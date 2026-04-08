@@ -2,9 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   buildBackupMetadata,
+  computePayloadChecksum,
   createBackupDownloadFileName,
   getBackupPayloadReadErrorResponse,
   verifyBackupIntegrity,
+  verifyBackupIntegrityFromChunks,
 } from "../backup-operations-integrity-utils";
 
 test("verifyBackupIntegrity treats backups without a stored checksum as readable but unverified", () => {
@@ -35,6 +37,26 @@ test("getBackupPayloadReadErrorResponse returns a conflict response for encrypte
       message: "Backup payload cannot be decrypted with the current encryption configuration.",
     },
   });
+});
+
+test("verifyBackupIntegrityFromChunks verifies checksum and payload size without a full payload string", async () => {
+  const payloadJson = "{\"imports\":[]}";
+  const result = await verifyBackupIntegrityFromChunks(
+    {
+      metadata: {
+        payloadChecksumSha256: computePayloadChecksum(payloadJson),
+      },
+    },
+    (async function* () {
+      yield "{\"imports\":";
+      yield "[]}";
+    })(),
+  );
+
+  assert.equal(result.ok, true);
+  assert.equal(result.verified, true);
+  assert.equal(result.payloadBytes, Buffer.byteLength(payloadJson, "utf8"));
+  assert.equal(result.computedChecksum, computePayloadChecksum(payloadJson));
 });
 
 test("createBackupDownloadFileName sanitizes unsafe backup names", () => {

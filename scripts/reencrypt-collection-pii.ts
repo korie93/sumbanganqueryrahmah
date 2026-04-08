@@ -5,6 +5,7 @@ import {
   encryptCollectionPiiFieldValue,
   hasCollectionPiiEncryptionConfigured,
   shouldRewriteCollectionPiiSearchHashValue,
+  shouldRewriteCollectionPiiSearchHashesValue,
   shouldRewriteCollectionPiiShadowValue,
 } from "../server/lib/collection-pii-encryption";
 
@@ -13,6 +14,7 @@ type CollectionPiiRow = {
   customer_name: string | null;
   customer_name_encrypted: string | null;
   customer_name_search_hash: string | null;
+  customer_name_search_hashes: string[] | null;
   ic_number: string | null;
   ic_number_encrypted: string | null;
   ic_number_search_hash: string | null;
@@ -101,6 +103,11 @@ function rowNeedsRewrite(row: CollectionPiiRow): boolean {
       encrypted: row.customer_name_encrypted,
       hash: row.customer_name_search_hash,
     })
+    || shouldRewriteCollectionPiiSearchHashesValue({
+      plaintext: row.customer_name,
+      encrypted: row.customer_name_encrypted,
+      hashes: row.customer_name_search_hashes,
+    })
     || shouldRewriteCollectionPiiSearchHashValue({
       field: "icNumber",
       plaintext: row.ic_number,
@@ -163,6 +170,7 @@ async function main() {
             customer_name,
             customer_name_encrypted,
             customer_name_search_hash,
+            customer_name_search_hashes,
             ic_number,
             ic_number_encrypted,
             ic_number_search_hash,
@@ -237,9 +245,10 @@ async function main() {
               customer_phone_encrypted = $4,
               account_number_encrypted = $5,
               customer_name_search_hash = $6,
-              ic_number_search_hash = $7,
-              customer_phone_search_hash = $8,
-              account_number_search_hash = $9
+              customer_name_search_hashes = $7,
+              ic_number_search_hash = $8,
+              customer_phone_search_hash = $9,
+              account_number_search_hash = $10
             WHERE id = $1::uuid
           `,
           [
@@ -249,6 +258,7 @@ async function main() {
             customerPhoneEncrypted,
             accountNumberEncrypted,
             searchHashes?.customerNameSearchHash ?? null,
+            searchHashes?.customerNameSearchHashes ?? null,
             searchHashes?.icNumberSearchHash ?? null,
             searchHashes?.customerPhoneSearchHash ?? null,
             searchHashes?.accountNumberSearchHash ?? null,

@@ -6,9 +6,11 @@ import type {
   CollectionReceiptValidationStatus,
 } from "../storage-postgres";
 import {
+  hashCollectionCustomerNameSearchTerms,
   hashCollectionPiiSearchValue,
   hasCollectionPiiEncryptionConfigured,
 } from "../lib/collection-pii-encryption";
+import { buildTextArraySql } from "./sql-array-utils";
 import { buildLikePattern } from "./sql-like-utils";
 
 const COLLECTION_MONTH_NAMES = [
@@ -59,11 +61,11 @@ export function buildCollectionRecordConditions(filters?: CollectionRecordFilter
   if (search) {
     const like = buildLikePattern(search, "contains");
     const searchConditions: SQL[] = [
-      sql`customer_name ILIKE ${like} ESCAPE '\'`,
       sql`batch ILIKE ${like} ESCAPE '\'`,
       sql`amount::text ILIKE ${like} ESCAPE '\'`,
     ];
     if (!hasCollectionPiiEncryptionConfigured()) {
+      searchConditions.push(sql`customer_name ILIKE ${like} ESCAPE '\'`);
       searchConditions.push(
         sql`ic_number ILIKE ${like} ESCAPE '\'`,
         sql`account_number ILIKE ${like} ESCAPE '\'`,
@@ -73,6 +75,12 @@ export function buildCollectionRecordConditions(filters?: CollectionRecordFilter
     const customerNameSearchHash = hashCollectionPiiSearchValue("customerName", search);
     if (customerNameSearchHash) {
       searchConditions.push(sql`customer_name_search_hash = ${customerNameSearchHash}`);
+    }
+    const customerNameSearchHashes = hashCollectionCustomerNameSearchTerms(search);
+    if (customerNameSearchHashes?.length) {
+      searchConditions.push(
+        sql`customer_name_search_hashes @> ${buildTextArraySql(customerNameSearchHashes)}`,
+      );
     }
     const icNumberSearchHash = hashCollectionPiiSearchValue("icNumber", search);
     if (icNumberSearchHash) {

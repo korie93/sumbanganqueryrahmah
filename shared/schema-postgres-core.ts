@@ -216,6 +216,20 @@ export const backups = pgTable("backups", {
   metadata: text("metadata"),
 });
 
+export const backupPayloadChunks = pgTable("backup_payload_chunks", {
+  backupId: text("backup_id")
+    .notNull()
+    .references(() => backups.id, { onDelete: "cascade", onUpdate: "cascade" }),
+  chunkIndex: integer("chunk_index").notNull(),
+  chunkData: text("chunk_data").notNull(),
+}, (table) => ({
+  backupIdChunkUnique: uniqueIndex("idx_backup_payload_chunks_backup_chunk_unique").on(
+    table.backupId,
+    table.chunkIndex,
+  ),
+  backupIdIdx: index("idx_backup_payload_chunks_backup_id").on(table.backupId),
+}));
+
 export const backupJobs = pgTable("backup_jobs", {
   id: uuid("id").primaryKey(),
   type: text("type").notNull(),

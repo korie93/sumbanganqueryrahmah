@@ -4,6 +4,7 @@ import {
   buildCollectionRecordPiiSearchHashes,
   buildEncryptedCollectionRecordPiiValues,
   resolveCollectionPiiFieldValue,
+  resolveStoredCollectionPiiPlaintextValue,
 } from "../lib/collection-pii-encryption";
 import { parseCollectionAmountToCents } from "../services/collection/collection-receipt-validation";
 import {
@@ -19,6 +20,7 @@ import {
   type BackupRestoreExecutor,
   toDate,
 } from "./backups-restore-shared-utils";
+import { buildTextArraySql } from "./sql-array-utils";
 
 const RESTORED_COLLECTION_RECORD_IDS_TEMP_TABLE = sql.raw("sqr_restored_collection_record_ids");
 const RESTORE_INSERT_BATCH_SIZE = 200;
@@ -26,6 +28,7 @@ const RESTORE_INSERT_BATCH_SIZE = 200;
 export type RestorableCollectionRecordRow = {
   id: string;
   customerName: string;
+  customerNameSearchHashes: string[] | null;
   icNumber: string;
   customerPhone: string;
   accountNumber: string;
@@ -83,6 +86,21 @@ function parseBackupStoredCents(value: unknown): number | null {
   return Number.isSafeInteger(parsed) ? parsed : null;
 }
 
+function normalizeBackupCustomerNameSearchHashes(value: unknown): string[] | null {
+  if (!Array.isArray(value)) {
+    return null;
+  }
+
+  const hashes = Array.from(
+    new Set(
+      value
+        .map((entry) => String(entry || "").trim())
+        .filter(Boolean),
+    ),
+  );
+  return hashes.length > 0 ? hashes : null;
+}
+
 export function normalizeBackupCollectionRecord(
   record: BackupCollectionRecord,
 ): RestorableCollectionRecordRow | null {
@@ -118,6 +136,7 @@ export function normalizeBackupCollectionRecord(
   return {
     id: String(record.id || crypto.randomUUID()),
     customerName,
+    customerNameSearchHashes: normalizeBackupCustomerNameSearchHashes(record.customerNameSearchHashes),
     icNumber,
     customerPhone,
     accountNumber,
@@ -189,7 +208,7 @@ export async function restoreCollectionRecordsFromBackup(
   backupDataReader: BackupPayloadChunkReader,
   stats: RestoreStats,
 ) {
-  for (const chunk of backupDataReader.iterateArrayChunks<BackupCollectionRecord>(
+  for await (const chunk of backupDataReader.iterateArrayChunks<BackupCollectionRecord>(
     "collectionRecords",
     BACKUP_CHUNK_SIZE,
   )) {
@@ -225,18 +244,37 @@ export async function restoreCollectionRecordsFromBackup(
             customerPhone: row.customerPhone,
             accountNumber: row.accountNumber,
           });
+          const persistedCustomerName = resolveStoredCollectionPiiPlaintextValue({
+            plaintext: row.customerName,
+            encrypted: encryptedPii?.customerNameEncrypted,
+          });
+          const persistedIcNumber = resolveStoredCollectionPiiPlaintextValue({
+            plaintext: row.icNumber,
+            encrypted: encryptedPii?.icNumberEncrypted,
+          });
+          const persistedCustomerPhone = resolveStoredCollectionPiiPlaintextValue({
+            plaintext: row.customerPhone,
+            encrypted: encryptedPii?.customerPhoneEncrypted,
+          });
+          const persistedAccountNumber = resolveStoredCollectionPiiPlaintextValue({
+            plaintext: row.accountNumber,
+            encrypted: encryptedPii?.accountNumberEncrypted,
+          });
           return sql`(
             ${row.id}::uuid,
-            ${row.customerName},
+            ${persistedCustomerName},
             ${encryptedPii?.customerNameEncrypted ?? null},
             ${piiSearchHashes?.customerNameSearchHash ?? null},
-            ${row.icNumber},
+            ${(row.customerNameSearchHashes ?? piiSearchHashes?.customerNameSearchHashes)?.length
+              ? buildTextArraySql(row.customerNameSearchHashes ?? piiSearchHashes?.customerNameSearchHashes ?? [])
+              : null},
+            ${persistedIcNumber},
             ${encryptedPii?.icNumberEncrypted ?? null},
             ${piiSearchHashes?.icNumberSearchHash ?? null},
-            ${row.customerPhone},
+            ${persistedCustomerPhone},
             ${encryptedPii?.customerPhoneEncrypted ?? null},
             ${piiSearchHashes?.customerPhoneSearchHash ?? null},
-            ${row.accountNumber},
+            ${persistedAccountNumber},
             ${encryptedPii?.accountNumberEncrypted ?? null},
             ${piiSearchHashes?.accountNumberSearchHash ?? null},
             ${row.batch},
@@ -263,6 +301,7 @@ export async function restoreCollectionRecordsFromBackup(
           customer_name,
           customer_name_encrypted,
           customer_name_search_hash,
+          customer_name_search_hashes,
           ic_number,
           ic_number_encrypted,
           ic_number_search_hash,
@@ -302,7 +341,7 @@ export async function restoreCollectionRecordReceiptsFromBackup(
   backupDataReader: BackupPayloadChunkReader,
   stats: RestoreStats,
 ) {
-  for (const chunk of backupDataReader.iterateArrayChunks<BackupCollectionReceipt>(
+  for await (const chunk of backupDataReader.iterateArrayChunks<BackupCollectionReceipt>(
     "collectionRecordReceipts",
     BACKUP_CHUNK_SIZE,
   )) {

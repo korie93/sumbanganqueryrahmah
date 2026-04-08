@@ -76,7 +76,7 @@ test("collection restore tracks restored record ids through a temp table before 
     getArray() {
       throw new Error("restore helpers must not eagerly parse backup datasets.");
     },
-    *iterateArrayChunks<T>(key: string): Generator<T[]> {
+    async *iterateArrayChunks<T>(key: string): AsyncGenerator<T[]> {
       if (key !== "collectionRecords") {
         return;
       }
@@ -177,7 +177,7 @@ test("collection restore batches temp-table tracking and inserts for large resto
     getArray() {
       throw new Error("restore helpers must not eagerly parse backup datasets.");
     },
-    *iterateArrayChunks<T>(key: string): Generator<T[]> {
+    async *iterateArrayChunks<T>(key: string): AsyncGenerator<T[]> {
       if (key !== "collectionRecords") {
         return;
       }
@@ -207,6 +207,7 @@ test("normalizeBackupCollectionRecord keeps restore fallbacks stable", () => {
   const restoredRecord = normalizeBackupCollectionRecord({
     id: "11111111-1111-1111-1111-111111111111",
     customerName: "",
+    customerNameSearchHashes: ["hash.customer.al", "hash.customer.alice"],
     icNumber: "",
     customerPhone: "",
     accountNumber: "",
@@ -228,6 +229,7 @@ test("normalizeBackupCollectionRecord keeps restore fallbacks stable", () => {
 
   assert.ok(restoredRecord);
   assert.equal(restoredRecord.customerName, "-");
+  assert.deepEqual(restoredRecord.customerNameSearchHashes, ["hash.customer.al", "hash.customer.alice"]);
   assert.equal(restoredRecord.paymentDate, "2026-03-31");
   assert.equal(restoredRecord.amount, 12.5);
   assert.equal(restoredRecord.receiptFile, null);
@@ -252,6 +254,7 @@ test("normalizeBackupCollectionRecord can recover PII from encrypted backup fiel
       id: "33333333-3333-3333-3333-333333333333",
       customerName: "",
       customerNameEncrypted: encryptCollectionPiiFieldValue("Encrypted Alice"),
+      customerNameSearchHashes: ["hash.customer.al", "hash.customer.alice"],
       icNumber: "",
       icNumberEncrypted: encryptCollectionPiiFieldValue("900101019999"),
       customerPhone: "",
@@ -271,6 +274,7 @@ test("normalizeBackupCollectionRecord can recover PII from encrypted backup fiel
 
     assert.ok(restoredRecord);
     assert.equal(restoredRecord?.customerName, "Encrypted Alice");
+    assert.deepEqual(restoredRecord?.customerNameSearchHashes, ["hash.customer.al", "hash.customer.alice"]);
     assert.equal(restoredRecord?.icNumber, "900101019999");
     assert.equal(restoredRecord?.customerPhone, "0123999999");
     assert.equal(restoredRecord?.accountNumber, "ACC-ENC-1");

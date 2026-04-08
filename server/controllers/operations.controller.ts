@@ -168,7 +168,7 @@ export function createOperationsController(deps: CreateOperationsControllerDeps)
       result.statusCode !== 200
       || !("fileName" in result.body)
       || !("payloadPrefixJson" in result.body)
-      || !("backupDataJson" in result.body)
+      || !("backupDataJsonChunks" in result.body)
       || !("payloadSuffixJson" in result.body)
     ) {
       return res.status(result.statusCode).json(result.body);
@@ -179,7 +179,11 @@ export function createOperationsController(deps: CreateOperationsControllerDeps)
     res.setHeader("Content-Disposition", `attachment; filename="${result.body.fileName}"`);
     res.status(200);
     res.write(result.body.payloadPrefixJson);
-    res.write(result.body.backupDataJson);
+    for await (const chunk of result.body.backupDataJsonChunks) {
+      if (chunk) {
+        res.write(chunk);
+      }
+    }
     res.end(result.body.payloadSuffixJson);
     return;
   };

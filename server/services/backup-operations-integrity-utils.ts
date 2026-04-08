@@ -50,7 +50,9 @@ export function computePayloadChecksum(payloadJson: string): string {
   return crypto.createHash("sha256").update(String(payloadJson || ""), "utf8").digest("hex");
 }
 
-export function readStoredChecksum(backup: BackupRecord): string | null {
+export function readStoredChecksum(
+  backup: { metadata: unknown },
+): string | null {
   const metadata = backup.metadata;
   if (!metadata || typeof metadata !== "object") {
     return null;
@@ -81,8 +83,44 @@ export function verifyBackupIntegrity(backup: BackupRecord): BackupIntegrityResu
   };
 }
 
+export async function verifyBackupIntegrityFromChunks(
+  backup: { metadata: unknown },
+  chunks: AsyncIterable<string>,
+): Promise<BackupIntegrityResult & { payloadBytes: number }> {
+  const hash = crypto.createHash("sha256");
+  let payloadBytes = 0;
+
+  for await (const chunk of chunks) {
+    if (!chunk) {
+      continue;
+    }
+    hash.update(chunk, "utf8");
+    payloadBytes += Buffer.byteLength(chunk, "utf8");
+  }
+
+  const computedChecksum = hash.digest("hex");
+  const storedChecksum = readStoredChecksum(backup);
+  if (!storedChecksum) {
+    return {
+      ok: true,
+      verified: false,
+      storedChecksum: null,
+      computedChecksum,
+      payloadBytes,
+    };
+  }
+
+  return {
+    ok: storedChecksum === computedChecksum,
+    verified: true,
+    storedChecksum,
+    computedChecksum,
+    payloadBytes,
+  };
+}
+
 export function buildBackupExportEnvelope(
-  backup: BackupRecord,
+  backup: Pick<BackupMetadataRecord, "id" | "name" | "createdAt" | "createdBy" | "metadata">,
   integrity: BackupIntegrityResult,
 ) {
   return {

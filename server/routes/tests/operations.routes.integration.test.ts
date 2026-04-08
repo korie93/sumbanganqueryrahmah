@@ -67,6 +67,15 @@ function createBackupRow(overrides: Partial<BackupRow> = {}): BackupRow {
   };
 }
 
+async function readExportPayloadJson(response: Response) {
+  return JSON.parse(await response.text()) as {
+    id: string;
+    backupData: {
+      imports: unknown[];
+    };
+  };
+}
+
 function createOperationsRouteHarness(options?: {
   exportCircuitOpen?: boolean;
   backupOperationTimeoutMs?: number;
@@ -237,6 +246,22 @@ function createOperationsRouteHarness(options?: {
         ...backup,
         backupData: "",
       };
+    },
+    iterateBackupDataJsonChunksById: async (id: string) => {
+      const exportDelayMs = options?.backupExportDelayMs ?? 0;
+      const backup = backups.get(id);
+      if (!backup) {
+        return undefined;
+      }
+      const backupData = String(backup.backupData || "");
+      return (async function* () {
+        if (exportDelayMs > 0) {
+          await sleep(exportDelayMs);
+        }
+        if (backupData) {
+          yield backupData;
+        }
+      })();
     },
     getBackupById: async (id: string) => {
       const exportDelayMs = options?.backupExportDelayMs ?? 0;
@@ -563,7 +588,7 @@ test("GET /api/backups/:id/export returns an attachment and audits the download"
     const response = await fetch(`${baseUrl}/api/backups/backup-1/export`);
     assert.equal(response.status, 200);
     assert.match(response.headers.get("content-disposition") || "", /attachment; filename=/i);
-    const payload = JSON.parse(await response.text());
+    const payload = await readExportPayloadJson(response);
     assert.equal(payload.id, "backup-1");
     assert.equal(Array.isArray(payload.backupData.imports), true);
     assert.equal(auditLogs.length, 1);

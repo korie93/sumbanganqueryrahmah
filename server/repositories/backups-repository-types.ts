@@ -46,6 +46,7 @@ export type BackupCollectionRecord = {
   id: string;
   customerName?: string | null;
   customerNameEncrypted?: string | null;
+  customerNameSearchHashes?: string[] | null;
   icNumber?: string | null;
   icNumberEncrypted?: string | null;
   customerPhone?: string | null;

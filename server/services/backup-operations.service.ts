@@ -56,7 +56,7 @@ export class BackupOperationsService {
       | {
           fileName: string;
           payloadPrefixJson: string;
-          backupDataJson: string;
+          backupDataJsonChunks: AsyncIterable<string>;
           payloadSuffixJson: string;
         }
       | { message: string }

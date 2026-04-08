@@ -11,6 +11,7 @@ import {
   getBackupById,
   getBackupMetadataById,
   getBackups,
+  iterateBackupDataJsonChunksById,
   listBackupsPage,
 } from "./backups-list-utils";
 import {
@@ -61,6 +62,10 @@ export class BackupsRepository {
     return getBackupById(this.options, this.backupEncryption, id);
   }
 
+  async iterateBackupDataJsonChunksById(id: string): Promise<AsyncIterable<string> | undefined> {
+    return iterateBackupDataJsonChunksById(this.options, this.backupEncryption, id);
+  }
+
   async getBackupMetadataById(id: string): Promise<Backup | undefined> {
     return getBackupMetadataById(this.options, id);
   }
@@ -77,7 +82,9 @@ export class BackupsRepository {
     return readPreparedBackupPayloadForStorage(preparedBackupPayload);
   }
 
-  async restoreFromBackup(backupDataRaw: BackupDataPayload | string): Promise<{ success: boolean; stats: RestoreStats }> {
+  async restoreFromBackup(
+    backupDataRaw: BackupDataPayload | string | AsyncIterable<string>,
+  ): Promise<{ success: boolean; stats: RestoreStats }> {
     return restoreFromBackup(backupDataRaw);
   }
 }

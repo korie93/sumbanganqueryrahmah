@@ -45,6 +45,14 @@ function normalizeSqlText(query: unknown): string {
   return flattenSqlChunk(query).replace(/\s+/g, " ").trim();
 }
 
+async function collectChunks(chunks: AsyncIterable<string>): Promise<string> {
+  let payload = "";
+  for await (const chunk of chunks) {
+    payload += chunk;
+  }
+  return payload;
+}
+
 async function withEnv<T>(overrides: EnvOverrides, fn: () => Promise<T> | T): Promise<T> {
   const previousValues = new Map<string, string | undefined>();
   for (const [key, value] of Object.entries(overrides)) {
@@ -189,6 +197,138 @@ test("BackupsRepository decodes encrypted v2 payloads when reading backup data",
   );
 });
 
+test("BackupsRepository decodes chunked encrypted payloads when backup_data is empty", async () => {
+  await withEnv(
+    {
+      NODE_ENV: "production",
+      BACKUP_ENCRYPTION_KEY: null,
+      BACKUP_ENCRYPTION_KEYS: `primary:${"A".repeat(32)}`,
+      BACKUP_ENCRYPTION_KEY_ID: "primary",
+    },
+    async () => {
+      let ensureCalled = 0;
+      const repository = new BackupsRepository({
+        ensureBackupsTable: async () => {
+          ensureCalled += 1;
+        },
+        parseBackupMetadataSafe: () => null,
+      });
+
+      const payloadJson = JSON.stringify({
+        imports: [],
+        dataRows: [],
+        users: [],
+        auditLogs: [],
+      });
+      const encryptedPayload = encryptBackupPayloadV2({
+        keyId: "primary",
+        key: Buffer.from("A".repeat(32), "utf8"),
+        payloadJson,
+      });
+      const chunkedPayload = [
+        encryptedPayload.slice(0, 18),
+        encryptedPayload.slice(18, 54),
+        encryptedPayload.slice(54),
+      ];
+
+      const dbAny = db as any;
+      const originalExecute = dbAny.execute;
+      dbAny.execute = async (query: unknown) => {
+        const sqlText = normalizeSqlText(query);
+        if (sqlText.includes("FROM public.backups")) {
+          return {
+            rows: [
+              {
+                id: "backup-1",
+                name: "Chunked Backup",
+                createdAt: new Date("2026-03-21T00:00:00.000Z"),
+                createdBy: "super.user",
+                backupData: "",
+                metadata: null,
+              },
+            ],
+          };
+        }
+        if (sqlText.includes("FROM public.backup_payload_chunks")) {
+          return {
+            rows: chunkedPayload.map((chunkData) => ({ chunkData })),
+          };
+        }
+        return { rows: [] };
+      };
+
+      try {
+        const backup = await repository.getBackupById("backup-1");
+        assert.equal(ensureCalled, 1);
+        assert.ok(backup);
+        assert.equal(backup?.backupData, payloadJson);
+      } finally {
+        dbAny.execute = originalExecute;
+      }
+    },
+  );
+});
+
+test("BackupsRepository streams chunked encrypted payloads as plaintext JSON chunks", async () => {
+  await withEnv(
+    {
+      NODE_ENV: "production",
+      BACKUP_ENCRYPTION_KEY: null,
+      BACKUP_ENCRYPTION_KEYS: `primary:${"A".repeat(32)}`,
+      BACKUP_ENCRYPTION_KEY_ID: "primary",
+    },
+    async () => {
+      const repository = new BackupsRepository(repoOptions);
+
+      const payloadJson = JSON.stringify({
+        imports: [],
+        dataRows: [],
+        users: [],
+        auditLogs: [],
+      });
+      const encryptedPayload = encryptBackupPayloadV2({
+        keyId: "primary",
+        key: Buffer.from("A".repeat(32), "utf8"),
+        payloadJson,
+      });
+      const chunkedPayload = [
+        encryptedPayload.slice(0, 18),
+        encryptedPayload.slice(18, 54),
+        encryptedPayload.slice(54),
+      ];
+
+      const dbAny = db as any;
+      const originalExecute = dbAny.execute;
+      dbAny.execute = async (query: unknown) => {
+        const sqlText = normalizeSqlText(query);
+        if (sqlText.includes("SELECT backup_data as \"backupData\" FROM public.backups")) {
+          return {
+            rows: [
+              {
+                backupData: "",
+              },
+            ],
+          };
+        }
+        if (sqlText.includes("FROM public.backup_payload_chunks")) {
+          return {
+            rows: chunkedPayload.map((chunkData) => ({ chunkData })),
+          };
+        }
+        return { rows: [] };
+      };
+
+      try {
+        const chunks = await repository.iterateBackupDataJsonChunksById("backup-1");
+        assert.ok(chunks);
+        assert.equal(await collectChunks(chunks), payloadJson);
+      } finally {
+        dbAny.execute = originalExecute;
+      }
+    },
+  );
+});
+
 test("BackupsRepository prepares encrypted temp backup payload files when an encryption key is configured", async () => {
   await withEnv(
     {
@@ -233,6 +373,79 @@ test("BackupsRepository prepares encrypted temp backup payload files when an enc
         ]);
       } finally {
         dbAny.execute = originalExecute;
+        await prepared?.cleanup();
+      }
+    },
+  );
+});
+
+test("BackupsRepository stores prepared backup payload chunks without rebuilding backup_data text", async () => {
+  await withEnv(
+    {
+      NODE_ENV: "production",
+      BACKUP_ENCRYPTION_KEY: null,
+      BACKUP_ENCRYPTION_KEYS: `primary:${"A".repeat(32)}`,
+      BACKUP_ENCRYPTION_KEY_ID: "primary",
+    },
+    async () => {
+      const repository = new BackupsRepository(repoOptions);
+
+      const dbAny = db as any;
+      const originalExecute = dbAny.execute;
+      const originalTransaction = dbAny.transaction;
+      dbAny.execute = async () => ({
+        rows: [],
+      });
+
+      let prepared: Awaited<ReturnType<BackupsRepository["prepareBackupPayloadFileForCreate"]>> | null =
+        null;
+      const executedSql: string[] = [];
+
+      try {
+        prepared = await repository.prepareBackupPayloadFileForCreate();
+
+        dbAny.transaction = async (callback: (tx: { execute: (query: unknown) => Promise<{ rows: unknown[] }> }) => Promise<unknown>) =>
+          callback({
+            execute: async (query: unknown) => {
+              const sqlText = normalizeSqlText(query);
+              executedSql.push(sqlText);
+              if (sqlText.startsWith("INSERT INTO public.backups ")) {
+                return {
+                  rows: [
+                    {
+                      id: "backup-1",
+                      name: "Chunked Backup",
+                      createdAt: new Date("2026-04-08T00:00:00.000Z"),
+                      createdBy: "super.user",
+                      backupData: "",
+                      metadata: null,
+                    },
+                  ],
+                };
+              }
+              return { rows: [] };
+            },
+          });
+
+        const created = await repository.createBackupFromPreparedPayload({
+          name: "Chunked Backup",
+          createdBy: "super.user",
+          metadata: null,
+          preparedBackupPayload: prepared,
+        });
+
+        assert.equal(created.backupData, "");
+        assert.equal(
+          executedSql.some((sqlText) => sqlText.includes("INSERT INTO public.backup_payload_chunks")),
+          true,
+        );
+        assert.equal(
+          executedSql.some((sqlText) => sqlText.includes("UPDATE public.backups SET backup_data = backup_data ||")),
+          false,
+        );
+      } finally {
+        dbAny.execute = originalExecute;
+        dbAny.transaction = originalTransaction;
         await prepared?.cleanup();
       }
     },
@@ -300,6 +513,7 @@ test("BackupsRepository exports collection backup payload amounts with explicit 
                 id: "record-1",
                 customerName: "Alice Tan",
                 customerNameEncrypted: "enc.customer-name",
+                customerNameSearchHashes: ["hash.customer.al", "hash.customer.alice", "hash.customer.tan"],
                 icNumber: "900101015555",
                 icNumberEncrypted: "enc.ic-number",
                 customerPhone: "0123000001",
@@ -373,6 +587,11 @@ test("BackupsRepository exports collection backup payload amounts with explicit 
         assert.equal("customerPhone" in (parsed.collectionRecords?.[0] || {}), false);
         assert.equal("accountNumber" in (parsed.collectionRecords?.[0] || {}), false);
         assert.equal(parsed.collectionRecords?.[0]?.customerNameEncrypted, "enc.customer-name");
+        assert.deepEqual(parsed.collectionRecords?.[0]?.customerNameSearchHashes, [
+          "hash.customer.al",
+          "hash.customer.alice",
+          "hash.customer.tan",
+        ]);
         assert.equal(parsed.collectionRecords?.[0]?.icNumberEncrypted, "enc.ic-number");
         assert.equal(parsed.collectionRecords?.[0]?.customerPhoneEncrypted, "enc.customer-phone");
         assert.equal(parsed.collectionRecords?.[0]?.accountNumberEncrypted, "enc.account-number");

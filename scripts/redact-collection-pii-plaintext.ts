@@ -11,6 +11,7 @@ type CollectionPiiRow = {
   customer_name: string | null;
   customer_name_encrypted: string | null;
   customer_name_search_hash: string | null;
+  customer_name_search_hashes: string[] | null;
   ic_number: string | null;
   ic_number_encrypted: string | null;
   ic_number_search_hash: string | null;
@@ -131,6 +132,7 @@ export function getRedactionPlan(
         plaintext: row.customer_name,
         encrypted: row.customer_name_encrypted,
         hash: row.customer_name_search_hash,
+        hashes: row.customer_name_search_hashes,
       }),
     icNumber: fields.has("icNumber")
       && shouldRedactCollectionPiiPlaintextValue({
@@ -213,6 +215,7 @@ export async function main() {
             customer_name,
             customer_name_encrypted,
             customer_name_search_hash,
+            customer_name_search_hashes,
             ic_number,
             ic_number_encrypted,
             ic_number_search_hash,

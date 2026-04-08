@@ -68,6 +68,7 @@ function buildCollectionRecordBackupPiiFields(
   BackupCollectionRecord,
   | "customerName"
   | "customerNameEncrypted"
+  | "customerNameSearchHashes"
   | "icNumber"
   | "icNumberEncrypted"
   | "customerPhone"
@@ -90,7 +91,12 @@ function buildCollectionRecordBackupPiiFields(
 
   return {
     ...(customerNameEncrypted
-      ? { customerNameEncrypted }
+      ? {
+        customerNameEncrypted,
+        ...(Array.isArray(row.customerNameSearchHashes) && row.customerNameSearchHashes.length > 0
+          ? { customerNameSearchHashes: row.customerNameSearchHashes as string[] }
+          : {}),
+      }
       : {
         customerName: resolveCollectionPiiFieldValue({
           plaintext: row.customerName,
@@ -421,6 +427,7 @@ export async function prepareBackupPayloadFileForCreate(
           id,
           customer_name as "customerName",
           customer_name_encrypted as "customerNameEncrypted",
+          customer_name_search_hashes as "customerNameSearchHashes",
           ic_number as "icNumber",
           ic_number_encrypted as "icNumberEncrypted",
           customer_phone as "customerPhone",

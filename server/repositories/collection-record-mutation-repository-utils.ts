@@ -8,7 +8,9 @@ import type {
 } from "../storage-postgres";
 import {
   encryptCollectionPiiFieldValue,
+  hashCollectionCustomerNameSearchTerms,
   hashCollectionPiiSearchValue,
+  resolveStoredCollectionPiiPlaintextValue,
 } from "../lib/collection-pii-encryption";
 import {
   getCollectionRecordById,
@@ -26,6 +28,7 @@ import {
   updateCollectionRecordReceiptRows,
 } from "./collection-receipt-utils";
 import { mapCollectionRecordRow } from "./collection-repository-mappers";
+import { buildTextArraySql } from "./sql-array-utils";
 
 function resolveExpectedCollectionRecordUpdatedAt(
   value: Date | undefined,
@@ -43,32 +46,48 @@ export async function updateCollectionRecord(
   const updateChunks: any[] = [];
 
   if (data.customerName !== undefined) {
-    updateChunks.push(sql`customer_name = ${data.customerName}`);
     const customerNameEncrypted = encryptCollectionPiiFieldValue(data.customerName);
+    updateChunks.push(sql`customer_name = ${resolveStoredCollectionPiiPlaintextValue({
+      plaintext: data.customerName,
+      encrypted: customerNameEncrypted,
+    })}`);
     if (customerNameEncrypted !== null) {
       updateChunks.push(sql`customer_name_encrypted = ${customerNameEncrypted}`);
     }
     updateChunks.push(sql`customer_name_search_hash = ${hashCollectionPiiSearchValue("customerName", data.customerName)}`);
+    const customerNameSearchHashes = hashCollectionCustomerNameSearchTerms(data.customerName);
+    updateChunks.push(sql`customer_name_search_hashes = ${customerNameSearchHashes?.length
+      ? buildTextArraySql(customerNameSearchHashes)
+      : null}`);
   }
   if (data.icNumber !== undefined) {
-    updateChunks.push(sql`ic_number = ${data.icNumber}`);
     const icNumberEncrypted = encryptCollectionPiiFieldValue(data.icNumber);
+    updateChunks.push(sql`ic_number = ${resolveStoredCollectionPiiPlaintextValue({
+      plaintext: data.icNumber,
+      encrypted: icNumberEncrypted,
+    })}`);
     if (icNumberEncrypted !== null) {
       updateChunks.push(sql`ic_number_encrypted = ${icNumberEncrypted}`);
     }
     updateChunks.push(sql`ic_number_search_hash = ${hashCollectionPiiSearchValue("icNumber", data.icNumber)}`);
   }
   if (data.customerPhone !== undefined) {
-    updateChunks.push(sql`customer_phone = ${data.customerPhone}`);
     const customerPhoneEncrypted = encryptCollectionPiiFieldValue(data.customerPhone);
+    updateChunks.push(sql`customer_phone = ${resolveStoredCollectionPiiPlaintextValue({
+      plaintext: data.customerPhone,
+      encrypted: customerPhoneEncrypted,
+    })}`);
     if (customerPhoneEncrypted !== null) {
       updateChunks.push(sql`customer_phone_encrypted = ${customerPhoneEncrypted}`);
     }
     updateChunks.push(sql`customer_phone_search_hash = ${hashCollectionPiiSearchValue("customerPhone", data.customerPhone)}`);
   }
   if (data.accountNumber !== undefined) {
-    updateChunks.push(sql`account_number = ${data.accountNumber}`);
     const accountNumberEncrypted = encryptCollectionPiiFieldValue(data.accountNumber);
+    updateChunks.push(sql`account_number = ${resolveStoredCollectionPiiPlaintextValue({
+      plaintext: data.accountNumber,
+      encrypted: accountNumberEncrypted,
+    })}`);
     if (accountNumberEncrypted !== null) {
       updateChunks.push(sql`account_number_encrypted = ${accountNumberEncrypted}`);
     }
@@ -150,6 +169,7 @@ export async function updateCollectionRecord(
         id,
         customer_name,
         customer_name_encrypted,
+        customer_name_search_hashes,
         ic_number,
         ic_number_encrypted,
         customer_phone,

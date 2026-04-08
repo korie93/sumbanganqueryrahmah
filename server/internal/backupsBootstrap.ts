@@ -125,6 +125,25 @@ export class BackupsBootstrap {
           await db.execute(sql`ALTER TABLE public.backups_new RENAME TO backups`);
         }
 
+        await db.execute(sql`
+          CREATE TABLE IF NOT EXISTS public.backup_payload_chunks (
+            backup_id text NOT NULL REFERENCES public.backups(id) ON DELETE CASCADE ON UPDATE CASCADE,
+            chunk_index integer NOT NULL,
+            chunk_data text NOT NULL
+          )
+        `);
+        await db.execute(sql`ALTER TABLE public.backup_payload_chunks ADD COLUMN IF NOT EXISTS backup_id text`);
+        await db.execute(sql`ALTER TABLE public.backup_payload_chunks ADD COLUMN IF NOT EXISTS chunk_index integer`);
+        await db.execute(sql`ALTER TABLE public.backup_payload_chunks ADD COLUMN IF NOT EXISTS chunk_data text`);
+        await db.execute(sql`
+          CREATE UNIQUE INDEX IF NOT EXISTS idx_backup_payload_chunks_backup_chunk_unique
+          ON public.backup_payload_chunks(backup_id, chunk_index)
+        `);
+        await db.execute(sql`
+          CREATE INDEX IF NOT EXISTS idx_backup_payload_chunks_backup_id
+          ON public.backup_payload_chunks(backup_id)
+        `);
+
         const info = await db.execute(sql`SELECT current_database() AS db, current_schema() AS schema`);
         const row = info.rows?.[0] as { db?: string; schema?: string } | undefined;
         logger.info("Backups table ready", {

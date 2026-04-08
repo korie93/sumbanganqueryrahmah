@@ -9,6 +9,7 @@ export type BackupOperationsBackupsRepository = Pick<
   | "deleteBackup"
   | "getBackupMetadataById"
   | "getBackupById"
+  | "iterateBackupDataJsonChunksById"
   | "prepareBackupPayloadFileForCreate"
   | "readPreparedBackupPayloadForStorage"
   | "listBackupsPage"

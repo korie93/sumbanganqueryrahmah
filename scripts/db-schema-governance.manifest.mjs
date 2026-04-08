@@ -77,6 +77,10 @@ export const schemaGovernanceManifest = {
       ["drizzle-schema", "drizzle-migration", "runtime-ddl"],
       "Backup queue persistence now has a reviewed Drizzle migration while runtime bootstrap keeps legacy installs compatible.",
     ),
+    backup_payload_chunks: drizzleReviewed(
+      ["drizzle-schema", "drizzle-migration", "runtime-ddl"],
+      "Chunked backup payload storage now has a reviewed Drizzle migration while runtime bootstrap remains additive for legacy installs that still rely on backup_data compatibility.",
+    ),
     backups: drizzleReviewed(
       ["drizzle-schema", "drizzle-migration", "runtime-ddl"],
       "Backup storage now has a reviewed Drizzle migration while runtime bootstrap still handles rare legacy id normalization.",

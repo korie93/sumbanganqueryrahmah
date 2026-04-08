@@ -13,16 +13,20 @@ export type EncryptedCollectionRecordPiiValues = {
 
 export type CollectionRecordPiiSearchHashes = {
   customerNameSearchHash: string | null;
+  customerNameSearchHashes: string[] | null;
   icNumberSearchHash: string | null;
   customerPhoneSearchHash: string | null;
   accountNumberSearchHash: string | null;
 };
 
-type CollectionPiiFieldName =
+export type CollectionPiiFieldName =
   | "customerName"
   | "icNumber"
   | "customerPhone"
   | "accountNumber";
+
+const MIN_CUSTOMER_NAME_SEARCH_TOKEN_LENGTH = 2;
+const MAX_CUSTOMER_NAME_SEARCH_PREFIX_LENGTH = 12;
 
 function getCollectionPiiCipherKey(secret: string) {
   return createHash("sha256").update(secret).digest();
@@ -61,6 +65,48 @@ function normalizeCollectionPiiSearchValue(field: CollectionPiiFieldName, value:
   }
 
   return normalized.trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+function collectCustomerNameSearchTerms(value: unknown): string[] {
+  const normalized = normalizeCollectionPiiSearchValue("customerName", value);
+  if (!normalized) {
+    return [];
+  }
+
+  const terms = new Set<string>();
+  for (const token of normalized.split(" ")) {
+    const compactToken = token.trim();
+    if (compactToken.length < MIN_CUSTOMER_NAME_SEARCH_TOKEN_LENGTH) {
+      continue;
+    }
+
+    const maxPrefixLength = Math.min(
+      compactToken.length,
+      MAX_CUSTOMER_NAME_SEARCH_PREFIX_LENGTH,
+    );
+    for (let prefixLength = MIN_CUSTOMER_NAME_SEARCH_TOKEN_LENGTH; prefixLength <= maxPrefixLength; prefixLength += 1) {
+      terms.add(compactToken.slice(0, prefixLength));
+    }
+    if (compactToken.length > maxPrefixLength) {
+      terms.add(compactToken);
+    }
+  }
+
+  return Array.from(terms);
+}
+
+function normalizeCollectionPiiSearchHashArray(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return Array.from(
+    new Set(
+      value
+        .map((entry) => normalizeCollectionPiiValue(entry))
+        .filter(Boolean),
+    ),
+  ).sort();
 }
 
 function encryptCollectionPiiWithSecret(value: string, secret: string): string {
@@ -157,6 +203,22 @@ export function hashCollectionPiiSearchValue(
     .digest("hex");
 }
 
+export function hashCollectionCustomerNameSearchTerms(value: unknown): string[] | null {
+  const terms = collectCustomerNameSearchTerms(value);
+  if (terms.length === 0) {
+    return null;
+  }
+
+  const hashes = Array.from(
+    new Set(
+      terms
+        .map((term) => hashCollectionPiiSearchValue("customerName", term))
+        .filter((entry): entry is string => typeof entry === "string" && entry.length > 0),
+    ),
+  );
+  return hashes.length > 0 ? hashes : null;
+}
+
 export function buildCollectionRecordPiiSearchHashes(values: {
   customerName: unknown;
   icNumber: unknown;
@@ -164,12 +226,14 @@ export function buildCollectionRecordPiiSearchHashes(values: {
   accountNumber: unknown;
 }): CollectionRecordPiiSearchHashes | null {
   const customerNameSearchHash = hashCollectionPiiSearchValue("customerName", values.customerName);
+  const customerNameSearchHashes = hashCollectionCustomerNameSearchTerms(values.customerName);
   const icNumberSearchHash = hashCollectionPiiSearchValue("icNumber", values.icNumber);
   const customerPhoneSearchHash = hashCollectionPiiSearchValue("customerPhone", values.customerPhone);
   const accountNumberSearchHash = hashCollectionPiiSearchValue("accountNumber", values.accountNumber);
 
   if (
     customerNameSearchHash === null
+    && customerNameSearchHashes === null
     && icNumberSearchHash === null
     && customerPhoneSearchHash === null
     && accountNumberSearchHash === null
@@ -179,6 +243,7 @@ export function buildCollectionRecordPiiSearchHashes(values: {
 
   return {
     customerNameSearchHash,
+    customerNameSearchHashes,
     icNumberSearchHash,
     customerPhoneSearchHash,
     accountNumberSearchHash,
@@ -229,6 +294,24 @@ export function resolveCollectionPiiFieldValue(params: {
   return params.fallback ?? "";
 }
 
+export function resolveStoredCollectionPiiPlaintextValue(params: {
+  plaintext: unknown;
+  encrypted?: unknown;
+  fallback?: string;
+}): string {
+  const plaintext = normalizeCollectionPiiValue(params.plaintext);
+  const encrypted = normalizeCollectionPiiValue(params.encrypted);
+  if (encrypted && hasCollectionPiiEncryptionConfigured()) {
+    return params.fallback ?? "";
+  }
+
+  if (plaintext) {
+    return plaintext;
+  }
+
+  return params.fallback ?? "";
+}
+
 export function shouldRewriteCollectionPiiShadowValue(params: {
   plaintext: unknown;
   encrypted: unknown;
@@ -271,11 +354,39 @@ export function shouldRewriteCollectionPiiSearchHashValue(params: {
   return normalizeCollectionPiiValue(params.hash) !== nextHash;
 }
 
+export function shouldRewriteCollectionPiiSearchHashesValue(params: {
+  plaintext: unknown;
+  encrypted?: unknown;
+  hashes: unknown;
+}): boolean {
+  const resolved = resolveCollectionPiiFieldValue({
+    plaintext: params.plaintext,
+    encrypted: params.encrypted,
+  });
+  if (!resolved) {
+    return false;
+  }
+
+  const nextHashes = hashCollectionCustomerNameSearchTerms(resolved);
+  if (!nextHashes || nextHashes.length === 0) {
+    return false;
+  }
+
+  const currentHashes = normalizeCollectionPiiSearchHashArray(params.hashes);
+  if (currentHashes.length !== nextHashes.length) {
+    return true;
+  }
+
+  const sortedNextHashes = [...nextHashes].sort();
+  return sortedNextHashes.some((value, index) => currentHashes[index] !== value);
+}
+
 export function shouldRedactCollectionPiiPlaintextValue(params: {
   field: CollectionPiiFieldName;
   plaintext: unknown;
   encrypted?: unknown;
   hash: unknown;
+  hashes?: unknown;
 }): boolean {
   const plaintext = normalizeCollectionPiiValue(params.plaintext);
   if (!plaintext) {
@@ -297,6 +408,17 @@ export function shouldRedactCollectionPiiPlaintextValue(params: {
       plaintext,
       encrypted: params.encrypted,
       hash: params.hash,
+    })
+  ) {
+    return false;
+  }
+
+  if (
+    params.field === "customerName"
+    && shouldRewriteCollectionPiiSearchHashesValue({
+      plaintext,
+      encrypted: params.encrypted,
+      hashes: params.hashes,
     })
   ) {
     return false;

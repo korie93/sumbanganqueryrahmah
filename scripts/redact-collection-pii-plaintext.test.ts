@@ -62,6 +62,7 @@ test("getRedactionPlan only evaluates requested staged fields", () => {
         customer_name: "Alice",
         customer_name_encrypted: encrypted?.customerNameEncrypted ?? null,
         customer_name_search_hash: hashes?.customerNameSearchHash ?? null,
+        customer_name_search_hashes: hashes?.customerNameSearchHashes ?? null,
         ic_number: "900101015555",
         ic_number_encrypted: encrypted?.icNumberEncrypted ?? null,
         ic_number_search_hash: hashes?.icNumberSearchHash ?? null,

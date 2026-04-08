@@ -17,7 +17,7 @@ import {
   updateRestoreTotals,
 } from "./backups-restore-dataset-utils";
 
-type BackupPayloadSource = BackupDataPayload | string;
+type BackupPayloadSource = BackupDataPayload | string | AsyncIterable<string>;
 
 export {
   createBackupPayloadChunkReader,

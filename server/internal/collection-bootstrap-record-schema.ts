@@ -7,6 +7,7 @@ import {
   hasCollectionPiiEncryptionConfigured,
   resolveCollectionPiiFieldValue,
 } from "../lib/collection-pii-encryption";
+import { buildTextArraySql } from "../repositories/sql-array-utils";
 import {
   executeBootstrapStatements,
   inferMimeTypeFromReceiptPath,
@@ -23,6 +24,7 @@ export async function ensureCollectionRecordBaseSchema(database: BootstrapSqlExe
         customer_name text NOT NULL,
         customer_name_encrypted text,
         customer_name_search_hash text,
+        customer_name_search_hashes text[],
         ic_number text NOT NULL,
         ic_number_encrypted text,
         ic_number_search_hash text,
@@ -51,6 +53,7 @@ export async function ensureCollectionRecordBaseSchema(database: BootstrapSqlExe
     sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS customer_name text`,
     sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS customer_name_encrypted text`,
     sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS customer_name_search_hash text`,
+    sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS customer_name_search_hashes text[]`,
     sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS ic_number text`,
     sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS ic_number_encrypted text`,
     sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS ic_number_search_hash text`,
@@ -103,6 +106,10 @@ export async function ensureCollectionRecordBaseSchema(database: BootstrapSqlExe
     sql`CREATE INDEX IF NOT EXISTS idx_collection_records_staff_nickname ON public.collection_records(collection_staff_nickname)`,
     sql`CREATE INDEX IF NOT EXISTS idx_collection_records_customer_phone ON public.collection_records(customer_phone)`,
     sql`CREATE INDEX IF NOT EXISTS idx_collection_records_customer_name_search_hash ON public.collection_records(customer_name_search_hash)`,
+    sql`
+      CREATE INDEX IF NOT EXISTS idx_collection_records_customer_name_search_hashes
+      ON public.collection_records USING gin (customer_name_search_hashes)
+    `,
     sql`CREATE INDEX IF NOT EXISTS idx_collection_records_ic_number_search_hash ON public.collection_records(ic_number_search_hash)`,
     sql`CREATE INDEX IF NOT EXISTS idx_collection_records_customer_phone_search_hash ON public.collection_records(customer_phone_search_hash)`,
     sql`CREATE INDEX IF NOT EXISTS idx_collection_records_account_number_search_hash ON public.collection_records(account_number_search_hash)`,
@@ -440,6 +447,7 @@ async function backfillCollectionRecordPiiSearchHashes(database: BootstrapSqlExe
       customer_name,
       customer_name_encrypted,
       customer_name_search_hash,
+      customer_name_search_hashes,
       ic_number,
       ic_number_encrypted,
       ic_number_search_hash,
@@ -453,6 +461,9 @@ async function backfillCollectionRecordPiiSearchHashes(database: BootstrapSqlExe
     WHERE (
       NULLIF(trim(COALESCE(customer_name, '')), '') IS NOT NULL
       AND NULLIF(trim(COALESCE(customer_name_search_hash, '')), '') IS NULL
+    ) OR (
+      NULLIF(trim(COALESCE(customer_name, '')), '') IS NOT NULL
+      AND COALESCE(array_length(customer_name_search_hashes, 1), 0) = 0
     ) OR (
       NULLIF(trim(COALESCE(ic_number, '')), '') IS NOT NULL
       AND NULLIF(trim(COALESCE(ic_number_search_hash, '')), '') IS NULL
@@ -499,6 +510,13 @@ async function backfillCollectionRecordPiiSearchHashes(database: BootstrapSqlExe
       UPDATE public.collection_records
       SET
         customer_name_search_hash = COALESCE(customer_name_search_hash, ${searchHashes.customerNameSearchHash}),
+        customer_name_search_hashes = CASE
+          WHEN COALESCE(array_length(customer_name_search_hashes, 1), 0) = 0
+            THEN ${searchHashes.customerNameSearchHashes?.length
+              ? buildTextArraySql(searchHashes.customerNameSearchHashes)
+              : null}
+          ELSE customer_name_search_hashes
+        END,
         ic_number_search_hash = COALESCE(ic_number_search_hash, ${searchHashes.icNumberSearchHash}),
         customer_phone_search_hash = COALESCE(customer_phone_search_hash, ${searchHashes.customerPhoneSearchHash}),
         account_number_search_hash = COALESCE(account_number_search_hash, ${searchHashes.accountNumberSearchHash})

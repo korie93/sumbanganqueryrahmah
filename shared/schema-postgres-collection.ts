@@ -22,6 +22,7 @@ export const collectionRecords = pgTable("collection_records", {
   customerName: text("customer_name").notNull(),
   customerNameEncrypted: text("customer_name_encrypted"),
   customerNameSearchHash: text("customer_name_search_hash"),
+  customerNameSearchHashes: text("customer_name_search_hashes").array(),
   icNumber: text("ic_number").notNull(),
   icNumberEncrypted: text("ic_number_encrypted"),
   icNumberSearchHash: text("ic_number_search_hash"),
@@ -56,6 +57,10 @@ export const collectionRecords = pgTable("collection_records", {
   customerPhoneIdx: index("idx_collection_records_customer_phone").on(table.customerPhone),
   customerNameSearchHashIdx: index("idx_collection_records_customer_name_search_hash").on(
     table.customerNameSearchHash,
+  ),
+  customerNameSearchHashesIdx: index("idx_collection_records_customer_name_search_hashes").using(
+    "gin",
+    table.customerNameSearchHashes,
   ),
   icNumberSearchHashIdx: index("idx_collection_records_ic_number_search_hash").on(
     table.icNumberSearchHash,

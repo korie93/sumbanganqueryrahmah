@@ -11,7 +11,9 @@ import {
 import {
   buildCollectionRecordPiiSearchHashes,
   buildEncryptedCollectionRecordPiiValues,
+  resolveStoredCollectionPiiPlaintextValue,
 } from "../lib/collection-pii-encryption";
+import { buildTextArraySql } from "./sql-array-utils";
 import {
   attachCollectionReceipts,
 } from "./collection-receipt-utils";
@@ -31,6 +33,22 @@ export async function createCollectionRecord(data: CreateCollectionRecordInput):
     customerPhone: data.customerPhone,
     accountNumber: data.accountNumber,
   });
+  const persistedCustomerName = resolveStoredCollectionPiiPlaintextValue({
+    plaintext: data.customerName,
+    encrypted: encryptedPii?.customerNameEncrypted,
+  });
+  const persistedIcNumber = resolveStoredCollectionPiiPlaintextValue({
+    plaintext: data.icNumber,
+    encrypted: encryptedPii?.icNumberEncrypted,
+  });
+  const persistedCustomerPhone = resolveStoredCollectionPiiPlaintextValue({
+    plaintext: data.customerPhone,
+    encrypted: encryptedPii?.customerPhoneEncrypted,
+  });
+  const persistedAccountNumber = resolveStoredCollectionPiiPlaintextValue({
+    plaintext: data.accountNumber,
+    encrypted: encryptedPii?.accountNumberEncrypted,
+  });
   return db.transaction(async (tx) => {
     await tx.execute(sql`
       INSERT INTO public.collection_records (
@@ -38,6 +56,7 @@ export async function createCollectionRecord(data: CreateCollectionRecordInput):
         customer_name,
         customer_name_encrypted,
         customer_name_search_hash,
+        customer_name_search_hashes,
         ic_number,
         ic_number_encrypted,
         ic_number_search_hash,
@@ -59,16 +78,19 @@ export async function createCollectionRecord(data: CreateCollectionRecordInput):
       )
       VALUES (
         ${id}::uuid,
-        ${data.customerName},
+        ${persistedCustomerName},
         ${encryptedPii?.customerNameEncrypted ?? null},
         ${piiSearchHashes?.customerNameSearchHash ?? null},
-        ${data.icNumber},
+        ${piiSearchHashes?.customerNameSearchHashes?.length
+          ? buildTextArraySql(piiSearchHashes.customerNameSearchHashes)
+          : null},
+        ${persistedIcNumber},
         ${encryptedPii?.icNumberEncrypted ?? null},
         ${piiSearchHashes?.icNumberSearchHash ?? null},
-        ${data.customerPhone},
+        ${persistedCustomerPhone},
         ${encryptedPii?.customerPhoneEncrypted ?? null},
         ${piiSearchHashes?.customerPhoneSearchHash ?? null},
-        ${data.accountNumber},
+        ${persistedAccountNumber},
         ${encryptedPii?.accountNumberEncrypted ?? null},
         ${piiSearchHashes?.accountNumberSearchHash ?? null},
         ${data.batch},

@@ -1,4 +1,5 @@
 import crypto from "crypto";
+import { StringDecoder } from "node:string_decoder";
 import { sql, type SQL } from "drizzle-orm";
 import type {
   Backup,
@@ -26,11 +27,222 @@ type BackupQueryRow = Omit<Backup, "metadata"> & {
   metadata?: unknown;
 };
 
+type BackupPayloadChunkQueryRow = {
+  chunkData?: unknown;
+};
+
+type BackupRawDataQueryRow = {
+  backupData?: unknown;
+};
+
+const BACKUP_DATA_ENCRYPTION_PREFIX_V1 = "enc:v1:";
+const BACKUP_DATA_ENCRYPTION_PREFIX_V2 = "enc:v2:";
+
 function mapBackupQueryRow(options: BackupsRepositoryOptions, row: BackupQueryRow): Backup {
   return {
     ...row,
     metadata: options.parseBackupMetadataSafe(row.metadata),
   } as Backup;
+}
+
+async function readChunkedBackupDataFromStorage(backupId: string): Promise<string> {
+  const result = await db.execute(sql`
+    SELECT chunk_data as "chunkData"
+    FROM public.backup_payload_chunks
+    WHERE backup_id = ${backupId}
+    ORDER BY chunk_index ASC
+  `);
+
+  return ((result.rows || []) as BackupPayloadChunkQueryRow[])
+    .map((row) => String(row.chunkData || ""))
+    .join("");
+}
+
+async function readChunkedBackupDataStorageChunks(backupId: string): Promise<string[]> {
+  const result = await db.execute(sql`
+    SELECT chunk_data as "chunkData"
+    FROM public.backup_payload_chunks
+    WHERE backup_id = ${backupId}
+    ORDER BY chunk_index ASC
+  `);
+
+  return ((result.rows || []) as BackupPayloadChunkQueryRow[])
+    .map((row) => String(row.chunkData || ""))
+    .filter((chunk) => chunk.length > 0);
+}
+
+function normalizeBackupEncryptionKeyId(raw: string): string | null {
+  const normalized = String(raw || "").trim().toLowerCase();
+  if (!normalized) {
+    return null;
+  }
+  return /^[a-z0-9_-]{1,64}$/.test(normalized) ? normalized : null;
+}
+
+function parseEncryptedBackupDataV2Header(rawPayload: string):
+  | {
+      keyId: string;
+      ivBase64: string;
+      authTagBase64: string;
+      ciphertextBase64Remainder: string;
+    }
+  | null {
+  if (!rawPayload.startsWith(BACKUP_DATA_ENCRYPTION_PREFIX_V2)) {
+    return null;
+  }
+
+  const token = rawPayload.slice(BACKUP_DATA_ENCRYPTION_PREFIX_V2.length);
+  const firstDot = token.indexOf(".");
+  if (firstDot < 0) {
+    return null;
+  }
+  const secondDot = token.indexOf(".", firstDot + 1);
+  if (secondDot < 0) {
+    return null;
+  }
+  const thirdDot = token.indexOf(".", secondDot + 1);
+  if (thirdDot < 0) {
+    return null;
+  }
+
+  return {
+    keyId: token.slice(0, firstDot),
+    ivBase64: token.slice(firstDot + 1, secondDot),
+    authTagBase64: token.slice(secondDot + 1, thirdDot),
+    ciphertextBase64Remainder: token.slice(thirdDot + 1),
+  };
+}
+
+async function* iterateDecodedBackupDataJsonChunksFromStorageChunks(
+  storagePayloadChunks: string[],
+  backupEncryption: BackupEncryptionConfig,
+): AsyncGenerator<string, void, void> {
+  const chunks = storagePayloadChunks.filter((chunk) => chunk.length > 0);
+  if (!chunks.length) {
+    return;
+  }
+
+  const firstChunk = chunks[0];
+  if (!firstChunk.startsWith(BACKUP_DATA_ENCRYPTION_PREFIX_V1)
+    && !firstChunk.startsWith(BACKUP_DATA_ENCRYPTION_PREFIX_V2)) {
+    for (const chunk of chunks) {
+      yield chunk;
+    }
+    return;
+  }
+
+  if (firstChunk.startsWith(BACKUP_DATA_ENCRYPTION_PREFIX_V1)) {
+    yield decodeBackupDataFromStorage(chunks.join(""), backupEncryption);
+    return;
+  }
+
+  let headerBuffer = "";
+  let parsedHeader:
+    | {
+        keyId: string;
+        ivBase64: string;
+        authTagBase64: string;
+        ciphertextBase64Remainder: string;
+      }
+    | null = null;
+  let startChunkIndex = -1;
+
+  for (let index = 0; index < chunks.length; index += 1) {
+    headerBuffer += chunks[index];
+    parsedHeader = parseEncryptedBackupDataV2Header(headerBuffer);
+    if (parsedHeader) {
+      startChunkIndex = index;
+      break;
+    }
+  }
+
+  if (!parsedHeader || startChunkIndex < 0) {
+    yield decodeBackupDataFromStorage(chunks.join(""), backupEncryption);
+    return;
+  }
+
+  const normalizedKeyId = normalizeBackupEncryptionKeyId(parsedHeader.keyId);
+  if (!normalizedKeyId) {
+    throw new Error("Stored backup payload has an invalid encrypted format.");
+  }
+
+  const key = backupEncryption.keysById.get(normalizedKeyId);
+  if (!key) {
+    throw new Error(
+      `Missing backup encryption key '${normalizedKeyId}'. Configure BACKUP_ENCRYPTION_KEYS for key rotation support.`,
+    );
+  }
+
+  const iv = Buffer.from(parsedHeader.ivBase64, "base64");
+  const authTag = Buffer.from(parsedHeader.authTagBase64, "base64");
+  const decipher = crypto.createDecipheriv("aes-256-gcm", key, iv);
+  decipher.setAuthTag(authTag);
+  const utf8Decoder = new StringDecoder("utf8");
+
+  let base64Remainder = "";
+  let ciphertextBase64 = parsedHeader.ciphertextBase64Remainder;
+
+  const flushCiphertextChunk = (segment: string) => {
+    const combined = `${base64Remainder}${segment}`;
+    const safeLength = combined.length - (combined.length % 4);
+
+    if (safeLength <= 0) {
+      base64Remainder = combined;
+      return "";
+    }
+
+    base64Remainder = combined.slice(safeLength);
+    const decryptedBuffer = decipher.update(Buffer.from(combined.slice(0, safeLength), "base64"));
+    return decryptedBuffer.length > 0 ? utf8Decoder.write(decryptedBuffer) : "";
+  };
+
+  const firstDecryptedChunk = flushCiphertextChunk(ciphertextBase64);
+  if (firstDecryptedChunk) {
+    yield firstDecryptedChunk;
+  }
+
+  for (let index = startChunkIndex + 1; index < chunks.length; index += 1) {
+    ciphertextBase64 = chunks[index];
+    const decryptedChunk = flushCiphertextChunk(ciphertextBase64);
+    if (decryptedChunk) {
+      yield decryptedChunk;
+    }
+  }
+
+  if (base64Remainder.length > 0) {
+    const trailingBuffer = decipher.update(Buffer.from(base64Remainder, "base64"));
+    const trailingChunk = trailingBuffer.length > 0 ? utf8Decoder.write(trailingBuffer) : "";
+    if (trailingChunk) {
+      yield trailingChunk;
+    }
+  }
+
+  const finalChunk = utf8Decoder.end(decipher.final());
+  if (finalChunk) {
+    yield finalChunk;
+  }
+}
+
+async function readBackupStoragePayloadChunksById(id: string): Promise<string[] | undefined> {
+  const result = await db.execute(sql`
+    SELECT
+      backup_data as "backupData"
+    FROM public.backups
+    WHERE id = ${id}
+    LIMIT 1
+  `);
+
+  const row = result.rows[0] as BackupRawDataQueryRow | undefined;
+  if (!row) {
+    return undefined;
+  }
+
+  const rawBackupData = String(row.backupData || "");
+  if (rawBackupData.trim().length > 0) {
+    return [rawBackupData];
+  }
+
+  return readChunkedBackupDataStorageChunks(id);
 }
 
 export async function createBackup(
@@ -87,16 +299,20 @@ export async function createBackupFromPreparedPayload(
         metadata
     `);
 
+    let chunkIndex = 0;
+
     for await (const chunk of iteratePreparedBackupPayloadStorageChunks(data.preparedBackupPayload)) {
       if (!chunk) {
         continue;
       }
 
       await tx.execute(sql`
-        UPDATE public.backups
-        SET backup_data = backup_data || ${chunk}
-        WHERE id = ${id}
+        INSERT INTO public.backup_payload_chunks (backup_id, chunk_index, chunk_data)
+        VALUES (${id}, ${chunkIndex}, ${chunk})
+        ON CONFLICT (backup_id, chunk_index) DO UPDATE
+        SET chunk_data = EXCLUDED.chunk_data
       `);
+      chunkIndex += 1;
     }
 
     return insertResult.rows[0] as Backup;
@@ -250,10 +466,29 @@ export async function getBackupById(
   const row = (result.rows[0] as BackupQueryRow | undefined);
   if (!row) return undefined;
 
+  const rawBackupData = String(row.backupData || "");
+  const storagePayload = rawBackupData.trim().length > 0
+    ? rawBackupData
+    : await readChunkedBackupDataFromStorage(id);
+
   return mapBackupQueryRow(options, {
     ...row,
-    backupData: decodeBackupDataFromStorage(String(row.backupData || ""), backupEncryption),
+    backupData: decodeBackupDataFromStorage(storagePayload, backupEncryption),
   });
+}
+
+export async function iterateBackupDataJsonChunksById(
+  options: BackupsRepositoryOptions,
+  backupEncryption: BackupEncryptionConfig,
+  id: string,
+): Promise<AsyncIterable<string> | undefined> {
+  await options.ensureBackupsTable();
+  const storagePayloadChunks = await readBackupStoragePayloadChunksById(id);
+  if (!storagePayloadChunks) {
+    return undefined;
+  }
+
+  return iterateDecodedBackupDataJsonChunksFromStorageChunks(storagePayloadChunks, backupEncryption);
 }
 
 export async function getBackupMetadataById(

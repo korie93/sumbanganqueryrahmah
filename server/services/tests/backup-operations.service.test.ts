@@ -12,6 +12,33 @@ type AuditEntry = {
   details?: string;
 };
 
+function isAsyncIterableStringSource(value: unknown): value is AsyncIterable<string> {
+  return typeof value === "object"
+    && value !== null
+    && Symbol.asyncIterator in value
+    && typeof (value as AsyncIterable<string>)[Symbol.asyncIterator] === "function";
+}
+
+async function collectAsyncTextChunks(chunks: AsyncIterable<string>) {
+  let payload = "";
+  for await (const chunk of chunks) {
+    payload += chunk;
+  }
+  return payload;
+}
+
+async function readExportPayloadJson(body: {
+  payloadPrefixJson: string;
+  backupDataJsonChunks: AsyncIterable<string>;
+  payloadSuffixJson: string;
+}) {
+  let backupDataJson = "";
+  for await (const chunk of body.backupDataJsonChunks) {
+    backupDataJson += chunk;
+  }
+  return `${body.payloadPrefixJson}${backupDataJson}${body.payloadSuffixJson}`;
+}
+
 function createBackupOperationsHarness(options?: {
   exportCircuitOpen?: boolean;
   corruptChecksum?: boolean;
@@ -23,6 +50,7 @@ function createBackupOperationsHarness(options?: {
   const auditLogs: AuditEntry[] = [];
   const createBackupCalls: Array<Record<string, unknown>> = [];
   const restoreCalls: unknown[] = [];
+  const restoreInputKinds: string[] = [];
   const deleteBackupCalls: string[] = [];
   const tempPayloadPaths: string[] = [];
   let payloadFileCleanupCount = 0;
@@ -195,6 +223,19 @@ function createBackupOperationsHarness(options?: {
         backupData: "",
       };
     },
+    iterateBackupDataJsonChunksById: async function* (id: string) {
+      if (options?.backupReadErrorMessage) {
+        throw new Error(options.backupReadErrorMessage);
+      }
+      const backup = backups.get(id);
+      if (!backup) {
+        return;
+      }
+      const backupData = String(backup.backupData || "");
+      if (backupData) {
+        yield backupData;
+      }
+    },
     getBackupById: async (id: string) => {
       if (options?.backupReadErrorMessage) {
         throw new Error(options.backupReadErrorMessage);
@@ -202,7 +243,13 @@ function createBackupOperationsHarness(options?: {
       return backups.get(id);
     },
     restoreFromBackup: async (backupData: unknown) => {
-      restoreCalls.push(backupData);
+      if (isAsyncIterableStringSource(backupData)) {
+        restoreInputKinds.push("async-iterable");
+        restoreCalls.push(await collectAsyncTextChunks(backupData));
+      } else {
+        restoreInputKinds.push(typeof backupData);
+        restoreCalls.push(backupData);
+      }
       return {
         success: true,
         stats: {
@@ -249,6 +296,7 @@ function createBackupOperationsHarness(options?: {
     createBackupCalls,
     restoreCalls,
     deleteBackupCalls,
+    restoreInputKinds,
     tempPayloadPaths,
     getPayloadFileCleanupCount: () => payloadFileCleanupCount,
     getReadPreparedPayloadCallCount: () => readPreparedPayloadCallCount,
@@ -472,7 +520,11 @@ test("BackupOperationsService exportBackup returns downloadable payload and audi
   assert.equal(result.statusCode, 200);
   assert.equal(typeof (result.body as any).fileName, "string");
   const payload = JSON.parse(
-    `${String((result.body as any).payloadPrefixJson || "")}${String((result.body as any).backupDataJson || "")}${String((result.body as any).payloadSuffixJson || "")}`,
+    await readExportPayloadJson(result.body as {
+      payloadPrefixJson: string;
+      backupDataJsonChunks: AsyncIterable<string>;
+      payloadSuffixJson: string;
+    }),
   );
   assert.equal(payload.id, "backup-1");
   assert.equal(Array.isArray(payload.backupData.imports), true);
@@ -527,7 +579,7 @@ test("BackupOperationsService exportBackup blocks oversized payloads", async () 
 });
 
 test("BackupOperationsService restoreBackup returns restore details and audit metadata", async () => {
-  const { service, restoreCalls, auditLogs } = createBackupOperationsHarness();
+  const { service, restoreCalls, restoreInputKinds, auditLogs } = createBackupOperationsHarness();
 
   const result = await service.restoreBackup({
     backupId: "backup-1",
@@ -540,6 +592,7 @@ test("BackupOperationsService restoreBackup returns restore details and audit me
   assert.equal((result.body as any).backupName, "Nightly Backup");
   assert.equal((result.body as any).integrity.verified, true);
   assert.equal(restoreCalls.length, 1);
+  assert.deepEqual(restoreInputKinds, ["async-iterable"]);
   assert.equal(typeof restoreCalls[0], "string");
   assert.equal(auditLogs.length, 1);
   assert.equal(auditLogs[0].action, "RESTORE_BACKUP");

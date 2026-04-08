@@ -1068,15 +1068,18 @@ test(
         assert.equal(await columnDataType(pool, "collection_records", "ic_number_encrypted"), "text");
         assert.equal(await columnDataType(pool, "collection_records", "customer_phone_encrypted"), "text");
         assert.equal(await columnDataType(pool, "collection_records", "account_number_encrypted"), "text");
+        assert.equal(await indexExists(pool, "idx_collection_records_customer_name_search_hashes"), true);
 
         const encryptedRecord = await pool.query<{
           customer_name_encrypted: string | null;
+          customer_name_search_hashes: string[] | null;
           ic_number_encrypted: string | null;
           customer_phone_encrypted: string | null;
           account_number_encrypted: string | null;
         }>(`
           SELECT
             customer_name_encrypted,
+            customer_name_search_hashes,
             ic_number_encrypted,
             customer_phone_encrypted,
             account_number_encrypted
@@ -1086,6 +1089,8 @@ test(
 
         const row = encryptedRecord.rows[0];
         assert.ok(row?.customer_name_encrypted);
+        assert.ok(Array.isArray(row?.customer_name_search_hashes));
+        assert.ok((row?.customer_name_search_hashes?.length ?? 0) > 0);
         assert.ok(row?.ic_number_encrypted);
         assert.ok(row?.customer_phone_encrypted);
         assert.ok(row?.account_number_encrypted);

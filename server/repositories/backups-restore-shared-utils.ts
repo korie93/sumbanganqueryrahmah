@@ -5,7 +5,7 @@ type BackupRestoreExecute = (typeof db)["execute"];
 
 export type BackupPayloadReader = {
   getArray<T>(key: keyof BackupDataPayload): T[];
-  iterateArrayChunks<T>(key: keyof BackupDataPayload, chunkSize: number): Generator<T[]>;
+  iterateArrayChunks<T>(key: keyof BackupDataPayload, chunkSize: number): AsyncGenerator<T[]>;
 };
 
 export type BackupPayloadChunkReader = Pick<BackupPayloadReader, "iterateArrayChunks">;

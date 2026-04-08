@@ -4,11 +4,14 @@ import {
   buildCollectionRecordPiiSearchHashes,
   buildEncryptedCollectionRecordPiiValues,
   decryptCollectionPiiValue,
+  hashCollectionCustomerNameSearchTerms,
   hashCollectionPiiSearchValue,
   hasCollectionPiiEncryptionConfigured,
   resolveCollectionPiiFieldValue,
+  resolveStoredCollectionPiiPlaintextValue,
   shouldRedactCollectionPiiPlaintextValue,
   shouldRewriteCollectionPiiSearchHashValue,
+  shouldRewriteCollectionPiiSearchHashesValue,
   shouldRewriteCollectionPiiShadowValue,
 } from "../../lib/collection-pii-encryption";
 import { mapCollectionRecordRow } from "../collection-repository-mappers";
@@ -127,6 +130,51 @@ test("collection PII helpers stay disabled when no encryption key is configured"
   });
 });
 
+test("collection PII helpers keep plaintext empty for storage when current encrypted shadows are available", () => {
+  withCollectionPiiKeys({ current: "test-collection-pii-encryption-key" }, () => {
+    const encrypted = buildEncryptedCollectionRecordPiiValues({
+      customerName: "Alice Tan",
+      icNumber: "900101015555",
+      customerPhone: "0123000001",
+      accountNumber: "ACC-1001",
+    });
+
+    assert.equal(
+      resolveStoredCollectionPiiPlaintextValue({
+        plaintext: "Alice Tan",
+        encrypted: encrypted?.customerNameEncrypted,
+      }),
+      "",
+    );
+    assert.equal(
+      resolveStoredCollectionPiiPlaintextValue({
+        plaintext: "900101015555",
+        encrypted: encrypted?.icNumberEncrypted,
+      }),
+      "",
+    );
+    assert.equal(
+      resolveStoredCollectionPiiPlaintextValue({
+        plaintext: "Alice Tan",
+        encrypted: "",
+      }),
+      "Alice Tan",
+    );
+  });
+});
+
+test("collection PII helpers keep plaintext storage fallback when encryption is not configured", () => {
+  withCollectionPiiKeys({ current: null }, () => {
+    assert.equal(
+      resolveStoredCollectionPiiPlaintextValue({
+        plaintext: "Alice Tan",
+        encrypted: "enc.value",
+      }),
+      "Alice Tan",
+    );
+  });
+});
+
 test("collection PII helpers can decrypt values with a previous rotation key", () => {
   withCollectionPiiKeys(
     {
@@ -236,6 +284,10 @@ test("collection PII helpers build deterministic search hashes for sensitive fie
       hashes?.customerNameSearchHash,
       hashCollectionPiiSearchValue("customerName", "Alice Tan"),
     );
+    assert.deepEqual(
+      hashes?.customerNameSearchHashes,
+      hashCollectionCustomerNameSearchTerms("Alice Tan"),
+    );
     assert.equal(
       hashes?.icNumberSearchHash,
       hashCollectionPiiSearchValue("icNumber", "900101015555"),
@@ -251,6 +303,17 @@ test("collection PII helpers build deterministic search hashes for sensitive fie
   });
 });
 
+test("collection PII helpers build prefix-token blind indexes for customer names", () => {
+  withCollectionPiiKeys({ current: "search-hash-secret-key" }, () => {
+    const hashes = hashCollectionCustomerNameSearchTerms(" Alice   Tan ");
+
+    assert.ok(hashes);
+    assert.ok(hashes?.includes(hashCollectionPiiSearchValue("customerName", "al") || ""));
+    assert.ok(hashes?.includes(hashCollectionPiiSearchValue("customerName", "alice") || ""));
+    assert.ok(hashes?.includes(hashCollectionPiiSearchValue("customerName", "tan") || ""));
+  });
+});
+
 test("collection PII helpers detect missing or stale search hashes for rewrite under the active key", () => {
   withCollectionPiiKeys(
     {
@@ -258,6 +321,19 @@ test("collection PII helpers detect missing or stale search hashes for rewrite u
       previous: "old-collection-pii-key",
     },
     () => {
+      const encryptedWithOldKey = withCollectionPiiKeys(
+        {
+          current: "old-collection-pii-key",
+        },
+        () =>
+          buildEncryptedCollectionRecordPiiValues({
+            customerName: "Legacy Alice",
+            icNumber: "900101011234",
+            customerPhone: "0123111222",
+            accountNumber: "ACC-OLD-1",
+          }),
+      );
+
       const legacyHash = withCollectionPiiKeys(
         {
           current: "old-collection-pii-key",
@@ -289,6 +365,22 @@ test("collection PII helpers detect missing or stale search hashes for rewrite u
         }),
         false,
       );
+      assert.equal(
+        shouldRewriteCollectionPiiSearchHashesValue({
+          plaintext: "Legacy Alice",
+          encrypted: encryptedWithOldKey?.customerNameEncrypted,
+          hashes: [],
+        }),
+        true,
+      );
+      assert.equal(
+        shouldRewriteCollectionPiiSearchHashesValue({
+          plaintext: "Legacy Alice",
+          encrypted: encryptedWithOldKey?.customerNameEncrypted,
+          hashes: hashCollectionCustomerNameSearchTerms("Legacy Alice"),
+        }),
+        false,
+      );
     },
   );
 });
@@ -314,7 +406,29 @@ test("collection PII helpers only allow plaintext redaction after current shadow
         },
         () => hashCollectionPiiSearchValue("customerPhone", "0123111222"),
       );
+      const currentCustomerNameHash = hashCollectionPiiSearchValue("customerName", "Legacy Alice");
+      const currentCustomerNameHashes = hashCollectionCustomerNameSearchTerms("Legacy Alice");
 
+      assert.equal(
+        shouldRedactCollectionPiiPlaintextValue({
+          field: "customerName",
+          plaintext: "Legacy Alice",
+          encrypted: encryptedWithCurrentKey?.customerNameEncrypted,
+          hash: currentCustomerNameHash,
+          hashes: currentCustomerNameHashes,
+        }),
+        true,
+      );
+      assert.equal(
+        shouldRedactCollectionPiiPlaintextValue({
+          field: "customerName",
+          plaintext: "Legacy Alice",
+          encrypted: encryptedWithCurrentKey?.customerNameEncrypted,
+          hash: currentCustomerNameHash,
+          hashes: [],
+        }),
+        false,
+      );
       assert.equal(
         shouldRedactCollectionPiiPlaintextValue({
           field: "customerPhone",

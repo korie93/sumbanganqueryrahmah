@@ -56,6 +56,7 @@ export {
   bannedSessions,
   auditLogs,
   backups,
+  backupPayloadChunks,
   backupJobs,
   monitorAlertIncidents,
   systemStabilityPatterns,

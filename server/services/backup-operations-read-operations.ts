@@ -3,16 +3,16 @@ import { logger } from "../lib/logger";
 import {
   buildBackupExportEnvelope,
   createBackupDownloadFileName,
-  verifyBackupIntegrity,
+  verifyBackupIntegrityFromChunks,
 } from "./backup-operations-integrity-utils";
 import {
   type BackupOperationsBackupsRepository,
   type BackupOperationsStorage,
+  type BackupIntegrityResult,
   type BackupMetadataRecord,
   type BackupOperationResponse,
   type BackupListResponse,
   type ListBackupsInput,
-  type BackupRecord,
 } from "./backup-operations-types";
 import {
   buildBackupPayloadTooLargeMessage,
@@ -24,7 +24,7 @@ type ExportBackupBody =
   | {
       fileName: string;
       payloadPrefixJson: string;
-      backupDataJson: string;
+      backupDataJsonChunks: AsyncIterable<string>;
       payloadSuffixJson: string;
     }
   | { message: string };
@@ -98,9 +98,9 @@ export class BackupOperationsReadOperations {
     backupId: string,
     username: string,
   ): Promise<BackupOperationResponse<ExportBackupBody>> {
-    let backup: BackupRecord | undefined;
+    let backup: BackupMetadataRecord | undefined;
     try {
-      backup = await this.backupsRepository.getBackupById(backupId);
+      backup = await this.backupsRepository.getBackupMetadataById(backupId);
     } catch (error) {
       const payloadReadFailure = getBackupPayloadReadFailure<ExportBackupBody>(error);
       if (payloadReadFailure) {
@@ -116,20 +116,40 @@ export class BackupOperationsReadOperations {
       };
     }
 
-    const backupDataJson = String(backup.backupData || "").trim();
-    if (!backupDataJson) {
+    const createBackupDataJsonChunks = async () => {
+      const chunks = await this.backupsRepository.iterateBackupDataJsonChunksById(backupId);
+      if (!chunks) {
+        throw new Error("Backup payload is not readable.");
+      }
+      return chunks;
+    };
+
+    let integrity: BackupIntegrityResult & { payloadBytes: number };
+    try {
+      integrity = await verifyBackupIntegrityFromChunks(
+        backup,
+        await createBackupDataJsonChunks(),
+      );
+    } catch (error) {
+      const payloadReadFailure = getBackupPayloadReadFailure<ExportBackupBody>(error);
+      if (payloadReadFailure) {
+        return payloadReadFailure;
+      }
+      throw error;
+    }
+
+    if (integrity.payloadBytes <= 0) {
       return {
         statusCode: 500,
         body: { message: "Backup payload is not readable." },
       };
     }
-    const payloadBytes = Buffer.byteLength(backupDataJson, "utf8");
-    if (payloadBytes > this.limits.maxPayloadBytes) {
+    if (integrity.payloadBytes > this.limits.maxPayloadBytes) {
       logger.warn("Backup export blocked because the payload exceeds the configured size limit", {
         backupId: backup.id,
         backupName: backup.name,
         username,
-        payloadBytes,
+        payloadBytes: integrity.payloadBytes,
         maxPayloadBytes: this.limits.maxPayloadBytes,
       });
       return {
@@ -138,7 +158,6 @@ export class BackupOperationsReadOperations {
       };
     }
 
-    const integrity = verifyBackupIntegrity(backup);
     if (!integrity.ok) {
       logger.warn("Backup integrity mismatch detected during export", {
         backupId: backup.id,
@@ -176,7 +195,7 @@ export class BackupOperationsReadOperations {
       body: {
         fileName: createBackupDownloadFileName(backup.name, backup.id),
         payloadPrefixJson: `${envelopeJson.slice(0, -1)},"backupData":`,
-        backupDataJson,
+        backupDataJsonChunks: await createBackupDataJsonChunks(),
         payloadSuffixJson: "}",
       },
     };

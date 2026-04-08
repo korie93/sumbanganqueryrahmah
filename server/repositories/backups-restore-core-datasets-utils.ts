@@ -27,7 +27,7 @@ export async function restoreImportsFromBackup(
   backupDataReader: BackupPayloadChunkReader,
   stats: RestoreStats,
 ) {
-  for (const chunk of backupDataReader.iterateArrayChunks<BackupImportRecord>("imports", BACKUP_CHUNK_SIZE)) {
+  for await (const chunk of backupDataReader.iterateArrayChunks<BackupImportRecord>("imports", BACKUP_CHUNK_SIZE)) {
     const rows = chunk.map((record) => ({
       id: record.id,
       name: record.name,
@@ -65,7 +65,7 @@ export async function restoreDataRowsFromBackup(
   backupDataReader: BackupPayloadChunkReader,
   stats: RestoreStats,
 ) {
-  for (const chunk of backupDataReader.iterateArrayChunks<DataRow>("dataRows", BACKUP_CHUNK_SIZE)) {
+  for await (const chunk of backupDataReader.iterateArrayChunks<DataRow>("dataRows", BACKUP_CHUNK_SIZE)) {
     const rows = chunk.map((row) => ({
       id: row.id ?? crypto.randomUUID(),
       importId: row.importId,
@@ -88,7 +88,7 @@ export async function restoreUsersFromBackup(
   backupDataReader: BackupPayloadChunkReader,
   stats: RestoreStats,
 ) {
-  for (const chunk of backupDataReader.iterateArrayChunks<BackupUserRecord>("users", BACKUP_CHUNK_SIZE)) {
+  for await (const chunk of backupDataReader.iterateArrayChunks<BackupUserRecord>("users", BACKUP_CHUNK_SIZE)) {
     const now = new Date();
     const rows = chunk
       .filter((user) => Boolean(user.passwordHash))
@@ -132,7 +132,7 @@ export async function restoreAuditLogsFromBackup(
   backupDataReader: BackupPayloadChunkReader,
   stats: RestoreStats,
 ) {
-  for (const chunk of backupDataReader.iterateArrayChunks<AuditLog>("auditLogs", BACKUP_CHUNK_SIZE)) {
+  for await (const chunk of backupDataReader.iterateArrayChunks<AuditLog>("auditLogs", BACKUP_CHUNK_SIZE)) {
     const rows = chunk.map((log) => ({
       id: log.id ?? crypto.randomUUID(),
       action: log.action,

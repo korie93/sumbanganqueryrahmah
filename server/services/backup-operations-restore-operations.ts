@@ -1,6 +1,7 @@
-import { verifyBackupIntegrity } from "./backup-operations-integrity-utils";
+import { verifyBackupIntegrityFromChunks } from "./backup-operations-integrity-utils";
 import type {
   BackupIntegrityResult,
+  BackupMetadataRecord,
   BackupOperationResponse,
   RestoreBackupInput,
   RestoreBackupSuccessBody,
@@ -16,11 +17,11 @@ export async function executeRestoreBackup(
   deps: BackupOperationsMutationDeps,
   params: RestoreBackupInput,
 ): Promise<BackupOperationResponse<RestoreBackupSuccessBody | { message: string }>> {
-  let backup;
+  let backup: BackupMetadataRecord | undefined;
 
   try {
     backup = await deps.withExportCircuit(() =>
-      deps.backupsRepository.getBackupById(params.backupId),
+      deps.backupsRepository.getBackupMetadataById(params.backupId),
     );
   } catch (error) {
     const payloadReadFailure = getBackupPayloadReadFailure<RestoreBackupSuccessBody>(error);
@@ -42,8 +43,8 @@ export async function executeRestoreBackup(
         error: {
           statusCode: number;
           message: string;
-        };
-      }
+      };
+    }
     | {
         restored: RestoreFromBackupResult;
         startTime: number;
@@ -53,7 +54,17 @@ export async function executeRestoreBackup(
   try {
     result = await deps.withExportCircuit(async () => {
       const startTime = Date.now();
-      const integrity = verifyBackupIntegrity(backup);
+      const createBackupDataJsonChunks = async () => {
+        const chunks = await deps.backupsRepository.iterateBackupDataJsonChunksById(params.backupId);
+        if (!chunks) {
+          throw new Error("Backup payload is not readable.");
+        }
+        return chunks;
+      };
+      const integrity = await verifyBackupIntegrityFromChunks(
+        backup,
+        await createBackupDataJsonChunks(),
+      );
       if (!integrity.ok) {
         return {
           error: {
@@ -63,9 +74,9 @@ export async function executeRestoreBackup(
         };
       }
 
-      const backupDataJson = String(backup.backupData || "");
-      backup.backupData = "";
-      const restored = await deps.backupsRepository.restoreFromBackup(backupDataJson);
+      const restored = await deps.backupsRepository.restoreFromBackup(
+        await createBackupDataJsonChunks(),
+      );
 
       await deps.storage.createAuditLog({
         action: "RESTORE_BACKUP",
@@ -85,6 +96,10 @@ export async function executeRestoreBackup(
       return { restored, startTime, integrity };
     });
   } catch (error) {
+    const payloadReadFailure = getBackupPayloadReadFailure<RestoreBackupSuccessBody>(error);
+    if (payloadReadFailure) {
+      return payloadReadFailure;
+    }
     return getCircuitOpenResponse(error, deps.isExportCircuitOpenError);
   }
 
