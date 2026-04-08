@@ -5,15 +5,15 @@ import { cn } from "@/lib/utils";
 export type ActiveFilterChip = {
   id: string;
   label: string;
-  onRemove?: () => void;
-  tone?: "default" | "warning" | "danger";
+  onRemove?: (() => void) | undefined;
+  tone?: "default" | "warning" | "danger" | undefined;
 };
 
 type ActiveFilterChipsProps = {
   items: ActiveFilterChip[];
-  onClearAll?: () => void;
-  label?: string;
-  className?: string;
+  onClearAll?: (() => void) | undefined;
+  label?: string | undefined;
+  className?: string | undefined;
 };
 
 function resolveChipToneClassName(tone: ActiveFilterChip["tone"]) {

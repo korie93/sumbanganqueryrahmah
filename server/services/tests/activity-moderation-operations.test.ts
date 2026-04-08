@@ -95,7 +95,7 @@ test("banActivity blocks superuser targets before visitor ban", async () => {
 });
 
 test("banAccount closes all active sessions and writes audit log", async () => {
-  const closed: Array<{ id: string; payload?: Record<string, unknown> }> = [];
+  const closed: Array<{ id: string; payload?: Record<string, unknown> | undefined }> = [];
   let auditTargetUser = "";
 
   const operations = createActivityModerationOperations(

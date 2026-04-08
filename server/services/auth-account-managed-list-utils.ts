@@ -47,10 +47,11 @@ export async function listManagedUsersPageOrAll(
     maxPageSize: 100,
   });
 
+  const search = readOptionalString(query.search);
   const result = await storage.listManagedUsersPage({
     page,
     pageSize,
-    search: readOptionalString(query.search),
+    ...(search !== undefined ? { search } : {}),
     role: (() => {
       const value = String(readOptionalString(query.role) || "all").toLowerCase();
       return value === "admin" || value === "user" ? value : "all";
@@ -92,10 +93,11 @@ export async function listPendingPasswordResetRequestsPageOrAll(
     pageSize: 50,
     maxPageSize: 100,
   });
+  const search = readOptionalString(query.search);
   const result = await storage.listPendingPasswordResetRequestsPage({
     page,
     pageSize,
-    search: readOptionalString(query.search),
+    ...(search !== undefined ? { search } : {}),
     status: parseManageableStatusFilter(query.status),
   });
 

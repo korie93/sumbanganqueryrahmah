@@ -190,8 +190,8 @@ export async function updateCollectionAdminGroupInTransaction(
   executor: CollectionAdminGroupExecutor,
   params: {
     groupId: string;
-    leaderNicknameId?: string;
-    memberNicknameIds?: string[];
+    leaderNicknameId?: string | undefined;
+    memberNicknameIds?: string[] | undefined;
     updatedBy: string;
   },
 ): Promise<string | null> {

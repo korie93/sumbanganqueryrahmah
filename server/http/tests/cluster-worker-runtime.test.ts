@@ -11,9 +11,9 @@ import type { WorkerControlState, WorkerMetricsPayload } from "../../internal/wo
 
 function createLogger() {
   return {
-    infoCalls: [] as Array<{ message: string; metadata?: Record<string, unknown> }>,
-    warnCalls: [] as Array<{ message: string; metadata?: Record<string, unknown> }>,
-    errorCalls: [] as Array<{ message: string; metadata?: Record<string, unknown> }>,
+    infoCalls: [] as Array<{ message: string; metadata?: Record<string, unknown> | undefined }>,
+    warnCalls: [] as Array<{ message: string; metadata?: Record<string, unknown> | undefined }>,
+    errorCalls: [] as Array<{ message: string; metadata?: Record<string, unknown> | undefined }>,
     info(message: string, metadata?: Record<string, unknown>) {
       this.infoCalls.push({ message, metadata });
     },

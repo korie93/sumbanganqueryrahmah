@@ -47,12 +47,12 @@ export class PostgresActivityStorage extends PostgresImportsSearchStorage {
   }
 
   async getFilteredActivities(filters: {
-    status?: string[];
-    username?: string;
-    ipAddress?: string;
-    browser?: string;
-    dateFrom?: Date;
-    dateTo?: Date;
+    status?: string[] | undefined;
+    username?: string | undefined;
+    ipAddress?: string | undefined;
+    browser?: string | undefined;
+    dateFrom?: Date | undefined;
+    dateTo?: Date | undefined;
   }): Promise<UserActivity[]> {
     return this.activityRepository.getFilteredActivities(filters);
   }
@@ -66,7 +66,7 @@ export class PostgresActivityStorage extends PostgresImportsSearchStorage {
   }
 
   async getBannedUsers(): Promise<
-    Array<User & { banInfo?: { ipAddress: string | null; browser: string | null; bannedAt: Date | null } }>
+    Array<User & { banInfo?: { ipAddress: string | null; browser: string | null; bannedAt: Date | null } | undefined }>
   > {
     return this.activityRepository.getBannedUsers();
   }

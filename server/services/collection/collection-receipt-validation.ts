@@ -18,15 +18,15 @@ export type CollectionReceiptExtractionStatus =
 export type CollectionReceiptValidationBlockingReason = "underpaid" | "overpaid" | "unverified" | null;
 
 export type CollectionReceiptValidationDraft = {
-  receiptId?: string | null;
-  fileHash?: string | null;
-  originalFileName?: string | null;
-  receiptAmountCents?: number | null;
-  extractedAmountCents?: number | null;
-  extractionStatus?: CollectionReceiptExtractionStatus | null;
-  extractionConfidence?: number | null;
-  receiptDate?: string | null;
-  receiptReference?: string | null;
+  receiptId?: string | null | undefined;
+  fileHash?: string | null | undefined;
+  originalFileName?: string | null | undefined;
+  receiptAmountCents?: number | null | undefined;
+  extractedAmountCents?: number | null | undefined;
+  extractionStatus?: CollectionReceiptExtractionStatus | null | undefined;
+  extractionConfidence?: number | null | undefined;
+  receiptDate?: string | null | undefined;
+  receiptReference?: string | null | undefined;
 };
 
 export type CollectionReceiptValidationResult = {

@@ -14,7 +14,7 @@ export interface ManagedSecretDialogProps {
   onOpenChange: (open: boolean) => void;
   open: boolean;
   title: string;
-  value?: string;
+  value?: string | undefined;
 }
 
 export function ManagedSecretDialog({

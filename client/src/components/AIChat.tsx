@@ -11,8 +11,8 @@ type AIChatProps = {
   timeoutMs: number;
   aiEnabled: boolean;
   compactMode?: boolean;
-  onCancelAISearchReady?: (cancelFn: () => void) => void;
-  onStatusChange?: (status: AIChatStatus) => void;
+  onCancelAISearchReady?: ((cancelFn: () => void) => void) | undefined;
+  onStatusChange?: ((status: AIChatStatus) => void) | undefined;
 };
 
 export type AIChatStatus = SharedAIChatStatus;

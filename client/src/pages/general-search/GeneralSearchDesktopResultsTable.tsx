@@ -9,7 +9,7 @@ interface GeneralSearchDesktopResultsTableProps {
   enableVirtualRows: boolean;
   headers: string[];
   onRecordSelect: (record: SearchResultRow) => void;
-  onScroll?: (event: UIEvent<HTMLDivElement>) => void;
+  onScroll?: ((event: UIEvent<HTMLDivElement>) => void) | undefined;
   renderCellValue: (safeText: string) => ReactNode;
   topSpacerHeight: number;
   virtualRows: SearchResultRow[];

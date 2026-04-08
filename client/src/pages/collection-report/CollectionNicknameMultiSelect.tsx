@@ -20,8 +20,8 @@ type CollectionNicknameMultiSelectProps = {
   onToggleNickname: (nickname: string, checked: boolean) => void;
   onSelectAllVisible: () => void;
   onClearAllSelected: () => void;
-  triggerClassName?: string;
-  popoverClassName?: string;
+  triggerClassName?: string | undefined;
+  popoverClassName?: string | undefined;
 };
 
 export function CollectionNicknameMultiSelect({

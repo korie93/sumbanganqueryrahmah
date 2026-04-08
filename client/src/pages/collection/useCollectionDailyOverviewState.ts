@@ -26,14 +26,14 @@ type UseCollectionDailyOverviewStateOptions = {
   year: number;
   month: number;
   selectedUsernames: string[];
-  selectedQueryUsers?: string[];
+  selectedQueryUsers?: string[] | undefined;
   canEditTarget: boolean;
   onClearSelection: () => void;
   toast: ToastFn;
 };
 
 type LoadCollectionDailyOverviewOptions = {
-  preserveSelection?: boolean;
+  preserveSelection?: boolean | undefined;
 };
 
 function isAbortError(error: unknown) {

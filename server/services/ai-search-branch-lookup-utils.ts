@@ -218,7 +218,7 @@ export async function resolveAiBranchLookup(
       if (hint.length >= 3) {
         branchTextSearch = true;
         const branches = await lookups.findBranchesByText(hint, 1, branchTimeoutMs);
-        nearestBranch = branches[0] ? { ...branches[0], distanceKm: undefined } : null;
+        nearestBranch = branches[0] ? branches[0] : null;
       }
     }
   } catch {

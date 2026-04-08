@@ -23,8 +23,8 @@ type UseAIChatStateOptions = {
   aiEnabled: boolean;
   isMobile: boolean;
   timeoutMs: number;
-  onCancelAISearchReady?: (cancelFn: () => void) => void;
-  onStatusChange?: (status: AIChatStatus) => void;
+  onCancelAISearchReady?: ((cancelFn: () => void) => void) | undefined;
+  onStatusChange?: ((status: AIChatStatus) => void) | undefined;
 };
 
 export function useAIChatState({

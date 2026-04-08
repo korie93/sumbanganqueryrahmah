@@ -55,7 +55,7 @@ export function shouldFetchSystemMetricsDetails({
 }: {
   hidden: boolean;
   pollCount: number;
-  forceDetailed?: boolean;
+  forceDetailed?: boolean | undefined;
 }) {
   if (hidden && !forceDetailed) {
     return false;

@@ -13,7 +13,7 @@ import {
 import { logCollectionReceiptSanitization } from "./collection-receipt-storage-utils";
 
 export type StoredCollectionReceiptFile = CreateCollectionRecordReceiptInput & {
-  extractionMessage?: string | null;
+  extractionMessage?: string | null | undefined;
 };
 
 export type CollectionReceiptInspectionResult = {
@@ -27,8 +27,8 @@ export type CollectionReceiptInspectionResult = {
 export async function inspectCollectionReceiptBuffer(params: {
   buffer: Buffer;
   mimeType: string;
-  imageWidth?: number;
-  imageHeight?: number;
+  imageWidth?: number | undefined;
+  imageHeight?: number | undefined;
 }): Promise<CollectionReceiptInspectionResult> {
   return {
     fileHash: createHash("sha256").update(params.buffer).digest("hex"),
@@ -51,23 +51,23 @@ export async function sanitizeAndInspectCollectionReceiptBuffer(params: {
     sanitizedBuffer: sanitized.buffer,
     originalBytes: params.buffer.length,
     removedMetadataKinds: sanitized.removedMetadataKinds,
-    imageWidth: sanitized.imageWidth,
-    imageHeight: sanitized.imageHeight,
+    ...(sanitized.imageWidth !== undefined ? { imageWidth: sanitized.imageWidth } : {}),
+    ...(sanitized.imageHeight !== undefined ? { imageHeight: sanitized.imageHeight } : {}),
   });
 
   const inspection = await inspectCollectionReceiptBuffer({
     buffer: sanitized.buffer,
     mimeType: resolveCanonicalReceiptMimeType(params.signatureType),
-    imageWidth: sanitized.imageWidth,
-    imageHeight: sanitized.imageHeight,
+    ...(sanitized.imageWidth !== undefined ? { imageWidth: sanitized.imageWidth } : {}),
+    ...(sanitized.imageHeight !== undefined ? { imageHeight: sanitized.imageHeight } : {}),
   });
 
   return {
     sanitizedBuffer: sanitized.buffer,
     inspection,
     removedMetadataKinds: sanitized.removedMetadataKinds,
-    imageWidth: sanitized.imageWidth,
-    imageHeight: sanitized.imageHeight,
+    ...(sanitized.imageWidth !== undefined ? { imageWidth: sanitized.imageWidth } : {}),
+    ...(sanitized.imageHeight !== undefined ? { imageHeight: sanitized.imageHeight } : {}),
   };
 }
 

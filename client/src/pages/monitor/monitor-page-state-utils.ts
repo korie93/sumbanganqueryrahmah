@@ -21,8 +21,8 @@ export type MonitorInitialPageState = {
 export type ParsedMonitorChaosRequest =
   | {
       ok: true;
-      magnitude?: number;
-      durationMs?: number;
+      magnitude?: number | undefined;
+      durationMs?: number | undefined;
     }
   | {
       ok: false;

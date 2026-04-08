@@ -11,8 +11,8 @@ type ChaosEvent = {
 
 type InjectChaosInput = {
   type: ChaosType;
-  magnitude?: number;
-  durationMs?: number;
+  magnitude?: number | undefined;
+  durationMs?: number | undefined;
 };
 
 const DEFAULT_DURATION_MS = 20_000;

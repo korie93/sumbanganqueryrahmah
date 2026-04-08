@@ -3,7 +3,7 @@ import { resolveNextSelectedSettingsCategory } from "@/pages/settings/settings-c
 import type { SettingCategory } from "@/pages/settings/types";
 
 type UseSettingsCategorySelectionSyncArgs = {
-  initialSectionId?: string;
+  initialSectionId?: string | undefined;
   selectedCategory: string;
   setSelectedCategory: (value: string) => void;
   sidebarCategories: SettingCategory[];

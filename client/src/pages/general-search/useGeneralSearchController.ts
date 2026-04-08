@@ -10,8 +10,8 @@ import {
 } from "@/pages/general-search/utils";
 
 interface UseGeneralSearchControllerParams {
-  searchResultLimit?: number;
-  userRole?: string;
+  searchResultLimit?: number | undefined;
+  userRole?: string | undefined;
 }
 
 export function useGeneralSearchController({

@@ -8,12 +8,12 @@ import {
 } from "@shared/api-contracts";
 
 type ImportRequestOptions = {
-  cursor?: string;
-  limit?: number;
-  pageSize?: number;
-  search?: string;
-  createdOn?: string;
-  signal?: AbortSignal;
+  cursor?: string | undefined;
+  limit?: number | undefined;
+  pageSize?: number | undefined;
+  search?: string | undefined;
+  createdOn?: string | undefined;
+  signal?: AbortSignal | undefined;
 };
 
 export type ImportDataColumnFilter = {
@@ -23,7 +23,7 @@ export type ImportDataColumnFilter = {
 };
 
 type ImportDataRequestOptions = ImportRequestOptions & {
-  columnFilters?: ImportDataColumnFilter[];
+  columnFilters?: ImportDataColumnFilter[] | undefined;
 };
 
 export async function getImports(options?: ImportRequestOptions) {

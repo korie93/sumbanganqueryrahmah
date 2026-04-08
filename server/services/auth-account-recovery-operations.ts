@@ -15,7 +15,7 @@ export class AuthAccountRecoveryOperations {
   async sendActivationEmail(params: {
     actorUsername: string;
     user: Awaited<ReturnType<PostgresStorage["getUser"]>>;
-    resent?: boolean;
+    resent?: boolean | undefined;
   }) {
     return this.activationOperations.sendActivationEmail(params);
   }
@@ -33,7 +33,7 @@ export class AuthAccountRecoveryOperations {
   }
 
   async activateAccount(params: {
-    username?: string;
+    username?: string | undefined;
     token: string;
     newPassword: string;
     confirmPassword: string;

@@ -77,11 +77,11 @@ export type ManagedUserListStatusFilter =
   | "banned";
 
 export type ManagedUserListPageParams = {
-  page?: number;
-  pageSize?: number;
-  search?: string;
-  role?: "all" | "admin" | "user";
-  status?: ManagedUserListStatusFilter;
+  page?: number | undefined;
+  pageSize?: number | undefined;
+  search?: string | undefined;
+  role?: "all" | "admin" | "user" | undefined;
+  status?: ManagedUserListStatusFilter | undefined;
 };
 
 export type ManagedUserListPageResult = {
@@ -93,10 +93,10 @@ export type ManagedUserListPageResult = {
 };
 
 export type PendingPasswordResetListPageParams = {
-  page?: number;
-  pageSize?: number;
-  search?: string;
-  status?: ManagedUserListStatusFilter;
+  page?: number | undefined;
+  pageSize?: number | undefined;
+  search?: string | undefined;
+  status?: ManagedUserListStatusFilter | undefined;
 };
 
 export type PendingPasswordResetListPageResult = {

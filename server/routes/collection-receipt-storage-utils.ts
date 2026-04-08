@@ -23,12 +23,12 @@ import {
 
 type QuarantineCollectionReceiptInput = {
   source: "base64" | "multipart";
-  fileName?: string | null;
-  mimeType?: string | null;
-  signatureType?: CollectionReceiptFileType | null;
+  fileName?: string | null | undefined;
+  mimeType?: string | null | undefined;
+  signatureType?: CollectionReceiptFileType | null | undefined;
   rejectionError: CollectionReceiptSecurityError;
-  buffer?: Buffer | null;
-  filePath?: string | null;
+  buffer?: Buffer | null | undefined;
+  filePath?: string | null | undefined;
 };
 
 const PRIVATE_UPLOAD_DIRECTORY_MODE = 0o750;

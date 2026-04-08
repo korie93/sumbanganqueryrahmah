@@ -9,7 +9,7 @@ export type ActivityRepositoryOptions = {
 export type ActivityWithStatus = UserActivity & { status: string };
 
 export type BannedUserWithInfo = User & {
-  banInfo?: { ipAddress: string | null; browser: string | null; bannedAt: Date | null };
+  banInfo?: { ipAddress: string | null; browser: string | null; bannedAt: Date | null } | undefined;
 };
 
 export function computeActivityStatus(activity: UserActivity): string {

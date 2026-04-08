@@ -123,7 +123,7 @@ export async function throwIfResNotOk(res: Response) {
 
 type ApiRequestOptions = {
   headers?: Record<string, string>;
-  signal?: AbortSignal;
+  signal?: AbortSignal | undefined;
 };
 
 export async function apiRequest(
@@ -145,17 +145,19 @@ export async function apiRequest(
   });
   if (data && !isFormDataPayload) headers["Content-Type"] = "application/json";
 
-  const res = await fetch(url, {
+  const requestInit: RequestInit = {
     method,
     headers,
-    body: data
-      ? isFormDataPayload
-        ? data as FormData
-        : JSON.stringify(data)
-      : undefined,
     credentials: "include",
-    signal: options?.signal,
-  });
+  };
+  if (data) {
+    requestInit.body = isFormDataPayload ? data as FormData : JSON.stringify(data);
+  }
+  if (options?.signal) {
+    requestInit.signal = options.signal;
+  }
+
+  const res = await fetch(url, requestInit);
 
   await throwIfResNotOk(res);
   return res;

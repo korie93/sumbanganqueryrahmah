@@ -156,12 +156,12 @@ export async function deleteActivity(id: string): Promise<boolean> {
 }
 
 export async function getFilteredActivities(filters: {
-  status?: string[];
-  username?: string;
-  ipAddress?: string;
-  browser?: string;
-  dateFrom?: Date;
-  dateTo?: Date;
+  status?: string[] | undefined;
+  username?: string | undefined;
+  ipAddress?: string | undefined;
+  browser?: string | undefined;
+  dateFrom?: Date | undefined;
+  dateTo?: Date | undefined;
 }): Promise<ActivityWithStatus[]> {
   const whereConditions: SQL[] = [];
 

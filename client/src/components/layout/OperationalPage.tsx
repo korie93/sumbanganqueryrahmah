@@ -4,41 +4,41 @@ import { cn } from "@/lib/utils";
 
 type OperationalPageProps = {
   children: ReactNode;
-  className?: string;
+  className?: string | undefined;
   width?: "wide" | "content";
 };
 
 type OperationalPageHeaderProps = {
   title: ReactNode;
-  description?: ReactNode;
-  eyebrow?: ReactNode;
-  actions?: ReactNode;
-  badge?: ReactNode;
-  className?: string;
+  description?: ReactNode | undefined;
+  eyebrow?: ReactNode | undefined;
+  actions?: ReactNode | undefined;
+  badge?: ReactNode | undefined;
+  className?: string | undefined;
 };
 
 type OperationalSectionCardProps = {
   children: ReactNode;
-  title?: ReactNode;
-  description?: ReactNode;
-  actions?: ReactNode;
-  badge?: ReactNode;
-  className?: string;
-  contentClassName?: string;
-  headerClassName?: string;
+  title?: ReactNode | undefined;
+  description?: ReactNode | undefined;
+  actions?: ReactNode | undefined;
+  badge?: ReactNode | undefined;
+  className?: string | undefined;
+  contentClassName?: string | undefined;
+  headerClassName?: string | undefined;
 };
 
 type OperationalSummaryStripProps = {
   children: ReactNode;
-  className?: string;
+  className?: string | undefined;
 };
 
 type OperationalMetricProps = {
   label: ReactNode;
   value: ReactNode;
-  supporting?: ReactNode;
-  tone?: "default" | "success" | "warning" | "danger";
-  className?: string;
+  supporting?: ReactNode | undefined;
+  tone?: "default" | "success" | "warning" | "danger" | undefined;
+  className?: string | undefined;
 };
 
 export function OperationalPage({

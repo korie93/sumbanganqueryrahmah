@@ -117,7 +117,7 @@ export function formatDateDDMMYYYY(value: string | number | Date | null | undefi
 
 export function formatDateTimeDDMMYYYY(
   value: string | number | Date | null | undefined,
-  options?: { includeSeconds?: boolean; fallback?: string },
+  options?: { includeSeconds?: boolean | undefined; fallback?: string | undefined },
 ) {
   const parsed = parseDateValue(value);
   if (!parsed) return options?.fallback ?? "-";
@@ -143,7 +143,7 @@ export function formatDateDDMMYYYYMalaysia(value: string | number | Date | null 
 
 export function formatDateTimeMalaysia(
   value: string | number | Date | null | undefined,
-  options?: { includeSeconds?: boolean; fallback?: string },
+  options?: { includeSeconds?: boolean | undefined; fallback?: string | undefined },
 ) {
   const parsed = parseDateValue(value);
   if (!parsed) return options?.fallback ?? "-";
@@ -155,7 +155,7 @@ export function formatDateTimeMalaysia(
 
 export function formatOperationalDateTime(
   value: string | number | Date | null | undefined,
-  options?: { fallback?: string },
+  options?: { fallback?: string | undefined },
 ) {
   return formatDateTimeMalaysia(value, { fallback: options?.fallback });
 }

@@ -1,13 +1,13 @@
 export class HttpError extends Error {
   readonly statusCode: number;
-  readonly code?: string;
+  readonly code?: string | undefined;
   readonly details?: unknown;
   readonly expose: boolean;
 
   constructor(
     statusCode: number,
     message: string,
-    options?: { code?: string; details?: unknown; expose?: boolean },
+    options?: { code?: string | undefined; details?: unknown; expose?: boolean | undefined },
   ) {
     super(message);
     this.name = "HttpError";

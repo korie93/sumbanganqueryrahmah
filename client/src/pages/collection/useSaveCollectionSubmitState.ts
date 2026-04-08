@@ -23,7 +23,7 @@ type UseSaveCollectionSubmitStateOptions = {
   values: SaveCollectionFormValues;
   receiptFiles: File[];
   receiptDrafts: CollectionReceiptDraftInput[];
-  onSaved?: () => void;
+  onSaved?: (() => void) | undefined;
   mutationFeedback: MutationFeedbackApi;
   clearPageState: () => void;
 };

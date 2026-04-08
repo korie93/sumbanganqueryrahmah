@@ -22,7 +22,7 @@ export class AuthAccountActivationOperations {
   async sendActivationEmail(params: {
     actorUsername: string;
     user: Awaited<ReturnType<PostgresStorage["getUser"]>>;
-    resent?: boolean;
+    resent?: boolean | undefined;
   }) {
     if (!params.user) {
       throw new AuthAccountError(404, "USER_NOT_FOUND", "Target user not found.");
@@ -76,7 +76,7 @@ export class AuthAccountActivationOperations {
   }
 
   async activateAccount(params: {
-    username?: string;
+    username?: string | undefined;
     token: string;
     newPassword: string;
     confirmPassword: string;

@@ -18,9 +18,9 @@ import {
 
 type ViewerPageStateOptions = {
   onNavigate: (page: string) => void;
-  importId?: string;
+  importId?: string | undefined;
   userRole: string;
-  viewerRowsPerPage?: number;
+  viewerRowsPerPage?: number | undefined;
 };
 
 export function useViewerPageState({

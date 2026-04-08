@@ -6,7 +6,7 @@ import type {
 } from "./collection-types";
 
 type CollectionDailyRequestOptions = {
-  signal?: AbortSignal;
+  signal?: AbortSignal | undefined;
 };
 
 export async function getCollectionDailyUsers(options?: CollectionDailyRequestOptions) {
@@ -55,8 +55,8 @@ export async function setCollectionDailyCalendar(payload: {
 export async function getCollectionDailyOverview(filters: {
   year: number;
   month: number;
-  username?: string;
-  usernames?: string[];
+  username?: string | undefined;
+  usernames?: string[] | undefined;
 }, options?: CollectionDailyRequestOptions) {
   const params = new URLSearchParams();
   params.set("year", String(filters.year));
@@ -81,10 +81,10 @@ export async function getCollectionDailyOverview(filters: {
 
 export async function getCollectionDailyDayDetails(filters: {
   date: string;
-  username?: string;
-  usernames?: string[];
-  page?: number;
-  pageSize?: number;
+  username?: string | undefined;
+  usernames?: string[] | undefined;
+  page?: number | undefined;
+  pageSize?: number | undefined;
 }, options?: CollectionDailyRequestOptions) {
   const params = new URLSearchParams();
   params.set("date", filters.date);

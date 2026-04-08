@@ -21,14 +21,14 @@ type AuthenticatedAppShellProps = {
   user: User;
   currentPage: string;
   monitorSection: MonitorSection;
-  selectedImportId?: string;
+  selectedImportId?: string | undefined;
   runtimeConfig: AppRuntimeConfig;
   tabVisibility: TabVisibility;
   tabVisibilityLoaded: boolean;
   monitorVisibility: MonitorSectionVisibility;
   featureLockdown: boolean;
-  savedCount?: number;
-  systemName?: string;
+  savedCount?: number | undefined;
+  systemName?: string | undefined;
   onNavigate: (page: string, importId?: string) => void;
   onMonitorSectionChange: (section: MonitorSection) => void;
   onLogout: () => void | Promise<void>;

@@ -16,8 +16,8 @@ import { useSettingsCategorySelectionSync } from "@/pages/settings/useSettingsCa
 import type { SettingCategory } from "@/pages/settings/types";
 
 type UseSettingsControllerArgs = {
-  initialSectionId?: string;
-  tabVisibility?: TabVisibility;
+  initialSectionId?: string | undefined;
+  tabVisibility?: TabVisibility | undefined;
 };
 
 export { BACKUP_SETTINGS_CATEGORY_ID } from "@/pages/settings/settings-controller-utils";

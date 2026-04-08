@@ -59,7 +59,7 @@ function sanitize(value: unknown): unknown {
 
 const rootLogger = pino({
   level: DEFAULT_LOG_LEVEL,
-  base: undefined,
+  base: null,
   timestamp: pino.stdTimeFunctions.isoTime,
   formatters: {
     level(label) {

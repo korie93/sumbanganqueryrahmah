@@ -178,11 +178,11 @@ export async function listDevMailPreviews(limit = 25): Promise<DevMailOutboxPrev
 }
 
 export async function listDevMailPreviewsPage(params?: {
-  page?: number;
-  pageSize?: number;
-  searchEmail?: string;
-  searchSubject?: string;
-  sortDirection?: "asc" | "desc";
+  page?: number | undefined;
+  pageSize?: number | undefined;
+  searchEmail?: string | undefined;
+  searchSubject?: string | undefined;
+  sortDirection?: "asc" | "desc" | undefined;
 }): Promise<DevMailOutboxPreviewPage> {
   if (!isDevMailOutboxEnabled()) {
     return {

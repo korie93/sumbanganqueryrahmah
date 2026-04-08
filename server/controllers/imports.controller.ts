@@ -14,7 +14,7 @@ type CreateImportsControllerDeps = {
   importsService: ImportsService;
   getRuntimeSettingsCached: () => Promise<RuntimeSettings>;
   isDbProtected: () => boolean;
-  analysisRequestTimeoutMs?: number;
+  analysisRequestTimeoutMs?: number | undefined;
 };
 
 export type ImportsController = ReturnType<typeof createImportsController>;

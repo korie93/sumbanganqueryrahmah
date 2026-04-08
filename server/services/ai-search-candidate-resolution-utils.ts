@@ -40,7 +40,7 @@ export async function resolveAiSearchCandidates(params: {
     options?: Record<string, unknown>,
   ) => Promise<string>;
   ollamaEmbed: (text: string) => Promise<number[]>;
-  intentMode?: string;
+  intentMode?: string | undefined;
 }): Promise<AiSearchCandidateResolution> {
   const intent = await resolveAiSearchIntent({
     query: params.query,

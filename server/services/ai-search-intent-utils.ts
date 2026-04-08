@@ -7,7 +7,7 @@ export async function resolveAiSearchIntent(params: {
   timeoutMs: number;
   withAiCircuit: <T>(operation: () => Promise<T>) => Promise<T>;
   ollamaChat: (messages: OllamaMessage[], options?: Record<string, unknown>) => Promise<string>;
-  intentMode?: string;
+  intentMode?: string | undefined;
 }): Promise<AiIntent> {
   const intentMode = String(params.intentMode || "fast").toLowerCase();
   if (intentMode === "fast") {

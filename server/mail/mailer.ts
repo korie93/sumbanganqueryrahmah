@@ -3,13 +3,13 @@ import { isDevMailOutboxEnabled, writeDevMailPreview } from "./dev-mail-outbox";
 
 type MailTransportConfig = {
   from: string;
-  host?: string;
-  password?: string;
-  port?: number;
+  host?: string | undefined;
+  password?: string | undefined;
+  port?: number | undefined;
   requireTls: boolean;
   secure: boolean;
-  service?: string;
-  user?: string;
+  service?: string | undefined;
+  user?: string | undefined;
 };
 
 export type MailSendResult = {

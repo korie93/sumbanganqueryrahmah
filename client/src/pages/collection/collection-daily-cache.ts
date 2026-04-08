@@ -13,7 +13,7 @@ export type CollectionDailyDayDetailsCacheEntry = {
   dayDetails: CollectionDailyDayDetailsResponse;
 };
 
-export function normalizeCollectionDailyCacheUsers(usernames?: string[]) {
+export function normalizeCollectionDailyCacheUsers(usernames?: string[] | undefined) {
   return Array.from(
     new Set(
       (Array.isArray(usernames) ? usernames : [])
@@ -26,7 +26,7 @@ export function normalizeCollectionDailyCacheUsers(usernames?: string[]) {
 export function buildCollectionDailyOverviewCacheKey(params: {
   year: number;
   month: number;
-  usernames?: string[];
+  usernames?: string[] | undefined;
 }) {
   return JSON.stringify({
     year: params.year,
@@ -37,7 +37,7 @@ export function buildCollectionDailyOverviewCacheKey(params: {
 
 export function buildCollectionDailyDayDetailsCacheKey(params: {
   date: string;
-  usernames?: string[];
+  usernames?: string[] | undefined;
   page: number;
   pageSize: number;
 }) {

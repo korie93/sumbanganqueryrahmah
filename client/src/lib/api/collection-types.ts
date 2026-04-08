@@ -93,14 +93,14 @@ export type CollectionReceiptPayload = {
 };
 
 export type CollectionReceiptMetadata = {
-  receiptId?: string;
-  receiptAmount?: number | string | null;
-  extractedAmount?: number | string | null;
-  extractionStatus?: CollectionReceiptExtractionStatus | null;
-  extractionConfidence?: number | string | null;
-  receiptDate?: string | null;
-  receiptReference?: string | null;
-  fileHash?: string | null;
+  receiptId?: string | undefined;
+  receiptAmount?: number | string | null | undefined;
+  extractedAmount?: number | string | null | undefined;
+  extractionStatus?: CollectionReceiptExtractionStatus | null | undefined;
+  extractionConfidence?: number | string | null | undefined;
+  receiptDate?: string | null | undefined;
+  receiptReference?: string | null | undefined;
+  fileHash?: string | null | undefined;
 };
 
 export type CreateCollectionPayload = {

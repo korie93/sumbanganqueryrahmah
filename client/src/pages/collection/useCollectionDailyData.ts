@@ -29,7 +29,7 @@ type UseCollectionDailyDataOptions = {
   year: number;
   month: number;
   selectedUsernames: string[];
-  selectedQueryUsers?: string[];
+  selectedQueryUsers?: string[] | undefined;
   canEditTarget: boolean;
 };
 

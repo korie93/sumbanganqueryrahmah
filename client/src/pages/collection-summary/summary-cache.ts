@@ -7,7 +7,7 @@ export type CollectionSummaryCacheEntry = {
   freshness: CollectionReportFreshness | null;
 };
 
-export function normalizeCollectionSummaryNicknames(nicknames?: string[]) {
+export function normalizeCollectionSummaryNicknames(nicknames?: string[] | undefined) {
   return Array.from(
     new Set(
       (Array.isArray(nicknames) ? nicknames : [])
@@ -19,7 +19,7 @@ export function normalizeCollectionSummaryNicknames(nicknames?: string[]) {
 
 export function buildCollectionSummaryCacheKey(params: {
   year: number;
-  nicknames?: string[];
+  nicknames?: string[] | undefined;
 }) {
   return JSON.stringify({
     year: params.year,

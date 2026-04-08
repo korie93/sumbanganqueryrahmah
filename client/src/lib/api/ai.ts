@@ -2,7 +2,7 @@ import { createApiHeaders } from "../api-client";
 import { getCsrfHeader } from "./shared";
 
 type AISearchRequestOptions = {
-  signal?: AbortSignal;
+  signal?: AbortSignal | undefined;
 };
 
 export async function searchAI(query: string, options?: AISearchRequestOptions) {
@@ -14,6 +14,6 @@ export async function searchAI(query: string, options?: AISearchRequestOptions) 
     }),
     body: JSON.stringify({ query }),
     credentials: "include",
-    signal: options?.signal,
+    signal: options?.signal ?? null,
   });
 }

@@ -77,7 +77,7 @@ function ChartIndicator({
   indicator,
   nestLabel = false,
 }: {
-  color?: string
+  color?: string | undefined
   indicator: "line" | "dot" | "dashed"
   nestLabel?: boolean
 }) {
@@ -130,7 +130,7 @@ function ChartIndicator({
   )
 }
 
-function ChartLegendSwatch({ color }: { color?: string }) {
+function ChartLegendSwatch({ color }: { color?: string | undefined }) {
   const presentationColor = resolveChartPresentationColor(color)
 
   return (

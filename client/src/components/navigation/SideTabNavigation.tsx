@@ -8,8 +8,8 @@ export type SideTabNavigationItem = {
   key: string;
   label: string;
   icon: LucideIcon;
-  description?: string | null;
-  badge?: number | string | null;
+  description?: string | null | undefined;
+  badge?: number | string | null | undefined;
 };
 
 export type SideTabNavigationProps = {
@@ -18,14 +18,14 @@ export type SideTabNavigationProps = {
   onSelect: (key: string) => void;
   mobileOpen: boolean;
   onMobileOpenChange: (open: boolean) => void;
-  hideMobileTrigger?: boolean;
+  hideMobileTrigger?: boolean | undefined;
   collapsed: boolean;
   onCollapsedChange: (value: boolean) => void;
-  menuLabel?: string;
-  navigationLabel?: string;
-  expandedWidth?: number;
-  collapsedWidth?: number;
-  className?: string;
+  menuLabel?: string | undefined;
+  navigationLabel?: string | undefined;
+  expandedWidth?: number | undefined;
+  collapsedWidth?: number | undefined;
+  className?: string | undefined;
 };
 
 const sideTabWidthClassByPixels = new Map<number, string>([

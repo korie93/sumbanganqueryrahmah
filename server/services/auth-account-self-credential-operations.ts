@@ -12,7 +12,7 @@ export type ChangePasswordInput = {
 export type UpdateOwnCredentialsInput = {
   hasUsernameField: boolean;
   hasPasswordField: boolean;
-  newUsername?: string;
+  newUsername?: string | undefined;
   currentPassword: string;
   newPassword: string;
 };
@@ -32,9 +32,9 @@ type AuthAccountSelfCredentialStorage = Pick<
 type AuthAccountSelfCredentialDeps = {
   storage: AuthAccountSelfCredentialStorage;
   ensureUniqueIdentity: (params: {
-    username?: string;
-    email?: string | null;
-    ignoreUserId?: string;
+    username?: string | undefined;
+    email?: string | null | undefined;
+    ignoreUserId?: string | undefined;
   }) => Promise<void>;
   validateUsername: (username: string) => void;
 };

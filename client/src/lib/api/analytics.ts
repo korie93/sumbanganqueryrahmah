@@ -1,7 +1,7 @@
 import { apiRequest } from "../api-client";
 
 type AnalyticsRequestOptions = {
-  signal?: AbortSignal;
+  signal?: AbortSignal | undefined;
 };
 
 export async function getAnalyticsSummary(options?: AnalyticsRequestOptions) {

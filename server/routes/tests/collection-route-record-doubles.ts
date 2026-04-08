@@ -257,7 +257,7 @@ export function createCoreCollectionStorageDouble(options?: {
         receiptDate?: string | null;
         receiptReference?: string | null;
       }>;
-    };
+    } | undefined;
   }> = [];
   const createReceiptCalls: Array<{
     recordId: string;
@@ -278,7 +278,7 @@ export function createCoreCollectionStorageDouble(options?: {
   }> = [];
   const deleteCalls: Array<{
     id: string;
-    options?: { expectedUpdatedAt?: Date };
+    options?: { expectedUpdatedAt?: Date } | undefined;
   }> = [];
   const deleteReceiptCalls: Array<{
     recordId: string;

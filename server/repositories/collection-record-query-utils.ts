@@ -23,13 +23,13 @@ const COLLECTION_MONTH_NAMES = [
 ] as const;
 
 type CollectionRecordFilters = {
-  from?: string;
-  to?: string;
-  search?: string;
-  createdByLogin?: string;
-  nicknames?: string[];
-  receiptValidationStatus?: CollectionReceiptValidationStatus | "flagged";
-  duplicateOnly?: boolean;
+  from?: string | undefined;
+  to?: string | undefined;
+  search?: string | undefined;
+  createdByLogin?: string | undefined;
+  nicknames?: string[] | undefined;
+  receiptValidationStatus?: CollectionReceiptValidationStatus | "flagged" | undefined;
+  duplicateOnly?: boolean | undefined;
 };
 
 export type CollectionRollupFilters = Omit<CollectionRecordFilters, "search">;
@@ -137,8 +137,8 @@ export function buildCollectionRecordDailyRollupWhereSql(filters?: CollectionRec
 
 export function buildCollectionRecordMonthlyRollupWhereSql(filters: {
   year: number;
-  nicknames?: string[];
-  createdByLogin?: string;
+  nicknames?: string[] | undefined;
+  createdByLogin?: string | undefined;
 }): { safeYear: number; whereSql: SQL } {
   const safeYear = Number.isFinite(filters.year)
     ? Math.min(2100, Math.max(2000, Math.floor(filters.year)))
@@ -166,8 +166,8 @@ export function buildCollectionRecordMonthlyRollupWhereSql(filters: {
 
 export function buildCollectionMonthlySummaryWhereSql(filters: {
   year: number;
-  nicknames?: string[];
-  createdByLogin?: string;
+  nicknames?: string[] | undefined;
+  createdByLogin?: string | undefined;
 }): { safeYear: number; whereSql: SQL } {
   const safeYear = Number.isFinite(filters.year)
     ? Math.min(2100, Math.max(2000, Math.floor(filters.year)))

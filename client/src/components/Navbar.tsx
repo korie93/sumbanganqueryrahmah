@@ -45,11 +45,11 @@ interface NavbarProps {
   onLogout: () => void | Promise<void>;
   userRole: string;
   username: string;
-  systemName?: string;
-  savedCount?: number;
-  tabVisibility?: TabVisibility;
-  featureLockdown?: boolean;
-  monitorSection?: MonitorSection;
+  systemName?: string | undefined;
+  savedCount?: number | undefined;
+  tabVisibility?: TabVisibility | undefined;
+  featureLockdown?: boolean | undefined;
+  monitorSection?: MonitorSection | undefined;
 }
 
 function NavbarImpl({

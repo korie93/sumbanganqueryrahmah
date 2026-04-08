@@ -11,8 +11,8 @@ type UseAIChatExternalEffectsOptions = {
   cancelAISearch: (incrementSession?: boolean) => void;
   messages: readonly unknown[];
   messagesRef: RefObject<HTMLDivElement | null>;
-  onCancelAISearchReady?: (cancelFn: () => void) => void;
-  onStatusChange?: (status: AIChatStatus) => void;
+  onCancelAISearchReady?: ((cancelFn: () => void) => void) | undefined;
+  onStatusChange?: ((status: AIChatStatus) => void) | undefined;
   resetSession: () => void;
   streamingText: string;
 };

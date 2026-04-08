@@ -30,7 +30,7 @@ export async function login(
       browser: navigator.userAgent,
     }),
     credentials: "include",
-    signal: options?.signal,
+    signal: options?.signal ?? null,
   });
 
   const data = await res.json();
@@ -70,7 +70,7 @@ export async function verifyTwoFactorLogin(
 export async function checkHealth(options?: RequestOptions) {
   const response = await fetch(`${API_BASE}/api/health`, {
     headers: createApiHeaders(),
-    signal: options?.signal,
+    signal: options?.signal ?? null,
   });
   return response.json();
 }

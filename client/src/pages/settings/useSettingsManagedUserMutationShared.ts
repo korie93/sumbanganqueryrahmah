@@ -12,7 +12,7 @@ export type ManagedAccountStatus = "pending_activation" | "active" | "suspended"
 export type ManagedSecretDialogParams = {
   title: string;
   description: string;
-  value?: string;
+  value?: string | undefined;
 };
 
 export function formatActivationExpiry(value: string | null | undefined) {

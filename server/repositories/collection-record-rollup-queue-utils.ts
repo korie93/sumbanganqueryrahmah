@@ -107,10 +107,10 @@ export async function getCollectionRecordDailyRollupFreshnessSnapshot(
 }
 
 export async function hasPendingCollectionRecordDailyRollupSlices(filters?: {
-  from?: string;
-  to?: string;
-  createdByLogin?: string;
-  nicknames?: string[];
+  from?: string | undefined;
+  to?: string | undefined;
+  createdByLogin?: string | undefined;
+  nicknames?: string[] | undefined;
 }): Promise<boolean> {
   const whereSql = buildCollectionRecordDailyRollupWhereSql(filters);
   const result = await db.execute(sql`

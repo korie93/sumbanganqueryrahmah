@@ -23,7 +23,7 @@ export function ActivityStatusFilterGroup({
           <div key={option.value} className={getActivityStatusOptionClassName(isMobile)}>
             <Checkbox
               id={`status-${option.value}`}
-              checked={filters.status?.includes(option.value)}
+              checked={filters.status?.includes(option.value) ?? false}
               onCheckedChange={() => onToggleStatus(option.value)}
               data-testid={`checkbox-status-${option.value.toLowerCase()}`}
             />

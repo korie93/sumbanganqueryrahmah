@@ -9,20 +9,20 @@ import type {
 
 export type CreateManagedUserInput = {
   username: string;
-  fullName?: string | null;
-  email?: string | null;
+  fullName?: string | null | undefined;
+  email?: string | null | undefined;
   role: string;
 };
 
 export type UpdateManagedUserInput = {
-  username?: string;
-  fullName?: string | null;
-  email?: string | null;
+  username?: string | undefined;
+  fullName?: string | null | undefined;
+  email?: string | null | undefined;
 };
 
 export type UpdateManagedStatusInput = {
-  status?: string;
-  isBanned?: boolean;
+  status?: string | undefined;
+  isBanned?: boolean | undefined;
 };
 
 export type AuthAccountManagedUser = NonNullable<
@@ -50,9 +50,9 @@ export type AuthAccountManagedStorage = Pick<
 export type AuthAccountManagedOpsDeps = {
   storage: AuthAccountManagedStorage;
   ensureUniqueIdentity: (params: {
-    username?: string;
-    email?: string | null;
-    ignoreUserId?: string;
+    username?: string | undefined;
+    email?: string | null | undefined;
+    ignoreUserId?: string | undefined;
   }) => Promise<void>;
   invalidateUserSessions: (username: string, reason: string) => Promise<string[]>;
   requireManageableTarget: (userId: string) => Promise<AuthAccountManagedUser>;
@@ -63,7 +63,7 @@ export type AuthAccountManagedOpsDeps = {
   sendActivationEmail: (params: {
     actorUsername: string;
     user: Awaited<ReturnType<PostgresStorage["getUser"]>>;
-    resent?: boolean;
+    resent?: boolean | undefined;
   }) => Promise<{
     delivery: ManagedAccountActivationDelivery;
   }>;

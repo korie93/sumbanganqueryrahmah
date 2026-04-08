@@ -1,7 +1,7 @@
 export type MonitorRequestState = "ok" | "unauthorized" | "forbidden" | "network_error";
 
 export type MonitorRequestOptions = {
-  signal?: AbortSignal;
+  signal?: AbortSignal | undefined;
 };
 
 export type AlertHistoryRequestOptions = MonitorRequestOptions & {
@@ -175,8 +175,8 @@ export type ChaosType = "cpu_spike" | "db_latency_spike" | "ai_delay" | "worker_
 
 export type ChaosInjectPayload = {
   type: ChaosType;
-  magnitude?: number;
-  durationMs?: number;
+  magnitude?: number | undefined;
+  durationMs?: number | undefined;
 };
 
 export type ChaosEventPayload = {

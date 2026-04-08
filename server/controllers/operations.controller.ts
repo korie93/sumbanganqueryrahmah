@@ -33,7 +33,7 @@ type CreateOperationsControllerDeps = {
   >;
   connectedClients: Map<string, WebSocket>;
   requestTimeouts?: {
-    backupOperationMs?: number;
+    backupOperationMs?: number | undefined;
   };
 };
 
@@ -68,7 +68,7 @@ export function createOperationsController(deps: CreateOperationsControllerDeps)
     return res.json(
       await auditLogOperationsService.cleanupAuditLogs({
         olderThanDays: body.olderThanDays,
-        username: req.user?.username,
+        ...(req.user?.username ? { username: req.user.username } : {}),
       }),
     );
   };

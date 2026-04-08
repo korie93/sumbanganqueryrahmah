@@ -4,5 +4,5 @@ import type { CollectionNicknameManagementDialogsValue } from "@/pages/collectio
 export type CollectionNicknameActionOptions = {
   nicknameData: CollectionNicknameManagementDataValue;
   dialogs: CollectionNicknameManagementDialogsValue;
-  onNicknameListChanged?: () => void;
+  onNicknameListChanged?: (() => void) | undefined;
 };

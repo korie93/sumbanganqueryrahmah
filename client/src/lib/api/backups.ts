@@ -12,13 +12,13 @@ export async function createBackupAsync(name: string): Promise<BackupJobEnqueueR
 }
 
 export async function getBackups(params?: {
-  page?: number;
-  pageSize?: number;
-  searchName?: string;
-  createdBy?: string;
-  dateFrom?: string;
-  dateTo?: string;
-  sortBy?: string;
+  page?: number | undefined;
+  pageSize?: number | undefined;
+  searchName?: string | undefined;
+  createdBy?: string | undefined;
+  dateFrom?: string | undefined;
+  dateTo?: string | undefined;
+  sortBy?: string | undefined;
 }) {
   const query = new URLSearchParams();
   if (params?.page) query.set("page", String(params.page));

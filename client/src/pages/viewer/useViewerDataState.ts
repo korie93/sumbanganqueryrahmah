@@ -23,7 +23,7 @@ export const VIEWER_MIN_SEARCH_LENGTH = 2;
 const VIEWER_SEARCH_DEBOUNCE_MS = 300;
 
 type UseViewerDataStateOptions = {
-  importId?: string;
+  importId?: string | undefined;
   rowsPerPage: number;
   onSelectionReset: () => void;
 };

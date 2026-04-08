@@ -94,7 +94,7 @@ function createActivityRouteHarness(options?: {
   const clearNicknameSessionCalls: string[] = [];
   const deleteActivityCalls: string[] = [];
   const banVisitorCalls: Array<Record<string, unknown>> = [];
-  const deactivateUserActivitiesCalls: Array<{ username: string; reason?: string }> = [];
+  const deactivateUserActivitiesCalls: Array<{ username: string; reason?: string | undefined }> = [];
   const updateUserBanCalls: Array<{ username: string; isBanned: boolean }> = [];
   const unbanVisitorCalls: string[] = [];
   const filteredActivityCalls: Array<Record<string, unknown>> = [];

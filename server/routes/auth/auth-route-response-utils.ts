@@ -83,9 +83,9 @@ export function buildOkPayload<T extends Record<string, unknown>>(payload: T): T
 
 export function buildAuthRouteErrorPayload(error: {
   message: string;
-  code?: string;
+  code?: string | undefined;
   details?: unknown;
-  extra?: Record<string, unknown>;
+  extra?: Record<string, unknown> | undefined;
 }) {
   return {
     ok: false,
@@ -107,8 +107,7 @@ export function sendAuthRouteError(res: Response, error: unknown) {
   if (error instanceof AuthAccountError) {
     res.status(error.statusCode).json(buildAuthRouteErrorPayload({
       code: error.code,
-      details: undefined,
-      extra: error.extra,
+      ...(error.extra ? { extra: error.extra } : {}),
       message: error.message,
     }));
     return true;

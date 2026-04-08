@@ -8,7 +8,7 @@ export type ImportsRouteDeps = {
   requireRole: (...roles: string[]) => RequestHandler;
   requireTabAccess: (tabId: string) => RequestHandler;
   searchRateLimiter: RequestHandler;
-  multipartMaxFileSizeBytes?: number;
+  multipartMaxFileSizeBytes?: number | undefined;
 };
 
 export type ImportsRouteContext = {

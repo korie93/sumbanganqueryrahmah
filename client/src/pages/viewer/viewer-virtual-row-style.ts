@@ -1,11 +1,11 @@
 type ViewerVirtualRowStyleInput = {
-  position?: string;
-  top?: number | string;
-  left?: number | string;
-  right?: number | string;
-  bottom?: number | string;
-  height?: number | string;
-  width?: number | string;
+  position?: string | undefined;
+  top?: number | string | undefined;
+  left?: number | string | undefined;
+  right?: number | string | undefined;
+  bottom?: number | string | undefined;
+  height?: number | string | undefined;
+  width?: number | string | undefined;
 };
 
 const VIEWER_VIRTUAL_ROW_STYLE_KEYS = [

@@ -10,14 +10,14 @@ import { clearAuthSessionCookie, readAuthSessionTokenFromHeaders } from "./sessi
 import { logger } from "../lib/logger";
 
 export interface AuthenticatedUser {
-  userId?: string;
+  userId?: string | undefined;
   username: string;
   role: string;
   activityId: string;
-  status?: string;
-  mustChangePassword?: boolean;
-  passwordResetBySuperuser?: boolean;
-  isBanned?: boolean | null;
+  status?: string | undefined;
+  mustChangePassword?: boolean | undefined;
+  passwordResetBySuperuser?: boolean | undefined;
+  isBanned?: boolean | null | undefined;
 }
 
 export interface AuthenticatedRequest extends Request {

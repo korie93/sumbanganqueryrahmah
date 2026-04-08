@@ -37,7 +37,7 @@ export async function issueActivationToken(
 export async function sendActivationEmailOperation(params: {
   actorUsername: string;
   requireManagedEmail: (email: string | null, message: string) => string;
-  resent?: boolean;
+  resent?: boolean | undefined;
   storage: Pick<
     AuthAccountAuthenticationStorage,
     "createActivationToken" | "createAuditLog" | "invalidateUnusedActivationTokens"

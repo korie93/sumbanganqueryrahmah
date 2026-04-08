@@ -13,15 +13,15 @@ const AUDIT_LIST_MAX_PAGE_SIZE = 100;
 type AuditLogSort = "newest" | "oldest";
 
 type AuditLogPageParams = {
-  page?: number;
-  pageSize?: number;
-  action?: string;
-  performedBy?: string;
-  targetUser?: string;
-  search?: string;
-  dateFrom?: Date;
-  dateTo?: Date;
-  sortBy?: AuditLogSort;
+  page?: number | undefined;
+  pageSize?: number | undefined;
+  action?: string | undefined;
+  performedBy?: string | undefined;
+  targetUser?: string | undefined;
+  search?: string | undefined;
+  dateFrom?: Date | undefined;
+  dateTo?: Date | undefined;
+  sortBy?: AuditLogSort | undefined;
 };
 
 type AuditLogPageResult = {

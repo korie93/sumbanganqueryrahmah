@@ -17,8 +17,8 @@ export type CollectionReceiptSecurityResult = {
   buffer: Buffer;
   strippedMetadata: boolean;
   removedMetadataKinds: string[];
-  imageWidth?: number;
-  imageHeight?: number;
+  imageWidth?: number | undefined;
+  imageHeight?: number | undefined;
 };
 
 export function createCollectionReceiptSecurityError(

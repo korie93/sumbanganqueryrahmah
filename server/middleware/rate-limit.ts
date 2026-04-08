@@ -24,7 +24,7 @@ type JsonRateLimiterOptions = {
   max: number;
   code: string;
   message: string;
-  keyGenerator?: (req: Request) => string;
+  keyGenerator?: ((req: Request) => string) | undefined;
 };
 
 type AuthenticatedLikeRequest = Request & {
@@ -67,7 +67,7 @@ function createJsonRateLimiter(options: JsonRateLimiterOptions): RequestHandler 
     max: options.max,
     standardHeaders: true,
     legacyHeaders: false,
-    keyGenerator: options.keyGenerator,
+    ...(options.keyGenerator ? { keyGenerator: options.keyGenerator } : {}),
     handler: (_req, res) => {
       res.status(429).json(payload);
     },

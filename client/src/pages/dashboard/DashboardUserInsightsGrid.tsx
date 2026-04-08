@@ -14,14 +14,14 @@ interface DashboardUserInsightsGridProps {
 }
 
 type PieTooltipPayloadItem = {
-  color?: string;
-  name?: string | number;
-  value?: string | number | readonly (string | number)[];
+  color?: string | undefined;
+  name?: string | number | undefined;
+  value?: string | number | readonly (string | number)[] | undefined;
 };
 
 type CompactRoleTooltipProps = {
-  active?: boolean;
-  payload?: PieTooltipPayloadItem[];
+  active?: boolean | undefined;
+  payload?: PieTooltipPayloadItem[] | undefined;
 };
 
 const ROLE_DOT_CLASS_BY_ROLE: Record<string, string> = {

@@ -1,16 +1,16 @@
 export interface User {
-  id?: string;
+  id?: string | undefined;
   username: string;
   role: string;
-  fullName?: string | null;
-  email?: string | null;
-  status?: string;
-  mustChangePassword?: boolean;
-  passwordResetBySuperuser?: boolean;
-  isBanned?: boolean | null;
-  twoFactorEnabled?: boolean;
-  twoFactorPendingSetup?: boolean;
-  twoFactorConfiguredAt?: string | null;
+  fullName?: string | null | undefined;
+  email?: string | null | undefined;
+  status?: string | undefined;
+  mustChangePassword?: boolean | undefined;
+  passwordResetBySuperuser?: boolean | undefined;
+  isBanned?: boolean | null | undefined;
+  twoFactorEnabled?: boolean | undefined;
+  twoFactorPendingSetup?: boolean | undefined;
+  twoFactorConfiguredAt?: string | null | undefined;
 }
 
 export type MonitorSection = "dashboard" | "activity" | "monitor" | "analysis" | "audit";

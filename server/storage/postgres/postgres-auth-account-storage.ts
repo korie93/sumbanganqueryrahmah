@@ -58,25 +58,25 @@ export class PostgresAuthAccountStorage extends PostgresStorageCore {
 
   async updateUserAccount(params: {
     userId: string;
-    username?: string;
-    fullName?: string | null;
-    email?: string | null;
-    role?: "admin" | "user";
-    status?: "pending_activation" | "active" | "suspended" | "disabled";
-    isBanned?: boolean;
-    mustChangePassword?: boolean;
-    passwordResetBySuperuser?: boolean;
-    passwordHash?: string;
-    passwordChangedAt?: Date | null;
-    activatedAt?: Date | null;
-    lastLoginAt?: Date | null;
-    twoFactorEnabled?: boolean;
-    twoFactorSecretEncrypted?: string | null;
-    twoFactorConfiguredAt?: Date | null;
-    failedLoginAttempts?: number;
-    lockedAt?: Date | null;
-    lockedReason?: string | null;
-    lockedBySystem?: boolean;
+    username?: string | undefined;
+    fullName?: string | null | undefined;
+    email?: string | null | undefined;
+    role?: "admin" | "user" | undefined;
+    status?: "pending_activation" | "active" | "suspended" | "disabled" | undefined;
+    isBanned?: boolean | undefined;
+    mustChangePassword?: boolean | undefined;
+    passwordResetBySuperuser?: boolean | undefined;
+    passwordHash?: string | undefined;
+    passwordChangedAt?: Date | null | undefined;
+    activatedAt?: Date | null | undefined;
+    lastLoginAt?: Date | null | undefined;
+    twoFactorEnabled?: boolean | undefined;
+    twoFactorSecretEncrypted?: string | null | undefined;
+    twoFactorConfiguredAt?: Date | null | undefined;
+    failedLoginAttempts?: number | undefined;
+    lockedAt?: Date | null | undefined;
+    lockedReason?: string | null | undefined;
+    lockedBySystem?: boolean | undefined;
   }): Promise<User | undefined> {
     return this.authRepository.updateUserAccount(params);
   }
@@ -114,11 +114,11 @@ export class PostgresAuthAccountStorage extends PostgresStorageCore {
   }
 
   async listManagedUsersPage(params?: {
-    page?: number;
-    pageSize?: number;
-    search?: string;
-    role?: "all" | "admin" | "user";
-    status?: "all" | "active" | "pending_activation" | "suspended" | "disabled" | "locked" | "banned";
+    page?: number | undefined;
+    pageSize?: number | undefined;
+    search?: string | undefined;
+    role?: "all" | "admin" | "user" | undefined;
+    status?: "all" | "active" | "pending_activation" | "suspended" | "disabled" | "locked" | "banned" | undefined;
   }): Promise<{
     users: ManagedUserAccount[];
     page: number;
@@ -222,10 +222,10 @@ export class PostgresAuthAccountStorage extends PostgresStorageCore {
   }
 
   async listPendingPasswordResetRequestsPage(params?: {
-    page?: number;
-    pageSize?: number;
-    search?: string;
-    status?: "all" | "active" | "pending_activation" | "suspended" | "disabled" | "locked" | "banned";
+    page?: number | undefined;
+    pageSize?: number | undefined;
+    search?: string | undefined;
+    status?: "all" | "active" | "pending_activation" | "suspended" | "disabled" | "locked" | "banned" | undefined;
   }): Promise<{
     requests: PendingPasswordResetRequestSummary[];
     page: number;

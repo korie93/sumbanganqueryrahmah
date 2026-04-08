@@ -1,5 +1,5 @@
 type PerformAppLogoutParams = {
-  activityId?: string;
+  activityId?: string | undefined;
   activityLogout: (activityId?: string) => Promise<unknown>;
   applyLoggedOutClientState: (redirectToLogin?: boolean, broadcast?: boolean) => void;
   broadcastLogoutToOtherTabs: () => void;

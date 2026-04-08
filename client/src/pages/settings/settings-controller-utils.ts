@@ -69,7 +69,7 @@ export function resolveNextSelectedSettingsCategory({
   selectedCategory,
   sidebarCategories,
 }: {
-  initialSectionId?: string;
+  initialSectionId?: string | undefined;
   selectedCategory: string;
   sidebarCategories: SettingCategory[];
 }) {

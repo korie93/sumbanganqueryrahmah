@@ -21,11 +21,11 @@ export { COLLECTION_RECEIPT_SIGNATURE_SCAN_BYTES } from "./collection-receipt-fo
 export function validateCollectionReceiptSecurity(
   buffer: Buffer,
   signatureType: CollectionReceiptFileType,
-): { imageWidth?: number; imageHeight?: number } {
+): { imageWidth?: number | undefined; imageHeight?: number | undefined } {
   const result = sanitizeCollectionReceiptBuffer(buffer, signatureType);
   return {
-    imageWidth: result.imageWidth,
-    imageHeight: result.imageHeight,
+    ...(result.imageWidth !== undefined ? { imageWidth: result.imageWidth } : {}),
+    ...(result.imageHeight !== undefined ? { imageHeight: result.imageHeight } : {}),
   };
 }
 

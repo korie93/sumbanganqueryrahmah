@@ -5,7 +5,7 @@ import type {
   CollectionReportFreshness,
 } from "./collection-types";
 
-export async function getCollectionMonthlySummary(filters: { year: number; nickname?: string; nicknames?: string[] }) {
+export async function getCollectionMonthlySummary(filters: { year: number; nickname?: string | undefined; nicknames?: string[] | undefined }) {
   const params = new URLSearchParams();
   params.set("year", String(filters.year));
   const nicknameList = Array.isArray(filters.nicknames)
@@ -27,18 +27,18 @@ export async function getCollectionMonthlySummary(filters: { year: number; nickn
 }
 
 type CollectionReportRequestOptions = {
-  signal?: AbortSignal;
+  signal?: AbortSignal | undefined;
 };
 
 export async function getCollectionNicknameSummary(filters: {
-  from?: string;
-  to?: string;
+  from?: string | undefined;
+  to?: string | undefined;
   nicknames: string[];
-  summaryOnly?: boolean;
-  page?: number;
-  pageSize?: number;
-  limit?: number;
-  offset?: number;
+  summaryOnly?: boolean | undefined;
+  page?: number | undefined;
+  pageSize?: number | undefined;
+  limit?: number | undefined;
+  offset?: number | undefined;
 }, options?: CollectionReportRequestOptions) {
   const params = new URLSearchParams();
   if (filters.from) params.set("from", filters.from);

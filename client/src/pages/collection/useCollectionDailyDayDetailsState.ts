@@ -17,7 +17,7 @@ type ToastFn = (options: {
 }) => void;
 
 type UseCollectionDailyDayDetailsStateOptions = {
-  selectedQueryUsers?: string[];
+  selectedQueryUsers?: string[] | undefined;
   onCloseRelatedUi: () => void;
   toast: ToastFn;
 };

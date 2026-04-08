@@ -16,7 +16,7 @@ type LoadViewerPagedExportRowsOptions = {
   signal: AbortSignal;
   getPage: (params: {
     page: number;
-    cursor?: string;
+    cursor?: string | undefined;
     signal: AbortSignal;
     search: string;
     columnFilters: ColumnFilter[];

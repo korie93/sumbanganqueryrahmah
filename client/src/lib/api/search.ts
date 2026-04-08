@@ -2,7 +2,7 @@ import { apiRequest, createApiHeaders } from "../api-client";
 import { getAuthHeader } from "./shared";
 
 type SearchRequestOptions = {
-  signal?: AbortSignal;
+  signal?: AbortSignal | undefined;
 };
 
 export async function searchData(
@@ -18,7 +18,7 @@ export async function searchData(
       headers: createApiHeaders({
         ...getAuthHeader(),
       }),
-      signal: options?.signal,
+      signal: options?.signal ?? null,
     },
   );
 

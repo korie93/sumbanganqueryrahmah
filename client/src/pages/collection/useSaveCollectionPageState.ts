@@ -12,7 +12,7 @@ type MutationFeedbackApi = {
 
 type UseSaveCollectionPageStateOptions = {
   staffNickname: string;
-  onSaved?: () => void;
+  onSaved?: (() => void) | undefined;
   mutationFeedback: MutationFeedbackApi;
 };
 

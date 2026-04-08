@@ -16,15 +16,15 @@ interface DashboardChartsGridProps {
 }
 
 type DashboardTooltipPayloadItem = {
-  color?: string;
-  name?: string | number;
-  value?: string | number | readonly (string | number)[];
+  color?: string | undefined;
+  name?: string | number | undefined;
+  value?: string | number | readonly (string | number)[] | undefined;
 };
 
 type CompactChartTooltipProps = {
-  active?: boolean;
-  payload?: DashboardTooltipPayloadItem[];
-  label?: string | number;
+  active?: boolean | undefined;
+  payload?: DashboardTooltipPayloadItem[] | undefined;
+  label?: string | number | undefined;
   labelFormatter: (label: string | number) => string;
 };
 

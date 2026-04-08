@@ -11,7 +11,7 @@ const SideTabNavigation = lazy(() =>
 );
 
 type LazySideTabNavigationProps = SideTabNavigationProps & {
-  fallbackClassName?: string;
+  fallbackClassName?: string | undefined;
 };
 
 function SideTabNavigationFallback({

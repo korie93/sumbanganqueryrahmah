@@ -312,7 +312,7 @@ function createBatchedAggregateCollectionDailyService() {
     },
   ];
 
-  const summaryCalls: Array<{ from?: string; to?: string; nicknames?: string[] }> = [];
+  const summaryCalls: Array<{ from?: string | undefined; to?: string | undefined; nicknames?: string[] }> = [];
   let listCallCount = 0;
 
   const storage = {
@@ -333,8 +333,8 @@ function createBatchedAggregateCollectionDailyService() {
     listCollectionDailyCalendar: async (params: { year: number; month: number }) =>
       buildCalendarMonth(params.year, params.month, [1, 2]),
     summarizeCollectionRecordsByNicknameAndPaymentDate: async (filters?: {
-      from?: string;
-      to?: string;
+      from?: string | undefined;
+      to?: string | undefined;
       nicknames?: string[];
     }) => {
       summaryCalls.push({
@@ -391,11 +391,11 @@ function createPaginatedDayDetailsCollectionDailyService() {
   ];
 
   const listCalls: Array<{
-    from?: string;
-    to?: string;
+    from?: string | undefined;
+    to?: string | undefined;
     nicknames?: string[];
-    limit?: number;
-    offset?: number;
+    limit?: number | undefined;
+    offset?: number | undefined;
   }> = [];
 
   const records: RecordShape[] = [
@@ -463,11 +463,11 @@ function createPaginatedDayDetailsCollectionDailyService() {
       },
     ],
     listCollectionRecords: async (filters?: {
-      from?: string;
-      to?: string;
+      from?: string | undefined;
+      to?: string | undefined;
       nicknames?: string[];
-      limit?: number;
-      offset?: number;
+      limit?: number | undefined;
+      offset?: number | undefined;
     }) => {
       listCalls.push({
         from: filters?.from,
@@ -526,11 +526,11 @@ function createFallbackPagedDailyOverviewService() {
     createdAt: new Date(`2026-03-01T${String(Math.floor(index / 60)).padStart(2, "0")}:${String(index % 60).padStart(2, "0")}:00.000Z`),
   }));
   const listCalls: Array<{
-    from?: string;
-    to?: string;
+    from?: string | undefined;
+    to?: string | undefined;
     nicknames?: string[];
-    limit?: number;
-    offset?: number;
+    limit?: number | undefined;
+    offset?: number | undefined;
   }> = [];
 
   const storage = {
@@ -551,11 +551,11 @@ function createFallbackPagedDailyOverviewService() {
     listCollectionDailyCalendar: async (params: { year: number; month: number }) =>
       buildCalendarMonth(params.year, params.month, [1, 2]),
     listCollectionRecords: async (filters?: {
-      from?: string;
-      to?: string;
+      from?: string | undefined;
+      to?: string | undefined;
       nicknames?: string[];
-      limit?: number;
-      offset?: number;
+      limit?: number | undefined;
+      offset?: number | undefined;
     }) => {
       listCalls.push({
         from: filters?.from,
@@ -587,11 +587,11 @@ function createFallbackPagedDailyOverviewService() {
 
 function createNicknameSummaryPaginationService() {
   const listCalls: Array<{
-    from?: string;
-    to?: string;
+    from?: string | undefined;
+    to?: string | undefined;
     nicknames?: string[];
-    limit?: number;
-    offset?: number;
+    limit?: number | undefined;
+    offset?: number | undefined;
   }> = [];
   const records: RecordShape[] = Array.from({ length: 300 }, (_, index) => ({
     id: `nickname-summary-${index + 1}`,
@@ -619,11 +619,11 @@ function createNicknameSummaryPaginationService() {
       },
     ],
     listCollectionRecords: async (filters?: {
-      from?: string;
-      to?: string;
+      from?: string | undefined;
+      to?: string | undefined;
       nicknames?: string[];
-      limit?: number;
-      offset?: number;
+      limit?: number | undefined;
+      offset?: number | undefined;
     }) => {
       listCalls.push({
         from: filters?.from,

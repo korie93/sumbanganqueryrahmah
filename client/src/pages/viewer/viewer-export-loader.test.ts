@@ -40,7 +40,7 @@ test("resolveViewerImmediateExportRows returns filtered rows when requested", ()
 });
 
 test("loadViewerPagedExportRows walks every cursor-linked page", async () => {
-  const calls: Array<{ page: number; cursor?: string; search: string }> = [];
+  const calls: Array<{ page: number; cursor?: string | undefined; search: string }> = [];
 
   const rows = await loadViewerPagedExportRows({
     pageSize: 2,

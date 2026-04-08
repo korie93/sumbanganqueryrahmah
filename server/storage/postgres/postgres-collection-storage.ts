@@ -81,8 +81,8 @@ export class PostgresCollectionStorage extends PostgresSettingsStorage {
 
   async updateCollectionAdminGroup(params: {
     groupId: string;
-    leaderNicknameId?: string;
-    memberNicknameIds?: string[];
+    leaderNicknameId?: string | undefined;
+    memberNicknameIds?: string[] | undefined;
     updatedBy: string;
   }): Promise<CollectionAdminGroup | undefined> {
     return this.collectionRepository.updateCollectionAdminGroup(params);

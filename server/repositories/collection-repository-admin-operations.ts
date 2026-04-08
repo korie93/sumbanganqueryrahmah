@@ -112,8 +112,8 @@ export async function createCollectionAdminGroupRepository(params: {
 
 export async function updateCollectionAdminGroupRepository(params: {
   groupId: string;
-  leaderNicknameId?: string;
-  memberNicknameIds?: string[];
+  leaderNicknameId?: string | undefined;
+  memberNicknameIds?: string[] | undefined;
   updatedBy: string;
 }): Promise<CollectionAdminGroup | undefined> {
   const updatedGroupId = await db.transaction(async (tx) => {

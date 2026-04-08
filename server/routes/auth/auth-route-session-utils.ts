@@ -24,29 +24,29 @@ type TwoFactorChallengeTokenPayload = {
   userId: string;
   username: string;
   role: string;
-  fingerprint?: string | null;
+  fingerprint?: string | null | undefined;
   browserName: string;
-  pcName?: string | null;
-  ipAddress?: string | null;
+  pcName?: string | null | undefined;
+  ipAddress?: string | null | undefined;
 };
 
 type TwoFactorChallengeTokenClaims = {
-  purpose?: string;
-  userId?: string;
-  username?: string;
-  role?: string;
-  fingerprint?: string | null;
-  browserName?: string;
-  pcName?: string | null;
-  ipAddress?: string | null;
-  iat?: number;
-  exp?: number;
+  purpose?: string | undefined;
+  userId?: string | undefined;
+  username?: string | undefined;
+  role?: string | undefined;
+  fingerprint?: string | null | undefined;
+  browserName?: string | undefined;
+  pcName?: string | null | undefined;
+  ipAddress?: string | null | undefined;
+  iat?: number | undefined;
+  exp?: number | undefined;
 };
 
 type CloseAuthActivitySocketsInput = {
   activityIds: string[];
   reason: string;
-  messageType?: ActivitySocketMessageType;
+  messageType?: ActivitySocketMessageType | undefined;
   connectedClients: Map<string, WebSocket>;
   storage: Pick<PostgresStorage, "clearCollectionNicknameSessionByActivity">;
 };

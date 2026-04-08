@@ -8,7 +8,7 @@ import {
 } from "@shared/api-contracts";
 
 type SettingsRequestOptions = {
-  signal?: AbortSignal;
+  signal?: AbortSignal | undefined;
 };
 
 export async function getSettings() {
@@ -41,7 +41,7 @@ export async function getMaintenanceStatus(options?: SettingsRequestOptions) {
     headers: createApiHeaders({
       ...getAuthHeader(),
     }),
-    signal: options?.signal,
+    signal: options?.signal ?? null,
   });
   return response.json();
 }

@@ -104,13 +104,13 @@ export type PreparedBackupPayloadFile = {
 export type BackupListSort = "newest" | "oldest" | "name-asc" | "name-desc";
 
 export type BackupListPageParams = {
-  page?: number;
-  pageSize?: number;
-  searchName?: string;
-  createdBy?: string;
-  dateFrom?: Date;
-  dateTo?: Date;
-  sortBy?: BackupListSort;
+  page?: number | undefined;
+  pageSize?: number | undefined;
+  searchName?: string | undefined;
+  createdBy?: string | undefined;
+  dateFrom?: Date | undefined;
+  dateTo?: Date | undefined;
+  sortBy?: BackupListSort | undefined;
 };
 
 export type BackupListPageResult = {

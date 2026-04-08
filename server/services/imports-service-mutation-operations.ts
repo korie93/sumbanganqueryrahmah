@@ -13,7 +13,7 @@ export class ImportsServiceMutationOperations {
     const importRecord = await this.storage.createImport({
       name: params.name,
       filename: params.filename,
-      createdBy: params.createdBy,
+      ...(params.createdBy ? { createdBy: params.createdBy } : {}),
     });
 
     for (let index = 0; index < params.dataRows.length; index += IMPORT_INSERT_CHUNK_SIZE) {

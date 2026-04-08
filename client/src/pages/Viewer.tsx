@@ -17,9 +17,9 @@ const ViewerContent = lazy(() =>
 
 interface ViewerProps {
   onNavigate: (page: string) => void;
-  importId?: string;
+  importId?: string | undefined;
   userRole: string;
-  viewerRowsPerPage?: number;
+  viewerRowsPerPage?: number | undefined;
 }
 
 export default function Viewer({

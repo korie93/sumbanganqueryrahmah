@@ -75,15 +75,15 @@ export type CollectionRecordAggregate = {
 };
 
 export type CollectionRecordListFilters = {
-  from?: string;
-  to?: string;
-  search?: string;
-  createdByLogin?: string;
-  nicknames?: string[];
-  receiptValidationStatus?: CollectionReceiptValidationStatus | "flagged";
-  duplicateOnly?: boolean;
-  limit?: number;
-  offset?: number;
+  from?: string | undefined;
+  to?: string | undefined;
+  search?: string | undefined;
+  createdByLogin?: string | undefined;
+  nicknames?: string[] | undefined;
+  receiptValidationStatus?: CollectionReceiptValidationStatus | "flagged" | undefined;
+  duplicateOnly?: boolean | undefined;
+  limit?: number | undefined;
+  offset?: number | undefined;
 };
 
 export type CollectionRecordAggregateFilters = Omit<
@@ -229,23 +229,23 @@ export type CreateCollectionRecordReceiptInput = {
   originalMimeType: string;
   originalExtension: string;
   fileSize: number;
-  receiptAmountCents?: number | null;
-  extractedAmountCents?: number | null;
-  extractionStatus?: CollectionReceiptExtractionStatus | null;
-  extractionConfidence?: number | null;
-  receiptDate?: string | null;
-  receiptReference?: string | null;
-  fileHash?: string | null;
+  receiptAmountCents?: number | null | undefined;
+  extractedAmountCents?: number | null | undefined;
+  extractionStatus?: CollectionReceiptExtractionStatus | null | undefined;
+  extractionConfidence?: number | null | undefined;
+  receiptDate?: string | null | undefined;
+  receiptReference?: string | null | undefined;
+  fileHash?: string | null | undefined;
 };
 
 export type UpdateCollectionRecordReceiptInput = {
   receiptId: string;
-  receiptAmountCents?: number | null;
-  extractedAmountCents?: number | null;
-  extractionStatus?: CollectionReceiptExtractionStatus | null;
-  extractionConfidence?: number | null;
-  receiptDate?: string | null;
-  receiptReference?: string | null;
+  receiptAmountCents?: number | null | undefined;
+  extractedAmountCents?: number | null | undefined;
+  extractionStatus?: CollectionReceiptExtractionStatus | null | undefined;
+  extractionConfidence?: number | null | undefined;
+  receiptDate?: string | null | undefined;
+  receiptReference?: string | null | undefined;
 };
 
 export type UpdateCollectionRecordInput = {
@@ -261,15 +261,15 @@ export type UpdateCollectionRecordInput = {
 };
 
 export type UpdateCollectionRecordOptions = {
-  expectedUpdatedAt?: Date;
-  removeAllReceipts?: boolean;
-  removeReceiptIds?: string[];
-  newReceipts?: CreateCollectionRecordReceiptInput[];
-  receiptUpdates?: UpdateCollectionRecordReceiptInput[];
+  expectedUpdatedAt?: Date | undefined;
+  removeAllReceipts?: boolean | undefined;
+  removeReceiptIds?: string[] | undefined;
+  newReceipts?: CreateCollectionRecordReceiptInput[] | undefined;
+  receiptUpdates?: UpdateCollectionRecordReceiptInput[] | undefined;
 };
 
 export type DeleteCollectionRecordOptions = {
-  expectedUpdatedAt?: Date;
+  expectedUpdatedAt?: Date | undefined;
 };
 
 export type MutationIdempotencyAcquireInput = {

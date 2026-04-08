@@ -1,3 +1,5 @@
+import type { LucideIcon } from "lucide-react";
+
 export interface SummaryData {
   totalUsers: number;
   activeSessions: number;
@@ -36,6 +38,6 @@ export interface RoleData {
 export interface SummaryCardItem {
   title: string;
   value: number;
-  icon: React.ComponentType<{ className?: string }>;
+  icon: LucideIcon;
   color: string;
 }

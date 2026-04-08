@@ -28,7 +28,7 @@ export async function fetchMonitorEndpoint<T>(
         ...getAuthHeader(),
       }),
       credentials: "include",
-      signal: options?.signal,
+      signal: options?.signal ?? null,
     });
 
     if (response.status === 401) {
@@ -90,7 +90,7 @@ export async function postMonitorEndpoint<T>(
       }),
       credentials: "include",
       body: JSON.stringify(body ?? {}),
-      signal: options?.signal,
+      signal: options?.signal ?? null,
     });
 
     if (response.status === 401) {
@@ -152,7 +152,7 @@ export async function deleteMonitorEndpoint<T>(
       }),
       credentials: "include",
       body: JSON.stringify(body ?? {}),
-      signal: options?.signal,
+      signal: options?.signal ?? null,
     });
 
     if (response.status === 401) {

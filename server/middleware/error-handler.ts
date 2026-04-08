@@ -22,7 +22,7 @@ type ApiErrorResponse = {
 
 function buildApiErrorResponse(
   message: string,
-  options?: { code?: string; details?: unknown; includeError?: boolean },
+  options?: { code?: string | undefined; details?: unknown; includeError?: boolean | undefined },
 ): ApiErrorResponse {
   const includeError = options?.includeError || Boolean(options?.code || options?.details !== undefined);
 
@@ -69,8 +69,8 @@ export function errorHandler(err: unknown, req: Request, res: Response, next: Ne
     }
 
     return res.status(err.statusCode).json(buildApiErrorResponse(err.message, {
-      code: err.code,
-      details: err.details,
+      ...(err.code ? { code: err.code } : {}),
+      ...(err.details !== undefined ? { details: err.details } : {}),
     }));
   }
 

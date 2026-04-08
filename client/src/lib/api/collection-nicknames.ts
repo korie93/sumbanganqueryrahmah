@@ -5,7 +5,7 @@ import type {
 } from "./collection-types";
 
 type CollectionNicknameRequestOptions = {
-  signal?: AbortSignal;
+  signal?: AbortSignal | undefined;
 };
 
 export async function getCollectionNicknames(
@@ -33,7 +33,7 @@ export async function checkCollectionNicknameAuth(nickname: string) {
 
 export async function setupCollectionNicknamePassword(payload: {
   nickname: string;
-  currentPassword?: string;
+  currentPassword?: string | undefined;
   newPassword: string;
   confirmPassword: string;
 }) {

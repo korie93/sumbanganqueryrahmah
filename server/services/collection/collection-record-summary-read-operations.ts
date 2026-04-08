@@ -65,16 +65,18 @@ export class CollectionRecordSummaryReadOperations extends CollectionServiceSupp
       }
     }
 
+    const createdByLogin = user.role === "user" ? userOwnedRecordFilters.createdByLogin : undefined;
+    const reportNicknames = user.role === "user" ? userOwnedRecordFilters.nicknames : nicknameFilters;
     const summary = await this.storage.getCollectionMonthlySummary({
       year: parsedYear,
-      nicknames: user.role === "user" ? userOwnedRecordFilters.nicknames : nicknameFilters,
-      createdByLogin: user.role === "user" ? userOwnedRecordFilters.createdByLogin : undefined,
+      ...(reportNicknames !== undefined ? { nicknames: reportNicknames } : {}),
+      ...(createdByLogin !== undefined ? { createdByLogin } : {}),
     });
     const freshness = await getCollectionReportFreshness(this.storage, {
       from: `${parsedYear}-01-01`,
       to: `${parsedYear}-12-31`,
-      createdByLogin: user.role === "user" ? userOwnedRecordFilters.createdByLogin : undefined,
-      nicknames: user.role === "user" ? userOwnedRecordFilters.nicknames : nicknameFilters,
+      ...(createdByLogin !== undefined ? { createdByLogin } : {}),
+      ...(reportNicknames !== undefined ? { nicknames: reportNicknames } : {}),
     });
 
     return {

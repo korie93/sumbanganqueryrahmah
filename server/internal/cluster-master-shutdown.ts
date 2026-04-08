@@ -12,12 +12,12 @@ type LoggerLike = {
 
 export function shutdownClusterMasterDueToFatalError(params: {
   reason: string;
-  metadata?: Record<string, unknown>;
+  metadata?: Record<string, unknown> | undefined;
   clusterModule: ClusterLike;
   workers: Worker[];
   logger: LoggerLike;
   createGracefulShutdownMessage: (reason: string) => Serializable;
-  onSchedule?: () => boolean;
+  onSchedule?: (() => boolean) | undefined;
 }): void {
   if (params.onSchedule && params.onSchedule()) {
     return;

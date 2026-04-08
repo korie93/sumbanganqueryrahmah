@@ -295,9 +295,9 @@ export function resolveNavigationTarget(itemId: string) {
 }
 
 type ResolveActiveNavigationItemOptions = {
-  monitorSection?: MonitorSection | null;
-  pathname?: string | null;
-  search?: string | null;
+  monitorSection?: MonitorSection | null | undefined;
+  pathname?: string | null | undefined;
+  search?: string | null | undefined;
 };
 
 export function resolveActiveNavigationItemId(

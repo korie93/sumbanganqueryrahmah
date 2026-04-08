@@ -3,23 +3,23 @@ import type { PostgresStorage } from "../storage-postgres";
 export type LoginInput = {
   username: string;
   password: string;
-  fingerprint?: string | null;
+  fingerprint?: string | null | undefined;
   browserName: string;
-  pcName?: string | null;
-  ipAddress?: string | null;
+  pcName?: string | null | undefined;
+  ipAddress?: string | null | undefined;
 };
 
 export type TwoFactorLoginInput = {
   userId: string;
   code: string;
-  fingerprint?: string | null;
+  fingerprint?: string | null | undefined;
   browserName: string;
-  pcName?: string | null;
-  ipAddress?: string | null;
+  pcName?: string | null | undefined;
+  ipAddress?: string | null | undefined;
 };
 
 export type ActivateAccountInput = {
-  username?: string;
+  username?: string | undefined;
   token: string;
   newPassword: string;
   confirmPassword: string;

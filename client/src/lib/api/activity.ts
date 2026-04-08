@@ -2,24 +2,24 @@ import { apiRequest, createApiHeaders } from "../api-client";
 import { getCsrfHeader } from "./shared";
 
 type ActivityRequestOptions = {
-  signal?: AbortSignal;
+  signal?: AbortSignal | undefined;
 };
 
 export type ActivityLoginPayload = {
   username: string;
   role: string;
-  pcName?: string;
-  browser?: string;
-  fingerprint?: string;
+  pcName?: string | undefined;
+  browser?: string | undefined;
+  fingerprint?: string | undefined;
 };
 
 export interface ActivityFilters {
-  status?: string[];
-  username?: string;
-  ipAddress?: string;
-  browser?: string;
-  dateFrom?: string;
-  dateTo?: string;
+  status?: string[] | undefined;
+  username?: string | undefined;
+  ipAddress?: string | undefined;
+  browser?: string | undefined;
+  dateFrom?: string | undefined;
+  dateTo?: string | undefined;
 }
 
 export async function activityLogin(data: ActivityLoginPayload) {
@@ -34,10 +34,10 @@ export async function activityLogout(activityId?: string) {
 }
 
 export async function activityHeartbeat(payload?: {
-  activityId?: string;
-  pcName?: string;
-  browser?: string;
-  fingerprint?: string;
+  activityId?: string | undefined;
+  pcName?: string | undefined;
+  browser?: string | undefined;
+  fingerprint?: string | undefined;
 }, options?: ActivityRequestOptions) {
   return fetch("/api/activity/heartbeat", {
     method: "POST",
@@ -47,7 +47,7 @@ export async function activityHeartbeat(payload?: {
     }),
     credentials: "include",
     body: JSON.stringify(payload || {}),
-    signal: options?.signal,
+    signal: options?.signal ?? null,
   });
 }
 
@@ -58,7 +58,7 @@ export async function activityHeartbeatLight(options?: ActivityRequestOptions) {
       ...(getCsrfHeader() as Record<string, string>),
     }),
     credentials: "include",
-    signal: options?.signal,
+    signal: options?.signal ?? null,
   });
 }
 

@@ -7,7 +7,7 @@ export function logCollectionReceiptWarning(params: {
   mode: "view" | "download";
   statusCode: number;
   reason: string;
-  meta?: Record<string, unknown>;
+  meta?: Record<string, unknown> | undefined;
 }): void {
   logger.warn("Collection receipt request failed", {
     mode: params.mode,

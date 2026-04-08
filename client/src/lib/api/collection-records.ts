@@ -155,19 +155,19 @@ export async function createCollectionRecord(
 }
 
 export async function getCollectionRecords(filters?: {
-  from?: string;
-  to?: string;
-  search?: string;
-  nickname?: string;
-  nicknames?: string[];
-  receiptValidationStatus?: "matched" | "underpaid" | "overpaid" | "unverified" | "needs_review" | "flagged";
-  duplicateOnly?: boolean;
-  page?: number;
-  pageSize?: number;
-  limit?: number;
-  offset?: number;
-  cursor?: string | null;
-}, options?: { signal?: AbortSignal }) {
+  from?: string | undefined;
+  to?: string | undefined;
+  search?: string | undefined;
+  nickname?: string | undefined;
+  nicknames?: string[] | undefined;
+  receiptValidationStatus?: "matched" | "underpaid" | "overpaid" | "unverified" | "needs_review" | "flagged" | undefined;
+  duplicateOnly?: boolean | undefined;
+  page?: number | undefined;
+  pageSize?: number | undefined;
+  limit?: number | undefined;
+  offset?: number | undefined;
+  cursor?: string | null | undefined;
+}, options?: { signal?: AbortSignal | undefined }) {
   const params = new URLSearchParams();
   if (filters?.from) params.set("from", filters.from);
   if (filters?.to) params.set("to", filters.to);
@@ -243,7 +243,7 @@ export async function fetchCollectionReceiptBlob(
   recordId: string,
   mode: "view" | "download",
   receiptId?: string | null,
-  options?: { signal?: AbortSignal },
+  options?: { signal?: AbortSignal | undefined },
 ) {
   const receiptSegment = receiptId
     ? `/receipts/${encodeURIComponent(receiptId)}`

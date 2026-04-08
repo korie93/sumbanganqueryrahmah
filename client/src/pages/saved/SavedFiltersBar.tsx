@@ -8,9 +8,9 @@ import { DatePickerField } from "@/components/ui/date-picker-field";
 
 interface SavedFiltersBarProps {
   searchTerm: string;
-  dateFilter?: Date;
+  dateFilter?: Date | undefined;
   hasActiveFilters: boolean;
-  searchInputRef?: RefObject<HTMLInputElement>;
+  searchInputRef?: RefObject<HTMLInputElement> | undefined;
   onSearchTermChange: (value: string) => void;
   onDateFilterChange: (date?: Date) => void;
   onClearFilters: () => void;

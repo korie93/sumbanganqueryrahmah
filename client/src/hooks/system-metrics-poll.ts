@@ -49,7 +49,7 @@ export type SystemMetricsPollingState = {
 
 export type SystemMetricsPollingFlags = {
   hidden: boolean;
-  forceDetailed?: boolean;
+  forceDetailed?: boolean | undefined;
   pollCount: number;
   includeHistory: boolean;
   includeAlerts: boolean;

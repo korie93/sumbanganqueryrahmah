@@ -11,17 +11,17 @@ export const VIEWER_FILTER_OPERATOR_LABELS: Record<ColumnFilter["operator"], str
 };
 
 type ViewerApiRow = {
-  jsonDataJsonb?: Record<string, unknown>;
+  jsonDataJsonb?: Record<string, unknown> | undefined;
 };
 
 export type ViewerPageResponse = {
-  rows?: ViewerApiRow[];
-  headers?: string[];
-  total?: number;
-  page?: number;
-  limit?: number;
-  pageSize?: number;
-  nextCursor?: string | null;
+  rows?: ViewerApiRow[] | undefined;
+  headers?: string[] | undefined;
+  total?: number | undefined;
+  page?: number | undefined;
+  limit?: number | undefined;
+  pageSize?: number | undefined;
+  nextCursor?: string | null | undefined;
 };
 
 export function resolveViewerImportName(

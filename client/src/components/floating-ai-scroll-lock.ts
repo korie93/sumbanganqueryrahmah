@@ -1,11 +1,11 @@
 type StyleLike = {
   overflow: string;
   overscrollBehavior: string;
-  position?: string;
-  top?: string;
-  left?: string;
-  right?: string;
-  width?: string;
+  position?: string | undefined;
+  top?: string | undefined;
+  left?: string | undefined;
+  right?: string | undefined;
+  width?: string | undefined;
 };
 
 type FloatingAiScrollLockTarget = {

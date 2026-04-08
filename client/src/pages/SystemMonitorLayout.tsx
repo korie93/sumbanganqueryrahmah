@@ -19,12 +19,12 @@ type SystemMonitorLayoutProps = {
   showAnalysis: boolean;
   showAuditLogs: boolean;
   requestedSection: MonitorSection;
-  onSectionChange?: (section: MonitorSection) => void;
-  onNavigate?: (page: string) => void;
+  onSectionChange?: ((section: MonitorSection) => void) | undefined;
+  onNavigate?: ((page: string) => void) | undefined;
 };
 
 type AnalysisSectionProps = {
-  onNavigate?: (page: string) => void;
+  onNavigate?: ((page: string) => void) | undefined;
 };
 
 const DashboardSection = memo(function DashboardSection() {

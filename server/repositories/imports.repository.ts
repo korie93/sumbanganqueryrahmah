@@ -24,10 +24,10 @@ export type ImportListPage = {
 };
 
 type ImportListPageParams = {
-  cursor?: string | null;
-  limit?: number;
-  search?: string | null;
-  createdOn?: string | null;
+  cursor?: string | null | undefined;
+  limit?: number | undefined;
+  search?: string | null | undefined;
+  createdOn?: string | null | undefined;
 };
 
 type ImportListCursor = {
@@ -84,9 +84,9 @@ function parseImportListCursor(rawCursor: string | null | undefined): ImportList
 
 function buildImportListFilterSql(params: {
   alias: string;
-  search?: string | null;
-  createdOn?: string | null;
-  cursor?: ImportListCursor | null;
+  search?: string | null | undefined;
+  createdOn?: string | null | undefined;
+  cursor?: ImportListCursor | null | undefined;
   includeCursor: boolean;
 }) {
   const alias = sql.raw(params.alias);

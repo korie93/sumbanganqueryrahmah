@@ -1,4 +1,4 @@
-import { Copy } from "lucide-react";
+import { Copy, type LucideIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { AnalysisCategory } from "@/pages/analysis/types";
@@ -6,7 +6,7 @@ import type { AnalysisCategory } from "@/pages/analysis/types";
 interface AnalysisCategoryCardProps {
   category: AnalysisCategory;
   colorClass: string;
-  icon: React.ComponentType<{ className?: string }>;
+  icon: LucideIcon;
   onCopySample: (sample: string) => void;
   title: string;
 }

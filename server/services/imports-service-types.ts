@@ -37,18 +37,18 @@ export type CreateImportInput = {
   name: string;
   filename: string;
   dataRows: unknown[];
-  createdBy?: string;
+  createdBy?: string | undefined;
 };
 
 export type ImportDataPageInput = {
   importId: string;
   page: number;
-  cursor?: string | null;
+  cursor?: string | null | undefined;
   requestedLimit: number;
   viewerRowsPerPage: number;
   isDbProtected: boolean;
-  search?: string | null;
-  columnFilters?: ImportDataColumnFilter[];
+  search?: string | null | undefined;
+  columnFilters?: ImportDataColumnFilter[] | undefined;
 };
 
 export type SearchImportRowsInput = {

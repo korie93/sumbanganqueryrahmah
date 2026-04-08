@@ -28,34 +28,34 @@ export type CreateManagedUserAccountParams = {
 
 export type UpdateUserCredentialsParams = {
   userId: string;
-  newUsername?: string;
-  newPasswordHash?: string;
-  passwordChangedAt?: Date | null;
-  mustChangePassword?: boolean;
-  passwordResetBySuperuser?: boolean;
+  newUsername?: string | undefined;
+  newPasswordHash?: string | undefined;
+  passwordChangedAt?: Date | null | undefined;
+  mustChangePassword?: boolean | undefined;
+  passwordResetBySuperuser?: boolean | undefined;
 };
 
 export type UpdateUserAccountParams = {
   userId: string;
-  username?: string;
-  fullName?: string | null;
-  email?: string | null;
-  role?: ManageableUserRole;
-  status?: AccountStatus;
-  isBanned?: boolean;
-  mustChangePassword?: boolean;
-  passwordResetBySuperuser?: boolean;
-  passwordHash?: string;
-  passwordChangedAt?: Date | null;
-  activatedAt?: Date | null;
-  lastLoginAt?: Date | null;
-  twoFactorEnabled?: boolean;
-  twoFactorSecretEncrypted?: string | null;
-  twoFactorConfiguredAt?: Date | null;
-  failedLoginAttempts?: number;
-  lockedAt?: Date | null;
-  lockedReason?: string | null;
-  lockedBySystem?: boolean;
+  username?: string | undefined;
+  fullName?: string | null | undefined;
+  email?: string | null | undefined;
+  role?: ManageableUserRole | undefined;
+  status?: AccountStatus | undefined;
+  isBanned?: boolean | undefined;
+  mustChangePassword?: boolean | undefined;
+  passwordResetBySuperuser?: boolean | undefined;
+  passwordHash?: string | undefined;
+  passwordChangedAt?: Date | null | undefined;
+  activatedAt?: Date | null | undefined;
+  lastLoginAt?: Date | null | undefined;
+  twoFactorEnabled?: boolean | undefined;
+  twoFactorSecretEncrypted?: string | null | undefined;
+  twoFactorConfiguredAt?: Date | null | undefined;
+  failedLoginAttempts?: number | undefined;
+  lockedAt?: Date | null | undefined;
+  lockedReason?: string | null | undefined;
+  lockedBySystem?: boolean | undefined;
 };
 
 export type RecordFailedLoginAttemptParams = {

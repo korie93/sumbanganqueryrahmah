@@ -40,11 +40,11 @@ export function classifyWebVitalPageType(pathname: string) {
 export function buildWebVitalPayload(
   metric: Pick<Metric, "name" | "value" | "delta" | "rating" | "id" | "navigationType">,
   options: {
-    pathname?: string;
-    visibilityState?: string;
-    effectiveConnectionType?: string;
-    saveData?: boolean;
-    capturedAt?: string;
+    pathname?: string | undefined;
+    visibilityState?: string | undefined;
+    effectiveConnectionType?: string | undefined;
+    saveData?: boolean | undefined;
+    capturedAt?: string | undefined;
   } = {},
 ): WebVitalTelemetryPayload {
   const pathname = options.pathname || "/";

@@ -34,7 +34,7 @@ export class AuthAccountError extends Error {
     public readonly statusCode: number,
     public readonly code: string,
     message: string,
-    public readonly extra?: Record<string, unknown>,
+    public readonly extra?: Record<string, unknown> | undefined,
   ) {
     super(message);
     this.name = "AuthAccountError";

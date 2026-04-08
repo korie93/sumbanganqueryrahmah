@@ -20,20 +20,20 @@ export type ConsumeActivationTokenParams = {
 export type CreatePasswordResetRequestParams = {
   userId: string;
   requestedByUser: string | null;
-  approvedBy?: string | null;
-  resetType?: string;
-  tokenHash?: string | null;
-  expiresAt?: Date | null;
-  usedAt?: Date | null;
+  approvedBy?: string | null | undefined;
+  resetType?: string | undefined;
+  tokenHash?: string | null | undefined;
+  expiresAt?: Date | null | undefined;
+  usedAt?: Date | null | undefined;
 };
 
 export type UpdatePasswordResetRequestParams = {
   requestId: string;
-  approvedBy?: string | null;
-  resetType?: string;
-  usedAt?: Date | null;
-  tokenHash?: string | null;
-  expiresAt?: Date | null;
+  approvedBy?: string | null | undefined;
+  resetType?: string | undefined;
+  usedAt?: Date | null | undefined;
+  tokenHash?: string | null | undefined;
+  expiresAt?: Date | null | undefined;
 };
 
 export type ResolvePendingPasswordResetRequestsForUserParams = {

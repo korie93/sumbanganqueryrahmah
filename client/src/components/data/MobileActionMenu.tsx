@@ -70,7 +70,7 @@ export function MobileActionMenu({
           return (
             <DropdownMenuItem
               key={item.id}
-              disabled={item.disabled}
+              {...(item.disabled !== undefined ? { disabled: item.disabled } : {})}
               onSelect={() => {
                 if (!item.disabled) {
                   item.onSelect();

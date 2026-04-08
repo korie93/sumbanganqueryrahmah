@@ -47,7 +47,7 @@ export function useSettingsManagedDialogs() {
   const openManagedSecretDialog = useCallback((params: {
     title: string;
     description: string;
-    value?: string;
+    value?: string | undefined;
   }) => {
     setManagedSecretDialogTitle(params.title);
     setManagedSecretDialogDescription(params.description);

@@ -189,7 +189,7 @@ export type PendingPasswordResetRequestsResponse = AuthOkResponse<{
 }>;
 
 export type RequestOptions = {
-  signal?: AbortSignal;
+  signal?: AbortSignal | undefined;
 };
 
 export type ManagedUsersQuery = {

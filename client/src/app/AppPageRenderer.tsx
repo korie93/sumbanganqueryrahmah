@@ -25,7 +25,7 @@ type AppPageRendererProps = {
   user: User;
   currentPage: string;
   monitorSection: MonitorSection;
-  selectedImportId?: string;
+  selectedImportId?: string | undefined;
   runtimeConfig: AppRuntimeConfig;
   tabVisibility: TabVisibility;
   tabVisibilityLoaded: boolean;

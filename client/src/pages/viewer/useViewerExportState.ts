@@ -13,7 +13,7 @@ import {
 
 type UseViewerExportStateOptions = {
   rowsPerPage: number;
-  importId?: string;
+  importId?: string | undefined;
   importName: string;
   rows: DataRowWithId[];
   filteredRows: DataRowWithId[];

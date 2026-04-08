@@ -14,9 +14,9 @@ type AuthAccountPolicyStorage = Pick<
 >;
 
 type EnsureUniqueIdentityInput = {
-  username?: string;
-  email?: string | null;
-  ignoreUserId?: string;
+  username?: string | undefined;
+  email?: string | null | undefined;
+  ignoreUserId?: string | undefined;
 };
 
 export function createAuthAccountServicePolicies(storage: AuthAccountPolicyStorage) {

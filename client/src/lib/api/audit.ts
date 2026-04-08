@@ -1,15 +1,15 @@
 import { apiRequest } from "../api-client";
 
 export async function getAuditLogs(params?: {
-  page?: number;
-  pageSize?: number;
-  action?: string;
-  performedBy?: string;
-  targetUser?: string;
-  search?: string;
-  dateFrom?: string;
-  dateTo?: string;
-  sortBy?: string;
+  page?: number | undefined;
+  pageSize?: number | undefined;
+  action?: string | undefined;
+  performedBy?: string | undefined;
+  targetUser?: string | undefined;
+  search?: string | undefined;
+  dateFrom?: string | undefined;
+  dateTo?: string | undefined;
+  sortBy?: string | undefined;
 }) {
   const query = new URLSearchParams();
   if (params?.page) query.set("page", String(params.page));

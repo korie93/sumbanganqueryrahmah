@@ -113,11 +113,11 @@ export interface IStorage extends CollectionStorageContract {
   }>>;
   getManagedUsers(): Promise<ManagedUserAccount[]>;
   listManagedUsersPage(params?: {
-    page?: number;
-    pageSize?: number;
-    search?: string;
-    role?: "all" | "admin" | "user";
-    status?: "all" | "active" | "pending_activation" | "suspended" | "disabled" | "locked" | "banned";
+    page?: number | undefined;
+    pageSize?: number | undefined;
+    search?: string | undefined;
+    role?: "all" | "admin" | "user" | undefined;
+    status?: "all" | "active" | "pending_activation" | "suspended" | "disabled" | "locked" | "banned" | undefined;
   }): Promise<{
     users: ManagedUserAccount[];
     page: number;
@@ -172,10 +172,10 @@ export interface IStorage extends CollectionStorageContract {
   }): Promise<boolean>;
   listPendingPasswordResetRequests(): Promise<PendingPasswordResetRequestSummary[]>;
   listPendingPasswordResetRequestsPage(params?: {
-    page?: number;
-    pageSize?: number;
-    search?: string;
-    status?: "all" | "active" | "pending_activation" | "suspended" | "disabled" | "locked" | "banned";
+    page?: number | undefined;
+    pageSize?: number | undefined;
+    search?: string | undefined;
+    status?: "all" | "active" | "pending_activation" | "suspended" | "disabled" | "locked" | "banned" | undefined;
   }): Promise<{
     requests: PendingPasswordResetRequestSummary[];
     page: number;
@@ -219,16 +219,16 @@ export interface IStorage extends CollectionStorageContract {
   getAllActivities(): Promise<UserActivity[]>;
   deleteActivity(id: string): Promise<boolean>;
   getFilteredActivities(filters: {
-    status?: string[];
-    username?: string;
-    ipAddress?: string;
-    browser?: string;
-    dateFrom?: Date;
-    dateTo?: Date;
+    status?: string[] | undefined;
+    username?: string | undefined;
+    ipAddress?: string | undefined;
+    browser?: string | undefined;
+    dateFrom?: Date | undefined;
+    dateTo?: Date | undefined;
   }): Promise<UserActivity[]>;
   deactivateUserActivities(username: string, reason?: string): Promise<void>;
   deactivateUserSessionsByFingerprint(username: string, fingerprint: string): Promise<void>;
-  getBannedUsers(): Promise<Array<User & { banInfo?: { ipAddress: string | null; browser: string | null; bannedAt: Date | null } }>>;
+  getBannedUsers(): Promise<Array<User & { banInfo?: { ipAddress: string | null; browser: string | null; bannedAt: Date | null } | undefined }>>;
   isVisitorBanned(fingerprint?: string | null, ipAddress?: string | null, username?: string | null): Promise<boolean>;
   banVisitor(params: { username: string; role: string; activityId: string; fingerprint?: string | null; ipAddress?: string | null; browser?: string | null; pcName?: string | null }): Promise<void>;
   unbanVisitor(banId: string): Promise<void>;

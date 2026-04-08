@@ -2,12 +2,12 @@ import type { WebSocket } from "ws";
 import type { PostgresStorage } from "../storage-postgres";
 
 export type ActivityFilters = {
-  status?: string[];
-  username?: string;
-  ipAddress?: string;
-  browser?: string;
-  dateFrom?: Date;
-  dateTo?: Date;
+  status?: string[] | undefined;
+  username?: string | undefined;
+  ipAddress?: string | undefined;
+  browser?: string | undefined;
+  dateFrom?: Date | undefined;
+  dateTo?: Date | undefined;
 };
 
 export type ActivityStorage = Pick<

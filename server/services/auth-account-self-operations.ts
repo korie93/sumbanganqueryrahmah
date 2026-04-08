@@ -37,9 +37,9 @@ type AuthAccountSelfStorage = Pick<
 type AuthAccountSelfDeps = {
   storage: AuthAccountSelfStorage;
   ensureUniqueIdentity: (params: {
-    username?: string;
-    email?: string | null;
-    ignoreUserId?: string;
+    username?: string | undefined;
+    email?: string | null | undefined;
+    ignoreUserId?: string | undefined;
   }) => Promise<void>;
   requireActor: (authUser: AuthenticatedUser | undefined) => Promise<AuthAccountUser>;
   validateUsername: (username: string) => void;

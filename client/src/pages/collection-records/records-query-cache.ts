@@ -5,9 +5,9 @@ const DEFAULT_COLLECTION_RECORDS_CACHE_LIMIT = 24;
 
 export type CollectionRecordsCacheEntry = {
   records: CollectionRecord[];
-  totalRecords?: number;
-  totalAmount?: number;
-  nextCursor?: string | null;
+  totalRecords?: number | undefined;
+  totalAmount?: number | undefined;
+  nextCursor?: string | null | undefined;
 };
 
 export function normalizeCollectionRecordFilterValue(value: unknown) {

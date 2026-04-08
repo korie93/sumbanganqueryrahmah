@@ -91,9 +91,11 @@ export class CollectionRecordNicknameSummaryOperations extends CollectionService
       }
     }
 
+    const fromFilter = from || undefined;
+    const toFilter = to || undefined;
     const nicknameTotalsRaw = await this.storage.summarizeCollectionRecordsByNickname({
-      from: from || undefined,
-      to: to || undefined,
+      ...(fromFilter !== undefined ? { from: fromFilter } : {}),
+      ...(toFilter !== undefined ? { to: toFilter } : {}),
       nicknames: nicknameFilters,
     });
     const nicknameTotals = nicknameFilters.map((nickname) => {
@@ -117,15 +119,15 @@ export class CollectionRecordNicknameSummaryOperations extends CollectionService
     const records = summaryOnly
       ? []
       : await this.storage.listCollectionRecords({
-          from: from || undefined,
-          to: to || undefined,
+          ...(fromFilter !== undefined ? { from: fromFilter } : {}),
+          ...(toFilter !== undefined ? { to: toFilter } : {}),
           nicknames: nicknameFilters,
           limit: recordLimit,
           offset: recordOffset,
         });
     const freshness = await getCollectionReportFreshness(this.storage, {
-      from: from || undefined,
-      to: to || undefined,
+      ...(fromFilter !== undefined ? { from: fromFilter } : {}),
+      ...(toFilter !== undefined ? { to: toFilter } : {}),
       nicknames: nicknameFilters,
     });
     const pagination = buildCollectionPaginationMeta({

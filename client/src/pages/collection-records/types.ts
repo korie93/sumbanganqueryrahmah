@@ -1,13 +1,13 @@
 export type ReceiptPreviewKind = "pdf" | "image" | "unsupported";
 
 export type CollectionRecordFilters = {
-  from?: string;
-  to?: string;
-  search?: string;
-  nickname?: string;
-  page?: number;
-  pageSize?: number;
-  limit?: number;
-  offset?: number;
-  cursor?: string | null;
+  from?: string | undefined;
+  to?: string | undefined;
+  search?: string | undefined;
+  nickname?: string | undefined;
+  page?: number | undefined;
+  pageSize?: number | undefined;
+  limit?: number | undefined;
+  offset?: number | undefined;
+  cursor?: string | null | undefined;
 };
