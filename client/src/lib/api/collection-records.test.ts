@@ -124,3 +124,39 @@ test("buildCollectionMutationFingerprint changes when receipt metadata changes",
 
   assert.notEqual(base, changed);
 });
+
+test("buildCollectionMutationFingerprint keeps multipart receipt headers below the backend limit", () => {
+  const fingerprint = buildCollectionMutationFingerprint({
+    operation: "create",
+    payload: {
+      accountNumber: "SMOKE-RCPT-1775610210015",
+      amount: 12.34,
+      batch: "ONLINE",
+      collectionStaffNickname: "collection-smoke-staff",
+      customerName: "Smoke Receipt 1775610210015",
+      customerPhone: "0120210015",
+      icNumber: "900101210015",
+      newReceiptMetadata: [
+        {
+          fileHash: null,
+          receiptAmount: "12.34",
+          receiptDate: null,
+          receiptId: null,
+          receiptReference: null,
+        },
+      ],
+      paymentDate: "2026-04-08",
+    },
+    receiptFiles: [
+      {
+        lastModified: 1775610210016,
+        name: "receipt-smoke-save.png",
+        size: 1000,
+        type: "image/png",
+      },
+    ],
+  });
+
+  assert.doesNotThrow(() => JSON.parse(fingerprint));
+  assert.ok(fingerprint.length <= 512);
+});

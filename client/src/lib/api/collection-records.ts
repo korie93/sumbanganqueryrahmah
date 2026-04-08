@@ -87,6 +87,19 @@ function sortFingerprintValue(value: unknown): unknown {
   return value ?? null;
 }
 
+function hashFingerprintInput(input: string): string {
+  let hash = 0xcbf29ce484222325n;
+  const prime = 0x100000001b3n;
+  const mask = 0xffffffffffffffffn;
+
+  for (let index = 0; index < input.length; index += 1) {
+    hash ^= BigInt(input.charCodeAt(index));
+    hash = (hash * prime) & mask;
+  }
+
+  return hash.toString(16).padStart(16, "0");
+}
+
 function buildCollectionMutationHeaders(options?: CollectionMutationRequestOptions) {
   const headers: Record<string, string> = {};
   const idempotencyKey = String(options?.idempotencyKey || "").trim();
@@ -112,7 +125,7 @@ export function buildCollectionMutationFingerprint(params: {
   receiptFiles?: readonly Pick<File, "lastModified" | "name" | "size" | "type">[];
   recordId?: string;
 }) {
-  return JSON.stringify(sortFingerprintValue({
+  const canonicalFingerprint = JSON.stringify(sortFingerprintValue({
     operation: params.operation,
     payload: params.payload || {},
     receiptFiles: (params.receiptFiles || []).map((file) => ({
@@ -123,6 +136,12 @@ export function buildCollectionMutationFingerprint(params: {
     })),
     recordId: String(params.recordId || ""),
   }));
+
+  return JSON.stringify({
+    algorithm: "fnv1a64",
+    hash: hashFingerprintInput(canonicalFingerprint),
+    version: 1,
+  });
 }
 
 export async function createCollectionRecord(
