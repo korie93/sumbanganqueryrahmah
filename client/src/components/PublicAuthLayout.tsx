@@ -26,6 +26,8 @@ export function PublicAuthLayout({
   contentBusy = false,
   onBackClick,
 }: PublicAuthLayoutProps) {
+  const contentBusyProps = contentBusy ? { "aria-busy": "true" as const } : {};
+
   return (
     <div className="public-auth-layout viewport-min-height">
       <div className="public-auth-layout__pattern" />
@@ -77,7 +79,7 @@ export function PublicAuthLayout({
               <p className="public-auth-layout__description">{description}</p>
             </div>
 
-            <div className="public-auth-layout__content" aria-busy={contentBusy || undefined}>
+            <div className="public-auth-layout__content" {...contentBusyProps}>
               {children}
             </div>
           </div>

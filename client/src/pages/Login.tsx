@@ -31,6 +31,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
     goToLandingPage,
     goToForgotPassword,
   } = useLoginPageState({ onLoginSuccess });
+  const loginFormBusyProps = loading ? { "aria-busy": "true" as const } : {};
 
   return (
     <div className="relative w-full viewport-min-height overflow-hidden bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900">
@@ -70,7 +71,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
               </p>
             </div>
 
-            <form className="space-y-4" onSubmit={handleSubmit} aria-busy={loading}>
+            <form className="space-y-4" onSubmit={handleSubmit} {...loginFormBusyProps}>
               <div className="relative">
                 <PublicAuthInput
                   className="w-full px-4 py-3 rounded-xl bg-white/90 border-0 text-slate-900 placeholder:text-slate-400 focus:ring-2 focus:ring-blue-400 transition-all"

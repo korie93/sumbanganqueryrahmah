@@ -35,9 +35,10 @@ export function BulkImportPanel({
   const hasImportableFiles = bulkResults.some((result) => !result.blocked);
   const failedCount = bulkResults.filter((result) => result.status === "error").length;
   const successCount = bulkResults.filter((result) => result.status === "success").length;
+  const bulkBusyProps = bulkProcessing ? { "aria-busy": "true" as const } : {};
 
   return (
-    <div className="glass-wrapper mb-4 p-4 sm:mb-6 sm:p-6" aria-busy={bulkProcessing}>
+    <div className="glass-wrapper mb-4 p-4 sm:mb-6 sm:p-6" {...bulkBusyProps}>
       <div className="mb-4">
         <h2 className="text-lg font-semibold text-foreground mb-2">Bulk Import</h2>
         <p className="text-sm text-muted-foreground">

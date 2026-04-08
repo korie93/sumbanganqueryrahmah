@@ -81,6 +81,9 @@ export function CollectionRecordsToolbar({
     hasPreviousPage,
     loadingRecords,
   });
+  const paginationBusyProps = paginationControls.paginationBusy
+    ? { "aria-busy": "true" as const }
+    : {};
 
   return (
     <>
@@ -127,7 +130,7 @@ export function CollectionRecordsToolbar({
       <div
         className="flex flex-col gap-3 rounded-md border border-border/60 bg-background/50 px-3 py-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between"
         data-floating-ai-avoid="true"
-        aria-busy={paginationControls.paginationBusy}
+        {...paginationBusyProps}
       >
         <p className="text-xs text-muted-foreground">
           {paginationControls.paginationBusy

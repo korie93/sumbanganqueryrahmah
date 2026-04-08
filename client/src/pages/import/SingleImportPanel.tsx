@@ -37,9 +37,11 @@ export function SingleImportPanel({
   onSave,
   parsedData,
 }: SingleImportPanelProps) {
+  const loadingBusyProps = loading ? { "aria-busy": "true" as const } : {};
+
   return (
     <>
-      <div className="glass-wrapper mb-4 p-4 sm:mb-6 sm:p-6" aria-busy={loading}>
+      <div className="glass-wrapper mb-4 p-4 sm:mb-6 sm:p-6" {...loadingBusyProps}>
         <div className="mb-4">
           <div className="mb-2 flex flex-wrap items-center gap-2">
             <label className="block text-sm font-medium text-foreground">Import Name</label>
@@ -141,7 +143,7 @@ export function SingleImportPanel({
       </div>
 
       {parsedData.length > 0 ? (
-        <div className="glass-wrapper p-4 sm:p-6" aria-busy={loading}>
+        <div className="glass-wrapper p-4 sm:p-6" {...loadingBusyProps}>
           <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h2 className="text-lg font-semibold text-foreground">
