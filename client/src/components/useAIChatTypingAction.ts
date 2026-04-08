@@ -1,10 +1,10 @@
 import { useCallback, type Dispatch, type MutableRefObject, type SetStateAction } from "react";
 
-import type { AIChatMessage } from "@/context/AIContext";
+import type { AIChatMessageInput } from "@/context/AIContext";
 import type { AIChatStatus } from "@/lib/ai-chat";
 
 type UseAIChatTypingActionOptions = {
-  appendMessage: (message: AIChatMessage) => void;
+  appendMessage: (message: AIChatMessageInput) => void;
   clearSlowNoticeTimer: () => void;
   isMountedRef: MutableRefObject<boolean>;
   processingRef: MutableRefObject<boolean>;

@@ -14,19 +14,28 @@ export const DEFAULT_RUNTIME_CONFIG: AppRuntimeConfig = {
 
 export const ACTIVE_SETTINGS_SECTION_KEY = "activeSettingsSection";
 
-export const LOCAL_STORAGE_KEYS_TO_CLEAR = [
+export const LEGACY_AUTH_LOCAL_STORAGE_KEYS = [
   "token",
   "user",
   "username",
   "role",
   "forcePasswordChange",
   "activityId",
+  "banned",
+  "fingerprint",
+] as const;
+
+export const PERSISTED_UI_LOCAL_STORAGE_KEYS = [
   "activeTab",
   "lastPage",
   ACTIVE_SETTINGS_SECTION_KEY,
   "selectedImportId",
   "selectedImportName",
-  "fingerprint",
+] as const;
+
+export const LOCAL_STORAGE_KEYS_TO_CLEAR = [
+  ...LEGACY_AUTH_LOCAL_STORAGE_KEYS,
+  ...PERSISTED_UI_LOCAL_STORAGE_KEYS,
 ] as const;
 
 export const SESSION_STORAGE_KEYS_TO_CLEAR = [

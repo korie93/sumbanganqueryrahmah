@@ -9,6 +9,10 @@ import {
   clearAuthenticatedUserStorage,
   setStoredForcePasswordChange,
 } from "@/lib/auth-session";
+import {
+  hasPublicAuthFieldErrors,
+  validatePasswordFields,
+} from "@/pages/public-auth-form-utils";
 
 type ChangePasswordPageProps = {
   username?: string;
@@ -22,6 +26,9 @@ export default function ChangePasswordPage({
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [currentPasswordError, setCurrentPasswordError] = useState("");
+  const [newPasswordError, setNewPasswordError] = useState("");
+  const [confirmPasswordError, setConfirmPasswordError] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
@@ -61,16 +68,22 @@ export default function ChangePasswordPage({
 
     setError("");
     setSuccessMessage("");
+    setCurrentPasswordError("");
+    setNewPasswordError("");
+    setConfirmPasswordError("");
     setLoading(true);
 
     try {
-      if (!currentPassword || !newPassword || !confirmPassword) {
-        setError("Semua medan kata laluan wajib diisi.");
-        return;
-      }
-
-      if (newPassword !== confirmPassword) {
-        setError("Pengesahan kata laluan tidak sepadan.");
+      const fieldErrors = validatePasswordFields({
+        currentPassword,
+        newPassword,
+        confirmPassword,
+        requireCurrentPassword: true,
+      });
+      if (hasPublicAuthFieldErrors(fieldErrors)) {
+        setCurrentPasswordError(fieldErrors.currentPassword ?? "");
+        setNewPasswordError(fieldErrors.newPassword ?? "");
+        setConfirmPasswordError(fieldErrors.confirmPassword ?? "");
         return;
       }
 
@@ -118,6 +131,25 @@ export default function ChangePasswordPage({
     }
   };
 
+  const currentPasswordInvalidProps = currentPasswordError
+    ? {
+      "aria-invalid": "true" as const,
+      "aria-describedby": "change-password-current-error",
+    }
+    : {};
+  const newPasswordInvalidProps = newPasswordError
+    ? {
+      "aria-invalid": "true" as const,
+      "aria-describedby": "change-password-new-error",
+    }
+    : {};
+  const confirmPasswordInvalidProps = confirmPasswordError
+    ? {
+      "aria-invalid": "true" as const,
+      "aria-describedby": "change-password-confirm-error",
+    }
+    : {};
+
   return (
     <PublicAuthLayout
       badge="Keselamatan Akaun"
@@ -139,24 +171,54 @@ export default function ChangePasswordPage({
       <PublicAuthInput
         type="password"
         value={currentPassword}
-        onChange={(event) => setCurrentPassword(event.target.value)}
+        onChange={(event) => {
+          setCurrentPassword(event.target.value);
+          setCurrentPasswordError("");
+          setError("");
+        }}
         placeholder="Kata laluan semasa"
         disabled={loading}
+        {...currentPasswordInvalidProps}
       />
+      {currentPasswordError ? (
+        <p id="change-password-current-error" className="text-sm text-amber-100" role="alert">
+          {currentPasswordError}
+        </p>
+      ) : null}
       <PublicAuthInput
         type="password"
         value={newPassword}
-        onChange={(event) => setNewPassword(event.target.value)}
+        onChange={(event) => {
+          setNewPassword(event.target.value);
+          setNewPasswordError("");
+          setError("");
+        }}
         placeholder="Kata laluan baharu"
         disabled={loading}
+        {...newPasswordInvalidProps}
       />
+      {newPasswordError ? (
+        <p id="change-password-new-error" className="text-sm text-amber-100" role="alert">
+          {newPasswordError}
+        </p>
+      ) : null}
       <PublicAuthInput
         type="password"
         value={confirmPassword}
-        onChange={(event) => setConfirmPassword(event.target.value)}
+        onChange={(event) => {
+          setConfirmPassword(event.target.value);
+          setConfirmPasswordError("");
+          setError("");
+        }}
         placeholder="Sahkan kata laluan baharu"
         disabled={loading}
+        {...confirmPasswordInvalidProps}
       />
+      {confirmPasswordError ? (
+        <p id="change-password-confirm-error" className="text-sm text-amber-100" role="alert">
+          {confirmPasswordError}
+        </p>
+      ) : null}
 
       {error ? (
         <div className="rounded-2xl border border-red-400/25 bg-red-500/10 p-3 text-sm text-red-100" role="alert">

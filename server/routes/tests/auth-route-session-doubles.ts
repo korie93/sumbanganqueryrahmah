@@ -1,6 +1,13 @@
 import { hashPassword } from "../../auth/passwords";
 import type { PostgresStorage } from "../../storage-postgres";
-import type { AuditEntry } from "./auth-route-auth-flow-shared";
+import type {
+  AuditEntry,
+  TestAuthRouteActivity,
+  TestAuthRouteUser,
+} from "./auth-route-auth-flow-shared";
+
+type UpdateUserAccountParams = Parameters<PostgresStorage["updateUserAccount"]>[0];
+type FailedLoginAttemptParams = Parameters<PostgresStorage["recordFailedLoginAttempt"]>[0];
 
 export function createCookieAuthStorageDouble() {
   const user = {
@@ -41,13 +48,13 @@ export function createCookieAuthStorageDouble() {
 }
 
 export async function createLoginStorageDouble(options?: {
-  user?: Record<string, any>;
-  activeSessions?: Array<Record<string, any>>;
+  user?: Partial<TestAuthRouteUser>;
+  activeSessions?: Array<Partial<TestAuthRouteActivity>>;
 }) {
   const passwordHash = await hashPassword("StrongPass123!");
   const auditLogs: AuditEntry[] = [];
   const deactivatedSessions: Array<{ username: string; reason: string }> = [];
-  const user = {
+  const user: TestAuthRouteUser = {
     id: "login-user-1",
     username: "login.user",
     fullName: "Login User",
@@ -106,7 +113,7 @@ export async function createLoginStorageDouble(options?: {
     },
     createActivity: async () => activity,
     touchLastLogin: async () => undefined,
-    updateUserAccount: async (params: Record<string, any>) => {
+    updateUserAccount: async (params: UpdateUserAccountParams) => {
       Object.assign(user, {
         failedLoginAttempts:
           params.failedLoginAttempts === undefined ? user.failedLoginAttempts : params.failedLoginAttempts,
@@ -117,7 +124,7 @@ export async function createLoginStorageDouble(options?: {
       });
       return user;
     },
-    recordFailedLoginAttempt: async (params: Record<string, any>) => {
+    recordFailedLoginAttempt: async (params: FailedLoginAttemptParams) => {
       user.failedLoginAttempts = Number(user.failedLoginAttempts || 0) + 1;
       const wasLocked = Boolean(user.lockedAt);
       const shouldLock = user.failedLoginAttempts > Number(params.maxAllowedAttempts || 0);

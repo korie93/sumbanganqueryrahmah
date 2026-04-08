@@ -1,9 +1,14 @@
 import type { User } from "@/app/types";
 import { createClientRandomId } from "@/lib/secure-id";
+import {
+  clearLegacyAuthLocalStorage,
+  clearLegacyAuthLocalStorageValue,
+} from "@/lib/legacy-auth-storage";
 
 const AUTH_SESSION_HINT_COOKIE_NAME = "sqr_auth_hint";
 const AUTH_NOTICE_STORAGE_KEY = "auth_notice";
-const FORCE_LOGOUT_STORAGE_KEY = "forceLogout";
+const FORCE_LOGOUT_EVENT_NAME = "force-logout";
+const FORCE_LOGOUT_BROADCAST_CHANNEL_NAME = "sqr-auth-force-logout";
 const AUTH_SESSION_STORAGE_KEYS = [
   "activityId",
   "banned",
@@ -21,21 +26,11 @@ type ForcedLogoutPayload = {
   nonce?: string;
 };
 
+type ForcedLogoutListener = (payload: ForcedLogoutPayload) => void;
+
 function canUseAuthStorage() {
   return typeof window !== "undefined"
     && typeof sessionStorage !== "undefined";
-}
-
-function removeLegacyAuthSessionValue(key: AuthSessionStorageKey) {
-  if (typeof localStorage === "undefined") {
-    return;
-  }
-
-  try {
-    localStorage.removeItem(key);
-  } catch {
-    // Ignore storage access failures during best-effort legacy cleanup.
-  }
 }
 
 function readAuthSessionValue(key: AuthSessionStorageKey): string | null {
@@ -49,7 +44,7 @@ function readAuthSessionValue(key: AuthSessionStorageKey): string | null {
       return sessionValue;
     }
 
-    removeLegacyAuthSessionValue(key);
+    clearLegacyAuthLocalStorageValue(key);
   } catch {
     return null;
   }
@@ -64,7 +59,7 @@ function writeAuthSessionValue(key: AuthSessionStorageKey, value: string) {
 
   try {
     sessionStorage.setItem(key, value);
-    removeLegacyAuthSessionValue(key);
+    clearLegacyAuthLocalStorageValue(key);
   } catch {
     // Ignore storage access failures and fall back to the active in-memory session.
   }
@@ -77,7 +72,7 @@ function removeAuthSessionValue(key: AuthSessionStorageKey) {
 
   try {
     sessionStorage.removeItem(key);
-    removeLegacyAuthSessionValue(key);
+    clearLegacyAuthLocalStorageValue(key);
   } catch {
     // Ignore storage access failures during best-effort cleanup.
   }
@@ -168,30 +163,118 @@ export function parseForcedLogoutStorageValue(raw: string | null | undefined): F
   }
 }
 
-export function broadcastForcedLogout(message?: string | null | undefined) {
+function normalizeForcedLogoutPayload(raw: unknown): ForcedLogoutPayload | null {
+  if (typeof raw === "string" || raw === null || raw === undefined) {
+    return parseForcedLogoutStorageValue(raw);
+  }
+
+  if (typeof raw !== "object") {
+    return null;
+  }
+
+  const parsed = raw as {
+    message?: unknown;
+    nonce?: unknown;
+  };
+
+  const message = normalizeAuthNoticeMessage(
+    typeof parsed.message === "string" ? parsed.message : "",
+  );
+  const nonce = typeof parsed.nonce === "string" ? parsed.nonce.trim() : "";
+
+  return {
+    ...(message ? { message } : {}),
+    ...(nonce ? { nonce } : {}),
+  };
+}
+
+function createForcedLogoutPayload(message?: string | null | undefined): ForcedLogoutPayload {
   const normalizedMessage = normalizeAuthNoticeMessage(message);
-  const payload = normalizedMessage
-    ? JSON.stringify({
+  return normalizedMessage
+    ? {
       message: normalizedMessage,
       nonce: createClientRandomId("force-logout"),
-    })
-    : "true";
-
-  if (typeof localStorage !== "undefined") {
-    try {
-      localStorage.setItem(FORCE_LOGOUT_STORAGE_KEY, payload);
-    } catch {
-      // Ignore cross-tab broadcast storage failures.
     }
+    : {};
+}
+
+function createForceLogoutBroadcastChannel(): BroadcastChannel | null {
+  if (typeof BroadcastChannel !== "function") {
+    return null;
   }
+
+  try {
+    return new BroadcastChannel(FORCE_LOGOUT_BROADCAST_CHANNEL_NAME);
+  } catch {
+    return null;
+  }
+}
+
+export function broadcastForcedLogoutToOtherTabs(message?: string | null | undefined) {
+  const payload = createForcedLogoutPayload(message);
+  const channel = createForceLogoutBroadcastChannel();
+  if (!channel) {
+    return;
+  }
+
+  try {
+    channel.postMessage(payload);
+  } catch {
+    // Ignore cross-tab broadcast channel failures.
+  } finally {
+    channel.close();
+  }
+}
+
+export function broadcastForcedLogout(message?: string | null | undefined) {
+  const payload = createForcedLogoutPayload(message);
+  broadcastForcedLogoutToOtherTabs(payload.message);
 
   if (typeof window !== "undefined") {
     window.dispatchEvent(
-      new CustomEvent("force-logout", {
-        detail: normalizedMessage ? { message: normalizedMessage } : undefined,
+      new CustomEvent(FORCE_LOGOUT_EVENT_NAME, {
+        detail: Object.keys(payload).length > 0 ? payload : undefined,
       }),
     );
   }
+}
+
+export function subscribeForcedLogout(listener: ForcedLogoutListener) {
+  const handleForcedLogoutEvent = (event: Event) => {
+    const payload = normalizeForcedLogoutPayload(
+      (event as CustomEvent<ForcedLogoutPayload | undefined>).detail,
+    );
+    if (payload) {
+      listener(payload);
+    }
+  };
+
+  let channel: BroadcastChannel | null = null;
+  const handleChannelMessage = (event: MessageEvent<unknown>) => {
+    const payload = normalizeForcedLogoutPayload(event.data);
+    if (payload) {
+      listener(payload);
+    }
+  };
+
+  if (typeof window !== "undefined") {
+    window.addEventListener(FORCE_LOGOUT_EVENT_NAME, handleForcedLogoutEvent);
+  }
+
+  channel = createForceLogoutBroadcastChannel();
+  if (channel) {
+    channel.addEventListener("message", handleChannelMessage);
+  }
+
+  return () => {
+    if (typeof window !== "undefined") {
+      window.removeEventListener(FORCE_LOGOUT_EVENT_NAME, handleForcedLogoutEvent);
+    }
+    if (channel) {
+      channel.removeEventListener("message", handleChannelMessage);
+      channel.close();
+    }
+  };
 }
 
 export function hasAuthSessionHintCookie() {
@@ -305,17 +388,7 @@ export function clearAuthenticatedUserStorage() {
   for (const key of AUTH_SESSION_STORAGE_KEYS) {
     removeAuthSessionValue(key);
   }
-  if (typeof localStorage !== "undefined") {
-    try {
-      localStorage.removeItem("token");
-      localStorage.removeItem("activeTab");
-      localStorage.removeItem("lastPage");
-      localStorage.removeItem("selectedImportId");
-      localStorage.removeItem("selectedImportName");
-    } catch {
-      // Ignore storage cleanup failures.
-    }
-  }
+  clearLegacyAuthLocalStorage();
   if (typeof sessionStorage !== "undefined") {
     try {
       sessionStorage.removeItem("collection_staff_nickname");

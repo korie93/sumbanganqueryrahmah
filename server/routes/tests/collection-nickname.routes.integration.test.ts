@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { COLLECTION_NICKNAME_TEMP_PASSWORD } from "../../routes/collection.validation";
 import { registerCollectionRoutes } from "../collection.routes";
+import type { CollectionRouteDeps } from "../collection/collection-route-shared";
 import {
   allowAllTabs,
   createJsonTestApp,
@@ -10,6 +11,36 @@ import {
   startTestServer,
   stopTestServer,
 } from "./http-test-utils";
+
+type CollectionNicknameRouteStorageDouble = Pick<
+  CollectionRouteDeps["storage"],
+  | "getCollectionNicknameAuthProfileByName"
+  | "getCollectionStaffNicknameById"
+  | "setCollectionNicknamePassword"
+  | "setCollectionNicknameSession"
+  | "createAuditLog"
+>;
+type CollectionNicknameAuditEntry = Parameters<
+  CollectionNicknameRouteStorageDouble["createAuditLog"]
+>[0];
+type CollectionNicknameAuditRow = Awaited<
+  ReturnType<CollectionNicknameRouteStorageDouble["createAuditLog"]>
+>;
+
+function createCollectionNicknameAuditRow(
+  entry: CollectionNicknameAuditEntry,
+): CollectionNicknameAuditRow {
+  return {
+    id: "audit-1",
+    action: entry.action,
+    performedBy: entry.performedBy,
+    requestId: entry.requestId ?? null,
+    targetUser: entry.targetUser ?? null,
+    targetResource: entry.targetResource ?? null,
+    details: entry.details ?? null,
+    timestamp: new Date("2026-03-27T00:00:00.000Z"),
+  };
+}
 
 function createCollectionNicknameRouteStorageDouble() {
   const profile = {
@@ -30,9 +61,9 @@ function createCollectionNicknameRouteStorageDouble() {
     createdBy: "superuser",
     createdAt: new Date("2026-03-01T00:00:00.000Z"),
   };
-  const auditLogs: Array<{ action: string; details?: string }> = [];
+  const auditLogs: CollectionNicknameAuditEntry[] = [];
 
-  const storage = {
+  const storage: CollectionNicknameRouteStorageDouble = {
     getCollectionNicknameAuthProfileByName: async (nickname: string) =>
       nickname.toLowerCase() === profile.nickname.toLowerCase() ? profile : undefined,
     getCollectionStaffNicknameById: async (id: string) =>
@@ -50,9 +81,9 @@ function createCollectionNicknameRouteStorageDouble() {
       profile.passwordUpdatedAt = params.passwordUpdatedAt;
     },
     setCollectionNicknameSession: async () => undefined,
-    createAuditLog: async (entry: { action: string; details?: string }) => {
+    createAuditLog: async (entry: CollectionNicknameAuditEntry) => {
       auditLogs.push(entry);
-      return entry;
+      return createCollectionNicknameAuditRow(entry);
     },
   };
 
@@ -68,7 +99,7 @@ test("POST /api/collection/nicknames/:id/reset-password returns the configured t
   const app = createJsonTestApp();
 
   registerCollectionRoutes(app, {
-    storage: storage as any,
+    storage: storage as unknown as CollectionRouteDeps["storage"],
     authenticateToken: createTestAuthenticateToken({
       userId: "superuser-1",
       username: "superuser",
@@ -104,7 +135,7 @@ test("POST /api/collection/nickname-auth/login accepts the reset temporary passw
   const app = createJsonTestApp();
 
   registerCollectionRoutes(app, {
-    storage: storage as any,
+    storage: storage as unknown as CollectionRouteDeps["storage"],
     authenticateToken: createTestAuthenticateToken({
       userId: "user-1",
       username: "collector.user",

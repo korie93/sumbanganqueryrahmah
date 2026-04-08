@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { type AIChatMessage, useAIContext } from "@/context/AIContext";
+import { type AIChatMessageInput, useAIContext } from "@/context/AIContext";
 import { AI_CANCEL_EVENT, AI_RESET_EVENT, type AIChatStatus } from "@/lib/ai-chat";
 import { resolveAiErrorMessage } from "@/lib/ai-error";
 import { searchAI } from "@/lib/api";
@@ -68,7 +68,7 @@ export function useAIPageController({
   }, [setIsThinking]);
 
   const appendMessage = useCallback(
-    (message: AIChatMessage) => {
+    (message: AIChatMessageInput) => {
       setMessages((previous) => appendAIPageMessage(previous, message));
     },
     [setMessages],

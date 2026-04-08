@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import type { Response } from "express";
 import { createAiController } from "../../controllers/ai.controller";
+import type { AuthenticatedRequest } from "../../auth/guards";
 import type { AiChatService } from "../../services/ai-chat.service";
 import type { AiIndexService } from "../../services/ai-index.service";
 import { AiIndexOperationsService } from "../../services/ai-index-operations.service";
@@ -155,7 +157,9 @@ function createAiRouteHarness(options?: {
     }),
     requireRole: createTestRequireRole(),
     withAiConcurrencyGate: (_route, handler) => (req, res, next) => {
-      void Promise.resolve(handler(req as any, res)).catch(next);
+      void Promise.resolve(
+        handler(req as AuthenticatedRequest, res as Response),
+      ).catch(next);
     },
   });
 

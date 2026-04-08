@@ -2,7 +2,20 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { RequestHandler } from "express";
 import { registerSystemRoutes } from "../system.routes";
+import type {
+  ChaosInjectionResult,
+  LocalCircuitSnapshots,
+  SystemRouteDeps,
+} from "../system.routes";
+import type { CircuitSnapshot } from "../../internal/circuitBreaker";
+import type {
+  InternalMonitorSnapshot,
+  WorkerControlState,
+} from "../../internal/runtime-monitor-manager";
 import type { StartupHealthSnapshot } from "../../internal/startup-health";
+import type { ExplainabilityReport } from "../../intelligence/types";
+import type { ChaosEvent } from "../../intelligence/chaos/ChaosEngine";
+import type { AuditLog, InsertAuditLog } from "../../../shared/schema-postgres";
 import type { WebVitalOverviewPayload } from "../../../shared/web-vitals";
 import {
   createJsonTestApp,
@@ -31,6 +44,139 @@ function createStartupSnapshot(overrides: Partial<StartupHealthSnapshot> = {}): 
 
 function allowAll(): RequestHandler {
   return (_req, _res, next) => next();
+}
+
+function createCircuitSnapshot(
+  name: string,
+  overrides: Partial<CircuitSnapshot> = {},
+): CircuitSnapshot {
+  return {
+    name,
+    state: "CLOSED",
+    failures: 0,
+    successes: 0,
+    rejections: 0,
+    totalRequests: 0,
+    failureRate: 0,
+    nextRetryAt: null,
+    cooldownMs: 20_000,
+    threshold: 0.5,
+    ...overrides,
+  };
+}
+
+function createLocalCircuitSnapshots(
+  overrides: Partial<LocalCircuitSnapshots> = {},
+): LocalCircuitSnapshots {
+  return {
+    ai: createCircuitSnapshot("ai"),
+    db: createCircuitSnapshot("db"),
+    export: createCircuitSnapshot("export"),
+    ...overrides,
+  };
+}
+
+function createControlState(
+  overrides: Partial<WorkerControlState> = {},
+): WorkerControlState {
+  return {
+    mode: "NORMAL",
+    healthScore: 94,
+    dbProtection: false,
+    rejectHeavyRoutes: false,
+    throttleFactor: 1,
+    predictor: {
+      requestRateMA: 0,
+      latencyMA: 0,
+      cpuMA: 0,
+      requestRateTrend: 0,
+      latencyTrend: 0,
+      cpuTrend: 0,
+      sustainedUpward: false,
+      lastUpdatedAt: null,
+    },
+    workerCount: 1,
+    maxWorkers: 1,
+    queueLength: 0,
+    preAllocateMB: 0,
+    updatedAt: Date.parse("2026-03-24T00:00:00.000Z"),
+    workers: [],
+    circuits: {
+      aiOpenWorkers: 0,
+      dbOpenWorkers: 0,
+      exportOpenWorkers: 0,
+    },
+    ...overrides,
+  };
+}
+
+function createExplainabilityReport(
+  overrides: Partial<ExplainabilityReport> = {},
+): ExplainabilityReport {
+  return {
+    anomalyBreakdown: {
+      normalizedZScore: 0,
+      slopeWeight: 0,
+      percentileShift: 0,
+      correlationWeight: 0,
+      forecastRisk: 0,
+      mutationFactor: 0,
+      weightedScore: 0,
+    },
+    correlationMatrix: {
+      cpuToLatency: 0,
+      dbToErrors: 0,
+      aiToQueue: 0,
+      boostedPairs: [],
+    },
+    slopeValues: {},
+    forecastProjection: [],
+    governanceState: "IDLE",
+    chosenStrategy: {
+      strategy: "CONSERVATIVE",
+      recommendedAction: "NONE",
+      confidenceScore: 1,
+      reason: "n/a",
+    },
+    decisionReason: "n/a",
+    ...overrides,
+  };
+}
+
+function createChaosEvent(
+  overrides: Partial<ChaosEvent> = {},
+): ChaosEvent {
+  return {
+    id: "chaos-1",
+    type: "cpu_spike",
+    magnitude: 25,
+    createdAt: Date.parse("2026-03-24T00:00:00.000Z"),
+    expiresAt: Date.parse("2026-03-24T00:00:20.000Z"),
+    ...overrides,
+  };
+}
+
+function createChaosInjectionResult(
+  overrides: Partial<ChaosInjectionResult> = {},
+): ChaosInjectionResult {
+  return {
+    injected: createChaosEvent(),
+    active: [],
+    ...overrides,
+  };
+}
+
+function createAuditLogRow(data: InsertAuditLog): AuditLog {
+  return {
+    id: "audit-1",
+    action: data.action,
+    performedBy: data.performedBy,
+    requestId: data.requestId ?? null,
+    targetUser: data.targetUser ?? null,
+    targetResource: data.targetResource ?? null,
+    details: data.details ?? null,
+    timestamp: new Date("2026-03-24T00:00:00.000Z"),
+  };
 }
 
 function createRollupQueueSnapshot(overrides?: Partial<{
@@ -114,77 +260,9 @@ function createSystemRouteExtraDeps() {
   };
 }
 
-function createSystemRouteHarness(options?: {
-  dbOk?: boolean;
-  startup?: Partial<StartupHealthSnapshot>;
-}) {
-  const app = createJsonTestApp();
-  registerSystemRoutes(app, {
-    authenticateToken: createTestAuthenticateToken({
-      userId: "monitor-1",
-      username: "monitor.user",
-      role: "admin",
-    }),
-    requireRole: createTestRequireRole(),
-    requireMonitorAccess: allowAll(),
-    getMaintenanceStateCached: async () => ({
-      maintenance: false,
-      message: "",
-      type: "soft",
-      startTime: null,
-      endTime: null,
-    }),
-    computeInternalMonitorSnapshot: () => ({
-      updatedAt: "2026-03-24T00:00:00.000Z",
-    } as any),
-    buildInternalMonitorAlerts: () => [],
-    getControlState: () => ({
-      mode: "NORMAL",
-      throttleFactor: 1,
-      rejectHeavyRoutes: false,
-      preAllocateMB: 0,
-      workerCount: 1,
-      maxWorkers: 1,
-      workers: [],
-      circuits: {},
-      predictor: null,
-      queueLength: 0,
-      updatedAt: "2026-03-24T00:00:00.000Z",
-    } as any),
-    getDbProtection: () => false,
-    getRequestRate: () => 0,
-    getLatencyP95: () => 0,
-    getLocalCircuitSnapshots: () => ({
-      ai: {} as any,
-      db: {} as any,
-      export: {} as any,
-    }),
-    getIntelligenceExplainability: () => ({
-      anomalyBreakdown: [],
-      correlationMatrix: [],
-      slopeValues: [],
-      forecastProjection: [],
-      governanceState: {},
-      chosenStrategy: null,
-      decisionReason: "n/a",
-    } as any),
-    injectChaos: () => ({
-      injected: {} as any,
-      active: [],
-    }),
-    ...createSystemRouteExtraDeps(),
-    createAuditLog: async (data) => ({
-      id: "audit-1",
-      ...data,
-    } as any),
-    checkDbConnectivity: async () => options?.dbOk ?? true,
-    getStartupHealthSnapshot: () => createStartupSnapshot(options?.startup),
-  });
-
-  return { app };
-}
-
-function createMonitorSnapshot(overrides: Record<string, unknown> = {}) {
+function createMonitorSnapshot(
+  overrides: Partial<InternalMonitorSnapshot> = {},
+): InternalMonitorSnapshot {
   return {
     score: 94,
     mode: "NORMAL",
@@ -217,6 +295,54 @@ function createMonitorSnapshot(overrides: Record<string, unknown> = {}) {
     updatedAt: Date.parse("2026-03-24T00:00:00.000Z"),
     ...overrides,
   };
+}
+
+function createBaseSystemRouteDeps(
+  overrides: Partial<SystemRouteDeps> = {},
+): SystemRouteDeps {
+  return {
+    authenticateToken: createTestAuthenticateToken({
+      userId: "monitor-1",
+      username: "monitor.user",
+      role: "admin",
+    }),
+    requireRole: createTestRequireRole(),
+    requireMonitorAccess: allowAll(),
+    getMaintenanceStateCached: async () => ({
+      maintenance: false,
+      message: "",
+      type: "soft",
+      startTime: null,
+      endTime: null,
+    }),
+    computeInternalMonitorSnapshot: () => createMonitorSnapshot(),
+    buildInternalMonitorAlerts: () => [],
+    getControlState: () => createControlState(),
+    getDbProtection: () => false,
+    getRequestRate: () => 0,
+    getLatencyP95: () => 0,
+    getLocalCircuitSnapshots: () => createLocalCircuitSnapshots(),
+    getIntelligenceExplainability: () => createExplainabilityReport(),
+    injectChaos: () => createChaosInjectionResult(),
+    ...createSystemRouteExtraDeps(),
+    createAuditLog: async (data) => createAuditLogRow(data),
+    checkDbConnectivity: async () => true,
+    getStartupHealthSnapshot: () => createStartupSnapshot(),
+    ...overrides,
+  };
+}
+
+function createSystemRouteHarness(options?: {
+  dbOk?: boolean;
+  startup?: Partial<StartupHealthSnapshot>;
+}) {
+  const app = createJsonTestApp();
+  registerSystemRoutes(app, createBaseSystemRouteDeps({
+    checkDbConnectivity: async () => options?.dbOk ?? true,
+    getStartupHealthSnapshot: () => createStartupSnapshot(options?.startup),
+  }));
+
+  return { app };
 }
 
 test("GET /api/health/live reports a live process with startup validation metadata", async () => {
@@ -328,28 +454,14 @@ test("GET /api/health preserves the aggregate health contract while exposing liv
 
 test("GET /internal/system-health exposes rollup refresh queue metrics alongside alert count", async () => {
   const app = createJsonTestApp();
-  registerSystemRoutes(app, {
-    authenticateToken: createTestAuthenticateToken({
-      userId: "monitor-1",
-      username: "monitor.user",
-      role: "admin",
-    }),
-    requireRole: createTestRequireRole(),
-    requireMonitorAccess: allowAll(),
-    getMaintenanceStateCached: async () => ({
-      maintenance: false,
-      message: "",
-      type: "soft",
-      startTime: null,
-      endTime: null,
-    }),
+  registerSystemRoutes(app, createBaseSystemRouteDeps({
     computeInternalMonitorSnapshot: () =>
       createMonitorSnapshot({
         rollupRefreshPendingCount: 12,
         rollupRefreshRunningCount: 2,
         rollupRefreshRetryCount: 1,
         rollupRefreshOldestPendingAgeMs: 91_000,
-      }) as any,
+      }),
     buildInternalMonitorAlerts: () => [
       {
         id: "rollup_queue_warning",
@@ -366,48 +478,7 @@ test("GET /internal/system-health exposes rollup refresh queue metrics alongside
         source: "ROLLUP_LAG",
       },
     ],
-    getControlState: () => ({
-      mode: "NORMAL",
-      throttleFactor: 1,
-      rejectHeavyRoutes: false,
-      preAllocateMB: 0,
-      workerCount: 1,
-      maxWorkers: 1,
-      workers: [],
-      circuits: {},
-      predictor: null,
-      queueLength: 0,
-      updatedAt: Date.parse("2026-03-24T00:00:00.000Z"),
-    } as any),
-    getDbProtection: () => false,
-    getRequestRate: () => 0,
-    getLatencyP95: () => 0,
-    getLocalCircuitSnapshots: () => ({
-      ai: {} as any,
-      db: {} as any,
-      export: {} as any,
-    }),
-    getIntelligenceExplainability: () => ({
-      anomalyBreakdown: [],
-      correlationMatrix: [],
-      slopeValues: [],
-      forecastProjection: [],
-      governanceState: {},
-      chosenStrategy: null,
-      decisionReason: "n/a",
-    } as any),
-    injectChaos: () => ({
-      injected: {} as any,
-      active: [],
-    }),
-    ...createSystemRouteExtraDeps(),
-    createAuditLog: async (data) => ({
-      id: "audit-1",
-      ...data,
-    } as any),
-    checkDbConnectivity: async () => true,
-    getStartupHealthSnapshot: () => createStartupSnapshot(),
-  });
+  }));
   const { server, baseUrl } = await startTestServer(app);
 
   try {
@@ -433,22 +504,7 @@ test("GET /internal/system-health exposes rollup refresh queue metrics alongside
 
 test("GET /internal/alerts returns paginated live monitor alerts", async () => {
   const app = createJsonTestApp();
-  registerSystemRoutes(app, {
-    authenticateToken: createTestAuthenticateToken({
-      userId: "monitor-1",
-      username: "monitor.user",
-      role: "admin",
-    }),
-    requireRole: createTestRequireRole(),
-    requireMonitorAccess: allowAll(),
-    getMaintenanceStateCached: async () => ({
-      maintenance: false,
-      message: "",
-      type: "soft",
-      startTime: null,
-      endTime: null,
-    }),
-    computeInternalMonitorSnapshot: () => createMonitorSnapshot() as any,
+  registerSystemRoutes(app, createBaseSystemRouteDeps({
     buildInternalMonitorAlerts: () => [
       {
         id: "alert-1",
@@ -472,48 +528,7 @@ test("GET /internal/alerts returns paginated live monitor alerts", async () => {
         source: "AI",
       },
     ],
-    getControlState: () => ({
-      mode: "NORMAL",
-      throttleFactor: 1,
-      rejectHeavyRoutes: false,
-      preAllocateMB: 0,
-      workerCount: 1,
-      maxWorkers: 1,
-      workers: [],
-      circuits: {},
-      predictor: null,
-      queueLength: 0,
-      updatedAt: Date.parse("2026-03-24T00:00:00.000Z"),
-    } as any),
-    getDbProtection: () => false,
-    getRequestRate: () => 0,
-    getLatencyP95: () => 0,
-    getLocalCircuitSnapshots: () => ({
-      ai: {} as any,
-      db: {} as any,
-      export: {} as any,
-    }),
-    getIntelligenceExplainability: () => ({
-      anomalyBreakdown: [],
-      correlationMatrix: [],
-      slopeValues: [],
-      forecastProjection: [],
-      governanceState: {},
-      chosenStrategy: null,
-      decisionReason: "n/a",
-    } as any),
-    injectChaos: () => ({
-      injected: {} as any,
-      active: [],
-    }),
-    ...createSystemRouteExtraDeps(),
-    createAuditLog: async (data) => ({
-      id: "audit-1",
-      ...data,
-    } as any),
-    checkDbConnectivity: async () => true,
-    getStartupHealthSnapshot: () => createStartupSnapshot(),
-  });
+  }));
   const { server, baseUrl } = await startTestServer(app);
 
   try {
@@ -544,58 +559,7 @@ test("GET /internal/alerts returns paginated live monitor alerts", async () => {
 test("GET /internal/alerts/history returns recent monitor alert incidents", async () => {
   const app = createJsonTestApp();
   const listCalls: Array<{ page?: number; pageSize?: number }> = [];
-  registerSystemRoutes(app, {
-    authenticateToken: createTestAuthenticateToken({
-      userId: "monitor-1",
-      username: "monitor.user",
-      role: "admin",
-    }),
-    requireRole: createTestRequireRole(),
-    requireMonitorAccess: allowAll(),
-    getMaintenanceStateCached: async () => ({
-      maintenance: false,
-      message: "",
-      type: "soft",
-      startTime: null,
-      endTime: null,
-    }),
-    computeInternalMonitorSnapshot: () => createMonitorSnapshot() as any,
-    buildInternalMonitorAlerts: () => [],
-    getControlState: () => ({
-      mode: "NORMAL",
-      throttleFactor: 1,
-      rejectHeavyRoutes: false,
-      preAllocateMB: 0,
-      workerCount: 1,
-      maxWorkers: 1,
-      workers: [],
-      circuits: {},
-      predictor: null,
-      queueLength: 0,
-      updatedAt: Date.parse("2026-03-24T00:00:00.000Z"),
-    } as any),
-    getDbProtection: () => false,
-    getRequestRate: () => 0,
-    getLatencyP95: () => 0,
-    getLocalCircuitSnapshots: () => ({
-      ai: {} as any,
-      db: {} as any,
-      export: {} as any,
-    }),
-    getIntelligenceExplainability: () => ({
-      anomalyBreakdown: [],
-      correlationMatrix: [],
-      slopeValues: [],
-      forecastProjection: [],
-      governanceState: {},
-      chosenStrategy: null,
-      decisionReason: "n/a",
-    } as any),
-    injectChaos: () => ({
-      injected: {} as any,
-      active: [],
-    }),
-    ...createSystemRouteExtraDeps(),
+  registerSystemRoutes(app, createBaseSystemRouteDeps({
     listMonitorAlertHistory: async (options) => {
       listCalls.push(options || {});
       return {
@@ -621,13 +585,7 @@ test("GET /internal/alerts/history returns recent monitor alert incidents", asyn
         },
       };
     },
-    createAuditLog: async (data) => ({
-      id: "audit-1",
-      ...data,
-    } as any),
-    checkDbConnectivity: async () => true,
-    getStartupHealthSnapshot: () => createStartupSnapshot(),
-  });
+  }));
   const { server, baseUrl } = await startTestServer(app);
 
   try {
@@ -661,58 +619,12 @@ test("DELETE /internal/alerts/history removes resolved incidents older than the 
   const cleanupCalls: Date[] = [];
   const auditLogs: Array<{ action: string; details: string }> = [];
 
-  registerSystemRoutes(app, {
+  registerSystemRoutes(app, createBaseSystemRouteDeps({
     authenticateToken: createTestAuthenticateToken({
       userId: "monitor-1",
       username: "monitor.superuser",
       role: "superuser",
     }),
-    requireRole: createTestRequireRole(),
-    requireMonitorAccess: allowAll(),
-    getMaintenanceStateCached: async () => ({
-      maintenance: false,
-      message: "",
-      type: "soft",
-      startTime: null,
-      endTime: null,
-    }),
-    computeInternalMonitorSnapshot: () => createMonitorSnapshot() as any,
-    buildInternalMonitorAlerts: () => [],
-    getControlState: () => ({
-      mode: "NORMAL",
-      throttleFactor: 1,
-      rejectHeavyRoutes: false,
-      preAllocateMB: 0,
-      workerCount: 1,
-      maxWorkers: 1,
-      workers: [],
-      circuits: {},
-      predictor: null,
-      queueLength: 0,
-      updatedAt: Date.parse("2026-03-24T00:00:00.000Z"),
-    } as any),
-    getDbProtection: () => false,
-    getRequestRate: () => 0,
-    getLatencyP95: () => 0,
-    getLocalCircuitSnapshots: () => ({
-      ai: {} as any,
-      db: {} as any,
-      export: {} as any,
-    }),
-    getIntelligenceExplainability: () => ({
-      anomalyBreakdown: [],
-      correlationMatrix: [],
-      slopeValues: [],
-      forecastProjection: [],
-      governanceState: {},
-      chosenStrategy: null,
-      decisionReason: "n/a",
-    } as any),
-    injectChaos: () => ({
-      injected: {} as any,
-      active: [],
-    }),
-    ...createSystemRouteExtraDeps(),
     deleteMonitorAlertHistoryOlderThan: async (cutoffDate) => {
       cleanupCalls.push(cutoffDate);
       return 7;
@@ -722,14 +634,9 @@ test("DELETE /internal/alerts/history removes resolved incidents older than the 
         action: data.action,
         details: data.details || "",
       });
-      return {
-        id: "audit-1",
-        ...data,
-      } as any;
+      return createAuditLogRow(data);
     },
-    checkDbConnectivity: async () => true,
-    getStartupHealthSnapshot: () => createStartupSnapshot(),
-  });
+  }));
   const { server, baseUrl } = await startTestServer(app);
 
   try {
@@ -766,58 +673,7 @@ test("DELETE /internal/alerts/history removes resolved incidents older than the 
 
 test("GET /internal/web-vitals returns the recent real-user experience overview", async () => {
   const app = createJsonTestApp();
-  registerSystemRoutes(app, {
-    authenticateToken: createTestAuthenticateToken({
-      userId: "monitor-1",
-      username: "monitor.user",
-      role: "admin",
-    }),
-    requireRole: createTestRequireRole(),
-    requireMonitorAccess: allowAll(),
-    getMaintenanceStateCached: async () => ({
-      maintenance: false,
-      message: "",
-      type: "soft",
-      startTime: null,
-      endTime: null,
-    }),
-    computeInternalMonitorSnapshot: () => createMonitorSnapshot() as any,
-    buildInternalMonitorAlerts: () => [],
-    getControlState: () => ({
-      mode: "NORMAL",
-      throttleFactor: 1,
-      rejectHeavyRoutes: false,
-      preAllocateMB: 0,
-      workerCount: 1,
-      maxWorkers: 1,
-      workers: [],
-      circuits: {},
-      predictor: null,
-      queueLength: 0,
-      updatedAt: Date.parse("2026-03-24T00:00:00.000Z"),
-    } as any),
-    getDbProtection: () => false,
-    getRequestRate: () => 0,
-    getLatencyP95: () => 0,
-    getLocalCircuitSnapshots: () => ({
-      ai: {} as any,
-      db: {} as any,
-      export: {} as any,
-    }),
-    getIntelligenceExplainability: () => ({
-      anomalyBreakdown: [],
-      correlationMatrix: [],
-      slopeValues: [],
-      forecastProjection: [],
-      governanceState: {},
-      chosenStrategy: null,
-      decisionReason: "n/a",
-    } as any),
-    injectChaos: () => ({
-      injected: {} as any,
-      active: [],
-    }),
-    ...createSystemRouteExtraDeps(),
+  registerSystemRoutes(app, createBaseSystemRouteDeps({
     getWebVitalsOverview: () => createWebVitalsOverview({
       totalSamples: 8,
       pageSummaries: [
@@ -858,13 +714,7 @@ test("GET /internal/web-vitals returns the recent real-user experience overview"
       ],
       updatedAt: "2026-03-24T00:06:00.000Z",
     }),
-    createAuditLog: async (data) => ({
-      id: "audit-1",
-      ...data,
-    } as any),
-    checkDbConnectivity: async () => true,
-    getStartupHealthSnapshot: () => createStartupSnapshot(),
-  });
+  }));
   const { server, baseUrl } = await startTestServer(app);
 
   try {
@@ -889,56 +739,11 @@ test("GET /internal/web-vitals returns the recent real-user experience overview"
 
 test("rollup refresh control routes remain superuser-only and return snapshots", async () => {
   const app = createJsonTestApp();
-  registerSystemRoutes(app, {
+  registerSystemRoutes(app, createBaseSystemRouteDeps({
     authenticateToken: createTestAuthenticateToken({
       userId: "superuser-1",
       username: "superuser.user",
       role: "superuser",
-    }),
-    requireRole: createTestRequireRole(),
-    requireMonitorAccess: allowAll(),
-    getMaintenanceStateCached: async () => ({
-      maintenance: false,
-      message: "",
-      type: "soft",
-      startTime: null,
-      endTime: null,
-    }),
-    computeInternalMonitorSnapshot: () => createMonitorSnapshot() as any,
-    buildInternalMonitorAlerts: () => [],
-    getControlState: () => ({
-      mode: "NORMAL",
-      throttleFactor: 1,
-      rejectHeavyRoutes: false,
-      preAllocateMB: 0,
-      workerCount: 1,
-      maxWorkers: 1,
-      workers: [],
-      circuits: {},
-      predictor: null,
-      queueLength: 0,
-      updatedAt: Date.parse("2026-03-24T00:00:00.000Z"),
-    } as any),
-    getDbProtection: () => false,
-    getRequestRate: () => 0,
-    getLatencyP95: () => 0,
-    getLocalCircuitSnapshots: () => ({
-      ai: {} as any,
-      db: {} as any,
-      export: {} as any,
-    }),
-    getIntelligenceExplainability: () => ({
-      anomalyBreakdown: [],
-      correlationMatrix: [],
-      slopeValues: [],
-      forecastProjection: [],
-      governanceState: {},
-      chosenStrategy: null,
-      decisionReason: "n/a",
-    } as any),
-    injectChaos: () => ({
-      injected: {} as any,
-      active: [],
     }),
     getCollectionRollupQueueStatus: async () => createRollupQueueSnapshot({
       pendingCount: 3,
@@ -985,24 +790,7 @@ test("rollup refresh control routes remain superuser-only and return snapshots",
       message: "Rebuild requested.",
       snapshot: createRollupQueueSnapshot(),
     }),
-    listMonitorAlertHistory: async () => ({
-      incidents: [],
-      pagination: {
-        page: 1,
-        pageSize: 5,
-        totalItems: 0,
-        totalPages: 1,
-      },
-    }),
-    deleteMonitorAlertHistoryOlderThan: async () => 0,
-    getWebVitalsOverview: () => createWebVitalsOverview(),
-    createAuditLog: async (data) => ({
-      id: "audit-1",
-      ...data,
-    } as any),
-    checkDbConnectivity: async () => true,
-    getStartupHealthSnapshot: () => createStartupSnapshot(),
-  });
+  }));
   const { server, baseUrl } = await startTestServer(app);
 
   try {

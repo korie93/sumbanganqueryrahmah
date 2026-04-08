@@ -4,20 +4,27 @@ import { PublicAuthButton, PublicAuthInput } from "@/components/PublicAuthContro
 import { PublicAuthLayout } from "@/components/PublicAuthLayout";
 import { requestPasswordReset } from "@/lib/api/auth";
 import { getApiErrorMessage } from "@/lib/api-errors";
+import {
+  hasPublicAuthFieldErrors,
+  validateIdentifierField,
+} from "@/pages/public-auth-form-utils";
 
 export default function ForgotPasswordPage() {
   const [identifier, setIdentifier] = useState("");
+  const [identifierError, setIdentifierError] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [submitted, setSubmitted] = useState(false);
 
   const handleSubmit = async () => {
     setError("");
+    setIdentifierError("");
     setLoading(true);
 
     try {
-      if (!identifier.trim()) {
-        setError("Sila masukkan username atau emel anda.");
+      const fieldErrors = validateIdentifierField(identifier);
+      if (hasPublicAuthFieldErrors(fieldErrors)) {
+        setIdentifierError(fieldErrors.identifier ?? "");
         return;
       }
 
@@ -29,6 +36,13 @@ export default function ForgotPasswordPage() {
       setLoading(false);
     }
   };
+
+  const identifierInvalidProps = identifierError
+    ? {
+      "aria-invalid": "true" as const,
+      "aria-describedby": "forgot-password-identifier-error",
+    }
+    : {};
 
   return (
     <PublicAuthLayout
@@ -44,12 +58,24 @@ export default function ForgotPasswordPage() {
         </div>
       ) : (
         <>
-          <PublicAuthInput
-            value={identifier}
-            onChange={(event) => setIdentifier(event.target.value)}
-            placeholder="Username atau emel"
-            disabled={loading}
-          />
+          <div className="space-y-2">
+            <PublicAuthInput
+              value={identifier}
+              onChange={(event) => {
+                setIdentifier(event.target.value);
+                setIdentifierError("");
+                setError("");
+              }}
+              placeholder="Username atau emel"
+              disabled={loading}
+              {...identifierInvalidProps}
+            />
+            {identifierError ? (
+              <p id="forgot-password-identifier-error" className="text-sm text-amber-100" role="alert">
+                {identifierError}
+              </p>
+            ) : null}
+          </div>
           <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm leading-6 text-white/75">
             Demi keselamatan, sistem hanya memaparkan status umum dan tidak mendedahkan sama ada
             sesuatu akaun benar-benar wujud.

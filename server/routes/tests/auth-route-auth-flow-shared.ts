@@ -1,9 +1,13 @@
+import type { NextFunction, Request, Response } from "express";
+
 export type AuditEntry = {
   action: string;
   performedBy?: string;
   targetUser?: string;
   details?: string;
 };
+
+export type TestAuthRouteTimestamp = Date | string;
 
 export type ActivationRecord = {
   tokenId: string;
@@ -14,10 +18,10 @@ export type ActivationRecord = {
   role: string;
   status: string;
   isBanned: boolean | null;
-  activatedAt: Date | null;
-  expiresAt: Date;
-  usedAt: Date | null;
-  createdAt: Date;
+  activatedAt: TestAuthRouteTimestamp | null;
+  expiresAt: TestAuthRouteTimestamp;
+  usedAt: TestAuthRouteTimestamp | null;
+  createdAt: TestAuthRouteTimestamp;
 };
 
 export type PasswordResetRecord = {
@@ -29,10 +33,56 @@ export type PasswordResetRecord = {
   role: string;
   status: string;
   isBanned: boolean | null;
-  activatedAt: Date | null;
-  expiresAt: Date;
-  usedAt: Date | null;
-  createdAt: Date;
+  activatedAt: TestAuthRouteTimestamp | null;
+  expiresAt: TestAuthRouteTimestamp;
+  usedAt: TestAuthRouteTimestamp | null;
+  createdAt: TestAuthRouteTimestamp;
+};
+
+export type TestAuthRouteUser = {
+  id: string;
+  username: string;
+  fullName: string | null;
+  email: string | null;
+  role: string;
+  status: string;
+  passwordHash: string | null;
+  mustChangePassword: boolean;
+  passwordResetBySuperuser: boolean;
+  isBanned: boolean;
+  activatedAt: TestAuthRouteTimestamp | null;
+  passwordChangedAt: TestAuthRouteTimestamp | null;
+  lastLoginAt: TestAuthRouteTimestamp | null;
+  twoFactorEnabled?: boolean;
+  twoFactorSecretEncrypted?: string | null;
+  twoFactorConfiguredAt?: TestAuthRouteTimestamp | null;
+  failedLoginAttempts?: number;
+  lockedAt?: TestAuthRouteTimestamp | null;
+  lockedReason?: string | null;
+  lockedBySystem?: boolean;
+} & Record<string, unknown>;
+
+export type TestAuthRouteActivity = {
+  id: string;
+  username: string;
+  isActive: boolean;
+  loginTime: TestAuthRouteTimestamp;
+  lastActivityTime: TestAuthRouteTimestamp;
+  userId?: string;
+  role?: string;
+  logoutTime?: TestAuthRouteTimestamp | null;
+  fingerprint?: string | null;
+  ipAddress?: string | null;
+} & Record<string, unknown>;
+
+type MutableAuthenticatedRequest = Request & {
+  user?: {
+    userId?: string;
+    username: string;
+    role: string;
+    activityId: string;
+    mustChangePassword: boolean;
+  };
 };
 
 export function authenticateAs(user: {
@@ -41,7 +91,7 @@ export function authenticateAs(user: {
   role: string;
   mustChangePassword?: boolean;
 }) {
-  return (req: any, _res: any, next: () => void) => {
+  return (req: MutableAuthenticatedRequest, _res: Response, next: NextFunction) => {
     req.user = {
       userId: user.id,
       username: user.username,

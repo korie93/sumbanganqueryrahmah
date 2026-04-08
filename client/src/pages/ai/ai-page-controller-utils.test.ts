@@ -10,8 +10,8 @@ import {
 
 test("AI page message helper keeps newest messages only", () => {
   const messages = [
-    { role: "user" as const, content: "one", timestamp: "1" },
-    { role: "assistant" as const, content: "two", timestamp: "2" },
+    { id: "ai-msg-1", role: "user" as const, content: "one", timestamp: "1" },
+    { id: "ai-msg-2", role: "assistant" as const, content: "two", timestamp: "2" },
   ];
 
   const next = appendAIPageMessage(messages, {

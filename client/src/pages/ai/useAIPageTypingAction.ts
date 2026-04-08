@@ -1,10 +1,10 @@
 import { useCallback, type Dispatch, type SetStateAction } from "react";
-import type { AIChatMessage } from "@/context/AIContext";
+import type { AIChatMessageInput } from "@/context/AIContext";
 import type { AIChatStatus } from "@/lib/ai-chat";
 import type { AIPageRuntimeRefs } from "./useAIPageRuntimeRefs";
 
 type UseAIPageTypingActionOptions = {
-  appendMessage: (message: AIChatMessage) => void;
+  appendMessage: (message: AIChatMessageInput) => void;
   runtimeRefs: Pick<AIPageRuntimeRefs, "isMountedRef" | "sessionRef" | "stopTyping" | "typingTimerRef">;
   setAiStatus: Dispatch<SetStateAction<AIChatStatus>>;
   setIsThinking: Dispatch<SetStateAction<boolean>>;

@@ -10,6 +10,10 @@ import {
 import { getApiErrorMessage } from "@/lib/api-errors";
 import { persistAuthNotice } from "@/lib/auth-session";
 import { formatDateTimeDDMMYYYY } from "@/lib/date-format";
+import {
+  hasPublicAuthFieldErrors,
+  validatePasswordFields,
+} from "@/pages/public-auth-form-utils";
 
 type ActivationPhase = "invalid" | "ready" | "success" | "validating";
 
@@ -28,6 +32,8 @@ export default function ActivateAccountPage() {
   const [phase, setPhase] = useState<ActivationPhase>(token ? "validating" : "invalid");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [newPasswordError, setNewPasswordError] = useState("");
+  const [confirmPasswordError, setConfirmPasswordError] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(token ? "" : "Pautan aktivasi tidak sah.");
   const mountedRef = useRef(true);
@@ -114,12 +120,20 @@ export default function ActivateAccountPage() {
   const handleActivate = async () => {
     if (!activation || loading || phase !== "ready" || activationAbortControllerRef.current) return;
 
-    if (newPassword !== confirmPassword) {
-      setError("Pengesahan kata laluan tidak sepadan.");
+    setError("");
+    setNewPasswordError("");
+    setConfirmPasswordError("");
+
+    const fieldErrors = validatePasswordFields({
+      newPassword,
+      confirmPassword,
+    });
+    if (hasPublicAuthFieldErrors(fieldErrors)) {
+      setNewPasswordError(fieldErrors.newPassword ?? "");
+      setConfirmPasswordError(fieldErrors.confirmPassword ?? "");
       return;
     }
 
-    setError("");
     setLoading(true);
     const controller = new AbortController();
     activationAbortControllerRef.current = controller;
@@ -163,6 +177,19 @@ export default function ActivateAccountPage() {
       void handleActivate();
     }
   };
+
+  const newPasswordInvalidProps = newPasswordError
+    ? {
+      "aria-invalid": "true" as const,
+      "aria-describedby": "activate-password-new-error",
+    }
+    : {};
+  const confirmPasswordInvalidProps = confirmPasswordError
+    ? {
+      "aria-invalid": "true" as const,
+      "aria-describedby": "activate-password-confirm-error",
+    }
+    : {};
 
   const title =
     phase === "success"
@@ -215,20 +242,40 @@ export default function ActivateAccountPage() {
           <PublicAuthInput
             type="password"
             value={newPassword}
-            onChange={(event) => setNewPassword(event.target.value)}
+            onChange={(event) => {
+              setNewPassword(event.target.value);
+              setNewPasswordError("");
+              setError("");
+            }}
             onKeyDown={onPasswordKeyDown}
             placeholder="Kata laluan baharu"
             autoFocus
             disabled={loading}
+            {...newPasswordInvalidProps}
           />
+          {newPasswordError ? (
+            <p id="activate-password-new-error" className="text-sm text-amber-100" role="alert">
+              {newPasswordError}
+            </p>
+          ) : null}
           <PublicAuthInput
             type="password"
             value={confirmPassword}
-            onChange={(event) => setConfirmPassword(event.target.value)}
+            onChange={(event) => {
+              setConfirmPassword(event.target.value);
+              setConfirmPasswordError("");
+              setError("");
+            }}
             onKeyDown={onPasswordKeyDown}
             placeholder="Sahkan kata laluan baharu"
             disabled={loading}
+            {...confirmPasswordInvalidProps}
           />
+          {confirmPasswordError ? (
+            <p id="activate-password-confirm-error" className="text-sm text-amber-100" role="alert">
+              {confirmPasswordError}
+            </p>
+          ) : null}
           {error ? (
             <div className="rounded-2xl border border-red-400/25 bg-red-500/10 p-3 text-sm text-red-100" role="alert">
               {error}

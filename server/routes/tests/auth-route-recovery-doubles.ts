@@ -4,11 +4,12 @@ import type {
   ActivationRecord,
   AuditEntry,
   PasswordResetRecord,
+  TestAuthRouteUser,
 } from "./auth-route-auth-flow-shared";
 
 export function createAuthStorageDouble(options?: {
-  userByUsername?: Record<string, any>;
-  userByEmail?: Record<string, any>;
+  userByUsername?: Record<string, TestAuthRouteUser>;
+  userByEmail?: Record<string, TestAuthRouteUser>;
 }) {
   const resetRequests: Array<{ userId: string; requestedByUser: string }> = [];
   const auditLogs: AuditEntry[] = [];
@@ -31,15 +32,15 @@ export function createAuthStorageDouble(options?: {
 
 export function createActivationStorageDouble(options?: {
   activationRecord?: Partial<ActivationRecord>;
-  user?: Record<string, any>;
+  user?: Partial<TestAuthRouteUser>;
 }) {
   const now = new Date();
   const rawToken = "activation-token-test-123";
   const tokenHash = hashOpaqueToken(rawToken);
   const auditLogs: AuditEntry[] = [];
   const invalidateCalls: string[] = [];
-  const updateCalls: Array<Record<string, unknown>> = [];
-  const user = {
+  const updateCalls: Array<Parameters<PostgresStorage["updateUserAccount"]>[0]> = [];
+  const user: TestAuthRouteUser = {
     id: "user-activate-1",
     username: "pending.user",
     fullName: "Pending User",
@@ -84,7 +85,7 @@ export function createActivationStorageDouble(options?: {
       return true;
     },
     getUser: async (userId: string) => (userId === user.id ? user : null),
-    updateUserAccount: async (params: Record<string, any>) => {
+    updateUserAccount: async (params: Parameters<PostgresStorage["updateUserAccount"]>[0]) => {
       updateCalls.push(params);
       Object.assign(user, {
         passwordHash: params.passwordHash,
@@ -110,16 +111,16 @@ export function createActivationStorageDouble(options?: {
 
 export function createPasswordResetStorageDouble(options?: {
   resetRecord?: Partial<PasswordResetRecord>;
-  user?: Record<string, any>;
+  user?: Partial<TestAuthRouteUser>;
 }) {
   const now = new Date();
   const rawToken = "password-reset-token-test-456";
   const tokenHash = hashOpaqueToken(rawToken);
   const auditLogs: AuditEntry[] = [];
   const invalidateCalls: Array<{ userId: string; now: Date }> = [];
-  const updateCalls: Array<Record<string, unknown>> = [];
+  const updateCalls: Array<Parameters<PostgresStorage["updateUserAccount"]>[0]> = [];
   const deactivatedSessions: Array<{ username: string; reason: string }> = [];
-  const user = {
+  const user: TestAuthRouteUser = {
     id: "user-reset-1",
     username: "reset.user",
     fullName: "Reset User",
@@ -164,7 +165,7 @@ export function createPasswordResetStorageDouble(options?: {
       return true;
     },
     getUser: async (userId: string) => (userId === user.id ? user : null),
-    updateUserAccount: async (params: Record<string, any>) => {
+    updateUserAccount: async (params: Parameters<PostgresStorage["updateUserAccount"]>[0]) => {
       updateCalls.push(params);
       Object.assign(user, {
         passwordHash: params.passwordHash,

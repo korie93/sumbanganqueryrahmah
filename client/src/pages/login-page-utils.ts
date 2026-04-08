@@ -1,6 +1,12 @@
 import type { User } from "@/app/types";
 import type { LoginSuccessResponse } from "@/lib/api/auth";
 
+export type LoginFieldErrors = {
+  username?: string | undefined;
+  password?: string | undefined;
+  twoFactorCode?: string | undefined;
+};
+
 export function buildAuthenticatedUser(response: LoginSuccessResponse): User {
   const { username, role } = response;
 
@@ -70,4 +76,27 @@ export function readErrorMessage(error: unknown, fallback: string): string {
   }
 
   return fallback;
+}
+
+export function validatePasswordLoginFields(
+  username: string,
+  password: string,
+): LoginFieldErrors {
+  const normalizedUsername = username.trim();
+
+  return {
+    ...(!normalizedUsername ? { username: "Sila masukkan username." } : {}),
+    ...(!password ? { password: "Sila masukkan password." } : {}),
+  };
+}
+
+export function validateTwoFactorCodeField(code: string): LoginFieldErrors {
+  const normalizedCode = code.replace(/\D/g, "").slice(0, 6);
+  return normalizedCode.length === 6
+    ? {}
+    : { twoFactorCode: "Sila masukkan kod pengesah 6 digit." };
+}
+
+export function hasLoginFieldErrors(errors: LoginFieldErrors): boolean {
+  return Boolean(errors.username || errors.password || errors.twoFactorCode);
 }

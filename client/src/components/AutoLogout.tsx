@@ -6,9 +6,9 @@ import {
   getStoredActivityId,
   getStoredFingerprint,
   getStoredUsername,
-  parseForcedLogoutStorageValue,
   persistAuthNotice,
   setBannedSessionFlag,
+  subscribeForcedLogout,
 } from "@/lib/auth-session";
 
 interface AutoLogoutProps {
@@ -237,38 +237,16 @@ export default function AutoLogout({
   }, [resetTimeout, runLogout, timeoutMs]);
 
   useEffect(() => {
-    const handleStorage = (event: StorageEvent) => {
-      if (event.key === "forceLogout") {
-        const payload = parseForcedLogoutStorageValue(event.newValue);
-        if (!payload) {
-          return;
-        }
-        localStorage.removeItem("forceLogout");
-        if (payload.message) {
-          persistAuthNotice(payload.message);
-        }
-        void runClientLogout();
-      }
-
-      if (event.key === "user" && !event.newValue) {
-        void runClientLogout();
-      }
-    };
-
-    const handleForceLogout = (event: Event) => {
-      const message = String((event as CustomEvent<{ message?: string }>).detail?.message || "").trim();
+    const unsubscribeForcedLogout = subscribeForcedLogout((payload) => {
+      const message = String(payload.message || "").trim();
       if (message) {
         persistAuthNotice(message);
       }
-      localStorage.removeItem("forceLogout");
       void runClientLogout();
-    };
+    });
 
-    window.addEventListener("storage", handleStorage);
-    window.addEventListener("force-logout", handleForceLogout);
     return () => {
-      window.removeEventListener("storage", handleStorage);
-      window.removeEventListener("force-logout", handleForceLogout);
+      unsubscribeForcedLogout();
     };
   }, [runClientLogout]);
 

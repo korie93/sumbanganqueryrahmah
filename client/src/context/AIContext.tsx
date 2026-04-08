@@ -1,10 +1,14 @@
 import { createContext, useContext, useMemo, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
 
 export type AIChatMessage = {
-  id?: string;
+  id: string;
   role: "user" | "assistant";
   content: string;
   timestamp: string;
+};
+
+export type AIChatMessageInput = Omit<AIChatMessage, "id"> & {
+  id?: string | undefined;
 };
 
 type AIContextValue = {

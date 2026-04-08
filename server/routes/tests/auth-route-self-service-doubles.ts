@@ -1,21 +1,18 @@
 import type { PostgresStorage } from "../../storage-postgres";
-import type { AuditEntry } from "./auth-route-auth-flow-shared";
+import type { AuditEntry, TestAuthRouteUser } from "./auth-route-auth-flow-shared";
+
+type UpdateUserAccountParams = Parameters<PostgresStorage["updateUserAccount"]>[0];
+type UpdateUserCredentialsParams = Parameters<PostgresStorage["updateUserCredentials"]>[0];
 
 export function createOwnCredentialsStorageDouble(options?: {
-  user?: Record<string, any>;
-  existingUsersByUsername?: Record<string, any>;
+  user?: Partial<TestAuthRouteUser>;
+  existingUsersByUsername?: Record<string, TestAuthRouteUser>;
 }) {
   const auditLogs: AuditEntry[] = [];
-  const credentialUpdates: Array<Record<string, unknown>> = [];
-  const accountUpdates: Array<Record<string, unknown>> = [];
+  const credentialUpdates: UpdateUserCredentialsParams[] = [];
+  const accountUpdates: UpdateUserAccountParams[] = [];
   const activityUsernameUpdates: Array<{ previousUsername: string; nextUsername: string }> = [];
-  const user: Record<string, any> & {
-    id: string;
-    username: string;
-    role: string;
-    mustChangePassword: boolean;
-    passwordHash: string;
-  } = {
+  const user: TestAuthRouteUser = {
     id: "credential-user-1",
     username: "credential.user",
     fullName: "Credential User",
@@ -31,13 +28,13 @@ export function createOwnCredentialsStorageDouble(options?: {
     lastLoginAt: null,
     ...options?.user,
   };
-  const usersByUsername = new Map<string, Record<string, any>>(Object.entries(options?.existingUsersByUsername || {}));
+  const usersByUsername = new Map<string, TestAuthRouteUser>(Object.entries(options?.existingUsersByUsername || {}));
   usersByUsername.set(user.username, user);
 
   const storage = {
     getUser: async (userId: string) => (userId === user.id ? user : null),
     getUserByUsername: async (username: string) => usersByUsername.get(username) ?? null,
-    updateUserAccount: async (params: Record<string, any>) => {
+    updateUserAccount: async (params: UpdateUserAccountParams) => {
       accountUpdates.push(params);
 
       if (params.passwordHash) {
@@ -67,7 +64,7 @@ export function createOwnCredentialsStorageDouble(options?: {
 
       return user;
     },
-    updateUserCredentials: async (params: Record<string, any>) => {
+    updateUserCredentials: async (params: UpdateUserCredentialsParams) => {
       credentialUpdates.push(params);
 
       if (typeof params.newUsername === "string" && params.newUsername) {

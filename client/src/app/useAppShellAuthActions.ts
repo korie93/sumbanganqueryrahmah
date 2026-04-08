@@ -7,7 +7,10 @@ import {
   LOCAL_STORAGE_KEYS_TO_CLEAR,
   SESSION_STORAGE_KEYS_TO_CLEAR,
 } from "@/app/constants";
-import { clearAuthenticatedUserStorage } from "@/lib/auth-session";
+import {
+  broadcastForcedLogoutToOtherTabs,
+  clearAuthenticatedUserStorage,
+} from "@/lib/auth-session";
 import {
   isPublicAuthRoutePage,
   replaceHistory,
@@ -33,7 +36,7 @@ export function useAppShellAuthActions({
   setUser,
 }: UseAppShellAuthActionsArgs) {
   const broadcastLogoutToOtherTabs = useCallback(() => {
-    localStorage.setItem("forceLogout", "true");
+    broadcastForcedLogoutToOtherTabs();
   }, []);
 
   const clearClientSessionStorage = useCallback(() => {
@@ -49,8 +52,7 @@ export function useAppShellAuthActions({
 
   const applyLoggedOutClientState = useCallback((redirectToLogin = true, broadcast = false) => {
     if (broadcast) {
-      localStorage.setItem("forceLogout", "true");
-      window.dispatchEvent(new CustomEvent("force-logout"));
+      broadcastForcedLogoutToOtherTabs();
     }
     clearClientSessionStorage();
     setUser(null);

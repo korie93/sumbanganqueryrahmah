@@ -2605,10 +2605,13 @@ test("PATCH /api/collection/:id rejects a stale rapid second edit and keeps dail
   try {
     const beforeSummaryResponse = await fetch(`${baseUrl}/api/collection/summary?year=2026`);
     assert.equal(beforeSummaryResponse.status, 200);
-    const beforeSummaryPayload = await beforeSummaryResponse.json();
+    const beforeSummaryPayload = await beforeSummaryResponse.json() as {
+      ok: boolean;
+      summary: Array<{ month: number; totalAmount: number }>;
+    };
     assert.equal(beforeSummaryPayload.ok, true);
-    const beforeJanuarySummary = beforeSummaryPayload.summary.find((entry: any) => entry.month === 1);
-    const beforeFebruarySummary = beforeSummaryPayload.summary.find((entry: any) => entry.month === 2);
+    const beforeJanuarySummary = beforeSummaryPayload.summary.find((entry) => entry.month === 1);
+    const beforeFebruarySummary = beforeSummaryPayload.summary.find((entry) => entry.month === 2);
     assert.equal(beforeJanuarySummary?.totalAmount, 1200);
     assert.equal(beforeFebruarySummary?.totalAmount, 700);
 
@@ -2624,9 +2627,12 @@ test("PATCH /api/collection/:id rejects a stale rapid second edit and keeps dail
       `${baseUrl}/api/collection/nickname-summary?from=2026-01-01&to=2026-01-31&nicknames=Collector%20Alpha,Collector%20Beta&summaryOnly=1`,
     );
     assert.equal(beforeNicknameResponse.status, 200);
-    const beforeNicknamePayload = await beforeNicknameResponse.json();
-    const beforeAlphaNickname = beforeNicknamePayload.nicknameTotals.find((item: any) => item.nickname === "Collector Alpha");
-    const beforeBetaNickname = beforeNicknamePayload.nicknameTotals.find((item: any) => item.nickname === "Collector Beta");
+    const beforeNicknamePayload = await beforeNicknameResponse.json() as {
+      totalAmount: number;
+      nicknameTotals: Array<{ nickname: string; totalAmount: number }>;
+    };
+    const beforeAlphaNickname = beforeNicknamePayload.nicknameTotals.find((item) => item.nickname === "Collector Alpha");
+    const beforeBetaNickname = beforeNicknamePayload.nicknameTotals.find((item) => item.nickname === "Collector Beta");
     assert.equal(beforeNicknamePayload.totalAmount, 1200);
     assert.equal(beforeAlphaNickname?.totalAmount, 1000);
     assert.equal(beforeBetaNickname?.totalAmount, 200);
@@ -2662,9 +2668,11 @@ test("PATCH /api/collection/:id rejects a stale rapid second edit and keeps dail
 
     const afterSummaryResponse = await fetch(`${baseUrl}/api/collection/summary?year=2026`);
     assert.equal(afterSummaryResponse.status, 200);
-    const afterSummaryPayload = await afterSummaryResponse.json();
-    const afterJanuarySummary = afterSummaryPayload.summary.find((entry: any) => entry.month === 1);
-    const afterFebruarySummary = afterSummaryPayload.summary.find((entry: any) => entry.month === 2);
+    const afterSummaryPayload = await afterSummaryResponse.json() as {
+      summary: Array<{ month: number; totalAmount: number }>;
+    };
+    const afterJanuarySummary = afterSummaryPayload.summary.find((entry) => entry.month === 1);
+    const afterFebruarySummary = afterSummaryPayload.summary.find((entry) => entry.month === 2);
     assert.equal(afterJanuarySummary?.totalAmount, 200);
     assert.equal(afterFebruarySummary?.totalAmount, 2200);
 
@@ -2686,9 +2694,12 @@ test("PATCH /api/collection/:id rejects a stale rapid second edit and keeps dail
       `${baseUrl}/api/collection/nickname-summary?from=2026-01-01&to=2026-01-31&nicknames=Collector%20Alpha,Collector%20Beta&summaryOnly=1`,
     );
     assert.equal(afterJanuaryNicknameResponse.status, 200);
-    const afterJanuaryNicknamePayload = await afterJanuaryNicknameResponse.json();
-    const afterJanuaryAlpha = afterJanuaryNicknamePayload.nicknameTotals.find((item: any) => item.nickname === "Collector Alpha");
-    const afterJanuaryBeta = afterJanuaryNicknamePayload.nicknameTotals.find((item: any) => item.nickname === "Collector Beta");
+    const afterJanuaryNicknamePayload = await afterJanuaryNicknameResponse.json() as {
+      totalAmount: number;
+      nicknameTotals: Array<{ nickname: string; totalAmount: number }>;
+    };
+    const afterJanuaryAlpha = afterJanuaryNicknamePayload.nicknameTotals.find((item) => item.nickname === "Collector Alpha");
+    const afterJanuaryBeta = afterJanuaryNicknamePayload.nicknameTotals.find((item) => item.nickname === "Collector Beta");
     assert.equal(afterJanuaryNicknamePayload.totalAmount, 200);
     assert.equal(afterJanuaryAlpha?.totalAmount, 0);
     assert.equal(afterJanuaryBeta?.totalAmount, 200);
@@ -2697,9 +2708,12 @@ test("PATCH /api/collection/:id rejects a stale rapid second edit and keeps dail
       `${baseUrl}/api/collection/nickname-summary?from=2026-02-01&to=2026-02-28&nicknames=Collector%20Alpha,Collector%20Beta&summaryOnly=1`,
     );
     assert.equal(afterFebruaryNicknameResponse.status, 200);
-    const afterFebruaryNicknamePayload = await afterFebruaryNicknameResponse.json();
-    const afterFebruaryAlpha = afterFebruaryNicknamePayload.nicknameTotals.find((item: any) => item.nickname === "Collector Alpha");
-    const afterFebruaryBeta = afterFebruaryNicknamePayload.nicknameTotals.find((item: any) => item.nickname === "Collector Beta");
+    const afterFebruaryNicknamePayload = await afterFebruaryNicknameResponse.json() as {
+      totalAmount: number;
+      nicknameTotals: Array<{ nickname: string; totalAmount: number }>;
+    };
+    const afterFebruaryAlpha = afterFebruaryNicknamePayload.nicknameTotals.find((item) => item.nickname === "Collector Alpha");
+    const afterFebruaryBeta = afterFebruaryNicknamePayload.nicknameTotals.find((item) => item.nickname === "Collector Beta");
     assert.equal(afterFebruaryNicknamePayload.totalAmount, 2200);
     assert.equal(afterFebruaryAlpha?.totalAmount, 700);
     assert.equal(afterFebruaryBeta?.totalAmount, 1500);

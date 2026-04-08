@@ -21,6 +21,7 @@ import {
 } from "./http-test-utils";
 import {
   authenticateAs,
+  type AuditEntry,
   createActivationStorageDouble,
   createAuthStorageDouble,
   createCookieAuthStorageDouble,
@@ -1375,7 +1376,7 @@ test("authenticated users can set up, enable, and disable 2FA through auth route
       });
       return user;
     },
-    createAuditLog: async (entry: any) => {
+    createAuditLog: async (entry: AuditEntry) => {
       auditLogs.push({ action: String(entry?.action || "") });
       return entry;
     },
@@ -1705,9 +1706,9 @@ test("POST /api/auth/validate-password-reset-token returns reset metadata for a 
 test("POST /api/auth/validate-password-reset-token accepts database-style UTC timestamps without timezone", async () => {
   const { storage, rawToken } = createPasswordResetStorageDouble({
     resetRecord: {
-      expiresAt: "2099-03-30 17:54:00" as any,
-      createdAt: "2099-03-30 09:54:00" as any,
-      activatedAt: "2099-03-29 09:00:00" as any,
+      expiresAt: "2099-03-30 17:54:00",
+      createdAt: "2099-03-30 09:54:00",
+      activatedAt: "2099-03-29 09:00:00",
     },
   });
   const app = createJsonTestApp();

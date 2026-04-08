@@ -54,6 +54,7 @@ function createStorageMock(): StorageLike {
 function installStorageMocks() {
   const local = createStorageMock();
   const session = createStorageMock();
+  const broadcastMessages: unknown[] = [];
   const documentMock = { cookie: "sqr_auth_hint=1" };
   const eventTarget = new EventTarget();
   const windowMock = Object.assign(globalThis, {
@@ -78,8 +79,27 @@ function installStorageMocks() {
     configurable: true,
     value: documentMock,
   });
+  Object.defineProperty(globalThis, "BroadcastChannel", {
+    configurable: true,
+    value: class BroadcastChannelMock extends EventTarget {
+      readonly name: string;
 
-  return { local, session, documentMock };
+      constructor(name: string) {
+        super();
+        this.name = name;
+      }
+
+      postMessage(message: unknown) {
+        broadcastMessages.push(message);
+      }
+
+      close() {
+        // no-op for tests
+      }
+    },
+  });
+
+  return { local, session, documentMock, broadcastMessages };
 }
 
 const sampleUser: User = {
@@ -146,7 +166,7 @@ test("clearAuthenticatedUserStorage clears both session auth data and legacy loc
   assert.equal(session.getItem("banned"), null);
   assert.equal(local.getItem("user"), null);
   assert.equal(local.getItem("token"), null);
-  assert.equal(local.getItem("activeTab"), null);
+  assert.equal(local.getItem("activeTab"), "home");
   assert.match(documentMock.cookie, /Max-Age=0/);
 });
 
@@ -168,8 +188,8 @@ test("parseForcedLogoutStorageValue supports both legacy and structured payloads
   );
 });
 
-test("broadcastForcedLogout stores a structured cross-tab payload and dispatches a browser event", () => {
-  const { local } = installStorageMocks();
+test("broadcastForcedLogout broadcasts through BroadcastChannel and dispatches a browser event", () => {
+  const { local, broadcastMessages } = installStorageMocks();
   const events: Array<string> = [];
   const listener = (event: Event) => {
     events.push(String((event as CustomEvent<{ message?: string }>).detail?.message || ""));
@@ -182,7 +202,10 @@ test("broadcastForcedLogout stores a structured cross-tab payload and dispatches
     window.removeEventListener("force-logout", listener);
   }
 
-  const raw = String(local.getItem("forceLogout") || "");
-  assert.match(raw, /Password was reset/i);
+  assert.equal(local.getItem("forceLogout"), null);
+  assert.equal(broadcastMessages.length, 1);
+  const payload = broadcastMessages[0] as { message?: unknown; nonce?: unknown };
+  assert.equal(payload.message, "Password was reset. Please login again.");
+  assert.match(String(payload.nonce || ""), /^force-logout-/);
   assert.deepEqual(events, ["Password was reset. Please login again."]);
 });

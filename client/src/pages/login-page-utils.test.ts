@@ -2,11 +2,14 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   buildAuthenticatedUser,
+  hasLoginFieldErrors,
   isAbortRequestError,
   isLockedAccountError,
   normalizeLoginErrorMessage,
   readErrorMessage,
   resolveAuthenticatedDefaultTab,
+  validatePasswordLoginFields,
+  validateTwoFactorCodeField,
 } from "./login-page-utils";
 
 test("buildAuthenticatedUser prefers nested user fields and normalizes username casing", () => {
@@ -67,4 +70,16 @@ test("login error helpers read safe fields from unknown errors", () => {
   assert.equal(readErrorMessage(new Error("Boom"), "Fallback"), "Boom");
   assert.equal(readErrorMessage({ message: "Plain object error" }, "Fallback"), "Plain object error");
   assert.equal(readErrorMessage({ message: "" }, "Fallback"), "Fallback");
+});
+
+test("login field validation flags missing username/password and incomplete 2FA codes", () => {
+  assert.deepEqual(validatePasswordLoginFields("", ""), {
+    username: "Sila masukkan username.",
+    password: "Sila masukkan password.",
+  });
+  assert.equal(hasLoginFieldErrors(validatePasswordLoginFields("operator", "secret")), false);
+  assert.deepEqual(validateTwoFactorCodeField("12"), {
+    twoFactorCode: "Sila masukkan kod pengesah 6 digit.",
+  });
+  assert.equal(hasLoginFieldErrors(validateTwoFactorCodeField("123456")), false);
 });

@@ -15,6 +15,9 @@ export default function Login({ onLoginSuccess }: LoginProps) {
     password,
     error,
     notice,
+    usernameError,
+    passwordError,
+    twoFactorCodeError,
     lockedAccountMessage,
     loading,
     showPassword,
@@ -32,6 +35,26 @@ export default function Login({ onLoginSuccess }: LoginProps) {
     goToForgotPassword,
   } = useLoginPageState({ onLoginSuccess });
   const loginFormBusyProps = loading ? { "aria-busy": "true" as const } : {};
+  const usernameInvalidProps = usernameError
+    ? {
+      "aria-invalid": "true" as const,
+      "aria-describedby": "login-username-error",
+    }
+    : {};
+  const passwordInvalidProps = passwordError
+    ? {
+      "aria-invalid": "true" as const,
+      "aria-describedby": "login-password-error",
+    }
+    : {};
+  const twoFactorInvalidProps = twoFactorCodeError
+    ? {
+      "aria-invalid": "true" as const,
+      "aria-describedby": "login-two-factor-help login-two-factor-error",
+    }
+    : {
+      "aria-describedby": "login-two-factor-help",
+    };
 
   return (
     <div className="relative w-full viewport-min-height overflow-hidden bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900">
@@ -72,7 +95,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
             </div>
 
             <form className="space-y-4" onSubmit={handleSubmit} {...loginFormBusyProps}>
-              <div className="relative">
+              <div className="space-y-2">
                 <PublicAuthInput
                   className="w-full px-4 py-3 rounded-xl bg-white/90 border-0 text-slate-900 placeholder:text-slate-400 focus:ring-2 focus:ring-blue-400 transition-all"
                   placeholder="Username"
@@ -83,7 +106,13 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                   data-testid="input-username"
                   autoFocus
                   disabled={loading || Boolean(twoFactorChallengeToken)}
+                  {...usernameInvalidProps}
                 />
+                {usernameError ? (
+                  <p id="login-username-error" className="text-sm text-amber-100" role="alert">
+                    {usernameError}
+                  </p>
+                ) : null}
               </div>
 
               {twoFactorChallengeToken ? (
@@ -98,35 +127,49 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                     autoComplete="one-time-code"
                     data-testid="input-two-factor-code"
                     disabled={loading}
+                    {...twoFactorInvalidProps}
                   />
-                  <p className="text-center text-xs text-white/70">
+                  <p id="login-two-factor-help" className="text-center text-xs text-white/70">
                     Masukkan kod 6 digit daripada aplikasi pengesah anda.
                   </p>
+                  {twoFactorCodeError ? (
+                    <p id="login-two-factor-error" className="text-center text-sm text-amber-100" role="alert">
+                      {twoFactorCodeError}
+                    </p>
+                  ) : null}
                 </div>
               ) : (
-                <div className="relative">
-                  <PublicAuthInput
-                    className="w-full px-4 py-3 pr-12 rounded-xl bg-white/90 border-0 text-slate-900 placeholder:text-slate-400 focus:ring-2 focus:ring-blue-400 transition-all"
-                    placeholder="Password"
-                    type={showPassword ? "text" : "password"}
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    onKeyDown={handleInputKeyDown}
-                    autoComplete="current-password"
-                    data-testid="input-password"
-                    disabled={loading}
-                  />
-                  <button
-                    type="button"
-                    onClick={toggleShowPassword}
-                    disabled={loading}
-                    className="absolute right-1 top-1/2 inline-flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-xl text-slate-500 transition-colors hover:text-slate-700"
-                    data-testid="button-toggle-password"
-                    aria-label={showPassword ? "Hide password" : "Show password"}
-                    title={showPassword ? "Hide password" : "Show password"}
-                  >
-                    {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                  </button>
+                <div className="space-y-2">
+                  <div className="relative">
+                    <PublicAuthInput
+                      className="w-full px-4 py-3 pr-12 rounded-xl bg-white/90 border-0 text-slate-900 placeholder:text-slate-400 focus:ring-2 focus:ring-blue-400 transition-all"
+                      placeholder="Password"
+                      type={showPassword ? "text" : "password"}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      onKeyDown={handleInputKeyDown}
+                      autoComplete="current-password"
+                      data-testid="input-password"
+                      disabled={loading}
+                      {...passwordInvalidProps}
+                    />
+                    <button
+                      type="button"
+                      onClick={toggleShowPassword}
+                      disabled={loading}
+                      className="absolute right-1 top-1/2 inline-flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-xl text-slate-500 transition-colors hover:text-slate-700"
+                      data-testid="button-toggle-password"
+                      aria-label={showPassword ? "Hide password" : "Show password"}
+                      title={showPassword ? "Hide password" : "Show password"}
+                    >
+                      {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                    </button>
+                  </div>
+                  {passwordError ? (
+                    <p id="login-password-error" className="text-sm text-amber-100" role="alert">
+                      {passwordError}
+                    </p>
+                  ) : null}
                 </div>
               )}
 

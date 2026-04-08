@@ -3,6 +3,7 @@ import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import type { WebSocket } from "ws";
 import { createOperationsController } from "../../controllers/operations.controller";
 import { AuditLogOperationsService } from "../../services/audit-log-operations.service";
 import { BackupJobQueueService } from "../../services/backup-job-queue.service";
@@ -19,12 +20,50 @@ import {
   stopTestServer,
 } from "./http-test-utils";
 
-type AuditEntry = {
-  action: string;
-  performedBy?: string;
-  targetResource?: string;
-  details?: string;
-};
+type AuditLogOperationsStorage = ConstructorParameters<typeof AuditLogOperationsService>[0];
+type AuditLogOperationsRepository = ConstructorParameters<typeof AuditLogOperationsService>[1];
+type BackupOperationsStorage = ConstructorParameters<typeof BackupOperationsService>[0];
+type BackupOperationsBackupsRepository = ConstructorParameters<typeof BackupOperationsService>[1];
+type OperationsAnalyticsRepository = ConstructorParameters<typeof OperationsAnalyticsService>[0];
+type AuditEntry = Parameters<AuditLogOperationsStorage["createAuditLog"]>[0];
+type AuditRow = Awaited<ReturnType<AuditLogOperationsRepository["getAuditLogs"]>>[number];
+type CreateBackupData = Parameters<BackupOperationsBackupsRepository["createBackup"]>[0];
+type BackupRow = NonNullable<Awaited<ReturnType<BackupOperationsBackupsRepository["getBackupById"]>>>;
+
+function createAuditRow(overrides: Partial<AuditRow> = {}): AuditRow {
+  return {
+    id: "audit-1",
+    action: "LOGIN",
+    performedBy: "super.user",
+    requestId: null,
+    targetUser: null,
+    targetResource: null,
+    details: "Logged in",
+    timestamp: new Date("2026-03-19T10:00:00.000Z"),
+    ...overrides,
+  };
+}
+
+function createBackupRow(overrides: Partial<BackupRow> = {}): BackupRow {
+  return {
+    id: "backup-1",
+    name: "Nightly Backup",
+    createdAt: new Date("2026-03-20T00:00:00.000Z"),
+    createdBy: "super.user",
+    backupData: JSON.stringify({
+      imports: [],
+      dataRows: [],
+      users: [],
+      auditLogs: [],
+      collectionRecords: [],
+      collectionRecordReceipts: [],
+    }),
+    metadata: JSON.stringify({
+      timestamp: "2026-03-20T00:00:00.000Z",
+    }),
+    ...overrides,
+  };
+}
 
 function createOperationsRouteHarness(options?: {
   exportCircuitOpen?: boolean;
@@ -36,7 +75,7 @@ function createOperationsRouteHarness(options?: {
   const auditLogs: AuditEntry[] = [];
   const cleanupCalls: Date[] = [];
   const topUserCalls: number[] = [];
-  const createBackupCalls: Array<Record<string, unknown>> = [];
+  const createBackupCalls: CreateBackupData[] = [];
   const restoreCalls: unknown[] = [];
   const deleteBackupCalls: string[] = [];
   const tempPayloadPaths: string[] = [];
@@ -45,60 +84,32 @@ function createOperationsRouteHarness(options?: {
       setTimeout(resolve, ms);
     });
 
-  const backups = new Map<string, any>([
+  const backups = new Map<string, BackupRow>([
     [
       "backup-1",
-      {
-        id: "backup-1",
-        name: "Nightly Backup",
-        createdAt: new Date("2026-03-20T00:00:00.000Z").toISOString(),
-        createdBy: "super.user",
-        backupData: JSON.stringify({
-          imports: [],
-          dataRows: [],
-          users: [],
-          auditLogs: [],
-          collectionRecords: [],
-          collectionRecordReceipts: [],
-        }),
-        metadata: {
-          timestamp: "2026-03-20T00:00:00.000Z",
-        },
-      },
+      createBackupRow(),
     ],
   ]);
 
-  const storage = {
+  const storage: AuditLogOperationsStorage & BackupOperationsStorage = {
     createAuditLog: async (entry: AuditEntry) => {
       auditLogs.push(entry);
-      return { id: `audit-${auditLogs.length}`, ...entry };
+      return createAuditRow({
+        ...entry,
+        id: `audit-${auditLogs.length}`,
+        targetUser: entry.targetUser ?? null,
+        targetResource: entry.targetResource ?? null,
+        details: entry.details ?? null,
+        requestId: entry.requestId ?? null,
+        timestamp: new Date(),
+      });
     },
-  } as any;
+  };
 
-  const auditRepository = {
-    getAuditLogs: async () => [
-      {
-        id: "audit-1",
-        action: "LOGIN",
-        performedBy: "super.user",
-        targetUser: null,
-        targetResource: null,
-        details: "Logged in",
-        timestamp: new Date("2026-03-19T10:00:00.000Z"),
-      },
-    ],
+  const auditRepository: AuditLogOperationsRepository = {
+    getAuditLogs: async () => [createAuditRow()],
     listAuditLogsPage: async () => ({
-      logs: [
-        {
-          id: "audit-1",
-          action: "LOGIN",
-          performedBy: "super.user",
-          targetUser: null,
-          targetResource: null,
-          details: "Logged in",
-          timestamp: new Date("2026-03-19T10:00:00.000Z"),
-        },
-      ],
+      logs: [createAuditRow()],
       page: 1,
       pageSize: 50,
       total: 1,
@@ -115,9 +126,9 @@ function createOperationsRouteHarness(options?: {
       cleanupCalls.push(cutoffDate);
       return 7;
     },
-  } as any;
+  };
 
-  const analyticsRepository = {
+  const analyticsRepository: OperationsAnalyticsRepository = {
     getDashboardSummary: async () => ({
       totalUsers: 3,
       activeSessions: 1,
@@ -136,9 +147,9 @@ function createOperationsRouteHarness(options?: {
     },
     getPeakHours: async () => [{ hour: 9, count: 4 }],
     getRoleDistribution: async () => [{ role: "superuser", count: 1 }],
-  } as any;
+  };
 
-  const backupsRepository = {
+  const backupsRepository: BackupOperationsBackupsRepository = {
     listBackupsPage: async () => ({
       backups: Array.from(backups.values()).map((backup) => ({
         ...backup,
@@ -149,20 +160,6 @@ function createOperationsRouteHarness(options?: {
       total: backups.size,
       totalPages: 1,
     }),
-    getBackupDataForExport: async () => {
-      const exportDelayMs = options?.backupExportDelayMs ?? 0;
-      if (exportDelayMs > 0) {
-        await sleep(exportDelayMs);
-      }
-      return {
-        imports: [{ id: "import-1" }],
-        dataRows: [{ id: "row-1" }, { id: "row-2" }],
-        users: [{ username: "super.user" }],
-        auditLogs: [{ id: "audit-1" }],
-        collectionRecords: [{ id: "record-1" }],
-        collectionRecordReceipts: [{ id: "receipt-1" }],
-      };
-    },
     prepareBackupPayloadFileForCreate: async () => {
       const exportDelayMs = options?.backupExportDelayMs ?? 0;
       if (exportDelayMs > 0) {
@@ -200,20 +197,20 @@ function createOperationsRouteHarness(options?: {
         },
       };
     },
-    createBackup: async (data: Record<string, unknown>) => {
+    createBackup: async (data: CreateBackupData) => {
       const createDelayMs = options?.backupCreateDelayMs ?? 0;
       if (createDelayMs > 0) {
         await sleep(createDelayMs);
       }
       createBackupCalls.push(data);
-      return {
+      return createBackupRow({
         id: "backup-2",
         name: data.name,
-        createdAt: new Date("2026-03-20T01:00:00.000Z").toISOString(),
+        createdAt: new Date("2026-03-20T01:00:00.000Z"),
         createdBy: data.createdBy,
         backupData: "",
-        metadata: JSON.parse(String(data.metadata || "{}")),
-      };
+        metadata: data.metadata ?? null,
+      });
     },
     getBackupMetadataById: async (id: string) => {
       const backup = backups.get(id);
@@ -257,7 +254,7 @@ function createOperationsRouteHarness(options?: {
       deleteBackupCalls.push(id);
       return backups.delete(id);
     },
-  } as any;
+  };
 
   const withExportCircuit = async <T>(fn: () => Promise<T>) => {
     if (options?.exportCircuitOpen) {
@@ -276,6 +273,10 @@ function createOperationsRouteHarness(options?: {
     executeCreate: (params) => backupOperationsService.createBackup(params),
     executeRestore: (params) => backupOperationsService.restoreBackup(params),
   });
+  const connectedClients = new Map<string, WebSocket>([
+    ["activity-1", { readyState: 1 } as unknown as WebSocket],
+    ["activity-2", { readyState: 1 } as unknown as WebSocket],
+  ]);
 
   const app = createJsonTestApp();
   registerOperationsRoutes(app, {
@@ -284,10 +285,7 @@ function createOperationsRouteHarness(options?: {
       backupOperationsService,
       backupJobQueueService,
       operationsAnalyticsService: new OperationsAnalyticsService(analyticsRepository),
-      connectedClients: new Map([
-        ["activity-1", {} as any],
-        ["activity-2", {} as any],
-      ]),
+      connectedClients,
       requestTimeouts: {
         backupOperationMs: options?.backupOperationTimeoutMs,
       },

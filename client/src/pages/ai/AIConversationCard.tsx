@@ -106,7 +106,7 @@ export function AIConversationCard({
 
           {messages.map((message) => (
             <div
-              key={message.id ?? `${message.timestamp}-${message.role}-${message.content.slice(0, 80)}`}
+              key={message.id}
               className={`max-w-[85%] whitespace-pre-wrap rounded-2xl px-4 py-3 text-sm ${
                 message.role === "user"
                   ? "ml-auto bg-primary text-primary-foreground"

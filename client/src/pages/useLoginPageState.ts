@@ -19,11 +19,14 @@ import { logClientError } from "@/lib/client-logger";
 import { isLockedAccountFlow, normalizeLoginIdentity } from "@/pages/login-lock-state";
 import {
   buildAuthenticatedUser,
+  hasLoginFieldErrors,
   isAbortRequestError,
   isLockedAccountError,
   normalizeLoginErrorMessage,
   readErrorMessage,
   resolveAuthenticatedDefaultTab,
+  validatePasswordLoginFields,
+  validateTwoFactorCodeField,
 } from "@/pages/login-page-utils";
 
 type UseLoginPageStateParams = {
@@ -35,6 +38,9 @@ export function useLoginPageState({ onLoginSuccess }: UseLoginPageStateParams) {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [usernameError, setUsernameError] = useState("");
+  const [passwordError, setPasswordError] = useState("");
+  const [twoFactorCodeError, setTwoFactorCodeError] = useState("");
   const [lockedAccountMessage, setLockedAccountMessage] = useState("");
   const [lockedUsername, setLockedUsername] = useState("");
   const [loading, setLoading] = useState(false);
@@ -97,6 +103,9 @@ export function useLoginPageState({ onLoginSuccess }: UseLoginPageStateParams) {
     loginRequestIdRef.current = requestId;
     setError("");
     setNotice("");
+    setUsernameError("");
+    setPasswordError("");
+    setTwoFactorCodeError("");
     setLockedAccountMessage("");
     setLoading(true);
     return requestId;
@@ -133,6 +142,7 @@ export function useLoginPageState({ onLoginSuccess }: UseLoginPageStateParams) {
 
   const handleUsernameChange = (value: string) => {
     setUsername(value);
+    setUsernameError("");
     if (!isLockedAccountFlow({
       lockedUsername,
       currentUsername: value,
@@ -140,6 +150,22 @@ export function useLoginPageState({ onLoginSuccess }: UseLoginPageStateParams) {
     })) {
       setError("");
       setNotice("");
+    }
+  };
+
+  const handlePasswordChange = (value: string) => {
+    setPassword(value);
+    setPasswordError("");
+    if (!lockedFlow) {
+      setError("");
+    }
+  };
+
+  const handleTwoFactorCodeChange = (value: string) => {
+    setTwoFactorCode(value.replace(/\D/g, "").slice(0, 6));
+    setTwoFactorCodeError("");
+    if (!lockedFlow) {
+      setError("");
     }
   };
 
@@ -152,9 +178,11 @@ export function useLoginPageState({ onLoginSuccess }: UseLoginPageStateParams) {
     let controller: AbortController | null = null;
 
     try {
-      if (!username.trim() || !password) {
+      const fieldErrors = validatePasswordLoginFields(username, password);
+      if (hasLoginFieldErrors(fieldErrors)) {
         if (!shouldIgnoreRequest(requestId)) {
-          setError("Sila masukkan username dan password.");
+          setUsernameError(fieldErrors.username ?? "");
+          setPasswordError(fieldErrors.password ?? "");
         }
         return;
       }
@@ -221,10 +249,12 @@ export function useLoginPageState({ onLoginSuccess }: UseLoginPageStateParams) {
         throw new Error("Sesi pengesahan dua faktor tiada. Sila log masuk semula.");
       }
 
-      const normalizedCode = twoFactorCode.replace(/\D/g, "").slice(0, 6);
-      if (normalizedCode.length !== 6) {
-        throw new Error("Sila masukkan kod pengesah 6 digit.");
+      const fieldErrors = validateTwoFactorCodeField(twoFactorCode);
+      if (hasLoginFieldErrors(fieldErrors)) {
+        setTwoFactorCodeError(fieldErrors.twoFactorCode ?? "");
+        return;
       }
+      const normalizedCode = twoFactorCode.replace(/\D/g, "").slice(0, 6);
 
       controller = new AbortController();
       loginAbortControllerRef.current = controller;
@@ -286,8 +316,11 @@ export function useLoginPageState({ onLoginSuccess }: UseLoginPageStateParams) {
   const returnToPasswordLogin = () => {
     setTwoFactorChallengeToken("");
     setTwoFactorCode("");
+    setTwoFactorCodeError("");
     setNotice("");
     setError("");
+    setUsernameError("");
+    setPasswordError("");
     setLockedAccountMessage("");
   };
 
@@ -296,14 +329,17 @@ export function useLoginPageState({ onLoginSuccess }: UseLoginPageStateParams) {
     password,
     error,
     notice,
+    usernameError,
+    passwordError,
+    twoFactorCodeError,
     lockedAccountMessage,
     loading,
     showPassword,
     twoFactorChallengeToken,
     twoFactorCode,
     lockedFlow,
-    setPassword,
-    setTwoFactorCode,
+    setPassword: handlePasswordChange,
+    setTwoFactorCode: handleTwoFactorCodeChange,
     handleUsernameChange,
     handleSubmit,
     handleInputKeyDown,

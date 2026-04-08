@@ -75,7 +75,7 @@ export default function AIChat({
 
         {messages.map((msg) => (
           <AIMessage
-            key={msg.id ?? `${msg.timestamp}-${msg.role}-${msg.content.slice(0, 80)}`}
+            key={msg.id}
             role={msg.role}
             content={msg.content}
           />

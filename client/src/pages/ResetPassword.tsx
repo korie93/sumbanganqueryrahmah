@@ -10,6 +10,10 @@ import {
 import { getApiErrorMessage } from "@/lib/api-errors";
 import { broadcastForcedLogout } from "@/lib/auth-session";
 import { formatDateTimeDDMMYYYY } from "@/lib/date-format";
+import {
+  hasPublicAuthFieldErrors,
+  validatePasswordFields,
+} from "@/pages/public-auth-form-utils";
 
 type ResetPhase = "invalid" | "ready" | "success" | "validating";
 
@@ -28,6 +32,8 @@ export default function ResetPasswordPage() {
   const [phase, setPhase] = useState<ResetPhase>(token ? "validating" : "invalid");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [newPasswordError, setNewPasswordError] = useState("");
+  const [confirmPasswordError, setConfirmPasswordError] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(token ? "" : "Pautan tetapan semula kata laluan tidak sah.");
 
@@ -68,12 +74,20 @@ export default function ResetPasswordPage() {
   const handleResetPassword = async () => {
     if (!reset || loading || phase !== "ready") return;
 
-    if (newPassword !== confirmPassword) {
-      setError("Pengesahan kata laluan tidak sepadan.");
+    setError("");
+    setNewPasswordError("");
+    setConfirmPasswordError("");
+
+    const fieldErrors = validatePasswordFields({
+      newPassword,
+      confirmPassword,
+    });
+    if (hasPublicAuthFieldErrors(fieldErrors)) {
+      setNewPasswordError(fieldErrors.newPassword ?? "");
+      setConfirmPasswordError(fieldErrors.confirmPassword ?? "");
       return;
     }
 
-    setError("");
     setLoading(true);
 
     try {
@@ -94,6 +108,19 @@ export default function ResetPasswordPage() {
       setLoading(false);
     }
   };
+
+  const newPasswordInvalidProps = newPasswordError
+    ? {
+      "aria-invalid": "true" as const,
+      "aria-describedby": "reset-password-new-error",
+    }
+    : {};
+  const confirmPasswordInvalidProps = confirmPasswordError
+    ? {
+      "aria-invalid": "true" as const,
+      "aria-describedby": "reset-password-confirm-error",
+    }
+    : {};
 
   return (
     <PublicAuthLayout
@@ -140,17 +167,37 @@ export default function ResetPasswordPage() {
           <PublicAuthInput
             type="password"
             value={newPassword}
-            onChange={(event) => setNewPassword(event.target.value)}
+            onChange={(event) => {
+              setNewPassword(event.target.value);
+              setNewPasswordError("");
+              setError("");
+            }}
             placeholder="Kata laluan baharu"
             disabled={loading}
+            {...newPasswordInvalidProps}
           />
+          {newPasswordError ? (
+            <p id="reset-password-new-error" className="text-sm text-amber-100" role="alert">
+              {newPasswordError}
+            </p>
+          ) : null}
           <PublicAuthInput
             type="password"
             value={confirmPassword}
-            onChange={(event) => setConfirmPassword(event.target.value)}
+            onChange={(event) => {
+              setConfirmPassword(event.target.value);
+              setConfirmPasswordError("");
+              setError("");
+            }}
             placeholder="Sahkan kata laluan baharu"
             disabled={loading}
+            {...confirmPasswordInvalidProps}
           />
+          {confirmPasswordError ? (
+            <p id="reset-password-confirm-error" className="text-sm text-amber-100" role="alert">
+              {confirmPasswordError}
+            </p>
+          ) : null}
           {error ? (
             <div className="rounded-2xl border border-red-400/25 bg-red-500/10 p-3 text-sm text-red-100" role="alert">
               {error}

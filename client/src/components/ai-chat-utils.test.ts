@@ -12,6 +12,7 @@ import {
 
 test("appendAIChatMessage trims to the newest messages only", () => {
   const messages = Array.from({ length: 3 }, (_, index) => ({
+    id: `ai-msg-${index + 1}`,
     role: "user" as const,
     content: `message-${index + 1}`,
     timestamp: `${index + 1}`,

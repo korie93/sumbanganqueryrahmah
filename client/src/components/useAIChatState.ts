@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 
-import { type AIChatMessage, useAIContext } from "@/context/AIContext";
+import { type AIChatMessageInput, useAIContext } from "@/context/AIContext";
 import { type AIChatStatus } from "@/lib/ai-chat";
 import { resolveAiErrorMessage } from "@/lib/ai-error";
 import { searchAI } from "@/lib/api";
@@ -66,7 +66,7 @@ export function useAIChatState({
     unregisterRetryTimer,
   } = useAIChatRuntimeRefs({ setIsTyping });
 
-  const appendMessage = useCallback((message: AIChatMessage) => {
+  const appendMessage = useCallback((message: AIChatMessageInput) => {
     setMessages((prev) => appendAIChatMessage(prev, message));
   }, [setMessages]);
 

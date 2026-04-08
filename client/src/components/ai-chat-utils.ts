@@ -1,6 +1,6 @@
 import { Brain, PencilLine, Search, type LucideIcon } from "lucide-react";
 
-import type { AIChatMessage } from "@/context/AIContext";
+import type { AIChatMessage, AIChatMessageInput } from "@/context/AIContext";
 import type { AIChatStatus } from "@/lib/ai-chat";
 import { createClientRandomId } from "@/lib/secure-id";
 
@@ -20,10 +20,13 @@ export function getAIChatTypingDelayMs(isLowSpecMode: boolean) {
 
 export function appendAIChatMessage(
   messages: AIChatMessage[],
-  message: AIChatMessage,
+  message: AIChatMessageInput,
   maxMessages = MAX_AI_CHAT_MESSAGES,
 ) {
-  const normalizedMessage = message.id ? message : {
+  const normalizedMessage: AIChatMessage = message.id ? {
+    ...message,
+    id: message.id,
+  } : {
     ...message,
     id: createClientRandomId("ai-msg"),
   };

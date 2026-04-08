@@ -100,6 +100,10 @@ jobs:
       - name: Enforce coverage gate
         run: npm run test:coverage:gate
 
+      - name: Publish coverage summary
+        if: always()
+        run: npm run report:coverage-summary
+
       - name: Upload coverage artifact
         if: always()
         uses: actions/upload-artifact@v6
