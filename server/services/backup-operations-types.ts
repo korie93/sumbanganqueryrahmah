@@ -9,6 +9,7 @@ export type BackupOperationsBackupsRepository = Pick<
   | "getBackupMetadataById"
   | "getBackupById"
   | "prepareBackupPayloadFileForCreate"
+  | "readPreparedBackupPayloadForStorage"
   | "listBackupsPage"
   | "restoreFromBackup"
 >;

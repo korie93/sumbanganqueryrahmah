@@ -8,6 +8,7 @@ import type {
 import {
   enqueueCollectionRecordDailyRollupSlices,
 } from "./collection-record-rollup-utils";
+import { buildEncryptedCollectionRecordPiiValues } from "../lib/collection-pii-encryption";
 import {
   attachCollectionReceipts,
 } from "./collection-receipt-utils";
@@ -15,14 +16,24 @@ import { mapCollectionRecordRow } from "./collection-repository-mappers";
 
 export async function createCollectionRecord(data: CreateCollectionRecordInput): Promise<CollectionRecord> {
   const id = randomUUID();
+  const encryptedPii = buildEncryptedCollectionRecordPiiValues({
+    customerName: data.customerName,
+    icNumber: data.icNumber,
+    customerPhone: data.customerPhone,
+    accountNumber: data.accountNumber,
+  });
   return db.transaction(async (tx) => {
     await tx.execute(sql`
       INSERT INTO public.collection_records (
         id,
         customer_name,
+        customer_name_encrypted,
         ic_number,
+        ic_number_encrypted,
         customer_phone,
+        customer_phone_encrypted,
         account_number,
+        account_number_encrypted,
         batch,
         payment_date,
         amount,
@@ -36,9 +47,13 @@ export async function createCollectionRecord(data: CreateCollectionRecordInput):
       VALUES (
         ${id}::uuid,
         ${data.customerName},
+        ${encryptedPii?.customerNameEncrypted ?? null},
         ${data.icNumber},
+        ${encryptedPii?.icNumberEncrypted ?? null},
         ${data.customerPhone},
+        ${encryptedPii?.customerPhoneEncrypted ?? null},
         ${data.accountNumber},
+        ${encryptedPii?.accountNumberEncrypted ?? null},
         ${data.batch},
         ${data.paymentDate}::date,
         ${data.amount},
@@ -61,9 +76,13 @@ export async function createCollectionRecord(data: CreateCollectionRecordInput):
       SELECT
         id,
         customer_name,
+        customer_name_encrypted,
         ic_number,
+        ic_number_encrypted,
         customer_phone,
+        customer_phone_encrypted,
         account_number,
+        account_number_encrypted,
         batch,
         payment_date,
         amount,

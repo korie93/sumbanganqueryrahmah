@@ -296,9 +296,13 @@ export async function syncCollectionRecordReceiptValidation(
     SELECT
       id,
       customer_name,
+      customer_name_encrypted,
       ic_number,
+      ic_number_encrypted,
       customer_phone,
+      customer_phone_encrypted,
       account_number,
+      account_number_encrypted,
       batch,
       payment_date,
       amount,

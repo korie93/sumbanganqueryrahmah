@@ -3,6 +3,7 @@ import type {
   CollectionDailyTarget,
   CollectionRecord,
 } from "../storage-postgres";
+import { resolveCollectionPiiFieldValue } from "../lib/collection-pii-encryption";
 import { formatCollectionAmountFromCents } from "../services/collection/collection-receipt-validation";
 
 type CollectionBatch = CollectionRecord["batch"];
@@ -27,10 +28,22 @@ export function mapCollectionRecordRow(row: any): CollectionRecord {
 
   return {
     id: String(row.id),
-    customerName: String(row.customer_name ?? row.customerName ?? ""),
-    icNumber: String(row.ic_number ?? row.icNumber ?? ""),
-    customerPhone: String(row.customer_phone ?? row.customerPhone ?? ""),
-    accountNumber: String(row.account_number ?? row.accountNumber ?? ""),
+    customerName: resolveCollectionPiiFieldValue({
+      plaintext: row.customer_name ?? row.customerName,
+      encrypted: row.customer_name_encrypted ?? row.customerNameEncrypted,
+    }),
+    icNumber: resolveCollectionPiiFieldValue({
+      plaintext: row.ic_number ?? row.icNumber,
+      encrypted: row.ic_number_encrypted ?? row.icNumberEncrypted,
+    }),
+    customerPhone: resolveCollectionPiiFieldValue({
+      plaintext: row.customer_phone ?? row.customerPhone,
+      encrypted: row.customer_phone_encrypted ?? row.customerPhoneEncrypted,
+    }),
+    accountNumber: resolveCollectionPiiFieldValue({
+      plaintext: row.account_number ?? row.accountNumber,
+      encrypted: row.account_number_encrypted ?? row.accountNumberEncrypted,
+    }),
     batch: String(row.batch ?? "") as CollectionBatch,
     paymentDate,
     amount: String(row.amount ?? "0"),

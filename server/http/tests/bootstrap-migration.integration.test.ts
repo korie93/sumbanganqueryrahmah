@@ -11,6 +11,7 @@ import { ensureCollectionRecordsTables } from "../../internal/collection-bootstr
 import { ensureCoreImportsTable } from "../../internal/core-schema-bootstrap-imports";
 import { ensureSettingsSchema } from "../../internal/settings-bootstrap-schema";
 import { ensureUsersBootstrapSchema } from "../../internal/users-bootstrap/schema";
+import { decryptCollectionPiiValue } from "../../lib/collection-pii-encryption";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 const aiMessagesIndexMigrationSql = readFileSync(
@@ -71,6 +72,14 @@ if (!schemaIntegrityMigrationFileName) {
 }
 const schemaIntegrityMigrationSql = readFileSync(
   path.join(repoRoot, "drizzle", schemaIntegrityMigrationFileName),
+  "utf8",
+);
+const collectionPiiShadowMigrationFileName = migrationSqlFileNames.find((name) => /^0026_.*\.sql$/.test(name));
+if (!collectionPiiShadowMigrationFileName) {
+  throw new Error("Expected a 0026 collection PII shadow migration file in drizzle/");
+}
+const collectionPiiShadowMigrationSql = readFileSync(
+  path.join(repoRoot, "drizzle", collectionPiiShadowMigrationFileName),
   "utf8",
 );
 const preTimezoneMigrationSqlTexts = migrationSqlFileNames
@@ -228,6 +237,24 @@ async function columnDataType(pool: pg.Pool, table: string, column: string): Pro
     [table, column],
   );
   return result.rows[0]?.data_type ?? null;
+}
+
+async function columnComment(pool: pg.Pool, table: string, column: string): Promise<string | null> {
+  const result = await pool.query<{ column_comment: string | null }>(
+    `
+      SELECT pg_catalog.col_description(
+        format('public.%I', $1::text)::regclass::oid,
+        attribute.attnum
+      ) AS column_comment
+      FROM pg_catalog.pg_attribute attribute
+      WHERE attribute.attrelid = format('public.%I', $1::text)::regclass
+        AND attribute.attname = $2
+        AND attribute.attnum > 0
+        AND NOT attribute.attisdropped
+    `,
+    [table, column],
+  );
+  return result.rows[0]?.column_comment ?? null;
 }
 
 async function foreignKeyRules(
@@ -544,6 +571,19 @@ test(
       assert.equal(await indexExists(pool, "idx_collection_records_receipt_validation_status"), true);
       assert.equal(await indexExists(pool, "idx_collection_record_receipts_extraction_status"), true);
       assert.equal(await indexExists(pool, "idx_collection_record_receipts_receipt_date"), true);
+      const amountComment = await columnComment(pool, "collection_records", "amount");
+      const receiptTotalAmountComment = await columnComment(pool, "collection_records", "receipt_total_amount");
+      const receiptAmountComment = await columnComment(pool, "collection_record_receipts", "receipt_amount");
+      const extractedAmountComment = await columnComment(pool, "collection_record_receipts", "extracted_amount");
+
+      assert.ok(amountComment);
+      assert.ok(receiptTotalAmountComment);
+      assert.ok(receiptAmountComment);
+      assert.ok(extractedAmountComment);
+      assert.match(amountComment, /MYR/i);
+      assert.match(receiptTotalAmountComment, /sen\/cents/i);
+      assert.match(receiptAmountComment, /sen\/cents/i);
+      assert.match(extractedAmountComment, /sen\/cents/i);
     });
   },
 );
@@ -783,6 +823,7 @@ test(
       await applySql(pool, collectionRecordDailyRollupMigrationSql);
       await applySql(pool, collectionRecordDailyRollupQueueMigrationSql);
       await applySql(pool, monitorAndMonthlyRollupsMigrationSql);
+      await applySql(pool, collectionPiiShadowMigrationSql);
       await ensureCollectionRecordsTables(drizzle(pool));
 
       const recordResult = await pool.query<{
@@ -917,6 +958,7 @@ test(
       await applySql(pool, collectionRecordDailyRollupMigrationSql);
       await applySql(pool, collectionRecordDailyRollupQueueMigrationSql);
       await applySql(pool, monitorAndMonthlyRollupsMigrationSql);
+      await applySql(pool, collectionPiiShadowMigrationSql);
 
       const receiptCount = await pool.query<{ count: number }>(
         `
@@ -971,5 +1013,93 @@ test(
       assert.equal(await indexExists(pool, "idx_collection_rollup_refresh_queue_slice_unique"), true);
       assert.equal(await indexExists(pool, "idx_collection_record_monthly_rollups_slice_unique"), true);
     });
+  },
+);
+
+test(
+  "collection bootstrap backfills encrypted PII shadow columns when a collection PII key is configured",
+  { skip: skipReason || false },
+  async () => {
+    const previousCollectionPiiKey = process.env.COLLECTION_PII_ENCRYPTION_KEY;
+    process.env.COLLECTION_PII_ENCRYPTION_KEY = "test-collection-pii-encryption-key";
+
+    try {
+      await withTempDatabase(async ({ pool }) => {
+        const recordId = "66666666-6666-6666-6666-666666666666";
+
+        await pool.query(`
+          CREATE TABLE public.collection_records (
+            id uuid PRIMARY KEY,
+            customer_name text,
+            ic_number text,
+            customer_phone text,
+            account_number text,
+            batch text,
+            payment_date date,
+            amount numeric(14,2),
+            receipt_file text,
+            created_by_login text,
+            collection_staff_nickname text,
+            staff_username text,
+            created_at timestamp DEFAULT now(),
+            updated_at timestamp
+          );
+        `);
+
+        await pool.query(
+          `
+            INSERT INTO public.collection_records (
+              id, customer_name, ic_number, customer_phone, account_number, batch,
+              payment_date, amount, receipt_file, created_by_login, collection_staff_nickname,
+              staff_username, created_at, updated_at
+            )
+            VALUES (
+              $1::uuid, 'Encrypted Customer', '900101015555', '0123000001', 'ACC-1001', 'B3',
+              DATE '2026-04-08', 50.00, NULL, 'system', 'Collector Alpha', 'Collector Alpha',
+              now(), now()
+            )
+          `,
+          [recordId],
+        );
+
+        await ensureCollectionRecordsTables(drizzle(pool));
+
+        assert.equal(await columnDataType(pool, "collection_records", "customer_name_encrypted"), "text");
+        assert.equal(await columnDataType(pool, "collection_records", "ic_number_encrypted"), "text");
+        assert.equal(await columnDataType(pool, "collection_records", "customer_phone_encrypted"), "text");
+        assert.equal(await columnDataType(pool, "collection_records", "account_number_encrypted"), "text");
+
+        const encryptedRecord = await pool.query<{
+          customer_name_encrypted: string | null;
+          ic_number_encrypted: string | null;
+          customer_phone_encrypted: string | null;
+          account_number_encrypted: string | null;
+        }>(`
+          SELECT
+            customer_name_encrypted,
+            ic_number_encrypted,
+            customer_phone_encrypted,
+            account_number_encrypted
+          FROM public.collection_records
+          WHERE id = $1::uuid
+        `, [recordId]);
+
+        const row = encryptedRecord.rows[0];
+        assert.ok(row?.customer_name_encrypted);
+        assert.ok(row?.ic_number_encrypted);
+        assert.ok(row?.customer_phone_encrypted);
+        assert.ok(row?.account_number_encrypted);
+        assert.equal(decryptCollectionPiiValue(String(row?.customer_name_encrypted || "")), "Encrypted Customer");
+        assert.equal(decryptCollectionPiiValue(String(row?.ic_number_encrypted || "")), "900101015555");
+        assert.equal(decryptCollectionPiiValue(String(row?.customer_phone_encrypted || "")), "0123000001");
+        assert.equal(decryptCollectionPiiValue(String(row?.account_number_encrypted || "")), "ACC-1001");
+      });
+    } finally {
+      if (previousCollectionPiiKey === undefined) {
+        delete process.env.COLLECTION_PII_ENCRYPTION_KEY;
+      } else {
+        process.env.COLLECTION_PII_ENCRYPTION_KEY = previousCollectionPiiKey;
+      }
+    }
   },
 );

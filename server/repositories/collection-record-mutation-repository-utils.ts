@@ -6,6 +6,7 @@ import type {
   UpdateCollectionRecordInput,
   UpdateCollectionRecordOptions,
 } from "../storage-postgres";
+import { encryptCollectionPiiFieldValue } from "../lib/collection-pii-encryption";
 import {
   getCollectionRecordById,
 } from "./collection-record-read-utils";
@@ -40,15 +41,31 @@ export async function updateCollectionRecord(
 
   if (data.customerName !== undefined) {
     updateChunks.push(sql`customer_name = ${data.customerName}`);
+    const customerNameEncrypted = encryptCollectionPiiFieldValue(data.customerName);
+    if (customerNameEncrypted !== null) {
+      updateChunks.push(sql`customer_name_encrypted = ${customerNameEncrypted}`);
+    }
   }
   if (data.icNumber !== undefined) {
     updateChunks.push(sql`ic_number = ${data.icNumber}`);
+    const icNumberEncrypted = encryptCollectionPiiFieldValue(data.icNumber);
+    if (icNumberEncrypted !== null) {
+      updateChunks.push(sql`ic_number_encrypted = ${icNumberEncrypted}`);
+    }
   }
   if (data.customerPhone !== undefined) {
     updateChunks.push(sql`customer_phone = ${data.customerPhone}`);
+    const customerPhoneEncrypted = encryptCollectionPiiFieldValue(data.customerPhone);
+    if (customerPhoneEncrypted !== null) {
+      updateChunks.push(sql`customer_phone_encrypted = ${customerPhoneEncrypted}`);
+    }
   }
   if (data.accountNumber !== undefined) {
     updateChunks.push(sql`account_number = ${data.accountNumber}`);
+    const accountNumberEncrypted = encryptCollectionPiiFieldValue(data.accountNumber);
+    if (accountNumberEncrypted !== null) {
+      updateChunks.push(sql`account_number_encrypted = ${accountNumberEncrypted}`);
+    }
   }
   if (data.batch !== undefined) {
     updateChunks.push(sql`batch = ${data.batch}`);
@@ -125,9 +142,13 @@ export async function updateCollectionRecord(
       RETURNING
         id,
         customer_name,
+        customer_name_encrypted,
         ic_number,
+        ic_number_encrypted,
         customer_phone,
+        customer_phone_encrypted,
         account_number,
+        account_number_encrypted,
         batch,
         payment_date,
         amount,

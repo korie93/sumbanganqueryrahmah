@@ -96,6 +96,7 @@ export type RuntimeConfig = {
     runtimeSettingsCacheTtlMs: number;
     pgPoolWarnCooldownMs: number;
     backupOperationTimeoutMs: number;
+    backupMaxPayloadBytes: number;
     importAnalysisTimeoutMs: number;
     collectionRollupListenReconnectMs: number;
   };

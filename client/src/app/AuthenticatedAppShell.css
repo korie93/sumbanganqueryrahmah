@@ -97,13 +97,13 @@
   margin-top: 0.4rem;
   font-size: 1.25rem;
   font-weight: 700;
-  line-height: 1.2;
+  line-height: var(--line-height-tight);
 }
 
 .ops-metric-supporting {
   margin-top: 0.35rem;
   font-size: 0.8rem;
-  line-height: 1.45;
+  line-height: var(--line-height-normal);
   color: hsl(var(--muted-foreground));
 }
 

@@ -86,13 +86,13 @@
 .ai-empty-hint {
   color: var(--ai-empty-text);
   font-size: 13px;
-  line-height: 1.45;
+  line-height: var(--line-height-normal);
   padding: 6px 2px;
 }
 
 .ai-chat-container[data-compact='true'] .ai-empty-hint {
   font-size: 12px;
-  line-height: 1.35;
+  line-height: var(--line-height-tight);
   padding-top: 2px;
 }
 
@@ -112,7 +112,7 @@
 .ai-bubble {
   max-width: 92%;
   padding: 12px 14px;
-  line-height: 1.45;
+  line-height: var(--line-height-normal);
   border-radius: 10px;
   white-space: pre-wrap;
   overflow-wrap: anywhere;

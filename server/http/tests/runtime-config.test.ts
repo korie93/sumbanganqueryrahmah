@@ -203,6 +203,31 @@ test("runtime config normalizes missing PG_PASSWORD to an empty string in strict
   );
 });
 
+test("runtime config accepts an explicit backup payload size override", async () => {
+  await withEnv(
+    {
+      NODE_ENV: "development",
+      HOST: "127.0.0.1",
+      PUBLIC_APP_URL: "http://127.0.0.1:5000",
+      SESSION_SECRET: null,
+      COLLECTION_NICKNAME_TEMP_PASSWORD: null,
+      PG_PASSWORD: null,
+      BACKUP_ENCRYPTION_KEY: null,
+      BACKUP_ENCRYPTION_KEYS: null,
+      BACKUP_FEATURE_ENABLED: "1",
+      BACKUP_MAX_PAYLOAD_BYTES: "16777216",
+      SEED_DEFAULT_USERS: "0",
+      LOCAL_SUPERUSER_CREDENTIALS_FILE_ENABLED: "0",
+      MAIL_DEV_OUTBOX_ENABLED: "0",
+      PG_MAX_CONNECTIONS: null,
+    },
+    async () => {
+      const runtimeModule = await importRuntimeFresh();
+      assert.equal(runtimeModule.runtimeConfig.runtime.backupMaxPayloadBytes, 16_777_216);
+    },
+  );
+});
+
 test("runtime config keeps strict local development bootable when SMTP env vars are incomplete", async () => {
   await withEnv(
     {

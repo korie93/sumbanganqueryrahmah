@@ -71,6 +71,7 @@ function createOperationsRouteHarness(options?: {
   backupCreateDelayMs?: number;
   backupExportDelayMs?: number;
   backupRestoreDelayMs?: number;
+  maxPayloadBytes?: number;
 }) {
   const auditLogs: AuditEntry[] = [];
   const cleanupCalls: Date[] = [];
@@ -199,6 +200,8 @@ function createOperationsRouteHarness(options?: {
         },
       };
     },
+    readPreparedBackupPayloadForStorage: async (preparedPayload) =>
+      fs.readFile(preparedPayload.tempFilePath, "utf8"),
     createBackup: async (data: CreateBackupData) => {
       const createDelayMs = options?.backupCreateDelayMs ?? 0;
       if (createDelayMs > 0) {
@@ -269,6 +272,11 @@ function createOperationsRouteHarness(options?: {
     backupsRepository,
     withExportCircuit,
     (error) => (error as Error)?.message === "circuit-open",
+    options?.maxPayloadBytes == null
+      ? undefined
+      : {
+        maxPayloadBytes: options.maxPayloadBytes,
+      },
   );
   const backupJobQueueService = new BackupJobQueueService({
     repository: createInMemoryBackupJobRepository(),
@@ -476,6 +484,33 @@ test("POST /api/backups creates a backup and writes an audit log", async () => {
   }
 });
 
+test("POST /api/backups returns 413 when the payload exceeds the configured size limit", async () => {
+  const { app, createBackupCalls, auditLogs } = createOperationsRouteHarness({
+    maxPayloadBytes: 32,
+  });
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(`${baseUrl}/api/backups`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ name: "Oversized Backup" }),
+    });
+
+    assert.equal(response.status, 413);
+    assert.deepEqual(await response.json(), {
+      message:
+        "Backup payload exceeds the configured 32 bytes limit. Narrow the dataset or increase BACKUP_MAX_PAYLOAD_BYTES.",
+    });
+    assert.equal(createBackupCalls.length, 0);
+    assert.equal(auditLogs.length, 0);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
 test("POST /api/backups?async=1 queues backup creation and exposes job status", async () => {
   const { app, createBackupCalls, auditLogs } = createOperationsRouteHarness();
   const { server, baseUrl } = await startTestServer(app);
@@ -520,6 +555,25 @@ test("GET /api/backups/:id/export returns an attachment and audits the download"
     assert.equal(Array.isArray(payload.backupData.imports), true);
     assert.equal(auditLogs.length, 1);
     assert.equal(auditLogs[0].action, "DOWNLOAD_BACKUP_EXPORT");
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("GET /api/backups/:id/export returns 413 when the payload exceeds the configured size limit", async () => {
+  const { app, auditLogs } = createOperationsRouteHarness({
+    maxPayloadBytes: 32,
+  });
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(`${baseUrl}/api/backups/backup-1/export`);
+    assert.equal(response.status, 413);
+    assert.deepEqual(await response.json(), {
+      message:
+        "Backup payload exceeds the configured 32 bytes limit. Narrow the dataset or increase BACKUP_MAX_PAYLOAD_BYTES.",
+    });
+    assert.equal(auditLogs.length, 0);
   } finally {
     await stopTestServer(server);
   }

@@ -48,6 +48,17 @@ test("runtime env schema rejects integer values outside configured bounds", () =
   );
 });
 
+test("runtime env schema rejects backup payload limits below the minimum bound", () => {
+  assert.throws(
+    () => {
+      validateRuntimeEnvironmentSchema({
+        BACKUP_MAX_PAYLOAD_BYTES: "1024",
+      });
+    },
+    /BACKUP_MAX_PAYLOAD_BYTES.*at least 1048576/i,
+  );
+});
+
 test("runtime env schema preserves the existing AUTH_COOKIE_SECURE error contract", () => {
   assert.throws(
     () => {

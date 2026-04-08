@@ -5,6 +5,7 @@ import {
   buildCollectionAuditFieldChanges,
   buildCollectionAuditSnapshot,
   buildCollectionRecordUpdateDraft,
+  maskCollectionAuditCustomerName,
   normalizeCollectionReceiptMetadata,
   normalizeCollectionRecordFields,
   normalizeExtractionConfidence,
@@ -47,10 +48,39 @@ test("collection audit helpers preserve receipt source precedence and changed fi
   });
 
   assert.equal(before.amount, 10.01);
+  assert.equal(before.customerName, maskCollectionAuditCustomerName("A"));
   assert.deepEqual(buildCollectionAuditFieldChanges(before, after), {
     amount: { from: 10.01, to: 12.1 },
     collectionStaffNickname: { from: "Collector A", to: "Collector B" },
     paymentDate: { from: "2026-01-01", to: "2026-01-02" },
+  });
+});
+
+test("collection audit helpers mask customer names while preserving change detection", () => {
+  const before = buildCollectionAuditSnapshot({
+    customerName: "Bob Lee",
+    paymentDate: "2026-01-01",
+    amount: 10,
+    collectionStaffNickname: "Collector A",
+    activeReceiptCount: 0,
+    activeReceiptSource: "none",
+  });
+  const after = buildCollectionAuditSnapshot({
+    customerName: "Bobby Lee",
+    paymentDate: "2026-01-01",
+    amount: 10,
+    collectionStaffNickname: "Collector A",
+    activeReceiptCount: 0,
+    activeReceiptSource: "none",
+  });
+
+  assert.equal(before.customerName, maskCollectionAuditCustomerName("Bob Lee"));
+  assert.notEqual(before.customerName, "Bob Lee");
+  assert.deepEqual(buildCollectionAuditFieldChanges(before, after), {
+    customerName: {
+      from: maskCollectionAuditCustomerName("Bob Lee"),
+      to: maskCollectionAuditCustomerName("Bobby Lee"),
+    },
   });
 });
 

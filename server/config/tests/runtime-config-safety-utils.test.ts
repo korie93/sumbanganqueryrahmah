@@ -71,6 +71,7 @@ test("assertNoPlaceholderSecrets rejects production-like generated placeholders"
         configuredPreviousSessionSecrets: [],
         configuredPgPassword: "GENERATE_ME_DB_PASSWORD_DO_NOT_USE_IN_PRODUCTION",
         configuredTwoFactorEncryptionKey: "GENERATE_ME_DISTINCT_2FA_KEY_DO_NOT_REUSE_SESSION_SECRET",
+        configuredCollectionPiiEncryptionKey: "GENERATE_ME_COLLECTION_PII_KEY_DO_NOT_REUSE_SESSION_SECRET",
         configuredBackupEncryptionKey: "GENERATE_ME_BACKUP_KEY_AND_STORE_OFFLINE",
         configuredBackupEncryptionKeys: null,
       }),

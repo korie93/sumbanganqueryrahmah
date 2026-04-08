@@ -1,22 +1,37 @@
-import { promises as fs } from "node:fs";
+import { logger } from "../lib/logger";
 import { buildBackupMetadata } from "./backup-operations-integrity-utils";
 import type {
   BackupOperationResponse,
   CreateBackupInput,
   PreparedBackupPayloadFile,
 } from "./backup-operations-types";
-import { getCircuitOpenResponse } from "./backup-operations-service-shared";
+import {
+  buildBackupPayloadTooLargeMessage,
+  getCircuitOpenResponse,
+  type BackupOperationsLimits,
+} from "./backup-operations-service-shared";
 import type { BackupOperationsMutationDeps } from "./backup-operations-mutation-shared";
 
 type CreatedBackupRecord = Awaited<
   ReturnType<BackupOperationsMutationDeps["backupsRepository"]["createBackup"]>
 >;
+type BackupCreateEarlyResponse = BackupOperationResponse<{ message: string }>;
+
+function isBackupCreateEarlyResponse(value: unknown): value is BackupCreateEarlyResponse {
+  return Boolean(
+    value
+    && typeof value === "object"
+    && "statusCode" in value
+    && "body" in value,
+  );
+}
 
 export async function executeCreateBackup(
   deps: BackupOperationsMutationDeps,
   params: CreateBackupInput,
+  limits: BackupOperationsLimits,
 ): Promise<BackupOperationResponse<CreatedBackupRecord | { message: string }>> {
-  let backup;
+  let backup: CreatedBackupRecord | BackupCreateEarlyResponse;
   let preparedBackupPayload: PreparedBackupPayloadFile | null = null;
 
   try {
@@ -25,10 +40,22 @@ export async function executeCreateBackup(
       preparedBackupPayload = await deps.backupsRepository.prepareBackupPayloadFileForCreate();
 
       try {
-        const backupPayloadJson = preparedBackupPayload.tempPayloadEncrypted
-          && typeof preparedBackupPayload.tempPayloadStoragePrefix === "string"
-          ? `${preparedBackupPayload.tempPayloadStoragePrefix}${(await fs.readFile(preparedBackupPayload.tempFilePath)).toString("base64")}`
-          : await fs.readFile(preparedBackupPayload.tempFilePath, "utf8");
+        if (preparedBackupPayload.payloadBytes > limits.maxPayloadBytes) {
+          logger.warn("Backup creation blocked because the payload exceeds the configured size limit", {
+            backupName: params.name,
+            username: params.username,
+            payloadBytes: preparedBackupPayload.payloadBytes,
+            maxPayloadBytes: limits.maxPayloadBytes,
+          });
+          return {
+            statusCode: 413,
+            body: { message: buildBackupPayloadTooLargeMessage(limits.maxPayloadBytes) },
+          };
+        }
+
+        const backupPayloadJson = await deps.backupsRepository.readPreparedBackupPayloadForStorage(
+          preparedBackupPayload,
+        );
         const metadata = buildBackupMetadata(
           preparedBackupPayload,
           preparedBackupPayload.payloadChecksumSha256,
@@ -58,6 +85,10 @@ export async function executeCreateBackup(
     });
   } catch (error) {
     return getCircuitOpenResponse(error, deps.isExportCircuitOpenError);
+  }
+
+  if (isBackupCreateEarlyResponse(backup)) {
+    return backup;
   }
 
   return {

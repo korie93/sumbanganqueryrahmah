@@ -14,6 +14,7 @@ import {
 } from "./backups-list-utils";
 import {
   prepareBackupPayloadFileForCreate,
+  readPreparedBackupPayloadForStorage,
   restoreFromBackup,
 } from "./backups-restore-utils";
 import type {
@@ -63,6 +64,10 @@ export class BackupsRepository {
 
   async prepareBackupPayloadFileForCreate(): Promise<PreparedBackupPayloadFile> {
     return prepareBackupPayloadFileForCreate(this.backupEncryption);
+  }
+
+  async readPreparedBackupPayloadForStorage(preparedBackupPayload: PreparedBackupPayloadFile): Promise<string> {
+    return readPreparedBackupPayloadForStorage(preparedBackupPayload);
   }
 
   async restoreFromBackup(backupDataRaw: BackupDataPayload | string): Promise<{ success: boolean; stats: RestoreStats }> {

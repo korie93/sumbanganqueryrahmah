@@ -1,6 +1,6 @@
 import crypto from "crypto";
 import { once } from "node:events";
-import { createWriteStream, promises as fs } from "node:fs";
+import { createReadStream, createWriteStream, promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { sql, type SQL } from "drizzle-orm";
@@ -11,6 +11,7 @@ import type {
 } from "../../shared/schema-postgres";
 import { db } from "../db-postgres";
 import {
+  BACKUP_MAX_SERIALIZED_ROW_BYTES,
   QUERY_PAGE_LIMIT,
   type BackupCollectionReceipt,
   type BackupCollectionRecord,
@@ -19,6 +20,7 @@ import {
   type PreparedBackupPayloadFile,
 } from "./backups-repository-types";
 import type { BackupEncryptionConfig } from "./backups-encryption";
+import { resolveCollectionPiiFieldValue } from "../lib/collection-pii-encryption";
 export {
   createBackupPayloadChunkReader,
   createBackupPayloadSectionReader,
@@ -51,6 +53,7 @@ type BackupPageFetcher<T extends BackupCursorRow> = (lastId: string | null) => P
 type PreparedBackupWriteState = {
   writer: ReturnType<typeof createWriteStream>,
   hash: crypto.Hash,
+  maxSerializedRowBytes: number,
   cipher?: crypto.CipherGCM,
 };
 
@@ -115,7 +118,15 @@ async function appendPagedJsonArray<T extends BackupCursorRow>(
         await writeBackupChunk(state, ",");
       }
       isFirstRow = false;
-      await writeBackupChunk(state, JSON.stringify(row));
+      const serializedRow = JSON.stringify(row);
+      const serializedRowBytes = Buffer.byteLength(serializedRow, "utf8");
+      if (serializedRowBytes > BACKUP_MAX_SERIALIZED_ROW_BYTES) {
+        throw new Error(
+          `Backup export row in '${key}' exceeds the ${BACKUP_MAX_SERIALIZED_ROW_BYTES} byte serialization limit.`,
+        );
+      }
+      state.maxSerializedRowBytes = Math.max(state.maxSerializedRowBytes, serializedRowBytes);
+      await writeBackupChunk(state, serializedRow);
       total += 1;
       lastId = row.id;
     }
@@ -149,6 +160,65 @@ async function createBackupTempFile() {
   };
 }
 
+async function readUtf8FileViaStream(filePath: string): Promise<string> {
+  let contents = "";
+  const stream = createReadStream(filePath, { encoding: "utf8" });
+  try {
+    for await (const chunk of stream) {
+      contents += chunk;
+    }
+    return contents;
+  } finally {
+    stream.destroy();
+  }
+}
+
+async function readBase64FileViaStream(filePath: string): Promise<string> {
+  let encoded = "";
+  let remainder = Buffer.alloc(0);
+  const stream = createReadStream(filePath);
+
+  try {
+    for await (const chunk of stream) {
+      const bufferChunk = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+      const combined = remainder.length > 0 ? Buffer.concat([remainder, bufferChunk]) : bufferChunk;
+      const safeLength = combined.length - (combined.length % 3);
+
+      if (safeLength > 0) {
+        encoded += combined.subarray(0, safeLength).toString("base64");
+      }
+
+      remainder = safeLength < combined.length
+        ? combined.subarray(safeLength)
+        : Buffer.alloc(0);
+    }
+
+    if (remainder.length > 0) {
+      encoded += remainder.toString("base64");
+    }
+
+    return encoded;
+  } finally {
+    stream.destroy();
+  }
+}
+
+export async function readPreparedBackupPayloadForStorage(
+  preparedBackupPayload: Pick<
+    PreparedBackupPayloadFile,
+    "tempFilePath" | "tempPayloadEncrypted" | "tempPayloadStoragePrefix"
+  >,
+): Promise<string> {
+  if (
+    preparedBackupPayload.tempPayloadEncrypted
+    && typeof preparedBackupPayload.tempPayloadStoragePrefix === "string"
+  ) {
+    return `${preparedBackupPayload.tempPayloadStoragePrefix}${await readBase64FileViaStream(preparedBackupPayload.tempFilePath)}`;
+  }
+
+  return readUtf8FileViaStream(preparedBackupPayload.tempFilePath);
+}
+
 export async function prepareBackupPayloadFileForCreate(
   backupEncryption?: BackupEncryptionConfig,
 ): Promise<PreparedBackupPayloadFile> {
@@ -170,6 +240,7 @@ export async function prepareBackupPayloadFileForCreate(
   const state: PreparedBackupWriteState = {
     writer,
     hash: crypto.createHash("sha256"),
+    maxSerializedRowBytes: 0,
     ...(cipher ? { cipher } : {}),
   };
   const counts = createEmptyBackupPayloadCounts();
@@ -260,18 +331,22 @@ export async function prepareBackupPayloadFileForCreate(
     await writeBackupChunk(state, ",");
 
     counts.collectionRecordsCount = await appendPagedJsonArray(state, "collectionRecords", (lastId) =>
-      safeSelectRows<BackupCollectionRecord & BackupCursorRow>(sql`
+      safeSelectRows<(BackupCollectionRecord & BackupCursorRow) & Record<string, unknown>>(sql`
         SELECT
           id,
           customer_name as "customerName",
+          customer_name_encrypted as "customerNameEncrypted",
           ic_number as "icNumber",
+          ic_number_encrypted as "icNumberEncrypted",
           customer_phone as "customerPhone",
+          customer_phone_encrypted as "customerPhoneEncrypted",
           account_number as "accountNumber",
+          account_number_encrypted as "accountNumberEncrypted",
           batch,
           payment_date as "paymentDate",
           amount,
           receipt_file as "receiptFile",
-          receipt_total_amount as "receiptTotalAmount",
+          receipt_total_amount as "receiptTotalAmountCents",
           receipt_validation_status as "receiptValidationStatus",
           receipt_validation_message as "receiptValidationMessage",
           receipt_count as "receiptCount",
@@ -284,7 +359,36 @@ export async function prepareBackupPayloadFileForCreate(
         WHERE ${lastId ? sql`id > ${lastId}` : sql`TRUE`}
         ORDER BY id ASC
         LIMIT ${QUERY_PAGE_LIMIT}
-      `),
+      `).then((rows) =>
+        rows.map((row) => {
+          const {
+            customerNameEncrypted,
+            icNumberEncrypted,
+            customerPhoneEncrypted,
+            accountNumberEncrypted,
+            ...rest
+          } = row;
+          return {
+            ...rest,
+            customerName: resolveCollectionPiiFieldValue({
+              plaintext: row.customerName,
+              encrypted: customerNameEncrypted,
+            }),
+            icNumber: resolveCollectionPiiFieldValue({
+              plaintext: row.icNumber,
+              encrypted: icNumberEncrypted,
+            }),
+            customerPhone: resolveCollectionPiiFieldValue({
+              plaintext: row.customerPhone,
+              encrypted: customerPhoneEncrypted,
+            }),
+            accountNumber: resolveCollectionPiiFieldValue({
+              plaintext: row.accountNumber,
+              encrypted: accountNumberEncrypted,
+            }),
+          };
+        }),
+      ),
     );
 
     await writeBackupChunk(state, ",");
@@ -302,8 +406,8 @@ export async function prepareBackupPayloadFileForCreate(
             original_mime_type as "originalMimeType",
             original_extension as "originalExtension",
             file_size as "fileSize",
-            receipt_amount as "receiptAmount",
-            extracted_amount as "extractedAmount",
+            receipt_amount as "receiptAmountCents",
+            extracted_amount as "extractedAmountCents",
             extraction_status as "extractionStatus",
             extraction_confidence as "extractionConfidence",
             receipt_date as "receiptDate",
@@ -324,6 +428,7 @@ export async function prepareBackupPayloadFileForCreate(
     }
     await closeBackupWriter(state.writer);
     const tempFileStats = await fs.stat(tempFilePath);
+    const memoryUsage = process.memoryUsage();
     const tempPayloadStoragePrefix = tempPayloadEncrypted
       ? `enc:v2:${primaryEncryptionKeyId}.${(iv as Buffer).toString("base64")}.${(state.cipher as crypto.CipherGCM).getAuthTag().toString("base64")}.`
       : undefined;
@@ -333,6 +438,9 @@ export async function prepareBackupPayloadFileForCreate(
       payloadChecksumSha256: state.hash.digest("hex"),
       counts,
       payloadBytes: tempFileStats.size,
+      maxSerializedRowBytes: state.maxSerializedRowBytes,
+      memoryRssBytes: memoryUsage.rss,
+      memoryHeapUsedBytes: memoryUsage.heapUsed,
       tempPayloadEncrypted,
       ...(tempPayloadStoragePrefix ? { tempPayloadStoragePrefix } : {}),
       cleanup,

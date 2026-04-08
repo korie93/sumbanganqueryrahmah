@@ -263,6 +263,9 @@ export function registerLocalServerRoutes(options: RegisterLocalServerRoutesOpti
     backupsRepository,
     withExportCircuit,
     (error) => error instanceof CircuitOpenError,
+    {
+      maxPayloadBytes: environmentRuntimeConfig.runtime.backupMaxPayloadBytes,
+    },
   );
   const backupJobQueueService = new BackupJobQueueService({
     repository: new BackupJobRepository(),

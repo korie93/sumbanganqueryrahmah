@@ -13,9 +13,23 @@ export function getTwoFactorEncryptionSecret(): string | null {
   return configured || null;
 }
 
+export function getCollectionPiiEncryptionSecret(): string | null {
+  const configured = String(process.env.COLLECTION_PII_ENCRYPTION_KEY || "").trim();
+  return configured || null;
+}
+
 export function getTwoFactorDecryptionSecrets(): string[] {
   const secrets = new Set<string>();
   const configured = getTwoFactorEncryptionSecret();
+  if (configured) {
+    secrets.add(configured);
+  }
+  return Array.from(secrets);
+}
+
+export function getCollectionPiiDecryptionSecrets(): string[] {
+  const secrets = new Set<string>();
+  const configured = getCollectionPiiEncryptionSecret();
   if (configured) {
     secrets.add(configured);
   }

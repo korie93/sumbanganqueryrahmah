@@ -170,7 +170,7 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
                     isMobile && layoutState.panel.mode === "fullscreen"
                       ? "h-10 px-3"
                       : isMobile
-                        ? "h-9 px-2.5"
+                        ? "h-11 px-2.5"
                         : "h-8 px-2",
                   )}
                   onClick={handleReset}
@@ -189,7 +189,7 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
                     isMobile && layoutState.panel.mode === "fullscreen"
                       ? "h-10 w-10"
                       : isMobile
-                        ? "h-9 w-9"
+                        ? "h-11 w-11"
                         : "h-8 w-8",
                   )}
                   onClick={handleMinimize}

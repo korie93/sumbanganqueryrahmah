@@ -56,12 +56,18 @@ test("buildBackupMetadata includes payload size and temp encryption flags", () =
         collectionRecordReceiptsCount: 6,
       },
       payloadBytes: 1024,
+      maxSerializedRowBytes: 256,
+      memoryRssBytes: 2_048,
+      memoryHeapUsedBytes: 1_024,
       tempPayloadEncrypted: true,
     },
     "a".repeat(64),
   );
 
   assert.equal(metadata.payloadBytes, 1024);
+  assert.equal(metadata.maxSerializedRowBytes, 256);
+  assert.equal(metadata.memoryRssBytes, 2_048);
+  assert.equal(metadata.memoryHeapUsedBytes, 1_024);
   assert.equal(metadata.tempPayloadEncrypted, true);
   assert.equal(metadata.collectionRecordReceiptsCount, 6);
 });

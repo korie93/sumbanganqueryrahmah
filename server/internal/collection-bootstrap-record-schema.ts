@@ -1,11 +1,14 @@
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { sql } from "drizzle-orm";
+import { buildEncryptedCollectionRecordPiiValues, hasCollectionPiiEncryptionConfigured } from "../lib/collection-pii-encryption";
 import {
   executeBootstrapStatements,
   inferMimeTypeFromReceiptPath,
   type BootstrapSqlExecutor,
 } from "./collection-bootstrap-records-shared";
+
+const COLLECTION_PII_BACKFILL_BATCH_SIZE = 500;
 
 export async function ensureCollectionRecordBaseSchema(database: BootstrapSqlExecutor): Promise<void> {
   await executeBootstrapStatements(database, [
@@ -13,9 +16,13 @@ export async function ensureCollectionRecordBaseSchema(database: BootstrapSqlExe
       CREATE TABLE IF NOT EXISTS public.collection_records (
         id uuid PRIMARY KEY,
         customer_name text NOT NULL,
+        customer_name_encrypted text,
         ic_number text NOT NULL,
+        ic_number_encrypted text,
         customer_phone text NOT NULL,
+        customer_phone_encrypted text,
         account_number text NOT NULL,
+        account_number_encrypted text,
         batch text NOT NULL,
         payment_date date NOT NULL,
         amount numeric(14,2) NOT NULL,
@@ -33,9 +40,13 @@ export async function ensureCollectionRecordBaseSchema(database: BootstrapSqlExe
       )
     `,
     sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS customer_name text`,
+    sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS customer_name_encrypted text`,
     sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS ic_number text`,
+    sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS ic_number_encrypted text`,
     sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS customer_phone text`,
+    sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS customer_phone_encrypted text`,
     sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS account_number text`,
+    sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS account_number_encrypted text`,
     sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS batch text`,
     sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS payment_date date`,
     sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS amount numeric(14,2)`,
@@ -98,7 +109,17 @@ export async function ensureCollectionRecordBaseSchema(database: BootstrapSqlExe
       CREATE INDEX IF NOT EXISTS idx_collection_records_lower_created_by_payment_created_id
       ON public.collection_records ((lower(created_by_login)), payment_date, created_at, id)
     `,
+    sql`
+      COMMENT ON COLUMN public.collection_records.amount
+      IS 'Stored in MYR as numeric(14,2).'
+    `,
+    sql`
+      COMMENT ON COLUMN public.collection_records.receipt_total_amount
+      IS 'Stored in sen/cents as a bigint integer. Divide by 100 to render MYR.'
+    `,
   ]);
+
+  await backfillCollectionRecordEncryptedPii(database);
 }
 
 export async function ensureCollectionReceiptSchema(database: BootstrapSqlExecutor): Promise<void> {
@@ -201,6 +222,14 @@ export async function ensureCollectionReceiptSchema(database: BootstrapSqlExecut
     sql`
       CREATE INDEX IF NOT EXISTS idx_collection_record_receipts_record_created_at
       ON public.collection_record_receipts (collection_record_id, created_at ASC)
+    `,
+    sql`
+      COMMENT ON COLUMN public.collection_record_receipts.receipt_amount
+      IS 'Stored in sen/cents as a bigint integer when receipt totals are extracted or confirmed.'
+    `,
+    sql`
+      COMMENT ON COLUMN public.collection_record_receipts.extracted_amount
+      IS 'Stored in sen/cents as a bigint integer when OCR extraction returns a candidate amount.'
     `,
   ]);
 
@@ -318,4 +347,66 @@ async function syncCollectionReceiptValidation(database: BootstrapSqlExecutor): 
       )
     `,
   ]);
+}
+
+async function backfillCollectionRecordEncryptedPii(database: BootstrapSqlExecutor): Promise<void> {
+  if (!hasCollectionPiiEncryptionConfigured()) {
+    return;
+  }
+
+  const result = await database.execute(sql`
+    SELECT
+      id,
+      customer_name,
+      customer_name_encrypted,
+      ic_number,
+      ic_number_encrypted,
+      customer_phone,
+      customer_phone_encrypted,
+      account_number,
+      account_number_encrypted
+    FROM public.collection_records
+    WHERE (
+      NULLIF(trim(COALESCE(customer_name, '')), '') IS NOT NULL
+      AND NULLIF(trim(COALESCE(customer_name_encrypted, '')), '') IS NULL
+    ) OR (
+      NULLIF(trim(COALESCE(ic_number, '')), '') IS NOT NULL
+      AND NULLIF(trim(COALESCE(ic_number_encrypted, '')), '') IS NULL
+    ) OR (
+      NULLIF(trim(COALESCE(customer_phone, '')), '') IS NOT NULL
+      AND NULLIF(trim(COALESCE(customer_phone_encrypted, '')), '') IS NULL
+    ) OR (
+      NULLIF(trim(COALESCE(account_number, '')), '') IS NOT NULL
+      AND NULLIF(trim(COALESCE(account_number_encrypted, '')), '') IS NULL
+    )
+    ORDER BY created_at ASC NULLS FIRST, id ASC
+    LIMIT ${COLLECTION_PII_BACKFILL_BATCH_SIZE}
+  `);
+
+  for (const row of result.rows as Array<Record<string, unknown>>) {
+    const recordId = String(row.id || "").trim();
+    if (!recordId) {
+      continue;
+    }
+
+    const encryptedPii = buildEncryptedCollectionRecordPiiValues({
+      customerName: row.customer_name,
+      icNumber: row.ic_number,
+      customerPhone: row.customer_phone,
+      accountNumber: row.account_number,
+    });
+    if (!encryptedPii) {
+      return;
+    }
+
+    await database.execute(sql`
+      UPDATE public.collection_records
+      SET
+        customer_name_encrypted = COALESCE(customer_name_encrypted, ${encryptedPii.customerNameEncrypted}),
+        ic_number_encrypted = COALESCE(ic_number_encrypted, ${encryptedPii.icNumberEncrypted}),
+        customer_phone_encrypted = COALESCE(customer_phone_encrypted, ${encryptedPii.customerPhoneEncrypted}),
+        account_number_encrypted = COALESCE(account_number_encrypted, ${encryptedPii.accountNumberEncrypted})
+      WHERE id = ${recordId}::uuid
+    `);
+  }
 }

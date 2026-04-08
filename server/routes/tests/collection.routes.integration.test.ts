@@ -25,6 +25,7 @@ import {
   createAdminCollectionSummaryStorageDouble,
   createCollectionSummaryStorageDouble,
 } from "./collection-route-summary-doubles";
+import { maskCollectionAuditCustomerName } from "../../services/collection/collection-record-mutation-helpers";
 
 const originalQuarantineEnabled = process.env.COLLECTION_RECEIPT_QUARANTINE_ENABLED;
 const originalQuarantineDir = process.env.COLLECTION_RECEIPT_QUARANTINE_DIR;
@@ -338,7 +339,7 @@ test("POST /api/collection creates a collection record and writes an audit log",
     assert.equal(auditLogs[0].action, "COLLECTION_RECORD_CREATED");
     const auditDetails = parseAuditDetails(auditLogs[0]);
     assert.equal(auditDetails.event, "collection_record_created");
-    assert.equal(auditDetails.snapshot.customerName, "Bob Lee");
+    assert.equal(auditDetails.snapshot.customerName, maskCollectionAuditCustomerName("Bob Lee"));
     assert.equal(auditDetails.snapshot.paymentDate, "2026-03-15");
     assert.equal(auditDetails.snapshot.amount, 245.9);
     assert.equal(auditDetails.snapshot.collectionStaffNickname, "Collector Alpha");
@@ -2998,7 +2999,7 @@ test("DELETE /api/collection/:id removes the record so it no longer appears in s
     assert.equal(auditLogs.length, 1);
     assert.equal(auditLogs[0].action, "COLLECTION_RECORD_DELETED");
     const auditDetails = parseAuditDetails(auditLogs[0]);
-    assert.equal(auditDetails.deleted.customerName, "Customer Z");
+    assert.equal(auditDetails.deleted.customerName, maskCollectionAuditCustomerName("Customer Z"));
     assert.equal(auditDetails.deleted.paymentDate, "2026-03-05");
     assert.equal(auditDetails.deleted.amount, 250);
     assert.equal(auditDetails.deleted.collectionStaffNickname, "Collector Alpha");

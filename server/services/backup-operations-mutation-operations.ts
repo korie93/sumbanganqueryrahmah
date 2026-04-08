@@ -7,19 +7,23 @@ import {
   type RestoreBackupSuccessBody,
 } from "./backup-operations-types";
 import type { BackupOperationsMutationDeps } from "./backup-operations-mutation-shared";
+import type { BackupOperationsLimits } from "./backup-operations-service-shared";
 import { executeCreateBackup } from "./backup-operations-create-operations";
 import { executeRestoreBackup } from "./backup-operations-restore-operations";
 import { executeDeleteBackup } from "./backup-operations-delete-operations";
 
 export class BackupOperationsMutationOperations {
-  constructor(private readonly deps: BackupOperationsMutationDeps) {}
+  constructor(
+    private readonly deps: BackupOperationsMutationDeps,
+    private readonly limits: BackupOperationsLimits,
+  ) {}
 
   async createBackup(
     params: CreateBackupInput,
   ): Promise<
     BackupOperationResponse<Awaited<ReturnType<BackupOperationsMutationDeps["backupsRepository"]["createBackup"]>> | { message: string }>
   > {
-    return executeCreateBackup(this.deps, params);
+    return executeCreateBackup(this.deps, params, this.limits);
   }
 
   async restoreBackup(

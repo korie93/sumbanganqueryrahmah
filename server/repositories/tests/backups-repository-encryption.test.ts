@@ -5,6 +5,8 @@ import test from "node:test";
 import { BackupsRepository } from "../backups.repository";
 import { db } from "../../db-postgres";
 import { decodeBackupDataFromStorage } from "../backups-encryption";
+import { readPreparedBackupPayloadForStorage } from "../backups-payload-utils";
+import { BACKUP_MAX_SERIALIZED_ROW_BYTES } from "../backups-repository-types";
 
 type EnvOverrides = Record<string, string | null>;
 
@@ -12,6 +14,33 @@ const repoOptions = {
   ensureBackupsTable: async () => {},
   parseBackupMetadataSafe: () => null,
 };
+
+function flattenSqlChunk(chunk: unknown): string {
+  if (chunk === null || chunk === undefined) {
+    return "";
+  }
+  if (typeof chunk === "string") {
+    return chunk;
+  }
+  if (Array.isArray(chunk)) {
+    return chunk.map((item) => flattenSqlChunk(item)).join("");
+  }
+  if (typeof chunk === "object") {
+    const value = (chunk as { value?: unknown; queryChunks?: unknown[] }).value;
+    if (value !== undefined) {
+      return flattenSqlChunk(value);
+    }
+    const queryChunks = (chunk as { queryChunks?: unknown[] }).queryChunks;
+    if (Array.isArray(queryChunks)) {
+      return queryChunks.map((item) => flattenSqlChunk(item)).join("");
+    }
+  }
+  return "";
+}
+
+function normalizeSqlText(query: unknown): string {
+  return flattenSqlChunk(query).replace(/\s+/g, " ").trim();
+}
 
 async function withEnv<T>(overrides: EnvOverrides, fn: () => Promise<T> | T): Promise<T> {
   const previousValues = new Map<string, string | undefined>();
@@ -184,8 +213,7 @@ test("BackupsRepository prepares encrypted temp backup payload files when an enc
         assert.match(String(prepared.tempPayloadStoragePrefix || ""), /^enc:v2:primary\./);
         assert.ok(prepared.payloadBytes > 0);
 
-        const encryptedPayload = await fs.readFile(prepared.tempFilePath);
-        const storagePayload = `${String(prepared.tempPayloadStoragePrefix || "")}${encryptedPayload.toString("base64")}`;
+        const storagePayload = await readPreparedBackupPayloadForStorage(prepared);
         const decryptedPayload = decodeBackupDataFromStorage(storagePayload, {
           requireEncryption: true,
           primaryKeyId: "primary",
@@ -204,6 +232,143 @@ test("BackupsRepository prepares encrypted temp backup payload files when an enc
         dbAny.execute = originalExecute;
         await prepared?.cleanup();
       }
+    },
+  );
+});
+
+test("BackupsRepository exports collection backup payload amounts with explicit cents field names", async () => {
+  await withEnv(
+    {
+      NODE_ENV: "production",
+      BACKUP_ENCRYPTION_KEY: null,
+      BACKUP_ENCRYPTION_KEYS: `primary:${"A".repeat(32)}`,
+      BACKUP_ENCRYPTION_KEY_ID: "primary",
+    },
+    async () => {
+      const repository = new BackupsRepository(repoOptions);
+
+      const dbAny = db as any;
+      const originalExecute = dbAny.execute;
+      dbAny.execute = async (query: unknown) => {
+        const sqlText = normalizeSqlText(query);
+        if (sqlText.includes("FROM public.collection_records")) {
+          return {
+            rows: [
+              {
+                id: "record-1",
+                customerName: "Alice Tan",
+                icNumber: "900101015555",
+                customerPhone: "0123000001",
+                accountNumber: "ACC-1001",
+                batch: "P10",
+                paymentDate: "2026-03-31",
+                amount: "100.00",
+                receiptFile: null,
+                receiptTotalAmountCents: "10000",
+                receiptValidationStatus: "matched",
+                receiptValidationMessage: null,
+                receiptCount: 1,
+                duplicateReceiptFlag: false,
+                createdByLogin: "system",
+                collectionStaffNickname: "Collector Alpha",
+                staffUsername: "staff.user",
+                createdAt: new Date("2026-03-31T08:00:00.000Z"),
+              },
+            ],
+          };
+        }
+        if (sqlText.includes("FROM public.collection_record_receipts")) {
+          return {
+            rows: [
+              {
+                id: "receipt-1",
+                collectionRecordId: "record-1",
+                storagePath: "/uploads/collection-receipts/receipt-1.jpg",
+                originalFileName: "receipt-1.jpg",
+                originalMimeType: "image/jpeg",
+                originalExtension: ".jpg",
+                fileSize: 2048,
+                receiptAmountCents: "505",
+                extractedAmountCents: "500",
+                extractionStatus: "suggested",
+                extractionConfidence: "0.95",
+                receiptDate: "2026-03-31",
+                receiptReference: "REF-100",
+                fileHash: "hash-1",
+                createdAt: new Date("2026-03-31T08:00:00.000Z"),
+              },
+            ],
+          };
+        }
+        return { rows: [] };
+      };
+
+      let prepared: Awaited<ReturnType<BackupsRepository["prepareBackupPayloadFileForCreate"]>> | null =
+        null;
+
+      try {
+        prepared = await repository.prepareBackupPayloadFileForCreate();
+        const encryptedPayload = await fs.readFile(prepared.tempFilePath);
+        const storagePayload = `${String(prepared.tempPayloadStoragePrefix || "")}${encryptedPayload.toString("base64")}`;
+        const decryptedPayload = decodeBackupDataFromStorage(storagePayload, {
+          requireEncryption: true,
+          primaryKeyId: "primary",
+          keysById: new Map([["primary", Buffer.from("A".repeat(32), "utf8")]]),
+        });
+        const parsed = JSON.parse(decryptedPayload) as {
+          collectionRecords?: Array<Record<string, unknown>>;
+          collectionRecordReceipts?: Array<Record<string, unknown>>;
+        };
+
+        assert.equal(parsed.collectionRecords?.[0]?.receiptTotalAmountCents, "10000");
+        assert.equal("receiptTotalAmount" in (parsed.collectionRecords?.[0] || {}), false);
+        assert.equal(parsed.collectionRecordReceipts?.[0]?.receiptAmountCents, "505");
+        assert.equal(parsed.collectionRecordReceipts?.[0]?.extractedAmountCents, "500");
+        assert.equal("receiptAmount" in (parsed.collectionRecordReceipts?.[0] || {}), false);
+        assert.equal("extractedAmount" in (parsed.collectionRecordReceipts?.[0] || {}), false);
+      } finally {
+        dbAny.execute = originalExecute;
+        await prepared?.cleanup();
+      }
+    },
+  );
+});
+
+test("BackupsRepository rejects backup export rows that exceed the serialization guard", async () => {
+  await withEnv(
+    {
+      NODE_ENV: "production",
+      BACKUP_ENCRYPTION_KEY: null,
+      BACKUP_ENCRYPTION_KEYS: `primary:${"A".repeat(32)}`,
+      BACKUP_ENCRYPTION_KEY_ID: "primary",
+    },
+    async () => {
+      const repository = new BackupsRepository(repoOptions);
+
+      const dbAny = db as any;
+      const originalExecute = dbAny.execute;
+      dbAny.execute = async (query: unknown) => {
+        const sqlText = normalizeSqlText(query);
+        if (sqlText.includes("FROM public.data_rows")) {
+          return {
+            rows: [
+              {
+                id: "row-oversized",
+                importId: "import-1",
+                jsonDataJsonb: "x".repeat(BACKUP_MAX_SERIALIZED_ROW_BYTES + 128),
+              },
+            ],
+          };
+        }
+        return { rows: [] };
+      };
+
+      await assert.rejects(
+        () => repository.prepareBackupPayloadFileForCreate(),
+        /exceeds the .* serialization limit/i,
+      );
+
+      dbAny.execute = originalExecute;
     },
   );
 });

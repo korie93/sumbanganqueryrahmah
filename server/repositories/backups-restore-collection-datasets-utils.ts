@@ -1,5 +1,6 @@
 import crypto from "crypto";
 import { sql } from "drizzle-orm";
+import { buildEncryptedCollectionRecordPiiValues } from "../lib/collection-pii-encryption";
 import { parseCollectionAmountToCents } from "../services/collection/collection-receipt-validation";
 import {
   BACKUP_CHUNK_SIZE,
@@ -57,6 +58,27 @@ export type RestorableCollectionReceiptRow = {
   createdAt: Date;
 };
 
+function parseBackupStoredCents(value: unknown): number | null {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+  if (typeof value === "number") {
+    return Number.isSafeInteger(value) ? value : null;
+  }
+  if (typeof value === "bigint") {
+    const parsed = Number(value);
+    return Number.isSafeInteger(parsed) ? parsed : null;
+  }
+
+  const normalized = String(value).trim();
+  if (!normalized || !/^-?\d+$/.test(normalized)) {
+    return null;
+  }
+
+  const parsed = Number.parseInt(normalized, 10);
+  return Number.isSafeInteger(parsed) ? parsed : null;
+}
+
 export function normalizeBackupCollectionRecord(
   record: BackupCollectionRecord,
 ): RestorableCollectionRecordRow | null {
@@ -77,7 +99,10 @@ export function normalizeBackupCollectionRecord(
     paymentDate,
     amount: Number(record.amount || 0),
     receiptFile: record.receiptFile || null,
-    receiptTotalAmount: parseCollectionAmountToCents(record.receiptTotalAmount, { allowZero: true }) ?? 0,
+    receiptTotalAmount:
+      parseBackupStoredCents(record.receiptTotalAmountCents)
+      ?? parseCollectionAmountToCents(record.receiptTotalAmount, { allowZero: true })
+      ?? 0,
     receiptValidationStatus: String(record.receiptValidationStatus || "needs_review"),
     receiptValidationMessage: String(record.receiptValidationMessage || "").trim() || null,
     receiptCount: Math.max(0, Number(record.receiptCount || 0) || 0),
@@ -101,8 +126,12 @@ export function normalizeBackupCollectionReceipt(
     originalMimeType: String(receipt.originalMimeType || "application/octet-stream"),
     originalExtension: String(receipt.originalExtension || ""),
     fileSize: Number(receipt.fileSize || 0),
-    receiptAmount: parseCollectionAmountToCents(receipt.receiptAmount, { allowZero: true, allowEmpty: true }),
-    extractedAmount: parseCollectionAmountToCents(receipt.extractedAmount, { allowZero: true, allowEmpty: true }),
+    receiptAmount:
+      parseBackupStoredCents(receipt.receiptAmountCents)
+      ?? parseCollectionAmountToCents(receipt.receiptAmount, { allowZero: true, allowEmpty: true }),
+    extractedAmount:
+      parseBackupStoredCents(receipt.extractedAmountCents)
+      ?? parseCollectionAmountToCents(receipt.extractedAmount, { allowZero: true, allowEmpty: true }),
     extractionStatus: String(receipt.extractionStatus || "").trim() || "unprocessed",
     extractionConfidence:
       receipt.extractionConfidence === null ||
@@ -157,26 +186,38 @@ export async function restoreCollectionRecordsFromBackup(
       `);
 
       const valuesSql = sql.join(
-        insertBatch.map((row) => sql`(
-          ${row.id}::uuid,
-          ${row.customerName},
-          ${row.icNumber},
-          ${row.customerPhone},
-          ${row.accountNumber},
-          ${row.batch},
-          ${row.paymentDate}::date,
-          ${row.amount},
-          ${row.receiptFile},
-          ${row.receiptTotalAmount},
-          ${row.receiptValidationStatus},
-          ${row.receiptValidationMessage},
-          ${row.receiptCount},
-          ${row.duplicateReceiptFlag},
-          ${row.createdByLogin},
-          ${row.collectionStaffNickname},
-          ${row.staffUsername},
-          ${row.createdAt}
-        )`),
+        insertBatch.map((row) => {
+          const encryptedPii = buildEncryptedCollectionRecordPiiValues({
+            customerName: row.customerName,
+            icNumber: row.icNumber,
+            customerPhone: row.customerPhone,
+            accountNumber: row.accountNumber,
+          });
+          return sql`(
+            ${row.id}::uuid,
+            ${row.customerName},
+            ${encryptedPii?.customerNameEncrypted ?? null},
+            ${row.icNumber},
+            ${encryptedPii?.icNumberEncrypted ?? null},
+            ${row.customerPhone},
+            ${encryptedPii?.customerPhoneEncrypted ?? null},
+            ${row.accountNumber},
+            ${encryptedPii?.accountNumberEncrypted ?? null},
+            ${row.batch},
+            ${row.paymentDate}::date,
+            ${row.amount},
+            ${row.receiptFile},
+            ${row.receiptTotalAmount},
+            ${row.receiptValidationStatus},
+            ${row.receiptValidationMessage},
+            ${row.receiptCount},
+            ${row.duplicateReceiptFlag},
+            ${row.createdByLogin},
+            ${row.collectionStaffNickname},
+            ${row.staffUsername},
+            ${row.createdAt}
+          )`;
+        }),
         sql`, `,
       );
 
@@ -184,9 +225,13 @@ export async function restoreCollectionRecordsFromBackup(
         INSERT INTO public.collection_records (
           id,
           customer_name,
+          customer_name_encrypted,
           ic_number,
+          ic_number_encrypted,
           customer_phone,
+          customer_phone_encrypted,
           account_number,
+          account_number_encrypted,
           batch,
           payment_date,
           amount,

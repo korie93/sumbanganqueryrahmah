@@ -20,13 +20,19 @@ const utcTimestamp = (name: string) => timestamp(name, { withTimezone: true });
 export const collectionRecords = pgTable("collection_records", {
   id: uuid("id").primaryKey(),
   customerName: text("customer_name").notNull(),
+  customerNameEncrypted: text("customer_name_encrypted"),
   icNumber: text("ic_number").notNull(),
+  icNumberEncrypted: text("ic_number_encrypted"),
   customerPhone: text("customer_phone").notNull(),
+  customerPhoneEncrypted: text("customer_phone_encrypted"),
   accountNumber: text("account_number").notNull(),
+  accountNumberEncrypted: text("account_number_encrypted"),
   batch: text("batch").notNull(),
   paymentDate: date("payment_date", { mode: "string" }).notNull(),
+  // Primary payment total is stored in MYR using a fixed decimal numeric column.
   amount: numeric("amount", { precision: 14, scale: 2 }).notNull(),
   receiptFile: text("receipt_file"),
+  // Receipt-derived totals stay in integer sen/cents to avoid rounding drift across OCR/import flows.
   receiptTotalAmount: bigint("receipt_total_amount", { mode: "number" }).notNull().default(0),
   receiptValidationStatus: text("receipt_validation_status").notNull().default("needs_review"),
   receiptValidationMessage: text("receipt_validation_message"),
@@ -84,6 +90,7 @@ export const collectionRecordReceipts = pgTable("collection_record_receipts", {
   originalMimeType: text("original_mime_type").notNull(),
   originalExtension: text("original_extension").notNull().default(""),
   fileSize: bigint("file_size", { mode: "number" }).notNull().default(0),
+  // Receipt amounts are normalized to integer sen/cents before persistence.
   receiptAmount: bigint("receipt_amount", { mode: "number" }),
   extractedAmount: bigint("extracted_amount", { mode: "number" }),
   extractionStatus: text("extraction_status").notNull().default("unprocessed"),

@@ -10,11 +10,15 @@ export const BACKUP_CHUNK_SIZE = 500;
 export const QUERY_PAGE_LIMIT = 1000;
 export const BACKUP_LIST_DEFAULT_PAGE_SIZE = 25;
 export const BACKUP_LIST_MAX_PAGE_SIZE = 100;
+export const BACKUP_MAX_SERIALIZED_ROW_BYTES = 512 * 1024;
 
 export type BackupsRepositoryOptions = {
   ensureBackupsTable: () => Promise<void>;
   parseBackupMetadataSafe: (raw: unknown) => Record<string, any> | null;
 };
+
+export type BackupAmountMyr = string | number;
+export type BackupAmountCents = string | number;
 
 export type RestoreDatasetStats = {
   processed: number;
@@ -45,9 +49,10 @@ export type BackupCollectionRecord = {
   accountNumber: string;
   batch: string;
   paymentDate: string;
-  amount: string | number;
+  amount: BackupAmountMyr;
   receiptFile: string | null;
-  receiptTotalAmount?: string | number | null;
+  receiptTotalAmountCents?: BackupAmountCents | null;
+  receiptTotalAmount?: BackupAmountMyr | null;
   receiptValidationStatus?: "matched" | "underpaid" | "overpaid" | "unverified" | "needs_review" | string | null;
   receiptValidationMessage?: string | null;
   receiptCount?: number | null;
@@ -66,8 +71,10 @@ export type BackupCollectionReceipt = {
   originalMimeType: string;
   originalExtension: string;
   fileSize: number;
-  receiptAmount?: string | number | null;
-  extractedAmount?: string | number | null;
+  receiptAmountCents?: BackupAmountCents | null;
+  receiptAmount?: BackupAmountMyr | null;
+  extractedAmountCents?: BackupAmountCents | null;
+  extractedAmount?: BackupAmountMyr | null;
   extractionStatus?: string | null;
   extractionConfidence?: number | string | null;
   receiptDate?: string | Date | null;
@@ -99,6 +106,9 @@ export type PreparedBackupPayloadFile = {
   payloadChecksumSha256: string;
   counts: BackupPayloadCounts;
   payloadBytes: number;
+  maxSerializedRowBytes?: number;
+  memoryRssBytes?: number;
+  memoryHeapUsedBytes?: number;
   tempPayloadEncrypted: boolean;
   tempPayloadStoragePrefix?: string;
   cleanup: () => Promise<void>;

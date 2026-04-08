@@ -3,11 +3,13 @@ import assert from "node:assert/strict";
 import path from "node:path";
 import {
   getContrastRatio,
+  extractCssRuleBlock,
   hslToRgb,
   parseHslTokens,
   readThemeTokenContrastReport,
   validateThemeContrast,
 } from "../lib/design-token-contrast.mjs";
+import { readFileSync } from "node:fs";
 
 test("hslToRgb converts core color coordinates predictably", () => {
   assert.deepEqual(hslToRgb({ h: 0, s: 100, l: 50 }), [255, 0, 0]);
@@ -46,4 +48,23 @@ test("theme token foreground pairs meet WCAG AA normal text contrast", () => {
 
   assert.deepEqual(report.lightFailures, []);
   assert.deepEqual(report.darkFailures, []);
+});
+
+test("light theme accent surfaces stay visually distinct from their parent backgrounds", () => {
+  const css = readFileSync(
+    path.resolve(process.cwd(), "client/src/theme-tokens.css"),
+    "utf8",
+  );
+  const lightTokens = parseHslTokens(extractCssRuleBlock(css, ":root"));
+
+  assert.deepEqual(
+    validateThemeContrast(lightTokens, {
+      minRatio: 1.5,
+      tokenPairs: [
+        ["background", "accent"],
+        ["sidebar", "sidebar-accent"],
+      ],
+    }),
+    [],
+  );
 });

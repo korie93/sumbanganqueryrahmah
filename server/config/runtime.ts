@@ -64,6 +64,7 @@ const configuredPreviousSessionSecrets = resolvePreviousSessionSecrets(
 const configuredCollectionNicknameTempPassword = readOptionalString("COLLECTION_NICKNAME_TEMP_PASSWORD");
 const configuredPgPassword = readOptionalString("PG_PASSWORD");
 const configuredTwoFactorEncryptionKey = readOptionalString("TWO_FACTOR_ENCRYPTION_KEY");
+const configuredCollectionPiiEncryptionKey = readOptionalString("COLLECTION_PII_ENCRYPTION_KEY");
 const configuredBackupEncryptionKey = readOptionalString("BACKUP_ENCRYPTION_KEY");
 const configuredBackupEncryptionKeys = readOptionalString("BACKUP_ENCRYPTION_KEYS");
 const publicAppUrl = normalizeHttpUrl("PUBLIC_APP_URL", readOptionalString("PUBLIC_APP_URL"));
@@ -105,6 +106,7 @@ assertNoPlaceholderSecrets({
   configuredPreviousSessionSecrets,
   configuredPgPassword,
   configuredTwoFactorEncryptionKey,
+  configuredCollectionPiiEncryptionKey,
   configuredBackupEncryptionKey,
   configuredBackupEncryptionKeys,
 });
@@ -201,6 +203,11 @@ export const runtimeConfig: RuntimeConfig = Object.freeze({
     runtimeSettingsCacheTtlMs: readInt("RUNTIME_SETTINGS_CACHE_TTL_MS", 3_000, { min: 500 }),
     pgPoolWarnCooldownMs: readInt("PG_POOL_WARN_COOLDOWN_MS", 60_000, { min: 1_000 }),
     backupOperationTimeoutMs: readInt("BACKUP_OPERATION_TIMEOUT_MS", 120_000, { min: 5_000 }),
+    backupMaxPayloadBytes: readInt(
+      "BACKUP_MAX_PAYLOAD_BYTES",
+      lowMemoryMode ? 32 * 1024 * 1024 : 128 * 1024 * 1024,
+      { min: 1_048_576, max: 536_870_912 },
+    ),
     importAnalysisTimeoutMs: readInt("IMPORT_ANALYSIS_TIMEOUT_MS", 45_000, { min: 5_000 }),
     collectionRollupListenReconnectMs: readInt("COLLECTION_ROLLUP_LISTEN_RECONNECT_MS", 5_000, { min: 1_000 }),
   },

@@ -6,6 +6,7 @@ export type {
 export {
   buildCollectionAuditFieldChanges,
   buildCollectionAuditSnapshot,
+  maskCollectionAuditCustomerName,
   resolveCollectionAuditReceiptState,
 } from "./collection-record-mutation-audit-utils";
 

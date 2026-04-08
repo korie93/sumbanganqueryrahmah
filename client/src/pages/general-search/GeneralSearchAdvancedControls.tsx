@@ -84,7 +84,7 @@ export function GeneralSearchAdvancedControls({
                   size="icon"
                   onClick={() => onRemoveFilter(filter.id)}
                   disabled={filters.length === 1}
-                  className="h-9 w-9 shrink-0"
+                  className="h-11 w-11 shrink-0"
                   data-testid={`button-remove-filter-${index}`}
                 >
                   <X className="h-4 w-4" />

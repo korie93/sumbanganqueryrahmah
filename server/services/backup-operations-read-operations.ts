@@ -14,7 +14,11 @@ import {
   type ListBackupsInput,
   type BackupRecord,
 } from "./backup-operations-types";
-import { getBackupPayloadReadFailure } from "./backup-operations-service-shared";
+import {
+  buildBackupPayloadTooLargeMessage,
+  getBackupPayloadReadFailure,
+  type BackupOperationsLimits,
+} from "./backup-operations-service-shared";
 
 type ExportBackupBody =
   | {
@@ -29,6 +33,7 @@ export class BackupOperationsReadOperations {
   constructor(
     private readonly storage: BackupOperationsStorage,
     private readonly backupsRepository: BackupOperationsBackupsRepository,
+    private readonly limits: BackupOperationsLimits,
   ) {}
 
   async listBackups(query: ListBackupsInput): Promise<BackupListResponse> {
@@ -116,6 +121,20 @@ export class BackupOperationsReadOperations {
       return {
         statusCode: 500,
         body: { message: "Backup payload is not readable." },
+      };
+    }
+    const payloadBytes = Buffer.byteLength(backupDataJson, "utf8");
+    if (payloadBytes > this.limits.maxPayloadBytes) {
+      logger.warn("Backup export blocked because the payload exceeds the configured size limit", {
+        backupId: backup.id,
+        backupName: backup.name,
+        username,
+        payloadBytes,
+        maxPayloadBytes: this.limits.maxPayloadBytes,
+      });
+      return {
+        statusCode: 413,
+        body: { message: buildBackupPayloadTooLargeMessage(this.limits.maxPayloadBytes) },
       };
     }
 

@@ -11,6 +11,7 @@ import { findDuplicateCollectionReceiptHashes } from "./collection-receipt-valid
 import {
   assertValidCollectionCreateFields,
   buildCollectionAuditSnapshot,
+  maskCollectionAuditCustomerName,
   normalizeCollectionRecordFields,
   normalizeCollectionReceiptMetadata,
   resolveCollectionAuditReceiptState,
@@ -61,7 +62,7 @@ export class CollectionRecordCreateOperations {
           details: JSON.stringify({
             event: "collection_receipt_duplicate_rejected",
             actor: user.username,
-            customerName: fields.customerName,
+            customerName: maskCollectionAuditCustomerName(fields.customerName),
             duplicates: duplicateReceipts,
           }),
         });

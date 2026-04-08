@@ -23,6 +23,7 @@ export {
   createBackupPayloadChunkReader,
   createBackupPayloadSectionReader,
   prepareBackupPayloadFileForCreate,
+  readPreparedBackupPayloadForStorage,
 } from "./backups-payload-utils";
 
 export async function restoreFromBackup(

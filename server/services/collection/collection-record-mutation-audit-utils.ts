@@ -1,3 +1,4 @@
+import crypto from "crypto";
 import { normalizeCollectionText } from "../../routes/collection.validation";
 
 export type CollectionRecordAuditSource = "relation" | "legacy" | "none";
@@ -10,6 +11,16 @@ export type CollectionRecordAuditSnapshot = {
   activeReceiptCount: number;
   activeReceiptSource: CollectionRecordAuditSource;
 };
+
+export function maskCollectionAuditCustomerName(value: unknown): string {
+  const normalized = String(value || "").trim();
+  if (!normalized) {
+    return "";
+  }
+
+  const digest = crypto.createHash("sha256").update(normalized, "utf8").digest("hex").slice(0, 12);
+  return `${normalized.slice(0, 1)}***#${digest}`;
+}
 
 function toCollectionAuditAmount(value: unknown) {
   const parsed = Number(value || 0);
@@ -56,7 +67,7 @@ export function buildCollectionAuditSnapshot(params: {
   activeReceiptSource: CollectionRecordAuditSource;
 }): CollectionRecordAuditSnapshot {
   return {
-    customerName: String(params.customerName || "").trim(),
+    customerName: maskCollectionAuditCustomerName(params.customerName),
     paymentDate: String(params.paymentDate || "").trim(),
     amount: toCollectionAuditAmount(params.amount),
     collectionStaffNickname: String(params.collectionStaffNickname || "").trim(),

@@ -13,6 +13,9 @@ const PLACEHOLDER_DATABASE_PASSWORDS = new Set([
 const PLACEHOLDER_TWO_FACTOR_ENCRYPTION_KEYS = new Set([
   "GENERATE_ME_DISTINCT_2FA_KEY_DO_NOT_REUSE_SESSION_SECRET",
 ]);
+const PLACEHOLDER_COLLECTION_PII_ENCRYPTION_KEYS = new Set([
+  "GENERATE_ME_COLLECTION_PII_KEY_DO_NOT_REUSE_SESSION_SECRET",
+]);
 const PLACEHOLDER_BACKUP_ENCRYPTION_KEYS = new Set([
   "GENERATE_ME_BACKUP_KEY_AND_STORE_OFFLINE",
 ]);
@@ -256,6 +259,7 @@ export function assertNoPlaceholderSecrets(params: {
   configuredPreviousSessionSecrets: readonly string[];
   configuredPgPassword: string | null;
   configuredTwoFactorEncryptionKey: string | null;
+  configuredCollectionPiiEncryptionKey: string | null;
   configuredBackupEncryptionKey: string | null;
   configuredBackupEncryptionKeys: string | null;
 }) {
@@ -283,6 +287,15 @@ export function assertNoPlaceholderSecrets(params: {
   ) {
     throw new Error(
       "TWO_FACTOR_ENCRYPTION_KEY is using the default placeholder value and must be replaced before non-local startup.",
+    );
+  }
+
+  if (
+    params.configuredCollectionPiiEncryptionKey
+    && PLACEHOLDER_COLLECTION_PII_ENCRYPTION_KEYS.has(params.configuredCollectionPiiEncryptionKey)
+  ) {
+    throw new Error(
+      "COLLECTION_PII_ENCRYPTION_KEY is using the default placeholder value and must be replaced before non-local startup.",
     );
   }
 

@@ -9,6 +9,10 @@ import {
 } from "./backup-operations-types";
 import { BackupOperationsMutationOperations } from "./backup-operations-mutation-operations";
 import { BackupOperationsReadOperations } from "./backup-operations-read-operations";
+import {
+  DEFAULT_BACKUP_MAX_PAYLOAD_BYTES,
+  type BackupOperationsLimits,
+} from "./backup-operations-service-shared";
 
 export class BackupOperationsService {
   private readonly readOperations: BackupOperationsReadOperations;
@@ -19,14 +23,21 @@ export class BackupOperationsService {
     backupsRepository: BackupOperationsBackupsRepository,
     withExportCircuit: <T>(fn: () => Promise<T>) => Promise<T>,
     isExportCircuitOpenError: (error: unknown) => boolean,
+    options?: Partial<BackupOperationsLimits>,
   ) {
-    this.readOperations = new BackupOperationsReadOperations(storage, backupsRepository);
+    const limits: BackupOperationsLimits = {
+      maxPayloadBytes:
+        options?.maxPayloadBytes == null
+          ? DEFAULT_BACKUP_MAX_PAYLOAD_BYTES
+          : Math.max(1, Math.trunc(options.maxPayloadBytes)),
+    };
+    this.readOperations = new BackupOperationsReadOperations(storage, backupsRepository, limits);
     this.mutationOperations = new BackupOperationsMutationOperations({
       storage,
       backupsRepository,
       withExportCircuit,
       isExportCircuitOpenError,
-    });
+    }, limits);
   }
 
   async listBackups(query: ListBackupsInput) {

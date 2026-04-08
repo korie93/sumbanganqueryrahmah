@@ -18,6 +18,7 @@ function createBackupOperationsHarness(options?: {
   backupReadErrorMessage?: string;
   preparedPayloadEncrypted?: boolean;
   createBackupErrorMessage?: string;
+  maxPayloadBytes?: number;
 }) {
   const auditLogs: AuditEntry[] = [];
   const createBackupCalls: Array<Record<string, unknown>> = [];
@@ -25,6 +26,7 @@ function createBackupOperationsHarness(options?: {
   const deleteBackupCalls: string[] = [];
   const tempPayloadPaths: string[] = [];
   let payloadFileCleanupCount = 0;
+  let readPreparedPayloadCallCount = 0;
 
   const backups = new Map<string, any>([
     [
@@ -110,6 +112,9 @@ function createBackupOperationsHarness(options?: {
           collectionRecordReceiptsCount: 1,
         },
         payloadBytes: (await fs.stat(tempFilePath)).size,
+        maxSerializedRowBytes: Buffer.byteLength(payloadJson, "utf8"),
+        memoryRssBytes: 2_048,
+        memoryHeapUsedBytes: 1_024,
         tempPayloadEncrypted: Boolean(options?.preparedPayloadEncrypted),
         ...(options?.preparedPayloadEncrypted
           ? {
@@ -122,6 +127,18 @@ function createBackupOperationsHarness(options?: {
           await fs.rm(tempDir, { recursive: true, force: true });
         },
       };
+    },
+    readPreparedBackupPayloadForStorage: async (preparedPayload: {
+      tempFilePath: string;
+      tempPayloadEncrypted: boolean;
+      tempPayloadStoragePrefix?: string;
+    }) => {
+      readPreparedPayloadCallCount += 1;
+      if (preparedPayload.tempPayloadEncrypted && typeof preparedPayload.tempPayloadStoragePrefix === "string") {
+        const fileBuffer = await fs.readFile(preparedPayload.tempFilePath);
+        return `${preparedPayload.tempPayloadStoragePrefix}${fileBuffer.toString("base64")}`;
+      }
+      return fs.readFile(preparedPayload.tempFilePath, "utf8");
     },
     createBackup: async (data: Record<string, unknown>) => {
       if (options?.createBackupErrorMessage) {
@@ -189,6 +206,11 @@ function createBackupOperationsHarness(options?: {
       backupsRepository as any,
       withExportCircuit,
       (error) => (error as Error)?.message === "circuit-open",
+      options?.maxPayloadBytes == null
+        ? undefined
+        : {
+          maxPayloadBytes: options.maxPayloadBytes,
+        },
     ),
     auditLogs,
     createBackupCalls,
@@ -196,6 +218,7 @@ function createBackupOperationsHarness(options?: {
     deleteBackupCalls,
     tempPayloadPaths,
     getPayloadFileCleanupCount: () => payloadFileCleanupCount,
+    getReadPreparedPayloadCallCount: () => readPreparedPayloadCallCount,
   };
 }
 
@@ -236,7 +259,14 @@ test("BackupOperationsService listBackups returns paginated metadata", async () 
 });
 
 test("BackupOperationsService createBackup persists backup metadata and audits export", async () => {
-  const { service, createBackupCalls, auditLogs, getPayloadFileCleanupCount, tempPayloadPaths } =
+  const {
+    service,
+    createBackupCalls,
+    auditLogs,
+    getPayloadFileCleanupCount,
+    tempPayloadPaths,
+    getReadPreparedPayloadCallCount,
+  } =
     createBackupOperationsHarness();
 
   const result = await service.createBackup({
@@ -260,6 +290,10 @@ test("BackupOperationsService createBackup persists backup metadata and audits e
   assert.equal(metadata.auditLogsCount, 1);
   assert.equal(metadata.collectionRecordsCount, 1);
   assert.equal(metadata.collectionRecordReceiptsCount, 1);
+  assert.equal(typeof metadata.maxSerializedRowBytes, "number");
+  assert.equal(typeof metadata.memoryRssBytes, "number");
+  assert.equal(typeof metadata.memoryHeapUsedBytes, "number");
+  assert.equal(getReadPreparedPayloadCallCount(), 1);
   assert.equal(getPayloadFileCleanupCount(), 1);
   await Promise.all(
     tempPayloadPaths.map(async (tempFilePath) => {
@@ -269,10 +303,19 @@ test("BackupOperationsService createBackup persists backup metadata and audits e
 
   const auditDetails = JSON.parse(String(auditLogs[0].details));
   assert.equal(typeof auditDetails.durationMs, "number");
+  assert.equal(typeof auditDetails.maxSerializedRowBytes, "number");
+  assert.equal(typeof auditDetails.memoryRssBytes, "number");
+  assert.equal(typeof auditDetails.memoryHeapUsedBytes, "number");
 });
 
 test("BackupOperationsService createBackup stores encrypted temp payloads without re-reading plaintext JSON", async () => {
-  const { service, createBackupCalls, getPayloadFileCleanupCount, tempPayloadPaths } =
+  const {
+    service,
+    createBackupCalls,
+    getPayloadFileCleanupCount,
+    tempPayloadPaths,
+    getReadPreparedPayloadCallCount,
+  } =
     createBackupOperationsHarness({
       preparedPayloadEncrypted: true,
     });
@@ -295,6 +338,41 @@ test("BackupOperationsService createBackup stores encrypted temp payloads withou
     ),
     true,
   );
+  assert.equal(getReadPreparedPayloadCallCount(), 1);
+  assert.equal(getPayloadFileCleanupCount(), 1);
+  await Promise.all(
+    tempPayloadPaths.map(async (tempFilePath) => {
+      await assert.rejects(() => fs.access(tempFilePath));
+    }),
+  );
+});
+
+test("BackupOperationsService createBackup blocks oversized payloads before persisting them", async () => {
+  const {
+    service,
+    createBackupCalls,
+    auditLogs,
+    getPayloadFileCleanupCount,
+    tempPayloadPaths,
+    getReadPreparedPayloadCallCount,
+  } =
+    createBackupOperationsHarness({
+      maxPayloadBytes: 32,
+    });
+
+  const result = await service.createBackup({
+    name: "Oversized Backup",
+    username: "super.user",
+  });
+
+  assert.equal(result.statusCode, 413);
+  assert.deepEqual(result.body, {
+    message:
+      "Backup payload exceeds the configured 32 bytes limit. Narrow the dataset or increase BACKUP_MAX_PAYLOAD_BYTES.",
+  });
+  assert.equal(createBackupCalls.length, 0);
+  assert.equal(auditLogs.length, 0);
+  assert.equal(getReadPreparedPayloadCallCount(), 0);
   assert.equal(getPayloadFileCleanupCount(), 1);
   await Promise.all(
     tempPayloadPaths.map(async (tempFilePath) => {
@@ -396,6 +474,21 @@ test("BackupOperationsService exportBackup returns 409 when backup payload canno
   assert.deepEqual(result.body, {
     message:
       "Backup payload cannot be decrypted with the current encryption configuration.",
+  });
+  assert.equal(auditLogs.length, 0);
+});
+
+test("BackupOperationsService exportBackup blocks oversized payloads", async () => {
+  const { service, auditLogs } = createBackupOperationsHarness({
+    maxPayloadBytes: 32,
+  });
+
+  const result = await service.exportBackup("backup-1", "super.user");
+
+  assert.equal(result.statusCode, 413);
+  assert.deepEqual(result.body, {
+    message:
+      "Backup payload exceeds the configured 32 bytes limit. Narrow the dataset or increase BACKUP_MAX_PAYLOAD_BYTES.",
   });
   assert.equal(auditLogs.length, 0);
 });
