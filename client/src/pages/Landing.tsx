@@ -132,7 +132,6 @@ export default function Landing({ onLoginClick }: LandingProps) {
   return (
     <LandingPageShell onLoginClick={onLoginClick}>
       <LandingHeroShell
-        onLoginClick={onLoginClick}
         leftDetail={(
           <>
             <LandingPrimaryActionRow onLoginClick={onLoginClick} />

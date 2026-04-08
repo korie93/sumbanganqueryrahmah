@@ -2,7 +2,6 @@ import type { Response } from "express";
 import type { AuthenticatedRequest } from "../auth/guards";
 import { clearAuthSessionCookie } from "../auth/session-cookie";
 import { asyncHandler } from "../http/async-handler";
-import { readNonEmptyString } from "../http/validation";
 import {
   buildActivityErrorPayload,
   buildActivityFilters,

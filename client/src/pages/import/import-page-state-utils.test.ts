@@ -8,7 +8,7 @@ import {
 } from "@/pages/import/import-page-state-utils";
 
 function createFile(name: string, size = 1024) {
-  return new File(["test"], name, { type: "text/plain", lastModified: 1, });
+  return new File([new Uint8Array(size)], name, { type: "text/plain", lastModified: 1 });
 }
 
 test("filterSupportedImportFiles keeps only supported spreadsheet uploads", () => {

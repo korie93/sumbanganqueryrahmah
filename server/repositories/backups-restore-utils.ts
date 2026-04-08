@@ -2,8 +2,6 @@ import { db } from "../db-postgres";
 import type { BackupDataPayload, RestoreStats } from "./backups-repository-types";
 import {
   createBackupPayloadChunkReader,
-  createBackupPayloadSectionReader,
-  prepareBackupPayloadFileForCreate,
 } from "./backups-payload-utils";
 import {
   createRestoreStats,
@@ -36,15 +34,16 @@ export async function restoreFromBackup(
   const stats = createRestoreStats();
 
   await db.transaction(async (tx) => {
-    await initializeRestoreTrackingTempTable(tx as any);
-    await restoreImportsFromBackup(tx as any, backupDataReader, stats);
-    await restoreDataRowsFromBackup(tx as any, backupDataReader, stats);
-    await restoreUsersFromBackup(tx as any, backupDataReader, stats);
-    await restoreAuditLogsFromBackup(tx as any, backupDataReader, stats);
-    await restoreCollectionRecordsFromBackup(tx as any, backupDataReader, stats);
-    await restoreCollectionRecordReceiptsFromBackup(tx as any, backupDataReader, stats);
-    await syncRestoredCollectionReceiptCache(tx as any);
-    await finalizeRestoredCollectionRollups(tx as any);
+    const restoreTx = tx as import("./backups-restore-shared-utils").BackupRestoreExecutor;
+    await initializeRestoreTrackingTempTable(restoreTx);
+    await restoreImportsFromBackup(restoreTx, backupDataReader, stats);
+    await restoreDataRowsFromBackup(restoreTx, backupDataReader, stats);
+    await restoreUsersFromBackup(restoreTx, backupDataReader, stats);
+    await restoreAuditLogsFromBackup(restoreTx, backupDataReader, stats);
+    await restoreCollectionRecordsFromBackup(restoreTx, backupDataReader, stats);
+    await restoreCollectionRecordReceiptsFromBackup(restoreTx, backupDataReader, stats);
+    await syncRestoredCollectionReceiptCache(restoreTx);
+    await finalizeRestoredCollectionRollups(restoreTx);
   });
 
   updateRestoreTotals(stats);

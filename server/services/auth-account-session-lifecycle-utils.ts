@@ -1,4 +1,3 @@
-import type { PostgresStorage } from "../storage-postgres";
 import { AuthAccountError } from "./auth-account-types";
 import type {
   AuthAccountAuthenticationStorage,

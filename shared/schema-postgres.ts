@@ -11,7 +11,6 @@ import {
   dataRows,
   imports,
   monitorAlertIncidents,
-  mutationIdempotencyKeys,
   passwordResetRequests,
   systemStabilityPatterns,
   userActivity,
@@ -56,12 +55,12 @@ export {
   userActivity,
   bannedSessions,
   auditLogs,
-  mutationIdempotencyKeys,
   backups,
   backupJobs,
   monitorAlertIncidents,
   systemStabilityPatterns,
 } from "./schema-postgres-core";
+export { mutationIdempotencyKeys } from "./schema-postgres-core";
 export {
   collectionRecords,
   collectionRecordReceipts,

@@ -1,6 +1,4 @@
 import {
-  type DevMailOutboxPaginationState,
-  type DevMailOutboxQueryState,
   type UseSettingsDevMailOutboxArgs,
 } from "@/pages/settings/settings-dev-mail-outbox-shared";
 import { useDevMailOutboxDataState } from "@/pages/settings/useDevMailOutboxDataState";

@@ -88,12 +88,12 @@ function normalizeIdempotencyFingerprintHeaderValue(value: unknown): string | nu
   return normalized;
 }
 
-function toSerializableMutationBody(payload: unknown): unknown {
+function normalizeMutationResponseBody(payload: unknown): unknown {
   if (payload === undefined) {
     return null;
   }
 
-  return JSON.parse(JSON.stringify(payload));
+  return payload;
 }
 
 async function reserveCollectionMutationIdempotency(params: {
@@ -243,7 +243,7 @@ export function createCollectionJsonMutationRouteHandler(params: {
       }
 
       const payload = await handler(authenticatedReq);
-      const serializablePayload = toSerializableMutationBody(payload);
+      const serializablePayload = normalizeMutationResponseBody(payload);
 
       if (reservation.reserved && reservation.scope && reservation.actor && reservation.key) {
         try {

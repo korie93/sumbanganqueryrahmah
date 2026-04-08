@@ -3,7 +3,6 @@ import type {
   BackupJobError,
   BackupJobRecord,
   BackupJobSnapshot,
-  BackupJobType,
   CreateBackupJobInput,
 } from "../repositories/backup-job.repository";
 

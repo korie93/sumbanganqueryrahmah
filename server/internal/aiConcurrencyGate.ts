@@ -189,17 +189,19 @@ export function createAiConcurrencyGate(options: CreateAiConcurrencyGateOptions)
 
       try {
         acquired = await waitForSlot(role, route);
-      } catch (error: any) {
-        const status = Number.isFinite(error?.status) ? Number(error.status) : 429;
+      } catch (error: unknown) {
+        const queueError = error as { code?: unknown; message?: unknown; status?: unknown };
+        const status = Number.isFinite(queueError.status) ? Number(queueError.status) : 429;
         const snapshot = getAiGateSnapshot(role);
-        return res.status(status).json({
-          message: error?.message || "AI queue is currently busy. Please retry shortly.",
+        res.status(status).json({
+          message: queueError.message || "AI queue is currently busy. Please retry shortly.",
           gate: {
             ...snapshot,
             queueWaitMs,
-            code: error?.code || "AI_GATE_BUSY",
+            code: queueError.code || "AI_GATE_BUSY",
           },
         });
+        return;
       }
 
       const releaseOnce = () => {
@@ -218,7 +220,7 @@ export function createAiConcurrencyGate(options: CreateAiConcurrencyGateOptions)
       }
 
       try {
-        await handler(req, res);
+        return await handler(req, res);
       } finally {
         releaseOnce();
       }

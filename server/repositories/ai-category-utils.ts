@@ -1,4 +1,4 @@
-import { sql } from "drizzle-orm";
+import { sql, type SQL } from "drizzle-orm";
 import { buildLikePattern } from "./sql-like-utils";
 import type { CategoryStatSample } from "./ai-category-types";
 
@@ -97,7 +97,7 @@ export function mapCategorySampleRow(row: {
   };
 }
 
-export function buildMatchSql(terms: string[], fields: string[], matchMode: string) {
+export function buildMatchSql(terms: string[], fields: string[], matchMode: string): SQL | null {
   if (terms.length === 0) return null;
 
   if (fields.length === 0) {

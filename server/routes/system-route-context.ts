@@ -1,7 +1,7 @@
 import type { Express, RequestHandler } from "express";
 import type { MaintenanceState } from "../config/system-settings";
 import type { ChaosEvent, InjectChaosInput } from "../intelligence/chaos/ChaosEngine";
-import type { ChaosType, ExplainabilityReport } from "../intelligence/types";
+import type { ExplainabilityReport } from "../intelligence/types";
 import type { CircuitSnapshot } from "../internal/circuitBreaker";
 import type {
   InternalMonitorAlert,

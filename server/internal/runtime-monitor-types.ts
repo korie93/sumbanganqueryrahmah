@@ -5,7 +5,7 @@ import type {
   SystemHistory,
   SystemSnapshot,
 } from "../intelligence/types";
-import type { WorkerControlState, WorkerToMasterMessage } from "./worker-ipc";
+import type { WorkerToMasterMessage } from "./worker-ipc";
 
 export type InternalMonitorSnapshot = {
   score: number;

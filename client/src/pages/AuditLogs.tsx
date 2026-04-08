@@ -46,7 +46,6 @@ export default function AuditLogs() {
     logs,
     stats,
     loading,
-    page,
     setPage,
     pagination,
     searchText,

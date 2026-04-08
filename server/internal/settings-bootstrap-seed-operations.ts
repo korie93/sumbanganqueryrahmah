@@ -63,7 +63,7 @@ export async function seedMaintenanceTypeOptions(database: SettingsBootstrapSqlE
     WHERE key = 'maintenance_type'
     LIMIT 1
   `);
-  const maintenanceTypeId = String((maintenanceTypeRes.rows as any[])[0]?.id || "").trim();
+  const maintenanceTypeId = String((maintenanceTypeRes.rows as Array<{ id?: unknown }>)[0]?.id || "").trim();
   if (!maintenanceTypeId) {
     return;
   }

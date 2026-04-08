@@ -1,7 +1,6 @@
 import type {
   GovernanceStateName,
   PredictiveState,
-  RecommendedAction,
   SeverityLevel,
   StrategyDecision,
   StrategyName,

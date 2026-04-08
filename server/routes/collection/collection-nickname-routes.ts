@@ -1,4 +1,4 @@
-import { createCollectionRouteContext, type CollectionRouteContext } from "./collection-route-shared";
+import type { CollectionRouteContext } from "./collection-route-shared";
 
 export function registerCollectionNicknameRoutes(context: CollectionRouteContext) {
   const {

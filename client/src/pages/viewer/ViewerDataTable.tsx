@@ -2,7 +2,6 @@ import { Suspense, lazy, useLayoutEffect, useMemo, useRef } from "react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import type { DataRowWithId, ViewerVirtualRowData } from "@/pages/viewer/types";
 import { ViewerDataTableFeedback } from "@/pages/viewer/ViewerDataTableFeedback";
-import styles from "./ViewerDataTable.module.css";
 
 const ViewerMobileCardsTable = lazy(() =>
   import("@/pages/viewer/ViewerMobileCardsTable").then((module) => ({

@@ -1,4 +1,4 @@
-import { sql } from "drizzle-orm";
+import { sql, type SQL } from "drizzle-orm";
 import { db } from "../db-postgres";
 import type { CategoryRule, CategoryStatRow, CategoryStatSample } from "./ai-category-types";
 import { buildMatchSql, mapCategorySampleRow } from "./ai-category-utils";
@@ -33,10 +33,10 @@ async function countAllCategoryRows(): Promise<number> {
     JOIN public.imports i ON i.id = dr.import_id
     WHERE i.is_deleted = false
   `);
-  return Number((totalRes.rows as any[])[0]?.count ?? 0);
+  return Number((totalRes.rows as Array<{ count?: unknown }>)[0]?.count ?? 0);
 }
 
-async function computeCategoryGroupStats(termSql: any): Promise<{
+async function computeCategoryGroupStats(termSql: SQL): Promise<{
   total: number;
   samples: CategoryStatSample[];
 }> {
@@ -47,7 +47,7 @@ async function computeCategoryGroupStats(termSql: any): Promise<{
     WHERE i.is_deleted = false
       AND (${termSql})
   `);
-  const total = Number((countRes.rows as any[])[0]?.count ?? 0);
+  const total = Number((countRes.rows as Array<{ count?: unknown }>)[0]?.count ?? 0);
 
   let samples: CategoryStatSample[] = [];
   if (total > 0) {
@@ -60,13 +60,17 @@ async function computeCategoryGroupStats(termSql: any): Promise<{
       LIMIT 10
     `);
 
-    samples = (sampleRes.rows as any[]).map(mapCategorySampleRow);
+    samples = (sampleRes.rows as Array<{
+      jsonData?: unknown;
+      importName?: string | null;
+      importFilename?: string | null;
+    }>).map(mapCategorySampleRow);
   }
 
   return { total, samples };
 }
 
-async function computeComplementCategoryStats(combined: any, totalRows: number): Promise<{
+async function computeComplementCategoryStats(combined: SQL | null, totalRows: number): Promise<{
   total: number;
   samples: CategoryStatSample[];
 }> {
@@ -81,7 +85,7 @@ async function computeComplementCategoryStats(combined: any, totalRows: number):
     WHERE i.is_deleted = false
       AND NOT (${combined})
   `);
-  const total = Number((countRes.rows as any[])[0]?.count ?? 0);
+  const total = Number((countRes.rows as Array<{ count?: unknown }>)[0]?.count ?? 0);
 
   let samples: CategoryStatSample[] = [];
   if (total > 0) {
@@ -94,7 +98,11 @@ async function computeComplementCategoryStats(combined: any, totalRows: number):
       LIMIT 10
     `);
 
-    samples = (sampleRes.rows as any[]).map(mapCategorySampleRow);
+    samples = (sampleRes.rows as Array<{
+      jsonData?: unknown;
+      importName?: string | null;
+      importFilename?: string | null;
+    }>).map(mapCategorySampleRow);
   }
 
   return { total, samples };
@@ -151,7 +159,7 @@ export async function rebuildCategoryStats(groups: CategoryRule[]): Promise<void
   const enabledGroups = groups.filter((group) => group.enabled !== false);
   const baseGroups = enabledGroups.filter((group) => String(group.matchMode || "").toLowerCase() !== "complement");
   const complementGroups = enabledGroups.filter((group) => String(group.matchMode || "").toLowerCase() === "complement");
-  const matchSqlByKey = new Map<string, any>();
+  const matchSqlByKey = new Map<string, SQL>();
 
   for (const group of baseGroups) {
     const terms = (group.terms || []).filter((term) => term.trim().length > 0);

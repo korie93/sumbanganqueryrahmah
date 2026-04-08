@@ -17,19 +17,24 @@ import {
   toDate,
 } from "./backups-restore-shared-utils";
 
+type BackupImportRecord = Import & {
+  createdAt?: unknown;
+  createdBy?: unknown;
+};
+
 export async function restoreImportsFromBackup(
   tx: BackupRestoreExecutor,
   backupDataReader: BackupPayloadChunkReader,
   stats: RestoreStats,
 ) {
-  for (const chunk of backupDataReader.iterateArrayChunks<Import>("imports", BACKUP_CHUNK_SIZE)) {
+  for (const chunk of backupDataReader.iterateArrayChunks<BackupImportRecord>("imports", BACKUP_CHUNK_SIZE)) {
     const rows = chunk.map((record) => ({
       id: record.id,
       name: record.name,
       filename: record.filename,
-      createdAt: toDate((record as any).createdAt) ?? new Date(),
+      createdAt: toDate(record.createdAt) ?? new Date(),
       isDeleted: false,
-      createdBy: (record as any).createdBy ?? null,
+      createdBy: record.createdBy ?? null,
     }));
 
     stats.imports.processed += rows.length;
@@ -129,13 +134,13 @@ export async function restoreAuditLogsFromBackup(
 ) {
   for (const chunk of backupDataReader.iterateArrayChunks<AuditLog>("auditLogs", BACKUP_CHUNK_SIZE)) {
     const rows = chunk.map((log) => ({
-      id: (log as any).id ?? crypto.randomUUID(),
+      id: log.id ?? crypto.randomUUID(),
       action: log.action,
       performedBy: log.performedBy,
       targetUser: log.targetUser ?? null,
       targetResource: log.targetResource ?? null,
       details: log.details ?? null,
-      timestamp: toDate((log as any).timestamp) ?? new Date(),
+      timestamp: toDate(log.timestamp) ?? new Date(),
     }));
 
     stats.auditLogs.processed += rows.length;

@@ -1,4 +1,3 @@
-import type cluster from "node:cluster";
 import type { Serializable } from "node:child_process";
 import type { Worker } from "node:cluster";
 import type { WorkerControlState } from "./worker-ipc";

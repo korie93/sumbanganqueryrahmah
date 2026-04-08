@@ -1,4 +1,4 @@
-import { sql } from "drizzle-orm";
+import { sql, type SQL } from "drizzle-orm";
 import { db } from "../db-postgres";
 import { buildLikePattern } from "./sql-like-utils";
 import type { CategoryRule, CategoryStatRow } from "./ai-category-types";
@@ -8,13 +8,33 @@ import {
   parseJsonObject,
 } from "./ai-category-utils";
 
+function toOptionalDate(value: unknown): Date | null {
+  if (!value) return null;
+  if (value instanceof Date) return value;
+  if (typeof value !== "string" && typeof value !== "number") return null;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function normalizeCategoryStatSamples(value: unknown): CategoryStatRow["samples"] {
+  if (!Array.isArray(value)) return [];
+  return value.map((item) => {
+    const sample = parseJsonObject(item);
+    return {
+      name: String(sample.name ?? ""),
+      ic: String(sample.ic ?? ""),
+      source: sample.source == null ? null : String(sample.source),
+    };
+  });
+}
+
 export async function countRowsByCategoryKeywords(params: { groups: CategoryRule[] }): Promise<{
   totalRows: number;
   counts: Record<string, number>;
 }> {
   const groups = params.groups || [];
-  const countSqls: Array<any> = [];
-  const matchSqlByKey = new Map<string, any>();
+  const countSqls: SQL[] = [];
+  const matchSqlByKey = new Map<string, SQL>();
 
   for (const group of groups) {
     const terms = (group.terms || []).filter((term) => term.trim().length > 0);
@@ -78,7 +98,7 @@ export async function countRowsByCategoryKeywords(params: { groups: CategoryRule
     WHERE i.is_deleted = false
   `);
 
-  const row = (result.rows as any[])[0] || {};
+  const row = (result.rows as Array<{ total?: unknown; counts?: unknown }>)[0] || {};
   const totalRows = Number(row.total ?? 0);
   const countsRecord = parseJsonObject(row.counts);
   const counts: Record<string, number> = {};
@@ -103,7 +123,13 @@ export async function getCategoryRules(): Promise<Array<{
     ORDER BY key
   `);
 
-  return (result.rows as any[]).map((row) => ({
+  return (result.rows as Array<{
+    key?: unknown;
+    terms?: unknown;
+    fields?: unknown;
+    match_mode?: unknown;
+    enabled?: unknown;
+  }>).map((row) => ({
     key: String(row.key),
     terms: normalizeRuleArray(row.terms),
     fields: normalizeRuleArray(row.fields),
@@ -117,8 +143,8 @@ export async function getCategoryRulesMaxUpdatedAt(): Promise<Date | null> {
     SELECT MAX(updated_at) as updated_at
     FROM public.ai_category_rules
   `);
-  const row = (result.rows as any[])[0];
-  return row?.updated_at ? new Date(row.updated_at) : null;
+  const row = (result.rows as Array<{ updated_at?: unknown }>)[0];
+  return toOptionalDate(row?.updated_at);
 }
 
 export async function getCategoryStats(keys: string[]): Promise<CategoryStatRow[]> {
@@ -130,10 +156,15 @@ export async function getCategoryStats(keys: string[]): Promise<CategoryStatRow[
     WHERE key IN (${buildTextInList(keys)})
   `);
 
-  return (result.rows as any[]).map((row) => ({
-    key: row.key,
+  return (result.rows as Array<{
+    key?: unknown;
+    total?: unknown;
+    samples?: unknown;
+    updated_at?: unknown;
+  }>).map((row) => ({
+    key: String(row.key ?? ""),
     total: Number(row.total ?? 0),
-    samples: Array.isArray(row.samples) ? row.samples : [],
-    updatedAt: row.updated_at ? new Date(row.updated_at) : null,
+    samples: normalizeCategoryStatSamples(row.samples),
+    updatedAt: toOptionalDate(row.updated_at),
   }));
 }

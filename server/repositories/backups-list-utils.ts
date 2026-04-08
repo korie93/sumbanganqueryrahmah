@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import { sql } from "drizzle-orm";
+import { sql, type SQL } from "drizzle-orm";
 import type {
   Backup,
   InsertBackup,
@@ -19,6 +19,17 @@ import {
   type BackupsRepositoryOptions,
 } from "./backups-repository-types";
 import { buildLikePattern } from "./sql-like-utils";
+
+type BackupQueryRow = Omit<Backup, "metadata"> & {
+  metadata?: unknown;
+};
+
+function mapBackupQueryRow(options: BackupsRepositoryOptions, row: BackupQueryRow): Backup {
+  return {
+    ...row,
+    metadata: options.parseBackupMetadataSafe(row.metadata),
+  } as Backup;
+}
 
 export async function createBackup(
   options: BackupsRepositoryOptions,
@@ -88,7 +99,7 @@ export async function listBackupsPage(
     : BACKUP_LIST_DEFAULT_PAGE_SIZE;
   const offset = (page - 1) * pageSize;
 
-  const whereClauses: any[] = [];
+  const whereClauses: SQL[] = [];
   const searchName = String(params.searchName || "").trim();
   if (searchName) {
     whereClauses.push(sql`name ILIKE ${buildLikePattern(searchName, "contains")} ESCAPE '\'`);
@@ -154,10 +165,9 @@ export async function listBackupsPage(
 
   const total = Number((countResult.rows?.[0] as { total?: number } | undefined)?.total || 0);
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
-  const backups = (rowsResult.rows || []).map((row: any) => ({
-    ...row,
-    metadata: options.parseBackupMetadataSafe(row.metadata),
-  })) as Backup[];
+  const backups = ((rowsResult.rows || []) as BackupQueryRow[]).map((row) =>
+    mapBackupQueryRow(options, row),
+  );
 
   return {
     backups,
@@ -191,14 +201,13 @@ export async function getBackupById(
     LIMIT 1
   `);
 
-  const row = result.rows[0] as any;
+  const row = (result.rows[0] as BackupQueryRow | undefined);
   if (!row) return undefined;
 
-  return {
+  return mapBackupQueryRow(options, {
     ...row,
     backupData: decodeBackupDataFromStorage(String(row.backupData || ""), backupEncryption),
-    metadata: options.parseBackupMetadataSafe(row.metadata),
-  } as Backup;
+  });
 }
 
 export async function getBackupMetadataById(
@@ -223,14 +232,13 @@ export async function getBackupMetadataById(
     LIMIT 1
   `);
 
-  const row = result.rows[0] as any;
+  const row = (result.rows[0] as BackupQueryRow | undefined);
   if (!row) return undefined;
 
-  return {
+  return mapBackupQueryRow(options, {
     ...row,
     backupData: "",
-    metadata: options.parseBackupMetadataSafe(row.metadata),
-  } as Backup;
+  });
 }
 
 export async function deleteBackup(

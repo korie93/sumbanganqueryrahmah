@@ -4,7 +4,6 @@ import { useLocation } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useIsMobile } from "@/hooks/use-mobile";
-import type { AIChatStatus } from "@/components/AIChat";
 import { resolveFloatingAIMinimizedStatus } from "@/components/floating-ai-status";
 import {
   shouldKeepFloatingAiPanelMounted,

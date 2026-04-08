@@ -7,10 +7,6 @@ import {
   shouldRunRuntimeMonitorTask,
 } from "./runtime-monitor-cadence";
 import { createRuntimeRequestTracker } from "./runtime-monitor-request-tracker";
-import type {
-  SystemHistory,
-  SystemSnapshot,
-} from "../intelligence/types";
 import {
   isControlStateMessage,
   isGracefulShutdownMessage,
@@ -36,7 +32,6 @@ import type {
   GcCapableGlobal,
   InternalMonitorSnapshot,
   IpcCapableProcess,
-  LocalCircuitSnapshots,
   RuntimeMonitorManagerOptions,
   StartRuntimeLoopsOptions,
 } from "./runtime-monitor-types";

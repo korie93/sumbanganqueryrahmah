@@ -5,11 +5,7 @@ import {
   type CollectionReceiptFileType,
   type CollectionReceiptSecurityResult,
 } from "./collection-receipt-security-shared";
-import {
-  COLLECTION_RECEIPT_SIGNATURE_SCAN_BYTES,
-  detectCollectionReceiptSignature,
-  validatePdfCollectionReceiptBuffer,
-} from "./collection-receipt-format-security";
+import { validatePdfCollectionReceiptBuffer } from "./collection-receipt-format-security";
 import { sanitizeCollectionReceiptImageBuffer } from "./collection-receipt-image-security";
 
 export {

@@ -19,7 +19,7 @@ import { MonitorOverviewSection } from "@/components/monitor/MonitorOverviewSect
 import { MonitorStatusBanners } from "@/components/monitor/MonitorStatusBanners";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ACTIVE_ALERTS_PAGE_SIZE, ALERT_HISTORY_PAGE_SIZE, useMonitorPageState } from "@/pages/monitor/useMonitorPageState";
+import { useMonitorPageState } from "@/pages/monitor/useMonitorPageState";
 
 const MonitorAlertsSection = lazy(() =>
   import("@/components/monitor/MonitorAlertsSection").then((module) => ({

@@ -2,7 +2,6 @@ import type { AuthenticatedUser } from "../auth/guards";
 import {
   type ActivationTokenValidationResult,
   type PasswordResetTokenValidationResult,
-  AuthAccountError,
 } from "./auth-account-types";
 import {
   AuthAccountManagedOperations,

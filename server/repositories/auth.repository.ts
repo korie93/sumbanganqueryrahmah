@@ -2,10 +2,6 @@ import type {
   InsertUser,
   User,
 } from "../../shared/schema-postgres";
-import type {
-  AccountStatus,
-  ManageableUserRole,
-} from "../auth/account-lifecycle";
 import {
   deleteManagedUserAccount,
   getAccounts,

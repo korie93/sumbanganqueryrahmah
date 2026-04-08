@@ -293,6 +293,6 @@ export async function syncRestoredCollectionReceiptCache(
 }
 
 export async function finalizeRestoredCollectionRollups(tx: BackupRestoreExecutor) {
-  await rebuildCollectionRecordDailyRollups(tx as any);
+  await rebuildCollectionRecordDailyRollups(tx);
   await tx.execute(sql`DELETE FROM public.collection_record_daily_rollup_refresh_queue`);
 }

@@ -23,9 +23,6 @@ import {
   initialSnapshot,
   initialWebVitalsOverview,
   resolveSystemMetricsPollIntervalMs,
-  shouldFetchSystemMetricsDetails,
-  shouldPollSystemMetricsDetails,
-  combineOpenCircuitCount,
 } from "@/hooks/system-metrics-utils";
 
 export type {

@@ -28,6 +28,14 @@ function buildTextInList(values: string[]) {
   return sql.join(values.map((value) => sql`${value}`), sql`, `);
 }
 
+function queryRows<T extends Record<string, unknown>>(result: { rows?: unknown[] }): T[] {
+  return Array.isArray(result.rows) ? (result.rows as T[]) : [];
+}
+
+function firstQueryRow<T extends Record<string, unknown>>(result: { rows?: unknown[] }): T | undefined {
+  return queryRows<T>(result)[0];
+}
+
 export class SettingsRepository {
   private async isAdminMaintenanceEditingEnabled(): Promise<boolean> {
     const result = await db.execute(sql`
@@ -37,7 +45,7 @@ export class SettingsRepository {
       LIMIT 1
     `);
 
-    const row = (result.rows as any[])[0];
+    const row = firstQueryRow<{ value?: unknown }>(result);
     return TRUTHY_SETTING_VALUES.has(String(row?.value ?? "").trim().toLowerCase());
   }
 
@@ -67,7 +75,7 @@ export class SettingsRepository {
       ORDER BY c.name, s.label
     `);
 
-    const settingIds = (rows.rows as any[])
+    const settingIds = queryRows<{ setting_id?: unknown }>(rows)
       .map((row) => String(row.setting_id))
       .filter((value) => value.length > 0);
     let optionsMap = new Map<string, SettingsOption[]>();
@@ -101,7 +109,7 @@ export class SettingsRepository {
       LIMIT 1
     `);
 
-    const row = (result.rows as any[])[0];
+    const row = firstQueryRow<{ value?: unknown }>(result);
     if (!row) return fallback;
     return asTruthySetting(row.value, fallback);
   }
@@ -138,7 +146,7 @@ export class SettingsRepository {
       pageIdByKey.set(roleTabSettingKey(roleKey, tab.suffix), tab.pageId);
     }
 
-    for (const row of rows.rows as any[]) {
+    for (const row of queryRows<{ key?: unknown; value?: unknown }>(rows)) {
       const key = String(row.key || "");
       const pageId = pageIdByKey.get(key);
       if (!pageId) continue;
@@ -153,7 +161,10 @@ export class SettingsRepository {
         WHERE key = 'canViewSystemPerformance'
         LIMIT 1
       `);
-      const canViewSystemPerformance = asTruthySetting((result.rows as any[])[0]?.value, false);
+      const canViewSystemPerformance = asTruthySetting(
+        firstQueryRow<{ value?: unknown }>(result)?.value,
+        false,
+      );
       visibility.canViewSystemPerformance = canViewSystemPerformance;
       visibility.monitor = visibility.monitor === true && canViewSystemPerformance;
     }
@@ -193,7 +204,7 @@ export class SettingsRepository {
       LIMIT 1
     `);
 
-    const current = (settingRes.rows as any[])[0];
+    const current = firstQueryRow<Record<string, unknown>>(settingRes);
     if (!current) {
       return { status: "not_found", message: "Setting not found." };
     }
@@ -238,7 +249,7 @@ export class SettingsRepository {
         LIMIT 1
       `);
 
-      if ((optionRes.rows as any[]).length === 0) {
+      if (queryRows(optionRes).length === 0) {
         return { status: "invalid", message: "Selected option is not allowed." };
       }
     }
@@ -275,7 +286,7 @@ export class SettingsRepository {
       LIMIT 1
     `);
 
-    const latest = (latestRes.rows as any[])[0];
+    const latest = firstQueryRow<Record<string, unknown>>(latestRes) ?? current;
     return {
       status: "updated",
       message: "Setting updated successfully.",
@@ -298,7 +309,7 @@ export class SettingsRepository {
     `);
 
     const values = new Map<string, string>();
-    for (const row of rows.rows as any[]) {
+    for (const row of queryRows<{ key?: unknown; value?: unknown }>(rows)) {
       values.set(String(row.key), String(row.value ?? ""));
     }
     return buildMaintenanceState(values, now);
@@ -331,7 +342,7 @@ export class SettingsRepository {
     `);
 
     const values = new Map<string, string>();
-    for (const row of result.rows as any[]) {
+    for (const row of queryRows<{ key?: unknown; value?: unknown }>(result)) {
       values.set(String(row.key), String(row.value ?? ""));
     }
     return buildAppConfig(values);

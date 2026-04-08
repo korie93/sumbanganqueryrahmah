@@ -1,5 +1,4 @@
 import { Filter } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { ActivityDateRangeFields } from "@/pages/activity/ActivityDateRangeFields";

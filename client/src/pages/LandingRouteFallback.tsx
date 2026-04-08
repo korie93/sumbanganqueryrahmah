@@ -11,7 +11,6 @@ export default function LandingRouteFallback({ onLoginClick }: LandingRouteFallb
   return (
     <LandingPageShell onLoginClick={onLoginClick}>
       <LandingHeroShell
-        onLoginClick={onLoginClick}
         leftDetail={(
           <>
             <div className="flex flex-wrap items-center gap-3" aria-hidden="true">

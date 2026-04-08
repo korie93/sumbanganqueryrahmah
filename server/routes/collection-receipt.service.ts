@@ -1,4 +1,3 @@
-import fs from "fs";
 import type { Response } from "express";
 import type { AuthenticatedRequest } from "../auth/guards";
 import { logger } from "../lib/logger";
@@ -7,7 +6,6 @@ import type {
 } from "../storage-postgres";
 import {
   isCollectionReceiptInlinePreviewMimeType,
-  logCollectionReceiptBestEffortFailure,
   normalizeCollectionReceiptMimeType,
   sanitizeReceiptDownloadName,
 } from "./collection-receipt-file-utils";

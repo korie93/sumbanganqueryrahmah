@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import { desc, gte, sql } from "drizzle-orm";
+import { gte, sql, type SQL } from "drizzle-orm";
 import type { AuditLog, InsertAuditLog } from "../../shared/schema-postgres";
 import { auditLogs } from "../../shared/schema-postgres";
 import { db } from "../db-postgres";
@@ -85,7 +85,7 @@ export class AuditRepository {
       : AUDIT_LIST_DEFAULT_PAGE_SIZE;
     const offset = (page - 1) * pageSize;
 
-    const whereClauses: any[] = [];
+    const whereClauses: SQL[] = [];
     const action = String(params.action || "").trim();
     if (action) {
       whereClauses.push(sql`action = ${action}`);
@@ -188,8 +188,8 @@ export class AuditRepository {
     `);
 
     const actionBreakdown: Record<string, number> = {};
-    for (const row of actionRows.rows || []) {
-      actionBreakdown[String((row as any).action || "UNKNOWN")] = Number((row as any).count || 0);
+    for (const row of (actionRows.rows || []) as Array<{ action?: unknown; count?: unknown }>) {
+      actionBreakdown[String(row.action || "UNKNOWN")] = Number(row.count || 0);
     }
 
     return {

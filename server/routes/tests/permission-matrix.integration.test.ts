@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { Express, RequestHandler } from "express";
+import type { Request, RequestHandler, Response } from "express";
 import { registerActivityRoutes } from "../activity.routes";
 import { registerAiRoutes } from "../ai.routes";
 import { registerCollectionAdminRoutes } from "../collection/collection-admin-routes";
@@ -148,7 +148,7 @@ function createSettingsPermissionHarness() {
         };
       },
       createAuditLog: async () => ({ id: "audit-1" }),
-    } as any,
+    } as never,
     authenticateToken: createTestAuthenticateToken(),
     requireRole: createTestRequireRole(),
     requireTabAccess: createTestRequireTabAccess(),
@@ -180,26 +180,26 @@ function createOperationsPermissionHarness() {
   };
   const app = createJsonTestApp();
   const controller = {
-    getDashboardSummary: async (_req: any, res: any) => {
+    getDashboardSummary: async (_req: Request, res: Response) => {
       calls.summary += 1;
       return res.json({ ok: true, summary: {} });
     },
-    listBackups: async (_req: any, res: any) => {
+    listBackups: async (_req: Request, res: Response) => {
       calls.backups += 1;
       return res.json({ ok: true, backups: [] });
     },
-    listAuditLogs: async (_req: any, res: any) => {
+    listAuditLogs: async (_req: Request, res: Response) => {
       calls.auditLogs += 1;
       return res.json({ ok: true, logs: [] });
     },
-    getWebsocketClients: async (_req: any, res: any) => {
+    getWebsocketClients: async (_req: Request, res: Response) => {
       calls.debugSockets += 1;
       return res.json({ ok: true, clients: [] });
     },
   };
 
   registerOperationsRoutes(app, {
-    operationsController: controller as any,
+    operationsController: controller as never,
     authenticateToken: createTestAuthenticateToken(),
     requireRole: createTestRequireRole(),
     requireTabAccess: createTestRequireTabAccess(),
@@ -264,27 +264,27 @@ function createAuthAdminPermissionHarness() {
         calls.getAccounts += 1;
         return [];
       },
-    } as any,
+    } as never,
     authenticateToken,
     requireRole,
     rateLimiters: {
       adminAction: passThroughRateLimiter,
-    } as any,
-    jsonRoute: (handler: (req: unknown, res: unknown) => Promise<unknown>) => async (req: unknown, res: any) => {
+    } as never,
+    jsonRoute: (handler: (req: unknown, res: unknown) => Promise<unknown>) => async (req: unknown, res: Response) => {
       const payload = await handler(req, res);
       if (!res.headersSent && payload !== undefined) {
         res.json(payload);
       }
     },
     closeActivitySockets: () => {},
-    buildUserPayload: (user: any) => user,
-    buildManagedUserPayload: (user: any) => user,
-    buildDeliveryPayload: (payload: any) => payload,
+    buildUserPayload: (user: unknown) => user as Record<string, unknown>,
+    buildManagedUserPayload: (user: unknown) => user as Record<string, unknown>,
+    buildDeliveryPayload: (payload: unknown) => payload as Record<string, unknown>,
     buildOkPayload: (payload: Record<string, unknown>) => ({
       ok: true,
       ...payload,
     }),
-  } as any);
+  } as never);
 
   return {
     app,
@@ -318,7 +318,7 @@ function createCollectionAdminPermissionHarness() {
         calls.saveAssignments += 1;
         return { ok: true };
       },
-    } as any,
+    } as never,
     superuserReportAccess: [
       authenticateToken,
       requireRole("superuser"),
@@ -327,10 +327,10 @@ function createCollectionAdminPermissionHarness() {
     jsonRoute: (
       _fallbackMessage: string,
       handler: (req: unknown) => Promise<unknown>,
-    ) => async (req: unknown, res: any) => {
+    ) => async (req: unknown, res: Response) => {
       res.json(await handler(req));
     },
-  } as any);
+  } as never);
 
   return {
     app,
@@ -402,11 +402,11 @@ function createActivityPermissionHarness() {
       deactivateUserActivities: async () => {},
       updateUserBan: async () => {},
       unbanVisitor: async () => {},
-    } as any,
+    } as never,
     authenticateToken: createTestAuthenticateToken(),
     requireRole: createTestRequireRole(),
     requireTabAccess: createTestRequireTabAccess(),
-    connectedClients: connectedClients as any,
+    connectedClients: connectedClients as never,
     rateLimiters: {
       adminAction: passThroughRateLimiter,
     },
@@ -429,28 +429,28 @@ function createImportsPermissionHarness() {
 
   registerImportRoutes(app, {
     importsController: {
-      listDataRows: async (_req: any, res: any) => res.json({ rows: [], total: 0 }),
-      listImports: async (_req: any, res: any) => res.json({ imports: [] }),
-      createImport: async (_req: any, res: any) => {
+      listDataRows: async (_req: Request, res: Response) => res.json({ rows: [], total: 0 }),
+      listImports: async (_req: Request, res: Response) => res.json({ imports: [] }),
+      createImport: async (_req: Request, res: Response) => {
         calls.createImport += 1;
         return res.json({ id: "import-1" });
       },
-      getImport: async (_req: any, res: any) => res.json({ import: null, rows: [] }),
-      getImportDataPage: async (_req: any, res: any) => res.json({ rows: [], total: 0, page: 1, limit: 50 }),
-      analyzeImport: async (_req: any, res: any) => {
+      getImport: async (_req: Request, res: Response) => res.json({ import: null, rows: [] }),
+      getImportDataPage: async (_req: Request, res: Response) => res.json({ rows: [], total: 0, page: 1, limit: 50 }),
+      analyzeImport: async (_req: Request, res: Response) => {
         calls.analyzeImport += 1;
         return res.json({ import: { id: "import-1" }, totalRows: 0, analysis: {} });
       },
-      analyzeAll: async (_req: any, res: any) => {
+      analyzeAll: async (_req: Request, res: Response) => {
         calls.analyzeAll += 1;
         return res.json({ totalImports: 0, totalRows: 0, imports: [], analysis: {} });
       },
-      renameImport: async (_req: any, res: any) => res.json({ id: "import-1", name: "Updated" }),
-      deleteImport: async (_req: any, res: any) => {
+      renameImport: async (_req: Request, res: Response) => res.json({ id: "import-1", name: "Updated" }),
+      deleteImport: async (_req: Request, res: Response) => {
         calls.deleteImport += 1;
         return res.json({ success: true });
       },
-    } as any,
+    } as never,
     authenticateToken: createTestAuthenticateToken(),
     requireRole: createTestRequireRole(),
     requireTabAccess: createTestRequireTabAccess(),
@@ -474,28 +474,28 @@ function createAiPermissionHarness() {
 
   registerAiRoutes(app, {
     aiController: {
-      getConfig: async (_req: any, res: any) => {
+      getConfig: async (_req: Request, res: Response) => {
         calls.config += 1;
         return res.json({ aiEnabled: true });
       },
-      search: async (_req: any, res: any) => {
+      search: async (_req: Request, res: Response) => {
         calls.search += 1;
         return res.status(200).json({ ok: true });
       },
-      indexImport: async (_req: any, res: any) => {
+      indexImport: async (_req: Request, res: Response) => {
         calls.indexImport += 1;
         return res.status(200).json({ ok: true });
       },
-      importBranches: async (_req: any, res: any) => res.status(200).json({ ok: true }),
-      chat: async (_req: any, res: any) => {
+      importBranches: async (_req: Request, res: Response) => res.status(200).json({ ok: true }),
+      chat: async (_req: Request, res: Response) => {
         calls.chat += 1;
         return res.status(200).json({ ok: true });
       },
-    } as any,
+    } as never,
     authenticateToken: createTestAuthenticateToken(),
     requireRole: createTestRequireRole(),
     withAiConcurrencyGate: (_route, handler) => (req, res, next) => {
-      void Promise.resolve(handler(req as any, res as any)).catch(next);
+      void Promise.resolve(handler(req as never, res as never)).catch(next);
     },
   });
 
@@ -516,23 +516,23 @@ function createSearchPermissionHarness() {
 
   registerSearchRoutes(app, {
     searchController: {
-      getColumns: async (_req: any, res: any) => {
+      getColumns: async (_req: Request, res: Response) => {
         calls.columns += 1;
         return res.json(["name", "ic"]);
       },
-      searchGlobal: async (_req: any, res: any) => {
+      searchGlobal: async (_req: Request, res: Response) => {
         calls.global += 1;
         return res.json({ columns: [], rows: [], total: 0 });
       },
-      searchSimple: async (_req: any, res: any) => {
+      searchSimple: async (_req: Request, res: Response) => {
         calls.simple += 1;
         return res.json({ results: [], total: 0 });
       },
-      advancedSearch: async (_req: any, res: any) => {
+      advancedSearch: async (_req: Request, res: Response) => {
         calls.advanced += 1;
         return res.json({ rows: [], total: 0 });
       },
-    } as any,
+    } as never,
     authenticateToken: createTestAuthenticateToken(),
     searchRateLimiter: (_req, _res, next) => next(),
   });
@@ -557,7 +557,7 @@ function createSystemPermissionHarness() {
     rollupRebuild: 0,
   };
   const app = createJsonTestApp();
-  const requireMonitorAccess: RequestHandler = (req: any, res, next) => {
+  const requireMonitorAccess: RequestHandler = (req, res, next) => {
     if (String(req.headers["x-test-deny-monitor"] || "").trim() === "1") {
       res.status(403).json({ message: "Monitor access denied" });
       return;
@@ -580,7 +580,7 @@ function createSystemPermissionHarness() {
       calls.systemHealth += 1;
       return {
         updatedAt: "2026-03-25T00:00:00.000Z",
-      } as any;
+      } as never;
     },
     buildInternalMonitorAlerts: () => [],
     getControlState: () => ({
@@ -595,14 +595,14 @@ function createSystemPermissionHarness() {
       predictor: null,
       queueLength: 0,
       updatedAt: "2026-03-25T00:00:00.000Z",
-    } as any),
+    } as never),
     getDbProtection: () => false,
     getRequestRate: () => 0,
     getLatencyP95: () => 0,
     getLocalCircuitSnapshots: () => ({
-      ai: {} as any,
-      db: {} as any,
-      export: {} as any,
+      ai: {} as never,
+      db: {} as never,
+      export: {} as never,
     }),
     getIntelligenceExplainability: () => {
       calls.explain += 1;
@@ -614,12 +614,12 @@ function createSystemPermissionHarness() {
         governanceState: {},
         chosenStrategy: null,
         decisionReason: "n/a",
-      } as any;
+      } as never;
     },
     injectChaos: () => {
       calls.chaos += 1;
       return {
-        injected: {} as any,
+        injected: {} as never,
         active: [],
       };
     },
@@ -726,7 +726,7 @@ function createSystemPermissionHarness() {
     createAuditLog: async (data) => ({
       id: "audit-1",
       ...data,
-    } as any),
+    } as never),
     checkDbConnectivity: async () => true,
     getStartupHealthSnapshot: () => ({
       failed: false,

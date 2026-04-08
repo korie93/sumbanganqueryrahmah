@@ -1,4 +1,3 @@
-import type { CollectionRecord } from "@/lib/api";
 import type { CollectionRecordsFiltersProps } from "@/pages/collection-records/CollectionRecordsFilters";
 import type { CollectionRecordsToolbarProps } from "@/pages/collection-records/CollectionRecordsToolbar";
 import type { CollectionRecordsTableProps } from "@/pages/collection-records/CollectionRecordsTable";

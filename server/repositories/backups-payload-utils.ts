@@ -3,7 +3,7 @@ import { once } from "node:events";
 import { createWriteStream, promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { sql } from "drizzle-orm";
+import { sql, type SQL } from "drizzle-orm";
 import type {
   AuditLog,
   DataRow,
@@ -23,9 +23,9 @@ export {
   createBackupPayloadSectionReader,
 } from "./backups-payload-reader-utils";
 
-async function safeSelectRows<T extends Record<string, unknown>>(query: unknown): Promise<T[]> {
+async function safeSelectRows<T extends Record<string, unknown>>(query: SQL): Promise<T[]> {
   try {
-    const result = await db.execute(query as any);
+    const result = await db.execute(query);
     return (Array.isArray(result.rows) ? result.rows : []) as T[];
   } catch (error) {
     const message = String((error as { message?: string })?.message || "");
@@ -36,8 +36,8 @@ async function safeSelectRows<T extends Record<string, unknown>>(query: unknown)
   }
 }
 
-async function selectRows<T extends Record<string, unknown>>(query: unknown): Promise<T[]> {
-  const result = await db.execute(query as any);
+async function selectRows<T extends Record<string, unknown>>(query: SQL): Promise<T[]> {
+  const result = await db.execute(query);
   return (Array.isArray(result.rows) ? result.rows : []) as T[];
 }
 

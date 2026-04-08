@@ -304,7 +304,6 @@ export function resolveActiveNavigationItemId(
   currentPage: string,
   options: ResolveActiveNavigationItemOptions = {},
 ) {
-  const normalizedPath = String(options.pathname ?? "").toLowerCase();
   const normalizedSearch = options.search ?? "";
 
   if (currentPage === "audit" || currentPage === "audit-logs") {

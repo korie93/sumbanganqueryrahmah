@@ -1,7 +1,6 @@
 import { sql, inArray } from "drizzle-orm";
 import { db } from "../db-postgres";
 import {
-  passwordResetRequests,
   users,
 } from "../../shared/schema-postgres";
 import {

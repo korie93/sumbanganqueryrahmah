@@ -1,6 +1,5 @@
 import type { Express, RequestHandler, Response } from "express";
 import { WebSocket } from "ws";
-import type { AuthenticatedRequest } from "../../auth/guards";
 import {
   type ManagedAccountActivationDelivery,
   type ManagedAccountPasswordResetDelivery,

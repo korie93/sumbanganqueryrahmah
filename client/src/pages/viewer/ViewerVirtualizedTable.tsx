@@ -23,11 +23,9 @@ interface ViewerVirtualizedTableProps {
 export function ViewerVirtualizedTable({
   filteredRows,
   gridTemplateColumns,
-  onToggleRowSelection,
   onToggleSelectAllFiltered,
   rowHeightPx,
   selectAllFiltered,
-  selectedRowIds,
   virtualRowData,
   viewportHeightPx,
   virtualTableWidthRef,

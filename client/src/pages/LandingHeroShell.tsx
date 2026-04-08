@@ -3,7 +3,6 @@ import { ArrowRight, LogIn } from "lucide-react";
 import { BrandLogo } from "@/components/BrandLogo";
 
 type LandingHeroShellProps = {
-  onLoginClick: () => void;
   leftDetail: ReactNode;
   rightPane: ReactNode;
 };
@@ -15,7 +14,6 @@ export const landingSecondaryButtonClassName =
   "inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-white/15 bg-slate-900/60 px-4 text-sm font-semibold text-slate-100 transition-colors hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/25";
 
 export function LandingHeroShell({
-  onLoginClick,
   leftDetail,
   rightPane,
 }: LandingHeroShellProps) {
