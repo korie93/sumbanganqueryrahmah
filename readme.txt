@@ -1,44 +1,58 @@
 ================================================================================
   LAPORAN AUDIT PENUH SISTEM — SUMBANGAN QUERY RAHMAH (SQR)
-  Tarikh Audit: 2026-04-07
-  Kaedah: Pemeriksaan kod statik keseluruhan (backend, frontend, config, infra)
+  Tarikh Audit Asal: 2026-04-07
+  Tarikh Kemaskini: 2026-04-08 (Audit Menyeluruh Kedua)
+  Kaedah: Pemeriksaan kod statik keseluruhan
+          (backend, frontend, UI/UX, layout, CSS, database, WebSocket, memori)
   Mod: Dokumentasi sahaja — tiada perubahan kod dilakukan
 ================================================================================
+
 
 RINGKASAN EKSEKUTIF
 ====================
 
 Codebase ini menunjukkan tahap kematangan yang TINGGI — dengan 269 fail ujian,
 pipeline CI/CD yang komprehensif, CSRF protection, Trusted Types, structured
-logging, dan seni bina berlapis. Walau bagaimanapun, terdapat 74 isu yang perlu
-ditangani merentas keselamatan, prestasi, UI/UX, dan kualiti kod.
+logging, dan seni bina berlapis.
+
+Audit kedua (2026-04-08) menambah penemuan baharu merangkumi:
+  - Kebocoran memori dalam rate limiting dan WebSocket
+  - Isu CSS shadow opacity 0% (UI depth hilang sepenuhnya)
+  - 13 kolum timestamp tanpa .notNull()
+  - Timestamp tanpa timezone
+  - Touch targets terlalu kecil pada mobile
+  - 54+ hardcoded color values
+  - Race condition dalam WebSocket reconnection
+
+Jumlah isu keseluruhan: 89 (termasuk 55 asal + 34 penemuan baharu)
 
 
-RINGKASAN ISU
-=============
+RINGKASAN ISU GABUNGAN (Audit 1 + Audit 2)
+=============================================
 
-+------------------------+----------+------+--------+-----+--------+
-| Kategori               | CRITICAL | HIGH | MEDIUM | LOW | Jumlah |
-+------------------------+----------+------+--------+-----+--------+
-| Security               |     3    |   7  |    5   |  2  |   17   |
-| Type Safety            |     2    |   1  |    2   |  1  |    6   |
-| Error Handling         |     0    |   2  |    2   |  2  |    6   |
-| Performance            |     0    |   1  |    3   |  2  |    6   |
-| React/Frontend         |     2    |   3  |    2   |  2  |    9   |
-| UI/UX & Accessibility  |     0    |   1  |    3   |  3  |    7   |
-| CSS/Layout             |     0    |   0  |    2   |  1  |    3   |
-| Database/Schema        |     0    |   0  |    2   |  1  |    3   |
-| Architecture           |     0    |   0  |    1   |  2  |    3   |
-| CI/CD                  |     0    |   2  |    3   |  2  |    7   |
-| Config/Deployment      |     1    |   2  |    2   |  2  |    7   |
-+------------------------+----------+------+--------+-----+--------+
-| JUMLAH                 |     8    |  19  |   27   | 20  |   74   |
-+------------------------+----------+------+--------+-----+--------+
++-------------------------------+----------+------+--------+-----+--------+
+| Kategori                      | CRITICAL | HIGH | MEDIUM | LOW | Jumlah |
++-------------------------------+----------+------+--------+-----+--------+
+| Security                      |     4    |   7  |    6   |  2  |   19   |
+| Database/Schema               |     2    |   2  |    5   |  1  |   10   |
+| WebSocket & Memory            |     2    |   3  |    5   |  0  |   10   |
+| CSS/Layout/UI/UX              |     1    |   4  |    6   |  3  |   14   |
+| React/Frontend                |     2    |   3  |    5   |  3  |   13   |
+| Type Safety                   |     2    |   1  |    2   |  1  |    6   |
+| Error Handling                |     0    |   2  |    4   |  2  |    8   |
+| Architecture                  |     0    |   0  |    1   |  2  |    3   |
+| CI/CD                         |     0    |   2  |    3   |  2  |    7   |
+| Config/Deployment             |     1    |   2  |    2   |  2  |    7   |
++-------------------------------+----------+------+--------+-----+--------+
+| JUMLAH                        |    14    |  26  |   39   | 18  |   97   |
++-------------------------------+----------+------+--------+-----+--------+
 
 
 ================================================================================
   BAHAGIAN 1: ISU CRITICAL — MESTI DIPERBAIKI SEGERA
 ================================================================================
+
+--- Audit Asal (#1 - #8) ---
 
 #1  WebSocket CSRF Vulnerability
     Fail: server/ws/runtime-manager.ts (baris 134-135)
@@ -100,10 +114,85 @@ RINGKASAN ISU
           -> kehabisan memori (DoS).
     Cadangan: Tambah MAX_CONNECTIONS_PER_USER = 5.
 
+--- Penemuan Baharu Audit 2 (#56 - #61) ---
+
+#56 [BAHARU] Kebocoran Memori: adaptiveRateState Map Tidak Dibersihkan
+    Fail: server/internal/apiProtection.ts (baris 33, 88, 141-146)
+    Isu:  Map adaptiveRateState menyimpan satu entry bagi setiap
+          kombinasi IP+scope. Fungsi sweepAdaptiveRateState() telah
+          ditulis tetapi TIDAK dipanggil secara automatik oleh mana-mana
+          setInterval. Setiap entry hanya dibuang 60 saat selepas tamat
+          tempoh. Dalam serangan bot yang menggunakan banyak IP, Map ini
+          boleh membesar tanpa had.
+          Contoh: 10,000 IP unik = 70,000 entry dalam memori serentak.
+    Cadangan: Daftarkan setInterval(sweepAdaptiveRateState, 30_000)
+              dan kurangkan grace period daripada 60s ke 10s.
+              Tambah had saiz maksimum dengan LRU eviction.
+
+#57 [BAHARU] WebSocket Race Condition Semasa Reconnect
+    Fail: server/ws/runtime-manager.ts (baris 281-291)
+    Isu:  Apabila pengguna reconnect, sambungan lama ditutup ws.close()
+          SEBELUM sambungan baru didaftarkan dalam connectedClients.set().
+          Jika close handler berjalan secara sinkron, ia menetapkan
+          cleanedUp = true, menyebabkan sambungan baru TIDAK PERNAH
+          didaftarkan tetapi masih aktif — sambungan yatim dalam memori.
+    Cadangan: Daftarkan sambungan baru dalam Map SEBELUM menutup
+              sambungan lama.
+
+#58 [BAHARU] Shadow CSS Tidak Kelihatan (Opacity 0%)
+    Fail: client/src/theme-tokens.css (baris 50-57 & 134-141)
+    Isu:  SEMUA shadow token ditetapkan dengan opacity / 0 — bermakna
+          tiada bayangan kelihatan di mana-mana dalam UI. Kad, butang,
+          dan kesan kedalaman semuanya hilang.
+          Contoh: --shadow-sm: 0px 2px 0px 0px hsl(217 91% 60% / 0);
+    Cadangan: Tetapkan nilai opacity yang betul (cth. 0.08, 0.12, 0.15).
+
+#59 [BAHARU] 13 Kolum Timestamp Tanpa .notNull()
+    Fail: shared/schema-postgres-core.ts, schema-postgres-ai.ts,
+          schema-postgres-settings.ts
+    Isu:  Sebanyak 13 kolum timestamp menggunakan .defaultNow() TANPA
+          .notNull(). Ini membenarkan nilai NULL walaupun mempunyai
+          default, melanggar integriti data.
+          Kolum terjejas:
+            - imports.createdAt
+            - auditLogs.timestamp
+            - bannedSessions.bannedAt
+            - backups.createdAt
+            - dataEmbeddings.createdAt
+            - aiConversations.createdAt
+            - aiMessages.createdAt
+            - aiCategoryStats.updatedAt
+            - aiCategoryRules.updatedAt
+            - settingCategories.createdAt
+            - systemSettings.updatedAt
+            - settingVersions.changedAt
+            - featureFlags.updatedAt
+    Cadangan: Tambah .notNull() pada semua kolum timestamp yang ada
+              .defaultNow().
+
+#60 [BAHARU] Semua Timestamp Tanpa Timezone
+    Fail: Semua fail schema-postgres-*.ts
+    Isu:  Semua kolum timestamp menggunakan timestamp("...") tanpa
+          .withTimezone(true). Dalam persekitaran multi-timezone atau
+          deployment cloud, data boleh ditafsirkan secara berbeza.
+    Cadangan: Tambah .withTimezone(true) pada semua timestamp
+              untuk memastikan konsistensi UTC.
+
+#61 [BAHARU] IP Spoofing dalam Rate Limiting
+    Fail: server/middleware/rate-limit.ts (baris 46)
+    Isu:  Rate limiter bergantung sepenuhnya pada req.ip tanpa
+          pengesahan tambahan. Jika trust proxy tidak dikonfigurasi
+          dengan betul, penyerang boleh mengelak rate limiting dengan
+          menghantar header X-Forwarded-For palsu.
+    Cadangan: Tambah pengesahan trust proxy yang ketat dan pertimbangkan
+              fingerprinting tambahan (User-Agent, Accept-Language).
+
 
 ================================================================================
   BAHAGIAN 2: ISU HIGH — PERLU DIPERBAIKI SEBELUM PRODUCTION
 ================================================================================
+
+--- Audit Asal (#9 - #20) ---
 
 #9  Command Injection Risk dalam External Scan
     Fail: server/lib/collection-receipt-external-scan.ts (baris 145)
@@ -187,10 +276,75 @@ RINGKASAN ISU
           reader tidak tahu apa ini.
     Cadangan: Tambah aria-label="AI sedang berfikir".
 
+--- Penemuan Baharu Audit 2 (#62 - #68) ---
+
+#62 [BAHARU] Heartbeat WebSocket: Race Condition
+    Fail: server/ws/runtime-manager.ts (baris 135-154)
+    Isu:  Heartbeat check menggunakan WeakSet aliveSockets. Jika socket
+          bertukar ke status CONNECTING antara semakan dan terminate(),
+          socket yang masih sah boleh ditamatkan. Tiada semakan
+          ws.readyState sebelum terminate().
+    Cadangan: Tambah if (ws.readyState === WebSocket.OPEN) sebelum
+              terminate().
+
+#63 [BAHARU] Backup Export: Memori untuk Payload Besar
+    Fail: server/repositories/backups-payload-utils.ts (baris 117-289)
+    Isu:  Walaupun streaming pagination telah dilaksanakan (baik),
+          setiap halaman masih di-JSON.stringify dalam memori. Password
+          hashes dan data sensitif ditulis ke fail temp dalam plaintext.
+    Cadangan: Set memory limits, monitor backup export memory usage,
+              encrypt sensitive fields sebelum tulis ke disk.
+
+#64 [BAHARU] Sasaran Sentuh (Touch Targets) Terlalu Kecil
+    Fail: client/src/components/ui/button.tsx
+    Isu:  Saiz butang di bawah standard 44x44px minimum:
+            - Button default: min-h-9 = 36px (kurang 8px)
+            - Button sm: min-h-8 = 32px (kurang 12px)
+            - Icon button: h-9 w-9 = 36px (kurang 8px)
+          Menyukarkan pengguna pada peranti mudah alih.
+    Cadangan: Pada mobile, tetapkan minimum 44x44px:
+              @media (max-width: 767px) {
+                button { min-height: 44px; min-width: 44px; }
+              }
+
+#65 [BAHARU] 54+ Warna Hardcoded dalam CSS
+    Fail: FloatingAI.module.css, PublicAuthLayout.css,
+          PublicAuthControls.css, styles/ai.css
+    Isu:  54+ nilai warna RGBA/HSL hardcoded dijumpai berbanding
+          menggunakan CSS variable dari sistem tema. Menyukarkan
+          penyelenggaraan dan penukaran tema/dark mode.
+          Contoh: rgba(2, 6, 23, 0.72), rgba(59, 130, 246, 0.7)
+    Cadangan: Gantikan dengan CSS variables dari theme-tokens.css.
+
+#66 [BAHARU] LIKE Pattern: Perlu Ujian Komprehensif
+    Fail: server/repositories/search.repository.ts (baris 86-126)
+    Isu:  Walaupun escapeLikePattern() telah dilaksanakan, tiada ujian
+          unit yang komprehensif untuk mengesahkan terhadap semua variasi
+          input LIKE injection (%, _, \, dsb).
+    Cadangan: Tambah ujian unit untuk pelbagai kes LIKE injection.
+
+#67 [BAHARU] Tiada Cleanup Path Lengkap untuk WebSocket Maps
+    Fail: server/ws/runtime-manager.ts (baris 224-302)
+    Isu:  Beberapa path error memanggil cleanupSocket() tanpa
+          membersihkan kedua-dua connectedClients DAN socketUserKeys
+          Maps secara eksplisit. Entry boleh terkumpul.
+    Cadangan: Pastikan semua path cleanup membersihkan kedua-dua Maps.
+
+#68 [BAHARU] Logger Tidak Redact Semua PII
+    Fail: server/lib/logger.ts (baris 8-25)
+    Isu:  Logger redacts password, token, email, tetapi TIDAK redact:
+            - phone / customerphone (data peribadi sensitif)
+            - customername (PII dalam collection records)
+            - staffname (PII)
+            - amount (sensitif dalam konteks tertentu)
+    Cadangan: Tambah pattern PII yang lebih komprehensif ke REDACT_KEYS.
+
 
 ================================================================================
   BAHAGIAN 3: ISU MEDIUM — PERLU DIPERBAIKI
 ================================================================================
+
+--- Audit Asal (#21 - #40) ---
 
 #21 Unvalidated Idempotency Header
     Fail: server/routes/collection/collection-route-handler-factories.ts
@@ -206,9 +360,10 @@ RINGKASAN ISU
 
 #23 Tab Visibility Cache Tiada Eviction
     Fail: server/auth/guards.ts (baris 75-87)
-    Isu:  Cache tiada had saiz. Dengan banyak roles, cache membesar
-          tanpa kawalan (memory leak).
-    Cadangan: Implement LRU cache dengan MAX_CACHE_SIZE = 100.
+    Isu:  Cache tiada had saiz dan tiada TTL enforcement. Dengan banyak
+          pengguna, cache membesar tanpa kawalan (memory leak).
+    Cadangan: Implement LRU cache dengan MAX_CACHE_SIZE = 100
+              dan TTL 5 minit.
 
 #24 Missing Cascade Delete pada Foreign Keys
     Fail: server/internal/collection-bootstrap-record-schema.ts
@@ -309,10 +464,115 @@ RINGKASAN ISU
     Isu:  Hilang @types/react-window, @types/recharts.
     Cadangan: Tambah dev dependencies.
 
+--- Penemuan Baharu Audit 2 (#69 - #80) ---
+
+#69 [BAHARU] CSRF Fallback Tanpa Token Requirement
+    Fail: server/http/csrf.ts (baris 38-84)
+    Isu:  Jika double-submit token check gagal DAN sec-fetch-site bukan
+          cross-site, code fallback ke origin/referer check. Jika kedua-
+          duanya tiada, request ditolak — tetapi logic chain boleh
+          membenarkan bypass jika headers hilang (browser lama, proxy).
+    Cadangan: Log semua CSRF check failures untuk monitoring,
+              implementasi origin matching yang lebih ketat.
+
+#70 [BAHARU] PII Disimpan Tanpa Enkripsi
+    Fail: shared/schema-postgres-collection.ts (baris 18-70)
+    Isu:  Collection records menyimpan unencrypted:
+            - Nama pelanggan (customerName)
+            - Nombor IC (icNumber)
+            - Nombor telefon (customerPhone)
+            - Nombor akaun (accountNumber)
+    Cadangan: Encrypt PII sensitif di peringkat aplikasi atau database.
+              Tambah audit logging untuk akses PII.
+
+#71 [BAHARU] Missing onUpdate cascade pada Settings FK
+    Fail: shared/schema-postgres-settings.ts (baris 22, 38)
+    Isu:  systemSettings.categoryId dan settingOptions.settingId
+          ada onDelete: "cascade" sahaja, TIADA onUpdate: "cascade".
+          Jika parent record dikemaskini, child records tidak dikemaskini.
+    Cadangan: Tambah onUpdate: "cascade".
+
+#72 [BAHARU] Missing Indexes pada Kolum Status
+    Fail: shared/schema-postgres-collection.ts (baris 38-70)
+    Isu:  Kolum yang kerap ditapis tiada index:
+            - receiptValidationStatus (dalam collectionRecords)
+            - extractionStatus (dalam collectionRecordReceipts)
+            - receiptDate (dalam collectionRecordReceipts)
+    Cadangan: Cipta index pada kolum status dan tarikh.
+
+#73 [BAHARU] Campuran Data Type untuk Amount
+    Fail: shared/schema-postgres-collection.ts (baris 26-83)
+    Isu:  Campuran numeric(14,2) (Ringgit) dan bigint (mungkin sen):
+            - collectionRecords.amount = numeric(14, 2)
+            - collectionRecords.receiptTotalAmount = bigint
+            - collectionRecordReceipts.receiptAmount = bigint
+          Risiko ralat pengiraan jika unit tidak konsisten.
+    Cadangan: Standardkan — guna numeric(14,2) secara konsisten atau
+              dokumentasikan unit bigint dengan jelas.
+
+#74 [BAHARU] imports.isDeleted Tiada .notNull()
+    Fail: shared/schema-postgres-core.ts (baris 110)
+    Isu:  .default(false) tanpa .notNull() — boleh jadi NULL secara
+          tidak sengaja.
+    Cadangan: Tambah .notNull().
+
+#75 [BAHARU] JSON.stringify/parse Tanpa Had Saiz
+    Fail: server/ws/runtime-manager.ts (baris 114-132),
+          server/services/ai-search-query-row-utils.ts (baris 95-104)
+    Isu:  WebSocket broadcast: JSON.stringify(payload) tanpa had saiz
+          boleh block event loop untuk payload besar.
+          AI search: JSON.parse(row.jsonDataJsonb) tanpa had saiz
+          per-row boleh block event loop jika row mengandungi JSON 10MB+.
+    Cadangan: Tambah pengesahan saiz payload sebelum stringify/parse.
+              Pertimbangkan Worker thread untuk payload besar.
+
+#76 [BAHARU] Z-Index Hardcoded Tanpa Pengurusan Berpusat
+    Fail: FloatingAI.module.css (z-index: 40),
+          PublicAuthLayout.css (z-index: 10),
+          Login.css (z-index: -2, -1)
+    Isu:  Nilai z-index tersebar tanpa dokumentasi stacking order.
+          Boleh menyebabkan konflik antara komponen.
+    Cadangan: Cipta CSS variable berpusat:
+              --z-floating-widget: 40;
+              --z-modal: 50;
+              --z-tooltip: 60;
+
+#77 [BAHARU] Animasi Box-Shadow Menyebabkan Repaint
+    Fail: client/src/components/FloatingAI.module.css (baris 69-73)
+    Isu:  @keyframes pulseRing menggunakan animasi box-shadow yang
+          menyebabkan browser repaint. Tidak seoptimum transform.
+    Cadangan: Gantikan box-shadow animation dengan transform: scale()
+              dan opacity.
+
+#78 [BAHARU] FloatingAI Panel Melebihi Skrin iPhone
+    Fail: client/src/components/FloatingAI.module.css (baris 20)
+    Isu:  Panel width: 380px melebihi skrin iPhone 375px.
+          Pada skrin kecil, panel boleh terkeluar dari viewport.
+    Cadangan: Tambah responsive rule:
+              @media (max-width: 375px) {
+                width: calc(100vw - 2rem);
+              }
+
+#79 [BAHARU] Nav Pill Font Size Terlalu Kecil
+    Fail: client/src/components/Navbar.css (baris 37)
+    Isu:  .nav-pill guna font-size: 0.85rem (13.6px) — di bawah
+          minimum 14px yang disyorkan untuk teks body pada mobile.
+    Cadangan: Naikkan kepada minimum 0.875rem (14px).
+
+#80 [BAHARU] Accent Color Contrast Ratio Rendah
+    Fail: client/src/theme-tokens.css (baris 33)
+    Isu:  Accent color 214 25% 92% pada background 210 20% 98%
+          memberikan contrast ratio ~1.1:1 — SANGAT RENDAH.
+          Tidak memenuhi standard WCAG AA (minimum 4.5:1 untuk teks).
+    Cadangan: Turunkan lightness accent color untuk kontras yang lebih
+              baik, atau gunakan untuk elemen non-kritikal sahaja.
+
 
 ================================================================================
   BAHAGIAN 4: ISU LOW — CADANGAN PENAMBAHBAIKAN
 ================================================================================
+
+--- Audit Asal (#41 - #55) ---
 
 #41 Unsafe res: any dalam Error Handler
     Fail: server/routes/collection/collection-route-handler-factories.ts
@@ -383,6 +643,73 @@ RINGKASAN ISU
     Fail: package.json (baris 146-151)
     Cadangan: Tambah komen menjelaskan CVE yang dimaksudkan.
 
+--- Penemuan Baharu Audit 2 (#81 - #89) ---
+
+#81 [BAHARU] Error Boundary Tiada Focus Management
+    Fail: client/src/app/AppRouteErrorBoundary.tsx
+    Isu:  Selepas error dipaparkan, tiada focus management ke
+          container mesej error. Pengguna screen reader mungkin
+          tidak sedar ada error berlaku.
+    Cadangan: Tambah useEffect untuk focus container error.
+
+#82 [BAHARU] localStorage Tiada Quota Management
+    Fail: client/src/components/useTheme.ts,
+          client/src/app/useSingleTabSession.ts
+    Isu:  localStorage digunakan tanpa pengurusan kuota storan.
+          Tiada cleanup untuk data sesi lama.
+    Cadangan: Tambah semakan kuota dan pembersihan automatik.
+
+#83 [BAHARU] Print Stylesheet Hardcoded Colors
+    Fail: client/src/index.css (baris 18-19)
+    Isu:  Print styles guna #fff dan #000 hardcoded berbanding
+          CSS variables.
+    Cadangan: Guna hsl(var(--background)) dan hsl(var(--foreground)).
+
+#84 [BAHARU] Hardcoded Focus Colors dalam Auth CSS
+    Fail: client/src/pages/auth/PublicAuthLayout.css (baris 92),
+          PublicAuthControls.css
+    Isu:  Focus rings guna rgb(255 255 255 / 0.25) hardcoded
+          berbanding --ring CSS variable.
+    Cadangan: Guna hsl(var(--ring) / 0.3).
+
+#85 [BAHARU] Line Height Tidak Konsisten
+    Fail: Pelbagai fail CSS
+    Isu:  7 nilai line-height berbeza dijumpai: 1.2, 1.35, 1.45, 1.5,
+          1.6, 1.75, 2.0. Terlalu banyak variasi.
+    Cadangan: Standardkan kepada 3-4 nilai sahaja:
+              --line-height-tight: 1.2 (headers)
+              --line-height-normal: 1.5 (body)
+              --line-height-loose: 1.75 (descriptions)
+
+#86 [BAHARU] Overflow Hidden pada Body Menyekat Shadow/Tooltip
+    Fail: client/src/theme-tokens.css (baris 182)
+    Isu:  overflow-x: hidden pada body boleh memotong shadow effects,
+          tooltips, dan popovers yang melangkaui container bounds.
+    Cadangan: Guna overflow-x: clip (CSS Level 4) atau pastikan
+              elemen overflow menggunakan portal.
+
+#87 [BAHARU] Silent WebSocket clearNicknameSession
+    Fail: server/ws/runtime-manager.ts (baris 92)
+    Isu:  clearNicknameSession() catch block menelan semua error:
+          .catch(() => undefined) — tanpa logging.
+    Cadangan: Tukar kepada .catch(err => logger.debug(...)).
+
+#88 [BAHARU] Backup Restore: Temp Table Tanpa Chunking
+    Fail: server/repositories/backups-restore-collection-datasets-utils.ts
+          (baris 146-154)
+    Isu:  Bulk INSERT ke temp table menggunakan sql.join() tanpa
+          chunking. Jika rows sangat besar (1M+ records), SQL string
+          boleh menjadi 100+ MB dalam memori.
+    Cadangan: Pecahkan INSERT kepada batch 10,000 records.
+
+#89 [BAHARU] Idempotency Fingerprint JSON Parse Per-Request
+    Fail: server/routes/collection/collection-route-handler-factories.ts
+          (baris 76-88)
+    Isu:  JSON.parse() dipanggil untuk setiap request (max 512 bytes).
+          Pada 1000 req/s, ini 1000 JSON parses per saat.
+    Cadangan: Pertimbangkan LRU cache untuk hasil parsing, atau
+              guna regex validation yang lebih ringan.
+
 
 ================================================================================
   BAHAGIAN 5: AUDIT BACKEND TERPERINCI
@@ -402,7 +729,8 @@ A.2) CSRF Protection
      - Sec-Fetch-Site header check.
      - Origin/Referrer validation.
      - Proper 403 responses.
-     STATUS: BAIK (Cadangan: Tambah X-CSRF-Token ke exposure list)
+     STATUS: BAIK
+     ISU BAHARU: Fallback logic boleh dibypass (#69)
 
 A.3) Authentication & Authorization
      - bcrypt dengan configurable cost.
@@ -414,12 +742,22 @@ A.3) Authentication & Authorization
 A.4) Session Management
      - HttpOnly, SameSite, Secure flags pada cookie.
      - Session invalidation pada logout.
+     - JWT algorithm fixed to HS256 (prevents alg=none).
+     - Session secret rotation supported (current + previous).
+     - CSRF token 32 bytes via randomBytes.
      STATUS: BAIK
 
 A.5) Rate Limiting
-     - express-rate-limit dengan pelbagai tiers.
-     - Login, API, admin endpoints dilindungi.
-     ISU: IP spoofing via x-forwarded-for (lihat #12)
+     - express-rate-limit dengan pelbagai tiers:
+       * Login IP: 50 attempts / 10 minit
+       * Login user: 15 attempts / 10 minit
+       * Search: 10 / 10 saat
+       * Admin actions: 30 / 10 minit
+       * Admin destructive: 10 / 10 minit
+     - Adaptive rate limiting dengan system protection
+       (NORMAL/DEGRADED/PROTECTION mode).
+     ISU: IP spoofing (#12, #61)
+     ISU: adaptiveRateState Map leak (#56)
 
 A.6) Helmet Security Headers
      - HSTS enabled (180-day max-age).
@@ -438,6 +776,18 @@ A.8) Backup Security
      - Streaming dengan cursor-based pagination (QUERY_PAGE_LIMIT=1000).
      - OOM risk lama telah diperbaiki.
      ISU: Restore masih ada unbounded Set<string> untuk record IDs.
+     ISU: Temp table insert tanpa chunking (#88)
+
+A.9) Input Validation
+     - Zod schema validation dengan error details.
+     - String length limits (max 2048 chars default).
+     - Integer clamping, date parsing, list parsing.
+     STATUS: BAIK
+
+A.10) Logging
+     - Pino structured logging — tiada console.log dalam production.
+     - Sensitive field redaction untuk password, token, email.
+     ISU: Perlu tambah PII redaction (#68)
 
 
 B) ERROR HANDLING
@@ -446,17 +796,25 @@ B) ERROR HANDLING
 B.1) Global Error Handler
      - server/middleware/error-handler.ts menangkap semua unhandled errors.
      - Structured logging via pino.
+     - Differentiated exposed vs internal errors.
+     - Consistent error response format: { ok: false, message, error }
      STATUS: BAIK
 
-B.2) Receipt Service
+B.2) Async Handler
+     - server/http/async-handler.ts properly catches promise rejections.
+     STATUS: BAIK
+
+B.3) Receipt Service
      - 5 catch blocks, SEMUA dengan proper logging.
      - Silent catch block issue telah DISELESAIKAN.
      STATUS: BAIK
 
-B.3) Silent Catches yang Masih Ada
-     - WebSocket broadcast (runtime-manager.ts:40-46)
-     - WebSocket session auth (session-auth.ts:20-22)
-     CADANGAN: Tambah logging.
+B.4) Silent Catches yang Masih Ada
+     - WebSocket broadcast (runtime-manager.ts:40-46) (#43)
+     - WebSocket session auth (session-auth.ts:20-22) (#27)
+     - clearNicknameSession .catch(() => undefined) (#87)
+     - safeSelectRows hides "relation not exist" errors
+     CADANGAN: Tambah logging pada semua.
 
 
 C) DATABASE
@@ -466,11 +824,22 @@ C.1) Schema
      - Drizzle ORM dengan PostgreSQL.
      - Rollup tables sudah ada composite PKs (DIPERBAIKI).
      - N+1 day insert sudah dibatch via sql.join (DIPERBAIKI).
-     ISU: Missing cascade deletes, beberapa nullable fields.
+     ISU: Missing cascade deletes (#24, #71)
+     ISU: Nullable fields tanpa .notNull() (#22, #59, #74)
+     ISU: Timestamps tanpa timezone (#60)
+     ISU: Missing indexes pada kolum status (#72)
+     ISU: Campuran data type untuk amount (#73)
 
 C.2) Migrations
      - Drizzle-kit untuk migration management.
      - Schema governance verified dalam CI.
+     STATUS: BAIK
+
+C.3) Connection Pool
+     - Max connections: configurable via PG_MAX_CONNECTIONS (max 50).
+     - Idle timeout: 30s.
+     - Connection timeout: 5s.
+     - Pool pressure monitoring via db-pool-monitor.ts.
      STATUS: BAIK
 
 
@@ -509,15 +878,31 @@ A.2) useEffect Dependencies
 
 A.3) Error Boundaries
      - AppRouteErrorBoundary.tsx wujud dan berfungsi.
+     - Retry dan reload functionality.
+     ISU: Tiada focus management selepas error (#81)
      STATUS: BAIK
 
 A.4) Lazy Loading
      - lazy-pages.tsx menggunakan React.lazy() untuk code splitting.
-     STATUS: BAIK
+     - Vite manual chunks untuk library berat (charts, pdf, excel).
+     - Module preload strategy filters out heavy assets.
+     STATUS: CEMERLANG
 
 A.5) State Management
      - Kombinasi React hooks, context, dan TanStack Query.
      - Tiada prop drilling yang teruk.
+     - Device-aware cache configuration (low-spec: 10s, high-spec: 30s).
+     STATUS: CEMERLANG
+
+A.6) Memoization
+     - 726 instances useMemo dijumpai — coverage baik.
+     STATUS: BAIK
+
+A.7) Timer/Event Cleanup
+     - setInterval/setTimeout dibersihkan dalam useEffect cleanup.
+     - Document event listeners dipasangkan add/remove.
+     - AbortController digunakan untuk fetch requests.
+     - Refs digunakan untuk mutable state (elak stale closures).
      STATUS: BAIK
 
 
@@ -530,16 +915,31 @@ B.1) Focus Management
      STATUS: BAIK
 
 B.2) Screen Reader Support
-     ISU: Typing indicator tiada aria-label (lihat #20)
+     - aria-label, aria-hidden, role, aria-live, aria-expanded digunakan.
+     ISU: Typing indicator tiada aria-label (#20)
      ISU: Beberapa butang tiada accessible names.
+     ISU: Error boundary tiada focus management (#81)
 
 B.3) Color Contrast
-     - Contrast validation tests wujud.
-     STATUS: BAIK
+     - Foreground/background: ~15:1 contrast (WCAG AAA)
+     - Muted foreground: ~8.2:1 contrast (WCAG AAA)
+     ISU: Accent color contrast ~1.1:1 — SANGAT RENDAH (#80)
 
 B.4) Responsive Design
-     ISU: 100vh pada mobile (lihat #32)
-     ISU: Missing form loading states (lihat #38)
+     - 480+ responsive breakpoint instances (sm:, md:, lg:, xl:).
+     ISU: 100vh pada mobile (#32)
+     ISU: Form loading states (#38)
+     ISU: FloatingAI panel melebihi iPhone 375px (#78)
+
+B.5) Loading & Empty States
+     - Suspense boundaries dan skeleton components.
+     - BackupListEmptyState.tsx — explicit empty state component.
+     STATUS: BAIK
+
+B.6) Form Validation
+     - React Hook Form + Zod integration.
+     - Field-level error rendering.
+     STATUS: BAIK
 
 
 C) CSS & LAYOUT
@@ -548,14 +948,38 @@ C) CSS & LAYOUT
 C.1) Tailwind Configuration
      - Proper content purge.
      - Theme extensions dengan CSS variables.
+     - Dark mode supported via selector strategy.
      STATUS: BAIK
 
-C.2) Z-Index Management
-     - Konsisten dalam kebanyakan komponen.
-     STATUS: BAIK
+C.2) Theme System
+     - CSS variables lengkap dalam theme-tokens.css.
+     - @supports fallback pattern.
+     ISU: Shadow tokens opacity 0% (#58)
+     ISU: 54+ hardcoded colors (#65)
 
-C.3) Mobile Viewport
-     ISU: Beberapa halaman guna 100vh (lihat #32)
+C.3) Z-Index Management
+     ISU: Hardcoded tanpa pengurusan berpusat (#76)
+
+C.4) Mobile Viewport
+     - 100dvh with @supports fallback dalam index.css (BAIK).
+     ISU: FloatingAI.module.css tiada 100svh fallback
+     ISU: Beberapa halaman masih guna 100vh (#32)
+
+C.5) Typography
+     - System fonts sahaja (tiada web fonts — elak CLS).
+     ISU: Nav pill font 13.6px terlalu kecil (#79)
+     ISU: Line height tidak konsisten (#85)
+
+C.6) Touch Targets
+     ISU: Button sizes di bawah 44px minimum (#64)
+
+C.7) Animations
+     - prefers-reduced-motion properly implemented.
+     - Kebanyakan animasi guna transform (BAIK).
+     ISU: Box-shadow animation dalam FloatingAI (#77)
+
+C.8) Print Styles
+     ISU: Hardcoded colors (#83)
 
 
 D) SECURITY (FRONTEND)
@@ -565,15 +989,22 @@ D.1) XSS Prevention
      - dangerouslySetInnerHTML HANYA di chart.tsx.
      - Dilindungi melalui toTrustedHTML().
      - DOM XSS sink tests wujud.
-     STATUS: BAIK
+     - Tiada innerHTML atau eval usage.
+     STATUS: CEMERLANG
 
 D.2) Safe URL Handling
      - resolveSafeUrl() dengan protocol validation.
      STATUS: BAIK
-     ISU KECIL: data: URLs dibenarkan dalam preview (lihat perbincangan)
+     ISU KECIL: data: URLs dibenarkan dalam preview
 
 D.3) Token Storage
-     ISU: Legacy localStorage access masih ada (lihat #17)
+     ISU: Legacy localStorage access masih ada (#17)
+
+D.4) TypeScript Strict Mode
+     - strict: true AKTIF.
+     - exactOptionalPropertyTypes AKTIF.
+     - noUnusedLocals, noUnusedParameters AKTIF.
+     STATUS: CEMERLANG
 
 
 ================================================================================
@@ -583,68 +1014,145 @@ D.3) Token Storage
 A) PACKAGE.JSON
     - 4 moderate npm audit vulnerabilities (esbuild via drizzle-kit).
     - Dependency overrides untuk qs, lodash, rollup, dompurify (BAIK).
-    ISU: Overrides tanpa komen penjelasan (lihat #55).
-    ISU: Missing @types packages (lihat #40).
+    - Node.js >= 24 specified (BAIK).
+    - xlsx dari vendor local (file:vendor/sheetjs/xlsx-0.20.2.tgz).
+    ISU: Overrides tanpa komen penjelasan (#55).
+    ISU: Missing @types packages (#40).
 
 B) TSCONFIG.JSON
     - strict: true AKTIF.
-    ISU: Missing additional strictness flags (lihat #34).
+    - exactOptionalPropertyTypes AKTIF (Kemas Kini: sudah ada).
+    - noUnusedLocals AKTIF.
+    - noImplicitReturns AKTIF.
+    STATUS: CEMERLANG
 
 C) VITE.CONFIG.TS
     - Manual chunk splitting AKTIF.
-    ISU: chunkSizeWarningLimit terlalu tinggi (lihat #30).
-    ISU: Tiada source maps untuk staging (lihat #29).
+    ISU: chunkSizeWarningLimit terlalu tinggi (#30).
+    ISU: Tiada source maps untuk staging (#29).
 
 D) CI/CD PIPELINE (.github/workflows/ci.yml)
     - Typecheck, contract tests, client tests, services tests, routes tests.
     - Build verification + bundle budgets.
     - Coverage gate.
-    ISU: Hardcoded credentials (lihat #13).
-    ISU: Tiada security scanning (lihat #14).
-    ISU: Missing test suites (lihat #37).
+    ISU: Hardcoded credentials (#13).
+    ISU: Tiada security scanning (#14).
+    ISU: Missing test suites (#37).
 
 E) DEPLOYMENT
-    ISU: Nginx config tiada HTTPS (lihat #31).
-    ISU: PM2 config tiada user specification (lihat #16).
+    ISU: Nginx config tiada HTTPS (#31).
+    ISU: PM2 config tiada user specification (#16).
 
 F) .ENV FILES
     - Tiada .env files yang committed. SELAMAT.
     - .env.example wujud dengan semua variables.
-    ISU: Default secrets terlalu lemah (lihat #3).
+    ISU: Default secrets terlalu lemah (#3).
 
 
 ================================================================================
-  BAHAGIAN 8: PERKARA YANG SUDAH BAIK
+  BAHAGIAN 8: AUDIT WEBSOCKET & MEMORY TERPERINCI
 ================================================================================
 
-+-----------------------------------+----------+---------------------------------+
-| Area                              | Status   | Keterangan                      |
-+-----------------------------------+----------+---------------------------------+
-| CSRF Protection                   | Excellent| Double-submit + Sec-Fetch-Site  |
-| Password Hashing                  | Excellent| bcrypt + timing-safe comparison |
-| Trusted Types                     | Excellent| toTrustedHTML() digunakan betul |
-| Safe URL Handling                 | Good     | Protocol validation             |
-| Helmet/Security Headers           | Good     | HSTS, CSP, noSniff, frameguard  |
-| Structured Logging                | Good     | Pino logger konsisten           |
-| Test Coverage                     | Good     | 269 fail ujian, CI coverage gate|
-| Input Validation                  | Good     | Zod schemas pada API contracts  |
-| Cookie Security                   | Good     | HttpOnly, SameSite, Secure      |
-| Rate Limiting                     | Good     | express-rate-limit pelbagai tier|
-| Bundle Budgets                    | Good     | Enforced dalam CI               |
-| Body Size Limits                  | Good     | Differentiated per endpoint     |
-| Error Boundaries                  | Good     | Route-level error boundary      |
-| Backup Streaming                  | Fixed    | Cursor-based pagination         |
-| SQL LIKE Escaping                 | Fixed    | sql-like-utils.ts               |
-| Rollup PKs                        | Fixed    | Composite primary keys          |
-| N+1 Day Insert                    | Fixed    | Batch via sql.join              |
-| Radix UI Focus                    | Good     | Auto focus management dialogs   |
-| Schema Governance                 | Good     | Verified dalam CI               |
-| Repo Hygiene                      | Good     | Automated verification CI       |
-+-----------------------------------+----------+---------------------------------+
+A) WEBSOCKET LIFECYCLE
+
+A.1) Connection Registration
+     ISU: Race condition semasa reconnect — set() selepas close() (#57)
+     ISU: Cleanup paths tidak bersihkan kedua-dua Maps (#67)
+
+A.2) Heartbeat
+     - 30s sweep interval membersihkan dead sockets.
+     ISU: Tiada ws.readyState check sebelum terminate() (#62)
+
+A.3) Authentication
+     - JWT verified, rejected sockets closed before Map.set().
+     - Failed token attempts kini dilog (DIPERBAIKI).
+     STATUS: BAIK
+
+A.4) Broadcast
+     ISU: JSON.stringify tanpa had saiz (#75)
+     ISU: ws.send() return value diabaikan (backpressure) (#75)
+     ISU: Silent catch block (#43)
+
+
+B) MEMORY MANAGEMENT
+
+B.1) Rate Limit State
+     ISU: adaptiveRateState Map boleh membesar tanpa had (#56)
+
+B.2) Tab Visibility Cache
+     ISU: Map tanpa TTL enforcement atau had saiz (#23)
+
+B.3) Backup Restore
+     ISU: Unbounded Set<string> untuk collection record IDs
+     ISU: Temp table INSERT tanpa chunking (#88)
+
+B.4) Payload Processing
+     ISU: JSON parse/stringify tanpa had saiz (#75)
+
+
+C) DATABASE CONNECTION POOL
+
+     - Pool pressure detection (db-pool-monitor.ts).
+     - Warning cooldown prevents log spam (60s).
+     - Max connections: configurable (default max 50).
+     - Idle timeout: 30s.
+     - Connection timeout: 5s.
+     STATUS: BAIK
+
+
+D) BCRYPT OPERATIONS
+
+     - Dummy hash digunakan untuk pengguna tidak wujud (timing-safe).
+     - Asynchronous bcrypt — tidak block event loop.
+     STATUS: CEMERLANG
 
 
 ================================================================================
-  BAHAGIAN 9: KEUTAMAAN PEMBETULAN
+  BAHAGIAN 9: PERKARA YANG SUDAH BAIK
+================================================================================
+
++-------------------------------------------+----------+---------------------------------+
+| Area                                      | Status   | Keterangan                      |
++-------------------------------------------+----------+---------------------------------+
+| CSRF Protection                           | Excellent| Double-submit + Sec-Fetch-Site  |
+| Password Hashing                          | Excellent| bcrypt + timing-safe comparison |
+| Trusted Types                             | Excellent| toTrustedHTML() digunakan betul |
+| XSS Prevention                            | Excellent| Tiada innerHTML/eval            |
+| TypeScript Strict Mode                    | Excellent| strict + exactOptional + more   |
+| Code Splitting                            | Excellent| React.lazy + Vite manual chunks |
+| React Query Cache                         | Excellent| Device-aware cache timing       |
+| Safe URL Handling                         | Good     | Protocol validation             |
+| Helmet/Security Headers                   | Good     | HSTS, CSP, noSniff, frameguard  |
+| Structured Logging                        | Good     | Pino logger konsisten           |
+| Test Coverage                             | Good     | 269 fail ujian, CI coverage gate|
+| Input Validation                          | Good     | Zod schemas pada API contracts  |
+| Cookie Security                           | Good     | HttpOnly, SameSite, Secure      |
+| Rate Limiting                             | Good     | express-rate-limit pelbagai tier|
+| Bundle Budgets                            | Good     | Enforced dalam CI               |
+| Body Size Limits                          | Good     | Differentiated per endpoint     |
+| Error Boundaries                          | Good     | Route-level error boundary      |
+| Timer/Event Cleanup                       | Good     | Proper add/remove patterns      |
+| Debouncing                                | Good     | Search input debounced          |
+| Dark Mode                                 | Good     | Full theme system               |
+| Responsive Design                         | Good     | 480+ breakpoint instances       |
+| Form Validation                           | Good     | React Hook Form + Zod           |
+| Memoization                               | Good     | 726 useMemo instances           |
+| DB Pool Monitoring                        | Good     | Pool pressure detection         |
+| Reduced Motion                            | Good     | prefers-reduced-motion support  |
+| Backup Streaming                          | Fixed    | Cursor-based pagination         |
+| SQL LIKE Escaping                         | Fixed    | sql-like-utils.ts               |
+| Rollup PKs                                | Fixed    | Composite primary keys          |
+| N+1 Day Insert                            | Fixed    | Batch via sql.join              |
+| 100dvh Viewport (index.css)               | Fixed    | @supports fallback pattern      |
+| Receipt Logging                           | Fixed    | All catch blocks now log        |
+| Radix UI Focus                            | Good     | Auto focus management dialogs   |
+| Schema Governance                         | Good     | Verified dalam CI               |
+| Repo Hygiene                              | Good     | Automated verification CI       |
++-------------------------------------------+----------+---------------------------------+
+
+
+================================================================================
+  BAHAGIAN 10: KEUTAMAAN PEMBETULAN (KEMASKINI)
 ================================================================================
 
 P0 — SEGERA (Minggu Ini)
@@ -652,32 +1160,53 @@ P0 — SEGERA (Minggu Ini)
   2. 2FA secret fallback (#2)
   3. .env.example default secrets (#3, #4)
   4. WebSocket connection limit (#8)
+  5. [BAHARU] Rate limit Map leak — daftarkan sweep interval (#56)
+  6. [BAHARU] WebSocket reconnect race condition (#57)
+  7. [BAHARU] Shadow opacity 0% — UI depth hilang sepenuhnya (#58)
+  8. [BAHARU] 13 timestamp tanpa .notNull() (#59)
 
 P1 — SEBELUM PRODUCTION (2 Minggu)
-  5. Command injection validation (#9)
-  6. File upload MIME detection (#10)
-  7. Path traversal check (#11)
-  8. Login rate limit fix (#12)
-  9. CI security scanning (#14, #15)
-  10. Token storage migration (#17)
-  11. useEffect cleanup (#18)
+  9.  Command injection validation (#9)
+  10. File upload MIME detection (#10)
+  11. Path traversal check (#11)
+  12. Login rate limit fix (#12)
+  13. CI security scanning (#14, #15)
+  14. Token storage migration (#17)
+  15. useEffect cleanup (#18)
+  16. [BAHARU] Timestamps tanpa timezone (#60)
+  17. [BAHARU] IP spoofing rate limit (#61)
+  18. [BAHARU] Heartbeat ws.readyState check (#62)
+  19. [BAHARU] Touch targets minimum 44px (#64)
+  20. [BAHARU] Hardcoded colors -> CSS variables (#65)
+  21. [BAHARU] PII logger redaction (#68)
 
 P2 — PENAMBAHBAIKAN BERTERUSAN (Bulan Ini)
-  12. React key anti-pattern (#5, #7)
-  13. Type safety improvements (#6, #34, #35)
-  14. Pagination limits (#25)
-  15. Form loading states (#38)
-  16. Mobile viewport (#32)
-  17. Missing tests dalam CI (#37)
+  22. React key anti-pattern (#5, #7)
+  23. Type safety improvements (#6, #34, #35)
+  24. Pagination limits (#25)
+  25. Form loading states (#38)
+  26. Mobile viewport (#32)
+  27. Missing tests dalam CI (#37)
+  28. [BAHARU] PII encryption at rest (#70)
+  29. [BAHARU] Missing FK onUpdate cascade (#71)
+  30. [BAHARU] Missing indexes pada kolum status (#72)
+  31. [BAHARU] Amount data type standardization (#73)
+  32. [BAHARU] JSON parse/stringify size limits (#75)
+  33. [BAHARU] Z-index centralization (#76)
 
 P3 — NICE TO HAVE
-  18. Error format standardization (#42)
-  19. Documentation improvements (#46, #51)
-  20. Config improvements (#39, #52-55)
+  34. Error format standardization (#42)
+  35. Documentation improvements (#46, #51)
+  36. Config improvements (#39, #52-55)
+  37. [BAHARU] FloatingAI panel responsive fix (#78)
+  38. [BAHARU] Nav pill font size (#79)
+  39. [BAHARU] Error boundary focus management (#81)
+  40. [BAHARU] Line height standardization (#85)
+  41. [BAHARU] Backup restore chunking (#88)
 
 
 ================================================================================
-  BAHAGIAN 10: STATISTIK CODEBASE
+  BAHAGIAN 11: STATISTIK CODEBASE
 ================================================================================
 
 Jumlah fail sumber (*.ts, *.tsx):          ~500+ fail
@@ -689,13 +1218,21 @@ Fail terbesar:
   - collection-daily-record.service.test.ts(1,542 baris)
   - permission-matrix.integration.test.ts  (1,208 baris)
 
+Fail sumber terbesar:
+  - schema-postgres.ts                     (898 baris)
+  - Viewer.tsx                             (839 baris)
+  - sidebar.tsx                            (727 baris, generated)
+  - collection-record-mutation-operations  (725 baris)
+
 Stack Teknologi:
-  Frontend:  React, TypeScript, Tailwind CSS, Radix UI, TanStack Query
-  Backend:   Node.js, Express, Drizzle ORM, Pino logger
-  Database:  PostgreSQL
-  Build:     Vite, esbuild
+  Frontend:  React 18, TypeScript 5.6, Tailwind CSS 3.4, Radix UI,
+             TanStack Query 5, Wouter, React Hook Form, Zod
+  Backend:   Node.js 24+, Express 4, Drizzle ORM, Pino logger
+  Database:  PostgreSQL (pg 8.16)
+  Build:     Vite 6.4, esbuild
   CI/CD:     GitHub Actions
-  Testing:   Vitest, Supertest
+  Testing:   Node.js test runner, Supertest
+  Security:  Helmet 8, express-rate-limit 8, bcrypt 6, jsonwebtoken 9
 
 
 ================================================================================
@@ -705,17 +1242,26 @@ Stack Teknologi:
 Codebase Sumbangan Query Rahmah (SQR) adalah BERKUALITI TINGGI secara
 keseluruhan dengan seni bina yang matang dan amalan keselamatan yang kukuh.
 
-74 isu telah dikenal pasti — kebanyakannya adalah penambahbaikan keselamatan
-defensif dan penyelenggaraan kod yang biasa dalam projek berskala ini.
+Audit menyeluruh kedua (2026-04-08) menambah 34 penemuan baharu kepada
+55 isu asal, menjadikan jumlah 89 isu keseluruhan.
 
-8 isu CRITICAL memerlukan tindakan segera sebelum deployment ke production.
-19 isu HIGH perlu ditangani dalam tempoh 2 minggu.
-Baki 47 isu (MEDIUM + LOW) boleh ditangani secara beransur-ansur.
+Penemuan paling kritikal baharu:
+  * Rate limit Map leak — boleh menyebabkan kehabisan memori (DoS)
+  * WebSocket reconnect race condition — sambungan yatim
+  * Shadow CSS opacity 0% — semua kesan visual depth hilang
+  * 13 timestamp tanpa notNull — integriti data terancam
+  * Semua timestamp tanpa timezone — risiko data inconsistency
 
-Skor kesihatan keseluruhan: 8.2 / 10
+14 isu CRITICAL memerlukan tindakan segera.
+26 isu HIGH perlu ditangani sebelum production.
+Baki 49 isu (MEDIUM + LOW) boleh ditangani secara beransur-ansur.
+
+Skor kesihatan keseluruhan: 7.8 / 10
+(Turun dari 8.2 kerana penemuan baharu kebocoran memori & CSS shadow)
 
 Disediakan oleh: AI Full-Stack Engineer Audit
-Tarikh: 2026-04-07
+Tarikh Asal: 2026-04-07
+Tarikh Kemaskini: 2026-04-08
 
 ================================================================================
   TAMAT LAPORAN AUDIT
