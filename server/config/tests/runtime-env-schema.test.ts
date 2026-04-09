@@ -70,9 +70,10 @@ test("runtime env schema preserves the existing AUTH_COOKIE_SECURE error contrac
   );
 });
 
-test("runtime env schema accepts staged collection PII retirement field lists", () => {
+test("runtime env schema accepts staged collection PII retirement field lists when encryption is configured", () => {
   assert.doesNotThrow(() => {
     validateRuntimeEnvironmentSchema({
+      COLLECTION_PII_ENCRYPTION_KEY: "collection-pii-active-key",
       COLLECTION_PII_RETIRED_FIELDS: "icNumber,customerPhone,accountNumber",
     });
   });
@@ -87,4 +88,24 @@ test("runtime env schema rejects unknown collection PII retirement fields", () =
     },
     /COLLECTION_PII_RETIRED_FIELDS must contain only/i,
   );
+});
+
+test("runtime env schema rejects collection PII retirement fields without an active encryption key", () => {
+  assert.throws(
+    () => {
+      validateRuntimeEnvironmentSchema({
+        COLLECTION_PII_RETIRED_FIELDS: "icNumber,customerPhone,accountNumber",
+      });
+    },
+    /COLLECTION_PII_ENCRYPTION_KEY is required when COLLECTION_PII_RETIRED_FIELDS is set/i,
+  );
+});
+
+test("runtime env schema accepts collection PII retirement fields when the active encryption key is configured", () => {
+  assert.doesNotThrow(() => {
+    validateRuntimeEnvironmentSchema({
+      COLLECTION_PII_ENCRYPTION_KEY: "collection-pii-active-key",
+      COLLECTION_PII_RETIRED_FIELDS: "icNumber,customerPhone,accountNumber",
+    });
+  });
 });

@@ -36,6 +36,7 @@ type CliOptions = {
   apply: boolean;
   batchSize: number;
   fields: ReadonlySet<RedactableCollectionPiiField>;
+  json: boolean;
   maxRows: number | null;
 };
 
@@ -73,12 +74,17 @@ export function parseCliOptions(argv: string[]): CliOptions {
   let apply = false;
   let batchSize = 500;
   let fields = new Set<RedactableCollectionPiiField>(REDACTABLE_COLLECTION_PII_FIELDS);
+  let json = false;
   let maxRows: number | null = null;
 
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
     if (arg === "--apply") {
       apply = true;
+      continue;
+    }
+    if (arg === "--json") {
+      json = true;
       continue;
     }
     if (arg === "--batch-size") {
@@ -99,6 +105,19 @@ export function parseCliOptions(argv: string[]): CliOptions {
       index += 1;
       continue;
     }
+    if (arg === "--fields-env") {
+      const nextValue = argv[index + 1];
+      if (!nextValue) {
+        throw new Error("--fields-env requires an environment variable name.");
+      }
+      const envValue = String(process.env[nextValue] || "").trim();
+      if (!envValue) {
+        throw new Error(`--fields-env could not find a non-empty value in ${nextValue}.`);
+      }
+      fields = new Set(parseRedactableCollectionPiiFields(envValue));
+      index += 1;
+      continue;
+    }
     if (arg === "--max-rows") {
       const nextValue = argv[index + 1];
       if (!nextValue) {
@@ -115,6 +134,7 @@ export function parseCliOptions(argv: string[]): CliOptions {
     apply,
     batchSize,
     fields,
+    json,
     maxRows,
   };
 }
@@ -163,6 +183,13 @@ function countPlannedFields(plan: CollectionPiiRedactionPlan): number {
     (count, field) => count + Number(plan[field]),
     0,
   );
+}
+
+export function resolveRedactedCollectionPiiPlaintextValue(
+  currentValue: string | null,
+  shouldRedact: boolean,
+): string | null {
+  return shouldRedact ? null : currentValue;
 }
 
 function formatFieldSummary(prefix: string, counts: Record<RedactableCollectionPiiField, number>): string {
@@ -257,22 +284,39 @@ export async function main() {
           continue;
         }
 
+        const customerName = resolveRedactedCollectionPiiPlaintextValue(
+          row.customer_name,
+          redactionPlan.customerName,
+        );
+        const icNumber = resolveRedactedCollectionPiiPlaintextValue(
+          row.ic_number,
+          redactionPlan.icNumber,
+        );
+        const customerPhone = resolveRedactedCollectionPiiPlaintextValue(
+          row.customer_phone,
+          redactionPlan.customerPhone,
+        );
+        const accountNumber = resolveRedactedCollectionPiiPlaintextValue(
+          row.account_number,
+          redactionPlan.accountNumber,
+        );
+
         await pool.query(
           `
             UPDATE public.collection_records
             SET
-              customer_name = CASE WHEN $2::boolean THEN '' ELSE customer_name END,
-              ic_number = CASE WHEN $3::boolean THEN '' ELSE ic_number END,
-              customer_phone = CASE WHEN $4::boolean THEN '' ELSE customer_phone END,
-              account_number = CASE WHEN $5::boolean THEN '' ELSE account_number END
+              customer_name = $2,
+              ic_number = $3,
+              customer_phone = $4,
+              account_number = $5
             WHERE id = $1::uuid
           `,
           [
             row.id,
-            redactionPlan.customerName,
-            redactionPlan.icNumber,
-            redactionPlan.customerPhone,
-            redactionPlan.accountNumber,
+            customerName,
+            icNumber,
+            customerPhone,
+            accountNumber,
           ],
         );
         redactedRows += 1;
@@ -300,6 +344,24 @@ export async function main() {
       formatFieldSummary("candidate", candidateFieldCounts),
       formatFieldSummary("redacted", redactedFieldCounts),
     ].join(" ");
+
+    if (options.json) {
+      console.log(JSON.stringify({
+        apply: options.apply,
+        batchSize: options.batchSize,
+        candidateFieldCounts,
+        candidateFields,
+        candidateRows,
+        fields: Array.from(options.fields),
+        maxRows: options.maxRows,
+        mode: options.apply ? "apply" : "dry-run",
+        processedRows,
+        redactedFieldCounts,
+        redactedFields,
+        redactedRows,
+      }, null, 2));
+      return;
+    }
 
     if (!options.apply && candidateRows > 0) {
       console.log(`${summary}\nRun 'npm run collection:redact-plaintext-pii -- --apply' to clear plaintext columns for rows already protected by current encrypted shadows and search hashes.`);

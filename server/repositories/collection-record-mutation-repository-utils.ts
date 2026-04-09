@@ -49,6 +49,7 @@ export async function updateCollectionRecord(
   if (data.customerName !== undefined) {
     const customerNameEncrypted = encryptCollectionPiiFieldValue(data.customerName);
     updateChunks.push(sql`customer_name = ${resolveStoredCollectionPiiPlaintextValue({
+      field: "customerName",
       plaintext: data.customerName,
       encrypted: customerNameEncrypted,
     })}`);
@@ -64,6 +65,7 @@ export async function updateCollectionRecord(
   if (data.icNumber !== undefined) {
     const icNumberEncrypted = encryptCollectionPiiFieldValue(data.icNumber);
     updateChunks.push(sql`ic_number = ${resolveStoredCollectionPiiPlaintextValue({
+      field: "icNumber",
       plaintext: data.icNumber,
       encrypted: icNumberEncrypted,
     })}`);
@@ -75,6 +77,7 @@ export async function updateCollectionRecord(
   if (data.customerPhone !== undefined) {
     const customerPhoneEncrypted = encryptCollectionPiiFieldValue(data.customerPhone);
     updateChunks.push(sql`customer_phone = ${resolveStoredCollectionPiiPlaintextValue({
+      field: "customerPhone",
       plaintext: data.customerPhone,
       encrypted: customerPhoneEncrypted,
     })}`);
@@ -86,6 +89,7 @@ export async function updateCollectionRecord(
   if (data.accountNumber !== undefined) {
     const accountNumberEncrypted = encryptCollectionPiiFieldValue(data.accountNumber);
     updateChunks.push(sql`account_number = ${resolveStoredCollectionPiiPlaintextValue({
+      field: "accountNumber",
       plaintext: data.accountNumber,
       encrypted: accountNumberEncrypted,
     })}`);

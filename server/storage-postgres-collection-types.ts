@@ -1,3 +1,9 @@
+import type {
+  CollectionAmountCents,
+  CollectionAmountMyrNumber,
+  CollectionAmountMyrString,
+} from "../shared/collection-amount-types";
+
 export type CollectionBatch = "P10" | "P25" | "MDD02" | "MDD10" | "MDD18" | "MDD25";
 
 export type CollectionReceiptValidationStatus =
@@ -35,8 +41,8 @@ export type CollectionRecordReceipt = {
   originalMimeType: string;
   originalExtension: string;
   fileSize: number;
-  receiptAmount: string | null;
-  extractedAmount: string | null;
+  receiptAmount: CollectionAmountMyrString | null;
+  extractedAmount: CollectionAmountMyrString | null;
   extractionStatus: CollectionReceiptExtractionStatus;
   extractionConfidence: number | null;
   receiptDate: string | null;
@@ -54,11 +60,11 @@ export type CollectionRecord = {
   accountNumber: string;
   batch: CollectionBatch;
   paymentDate: string;
-  amount: string;
+  amount: CollectionAmountMyrString;
   receiptFile: string | null;
   receipts: CollectionRecordReceipt[];
   archivedReceipts?: CollectionRecordReceipt[];
-  receiptTotalAmount: string;
+  receiptTotalAmount: CollectionAmountMyrString;
   receiptValidationStatus: CollectionReceiptValidationStatus;
   receiptValidationMessage: string | null;
   receiptCount: number;
@@ -206,7 +212,7 @@ export type CollectionDailyPaidCustomer = {
   id: string;
   customerName: string;
   accountNumber: string;
-  amount: number;
+  amount: CollectionAmountMyrNumber;
   collectionStaffNickname: string;
 };
 
@@ -217,7 +223,7 @@ export type CreateCollectionRecordInput = {
   accountNumber: string;
   batch: CollectionBatch;
   paymentDate: string;
-  amount: number;
+  amount: CollectionAmountMyrNumber;
   receiptFile?: string | null;
   createdByLogin: string;
   collectionStaffNickname: string;
@@ -229,8 +235,8 @@ export type CreateCollectionRecordReceiptInput = {
   originalMimeType: string;
   originalExtension: string;
   fileSize: number;
-  receiptAmountCents?: number | null | undefined;
-  extractedAmountCents?: number | null | undefined;
+  receiptAmountCents?: CollectionAmountCents | null | undefined;
+  extractedAmountCents?: CollectionAmountCents | null | undefined;
   extractionStatus?: CollectionReceiptExtractionStatus | null | undefined;
   extractionConfidence?: number | null | undefined;
   receiptDate?: string | null | undefined;
@@ -240,8 +246,8 @@ export type CreateCollectionRecordReceiptInput = {
 
 export type UpdateCollectionRecordReceiptInput = {
   receiptId: string;
-  receiptAmountCents?: number | null | undefined;
-  extractedAmountCents?: number | null | undefined;
+  receiptAmountCents?: CollectionAmountCents | null | undefined;
+  extractedAmountCents?: CollectionAmountCents | null | undefined;
   extractionStatus?: CollectionReceiptExtractionStatus | null | undefined;
   extractionConfidence?: number | null | undefined;
   receiptDate?: string | null | undefined;
@@ -255,7 +261,7 @@ export type UpdateCollectionRecordInput = {
   accountNumber?: string;
   batch?: CollectionBatch;
   paymentDate?: string;
-  amount?: number;
+  amount?: CollectionAmountMyrNumber;
   receiptFile?: string | null;
   collectionStaffNickname?: string;
 };

@@ -9,6 +9,7 @@ import {
   getRedactionPlan,
   parseCliOptions,
   parseRedactableCollectionPiiFields,
+  resolveRedactedCollectionPiiPlaintextValue,
 } from "./redact-collection-pii-plaintext";
 
 test("parseRedactableCollectionPiiFields accepts staged numeric-field rollout", () => {
@@ -33,8 +34,35 @@ test("parseCliOptions accepts --fields alongside apply and batch sizing", () => 
 
   assert.equal(options.apply, true);
   assert.equal(options.batchSize, 250);
+  assert.equal(options.json, false);
   assert.equal(options.maxRows, 1000);
   assert.deepEqual(Array.from(options.fields), ["customerPhone", "accountNumber"]);
+});
+
+test("parseCliOptions accepts --fields-env and --json", () => {
+  const previous = process.env.COLLECTION_PII_RETIRED_FIELDS;
+  process.env.COLLECTION_PII_RETIRED_FIELDS = "icNumber,customerPhone,accountNumber";
+
+  try {
+    const options = parseCliOptions([
+      "--fields-env",
+      "COLLECTION_PII_RETIRED_FIELDS",
+      "--json",
+    ]);
+
+    assert.equal(options.json, true);
+    assert.deepEqual(Array.from(options.fields), [
+      "icNumber",
+      "customerPhone",
+      "accountNumber",
+    ]);
+  } finally {
+    if (previous === undefined) {
+      delete process.env.COLLECTION_PII_RETIRED_FIELDS;
+    } else {
+      process.env.COLLECTION_PII_RETIRED_FIELDS = previous;
+    }
+  }
 });
 
 test("getRedactionPlan only evaluates requested staged fields", () => {
@@ -87,4 +115,19 @@ test("getRedactionPlan only evaluates requested staged fields", () => {
       process.env.COLLECTION_PII_ENCRYPTION_KEY = previousKey;
     }
   }
+});
+
+test("resolveRedactedCollectionPiiPlaintextValue clears retired plaintext to null", () => {
+  assert.equal(
+    resolveRedactedCollectionPiiPlaintextValue("Alice", true),
+    null,
+  );
+  assert.equal(
+    resolveRedactedCollectionPiiPlaintextValue("Alice", false),
+    "Alice",
+  );
+  assert.equal(
+    resolveRedactedCollectionPiiPlaintextValue(null, false),
+    null,
+  );
 });

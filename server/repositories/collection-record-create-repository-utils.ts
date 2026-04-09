@@ -35,18 +35,22 @@ export async function createCollectionRecord(data: CreateCollectionRecordInput):
     accountNumber: data.accountNumber,
   });
   const persistedCustomerName = resolveStoredCollectionPiiPlaintextValue({
+    field: "customerName",
     plaintext: data.customerName,
     encrypted: encryptedPii?.customerNameEncrypted,
   });
   const persistedIcNumber = resolveStoredCollectionPiiPlaintextValue({
+    field: "icNumber",
     plaintext: data.icNumber,
     encrypted: encryptedPii?.icNumberEncrypted,
   });
   const persistedCustomerPhone = resolveStoredCollectionPiiPlaintextValue({
+    field: "customerPhone",
     plaintext: data.customerPhone,
     encrypted: encryptedPii?.customerPhoneEncrypted,
   });
   const persistedAccountNumber = resolveStoredCollectionPiiPlaintextValue({
+    field: "accountNumber",
     plaintext: data.accountNumber,
     encrypted: encryptedPii?.accountNumberEncrypted,
   });

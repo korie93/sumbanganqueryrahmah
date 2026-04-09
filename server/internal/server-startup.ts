@@ -12,6 +12,7 @@ import type { CategoryStatsService } from "../services/category-stats.service";
 import { logger } from "../lib/logger";
 import { registerFrontendStatic } from "./frontend-static";
 import { startIdleSessionSweeper } from "./idle-session-sweeper";
+import { assertCollectionPiiRetirementStartupReady } from "./collection-pii-retirement-startup";
 
 type RuntimeSettings = {
   sessionTimeoutMinutes: number;
@@ -70,6 +71,21 @@ export async function startLocalServer(options: StartLocalServerOptions) {
 
   markStartupStage("initializing-storage");
   await storage.init();
+  try {
+    await assertCollectionPiiRetirementStartupReady();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    const startupError = error instanceof Error ? error : new Error(message);
+    Object.assign(startupError, {
+      startupReason: "COLLECTION_PII_RETIREMENT_BLOCKED",
+    });
+    notifyFatalStartup("COLLECTION_PII_RETIREMENT_BLOCKED", message);
+    markStartupFailed("COLLECTION_PII_RETIREMENT_BLOCKED", message);
+    logger.error("Local server startup blocked by collection PII retirement policy", {
+      error,
+    });
+    throw startupError;
+  }
 
   markStartupStage("registering-runtime");
   registerFrontendStatic(app);

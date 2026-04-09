@@ -196,7 +196,15 @@ const runtimeEnvironmentSchema = z.object({
   SQR_MAX_WORKERS: optionalIntEnv("SQR_MAX_WORKERS", { min: 1 }),
   SQR_INITIAL_WORKERS: optionalIntEnv("SQR_INITIAL_WORKERS", { min: 1 }),
   SQR_PREALLOCATE_MB: optionalIntEnv("SQR_PREALLOCATE_MB", { min: 0 }),
-}).passthrough();
+}).passthrough().superRefine((env, ctx) => {
+  if (env.COLLECTION_PII_RETIRED_FIELDS && !env.COLLECTION_PII_ENCRYPTION_KEY) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["COLLECTION_PII_ENCRYPTION_KEY"],
+      message: "COLLECTION_PII_ENCRYPTION_KEY is required when COLLECTION_PII_RETIRED_FIELDS is set.",
+    });
+  }
+});
 
 function formatRuntimeEnvIssue(issue: z.ZodIssue) {
   const envName = issue.path.join(".") || "runtime environment";

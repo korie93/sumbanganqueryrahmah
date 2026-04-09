@@ -319,21 +319,36 @@ export function resolveCollectionCustomerNameSearchHashesValue(params: {
 }
 
 export function resolveStoredCollectionPiiPlaintextValue(params: {
+  field?: CollectionPiiFieldName;
   plaintext: unknown;
   encrypted?: unknown;
-  fallback?: string;
-}): string {
+  fallback?: string | null;
+}): string | null {
   const plaintext = normalizeCollectionPiiValue(params.plaintext);
   const encrypted = normalizeCollectionPiiValue(params.encrypted);
+  if (params.field && isCollectionPiiPlaintextRetiredField(params.field)) {
+    if (!hasCollectionPiiEncryptionConfigured() && plaintext) {
+      throw new Error(
+        `Cannot retire collection PII plaintext for ${params.field} without COLLECTION_PII_ENCRYPTION_KEY.`,
+      );
+    }
+    if (plaintext && !encrypted) {
+      throw new Error(
+        `Cannot persist retired collection PII field ${params.field} without an encrypted shadow value.`,
+      );
+    }
+    return params.fallback ?? null;
+  }
+
   if (encrypted && hasCollectionPiiEncryptionConfigured()) {
-    return params.fallback ?? "";
+    return params.fallback ?? null;
   }
 
   if (plaintext) {
     return plaintext;
   }
 
-  return params.fallback ?? "";
+  return params.fallback ?? null;
 }
 
 export function shouldRewriteCollectionPiiShadowValue(params: {

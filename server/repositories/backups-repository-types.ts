@@ -5,6 +5,10 @@ import type {
   Import,
   InsertBackup,
 } from "../../shared/schema-postgres";
+import type {
+  CollectionAmountCentsLike,
+  CollectionAmountMyrLike,
+} from "../../shared/collection-amount-types";
 
 export const BACKUP_CHUNK_SIZE = 500;
 export const QUERY_PAGE_LIMIT = 1000;
@@ -18,8 +22,8 @@ export type BackupsRepositoryOptions = {
   parseBackupMetadataSafe: (raw: unknown) => Record<string, any> | null;
 };
 
-export type BackupAmountMyr = string | number;
-export type BackupAmountCents = string | number;
+export type BackupAmountMyr = CollectionAmountMyrLike;
+export type BackupAmountCents = CollectionAmountCentsLike;
 
 export type RestoreDatasetStats = {
   processed: number;

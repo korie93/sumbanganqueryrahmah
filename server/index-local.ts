@@ -12,6 +12,10 @@ type WorkerIpcProcess = NodeJS.Process & {
   send?: (message: WorkerFatalMessage) => void;
 };
 
+type StartupReasonError = Error & {
+  startupReason?: string;
+};
+
 const workerIpcProcess = process as WorkerIpcProcess;
 
 function notifyMasterFatalStartup(reason: string, details?: string) {
@@ -95,8 +99,15 @@ async function startServer() {
 
 startServer().catch(async (error) => {
   const message = error instanceof Error ? error.message : String(error);
-  notifyMasterFatalStartup("SERVER_STARTUP_ERROR", message);
-  markStartupFailed("SERVER_STARTUP_ERROR", message);
+  const startupReasonCandidate =
+    error instanceof Error ? (error as StartupReasonError).startupReason : null;
+  const startupReason =
+    typeof startupReasonCandidate === "string"
+      ? startupReasonCandidate
+      : "SERVER_STARTUP_ERROR";
+
+  notifyMasterFatalStartup(startupReason, message);
+  markStartupFailed(startupReason, message);
   logger.error("Local server failed during startup", { error });
 
   try {

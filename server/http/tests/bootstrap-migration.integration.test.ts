@@ -82,6 +82,14 @@ const collectionPiiShadowMigrationSql = readFileSync(
   path.join(repoRoot, "drizzle", collectionPiiShadowMigrationFileName),
   "utf8",
 );
+const collectionPiiPlaintextNullableMigrationFileName = migrationSqlFileNames.find((name) => /^0030_.*\.sql$/.test(name));
+if (!collectionPiiPlaintextNullableMigrationFileName) {
+  throw new Error("Expected a 0030 collection PII plaintext nullable migration file in drizzle/");
+}
+const collectionPiiPlaintextNullableMigrationSql = readFileSync(
+  path.join(repoRoot, "drizzle", collectionPiiPlaintextNullableMigrationFileName),
+  "utf8",
+);
 const preTimezoneMigrationSqlTexts = migrationSqlFileNames
   .filter((name) => name.localeCompare(timezoneMigrationFileName) < 0)
   .sort((left, right) => left.localeCompare(right))
@@ -827,7 +835,7 @@ test(
       await ensureCollectionRecordsTables(drizzle(pool));
 
       const recordResult = await pool.query<{
-        customer_phone: string;
+        customer_phone: string | null;
         created_by_login: string;
         collection_staff_nickname: string;
         staff_username: string;
@@ -839,11 +847,15 @@ test(
       `, [recordId]);
       const record = recordResult.rows[0];
 
-      assert.equal(record?.customer_phone, "-");
+      assert.equal(record?.customer_phone, null);
       assert.equal(record?.created_by_login, "unknown");
       assert.equal(record?.collection_staff_nickname, "unknown");
       assert.equal(record?.staff_username, "unknown");
       assert.ok(record?.updated_at instanceof Date);
+      assert.equal(await columnIsNotNull(pool, "collection_records", "customer_name"), false);
+      assert.equal(await columnIsNotNull(pool, "collection_records", "ic_number"), false);
+      assert.equal(await columnIsNotNull(pool, "collection_records", "customer_phone"), false);
+      assert.equal(await columnIsNotNull(pool, "collection_records", "account_number"), false);
 
       const receiptResult = await pool.query<{
         storage_path: string;
@@ -959,6 +971,7 @@ test(
       await applySql(pool, collectionRecordDailyRollupQueueMigrationSql);
       await applySql(pool, monitorAndMonthlyRollupsMigrationSql);
       await applySql(pool, collectionPiiShadowMigrationSql);
+      await applySql(pool, collectionPiiPlaintextNullableMigrationSql);
 
       const receiptCount = await pool.query<{ count: number }>(
         `
@@ -969,7 +982,7 @@ test(
         [recordId],
       );
       const record = await pool.query<{
-        customer_phone: string;
+        customer_phone: string | null;
         created_by_login: string;
         collection_staff_nickname: string;
         staff_username: string;
@@ -983,7 +996,7 @@ test(
       );
 
       assert.equal(receiptCount.rows[0]?.count, 1);
-      assert.equal(record.rows[0]?.customer_phone, "-");
+      assert.equal(record.rows[0]?.customer_phone, null);
       assert.equal(record.rows[0]?.created_by_login, "unknown");
       assert.equal(record.rows[0]?.collection_staff_nickname, "unknown");
       assert.equal(record.rows[0]?.staff_username, "unknown");

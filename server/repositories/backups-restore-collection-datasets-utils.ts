@@ -246,18 +246,22 @@ export async function restoreCollectionRecordsFromBackup(
             accountNumber: row.accountNumber,
           });
           const persistedCustomerName = resolveStoredCollectionPiiPlaintextValue({
+            field: "customerName",
             plaintext: row.customerName,
             encrypted: encryptedPii?.customerNameEncrypted,
           });
           const persistedIcNumber = resolveStoredCollectionPiiPlaintextValue({
+            field: "icNumber",
             plaintext: row.icNumber,
             encrypted: encryptedPii?.icNumberEncrypted,
           });
           const persistedCustomerPhone = resolveStoredCollectionPiiPlaintextValue({
+            field: "customerPhone",
             plaintext: row.customerPhone,
             encrypted: encryptedPii?.customerPhoneEncrypted,
           });
           const persistedAccountNumber = resolveStoredCollectionPiiPlaintextValue({
+            field: "accountNumber",
             plaintext: row.accountNumber,
             encrypted: encryptedPii?.accountNumberEncrypted,
           });

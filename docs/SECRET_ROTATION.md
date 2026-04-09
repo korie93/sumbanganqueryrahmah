@@ -109,34 +109,38 @@ through `COLLECTION_PII_ENCRYPTION_KEY_PREVIOUS` for decryption only.
    `npm run collection:reencrypt-pii -- --apply` to re-encrypt them with the
    active key.
 7. Optional after rollout verification: run
+   `npm run collection:redact-sensitive-plaintext-pii`, then
+   `npm run collection:redact-sensitive-plaintext-pii -- --apply`, to clear
+   historical plaintext for `icNumber`, `customerPhone`, and `accountNumber`
+   first. This now writes `NULL`, not empty strings, for retired plaintext.
+   New writes and restore flows already store collection PII encrypted-first
+   when `COLLECTION_PII_ENCRYPTION_KEY` is active, so this task mainly retires
+   historical plaintext.
+8. After the sensitive fields are clean, run
    `npm run collection:redact-plaintext-pii`, then
-   `npm run collection:redact-plaintext-pii -- --apply`, to clear plaintext
-   collection PII for legacy rows that already have current encrypted shadows
-   and blind-index hashes. New writes and restore flows now store collection
-   PII encrypted-first when `COLLECTION_PII_ENCRYPTION_KEY` is active, so this
-   task mainly retires historical plaintext. Safer staged rollout: start with
-   `--fields icNumber,customerPhone,accountNumber` first, then add
-   `customerName` after the team confirms the token-prefix blind-index search
-   behavior is sufficient for live operations.
-8. Re-run `npm run collection:pii-status` and confirm plaintext/redaction
+   `npm run collection:redact-plaintext-pii -- --apply`, only when the team is
+   ready to include `customerName` too and has confirmed the token-prefix
+   blind-index search behavior is sufficient for live operations.
+9. Re-run `npm run collection:pii-status` and confirm plaintext/redaction
    counts move in the expected direction before removing the previous key. For
    the first staged retirement gate, `npm run collection:verify-pii-sensitive-retirement`
    now fails if `icNumber`, `customerPhone`, or `accountNumber` still have
    plaintext, redactable legacy rows, or pending rewrite work.
-9. Optional once a staged gate is clean: set
+10. Optional once a staged gate is clean: set
    `COLLECTION_PII_RETIRED_FIELDS=icNumber,customerPhone,accountNumber` to stop
    live read paths from falling back to plaintext for those fields. After full
    retirement is clean, you can extend this to
    `customerName,icNumber,customerPhone,accountNumber`.
+   Startup now rejects this env if `COLLECTION_PII_ENCRYPTION_KEY` is missing.
    `npm run collection:verify-pii-retired-fields` now checks the exact env list
    before that rollout.
-10. Verify collection create, edit, list, summary, backup export, and backup
+11. Verify collection create, edit, list, summary, backup export, and backup
     restore paths.
-11. Keep `COLLECTION_PII_ENCRYPTION_KEY_PREVIOUS` only for the intended
+12. Keep `COLLECTION_PII_ENCRYPTION_KEY_PREVIOUS` only for the intended
    compatibility window while older encrypted rows and backups are being
    rewritten or phased out.
-12. Remove the old value from `COLLECTION_PII_ENCRYPTION_KEY_PREVIOUS`.
-13. Redeploy or restart all app processes.
+13. Remove the old value from `COLLECTION_PII_ENCRYPTION_KEY_PREVIOUS`.
+14. Redeploy or restart all app processes.
 
 ### Emergency Rotation
 

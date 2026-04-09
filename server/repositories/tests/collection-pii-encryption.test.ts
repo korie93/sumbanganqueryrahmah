@@ -132,6 +132,46 @@ test("collection PII field resolution can suppress plaintext fallback for retire
   );
 });
 
+test("collection PII helpers reject retired plaintext persistence without an active encryption key", () => {
+  withCollectionPiiKeys(
+    {
+      current: null,
+      retiredFields: "icNumber,customerPhone,accountNumber",
+    },
+    () => {
+      assert.throws(
+        () =>
+          resolveStoredCollectionPiiPlaintextValue({
+            field: "icNumber",
+            plaintext: "900101015555",
+            encrypted: "",
+          }),
+        /Cannot retire collection PII plaintext for icNumber without COLLECTION_PII_ENCRYPTION_KEY/i,
+      );
+    },
+  );
+});
+
+test("collection PII helpers reject retired plaintext persistence when the encrypted shadow value is missing", () => {
+  withCollectionPiiKeys(
+    {
+      current: "test-collection-pii-encryption-key",
+      retiredFields: "icNumber,customerPhone,accountNumber",
+    },
+    () => {
+      assert.throws(
+        () =>
+          resolveStoredCollectionPiiPlaintextValue({
+            field: "customerPhone",
+            plaintext: "0123000001",
+            encrypted: "",
+          }),
+        /Cannot persist retired collection PII field customerPhone without an encrypted shadow value/i,
+      );
+    },
+  );
+});
+
 test("mapCollectionRecordRow falls back to encrypted collection PII shadow columns", () => {
   withCollectionPiiKeys({ current: "test-collection-pii-encryption-key" }, () => {
     const encrypted = buildEncryptedCollectionRecordPiiValues({
@@ -189,7 +229,7 @@ test("collection PII helpers stay disabled when no encryption key is configured"
   });
 });
 
-test("collection PII helpers keep plaintext empty for storage when current encrypted shadows are available", () => {
+test("collection PII helpers keep plaintext storage nullable when current encrypted shadows are available", () => {
   withCollectionPiiKeys({ current: "test-collection-pii-encryption-key" }, () => {
     const encrypted = buildEncryptedCollectionRecordPiiValues({
       customerName: "Alice Tan",
@@ -200,20 +240,23 @@ test("collection PII helpers keep plaintext empty for storage when current encry
 
     assert.equal(
       resolveStoredCollectionPiiPlaintextValue({
+        field: "customerName",
         plaintext: "Alice Tan",
         encrypted: encrypted?.customerNameEncrypted,
       }),
-      "",
+      null,
     );
     assert.equal(
       resolveStoredCollectionPiiPlaintextValue({
+        field: "icNumber",
         plaintext: "900101015555",
         encrypted: encrypted?.icNumberEncrypted,
       }),
-      "",
+      null,
     );
     assert.equal(
       resolveStoredCollectionPiiPlaintextValue({
+        field: "customerName",
         plaintext: "Alice Tan",
         encrypted: "",
       }),
@@ -226,6 +269,7 @@ test("collection PII helpers keep plaintext storage fallback when encryption is 
   withCollectionPiiKeys({ current: null }, () => {
     assert.equal(
       resolveStoredCollectionPiiPlaintextValue({
+        field: "customerName",
         plaintext: "Alice Tan",
         encrypted: "enc.value",
       }),

@@ -1,3 +1,9 @@
+import type {
+  CollectionAmountMyrLike,
+  CollectionAmountMyrNumber,
+  CollectionAmountMyrString,
+} from "@shared/collection-amount-types";
+
 export type CollectionBatch = "P10" | "P25" | "MDD02" | "MDD10" | "MDD18" | "MDD25";
 
 export type CollectionRecordReceipt = {
@@ -8,8 +14,8 @@ export type CollectionRecordReceipt = {
   originalMimeType: string;
   originalExtension: string;
   fileSize: number;
-  receiptAmount: string | null;
-  extractedAmount: string | null;
+  receiptAmount: CollectionAmountMyrString | null;
+  extractedAmount: CollectionAmountMyrString | null;
   extractionStatus: CollectionReceiptExtractionStatus;
   extractionConfidence: number | null;
   receiptDate: string | null;
@@ -40,11 +46,11 @@ export type CollectionRecord = {
   accountNumber: string;
   batch: CollectionBatch;
   paymentDate: string;
-  amount: string;
+  amount: CollectionAmountMyrString;
   receiptFile: string | null;
   receipts: CollectionRecordReceipt[];
   archivedReceipts?: CollectionRecordReceipt[];
-  receiptTotalAmount: string;
+  receiptTotalAmount: CollectionAmountMyrString;
   receiptValidationStatus: CollectionReceiptValidationStatus;
   receiptValidationMessage: string | null;
   receiptCount: number;
@@ -94,8 +100,8 @@ export type CollectionReceiptPayload = {
 
 export type CollectionReceiptMetadata = {
   receiptId?: string | undefined;
-  receiptAmount?: number | string | null | undefined;
-  extractedAmount?: number | string | null | undefined;
+  receiptAmount?: CollectionAmountMyrLike | null | undefined;
+  extractedAmount?: CollectionAmountMyrLike | null | undefined;
   extractionStatus?: CollectionReceiptExtractionStatus | null | undefined;
   extractionConfidence?: number | string | null | undefined;
   receiptDate?: string | null | undefined;
@@ -110,7 +116,7 @@ export type CreateCollectionPayload = {
   accountNumber: string;
   batch: CollectionBatch;
   paymentDate: string;
-  amount: number;
+  amount: CollectionAmountMyrNumber;
   collectionStaffNickname: string;
   receipt?: CollectionReceiptPayload | null;
   receipts?: CollectionReceiptPayload[] | null;

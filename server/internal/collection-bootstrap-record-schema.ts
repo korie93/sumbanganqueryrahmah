@@ -13,6 +13,7 @@ import {
   inferMimeTypeFromReceiptPath,
   type BootstrapSqlExecutor,
 } from "./collection-bootstrap-records-shared";
+import { buildCollectionAmountMyrToCentsSql } from "../repositories/collection-amount-sql";
 
 const COLLECTION_PII_BACKFILL_BATCH_SIZE = 500;
 
@@ -21,17 +22,17 @@ export async function ensureCollectionRecordBaseSchema(database: BootstrapSqlExe
     sql`
       CREATE TABLE IF NOT EXISTS public.collection_records (
         id uuid PRIMARY KEY,
-        customer_name text NOT NULL,
+        customer_name text,
         customer_name_encrypted text,
         customer_name_search_hash text,
         customer_name_search_hashes text[],
-        ic_number text NOT NULL,
+        ic_number text,
         ic_number_encrypted text,
         ic_number_search_hash text,
-        customer_phone text NOT NULL,
+        customer_phone text,
         customer_phone_encrypted text,
         customer_phone_search_hash text,
-        account_number text NOT NULL,
+        account_number text,
         account_number_encrypted text,
         account_number_search_hash text,
         batch text NOT NULL,
@@ -77,7 +78,21 @@ export async function ensureCollectionRecordBaseSchema(database: BootstrapSqlExe
     sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS staff_username text`,
     sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS created_at timestamp with time zone DEFAULT now()`,
     sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS updated_at timestamp with time zone DEFAULT now()`,
-    sql`UPDATE public.collection_records SET customer_phone = COALESCE(NULLIF(customer_phone, ''), '-')`,
+    sql`ALTER TABLE public.collection_records ALTER COLUMN customer_name DROP NOT NULL`,
+    sql`ALTER TABLE public.collection_records ALTER COLUMN ic_number DROP NOT NULL`,
+    sql`ALTER TABLE public.collection_records ALTER COLUMN customer_phone DROP NOT NULL`,
+    sql`ALTER TABLE public.collection_records ALTER COLUMN account_number DROP NOT NULL`,
+    sql`
+      UPDATE public.collection_records
+      SET
+        customer_name = NULLIF(trim(COALESCE(customer_name, '')), ''),
+        ic_number = NULLIF(trim(COALESCE(ic_number, '')), ''),
+        customer_phone = CASE
+          WHEN trim(COALESCE(customer_phone, '')) IN ('', '-') THEN NULL
+          ELSE trim(customer_phone)
+        END,
+        account_number = NULLIF(trim(COALESCE(account_number, '')), '')
+    `,
     sql`
       UPDATE public.collection_records
       SET created_by_login = COALESCE(NULLIF(created_by_login, ''), NULLIF(staff_username, ''), 'unknown')
@@ -314,6 +329,8 @@ async function backfillLegacyCollectionReceipts(database: BootstrapSqlExecutor):
 }
 
 async function syncCollectionReceiptValidation(database: BootstrapSqlExecutor): Promise<void> {
+  const recordAmountCentsSql = buildCollectionAmountMyrToCentsSql(sql.raw("record.amount"));
+
   await executeBootstrapStatements(database, [
     sql`
       UPDATE public.collection_records record
@@ -324,15 +341,15 @@ async function syncCollectionReceiptValidation(database: BootstrapSqlExecutor): 
         receipt_validation_status = CASE
           WHEN COALESCE(stats.receipt_count, 0) = 0 THEN 'unverified'
           WHEN COALESCE(stats.missing_amount_count, 0) > 0 THEN 'unverified'
-          WHEN COALESCE(stats.receipt_total_amount, 0) < ROUND(record.amount * 100)::bigint THEN 'underpaid'
-          WHEN COALESCE(stats.receipt_total_amount, 0) > ROUND(record.amount * 100)::bigint THEN 'overpaid'
+          WHEN COALESCE(stats.receipt_total_amount, 0) < ${recordAmountCentsSql} THEN 'underpaid'
+          WHEN COALESCE(stats.receipt_total_amount, 0) > ${recordAmountCentsSql} THEN 'overpaid'
           ELSE 'matched'
         END,
         receipt_validation_message = CASE
           WHEN COALESCE(stats.receipt_count, 0) = 0 THEN 'Tiada resit dilampirkan untuk semakan jumlah.'
           WHEN COALESCE(stats.missing_amount_count, 0) > 0 THEN 'Setiap resit perlu disahkan jumlahnya sebelum rekod boleh disimpan.'
-          WHEN COALESCE(stats.receipt_total_amount, 0) < ROUND(record.amount * 100)::bigint THEN 'Jumlah resit lebih rendah daripada jumlah bayaran yang dimasukkan.'
-          WHEN COALESCE(stats.receipt_total_amount, 0) > ROUND(record.amount * 100)::bigint THEN 'Jumlah resit melebihi jumlah bayaran yang dimasukkan.'
+          WHEN COALESCE(stats.receipt_total_amount, 0) < ${recordAmountCentsSql} THEN 'Jumlah resit lebih rendah daripada jumlah bayaran yang dimasukkan.'
+          WHEN COALESCE(stats.receipt_total_amount, 0) > ${recordAmountCentsSql} THEN 'Jumlah resit melebihi jumlah bayaran yang dimasukkan.'
           ELSE 'Jumlah resit sepadan dengan jumlah bayaran yang dimasukkan.'
         END
       FROM (
