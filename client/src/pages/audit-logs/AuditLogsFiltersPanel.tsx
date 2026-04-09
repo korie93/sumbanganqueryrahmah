@@ -20,13 +20,21 @@ interface AuditLogsFiltersPanelProps extends AuditLogsFilterFieldsProps {
   onFiltersOpenChange: (open: boolean) => void;
 }
 
+const AUDIT_LOG_FILTER_FALLBACK_KEYS = [
+  "action",
+  "performed-by",
+  "target-user",
+  "search",
+  "date-range",
+] as const;
+
 function AuditLogsFilterFieldsFallback() {
   return (
     <div className="space-y-4 px-6 pb-6">
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {Array.from({ length: 5 }).map((_, index) => (
+        {AUDIT_LOG_FILTER_FALLBACK_KEYS.map((key) => (
           <div
-            key={`audit-log-filter-fallback-${index}`}
+            key={`audit-log-filter-fallback-${key}`}
             className="h-16 animate-pulse rounded-xl border border-border/60 bg-muted/20"
           />
         ))}

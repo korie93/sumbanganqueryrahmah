@@ -7,7 +7,7 @@ import {
 } from "../utils";
 import {
   clampReceiptPreviewZoom,
-  getReceiptPreviewZoomClass,
+  getReceiptPreviewZoomStyle,
   resolveSelectedReceipt,
 } from "../receipt-preview-dialog-utils";
 
@@ -45,7 +45,9 @@ test("shouldRenderInlineReceiptPdfPreview disables inline PDF preview on mobile"
 test("receipt preview dialog utils clamp zoom and resolve selected receipt", () => {
   assert.equal(clampReceiptPreviewZoom(0.1), 0.5);
   assert.equal(clampReceiptPreviewZoom(3.5), 3);
-  assert.equal(getReceiptPreviewZoomClass(1.24), "receipt-preview-zoom receipt-preview-zoom-12");
+  assert.deepEqual(getReceiptPreviewZoomStyle(1.24), {
+    "--receipt-preview-zoom": "1.24",
+  });
 
   const receipts = [
     { id: "first", originalFileName: "a.pdf" },

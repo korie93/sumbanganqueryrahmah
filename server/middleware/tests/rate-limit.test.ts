@@ -6,6 +6,9 @@ import { buildRequestRateLimitFingerprint } from "../rate-limit";
 function createRequest(headers: Record<string, string | undefined> = {}, ip = "203.0.113.10") {
   return {
     ip,
+    socket: {
+      remoteAddress: "10.0.0.10",
+    },
     get(name: string) {
       return headers[name.toLowerCase()];
     },
@@ -20,6 +23,7 @@ test("buildRequestRateLimitFingerprint keeps the network identity and normalized
 
   assert.deepEqual(buildRequestRateLimitFingerprint(req), [
     "203.0.113.10",
+    "peer:10.0.0.10",
     "ua:mozilla/5.0",
     "lang:en-us,en;q=0.9",
   ]);
@@ -30,6 +34,23 @@ test("buildRequestRateLimitFingerprint omits empty headers safely", () => {
     "user-agent": "   ",
     "accept-language": undefined,
   }, "198.51.100.8");
+
+  assert.deepEqual(buildRequestRateLimitFingerprint(req), [
+    "198.51.100.8",
+    "peer:10.0.0.10",
+  ]);
+});
+
+test("buildRequestRateLimitFingerprint avoids duplicating the direct peer when it matches req.ip", () => {
+  const req = {
+    ip: "198.51.100.8",
+    socket: {
+      remoteAddress: "198.51.100.8",
+    },
+    get() {
+      return undefined;
+    },
+  } as unknown as Request;
 
   assert.deepEqual(buildRequestRateLimitFingerprint(req), ["198.51.100.8"]);
 });

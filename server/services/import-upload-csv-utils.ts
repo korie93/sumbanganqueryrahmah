@@ -6,6 +6,11 @@ import {
 } from "./import-upload-file-utils";
 import type { ImportRow, ParsedImportUploadResult } from "./import-upload-types";
 
+type ReadlineErrorEmitter = {
+  once(event: "error", listener: (error: Error) => void): unknown;
+  off(event: "error", listener: (error: Error) => void): unknown;
+};
+
 function parseCsvLine(line: string): string[] {
   const result: string[] = [];
   let current = "";
@@ -83,12 +88,38 @@ export async function parseCsvFile(filePath: string): Promise<ParsedImportUpload
     input: stream,
     crlfDelay: Infinity,
   });
-  let inputStreamError: unknown = null;
-  const handleInputStreamError = (error: Error) => {
-    inputStreamError = error;
-    lineReader.close();
+  const lineReaderErrorEmitter = lineReader as unknown as ReadlineErrorEmitter;
+  let pendingReaderError: unknown = null;
+
+  const closeLineReaderSafely = () => {
+    try {
+      lineReader.close();
+    } catch (error) {
+      if (!pendingReaderError) {
+        pendingReaderError = error;
+      }
+    }
   };
-  stream.once("error", handleInputStreamError);
+
+  const destroyStreamSafely = () => {
+    try {
+      stream.destroy();
+    } catch (error) {
+      if (!pendingReaderError) {
+        pendingReaderError = error;
+      }
+    }
+  };
+
+  const handleReaderError = (error: Error) => {
+    if (!pendingReaderError) {
+      pendingReaderError = error;
+    }
+    closeLineReaderSafely();
+    destroyStreamSafely();
+  };
+  stream.once("error", handleReaderError);
+  lineReaderErrorEmitter.once("error", handleReaderError);
 
   const rows: ImportRow[] = [];
   let headers: string[] = [];
@@ -114,8 +145,8 @@ export async function parseCsvFile(filePath: string): Promise<ParsedImportUpload
       }
     }
 
-    if (inputStreamError) {
-      throw inputStreamError;
+    if (pendingReaderError) {
+      throw pendingReaderError;
     }
   } catch (error) {
     if (isFileAccessError(error)) {
@@ -123,9 +154,10 @@ export async function parseCsvFile(filePath: string): Promise<ParsedImportUpload
     }
     throw error;
   } finally {
-    stream.off("error", handleInputStreamError);
-    lineReader.close();
-    stream.destroy();
+    stream.off("error", handleReaderError);
+    lineReaderErrorEmitter.off("error", handleReaderError);
+    closeLineReaderSafely();
+    destroyStreamSafely();
   }
 
   if (!headerResolved || headers.length === 0) {

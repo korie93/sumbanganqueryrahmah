@@ -121,7 +121,7 @@ export function buildViewerActiveFilterChips({
 
   activeColumnFilters.forEach((filter, index) => {
     items.push({
-      id: `viewer-filter-${index}`,
+      id: filter.id ?? `viewer-filter-${index}`,
       label: `${filter.column} ${VIEWER_FILTER_OPERATOR_LABELS[filter.operator]} ${filter.value}`,
       onRemove: () => onRemoveFilter(index),
     });

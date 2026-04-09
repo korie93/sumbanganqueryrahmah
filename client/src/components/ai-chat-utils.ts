@@ -9,10 +9,27 @@ export const AI_CHAT_MAX_RETRIES = 6;
 export const AI_CHAT_RETRY_MS = 2500;
 export const DEFAULT_AI_CHAT_ERROR_MESSAGE = "AI tidak dapat memproses permintaan sekarang.\nSila cuba semula.";
 
+type AIChatResponseLike = {
+  headers: {
+    get(name: string): string | null;
+  };
+  json(): Promise<unknown>;
+};
+
 export type AIChatStatusMeta = {
   icon: LucideIcon;
   text: string;
 };
+
+export class AIChatRequestError extends Error {
+  gateNotice: string | null;
+
+  constructor(message: string, options?: { gateNotice?: string | null }) {
+    super(message);
+    this.name = "AIChatRequestError";
+    this.gateNotice = options?.gateNotice ?? null;
+  }
+}
 
 export function getAIChatTypingDelayMs(isLowSpecMode: boolean) {
   return isLowSpecMode ? 18 : 14;
@@ -105,4 +122,36 @@ export function getAIChatErrorDetailsFromPayload(
     gateNotice,
     message: message || fallbackMessage,
   };
+}
+
+export async function readAIChatErrorResponse(
+  response: AIChatResponseLike,
+  fallbackMessage = DEFAULT_AI_CHAT_ERROR_MESSAGE,
+) {
+  const contentType = String(response.headers.get("content-type") || "").toLowerCase();
+  if (!contentType.includes("application/json")) {
+    return new AIChatRequestError(fallbackMessage);
+  }
+
+  try {
+    const payload = await response.json();
+    const details = getAIChatErrorDetailsFromPayload(payload, fallbackMessage);
+    return new AIChatRequestError(details.message, { gateNotice: details.gateNotice });
+  } catch {
+    return new AIChatRequestError(fallbackMessage);
+  }
+}
+
+export async function readAIChatSuccessPayload(
+  response: Pick<AIChatResponseLike, "json">,
+  fallbackMessage = DEFAULT_AI_CHAT_ERROR_MESSAGE,
+) {
+  try {
+    const payload = await response.json();
+    return payload && typeof payload === "object"
+      ? payload as Record<string, unknown>
+      : {};
+  } catch {
+    throw new AIChatRequestError(fallbackMessage);
+  }
 }

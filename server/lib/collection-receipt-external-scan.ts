@@ -10,6 +10,9 @@ const DEFAULT_COLLECTION_RECEIPT_EXTERNAL_SCAN_REJECT_EXIT_CODES = "1";
 const EXTERNAL_SCAN_OUTPUT_LIMIT = 2_000;
 const BARE_COMMAND_PATTERN = /^[a-zA-Z0-9._-]+$/;
 const UNSAFE_ENV_VALUE_PATTERN = /[\0\r\n]/;
+const EXTERNAL_SCAN_TEMPLATE_PATTERN = /\{[^}]+\}/g;
+const EXTERNAL_SCAN_FILE_PLACEHOLDER = "{file}";
+const EXTERNAL_SCAN_FILENAME_PLACEHOLDER = "{filename}";
 
 function readOptionalString(name: string): string | null {
   const value = process.env[name];
@@ -62,6 +65,102 @@ function parseScannerArgsJson(): string[] {
   }
 }
 
+function resolveExistingFile(candidatePath: string): string | null {
+  try {
+    if (!fs.statSync(candidatePath).isFile()) {
+      return null;
+    }
+    return fs.realpathSync.native(candidatePath);
+  } catch {
+    return null;
+  }
+}
+
+function resolveScannerCommandOnPath(command: string): string | null {
+  const pathEntries = String(process.env.PATH || "")
+    .split(path.delimiter)
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+
+  if (pathEntries.length === 0) {
+    return null;
+  }
+
+  if (process.platform !== "win32") {
+    for (const pathEntry of pathEntries) {
+      const resolved = resolveExistingFile(path.join(pathEntry, command));
+      if (resolved) {
+        return resolved;
+      }
+    }
+    return null;
+  }
+
+  const hasExtension = path.extname(command).length > 0;
+  const pathExtensions = hasExtension
+    ? [""]
+    : String(process.env.PATHEXT || ".COM;.EXE;.BAT;.CMD")
+      .split(";")
+      .map((entry) => entry.trim())
+      .filter(Boolean);
+
+  for (const pathEntry of pathEntries) {
+    const directMatch = resolveExistingFile(path.join(pathEntry, command));
+    if (directMatch) {
+      return directMatch;
+    }
+
+    if (hasExtension) {
+      continue;
+    }
+
+    for (const extension of pathExtensions) {
+      const resolved = resolveExistingFile(path.join(pathEntry, `${command}${extension}`));
+      if (resolved) {
+        return resolved;
+      }
+    }
+  }
+
+  return null;
+}
+
+function validateScannerArgs(args: string[]): string[] {
+  let containsFilePlaceholder = false;
+
+  for (const entry of args) {
+    const placeholders = entry.match(EXTERNAL_SCAN_TEMPLATE_PATTERN) ?? [];
+    for (const placeholder of placeholders) {
+      if (
+        placeholder === EXTERNAL_SCAN_FILE_PLACEHOLDER
+        || placeholder === EXTERNAL_SCAN_FILENAME_PLACEHOLDER
+      ) {
+        containsFilePlaceholder = true;
+        continue;
+      }
+
+      throw new Error(
+        `must only use ${EXTERNAL_SCAN_FILE_PLACEHOLDER} and ${EXTERNAL_SCAN_FILENAME_PLACEHOLDER} placeholders.`,
+      );
+    }
+
+    if (
+      entry.includes(EXTERNAL_SCAN_FILE_PLACEHOLDER)
+      || entry.includes(EXTERNAL_SCAN_FILENAME_PLACEHOLDER)
+    ) {
+      containsFilePlaceholder = true;
+    }
+  }
+
+  if (!containsFilePlaceholder) {
+    throw new Error(
+      `must include at least one ${EXTERNAL_SCAN_FILE_PLACEHOLDER} or ${EXTERNAL_SCAN_FILENAME_PLACEHOLDER} placeholder.`,
+    );
+  }
+
+  return args;
+}
+
 function validateExternalScanCommand(command: string): string {
   const normalized = command.trim();
   if (!normalized || UNSAFE_ENV_VALUE_PATTERN.test(normalized)) {
@@ -69,10 +168,11 @@ function validateExternalScanCommand(command: string): string {
   }
 
   if (path.isAbsolute(normalized)) {
-    if (!fs.existsSync(normalized) || !fs.statSync(normalized).isFile()) {
+    const resolved = resolveExistingFile(normalized);
+    if (!resolved) {
       throw new Error("COLLECTION_RECEIPT_EXTERNAL_SCAN_COMMAND must point to an existing scanner executable.");
     }
-    return normalized;
+    return resolved;
   }
 
   if (!BARE_COMMAND_PATTERN.test(normalized) || normalized !== path.basename(normalized)) {
@@ -81,7 +181,26 @@ function validateExternalScanCommand(command: string): string {
     );
   }
 
-  return normalized;
+  const resolved = resolveScannerCommandOnPath(normalized);
+  if (!resolved) {
+    throw new Error("COLLECTION_RECEIPT_EXTERNAL_SCAN_COMMAND must resolve to an executable on PATH.");
+  }
+
+  return resolved;
+}
+
+function validateExternalScanFilePath(filePath: string): string {
+  const normalized = String(filePath || "").trim();
+  if (!normalized || UNSAFE_ENV_VALUE_PATTERN.test(normalized)) {
+    throw new Error("receipt file path is invalid.");
+  }
+
+  const resolved = resolveExistingFile(path.resolve(normalized));
+  if (!resolved) {
+    throw new Error("receipt file path must point to an existing file.");
+  }
+
+  return resolved;
 }
 
 function summarizeOutput(output: string): string | null {
@@ -106,7 +225,7 @@ function readExternalScanConfig(): ExternalScanConfig {
   return {
     enabled: readBooleanEnvFlag("COLLECTION_RECEIPT_EXTERNAL_SCAN_ENABLED", false),
     command: readOptionalString("COLLECTION_RECEIPT_EXTERNAL_SCAN_COMMAND"),
-    args: parseScannerArgsJson(),
+    args: validateScannerArgs(parseScannerArgsJson()),
     timeoutMs: readInt(
       "COLLECTION_RECEIPT_EXTERNAL_SCAN_TIMEOUT_MS",
       DEFAULT_COLLECTION_RECEIPT_EXTERNAL_SCAN_TIMEOUT_MS,
@@ -122,6 +241,18 @@ function readExternalScanConfig(): ExternalScanConfig {
         || DEFAULT_COLLECTION_RECEIPT_EXTERNAL_SCAN_REJECT_EXIT_CODES,
       DEFAULT_COLLECTION_RECEIPT_EXTERNAL_SCAN_REJECT_EXIT_CODES,
     ),
+  };
+}
+
+function createFallbackExternalScanConfig(): ExternalScanConfig {
+  return {
+    enabled: true,
+    command: null,
+    args: [EXTERNAL_SCAN_FILE_PLACEHOLDER],
+    timeoutMs: DEFAULT_COLLECTION_RECEIPT_EXTERNAL_SCAN_TIMEOUT_MS,
+    failClosed: readBooleanEnvFlag("COLLECTION_RECEIPT_EXTERNAL_SCAN_FAIL_CLOSED", true),
+    cleanExitCodes: new Set([0]),
+    rejectExitCodes: new Set([1]),
   };
 }
 
@@ -155,7 +286,21 @@ function createOperationalScanError(
 }
 
 export async function scanCollectionReceiptWithExternalScanner(filePath: string): Promise<void> {
-  const config = readExternalScanConfig();
+  let config: ExternalScanConfig;
+  try {
+    config = readExternalScanConfig();
+  } catch (error) {
+    const operational = createOperationalScanError(
+      createFallbackExternalScanConfig(),
+      filePath,
+      "external-scan-config-invalid",
+      error instanceof Error ? error.message : "invalid scanner configuration",
+    );
+    if (operational) {
+      throw operational;
+    }
+    return;
+  }
   if (!config.enabled) {
     return;
   }
@@ -184,8 +329,24 @@ export async function scanCollectionReceiptWithExternalScanner(filePath: string)
     return;
   }
 
-  const args = buildScanArgs(config, filePath);
-  const fileName = path.basename(filePath);
+  let validatedFilePath: string;
+  try {
+    validatedFilePath = validateExternalScanFilePath(filePath);
+  } catch (error) {
+    const operational = createOperationalScanError(
+      config,
+      filePath,
+      "external-scan-file-invalid",
+      error instanceof Error ? error.message : "invalid scanner file path",
+    );
+    if (operational) {
+      throw operational;
+    }
+    return;
+  }
+
+  const args = buildScanArgs(config, validatedFilePath);
+  const fileName = path.basename(validatedFilePath);
 
   await new Promise<void>((resolve, reject) => {
     const child = spawn(scannerCommand, args, {

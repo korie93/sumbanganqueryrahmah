@@ -57,15 +57,26 @@ type CollectionRecordsPageProps = {
   role: string;
 };
 
+const COLLECTION_RECORDS_MOBILE_FILTER_FALLBACK_KEYS = ["date", "nickname", "search", "status"] as const;
+const COLLECTION_RECORDS_DESKTOP_FILTER_FALLBACK_KEYS = [
+  "from-date",
+  "to-date",
+  "search",
+  "nickname",
+  "actions",
+  "summary",
+] as const;
+const COLLECTION_RECORDS_TOOLBAR_FALLBACK_KEYS = ["summary", "actions"] as const;
+
 function CollectionRecordsFiltersFallback() {
   const isMobile = useIsMobile();
 
   if (isMobile) {
     return (
       <div className="space-y-3">
-        {Array.from({ length: 4 }).map((_, index) => (
+        {COLLECTION_RECORDS_MOBILE_FILTER_FALLBACK_KEYS.map((key) => (
           <div
-            key={`collection-records-mobile-filter-fallback-${index}`}
+            key={`collection-records-mobile-filter-fallback-${key}`}
             className="h-16 animate-pulse rounded-2xl border border-border/60 bg-muted/20"
           />
         ))}
@@ -80,9 +91,9 @@ function CollectionRecordsFiltersFallback() {
   return (
     <div className="ops-toolbar space-y-3">
       <div className="grid gap-3 xl:grid-cols-[170px_170px_minmax(260px,1fr)_190px_auto_auto]">
-        {Array.from({ length: 6 }).map((_, index) => (
+        {COLLECTION_RECORDS_DESKTOP_FILTER_FALLBACK_KEYS.map((key) => (
           <div
-            key={`collection-records-desktop-filter-fallback-${index}`}
+            key={`collection-records-desktop-filter-fallback-${key}`}
             className="h-16 animate-pulse rounded-xl border border-border/60 bg-muted/20"
           />
         ))}
@@ -95,9 +106,9 @@ function CollectionRecordsToolbarFallback() {
   return (
     <div className="space-y-3">
       <div className="grid gap-3 md:grid-cols-2">
-        {Array.from({ length: 2 }).map((_, index) => (
+        {COLLECTION_RECORDS_TOOLBAR_FALLBACK_KEYS.map((key) => (
           <div
-            key={`collection-records-toolbar-fallback-${index}`}
+            key={`collection-records-toolbar-fallback-${key}`}
             className="h-20 animate-pulse rounded-xl border border-border/60 bg-muted/20"
           />
         ))}

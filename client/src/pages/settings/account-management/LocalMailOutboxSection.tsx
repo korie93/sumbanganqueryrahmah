@@ -75,6 +75,7 @@ export function LocalMailOutboxSection({
         pagination={
           <AppPaginationBar
             disabled={loading}
+            loading={loading}
             page={pagination.page}
             totalPages={pagination.totalPages}
             pageSize={pagination.pageSize}

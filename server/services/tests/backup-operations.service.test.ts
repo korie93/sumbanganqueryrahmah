@@ -623,6 +623,25 @@ test("BackupOperationsService restoreBackup blocks corrupted backup payload chec
   assert.equal(auditLogs.length, 0);
 });
 
+test("BackupOperationsService restoreBackup blocks oversized payloads before parsing datasets", async () => {
+  const { service, restoreCalls, auditLogs } = createBackupOperationsHarness({
+    maxPayloadBytes: 32,
+  });
+
+  const result = await service.restoreBackup({
+    backupId: "backup-1",
+    username: "super.user",
+  });
+
+  assert.equal(result.statusCode, 413);
+  assert.deepEqual(result.body, {
+    message:
+      "Backup payload exceeds the configured 32 bytes limit. Narrow the dataset or increase BACKUP_MAX_PAYLOAD_BYTES.",
+  });
+  assert.equal(restoreCalls.length, 0);
+  assert.equal(auditLogs.length, 0);
+});
+
 test("BackupOperationsService restoreBackup returns 409 when backup payload cannot be decrypted", async () => {
   const { service, restoreCalls, auditLogs } = createBackupOperationsHarness({
     backupReadErrorMessage:

@@ -6,14 +6,16 @@ import { resolveAiErrorMessage } from "@/lib/ai-error";
 import { searchAI } from "@/lib/api";
 
 import {
+  AIChatRequestError,
   AI_CHAT_MAX_RETRIES,
   AI_CHAT_RETRY_MS,
   DEFAULT_AI_CHAT_ERROR_MESSAGE,
   appendAIChatMessage,
   formatAIChatQueuedNotice,
-  getAIChatErrorDetailsFromPayload,
   getAIChatStatusMeta,
   getAIChatTypingDelayMs,
+  readAIChatErrorResponse,
+  readAIChatSuccessPayload,
 } from "./ai-chat-utils";
 import { useAIChatExternalEffects } from "./useAIChatExternalEffects";
 import { useAIChatRuntimeRefs } from "./useAIChatRuntimeRefs";
@@ -127,6 +129,26 @@ export function useAIChatState({
     }, 1500);
   }, [clearSlowNoticeTimer]);
 
+  const finishAsyncCycle = useCallback((options?: {
+    clearStreamingText?: boolean;
+    gateNotice?: string | null;
+  }) => {
+    processingRef.current = false;
+    if (isMountedRef.current) {
+      setIsProcessing(false);
+      setIsThinking(false);
+      setAiStatus("IDLE");
+      setSlowNotice(false);
+      if (options?.clearStreamingText) {
+        setStreamingText("");
+      }
+      if (options && "gateNotice" in options) {
+        setGateNotice(options.gateNotice ?? null);
+      }
+    }
+    clearSlowNoticeTimer();
+  }, [clearSlowNoticeTimer, setIsThinking]);
+
   const executeSearch = useCallback(async (text: string, sessionId: number, retryCount = 0) => {
     if (sessionId !== sessionRef.current) {
       return;
@@ -149,22 +171,10 @@ export function useAIChatState({
 
       const gateWaitMs = Number(response.headers.get("x-ai-gate-wait-ms") || "0");
       if (!response.ok) {
-        let responseMessage = DEFAULT_AI_CHAT_ERROR_MESSAGE;
-        const contentType = String(response.headers.get("content-type") || "").toLowerCase();
-
-        if (contentType.includes("application/json")) {
-          const payload = await response.json();
-          const details = getAIChatErrorDetailsFromPayload(payload);
-          responseMessage = details.message;
-          if (details.gateNotice) {
-            setGateNotice(details.gateNotice);
-          }
-        }
-
-        throw new Error(responseMessage);
+        throw await readAIChatErrorResponse(response, DEFAULT_AI_CHAT_ERROR_MESSAGE);
       }
 
-      const data = await response.json();
+      const data = await readAIChatSuccessPayload(response, DEFAULT_AI_CHAT_ERROR_MESSAGE);
       if (sessionId !== sessionRef.current) {
         return;
       }
@@ -181,12 +191,10 @@ export function useAIChatState({
             content: "Sistem masih memproses. Sila cuba semula sebentar lagi.",
             timestamp: new Date().toISOString(),
           });
-          processingRef.current = false;
-          setIsProcessing(false);
-          setIsThinking(false);
-          setAiStatus("IDLE");
-          setSlowNotice(false);
-          clearSlowNoticeTimer();
+          finishAsyncCycle({
+            clearStreamingText: true,
+            gateNotice: null,
+          });
           return;
         }
 
@@ -210,19 +218,16 @@ export function useAIChatState({
       if (sessionId !== sessionRef.current) {
         return;
       }
+      const gateNotice = error instanceof AIChatRequestError ? error.gateNotice : null;
       appendMessage({
         role: "assistant",
         content: resolveAiErrorMessage(error),
         timestamp: new Date().toISOString(),
       });
-      processingRef.current = false;
-      if (isMountedRef.current) {
-        setIsProcessing(false);
-        setIsThinking(false);
-        setAiStatus("IDLE");
-        setSlowNotice(false);
-      }
-      clearSlowNoticeTimer();
+      finishAsyncCycle({
+        clearStreamingText: true,
+        gateNotice,
+      });
     } finally {
       if (timeoutId !== null) {
         window.clearTimeout(timeoutId);
@@ -231,22 +236,14 @@ export function useAIChatState({
         requestControllerRef.current = null;
       }
       if (!waitingRetry && !startedTyping && sessionId === sessionRef.current) {
-        processingRef.current = false;
-        if (isMountedRef.current) {
-          setIsProcessing(false);
-          setIsThinking(false);
-          setAiStatus("IDLE");
-          setSlowNotice(false);
-        }
-        clearSlowNoticeTimer();
+        finishAsyncCycle();
       }
     }
   }, [
     abortActiveRequest,
     appendMessage,
-    clearSlowNoticeTimer,
+    finishAsyncCycle,
     registerRetryTimer,
-    setIsThinking,
     startTyping,
     timeoutMs,
     unregisterRetryTimer,

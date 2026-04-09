@@ -4,10 +4,14 @@ export function clampReceiptPreviewZoom(zoom: number): number {
   return Math.min(3, Math.max(0.5, Number(zoom.toFixed(2))));
 }
 
-export function getReceiptPreviewZoomClass(zoom: number): string {
-  const clamped = clampReceiptPreviewZoom(zoom);
-  const zoomStep = Math.round(clamped * 10);
-  return `receipt-preview-zoom receipt-preview-zoom-${zoomStep}`;
+export type ReceiptPreviewZoomStyle = {
+  "--receipt-preview-zoom": string;
+};
+
+export function getReceiptPreviewZoomStyle(zoom: number): ReceiptPreviewZoomStyle {
+  return {
+    "--receipt-preview-zoom": String(clampReceiptPreviewZoom(zoom)),
+  };
 }
 
 export function resolveSelectedReceipt(

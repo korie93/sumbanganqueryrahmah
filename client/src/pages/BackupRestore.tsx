@@ -144,6 +144,7 @@ function BackupRestoreContent({ userRole, embedded = false }: BackupRestoreProps
 
       <AppPaginationBar
         disabled={listState.loading}
+        loading={listState.loading}
         page={listState.pagination.page}
         totalPages={listState.pagination.totalPages}
         pageSize={listState.pagination.pageSize}

@@ -2,14 +2,14 @@ import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { buildViewerFiltersEmptyMessage } from "@/pages/viewer/filter-utils";
 import { ViewerFilterRow } from "@/pages/viewer/ViewerFilterRow";
-import type { ColumnFilter } from "@/pages/viewer/types";
+import type { ColumnFilter, ViewerFilterMutableField } from "@/pages/viewer/types";
 
 interface ViewerFiltersPanelProps {
   headers: string[];
   columnFilters: ColumnFilter[];
   onAddFilter: () => void;
   onClearAllFilters: () => void;
-  onUpdateFilter: (index: number, field: keyof ColumnFilter, value: string) => void;
+  onUpdateFilter: (index: number, field: ViewerFilterMutableField, value: string) => void;
   onRemoveFilter: (index: number) => void;
 }
 
@@ -55,7 +55,7 @@ export function ViewerFiltersPanel({
         <div className="space-y-3">
           {columnFilters.map((filter, index) => (
             <ViewerFilterRow
-              key={`viewer-filter-${filter.column}-${filter.operator}-${filter.value}-${index}`}
+              key={filter.id ?? `viewer-filter-${index}`}
               filter={filter}
               headers={headers}
               index={index}

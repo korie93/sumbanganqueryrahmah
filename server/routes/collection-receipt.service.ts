@@ -1,5 +1,6 @@
 import type { Response } from "express";
 import type { AuthenticatedRequest } from "../auth/guards";
+import { ERROR_CODES } from "../../shared/error-codes";
 import { logger } from "../lib/logger";
 import type {
   PostgresStorage,
@@ -28,6 +29,56 @@ export type {
 
 export { detectCollectionReceiptSignature } from "../lib/collection-receipt-security";
 
+const COLLECTION_RECEIPT_ERROR_CODES = {
+  LOAD_FAILED: "COLLECTION_RECEIPT_LOAD_FAILED",
+  NOT_FOUND: "COLLECTION_RECEIPT_NOT_FOUND",
+  PREVIEW_UNSUPPORTED: "COLLECTION_RECEIPT_PREVIEW_UNSUPPORTED",
+} as const;
+
+function buildCollectionReceiptErrorResponse(
+  message: string,
+  code?: string,
+) {
+  return {
+    ok: false as const,
+    message,
+    error: {
+      ...(code ? { code } : {}),
+      message,
+    },
+  };
+}
+
+function resolveCollectionReceiptErrorCode(params: {
+  statusCode: number;
+  reason: string;
+}) {
+  const { reason, statusCode } = params;
+
+  if (reason === "missing_collection_id") {
+    return ERROR_CODES.REQUEST_BODY_INVALID;
+  }
+
+  if (
+    reason === "record_not_found"
+    || reason === "receipt_row_not_found"
+    || reason === "receipt_storage_missing"
+    || reason === "send_file_missing"
+  ) {
+    return COLLECTION_RECEIPT_ERROR_CODES.NOT_FOUND;
+  }
+
+  if (reason === "preview_not_supported") {
+    return COLLECTION_RECEIPT_ERROR_CODES.PREVIEW_UNSUPPORTED;
+  }
+
+  if (statusCode >= 500 || reason === "send_file_failed") {
+    return COLLECTION_RECEIPT_ERROR_CODES.LOAD_FAILED;
+  }
+
+  return undefined;
+}
+
 export async function serveCollectionReceipt(
   storage: PostgresStorage,
   req: AuthenticatedRequest,
@@ -45,10 +96,15 @@ export async function serveCollectionReceipt(
         reason: requestContext.reason,
         meta: requestContext.meta,
       });
-      return res.status(requestContext.statusCode).json({
-        ok: false,
-        message: requestContext.message,
-      });
+      return res.status(requestContext.statusCode).json(
+        buildCollectionReceiptErrorResponse(
+          requestContext.message,
+          resolveCollectionReceiptErrorCode({
+            statusCode: requestContext.statusCode,
+            reason: requestContext.reason,
+          }),
+        ),
+      );
     }
 
     const { record, requestedReceiptId } = requestContext;
@@ -67,10 +123,15 @@ export async function serveCollectionReceipt(
         reason: resolvedTarget.reason,
         meta: resolvedTarget.meta,
       });
-      return res.status(resolvedTarget.statusCode).json({
-        ok: false,
-        message: resolvedTarget.message,
-      });
+      return res.status(resolvedTarget.statusCode).json(
+        buildCollectionReceiptErrorResponse(
+          resolvedTarget.message,
+          resolveCollectionReceiptErrorCode({
+            statusCode: resolvedTarget.statusCode,
+            reason: resolvedTarget.reason,
+          }),
+        ),
+      );
     }
 
     const { resolved, selectedReceipt } = resolvedTarget;
@@ -89,7 +150,12 @@ export async function serveCollectionReceipt(
           mimeType: responseMimeType,
         },
       });
-      return res.status(415).json({ ok: false, message: "Preview not available for this file type." });
+      return res.status(415).json(
+        buildCollectionReceiptErrorResponse(
+          "Preview not available for this file type.",
+          COLLECTION_RECEIPT_ERROR_CODES.PREVIEW_UNSUPPORTED,
+        ),
+      );
     }
 
     const safeFileName = sanitizeReceiptDownloadName(
@@ -118,7 +184,15 @@ export async function serveCollectionReceipt(
           errorCode: sendErr.code || null,
         },
       });
-      res.status(status).json({ ok: false, message });
+      res.status(status).json(
+        buildCollectionReceiptErrorResponse(
+          message,
+          resolveCollectionReceiptErrorCode({
+            statusCode: status,
+            reason: status === 404 ? "send_file_missing" : "send_file_failed",
+          }),
+        ),
+      );
     });
   } catch (error) {
     logger.error("Collection receipt request crashed", {
@@ -128,6 +202,11 @@ export async function serveCollectionReceipt(
       receiptId: req.params.receiptId || null,
       error,
     });
-    return res.status(500).json({ ok: false, message: "Failed to load receipt file." });
+    return res.status(500).json(
+      buildCollectionReceiptErrorResponse(
+        "Failed to load receipt file.",
+        COLLECTION_RECEIPT_ERROR_CODES.LOAD_FAILED,
+      ),
+    );
   }
 }

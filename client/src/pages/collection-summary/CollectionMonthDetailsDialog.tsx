@@ -116,6 +116,7 @@ export function CollectionMonthDetailsDialog({
         >
           <CollectionPaginationBar
             disabled={loading}
+            loading={loading}
             page={page}
             totalPages={totalPages}
             pageSize={pageSize}

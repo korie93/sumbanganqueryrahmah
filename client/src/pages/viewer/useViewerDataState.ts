@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getImportData } from "@/lib/api";
 import {
   appendViewerFilter,
+  ensureViewerFilterIds,
   removeViewerFilterAt,
   updateViewerFilterAt,
 } from "@/pages/viewer/viewer-filter-state-utils";
@@ -10,7 +11,7 @@ import {
   resolveViewerPageHeaders,
   resolveViewerImportName,
 } from "@/pages/viewer/page-utils";
-import type { ColumnFilter, DataRowWithId } from "@/pages/viewer/types";
+import type { ColumnFilter, DataRowWithId, ViewerFilterMutableField } from "@/pages/viewer/types";
 import {
   createViewerClearedState,
   createViewerImportResetState,
@@ -97,7 +98,7 @@ export function useViewerDataState({
       setHeadersLocked(patch.headersLocked);
       headersLockedRef.current = patch.headersLocked;
     }
-    if (patch.columnFilters !== undefined) setColumnFilters(patch.columnFilters);
+    if (patch.columnFilters !== undefined) setColumnFilters(ensureViewerFilterIds(patch.columnFilters));
     if (patch.search !== undefined) setSearch(patch.search);
     if (patch.importName !== undefined) setImportName(patch.importName);
     if (patch.emptyHint !== undefined) setEmptyHint(patch.emptyHint);
@@ -271,7 +272,7 @@ export function useViewerDataState({
     setColumnFilters((previous) => appendViewerFilter(previous, headers));
   }, [headers]);
 
-  const updateFilter = useCallback((index: number, field: keyof ColumnFilter, value: string) => {
+  const updateFilter = useCallback((index: number, field: ViewerFilterMutableField, value: string) => {
     setColumnFilters((previous) => updateViewerFilterAt(previous, index, field, value));
   }, []);
 

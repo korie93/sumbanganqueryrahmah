@@ -212,6 +212,7 @@ export default function AuditLogs() {
 
       <AppPaginationBar
         disabled={loading}
+        loading={loading}
         page={pagination.page}
         totalPages={pagination.totalPages}
         pageSize={pagination.pageSize}

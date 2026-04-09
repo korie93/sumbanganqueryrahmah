@@ -18,7 +18,7 @@ import { ReceiptPreviewRecordDetails } from "@/pages/collection-records/ReceiptP
 import { ReceiptPreviewSelector } from "@/pages/collection-records/ReceiptPreviewSelector";
 import { ReceiptPreviewToolbar } from "@/pages/collection-records/ReceiptPreviewToolbar";
 import {
-  getReceiptPreviewZoomClass,
+  getReceiptPreviewZoomStyle,
   resolveSelectedReceipt,
 } from "@/pages/collection-records/receipt-preview-dialog-utils";
 import type { ReceiptPreviewKind } from "@/pages/collection-records/types";
@@ -67,7 +67,7 @@ export function ReceiptPreviewDialog({
   const canRenderInlinePdfPreview = shouldRenderInlineReceiptPdfPreview({ kind, isMobile });
   const showPdfFallback = Boolean(safeSource) && kind === "pdf" && !canRenderInlinePdfPreview;
   const canZoom = Boolean(safeSource) && (kind === "image" || canRenderInlinePdfPreview);
-  const zoomClassName = getReceiptPreviewZoomClass(zoom);
+  const zoomStyle = getReceiptPreviewZoomStyle(zoom);
 
   useEffect(() => {
     if (open) {
@@ -136,7 +136,7 @@ export function ReceiptPreviewDialog({
           showPdfFallback={showPdfFallback}
           kind={kind}
           isMobile={isMobile}
-          zoomClassName={zoomClassName}
+          zoomStyle={zoomStyle}
           fileName={fileName}
           selectedReceipt={selectedReceipt}
           downloading={downloading}

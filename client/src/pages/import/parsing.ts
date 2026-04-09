@@ -45,6 +45,14 @@ export function parseCsvLine(line: string): string[] {
   return result;
 }
 
+export function normalizeExcelMatrixRows(value: unknown): unknown[][] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.map((row) => (Array.isArray(row) ? row : row == null ? [] : [row]));
+}
+
 function findHeaderLine(lines: string[]) {
   let headerLineIndex = 0;
   while (headerLineIndex < lines.length && !lines[headerLineIndex].trim()) {
@@ -116,7 +124,13 @@ function parseExcelBuffer(
   }
 
   const worksheet = workbook.Sheets[firstSheetName];
-  const jsonData = xlsx.utils.sheet_to_json(worksheet, { header: 1, defval: "", raw: false }) as unknown[][];
+  if (!worksheet) {
+    return { headers: [], rows: [], error: "Excel sheet data is unavailable." };
+  }
+
+  const jsonData = normalizeExcelMatrixRows(
+    xlsx.utils.sheet_to_json(worksheet, { header: 1, defval: "", raw: false }),
+  );
 
   // Null out workbook references early to allow GC to reclaim memory
   workbook.SheetNames = [];

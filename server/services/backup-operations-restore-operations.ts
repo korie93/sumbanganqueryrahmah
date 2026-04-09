@@ -1,4 +1,5 @@
 import { verifyBackupIntegrityFromChunks } from "./backup-operations-integrity-utils";
+import { logger } from "../lib/logger";
 import type {
   BackupIntegrityResult,
   BackupMetadataRecord,
@@ -8,7 +9,9 @@ import type {
   RestoreFromBackupResult,
 } from "./backup-operations-types";
 import {
+  buildBackupPayloadTooLargeMessage,
   getBackupPayloadReadFailure,
+  type BackupOperationsLimits,
   getCircuitOpenResponse,
 } from "./backup-operations-service-shared";
 import type { BackupOperationsMutationDeps } from "./backup-operations-mutation-shared";
@@ -16,6 +19,7 @@ import type { BackupOperationsMutationDeps } from "./backup-operations-mutation-
 export async function executeRestoreBackup(
   deps: BackupOperationsMutationDeps,
   params: RestoreBackupInput,
+  limits: BackupOperationsLimits,
 ): Promise<BackupOperationResponse<RestoreBackupSuccessBody | { message: string }>> {
   let backup: BackupMetadataRecord | undefined;
 
@@ -65,6 +69,21 @@ export async function executeRestoreBackup(
         backup,
         await createBackupDataJsonChunks(),
       );
+      if (integrity.payloadBytes > limits.maxPayloadBytes) {
+        logger.warn("Backup restore blocked because the payload exceeds the configured size limit", {
+          backupId: backup.id,
+          backupName: backup.name,
+          username: params.username,
+          payloadBytes: integrity.payloadBytes,
+          maxPayloadBytes: limits.maxPayloadBytes,
+        });
+        return {
+          error: {
+            statusCode: 413,
+            message: buildBackupPayloadTooLargeMessage(limits.maxPayloadBytes),
+          },
+        };
+      }
       if (!integrity.ok) {
         return {
           error: {

@@ -2,12 +2,15 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  AIChatRequestError,
   appendAIChatMessage,
   formatAIChatQueueBusyNotice,
   formatAIChatQueuedNotice,
   getAIChatErrorDetailsFromPayload,
   getAIChatStatusMeta,
   getAIChatTypingDelayMs,
+  readAIChatErrorResponse,
+  readAIChatSuccessPayload,
 } from "@/components/ai-chat-utils";
 
 test("appendAIChatMessage trims to the newest messages only", () => {
@@ -76,4 +79,65 @@ test("getAIChatErrorDetailsFromPayload falls back on malformed payload", () => {
 
   assert.equal(details.message, "fallback");
   assert.equal(details.gateNotice, null);
+});
+
+test("readAIChatErrorResponse keeps queue notice from valid JSON payloads", async () => {
+  const response = {
+    headers: {
+      get(name: string) {
+        return name.toLowerCase() === "content-type" ? "application/json; charset=utf-8" : null;
+      },
+    },
+    async json() {
+      return {
+        gate: {
+          queueLimit: 4,
+          queueSize: 3,
+          queueWaitMs: 1500,
+        },
+        message: "queue penuh",
+      };
+    },
+  };
+
+  const error = await readAIChatErrorResponse(response);
+
+  assert.ok(error instanceof AIChatRequestError);
+  assert.equal(error.message, "queue penuh");
+  assert.equal(error.gateNotice, "AI queue busy (3/4). Estimated wait 2s.");
+});
+
+test("readAIChatErrorResponse falls back cleanly when JSON payload is malformed", async () => {
+  const response = {
+    headers: {
+      get(name: string) {
+        return name.toLowerCase() === "content-type" ? "application/json" : null;
+      },
+    },
+    async json() {
+      throw new SyntaxError("Unexpected end of JSON input");
+    },
+  };
+
+  const error = await readAIChatErrorResponse(response, "fallback");
+
+  assert.ok(error instanceof AIChatRequestError);
+  assert.equal(error.message, "fallback");
+  assert.equal(error.gateNotice, null);
+});
+
+test("readAIChatSuccessPayload falls back to a controlled error on malformed JSON", async () => {
+  const response = {
+    async json() {
+      throw new SyntaxError("Unexpected end of JSON input");
+    },
+  };
+
+  await assert.rejects(
+    () => readAIChatSuccessPayload(response, "fallback"),
+    (error: unknown) =>
+      error instanceof AIChatRequestError
+      && error.message === "fallback"
+      && error.gateNotice === null,
+  );
 });

@@ -40,8 +40,8 @@ export function AnalysisCharts({ categoryBarData, genderPieData }: AnalysisChart
                     fill="#8884d8"
                     dataKey="value"
                   >
-                    {genderPieData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
+                    {genderPieData.map((entry) => (
+                      <Cell key={`${entry.name}-${entry.color}`} fill={entry.color} />
                     ))}
                   </Pie>
                   <Tooltip formatter={(value: number) => value.toLocaleString()} />

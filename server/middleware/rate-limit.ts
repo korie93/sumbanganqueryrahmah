@@ -44,8 +44,13 @@ function normalizeKeyPart(value: unknown): string | null {
 
 export function buildRequestRateLimitFingerprint(req: Request): string[] {
   const parts: string[] = [normalizeKeyPart(req.ip) ?? "unknown"];
+  const directPeer = normalizeKeyPart(req.socket?.remoteAddress);
   const userAgent = normalizeKeyPart(req.get("user-agent"));
   const acceptLanguage = normalizeKeyPart(req.get("accept-language"));
+
+  if (directPeer && directPeer !== parts[0]) {
+    parts.push(`peer:${directPeer}`);
+  }
 
   if (userAgent) {
     parts.push(`ua:${userAgent}`);

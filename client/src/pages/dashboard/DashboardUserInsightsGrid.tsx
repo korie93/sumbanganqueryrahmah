@@ -179,7 +179,7 @@ export function DashboardUserInsightsGrid({
                     >
                       {roleDistribution.map((entry, index) => (
                         <Cell
-                          key={`cell-${index}`}
+                          key={entry.role}
                           fill={ROLE_COLORS[entry.role] || `hsl(var(--chart-${(index % 5) + 1}))`}
                         />
                       ))}

@@ -1,8 +1,11 @@
 export interface ColumnFilter {
+  id?: string;
   column: string;
   operator: "contains" | "equals" | "startsWith" | "endsWith" | "notEquals";
   value: string;
 }
+
+export type ViewerFilterMutableField = Exclude<keyof ColumnFilter, "id">;
 
 export interface DataRowWithId {
   __rowId: number;

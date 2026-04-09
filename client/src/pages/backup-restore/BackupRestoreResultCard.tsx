@@ -12,6 +12,7 @@ export function BackupRestoreResultCard({
   lastRestoreResult,
 }: BackupRestoreResultCardProps) {
   const isMobile = useIsMobile();
+  const warningOccurrences = new Map<string, number>();
 
   if (!lastRestoreResult) {
     return null;
@@ -63,9 +64,11 @@ export function BackupRestoreResultCard({
           <div className="rounded-md border border-amber-300/40 bg-amber-50/40 p-3 text-sm">
             <div className="font-medium text-amber-800">Warnings ({lastRestoreResult.stats.warnings.length})</div>
             <ul className="mt-1 list-disc pl-5 text-amber-900">
-              {lastRestoreResult.stats.warnings.slice(0, 5).map((warning, index) => (
-                <li key={`${warning}-${index}`}>{warning}</li>
-              ))}
+              {lastRestoreResult.stats.warnings.slice(0, 5).map((warning) => {
+                const nextOccurrence = (warningOccurrences.get(warning) ?? 0) + 1;
+                warningOccurrences.set(warning, nextOccurrence);
+                return <li key={`${warning}::${nextOccurrence}`}>{warning}</li>;
+              })}
             </ul>
           </div>
         ) : null}

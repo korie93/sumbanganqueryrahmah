@@ -5,6 +5,11 @@ import {
 } from "@/components/layout/OperationalPage";
 import { Badge } from "@/components/ui/badge";
 
+const MONITOR_CHART_FALLBACK_KEYS = ["cpu", "memory", "latency", "throughput"] as const;
+const MONITOR_INSIGHT_FALLBACK_KEYS = ["signals", "anomalies", "recommendations"] as const;
+const MONITOR_METRIC_FALLBACK_KEYS = ["system", "db", "queue", "traffic"] as const;
+const MONITOR_WEB_VITAL_FALLBACK_KEYS = ["cls", "lcp"] as const;
+
 export function getMonitorSummaryToneClass(tone: "stable" | "watch" | "attention") {
   if (tone === "attention") {
     return "border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-300";
@@ -23,9 +28,9 @@ export function MonitorChartsFallback() {
       <div role="status" aria-live="polite" aria-label="Loading technical charts" className="space-y-4">
         <div className="h-6 w-48 animate-pulse rounded bg-slate-300/70 dark:bg-slate-700/70" />
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-          {Array.from({ length: 4 }).map((_, index) => (
+          {MONITOR_CHART_FALLBACK_KEYS.map((key) => (
             <div
-              key={`monitor-chart-fallback-${index}`}
+              key={`monitor-chart-fallback-${key}`}
               className="h-64 animate-pulse rounded-xl bg-slate-300/60 dark:bg-slate-800/70"
             />
           ))}
@@ -44,9 +49,9 @@ export function MonitorInsightsFallback() {
           <div className="h-4 w-full max-w-2xl animate-pulse rounded bg-slate-300/60 dark:bg-slate-800/70" />
         </div>
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          {Array.from({ length: 3 }).map((_, index) => (
+          {MONITOR_INSIGHT_FALLBACK_KEYS.map((key) => (
             <div
-              key={`monitor-insight-fallback-${index}`}
+              key={`monitor-insight-fallback-${key}`}
               className="h-32 animate-pulse rounded-xl bg-slate-300/60 dark:bg-slate-800/70"
             />
           ))}
@@ -65,9 +70,9 @@ export function MonitorMetricsFallback() {
           <div className="h-4 w-full max-w-xl animate-pulse rounded bg-slate-300/60 dark:bg-slate-800/70" />
         </div>
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-4">
-          {Array.from({ length: 4 }).map((_, index) => (
+          {MONITOR_METRIC_FALLBACK_KEYS.map((key) => (
             <div
-              key={`monitor-metric-fallback-${index}`}
+              key={`monitor-metric-fallback-${key}`}
               className="h-72 animate-pulse rounded-2xl border border-border/60 bg-background/35 backdrop-blur-sm"
             />
           ))}
@@ -89,9 +94,9 @@ export function MonitorSectionCardFallback({
       <div role="status" aria-live="polite" aria-label={title} className="space-y-3">
         <div className="h-5 w-40 animate-pulse rounded bg-slate-300/70 dark:bg-slate-700/70" />
         <div className="space-y-3">
-          {Array.from({ length: blocks }).map((_, index) => (
+          {Array.from({ length: blocks }, (_, index) => `section-${index + 1}`).map((key) => (
             <div
-              key={`monitor-section-fallback-${index}`}
+              key={`monitor-section-fallback-${key}`}
               className="h-20 animate-pulse rounded-xl bg-slate-300/60 dark:bg-slate-800/70"
             />
           ))}
@@ -112,9 +117,9 @@ export function MonitorWebVitalsInlineFallback() {
       >
         <div className="h-5 w-48 animate-pulse rounded bg-slate-300/70 dark:bg-slate-700/70" />
         <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-          {Array.from({ length: 2 }).map((_, index) => (
+          {MONITOR_WEB_VITAL_FALLBACK_KEYS.map((key) => (
             <div
-              key={`monitor-web-vital-fallback-${index}`}
+              key={`monitor-web-vital-fallback-${key}`}
               className="h-36 animate-pulse rounded-2xl bg-slate-300/60 dark:bg-slate-800/70"
             />
           ))}

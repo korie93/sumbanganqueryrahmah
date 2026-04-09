@@ -1,9 +1,19 @@
-function shouldLogClientDiagnostics(): boolean {
-  return Boolean(import.meta.env?.DEV || import.meta.env?.VITE_CLIENT_DEBUG === "1");
+export type ClientLoggerEnvironment = {
+  DEV?: boolean;
+  VITE_CLIENT_DEBUG?: string | undefined;
+};
+
+export function shouldLogClientDiagnostics(env: ClientLoggerEnvironment = import.meta.env): boolean {
+  return Boolean(env?.DEV || env?.VITE_CLIENT_DEBUG === "1");
 }
 
-export function logClientError(message: string, error?: unknown, details?: unknown): void {
-  if (!shouldLogClientDiagnostics()) {
+export function logClientError(
+  message: string,
+  error?: unknown,
+  details?: unknown,
+  env: ClientLoggerEnvironment = import.meta.env,
+): void {
+  if (!shouldLogClientDiagnostics(env)) {
     return;
   }
 

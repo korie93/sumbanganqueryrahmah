@@ -2,6 +2,7 @@ import { AppPaginationBar } from "@/components/data/AppPaginationBar";
 
 type CollectionPaginationBarProps = {
   disabled?: boolean;
+  loading?: boolean;
   page: number;
   totalPages: number;
   pageSize: number;
@@ -14,6 +15,7 @@ type CollectionPaginationBarProps = {
 
 export function CollectionPaginationBar({
   disabled = false,
+  loading = false,
   page,
   totalPages,
   pageSize,
@@ -26,6 +28,7 @@ export function CollectionPaginationBar({
   return (
     <AppPaginationBar
       disabled={disabled}
+      loading={loading}
       page={page}
       totalPages={totalPages}
       pageSize={pageSize}

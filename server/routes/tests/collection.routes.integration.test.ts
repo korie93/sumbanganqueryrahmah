@@ -1558,6 +1558,7 @@ test("GET /api/collection/:id/receipt/view rejects users who no longer own the r
     const payload = await response.json();
     assert.equal(payload.ok, false);
     assert.match(String(payload.message), /forbidden/i);
+    assert.equal(payload.error?.message, payload.message);
   } finally {
     await stopTestServer(server);
   }
@@ -1591,6 +1592,8 @@ test("GET /api/collection/:id/receipt/download returns 404 when receipt file is 
     const payload = await response.json();
     assert.equal(payload.ok, false);
     assert.match(String(payload.message), /receipt file not found/i);
+    assert.equal(payload.error?.code, "COLLECTION_RECEIPT_NOT_FOUND");
+    assert.equal(payload.error?.message, payload.message);
   } finally {
     await stopTestServer(server);
   }
@@ -1715,6 +1718,8 @@ test("GET /api/collection/:id/receipts/:receiptId/view does not fallback to lega
     const payload = await response.json();
     assert.equal(payload.ok, false);
     assert.match(String(payload.message), /receipt file not found/i);
+    assert.equal(payload.error?.code, "COLLECTION_RECEIPT_NOT_FOUND");
+    assert.equal(payload.error?.message, payload.message);
   } finally {
     await stopTestServer(server);
     await fs.unlink(path.join(uploadsDir, storedFileName)).catch(() => undefined);

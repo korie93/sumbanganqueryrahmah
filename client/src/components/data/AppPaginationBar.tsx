@@ -3,8 +3,38 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 
 export const STANDARD_PAGE_SIZE_OPTIONS = [10, 20, 30, 40, 50] as const;
 
+type AppPaginationSummaryArgs = {
+  itemLabel: string;
+  loading: boolean;
+  page: number;
+  pageSize: number;
+  totalItems: number;
+  totalPages: number;
+};
+
+export function buildAppPaginationSummary({
+  itemLabel,
+  loading,
+  page,
+  pageSize,
+  totalItems,
+  totalPages,
+}: AppPaginationSummaryArgs) {
+  if (loading) {
+    return `Updating ${itemLabel}...`;
+  }
+
+  const safeTotalPages = Math.max(1, totalPages);
+  const safePage = Math.min(Math.max(1, page), safeTotalPages);
+  const start = totalItems === 0 ? 0 : (safePage - 1) * pageSize + 1;
+  const end = totalItems === 0 ? 0 : Math.min(totalItems, safePage * pageSize);
+
+  return `Showing ${start}-${end} of ${totalItems} ${itemLabel}`;
+}
+
 type AppPaginationBarProps = {
   disabled?: boolean;
+  loading?: boolean;
   page: number;
   totalPages: number;
   pageSize: number;
@@ -17,6 +47,7 @@ type AppPaginationBarProps = {
 
 export function AppPaginationBar({
   disabled = false,
+  loading = false,
   page,
   totalPages,
   pageSize,
@@ -28,23 +59,30 @@ export function AppPaginationBar({
 }: AppPaginationBarProps) {
   const safeTotalPages = Math.max(1, totalPages);
   const safePage = Math.min(Math.max(1, page), safeTotalPages);
-  const start = totalItems === 0 ? 0 : (safePage - 1) * pageSize + 1;
-  const end = totalItems === 0 ? 0 : Math.min(totalItems, safePage * pageSize);
+  const controlsDisabled = disabled || loading;
 
   return (
     <div
       className="flex flex-col gap-3 rounded-xl border border-border/60 bg-background/70 px-3.5 py-2.5 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between"
       data-floating-ai-avoid="true"
+      aria-busy={loading || undefined}
     >
       <p className="text-xs font-medium text-muted-foreground">
-        Showing {start}-{end} of {totalItems} {itemLabel}
+        {buildAppPaginationSummary({
+          itemLabel,
+          loading,
+          page,
+          pageSize,
+          totalItems,
+          totalPages,
+        })}
       </p>
 
       <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
         <Select
           value={String(pageSize)}
           onValueChange={(value) => onPageSizeChange(Number(value))}
-          disabled={disabled}
+          disabled={controlsDisabled}
         >
           <SelectTrigger className="h-9 w-full sm:w-[120px]">
             <SelectValue />
@@ -63,7 +101,7 @@ export function AppPaginationBar({
             size="sm"
             variant="outline"
             className="w-full min-w-0 sm:w-auto"
-            disabled={disabled || safePage <= 1}
+            disabled={controlsDisabled || safePage <= 1}
             onClick={() => onPageChange(safePage - 1)}
           >
             Prev
@@ -75,7 +113,7 @@ export function AppPaginationBar({
             size="sm"
             variant="outline"
             className="w-full min-w-0 sm:w-auto"
-            disabled={disabled || safePage >= safeTotalPages}
+            disabled={controlsDisabled || safePage >= safeTotalPages}
             onClick={() => onPageChange(safePage + 1)}
           >
             Next

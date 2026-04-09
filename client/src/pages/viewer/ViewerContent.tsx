@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/sheet";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { ViewerLoadingSkeleton } from "@/pages/viewer/ViewerLoadingSkeleton";
-import type { ColumnFilter, DataRowWithId } from "@/pages/viewer/types";
+import type { ColumnFilter, DataRowWithId, ViewerFilterMutableField } from "@/pages/viewer/types";
 
 const ViewerEmptyState = lazy(() =>
   import("@/pages/viewer/ViewerEmptyState").then((module) => ({
@@ -80,7 +80,7 @@ type ViewerContentProps = {
   onBackToSaved: () => void;
   onAddFilter: () => void;
   onClearAllFilters: () => void;
-  onUpdateFilter: (index: number, field: keyof ColumnFilter, value: string) => void;
+  onUpdateFilter: (index: number, field: ViewerFilterMutableField, value: string) => void;
   onRemoveFilter: (index: number) => void;
   onSearchChange: (value: string) => void;
   onToggleRowSelection: (rowId: number) => void;

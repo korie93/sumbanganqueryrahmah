@@ -1,7 +1,9 @@
+import type { CSSProperties } from "react";
 import { Download, ExternalLink, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { CollectionRecordReceipt } from "@/lib/api";
+import type { ReceiptPreviewZoomStyle } from "@/pages/collection-records/receipt-preview-dialog-utils";
 import type { ReceiptPreviewKind } from "@/pages/collection-records/types";
 
 type ReceiptPreviewContentProps = {
@@ -12,7 +14,7 @@ type ReceiptPreviewContentProps = {
   showPdfFallback: boolean;
   kind: ReceiptPreviewKind;
   isMobile: boolean;
-  zoomClassName: string;
+  zoomStyle: ReceiptPreviewZoomStyle;
   fileName: string;
   selectedReceipt: CollectionRecordReceipt | null;
   downloading: boolean;
@@ -27,7 +29,7 @@ export function ReceiptPreviewContent({
   showPdfFallback,
   kind,
   isMobile,
-  zoomClassName,
+  zoomStyle,
   fileName,
   selectedReceipt,
   downloading,
@@ -82,7 +84,10 @@ export function ReceiptPreviewContent({
         </div>
       ) : kind === "pdf" ? (
         <div className="h-full overflow-auto">
-          <div className={cn("mx-auto w-full", isMobile ? "h-full" : "h-[72vh]", zoomClassName)}>
+          <div
+            className={cn("receipt-preview-zoom mx-auto w-full", isMobile ? "h-full" : "h-[72vh]")}
+            style={zoomStyle as CSSProperties}
+          >
             <iframe
               src={safeSource}
               title="Receipt PDF Preview"
@@ -97,10 +102,10 @@ export function ReceiptPreviewContent({
             src={safeSource}
             alt={fileName || "Receipt preview"}
             className={cn(
-              "block rounded-sm object-contain",
+              "receipt-preview-zoom block rounded-sm object-contain",
               isMobile ? "max-w-full" : "max-w-none",
-              zoomClassName,
             )}
+            style={zoomStyle as CSSProperties}
           />
         </div>
       ) : (

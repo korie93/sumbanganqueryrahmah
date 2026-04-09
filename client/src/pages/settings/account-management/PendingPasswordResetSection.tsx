@@ -57,6 +57,7 @@ export function PendingPasswordResetSection({
       pagination={
         <AppPaginationBar
           disabled={loading}
+          loading={loading}
           page={pagination.page}
           totalPages={pagination.totalPages}
           pageSize={pagination.pageSize}

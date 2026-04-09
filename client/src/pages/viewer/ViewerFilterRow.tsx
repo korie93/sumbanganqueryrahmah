@@ -9,14 +9,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { VIEWER_FILTER_OPERATOR_OPTIONS } from "@/pages/viewer/filter-utils";
-import type { ColumnFilter } from "@/pages/viewer/types";
+import type { ColumnFilter, ViewerFilterMutableField } from "@/pages/viewer/types";
 
 interface ViewerFilterRowProps {
   filter: ColumnFilter;
   headers: string[];
   index: number;
   onRemoveFilter: (index: number) => void;
-  onUpdateFilter: (index: number, field: keyof ColumnFilter, value: string) => void;
+  onUpdateFilter: (index: number, field: ViewerFilterMutableField, value: string) => void;
 }
 
 export function ViewerFilterRow({
