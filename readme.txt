@@ -650,6 +650,9 @@ ditentukan melalui penanda STATUS pada setiap item, bukan melalui jadual ini.
         Kemaskini 2026-04-10 (sambungan): server/services/tests/
         audit-log-operations.service.test.ts juga kini typed melalui
         constructor contracts tanpa as any.
+        Kemaskini 2026-04-10 (cache tests): client cache tests untuk
+        collection summary, month dialog, dan records query kini guna
+        helper row typed minimum tanpa as any.
 
 #36 Missing Test Coverage Reporting dalam CI
     Fail: .github/workflows/ci.yml (baris 68-98)

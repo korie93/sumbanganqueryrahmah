@@ -5,6 +5,16 @@ import {
   createCollectionSummaryCache,
   normalizeCollectionSummaryNicknames,
 } from "@/pages/collection-summary/summary-cache";
+import type { CollectionMonthlySummary } from "@/lib/api/collection-types";
+
+function createSummaryRow(month: number): CollectionMonthlySummary {
+  return {
+    month,
+    monthName: `Month ${month}`,
+    totalRecords: 0,
+    totalAmount: 0,
+  };
+}
 
 test("normalizeCollectionSummaryNicknames dedupes and sorts summary filters", () => {
   assert.deepEqual(
@@ -34,13 +44,13 @@ test("buildCollectionSummaryCacheKey normalizes nickname casing and order", () =
 test("createCollectionSummaryCache evicts least-recently-used entries", () => {
   const cache = createCollectionSummaryCache(2);
 
-  cache.set("2026-a", { summaryRows: [{ month: 1 } as any], freshness: null });
-  cache.set("2026-b", { summaryRows: [{ month: 2 } as any], freshness: null });
+  cache.set("2026-a", { summaryRows: [createSummaryRow(1)], freshness: null });
+  cache.set("2026-b", { summaryRows: [createSummaryRow(2)], freshness: null });
   assert.equal(cache.size(), 2);
 
   assert.equal(cache.get("2026-a")?.summaryRows[0]?.month, 1);
 
-  cache.set("2026-c", { summaryRows: [{ month: 3 } as any], freshness: null });
+  cache.set("2026-c", { summaryRows: [createSummaryRow(3)], freshness: null });
 
   assert.equal(cache.get("2026-b"), null);
   assert.equal(cache.get("2026-a")?.summaryRows[0]?.month, 1);
@@ -50,8 +60,8 @@ test("createCollectionSummaryCache evicts least-recently-used entries", () => {
 test("createCollectionSummaryCache clear removes cached summary rows", () => {
   const cache = createCollectionSummaryCache(3);
 
-  cache.set("2026-a", { summaryRows: [{ month: 1 } as any], freshness: null });
-  cache.set("2026-b", { summaryRows: [{ month: 2 } as any], freshness: null });
+  cache.set("2026-a", { summaryRows: [createSummaryRow(1)], freshness: null });
+  cache.set("2026-b", { summaryRows: [createSummaryRow(2)], freshness: null });
   cache.clear();
 
   assert.equal(cache.size(), 0);
