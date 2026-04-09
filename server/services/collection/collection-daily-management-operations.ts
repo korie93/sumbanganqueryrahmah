@@ -1,5 +1,6 @@
 import { badRequest, forbidden } from "../../http/errors";
 import type { AuthenticatedUser } from "../../auth/guards";
+import { parseCollectionAmountMyrInput } from "../../../shared/collection-amount-types";
 import {
   ensureLooseObject,
   normalizeCollectionText,
@@ -42,12 +43,12 @@ export class CollectionDailyManagementOperations {
     const normalizedUsername = username.toLowerCase();
     const year = Number.parseInt(normalizeCollectionText(body.year), 10);
     const month = Number.parseInt(normalizeCollectionText(body.month), 10);
-    const monthlyTarget = Number(body.monthlyTarget);
+    const monthlyTarget = parseCollectionAmountMyrInput(body.monthlyTarget, { allowZero: true });
 
     if (!normalizedUsername) throw badRequest("Staff nickname is required.");
     if (!Number.isInteger(year) || year < 2000 || year > 2100) throw badRequest("Invalid year.");
     if (!Number.isInteger(month) || month < 1 || month > 12) throw badRequest("Invalid month.");
-    if (!Number.isFinite(monthlyTarget) || monthlyTarget < 0) {
+    if (monthlyTarget === null || monthlyTarget < 0) {
       throw badRequest("Monthly target must be a non-negative number.");
     }
 

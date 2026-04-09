@@ -1,3 +1,4 @@
+import { formatCollectionAmountMyrString } from "@shared/collection-amount-types";
 import type {
   CollectionDailyDayDetailsResponse,
   CollectionRecord,
@@ -55,7 +56,7 @@ export function mapDailyRecordToCollectionRecord(record: CollectionDailyDayRecor
     accountNumber: record.accountNumber,
     batch: record.batch as CollectionRecord["batch"],
     paymentDate: record.paymentDate,
-    amount: String(record.amount),
+    amount: formatCollectionAmountMyrString(record.amount),
     receiptFile: null,
     receipts,
     receiptTotalAmount: "0.00",

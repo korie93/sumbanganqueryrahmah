@@ -22,6 +22,12 @@
   animation: welcome-pop 1.2s ease-out forwards;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .welcome-title {
+    animation: none !important;
+  }
+}
+
 .home-mobile-hero {
   position: relative;
   overflow: hidden;
@@ -98,6 +104,15 @@
   transform: translateY(-2px);
   border-color: hsl(var(--primary) / 0.3);
   box-shadow: var(--home-quick-card-shadow-hover);
+}
+
+.home-mobile-quick-card:focus-visible,
+.home-mobile-list-card:focus-visible,
+.home-card:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 3px;
+  border-color: hsl(var(--primary) / 0.34);
+  box-shadow: var(--home-card-shadow-hover);
 }
 
 .dark .home-mobile-quick-card {

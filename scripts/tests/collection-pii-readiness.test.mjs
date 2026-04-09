@@ -17,6 +17,10 @@ test("resolveCollectionPiiReadinessConfig disables PII readiness checks without 
   assert.equal(config.encryptionConfigured, false);
   assert.equal(config.retiredFieldsConfigured, false);
   assert.equal(
+    config.rolloutReadinessArtifactPath,
+    path.join("artifacts/release-readiness-local", "collection-pii-rollout-readiness.json"),
+  );
+  assert.equal(
     config.statusArtifactPath,
     path.join("artifacts/release-readiness-local", "collection-pii-status.json"),
   );
@@ -37,6 +41,10 @@ test("resolveCollectionPiiReadinessConfig enables artifact capture when the encr
 
   assert.equal(config.encryptionConfigured, true);
   assert.equal(config.retiredFieldsConfigured, true);
+  assert.equal(
+    config.rolloutReadinessArtifactPath,
+    path.join("artifacts/release-readiness-local", "collection-pii-rollout-readiness.json"),
+  );
   assert.equal(config.verifySensitiveRetirement, true);
   assert.equal(config.verifyFullRetirement, false);
 });

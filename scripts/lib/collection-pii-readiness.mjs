@@ -15,6 +15,7 @@ export function resolveCollectionPiiReadinessConfig(env, artifactsDir) {
 
   return {
     encryptionConfigured,
+    rolloutReadinessArtifactPath: path.join(artifactsDir, "collection-pii-rollout-readiness.json"),
     retiredFieldsConfigured,
     statusArtifactPath: path.join(artifactsDir, "collection-pii-status.json"),
     verifyFullRetirement: isTruthyEnvFlag(env.VERIFY_COLLECTION_PII_FULL_RETIREMENT),

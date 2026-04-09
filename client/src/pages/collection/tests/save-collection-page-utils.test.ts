@@ -73,6 +73,24 @@ test("buildSaveCollectionMutationPayload trims values and maps receipt metadata"
   ]);
 });
 
+test("buildSaveCollectionMutationPayload normalizes grouped amount strings", () => {
+  const payload = buildSaveCollectionMutationPayload({
+    values: {
+      staffNickname: " staff1 ",
+      customerName: " Siti ",
+      icNumber: " 900101-10-1234 ",
+      customerPhone: " 0123456789 ",
+      accountNumber: " ACC-1 ",
+      batch: "P25",
+      paymentDate: "2026-03-01",
+      amount: "1,200.50",
+    },
+    receiptDrafts: [],
+  });
+
+  assert.equal(payload.amount, 1200.5);
+});
+
 test("removeSaveCollectionReceiptAtIndex removes only the targeted item", () => {
   assert.deepEqual(removeSaveCollectionReceiptAtIndex(["a", "b", "c"], 1), ["a", "c"]);
 });

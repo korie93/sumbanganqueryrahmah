@@ -2,6 +2,9 @@ import {
   isValidCollectionDate,
   normalizeCollectionText,
 } from "../../routes/collection.validation";
+import {
+  formatCollectionCurrencyLabelFromCents,
+} from "../../../shared/collection-amount-types";
 
 export type CollectionReceiptValidationStatus =
   | "matched"
@@ -38,8 +41,11 @@ export type CollectionReceiptValidationResult = {
   blockingReason: CollectionReceiptValidationBlockingReason;
   requiresOverride: boolean;
 };
-
-const CURRENCY_INPUT_REGEX = /^\d+(?:\.\d{1,2})?$/;
+export {
+  formatCollectionAmountFromCents,
+  formatCollectionCurrencyLabelFromCents,
+  parseCollectionAmountToCents,
+} from "../../../shared/collection-amount-types";
 
 export function normalizeCollectionReceiptReference(value: unknown): string | null {
   const normalized = normalizeCollectionText(value);
@@ -70,87 +76,6 @@ export function normalizeCollectionReceiptExtractionStatus(
     return normalized;
   }
   return "unprocessed";
-}
-
-export function parseCollectionAmountToCents(
-  value: unknown,
-  options?: {
-    allowEmpty?: boolean;
-    allowZero?: boolean;
-  },
-): number | null {
-  const raw = String(value ?? "").trim();
-  if (!raw) {
-    return options?.allowEmpty ? null : null;
-  }
-
-  const normalized = raw.replace(/,/g, "");
-  if (!CURRENCY_INPUT_REGEX.test(normalized)) {
-    return null;
-  }
-
-  const [wholePartRaw, fractionPartRaw = ""] = normalized.split(".");
-  const wholePart = Number.parseInt(wholePartRaw, 10);
-  if (!Number.isSafeInteger(wholePart) || wholePart < 0) {
-    return null;
-  }
-  const fractionPart = Number.parseInt(`${fractionPartRaw}00`.slice(0, 2), 10);
-  if (!Number.isSafeInteger(fractionPart) || fractionPart < 0) {
-    return null;
-  }
-
-  const cents = (wholePart * 100) + fractionPart;
-  if (!Number.isSafeInteger(cents)) {
-    return null;
-  }
-  if (!options?.allowZero && cents <= 0) {
-    return null;
-  }
-  if (options?.allowZero && cents < 0) {
-    return null;
-  }
-
-  return cents;
-}
-
-function parseStoredCentsValue(value: unknown): bigint | null {
-  if (value === null || value === undefined || value === "") {
-    return null;
-  }
-  if (typeof value === "bigint") {
-    return value;
-  }
-  if (typeof value === "number" && Number.isSafeInteger(value)) {
-    return BigInt(value);
-  }
-
-  const normalized = String(value).trim();
-  if (!normalized || !/^-?\d+$/.test(normalized)) {
-    return null;
-  }
-
-  try {
-    return BigInt(normalized);
-  } catch {
-    return null;
-  }
-}
-
-export function formatCollectionAmountFromCents(value: unknown): string {
-  const cents = parseStoredCentsValue(value) ?? 0n;
-  const negative = cents < 0n;
-  const absolute = negative ? -cents : cents;
-  const whole = absolute / 100n;
-  const fraction = absolute % 100n;
-  return `${negative ? "-" : ""}${whole.toString()}.${fraction.toString().padStart(2, "0")}`;
-}
-
-export function formatCollectionCurrencyLabelFromCents(value: unknown): string {
-  const amount = Number.parseFloat(formatCollectionAmountFromCents(value));
-  return amount.toLocaleString("en-MY", {
-    style: "currency",
-    currency: "MYR",
-  });
 }
 
 function hasReceiptOcrReviewSignal(receipt: CollectionReceiptValidationDraft): boolean {

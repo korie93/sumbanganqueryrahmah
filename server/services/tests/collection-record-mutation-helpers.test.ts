@@ -48,6 +48,17 @@ test("collection audit helpers preserve receipt source precedence and changed fi
   });
 
   assert.equal(before.amount, 10.01);
+  assert.equal(
+    buildCollectionAuditSnapshot({
+      customerName: "Grouped Customer",
+      paymentDate: "2026-01-03",
+      amount: "1,200.50",
+      collectionStaffNickname: "Collector C",
+      activeReceiptCount: 0,
+      activeReceiptSource: "none",
+    }).amount,
+    1200.5,
+  );
   assert.equal(before.customerName, maskCollectionAuditCustomerName("A"));
   assert.deepEqual(buildCollectionAuditFieldChanges(before, after), {
     amount: { from: 10.01, to: 12.1 },
@@ -87,7 +98,7 @@ test("collection audit helpers mask customer names while preserving change detec
 test("collection record field helpers normalize create/update payloads", () => {
   const fields = normalizeCollectionRecordFields({
     accountNumber: " acc-1 ",
-    amount: "12.30",
+    amount: "1,200.50",
     batch: " p10 ",
     collectionStaffNickname: " Collector Alpha ",
     customerName: " Customer A ",
@@ -98,8 +109,8 @@ test("collection record field helpers normalize create/update payloads", () => {
 
   assert.deepEqual(fields, {
     accountNumber: "acc-1",
-    amount: 12.3,
-    amountCents: 1230,
+    amount: 1200.5,
+    amountCents: 120050,
     batch: "P10",
     collectionStaffNickname: "Collector Alpha",
     customerName: "Customer A",
@@ -107,6 +118,23 @@ test("collection record field helpers normalize create/update payloads", () => {
     icNumber: "900101",
     paymentDate: "2020-01-01",
   });
+
+  assert.deepEqual(
+    normalizeCollectionRecordFields({
+      amount: "12.345",
+    }),
+    {
+      accountNumber: "",
+      amount: null,
+      amountCents: null,
+      batch: "",
+      collectionStaffNickname: "",
+      customerName: "",
+      customerPhone: "",
+      icNumber: "",
+      paymentDate: "",
+    },
+  );
 
   const updateDraft = buildCollectionRecordUpdateDraft(
     {

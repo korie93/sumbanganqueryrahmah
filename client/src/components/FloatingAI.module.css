@@ -2,7 +2,7 @@
   inset: 0;
   z-index: var(--z-floating-ai-root);
   overflow: clip;
-  padding-bottom: env(safe-area-inset-bottom, 0px);
+  padding-bottom: var(--safe-area-inset-bottom);
 }
 
 .floatingRootModal {
@@ -44,8 +44,8 @@
   border-left: 0;
   border-right: 0;
   border-bottom: 0;
-  padding-top: env(safe-area-inset-top, 0px);
-  padding-bottom: env(safe-area-inset-bottom, 0px);
+  padding-top: var(--safe-area-inset-top);
+  padding-bottom: var(--safe-area-inset-bottom);
 }
 
 .floatingMobileBackdrop {

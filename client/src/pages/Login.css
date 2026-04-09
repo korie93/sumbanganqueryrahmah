@@ -10,6 +10,7 @@
 .login-bg-orb {
   border-radius: 9999px;
   filter: blur(64px);
+  will-change: transform, opacity, filter;
 }
 
 .login-bg-orb--top {
@@ -47,6 +48,7 @@
 .login-content {
   animation: content-fade 1.2s ease-out forwards;
   opacity: 0;
+  will-change: transform, opacity;
 }
 
 @keyframes content-fade {
@@ -71,6 +73,7 @@
   border: 1px solid var(--login-card-border);
   box-shadow: var(--login-card-shadow);
   animation: glass-float 7s ease-in-out infinite;
+  will-change: transform, opacity, backdrop-filter;
 }
 
 @keyframes glass-float {
@@ -250,6 +253,7 @@
 
 .floating-slow {
   animation: float-slow 6s ease-in-out infinite;
+  will-change: transform;
 }
 
 .floating-slow.delay-150 {

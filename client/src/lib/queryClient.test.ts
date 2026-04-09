@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { apiRequest, createApiHeaders, createApiRequestId } from "./api-client";
-import { getQueryFn } from "./queryClient";
+import { getQueryFn, resolveDefaultQueryStaleTime } from "./queryClient";
 
 test("createApiRequestId returns a non-empty unique identifier", () => {
   const left = createApiRequestId();
@@ -118,4 +118,11 @@ test("getQueryFn injects x-request-id headers for query fetches", async () => {
   } finally {
     globalThis.fetch = originalFetch;
   }
+});
+
+test("resolveDefaultQueryStaleTime tunes query freshness by endpoint profile", () => {
+  assert.equal(resolveDefaultQueryStaleTime(["/api/health/live"]), 15_000);
+  assert.equal(resolveDefaultQueryStaleTime(["/api/analytics/summary"]), 30_000);
+  assert.equal(resolveDefaultQueryStaleTime(["/api/settings"]), 90_000);
+  assert.equal(resolveDefaultQueryStaleTime(["/api/collection/list"]), 60_000);
 });

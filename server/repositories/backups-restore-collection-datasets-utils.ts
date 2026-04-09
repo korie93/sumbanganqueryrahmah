@@ -1,6 +1,10 @@
 import crypto from "crypto";
 import { sql } from "drizzle-orm";
-import { parseCollectionAmountMyrNumber } from "../../shared/collection-amount-types";
+import {
+  parseCollectionAmountMyrNumber,
+  parseCollectionAmountToCents,
+  parseStoredCollectionAmountCents,
+} from "../../shared/collection-amount-types";
 import {
   buildCollectionRecordPiiSearchHashes,
   buildEncryptedCollectionRecordPiiValues,
@@ -8,7 +12,6 @@ import {
   resolveCollectionPiiFieldValue,
   resolveStoredCollectionPiiPlaintextValue,
 } from "../lib/collection-pii-encryption";
-import { parseCollectionAmountToCents } from "../services/collection/collection-receipt-validation";
 import {
   BACKUP_CHUNK_SIZE,
   type BackupCollectionReceipt,
@@ -66,27 +69,6 @@ export type RestorableCollectionReceiptRow = {
   fileHash: string | null;
   createdAt: Date;
 };
-
-function parseBackupStoredCents(value: unknown): number | null {
-  if (value === null || value === undefined || value === "") {
-    return null;
-  }
-  if (typeof value === "number") {
-    return Number.isSafeInteger(value) ? value : null;
-  }
-  if (typeof value === "bigint") {
-    const parsed = Number(value);
-    return Number.isSafeInteger(parsed) ? parsed : null;
-  }
-
-  const normalized = String(value).trim();
-  if (!normalized || !/^-?\d+$/.test(normalized)) {
-    return null;
-  }
-
-  const parsed = Number.parseInt(normalized, 10);
-  return Number.isSafeInteger(parsed) ? parsed : null;
-}
 
 function normalizeBackupCustomerNameSearchHashes(value: unknown): string[] | null {
   if (!Array.isArray(value)) {
@@ -147,7 +129,7 @@ export function normalizeBackupCollectionRecord(
     amount: parseCollectionAmountMyrNumber(record.amount),
     receiptFile: record.receiptFile || null,
     receiptTotalAmount:
-      parseBackupStoredCents(record.receiptTotalAmountCents)
+      parseStoredCollectionAmountCents(record.receiptTotalAmountCents)
       ?? parseCollectionAmountToCents(record.receiptTotalAmount, { allowZero: true })
       ?? 0,
     receiptValidationStatus: String(record.receiptValidationStatus || "needs_review"),
@@ -174,10 +156,10 @@ export function normalizeBackupCollectionReceipt(
     originalExtension: String(receipt.originalExtension || ""),
     fileSize: Number(receipt.fileSize || 0),
     receiptAmount:
-      parseBackupStoredCents(receipt.receiptAmountCents)
+      parseStoredCollectionAmountCents(receipt.receiptAmountCents)
       ?? parseCollectionAmountToCents(receipt.receiptAmount, { allowZero: true, allowEmpty: true }),
     extractedAmount:
-      parseBackupStoredCents(receipt.extractedAmountCents)
+      parseStoredCollectionAmountCents(receipt.extractedAmountCents)
       ?? parseCollectionAmountToCents(receipt.extractedAmount, { allowZero: true, allowEmpty: true }),
     extractionStatus: String(receipt.extractionStatus || "").trim() || "unprocessed",
     extractionConfidence:

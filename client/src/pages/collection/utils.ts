@@ -1,5 +1,9 @@
 import type { CollectionBatch, CollectionReceiptPayload, CollectionRecord } from "@/lib/api";
 import {
+  formatCollectionAmountMyrString,
+  parseCollectionAmountMyrNumber,
+} from "@shared/collection-amount-types";
+import {
   getStoredAuthenticatedUser,
   getStoredRole,
   getStoredUsername,
@@ -86,13 +90,11 @@ export function isFutureDate(value: string, referenceDate = new Date()): boolean
 }
 
 export function isPositiveAmount(value: string): boolean {
-  const amount = Number(value);
-  return Number.isFinite(amount) && amount > 0;
+  return parseCollectionAmountMyrNumber(value) > 0;
 }
 
 export function formatAmountRM(raw: string | number): string {
-  const amount = Number(raw);
-  if (!Number.isFinite(amount)) return "RM 0.00";
+  const amount = parseCollectionAmountMyrNumber(raw);
   return amount.toLocaleString("en-MY", {
     style: "currency",
     currency: "MYR",
@@ -220,10 +222,12 @@ export function validateReceiptFile(file: File): string | null {
 export function computeSummary(records: CollectionRecord[]): { totalRecords: number; totalAmount: number } {
   const totalRecords = records.length;
   const totalAmount = records.reduce((sum, record) => {
-    const amount = Number(record.amount);
-    return Number.isFinite(amount) ? sum + amount : sum;
+    return sum + parseCollectionAmountMyrNumber(record.amount);
   }, 0);
-  return { totalRecords, totalAmount };
+  return {
+    totalRecords,
+    totalAmount: parseCollectionAmountMyrNumber(formatCollectionAmountMyrString(totalAmount)),
+  };
 }
 
 export function isValidCustomerPhone(value: string): boolean {

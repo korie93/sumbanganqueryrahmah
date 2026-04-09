@@ -105,14 +105,14 @@ export class CollectionRecordNicknameSummaryOperations extends CollectionService
       );
       return {
         nickname,
-        totalRecords: matched?.totalRecords ?? 0,
-        totalAmount: matched?.totalAmount ?? 0,
+        totalRecords: Number(matched?.totalRecords ?? 0),
+        totalAmount: parseCollectionAmountMyrNumber(matched?.totalAmount ?? 0),
       };
     });
     const totals = nicknameTotals.reduce(
       (accumulator, item) => {
-        accumulator.totalRecords += Number(item.totalRecords || 0);
-        accumulator.totalAmount += parseCollectionAmountMyrNumber(item.totalAmount || 0);
+        accumulator.totalRecords += item.totalRecords;
+        accumulator.totalAmount += item.totalAmount;
         return accumulator;
       },
       { totalRecords: 0, totalAmount: 0 },

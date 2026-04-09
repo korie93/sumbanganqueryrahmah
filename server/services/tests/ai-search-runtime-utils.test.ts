@@ -6,6 +6,7 @@ import {
   getFreshLastAiPerson,
   getFreshTimedCacheEntry,
   getOrCreateAiSearchInflight,
+  resolveAiSearchRequestTimeoutMs,
   shouldLogAiSearchResolveError,
   sweepTimedCacheEntries,
   withTimeout,
@@ -72,6 +73,12 @@ test("getFreshLastAiPerson keeps fresh rows and drops expired session context", 
 test("withTimeout resolves successful promises and rejects timeouts", async () => {
   await assert.doesNotReject(() => withTimeout(Promise.resolve("ok"), 100));
   await assert.rejects(() => withTimeout(new Promise(() => {}), 1), /timeout/);
+});
+
+test("resolveAiSearchRequestTimeoutMs leaves room for post-processing work", () => {
+  assert.equal(resolveAiSearchRequestTimeoutMs(1000), 2500);
+  assert.equal(resolveAiSearchRequestTimeoutMs(6000), 7800);
+  assert.equal(resolveAiSearchRequestTimeoutMs(15000), 18000);
 });
 
 test("getOrCreateAiSearchInflight dedupes concurrent work and writes cache once", async () => {

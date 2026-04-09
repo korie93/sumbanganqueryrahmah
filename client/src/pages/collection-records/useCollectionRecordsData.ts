@@ -1,6 +1,7 @@
 import { useCallback, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import type { CollectionStaffNickname } from "@/lib/api";
+import { logClientError } from "@/lib/client-logger";
 import { DEFAULT_COLLECTION_RECORDS_PAGE_SIZE } from "@/pages/collection-records/collection-records-data-utils";
 import { COLLECTION_DATA_CHANGED_EVENT, isValidDate } from "@/pages/collection/utils";
 import { useCollectionRecordsFilterState } from "@/pages/collection-records/useCollectionRecordsFilterState";
@@ -66,18 +67,33 @@ export function useCollectionRecordsData({
   }, [fetchRecordsPage]);
 
   useEffect(() => {
-    void loadNicknames().then((options) => {
-      if (!Array.isArray(options)) return;
+    let isMounted = true;
+    const controller = new AbortController();
 
-      const nextValue = nicknameFilter !== "all"
-        && !options.some((item: CollectionStaffNickname) => item.nickname === nicknameFilter)
-          ? "all"
-          : nicknameFilter;
+    const syncNicknames = async () => {
+      try {
+        const options = await loadNicknames({ signal: controller.signal });
+        if (!isMounted || !Array.isArray(options)) return;
 
-      if (nextValue !== nicknameFilter) {
-        handleNicknameFilterChange(nextValue);
+        const nextValue = nicknameFilter !== "all"
+          && !options.some((item: CollectionStaffNickname) => item.nickname === nicknameFilter)
+            ? "all"
+            : nicknameFilter;
+
+        if (nextValue !== nicknameFilter) {
+          handleNicknameFilterChange(nextValue);
+        }
+      } catch (error: unknown) {
+        logClientError("Failed to sync collection record nickname options.", error);
       }
-    });
+    };
+
+    void syncNicknames();
+
+    return () => {
+      isMounted = false;
+      controller.abort();
+    };
   }, [
     handleNicknameFilterChange,
     loadNicknames,

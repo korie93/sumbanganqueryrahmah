@@ -1,3 +1,5 @@
+import { parseCollectionAmountMyrNumber } from "../../../shared/collection-amount-types";
+
 export type CollectionDailyStatus = "green" | "yellow" | "red" | "neutral";
 
 export type CollectionDailyCalendarInput = {
@@ -127,8 +129,8 @@ export function getCollectionDailyStatus(params: {
   amount: number;
   target: number;
 }): CollectionDailyStatus {
-  const amount = roundMoney(Math.max(0, Number(params.amount || 0)));
-  const target = roundMoney(Math.max(0, Number(params.target || 0)));
+  const amount = roundMoney(Math.max(0, parseCollectionAmountMyrNumber(params.amount || 0)));
+  const target = roundMoney(Math.max(0, parseCollectionAmountMyrNumber(params.target || 0)));
   if (!params.isWorkingDay) {
     return "neutral";
   }
@@ -313,7 +315,7 @@ export function computeCollectionDailyTimeline({
     }
   }
 
-  const safeMonthlyTarget = roundMoney(Math.max(0, Number(monthlyTarget || 0)));
+  const safeMonthlyTarget = roundMoney(Math.max(0, parseCollectionAmountMyrNumber(monthlyTarget || 0)));
   const baseDailyTarget = workingDays > 0 ? roundMoney(safeMonthlyTarget / workingDays) : 0;
   const elapsedWorkingDays = getElapsedWorkingDaysCount(year, month, workingFlags, referenceDate);
   const remainingWorkingDays = Math.max(0, workingDays - elapsedWorkingDays);
@@ -330,7 +332,7 @@ export function computeCollectionDailyTimeline({
     const day = index + 1;
     const date = buildDateKey(year, month, day);
     const collectedBeforeDay = collectedAmount;
-    const amount = roundMoney(Math.max(0, Number(amountByDate.get(date) || 0)));
+    const amount = roundMoney(Math.max(0, parseCollectionAmountMyrNumber(amountByDate.get(date) || 0)));
     const override = calendarByDay.get(day);
     const isWorkingDay = workingFlags[index];
     if (isWorkingDay) {

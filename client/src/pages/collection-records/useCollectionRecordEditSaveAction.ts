@@ -23,6 +23,7 @@ import {
   emitCollectionDataChanged,
   parseCollectionApiErrorDetails,
 } from "@/pages/collection/utils";
+import { parseCollectionAmountMyrNumber } from "@shared/collection-amount-types";
 
 type UseCollectionRecordEditSaveActionArgs = {
   editingRecord: CollectionRecord | null;
@@ -134,7 +135,7 @@ export function useCollectionRecordEditSaveAction({
         accountNumber: accountNumber.trim(),
         batch,
         paymentDate,
-        amount: Number(amount),
+        amount: parseCollectionAmountMyrNumber(amount),
         expectedUpdatedAt: editingRecord.updatedAt || editingRecord.createdAt,
         existingReceiptMetadata,
         newReceiptMetadata,

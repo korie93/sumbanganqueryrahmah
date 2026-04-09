@@ -27,14 +27,14 @@ type CollectionPiiRow = {
   account_number_search_hash: string | null;
 };
 
-const TRACKED_COLLECTION_PII_FIELDS = [
+export const TRACKED_COLLECTION_PII_FIELDS = [
   "customerName",
   "icNumber",
   "customerPhone",
   "accountNumber",
 ] as const;
 
-type TrackedCollectionPiiField = (typeof TRACKED_COLLECTION_PII_FIELDS)[number];
+export type TrackedCollectionPiiField = (typeof TRACKED_COLLECTION_PII_FIELDS)[number];
 
 type CliOptions = {
   batchSize: number;
@@ -66,9 +66,9 @@ export type CollectionPiiStatusEvaluation = {
   requirements: CollectionPiiStatusRequirements;
 };
 
-type CollectionPiiFieldCounts = Record<TrackedCollectionPiiField, number>;
+export type CollectionPiiFieldCounts = Record<TrackedCollectionPiiField, number>;
 
-type CollectionPiiStatusSummary = {
+export type CollectionPiiStatusSummary = {
   encryptionConfigured: boolean;
   plaintextFieldCounts: CollectionPiiFieldCounts;
   plaintextFields: number;
@@ -207,6 +207,108 @@ function createEmptyFieldCounts(): CollectionPiiFieldCounts {
     customerPhone: 0,
     accountNumber: 0,
   };
+}
+
+export async function collectCollectionPiiStatusSummary(params: {
+  batchSize?: number;
+  encryptionConfigured?: boolean;
+  fields?: ReadonlySet<TrackedCollectionPiiField>;
+  maxRows?: number | null;
+} = {}): Promise<CollectionPiiStatusSummary> {
+  const batchSize = params.batchSize ?? 500;
+  const encryptionConfigured = params.encryptionConfigured ?? hasCollectionPiiEncryptionConfigured();
+  const fields = params.fields ?? new Set<TrackedCollectionPiiField>(TRACKED_COLLECTION_PII_FIELDS);
+  const maxRows = params.maxRows ?? null;
+  const summary: CollectionPiiStatusSummary = {
+    encryptionConfigured,
+    plaintextFieldCounts: createEmptyFieldCounts(),
+    plaintextFields: 0,
+    processedRows: 0,
+    redactableFieldCounts: createEmptyFieldCounts(),
+    redactableFields: 0,
+    rewriteFieldCounts: createEmptyFieldCounts(),
+    rewriteFields: 0,
+    rowsEligibleForRedaction: 0,
+    rowsNeedingRewrite: 0,
+    rowsWithPlaintext: 0,
+  };
+  let lastId: string | null = null;
+
+  while (true) {
+    const remainingLimit = maxRows === null
+      ? batchSize
+      : Math.min(batchSize, Math.max(0, maxRows - summary.processedRows));
+    if (remainingLimit <= 0) {
+      break;
+    }
+
+    const result = await pool.query<CollectionPiiRow>(
+      `
+        SELECT
+          id,
+          customer_name,
+          customer_name_encrypted,
+          customer_name_search_hash,
+          customer_name_search_hashes,
+          ic_number,
+          ic_number_encrypted,
+          ic_number_search_hash,
+          customer_phone,
+          customer_phone_encrypted,
+          customer_phone_search_hash,
+          account_number,
+          account_number_encrypted,
+          account_number_search_hash
+        FROM public.collection_records
+        WHERE ($1::uuid IS NULL OR id > $1::uuid)
+        ORDER BY id ASC
+        LIMIT $2
+      `,
+      [lastId, remainingLimit],
+    );
+
+    if (result.rows.length === 0) {
+      break;
+    }
+
+    for (const row of result.rows) {
+      summary.processedRows += 1;
+      lastId = row.id;
+
+      const plan = getCollectionPiiStatusPlan(
+        row,
+        encryptionConfigured,
+        fields,
+      );
+      const plaintextCount = countEnabledFields(plan.plaintext);
+      const redactableCount = countEnabledFields(plan.redactable);
+      const rewriteCount = countEnabledFields(plan.rewrite);
+
+      if (plaintextCount > 0) {
+        summary.rowsWithPlaintext += 1;
+        summary.plaintextFields += plaintextCount;
+        incrementFieldCounts(summary.plaintextFieldCounts, plan.plaintext);
+      }
+
+      if (redactableCount > 0) {
+        summary.rowsEligibleForRedaction += 1;
+        summary.redactableFields += redactableCount;
+        incrementFieldCounts(summary.redactableFieldCounts, plan.redactable);
+      }
+
+      if (rewriteCount > 0) {
+        summary.rowsNeedingRewrite += 1;
+        summary.rewriteFields += rewriteCount;
+        incrementFieldCounts(summary.rewriteFieldCounts, plan.rewrite);
+      }
+    }
+
+    if (result.rows.length < remainingLimit) {
+      break;
+    }
+  }
+
+  return summary;
 }
 
 function countEnabledFields(map: CollectionPiiBooleanMap): number {
@@ -442,98 +544,14 @@ export async function main() {
   const options = parseCliOptions(process.argv.slice(2));
   await assertCollectionPiiPostgresReady("Collection PII status");
   const encryptionConfigured = hasCollectionPiiEncryptionConfigured();
-  const summary: CollectionPiiStatusSummary = {
-    encryptionConfigured,
-    plaintextFieldCounts: createEmptyFieldCounts(),
-    plaintextFields: 0,
-    processedRows: 0,
-    redactableFieldCounts: createEmptyFieldCounts(),
-    redactableFields: 0,
-    rewriteFieldCounts: createEmptyFieldCounts(),
-    rewriteFields: 0,
-    rowsEligibleForRedaction: 0,
-    rowsNeedingRewrite: 0,
-    rowsWithPlaintext: 0,
-  };
-  let lastId: string | null = null;
 
   try {
-    while (true) {
-      const remainingLimit = options.maxRows === null
-        ? options.batchSize
-        : Math.min(
-          options.batchSize,
-          Math.max(0, options.maxRows - summary.processedRows),
-        );
-      if (remainingLimit <= 0) {
-        break;
-      }
-
-      const result = await pool.query<CollectionPiiRow>(
-        `
-          SELECT
-            id,
-            customer_name,
-            customer_name_encrypted,
-            customer_name_search_hash,
-            customer_name_search_hashes,
-            ic_number,
-            ic_number_encrypted,
-            ic_number_search_hash,
-            customer_phone,
-            customer_phone_encrypted,
-            customer_phone_search_hash,
-            account_number,
-            account_number_encrypted,
-            account_number_search_hash
-          FROM public.collection_records
-          WHERE ($1::uuid IS NULL OR id > $1::uuid)
-          ORDER BY id ASC
-          LIMIT $2
-        `,
-        [lastId, remainingLimit],
-      );
-
-      if (result.rows.length === 0) {
-        break;
-      }
-
-      for (const row of result.rows) {
-        summary.processedRows += 1;
-        lastId = row.id;
-
-        const plan = getCollectionPiiStatusPlan(
-          row,
-          encryptionConfigured,
-          options.fields,
-        );
-        const plaintextCount = countEnabledFields(plan.plaintext);
-        const redactableCount = countEnabledFields(plan.redactable);
-        const rewriteCount = countEnabledFields(plan.rewrite);
-
-        if (plaintextCount > 0) {
-          summary.rowsWithPlaintext += 1;
-          summary.plaintextFields += plaintextCount;
-          incrementFieldCounts(summary.plaintextFieldCounts, plan.plaintext);
-        }
-
-        if (redactableCount > 0) {
-          summary.rowsEligibleForRedaction += 1;
-          summary.redactableFields += redactableCount;
-          incrementFieldCounts(summary.redactableFieldCounts, plan.redactable);
-        }
-
-        if (rewriteCount > 0) {
-          summary.rowsNeedingRewrite += 1;
-          summary.rewriteFields += rewriteCount;
-          incrementFieldCounts(summary.rewriteFieldCounts, plan.rewrite);
-        }
-      }
-
-      if (result.rows.length < remainingLimit) {
-        break;
-      }
-    }
+    const summary = await collectCollectionPiiStatusSummary({
+      batchSize: options.batchSize,
+      encryptionConfigured,
+      fields: options.fields,
+      maxRows: options.maxRows,
+    });
 
     const evaluation = evaluateCollectionPiiStatus(summary, {
       requireZeroPlaintext: options.requireZeroPlaintext,

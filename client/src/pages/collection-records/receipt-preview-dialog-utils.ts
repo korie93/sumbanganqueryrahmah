@@ -7,7 +7,7 @@ export function clampReceiptPreviewZoom(zoom: number): number {
 export function getReceiptPreviewZoomClass(zoom: number): string {
   const clamped = clampReceiptPreviewZoom(zoom);
   const zoomStep = Math.round(clamped * 10);
-  return `receipt-preview-zoom-${zoomStep}`;
+  return `receipt-preview-zoom receipt-preview-zoom-${zoomStep}`;
 }
 
 export function resolveSelectedReceipt(

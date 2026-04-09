@@ -67,6 +67,7 @@ Release artifacts produced by that flow:
 - `artifacts/release-readiness-local/server.log`
 - `artifacts/release-readiness-local/monitor-stale-conflicts.json`
 - `artifacts/release-readiness-local/collection-pii-status.json` when `COLLECTION_PII_ENCRYPTION_KEY` is configured
+- `artifacts/release-readiness-local/collection-pii-rollout-readiness.json` when `COLLECTION_PII_ENCRYPTION_KEY` is configured
 - `artifacts/release-readiness-local/smoke-ui/`
 - `var/perf/collection-baseline-*.json`
 - `var/perf/collection-baseline-*.md`

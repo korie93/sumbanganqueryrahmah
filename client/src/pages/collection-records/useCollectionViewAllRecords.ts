@@ -15,6 +15,7 @@ import {
   COLLECTION_DATA_CHANGED_EVENT,
   parseApiError,
 } from "@/pages/collection/utils";
+import { parseCollectionAmountMyrNumber } from "@shared/collection-amount-types";
 import {
   buildCollectionRecordsCacheKey,
   createCollectionRecordsCache,
@@ -28,8 +29,7 @@ function isAbortError(error: unknown) {
 
 function getCachedRecordTotalAmount(records: CollectionRecord[]) {
   return records.reduce((total, record) => {
-    const nextAmount = Number(record.amount);
-    return Number.isFinite(nextAmount) ? total + nextAmount : total;
+    return total + parseCollectionAmountMyrNumber(record.amount);
   }, 0);
 }
 
@@ -151,7 +151,7 @@ export function useCollectionViewAllRecords({
         ) return;
         const nextRecords = Array.isArray(response?.records) ? response.records : [];
         const nextTotalRecords = Number((response?.pagination?.total ?? response?.total) || 0);
-        const nextTotalAmount = Number(response?.totalAmount || 0);
+        const nextTotalAmount = parseCollectionAmountMyrNumber(response?.totalAmount);
         viewAllCacheRef.current.set(cacheKey, {
           records: nextRecords,
           totalRecords: nextTotalRecords,

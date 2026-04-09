@@ -7,6 +7,7 @@ import {
   buildCollectionDailyOverviewCacheKey,
   createCollectionDailyOverviewCache,
 } from "@/pages/collection/collection-daily-cache";
+import { formatCollectionDailyTargetInput } from "@/pages/collection/collection-daily-target-input-utils";
 import {
   mapCollectionDailyEditableCalendarDays,
   shouldLoadCollectionDailyOverview,
@@ -58,7 +59,9 @@ export function useCollectionDailyOverviewState({
   const overviewCacheRef = useRef(createCollectionDailyOverviewCache());
   const [overview, setOverview] = useState<CollectionDailyOverviewResponse | null>(null);
   const [loadingOverview, setLoadingOverview] = useState(false);
-  const [monthlyTargetInput, setMonthlyTargetInput] = useState("0");
+  const [monthlyTargetInput, setMonthlyTargetInput] = useState(() =>
+    formatCollectionDailyTargetInput(0),
+  );
   const [calendarDays, setCalendarDays] = useState<EditableCalendarDay[]>([]);
 
   const abortOverviewRequest = useCallback(() => {
@@ -110,7 +113,9 @@ export function useCollectionDailyOverviewState({
       abortOverviewRequest();
       setOverview(cachedEntry.overview);
       if (canEditTarget) {
-        setMonthlyTargetInput(String(cachedEntry.overview.summary.monthlyTarget || 0));
+        setMonthlyTargetInput(
+          formatCollectionDailyTargetInput(cachedEntry.overview.summary.monthlyTarget || 0),
+        );
       }
       setCalendarDays(mapCollectionDailyEditableCalendarDays(cachedEntry.overview));
       if (!preserveSelection) {
@@ -140,7 +145,9 @@ export function useCollectionDailyOverviewState({
       overviewCacheRef.current.set(cacheKey, { overview: response });
       setOverview(response);
       if (canEditTarget) {
-        setMonthlyTargetInput(String(response.summary.monthlyTarget || 0));
+        setMonthlyTargetInput(
+          formatCollectionDailyTargetInput(response.summary.monthlyTarget || 0),
+        );
       }
       setCalendarDays(mapCollectionDailyEditableCalendarDays(response));
       if (!preserveSelection) {

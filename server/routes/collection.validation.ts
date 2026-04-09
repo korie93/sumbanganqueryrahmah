@@ -1,4 +1,5 @@
 import { getCollectionNicknameTempPassword } from "../config/security";
+import { parseCollectionAmountMyrInput } from "../../shared/collection-amount-types";
 
 export const COLLECTION_BATCHES = new Set(["P10", "P25", "MDD02", "MDD10", "MDD18", "MDD25"]);
 export const COLLECTION_STAFF_NICKNAME_MIN_LENGTH = 2;
@@ -143,10 +144,7 @@ export function isFutureCollectionDate(value: string, referenceDate = new Date()
 }
 
 export function parseCollectionAmount(value: unknown): number | null {
-  const num = Number(value);
-  if (!Number.isFinite(num)) return null;
-  if (num <= 0) return null;
-  return Math.round(num * 100) / 100;
+  return parseCollectionAmountMyrInput(value);
 }
 
 export function isValidCollectionPhone(value: string): boolean {

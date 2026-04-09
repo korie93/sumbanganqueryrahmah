@@ -1,9 +1,9 @@
 import path from "path";
 import type { CollectionRepositoryQueryResult } from "./collection-nickname-utils";
 import {
-  formatCollectionAmountFromCents,
   normalizeCollectionReceiptExtractionStatus,
 } from "../services/collection/collection-receipt-validation";
+import { formatCollectionAmountFromCents } from "../../shared/collection-amount-types";
 import type { CollectionRecordReceipt } from "../storage-postgres";
 
 export type CollectionRecordReceiptDbRow = {

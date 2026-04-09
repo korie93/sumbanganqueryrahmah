@@ -2,6 +2,7 @@ import { formatAmountRM } from "@/pages/collection/utils";
 import { fitCollectionRecordText } from "@/pages/collection-records/utils";
 import type { CollectionRecord } from "@/lib/api";
 import { formatDateTimeDDMMYYYY, formatIsoDateToDDMMYYYY } from "@/lib/date-format";
+import { parseCollectionAmountMyrNumber } from "@shared/collection-amount-types";
 
 interface CollectionRecordsExportParams {
   visibleRecords: CollectionRecord[];
@@ -28,7 +29,7 @@ export async function exportCollectionRecordsToExcel({
     record.icNumber,
     record.accountNumber,
     record.customerPhone,
-    Number(record.amount),
+    parseCollectionAmountMyrNumber(record.amount),
     record.paymentDate,
     hasReceiptAttachment(record) ? "Available" : "-",
     record.collectionStaffNickname,

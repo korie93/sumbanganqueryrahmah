@@ -162,9 +162,10 @@ export function CollectionDailyTargetControls({
       <div className="space-y-1">
         <Label>Monthly Target (RM)</Label>
         <Input
-          type="number"
-          min={0}
-          step={0.01}
+          type="text"
+          inputMode="decimal"
+          placeholder="0.00"
+          autoComplete="off"
           value={monthlyTargetInput}
           onChange={(event) => onMonthlyTargetInputChange(event.target.value)}
           disabled={!canEditTarget}

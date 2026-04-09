@@ -1,4 +1,5 @@
 import crypto from "crypto";
+import { parseCollectionAmountMyrInput } from "../../../shared/collection-amount-types";
 import { normalizeCollectionText } from "../../routes/collection.validation";
 
 export type CollectionRecordAuditSource = "relation" | "legacy" | "none";
@@ -23,7 +24,12 @@ export function maskCollectionAuditCustomerName(value: unknown): string {
 }
 
 function toCollectionAuditAmount(value: unknown) {
-  const parsed = Number(value || 0);
+  const strictParsed = parseCollectionAmountMyrInput(value, { allowZero: true });
+  if (strictParsed !== null) {
+    return strictParsed;
+  }
+
+  const parsed = Number(String(value ?? "").trim().replace(/,/g, "") || 0);
   if (!Number.isFinite(parsed)) {
     return 0;
   }

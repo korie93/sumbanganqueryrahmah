@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { toReceiptPayloads, validateReceiptFile } from "./utils";
+import {
+  computeSummary,
+  formatAmountRM,
+  isPositiveAmount,
+  toReceiptPayloads,
+  validateReceiptFile,
+} from "./utils";
 
 function createFileLike(input: {
   name: string;
@@ -105,4 +111,21 @@ test("toReceiptPayloads reads receipts sequentially to avoid memory spikes", asy
       writable: true,
     });
   }
+});
+
+test("collection amount helpers normalize grouped MYR strings consistently", () => {
+  assert.equal(isPositiveAmount("1,200.50"), true);
+  assert.equal(isPositiveAmount("bad-value"), false);
+  assert.equal(formatAmountRM("1,200.50"), "RM 1,200.50");
+  assert.deepEqual(
+    computeSummary([
+      { amount: "1,200.50" } as { amount: string },
+      { amount: "99.50" } as { amount: string },
+      { amount: "bad-value" } as { amount: string },
+    ] as never),
+    {
+      totalAmount: 1300,
+      totalRecords: 3,
+    },
+  );
 });

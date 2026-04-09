@@ -181,6 +181,17 @@ const run = async () => {
       "utf8",
     );
 
+    console.log("Release readiness: capturing collection PII rollout readiness...");
+    const rolloutReadinessResult = await runNpmCapture(
+      ["run", "collection:rollout-readiness", "--", "--json"],
+      { env },
+    );
+    await writeFile(
+      collectionPiiReadiness.rolloutReadinessArtifactPath,
+      rolloutReadinessResult.stdout,
+      "utf8",
+    );
+
     if (collectionPiiReadiness.verifySensitiveRetirement) {
       console.log("Release readiness: verifying staged retirement for sensitive collection PII...");
       await runNpm(["run", "collection:verify-pii-sensitive-retirement"], { env });

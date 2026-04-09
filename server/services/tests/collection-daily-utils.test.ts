@@ -154,3 +154,30 @@ test("computeCollectionDailyTimeline never inflates remaining target when collec
   assert.equal(timeline.summary.progressVarianceAmount, 500);
   assert.equal(timeline.summary.remainingWorkingDays, 0);
 });
+
+test("computeCollectionDailyTimeline normalizes grouped MYR strings consistently", () => {
+  const timeline = computeCollectionDailyTimeline({
+    year: 2026,
+    month: 3,
+    monthlyTarget: Number("1"),
+    calendarRows: buildCalendarMonth(2026, 3, [1]),
+    amountByDate: new Map<string, number>([["2026-03-01", Number("0")]]),
+    referenceDate: new Date("2026-03-01T12:00:00.000Z"),
+  });
+
+  const groupedTimeline = computeCollectionDailyTimeline({
+    year: 2026,
+    month: 3,
+    monthlyTarget: "1,200.50" as unknown as number,
+    calendarRows: buildCalendarMonth(2026, 3, [1]),
+    amountByDate: new Map<string, number>([["2026-03-01", "1,000.25" as unknown as number]]),
+    referenceDate: new Date("2026-03-01T12:00:00.000Z"),
+  });
+
+  assert.equal(timeline.summary.monthlyTarget, 1);
+  assert.equal(groupedTimeline.summary.monthlyTarget, 1200.5);
+  assert.equal(groupedTimeline.summary.collectedToDate, 1000.25);
+  assert.equal(groupedTimeline.summary.remainingTarget, 200.25);
+  assert.equal(groupedTimeline.days[0]?.amount, 1000.25);
+  assert.equal(groupedTimeline.days[0]?.target, 1200.5);
+});

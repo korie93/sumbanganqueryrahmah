@@ -10,6 +10,7 @@ import {
   isValidCustomerPhone,
   isValidDate,
 } from "@/pages/collection/utils";
+import { parseCollectionAmountMyrNumber } from "@shared/collection-amount-types";
 
 export type SaveCollectionDraftRestoreNotice = {
   restoredAt: string;
@@ -82,7 +83,7 @@ export function buildSaveCollectionMutationPayload(options: {
     accountNumber: values.accountNumber.trim(),
     batch: values.batch,
     paymentDate: values.paymentDate,
-    amount: Number(values.amount),
+    amount: parseCollectionAmountMyrNumber(values.amount),
     collectionStaffNickname: values.staffNickname.trim(),
     newReceiptMetadata: receiptDrafts.map((draft) => buildCollectionReceiptMetadataPayload(draft)),
   };
@@ -91,4 +92,3 @@ export function buildSaveCollectionMutationPayload(options: {
 export function removeSaveCollectionReceiptAtIndex<T>(items: T[], index: number) {
   return items.filter((_, itemIndex) => itemIndex !== index);
 }
-

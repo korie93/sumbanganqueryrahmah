@@ -305,7 +305,7 @@ test("collection daily receipt viewer utils map daily receipts into collection r
   } as any);
 
   assert.equal(mappedRecord.id, "record-1");
-  assert.equal(mappedRecord.amount, "25");
+  assert.equal(mappedRecord.amount, "25.00");
   assert.equal(mappedRecord.receiptCount, 1);
   assert.equal(mappedRecord.receipts[0]?.originalExtension, "pdf");
   assert.match(mappedRecord.receiptValidationMessage || "", /menunggu semakan/i);

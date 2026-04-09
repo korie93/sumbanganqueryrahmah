@@ -78,6 +78,32 @@ export function useFloatingAILayoutState({
       (messageCount === 0 && !isThinking && aiStatus === "IDLE")
       || hasFocusedAiEditable
     );
+  const syncInputsRef = useRef({
+    hiddenForAiPage,
+    isMobile,
+    isOpen,
+    shouldTrackObstacleLayout,
+    keyboardOpen,
+    mobileViewportHeight,
+    hasFocusedAiEditable,
+    viewportBottomInset,
+    hasFocusedEditable,
+    hasDensePage,
+    preferCompactPanel,
+  });
+  syncInputsRef.current = {
+    hiddenForAiPage,
+    isMobile,
+    isOpen,
+    shouldTrackObstacleLayout,
+    keyboardOpen,
+    mobileViewportHeight,
+    hasFocusedAiEditable,
+    viewportBottomInset,
+    hasFocusedEditable,
+    hasDensePage,
+    preferCompactPanel,
+  };
 
   useEffect(() => {
     if (hiddenForAiPage || typeof document === "undefined") return;
@@ -124,37 +150,44 @@ export function useFloatingAILayoutState({
   }, [hiddenForAiPage, isMobile, isOpen, layoutState.rootHidden]);
 
   const syncLayout = useCallback(() => {
-    if (hiddenForAiPage || typeof window === "undefined") return;
+    const state = syncInputsRef.current;
+    if (state.hiddenForAiPage || typeof window === "undefined") return;
     const effectiveViewportHeight =
-      isMobile && mobileViewportHeight > 0 && !keyboardOpen
-        ? mobileViewportHeight
+      state.isMobile && state.mobileViewportHeight > 0 && !state.keyboardOpen
+        ? state.mobileViewportHeight
         : window.innerHeight;
 
     const nextLayout = resolveFloatingAiLayout({
       viewportWidth: window.innerWidth,
       viewportHeight: effectiveViewportHeight,
-      viewportBottomInset: hasFocusedAiEditable ? viewportBottomInset : 0,
-      isMobile,
-      isOpen,
-      hasBlockingDialog: shouldTrackObstacleLayout ? hasFloatingAiBlockingDialog() : false,
-      keyboardOpen,
-      hasFocusedEditable,
-      hasDensePage,
-      preferCompactPanel,
-      avoidRects: shouldTrackObstacleLayout ? collectFloatingAiAvoidRects() : [],
+      viewportBottomInset: state.hasFocusedAiEditable ? state.viewportBottomInset : 0,
+      isMobile: state.isMobile,
+      isOpen: state.isOpen,
+      hasBlockingDialog: state.shouldTrackObstacleLayout ? hasFloatingAiBlockingDialog() : false,
+      keyboardOpen: state.keyboardOpen,
+      hasFocusedEditable: state.hasFocusedEditable,
+      hasDensePage: state.hasDensePage,
+      preferCompactPanel: state.preferCompactPanel,
+      avoidRects: state.shouldTrackObstacleLayout ? collectFloatingAiAvoidRects() : [],
     });
 
     setLayoutState((previous) => (areFloatingAiLayoutsEqual(previous, nextLayout) ? previous : nextLayout));
+  }, []);
+
+  useEffect(() => {
+    syncLayout();
   }, [
     hasDensePage,
     hasFocusedAiEditable,
     hasFocusedEditable,
+    hiddenForAiPage,
     isMobile,
     isOpen,
     keyboardOpen,
     mobileViewportHeight,
     preferCompactPanel,
     shouldTrackObstacleLayout,
+    syncLayout,
     viewportBottomInset,
   ]);
 

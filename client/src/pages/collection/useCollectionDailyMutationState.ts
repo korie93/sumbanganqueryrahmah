@@ -1,5 +1,6 @@
 import { useCallback, useState } from "react";
 import { setCollectionDailyCalendar, setCollectionDailyTarget } from "@/lib/api";
+import { parseCollectionAmountMyrInput } from "@shared/collection-amount-types";
 import type { EditableCalendarDay } from "@/pages/collection/CollectionDailyShared";
 import { buildCollectionDailyCalendarPayloadDays } from "@/pages/collection/collection-daily-state-utils";
 import { parseApiError } from "@/pages/collection/utils";
@@ -47,8 +48,8 @@ export function useCollectionDailyMutationState({
       return;
     }
 
-    const monthlyTarget = Number(monthlyTargetInput);
-    if (!Number.isFinite(monthlyTarget) || monthlyTarget < 0) {
+    const monthlyTarget = parseCollectionAmountMyrInput(monthlyTargetInput, { allowZero: true });
+    if (monthlyTarget === null || monthlyTarget < 0) {
       toast({
         title: "Validation Error",
         description: "Monthly target must be a non-negative number.",

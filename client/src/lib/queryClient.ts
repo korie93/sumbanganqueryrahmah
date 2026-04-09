@@ -15,8 +15,59 @@ const isLowSpecClient = (() => {
   return cores <= 4 || ramGb <= 4 || saveData;
 })();
 
-const QUERY_STALE_TIME = isLowSpecClient ? 10_000 : 30_000;
+const LIVE_QUERY_STALE_TIME = isLowSpecClient ? 10_000 : 15_000;
+const DEFAULT_QUERY_STALE_TIME = isLowSpecClient ? 20_000 : 60_000;
+const ANALYTICS_QUERY_STALE_TIME = isLowSpecClient ? 20_000 : 30_000;
+const STATIC_QUERY_STALE_TIME = isLowSpecClient ? 45_000 : 90_000;
 const QUERY_GC_TIME = isLowSpecClient ? 45_000 : 2 * 60_000;
+
+const LIVE_QUERY_PREFIXES = [
+  "/api/activity",
+  "/api/health",
+  "/internal/alerts",
+  "/internal/system-health",
+  "/internal/web-vitals",
+  "/api/debug/websocket-clients",
+];
+
+const ANALYTICS_QUERY_PREFIXES = [
+  "/api/analytics",
+  "/api/collection/summary",
+  "/api/collection/nickname-summary",
+  "/api/collection/daily",
+  "/api/audit-logs",
+];
+
+const STATIC_QUERY_PREFIXES = [
+  "/api/accounts",
+  "/api/admin/users",
+  "/api/users/banned",
+  "/api/settings",
+  "/api/settings/tab-visibility",
+  "/api/app-config",
+  "/api/search/columns",
+  "/api/columns",
+];
+
+function readQueryPath(queryKey: readonly unknown[]): string {
+  return typeof queryKey[0] === "string"
+    ? queryKey[0]
+    : "";
+}
+
+export function resolveDefaultQueryStaleTime(queryKey: readonly unknown[]): number {
+  const path = readQueryPath(queryKey);
+  if (LIVE_QUERY_PREFIXES.some((prefix) => path.startsWith(prefix))) {
+    return LIVE_QUERY_STALE_TIME;
+  }
+  if (ANALYTICS_QUERY_PREFIXES.some((prefix) => path.startsWith(prefix))) {
+    return ANALYTICS_QUERY_STALE_TIME;
+  }
+  if (STATIC_QUERY_PREFIXES.some((prefix) => path.startsWith(prefix))) {
+    return STATIC_QUERY_STALE_TIME;
+  }
+  return DEFAULT_QUERY_STALE_TIME;
+}
 
 type UnauthorizedBehavior = "returnNull" | "throw";
 export const getQueryFn: <T>(options: {
@@ -44,7 +95,7 @@ export const queryClient = new QueryClient({
       refetchInterval: false,
       refetchOnWindowFocus: false,
       refetchOnMount: false,
-      staleTime: QUERY_STALE_TIME,
+      staleTime: (query) => resolveDefaultQueryStaleTime(query.queryKey),
       gcTime: QUERY_GC_TIME,
       retry: false,
     },

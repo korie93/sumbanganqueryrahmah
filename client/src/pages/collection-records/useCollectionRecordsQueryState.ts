@@ -18,6 +18,7 @@ import {
   isCollectionRecordsAbortError,
 } from "@/pages/collection-records/collection-records-data-utils";
 import { parseApiError } from "@/pages/collection/utils";
+import { parseCollectionAmountMyrNumber } from "@shared/collection-amount-types";
 
 type FetchCollectionRecordsPageParams = {
   cursor: string | null;
@@ -33,6 +34,7 @@ export function useCollectionRecordsQueryState() {
   const recordsRequestIdRef = useRef(0);
   const nicknamesRequestIdRef = useRef(0);
   const recordsAbortControllerRef = useRef<AbortController | null>(null);
+  const nicknamesAbortControllerRef = useRef<AbortController | null>(null);
   const recordsCacheRef = useRef(createCollectionRecordsCache());
   const appliedFiltersRef = useRef<CollectionRecordFilters>({});
   const cursorHistoryRef = useRef<Array<string | null>>([null]);
@@ -54,6 +56,13 @@ export function useCollectionRecordsQueryState() {
     }
   }, []);
 
+  const abortNicknamesRequest = useCallback(() => {
+    if (nicknamesAbortControllerRef.current) {
+      nicknamesAbortControllerRef.current.abort();
+      nicknamesAbortControllerRef.current = null;
+    }
+  }, []);
+
   const clearRecordsCache = useCallback(() => {
     recordsCacheRef.current.clear();
   }, []);
@@ -62,22 +71,39 @@ export function useCollectionRecordsQueryState() {
     return () => {
       isMountedRef.current = false;
       recordsRequestIdRef.current += 1;
+      nicknamesRequestIdRef.current += 1;
       abortRecordsRequest();
+      abortNicknamesRequest();
       clearRecordsCache();
     };
-  }, [abortRecordsRequest, clearRecordsCache]);
+  }, [abortNicknamesRequest, abortRecordsRequest, clearRecordsCache]);
 
-  const loadNicknames = useCallback(async () => {
+  const loadNicknames = useCallback(async (options?: { signal?: AbortSignal | undefined }) => {
     const requestId = ++nicknamesRequestIdRef.current;
+    abortNicknamesRequest();
+    const controller = new AbortController();
+    nicknamesAbortControllerRef.current = controller;
+    if (options?.signal) {
+      if (options.signal.aborted) {
+        controller.abort(options.signal.reason);
+      } else {
+        options.signal.addEventListener("abort", () => {
+          controller.abort(options.signal?.reason);
+        }, { once: true });
+      }
+    }
     setLoadingNicknames(true);
     try {
-      const response = await getCollectionNicknames();
+      const response = await getCollectionNicknames(undefined, { signal: controller.signal });
       if (!isMountedRef.current || requestId !== nicknamesRequestIdRef.current) return;
       const options = Array.isArray(response?.nicknames) ? response.nicknames : [];
       setNicknameOptions(options);
       return options;
     } catch (error: unknown) {
       if (!isMountedRef.current || requestId !== nicknamesRequestIdRef.current) return;
+      if (isCollectionRecordsAbortError(error)) {
+        return undefined;
+      }
       toast({
         title: "Failed to Load Nicknames",
         description: parseApiError(error),
@@ -85,10 +111,13 @@ export function useCollectionRecordsQueryState() {
       });
       return undefined;
     } finally {
+      if (nicknamesAbortControllerRef.current === controller) {
+        nicknamesAbortControllerRef.current = null;
+      }
       if (!isMountedRef.current || requestId !== nicknamesRequestIdRef.current) return;
       setLoadingNicknames(false);
     }
-  }, [toast]);
+  }, [abortNicknamesRequest, toast]);
 
   const fetchRecordsPage = useCallback(
     async ({
@@ -163,7 +192,7 @@ export function useCollectionRecordsQueryState() {
 
         const nextRecords = Array.isArray(response?.records) ? response.records : [];
         const nextTotalRecords = Number((response?.pagination?.total ?? response?.total) || 0);
-        const nextTotalAmount = Number(response?.totalAmount || 0);
+        const nextTotalAmount = parseCollectionAmountMyrNumber(response?.totalAmount);
         const nextCursorValue =
           typeof response?.pagination?.nextCursor === "string"
             ? response.pagination.nextCursor

@@ -12,6 +12,7 @@ import {
   getFreshLastAiPerson,
   getFreshTimedCacheEntry,
   getOrCreateAiSearchInflight,
+  resolveAiSearchRequestTimeoutMs,
   shouldLogAiSearchResolveError,
   sweepTimedCacheEntries,
   withTimeout,
@@ -105,7 +106,7 @@ export class AiSearchService {
 
     try {
       const configuredTimeout = runtimeSettings.aiTimeoutMs || this.searchFastTimeoutMs;
-      const timeoutMs = Math.max(1000, Math.min(configuredTimeout, configuredTimeout - 1200));
+      const timeoutMs = resolveAiSearchRequestTimeoutMs(configuredTimeout);
       const result = await withTimeout(inflight, timeoutMs);
       return {
         statusCode: 200,

@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
+import { formatCollectionAmountMyrString } from "@shared/collection-amount-types";
 import {
   type CollectionBatch,
   type CollectionRecord,
@@ -110,7 +111,7 @@ export function useCollectionRecordEdit({
     setEditAccountNumber(record.accountNumber);
     setEditBatch(record.batch);
     setEditPaymentDate(record.paymentDate);
-    setEditAmount(String(record.amount));
+    setEditAmount(formatCollectionAmountMyrString(record.amount));
     setEditStaffNickname(record.collectionStaffNickname);
     receiptState.populateReceiptStateFromRecord(record);
     saveAction.resetEditMutationIntent();

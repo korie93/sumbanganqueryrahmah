@@ -181,11 +181,6 @@
   color: hsl(var(--status-online));
 }
 
-.landing-deferred-section {
-  content-visibility: auto;
-  contain-intrinsic-size: auto 720px;
-}
-
 .landing-secondary-pane {
   min-height: 30rem;
 }
@@ -197,21 +192,9 @@
 @media (max-width: 1023px) {
   .landing-secondary-pane {
     min-height: 0;
-    content-visibility: auto;
-    contain-intrinsic-size: auto 540px;
   }
 
   .landing-about-card {
     min-height: 0;
-  }
-}
-
-@media (max-width: 767px) {
-  .landing-deferred-section {
-    contain-intrinsic-size: auto 980px;
-  }
-
-  .landing-secondary-pane {
-    contain-intrinsic-size: auto 680px;
   }
 }

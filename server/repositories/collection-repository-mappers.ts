@@ -4,11 +4,11 @@ import type {
   CollectionRecord,
 } from "../storage-postgres";
 import {
+  formatCollectionAmountFromCents,
   formatCollectionAmountMyrString,
   parseCollectionAmountMyrNumber,
 } from "../../shared/collection-amount-types";
 import { resolveCollectionPiiFieldValue } from "../lib/collection-pii-encryption";
-import { formatCollectionAmountFromCents } from "../services/collection/collection-receipt-validation";
 
 type CollectionBatch = CollectionRecord["batch"];
 

@@ -1,5 +1,8 @@
 import { badRequest } from "../../http/errors";
 import {
+  parseCollectionAmountToCents,
+} from "../../../shared/collection-amount-types";
+import {
   COLLECTION_BATCHES,
   COLLECTION_STAFF_NICKNAME_MIN_LENGTH,
   isFutureCollectionDate,
@@ -10,7 +13,6 @@ import {
   type CollectionUpdatePayload,
   normalizeCollectionText,
 } from "../../routes/collection.validation";
-import { parseCollectionAmountToCents } from "./collection-receipt-validation";
 
 export type NormalizedCollectionRecordFields = {
   customerName: string;

@@ -79,6 +79,15 @@ export function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   });
 }
 
+export function resolveAiSearchRequestTimeoutMs(configuredTimeoutMs: number): number {
+  const normalizedTimeoutMs = Math.max(1000, Math.floor(configuredTimeoutMs));
+  const processingBufferMs = Math.max(
+    1500,
+    Math.min(3000, Math.floor(normalizedTimeoutMs * 0.3)),
+  );
+  return normalizedTimeoutMs + processingBufferMs;
+}
+
 export function getOrCreateAiSearchInflight(params: {
   cacheKey: string;
   inflight: Map<string, Promise<AiSearchResult>>;

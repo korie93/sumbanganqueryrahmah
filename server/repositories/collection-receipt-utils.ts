@@ -1,9 +1,9 @@
 import { randomUUID } from "crypto";
 import { sql } from "drizzle-orm";
+import { parseCollectionAmountToCents } from "../../shared/collection-amount-types";
 import {
   buildCollectionReceiptValidationResult,
   normalizeCollectionReceiptExtractionStatus,
-  parseCollectionAmountToCents,
 } from "../services/collection/collection-receipt-validation";
 import { mapCollectionRecordRow } from "./collection-repository-mappers";
 import { buildProtectedCollectionPiiSelect } from "./collection-pii-select-utils";

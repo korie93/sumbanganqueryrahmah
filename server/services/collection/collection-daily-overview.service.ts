@@ -1,4 +1,5 @@
 import { resolveCurrentCollectionNicknameFromSession } from "../../routes/collection-access";
+import { parseCollectionAmountMyrInput } from "../../../shared/collection-amount-types";
 import { normalizeCollectionText } from "../../routes/collection.validation";
 import {
   aggregateCollectionDailyTimelines,
@@ -84,7 +85,9 @@ export class CollectionDailyOverviewService {
           timeline: computeCollectionDailyTimeline({
             year,
             month,
-            monthlyTarget: Number(target?.monthlyTarget || 0),
+            monthlyTarget: parseCollectionAmountMyrInput(target?.monthlyTarget ?? 0, {
+              allowZero: true,
+            }) ?? 0,
             calendarRows,
             amountByDate,
             customerCountByDate,
