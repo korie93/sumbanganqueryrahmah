@@ -1,4 +1,4 @@
-import { verifyBackupIntegrityFromChunks } from "./backup-operations-integrity-utils";
+import { readStoredPayloadBytes, verifyBackupIntegrityFromChunks } from "./backup-operations-integrity-utils";
 import { logger } from "../lib/logger";
 import type {
   BackupIntegrityResult,
@@ -39,6 +39,24 @@ export async function executeRestoreBackup(
     return {
       statusCode: 404,
       body: { message: "Backup not found" },
+    };
+  }
+
+  const storedPayloadBytes = readStoredPayloadBytes(backup);
+  if (
+    typeof storedPayloadBytes === "number"
+    && storedPayloadBytes > limits.maxPayloadBytes
+  ) {
+    logger.warn("Backup restore blocked by metadata payload size preflight", {
+      backupId: backup.id,
+      backupName: backup.name,
+      username: params.username,
+      payloadBytes: storedPayloadBytes,
+      maxPayloadBytes: limits.maxPayloadBytes,
+    });
+    return {
+      statusCode: 413,
+      body: { message: buildBackupPayloadTooLargeMessage(limits.maxPayloadBytes) },
     };
   }
 

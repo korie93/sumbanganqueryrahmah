@@ -46,6 +46,7 @@ function createBackupOperationsHarness(options?: {
   preparedPayloadEncrypted?: boolean;
   createBackupErrorMessage?: string;
   maxPayloadBytes?: number;
+  metadataPayloadBytes?: number;
 }) {
   const auditLogs: AuditEntry[] = [];
   const createBackupCalls: Array<Record<string, unknown>> = [];
@@ -55,6 +56,7 @@ function createBackupOperationsHarness(options?: {
   const tempPayloadPaths: string[] = [];
   let payloadFileCleanupCount = 0;
   let readPreparedPayloadCallCount = 0;
+  let backupChunkReadCount = 0;
 
   const buildStoragePayloadFromPreparedPayload = async (preparedPayload: {
     tempFilePath: string;
@@ -89,6 +91,9 @@ function createBackupOperationsHarness(options?: {
           payloadChecksumSha256: options?.corruptChecksum
             ? "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
             : "27c7f1187bb22c1e832d2812300765fda4d9919427fb413b81f9884c763c2ff2",
+          ...(typeof options?.metadataPayloadBytes === "number"
+            ? { payloadBytes: options.metadataPayloadBytes }
+            : {}),
         },
       },
     ],
@@ -231,6 +236,7 @@ function createBackupOperationsHarness(options?: {
       if (!backup) {
         return;
       }
+      backupChunkReadCount += 1;
       const backupData = String(backup.backupData || "");
       if (backupData) {
         yield backupData;
@@ -298,6 +304,7 @@ function createBackupOperationsHarness(options?: {
     deleteBackupCalls,
     restoreInputKinds,
     tempPayloadPaths,
+    getBackupChunkReadCount: () => backupChunkReadCount,
     getPayloadFileCleanupCount: () => payloadFileCleanupCount,
     getReadPreparedPayloadCallCount: () => readPreparedPayloadCallCount,
   };
@@ -578,6 +585,23 @@ test("BackupOperationsService exportBackup blocks oversized payloads", async () 
   assert.equal(auditLogs.length, 0);
 });
 
+test("BackupOperationsService exportBackup blocks oversized payloads from metadata preflight before reading chunks", async () => {
+  const { service, auditLogs, getBackupChunkReadCount } = createBackupOperationsHarness({
+    maxPayloadBytes: 32,
+    metadataPayloadBytes: 64,
+  });
+
+  const result = await service.exportBackup("backup-1", "super.user");
+
+  assert.equal(result.statusCode, 413);
+  assert.deepEqual(result.body, {
+    message:
+      "Backup payload exceeds the configured 32 bytes limit. Narrow the dataset or increase BACKUP_MAX_PAYLOAD_BYTES.",
+  });
+  assert.equal(getBackupChunkReadCount(), 0);
+  assert.equal(auditLogs.length, 0);
+});
+
 test("BackupOperationsService restoreBackup returns restore details and audit metadata", async () => {
   const { service, restoreCalls, restoreInputKinds, auditLogs } = createBackupOperationsHarness();
 
@@ -638,6 +662,27 @@ test("BackupOperationsService restoreBackup blocks oversized payloads before par
     message:
       "Backup payload exceeds the configured 32 bytes limit. Narrow the dataset or increase BACKUP_MAX_PAYLOAD_BYTES.",
   });
+  assert.equal(restoreCalls.length, 0);
+  assert.equal(auditLogs.length, 0);
+});
+
+test("BackupOperationsService restoreBackup blocks oversized payloads from metadata preflight before reading chunks", async () => {
+  const { service, restoreCalls, auditLogs, getBackupChunkReadCount } = createBackupOperationsHarness({
+    maxPayloadBytes: 32,
+    metadataPayloadBytes: 64,
+  });
+
+  const result = await service.restoreBackup({
+    backupId: "backup-1",
+    username: "super.user",
+  });
+
+  assert.equal(result.statusCode, 413);
+  assert.deepEqual(result.body, {
+    message:
+      "Backup payload exceeds the configured 32 bytes limit. Narrow the dataset or increase BACKUP_MAX_PAYLOAD_BYTES.",
+  });
+  assert.equal(getBackupChunkReadCount(), 0);
   assert.equal(restoreCalls.length, 0);
   assert.equal(auditLogs.length, 0);
 });

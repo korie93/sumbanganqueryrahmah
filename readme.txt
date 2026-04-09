@@ -429,7 +429,9 @@ ditentukan melalui penanda STATUS pada setiap item, bukan melalui jadual ini.
         chunk table, dan export path kini distream tanpa membina semula
         satu backupDataJson penuh di memory. Restore kini juga memblok
         payload melebihi BACKUP_MAX_PAYLOAD_BYTES sebelum parser dataset
-        berjalan. Baki yang tinggal hanyalah
+        berjalan, dan export/restore menggunakan metadata payloadBytes
+        sebagai preflight supaya backup oversize boleh ditolak sebelum
+        chunk payload dibaca penuh. Baki yang tinggal hanyalah
         refinement architecture lanjutan untuk restore/full parse path.
 
 #64 [BAHARU] Sasaran Sentuh (Touch Targets) Terlalu Kecil

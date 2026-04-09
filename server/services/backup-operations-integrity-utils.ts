@@ -63,6 +63,23 @@ export function readStoredChecksum(
   return /^[a-f0-9]{64}$/.test(candidate) ? candidate : null;
 }
 
+export function readStoredPayloadBytes(
+  backup: { metadata: unknown },
+): number | null {
+  const metadata = backup.metadata;
+  if (!metadata || typeof metadata !== "object") {
+    return null;
+  }
+
+  const candidate = (metadata as Record<string, unknown>).payloadBytes;
+  if (typeof candidate !== "number" || !Number.isFinite(candidate)) {
+    return null;
+  }
+
+  const normalized = Math.trunc(candidate);
+  return normalized >= 0 ? normalized : null;
+}
+
 export function verifyBackupIntegrity(backup: BackupRecord): BackupIntegrityResult {
   const computedChecksum = computePayloadChecksum(String(backup.backupData || ""));
   const storedChecksum = readStoredChecksum(backup);

@@ -3,6 +3,7 @@ import { logger } from "../lib/logger";
 import {
   buildBackupExportEnvelope,
   createBackupDownloadFileName,
+  readStoredPayloadBytes,
   verifyBackupIntegrityFromChunks,
 } from "./backup-operations-integrity-utils";
 import {
@@ -113,6 +114,24 @@ export class BackupOperationsReadOperations {
       return {
         statusCode: 404,
         body: { message: "Backup not found" },
+      };
+    }
+
+    const storedPayloadBytes = readStoredPayloadBytes(backup);
+    if (
+      typeof storedPayloadBytes === "number"
+      && storedPayloadBytes > this.limits.maxPayloadBytes
+    ) {
+      logger.warn("Backup export blocked by metadata payload size preflight", {
+        backupId: backup.id,
+        backupName: backup.name,
+        username,
+        payloadBytes: storedPayloadBytes,
+        maxPayloadBytes: this.limits.maxPayloadBytes,
+      });
+      return {
+        statusCode: 413,
+        body: { message: buildBackupPayloadTooLargeMessage(this.limits.maxPayloadBytes) },
       };
     }
 
