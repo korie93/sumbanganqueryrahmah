@@ -3,6 +3,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 import pg from "pg";
+import { buildProtectedCollectionPiiSelectSql } from "./lib/perf-collection-baseline-sql.mjs";
 
 function readInt(name, fallback) {
   const value = Number.parseInt(String(process.env[name] ?? fallback), 10);
@@ -152,8 +153,20 @@ const queries = [
     sql: `
       SELECT
         id,
-        customer_name,
-        account_number,
+        ${buildProtectedCollectionPiiSelectSql({
+          columnName: "customer_name",
+          encryptedColumnName: "customer_name_encrypted",
+          aliasName: "customer_name",
+          fieldName: "customerName",
+        })},
+        customer_name_encrypted,
+        ${buildProtectedCollectionPiiSelectSql({
+          columnName: "account_number",
+          encryptedColumnName: "account_number_encrypted",
+          aliasName: "account_number",
+          fieldName: "accountNumber",
+        })},
+        account_number_encrypted,
         amount,
         collection_staff_nickname
       FROM public.collection_records

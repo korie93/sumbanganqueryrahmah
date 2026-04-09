@@ -6,22 +6,23 @@ import {
   hasCollectionPiiEncryptionConfigured,
   shouldRedactCollectionPiiPlaintextValue,
 } from "../server/lib/collection-pii-encryption";
+import { buildCollectionPiiScriptSelectClause } from "./collection-pii-script-columns";
 
 type CollectionPiiRow = {
   id: string;
-  customer_name: string | null;
-  customer_name_encrypted: string | null;
-  customer_name_search_hash: string | null;
-  customer_name_search_hashes: string[] | null;
-  ic_number: string | null;
-  ic_number_encrypted: string | null;
-  ic_number_search_hash: string | null;
-  customer_phone: string | null;
-  customer_phone_encrypted: string | null;
-  customer_phone_search_hash: string | null;
-  account_number: string | null;
-  account_number_encrypted: string | null;
-  account_number_search_hash: string | null;
+  customer_name?: string | null | undefined;
+  customer_name_encrypted?: string | null | undefined;
+  customer_name_search_hash?: string | null | undefined;
+  customer_name_search_hashes?: string[] | null | undefined;
+  ic_number?: string | null | undefined;
+  ic_number_encrypted?: string | null | undefined;
+  ic_number_search_hash?: string | null | undefined;
+  customer_phone?: string | null | undefined;
+  customer_phone_encrypted?: string | null | undefined;
+  customer_phone_search_hash?: string | null | undefined;
+  account_number?: string | null | undefined;
+  account_number_encrypted?: string | null | undefined;
+  account_number_search_hash?: string | null | undefined;
 };
 
 const REDACTABLE_COLLECTION_PII_FIELDS = [
@@ -241,6 +242,7 @@ export async function redactCollectionPiiPlaintext(params: {
     customerPhone: 0,
     accountNumber: 0,
   };
+  const selectClause = buildCollectionPiiScriptSelectClause(fields);
 
   while (true) {
     const remainingLimit = maxRows === null
@@ -253,20 +255,7 @@ export async function redactCollectionPiiPlaintext(params: {
     const result = await pool.query<CollectionPiiRow>(
       `
         SELECT
-          id,
-          customer_name,
-          customer_name_encrypted,
-          customer_name_search_hash,
-          customer_name_search_hashes,
-          ic_number,
-          ic_number_encrypted,
-          ic_number_search_hash,
-          customer_phone,
-          customer_phone_encrypted,
-          customer_phone_search_hash,
-          account_number,
-          account_number_encrypted,
-          account_number_search_hash
+          ${selectClause}
         FROM public.collection_records
         WHERE ($1::uuid IS NULL OR id > $1::uuid)
         ORDER BY id ASC

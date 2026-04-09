@@ -44,6 +44,9 @@ penemuan baharu merangkumi:
 
 Jumlah isu keseluruhan: 110 (55 asal + 34 audit kedua + 13 audit ketiga
                               + 8 dipindah ke DIPERBAIKI)
+Nota: angka ini ialah snapshot audit asal setakat 2026-04-09. Beberapa item
+      telah ditutup selepas audit tersebut; rujuk penanda STATUS terkini pada
+      item berkaitan untuk keadaan repo semasa.
 
 ISU YANG DIPERBAIKI SEJAK AUDIT LEPAS:
   #3  .env.example default secrets → DIPERBAIKI
@@ -526,6 +529,14 @@ RINGKASAN ISU GABUNGAN (Audit 1 + Audit 2 + Audit 3)
             - Nombor akaun (accountNumber)
     Cadangan: Encrypt PII sensitif di peringkat aplikasi atau database.
               Tambah audit logging untuk akses PII.
+    >>> STATUS: MATERIALLY CLOSED (Audit 3 pasca pembetulan, 2026-04-09)
+        - Shadow encrypted fields, blind-index search, startup guards,
+          backup/export safeguards, redaction tooling, dan env-scoped
+          retirement helpers sudah dilaksanakan.
+        - Local rollout kini bersih untuk customerName, icNumber,
+          customerPhone, dan accountNumber.
+        - Baki kerja hanyalah rollout lintas-environment dan pelupusan
+          compatibility plaintext/schema pada masa depan.
 
 #71 [BAHARU] Missing onUpdate cascade pada Settings FK
     Fail: shared/schema-postgres-settings.ts (baris 22, 38)
@@ -549,8 +560,16 @@ RINGKASAN ISU GABUNGAN (Audit 1 + Audit 2 + Audit 3)
             - collectionRecords.receiptTotalAmount = bigint
             - collectionRecordReceipts.receiptAmount = bigint
           Risiko ralat pengiraan jika unit tidak konsisten.
-    Cadangan: Standardkan — guna numeric(14,2) secara konsisten atau
+    Cadangan: Standardkan - guna numeric(14,2) secara konsisten atau
               dokumentasikan unit bigint dengan jelas.
+    >>> STATUS: MATERIALLY CLOSED (Audit 3 pasca pembetulan, 2026-04-09)
+        - Boundary amount kini diseragamkan pada shared helpers,
+          repository, service, client, backup, validation, dan SQL
+          conversion paths.
+        - Unit MYR vs cents kini didokumen dan dipaksa dengan lebih
+          ketat dalam code paths semasa.
+        - Baki pilihan masa depan hanyalah migration schema literal jika
+          benar-benar mahu satu datatype DB sahaja.
 
 #74 [BAHARU] imports.isDeleted Tiada .notNull()
     Fail: shared/schema-postgres-core.ts (baris 110)
@@ -1346,6 +1365,14 @@ D) BCRYPT OPERATIONS
   BAHAGIAN 10: KEUTAMAAN PEMBETULAN (KEMASKINI)
 ================================================================================
 
+Nota pembacaan:
+  - Senarai ini mengekalkan susunan keutamaan audit asal.
+  - Item bertanda [DIPERBAIKI] atau [MATERIALLY CLOSED] bukan lagi blocker kod
+    aktif untuk repo semasa.
+  - [MATERIALLY CLOSED] biasanya bermaksud kod, test, dan local rollout helper
+    sudah siap; baki kerja hanyalah rollout lintas-environment atau migration
+    besar yang dirancang berasingan.
+
 P0 — SEGERA (Minggu Ini)
   1. WebSocket CSRF vulnerability (#1)
   2. 2FA secret fallback (#2)
@@ -1380,10 +1407,10 @@ P2 — PENAMBAHBAIKAN BERTERUSAN (Bulan Ini)
   27. Form loading states (#38)
   28. Mobile viewport (#32)
   29. Missing tests dalam CI (#37)
-  30. [BAHARU] PII encryption at rest (#70)
+  30. [MATERIALLY CLOSED] PII encryption at rest (#70)
   31. [BAHARU] Missing FK onUpdate cascade (#71)
   32. [BAHARU] Missing indexes pada kolum status (#72)
-  33. [BAHARU] Amount data type standardization (#73)
+  33. [MATERIALLY CLOSED] Amount data type standardization (#73)
   34. [BAHARU] JSON parse/stringify size limits (#75)
   35. [BAHARU] Z-index centralization (#76)
   36. [AUDIT 3] Unmounted state update + missing .catch() (#91, #92, #93)
@@ -1473,11 +1500,17 @@ Penemuan paling kritikal baharu (Audit 3):
   * Contrast ratio rendah — aksesibiliti visual terjejas
 
 Penemuan kritikal terdahulu yang masih aktif:
-  * Rate limit Map leak — boleh menyebabkan kehabisan memori (DoS)
-  * WebSocket reconnect race condition — sambungan yatim
-  * Shadow CSS opacity 0% — semua kesan visual depth hilang
-  * 13 timestamp tanpa notNull — integriti data terancam
-  * Semua timestamp tanpa timezone — risiko data inconsistency
+  * Rate limit Map leak - boleh menyebabkan kehabisan memori (DoS)
+  * WebSocket reconnect race condition - sambungan yatim
+  * Shadow CSS opacity 0% - semua kesan visual depth hilang
+  * 13 timestamp tanpa notNull - integriti data terancam
+  * Semua timestamp tanpa timezone - risiko data inconsistency
+
+Kemaskini status pasca pembetulan (2026-04-09):
+  * #70 PII encryption at rest kini materially closed dalam kod semasa.
+    Local rollout juga sudah bersih; baki tinggal rollout lintas-environment.
+  * #73 amount standardization kini materially closed pada boundary code.
+    Baki hanya migration schema literal jika mahu satu datatype DB sahaja.
 
 14 isu CRITICAL memerlukan tindakan segera.
 26 isu HIGH perlu ditangani sebelum production.

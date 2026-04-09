@@ -80,8 +80,12 @@ Optional PII retirement gates for that release flow:
 
 Optional staged rollout helper before enabling `COLLECTION_PII_RETIRED_FIELDS`:
 
+- `npm run collection:reencrypt-sensitive-pii`
+- `npm run collection:reencrypt-sensitive-pii -- --apply`
 - `npm run collection:retire-sensitive-pii`
 - `npm run collection:retire-sensitive-pii -- --apply`
+- `npm run collection:retire-retired-fields-pii`
+- `npm run collection:retire-retired-fields-pii -- --apply`
 
 These directories are generated runtime output and are intentionally gitignored:
 

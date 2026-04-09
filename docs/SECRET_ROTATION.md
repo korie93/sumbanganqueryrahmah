@@ -116,7 +116,10 @@ through `COLLECTION_PII_ENCRYPTION_KEY_PREVIOUS` for decryption only.
 8. Run `npm run collection:reencrypt-pii` to measure how many rows still need
    shadow-column rewrites, then run
    `npm run collection:reencrypt-pii -- --apply` to re-encrypt them with the
-   active key.
+   active key. For the staged sensitive rollout, you can scope this to
+   `icNumber`, `customerPhone`, and `accountNumber` with
+   `npm run collection:reencrypt-sensitive-pii`, then
+   `npm run collection:reencrypt-sensitive-pii -- --apply`.
 9. Optional after rollout verification: run
    `npm run collection:redact-sensitive-plaintext-pii`, then
    `npm run collection:redact-sensitive-plaintext-pii -- --apply`, to clear
@@ -142,7 +145,11 @@ through `COLLECTION_PII_ENCRYPTION_KEY_PREVIOUS` for decryption only.
    `customerName,icNumber,customerPhone,accountNumber`.
    Startup now rejects this env if `COLLECTION_PII_ENCRYPTION_KEY` is missing.
    `npm run collection:verify-pii-retired-fields` now checks the exact env list
-   before that rollout.
+   before that rollout. You can also run
+   `npm run collection:retire-retired-fields-pii`, then
+   `npm run collection:retire-retired-fields-pii -- --apply`, to combine the
+   env-scoped readiness check and plaintext redaction for the exact retired
+   field list.
 12. Verify collection create, edit, list, summary, backup export, and backup
     restore paths.
 13. Keep `COLLECTION_PII_ENCRYPTION_KEY_PREVIOUS` only for the intended

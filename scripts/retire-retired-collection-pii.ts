@@ -9,15 +9,12 @@ import {
   parseTrackedCollectionPiiFields,
   type CollectionPiiStatusEvaluation,
   type CollectionPiiStatusSummary,
+  type TrackedCollectionPiiField,
 } from "./collection-pii-status";
 import {
   redactCollectionPiiPlaintext,
   type CollectionPiiPlaintextRedactionSummary,
 } from "./redact-collection-pii-plaintext";
-
-export const SENSITIVE_COLLECTION_PII_FIELDS = parseTrackedCollectionPiiFields(
-  "icNumber,customerPhone,accountNumber",
-);
 
 type CliOptions = {
   apply: boolean;
@@ -26,20 +23,20 @@ type CliOptions = {
   maxRows: number | null;
 };
 
-type SensitiveRetirementSlice = {
+type RetiredFieldRetirementSlice = {
   evaluation: CollectionPiiStatusEvaluation;
-  fields: string[];
+  fields: TrackedCollectionPiiField[];
   summary: CollectionPiiStatusSummary;
 };
 
-export type SensitiveCollectionPiiRetirementReport = {
+export type RetiredFieldCollectionPiiRetirementReport = {
+  after: RetiredFieldRetirementSlice | null;
   apply: boolean;
-  before: SensitiveRetirementSlice;
+  before: RetiredFieldRetirementSlice;
   encryptionConfigured: boolean;
   ok: boolean;
   redaction: CollectionPiiPlaintextRedactionSummary | null;
   recommendations: string[];
-  after: SensitiveRetirementSlice | null;
 };
 
 function parsePositiveInteger(value: string, flagName: string): number {
@@ -90,38 +87,54 @@ export function parseCliOptions(argv: string[]): CliOptions {
   return { apply, batchSize, json, maxRows };
 }
 
-function buildRetirementSlice(summary: CollectionPiiStatusSummary): SensitiveRetirementSlice {
+export function resolveConfiguredCollectionPiiRetiredFields(
+  envValue = String(process.env.COLLECTION_PII_RETIRED_FIELDS || "").trim(),
+): ReadonlySet<TrackedCollectionPiiField> {
+  if (!envValue) {
+    throw new Error(
+      "COLLECTION_PII_RETIRED_FIELDS must be set before retiring configured collection PII fields.",
+    );
+  }
+
+  return parseTrackedCollectionPiiFields(envValue);
+}
+
+function buildRetirementSlice(
+  fields: ReadonlySet<TrackedCollectionPiiField>,
+  summary: CollectionPiiStatusSummary,
+): RetiredFieldRetirementSlice {
   return {
     evaluation: evaluateCollectionPiiStatus(summary, {
       requireZeroPlaintext: true,
       requireZeroRedactable: true,
       requireZeroRewrite: true,
     }),
-    fields: Array.from(SENSITIVE_COLLECTION_PII_FIELDS),
+    fields: Array.from(fields),
     summary,
   };
 }
 
-export function buildSensitiveCollectionPiiRetirementReport(params: {
-  apply: boolean;
-  encryptionConfigured: boolean;
-  before: CollectionPiiStatusSummary;
-  redaction: CollectionPiiPlaintextRedactionSummary | null;
+export function buildRetiredFieldCollectionPiiRetirementReport(params: {
   after?: CollectionPiiStatusSummary | null;
-}): SensitiveCollectionPiiRetirementReport {
-  const before = buildRetirementSlice(params.before);
-  const after = params.after ? buildRetirementSlice(params.after) : null;
+  apply: boolean;
+  before: CollectionPiiStatusSummary;
+  encryptionConfigured: boolean;
+  fields: ReadonlySet<TrackedCollectionPiiField>;
+  redaction: CollectionPiiPlaintextRedactionSummary | null;
+}): RetiredFieldCollectionPiiRetirementReport {
+  const before = buildRetirementSlice(params.fields, params.before);
+  const after = params.after ? buildRetirementSlice(params.fields, params.after) : null;
   const recommendations: string[] = [];
 
   if (!params.encryptionConfigured) {
     recommendations.push(
-      "Set COLLECTION_PII_ENCRYPTION_KEY before attempting staged sensitive-field retirement.",
+      "Set COLLECTION_PII_ENCRYPTION_KEY before attempting configured collection PII retirement.",
     );
   }
 
   if (before.summary.rowsNeedingRewrite > 0) {
     recommendations.push(
-      "Run 'npm run collection:reencrypt-sensitive-pii' first, then 'npm run collection:reencrypt-sensitive-pii -- --apply' before clearing sensitive plaintext fields.",
+      "Run 'npm run collection:reencrypt-retired-fields' first, then 'npm run collection:reencrypt-retired-fields -- --apply' before clearing configured retired plaintext fields.",
     );
   }
 
@@ -133,11 +146,11 @@ export function buildSensitiveCollectionPiiRetirementReport(params: {
 
   if (params.apply && after && after.evaluation.ok) {
     recommendations.push(
-      "Sensitive fields are clean. You can now set COLLECTION_PII_RETIRED_FIELDS=icNumber,customerPhone,accountNumber in the target environment.",
+      "Configured retired fields are clean. Re-run 'npm run collection:verify-pii-retired-fields' in the target environment before rollout.",
     );
   } else if (params.apply && after && !after.evaluation.ok) {
     recommendations.push(
-      "Sensitive field retirement is still incomplete. Re-run 'npm run collection:verify-pii-sensitive-retirement' and inspect remaining plaintext or rewrite counts.",
+      "Configured retired field cleanup is still incomplete. Re-run 'npm run collection:verify-pii-retired-fields' and inspect the remaining plaintext or rewrite counts.",
     );
   }
 
@@ -156,11 +169,12 @@ export function buildSensitiveCollectionPiiRetirementReport(params: {
   };
 }
 
-export function renderSensitiveCollectionPiiRetirementReport(
-  report: SensitiveCollectionPiiRetirementReport,
+export function renderRetiredFieldCollectionPiiRetirementReport(
+  report: RetiredFieldCollectionPiiRetirementReport,
 ): string {
   const lines = [
     `apply=${report.apply} encryptionConfigured=${report.encryptionConfigured} ok=${report.ok}`,
+    `fields=${report.before.fields.join(",")}`,
     `before: rowsWithPlaintext=${report.before.summary.rowsWithPlaintext} rowsEligibleForRedaction=${report.before.summary.rowsEligibleForRedaction} rowsNeedingRewrite=${report.before.summary.rowsNeedingRewrite}`,
   ];
 
@@ -186,34 +200,36 @@ export function renderSensitiveCollectionPiiRetirementReport(
 export async function main() {
   const options = parseCliOptions(process.argv.slice(2));
   const encryptionConfigured = hasCollectionPiiEncryptionConfigured();
+  const fields = resolveConfiguredCollectionPiiRetiredFields();
 
   if (!encryptionConfigured) {
     throw new Error(
-      "COLLECTION_PII_ENCRYPTION_KEY is required before retiring sensitive collection PII fields.",
+      "COLLECTION_PII_ENCRYPTION_KEY is required before retiring configured collection PII fields.",
     );
   }
 
-  await assertCollectionPiiPostgresReady("Collection PII sensitive retirement");
+  await assertCollectionPiiPostgresReady("Collection PII configured retirement");
 
   try {
     const before = await collectCollectionPiiStatusSummary({
       batchSize: options.batchSize,
       encryptionConfigured,
-      fields: SENSITIVE_COLLECTION_PII_FIELDS,
+      fields,
       maxRows: options.maxRows,
     });
 
     if (before.rowsNeedingRewrite > 0) {
-      const report = buildSensitiveCollectionPiiRetirementReport({
+      const report = buildRetiredFieldCollectionPiiRetirementReport({
         apply: options.apply,
         before,
         encryptionConfigured,
+        fields,
         redaction: null,
       });
       if (options.json) {
         console.log(JSON.stringify(report, null, 2));
       } else {
-        console.log(renderSensitiveCollectionPiiRetirementReport(report));
+        console.log(renderRetiredFieldCollectionPiiRetirementReport(report));
       }
       process.exitCode = 1;
       return;
@@ -222,30 +238,31 @@ export async function main() {
     const redaction = await redactCollectionPiiPlaintext({
       apply: options.apply,
       batchSize: options.batchSize,
-      fields: SENSITIVE_COLLECTION_PII_FIELDS,
+      fields,
       maxRows: options.maxRows,
     });
     const after = options.apply
       ? await collectCollectionPiiStatusSummary({
           batchSize: options.batchSize,
           encryptionConfigured,
-          fields: SENSITIVE_COLLECTION_PII_FIELDS,
+          fields,
           maxRows: options.maxRows,
         })
       : null;
 
-    const report = buildSensitiveCollectionPiiRetirementReport({
+    const report = buildRetiredFieldCollectionPiiRetirementReport({
       after,
       apply: options.apply,
       before,
       encryptionConfigured,
+      fields,
       redaction,
     });
 
     if (options.json) {
       console.log(JSON.stringify(report, null, 2));
     } else {
-      console.log(renderSensitiveCollectionPiiRetirementReport(report));
+      console.log(renderRetiredFieldCollectionPiiRetirementReport(report));
     }
 
     if (!report.ok) {

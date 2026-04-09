@@ -124,9 +124,13 @@ export function buildCollectionPiiRolloutReadinessReport(params: {
     );
   }
 
-  if (params.totalFields.summary.rowsNeedingRewrite > 0) {
+  if (params.sensitiveFields.summary.rowsNeedingRewrite > 0) {
     recommendations.push(
-      "Run 'npm run collection:reencrypt-pii' first, then 'npm run collection:reencrypt-pii -- --apply' once the dry-run count looks safe.",
+      "Run 'npm run collection:reencrypt-sensitive-pii' first, then 'npm run collection:reencrypt-sensitive-pii -- --apply' before the staged sensitive-field retirement.",
+    );
+  } else if (params.totalFields.summary.rowsNeedingRewrite > 0) {
+    recommendations.push(
+      "Sensitive fields are ready, but full retirement still needs more shadow-column rewrites. Run 'npm run collection:reencrypt-pii' next, or scope it with '--fields customerName' for the final stage.",
     );
   }
 
@@ -143,7 +147,7 @@ export function buildCollectionPiiRolloutReadinessReport(params: {
   if (retiredFields) {
     if (!retiredFields.evaluation.ok) {
       recommendations.push(
-        "Configured COLLECTION_PII_RETIRED_FIELDS still have legacy plaintext or rewrite work. Keep the env disabled until the staged retirement gate is clean.",
+        "Configured COLLECTION_PII_RETIRED_FIELDS still have legacy plaintext or rewrite work. Run 'npm run collection:retire-retired-fields-pii' first, then 'npm run collection:retire-retired-fields-pii -- --apply' before keeping the env enabled.",
       );
     } else {
       recommendations.push(

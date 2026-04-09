@@ -11,6 +11,7 @@ import {
   parseCliOptions,
   parseTrackedCollectionPiiFields,
 } from "./collection-pii-status";
+import { buildCollectionPiiScriptSelectClause } from "./collection-pii-script-columns";
 
 test("parseCliOptions accepts json output and row caps", () => {
   const options = parseCliOptions([
@@ -257,6 +258,19 @@ test("getCollectionPiiStatusPlan respects selected field filters", () => {
     customerPhone: true,
     accountNumber: false,
   });
+});
+
+test("collection PII status query projection only selects requested fields", () => {
+  const clause = buildCollectionPiiScriptSelectClause(
+    new Set(["icNumber", "customerPhone", "accountNumber"]),
+  );
+
+  assert.match(clause, /\bid\b/);
+  assert.match(clause, /\bic_number\b/);
+  assert.match(clause, /\bcustomer_phone\b/);
+  assert.match(clause, /\baccount_number\b/);
+  assert.doesNotMatch(clause, /\bcustomer_name\b/);
+  assert.doesNotMatch(clause, /\bcustomer_name_search_hashes\b/);
 });
 
 test("evaluateCollectionPiiStatus reports unmet threshold requirements", () => {

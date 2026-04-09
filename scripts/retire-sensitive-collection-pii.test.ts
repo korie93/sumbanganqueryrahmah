@@ -45,7 +45,7 @@ test("buildSensitiveCollectionPiiRetirementReport blocks apply mode when rewrite
 
   assert.equal(report.ok, false);
   assert.ok(
-    report.recommendations.some((entry) => entry.includes("collection:reencrypt-pii")),
+    report.recommendations.some((entry) => entry.includes("collection:reencrypt-sensitive-pii")),
   );
 });
 
