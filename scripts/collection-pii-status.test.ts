@@ -40,6 +40,7 @@ test("parseCliOptions accepts field filters and requirement gates", () => {
     "--require-zero-plaintext",
     "--require-zero-redactable",
     "--require-zero-rewrite",
+    "--require-zero-unreadable-shadow",
   ]);
 
   assert.deepEqual(Array.from(options.fields), [
@@ -50,6 +51,7 @@ test("parseCliOptions accepts field filters and requirement gates", () => {
   assert.equal(options.requireZeroPlaintext, true);
   assert.equal(options.requireZeroRedactable, true);
   assert.equal(options.requireZeroRewrite, true);
+  assert.equal(options.requireZeroUnreadableEncryptedShadow, true);
 });
 
 test("parseCliOptions can read staged field filters from an environment variable", () => {
@@ -142,6 +144,12 @@ test("getCollectionPiiStatusPlan reports plaintext without rewrite metadata when
     customerPhone: false,
     accountNumber: false,
   });
+  assert.deepEqual(plan.unreadableShadow, {
+    customerName: false,
+    icNumber: false,
+    customerPhone: false,
+    accountNumber: false,
+  });
 });
 
 test("getCollectionPiiStatusPlan distinguishes redactable rows from rows that still need rewrite", () => {
@@ -191,6 +199,12 @@ test("getCollectionPiiStatusPlan distinguishes redactable rows from rows that st
       customerPhone: false,
       accountNumber: false,
     });
+    assert.deepEqual(redactablePlan.unreadableShadow, {
+      customerName: false,
+      icNumber: false,
+      customerPhone: false,
+      accountNumber: false,
+    });
 
     const rewritePlan = getCollectionPiiStatusPlan({
       id: "record-2",
@@ -220,6 +234,12 @@ test("getCollectionPiiStatusPlan distinguishes redactable rows from rows that st
       icNumber: true,
       customerPhone: true,
       accountNumber: true,
+    });
+    assert.deepEqual(rewritePlan.unreadableShadow, {
+      customerName: false,
+      icNumber: false,
+      customerPhone: false,
+      accountNumber: false,
     });
   } finally {
     if (previousKey === undefined) {
@@ -258,6 +278,55 @@ test("getCollectionPiiStatusPlan respects selected field filters", () => {
     customerPhone: true,
     accountNumber: false,
   });
+  assert.deepEqual(plan.unreadableShadow, {
+    customerName: false,
+    icNumber: false,
+    customerPhone: false,
+    accountNumber: false,
+  });
+});
+
+test("getCollectionPiiStatusPlan reports unreadable encrypted shadows without treating them as rewrites", () => {
+  const previousKey = process.env.COLLECTION_PII_ENCRYPTION_KEY;
+  process.env.COLLECTION_PII_ENCRYPTION_KEY = "collection-pii-status-test-key";
+
+  try {
+    const plan = getCollectionPiiStatusPlan({
+      id: "record-4",
+      customer_name: null,
+      customer_name_encrypted: "not-a-valid-collection-pii-payload",
+      customer_name_search_hash: null,
+      customer_name_search_hashes: null,
+      ic_number: null,
+      ic_number_encrypted: null,
+      ic_number_search_hash: null,
+      customer_phone: null,
+      customer_phone_encrypted: null,
+      customer_phone_search_hash: null,
+      account_number: null,
+      account_number_encrypted: null,
+      account_number_search_hash: null,
+    });
+
+    assert.deepEqual(plan.unreadableShadow, {
+      customerName: true,
+      icNumber: false,
+      customerPhone: false,
+      accountNumber: false,
+    });
+    assert.deepEqual(plan.rewrite, {
+      customerName: false,
+      icNumber: false,
+      customerPhone: false,
+      accountNumber: false,
+    });
+  } finally {
+    if (previousKey === undefined) {
+      delete process.env.COLLECTION_PII_ENCRYPTION_KEY;
+    } else {
+      process.env.COLLECTION_PII_ENCRYPTION_KEY = previousKey;
+    }
+  }
 });
 
 test("collection PII status query projection only selects requested fields", () => {
@@ -299,14 +368,23 @@ test("evaluateCollectionPiiStatus reports unmet threshold requirements", () => {
         accountNumber: 0,
       },
       rewriteFields: 2,
+      unreadableShadowFieldCounts: {
+        customerName: 0,
+        icNumber: 0,
+        customerPhone: 0,
+        accountNumber: 1,
+      },
+      unreadableShadowFields: 1,
       rowsEligibleForRedaction: 0,
       rowsNeedingRewrite: 2,
+      rowsWithUnreadableEncryptedShadow: 1,
       rowsWithPlaintext: 1,
     },
     {
       requireZeroPlaintext: true,
       requireZeroRedactable: false,
       requireZeroRewrite: true,
+      requireZeroUnreadableEncryptedShadow: true,
     },
   );
 
@@ -314,5 +392,6 @@ test("evaluateCollectionPiiStatus reports unmet threshold requirements", () => {
   assert.deepEqual(evaluation.failures, [
     "rowsWithPlaintext=1 must be zero.",
     "rowsNeedingRewrite=2 must be zero.",
+    "rowsWithUnreadableEncryptedShadow=1 must be zero.",
   ]);
 });

@@ -59,6 +59,37 @@ test("buildRetiredFieldCollectionPiiRetirementReport blocks apply mode when rewr
   );
 });
 
+test("buildRetiredFieldCollectionPiiRetirementReport blocks apply mode when unreadable encrypted shadows remain", () => {
+  const fields = new Set(["customerName", "icNumber"]);
+  const report = buildRetiredFieldCollectionPiiRetirementReport({
+    apply: true,
+    before: {
+      encryptionConfigured: true,
+      plaintextFieldCounts: { customerName: 0, icNumber: 0, customerPhone: 0, accountNumber: 0 },
+      plaintextFields: 0,
+      processedRows: 10,
+      redactableFieldCounts: { customerName: 0, icNumber: 0, customerPhone: 0, accountNumber: 0 },
+      redactableFields: 0,
+      rewriteFieldCounts: { customerName: 0, icNumber: 0, customerPhone: 0, accountNumber: 0 },
+      rewriteFields: 0,
+      unreadableShadowFieldCounts: { customerName: 1, icNumber: 0, customerPhone: 0, accountNumber: 0 },
+      unreadableShadowFields: 1,
+      rowsEligibleForRedaction: 0,
+      rowsNeedingRewrite: 0,
+      rowsWithUnreadableEncryptedShadow: 1,
+      rowsWithPlaintext: 0,
+    },
+    encryptionConfigured: true,
+    fields,
+    redaction: null,
+  });
+
+  assert.equal(report.ok, false);
+  assert.ok(
+    report.recommendations.some((entry) => entry.includes("unreadable encrypted shadows")),
+  );
+});
+
 test("buildRetiredFieldCollectionPiiRetirementReport marks apply mode complete once configured slice is clean", () => {
   const fields = new Set(["customerName", "icNumber"]);
   const report = buildRetiredFieldCollectionPiiRetirementReport({

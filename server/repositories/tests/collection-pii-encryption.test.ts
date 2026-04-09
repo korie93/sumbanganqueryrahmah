@@ -7,6 +7,7 @@ import {
   hashCollectionCustomerNameSearchTerms,
   hashCollectionPiiSearchValue,
   hasCollectionPiiEncryptionConfigured,
+  hasUnreadableCollectionPiiShadowValue,
   resolveCollectionCustomerNameSearchHashesValue,
   resolveCollectionPiiFieldValue,
   resolveStoredCollectionPiiPlaintextValue,
@@ -130,6 +131,25 @@ test("collection PII field resolution can suppress plaintext fallback for retire
       );
     },
   );
+});
+
+test("collection PII helpers flag unreadable encrypted shadows when no plaintext fallback remains", () => {
+  withCollectionPiiKeys({ current: "test-collection-pii-encryption-key" }, () => {
+    assert.equal(
+      hasUnreadableCollectionPiiShadowValue({
+        plaintext: "",
+        encrypted: "not-a-valid-collection-pii-payload",
+      }),
+      true,
+    );
+    assert.equal(
+      hasUnreadableCollectionPiiShadowValue({
+        plaintext: "Legacy Alice",
+        encrypted: "not-a-valid-collection-pii-payload",
+      }),
+      false,
+    );
+  });
 });
 
 test("collection PII helpers reject retired plaintext persistence without an active encryption key", () => {

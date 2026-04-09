@@ -206,6 +206,75 @@ test("buildCollectionPiiRolloutReadinessReport points to the sensitive re-encryp
   );
 });
 
+test("buildCollectionPiiRolloutReadinessReport blocks rollout on unreadable encrypted shadows", () => {
+  const report = buildCollectionPiiRolloutReadinessReport({
+    encryptionConfigured: true,
+    sensitiveFields: {
+      fields: ["icNumber", "customerPhone", "accountNumber"],
+      summary: {
+        encryptionConfigured: true,
+        plaintextFieldCounts: { customerName: 0, icNumber: 0, customerPhone: 0, accountNumber: 0 },
+        plaintextFields: 0,
+        processedRows: 10,
+        redactableFieldCounts: { customerName: 0, icNumber: 0, customerPhone: 0, accountNumber: 0 },
+        redactableFields: 0,
+        rewriteFieldCounts: { customerName: 0, icNumber: 0, customerPhone: 0, accountNumber: 0 },
+        rewriteFields: 0,
+        unreadableShadowFieldCounts: { customerName: 0, icNumber: 1, customerPhone: 0, accountNumber: 0 },
+        unreadableShadowFields: 1,
+        rowsEligibleForRedaction: 0,
+        rowsNeedingRewrite: 0,
+        rowsWithUnreadableEncryptedShadow: 1,
+        rowsWithPlaintext: 0,
+      },
+      evaluation: {
+        failures: ["rowsWithUnreadableEncryptedShadow=1 must be zero."],
+        ok: false,
+        requirements: {
+          requireZeroPlaintext: true,
+          requireZeroRedactable: true,
+          requireZeroRewrite: true,
+          requireZeroUnreadableEncryptedShadow: true,
+        },
+      },
+    },
+    totalFields: {
+      fields: ["customerName", "icNumber", "customerPhone", "accountNumber"],
+      summary: {
+        encryptionConfigured: true,
+        plaintextFieldCounts: { customerName: 0, icNumber: 0, customerPhone: 0, accountNumber: 0 },
+        plaintextFields: 0,
+        processedRows: 10,
+        redactableFieldCounts: { customerName: 0, icNumber: 0, customerPhone: 0, accountNumber: 0 },
+        redactableFields: 0,
+        rewriteFieldCounts: { customerName: 0, icNumber: 0, customerPhone: 0, accountNumber: 0 },
+        rewriteFields: 0,
+        unreadableShadowFieldCounts: { customerName: 0, icNumber: 1, customerPhone: 0, accountNumber: 0 },
+        unreadableShadowFields: 1,
+        rowsEligibleForRedaction: 0,
+        rowsNeedingRewrite: 0,
+        rowsWithUnreadableEncryptedShadow: 1,
+        rowsWithPlaintext: 0,
+      },
+      evaluation: {
+        failures: ["rowsWithUnreadableEncryptedShadow=1 must be zero."],
+        ok: false,
+        requirements: {
+          requireZeroPlaintext: true,
+          requireZeroRedactable: true,
+          requireZeroRewrite: true,
+          requireZeroUnreadableEncryptedShadow: true,
+        },
+      },
+    },
+  });
+
+  assert.ok(
+    report.recommendations.some((entry) => entry.includes("unreadable encrypted shadows")),
+  );
+  assert.match(renderCollectionPiiRolloutReadinessReport(report), /rowsWithUnreadableEncryptedShadow=1/i);
+});
+
 test("buildCollectionPiiRolloutReadinessReport points to the configured retired-field helper when the env-scoped gate is still dirty", () => {
   const report = buildCollectionPiiRolloutReadinessReport({
     encryptionConfigured: true,

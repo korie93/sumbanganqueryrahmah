@@ -714,6 +714,9 @@ ditentukan melalui penanda STATUS pada setiap item, bukan melalui jadual ini.
         - Shadow encrypted fields, blind-index search, startup guards,
           backup/export safeguards, redaction tooling, dan env-scoped
           retirement helpers sudah dilaksanakan.
+        - Status/readiness tooling kini turut mengesan unreadable
+          encrypted shadow rows dan akan block rollout retired-fields
+          lebih awal jika shadow value tidak lagi boleh dipulihkan.
         - Local rollout kini bersih untuk customerName, icNumber,
           customerPhone, dan accountNumber.
         - Baki kerja hanyalah rollout lintas-environment dan pelupusan

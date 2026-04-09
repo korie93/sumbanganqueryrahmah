@@ -352,6 +352,23 @@ export function resolveStoredCollectionPiiPlaintextValue(params: {
   return params.fallback ?? null;
 }
 
+export function hasUnreadableCollectionPiiShadowValue(params: {
+  plaintext: unknown;
+  encrypted: unknown;
+}): boolean {
+  const encrypted = normalizeCollectionPiiValue(params.encrypted);
+  if (!encrypted) {
+    return false;
+  }
+
+  const decrypted = decryptCollectionPiiValueSafe(encrypted);
+  if (decrypted) {
+    return false;
+  }
+
+  return normalizeCollectionPiiValue(params.plaintext).length === 0;
+}
+
 export function shouldRewriteCollectionPiiShadowValue(params: {
   plaintext: unknown;
   encrypted: unknown;

@@ -4,6 +4,7 @@ import { pool } from "../server/db-postgres";
 import { assertCollectionPiiPostgresReady } from "./collection-pii-postgres";
 import {
   hasCollectionPiiEncryptionConfigured,
+  hasUnreadableCollectionPiiShadowValue,
   shouldRedactCollectionPiiPlaintextValue,
   shouldRewriteCollectionPiiSearchHashesValue,
   shouldRewriteCollectionPiiSearchHashValue,
@@ -45,6 +46,7 @@ type CliOptions = {
   requireZeroPlaintext: boolean;
   requireZeroRedactable: boolean;
   requireZeroRewrite: boolean;
+  requireZeroUnreadableEncryptedShadow: boolean;
 };
 
 type CollectionPiiBooleanMap = Record<TrackedCollectionPiiField, boolean>;
@@ -53,12 +55,14 @@ export type CollectionPiiStatusPlan = {
   plaintext: CollectionPiiBooleanMap;
   redactable: CollectionPiiBooleanMap;
   rewrite: CollectionPiiBooleanMap;
+  unreadableShadow: CollectionPiiBooleanMap;
 };
 
 type CollectionPiiStatusRequirements = {
   requireZeroPlaintext: boolean;
   requireZeroRedactable: boolean;
   requireZeroRewrite: boolean;
+  requireZeroUnreadableEncryptedShadow?: boolean;
 };
 
 export type CollectionPiiStatusEvaluation = {
@@ -78,8 +82,11 @@ export type CollectionPiiStatusSummary = {
   redactableFields: number;
   rewriteFieldCounts: CollectionPiiFieldCounts;
   rewriteFields: number;
+  unreadableShadowFieldCounts?: CollectionPiiFieldCounts;
+  unreadableShadowFields?: number;
   rowsEligibleForRedaction: number;
   rowsNeedingRewrite: number;
+  rowsWithUnreadableEncryptedShadow?: number;
   rowsWithPlaintext: number;
 };
 
@@ -99,6 +106,7 @@ export function parseCliOptions(argv: string[]): CliOptions {
   let requireZeroPlaintext = false;
   let requireZeroRedactable = false;
   let requireZeroRewrite = false;
+  let requireZeroUnreadableEncryptedShadow = false;
 
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
@@ -158,6 +166,10 @@ export function parseCliOptions(argv: string[]): CliOptions {
       requireZeroRewrite = true;
       continue;
     }
+    if (arg === "--require-zero-unreadable-shadow") {
+      requireZeroUnreadableEncryptedShadow = true;
+      continue;
+    }
     throw new Error(`Unknown flag: ${arg}`);
   }
 
@@ -169,6 +181,7 @@ export function parseCliOptions(argv: string[]): CliOptions {
     requireZeroPlaintext,
     requireZeroRedactable,
     requireZeroRewrite,
+    requireZeroUnreadableEncryptedShadow,
   };
 }
 
@@ -229,8 +242,11 @@ export async function collectCollectionPiiStatusSummary(params: {
     redactableFields: 0,
     rewriteFieldCounts: createEmptyFieldCounts(),
     rewriteFields: 0,
+    unreadableShadowFieldCounts: createEmptyFieldCounts(),
+    unreadableShadowFields: 0,
     rowsEligibleForRedaction: 0,
     rowsNeedingRewrite: 0,
+    rowsWithUnreadableEncryptedShadow: 0,
     rowsWithPlaintext: 0,
   };
   let lastId: string | null = null;
@@ -272,6 +288,7 @@ export async function collectCollectionPiiStatusSummary(params: {
       const plaintextCount = countEnabledFields(plan.plaintext);
       const redactableCount = countEnabledFields(plan.redactable);
       const rewriteCount = countEnabledFields(plan.rewrite);
+      const unreadableCount = countEnabledFields(plan.unreadableShadow);
 
       if (plaintextCount > 0) {
         summary.rowsWithPlaintext += 1;
@@ -289,6 +306,15 @@ export async function collectCollectionPiiStatusSummary(params: {
         summary.rowsNeedingRewrite += 1;
         summary.rewriteFields += rewriteCount;
         incrementFieldCounts(summary.rewriteFieldCounts, plan.rewrite);
+      }
+
+      if (unreadableCount > 0) {
+        summary.rowsWithUnreadableEncryptedShadow = (summary.rowsWithUnreadableEncryptedShadow ?? 0) + 1;
+        summary.unreadableShadowFields = (summary.unreadableShadowFields ?? 0) + unreadableCount;
+        incrementFieldCounts(
+          summary.unreadableShadowFieldCounts ?? createEmptyFieldCounts(),
+          plan.unreadableShadow,
+        );
       }
     }
 
@@ -467,6 +493,32 @@ export function getCollectionPiiStatusPlan(
     },
     redactable: getRedactionPlan(row, encryptionConfigured, fields),
     rewrite: getRewritePlan(row, encryptionConfigured, fields),
+    unreadableShadow: {
+      customerName:
+        fields.has("customerName")
+        && hasUnreadableCollectionPiiShadowValue({
+          plaintext: row.customer_name,
+          encrypted: row.customer_name_encrypted,
+        }),
+      icNumber:
+        fields.has("icNumber")
+        && hasUnreadableCollectionPiiShadowValue({
+          plaintext: row.ic_number,
+          encrypted: row.ic_number_encrypted,
+        }),
+      customerPhone:
+        fields.has("customerPhone")
+        && hasUnreadableCollectionPiiShadowValue({
+          plaintext: row.customer_phone,
+          encrypted: row.customer_phone_encrypted,
+        }),
+      accountNumber:
+        fields.has("accountNumber")
+        && hasUnreadableCollectionPiiShadowValue({
+          plaintext: row.account_number,
+          encrypted: row.account_number_encrypted,
+        }),
+    },
   };
 }
 
@@ -490,6 +542,11 @@ export function evaluateCollectionPiiStatus(
       `rowsNeedingRewrite=${summary.rowsNeedingRewrite} must be zero.`,
     );
   }
+  if (requirements.requireZeroUnreadableEncryptedShadow && (summary.rowsWithUnreadableEncryptedShadow ?? 0) > 0) {
+    failures.push(
+      `rowsWithUnreadableEncryptedShadow=${summary.rowsWithUnreadableEncryptedShadow ?? 0} must be zero.`,
+    );
+  }
 
   return {
     failures,
@@ -511,14 +568,25 @@ function buildSummary(
       `redactableFields=${summary.redactableFields}`,
       `rowsNeedingRewrite=${summary.rowsNeedingRewrite}`,
       `rewriteFields=${summary.rewriteFields}`,
+      `rowsWithUnreadableEncryptedShadow=${summary.rowsWithUnreadableEncryptedShadow ?? 0}`,
+      `unreadableShadowFields=${summary.unreadableShadowFields ?? 0}`,
       `encryptionConfigured=${summary.encryptionConfigured}`,
       `fields=${Array.from(fields).join(",")}`,
     ].join(" "),
     formatFieldSummary("plaintext", summary.plaintextFieldCounts),
     formatFieldSummary("redactable", summary.redactableFieldCounts),
     formatFieldSummary("rewrite", summary.rewriteFieldCounts),
+    formatFieldSummary(
+      "unreadableShadow",
+      summary.unreadableShadowFieldCounts ?? createEmptyFieldCounts(),
+    ),
   ];
 
+  if ((summary.rowsWithUnreadableEncryptedShadow ?? 0) > 0) {
+    lines.push(
+      "Next: investigate unreadable encrypted shadow rows before redaction. These rows no longer have a safe automatic rewrite path.",
+    );
+  }
   if (summary.rowsNeedingRewrite > 0) {
     lines.push("Next: run 'npm run collection:reencrypt-pii -- --apply' before retiring plaintext.");
   }
@@ -546,6 +614,7 @@ export async function main() {
       requireZeroPlaintext: options.requireZeroPlaintext,
       requireZeroRedactable: options.requireZeroRedactable,
       requireZeroRewrite: options.requireZeroRewrite,
+      requireZeroUnreadableEncryptedShadow: options.requireZeroUnreadableEncryptedShadow,
     });
 
     if (options.json) {

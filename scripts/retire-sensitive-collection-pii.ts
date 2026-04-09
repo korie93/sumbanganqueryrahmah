@@ -96,6 +96,7 @@ function buildRetirementSlice(summary: CollectionPiiStatusSummary): SensitiveRet
       requireZeroPlaintext: true,
       requireZeroRedactable: true,
       requireZeroRewrite: true,
+      requireZeroUnreadableEncryptedShadow: true,
     }),
     fields: Array.from(SENSITIVE_COLLECTION_PII_FIELDS),
     summary,
@@ -119,7 +120,11 @@ export function buildSensitiveCollectionPiiRetirementReport(params: {
     );
   }
 
-  if (before.summary.rowsNeedingRewrite > 0) {
+  if ((before.summary.rowsWithUnreadableEncryptedShadow ?? 0) > 0) {
+    recommendations.push(
+      "Investigate unreadable encrypted shadows before clearing sensitive plaintext fields. These rows no longer have a safe automatic rewrite path.",
+    );
+  } else if (before.summary.rowsNeedingRewrite > 0) {
     recommendations.push(
       "Run 'npm run collection:reencrypt-sensitive-pii' first, then 'npm run collection:reencrypt-sensitive-pii -- --apply' before clearing sensitive plaintext fields.",
     );
@@ -143,7 +148,8 @@ export function buildSensitiveCollectionPiiRetirementReport(params: {
 
   const ok = params.apply
     ? Boolean(after?.evaluation.ok)
-    : before.summary.rowsNeedingRewrite === 0;
+    : before.summary.rowsNeedingRewrite === 0
+      && (before.summary.rowsWithUnreadableEncryptedShadow ?? 0) === 0;
 
   return {
     after,
@@ -161,7 +167,7 @@ export function renderSensitiveCollectionPiiRetirementReport(
 ): string {
   const lines = [
     `apply=${report.apply} encryptionConfigured=${report.encryptionConfigured} ok=${report.ok}`,
-    `before: rowsWithPlaintext=${report.before.summary.rowsWithPlaintext} rowsEligibleForRedaction=${report.before.summary.rowsEligibleForRedaction} rowsNeedingRewrite=${report.before.summary.rowsNeedingRewrite}`,
+    `before: rowsWithPlaintext=${report.before.summary.rowsWithPlaintext} rowsEligibleForRedaction=${report.before.summary.rowsEligibleForRedaction} rowsNeedingRewrite=${report.before.summary.rowsNeedingRewrite} rowsWithUnreadableEncryptedShadow=${report.before.summary.rowsWithUnreadableEncryptedShadow ?? 0}`,
   ];
 
   if (report.redaction) {
@@ -172,7 +178,7 @@ export function renderSensitiveCollectionPiiRetirementReport(
 
   if (report.after) {
     lines.push(
-      `after: rowsWithPlaintext=${report.after.summary.rowsWithPlaintext} rowsEligibleForRedaction=${report.after.summary.rowsEligibleForRedaction} rowsNeedingRewrite=${report.after.summary.rowsNeedingRewrite}`,
+      `after: rowsWithPlaintext=${report.after.summary.rowsWithPlaintext} rowsEligibleForRedaction=${report.after.summary.rowsEligibleForRedaction} rowsNeedingRewrite=${report.after.summary.rowsNeedingRewrite} rowsWithUnreadableEncryptedShadow=${report.after.summary.rowsWithUnreadableEncryptedShadow ?? 0}`,
     );
   }
 
@@ -203,7 +209,7 @@ export async function main() {
       maxRows: options.maxRows,
     });
 
-    if (before.rowsNeedingRewrite > 0) {
+    if (before.rowsNeedingRewrite > 0 || (before.rowsWithUnreadableEncryptedShadow ?? 0) > 0) {
       const report = buildSensitiveCollectionPiiRetirementReport({
         apply: options.apply,
         before,

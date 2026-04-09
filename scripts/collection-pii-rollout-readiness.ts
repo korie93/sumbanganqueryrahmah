@@ -89,10 +89,11 @@ function buildReadinessSlice(
 ): ReadinessSlice {
   return {
     evaluation: evaluateCollectionPiiStatus(summary, {
-      requireZeroPlaintext: true,
-      requireZeroRedactable: true,
-      requireZeroRewrite: true,
-    }),
+        requireZeroPlaintext: true,
+        requireZeroRedactable: true,
+        requireZeroRewrite: true,
+        requireZeroUnreadableEncryptedShadow: true,
+      }),
     fields: Array.from(fields),
     summary,
   };
@@ -112,6 +113,7 @@ export function buildCollectionPiiRolloutReadinessReport(params: {
           requireZeroPlaintext: true,
           requireZeroRedactable: true,
           requireZeroRewrite: true,
+          requireZeroUnreadableEncryptedShadow: true,
         }),
       }
     : null;
@@ -124,9 +126,17 @@ export function buildCollectionPiiRolloutReadinessReport(params: {
     );
   }
 
-  if (params.sensitiveFields.summary.rowsNeedingRewrite > 0) {
+  if ((params.sensitiveFields.summary.rowsWithUnreadableEncryptedShadow ?? 0) > 0) {
+    recommendations.push(
+      "Investigate unreadable encrypted shadows in the sensitive fields before retirement. These rows no longer have a safe automatic rewrite path.",
+    );
+  } else if (params.sensitiveFields.summary.rowsNeedingRewrite > 0) {
     recommendations.push(
       "Run 'npm run collection:reencrypt-sensitive-pii' first, then 'npm run collection:reencrypt-sensitive-pii -- --apply' before the staged sensitive-field retirement.",
+    );
+  } else if ((params.totalFields.summary.rowsWithUnreadableEncryptedShadow ?? 0) > 0) {
+    recommendations.push(
+      "Sensitive fields are ready, but full retirement still has unreadable encrypted shadows. Repair those rows before the final customerName stage.",
     );
   } else if (params.totalFields.summary.rowsNeedingRewrite > 0) {
     recommendations.push(
@@ -190,6 +200,7 @@ function renderSlice(label: string, slice: ReadinessSlice): string {
     `rowsWithPlaintext=${summary.rowsWithPlaintext}`,
     `rowsEligibleForRedaction=${summary.rowsEligibleForRedaction}`,
     `rowsNeedingRewrite=${summary.rowsNeedingRewrite}`,
+    `rowsWithUnreadableEncryptedShadow=${summary.rowsWithUnreadableEncryptedShadow ?? 0}`,
     `ok=${slice.evaluation.ok}`,
   ].join(" ");
 }
