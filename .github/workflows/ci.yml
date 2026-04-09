@@ -192,7 +192,8 @@ jobs:
 
       - name: Start built server
         run: |
-          npm run start:built > server.log 2>&1 &
+          : > server.log
+          npm run start:built >> server.log 2>&1 &
           echo $! > server.pid
 
       - name: Wait for server
@@ -204,7 +205,11 @@ jobs:
             sleep 2
           done
           echo "Server did not become ready in time"
-          cat server.log
+          if [ -f server.log ]; then
+            cat server.log
+          else
+            echo "server.log was not created"
+          fi
           exit 1
 
       - name: Smoke preflight
@@ -225,7 +230,12 @@ jobs:
 
       - name: Print server log on failure
         if: failure()
-        run: cat server.log
+        run: |
+          if [ -f server.log ]; then
+            cat server.log
+          else
+            echo "server.log was not created"
+          fi
 
       - name: Stop built server
         if: always()
