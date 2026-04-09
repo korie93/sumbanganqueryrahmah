@@ -1,9 +1,8 @@
-import type { CSSProperties } from "react";
+import { useEffect, useRef } from "react";
 import { Download, ExternalLink, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { CollectionRecordReceipt } from "@/lib/api";
-import type { ReceiptPreviewZoomStyle } from "@/pages/collection-records/receipt-preview-dialog-utils";
 import type { ReceiptPreviewKind } from "@/pages/collection-records/types";
 
 type ReceiptPreviewContentProps = {
@@ -14,7 +13,7 @@ type ReceiptPreviewContentProps = {
   showPdfFallback: boolean;
   kind: ReceiptPreviewKind;
   isMobile: boolean;
-  zoomStyle: ReceiptPreviewZoomStyle;
+  zoomValue: string;
   fileName: string;
   selectedReceipt: CollectionRecordReceipt | null;
   downloading: boolean;
@@ -29,12 +28,24 @@ export function ReceiptPreviewContent({
   showPdfFallback,
   kind,
   isMobile,
-  zoomStyle,
+  zoomValue,
   fileName,
   selectedReceipt,
   downloading,
   onDownload,
 }: ReceiptPreviewContentProps) {
+  const pdfZoomRef = useRef<HTMLDivElement | null>(null);
+  const imageZoomRef = useRef<HTMLImageElement | null>(null);
+
+  useEffect(() => {
+    if (pdfZoomRef.current) {
+      pdfZoomRef.current.style.setProperty("--receipt-preview-zoom", zoomValue);
+    }
+    if (imageZoomRef.current) {
+      imageZoomRef.current.style.setProperty("--receipt-preview-zoom", zoomValue);
+    }
+  }, [zoomValue]);
+
   return (
     <div className={cn("min-h-0 flex-1 rounded-md border border-border/60 bg-background/40 p-3", isMobile ? "mx-3 my-3" : "mt-3")}>
       {loading ? (
@@ -85,8 +96,8 @@ export function ReceiptPreviewContent({
       ) : kind === "pdf" ? (
         <div className="h-full overflow-auto">
           <div
+            ref={pdfZoomRef}
             className={cn("receipt-preview-zoom mx-auto w-full", isMobile ? "h-full" : "h-[72vh]")}
-            style={zoomStyle as CSSProperties}
           >
             <iframe
               src={safeSource}
@@ -99,13 +110,13 @@ export function ReceiptPreviewContent({
       ) : kind === "image" ? (
         <div className="flex h-full items-center justify-center overflow-auto">
           <img
+            ref={imageZoomRef}
             src={safeSource}
             alt={fileName || "Receipt preview"}
             className={cn(
               "receipt-preview-zoom block rounded-sm object-contain",
               isMobile ? "max-w-full" : "max-w-none",
             )}
-            style={zoomStyle as CSSProperties}
           />
         </div>
       ) : (
