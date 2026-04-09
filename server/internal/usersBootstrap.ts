@@ -19,7 +19,7 @@ export class UsersBootstrap {
       try {
         await ensureUsersBootstrapSchema();
         this.ready = true;
-      } catch (err: any) {
+      } catch (err) {
         logger.error("Failed to ensure users table", { error: err });
         throw err;
       }

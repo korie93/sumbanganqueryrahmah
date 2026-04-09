@@ -1,10 +1,25 @@
 import { randomUUID } from "crypto";
-import { sql } from "drizzle-orm";
-import { mapCollectionStaffNicknameRow } from "./collection-nickname-utils";
+import { sql, type SQL } from "drizzle-orm";
+import {
+  mapCollectionStaffNicknameRow,
+  type CollectionRepositoryExecutor,
+  type CollectionRepositoryQueryResult,
+  type CollectionStaffNicknameDbRow,
+} from "./collection-nickname-utils";
 import type { CollectionStaffNickname } from "../storage-postgres";
 
-export type CollectionAdminAssignmentExecutor = {
-  execute: (query: any) => Promise<any>;
+export type CollectionAdminAssignmentExecutor = Pick<CollectionRepositoryExecutor, "execute">;
+
+type CollectionIdRow = {
+  id?: unknown;
+};
+
+type CollectionNicknameIdRow = {
+  nickname_id?: unknown;
+};
+
+function readRows<TRow>(result: CollectionRepositoryQueryResult): TRow[] {
+  return Array.isArray(result.rows) ? (result.rows as TRow[]) : [];
 };
 
 function normalizeUniqueValues(values: string[]): string[] {
@@ -31,8 +46,8 @@ export async function listCollectionAdminAssignedNicknameIds(
     ORDER BY avn.nickname_id ASC
     LIMIT 5000
   `);
-  return (result.rows || [])
-    .map((row: any) => String(row.nickname_id || "").trim())
+  return readRows<CollectionNicknameIdRow>(result)
+    .map((row) => String(row.nickname_id ?? "").trim())
     .filter(Boolean);
 }
 
@@ -44,7 +59,7 @@ export async function listCollectionAdminVisibleNicknames(
   const normalized = String(adminUserId || "").trim();
   if (!normalized) return [];
 
-  const conditions: any[] = [sql`avn.admin_user_id = ${normalized}`];
+  const conditions: SQL[] = [sql`avn.admin_user_id = ${normalized}`];
   if (filters?.activeOnly === true) {
     conditions.push(sql`n.is_active = true`);
   }
@@ -74,7 +89,7 @@ export async function listCollectionAdminVisibleNicknames(
     LIMIT 1000
   `);
 
-  return (result.rows || []).map((row: any) => mapCollectionStaffNicknameRow(row));
+  return readRows<CollectionStaffNicknameDbRow>(result).map((row) => mapCollectionStaffNicknameRow(row));
 }
 
 async function resolveValidCollectionNicknameIds(
@@ -96,8 +111,8 @@ async function resolveValidCollectionNicknameIds(
     WHERE id IN (${nicknameSql})
     LIMIT 5000
   `);
-  const validNicknameIds = (validRows.rows || [])
-    .map((row: any) => String(row.id || "").trim())
+  const validNicknameIds = readRows<CollectionIdRow>(validRows)
+    .map((row) => String(row.id ?? "").trim())
     .filter(Boolean);
   if (validNicknameIds.length !== normalizedNicknameIds.length) {
     throw new Error("Invalid nickname ids.");

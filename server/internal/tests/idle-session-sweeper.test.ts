@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { WebSocket } from "ws";
+import type { UserActivity } from "../../../shared/schema-postgres";
 import { runIdleSessionSweeperPass } from "../idle-session-sweeper";
 
 function createSocketDouble() {
@@ -22,6 +23,25 @@ function createSocketDouble() {
   };
 }
 
+function createActiveActivity(overrides?: Partial<UserActivity>): UserActivity {
+  return {
+    id: "activity-1",
+    userId: "user-1",
+    username: "alpha.user",
+    role: "user",
+    pcName: null,
+    browser: null,
+    fingerprint: null,
+    ipAddress: null,
+    loginTime: null,
+    lastActivityTime: new Date(),
+    isActive: true,
+    logoutTime: null,
+    logoutReason: null,
+    ...overrides,
+  };
+}
+
 test("runIdleSessionSweeperPass expires stale sessions and closes connected sockets", async () => {
   const now = Date.now();
   const socketDouble = createSocketDouble();
@@ -31,19 +51,15 @@ test("runIdleSessionSweeperPass expires stale sessions and closes connected sock
   await runIdleSessionSweeperPass({
     storage: {
       getActiveActivities: async () => [
-        {
-          id: "activity-1",
-          username: "alpha.user",
+        createActiveActivity({
           lastActivityTime: new Date(now - 10 * 60 * 1000),
-        } as any,
+        }),
       ],
       expireIdleActivitySession: async (params) => {
         expireCalls.push(params);
-        return {
-          id: "activity-1",
-          username: "alpha.user",
+        return createActiveActivity({
           lastActivityTime: new Date(now - 10 * 60 * 1000),
-        } as any;
+        });
       },
     },
     connectedClients,
@@ -75,11 +91,9 @@ test("runIdleSessionSweeperPass leaves active sessions alone when atomic expiry 
   await runIdleSessionSweeperPass({
     storage: {
       getActiveActivities: async () => [
-        {
-          id: "activity-1",
-          username: "alpha.user",
+        createActiveActivity({
           lastActivityTime: new Date(now - 10 * 60 * 1000),
-        } as any,
+        }),
       ],
       expireIdleActivitySession: async (params) => {
         expireCalls.push(params);

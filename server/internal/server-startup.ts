@@ -40,6 +40,19 @@ type StartLocalServerOptions = {
   host?: string;
 };
 
+function getServerStartupErrorCode(error: unknown): string | undefined {
+  if (typeof error !== "object" || error === null || !("code" in error)) {
+    return undefined;
+  }
+
+  const code = (error as { code?: unknown }).code;
+  return typeof code === "string" && code ? code : undefined;
+}
+
+function getServerStartupErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 export async function startLocalServer(options: StartLocalServerOptions) {
   const {
     app,
@@ -99,8 +112,8 @@ export async function startLocalServer(options: StartLocalServerOptions) {
     clearInterval(idleSweeperHandle);
   });
 
-  server.on("error", (err: any) => {
-    if (err.code === "EADDRINUSE") {
+  server.on("error", (err: unknown) => {
+    if (getServerStartupErrorCode(err) === "EADDRINUSE") {
       notifyFatalStartup("EADDRINUSE", `Port ${port} is already in use`);
       markStartupFailed("EADDRINUSE", `Port ${port} is already in use`);
       logger.error("Server startup failed because the port is already in use", {
@@ -111,8 +124,9 @@ export async function startLocalServer(options: StartLocalServerOptions) {
       return;
     }
 
-    notifyFatalStartup("SERVER_STARTUP_ERROR", String(err?.message || err));
-    markStartupFailed("SERVER_STARTUP_ERROR", String(err?.message || err));
+    const message = getServerStartupErrorMessage(err);
+    notifyFatalStartup("SERVER_STARTUP_ERROR", message);
+    markStartupFailed("SERVER_STARTUP_ERROR", message);
     logger.error("Server startup failed", { error: err, port, host });
     setTimeout(() => process.exit(1), 10).unref();
   });
@@ -141,7 +155,7 @@ export async function startLocalServer(options: StartLocalServerOptions) {
       }
       logger.info("Precomputing category stats", { computeKeys: result.computeKeys });
       logger.info("Precomputed category stats");
-    } catch (err: any) {
+    } catch (err) {
       logger.error("Category stats precompute failed", { error: err });
     }
   }, 0);

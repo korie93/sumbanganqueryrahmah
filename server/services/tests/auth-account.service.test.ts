@@ -7,6 +7,12 @@ import { AuthAccountService, AuthAccountError } from "../auth-account.service";
 const previousTwoFactorEncryptionKey = process.env.TWO_FACTOR_ENCRYPTION_KEY;
 process.env.TWO_FACTOR_ENCRYPTION_KEY = "test-two-factor-encryption-key";
 
+type AuthAccountStorage = ConstructorParameters<typeof AuthAccountService>[0];
+type AuditLogInput = Parameters<AuthAccountStorage["createAuditLog"]>[0];
+type AuditLogRecord = Awaited<ReturnType<AuthAccountStorage["createAuditLog"]>>;
+type FailedLoginAttemptInput = Parameters<AuthAccountStorage["recordFailedLoginAttempt"]>[0];
+type UpdateUserAccountInput = Parameters<AuthAccountStorage["updateUserAccount"]>[0];
+
 test.after(() => {
   if (previousTwoFactorEncryptionKey === undefined) {
     delete process.env.TWO_FACTOR_ENCRYPTION_KEY;
@@ -14,6 +20,23 @@ test.after(() => {
   }
   process.env.TWO_FACTOR_ENCRYPTION_KEY = previousTwoFactorEncryptionKey;
 });
+
+function createAuthAccountService(storage: object): AuthAccountService {
+  return new AuthAccountService(storage as AuthAccountStorage);
+}
+
+function buildAuditLog(entry: AuditLogInput): AuditLogRecord {
+  return {
+    id: "audit-log-1",
+    action: entry.action,
+    performedBy: entry.performedBy,
+    requestId: entry.requestId ?? null,
+    targetUser: entry.targetUser ?? null,
+    targetResource: entry.targetResource ?? null,
+    details: entry.details ?? null,
+    timestamp: new Date("2026-03-20T00:00:00.000Z"),
+  };
+}
 
 function buildSuperuser(passwordHash: string) {
   const now = new Date("2026-03-20T00:00:00.000Z");
@@ -60,7 +83,7 @@ async function createLockoutHarness(overrides?: Record<string, unknown>) {
   const passwordHash = await hashPassword("Password123!");
   const user = buildManagedUser(passwordHash, overrides);
   const auditActions: string[] = [];
-  const updateUserAccountCalls: Array<Record<string, unknown>> = [];
+  const updateUserAccountCalls: UpdateUserAccountInput[] = [];
   const deactivatedReasons: string[] = [];
   const activity = {
     id: "activity-lockout-1",
@@ -79,7 +102,7 @@ async function createLockoutHarness(overrides?: Record<string, unknown>) {
   };
   let recordFailedLoginAttemptCalls = 0;
 
-  const service = new AuthAccountService({
+  const service = createAuthAccountService({
     getUserByUsername: async (username: string) => (username === user.username ? user : null),
     isVisitorBanned: async () => false,
     getBooleanSystemSetting: async () => false,
@@ -94,11 +117,11 @@ async function createLockoutHarness(overrides?: Record<string, unknown>) {
       deactivatedReasons.push(reason);
     },
     deactivateUserSessionsByFingerprint: async () => undefined,
-    createAuditLog: async (entry: any) => {
+    createAuditLog: async (entry: AuditLogInput) => {
       auditActions.push(String(entry?.action || ""));
-      return entry;
+      return buildAuditLog(entry);
     },
-    recordFailedLoginAttempt: async (params: any) => {
+    recordFailedLoginAttempt: async (params: FailedLoginAttemptInput) => {
       recordFailedLoginAttemptCalls += 1;
       const wasLocked = Boolean(user.lockedAt);
       user.failedLoginAttempts = Number(user.failedLoginAttempts || 0) + 1;
@@ -115,7 +138,7 @@ async function createLockoutHarness(overrides?: Record<string, unknown>) {
         newlyLocked: locked && !wasLocked,
       };
     },
-    updateUserAccount: async (params: any) => {
+    updateUserAccount: async (params: UpdateUserAccountInput) => {
       updateUserAccountCalls.push(params);
       Object.assign(user, {
         failedLoginAttempts:
@@ -128,7 +151,7 @@ async function createLockoutHarness(overrides?: Record<string, unknown>) {
     },
     createActivity: async () => activity,
     touchLastLogin: async () => undefined,
-  } as any);
+  });
 
   return {
     service,
@@ -147,12 +170,12 @@ test("AuthAccountService.login clears stale superuser sessions before issuing a 
   const auditActions: string[] = [];
   let deactivated = false;
 
-  const service = new AuthAccountService({
+  const service = createAuthAccountService({
     getUserByUsername: async () => user,
     isVisitorBanned: async () => false,
-    createAuditLog: async (entry: any) => {
+    createAuditLog: async (entry: AuditLogInput) => {
       auditActions.push(String(entry?.action || ""));
-      return entry;
+      return buildAuditLog(entry);
     },
     getBooleanSystemSetting: async () => true,
     getActiveActivitiesByUsername: async () => [
@@ -195,7 +218,7 @@ test("AuthAccountService.login clears stale superuser sessions before issuing a 
       searchResultLimit: 100,
       viewerRowsPerPage: 100,
     }),
-  } as any);
+  });
 
   const result = await service.login({
     username: "superuser",
@@ -218,10 +241,10 @@ test("AuthAccountService.login blocks superuser when another recent session is s
   const passwordHash = await hashPassword("Password123!");
   const user = buildSuperuser(passwordHash);
 
-  const service = new AuthAccountService({
+  const service = createAuthAccountService({
     getUserByUsername: async () => user,
     isVisitorBanned: async () => false,
-    createAuditLog: async (entry: any) => entry,
+    createAuditLog: async (entry: AuditLogInput) => buildAuditLog(entry),
     getBooleanSystemSetting: async () => true,
     getActiveActivitiesByUsername: async () => [
       {
@@ -232,7 +255,7 @@ test("AuthAccountService.login blocks superuser when another recent session is s
         isActive: true,
       },
     ],
-  } as any);
+  });
 
   await assert.rejects(
     service.login({
@@ -256,7 +279,7 @@ test("AuthAccountService.login replaces existing user sessions so only the lates
   const auditActions: string[] = [];
   const deactivatedReasons: string[] = [];
 
-  const service = new AuthAccountService({
+  const service = createAuthAccountService({
     getUserByUsername: async () => user,
     isVisitorBanned: async () => false,
     getActiveActivitiesByUsername: async () => [
@@ -279,9 +302,9 @@ test("AuthAccountService.login replaces existing user sessions so only the lates
       deactivatedReasons.push(reason);
     },
     deactivateUserSessionsByFingerprint: async () => undefined,
-    createAuditLog: async (entry: any) => {
+    createAuditLog: async (entry: AuditLogInput) => {
       auditActions.push(String(entry?.action || ""));
-      return entry;
+      return buildAuditLog(entry);
     },
     createActivity: async () => ({
       id: "activity-new-1",
@@ -299,7 +322,7 @@ test("AuthAccountService.login replaces existing user sessions so only the lates
       ipAddress: "127.0.0.1",
     }),
     touchLastLogin: async () => undefined,
-  } as any);
+  });
 
   const result = await service.login({
     username: user.username,
@@ -331,7 +354,7 @@ test("AuthAccountService.login requires second factor for admin accounts with 2F
   let createActivityCalled = false;
   const auditActions: string[] = [];
 
-  const service = new AuthAccountService({
+  const service = createAuthAccountService({
     getUserByUsername: async () => user,
     isVisitorBanned: async () => false,
     deactivateUserSessionsByFingerprint: async () => undefined,
@@ -340,11 +363,11 @@ test("AuthAccountService.login requires second factor for admin accounts with 2F
       return { id: "activity-unexpected" };
     },
     touchLastLogin: async () => undefined,
-    createAuditLog: async (entry: any) => {
+    createAuditLog: async (entry: AuditLogInput) => {
       auditActions.push(String(entry?.action || ""));
-      return entry;
+      return buildAuditLog(entry);
     },
-  } as any);
+  });
 
   const result = await service.login({
     username: "admin.user",
@@ -375,7 +398,7 @@ test("AuthAccountService.verifyTwoFactorLogin replaces existing admin sessions a
   const auditActions: string[] = [];
   const deactivatedReasons: string[] = [];
 
-  const service = new AuthAccountService({
+  const service = createAuthAccountService({
     getUser: async () => user,
     isVisitorBanned: async () => false,
     getActiveActivitiesByUsername: async () => [
@@ -390,9 +413,9 @@ test("AuthAccountService.verifyTwoFactorLogin replaces existing admin sessions a
     deactivateUserActivities: async (_username: string, reason: string) => {
       deactivatedReasons.push(reason);
     },
-    createAuditLog: async (entry: any) => {
+    createAuditLog: async (entry: AuditLogInput) => {
       auditActions.push(String(entry?.action || ""));
-      return entry;
+      return buildAuditLog(entry);
     },
     createActivity: async () => ({
       id: "activity-admin-new-1",
@@ -410,7 +433,7 @@ test("AuthAccountService.verifyTwoFactorLogin replaces existing admin sessions a
       ipAddress: "127.0.0.1",
     }),
     touchLastLogin: async () => undefined,
-  } as any);
+  });
 
   const result = await service.verifyTwoFactorLogin({
     userId: user.id,
@@ -438,14 +461,14 @@ test("AuthAccountService supports starting, confirming, and disabling 2FA for ad
     role: "admin",
   };
 
-  const service = new AuthAccountService({
+  const service = createAuthAccountService({
     getUser: async () => user,
     getUserByUsername: async () => user,
-    createAuditLog: async (entry: any) => {
+    createAuditLog: async (entry: AuditLogInput) => {
       auditActions.push(String(entry?.action || ""));
-      return entry;
+      return buildAuditLog(entry);
     },
-    updateUserAccount: async (params: any) => {
+    updateUserAccount: async (params: UpdateUserAccountInput) => {
       Object.assign(user, {
         twoFactorEnabled:
           params.twoFactorEnabled === undefined ? user.twoFactorEnabled : params.twoFactorEnabled,
@@ -464,7 +487,7 @@ test("AuthAccountService supports starting, confirming, and disabling 2FA for ad
     getActiveActivitiesByUsername: async () => [],
     deactivateUserActivities: async () => undefined,
     updateActivitiesUsername: async () => undefined,
-  } as any);
+  });
 
   const authUser = {
     userId: user.id,
@@ -631,12 +654,12 @@ test("AuthAccountService.login keeps invalid usernames generic and does not reco
   const auditActions: string[] = [];
   let recordFailedLoginAttemptCalled = false;
 
-  const service = new AuthAccountService({
+  const service = createAuthAccountService({
     getUserByUsername: async () => null,
     isVisitorBanned: async () => false,
-    createAuditLog: async (entry: any) => {
+    createAuditLog: async (entry: AuditLogInput) => {
       auditActions.push(String(entry?.action || ""));
-      return entry;
+      return buildAuditLog(entry);
     },
     recordFailedLoginAttempt: async () => {
       recordFailedLoginAttemptCalled = true;
@@ -647,7 +670,7 @@ test("AuthAccountService.login keeps invalid usernames generic and does not reco
         newlyLocked: false,
       };
     },
-  } as any);
+  });
 
   await assert.rejects(
     service.login({

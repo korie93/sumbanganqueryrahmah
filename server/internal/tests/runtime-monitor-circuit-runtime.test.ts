@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createRuntimeMonitorCircuitRuntime } from "../runtime-monitor-circuit-runtime";
+import type { RuntimeMonitorManagerOptions } from "../runtime-monitor-types";
 
 test("runtime monitor circuit runtime records db and ai latency through circuit wrappers", async () => {
   const observedDbLatencies: number[] = [];
@@ -11,7 +12,7 @@ test("runtime monitor circuit runtime records db and ai latency through circuit 
       idleCount: 1,
       waitingCount: 0,
       options: { max: 10 },
-    } as any,
+    } as unknown as RuntimeMonitorManagerOptions["pool"],
     pgPoolWarnCooldownMs: 30_000,
     observeDbLatency: (ms) => observedDbLatencies.push(ms),
     observeAiLatency: (ms) => observedAiLatencies.push(ms),

@@ -94,7 +94,7 @@ export class CoreSchemaBootstrap {
         await ensureCorePerformanceIndexes(database);
         try {
           await ensureCorePerformanceTrigramIndexes(database);
-        } catch (err: any) {
+        } catch (err) {
           logger.warn("pg_trgm is not available; skipping trigram index creation", { error: err });
         }
       },

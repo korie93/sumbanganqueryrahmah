@@ -10,14 +10,15 @@ import {
 } from "../backup-operations-integrity-utils";
 
 test("verifyBackupIntegrity treats backups without a stored checksum as readable but unverified", () => {
-  const result = verifyBackupIntegrity({
+  const backup: Parameters<typeof verifyBackupIntegrity>[0] = {
     id: "backup-1",
     name: "Nightly Backup",
-    createdAt: "2026-03-20T00:00:00.000Z",
+    createdAt: new Date("2026-03-20T00:00:00.000Z"),
     createdBy: "super.user",
     backupData: "{\"imports\":[]}",
-    metadata: {},
-  } as any);
+    metadata: JSON.stringify({}),
+  };
+  const result = verifyBackupIntegrity(backup);
 
   assert.equal(result.ok, true);
   assert.equal(result.verified, false);

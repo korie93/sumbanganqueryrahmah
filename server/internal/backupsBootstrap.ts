@@ -152,7 +152,7 @@ export class BackupsBootstrap {
         });
 
         this.ready = true;
-      } catch (err: any) {
+      } catch (err) {
         logger.error("Failed to ensure backups table", { error: err });
       }
     })();

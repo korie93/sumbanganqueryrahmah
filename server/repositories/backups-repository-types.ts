@@ -19,7 +19,7 @@ export const BACKUP_STORAGE_APPEND_CHUNK_BYTES = 128 * 1024;
 
 export type BackupsRepositoryOptions = {
   ensureBackupsTable: () => Promise<void>;
-  parseBackupMetadataSafe: (raw: unknown) => Record<string, any> | null;
+  parseBackupMetadataSafe: (raw: unknown) => Record<string, unknown> | null;
 };
 
 export type BackupAmountMyr = CollectionAmountMyrLike;

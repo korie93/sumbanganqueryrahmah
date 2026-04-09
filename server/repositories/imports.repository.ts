@@ -35,6 +35,19 @@ type ImportListCursor = {
   id: string;
 };
 
+type ImportColumnNameRow = {
+  column_name?: unknown;
+};
+
+type ImportRowCountByImportIdRow = {
+  importId?: unknown;
+  rowCount?: unknown;
+};
+
+function readImportRows<TRow>(rows: unknown[] | undefined): TRow[] {
+  return Array.isArray(rows) ? (rows as TRow[]) : [];
+}
+
 function clampImportListLimit(limit: number | undefined): number {
   const safeLimit = Number.isFinite(limit) ? Math.trunc(Number(limit)) : IMPORT_LIST_PAGE_DEFAULT_LIMIT;
   return Math.max(1, Math.min(IMPORT_LIST_PAGE_MAX_LIMIT, safeLimit));
@@ -310,8 +323,8 @@ export class ImportsRepository {
       LIMIT ${IMPORT_COLUMN_KEYS_MAX_LIMIT}
     `);
 
-    return (result.rows || [])
-      .map((row: any) => String(row.column_name || "").trim())
+    return readImportRows<ImportColumnNameRow>(result.rows)
+      .map((row) => String(row.column_name ?? "").trim())
       .filter(Boolean);
   }
 
@@ -348,7 +361,8 @@ export class ImportsRepository {
     `);
 
     return new Map(
-      (result.rows || []).map((row: any) => [String(row.importId), Number(row.rowCount)]),
+      readImportRows<ImportRowCountByImportIdRow>(result.rows)
+        .map((row) => [String(row.importId ?? ""), Number(row.rowCount ?? 0)]),
     );
   }
 }

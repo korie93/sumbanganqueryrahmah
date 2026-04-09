@@ -72,7 +72,7 @@ export class CollectionBootstrap {
   ): Promise<void> {
     try {
       await runBootstrapTask(state, task);
-    } catch (err: any) {
+    } catch (err) {
       logger.error(failureMessage, { error: err });
       throw err;
     }

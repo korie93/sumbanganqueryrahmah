@@ -2,13 +2,13 @@ import { sql } from "drizzle-orm";
 import { db } from "../db-postgres";
 import type { CollectionAmountMyrNumber } from "../../shared/collection-amount-types";
 import type {
+  CollectionNicknameAggregate,
   CollectionMonthlySummary,
   CollectionNicknameDailyAggregate,
   CollectionRecord,
   CollectionRecordAggregateFilters,
   CollectionRecordListFilters,
 } from "../storage-postgres";
-import { parseCollectionAmountMyrNumber } from "../../shared/collection-amount-types";
 import {
   buildCollectionMonthlySummaryWhereSql,
   buildCollectionRecordMonthlyRollupWhereSql,
@@ -16,6 +16,7 @@ import {
   buildCollectionRecordWhereSql,
   canUseCollectionRecordDailyRollups,
   mapCollectionAggregateRow,
+  mapCollectionNicknameAggregateRows,
   mapCollectionNicknameDailyAggregateRows,
   mapCollectionMonthlySummaryRows,
 } from "./collection-record-query-utils";
@@ -23,6 +24,10 @@ import { hasPendingCollectionRecordDailyRollupSlices } from "./collection-record
 import { attachCollectionReceipts } from "./collection-receipt-utils";
 import { buildProtectedCollectionPiiSelect } from "./collection-pii-select-utils";
 import { mapCollectionRecordRow } from "./collection-repository-mappers";
+
+function normalizeQueryRows(rows: unknown[] | undefined): unknown[] {
+  return Array.isArray(rows) ? rows : [];
+}
 
 export async function listCollectionRecords(
   filters?: CollectionRecordListFilters,
@@ -69,7 +74,7 @@ export async function listCollectionRecords(
     OFFSET ${safeOffset}
   `);
 
-  const records = (result.rows || []).map((row: any) => mapCollectionRecordRow(row));
+  const records = normalizeQueryRows(result.rows).map((row) => mapCollectionRecordRow(row));
   return attachCollectionReceipts(db, records);
 }
 
@@ -107,7 +112,7 @@ export async function summarizeCollectionRecords(
 
 export async function summarizeCollectionRecordsByNickname(
   filters?: CollectionRecordAggregateFilters,
-): Promise<Array<{ nickname: string; totalRecords: number; totalAmount: CollectionAmountMyrNumber }>> {
+): Promise<CollectionNicknameAggregate[]> {
   if (
     canUseCollectionRecordDailyRollups(filters)
     && !(await hasPendingCollectionRecordDailyRollupSlices(filters))
@@ -125,11 +130,7 @@ export async function summarizeCollectionRecordsByNickname(
       ORDER BY lower(collection_staff_nickname) ASC
     `);
 
-    return (result.rows || []).map((row: any) => ({
-      nickname: String(row.nickname || "Unknown"),
-      totalRecords: Number(row.total_records || 0),
-      totalAmount: parseCollectionAmountMyrNumber(row.total_amount || 0),
-    }));
+    return mapCollectionNicknameAggregateRows(result.rows);
   }
 
   const whereSql = buildCollectionRecordWhereSql(filters);
@@ -145,11 +146,7 @@ export async function summarizeCollectionRecordsByNickname(
     ORDER BY lower(collection_staff_nickname) ASC
   `);
 
-  return (result.rows || []).map((row: any) => ({
-    nickname: String(row.nickname || "Unknown"),
-    totalRecords: Number(row.total_records || 0),
-    totalAmount: parseCollectionAmountMyrNumber(row.total_amount || 0),
-  }));
+  return mapCollectionNicknameAggregateRows(result.rows);
 }
 
 export async function summarizeCollectionRecordsByNicknameAndPaymentDate(
@@ -174,7 +171,7 @@ export async function summarizeCollectionRecordsByNicknameAndPaymentDate(
       ORDER BY lower(collection_staff_nickname) ASC, payment_date ASC
     `);
 
-    return mapCollectionNicknameDailyAggregateRows(result.rows || []);
+    return mapCollectionNicknameDailyAggregateRows(result.rows);
   }
 
   const whereSql = buildCollectionRecordWhereSql(filters);
@@ -192,7 +189,7 @@ export async function summarizeCollectionRecordsByNicknameAndPaymentDate(
     ORDER BY lower(collection_staff_nickname) ASC, payment_date ASC
   `);
 
-  return mapCollectionNicknameDailyAggregateRows(result.rows || []);
+  return mapCollectionNicknameDailyAggregateRows(result.rows);
 }
 
 export async function summarizeCollectionRecordsOlderThan(
@@ -259,7 +256,7 @@ export async function getCollectionMonthlySummary(filters: {
       LIMIT 12
     `);
 
-    return mapCollectionMonthlySummaryRows(fallbackResult.rows || []);
+    return mapCollectionMonthlySummaryRows(fallbackResult.rows);
   }
 
   const monthlyWhere = buildCollectionRecordMonthlyRollupWhereSql(filters);
@@ -275,7 +272,7 @@ export async function getCollectionMonthlySummary(filters: {
     LIMIT 12
   `);
 
-  return mapCollectionMonthlySummaryRows(result.rows || []);
+  return mapCollectionMonthlySummaryRows(result.rows);
 }
 
 export async function getCollectionRecordById(id: string): Promise<CollectionRecord | undefined> {

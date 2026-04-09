@@ -7,6 +7,10 @@ import {
   normalizePendingPasswordResetListFilters,
 } from "../auth-managed-user-shared";
 
+type ManagedUserListFiltersInput = NonNullable<Parameters<typeof normalizeManagedUserListFilters>[0]>;
+type PendingPasswordResetListFiltersInput =
+  NonNullable<Parameters<typeof normalizePendingPasswordResetListFilters>[0]>;
+
 test("auth managed user shared normalizes role and status filters safely", () => {
   assert.equal(normalizeManagedUserRoleFilter("ADMIN"), "admin");
   assert.equal(normalizeManagedUserRoleFilter("weird"), "all");
@@ -18,9 +22,9 @@ test("auth managed user shared trims listing filters", () => {
   assert.deepEqual(
     normalizeManagedUserListFilters({
       search: "  alice  ",
-      role: " user ",
-      status: " banned ",
-    } as any),
+      role: " user " as unknown as ManagedUserListFiltersInput["role"],
+      status: " banned " as unknown as ManagedUserListFiltersInput["status"],
+    }),
     {
       search: "alice",
       role: "user",
@@ -31,8 +35,8 @@ test("auth managed user shared trims listing filters", () => {
   assert.deepEqual(
     normalizePendingPasswordResetListFilters({
       search: "  bob  ",
-      status: " disabled ",
-    } as any),
+      status: " disabled " as unknown as PendingPasswordResetListFiltersInput["status"],
+    }),
     {
       search: "bob",
       status: "disabled",

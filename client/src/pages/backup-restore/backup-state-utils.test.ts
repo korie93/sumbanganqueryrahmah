@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import type { BackupJobRecord } from "@/pages/backup-restore/types";
 
 import {
   buildBackupQueryParams,
@@ -9,6 +10,23 @@ import {
   isBackupJobInProgress,
   isBackupJobTerminal,
 } from "@/pages/backup-restore/backup-state-utils";
+
+function createBackupJob(status: BackupJobRecord["status"]): BackupJobRecord {
+  return {
+    id: "job-1",
+    type: "create",
+    status,
+    requestedBy: "super.user",
+    requestedAt: "2026-04-01T00:00:00.000Z",
+    startedAt: null,
+    finishedAt: null,
+    backupId: null,
+    backupName: null,
+    queuePosition: 1,
+    result: null,
+    error: null,
+  };
+}
 
 test("buildBackupQueryParams normalizes empty filters for API requests", () => {
   assert.deepEqual(
@@ -57,8 +75,8 @@ test("backup pagination and filter helpers derive stable defaults", () => {
 
 test("backup job helpers identify in-progress and terminal states", () => {
   assert.equal(isBackupJobInProgress(null, "job-1"), true);
-  assert.equal(isBackupJobInProgress({ status: "running" } as any, "job-1"), true);
-  assert.equal(isBackupJobInProgress({ status: "completed" } as any, "job-1"), false);
+  assert.equal(isBackupJobInProgress(createBackupJob("running"), "job-1"), true);
+  assert.equal(isBackupJobInProgress(createBackupJob("completed"), "job-1"), false);
   assert.equal(isBackupJobTerminal("completed"), true);
   assert.equal(isBackupJobTerminal("failed"), true);
   assert.equal(isBackupJobTerminal("running"), false);

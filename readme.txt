@@ -638,11 +638,12 @@ ditentukan melalui penanda STATUS pada setiap item, bukan melalui jadual ini.
           yang betul.
     Cadangan: Kurangkan secara beransur-ansur, utamakan bahagian yang
               mengendalikan data luaran.
-    >>> STATUS: MATERIALLY CLOSED (Pasca pembetulan, 2026-04-09)
-        Scan semasa pada server/client/shared production code tidak lagi
-        menemukan as any, @ts-ignore, atau @ts-expect-error di luar tests.
-        Debt yang masih tinggal kini tertumpu pada harness tests lama,
-        bukan laluan production.
+    >>> STATUS: MATERIALLY CLOSED (Kemaskini semula, 2026-04-10)
+        Semakan sintaks semasa pada server/client/shared .ts/.tsx tidak lagi
+        menemukan penggunaan type any, as any, @ts-ignore, atau
+        @ts-expect-error.
+        Padanan perkataan "any" yang masih wujud dalam scan luas kini hanya
+        datang daripada mesej UI/log dan komen naratif, bukan typing code.
         Kemaskini 2026-04-10: harness
         server/services/tests/backup-operations.service.test.ts kini
         dibersihkan daripada as any pada service injection dan success-body
@@ -653,6 +654,50 @@ ditentukan melalui penanda STATUS pada setiap item, bukan melalui jadual ini.
         Kemaskini 2026-04-10 (cache tests): client cache tests untuk
         collection summary, month dialog, dan records query kini guna
         helper row typed minimum tanpa as any.
+        Kemaskini 2026-04-10 (state/cache tests): backup-state-utils.test.ts
+        dan collection-daily-cache.test.ts juga kini typed tanpa as any.
+        Kemaskini 2026-04-10 (receipt/token tests): receipt-preview-utils
+        dan collection-daily-hooks-utils kini guna helper typed minimum
+        tanpa as any; auth-account-token-utils pula kini menerima dan
+        menormalisasi timestamp string secara typed, lalu test util itu
+        juga dibersihkan tanpa as any.
+        Kemaskini 2026-04-10 (AI search tests): ai-search-compute-utils.test.ts
+        kini guna storage mocks, semantic rows, branch lookup doubles,
+        dan payload assertions yang typed tanpa as any; ini menutup lagi
+        satu slice server test yang sebelum ini masih longgar.
+        Kemaskini 2026-04-10 (managed account tests): auth-account-managed-
+        operations.test.ts kini memakai superuser/managed-user fixtures serta
+        storage mocks yang typed penuh tanpa as any, sambil kekal lulus
+        pada targeted test, typecheck, dan build.
+        Kemaskini 2026-04-10 (receipt multipart typing): MultipartCollectionPayload
+        kini memodelkan uploadedReceipts sebagai input longgar sebenar, dan
+        collection-record-mutation-helpers.test.ts dibersihkan daripada as any
+        sambil kekal lulus pada targeted test, typecheck, dan build.
+        Kemaskini 2026-04-10 (service test cleanup lanjutan): collection-daily-
+        record.service.test.ts, auth-account.service.test.ts, ai-chat-utils.test.ts,
+        ai-chat.service.test.ts, collection-nickname.service.test.ts, dan
+        backup-operations-integrity-utils.test.ts kini juga typed tanpa as any
+        pada harness utama, dan repo kekal lulus pada targeted tests, typecheck,
+        serta build.
+        Kemaskini 2026-04-10 (ws/internal cleanup): runtime-manager.test.ts,
+        settings-bootstrap-utils.test.ts, core-schema-bootstrap-utils.test.ts,
+        runtime-monitor-sync-state.test.ts, runtime-monitor-circuit-runtime.test.ts,
+        dan idle-session-sweeper.test.ts kini juga dibersihkan daripada as any.
+        Kemaskini 2026-04-10 (collection repository typing): collection-
+        repository-mappers.ts, collection-record-query-utils.ts,
+        collection-record-read-utils.ts, collection-admin-assignment-utils.ts,
+        backupMetadata.ts, dan backups-repository-types.ts kini juga
+        dipindahkan kepada unknown-based row typing tanpa explicit any,
+        sambil kekal lulus pada targeted tests dan typecheck.
+        Kemaskini 2026-04-10 (final typing pass): collection-daily-
+        repository-utils.ts, collection-repository-admin-operations.ts,
+        activity-repository-shared.ts, auth-managed-user-read-utils.ts,
+        collection-record-mutation-repository-utils.ts, imports.repository.ts,
+        bootstrap/internal helpers, db-pool-monitor.ts, auth.routes.integration
+        test stubs, schema-postgres.ts, serta xlsx export typings kini turut
+        dibersihkan. Repo kekal lulus pada targeted tests, typecheck, dan build.
+        Scan luas terkini untuk server/client/shared kini hanya memadankan
+        perkataan "any" dalam string mesej atau komen, bukan sebagai typing.
 
 #36 Missing Test Coverage Reporting dalam CI
     Fail: .github/workflows/ci.yml (baris 68-98)
@@ -1844,8 +1889,9 @@ Penemuan kritikal terdahulu yang kini ditutup dalam kod semasa:
   * Semua timestamp tanpa timezone - schema kini menggunakan timestamp with timezone
 
 Kemaskini status pasca pembetulan (2026-04-09):
-  * #35 type-safety debt kini materially closed; baki utama tertumpu pada
-    debt ujian dan bukan production code.
+  * #35 type-safety debt kini materially closed; semakan semasa pada
+    server/client/shared tidak lagi menunjukkan penggunaan type any,
+    as any, @ts-ignore, atau @ts-expect-error dalam typing code.
   * #63 backup export memory kini materially closed; baki tinggal
     refinement architecture lanjutan pada restore/full-parse path.
   * #70 PII encryption at rest kini materially closed dalam kod semasa.

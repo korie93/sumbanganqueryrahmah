@@ -196,15 +196,15 @@ test("collection receipt helpers normalize metadata and uploaded receipt rows", 
   const uploadedRows = readUploadedReceiptRows({
     uploadedReceipts: [
       {
-        extractedAmountCents: "5.00" as any,
-        extractionConfidence: "99" as any,
+        extractedAmountCents: "5.00",
+        extractionConfidence: "99",
         extractionStatus: "ambiguous",
         fileHash: " Hash-1 ",
         fileSize: 100,
         originalExtension: ".pdf",
         originalFileName: " receipt.pdf ",
         originalMimeType: "",
-        receiptAmountCents: "5.00" as any,
+        receiptAmountCents: "5.00",
         receiptDate: "2020-01-01",
         receiptReference: " REF ",
         storagePath: " collection-receipts/receipt.pdf ",
@@ -213,7 +213,7 @@ test("collection receipt helpers normalize metadata and uploaded receipt rows", 
         fileSize: 10,
         originalFileName: "",
         storagePath: "",
-      } as any,
+      },
     ],
   });
 

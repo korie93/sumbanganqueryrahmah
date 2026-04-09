@@ -17,7 +17,7 @@ import {
 } from "./collection-receipt-validation";
 
 export type MultipartCollectionPayload = Record<string, unknown> & {
-  uploadedReceipts?: CreateCollectionRecordReceiptInput[] | null;
+  uploadedReceipts?: unknown[] | null;
 };
 
 export function normalizeExtractionConfidence(value: unknown): number | null {

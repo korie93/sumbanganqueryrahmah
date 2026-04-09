@@ -5,6 +5,7 @@ import {
   resolveReceiptPreviewKind,
   shouldRenderInlineReceiptPdfPreview,
 } from "../utils";
+import type { CollectionRecordReceipt } from "@/lib/api";
 import {
   clampReceiptPreviewZoom,
   getReceiptPreviewZoomValue,
@@ -47,10 +48,24 @@ test("receipt preview dialog utils clamp zoom and resolve selected receipt", () 
   assert.equal(clampReceiptPreviewZoom(3.5), 3);
   assert.equal(getReceiptPreviewZoomValue(1.24), "1.24");
 
-  const receipts = [
-    { id: "first", originalFileName: "a.pdf" },
-    { id: "second", originalFileName: "b.pdf" },
-  ] as any[];
+  const createReceipt = (id: string, originalFileName: string): CollectionRecordReceipt => ({
+    id,
+    collectionRecordId: "record-1",
+    storagePath: `receipts/${originalFileName}`,
+    originalFileName,
+    originalMimeType: "application/pdf",
+    originalExtension: "pdf",
+    fileSize: 128,
+    receiptAmount: null,
+    extractedAmount: null,
+    extractionStatus: "unprocessed",
+    extractionConfidence: null,
+    receiptDate: null,
+    receiptReference: null,
+    fileHash: null,
+    createdAt: "2026-04-01T00:00:00.000Z",
+  });
+  const receipts = [createReceipt("first", "a.pdf"), createReceipt("second", "b.pdf")];
   assert.equal(resolveSelectedReceipt(receipts, "second")?.id, "second");
   assert.equal(resolveSelectedReceipt(receipts, "missing")?.id, "first");
   assert.equal(resolveSelectedReceipt([], "missing"), null);

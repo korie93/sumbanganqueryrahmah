@@ -172,7 +172,7 @@ async function cleanupDuplicateSettingOptions(database: SettingsBootstrapSqlExec
       WHERE so.ctid = r.ctid
         AND r.rn > 1
     `);
-  } catch (dupCleanupErr: any) {
+  } catch (dupCleanupErr) {
     logger.warn("setting_options duplicate cleanup skipped", { error: dupCleanupErr });
   }
 }
@@ -183,7 +183,7 @@ async function ensureSettingOptionsIndexes(database: SettingsBootstrapSqlExecuto
       CREATE UNIQUE INDEX IF NOT EXISTS idx_setting_options_unique_value
       ON public.setting_options (setting_id, value)
     `);
-  } catch (idxErr: any) {
+  } catch (idxErr) {
     logger.warn("setting_options unique index was not created", { error: idxErr });
   }
 

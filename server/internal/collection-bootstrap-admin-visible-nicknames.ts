@@ -2,6 +2,16 @@ import { randomUUID } from "crypto";
 import { sql } from "drizzle-orm";
 import { db } from "../db-postgres";
 
+type IdRow = {
+  id?: unknown;
+};
+
+function readIds(rows: unknown[] | undefined): string[] {
+  return (Array.isArray(rows) ? (rows as IdRow[]) : [])
+    .map((row) => String(row.id ?? "").trim())
+    .filter(Boolean);
+}
+
 export async function ensureCollectionAdminVisibleNicknamesTable(): Promise<void> {
   await db.execute(sql`SET search_path TO public`);
   await db.execute(sql`
@@ -112,12 +122,8 @@ export async function ensureCollectionAdminVisibleNicknamesTable(): Promise<void
     LIMIT 5000
   `);
 
-  const adminIds = (admins.rows || [])
-    .map((row: any) => String(row.id || "").trim())
-    .filter(Boolean);
-  const nicknameIds = (nicknames.rows || [])
-    .map((row: any) => String(row.id || "").trim())
-    .filter(Boolean);
+  const adminIds = readIds(admins.rows);
+  const nicknameIds = readIds(nicknames.rows);
 
   for (const adminUserId of adminIds) {
     for (const nicknameId of nicknameIds) {

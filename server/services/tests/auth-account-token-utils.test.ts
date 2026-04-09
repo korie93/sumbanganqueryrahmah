@@ -57,7 +57,7 @@ test("assertUsableActivationTokenRecord normalizes dates and rejects unsafe acti
       status: "pending_activation",
       isBanned: false,
       activatedAt: null,
-      expiresAt: "2026-03-16T10:00:00.000Z" as any,
+      expiresAt: "2026-03-16T10:00:00.000Z",
       usedAt: null,
       createdAt: new Date("2026-03-15T09:00:00.000Z"),
     },
@@ -71,7 +71,7 @@ test("assertUsableActivationTokenRecord normalizes dates and rejects unsafe acti
       assertUsableActivationTokenRecord(
         {
           ...usable,
-          usedAt: "2026-03-15T09:30:00.000Z" as any,
+          usedAt: "2026-03-15T09:30:00.000Z",
         },
         now,
       ),
@@ -82,7 +82,7 @@ test("assertUsableActivationTokenRecord normalizes dates and rejects unsafe acti
       assertUsableActivationTokenRecord(
         {
           ...usable,
-          expiresAt: "2026-03-15T09:59:59.000Z" as any,
+          expiresAt: "2026-03-15T09:59:59.000Z",
         },
         now,
       ),
@@ -137,7 +137,7 @@ test("assertUsablePasswordResetTokenRecord rejects used, expired, pending, and u
       status: "active",
       isBanned: false,
       activatedAt: new Date("2026-03-10T10:00:00.000Z"),
-      expiresAt: "2026-03-15T12:00:00.000Z" as any,
+      expiresAt: "2026-03-15T12:00:00.000Z",
       usedAt: null,
       createdAt: new Date("2026-03-15T09:00:00.000Z"),
     },
@@ -151,7 +151,7 @@ test("assertUsablePasswordResetTokenRecord rejects used, expired, pending, and u
       assertUsablePasswordResetTokenRecord(
         {
           ...usable,
-          usedAt: "2026-03-15T09:30:00.000Z" as any,
+          usedAt: "2026-03-15T09:30:00.000Z",
         },
         now,
       ),
@@ -162,7 +162,7 @@ test("assertUsablePasswordResetTokenRecord rejects used, expired, pending, and u
       assertUsablePasswordResetTokenRecord(
         {
           ...usable,
-          expiresAt: "2026-03-15T09:59:59.000Z" as any,
+          expiresAt: "2026-03-15T09:59:59.000Z",
         },
         now,
       ),
@@ -205,10 +205,10 @@ test("auth token helpers treat database timestamps without timezone as UTC", () 
       role: "user",
       status: "active",
       isBanned: false,
-      activatedAt: "2026-03-29 09:00:00" as any,
-      expiresAt: "2026-03-30 17:54:00" as any,
+      activatedAt: "2026-03-29 09:00:00",
+      expiresAt: "2026-03-30 17:54:00",
       usedAt: null,
-      createdAt: "2026-03-30 09:54:00" as any,
+      createdAt: "2026-03-30 09:54:00",
     },
     now,
   );
@@ -224,13 +224,16 @@ test("auth token helpers treat database timestamps without timezone as UTC", () 
       status: "pending_activation",
       isBanned: false,
       activatedAt: null,
-      expiresAt: "2026-03-30 17:54:00" as any,
+      expiresAt: "2026-03-30 17:54:00",
       usedAt: null,
-      createdAt: "2026-03-30 09:54:00" as any,
+      createdAt: "2026-03-30 09:54:00",
     },
     now,
   );
 
   assert.equal(reset.expiresAt.toISOString(), "2026-03-30T17:54:00.000Z");
+  assert.equal(reset.activatedAt?.toISOString(), "2026-03-29T09:00:00.000Z");
+  assert.equal(reset.createdAt.toISOString(), "2026-03-30T09:54:00.000Z");
   assert.equal(activation.expiresAt.toISOString(), "2026-03-30T17:54:00.000Z");
+  assert.equal(activation.createdAt.toISOString(), "2026-03-30T09:54:00.000Z");
 });

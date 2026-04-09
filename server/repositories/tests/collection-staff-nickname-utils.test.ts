@@ -12,6 +12,8 @@ import {
 } from "../collection-staff-nickname-utils";
 import { collectBoundValues, collectSqlText, createSequenceExecutor } from "./sql-test-utils";
 
+type CreateCollectionStaffNicknameInput = Parameters<typeof createCollectionStaffNicknameValue>[1];
+
 test("listCollectionStaffNicknames applies active and admin scope filters", async () => {
   const { executor, queries } = createSequenceExecutor<CollectionStaffNicknameExecutor>([
     {
@@ -95,7 +97,7 @@ test("createCollectionStaffNicknameValue normalizes unsupported role scope to bo
 
   const created = await createCollectionStaffNicknameValue(executor, {
     nickname: "Collector Gamma",
-    roleScope: "unexpected" as any,
+    roleScope: "unexpected" as unknown as NonNullable<CreateCollectionStaffNicknameInput["roleScope"]>,
     createdBy: "superuser",
   });
 

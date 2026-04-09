@@ -7,17 +7,20 @@ import {
   type CoreSchemaSqlExecutor,
 } from "../core-schema-bootstrap-utils";
 
-function createExecutor(executions: unknown[]): CoreSchemaSqlExecutor {
+type CoreSchemaSqlQuery = Parameters<CoreSchemaSqlExecutor["execute"]>[0];
+type CoreSchemaSqlResult = ReturnType<CoreSchemaSqlExecutor["execute"]>;
+
+function createExecutor(executions: CoreSchemaSqlQuery[]): CoreSchemaSqlExecutor {
   return {
     execute: ((query) => {
       executions.push(query);
-      return {} as any;
+      return {} as unknown as CoreSchemaSqlResult;
     }) as CoreSchemaSqlExecutor["execute"],
   };
 }
 
 test("core schema bootstrap task runner shares in-flight work and marks state ready", async () => {
-  const executions: unknown[] = [];
+  const executions: CoreSchemaSqlQuery[] = [];
   const state: CoreSchemaBootstrapTaskState = {
     ready: false,
     initPromise: null,
@@ -60,7 +63,7 @@ test("core schema bootstrap task runner shares in-flight work and marks state re
 });
 
 test("core schema bootstrap task runner can swallow failures without marking state ready", async () => {
-  const executions: unknown[] = [];
+  const executions: CoreSchemaSqlQuery[] = [];
   const state: CoreSchemaBootstrapTaskState = {
     ready: false,
     initPromise: null,

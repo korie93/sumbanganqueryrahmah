@@ -1,11 +1,37 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import type { EvaluateSystemResult } from "../../intelligence/types";
 import {
   createEmptyRuntimeRollupRefreshSnapshot,
   createRuntimeIntelligenceHistory,
   createRuntimeMonitorSyncState,
 } from "../runtime-monitor-sync-state";
 import type { InternalMonitorSnapshot } from "../runtime-monitor-types";
+
+function buildEvaluateSystemResult(
+  overrides: Partial<EvaluateSystemResult> = {},
+): EvaluateSystemResult {
+  return {
+    stabilityIndex: 100,
+    anomalySummary: {
+      score: 0,
+      severity: "NORMAL",
+      breakdown: {
+        normalizedZScore: 0,
+        slopeWeight: 0,
+        percentileShift: 0,
+        correlationWeight: 0,
+        forecastRisk: 0,
+        mutationFactor: 0,
+        weightedScore: 0,
+      },
+    },
+    recommendedAction: "NONE",
+    predictiveState: "NORMAL",
+    governanceState: "IDLE",
+    ...overrides,
+  };
+}
 
 function createSnapshot(overrides: Partial<InternalMonitorSnapshot> = {}): InternalMonitorSnapshot {
   return {
@@ -45,7 +71,7 @@ function createSnapshot(overrides: Partial<InternalMonitorSnapshot> = {}): Inter
 test("runtime monitor sync state normalizes rollup refresh snapshots", async () => {
   const state = createRuntimeMonitorSyncState({
     apiDebugLogs: false,
-    evaluateSystem: async () => ({ score: 90, mode: "NORMAL" } as any),
+    evaluateSystem: async () => buildEvaluateSystemResult({ stabilityIndex: 90 }),
     getCollectionRollupRefreshQueueSnapshot: async () => ({
       pendingCount: -4,
       runningCount: 2,
@@ -75,7 +101,10 @@ test("runtime monitor sync state appends intelligence history and deduplicates a
         snapshotScore: snapshot.score,
         historyPoints: history.cpuPercent.length,
       });
-      return { score: snapshot.score, mode: snapshot.mode } as any;
+      return buildEvaluateSystemResult({
+        stabilityIndex: snapshot.score,
+        predictiveState: snapshot.mode === "NORMAL" ? "NORMAL" : "CRITICAL_IMMINENT",
+      });
     },
     syncAlertHistory: async (_snapshot, alerts) => {
       syncedAlerts.push(alerts.map((alert) => alert.id).join(","));

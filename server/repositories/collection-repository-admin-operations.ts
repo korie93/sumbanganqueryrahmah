@@ -19,7 +19,10 @@ import {
   listCollectionAdminGroups,
   updateCollectionAdminGroupInTransaction,
 } from "./collection-admin-group-utils";
-import { mapCollectionAdminUserRow } from "./collection-nickname-utils";
+import {
+  mapCollectionAdminUserRow,
+  type CollectionAdminUserDbRow,
+} from "./collection-nickname-utils";
 
 export async function getCollectionAdminUsersRepository(): Promise<CollectionAdminUser[]> {
   const result = await db.execute(sql`
@@ -35,7 +38,7 @@ export async function getCollectionAdminUsersRepository(): Promise<CollectionAdm
     ORDER BY lower(username) ASC
     LIMIT 1000
   `);
-  return (result.rows || []).map((row: any) => mapCollectionAdminUserRow(row));
+  return ((result.rows || []) as CollectionAdminUserDbRow[]).map((row) => mapCollectionAdminUserRow(row));
 }
 
 export async function getCollectionAdminUserByIdRepository(

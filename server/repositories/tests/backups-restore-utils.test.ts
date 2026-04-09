@@ -4,6 +4,9 @@ import {
   createBackupPayloadChunkReader,
   createBackupPayloadSectionReader,
 } from "../backups-restore-utils";
+import type { BackupDataPayload } from "../backups-repository-types";
+
+type BackupCollectionRecord = NonNullable<BackupDataPayload["collectionRecords"]>[number];
 
 async function collectChunkIds(
   chunks: AsyncIterable<Array<{ id: string }>>,
@@ -13,6 +16,23 @@ async function collectChunkIds(
     collected.push(chunk.map((row) => row.id));
   }
   return collected;
+}
+
+function createBackupCollectionRecord(
+  overrides?: Partial<BackupCollectionRecord>,
+): BackupCollectionRecord {
+  return {
+    id: "record-1",
+    customerName: "Alice",
+    batch: "P10",
+    paymentDate: "2026-03-31",
+    amount: 10,
+    receiptFile: null,
+    createdByLogin: "staff.user",
+    collectionStaffNickname: "Collector Alpha",
+    createdAt: "2026-03-31T00:00:00.000Z",
+    ...overrides,
+  };
 }
 
 test("createBackupPayloadSectionReader reads top-level backup arrays from a raw JSON string", () => {
@@ -121,18 +141,19 @@ test("createBackupPayloadSectionReader iterates JSON array datasets in bounded c
 });
 
 test("createBackupPayloadSectionReader iterates object-source datasets in bounded chunks", async () => {
-  const reader = createBackupPayloadSectionReader({
+  const payload: BackupDataPayload = {
     imports: [],
     dataRows: [],
     users: [],
     auditLogs: [],
     collectionRecords: [
-      { id: "record-1", customerName: "Alice", paymentDate: "2026-03-31", amount: 10 } as any,
-      { id: "record-2", customerName: "Bob", paymentDate: "2026-03-31", amount: 20 } as any,
-      { id: "record-3", customerName: "Cara", paymentDate: "2026-03-31", amount: 30 } as any,
+      createBackupCollectionRecord(),
+      createBackupCollectionRecord({ id: "record-2", customerName: "Bob", amount: 20 }),
+      createBackupCollectionRecord({ id: "record-3", customerName: "Cara", amount: 30 }),
     ],
     collectionRecordReceipts: [],
-  });
+  };
+  const reader = createBackupPayloadSectionReader(payload);
 
   assert.deepEqual(
     await collectChunkIds(reader.iterateArrayChunks<{ id: string }>("collectionRecords", 2)),

@@ -1,6 +1,12 @@
-export function parseBackupMetadataSafe(raw: unknown): Record<string, any> | null {
+export type BackupMetadataRecord = Record<string, unknown>;
+
+function isBackupMetadataRecord(value: unknown): value is BackupMetadataRecord {
+  return typeof value === "object" && value !== null;
+}
+
+export function parseBackupMetadataSafe(raw: unknown): BackupMetadataRecord | null {
   if (!raw) return null;
-  if (typeof raw === "object") return raw as Record<string, any>;
+  if (isBackupMetadataRecord(raw)) return raw;
   if (typeof raw !== "string") return null;
 
   const trimmed = raw.trim();
@@ -11,7 +17,7 @@ export function parseBackupMetadataSafe(raw: unknown): Record<string, any> | nul
 
   try {
     const parsed = JSON.parse(trimmed);
-    return parsed && typeof parsed === "object" ? parsed : null;
+    return isBackupMetadataRecord(parsed) ? parsed : null;
   } catch {
     return null;
   }

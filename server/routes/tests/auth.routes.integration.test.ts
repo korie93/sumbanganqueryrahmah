@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import rateLimit from "express-rate-limit";
 import jwt from "jsonwebtoken";
+import type { WebSocket } from "ws";
 import { createAuthGuards } from "../../auth/guards";
 import { hashPassword, verifyPassword } from "../../auth/passwords";
 import {
@@ -37,6 +38,23 @@ import {
   createPendingResetPageStorageDouble,
   withDevMailOutboxFixture,
 } from "./auth-route-admin-doubles";
+
+function createConnectedClient(
+  onSend: (payload: string) => void,
+  onClose: () => void,
+): WebSocket {
+  return {
+    readyState: 1,
+    send: (payload: string) => {
+      onSend(payload);
+      return undefined as never;
+    },
+    close: () => {
+      onClose();
+      return undefined as never;
+    },
+  } as unknown as WebSocket;
+}
 
 const previousTwoFactorEncryptionKey = process.env.TWO_FACTOR_ENCRYPTION_KEY;
 process.env.TWO_FACTOR_ENCRYPTION_KEY = "test-two-factor-encryption-key";
@@ -971,25 +989,23 @@ test("POST /api/auth/login deactivates and closes older sessions for the same ac
   });
   const sentPayloads: string[] = [];
   let closedCount = 0;
-  const connectedClients = new Map<string, any>([
-    ["activity-existing-1", {
-      readyState: 1,
-      send: (payload: string) => {
+  const connectedClients = new Map<string, WebSocket>([
+    ["activity-existing-1", createConnectedClient(
+      (payload) => {
         sentPayloads.push(payload);
       },
-      close: () => {
+      () => {
         closedCount += 1;
       },
-    }],
-    ["activity-existing-2", {
-      readyState: 1,
-      send: (payload: string) => {
+    )],
+    ["activity-existing-2", createConnectedClient(
+      (payload) => {
         sentPayloads.push(payload);
       },
-      close: () => {
+      () => {
         closedCount += 1;
       },
-    }],
+    )],
   ]);
   const app = createJsonTestApp();
 
@@ -1266,16 +1282,15 @@ test("POST /api/auth/verify-two-factor-login closes older sessions after success
   });
   const sentPayloads: string[] = [];
   let closedCount = 0;
-  const connectedClients = new Map<string, any>([
-    ["activity-existing-2fa-1", {
-      readyState: 1,
-      send: (payload: string) => {
+  const connectedClients = new Map<string, WebSocket>([
+    ["activity-existing-2fa-1", createConnectedClient(
+      (payload) => {
         sentPayloads.push(payload);
       },
-      close: () => {
+      () => {
         closedCount += 1;
       },
-    }],
+    )],
   ]);
   const app = createJsonTestApp();
 

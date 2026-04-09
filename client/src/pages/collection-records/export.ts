@@ -16,6 +16,15 @@ interface CollectionRecordsExportParams {
   nicknameFilter: string;
 }
 
+type WorksheetCell = {
+  z?: string;
+};
+
+function getWorksheetCell(worksheet: Record<string, unknown>, address: string): WorksheetCell | undefined {
+  const value = worksheet[address];
+  return typeof value === "object" && value !== null ? (value as WorksheetCell) : undefined;
+}
+
 function hasReceiptAttachment(record: CollectionRecord): boolean {
   return (record.receipts?.length || 0) > 0;
 }
@@ -67,14 +76,16 @@ export async function exportCollectionRecordsToExcel({
   }));
 
   const totalAmountCell = "B5";
-  if (worksheet[totalAmountCell]) {
-    worksheet[totalAmountCell].z = "\"RM\" #,##0.00";
+  const totalAmountWorksheetCell = getWorksheetCell(worksheet, totalAmountCell);
+  if (totalAmountWorksheetCell) {
+    totalAmountWorksheetCell.z = "\"RM\" #,##0.00";
   }
 
   for (let row = 8; row < 8 + reportRows.length; row += 1) {
     const amountCell = `E${row}`;
-    if (worksheet[amountCell]) {
-      worksheet[amountCell].z = "\"RM\" #,##0.00";
+    const worksheetCell = getWorksheetCell(worksheet, amountCell);
+    if (worksheetCell) {
+      worksheetCell.z = "\"RM\" #,##0.00";
     }
   }
 

@@ -29,6 +29,7 @@ import {
   mapDailyRecordToCollectionRecord,
   mapDailyReceiptToCollectionReceipt,
 } from "@/pages/collection/collection-daily-receipt-viewer-utils";
+import type { CollectionDailyDayDetailsResponse } from "@/lib/api";
 
 test("parseIntegerInput returns integer values and rejects blanks", () => {
   assert.equal(parseIntegerInput("12"), 12);
@@ -261,7 +262,7 @@ test("buildCollectionDailyReceiptKey normalizes primary and specific receipt key
 });
 
 test("collection daily receipt viewer utils map daily receipts into collection records", () => {
-  const receipt = {
+  const receipt: CollectionDailyDayDetailsResponse["records"][number]["receipts"][number] = {
     id: "receipt-1",
     storagePath: "collection-receipts/receipt-1.PDF",
     originalFileName: "receipt-1.PDF",
@@ -273,7 +274,7 @@ test("collection daily receipt viewer utils map daily receipts into collection r
   assert.equal(inferReceiptExtension("receipt-1.PDF"), "pdf");
   assert.equal(inferReceiptExtension("receipt-without-extension"), "");
 
-  assert.deepEqual(mapDailyReceiptToCollectionReceipt("record-1", receipt as any), {
+  assert.deepEqual(mapDailyReceiptToCollectionReceipt("record-1", receipt), {
     id: "receipt-1",
     collectionRecordId: "record-1",
     storagePath: "collection-receipts/receipt-1.PDF",
@@ -291,7 +292,7 @@ test("collection daily receipt viewer utils map daily receipts into collection r
     createdAt: "2026-03-31T08:00:00.000Z",
   });
 
-  const mappedRecord = mapDailyRecordToCollectionRecord({
+  const record: CollectionDailyDayDetailsResponse["records"][number] = {
     id: "record-1",
     customerName: "Alice Tan",
     accountNumber: "ACC-1",
@@ -301,8 +302,11 @@ test("collection daily receipt viewer utils map daily receipts into collection r
     username: "staff1",
     collectionStaffNickname: "Staff Alpha",
     createdAt: "2026-03-31T07:00:00.000Z",
+    paymentReference: "REF-1",
+    receiptFile: null,
     receipts: [receipt],
-  } as any);
+  };
+  const mappedRecord = mapDailyRecordToCollectionRecord(record);
 
   assert.equal(mappedRecord.id, "record-1");
   assert.equal(mappedRecord.amount, "25.00");

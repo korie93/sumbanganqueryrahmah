@@ -20,6 +20,17 @@ interface ViewerExportParams {
   exportSelected?: boolean;
 }
 
+type WorksheetCell = {
+  v?: unknown;
+  t?: string;
+  z?: string;
+};
+
+function getWorksheetCell(worksheet: Record<string, unknown>, address: string): WorksheetCell | undefined {
+  const value = worksheet[address];
+  return typeof value === "object" && value !== null ? (value as WorksheetCell) : undefined;
+}
+
 export function exportViewerRowsToCsv({
   headers,
   rows,
@@ -182,16 +193,17 @@ export async function exportViewerRowsToExcel({
 
   for (let columnIndex = range.s.c; columnIndex <= range.e.c; columnIndex += 1) {
     const headerCell = XLSX.utils.encode_cell({ r: 0, c: columnIndex });
-    const headerValue = worksheet[headerCell]?.v;
-    const isIcColumn = potentialIcColumns.includes(headerValue);
+    const headerValue = getWorksheetCell(worksheet, headerCell)?.v;
+    const isIcColumn = typeof headerValue === "string" && potentialIcColumns.includes(headerValue);
 
     if (!isIcColumn) continue;
 
     for (let rowIndex = range.s.r + 1; rowIndex <= range.e.r; rowIndex += 1) {
       const cellAddress = XLSX.utils.encode_cell({ r: rowIndex, c: columnIndex });
-      if (worksheet[cellAddress]) {
-        worksheet[cellAddress].t = "s";
-        worksheet[cellAddress].z = "@";
+      const cell = getWorksheetCell(worksheet, cellAddress);
+      if (cell) {
+        cell.t = "s";
+        cell.z = "@";
       }
     }
   }

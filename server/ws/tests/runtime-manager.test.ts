@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
+import type { IncomingMessage } from "node:http";
 import test from "node:test";
 import jwt from "jsonwebtoken";
 import { WebSocket } from "ws";
@@ -52,7 +53,9 @@ function createWsToken(activityId: string) {
   return jwt.sign({ activityId }, TEST_SECRET, { algorithm: "HS256" });
 }
 
-function createConnectionRequest(token?: string) {
+type RuntimeConnectionRequest = Pick<IncomingMessage, "url" | "headers">;
+
+function createConnectionRequest(token?: string): RuntimeConnectionRequest {
   const headers: Record<string, string> = {
     host: "example.test",
     origin: "http://example.test",
@@ -64,20 +67,20 @@ function createConnectionRequest(token?: string) {
   return {
     url: "/ws",
     headers,
-  } as any;
+  };
 }
 
-function createQueryTokenConnectionRequest(token: string) {
+function createQueryTokenConnectionRequest(token: string): RuntimeConnectionRequest {
   return {
     url: `/ws?token=${encodeURIComponent(token)}`,
     headers: {
       host: "example.test",
       origin: "http://example.test",
     },
-  } as any;
+  };
 }
 
-function createCrossOriginConnectionRequest(token: string) {
+function createCrossOriginConnectionRequest(token: string): RuntimeConnectionRequest {
   return {
     url: "/ws",
     headers: {
@@ -85,7 +88,7 @@ function createCrossOriginConnectionRequest(token: string) {
       host: "example.test",
       origin: "https://evil.example",
     },
-  } as any;
+  };
 }
 
 function createDeferred<T>() {

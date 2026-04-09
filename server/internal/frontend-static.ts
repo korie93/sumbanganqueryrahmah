@@ -76,7 +76,7 @@ export function registerFrontendStatic(app: Express, options?: { cwd?: string; p
           break;
         }
       }
-    } catch (error: any) {
+    } catch (error) {
       logger.warn("Failed to inspect frontend static path", { fullPath, error });
     }
   }

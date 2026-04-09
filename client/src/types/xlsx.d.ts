@@ -7,8 +7,7 @@ declare module "xlsx" {
   }
 
   export interface WorkSheet {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    [key: string]: any;
+    [key: string]: unknown;
     "!ref"?: string;
     "!cols"?: Array<{ wch?: number; wpx?: number }>;
     "!rows"?: Array<{ hpt?: number; hpx?: number }>;

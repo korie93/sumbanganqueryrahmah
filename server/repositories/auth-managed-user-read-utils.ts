@@ -1,4 +1,4 @@
-import { sql, inArray } from "drizzle-orm";
+import { sql, inArray, type SQL } from "drizzle-orm";
 import { db } from "../db-postgres";
 import {
   users,
@@ -101,7 +101,7 @@ export async function listManagedUsersPage(
   );
   const filters = normalizeManagedUserListFilters(params);
 
-  const whereClauses: any[] = [sql`role IN ('admin', 'user')`];
+  const whereClauses: SQL[] = [sql`role IN ('admin', 'user')`];
   if (filters.search) {
     const searchPattern = buildLikePattern(filters.search, "contains");
     whereClauses.push(sql`(
@@ -209,7 +209,7 @@ export async function listPendingPasswordResetRequestsPage(
   );
   const filters = normalizePendingPasswordResetListFilters(params);
 
-  const whereClauses: any[] = [
+  const whereClauses: SQL[] = [
     sql`r.approved_by IS NULL`,
     sql`r.used_at IS NULL`,
   ];

@@ -20,6 +20,8 @@ import {
 } from "../collection-receipt-utils";
 import { collectBoundValues, collectSqlText, createSequenceExecutor } from "./sql-test-utils";
 
+type AttachableCollectionRecord = Parameters<typeof attachCollectionReceipts>[1][number];
+
 async function createManagedCollectionReceiptFixture(extension: ".png" | ".pdf" = ".png") {
   const uploadsDir = path.resolve(process.cwd(), "uploads", "collection-receipts");
   const storedFileName = `repo-receipt-${Date.now()}-${Math.random().toString(16).slice(2)}${extension}`;
@@ -33,6 +35,32 @@ async function createManagedCollectionReceiptFixture(extension: ".png" | ".pdf" 
   return {
     absolutePath,
     publicPath: `/uploads/collection-receipts/${storedFileName}`,
+  };
+}
+
+function createCollectionRecordFixture(
+  overrides?: Partial<AttachableCollectionRecord>,
+): AttachableCollectionRecord {
+  return {
+    id: "record-1",
+    customerName: "Customer One",
+    icNumber: "",
+    customerPhone: "",
+    accountNumber: "",
+    batch: "P10",
+    paymentDate: "2026-03-01",
+    amount: "100.00",
+    receiptFile: null,
+    receipts: [],
+    receiptTotalAmount: "0.00",
+    receiptValidationStatus: "unverified",
+    receiptValidationMessage: null,
+    receiptCount: 0,
+    duplicateReceiptFlag: false,
+    createdByLogin: "staff.user",
+    collectionStaffNickname: "Collector Alpha",
+    createdAt: new Date("2026-03-01T00:00:00.000Z"),
+    ...overrides,
   };
 }
 
@@ -231,24 +259,15 @@ test("attachCollectionReceipts promotes legacy receipt_file rows into relation-b
 
   try {
     const records = await attachCollectionReceipts(executor, [
-      {
-        id: "record-1",
-        customerName: "Customer One",
-        amount: 100,
-        paymentDate: "2026-03-01",
-        receiptFile: null,
-        createdBy: "staff.user",
-        createdAt: "2026-03-01T00:00:00.000Z",
-      } as any,
-      {
+      createCollectionRecordFixture(),
+      createCollectionRecordFixture({
         id: "record-2",
         customerName: "Customer Two",
-        amount: 200,
         paymentDate: "2026-03-02",
+        amount: "200.00",
         receiptFile: legacyReceipt.publicPath,
-        createdBy: "staff.user",
-        createdAt: "2026-03-02T00:00:00.000Z",
-      } as any,
+        createdAt: new Date("2026-03-02T00:00:00.000Z"),
+      }),
     ]);
 
     const firstRecord = records[0];
@@ -312,15 +331,9 @@ test("attachCollectionReceipts prunes relation-backed receipts whose files are m
 
   try {
     const [record] = await attachCollectionReceipts(executor, [
-      {
-        id: "record-1",
-        customerName: "Customer One",
-        amount: 100,
-        paymentDate: "2026-03-01",
+      createCollectionRecordFixture({
         receiptFile: "/uploads/collection-receipts/missing-file.png",
-        createdBy: "staff.user",
-        createdAt: "2026-03-01T00:00:00.000Z",
-      } as any,
+      }),
     ]);
 
     assert.ok(record);

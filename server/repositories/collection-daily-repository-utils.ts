@@ -17,12 +17,32 @@ import { buildProtectedCollectionPiiSelect } from "./collection-pii-select-utils
 import { resolveCollectionPiiFieldValue } from "../lib/collection-pii-encryption";
 
 type CollectionDailyQueryResult = {
-  rows?: any[];
+  rows?: unknown[];
 };
 
 type CollectionDailyExecutor = {
   execute: (query: SQLWrapper | string) => PromiseLike<CollectionDailyQueryResult>;
 };
+
+type CollectionDailyUserRow = {
+  id?: unknown;
+  username?: unknown;
+  role?: unknown;
+};
+
+type CollectionDailyPaidCustomerRow = {
+  id?: unknown;
+  customer_name?: unknown;
+  customer_name_encrypted?: unknown;
+  account_number?: unknown;
+  account_number_encrypted?: unknown;
+  amount?: unknown;
+  collection_staff_nickname?: unknown;
+};
+
+function readRows<TRow>(result: CollectionDailyQueryResult): TRow[] {
+  return Array.isArray(result.rows) ? (result.rows as TRow[]) : [];
+}
 
 export async function listCollectionDailyUsers(): Promise<CollectionDailyUser[]> {
   const result = await db.execute(sql`
@@ -34,10 +54,10 @@ export async function listCollectionDailyUsers(): Promise<CollectionDailyUser[]>
     ORDER BY lower(username) ASC
     LIMIT 5000
   `);
-  return (result.rows || []).map((row: any) => ({
-    id: String(row.id),
-    username: String(row.username || "").toLowerCase(),
-    role: String(row.role || "user"),
+  return readRows<CollectionDailyUserRow>(result).map((row) => ({
+    id: String(row.id ?? ""),
+    username: String(row.username ?? "").toLowerCase(),
+    role: String(row.role ?? "user"),
   }));
 }
 
@@ -142,7 +162,7 @@ export async function listCollectionDailyCalendar(params: {
       AND month = ${params.month}
     ORDER BY day ASC
   `);
-  return (result.rows || []).map((row: any) => mapCollectionDailyCalendarRow(row));
+  return readRows(result).map((row) => mapCollectionDailyCalendarRow(row));
 }
 
 export async function upsertCollectionDailyCalendarDays(params: {
@@ -225,8 +245,8 @@ export async function listCollectionDailyPaidCustomers(params: {
       AND payment_date = ${params.date}::date
     ORDER BY created_at ASC, id ASC
   `);
-  return (result.rows || []).map((row: any) => ({
-    id: String(row.id),
+  return readRows<CollectionDailyPaidCustomerRow>(result).map((row) => ({
+    id: String(row.id ?? ""),
     customerName: resolveCollectionPiiFieldValue({
       field: "customerName",
       plaintext: row.customer_name,
@@ -237,7 +257,7 @@ export async function listCollectionDailyPaidCustomers(params: {
       plaintext: row.account_number,
       encrypted: row.account_number_encrypted,
     }),
-    amount: parseCollectionAmountMyrNumber(row.amount),
-    collectionStaffNickname: String(row.collection_staff_nickname || ""),
+    amount: parseCollectionAmountMyrNumber(row.amount ?? 0),
+    collectionStaffNickname: String(row.collection_staff_nickname ?? ""),
   }));
 }

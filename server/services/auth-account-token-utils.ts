@@ -19,13 +19,37 @@ export type IssuedOpaqueToken = {
 };
 
 export type UsableActivationTokenRecord = AccountActivationTokenSummary & {
+  activatedAt: Date | null;
+  createdAt: Date;
   expiresAt: Date;
   usedAt: Date | null;
 };
 
 export type UsablePasswordResetTokenRecord = PasswordResetTokenSummary & {
+  activatedAt: Date | null;
+  createdAt: Date;
   expiresAt: Date;
   usedAt: Date | null;
+};
+
+export type ActivationTokenRecordLike = Omit<
+  AccountActivationTokenSummary,
+  "activatedAt" | "createdAt" | "expiresAt" | "usedAt"
+> & {
+  activatedAt: Date | string | null;
+  createdAt: Date | string;
+  expiresAt: Date | string;
+  usedAt: Date | string | null;
+};
+
+export type PasswordResetTokenRecordLike = Omit<
+  PasswordResetTokenSummary,
+  "activatedAt" | "createdAt" | "expiresAt" | "usedAt"
+> & {
+  activatedAt: Date | string | null;
+  createdAt: Date | string;
+  expiresAt: Date | string;
+  usedAt: Date | string | null;
 };
 
 const UTC_NAIVE_TIMESTAMP_PATTERN =
@@ -52,11 +76,20 @@ function normalizeTokenDateValue(value: Date | string | null | undefined): Date 
   return new Date(asUtcNaiveTimestamp);
 }
 
-function normalizeTokenDates<TRecord extends { expiresAt: Date | string; usedAt: Date | string | null }>(
+function normalizeTokenDates<
+  TRecord extends {
+    activatedAt: Date | string | null;
+    createdAt: Date | string;
+    expiresAt: Date | string;
+    usedAt: Date | string | null;
+  },
+>(
   record: TRecord,
 ) {
   return {
     ...record,
+    activatedAt: normalizeTokenDateValue(record.activatedAt),
+    createdAt: normalizeTokenDateValue(record.createdAt) ?? new Date(Number.NaN),
     expiresAt: normalizeTokenDateValue(record.expiresAt) ?? new Date(Number.NaN),
     usedAt: normalizeTokenDateValue(record.usedAt),
   };
@@ -111,7 +144,7 @@ export function assertStrongPasswordInput(newPassword: string) {
 }
 
 export function assertUsableActivationTokenRecord(
-  record: AccountActivationTokenSummary | undefined,
+  record: ActivationTokenRecordLike | undefined,
   now: Date,
 ): UsableActivationTokenRecord {
   if (!record) {
@@ -159,7 +192,7 @@ export function assertUsableActivationTokenRecord(
 }
 
 export function assertUsablePasswordResetTokenRecord(
-  record: PasswordResetTokenSummary | undefined,
+  record: PasswordResetTokenRecordLike | undefined,
   now: Date,
 ): UsablePasswordResetTokenRecord {
   if (!record) {

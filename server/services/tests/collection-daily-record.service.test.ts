@@ -2,6 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { CollectionRecordService } from "../collection/collection-record.service";
 
+type CollectionServiceStorage = ConstructorParameters<typeof CollectionRecordService>[0];
+type CollectionServiceAuthUser = NonNullable<
+  Parameters<CollectionRecordService["getSummary"]>[0]
+>;
+
 type Receipt = {
   id: string;
   storagePath: string;
@@ -26,6 +31,22 @@ type RecordShape = {
   collectionStaffNickname: string;
   createdAt: Date;
 };
+
+function createCollectionRecordService(storage: object): CollectionRecordService {
+  return new CollectionRecordService(storage as CollectionServiceStorage);
+}
+
+function buildAuthUser(
+  overrides: Partial<CollectionServiceAuthUser> = {},
+): CollectionServiceAuthUser {
+  return {
+    username: "superuser",
+    role: "superuser",
+    userId: "superuser-1",
+    activityId: "activity-superuser-1",
+    ...overrides,
+  };
+}
 
 function buildCalendarMonth(year: number, month: number, workingDays: number[]) {
   const daysInMonth = new Date(year, month, 0).getDate();
@@ -249,7 +270,7 @@ function createCollectionDailyService() {
   };
 
   return {
-    service: new CollectionRecordService(storage as any),
+    service: createCollectionRecordService(storage),
     auditLogs,
   };
 }
@@ -273,6 +294,7 @@ function createAggregateOptimizedCollectionDailyService() {
     getCollectionStaffNicknames: async () => nicknameProfiles,
     getCollectionStaffNicknameByName: async (nickname: string) =>
       nicknameProfiles.find((item) => item.nickname.toLowerCase() === String(nickname).toLowerCase()) || null,
+    getCollectionNicknameSessionByActivity: async () => null,
     getCollectionDailyTarget: async () => ({
       id: "target-gamma",
       username: "collector gamma",
@@ -304,7 +326,7 @@ function createAggregateOptimizedCollectionDailyService() {
   };
 
   return {
-    service: new CollectionRecordService(storage as any),
+    service: createCollectionRecordService(storage),
     getSummaryCallCount: () => summaryCallCount,
     getListCallCount: () => listCallCount,
   };
@@ -337,6 +359,7 @@ function createBatchedAggregateCollectionDailyService() {
     getCollectionStaffNicknames: async () => nicknameProfiles,
     getCollectionStaffNicknameByName: async (nickname: string) =>
       nicknameProfiles.find((item) => item.nickname.toLowerCase() === String(nickname).toLowerCase()) || null,
+    getCollectionNicknameSessionByActivity: async () => null,
     getCollectionDailyTarget: async (params: { username: string }) => ({
       id: `target-${String(params.username).toLowerCase().replace(/\s+/g, "-")}`,
       username: String(params.username).toLowerCase(),
@@ -382,7 +405,7 @@ function createBatchedAggregateCollectionDailyService() {
   };
 
   return {
-    service: new CollectionRecordService(storage as any),
+    service: createCollectionRecordService(storage),
     getSummaryCalls: () => summaryCalls,
     getListCallCount: () => listCallCount,
   };
@@ -453,6 +476,7 @@ function createPaginatedDayDetailsCollectionDailyService() {
     getCollectionStaffNicknames: async () => nicknameProfiles,
     getCollectionStaffNicknameByName: async (nickname: string) =>
       nicknameProfiles.find((item) => item.nickname.toLowerCase() === String(nickname).toLowerCase()) || null,
+    getCollectionNicknameSessionByActivity: async () => null,
     getCollectionDailyTarget: async (params: { username: string }) => ({
       id: `target-${String(params.username).toLowerCase().replace(/\s+/g, "-")}`,
       username: String(params.username).toLowerCase(),
@@ -512,7 +536,7 @@ function createPaginatedDayDetailsCollectionDailyService() {
   };
 
   return {
-    service: new CollectionRecordService(storage as any),
+    service: createCollectionRecordService(storage),
     getListCalls: () => listCalls,
   };
 }
@@ -556,6 +580,7 @@ function createFallbackPagedDailyOverviewService() {
     getCollectionStaffNicknames: async () => nicknameProfiles,
     getCollectionStaffNicknameByName: async (nickname: string) =>
       nicknameProfiles.find((item) => item.nickname.toLowerCase() === String(nickname).toLowerCase()) || null,
+    getCollectionNicknameSessionByActivity: async () => null,
     getCollectionDailyTarget: async () => ({
       id: "target-fallback",
       username: "collector fallback",
@@ -599,7 +624,7 @@ function createFallbackPagedDailyOverviewService() {
   };
 
   return {
-    service: new CollectionRecordService(storage as any),
+    service: createCollectionRecordService(storage),
     getListCalls: () => listCalls,
   };
 }
@@ -659,7 +684,7 @@ function createNicknameSummaryPaginationService() {
   };
 
   return {
-    service: new CollectionRecordService(storage as any),
+    service: createCollectionRecordService(storage),
     getListCalls: () => listCalls,
   };
 }
@@ -720,6 +745,7 @@ function createMutableCollectionDailyService() {
     getCollectionStaffNicknames: async () => nicknameProfiles,
     getCollectionStaffNicknameByName: async (nickname: string) =>
       nicknameProfiles.find((item) => item.nickname.toLowerCase() === String(nickname).toLowerCase()) || null,
+    getCollectionNicknameSessionByActivity: async () => null,
     getCollectionDailyTarget: async (params: { username: string; year: number; month: number }) => {
       const normalized = String(params.username || "").toLowerCase();
       if (params.year !== 2026 || params.month !== 3) {
@@ -797,7 +823,7 @@ function createMutableCollectionDailyService() {
     createAuditLog: async () => ({ id: "audit-1" }),
   };
 
-  return new CollectionRecordService(storage as any);
+  return createCollectionRecordService(storage);
 }
 
 function createLegacyReceiptCleanupService() {
@@ -842,7 +868,7 @@ function createLegacyReceiptCleanupService() {
   };
 
   return {
-    service: new CollectionRecordService(storage as any),
+    service: createCollectionRecordService(storage),
     records,
     updateCalls,
   };
@@ -991,6 +1017,7 @@ function createMutableCollectionSummaryService() {
     getCollectionStaffNicknames: async () => nicknameProfiles,
     getCollectionStaffNicknameByName: async (nickname: string) =>
       nicknameProfiles.find((item) => item.nickname.toLowerCase() === String(nickname).toLowerCase()) || null,
+    getCollectionNicknameSessionByActivity: async () => null,
     isCollectionStaffNicknameActive: async (nickname: string) =>
       nicknameProfiles.some((item) => item.nickname.toLowerCase() === String(nickname).toLowerCase() && item.isActive),
     getCollectionMonthlySummary: async (filters: {
@@ -1122,7 +1149,7 @@ function createMutableCollectionSummaryService() {
   };
 
   return {
-    service: new CollectionRecordService(storage as any),
+    service: createCollectionRecordService(storage),
     records,
   };
 }
@@ -1130,7 +1157,7 @@ function createMutableCollectionSummaryService() {
 test("Collection daily overview supports multi-staff aggregation", async () => {
   const { service } = createCollectionDailyService();
   const response = await service.getDailyOverview(
-    { username: "superuser", role: "superuser", userId: "superuser-1" } as any,
+    buildAuthUser(),
     { year: "2026", month: "3", usernames: "Collector Alpha,Collector Beta" },
   );
 
@@ -1158,7 +1185,7 @@ test("Collection daily overview supports multi-staff aggregation", async () => {
 test("Collection daily day-details returns paginated records with receipt metadata", async () => {
   const { service, auditLogs } = createCollectionDailyService();
   const pageOne = await service.getDailyDayDetails(
-    { username: "superuser", role: "superuser", userId: "superuser-1" } as any,
+    buildAuthUser(),
     { date: "2026-03-01", usernames: "Collector Alpha,Collector Beta", page: "1", pageSize: "1" },
   );
 
@@ -1173,7 +1200,7 @@ test("Collection daily day-details returns paginated records with receipt metada
   assert.equal(pageOne.message, "Collection recorded but daily target not achieved.");
 
   const pageTwo = await service.getDailyDayDetails(
-    { username: "superuser", role: "superuser", userId: "superuser-1" } as any,
+    buildAuthUser(),
     { date: "2026-03-01", usernames: "Collector Alpha,Collector Beta", page: "2", pageSize: "1" },
   );
   assert.equal(pageTwo.records.length, 1);
@@ -1212,7 +1239,7 @@ test("Collection daily overview prefers aggregate summaries over full record loa
   const { service, getListCallCount, getSummaryCallCount } = createAggregateOptimizedCollectionDailyService();
 
   const response = await service.getDailyOverview(
-    { username: "superuser", role: "superuser", userId: "superuser-1" } as any,
+    buildAuthUser(),
     { year: "2026", month: "3", usernames: "Collector Gamma" },
   );
 
@@ -1228,7 +1255,7 @@ test("Collection daily overview batches aggregate summary loading across multipl
   const { service, getSummaryCalls, getListCallCount } = createBatchedAggregateCollectionDailyService();
 
   const response = await service.getDailyOverview(
-    { username: "superuser", role: "superuser", userId: "superuser-1" } as any,
+    buildAuthUser(),
     { year: "2026", month: "3", usernames: "Collector Alpha,Collector Beta" },
   );
 
@@ -1249,7 +1276,7 @@ test("Collection daily day-details paginates with a single combined record query
   const { service, getListCalls } = createPaginatedDayDetailsCollectionDailyService();
 
   const response = await service.getDailyDayDetails(
-    { username: "superuser", role: "superuser", userId: "superuser-1" } as any,
+    buildAuthUser(),
     { date: "2026-03-01", usernames: "Collector Alpha,Collector Beta", page: "2", pageSize: "1" },
   );
 
@@ -1272,7 +1299,7 @@ test("Collection daily overview fallback paginates record loading when aggregate
   const { service, getListCalls } = createFallbackPagedDailyOverviewService();
 
   const response = await service.getDailyOverview(
-    { username: "superuser", role: "superuser", userId: "superuser-1" } as any,
+    buildAuthUser(),
     { year: "2026", month: "3", usernames: "Collector Fallback" },
   );
 
@@ -1302,7 +1329,12 @@ test("Collection daily user role cannot request other staff nicknames", async ()
 
   await assert.rejects(
     service.getDailyOverview(
-      { username: "alpha.user", role: "user", userId: "user-alpha", activityId: "activity-user-alpha" } as any,
+      buildAuthUser({
+        username: "alpha.user",
+        role: "user",
+        userId: "user-alpha",
+        activityId: "activity-user-alpha",
+      }),
       { year: "2026", month: "3", usernames: "Collector Alpha,Collector Beta" },
     ),
     /User hanya boleh melihat data sendiri/i,
@@ -1311,7 +1343,7 @@ test("Collection daily user role cannot request other staff nicknames", async ()
 
 test("Collection daily overview recalculates immediately after record ownership/date/amount edits", async () => {
   const service = createMutableCollectionDailyService();
-  const authUser = { username: "superuser", role: "superuser", userId: "superuser-1" } as any;
+  const authUser = buildAuthUser();
 
   const before = await service.getDailyOverview(authUser, {
     year: "2026",
@@ -1354,7 +1386,7 @@ test("Collection daily overview recalculates immediately after record ownership/
 
 test("Collection daily overview moves totals across month boundaries after payment-date edits", async () => {
   const service = createMutableCollectionDailyService();
-  const authUser = { username: "superuser", role: "superuser", userId: "superuser-1" } as any;
+  const authUser = buildAuthUser();
 
   const marchBefore = await service.getDailyOverview(authUser, {
     year: "2026",
@@ -1386,7 +1418,7 @@ test("Collection daily overview moves totals across month boundaries after payme
 
 test("Collection daily overview recalculates correctly after record deletion", async () => {
   const service = createMutableCollectionDailyService();
-  const authUser = { username: "superuser", role: "superuser", userId: "superuser-1" } as any;
+  const authUser = buildAuthUser();
 
   const before = await service.getDailyOverview(authUser, {
     year: "2026",
@@ -1424,9 +1456,9 @@ test("Collection daily overview recalculates correctly after record deletion", a
 
 test("Collection summary and nickname summary recalculate after reassignment/date/amount edits", async () => {
   const { service } = createMutableCollectionSummaryService();
-  const authUser = { username: "superuser", role: "superuser", userId: "superuser-1" } as any;
+  const authUser = buildAuthUser();
 
-  const beforeSummary = await service.getSummary(authUser, { year: "2026" } as any);
+  const beforeSummary = await service.getSummary(authUser, { year: "2026" });
   const beforeJanuary = beforeSummary.summary.find((entry) => entry.month === 1);
   const beforeFebruary = beforeSummary.summary.find((entry) => entry.month === 2);
   assert.equal(beforeJanuary?.totalAmount, 1200);
@@ -1437,7 +1469,7 @@ test("Collection summary and nickname summary recalculate after reassignment/dat
     to: "2026-01-31",
     nicknames: "Collector Alpha,Collector Beta",
     summaryOnly: "true",
-  } as any);
+  });
   const beforeAlphaJanuary = beforeNicknameJanuary.nicknameTotals.find((item) => item.nickname === "Collector Alpha");
   const beforeBetaJanuary = beforeNicknameJanuary.nicknameTotals.find((item) => item.nickname === "Collector Beta");
   assert.equal(beforeNicknameJanuary.totalAmount, 1200);
@@ -1450,7 +1482,7 @@ test("Collection summary and nickname summary recalculate after reassignment/dat
     amount: "1500",
   });
 
-  const afterSummary = await service.getSummary(authUser, { year: "2026" } as any);
+  const afterSummary = await service.getSummary(authUser, { year: "2026" });
   const afterJanuary = afterSummary.summary.find((entry) => entry.month === 1);
   const afterFebruary = afterSummary.summary.find((entry) => entry.month === 2);
   assert.equal(afterJanuary?.totalAmount, 200);
@@ -1461,7 +1493,7 @@ test("Collection summary and nickname summary recalculate after reassignment/dat
     to: "2026-01-31",
     nicknames: "Collector Alpha,Collector Beta",
     summaryOnly: "true",
-  } as any);
+  });
   const afterAlphaJanuary = afterNicknameJanuary.nicknameTotals.find((item) => item.nickname === "Collector Alpha");
   const afterBetaJanuary = afterNicknameJanuary.nicknameTotals.find((item) => item.nickname === "Collector Beta");
   assert.equal(afterNicknameJanuary.totalAmount, 200);
@@ -1473,7 +1505,7 @@ test("Collection summary and nickname summary recalculate after reassignment/dat
     to: "2026-02-28",
     nicknames: "Collector Alpha,Collector Beta",
     summaryOnly: "true",
-  } as any);
+  });
   const afterAlphaFebruary = afterNicknameFebruary.nicknameTotals.find((item) => item.nickname === "Collector Alpha");
   const afterBetaFebruary = afterNicknameFebruary.nicknameTotals.find((item) => item.nickname === "Collector Beta");
   assert.equal(afterNicknameFebruary.totalAmount, 2200);
@@ -1483,9 +1515,9 @@ test("Collection summary and nickname summary recalculate after reassignment/dat
 
 test("Collection summary and nickname summary recalculate correctly after record deletion", async () => {
   const { service } = createMutableCollectionSummaryService();
-  const authUser = { username: "superuser", role: "superuser", userId: "superuser-1" } as any;
+  const authUser = buildAuthUser();
 
-  const beforeSummary = await service.getSummary(authUser, { year: "2026" } as any);
+  const beforeSummary = await service.getSummary(authUser, { year: "2026" });
   const beforeJanuary = beforeSummary.summary.find((entry) => entry.month === 1);
   assert.equal(beforeJanuary?.totalAmount, 1200);
 
@@ -1494,7 +1526,7 @@ test("Collection summary and nickname summary recalculate correctly after record
     to: "2026-01-31",
     nicknames: "Collector Alpha,Collector Beta",
     summaryOnly: "true",
-  } as any);
+  });
   const beforeAlphaJanuary = beforeNicknameJanuary.nicknameTotals.find((item) => item.nickname === "Collector Alpha");
   const beforeBetaJanuary = beforeNicknameJanuary.nicknameTotals.find((item) => item.nickname === "Collector Beta");
   assert.equal(beforeNicknameJanuary.totalAmount, 1200);
@@ -1503,7 +1535,7 @@ test("Collection summary and nickname summary recalculate correctly after record
 
   await service.deleteRecord(authUser, "beta-march-1");
 
-  const afterSummary = await service.getSummary(authUser, { year: "2026" } as any);
+  const afterSummary = await service.getSummary(authUser, { year: "2026" });
   const afterJanuary = afterSummary.summary.find((entry) => entry.month === 1);
   assert.equal(afterJanuary?.totalAmount, 1000);
 
@@ -1512,7 +1544,7 @@ test("Collection summary and nickname summary recalculate correctly after record
     to: "2026-01-31",
     nicknames: "Collector Alpha,Collector Beta",
     summaryOnly: "true",
-  } as any);
+  });
   const afterAlphaJanuary = afterNicknameJanuary.nicknameTotals.find((item) => item.nickname === "Collector Alpha");
   const afterBetaJanuary = afterNicknameJanuary.nicknameTotals.find((item) => item.nickname === "Collector Beta");
   assert.equal(afterNicknameJanuary.totalAmount, 1000);
@@ -1522,20 +1554,20 @@ test("Collection summary and nickname summary recalculate correctly after record
 
 test("Collection list pagination keeps month totals stable and month-scoped", async () => {
   const { service } = createMutableCollectionSummaryService();
-  const authUser = { username: "superuser", role: "superuser", userId: "superuser-1" } as any;
+  const authUser = buildAuthUser();
 
   const pageOne = await service.listRecords(authUser, {
     from: "2026-01-01",
     to: "2026-01-31",
     limit: "1",
     offset: "0",
-  } as any);
+  });
   const pageTwo = await service.listRecords(authUser, {
     from: "2026-01-01",
     to: "2026-01-31",
     limit: "1",
     offset: "1",
-  } as any);
+  });
 
   assert.equal(pageOne.total, 2);
   assert.equal(pageOne.totalAmount, 1200);
@@ -1548,7 +1580,7 @@ test("Collection list pagination keeps month totals stable and month-scoped", as
 
 test("Nickname summary detail rows clamp pagination to a safer record cap", async () => {
   const { service, getListCalls } = createNicknameSummaryPaginationService();
-  const authUser = { username: "superuser", role: "superuser", userId: "superuser-1" } as any;
+  const authUser = buildAuthUser();
 
   const response = await service.getNicknameSummary(authUser, {
     from: "2026-03-01",
@@ -1556,7 +1588,7 @@ test("Nickname summary detail rows clamp pagination to a safer record cap", asyn
     nicknames: "Collector Alpha",
     limit: "9999",
     offset: "25",
-  } as any);
+  });
 
   assert.equal(response.ok, true);
   assert.equal(response.totalRecords, 300);
@@ -1575,7 +1607,7 @@ test("Nickname summary detail rows clamp pagination to a safer record cap", asyn
 
 test("Collection record update clears legacy receipt_file when removeReceipt is requested on legacy-only rows", async () => {
   const { service, records, updateCalls } = createLegacyReceiptCleanupService();
-  const authUser = { username: "superuser", role: "superuser", userId: "superuser-1" } as any;
+  const authUser = buildAuthUser();
 
   const response = await service.updateRecord(authUser, "legacy-1", {
     removeReceipt: true,

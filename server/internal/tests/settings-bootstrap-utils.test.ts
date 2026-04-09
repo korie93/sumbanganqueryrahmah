@@ -7,17 +7,20 @@ import type {
 } from "../settings-bootstrap-shared";
 import { runSettingsBootstrapTask } from "../settings-bootstrap-utils";
 
-function createExecutor(executions: unknown[]): SettingsBootstrapSqlExecutor {
+type SettingsBootstrapSqlQuery = Parameters<SettingsBootstrapSqlExecutor["execute"]>[0];
+type SettingsBootstrapSqlResult = ReturnType<SettingsBootstrapSqlExecutor["execute"]>;
+
+function createExecutor(executions: SettingsBootstrapSqlQuery[]): SettingsBootstrapSqlExecutor {
   return {
     execute: ((query) => {
       executions.push(query);
-      return {} as any;
+      return {} as unknown as SettingsBootstrapSqlResult;
     }) as SettingsBootstrapSqlExecutor["execute"],
   };
 }
 
 test("settings bootstrap task runner shares in-flight work and marks state ready", async () => {
-  const executions: unknown[] = [];
+  const executions: SettingsBootstrapSqlQuery[] = [];
   const state: SettingsBootstrapTaskState = {
     ready: false,
     initPromise: null,
@@ -59,7 +62,7 @@ test("settings bootstrap task runner shares in-flight work and marks state ready
 });
 
 test("settings bootstrap task runner swallows failures without marking state ready", async () => {
-  const executions: unknown[] = [];
+  const executions: SettingsBootstrapSqlQuery[] = [];
   const state: SettingsBootstrapTaskState = {
     ready: false,
     initPromise: null,

@@ -2,6 +2,22 @@ import type { SQLWrapper } from "drizzle-orm";
 
 export type QueryResponse = { rows?: unknown[] };
 
+type QueryChunkContainer = {
+  queryChunks: unknown[];
+};
+
+type ValueChunkContainer = {
+  value: unknown[];
+};
+
+function hasQueryChunks(value: object): value is QueryChunkContainer {
+  return Array.isArray((value as { queryChunks?: unknown }).queryChunks);
+}
+
+function hasValueChunks(value: object): value is ValueChunkContainer {
+  return Array.isArray((value as { value?: unknown }).value);
+}
+
 export function collectSqlText(value: unknown): string {
   if (typeof value === "string") {
     return value;
@@ -12,11 +28,11 @@ export function collectSqlText(value: unknown): string {
   if (!value || typeof value !== "object") {
     return "";
   }
-  if ("queryChunks" in value && Array.isArray((value as any).queryChunks)) {
-    return (value as any).queryChunks.map(collectSqlText).join("");
+  if (hasQueryChunks(value)) {
+    return value.queryChunks.map(collectSqlText).join("");
   }
-  if ("value" in value && Array.isArray((value as any).value)) {
-    return (value as any).value.map((chunk: unknown) => collectSqlText(chunk)).join("");
+  if (hasValueChunks(value)) {
+    return value.value.map((chunk) => collectSqlText(chunk)).join("");
   }
   return "";
 }
@@ -37,11 +53,11 @@ export function collectBoundValues(value: unknown, inFragment = false): unknown[
   if (!value || typeof value !== "object") {
     return [];
   }
-  if ("queryChunks" in value && Array.isArray((value as any).queryChunks)) {
-    return (value as any).queryChunks.flatMap((chunk: unknown) => collectBoundValues(chunk, false));
+  if (hasQueryChunks(value)) {
+    return value.queryChunks.flatMap((chunk) => collectBoundValues(chunk, false));
   }
-  if ("value" in value && Array.isArray((value as any).value)) {
-    return (value as any).value.flatMap((chunk: unknown) => collectBoundValues(chunk, true));
+  if (hasValueChunks(value)) {
+    return value.value.flatMap((chunk) => collectBoundValues(chunk, true));
   }
   return [];
 }

@@ -1,6 +1,7 @@
 import type { SQL } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 import type {
+  CollectionNicknameAggregate,
   CollectionMonthlySummary,
   CollectionNicknameDailyAggregate,
   CollectionReceiptValidationStatus,
@@ -39,6 +40,52 @@ type CollectionRecordFilters = {
   receiptValidationStatus?: CollectionReceiptValidationStatus | "flagged" | undefined;
   duplicateOnly?: boolean | undefined;
 };
+
+type CollectionAggregateRow = {
+  total_records?: unknown;
+  total_amount?: unknown;
+};
+
+type CollectionMonthlySummaryRow = CollectionAggregateRow & {
+  month?: unknown;
+};
+
+type CollectionNicknameAggregateRow = CollectionAggregateRow & {
+  nickname?: unknown;
+  nickname_key?: unknown;
+};
+
+type CollectionNicknameDailyAggregateRow = CollectionNicknameAggregateRow & {
+  payment_date?: unknown;
+};
+
+type CollectionRecordIdRow = {
+  id?: unknown;
+};
+
+type CollectionReceiptPathRow = {
+  receipt_file?: unknown;
+};
+
+type CollectionReceiptStoragePathRow = {
+  storage_path?: unknown;
+};
+
+type CollectionAmountRow = {
+  amount?: unknown;
+};
+
+function isCollectionQueryRow(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function normalizeCollectionQueryRow<T extends Record<string, unknown>>(row: unknown): T {
+  return isCollectionQueryRow(row) ? (row as T) : ({} as T);
+}
+
+function normalizeCollectionQueryRows(rows: readonly unknown[] | null | undefined): readonly unknown[] {
+  return Array.isArray(rows) ? rows : [];
+}
 
 export type CollectionRollupFilters = Omit<CollectionRecordFilters, "search">;
 
@@ -234,24 +281,26 @@ export function buildCollectionMonthlySummaryWhereSql(filters: {
   };
 }
 
-export function mapCollectionAggregateRow(row: any): {
+export function mapCollectionAggregateRow(row: unknown): {
   totalRecords: number;
   totalAmount: CollectionAmountMyrNumber;
 } {
+  const normalizedRow = normalizeCollectionQueryRow<CollectionAggregateRow>(row);
   return {
-    totalRecords: Number(row?.total_records ?? 0),
-    totalAmount: parseCollectionAmountMyrNumber(row?.total_amount ?? 0),
+    totalRecords: Number(normalizedRow.total_records ?? 0),
+    totalAmount: parseCollectionAmountMyrNumber(normalizedRow.total_amount ?? 0),
   };
 }
 
-export function mapCollectionMonthlySummaryRows(rows: any[]): CollectionMonthlySummary[] {
+export function mapCollectionMonthlySummaryRows(rows: readonly unknown[] | null | undefined): CollectionMonthlySummary[] {
   const byMonth = new Map<number, { totalRecords: number; totalAmount: CollectionAmountMyrNumber }>();
-  for (const row of rows || []) {
-    const month = Number(row?.month ?? 0);
+  for (const row of normalizeCollectionQueryRows(rows)) {
+    const normalizedRow = normalizeCollectionQueryRow<CollectionMonthlySummaryRow>(row);
+    const month = Number(normalizedRow.month ?? 0);
     if (!Number.isFinite(month) || month < 1 || month > 12) continue;
     byMonth.set(month, {
-      totalRecords: Number(row?.total_records ?? 0),
-      totalAmount: parseCollectionAmountMyrNumber(row?.total_amount ?? 0),
+      totalRecords: Number(normalizedRow.total_records ?? 0),
+      totalAmount: parseCollectionAmountMyrNumber(normalizedRow.total_amount ?? 0),
     });
   }
 
@@ -267,38 +316,59 @@ export function mapCollectionMonthlySummaryRows(rows: any[]): CollectionMonthlyS
   });
 }
 
-export function mapCollectionNicknameDailyAggregateRows(rows: any[]): CollectionNicknameDailyAggregate[] {
-  return (rows || []).map((row) => ({
-    nickname: String(row?.nickname || row?.nickname_key || "Unknown"),
-    paymentDate: String(row?.payment_date || ""),
-    totalRecords: Number(row?.total_records ?? 0),
-    totalAmount: parseCollectionAmountMyrNumber(row?.total_amount ?? 0),
-  }));
+export function mapCollectionNicknameAggregateRows(
+  rows: readonly unknown[] | null | undefined,
+): CollectionNicknameAggregate[] {
+  return normalizeCollectionQueryRows(rows).map((row) => {
+    const normalizedRow = normalizeCollectionQueryRow<CollectionNicknameAggregateRow>(row);
+    return {
+      nickname: String(normalizedRow.nickname ?? normalizedRow.nickname_key ?? "Unknown"),
+      totalRecords: Number(normalizedRow.total_records ?? 0),
+      totalAmount: parseCollectionAmountMyrNumber(normalizedRow.total_amount ?? 0),
+    };
+  });
 }
 
-export function extractCollectionRecordIds(rows: any[]): string[] {
-  return (rows || [])
-    .map((row) => String(row?.id || "").trim())
+export function mapCollectionNicknameDailyAggregateRows(
+  rows: readonly unknown[] | null | undefined,
+): CollectionNicknameDailyAggregate[] {
+  return normalizeCollectionQueryRows(rows).map((row) => {
+    const normalizedRow = normalizeCollectionQueryRow<CollectionNicknameDailyAggregateRow>(row);
+    return {
+      nickname: String(normalizedRow.nickname ?? normalizedRow.nickname_key ?? "Unknown"),
+      paymentDate: String(normalizedRow.payment_date ?? ""),
+      totalRecords: Number(normalizedRow.total_records ?? 0),
+      totalAmount: parseCollectionAmountMyrNumber(normalizedRow.total_amount ?? 0),
+    };
+  });
+}
+
+export function extractCollectionRecordIds(rows: readonly unknown[] | null | undefined): string[] {
+  return normalizeCollectionQueryRows(rows)
+    .map((row) => String(normalizeCollectionQueryRow<CollectionRecordIdRow>(row).id ?? "").trim())
     .filter(Boolean);
 }
 
 export function collectCollectionReceiptPaths(
-  recordRows: any[],
-  receiptRows: any[],
+  recordRows: readonly unknown[] | null | undefined,
+  receiptRows: readonly unknown[] | null | undefined,
 ): string[] {
   return Array.from(
     new Set(
       [
-        ...(recordRows || []).map((row) => String(row?.receipt_file || "").trim()),
-        ...(receiptRows || []).map((row) => String(row?.storage_path || "").trim()),
+        ...normalizeCollectionQueryRows(recordRows)
+          .map((row) => String(normalizeCollectionQueryRow<CollectionReceiptPathRow>(row).receipt_file ?? "").trim()),
+        ...normalizeCollectionQueryRows(receiptRows)
+          .map((row) => String(normalizeCollectionQueryRow<CollectionReceiptStoragePathRow>(row).storage_path ?? "").trim()),
       ].filter(Boolean),
     ),
   );
 }
 
-export function sumCollectionRowAmounts(rows: any[]): CollectionAmountMyrNumber {
-  return (rows || []).reduce(
-    (sum: number, row: any) => sum + parseCollectionAmountMyrNumber(row?.amount ?? 0),
+export function sumCollectionRowAmounts(rows: readonly unknown[] | null | undefined): CollectionAmountMyrNumber {
+  return normalizeCollectionQueryRows(rows).reduce<number>(
+    (sum, row) =>
+      sum + parseCollectionAmountMyrNumber(normalizeCollectionQueryRow<CollectionAmountRow>(row).amount ?? 0),
     0,
   );
 }

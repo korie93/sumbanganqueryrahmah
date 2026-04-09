@@ -57,7 +57,7 @@ export class SpatialBootstrap {
         await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_aeon_postcodes ON public.aeon_branch_postcodes (postcode)`);
 
         this.ready = true;
-      } catch (err: any) {
+      } catch (err) {
         logger.warn("Failed to ensure PostGIS tables", { error: err });
       }
     })();

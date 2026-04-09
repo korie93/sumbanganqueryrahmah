@@ -22,6 +22,29 @@ const repoOptions = {
   parseBackupMetadataSafe: () => null,
 };
 
+type DbTestHarness = {
+  execute: typeof db.execute;
+  transaction: typeof db.transaction;
+};
+
+function getDbTestHarness(): DbTestHarness {
+  return db as unknown as DbTestHarness;
+}
+
+type DbExecuteImplementation = (query: unknown) => Promise<{ rows: unknown[] }>;
+
+function setDbExecute(harness: DbTestHarness, implementation: DbExecuteImplementation) {
+  harness.execute = (((query: unknown) => implementation(query)) as unknown as typeof db.execute);
+}
+
+type DbTransactionImplementation = (
+  callback: (tx: { execute: (query: unknown) => Promise<{ rows: unknown[] }> }) => Promise<unknown>,
+) => Promise<unknown>;
+
+function setDbTransaction(harness: DbTestHarness, implementation: DbTransactionImplementation) {
+  harness.transaction = implementation as unknown as typeof db.transaction;
+}
+
 function flattenSqlChunk(chunk: unknown): string {
   if (chunk === null || chunk === undefined) {
     return "";
@@ -174,9 +197,9 @@ test("BackupsRepository decodes encrypted v2 payloads when reading backup data",
         payloadJson,
       });
 
-      const dbAny = db as any;
-      const originalExecute = dbAny.execute;
-      dbAny.execute = async () => ({
+      const dbHarness = getDbTestHarness();
+      const originalExecute = dbHarness.execute;
+      setDbExecute(dbHarness, async () => ({
         rows: [
           {
             id: "backup-1",
@@ -187,7 +210,7 @@ test("BackupsRepository decodes encrypted v2 payloads when reading backup data",
             metadata: null,
           },
         ],
-      });
+      }));
 
       try {
         const backup = await repository.getBackupById("backup-1");
@@ -195,7 +218,7 @@ test("BackupsRepository decodes encrypted v2 payloads when reading backup data",
         assert.ok(backup);
         assert.equal(backup?.backupData, payloadJson);
       } finally {
-        dbAny.execute = originalExecute;
+        dbHarness.execute = originalExecute;
       }
     },
   );
@@ -235,9 +258,9 @@ test("BackupsRepository decodes chunked encrypted payloads when backup_data is e
         encryptedPayload.slice(54),
       ];
 
-      const dbAny = db as any;
-      const originalExecute = dbAny.execute;
-      dbAny.execute = async (query: unknown) => {
+      const dbHarness = getDbTestHarness();
+      const originalExecute = dbHarness.execute;
+      setDbExecute(dbHarness, async (query: unknown) => {
         const sqlText = normalizeSqlText(query);
         if (sqlText.includes("FROM public.backups")) {
           return {
@@ -259,7 +282,7 @@ test("BackupsRepository decodes chunked encrypted payloads when backup_data is e
           };
         }
         return { rows: [] };
-      };
+      });
 
       try {
         const backup = await repository.getBackupById("backup-1");
@@ -267,7 +290,7 @@ test("BackupsRepository decodes chunked encrypted payloads when backup_data is e
         assert.ok(backup);
         assert.equal(backup?.backupData, payloadJson);
       } finally {
-        dbAny.execute = originalExecute;
+        dbHarness.execute = originalExecute;
       }
     },
   );
@@ -301,9 +324,9 @@ test("BackupsRepository streams chunked encrypted payloads as plaintext JSON chu
         encryptedPayload.slice(54),
       ];
 
-      const dbAny = db as any;
-      const originalExecute = dbAny.execute;
-      dbAny.execute = async (query: unknown) => {
+      const dbHarness = getDbTestHarness();
+      const originalExecute = dbHarness.execute;
+      setDbExecute(dbHarness, async (query: unknown) => {
         const sqlText = normalizeSqlText(query);
         if (sqlText.includes("SELECT backup_data as \"backupData\" FROM public.backups")) {
           return {
@@ -320,14 +343,14 @@ test("BackupsRepository streams chunked encrypted payloads as plaintext JSON chu
           };
         }
         return { rows: [] };
-      };
+      });
 
       try {
         const chunks = await repository.iterateBackupDataJsonChunksById("backup-1");
         assert.ok(chunks);
         assert.equal(await collectChunks(chunks), payloadJson);
       } finally {
-        dbAny.execute = originalExecute;
+        dbHarness.execute = originalExecute;
       }
     },
   );
@@ -344,11 +367,11 @@ test("BackupsRepository prepares encrypted temp backup payload files when an enc
     async () => {
       const repository = new BackupsRepository(repoOptions);
 
-      const dbAny = db as any;
-      const originalExecute = dbAny.execute;
-      dbAny.execute = async () => ({
+      const dbHarness = getDbTestHarness();
+      const originalExecute = dbHarness.execute;
+      setDbExecute(dbHarness, async () => ({
         rows: [],
-      });
+      }));
 
       let prepared: Awaited<ReturnType<BackupsRepository["prepareBackupPayloadFileForCreate"]>> | null =
         null;
@@ -376,7 +399,7 @@ test("BackupsRepository prepares encrypted temp backup payload files when an enc
           "collectionRecordReceipts",
         ]);
       } finally {
-        dbAny.execute = originalExecute;
+        dbHarness.execute = originalExecute;
         await prepared?.cleanup();
       }
     },
@@ -394,12 +417,12 @@ test("BackupsRepository stores prepared backup payload chunks without rebuilding
     async () => {
       const repository = new BackupsRepository(repoOptions);
 
-      const dbAny = db as any;
-      const originalExecute = dbAny.execute;
-      const originalTransaction = dbAny.transaction;
-      dbAny.execute = async () => ({
+      const dbHarness = getDbTestHarness();
+      const originalExecute = dbHarness.execute;
+      const originalTransaction = dbHarness.transaction;
+      setDbExecute(dbHarness, async () => ({
         rows: [],
-      });
+      }));
 
       let prepared: Awaited<ReturnType<BackupsRepository["prepareBackupPayloadFileForCreate"]>> | null =
         null;
@@ -408,7 +431,7 @@ test("BackupsRepository stores prepared backup payload chunks without rebuilding
       try {
         prepared = await repository.prepareBackupPayloadFileForCreate();
 
-        dbAny.transaction = async (callback: (tx: { execute: (query: unknown) => Promise<{ rows: unknown[] }> }) => Promise<unknown>) =>
+        setDbTransaction(dbHarness, async (callback: (tx: { execute: (query: unknown) => Promise<{ rows: unknown[] }> }) => Promise<unknown>) =>
           callback({
             execute: async (query: unknown) => {
               const sqlText = normalizeSqlText(query);
@@ -429,7 +452,7 @@ test("BackupsRepository stores prepared backup payload chunks without rebuilding
               }
               return { rows: [] };
             },
-          });
+          }));
 
         const created = await repository.createBackupFromPreparedPayload({
           name: "Chunked Backup",
@@ -448,8 +471,8 @@ test("BackupsRepository stores prepared backup payload chunks without rebuilding
           false,
         );
       } finally {
-        dbAny.execute = originalExecute;
-        dbAny.transaction = originalTransaction;
+        dbHarness.execute = originalExecute;
+        dbHarness.transaction = originalTransaction;
         await prepared?.cleanup();
       }
     },
@@ -467,11 +490,11 @@ test("BackupsRepository iterates encrypted temp backup payload storage chunks wi
     async () => {
       const repository = new BackupsRepository(repoOptions);
 
-      const dbAny = db as any;
-      const originalExecute = dbAny.execute;
-      dbAny.execute = async () => ({
+      const dbHarness = getDbTestHarness();
+      const originalExecute = dbHarness.execute;
+      setDbExecute(dbHarness, async () => ({
         rows: [],
-      });
+      }));
 
       let prepared: Awaited<ReturnType<BackupsRepository["prepareBackupPayloadFileForCreate"]>> | null =
         null;
@@ -488,7 +511,7 @@ test("BackupsRepository iterates encrypted temp backup payload storage chunks wi
         const manualStoragePayload = `${String(prepared.tempPayloadStoragePrefix || "")}${(await fs.readFile(prepared.tempFilePath)).toString("base64")}`;
         assert.equal(iteratedChunks.join(""), manualStoragePayload);
       } finally {
-        dbAny.execute = originalExecute;
+        dbHarness.execute = originalExecute;
         await prepared?.cleanup();
       }
     },
@@ -506,9 +529,9 @@ test("BackupsRepository exports collection backup payload amounts with explicit 
     async () => {
       const repository = new BackupsRepository(repoOptions);
 
-      const dbAny = db as any;
-      const originalExecute = dbAny.execute;
-      dbAny.execute = async (query: unknown) => {
+      const dbHarness = getDbTestHarness();
+      const originalExecute = dbHarness.execute;
+      setDbExecute(dbHarness, async (query: unknown) => {
         const sqlText = normalizeSqlText(query);
         if (sqlText.includes("FROM public.collection_records")) {
           return {
@@ -565,7 +588,7 @@ test("BackupsRepository exports collection backup payload amounts with explicit 
           };
         }
         return { rows: [] };
-      };
+      });
 
       let prepared: Awaited<ReturnType<BackupsRepository["prepareBackupPayloadFileForCreate"]>> | null =
         null;
@@ -604,7 +627,7 @@ test("BackupsRepository exports collection backup payload amounts with explicit 
         assert.equal("receiptAmount" in (parsed.collectionRecordReceipts?.[0] || {}), false);
         assert.equal("extractedAmount" in (parsed.collectionRecordReceipts?.[0] || {}), false);
       } finally {
-        dbAny.execute = originalExecute;
+        dbHarness.execute = originalExecute;
         await prepared?.cleanup();
       }
     },
@@ -623,9 +646,9 @@ test("BackupsRepository recomputes customer-name blind indexes from encrypted co
     async () => {
       const repository = new BackupsRepository(repoOptions);
 
-      const dbAny = db as any;
-      const originalExecute = dbAny.execute;
-      dbAny.execute = async (query: unknown) => {
+      const dbHarness = getDbTestHarness();
+      const originalExecute = dbHarness.execute;
+      setDbExecute(dbHarness, async (query: unknown) => {
         const sqlText = normalizeSqlText(query);
         if (sqlText.includes("FROM public.collection_records")) {
           return {
@@ -659,7 +682,7 @@ test("BackupsRepository recomputes customer-name blind indexes from encrypted co
           };
         }
         return { rows: [] };
-      };
+      });
 
       let prepared: Awaited<ReturnType<BackupsRepository["prepareBackupPayloadFileForCreate"]>> | null =
         null;
@@ -682,7 +705,7 @@ test("BackupsRepository recomputes customer-name blind indexes from encrypted co
           hashCollectionCustomerNameSearchTerms("Encrypted Alice"),
         );
       } finally {
-        dbAny.execute = originalExecute;
+        dbHarness.execute = originalExecute;
         await prepared?.cleanup();
       }
     },
@@ -700,9 +723,9 @@ test("BackupsRepository keeps plaintext collection PII in backup payloads when e
     async () => {
       const repository = new BackupsRepository(repoOptions);
 
-      const dbAny = db as any;
-      const originalExecute = dbAny.execute;
-      dbAny.execute = async (query: unknown) => {
+      const dbHarness = getDbTestHarness();
+      const originalExecute = dbHarness.execute;
+      setDbExecute(dbHarness, async (query: unknown) => {
         const sqlText = normalizeSqlText(query);
         if (sqlText.includes("FROM public.collection_records")) {
           return {
@@ -735,7 +758,7 @@ test("BackupsRepository keeps plaintext collection PII in backup payloads when e
           };
         }
         return { rows: [] };
-      };
+      });
 
       let prepared: Awaited<ReturnType<BackupsRepository["prepareBackupPayloadFileForCreate"]>> | null =
         null;
@@ -759,7 +782,7 @@ test("BackupsRepository keeps plaintext collection PII in backup payloads when e
         assert.equal(parsed.collectionRecords?.[0]?.accountNumber, "ACC-1001");
         assert.equal("customerNameEncrypted" in (parsed.collectionRecords?.[0] || {}), false);
       } finally {
-        dbAny.execute = originalExecute;
+        dbHarness.execute = originalExecute;
         await prepared?.cleanup();
       }
     },
@@ -779,9 +802,9 @@ test("BackupsRepository rejects retired collection PII plaintext rows without en
     async () => {
       const repository = new BackupsRepository(repoOptions);
 
-      const dbAny = db as any;
-      const originalExecute = dbAny.execute;
-      dbAny.execute = async (query: unknown) => {
+      const dbHarness = getDbTestHarness();
+      const originalExecute = dbHarness.execute;
+      setDbExecute(dbHarness, async (query: unknown) => {
         const sqlText = normalizeSqlText(query);
         if (sqlText.includes("FROM public.collection_records")) {
           return {
@@ -814,7 +837,7 @@ test("BackupsRepository rejects retired collection PII plaintext rows without en
           };
         }
         return { rows: [] };
-      };
+      });
 
       try {
         await assert.rejects(
@@ -822,7 +845,7 @@ test("BackupsRepository rejects retired collection PII plaintext rows without en
           /Cannot persist retired collection PII field customerName without an encrypted shadow value/i,
         );
       } finally {
-        dbAny.execute = originalExecute;
+        dbHarness.execute = originalExecute;
       }
     },
   );
@@ -839,9 +862,9 @@ test("BackupsRepository rejects backup export rows that exceed the serialization
     async () => {
       const repository = new BackupsRepository(repoOptions);
 
-      const dbAny = db as any;
-      const originalExecute = dbAny.execute;
-      dbAny.execute = async (query: unknown) => {
+      const dbHarness = getDbTestHarness();
+      const originalExecute = dbHarness.execute;
+      setDbExecute(dbHarness, async (query: unknown) => {
         const sqlText = normalizeSqlText(query);
         if (sqlText.includes("FROM public.data_rows")) {
           return {
@@ -855,14 +878,14 @@ test("BackupsRepository rejects backup export rows that exceed the serialization
           };
         }
         return { rows: [] };
-      };
+      });
 
       await assert.rejects(
         () => repository.prepareBackupPayloadFileForCreate(),
         /exceeds the .* serialization limit/i,
       );
 
-      dbAny.execute = originalExecute;
+      dbHarness.execute = originalExecute;
     },
   );
 });

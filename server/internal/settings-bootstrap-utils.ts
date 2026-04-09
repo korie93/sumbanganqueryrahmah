@@ -30,7 +30,7 @@ export async function runSettingsBootstrapTask(
       await database.execute(sql`SET search_path TO public`);
       await task(database);
       state.ready = true;
-    } catch (err: any) {
+    } catch (err) {
       logger.error(options.errorMessage, { error: err });
     }
   })();

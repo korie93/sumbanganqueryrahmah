@@ -1,27 +1,34 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  type AiChatRetrievalRow,
   buildAiChatContextBlock,
   buildAiChatQuickReply,
   buildAiChatSearchTerms,
   fetchAiChatRetrievalRows,
 } from "../ai-chat-utils";
 
+type AiChatSearchStorage = Parameters<typeof fetchAiChatRetrievalRows>[0];
+
 function createRow(
   id: string,
   jsonDataJsonb: Record<string, unknown>,
   overrides?: {
+    importId?: string;
     importFilename?: string | null;
     importName?: string | null;
-    rowId?: string;
+    rowId?: string | null;
   },
-) {
+): AiChatRetrievalRow {
+  const rowId = overrides?.rowId;
+
   return {
     id,
-    rowId: overrides?.rowId,
+    importId: overrides?.importId ?? "import-1",
     importFilename: overrides?.importFilename ?? null,
     importName: overrides?.importName ?? null,
     jsonDataJsonb,
+    ...(rowId === undefined ? {} : { rowId }),
   };
 }
 
@@ -46,7 +53,7 @@ test("fetchAiChatRetrievalRows dedupes rows and prioritizes stronger digit match
     Nama: "Jalan Ampang",
   });
 
-  const storage = {
+  const storage: AiChatSearchStorage = {
     searchGlobalDataRows: async ({ search }: { search: string }) => {
       if (search === "123456789012") {
         return { rows: [rowExact, rowPartial], total: 2 };
@@ -55,7 +62,7 @@ test("fetchAiChatRetrievalRows dedupes rows and prioritizes stronger digit match
     },
   };
 
-  const rows = await fetchAiChatRetrievalRows(storage as any, ["123456789012", "jalan"]);
+  const rows = await fetchAiChatRetrievalRows(storage, ["123456789012", "jalan"]);
 
   assert.equal(rows.length, 3);
   assert.equal(rows[0].id, "row-1");
@@ -64,7 +71,7 @@ test("fetchAiChatRetrievalRows dedupes rows and prioritizes stronger digit match
 });
 
 test("buildAiChatContextBlock renders record context and empty states", () => {
-  const rows = [
+  const rows: AiChatRetrievalRow[] = [
     createRow(
       "row-1",
       {
@@ -77,7 +84,7 @@ test("buildAiChatContextBlock renders record context and empty states", () => {
     ),
   ];
 
-  const context = buildAiChatContextBlock(["ali", "jalan"], rows as any);
+  const context = buildAiChatContextBlock(["ali", "jalan"], rows);
   assert.ok(context.includes("HASIL CARIAN KATA KUNCI: ali, jalan"));
   assert.ok(context.includes("Source: customers.xlsx"));
   assert.ok(context.includes("Nama: Ali Bin Abu"));
@@ -101,7 +108,7 @@ test("buildAiChatQuickReply prefers priority keys and falls back to generic fiel
         importName: "customer-import",
       },
     ),
-  ] as any);
+  ]);
 
   assert.ok(prioritized.includes("Rekod dijumpai:"));
   assert.ok(prioritized.includes("Nama: Ali Bin Abu"));
@@ -112,7 +119,7 @@ test("buildAiChatQuickReply prefers priority keys and falls back to generic fiel
       Kategori: "Pelanggan",
       Status: "Aktif",
     }),
-  ] as any);
+  ]);
 
   assert.ok(fallback.includes("Kategori: Pelanggan"));
   assert.ok(fallback.includes("Status: Aktif"));

@@ -12,8 +12,110 @@ import { resolveCollectionPiiFieldValue } from "../lib/collection-pii-encryption
 
 type CollectionBatch = CollectionRecord["batch"];
 
-export function mapCollectionRecordRow(row: any): CollectionRecord {
-  const paymentDateRaw = row.payment_date ?? row.paymentDate;
+type CollectionRecordDbRow = {
+  id?: unknown;
+  customer_name?: unknown;
+  customerName?: unknown;
+  customer_name_encrypted?: unknown;
+  customerNameEncrypted?: unknown;
+  ic_number?: unknown;
+  icNumber?: unknown;
+  ic_number_encrypted?: unknown;
+  icNumberEncrypted?: unknown;
+  customer_phone?: unknown;
+  customerPhone?: unknown;
+  customer_phone_encrypted?: unknown;
+  customerPhoneEncrypted?: unknown;
+  account_number?: unknown;
+  accountNumber?: unknown;
+  account_number_encrypted?: unknown;
+  accountNumberEncrypted?: unknown;
+  batch?: unknown;
+  payment_date?: unknown;
+  paymentDate?: unknown;
+  amount?: unknown;
+  receipt_file?: unknown;
+  receiptFile?: unknown;
+  receipt_total_amount?: unknown;
+  receiptTotalAmount?: unknown;
+  receipt_validation_status?: unknown;
+  receiptValidationStatus?: unknown;
+  receipt_validation_message?: unknown;
+  receiptValidationMessage?: unknown;
+  receipt_count?: unknown;
+  receiptCount?: unknown;
+  duplicate_receipt_flag?: unknown;
+  duplicateReceiptFlag?: unknown;
+  created_by_login?: unknown;
+  createdByLogin?: unknown;
+  collection_staff_nickname?: unknown;
+  collectionStaffNickname?: unknown;
+  staff_username?: unknown;
+  staffUsername?: unknown;
+  created_at?: unknown;
+  createdAt?: unknown;
+  updated_at?: unknown;
+  updatedAt?: unknown;
+};
+
+type CollectionDailyTargetDbRow = {
+  id?: unknown;
+  username?: unknown;
+  year?: unknown;
+  month?: unknown;
+  monthly_target?: unknown;
+  monthlyTarget?: unknown;
+  created_by?: unknown;
+  createdBy?: unknown;
+  updated_by?: unknown;
+  updatedBy?: unknown;
+  created_at?: unknown;
+  updated_at?: unknown;
+};
+
+type CollectionDailyCalendarDbRow = {
+  id?: unknown;
+  year?: unknown;
+  month?: unknown;
+  day?: unknown;
+  is_working_day?: unknown;
+  isWorkingDay?: unknown;
+  is_holiday?: unknown;
+  isHoliday?: unknown;
+  holiday_name?: unknown;
+  holidayName?: unknown;
+  created_by?: unknown;
+  createdBy?: unknown;
+  updated_by?: unknown;
+  updatedBy?: unknown;
+  created_at?: unknown;
+  updated_at?: unknown;
+};
+
+function isCollectionRow(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function normalizeCollectionDbRow<T extends Record<string, unknown>>(row: unknown): T {
+  return isCollectionRow(row) ? (row as T) : ({} as T);
+}
+
+function normalizeCollectionDate(value: unknown, fallback: Date | number = Date.now()): Date {
+  if (value instanceof Date) {
+    return value;
+  }
+  if (typeof value === "string" || typeof value === "number") {
+    return new Date(value);
+  }
+  if (fallback instanceof Date) {
+    return new Date(fallback.getTime());
+  }
+  return new Date(fallback);
+}
+
+export function mapCollectionRecordRow(row: unknown): CollectionRecord {
+  const normalizedRow = normalizeCollectionDbRow<CollectionRecordDbRow>(row);
+  const paymentDateRaw = normalizedRow.payment_date ?? normalizedRow.paymentDate;
   const paymentDate =
     typeof paymentDateRaw === "string"
       ? paymentDateRaw.slice(0, 10)
@@ -21,90 +123,102 @@ export function mapCollectionRecordRow(row: any): CollectionRecord {
         ? paymentDateRaw.toISOString().slice(0, 10)
         : "";
 
-  const createdAtRaw = row.created_at ?? row.createdAt;
-  const createdAt = createdAtRaw instanceof Date
-    ? createdAtRaw
-    : new Date(createdAtRaw ?? Date.now());
-  const updatedAtRaw = row.updated_at ?? row.updatedAt ?? createdAt;
-  const updatedAt = updatedAtRaw instanceof Date
-    ? updatedAtRaw
-    : new Date(updatedAtRaw ?? createdAt);
+  const createdAtRaw = normalizedRow.created_at ?? normalizedRow.createdAt;
+  const createdAt = normalizeCollectionDate(createdAtRaw);
+  const updatedAtRaw = normalizedRow.updated_at ?? normalizedRow.updatedAt ?? createdAt;
+  const updatedAt = normalizeCollectionDate(updatedAtRaw, createdAt);
 
   return {
-    id: String(row.id),
+    id: String(normalizedRow.id ?? ""),
     customerName: resolveCollectionPiiFieldValue({
       field: "customerName",
-      plaintext: row.customer_name ?? row.customerName,
-      encrypted: row.customer_name_encrypted ?? row.customerNameEncrypted,
+      plaintext: normalizedRow.customer_name ?? normalizedRow.customerName,
+      encrypted: normalizedRow.customer_name_encrypted ?? normalizedRow.customerNameEncrypted,
     }),
     icNumber: resolveCollectionPiiFieldValue({
       field: "icNumber",
-      plaintext: row.ic_number ?? row.icNumber,
-      encrypted: row.ic_number_encrypted ?? row.icNumberEncrypted,
+      plaintext: normalizedRow.ic_number ?? normalizedRow.icNumber,
+      encrypted: normalizedRow.ic_number_encrypted ?? normalizedRow.icNumberEncrypted,
     }),
     customerPhone: resolveCollectionPiiFieldValue({
       field: "customerPhone",
-      plaintext: row.customer_phone ?? row.customerPhone,
-      encrypted: row.customer_phone_encrypted ?? row.customerPhoneEncrypted,
+      plaintext: normalizedRow.customer_phone ?? normalizedRow.customerPhone,
+      encrypted: normalizedRow.customer_phone_encrypted ?? normalizedRow.customerPhoneEncrypted,
     }),
     accountNumber: resolveCollectionPiiFieldValue({
       field: "accountNumber",
-      plaintext: row.account_number ?? row.accountNumber,
-      encrypted: row.account_number_encrypted ?? row.accountNumberEncrypted,
+      plaintext: normalizedRow.account_number ?? normalizedRow.accountNumber,
+      encrypted: normalizedRow.account_number_encrypted ?? normalizedRow.accountNumberEncrypted,
     }),
-    batch: String(row.batch ?? "") as CollectionBatch,
+    batch: String(normalizedRow.batch ?? "") as CollectionBatch,
     paymentDate,
-    amount: formatCollectionAmountMyrString(row.amount ?? 0),
-    receiptFile: row.receipt_file ?? row.receiptFile ?? null,
+    amount: formatCollectionAmountMyrString(normalizedRow.amount ?? 0),
+    receiptFile: (normalizedRow.receipt_file ?? normalizedRow.receiptFile ?? null) as string | null,
     receipts: [],
     archivedReceipts: [],
-    receiptTotalAmount: formatCollectionAmountFromCents(row.receipt_total_amount ?? row.receiptTotalAmount ?? 0),
+    receiptTotalAmount: formatCollectionAmountFromCents(
+      normalizedRow.receipt_total_amount ?? normalizedRow.receiptTotalAmount ?? 0,
+    ),
     receiptValidationStatus: String(
-      row.receipt_validation_status
-      ?? row.receiptValidationStatus
+      normalizedRow.receipt_validation_status
+      ?? normalizedRow.receiptValidationStatus
       ?? "needs_review",
     ) as CollectionRecord["receiptValidationStatus"],
     receiptValidationMessage:
-      (row.receipt_validation_message ?? row.receiptValidationMessage ?? null) as string | null,
-    receiptCount: Math.max(0, Number(row.receipt_count ?? row.receiptCount ?? 0) || 0),
+      (normalizedRow.receipt_validation_message ?? normalizedRow.receiptValidationMessage ?? null) as string | null,
+    receiptCount: Math.max(0, Number(normalizedRow.receipt_count ?? normalizedRow.receiptCount ?? 0) || 0),
     duplicateReceiptFlag: Boolean(
-      row.duplicate_receipt_flag
-      ?? row.duplicateReceiptFlag
+      normalizedRow.duplicate_receipt_flag
+      ?? normalizedRow.duplicateReceiptFlag
       ?? false,
     ),
-    createdByLogin: String(row.created_by_login ?? row.createdByLogin ?? row.staff_username ?? row.staffUsername ?? ""),
-    collectionStaffNickname: String(row.collection_staff_nickname ?? row.collectionStaffNickname ?? row.staff_username ?? row.staffUsername ?? ""),
+    createdByLogin: String(
+      normalizedRow.created_by_login
+      ?? normalizedRow.createdByLogin
+      ?? normalizedRow.staff_username
+      ?? normalizedRow.staffUsername
+      ?? "",
+    ),
+    collectionStaffNickname: String(
+      normalizedRow.collection_staff_nickname
+      ?? normalizedRow.collectionStaffNickname
+      ?? normalizedRow.staff_username
+      ?? normalizedRow.staffUsername
+      ?? "",
+    ),
     createdAt,
     updatedAt,
   };
 }
 
-export function mapCollectionDailyTargetRow(row: any): CollectionDailyTarget {
+export function mapCollectionDailyTargetRow(row: unknown): CollectionDailyTarget {
+  const normalizedRow = normalizeCollectionDbRow<CollectionDailyTargetDbRow>(row);
   return {
-    id: String(row.id),
-    username: String(row.username || "").toLowerCase(),
-    year: Number(row.year || 0),
-    month: Number(row.month || 0),
-    monthlyTarget: parseCollectionAmountMyrNumber(row.monthly_target ?? row.monthlyTarget ?? 0),
-    createdBy: row.created_by ?? row.createdBy ?? null,
-    updatedBy: row.updated_by ?? row.updatedBy ?? null,
-    createdAt: row.created_at instanceof Date ? row.created_at : new Date(row.created_at),
-    updatedAt: row.updated_at instanceof Date ? row.updated_at : new Date(row.updated_at),
+    id: String(normalizedRow.id ?? ""),
+    username: String(normalizedRow.username ?? "").toLowerCase(),
+    year: Number(normalizedRow.year ?? 0),
+    month: Number(normalizedRow.month ?? 0),
+    monthlyTarget: parseCollectionAmountMyrNumber(normalizedRow.monthly_target ?? normalizedRow.monthlyTarget ?? 0),
+    createdBy: (normalizedRow.created_by ?? normalizedRow.createdBy ?? null) as string | null,
+    updatedBy: (normalizedRow.updated_by ?? normalizedRow.updatedBy ?? null) as string | null,
+    createdAt: normalizeCollectionDate(normalizedRow.created_at),
+    updatedAt: normalizeCollectionDate(normalizedRow.updated_at),
   };
 }
 
-export function mapCollectionDailyCalendarRow(row: any): CollectionDailyCalendarDay {
+export function mapCollectionDailyCalendarRow(row: unknown): CollectionDailyCalendarDay {
+  const normalizedRow = normalizeCollectionDbRow<CollectionDailyCalendarDbRow>(row);
   return {
-    id: String(row.id),
-    year: Number(row.year || 0),
-    month: Number(row.month || 0),
-    day: Number(row.day || 0),
-    isWorkingDay: Boolean(row.is_working_day ?? row.isWorkingDay),
-    isHoliday: Boolean(row.is_holiday ?? row.isHoliday),
-    holidayName: (row.holiday_name ?? row.holidayName ?? null) as string | null,
-    createdBy: (row.created_by ?? row.createdBy ?? null) as string | null,
-    updatedBy: (row.updated_by ?? row.updatedBy ?? null) as string | null,
-    createdAt: row.created_at instanceof Date ? row.created_at : new Date(row.created_at),
-    updatedAt: row.updated_at instanceof Date ? row.updated_at : new Date(row.updated_at),
+    id: String(normalizedRow.id ?? ""),
+    year: Number(normalizedRow.year ?? 0),
+    month: Number(normalizedRow.month ?? 0),
+    day: Number(normalizedRow.day ?? 0),
+    isWorkingDay: Boolean(normalizedRow.is_working_day ?? normalizedRow.isWorkingDay),
+    isHoliday: Boolean(normalizedRow.is_holiday ?? normalizedRow.isHoliday),
+    holidayName: (normalizedRow.holiday_name ?? normalizedRow.holidayName ?? null) as string | null,
+    createdBy: (normalizedRow.created_by ?? normalizedRow.createdBy ?? null) as string | null,
+    updatedBy: (normalizedRow.updated_by ?? normalizedRow.updatedBy ?? null) as string | null,
+    createdAt: normalizeCollectionDate(normalizedRow.created_at),
+    updatedAt: normalizeCollectionDate(normalizedRow.updated_at),
   };
 }

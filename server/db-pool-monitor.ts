@@ -7,8 +7,8 @@ type PgPoolLike = {
   options?: {
     max?: number;
   };
-  on(event: string, listener: (...args: any[]) => void): unknown;
-  off?(event: string, listener: (...args: any[]) => void): unknown;
+  on(event: string, listener: (...args: unknown[]) => void): unknown;
+  off?(event: string, listener: (...args: unknown[]) => void): unknown;
 };
 
 type LoggerLike = Pick<typeof logger, "warn" | "error">;

@@ -5,6 +5,35 @@ import type { AuthenticatedUser } from "../../auth/guards";
 import { COLLECTION_NICKNAME_TEMP_PASSWORD } from "../../routes/collection.validation";
 import { CollectionNicknameService } from "../collection/collection-nickname.service";
 
+type CollectionNicknameStorage = ConstructorParameters<typeof CollectionNicknameService>[0];
+type CollectionNicknamePasswordInput =
+  Parameters<CollectionNicknameStorage["setCollectionNicknamePassword"]>[0];
+type CollectionNicknameSessionInput =
+  Parameters<CollectionNicknameStorage["setCollectionNicknameSession"]>[0];
+type CollectionNicknameAuditLogInput =
+  Parameters<CollectionNicknameStorage["createAuditLog"]>[0];
+type CollectionNicknameAuditLogRecord =
+  Awaited<ReturnType<CollectionNicknameStorage["createAuditLog"]>>;
+
+function createCollectionNicknameService(storage: object): CollectionNicknameService {
+  return new CollectionNicknameService(storage as unknown as CollectionNicknameStorage);
+}
+
+function buildCollectionNicknameAuditLog(
+  entry: CollectionNicknameAuditLogInput,
+): CollectionNicknameAuditLogRecord {
+  return {
+    id: "audit-collection-nickname-1",
+    action: entry.action,
+    performedBy: entry.performedBy,
+    requestId: entry.requestId ?? null,
+    targetUser: entry.targetUser ?? null,
+    targetResource: entry.targetResource ?? null,
+    details: entry.details ?? null,
+    timestamp: new Date("2026-03-01T00:00:00.000Z"),
+  };
+}
+
 function createNicknameHarness() {
   const profile = {
     id: "nickname-1",
@@ -24,47 +53,47 @@ function createNicknameHarness() {
     createdBy: "superuser",
     createdAt: new Date("2026-03-01T00:00:00.000Z"),
   };
-  const auditLogs: Array<{ action: string; details?: string }> = [];
+  const auditLogs: Array<{ action: string; details: string | null }> = [];
   const passwordUpdates: Array<{
     nicknameId: string;
     passwordHash: string;
     mustChangePassword: boolean;
     passwordResetBySuperuser: boolean;
-    passwordUpdatedAt: Date;
+    passwordUpdatedAt: Date | null;
   }> = [];
   const sessionWrites: Array<{ activityId: string; nickname: string }> = [];
 
-  const service = new CollectionNicknameService({
+  const service = createCollectionNicknameService({
     getCollectionStaffNicknameById: async (id: string) => (id === profile.id ? nicknameRecord : undefined),
     getCollectionNicknameAuthProfileByName: async (nickname: string) =>
       nickname.toLowerCase() === profile.nickname.toLowerCase() ? profile : undefined,
-    setCollectionNicknamePassword: async (params: any) => {
+    setCollectionNicknamePassword: async (params: CollectionNicknamePasswordInput) => {
       passwordUpdates.push({
         nicknameId: params.nicknameId,
         passwordHash: params.passwordHash,
         mustChangePassword: Boolean(params.mustChangePassword),
         passwordResetBySuperuser: Boolean(params.passwordResetBySuperuser),
-        passwordUpdatedAt: params.passwordUpdatedAt,
+        passwordUpdatedAt: params.passwordUpdatedAt ?? null,
       });
       profile.nicknamePasswordHash = params.passwordHash;
       profile.mustChangePassword = Boolean(params.mustChangePassword);
       profile.passwordResetBySuperuser = Boolean(params.passwordResetBySuperuser);
-      profile.passwordUpdatedAt = params.passwordUpdatedAt;
+      profile.passwordUpdatedAt = params.passwordUpdatedAt ?? null;
     },
-    setCollectionNicknameSession: async (params: any) => {
+    setCollectionNicknameSession: async (params: CollectionNicknameSessionInput) => {
       sessionWrites.push({
         activityId: params.activityId,
         nickname: params.nickname,
       });
     },
-    createAuditLog: async (entry: any) => {
+    createAuditLog: async (entry: CollectionNicknameAuditLogInput) => {
       auditLogs.push({
         action: String(entry.action || ""),
-        details: entry.details,
+        details: entry.details ?? null,
       });
-      return entry;
+      return buildCollectionNicknameAuditLog(entry);
     },
-  } as any);
+  });
 
   return {
     service,

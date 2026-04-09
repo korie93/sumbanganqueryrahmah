@@ -9,20 +9,44 @@ import type {
   AiIntent,
   AiSearchCandidateRow,
 } from "../ai-search-types";
+import type { AiSearchPayloadShape } from "../ai-search-result-utils";
+
+type CandidateResolutionStorage = Parameters<typeof resolveAiSearchCandidates>[0]["storage"];
+type ResultAssemblyStorage = Parameters<typeof buildResolvedAiSearchResult>[0]["storage"];
+type BranchLookups = Parameters<typeof buildResolvedAiSearchResult>[0]["branchLookups"];
+type SemanticSearchRow = Awaited<ReturnType<CandidateResolutionStorage["semanticSearch"]>>[number];
 
 function createCandidate(rowId: string, jsonDataJsonb: Record<string, unknown>): AiSearchCandidateRow {
   return {
     rowId,
+    importId: "import-1",
+    importName: "Import 1",
+    importFilename: "import-1.csv",
     jsonDataJsonb,
-  } as AiSearchCandidateRow;
+  };
+}
+
+function createSemanticCandidate(rowId: string, jsonDataJsonb: Record<string, unknown>): SemanticSearchRow {
+  return {
+    rowId,
+    importId: "import-semantic-1",
+    content: JSON.stringify(jsonDataJsonb),
+    score: 0.92,
+    importName: "Semantic Import",
+    importFilename: "semantic-import.csv",
+    jsonDataJsonb,
+  };
 }
 
 function createFuzzyRow(jsonDataJsonb: Record<string, unknown>, score: number): AiFuzzySearchRow {
   return {
     rowId: "row-fuzzy",
+    importId: "import-fuzzy",
+    importName: "Import Fuzzy",
+    importFilename: "import-fuzzy.csv",
     jsonDataJsonb,
     score,
-  } as AiFuzzySearchRow;
+  };
 }
 
 function createIntent(): AiIntent {
@@ -40,6 +64,45 @@ function createIntent(): AiIntent {
   };
 }
 
+function createCandidateResolutionStorage(
+  overrides: Partial<CandidateResolutionStorage> = {},
+): CandidateResolutionStorage {
+  return {
+    aiKeywordSearch: async () => [],
+    aiNameSearch: async () => [],
+    aiDigitsSearch: async () => [],
+    semanticSearch: async () => [],
+    ...overrides,
+  };
+}
+
+function createResultAssemblyStorage(
+  overrides: Partial<ResultAssemblyStorage> = {},
+): ResultAssemblyStorage {
+  return {
+    aiFuzzySearch: async () => [],
+    ...overrides,
+  };
+}
+
+function createBranchLookups(overrides: Partial<BranchLookups> = {}): BranchLookups {
+  return {
+    findBranchesByText: async () => [],
+    findBranchesByPostcode: async () => [],
+    nearestBranches: async () => [],
+    postcodeLatLng: async () => null,
+    ...overrides,
+  };
+}
+
+function assertAiSearchPayloadShape(payload: unknown): asserts payload is AiSearchPayloadShape {
+  assert.ok(payload && typeof payload === "object");
+  assert.ok("person" in payload);
+  assert.ok("nearest_branch" in payload);
+  assert.ok("decision" in payload);
+  assert.ok("ai_explanation" in payload);
+}
+
 test("resolveAiSearchCandidates uses semantic results for non-digit queries", async () => {
   const nameCalls: Array<Record<string, unknown>> = [];
   const semanticCalls: Array<Record<string, unknown>> = [];
@@ -49,7 +112,7 @@ test("resolveAiSearchCandidates uses semantic results for non-digit queries", as
     query: "Ali",
     semanticSearchEnabled: true,
     aiTimeoutMs: 6000,
-    storage: {
+    storage: createCandidateResolutionStorage({
       aiKeywordSearch: async () => {
         throw new Error("digits path should not be used");
       },
@@ -60,9 +123,9 @@ test("resolveAiSearchCandidates uses semantic results for non-digit queries", as
       aiDigitsSearch: async () => [],
       semanticSearch: async (params: Record<string, unknown>) => {
         semanticCalls.push(params);
-        return [createCandidate("row-vector", { Nama: "Ali Bin Abu" })];
+        return [createSemanticCandidate("row-vector", { Nama: "Ali Bin Abu" })];
       },
-    } as any,
+    }),
     withAiCircuit: async <T>(operation: () => Promise<T>) => operation(),
     ollamaChat: async () => "",
     ollamaEmbed: async (text: string) => {
@@ -87,7 +150,7 @@ test("resolveAiSearchCandidates swallows embedding failures and keeps keyword ma
     query: "Ali",
     semanticSearchEnabled: true,
     aiTimeoutMs: 6000,
-    storage: {
+    storage: createCandidateResolutionStorage({
       aiKeywordSearch: async () => {
         throw new Error("digits path should not be used");
       },
@@ -97,7 +160,7 @@ test("resolveAiSearchCandidates swallows embedding failures and keeps keyword ma
         semanticCalled = true;
         return [];
       },
-    } as any,
+    }),
     withAiCircuit: async <T>(operation: () => Promise<T>) => operation(),
     ollamaChat: async () => "",
     ollamaEmbed: async () => {
@@ -119,7 +182,7 @@ test("resolveAiSearchCandidates falls back to raw query digits when intent only 
     query: "Ali 900101015555",
     semanticSearchEnabled: false,
     aiTimeoutMs: 6000,
-    storage: {
+    storage: createCandidateResolutionStorage({
       aiKeywordSearch: async () => {
         throw new Error("digits-first path should not be used");
       },
@@ -137,7 +200,7 @@ test("resolveAiSearchCandidates falls back to raw query digits when intent only 
         ];
       },
       semanticSearch: async () => [],
-    } as any,
+    }),
     withAiCircuit: async <T>(operation: () => Promise<T>) => operation(),
     ollamaChat: async () =>
       '{"intent":"search_person","entities":{"name":"Ali","ic":null,"account_no":null,"phone":null,"address":null},"need_nearest_branch":false}',
@@ -164,7 +227,7 @@ test("buildResolvedAiSearchResult adds fuzzy suggestions and marks last-person u
     keywordResults: [],
     fallbackDigitsResults: [],
     fallbackPerson: createCandidate("row-last", { Nama: "Ali Lama" }),
-    storage: {
+    storage: createResultAssemblyStorage({
       aiFuzzySearch: async (params: Record<string, unknown>) => {
         fuzzyCalls.push(params);
         return [
@@ -178,8 +241,8 @@ test("buildResolvedAiSearchResult adds fuzzy suggestions and marks last-person u
           ),
         ];
       },
-    } as any,
-    branchLookups: {
+    }),
+    branchLookups: createBranchLookups({
       findBranchesByText: async () => {
         throw new Error("branch lookup should not run");
       },
@@ -192,13 +255,14 @@ test("buildResolvedAiSearchResult adds fuzzy suggestions and marks last-person u
       postcodeLatLng: async () => {
         throw new Error("branch lookup should not run");
       },
-    },
+    }),
   });
 
   assert.deepEqual(fuzzyCalls, [{ query: "ali jalan", limit: 5 }]);
-  assert.equal((result.payload as any).person, null);
-  assert.ok(String((result.payload as any).ai_explanation).includes("Cadangan Rekod (fuzzy):"));
-  assert.ok(String((result.payload as any).ai_explanation).includes("Ali Bin Abu"));
+  assertAiSearchPayloadShape(result.payload);
+  assert.equal(result.payload.person, null);
+  assert.ok(String(result.payload.ai_explanation).includes("Cadangan Rekod (fuzzy):"));
+  assert.ok(String(result.payload.ai_explanation).includes("Ali Bin Abu"));
   assert.equal(result.audit.used_last_person, true);
 });
 
@@ -228,13 +292,13 @@ test("buildResolvedAiSearchResult skips fuzzy suggestions for digit-style search
     keywordResults: [],
     fallbackDigitsResults: [],
     fallbackPerson: null,
-    storage: {
+    storage: createResultAssemblyStorage({
       aiFuzzySearch: async () => {
         fuzzyCalled = true;
         return [];
       },
-    } as any,
-    branchLookups: {
+    }),
+    branchLookups: createBranchLookups({
       findBranchesByText: async () => {
         throw new Error("branch lookup should not run");
       },
@@ -247,11 +311,12 @@ test("buildResolvedAiSearchResult skips fuzzy suggestions for digit-style search
       postcodeLatLng: async () => {
         throw new Error("branch lookup should not run");
       },
-    },
+    }),
   });
 
   assert.equal(fuzzyCalled, false);
-  assert.equal((result.payload as any).person?.id, "row-1");
+  assertAiSearchPayloadShape(result.payload);
+  assert.equal(result.payload.person?.id, "row-1");
   assert.equal(result.audit.used_last_person, false);
 });
 
@@ -283,10 +348,8 @@ test("buildResolvedAiSearchResult includes nearest branch for IC searches with m
     keywordResults: [],
     fallbackDigitsResults: [],
     fallbackPerson: null,
-    storage: {
-      aiFuzzySearch: async () => [],
-    } as any,
-    branchLookups: {
+    storage: createResultAssemblyStorage(),
+    branchLookups: createBranchLookups({
       findBranchesByText: async () => [],
       findBranchesByPostcode: async (postcode: string) => {
         postcodeLookup = postcode;
@@ -305,10 +368,11 @@ test("buildResolvedAiSearchResult includes nearest branch for IC searches with m
       },
       nearestBranches: async () => [],
       postcodeLatLng: async () => null,
-    },
+    }),
   });
 
   assert.equal(postcodeLookup, "43200");
-  assert.equal((result.payload as any).nearest_branch?.name, "AEON Cheras Selatan");
-  assert.ok(String((result.payload as any).ai_explanation).includes("AEON Cheras Selatan"));
+  assertAiSearchPayloadShape(result.payload);
+  assert.equal(result.payload.nearest_branch?.name, "AEON Cheras Selatan");
+  assert.ok(String(result.payload.ai_explanation).includes("AEON Cheras Selatan"));
 });

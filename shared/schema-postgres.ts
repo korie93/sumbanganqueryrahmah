@@ -109,7 +109,7 @@ export const insertImportSchema = createInsertSchema(imports).pick({
 
 export const insertDataRowSchema = z.object({
   importId: z.string(),
-  jsonDataJsonb: z.record(z.any()),
+  jsonDataJsonb: z.record(z.unknown()),
 });
 
 export const insertUserActivitySchema = createInsertSchema(userActivity).pick({

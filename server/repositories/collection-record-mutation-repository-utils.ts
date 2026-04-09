@@ -1,4 +1,4 @@
-import { sql } from "drizzle-orm";
+import { sql, type SQL } from "drizzle-orm";
 import { db } from "../db-postgres";
 import type {
   CollectionRecord,
@@ -54,7 +54,7 @@ export async function updateCollectionRecord(
   data: UpdateCollectionRecordInput,
   options?: UpdateCollectionRecordOptions,
 ): Promise<CollectionRecord | undefined> {
-  const updateChunks: any[] = [];
+  const updateChunks: SQL[] = [];
 
   if (data.customerName !== undefined) {
     const customerNameEncrypted = encryptCollectionPiiFieldValue(data.customerName);

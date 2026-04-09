@@ -3,6 +3,18 @@ import test from "node:test";
 import { CircuitOpenError } from "../../internal/circuitBreaker";
 import { AiChatService } from "../ai-chat.service";
 
+type AiChatServiceOptions = ConstructorParameters<typeof AiChatService>[0];
+type AiChatStorage = AiChatServiceOptions["storage"];
+type AiChatCategoryStatsService = AiChatServiceOptions["categoryStatsService"];
+
+function createAiChatStorage(storage: object): AiChatStorage {
+  return storage as unknown as AiChatStorage;
+}
+
+function createAiChatCategoryStatsService(service: object): AiChatCategoryStatsService {
+  return service as unknown as AiChatCategoryStatsService;
+}
+
 function createAiChatHarness(options?: {
   countSummary?: {
     processing: boolean;
@@ -61,8 +73,8 @@ function createAiChatHarness(options?: {
   };
 
   const service = new AiChatService({
-    storage: storage as any,
-    categoryStatsService: categoryStatsService as any,
+    storage: createAiChatStorage(storage),
+    categoryStatsService: createAiChatCategoryStatsService(categoryStatsService),
     withAiCircuit: async <T>(operation: () => Promise<T>) => {
       if (options?.withAiCircuitError) {
         throw options.withAiCircuitError;

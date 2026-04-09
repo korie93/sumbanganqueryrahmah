@@ -14,6 +14,14 @@ import {
   normalizeBackupCollectionReceipt,
   normalizeBackupCollectionRecord,
 } from "../backups-restore-collection-datasets-utils";
+import type {
+  BackupCollectionReceipt,
+  BackupCollectionRecord,
+} from "../backups-repository-types";
+import type {
+  BackupPayloadChunkReader,
+  BackupRestoreExecutor,
+} from "../backups-restore-shared-utils";
 
 function flattenSqlChunk(chunk: unknown): string {
   if (chunk === null || chunk === undefined) {
@@ -42,6 +50,32 @@ function normalizeSqlText(query: unknown): string {
   return flattenSqlChunk(query).replace(/\s+/g, " ").trim();
 }
 
+function createBackupRestoreExecutor(
+  execute: (query: unknown) => Promise<{ rows: unknown[] }>,
+  insertMessage: string,
+): BackupRestoreExecutor {
+  return {
+    execute: execute as BackupRestoreExecutor["execute"],
+    insert() {
+      throw new Error(insertMessage);
+    },
+  } as unknown as BackupRestoreExecutor;
+}
+
+function createCollectionRecordReader(
+  records: BackupCollectionRecord[],
+): BackupPayloadChunkReader {
+  return {
+    async *iterateArrayChunks<T>(key: string): AsyncGenerator<T[]> {
+      if (key !== "collectionRecords") {
+        return;
+      }
+
+      yield records as unknown as T[];
+    },
+  };
+}
+
 async function withCollectionPiiEncryptionKey<T>(secret: string, fn: () => Promise<T> | T): Promise<T> {
   const previous = process.env.COLLECTION_PII_ENCRYPTION_KEY;
   process.env.COLLECTION_PII_ENCRYPTION_KEY = secret;
@@ -58,8 +92,8 @@ async function withCollectionPiiEncryptionKey<T>(secret: string, fn: () => Promi
 
 test("collection restore tracks restored record ids through a temp table before receipt cache sync", async () => {
   const executedQueries: string[] = [];
-  const tx = {
-    async execute(query: unknown) {
+  const tx = createBackupRestoreExecutor(
+    async (query: unknown) => {
       const sqlText = normalizeSqlText(query);
       executedQueries.push(sqlText);
 
@@ -71,48 +105,35 @@ test("collection restore tracks restored record ids through a temp table before 
 
       return { rows: [] };
     },
-    insert() {
-      throw new Error("Unexpected insert() call during collection restore test.");
+    "Unexpected insert() call during collection restore test.",
+  );
+  const backupDataReader = createCollectionRecordReader([
+    {
+      id: "11111111-1111-1111-1111-111111111111",
+      customerName: "Alice Tan",
+      icNumber: "900101015555",
+      customerPhone: "0123000001",
+      accountNumber: "ACC-1001",
+      batch: "P10",
+      paymentDate: "2026-03-31",
+      amount: 100,
+      receiptFile: null,
+      receiptTotalAmountCents: 10000,
+      receiptValidationStatus: "matched",
+      receiptValidationMessage: null,
+      receiptCount: 1,
+      duplicateReceiptFlag: false,
+      createdByLogin: "system",
+      collectionStaffNickname: "Collector Alpha",
+      staffUsername: "Collector Alpha",
+      createdAt: "2026-03-31T08:00:00.000Z",
     },
-  };
-  const backupDataReader = {
-    getArray() {
-      throw new Error("restore helpers must not eagerly parse backup datasets.");
-    },
-    async *iterateArrayChunks<T>(key: string): AsyncGenerator<T[]> {
-      if (key !== "collectionRecords") {
-        return;
-      }
-
-      yield [
-        {
-          id: "11111111-1111-1111-1111-111111111111",
-          customerName: "Alice Tan",
-          icNumber: "900101015555",
-          customerPhone: "0123000001",
-          accountNumber: "ACC-1001",
-          batch: "P10",
-          paymentDate: "2026-03-31",
-          amount: 100,
-          receiptFile: null,
-          receiptTotalAmountCents: 10000,
-          receiptValidationStatus: "matched",
-          receiptValidationMessage: null,
-          receiptCount: 1,
-          duplicateReceiptFlag: false,
-          createdByLogin: "system",
-          collectionStaffNickname: "Collector Alpha",
-          staffUsername: "Collector Alpha",
-          createdAt: "2026-03-31T08:00:00.000Z",
-        } as T,
-      ];
-    },
-  };
+  ]);
   const stats = createRestoreStats();
 
-  await initializeRestoreTrackingTempTable(tx as any);
-  await restoreCollectionRecordsFromBackup(tx as any, backupDataReader as any, stats);
-  await syncRestoredCollectionReceiptCache(tx as any);
+  await initializeRestoreTrackingTempTable(tx);
+  await restoreCollectionRecordsFromBackup(tx, backupDataReader, stats);
+  await syncRestoredCollectionReceiptCache(tx);
 
   const createTempTableIndex = executedQueries.findIndex((query) =>
     query.includes("CREATE TEMP TABLE sqr_restored_collection_record_ids"),
@@ -138,8 +159,8 @@ test("collection restore tracks restored record ids through a temp table before 
 
 test("collection restore batches temp-table tracking and inserts for large restore chunks", async () => {
   const executedQueries: string[] = [];
-  const tx = {
-    async execute(query: unknown) {
+  const tx = createBackupRestoreExecutor(
+    async (query: unknown) => {
       const sqlText = normalizeSqlText(query);
       executedQueries.push(sqlText);
 
@@ -152,10 +173,8 @@ test("collection restore batches temp-table tracking and inserts for large resto
 
       return { rows: [] };
     },
-    insert() {
-      throw new Error("Unexpected insert() call during collection restore batching test.");
-    },
-  };
+    "Unexpected insert() call during collection restore batching test.",
+  );
   const largeChunk = Array.from({ length: 205 }, (_, index) => ({
     id: `11111111-1111-1111-1111-${String(index + 1).padStart(12, "0")}`,
     customerName: `Customer ${index + 1}`,
@@ -176,22 +195,11 @@ test("collection restore batches temp-table tracking and inserts for large resto
     staffUsername: "Collector Alpha",
     createdAt: "2026-03-31T08:00:00.000Z",
   }));
-  const backupDataReader = {
-    getArray() {
-      throw new Error("restore helpers must not eagerly parse backup datasets.");
-    },
-    async *iterateArrayChunks<T>(key: string): AsyncGenerator<T[]> {
-      if (key !== "collectionRecords") {
-        return;
-      }
-
-      yield largeChunk as T[];
-    },
-  };
+  const backupDataReader = createCollectionRecordReader(largeChunk);
   const stats = createRestoreStats();
 
-  await initializeRestoreTrackingTempTable(tx as any);
-  await restoreCollectionRecordsFromBackup(tx as any, backupDataReader as any, stats);
+  await initializeRestoreTrackingTempTable(tx);
+  await restoreCollectionRecordsFromBackup(tx, backupDataReader, stats);
 
   assert.equal(
     executedQueries.filter((query) => query.includes("INSERT INTO sqr_restored_collection_record_ids")).length,
@@ -215,7 +223,7 @@ test("normalizeBackupCollectionRecord keeps restore fallbacks stable", () => {
     customerPhone: "",
     accountNumber: "",
     batch: "",
-    paymentDate: new Date("2026-03-31T08:00:00.000Z") as any,
+    paymentDate: new Date("2026-03-31T08:00:00.000Z"),
     amount: "12.50",
     receiptFile: "",
     receiptTotalAmountCents: 1234,
@@ -228,7 +236,7 @@ test("normalizeBackupCollectionRecord keeps restore fallbacks stable", () => {
     collectionStaffNickname: "",
     staffUsername: "Staff Alpha",
     createdAt: "2026-03-30T08:00:00.000Z",
-  });
+  } as unknown as BackupCollectionRecord);
 
   assert.ok(restoredRecord);
   assert.equal(restoredRecord.customerName, "-");
@@ -246,7 +254,7 @@ test("normalizeBackupCollectionRecord keeps restore fallbacks stable", () => {
   assert.equal(
     normalizeBackupCollectionRecord({
       paymentDate: null,
-    } as any),
+    } as unknown as BackupCollectionRecord),
     null,
   );
 });
@@ -287,8 +295,8 @@ test("normalizeBackupCollectionRecord can recover PII from encrypted backup fiel
 test("collection restore recomputes customer-name blind indexes instead of trusting stale backup hashes", async () => {
   await withCollectionPiiEncryptionKey("collection-pii-secret-2026", async () => {
     const executedQueries: string[] = [];
-    const tx = {
-      async execute(query: unknown) {
+    const tx = createBackupRestoreExecutor(
+      async (query: unknown) => {
         const sqlText = normalizeSqlText(query);
         executedQueries.push(sqlText);
 
@@ -300,49 +308,36 @@ test("collection restore recomputes customer-name blind indexes instead of trust
 
         return { rows: [] };
       },
-      insert() {
-        throw new Error("Unexpected insert() call during collection restore hash recompute test.");
+      "Unexpected insert() call during collection restore hash recompute test.",
+    );
+    const backupDataReader = createCollectionRecordReader([
+      {
+        id: "11111111-1111-1111-1111-111111111111",
+        customerName: "",
+        customerNameEncrypted: encryptCollectionPiiFieldValue("Encrypted Alice"),
+        customerNameSearchHashes: ["stale.hash.value"],
+        icNumber: "900101015555",
+        customerPhone: "0123000001",
+        accountNumber: "ACC-1001",
+        batch: "P10",
+        paymentDate: "2026-03-31",
+        amount: 100,
+        receiptFile: null,
+        receiptTotalAmountCents: 10000,
+        receiptValidationStatus: "matched",
+        receiptValidationMessage: null,
+        receiptCount: 1,
+        duplicateReceiptFlag: false,
+        createdByLogin: "system",
+        collectionStaffNickname: "Collector Alpha",
+        staffUsername: "Collector Alpha",
+        createdAt: "2026-03-31T08:00:00.000Z",
       },
-    };
-    const backupDataReader = {
-      getArray() {
-        throw new Error("restore helpers must not eagerly parse backup datasets.");
-      },
-      async *iterateArrayChunks<T>(key: string): AsyncGenerator<T[]> {
-        if (key !== "collectionRecords") {
-          return;
-        }
-
-        yield [
-          {
-            id: "11111111-1111-1111-1111-111111111111",
-            customerName: "",
-            customerNameEncrypted: encryptCollectionPiiFieldValue("Encrypted Alice"),
-            customerNameSearchHashes: ["stale.hash.value"],
-            icNumber: "900101015555",
-            customerPhone: "0123000001",
-            accountNumber: "ACC-1001",
-            batch: "P10",
-            paymentDate: "2026-03-31",
-            amount: 100,
-            receiptFile: null,
-            receiptTotalAmountCents: 10000,
-            receiptValidationStatus: "matched",
-            receiptValidationMessage: null,
-            receiptCount: 1,
-            duplicateReceiptFlag: false,
-            createdByLogin: "system",
-            collectionStaffNickname: "Collector Alpha",
-            staffUsername: "Collector Alpha",
-            createdAt: "2026-03-31T08:00:00.000Z",
-          } as T,
-        ];
-      },
-    };
+    ]);
     const stats = createRestoreStats();
 
-    await initializeRestoreTrackingTempTable(tx as any);
-    await restoreCollectionRecordsFromBackup(tx as any, backupDataReader as any, stats);
+    await initializeRestoreTrackingTempTable(tx);
+    await restoreCollectionRecordsFromBackup(tx, backupDataReader, stats);
 
     const insertQuery = executedQueries.find((query) => query.includes("INSERT INTO public.collection_records"));
     assert.ok(insertQuery);
@@ -368,7 +363,7 @@ test("normalizeBackupCollectionReceipt keeps receipt restore fallbacks stable", 
     extractedAmount: "",
     extractionStatus: "",
     extractionConfidence: "0.42",
-    receiptDate: new Date("2026-03-31T08:00:00.000Z") as any,
+    receiptDate: new Date("2026-03-31T08:00:00.000Z"),
     receiptReference: "  Ref-100  ",
     fileHash: "  ABCDEF  ",
     createdAt: "2026-03-31T08:00:00.000Z",
@@ -389,7 +384,7 @@ test("normalizeBackupCollectionReceipt keeps receipt restore fallbacks stable", 
     normalizeBackupCollectionReceipt({
       collectionRecordId: "11111111-1111-1111-1111-111111111111",
       storagePath: "",
-    } as any),
+    } as unknown as BackupCollectionReceipt),
     null,
   );
 });

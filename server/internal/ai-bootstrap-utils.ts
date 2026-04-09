@@ -27,7 +27,7 @@ export async function runAiBootstrapTask(
     try {
       await task();
       state.ready = true;
-    } catch (err: any) {
+    } catch (err) {
       logger.error(errorMessage, { error: err });
     }
   })();

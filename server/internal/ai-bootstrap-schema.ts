@@ -80,7 +80,7 @@ export async function ensureAiCoreTables(): Promise<void> {
         ON public.data_embeddings
         USING ivfflat (embedding vector_cosine_ops)
       `);
-    } catch (err: any) {
+    } catch (err) {
       logger.warn("Failed to create ivfflat index", { error: err });
     }
   }
