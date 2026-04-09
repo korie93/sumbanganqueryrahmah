@@ -226,10 +226,12 @@ export async function listCollectionDailyPaidCustomers(params: {
   return (result.rows || []).map((row: any) => ({
     id: String(row.id),
     customerName: resolveCollectionPiiFieldValue({
+      field: "customerName",
       plaintext: row.customer_name,
       encrypted: row.customer_name_encrypted,
     }),
     accountNumber: resolveCollectionPiiFieldValue({
+      field: "accountNumber",
       plaintext: row.account_number,
       encrypted: row.account_number_encrypted,
     }),

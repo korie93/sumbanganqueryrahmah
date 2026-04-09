@@ -1,0 +1,74 @@
+.forbidden-page {
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+}
+
+.forbidden-page__card {
+  background: var(--forbidden-shell-gradient);
+  border: 1px solid var(--forbidden-accent-border);
+  box-shadow: var(--error-boundary-card-shadow);
+}
+
+.forbidden-page__icon-shell {
+  background: var(--forbidden-accent-bg);
+  border: 1px solid var(--forbidden-accent-border-soft);
+}
+
+.forbidden-page__icon,
+.forbidden-page__kicker {
+  color: var(--forbidden-accent-text);
+}
+
+.forbidden-page__icon {
+  color: var(--forbidden-accent-icon);
+}
+
+.forbidden-page__title {
+  color: hsl(var(--foreground));
+}
+
+.forbidden-page__copy {
+  color: hsl(var(--muted-foreground));
+}
+
+.forbidden-page__panel {
+  background: hsl(var(--background) / 0.6);
+  border: 1px solid hsl(var(--border) / 0.6);
+}
+
+.forbidden-page__panel-eyebrow {
+  color: hsl(var(--muted-foreground));
+}
+
+.forbidden-page__panel-copy {
+  color: hsl(var(--foreground) / 0.85);
+}
+
+.forbidden-page__secondary-button {
+  border: 1px solid hsl(var(--border));
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+}
+
+.forbidden-page__secondary-button:hover {
+  background: hsl(var(--muted));
+}
+
+.forbidden-page__secondary-button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px hsl(var(--ring) / 0.55);
+}
+
+.forbidden-page__primary-button {
+  background: var(--forbidden-primary-button-bg);
+  color: var(--forbidden-primary-button-text);
+}
+
+.forbidden-page__primary-button:hover {
+  background: var(--forbidden-primary-button-bg-hover);
+}
+
+.forbidden-page__primary-button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--forbidden-primary-button-ring);
+}

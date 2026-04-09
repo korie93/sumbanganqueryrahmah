@@ -51,6 +51,50 @@ test("parseCliOptions accepts field filters and requirement gates", () => {
   assert.equal(options.requireZeroRewrite, true);
 });
 
+test("parseCliOptions can read staged field filters from an environment variable", () => {
+  const previous = process.env.COLLECTION_PII_RETIRED_FIELDS;
+  process.env.COLLECTION_PII_RETIRED_FIELDS = "icNumber,customerPhone,accountNumber";
+
+  try {
+    const options = parseCliOptions([
+      "--fields-env",
+      "COLLECTION_PII_RETIRED_FIELDS",
+      "--require-zero-plaintext",
+    ]);
+
+    assert.deepEqual(Array.from(options.fields), [
+      "icNumber",
+      "customerPhone",
+      "accountNumber",
+    ]);
+    assert.equal(options.requireZeroPlaintext, true);
+  } finally {
+    if (previous === undefined) {
+      delete process.env.COLLECTION_PII_RETIRED_FIELDS;
+    } else {
+      process.env.COLLECTION_PII_RETIRED_FIELDS = previous;
+    }
+  }
+});
+
+test("parseCliOptions rejects empty field filters sourced from an environment variable", () => {
+  const previous = process.env.COLLECTION_PII_RETIRED_FIELDS;
+  delete process.env.COLLECTION_PII_RETIRED_FIELDS;
+
+  try {
+    assert.throws(
+      () => parseCliOptions(["--fields-env", "COLLECTION_PII_RETIRED_FIELDS"]),
+      /could not find a non-empty value in COLLECTION_PII_RETIRED_FIELDS/i,
+    );
+  } finally {
+    if (previous === undefined) {
+      delete process.env.COLLECTION_PII_RETIRED_FIELDS;
+    } else {
+      process.env.COLLECTION_PII_RETIRED_FIELDS = previous;
+    }
+  }
+});
+
 test("parseTrackedCollectionPiiFields rejects unknown field names", () => {
   assert.throws(
     () => parseTrackedCollectionPiiFields("customerName,passportNumber"),

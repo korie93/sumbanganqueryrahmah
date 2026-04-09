@@ -21,7 +21,10 @@ import {
   type PreparedBackupPayloadFile,
 } from "./backups-repository-types";
 import type { BackupEncryptionConfig } from "./backups-encryption";
-import { resolveCollectionPiiFieldValue } from "../lib/collection-pii-encryption";
+import {
+  resolveCollectionCustomerNameSearchHashesValue,
+  resolveCollectionPiiFieldValue,
+} from "../lib/collection-pii-encryption";
 import { buildProtectedCollectionPiiSelect } from "./collection-pii-select-utils";
 export {
   createBackupPayloadChunkReader,
@@ -89,13 +92,18 @@ function buildCollectionRecordBackupPiiFields(
   const accountNumberEncrypted = hasNonEmptyString(row.accountNumberEncrypted)
     ? row.accountNumberEncrypted
     : null;
+  const customerNameSearchHashes = resolveCollectionCustomerNameSearchHashesValue({
+    plaintext: row.customerName,
+    encrypted: row.customerNameEncrypted,
+    hashes: row.customerNameSearchHashes,
+  });
 
   return {
     ...(customerNameEncrypted
       ? {
         customerNameEncrypted,
-        ...(Array.isArray(row.customerNameSearchHashes) && row.customerNameSearchHashes.length > 0
-          ? { customerNameSearchHashes: row.customerNameSearchHashes as string[] }
+        ...(customerNameSearchHashes?.length
+          ? { customerNameSearchHashes }
           : {}),
       }
       : {

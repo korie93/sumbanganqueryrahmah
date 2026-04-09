@@ -3,6 +3,7 @@ import { sql } from "drizzle-orm";
 import {
   buildCollectionRecordPiiSearchHashes,
   buildEncryptedCollectionRecordPiiValues,
+  resolveCollectionCustomerNameSearchHashesValue,
   resolveCollectionPiiFieldValue,
   resolveStoredCollectionPiiPlaintextValue,
 } from "../lib/collection-pii-encryption";
@@ -260,13 +261,18 @@ export async function restoreCollectionRecordsFromBackup(
             plaintext: row.accountNumber,
             encrypted: encryptedPii?.accountNumberEncrypted,
           });
+          const customerNameSearchHashes = resolveCollectionCustomerNameSearchHashesValue({
+            plaintext: row.customerName,
+            encrypted: encryptedPii?.customerNameEncrypted,
+            hashes: row.customerNameSearchHashes,
+          });
           return sql`(
             ${row.id}::uuid,
             ${persistedCustomerName},
             ${encryptedPii?.customerNameEncrypted ?? null},
             ${piiSearchHashes?.customerNameSearchHash ?? null},
-            ${(row.customerNameSearchHashes ?? piiSearchHashes?.customerNameSearchHashes)?.length
-              ? buildTextArraySql(row.customerNameSearchHashes ?? piiSearchHashes?.customerNameSearchHashes ?? [])
+            ${(customerNameSearchHashes ?? piiSearchHashes?.customerNameSearchHashes)?.length
+              ? buildTextArraySql(customerNameSearchHashes ?? piiSearchHashes?.customerNameSearchHashes ?? [])
               : null},
             ${persistedIcNumber},
             ${encryptedPii?.icNumberEncrypted ?? null},

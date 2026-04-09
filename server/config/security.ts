@@ -1,5 +1,15 @@
 import { runtimeConfig } from "./runtime";
 
+const COLLECTION_PII_FIELD_NAMES = new Set([
+  "customerName",
+  "icNumber",
+  "customerPhone",
+  "accountNumber",
+]);
+
+let cachedCollectionPiiRetiredFieldsRaw: string | null = null;
+let cachedCollectionPiiRetiredFields = new Set<string>();
+
 export function getSessionSecret(): string {
   return runtimeConfig.auth.sessionSecret;
 }
@@ -44,6 +54,26 @@ export function getCollectionPiiDecryptionSecrets(): string[] {
     secrets.add(previousSecret);
   }
   return Array.from(secrets);
+}
+
+export function getCollectionPiiRetiredFields(): Set<string> {
+  const raw = String(process.env.COLLECTION_PII_RETIRED_FIELDS || "").trim();
+  if (raw === cachedCollectionPiiRetiredFieldsRaw) {
+    return cachedCollectionPiiRetiredFields;
+  }
+
+  cachedCollectionPiiRetiredFieldsRaw = raw;
+  cachedCollectionPiiRetiredFields = new Set(
+    raw
+      .split(",")
+      .map((value) => value.trim())
+      .filter((value) => COLLECTION_PII_FIELD_NAMES.has(value)),
+  );
+  return cachedCollectionPiiRetiredFields;
+}
+
+export function isCollectionPiiPlaintextRetiredField(field: string): boolean {
+  return getCollectionPiiRetiredFields().has(field);
 }
 
 export function shouldSeedDefaultUsers(): boolean {

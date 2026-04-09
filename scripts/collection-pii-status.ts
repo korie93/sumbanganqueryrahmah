@@ -113,6 +113,19 @@ export function parseCliOptions(argv: string[]): CliOptions {
       index += 1;
       continue;
     }
+    if (arg === "--fields-env") {
+      const nextValue = argv[index + 1];
+      if (!nextValue) {
+        throw new Error("--fields-env requires an environment variable name.");
+      }
+      const envValue = String(process.env[nextValue] || "").trim();
+      if (!envValue) {
+        throw new Error(`--fields-env could not find a non-empty value in ${nextValue}.`);
+      }
+      fields = new Set(parseTrackedCollectionPiiFields(envValue));
+      index += 1;
+      continue;
+    }
     if (arg === "--batch-size") {
       const nextValue = argv[index + 1];
       if (!nextValue) {

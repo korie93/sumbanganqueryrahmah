@@ -1,3 +1,186 @@
+.landing-page {
+  background: var(--public-auth-layout-bg);
+  color: var(--public-auth-text-strong);
+}
+
+.landing-shell {
+  border: 1px solid var(--public-auth-shell-border);
+  background: var(--public-auth-shell-surface-muted);
+}
+
+.landing-brand-shell {
+  border: 1px solid var(--public-auth-shell-border);
+  background: var(--public-auth-shell-surface-strong-sm);
+}
+
+.landing-brand-title,
+.landing-title,
+.landing-about-title,
+.landing-footer-title {
+  color: var(--public-auth-text-strong);
+}
+
+.landing-brand-copy,
+.landing-copy,
+.landing-feature-eyebrow,
+.landing-feature-copy,
+.landing-about-eyebrow,
+.landing-about-copy,
+.landing-about-item-copy,
+.landing-action-note,
+.landing-footer,
+.landing-footer-copy {
+  color: var(--public-auth-text-muted);
+}
+
+.landing-nav {
+  border: 1px solid var(--public-auth-shell-border);
+  background: var(--public-auth-shell-surface-strong-sm);
+}
+
+.landing-nav-link {
+  color: var(--public-auth-text-muted);
+}
+
+.landing-nav-link:hover {
+  background: var(--public-auth-ghost-hover-bg);
+  color: var(--public-auth-text-strong);
+}
+
+.landing-nav-link:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--public-auth-ghost-ring);
+}
+
+.landing-primary-button {
+  border: 1px solid var(--public-auth-primary-bg);
+  background: var(--public-auth-primary-bg);
+  color: var(--public-auth-text-strong);
+}
+
+.landing-primary-button:hover {
+  background: var(--public-auth-primary-bg-hover);
+}
+
+.landing-primary-button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--public-auth-primary-ring);
+}
+
+.landing-secondary-button {
+  border: 1px solid var(--public-auth-shell-border);
+  background: var(--public-auth-shell-surface-strong-sm);
+  color: var(--public-auth-text-strong);
+}
+
+.landing-secondary-button:hover {
+  background: var(--public-auth-ghost-hover-bg);
+}
+
+.landing-secondary-button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--public-auth-ghost-ring);
+}
+
+.landing-badge {
+  border: 1px solid hsl(var(--primary) / 0.25);
+  background: hsl(var(--primary) / 0.1);
+  color: hsl(var(--primary-foreground));
+}
+
+.landing-chip,
+.landing-feature-card,
+.landing-action-note,
+.landing-secondary-pane-shell,
+.landing-about-shell,
+.landing-about-item,
+.landing-about-note,
+.landing-placeholder-section,
+.landing-placeholder-card,
+.landing-placeholder-box,
+.landing-placeholder-footer-shell {
+  border: 1px solid var(--public-auth-shell-border);
+  background: var(--public-auth-shell-surface-muted);
+}
+
+.landing-chip {
+  color: var(--public-auth-text-muted);
+}
+
+.landing-about-shell {
+  background: var(--public-auth-shell-surface-strong);
+}
+
+.landing-about-item-icon {
+  color: hsl(var(--primary-foreground));
+}
+
+.landing-placeholder-section--accent {
+  border-color: hsl(var(--status-online) / 0.22);
+  background: hsl(var(--status-online) / 0.08);
+}
+
+.landing-placeholder-line {
+  background: var(--public-auth-shell-surface);
+}
+
+.landing-placeholder-line--accent {
+  background: hsl(var(--status-online) / 0.18);
+}
+
+.landing-footer {
+  border-top: 1px solid var(--public-auth-shell-border);
+}
+
+.landing-section-eyebrow,
+.landing-security-panel-eyebrow {
+  color: var(--public-auth-text-muted);
+}
+
+.landing-section-title,
+.landing-feature-title,
+.landing-security-title {
+  color: var(--public-auth-text-strong);
+}
+
+.landing-section-copy,
+.landing-security-copy,
+.landing-security-panel-copy,
+.landing-security-point-copy {
+  color: var(--public-auth-text-muted);
+}
+
+.landing-feature-article,
+.landing-security-panel,
+.landing-security-point {
+  border: 1px solid var(--public-auth-shell-border);
+  background: var(--public-auth-shell-surface-muted);
+}
+
+.landing-feature-icon {
+  background: hsl(var(--primary) / 0.15);
+  color: hsl(var(--primary-foreground));
+}
+
+.landing-security-shell {
+  border: 1px solid hsl(var(--status-online) / 0.22);
+  background: hsl(var(--status-online) / 0.08);
+}
+
+.landing-security-heading {
+  color: hsl(var(--status-online));
+}
+
+.landing-security-panel,
+.landing-security-point {
+  background: var(--public-auth-shell-surface-strong-sm);
+}
+
+.landing-security-panel-eyebrow,
+.landing-security-point-icon {
+  color: hsl(var(--status-online));
+}
+
 .landing-deferred-section {
   content-visibility: auto;
   contain-intrinsic-size: auto 720px;

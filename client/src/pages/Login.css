@@ -1,3 +1,49 @@
+.login-page {
+  background: var(--login-layout-bg);
+}
+
+.login-bg-pattern {
+  background-image: radial-gradient(circle, var(--login-pattern-dot) 0 1.5px, transparent 1.6px);
+  background-size: 60px 60px;
+}
+
+.login-bg-orb {
+  border-radius: 9999px;
+  filter: blur(64px);
+}
+
+.login-bg-orb--top {
+  background: var(--login-glow-top);
+}
+
+.login-bg-orb--bottom {
+  background: var(--login-glow-bottom);
+}
+
+.login-bg-orb--center {
+  background: var(--login-glow-center);
+}
+
+.login-back-button {
+  border: 1px solid var(--login-back-button-border);
+  background: var(--login-back-button-bg);
+  color: var(--login-back-button-text);
+}
+
+.login-back-button:hover {
+  background: var(--login-back-button-bg-hover);
+  color: var(--login-back-button-text-hover);
+}
+
+.login-back-button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--login-back-button-ring);
+}
+
+.login-halo {
+  background: var(--login-card-halo);
+}
+
 .login-content {
   animation: content-fade 1.2s ease-out forwards;
   opacity: 0;
@@ -19,10 +65,10 @@
   position: relative;
   overflow: hidden;
   border-radius: 32px;
-  background: rgba(255, 255, 255, 0.12);
+  background: var(--login-card-surface);
   -webkit-backdrop-filter: blur(18px) saturate(160%);
   backdrop-filter: blur(18px) saturate(160%);
-  border: 1px solid rgba(255, 255, 255, 0.55);
+  border: 1px solid var(--login-card-border);
   box-shadow: var(--login-card-shadow);
   animation: glass-float 7s ease-in-out infinite;
 }
@@ -43,12 +89,7 @@
   position: absolute;
   inset: -2px;
   border-radius: inherit;
-  background: linear-gradient(
-    160deg,
-    rgba(255, 255, 255, 0.85),
-    rgba(220, 220, 220, 0.45),
-    rgba(255, 255, 255, 0.75)
-  );
+  background: var(--login-card-border-gradient);
   background-size: 200% 200%;
   animation: silver-move 12s ease infinite;
   z-index: var(--z-login-card-border);
@@ -74,14 +115,123 @@
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  background: linear-gradient(
-    to bottom right,
-    rgba(255, 255, 255, 0.45),
-    rgba(255, 255, 255, 0.08) 40%,
-    rgba(255, 255, 255, 0.02)
-  );
+  background: var(--login-card-overlay-gradient);
   pointer-events: none;
   z-index: var(--z-login-card-overlay);
+}
+
+.login-brand-mark {
+  background: var(--login-brand-surface);
+  border: 1px solid var(--login-brand-border);
+}
+
+.login-title {
+  color: var(--login-title-text);
+}
+
+.login-subtitle {
+  color: var(--login-subtitle-text);
+}
+
+.login-input {
+  border-color: transparent;
+  background: var(--login-input-bg);
+  color: var(--login-input-text);
+}
+
+.login-input::placeholder {
+  color: var(--login-input-placeholder);
+}
+
+.login-input:focus,
+.login-input:focus-visible {
+  border-color: transparent;
+  outline: none;
+  box-shadow: 0 0 0 2px var(--login-input-focus-ring);
+}
+
+.login-password-toggle {
+  color: var(--login-password-toggle-text);
+}
+
+.login-password-toggle:hover {
+  color: var(--login-password-toggle-text-hover);
+}
+
+.login-password-toggle:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--login-password-toggle-ring);
+}
+
+.login-submit {
+  background: var(--login-submit-gradient);
+  color: var(--login-submit-text);
+  box-shadow: var(--login-submit-shadow);
+}
+
+.login-submit:hover {
+  background: var(--login-submit-gradient-hover);
+}
+
+.login-submit:focus-visible {
+  outline: none;
+  box-shadow: var(--login-submit-shadow), 0 0 0 3px var(--login-submit-ring);
+}
+
+.login-submit-spinner {
+  border-color: var(--login-spinner-track);
+  border-top-color: var(--login-spinner-head);
+}
+
+.login-field-error {
+  color: var(--login-alert-warning-text);
+}
+
+.login-alert {
+  border-radius: 0.75rem;
+  border: 1px solid transparent;
+  padding: 0.75rem 1rem;
+  text-align: center;
+}
+
+.login-alert--warning {
+  border-color: var(--login-alert-warning-border);
+  background: var(--login-alert-warning-bg);
+  color: var(--login-alert-warning-text);
+}
+
+.login-alert--warning-subtext {
+  color: var(--login-alert-warning-subtext);
+}
+
+.login-alert--error {
+  border-color: var(--login-alert-error-border);
+  background: var(--login-alert-error-bg);
+  color: var(--login-alert-error-text);
+}
+
+.login-alert--success {
+  border-color: var(--login-alert-success-border);
+  background: var(--login-alert-success-bg);
+  color: var(--login-alert-success-text);
+}
+
+.login-secondary-link {
+  color: var(--login-link-text);
+}
+
+.login-secondary-link:hover {
+  background: var(--login-link-bg-hover);
+  color: var(--login-link-text-hover);
+}
+
+.login-secondary-link:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--login-link-ring);
+}
+
+.login-footer {
+  color: var(--login-footer-text);
 }
 
 @keyframes float-slow {
@@ -133,8 +283,8 @@
     animation: none;
     -webkit-backdrop-filter: none;
     backdrop-filter: none;
-    background: rgba(15, 23, 42, 0.92);
-    border-color: rgba(255, 255, 255, 0.18);
+    background: var(--login-mobile-card-surface);
+    border-color: var(--login-mobile-card-border);
     box-shadow: var(--login-card-mobile-shadow);
   }
 

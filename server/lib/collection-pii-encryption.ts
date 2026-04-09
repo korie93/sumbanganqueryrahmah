@@ -2,6 +2,7 @@ import { createCipheriv, createDecipheriv, createHash, createHmac, randomBytes }
 import {
   getCollectionPiiDecryptionSecrets,
   getCollectionPiiEncryptionSecret,
+  isCollectionPiiPlaintextRetiredField,
 } from "../config/security";
 
 export type EncryptedCollectionRecordPiiValues = {
@@ -277,21 +278,44 @@ export function decryptCollectionPiiValueSafe(payload: unknown): string | null {
 }
 
 export function resolveCollectionPiiFieldValue(params: {
+  field?: CollectionPiiFieldName;
   plaintext: unknown;
   encrypted: unknown;
   fallback?: string;
 }): string {
-  const plaintext = normalizeCollectionPiiValue(params.plaintext);
-  if (plaintext) {
-    return plaintext;
-  }
-
   const decrypted = decryptCollectionPiiValueSafe(params.encrypted);
   if (decrypted) {
     return decrypted;
   }
 
+  if (params.field && isCollectionPiiPlaintextRetiredField(params.field)) {
+    return params.fallback ?? "";
+  }
+
+  const plaintext = normalizeCollectionPiiValue(params.plaintext);
+  if (plaintext) {
+    return plaintext;
+  }
+
   return params.fallback ?? "";
+}
+
+export function resolveCollectionCustomerNameSearchHashesValue(params: {
+  plaintext: unknown;
+  encrypted?: unknown;
+  hashes?: unknown;
+}): string[] | null {
+  const resolved = resolveCollectionPiiFieldValue({
+    plaintext: params.plaintext,
+    encrypted: params.encrypted,
+  });
+  const recomputedHashes = hashCollectionCustomerNameSearchTerms(resolved);
+  if (recomputedHashes?.length) {
+    return recomputedHashes;
+  }
+
+  const fallbackHashes = normalizeCollectionPiiSearchHashArray(params.hashes);
+  return fallbackHashes.length > 0 ? fallbackHashes : null;
 }
 
 export function resolveStoredCollectionPiiPlaintextValue(params: {

@@ -1,0 +1,68 @@
+.not-found-page {
+  background: var(--not-found-layout-bg);
+  color: var(--not-found-title-text);
+}
+
+.not-found-page__orb--primary {
+  background: var(--not-found-orb-primary);
+}
+
+.not-found-page__orb--secondary {
+  background: var(--not-found-orb-secondary);
+}
+
+.not-found-page__card {
+  background: var(--not-found-card-surface);
+  border: 1px solid var(--not-found-card-border);
+  box-shadow: var(--not-found-card-shadow);
+}
+
+.not-found-page__icon-shell {
+  background: var(--not-found-icon-surface);
+  border: 1px solid var(--not-found-icon-border);
+}
+
+.not-found-page__icon {
+  color: var(--not-found-icon-color);
+}
+
+.not-found-page__kicker {
+  color: var(--not-found-kicker-text);
+}
+
+.not-found-page__title {
+  color: var(--not-found-title-text);
+}
+
+.not-found-page__copy {
+  color: var(--not-found-copy-text);
+}
+
+.not-found-page__secondary-button {
+  border: 1px solid var(--not-found-secondary-button-border);
+  background: var(--not-found-secondary-button-bg);
+  color: var(--not-found-secondary-button-text);
+}
+
+.not-found-page__secondary-button:hover {
+  background: var(--not-found-secondary-button-bg-hover);
+}
+
+.not-found-page__secondary-button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--not-found-secondary-button-ring);
+}
+
+.not-found-page__primary-button {
+  background: var(--not-found-primary-button-bg);
+  color: var(--not-found-primary-button-text);
+}
+
+.not-found-page__primary-button:hover {
+  background: var(--not-found-primary-button-bg-hover);
+}
+
+.not-found-page__primary-button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--not-found-primary-button-ring);
+}

@@ -6,6 +6,10 @@ import { BackupsRepository } from "../backups.repository";
 import { db } from "../../db-postgres";
 import { decodeBackupDataFromStorage } from "../backups-encryption";
 import {
+  encryptCollectionPiiFieldValue,
+  hashCollectionCustomerNameSearchTerms,
+} from "../../lib/collection-pii-encryption";
+import {
   iteratePreparedBackupPayloadStorageChunks,
   readPreparedBackupPayloadForStorage,
 } from "../backups-payload-utils";
@@ -599,6 +603,84 @@ test("BackupsRepository exports collection backup payload amounts with explicit 
         assert.equal(parsed.collectionRecordReceipts?.[0]?.extractedAmountCents, "500");
         assert.equal("receiptAmount" in (parsed.collectionRecordReceipts?.[0] || {}), false);
         assert.equal("extractedAmount" in (parsed.collectionRecordReceipts?.[0] || {}), false);
+      } finally {
+        dbAny.execute = originalExecute;
+        await prepared?.cleanup();
+      }
+    },
+  );
+});
+
+test("BackupsRepository recomputes customer-name blind indexes from encrypted collection PII when possible", async () => {
+  await withEnv(
+    {
+      NODE_ENV: "production",
+      BACKUP_ENCRYPTION_KEY: null,
+      BACKUP_ENCRYPTION_KEYS: `primary:${"A".repeat(32)}`,
+      BACKUP_ENCRYPTION_KEY_ID: "primary",
+      COLLECTION_PII_ENCRYPTION_KEY: "collection-pii-secret-2026",
+    },
+    async () => {
+      const repository = new BackupsRepository(repoOptions);
+
+      const dbAny = db as any;
+      const originalExecute = dbAny.execute;
+      dbAny.execute = async (query: unknown) => {
+        const sqlText = normalizeSqlText(query);
+        if (sqlText.includes("FROM public.collection_records")) {
+          return {
+            rows: [
+              {
+                id: "record-1",
+                customerName: "",
+                customerNameEncrypted: encryptCollectionPiiFieldValue("Encrypted Alice"),
+                customerNameSearchHashes: ["stale.hash.value"],
+                icNumber: "900101015555",
+                icNumberEncrypted: "enc.ic-number",
+                customerPhone: "0123000001",
+                customerPhoneEncrypted: "enc.customer-phone",
+                accountNumber: "ACC-1001",
+                accountNumberEncrypted: "enc.account-number",
+                batch: "P10",
+                paymentDate: "2026-03-31",
+                amount: "100.00",
+                receiptFile: null,
+                receiptTotalAmountCents: "10000",
+                receiptValidationStatus: "matched",
+                receiptValidationMessage: null,
+                receiptCount: 1,
+                duplicateReceiptFlag: false,
+                createdByLogin: "system",
+                collectionStaffNickname: "Collector Alpha",
+                staffUsername: "staff.user",
+                createdAt: new Date("2026-03-31T08:00:00.000Z"),
+              },
+            ],
+          };
+        }
+        return { rows: [] };
+      };
+
+      let prepared: Awaited<ReturnType<BackupsRepository["prepareBackupPayloadFileForCreate"]>> | null =
+        null;
+
+      try {
+        prepared = await repository.prepareBackupPayloadFileForCreate();
+        const encryptedPayload = await fs.readFile(prepared.tempFilePath);
+        const storagePayload = `${String(prepared.tempPayloadStoragePrefix || "")}${encryptedPayload.toString("base64")}`;
+        const decryptedPayload = decodeBackupDataFromStorage(storagePayload, {
+          requireEncryption: true,
+          primaryKeyId: "primary",
+          keysById: new Map([["primary", Buffer.from("A".repeat(32), "utf8")]]),
+        });
+        const parsed = JSON.parse(decryptedPayload) as {
+          collectionRecords?: Array<Record<string, unknown>>;
+        };
+
+        assert.deepEqual(
+          parsed.collectionRecords?.[0]?.customerNameSearchHashes,
+          hashCollectionCustomerNameSearchTerms("Encrypted Alice"),
+        );
       } finally {
         dbAny.execute = originalExecute;
         await prepared?.cleanup();

@@ -6,7 +6,6 @@ import {
   LandingPrimaryActionRow,
   landingSecondaryButtonClassName,
 } from "@/pages/LandingHeroShell";
-import "./Landing.css";
 
 type LandingProps = {
   onLoginClick: () => void;
@@ -33,35 +32,35 @@ function LandingDeferredSectionsFallback({
     <>
       <section
         id="features"
-        className="landing-deferred-section mt-12 rounded-3xl border border-white/10 bg-white/[0.03] px-5 py-6"
+        className="landing-deferred-section landing-placeholder-section mt-12 rounded-3xl px-5 py-6"
         aria-hidden="true"
       >
         <div className="max-w-3xl space-y-3">
-          <div className="h-3.5 w-24 rounded-full bg-white/10" />
-          <div className="h-7 max-w-md rounded-2xl bg-white/10" />
-          <div className="h-3 max-w-2xl rounded-full bg-white/10" />
+          <div className="landing-placeholder-line h-3.5 w-24 rounded-full" />
+          <div className="landing-placeholder-line h-7 max-w-md rounded-2xl" />
+          <div className="landing-placeholder-line h-3 max-w-2xl rounded-full" />
         </div>
       </section>
 
       <section
         id="security"
-        className="landing-deferred-section mt-6 rounded-3xl border border-emerald-400/15 bg-emerald-400/[0.04] px-5 py-6"
+        className="landing-deferred-section landing-placeholder-section landing-placeholder-section--accent mt-6 rounded-3xl px-5 py-6"
         aria-hidden="true"
       >
         <div className="max-w-3xl space-y-3">
-          <div className="h-4 w-36 rounded-full bg-emerald-200/15" />
-          <div className="h-3 max-w-3xl rounded-full bg-white/10" />
-          <div className="h-3 max-w-2xl rounded-full bg-white/10" />
+          <div className="landing-placeholder-line landing-placeholder-line--accent h-4 w-36 rounded-full" />
+          <div className="landing-placeholder-line h-3 max-w-3xl rounded-full" />
+          <div className="landing-placeholder-line h-3 max-w-2xl rounded-full" />
         </div>
       </section>
 
-      <footer className="landing-deferred-section border-t border-white/10 pt-6 text-sm text-slate-400">
-        <div className="flex flex-col gap-4 rounded-2xl border border-white/10 bg-white/5 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+      <footer className="landing-deferred-section landing-footer pt-6 text-sm">
+        <div className="landing-placeholder-footer-shell flex flex-col gap-4 rounded-2xl px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="space-y-1">
-            <p className="font-medium text-slate-200">
+            <p className="landing-footer-title font-medium">
               SQR dibina untuk operasi dalaman yang fokus, ringkas, dan terkawal.
             </p>
-            <p>
+            <p className="landing-footer-copy">
               Halaman ini diwujudkan untuk memberi gambaran ringkas tentang fungsi utama sistem
               tanpa elemen promosi, borang pertanyaan, atau kandungan yang tidak diperlukan.
             </p>
@@ -136,27 +135,27 @@ export default function Landing({ onLoginClick }: LandingProps) {
           <>
             <LandingPrimaryActionRow onLoginClick={onLoginClick} />
             <div className="grid gap-3 sm:grid-cols-3">
-              <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-4">
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
+              <div className="landing-feature-card rounded-2xl px-4 py-4">
+                <p className="landing-feature-eyebrow text-xs font-semibold uppercase tracking-[0.2em]">
                   Fokus
                 </p>
-                <p className="mt-2 text-sm leading-6 text-slate-200">
+                <p className="landing-feature-copy mt-2 text-sm leading-6">
                   General search dan semakan rekod tanpa paparan yang berserabut.
                 </p>
               </div>
-              <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-4">
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
+              <div className="landing-feature-card rounded-2xl px-4 py-4">
+                <p className="landing-feature-eyebrow text-xs font-semibold uppercase tracking-[0.2em]">
                   Ketertiban
                 </p>
-                <p className="mt-2 text-sm leading-6 text-slate-200">
+                <p className="landing-feature-copy mt-2 text-sm leading-6">
                   Susun atur dibina untuk kerja dalaman yang berulang dan memerlukan ketepatan.
                 </p>
               </div>
-              <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-4">
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
+              <div className="landing-feature-card rounded-2xl px-4 py-4">
+                <p className="landing-feature-eyebrow text-xs font-semibold uppercase tracking-[0.2em]">
                   Kawalan
                 </p>
-                <p className="mt-2 text-sm leading-6 text-slate-200">
+                <p className="landing-feature-copy mt-2 text-sm leading-6">
                   Akses sistem dikawal melalui log masuk dan semakan keselamatan yang berkaitan.
                 </p>
               </div>
@@ -166,16 +165,16 @@ export default function Landing({ onLoginClick }: LandingProps) {
         rightPane={(
           <div
             id="about"
-            className="landing-secondary-pane rounded-3xl border border-white/10 bg-white/5 p-5 shadow-2xl shadow-black/20 backdrop-blur"
+            className="landing-secondary-pane landing-secondary-pane-shell rounded-3xl p-5 shadow-2xl shadow-black/20 backdrop-blur"
           >
-            <div className="landing-about-card rounded-2xl border border-white/10 bg-slate-900/80 p-6">
-              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">
+            <div className="landing-about-shell landing-about-card rounded-2xl p-6">
+              <p className="landing-about-eyebrow text-xs font-semibold uppercase tracking-[0.24em]">
                 Tentang Sistem
               </p>
-              <h2 className="mt-3 text-2xl font-semibold tracking-tight text-white">
+              <h2 className="landing-about-title mt-3 text-2xl font-semibold tracking-tight">
                 Ruang kerja digital untuk semakan data yang lebih teratur.
               </h2>
-              <p className="mt-4 text-sm leading-7 text-slate-300">
+              <p className="landing-about-copy mt-4 text-sm leading-7">
                 Sistem ini dibangunkan untuk kegunaan operasi dalaman dengan keutamaan pada
                 kelajuan carian, kebolehbacaan data, kawalan akses, dan aliran kerja yang
                 membantu pengguna menumpukan kepada tugas sebenar tanpa gangguan yang tidak perlu.
@@ -184,14 +183,14 @@ export default function Landing({ onLoginClick }: LandingProps) {
                 {aboutHighlights.map((item) => (
                   <div
                     key={item}
-                    className="flex items-start gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3"
+                    className="landing-about-item flex items-start gap-3 rounded-2xl px-4 py-3"
                   >
-                    <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-blue-200" />
-                    <p className="text-sm leading-6 text-slate-200">{item}</p>
+                    <CheckCircle2 className="landing-about-item-icon mt-0.5 h-4 w-4 shrink-0" />
+                    <p className="landing-about-item-copy text-sm leading-6">{item}</p>
                   </div>
                 ))}
               </div>
-              <div className="mt-4 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm leading-6 text-slate-300">
+              <div className="landing-about-note mt-4 rounded-2xl px-4 py-3 text-sm leading-6">
                 Akses adalah terhad kepada pengguna berdaftar dan tertakluk kepada kawalan peranan
                 serta dasar keselamatan sistem.
               </div>

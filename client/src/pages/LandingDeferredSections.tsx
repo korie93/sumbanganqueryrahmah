@@ -47,13 +47,13 @@ export default function LandingDeferredSections({
     <>
       <section id="features" className="landing-deferred-section mt-12 space-y-5">
         <div className="space-y-2">
-          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">
+          <p className="landing-section-eyebrow text-xs font-semibold uppercase tracking-[0.24em]">
             Fungsi Teras
           </p>
-          <h2 className="text-2xl font-semibold tracking-tight text-white">
+          <h2 className="landing-section-title text-2xl font-semibold tracking-tight">
             Fungsi utama dipersembahkan secara padat dan mudah diimbas.
           </h2>
-          <p className="max-w-3xl text-sm leading-7 text-slate-300">
+          <p className="landing-section-copy max-w-3xl text-sm leading-7">
             Halaman awam ini hanya memaparkan gambaran ringkas tentang keupayaan sistem. Fokus
             sebenar kekal pada pengalaman kerja selepas pengguna log masuk.
           </p>
@@ -62,13 +62,13 @@ export default function LandingDeferredSections({
           {featureHighlights.map((item) => (
             <article
               key={item.title}
-              className="rounded-3xl border border-white/10 bg-white/5 p-5 backdrop-blur"
+              className="landing-feature-article rounded-3xl p-5 backdrop-blur"
             >
-              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-500/15 text-blue-200">
+              <div className="landing-feature-icon flex h-11 w-11 items-center justify-center rounded-2xl">
                 <item.icon className="h-5 w-5" />
               </div>
-              <h2 className="mt-4 text-lg font-semibold text-white">{item.title}</h2>
-              <p className="mt-2 text-sm leading-6 text-slate-300">{item.description}</p>
+              <h2 className="landing-feature-title mt-4 text-lg font-semibold">{item.title}</h2>
+              <p className="landing-section-copy mt-2 text-sm leading-6">{item.description}</p>
             </article>
           ))}
         </div>
@@ -76,25 +76,25 @@ export default function LandingDeferredSections({
 
       <section
         id="security"
-        className="landing-deferred-section mt-12 rounded-3xl border border-emerald-400/15 bg-emerald-400/5 p-6"
+        className="landing-deferred-section landing-security-shell mt-12 rounded-3xl p-6"
       >
         <div className="grid gap-6 lg:grid-cols-[1.15fr_0.85fr] lg:items-start">
           <div>
-            <div className="flex items-center gap-2 text-emerald-200">
+            <div className="landing-security-heading flex items-center gap-2">
               <ShieldCheck className="h-5 w-5" />
-              <h2 className="text-lg font-semibold text-white">Gambaran Keselamatan</h2>
+              <h2 className="landing-security-title text-lg font-semibold">Gambaran Keselamatan</h2>
             </div>
-            <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-300">
+            <p className="landing-security-copy mt-3 max-w-3xl text-sm leading-7">
               Asas keselamatan sistem ini memberi tumpuan kepada perlindungan akses, pengesahan
               sesi, dan kebolehkesanan tindakan penting supaya penggunaan harian kekal terkawal
               dan selamat.
             </p>
           </div>
-          <div className="rounded-2xl border border-white/10 bg-slate-950/35 p-4">
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-200/80">
+          <div className="landing-security-panel rounded-2xl p-4">
+            <p className="landing-security-panel-eyebrow text-xs font-semibold uppercase tracking-[0.2em]">
               Akses Sistem
             </p>
-            <p className="mt-2 text-sm leading-6 text-slate-200">
+            <p className="landing-security-panel-copy mt-2 text-sm leading-6">
               Halaman awam hanya memberikan penerangan ringkas. Semua fungsi operasi sebenar
               memerlukan log masuk mengikut peranan pengguna.
             </p>
@@ -104,22 +104,22 @@ export default function LandingDeferredSections({
           {securityPoints.map((point) => (
             <div
               key={point}
-              className="flex items-start gap-3 rounded-2xl border border-white/10 bg-slate-950/35 p-4"
+              className="landing-security-point flex items-start gap-3 rounded-2xl p-4"
             >
-              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-300" />
-              <p className="text-sm leading-6 text-slate-200">{point}</p>
+              <CheckCircle2 className="landing-security-point-icon mt-0.5 h-4 w-4 shrink-0" />
+              <p className="landing-security-point-copy text-sm leading-6">{point}</p>
             </div>
           ))}
         </div>
       </section>
 
-      <footer className="landing-deferred-section border-t border-white/10 pt-6 text-sm text-slate-400">
-        <div className="flex flex-col gap-4 rounded-2xl border border-white/10 bg-white/5 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+      <footer className="landing-deferred-section landing-footer pt-6 text-sm">
+        <div className="landing-placeholder-footer-shell flex flex-col gap-4 rounded-2xl px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="space-y-1">
-            <p className="font-medium text-slate-200">
+            <p className="landing-footer-title font-medium">
               SQR dibina untuk operasi dalaman yang fokus, ringkas, dan terkawal.
             </p>
-            <p>
+            <p className="landing-footer-copy">
               Halaman ini diwujudkan untuk memberi gambaran ringkas tentang fungsi utama sistem
               tanpa elemen promosi, borang pertanyaan, atau kandungan yang tidak diperlukan.
             </p>

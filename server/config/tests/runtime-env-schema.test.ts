@@ -69,3 +69,22 @@ test("runtime env schema preserves the existing AUTH_COOKIE_SECURE error contrac
     /AUTH_COOKIE_SECURE must be one of: auto, true, false, 1, or 0/i,
   );
 });
+
+test("runtime env schema accepts staged collection PII retirement field lists", () => {
+  assert.doesNotThrow(() => {
+    validateRuntimeEnvironmentSchema({
+      COLLECTION_PII_RETIRED_FIELDS: "icNumber,customerPhone,accountNumber",
+    });
+  });
+});
+
+test("runtime env schema rejects unknown collection PII retirement fields", () => {
+  assert.throws(
+    () => {
+      validateRuntimeEnvironmentSchema({
+        COLLECTION_PII_RETIRED_FIELDS: "icNumber,unknownField",
+      });
+    },
+    /COLLECTION_PII_RETIRED_FIELDS must contain only/i,
+  );
+});

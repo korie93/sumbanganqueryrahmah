@@ -6,6 +6,12 @@ const DEFAULT_STRING_MAX_LENGTH = 4_096;
 const SECRET_STRING_MAX_LENGTH = 8_192;
 const BOOLEAN_ENV_VALUES = new Set(["1", "0", "true", "false", "yes", "no", "on", "off"]);
 const AUTH_COOKIE_SECURE_VALUES = new Set(["auto", "true", "false", "1", "0"]);
+const COLLECTION_PII_FIELD_VALUES = new Set([
+  "customerName",
+  "icNumber",
+  "customerPhone",
+  "accountNumber",
+]);
 
 function normalizeOptionalEnvString(value: unknown) {
   if (value == null) {
@@ -80,6 +86,22 @@ function optionalIntEnv(name: string, options: { min?: number; max?: number } = 
   );
 }
 
+function optionalCollectionPiiRetiredFieldsEnv(name: string) {
+  return z.preprocess(
+    normalizeOptionalEnvString,
+    z
+      .string({ invalid_type_error: `${name} must be a comma-separated string.` })
+      .refine((value) => {
+        const fields = value
+          .split(",")
+          .map((entry) => entry.trim())
+          .filter(Boolean);
+        return fields.every((field) => COLLECTION_PII_FIELD_VALUES.has(field));
+      }, `${name} must contain only: customerName, icNumber, customerPhone, accountNumber.`)
+      .optional(),
+  );
+}
+
 const runtimeEnvironmentSchema = z.object({
   NODE_ENV: optionalEnvString("NODE_ENV", 64),
   HOST: optionalEnvString("HOST", 255),
@@ -109,6 +131,9 @@ const runtimeEnvironmentSchema = z.object({
   COLLECTION_PII_ENCRYPTION_KEY_PREVIOUS: optionalEnvString(
     "COLLECTION_PII_ENCRYPTION_KEY_PREVIOUS",
     SECRET_STRING_MAX_LENGTH,
+  ),
+  COLLECTION_PII_RETIRED_FIELDS: optionalCollectionPiiRetiredFieldsEnv(
+    "COLLECTION_PII_RETIRED_FIELDS",
   ),
   COLLECTION_NICKNAME_TEMP_PASSWORD: optionalEnvString(
     "COLLECTION_NICKNAME_TEMP_PASSWORD",

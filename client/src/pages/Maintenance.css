@@ -1,0 +1,77 @@
+.maintenance-page {
+  background: var(--maintenance-layout-bg);
+  color: var(--maintenance-title-text);
+}
+
+.maintenance-page__shell {
+  background: var(--maintenance-shell-surface);
+  border: 1px solid var(--maintenance-shell-border);
+  box-shadow: var(--error-boundary-card-shadow);
+}
+
+.maintenance-page__header {
+  border-bottom: 1px solid var(--maintenance-shell-divider);
+}
+
+.maintenance-page__kicker {
+  color: var(--maintenance-warning-text);
+}
+
+.maintenance-page__badge {
+  border: 1px solid var(--maintenance-badge-border);
+  background: var(--maintenance-badge-surface);
+  color: var(--maintenance-badge-text);
+}
+
+.maintenance-page__title {
+  color: var(--maintenance-title-text);
+}
+
+.maintenance-page__message {
+  background: var(--maintenance-panel-surface);
+  border: 1px solid var(--maintenance-panel-border);
+  color: var(--maintenance-copy-text);
+}
+
+.maintenance-page__panel {
+  background: var(--maintenance-panel-surface);
+  border: 1px solid var(--maintenance-panel-border);
+}
+
+.maintenance-page__panel-label {
+  color: var(--maintenance-muted-text);
+}
+
+.maintenance-page__panel-value {
+  color: var(--maintenance-title-text);
+}
+
+.maintenance-page__countdown {
+  background: var(--maintenance-countdown-surface);
+  border: 1px solid var(--maintenance-countdown-border);
+}
+
+.maintenance-page__countdown-label,
+.maintenance-page__countdown-icon {
+  color: var(--maintenance-countdown-text);
+}
+
+.maintenance-page__countdown-chip {
+  background: var(--maintenance-countdown-inner-bg);
+  border: 1px solid var(--maintenance-countdown-border);
+}
+
+.maintenance-page__countdown-value,
+.maintenance-page__countdown-chip-icon {
+  color: var(--maintenance-countdown-value);
+}
+
+.maintenance-page__info {
+  background: var(--maintenance-info-surface);
+  border: 1px solid var(--maintenance-shell-divider);
+  color: var(--maintenance-muted-text);
+}
+
+.maintenance-page__info-icon {
+  color: var(--maintenance-warning-text);
+}

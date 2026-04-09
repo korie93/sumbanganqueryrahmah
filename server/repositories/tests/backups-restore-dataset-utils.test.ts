@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { encryptCollectionPiiFieldValue } from "../../lib/collection-pii-encryption";
+import {
+  encryptCollectionPiiFieldValue,
+  hashCollectionCustomerNameSearchTerms,
+} from "../../lib/collection-pii-encryption";
 import {
   createRestoreStats,
   initializeRestoreTrackingTempTable,
@@ -278,6 +281,75 @@ test("normalizeBackupCollectionRecord can recover PII from encrypted backup fiel
     assert.equal(restoredRecord?.icNumber, "900101019999");
     assert.equal(restoredRecord?.customerPhone, "0123999999");
     assert.equal(restoredRecord?.accountNumber, "ACC-ENC-1");
+  });
+});
+
+test("collection restore recomputes customer-name blind indexes instead of trusting stale backup hashes", async () => {
+  await withCollectionPiiEncryptionKey("collection-pii-secret-2026", async () => {
+    const executedQueries: string[] = [];
+    const tx = {
+      async execute(query: unknown) {
+        const sqlText = normalizeSqlText(query);
+        executedQueries.push(sqlText);
+
+        if (sqlText.includes("INSERT INTO public.collection_records")) {
+          return {
+            rows: [{ id: "11111111-1111-1111-1111-111111111111" }],
+          };
+        }
+
+        return { rows: [] };
+      },
+      insert() {
+        throw new Error("Unexpected insert() call during collection restore hash recompute test.");
+      },
+    };
+    const backupDataReader = {
+      getArray() {
+        throw new Error("restore helpers must not eagerly parse backup datasets.");
+      },
+      async *iterateArrayChunks<T>(key: string): AsyncGenerator<T[]> {
+        if (key !== "collectionRecords") {
+          return;
+        }
+
+        yield [
+          {
+            id: "11111111-1111-1111-1111-111111111111",
+            customerName: "",
+            customerNameEncrypted: encryptCollectionPiiFieldValue("Encrypted Alice"),
+            customerNameSearchHashes: ["stale.hash.value"],
+            icNumber: "900101015555",
+            customerPhone: "0123000001",
+            accountNumber: "ACC-1001",
+            batch: "P10",
+            paymentDate: "2026-03-31",
+            amount: 100,
+            receiptFile: null,
+            receiptTotalAmountCents: 10000,
+            receiptValidationStatus: "matched",
+            receiptValidationMessage: null,
+            receiptCount: 1,
+            duplicateReceiptFlag: false,
+            createdByLogin: "system",
+            collectionStaffNickname: "Collector Alpha",
+            staffUsername: "Collector Alpha",
+            createdAt: "2026-03-31T08:00:00.000Z",
+          } as T,
+        ];
+      },
+    };
+    const stats = createRestoreStats();
+
+    await initializeRestoreTrackingTempTable(tx as any);
+    await restoreCollectionRecordsFromBackup(tx as any, backupDataReader as any, stats);
+
+    const insertQuery = executedQueries.find((query) => query.includes("INSERT INTO public.collection_records"));
+    assert.ok(insertQuery);
+    assert.equal(insertQuery?.includes("stale.hash.value"), false);
+    for (const hash of hashCollectionCustomerNameSearchTerms("Encrypted Alice") || []) {
+      assert.equal(insertQuery?.includes(hash), true);
+    }
   });
 });
 

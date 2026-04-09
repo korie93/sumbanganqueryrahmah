@@ -1,0 +1,116 @@
+.banned-page {
+  background: var(--banned-layout-bg);
+}
+
+.banned-page__pattern {
+  background-image: radial-gradient(circle, var(--banned-pattern-dot) 0 1.5px, transparent 1.6px);
+  background-size: 60px 60px;
+}
+
+.banned-page__orb {
+  border-radius: 9999px;
+}
+
+.banned-page__orb--top {
+  background: var(--banned-orb-top);
+}
+
+.banned-page__orb--bottom {
+  background: var(--banned-orb-bottom);
+}
+
+.banned-page__orb--center {
+  background: var(--banned-orb-center);
+}
+
+.banned-page__halo {
+  background: var(--banned-halo);
+}
+
+.banned-page__card {
+  background: var(--banned-card-surface);
+  border: 1px solid var(--banned-card-border);
+  box-shadow: var(--banned-card-shadow);
+}
+
+.banned-page__shield-glow {
+  background: var(--banned-shield-glow);
+}
+
+.banned-page__shield-core {
+  background: var(--banned-shield-core);
+  border: 4px solid var(--banned-shield-border);
+}
+
+.banned-page__shield-icon {
+  color: var(--banned-shield-icon);
+}
+
+.banned-page__status {
+  background: var(--banned-status-bg);
+  border: 1px solid var(--banned-status-border);
+}
+
+.banned-page__status,
+.banned-page__status-icon {
+  color: var(--banned-status-text);
+}
+
+.banned-page__title {
+  color: var(--banned-title-text);
+}
+
+.banned-page__copy,
+.banned-page__contact-copy {
+  color: var(--banned-copy-text);
+}
+
+.banned-page__panel {
+  background: var(--banned-panel-surface);
+  border: 1px solid var(--banned-panel-border);
+}
+
+.banned-page__panel-icon {
+  color: var(--banned-status-text);
+}
+
+.banned-page__panel-text {
+  color: var(--banned-panel-text);
+}
+
+.banned-page__contact {
+  background: var(--banned-contact-surface);
+  border: 1px solid var(--banned-panel-border);
+}
+
+.banned-page__contact-title {
+  color: var(--banned-contact-title);
+}
+
+.banned-page__retry {
+  border: 1px solid var(--banned-retry-border);
+  color: var(--banned-retry-text);
+}
+
+.banned-page__retry:hover {
+  border-color: var(--banned-retry-border);
+  background: var(--banned-retry-bg-hover);
+  color: var(--banned-retry-text-hover);
+}
+
+.banned-page__retry:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--banned-retry-ring);
+}
+
+.banned-page__footer {
+  border-top: 1px solid var(--banned-footer-border);
+}
+
+.banned-page__footer-brand {
+  color: var(--banned-footer-text);
+}
+
+.banned-page__footer-copy {
+  color: var(--banned-footer-subtext);
+}

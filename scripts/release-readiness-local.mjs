@@ -1,11 +1,12 @@
 import process from "node:process";
 import path from "node:path";
 import { createWriteStream } from "node:fs";
-import { mkdir } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
 import "dotenv/config";
 import { assertPostgresConnection } from "./lib/postgres-preflight.mjs";
+import { resolveCollectionPiiReadinessConfig } from "./lib/collection-pii-readiness.mjs";
 import { waitForServer } from "./lib/server-readiness.mjs";
 
 const npmCliPath = String(process.env.npm_execpath || "").trim();
@@ -37,8 +38,53 @@ const runCommand = (command, args, options = {}) =>
     });
   });
 
+const runCommandCapture = (command, args, options = {}) =>
+  new Promise((resolve, reject) => {
+    const child = spawn(command, args, {
+      stdio: ["ignore", "pipe", "pipe"],
+      cwd: options.cwd || process.cwd(),
+      env: options.env || process.env,
+    });
+    let stdout = "";
+    let stderr = "";
+
+    child.stdout?.on("data", (chunk) => {
+      stdout += chunk.toString();
+    });
+    child.stderr?.on("data", (chunk) => {
+      stderr += chunk.toString();
+    });
+
+    child.on("error", reject);
+    child.on("exit", (code) => {
+      if (code === 0 || options.allowFailure) {
+        resolve({
+          code: code ?? 0,
+          stderr,
+          stdout,
+        });
+        return;
+      }
+      const captured = stderr.trim() || stdout.trim();
+      reject(
+        new Error(
+          captured
+            ? `${command} ${args.join(" ")} failed with exit code ${code}: ${captured}`
+            : `${command} ${args.join(" ")} failed with exit code ${code}`,
+        ),
+      );
+    });
+  });
+
 const runNpm = (args, options = {}) =>
   runCommand(
+    npmCommand,
+    npmCliPath ? [npmCliPath, ...args] : args,
+    options,
+  );
+
+const runNpmCapture = (args, options = {}) =>
+  runCommandCapture(
     npmCommand,
     npmCliPath ? [npmCliPath, ...args] : args,
     options,
@@ -113,6 +159,7 @@ const run = async () => {
     // Bundle budgets should reflect the release artifact, not development-only branches.
     NODE_ENV: "production",
   };
+  const collectionPiiReadiness = resolveCollectionPiiReadinessConfig(env, artifactsDir);
 
   console.log("Release readiness: checking PostgreSQL connectivity...");
   await assertPostgresConnection(env, { context: "Release readiness" });
@@ -124,6 +171,31 @@ const run = async () => {
   await runNpm(["run", "test:db-integration"], { env });
   await runNpm(["run", "test:routes"], { env });
   await runNpm(["run", "test:services"], { env });
+
+  if (collectionPiiReadiness.encryptionConfigured) {
+    console.log("Release readiness: capturing collection PII status...");
+    const statusResult = await runNpmCapture(["run", "collection:pii-status", "--", "--json"], { env });
+    await writeFile(
+      collectionPiiReadiness.statusArtifactPath,
+      statusResult.stdout,
+      "utf8",
+    );
+
+    if (collectionPiiReadiness.verifySensitiveRetirement) {
+      console.log("Release readiness: verifying staged retirement for sensitive collection PII...");
+      await runNpm(["run", "collection:verify-pii-sensitive-retirement"], { env });
+    }
+
+    if (collectionPiiReadiness.retiredFieldsConfigured) {
+      console.log("Release readiness: verifying configured retired collection PII fields...");
+      await runNpm(["run", "collection:verify-pii-retired-fields"], { env });
+    }
+
+    if (collectionPiiReadiness.verifyFullRetirement) {
+      console.log("Release readiness: verifying full collection PII plaintext retirement...");
+      await runNpm(["run", "collection:verify-pii-full-retirement"], { env });
+    }
+  }
 
   console.log("Release readiness: building runtime bundle...");
   await runNpm(["run", "build"], { env: releaseBuildEnv });

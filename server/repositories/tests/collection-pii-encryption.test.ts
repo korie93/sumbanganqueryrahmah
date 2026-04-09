@@ -7,6 +7,7 @@ import {
   hashCollectionCustomerNameSearchTerms,
   hashCollectionPiiSearchValue,
   hasCollectionPiiEncryptionConfigured,
+  resolveCollectionCustomerNameSearchHashesValue,
   resolveCollectionPiiFieldValue,
   resolveStoredCollectionPiiPlaintextValue,
   shouldRedactCollectionPiiPlaintextValue,
@@ -19,9 +20,11 @@ import { mapCollectionRecordRow } from "../collection-repository-mappers";
 function withCollectionPiiKeys<T>(params: {
   current: string | null;
   previous?: string | null;
+  retiredFields?: string | null;
 }, fn: () => T): T {
   const previous = process.env.COLLECTION_PII_ENCRYPTION_KEY;
   const previousCompat = process.env.COLLECTION_PII_ENCRYPTION_KEY_PREVIOUS;
+  const previousRetiredFields = process.env.COLLECTION_PII_RETIRED_FIELDS;
   if (params.current === null) {
     delete process.env.COLLECTION_PII_ENCRYPTION_KEY;
   } else {
@@ -31,6 +34,11 @@ function withCollectionPiiKeys<T>(params: {
     delete process.env.COLLECTION_PII_ENCRYPTION_KEY_PREVIOUS;
   } else {
     process.env.COLLECTION_PII_ENCRYPTION_KEY_PREVIOUS = params.previous;
+  }
+  if (params.retiredFields == null) {
+    delete process.env.COLLECTION_PII_RETIRED_FIELDS;
+  } else {
+    process.env.COLLECTION_PII_RETIRED_FIELDS = params.retiredFields;
   }
 
   try {
@@ -45,6 +53,11 @@ function withCollectionPiiKeys<T>(params: {
       delete process.env.COLLECTION_PII_ENCRYPTION_KEY_PREVIOUS;
     } else {
       process.env.COLLECTION_PII_ENCRYPTION_KEY_PREVIOUS = previousCompat;
+    }
+    if (previousRetiredFields === undefined) {
+      delete process.env.COLLECTION_PII_RETIRED_FIELDS;
+    } else {
+      process.env.COLLECTION_PII_RETIRED_FIELDS = previousRetiredFields;
     }
   }
 }
@@ -71,6 +84,52 @@ test("collection PII helpers encrypt and decrypt collection record shadow fields
       "900101015555",
     );
   });
+});
+
+test("collection PII field resolution prefers decrypting shadow values over legacy plaintext", () => {
+  withCollectionPiiKeys({ current: "test-collection-pii-encryption-key" }, () => {
+    const encrypted = buildEncryptedCollectionRecordPiiValues({
+      customerName: "Encrypted Alice",
+      icNumber: "900101015555",
+      customerPhone: "0123000001",
+      accountNumber: "ACC-1001",
+    });
+
+    assert.equal(
+      resolveCollectionPiiFieldValue({
+        plaintext: "Legacy Alice",
+        encrypted: encrypted?.customerNameEncrypted,
+      }),
+      "Encrypted Alice",
+    );
+  });
+});
+
+test("collection PII field resolution can suppress plaintext fallback for retired live fields", () => {
+  withCollectionPiiKeys(
+    {
+      current: "test-collection-pii-encryption-key",
+      retiredFields: "icNumber,customerPhone,accountNumber",
+    },
+    () => {
+      assert.equal(
+        resolveCollectionPiiFieldValue({
+          field: "icNumber",
+          plaintext: "900101015555",
+          encrypted: "",
+        }),
+        "",
+      );
+      assert.equal(
+        resolveCollectionPiiFieldValue({
+          field: "customerName",
+          plaintext: "Legacy Alice",
+          encrypted: "",
+        }),
+        "Legacy Alice",
+      );
+    },
+  );
 });
 
 test("mapCollectionRecordRow falls back to encrypted collection PII shadow columns", () => {
@@ -311,6 +370,30 @@ test("collection PII helpers build prefix-token blind indexes for customer names
     assert.ok(hashes?.includes(hashCollectionPiiSearchValue("customerName", "al") || ""));
     assert.ok(hashes?.includes(hashCollectionPiiSearchValue("customerName", "alice") || ""));
     assert.ok(hashes?.includes(hashCollectionPiiSearchValue("customerName", "tan") || ""));
+  });
+});
+
+test("collection PII customer-name hash resolver prefers current blind indexes over stale provided hashes", () => {
+  withCollectionPiiKeys({ current: "search-hash-secret-key" }, () => {
+    assert.deepEqual(
+      resolveCollectionCustomerNameSearchHashesValue({
+        plaintext: "Alice Tan",
+        hashes: ["stale.hash.value"],
+      }),
+      hashCollectionCustomerNameSearchTerms("Alice Tan"),
+    );
+  });
+});
+
+test("collection PII customer-name hash resolver falls back to provided hashes when hashing is unavailable", () => {
+  withCollectionPiiKeys({ current: null }, () => {
+    assert.deepEqual(
+      resolveCollectionCustomerNameSearchHashesValue({
+        plaintext: "",
+        hashes: ["hash.customer.al", "hash.customer.alice", "hash.customer.al"],
+      }),
+      ["hash.customer.al", "hash.customer.alice"],
+    );
   });
 });
 

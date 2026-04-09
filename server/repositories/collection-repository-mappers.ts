@@ -29,18 +29,22 @@ export function mapCollectionRecordRow(row: any): CollectionRecord {
   return {
     id: String(row.id),
     customerName: resolveCollectionPiiFieldValue({
+      field: "customerName",
       plaintext: row.customer_name ?? row.customerName,
       encrypted: row.customer_name_encrypted ?? row.customerNameEncrypted,
     }),
     icNumber: resolveCollectionPiiFieldValue({
+      field: "icNumber",
       plaintext: row.ic_number ?? row.icNumber,
       encrypted: row.ic_number_encrypted ?? row.icNumberEncrypted,
     }),
     customerPhone: resolveCollectionPiiFieldValue({
+      field: "customerPhone",
       plaintext: row.customer_phone ?? row.customerPhone,
       encrypted: row.customer_phone_encrypted ?? row.customerPhoneEncrypted,
     }),
     accountNumber: resolveCollectionPiiFieldValue({
+      field: "accountNumber",
       plaintext: row.account_number ?? row.accountNumber,
       encrypted: row.account_number_encrypted ?? row.accountNumberEncrypted,
     }),

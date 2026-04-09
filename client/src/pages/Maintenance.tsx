@@ -7,6 +7,7 @@ import {
   parseStoredMaintenanceState,
   type MaintenancePayload,
 } from "@/pages/maintenance-state";
+import "./Maintenance.css";
 
 const DEFAULT_MAINTENANCE_STATE: MaintenancePayload = {
   maintenance: true,
@@ -128,61 +129,61 @@ export default function MaintenancePage() {
   };
 
   return (
-    <main className="viewport-min-height bg-gradient-to-br from-[#0b1220] via-[#101a2d] to-[#14213d] text-slate-100 flex items-center justify-center p-4 sm:p-6">
+    <main className="maintenance-page viewport-min-height flex items-center justify-center p-4 sm:p-6">
       <section
-        className="w-full max-w-3xl rounded-3xl border border-slate-700/80 bg-slate-900/75 shadow-2xl backdrop-blur-md"
+        className="maintenance-page__shell w-full max-w-3xl rounded-3xl backdrop-blur-md"
         aria-labelledby="maintenance-page-title"
       >
-        <header className="space-y-4 border-b border-slate-800 px-6 pb-6 pt-6 sm:px-8">
+        <header className="maintenance-page__header space-y-4 px-6 pb-6 pt-6 sm:px-8">
           <div className="flex items-center justify-between gap-3">
-            <p className="flex items-center gap-2 text-amber-300">
+            <p className="maintenance-page__kicker flex items-center gap-2">
               <ShieldAlert className="w-5 h-5" />
               <span className="text-xs sm:text-sm uppercase tracking-wide">Penyelenggaraan Sistem</span>
             </p>
-            <div className="rounded-full border border-slate-700 bg-slate-800/80 px-3 py-1 text-xs text-slate-300">
+            <div className="maintenance-page__badge rounded-full px-3 py-1 text-xs">
               {state.type === "hard" ? "Mod Penuh" : "Mod Lembut"}
             </div>
           </div>
-          <h1 id="maintenance-page-title" className="text-2xl font-bold text-slate-100 sm:text-3xl">
+          <h1 id="maintenance-page-title" className="maintenance-page__title text-2xl font-bold sm:text-3xl">
             Sistem Sedang Diselenggara
           </h1>
         </header>
         <div className="space-y-5 px-6 pb-6 pt-6 sm:px-8">
-          <div className="rounded-lg border border-slate-700/90 bg-slate-800/70 p-4">
-            <p className="text-slate-100 leading-relaxed">{state.message}</p>
+          <div className="maintenance-page__message rounded-lg p-4">
+            <p className="leading-relaxed">{state.message}</p>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
-            <div className="rounded-lg border border-slate-700 bg-slate-800/60 p-3">
-              <p className="text-slate-400 mb-1">Status</p>
-              <p className="font-semibold">{state.maintenance ? "Aktif" : "Tidak Aktif"}</p>
+            <div className="maintenance-page__panel rounded-lg p-3">
+              <p className="maintenance-page__panel-label mb-1">Status</p>
+              <p className="maintenance-page__panel-value font-semibold">{state.maintenance ? "Aktif" : "Tidak Aktif"}</p>
             </div>
-            <div className="rounded-lg border border-slate-700 bg-slate-800/60 p-3">
-              <p className="text-slate-400 mb-1">Masa Mula</p>
-              <p className="font-semibold text-xs sm:text-sm">{formatTime(state.startTime)}</p>
+            <div className="maintenance-page__panel rounded-lg p-3">
+              <p className="maintenance-page__panel-label mb-1">Masa Mula</p>
+              <p className="maintenance-page__panel-value font-semibold text-xs sm:text-sm">{formatTime(state.startTime)}</p>
             </div>
-            <div className="rounded-lg border border-slate-700 bg-slate-800/60 p-3">
-              <p className="text-slate-400 mb-1">Masa Tamat</p>
-              <p className="font-semibold text-xs sm:text-sm">{formatTime(state.endTime)}</p>
+            <div className="maintenance-page__panel rounded-lg p-3">
+              <p className="maintenance-page__panel-label mb-1">Masa Tamat</p>
+              <p className="maintenance-page__panel-value font-semibold text-xs sm:text-sm">{formatTime(state.endTime)}</p>
             </div>
           </div>
 
           {countdown && (
-            <div className="rounded-lg border border-blue-700/50 bg-blue-950/40 p-4 flex flex-col sm:flex-row sm:items-center gap-3">
+            <div className="maintenance-page__countdown rounded-lg p-4 flex flex-col gap-3 sm:flex-row sm:items-center">
               <div className="flex items-center gap-2">
-                <Clock3 className="w-5 h-5 text-blue-300" />
-                <p className="text-xs text-blue-200">Anggaran tamat maintenance</p>
+                <Clock3 className="maintenance-page__countdown-icon w-5 h-5" />
+                <p className="maintenance-page__countdown-label text-xs">Anggaran tamat maintenance</p>
               </div>
-              <div className="inline-flex items-center gap-2 rounded-md border border-blue-700/50 px-3 py-1 bg-blue-900/20">
-                <TimerReset className="w-4 h-4 text-blue-200" />
-                <p className="text-2xl font-semibold tracking-wide text-blue-100 font-mono">{countdown}</p>
+              <div className="maintenance-page__countdown-chip inline-flex items-center gap-2 rounded-md px-3 py-1">
+                <TimerReset className="maintenance-page__countdown-chip-icon w-4 h-4" />
+                <p className="maintenance-page__countdown-value text-2xl font-semibold tracking-wide font-mono">{countdown}</p>
               </div>
             </div>
           )}
 
-          <div className="text-xs text-slate-400 flex items-center gap-2 rounded-md border border-slate-800 bg-slate-900/50 p-3">
-            <Wrench className="w-4 h-4" />
-            <AlertTriangle className="w-4 h-4" />
+          <div className="maintenance-page__info flex items-center gap-2 rounded-md p-3 text-xs">
+            <Wrench className="maintenance-page__info-icon w-4 h-4" />
+            <AlertTriangle className="maintenance-page__info-icon w-4 h-4" />
             Jika anda admin atau superuser, log masuk semula untuk akses yang dibenarkan semasa penyelenggaraan.
           </div>
         </div>
