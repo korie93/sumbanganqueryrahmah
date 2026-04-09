@@ -60,12 +60,13 @@ export function AppPaginationBar({
   const safeTotalPages = Math.max(1, totalPages);
   const safePage = Math.min(Math.max(1, page), safeTotalPages);
   const controlsDisabled = disabled || loading;
+  const busyProps = loading ? { "aria-busy": "true" as const } : {};
 
   return (
     <div
       className="flex flex-col gap-3 rounded-xl border border-border/60 bg-background/70 px-3.5 py-2.5 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between"
       data-floating-ai-avoid="true"
-      aria-busy={loading || undefined}
+      {...busyProps}
     >
       <p className="text-xs font-medium text-muted-foreground">
         {buildAppPaginationSummary({
