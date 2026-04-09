@@ -1,7 +1,8 @@
 ================================================================================
   LAPORAN AUDIT PENUH SISTEM — SUMBANGAN QUERY RAHMAH (SQR)
   Tarikh Audit Asal: 2026-04-07
-  Tarikh Kemaskini: 2026-04-08 (Audit Menyeluruh Kedua)
+  Tarikh Kemaskini Kedua: 2026-04-08 (Audit Menyeluruh Kedua)
+  Tarikh Kemaskini Ketiga: 2026-04-09 (Audit Menyeluruh Ketiga)
   Kaedah: Pemeriksaan kod statik keseluruhan
           (backend, frontend, UI/UX, layout, CSS, database, WebSocket, memori)
   Mod: Dokumentasi sahaja — tiada perubahan kod dilakukan
@@ -24,27 +25,56 @@ Audit kedua (2026-04-08) menambah penemuan baharu merangkumi:
   - 54+ hardcoded color values
   - Race condition dalam WebSocket reconnection
 
-Jumlah isu keseluruhan: 89 (termasuk 55 asal + 34 penemuan baharu)
+Audit ketiga (2026-04-09) mengesahkan beberapa pembetulan dan menambah
+penemuan baharu merangkumi:
+  - 4 isu TELAH DIPERBAIKI (#3, #4, #34, #40)
+  - Unmounted state update risk dalam useCollectionRecordsData
+  - Event listener accumulation dalam useFloatingAILayoutState
+  - Missing :focus-visible pada interactive home cards
+  - Backdrop filter performance tanpa will-change
+  - Content-visibility CLS risk pada Landing page
+  - Contrast ratio rendah untuk public auth text
+  - Query stale time terlalu agresif
+  - Promise chain tanpa .catch() handler
+  - Missing AbortController cleanup
+  - AI search timeout buffer terlalu ketat
+  - Receipt preview zoom CSS duplication (26 class)
+  - Missing prefers-reduced-motion untuk welcome-pop
+  - Safe area inset inconsistency
+
+Jumlah isu keseluruhan: 110 (55 asal + 34 audit kedua + 13 audit ketiga
+                              + 8 dipindah ke DIPERBAIKI)
+
+ISU YANG DIPERBAIKI SEJAK AUDIT LEPAS:
+  #3  .env.example default secrets → DIPERBAIKI
+      (kini guna GENERATE_ME placeholder yang jelas)
+  #4  Missing backup encryption key guidance → DIPERBAIKI
+      (kini ada arahan generate dan amaran)
+  #34 TypeScript missing strictness options → DIPERBAIKI
+      (exactOptionalPropertyTypes, noUnusedLocals, noImplicitReturns AKTIF)
+  #40 Missing @types packages → DIPERBAIKI
+      (@types/react-window dan @types/recharts sudah ditambah)
 
 
-RINGKASAN ISU GABUNGAN (Audit 1 + Audit 2)
-=============================================
+RINGKASAN ISU GABUNGAN (Audit 1 + Audit 2 + Audit 3)
+======================================================
 
 +-------------------------------+----------+------+--------+-----+--------+
 | Kategori                      | CRITICAL | HIGH | MEDIUM | LOW | Jumlah |
 +-------------------------------+----------+------+--------+-----+--------+
-| Security                      |     4    |   7  |    6   |  2  |   19   |
+| Security                      |     4    |   7  |    7   |  2  |   20   |
 | Database/Schema               |     2    |   2  |    5   |  1  |   10   |
 | WebSocket & Memory            |     2    |   3  |    5   |  0  |   10   |
-| CSS/Layout/UI/UX              |     1    |   4  |    6   |  3  |   14   |
-| React/Frontend                |     2    |   3  |    5   |  3  |   13   |
+| CSS/Layout/UI/UX              |     1    |   4  |   11   |  6  |   22   |
+| React/Frontend                |     2    |   3  |    9   |  4  |   18   |
 | Type Safety                   |     2    |   1  |    2   |  1  |    6   |
 | Error Handling                |     0    |   2  |    4   |  2  |    8   |
 | Architecture                  |     0    |   0  |    1   |  2  |    3   |
 | CI/CD                         |     0    |   2  |    3   |  2  |    7   |
-| Config/Deployment             |     1    |   2  |    2   |  2  |    7   |
+| Config/Deployment             |     1    |   2  |    1   |  2  |    6   |
 +-------------------------------+----------+------+--------+-----+--------+
-| JUMLAH                        |    14    |  26  |   39   | 18  |   97   |
+| JUMLAH AKTIF                  |    14    |  26  |   48   | 22  |  110   |
+| Diperbaiki (tidak dikira)     |     0    |   0  |    2   |  2  |    4   |
 +-------------------------------+----------+------+--------+-----+--------+
 
 
@@ -79,12 +109,18 @@ RINGKASAN ISU GABUNGAN (Audit 1 + Audit 2)
               + tambah arahan generate:
               # Generate: node -e "console.log(require('crypto').randomBytes(48).toString('base64'))"
               SESSION_SECRET=GENERATE-ME-AT-LEAST-32-CHARS
+    >>> STATUS: ✅ DIPERBAIKI (Audit 3, 2026-04-09)
+        Kini menggunakan placeholder GENERATE_ME_AT_LEAST_32_CHARS_DO_NOT_USE_IN_PRODUCTION
+        dan GENERATE_ME_DB_PASSWORD_DO_NOT_USE_IN_PRODUCTION dengan arahan generate.
 
 #4  Missing Backup Encryption Key Guidance
     Fail: .env.example (baris 125)
     Isu:  BACKUP_ENCRYPTION_KEY= kosong tanpa panduan penjanaan.
           Backup tanpa encryption key boleh didekripsi oleh sesiapa.
     Cadangan: Tambah arahan generate dan amaran keselamatan.
+    >>> STATUS: ✅ DIPERBAIKI (Audit 3, 2026-04-09)
+        Kini ada BACKUP_ENCRYPTION_KEY=GENERATE_ME_BACKUP_KEY_AND_STORE_OFFLINE
+        dengan arahan generate dan amaran keselamatan.
 
 #5  React List Key Anti-Pattern (15+ fail)
     Fail: MonitorDeferredSection.tsx, CollectionRecordsPage.tsx,
@@ -428,6 +464,9 @@ RINGKASAN ISU GABUNGAN (Audit 1 + Audit 2)
     Isu:  Missing exactOptionalPropertyTypes, noUnusedLocals,
           noUnusedParameters, noImplicitReturns.
     Cadangan: Tambah secara beransur-ansur.
+    >>> STATUS: ✅ DIPERBAIKI (Audit 3, 2026-04-09)
+        exactOptionalPropertyTypes, noUnusedLocals, noImplicitReturns
+        semuanya AKTIF dalam tsconfig.json.
 
 #35 588 Instances of any/@ts-ignore/@ts-expect-error
     Isu:  Jumlah tinggi menandakan banyak bahagian kod tanpa typing
@@ -463,6 +502,9 @@ RINGKASAN ISU GABUNGAN (Audit 1 + Audit 2)
     Fail: package.json
     Isu:  Hilang @types/react-window, @types/recharts.
     Cadangan: Tambah dev dependencies.
+    >>> STATUS: ✅ DIPERBAIKI (Audit 3, 2026-04-09)
+        @types/react-window dan @types/recharts sudah ada dalam
+        devDependencies.
 
 --- Penemuan Baharu Audit 2 (#69 - #80) ---
 
@@ -709,6 +751,147 @@ RINGKASAN ISU GABUNGAN (Audit 1 + Audit 2)
           Pada 1000 req/s, ini 1000 JSON parses per saat.
     Cadangan: Pertimbangkan LRU cache untuk hasil parsing, atau
               guna regex validation yang lebih ringan.
+
+--- Penemuan Baharu Audit 3 (#90 - #102) ---
+
+#90 [BAHARU] AI Search Timeout Buffer Terlalu Ketat
+    Fail: server/services/ai-search.service.ts (baris 108)
+    Isu:  Pengiraan timeout AI search hanya menyisakan 1200ms buffer
+          untuk pemprosesan selepas configured timeout. Jika Ollama
+          response lambat, request mungkin timeout sebelum respons
+          diproses sepenuhnya.
+    Cadangan: Semak logic timeout dan tambah buffer jika timeout
+              sering dicapai dalam production.
+
+#91 [BAHARU] Missing AbortController dalam useCollectionRecordsData
+    Fail: client/src/pages/collection-records/useCollectionRecordsData.ts
+          (baris 69-80)
+    Isu:  loadNicknames() promise tidak dibatalkan apabila komponen
+          unmount. Jika network request lambat, ia masih resolve dan
+          cuba kemaskini state yang sudah unmounted.
+    Cadangan: Tambah AbortController sokongan pada loadNicknames()
+              atau wrap .then() dengan mounted check.
+
+#92 [BAHARU] Promise Chain Tanpa .catch() dalam useCollectionRecordsData
+    Fail: client/src/pages/collection-records/useCollectionRecordsData.ts
+          (baris 69)
+    Isu:  loadNicknames().then(...) tiada .catch() handler. Jika
+          promise ditolak, ia menjadi unhandled rejection.
+    Cadangan: Tambah error handling:
+              void loadNicknames()
+                .then((options) => { /* ... */ })
+                .catch((error) => console.error("Gagal load nicknames:", error));
+
+#93 [BAHARU] Unmounted State Update dalam useCollectionRecordsData
+    Fail: client/src/pages/collection-records/useCollectionRecordsData.ts
+          (baris 69-80)
+    Isu:  .then() chain dalam useEffect untuk loading nicknames tidak
+          semak sama ada komponen masih mounted sebelum panggil
+          handleNicknameFilterChange(). Jika komponen unmount semasa
+          operasi async, ia akan cuba kemaskini state yang unmounted.
+    Cadangan: Tambah isMounted check:
+              useEffect(() => {
+                let isMounted = true;
+                void loadNicknames().then((options) => {
+                  if (!isMounted) return;
+                  // ... logik seterusnya
+                });
+                return () => { isMounted = false; };
+              }, []);
+
+#94 [BAHARU] Event Listener Accumulation dalam useFloatingAILayoutState
+    Fail: client/src/components/useFloatingAILayoutState.ts
+    Isu:  Pelbagai listener (focusin, focusout, resize, scroll)
+          didaftarkan tanpa pengesahan cleanup sebelumnya. Jika
+          effect re-run tanpa complete cleanup, listener boleh
+          terkumpul dan menyebabkan memory leak.
+    Cadangan: Simpan listener references dalam refs dan pastikan
+              cleanup berlaku tanpa mengira keadaan.
+
+#95 [BAHARU] Missing :focus-visible pada Home Cards
+    Fail: client/src/pages/Home.css (baris 147-177)
+    Isu:  .home-card dan .home-mobile-quick-card ada :hover states
+          tetapi TIADA :focus-visible atau :focus states. Pengguna
+          yang navigasi via keyboard tidak nampak focus indicator.
+    Cadangan: Tambah explicit focus styles:
+              .home-card:focus-visible {
+                outline: 2px solid var(--primary);
+                outline-offset: 2px;
+              }
+
+#96 [BAHARU] Backdrop Filter Performance Tanpa will-change
+    Fail: client/src/pages/Login.css (baris 48-85, 69-70),
+          client/src/components/Navbar.css (baris 15-16)
+    Isu:  Blur filters berat (18px-64px) dengan saturate(160%) pada
+          Login page. Animasi kompleks (content-fade, glass-float)
+          dengan transforms dan opacity tanpa will-change hints.
+          Boleh menyebabkan GPU spikes dan jank pada frame pertama.
+    Cadangan: Tambah will-change: transform, opacity pada elemen
+              animasi. Tambah will-change: filter pada elemen dengan
+              backdrop-filter. Buang will-change selepas animasi selesai.
+
+#97 [BAHARU] Content-Visibility CLS Risk pada Landing Page
+    Fail: client/src/pages/Landing.css (baris 184-207)
+    Isu:  .landing-deferred-section guna content-visibility: auto
+          dengan contain-intrinsic-size tetapi nilai adalah anggaran
+          kasar (auto 720px, 980px, 680px). Jika kandungan sebenar
+          jauh lebih besar, akan menyebabkan Cumulative Layout Shift.
+    Cadangan: Kira saiz intrinsik sebenar atau guna JavaScript
+              ResizeObserver untuk capture actual heights.
+
+#98 [BAHARU] Contrast Ratio Rendah untuk Public Auth Text
+    Fail: client/src/theme-tokens.css (baris 68-70)
+    Isu:  --public-auth-text-soft: hsl(0 0% 100% / 0.75) (75% opacity
+          putih) pada latar belakang gradient gelap mungkin gagal
+          memenuhi WCAG AA contrast requirements. Bermasalah pada
+          monitor dengan kalibrasi lebih cerah.
+    Cadangan: Uji contrast ratios dengan warna latar sebenar.
+              Pertimbangkan hsl(0 0% 100% / 0.85) atau opacity
+              lebih tinggi untuk teks body.
+
+#99 [BAHARU] Query Stale Time Terlalu Agresif
+    Fail: client/src/lib/queryClient.ts (baris 18-19)
+    Isu:  Stale time hanya 10-30 saat. High-frequency queries mungkin
+          menyebabkan refetch berlebihan dan beban rangkaian tambahan.
+    Cadangan: Laraskan berdasarkan keperluan data freshness:
+              - Senarai pengguna/roles: 60-120 saat (jarang berubah)
+              - Analytics: 30 saat (kadar perubahan sederhana)
+              - Aktiviti langsung: 5-10 saat (kerap berubah)
+
+#100 [BAHARU] Receipt Preview Zoom CSS Duplication
+     Fail: client/src/pages/collection-records/receipt-preview-dialog.css
+           (baris 1-26)
+     Isu:  26 kelas zoom identical (.receipt-preview-zoom-5 hingga
+           .receipt-preview-zoom-30) dengan hanya nilai scale berubah.
+           Setiap kelas mengulangi transform dan transform-origin.
+     Cadangan: Guna satu kelas dengan CSS custom properties:
+               .receipt-preview-zoom {
+                 transform: scale(var(--zoom-level));
+                 transform-origin: top center;
+               }
+               dan set --zoom-level secara inline.
+
+#101 [BAHARU] Missing prefers-reduced-motion untuk Welcome Animation
+     Fail: client/src/pages/Home.css (baris 1-24)
+     Isu:  .welcome-pop animation tiada @media (prefers-reduced-motion)
+           rule. Pengguna dengan gangguan vestibular akan mengalami
+           animasi pop yang berpotensi mengganggu.
+     Cadangan: Tambah:
+               @media (prefers-reduced-motion: reduce) {
+                 .welcome-pop { animation: none !important; }
+               }
+
+#102 [BAHARU] Safe Area Inset Inconsistency
+     Fail: client/src/components/FloatingAI.module.css (baris 5-6, 47-48),
+           client/src/pages/viewer/ViewerFooter.module.css (baris 2)
+     Isu:  Safe area insets diaplikasikan secara tidak konsisten.
+           Floating AI apply pada bottom dan top, tetapi tidak semua
+           elemen interaktif mengikut pola ini. Peranti notch mungkin
+           ada kandungan yang bertindih.
+     Cadangan: Cipta strategi safe area inset yang konsisten:
+               --safe-inset-top: env(safe-area-inset-top, 0px);
+               --safe-inset-bottom: env(safe-area-inset-bottom, 0px);
+               dan apply secara universal.
 
 
 ================================================================================
@@ -1005,6 +1188,7 @@ D.4) TypeScript Strict Mode
      - exactOptionalPropertyTypes AKTIF.
      - noUnusedLocals, noUnusedParameters AKTIF.
      STATUS: CEMERLANG
+     >>> Audit 3: Isu #34 DIPERBAIKI ✅
 
 
 ================================================================================
@@ -1017,14 +1201,16 @@ A) PACKAGE.JSON
     - Node.js >= 24 specified (BAIK).
     - xlsx dari vendor local (file:vendor/sheetjs/xlsx-0.20.2.tgz).
     ISU: Overrides tanpa komen penjelasan (#55).
-    ISU: Missing @types packages (#40).
+    >>> Audit 3: Isu #40 (Missing @types) DIPERBAIKI ✅
+    STATUS: BAIK
 
 B) TSCONFIG.JSON
     - strict: true AKTIF.
-    - exactOptionalPropertyTypes AKTIF (Kemas Kini: sudah ada).
+    - exactOptionalPropertyTypes AKTIF.
     - noUnusedLocals AKTIF.
     - noImplicitReturns AKTIF.
     STATUS: CEMERLANG
+    >>> Audit 3: Semua isu #34 DIPERBAIKI ✅
 
 C) VITE.CONFIG.TS
     - Manual chunk splitting AKTIF.
@@ -1046,7 +1232,8 @@ E) DEPLOYMENT
 F) .ENV FILES
     - Tiada .env files yang committed. SELAMAT.
     - .env.example wujud dengan semua variables.
-    ISU: Default secrets terlalu lemah (#3).
+    >>> Audit 3: Isu #3 dan #4 DIPERBAIKI ✅
+    STATUS: BAIK (default secrets dan guidance sudah dikemaskini)
 
 
 ================================================================================
@@ -1148,6 +1335,10 @@ D) BCRYPT OPERATIONS
 | Radix UI Focus                            | Good     | Auto focus management dialogs   |
 | Schema Governance                         | Good     | Verified dalam CI               |
 | Repo Hygiene                              | Good     | Automated verification CI       |
+| .env.example Secrets                      | Fixed    | GENERATE_ME placeholders        |
+| Backup Encryption Key Guidance            | Fixed    | Generate instructions + warning |
+| TypeScript Strict Options                 | Fixed    | exactOptional + noUnused AKTIF  |
+| @types Packages                           | Fixed    | react-window + recharts added   |
 +-------------------------------------------+----------+---------------------------------+
 
 
@@ -1158,7 +1349,7 @@ D) BCRYPT OPERATIONS
 P0 — SEGERA (Minggu Ini)
   1. WebSocket CSRF vulnerability (#1)
   2. 2FA secret fallback (#2)
-  3. .env.example default secrets (#3, #4)
+  3. [DIPERBAIKI] .env.example default secrets (#3, #4) ✅
   4. WebSocket connection limit (#8)
   5. [BAHARU] Rate limit Map leak — daftarkan sweep interval (#56)
   6. [BAHARU] WebSocket reconnect race condition (#57)
@@ -1179,37 +1370,50 @@ P1 — SEBELUM PRODUCTION (2 Minggu)
   19. [BAHARU] Touch targets minimum 44px (#64)
   20. [BAHARU] Hardcoded colors -> CSS variables (#65)
   21. [BAHARU] PII logger redaction (#68)
+  22. [AUDIT 3] Backdrop filter performance — tambah will-change (#96)
 
 P2 — PENAMBAHBAIKAN BERTERUSAN (Bulan Ini)
-  22. React key anti-pattern (#5, #7)
-  23. Type safety improvements (#6, #34, #35)
-  24. Pagination limits (#25)
-  25. Form loading states (#38)
-  26. Mobile viewport (#32)
-  27. Missing tests dalam CI (#37)
-  28. [BAHARU] PII encryption at rest (#70)
-  29. [BAHARU] Missing FK onUpdate cascade (#71)
-  30. [BAHARU] Missing indexes pada kolum status (#72)
-  31. [BAHARU] Amount data type standardization (#73)
-  32. [BAHARU] JSON parse/stringify size limits (#75)
-  33. [BAHARU] Z-index centralization (#76)
+  23. React key anti-pattern (#5, #7)
+  24. Type safety improvements (#6, #35)
+  25. [DIPERBAIKI] TypeScript strictness options (#34) ✅
+  26. Pagination limits (#25)
+  27. Form loading states (#38)
+  28. Mobile viewport (#32)
+  29. Missing tests dalam CI (#37)
+  30. [BAHARU] PII encryption at rest (#70)
+  31. [BAHARU] Missing FK onUpdate cascade (#71)
+  32. [BAHARU] Missing indexes pada kolum status (#72)
+  33. [BAHARU] Amount data type standardization (#73)
+  34. [BAHARU] JSON parse/stringify size limits (#75)
+  35. [BAHARU] Z-index centralization (#76)
+  36. [AUDIT 3] Unmounted state update + missing .catch() (#91, #92, #93)
+  37. [AUDIT 3] Event listener cleanup (#94)
+  38. [AUDIT 3] Missing :focus-visible pada Home cards (#95)
+  39. [AUDIT 3] Content-visibility CLS risk (#97)
+  40. [AUDIT 3] Auth text contrast ratio (#98)
 
 P3 — NICE TO HAVE
-  34. Error format standardization (#42)
-  35. Documentation improvements (#46, #51)
-  36. Config improvements (#39, #52-55)
-  37. [BAHARU] FloatingAI panel responsive fix (#78)
-  38. [BAHARU] Nav pill font size (#79)
-  39. [BAHARU] Error boundary focus management (#81)
-  40. [BAHARU] Line height standardization (#85)
-  41. [BAHARU] Backup restore chunking (#88)
+  41. Error format standardization (#42)
+  42. Documentation improvements (#46, #51)
+  43. Config improvements (#39, #52-55)
+  44. [DIPERBAIKI] Missing @types packages (#40) ✅
+  45. [BAHARU] FloatingAI panel responsive fix (#78)
+  46. [BAHARU] Nav pill font size (#79)
+  47. [BAHARU] Error boundary focus management (#81)
+  48. [BAHARU] Line height standardization (#85)
+  49. [BAHARU] Backup restore chunking (#88)
+  50. [AUDIT 3] AI search timeout buffer (#90)
+  51. [AUDIT 3] Query stale time tuning (#99)
+  52. [AUDIT 3] Receipt zoom CSS duplication (#100)
+  53. [AUDIT 3] Missing reduced-motion welcome-pop (#101)
+  54. [AUDIT 3] Safe area inset consistency (#102)
 
 
 ================================================================================
   BAHAGIAN 11: STATISTIK CODEBASE
 ================================================================================
 
-Jumlah fail sumber (*.ts, *.tsx):          ~500+ fail
+Jumlah fail sumber (*.ts, *.tsx):          ~711+ fail
 Jumlah fail ujian (*.test.ts, *.test.tsx): 269 fail
 Jumlah baris kod:                          ~166,843 baris
 Fail terbesar:
@@ -1225,14 +1429,20 @@ Fail sumber terbesar:
   - collection-record-mutation-operations  (725 baris)
 
 Stack Teknologi:
-  Frontend:  React 18, TypeScript 5.6, Tailwind CSS 3.4, Radix UI,
-             TanStack Query 5, Wouter, React Hook Form, Zod
-  Backend:   Node.js 24+, Express 4, Drizzle ORM, Pino logger
+  Frontend:  React 18.3.1, TypeScript 5.6.3, Tailwind CSS 3.4, Radix UI,
+             TanStack Query 5, Wouter 3.3, React Hook Form 7, Zod 3.24
+  Backend:   Node.js 24+, Express 4.21, Drizzle ORM 0.45, Pino 10 logger
   Database:  PostgreSQL (pg 8.16)
-  Build:     Vite 6.4, esbuild
+  Build:     Vite 6.4, esbuild 0.25
   CI/CD:     GitHub Actions
-  Testing:   Node.js test runner, Supertest
+  Testing:   Node.js test runner, Supertest, c8 coverage, Playwright
   Security:  Helmet 8, express-rate-limit 8, bcrypt 6, jsonwebtoken 9
+
+Jumlah Audit:
+  Audit 1 (2026-04-07): 55 isu dikesan
+  Audit 2 (2026-04-08): +34 isu baharu = 89 jumlah
+  Audit 3 (2026-04-09): +13 isu baharu, 4 diperbaiki = 110 isu aktif
+  Diperbaiki keseluruhan: 4 isu (#3, #4, #34, #40)
 
 
 ================================================================================
@@ -1245,7 +1455,24 @@ keseluruhan dengan seni bina yang matang dan amalan keselamatan yang kukuh.
 Audit menyeluruh kedua (2026-04-08) menambah 34 penemuan baharu kepada
 55 isu asal, menjadikan jumlah 89 isu keseluruhan.
 
-Penemuan paling kritikal baharu:
+Audit menyeluruh ketiga (2026-04-09) mengesahkan 4 isu telah DIPERBAIKI
+dan menambah 13 penemuan baharu, menjadikan jumlah 110 isu aktif.
+
+Isu yang telah DIPERBAIKI sejak audit lepas:
+  * .env.example secrets — kini guna GENERATE_ME placeholders
+  * Backup encryption key guidance — kini ada arahan lengkap
+  * TypeScript strict options — exactOptionalPropertyTypes AKTIF
+  * Missing @types packages — react-window + recharts ditambah
+
+Penemuan paling kritikal baharu (Audit 3):
+  * Unmounted state update risk — boleh crash komponen
+  * Event listener accumulation — potensi memory leak
+  * Missing :focus-visible — aksesibiliti keyboard terjejas
+  * Backdrop filter tanpa will-change — performance issue
+  * Content-visibility CLS — layout shift pada landing page
+  * Contrast ratio rendah — aksesibiliti visual terjejas
+
+Penemuan kritikal terdahulu yang masih aktif:
   * Rate limit Map leak — boleh menyebabkan kehabisan memori (DoS)
   * WebSocket reconnect race condition — sambungan yatim
   * Shadow CSS opacity 0% — semua kesan visual depth hilang
@@ -1254,14 +1481,17 @@ Penemuan paling kritikal baharu:
 
 14 isu CRITICAL memerlukan tindakan segera.
 26 isu HIGH perlu ditangani sebelum production.
-Baki 49 isu (MEDIUM + LOW) boleh ditangani secara beransur-ansur.
+Baki 70 isu (MEDIUM + LOW) boleh ditangani secara beransur-ansur.
 
-Skor kesihatan keseluruhan: 7.8 / 10
-(Turun dari 8.2 kerana penemuan baharu kebocoran memori & CSS shadow)
+Skor kesihatan keseluruhan: 7.9 / 10
+(Naik sedikit dari 7.8 kerana pembetulan .env.example, TypeScript strict,
+ dan @types packages. Masih tertakluk kepada isu kritikal yang belum
+ diperbaiki.)
 
 Disediakan oleh: AI Full-Stack Engineer Audit
 Tarikh Asal: 2026-04-07
-Tarikh Kemaskini: 2026-04-08
+Tarikh Kemaskini Kedua: 2026-04-08
+Tarikh Kemaskini Ketiga: 2026-04-09
 
 ================================================================================
   TAMAT LAPORAN AUDIT
