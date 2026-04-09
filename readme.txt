@@ -643,6 +643,10 @@ ditentukan melalui penanda STATUS pada setiap item, bukan melalui jadual ini.
         menemukan as any, @ts-ignore, atau @ts-expect-error di luar tests.
         Debt yang masih tinggal kini tertumpu pada harness tests lama,
         bukan laluan production.
+        Kemaskini 2026-04-10: harness
+        server/services/tests/backup-operations.service.test.ts kini
+        dibersihkan daripada as any pada service injection dan success-body
+        assertions; baki debt mengecil lagi kepada test doubles lama lain.
 
 #36 Missing Test Coverage Reporting dalam CI
     Fail: .github/workflows/ci.yml (baris 68-98)

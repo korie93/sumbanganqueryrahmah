@@ -4,13 +4,80 @@ import test from "node:test";
 import os from "node:os";
 import path from "node:path";
 import { BackupOperationsService } from "../backup-operations.service";
+import type {
+  BackupMetadataRecord,
+  BackupOperationsBackupsRepository,
+  BackupOperationsStorage,
+  PreparedBackupPayloadFile,
+  RestoreBackupSuccessBody,
+} from "../backup-operations-types";
 
-type AuditEntry = {
-  action: string;
-  performedBy?: string;
-  targetResource?: string;
-  details?: string;
+type AuditEntry = Parameters<BackupOperationsStorage["createAuditLog"]>[0];
+
+type CreateBackupResponseBody = Awaited<
+  ReturnType<BackupOperationsService["createBackup"]>
+>["body"];
+type CreateBackupSuccessBody = Awaited<
+  ReturnType<BackupOperationsBackupsRepository["createBackup"]>
+>;
+type BackupMetadataResponseBody = Awaited<
+  ReturnType<BackupOperationsService["getBackupMetadata"]>
+>["body"];
+type ExportBackupResponseBody = Awaited<
+  ReturnType<BackupOperationsService["exportBackup"]>
+>["body"];
+type ExportBackupSuccessBody = Extract<ExportBackupResponseBody, { fileName: string }>;
+type RestoreBackupResponseBody = Awaited<
+  ReturnType<BackupOperationsService["restoreBackup"]>
+>["body"];
+type HarnessBackupRecord = {
+  id: string;
+  name: string;
+  createdAt: Date;
+  createdBy: string;
+  backupData: string;
+  metadata: {
+    timestamp: string;
+    payloadChecksumSha256: string;
+    payloadBytes?: number;
+  };
 };
+
+function assertCreateBackupSuccessBody(
+  body: CreateBackupResponseBody,
+): asserts body is CreateBackupSuccessBody {
+  assert.equal(typeof body, "object");
+  assert.notEqual(body, null);
+  assert.equal("id" in body, true);
+}
+
+function assertBackupMetadataBody(
+  body: BackupMetadataResponseBody,
+): asserts body is BackupMetadataRecord {
+  assert.equal(typeof body, "object");
+  assert.notEqual(body, null);
+  assert.equal("id" in body, true);
+  assert.equal("backupData" in body, true);
+}
+
+function assertExportBackupSuccessBody(
+  body: ExportBackupResponseBody,
+): asserts body is ExportBackupSuccessBody {
+  assert.equal(typeof body, "object");
+  assert.notEqual(body, null);
+  assert.equal("fileName" in body, true);
+  assert.equal("backupDataJsonChunks" in body, true);
+}
+
+function assertRestoreBackupSuccessBody(
+  body: RestoreBackupResponseBody,
+): asserts body is RestoreBackupSuccessBody {
+  assert.equal(typeof body, "object");
+  assert.notEqual(body, null);
+  assert.equal("success" in body, true);
+  assert.equal("backupId" in body, true);
+  assert.equal("integrity" in body, true);
+}
 
 function isAsyncIterableStringSource(value: unknown): value is AsyncIterable<string> {
   return typeof value === "object"
@@ -27,11 +94,7 @@ async function collectAsyncTextChunks(chunks: AsyncIterable<string>) {
   return payload;
 }
 
-async function readExportPayloadJson(body: {
-  payloadPrefixJson: string;
-  backupDataJsonChunks: AsyncIterable<string>;
-  payloadSuffixJson: string;
-}) {
+async function readExportPayloadJson(body: ExportBackupSuccessBody) {
   let backupDataJson = "";
   for await (const chunk of body.backupDataJsonChunks) {
     backupDataJson += chunk;
@@ -70,62 +133,67 @@ function createBackupOperationsHarness(options?: {
     return fs.readFile(preparedPayload.tempFilePath, "utf8");
   };
 
-  const backups = new Map<string, any>([
+  const buildBackupRecord = (payloadBytes?: number): HarnessBackupRecord => ({
+    id: "backup-1",
+    name: "Nightly Backup",
+    createdAt: new Date("2026-03-20T00:00:00.000Z"),
+    createdBy: "super.user",
+    backupData: JSON.stringify({
+      imports: [],
+      dataRows: [],
+      users: [],
+      auditLogs: [],
+      collectionRecords: [],
+      collectionRecordReceipts: [],
+    }),
+    metadata: {
+      timestamp: "2026-03-20T00:00:00.000Z",
+      payloadChecksumSha256: options?.corruptChecksum
+        ? "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
+        : "27c7f1187bb22c1e832d2812300765fda4d9919427fb413b81f9884c763c2ff2",
+      ...(typeof payloadBytes === "number" ? { payloadBytes } : {}),
+    },
+  });
+
+  const backups = new Map<string, HarnessBackupRecord>([
     [
       "backup-1",
-      {
-        id: "backup-1",
-        name: "Nightly Backup",
-        createdAt: new Date("2026-03-20T00:00:00.000Z").toISOString(),
-        createdBy: "super.user",
-        backupData: JSON.stringify({
-          imports: [],
-          dataRows: [],
-          users: [],
-          auditLogs: [],
-          collectionRecords: [],
-          collectionRecordReceipts: [],
-        }),
-        metadata: {
-          timestamp: "2026-03-20T00:00:00.000Z",
-          payloadChecksumSha256: options?.corruptChecksum
-            ? "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
-            : "27c7f1187bb22c1e832d2812300765fda4d9919427fb413b81f9884c763c2ff2",
-          ...(typeof options?.metadataPayloadBytes === "number"
-            ? { payloadBytes: options.metadataPayloadBytes }
-            : {}),
-        },
-      },
+      buildBackupRecord(options?.metadataPayloadBytes),
     ],
   ]);
 
-  const storage = {
+  const storage: BackupOperationsStorage = {
     createAuditLog: async (entry: AuditEntry) => {
       auditLogs.push(entry);
-      return { id: `audit-${auditLogs.length}`, ...entry };
+      return {
+        id: `audit-${auditLogs.length}`,
+        timestamp: new Date("2026-03-20T00:00:00.000Z"),
+        action: entry.action,
+        performedBy: entry.performedBy,
+        targetUser: entry.targetUser ?? null,
+        targetResource: entry.targetResource ?? null,
+        details: entry.details ?? null,
+        requestId: entry.requestId ?? null,
+      };
     },
   };
 
-  const backupsRepository = {
-    listBackupsPage: async () => ({
+  const backupsRepository: BackupOperationsBackupsRepository = {
+    listBackupsPage: async (
+      _params: Parameters<BackupOperationsBackupsRepository["listBackupsPage"]>[0] = {},
+    ) => ({
       backups: Array.from(backups.values()).map((backup) => ({
         ...backup,
         backupData: "",
-      })),
+      })) as unknown as Awaited<
+        ReturnType<BackupOperationsBackupsRepository["listBackupsPage"]>
+      >["backups"],
       page: 1,
       pageSize: 25,
       total: backups.size,
       totalPages: 1,
     }),
-    getBackupDataForExport: async () => ({
-      imports: [{ id: "import-1" }],
-      dataRows: [{ id: "row-1" }, { id: "row-2" }],
-      users: [{ username: "super.user" }],
-      auditLogs: [{ id: "audit-1" }],
-      collectionRecords: [{ id: "record-1" }],
-      collectionRecordReceipts: [{ id: "receipt-1" }],
-    }),
-    prepareBackupPayloadFileForCreate: async () => {
+    prepareBackupPayloadFileForCreate: async (): Promise<PreparedBackupPayloadFile> => {
       const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "backup-service-test-"));
       const tempFilePath = path.join(tempDir, "payload.json");
       tempPayloadPaths.push(tempFilePath);
@@ -177,7 +245,7 @@ function createBackupOperationsHarness(options?: {
       readPreparedPayloadCallCount += 1;
       throw new Error("Legacy prepared backup payload read path should not be used.");
     },
-    createBackup: async (data: Record<string, unknown>) => {
+    createBackup: async (data: Parameters<BackupOperationsBackupsRepository["createBackup"]>[0]) => {
       if (options?.createBackupErrorMessage) {
         throw new Error(options.createBackupErrorMessage);
       }
@@ -185,22 +253,15 @@ function createBackupOperationsHarness(options?: {
       return {
         id: "backup-2",
         name: data.name,
-        createdAt: new Date("2026-03-20T01:00:00.000Z").toISOString(),
+        createdAt: new Date("2026-03-20T01:00:00.000Z"),
         createdBy: data.createdBy,
-        backupData: "",
-        metadata: JSON.parse(String(data.metadata || "{}")),
+        backupData: data.backupData,
+        metadata: data.metadata ?? null,
       };
     },
-    createBackupFromPreparedPayload: async (data: {
-      name: string;
-      createdBy: string;
-      metadata?: string | null;
-      preparedBackupPayload: {
-        tempFilePath: string;
-        tempPayloadEncrypted: boolean;
-        tempPayloadStoragePrefix?: string;
-      };
-    }) => {
+    createBackupFromPreparedPayload: async (
+      data: Parameters<BackupOperationsBackupsRepository["createBackupFromPreparedPayload"]>[0],
+    ) => {
       if (options?.createBackupErrorMessage) {
         throw new Error(options.createBackupErrorMessage);
       }
@@ -214,10 +275,10 @@ function createBackupOperationsHarness(options?: {
       return {
         id: "backup-2",
         name: data.name,
-        createdAt: new Date("2026-03-20T01:00:00.000Z").toISOString(),
+        createdAt: new Date("2026-03-20T01:00:00.000Z"),
         createdBy: data.createdBy,
-        backupData: "",
-        metadata: JSON.parse(String(data.metadata || "{}")),
+        backupData,
+        metadata: data.metadata ?? null,
       };
     },
     getBackupMetadataById: async (id: string) => {
@@ -226,27 +287,31 @@ function createBackupOperationsHarness(options?: {
       return {
         ...backup,
         backupData: "",
-      };
+      } as unknown as BackupMetadataRecord;
     },
-    iterateBackupDataJsonChunksById: async function* (id: string) {
+    iterateBackupDataJsonChunksById: async (id: string) => {
       if (options?.backupReadErrorMessage) {
         throw new Error(options.backupReadErrorMessage);
       }
       const backup = backups.get(id);
       if (!backup) {
-        return;
+        return undefined;
       }
       backupChunkReadCount += 1;
       const backupData = String(backup.backupData || "");
-      if (backupData) {
-        yield backupData;
-      }
+      return (async function* () {
+        if (backupData) {
+          yield backupData;
+        }
+      })();
     },
     getBackupById: async (id: string) => {
       if (options?.backupReadErrorMessage) {
         throw new Error(options.backupReadErrorMessage);
       }
-      return backups.get(id);
+      return backups.get(id) as Awaited<
+        ReturnType<BackupOperationsBackupsRepository["getBackupById"]>
+      >;
     },
     restoreFromBackup: async (backupData: unknown) => {
       if (isAsyncIterableStringSource(backupData)) {
@@ -288,8 +353,8 @@ function createBackupOperationsHarness(options?: {
 
   return {
     service: new BackupOperationsService(
-      storage as any,
-      backupsRepository as any,
+      storage,
+      backupsRepository,
       withExportCircuit,
       (error) => (error as Error)?.message === "circuit-open",
       options?.maxPayloadBytes == null
@@ -363,7 +428,8 @@ test("BackupOperationsService createBackup persists backup metadata and audits e
   });
 
   assert.equal(result.statusCode, 200);
-  assert.equal((result.body as any).id, "backup-2");
+  assertCreateBackupSuccessBody(result.body);
+  assert.equal(result.body.id, "backup-2");
   assert.equal(createBackupCalls.length, 1);
   assert.equal(createBackupCalls[0].createdBy, "super.user");
   assert.equal(auditLogs.length, 1);
@@ -513,8 +579,9 @@ test("BackupOperationsService getBackupMetadata returns metadata-only payload an
   const result = await service.getBackupMetadata("backup-1", "super.user");
 
   assert.equal(result.statusCode, 200);
-  assert.equal((result.body as any).id, "backup-1");
-  assert.equal((result.body as any).backupData, "");
+  assertBackupMetadataBody(result.body);
+  assert.equal(result.body.id, "backup-1");
+  assert.equal(result.body.backupData, "");
   assert.equal(auditLogs.length, 1);
   assert.equal(auditLogs[0].action, "VIEW_BACKUP_METADATA");
 });
@@ -525,14 +592,9 @@ test("BackupOperationsService exportBackup returns downloadable payload and audi
   const result = await service.exportBackup("backup-1", "super.user");
 
   assert.equal(result.statusCode, 200);
-  assert.equal(typeof (result.body as any).fileName, "string");
-  const payload = JSON.parse(
-    await readExportPayloadJson(result.body as {
-      payloadPrefixJson: string;
-      backupDataJsonChunks: AsyncIterable<string>;
-      payloadSuffixJson: string;
-    }),
-  );
+  assertExportBackupSuccessBody(result.body);
+  assert.equal(typeof result.body.fileName, "string");
+  const payload = JSON.parse(await readExportPayloadJson(result.body));
   assert.equal(payload.id, "backup-1");
   assert.equal(Array.isArray(payload.backupData.imports), true);
   assert.equal(payload.integrity.verified, true);
@@ -611,10 +673,11 @@ test("BackupOperationsService restoreBackup returns restore details and audit me
   });
 
   assert.equal(result.statusCode, 200);
-  assert.equal((result.body as any).success, true);
-  assert.equal((result.body as any).backupId, "backup-1");
-  assert.equal((result.body as any).backupName, "Nightly Backup");
-  assert.equal((result.body as any).integrity.verified, true);
+  assertRestoreBackupSuccessBody(result.body);
+  assert.equal(result.body.success, true);
+  assert.equal(result.body.backupId, "backup-1");
+  assert.equal(result.body.backupName, "Nightly Backup");
+  assert.equal(result.body.integrity.verified, true);
   assert.equal(restoreCalls.length, 1);
   assert.deepEqual(restoreInputKinds, ["async-iterable"]);
   assert.equal(typeof restoreCalls[0], "string");
