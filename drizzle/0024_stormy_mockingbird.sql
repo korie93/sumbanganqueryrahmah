@@ -61,8 +61,14 @@ ALTER TABLE "collection_records" ALTER COLUMN "updated_at" SET DEFAULT now();-->
 ALTER TABLE "collection_staff_nicknames" ALTER COLUMN "password_updated_at" SET DATA TYPE timestamp with time zone USING "password_updated_at" AT TIME ZONE 'UTC';--> statement-breakpoint
 ALTER TABLE "collection_staff_nicknames" ALTER COLUMN "created_at" SET DATA TYPE timestamp with time zone USING "created_at" AT TIME ZONE 'UTC';--> statement-breakpoint
 ALTER TABLE "collection_staff_nicknames" ALTER COLUMN "created_at" SET DEFAULT now();--> statement-breakpoint
-ALTER TABLE "data_embeddings" ALTER COLUMN "created_at" SET DATA TYPE timestamp with time zone USING "created_at" AT TIME ZONE 'UTC';--> statement-breakpoint
-ALTER TABLE "data_embeddings" ALTER COLUMN "created_at" SET DEFAULT now();--> statement-breakpoint
+DO $$
+BEGIN
+  IF to_regclass('public.data_embeddings') IS NOT NULL THEN
+    ALTER TABLE "data_embeddings" ALTER COLUMN "created_at" SET DATA TYPE timestamp with time zone USING "created_at" AT TIME ZONE 'UTC';
+    ALTER TABLE "data_embeddings" ALTER COLUMN "created_at" SET DEFAULT now();
+  END IF;
+END
+$$;--> statement-breakpoint
 ALTER TABLE "feature_flags" ALTER COLUMN "updated_at" SET DATA TYPE timestamp with time zone USING "updated_at" AT TIME ZONE 'UTC';--> statement-breakpoint
 ALTER TABLE "feature_flags" ALTER COLUMN "updated_at" SET DEFAULT now();--> statement-breakpoint
 ALTER TABLE "imports" ALTER COLUMN "created_at" SET DATA TYPE timestamp with time zone USING "created_at" AT TIME ZONE 'UTC';--> statement-breakpoint

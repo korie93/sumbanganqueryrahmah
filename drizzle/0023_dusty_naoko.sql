@@ -12,8 +12,14 @@ UPDATE "backups" SET "created_at" = now() WHERE "created_at" IS NULL;--> stateme
 ALTER TABLE "backups" ALTER COLUMN "created_at" SET NOT NULL;--> statement-breakpoint
 UPDATE "banned_sessions" SET "banned_at" = now() WHERE "banned_at" IS NULL;--> statement-breakpoint
 ALTER TABLE "banned_sessions" ALTER COLUMN "banned_at" SET NOT NULL;--> statement-breakpoint
-UPDATE "data_embeddings" SET "created_at" = now() WHERE "created_at" IS NULL;--> statement-breakpoint
-ALTER TABLE "data_embeddings" ALTER COLUMN "created_at" SET NOT NULL;--> statement-breakpoint
+DO $$
+BEGIN
+  IF to_regclass('public.data_embeddings') IS NOT NULL THEN
+    UPDATE "data_embeddings" SET "created_at" = now() WHERE "created_at" IS NULL;
+    ALTER TABLE "data_embeddings" ALTER COLUMN "created_at" SET NOT NULL;
+  END IF;
+END
+$$;--> statement-breakpoint
 UPDATE "feature_flags" SET "updated_at" = now() WHERE "updated_at" IS NULL;--> statement-breakpoint
 ALTER TABLE "feature_flags" ALTER COLUMN "updated_at" SET NOT NULL;--> statement-breakpoint
 UPDATE "imports" SET "created_at" = now() WHERE "created_at" IS NULL;--> statement-breakpoint
