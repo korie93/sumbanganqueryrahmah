@@ -2,18 +2,21 @@ module.exports = {
   apps: [
     {
       name: "sqr",
-      cwd: "/var/www/sumbanganqueryrahmah",
+      cwd: "/absolute/path/to/sumbanganqueryrahmah",
       script: "npm",
       args: "start",
       interpreter: "none",
-      user: "www-data",
-      uid: "www-data",
-      gid: "www-data",
+      // The app loads secrets from .env in the working directory via dotenv/config.
+      // Keep real secrets in .env, not in this file.
       env: {
         NODE_ENV: "production",
+        HOST: "0.0.0.0",
+        PORT: "5000",
       },
       max_memory_restart: "768M",
       restart_delay: 5000,
+      kill_timeout: 30000,
+      listen_timeout: 10000,
       time: true,
     },
   ],

@@ -11,6 +11,10 @@ var/perf/
 .env
 .env.*
 !.env.example
+ecosystem.config.cjs
+ecosystem.config.js
+ecosystem.termux.config.cjs
+ecosystem.termux.config.js
 
 # Build outputs
 dist/
