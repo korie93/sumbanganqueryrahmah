@@ -1,6 +1,7 @@
 import "dotenv/config";
 import { pathToFileURL } from "node:url";
 import { pool } from "../server/db-postgres";
+import { assertCollectionPiiPostgresReady } from "./collection-pii-postgres";
 import {
   hasCollectionPiiEncryptionConfigured,
   shouldRedactCollectionPiiPlaintextValue,
@@ -206,6 +207,8 @@ export async function main() {
       "COLLECTION_PII_ENCRYPTION_KEY is required before redacting collection plaintext PII.",
     );
   }
+
+  await assertCollectionPiiPostgresReady("Collection PII plaintext redaction");
 
   let processedRows = 0;
   let candidateRows = 0;

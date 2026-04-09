@@ -43,15 +43,23 @@ function assertSafeChannelName(channel: string): string {
 }
 
 function createDefaultClient(): PgNotificationClientLike {
-  return new Client({
-    host: runtimeConfig.database.host,
-    port: runtimeConfig.database.port,
-    user: runtimeConfig.database.user,
-    password: runtimeConfig.database.password,
-    database: runtimeConfig.database.database,
-    application_name: "sqr-rollup-queue-listener",
-    options: `-c search_path=${runtimeConfig.database.searchPath}`,
-  });
+  return new Client(
+    runtimeConfig.database.connectionString
+      ? {
+          connectionString: runtimeConfig.database.connectionString,
+          application_name: "sqr-rollup-queue-listener",
+          options: `-c search_path=${runtimeConfig.database.searchPath}`,
+        }
+      : {
+          host: runtimeConfig.database.host,
+          port: runtimeConfig.database.port,
+          user: runtimeConfig.database.user,
+          password: runtimeConfig.database.password,
+          database: runtimeConfig.database.database,
+          application_name: "sqr-rollup-queue-listener",
+          options: `-c search_path=${runtimeConfig.database.searchPath}`,
+        },
+  );
 }
 
 export class CollectionRollupRefreshNotificationSubscriber

@@ -1,6 +1,7 @@
 import "dotenv/config";
 import { pathToFileURL } from "node:url";
 import { pool } from "../server/db-postgres";
+import { assertCollectionPiiPostgresReady } from "./collection-pii-postgres";
 import {
   hasCollectionPiiEncryptionConfigured,
   shouldRedactCollectionPiiPlaintextValue,
@@ -439,6 +440,7 @@ function buildSummary(
 
 export async function main() {
   const options = parseCliOptions(process.argv.slice(2));
+  await assertCollectionPiiPostgresReady("Collection PII status");
   const encryptionConfigured = hasCollectionPiiEncryptionConfigured();
   const summary: CollectionPiiStatusSummary = {
     encryptionConfigured,

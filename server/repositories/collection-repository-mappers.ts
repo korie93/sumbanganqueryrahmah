@@ -3,6 +3,10 @@ import type {
   CollectionDailyTarget,
   CollectionRecord,
 } from "../storage-postgres";
+import {
+  formatCollectionAmountMyrString,
+  parseCollectionAmountMyrNumber,
+} from "../../shared/collection-amount-types";
 import { resolveCollectionPiiFieldValue } from "../lib/collection-pii-encryption";
 import { formatCollectionAmountFromCents } from "../services/collection/collection-receipt-validation";
 
@@ -50,7 +54,7 @@ export function mapCollectionRecordRow(row: any): CollectionRecord {
     }),
     batch: String(row.batch ?? "") as CollectionBatch,
     paymentDate,
-    amount: String(row.amount ?? "0"),
+    amount: formatCollectionAmountMyrString(row.amount ?? 0),
     receiptFile: row.receipt_file ?? row.receiptFile ?? null,
     receipts: [],
     archivedReceipts: [],
@@ -81,7 +85,7 @@ export function mapCollectionDailyTargetRow(row: any): CollectionDailyTarget {
     username: String(row.username || "").toLowerCase(),
     year: Number(row.year || 0),
     month: Number(row.month || 0),
-    monthlyTarget: Number(row.monthly_target ?? row.monthlyTarget ?? 0),
+    monthlyTarget: parseCollectionAmountMyrNumber(row.monthly_target ?? row.monthlyTarget ?? 0),
     createdBy: row.created_by ?? row.createdBy ?? null,
     updatedBy: row.updated_by ?? row.updatedBy ?? null,
     createdAt: row.created_at instanceof Date ? row.created_at : new Date(row.created_at),

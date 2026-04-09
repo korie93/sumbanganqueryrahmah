@@ -7,6 +7,7 @@ import type {
   CollectionRecordAggregateFilters,
   CollectionRecordListFilters,
 } from "../storage-postgres";
+import { parseCollectionAmountMyrNumber } from "../../shared/collection-amount-types";
 import {
   buildCollectionMonthlySummaryWhereSql,
   buildCollectionRecordMonthlyRollupWhereSql,
@@ -126,7 +127,7 @@ export async function summarizeCollectionRecordsByNickname(
     return (result.rows || []).map((row: any) => ({
       nickname: String(row.nickname || "Unknown"),
       totalRecords: Number(row.total_records || 0),
-      totalAmount: Number(row.total_amount || 0),
+      totalAmount: parseCollectionAmountMyrNumber(row.total_amount || 0),
     }));
   }
 
@@ -146,7 +147,7 @@ export async function summarizeCollectionRecordsByNickname(
   return (result.rows || []).map((row: any) => ({
     nickname: String(row.nickname || "Unknown"),
     totalRecords: Number(row.total_records || 0),
-    totalAmount: Number(row.total_amount || 0),
+    totalAmount: parseCollectionAmountMyrNumber(row.total_amount || 0),
   }));
 }
 

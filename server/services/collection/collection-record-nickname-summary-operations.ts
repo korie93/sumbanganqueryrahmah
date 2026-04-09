@@ -8,6 +8,7 @@ import {
   normalizeCollectionStringList,
   normalizeCollectionText,
 } from "../../routes/collection.validation";
+import { parseCollectionAmountMyrNumber } from "../../../shared/collection-amount-types";
 import {
   CollectionServiceSupport,
   type ListQuery,
@@ -111,7 +112,7 @@ export class CollectionRecordNicknameSummaryOperations extends CollectionService
     const totals = nicknameTotals.reduce(
       (accumulator, item) => {
         accumulator.totalRecords += Number(item.totalRecords || 0);
-        accumulator.totalAmount += Number(item.totalAmount || 0);
+        accumulator.totalAmount += parseCollectionAmountMyrNumber(item.totalAmount || 0);
         return accumulator;
       },
       { totalRecords: 0, totalAmount: 0 },

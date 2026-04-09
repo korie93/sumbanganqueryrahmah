@@ -15,11 +15,28 @@ test("buildPostgresPreflightConfig normalizes PG env without exposing secrets", 
       PG_USER: " postgres ",
     }),
     {
+      connectionString: null,
       database: "sqr_db",
       host: "db.local",
       password: "secret",
       port: 6543,
       user: "postgres",
+    },
+  );
+});
+
+test("buildPostgresPreflightConfig falls back to DATABASE_URL when PG identity fields are omitted", () => {
+  assert.deepEqual(
+    buildPostgresPreflightConfig({
+      DATABASE_URL: "postgres://db_user:db_pass@db.internal:6544/sqr_prod",
+    }),
+    {
+      connectionString: "postgres://db_user:db_pass@db.internal:6544/sqr_prod",
+      database: "sqr_prod",
+      host: "db.internal",
+      password: "db_pass",
+      port: 6544,
+      user: "db_user",
     },
   );
 });
@@ -33,7 +50,7 @@ test("assertPostgresConnection rejects missing required PG identity fields", asy
       },
       { context: "Release readiness" },
     ),
-    /Release readiness requires PG_USER and PG_DATABASE/,
+    /Release readiness requires PG_USER and PG_DATABASE to be set, or a DATABASE_URL/,
   );
 });
 
@@ -63,6 +80,7 @@ test("assertPostgresConnection does not include PG_PASSWORD in failure messages"
     (error) => {
       assert.match(error.message, /Release readiness requires PostgreSQL/);
       assert.match(error.message, /password authentication failed/);
+      assert.match(error.message, /DATABASE_URL or PG_HOST, PG_PORT, PG_USER, PG_PASSWORD, and PG_DATABASE/);
       assert.doesNotMatch(error.message, /super-secret-password/);
       return true;
     },

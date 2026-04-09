@@ -1,5 +1,6 @@
 import "dotenv/config";
 import { pool } from "../server/db-postgres";
+import { assertCollectionPiiPostgresReady } from "./collection-pii-postgres";
 import {
   buildCollectionRecordPiiSearchHashes,
   encryptCollectionPiiFieldValue,
@@ -148,6 +149,8 @@ async function main() {
       "COLLECTION_PII_ENCRYPTION_KEY is required before running collection PII re-encryption.",
     );
   }
+
+  await assertCollectionPiiPostgresReady("Collection PII re-encryption");
 
   let processedRows = 0;
   let rewriteCandidates = 0;

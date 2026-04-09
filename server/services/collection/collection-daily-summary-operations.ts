@@ -1,4 +1,5 @@
 import { normalizeCollectionText } from "../../routes/collection.validation";
+import { parseCollectionAmountMyrNumber } from "../../../shared/collection-amount-types";
 import type { CollectionStoragePort } from "./collection-service-support";
 import {
   createDailySummaryEntry,
@@ -68,7 +69,7 @@ export async function buildDailySummaryMaps(
     for (const row of summaryRows) {
       const key = String(row.paymentDate || "");
       if (!key) continue;
-      amountByDate.set(key, roundDailyOverviewMoney(Number(row.totalAmount || 0)));
+      amountByDate.set(key, roundDailyOverviewMoney(parseCollectionAmountMyrNumber(row.totalAmount || 0)));
       customerCountByDate.set(key, Number(row.totalRecords || 0));
     }
     return {
@@ -85,7 +86,7 @@ export async function buildDailySummaryMaps(
 
   for (const record of records) {
     const key = record.paymentDate;
-    const amount = Number(record.amount || 0);
+    const amount = parseCollectionAmountMyrNumber(record.amount || 0);
     amountByDate.set(
       key,
       roundDailyOverviewMoney((amountByDate.get(key) || 0) + (Number.isFinite(amount) ? amount : 0)),
@@ -137,7 +138,10 @@ export async function buildDailySummaryMapsByUsername(
       const dateKey = String(row.paymentDate || "");
       if (!dateKey) continue;
       const summaryEntry = summaryByUsername.get(nicknameKey)!;
-      summaryEntry.amountByDate.set(dateKey, roundDailyOverviewMoney(Number(row.totalAmount || 0)));
+      summaryEntry.amountByDate.set(
+        dateKey,
+        roundDailyOverviewMoney(parseCollectionAmountMyrNumber(row.totalAmount || 0)),
+      );
       summaryEntry.customerCountByDate.set(dateKey, Number(row.totalRecords || 0));
     }
 

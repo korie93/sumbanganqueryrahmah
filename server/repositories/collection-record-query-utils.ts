@@ -5,6 +5,7 @@ import type {
   CollectionNicknameDailyAggregate,
   CollectionReceiptValidationStatus,
 } from "../storage-postgres";
+import { parseCollectionAmountMyrNumber } from "../../shared/collection-amount-types";
 import {
   hashCollectionCustomerNameSearchTerms,
   hashCollectionPiiSearchValue,
@@ -238,7 +239,7 @@ export function mapCollectionAggregateRow(row: any): {
 } {
   return {
     totalRecords: Number(row?.total_records ?? 0),
-    totalAmount: Number(row?.total_amount ?? 0),
+    totalAmount: parseCollectionAmountMyrNumber(row?.total_amount ?? 0),
   };
 }
 
@@ -249,7 +250,7 @@ export function mapCollectionMonthlySummaryRows(rows: any[]): CollectionMonthlyS
     if (!Number.isFinite(month) || month < 1 || month > 12) continue;
     byMonth.set(month, {
       totalRecords: Number(row?.total_records ?? 0),
-      totalAmount: Number(row?.total_amount ?? 0),
+      totalAmount: parseCollectionAmountMyrNumber(row?.total_amount ?? 0),
     });
   }
 
@@ -270,7 +271,7 @@ export function mapCollectionNicknameDailyAggregateRows(rows: any[]): Collection
     nickname: String(row?.nickname || row?.nickname_key || "Unknown"),
     paymentDate: String(row?.payment_date || ""),
     totalRecords: Number(row?.total_records ?? 0),
-    totalAmount: Number(row?.total_amount ?? 0),
+    totalAmount: parseCollectionAmountMyrNumber(row?.total_amount ?? 0),
   }));
 }
 
@@ -295,5 +296,8 @@ export function collectCollectionReceiptPaths(
 }
 
 export function sumCollectionRowAmounts(rows: any[]): number {
-  return (rows || []).reduce((sum: number, row: any) => sum + Number(row?.amount ?? 0), 0);
+  return (rows || []).reduce(
+    (sum: number, row: any) => sum + parseCollectionAmountMyrNumber(row?.amount ?? 0),
+    0,
+  );
 }

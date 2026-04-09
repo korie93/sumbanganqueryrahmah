@@ -18,17 +18,27 @@ function validateSearchPath(searchPath: string): string {
   return searchPath;
 }
 
-export const pool = new Pool({
-  host: runtimeConfig.database.host,
-  port: runtimeConfig.database.port,
-  user: runtimeConfig.database.user,
-  password: runtimeConfig.database.password,
-  database: runtimeConfig.database.database,
-  max: runtimeConfig.database.maxConnections,
-  idleTimeoutMillis: runtimeConfig.database.idleTimeoutMs,
-  connectionTimeoutMillis: runtimeConfig.database.connectionTimeoutMs,
-  options: `-c search_path=${validateSearchPath(runtimeConfig.database.searchPath)}`,
-});
+export const pool = new Pool(
+  runtimeConfig.database.connectionString
+    ? {
+        connectionString: runtimeConfig.database.connectionString,
+        max: runtimeConfig.database.maxConnections,
+        idleTimeoutMillis: runtimeConfig.database.idleTimeoutMs,
+        connectionTimeoutMillis: runtimeConfig.database.connectionTimeoutMs,
+        options: `-c search_path=${validateSearchPath(runtimeConfig.database.searchPath)}`,
+      }
+    : {
+        host: runtimeConfig.database.host,
+        port: runtimeConfig.database.port,
+        user: runtimeConfig.database.user,
+        password: runtimeConfig.database.password,
+        database: runtimeConfig.database.database,
+        max: runtimeConfig.database.maxConnections,
+        idleTimeoutMillis: runtimeConfig.database.idleTimeoutMs,
+        connectionTimeoutMillis: runtimeConfig.database.connectionTimeoutMs,
+        options: `-c search_path=${validateSearchPath(runtimeConfig.database.searchPath)}`,
+      },
+);
 
 bindPgPoolMonitoring(pool, {
   warnCooldownMs: runtimeConfig.runtime.pgPoolWarnCooldownMs,

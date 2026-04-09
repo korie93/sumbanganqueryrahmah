@@ -1,4 +1,5 @@
 import { badRequest } from "../../http/errors";
+import { parseCollectionAmountMyrNumber } from "../../../shared/collection-amount-types";
 import type { AuthenticatedUser } from "../../auth/guards";
 import { resolveCurrentCollectionNicknameFromSession } from "../../routes/collection-access";
 import {
@@ -98,7 +99,7 @@ export class CollectionDailyReadOperations extends CollectionServiceSupport {
       id: record.id,
       customerName: record.customerName,
       accountNumber: record.accountNumber,
-      amount: Number(record.amount || 0),
+      amount: parseCollectionAmountMyrNumber(record.amount),
       collectionStaffNickname: record.collectionStaffNickname,
     }));
 
@@ -154,7 +155,7 @@ export class CollectionDailyReadOperations extends CollectionServiceSupport {
         customerName: record.customerName,
         accountNumber: record.accountNumber,
         paymentDate: record.paymentDate,
-        amount: Number(record.amount || 0),
+        amount: parseCollectionAmountMyrNumber(record.amount),
         batch: record.batch,
         paymentReference: record.accountNumber,
         username: record.createdByLogin,

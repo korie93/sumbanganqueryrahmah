@@ -114,6 +114,7 @@ const runtimeEnvironmentSchema = z.object({
   TRUSTED_PROXIES: optionalEnvString("TRUSTED_PROXIES"),
   ALLOW_LOCAL_DEV_CORS: optionalBooleanEnv("ALLOW_LOCAL_DEV_CORS"),
 
+  DATABASE_URL: optionalEnvString("DATABASE_URL", SECRET_STRING_MAX_LENGTH),
   PG_HOST: optionalEnvString("PG_HOST", 255),
   PG_PORT: optionalIntEnv("PG_PORT", { min: 1, max: 65_535 }),
   PG_USER: optionalEnvString("PG_USER", 255),

@@ -209,6 +209,34 @@ test("aggregate and receipt helpers normalize values and dedupe paths", () => {
   );
 });
 
+test("collection aggregate helpers normalize grouped amount strings consistently", () => {
+  assert.deepEqual(
+    mapCollectionAggregateRow({ total_records: "2", total_amount: "1,200.50" }),
+    {
+      totalRecords: 2,
+      totalAmount: 1200.5,
+    },
+  );
+  assert.deepEqual(
+    mapCollectionNicknameDailyAggregateRows([
+      {
+        nickname: "Collector Alpha",
+        payment_date: "2026-03-03",
+        total_records: "3",
+        total_amount: "1,050.10",
+      },
+    ]),
+    [
+      {
+        nickname: "Collector Alpha",
+        paymentDate: "2026-03-03",
+        totalRecords: 3,
+        totalAmount: 1050.1,
+      },
+    ],
+  );
+});
+
 test("mapCollectionNicknameDailyAggregateRows normalizes nickname and payment-date aggregates", () => {
   assert.deepEqual(
     mapCollectionNicknameDailyAggregateRows([

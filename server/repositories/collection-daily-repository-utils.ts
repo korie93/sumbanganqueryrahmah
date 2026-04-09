@@ -1,5 +1,6 @@
 import { randomUUID } from "crypto";
 import { sql, type SQLWrapper } from "drizzle-orm";
+import { parseCollectionAmountMyrNumber } from "../../shared/collection-amount-types";
 import { db } from "../db-postgres";
 import type {
   CollectionDailyCalendarDay,
@@ -235,7 +236,7 @@ export async function listCollectionDailyPaidCustomers(params: {
       plaintext: row.account_number,
       encrypted: row.account_number_encrypted,
     }),
-    amount: Number(row.amount || 0),
+    amount: parseCollectionAmountMyrNumber(row.amount),
     collectionStaffNickname: String(row.collection_staff_nickname || ""),
   }));
 }

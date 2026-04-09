@@ -1,5 +1,6 @@
 import crypto from "crypto";
 import { sql } from "drizzle-orm";
+import { parseCollectionAmountMyrNumber } from "../../shared/collection-amount-types";
 import {
   buildCollectionRecordPiiSearchHashes,
   buildEncryptedCollectionRecordPiiValues,
@@ -143,7 +144,7 @@ export function normalizeBackupCollectionRecord(
     accountNumber,
     batch: String(record.batch || "P10"),
     paymentDate,
-    amount: Number(record.amount || 0),
+    amount: parseCollectionAmountMyrNumber(record.amount),
     receiptFile: record.receiptFile || null,
     receiptTotalAmount:
       parseBackupStoredCents(record.receiptTotalAmountCents)

@@ -50,6 +50,42 @@ const backupFeatureEnabled = readBoolean("BACKUP_FEATURE_ENABLED", true);
 const localSuperuserCredentialsFileEnabled = readBoolean("LOCAL_SUPERUSER_CREDENTIALS_FILE_ENABLED", false);
 const mailDevOutboxEnabled = readBoolean("MAIL_DEV_OUTBOX_ENABLED", false);
 
+type ParsedDatabaseUrl = {
+  database: string;
+  host: string;
+  password: string;
+  port: number;
+  user: string;
+};
+
+function parseDatabaseUrl(rawValue: string | null): ParsedDatabaseUrl | null {
+  if (!rawValue) {
+    return null;
+  }
+
+  let url: URL;
+  try {
+    url = new URL(rawValue);
+  } catch {
+    throw new Error("DATABASE_URL must be a valid PostgreSQL connection URL.");
+  }
+
+  if (url.protocol !== "postgres:" && url.protocol !== "postgresql:") {
+    throw new Error("DATABASE_URL must start with postgres:// or postgresql://.");
+  }
+
+  const pathname = url.pathname.replace(/^\/+/, "");
+  const port = Number.parseInt(url.port || "5432", 10);
+
+  return {
+    database: decodeURIComponent(pathname),
+    host: url.hostname,
+    password: decodeURIComponent(url.password || ""),
+    port: Number.isFinite(port) ? port : 5432,
+    user: decodeURIComponent(url.username || ""),
+  };
+}
+
 function resolveDefaultPgMaxConnections() {
   const cpuCount = typeof os.availableParallelism === "function"
     ? os.availableParallelism()
@@ -63,6 +99,8 @@ const configuredPreviousSessionSecrets = resolvePreviousSessionSecrets(
   readCommaSeparatedList("SESSION_SECRET_PREVIOUS"),
   configuredSessionSecret,
 );
+const configuredDatabaseUrl = readOptionalString("DATABASE_URL");
+const parsedDatabaseUrl = parseDatabaseUrl(configuredDatabaseUrl);
 const configuredCollectionNicknameTempPassword = readOptionalString("COLLECTION_NICKNAME_TEMP_PASSWORD");
 const configuredPgPassword = readOptionalString("PG_PASSWORD");
 const configuredTwoFactorEncryptionKey = readOptionalString("TWO_FACTOR_ENCRYPTION_KEY");
@@ -141,22 +179,26 @@ export const runtimeConfig: RuntimeConfig = Object.freeze({
     trustedProxies,
   },
   database: {
-    host: readString("PG_HOST", "localhost"),
-    port: readInt("PG_PORT", 5432, { min: 1, max: 65535 }),
-    user: readString("PG_USER", "postgres"),
+    connectionString: configuredDatabaseUrl,
+    host: readString("PG_HOST", parsedDatabaseUrl?.host || "localhost"),
+    port: readInt("PG_PORT", parsedDatabaseUrl?.port || 5432, { min: 1, max: 65535 }),
+    user: readString("PG_USER", parsedDatabaseUrl?.user || "postgres"),
     password: (() => {
       if (configuredPgPassword) {
         return configuredPgPassword;
       }
+      if (parsedDatabaseUrl?.password) {
+        return parsedDatabaseUrl.password;
+      }
       if (isProductionLike) {
-        throw new Error("PG_PASSWORD is required outside strict local development.");
+        throw new Error("PG_PASSWORD or DATABASE_URL password is required outside strict local development.");
       }
       // Keep the local-development path passwordless-friendly while ensuring pg
       // always receives a string and can surface a normal auth failure instead
       // of throwing on undefined during SCRAM negotiation.
       return "";
     })(),
-    database: readString("PG_DATABASE", "sqr_db"),
+    database: readString("PG_DATABASE", parsedDatabaseUrl?.database || "sqr_db"),
     maxConnections: readInt("PG_MAX_CONNECTIONS", resolveDefaultPgMaxConnections(), { min: 1, max: 50 }),
     idleTimeoutMs: readInt("PG_IDLE_TIMEOUT_MS", 30_000, { min: 1_000 }),
     connectionTimeoutMs: readInt("PG_CONNECTION_TIMEOUT_MS", 5_000, { min: 1_000 }),

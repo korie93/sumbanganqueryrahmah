@@ -15,6 +15,15 @@ test("runtime env schema accepts a minimal local configuration", () => {
   });
 });
 
+test("runtime env schema accepts DATABASE_URL-only database configuration", () => {
+  assert.doesNotThrow(() => {
+    validateRuntimeEnvironmentSchema({
+      DATABASE_URL: "postgres://postgres:password@127.0.0.1:5432/sqr_db",
+      BACKUP_FEATURE_ENABLED: "1",
+    });
+  });
+});
+
 test("runtime env schema rejects malformed boolean flags", () => {
   assert.throws(
     () => {

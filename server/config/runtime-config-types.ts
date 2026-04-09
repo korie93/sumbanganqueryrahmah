@@ -39,6 +39,7 @@ export type RuntimeConfig = {
     trustedProxies: string[];
   };
   database: {
+    connectionString: string | null;
     host: string;
     port: number;
     user: string;
