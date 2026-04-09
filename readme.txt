@@ -647,6 +647,9 @@ ditentukan melalui penanda STATUS pada setiap item, bukan melalui jadual ini.
         server/services/tests/backup-operations.service.test.ts kini
         dibersihkan daripada as any pada service injection dan success-body
         assertions; baki debt mengecil lagi kepada test doubles lama lain.
+        Kemaskini 2026-04-10 (sambungan): server/services/tests/
+        audit-log-operations.service.test.ts juga kini typed melalui
+        constructor contracts tanpa as any.
 
 #36 Missing Test Coverage Reporting dalam CI
     Fail: .github/workflows/ci.yml (baris 68-98)

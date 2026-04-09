@@ -2,11 +2,24 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { AuditLogOperationsService } from "../audit-log-operations.service";
 
-type AuditEntry = {
-  action: string;
-  performedBy?: string;
-  details?: string;
-};
+type AuditLogOperationsStorage = ConstructorParameters<typeof AuditLogOperationsService>[0];
+type AuditLogOperationsRepository = ConstructorParameters<typeof AuditLogOperationsService>[1];
+type AuditEntry = Parameters<AuditLogOperationsStorage["createAuditLog"]>[0];
+type AuditRow = Awaited<ReturnType<AuditLogOperationsRepository["getAuditLogs"]>>[number];
+
+function createAuditRow(overrides: Partial<AuditRow> = {}): AuditRow {
+  return {
+    id: "audit-1",
+    action: "LOGIN",
+    performedBy: "super.user",
+    requestId: null,
+    targetUser: null,
+    targetResource: null,
+    details: "Logged in",
+    timestamp: new Date("2026-03-19T10:00:00.000Z"),
+    ...overrides,
+  };
+}
 
 test("AuditLogOperationsService cleanup clamps the cutoff and writes an audit log", async () => {
   const auditLogs: AuditEntry[] = [];
@@ -15,9 +28,18 @@ test("AuditLogOperationsService cleanup clamps the cutoff and writes an audit lo
     {
       createAuditLog: async (entry: AuditEntry) => {
         auditLogs.push(entry);
-        return { id: `audit-${auditLogs.length}`, ...entry };
+        return createAuditRow({
+          id: `audit-${auditLogs.length}`,
+          action: entry.action,
+          performedBy: entry.performedBy,
+          details: entry.details ?? null,
+          requestId: entry.requestId ?? null,
+          targetUser: entry.targetUser ?? null,
+          targetResource: entry.targetResource ?? null,
+          timestamp: new Date("2026-03-20T00:00:00.000Z"),
+        });
       },
-    } as any,
+    },
     {
       getAuditLogs: async () => [],
       listAuditLogsPage: async () => ({
@@ -36,7 +58,7 @@ test("AuditLogOperationsService cleanup clamps the cutoff and writes an audit lo
         cleanupCalls.push(cutoffDate);
         return 7;
       },
-    } as any,
+    },
   );
 
   const before = Date.now();
@@ -63,17 +85,7 @@ test("AuditLogOperationsService cleanup clamps the cutoff and writes an audit lo
 });
 
 test("AuditLogOperationsService proxies audit log reads through the repository", async () => {
-  const logs = [
-    {
-      id: "audit-1",
-      action: "LOGIN",
-      performedBy: "super.user",
-      targetUser: null,
-      targetResource: null,
-      details: "Logged in",
-      timestamp: new Date("2026-03-19T10:00:00.000Z"),
-    },
-  ];
+  const logs = [createAuditRow()];
   const stats = {
     totalLogs: 12,
     todayLogs: 3,
@@ -84,8 +96,8 @@ test("AuditLogOperationsService proxies audit log reads through the repository",
 
   const service = new AuditLogOperationsService(
     {
-      createAuditLog: async () => ({ id: "audit-2" }),
-    } as any,
+      createAuditLog: async () => createAuditRow({ id: "audit-2" }),
+    },
     {
       getAuditLogs: async () => logs,
       listAuditLogsPage: async () => ({
@@ -97,7 +109,7 @@ test("AuditLogOperationsService proxies audit log reads through the repository",
       }),
       getAuditLogStats: async () => stats,
       cleanupAuditLogsOlderThan: async () => 0,
-    } as any,
+    },
   );
 
   assert.deepEqual(await service.listAuditLogs({}), {
