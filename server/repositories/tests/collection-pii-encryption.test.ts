@@ -441,6 +441,25 @@ test("collection PII customer-name hash resolver falls back to provided hashes w
   });
 });
 
+test("collection PII customer-name hash resolver suppresses plaintext fallback for retired live fields", () => {
+  withCollectionPiiKeys(
+    {
+      current: "search-hash-secret-key",
+      retiredFields: "customerName",
+    },
+    () => {
+      assert.deepEqual(
+        resolveCollectionCustomerNameSearchHashesValue({
+          plaintext: "Legacy Alice",
+          encrypted: "",
+          hashes: ["hash.customer.al", "hash.customer.alice"],
+        }),
+        ["hash.customer.al", "hash.customer.alice"],
+      );
+    },
+  );
+});
+
 test("collection PII helpers detect missing or stale search hashes for rewrite under the active key", () => {
   withCollectionPiiKeys(
     {
@@ -505,6 +524,43 @@ test("collection PII helpers detect missing or stale search hashes for rewrite u
           plaintext: "Legacy Alice",
           encrypted: encryptedWithOldKey?.customerNameEncrypted,
           hashes: hashCollectionCustomerNameSearchTerms("Legacy Alice"),
+        }),
+        false,
+      );
+      assert.equal(
+        shouldRewriteCollectionPiiSearchHashValue({
+          field: "customerPhone",
+          plaintext: "0123111222",
+          encrypted: "",
+          hash: legacyHash,
+        }),
+        true,
+      );
+    },
+  );
+});
+
+test("collection PII rewrite helpers suppress plaintext fallback for retired live fields", () => {
+  withCollectionPiiKeys(
+    {
+      current: "new-collection-pii-key",
+      retiredFields: "customerName,customerPhone",
+    },
+    () => {
+      assert.equal(
+        shouldRewriteCollectionPiiSearchHashValue({
+          field: "customerPhone",
+          plaintext: "0123111222",
+          encrypted: "",
+          hash: "stale.hash.value",
+        }),
+        false,
+      );
+      assert.equal(
+        shouldRewriteCollectionPiiSearchHashesValue({
+          plaintext: "Legacy Alice",
+          encrypted: "",
+          hashes: ["hash.customer.al"],
         }),
         false,
       );

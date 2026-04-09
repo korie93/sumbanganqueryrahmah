@@ -306,6 +306,7 @@ export function resolveCollectionCustomerNameSearchHashesValue(params: {
   hashes?: unknown;
 }): string[] | null {
   const resolved = resolveCollectionPiiFieldValue({
+    field: "customerName",
     plaintext: params.plaintext,
     encrypted: params.encrypted,
   });
@@ -378,6 +379,7 @@ export function shouldRewriteCollectionPiiSearchHashValue(params: {
   hash: unknown;
 }): boolean {
   const resolved = resolveCollectionPiiFieldValue({
+    field: params.field,
     plaintext: params.plaintext,
     encrypted: params.encrypted,
   });
@@ -399,6 +401,7 @@ export function shouldRewriteCollectionPiiSearchHashesValue(params: {
   hashes: unknown;
 }): boolean {
   const resolved = resolveCollectionPiiFieldValue({
+    field: "customerName",
     plaintext: params.plaintext,
     encrypted: params.encrypted,
   });

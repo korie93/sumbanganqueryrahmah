@@ -23,7 +23,7 @@ import {
 import type { BackupEncryptionConfig } from "./backups-encryption";
 import {
   resolveCollectionCustomerNameSearchHashesValue,
-  resolveCollectionPiiFieldValue,
+  resolveStoredCollectionPiiPlaintextValue,
 } from "../lib/collection-pii-encryption";
 import { buildProtectedCollectionPiiSelect } from "./collection-pii-select-utils";
 export {
@@ -92,8 +92,32 @@ function buildCollectionRecordBackupPiiFields(
   const accountNumberEncrypted = hasNonEmptyString(row.accountNumberEncrypted)
     ? row.accountNumberEncrypted
     : null;
-  const customerNameSearchHashes = resolveCollectionCustomerNameSearchHashesValue({
+  const customerName = resolveStoredCollectionPiiPlaintextValue({
+    field: "customerName",
     plaintext: row.customerName,
+    encrypted: row.customerNameEncrypted,
+    fallback: null,
+  });
+  const icNumber = resolveStoredCollectionPiiPlaintextValue({
+    field: "icNumber",
+    plaintext: row.icNumber,
+    encrypted: row.icNumberEncrypted,
+    fallback: null,
+  });
+  const customerPhone = resolveStoredCollectionPiiPlaintextValue({
+    field: "customerPhone",
+    plaintext: row.customerPhone,
+    encrypted: row.customerPhoneEncrypted,
+    fallback: null,
+  });
+  const accountNumber = resolveStoredCollectionPiiPlaintextValue({
+    field: "accountNumber",
+    plaintext: row.accountNumber,
+    encrypted: row.accountNumberEncrypted,
+    fallback: null,
+  });
+  const customerNameSearchHashes = resolveCollectionCustomerNameSearchHashesValue({
+    plaintext: customerName,
     encrypted: row.customerNameEncrypted,
     hashes: row.customerNameSearchHashes,
   });
@@ -107,34 +131,22 @@ function buildCollectionRecordBackupPiiFields(
           : {}),
       }
       : {
-        customerName: resolveCollectionPiiFieldValue({
-          plaintext: row.customerName,
-          encrypted: null,
-        }),
+        ...(customerName ? { customerName } : {}),
       }),
     ...(icNumberEncrypted
       ? { icNumberEncrypted }
       : {
-        icNumber: resolveCollectionPiiFieldValue({
-          plaintext: row.icNumber,
-          encrypted: null,
-        }),
+        ...(icNumber ? { icNumber } : {}),
       }),
     ...(customerPhoneEncrypted
       ? { customerPhoneEncrypted }
       : {
-        customerPhone: resolveCollectionPiiFieldValue({
-          plaintext: row.customerPhone,
-          encrypted: null,
-        }),
+        ...(customerPhone ? { customerPhone } : {}),
       }),
     ...(accountNumberEncrypted
       ? { accountNumberEncrypted }
       : {
-        accountNumber: resolveCollectionPiiFieldValue({
-          plaintext: row.accountNumber,
-          encrypted: null,
-        }),
+        ...(accountNumber ? { accountNumber } : {}),
       }),
   };
 }
@@ -434,14 +446,14 @@ export async function prepareBackupPayloadFileForCreate(
       safeSelectRows<(BackupCollectionRecord & BackupCursorRow) & Record<string, unknown>>(sql`
         SELECT
           id,
-          ${buildProtectedCollectionPiiSelect("customer_name", "customer_name_encrypted", "customerName")},
+          ${buildProtectedCollectionPiiSelect("customer_name", "customer_name_encrypted", "customerName", "customerName")},
           customer_name_encrypted as "customerNameEncrypted",
           customer_name_search_hashes as "customerNameSearchHashes",
-          ${buildProtectedCollectionPiiSelect("ic_number", "ic_number_encrypted", "icNumber")},
+          ${buildProtectedCollectionPiiSelect("ic_number", "ic_number_encrypted", "icNumber", "icNumber")},
           ic_number_encrypted as "icNumberEncrypted",
-          ${buildProtectedCollectionPiiSelect("customer_phone", "customer_phone_encrypted", "customerPhone")},
+          ${buildProtectedCollectionPiiSelect("customer_phone", "customer_phone_encrypted", "customerPhone", "customerPhone")},
           customer_phone_encrypted as "customerPhoneEncrypted",
-          ${buildProtectedCollectionPiiSelect("account_number", "account_number_encrypted", "accountNumber")},
+          ${buildProtectedCollectionPiiSelect("account_number", "account_number_encrypted", "accountNumber", "accountNumber")},
           account_number_encrypted as "accountNumberEncrypted",
           batch,
           payment_date as "paymentDate",

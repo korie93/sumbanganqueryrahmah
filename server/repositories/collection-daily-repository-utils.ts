@@ -214,9 +214,9 @@ export async function listCollectionDailyPaidCustomers(params: {
   const result = await executor.execute(sql`
     SELECT
       id,
-      ${buildProtectedCollectionPiiSelect("customer_name", "customer_name_encrypted")},
+      ${buildProtectedCollectionPiiSelect("customer_name", "customer_name_encrypted", "customer_name", "customerName")},
       customer_name_encrypted,
-      ${buildProtectedCollectionPiiSelect("account_number", "account_number_encrypted")},
+      ${buildProtectedCollectionPiiSelect("account_number", "account_number_encrypted", "account_number", "accountNumber")},
       account_number_encrypted,
       amount,
       collection_staff_nickname

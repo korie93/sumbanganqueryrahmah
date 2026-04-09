@@ -25,10 +25,37 @@ function flattenSqlChunk(chunk: unknown): string {
   return "";
 }
 
-test("buildProtectedCollectionPiiSelect blanks plaintext when encrypted shadows exist", () => {
+test("buildProtectedCollectionPiiSelect omits plaintext when encrypted shadows exist", () => {
   const sqlText = flattenSqlChunk(
     buildProtectedCollectionPiiSelect("customer_name", "customer_name_encrypted", "customerName"),
   ).replace(/\s+/g, " ").trim();
 
-  assert.match(sqlText, /CASE WHEN NULLIF\(trim\(COALESCE\(customer_name_encrypted, ''\)\), ''\) IS NOT NULL THEN '' ELSE customer_name END AS "customerName"/);
+  assert.match(
+    sqlText,
+    /CASE WHEN NULLIF\(trim\(COALESCE\(customer_name_encrypted, ''\)\), ''\) IS NOT NULL THEN NULL ELSE NULLIF\(trim\(COALESCE\(customer_name, ''\)\), ''\) END AS "customerName"/,
+  );
+});
+
+test("buildProtectedCollectionPiiSelect emits NULL aliases for retired plaintext fields", () => {
+  const previous = process.env.COLLECTION_PII_RETIRED_FIELDS;
+  process.env.COLLECTION_PII_RETIRED_FIELDS = "customerName";
+
+  try {
+    const sqlText = flattenSqlChunk(
+      buildProtectedCollectionPiiSelect(
+        "customer_name",
+        "customer_name_encrypted",
+        "customerName",
+        "customerName",
+      ),
+    ).replace(/\s+/g, " ").trim();
+
+    assert.equal(sqlText, 'NULL AS "customerName"');
+  } finally {
+    if (previous === undefined) {
+      delete process.env.COLLECTION_PII_RETIRED_FIELDS;
+    } else {
+      process.env.COLLECTION_PII_RETIRED_FIELDS = previous;
+    }
+  }
 });

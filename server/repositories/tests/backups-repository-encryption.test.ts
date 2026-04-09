@@ -766,6 +766,68 @@ test("BackupsRepository keeps plaintext collection PII in backup payloads when e
   );
 });
 
+test("BackupsRepository rejects retired collection PII plaintext rows without encrypted shadows", async () => {
+  await withEnv(
+    {
+      NODE_ENV: "production",
+      BACKUP_ENCRYPTION_KEY: null,
+      BACKUP_ENCRYPTION_KEYS: `primary:${"A".repeat(32)}`,
+      BACKUP_ENCRYPTION_KEY_ID: "primary",
+      COLLECTION_PII_ENCRYPTION_KEY: "collection-pii-secret-2026",
+      COLLECTION_PII_RETIRED_FIELDS: "customerName,icNumber,customerPhone,accountNumber",
+    },
+    async () => {
+      const repository = new BackupsRepository(repoOptions);
+
+      const dbAny = db as any;
+      const originalExecute = dbAny.execute;
+      dbAny.execute = async (query: unknown) => {
+        const sqlText = normalizeSqlText(query);
+        if (sqlText.includes("FROM public.collection_records")) {
+          return {
+            rows: [
+              {
+                id: "record-1",
+                customerName: "Legacy Alice",
+                customerNameEncrypted: null,
+                icNumber: "900101015555",
+                icNumberEncrypted: null,
+                customerPhone: "0123000001",
+                customerPhoneEncrypted: null,
+                accountNumber: "ACC-1001",
+                accountNumberEncrypted: null,
+                batch: "P10",
+                paymentDate: "2026-03-31",
+                amount: "100.00",
+                receiptFile: null,
+                receiptTotalAmountCents: "10000",
+                receiptValidationStatus: "matched",
+                receiptValidationMessage: null,
+                receiptCount: 1,
+                duplicateReceiptFlag: false,
+                createdByLogin: "system",
+                collectionStaffNickname: "Collector Alpha",
+                staffUsername: "staff.user",
+                createdAt: new Date("2026-03-31T08:00:00.000Z"),
+              },
+            ],
+          };
+        }
+        return { rows: [] };
+      };
+
+      try {
+        await assert.rejects(
+          () => repository.prepareBackupPayloadFileForCreate(),
+          /Cannot persist retired collection PII field customerName without an encrypted shadow value/i,
+        );
+      } finally {
+        dbAny.execute = originalExecute;
+      }
+    },
+  );
+});
+
 test("BackupsRepository rejects backup export rows that exceed the serialization guard", async () => {
   await withEnv(
     {

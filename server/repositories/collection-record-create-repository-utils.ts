@@ -119,13 +119,13 @@ export async function createCollectionRecord(data: CreateCollectionRecordInput):
     const result = await tx.execute(sql`
       SELECT
         id,
-        ${buildProtectedCollectionPiiSelect("customer_name", "customer_name_encrypted")},
+        ${buildProtectedCollectionPiiSelect("customer_name", "customer_name_encrypted", "customer_name", "customerName")},
         customer_name_encrypted,
-        ${buildProtectedCollectionPiiSelect("ic_number", "ic_number_encrypted")},
+        ${buildProtectedCollectionPiiSelect("ic_number", "ic_number_encrypted", "ic_number", "icNumber")},
         ic_number_encrypted,
-        ${buildProtectedCollectionPiiSelect("customer_phone", "customer_phone_encrypted")},
+        ${buildProtectedCollectionPiiSelect("customer_phone", "customer_phone_encrypted", "customer_phone", "customerPhone")},
         customer_phone_encrypted,
-        ${buildProtectedCollectionPiiSelect("account_number", "account_number_encrypted")},
+        ${buildProtectedCollectionPiiSelect("account_number", "account_number_encrypted", "account_number", "accountNumber")},
         account_number_encrypted,
         batch,
         payment_date,
