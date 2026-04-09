@@ -1,3 +1,4 @@
+import type { CollectionAmountMyrNumber } from "../../../shared/collection-amount-types";
 import {
   aggregateCollectionDailyTimelines,
   computeCollectionDailyTimeline,
@@ -13,7 +14,7 @@ export type DailyResolvedUser = {
 };
 
 export type DailySummaryEntry = {
-  amountByDate: Map<string, number>;
+  amountByDate: Map<string, CollectionAmountMyrNumber>;
   customerCountByDate: Map<string, number>;
 };
 
@@ -29,8 +30,8 @@ export type DailyOverviewComputation = {
   days: Array<{
     day: number;
     date: string;
-    amount: number;
-    target: number;
+    amount: CollectionAmountMyrNumber;
+    target: CollectionAmountMyrNumber;
     isWorkingDay: boolean;
     isHoliday: boolean;
     holidayName: string | null;

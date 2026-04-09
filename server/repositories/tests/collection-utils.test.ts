@@ -25,6 +25,7 @@ import {
   validateCollectionAdminGroupComposition,
   type CollectionRepositoryExecutor,
 } from "../collection-nickname-utils";
+import { buildExpectedCollectionRecordVersionWhereClause } from "../collection-record-mutation-repository-utils";
 import { collectBoundValues, collectSqlText } from "./sql-test-utils";
 
 function withCollectionPiiKey<T>(value: string | null, fn: () => T): T {
@@ -109,6 +110,14 @@ test("buildCollectionRecordConditions keeps plaintext numeric PII fallback when 
     assert.doesNotMatch(sqlText, /customer_phone_search_hash = /);
     assert.doesNotMatch(sqlText, /account_number_search_hash = /);
   });
+});
+
+test("buildExpectedCollectionRecordVersionWhereClause compares against timestamptz timestamps", () => {
+  const clause = buildExpectedCollectionRecordVersionWhereClause(new Date("2026-04-09T05:49:03.036Z"));
+
+  assert.ok(clause);
+  assert.match(collectSqlText(clause), /CAST\(.+ AS timestamptz\)/);
+  assert.ok(collectBoundValues(clause).includes("2026-04-09T05:49:03.036Z"));
 });
 
 test("buildCollectionMonthlySummaryWhereSql clamps out-of-range years", () => {

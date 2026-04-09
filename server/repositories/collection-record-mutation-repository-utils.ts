@@ -39,6 +39,16 @@ function resolveExpectedCollectionRecordUpdatedAt(
     : null;
 }
 
+export function buildExpectedCollectionRecordVersionWhereClause(
+  expectedUpdatedAt: Date | null,
+) {
+  if (!expectedUpdatedAt) {
+    return null;
+  }
+
+  return sql`date_trunc('milliseconds', updated_at) = date_trunc('milliseconds', CAST(${expectedUpdatedAt.toISOString()} AS timestamptz))`;
+}
+
 export async function updateCollectionRecord(
   id: string,
   data: UpdateCollectionRecordInput,
@@ -149,10 +159,9 @@ export async function updateCollectionRecord(
   updateChunks.push(sql`updated_at = date_trunc('milliseconds', now())`);
 
   const whereClauses = [sql`id = ${id}::uuid`];
-  if (expectedUpdatedAt) {
-    whereClauses.push(
-      sql`date_trunc('milliseconds', updated_at) = date_trunc('milliseconds', CAST(${expectedUpdatedAt} AS timestamp))`,
-    );
+  const expectedVersionWhereClause = buildExpectedCollectionRecordVersionWhereClause(expectedUpdatedAt);
+  if (expectedVersionWhereClause) {
+    whereClauses.push(expectedVersionWhereClause);
   }
 
   return db.transaction(async (tx) => {
@@ -235,10 +244,9 @@ export async function deleteCollectionRecord(
 ): Promise<boolean> {
   const expectedUpdatedAt = resolveExpectedCollectionRecordUpdatedAt(options?.expectedUpdatedAt);
   const whereClauses = [sql`id = ${id}::uuid`];
-  if (expectedUpdatedAt) {
-    whereClauses.push(
-      sql`date_trunc('milliseconds', updated_at) = date_trunc('milliseconds', CAST(${expectedUpdatedAt} AS timestamp))`,
-    );
+  const expectedVersionWhereClause = buildExpectedCollectionRecordVersionWhereClause(expectedUpdatedAt);
+  if (expectedVersionWhereClause) {
+    whereClauses.push(expectedVersionWhereClause);
   }
 
   return db.transaction(async (tx) => {

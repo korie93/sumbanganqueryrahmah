@@ -2,10 +2,11 @@ import type {
   CollectionPurgeSummaryResponse,
   CollectionRecord,
 } from "@/lib/api";
+import type { CollectionAmountMyrNumber } from "@shared/collection-amount-types";
 
 export type CollectionRecordsSummary = {
   totalRecords: number;
-  totalAmount: number;
+  totalAmount: CollectionAmountMyrNumber;
 };
 
 export type UseCollectionRecordsActionsArgs = {

@@ -7,6 +7,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { buildCollectionRecordsPaginationControlsState } from "@/pages/collection-records/collection-records-toolbar-utils";
 import { formatAmountRM } from "@/pages/collection/utils";
+import type { CollectionAmountMyrNumber } from "@shared/collection-amount-types";
 
 const CollectionRecordsPurgeSummaryCard = lazy(() =>
   import("@/pages/collection-records/CollectionRecordsPurgeSummaryCard").then((module) => ({
@@ -15,7 +16,7 @@ const CollectionRecordsPurgeSummaryCard = lazy(() =>
 );
 
 export interface CollectionRecordsToolbarProps {
-  summary: { totalRecords: number; totalAmount: number };
+  summary: { totalRecords: number; totalAmount: CollectionAmountMyrNumber };
   loadingRecords: boolean;
   viewAllLoading: boolean;
   exportingExcel: boolean;
@@ -26,7 +27,7 @@ export interface CollectionRecordsToolbarProps {
   purgeSummary: {
     cutoffDate: string;
     eligibleRecords: number;
-    totalAmount: number;
+    totalAmount: CollectionAmountMyrNumber;
   } | null;
   pagedStart: number;
   pagedEnd: number;

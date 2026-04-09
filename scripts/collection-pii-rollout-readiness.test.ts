@@ -21,7 +21,7 @@ test("parseCliOptions accepts json and row caps for rollout readiness", () => {
   assert.equal(options.json, true);
 });
 
-test("buildCollectionPiiRolloutReadinessReport recommends staged sensitive redaction when plaintext remains", () => {
+test("buildCollectionPiiRolloutReadinessReport recommends the staged sensitive retirement helper when plaintext remains", () => {
   const report = buildCollectionPiiRolloutReadinessReport({
     encryptionConfigured: true,
     sensitiveFields: {
@@ -79,7 +79,7 @@ test("buildCollectionPiiRolloutReadinessReport recommends staged sensitive redac
   assert.equal(report.sensitiveRetirementReady, false);
   assert.equal(report.fullRetirementReady, false);
   assert.ok(
-    report.recommendations.some((entry) => entry.includes("collection:redact-sensitive-plaintext-pii")),
+    report.recommendations.some((entry) => entry.includes("collection:retire-sensitive-pii")),
   );
   assert.match(renderCollectionPiiRolloutReadinessReport(report), /sensitive:/i);
 });

@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import { db } from "../db-postgres";
+import type { CollectionAmountMyrNumber } from "../../shared/collection-amount-types";
 import type {
   CollectionMonthlySummary,
   CollectionNicknameDailyAggregate,
@@ -74,7 +75,7 @@ export async function listCollectionRecords(
 
 export async function summarizeCollectionRecords(
   filters?: CollectionRecordAggregateFilters,
-): Promise<{ totalRecords: number; totalAmount: number }> {
+): Promise<{ totalRecords: number; totalAmount: CollectionAmountMyrNumber }> {
   if (
     canUseCollectionRecordDailyRollups(filters)
     && !(await hasPendingCollectionRecordDailyRollupSlices(filters))
@@ -106,7 +107,7 @@ export async function summarizeCollectionRecords(
 
 export async function summarizeCollectionRecordsByNickname(
   filters?: CollectionRecordAggregateFilters,
-): Promise<Array<{ nickname: string; totalRecords: number; totalAmount: number }>> {
+): Promise<Array<{ nickname: string; totalRecords: number; totalAmount: CollectionAmountMyrNumber }>> {
   if (
     canUseCollectionRecordDailyRollups(filters)
     && !(await hasPendingCollectionRecordDailyRollupSlices(filters))
@@ -196,7 +197,7 @@ export async function summarizeCollectionRecordsByNicknameAndPaymentDate(
 
 export async function summarizeCollectionRecordsOlderThan(
   beforeDate: string,
-): Promise<{ totalRecords: number; totalAmount: number }> {
+): Promise<{ totalRecords: number; totalAmount: CollectionAmountMyrNumber }> {
   const normalizedBeforeDate = String(beforeDate || "").trim();
   if (!normalizedBeforeDate) {
     return {

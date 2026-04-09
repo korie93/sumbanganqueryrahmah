@@ -26,6 +26,7 @@ import type {
   UpdateCollectionRecordOptions,
   UpdateCollectionStaffNicknameInput,
 } from "../../storage-postgres";
+import type { CollectionAmountMyrNumber } from "../../../shared/collection-amount-types";
 import { PostgresSettingsStorage } from "./postgres-settings-storage";
 
 export class PostgresCollectionStorage extends PostgresSettingsStorage {
@@ -135,7 +136,7 @@ export class PostgresCollectionStorage extends PostgresSettingsStorage {
     username: string;
     year: number;
     month: number;
-    monthlyTarget: number;
+    monthlyTarget: CollectionAmountMyrNumber;
     actor: string;
   }): Promise<CollectionDailyTarget> {
     return this.collectionRepository.upsertCollectionDailyTarget(params);
@@ -257,7 +258,7 @@ export class PostgresCollectionStorage extends PostgresSettingsStorage {
 
   async purgeCollectionRecordsOlderThan(beforeDate: string): Promise<{
     totalRecords: number;
-    totalAmount: number;
+    totalAmount: CollectionAmountMyrNumber;
     receiptPaths: string[];
   }> {
     return this.collectionRepository.purgeCollectionRecordsOlderThan(beforeDate);

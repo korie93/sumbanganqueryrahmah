@@ -78,6 +78,11 @@ Optional PII retirement gates for that release flow:
 - set `COLLECTION_PII_RETIRED_FIELDS=...` to make release readiness verify that the exact retired live-read fields are already clean before rollout
 - set `VERIFY_COLLECTION_PII_FULL_RETIREMENT=1` to fail if any tracked collection PII field still has plaintext, redactable, or rewrite-needed rows
 
+Optional staged rollout helper before enabling `COLLECTION_PII_RETIRED_FIELDS`:
+
+- `npm run collection:retire-sensitive-pii`
+- `npm run collection:retire-sensitive-pii -- --apply`
+
 These directories are generated runtime output and are intentionally gitignored:
 
 - `artifacts/`

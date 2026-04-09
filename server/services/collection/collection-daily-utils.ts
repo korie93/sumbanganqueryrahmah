@@ -1,3 +1,4 @@
+import type { CollectionAmountMyrNumber } from "../../../shared/collection-amount-types";
 import { parseCollectionAmountMyrNumber } from "../../../shared/collection-amount-types";
 
 export type CollectionDailyStatus = "green" | "yellow" | "red" | "neutral";
@@ -12,10 +13,10 @@ export type CollectionDailyCalendarInput = {
 export type CollectionDailyTimelineDay = {
   day: number;
   date: string;
-  amount: number;
-  target: number;
-  carryIn: number;
-  carryOut: number;
+  amount: CollectionAmountMyrNumber;
+  target: CollectionAmountMyrNumber;
+  carryIn: CollectionAmountMyrNumber;
+  carryOut: CollectionAmountMyrNumber;
   isWorkingDay: boolean;
   isHoliday: boolean;
   holidayName: string | null;
@@ -24,23 +25,23 @@ export type CollectionDailyTimelineDay = {
 };
 
 export type CollectionDailyTimelineSummary = {
-  monthlyTarget: number;
-  collectedToDate: number;
-  collectedAmount: number;
-  remainingTarget: number;
-  balancedAmount: number;
+  monthlyTarget: CollectionAmountMyrNumber;
+  collectedToDate: CollectionAmountMyrNumber;
+  collectedAmount: CollectionAmountMyrNumber;
+  remainingTarget: CollectionAmountMyrNumber;
+  balancedAmount: CollectionAmountMyrNumber;
   workingDays: number;
   elapsedWorkingDays: number;
   remainingWorkingDays: number;
-  requiredPerRemainingWorkingDay: number;
+  requiredPerRemainingWorkingDay: CollectionAmountMyrNumber;
   completedDays: number;
   incompleteDays: number;
   noCollectionDays: number;
   neutralDays: number;
-  baseDailyTarget: number;
-  dailyTarget: number;
-  expectedProgressAmount: number;
-  progressVarianceAmount: number;
+  baseDailyTarget: CollectionAmountMyrNumber;
+  dailyTarget: CollectionAmountMyrNumber;
+  expectedProgressAmount: CollectionAmountMyrNumber;
+  progressVarianceAmount: CollectionAmountMyrNumber;
 };
 
 export type CollectionDailyTimeline = {
@@ -50,8 +51,8 @@ export type CollectionDailyTimeline = {
 };
 
 export type CollectionDailyOverviewSummary = CollectionDailyTimelineSummary & {
-  achievedAmount: number;
-  remainingAmount: number;
+  achievedAmount: CollectionAmountMyrNumber;
+  remainingAmount: CollectionAmountMyrNumber;
   metDays: number;
   yellowDays: number;
   redDays: number;
@@ -66,9 +67,9 @@ export type CollectionDailyTimelineAggregate = {
 type ComputeCollectionDailyTimelineParams = {
   year: number;
   month: number;
-  monthlyTarget: number;
+  monthlyTarget: CollectionAmountMyrNumber;
   calendarRows: CollectionDailyCalendarInput[];
-  amountByDate: Map<string, number>;
+  amountByDate: Map<string, CollectionAmountMyrNumber>;
   customerCountByDate?: Map<string, number>;
   referenceDate?: Date;
 };
@@ -126,8 +127,8 @@ function getElapsedWorkingDaysCount(
 
 export function getCollectionDailyStatus(params: {
   isWorkingDay: boolean;
-  amount: number;
-  target: number;
+  amount: CollectionAmountMyrNumber;
+  target: CollectionAmountMyrNumber;
 }): CollectionDailyStatus {
   const amount = roundMoney(Math.max(0, parseCollectionAmountMyrNumber(params.amount || 0)));
   const target = roundMoney(Math.max(0, parseCollectionAmountMyrNumber(params.target || 0)));

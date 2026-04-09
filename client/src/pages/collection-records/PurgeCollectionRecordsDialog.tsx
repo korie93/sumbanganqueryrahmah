@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { formatAmountRM } from "@/pages/collection/utils";
+import type { CollectionAmountMyrNumber } from "@shared/collection-amount-types";
 
 export type PurgeCollectionRecordsDialogProps = {
   open: boolean;
@@ -19,7 +20,7 @@ export type PurgeCollectionRecordsDialogProps = {
   summary: {
     cutoffDate: string;
     eligibleRecords: number;
-    totalAmount: number;
+    totalAmount: CollectionAmountMyrNumber;
   } | null;
   onOpenChange: (open: boolean) => void;
   onPasswordInputChange: (value: string) => void;

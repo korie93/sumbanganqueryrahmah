@@ -1,6 +1,7 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { formatAmountRM } from "@/pages/collection/utils";
+import type { CollectionAmountMyrNumber } from "@shared/collection-amount-types";
 
 export interface CollectionRecordsPurgeSummaryCardProps {
   loadingRecords: boolean;
@@ -9,7 +10,7 @@ export interface CollectionRecordsPurgeSummaryCardProps {
   purgeSummary: {
     cutoffDate: string;
     eligibleRecords: number;
-    totalAmount: number;
+    totalAmount: CollectionAmountMyrNumber;
   } | null;
   onOpenPurgeDialog: () => void;
 }

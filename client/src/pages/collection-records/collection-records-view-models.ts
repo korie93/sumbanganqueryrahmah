@@ -1,16 +1,17 @@
 import type { CollectionRecord } from "@/lib/api";
 import type { CollectionRecordsTableProps } from "@/pages/collection-records/CollectionRecordsTable";
 import type { CollectionRecordsToolbarProps } from "@/pages/collection-records/CollectionRecordsToolbar";
+import type { CollectionAmountMyrNumber } from "@shared/collection-amount-types";
 
 type Summary = {
   totalRecords: number;
-  totalAmount: number;
+  totalAmount: CollectionAmountMyrNumber;
 };
 
 type PurgeSummary = {
   cutoffDate: string;
   eligibleRecords: number;
-  totalAmount: number;
+  totalAmount: CollectionAmountMyrNumber;
 } | null;
 
 type BuildCollectionRecordsTableViewModelArgs = {

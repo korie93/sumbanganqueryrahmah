@@ -2,13 +2,16 @@ import { formatAmountRM } from "@/pages/collection/utils";
 import { fitCollectionRecordText } from "@/pages/collection-records/utils";
 import type { CollectionRecord } from "@/lib/api";
 import { formatDateTimeDDMMYYYY, formatIsoDateToDDMMYYYY } from "@/lib/date-format";
-import { parseCollectionAmountMyrNumber } from "@shared/collection-amount-types";
+import {
+  parseCollectionAmountMyrNumber,
+  type CollectionAmountMyrNumber,
+} from "@shared/collection-amount-types";
 
 interface CollectionRecordsExportParams {
   visibleRecords: CollectionRecord[];
   fromDate: string;
   toDate: string;
-  summary: { totalRecords: number; totalAmount: number };
+  summary: { totalRecords: number; totalAmount: CollectionAmountMyrNumber };
   canUseNicknameFilter: boolean;
   nicknameFilter: string;
 }

@@ -1,4 +1,5 @@
 import { apiRequest } from "../api-client";
+import type { CollectionAmountMyrNumber } from "@shared/collection-amount-types";
 import type {
   CollectionDailyDayDetailsResponse,
   CollectionDailyOverviewResponse,
@@ -23,7 +24,7 @@ export async function setCollectionDailyTarget(payload: {
   username: string;
   year: number;
   month: number;
-  monthlyTarget: number;
+  monthlyTarget: CollectionAmountMyrNumber;
 }) {
   const response = await apiRequest("PUT", "/api/collection/daily/target", payload);
   return response.json() as Promise<{
@@ -33,7 +34,7 @@ export async function setCollectionDailyTarget(payload: {
       username: string;
       year: number;
       month: number;
-      monthlyTarget: number;
+      monthlyTarget: CollectionAmountMyrNumber;
     };
   }>;
 }

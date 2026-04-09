@@ -5,6 +5,7 @@ import type {
   CollectionNicknameDailyAggregate,
   CollectionReceiptValidationStatus,
 } from "../storage-postgres";
+import type { CollectionAmountMyrNumber } from "../../shared/collection-amount-types";
 import { parseCollectionAmountMyrNumber } from "../../shared/collection-amount-types";
 import {
   hashCollectionCustomerNameSearchTerms,
@@ -235,7 +236,7 @@ export function buildCollectionMonthlySummaryWhereSql(filters: {
 
 export function mapCollectionAggregateRow(row: any): {
   totalRecords: number;
-  totalAmount: number;
+  totalAmount: CollectionAmountMyrNumber;
 } {
   return {
     totalRecords: Number(row?.total_records ?? 0),
@@ -244,7 +245,7 @@ export function mapCollectionAggregateRow(row: any): {
 }
 
 export function mapCollectionMonthlySummaryRows(rows: any[]): CollectionMonthlySummary[] {
-  const byMonth = new Map<number, { totalRecords: number; totalAmount: number }>();
+  const byMonth = new Map<number, { totalRecords: number; totalAmount: CollectionAmountMyrNumber }>();
   for (const row of rows || []) {
     const month = Number(row?.month ?? 0);
     if (!Number.isFinite(month) || month < 1 || month > 12) continue;
@@ -295,7 +296,7 @@ export function collectCollectionReceiptPaths(
   );
 }
 
-export function sumCollectionRowAmounts(rows: any[]): number {
+export function sumCollectionRowAmounts(rows: any[]): CollectionAmountMyrNumber {
   return (rows || []).reduce(
     (sum: number, row: any) => sum + parseCollectionAmountMyrNumber(row?.amount ?? 0),
     0,

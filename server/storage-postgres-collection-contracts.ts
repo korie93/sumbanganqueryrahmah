@@ -27,6 +27,7 @@ import type {
   UpdateCollectionRecordReceiptInput,
   UpdateCollectionStaffNicknameInput,
 } from "./storage-postgres-collection-types";
+import type { CollectionAmountMyrNumber } from "../shared/collection-amount-types";
 
 export interface CollectionStorageContract {
   createCollectionRecord(data: CreateCollectionRecordInput): Promise<CollectionRecord>;
@@ -45,7 +46,7 @@ export interface CollectionStorageContract {
   summarizeCollectionRecordsOlderThan(beforeDate: string): Promise<CollectionRecordAggregate>;
   purgeCollectionRecordsOlderThan(beforeDate: string): Promise<{
     totalRecords: number;
-    totalAmount: number;
+    totalAmount: CollectionAmountMyrNumber;
     receiptPaths: string[];
   }>;
   getCollectionMonthlySummary(filters: {
@@ -98,7 +99,7 @@ export interface CollectionStorageContract {
     username: string;
     year: number;
     month: number;
-    monthlyTarget: number;
+    monthlyTarget: CollectionAmountMyrNumber;
     actor: string;
   }): Promise<CollectionDailyTarget>;
   listCollectionDailyCalendar(params: {

@@ -14,6 +14,7 @@ import type { CollectionRecord } from "@/lib/api";
 import { CollectionPaginationBar } from "@/pages/collection-report/CollectionPaginationBar";
 import { formatAmountRM } from "@/pages/collection/utils";
 import { formatIsoDateToDDMMYYYY } from "@/lib/date-format";
+import type { CollectionAmountMyrNumber } from "@shared/collection-amount-types";
 
 const VIEW_ALL_PAGE_SIZE_OPTIONS = [...STANDARD_PAGE_SIZE_OPTIONS];
 const ViewAllRecordsDesktopTable = lazy(() =>
@@ -28,7 +29,7 @@ export interface ViewAllRecordsDialogProps {
   fromDate: string;
   toDate: string;
   viewAllRecords: CollectionRecord[];
-  viewAllSummary: { totalRecords: number; totalAmount: number };
+  viewAllSummary: { totalRecords: number; totalAmount: CollectionAmountMyrNumber };
   page: number;
   pageSize: number;
   totalPages: number;

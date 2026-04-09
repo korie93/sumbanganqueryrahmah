@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import { db } from "../db-postgres";
+import type { CollectionAmountMyrNumber } from "../../shared/collection-amount-types";
 import {
   collectCollectionReceiptPaths,
   extractCollectionRecordIds,
@@ -11,7 +12,7 @@ import {
 
 export async function purgeCollectionRecordsOlderThan(beforeDate: string): Promise<{
   totalRecords: number;
-  totalAmount: number;
+  totalAmount: CollectionAmountMyrNumber;
   receiptPaths: string[];
 }> {
   const normalizedBeforeDate = String(beforeDate || "").trim();

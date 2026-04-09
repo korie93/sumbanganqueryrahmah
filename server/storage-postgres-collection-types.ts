@@ -77,7 +77,7 @@ export type CollectionRecord = {
 
 export type CollectionRecordAggregate = {
   totalRecords: number;
-  totalAmount: number;
+  totalAmount: CollectionAmountMyrNumber;
 };
 
 export type CollectionRecordListFilters = {
@@ -100,21 +100,21 @@ export type CollectionRecordAggregateFilters = Omit<
 export type CollectionNicknameAggregate = {
   nickname: string;
   totalRecords: number;
-  totalAmount: number;
+  totalAmount: CollectionAmountMyrNumber;
 };
 
 export type CollectionNicknameDailyAggregate = {
   nickname: string;
   paymentDate: string;
   totalRecords: number;
-  totalAmount: number;
+  totalAmount: CollectionAmountMyrNumber;
 };
 
 export type CollectionMonthlySummary = {
   month: number;
   monthName: string;
   totalRecords: number;
-  totalAmount: number;
+  totalAmount: CollectionAmountMyrNumber;
 };
 
 export type CollectionRollupFreshnessSnapshot = {
@@ -187,7 +187,7 @@ export type CollectionDailyTarget = {
   username: string;
   year: number;
   month: number;
-  monthlyTarget: number;
+  monthlyTarget: CollectionAmountMyrNumber;
   createdBy: string | null;
   updatedBy: string | null;
   createdAt: Date;

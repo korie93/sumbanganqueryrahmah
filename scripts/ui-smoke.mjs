@@ -1248,16 +1248,16 @@ const checkCollectionMutationConsistency = async (context) => {
       "Nickname Summary for staff A should increase after create",
     );
 
-    const reassignResponse = await apiJsonRequestWithRetry(
-      context,
-      "PATCH",
-      `/api/collection/${encodeURIComponent(createdRecordId)}`,
-      {
+    const reassignResponse = await apiCollectionRecordVersionedRequestWithRetry(context, {
+      accountNumber: createdAccountNumber,
+      body: {
         collectionStaffNickname: nicknameB,
         expectedUpdatedAt,
       },
-      [200],
-    );
+      expectedStatuses: [200],
+      method: "PATCH",
+      recordId: createdRecordId,
+    });
     expectedUpdatedAt = String(
       reassignResponse.payload?.record?.updatedAt
       || reassignResponse.payload?.record?.createdAt
@@ -1275,16 +1275,16 @@ const checkCollectionMutationConsistency = async (context) => {
       "Nickname Summary for staff B should increase after reassignment",
     );
 
-    const moveDateResponse = await apiJsonRequestWithRetry(
-      context,
-      "PATCH",
-      `/api/collection/${encodeURIComponent(createdRecordId)}`,
-      {
+    const moveDateResponse = await apiCollectionRecordVersionedRequestWithRetry(context, {
+      accountNumber: createdAccountNumber,
+      body: {
         paymentDate: dateB,
         expectedUpdatedAt,
       },
-      [200],
-    );
+      expectedStatuses: [200],
+      method: "PATCH",
+      recordId: createdRecordId,
+    });
     expectedUpdatedAt = String(
       moveDateResponse.payload?.record?.updatedAt
       || moveDateResponse.payload?.record?.createdAt
@@ -1302,16 +1302,16 @@ const checkCollectionMutationConsistency = async (context) => {
       "Collection Summary month B total should increase after payment-date month move",
     );
 
-    const amountUpdateResponse = await apiJsonRequestWithRetry(
-      context,
-      "PATCH",
-      `/api/collection/${encodeURIComponent(createdRecordId)}`,
-      {
+    const amountUpdateResponse = await apiCollectionRecordVersionedRequestWithRetry(context, {
+      accountNumber: createdAccountNumber,
+      body: {
         amount: bumpedAmount,
         expectedUpdatedAt,
       },
-      [200],
-    );
+      expectedStatuses: [200],
+      method: "PATCH",
+      recordId: createdRecordId,
+    });
     expectedUpdatedAt = String(
       amountUpdateResponse.payload?.record?.updatedAt
       || amountUpdateResponse.payload?.record?.createdAt
@@ -1372,13 +1372,13 @@ const checkCollectionMutationConsistency = async (context) => {
       );
     }
 
-    const deleteResponse = await apiJsonRequestWithRetry(
-      context,
-      "DELETE",
-      `/api/collection/${encodeURIComponent(createdRecordId)}`,
-      expectedUpdatedAt ? { expectedUpdatedAt } : undefined,
-      [200],
-    );
+    const deleteResponse = await apiCollectionRecordVersionedRequestWithRetry(context, {
+      accountNumber: createdAccountNumber,
+      body: expectedUpdatedAt ? { expectedUpdatedAt } : undefined,
+      expectedStatuses: [200],
+      method: "DELETE",
+      recordId: createdRecordId,
+    });
     assert(deleteResponse.payload?.ok === true, "Delete flow should succeed in collection mutation smoke");
     recordDeleted = true;
 
@@ -1607,6 +1607,115 @@ const apiJsonRequestWithRetry = async (
   }
 
   throw new Error(`${String(method).toUpperCase()} ${apiPath} remained rate-limited after ${maxAttempts} attempts.`);
+};
+
+const isCollectionRecordVersionConflictPayload = (payload) =>
+  String(payload?.error?.code || payload?.code || "").trim() === "COLLECTION_RECORD_VERSION_CONFLICT";
+
+const readCollectionRecordVersionBySearch = async (
+  context,
+  {
+    accountNumber,
+    recordId,
+  },
+  maxAttempts = 6,
+) => {
+  const normalizedRecordId = String(recordId || "").trim();
+  const normalizedAccountNumber = String(accountNumber || "").trim();
+  if (!normalizedRecordId || !normalizedAccountNumber) {
+    return "";
+  }
+
+  const apiPath = `/api/collection/list?search=${encodeURIComponent(normalizedAccountNumber)}&limit=100&offset=0`;
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    const response = await apiJsonRequest(context, "GET", apiPath, undefined, [200, 429]);
+    if (response.status === 429) {
+      if (attempt === maxAttempts) {
+        break;
+      }
+      await waitForRateLimitRecovery(response.payload, 800);
+      continue;
+    }
+
+    const rows = Array.isArray(response.payload?.records) ? response.payload.records : [];
+    const matched = rows.find((row) => String(row?.id || "").trim() === normalizedRecordId);
+    return String(matched?.updatedAt || matched?.createdAt || "").trim();
+  }
+
+  return "";
+};
+
+const apiCollectionRecordVersionedRequestWithRetry = async (
+  context,
+  {
+    accountNumber,
+    body,
+    expectedStatuses = [200],
+    maxAttempts = 6,
+    method,
+    recordId,
+  },
+) => {
+  const normalizedRecordId = String(recordId || "").trim();
+  const apiPath = `/api/collection/${encodeURIComponent(normalizedRecordId)}`;
+  let nextBody = body && typeof body === "object" && !Array.isArray(body) ? { ...body } : body;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    const response = await apiJsonRequest(
+      context,
+      method,
+      apiPath,
+      nextBody,
+      Array.from(new Set([...expectedStatuses, 409, 429])),
+    );
+
+    if (response.status === 429) {
+      if (attempt === maxAttempts) {
+        break;
+      }
+      await waitForRateLimitRecovery(response.payload, 800);
+      continue;
+    }
+
+    if (
+      response.status === 409
+      && isCollectionRecordVersionConflictPayload(response.payload)
+      && nextBody
+      && typeof nextBody === "object"
+      && !Array.isArray(nextBody)
+      && Object.prototype.hasOwnProperty.call(nextBody, "expectedUpdatedAt")
+      && attempt < maxAttempts
+    ) {
+      const currentVersion = String(nextBody.expectedUpdatedAt || "").trim();
+      const refreshedVersion = await readCollectionRecordVersionBySearch(context, {
+        accountNumber,
+        recordId: normalizedRecordId,
+      });
+      if (refreshedVersion && refreshedVersion !== currentVersion) {
+        nextBody = {
+          ...nextBody,
+          expectedUpdatedAt: refreshedVersion,
+        };
+        continue;
+      }
+    }
+
+    if (expectedStatuses.includes(response.status)) {
+      return response;
+    }
+
+    throw new Error(
+      [
+        `${String(method).toUpperCase()} ${apiPath} returned unexpected status ${response.status}.`,
+        `Expected statuses: ${expectedStatuses.join(", ")}`,
+        `Response body: ${JSON.stringify(response.payload) || "(empty)"}`,
+      ].join("\n"),
+    );
+  }
+
+  throw new Error(
+    `${String(method).toUpperCase()} ${apiPath} could not recover from rate limit or version conflicts after ${maxAttempts} attempts.`,
+  );
 };
 
 const pad2 = (value) => String(value).padStart(2, "0");

@@ -132,7 +132,7 @@ export function buildCollectionPiiRolloutReadinessReport(params: {
 
   if (params.sensitiveFields.summary.rowsEligibleForRedaction > 0 || params.sensitiveFields.summary.rowsWithPlaintext > 0) {
     recommendations.push(
-      "Run 'npm run collection:redact-sensitive-plaintext-pii' first, then 'npm run collection:redact-sensitive-plaintext-pii -- --apply' for icNumber, customerPhone, and accountNumber.",
+      "Run 'npm run collection:retire-sensitive-pii' first, then 'npm run collection:retire-sensitive-pii -- --apply' for icNumber, customerPhone, and accountNumber.",
     );
   } else {
     recommendations.push(

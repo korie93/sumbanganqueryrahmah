@@ -146,7 +146,7 @@ export type CollectionRecordListResponse = {
   ok: boolean;
   records: CollectionRecord[];
   total: number;
-  totalAmount: number;
+  totalAmount: CollectionAmountMyrNumber;
   page: number;
   pageSize: number;
   limit: number;
@@ -159,7 +159,7 @@ export type CollectionNicknameSummaryResponse = {
   ok: boolean;
   nicknames: string[];
   totalRecords: number;
-  totalAmount: number;
+  totalAmount: CollectionAmountMyrNumber;
   page: number;
   pageSize: number;
   limit: number;
@@ -167,7 +167,7 @@ export type CollectionNicknameSummaryResponse = {
   nicknameTotals: Array<{
     nickname: string;
     totalRecords: number;
-    totalAmount: number;
+    totalAmount: CollectionAmountMyrNumber;
   }>;
   records: CollectionRecord[];
   freshness?: CollectionReportFreshness;
@@ -179,7 +179,7 @@ export type CollectionPurgeSummaryResponse = {
   retentionMonths: number;
   cutoffDate: string;
   eligibleRecords: number;
-  totalAmount: number;
+  totalAmount: CollectionAmountMyrNumber;
 };
 
 export type CollectionPurgeResponse = {
@@ -187,14 +187,14 @@ export type CollectionPurgeResponse = {
   retentionMonths: number;
   cutoffDate: string;
   deletedRecords: number;
-  totalAmount: number;
+  totalAmount: CollectionAmountMyrNumber;
 };
 
 export type CollectionMonthlySummary = {
   month: number;
   monthName: string;
   totalRecords: number;
-  totalAmount: number;
+  totalAmount: CollectionAmountMyrNumber;
 };
 
 export type CollectionReportFreshness = {
@@ -215,8 +215,8 @@ export type CollectionDailyUser = {
 export type CollectionDailyOverviewDay = {
   day: number;
   date: string;
-  amount: number;
-  target: number;
+  amount: CollectionAmountMyrNumber;
+  target: CollectionAmountMyrNumber;
   isWorkingDay: boolean;
   isHoliday: boolean;
   holidayName: string | null;
@@ -235,25 +235,25 @@ export type CollectionDailyOverviewResponse = {
     daysInMonth: number;
   };
   summary: {
-    monthlyTarget: number;
+    monthlyTarget: CollectionAmountMyrNumber;
     collectedToDate: number;
-    collectedAmount: number;
-    remainingTarget: number;
-    balancedAmount: number;
+    collectedAmount: CollectionAmountMyrNumber;
+    remainingTarget: CollectionAmountMyrNumber;
+    balancedAmount: CollectionAmountMyrNumber;
     workingDays: number;
     elapsedWorkingDays: number;
     remainingWorkingDays: number;
-    requiredPerRemainingWorkingDay: number;
+    requiredPerRemainingWorkingDay: CollectionAmountMyrNumber;
     completedDays: number;
     incompleteDays: number;
     noCollectionDays: number;
     neutralDays: number;
-    baseDailyTarget: number;
-    dailyTarget: number;
-    expectedProgressAmount: number;
-    progressVarianceAmount: number;
-    achievedAmount: number;
-    remainingAmount: number;
+    baseDailyTarget: CollectionAmountMyrNumber;
+    dailyTarget: CollectionAmountMyrNumber;
+    expectedProgressAmount: CollectionAmountMyrNumber;
+    progressVarianceAmount: CollectionAmountMyrNumber;
+    achievedAmount: CollectionAmountMyrNumber;
+    remainingAmount: CollectionAmountMyrNumber;
     metDays: number;
     yellowDays: number;
     redDays: number;
@@ -270,21 +270,21 @@ export type CollectionDailyDayDetailsResponse = {
   date: string;
   status: "green" | "yellow" | "red" | "neutral";
   message: string;
-  amount: number;
-  dailyTarget: number;
+  amount: CollectionAmountMyrNumber;
+  dailyTarget: CollectionAmountMyrNumber;
   customers: Array<{
     id: string;
     customerName: string;
     accountNumber: string;
-    amount: number;
+    amount: CollectionAmountMyrNumber;
     collectionStaffNickname: string;
   }>;
   summary: {
-    monthlyTarget: number;
-    collected: number;
-    balanced: number;
-    totalForDate: number;
-    targetForDate: number;
+    monthlyTarget: CollectionAmountMyrNumber;
+    collected: CollectionAmountMyrNumber;
+    balanced: CollectionAmountMyrNumber;
+    totalForDate: CollectionAmountMyrNumber;
+    targetForDate: CollectionAmountMyrNumber;
   };
   pagination: {
     page: number;
@@ -299,7 +299,7 @@ export type CollectionDailyDayDetailsResponse = {
     customerName: string;
     accountNumber: string;
     paymentDate: string;
-    amount: number;
+    amount: CollectionAmountMyrNumber;
     batch: string;
     paymentReference: string;
     username: string;

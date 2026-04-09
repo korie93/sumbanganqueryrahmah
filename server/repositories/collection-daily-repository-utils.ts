@@ -1,5 +1,6 @@
 import { randomUUID } from "crypto";
 import { sql, type SQLWrapper } from "drizzle-orm";
+import type { CollectionAmountMyrNumber } from "../../shared/collection-amount-types";
 import { parseCollectionAmountMyrNumber } from "../../shared/collection-amount-types";
 import { db } from "../db-postgres";
 import type {
@@ -70,7 +71,7 @@ export async function upsertCollectionDailyTarget(params: {
   username: string;
   year: number;
   month: number;
-  monthlyTarget: number;
+  monthlyTarget: CollectionAmountMyrNumber;
   actor: string;
 }): Promise<CollectionDailyTarget> {
   const result = await db.execute(sql`

@@ -31,7 +31,7 @@ const REDACTABLE_COLLECTION_PII_FIELDS = [
   "accountNumber",
 ] as const;
 
-type RedactableCollectionPiiField = (typeof REDACTABLE_COLLECTION_PII_FIELDS)[number];
+export type RedactableCollectionPiiField = (typeof REDACTABLE_COLLECTION_PII_FIELDS)[number];
 
 type CliOptions = {
   apply: boolean;
@@ -39,6 +39,21 @@ type CliOptions = {
   fields: ReadonlySet<RedactableCollectionPiiField>;
   json: boolean;
   maxRows: number | null;
+};
+
+export type CollectionPiiPlaintextRedactionSummary = {
+  apply: boolean;
+  batchSize: number;
+  candidateFieldCounts: Record<RedactableCollectionPiiField, number>;
+  candidateFields: number;
+  candidateRows: number;
+  fields: RedactableCollectionPiiField[];
+  maxRows: number | null;
+  mode: "apply" | "dry-run";
+  processedRows: number;
+  redactedFieldCounts: Record<RedactableCollectionPiiField, number>;
+  redactedFields: number;
+  redactedRows: number;
 };
 
 function parsePositiveInteger(value: string, flagName: string): number {
@@ -199,17 +214,15 @@ function formatFieldSummary(prefix: string, counts: Record<RedactableCollectionP
     .join(" ");
 }
 
-export async function main() {
-  const options = parseCliOptions(process.argv.slice(2));
-
-  if (!hasCollectionPiiEncryptionConfigured()) {
-    throw new Error(
-      "COLLECTION_PII_ENCRYPTION_KEY is required before redacting collection plaintext PII.",
-    );
-  }
-
-  await assertCollectionPiiPostgresReady("Collection PII plaintext redaction");
-
+export async function redactCollectionPiiPlaintext(params: {
+  apply: boolean;
+  batchSize?: number;
+  fields?: ReadonlySet<RedactableCollectionPiiField>;
+  maxRows?: number | null;
+}): Promise<CollectionPiiPlaintextRedactionSummary> {
+  const batchSize = params.batchSize ?? 500;
+  const fields = params.fields ?? new Set<RedactableCollectionPiiField>(REDACTABLE_COLLECTION_PII_FIELDS);
+  const maxRows = params.maxRows ?? null;
   let processedRows = 0;
   let candidateRows = 0;
   let candidateFields = 0;
@@ -229,149 +242,175 @@ export async function main() {
     accountNumber: 0,
   };
 
-  try {
-    while (true) {
-      const remainingLimit = options.maxRows === null
-        ? options.batchSize
-        : Math.min(options.batchSize, Math.max(0, options.maxRows - processedRows));
-      if (remainingLimit <= 0) {
-        break;
+  while (true) {
+    const remainingLimit = maxRows === null
+      ? batchSize
+      : Math.min(batchSize, Math.max(0, maxRows - processedRows));
+    if (remainingLimit <= 0) {
+      break;
+    }
+
+    const result = await pool.query<CollectionPiiRow>(
+      `
+        SELECT
+          id,
+          customer_name,
+          customer_name_encrypted,
+          customer_name_search_hash,
+          customer_name_search_hashes,
+          ic_number,
+          ic_number_encrypted,
+          ic_number_search_hash,
+          customer_phone,
+          customer_phone_encrypted,
+          customer_phone_search_hash,
+          account_number,
+          account_number_encrypted,
+          account_number_search_hash
+        FROM public.collection_records
+        WHERE ($1::uuid IS NULL OR id > $1::uuid)
+        ORDER BY id ASC
+        LIMIT $2
+      `,
+      [lastId, remainingLimit],
+    );
+
+    if (result.rows.length === 0) {
+      break;
+    }
+
+    for (const row of result.rows) {
+      processedRows += 1;
+      lastId = row.id;
+      const redactionPlan = getRedactionPlan(row, fields);
+      const plannedFieldCount = countPlannedFields(redactionPlan);
+      if (plannedFieldCount === 0) {
+        continue;
       }
 
-      const result = await pool.query<CollectionPiiRow>(
-        `
-          SELECT
-            id,
-            customer_name,
-            customer_name_encrypted,
-            customer_name_search_hash,
-            customer_name_search_hashes,
-            ic_number,
-            ic_number_encrypted,
-            ic_number_search_hash,
-            customer_phone,
-            customer_phone_encrypted,
-            customer_phone_search_hash,
-            account_number,
-            account_number_encrypted,
-            account_number_search_hash
-          FROM public.collection_records
-          WHERE ($1::uuid IS NULL OR id > $1::uuid)
-          ORDER BY id ASC
-          LIMIT $2
-        `,
-        [lastId, remainingLimit],
+      candidateRows += 1;
+      candidateFields += plannedFieldCount;
+      for (const field of REDACTABLE_COLLECTION_PII_FIELDS) {
+        if (redactionPlan[field]) {
+          candidateFieldCounts[field] += 1;
+        }
+      }
+      if (!params.apply) {
+        continue;
+      }
+
+      const customerName = resolveRedactedCollectionPiiPlaintextValue(
+        row.customer_name,
+        redactionPlan.customerName,
+      );
+      const icNumber = resolveRedactedCollectionPiiPlaintextValue(
+        row.ic_number,
+        redactionPlan.icNumber,
+      );
+      const customerPhone = resolveRedactedCollectionPiiPlaintextValue(
+        row.customer_phone,
+        redactionPlan.customerPhone,
+      );
+      const accountNumber = resolveRedactedCollectionPiiPlaintextValue(
+        row.account_number,
+        redactionPlan.accountNumber,
       );
 
-      if (result.rows.length === 0) {
-        break;
-      }
-
-      for (const row of result.rows) {
-        processedRows += 1;
-        lastId = row.id;
-        const redactionPlan = getRedactionPlan(row, options.fields);
-        const plannedFieldCount = countPlannedFields(redactionPlan);
-        if (plannedFieldCount === 0) {
-          continue;
+      await pool.query(
+        `
+          UPDATE public.collection_records
+          SET
+            customer_name = $2,
+            ic_number = $3,
+            customer_phone = $4,
+            account_number = $5
+          WHERE id = $1::uuid
+        `,
+        [
+          row.id,
+          customerName,
+          icNumber,
+          customerPhone,
+          accountNumber,
+        ],
+      );
+      redactedRows += 1;
+      redactedFields += plannedFieldCount;
+      for (const field of REDACTABLE_COLLECTION_PII_FIELDS) {
+        if (redactionPlan[field]) {
+          redactedFieldCounts[field] += 1;
         }
-
-        candidateRows += 1;
-        candidateFields += plannedFieldCount;
-        for (const field of REDACTABLE_COLLECTION_PII_FIELDS) {
-          if (redactionPlan[field]) {
-            candidateFieldCounts[field] += 1;
-          }
-        }
-        if (!options.apply) {
-          continue;
-        }
-
-        const customerName = resolveRedactedCollectionPiiPlaintextValue(
-          row.customer_name,
-          redactionPlan.customerName,
-        );
-        const icNumber = resolveRedactedCollectionPiiPlaintextValue(
-          row.ic_number,
-          redactionPlan.icNumber,
-        );
-        const customerPhone = resolveRedactedCollectionPiiPlaintextValue(
-          row.customer_phone,
-          redactionPlan.customerPhone,
-        );
-        const accountNumber = resolveRedactedCollectionPiiPlaintextValue(
-          row.account_number,
-          redactionPlan.accountNumber,
-        );
-
-        await pool.query(
-          `
-            UPDATE public.collection_records
-            SET
-              customer_name = $2,
-              ic_number = $3,
-              customer_phone = $4,
-              account_number = $5
-            WHERE id = $1::uuid
-          `,
-          [
-            row.id,
-            customerName,
-            icNumber,
-            customerPhone,
-            accountNumber,
-          ],
-        );
-        redactedRows += 1;
-        redactedFields += plannedFieldCount;
-        for (const field of REDACTABLE_COLLECTION_PII_FIELDS) {
-          if (redactionPlan[field]) {
-            redactedFieldCounts[field] += 1;
-          }
-        }
-      }
-
-      if (result.rows.length < remainingLimit) {
-        break;
       }
     }
 
-    const summary = [
-      `processed=${processedRows}`,
-      `candidateRows=${candidateRows}`,
-      `candidateFields=${candidateFields}`,
-      `redactedRows=${redactedRows}`,
-      `redactedFields=${redactedFields}`,
-      `fields=${Array.from(options.fields).join(",")}`,
-      `mode=${options.apply ? "apply" : "dry-run"}`,
-      formatFieldSummary("candidate", candidateFieldCounts),
-      formatFieldSummary("redacted", redactedFieldCounts),
-    ].join(" ");
+    if (result.rows.length < remainingLimit) {
+      break;
+    }
+  }
+
+  return {
+    apply: params.apply,
+    batchSize,
+    candidateFieldCounts,
+    candidateFields,
+    candidateRows,
+    fields: Array.from(fields),
+    maxRows,
+    mode: params.apply ? "apply" : "dry-run",
+    processedRows,
+    redactedFieldCounts,
+    redactedFields,
+    redactedRows,
+  };
+}
+
+export function renderCollectionPiiPlaintextRedactionSummary(
+  summary: CollectionPiiPlaintextRedactionSummary,
+): string {
+  const renderedSummary = [
+    `processed=${summary.processedRows}`,
+    `candidateRows=${summary.candidateRows}`,
+    `candidateFields=${summary.candidateFields}`,
+    `redactedRows=${summary.redactedRows}`,
+    `redactedFields=${summary.redactedFields}`,
+    `fields=${summary.fields.join(",")}`,
+    `mode=${summary.mode}`,
+    formatFieldSummary("candidate", summary.candidateFieldCounts),
+    formatFieldSummary("redacted", summary.redactedFieldCounts),
+  ].join(" ");
+
+  if (summary.mode === "dry-run" && summary.candidateRows > 0) {
+    return `${renderedSummary}\nRun 'npm run collection:redact-plaintext-pii -- --apply' to clear plaintext columns for rows already protected by current encrypted shadows and search hashes.`;
+  }
+
+  return renderedSummary;
+}
+
+export async function main() {
+  const options = parseCliOptions(process.argv.slice(2));
+
+  if (!hasCollectionPiiEncryptionConfigured()) {
+    throw new Error(
+      "COLLECTION_PII_ENCRYPTION_KEY is required before redacting collection plaintext PII.",
+    );
+  }
+
+  await assertCollectionPiiPostgresReady("Collection PII plaintext redaction");
+
+  try {
+    const summary = await redactCollectionPiiPlaintext({
+      apply: options.apply,
+      batchSize: options.batchSize,
+      fields: options.fields,
+      maxRows: options.maxRows,
+    });
 
     if (options.json) {
-      console.log(JSON.stringify({
-        apply: options.apply,
-        batchSize: options.batchSize,
-        candidateFieldCounts,
-        candidateFields,
-        candidateRows,
-        fields: Array.from(options.fields),
-        maxRows: options.maxRows,
-        mode: options.apply ? "apply" : "dry-run",
-        processedRows,
-        redactedFieldCounts,
-        redactedFields,
-        redactedRows,
-      }, null, 2));
+      console.log(JSON.stringify(summary, null, 2));
       return;
     }
 
-    if (!options.apply && candidateRows > 0) {
-      console.log(`${summary}\nRun 'npm run collection:redact-plaintext-pii -- --apply' to clear plaintext columns for rows already protected by current encrypted shadows and search hashes.`);
-      return;
-    }
-
-    console.log(summary);
+    console.log(renderCollectionPiiPlaintextRedactionSummary(summary));
   } finally {
     await pool.end().catch(() => {});
   }
