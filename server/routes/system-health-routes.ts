@@ -1,4 +1,4 @@
-import { asyncHandler } from "../http/async-handler";
+import { asyncHandler, routeHandler } from "../http/async-handler";
 import type { StartupHealthSnapshot } from "../internal/startup-health";
 import type { SystemRouteContext } from "./system-route-context";
 
@@ -53,9 +53,9 @@ export function registerSystemHealthRoutes(context: SystemRouteContext) {
     getStartupHealthSnapshot,
   } = context;
 
-  app.get("/api/health/live", (_req, res) => {
+  app.get("/api/health/live", routeHandler((_req, res) => {
     res.json(buildLiveHealthPayload(getStartupHealthSnapshot));
-  });
+  }));
 
   app.get("/api/health/ready", asyncHandler(async (_req, res) => {
     const startup = getStartupHealthSnapshot();

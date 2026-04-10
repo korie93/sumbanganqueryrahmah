@@ -1,9 +1,10 @@
 import type { NextFunction, Request, RequestHandler, Response } from "express";
+import { routeHandler } from "./route-observability";
 
 export function asyncHandler(
   fn: (req: Request, res: Response, next: NextFunction) => Promise<unknown>,
 ): RequestHandler {
-  return (req, res, next) => {
-    void Promise.resolve(fn(req, res, next)).catch(next);
-  };
+  return routeHandler(fn);
 }
+
+export { routeHandler } from "./route-observability";

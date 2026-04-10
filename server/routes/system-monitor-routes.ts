@@ -1,3 +1,4 @@
+import { routeHandler } from "../http/async-handler";
 import type { SystemRouteContext } from "./system-route-context";
 
 export function registerSystemMonitorRoutes(context: SystemRouteContext) {
@@ -22,14 +23,14 @@ export function registerSystemMonitorRoutes(context: SystemRouteContext) {
     authenticateToken,
     requireRole("user", "admin", "superuser"),
     requireMonitorAccess,
-    (_req, res) => {
+    routeHandler((_req, res) => {
       const snapshot = computeInternalMonitorSnapshot();
       const alerts = buildInternalMonitorAlerts(snapshot);
       res.json({
         ...snapshot,
         activeAlertCount: alerts.length,
       });
-    },
+    }),
   );
 
   app.get(
@@ -37,7 +38,7 @@ export function registerSystemMonitorRoutes(context: SystemRouteContext) {
     authenticateToken,
     requireRole("user", "admin", "superuser"),
     requireMonitorAccess,
-    (_req, res) => {
+    routeHandler((_req, res) => {
       const controlState = getControlState();
       res.json({
         mode: controlState.mode,
@@ -47,7 +48,7 @@ export function registerSystemMonitorRoutes(context: SystemRouteContext) {
         preAllocatedMB: controlState.preAllocateMB,
         updatedAt: controlState.updatedAt,
       });
-    },
+    }),
   );
 
   app.get(
@@ -55,7 +56,7 @@ export function registerSystemMonitorRoutes(context: SystemRouteContext) {
     authenticateToken,
     requireRole("user", "admin", "superuser"),
     requireMonitorAccess,
-    (_req, res) => {
+    routeHandler((_req, res) => {
       const controlState = getControlState();
       res.json({
         count: controlState.workerCount,
@@ -63,7 +64,7 @@ export function registerSystemMonitorRoutes(context: SystemRouteContext) {
         workers: controlState.workers,
         updatedAt: controlState.updatedAt,
       });
-    },
+    }),
   );
 
   app.get(
@@ -71,9 +72,9 @@ export function registerSystemMonitorRoutes(context: SystemRouteContext) {
     authenticateToken,
     requireRole("user", "admin", "superuser"),
     requireMonitorAccess,
-    (_req, res) => {
+    routeHandler((_req, res) => {
       res.json(getWebVitalsOverview());
-    },
+    }),
   );
 
   app.get(
@@ -81,7 +82,7 @@ export function registerSystemMonitorRoutes(context: SystemRouteContext) {
     authenticateToken,
     requireRole("user", "admin", "superuser"),
     requireMonitorAccess,
-    (_req, res) => {
+    routeHandler((_req, res) => {
       const controlState = getControlState();
       res.json({
         predictor: controlState.predictor,
@@ -90,7 +91,7 @@ export function registerSystemMonitorRoutes(context: SystemRouteContext) {
         p95LatencyMs: getLatencyP95(),
         updatedAt: controlState.updatedAt,
       });
-    },
+    }),
   );
 
   app.get(
@@ -98,14 +99,14 @@ export function registerSystemMonitorRoutes(context: SystemRouteContext) {
     authenticateToken,
     requireRole("user", "admin", "superuser"),
     requireMonitorAccess,
-    (_req, res) => {
+    routeHandler((_req, res) => {
       const controlState = getControlState();
       res.json({
         local: getLocalCircuitSnapshots(),
         cluster: controlState.circuits,
         updatedAt: controlState.updatedAt,
       });
-    },
+    }),
   );
 
   app.get(
@@ -113,7 +114,7 @@ export function registerSystemMonitorRoutes(context: SystemRouteContext) {
     authenticateToken,
     requireRole("user", "admin", "superuser"),
     requireMonitorAccess,
-    (_req, res) => {
+    routeHandler((_req, res) => {
       const explain = getIntelligenceExplainability();
       res.json({
         anomalyBreakdown: explain.anomalyBreakdown,
@@ -124,6 +125,6 @@ export function registerSystemMonitorRoutes(context: SystemRouteContext) {
         chosenStrategy: explain.chosenStrategy,
         decisionReason: explain.decisionReason,
       });
-    },
+    }),
   );
 }

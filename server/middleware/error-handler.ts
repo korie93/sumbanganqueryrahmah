@@ -1,5 +1,6 @@
 import type { NextFunction, Request, Response } from "express";
 import { HttpError } from "../http/errors";
+import { wasRouteErrorLogged } from "../http/route-observability";
 import { logger } from "../lib/logger";
 
 type ErrorLike = {
@@ -57,13 +58,15 @@ export function errorHandler(err: unknown, req: Request, res: Response, next: Ne
 
   if (err instanceof HttpError) {
     if (!err.expose) {
-      logger.error("Unhandled API HttpError", {
-        path: req.path,
-        method: req.method,
-        code: err.code,
-        statusCode: err.statusCode,
-        message: err.message,
-      });
+      if (!wasRouteErrorLogged(err)) {
+        logger.error("Unhandled API HttpError", {
+          path: req.path,
+          method: req.method,
+          code: err.code,
+          statusCode: err.statusCode,
+          message: err.message,
+        });
+      }
 
       return res.status(err.statusCode).json(buildApiErrorResponse("Internal server error"));
     }
@@ -74,12 +77,14 @@ export function errorHandler(err: unknown, req: Request, res: Response, next: Ne
     }));
   }
 
-  logger.error("Unhandled API error", {
-    path: req.path,
-    method: req.method,
-    code: error?.code,
-    message: error?.message,
-  });
+  if (!wasRouteErrorLogged(err)) {
+    logger.error("Unhandled API error", {
+      path: req.path,
+      method: req.method,
+      code: error?.code,
+      message: error?.message,
+    });
+  }
 
   return res.status(500).json(buildApiErrorResponse("Internal server error"));
 }

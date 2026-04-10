@@ -8,12 +8,11 @@ import {
 import { applyFloatingAiScrollLock } from "@/components/floating-ai-scroll-lock";
 import { shouldTrackFloatingAiDom } from "@/components/floating-ai-visibility";
 import {
-  FLOATING_AI_AVOID_SELECTOR,
-  FLOATING_AI_DIALOG_SELECTOR,
-  collectFloatingAiAvoidRects,
-  hasFloatingAiBlockingDialog,
+  collectFloatingAiDomSnapshot,
   isEditableElement,
+  queryFloatingAiObstacleElements,
   resolveFloatingAiHasDensePage,
+  type FloatingAiObstacleQueryResult,
 } from "@/components/floating-ai-dom-utils";
 import type { AIChatStatus } from "@/components/AIChat";
 
@@ -149,13 +148,19 @@ export function useFloatingAILayoutState({
     });
   }, [hiddenForAiPage, isMobile, isOpen, layoutState.rootHidden]);
 
-  const syncLayout = useCallback(() => {
+  const syncLayout = useCallback((obstacleQuery?: FloatingAiObstacleQueryResult | null) => {
     const state = syncInputsRef.current;
     if (state.hiddenForAiPage || typeof window === "undefined") return;
     const effectiveViewportHeight =
       state.isMobile && state.mobileViewportHeight > 0 && !state.keyboardOpen
         ? state.mobileViewportHeight
         : window.innerHeight;
+    const domSnapshot = state.shouldTrackObstacleLayout
+      ? collectFloatingAiDomSnapshot(obstacleQuery ?? queryFloatingAiObstacleElements())
+      : {
+          avoidRects: [],
+          hasBlockingDialog: false,
+        };
 
     const nextLayout = resolveFloatingAiLayout({
       viewportWidth: window.innerWidth,
@@ -163,12 +168,12 @@ export function useFloatingAILayoutState({
       viewportBottomInset: state.hasFocusedAiEditable ? state.viewportBottomInset : 0,
       isMobile: state.isMobile,
       isOpen: state.isOpen,
-      hasBlockingDialog: state.shouldTrackObstacleLayout ? hasFloatingAiBlockingDialog() : false,
+      hasBlockingDialog: domSnapshot.hasBlockingDialog,
       keyboardOpen: state.keyboardOpen,
       hasFocusedEditable: state.hasFocusedEditable,
       hasDensePage: state.hasDensePage,
       preferCompactPanel: state.preferCompactPanel,
-      avoidRects: state.shouldTrackObstacleLayout ? collectFloatingAiAvoidRects() : [],
+      avoidRects: domSnapshot.avoidRects,
     });
 
     setLayoutState((previous) => (areFloatingAiLayoutsEqual(previous, nextLayout) ? previous : nextLayout));
@@ -192,19 +197,16 @@ export function useFloatingAILayoutState({
   ]);
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
+    if (hiddenForAiPage || typeof document === "undefined" || typeof window === "undefined") return;
 
     let frame = 0;
     let scheduled = false;
     let resizeObserver: ResizeObserver | null = null;
     const observedElements = new Set<Element>();
 
-    const syncObservedElements = () => {
+    const syncObservedElements = (obstacleQuery?: FloatingAiObstacleQueryResult | null) => {
       if (!resizeObserver) return;
-      const nextElements = new Set<Element>([
-        ...document.querySelectorAll(FLOATING_AI_AVOID_SELECTOR),
-        ...document.querySelectorAll(FLOATING_AI_DIALOG_SELECTOR),
-      ]);
+      const nextElements = new Set<Element>(obstacleQuery?.observedElements ?? []);
 
       for (const element of observedElements) {
         if (nextElements.has(element)) continue;
@@ -225,8 +227,9 @@ export function useFloatingAILayoutState({
       scheduled = true;
       frame = window.requestAnimationFrame(() => {
         scheduled = false;
-        syncObservedElements();
-        syncLayout();
+        const obstacleQuery = shouldTrackObstacleLayout ? queryFloatingAiObstacleElements() : null;
+        syncObservedElements(obstacleQuery);
+        syncLayout(obstacleQuery);
       });
     };
 

@@ -135,9 +135,19 @@ frontend, UI/UX, layout, CSS, dependencies, dan infrastructure. Penemuan utama:
             verify:browser-storage-safety menghalang penggunaan
             localStorage.getItem/setItem/removeItem secara langsung.
     L3. DOM query tanpa caching (floating-ai-dom-utils.ts)
+        >>> STATUS: ✅ DIPERBAIKI (Kemaskini susulan, 2026-04-10)
+            Floating AI DOM obstacle query kini dikongsi semula dalam
+            setiap animation frame antara observer sync dan layout sync,
+            jadi selector scan untuk avoid/dialog tidak lagi diulang pada
+            laluan kemaskini yang sama.
     L4. Error logging terhad di route files (hanya 10 explicit statements)
     L5. Tiada predictive data prefetching
     L6. allowImportingTsExtensions: true bukan standard (client/tsconfig.json)
+        >>> STATUS: ✅ DIPERBAIKI (Kemaskini susulan, 2026-04-10)
+            client/tsconfig.json kini kembali kepada konfigurasi bundler
+            standard tanpa allowImportingTsExtensions, dan
+            verify:client-tsconfig-contract mengunci kontrak ini serta
+            menghalang import .ts/.tsx specifiers dalam client source.
 
   Amalan terbaik yang sudah dilaksanakan:
     ✅ 389 AbortController instances dengan proper cleanup
@@ -189,8 +199,8 @@ Status item bernombor dalam dokumen ini:
   - 0 item: MATERIALLY CLOSED
   - 0 item: tanpa STATUS
 Audit susulan 10/04/2026 menambah 13 penemuan tidak bernombor:
-  - 11 item: ✅ DIPERBAIKI (H1, H2, H3, M1, M2, M3, M4, M5, M6, L1, L2)
-  - 4 item: TERBUKA (L3-L6)
+  - 13 item: ✅ DIPERBAIKI (H1, H2, H3, M1, M2, M3, M4, M5, M6, L1, L2, L3, L6)
+  - 2 item: TERBUKA (L4-L5)
 Nota: angka snapshot audit asal dikekalkan sebagai rekod sejarah. Untuk
       keadaan repo semasa, rujuk penanda STATUS pada setiap item dan
       blok audit susulan di ringkasan eksekutif.
@@ -1992,7 +2002,7 @@ Jumlah Audit:
   Audit susulan 5 (2026-04-10): +13 penemuan ringkas tidak bernombor
   Status item bernombor semasa: 102 item DIPERBAIKI, 0 item
   MATERIALLY CLOSED, 0 item tanpa STATUS.
-  Status audit susulan semasa: 11 item DIPERBAIKI, 4 item TERBUKA.
+  Status audit susulan semasa: 13 item DIPERBAIKI, 2 item TERBUKA.
   Nota: angka audit di atas ialah snapshot sejarah. Pembetulan pasca audit
         tambahan dirujuk melalui penanda STATUS pada item berkaitan.
 
@@ -2019,8 +2029,8 @@ Status repo semasa berdasarkan item bernombor dalam dokumen ini:
   * Tiada lagi item audit tanpa penanda STATUS
 
 Status audit susulan kelima:
-  * 11 item telah DIPERBAIKI (H1, H2, H3, M1, M2, M3, M4, M5, M6, L1, L2)
-  * 4 item masih TERBUKA (L3-L6)
+  * 13 item telah DIPERBAIKI (H1, H2, H3, M1, M2, M3, M4, M5, M6, L1, L2, L3, L6)
+  * 2 item masih TERBUKA (L4-L5)
 
 Penemuan paling kritikal baharu (Audit 3):
   * Unmounted state update risk — boleh crash komponen
@@ -2055,8 +2065,8 @@ Kemaskini status pasca pembetulan (2026-04-09):
 Snapshot audit asal merekodkan 14 isu CRITICAL, tetapi item kritikal dan high
 utama bernombor kini telah ditutup dalam kod semasa.
 Baki kerja audit aktif kini datang daripada audit susulan 10/04/2026, dan
-fokus seterusnya telah beralih kepada L3-L6 selepas H1-H3, M1-M6,
-dan L1-L2 ditutup.
+fokus seterusnya telah beralih kepada L4-L5 selepas H1-H3, M1-M6,
+L1-L3, dan L6 ditutup.
 
 Skor kesihatan keseluruhan semasa: jauh lebih baik daripada snapshot 7.9 / 10
 yang direkodkan pada audit asal 2026-04-09, kerana majoriti isu audit kini

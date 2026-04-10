@@ -1,5 +1,5 @@
 import type { AuthenticatedRequest } from "../auth/guards";
-import { asyncHandler } from "../http/async-handler";
+import { asyncHandler, routeHandler } from "../http/async-handler";
 import type { SystemRouteContext } from "./system-route-context";
 
 function readPositivePage(value: unknown, fallback: number) {
@@ -39,7 +39,7 @@ export function registerSystemAlertRoutes(context: SystemRouteContext) {
     authenticateToken,
     requireRole("user", "admin", "superuser"),
     requireMonitorAccess,
-    (req, res) => {
+    routeHandler((req, res) => {
       const snapshot = computeInternalMonitorSnapshot();
       const alerts = buildInternalMonitorAlerts(snapshot);
       const page = readPositivePage(req.query.page, 1);
@@ -58,7 +58,7 @@ export function registerSystemAlertRoutes(context: SystemRouteContext) {
         },
         updatedAt: snapshot.updatedAt,
       });
-    },
+    }),
   );
 
   app.get(

@@ -1,6 +1,7 @@
 import type { RequestHandler, Response } from "express";
 import type { AuthenticatedRequest } from "../../auth/guards";
 import { HttpError } from "../../http/errors";
+import { logRouteHandlerError } from "../../http/route-observability";
 import {
   type ManagedAccountActivationDelivery,
   type ManagedAccountPasswordResetDelivery,
@@ -136,6 +137,7 @@ export function createAuthJsonRoute(handler: AuthRouteJsonHandler): RequestHandl
       if (sendAuthRouteError(res, error)) {
         return;
       }
+      logRouteHandlerError(error, req, { message: "Unhandled auth route error" });
       throw error;
     }
   };

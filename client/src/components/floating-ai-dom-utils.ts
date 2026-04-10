@@ -3,6 +3,17 @@ import type { RectLike } from "@/components/floating-ai-layout";
 export const FLOATING_AI_AVOID_SELECTOR = "[data-floating-ai-avoid='true']";
 export const FLOATING_AI_DIALOG_SELECTOR = "[role='dialog'], [data-radix-dialog-content]";
 
+export type FloatingAiObstacleQueryResult = {
+  avoidElements: Element[];
+  dialogElements: Element[];
+  observedElements: Element[];
+};
+
+export type FloatingAiDomSnapshot = {
+  avoidRects: RectLike[];
+  hasBlockingDialog: boolean;
+};
+
 const DENSE_PAGE_HINTS = [
   "analysis",
   "audit",
@@ -37,8 +48,21 @@ export function resolveFloatingAiHasDensePage(activePage: string, location: stri
   return DENSE_PAGE_HINTS.some((token) => pageKey.includes(token));
 }
 
-export function collectFloatingAiAvoidRects(): RectLike[] {
-  return Array.from(document.querySelectorAll(FLOATING_AI_AVOID_SELECTOR))
+export function queryFloatingAiObstacleElements(
+  documentObject: Document = document,
+): FloatingAiObstacleQueryResult {
+  const avoidElements = Array.from(documentObject.querySelectorAll(FLOATING_AI_AVOID_SELECTOR));
+  const dialogElements = Array.from(documentObject.querySelectorAll(FLOATING_AI_DIALOG_SELECTOR));
+
+  return {
+    avoidElements,
+    dialogElements,
+    observedElements: [...avoidElements, ...dialogElements],
+  };
+}
+
+export function collectFloatingAiAvoidRects(elements?: Iterable<Element>): RectLike[] {
+  return Array.from(elements ?? document.querySelectorAll(FLOATING_AI_AVOID_SELECTOR))
     .filter((element) => isVisibleElement(element))
     .map((element) => {
       const rect = element.getBoundingClientRect();
@@ -53,8 +77,17 @@ export function collectFloatingAiAvoidRects(): RectLike[] {
     });
 }
 
-export function hasFloatingAiBlockingDialog(): boolean {
-  return Array.from(document.querySelectorAll(FLOATING_AI_DIALOG_SELECTOR)).some((element) =>
+export function hasFloatingAiBlockingDialog(elements?: Iterable<Element>): boolean {
+  return Array.from(elements ?? document.querySelectorAll(FLOATING_AI_DIALOG_SELECTOR)).some((element) =>
     isVisibleElement(element),
   );
+}
+
+export function collectFloatingAiDomSnapshot(
+  obstacleQuery: FloatingAiObstacleQueryResult = queryFloatingAiObstacleElements(),
+): FloatingAiDomSnapshot {
+  return {
+    avoidRects: collectFloatingAiAvoidRects(obstacleQuery.avoidElements),
+    hasBlockingDialog: hasFloatingAiBlockingDialog(obstacleQuery.dialogElements),
+  };
 }
