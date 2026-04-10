@@ -35,6 +35,12 @@ function parseHslColorValue(value) {
   };
 }
 
+function extractHslColorValues(value) {
+  return Array.from(String(value || "").matchAll(/hsl\([^)]*\)/gi), (match) =>
+    parseHslColorValue(match[0]),
+  );
+}
+
 function compositeColor(foreground, background) {
   const alpha = foreground.alpha ?? 1;
   const foregroundRgb = hslToRgb(foreground);
@@ -163,6 +169,49 @@ test("public auth text tokens keep WCAG AA contrast against the auth shell surfa
       getContrastRatio(effectiveSurface, effectiveTextMuted) >= 4.5,
       `${selector} public auth muted text must satisfy WCAG AA contrast`,
     );
+  }
+});
+
+test("public auth primary buttons and login submit gradients keep readable white text", () => {
+  const css = readFileSync(
+    path.resolve(process.cwd(), "client/src/theme-tokens.css"),
+    "utf8",
+  );
+
+  for (const selector of [":root", ".dark"]) {
+    const cssBlock = extractCssRuleBlock(css, selector);
+    const publicAuthPrimaryBackground = parseHslColorValue(
+      extractCssVariableValue(cssBlock, "public-auth-primary-bg"),
+    );
+    const publicAuthPrimaryBackgroundHover = parseHslColorValue(
+      extractCssVariableValue(cssBlock, "public-auth-primary-bg-hover"),
+    );
+    const publicAuthTextStrong = parseHslColorValue(
+      extractCssVariableValue(cssBlock, "public-auth-text-strong"),
+    );
+    const loginSubmitText = parseHslColorValue(
+      extractCssVariableValue(cssBlock, "login-submit-text"),
+    );
+    const loginSubmitGradientStops = [
+      ...extractHslColorValues(extractCssVariableValue(cssBlock, "login-submit-gradient")),
+      ...extractHslColorValues(extractCssVariableValue(cssBlock, "login-submit-gradient-hover")),
+    ];
+
+    assert.ok(
+      getContrastRatio(publicAuthPrimaryBackground, publicAuthTextStrong) >= 4.5,
+      `${selector} public auth primary background must satisfy WCAG AA contrast`,
+    );
+    assert.ok(
+      getContrastRatio(publicAuthPrimaryBackgroundHover, publicAuthTextStrong) >= 4.5,
+      `${selector} public auth primary hover background must satisfy WCAG AA contrast`,
+    );
+
+    for (const [index, gradientStop] of loginSubmitGradientStops.entries()) {
+      assert.ok(
+        getContrastRatio(gradientStop, loginSubmitText) >= 4.5,
+        `${selector} login submit gradient stop ${index + 1} must satisfy WCAG AA contrast`,
+      );
+    }
   }
 });
 
