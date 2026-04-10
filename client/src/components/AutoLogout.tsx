@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef } from "react";
-import { activityHeartbeat } from "@/lib/api";
+import { activityHeartbeatLight } from "@/lib/api";
 import { getBrowserLocalStorage, safeSetStorageItem } from "@/lib/browser-storage";
 import { toast } from "@/hooks/use-toast";
 import {
@@ -7,8 +7,10 @@ import {
   resolveAutoLogoutReconnectDelayMs,
 } from "@/components/auto-logout-websocket";
 import {
-  getStoredActivityId,
-  getStoredFingerprint,
+  resolveActivityHeartbeatSyncWindowMs,
+  shouldSyncActivityHeartbeat,
+} from "@/components/auto-logout-heartbeat-utils";
+import {
   getStoredUsername,
   persistAuthNotice,
   setBannedSessionFlag,
@@ -63,9 +65,11 @@ export default function AutoLogout({
   const mountedRef = useRef(true);
   const reconnectEnabledRef = useRef(true);
   const logoutStartedRef = useRef(false);
+  const lastHeartbeatSyncAtRef = useRef(0);
 
   const timeoutMs = timeoutMinutes * 60 * 1000;
   const heartbeatMs = heartbeatIntervalMinutes * 60 * 1000;
+  const heartbeatSyncWindowMs = resolveActivityHeartbeatSyncWindowMs(heartbeatMs);
 
   const clearIdleTimeout = useCallback(() => {
     if (timeoutRef.current) {
@@ -144,23 +148,17 @@ export default function AutoLogout({
     if (logoutStartedRef.current) return;
     if (heartbeatAbortControllerRef.current) return;
 
-    const activityId = getStoredActivityId();
-    const fingerprint = getStoredFingerprint();
-
-    if (!activityId) return;
-
     const controller = new AbortController();
     heartbeatAbortControllerRef.current = controller;
 
     try {
-      await activityHeartbeat({
-        activityId,
-        pcName: navigator.platform || "Unknown",
-        browser: navigator.userAgent,
-        fingerprint: fingerprint || undefined,
-      }, {
+      await activityHeartbeatLight({
         signal: controller.signal,
       });
+      lastHeartbeatSyncAtRef.current = Date.now();
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("activity-heartbeat-synced"));
+      }
     } catch (error) {
       if (
         controller.signal.aborted ||
@@ -177,11 +175,24 @@ export default function AutoLogout({
     }
   }, []);
 
+  const syncHeartbeatIfNeeded = useCallback((nowMs: number = Date.now()) => {
+    if (logoutStartedRef.current || heartbeatAbortControllerRef.current) {
+      return;
+    }
+
+    if (!shouldSyncActivityHeartbeat(lastHeartbeatSyncAtRef.current, nowMs, heartbeatSyncWindowMs)) {
+      return;
+    }
+
+    void sendHeartbeat();
+  }, [heartbeatSyncWindowMs, sendHeartbeat]);
+
   useEffect(() => {
     mountedRef.current = true;
     reconnectEnabledRef.current = true;
     logoutStartedRef.current = false;
     reconnectAttemptRef.current = 0;
+    lastHeartbeatSyncAtRef.current = 0;
 
     return () => {
       mountedRef.current = false;
@@ -202,6 +213,7 @@ export default function AutoLogout({
       if (now - lastResetByEventRef.current < 1000) return;
       lastResetByEventRef.current = now;
       resetTimeout();
+      syncHeartbeatIfNeeded(now);
     };
 
     events.forEach((eventName) => {
@@ -209,6 +221,7 @@ export default function AutoLogout({
     });
 
     resetTimeout();
+    void sendHeartbeat();
     heartbeatRef.current = window.setInterval(sendHeartbeat, heartbeatMs);
 
     return () => {
@@ -219,7 +232,15 @@ export default function AutoLogout({
       clearHeartbeat();
       clearHeartbeatRequest();
     };
-  }, [clearHeartbeat, clearHeartbeatRequest, clearIdleTimeout, heartbeatMs, resetTimeout, sendHeartbeat]);
+  }, [
+    clearHeartbeat,
+    clearHeartbeatRequest,
+    clearIdleTimeout,
+    heartbeatMs,
+    resetTimeout,
+    sendHeartbeat,
+    syncHeartbeatIfNeeded,
+  ]);
 
   useEffect(() => {
     const handleVisibilityChange = () => {
@@ -232,13 +253,14 @@ export default function AutoLogout({
       }
 
       resetTimeout();
+      syncHeartbeatIfNeeded();
     };
 
     document.addEventListener("visibilitychange", handleVisibilityChange);
     return () => {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [resetTimeout, runLogout, timeoutMs]);
+  }, [resetTimeout, runLogout, syncHeartbeatIfNeeded, timeoutMs]);
 
   useEffect(() => {
     const unsubscribeForcedLogout = subscribeForcedLogout((payload) => {

@@ -39,8 +39,8 @@ export function registerActivityReadRoutes(context: ActivityRouteContext) {
     authenticateToken,
     requireRole("user", "admin", "superuser"),
     requireTabAccess("activity"),
-    asyncHandler(async (_req, res) => {
-      return res.json({ activities: await activityService.getAllActivities() });
+    asyncHandler(async (req: AuthenticatedRequest, res) => {
+      return res.json({ activities: await activityService.getAllActivities(req.user?.activityId) });
     }),
   );
 
@@ -49,10 +49,11 @@ export function registerActivityReadRoutes(context: ActivityRouteContext) {
     authenticateToken,
     requireRole("user", "admin", "superuser"),
     requireTabAccess("activity"),
-    asyncHandler(async (req, res) => {
+    asyncHandler(async (req: AuthenticatedRequest, res) => {
       return res.json({
         activities: await activityService.getFilteredActivities(
           buildActivityFilters(req.query as Record<string, unknown>),
+          req.user?.activityId,
         ),
       });
     }),

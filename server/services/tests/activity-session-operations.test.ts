@@ -113,3 +113,112 @@ test("heartbeat marks activity online and returns ISO timestamp", async () => {
   assert.equal(capturedPatch.isActive, true);
   assert.ok(capturedPatch.lastActivityTime instanceof Date);
 });
+
+test("getAllActivities keeps the requesting active session online in the returned feed", async () => {
+  const staleCurrentActivity = {
+    id: "act-1",
+    userId: "user-1",
+    username: "ali",
+    role: "user",
+    fingerprint: null,
+    ipAddress: "127.0.0.1",
+    browser: "Chrome",
+    isActive: true,
+    pcName: "PC-1",
+    loginTime: new Date("2026-04-10T06:05:00.000Z"),
+    logoutTime: null,
+    lastActivityTime: new Date(Date.now() - 10 * 60_000),
+    logoutReason: null,
+  } as ActivityRecord;
+
+  const operations = createActivitySessionOperations(
+    createStorageMock({
+      getActivityById: async (activityId: string) => (activityId === "act-1" ? staleCurrentActivity : undefined),
+      getAllActivities: async () => [
+        {
+          ...staleCurrentActivity,
+          status: "IDLE",
+        } as ActivityRecord & { status: string },
+      ],
+    }),
+    async () => undefined,
+  );
+
+  const result = await operations.getAllActivities("act-1");
+
+  assert.equal(result.length, 1);
+  assert.equal(result[0]?.id, "act-1");
+  assert.equal((result[0] as { status?: string }).status, "ONLINE");
+  assert.ok(resolveDateValue((result[0] as { lastActivityTime?: unknown }).lastActivityTime) > staleCurrentActivity.lastActivityTime!.getTime());
+});
+
+test("getFilteredActivities injects the requesting active session into ONLINE filters when storage returned stale data", async () => {
+  const staleCurrentActivity = {
+    id: "act-1",
+    userId: "user-1",
+    username: "ali",
+    role: "user",
+    fingerprint: null,
+    ipAddress: "127.0.0.1",
+    browser: "Chrome",
+    isActive: true,
+    pcName: "PC-1",
+    loginTime: new Date("2026-04-10T06:05:00.000Z"),
+    logoutTime: null,
+    lastActivityTime: new Date(Date.now() - 10 * 60_000),
+    logoutReason: null,
+  } as ActivityRecord;
+
+  const operations = createActivitySessionOperations(
+    createStorageMock({
+      getActivityById: async (activityId: string) => (activityId === "act-1" ? staleCurrentActivity : undefined),
+      getFilteredActivities: async () => [],
+    }),
+    async () => undefined,
+  );
+
+  const result = await operations.getFilteredActivities({ status: ["ONLINE"] }, "act-1");
+
+  assert.equal(result.length, 1);
+  assert.equal(result[0]?.id, "act-1");
+  assert.equal((result[0] as { status?: string }).status, "ONLINE");
+});
+
+test("getFilteredActivities removes the requesting active session from IDLE filters once it is treated as online", async () => {
+  const staleCurrentActivity = {
+    id: "act-1",
+    userId: "user-1",
+    username: "ali",
+    role: "user",
+    fingerprint: null,
+    ipAddress: "127.0.0.1",
+    browser: "Chrome",
+    isActive: true,
+    pcName: "PC-1",
+    loginTime: new Date("2026-04-10T06:05:00.000Z"),
+    logoutTime: null,
+    lastActivityTime: new Date(Date.now() - 10 * 60_000),
+    logoutReason: null,
+  } as ActivityRecord;
+
+  const operations = createActivitySessionOperations(
+    createStorageMock({
+      getActivityById: async (activityId: string) => (activityId === "act-1" ? staleCurrentActivity : undefined),
+      getFilteredActivities: async () => [
+        {
+          ...staleCurrentActivity,
+          status: "IDLE",
+        } as ActivityRecord & { status: string },
+      ],
+    }),
+    async () => undefined,
+  );
+
+  const result = await operations.getFilteredActivities({ status: ["IDLE"] }, "act-1");
+
+  assert.equal(result.length, 0);
+});
+
+function resolveDateValue(value: unknown) {
+  return new Date(value as string | number | Date).getTime();
+}

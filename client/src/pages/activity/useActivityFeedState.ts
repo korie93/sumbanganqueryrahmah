@@ -97,13 +97,26 @@ export function useActivityFeedState({
       }
     };
 
+    const handleHeartbeatSynced = () => {
+      if (typeof document !== "undefined" && document.visibilityState !== "visible") {
+        return;
+      }
+      void fetchActivities(true);
+    };
+
     if (typeof document !== "undefined") {
       document.addEventListener("visibilitychange", handleVisibilityChange);
+    }
+    if (typeof window !== "undefined") {
+      window.addEventListener("activity-heartbeat-synced", handleHeartbeatSynced);
     }
 
     return () => {
       if (typeof document !== "undefined") {
         document.removeEventListener("visibilitychange", handleVisibilityChange);
+      }
+      if (typeof window !== "undefined") {
+        window.removeEventListener("activity-heartbeat-synced", handleHeartbeatSynced);
       }
       window.clearInterval(interval);
     };

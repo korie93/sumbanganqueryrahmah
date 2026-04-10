@@ -44,12 +44,12 @@ export class ActivityService {
     return this.sessionOperations.logout(activityId, username);
   }
 
-  async getAllActivities() {
-    return this.sessionOperations.getAllActivities();
+  async getAllActivities(currentActivityId?: string) {
+    return this.sessionOperations.getAllActivities(currentActivityId);
   }
 
-  async getFilteredActivities(filters: ActivityFilters) {
-    return this.sessionOperations.getFilteredActivities(filters);
+  async getFilteredActivities(filters: ActivityFilters, currentActivityId?: string) {
+    return this.sessionOperations.getFilteredActivities(filters, currentActivityId);
   }
 
   async deleteActivityLog(activityId: string) {

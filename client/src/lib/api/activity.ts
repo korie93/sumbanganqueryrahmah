@@ -1,5 +1,4 @@
-import { apiRequest, createApiHeaders } from "../api-client";
-import { getCsrfHeader } from "./shared";
+import { apiRequest } from "../api-client";
 
 type ActivityRequestOptions = {
   signal?: AbortSignal | undefined;
@@ -39,26 +38,14 @@ export async function activityHeartbeat(payload?: {
   browser?: string | undefined;
   fingerprint?: string | undefined;
 }, options?: ActivityRequestOptions) {
-  return fetch("/api/activity/heartbeat", {
-    method: "POST",
-    headers: createApiHeaders({
-      "Content-Type": "application/json",
-      ...(getCsrfHeader() as Record<string, string>),
-    }),
-    credentials: "include",
-    body: JSON.stringify(payload || {}),
-    signal: options?.signal ?? null,
+  return apiRequest("POST", "/api/activity/heartbeat", payload || {}, {
+    signal: options?.signal,
   });
 }
 
 export async function activityHeartbeatLight(options?: ActivityRequestOptions) {
-  return fetch("/api/activity/heartbeat", {
-    method: "POST",
-    headers: createApiHeaders({
-      ...(getCsrfHeader() as Record<string, string>),
-    }),
-    credentials: "include",
-    signal: options?.signal ?? null,
+  return apiRequest("POST", "/api/activity/heartbeat", {}, {
+    signal: options?.signal,
   });
 }
 

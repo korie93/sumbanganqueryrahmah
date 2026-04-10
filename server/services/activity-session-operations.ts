@@ -5,6 +5,116 @@ type CloseActivitySocket = (
   payload?: Record<string, unknown>,
 ) => Promise<void>;
 
+type ActivityListItem = Awaited<ReturnType<ActivityStorage["getAllActivities"]>>[number] & {
+  id?: string | null | undefined;
+  isActive?: boolean | null | undefined;
+  logoutTime?: Date | string | null | undefined;
+  loginTime?: Date | string | null | undefined;
+  username?: string | null | undefined;
+  ipAddress?: string | null | undefined;
+  browser?: string | null | undefined;
+  lastActivityTime?: Date | string | null | undefined;
+  status?: string | undefined;
+};
+
+function resolveActivityTimestampMs(value: Date | string | null | undefined) {
+  if (!value) {
+    return Number.NaN;
+  }
+
+  return new Date(value).getTime();
+}
+
+function matchesActivityBaseFilters(
+  activity: ActivityListItem,
+  filters: ActivityFilters | undefined,
+) {
+  if (!filters) {
+    return true;
+  }
+
+  if (filters.username && activity.username !== filters.username) {
+    return false;
+  }
+
+  if (filters.ipAddress && activity.ipAddress !== filters.ipAddress) {
+    return false;
+  }
+
+  if (filters.browser && activity.browser !== filters.browser) {
+    return false;
+  }
+
+  const loginTimeMs = resolveActivityTimestampMs(activity.loginTime);
+
+  if (filters.dateFrom && (!Number.isFinite(loginTimeMs) || loginTimeMs < filters.dateFrom.getTime())) {
+    return false;
+  }
+
+  if (filters.dateTo) {
+    const endOfDay = new Date(filters.dateTo);
+    endOfDay.setHours(23, 59, 59, 999);
+    if (!Number.isFinite(loginTimeMs) || loginTimeMs > endOfDay.getTime()) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function sortActivitiesByLoginTimeDesc<T extends ActivityListItem>(activities: T[]) {
+  return [...activities].sort((left, right) => {
+    const leftMs = resolveActivityTimestampMs(left.loginTime);
+    const rightMs = resolveActivityTimestampMs(right.loginTime);
+    if (!Number.isFinite(leftMs) && !Number.isFinite(rightMs)) {
+      return 0;
+    }
+    if (!Number.isFinite(leftMs)) {
+      return 1;
+    }
+    if (!Number.isFinite(rightMs)) {
+      return -1;
+    }
+    return rightMs - leftMs;
+  });
+}
+
+function reconcileRequestingActivityPresence<T extends ActivityListItem>(
+  activities: T[],
+  requestingActivity: T | undefined,
+  filters?: ActivityFilters,
+) {
+  const requestingActivityId = String(requestingActivity?.id || "").trim();
+  if (!requestingActivityId) {
+    return activities;
+  }
+
+  if (!requestingActivity) {
+    return activities;
+  }
+
+  if (requestingActivity?.isActive === false || requestingActivity?.logoutTime) {
+    return activities.filter((activity) => String(activity.id || "").trim() !== requestingActivityId);
+  }
+
+  const onlineAllowed = !filters?.status?.length || filters.status.includes("ONLINE");
+  const baseFiltersMatched = matchesActivityBaseFilters(requestingActivity, filters);
+  const nextActivities = activities.filter((activity) => String(activity.id || "").trim() !== requestingActivityId);
+
+  if (!onlineAllowed || !baseFiltersMatched) {
+    return nextActivities;
+  }
+
+  const now = new Date();
+  const nextRequestingActivity = {
+    ...requestingActivity,
+    lastActivityTime: now,
+    status: "ONLINE",
+  } as T;
+
+  return sortActivitiesByLoginTimeDesc([...nextActivities, nextRequestingActivity]);
+}
+
 export function createActivitySessionOperations(
   storage: ActivityStorage,
   closeSocket: CloseActivitySocket,
@@ -33,12 +143,31 @@ export function createActivitySessionOperations(
       });
     },
 
-    async getAllActivities() {
-      return storage.getAllActivities();
+    async getAllActivities(currentActivityId?: string) {
+      const activities = await storage.getAllActivities();
+      if (!currentActivityId) {
+        return activities;
+      }
+
+      const requestingActivity = await storage.getActivityById(currentActivityId) as ActivityListItem | undefined;
+      return reconcileRequestingActivityPresence(
+        activities as ActivityListItem[],
+        requestingActivity,
+      ) as typeof activities;
     },
 
-    async getFilteredActivities(filters: ActivityFilters) {
-      return storage.getFilteredActivities(filters);
+    async getFilteredActivities(filters: ActivityFilters, currentActivityId?: string) {
+      const activities = await storage.getFilteredActivities(filters);
+      if (!currentActivityId) {
+        return activities;
+      }
+
+      const requestingActivity = await storage.getActivityById(currentActivityId) as ActivityListItem | undefined;
+      return reconcileRequestingActivityPresence(
+        activities as ActivityListItem[],
+        requestingActivity,
+        filters,
+      ) as typeof activities;
     },
 
     async deleteActivityLog(activityId: string) {

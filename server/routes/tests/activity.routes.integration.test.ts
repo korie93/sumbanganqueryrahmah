@@ -27,6 +27,7 @@ type ActivityRecord = {
   username: string;
   role: string;
   isActive: boolean;
+  loginTime?: Date | null;
   logoutTime: Date | null;
   logoutReason?: string | null;
   fingerprint?: string | null;
@@ -34,6 +35,11 @@ type ActivityRecord = {
   browser?: string | null;
   pcName?: string | null;
   lastActivityTime?: Date | null;
+};
+
+type StoredActivityRecord = NonNullable<Awaited<ReturnType<PostgresStorage["getActivityById"]>>>;
+type StoredActivityFeedRecord = Awaited<ReturnType<PostgresStorage["getAllActivities"]>>[number] & {
+  status?: string;
 };
 
 type UserRecord = {
@@ -85,10 +91,37 @@ function createMockSocket(): { socket: WebSocket; state: SocketState } {
   };
 }
 
+function toStoredActivity(
+  activity: ActivityRecord | undefined,
+  overrides: Partial<StoredActivityRecord> = {},
+): StoredActivityRecord {
+  if (!activity) {
+    throw new Error("Expected activity record to exist in test harness.");
+  }
+
+  return {
+    id: activity.id,
+    userId: activity.userId ?? "",
+    username: activity.username,
+    role: activity.role,
+    fingerprint: activity.fingerprint ?? null,
+    ipAddress: activity.ipAddress ?? null,
+    browser: activity.browser ?? null,
+    isActive: activity.isActive,
+    pcName: activity.pcName ?? null,
+    loginTime: activity.loginTime ?? null,
+    logoutTime: activity.logoutTime ?? null,
+    lastActivityTime: activity.lastActivityTime ?? null,
+    logoutReason: activity.logoutReason ?? null,
+    ...overrides,
+  };
+}
+
 function createActivityRouteHarness(options?: {
   authenticateToken?: RequestHandler;
   adminActionRateLimiter?: RequestHandler;
   adminDestructiveActionRateLimiter?: RequestHandler;
+  storageOverrides?: Partial<PostgresStorage>;
 }) {
   const auditLogs: AuditEntry[] = [];
   const clearNicknameSessionCalls: string[] = [];
@@ -188,7 +221,7 @@ function createActivityRouteHarness(options?: {
     socketStates.set(activityId, state);
   }
 
-  const storage = {
+  const defaultStorage = {
     clearCollectionNicknameSessionByActivity: async (activityId: string) => {
       clearNicknameSessionCalls.push(activityId);
     },
@@ -255,6 +288,11 @@ function createActivityRouteHarness(options?: {
       unbanVisitorCalls.push(banId);
     },
     getBannedSessions: async () => bannedSessions,
+  };
+
+  const storage = {
+    ...defaultStorage,
+    ...(options?.storageOverrides ?? {}),
   } as unknown as PostgresStorage;
 
   const app = createJsonTestApp();
@@ -687,6 +725,102 @@ test("GET /api/users/banned returns mapped banned session data", async () => {
           },
         },
       ],
+    });
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("GET /api/activity/all keeps the requesting active session online when the stored feed is stale", async () => {
+  const { app, activities } = createActivityRouteHarness({
+    authenticateToken: createTestAuthenticateToken({
+      userId: "user-1",
+      username: "user.one",
+      role: "user",
+      activityId: "activity-1",
+    }),
+    storageOverrides: {
+      getAllActivities: async () => [
+        {
+          ...toStoredActivity(activities.get("activity-1"), {
+          loginTime: new Date("2026-04-10T06:05:00.000Z"),
+          lastActivityTime: new Date(Date.now() - 10 * 60_000),
+          }),
+          status: "IDLE",
+        } as StoredActivityFeedRecord,
+      ],
+      getActivityById: async (activityId: string) =>
+        activities.has(activityId)
+          ? toStoredActivity(activities.get(activityId), {
+          loginTime: new Date("2026-04-10T06:05:00.000Z"),
+          lastActivityTime: new Date(Date.now() - 10 * 60_000),
+          })
+          : undefined,
+    },
+  });
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(`${baseUrl}/api/activity/all`, {
+      headers: {
+        "x-test-username": "user.one",
+        "x-test-role": "user",
+        "x-test-activityid": "activity-1",
+      },
+    });
+
+    assert.equal(response.status, 200);
+    const payload = await response.json();
+    assert.equal(payload.activities.length, 1);
+    assert.equal(payload.activities[0]?.id, "activity-1");
+    assert.equal(payload.activities[0]?.status, "ONLINE");
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("GET /api/activity/filter removes the requesting session from IDLE results once it is reconciled online", async () => {
+  const { app, activities } = createActivityRouteHarness({
+    authenticateToken: createTestAuthenticateToken({
+      userId: "user-1",
+      username: "user.one",
+      role: "user",
+      activityId: "activity-1",
+    }),
+    storageOverrides: {
+      getFilteredActivities: async () => [
+        {
+          ...toStoredActivity(activities.get("activity-1"), {
+          loginTime: new Date("2026-04-10T06:05:00.000Z"),
+          lastActivityTime: new Date(Date.now() - 10 * 60_000),
+          }),
+          status: "IDLE",
+        } as StoredActivityFeedRecord,
+      ],
+      getActivityById: async (activityId: string) =>
+        activities.has(activityId)
+          ? toStoredActivity(activities.get(activityId), {
+          loginTime: new Date("2026-04-10T06:05:00.000Z"),
+          lastActivityTime: new Date(Date.now() - 10 * 60_000),
+          })
+          : undefined,
+    },
+  });
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(`${baseUrl}/api/activity/filter?status=IDLE`, {
+      headers: {
+        "x-test-username": "user.one",
+        "x-test-role": "user",
+        "x-test-activityid": "activity-1",
+      },
+    });
+
+    assert.equal(response.status, 200);
+    const payload = await response.json();
+    assert.deepEqual(payload, {
+      activities: [],
     });
   } finally {
     await stopTestServer(server);
