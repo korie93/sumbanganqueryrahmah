@@ -20,7 +20,7 @@ test("frontend static serves robots.txt and sitemap.xml while keeping SPA fallba
   </url>
 </urlset>
 `;
-  const immutableAssetBody = "console.log('asset');";
+  const immutableAssetBody = "console.log('asset');\n".repeat(128);
 
   await fs.mkdir(publicDir, { recursive: true });
   await fs.mkdir(assetsDir, { recursive: true });
@@ -51,13 +51,19 @@ test("frontend static serves robots.txt and sitemap.xml while keeping SPA fallba
     assert.equal(routeResponse.status, 200);
     assert.match(await routeResponse.text(), /<div id="root"><\/div>/i);
 
-    const immutableAssetResponse = await fetch(`${baseUrl}/assets/app-ABC12345.js`);
+    const immutableAssetResponse = await fetch(`${baseUrl}/assets/app-ABC12345.js`, {
+      headers: {
+        "accept-encoding": "gzip",
+      },
+    });
     assert.equal(immutableAssetResponse.status, 200);
     assert.equal(await immutableAssetResponse.text(), immutableAssetBody);
     assert.equal(
       immutableAssetResponse.headers.get("cache-control"),
       "public, max-age=31536000, immutable",
     );
+    assert.equal(immutableAssetResponse.headers.get("content-encoding"), "gzip");
+    assert.match(String(immutableAssetResponse.headers.get("vary") || ""), /accept-encoding/i);
 
     const missingAssetResponse = await fetch(`${baseUrl}/missing.xml`);
     assert.equal(missingAssetResponse.status, 404);

@@ -9,8 +9,10 @@ import {
   getLighthouseRuntimeErrorCode,
   isRetryableLighthouseRuntimeError,
   isUsableLighthouseReport,
+  summarizeObservedWebVitalsFromLog,
   summarizeLighthouseReport,
 } from "./lib/pagespeed-local.mjs";
+import { resolveManagedLoopbackBaseUrl } from "./lib/local-loopback-server.mjs";
 import { assertPostgresConnection } from "./lib/postgres-preflight.mjs";
 import { waitForServer } from "./lib/server-readiness.mjs";
 
@@ -24,7 +26,6 @@ if (existsSync(smokeEnvPath)) {
 const npmCliPath = String(process.env.npm_execpath || "").trim();
 const npmCommand = npmCliPath ? process.execPath : (process.platform === "win32" ? "npm.cmd" : "npm");
 const lighthouseVersion = String(process.env.PAGESPEED_LIGHTHOUSE_VERSION || "13.0.3").trim();
-const baseUrl = String(process.env.PAGESPEED_BASE_URL || process.env.PUBLIC_APP_URL || process.env.SMOKE_BASE_URL || "http://127.0.0.1:5000").trim();
 const artifactsDir = path.resolve(process.cwd(), process.env.PAGESPEED_ARTIFACTS_DIR || "artifacts/pagespeed");
 const serverLogPath = path.join(artifactsDir, "pagespeed-server.log");
 const tempRootDir = path.join(artifactsDir, "tmp");
@@ -213,6 +214,7 @@ function writeSummary(results) {
       summary: result.summary,
       fallbackReportPath: result.fallbackReportPath || null,
       fallbackSummary: result.fallbackSummary || null,
+      observedWebVitals: result.observedWebVitals || null,
     })),
   };
 
@@ -247,6 +249,14 @@ function writeSummary(results) {
         `- Fallback metrics: perf ${result.fallbackSummary.performance ?? "n/a"}, a11y ${result.fallbackSummary.accessibility ?? "n/a"}, bp ${result.fallbackSummary.bestPractices ?? "n/a"}, seo ${result.fallbackSummary.seo ?? "n/a"}, FCP ${result.fallbackSummary.fcp}, LCP ${result.fallbackSummary.lcp}, TBT ${result.fallbackSummary.tbt}, CLS ${result.fallbackSummary.cls}`,
       );
     }
+    if (result.observedWebVitals) {
+      lines.push(
+        `- Observed web vitals (${result.observedWebVitals.userAgentProfile}, ${result.observedWebVitals.source}): FCP ${result.observedWebVitals.fcp}, LCP ${result.observedWebVitals.lcp}, TTFB ${result.observedWebVitals.ttfb}, CLS ${result.observedWebVitals.cls}`,
+      );
+      if (result.observedWebVitals.capturedAt) {
+        lines.push(`- Observed captured at: ${result.observedWebVitals.capturedAt}`);
+      }
+    }
     lines.push("");
   }
 
@@ -263,6 +273,7 @@ async function runAudit(audit, env) {
   const latestPath = path.join(artifactsDir, `${audit.slug}.json`);
   const slugBase = audit.slug.replace(/-latest$/, "");
   const attemptPaths = [];
+  const auditStartedAt = new Date().toISOString();
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     const attemptPath = path.join(artifactsDir, `${audit.slug}-attempt-${attempt}.json`);
@@ -332,11 +343,22 @@ async function runAudit(audit, env) {
       runtimeErrorCode,
       fallbackReportPath: fallback?.filePath || null,
       fallbackSummary: fallback ? summarizeLighthouseReport(fallback.report) : null,
+      observedWebVitals: summarizeObservedWebVitalsFromLog(
+        existsSync(serverLogPath) ? readFileSync(serverLogPath, "utf8") : "",
+        {
+          path: new URL(audit.url).pathname || "/",
+          preset: audit.preset,
+          since: auditStartedAt,
+        },
+      ),
     };
 
     if (softFailRetryableFailures && isRetryableLighthouseRuntimeError(report)) {
+      const observedSummary = result.observedWebVitals
+        ? ` observed FCP ${result.observedWebVitals.fcp}, LCP ${result.observedWebVitals.lcp}, TTFB ${result.observedWebVitals.ttfb}, CLS ${result.observedWebVitals.cls}.`
+        : "";
       console.warn(
-        `[pagespeed] ${audit.slug}: soft-failing after ${runtimeErrorCode}; fallback report ${fallback?.filePath || "not found"}.`,
+        `[pagespeed] ${audit.slug}: soft-failing after ${runtimeErrorCode}; fallback report ${fallback?.filePath || "not found"}.${observedSummary}`,
       );
       return {
         ...result,
@@ -368,12 +390,19 @@ async function run() {
   await mkdir(tempRootDir, { recursive: true });
 
   const host = String(process.env.HOST || "127.0.0.1").trim() || "127.0.0.1";
-  const port = String(process.env.PORT || "5000").trim() || "5000";
+  const defaultPort = String(process.env.PORT || "5000").trim() || "5000";
+  const resolvedServer = await resolveManagedLoopbackBaseUrl({
+    configuredBaseUrl: process.env.PAGESPEED_BASE_URL || process.env.PUBLIC_APP_URL || process.env.SMOKE_BASE_URL || `http://${host}:${defaultPort}`,
+    host,
+    preferredPort: defaultPort,
+    allowPortFallback: !shouldReuseServer,
+  });
+  const baseUrl = resolvedServer.baseUrl;
   const env = {
     ...process.env,
     NODE_ENV: process.env.NODE_ENV || "development",
     HOST: host,
-    PORT: port,
+    PORT: String(resolvedServer.port),
     PUBLIC_APP_URL: process.env.PUBLIC_APP_URL || baseUrl,
     CORS_ALLOWED_ORIGINS: process.env.CORS_ALLOWED_ORIGINS || baseUrl,
     SESSION_SECRET: process.env.SESSION_SECRET || "ci-session-secret",
@@ -391,6 +420,9 @@ async function run() {
   if (!shouldReuseServer) {
     console.log("Pagespeed local: checking PostgreSQL connectivity...");
     await assertPostgresConnection(env, { context: "Pagespeed local" });
+    if (resolvedServer.usedFallbackPort) {
+      console.log(`Pagespeed local: port ${defaultPort} busy, using ${resolvedServer.port} instead.`);
+    }
   }
 
   if (!shouldReuseServer && !shouldSkipBuild) {
@@ -412,7 +444,7 @@ async function run() {
         },
       );
 
-      serverLogStream = createWriteStream(serverLogPath, { flags: "a" });
+      serverLogStream = createWriteStream(serverLogPath, { flags: "w" });
       serverProcess.stdout?.pipe(serverLogStream);
       serverProcess.stderr?.pipe(serverLogStream);
 

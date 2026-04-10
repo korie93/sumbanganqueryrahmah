@@ -15,6 +15,7 @@ import { iteratePreparedBackupPayloadStorageChunks } from "./backups-payload-uti
 import {
   BACKUP_LIST_DEFAULT_PAGE_SIZE,
   BACKUP_LIST_MAX_PAGE_SIZE,
+  BACKUP_STORAGE_DB_READ_PAGE_SIZE,
   QUERY_PAGE_LIMIT,
   type BackupListPageParams,
   type BackupListPageResult,
@@ -28,6 +29,7 @@ type BackupQueryRow = Omit<Backup, "metadata"> & {
 };
 
 type BackupPayloadChunkQueryRow = {
+  chunkIndex?: unknown;
   chunkData?: unknown;
 };
 
@@ -45,30 +47,60 @@ function mapBackupQueryRow(options: BackupsRepositoryOptions, row: BackupQueryRo
   } as Backup;
 }
 
-async function readChunkedBackupDataFromStorage(backupId: string): Promise<string> {
-  const result = await db.execute(sql`
-    SELECT chunk_data as "chunkData"
-    FROM public.backup_payload_chunks
-    WHERE backup_id = ${backupId}
-    ORDER BY chunk_index ASC
-  `);
+function normalizeBackupChunkIndex(raw: unknown): number | null {
+  const numericValue = typeof raw === "number" ? raw : Number(raw);
+  if (!Number.isFinite(numericValue)) {
+    return null;
+  }
 
-  return ((result.rows || []) as BackupPayloadChunkQueryRow[])
-    .map((row) => String(row.chunkData || ""))
-    .join("");
+  const normalized = Math.trunc(numericValue);
+  return normalized >= 0 ? normalized : null;
 }
 
-async function readChunkedBackupDataStorageChunks(backupId: string): Promise<string[]> {
-  const result = await db.execute(sql`
-    SELECT chunk_data as "chunkData"
-    FROM public.backup_payload_chunks
-    WHERE backup_id = ${backupId}
-    ORDER BY chunk_index ASC
-  `);
+async function* iterateChunkedBackupDataStorageChunks(
+  backupId: string,
+): AsyncGenerator<string, void, void> {
+  let lastChunkIndex = -1;
 
-  return ((result.rows || []) as BackupPayloadChunkQueryRow[])
-    .map((row) => String(row.chunkData || ""))
-    .filter((chunk) => chunk.length > 0);
+  while (true) {
+    const result = await db.execute(sql`
+      SELECT
+        chunk_index as "chunkIndex",
+        chunk_data as "chunkData"
+      FROM public.backup_payload_chunks
+      WHERE backup_id = ${backupId}
+        AND chunk_index > ${lastChunkIndex}
+      ORDER BY chunk_index ASC
+      LIMIT ${BACKUP_STORAGE_DB_READ_PAGE_SIZE}
+    `);
+
+    const rows = ((result.rows || []) as BackupPayloadChunkQueryRow[]);
+    if (!rows.length) {
+      break;
+    }
+
+    for (const row of rows) {
+      const chunkIndex = normalizeBackupChunkIndex(row.chunkIndex) ?? (lastChunkIndex + 1);
+
+      lastChunkIndex = chunkIndex;
+      const chunkData = String(row.chunkData || "");
+      if (chunkData.length > 0) {
+        yield chunkData;
+      }
+    }
+
+    if (rows.length < BACKUP_STORAGE_DB_READ_PAGE_SIZE) {
+      break;
+    }
+  }
+}
+
+async function readChunkedBackupDataFromStorage(backupId: string): Promise<string> {
+  let payload = "";
+  for await (const chunk of iterateChunkedBackupDataStorageChunks(backupId)) {
+    payload += chunk;
+  }
+  return payload;
 }
 
 function normalizeBackupEncryptionKeyId(raw: string): string | null {
@@ -113,52 +145,104 @@ function parseEncryptedBackupDataV2Header(rawPayload: string):
   };
 }
 
+function detectStoredBackupPayloadFormat(
+  probe: string,
+): "need-more" | "plaintext" | "encrypted-v1" | "encrypted-v2" | "invalid" {
+  const normalized = probe.trimStart();
+  if (!normalized) {
+    return "need-more";
+  }
+
+  if (normalized.startsWith("{")) {
+    return "plaintext";
+  }
+
+  if (normalized.startsWith(BACKUP_DATA_ENCRYPTION_PREFIX_V1)) {
+    return "encrypted-v1";
+  }
+
+  if (normalized.startsWith(BACKUP_DATA_ENCRYPTION_PREFIX_V2)) {
+    return "encrypted-v2";
+  }
+
+  if (
+    BACKUP_DATA_ENCRYPTION_PREFIX_V1.startsWith(normalized)
+    || BACKUP_DATA_ENCRYPTION_PREFIX_V2.startsWith(normalized)
+  ) {
+    return "need-more";
+  }
+
+  return "invalid";
+}
+
 async function* iterateDecodedBackupDataJsonChunksFromStorageChunks(
-  storagePayloadChunks: string[],
+  storagePayloadChunks: AsyncIterable<string>,
   backupEncryption: BackupEncryptionConfig,
 ): AsyncGenerator<string, void, void> {
-  const chunks = storagePayloadChunks.filter((chunk) => chunk.length > 0);
-  if (!chunks.length) {
-    return;
-  }
+  const iterator = storagePayloadChunks[Symbol.asyncIterator]();
+  const readNextNonEmptyChunk = async (): Promise<string | null> => {
+    while (true) {
+      const result = await iterator.next();
+      if (result.done) {
+        return null;
+      }
 
-  const firstChunk = chunks[0];
-  if (!firstChunk.startsWith(BACKUP_DATA_ENCRYPTION_PREFIX_V1)
-    && !firstChunk.startsWith(BACKUP_DATA_ENCRYPTION_PREFIX_V2)) {
-    for (const chunk of chunks) {
-      yield chunk;
+      const chunk = String(result.value || "");
+      if (chunk.length > 0) {
+        return chunk;
+      }
     }
-    return;
-  }
-
-  if (firstChunk.startsWith(BACKUP_DATA_ENCRYPTION_PREFIX_V1)) {
-    yield decodeBackupDataFromStorage(chunks.join(""), backupEncryption);
-    return;
-  }
+  };
 
   let headerBuffer = "";
-  let parsedHeader:
-    | {
-        keyId: string;
-        ivBase64: string;
-        authTagBase64: string;
-        ciphertextBase64Remainder: string;
-      }
-    | null = null;
-  let startChunkIndex = -1;
+  let format: ReturnType<typeof detectStoredBackupPayloadFormat> = "need-more";
 
-  for (let index = 0; index < chunks.length; index += 1) {
-    headerBuffer += chunks[index];
-    parsedHeader = parseEncryptedBackupDataV2Header(headerBuffer);
-    if (parsedHeader) {
-      startChunkIndex = index;
-      break;
+  while (format === "need-more") {
+    const nextChunk = await readNextNonEmptyChunk();
+    if (nextChunk === null) {
+      return;
+    }
+
+    headerBuffer += nextChunk;
+    format = detectStoredBackupPayloadFormat(headerBuffer);
+  }
+
+  if (format === "invalid") {
+    throw new Error("Stored backup payload has an invalid encrypted format.");
+  }
+
+  if (format === "plaintext") {
+    yield headerBuffer;
+    while (true) {
+      const nextChunk = await readNextNonEmptyChunk();
+      if (nextChunk === null) {
+        return;
+      }
+      yield nextChunk;
     }
   }
 
-  if (!parsedHeader || startChunkIndex < 0) {
-    yield decodeBackupDataFromStorage(chunks.join(""), backupEncryption);
+  let encryptedPayload = headerBuffer.trimStart();
+  if (format === "encrypted-v1") {
+    while (true) {
+      const nextChunk = await readNextNonEmptyChunk();
+      if (nextChunk === null) {
+        break;
+      }
+      encryptedPayload += nextChunk;
+    }
+    yield decodeBackupDataFromStorage(encryptedPayload, backupEncryption);
     return;
+  }
+
+  let parsedHeader = parseEncryptedBackupDataV2Header(encryptedPayload);
+  while (!parsedHeader) {
+    const nextChunk = await readNextNonEmptyChunk();
+    if (nextChunk === null) {
+      throw new Error("Stored backup payload has an invalid encrypted format.");
+    }
+    encryptedPayload += nextChunk;
+    parsedHeader = parseEncryptedBackupDataV2Header(encryptedPayload);
   }
 
   const normalizedKeyId = normalizeBackupEncryptionKeyId(parsedHeader.keyId);
@@ -180,8 +264,6 @@ async function* iterateDecodedBackupDataJsonChunksFromStorageChunks(
   const utf8Decoder = new StringDecoder("utf8");
 
   let base64Remainder = "";
-  let ciphertextBase64 = parsedHeader.ciphertextBase64Remainder;
-
   const flushCiphertextChunk = (segment: string) => {
     const combined = `${base64Remainder}${segment}`;
     const safeLength = combined.length - (combined.length % 4);
@@ -196,14 +278,17 @@ async function* iterateDecodedBackupDataJsonChunksFromStorageChunks(
     return decryptedBuffer.length > 0 ? utf8Decoder.write(decryptedBuffer) : "";
   };
 
-  const firstDecryptedChunk = flushCiphertextChunk(ciphertextBase64);
+  const firstDecryptedChunk = flushCiphertextChunk(parsedHeader.ciphertextBase64Remainder);
   if (firstDecryptedChunk) {
     yield firstDecryptedChunk;
   }
 
-  for (let index = startChunkIndex + 1; index < chunks.length; index += 1) {
-    ciphertextBase64 = chunks[index];
-    const decryptedChunk = flushCiphertextChunk(ciphertextBase64);
+  while (true) {
+    const nextChunk = await readNextNonEmptyChunk();
+    if (nextChunk === null) {
+      break;
+    }
+    const decryptedChunk = flushCiphertextChunk(nextChunk);
     if (decryptedChunk) {
       yield decryptedChunk;
     }
@@ -223,7 +308,13 @@ async function* iterateDecodedBackupDataJsonChunksFromStorageChunks(
   }
 }
 
-async function readBackupStoragePayloadChunksById(id: string): Promise<string[] | undefined> {
+async function* iterateSingleStoragePayloadChunk(chunk: string): AsyncGenerator<string, void, void> {
+  if (chunk.length > 0) {
+    yield chunk;
+  }
+}
+
+async function getBackupStoragePayloadChunkStreamById(id: string): Promise<AsyncIterable<string> | undefined> {
   const result = await db.execute(sql`
     SELECT
       backup_data as "backupData"
@@ -239,10 +330,10 @@ async function readBackupStoragePayloadChunksById(id: string): Promise<string[] 
 
   const rawBackupData = String(row.backupData || "");
   if (rawBackupData.trim().length > 0) {
-    return [rawBackupData];
+    return iterateSingleStoragePayloadChunk(rawBackupData);
   }
 
-  return readChunkedBackupDataStorageChunks(id);
+  return iterateChunkedBackupDataStorageChunks(id);
 }
 
 export async function createBackup(
@@ -483,7 +574,7 @@ export async function iterateBackupDataJsonChunksById(
   id: string,
 ): Promise<AsyncIterable<string> | undefined> {
   await options.ensureBackupsTable();
-  const storagePayloadChunks = await readBackupStoragePayloadChunksById(id);
+  const storagePayloadChunks = await getBackupStoragePayloadChunkStreamById(id);
   if (!storagePayloadChunks) {
     return undefined;
   }

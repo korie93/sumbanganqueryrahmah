@@ -19,6 +19,41 @@ const ALLOWED_SECRET_VALUE_PATTERNS = [
   /^readOptionalString\(\s*['"`]SMTP_PASS(?:WORD)?['"`]\s*\)/i,
 ];
 
+const FORBIDDEN_TYPESCRIPT_PATTERN_RULES = [
+  {
+    label: "type assertion 'as any'",
+    regex: /\bas\s+any\b/,
+  },
+  {
+    label: "TypeScript suppression '@ts-ignore'",
+    regex: /@ts-ignore\b/,
+  },
+  {
+    label: "TypeScript suppression '@ts-expect-error'",
+    regex: /@ts-expect-error\b/,
+  },
+  {
+    label: "explicit ': any' type annotation",
+    regex: /:\s*any\b/,
+  },
+  {
+    label: "explicit generic '<any>' usage",
+    regex: /<\s*any\s*>/,
+  },
+  {
+    label: "explicit 'Array<any>' usage",
+    regex: /\bArray<\s*any\s*>/,
+  },
+  {
+    label: "explicit 'Promise<any>' usage",
+    regex: /\bPromise<\s*any\s*>/,
+  },
+  {
+    label: "explicit 'Record<..., any>' usage",
+    regex: /\bRecord<[^>\n]+,\s*any\s*>/,
+  },
+];
+
 function isAllowedSecretValue(rawValue) {
   const value = String(rawValue || "")
     .trim()
@@ -50,6 +85,35 @@ export function findPotentialCommittedSmtpSecrets(params) {
         continue;
       }
       findings.push(`${filePath} potential hardcoded nodemailer auth.pass literal`);
+    }
+  }
+
+  return findings;
+}
+
+export function findForbiddenTypeScriptTypeSafetyPatterns(params) {
+  const filePath = String(params?.filePath || "");
+  const text = String(params?.text || "");
+  const findings = [];
+  const lines = text.split(/\r?\n/);
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+    const trimmed = line.trim();
+    if (!trimmed) {
+      continue;
+    }
+
+    for (const rule of FORBIDDEN_TYPESCRIPT_PATTERN_RULES) {
+      if (
+        (trimmed.startsWith("//") || trimmed.startsWith("*") || trimmed.startsWith("/*"))
+        && !/@ts-ignore\b|@ts-expect-error\b/.test(trimmed)
+      ) {
+        continue;
+      }
+      if (rule.regex.test(line)) {
+        findings.push(`${filePath}:${index + 1} ${rule.label}`);
+      }
     }
   }
 

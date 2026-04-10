@@ -1,16 +1,18 @@
-import { Suspense, lazy, useEffect, type ReactNode } from "react";
+import { Suspense, useEffect, type ReactNode } from "react";
 import { AppRouteErrorBoundary } from "@/app/AppRouteErrorBoundary";
 import { AppProviders } from "@/app/AppProviders";
 import { PageSpinner } from "@/app/PageSpinner";
 import { applyDocumentMetadata, resolveDocumentMetadata } from "@/app/document-metadata";
 import { MaintenanceRoutePage, SingleTabBlockedPage } from "@/app/lazy-pages";
+import { lazyWithPreload } from "@/lib/lazy-with-preload";
 import type { MonitorSection, User } from "@/app/types";
 import { initializeTrustedTypesRuntime } from "@/lib/trusted-types-runtime";
 import { useAuthenticatedAppState } from "@/app/useAuthenticatedAppState";
 import { useSingleTabSession } from "@/app/useSingleTabSession";
 import "../index.css";
 
-const AuthenticatedAppShell = lazy(() => import("@/app/AuthenticatedAppShell"));
+const AuthenticatedAppShell = lazyWithPreload(() => import("@/app/AuthenticatedAppShell"));
+void AuthenticatedAppShell.preload();
 
 // Authenticated surfaces rely on Radix/React portals and injected style tags more often
 // than the public shell, so keep the Trusted Types compatibility policy scoped here.

@@ -1,3 +1,4 @@
+import compression from "compression";
 import express, { type Express } from "express";
 import fs from "fs";
 import path from "path";
@@ -12,6 +13,7 @@ const DEFAULT_FRONTEND_PATHS = [
 ];
 
 const IMMUTABLE_ASSET_MAX_AGE_SECONDS = 60 * 60 * 24 * 365;
+const FRONTEND_COMPRESSION_THRESHOLD_BYTES = 1024;
 
 function normalizeStaticRelativePath(staticRoot: string, absoluteFilePath: string) {
   const relativePath = path.relative(staticRoot, absoluteFilePath);
@@ -83,6 +85,9 @@ export function registerFrontendStatic(app: Express, options?: { cwd?: string; p
 
   if (foundPath && foundIndex) {
     logger.info("Serving frontend static assets", { foundPath });
+    app.use(compression({
+      threshold: FRONTEND_COMPRESSION_THRESHOLD_BYTES,
+    }));
     app.use(express.static(foundPath, {
       setHeaders(res, servedPath) {
         if (!isImmutableFrontendAsset(foundPath as string, servedPath)) {

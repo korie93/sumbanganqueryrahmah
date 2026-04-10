@@ -165,6 +165,8 @@ const run = async () => {
   await assertPostgresConnection(env, { context: "Release readiness" });
 
   console.log("Release readiness: running fast regression gates...");
+  await runNpm(["run", "verify:collection-amount-contract"], { env });
+  await runNpm(["run", "verify:collection-pii-rollout-contract"], { env });
   await runNpm(["run", "verify:db-schema-governance"], { env });
   await runNpm(["run", "test:client"], { env });
   await runNpm(["run", "test:scripts"], { env });

@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { CheckCircle2, LogIn } from "lucide-react";
 import {
   LandingHeroShell,
@@ -6,6 +6,7 @@ import {
   LandingPrimaryActionRow,
   landingSecondaryButtonClassName,
 } from "@/pages/LandingHeroShell";
+import { lazyWithPreload, scheduleIdlePreload } from "@/lib/lazy-with-preload";
 
 type LandingProps = {
   onLoginClick: () => void;
@@ -17,7 +18,7 @@ const aboutHighlights = [
   "Paparan direka ringkas supaya tugas harian dapat diselesaikan dengan lebih cepat.",
 ];
 
-const LandingDeferredSections = lazy(() => import("./LandingDeferredSections"));
+const LandingDeferredSections = lazyWithPreload(() => import("./LandingDeferredSections"));
 
 type LandingDeferredSectionsFallbackProps = {
   onLoginClick: () => void;
@@ -82,6 +83,12 @@ function LandingDeferredSectionsFallback({
 export default function Landing({ onLoginClick }: LandingProps) {
   const [shouldLoadDeferredSections, setShouldLoadDeferredSections] = useState(false);
   const deferredSectionsTriggerRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    return scheduleIdlePreload(() => {
+      LandingDeferredSections.preload();
+    }, 900);
+  }, []);
 
   useEffect(() => {
     if (shouldLoadDeferredSections) {

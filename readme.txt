@@ -45,8 +45,8 @@ dan menambah penemuan baharu merangkumi:
 Snapshot audit asal (2026-04-09): 110 penemuan gabungan mengikut kiraan
 laporan ketika audit dilakukan.
 Status repo semasa dalam dokumen bernombor ini:
-  - 98 item: ✅ DIPERBAIKI
-  - 4 item: MATERIALLY CLOSED
+  - 102 item: ✅ DIPERBAIKI
+  - 0 item: MATERIALLY CLOSED
   - 0 item: tanpa STATUS
 Nota: angka snapshot audit asal dikekalkan sebagai rekod sejarah. Untuk
       keadaan repo semasa, rujuk penanda STATUS pada setiap item.
@@ -423,7 +423,7 @@ ditentukan melalui penanda STATUS pada setiap item, bukan melalui jadual ini.
           hashes dan data sensitif ditulis ke fail temp dalam plaintext.
     Cadangan: Set memory limits, monitor backup export memory usage,
               encrypt sensitive fields sebelum tulis ke disk.
-    >>> STATUS: MATERIALLY CLOSED (Pasca pembetulan, 2026-04-09)
+    >>> STATUS: ✅ DIPERBAIKI (Kemaskini semula, 2026-04-10)
         Temp payload kini diencrypt di disk, row/payload limits serta
         memory observability telah ditambah, storage backup dipecah kepada
         chunk table, dan export path kini distream tanpa membina semula
@@ -431,8 +431,10 @@ ditentukan melalui penanda STATUS pada setiap item, bukan melalui jadual ini.
         payload melebihi BACKUP_MAX_PAYLOAD_BYTES sebelum parser dataset
         berjalan, dan export/restore menggunakan metadata payloadBytes
         sebagai preflight supaya backup oversize boleh ditolak sebelum
-        chunk payload dibaca penuh. Baki yang tinggal hanyalah
-        refinement architecture lanjutan untuk restore/full parse path.
+        chunk payload dibaca penuh. Kemaskini 2026-04-10 menutup baki
+        restore/full-parse hotspot dengan bacaan backup_payload_chunks
+        berperingkat dari DB serta streamed decryption untuk payload v2,
+        jadi export/restore tidak lagi preload semua row chunk serentak.
 
 #64 [BAHARU] Sasaran Sentuh (Touch Targets) Terlalu Kecil
     Fail: client/src/components/ui/button.tsx
@@ -638,12 +640,15 @@ ditentukan melalui penanda STATUS pada setiap item, bukan melalui jadual ini.
           yang betul.
     Cadangan: Kurangkan secara beransur-ansur, utamakan bahagian yang
               mengendalikan data luaran.
-    >>> STATUS: MATERIALLY CLOSED (Kemaskini semula, 2026-04-10)
+    >>> STATUS: ✅ DIPERBAIKI (Kemaskini semula, 2026-04-10)
         Semakan sintaks semasa pada server/client/shared .ts/.tsx tidak lagi
         menemukan penggunaan type any, as any, @ts-ignore, atau
         @ts-expect-error.
         Padanan perkataan "any" yang masih wujud dalam scan luas kini hanya
         datang daripada mesej UI/log dan komen naratif, bukan typing code.
+        Repo hygiene check kini juga menolak regresi baharu untuk as any,
+        @ts-ignore, @ts-expect-error, dan explicit any patterns dalam fail
+        TypeScript yang ditrack git, jadi pembaikan ini dikunci dalam CI.
         Kemaskini 2026-04-10: harness
         server/services/tests/backup-operations.service.test.ts kini
         dibersihkan daripada as any pada service injection dan success-body
@@ -767,17 +772,11 @@ ditentukan melalui penanda STATUS pada setiap item, bukan melalui jadual ini.
             - Nombor akaun (accountNumber)
     Cadangan: Encrypt PII sensitif di peringkat aplikasi atau database.
               Tambah audit logging untuk akses PII.
-    >>> STATUS: MATERIALLY CLOSED (Audit 3 pasca pembetulan, 2026-04-09)
-        - Shadow encrypted fields, blind-index search, startup guards,
-          backup/export safeguards, redaction tooling, dan env-scoped
-          retirement helpers sudah dilaksanakan.
-        - Status/readiness tooling kini turut mengesan unreadable
-          encrypted shadow rows dan akan block rollout retired-fields
-          lebih awal jika shadow value tidak lagi boleh dipulihkan.
-        - Local rollout kini bersih untuk customerName, icNumber,
-          customerPhone, dan accountNumber.
-        - Baki kerja hanyalah rollout lintas-environment dan pelupusan
-          compatibility plaintext/schema pada masa depan.
+    >>> STATUS: ✅ DIPERBAIKI (Pasca pembetulan, 2026-04-10)
+        Shadow encrypted fields, blind-index search, protected read
+        paths, startup guards, backup/export safeguards, env validation,
+        retirement tooling, dan release/smoke rollout contracts kini
+        dipagari oleh verify:collection-pii-rollout-contract.
 
 #71 [BAHARU] Missing onUpdate cascade pada Settings FK
     Fail: shared/schema-postgres-settings.ts (baris 22, 38)
@@ -810,14 +809,11 @@ ditentukan melalui penanda STATUS pada setiap item, bukan melalui jadual ini.
           Risiko ralat pengiraan jika unit tidak konsisten.
     Cadangan: Standardkan - guna numeric(14,2) secara konsisten atau
               dokumentasikan unit bigint dengan jelas.
-    >>> STATUS: MATERIALLY CLOSED (Audit 3 pasca pembetulan, 2026-04-09)
-        - Boundary amount kini diseragamkan pada shared helpers,
-          repository, service, client, backup, validation, dan SQL
-          conversion paths.
-        - Unit MYR vs cents kini didokumen dan dipaksa dengan lebih
-          ketat dalam code paths semasa.
-        - Baki pilihan masa depan hanyalah migration schema literal jika
-          benar-benar mahu satu datatype DB sahaja.
+    >>> STATUS: ✅ DIPERBAIKI (Pasca pembetulan, 2026-04-10)
+        Boundary amount kini bukan sekadar didokumenkan, malah
+        dipagari oleh verify:collection-amount-contract pada schema
+        Drizzle, bootstrap SQL, mapper repository, backup payload,
+        server/client API types, dan release/smoke gates.
 
 #74 [BAHARU] imports.isDeleted Tiada .notNull()
     Fail: shared/schema-postgres-core.ts (baris 110)
@@ -1407,8 +1403,8 @@ C.1) Schema
      - N+1 day insert sudah dibatch via sql.join (DIPERBAIKI).
      ISU: Missing cascade deletes yang masih berbaki (#24)
      STATUS: BAIK (status/date indexes utama kini telah ditambah)
-     CATATAN: Standardisasi amount kini materially closed; baki hanya
-              migration schema literal jika mahu satu datatype DB sahaja.
+     CATATAN: Boundary amount kini dipagari oleh governance check
+              automatik supaya unit MYR vs cents kekal konsisten.
 
 C.2) Migrations
      - Drizzle-kit untuk migration management.
@@ -1781,16 +1777,16 @@ P1 — SEBELUM PRODUCTION (2 Minggu)
 
 P2 — PENAMBAHBAIKAN BERTERUSAN (Bulan Ini)
   23. React key anti-pattern (#5, #7)
-  24. [MATERIALLY CLOSED] Type safety improvements (#6, #35)
+  24. [DIPERBAIKI] Type safety improvements (#6, #35)
   25. [DIPERBAIKI] TypeScript strictness options (#34) ✅
   26. Pagination limits (#25)
   27. Form loading states (#38)
   28. [DIPERBAIKI] Mobile viewport (#32)
   29. Missing tests dalam CI (#37)
-  30. [MATERIALLY CLOSED] PII encryption at rest (#70)
+  30. [DIPERBAIKI] PII encryption at rest (#70)
   31. [DIPERBAIKI] Missing FK onUpdate cascade (#71)
   32. [DIPERBAIKI] Missing indexes pada kolum status (#72)
-  33. [MATERIALLY CLOSED] Amount data type standardization (#73)
+  33. [DIPERBAIKI] Amount data type standardization (#73)
   34. [DIPERBAIKI] JSON parse/stringify size limits (#75)
   35. [DIPERBAIKI] Z-index centralization (#76)
   36. [DIPERBAIKI] Unmounted state update + missing .catch() (#91, #92, #93)
@@ -1849,7 +1845,7 @@ Jumlah Audit:
   Audit 1 (2026-04-07): 55 isu dikesan
   Audit 2 (2026-04-08): +34 isu baharu = 89 jumlah
   Audit 3 (2026-04-09): +13 isu baharu, 4 diperbaiki = 110 isu aktif
-  Status repo semasa dokumen ini: 98 item DIPERBAIKI, 4 item
+  Status repo semasa dokumen ini: 102 item DIPERBAIKI, 0 item
   MATERIALLY CLOSED, 0 item tanpa STATUS.
   Nota: angka audit di atas ialah snapshot sejarah. Pembetulan pasca audit
         tambahan dirujuk melalui penanda STATUS pada item berkaitan.
@@ -1869,8 +1865,8 @@ Audit menyeluruh ketiga (2026-04-09) ialah snapshot sejarah yang ketika itu
 mengesahkan 4 isu telah DIPERBAIKI dan menambah 13 penemuan baharu.
 
 Status repo semasa berdasarkan item bernombor dalam dokumen ini:
-  * 98 item telah DIPERBAIKI
-  * 4 item berada pada tahap MATERIALLY CLOSED
+  * 102 item telah DIPERBAIKI
+  * Tiada lagi item audit pada tahap MATERIALLY CLOSED
   * Tiada lagi item audit tanpa penanda STATUS
 
 Penemuan paling kritikal baharu (Audit 3):
@@ -1889,20 +1885,24 @@ Penemuan kritikal terdahulu yang kini ditutup dalam kod semasa:
   * Semua timestamp tanpa timezone - schema kini menggunakan timestamp with timezone
 
 Kemaskini status pasca pembetulan (2026-04-09):
-  * #35 type-safety debt kini materially closed; semakan semasa pada
-    server/client/shared tidak lagi menunjukkan penggunaan type any,
-    as any, @ts-ignore, atau @ts-expect-error dalam typing code.
-  * #63 backup export memory kini materially closed; baki tinggal
-    refinement architecture lanjutan pada restore/full-parse path.
-  * #70 PII encryption at rest kini materially closed dalam kod semasa.
-    Local rollout juga sudah bersih; baki tinggal rollout lintas-environment.
-  * #73 amount standardization kini materially closed pada boundary code.
-    Baki hanya migration schema literal jika mahu satu datatype DB sahaja.
+  * #35 type-safety debt kini dipagari oleh verify:repo-hygiene;
+    semakan semasa pada server/client/shared tidak lagi menunjukkan
+    penggunaan type any, as any, @ts-ignore, atau @ts-expect-error
+    dalam typing code.
+  * #63 backup export memory kini diperkukuh dengan DB chunk paging
+    dan decrypt streaming untuk payload enc:v2 pada export/restore.
+  * #70 PII encryption at rest kini dipagari oleh
+    verify:collection-pii-rollout-contract merentasi schema, protected
+    selects, startup policy, backup/export, env validation, serta
+    release/smoke rollout helpers.
+  * #73 amount standardization kini dipagari oleh governance check
+    automatik merentasi schema, bootstrap, mapper, backup, dan API
+    boundary supaya unit MYR vs cents tidak regress secara senyap.
 
 Snapshot audit asal merekodkan 14 isu CRITICAL, tetapi item kritikal dan high
 utama kini telah ditutup dalam kod semasa.
-Baki kerja yang masih relevan kini lebih kepada rollout lintas-environment,
-migration schema literal, dan debt dokumentasi/ujian lanjutan.
+Baki kerja yang masih relevan kini lebih kepada enhancement operasi deploy,
+dokumentasi, dan ujian lanjutan; tiada lagi item audit aktif yang berbaki.
 
 Skor kesihatan keseluruhan semasa: jauh lebih baik daripada snapshot 7.9 / 10
 yang direkodkan pada audit asal 2026-04-09, kerana majoriti isu audit kini

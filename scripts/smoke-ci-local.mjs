@@ -5,12 +5,12 @@ import { mkdir } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
 import "dotenv/config";
+import { resolveManagedLoopbackBaseUrl } from "./lib/local-loopback-server.mjs";
 import { assertPostgresConnection } from "./lib/postgres-preflight.mjs";
 import { waitForServer } from "./lib/server-readiness.mjs";
 
 const npmCliPath = String(process.env.npm_execpath || "").trim();
 const npmCommand = npmCliPath ? process.execPath : (process.platform === "win32" ? "npm.cmd" : "npm");
-const baseUrl = process.env.SMOKE_BASE_URL || "http://127.0.0.1:5000";
 const artifactsDir = path.resolve(process.cwd(), process.env.SMOKE_ARTIFACTS_DIR || "artifacts/smoke-ui-local");
 const serverLogPath = path.join(artifactsDir, "server.log");
 
@@ -80,11 +80,19 @@ const run = async () => {
   const stamp = Date.now();
   const smokeUser = String(process.env.SMOKE_TEST_USERNAME || "").trim() || `superuser${stamp}`;
   const smokePassword = String(process.env.SMOKE_TEST_PASSWORD || "").trim() || "Password123!";
+  const host = String(process.env.HOST || "127.0.0.1").trim() || "127.0.0.1";
+  const defaultPort = String(process.env.PORT || "5000").trim() || "5000";
+  const resolvedServer = await resolveManagedLoopbackBaseUrl({
+    configuredBaseUrl: process.env.SMOKE_BASE_URL || process.env.PUBLIC_APP_URL || `http://${host}:${defaultPort}`,
+    host,
+    preferredPort: defaultPort,
+  });
+  const baseUrl = resolvedServer.baseUrl;
   const env = {
     ...process.env,
     NODE_ENV: process.env.NODE_ENV || "development",
-    PORT: process.env.PORT || "5000",
-    HOST: process.env.HOST || "127.0.0.1",
+    PORT: String(resolvedServer.port),
+    HOST: host,
     PUBLIC_APP_URL: process.env.PUBLIC_APP_URL || baseUrl,
     CORS_ALLOWED_ORIGINS: process.env.CORS_ALLOWED_ORIGINS || baseUrl,
     SESSION_SECRET: process.env.SESSION_SECRET || "ci-session-secret",
@@ -105,7 +113,12 @@ const run = async () => {
 
   console.log("Smoke CI local: checking PostgreSQL connectivity...");
   await assertPostgresConnection(env, { context: "Smoke CI local" });
+  if (resolvedServer.usedFallbackPort) {
+    console.log(`Smoke CI local: port ${defaultPort} busy, using ${resolvedServer.port} instead.`);
+  }
 
+  await runNpm(["run", "verify:collection-amount-contract"], { env });
+  await runNpm(["run", "verify:collection-pii-rollout-contract"], { env });
   await runNpm(["run", "verify:db-schema-governance"], { env });
   await runNpm(["run", "test:db-integration"], { env });
   await runNpm(["run", "build"], { env });
@@ -120,7 +133,7 @@ const run = async () => {
     },
   );
 
-  const serverLogStream = createWriteStream(serverLogPath, { flags: "a" });
+  const serverLogStream = createWriteStream(serverLogPath, { flags: "w" });
   serverProcess.stdout?.pipe(serverLogStream);
   serverProcess.stderr?.pipe(serverLogStream);
 

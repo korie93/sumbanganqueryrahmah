@@ -1,6 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { findPotentialCommittedSmtpSecrets } from "../lib/repo-hygiene.mjs";
+import {
+  findForbiddenTypeScriptTypeSafetyPatterns,
+  findPotentialCommittedSmtpSecrets,
+} from "../lib/repo-hygiene.mjs";
 
 test("repo hygiene allows clearly fake SMTP placeholders in env templates", () => {
   const envKey = "SMTP_PASSWORD";
@@ -70,4 +73,34 @@ test("repo hygiene flags hardcoded nodemailer auth passwords", () => {
 
   assert.equal(findings.length, 1);
   assert.match(findings[0], /hardcoded nodemailer auth\.pass literal/i);
+});
+
+test("repo hygiene allows narrative uses of the word any in TypeScript strings and comments", () => {
+  const findings = findForbiddenTypeScriptTypeSafetyPatterns({
+    filePath: "client/src/example.ts",
+    text: `
+// This message should not match any type-safety rule.
+export const message = "Excel file does not have any sheets.";
+`,
+  });
+
+  assert.deepEqual(findings, []);
+});
+
+test("repo hygiene flags explicit TypeScript any patterns and suppression directives", () => {
+  const findings = findForbiddenTypeScriptTypeSafetyPatterns({
+    filePath: "server/example.ts",
+    text: `
+const first = value as any;
+const second: any = value;
+// @ts-ignore
+const third = fn<any>();
+`,
+  });
+
+  assert.equal(findings.length, 4);
+  assert.match(findings[0], /as any/i);
+  assert.match(findings[1], /: any/i);
+  assert.match(findings[2], /@ts-ignore/i);
+  assert.match(findings[3], /<any>/i);
 });

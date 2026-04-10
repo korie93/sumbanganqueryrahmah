@@ -1,6 +1,9 @@
 import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
-import { findPotentialCommittedSmtpSecrets } from "./lib/repo-hygiene.mjs";
+import {
+  findForbiddenTypeScriptTypeSafetyPatterns,
+  findPotentialCommittedSmtpSecrets,
+} from "./lib/repo-hygiene.mjs";
 
 const forbiddenEnvFiles = [
   ".env",
@@ -101,12 +104,18 @@ if (allTrackedFilesResult.error) {
     .filter(Boolean);
 
   const smtpSecretFindings = [];
+  const typeSafetyFindings = [];
   for (const filePath of trackedFiles) {
     try {
       const text = readFileSync(filePath, "utf8");
       smtpSecretFindings.push(
         ...findPotentialCommittedSmtpSecrets({ filePath, text }),
       );
+      if (/\.(?:ts|tsx)$/i.test(filePath)) {
+        typeSafetyFindings.push(
+          ...findForbiddenTypeScriptTypeSafetyPatterns({ filePath, text }),
+        );
+      }
     } catch {
       // Ignore binary or unreadable files. Hygiene scanning targets text sources only.
     }
@@ -115,6 +124,12 @@ if (allTrackedFilesResult.error) {
   if (smtpSecretFindings.length > 0) {
     failures.push(
       `Potential committed SMTP secrets detected: ${smtpSecretFindings.join("; ")}`,
+    );
+  }
+
+  if (typeSafetyFindings.length > 0) {
+    failures.push(
+      `Forbidden TypeScript type-safety regressions detected: ${typeSafetyFindings.join("; ")}`,
     );
   }
 }

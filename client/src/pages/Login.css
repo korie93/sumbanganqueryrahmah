@@ -283,6 +283,12 @@
 }
 
 @media (max-width: 640px) {
+  .login-content {
+    animation: none;
+    opacity: 1;
+    will-change: auto;
+  }
+
   .login-card {
     animation: none;
     -webkit-backdrop-filter: none;

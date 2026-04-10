@@ -3,6 +3,7 @@ import path from "node:path";
 import { existsSync } from "node:fs";
 import { spawn } from "node:child_process";
 import dotenv from "dotenv";
+import { resolveManagedLoopbackBaseUrl } from "./lib/local-loopback-server.mjs";
 
 const smokeEnvPath = path.resolve(process.cwd(), ".env.smoke.local");
 if (existsSync(smokeEnvPath)) {
@@ -48,8 +49,14 @@ const runNpm = (args, options = {}) =>
 const run = async () => {
   const stamp = Date.now();
   const host = String(process.env.HOST || "127.0.0.1").trim() || "127.0.0.1";
-  const port = String(process.env.PORT || "5000").trim() || "5000";
-  const baseUrl = String(process.env.SMOKE_BASE_URL || process.env.PUBLIC_APP_URL || `http://${host}:${port}`).trim();
+  const defaultPort = String(process.env.PORT || "5000").trim() || "5000";
+  const configuredBaseUrl = String(process.env.SMOKE_BASE_URL || process.env.PUBLIC_APP_URL || `http://${host}:${defaultPort}`).trim();
+  const resolvedServer = await resolveManagedLoopbackBaseUrl({
+    configuredBaseUrl,
+    host,
+    preferredPort: defaultPort,
+  });
+  const baseUrl = resolvedServer.baseUrl;
   const reuseFixedSmokeUser = String(process.env.SMOKE_LOCAL_REUSE_USER || "").trim().toLowerCase() === "true";
   const smokeUserPrefix =
     String(
@@ -73,7 +80,7 @@ const run = async () => {
     ...process.env,
     NODE_ENV: process.env.NODE_ENV || "development",
     HOST: host,
-    PORT: port,
+    PORT: String(resolvedServer.port),
     PUBLIC_APP_URL: process.env.PUBLIC_APP_URL || baseUrl,
     CORS_ALLOWED_ORIGINS: process.env.CORS_ALLOWED_ORIGINS || baseUrl,
     SESSION_SECRET: process.env.SESSION_SECRET || "ci-session-secret",
@@ -100,6 +107,9 @@ const run = async () => {
     [
       "Running local smoke with:",
       `- baseUrl: ${env.SMOKE_BASE_URL}`,
+      ...(resolvedServer.usedFallbackPort
+        ? [`- resolved port fallback: ${defaultPort} -> ${resolvedServer.port}`]
+        : []),
       `- db: ${env.PG_USER}@${env.PG_HOST}:${env.PG_PORT}/${env.PG_DATABASE}`,
       `- smoke user: ${env.SMOKE_TEST_USERNAME}`,
       `- reuse fixed smoke user: ${reuseFixedSmokeUser ? "yes" : "no"}`,

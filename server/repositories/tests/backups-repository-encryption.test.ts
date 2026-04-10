@@ -13,7 +13,10 @@ import {
   iteratePreparedBackupPayloadStorageChunks,
   readPreparedBackupPayloadForStorage,
 } from "../backups-payload-utils";
-import { BACKUP_MAX_SERIALIZED_ROW_BYTES } from "../backups-repository-types";
+import {
+  BACKUP_MAX_SERIALIZED_ROW_BYTES,
+  BACKUP_STORAGE_DB_READ_PAGE_SIZE,
+} from "../backups-repository-types";
 
 type EnvOverrides = Record<string, string | null>;
 
@@ -349,6 +352,82 @@ test("BackupsRepository streams chunked encrypted payloads as plaintext JSON chu
         const chunks = await repository.iterateBackupDataJsonChunksById("backup-1");
         assert.ok(chunks);
         assert.equal(await collectChunks(chunks), payloadJson);
+      } finally {
+        dbHarness.execute = originalExecute;
+      }
+    },
+  );
+});
+
+test("BackupsRepository paginates chunked payload reads while streaming encrypted backup JSON", async () => {
+  await withEnv(
+    {
+      NODE_ENV: "production",
+      BACKUP_ENCRYPTION_KEY: null,
+      BACKUP_ENCRYPTION_KEYS: `primary:${"A".repeat(32)}`,
+      BACKUP_ENCRYPTION_KEY_ID: "primary",
+    },
+    async () => {
+      const repository = new BackupsRepository(repoOptions);
+
+      const payloadJson = JSON.stringify({
+        imports: Array.from({ length: 12 }, (_, index) => ({
+          id: `import-${index}`,
+          name: `Import ${index}`,
+        })),
+        dataRows: [],
+        users: [],
+        auditLogs: [],
+      });
+      const encryptedPayload = encryptBackupPayloadV2({
+        keyId: "primary",
+        key: Buffer.from("A".repeat(32), "utf8"),
+        payloadJson,
+      });
+      const chunkWidth = 2;
+      const chunkedPayload = Array.from(
+        { length: Math.ceil(encryptedPayload.length / chunkWidth) },
+        (_, index) => encryptedPayload.slice(index * chunkWidth, (index + 1) * chunkWidth),
+      );
+      assert.ok(chunkedPayload.length > BACKUP_STORAGE_DB_READ_PAGE_SIZE);
+
+      const dbHarness = getDbTestHarness();
+      const originalExecute = dbHarness.execute;
+      let chunkQueryCount = 0;
+      setDbExecute(dbHarness, async (query: unknown) => {
+        const sqlText = normalizeSqlText(query);
+        if (sqlText.includes("SELECT backup_data as \"backupData\" FROM public.backups")) {
+          return {
+            rows: [
+              {
+                backupData: "",
+              },
+            ],
+          };
+        }
+        if (sqlText.includes("FROM public.backup_payload_chunks")) {
+          const start = chunkQueryCount * BACKUP_STORAGE_DB_READ_PAGE_SIZE;
+          chunkQueryCount += 1;
+          return {
+            rows: chunkedPayload
+              .slice(start, start + BACKUP_STORAGE_DB_READ_PAGE_SIZE)
+              .map((chunkData, offset) => ({
+                chunkIndex: start + offset,
+                chunkData,
+              })),
+          };
+        }
+        return { rows: [] };
+      });
+
+      try {
+        const chunks = await repository.iterateBackupDataJsonChunksById("backup-1");
+        assert.ok(chunks);
+        assert.equal(await collectChunks(chunks), payloadJson);
+        assert.equal(
+          chunkQueryCount,
+          Math.ceil(chunkedPayload.length / BACKUP_STORAGE_DB_READ_PAGE_SIZE),
+        );
       } finally {
         dbHarness.execute = originalExecute;
       }

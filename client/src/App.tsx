@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect } from "react";
+import { Suspense, useEffect } from "react";
 import { AppRouteErrorBoundary } from "@/app/AppRouteErrorBoundary";
 import { applyDocumentMetadata, resolveDocumentMetadata } from "@/app/document-metadata";
 import {
@@ -12,11 +12,11 @@ import {
   ResetPasswordPage,
 } from "@/app/lazy-pages";
 import { PageSpinner } from "@/app/PageSpinner";
+import { AuthenticatedAppEntry } from "@/app/authenticated-entry-lazy";
 import { isBannedSessionFlagSet } from "@/lib/auth-session";
+import { scheduleIdlePreload } from "@/lib/lazy-with-preload";
 import LandingRouteFallback from "@/pages/LandingRouteFallback";
 import { usePublicAppState } from "@/app/usePublicAppState";
-
-const AuthenticatedAppEntry = lazy(() => import("@/app/AuthenticatedAppEntry"));
 
 function AppContent() {
   const {
@@ -40,6 +40,32 @@ function AppContent() {
       }),
     );
   }, [currentPage, monitorSection, systemName, user]);
+
+  useEffect(() => {
+    if (!isInitialized || user) {
+      return;
+    }
+
+    if (currentPage === "home") {
+      return scheduleIdlePreload(() => {
+        LoginPage.preload();
+      }, 700);
+    }
+
+    if (currentPage === "login") {
+      return scheduleIdlePreload(() => {
+        ForgotPasswordPage.preload();
+      }, 250);
+    }
+
+    if (currentPage === "forgot-password") {
+      return scheduleIdlePreload(() => {
+        LoginPage.preload();
+      }, 250);
+    }
+
+    return;
+  }, [currentPage, isInitialized, user]);
 
   const renderRoutePage = (
     routeKey: string,
