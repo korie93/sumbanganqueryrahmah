@@ -1,4 +1,5 @@
 import type { MaintenanceState, SettingInputType } from "../config/system-settings";
+import { resolveHeartbeatIntervalMinutes } from "../activity/activity-session-policy";
 
 export const TRUTHY_SETTING_VALUES = new Set(["true", "1", "yes", "on"]);
 
@@ -159,9 +160,9 @@ export function buildAppConfig(values: Map<string, string>) {
   const viewerRowsPerPage = asNumber("viewer_rows_per_page", 100, 10, 500);
   const aiEnabled = asBool("ai_enabled", true);
   const semanticSearchEnabled = asBool("semantic_search_enabled", true);
-  const heartbeatIntervalMinutes = Math.max(
-    1,
-    Math.min(10, Math.floor(sessionTimeoutMinutes / 2) || 1),
+  const heartbeatIntervalMinutes = resolveHeartbeatIntervalMinutes(
+    sessionTimeoutMinutes,
+    wsIdleMinutes,
   );
 
   return {

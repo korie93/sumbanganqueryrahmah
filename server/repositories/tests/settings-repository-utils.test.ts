@@ -72,13 +72,22 @@ test("buildAppConfig clamps numeric values and derives heartbeat interval", () =
 
   assert.equal(config.systemName, "Demo");
   assert.equal(config.sessionTimeoutMinutes, 61);
-  assert.equal(config.heartbeatIntervalMinutes, 10);
+  assert.equal(config.heartbeatIntervalMinutes, 1);
   assert.equal(config.wsIdleMinutes, 1);
   assert.equal(config.aiEnabled, false);
   assert.equal(config.semanticSearchEnabled, true);
   assert.equal(config.aiTimeoutMs, 1000);
   assert.equal(config.searchResultLimit, 5000);
   assert.equal(config.viewerRowsPerPage, 10);
+});
+
+test("buildAppConfig keeps heartbeat safely below the activity idle threshold", () => {
+  const config = buildAppConfig(new Map<string, string>([
+    ["session_timeout_minutes", "30"],
+    ["ws_idle_minutes", "3"],
+  ]));
+
+  assert.equal(config.heartbeatIntervalMinutes, 2);
 });
 
 test("asTruthySetting respects fallback for blank values", () => {

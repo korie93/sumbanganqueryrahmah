@@ -8,6 +8,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { DatePickerField } from "@/components/ui/date-picker-field";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -159,12 +160,14 @@ export function EditCollectionRecordDialog({
           </div>
           <div className="space-y-2">
             <Label>Payment Date</Label>
-            <Input
-              type="date"
+            <DatePickerField
               value={editPaymentDate}
-              max={maxPaymentDate}
-              onChange={(event) => onPaymentDateChange(event.target.value)}
+              onChange={onPaymentDateChange}
               disabled={savingEdit}
+              placeholder="Select payment date..."
+              ariaLabel="Payment Date"
+              buttonTestId="edit-collection-payment-date"
+              disabledDates={{ after: new Date(`${maxPaymentDate}T23:59:59`) }}
             />
           </div>
           <div className="space-y-2">
