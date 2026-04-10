@@ -1,5 +1,6 @@
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
+import { cn } from "@/lib/utils";
 import { ActivityDesktopLogActions } from "@/pages/activity/ActivityDesktopLogActions";
 import { getActivityBrowserText } from "@/pages/activity/activity-desktop-logs-utils";
 import type { ActivityDesktopLogRowProps } from "@/pages/activity/activity-desktop-logs-shared";
@@ -14,25 +15,25 @@ export function ActivityDesktopLogRow({
   actionLoading,
   activity,
   canModerateActivity,
-  gridTemplateColumns,
+  gridClassName,
   isSelected,
   onBanClick,
   onDeleteClick,
   onKickClick,
   onToggleSelected,
-  style,
 }: ActivityDesktopLogRowProps) {
   const browserInfo = parseActivityUserAgent(activity.browser);
 
   return (
     <div
-      className="grid items-center gap-3 border-b border-border/70 px-3 py-3 hover:bg-muted/50"
+      className={cn(
+        "grid h-full items-center gap-3 border-b border-border/70 px-3 py-3 hover:bg-muted/50",
+        gridClassName,
+      )}
       data-testid={`activity-row-${activity.id}`}
-      role="row"
-      style={{ ...style, gridTemplateColumns }}
     >
       {canModerateActivity ? (
-        <div className="flex items-center" role="cell">
+        <div className="flex items-center">
           <Checkbox
             checked={isSelected}
             onCheckedChange={(checked) => onToggleSelected(activity.id, Boolean(checked))}
@@ -40,7 +41,7 @@ export function ActivityDesktopLogRow({
           />
         </div>
       ) : null}
-      <div className="min-w-0" role="cell">
+      <div className="min-w-0">
         <div className="flex items-center gap-2">
           <span className="truncate font-medium text-foreground">{activity.username}</span>
           <Badge variant="outline" className="text-xs">
@@ -48,28 +49,20 @@ export function ActivityDesktopLogRow({
           </Badge>
         </div>
       </div>
-      <div role="cell">{getStatusBadge(activity.status)}</div>
-      <div className="truncate text-xs text-muted-foreground" role="cell" title={activity.ipAddress || "-"}>
+      <div>{getStatusBadge(activity.status)}</div>
+      <div className="truncate text-xs text-muted-foreground" title={activity.ipAddress || "-"}>
         {activity.ipAddress || "-"}
       </div>
-      <div
-        className="truncate text-xs text-muted-foreground"
-        role="cell"
-        title={getActivityBrowserText(browserInfo)}
-      >
+      <div className="truncate text-xs text-muted-foreground" title={getActivityBrowserText(browserInfo)}>
         {getActivityBrowserText(browserInfo)}
       </div>
-      <div className="text-xs text-muted-foreground" role="cell">
-        {formatActivityTime(activity.loginTime)}
-      </div>
-      <div className="text-xs text-muted-foreground" role="cell">
+      <div className="text-xs text-muted-foreground">{formatActivityTime(activity.loginTime)}</div>
+      <div className="text-xs text-muted-foreground">
         {activity.logoutTime ? formatActivityTime(activity.logoutTime) : "-"}
       </div>
-      <div className="text-xs text-muted-foreground" role="cell">
-        {getSessionDuration(activity.loginTime, activity.logoutTime)}
-      </div>
+      <div className="text-xs text-muted-foreground">{getSessionDuration(activity.loginTime, activity.logoutTime)}</div>
       {canModerateActivity ? (
-        <div role="cell">
+        <div>
           <ActivityDesktopLogActions
             actionLoading={actionLoading}
             activity={activity}

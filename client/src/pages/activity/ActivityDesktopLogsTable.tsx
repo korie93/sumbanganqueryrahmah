@@ -4,15 +4,15 @@ import { FixedSizeList } from "react-window";
 import { ActivityDesktopLogsHeader } from "@/pages/activity/ActivityDesktopLogsHeader";
 import { ActivityDesktopLogRow } from "@/pages/activity/ActivityDesktopLogRow";
 import {
+  getActivityDesktopGridClassName,
   ACTIVITY_DESKTOP_LIST_MAX_HEIGHT_PX,
   ACTIVITY_DESKTOP_ROW_HEIGHT_PX,
-  getActivityDesktopGridTemplate,
   getVirtualizedListHeight,
 } from "@/pages/activity/activity-virtualization";
 import type { ActivityDesktopLogsTableProps } from "@/pages/activity/activity-desktop-logs-shared";
 
 type ActivityDesktopVirtualListData = ActivityDesktopLogsTableProps & {
-  gridTemplateColumns: string;
+  gridClassName: string;
 };
 
 function ActivityDesktopVirtualRow({
@@ -27,18 +27,19 @@ function ActivityDesktopVirtualRow({
   }
 
   return (
-    <ActivityDesktopLogRow
-      actionLoading={data.actionLoading}
-      activity={activity}
-      canModerateActivity={data.canModerateActivity}
-      gridTemplateColumns={data.gridTemplateColumns}
-      isSelected={data.selectedActivityIds.has(activity.id)}
-      onBanClick={data.onBanClick}
-      onDeleteClick={data.onDeleteClick}
-      onKickClick={data.onKickClick}
-      onToggleSelected={data.onToggleSelected}
-      style={style}
-    />
+    <div style={style}>
+      <ActivityDesktopLogRow
+        actionLoading={data.actionLoading}
+        activity={activity}
+        canModerateActivity={data.canModerateActivity}
+        gridClassName={data.gridClassName}
+        isSelected={data.selectedActivityIds.has(activity.id)}
+        onBanClick={data.onBanClick}
+        onDeleteClick={data.onDeleteClick}
+        onKickClick={data.onKickClick}
+        onToggleSelected={data.onToggleSelected}
+      />
+    </div>
   );
 }
 
@@ -55,8 +56,8 @@ export function ActivityDesktopLogsTable({
   partiallySelected,
   selectedActivityIds,
 }: ActivityDesktopLogsTableProps) {
-  const gridTemplateColumns = useMemo(
-    () => getActivityDesktopGridTemplate(canModerateActivity),
+  const gridClassName = useMemo(
+    () => getActivityDesktopGridClassName(canModerateActivity),
     [canModerateActivity],
   );
   const itemData = useMemo<ActivityDesktopVirtualListData>(
@@ -65,7 +66,7 @@ export function ActivityDesktopLogsTable({
       activities,
       allVisibleSelected,
       canModerateActivity,
-      gridTemplateColumns,
+      gridClassName,
       onBanClick,
       onDeleteClick,
       onKickClick,
@@ -79,7 +80,7 @@ export function ActivityDesktopLogsTable({
       activities,
       allVisibleSelected,
       canModerateActivity,
-      gridTemplateColumns,
+      gridClassName,
       onBanClick,
       onDeleteClick,
       onKickClick,
@@ -94,36 +95,27 @@ export function ActivityDesktopLogsTable({
     ACTIVITY_DESKTOP_ROW_HEIGHT_PX,
     ACTIVITY_DESKTOP_LIST_MAX_HEIGHT_PX,
   );
-  const columnCount = canModerateActivity ? 9 : 7;
 
   return (
     <div className="overflow-x-auto">
-      <div
-        aria-colcount={columnCount}
-        aria-label="Activity logs"
-        aria-rowcount={activities.length + 1}
-        className="min-w-[58rem] overflow-hidden rounded-lg border border-border bg-card/60 text-sm"
-        role="table"
-      >
+      <div className="min-w-[58rem] overflow-hidden rounded-lg border border-border bg-card/60 text-sm">
         <ActivityDesktopLogsHeader
           allVisibleSelected={allVisibleSelected}
           canModerateActivity={canModerateActivity}
-          gridTemplateColumns={gridTemplateColumns}
+          gridClassName={gridClassName}
           onToggleSelectAllVisible={onToggleSelectAllVisible}
           partiallySelected={partiallySelected}
         />
-        <div role="rowgroup">
-          <FixedSizeList
-            height={listHeight}
-            itemCount={activities.length}
-            itemData={itemData}
-            itemSize={ACTIVITY_DESKTOP_ROW_HEIGHT_PX}
-            overscanCount={8}
-            width="100%"
-          >
-            {ActivityDesktopVirtualRow}
-          </FixedSizeList>
-        </div>
+        <FixedSizeList
+          height={listHeight}
+          itemCount={activities.length}
+          itemData={itemData}
+          itemSize={ACTIVITY_DESKTOP_ROW_HEIGHT_PX}
+          overscanCount={8}
+          width="100%"
+        >
+          {ActivityDesktopVirtualRow}
+        </FixedSizeList>
       </div>
     </div>
   );
