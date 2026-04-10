@@ -79,24 +79,32 @@ Untuk manual penggunaan client yang lengkap (split ikut role `superuser`, `admin
 | `npm run release:verify:local` | Run final local release gate (tests + smoke + backup drill) |
 | `npm run monitor:stale-conflicts` | Snapshot stale-conflict/429 runtime monitor signals |
 
+## Troubleshooting
+
+- `502 Bad Gateway` selepas `git pull`, `npm run build`, atau `pm2 restart`: semak `pm2 logs sqr --lines 100` dahulu. Jika app crash semasa bootstrap, restart semula dengan `pm2 restart sqr --update-env` supaya perubahan `.env` dimuatkan sekali.
+- `BACKUP_ENCRYPTION_KEY_ID 'primary' is configured but no matching key exists`: pastikan konfigurasi `.env` konsisten. Jika anda guna `BACKUP_ENCRYPTION_KEY_ID=primary`, tetapkan sama ada `BACKUP_ENCRYPTION_KEY=...` untuk satu kunci aktif atau `BACKUP_ENCRYPTION_KEYS=primary:...` untuk format key rotation.
+- Perubahan `.env` tidak berkesan dalam PM2 atau Termux: edit `.env`, kemudian jalankan `pm2 restart sqr --update-env`. Untuk setup yang kekal selepas reboot, ikut [docs/TERMUX_PM2_DEPLOYMENT.md](./docs/TERMUX_PM2_DEPLOYMENT.md).
+- Ralat CSP seperti `Executing inline script violates 'script-src 'self''`: biasanya build lama atau `index.html` lama masih diserve oleh proxy/cache. Jalankan `npm run build`, restart app, dan kosongkan cache reverse proxy/CDN jika berkenaan.
+- `/favicon.ico` atau aset statik lain gagal dimuatkan: pastikan build client wujud dalam `dist-local/public` selepas `npm run build`, kemudian semak log startup untuk mesej `Serving frontend static assets`.
+
 ## Project Structure
 
-```
+```text
 sumbanganqueryrahmah/
-├── client/          # React + TypeScript frontend (Vite)
-├── server/          # Express + TypeScript backend
-│   ├── controllers/ # Request/response logic
-│   ├── services/    # Business logic
-│   ├── repositories/# Database query layer
-│   ├── middleware/  # Express middleware
-│   ├── routes/      # API route definitions
-│   ├── config/      # Runtime configuration
-│   ├── utils/       # Shared utility functions
-│   └── db/          # Database connection setup
-├── shared/          # Types and schemas shared between client and server
-├── drizzle/         # Drizzle ORM migration files
-├── scripts/         # Build, CI, and maintenance scripts
-└── docs/            # Additional documentation
+|-- client/           # React + TypeScript frontend (Vite)
+|-- server/           # Express + TypeScript backend
+|   |-- controllers/  # Request/response logic
+|   |-- services/     # Business logic
+|   |-- repositories/ # Database query layer
+|   |-- middleware/   # Express middleware
+|   |-- routes/       # API route definitions
+|   |-- config/       # Runtime configuration
+|   |-- utils/        # Shared utility functions
+|   `-- db/           # Database connection setup
+|-- shared/           # Types and schemas shared between client and server
+|-- drizzle/          # Drizzle ORM migration files
+|-- scripts/          # Build, CI, and maintenance scripts
+`-- docs/             # Additional documentation
 ```
 
 See [ARCHITECTURE.md](./ARCHITECTURE.md) for a detailed architecture overview.
@@ -124,6 +132,8 @@ See [ARCHITECTURE.md](./ARCHITECTURE.md) for a detailed architecture overview.
 - [docs/RELEASE_HARDENING_SUMMARY.md](./docs/RELEASE_HARDENING_SUMMARY.md) - Current build hardening summary and controlled rollout checklist
 - [docs/GO_NO_GO_RELEASE_TEMPLATE.md](./docs/GO_NO_GO_RELEASE_TEMPLATE.md) - Fill-in template for final rollout decision during the release window
 - [docs/DISASTER_RECOVERY_DRILL.md](./docs/DISASTER_RECOVERY_DRILL.md) - Backup and restore drill guide
+- [docs/CSS_ARCHITECTURE.md](./docs/CSS_ARCHITECTURE.md) - CSS layering, token usage, and component styling decision guide
+- [docs/TERMUX_PM2_DEPLOYMENT.md](./docs/TERMUX_PM2_DEPLOYMENT.md) - Termux/PM2 deployment, environment persistence, and reboot workflow
 - [README_CLIENT_MANUAL.md](./README_CLIENT_MANUAL.md) - Client user manual
 
 ## License

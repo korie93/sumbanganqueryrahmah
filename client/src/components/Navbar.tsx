@@ -1,4 +1,4 @@
-import { memo, useMemo, useState } from "react";
+import { memo, useCallback, useMemo, useState } from "react";
 import {
   ChevronDown,
   Home,
@@ -34,6 +34,7 @@ import {
   resolveNavigationTarget,
   resolveActiveNavigationItemId,
 } from "@/app/navigation";
+import { prefetchNavigationTarget } from "@/app/navigation-prefetch";
 import type { MonitorSection, TabVisibility } from "@/app/types";
 import { BrandLogo } from "@/components/BrandLogo";
 import { useTheme } from "@/components/useTheme";
@@ -91,6 +92,9 @@ function NavbarImpl({
   const navigateToItem = (itemId: string) => {
     onNavigate(resolveNavigationTarget(itemId));
   };
+  const prefetchItem = useCallback((itemId: string) => {
+    void prefetchNavigationTarget(resolveNavigationTarget(itemId));
+  }, []);
 
   const renderUserMenuContent = () => (
     <DropdownMenuContent
@@ -155,6 +159,8 @@ function NavbarImpl({
               <button
                 type="button"
                 onClick={() => navigateToItem(HOME_NAV_ITEM.id)}
+                onMouseEnter={() => prefetchItem(HOME_NAV_ITEM.id)}
+                onFocus={() => prefetchItem(HOME_NAV_ITEM.id)}
                 className={`nav-pill nav-home-pill hidden lg:inline-flex ${activeNavigationItemId === HOME_NAV_ITEM.id ? "nav-pill-active" : ""}`}
                 data-testid="nav-home"
                 aria-label={HOME_NAV_ITEM.label}
@@ -220,6 +226,8 @@ function NavbarImpl({
                   aria-label={item.label}
                   aria-current={isActive ? "page" : undefined}
                   onClick={() => navigateToItem(item.id)}
+                  onMouseEnter={() => prefetchItem(item.id)}
+                  onFocus={() => prefetchItem(item.id)}
                   data-testid={`nav-${item.id}`}
                   className={`nav-pill ${isActive ? "nav-pill-active" : ""}`}
                 >
@@ -249,6 +257,8 @@ function NavbarImpl({
                       type="button"
                       title={group.label}
                       aria-label={`${group.label} menu`}
+                      onMouseEnter={() => group.items.forEach((item) => prefetchItem(item.id))}
+                      onFocus={() => group.items.forEach((item) => prefetchItem(item.id))}
                       className={`nav-pill ${active ? "nav-pill-active" : ""}`}
                       data-testid={`nav-group-${group.id}`}
                     >
@@ -274,6 +284,7 @@ function NavbarImpl({
                           <DropdownMenuItem
                             key={item.id}
                             onSelect={() => navigateToItem(item.id)}
+                            onFocus={() => prefetchItem(item.id)}
                             className={`items-start gap-3 rounded-xl px-3 py-3 ${activeItem ? "bg-accent text-accent-foreground" : ""}`}
                           >
                             <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
@@ -349,6 +360,8 @@ function NavbarImpl({
                     navigateToItem(item.id);
                     setMobileNavOpen(false);
                   }}
+                  onMouseEnter={() => prefetchItem(item.id)}
+                  onFocus={() => prefetchItem(item.id)}
                   className={`flex w-full items-start gap-3 rounded-xl border px-3 py-3 text-left transition-colors ${
                     active
                       ? "border-primary/35 bg-primary/10 text-primary"

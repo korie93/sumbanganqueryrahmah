@@ -1,5 +1,6 @@
 import { Suspense, lazy, useEffect, useState } from "react";
 import { AppPageRenderer } from "@/app/AppPageRenderer";
+import { prefetchNavigationTarget, resolvePredictivePrefetchTargets } from "@/app/navigation-prefetch";
 import { AppRouteErrorBoundary } from "@/app/AppRouteErrorBoundary";
 import { PageSpinner } from "@/app/PageSpinner";
 import { ChangePasswordPage } from "@/app/lazy-pages";
@@ -13,6 +14,7 @@ import type {
 import AutoLogout from "@/components/AutoLogout";
 import Navbar from "@/components/Navbar";
 import { AIProvider } from "@/context/AIContext";
+import { scheduleIdlePreload } from "@/lib/lazy-with-preload";
 import "./AuthenticatedAppShell.css";
 
 const FloatingAI = lazy(() => import("@/components/FloatingAI"));
@@ -84,6 +86,34 @@ export default function AuthenticatedAppShell({
       }
     };
   }, [floatingAiReady, runtimeConfig.aiEnabled]);
+
+  useEffect(() => {
+    const targets = resolvePredictivePrefetchTargets({
+      currentPage,
+      featureLockdown,
+      monitorSection,
+      tabVisibility,
+      userRole: user.role,
+    });
+    if (targets.length === 0) {
+      return;
+    }
+
+    let cancelled = false;
+    const cancelIdlePreload = scheduleIdlePreload(async () => {
+      for (const target of targets) {
+        if (cancelled) {
+          return;
+        }
+        await prefetchNavigationTarget(target);
+      }
+    }, 900);
+
+    return () => {
+      cancelled = true;
+      cancelIdlePreload();
+    };
+  }, [currentPage, featureLockdown, monitorSection, tabVisibility, user.role]);
 
   if (user.mustChangePassword) {
     return (

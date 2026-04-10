@@ -10,6 +10,7 @@
     "verify:collection-amount-contract": "node scripts/verify-collection-amount-contract.mjs",
     "verify:collection-pii-rollout-contract": "node scripts/verify-collection-pii-rollout-contract.mjs",
     "verify:client-breakpoint-contract": "node scripts/verify-client-breakpoint-contract.mjs",
+    "verify:client-entry-shell-contract": "node scripts/verify-client-entry-shell-contract.mjs",
     "verify:client-tsconfig-contract": "node scripts/verify-client-tsconfig-contract.mjs",
     "verify:browser-storage-safety": "node scripts/verify-browser-storage-safety.mjs",
     "verify:design-token-color-compatibility": "node scripts/verify-design-token-color-compatibility.mjs",

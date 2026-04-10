@@ -1,15 +1,16 @@
-import { Suspense, lazy, memo, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, memo, useEffect, useMemo, useRef, useState } from "react";
 import { BarChart3, ClipboardList, FileText, Server } from "lucide-react";
 import { AppRouteErrorBoundary } from "@/app/AppRouteErrorBoundary";
 import { LazySideTabNavigation } from "@/components/navigation/LazySideTabNavigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { lazyWithPreload } from "@/lib/lazy-with-preload";
 
-const DashboardPage = lazy(() => import("@/pages/Dashboard"));
-const ActivityPage = lazy(() => import("@/pages/Activity"));
-const SystemPerformancePage = lazy(() => import("@/pages/Monitor"));
-const AnalysisPage = lazy(() => import("@/pages/Analysis"));
-const AuditLogsPage = lazy(() => import("@/pages/AuditLogs"));
+const DashboardPage = lazyWithPreload(() => import("@/pages/Dashboard"));
+const ActivityPage = lazyWithPreload(() => import("@/pages/Activity"));
+const SystemPerformancePage = lazyWithPreload(() => import("@/pages/Monitor"));
+const AnalysisPage = lazyWithPreload(() => import("@/pages/Analysis"));
+const AuditLogsPage = lazyWithPreload(() => import("@/pages/AuditLogs"));
 
 type MonitorSection = "dashboard" | "activity" | "monitor" | "analysis" | "audit";
 
@@ -27,6 +28,23 @@ type SystemMonitorLayoutProps = {
 type AnalysisSectionProps = {
   onNavigate?: ((page: string) => void) | undefined;
 };
+
+export function preloadSystemMonitorSection(
+  section: "dashboard" | "activity" | "monitor" | "analysis" | "audit",
+) {
+  switch (section) {
+    case "dashboard":
+      return DashboardPage.preload();
+    case "activity":
+      return ActivityPage.preload();
+    case "analysis":
+      return AnalysisPage.preload();
+    case "audit":
+      return AuditLogsPage.preload();
+    default:
+      return SystemPerformancePage.preload();
+  }
+}
 
 const DashboardSection = memo(function DashboardSection() {
   return <DashboardPage />;

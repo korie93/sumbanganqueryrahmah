@@ -59,7 +59,7 @@ frontend, UI/UX, layout, CSS, dependencies, dan infrastructure. Penemuan utama:
     - UI/UX:                   ✅ Baik (Risiko Rendah)
     - Testing:                 ✅ Baik (85%+ coverage, 312 test files)
     - CI/CD:                   ✅ Sangat Baik (7 verification gates)
-    - Dokumentasi:             ✅ Sangat Baik (18 dokumen teknikal)
+    - Dokumentasi:             ✅ Sangat Baik (23 dokumen teknikal)
     - Dependencies:            ✅ Baik (0 npm audit vulnerabilities)
 
   Isu tahap TINGGI yang ditemui (bukan kritikal):
@@ -141,7 +141,17 @@ frontend, UI/UX, layout, CSS, dependencies, dan infrastructure. Penemuan utama:
             jadi selector scan untuk avoid/dialog tidak lagi diulang pada
             laluan kemaskini yang sama.
     L4. Error logging terhad di route files (hanya 10 explicit statements)
+        >>> STATUS: ✅ DIPERBAIKI (Kemaskini susulan, 2026-04-10)
+            Helper routeHandler/logRouteHandlerError kini melog ralat route
+            secara konsisten bersama metadata request, sementara global
+            error handler mengelak duplicate logging untuk ralat yang sudah
+            direkodkan di lapisan route.
     L5. Tiada predictive data prefetching
+        >>> STATUS: ✅ DIPERBAIKI (Kemaskini susulan, 2026-04-10)
+            Navigasi utama kini memanaskan lazy bundles dan query kritikal
+            secara predictive melalui hover/focus prefetch serta idle
+            background prefetch untuk dashboard, settings backup, dan
+            modul System Monitor yang paling berkemungkinan dibuka seterusnya.
     L6. allowImportingTsExtensions: true bukan standard (client/tsconfig.json)
         >>> STATUS: ✅ DIPERBAIKI (Kemaskini susulan, 2026-04-10)
             client/tsconfig.json kini kembali kepada konfigurasi bundler
@@ -186,11 +196,11 @@ frontend, UI/UX, layout, CSS, dependencies, dan infrastructure. Penemuan utama:
       7. [DIPERBAIKI] Pecahkan komponen besar (>300 baris) kepada sub-components
       8. [DIPERBAIKI] Wrap semua localStorage operations dengan try-catch
     JANGKA PANJANG:
-      9. Tambah troubleshooting section dalam README
+      9. [DIPERBAIKI] Tambah troubleshooting section dalam README
       10. [DIPERBAIKI] Tambah landscape orientation styles
       11. [DIPERBAIKI] Verify hsl(from ...) browser compatibility
-      12. Pertimbangkan predictive data prefetching
-      13. Dokumenkan CSS architecture dan component styling guide
+      12. [DIPERBAIKI] Tambah predictive data prefetching
+      13. [DIPERBAIKI] Dokumenkan CSS architecture dan component styling guide
 
 Snapshot audit asal (2026-04-09): 110 penemuan gabungan mengikut kiraan
 laporan ketika audit dilakukan.
@@ -199,8 +209,8 @@ Status item bernombor dalam dokumen ini:
   - 0 item: MATERIALLY CLOSED
   - 0 item: tanpa STATUS
 Audit susulan 10/04/2026 menambah 13 penemuan tidak bernombor:
-  - 13 item: ✅ DIPERBAIKI (H1, H2, H3, M1, M2, M3, M4, M5, M6, L1, L2, L3, L6)
-  - 2 item: TERBUKA (L4-L5)
+  - 15 item: ✅ DIPERBAIKI (H1, H2, H3, M1, M2, M3, M4, M5, M6, L1, L2, L3, L4, L5, L6)
+  - 0 item: TERBUKA
 Nota: angka snapshot audit asal dikekalkan sebagai rekod sejarah. Untuk
       keadaan repo semasa, rujuk penanda STATUS pada setiap item dan
       blok audit susulan di ringkasan eksekutif.
@@ -1914,13 +1924,13 @@ P0 — SEGERA (Minggu Ini)
   8. [DIPERBAIKI] 13 timestamp tanpa .notNull() (#59)
 
 P1 — SEBELUM PRODUCTION (2 Minggu)
-  9.  Command injection validation (#9)
-  10. File upload MIME detection (#10)
-  11. Path traversal check (#11)
-  12. Login rate limit fix (#12)
-  13. CI security scanning (#14, #15)
-  14. Token storage migration (#17)
-  15. useEffect cleanup (#18)
+  9.  [DIPERBAIKI] Command injection validation (#9)
+  10. [DIPERBAIKI] File upload MIME detection (#10)
+  11. [DIPERBAIKI] Path traversal check (#11)
+  12. [DIPERBAIKI] Login rate limit fix (#12)
+  13. [DIPERBAIKI] CI security scanning (#14, #15)
+  14. [DIPERBAIKI] Token storage migration (#17)
+  15. [DIPERBAIKI] useEffect cleanup (#18)
   16. [DIPERBAIKI] Timestamps tanpa timezone (#60)
   17. [DIPERBAIKI] IP spoofing rate limit (#61)
   18. [DIPERBAIKI] Heartbeat ws.readyState check (#62)
@@ -1930,13 +1940,13 @@ P1 — SEBELUM PRODUCTION (2 Minggu)
   22. [DIPERBAIKI] Backdrop filter performance — tambah will-change (#96)
 
 P2 — PENAMBAHBAIKAN BERTERUSAN (Bulan Ini)
-  23. React key anti-pattern (#5, #7)
+  23. [DIPERBAIKI] React key anti-pattern (#5, #7)
   24. [DIPERBAIKI] Type safety improvements (#6, #35)
   25. [DIPERBAIKI] TypeScript strictness options (#34) ✅
-  26. Pagination limits (#25)
-  27. Form loading states (#38)
+  26. [DIPERBAIKI] Pagination limits (#25)
+  27. [DIPERBAIKI] Form loading states (#38)
   28. [DIPERBAIKI] Mobile viewport (#32)
-  29. Missing tests dalam CI (#37)
+  29. [DIPERBAIKI] Missing tests dalam CI (#37)
   30. [DIPERBAIKI] PII encryption at rest (#70)
   31. [DIPERBAIKI] Missing FK onUpdate cascade (#71)
   32. [DIPERBAIKI] Missing indexes pada kolum status (#72)
@@ -2002,7 +2012,7 @@ Jumlah Audit:
   Audit susulan 5 (2026-04-10): +13 penemuan ringkas tidak bernombor
   Status item bernombor semasa: 102 item DIPERBAIKI, 0 item
   MATERIALLY CLOSED, 0 item tanpa STATUS.
-  Status audit susulan semasa: 13 item DIPERBAIKI, 2 item TERBUKA.
+  Status audit susulan semasa: 15 item DIPERBAIKI, 0 item TERBUKA.
   Nota: angka audit di atas ialah snapshot sejarah. Pembetulan pasca audit
         tambahan dirujuk melalui penanda STATUS pada item berkaitan.
 
@@ -2029,8 +2039,8 @@ Status repo semasa berdasarkan item bernombor dalam dokumen ini:
   * Tiada lagi item audit tanpa penanda STATUS
 
 Status audit susulan kelima:
-  * 13 item telah DIPERBAIKI (H1, H2, H3, M1, M2, M3, M4, M5, M6, L1, L2, L3, L6)
-  * 2 item masih TERBUKA (L4-L5)
+  * 15 item telah DIPERBAIKI (H1, H2, H3, M1, M2, M3, M4, M5, M6, L1, L2, L3, L4, L5, L6)
+  * Tiada lagi item audit susulan yang terbuka
 
 Penemuan paling kritikal baharu (Audit 3):
   * Unmounted state update risk — boleh crash komponen
@@ -2064,9 +2074,9 @@ Kemaskini status pasca pembetulan (2026-04-09):
 
 Snapshot audit asal merekodkan 14 isu CRITICAL, tetapi item kritikal dan high
 utama bernombor kini telah ditutup dalam kod semasa.
-Baki kerja audit aktif kini datang daripada audit susulan 10/04/2026, dan
-fokus seterusnya telah beralih kepada L4-L5 selepas H1-H3, M1-M6,
-L1-L3, dan L6 ditutup.
+Tiada lagi baki kerja audit aktif yang dikenal pasti dalam repo semasa:
+item bernombor sejarah, audit susulan 10/04/2026, dan cadangan dokumentasi
+jangka panjang utama kini semuanya telah ditutup dalam kod atau dokumentasi.
 
 Skor kesihatan keseluruhan semasa: jauh lebih baik daripada snapshot 7.9 / 10
 yang direkodkan pada audit asal 2026-04-09, kerana majoriti isu audit kini

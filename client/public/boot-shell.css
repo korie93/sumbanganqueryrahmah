@@ -1,0 +1,160 @@
+:root {
+  --boot-shell-bg: #08111f;
+  --boot-shell-bg-secondary: #10233f;
+  --boot-shell-panel-bg: rgba(8, 17, 31, 0.88);
+  --boot-shell-panel-border: rgba(173, 189, 214, 0.2);
+  --boot-shell-panel-shadow: 0 28px 72px rgba(2, 6, 23, 0.42);
+  --boot-shell-text: #e8eef8;
+  --boot-shell-muted: rgba(216, 226, 242, 0.78);
+  --boot-shell-highlight: #8fb7ff;
+  --boot-shell-line: rgba(191, 219, 254, 0.2);
+  --boot-shell-input-bg: rgba(148, 163, 184, 0.08);
+  --boot-shell-button-bg: linear-gradient(135deg, #2563eb, #1d4ed8);
+}
+
+html,
+body {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  background:
+    radial-gradient(circle at top, rgba(59, 130, 246, 0.16), transparent 42%),
+    linear-gradient(180deg, var(--boot-shell-bg), var(--boot-shell-bg-secondary));
+}
+
+.public-auth-boot-shell {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  color: var(--boot-shell-text);
+  font-family:
+    "Segoe UI",
+    Inter,
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    sans-serif;
+}
+
+html[data-boot-shell="public-auth"] .public-auth-boot-shell {
+  display: flex;
+}
+
+html.app-ready .public-auth-boot-shell {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 180ms ease;
+}
+
+.public-auth-boot-shell__panel {
+  width: min(100%, 420px);
+  border-radius: 28px;
+  border: 1px solid var(--boot-shell-panel-border);
+  background: var(--boot-shell-panel-bg);
+  box-shadow: var(--boot-shell-panel-shadow);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  overflow: hidden;
+}
+
+.public-auth-boot-shell__content {
+  display: grid;
+  gap: 18px;
+  padding: 28px 24px;
+}
+
+.public-auth-boot-shell__eyebrow {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--boot-shell-highlight);
+}
+
+.public-auth-boot-shell__title {
+  margin: 0;
+  font-size: clamp(1.9rem, 4.8vw, 2.3rem);
+  font-weight: 750;
+  line-height: 1.05;
+  letter-spacing: -0.04em;
+}
+
+.public-auth-boot-shell__copy {
+  margin: 0;
+  font-size: 0.96rem;
+  line-height: 1.6;
+  color: var(--boot-shell-muted);
+}
+
+.public-auth-boot-shell__fields {
+  display: grid;
+  gap: 12px;
+  margin: 4px 0;
+}
+
+.public-auth-boot-shell__field,
+.public-auth-boot-shell__button,
+.public-auth-boot-shell__link {
+  position: relative;
+  overflow: hidden;
+  border-radius: 16px;
+}
+
+.public-auth-boot-shell__field {
+  height: 52px;
+  border: 1px solid var(--boot-shell-line);
+  background: var(--boot-shell-input-bg);
+}
+
+.public-auth-boot-shell__button {
+  height: 52px;
+  background: var(--boot-shell-button-bg);
+}
+
+.public-auth-boot-shell__link {
+  height: 18px;
+  width: 46%;
+  background: rgba(191, 219, 254, 0.12);
+}
+
+.public-auth-boot-shell__field::after,
+.public-auth-boot-shell__button::after,
+.public-auth-boot-shell__link::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.12), transparent);
+  animation: boot-shell-shimmer 1.5s ease-in-out infinite;
+}
+
+@keyframes boot-shell-shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+@media (max-width: 640px) {
+  .public-auth-boot-shell {
+    padding: 18px;
+  }
+
+  .public-auth-boot-shell__panel {
+    border-radius: 24px;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  .public-auth-boot-shell__content {
+    gap: 16px;
+    padding: 24px 20px;
+  }
+}

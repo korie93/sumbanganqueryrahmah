@@ -1,6 +1,7 @@
 import { ArrowRight, ChevronRight, Sparkles } from "lucide-react";
-import { memo, useMemo } from "react";
+import { memo, useCallback, useMemo } from "react";
 import { type NavigationEntry, getVisibleHomeItems, resolveNavigationTarget } from "@/app/navigation";
+import { prefetchNavigationTarget } from "@/app/navigation-prefetch";
 import { Button } from "@/components/ui/button";
 import { useIsMobile } from "@/hooks/use-mobile";
 import "./Home.css";
@@ -43,6 +44,9 @@ function HomeImpl({ onNavigate, userRole, tabVisibility }: HomeProps) {
       secondaryItems,
     };
   }, [visibleItems]);
+  const prefetchTarget = useCallback((itemId: string) => {
+    void prefetchNavigationTarget(resolveNavigationTarget(itemId));
+  }, []);
 
   if (isMobile) {
     return (
@@ -79,6 +83,8 @@ function HomeImpl({ onNavigate, userRole, tabVisibility }: HomeProps) {
                     variant="secondary"
                     size="lg"
                     onClick={() => onNavigate(resolveNavigationTarget(item.id))}
+                    onMouseEnter={() => prefetchTarget(item.id)}
+                    onFocus={() => prefetchTarget(item.id)}
                     className="home-mobile-hero-action"
                   >
                     <Icon className="h-4 w-4" />
@@ -110,6 +116,8 @@ function HomeImpl({ onNavigate, userRole, tabVisibility }: HomeProps) {
                     key={item.id}
                     type="button"
                     onClick={() => onNavigate(resolveNavigationTarget(item.id))}
+                    onMouseEnter={() => prefetchTarget(item.id)}
+                    onFocus={() => prefetchTarget(item.id)}
                     className="home-mobile-quick-card text-left"
                     data-testid={`card-${item.id}`}
                   >
@@ -153,6 +161,8 @@ function HomeImpl({ onNavigate, userRole, tabVisibility }: HomeProps) {
                       key={item.id}
                       type="button"
                       onClick={() => onNavigate(resolveNavigationTarget(item.id))}
+                      onMouseEnter={() => prefetchTarget(item.id)}
+                      onFocus={() => prefetchTarget(item.id)}
                       className="home-mobile-list-card"
                       data-testid={`card-${item.id}`}
                     >
@@ -203,6 +213,8 @@ function HomeImpl({ onNavigate, userRole, tabVisibility }: HomeProps) {
                 key={item.id}
                 type="button"
                 onClick={() => onNavigate(resolveNavigationTarget(item.id))}
+                onMouseEnter={() => prefetchTarget(item.id)}
+                onFocus={() => prefetchTarget(item.id)}
                 className="home-card flex items-center gap-4 text-left"
                 data-testid={`card-${item.id}`}
               >
