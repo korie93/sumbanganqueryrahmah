@@ -94,10 +94,17 @@ export function ActivityDesktopLogsTable({
     ACTIVITY_DESKTOP_ROW_HEIGHT_PX,
     ACTIVITY_DESKTOP_LIST_MAX_HEIGHT_PX,
   );
+  const columnCount = canModerateActivity ? 9 : 7;
 
   return (
     <div className="overflow-x-auto">
-      <div className="min-w-[58rem] overflow-hidden rounded-lg border border-border bg-card/60 text-sm">
+      <div
+        aria-colcount={columnCount}
+        aria-label="Activity logs"
+        aria-rowcount={activities.length + 1}
+        className="min-w-[58rem] overflow-hidden rounded-lg border border-border bg-card/60 text-sm"
+        role="table"
+      >
         <ActivityDesktopLogsHeader
           allVisibleSelected={allVisibleSelected}
           canModerateActivity={canModerateActivity}

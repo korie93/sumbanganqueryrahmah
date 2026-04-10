@@ -14,25 +14,27 @@ export function ActivityDesktopLogsHeader({
       role="row"
       style={{ gridTemplateColumns }}
     >
-        {canModerateActivity ? (
-          <div className="flex items-center">
-            <Checkbox
-              checked={allVisibleSelected || (partiallySelected ? "indeterminate" : false)}
-              onCheckedChange={(checked) => onToggleSelectAllVisible(Boolean(checked))}
-              aria-label="Select all visible activity logs"
-            />
-          </div>
-        ) : null}
-        <div>User</div>
-        <div>Status</div>
-        <div>IP</div>
-        <div>Browser</div>
-        <div>Login</div>
-        <div>Logout</div>
-        <div>Duration</div>
-        {canModerateActivity ? (
-          <div className="text-right">Actions</div>
-        ) : null}
+      {canModerateActivity ? (
+        <div className="flex items-center" role="columnheader" aria-label="Selection">
+          <Checkbox
+            checked={allVisibleSelected || (partiallySelected ? "indeterminate" : false)}
+            onCheckedChange={(checked) => onToggleSelectAllVisible(Boolean(checked))}
+            aria-label="Select all visible activity logs"
+          />
+        </div>
+      ) : null}
+      <div role="columnheader">User</div>
+      <div role="columnheader">Status</div>
+      <div role="columnheader">IP</div>
+      <div role="columnheader">Browser</div>
+      <div role="columnheader">Login</div>
+      <div role="columnheader">Logout</div>
+      <div role="columnheader">Duration</div>
+      {canModerateActivity ? (
+        <div className="text-right" role="columnheader">
+          Actions
+        </div>
+      ) : null}
     </div>
   );
 }

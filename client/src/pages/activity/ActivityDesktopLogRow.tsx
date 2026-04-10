@@ -32,7 +32,7 @@ export function ActivityDesktopLogRow({
       style={{ ...style, gridTemplateColumns }}
     >
       {canModerateActivity ? (
-        <div className="flex items-center">
+        <div className="flex items-center" role="cell">
           <Checkbox
             checked={isSelected}
             onCheckedChange={(checked) => onToggleSelected(activity.id, Boolean(checked))}
@@ -40,7 +40,7 @@ export function ActivityDesktopLogRow({
           />
         </div>
       ) : null}
-      <div className="min-w-0">
+      <div className="min-w-0" role="cell">
         <div className="flex items-center gap-2">
           <span className="truncate font-medium text-foreground">{activity.username}</span>
           <Badge variant="outline" className="text-xs">
@@ -48,22 +48,28 @@ export function ActivityDesktopLogRow({
           </Badge>
         </div>
       </div>
-      <div>{getStatusBadge(activity.status)}</div>
-      <div className="truncate text-xs text-muted-foreground" title={activity.ipAddress || "-"}>
+      <div role="cell">{getStatusBadge(activity.status)}</div>
+      <div className="truncate text-xs text-muted-foreground" role="cell" title={activity.ipAddress || "-"}>
         {activity.ipAddress || "-"}
       </div>
-      <div className="truncate text-xs text-muted-foreground" title={getActivityBrowserText(browserInfo)}>
+      <div
+        className="truncate text-xs text-muted-foreground"
+        role="cell"
+        title={getActivityBrowserText(browserInfo)}
+      >
         {getActivityBrowserText(browserInfo)}
       </div>
-      <div className="text-xs text-muted-foreground">{formatActivityTime(activity.loginTime)}</div>
-      <div className="text-xs text-muted-foreground">
+      <div className="text-xs text-muted-foreground" role="cell">
+        {formatActivityTime(activity.loginTime)}
+      </div>
+      <div className="text-xs text-muted-foreground" role="cell">
         {activity.logoutTime ? formatActivityTime(activity.logoutTime) : "-"}
       </div>
-      <div className="text-xs text-muted-foreground">
+      <div className="text-xs text-muted-foreground" role="cell">
         {getSessionDuration(activity.loginTime, activity.logoutTime)}
       </div>
       {canModerateActivity ? (
-        <div>
+        <div role="cell">
           <ActivityDesktopLogActions
             actionLoading={actionLoading}
             activity={activity}
