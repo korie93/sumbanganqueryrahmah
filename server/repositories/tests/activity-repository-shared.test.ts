@@ -33,3 +33,17 @@ test("computeActivityStatus marks active stale sessions idle", () => {
   assert.equal(computeActivityStatus(activity({ isActive: true, lastActivityTime })), "IDLE");
   assert.equal(computeActivityStatus(activity({ isActive: true, lastActivityTime: new Date() })), "ONLINE");
 });
+
+test("computeActivityStatus treats database-style timestamps without timezone as UTC", () => {
+  const staleTimestamp = new Date(Date.now() - 6 * 60_000).toISOString().replace("T", " ").replace("Z", "");
+  const recentTimestamp = new Date().toISOString().replace("T", " ").replace("Z", "");
+
+  assert.equal(
+    computeActivityStatus(activity({ isActive: true, lastActivityTime: staleTimestamp as unknown as Date })),
+    "IDLE",
+  );
+  assert.equal(
+    computeActivityStatus(activity({ isActive: true, lastActivityTime: recentTimestamp as unknown as Date })),
+    "ONLINE",
+  );
+});

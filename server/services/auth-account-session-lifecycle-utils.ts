@@ -4,6 +4,7 @@ import type {
   AuthAccountUser,
   AuthenticatedSessionInput,
 } from "./auth-account-authentication-shared";
+import { resolveTimestampMs } from "../lib/timestamp";
 
 export async function getSuperuserSessionIdleWindowMs(
   storage: Pick<AuthAccountAuthenticationStorage, "getAppConfig">,
@@ -30,7 +31,7 @@ export function isRecentActivitySession(
   if (!timestampSource) {
     return true;
   }
-  const activityMs = new Date(timestampSource).getTime();
+  const activityMs = resolveTimestampMs(timestampSource);
   if (!Number.isFinite(activityMs)) {
     return true;
   }

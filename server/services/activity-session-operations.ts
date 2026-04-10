@@ -1,3 +1,4 @@
+import { resolveTimestampMs, serializeTimestamp } from "../lib/timestamp";
 import type { ActivityFilters, ActivityStorage } from "./activity-service-types";
 
 type CloseActivitySocket = (
@@ -18,11 +19,31 @@ type ActivityListItem = Awaited<ReturnType<ActivityStorage["getAllActivities"]>>
 };
 
 function resolveActivityTimestampMs(value: Date | string | null | undefined) {
-  if (!value) {
-    return Number.NaN;
-  }
+  return resolveTimestampMs(value);
+}
 
-  return new Date(value).getTime();
+type SerializedActivityListItem<T extends ActivityListItem> = Omit<
+  T,
+  "lastActivityTime" | "loginTime" | "logoutTime"
+> & {
+  lastActivityTime: string | null;
+  loginTime: string;
+  logoutTime: string | null;
+};
+
+function serializeActivityForResponse<T extends ActivityListItem>(
+  activity: T,
+): SerializedActivityListItem<T> {
+  return {
+    ...activity,
+    lastActivityTime: serializeTimestamp(activity.lastActivityTime),
+    loginTime: serializeTimestamp(activity.loginTime) ?? "",
+    logoutTime: serializeTimestamp(activity.logoutTime),
+  } as SerializedActivityListItem<T>;
+}
+
+function serializeActivitiesForResponse<T extends ActivityListItem>(activities: T[]) {
+  return activities.map((activity) => serializeActivityForResponse(activity));
 }
 
 function matchesActivityBaseFilters(
@@ -146,28 +167,32 @@ export function createActivitySessionOperations(
     async getAllActivities(currentActivityId?: string) {
       const activities = await storage.getAllActivities();
       if (!currentActivityId) {
-        return activities;
+        return serializeActivitiesForResponse(activities as ActivityListItem[]);
       }
 
       const requestingActivity = await storage.getActivityById(currentActivityId) as ActivityListItem | undefined;
-      return reconcileRequestingActivityPresence(
-        activities as ActivityListItem[],
-        requestingActivity,
-      ) as typeof activities;
+      return serializeActivitiesForResponse(
+        reconcileRequestingActivityPresence(
+          activities as ActivityListItem[],
+          requestingActivity,
+        ),
+      );
     },
 
     async getFilteredActivities(filters: ActivityFilters, currentActivityId?: string) {
       const activities = await storage.getFilteredActivities(filters);
       if (!currentActivityId) {
-        return activities;
+        return serializeActivitiesForResponse(activities as ActivityListItem[]);
       }
 
       const requestingActivity = await storage.getActivityById(currentActivityId) as ActivityListItem | undefined;
-      return reconcileRequestingActivityPresence(
-        activities as ActivityListItem[],
-        requestingActivity,
-        filters,
-      ) as typeof activities;
+      return serializeActivitiesForResponse(
+        reconcileRequestingActivityPresence(
+          activities as ActivityListItem[],
+          requestingActivity,
+          filters,
+        ),
+      );
     },
 
     async deleteActivityLog(activityId: string) {

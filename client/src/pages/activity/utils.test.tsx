@@ -36,6 +36,18 @@ test("getSessionDuration formats minute and hour ranges", () => {
   assert.equal(getSessionDuration("2026-01-01T00:00:00.000Z", "2026-01-01T02:15:00.000Z"), "2h 15m");
 });
 
+test("getSessionDuration treats database-style timestamps without timezone as UTC", () => {
+  assert.equal(
+    getSessionDuration("2026-04-10 15:26:00", "2026-04-10 15:56:00"),
+    "30 min",
+  );
+});
+
+test("getSessionDuration rejects invalid or reversed timestamp ranges", () => {
+  assert.equal(getSessionDuration("not-a-date", "2026-01-01T00:45:00.000Z"), "-");
+  assert.equal(getSessionDuration("2026-01-01T02:15:00.000Z", "2026-01-01T00:45:00.000Z"), "-");
+});
+
 test("parseActivityUserAgent detects common and plain user agents", () => {
   assert.deepEqual(parseActivityUserAgent("Chrome 120"), {
     browser: "Chrome",

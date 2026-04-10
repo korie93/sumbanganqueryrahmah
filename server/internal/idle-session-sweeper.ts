@@ -1,5 +1,6 @@
 import { WebSocket } from "ws";
 import { logger } from "../lib/logger";
+import { resolveTimestampMs } from "../lib/timestamp";
 import type { PostgresStorage } from "../storage-postgres";
 
 type RuntimeSettings = {
@@ -49,7 +50,7 @@ export async function runIdleSessionSweeperPass(
       continue;
     }
 
-    const last = new Date(activity.lastActivityTime).getTime();
+    const last = resolveTimestampMs(activity.lastActivityTime);
     if (now - last <= idleMs) {
       continue;
     }

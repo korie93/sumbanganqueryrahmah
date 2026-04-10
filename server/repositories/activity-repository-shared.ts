@@ -1,5 +1,6 @@
 import type { User, UserActivity } from "../../shared/schema-postgres";
 import { ACTIVITY_IDLE_STATUS_THRESHOLD_MINUTES } from "../activity/activity-session-policy";
+import { resolveTimestampMs } from "../lib/timestamp";
 
 export const ACTIVITY_QUERY_PAGE_LIMIT = 1000;
 
@@ -54,7 +55,7 @@ export function computeActivityStatus(activity: UserActivity): string {
   }
 
   if (activity.lastActivityTime) {
-    const lastActive = new Date(activity.lastActivityTime).getTime();
+    const lastActive = resolveTimestampMs(activity.lastActivityTime);
     const diffMinutes = Math.floor((Date.now() - lastActive) / 60_000);
     if (diffMinutes >= ACTIVITY_IDLE_STATUS_THRESHOLD_MINUTES) return "IDLE";
   }

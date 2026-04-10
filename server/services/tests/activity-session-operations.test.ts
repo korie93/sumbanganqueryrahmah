@@ -149,6 +149,8 @@ test("getAllActivities keeps the requesting active session online in the returne
   assert.equal(result.length, 1);
   assert.equal(result[0]?.id, "act-1");
   assert.equal((result[0] as { status?: string }).status, "ONLINE");
+  assert.equal(typeof (result[0] as { loginTime?: unknown }).loginTime, "string");
+  assert.equal(typeof (result[0] as { lastActivityTime?: unknown }).lastActivityTime, "string");
   assert.ok(resolveDateValue((result[0] as { lastActivityTime?: unknown }).lastActivityTime) > staleCurrentActivity.lastActivityTime!.getTime());
 });
 
@@ -182,6 +184,10 @@ test("getFilteredActivities injects the requesting active session into ONLINE fi
   assert.equal(result.length, 1);
   assert.equal(result[0]?.id, "act-1");
   assert.equal((result[0] as { status?: string }).status, "ONLINE");
+  assert.equal(
+    (result[0] as { loginTime?: unknown }).loginTime,
+    "2026-04-10T06:05:00.000Z",
+  );
 });
 
 test("getFilteredActivities removes the requesting active session from IDLE filters once it is treated as online", async () => {

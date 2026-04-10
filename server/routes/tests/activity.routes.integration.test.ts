@@ -774,6 +774,8 @@ test("GET /api/activity/all keeps the requesting active session online when the 
     assert.equal(payload.activities.length, 1);
     assert.equal(payload.activities[0]?.id, "activity-1");
     assert.equal(payload.activities[0]?.status, "ONLINE");
+    assert.equal(payload.activities[0]?.loginTime, "2026-04-10T06:05:00.000Z");
+    assert.match(String(payload.activities[0]?.lastActivityTime || ""), /^\d{4}-\d{2}-\d{2}T/);
   } finally {
     await stopTestServer(server);
   }

@@ -1,4 +1,4 @@
-import { formatOperationalDateTime } from "@/lib/date-format";
+import { formatOperationalDateTime, parseDateValue } from "@/lib/date-format";
 
 export function formatActivityTime(dateStr: string) {
   if (!dateStr) return "-";
@@ -7,8 +7,15 @@ export function formatActivityTime(dateStr: string) {
 
 export function getSessionDuration(loginTime: string, logoutTime?: string) {
   try {
-    const start = new Date(loginTime).getTime();
-    const end = logoutTime ? new Date(logoutTime).getTime() : Date.now();
+    const start = parseDateValue(loginTime)?.getTime() ?? Number.NaN;
+    const end = logoutTime
+      ? (parseDateValue(logoutTime)?.getTime() ?? Number.NaN)
+      : Date.now();
+
+    if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) {
+      return "-";
+    }
+
     const diffMs = end - start;
     const diffMins = Math.floor(diffMs / 60000);
 
