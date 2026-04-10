@@ -4,6 +4,7 @@
   Tarikh Kemaskini Kedua: 2026-04-08 (Audit Menyeluruh Kedua)
   Tarikh Kemaskini Ketiga: 2026-04-09 (Audit Menyeluruh Ketiga)
   Tarikh Kemaskini Keempat: 09/04/2026 (Audit Menyeluruh Keempat)
+  Tarikh Kemaskini Kelima: 10/04/2026 (Audit Susulan Kelima)
   Kaedah: Pemeriksaan kod statik keseluruhan
           (backend, frontend, UI/UX, layout, CSS, database, WebSocket, memori)
   Mod: Audit statik asal + penjejakan status pasca pembetulan
@@ -64,22 +65,75 @@ frontend, UI/UX, layout, CSS, dependencies, dan infrastructure. Penemuan utama:
   Isu tahap TINGGI yang ditemui (bukan kritikal):
     H1. Key rendering tidak stabil dalam SingleImportPanel.tsx (baris 193)
         — key list render bergantung pada nilai sel data, bukan ID stabil
+        >>> STATUS: ✅ DIPERBAIKI (Kemaskini susulan, 2026-04-10)
+            Preview import kini menggunakan preview-row key stabil
+            berasaskan object identity, bukan gabungan nilai sel.
     H2. Coverage rendah pada Imports API — branch coverage hanya 21.73%
+        >>> STATUS: ✅ DIPERBAIKI (Kemaskini susulan, 2026-04-10)
+            Suite imports API kini meliputi branch penting untuk invalid
+            cursor, missing importId, timeout analysis, 404 rename/delete,
+            dan kegagalan multipart upload. Targeted coverage imports API
+            kini naik kepada 88.13% branch secara keseluruhan
+            (controller imports: 84.61% branch).
     H3. Error boundary untuk lazy routes — ada page dengan Suspense tanpa
         ErrorBoundary khusus
+        >>> STATUS: ✅ DIPERBAIKI (Kemaskini susulan, 2026-04-10)
+            Authenticated entry route, System Monitor section routes, dan
+            Collection Report sub-routes kini dibalut AppRouteErrorBoundary
+            khusus supaya kegagalan lazy import tidak menjatuhkan seluruh shell.
 
   Isu tahap SEDERHANA:
     M1. Prop drilling berlebihan dalam Monitor.tsx (75+ props)
+        >>> STATUS: ✅ DIPERBAIKI (Kemaskini susulan, 2026-04-10)
+            Wiring monitor page kini dipindah ke MonitorPageProvider dan
+            page-section wrappers khusus, jadi Monitor.tsx tinggal shell
+            komposisi tanpa menyalurkan puluhan prop mentah ke setiap seksyen.
     M2. Tiada landscape orientation handling dalam CSS
+        >>> STATUS: ✅ DIPERBAIKI (Kemaskini susulan, 2026-04-10)
+            Mobile landscape rules kini ditambah untuk public-auth shell,
+            login shell, dan operational app shell supaya padding, alignment,
+            card density, dan safe-area spacing lebih stabil pada viewport
+            telefon yang rendah tetapi lebar.
     M3. Breakpoint tidak konsisten (640px, 767px, 768px, 1023px, 1024px)
+        >>> STATUS: ✅ DIPERBAIKI (Kemaskini susulan, 2026-04-10)
+            Kontrak viewport kini dipusatkan dalam client/src/lib/responsive.ts,
+            consumer viewport JavaScript utama diseragamkan kepada helper/query
+            shared yang sama, dan verify:client-breakpoint-contract mengunci
+            set breakpoint CSS 640/767/768/1023/1024 supaya tidak drift semula.
     M4. Spacing system tidak lengkap — hanya satu token (--spacing: 0.25rem)
+        >>> STATUS: ✅ DIPERBAIKI (Kemaskini susulan, 2026-04-10)
+            Theme tokens kini mempunyai spacing scale lengkap berasaskan
+            --spacing, Tailwind spacing diselaraskan kepada token tersebut,
+            shell CSS utama mula menggunakan var(--spacing-*), dan
+            verify:design-token-spacing mengunci kontrak spacing supaya
+            token theme/Tailwind/layout tidak regress semula.
     M5. Komponen besar perlu decomposition (Monitor 426, Analysis 363,
         Dashboard 333, ViewerContent 331 baris)
+        >>> STATUS: ✅ DIPERBAIKI (Kemaskini susulan, 2026-04-10)
+            Monitor, Analysis, Dashboard, dan ViewerContent kini
+            dipecahkan kepada sub-komponen khusus (header/section/grid)
+            supaya fail utama kekal sebagai shell komposisi yang mudah
+            diselenggara.
     M6. CSS hsl(from ...) browser compatibility belum disahkan
+        >>> STATUS: ✅ DIPERBAIKI (Kemaskini susulan, 2026-04-10)
+            Border theme tokens kini menggunakan nilai HSL eksplisit yang
+            browser-safe untuk light/dark mode tanpa relative color syntax,
+            dan verify:design-token-color-compatibility mengunci kontrak ini
+            dalam script/test/release gates.
 
   Isu tahap RENDAH:
     L1. WebSocket message typing tidak enforced (AutoLogout.tsx baris 302)
+        >>> STATUS: ✅ DIPERBAIKI (Kemaskini susulan, 2026-04-10)
+            AutoLogout kini menggunakan parser/union type khusus untuk
+            mesej WebSocket (`logout`, `kicked`, `banned`,
+            `maintenance_update`, `settings_updated`) supaya akses payload
+            tidak lagi bergantung pada JSON mentah tanpa typing.
     L2. localStorage tanpa try-catch (Maintenance.tsx, Settings.tsx)
+        >>> STATUS: ✅ DIPERBAIKI (Kemaskini susulan, 2026-04-10)
+            Semua akses localStorage mentah dalam client/src kini dialih
+            kepada browser-storage safety helpers, dan
+            verify:browser-storage-safety menghalang penggunaan
+            localStorage.getItem/setItem/removeItem secara langsung.
     L3. DOM query tanpa caching (floating-ai-dom-utils.ts)
     L4. Error logging terhad di route files (hanya 10 explicit statements)
     L5. Tiada predictive data prefetching
@@ -112,30 +166,34 @@ frontend, UI/UX, layout, CSS, dependencies, dan infrastructure. Penemuan utama:
 
   Cadangan tindakan mengikut keutamaan:
     SEGERA:
-      1. Perbaiki key rendering dalam SingleImportPanel.tsx — gunakan ID stabil
-      2. Tambah error boundaries pada semua lazy-loaded routes
-      3. Tambah test coverage untuk imports API (terutama branch coverage)
+      1. [DIPERBAIKI] Perbaiki key rendering dalam SingleImportPanel.tsx — gunakan ID stabil
+      2. [DIPERBAIKI] Tambah error boundaries pada semua lazy-loaded routes
+      3. [DIPERBAIKI] Tambah test coverage untuk imports API (terutama branch coverage)
     JANGKA PENDEK (2-3 Sprint):
-      4. Refactor Monitor page — kurangkan prop drilling dengan context providers
-      5. Seragamkan responsive breakpoints
-      6. Wujudkan spacing scale tokens yang lengkap
-      7. Pecahkan komponen besar (>300 baris) kepada sub-components
-      8. Wrap semua localStorage operations dengan try-catch
+      4. [DIPERBAIKI] Refactor Monitor page — kurangkan prop drilling dengan context providers
+      5. [DIPERBAIKI] Seragamkan responsive breakpoints
+      6. [DIPERBAIKI] Wujudkan spacing scale tokens yang lengkap
+      7. [DIPERBAIKI] Pecahkan komponen besar (>300 baris) kepada sub-components
+      8. [DIPERBAIKI] Wrap semua localStorage operations dengan try-catch
     JANGKA PANJANG:
       9. Tambah troubleshooting section dalam README
-      10. Tambah landscape orientation styles
-      11. Verify hsl(from ...) browser compatibility
+      10. [DIPERBAIKI] Tambah landscape orientation styles
+      11. [DIPERBAIKI] Verify hsl(from ...) browser compatibility
       12. Pertimbangkan predictive data prefetching
       13. Dokumenkan CSS architecture dan component styling guide
 
 Snapshot audit asal (2026-04-09): 110 penemuan gabungan mengikut kiraan
 laporan ketika audit dilakukan.
-Status repo semasa dalam dokumen bernombor ini:
+Status item bernombor dalam dokumen ini:
   - 102 item: ✅ DIPERBAIKI
   - 0 item: MATERIALLY CLOSED
   - 0 item: tanpa STATUS
+Audit susulan 10/04/2026 menambah 13 penemuan tidak bernombor:
+  - 11 item: ✅ DIPERBAIKI (H1, H2, H3, M1, M2, M3, M4, M5, M6, L1, L2)
+  - 4 item: TERBUKA (L3-L6)
 Nota: angka snapshot audit asal dikekalkan sebagai rekod sejarah. Untuk
-      keadaan repo semasa, rujuk penanda STATUS pada setiap item.
+      keadaan repo semasa, rujuk penanda STATUS pada setiap item dan
+      blok audit susulan di ringkasan eksekutif.
 
 ISU YANG DIPERBAIKI SEJAK AUDIT LEPAS:
   #3  .env.example default secrets → DIPERBAIKI
@@ -1792,7 +1850,7 @@ D) BCRYPT OPERATIONS
 | Safe URL Handling                         | Good     | Protocol validation             |
 | Helmet/Security Headers                   | Good     | HSTS, CSP, noSniff, frameguard  |
 | Structured Logging                        | Good     | Pino logger konsisten           |
-| Test Coverage                             | Good     | 269 fail ujian, CI coverage gate|
+| Test Coverage                             | Good     | 312+ fail ujian, CI coverage gate|
 | Input Validation                          | Good     | Zod schemas pada API contracts  |
 | Cookie Security                           | Good     | HttpOnly, SameSite, Secure      |
 | Rate Limiting                             | Good     | express-rate-limit pelbagai tier|
@@ -1903,7 +1961,7 @@ P3 — NICE TO HAVE
 ================================================================================
 
 Jumlah fail sumber (*.ts, *.tsx):          ~711+ fail
-Jumlah fail ujian (*.test.ts, *.test.tsx): 269 fail
+Jumlah fail ujian (*.test.ts, *.test.tsx): 312+ fail
 Jumlah baris kod:                          ~166,843 baris
 Fail terbesar:
   - collection.routes.integration.test.ts  (3,100 baris)
@@ -1931,8 +1989,10 @@ Jumlah Audit:
   Audit 1 (2026-04-07): 55 isu dikesan
   Audit 2 (2026-04-08): +34 isu baharu = 89 jumlah
   Audit 3 (2026-04-09): +13 isu baharu, 4 diperbaiki = 110 isu aktif
-  Status repo semasa dokumen ini: 102 item DIPERBAIKI, 0 item
+  Audit susulan 5 (2026-04-10): +13 penemuan ringkas tidak bernombor
+  Status item bernombor semasa: 102 item DIPERBAIKI, 0 item
   MATERIALLY CLOSED, 0 item tanpa STATUS.
+  Status audit susulan semasa: 11 item DIPERBAIKI, 4 item TERBUKA.
   Nota: angka audit di atas ialah snapshot sejarah. Pembetulan pasca audit
         tambahan dirujuk melalui penanda STATUS pada item berkaitan.
 
@@ -1950,10 +2010,17 @@ Audit menyeluruh kedua (2026-04-08) menambah 34 penemuan baharu kepada
 Audit menyeluruh ketiga (2026-04-09) ialah snapshot sejarah yang ketika itu
 mengesahkan 4 isu telah DIPERBAIKI dan menambah 13 penemuan baharu.
 
+Audit susulan kelima (2026-04-10) menambah 13 penemuan ringkas berkaitan
+route resilience, import preview stability, maintainability, dan coverage.
+
 Status repo semasa berdasarkan item bernombor dalam dokumen ini:
   * 102 item telah DIPERBAIKI
   * Tiada lagi item audit pada tahap MATERIALLY CLOSED
   * Tiada lagi item audit tanpa penanda STATUS
+
+Status audit susulan kelima:
+  * 11 item telah DIPERBAIKI (H1, H2, H3, M1, M2, M3, M4, M5, M6, L1, L2)
+  * 4 item masih TERBUKA (L3-L6)
 
 Penemuan paling kritikal baharu (Audit 3):
   * Unmounted state update risk — boleh crash komponen
@@ -1986,9 +2053,10 @@ Kemaskini status pasca pembetulan (2026-04-09):
     boundary supaya unit MYR vs cents tidak regress secara senyap.
 
 Snapshot audit asal merekodkan 14 isu CRITICAL, tetapi item kritikal dan high
-utama kini telah ditutup dalam kod semasa.
-Baki kerja yang masih relevan kini lebih kepada enhancement operasi deploy,
-dokumentasi, dan ujian lanjutan; tiada lagi item audit aktif yang berbaki.
+utama bernombor kini telah ditutup dalam kod semasa.
+Baki kerja audit aktif kini datang daripada audit susulan 10/04/2026, dan
+fokus seterusnya telah beralih kepada L3-L6 selepas H1-H3, M1-M6,
+dan L1-L2 ditutup.
 
 Skor kesihatan keseluruhan semasa: jauh lebih baik daripada snapshot 7.9 / 10
 yang direkodkan pada audit asal 2026-04-09, kerana majoriti isu audit kini
@@ -1999,6 +2067,7 @@ Tarikh Asal: 2026-04-07
 Tarikh Kemaskini Kedua: 2026-04-08
 Tarikh Kemaskini Ketiga: 2026-04-09
 Tarikh Kemaskini Keempat: 09/04/2026
+Tarikh Kemaskini Kelima: 10/04/2026
 
 ================================================================================
   TAMAT LAPORAN AUDIT

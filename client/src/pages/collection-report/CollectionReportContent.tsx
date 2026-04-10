@@ -1,4 +1,5 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, type ReactNode } from "react";
+import { AppRouteErrorBoundary } from "@/app/AppRouteErrorBoundary";
 import { OperationalSectionCard } from "@/components/layout/OperationalPage";
 import { Button } from "@/components/ui/button";
 import type { CollectionSubPage } from "@/pages/collection-report/types";
@@ -31,8 +32,19 @@ type CollectionReportContentProps = {
 function CollectionSectionFallback() {
   return (
     <OperationalSectionCard contentClassName="flex min-h-[320px] items-center justify-center p-8">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary/30 border-t-primary" />
+      <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary/30 border-t-primary" />
     </OperationalSectionCard>
+  );
+}
+
+function renderCollectionSection(subPage: CollectionSubPage, node: ReactNode) {
+  return (
+    <AppRouteErrorBoundary
+      routeKey={`collection-report:${subPage}`}
+      routeLabel="collection-report"
+    >
+      <Suspense fallback={<CollectionSectionFallback />}>{node}</Suspense>
+    </AppRouteErrorBoundary>
   );
 }
 
@@ -49,59 +61,44 @@ export function CollectionReportContent({
         title="Pengesahan Nickname Diperlukan"
         description="Lengkapkan pengesahan nickname dahulu sebelum meneruskan ke Collection Report."
       >
-          <p className="text-sm text-muted-foreground">
-            Sila lengkapkan pengesahan nickname dahulu sebelum meneruskan ke
-            Collection Report.
-          </p>
-          <Button onClick={onOpenNicknameDialog}>
-            Buka Pengesahan Nickname
-          </Button>
+        <p className="text-sm text-muted-foreground">
+          Sila lengkapkan pengesahan nickname dahulu sebelum meneruskan ke
+          Collection Report.
+        </p>
+        <Button onClick={onOpenNicknameDialog}>
+          Buka Pengesahan Nickname
+        </Button>
       </OperationalSectionCard>
     );
   }
 
   if (subPage === "save") {
-    return (
-      <Suspense fallback={<CollectionSectionFallback />}>
-        <SaveCollectionPage staffNickname={staffNickname} />
-      </Suspense>
+    return renderCollectionSection(
+      "save",
+      <SaveCollectionPage staffNickname={staffNickname} />,
     );
   }
   if (subPage === "records") {
-    return (
-      <Suspense fallback={<CollectionSectionFallback />}>
-        <CollectionRecordsPage role={role} />
-      </Suspense>
-    );
+    return renderCollectionSection("records", <CollectionRecordsPage role={role} />);
   }
   if (subPage === "summary") {
-    return (
-      <Suspense fallback={<CollectionSectionFallback />}>
-        <CollectionSummaryPage role={role} />
-      </Suspense>
-    );
+    return renderCollectionSection("summary", <CollectionSummaryPage role={role} />);
   }
   if (subPage === "daily") {
-    return (
-      <Suspense fallback={<CollectionSectionFallback />}>
-        <CollectionDailyPage role={role} />
-      </Suspense>
-    );
+    return renderCollectionSection("daily", <CollectionDailyPage role={role} />);
   }
   if (subPage === "nickname-summary") {
-    return (
-      <Suspense fallback={<CollectionSectionFallback />}>
-        <CollectionNicknameSummaryPage role={role} />
-      </Suspense>
+    return renderCollectionSection(
+      "nickname-summary",
+      <CollectionNicknameSummaryPage role={role} />,
     );
   }
 
-  return (
-    <Suspense fallback={<CollectionSectionFallback />}>
-      <ManageCollectionNicknamesPage
-        role={role}
-        currentNickname={staffNickname}
-      />
-    </Suspense>
+  return renderCollectionSection(
+    "manage-nicknames",
+    <ManageCollectionNicknamesPage
+      role={role}
+      currentNickname={staffNickname}
+    />,
   );
 }

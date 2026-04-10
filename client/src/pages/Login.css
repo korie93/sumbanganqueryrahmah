@@ -305,6 +305,71 @@
   }
 }
 
+@media (max-width: 767px) and (max-height: 560px) and (orientation: landscape) {
+  .login-content--shell {
+    align-items: flex-start;
+    justify-content: flex-start;
+    padding:
+      max(0.75rem, var(--safe-area-inset-top))
+      1rem
+      calc(0.75rem + var(--safe-area-inset-bottom));
+    animation: none;
+    opacity: 1;
+    will-change: auto;
+  }
+
+  .login-shell {
+    max-width: 44rem;
+  }
+
+  .login-back-button {
+    margin-bottom: 0.75rem;
+  }
+
+  .login-card {
+    padding: 1rem 1.1rem !important;
+    border-radius: 1.5rem;
+    animation: none;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    background: var(--login-mobile-card-surface);
+    border-color: var(--login-mobile-card-border);
+    box-shadow: var(--login-card-mobile-shadow);
+  }
+
+  .login-card::before,
+  .login-card::after,
+  .login-bg-effect {
+    display: none;
+  }
+
+  .login-brand {
+    margin-bottom: 1rem;
+  }
+
+  .login-brand-mark {
+    margin-bottom: 0.75rem;
+    height: 4rem;
+    width: 4rem;
+  }
+
+  .login-title {
+    font-size: 1.5rem;
+  }
+
+  .login-subtitle {
+    line-height: 1.45;
+  }
+
+  .login-form {
+    gap: 0.75rem;
+  }
+
+  .login-footer {
+    margin-top: 1rem;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .login-content,
   .login-card,

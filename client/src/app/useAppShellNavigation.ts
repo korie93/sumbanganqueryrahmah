@@ -1,6 +1,11 @@
 import { useCallback, type Dispatch, type SetStateAction } from "react";
 import { ACTIVE_SETTINGS_SECTION_KEY } from "@/app/constants";
 import {
+  getBrowserLocalStorage,
+  safeRemoveStorageItem,
+  safeSetStorageItem,
+} from "@/lib/browser-storage";
+import {
   getDefaultMonitorSection,
   getDefaultPageForRole,
   isPageEnabled,
@@ -35,20 +40,22 @@ export function useAppShellNavigation({
 }: UseAppShellNavigationArgs) {
   const clearViewerSelection = useCallback(() => {
     setSelectedImportId(undefined);
-    localStorage.removeItem("selectedImportId");
-    localStorage.removeItem("selectedImportName");
+    const storage = getBrowserLocalStorage();
+    safeRemoveStorageItem(storage, "selectedImportId");
+    safeRemoveStorageItem(storage, "selectedImportName");
   }, [setSelectedImportId]);
 
   const handleNavigate = useCallback((page: string, importId?: string) => {
+    const storage = getBrowserLocalStorage();
     if (page === "backup") {
       if (!isPageEnabled(user?.role, "backup", tabVisibility, tabVisibilityLoaded)) {
         setCurrentPage(getDefaultPageForRole(user?.role || "user", tabVisibility, tabVisibilityLoaded));
         return;
       }
-      localStorage.setItem(ACTIVE_SETTINGS_SECTION_KEY, "backup-restore");
+      safeSetStorageItem(storage, ACTIVE_SETTINGS_SECTION_KEY, "backup-restore");
       setCurrentPage("settings");
-      localStorage.setItem("activeTab", "settings");
-      localStorage.setItem("lastPage", "settings");
+      safeSetStorageItem(storage, "activeTab", "settings");
+      safeSetStorageItem(storage, "lastPage", "settings");
       replaceHistory("/settings?section=backup-restore");
       return;
     }
@@ -63,16 +70,16 @@ export function useAppShellNavigation({
 
     if (user?.mustChangePassword && requestedPage !== "change-password") {
       setCurrentPage("change-password");
-      localStorage.setItem("activeTab", "change-password");
-      localStorage.setItem("lastPage", "change-password");
+      safeSetStorageItem(storage, "activeTab", "change-password");
+      safeSetStorageItem(storage, "lastPage", "change-password");
       replaceHistory("/change-password");
       return;
     }
 
     if (featureLockdown && requestedPage !== "general-search") {
       setCurrentPage("general-search");
-      localStorage.setItem("activeTab", "general-search");
-      localStorage.setItem("lastPage", "general-search");
+      safeSetStorageItem(storage, "activeTab", "general-search");
+      safeSetStorageItem(storage, "lastPage", "general-search");
       replaceHistory("/");
       return;
     }
@@ -80,8 +87,8 @@ export function useAppShellNavigation({
     if (!isPageEnabled(user?.role, requestedPage, tabVisibility, tabVisibilityLoaded)) {
       if (requestedPage === "monitor") {
         setCurrentPage("forbidden");
-        localStorage.setItem("activeTab", "forbidden");
-        localStorage.setItem("lastPage", "forbidden");
+        safeSetStorageItem(storage, "activeTab", "forbidden");
+        safeSetStorageItem(storage, "lastPage", "forbidden");
         replaceHistory("/403");
         return;
       }
@@ -98,18 +105,18 @@ export function useAppShellNavigation({
 
       setCurrentPage("monitor");
       setMonitorSection(nextSection);
-      localStorage.setItem("activeTab", "monitor");
-      localStorage.setItem("lastPage", "monitor");
+      safeSetStorageItem(storage, "activeTab", "monitor");
+      safeSetStorageItem(storage, "lastPage", "monitor");
       replaceHistory(buildPathForPage("monitor", nextSection));
       return;
     }
 
     setCurrentPage(requestedPage);
     if (requestedPage === "settings") {
-      localStorage.removeItem(ACTIVE_SETTINGS_SECTION_KEY);
+      safeRemoveStorageItem(storage, ACTIVE_SETTINGS_SECTION_KEY);
     }
-    localStorage.setItem("activeTab", requestedPage);
-    localStorage.setItem("lastPage", requestedPage);
+    safeSetStorageItem(storage, "activeTab", requestedPage);
+    safeSetStorageItem(storage, "lastPage", requestedPage);
     replaceHistory(buildPathForPage(requestedPage));
 
     if (importId) {

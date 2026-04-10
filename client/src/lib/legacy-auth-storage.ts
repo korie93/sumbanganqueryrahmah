@@ -1,9 +1,10 @@
 import { LEGACY_AUTH_LOCAL_STORAGE_KEYS } from "@/app/constants";
+import { getBrowserLocalStorage, safeRemoveStorageItem } from "@/lib/browser-storage";
 
 type LegacyAuthStorageKey = (typeof LEGACY_AUTH_LOCAL_STORAGE_KEYS)[number];
 
 function canUseLegacyAuthLocalStorage() {
-  return typeof localStorage !== "undefined";
+  return getBrowserLocalStorage() !== null;
 }
 
 export function clearLegacyAuthLocalStorageValue(key: LegacyAuthStorageKey) {
@@ -11,11 +12,7 @@ export function clearLegacyAuthLocalStorageValue(key: LegacyAuthStorageKey) {
     return;
   }
 
-  try {
-    localStorage.removeItem(key);
-  } catch {
-    // Ignore storage access failures during best-effort legacy cleanup.
-  }
+  safeRemoveStorageItem(getBrowserLocalStorage(), key);
 }
 
 export function clearLegacyAuthLocalStorage() {

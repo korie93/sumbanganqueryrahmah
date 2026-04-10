@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import type { User } from "@/app/types";
+import { getBrowserLocalStorage, safeSetStorageItem } from "@/lib/browser-storage";
 import {
   login,
   verifyTwoFactorLogin,
@@ -129,8 +130,9 @@ export function useLoginPageState({ onLoginSuccess }: UseLoginPageStateParams) {
     }
 
     const defaultTab = resolveAuthenticatedDefaultTab(authenticatedUser);
-    localStorage.setItem("activeTab", defaultTab);
-    localStorage.setItem("lastPage", defaultTab);
+    const storage = getBrowserLocalStorage();
+    safeSetStorageItem(storage, "activeTab", defaultTab);
+    safeSetStorageItem(storage, "lastPage", defaultTab);
 
     if (options?.clearTwoFactor) {
       setTwoFactorChallengeToken("");

@@ -1,5 +1,6 @@
 import { Suspense, lazy, memo, useEffect, useMemo, useRef, useState } from "react";
 import { BarChart3, ClipboardList, FileText, Server } from "lucide-react";
+import { AppRouteErrorBoundary } from "@/app/AppRouteErrorBoundary";
 import { LazySideTabNavigation } from "@/components/navigation/LazySideTabNavigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -201,7 +202,12 @@ export default function SystemMonitorLayout({
           ) : null}
 
           <section className="min-w-0 flex-1 overflow-hidden rounded-xl border border-border/60 bg-background/70 shadow-sm">
-            <Suspense fallback={sectionFallback}>{renderActiveSection()}</Suspense>
+            <AppRouteErrorBoundary
+              routeKey={`system-monitor:${activeSection}`}
+              routeLabel={activeSection}
+            >
+              <Suspense fallback={sectionFallback}>{renderActiveSection()}</Suspense>
+            </AppRouteErrorBoundary>
           </section>
         </div>
       </div>

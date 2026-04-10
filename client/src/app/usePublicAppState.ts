@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { DEFAULT_SYSTEM_NAME } from "@/app/constants";
 import {
+  getBrowserLocalStorage,
+  safeGetStorageItem,
+  safeSetStorageItem,
+} from "@/lib/browser-storage";
+import {
   buildPathForPage,
   isPublicAuthRoutePage,
   parseMonitorSectionFromPageInput,
@@ -55,7 +60,8 @@ function resolvePublicBootstrapState(): PublicBootstrapState {
 }
 
 function resolveAuthenticatedEntryPage(route: ResolvedRoute | null, user: User) {
-  const savedPage = localStorage.getItem("activeTab") || localStorage.getItem("lastPage");
+  const storage = getBrowserLocalStorage();
+  const savedPage = safeGetStorageItem(storage, "activeTab") || safeGetStorageItem(storage, "lastPage");
 
   if (route && route.page !== "not-found" && !isPublicAuthRoutePage(route.page)) {
     return {
@@ -72,8 +78,8 @@ function resolveAuthenticatedEntryPage(route: ResolvedRoute | null, user: User) 
   }
 
   if (savedPage === "backup") {
-    localStorage.setItem("activeTab", "settings");
-    localStorage.setItem("lastPage", "settings");
+    safeSetStorageItem(storage, "activeTab", "settings");
+    safeSetStorageItem(storage, "lastPage", "settings");
     replaceHistory("/settings?section=backup-restore");
     return {
       currentPage: "settings",
@@ -148,8 +154,9 @@ export function usePublicAppState() {
     const persistedPage = nextState.currentPage === "monitor"
       ? "monitor"
       : nextState.currentPage;
-    localStorage.setItem("activeTab", persistedPage);
-    localStorage.setItem("lastPage", persistedPage);
+    const storage = getBrowserLocalStorage();
+    safeSetStorageItem(storage, "activeTab", persistedPage);
+    safeSetStorageItem(storage, "lastPage", persistedPage);
 
     if (nextState.currentPage === "change-password") {
       replaceHistory("/change-password");

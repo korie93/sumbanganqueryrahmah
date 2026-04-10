@@ -1,5 +1,6 @@
 import { createRoot } from "react-dom/client";
 import App from "./App";
+import { getBrowserLocalStorage, safeGetStorageItem } from "./lib/browser-storage";
 import { initializeWebVitalsReporting } from "./lib/web-vitals";
 import "./public-shell.css";
 import "./theme-tokens.css";
@@ -9,7 +10,7 @@ type WindowWithBootShell = Window & {
 };
 
 const detectLowSpecMode = () => {
-  const perfOverride = localStorage.getItem("perf_mode");
+  const perfOverride = safeGetStorageItem(getBrowserLocalStorage(), "perf_mode");
   if (perfOverride === "low") return true;
   if (perfOverride === "high") return false;
 

@@ -12,6 +12,11 @@ import {
   clearAuthenticatedUserStorage,
 } from "@/lib/auth-session";
 import {
+  getBrowserLocalStorage,
+  safeRemoveStorageItem,
+  safeSetStorageItem,
+} from "@/lib/browser-storage";
+import {
   isPublicAuthRoutePage,
   replaceHistory,
   resolveRouteFromLocation,
@@ -41,8 +46,9 @@ export function useAppShellAuthActions({
 
   const clearClientSessionStorage = useCallback(() => {
     clearAuthenticatedUserStorage();
+    const storage = getBrowserLocalStorage();
     for (const key of LOCAL_STORAGE_KEYS_TO_CLEAR) {
-      localStorage.removeItem(key);
+      safeRemoveStorageItem(storage, key);
     }
     for (const key of SESSION_STORAGE_KEYS_TO_CLEAR) {
       sessionStorage.removeItem(key);
@@ -103,8 +109,9 @@ export function useAppShellAuthActions({
         const persistedPage = resolvedRoute.page === "monitor"
           ? "monitor"
           : resolvedRoute.page;
-        localStorage.setItem("activeTab", persistedPage);
-        localStorage.setItem("lastPage", persistedPage);
+        const storage = getBrowserLocalStorage();
+        safeSetStorageItem(storage, "activeTab", persistedPage);
+        safeSetStorageItem(storage, "lastPage", persistedPage);
         return;
       }
     }

@@ -10,6 +10,7 @@ import {
 } from "@/components/layout/OperationalPage";
 import { Badge } from "@/components/ui/badge";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { getBrowserLocalStorage, safeSetStorageItem } from "@/lib/browser-storage";
 import {
   COLLECTION_STAFF_NICKNAME_KEY,
   getCurrentRole,
@@ -47,8 +48,9 @@ export default function CollectionReport() {
 
   const redirectToSearchTab = useCallback(() => {
     nicknameAccess.clearNicknameSession();
-    localStorage.setItem("activeTab", "general-search");
-    localStorage.setItem("lastPage", "general-search");
+    const storage = getBrowserLocalStorage();
+    safeSetStorageItem(storage, "activeTab", "general-search");
+    safeSetStorageItem(storage, "lastPage", "general-search");
     if (typeof window !== "undefined") {
       window.location.assign("/");
     }

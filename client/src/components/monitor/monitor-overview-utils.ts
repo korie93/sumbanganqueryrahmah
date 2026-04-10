@@ -1,7 +1,8 @@
 import type { MonitorSnapshot } from "@/hooks/useSystemMetrics";
+import { isMobileViewportWidth } from "@/lib/responsive";
 
 export function resolveInitialMonitorOverviewExpanded(width: number | undefined) {
-  return !(typeof width === "number" && width < 768);
+  return !isMobileViewportWidth(width);
 }
 
 export function isMonitorOverviewStable(snapshot: MonitorSnapshot) {

@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { analyzeAll, analyzeImport } from "@/lib/api";
+import {
+  getBrowserLocalStorage,
+  safeGetStorageItem,
+  safeRemoveStorageItem,
+} from "@/lib/browser-storage";
 import type {
   AllAnalysisResult,
   AnalysisMode,
@@ -54,8 +59,9 @@ export function useAnalysisDataState({ onNavigate }: AnalysisProps) {
   }, []);
 
   const fetchSingleAnalysis = useCallback(async () => {
-    const importId = localStorage.getItem("analysisImportId");
-    const name = localStorage.getItem("analysisImportName") || "Data";
+    const storage = getBrowserLocalStorage();
+    const importId = safeGetStorageItem(storage, "analysisImportId");
+    const name = safeGetStorageItem(storage, "analysisImportName") || "Data";
     setImportName(name);
 
     if (!importId) {
@@ -100,8 +106,9 @@ export function useAnalysisDataState({ onNavigate }: AnalysisProps) {
   }, []);
 
   const handleReset = useCallback(() => {
-    localStorage.removeItem("analysisImportId");
-    localStorage.removeItem("analysisImportName");
+    const storage = getBrowserLocalStorage();
+    safeRemoveStorageItem(storage, "analysisImportId");
+    safeRemoveStorageItem(storage, "analysisImportName");
     void fetchAllAnalysis();
   }, [fetchAllAnalysis]);
 

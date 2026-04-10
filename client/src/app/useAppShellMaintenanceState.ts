@@ -1,6 +1,7 @@
 import { useEffect, type Dispatch, type SetStateAction } from "react";
 import type { User } from "@/app/types";
 import { getMaintenanceStatus } from "@/lib/api";
+import { getBrowserLocalStorage, safeSetStorageItem } from "@/lib/browser-storage";
 
 type MaintenanceUpdatedDetail = {
   maintenance?: boolean;
@@ -35,6 +36,7 @@ export function useAppShellMaintenanceState({
     if (!user || user.role === "admin" || user.role === "superuser") return;
     let cancelled = false;
     let activeController: AbortController | null = null;
+    const storage = getBrowserLocalStorage();
 
     const canPollNow = () =>
       typeof document === "undefined" || document.visibilityState === "visible";
@@ -51,7 +53,7 @@ export function useAppShellMaintenanceState({
         if (cancelled) return;
 
         if (state?.maintenance === true) {
-          localStorage.setItem("maintenanceState", JSON.stringify(state));
+          safeSetStorageItem(storage, "maintenanceState", JSON.stringify(state));
           setCurrentPage("maintenance");
         } else if (currentPage === "maintenance") {
           setCurrentPage("general-search");

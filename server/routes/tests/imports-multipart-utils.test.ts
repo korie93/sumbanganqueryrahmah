@@ -23,6 +23,16 @@ test("resolveImportMultipartFailure upgrades size limit errors to the standard 4
   );
 });
 
+test("resolveImportMultipartFailure falls back cleanly for unknown error payloads", () => {
+  assert.deepEqual(
+    resolveImportMultipartFailure(null, "Multipart import failed."),
+    {
+      message: "Multipart import failed.",
+      statusCode: 400,
+    },
+  );
+});
+
 test("parseMultipartImportUpload parses CSV streams through the shared temp-file helper", async () => {
   const file = Readable.from("name,amount\nAlice,12\nBob,33\n");
   const parsed = await parseMultipartImportUpload({
@@ -35,4 +45,44 @@ test("parseMultipartImportUpload parses CSV streams through the shared temp-file
     { amount: "12", name: "Alice" },
     { amount: "33", name: "Bob" },
   ]);
+});
+
+test("parseMultipartImportUpload rejects unsupported upload extensions", async () => {
+  const file = Readable.from("unsupported");
+
+  await assert.rejects(
+    () =>
+      parseMultipartImportUpload({
+        file,
+        filename: "multipart-import.txt",
+      }),
+    /csv or excel/i,
+  );
+});
+
+test("parseMultipartImportUpload rejects files that exceed the configured size limit", async () => {
+  class LimitReadable extends Readable {
+    private hasSentData = false;
+
+    override _read() {
+      if (this.hasSentData) {
+        this.push(null);
+        return;
+      }
+
+      this.hasSentData = true;
+      this.emit("limit");
+      this.push("name,amount\nAlice,12\n");
+    }
+  }
+
+  const parsingPromise = parseMultipartImportUpload({
+    file: new LimitReadable(),
+    filename: "multipart-import.csv",
+  });
+
+  await assert.rejects(
+    () => parsingPromise,
+    new RegExp(IMPORT_TOO_LARGE_MESSAGE.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")),
+  );
 });

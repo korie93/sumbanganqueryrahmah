@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, Clock3, ShieldAlert, TimerReset, Wrench } from "lucide-react";
 import { getMaintenanceStatus } from "@/lib/api/settings";
+import { getBrowserLocalStorage, safeGetStorageItem, safeSetStorageItem } from "@/lib/browser-storage";
 import { formatDateTimeDDMMYYYY } from "@/lib/date-format";
 import {
   mergeMaintenancePayload,
@@ -37,8 +38,9 @@ export default function MaintenancePage() {
   useEffect(() => {
     let mounted = true;
     let activeController: AbortController | null = null;
+    const storage = getBrowserLocalStorage();
 
-    setState((previous) => parseStoredMaintenanceState(localStorage.getItem("maintenanceState"), previous));
+    setState((previous) => parseStoredMaintenanceState(safeGetStorageItem(storage, "maintenanceState"), previous));
 
     const load = async () => {
       try {
@@ -51,7 +53,7 @@ export default function MaintenancePage() {
         }
         if (latest && typeof latest === "object") {
           setState((prev) => mergeMaintenancePayload(prev, latest));
-          localStorage.setItem("maintenanceState", JSON.stringify(latest));
+          safeSetStorageItem(storage, "maintenanceState", JSON.stringify(latest));
         }
       } catch (error) {
         if (error instanceof DOMException && error.name === "AbortError") {

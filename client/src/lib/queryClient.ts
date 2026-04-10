@@ -1,11 +1,12 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
 import { createApiHeaders, throwIfResNotOk } from "./api-client";
+import { getBrowserLocalStorage, safeGetStorageItem } from "./browser-storage";
 
 const isLowSpecClient = (() => {
   if (typeof window === "undefined" || typeof navigator === "undefined") {
     return false;
   }
-  const perfOverride = localStorage.getItem("perf_mode");
+  const perfOverride = safeGetStorageItem(getBrowserLocalStorage(), "perf_mode");
   if (perfOverride === "low") return true;
   if (perfOverride === "high") return false;
 

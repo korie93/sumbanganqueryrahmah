@@ -21,6 +21,11 @@ import {
   isBannedSessionFlagSet,
   persistAuthenticatedUser,
 } from "@/lib/auth-session";
+import {
+  getBrowserLocalStorage,
+  safeGetStorageItem,
+  safeSetStorageItem,
+} from "@/lib/browser-storage";
 import { getMe } from "@/lib/api";
 
 type UseAppShellAuthBootstrapArgs = {
@@ -61,7 +66,8 @@ export function useAppShellAuthBootstrap({
     }
 
     const savedUser = getStoredAuthenticatedUser();
-    const savedPage = localStorage.getItem("activeTab") || localStorage.getItem("lastPage");
+    const storage = getBrowserLocalStorage();
+    const savedPage = safeGetStorageItem(storage, "activeTab") || safeGetStorageItem(storage, "lastPage");
     const forcePasswordChange = getStoredForcePasswordChange();
     const hasAuthHintCookie = hasAuthSessionHintCookie();
 
@@ -105,7 +111,7 @@ export function useAppShellAuthBootstrap({
               setCurrentPage("change-password");
               replaceHistory("/change-password");
             } else if (savedPage === "backup") {
-              localStorage.setItem(ACTIVE_SETTINGS_SECTION_KEY, "backup-restore");
+              safeSetStorageItem(storage, ACTIVE_SETTINGS_SECTION_KEY, "backup-restore");
               setCurrentPage("settings");
               replaceHistory("/settings?section=backup-restore");
             } else if (nextUser.role === "user") {

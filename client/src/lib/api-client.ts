@@ -4,6 +4,7 @@ import {
   setBannedSessionFlag,
   setStoredForcePasswordChange,
 } from "./auth-session";
+import { getBrowserLocalStorage, safeSetStorageItem } from "./browser-storage";
 import { createClientRandomId } from "./secure-id";
 
 export function createApiRequestId() {
@@ -100,7 +101,7 @@ export async function throwIfResNotOk(res: Response) {
     if (res.status === 503) {
       try {
         if (parsed?.maintenance) {
-          localStorage.setItem("maintenanceState", JSON.stringify(parsed));
+          safeSetStorageItem(getBrowserLocalStorage(), "maintenanceState", JSON.stringify(parsed));
           if (typeof window !== "undefined") {
             window.location.href = "/maintenance";
           }

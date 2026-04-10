@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { getBrowserLocalStorage, safeSetStorageItem } from "@/lib/browser-storage";
 import { usePageShortcuts } from "@/hooks/usePageShortcuts";
 import { useToast } from "@/hooks/use-toast";
 import type { SavedProps } from "@/pages/saved/types";
@@ -81,8 +82,9 @@ export function useSavedPageState({ onNavigate, userRole }: SavedProps) {
 
   const handleView = useCallback(
     (importItem: { id: string; name: string }) => {
-      localStorage.setItem("selectedImportId", importItem.id);
-      localStorage.setItem("selectedImportName", importItem.name);
+      const storage = getBrowserLocalStorage();
+      safeSetStorageItem(storage, "selectedImportId", importItem.id);
+      safeSetStorageItem(storage, "selectedImportName", importItem.name);
       onNavigate("viewer", importItem.id);
     },
     [onNavigate],
@@ -90,8 +92,9 @@ export function useSavedPageState({ onNavigate, userRole }: SavedProps) {
 
   const handleAnalysis = useCallback(
     (importItem: { id: string; name: string }) => {
-      localStorage.setItem("analysisImportId", importItem.id);
-      localStorage.setItem("analysisImportName", importItem.name);
+      const storage = getBrowserLocalStorage();
+      safeSetStorageItem(storage, "analysisImportId", importItem.id);
+      safeSetStorageItem(storage, "analysisImportName", importItem.name);
       onNavigate("analysis");
     },
     [onNavigate],

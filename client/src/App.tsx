@@ -85,6 +85,10 @@ function AppContent() {
     </AppRouteErrorBoundary>
   );
 
+  const handleAuthenticatedNavigateHome = () => {
+    handlePublicNavigate(user?.role === "user" ? "general-search" : "home");
+  };
+
   if (!isInitialized) {
     return <PageSpinner fullscreen />;
   }
@@ -135,14 +139,21 @@ function AppContent() {
   }
 
   return (
-    <Suspense fallback={<PageSpinner fullscreen />}>
-      <AuthenticatedAppEntry
-        initialUser={user}
-        initialPage={currentPage}
-        initialMonitorSection={monitorSection}
-        onLoggedOut={handleAuthenticatedLogout}
-      />
-    </Suspense>
+    <AppRouteErrorBoundary
+      routeKey={`authenticated-entry:${currentPage}:${monitorSection}`}
+      routeLabel={currentPage}
+      fullscreen
+      onNavigateHome={handleAuthenticatedNavigateHome}
+    >
+      <Suspense fallback={<PageSpinner fullscreen />}>
+        <AuthenticatedAppEntry
+          initialUser={user}
+          initialPage={currentPage}
+          initialMonitorSection={monitorSection}
+          onLoggedOut={handleAuthenticatedLogout}
+        />
+      </Suspense>
+    </AppRouteErrorBoundary>
   );
 }
 

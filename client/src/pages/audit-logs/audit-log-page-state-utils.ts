@@ -1,7 +1,6 @@
 import { getAuditDateRange } from "@/pages/audit-logs/utils";
+import { isMobileViewportWidth } from "@/lib/responsive";
 import type { AuditLogFilters, AuditLogsResponse } from "@/pages/audit-logs/types";
-
-const AUDIT_LOGS_MOBILE_BREAKPOINT = 768;
 
 export type AuditLogsPaginationState = {
   page: number;
@@ -11,7 +10,7 @@ export type AuditLogsPaginationState = {
 };
 
 export function resolveInitialAuditLogsLayoutState(width?: number) {
-  const isMobileViewport = typeof width === "number" && width < AUDIT_LOGS_MOBILE_BREAKPOINT;
+  const isMobileViewport = isMobileViewportWidth(width);
 
   return {
     filtersOpen: false,

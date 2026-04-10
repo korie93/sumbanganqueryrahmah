@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { isMobileViewportWidth } from "@/lib/responsive";
 import { buildActivitySummaryCounts } from "@/pages/activity/activity-page-state-utils";
 import { useActivityActionState } from "@/pages/activity/useActivityActionState";
 import { useActivityDataState } from "@/pages/activity/useActivityDataState";
@@ -9,7 +10,7 @@ import { getCurrentActivityRole } from "@/pages/activity/utils";
 export function useActivityPageState() {
   const isMobile = useIsMobile();
   const shouldDeferSecondaryMobileSections =
-    isMobile || (typeof window !== "undefined" && window.innerWidth < 768);
+    isMobile || (typeof window !== "undefined" && isMobileViewportWidth(window.innerWidth));
   const currentRole = getCurrentActivityRole();
   const canModerateActivity = currentRole === "admin" || currentRole === "superuser";
 

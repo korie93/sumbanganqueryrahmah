@@ -5,6 +5,7 @@ import { replaceHistory } from "@/app/routing";
 import type { TabVisibility } from "@/app/types";
 import { Badge } from "@/components/ui/badge";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { getBrowserLocalStorage, safeGetStorageItem, safeSetStorageItem } from "@/lib/browser-storage";
 import {
   OperationalPage,
   OperationalPageHeader,
@@ -53,13 +54,14 @@ export default function SettingsPage({
   initialSectionId,
 }: SettingsPageProps) {
   const isMobile = useIsMobile();
+  const storage = getBrowserLocalStorage();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const requestedSection = useMemo(() => {
     if (typeof window === "undefined") return initialSectionId;
     const sectionFromUrl = new URLSearchParams(window.location.search).get("section");
-    return sectionFromUrl || initialSectionId || localStorage.getItem(ACTIVE_SETTINGS_SECTION_KEY) || undefined;
-  }, [initialSectionId]);
+    return sectionFromUrl || initialSectionId || safeGetStorageItem(storage, ACTIVE_SETTINGS_SECTION_KEY) || undefined;
+  }, [initialSectionId, storage]);
 
   const controller = useSettingsController({
     initialSectionId: requestedSection,
@@ -68,9 +70,9 @@ export default function SettingsPage({
 
   useEffect(() => {
     if (typeof window === "undefined" || !controller.selectedCategory) return;
-    localStorage.setItem(ACTIVE_SETTINGS_SECTION_KEY, controller.selectedCategory);
+    safeSetStorageItem(storage, ACTIVE_SETTINGS_SECTION_KEY, controller.selectedCategory);
     replaceHistory(`/settings?section=${encodeURIComponent(controller.selectedCategory)}`);
-  }, [controller.selectedCategory]);
+  }, [controller.selectedCategory, storage]);
 
   useEffect(() => {
     setMobileSidebarOpen(false);

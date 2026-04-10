@@ -10,6 +10,30 @@ export default {
         md: ".375rem", /* 6px */
         sm: ".1875rem", /* 3px */
       },
+      spacing: {
+        px: "var(--spacing-px)",
+        "0": "var(--spacing-0)",
+        "0.5": "var(--spacing-0_5)",
+        "1": "var(--spacing-1)",
+        "1.5": "var(--spacing-1_5)",
+        "2": "var(--spacing-2)",
+        "2.5": "var(--spacing-2_5)",
+        "3": "var(--spacing-3)",
+        "3.5": "var(--spacing-3_5)",
+        "4": "var(--spacing-4)",
+        "5": "var(--spacing-5)",
+        "6": "var(--spacing-6)",
+        "7": "var(--spacing-7)",
+        "8": "var(--spacing-8)",
+        "9": "var(--spacing-9)",
+        "10": "var(--spacing-10)",
+        "11": "var(--spacing-11)",
+        "12": "var(--spacing-12)",
+        "14": "var(--spacing-14)",
+        "16": "var(--spacing-16)",
+        "20": "var(--spacing-20)",
+        "24": "var(--spacing-24)",
+      },
       colors: {
         // Flat / base colors (regular buttons)
         background: "hsl(var(--background) / <alpha-value>)",

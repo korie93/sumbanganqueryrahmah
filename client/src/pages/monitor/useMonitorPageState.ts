@@ -250,3 +250,5 @@ export function useMonitorPageState() {
     runRollupAction,
   };
 }
+
+export type MonitorPageState = ReturnType<typeof useMonitorPageState>;

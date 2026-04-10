@@ -167,6 +167,10 @@ const run = async () => {
   console.log("Release readiness: running fast regression gates...");
   await runNpm(["run", "verify:collection-amount-contract"], { env });
   await runNpm(["run", "verify:collection-pii-rollout-contract"], { env });
+  await runNpm(["run", "verify:browser-storage-safety"], { env });
+  await runNpm(["run", "verify:client-breakpoint-contract"], { env });
+  await runNpm(["run", "verify:design-token-color-compatibility"], { env });
+  await runNpm(["run", "verify:design-token-spacing"], { env });
   await runNpm(["run", "verify:db-schema-governance"], { env });
   await runNpm(["run", "test:client"], { env });
   await runNpm(["run", "test:scripts"], { env });

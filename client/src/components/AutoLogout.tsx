@@ -1,7 +1,11 @@
 import { useCallback, useEffect, useRef } from "react";
 import { activityHeartbeat } from "@/lib/api";
+import { getBrowserLocalStorage, safeSetStorageItem } from "@/lib/browser-storage";
 import { toast } from "@/hooks/use-toast";
-import { resolveAutoLogoutReconnectDelayMs } from "@/components/auto-logout-websocket";
+import {
+  parseAutoLogoutWebSocketMessage,
+  resolveAutoLogoutReconnectDelayMs,
+} from "@/components/auto-logout-websocket";
 import {
   getStoredActivityId,
   getStoredFingerprint,
@@ -258,6 +262,7 @@ export default function AutoLogout({
 
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     const host = window.location.host;
+    const storage = getBrowserLocalStorage();
     reconnectEnabledRef.current = true;
     reconnectAttemptRef.current = 0;
 
@@ -298,45 +303,45 @@ export default function AutoLogout({
         };
 
         socket.onmessage = (event) => {
-          try {
-            const message = JSON.parse(event.data);
+          const message = parseAutoLogoutWebSocketMessage(event.data);
+          if (!message) {
+            warnAutoLogoutDiagnostic("Failed to parse WebSocket message:", event.data);
+            return;
+          }
 
-            if (message.type === "kicked") {
-              notifyAutoLogoutNotice(message.reason, "Anda telah dilogout oleh pentadbir.");
-              void runClientLogout();
-            }
+          if (message.type === "kicked") {
+            notifyAutoLogoutNotice(message.reason, "Anda telah dilogout oleh pentadbir.");
+            void runClientLogout();
+          }
 
-            if (message.type === "logout") {
-              notifyAutoLogoutNotice(message.reason, "Sesi anda telah ditamatkan.");
-              void runClientLogout();
-            }
+          if (message.type === "logout") {
+            notifyAutoLogoutNotice(message.reason, "Sesi anda telah ditamatkan.");
+            void runClientLogout();
+          }
 
-            if (message.type === "banned") {
-              setBannedSessionFlag(true);
-              notifyAutoLogoutNotice(message.reason, "Akaun anda telah disekat.");
-              window.location.href = "/";
-            }
+          if (message.type === "banned") {
+            setBannedSessionFlag(true);
+            notifyAutoLogoutNotice(message.reason, "Akaun anda telah disekat.");
+            window.location.href = "/";
+          }
 
-            if (message.type === "maintenance_update") {
-              const payload = {
-                maintenance: !!message.maintenance,
-                message: String(message.message || ""),
-                type: message.mode === "hard" ? "hard" : "soft",
-                startTime: message.startTime || null,
-                endTime: message.endTime || null,
-              };
-              localStorage.setItem("maintenanceState", JSON.stringify(payload));
-              window.dispatchEvent(new CustomEvent("maintenance-updated", { detail: payload }));
-              if (payload.maintenance) {
-                window.location.href = "/maintenance";
-              }
+          if (message.type === "maintenance_update") {
+            const payload = {
+              maintenance: message.maintenance,
+              message: message.message,
+              type: message.mode,
+              startTime: message.startTime,
+              endTime: message.endTime,
+            };
+            safeSetStorageItem(storage, "maintenanceState", JSON.stringify(payload));
+            window.dispatchEvent(new CustomEvent("maintenance-updated", { detail: payload }));
+            if (payload.maintenance) {
+              window.location.href = "/maintenance";
             }
+          }
 
-            if (message.type === "settings_updated") {
-              window.dispatchEvent(new CustomEvent("settings-updated", { detail: message }));
-            }
-          } catch (error) {
-            warnAutoLogoutDiagnostic("Failed to parse WebSocket message:", error);
+          if (message.type === "settings_updated") {
+            window.dispatchEvent(new CustomEvent("settings-updated", { detail: message }));
           }
         };
 

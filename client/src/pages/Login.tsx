@@ -85,8 +85,8 @@ export default function Login({ onLoginSuccess }: LoginProps) {
       <div className="login-bg-effect login-bg-orb login-bg-orb--bottom absolute bottom-20 right-20 hidden h-72 w-72 floating-slow delay-150 sm:block" />
       <div className="login-bg-effect login-bg-orb login-bg-orb--center absolute left-1/2 top-1/2 hidden h-[360px] w-[360px] -translate-x-1/2 -translate-y-1/2 floating-slow delay-300 md:block" />
 
-      <main className="relative z-[var(--z-public-auth-main)] flex viewport-min-height items-center justify-center px-4 py-6 login-content sm:py-8">
-        <div className="relative w-full max-w-md">
+      <main className="relative z-[var(--z-public-auth-main)] flex viewport-min-height items-center justify-center px-4 py-6 login-content login-content--shell sm:py-8">
+        <div className="login-shell relative w-full max-w-md">
           <button
             type="button"
             onClick={goToLandingPage}
@@ -98,7 +98,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
           <div className="login-bg-effect login-halo pointer-events-none absolute -inset-4 hidden rounded-[2rem] blur-2xl sm:block" />
 
           <div className="login-card px-5 py-7 sm:px-8 sm:py-10">
-            <div className="flex flex-col items-center mb-8">
+            <div className="login-brand mb-8 flex flex-col items-center">
               <div className="login-brand-mark mb-4 flex h-20 w-20 items-center justify-center rounded-full backdrop-blur-md shadow-xl">
                 <BrandLogo
                   decorative
@@ -115,7 +115,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
               </p>
             </div>
 
-            <form className="space-y-4" onSubmit={handleSubmit} {...loginFormBusyProps}>
+            <form className="login-form space-y-4" onSubmit={handleSubmit} {...loginFormBusyProps}>
               <div className="space-y-2">
                 <PublicAuthInput
                   className="login-input w-full rounded-xl px-4 py-3 transition-all"

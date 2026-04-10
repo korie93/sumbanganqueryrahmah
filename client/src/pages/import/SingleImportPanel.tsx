@@ -2,6 +2,7 @@ import { AlertCircle, FileSpreadsheet, Save, Upload, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { getImportPreviewRowKey } from "@/pages/import/import-preview-row-key";
 import type { ImportRow } from "@/pages/import/types";
 
 interface SingleImportPanelProps {
@@ -190,7 +191,7 @@ export function SingleImportPanel({
               </thead>
               <tbody>
                 {parsedData.slice(0, 10).map((row, rowIndex) => (
-                  <tr key={`import-preview-row-${rowIndex}-${headers.map((header) => row[header] ?? "").join("|")}`} className="border-t border-border hover:bg-muted/50">
+                  <tr key={getImportPreviewRowKey(row)} className="border-t border-border hover:bg-muted/50">
                     <td className="p-3 text-muted-foreground">{rowIndex + 1}</td>
                     {headers.map((header) => (
                       <td key={header} className="p-3 text-foreground">

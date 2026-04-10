@@ -199,6 +199,9 @@ function createImportsRouteHarness(options?: {
     createdOn?: string | null;
   }) => {
     listImportsPageCalls.push(params);
+    if (String(params.cursor || "").trim() === "bad-cursor") {
+      throw new Error("Invalid imports cursor.");
+    }
     const search = String(params.search || "").trim().toLowerCase();
     const createdOn = String(params.createdOn || "").trim();
     const limit = Math.max(1, Math.min(200, Number(params.pageSize ?? params.limit ?? 100)));
@@ -468,6 +471,65 @@ test("GET /api/imports forwards cursor search and date filters", async () => {
       search: "batch",
       createdOn: "2026-03-09",
     }]);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("GET /api/imports rejects malformed cursor tokens", async () => {
+  const { app } = createImportsRouteHarness();
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(`${baseUrl}/api/imports?cursor=bad-cursor`);
+    assert.equal(response.status, 400);
+    assert.deepEqual(await response.json(), {
+      ok: false,
+      message: "Invalid imports cursor.",
+    });
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("GET /api/data-rows requires an importId", async () => {
+  const { app } = createImportsRouteHarness();
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(`${baseUrl}/api/data-rows`);
+    assert.equal(response.status, 400);
+    assert.deepEqual(await response.json(), {
+      ok: false,
+      message: "importId is required",
+    });
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("GET /api/data-rows forwards pagination and search params to the service layer", async () => {
+  const { app, searchCalls } = createImportsRouteHarness();
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(
+      `${baseUrl}/api/data-rows?importId=import-1&limit=1&page=2&offset=1&q=Bob`,
+    );
+    assert.equal(response.status, 200);
+
+    const payload = await response.json();
+    assert.equal(payload.total, 2);
+    assert.equal(payload.rows.length, 1);
+    assert.equal(payload.rows[0]?.id, "row-2");
+    assert.deepEqual(searchCalls[0], {
+      columnFilters: [],
+      cursor: null,
+      importId: "import-1",
+      search: "Bob",
+      limit: 1,
+      offset: 1,
+    });
   } finally {
     await stopTestServer(server);
   }
@@ -752,6 +814,33 @@ test("GET /api/analyze/all analyzes all imports through the service layer", asyn
   }
 });
 
+test("GET /api/analyze/all returns 504 when analysis exceeds the request deadline", async () => {
+  const { app } = createImportsRouteHarness({
+    analysisRequestTimeoutMs: 15,
+    analysisAllDelayMs: 50,
+  });
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(`${baseUrl}/api/analyze/all`);
+    assert.equal(response.status, 504);
+    assert.deepEqual(await response.json(), {
+      ok: false,
+      message: "Import analysis is taking longer than expected. Please retry in a moment.",
+      error: {
+        code: "REQUEST_TIMEOUT",
+        message: "Import analysis is taking longer than expected. Please retry in a moment.",
+        details: {
+          operation: "imports-analysis-all",
+          timeoutMs: 15,
+        },
+      },
+    });
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
 test("GET /api/imports/:id/analyze returns 504 when analysis exceeds the request deadline", async () => {
   const { app } = createImportsRouteHarness({
     analysisRequestTimeoutMs: 15,
@@ -931,6 +1020,31 @@ test("PATCH /api/imports/:id/rename renames an import and writes an audit log", 
   }
 });
 
+test("PATCH /api/imports/:id/rename returns 404 when the import is missing", async () => {
+  const { app } = createImportsRouteHarness();
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(`${baseUrl}/api/imports/import-missing/rename`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        name: "Renamed Import",
+      }),
+    });
+
+    assert.equal(response.status, 404);
+    assert.deepEqual(await response.json(), {
+      ok: false,
+      message: "Import not found",
+    });
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
 test("DELETE /api/imports/:id deletes an import and audits the deletion", async () => {
   const { app, deleteCalls, auditLogs } = createImportsRouteHarness();
   const { server, baseUrl } = await startTestServer(app);
@@ -951,6 +1065,25 @@ test("DELETE /api/imports/:id deletes an import and audits the deletion", async 
     assert.equal(auditLogs.length, 1);
     assert.equal(auditLogs[0].action, "DELETE_IMPORT");
     assert.equal(auditLogs[0].targetResource, "Customer Import");
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("DELETE /api/imports/:id returns 404 when the import is missing", async () => {
+  const { app } = createImportsRouteHarness();
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(`${baseUrl}/api/imports/import-missing`, {
+      method: "DELETE",
+    });
+
+    assert.equal(response.status, 404);
+    assert.deepEqual(await response.json(), {
+      ok: false,
+      message: "Import not found",
+    });
   } finally {
     await stopTestServer(server);
   }

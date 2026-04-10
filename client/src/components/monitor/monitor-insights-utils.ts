@@ -1,4 +1,5 @@
 import type { IntelligenceExplainPayload } from "@/lib/api";
+import { isMobileViewportWidth } from "@/lib/responsive";
 
 type MonitorInsightsBadge = {
   label: string;
@@ -18,8 +19,6 @@ export type MonitorInsightsSummaryFact = {
   value: string;
   tone: MonitorInsightsSummaryTone;
 };
-
-const MOBILE_MONITOR_BREAKPOINT = 768;
 
 function formatStrategyAction(action: IntelligenceExplainPayload["chosenStrategy"]["recommendedAction"]) {
   switch (action) {
@@ -79,7 +78,7 @@ function resolveActionTone(
 export function resolveInitialMonitorInsightsOpenState(
   width?: number,
 ): MonitorInsightsInitialOpenState {
-  const isCompactViewport = typeof width === "number" && width < MOBILE_MONITOR_BREAKPOINT;
+  const isCompactViewport = isMobileViewportWidth(width);
 
   if (isCompactViewport) {
     return {

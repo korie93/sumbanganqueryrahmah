@@ -1,7 +1,6 @@
 import { CHAOS_OPTIONS } from "@/components/monitor/monitorData";
 import type { ChaosType } from "@/lib/api";
-
-const MONITOR_MOBILE_BREAKPOINT = 768;
+import { isMobileViewportWidth } from "@/lib/responsive";
 
 export type MonitorQueueAction = "drain" | "retry-failures" | "auto-heal" | "rebuild";
 
@@ -30,7 +29,7 @@ export type ParsedMonitorChaosRequest =
     };
 
 export function resolveInitialMonitorPageState(width?: number): MonitorInitialPageState {
-  const isCompactViewport = typeof width === "number" && width < MONITOR_MOBILE_BREAKPOINT;
+  const isCompactViewport = isMobileViewportWidth(width);
 
   return {
     isCompactViewport,
