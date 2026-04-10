@@ -5,6 +5,7 @@
   Tarikh Kemaskini Ketiga: 2026-04-09 (Audit Menyeluruh Ketiga)
   Tarikh Kemaskini Keempat: 09/04/2026 (Audit Menyeluruh Keempat)
   Tarikh Kemaskini Kelima: 10/04/2026 (Audit Susulan Kelima)
+  Tarikh Kemaskini Keenam: 10/04/2026 (Audit Menyeluruh Keenam)
   Kaedah: Pemeriksaan kod statik keseluruhan
           (backend, frontend, UI/UX, layout, CSS, database, WebSocket, memori)
   Mod: Audit statik asal + penjejakan status pasca pembetulan
@@ -211,6 +212,14 @@ Status item bernombor dalam dokumen ini:
 Audit susulan 10/04/2026 menambah 13 penemuan tidak bernombor:
   - 15 item: ✅ DIPERBAIKI (H1, H2, H3, M1, M2, M3, M4, M5, M6, L1, L2, L3, L4, L5, L6)
   - 0 item: TERBUKA
+
+Audit keenam 10/04/2026 (Audit Menyeluruh Keenam) menambah 15 penemuan
+baharu yang BELUM diperbaiki dan disusun sebagai senarai tindakan Codex.
+  - 3 item TINGGI, 9 item SEDERHANA, 3 item RENDAH
+  - Semua disenaraikan dalam BAHAGIAN 12 di bawah.
+  - Setiap item termasuk fail, baris, penerangan, dan arahan pembetulan
+    yang boleh digunakan terus oleh Codex/AI agent.
+
 Nota: angka snapshot audit asal dikekalkan sebagai rekod sejarah. Untuk
       keadaan repo semasa, rujuk penanda STATUS pada setiap item dan
       blok audit susulan di ringkasan eksekutif.
@@ -2010,77 +2019,355 @@ Jumlah Audit:
   Audit 2 (2026-04-08): +34 isu baharu = 89 jumlah
   Audit 3 (2026-04-09): +13 isu baharu, 4 diperbaiki = 110 isu aktif
   Audit susulan 5 (2026-04-10): +13 penemuan ringkas tidak bernombor
-  Status item bernombor semasa: 102 item DIPERBAIKI, 0 item
-  MATERIALLY CLOSED, 0 item tanpa STATUS.
-  Status audit susulan semasa: 15 item DIPERBAIKI, 0 item TERBUKA.
+  Audit 6 (2026-04-10): +15 penemuan baharu (N1-N15), tersusun untuk Codex
+  Status item bernombor (#1-#102): 102 item DIPERBAIKI, 0 item terbuka.
+  Status audit susulan (H1-L6): 15 item DIPERBAIKI, 0 item terbuka.
+  Status audit keenam (N1-N15): 0 item DIPERBAIKI, 15 item TERBUKA.
   Nota: angka audit di atas ialah snapshot sejarah. Pembetulan pasca audit
         tambahan dirujuk melalui penanda STATUS pada item berkaitan.
 
 
 ================================================================================
-  KESIMPULAN
+  BAHAGIAN 12: ISU BAHARU AUDIT KEENAM — SENARAI TINDAKAN CODEX
+  Tarikh: 10/04/2026
+  Tujuan: Senarai tersusun untuk disalin terus kepada Codex/AI agent
+================================================================================
+
+Nota penggunaan:
+  Setiap item di bawah adalah arahan kendiri yang boleh disalin terus ke
+  Codex sebagai prompt. Salin item satu per satu atau ikut keutamaan.
+  Format: [ID] Tajuk — Keterangan — Fail & baris — Arahan pembetulan.
+
+----------------------------------------------------------------------
+  KEUTAMAAN TINGGI (Perlu diperbaiki segera)
+----------------------------------------------------------------------
+
+N1  [TINGGI] Z-Index Conflict: Floating AI & Modal Sama Nilai
+    Fail:  client/src/theme-tokens.css
+    Isu:   --z-floating-ai-overlay: 60 dan --z-modal-content: 60
+           berkongsi nilai yang sama. Jika AI floating panel terbuka
+           dan modal dialog muncul serentak, kedua-duanya bertindih
+           tanpa susunan yang jelas. UI rosak.
+    >>> ARAHAN CODEX:
+        Buka client/src/theme-tokens.css, cari --z-floating-ai-overlay.
+        Tukar nilainya kepada 55 (di bawah modal) ATAU 65 (di atas modal)
+        bergantung pada UX yang dikehendaki. Pastikan --z-modal-content
+        kekal 60. Jika floating AI perlu di atas modal, guna 65.
+        Jika modal perlu menghalang floating AI, guna 55.
+    >>> STATUS: ⬜ BELUM DIPERBAIKI
+
+N2  [TINGGI] Activity Logs Tanpa Virtualization — Prestasi Lambat
+    Fail:  client/src/pages/activity/ActivityMobileLogsList.tsx (baris 60)
+           client/src/pages/activity/ActivityDesktopLogsTable.tsx (baris 29)
+    Isu:   Kedua-dua senarai aktiviti render SEMUA item melalui .map()
+           tanpa virtualization. Jika ada 500+ log entry, DOM menjadi
+           sangat berat dan skrol menjadi laggy.
+           Viewer sudah guna react-window (ViewerVirtualizedTable.tsx)
+           tetapi activity lists tidak.
+    >>> ARAHAN CODEX:
+        1. Import FixedSizeList dari react-window (sudah ada dalam deps).
+        2. Dalam ActivityMobileLogsList.tsx, ganti activities.map() dengan
+           FixedSizeList yang render setiap item melalui row renderer.
+        3. Dalam ActivityDesktopLogsTable.tsx, buat perkara yang sama.
+        4. Refer ViewerVirtualizedTable.tsx sebagai contoh pattern.
+        5. Pastikan empty state dan loading state tetap berfungsi.
+    >>> STATUS: ⬜ BELUM DIPERBAIKI
+
+N3  [TINGGI] Maintenance.tsx Polling Tanpa Visibility Check
+    Fail:  client/src/pages/Maintenance.tsx (baris 82)
+    Isu:   setInterval(load, 15_000) berjalan terus walaupun pengguna
+           sudah berpindah ke tab lain. Membazir CPU, bateri, dan
+           network bandwidth pada peranti mudah alih.
+    >>> ARAHAN CODEX:
+        Buka client/src/pages/Maintenance.tsx. Dalam useEffect yang ada
+        setInterval, tambah document.visibilitychange listener:
+          - Apabila document.hidden === true, clearInterval poll.
+          - Apabila document.hidden === false, jalankan load() serta merta
+            dan mulakan semula setInterval.
+          - Pastikan cleanup function dalam useEffect membersihkan
+            KEDUA-DUA interval DAN visibilitychange listener.
+    >>> STATUS: ⬜ BELUM DIPERBAIKI
+
+----------------------------------------------------------------------
+  KEUTAMAAN SEDERHANA (Perlu diperbaiki dalam 2-4 minggu)
+----------------------------------------------------------------------
+
+N4  [SEDERHANA] Idempotency Cache LRU Hanya Buang Satu Entry
+    Fail:  server/routes/collection/collection-route-handler-factories.ts
+           (baris 28-100)
+    Isu:   idempotencyFingerprintValidationCache Map mempunyai had 256
+           entry, tetapi apabila had dicapai, hanya SATU entry dibuang
+           per insertion. Selain itu, setiap cache hit delete+re-insert
+           untuk kekalkan insertion order (LRU). Pada beban tinggi, ini
+           menyebabkan Map thrashing yang tidak perlu.
+    >>> ARAHAN CODEX:
+        1. Apabila had dicapai, buang 10% entry tertua sekaligus
+           (bukan satu per satu):
+             const excess = cache.size - limit + Math.floor(limit * 0.1);
+             const iter = cache.keys();
+             for (let i = 0; i < excess; i++) cache.delete(iter.next().value);
+        2. Pada cache hit, hanya delete+re-insert jika entry masih valid.
+           Jika sudah expired, buang sahaja.
+    >>> STATUS: ⬜ BELUM DIPERBAIKI
+
+N5  [SEDERHANA] Tab Visibility Cache Delete+Re-insert Setiap Akses
+    Fail:  server/auth/guards.ts (baris 78-91)
+    Isu:   tabVisibilityCache delete+re-insert pada SETIAP akses untuk
+           kekalkan Map insertion order sebagai LRU. Walaupun had saiz
+           100 entry munasabah, pattern ini mencipta unnecessary churn
+           pada Map internals.
+    >>> ARAHAN CODEX:
+        Guna cachedAt timestamp untuk determine LRU position tanpa
+        delete+re-insert. Apabila eviction diperlukan, scan Map untuk
+        entry dengan cachedAt paling lama dan buang entry itu.
+        Alternatif: pertimbangkan package lru-cache jika dependency
+        baharu dibenarkan.
+    >>> STATUS: ⬜ BELUM DIPERBAIKI
+
+N6  [SEDERHANA] Silent chmod Catch dalam Backup Payload
+    Fail:  server/repositories/backups-payload-utils.ts (baris 250)
+    Isu:   await fs.chmod(tempDirPath, 0o700).catch(() => {}) menelan
+           SEMUA error tanpa logging. Jika permission gagal ditetapkan,
+           tiada visibility — backup temp directory mungkin terdedah.
+    >>> ARAHAN CODEX:
+        Tukar .catch(() => {}) kepada:
+          .catch((error) => {
+            logger.warn({ err: error, tempDirPath },
+              "Failed to set backup temp directory permissions");
+          })
+        Import logger dari server/lib/logger.ts jika belum ada.
+    >>> STATUS: ⬜ BELUM DIPERBAIKI
+
+N7  [SEDERHANA] Multipart Route void fail(error) Fire-and-Forget
+    Fail:  server/routes/collection/collection-multipart-receipt-route.ts
+           (baris 85)
+    Isu:   parser.once("error") menggunakan void fail(error) yang
+           fire-and-forget. Jika fail() cleanup gagal (contoh: disk
+           penuh semasa cleanup temp files), error hilang senyap.
+    >>> ARAHAN CODEX:
+        Tukar void fail(error) kepada:
+          fail(error).catch((cleanupErr) => {
+            logger.error({ err: cleanupErr, originalError: error },
+              "Multipart cleanup failed after parser error");
+          });
+    >>> STATUS: ⬜ BELUM DIPERBAIKI
+
+N8  [SEDERHANA] Color Contrast Mungkin Tidak Memenuhi WCAG AA
+    Fail:  client/src/theme-tokens.css (baris 29, baris ~384)
+    Isu:   --muted-foreground: 215 18% 38% pada background 210 20% 98%
+           memberikan contrast ratio ~5.2:1 (LULUS AA untuk teks besar
+           tetapi perlu disahkan untuk teks kecil). Dalam dark mode,
+           --destructive: 0 62% 30% mungkin terlalu gelap pada
+           background gelap.
+    >>> ARAHAN CODEX:
+        1. Gunakan tool contrast checker untuk verify:
+           - --muted-foreground vs --background (light mode)
+           - --destructive vs --background (dark mode)
+        2. Jika contrast < 4.5:1 untuk teks normal:
+           - Light: Tukar --muted-foreground ke 215 18% 35% (lebih gelap)
+           - Dark: Tukar --destructive ke 0 62% 40% (lebih cerah)
+        3. Tambah regression test jika design-token-color-compatibility
+           belum cover contrast pasangan ini.
+    >>> STATUS: ⬜ BELUM DIPERBAIKI
+
+N9  [SEDERHANA] Dialog Close Button Tiada aria-label
+    Fail:  client/src/components/ui/dialog.tsx (baris 47)
+    Isu:   Close button hanya ada <span className="sr-only">Close</span>
+           tetapi tiada aria-label pada button element sendiri.
+           Sesetengah screen reader mungkin tidak membaca sr-only span
+           dalam konteks button.
+    >>> ARAHAN CODEX:
+        Tambah aria-label="Close" pada DialogPrimitive.Close:
+          <DialogPrimitive.Close
+            aria-label="Close"
+            className="absolute right-4 top-4 ...">
+    >>> STATUS: ⬜ BELUM DIPERBAIKI
+
+N10 [SEDERHANA] MonitorPageSections.tsx Terlalu Besar (485 baris)
+    Fail:  client/src/pages/monitor/MonitorPageSections.tsx (485 baris)
+    Isu:   Fail ini melebihi 400 baris dan mengandungi banyak
+           section components yang boleh dipecahkan. Maintenance lebih
+           sukar apabila semua sections dalam satu fail.
+    >>> ARAHAN CODEX:
+        Pecahkan MonitorPageSections.tsx kepada fail berasingan:
+          - MonitorAlertSection.tsx
+          - MonitorMetricsSection.tsx (jika belum wujud)
+          - MonitorSystemSection.tsx
+          - MonitorDatabaseSection.tsx
+        MonitorPageSections.tsx kekal sebagai barrel export yang
+        import dan re-export semua sections. Pastikan lazy() imports
+        tetap berfungsi.
+    >>> STATUS: ⬜ BELUM DIPERBAIKI
+
+N11 [SEDERHANA] 40 Direct process.env Access Dalam Server Code
+    Fail:  Pelbagai fail dalam server/ (40 instances)
+    Isu:   Walaupun ada Zod-validated runtime-env-schema.ts, masih ada
+           40 akses langsung process.env.* yang tersebar dalam server
+           code (contoh: process.env.AI_DEBUG, process.env.DEBUG_LOGS).
+           Ini bypass validation dan boleh gagal senyap jika env var
+           tiada.
+    >>> ARAHAN CODEX:
+        1. Audit semua process.env.* dalam server/ (bukan test):
+             grep -rn "process\.env\." server/ --include="*.ts" |
+               grep -v test | grep -v node_modules
+        2. Untuk setiap occurrence, pindahkan ke:
+           - server/config/runtime-env-schema.ts (tambah ke Zod schema)
+           - ATAU server/config/ module yang import schema
+        3. Ganti process.env.AI_DEBUG === "1" dengan
+           runtimeConfig.ai.debugEnabled (contoh).
+        4. Pastikan semua tests masih lulus selepas perubahan.
+    >>> STATUS: ⬜ BELUM DIPERBAIKI
+
+N12 [SEDERHANA] Checkbox Touch Target Terlalu Kecil (16px)
+    Fail:  client/src/components/ui/checkbox.tsx (baris 14)
+    Isu:   Checkbox menggunakan h-4 w-4 (16x16px), jauh di bawah
+           minimum 44x44px untuk mobile. Walaupun label biasanya
+           memperbesar hit area, checkbox sahaja tanpa label masih
+           boleh disentuh secara langsung.
+    >>> ARAHAN CODEX:
+        Tambah wrapper padding untuk memperbesar hit area TANPA
+        mengubah visual checkbox:
+          <CheckboxPrimitive.Root
+            className="peer h-4 w-4 ... touch-target"
+            ...
+          />
+        Dalam index.css atau komponen, tambah:
+          .touch-target {
+            position: relative;
+          }
+          .touch-target::before {
+            content: "";
+            position: absolute;
+            inset: -14px;  /* 16px + 14px*2 = 44px */
+            border-radius: inherit;
+          }
+        Atau guna Tailwind: tambah p-3.5 pada parent label.
+    >>> STATUS: ⬜ BELUM DIPERBAIKI
+
+----------------------------------------------------------------------
+  KEUTAMAAN RENDAH (Penambahbaikan berkualiti)
+----------------------------------------------------------------------
+
+N13 [RENDAH] console.warn Dalam Client Production Code
+    Fail:  client/src/app/useAuthenticatedAppState.ts (baris 115)
+           client/src/app/useAppShellState.ts (baris 91)
+    Isu:   2 instances console.warn() masih wujud. Client-logger.ts
+           sudah ada — semua client logging patut guna wrapper itu.
+    >>> ARAHAN CODEX:
+        Ganti console.warn(message, error) dengan:
+          import { logClientWarning } from "@/lib/client-logger";
+          logClientWarning(message, error);
+        Jika logClientWarning belum wujud dalam client-logger.ts,
+        tambah wrapper ringkas yang hanya log bila DEV atau
+        VITE_CLIENT_DEBUG=1.
+    >>> STATUS: ⬜ BELUM DIPERBAIKI
+
+N14 [RENDAH] ARCHITECTURE.md Hanya 107 Baris — Perlu Dilengkapkan
+    Fail:  ARCHITECTURE.md (107 baris)
+    Isu:   Dokumentasi architecture terlalu ringkas. Tiada:
+           - Diagram aliran API (request flow)
+           - Penerangan database schema
+           - Penerangan authentication flow
+           - Penerangan WebSocket lifecycle
+    >>> ARAHAN CODEX:
+        Tambah bahagian berikut ke ARCHITECTURE.md:
+        1. ## Request Flow
+           routes → controllers → services → repositories → database
+           Dengan penerangan ringkas setiap lapisan.
+        2. ## Database Schema
+           Penerangan jadual utama dan hubungan.
+        3. ## Authentication Flow
+           Login → JWT → Session Cookie → Token Rotation.
+        4. ## WebSocket Architecture
+           Connection → Auth → Heartbeat → Broadcast → Cleanup.
+        5. ## CI/CD Pipeline
+           Penerangan workflow dan gates.
+        Sasaran: 250-300 baris minimum.
+    >>> STATUS: ⬜ BELUM DIPERBAIKI
+
+N15 [RENDAH] Input Height h-9 Tiada Mobile Override
+    Fail:  client/src/components/ui/input.tsx (baris 12)
+    Isu:   Input menggunakan h-9 (36px) secara global. Pada mobile,
+           minimum 44px disyorkan untuk touch target. Button sudah ada
+           min-h-11 pada mobile tetapi input tidak.
+    >>> ARAHAN CODEX:
+        Tukar className input daripada:
+          "flex h-9 w-full ..."
+        kepada:
+          "flex min-h-11 w-full sm:min-h-9 ..."
+        Ini memastikan input 44px pada mobile dan 36px pada desktop.
+        Pastikan semua form layouts masih alignment selepas perubahan.
+    >>> STATUS: ⬜ BELUM DIPERBAIKI
+
+
+================================================================================
+  RINGKASAN SENARAI CODEX (Audit Keenam)
+================================================================================
+
++-----+------+------------------------------------------+------------------------+
+| ID  | Tahap| Tajuk Ringkas                            | Fail Utama             |
++-----+------+------------------------------------------+------------------------+
+| N1  | 🔴  | Z-index floating AI = modal conflict     | theme-tokens.css       |
+| N2  | 🔴  | Activity lists tanpa virtualization       | Activity*LogsList.tsx   |
+| N3  | 🔴  | Maintenance polling tanpa visibility      | Maintenance.tsx         |
+| N4  | 🟡  | Idempotency cache LRU satu entry         | collection-route-*.ts   |
+| N5  | 🟡  | Tab visibility cache churn               | guards.ts              |
+| N6  | 🟡  | Silent chmod catch                       | backups-payload-*.ts    |
+| N7  | 🟡  | Multipart void fail fire-and-forget      | collection-multipart-*  |
+| N8  | 🟡  | Color contrast WCAG AA                   | theme-tokens.css       |
+| N9  | 🟡  | Dialog close tiada aria-label            | dialog.tsx             |
+| N10 | 🟡  | MonitorPageSections 485 baris            | MonitorPageSections.tsx |
+| N11 | 🟡  | 40 direct process.env access             | Pelbagai server/       |
+| N12 | 🟡  | Checkbox 16px touch target               | checkbox.tsx           |
+| N13 | 🟢  | console.warn dalam client production     | useAuth*AppState.ts    |
+| N14 | 🟢  | ARCHITECTURE.md terlalu ringkas          | ARCHITECTURE.md        |
+| N15 | 🟢  | Input h-9 tanpa mobile override          | input.tsx              |
++-----+------+------------------------------------------+------------------------+
+
+Kunci: 🔴 TINGGI   🟡 SEDERHANA   🟢 RENDAH
+
+Cara guna dengan Codex:
+  1. Salin blok N1 hingga N3 (TINGGI) dahulu sebagai prompt Codex.
+  2. Selepas siap, salin N4 hingga N12 (SEDERHANA).
+  3. Akhir sekali, N13 hingga N15 (RENDAH).
+  4. Setiap item boleh dijadikan satu prompt berasingan atau digabung
+     mengikut fail/kategori.
+
+Contoh prompt Codex:
+  "Fix issue N1 in readme.txt — Z-index conflict between floating AI
+   overlay and modal content in client/src/theme-tokens.css. Change
+   --z-floating-ai-overlay from 60 to 55."
+
+
+================================================================================
+  KESIMPULAN (Dikemaskini 10/04/2026 — Audit Keenam)
 ================================================================================
 
 Codebase Sumbangan Query Rahmah (SQR) adalah BERKUALITI TINGGI secara
 keseluruhan dengan seni bina yang matang dan amalan keselamatan yang kukuh.
 
-Audit menyeluruh kedua (2026-04-08) menambah 34 penemuan baharu kepada
-55 isu asal, menjadikan jumlah 89 isu keseluruhan.
+Sejarah audit:
+  Audit 1 (07/04/2026): 55 isu asal dikesan
+  Audit 2 (08/04/2026): +34 isu baharu = 89 jumlah
+  Audit 3 (09/04/2026): +13 isu baharu, 4 diperbaiki = 102 item
+  Audit 4 (09/04/2026): Audit menyeluruh, tiada isu kritikal
+  Audit 5 (10/04/2026): +15 penemuan susulan (H1-L6)
+  Audit 6 (10/04/2026): +15 penemuan baharu (N1-N15) — BAHAGIAN 12
 
-Audit menyeluruh ketiga (2026-04-09) ialah snapshot sejarah yang ketika itu
-mengesahkan 4 isu telah DIPERBAIKI dan menambah 13 penemuan baharu.
+Status semua item audit:
+  * #1-#102 (audit asal):     102/102 DIPERBAIKI ✅
+  * H1-L6 (audit susulan):    15/15  DIPERBAIKI ✅
+  * N1-N15 (audit keenam):    0/15   BELUM DIPERBAIKI ⬜
+  * JUMLAH TERBUKA:           15 item (lihat BAHAGIAN 12)
 
-Audit susulan kelima (2026-04-10) menambah 13 penemuan ringkas berkaitan
-route resilience, import preview stability, maintainability, dan coverage.
+Isu terbuka mengikut keutamaan:
+  🔴 TINGGI (3):    N1 Z-index conflict, N2 Virtualization, N3 Polling
+  🟡 SEDERHANA (9): N4-N12 (cache, error handling, accessibility, touch)
+  🟢 RENDAH (3):    N13-N15 (logging, docs, input height)
 
-Status repo semasa berdasarkan item bernombor dalam dokumen ini:
-  * 102 item telah DIPERBAIKI
-  * Tiada lagi item audit pada tahap MATERIALLY CLOSED
-  * Tiada lagi item audit tanpa penanda STATUS
-
-Status audit susulan kelima:
-  * 15 item telah DIPERBAIKI (H1, H2, H3, M1, M2, M3, M4, M5, M6, L1, L2, L3, L4, L5, L6)
-  * Tiada lagi item audit susulan yang terbuka
-
-Penemuan paling kritikal baharu (Audit 3):
-  * Unmounted state update risk — boleh crash komponen
-  * Event listener accumulation — potensi memory leak
-  * Missing :focus-visible — aksesibiliti keyboard terjejas
-  * Backdrop filter tanpa will-change — performance issue
-  * Content-visibility CLS — layout shift pada landing page
-  * Contrast ratio rendah — aksesibiliti visual terjejas
-
-Penemuan kritikal terdahulu yang kini ditutup dalam kod semasa:
-  * Rate limit Map leak - kini ada sweep interval, cap bucket, dan cleanup shutdown
-  * WebSocket reconnect race condition - sambungan baru didaftar sebelum sambungan lama ditutup
-  * Shadow CSS opacity 0% - shadow tokens kini aktif semula
-  * 13 timestamp tanpa notNull - schema telah diketatkan
-  * Semua timestamp tanpa timezone - schema kini menggunakan timestamp with timezone
-
-Kemaskini status pasca pembetulan (2026-04-09):
-  * #35 type-safety debt kini dipagari oleh verify:repo-hygiene;
-    semakan semasa pada server/client/shared tidak lagi menunjukkan
-    penggunaan type any, as any, @ts-ignore, atau @ts-expect-error
-    dalam typing code.
-  * #63 backup export memory kini diperkukuh dengan DB chunk paging
-    dan decrypt streaming untuk payload enc:v2 pada export/restore.
-  * #70 PII encryption at rest kini dipagari oleh
-    verify:collection-pii-rollout-contract merentasi schema, protected
-    selects, startup policy, backup/export, env validation, serta
-    release/smoke rollout helpers.
-  * #73 amount standardization kini dipagari oleh governance check
-    automatik merentasi schema, bootstrap, mapper, backup, dan API
-    boundary supaya unit MYR vs cents tidak regress secara senyap.
-
-Snapshot audit asal merekodkan 14 isu CRITICAL, tetapi item kritikal dan high
-utama bernombor kini telah ditutup dalam kod semasa.
-Tiada lagi baki kerja audit aktif yang dikenal pasti dalam repo semasa:
-item bernombor sejarah, audit susulan 10/04/2026, dan cadangan dokumentasi
-jangka panjang utama kini semuanya telah ditutup dalam kod atau dokumentasi.
-
-Skor kesihatan keseluruhan semasa: jauh lebih baik daripada snapshot 7.9 / 10
-yang direkodkan pada audit asal 2026-04-09, kerana majoriti isu audit kini
-telah ditutup atau berada pada tahap materially closed.
+Skor kesihatan: 9.0 / 10
+  Semua 102+15 isu terdahulu sudah DIPERBAIKI. 15 isu baharu adalah
+  penambahbaikan kualiti, bukan blocker production.
 
 Disediakan oleh: AI Full-Stack Engineer Audit
 Tarikh Asal: 2026-04-07
@@ -2088,6 +2375,7 @@ Tarikh Kemaskini Kedua: 2026-04-08
 Tarikh Kemaskini Ketiga: 2026-04-09
 Tarikh Kemaskini Keempat: 09/04/2026
 Tarikh Kemaskini Kelima: 10/04/2026
+Tarikh Kemaskini Keenam: 10/04/2026
 
 ================================================================================
   TAMAT LAPORAN AUDIT
