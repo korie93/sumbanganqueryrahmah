@@ -105,15 +105,13 @@ export function ActivityDesktopLogsTable({
         className="min-w-[58rem] overflow-hidden rounded-lg border border-border bg-card/60 text-sm"
         role="table"
       >
-        <div role="rowgroup">
-          <ActivityDesktopLogsHeader
-            allVisibleSelected={allVisibleSelected}
-            canModerateActivity={canModerateActivity}
-            gridTemplateColumns={gridTemplateColumns}
-            onToggleSelectAllVisible={onToggleSelectAllVisible}
-            partiallySelected={partiallySelected}
-          />
-        </div>
+        <ActivityDesktopLogsHeader
+          allVisibleSelected={allVisibleSelected}
+          canModerateActivity={canModerateActivity}
+          gridTemplateColumns={gridTemplateColumns}
+          onToggleSelectAllVisible={onToggleSelectAllVisible}
+          partiallySelected={partiallySelected}
+        />
         <div role="rowgroup">
           <FixedSizeList
             height={listHeight}
