@@ -27,7 +27,7 @@ const INITIAL_WORKERS = normalizeInitialWorkerCount({
 });
 const SINGLE_PROCESS_MODE = shouldUseSingleProcessMode({
   maxWorkers: MAX_WORKERS_HARD_CAP,
-  forceCluster: process.env.SQR_FORCE_CLUSTER,
+  forceCluster: runtimeConfig.cluster.forceCluster ? "1" : undefined,
 });
 const MIN_WORKERS = 1;
 const SCALE_COOLDOWN_MS = LOW_MEMORY_MODE ? 30_000 : 15_000; // more conservative in low-memory mode

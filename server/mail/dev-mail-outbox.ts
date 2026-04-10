@@ -3,9 +3,11 @@ import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { getPublicAppBaseUrl } from "../auth/activation-links";
 import {
-  isStrictLocalDevelopmentEnvironment,
-  readBooleanEnvFlag,
-} from "../config/runtime-environment";
+  readBoolean,
+  readInt,
+  readOptionalString,
+} from "../config/runtime-config-read-utils";
+import { isStrictLocalDevelopmentEnvironment } from "../config/runtime-environment";
 
 const DEFAULT_OUTBOX_MAX_FILES = 50;
 const DEV_OUTBOX_LIST_DEFAULT_PAGE_SIZE = 25;
@@ -38,19 +40,18 @@ export type DevMailOutboxPreviewPage = {
   totalPages: number;
 };
 
-function readFlag(name: string, fallback: boolean): boolean {
-  return readBooleanEnvFlag(name, fallback);
-}
-
 function getDevMailOutboxDir(): string {
-  const configured = String(process.env.MAIL_DEV_OUTBOX_DIR || "").trim();
+  const configured = readOptionalString("MAIL_DEV_OUTBOX_DIR");
   return configured
     ? path.resolve(configured)
     : path.resolve(process.cwd(), "var", "dev-mail-outbox");
 }
 
 function getOutboxRetentionLimit(): number {
-  const parsed = Number(process.env.MAIL_DEV_OUTBOX_MAX_FILES || DEFAULT_OUTBOX_MAX_FILES);
+  const parsed = readInt("MAIL_DEV_OUTBOX_MAX_FILES", DEFAULT_OUTBOX_MAX_FILES, {
+    min: 1,
+    max: 10_000,
+  });
   if (!Number.isFinite(parsed) || parsed < 1) {
     return DEFAULT_OUTBOX_MAX_FILES;
   }
@@ -70,7 +71,7 @@ export function isDevMailOutboxEnabled(): boolean {
   if (!isStrictLocalDevelopmentEnvironment()) {
     return false;
   }
-  return readFlag("MAIL_DEV_OUTBOX_ENABLED", true);
+  return readBoolean("MAIL_DEV_OUTBOX_ENABLED", true);
 }
 
 function buildPreviewId(): string {

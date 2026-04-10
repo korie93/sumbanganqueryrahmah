@@ -165,3 +165,28 @@ test("public auth text tokens keep WCAG AA contrast against the auth shell surfa
     );
   }
 });
+
+test("audit contrast pairs keep muted and destructive tokens readable on their parent backgrounds", () => {
+  const css = readFileSync(
+    path.resolve(process.cwd(), "client/src/theme-tokens.css"),
+    "utf8",
+  );
+  const lightTokens = parseHslTokens(extractCssRuleBlock(css, ":root"));
+  const darkTokens = parseHslTokens(extractCssRuleBlock(css, ".dark"));
+
+  assert.deepEqual(
+    validateThemeContrast(lightTokens, {
+      tokenPairs: [["background", "muted-foreground"]],
+    }),
+    [],
+  );
+  assert.deepEqual(
+    validateThemeContrast(darkTokens, {
+      tokenPairs: [
+        ["background", "destructive"],
+        ["destructive", "destructive-foreground"],
+      ],
+    }),
+    [],
+  );
+});

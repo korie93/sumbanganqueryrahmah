@@ -1,4 +1,5 @@
 import os from "node:os";
+import path from "node:path";
 import {
   isProductionLikeEnvironment,
   isStrictLocalDevelopmentEnvironment,
@@ -39,11 +40,19 @@ export type { RuntimeConfigDiagnostic, RuntimeConfigValidation } from "./runtime
 
 validateRuntimeEnvironmentSchema();
 
+const COLLECTION_PII_FIELD_NAMES = new Set([
+  "customerName",
+  "icNumber",
+  "customerPhone",
+  "accountNumber",
+]);
+
 const nodeEnv = resolveNodeEnv();
 const isProduction = nodeEnv === "production";
 const isStrictLocalDevelopment = isStrictLocalDevelopmentEnvironment();
 const isProductionLike = isProductionLikeEnvironment();
 const debugLogs = readBoolean("DEBUG_LOGS", false) && !isProductionLike;
+const logLevel = readString("LOG_LEVEL", debugLogs ? "debug" : "info");
 const lowMemoryMode = readBoolean("SQR_LOW_MEMORY_MODE", true);
 const seedDefaultUsers = readBoolean("SEED_DEFAULT_USERS", false);
 const backupFeatureEnabled = readBoolean("BACKUP_FEATURE_ENABLED", true);
@@ -109,8 +118,18 @@ const configuredPreviousCollectionPiiEncryptionKeys = resolvePreviousCollectionP
   readCommaSeparatedList("COLLECTION_PII_ENCRYPTION_KEY_PREVIOUS"),
   configuredCollectionPiiEncryptionKey,
 );
+const configuredCollectionPiiRetiredFields = readCommaSeparatedList("COLLECTION_PII_RETIRED_FIELDS")
+  .filter((field) => COLLECTION_PII_FIELD_NAMES.has(field));
 const configuredBackupEncryptionKey = readOptionalString("BACKUP_ENCRYPTION_KEY");
 const configuredBackupEncryptionKeys = readOptionalString("BACKUP_ENCRYPTION_KEYS");
+const configuredCollectionReceiptQuarantineDir = readOptionalString("COLLECTION_RECEIPT_QUARANTINE_DIR");
+const resolvedCollectionReceiptQuarantineDir = configuredCollectionReceiptQuarantineDir
+  ? path.resolve(process.cwd(), configuredCollectionReceiptQuarantineDir)
+  : path.resolve(process.cwd(), "var", "collection-receipt-quarantine");
+const configuredMailDevOutboxDir = readOptionalString("MAIL_DEV_OUTBOX_DIR");
+const resolvedMailDevOutboxDir = configuredMailDevOutboxDir
+  ? path.resolve(configuredMailDevOutboxDir)
+  : path.resolve(process.cwd(), "var", "dev-mail-outbox");
 const publicAppUrl = normalizeHttpUrl("PUBLIC_APP_URL", readOptionalString("PUBLIC_APP_URL"));
 const trustedProxies = resolveTrustedProxies(readCommaSeparatedList("TRUSTED_PROXIES"));
 const corsAllowedOrigins = resolveCorsAllowedOrigins({
@@ -169,6 +188,8 @@ export const runtimeConfig: RuntimeConfig = Object.freeze({
     host: readString("HOST", "0.0.0.0"),
     publicAppUrl,
     debugLogs,
+    logLevel,
+    allowLocalDevCors: readBoolean("ALLOW_LOCAL_DEV_CORS", false),
     uploadsRootDir: resolveUploadsRootDir(),
     bodyLimits: {
       default: readString("DEFAULT_BODY_LIMIT", "2mb"),
@@ -212,6 +233,7 @@ export const runtimeConfig: RuntimeConfig = Object.freeze({
       isProductionLike,
       () => buildEphemeralSecret("collection-temp").slice(0, 16),
     ),
+    twoFactorEncryptionSecret: configuredTwoFactorEncryptionKey,
     seedDefaultUsers,
     cookieSecure,
   },
@@ -223,6 +245,8 @@ export const runtimeConfig: RuntimeConfig = Object.freeze({
     precomputeOnStart: readBoolean("AI_PRECOMPUTE_ON_START", false),
     lowMemoryMode,
     debugLogs,
+    debugEnabled: readBoolean("AI_DEBUG", false),
+    intentMode: readOptionalString("AI_INTENT_MODE"),
     gate: {
       globalLimit: readInt("AI_GATE_GLOBAL_LIMIT", 4, { min: 1 }),
       queueLimit: readInt("AI_GATE_QUEUE_LIMIT", 20, { min: 0 }),
@@ -262,12 +286,69 @@ export const runtimeConfig: RuntimeConfig = Object.freeze({
     ),
     importAnalysisTimeoutMs: readInt("IMPORT_ANALYSIS_TIMEOUT_MS", 45_000, { min: 5_000 }),
     collectionRollupListenReconnectMs: readInt("COLLECTION_ROLLUP_LISTEN_RECONNECT_MS", 5_000, { min: 1_000 }),
+    httpSlowRequestMs: readInt("HTTP_SLOW_REQUEST_MS", 1_500, { min: 250 }),
+    analyticsTimeZone: readString("ANALYTICS_TZ", "Asia/Kuala_Lumpur"),
+  },
+  collection: {
+    routeWarnMs: readInt("COLLECTION_ROUTE_WARN_MS", 750, { min: 250 }),
+    receiptQuarantineEnabled: readBoolean("COLLECTION_RECEIPT_QUARANTINE_ENABLED", true),
+    receiptQuarantineDir: resolvedCollectionReceiptQuarantineDir,
+    piiEncryptionSecret: configuredCollectionPiiEncryptionKey,
+    previousPiiEncryptionSecrets: configuredPreviousCollectionPiiEncryptionKeys,
+    piiRetiredFields: configuredCollectionPiiRetiredFields,
+  },
+  mail: {
+    devOutboxEnabled: mailDevOutboxEnabled,
+    devOutboxDir: resolvedMailDevOutboxDir,
+    devOutboxMaxFiles: readInt("MAIL_DEV_OUTBOX_MAX_FILES", 50, { min: 1, max: 10_000 }),
+    transport: {
+      from: mailConfiguration.effectiveFrom,
+      service: readOptionalString("SMTP_SERVICE"),
+      host: readOptionalString("SMTP_HOST"),
+      port: readInt("SMTP_PORT", 587, { min: 1, max: 65_535 }),
+      user: readOptionalString("SMTP_USER"),
+      password: readOptionalString("SMTP_PASSWORD"),
+      secure: readBoolean("SMTP_SECURE", readInt("SMTP_PORT", 587, { min: 1, max: 65_535 }) === 465),
+      requireTls: readBoolean("SMTP_REQUIRE_TLS", false),
+    },
+  },
+  backups: {
+    featureEnabled: backupFeatureEnabled,
+    encryptionKey: configuredBackupEncryptionKey,
+    encryptionKeys: configuredBackupEncryptionKeys,
+    encryptionKeyId: readOptionalString("BACKUP_ENCRYPTION_KEY_ID"),
   },
   cluster: {
     lowMemoryMode,
     maxWorkers: readInt("SQR_MAX_WORKERS", lowMemoryMode ? 1 : 4, { min: 1 }),
     initialWorkers: readInt("SQR_INITIAL_WORKERS", 1, { min: 1 }),
     preallocateMb: readInt("SQR_PREALLOCATE_MB", lowMemoryMode ? 0 : 32, { min: 0 }),
+    forceCluster: readBoolean("SQR_FORCE_CLUSTER", false),
+  },
+  bootstrap: {
+    localSuperuserCredentialsFileEnabled,
+    users: {
+      superuser: {
+        username: readString("SEED_SUPERUSER_USERNAME", "superuser"),
+        password: readString("SEED_SUPERUSER_PASSWORD", ""),
+        fullName: readString("SEED_SUPERUSER_FULL_NAME", "Superuser"),
+      },
+      admin: {
+        username: readString("SEED_ADMIN_USERNAME", "admin1"),
+        password: readString("SEED_ADMIN_PASSWORD", ""),
+        fullName: readString("SEED_ADMIN_FULL_NAME", "Admin"),
+      },
+      user: {
+        username: readString("SEED_USER_USERNAME", "user1"),
+        password: readString("SEED_USER_PASSWORD", ""),
+        fullName: readString("SEED_USER_FULL_NAME", "User"),
+      },
+    },
+    freshLocalSuperuser: {
+      username: readString("SEED_SUPERUSER_USERNAME", "superuser"),
+      password: readString("SEED_SUPERUSER_PASSWORD", ""),
+      fullName: readString("SEED_SUPERUSER_FULL_NAME", "Local Superuser"),
+    },
   },
 });
 

@@ -11,6 +11,7 @@ import { useAppShellTabVisibility } from "@/app/useAppShellTabVisibility";
 import { performAppLogout, performClientLogout } from "@/app/logout-flow";
 import { activityLogout } from "@/lib/api";
 import { getStoredActivityId } from "@/lib/auth-session";
+import { logClientWarning } from "@/lib/client-logger";
 
 export function useAppShellState() {
   const [currentPage, setCurrentPage] = useState("home");
@@ -88,7 +89,7 @@ export function useAppShellState() {
       applyLoggedOutClientState,
       broadcastLogoutToOtherTabs,
       warn: (message, error) => {
-        console.warn(message, error);
+        logClientWarning(message, error);
       },
     });
   }, [applyLoggedOutClientState, broadcastLogoutToOtherTabs]);

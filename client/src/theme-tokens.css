@@ -268,7 +268,7 @@
   --z-tooltip: 80;
   --z-toast: 100;
   --z-floating-ai-root: 40;
-  --z-floating-ai-overlay: 60;
+  --z-floating-ai-overlay: 55;
   --z-sidebar-desktop: 10;
   --z-sidebar-rail: 20;
   --login-card-shadow: 0 25px 40px hsl(0 0% 0% / 0.25), inset 0 0 35px hsl(0 0% 100% / 0.18);
@@ -381,8 +381,8 @@
   --muted-foreground: 215 20% 65%;
   --accent: 217 20% 21%;
   --accent-foreground: 210 40% 98%;
-  --destructive: 0 62% 30%;
-  --destructive-foreground: 210 40% 98%;
+  --destructive: 0 62% 59%;
+  --destructive-foreground: 222 47% 11%;
   --input: 217 32% 38%;
   --ring: 217 91% 60%;
   --chart-1: 217 91% 65%;
@@ -601,7 +601,7 @@
   --login-card-shadow: 0 25px 40px hsl(0 0% 0% / 0.34), inset 0 0 35px hsl(0 0% 100% / 0.12);
   --login-card-mobile-shadow: 0 16px 32px hsl(0 0% 0% / 0.32);
   --z-floating-ai-root: 40;
-  --z-floating-ai-overlay: 60;
+  --z-floating-ai-overlay: 55;
   --app-shell-glass-shadow: 0 14px 28px hsl(215 28% 11% / 0.07);
   --app-shell-glass-shadow-dark: 0 16px 30px hsl(0 0% 0% / 0.24);
   --app-shell-section-shadow: 0 10px 24px hsl(215 28% 11% / 0.06);

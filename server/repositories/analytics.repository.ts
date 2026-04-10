@@ -1,8 +1,9 @@
 import { count, eq, gte, sql } from "drizzle-orm";
 import { auditLogs, dataRows, imports, userActivity, users } from "../../shared/schema-postgres";
+import { runtimeConfig } from "../config/runtime";
 import { db } from "../db-postgres";
 
-const ANALYTICS_TZ = process.env.ANALYTICS_TZ || "Asia/Kuala_Lumpur";
+const ANALYTICS_TZ = runtimeConfig.runtime.analyticsTimeZone;
 const COLLECTION_RECORD_VERSION_CONFLICT_ACTION = "COLLECTION_RECORD_VERSION_CONFLICT";
 const LOGIN_FAILURE_ACTIONS = [
   "LOGIN_FAILED",

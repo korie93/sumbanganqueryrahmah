@@ -2,13 +2,14 @@ import { randomUUID } from "node:crypto";
 import path from "node:path";
 import express, { type Express, type RequestHandler } from "express";
 import helmet from "helmet";
+import { runtimeConfig } from "../config/runtime";
 import { logger } from "../lib/logger";
 import { runWithRequestContext } from "../lib/request-context";
 import { createCsrfProtectionMiddleware } from "../http/csrf";
 import { createCorsMiddleware } from "../http/cors";
 import { SQR_TRUSTED_TYPES_POLICY_NAME } from "../../shared/trusted-types";
 
-const HTTP_SLOW_REQUEST_MS = Math.max(250, Number(process.env.HTTP_SLOW_REQUEST_MS || 1500) || 1500);
+const HTTP_SLOW_REQUEST_MS = runtimeConfig.runtime.httpSlowRequestMs;
 
 function normalizeRequestUserAgent(rawUserAgent: unknown): string | undefined {
   const normalized = String(rawUserAgent || "").trim().replace(/\s+/g, " ");

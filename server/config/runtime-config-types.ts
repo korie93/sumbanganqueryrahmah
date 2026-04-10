@@ -19,6 +19,12 @@ export type MailConfigurationAssessment = {
   isIncomplete: boolean;
 };
 
+export type SeedUserRuntimeConfig = {
+  username: string;
+  password: string;
+  fullName: string;
+};
+
 export type RuntimeConfig = {
   app: {
     nodeEnv: RuntimeEnvironment;
@@ -29,6 +35,8 @@ export type RuntimeConfig = {
     host: string;
     publicAppUrl: string | null;
     debugLogs: boolean;
+    logLevel: string;
+    allowLocalDevCors: boolean;
     uploadsRootDir: string;
     bodyLimits: {
       default: string;
@@ -54,6 +62,7 @@ export type RuntimeConfig = {
     sessionSecret: string;
     previousSessionSecrets: string[];
     collectionNicknameTempPassword: string;
+    twoFactorEncryptionSecret: string | null;
     seedDefaultUsers: boolean;
     cookieSecure: boolean;
   };
@@ -65,6 +74,8 @@ export type RuntimeConfig = {
     precomputeOnStart: boolean;
     lowMemoryMode: boolean;
     debugLogs: boolean;
+    debugEnabled: boolean;
+    intentMode: string | null;
     gate: {
       globalLimit: number;
       queueLimit: number;
@@ -100,11 +111,52 @@ export type RuntimeConfig = {
     backupMaxPayloadBytes: number;
     importAnalysisTimeoutMs: number;
     collectionRollupListenReconnectMs: number;
+    httpSlowRequestMs: number;
+    analyticsTimeZone: string;
+  };
+  collection: {
+    routeWarnMs: number;
+    receiptQuarantineEnabled: boolean;
+    receiptQuarantineDir: string;
+    piiEncryptionSecret: string | null;
+    previousPiiEncryptionSecrets: string[];
+    piiRetiredFields: string[];
+  };
+  mail: {
+    devOutboxEnabled: boolean;
+    devOutboxDir: string;
+    devOutboxMaxFiles: number;
+    transport: {
+      from: string | null;
+      host: string | null;
+      password: string | null;
+      port: number;
+      requireTls: boolean;
+      secure: boolean;
+      service: string | null;
+      user: string | null;
+    };
+  };
+  backups: {
+    featureEnabled: boolean;
+    encryptionKey: string | null;
+    encryptionKeys: string | null;
+    encryptionKeyId: string | null;
   };
   cluster: {
     lowMemoryMode: boolean;
     maxWorkers: number;
     initialWorkers: number;
     preallocateMb: number;
+    forceCluster: boolean;
+  };
+  bootstrap: {
+    localSuperuserCredentialsFileEnabled: boolean;
+    users: {
+      superuser: SeedUserRuntimeConfig;
+      admin: SeedUserRuntimeConfig;
+      user: SeedUserRuntimeConfig;
+    };
+    freshLocalSuperuser: SeedUserRuntimeConfig;
   };
 };

@@ -1,4 +1,5 @@
 import nodemailer from "nodemailer";
+import { runtimeConfig } from "../config/runtime";
 import { isDevMailOutboxEnabled, writeDevMailPreview } from "./dev-mail-outbox";
 
 type MailTransportConfig = {
@@ -31,28 +32,19 @@ type SendMailInput = {
 let cachedTransportConfig: MailTransportConfig | null = null;
 let cachedTransporter: nodemailer.Transporter | null = null;
 
-function readMailEnv(name: string): string | null {
-  const raw = String(process.env[name] || "").trim();
-  return raw ? raw : null;
-}
-
-function parseBooleanFlag(value: string | null, fallback: boolean): boolean {
-  if (value == null) return fallback;
-  const normalized = value.trim().toLowerCase();
-  if (["1", "true", "yes", "on"].includes(normalized)) return true;
-  if (["0", "false", "no", "off"].includes(normalized)) return false;
-  return fallback;
-}
-
 function readTransportConfig(): MailTransportConfig | null {
   if (cachedTransportConfig) return cachedTransportConfig;
 
-  const service = readMailEnv("SMTP_SERVICE");
-  const host = readMailEnv("SMTP_HOST");
-  const portRaw = readMailEnv("SMTP_PORT");
-  const user = readMailEnv("SMTP_USER") || undefined;
-  const password = readMailEnv("SMTP_PASSWORD") || undefined;
-  const from = readMailEnv("MAIL_FROM") || user || null;
+  const {
+    from,
+    host,
+    password,
+    port,
+    requireTls,
+    secure,
+    service,
+    user,
+  } = runtimeConfig.mail.transport;
   if (!from) {
     return null;
   }
@@ -64,11 +56,11 @@ function readTransportConfig(): MailTransportConfig | null {
 
     cachedTransportConfig = {
       from,
-      password,
-      requireTls: parseBooleanFlag(readMailEnv("SMTP_REQUIRE_TLS"), false),
-      secure: parseBooleanFlag(readMailEnv("SMTP_SECURE"), false),
-      service: service.trim(),
-      user,
+      password: password ?? undefined,
+      requireTls,
+      secure,
+      service: service ?? undefined,
+      user: user ?? undefined,
     };
 
     return cachedTransportConfig;
@@ -82,22 +74,18 @@ function readTransportConfig(): MailTransportConfig | null {
     return null;
   }
 
-  const port = Number(portRaw || "587");
   if (!Number.isFinite(port) || port <= 0) {
     return null;
   }
 
-  const secure = parseBooleanFlag(readMailEnv("SMTP_SECURE"), port === 465);
-  const requireTls = parseBooleanFlag(readMailEnv("SMTP_REQUIRE_TLS"), false);
-
   cachedTransportConfig = {
     from,
-    host,
-    password,
+    host: host ?? undefined,
+    password: password ?? undefined,
     port,
     requireTls,
     secure,
-    user,
+    user: user ?? undefined,
   };
 
   return cachedTransportConfig;

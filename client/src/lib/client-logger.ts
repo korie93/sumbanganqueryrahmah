@@ -29,3 +29,26 @@ export function logClientError(
 
   console.error(message);
 }
+
+export function logClientWarning(
+  message: string,
+  error?: unknown,
+  details?: unknown,
+  env: ClientLoggerEnvironment = import.meta.env,
+): void {
+  if (!shouldLogClientDiagnostics(env)) {
+    return;
+  }
+
+  if (details !== undefined) {
+    console.warn(message, error, details);
+    return;
+  }
+
+  if (error !== undefined) {
+    console.warn(message, error);
+    return;
+  }
+
+  console.warn(message);
+}

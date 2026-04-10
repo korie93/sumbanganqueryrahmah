@@ -4,6 +4,7 @@ import {
   clearIdempotencyFingerprintValidationCacheForTests,
   createCollectionJsonMutationRouteHandler,
   normalizeIdempotencyFingerprintHeaderValue,
+  pruneIdempotencyFingerprintValidationCache,
 } from "../collection/collection-route-handler-factories";
 import {
   createJsonTestApp,
@@ -251,4 +252,22 @@ test("collection mutation handler caches repeated idempotency fingerprint JSON v
     JSON.parse = originalParse;
     clearIdempotencyFingerprintValidationCacheForTests();
   }
+});
+
+test("pruneIdempotencyFingerprintValidationCache evicts the oldest fingerprint validations in batches", () => {
+  const cache = new Map();
+
+  for (let index = 0; index < 260; index += 1) {
+    cache.set(`fingerprint-${index}`, {
+      lastValidatedAt: index,
+    });
+  }
+
+  const pruned = pruneIdempotencyFingerprintValidationCache(cache, 256);
+
+  assert.equal(pruned, 29);
+  assert.equal(cache.size, 231);
+  assert.equal(cache.has("fingerprint-0"), false);
+  assert.equal(cache.has("fingerprint-28"), false);
+  assert.equal(cache.has("fingerprint-29"), true);
 });

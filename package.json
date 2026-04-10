@@ -12,6 +12,7 @@
     "verify:client-breakpoint-contract": "node scripts/verify-client-breakpoint-contract.mjs",
     "verify:client-entry-shell-contract": "node scripts/verify-client-entry-shell-contract.mjs",
     "verify:client-tsconfig-contract": "node scripts/verify-client-tsconfig-contract.mjs",
+    "verify:server-env-access-contract": "node scripts/verify-server-env-access-contract.mjs",
     "verify:browser-storage-safety": "node scripts/verify-browser-storage-safety.mjs",
     "verify:design-token-color-compatibility": "node scripts/verify-design-token-color-compatibility.mjs",
     "verify:design-token-spacing": "node scripts/verify-design-token-spacing.mjs",

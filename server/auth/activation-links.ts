@@ -1,13 +1,7 @@
-function readBaseUrlEnv(name: string): string | null {
-  const raw = String(process.env[name] || "").trim();
-  return raw ? raw : null;
-}
+import { readOptionalString } from "../config/runtime-config-read-utils";
 
 export function getPublicAppBaseUrl(): string {
-  const configured =
-    readBaseUrlEnv("PUBLIC_APP_URL")
-    || readBaseUrlEnv("APP_BASE_URL")
-    || readBaseUrlEnv("CLIENT_APP_URL");
+  const configured = readOptionalString("PUBLIC_APP_URL");
 
   if (configured) {
     try {

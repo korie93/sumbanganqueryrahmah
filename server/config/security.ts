@@ -1,14 +1,12 @@
+import { readCommaSeparatedList, readOptionalString } from "./runtime-config-read-utils";
 import { runtimeConfig } from "./runtime";
 
-const COLLECTION_PII_FIELD_NAMES = new Set([
+const ALLOWED_COLLECTION_PII_RETIRED_FIELDS = new Set([
   "customerName",
   "icNumber",
   "customerPhone",
   "accountNumber",
 ]);
-
-let cachedCollectionPiiRetiredFieldsRaw: string | null = null;
-let cachedCollectionPiiRetiredFields = new Set<string>();
 
 export function getSessionSecret(): string {
   return runtimeConfig.auth.sessionSecret;
@@ -19,20 +17,15 @@ export function getCollectionNicknameTempPassword(): string {
 }
 
 export function getTwoFactorEncryptionSecret(): string | null {
-  const configured = String(process.env.TWO_FACTOR_ENCRYPTION_KEY || "").trim();
-  return configured || null;
+  return readOptionalString("TWO_FACTOR_ENCRYPTION_KEY");
 }
 
 export function getCollectionPiiEncryptionSecret(): string | null {
-  const configured = String(process.env.COLLECTION_PII_ENCRYPTION_KEY || "").trim();
-  return configured || null;
+  return readOptionalString("COLLECTION_PII_ENCRYPTION_KEY");
 }
 
 function getCollectionPiiPreviousSecrets(): string[] {
-  return String(process.env.COLLECTION_PII_ENCRYPTION_KEY_PREVIOUS || "")
-    .split(",")
-    .map((value) => value.trim())
-    .filter(Boolean);
+  return readCommaSeparatedList("COLLECTION_PII_ENCRYPTION_KEY_PREVIOUS");
 }
 
 export function getTwoFactorDecryptionSecrets(): string[] {
@@ -57,19 +50,11 @@ export function getCollectionPiiDecryptionSecrets(): string[] {
 }
 
 export function getCollectionPiiRetiredFields(): Set<string> {
-  const raw = String(process.env.COLLECTION_PII_RETIRED_FIELDS || "").trim();
-  if (raw === cachedCollectionPiiRetiredFieldsRaw) {
-    return cachedCollectionPiiRetiredFields;
-  }
-
-  cachedCollectionPiiRetiredFieldsRaw = raw;
-  cachedCollectionPiiRetiredFields = new Set(
-    raw
-      .split(",")
-      .map((value) => value.trim())
-      .filter((value) => COLLECTION_PII_FIELD_NAMES.has(value)),
+  return new Set(
+    readCommaSeparatedList("COLLECTION_PII_RETIRED_FIELDS").filter((field) =>
+      ALLOWED_COLLECTION_PII_RETIRED_FIELDS.has(field),
+    ),
   );
-  return cachedCollectionPiiRetiredFields;
 }
 
 export function isCollectionPiiPlaintextRetiredField(field: string): boolean {

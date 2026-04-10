@@ -104,6 +104,8 @@ function optionalCollectionPiiRetiredFieldsEnv(name: string) {
 
 const runtimeEnvironmentSchema = z.object({
   NODE_ENV: optionalEnvString("NODE_ENV", 64),
+  DEBUG_LOGS: optionalBooleanEnv("DEBUG_LOGS"),
+  LOG_LEVEL: optionalEnvString("LOG_LEVEL", 64),
   HOST: optionalEnvString("HOST", 255),
   PORT: optionalIntEnv("PORT", { min: 1, max: 65_535 }),
   PUBLIC_APP_URL: optionalEnvString("PUBLIC_APP_URL"),
@@ -113,6 +115,7 @@ const runtimeEnvironmentSchema = z.object({
   CORS_ALLOWED_ORIGINS: optionalEnvString("CORS_ALLOWED_ORIGINS"),
   TRUSTED_PROXIES: optionalEnvString("TRUSTED_PROXIES"),
   ALLOW_LOCAL_DEV_CORS: optionalBooleanEnv("ALLOW_LOCAL_DEV_CORS"),
+  HTTP_SLOW_REQUEST_MS: optionalIntEnv("HTTP_SLOW_REQUEST_MS", { min: 250 }),
 
   DATABASE_URL: optionalEnvString("DATABASE_URL", SECRET_STRING_MAX_LENGTH),
   PG_HOST: optionalEnvString("PG_HOST", 255),
@@ -136,6 +139,12 @@ const runtimeEnvironmentSchema = z.object({
   COLLECTION_PII_RETIRED_FIELDS: optionalCollectionPiiRetiredFieldsEnv(
     "COLLECTION_PII_RETIRED_FIELDS",
   ),
+  COLLECTION_RECEIPT_QUARANTINE_ENABLED: optionalBooleanEnv(
+    "COLLECTION_RECEIPT_QUARANTINE_ENABLED",
+  ),
+  COLLECTION_RECEIPT_QUARANTINE_DIR: optionalEnvString(
+    "COLLECTION_RECEIPT_QUARANTINE_DIR",
+  ),
   COLLECTION_NICKNAME_TEMP_PASSWORD: optionalEnvString(
     "COLLECTION_NICKNAME_TEMP_PASSWORD",
     SECRET_STRING_MAX_LENGTH,
@@ -145,10 +154,25 @@ const runtimeEnvironmentSchema = z.object({
   LOCAL_SUPERUSER_CREDENTIALS_FILE_ENABLED: optionalBooleanEnv(
     "LOCAL_SUPERUSER_CREDENTIALS_FILE_ENABLED",
   ),
+  SEED_SUPERUSER_USERNAME: optionalEnvString("SEED_SUPERUSER_USERNAME", 255),
+  SEED_SUPERUSER_PASSWORD: optionalEnvString("SEED_SUPERUSER_PASSWORD", SECRET_STRING_MAX_LENGTH),
+  SEED_SUPERUSER_FULL_NAME: optionalEnvString("SEED_SUPERUSER_FULL_NAME", 255),
+  SEED_ADMIN_USERNAME: optionalEnvString("SEED_ADMIN_USERNAME", 255),
+  SEED_ADMIN_PASSWORD: optionalEnvString("SEED_ADMIN_PASSWORD", SECRET_STRING_MAX_LENGTH),
+  SEED_ADMIN_FULL_NAME: optionalEnvString("SEED_ADMIN_FULL_NAME", 255),
+  SEED_USER_USERNAME: optionalEnvString("SEED_USER_USERNAME", 255),
+  SEED_USER_PASSWORD: optionalEnvString("SEED_USER_PASSWORD", SECRET_STRING_MAX_LENGTH),
+  SEED_USER_FULL_NAME: optionalEnvString("SEED_USER_FULL_NAME", 255),
   MAIL_DEV_OUTBOX_ENABLED: optionalBooleanEnv("MAIL_DEV_OUTBOX_ENABLED"),
+  MAIL_DEV_OUTBOX_DIR: optionalEnvString("MAIL_DEV_OUTBOX_DIR"),
+  MAIL_DEV_OUTBOX_MAX_FILES: optionalIntEnv("MAIL_DEV_OUTBOX_MAX_FILES", {
+    min: 1,
+    max: 10_000,
+  }),
 
   BACKUP_ENCRYPTION_KEY: optionalEnvString("BACKUP_ENCRYPTION_KEY", SECRET_STRING_MAX_LENGTH),
   BACKUP_ENCRYPTION_KEYS: optionalEnvString("BACKUP_ENCRYPTION_KEYS", SECRET_STRING_MAX_LENGTH),
+  BACKUP_ENCRYPTION_KEY_ID: optionalEnvString("BACKUP_ENCRYPTION_KEY_ID", 64),
   BACKUP_FEATURE_ENABLED: optionalBooleanEnv("BACKUP_FEATURE_ENABLED"),
   BACKUP_MAX_PAYLOAD_BYTES: optionalIntEnv("BACKUP_MAX_PAYLOAD_BYTES", {
     min: 1_048_576,
@@ -157,8 +181,11 @@ const runtimeEnvironmentSchema = z.object({
 
   SMTP_SERVICE: optionalEnvString("SMTP_SERVICE", 255),
   SMTP_HOST: optionalEnvString("SMTP_HOST", 255),
+  SMTP_PORT: optionalIntEnv("SMTP_PORT", { min: 1, max: 65_535 }),
   SMTP_USER: optionalEnvString("SMTP_USER", 255),
   SMTP_PASSWORD: optionalEnvString("SMTP_PASSWORD", SECRET_STRING_MAX_LENGTH),
+  SMTP_SECURE: optionalBooleanEnv("SMTP_SECURE"),
+  SMTP_REQUIRE_TLS: optionalBooleanEnv("SMTP_REQUIRE_TLS"),
   MAIL_FROM: optionalEnvString("MAIL_FROM", 255),
 
   OLLAMA_HOST: optionalEnvString("OLLAMA_HOST"),
@@ -166,6 +193,8 @@ const runtimeEnvironmentSchema = z.object({
   OLLAMA_EMBED_MODEL: optionalEnvString("OLLAMA_EMBED_MODEL", 255),
   OLLAMA_TIMEOUT_MS: optionalIntEnv("OLLAMA_TIMEOUT_MS", { min: 1_000 }),
   AI_PRECOMPUTE_ON_START: optionalBooleanEnv("AI_PRECOMPUTE_ON_START"),
+  AI_DEBUG: optionalBooleanEnv("AI_DEBUG"),
+  AI_INTENT_MODE: optionalEnvString("AI_INTENT_MODE", 64),
   AI_GATE_GLOBAL_LIMIT: optionalIntEnv("AI_GATE_GLOBAL_LIMIT", { min: 1 }),
   AI_GATE_QUEUE_LIMIT: optionalIntEnv("AI_GATE_QUEUE_LIMIT", { min: 0 }),
   AI_GATE_QUEUE_WAIT_MS: optionalIntEnv("AI_GATE_QUEUE_WAIT_MS", { min: 1_000 }),
@@ -187,6 +216,8 @@ const runtimeEnvironmentSchema = z.object({
   MAINTENANCE_CACHE_TTL_MS: optionalIntEnv("MAINTENANCE_CACHE_TTL_MS", { min: 500 }),
   RUNTIME_SETTINGS_CACHE_TTL_MS: optionalIntEnv("RUNTIME_SETTINGS_CACHE_TTL_MS", { min: 500 }),
   PG_POOL_WARN_COOLDOWN_MS: optionalIntEnv("PG_POOL_WARN_COOLDOWN_MS", { min: 1_000 }),
+  COLLECTION_ROUTE_WARN_MS: optionalIntEnv("COLLECTION_ROUTE_WARN_MS", { min: 250 }),
+  ANALYTICS_TZ: optionalEnvString("ANALYTICS_TZ", 255),
   BACKUP_OPERATION_TIMEOUT_MS: optionalIntEnv("BACKUP_OPERATION_TIMEOUT_MS", { min: 5_000 }),
   IMPORT_ANALYSIS_TIMEOUT_MS: optionalIntEnv("IMPORT_ANALYSIS_TIMEOUT_MS", { min: 5_000 }),
   COLLECTION_ROLLUP_LISTEN_RECONNECT_MS: optionalIntEnv(
@@ -194,6 +225,7 @@ const runtimeEnvironmentSchema = z.object({
     { min: 1_000 },
   ),
 
+  SQR_FORCE_CLUSTER: optionalBooleanEnv("SQR_FORCE_CLUSTER"),
   SQR_MAX_WORKERS: optionalIntEnv("SQR_MAX_WORKERS", { min: 1 }),
   SQR_INITIAL_WORKERS: optionalIntEnv("SQR_INITIAL_WORKERS", { min: 1 }),
   SQR_PREALLOCATE_MB: optionalIntEnv("SQR_PREALLOCATE_MB", { min: 0 }),

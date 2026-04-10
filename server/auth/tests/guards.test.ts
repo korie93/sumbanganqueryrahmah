@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createAuthGuards, getInvalidatedSessionMessage } from "../guards";
+import {
+  createAuthGuards,
+  evictOldestTabVisibilityCacheEntryForTests,
+  getInvalidatedSessionMessage,
+} from "../guards";
 
 test("getInvalidatedSessionMessage returns reset-specific messaging for password reset invalidation", () => {
   assert.equal(
@@ -84,4 +88,17 @@ test("tab visibility guard caches role visibility and allows explicit cache clea
 
   assert.equal(visibilityLookupCount, 2);
   assert.equal(nextCalls, 3);
+});
+
+test("tab visibility cache helper evicts the least recently used role entry", () => {
+  const cache = new Map([
+    ["admin", { tabs: { monitor: true }, cachedAt: 100 }],
+    ["user", { tabs: { monitor: false }, cachedAt: 50 }],
+    ["auditor", { tabs: { monitor: true }, cachedAt: 75 }],
+  ]);
+
+  const evicted = evictOldestTabVisibilityCacheEntryForTests(cache);
+
+  assert.equal(evicted, "user");
+  assert.deepEqual(Array.from(cache.keys()), ["admin", "auditor"]);
 });

@@ -123,6 +123,7 @@ const run = async () => {
   await runNpm(["run", "verify:client-breakpoint-contract"], { env });
   await runNpm(["run", "verify:client-entry-shell-contract"], { env });
   await runNpm(["run", "verify:client-tsconfig-contract"], { env });
+  await runNpm(["run", "verify:server-env-access-contract"], { env });
   await runNpm(["run", "verify:design-token-color-compatibility"], { env });
   await runNpm(["run", "verify:design-token-spacing"], { env });
   await runNpm(["run", "verify:db-schema-governance"], { env });

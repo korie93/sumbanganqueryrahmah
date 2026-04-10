@@ -3,15 +3,13 @@ import { randomUUID } from "crypto";
 import { count, sql } from "drizzle-orm";
 import { users } from "../../../shared/schema-postgres";
 import { normalizeUserRole } from "../../auth/account-lifecycle";
+import { runtimeConfig } from "../../config/runtime";
 import { shouldSeedDefaultUsers } from "../../config/security";
 import { db } from "../../db-postgres";
 import { logger } from "../../lib/logger";
 import { USERS_BOOTSTRAP_BCRYPT_COST } from "./constants";
 import { writeLocalSuperuserCredentialsFile } from "./credentials-file";
-import {
-  isUsersBootstrapStrictLocalDevelopmentEnvironment,
-  readUsersBootstrapBooleanFlag,
-} from "./runtime";
+import { isUsersBootstrapStrictLocalDevelopmentEnvironment } from "./runtime";
 
 type SeedableUser = {
   username: string;
@@ -23,21 +21,21 @@ type SeedableUser = {
 function resolveConfiguredSeedUsers(): SeedableUser[] {
   return [
     {
-      username: process.env.SEED_SUPERUSER_USERNAME || "superuser",
-      password: process.env.SEED_SUPERUSER_PASSWORD || "",
-      fullName: process.env.SEED_SUPERUSER_FULL_NAME || "Superuser",
+      username: runtimeConfig.bootstrap.users.superuser.username,
+      password: runtimeConfig.bootstrap.users.superuser.password,
+      fullName: runtimeConfig.bootstrap.users.superuser.fullName,
       role: "superuser",
     },
     {
-      username: process.env.SEED_ADMIN_USERNAME || "admin1",
-      password: process.env.SEED_ADMIN_PASSWORD || "",
-      fullName: process.env.SEED_ADMIN_FULL_NAME || "Admin",
+      username: runtimeConfig.bootstrap.users.admin.username,
+      password: runtimeConfig.bootstrap.users.admin.password,
+      fullName: runtimeConfig.bootstrap.users.admin.fullName,
       role: "admin",
     },
     {
-      username: process.env.SEED_USER_USERNAME || "user1",
-      password: process.env.SEED_USER_PASSWORD || "",
-      fullName: process.env.SEED_USER_FULL_NAME || "User",
+      username: runtimeConfig.bootstrap.users.user.username,
+      password: runtimeConfig.bootstrap.users.user.password,
+      fullName: runtimeConfig.bootstrap.users.user.fullName,
       role: "user",
     },
   ].filter((user) => Boolean(String(user.password || "").trim()));
@@ -74,18 +72,15 @@ export async function seedUsersBootstrapDefaults(): Promise<void> {
   const defaultUsers = resolveConfiguredSeedUsers();
 
   if (isFreshLocalBootstrap) {
-    const bootstrapUsername = process.env.SEED_SUPERUSER_USERNAME || "superuser";
-    const bootstrapPassword = String(process.env.SEED_SUPERUSER_PASSWORD || "").trim();
+    const bootstrapUsername = runtimeConfig.bootstrap.freshLocalSuperuser.username;
+    const bootstrapPassword = String(runtimeConfig.bootstrap.freshLocalSuperuser.password || "").trim();
     if (!bootstrapPassword) {
       throw new Error(
         "Fresh local bootstrap requires SEED_SUPERUSER_PASSWORD. Temporary credential generation and disk output are disabled by default.",
       );
     }
 
-    const shouldWriteCredentialsFile = readUsersBootstrapBooleanFlag(
-      "LOCAL_SUPERUSER_CREDENTIALS_FILE_ENABLED",
-      false,
-    );
+    const shouldWriteCredentialsFile = runtimeConfig.bootstrap.localSuperuserCredentialsFileEnabled;
     if (shouldWriteCredentialsFile) {
       if (!isUsersBootstrapStrictLocalDevelopmentEnvironment()) {
         throw new Error(
@@ -101,7 +96,7 @@ export async function seedUsersBootstrapDefaults(): Promise<void> {
     defaultUsers.push({
       username: bootstrapUsername,
       password: bootstrapPassword,
-      fullName: process.env.SEED_SUPERUSER_FULL_NAME || "Local Superuser",
+      fullName: runtimeConfig.bootstrap.freshLocalSuperuser.fullName,
       role: "superuser",
     });
   } else if (!shouldSeedConfiguredUsers) {
@@ -142,7 +137,7 @@ export async function seedUsersBootstrapDefaults(): Promise<void> {
 
   if (localSuperuserCredentialsFilePath) {
     logger.warn("Bootstrapped a local superuser account and wrote credentials to an explicitly enabled local file", {
-      username: process.env.SEED_SUPERUSER_USERNAME || "superuser",
+      username: runtimeConfig.bootstrap.freshLocalSuperuser.username,
       credentialsFilePath: localSuperuserCredentialsFilePath,
     });
     logger.warn("Credential-file output should be treated as temporary local development material", {

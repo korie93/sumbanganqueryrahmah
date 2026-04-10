@@ -37,6 +37,11 @@ type CreateAuthGuardsOptions = {
   secret?: string;
 };
 
+type TabVisibilityCacheEntry = {
+  tabs: Record<string, boolean>;
+  cachedAt: number;
+};
+
 const TAB_VISIBILITY_CACHE_TTL_MS = 5 * 60 * 1000;
 const TAB_VISIBILITY_CACHE_MAX_SIZE = 100;
 const FORCED_PASSWORD_CHANGE_ALLOWLIST = new Set([
@@ -70,22 +75,38 @@ export function getInvalidatedSessionMessage(logoutReason?: string | null): stri
   return "Session expired. Please login again.";
 }
 
+function evictOldestTabVisibilityCacheEntry(
+  cache: Map<string, TabVisibilityCacheEntry>,
+): string | null {
+  let oldestKey: string | null = null;
+  let oldestCachedAt = Number.POSITIVE_INFINITY;
+
+  for (const [key, entry] of cache.entries()) {
+    if (entry.cachedAt < oldestCachedAt) {
+      oldestCachedAt = entry.cachedAt;
+      oldestKey = key;
+    }
+  }
+
+  if (oldestKey) {
+    cache.delete(oldestKey);
+  }
+
+  return oldestKey;
+}
+
 export function createAuthGuards(options: CreateAuthGuardsOptions) {
   const storage = options.storage;
   const secret = options.secret || getSessionSecret();
-  const tabVisibilityCache = new Map<string, { tabs: Record<string, boolean>; cachedAt: number }>();
+  const tabVisibilityCache = new Map<string, TabVisibilityCacheEntry>();
 
   function setRoleTabVisibilityCache(role: string, tabs: Record<string, boolean>, cachedAt: number) {
-    if (tabVisibilityCache.has(role)) {
-      tabVisibilityCache.delete(role);
-    }
-
-    while (tabVisibilityCache.size >= TAB_VISIBILITY_CACHE_MAX_SIZE) {
-      const oldestKey = tabVisibilityCache.keys().next().value;
-      if (!oldestKey) {
-        break;
+    if (!tabVisibilityCache.has(role)) {
+      while (tabVisibilityCache.size >= TAB_VISIBILITY_CACHE_MAX_SIZE) {
+        if (!evictOldestTabVisibilityCacheEntry(tabVisibilityCache)) {
+          break;
+        }
       }
-      tabVisibilityCache.delete(oldestKey);
     }
 
     tabVisibilityCache.set(role, { tabs, cachedAt });
@@ -95,9 +116,13 @@ export function createAuthGuards(options: CreateAuthGuardsOptions) {
     if (role === "superuser") return {};
     const now = Date.now();
     const cached = tabVisibilityCache.get(role);
-    if (cached && now - cached.cachedAt < TAB_VISIBILITY_CACHE_TTL_MS) {
-      setRoleTabVisibilityCache(role, cached.tabs, now);
-      return cached.tabs;
+    if (cached) {
+      if (now - cached.cachedAt < TAB_VISIBILITY_CACHE_TTL_MS) {
+        cached.cachedAt = now;
+        return cached.tabs;
+      }
+
+      tabVisibilityCache.delete(role);
     }
 
     const tabs = await storage.getRoleTabVisibility(role);
@@ -306,4 +331,24 @@ export function createAuthGuards(options: CreateAuthGuardsOptions) {
       tabVisibilityCache.clear();
     },
   };
+}
+
+export function evictOldestTabVisibilityCacheEntryForTests(
+  cache: Map<string, TabVisibilityCacheEntry>,
+): string | null {
+  let oldestKey: string | null = null;
+  let oldestCachedAt = Number.POSITIVE_INFINITY;
+
+  for (const [key, entry] of cache.entries()) {
+    if (entry.cachedAt < oldestCachedAt) {
+      oldestCachedAt = entry.cachedAt;
+      oldestKey = key;
+    }
+  }
+
+  if (oldestKey) {
+    cache.delete(oldestKey);
+  }
+
+  return oldestKey;
 }

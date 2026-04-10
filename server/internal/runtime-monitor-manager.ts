@@ -1,3 +1,4 @@
+import cluster from "node:cluster";
 import { PerformanceObserver, monitorEventLoopDelay } from "node:perf_hooks";
 import {
   createRuntimeControlStateManager,
@@ -270,7 +271,7 @@ export function createRuntimeMonitorManager(options: RuntimeMonitorManagerOption
             queueLength: options.getSearchQueueLength(),
             requestRate: requestTracker.getRequestRate(),
             timestamp: Date.now(),
-            workerId: Number(process.env.NODE_UNIQUE_ID || 0),
+            workerId: Number(cluster.worker?.id || 0),
           }),
         });
       }

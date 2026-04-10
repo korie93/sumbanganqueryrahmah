@@ -1,9 +1,6 @@
 import pino from "pino";
+import { runtimeConfig } from "../config/runtime";
 import { getRequestContext } from "./request-context";
-import { isProductionLikeEnvironment } from "../config/runtime-environment";
-
-const DEBUG_LOGS = String(process.env.DEBUG_LOGS || "0") === "1" && !isProductionLikeEnvironment();
-const DEFAULT_LOG_LEVEL = process.env.LOG_LEVEL || (DEBUG_LOGS ? "debug" : "info");
 
 const REDACT_KEYS = [
   "password",
@@ -78,7 +75,7 @@ export function sanitizeForLog(value: unknown): unknown {
 }
 
 const rootLogger = pino({
-  level: DEFAULT_LOG_LEVEL,
+  level: runtimeConfig.app.logLevel,
   base: null,
   timestamp: pino.stdTimeFunctions.isoTime,
   formatters: {

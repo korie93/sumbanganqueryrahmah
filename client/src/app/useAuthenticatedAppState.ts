@@ -13,6 +13,7 @@ import type { MonitorSection, User } from "@/app/types";
 import { performAppLogout, performClientLogout } from "@/app/logout-flow";
 import { activityLogout } from "@/lib/api";
 import { getStoredActivityId } from "@/lib/auth-session";
+import { logClientWarning } from "@/lib/client-logger";
 
 type UseAuthenticatedAppStateArgs = {
   initialMonitorSection: MonitorSection;
@@ -112,7 +113,7 @@ export function useAuthenticatedAppState({
       applyLoggedOutClientState,
       broadcastLogoutToOtherTabs,
       warn: (message, error) => {
-        console.warn(message, error);
+        logClientWarning(message, error);
       },
     });
   }, [applyLoggedOutClientState, broadcastLogoutToOtherTabs]);

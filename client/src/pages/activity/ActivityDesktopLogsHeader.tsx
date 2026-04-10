@@ -1,41 +1,38 @@
 import { Checkbox } from "@/components/ui/checkbox";
-
-type ActivityDesktopLogsHeaderProps = {
-  allVisibleSelected: boolean;
-  canModerateActivity: boolean;
-  onToggleSelectAllVisible: (checked: boolean) => void;
-  partiallySelected: boolean;
-};
+import type { ActivityDesktopLogsHeaderProps } from "@/pages/activity/activity-desktop-logs-shared";
 
 export function ActivityDesktopLogsHeader({
   allVisibleSelected,
   canModerateActivity,
+  gridTemplateColumns,
   onToggleSelectAllVisible,
   partiallySelected,
 }: ActivityDesktopLogsHeaderProps) {
   return (
-    <thead className="bg-muted sticky top-0 z-[var(--z-sticky-header)]">
-      <tr>
+    <div
+      className="sticky top-0 z-[var(--z-sticky-header)] grid items-center gap-3 border-b border-border bg-muted/95 px-3 py-3 text-left text-sm font-medium text-muted-foreground backdrop-blur-sm"
+      role="row"
+      style={{ gridTemplateColumns }}
+    >
         {canModerateActivity ? (
-          <th className="text-left p-3 font-medium text-muted-foreground w-[50px]">
+          <div className="flex items-center">
             <Checkbox
               checked={allVisibleSelected || (partiallySelected ? "indeterminate" : false)}
               onCheckedChange={(checked) => onToggleSelectAllVisible(Boolean(checked))}
               aria-label="Select all visible activity logs"
             />
-          </th>
+          </div>
         ) : null}
-        <th className="text-left p-3 font-medium text-muted-foreground">User</th>
-        <th className="text-left p-3 font-medium text-muted-foreground">Status</th>
-        <th className="text-left p-3 font-medium text-muted-foreground">IP</th>
-        <th className="text-left p-3 font-medium text-muted-foreground">Browser</th>
-        <th className="text-left p-3 font-medium text-muted-foreground">Login</th>
-        <th className="text-left p-3 font-medium text-muted-foreground">Logout</th>
-        <th className="text-left p-3 font-medium text-muted-foreground">Duration</th>
+        <div>User</div>
+        <div>Status</div>
+        <div>IP</div>
+        <div>Browser</div>
+        <div>Login</div>
+        <div>Logout</div>
+        <div>Duration</div>
         {canModerateActivity ? (
-          <th className="text-right p-3 font-medium text-muted-foreground">Actions</th>
+          <div className="text-right">Actions</div>
         ) : null}
-      </tr>
-    </thead>
+    </div>
   );
 }

@@ -44,7 +44,7 @@ export function normalizeCorsOrigin(value: string | null | undefined): string | 
 function buildDefaultCorsEnvironment(): CorsEnvironmentSource {
   return {
     NODE_ENV: runtimeConfig.app.nodeEnv,
-    ALLOW_LOCAL_DEV_CORS: process.env.ALLOW_LOCAL_DEV_CORS,
+    ALLOW_LOCAL_DEV_CORS: runtimeConfig.app.allowLocalDevCors ? "1" : "0",
     PUBLIC_APP_URL: runtimeConfig.app.publicAppUrl ?? undefined,
     CORS_ALLOWED_ORIGINS: runtimeConfig.app.corsAllowedOrigins.join(","),
   };

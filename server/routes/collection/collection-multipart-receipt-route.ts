@@ -1,5 +1,6 @@
 import Busboy from "busboy";
 import type { RequestHandler } from "express";
+import { logger } from "../../lib/logger";
 import {
   appendCollectionMultipartField,
   isCollectionReceiptMultipartField,
@@ -82,7 +83,12 @@ export function createCollectionReceiptMultipartRoute<
     });
 
     parser.once("error", (error) => {
-      void fail(error);
+      fail(error).catch((cleanupError) => {
+        logger.error("Multipart cleanup failed after parser error", {
+          cleanupError,
+          originalError: error,
+        });
+      });
     });
 
     parser.once("finish", async () => {

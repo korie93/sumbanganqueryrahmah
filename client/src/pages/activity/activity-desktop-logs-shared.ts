@@ -15,6 +15,14 @@ export type ActivityDesktopLogsTableProps = Pick<
   | "selectedActivityIds"
 >;
 
+export interface ActivityDesktopLogsHeaderProps {
+  allVisibleSelected: boolean;
+  canModerateActivity: boolean;
+  gridTemplateColumns: string;
+  onToggleSelectAllVisible: (checked: boolean) => void;
+  partiallySelected: boolean;
+}
+
 export interface ActivityDesktopLogActionsProps {
   actionLoading: string | null;
   activity: ActivityRecord;
@@ -31,4 +39,6 @@ export interface ActivityDesktopLogRowProps
   activity: ActivityRecord;
   isSelected: boolean;
   onToggleSelected: (activityId: string, checked: boolean) => void;
+  style?: React.CSSProperties;
+  gridTemplateColumns: string;
 }

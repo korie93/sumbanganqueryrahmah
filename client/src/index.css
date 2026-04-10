@@ -1,6 +1,17 @@
 @tailwind components;
 @tailwind utilities;
 
+.touch-target {
+  position: relative;
+}
+
+.touch-target::before {
+  content: "";
+  position: absolute;
+  inset: -14px;
+  border-radius: inherit;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

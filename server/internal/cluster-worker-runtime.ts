@@ -69,7 +69,7 @@ export function forkClusterWorker(params: {
   logger: LoggerLike;
 }): Worker | null {
   try {
-    const worker = params.clusterModule.fork({ ...process.env, SQR_CLUSTER_WORKER: "1" });
+    const worker = params.clusterModule.fork();
     params.logger.info("Spawned worker", {
       workerId: worker.id,
       spawnReason: params.reason,

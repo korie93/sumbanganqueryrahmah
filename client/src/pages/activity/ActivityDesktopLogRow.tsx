@@ -14,48 +14,56 @@ export function ActivityDesktopLogRow({
   actionLoading,
   activity,
   canModerateActivity,
+  gridTemplateColumns,
   isSelected,
   onBanClick,
   onDeleteClick,
   onKickClick,
   onToggleSelected,
+  style,
 }: ActivityDesktopLogRowProps) {
   const browserInfo = parseActivityUserAgent(activity.browser);
 
   return (
-    <tr
-      className="border-t border-border hover:bg-muted/50"
+    <div
+      className="grid items-center gap-3 border-b border-border/70 px-3 py-3 hover:bg-muted/50"
       data-testid={`activity-row-${activity.id}`}
+      role="row"
+      style={{ ...style, gridTemplateColumns }}
     >
       {canModerateActivity ? (
-        <td className="p-3 align-top">
+        <div className="flex items-center">
           <Checkbox
             checked={isSelected}
             onCheckedChange={(checked) => onToggleSelected(activity.id, Boolean(checked))}
             aria-label={`Select activity log ${activity.id}`}
           />
-        </td>
+        </div>
       ) : null}
-      <td className="p-3">
+      <div className="min-w-0">
         <div className="flex items-center gap-2">
-          <span className="font-medium text-foreground">{activity.username}</span>
+          <span className="truncate font-medium text-foreground">{activity.username}</span>
           <Badge variant="outline" className="text-xs">
             {activity.role}
           </Badge>
         </div>
-      </td>
-      <td className="p-3">{getStatusBadge(activity.status)}</td>
-      <td className="p-3 text-muted-foreground text-xs">{activity.ipAddress || "-"}</td>
-      <td className="p-3 text-muted-foreground text-xs">{getActivityBrowserText(browserInfo)}</td>
-      <td className="p-3 text-muted-foreground text-xs">{formatActivityTime(activity.loginTime)}</td>
-      <td className="p-3 text-muted-foreground text-xs">
+      </div>
+      <div>{getStatusBadge(activity.status)}</div>
+      <div className="truncate text-xs text-muted-foreground" title={activity.ipAddress || "-"}>
+        {activity.ipAddress || "-"}
+      </div>
+      <div className="truncate text-xs text-muted-foreground" title={getActivityBrowserText(browserInfo)}>
+        {getActivityBrowserText(browserInfo)}
+      </div>
+      <div className="text-xs text-muted-foreground">{formatActivityTime(activity.loginTime)}</div>
+      <div className="text-xs text-muted-foreground">
         {activity.logoutTime ? formatActivityTime(activity.logoutTime) : "-"}
-      </td>
-      <td className="p-3 text-muted-foreground text-xs">
+      </div>
+      <div className="text-xs text-muted-foreground">
         {getSessionDuration(activity.loginTime, activity.logoutTime)}
-      </td>
+      </div>
       {canModerateActivity ? (
-        <td className="p-3">
+        <div>
           <ActivityDesktopLogActions
             actionLoading={actionLoading}
             activity={activity}
@@ -63,8 +71,8 @@ export function ActivityDesktopLogRow({
             onDeleteClick={onDeleteClick}
             onKickClick={onKickClick}
           />
-        </td>
+        </div>
       ) : null}
-    </tr>
+    </div>
   );
 }

@@ -1,6 +1,7 @@
 import { constants as fsConstants } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
+import { runtimeConfig } from "../config/runtime";
 import { resolveUploadsRootDir } from "../config/upload-paths";
 
 export const COLLECTION_UPLOADS_ROOT_DIR = resolveUploadsRootDir();
@@ -72,14 +73,9 @@ export async function collectionReceiptFileExists(
 }
 
 export function isCollectionReceiptQuarantineEnabled(): boolean {
-  return String(process.env.COLLECTION_RECEIPT_QUARANTINE_ENABLED || "1").trim() !== "0";
+  return runtimeConfig.collection.receiptQuarantineEnabled;
 }
 
 export function getCollectionReceiptQuarantineDir(): string {
-  const configured = String(process.env.COLLECTION_RECEIPT_QUARANTINE_DIR || "").trim();
-  if (!configured) {
-    return DEFAULT_COLLECTION_RECEIPT_QUARANTINE_DIR;
-  }
-
-  return path.resolve(process.cwd(), configured);
+  return runtimeConfig.collection.receiptQuarantineDir || DEFAULT_COLLECTION_RECEIPT_QUARANTINE_DIR;
 }

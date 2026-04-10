@@ -1,5 +1,6 @@
 import type { RequestHandler, Response } from "express";
 import type { AuthenticatedRequest } from "../../auth/guards";
+import { runtimeConfig } from "../../config/runtime";
 import { badRequest, HttpError } from "../../http/errors";
 import { logger } from "../../lib/logger";
 import type {
@@ -16,7 +17,7 @@ type CollectionMutationIdempotencyStorage = Pick<
 
 const SLOW_COLLECTION_ROUTE_THRESHOLD_MS = Math.max(
   250,
-  Number.parseInt(String(process.env.COLLECTION_ROUTE_WARN_MS || "750"), 10) || 750,
+  runtimeConfig.collection.routeWarnMs,
 );
 const OBSERVED_COLLECTION_ROUTE_PATHS = new Set([
   "/api/collection/summary",
@@ -26,7 +27,37 @@ const OBSERVED_COLLECTION_ROUTE_PATHS = new Set([
   "/api/collection/daily/day-details",
 ]);
 const IDEMPOTENCY_FINGERPRINT_PARSE_CACHE_LIMIT = 256;
-const idempotencyFingerprintValidationCache = new Map<string, true>();
+type IdempotencyFingerprintValidationCacheEntry = {
+  lastValidatedAt: number;
+};
+
+const idempotencyFingerprintValidationCache = new Map<
+  string,
+  IdempotencyFingerprintValidationCacheEntry
+>();
+
+export function pruneIdempotencyFingerprintValidationCache(
+  cache: Map<string, IdempotencyFingerprintValidationCacheEntry>,
+  limit = IDEMPOTENCY_FINGERPRINT_PARSE_CACHE_LIMIT,
+): number {
+  if (cache.size <= limit) {
+    return 0;
+  }
+
+  const pruneCount = Math.min(
+    cache.size,
+    cache.size - limit + Math.max(1, Math.floor(limit * 0.1)),
+  );
+  const oldestEntries = Array.from(cache.entries())
+    .sort((left, right) => left[1].lastValidatedAt - right[1].lastValidatedAt)
+    .slice(0, pruneCount);
+
+  for (const [key] of oldestEntries) {
+    cache.delete(key);
+  }
+
+  return oldestEntries.length;
+}
 
 function sendCollectionError(res: Response, err: unknown, fallbackMessage: string) {
   if (err instanceof HttpError) {
@@ -81,23 +112,20 @@ export function normalizeIdempotencyFingerprintHeaderValue(value: unknown): stri
     return null;
   }
 
-  if (!idempotencyFingerprintValidationCache.has(normalized)) {
+  const now = Date.now();
+  const cached = idempotencyFingerprintValidationCache.get(normalized);
+
+  if (!cached) {
     try {
       JSON.parse(normalized);
     } catch {
       throw badRequest("Idempotency fingerprint must be valid JSON.");
     }
 
-    idempotencyFingerprintValidationCache.set(normalized, true);
-    if (idempotencyFingerprintValidationCache.size > IDEMPOTENCY_FINGERPRINT_PARSE_CACHE_LIMIT) {
-      const oldestKey = idempotencyFingerprintValidationCache.keys().next().value;
-      if (oldestKey) {
-        idempotencyFingerprintValidationCache.delete(oldestKey);
-      }
-    }
+    idempotencyFingerprintValidationCache.set(normalized, { lastValidatedAt: now });
+    pruneIdempotencyFingerprintValidationCache(idempotencyFingerprintValidationCache);
   } else {
-    idempotencyFingerprintValidationCache.delete(normalized);
-    idempotencyFingerprintValidationCache.set(normalized, true);
+    cached.lastValidatedAt = now;
   }
 
   return normalized;

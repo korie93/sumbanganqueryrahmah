@@ -25,6 +25,7 @@ import type {
   LastAiPersonEntry,
   SearchCacheEntry,
 } from "./ai-search-types";
+import { runtimeConfig } from "../config/runtime";
 import { logger } from "../lib/logger";
 
 export class AiSearchService {
@@ -42,13 +43,9 @@ export class AiSearchService {
   private readonly branchLookups: ReturnType<typeof createAiSafeBranchLookups>;
 
   constructor(private readonly options: AiSearchServiceOptions) {
-    this.maxSearchCacheEntries = Number(
-      process.env.SQR_MAX_SEARCH_CACHE_ENTRIES ?? (options.lowMemoryMode ? "60" : "180"),
-    );
-    this.maxLastAiPersonEntries = Number(
-      process.env.SQR_MAX_AI_LAST_PERSON_ENTRIES ?? (options.lowMemoryMode ? "40" : "120"),
-    );
-    this.lastAiPersonTtlMs = Number(process.env.SQR_AI_LAST_PERSON_TTL_MS ?? "1800000");
+    this.maxSearchCacheEntries = runtimeConfig.ai.cache.maxSearchEntries;
+    this.maxLastAiPersonEntries = runtimeConfig.ai.cache.maxLastPersonEntries;
+    this.lastAiPersonTtlMs = runtimeConfig.ai.cache.lastPersonTtlMs;
     this.branchLookups = createAiSafeBranchLookups(options.storage);
     this.debugGlobal.__searchInflightMap = this.searchInflight;
   }
@@ -135,10 +132,10 @@ export class AiSearchService {
       withAiCircuit: this.options.withAiCircuit,
       ollamaChat: this.options.ollamaChat,
       ollamaEmbed: this.options.ollamaEmbed,
-      intentMode: process.env.AI_INTENT_MODE,
+      intentMode: runtimeConfig.ai.intentMode ?? undefined,
     });
 
-    if (process.env.AI_DEBUG === "1") {
+    if (runtimeConfig.ai.debugEnabled) {
       logger.debug(
         "AI search candidate debug",
         buildAiSearchDebugPayload({
@@ -151,7 +148,7 @@ export class AiSearchService {
       );
     }
 
-    if (process.env.AI_DEBUG === "1" && resolution.best) {
+    if (runtimeConfig.ai.debugEnabled && resolution.best) {
       const bestCandidateDebugPayload = buildAiBestCandidateDebugPayload(resolution.best);
       if (bestCandidateDebugPayload) {
         logger.debug("AI search best row", bestCandidateDebugPayload);
@@ -180,7 +177,7 @@ export class AiSearchService {
       fallbackPerson,
       storage: this.options.storage,
       branchLookups: this.branchLookups,
-      debugEnabled: process.env.AI_DEBUG === "1",
+      debugEnabled: runtimeConfig.ai.debugEnabled,
     });
   }
 

@@ -25,6 +25,7 @@ import {
   resolveCollectionCustomerNameSearchHashesValue,
   resolveStoredCollectionPiiPlaintextValue,
 } from "../lib/collection-pii-encryption";
+import { logger } from "../lib/logger";
 import { buildProtectedCollectionPiiSelect } from "./collection-pii-select-utils";
 export {
   createBackupPayloadChunkReader,
@@ -247,7 +248,12 @@ function createEmptyBackupPayloadCounts(): BackupPayloadCounts {
 
 async function createBackupTempFile() {
   const tempDirPath = await fs.mkdtemp(path.join(os.tmpdir(), "sqr-backup-export-"));
-  await fs.chmod(tempDirPath, 0o700).catch(() => {});
+  await fs.chmod(tempDirPath, 0o700).catch((error) => {
+    logger.warn("Failed to set backup temp directory permissions", {
+      error,
+      tempDirPath,
+    });
+  });
   return {
     tempDirPath,
     tempFilePath: path.join(tempDirPath, "backup-data.json"),

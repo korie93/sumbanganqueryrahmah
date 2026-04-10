@@ -38,6 +38,7 @@ export default function MaintenancePage() {
   useEffect(() => {
     let mounted = true;
     let activeController: AbortController | null = null;
+    let pollIntervalId: number | null = null;
     const storage = getBrowserLocalStorage();
 
     setState((previous) => parseStoredMaintenanceState(safeGetStorageItem(storage, "maintenanceState"), previous));
@@ -63,6 +64,22 @@ export default function MaintenancePage() {
       }
     };
 
+    const stopPolling = () => {
+      if (pollIntervalId !== null) {
+        window.clearInterval(pollIntervalId);
+        pollIntervalId = null;
+      }
+    };
+
+    const startPolling = () => {
+      if (document.hidden || pollIntervalId !== null) {
+        return;
+      }
+      pollIntervalId = window.setInterval(() => {
+        void load();
+      }, 15_000);
+    };
+
     const handleMaintenanceUpdated = (event: Event) => {
       const nextState = (event as CustomEvent<Partial<MaintenancePayload>>).detail;
       if (!mounted) {
@@ -78,10 +95,22 @@ export default function MaintenancePage() {
       setState((previous) => parseStoredMaintenanceState(event.newValue, previous));
     };
 
-    load();
-    const poll = setInterval(load, 15_000);
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        activeController?.abort();
+        stopPolling();
+        return;
+      }
+
+      void load();
+      startPolling();
+    };
+
+    void load();
+    startPolling();
     window.addEventListener("maintenance-updated", handleMaintenanceUpdated as EventListener);
     window.addEventListener("storage", handleStorage);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
       mounted = false;
@@ -89,7 +118,8 @@ export default function MaintenancePage() {
       activeController = null;
       window.removeEventListener("maintenance-updated", handleMaintenanceUpdated as EventListener);
       window.removeEventListener("storage", handleStorage);
-      clearInterval(poll);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      stopPolling();
     };
   }, []);
 
