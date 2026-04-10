@@ -2050,10 +2050,11 @@ N1  [TINGGI] Z-Index Conflict: Floating AI & Modal Sama Nilai
            tanpa susunan yang jelas. UI rosak.
     >>> ARAHAN CODEX:
         Buka client/src/theme-tokens.css, cari --z-floating-ai-overlay.
-        Tukar nilainya kepada 55 (di bawah modal) ATAU 65 (di atas modal)
-        bergantung pada UX yang dikehendaki. Pastikan --z-modal-content
-        kekal 60. Jika floating AI perlu di atas modal, guna 65.
-        Jika modal perlu menghalang floating AI, guna 55.
+        Tukar nilainya kepada 55 supaya modal (60) sentiasa di atas
+        floating AI. Ini adalah cadangan utama kerana modal dialog
+        biasanya memerlukan fokus pengguna dan perlu menghalang semua
+        elemen lain termasuk floating AI.
+        Pastikan --z-modal-content kekal 60.
     >>> STATUS: ⬜ BELUM DIPERBAIKI
 
 N2  [TINGGI] Activity Logs Tanpa Virtualization — Prestasi Lambat
@@ -2308,7 +2309,7 @@ N15 [RENDAH] Input Height h-9 Tiada Mobile Override
 | ID  | Tahap| Tajuk Ringkas                            | Fail Utama             |
 +-----+------+------------------------------------------+------------------------+
 | N1  | 🔴  | Z-index floating AI = modal conflict     | theme-tokens.css       |
-| N2  | 🔴  | Activity lists tanpa virtualization       | Activity*LogsList.tsx   |
+| N2  | 🔴  | Activity lists tanpa virtualization       | ActivityMobile/Desktop |
 | N3  | 🔴  | Maintenance polling tanpa visibility      | Maintenance.tsx         |
 | N4  | 🟡  | Idempotency cache LRU satu entry         | collection-route-*.ts   |
 | N5  | 🟡  | Tab visibility cache churn               | guards.ts              |
