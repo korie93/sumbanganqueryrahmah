@@ -1,4 +1,5 @@
 import { readCommaSeparatedList, readOptionalString } from "./runtime-config-read-utils";
+import { isProductionLikeEnvironment } from "./runtime-environment";
 import { runtimeConfig } from "./runtime";
 
 const ALLOWED_COLLECTION_PII_RETIRED_FIELDS = new Set([
@@ -59,6 +60,20 @@ export function getCollectionPiiRetiredFields(): Set<string> {
 
 export function isCollectionPiiPlaintextRetiredField(field: string): boolean {
   return getCollectionPiiRetiredFields().has(field);
+}
+
+export function getBackupEncryptionRuntimeConfig(): {
+  encryptionKey: string | null;
+  encryptionKeys: string | null;
+  encryptionKeyId: string | null;
+  requireEncryption: boolean;
+} {
+  return {
+    encryptionKey: readOptionalString("BACKUP_ENCRYPTION_KEY"),
+    encryptionKeys: readOptionalString("BACKUP_ENCRYPTION_KEYS"),
+    encryptionKeyId: readOptionalString("BACKUP_ENCRYPTION_KEY_ID"),
+    requireEncryption: isProductionLikeEnvironment(),
+  };
 }
 
 export function shouldSeedDefaultUsers(): boolean {

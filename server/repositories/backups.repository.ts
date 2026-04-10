@@ -1,5 +1,4 @@
-import { runtimeConfig } from "../config/runtime";
-import { isProductionLikeEnvironment } from "../config/runtime-environment";
+import { getBackupEncryptionRuntimeConfig } from "../config/security";
 import {
   assertBackupEncryptionConfig,
   resolveBackupEncryptionConfig,
@@ -37,11 +36,12 @@ export class BackupsRepository {
   private readonly backupEncryption: BackupEncryptionConfig;
 
   constructor(private readonly options: BackupsRepositoryOptions) {
+    const backupEncryptionRuntimeConfig = getBackupEncryptionRuntimeConfig();
     this.backupEncryption = resolveBackupEncryptionConfig({
-      BACKUP_ENCRYPTION_KEY: runtimeConfig.backups.encryptionKey ?? undefined,
-      BACKUP_ENCRYPTION_KEYS: runtimeConfig.backups.encryptionKeys ?? undefined,
-      BACKUP_ENCRYPTION_KEY_ID: runtimeConfig.backups.encryptionKeyId ?? undefined,
-    }, isProductionLikeEnvironment());
+      BACKUP_ENCRYPTION_KEY: backupEncryptionRuntimeConfig.encryptionKey ?? undefined,
+      BACKUP_ENCRYPTION_KEYS: backupEncryptionRuntimeConfig.encryptionKeys ?? undefined,
+      BACKUP_ENCRYPTION_KEY_ID: backupEncryptionRuntimeConfig.encryptionKeyId ?? undefined,
+    }, backupEncryptionRuntimeConfig.requireEncryption);
     assertBackupEncryptionConfig(this.backupEncryption);
   }
 
