@@ -105,23 +105,27 @@ export function ActivityDesktopLogsTable({
         className="min-w-[58rem] overflow-hidden rounded-lg border border-border bg-card/60 text-sm"
         role="table"
       >
-        <ActivityDesktopLogsHeader
-          allVisibleSelected={allVisibleSelected}
-          canModerateActivity={canModerateActivity}
-          gridTemplateColumns={gridTemplateColumns}
-          onToggleSelectAllVisible={onToggleSelectAllVisible}
-          partiallySelected={partiallySelected}
-        />
-        <FixedSizeList
-          height={listHeight}
-          itemCount={activities.length}
-          itemData={itemData}
-          itemSize={ACTIVITY_DESKTOP_ROW_HEIGHT_PX}
-          overscanCount={8}
-          width="100%"
-        >
-          {ActivityDesktopVirtualRow}
-        </FixedSizeList>
+        <div role="rowgroup">
+          <ActivityDesktopLogsHeader
+            allVisibleSelected={allVisibleSelected}
+            canModerateActivity={canModerateActivity}
+            gridTemplateColumns={gridTemplateColumns}
+            onToggleSelectAllVisible={onToggleSelectAllVisible}
+            partiallySelected={partiallySelected}
+          />
+        </div>
+        <div role="rowgroup">
+          <FixedSizeList
+            height={listHeight}
+            itemCount={activities.length}
+            itemData={itemData}
+            itemSize={ACTIVITY_DESKTOP_ROW_HEIGHT_PX}
+            overscanCount={8}
+            width="100%"
+          >
+            {ActivityDesktopVirtualRow}
+          </FixedSizeList>
+        </div>
       </div>
     </div>
   );
