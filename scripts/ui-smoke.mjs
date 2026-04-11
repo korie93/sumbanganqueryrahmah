@@ -9,12 +9,16 @@ const password = process.env.SMOKE_TEST_PASSWORD || "";
 const rawArtifactsDir = String(process.env.SMOKE_ARTIFACTS_DIR || "").trim();
 const artifactsDir = rawArtifactsDir ? path.resolve(process.cwd(), rawArtifactsDir) : "";
 const errors = [];
+const BACKUP_JOB_TIMEOUT_MS = 180_000;
+const BACKUP_JOB_POLL_INTERVAL_MS = 1_500;
 
 const assert = (condition, message) => {
   if (!condition) {
     throw new Error(message);
   }
 };
+
+const waitMs = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 
 const ensureArtifactsDir = async () => {
   if (!artifactsDir) {
@@ -916,6 +920,50 @@ const cleanupBackupByName = async (context, backupName) => {
   }
 };
 
+const readJsonResponseBody = async (response) => {
+  const rawText = await response.text().catch(() => "");
+  try {
+    return rawText ? JSON.parse(rawText) : null;
+  } catch {
+    return null;
+  }
+};
+
+const waitForBackupJobTerminal = async (context, jobId, timeoutMs = BACKUP_JOB_TIMEOUT_MS) => {
+  const normalizedJobId = String(jobId || "").trim();
+  assert(normalizedJobId, "backup smoke expected the create response to include a job id");
+
+  const deadline = Date.now() + timeoutMs;
+  let lastJob = null;
+
+  while (Date.now() < deadline) {
+    const response = await apiJsonRequestWithRetry(
+      context,
+      "GET",
+      `/api/backups/jobs/${encodeURIComponent(normalizedJobId)}`,
+      undefined,
+      [200],
+    );
+    lastJob = response.payload;
+    const status = String(lastJob?.status || "").trim().toLowerCase();
+
+    if (status === "completed") {
+      return lastJob;
+    }
+
+    if (status === "failed") {
+      const message = String(lastJob?.error?.message || "Backup background job failed.").trim();
+      throw new Error(`Backup background job ${normalizedJobId} failed: ${message}`);
+    }
+
+    await waitMs(BACKUP_JOB_POLL_INTERVAL_MS);
+  }
+
+  throw new Error(
+    `Backup background job ${normalizedJobId} did not finish within ${timeoutMs}ms. Last status: ${String(lastJob?.status || "unknown")}`,
+  );
+};
+
 const checkCollectionReceiptUiFlow = async (page, context, tracker) => {
   const [nickname] = await ensureCollectionSmokeNicknames(context);
   const uniqueSuffix = `${Date.now()}`;
@@ -1090,13 +1138,34 @@ const checkBackupRestoreUiFlow = async (page, context, tracker) => {
     await page.getByTestId("button-create-backup").click();
     await page.getByText("Create New Backup").first().waitFor({ timeout: 15_000 });
     await page.getByTestId("input-backup-name").fill(backupName);
+    const createResponsePromise = page.waitForResponse(
+      (response) =>
+        response.request().method() === "POST"
+        && response.url().includes("/api/backups?async=1"),
+      { timeout: 30_000 },
+    );
     await page.getByTestId("button-confirm-create").click();
+    const createResponse = await createResponsePromise;
+    const createPayload = await readJsonResponseBody(createResponse);
+    assert(
+      createResponse.status() === 202,
+      `backup create UI smoke expected a queued job response, got ${createResponse.status()}`,
+    );
+    const backupJob = await waitForBackupJobTerminal(context, createPayload?.job?.id);
+    assert(
+      String(backupJob?.backupName || "").trim() === backupName,
+      "backup create UI smoke completed a job with an unexpected backup name",
+    );
 
     const createdBackupItem = page
       .locator('[data-testid^="backup-item-"]')
       .filter({ hasText: backupName })
       .first();
-    await createdBackupItem.waitFor({ state: "visible", timeout: 120_000 });
+    await createdBackupItem.waitFor({ state: "visible", timeout: 20_000 }).catch(async () => {
+      await page.goto(`${baseUrl}/settings?section=backup-restore`, { waitUntil: "networkidle" });
+      await page.getByText("Backup & Restore").first().waitFor();
+      await createdBackupItem.waitFor({ state: "visible", timeout: 30_000 });
+    });
 
     await createdBackupItem.getByRole("button", { name: "Delete" }).click();
     await page.getByText("Delete Backup?").first().waitFor({ timeout: 15_000 });
