@@ -10,7 +10,7 @@
 .login-bg-orb {
   border-radius: 9999px;
   filter: blur(64px);
-  will-change: transform, opacity, filter;
+  will-change: transform, opacity;
 }
 
 .login-bg-orb--top {
@@ -68,23 +68,10 @@
   overflow: hidden;
   border-radius: 32px;
   background: var(--login-card-surface);
-  -webkit-backdrop-filter: blur(18px) saturate(160%);
-  backdrop-filter: blur(18px) saturate(160%);
+  -webkit-backdrop-filter: blur(12px) saturate(130%);
+  backdrop-filter: blur(12px) saturate(130%);
   border: 1px solid var(--login-card-border);
   box-shadow: var(--login-card-shadow);
-  animation: glass-float 7s ease-in-out infinite;
-  will-change: transform, opacity, backdrop-filter;
-}
-
-@keyframes glass-float {
-  0%,
-  100% {
-    transform: translateY(0);
-  }
-
-  50% {
-    transform: translateY(-5px);
-  }
 }
 
 .login-card::before {
@@ -93,24 +80,9 @@
   inset: -2px;
   border-radius: inherit;
   background: var(--login-card-border-gradient);
-  background-size: 200% 200%;
-  animation: silver-move 12s ease infinite;
+  background-size: 100% 100%;
   z-index: var(--z-login-card-border);
   opacity: 0.55;
-}
-
-@keyframes silver-move {
-  0% {
-    background-position: 0% 50%;
-  }
-
-  50% {
-    background-position: 100% 50%;
-  }
-
-  100% {
-    background-position: 0% 50%;
-  }
 }
 
 .login-card::after {
@@ -252,8 +224,7 @@
 }
 
 .floating-slow {
-  animation: float-slow 6s ease-in-out infinite;
-  will-change: transform;
+  animation: float-slow 10s ease-in-out infinite;
 }
 
 .floating-slow.delay-150 {

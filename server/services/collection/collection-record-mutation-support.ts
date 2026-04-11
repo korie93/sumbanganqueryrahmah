@@ -48,9 +48,26 @@ export async function collectStoredCollectionReceipts(
   body: CollectionReceiptMutationBody,
 ): Promise<StoredCollectionMutationReceipt[]> {
   const storedReceipts: StoredCollectionMutationReceipt[] = [...readUploadedReceiptRows(body)];
+  const receiptPayloads = readCollectionReceiptPayloads(body);
 
-  for (const receipt of readCollectionReceiptPayloads(body)) {
-    storedReceipts.push(await saveCollectionReceipt(receipt));
+  if (receiptPayloads.length === 0) {
+    return storedReceipts;
+  }
+
+  const savedPayloadResults = await Promise.allSettled(
+    receiptPayloads.map((receipt) => saveCollectionReceipt(receipt)),
+  );
+
+  for (const result of savedPayloadResults) {
+    if (result.status === "fulfilled") {
+      storedReceipts.push(result.value);
+    }
+  }
+
+  const failedResult = savedPayloadResults.find((result) => result.status === "rejected");
+  if (failedResult?.status === "rejected") {
+    await cleanupStoredCollectionReceipts(storedReceipts);
+    throw failedResult.reason;
   }
 
   return storedReceipts;
@@ -88,8 +105,18 @@ export function buildCollectionValidationDraftsFromNewReceipts(
 export async function cleanupStoredCollectionReceipts(
   receipts: Array<Pick<CreateCollectionRecordReceiptInput, "storagePath">>,
 ) {
-  for (const receipt of receipts) {
-    await removeCollectionReceiptFile(receipt.storagePath);
+  const cleanupResults = await Promise.allSettled(
+    receipts.map((receipt) => removeCollectionReceiptFile(receipt.storagePath)),
+  );
+
+  for (let index = 0; index < cleanupResults.length; index += 1) {
+    const result = cleanupResults[index];
+    if (result.status === "rejected") {
+      logger.warn("Collection receipt cleanup failed", {
+        storagePath: receipts[index]?.storagePath || null,
+        error: result.reason,
+      });
+    }
   }
 }
 

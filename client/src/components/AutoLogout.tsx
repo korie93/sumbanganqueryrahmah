@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef } from "react";
 import { activityHeartbeatLight } from "@/lib/api";
 import { getBrowserLocalStorage, safeSetStorageItem } from "@/lib/browser-storage";
 import { toast } from "@/hooks/use-toast";
+import { useLatestRef } from "@/hooks/use-latest-ref";
 import {
   parseAutoLogoutWebSocketMessage,
   resolveAutoLogoutReconnectDelayMs,
@@ -24,6 +25,8 @@ interface AutoLogoutProps {
   heartbeatIntervalMinutes?: number;
   username?: string;
 }
+
+const ACTIVITY_EVENTS = ["mousedown", "keydown", "touchstart", "click"] as const;
 
 function isAutoLogoutDiagnosticsEnabled() {
   return Boolean(import.meta.env?.DEV || import.meta.env?.VITE_AUTO_LOGOUT_DEBUG === "1");
@@ -66,6 +69,9 @@ export default function AutoLogout({
   const reconnectEnabledRef = useRef(true);
   const logoutStartedRef = useRef(false);
   const lastHeartbeatSyncAtRef = useRef(0);
+  const activityListenersAttachedRef = useRef(false);
+  const onClientLogoutRef = useLatestRef(onClientLogout);
+  const onLogoutRef = useLatestRef(onLogout);
 
   const timeoutMs = timeoutMinutes * 60 * 1000;
   const heartbeatMs = heartbeatIntervalMinutes * 60 * 1000;
@@ -120,8 +126,8 @@ export default function AutoLogout({
     clearHeartbeat();
     clearHeartbeatRequest();
     cleanupSocket();
-    await onLogout();
-  }, [cleanupSocket, clearHeartbeat, clearHeartbeatRequest, clearIdleTimeout, onLogout]);
+    await onLogoutRef.current();
+  }, [cleanupSocket, clearHeartbeat, clearHeartbeatRequest, clearIdleTimeout, onLogoutRef]);
 
   const runClientLogout = useCallback(async () => {
     if (logoutStartedRef.current) return;
@@ -132,8 +138,8 @@ export default function AutoLogout({
     clearHeartbeat();
     clearHeartbeatRequest();
     cleanupSocket();
-    await onClientLogout();
-  }, [cleanupSocket, clearHeartbeat, clearHeartbeatRequest, clearIdleTimeout, onClientLogout]);
+    await onClientLogoutRef.current();
+  }, [cleanupSocket, clearHeartbeat, clearHeartbeatRequest, clearIdleTimeout, onClientLogoutRef]);
 
   const resetTimeout = useCallback(() => {
     lastActivityRef.current = Date.now();
@@ -186,6 +192,9 @@ export default function AutoLogout({
 
     void sendHeartbeat();
   }, [heartbeatSyncWindowMs, sendHeartbeat]);
+  const resetTimeoutRef = useLatestRef(resetTimeout);
+  const sendHeartbeatRef = useLatestRef(sendHeartbeat);
+  const syncHeartbeatIfNeededRef = useLatestRef(syncHeartbeatIfNeeded);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -206,26 +215,33 @@ export default function AutoLogout({
   }, [cleanupSocket, clearHeartbeat, clearHeartbeatRequest, clearIdleTimeout]);
 
   useEffect(() => {
-    const events = ["mousedown", "keydown", "touchstart", "click"];
+    if (activityListenersAttachedRef.current) {
+      return;
+    }
+
+    activityListenersAttachedRef.current = true;
 
     const handleActivity = () => {
       const now = Date.now();
       if (now - lastResetByEventRef.current < 1000) return;
       lastResetByEventRef.current = now;
-      resetTimeout();
-      syncHeartbeatIfNeeded(now);
+      resetTimeoutRef.current();
+      syncHeartbeatIfNeededRef.current(now);
     };
 
-    events.forEach((eventName) => {
+    ACTIVITY_EVENTS.forEach((eventName) => {
       document.addEventListener(eventName, handleActivity, { passive: true });
     });
 
-    resetTimeout();
-    void sendHeartbeat();
-    heartbeatRef.current = window.setInterval(sendHeartbeat, heartbeatMs);
+    resetTimeoutRef.current();
+    void sendHeartbeatRef.current();
+    heartbeatRef.current = window.setInterval(() => {
+      void sendHeartbeatRef.current();
+    }, heartbeatMs);
 
     return () => {
-      events.forEach((eventName) => {
+      activityListenersAttachedRef.current = false;
+      ACTIVITY_EVENTS.forEach((eventName) => {
         document.removeEventListener(eventName, handleActivity);
       });
       clearIdleTimeout();
@@ -237,9 +253,9 @@ export default function AutoLogout({
     clearHeartbeatRequest,
     clearIdleTimeout,
     heartbeatMs,
-    resetTimeout,
-    sendHeartbeat,
-    syncHeartbeatIfNeeded,
+    resetTimeoutRef,
+    sendHeartbeatRef,
+    syncHeartbeatIfNeededRef,
   ]);
 
   useEffect(() => {

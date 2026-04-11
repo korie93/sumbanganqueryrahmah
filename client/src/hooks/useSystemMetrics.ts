@@ -142,13 +142,15 @@ export function useSystemMetrics(options: UseSystemMetricsOptions = {}): UseSyst
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
+      inFlightRef.current = false;
       if (scheduledPollRef.current !== null) {
         window.clearTimeout(scheduledPollRef.current);
         scheduledPollRef.current = null;
       }
       scheduleNextPollRef.current = null;
-      pollControllerRef.current?.abort();
+      const activeController = pollControllerRef.current;
       pollControllerRef.current = null;
+      activeController?.abort();
     };
   }, []);
 
@@ -161,6 +163,7 @@ export function useSystemMetrics(options: UseSystemMetricsOptions = {}): UseSyst
 
   const pollMetrics = useCallback(
     async ({ forceDetailed = false }: { forceDetailed?: boolean } = {}) => {
+      if (!mountedRef.current) return;
       if (inFlightRef.current) return;
 
       inFlightRef.current = true;
