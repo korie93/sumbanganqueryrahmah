@@ -21,6 +21,14 @@ const LEGACY_MONITOR_ROUTES: Record<string, MonitorSection> = {
   "/audit-logs": "audit",
 };
 
+const DIRECT_APP_ROUTE_ALIASES: Record<string, string> = {
+  "/search": "general-search",
+  "/general-search": "general-search",
+  "/import": "import",
+  "/saved": "saved",
+  "/viewer": "viewer",
+};
+
 export function parseMonitorSectionFromQuery(search: string): MonitorSection | null {
   const section = new URLSearchParams(search).get("section");
   if (
@@ -59,6 +67,7 @@ export function parseMonitorSectionFromPageInput(page: string): MonitorSection |
 export function resolveRouteFromLocation(pathname: string, search: string): ResolvedRoute | null {
   const normalizedPath = pathname.toLowerCase();
   const legacyMonitorSection = LEGACY_MONITOR_ROUTES[normalizedPath];
+  const directAliasPage = DIRECT_APP_ROUTE_ALIASES[normalizedPath];
 
   if (normalizedPath === "/") {
     return { page: "home" };
@@ -86,6 +95,9 @@ export function resolveRouteFromLocation(pathname: string, search: string): Reso
   }
   if (normalizedPath === "/collection-report" || normalizedPath.startsWith("/collection/")) {
     return { page: "collection-report" };
+  }
+  if (directAliasPage) {
+    return { page: directAliasPage };
   }
   if (legacyMonitorSection) {
     return {

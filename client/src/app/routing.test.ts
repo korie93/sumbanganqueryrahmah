@@ -13,6 +13,14 @@ test("resolveRouteFromLocation supports landing and login routes", () => {
   assert.equal(resolveRouteFromLocation("/missing-page", ""), null);
 });
 
+test("resolveRouteFromLocation supports direct app route aliases inside the authenticated shell", () => {
+  assert.deepEqual(resolveRouteFromLocation("/search", ""), { page: "general-search" });
+  assert.deepEqual(resolveRouteFromLocation("/general-search", ""), { page: "general-search" });
+  assert.deepEqual(resolveRouteFromLocation("/import", ""), { page: "import" });
+  assert.deepEqual(resolveRouteFromLocation("/saved", ""), { page: "saved" });
+  assert.deepEqual(resolveRouteFromLocation("/viewer", ""), { page: "viewer" });
+});
+
 test("buildPathForPage returns stable public paths", () => {
   assert.equal(buildPathForPage("home"), "/");
   assert.equal(buildPathForPage("login"), "/login");
