@@ -43,6 +43,8 @@ export function CollectionDailyDesktopCalendarGrid({
       {days.map((day) => {
         const editable = editableCalendarByDay.get(day.day);
         const isSelected = selectedDate === day.date;
+        const workingDayCheckboxId = `collection-daily-working-day-desktop-${day.day}`;
+        const holidayCheckboxId = `collection-daily-holiday-desktop-${day.day}`;
 
         return (
           <div
@@ -72,8 +74,10 @@ export function CollectionDailyDesktopCalendarGrid({
             </button>
             {canManage && editable ? (
               <div className="space-y-1 border-t border-border/40 px-2 pb-2 pt-1.5">
-                <label className="flex items-center gap-1">
+                <label className="flex items-center gap-1" htmlFor={workingDayCheckboxId}>
                   <input
+                    id={workingDayCheckboxId}
+                    name={workingDayCheckboxId}
                     type="checkbox"
                     checked={editable.isWorkingDay}
                     onChange={(event) =>
@@ -82,8 +86,10 @@ export function CollectionDailyDesktopCalendarGrid({
                   />
                   Working
                 </label>
-                <label className="flex items-center gap-1">
+                <label className="flex items-center gap-1" htmlFor={holidayCheckboxId}>
                   <input
+                    id={holidayCheckboxId}
+                    name={holidayCheckboxId}
                     type="checkbox"
                     checked={editable.isHoliday}
                     onChange={(event) =>

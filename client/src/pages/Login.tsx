@@ -118,6 +118,8 @@ export default function Login({ onLoginSuccess }: LoginProps) {
             <form className="login-form space-y-4" onSubmit={handleSubmit} {...loginFormBusyProps}>
               <div className="space-y-2">
                 <PublicAuthInput
+                  id="login-username"
+                  name="username"
                   className="login-input w-full rounded-xl px-4 py-3 transition-all"
                   placeholder="Username"
                   value={username}
@@ -139,6 +141,8 @@ export default function Login({ onLoginSuccess }: LoginProps) {
               {twoFactorChallengeToken ? (
                 <div className="space-y-2">
                   <PublicAuthInput
+                    id="login-two-factor-code"
+                    name="twoFactorCode"
                     className="login-input w-full rounded-xl px-4 py-3 text-center tracking-[0.45em] transition-all"
                     placeholder="000000"
                     inputMode="numeric"
@@ -163,6 +167,8 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                 <div className="space-y-2">
                   <div className="relative">
                     <PublicAuthInput
+                      id="login-password"
+                      name="password"
                       className="login-input w-full rounded-xl px-4 py-3 pr-12 transition-all"
                       placeholder="Password"
                       type={showPassword ? "text" : "password"}

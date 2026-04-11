@@ -2,6 +2,7 @@ import {
   forwardRef,
   type ButtonHTMLAttributes,
   type InputHTMLAttributes,
+  useId,
 } from "react";
 import "./PublicAuthControls.css";
 
@@ -34,9 +35,13 @@ export function PublicAuthButton({
 
 export const PublicAuthInput = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement>>(
   function PublicAuthInput({ className, ...props }, ref) {
+    const generatedId = useId();
+    const fallbackId = !props.id && !props.name ? generatedId : undefined;
+
     return (
       <input
         ref={ref}
+        id={props.id ?? fallbackId}
         className={joinClassNames("public-auth-input", className)}
         {...props}
       />

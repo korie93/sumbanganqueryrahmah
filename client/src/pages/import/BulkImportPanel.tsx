@@ -64,6 +64,8 @@ export function BulkImportPanel({
         {...bulkDropzoneDisabledProps}
       >
         <input
+          id="bulk-import-file-input"
+          name="bulkImportFiles"
           ref={bulkInputRef}
           type="file"
           aria-label="Select bulk import files"

@@ -53,6 +53,12 @@ export function CollectionDailyCalendarCard({
   const selectedDay = overview?.days.find((day) => day.date === selectedDate) || null;
   const selectedEditableDay =
     selectedDay ? editableCalendarByDay.get(selectedDay.day) || null : null;
+  const workingDayCheckboxId = selectedEditableDay
+    ? `collection-daily-working-day-${selectedEditableDay.day}`
+    : undefined;
+  const holidayCheckboxId = selectedEditableDay
+    ? `collection-daily-holiday-${selectedEditableDay.day}`
+    : undefined;
 
   return (
     <div data-testid="collection-daily-calendar">
@@ -221,8 +227,13 @@ export function CollectionDailyCalendarCard({
                   </p>
                 </div>
                 <div className="flex flex-col gap-2 sm:flex-row">
-                  <label className="flex items-center gap-2 rounded-lg border border-border/60 bg-muted/15 px-3 py-2">
+                  <label
+                    className="flex items-center gap-2 rounded-lg border border-border/60 bg-muted/15 px-3 py-2"
+                    htmlFor={workingDayCheckboxId}
+                  >
                     <input
+                      id={workingDayCheckboxId}
+                      name={workingDayCheckboxId}
                       type="checkbox"
                       checked={selectedEditableDay.isWorkingDay}
                       onChange={(event) =>
@@ -231,8 +242,13 @@ export function CollectionDailyCalendarCard({
                     />
                     <span>Working day</span>
                   </label>
-                  <label className="flex items-center gap-2 rounded-lg border border-border/60 bg-muted/15 px-3 py-2">
+                  <label
+                    className="flex items-center gap-2 rounded-lg border border-border/60 bg-muted/15 px-3 py-2"
+                    htmlFor={holidayCheckboxId}
+                  >
                     <input
+                      id={holidayCheckboxId}
+                      name={holidayCheckboxId}
                       type="checkbox"
                       checked={selectedEditableDay.isHoliday}
                       onChange={(event) =>

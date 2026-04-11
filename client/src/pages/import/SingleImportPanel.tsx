@@ -81,6 +81,8 @@ export function SingleImportPanel({
           {...loadingDropzoneDisabledProps}
         >
           <input
+            id="single-import-file-input"
+            name="singleImportFile"
             ref={fileInputRef}
             type="file"
             aria-label="Select single import file"
