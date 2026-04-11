@@ -220,21 +220,38 @@ function NavbarImpl({
             </div>
 
             {showHomeButton ? (
-              <button
-                type="button"
-                onClick={() => navigateToItem(HOME_NAV_ITEM.id)}
-                onMouseEnter={() => prefetchItem(HOME_NAV_ITEM.id)}
-                onFocus={() => prefetchItem(HOME_NAV_ITEM.id)}
-                className={`nav-pill nav-home-pill hidden lg:inline-flex ${activeNavigationItemId === HOME_NAV_ITEM.id ? "nav-pill-active" : ""}`}
-                data-testid="nav-home"
-                aria-label={HOME_NAV_ITEM.label}
-                aria-current={activeNavigationItemId === HOME_NAV_ITEM.id ? "page" : undefined}
-              >
-                <span className="nav-pill-icon">
-                  <Home className="h-4 w-4" />
-                </span>
-                <span className="nav-pill-label">Home</span>
-              </button>
+              activeNavigationItemId === HOME_NAV_ITEM.id ? (
+                <button
+                  type="button"
+                  onClick={() => navigateToItem(HOME_NAV_ITEM.id)}
+                  onMouseEnter={() => prefetchItem(HOME_NAV_ITEM.id)}
+                  onFocus={() => prefetchItem(HOME_NAV_ITEM.id)}
+                  className="nav-pill nav-home-pill nav-pill-active hidden lg:inline-flex"
+                  data-testid="nav-home"
+                  aria-label={HOME_NAV_ITEM.label}
+                  aria-current="page"
+                >
+                  <span className="nav-pill-icon">
+                    <Home className="h-4 w-4" />
+                  </span>
+                  <span className="nav-pill-label">Home</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => navigateToItem(HOME_NAV_ITEM.id)}
+                  onMouseEnter={() => prefetchItem(HOME_NAV_ITEM.id)}
+                  onFocus={() => prefetchItem(HOME_NAV_ITEM.id)}
+                  className="nav-pill nav-home-pill hidden lg:inline-flex"
+                  data-testid="nav-home"
+                  aria-label={HOME_NAV_ITEM.label}
+                >
+                  <span className="nav-pill-icon">
+                    <Home className="h-4 w-4" />
+                  </span>
+                  <span className="nav-pill-label">Home</span>
+                </button>
+              )
             ) : null}
           </div>
 
@@ -286,18 +303,43 @@ function NavbarImpl({
               const Icon = item.icon;
               const isActive = activeNavigationItemId === item.id;
               const showBadge = item.id === "saved" && savedCount !== undefined && savedCount > 0;
-              return (
+              return isActive ? (
                 <button
                   key={item.id}
                   type="button"
                   title={item.label}
                   aria-label={item.label}
-                  aria-current={isActive ? "page" : undefined}
+                  aria-current="page"
                   onClick={() => navigateToItem(item.id)}
                   onMouseEnter={() => prefetchItem(item.id)}
                   onFocus={() => prefetchItem(item.id)}
                   data-testid={`nav-${item.id}`}
-                  className={`nav-pill ${isActive ? "nav-pill-active" : ""}`}
+                  className="nav-pill nav-pill-active"
+                >
+                  <span className="nav-pill-icon">
+                    <Icon className="h-4 w-4" />
+                  </span>
+                  <span className="nav-pill-label">{item.label}</span>
+                  {showBadge ? (
+                    <span
+                      className="rounded-full bg-primary px-1.5 py-0.5 text-xs font-medium text-primary-foreground"
+                      data-testid="badge-saved-count"
+                    >
+                      {savedCount > 99 ? "99+" : savedCount}
+                    </span>
+                  ) : null}
+                </button>
+              ) : (
+                <button
+                  key={item.id}
+                  type="button"
+                  title={item.label}
+                  aria-label={item.label}
+                  onClick={() => navigateToItem(item.id)}
+                  onMouseEnter={() => prefetchItem(item.id)}
+                  onFocus={() => prefetchItem(item.id)}
+                  data-testid={`nav-${item.id}`}
+                  className="nav-pill"
                 >
                   <span className="nav-pill-icon">
                     <Icon className="h-4 w-4" />

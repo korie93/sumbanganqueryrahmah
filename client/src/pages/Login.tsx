@@ -174,17 +174,31 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                       disabled={loading}
                       {...passwordInvalidProps}
                     />
-                    <button
-                      type="button"
-                      onClick={toggleShowPassword}
-                      disabled={loading}
-                      className="login-password-toggle absolute right-1 top-1/2 inline-flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-xl transition-colors"
-                      data-testid="button-toggle-password"
-                      aria-label={showPassword ? "Hide password" : "Show password"}
-                      title={showPassword ? "Hide password" : "Show password"}
-                    >
-                      {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                    </button>
+                    {showPassword ? (
+                      <button
+                        type="button"
+                        onClick={toggleShowPassword}
+                        disabled={loading}
+                        className="login-password-toggle absolute right-1 top-1/2 inline-flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-xl transition-colors"
+                        data-testid="button-toggle-password"
+                        aria-label="Hide password"
+                        title="Hide password"
+                      >
+                        <EyeOff className="w-5 h-5" />
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={toggleShowPassword}
+                        disabled={loading}
+                        className="login-password-toggle absolute right-1 top-1/2 inline-flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-xl transition-colors"
+                        data-testid="button-toggle-password"
+                        aria-label="Show password"
+                        title="Show password"
+                      >
+                        <Eye className="w-5 h-5" />
+                      </button>
+                    )}
                   </div>
                   {passwordError ? (
                     <p id="login-password-error" className="login-field-error text-sm" role="alert">

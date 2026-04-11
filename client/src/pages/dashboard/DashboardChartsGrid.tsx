@@ -121,18 +121,33 @@ export function DashboardChartsGrid({
               aria-label="Select trend period"
             >
               {[7, 14, 30].map((days) => (
-                <Button
-                  key={days}
-                  variant={trendDays === days ? "default" : "ghost"}
-                  size="sm"
-                  className="h-8 px-2.5 text-xs sm:h-9 sm:px-3 sm:text-sm"
-                  onClick={() => onTrendDaysChange(days)}
-                  aria-pressed={trendDays === days}
-                  aria-label={`Show ${days} day trends`}
-                  data-testid={`button-trend-${days}d`}
-                >
-                  {days}d
-                </Button>
+                trendDays === days ? (
+                  <Button
+                    key={days}
+                    variant="default"
+                    size="sm"
+                    className="h-8 px-2.5 text-xs sm:h-9 sm:px-3 sm:text-sm"
+                    onClick={() => onTrendDaysChange(days)}
+                    aria-pressed="true"
+                    aria-label={`Show ${days} day trends`}
+                    data-testid={`button-trend-${days}d`}
+                  >
+                    {days}d
+                  </Button>
+                ) : (
+                  <Button
+                    key={days}
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 px-2.5 text-xs sm:h-9 sm:px-3 sm:text-sm"
+                    onClick={() => onTrendDaysChange(days)}
+                    aria-pressed="false"
+                    aria-label={`Show ${days} day trends`}
+                    data-testid={`button-trend-${days}d`}
+                  >
+                    {days}d
+                  </Button>
+                )
               ))}
             </div>
           </div>

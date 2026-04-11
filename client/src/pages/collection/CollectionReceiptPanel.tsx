@@ -79,7 +79,7 @@ export function CollectionReceiptPanel({
         className="hidden"
         onChange={onFileChange}
         disabled={disabled}
-        aria-describedby={helperText ? helperTextId : undefined}
+        {...(helperText ? { "aria-describedby": helperTextId } : {})}
       />
 
       <div className="flex flex-wrap items-center gap-2">

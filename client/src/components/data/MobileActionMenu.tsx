@@ -39,6 +39,8 @@ export function MobileActionMenu({
     return null;
   }
 
+  const triggerAriaLabelProps = triggerLabel ? { "aria-label": triggerLabel } : {};
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -47,7 +49,7 @@ export function MobileActionMenu({
           variant="outline"
           size="icon"
           className={cn("h-10 w-10 shrink-0 md:hidden", className)}
-          aria-label={triggerLabel}
+          {...triggerAriaLabelProps}
           title={triggerLabel}
         >
           <MoreHorizontal className="h-4 w-4" />

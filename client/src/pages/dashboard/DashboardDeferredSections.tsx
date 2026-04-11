@@ -22,12 +22,14 @@ function DashboardSectionFallback({
   label: string;
   visualClassName?: string;
 }) {
+  const statusAriaLabelProps = label ? { "aria-label": label } : {};
+
   return (
     <OperationalSectionCard
       className={`bg-background/80 ${className ?? ""}`}
       contentClassName="space-y-4 p-6"
     >
-      <div role="status" aria-live="polite" aria-label={label} className="space-y-4">
+      <div role="status" aria-live="polite" {...statusAriaLabelProps} className="space-y-4">
         <div className="h-6 w-40 animate-pulse rounded bg-slate-200/80 dark:bg-slate-700/80" />
         <div className={`animate-pulse rounded-xl bg-slate-200/60 dark:bg-slate-800/70 ${visualClassName}`} />
       </div>

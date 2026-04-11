@@ -9,10 +9,12 @@ export function ViewerDataFieldCard({
   value,
   compact = false,
 }: ViewerDataFieldCardProps) {
+  const groupAriaLabelProps = header ? { "aria-label": header } : {};
+
   return (
     <div
       role="group"
-      aria-label={header}
+      {...groupAriaLabelProps}
       className={
         compact
           ? "rounded-lg border border-border/40 bg-muted/20 px-3 py-2"

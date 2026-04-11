@@ -41,34 +41,51 @@ function MonitorInsightsSubsectionToggle({
   open: boolean;
   onToggle: () => void;
 }) {
+  const toggleContent = (
+    <>
+      <div className="min-w-0">
+        <h3 className="text-sm font-semibold text-foreground">{title}</h3>
+        <p className="mt-1 text-xs text-muted-foreground">{description}</p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          {badges.map((badge) => (
+            <Badge
+              key={`${title}-${badge.label}`}
+              variant="outline"
+              className="rounded-full px-3 py-1 text-[11px]"
+            >
+              {badge.label} {badge.value}
+            </Badge>
+          ))}
+        </div>
+      </div>
+      <span className="shrink-0 pt-1 text-muted-foreground">
+        {open ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+      </span>
+    </>
+  );
+
   return (
     <Card className="border-border/60 bg-background/35 backdrop-blur-sm">
       <CardContent className="p-4">
-        <button
-          type="button"
-          className="flex w-full items-start justify-between gap-3 text-left"
-          onClick={onToggle}
-          aria-expanded={open ? "true" : "false"}
-        >
-          <div className="min-w-0">
-            <h3 className="text-sm font-semibold text-foreground">{title}</h3>
-            <p className="mt-1 text-xs text-muted-foreground">{description}</p>
-            <div className="mt-3 flex flex-wrap gap-2">
-              {badges.map((badge) => (
-                <Badge
-                  key={`${title}-${badge.label}`}
-                  variant="outline"
-                  className="rounded-full px-3 py-1 text-[11px]"
-                >
-                  {badge.label} {badge.value}
-                </Badge>
-              ))}
-            </div>
-          </div>
-          <span className="shrink-0 pt-1 text-muted-foreground">
-            {open ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-          </span>
-        </button>
+        {open ? (
+          <button
+            type="button"
+            className="flex w-full items-start justify-between gap-3 text-left"
+            onClick={onToggle}
+            aria-expanded="true"
+          >
+            {toggleContent}
+          </button>
+        ) : (
+          <button
+            type="button"
+            className="flex w-full items-start justify-between gap-3 text-left"
+            onClick={onToggle}
+            aria-expanded="false"
+          >
+            {toggleContent}
+          </button>
+        )}
       </CardContent>
     </Card>
   );

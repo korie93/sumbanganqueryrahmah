@@ -28,6 +28,8 @@ export function ReceiptPreviewToolbar({
   setZoom,
   isMobile,
 }: ReceiptPreviewToolbarProps) {
+  const receiptDetailsId = selectedReceipt ? `receipt-preview-details-${selectedReceipt.id}` : undefined;
+
   return (
     <div
       className={cn(
@@ -36,7 +38,10 @@ export function ReceiptPreviewToolbar({
       )}
       data-floating-ai-avoid="true"
     >
-      <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+      <div
+        id={receiptDetailsId}
+        className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground"
+      >
         {showDetails && selectedReceipt ? (
           <>
             <Badge variant="secondary">{selectedReceipt.originalMimeType}</Badge>
@@ -47,16 +52,31 @@ export function ReceiptPreviewToolbar({
         )}
       </div>
       <div className={cn(isMobile ? "grid grid-cols-2 gap-2" : "flex items-center gap-2")}>
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          onClick={() => setShowDetails((previous) => !previous)}
-          aria-expanded={showDetails}
-          className={isMobile ? "col-span-2 w-full" : ""}
-        >
-          {showDetails ? "Show less" : "Show more"}
-        </Button>
+        {showDetails ? (
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => setShowDetails(false)}
+            aria-expanded="true"
+            aria-controls={receiptDetailsId}
+            className={isMobile ? "col-span-2 w-full" : ""}
+          >
+            Show less
+          </Button>
+        ) : (
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => setShowDetails(true)}
+            aria-expanded="false"
+            aria-controls={receiptDetailsId}
+            className={isMobile ? "col-span-2 w-full" : ""}
+          >
+            Show more
+          </Button>
+        )}
         {showPdfFallback ? (
           <Button
             size="sm"

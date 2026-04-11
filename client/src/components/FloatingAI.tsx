@@ -1,4 +1,4 @@
-import { Suspense, lazy } from "react";
+import { Suspense, lazy, type ReactNode, type Ref } from "react";
 import { Bot, Minimize2 } from "lucide-react";
 import { useLocation } from "wouter";
 import { Badge } from "@/components/ui/badge";
@@ -20,6 +20,90 @@ type FloatingAIProps = {
   aiEnabled: boolean;
   activePage: string;
 };
+
+function FloatingRootContainer({
+  rootRef,
+  className,
+  hidden,
+  children,
+}: {
+  rootRef: Ref<HTMLDivElement>;
+  className: string;
+  hidden: boolean;
+  children: ReactNode;
+}) {
+  return hidden ? (
+    <div
+      ref={rootRef}
+      className={className}
+      aria-hidden="true"
+      hidden
+    >
+      {children}
+    </div>
+  ) : (
+    <div
+      ref={rootRef}
+      className={className}
+      aria-hidden="false"
+    >
+      {children}
+    </div>
+  );
+}
+
+function FloatingPanelShell({
+  className,
+  hidden,
+  children,
+}: {
+  className: string;
+  hidden: boolean;
+  children: ReactNode;
+}) {
+  return hidden ? (
+    <div
+      hidden
+      aria-hidden="true"
+      className={className}
+    >
+      {children}
+    </div>
+  ) : (
+    <div
+      aria-hidden="false"
+      className={className}
+    >
+      {children}
+    </div>
+  );
+}
+
+function FloatingTriggerShell({
+  className,
+  hidden,
+  children,
+}: {
+  className: string;
+  hidden: boolean;
+  children: ReactNode;
+}) {
+  return hidden ? (
+    <div
+      className={className}
+      aria-hidden="true"
+    >
+      {children}
+    </div>
+  ) : (
+    <div
+      className={className}
+      aria-hidden="false"
+    >
+      {children}
+    </div>
+  );
+}
 
 export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: FloatingAIProps) {
   const isMobile = useIsMobile();
@@ -73,8 +157,8 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
   if (hiddenForAiPage) return null;
 
   return (
-    <div
-      ref={floatingRootRef}
+    <FloatingRootContainer
+      rootRef={floatingRootRef}
       className={cn(
         "pointer-events-none fixed transition-opacity duration-200",
         styles.floatingRoot,
@@ -83,7 +167,6 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
           ? "translate-y-2 opacity-0"
           : "opacity-100",
       )}
-      aria-hidden={layoutState.rootHidden}
       hidden={layoutState.rootHidden}
     >
       {isMobile && shouldShowPanel ? (
@@ -94,9 +177,8 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
         />
       ) : null}
       {shouldKeepPanelMounted ? (
-        <div
+        <FloatingPanelShell
           hidden={!shouldShowPanel}
-          aria-hidden={!shouldShowPanel}
           className={cn(
             "pointer-events-none absolute transition-all duration-200",
             styles.floatingPanelShell,
@@ -228,16 +310,16 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
               </div>
             </div>
           </section>
-        </div>
+        </FloatingPanelShell>
       ) : null}
-      <div
+      <FloatingTriggerShell
         className={cn(
           "absolute flex flex-col gap-2 pointer-events-none",
           styles.floatingTriggerShell,
           layoutState.trigger.anchor === "left" ? "items-start" : "items-end",
           layoutState.triggerHidden ? "translate-y-2 opacity-0" : "opacity-100",
         )}
-        aria-hidden={layoutState.triggerHidden}
+        hidden={layoutState.triggerHidden}
       >
         {!isOpen && isThinking && !layoutState.rootHidden && !isMobile ? (
           <div className="pointer-events-none max-w-[220px] rounded-lg border border-blue-500/35 bg-blue-500/10 px-3 py-1.5 text-[11px] text-blue-200 shadow-sm">
@@ -268,7 +350,7 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
             </Badge>
           ) : null}
         </button>
-      </div>
-    </div>
+      </FloatingTriggerShell>
+    </FloatingRootContainer>
   );
 }

@@ -58,51 +58,99 @@ function MonitorStatusBannersImpl({
   return (
     <Card className={shellClass}>
       <CardContent className="space-y-3 p-3">
-        <button
-          type="button"
-          className="flex w-full items-start justify-between gap-3 text-left"
-          onClick={() => setDetailsOpen((previous) => !previous)}
-          aria-expanded={detailsOpen ? "true" : "false"}
-        >
-          <div className="min-w-0 space-y-2">
-            <div className={`flex items-center gap-2 text-sm font-semibold ${textClass}`}>
-              <AlertTriangle className="h-4 w-4 shrink-0" />
-              <span>{headline}</span>
+        {detailsOpen ? (
+          <button
+            type="button"
+            className="flex w-full items-start justify-between gap-3 text-left"
+            onClick={() => setDetailsOpen((previous) => !previous)}
+            aria-expanded="true"
+          >
+            <div className="min-w-0 space-y-2">
+              <div className={`flex items-center gap-2 text-sm font-semibold ${textClass}`}>
+                <AlertTriangle className="h-4 w-4 shrink-0" />
+                <span>{headline}</span>
+              </div>
+              <p className={`text-sm ${textClass}`}>{summaryText}</p>
+              <div className="flex flex-wrap gap-2">
+                {summaryFacts.map((fact) => (
+                  <Badge
+                    key={fact.label}
+                    variant="outline"
+                    className={`rounded-full px-3 py-1 text-xs ${
+                      fact.severity === "critical"
+                        ? "border-red-500/30 bg-red-500/10 text-red-600 dark:text-red-400"
+                        : "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400"
+                    }`}
+                  >
+                    {fact.label} {fact.value}
+                  </Badge>
+                ))}
+                {notices.map((notice) => (
+                  <Badge
+                    key={notice.id}
+                    variant="outline"
+                    className={`rounded-full px-3 py-1 text-xs ${
+                      notice.severity === "critical"
+                        ? "border-red-500/30 bg-red-500/10 text-red-600 dark:text-red-400"
+                        : "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400"
+                    }`}
+                  >
+                    {notice.badge}
+                  </Badge>
+                ))}
+              </div>
             </div>
-            <p className={`text-sm ${textClass}`}>{summaryText}</p>
-            <div className="flex flex-wrap gap-2">
-              {summaryFacts.map((fact) => (
-                <Badge
-                  key={fact.label}
-                  variant="outline"
-                  className={`rounded-full px-3 py-1 text-xs ${
-                    fact.severity === "critical"
-                      ? "border-red-500/30 bg-red-500/10 text-red-600 dark:text-red-400"
-                      : "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400"
-                  }`}
-                >
-                  {fact.label} {fact.value}
-                </Badge>
-              ))}
-              {notices.map((notice) => (
-                <Badge
-                  key={notice.id}
-                  variant="outline"
-                  className={`rounded-full px-3 py-1 text-xs ${
-                    notice.severity === "critical"
-                      ? "border-red-500/30 bg-red-500/10 text-red-600 dark:text-red-400"
-                      : "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400"
-                  }`}
-                >
-                  {notice.badge}
-                </Badge>
-              ))}
+            <span className={`shrink-0 pt-1 ${textClass}`}>
+              <ChevronUp className="h-4 w-4" />
+            </span>
+          </button>
+        ) : (
+          <button
+            type="button"
+            className="flex w-full items-start justify-between gap-3 text-left"
+            onClick={() => setDetailsOpen((previous) => !previous)}
+            aria-expanded="false"
+          >
+            <div className="min-w-0 space-y-2">
+              <div className={`flex items-center gap-2 text-sm font-semibold ${textClass}`}>
+                <AlertTriangle className="h-4 w-4 shrink-0" />
+                <span>{headline}</span>
+              </div>
+              <p className={`text-sm ${textClass}`}>{summaryText}</p>
+              <div className="flex flex-wrap gap-2">
+                {summaryFacts.map((fact) => (
+                  <Badge
+                    key={fact.label}
+                    variant="outline"
+                    className={`rounded-full px-3 py-1 text-xs ${
+                      fact.severity === "critical"
+                        ? "border-red-500/30 bg-red-500/10 text-red-600 dark:text-red-400"
+                        : "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400"
+                    }`}
+                  >
+                    {fact.label} {fact.value}
+                  </Badge>
+                ))}
+                {notices.map((notice) => (
+                  <Badge
+                    key={notice.id}
+                    variant="outline"
+                    className={`rounded-full px-3 py-1 text-xs ${
+                      notice.severity === "critical"
+                        ? "border-red-500/30 bg-red-500/10 text-red-600 dark:text-red-400"
+                        : "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400"
+                    }`}
+                  >
+                    {notice.badge}
+                  </Badge>
+                ))}
+              </div>
             </div>
-          </div>
-          <span className={`shrink-0 pt-1 ${textClass}`}>
-            {detailsOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-          </span>
-        </button>
+            <span className={`shrink-0 pt-1 ${textClass}`}>
+              <ChevronDown className="h-4 w-4" />
+            </span>
+          </button>
+        )}
 
         {detailsOpen ? (
           <div className="space-y-2">

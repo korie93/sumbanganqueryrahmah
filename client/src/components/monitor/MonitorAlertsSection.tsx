@@ -108,25 +108,42 @@ function MonitorAlertsSubsectionToggle({
   onToggle: () => void;
   badges?: ReactNode;
 }) {
+  const toggleContent = (
+    <>
+      <div className="min-w-0 space-y-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-sm font-semibold text-foreground">{title}</span>
+          {badges}
+        </div>
+        <p className="text-xs text-muted-foreground">{description}</p>
+      </div>
+      <span className="shrink-0 pt-1 text-muted-foreground">
+        {open ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+      </span>
+    </>
+  );
+
   return (
     <div className="rounded-xl border border-border/60 bg-background/40 p-3">
-      <button
-        type="button"
-        className="flex w-full items-start justify-between gap-3 text-left"
-        onClick={onToggle}
-        aria-expanded={open ? "true" : "false"}
-      >
-        <div className="min-w-0 space-y-2">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-sm font-semibold text-foreground">{title}</span>
-            {badges}
-          </div>
-          <p className="text-xs text-muted-foreground">{description}</p>
-        </div>
-        <span className="shrink-0 pt-1 text-muted-foreground">
-          {open ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-        </span>
-      </button>
+      {open ? (
+        <button
+          type="button"
+          className="flex w-full items-start justify-between gap-3 text-left"
+          onClick={onToggle}
+          aria-expanded="true"
+        >
+          {toggleContent}
+        </button>
+      ) : (
+        <button
+          type="button"
+          className="flex w-full items-start justify-between gap-3 text-left"
+          onClick={onToggle}
+          aria-expanded="false"
+        >
+          {toggleContent}
+        </button>
+      )}
     </div>
   );
 }

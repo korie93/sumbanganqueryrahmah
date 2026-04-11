@@ -26,13 +26,8 @@ function MonitorMetricGroupToggle({
   open: boolean;
   onToggle: () => void;
 }) {
-  return (
-    <button
-      type="button"
-      className="flex w-full items-start justify-between gap-3 text-left"
-      onClick={onToggle}
-      aria-expanded={open ? "true" : "false"}
-    >
+  const toggleContent = (
+    <>
       <div className="min-w-0 space-y-2">
         <div className="flex flex-wrap items-center gap-2">
           <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">{group.title}</h3>
@@ -46,6 +41,26 @@ function MonitorMetricGroupToggle({
       <span className="shrink-0 pt-1 text-muted-foreground">
         {open ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
       </span>
+    </>
+  );
+
+  return open ? (
+    <button
+      type="button"
+      className="flex w-full items-start justify-between gap-3 text-left"
+      onClick={onToggle}
+      aria-expanded="true"
+    >
+      {toggleContent}
+    </button>
+  ) : (
+    <button
+      type="button"
+      className="flex w-full items-start justify-between gap-3 text-left"
+      onClick={onToggle}
+      aria-expanded="false"
+    >
+      {toggleContent}
     </button>
   );
 }

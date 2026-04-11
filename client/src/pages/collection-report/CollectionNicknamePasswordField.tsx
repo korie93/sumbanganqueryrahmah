@@ -33,15 +33,29 @@ export function CollectionNicknamePasswordField({
           className="pr-10"
           disabled={disabled}
         />
-        <button
-          type="button"
-          className="absolute inset-y-0 right-0 inline-flex items-center px-3 text-muted-foreground hover:text-foreground"
-          onClick={onToggleVisibility}
-          disabled={disabled}
-          aria-label={showPassword ? "Hide password" : "Show password"}
-        >
-          {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-        </button>
+        {showPassword ? (
+          <button
+            type="button"
+            className="absolute inset-y-0 right-0 inline-flex items-center px-3 text-muted-foreground hover:text-foreground"
+            onClick={onToggleVisibility}
+            disabled={disabled}
+            aria-label="Hide password"
+            title="Hide password"
+          >
+            <EyeOff className="h-4 w-4" />
+          </button>
+        ) : (
+          <button
+            type="button"
+            className="absolute inset-y-0 right-0 inline-flex items-center px-3 text-muted-foreground hover:text-foreground"
+            onClick={onToggleVisibility}
+            disabled={disabled}
+            aria-label="Show password"
+            title="Show password"
+          >
+            <Eye className="h-4 w-4" />
+          </button>
+        )}
       </div>
     </div>
   );

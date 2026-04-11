@@ -130,47 +130,88 @@ function MonitorWebVitalsSectionImpl({
             const isOpen = openPageTypes.includes(summary.pageType);
             const compactMetricBadges = buildMonitorWebVitalPrimaryMetricBadges(summary);
 
-            return (
+          return (
               <Card key={summary.pageType} className="border-border/60 bg-background/45">
                 <CardHeader className="space-y-3 pb-3">
-                  <button
-                    type="button"
-                    className="flex w-full items-start justify-between gap-3 text-left"
-                    onClick={() =>
-                      setOpenPageTypes((previous) =>
-                        previous.includes(summary.pageType)
-                          ? previous.filter((pageType) => pageType !== summary.pageType)
-                          : [...previous, summary.pageType],
-                      )
-                    }
-                    aria-expanded={isOpen ? "true" : "false"}
-                  >
-                    <div className="min-w-0 space-y-3">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <CardTitle className="text-base font-semibold text-foreground">
-                          {getPageSummaryLabel(summary.pageType)}
-                        </CardTitle>
-                        <Badge variant="outline" className="rounded-full px-3 py-1 text-[11px] uppercase tracking-wide">
-                          {summary.sampleCount} samples
-                        </Badge>
-                      </div>
-                      <p className="text-xs text-muted-foreground">{formatLastCaptured(summary.latestCapturedAt)}</p>
-                      <div className="flex flex-wrap gap-2">
-                        {compactMetricBadges.map((metric) => (
-                          <Badge
-                            key={`${summary.pageType}-${metric.name}`}
-                            variant="outline"
-                            className={`rounded-full px-3 py-1 text-xs ${getRatingBadgeClass(metric.p75Rating)}`}
-                          >
-                            {metric.name} {formatWebVitalValue(metric.name, metric.p75)}
+                  {isOpen ? (
+                    <button
+                      type="button"
+                      className="flex w-full items-start justify-between gap-3 text-left"
+                      onClick={() =>
+                        setOpenPageTypes((previous) =>
+                          previous.includes(summary.pageType)
+                            ? previous.filter((pageType) => pageType !== summary.pageType)
+                            : [...previous, summary.pageType],
+                        )
+                      }
+                      aria-expanded="true"
+                    >
+                      <div className="min-w-0 space-y-3">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <CardTitle className="text-base font-semibold text-foreground">
+                            {getPageSummaryLabel(summary.pageType)}
+                          </CardTitle>
+                          <Badge variant="outline" className="rounded-full px-3 py-1 text-[11px] uppercase tracking-wide">
+                            {summary.sampleCount} samples
                           </Badge>
-                        ))}
+                        </div>
+                        <p className="text-xs text-muted-foreground">{formatLastCaptured(summary.latestCapturedAt)}</p>
+                        <div className="flex flex-wrap gap-2">
+                          {compactMetricBadges.map((metric) => (
+                            <Badge
+                              key={`${summary.pageType}-${metric.name}`}
+                              variant="outline"
+                              className={`rounded-full px-3 py-1 text-xs ${getRatingBadgeClass(metric.p75Rating)}`}
+                            >
+                              {metric.name} {formatWebVitalValue(metric.name, metric.p75)}
+                            </Badge>
+                          ))}
+                        </div>
                       </div>
-                    </div>
-                    <span className="shrink-0 pt-1 text-muted-foreground">
-                      {isOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                    </span>
-                  </button>
+                      <span className="shrink-0 pt-1 text-muted-foreground">
+                        <ChevronUp className="h-4 w-4" />
+                      </span>
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className="flex w-full items-start justify-between gap-3 text-left"
+                      onClick={() =>
+                        setOpenPageTypes((previous) =>
+                          previous.includes(summary.pageType)
+                            ? previous.filter((pageType) => pageType !== summary.pageType)
+                            : [...previous, summary.pageType],
+                        )
+                      }
+                      aria-expanded="false"
+                    >
+                      <div className="min-w-0 space-y-3">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <CardTitle className="text-base font-semibold text-foreground">
+                            {getPageSummaryLabel(summary.pageType)}
+                          </CardTitle>
+                          <Badge variant="outline" className="rounded-full px-3 py-1 text-[11px] uppercase tracking-wide">
+                            {summary.sampleCount} samples
+                          </Badge>
+                        </div>
+                        <p className="text-xs text-muted-foreground">{formatLastCaptured(summary.latestCapturedAt)}</p>
+                        <div className="flex flex-wrap gap-2">
+                          {compactMetricBadges.map((metric) => (
+                            <Badge
+                              key={`${summary.pageType}-${metric.name}`}
+                              variant="outline"
+                              className={`rounded-full px-3 py-1 text-xs ${getRatingBadgeClass(metric.p75Rating)}`}
+                            >
+                              {metric.name} {formatWebVitalValue(metric.name, metric.p75)}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                      <span className="shrink-0 pt-1 text-muted-foreground">
+                        <ChevronDown className="h-4 w-4" />
+                      </span>
+                    </button>
+                  )}
                 </CardHeader>
                 {isOpen ? (
                   <CardContent className="space-y-4">

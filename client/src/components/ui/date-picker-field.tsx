@@ -54,6 +54,8 @@ export function DatePickerField({
   const open = controlledOpen ?? internalOpen;
   const setOpen = onOpenChange ?? setInternalOpen;
   const selectedDate = getSelectedDate(value);
+  const triggerLabel = ariaLabel ?? placeholder;
+  const triggerAriaLabelProps = triggerLabel ? { "aria-label": triggerLabel } : {};
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -62,8 +64,8 @@ export function DatePickerField({
           type="button"
           variant="outline"
           disabled={disabled}
-          aria-label={ariaLabel ?? placeholder}
-          title={ariaLabel ?? placeholder}
+          {...triggerAriaLabelProps}
+          title={triggerLabel}
           className={cn(
             "h-10 w-full justify-start rounded-lg border-border/80 bg-background/95 text-left font-normal shadow-sm transition-colors hover:bg-accent/50 hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2",
             value

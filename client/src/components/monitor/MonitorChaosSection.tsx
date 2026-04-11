@@ -56,30 +56,57 @@ function MonitorChaosSectionImpl({
       {canInjectChaos ? (
         <div className="space-y-3">
           <div className="rounded-2xl border border-border/60 bg-background/45 p-4">
-            <button
-              type="button"
-              className="flex w-full items-start justify-between gap-3 text-left"
-              onClick={() => setControlsOpen((previous) => !previous)}
-              aria-expanded={controlsOpen ? "true" : "false"}
-            >
-              <div className="min-w-0 space-y-2">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-sm font-semibold text-foreground">Scenario controls</span>
-                  <Badge variant="secondary" className="rounded-full px-2.5 py-0.5 text-[10px]">
-                    {selectedChaosProfile.label}
-                  </Badge>
-                  <Badge variant="outline" className="rounded-full px-2.5 py-0.5 text-[10px]">
-                    {chaosDurationMs || String(selectedChaosProfile.defaultDurationMs)}ms
-                  </Badge>
+            {controlsOpen ? (
+              <button
+                type="button"
+                className="flex w-full items-start justify-between gap-3 text-left"
+                onClick={() => setControlsOpen((previous) => !previous)}
+                aria-expanded="true"
+              >
+                <div className="min-w-0 space-y-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-sm font-semibold text-foreground">Scenario controls</span>
+                    <Badge variant="secondary" className="rounded-full px-2.5 py-0.5 text-[10px]">
+                      {selectedChaosProfile.label}
+                    </Badge>
+                    <Badge variant="outline" className="rounded-full px-2.5 py-0.5 text-[10px]">
+                      {chaosDurationMs || String(selectedChaosProfile.defaultDurationMs)}ms
+                    </Badge>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Open the fault-injection form only when you want to configure a scenario. Hidden by default to keep monitor lighter.
+                  </p>
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  Open the fault-injection form only when you want to configure a scenario. Hidden by default to keep monitor lighter.
-                </p>
-              </div>
-              <span className="shrink-0 pt-1 text-muted-foreground">
-                {controlsOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-              </span>
-            </button>
+                <span className="shrink-0 pt-1 text-muted-foreground">
+                  <ChevronUp className="h-4 w-4" />
+                </span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="flex w-full items-start justify-between gap-3 text-left"
+                onClick={() => setControlsOpen((previous) => !previous)}
+                aria-expanded="false"
+              >
+                <div className="min-w-0 space-y-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-sm font-semibold text-foreground">Scenario controls</span>
+                    <Badge variant="secondary" className="rounded-full px-2.5 py-0.5 text-[10px]">
+                      {selectedChaosProfile.label}
+                    </Badge>
+                    <Badge variant="outline" className="rounded-full px-2.5 py-0.5 text-[10px]">
+                      {chaosDurationMs || String(selectedChaosProfile.defaultDurationMs)}ms
+                    </Badge>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Open the fault-injection form only when you want to configure a scenario. Hidden by default to keep monitor lighter.
+                  </p>
+                </div>
+                <span className="shrink-0 pt-1 text-muted-foreground">
+                  <ChevronDown className="h-4 w-4" />
+                </span>
+              </button>
+            )}
           </div>
 
           {controlsOpen ? (

@@ -66,17 +66,31 @@ function MonitorOverviewSectionImpl({
                 : compactSummary.description}
             </p>
           </div>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="rounded-full px-4 sm:self-start"
-            aria-expanded={detailsOpen ? "true" : "false"}
-            onClick={() => setDetailsOpen((previous) => !previous)}
-          >
-            {detailsOpen ? "Compact overview" : "Expand overview"}
-            {detailsOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-          </Button>
+          {detailsOpen ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="rounded-full px-4 sm:self-start"
+              aria-expanded="true"
+              onClick={() => setDetailsOpen((previous) => !previous)}
+            >
+              Compact overview
+              <ChevronUp className="h-4 w-4" />
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="rounded-full px-4 sm:self-start"
+              aria-expanded="false"
+              onClick={() => setDetailsOpen((previous) => !previous)}
+            >
+              Expand overview
+              <ChevronDown className="h-4 w-4" />
+            </Button>
+          )}
         </div>
 
         {!detailsOpen ? (

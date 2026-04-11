@@ -49,12 +49,16 @@ export interface ButtonProps
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   ({ className, variant, size, asChild = false, title, "aria-label": ariaLabel, ...props }, ref) => {
     const Comp = asChild ? Slot : "button"
+    const resolvedAriaLabel =
+      ariaLabel ?? (size === "icon" && typeof title === "string" ? title : undefined)
+    const ariaLabelProps = resolvedAriaLabel ? { "aria-label": resolvedAriaLabel } : {}
+
     return (
       <Comp
         className={cn(buttonVariants({ variant, size, className }))}
         ref={ref}
         title={title}
-        aria-label={ariaLabel ?? (size === "icon" && typeof title === "string" ? title : undefined)}
+        {...ariaLabelProps}
         {...props}
       />
     )

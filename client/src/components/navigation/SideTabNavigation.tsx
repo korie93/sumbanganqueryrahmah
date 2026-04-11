@@ -84,16 +84,31 @@ export function SideTabNavigation({
         )}
       >
         <div className={cn("mb-2 flex", collapsed ? "justify-center" : "justify-end")}>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="h-11 w-11"
-            aria-label={collapsed ? "Expand navigation" : "Collapse navigation"}
-            onClick={() => onCollapsedChange(!collapsed)}
-          >
-            {collapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
-          </Button>
+          {collapsed ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-11 w-11"
+              aria-label="Expand navigation"
+              title="Expand navigation"
+              onClick={() => onCollapsedChange(false)}
+            >
+              <PanelLeftOpen className="h-4 w-4" />
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-11 w-11"
+              aria-label="Collapse navigation"
+              title="Collapse navigation"
+              onClick={() => onCollapsedChange(true)}
+            >
+              <PanelLeftClose className="h-4 w-4" />
+            </Button>
+          )}
         </div>
 
         <nav className="space-y-1" aria-label={navigationLabel}>
@@ -103,47 +118,80 @@ export function SideTabNavigation({
             const showBadge = item.badge !== null && item.badge !== undefined && item.badge !== "";
 
             return (
-              <button
-                key={item.key}
-                type="button"
-                onClick={() => handleSelect(item.key)}
-                className={cn(
-                  "relative flex min-h-11 w-full items-center rounded-lg px-2 py-2 text-sm transition-colors",
-                  collapsed ? "justify-center" : "justify-start gap-3",
-                  active ? "text-primary" : "text-muted-foreground hover:bg-accent/40 hover:text-foreground",
-                )}
-                aria-label={item.label}
-                aria-current={active ? "page" : undefined}
-                title={collapsed ? item.label : item.description || item.label}
-              >
-                {active ? (
+              active ? (
+                <button
+                  key={item.key}
+                  type="button"
+                  onClick={() => handleSelect(item.key)}
+                  className={cn(
+                    "relative flex min-h-11 w-full items-center rounded-lg px-2 py-2 text-sm transition-colors text-primary",
+                    collapsed ? "justify-center" : "justify-start gap-3",
+                  )}
+                  aria-label={item.label}
+                  aria-current="page"
+                  title={collapsed ? item.label : item.description || item.label}
+                >
                   <span
                     className="absolute inset-0 rounded-lg border border-primary/35 bg-primary/10"
                   />
-                ) : null}
 
-                <span className="relative z-10 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-background/60">
-                  <Icon className="h-4 w-4" />
-                </span>
+                  <span className="relative z-10 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-background/60">
+                    <Icon className="h-4 w-4" />
+                  </span>
 
-                {!collapsed ? (
-                  <span className="relative z-10 flex min-w-0 flex-1 items-start justify-between gap-2">
-                    <span className="min-w-0 space-y-0.5 text-left">
-                      <span className="block truncate font-medium">{item.label}</span>
-                      {item.description ? (
-                        <span className="block truncate text-xs text-muted-foreground">
-                          {item.description}
-                        </span>
+                  {!collapsed ? (
+                    <span className="relative z-10 flex min-w-0 flex-1 items-start justify-between gap-2">
+                      <span className="min-w-0 space-y-0.5 text-left">
+                        <span className="block truncate font-medium">{item.label}</span>
+                        {item.description ? (
+                          <span className="block truncate text-xs text-muted-foreground">
+                            {item.description}
+                          </span>
+                        ) : null}
+                      </span>
+                      {showBadge ? (
+                        <Badge variant="default" className="shrink-0">
+                          {item.badge}
+                        </Badge>
                       ) : null}
                     </span>
-                    {showBadge ? (
-                      <Badge variant={active ? "default" : "secondary"} className="shrink-0">
-                        {item.badge}
-                      </Badge>
-                    ) : null}
+                  ) : null}
+                </button>
+              ) : (
+                <button
+                  key={item.key}
+                  type="button"
+                  onClick={() => handleSelect(item.key)}
+                  className={cn(
+                    "relative flex min-h-11 w-full items-center rounded-lg px-2 py-2 text-sm transition-colors text-muted-foreground hover:bg-accent/40 hover:text-foreground",
+                    collapsed ? "justify-center" : "justify-start gap-3",
+                  )}
+                  aria-label={item.label}
+                  title={collapsed ? item.label : item.description || item.label}
+                >
+                  <span className="relative z-10 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-background/60">
+                    <Icon className="h-4 w-4" />
                   </span>
-                ) : null}
-              </button>
+
+                  {!collapsed ? (
+                    <span className="relative z-10 flex min-w-0 flex-1 items-start justify-between gap-2">
+                      <span className="min-w-0 space-y-0.5 text-left">
+                        <span className="block truncate font-medium">{item.label}</span>
+                        {item.description ? (
+                          <span className="block truncate text-xs text-muted-foreground">
+                            {item.description}
+                          </span>
+                        ) : null}
+                      </span>
+                      {showBadge ? (
+                        <Badge variant="secondary" className="shrink-0">
+                          {item.badge}
+                        </Badge>
+                      ) : null}
+                    </span>
+                  ) : null}
+                </button>
+              )
             );
           })}
         </nav>
@@ -182,35 +230,56 @@ export function SideTabNavigation({
                 const showBadge = item.badge !== null && item.badge !== undefined && item.badge !== "";
 
                 return (
-                  <button
-                    key={`mobile-${item.key}`}
-                    type="button"
-                    onClick={() => handleSelect(item.key)}
-                    className={cn(
-                      "flex min-h-11 w-full items-start gap-3 rounded-lg px-3 py-2 text-left text-sm transition-colors",
-                      active
-                        ? "border border-primary/35 bg-primary/10 text-primary"
-                        : "text-muted-foreground hover:bg-accent/40 hover:text-foreground",
-                    )}
-                    aria-current={active ? "page" : undefined}
-                  >
-                    <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-background/60">
-                      <Icon className="h-4 w-4" />
-                    </span>
-                    <span className="min-w-0 flex-1 space-y-0.5">
-                      <span className="block truncate font-medium">{item.label}</span>
-                      {item.description ? (
-                        <span className="block text-xs text-muted-foreground">
-                          {item.description}
-                        </span>
+                  active ? (
+                    <button
+                      key={`mobile-${item.key}`}
+                      type="button"
+                      onClick={() => handleSelect(item.key)}
+                      className="flex min-h-11 w-full items-start gap-3 rounded-lg border border-primary/35 bg-primary/10 px-3 py-2 text-left text-sm text-primary transition-colors"
+                      aria-current="page"
+                    >
+                      <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-background/60">
+                        <Icon className="h-4 w-4" />
+                      </span>
+                      <span className="min-w-0 flex-1 space-y-0.5">
+                        <span className="block truncate font-medium">{item.label}</span>
+                        {item.description ? (
+                          <span className="block text-xs text-muted-foreground">
+                            {item.description}
+                          </span>
+                        ) : null}
+                      </span>
+                      {showBadge ? (
+                        <Badge variant="default" className="shrink-0">
+                          {item.badge}
+                        </Badge>
                       ) : null}
-                    </span>
-                    {showBadge ? (
-                      <Badge variant={active ? "default" : "secondary"} className="shrink-0">
-                        {item.badge}
-                      </Badge>
-                    ) : null}
-                  </button>
+                    </button>
+                  ) : (
+                    <button
+                      key={`mobile-${item.key}`}
+                      type="button"
+                      onClick={() => handleSelect(item.key)}
+                      className="flex min-h-11 w-full items-start gap-3 rounded-lg px-3 py-2 text-left text-sm text-muted-foreground transition-colors hover:bg-accent/40 hover:text-foreground"
+                    >
+                      <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-background/60">
+                        <Icon className="h-4 w-4" />
+                      </span>
+                      <span className="min-w-0 flex-1 space-y-0.5">
+                        <span className="block truncate font-medium">{item.label}</span>
+                        {item.description ? (
+                          <span className="block text-xs text-muted-foreground">
+                            {item.description}
+                          </span>
+                        ) : null}
+                      </span>
+                      {showBadge ? (
+                        <Badge variant="secondary" className="shrink-0">
+                          {item.badge}
+                        </Badge>
+                      ) : null}
+                    </button>
+                  )
                 );
               })}
             </div>

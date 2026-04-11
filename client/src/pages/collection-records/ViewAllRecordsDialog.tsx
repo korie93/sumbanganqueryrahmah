@@ -170,6 +170,7 @@ export function ViewAllRecordsDialog({
                     <div className="space-y-3">
                       {viewAllRecords.map((record, index) => {
                         const isExpanded = expandedRecordIds.includes(record.id);
+                        const recordDetailsId = `view-all-record-details-${record.id}`;
                         return (
                           <article
                             key={`view-all-${record.id}`}
@@ -185,24 +186,38 @@ export function ViewAllRecordsDialog({
                               </div>
                             </div>
 
-                            <Button
-                              type="button"
-                              variant="outline"
-                              className="w-full"
-                              onClick={() => toggleRecordExpanded(record.id)}
-                              aria-expanded={isExpanded}
-                            >
-                              {isExpanded ? (
+                            {isExpanded ? (
+                              <Button
+                                type="button"
+                                variant="outline"
+                                className="w-full"
+                                onClick={() => toggleRecordExpanded(record.id)}
+                                aria-expanded="true"
+                                aria-controls={recordDetailsId}
+                              >
                                 <ChevronUp className="mr-2 h-4 w-4" />
-                              ) : (
+                                Show less
+                              </Button>
+                            ) : (
+                              <Button
+                                type="button"
+                                variant="outline"
+                                className="w-full"
+                                onClick={() => toggleRecordExpanded(record.id)}
+                                aria-expanded="false"
+                                aria-controls={recordDetailsId}
+                              >
                                 <ChevronDown className="mr-2 h-4 w-4" />
-                              )}
-                              {isExpanded ? "Show less" : "Show more"}
-                            </Button>
+                                Show more
+                              </Button>
+                            )}
 
                             {isExpanded ? (
                               <>
-                                <dl className="grid gap-2 rounded-lg border border-border/60 bg-muted/15 p-3 text-sm">
+                                <dl
+                                  id={recordDetailsId}
+                                  className="grid gap-2 rounded-lg border border-border/60 bg-muted/15 p-3 text-sm"
+                                >
                                   <div className="space-y-1">
                                     <dt className="text-xs uppercase tracking-[0.14em] text-muted-foreground">IC Number</dt>
                                     <dd className="break-words">{record.icNumber}</dd>

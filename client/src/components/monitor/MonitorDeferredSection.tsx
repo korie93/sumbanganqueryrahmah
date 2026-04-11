@@ -89,9 +89,11 @@ export function MonitorSectionCardFallback({
   title: string;
   blocks?: number;
 }) {
+  const statusAriaLabelProps = title ? { "aria-label": title } : {};
+
   return (
     <OperationalSectionCard className="bg-background/80" contentClassName="space-y-3 p-4">
-      <div role="status" aria-live="polite" aria-label={title} className="space-y-3">
+      <div role="status" aria-live="polite" {...statusAriaLabelProps} className="space-y-3">
         <div className="h-5 w-40 animate-pulse rounded bg-slate-300/70 dark:bg-slate-700/70" />
         <div className="space-y-3">
           {Array.from({ length: blocks }, (_, index) => `section-${index + 1}`).map((key) => (

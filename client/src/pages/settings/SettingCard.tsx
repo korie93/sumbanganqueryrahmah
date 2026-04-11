@@ -29,6 +29,7 @@ export const SettingCard = memo(function SettingCard({
   const disabled = !setting.permission.canEdit || saving;
   const asString = String(value ?? "");
   const actionHint = getSettingActionTooltip(setting);
+  const actionHintAriaLabelProps = actionHint ? { "aria-label": actionHint } : {};
   const controlClassName = isMobile ? "w-full" : "w-full max-w-sm";
 
   const handleValueChange = useCallback(
@@ -47,7 +48,7 @@ export const SettingCard = memo(function SettingCard({
           disabled={disabled}
           onCheckedChange={(checkedValue) => handleValueChange(checkedValue)}
           title={actionHint}
-          aria-label={actionHint}
+          {...actionHintAriaLabelProps}
         />
       );
     }
@@ -55,7 +56,7 @@ export const SettingCard = memo(function SettingCard({
     if (setting.type === "select") {
       return (
         <Select value={asString} disabled={disabled} onValueChange={(selected) => handleValueChange(selected)}>
-          <SelectTrigger className={controlClassName} title={actionHint} aria-label={actionHint}>
+          <SelectTrigger className={controlClassName} title={actionHint} {...actionHintAriaLabelProps}>
             <SelectValue placeholder="Select a value" />
           </SelectTrigger>
           <SelectContent>
@@ -78,7 +79,7 @@ export const SettingCard = memo(function SettingCard({
           rows={3}
           className={isMobile ? "w-full" : "max-w-2xl"}
           title={actionHint}
-          aria-label={actionHint}
+          {...actionHintAriaLabelProps}
         />
       );
     }
@@ -92,10 +93,13 @@ export const SettingCard = memo(function SettingCard({
         onChange={(event) => handleValueChange(event.target.value)}
         className={controlClassName}
         title={actionHint}
-        aria-label={actionHint}
+        {...actionHintAriaLabelProps}
       />
     );
   };
+
+  const descriptionLabel = setting.description || "No description available for this setting.";
+  const descriptionAriaLabelProps = descriptionLabel ? { "aria-label": descriptionLabel } : {};
 
   return (
     <Card className="border-border/60 bg-background/70 [contain-intrinsic-size:140px] [content-visibility:auto]">
@@ -106,8 +110,8 @@ export const SettingCard = memo(function SettingCard({
               <h3 className="font-semibold">{setting.label}</h3>
               <span
                 className="text-muted-foreground"
-                title={setting.description || "No description available for this setting."}
-                aria-label={setting.description || "No description available for this setting."}
+                title={descriptionLabel}
+                {...descriptionAriaLabelProps}
               >
                 <Info className="w-3.5 h-3.5" />
               </span>
