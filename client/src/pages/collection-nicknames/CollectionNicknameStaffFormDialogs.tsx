@@ -46,6 +46,8 @@ export function CollectionNicknameStaffFormDialogs({
   onSaveEditNickname,
 }: CollectionNicknameStaffFormDialogsProps) {
   const isMobile = useIsMobile();
+  const newRoleScopeTriggerId = "collection-nickname-new-role-scope";
+  const editRoleScopeTriggerId = "collection-nickname-edit-role-scope";
 
   return (
     <>
@@ -72,9 +74,9 @@ export function CollectionNicknameStaffFormDialogs({
             />
           </div>
           <div className="space-y-2">
-            <Label>Role Scope</Label>
+            <Label htmlFor={newRoleScopeTriggerId}>Role Scope</Label>
             <Select value={newRoleScope} onValueChange={onNewRoleScopeChange}>
-              <SelectTrigger className={isMobile ? "h-12 rounded-2xl" : undefined}>
+              <SelectTrigger id={newRoleScopeTriggerId} className={isMobile ? "h-12 rounded-2xl" : undefined}>
                 <SelectValue placeholder="Pilih role scope" />
               </SelectTrigger>
               <SelectContent>
@@ -128,9 +130,9 @@ export function CollectionNicknameStaffFormDialogs({
             />
           </div>
           <div className="space-y-2">
-            <Label>Role Scope</Label>
+            <Label htmlFor={editRoleScopeTriggerId}>Role Scope</Label>
             <Select value={editRoleScope} onValueChange={onEditRoleScopeChange}>
-              <SelectTrigger className={isMobile ? "h-12 rounded-2xl" : undefined}>
+              <SelectTrigger id={editRoleScopeTriggerId} className={isMobile ? "h-12 rounded-2xl" : undefined}>
                 <SelectValue placeholder="Pilih role scope" />
               </SelectTrigger>
               <SelectContent>

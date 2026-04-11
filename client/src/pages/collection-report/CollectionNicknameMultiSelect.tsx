@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 
 type CollectionNicknameMultiSelectProps = {
   label: string;
+  triggerId?: string | undefined;
   open: boolean;
   loading?: boolean;
   selectedLabel: string;
@@ -26,6 +27,7 @@ type CollectionNicknameMultiSelectProps = {
 
 export function CollectionNicknameMultiSelect({
   label,
+  triggerId,
   open,
   loading = false,
   selectedLabel,
@@ -43,10 +45,11 @@ export function CollectionNicknameMultiSelect({
 }: CollectionNicknameMultiSelectProps) {
   return (
     <div className="space-y-1">
-      <Label>{label}</Label>
+      <Label htmlFor={triggerId}>{label}</Label>
       <Popover open={open} onOpenChange={onOpenChange}>
         <PopoverTrigger asChild>
           <Button
+            id={triggerId}
             variant="outline"
             className={cn("w-full justify-between", triggerClassName)}
             disabled={loading}

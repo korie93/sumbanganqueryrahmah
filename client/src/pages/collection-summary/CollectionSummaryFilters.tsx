@@ -47,6 +47,7 @@ export function CollectionSummaryFilters({
   onClearAllSelected,
 }: CollectionSummaryFiltersProps) {
   const isMobile = useIsMobile();
+  const nicknameTriggerId = "collection-summary-nickname-filter";
 
   return (
     <div
@@ -78,7 +79,9 @@ export function CollectionSummaryFilters({
         <Suspense
           fallback={
             <div className="space-y-1">
-              <Label>Staff Nickname (optional)</Label>
+              <p className="text-sm font-medium leading-none text-foreground">
+                Staff Nickname (optional)
+              </p>
               <div
                 className={`animate-pulse border border-border/60 bg-muted/20 ${
                   isMobile ? "h-12 rounded-2xl" : "h-10 rounded-xl"
@@ -89,6 +92,7 @@ export function CollectionSummaryFilters({
         >
           <CollectionNicknameMultiSelect
             label="Staff Nickname (optional)"
+            triggerId={nicknameTriggerId}
             open={nicknameDropdownOpen}
             loading={loading}
             selectedLabel={selectedNicknameLabel}

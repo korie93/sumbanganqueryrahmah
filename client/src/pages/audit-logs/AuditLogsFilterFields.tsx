@@ -146,7 +146,7 @@ export function AuditLogsFilterFields({
 
         {datePreset === "custom" ? (
           <div className="space-y-2 lg:col-span-1">
-            <Label className="text-sm font-medium">Custom Date Range</Label>
+            <p className="text-sm font-medium text-foreground">Custom Date Range</p>
             <div className="grid gap-2 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor={dateFromButtonId} className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">

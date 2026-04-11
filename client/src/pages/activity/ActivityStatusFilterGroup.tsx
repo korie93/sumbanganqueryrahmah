@@ -16,8 +16,8 @@ export function ActivityStatusFilterGroup({
   onToggleStatus,
 }: ActivityStatusFilterGroupProps) {
   return (
-    <div>
-      <Label className="mb-2 block text-sm font-medium">Status</Label>
+    <fieldset>
+      <legend className="mb-2 text-sm font-medium">Status</legend>
       <div className={`flex flex-wrap ${isMobile ? "gap-3" : "gap-2"}`}>
         {STATUS_OPTIONS.map((option) => (
           <div key={option.value} className={getActivityStatusOptionClassName(isMobile)}>
@@ -33,6 +33,6 @@ export function ActivityStatusFilterGroup({
           </div>
         ))}
       </div>
-    </div>
+    </fieldset>
   );
 }
