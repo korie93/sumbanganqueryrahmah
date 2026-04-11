@@ -56,12 +56,15 @@ export function createClusterMasterOrchestrator({
     fatalStartupLockReason: null as string | null,
     fatalShutdownScheduled: false,
   };
+  let scaleIntervalHandle: ReturnType<typeof setInterval> | null = null;
+  let gracefulShutdownScheduled = false;
 
   function getWorkers(): Worker[] {
     return Object.values(clusterModule.workers ?? {}).filter((worker): worker is Worker => Boolean(worker));
   }
 
   function shutdownMasterDueToFatalError(reason: string, metadata?: Record<string, unknown>) {
+    dispose();
     shutdownClusterMasterDueToFatalError({
       reason,
       metadata,
@@ -78,6 +81,73 @@ export function createClusterMasterOrchestrator({
         return false;
       },
     });
+  }
+
+  function startScaleInterval() {
+    if (scaleIntervalHandle) {
+      return;
+    }
+
+    scaleIntervalHandle = setInterval(evaluateScale, config.scaleIntervalMs);
+    scaleIntervalHandle.unref();
+  }
+
+  function dispose() {
+    if (!scaleIntervalHandle) {
+      return;
+    }
+
+    clearInterval(scaleIntervalHandle);
+    scaleIntervalHandle = null;
+  }
+
+  function shutdownGracefully(reason: string) {
+    if (gracefulShutdownScheduled) {
+      return;
+    }
+
+    gracefulShutdownScheduled = true;
+    dispose();
+
+    const workers = getWorkers();
+    logger.info("Cluster master shutting down gracefully", {
+      reason,
+      workers: workers.length,
+    });
+
+    const forceExitTimer = setTimeout(() => {
+      process.exit(0);
+    }, 25_000);
+    forceExitTimer.unref();
+
+    for (const worker of workers) {
+      state.intentionalExits.add(worker.id);
+      sendGracefulShutdownToWorker({
+        worker,
+        reason: `master:${reason}`,
+        createGracefulShutdownMessage: toGracefulShutdownMessage,
+      });
+    }
+
+    if (clusterModule.isPrimary && workers.length > 0) {
+      try {
+        clusterModule.disconnect(() => {
+          clearTimeout(forceExitTimer);
+          process.exit(0);
+        });
+        return;
+      } catch (error) {
+        logger.error("Cluster master disconnect failed during graceful shutdown", {
+          reason,
+          error,
+        });
+      }
+    }
+
+    setTimeout(() => {
+      clearTimeout(forceExitTimer);
+      process.exit(0);
+    }, 50).unref();
   }
 
   function broadcastControl(control: WorkerControlState) {
@@ -287,7 +357,7 @@ export function createClusterMasterOrchestrator({
       },
     });
 
-    setInterval(evaluateScale, config.scaleIntervalMs);
+    startScaleInterval();
     logger.info("Cluster master online", {
       workers: config.initialWorkers,
       maxWorkers: config.maxWorkers,
@@ -307,7 +377,9 @@ export function createClusterMasterOrchestrator({
 
   return {
     bootCluster,
+    dispose,
     handleUncaughtException,
     handleUnhandledRejection,
+    shutdownGracefully,
   };
 }

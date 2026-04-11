@@ -73,12 +73,26 @@ test("cluster master orchestrator boots primary workers and registers lifecycle 
   } as unknown as typeof cluster;
 
   const originalSetInterval = globalThis.setInterval;
-  const intervalHandles: unknown[] = [];
-  globalThis.setInterval = ((handler: TimerHandler, timeout?: number, ...args: unknown[]) => {
-    const intervalHandle = originalSetInterval(handler, timeout, ...args);
-    intervalHandles.push(intervalHandle);
+  const originalClearInterval = globalThis.clearInterval;
+  let intervalUnrefCalls = 0;
+  const intervalHandle = {
+    unref() {
+      intervalUnrefCalls += 1;
+    },
+  } as unknown as ReturnType<typeof setInterval>;
+  const clearedIntervalHandles: Array<Parameters<typeof clearInterval>[0]> = [];
+  let scaleIntervalMs: number | undefined;
+  globalThis.setInterval = (((handler: TimerHandler, timeout?: number, ...args: unknown[]) => {
+    void handler;
+    void args;
+    scaleIntervalMs = timeout;
     return intervalHandle;
-  }) as typeof setInterval;
+  }) as unknown) as typeof setInterval;
+  globalThis.clearInterval = (((handle?: Parameters<typeof clearInterval>[0]) => {
+    if (handle) {
+      clearedIntervalHandles.push(handle);
+    }
+  }) as unknown) as typeof clearInterval;
 
   try {
     const orchestrator = createClusterMasterOrchestrator({
@@ -116,10 +130,15 @@ test("cluster master orchestrator boots primary workers and registers lifecycle 
       logger.infoCalls.some((entry) => entry.message === "Cluster master online"),
       true,
     );
+    assert.equal(scaleIntervalMs, 5_000);
+    assert.equal(intervalUnrefCalls, 1);
+
+    orchestrator.dispose();
+    orchestrator.dispose();
+
+    assert.deepEqual(clearedIntervalHandles, [intervalHandle]);
   } finally {
     globalThis.setInterval = originalSetInterval;
-    for (const intervalHandle of intervalHandles) {
-      clearInterval(intervalHandle as Parameters<typeof clearInterval>[0]);
-    }
+    globalThis.clearInterval = originalClearInterval;
   }
 });

@@ -260,15 +260,16 @@
   --z-sticky-header: 10;
   --z-sticky-content: 20;
   --z-navbar: 30;
+  /* Transient app shells must stay below modal overlay/content. */
   --z-mobile-nav-overlay: 40;
-  --z-mobile-nav-panel: 50;
+  --z-floating-ai-root: 35;
+  --z-floating-ai-overlay: 45;
+  --z-mobile-nav-panel: 48;
   --z-modal-overlay: 50;
   --z-modal-content: 60;
   --z-popover: 70;
   --z-tooltip: 80;
   --z-toast: 100;
-  --z-floating-ai-root: 40;
-  --z-floating-ai-overlay: 55;
   --z-sidebar-desktop: 10;
   --z-sidebar-rail: 20;
   --login-card-shadow: 0 25px 40px hsl(0 0% 0% / 0.25), inset 0 0 35px hsl(0 0% 100% / 0.18);
@@ -600,8 +601,8 @@
   --floating-ai-edge-gap: clamp(0.5rem, 2vw, 1.5rem);
   --login-card-shadow: 0 25px 40px hsl(0 0% 0% / 0.34), inset 0 0 35px hsl(0 0% 100% / 0.12);
   --login-card-mobile-shadow: 0 16px 32px hsl(0 0% 0% / 0.32);
-  --z-floating-ai-root: 40;
-  --z-floating-ai-overlay: 55;
+  --z-floating-ai-root: 35;
+  --z-floating-ai-overlay: 45;
   --app-shell-glass-shadow: 0 14px 28px hsl(215 28% 11% / 0.07);
   --app-shell-glass-shadow-dark: 0 16px 30px hsl(0 0% 0% / 0.24);
   --app-shell-section-shadow: 0 10px 24px hsl(215 28% 11% / 0.06);

@@ -72,6 +72,10 @@ process.on("unhandledRejection", (reason) => {
   clusterMaster.handleUnhandledRejection(reason);
 });
 
+function handleClusterShutdownSignal(signal: NodeJS.Signals) {
+  clusterMaster.shutdownGracefully(signal);
+}
+
 if (cluster.isPrimary) {
   if (SINGLE_PROCESS_MODE) {
     logger.info("Starting server in single-process mode", {
@@ -80,6 +84,8 @@ if (cluster.isPrimary) {
     });
     await import("./index-local.js");
   } else {
+    process.once("SIGINT", handleClusterShutdownSignal);
+    process.once("SIGTERM", handleClusterShutdownSignal);
     clusterMaster.bootCluster();
   }
 } else {
