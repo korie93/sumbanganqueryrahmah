@@ -56,8 +56,6 @@
   color: var(--home-hero-chip-text);
   font-size: 0.74rem;
   font-weight: 600;
-  -webkit-backdrop-filter: blur(10px);
-  backdrop-filter: blur(10px);
 }
 
 .home-mobile-hero-action {
@@ -76,8 +74,6 @@
   border: 1px solid hsl(var(--border) / 0.72);
   background: hsl(var(--card) / 0.92);
   box-shadow: var(--home-surface-shadow);
-  -webkit-backdrop-filter: blur(12px);
-  backdrop-filter: blur(12px);
 }
 
 .home-mobile-quick-card {
@@ -150,13 +146,24 @@
   border: 1px solid hsl(var(--border) / 0.75);
   background: hsl(var(--card) / 0.86);
   box-shadow: var(--home-card-shadow);
-  -webkit-backdrop-filter: blur(12px);
-  backdrop-filter: blur(12px);
   cursor: pointer;
   transition:
     transform 0.2s ease,
     box-shadow 0.2s ease,
     border-color 0.2s ease;
+}
+
+@supports ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
+  .home-mobile-hero-chip {
+    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(10px);
+  }
+
+  .home-mobile-surface,
+  .home-card {
+    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(12px);
+  }
 }
 
 .dark .home-card {

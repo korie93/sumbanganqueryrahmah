@@ -29,7 +29,7 @@ class FakeNotificationClient extends EventEmitter {
   listenQueries: string[] = [];
   endCalls = 0;
 
-  constructor(private readonly options: { connectError?: Error } = {}) {
+  constructor(private readonly options: { connectError?: Error; endError?: Error } = {}) {
     super();
   }
 
@@ -45,6 +45,9 @@ class FakeNotificationClient extends EventEmitter {
 
   async end(): Promise<void> {
     this.endCalls += 1;
+    if (this.options.endError) {
+      throw this.options.endError;
+    }
   }
 }
 
@@ -202,4 +205,38 @@ test("CollectionRollupRefreshNotificationSubscriber contains notification callba
   );
 
   await subscriber.stop();
+});
+
+test("CollectionRollupRefreshNotificationSubscriber logs close failures without breaking shutdown", async (t) => {
+  const client = new FakeNotificationClient({
+    endError: new Error("close failed"),
+  });
+  const warnings: Array<{ message: string; meta?: Record<string, unknown> }> = [];
+
+  t.mock.method(
+    logger,
+    "warn",
+    ((message: string, meta?: Record<string, unknown>) => {
+      warnings.push(meta ? { message, meta } : { message });
+    }) as typeof logger.warn,
+  );
+
+  const subscriber = new CollectionRollupRefreshNotificationSubscriber({
+    clientFactory: () => client,
+    reconnectDelayMs: 20,
+  });
+
+  await subscriber.start(() => undefined);
+  await assert.doesNotReject(async () => {
+    await subscriber.stop();
+  });
+
+  assert.equal(client.endCalls, 1);
+  assert.equal(
+    warnings.some(({ message, meta }) => (
+      message === "Failed to close collection rollup notification client cleanly; polling fallback remains active"
+      && meta?.reason === "stop"
+    )),
+    true,
+  );
 });

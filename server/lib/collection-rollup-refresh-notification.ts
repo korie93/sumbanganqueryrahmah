@@ -30,6 +30,8 @@ type CollectionRollupRefreshNotificationSubscriberOptions = {
   clientFactory?: PgNotificationClientFactory;
 };
 
+const DEFAULT_ROLLUP_REFRESH_NOTIFICATION_RECONNECT_DELAY_MS = 5_000;
+
 export type CollectionRollupRefreshNotificationSubscriberLike = {
   start(onNotify: () => void): Promise<void>;
   stop?(): Promise<void> | void;
@@ -80,7 +82,7 @@ export class CollectionRollupRefreshNotificationSubscriber
     this.channel = assertSafeChannelName(
       options.channel ?? COLLECTION_ROLLUP_REFRESH_NOTIFICATION_CHANNEL,
     );
-    this.reconnectDelayMs = Math.max(1, options.reconnectDelayMs ?? 5_000);
+    this.reconnectDelayMs = Math.max(1, options.reconnectDelayMs ?? DEFAULT_ROLLUP_REFRESH_NOTIFICATION_RECONNECT_DELAY_MS);
     this.clientFactory = options.clientFactory ?? createDefaultClient;
   }
 
@@ -102,7 +104,7 @@ export class CollectionRollupRefreshNotificationSubscriber
     this.currentClient = null;
     if (activeClient) {
       this.removeClientListeners(activeClient);
-      await this.safeCloseClient(activeClient);
+      await this.safeCloseClient(activeClient, "stop");
     }
   }
 
@@ -183,7 +185,7 @@ export class CollectionRollupRefreshNotificationSubscriber
       await client.query(`LISTEN ${this.channel}`);
 
       if (!this.started) {
-        await this.safeCloseClient(client);
+        await this.safeCloseClient(client, "start-aborted");
         return;
       }
 
@@ -193,7 +195,7 @@ export class CollectionRollupRefreshNotificationSubscriber
       });
     } catch (error) {
       this.removeClientListeners(client);
-      await this.safeCloseClient(client);
+      await this.safeCloseClient(client, "connect-failure");
       logger.warn("Failed to start collection rollup notification listener; polling fallback remains active", {
         channel: this.channel,
         error,
@@ -213,7 +215,7 @@ export class CollectionRollupRefreshNotificationSubscriber
         this.currentClient = null;
       }
       this.removeClientListeners(client);
-      await this.safeCloseClient(client);
+      await this.safeCloseClient(client, "disconnect");
       this.scheduleReconnect();
     } finally {
       this.closingClients.delete(client);
@@ -248,11 +250,18 @@ export class CollectionRollupRefreshNotificationSubscriber
     this.reconnectTimer.unref?.();
   }
 
-  private async safeCloseClient(client: PgNotificationClientLike): Promise<void> {
+  private async safeCloseClient(
+    client: PgNotificationClientLike,
+    reason: "stop" | "start-aborted" | "connect-failure" | "disconnect",
+  ): Promise<void> {
     try {
       await client.end();
-    } catch {
-      // Swallow close errors because polling fallback is still available.
+    } catch (error) {
+      logger.warn("Failed to close collection rollup notification client cleanly; polling fallback remains active", {
+        channel: this.channel,
+        reason,
+        error,
+      });
     }
   }
 }

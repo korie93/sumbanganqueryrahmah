@@ -70,8 +70,6 @@
   border-radius: 32px;
   background: var(--login-card-surface);
   background-clip: padding-box;
-  -webkit-backdrop-filter: blur(12px) saturate(130%);
-  backdrop-filter: blur(12px) saturate(130%);
   border: 1px solid var(--login-card-border);
   box-shadow: var(--login-card-shadow);
   contain: paint;
@@ -241,6 +239,13 @@
 .low-spec .login-content {
   opacity: 1 !important;
   transform: none !important;
+}
+
+@supports ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
+  .login-card {
+    -webkit-backdrop-filter: blur(12px) saturate(130%);
+    backdrop-filter: blur(12px) saturate(130%);
+  }
 }
 
 @media (max-width: 640px) {

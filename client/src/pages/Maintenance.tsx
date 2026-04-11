@@ -4,6 +4,8 @@ import { getMaintenanceStatus } from "@/lib/api/settings";
 import { getBrowserLocalStorage, safeGetStorageItem, safeSetStorageItem } from "@/lib/browser-storage";
 import { formatDateTimeDDMMYYYY } from "@/lib/date-format";
 import {
+  MAINTENANCE_COUNTDOWN_TICK_INTERVAL_MS,
+  MAINTENANCE_STATUS_POLL_INTERVAL_MS,
   mergeMaintenancePayload,
   parseStoredMaintenanceState,
   type MaintenancePayload,
@@ -77,7 +79,7 @@ export default function MaintenancePage() {
       }
       pollIntervalId = window.setInterval(() => {
         void load();
-      }, 15_000);
+      }, MAINTENANCE_STATUS_POLL_INTERVAL_MS);
     };
 
     const handleMaintenanceUpdated = (event: Event) => {
@@ -143,7 +145,7 @@ export default function MaintenancePage() {
       if (nextNow >= countdownTargetMs) {
         window.clearInterval(tick);
       }
-    }, 1000);
+    }, MAINTENANCE_COUNTDOWN_TICK_INTERVAL_MS);
 
     return () => {
       window.clearInterval(tick);
@@ -163,7 +165,7 @@ export default function MaintenancePage() {
   return (
     <main className="maintenance-page viewport-min-height flex items-center justify-center p-4 sm:p-6">
       <section
-        className="maintenance-page__shell w-full max-w-3xl rounded-3xl backdrop-blur-md"
+        className="maintenance-page__shell w-full max-w-3xl rounded-3xl supports-[backdrop-filter]:backdrop-blur-md"
         aria-labelledby="maintenance-page-title"
       >
         <header className="maintenance-page__header space-y-4 px-6 pb-6 pt-6 sm:px-8">

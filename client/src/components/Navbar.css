@@ -22,13 +22,10 @@
   border-radius: 9999px;
   background: hsl(var(--card) / 0.78);
   border: 1px solid hsl(var(--border) / 0.9);
-  -webkit-backdrop-filter: blur(14px);
-  backdrop-filter: blur(14px);
   box-shadow: var(--nav-surface-shadow);
   transition:
     box-shadow 0.2s ease,
     background 0.3s ease;
-  will-change: backdrop-filter;
 }
 
 .navbar-scroll-fade {
@@ -124,16 +121,16 @@
     var(--nav-focus-shadow);
 }
 
-.nav-pill-active {
-  background: hsl(var(--foreground)) !important;
-  color: hsl(var(--background)) !important;
-  border-color: hsl(var(--foreground)) !important;
+.nav-pill.nav-pill-active {
+  background: hsl(var(--foreground));
+  color: hsl(var(--background));
+  border-color: hsl(var(--foreground));
   box-shadow: var(--nav-active-shadow);
 }
 
-.nav-pill-active .nav-pill-icon svg {
-  color: currentColor !important;
-  stroke: currentColor !important;
+.nav-pill.nav-pill-active .nav-pill-icon svg {
+  color: currentColor;
+  stroke: currentColor;
 }
 
 .nav-pill-icon {
@@ -231,6 +228,23 @@
   -webkit-backdrop-filter: none !important;
   backdrop-filter: none !important;
   box-shadow: none !important;
+}
+
+@supports ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
+  .navbar-premium-glass {
+    -webkit-backdrop-filter: blur(14px);
+    backdrop-filter: blur(14px);
+  }
+}
+
+@supports not ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
+  .navbar-premium-glass {
+    background: hsl(var(--card) / 0.92);
+  }
+
+  .dark .navbar-premium-glass {
+    background: hsl(var(--card) / 0.94);
+  }
 }
 
 @media (hover: hover) and (pointer: fine) {

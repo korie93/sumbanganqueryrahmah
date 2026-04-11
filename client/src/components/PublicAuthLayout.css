@@ -202,8 +202,15 @@
   .public-auth-layout__card {
     background: var(--public-auth-shell-surface-strong-sm);
     padding: var(--spacing-8);
-    -webkit-backdrop-filter: blur(20px);
-    backdrop-filter: blur(20px);
+  }
+}
+
+@supports ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
+  @media (min-width: 640px) {
+    .public-auth-layout__card {
+      -webkit-backdrop-filter: blur(20px);
+      backdrop-filter: blur(20px);
+    }
   }
 }
 

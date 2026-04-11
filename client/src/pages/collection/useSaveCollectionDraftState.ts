@@ -15,6 +15,8 @@ import {
   type SaveCollectionRestoredFormValues,
 } from "@/pages/collection/save-collection-state-utils";
 
+const SAVE_COLLECTION_DRAFT_PERSIST_DELAY_MS = 250;
+
 type UseSaveCollectionDraftStateOptions = {
   staffNickname: string;
   values: SaveCollectionFormValues;
@@ -50,7 +52,7 @@ export function useSaveCollectionDraftState({
 
     const timer = window.setTimeout(() => {
       persistSaveCollectionDraft(staffNickname, persistPayload);
-    }, 250);
+    }, SAVE_COLLECTION_DRAFT_PERSIST_DELAY_MS);
 
     return () => {
       window.clearTimeout(timer);

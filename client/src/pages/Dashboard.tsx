@@ -17,7 +17,11 @@ import { DashboardDeferredSections } from "@/pages/dashboard/DashboardDeferredSe
 import { DashboardPageHeader } from "@/pages/dashboard/DashboardPageHeader";
 import { DashboardSnapshotSection } from "@/pages/dashboard/DashboardSnapshotSection";
 import { resolveDashboardExportBlockReason } from "@/pages/dashboard/export-guards";
-import { resolveVisibleDashboardRefetchInterval } from "@/pages/dashboard/refetch-visibility";
+import {
+  DASHBOARD_PRIMARY_REFETCH_INTERVAL_MS,
+  DASHBOARD_SECONDARY_REFETCH_INTERVAL_MS,
+  resolveVisibleDashboardRefetchInterval,
+} from "@/pages/dashboard/refetch-visibility";
 import type { LoginTrend, PeakHour, RoleData, SummaryData, TopUser } from "@/pages/dashboard/types";
 import { buildSummaryCards, exportDashboardToPdf } from "@/pages/dashboard/utils";
 
@@ -36,35 +40,35 @@ function DashboardContent() {
   const { data: summary, isLoading: summaryLoading, refetch: refetchSummary } = useQuery<SummaryData>({
     queryKey: ["/api/analytics/summary"],
     queryFn: ({ signal }) => getAnalyticsSummary({ signal }),
-    refetchInterval: () => resolveVisibleDashboardRefetchInterval(30_000),
+    refetchInterval: () => resolveVisibleDashboardRefetchInterval(DASHBOARD_PRIMARY_REFETCH_INTERVAL_MS),
     refetchIntervalInBackground: false,
   });
 
   const { data: trends, isLoading: trendsLoading, refetch: refetchTrends } = useQuery<LoginTrend[]>({
     queryKey: ["/api/analytics/login-trends", trendDays],
     queryFn: ({ signal }) => getLoginTrends(trendDays, { signal }),
-    refetchInterval: () => resolveVisibleDashboardRefetchInterval(30_000),
+    refetchInterval: () => resolveVisibleDashboardRefetchInterval(DASHBOARD_PRIMARY_REFETCH_INTERVAL_MS),
     refetchIntervalInBackground: false,
   });
 
   const { data: topUsers, isLoading: topUsersLoading, refetch: refetchTopUsers } = useQuery<TopUser[]>({
     queryKey: ["/api/analytics/top-users"],
     queryFn: ({ signal }) => getTopActiveUsers(10, { signal }),
-    refetchInterval: () => resolveVisibleDashboardRefetchInterval(30_000),
+    refetchInterval: () => resolveVisibleDashboardRefetchInterval(DASHBOARD_PRIMARY_REFETCH_INTERVAL_MS),
     refetchIntervalInBackground: false,
   });
 
   const { data: peakHours, isLoading: peakHoursLoading, refetch: refetchPeakHours } = useQuery<PeakHour[]>({
     queryKey: ["/api/analytics/peak-hours"],
     queryFn: ({ signal }) => getPeakHours({ signal }),
-    refetchInterval: () => resolveVisibleDashboardRefetchInterval(60_000),
+    refetchInterval: () => resolveVisibleDashboardRefetchInterval(DASHBOARD_SECONDARY_REFETCH_INTERVAL_MS),
     refetchIntervalInBackground: false,
   });
 
   const { data: roleDistribution, isLoading: roleLoading, refetch: refetchRoles } = useQuery<RoleData[]>({
     queryKey: ["/api/analytics/role-distribution"],
     queryFn: ({ signal }) => getRoleDistribution({ signal }),
-    refetchInterval: () => resolveVisibleDashboardRefetchInterval(60_000),
+    refetchInterval: () => resolveVisibleDashboardRefetchInterval(DASHBOARD_SECONDARY_REFETCH_INTERVAL_MS),
     refetchIntervalInBackground: false,
   });
 

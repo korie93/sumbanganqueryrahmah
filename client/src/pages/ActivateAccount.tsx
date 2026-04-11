@@ -17,6 +17,8 @@ import {
 
 type ActivationPhase = "invalid" | "ready" | "success" | "validating";
 
+const ACTIVATION_SUCCESS_REDIRECT_DELAY_MS = 1_200;
+
 function getTokenFromLocation() {
   if (typeof window === "undefined") return "";
   return new URLSearchParams(window.location.search).get("token") || "";
@@ -61,7 +63,7 @@ export default function ActivateAccountPage() {
 
     const timeoutId = window.setTimeout(() => {
       window.location.href = "/";
-    }, 1200);
+    }, ACTIVATION_SUCCESS_REDIRECT_DELAY_MS);
 
     return () => {
       window.clearTimeout(timeoutId);

@@ -8,6 +8,8 @@ import {
 import type { UseActivityFeedStateOptions } from "@/pages/activity/activity-data-state-shared";
 import type { ActivityRecord, BannedUser } from "@/pages/activity/types";
 
+const ACTIVITY_VISIBLE_REFRESH_INTERVAL_MS = 30_000;
+
 export function useActivityFeedState({
   canModerateActivity,
   filtersRef,
@@ -89,7 +91,7 @@ export function useActivityFeedState({
 
     const interval = window.setInterval(() => {
       refreshVisibleActivity();
-    }, 30000);
+    }, ACTIVITY_VISIBLE_REFRESH_INTERVAL_MS);
 
     const handleVisibilityChange = () => {
       if (typeof document !== "undefined" && document.visibilityState === "visible") {

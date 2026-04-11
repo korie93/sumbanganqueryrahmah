@@ -1,6 +1,9 @@
 import { startTransition, useEffect, useRef, useState } from "react";
 import { OperationalSectionCard } from "@/components/layout/OperationalPage";
 
+const DEFERRED_ACTIVITY_SECTION_ROOT_MARGIN_DEFAULT = "280px 0px";
+const DEFERRED_ACTIVITY_SECTION_TIMEOUT_MS_DEFAULT = 1_200;
+
 export function ActivitySectionFallback({ label }: { label: string }) {
   return (
     <OperationalSectionCard className="bg-background/80" contentClassName="p-4 text-sm text-muted-foreground">
@@ -19,8 +22,8 @@ type DeferredActivitySectionOptions = {
 
 export function useDeferredActivitySectionMount({
   enabled,
-  rootMargin = "280px 0px",
-  timeoutMs = 1200,
+  rootMargin = DEFERRED_ACTIVITY_SECTION_ROOT_MARGIN_DEFAULT,
+  timeoutMs = DEFERRED_ACTIVITY_SECTION_TIMEOUT_MS_DEFAULT,
 }: DeferredActivitySectionOptions) {
   const triggerRef = useRef<HTMLDivElement | null>(null);
   const [shouldRender, setShouldRender] = useState(() => !enabled);

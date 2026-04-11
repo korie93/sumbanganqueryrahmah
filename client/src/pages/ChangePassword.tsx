@@ -19,6 +19,8 @@ type ChangePasswordPageProps = {
   forced?: boolean;
 };
 
+const CHANGE_PASSWORD_FORCE_LOGOUT_REDIRECT_DELAY_MS = 900;
+
 export default function ChangePasswordPage({
   username,
   forced = false,
@@ -109,7 +111,7 @@ export default function ChangePasswordPage({
         redirectTimeoutRef.current = window.setTimeout(() => {
           redirectTimeoutRef.current = null;
           window.location.href = "/";
-        }, 900);
+        }, CHANGE_PASSWORD_FORCE_LOGOUT_REDIRECT_DELAY_MS);
         return;
       }
 

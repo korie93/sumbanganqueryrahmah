@@ -18,6 +18,9 @@ import { scheduleIdlePreload } from "@/lib/lazy-with-preload";
 import "./AuthenticatedAppShell.css";
 
 const FloatingAI = lazy(() => import("@/components/FloatingAI"));
+const FLOATING_AI_FALLBACK_READY_DELAY_MS = 1_200;
+const FLOATING_AI_IDLE_READY_TIMEOUT_MS = 1_500;
+const NAVIGATION_PREFETCH_IDLE_DELAY_MS = 900;
 
 type AuthenticatedAppShellProps = {
   user: User;
@@ -70,10 +73,12 @@ export default function AuthenticatedAppShell({
       setFloatingAiReady(true);
     };
 
-    fallbackTimeoutId = window.setTimeout(markReady, 1200);
+    fallbackTimeoutId = window.setTimeout(markReady, FLOATING_AI_FALLBACK_READY_DELAY_MS);
 
     if (typeof window.requestIdleCallback === "function") {
-      idleCallbackId = window.requestIdleCallback(markReady, { timeout: 1500 });
+      idleCallbackId = window.requestIdleCallback(markReady, {
+        timeout: FLOATING_AI_IDLE_READY_TIMEOUT_MS,
+      });
     }
 
     return () => {
@@ -107,7 +112,7 @@ export default function AuthenticatedAppShell({
         }
         await prefetchNavigationTarget(target);
       }
-    }, 900);
+    }, NAVIGATION_PREFETCH_IDLE_DELAY_MS);
 
     return () => {
       cancelled = true;

@@ -3,6 +3,8 @@ import type { WebVitalTelemetryPayload } from "@shared/web-vitals";
 import { createClientRandomId } from "@/lib/secure-id";
 
 const WEB_VITALS_ENDPOINT = "/telemetry/web-vitals";
+const WEB_VITALS_IDLE_COLLECTION_TIMEOUT_MS = 2_000;
+const WEB_VITALS_FALLBACK_START_DELAY_MS = 1_200;
 const PUBLIC_PATHS = new Set([
   "/",
   "/login",
@@ -135,9 +137,11 @@ export function initializeWebVitalsReporting() {
 
   const idleWindow = window as WindowWithIdleCallback;
   if (typeof idleWindow.requestIdleCallback === "function") {
-    idleWindow.requestIdleCallback(start, { timeout: 2_000 });
+    idleWindow.requestIdleCallback(start, {
+      timeout: WEB_VITALS_IDLE_COLLECTION_TIMEOUT_MS,
+    });
     return;
   }
 
-  window.setTimeout(start, 1_200);
+  window.setTimeout(start, WEB_VITALS_FALLBACK_START_DELAY_MS);
 }

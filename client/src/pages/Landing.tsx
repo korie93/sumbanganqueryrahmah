@@ -19,6 +19,9 @@ const aboutHighlights = [
 ];
 
 const LandingDeferredSections = lazyWithPreload(() => import("./LandingDeferredSections"));
+const LANDING_DEFERRED_SECTION_PRELOAD_DELAY_MS = 900;
+const LANDING_DEFERRED_SECTION_ROOT_MARGIN = "320px 0px";
+const LANDING_DEFERRED_SECTION_FALLBACK_DELAY_MS = 1_200;
 
 type LandingDeferredSectionsFallbackProps = {
   onLoginClick: () => void;
@@ -87,7 +90,7 @@ export default function Landing({ onLoginClick }: LandingProps) {
   useEffect(() => {
     return scheduleIdlePreload(() => {
       LandingDeferredSections.preload();
-    }, 900);
+    }, LANDING_DEFERRED_SECTION_PRELOAD_DELAY_MS);
   }, []);
 
   useEffect(() => {
@@ -117,12 +120,15 @@ export default function Landing({ onLoginClick }: LandingProps) {
           loadDeferredSections();
         },
         {
-          rootMargin: "320px 0px",
+          rootMargin: LANDING_DEFERRED_SECTION_ROOT_MARGIN,
         },
       );
       observer.observe(deferredSectionsTriggerRef.current);
     } else {
-      timeoutHandle = window.setTimeout(loadDeferredSections, 1200);
+      timeoutHandle = window.setTimeout(
+        loadDeferredSections,
+        LANDING_DEFERRED_SECTION_FALLBACK_DELAY_MS,
+      );
     }
 
     return () => {

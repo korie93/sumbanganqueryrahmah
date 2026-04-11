@@ -9,6 +9,8 @@ const MONITOR_CHART_FALLBACK_KEYS = ["cpu", "memory", "latency", "throughput"] a
 const MONITOR_INSIGHT_FALLBACK_KEYS = ["signals", "anomalies", "recommendations"] as const;
 const MONITOR_METRIC_FALLBACK_KEYS = ["system", "db", "queue", "traffic"] as const;
 const MONITOR_WEB_VITAL_FALLBACK_KEYS = ["cls", "lcp"] as const;
+const DEFERRED_MONITOR_SECTION_ROOT_MARGIN_DEFAULT = "320px 0px";
+const DEFERRED_MONITOR_SECTION_TIMEOUT_MS_DEFAULT = 1_400;
 
 export function getMonitorSummaryToneClass(tone: "stable" | "watch" | "attention") {
   if (tone === "attention") {
@@ -139,8 +141,8 @@ type DeferredMonitorSectionOptions = {
 
 export function useDeferredMonitorSectionMount({
   enabled,
-  rootMargin = "320px 0px",
-  timeoutMs = 1400,
+  rootMargin = DEFERRED_MONITOR_SECTION_ROOT_MARGIN_DEFAULT,
+  timeoutMs = DEFERRED_MONITOR_SECTION_TIMEOUT_MS_DEFAULT,
 }: DeferredMonitorSectionOptions) {
   const triggerRef = useRef<HTMLDivElement | null>(null);
   const [shouldRender, setShouldRender] = useState(() => !enabled);

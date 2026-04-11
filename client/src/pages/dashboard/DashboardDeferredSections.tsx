@@ -12,6 +12,12 @@ const DashboardUserInsightsGrid = lazy(() =>
     default: module.DashboardUserInsightsGrid,
   })),
 );
+const DEFERRED_DASHBOARD_SECTION_ROOT_MARGIN_DEFAULT = "320px 0px";
+const DEFERRED_DASHBOARD_SECTION_TIMEOUT_MS_DEFAULT = 1_400;
+const DASHBOARD_CHARTS_DEFER_ROOT_MARGIN = "260px 0px";
+const DASHBOARD_CHARTS_DEFER_TIMEOUT_MS = 1_200;
+const DASHBOARD_USER_INSIGHTS_DEFER_ROOT_MARGIN = "420px 0px";
+const DASHBOARD_USER_INSIGHTS_DEFER_TIMEOUT_MS = 1_700;
 
 function DashboardSectionFallback({
   className,
@@ -70,8 +76,8 @@ type DeferredDashboardSectionOptions = {
 
 function useDeferredDashboardSectionMount({
   enabled,
-  rootMargin = "320px 0px",
-  timeoutMs = 1400,
+  rootMargin = DEFERRED_DASHBOARD_SECTION_ROOT_MARGIN_DEFAULT,
+  timeoutMs = DEFERRED_DASHBOARD_SECTION_TIMEOUT_MS_DEFAULT,
 }: DeferredDashboardSectionOptions) {
   const triggerRef = useRef<HTMLDivElement | null>(null);
   const [shouldRender, setShouldRender] = useState(() => !enabled);
@@ -162,13 +168,13 @@ export function DashboardDeferredSections({
 }: DashboardDeferredSectionsProps) {
   const chartsSection = useDeferredDashboardSectionMount({
     enabled: defer,
-    rootMargin: "260px 0px",
-    timeoutMs: 1200,
+    rootMargin: DASHBOARD_CHARTS_DEFER_ROOT_MARGIN,
+    timeoutMs: DASHBOARD_CHARTS_DEFER_TIMEOUT_MS,
   });
   const userInsightsSection = useDeferredDashboardSectionMount({
     enabled: defer,
-    rootMargin: "420px 0px",
-    timeoutMs: 1700,
+    rootMargin: DASHBOARD_USER_INSIGHTS_DEFER_ROOT_MARGIN,
+    timeoutMs: DASHBOARD_USER_INSIGHTS_DEFER_TIMEOUT_MS,
   });
 
   return (

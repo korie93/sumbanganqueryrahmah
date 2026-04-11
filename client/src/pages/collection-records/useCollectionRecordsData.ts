@@ -7,6 +7,8 @@ import { COLLECTION_DATA_CHANGED_EVENT, isValidDate } from "@/pages/collection/u
 import { useCollectionRecordsFilterState } from "@/pages/collection-records/useCollectionRecordsFilterState";
 import { useCollectionRecordsQueryState } from "@/pages/collection-records/useCollectionRecordsQueryState";
 
+const COLLECTION_RECORDS_AUTO_FETCH_DEBOUNCE_MS = 300;
+
 type UseCollectionRecordsDataArgs = {
   canUseNicknameFilter: boolean;
 };
@@ -125,7 +127,7 @@ export function useCollectionRecordsData({
       if (toDate && !isValidDate(toDate)) return;
       if (fromDate && toDate && fromDate > toDate) return;
       void loadFirstPage(buildCurrentFilters(trimmedSearch, pageSize, 0));
-    }, 300);
+    }, COLLECTION_RECORDS_AUTO_FETCH_DEBOUNCE_MS);
 
     return () => window.clearTimeout(timer);
   }, [

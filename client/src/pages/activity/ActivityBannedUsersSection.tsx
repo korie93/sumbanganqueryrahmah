@@ -8,6 +8,8 @@ const ActivityBannedUsersPanel = lazy(() =>
     default: module.ActivityBannedUsersPanel,
   })),
 );
+const BANNED_USERS_DEFER_ROOT_MARGIN = "160px 0px";
+const BANNED_USERS_DEFER_TIMEOUT_MS = 700;
 
 type ActivityBannedUsersSectionProps = {
   actionLoading: string | null;
@@ -28,8 +30,8 @@ export function ActivityBannedUsersSection({
 }: ActivityBannedUsersSectionProps) {
   const bannedUsersSection = useDeferredActivitySectionMount({
     enabled: shouldDeferSecondaryMobileSections,
-    rootMargin: "160px 0px",
-    timeoutMs: 700,
+    rootMargin: BANNED_USERS_DEFER_ROOT_MARGIN,
+    timeoutMs: BANNED_USERS_DEFER_TIMEOUT_MS,
   });
 
   if (!shouldRenderBannedUsersSection(canModerateActivity, bannedUsers.length)) {

@@ -200,7 +200,7 @@ function NavbarImpl({
   );
 
   return (
-    <header className="navbar-safe-area-shell sticky top-0 z-[var(--z-navbar)] w-full border-b border-border/70 bg-background/90 backdrop-blur-md">
+    <header className="navbar-safe-area-shell sticky top-0 z-[var(--z-navbar)] w-full border-b border-border/70 bg-background/95 supports-[backdrop-filter]:bg-background/90 supports-[backdrop-filter]:backdrop-blur-md">
       <div className="mx-auto flex max-w-[1440px] flex-col gap-3 px-3 py-2 md:px-4 lg:min-h-16 lg:flex-row lg:items-center">
         <div className="flex min-w-0 items-start justify-between gap-3 lg:flex-[0_1_auto] lg:items-center lg:pr-2">
           <div className="flex min-w-0 items-center gap-3">

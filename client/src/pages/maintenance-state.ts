@@ -6,6 +6,9 @@ export type MaintenancePayload = {
   endTime?: string | null;
 };
 
+export const MAINTENANCE_STATUS_POLL_INTERVAL_MS = 15_000;
+export const MAINTENANCE_COUNTDOWN_TICK_INTERVAL_MS = 1_000;
+
 function normalizeMaintenanceMode(value: unknown): "soft" | "hard" {
   return value === "soft" ? "soft" : "hard";
 }

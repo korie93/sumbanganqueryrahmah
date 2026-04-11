@@ -2,6 +2,7 @@ import { useEffect, type Dispatch, type SetStateAction } from "react";
 import type { User } from "@/app/types";
 import { getMaintenanceStatus } from "@/lib/api";
 import { getBrowserLocalStorage, safeSetStorageItem } from "@/lib/browser-storage";
+import { MAINTENANCE_STATUS_POLL_INTERVAL_MS } from "@/pages/maintenance-state";
 
 type MaintenanceUpdatedDetail = {
   maintenance?: boolean;
@@ -73,7 +74,7 @@ export function useAppShellMaintenanceState({
     };
 
     void checkMaintenance();
-    const timer = window.setInterval(checkMaintenance, 15000);
+    const timer = window.setInterval(checkMaintenance, MAINTENANCE_STATUS_POLL_INTERVAL_MS);
     if (typeof document !== "undefined") {
       document.addEventListener("visibilitychange", handleVisibilityChange);
     }

@@ -15,6 +15,8 @@ type IdleWindow = Window & {
   cancelIdleCallback?: (handle: IdleCallbackHandle) => void;
 };
 
+const DEFAULT_IDLE_PRELOAD_TIMEOUT_MS = 1_200;
+
 export type LazyWithPreload<TModule extends LazyModule> =
   LazyExoticComponent<TModule["default"]> & {
     preload: () => Promise<TModule>;
@@ -43,7 +45,7 @@ export function lazyWithPreload<TModule extends LazyModule>(
 
 export function scheduleIdlePreload(
   preload: () => void | Promise<unknown>,
-  timeoutMs = 1_200,
+  timeoutMs = DEFAULT_IDLE_PRELOAD_TIMEOUT_MS,
 ): () => void {
   if (typeof window === "undefined") {
     return () => {};

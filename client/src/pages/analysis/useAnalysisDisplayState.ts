@@ -13,6 +13,8 @@ import type {
 } from "@/pages/analysis/types";
 import { getCategoryBarData, getGenderPieData, getPaginatedItems, TABLE_PAGE_SIZE } from "@/pages/analysis/utils";
 
+const ANALYSIS_COPY_FEEDBACK_DURATION_MS = 2_000;
+
 type AnalysisDisplayStateOptions = {
   allResult: AllAnalysisResult | null;
   analysis: AnalysisData | null;
@@ -64,7 +66,7 @@ export function useAnalysisDisplayState({
     const timerId = window.setTimeout(() => {
       setCopiedItems((previous) => ({ ...previous, [key]: false }));
       copyTimersRef.current = copyTimersRef.current.filter((id) => id !== timerId);
-    }, 2000);
+    }, ANALYSIS_COPY_FEEDBACK_DURATION_MS);
     copyTimersRef.current.push(timerId);
   }, []);
 

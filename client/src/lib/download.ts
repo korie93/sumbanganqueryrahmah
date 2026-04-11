@@ -1,3 +1,5 @@
+const OBJECT_URL_REVOKE_DELAY_MS = 0;
+
 export function downloadBlob(blob: Blob, filename: string) {
   const link = document.createElement("a");
   const objectUrl = URL.createObjectURL(blob);
@@ -8,5 +10,5 @@ export function downloadBlob(blob: Blob, filename: string) {
 
   window.setTimeout(() => {
     URL.revokeObjectURL(objectUrl);
-  }, 0);
+  }, OBJECT_URL_REVOKE_DELAY_MS);
 }
