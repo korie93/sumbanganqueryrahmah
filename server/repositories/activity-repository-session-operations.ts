@@ -1,4 +1,3 @@
-import crypto from "crypto";
 import { and, desc, eq, gte, lte, type SQL } from "drizzle-orm";
 import type { InsertUserActivity, UserActivity } from "../../shared/schema-postgres";
 import { auditLogs, collectionNicknameSessions, userActivity } from "../../shared/schema-postgres";
@@ -8,6 +7,11 @@ import {
   computeActivityStatus,
   type ActivityWithStatus,
 } from "./activity-repository-shared";
+import {
+  buildCreateActivityValues,
+  buildUpdateActivityValues,
+  createCurrentTimestampSql,
+} from "./activity-repository-timestamp-utils";
 
 async function loadActivityPages(whereCondition?: SQL): Promise<UserActivity[]> {
   const activities: UserActivity[] = [];
@@ -32,24 +36,9 @@ async function loadActivityPages(whereCondition?: SQL): Promise<UserActivity[]> 
 }
 
 export async function createActivity(data: InsertUserActivity): Promise<UserActivity> {
-  const now = new Date();
   const result = await db
     .insert(userActivity)
-    .values({
-      id: crypto.randomUUID(),
-      userId: data.userId,
-      username: data.username,
-      role: data.role,
-      pcName: data.pcName ?? null,
-      browser: data.browser ?? null,
-      fingerprint: data.fingerprint ?? null,
-      ipAddress: data.ipAddress ?? null,
-      loginTime: now,
-      logoutTime: null,
-      lastActivityTime: now,
-      isActive: true,
-      logoutReason: null,
-    })
+    .values(buildCreateActivityValues(data))
     .returning();
 
   return result[0];
@@ -58,7 +47,7 @@ export async function createActivity(data: InsertUserActivity): Promise<UserActi
 export async function touchActivity(activityId: string): Promise<void> {
   await db
     .update(userActivity)
-    .set({ lastActivityTime: new Date() })
+    .set({ lastActivityTime: createCurrentTimestampSql() })
     .where(eq(userActivity.id, activityId));
 }
 
@@ -70,14 +59,13 @@ export async function updateActivity(
   id: string,
   data: Partial<UserActivity>,
 ): Promise<UserActivity | undefined> {
-  const updateData: Partial<typeof userActivity.$inferInsert> = {};
-  if (data.lastActivityTime !== undefined) updateData.lastActivityTime = data.lastActivityTime;
-  if (data.isActive !== undefined) updateData.isActive = data.isActive;
-  if (data.logoutTime !== undefined) updateData.logoutTime = data.logoutTime;
-  if (data.logoutReason !== undefined) updateData.logoutReason = data.logoutReason;
+  const updateData = buildUpdateActivityValues(data);
 
   if (Object.keys(updateData).length > 0) {
-    await db.update(userActivity).set(updateData).where(eq(userActivity.id, id));
+    await db
+      .update(userActivity)
+      .set(updateData as Partial<typeof userActivity.$inferInsert>)
+      .where(eq(userActivity.id, id));
   }
 
   const result = await db.select().from(userActivity).where(eq(userActivity.id, id)).limit(1);
@@ -97,7 +85,7 @@ export async function expireIdleActivitySession(params: {
       .update(userActivity)
       .set({
         isActive: false,
-        logoutTime,
+        logoutTime: createCurrentTimestampSql(),
         logoutReason: "IDLE_TIMEOUT",
       })
       .where(
@@ -189,9 +177,9 @@ export async function getFilteredActivities(filters: {
 }
 
 export async function deactivateUserActivities(username: string, reason?: string): Promise<void> {
-  const updateData: Partial<typeof userActivity.$inferInsert> = {
+  const updateData: Record<string, unknown> = {
     isActive: false,
-    logoutTime: new Date(),
+    logoutTime: createCurrentTimestampSql(),
   };
 
   if (reason) {
@@ -200,7 +188,7 @@ export async function deactivateUserActivities(username: string, reason?: string
 
   await db
     .update(userActivity)
-    .set(updateData)
+    .set(updateData as Partial<typeof userActivity.$inferInsert>)
     .where(and(eq(userActivity.isActive, true), eq(userActivity.username, username)));
 }
 
@@ -212,7 +200,7 @@ export async function deactivateUserSessionsByFingerprint(
     .update(userActivity)
     .set({
       isActive: false,
-      logoutTime: new Date(),
+      logoutTime: createCurrentTimestampSql(),
       logoutReason: "NEW_SESSION",
     })
     .where(
