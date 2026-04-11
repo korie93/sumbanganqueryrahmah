@@ -43,8 +43,26 @@ const productionBaseOverrides: Record<string, string | null> = {
   SESSION_SECRET: "prod-session-secret",
   COLLECTION_NICKNAME_TEMP_PASSWORD: "ProdTempPass12345",
   COLLECTION_PII_ENCRYPTION_KEY: "C".repeat(32),
+  TWO_FACTOR_ENCRYPTION_KEY: "T".repeat(32),
   PG_PASSWORD: "prod-db-password",
   BACKUP_ENCRYPTION_KEY: null,
+  BACKUP_ENCRYPTION_KEYS: null,
+  BACKUP_FEATURE_ENABLED: "1",
+  SEED_DEFAULT_USERS: "0",
+  LOCAL_SUPERUSER_CREDENTIALS_FILE_ENABLED: "0",
+  MAIL_DEV_OUTBOX_ENABLED: "0",
+};
+
+const productionLikeDevelopmentBaseOverrides: Record<string, string | null> = {
+  NODE_ENV: "development",
+  HOST: "0.0.0.0",
+  PUBLIC_APP_URL: "http://10.10.10.10:5000",
+  SESSION_SECRET: "prod-like-session-secret",
+  COLLECTION_NICKNAME_TEMP_PASSWORD: "ProdLikeTempPass12345",
+  COLLECTION_PII_ENCRYPTION_KEY: "C".repeat(32),
+  TWO_FACTOR_ENCRYPTION_KEY: "T".repeat(32),
+  PG_PASSWORD: "prod-like-db-password",
+  BACKUP_ENCRYPTION_KEY: "A".repeat(32),
   BACKUP_ENCRYPTION_KEYS: null,
   BACKUP_FEATURE_ENABLED: "1",
   SEED_DEFAULT_USERS: "0",
@@ -75,6 +93,22 @@ test("runtime config rejects production startup when collection PII encryption k
       await assert.rejects(
         importRuntimeFresh(),
         /COLLECTION_PII_ENCRYPTION_KEY is required outside strict local development/i,
+      );
+    },
+  );
+});
+
+test("runtime config rejects production startup when the two-factor encryption key is missing", async () => {
+  await withEnv(
+    {
+      ...productionBaseOverrides,
+      TWO_FACTOR_ENCRYPTION_KEY: null,
+      BACKUP_ENCRYPTION_KEY: "A".repeat(32),
+    },
+    async () => {
+      await assert.rejects(
+        importRuntimeFresh(),
+        /TWO_FACTOR_ENCRYPTION_KEY is required outside strict local development/i,
       );
     },
   );
@@ -150,19 +184,8 @@ test("runtime config rejects production startup when default user seeding is ena
 test("runtime config rejects production-like development startup when session secret is missing", async () => {
   await withEnv(
     {
-      NODE_ENV: "development",
-      HOST: "0.0.0.0",
-      PUBLIC_APP_URL: "http://10.10.10.10:5000",
+      ...productionLikeDevelopmentBaseOverrides,
       SESSION_SECRET: null,
-      COLLECTION_NICKNAME_TEMP_PASSWORD: "ProdLikeTempPass12345",
-      COLLECTION_PII_ENCRYPTION_KEY: "C".repeat(32),
-      PG_PASSWORD: "prod-like-db-password",
-      BACKUP_ENCRYPTION_KEY: "A".repeat(32),
-      BACKUP_ENCRYPTION_KEYS: null,
-      BACKUP_FEATURE_ENABLED: "1",
-      SEED_DEFAULT_USERS: "0",
-      LOCAL_SUPERUSER_CREDENTIALS_FILE_ENABLED: "0",
-      MAIL_DEV_OUTBOX_ENABLED: "0",
     },
     async () => {
       await assert.rejects(
@@ -176,18 +199,7 @@ test("runtime config rejects production-like development startup when session se
 test("runtime config rejects development startup when dev outbox is enabled outside strict local mode", async () => {
   await withEnv(
     {
-      NODE_ENV: "development",
-      HOST: "0.0.0.0",
-      PUBLIC_APP_URL: "http://10.10.10.10:5000",
-      SESSION_SECRET: "prod-like-session-secret",
-      COLLECTION_NICKNAME_TEMP_PASSWORD: "ProdLikeTempPass12345",
-      COLLECTION_PII_ENCRYPTION_KEY: "C".repeat(32),
-      PG_PASSWORD: "prod-like-db-password",
-      BACKUP_ENCRYPTION_KEY: "A".repeat(32),
-      BACKUP_ENCRYPTION_KEYS: null,
-      BACKUP_FEATURE_ENABLED: "1",
-      SEED_DEFAULT_USERS: "0",
-      LOCAL_SUPERUSER_CREDENTIALS_FILE_ENABLED: "0",
+      ...productionLikeDevelopmentBaseOverrides,
       MAIL_DEV_OUTBOX_ENABLED: "1",
     },
     async () => {
@@ -202,18 +214,9 @@ test("runtime config rejects development startup when dev outbox is enabled outs
 test("runtime config rejects non-local startup when SMTP env vars are partially configured", async () => {
   await withEnv(
     {
-      NODE_ENV: "production",
+      ...productionBaseOverrides,
       PUBLIC_APP_URL: "https://sqr.example.com",
-      SESSION_SECRET: "prod-session-secret",
-      COLLECTION_NICKNAME_TEMP_PASSWORD: "ProdTempPass12345",
-      COLLECTION_PII_ENCRYPTION_KEY: "C".repeat(32),
-      PG_PASSWORD: "prod-db-password",
       BACKUP_ENCRYPTION_KEY: "A".repeat(32),
-      BACKUP_ENCRYPTION_KEYS: null,
-      BACKUP_FEATURE_ENABLED: "1",
-      SEED_DEFAULT_USERS: "0",
-      LOCAL_SUPERUSER_CREDENTIALS_FILE_ENABLED: "0",
-      MAIL_DEV_OUTBOX_ENABLED: "0",
       SMTP_HOST: "smtp.example.com",
       SMTP_USER: "mailer@example.com",
       SMTP_PASSWORD: null,
@@ -351,18 +354,9 @@ test("runtime config keeps strict local development bootable when SMTP env vars 
 test("runtime config rejects invalid PUBLIC_APP_URL values with a clear startup error", async () => {
   await withEnv(
     {
-      NODE_ENV: "production",
+      ...productionBaseOverrides,
       PUBLIC_APP_URL: "not-a-url",
-      SESSION_SECRET: "prod-session-secret",
-      COLLECTION_NICKNAME_TEMP_PASSWORD: "ProdTempPass12345",
-      COLLECTION_PII_ENCRYPTION_KEY: "C".repeat(32),
-      PG_PASSWORD: "prod-db-password",
       BACKUP_ENCRYPTION_KEY: "A".repeat(32),
-      BACKUP_ENCRYPTION_KEYS: null,
-      BACKUP_FEATURE_ENABLED: "1",
-      SEED_DEFAULT_USERS: "0",
-      LOCAL_SUPERUSER_CREDENTIALS_FILE_ENABLED: "0",
-      MAIL_DEV_OUTBOX_ENABLED: "0",
     },
     async () => {
       await assert.rejects(
@@ -376,19 +370,10 @@ test("runtime config rejects invalid PUBLIC_APP_URL values with a clear startup 
 test("runtime config rejects invalid CORS_ALLOWED_ORIGINS entries with paths", async () => {
   await withEnv(
     {
-      NODE_ENV: "production",
+      ...productionBaseOverrides,
       PUBLIC_APP_URL: "https://sqr.example.com",
       CORS_ALLOWED_ORIGINS: "https://sqr.example.com/app",
-      SESSION_SECRET: "prod-session-secret",
-      COLLECTION_NICKNAME_TEMP_PASSWORD: "ProdTempPass12345",
-      COLLECTION_PII_ENCRYPTION_KEY: "C".repeat(32),
-      PG_PASSWORD: "prod-db-password",
       BACKUP_ENCRYPTION_KEY: "A".repeat(32),
-      BACKUP_ENCRYPTION_KEYS: null,
-      BACKUP_FEATURE_ENABLED: "1",
-      SEED_DEFAULT_USERS: "0",
-      LOCAL_SUPERUSER_CREDENTIALS_FILE_ENABLED: "0",
-      MAIL_DEV_OUTBOX_ENABLED: "0",
     },
     async () => {
       await assert.rejects(
@@ -402,19 +387,10 @@ test("runtime config rejects invalid CORS_ALLOWED_ORIGINS entries with paths", a
 test("runtime config rejects invalid AUTH_COOKIE_SECURE flags", async () => {
   await withEnv(
     {
-      NODE_ENV: "production",
+      ...productionBaseOverrides,
       PUBLIC_APP_URL: "https://sqr.example.com",
       AUTH_COOKIE_SECURE: "sometimes",
-      SESSION_SECRET: "prod-session-secret",
-      COLLECTION_NICKNAME_TEMP_PASSWORD: "ProdTempPass12345",
-      COLLECTION_PII_ENCRYPTION_KEY: "C".repeat(32),
-      PG_PASSWORD: "prod-db-password",
       BACKUP_ENCRYPTION_KEY: "A".repeat(32),
-      BACKUP_ENCRYPTION_KEYS: null,
-      BACKUP_FEATURE_ENABLED: "1",
-      SEED_DEFAULT_USERS: "0",
-      LOCAL_SUPERUSER_CREDENTIALS_FILE_ENABLED: "0",
-      MAIL_DEV_OUTBOX_ENABLED: "0",
     },
     async () => {
       await assert.rejects(
@@ -481,19 +457,10 @@ test("runtime config rejects malformed boolean env values before fallback handli
 test("runtime config exposes explicit trusted proxies when configured", async () => {
   await withEnv(
     {
-      NODE_ENV: "production",
+      ...productionBaseOverrides,
       PUBLIC_APP_URL: "https://sqr.example.com",
       TRUSTED_PROXIES: "loopback,10.0.0.0/8",
-      SESSION_SECRET: "prod-session-secret",
-      COLLECTION_NICKNAME_TEMP_PASSWORD: "ProdTempPass12345",
-      COLLECTION_PII_ENCRYPTION_KEY: "C".repeat(32),
-      PG_PASSWORD: "prod-db-password",
       BACKUP_ENCRYPTION_KEY: "A".repeat(32),
-      BACKUP_ENCRYPTION_KEYS: null,
-      BACKUP_FEATURE_ENABLED: "1",
-      SEED_DEFAULT_USERS: "0",
-      LOCAL_SUPERUSER_CREDENTIALS_FILE_ENABLED: "0",
-      MAIL_DEV_OUTBOX_ENABLED: "0",
     },
     async () => {
       const runtimeModule = await importRuntimeFresh();
@@ -505,19 +472,10 @@ test("runtime config exposes explicit trusted proxies when configured", async ()
 test("runtime config rejects unsafe TRUSTED_PROXIES wildcard-style values", async () => {
   await withEnv(
     {
-      NODE_ENV: "production",
+      ...productionBaseOverrides,
       PUBLIC_APP_URL: "https://sqr.example.com",
       TRUSTED_PROXIES: "*",
-      SESSION_SECRET: "prod-session-secret",
-      COLLECTION_NICKNAME_TEMP_PASSWORD: "ProdTempPass12345",
-      COLLECTION_PII_ENCRYPTION_KEY: "C".repeat(32),
-      PG_PASSWORD: "prod-db-password",
       BACKUP_ENCRYPTION_KEY: "A".repeat(32),
-      BACKUP_ENCRYPTION_KEYS: null,
-      BACKUP_FEATURE_ENABLED: "1",
-      SEED_DEFAULT_USERS: "0",
-      LOCAL_SUPERUSER_CREDENTIALS_FILE_ENABLED: "0",
-      MAIL_DEV_OUTBOX_ENABLED: "0",
     },
     async () => {
       await assert.rejects(
@@ -531,19 +489,10 @@ test("runtime config rejects unsafe TRUSTED_PROXIES wildcard-style values", asyn
 test("runtime config rejects SESSION_SECRET_PREVIOUS entries that duplicate the active secret", async () => {
   await withEnv(
     {
-      NODE_ENV: "production",
+      ...productionBaseOverrides,
       PUBLIC_APP_URL: "https://sqr.example.com",
-      SESSION_SECRET: "prod-session-secret",
       SESSION_SECRET_PREVIOUS: "prod-session-secret",
-      COLLECTION_NICKNAME_TEMP_PASSWORD: "ProdTempPass12345",
-      COLLECTION_PII_ENCRYPTION_KEY: "C".repeat(32),
-      PG_PASSWORD: "prod-db-password",
       BACKUP_ENCRYPTION_KEY: "A".repeat(32),
-      BACKUP_ENCRYPTION_KEYS: null,
-      BACKUP_FEATURE_ENABLED: "1",
-      SEED_DEFAULT_USERS: "0",
-      LOCAL_SUPERUSER_CREDENTIALS_FILE_ENABLED: "0",
-      MAIL_DEV_OUTBOX_ENABLED: "0",
     },
     async () => {
       await assert.rejects(
@@ -557,19 +506,10 @@ test("runtime config rejects SESSION_SECRET_PREVIOUS entries that duplicate the 
 test("runtime config keeps previous session secrets for manual rotation verification", async () => {
   await withEnv(
     {
-      NODE_ENV: "production",
+      ...productionBaseOverrides,
       PUBLIC_APP_URL: "https://sqr.example.com",
-      SESSION_SECRET: "prod-session-secret",
       SESSION_SECRET_PREVIOUS: "older-secret,oldest-secret",
-      COLLECTION_NICKNAME_TEMP_PASSWORD: "ProdTempPass12345",
-      COLLECTION_PII_ENCRYPTION_KEY: "C".repeat(32),
-      PG_PASSWORD: "prod-db-password",
       BACKUP_ENCRYPTION_KEY: "A".repeat(32),
-      BACKUP_ENCRYPTION_KEYS: null,
-      BACKUP_FEATURE_ENABLED: "1",
-      SEED_DEFAULT_USERS: "0",
-      LOCAL_SUPERUSER_CREDENTIALS_FILE_ENABLED: "0",
-      MAIL_DEV_OUTBOX_ENABLED: "0",
     },
     async () => {
       const runtimeModule = await importRuntimeFresh();
