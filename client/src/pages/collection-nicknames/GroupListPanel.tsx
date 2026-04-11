@@ -61,6 +61,7 @@ export function GroupListPanel({
         ) : (
           filteredGroups.map((group) => {
             const expanded = expandedGroupIds.includes(group.id);
+            const memberListId = `group-members-${group.id}`;
             const members = (group.memberNicknames || [])
               .slice()
               .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
@@ -75,6 +76,9 @@ export function GroupListPanel({
                     type="button"
                     className="inline-flex min-w-0 items-center gap-2 text-left"
                     onClick={() => onToggleExpandGroup(group.id)}
+                    aria-expanded={expanded}
+                    aria-controls={memberListId}
+                    title={expanded ? "Collapse group members" : "Expand group members"}
                   >
                     <ChevronRight className={`h-4 w-4 transition ${expanded ? "rotate-90" : ""}`} />
                     <span className="truncate text-sm font-medium">{group.leaderNickname}</span>
@@ -93,7 +97,7 @@ export function GroupListPanel({
                 </div>
 
                 {expanded ? (
-                  <div className="space-y-2 border-t border-border/60 px-3 py-2">
+                  <div id={memberListId} className="space-y-2 border-t border-border/60 px-3 py-2">
                     {members.length === 0 ? (
                       <p className="text-xs text-muted-foreground">Tiada member dalam group ini.</p>
                     ) : (

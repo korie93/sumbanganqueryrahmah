@@ -17,7 +17,11 @@
 
 .ops-page {
   min-height: calc(100dvh - 3.5rem);
-  padding: var(--spacing-4);
+  padding:
+    var(--spacing-4)
+    max(var(--spacing-4), var(--safe-area-inset-right))
+    calc(var(--spacing-4) + var(--safe-area-inset-bottom))
+    max(var(--spacing-4), var(--safe-area-inset-left));
   background:
     radial-gradient(circle at top left, hsl(var(--primary) / 0.06), transparent 28%),
     linear-gradient(180deg, hsl(var(--background)), hsl(var(--background) / 0.96));
@@ -52,7 +56,7 @@
 }
 
 .ops-eyebrow {
-  font-size: 0.72rem;
+  font-size: var(--font-size-xs);
   font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -86,7 +90,7 @@
 }
 
 .ops-metric-label {
-  font-size: 0.72rem;
+  font-size: var(--font-size-xs);
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -95,14 +99,14 @@
 
 .ops-metric-value {
   margin-top: 0.4rem;
-  font-size: 1.25rem;
+  font-size: var(--font-size-xl);
   font-weight: 700;
   line-height: var(--line-height-tight);
 }
 
 .ops-metric-supporting {
   margin-top: 0.35rem;
-  font-size: 0.8rem;
+  font-size: var(--font-size-sm);
   line-height: var(--line-height-normal);
   color: hsl(var(--muted-foreground));
 }
@@ -139,13 +143,13 @@
   background: hsl(var(--muted) / 0.55);
 }
 
-.ops-data-table tbody tr:hover {
-  background: hsl(var(--accent) / 0.45);
-}
-
 @media (min-width: 1024px) {
   .ops-page {
-    padding: var(--spacing-4) var(--spacing-6) var(--spacing-6);
+    padding:
+      var(--spacing-4)
+      max(var(--spacing-6), var(--safe-area-inset-right))
+      calc(var(--spacing-6) + var(--safe-area-inset-bottom))
+      max(var(--spacing-6), var(--safe-area-inset-left));
   }
 }
 
@@ -162,7 +166,11 @@
 
 @media (max-width: 767px) {
   .ops-page {
-    padding: var(--spacing-3);
+    padding:
+      var(--spacing-3)
+      max(var(--spacing-3), var(--safe-area-inset-right))
+      calc(var(--spacing-3) + var(--safe-area-inset-bottom))
+      max(var(--spacing-3), var(--safe-area-inset-left));
   }
 
   .ops-toolbar,
@@ -186,7 +194,11 @@
 
 @media (max-width: 767px) and (max-height: 560px) and (orientation: landscape) {
   .ops-page {
-    padding: var(--spacing-2) var(--spacing-3);
+    padding:
+      var(--spacing-2)
+      max(var(--spacing-3), var(--safe-area-inset-right))
+      calc(var(--spacing-2) + var(--safe-area-inset-bottom))
+      max(var(--spacing-3), var(--safe-area-inset-left));
   }
 
   .ops-page-frame {
@@ -245,4 +257,10 @@
   -webkit-backdrop-filter: none !important;
   backdrop-filter: none !important;
   box-shadow: none !important;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .ops-data-table tbody tr:hover {
+    background: hsl(var(--accent) / 0.45);
+  }
 }

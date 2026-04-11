@@ -120,12 +120,13 @@ export function createLocalRuntimeEnvironment(options: CreateLocalRuntimeEnviron
     });
   server.once("close", stopAdaptiveRateStateSweep);
 
-  const { withAiConcurrencyGate } = createAiConcurrencyGate({
+  const { withAiConcurrencyGate, stopAiConcurrencyGate } = createAiConcurrencyGate({
     globalLimit: runtimeConfig.ai.gate.globalLimit,
     queueLimit: runtimeConfig.ai.gate.queueLimit,
     queueWaitMs: runtimeConfig.ai.gate.queueWaitMs,
     roleLimits: runtimeConfig.ai.gate.roleLimits,
   });
+  server.once("close", stopAiConcurrencyGate);
 
   const runtimeConfigManager = createRuntimeConfigManager({
     storage,

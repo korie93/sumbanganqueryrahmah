@@ -1,5 +1,6 @@
 import type { ReactNode, UIEvent } from "react";
 import { Eye } from "lucide-react";
+import { HorizontalScrollHint } from "@/components/HorizontalScrollHint";
 import { Button } from "@/components/ui/button";
 import type { SearchResultRow } from "@/pages/general-search/types";
 import { getCellDisplayText, getPriorityRank } from "@/pages/general-search/utils";
@@ -42,9 +43,11 @@ export function GeneralSearchDesktopResultsTable({
   };
 
   return (
-    <div
-      className="max-h-[600px] overflow-x-auto overflow-y-auto rounded-lg border border-border scrollbar-visible"
-      onScroll={onScroll}
+    <HorizontalScrollHint
+      className="rounded-lg border border-border"
+      viewportClassName="max-h-[600px] overflow-y-auto scrollbar-visible"
+      hint="Scroll columns"
+      {...(onScroll ? { onScroll } : {})}
     >
       <style>{`
         .scrollbar-visible {
@@ -125,6 +128,6 @@ export function GeneralSearchDesktopResultsTable({
           ) : null}
         </tbody>
       </table>
-    </div>
+    </HorizontalScrollHint>
   );
 }

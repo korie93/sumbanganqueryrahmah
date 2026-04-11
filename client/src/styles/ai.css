@@ -259,10 +259,10 @@
   }
 
   .ai-input-container {
-    padding: 10px 10px calc(10px + env(safe-area-inset-bottom, 0px));
+    padding: 10px 10px calc(10px + var(--safe-area-inset-bottom));
   }
 
   .ai-actions {
-    padding: 0 10px calc(8px + env(safe-area-inset-bottom, 0px)) 10px;
+    padding: 0 10px calc(8px + var(--safe-area-inset-bottom)) 10px;
   }
 }

@@ -44,10 +44,6 @@
   color: var(--not-found-secondary-button-text);
 }
 
-.not-found-page__secondary-button:hover {
-  background: var(--not-found-secondary-button-bg-hover);
-}
-
 .not-found-page__secondary-button:focus-visible {
   outline: none;
   box-shadow: 0 0 0 2px var(--not-found-secondary-button-ring);
@@ -58,11 +54,17 @@
   color: var(--not-found-primary-button-text);
 }
 
-.not-found-page__primary-button:hover {
-  background: var(--not-found-primary-button-bg-hover);
-}
-
 .not-found-page__primary-button:focus-visible {
   outline: none;
   box-shadow: 0 0 0 2px var(--not-found-primary-button-ring);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .not-found-page__secondary-button:hover {
+    background: var(--not-found-secondary-button-bg-hover);
+  }
+
+  .not-found-page__primary-button:hover {
+    background: var(--not-found-primary-button-bg-hover);
+  }
 }

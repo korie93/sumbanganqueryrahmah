@@ -1,4 +1,4 @@
-import { memo, useCallback, useMemo, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ChevronDown,
   Home,
@@ -38,6 +38,7 @@ import { prefetchNavigationTarget } from "@/app/navigation-prefetch";
 import type { MonitorSection, TabVisibility } from "@/app/types";
 import { BrandLogo } from "@/components/BrandLogo";
 import { useTheme } from "@/components/useTheme";
+import { cn } from "@/lib/utils";
 import "./Navbar.css";
 
 interface NavbarProps {
@@ -67,6 +68,12 @@ function NavbarImpl({
 }: NavbarProps) {
   const { theme, setTheme } = useTheme();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const navScrollerRef = useRef<HTMLElement | null>(null);
+  const [desktopNavOverflow, setDesktopNavOverflow] = useState({
+    canScroll: false,
+    canScrollLeft: false,
+    canScrollRight: false,
+  });
   const directItems = useMemo(
     () => getVisiblePrimaryNavItems(userRole, tabVisibility ?? null, featureLockdown),
     [featureLockdown, tabVisibility, userRole],
@@ -95,6 +102,63 @@ function NavbarImpl({
   const prefetchItem = useCallback((itemId: string) => {
     void prefetchNavigationTarget(resolveNavigationTarget(itemId));
   }, []);
+
+  useEffect(() => {
+    const navNode = navScrollerRef.current;
+
+    if (!navNode || typeof window === "undefined") {
+      return;
+    }
+
+    let frame = 0;
+    let resizeObserver: ResizeObserver | null = null;
+
+    const updateOverflowState = () => {
+      frame = 0;
+
+      const maxScrollLeft = Math.max(0, navNode.scrollWidth - navNode.clientWidth);
+      const nextState = {
+        canScroll: maxScrollLeft > 12,
+        canScrollLeft: navNode.scrollLeft > 8,
+        canScrollRight: maxScrollLeft - navNode.scrollLeft > 8,
+      };
+
+      setDesktopNavOverflow((previous) => (
+        previous.canScroll === nextState.canScroll
+        && previous.canScrollLeft === nextState.canScrollLeft
+        && previous.canScrollRight === nextState.canScrollRight
+      ) ? previous : nextState);
+    };
+
+    const scheduleOverflowUpdate = () => {
+      if (frame !== 0) {
+        return;
+      }
+
+      frame = window.requestAnimationFrame(updateOverflowState);
+    };
+
+    scheduleOverflowUpdate();
+    navNode.addEventListener("scroll", scheduleOverflowUpdate, { passive: true });
+    window.addEventListener("resize", scheduleOverflowUpdate);
+
+    if (typeof ResizeObserver === "function") {
+      resizeObserver = new ResizeObserver(() => {
+        scheduleOverflowUpdate();
+      });
+      resizeObserver.observe(navNode);
+    }
+
+    return () => {
+      navNode.removeEventListener("scroll", scheduleOverflowUpdate);
+      window.removeEventListener("resize", scheduleOverflowUpdate);
+      resizeObserver?.disconnect();
+
+      if (frame !== 0) {
+        window.cancelAnimationFrame(frame);
+      }
+    };
+  }, [directItems, groupedItems, savedCount, showHomeButton]);
 
   const renderUserMenuContent = () => (
     <DropdownMenuContent
@@ -136,7 +200,7 @@ function NavbarImpl({
   );
 
   return (
-    <header className="sticky top-0 z-[var(--z-navbar)] w-full border-b border-border/70 bg-background/90 backdrop-blur-md">
+    <header className="navbar-safe-area-shell sticky top-0 z-[var(--z-navbar)] w-full border-b border-border/70 bg-background/90 backdrop-blur-md">
       <div className="mx-auto flex max-w-[1440px] flex-col gap-3 px-3 py-2 md:px-4 lg:min-h-16 lg:flex-row lg:items-center">
         <div className="flex min-w-0 items-start justify-between gap-3 lg:flex-[0_1_auto] lg:items-center lg:pr-2">
           <div className="flex min-w-0 items-center gap-3">
@@ -212,8 +276,12 @@ function NavbarImpl({
           </div>
         </div>
 
-        <div className="hidden min-w-0 flex-1 items-center justify-start overflow-hidden lg:flex">
-          <nav className="navbar-premium-glass w-full justify-start" aria-label="Primary navigation">
+        <div className="navbar-nav-shell hidden min-w-0 flex-1 items-center justify-start overflow-hidden lg:flex">
+          <nav
+            ref={navScrollerRef}
+            className="navbar-premium-glass w-full justify-start"
+            aria-label="Primary navigation"
+          >
             {directItems.map((item) => {
               const Icon = item.icon;
               const isActive = activeNavigationItemId === item.id;
@@ -307,6 +375,29 @@ function NavbarImpl({
               );
             })}
           </nav>
+          {desktopNavOverflow.canScroll ? (
+            <>
+              <div
+                className={cn(
+                  "navbar-scroll-fade navbar-scroll-fade--left",
+                  desktopNavOverflow.canScrollLeft ? "navbar-scroll-fade--visible" : "",
+                )}
+                aria-hidden="true"
+              />
+              <div
+                className={cn(
+                  "navbar-scroll-fade navbar-scroll-fade--right",
+                  desktopNavOverflow.canScrollRight ? "navbar-scroll-fade--visible" : "",
+                )}
+                aria-hidden="true"
+              />
+              {desktopNavOverflow.canScrollRight ? (
+                <div className="navbar-scroll-hint" aria-hidden="true">
+                  Scroll for more
+                </div>
+              ) : null}
+            </>
+          ) : null}
         </div>
 
         <div className="ml-auto hidden shrink-0 items-center gap-2 lg:flex">

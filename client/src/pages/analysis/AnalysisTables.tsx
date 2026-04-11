@@ -1,4 +1,5 @@
 import { AlertTriangle, ChevronDown, Copy, FileStack } from "lucide-react";
+import { HorizontalScrollHint } from "@/components/HorizontalScrollHint";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -142,7 +143,7 @@ export function AnalysisFilesList({
                 ))}
               </div>
             ) : (
-              <div className="overflow-x-auto rounded-lg border border-border">
+              <HorizontalScrollHint className="rounded-lg border border-border" hint="Scroll table">
                 <table className="w-full text-sm">
                   <thead className="bg-muted sticky top-0 z-[var(--z-sticky-header)]">
                     <tr>
@@ -165,7 +166,7 @@ export function AnalysisFilesList({
                     ))}
                   </tbody>
                 </table>
-              </div>
+              </HorizontalScrollHint>
             )}
             <AnalysisTablePagination
               currentPage={filesPaged.page}
@@ -268,7 +269,7 @@ export function AnalysisDuplicatesPanel({
                   ))}
                 </div>
               ) : (
-                <div className="overflow-x-auto rounded-lg border border-border">
+                <HorizontalScrollHint className="rounded-lg border border-border" hint="Scroll table">
                   <table className="w-full text-sm">
                   <thead className="bg-muted sticky top-0 z-[var(--z-sticky-header)]">
                       <tr>
@@ -291,6 +292,8 @@ export function AnalysisDuplicatesPanel({
                               variant="ghost"
                               size="sm"
                               onClick={() => onCopyDuplicate(duplicate.value)}
+                              aria-label="Copy duplicate value"
+                              title="Copy duplicate value"
                               data-testid={`button-copy-dup-${index}`}
                             >
                               <Copy className="w-4 h-4" />
@@ -300,7 +303,7 @@ export function AnalysisDuplicatesPanel({
                       ))}
                     </tbody>
                   </table>
-                </div>
+                </HorizontalScrollHint>
               )}
               <AnalysisTablePagination
                 currentPage={duplicatesPaged.page}

@@ -1,6 +1,7 @@
 import { Copy, type LucideIcon } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { badgeVariants } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
 import type { AnalysisCategory } from "@/pages/analysis/types";
 
 interface AnalysisCategoryCardProps {
@@ -33,16 +34,21 @@ export function AnalysisCategoryCard({
             <p className="text-xs text-muted-foreground">Examples:</p>
             <div className="flex flex-wrap gap-1">
               {category.samples.slice(0, 5).map((sample, index) => (
-                <Badge
+                <button
                   key={`${title}:${sample}`}
-                  variant="secondary"
-                  className="text-xs cursor-pointer"
+                  type="button"
+                  className={cn(
+                    badgeVariants({ variant: "secondary" }),
+                    "cursor-pointer text-xs",
+                  )}
                   onClick={() => onCopySample(sample)}
+                  aria-label={`Copy sample value ${sample}`}
+                  title={`Copy ${sample}`}
                   data-testid={`badge-sample-${testIdTitle}-${index}`}
                 >
                   {sample}
                   <Copy className="w-3 h-3 ml-1 opacity-50" />
-                </Badge>
+                </button>
               ))}
             </div>
           </div>

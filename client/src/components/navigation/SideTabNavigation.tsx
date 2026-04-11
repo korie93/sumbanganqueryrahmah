@@ -112,6 +112,8 @@ export function SideTabNavigation({
                   collapsed ? "justify-center" : "justify-start gap-3",
                   active ? "text-primary" : "text-muted-foreground hover:bg-accent/40 hover:text-foreground",
                 )}
+                aria-label={item.label}
+                aria-current={active ? "page" : undefined}
                 title={collapsed ? item.label : item.description || item.label}
               >
                 {active ? (
@@ -165,6 +167,8 @@ export function SideTabNavigation({
                 variant="ghost"
                 size="icon"
                 className="h-11 w-11"
+                aria-label="Close navigation menu"
+                title="Close navigation menu"
                 onClick={() => onMobileOpenChange(false)}
               >
                 <X className="h-4 w-4" />
@@ -188,6 +192,7 @@ export function SideTabNavigation({
                         ? "border border-primary/35 bg-primary/10 text-primary"
                         : "text-muted-foreground hover:bg-accent/40 hover:text-foreground",
                     )}
+                    aria-current={active ? "page" : undefined}
                   >
                     <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-background/60">
                       <Icon className="h-4 w-4" />

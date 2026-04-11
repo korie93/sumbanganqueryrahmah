@@ -58,7 +58,11 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: var(--spacing-6) var(--spacing-4);
+  padding:
+    max(var(--spacing-6), var(--safe-area-inset-top))
+    max(var(--spacing-4), var(--safe-area-inset-right))
+    calc(var(--spacing-6) + var(--safe-area-inset-bottom))
+    max(var(--spacing-4), var(--safe-area-inset-left));
 }
 
 .public-auth-layout__container {
@@ -76,14 +80,9 @@
   border: 1px solid var(--public-auth-shell-border);
   background: var(--public-auth-shell-surface-muted);
   padding: var(--spacing-2) var(--spacing-4);
-  font-size: 0.875rem;
+  font-size: var(--font-size-sm);
   color: var(--public-auth-text-muted);
   transition: background-color 160ms ease, color 160ms ease, box-shadow 160ms ease;
-}
-
-.public-auth-layout__back-button:hover {
-  background: var(--public-auth-shell-surface);
-  color: var(--public-auth-text-strong);
 }
 
 .public-auth-layout__back-button:focus-visible {
@@ -132,7 +131,7 @@
 }
 
 .public-auth-layout__badge {
-  font-size: 0.75rem;
+  font-size: var(--font-size-xs);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.24em;
@@ -141,7 +140,7 @@
 
 .public-auth-layout__brand-copy {
   margin-top: var(--spacing-1);
-  font-size: 0.875rem;
+  font-size: var(--font-size-sm);
   color: var(--public-auth-text-soft);
 }
 
@@ -167,7 +166,7 @@
 
 .public-auth-layout__title {
   margin-top: var(--spacing-5);
-  font-size: 1.875rem;
+  font-size: var(--font-size-3xl);
   font-weight: 600;
   letter-spacing: -0.025em;
   color: var(--public-auth-text-strong);
@@ -176,7 +175,7 @@
 .public-auth-layout__description {
   margin-top: var(--spacing-3);
   max-width: 32rem;
-  font-size: 0.875rem;
+  font-size: var(--font-size-sm);
   line-height: var(--line-height-loose);
   color: var(--public-auth-text-soft);
 }
@@ -193,7 +192,11 @@
   }
 
   .public-auth-layout__main {
-    padding-block: var(--spacing-8);
+    padding:
+      max(var(--spacing-8), var(--safe-area-inset-top))
+      max(var(--spacing-4), var(--safe-area-inset-right))
+      calc(var(--spacing-8) + var(--safe-area-inset-bottom))
+      max(var(--spacing-4), var(--safe-area-inset-left));
   }
 
   .public-auth-layout__card {
@@ -220,11 +223,18 @@
   }
 
   .public-auth-layout__title {
-    font-size: clamp(1.875rem, 3.2vw, 2.25rem);
+    font-size: clamp(var(--font-size-3xl), 3.2vw, var(--font-size-4xl));
   }
 
   .public-auth-layout__description {
     font-size: 0.9375rem;
+  }
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .public-auth-layout__back-button:hover {
+    background: var(--public-auth-shell-surface);
+    color: var(--public-auth-text-strong);
   }
 }
 

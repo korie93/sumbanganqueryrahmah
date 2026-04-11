@@ -46,6 +46,7 @@ export function createAiConcurrencyGate(options: CreateAiConcurrencyGateOptions)
     route: AiRoute,
     handler: (req: AuthenticatedRequest, res: Response) => Promise<unknown>,
   ) => RequestHandler;
+  stopAiConcurrencyGate: () => void;
 } {
   const globalLimit = normalizeGateLimit(options.globalLimit, 1, 1);
   const queueLimit = normalizeGateLimit(options.queueLimit, 0, 0);
@@ -58,6 +59,7 @@ export function createAiConcurrencyGate(options: CreateAiConcurrencyGateOptions)
 
   let sequence = 0;
   let inflightGlobal = 0;
+  let stopped = false;
   const inflightByRole: AiRoleLimits = {
     user: 0,
     admin: 0,
@@ -98,7 +100,7 @@ export function createAiConcurrencyGate(options: CreateAiConcurrencyGateOptions)
   };
 
   const drainQueue = () => {
-    if (queue.length === 0) return;
+    if (stopped || queue.length === 0) return;
 
     let progressed = true;
     while (progressed && queue.length > 0) {
@@ -144,7 +146,29 @@ export function createAiConcurrencyGate(options: CreateAiConcurrencyGateOptions)
     return error;
   };
 
+  const createGateStoppedError = () =>
+    createGateError(
+      "AI service is shutting down. Please retry shortly.",
+      "AI_GATE_STOPPED",
+      503,
+    );
+
+  const stopAiConcurrencyGate = () => {
+    if (stopped) return;
+    stopped = true;
+
+    const queuedItems = queue.splice(0, queue.length);
+    for (const item of queuedItems) {
+      clearTimeout(item.timeout);
+      item.reject(createGateStoppedError());
+    }
+  };
+
   const waitForSlot = (role: AiRole, route: AiRoute): Promise<AiGateAcquireResult> => {
+    if (stopped) {
+      return Promise.reject(createGateStoppedError());
+    }
+
     if (canAcquire(role)) {
       return Promise.resolve({
         lease: acquire(role, route),
@@ -241,5 +265,5 @@ export function createAiConcurrencyGate(options: CreateAiConcurrencyGateOptions)
     };
   };
 
-  return { withAiConcurrencyGate };
+  return { withAiConcurrencyGate, stopAiConcurrencyGate };
 }

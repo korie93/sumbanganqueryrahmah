@@ -85,6 +85,8 @@ export function GeneralSearchAdvancedControls({
                   onClick={() => onRemoveFilter(filter.id)}
                   disabled={filters.length === 1}
                   className="h-11 w-11 shrink-0"
+                  aria-label={`Remove filter ${index + 1}`}
+                  title={`Remove filter ${index + 1}`}
                   data-testid={`button-remove-filter-${index}`}
                 >
                   <X className="h-4 w-4" />
@@ -156,6 +158,8 @@ export function GeneralSearchAdvancedControls({
                 onClick={() => onRemoveFilter(filter.id)}
                 disabled={filters.length === 1}
                 className="shrink-0"
+                aria-label={`Remove filter ${index + 1}`}
+                title={`Remove filter ${index + 1}`}
                 data-testid={`button-remove-filter-${index}`}
               >
                 <X className="h-4 w-4" />

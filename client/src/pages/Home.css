@@ -70,10 +70,6 @@
   box-shadow: var(--home-hero-action-shadow);
 }
 
-.home-mobile-hero-action:hover {
-  background: var(--home-hero-action-bg-hover);
-}
-
 .home-mobile-surface {
   padding: 1rem;
   border-radius: 1.75rem;
@@ -98,12 +94,6 @@
     transform 0.2s ease,
     box-shadow 0.2s ease,
     border-color 0.2s ease;
-}
-
-.home-mobile-quick-card:hover {
-  transform: translateY(-2px);
-  border-color: hsl(var(--primary) / 0.3);
-  box-shadow: var(--home-quick-card-shadow-hover);
 }
 
 .home-mobile-quick-card:focus-visible,
@@ -148,12 +138,6 @@
     border-color 0.2s ease;
 }
 
-.home-mobile-list-card:hover {
-  transform: translateY(-1px);
-  border-color: hsl(var(--primary) / 0.22);
-  box-shadow: var(--home-list-card-shadow-hover);
-}
-
 .dark .home-mobile-list-card {
   background: hsl(var(--background) / 0.42);
   box-shadow: var(--home-list-card-shadow);
@@ -181,16 +165,6 @@
   box-shadow: var(--home-card-shadow);
 }
 
-.home-card:hover {
-  transform: translateY(-2px);
-  border-color: hsl(var(--primary) / 0.28);
-  box-shadow: var(--home-card-shadow-hover);
-}
-
-.dark .home-card:hover {
-  box-shadow: var(--home-card-shadow-hover);
-}
-
 .home-card-icon {
   display: flex;
   align-items: center;
@@ -214,7 +188,35 @@
 }
 
 .home-card-text p {
-  font-size: 0.85rem;
+  font-size: var(--font-size-sm);
   opacity: 0.8;
   color: hsl(var(--muted-foreground));
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .home-mobile-hero-action:hover {
+    background: var(--home-hero-action-bg-hover);
+  }
+
+  .home-mobile-quick-card:hover {
+    transform: translateY(-2px);
+    border-color: hsl(var(--primary) / 0.3);
+    box-shadow: var(--home-quick-card-shadow-hover);
+  }
+
+  .home-mobile-list-card:hover {
+    transform: translateY(-1px);
+    border-color: hsl(var(--primary) / 0.22);
+    box-shadow: var(--home-list-card-shadow-hover);
+  }
+
+  .home-card:hover {
+    transform: translateY(-2px);
+    border-color: hsl(var(--primary) / 0.28);
+    box-shadow: var(--home-card-shadow-hover);
+  }
+
+  .dark .home-card:hover {
+    box-shadow: var(--home-card-shadow-hover);
+  }
 }

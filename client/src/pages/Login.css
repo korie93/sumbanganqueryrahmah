@@ -37,11 +37,6 @@
   color: var(--login-back-button-text);
 }
 
-.login-back-button:hover {
-  background: var(--login-back-button-bg-hover);
-  color: var(--login-back-button-text-hover);
-}
-
 .login-back-button:focus-visible {
   outline: none;
   box-shadow: 0 0 0 2px var(--login-back-button-ring);
@@ -137,10 +132,6 @@
   color: var(--login-password-toggle-text);
 }
 
-.login-password-toggle:hover {
-  color: var(--login-password-toggle-text-hover);
-}
-
 .login-password-toggle:focus-visible {
   outline: none;
   box-shadow: 0 0 0 3px var(--login-password-toggle-ring);
@@ -150,10 +141,6 @@
   background: var(--login-submit-gradient);
   color: var(--login-submit-text);
   box-shadow: var(--login-submit-shadow);
-}
-
-.login-submit:hover {
-  background: var(--login-submit-gradient-hover);
 }
 
 .login-submit:focus-visible {
@@ -201,11 +188,6 @@
 
 .login-secondary-link {
   color: var(--login-link-text);
-}
-
-.login-secondary-link:hover {
-  background: var(--login-link-bg-hover);
-  color: var(--login-link-text-hover);
 }
 
 .login-secondary-link:focus-visible {
@@ -372,5 +354,25 @@
 
   .login-content {
     opacity: 1 !important;
+  }
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .login-back-button:hover {
+    background: var(--login-back-button-bg-hover);
+    color: var(--login-back-button-text-hover);
+  }
+
+  .login-password-toggle:hover {
+    color: var(--login-password-toggle-text-hover);
+  }
+
+  .login-submit:hover {
+    background: var(--login-submit-gradient-hover);
+  }
+
+  .login-secondary-link:hover {
+    background: var(--login-link-bg-hover);
+    color: var(--login-link-text-hover);
   }
 }

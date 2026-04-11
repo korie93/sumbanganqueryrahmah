@@ -5,6 +5,7 @@
  */
 /* LIGHT MODE */
 :root {
+  color-scheme: light;
   --button-outline: rgba(0, 0, 0, 0.1);
   --badge-outline: rgba(0, 0, 0, 0.05);
   --elevate-1: rgba(0, 0, 0, 0.03);
@@ -50,6 +51,15 @@
   --font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --font-serif: Georgia, serif;
   --font-mono: Menlo, monospace;
+  --font-size-2xs: 0.6875rem;
+  --font-size-xs: 0.75rem;
+  --font-size-sm: 0.875rem;
+  --font-size-base: 1rem;
+  --font-size-lg: 1.125rem;
+  --font-size-xl: 1.25rem;
+  --font-size-2xl: 1.5rem;
+  --font-size-3xl: 1.875rem;
+  --font-size-4xl: 2.25rem;
   --safe-area-inset-top: env(safe-area-inset-top, 0px);
   --safe-area-inset-right: env(safe-area-inset-right, 0px);
   --safe-area-inset-bottom: env(safe-area-inset-bottom, 0px);
@@ -261,21 +271,21 @@
   --floating-ai-edge-gap: clamp(0.5rem, 2vw, 1.5rem);
   --z-login-card-border: -2;
   --z-login-card-overlay: -1;
-  --z-public-auth-main: 10;
-  --z-sticky-header: 10;
+  --z-public-auth-main: 5;
+  --z-sticky-header: 15;
   --z-sticky-content: 20;
   --z-navbar: 30;
   /* Transient app shells must stay below modal overlay/content. */
-  --z-mobile-nav-overlay: 40;
-  --z-floating-ai-root: 35;
-  --z-floating-ai-overlay: 45;
-  --z-mobile-nav-panel: 48;
-  --z-modal-overlay: 50;
-  --z-modal-content: 60;
-  --z-popover: 70;
-  --z-tooltip: 80;
-  --z-toast: 100;
-  --z-sidebar-desktop: 10;
+  --z-floating-ai-root: 40;
+  --z-mobile-nav-overlay: 50;
+  --z-floating-ai-overlay: 55;
+  --z-mobile-nav-panel: 58;
+  --z-modal-overlay: 70;
+  --z-modal-content: 80;
+  --z-popover: 90;
+  --z-tooltip: 100;
+  --z-toast: 110;
+  --z-sidebar-desktop: 8;
   --z-sidebar-rail: 20;
   --login-card-shadow: 0 25px 40px hsl(0 0% 0% / 0.25), inset 0 0 35px hsl(0 0% 100% / 0.18);
   --login-card-mobile-shadow: 0 16px 32px hsl(0 0% 0% / 0.24);
@@ -358,6 +368,7 @@
 }
 
 .dark {
+  color-scheme: dark;
   --button-outline: rgba(255, 255, 255, 0.1);
   --badge-outline: rgba(255, 255, 255, 0.05);
   --elevate-1: rgba(255, 255, 255, 0.04);
@@ -606,8 +617,8 @@
   --floating-ai-edge-gap: clamp(0.5rem, 2vw, 1.5rem);
   --login-card-shadow: 0 25px 40px hsl(0 0% 0% / 0.34), inset 0 0 35px hsl(0 0% 100% / 0.12);
   --login-card-mobile-shadow: 0 16px 32px hsl(0 0% 0% / 0.32);
-  --z-floating-ai-root: 35;
-  --z-floating-ai-overlay: 45;
+  --z-floating-ai-root: 40;
+  --z-floating-ai-overlay: 55;
   --app-shell-glass-shadow: 0 14px 28px hsl(215 28% 11% / 0.07);
   --app-shell-glass-shadow-dark: 0 16px 30px hsl(0 0% 0% / 0.24);
   --app-shell-section-shadow: 0 10px 24px hsl(215 28% 11% / 0.06);
@@ -663,6 +674,7 @@
 
 body {
   font-family: var(--font-sans);
+  font-size: var(--font-size-base);
   line-height: var(--line-height-normal);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -732,12 +744,10 @@ input[type="search"]::-webkit-search-cancel-button {
   z-index: 1;
 }
 
-.hover-elevate:hover:not(.no-default-hover-elevate)::after,
 .active-elevate:active:not(.no-default-active-elevate)::after {
   background-color: var(--elevate-1);
 }
 
-.hover-elevate-2:hover:not(.no-default-hover-elevate)::after,
 .active-elevate-2:active:not(.no-default-active-elevate)::after {
   background-color: var(--elevate-2);
 }
@@ -752,20 +762,20 @@ input[type="search"]::-webkit-search-cancel-button {
 }
 
 .viewport-min-height {
-  min-height: 100svh;
+  min-height: 100dvh;
 }
 
 .app-shell-min-height {
-  min-height: calc(100svh - 3.5rem);
+  min-height: calc(100dvh - 3.5rem);
 }
 
-@supports (height: 100dvh) {
+@supports not (height: 100dvh) {
   .viewport-min-height {
-    min-height: 100dvh;
+    min-height: 100svh;
   }
 
   .app-shell-min-height {
-    min-height: calc(100dvh - 3.5rem);
+    min-height: calc(100svh - 3.5rem);
   }
 }
 
@@ -778,4 +788,20 @@ input[type="search"]::-webkit-search-cancel-button {
 .low-spec *::after {
   animation: none !important;
   transition: none !important;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .hover-elevate:hover:not(.no-default-hover-elevate)::after {
+    background-color: var(--elevate-1);
+  }
+
+  .hover-elevate-2:hover:not(.no-default-hover-elevate)::after {
+    background-color: var(--elevate-2);
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+  }
 }

@@ -3,6 +3,32 @@ import test from "node:test";
 import { apiRequest, createApiHeaders, createApiRequestId } from "./api-client";
 import { getQueryFn, resolveDefaultQueryStaleTime } from "./queryClient";
 
+async function withNavigatorOnlineState(
+  online: boolean,
+  run: () => Promise<void>,
+) {
+  const navigatorObject = globalThis.navigator as Navigator & { onLine?: boolean };
+  const existingDescriptor = Object.getOwnPropertyDescriptor(navigatorObject, "onLine");
+
+  Object.defineProperty(navigatorObject, "onLine", {
+    configurable: true,
+    value: online,
+  });
+
+  try {
+    await run();
+  } finally {
+    if (existingDescriptor) {
+      Object.defineProperty(navigatorObject, "onLine", existingDescriptor);
+    } else {
+      Object.defineProperty(navigatorObject, "onLine", {
+        configurable: true,
+        value: undefined,
+      });
+    }
+  }
+}
+
 test("createApiRequestId returns a non-empty unique identifier", () => {
   const left = createApiRequestId();
   const right = createApiRequestId();
@@ -147,6 +173,47 @@ test("apiRequest preserves caller AbortSignal semantics when the caller aborts f
       pendingRequest,
       (error: unknown) => error instanceof DOMException && error.name === "AbortError",
     );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("apiRequest surfaces an offline-specific message before fetch when the browser is offline", async () => {
+  const originalFetch = globalThis.fetch;
+  let fetchCalled = false;
+
+  globalThis.fetch = (async () => {
+    fetchCalled = true;
+    return new Response(null, { status: 200 });
+  }) as typeof fetch;
+
+  try {
+    await withNavigatorOnlineState(false, async () => {
+      await assert.rejects(
+        () => apiRequest("GET", "/api/test-offline"),
+        /appear to be offline/i,
+      );
+    });
+    assert.equal(fetchCalled, false);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("apiRequest normalizes offline fetch failures into a specific offline message", async () => {
+  const originalFetch = globalThis.fetch;
+
+  globalThis.fetch = (async () => {
+    throw new TypeError("Failed to fetch");
+  }) as typeof fetch;
+
+  try {
+    await withNavigatorOnlineState(false, async () => {
+      await assert.rejects(
+        () => apiRequest("GET", "/api/test-offline-failure"),
+        /appear to be offline/i,
+      );
+    });
   } finally {
     globalThis.fetch = originalFetch;
   }

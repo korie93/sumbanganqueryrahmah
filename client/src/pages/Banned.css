@@ -92,12 +92,6 @@
   color: var(--banned-retry-text);
 }
 
-.banned-page__retry:hover {
-  border-color: var(--banned-retry-border);
-  background: var(--banned-retry-bg-hover);
-  color: var(--banned-retry-text-hover);
-}
-
 .banned-page__retry:focus-visible {
   outline: none;
   box-shadow: 0 0 0 2px var(--banned-retry-ring);
@@ -113,4 +107,12 @@
 
 .banned-page__footer-copy {
   color: var(--banned-footer-subtext);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .banned-page__retry:hover {
+    border-color: var(--banned-retry-border);
+    background: var(--banned-retry-bg-hover);
+    color: var(--banned-retry-text-hover);
+  }
 }

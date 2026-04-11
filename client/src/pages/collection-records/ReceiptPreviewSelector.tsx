@@ -1,4 +1,5 @@
 import { Button } from "@/components/ui/button";
+import { HorizontalScrollHint } from "@/components/HorizontalScrollHint";
 import { cn } from "@/lib/utils";
 import type { CollectionRecordReceipt } from "@/lib/api";
 
@@ -25,27 +26,48 @@ export function ReceiptPreviewSelector({
     <div
       className={cn(
         "rounded-md border border-border/60 bg-background/40 p-3",
-        isMobile ? "mx-3 mt-3 overflow-x-auto" : "mt-3 flex flex-wrap items-center gap-2",
+        isMobile ? "mx-3 mt-3" : "mt-3 flex flex-wrap items-center gap-2",
       )}
     >
       <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
         Receipts
       </span>
-      <div className={cn("gap-2", isMobile ? "mt-2 flex w-max min-w-full" : "flex flex-wrap items-center")}>
-        {receipts.map((receipt, index) => (
-          <Button
-            key={receipt.id}
-            type="button"
-            size="sm"
-            variant={selectedReceipt?.id === receipt.id ? "default" : "outline"}
-            onClick={() => onSelectReceipt(receipt.id)}
-            disabled={loading}
-            className={isMobile ? "shrink-0" : ""}
-          >
-            #{index + 1}
-          </Button>
-        ))}
-      </div>
+      {isMobile ? (
+        <HorizontalScrollHint
+          className="mt-2"
+          viewportClassName="flex w-max min-w-full gap-2"
+          hint="Swipe receipts"
+        >
+          {receipts.map((receipt, index) => (
+            <Button
+              key={receipt.id}
+              type="button"
+              size="sm"
+              variant={selectedReceipt?.id === receipt.id ? "default" : "outline"}
+              onClick={() => onSelectReceipt(receipt.id)}
+              disabled={loading}
+              className="shrink-0"
+            >
+              #{index + 1}
+            </Button>
+          ))}
+        </HorizontalScrollHint>
+      ) : (
+        <div className="flex flex-wrap items-center gap-2">
+          {receipts.map((receipt, index) => (
+            <Button
+              key={receipt.id}
+              type="button"
+              size="sm"
+              variant={selectedReceipt?.id === receipt.id ? "default" : "outline"}
+              onClick={() => onSelectReceipt(receipt.id)}
+              disabled={loading}
+            >
+              #{index + 1}
+            </Button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

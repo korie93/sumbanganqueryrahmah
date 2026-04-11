@@ -1,4 +1,5 @@
 import { AlertCircle, FileSpreadsheet, Save, Upload, X } from "lucide-react";
+import { HorizontalScrollHint } from "@/components/HorizontalScrollHint";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -177,7 +178,7 @@ export function SingleImportPanel({
             </div>
           </div>
 
-          <div className="overflow-x-auto rounded-lg border border-border">
+          <HorizontalScrollHint className="rounded-lg border border-border" hint="Scroll preview">
             <table className="w-full text-sm">
               <thead className="bg-muted">
                 <tr>
@@ -207,7 +208,7 @@ export function SingleImportPanel({
                 ... and {parsedData.length - 10} more rows
               </div>
             ) : null}
-          </div>
+          </HorizontalScrollHint>
         </div>
       ) : null}
     </>

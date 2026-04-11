@@ -84,3 +84,65 @@ test("AI concurrency gate rejects immediately when queue limit is zero", async (
     },
   });
 });
+
+test("AI concurrency gate clears queued work and rejects new work after shutdown", async () => {
+  const gate = createAiConcurrencyGate({
+    globalLimit: 1,
+    queueLimit: 1,
+    queueWaitMs: 1_000,
+    roleLimits: {
+      user: 1,
+      admin: 1,
+      superuser: 1,
+    },
+  });
+  const firstRelease = createDeferred();
+  const firstResponse = new MockResponse();
+  const queuedResponse = new MockResponse();
+  const postShutdownResponse = new MockResponse();
+  const handler = gate.withAiConcurrencyGate("chat", async () => {
+    await firstRelease.promise;
+  });
+
+  const firstRequest = handler(createRequest(), firstResponse as never, undefined as never);
+  const queuedRequest = handler(createRequest(), queuedResponse as never, undefined as never);
+
+  gate.stopAiConcurrencyGate();
+
+  await queuedRequest;
+  await handler(createRequest(), postShutdownResponse as never, undefined as never);
+  firstRelease.resolve();
+  await firstRequest;
+
+  assert.equal(queuedResponse.statusCode, 503);
+  assert.deepEqual(queuedResponse.body, {
+    message: "AI service is shutting down. Please retry shortly.",
+    gate: {
+      globalInFlight: 1,
+      globalLimit: 1,
+      queueSize: 0,
+      queueLimit: 1,
+      role: "user",
+      roleInFlight: 1,
+      roleLimit: 1,
+      queueWaitMs: 1_000,
+      code: "AI_GATE_STOPPED",
+    },
+  });
+
+  assert.equal(postShutdownResponse.statusCode, 503);
+  assert.deepEqual(postShutdownResponse.body, {
+    message: "AI service is shutting down. Please retry shortly.",
+    gate: {
+      globalInFlight: 1,
+      globalLimit: 1,
+      queueSize: 0,
+      queueLimit: 1,
+      role: "user",
+      roleInFlight: 1,
+      roleLimit: 1,
+      queueWaitMs: 1_000,
+      code: "AI_GATE_STOPPED",
+    },
+  });
+});

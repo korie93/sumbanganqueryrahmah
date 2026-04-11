@@ -6,20 +6,20 @@
 }
 
 .page-spinner-shell--fullscreen {
-  min-height: 100svh;
+  min-height: 100dvh;
 }
 
 .page-spinner-shell--app {
-  min-height: calc(100svh - 3.5rem);
+  min-height: calc(100dvh - 3.5rem);
 }
 
-@supports (height: 100dvh) {
+@supports not (height: 100dvh) {
   .page-spinner-shell--fullscreen {
-    min-height: 100dvh;
+    min-height: 100svh;
   }
 
   .page-spinner-shell--app {
-    min-height: calc(100dvh - 3.5rem);
+    min-height: calc(100svh - 3.5rem);
   }
 }
 
@@ -43,7 +43,7 @@
 }
 
 .app-route-error-boundary--fullscreen {
-  min-height: 100svh;
+  min-height: 100dvh;
 }
 
 .app-route-error-boundary__shell {
@@ -52,15 +52,15 @@
 
 .app-route-error-boundary__shell--fullscreen {
   display: flex;
-  min-height: 100svh;
+  min-height: 100dvh;
   align-items: center;
   justify-content: center;
 }
 
-@supports (height: 100dvh) {
+@supports not (height: 100dvh) {
   .app-route-error-boundary--fullscreen,
   .app-route-error-boundary__shell--fullscreen {
-    min-height: 100dvh;
+    min-height: 100svh;
   }
 }
 
@@ -150,17 +150,19 @@
   color: hsl(var(--primary-foreground) / 1);
 }
 
-.app-route-error-boundary__action--primary:hover {
-  background: hsl(var(--primary) / 0.9);
-}
-
 .app-route-error-boundary__action--secondary {
   border-color: hsl(var(--border) / 1);
   background: hsl(var(--background) / 1);
   color: hsl(var(--foreground) / 1);
 }
 
-.app-route-error-boundary__action--secondary:hover {
-  background: hsl(var(--accent) / 1);
-  color: hsl(var(--accent-foreground) / 1);
+@media (hover: hover) and (pointer: fine) {
+  .app-route-error-boundary__action--primary:hover {
+    background: hsl(var(--primary) / 0.9);
+  }
+
+  .app-route-error-boundary__action--secondary:hover {
+    background: hsl(var(--accent) / 1);
+    color: hsl(var(--accent-foreground) / 1);
+  }
 }

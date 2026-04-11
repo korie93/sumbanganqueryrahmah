@@ -2,6 +2,7 @@ import { Suspense, lazy, useState } from "react";
 import { AlertCircle, Filter, RotateCcw, Search, SlidersHorizontal } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { HorizontalScrollHint } from "@/components/HorizontalScrollHint";
 import { Input } from "@/components/ui/input";
 import {
   Sheet,
@@ -120,7 +121,10 @@ export function GeneralSearchMobileControls({
         </div>
 
         {advancedMode && activeFilterSummaries.length > 0 ? (
-          <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1">
+          <HorizontalScrollHint
+            viewportClassName="-mx-1 flex gap-1.5 px-1 pb-1"
+            hint="Swipe filters"
+          >
             <Badge variant="secondary" className="shrink-0 rounded-full px-2 py-1 text-[10px]">
               {logic}
             </Badge>
@@ -134,7 +138,7 @@ export function GeneralSearchMobileControls({
                 +{activeFilterSummaries.length - 2}
               </Badge>
             ) : null}
-          </div>
+          </HorizontalScrollHint>
         ) : null}
 
         {!advancedMode ? (

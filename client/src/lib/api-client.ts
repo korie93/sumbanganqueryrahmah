@@ -151,6 +151,27 @@ function buildApiRequestTimeoutError(method: string, url: string, timeoutMs: num
   return new Error(`Request timed out after ${timeoutMs}ms: ${String(method || "GET").toUpperCase()} ${url}`);
 }
 
+function isNavigatorOffline() {
+  return typeof navigator !== "undefined" && navigator.onLine === false;
+}
+
+function buildOfflineApiRequestError() {
+  return new Error("You appear to be offline. Check your internet connection and try again.");
+}
+
+function isLikelyOfflineFetchFailure(error: unknown) {
+  if (!isNavigatorOffline()) {
+    return false;
+  }
+
+  if (error instanceof TypeError) {
+    return true;
+  }
+
+  return error instanceof Error
+    && /failed to fetch|networkerror|load failed|network request failed/i.test(error.message);
+}
+
 function createApiRequestSignal(options?: ApiRequestOptions): {
   cleanup: () => void;
   signal?: AbortSignal | undefined;
@@ -204,6 +225,10 @@ export async function apiRequest(
   data?: unknown | undefined,
   options?: ApiRequestOptions,
 ): Promise<Response> {
+  if (isNavigatorOffline()) {
+    throw buildOfflineApiRequestError();
+  }
+
   const isFormDataPayload =
     typeof FormData !== "undefined"
     && data instanceof FormData;
@@ -243,6 +268,9 @@ export async function apiRequest(
       && error.name === "AbortError"
     ) {
       throw buildApiRequestTimeoutError(method, url, requestSignal.timeoutMs);
+    }
+    if (isLikelyOfflineFetchFailure(error)) {
+      throw buildOfflineApiRequestError();
     }
     throw error;
   } finally {

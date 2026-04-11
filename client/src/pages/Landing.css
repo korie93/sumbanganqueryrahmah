@@ -42,11 +42,6 @@
   color: var(--public-auth-text-muted);
 }
 
-.landing-nav-link:hover {
-  background: var(--public-auth-ghost-hover-bg);
-  color: var(--public-auth-text-strong);
-}
-
 .landing-nav-link:focus-visible {
   outline: none;
   box-shadow: 0 0 0 2px var(--public-auth-ghost-ring);
@@ -58,10 +53,6 @@
   color: var(--public-auth-text-strong);
 }
 
-.landing-primary-button:hover {
-  background: var(--public-auth-primary-bg-hover);
-}
-
 .landing-primary-button:focus-visible {
   outline: none;
   box-shadow: 0 0 0 2px var(--public-auth-primary-ring);
@@ -71,10 +62,6 @@
   border: 1px solid var(--public-auth-shell-border);
   background: var(--public-auth-shell-surface-strong-sm);
   color: var(--public-auth-text-strong);
-}
-
-.landing-secondary-button:hover {
-  background: var(--public-auth-ghost-hover-bg);
 }
 
 .landing-secondary-button:focus-visible {
@@ -196,5 +183,20 @@
 
   .landing-about-card {
     min-height: 0;
+  }
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .landing-nav-link:hover {
+    background: var(--public-auth-ghost-hover-bg);
+    color: var(--public-auth-text-strong);
+  }
+
+  .landing-primary-button:hover {
+    background: var(--public-auth-primary-bg-hover);
+  }
+
+  .landing-secondary-button:hover {
+    background: var(--public-auth-ghost-hover-bg);
   }
 }

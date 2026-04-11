@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { HorizontalScrollHint } from "@/components/HorizontalScrollHint";
 import { ActivityDesktopLogsHeader } from "@/pages/activity/ActivityDesktopLogsHeader";
 import { ActivityDesktopLogRow } from "@/pages/activity/ActivityDesktopLogRow";
 import {
@@ -25,7 +26,7 @@ export function ActivityDesktopLogsTable({
   );
 
   return (
-    <div className="overflow-x-auto">
+    <HorizontalScrollHint hint="Scroll table">
       <div className="min-w-[58rem] overflow-hidden rounded-lg border border-border bg-card/60 text-sm">
         <ActivityDesktopLogsHeader
           allVisibleSelected={allVisibleSelected}
@@ -51,6 +52,6 @@ export function ActivityDesktopLogsTable({
           ))}
         </div>
       </div>
-    </div>
+    </HorizontalScrollHint>
   );
 }

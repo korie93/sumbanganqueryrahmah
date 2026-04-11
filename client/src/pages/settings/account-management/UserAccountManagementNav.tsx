@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { Inbox, LifeBuoy, Menu, ShieldCheck, UserCog } from "lucide-react";
 import { LazySideTabNavigation } from "@/components/navigation/LazySideTabNavigation";
+import { HorizontalScrollHint } from "@/components/HorizontalScrollHint";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -115,7 +116,11 @@ export function UserAccountManagementNav({
               </Button>
             </div>
 
-            <div className="-mx-1 mt-3 flex gap-2 overflow-x-auto px-1 pb-1">
+            <HorizontalScrollHint
+              className="mt-3"
+              viewportClassName="-mx-1 flex gap-2 px-1 pb-1"
+              hint="Swipe sections"
+            >
               {items.map((item) => {
                 const Icon = item.icon;
                 const active = item.key === activeTab;
@@ -148,7 +153,7 @@ export function UserAccountManagementNav({
                   </button>
                 );
               })}
-            </div>
+            </HorizontalScrollHint>
           </div>
         </div>
       ) : null}

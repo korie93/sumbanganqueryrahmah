@@ -50,10 +50,6 @@
   color: hsl(var(--foreground));
 }
 
-.forbidden-page__secondary-button:hover {
-  background: hsl(var(--muted));
-}
-
 .forbidden-page__secondary-button:focus-visible {
   outline: none;
   box-shadow: 0 0 0 2px hsl(var(--ring) / 0.55);
@@ -64,11 +60,17 @@
   color: var(--forbidden-primary-button-text);
 }
 
-.forbidden-page__primary-button:hover {
-  background: var(--forbidden-primary-button-bg-hover);
-}
-
 .forbidden-page__primary-button:focus-visible {
   outline: none;
   box-shadow: 0 0 0 2px var(--forbidden-primary-button-ring);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .forbidden-page__secondary-button:hover {
+    background: hsl(var(--muted));
+  }
+
+  .forbidden-page__primary-button:hover {
+    background: var(--forbidden-primary-button-bg-hover);
+  }
 }

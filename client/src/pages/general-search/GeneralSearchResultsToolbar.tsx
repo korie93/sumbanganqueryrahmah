@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import { HorizontalScrollHint } from "@/components/HorizontalScrollHint";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -64,7 +65,10 @@ export function GeneralSearchResultsToolbar({
             </p>
           ) : null}
           {mobileSummaryChips.length > 0 ? (
-            <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+            <HorizontalScrollHint
+              viewportClassName="-mx-1 flex gap-2 px-1 pb-1"
+              hint="Swipe summaries"
+            >
               {mobileSummaryChips.slice(0, 5).map((summary) => (
                 <div
                   key={summary}
@@ -78,7 +82,7 @@ export function GeneralSearchResultsToolbar({
                   +{mobileSummaryChips.length - 5} more
                 </div>
               ) : null}
-            </div>
+            </HorizontalScrollHint>
           ) : null}
         </div>
 
