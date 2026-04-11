@@ -210,6 +210,24 @@
   }
 }
 
+@media (min-width: 640px) and (max-width: 1023px) {
+  .public-auth-layout__container {
+    max-width: min(92vw, 38rem);
+  }
+
+  .public-auth-layout__card {
+    padding: clamp(var(--spacing-6), 4vw, var(--spacing-8));
+  }
+
+  .public-auth-layout__title {
+    font-size: clamp(1.875rem, 3.2vw, 2.25rem);
+  }
+
+  .public-auth-layout__description {
+    font-size: 0.9375rem;
+  }
+}
+
 @media (max-width: 767px) and (max-height: 560px) and (orientation: landscape) {
   .public-auth-layout__main {
     align-items: flex-start;

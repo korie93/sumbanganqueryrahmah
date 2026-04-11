@@ -34,13 +34,27 @@ type CreateAiConcurrencyGateOptions = {
   roleLimits: AiRoleLimits;
 };
 
+function normalizeGateLimit(value: number, fallback: number, min: number): number {
+  if (!Number.isFinite(value)) {
+    return fallback;
+  }
+  return Math.max(min, Math.floor(value));
+}
+
 export function createAiConcurrencyGate(options: CreateAiConcurrencyGateOptions): {
   withAiConcurrencyGate: (
     route: AiRoute,
     handler: (req: AuthenticatedRequest, res: Response) => Promise<unknown>,
   ) => RequestHandler;
 } {
-  const { globalLimit, queueLimit, queueWaitMs, roleLimits } = options;
+  const globalLimit = normalizeGateLimit(options.globalLimit, 1, 1);
+  const queueLimit = normalizeGateLimit(options.queueLimit, 0, 0);
+  const queueWaitMs = normalizeGateLimit(options.queueWaitMs, 1_000, 1);
+  const roleLimits: AiRoleLimits = {
+    user: normalizeGateLimit(options.roleLimits.user, 1, 1),
+    admin: normalizeGateLimit(options.roleLimits.admin, 1, 1),
+    superuser: normalizeGateLimit(options.roleLimits.superuser, 1, 1),
+  };
 
   let sequence = 0;
   let inflightGlobal = 0;

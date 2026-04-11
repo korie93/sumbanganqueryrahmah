@@ -68,10 +68,12 @@
   overflow: hidden;
   border-radius: 32px;
   background: var(--login-card-surface);
+  background-clip: padding-box;
   -webkit-backdrop-filter: blur(12px) saturate(130%);
   backdrop-filter: blur(12px) saturate(130%);
   border: 1px solid var(--login-card-border);
   box-shadow: var(--login-card-shadow);
+  contain: paint;
 }
 
 .login-card::before {
@@ -265,8 +267,10 @@
     -webkit-backdrop-filter: none;
     backdrop-filter: none;
     background: var(--login-mobile-card-surface);
+    background-clip: padding-box;
     border-color: var(--login-mobile-card-border);
     box-shadow: var(--login-card-mobile-shadow);
+    contain: paint;
   }
 
   .login-card::before,
@@ -304,8 +308,10 @@
     -webkit-backdrop-filter: none;
     backdrop-filter: none;
     background: var(--login-mobile-card-surface);
+    background-clip: padding-box;
     border-color: var(--login-mobile-card-border);
     box-shadow: var(--login-card-mobile-shadow);
+    contain: paint;
   }
 
   .login-card::before,

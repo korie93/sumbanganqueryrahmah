@@ -72,7 +72,7 @@ export class CollectionRollupRefreshNotificationSubscriber
   private connectPromise: Promise<void> | null = null;
   private reconnectTimer: NodeJS.Timeout | null = null;
   private currentClient: PgNotificationClientLike | null = null;
-  private notifyCallback: (() => void) | null = null;
+  private notifyCallback: (() => unknown) | null = null;
 
   constructor(options: CollectionRollupRefreshNotificationSubscriberOptions = {}) {
     this.channel = assertSafeChannelName(
@@ -126,20 +126,44 @@ export class CollectionRollupRefreshNotificationSubscriber
       if (!this.started || message.channel !== this.channel) {
         return;
       }
-      this.notifyCallback?.();
+      try {
+        const notifyResult = this.notifyCallback?.();
+        if (notifyResult && typeof (notifyResult as Promise<unknown>).then === "function") {
+          void Promise.resolve(notifyResult).catch((error) => {
+            logger.warn("Collection rollup notification callback failed; polling fallback remains active", {
+              channel: this.channel,
+              error,
+            });
+          });
+        }
+      } catch (error) {
+        logger.warn("Collection rollup notification callback failed; polling fallback remains active", {
+          channel: this.channel,
+          error,
+        });
+      }
+    };
+    const disconnectSafely = () => {
+      void this.handleDisconnect(client).catch((error) => {
+        logger.warn("Collection rollup notification disconnect cleanup failed; polling fallback remains active", {
+          channel: this.channel,
+          error,
+        });
+        this.scheduleReconnect();
+      });
     };
     const handleError = (error: unknown) => {
       logger.warn("Collection rollup notification listener error; polling fallback remains active", {
         channel: this.channel,
         error,
       });
-      void this.handleDisconnect(client);
+      disconnectSafely();
     };
     const handleEnd = () => {
       logger.warn("Collection rollup notification listener ended; polling fallback remains active", {
         channel: this.channel,
       });
-      void this.handleDisconnect(client);
+      disconnectSafely();
     };
 
     client.on("notification", handleNotification);
@@ -187,7 +211,13 @@ export class CollectionRollupRefreshNotificationSubscriber
 
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;
-      void this.ensureConnected();
+      void this.ensureConnected().catch((error) => {
+        logger.warn("Collection rollup notification reconnect failed; polling fallback remains active", {
+          channel: this.channel,
+          error,
+        });
+        this.scheduleReconnect();
+      });
     }, this.reconnectDelayMs);
     this.reconnectTimer.unref?.();
   }

@@ -19,11 +19,22 @@
     box-shadow 0.2s ease,
     background 0.3s ease;
   will-change: backdrop-filter;
-  -ms-overflow-style: none;
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--muted-foreground) / 0.48) transparent;
+  scrollbar-gutter: stable both-edges;
 }
 
 .navbar-premium-glass::-webkit-scrollbar {
-  display: none;
+  height: 0.35rem;
+}
+
+.navbar-premium-glass::-webkit-scrollbar-thumb {
+  border-radius: 9999px;
+  background: hsl(var(--muted-foreground) / 0.42);
+}
+
+.navbar-premium-glass::-webkit-scrollbar-track {
+  background: transparent;
 }
 
 .nav-pill {

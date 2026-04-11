@@ -107,6 +107,7 @@ export function createLocalRuntimeEnvironment(options: CreateLocalRuntimeEnviron
     defaultAiTimeoutMs: runtimeConfig.runtime.defaults.aiTimeoutMs,
     lowMemoryMode: runtimeConfig.cluster.lowMemoryMode,
   });
+  server.once("close", composition.stopTabVisibilityCacheSweep);
   const {
     aiSearchService,
     categoryStatsService,

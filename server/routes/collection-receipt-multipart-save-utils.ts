@@ -55,12 +55,14 @@ export async function saveMultipartCollectionReceipt(
   let signatureBytesCaptured = 0;
   let fileSize = 0;
   let signatureType: CollectionReceiptFileType | null = null;
+  let maxBytesExceeded = false;
 
   const captureAndValidate = new Transform({
     transform(chunk, _encoding, callback) {
       const bufferChunk = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
       fileSize += bufferChunk.length;
       if (fileSize > COLLECTION_RECEIPT_MAX_BYTES) {
+        maxBytesExceeded = true;
         callback(new Error("Receipt file exceeds 5MB."));
         return;
       }
@@ -122,6 +124,13 @@ export async function saveMultipartCollectionReceipt(
       fileSize: prepared.sanitizedBuffer.length,
     });
   } catch (error) {
+    if (maxBytesExceeded) {
+      const destroyableStream = receipt.stream as NodeJS.ReadableStream & {
+        destroy?: (error?: Error) => void;
+      };
+      destroyableStream.destroy?.(error instanceof Error ? error : undefined);
+    }
+
     if (error instanceof CollectionReceiptSecurityError) {
       await quarantineRejectedCollectionReceipt({
         source: "multipart",
@@ -138,6 +147,7 @@ export async function saveMultipartCollectionReceipt(
         {
           fileName,
           temporaryFilePath,
+          maxBytesExceeded,
           error: cleanupError,
         },
       );

@@ -84,12 +84,17 @@ export function matchesPageShortcut(
 
 export function usePageShortcuts(shortcuts: PageShortcutDefinition[]) {
   const shortcutsRef = useRef(shortcuts);
+  const hasShortcuts = shortcuts.length > 0;
 
   useEffect(() => {
     shortcutsRef.current = shortcuts;
   }, [shortcuts]);
 
   useEffect(() => {
+    if (!hasShortcuts) {
+      return;
+    }
+
     const handleKeyDown = (event: KeyboardEvent) => {
       for (const shortcut of shortcutsRef.current) {
         if (shortcut.enabled === false) {
@@ -114,5 +119,5 @@ export function usePageShortcuts(shortcuts: PageShortcutDefinition[]) {
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, []);
+  }, [hasShortcuts]);
 }

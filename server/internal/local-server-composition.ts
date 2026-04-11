@@ -123,6 +123,7 @@ export type LocalServerComposition = {
   requireTabAccess: AuthGuards["requireTabAccess"];
   requireMonitorAccess: AuthGuards["requireMonitorAccess"];
   clearTabVisibilityCache: AuthGuards["clearTabVisibilityCache"];
+  stopTabVisibilityCacheSweep: AuthGuards["stopTabVisibilityCacheSweep"];
 };
 
 type RegisterLocalServerRoutesOptions = {
@@ -204,6 +205,7 @@ export function createLocalServerComposition(
     requireTabAccess: authGuards.requireTabAccess,
     requireMonitorAccess: authGuards.requireMonitorAccess,
     clearTabVisibilityCache: authGuards.clearTabVisibilityCache,
+    stopTabVisibilityCacheSweep: authGuards.stopTabVisibilityCacheSweep,
   };
 }
 

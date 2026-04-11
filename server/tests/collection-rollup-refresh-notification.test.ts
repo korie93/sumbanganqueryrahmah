@@ -5,6 +5,7 @@ import {
   COLLECTION_ROLLUP_REFRESH_NOTIFICATION_CHANNEL,
   CollectionRollupRefreshNotificationSubscriber,
 } from "../lib/collection-rollup-refresh-notification";
+import { logger } from "../lib/logger";
 
 function waitFor(predicate: () => boolean, timeoutMs = 500): Promise<void> {
   const deadline = Date.now() + timeoutMs;
@@ -100,6 +101,39 @@ test("CollectionRollupRefreshNotificationSubscriber retries after the initial co
   assert.deepEqual(secondClient.listenQueries, [
     `LISTEN ${COLLECTION_ROLLUP_REFRESH_NOTIFICATION_CHANNEL}`,
   ]);
+
+  await subscriber.stop();
+});
+
+test("CollectionRollupRefreshNotificationSubscriber contains notification callback failures", async (t) => {
+  const client = new FakeNotificationClient();
+  const warnings: string[] = [];
+  t.mock.method(
+    logger,
+    "warn",
+    ((message: string) => {
+      warnings.push(message);
+    }) as typeof logger.warn,
+  );
+
+  const subscriber = new CollectionRollupRefreshNotificationSubscriber({
+    clientFactory: () => client,
+    reconnectDelayMs: 20,
+  });
+
+  await subscriber.start(() => {
+    throw new Error("callback failed");
+  });
+
+  assert.doesNotThrow(() => {
+    client.emit("notification", {
+      channel: COLLECTION_ROLLUP_REFRESH_NOTIFICATION_CHANNEL,
+    });
+  });
+  assert.equal(
+    warnings.includes("Collection rollup notification callback failed; polling fallback remains active"),
+    true,
+  );
 
   await subscriber.stop();
 });

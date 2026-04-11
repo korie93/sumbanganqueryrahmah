@@ -43,6 +43,7 @@ type TabVisibilityCacheEntry = {
 };
 
 const TAB_VISIBILITY_CACHE_TTL_MS = 5 * 60 * 1000;
+const TAB_VISIBILITY_CACHE_SWEEP_INTERVAL_MS = TAB_VISIBILITY_CACHE_TTL_MS;
 const TAB_VISIBILITY_CACHE_MAX_SIZE = 100;
 const FORCED_PASSWORD_CHANGE_ALLOWLIST = new Set([
   "GET:/api/auth/me",
@@ -95,12 +96,33 @@ function evictOldestTabVisibilityCacheEntry(
   return oldestKey;
 }
 
+function sweepExpiredTabVisibilityCacheEntries(
+  cache: Map<string, TabVisibilityCacheEntry>,
+  now = Date.now(),
+): number {
+  let removed = 0;
+  for (const [key, entry] of cache.entries()) {
+    if (now - entry.cachedAt >= TAB_VISIBILITY_CACHE_TTL_MS) {
+      cache.delete(key);
+      removed += 1;
+    }
+  }
+  return removed;
+}
+
 export function createAuthGuards(options: CreateAuthGuardsOptions) {
   const storage = options.storage;
   const secret = options.secret || getSessionSecret();
   const tabVisibilityCache = new Map<string, TabVisibilityCacheEntry>();
+  let tabVisibilitySweepStopped = false;
+  const tabVisibilitySweepHandle = setInterval(() => {
+    sweepExpiredTabVisibilityCacheEntries(tabVisibilityCache);
+  }, TAB_VISIBILITY_CACHE_SWEEP_INTERVAL_MS);
+  tabVisibilitySweepHandle.unref?.();
 
   function setRoleTabVisibilityCache(role: string, tabs: Record<string, boolean>, cachedAt: number) {
+    sweepExpiredTabVisibilityCacheEntries(tabVisibilityCache, cachedAt);
+
     if (!tabVisibilityCache.has(role)) {
       while (tabVisibilityCache.size >= TAB_VISIBILITY_CACHE_MAX_SIZE) {
         if (!evictOldestTabVisibilityCacheEntry(tabVisibilityCache)) {
@@ -128,6 +150,14 @@ export function createAuthGuards(options: CreateAuthGuardsOptions) {
     const tabs = await storage.getRoleTabVisibility(role);
     setRoleTabVisibilityCache(role, tabs, now);
     return tabs;
+  }
+
+  function stopTabVisibilityCacheSweep() {
+    if (tabVisibilitySweepStopped) {
+      return;
+    }
+    tabVisibilitySweepStopped = true;
+    clearInterval(tabVisibilitySweepHandle);
   }
 
   const authenticateToken: RequestHandler = async (
@@ -330,6 +360,7 @@ export function createAuthGuards(options: CreateAuthGuardsOptions) {
     clearTabVisibilityCache() {
       tabVisibilityCache.clear();
     },
+    stopTabVisibilityCacheSweep,
   };
 }
 
@@ -351,4 +382,11 @@ export function evictOldestTabVisibilityCacheEntryForTests(
   }
 
   return oldestKey;
+}
+
+export function sweepExpiredTabVisibilityCacheEntriesForTests(
+  cache: Map<string, TabVisibilityCacheEntry>,
+  now?: number,
+): number {
+  return sweepExpiredTabVisibilityCacheEntries(cache, now);
 }

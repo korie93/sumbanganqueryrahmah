@@ -1,4 +1,4 @@
-import { Suspense, lazy, type ReactNode, useEffect, useState } from "react";
+import { Suspense, lazy, type ReactNode } from "react";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
 const Toaster = lazy(() =>
@@ -10,25 +10,11 @@ type AppProvidersProps = {
 };
 
 export function AppProviders({ children }: AppProvidersProps) {
-  const [showToaster, setShowToaster] = useState(false);
-
-  useEffect(() => {
-    const timeoutId = window.setTimeout(() => {
-      setShowToaster(true);
-    }, 0);
-
-    return () => {
-      window.clearTimeout(timeoutId);
-    };
-  }, []);
-
   return (
     <TooltipProvider>
-      {showToaster ? (
-        <Suspense fallback={null}>
-          <Toaster />
-        </Suspense>
-      ) : null}
+      <Suspense fallback={null}>
+        <Toaster />
+      </Suspense>
       {children}
     </TooltipProvider>
   );

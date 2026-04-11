@@ -154,6 +154,7 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
     if (!message) {
       return;
     }
+    const messageBytes = Buffer.byteLength(message, "utf8");
 
     for (const [activityId, ws] of connectedClients.entries()) {
       if (!ws || ws.readyState !== WebSocket.OPEN) {
@@ -162,7 +163,10 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
         continue;
       }
 
-      if (ws.bufferedAmount > MAX_RUNTIME_WS_BUFFERED_BYTES) {
+      if (
+        ws.bufferedAmount > MAX_RUNTIME_WS_BUFFERED_BYTES
+        || ws.bufferedAmount + messageBytes > MAX_RUNTIME_WS_BUFFERED_BYTES
+      ) {
         dropBackpressuredSocket(activityId, ws);
         continue;
       }

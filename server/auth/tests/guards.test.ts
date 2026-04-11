@@ -4,6 +4,7 @@ import {
   createAuthGuards,
   evictOldestTabVisibilityCacheEntryForTests,
   getInvalidatedSessionMessage,
+  sweepExpiredTabVisibilityCacheEntriesForTests,
 } from "../guards";
 
 test("getInvalidatedSessionMessage returns reset-specific messaging for password reset invalidation", () => {
@@ -85,6 +86,7 @@ test("tab visibility guard caches role visibility and allows explicit cache clea
   await handler(request as never, response as never, next);
   guards.clearTabVisibilityCache();
   await handler(request as never, response as never, next);
+  guards.stopTabVisibilityCacheSweep();
 
   assert.equal(visibilityLookupCount, 2);
   assert.equal(nextCalls, 3);
@@ -101,4 +103,66 @@ test("tab visibility cache helper evicts the least recently used role entry", ()
 
   assert.equal(evicted, "user");
   assert.deepEqual(Array.from(cache.keys()), ["admin", "auditor"]);
+});
+
+test("tab visibility cache sweep removes expired entries without waiting for a role read", () => {
+  const now = 1_000_000;
+  const cache = new Map([
+    ["fresh", { tabs: { monitor: true }, cachedAt: now - 60_000 }],
+    ["expired", { tabs: { monitor: false }, cachedAt: now - 6 * 60_000 }],
+  ]);
+
+  const removed = sweepExpiredTabVisibilityCacheEntriesForTests(cache, now);
+
+  assert.equal(removed, 1);
+  assert.deepEqual(Array.from(cache.keys()), ["fresh"]);
+});
+
+test("tab visibility cache registers an unrefed sweep interval and clears it idempotently", (t) => {
+  let capturedIntervalMs = 0;
+  let unrefCalled = false;
+  const fakeHandle = {
+    unref() {
+      unrefCalled = true;
+      return this;
+    },
+  } as unknown as NodeJS.Timeout;
+
+  const setIntervalMock = t.mock.method(
+    globalThis,
+    "setInterval",
+    (((handler: TimerHandler, delay?: number) => {
+      assert.equal(typeof handler, "function");
+      capturedIntervalMs = Number(delay ?? 0);
+      return fakeHandle;
+    }) as unknown) as typeof setInterval,
+  );
+  const clearIntervalMock = t.mock.method(
+    globalThis,
+    "clearInterval",
+    (((handle?: NodeJS.Timeout) => {
+      assert.equal(handle, fakeHandle);
+    }) as unknown) as typeof clearInterval,
+  );
+
+  const guards = createAuthGuards({
+    storage: {
+      getActivityById: async () => undefined,
+      getUser: async () => undefined,
+      getUserByUsername: async () => undefined,
+      isVisitorBanned: async () => false,
+      updateActivity: async () => undefined,
+      getRoleTabVisibility: async () => ({}),
+    },
+    secret: "guard-test-secret",
+  });
+
+  assert.equal(setIntervalMock.mock.callCount(), 1);
+  assert.equal(capturedIntervalMs, 5 * 60 * 1000);
+  assert.equal(unrefCalled, true);
+
+  guards.stopTabVisibilityCacheSweep();
+  guards.stopTabVisibilityCacheSweep();
+
+  assert.equal(clearIntervalMock.mock.callCount(), 1);
 });

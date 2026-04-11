@@ -16,16 +16,16 @@
 }
 
 .ops-page {
-  min-height: calc(100svh - 3.5rem);
+  min-height: calc(100dvh - 3.5rem);
   padding: var(--spacing-4);
   background:
     radial-gradient(circle at top left, hsl(var(--primary) / 0.06), transparent 28%),
     linear-gradient(180deg, hsl(var(--background)), hsl(var(--background) / 0.96));
 }
 
-@supports (height: 100dvh) {
+@supports not (height: 100dvh) {
   .ops-page {
-    min-height: calc(100dvh - 3.5rem);
+    min-height: calc(100svh - 3.5rem);
   }
 }
 
@@ -146,6 +146,17 @@
 @media (min-width: 1024px) {
   .ops-page {
     padding: var(--spacing-4) var(--spacing-6) var(--spacing-6);
+  }
+}
+
+@media (min-width: 768px) and (max-width: 1023px) {
+  .ops-summary-strip {
+    gap: 0.85rem;
+  }
+
+  .ops-metric {
+    min-width: min(100%, 220px);
+    flex: 1 1 calc(50% - 0.5rem);
   }
 }
 

@@ -49,6 +49,7 @@ export function useLoginPageState({ onLoginSuccess }: UseLoginPageStateParams) {
   const [twoFactorChallengeToken, setTwoFactorChallengeToken] = useState("");
   const [twoFactorCode, setTwoFactorCode] = useState("");
   const mountedRef = useRef(true);
+  const storedNoticeConsumedRef = useRef(false);
   const loginInFlightRef = useRef(false);
   const loginAbortControllerRef = useRef<AbortController | null>(null);
   const loginRequestIdRef = useRef(0);
@@ -59,6 +60,11 @@ export function useLoginPageState({ onLoginSuccess }: UseLoginPageStateParams) {
   });
 
   useEffect(() => {
+    if (storedNoticeConsumedRef.current) {
+      return;
+    }
+    storedNoticeConsumedRef.current = true;
+
     const message = consumeStoredAuthNotice();
     if (message) {
       setNotice(message);
