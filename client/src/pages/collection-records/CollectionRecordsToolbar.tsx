@@ -144,6 +144,7 @@ export function CollectionRecordsToolbar({
           </label>
           <select
             id="collection-records-page-size"
+            name="collectionRecordsPageSize"
             value={String(tablePageSize)}
             onChange={(event) => onTablePageSizeChange(Number(event.target.value))}
             disabled={paginationControls.pageSizeDisabled}

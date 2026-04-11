@@ -28,6 +28,7 @@ export function LocalMailOutboxFiltersPanel({
         <div className="relative">
           <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
+            name="localMailOutboxEmailQuery"
             type="search"
             value={emailQuery}
             onChange={(event) => onEmailQueryChange(event.target.value)}
@@ -45,6 +46,7 @@ export function LocalMailOutboxFiltersPanel({
         <div className="relative">
           <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
+            name="localMailOutboxSubjectQuery"
             type="search"
             value={subjectQuery}
             onChange={(event) => onSubjectQueryChange(event.target.value)}

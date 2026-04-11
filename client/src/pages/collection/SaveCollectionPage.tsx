@@ -46,6 +46,7 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
       <div className="space-y-2">
         <Label>Customer Name</Label>
         <Input
+          name="customerName"
           value={state.customerName}
           onChange={(e) => state.setCustomerName(e.target.value)}
           disabled={state.submitting}
@@ -55,6 +56,7 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
       <div className="space-y-2">
         <Label>IC Number</Label>
         <Input
+          name="customerIcNumber"
           value={state.icNumber}
           onChange={(e) => state.setIcNumber(e.target.value)}
           disabled={state.submitting}
@@ -65,6 +67,7 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
       <div className="space-y-2">
         <Label>Customer Phone Number</Label>
         <Input
+          name="customerPhoneNumber"
           type="tel"
           value={state.customerPhone}
           onChange={(e) => state.setCustomerPhone(e.target.value)}
@@ -82,6 +85,7 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
       <div className="space-y-2">
         <Label>Account Number</Label>
         <Input
+          name="accountNumber"
           value={state.accountNumber}
           onChange={(e) => state.setAccountNumber(e.target.value)}
           disabled={state.submitting}
@@ -92,6 +96,7 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
         <Label htmlFor="save-collection-batch">Batch</Label>
         <select
           id="save-collection-batch"
+          name="collectionBatch"
           value={state.batch}
           onChange={(event) => state.setBatch(event.target.value as CollectionBatch)}
           disabled={state.submitting}
@@ -126,6 +131,7 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
       <div className="space-y-2">
         <Label>Amount (RM)</Label>
         <Input
+          name="collectionAmount"
           type="number"
           min="0"
           step="0.01"

@@ -49,6 +49,7 @@ export function CreateClosedAccountSection({
           <div className="space-y-2">
             <p className="text-sm font-medium">Full name</p>
             <Input
+              name="closedAccountFullName"
               value={createFullNameInput}
               onChange={(event) => onCreateFullNameInputChange(event.target.value)}
               placeholder="Full name"
@@ -59,6 +60,7 @@ export function CreateClosedAccountSection({
           <div className="space-y-2">
             <p className="text-sm font-medium">Username</p>
             <Input
+              name="closedAccountUsername"
               value={createUsernameInput}
               onChange={(event) => onCreateUsernameInputChange(event.target.value)}
               placeholder="Username"
@@ -72,6 +74,7 @@ export function CreateClosedAccountSection({
           <div className="space-y-2">
             <p className="text-sm font-medium">Email</p>
             <Input
+              name="closedAccountEmail"
               type="email"
               value={createEmailInput}
               onChange={(event) => onCreateEmailInputChange(event.target.value)}
@@ -90,6 +93,7 @@ export function CreateClosedAccountSection({
             </label>
             <select
               id="create-closed-account-role"
+              name="closedAccountRole"
               value={createRoleInput}
               onChange={(event) =>
                 onCreateRoleInputChange(event.target.value === "admin" ? "admin" : "user")

@@ -85,6 +85,7 @@ export function ManagedUserDialog({
             <div className="space-y-2">
               <p className="text-sm font-medium">Full Name</p>
               <Input
+                name="managedUserFullName"
                 value={managedFullNameInput}
                 onChange={(event) => onManagedFullNameInputChange(event.target.value)}
                 disabled={managedSaving}
@@ -93,6 +94,7 @@ export function ManagedUserDialog({
             <div className="space-y-2">
               <p className="text-sm font-medium">Username</p>
               <Input
+                name="managedUserUsername"
                 value={managedUsernameInput}
                 onChange={(event) => onManagedUsernameInputChange(event.target.value)}
                 disabled={managedSaving}
@@ -101,6 +103,7 @@ export function ManagedUserDialog({
             <div className="space-y-2">
               <p className="text-sm font-medium">Email</p>
               <Input
+                name="managedUserEmail"
                 value={managedEmailInput}
                 onChange={(event) => onManagedEmailInputChange(event.target.value)}
                 disabled={managedSaving}
@@ -113,6 +116,7 @@ export function ManagedUserDialog({
                 </label>
                 <select
                   id="managed-user-role"
+                  name="managedUserRole"
                   value={managedRoleInput}
                   onChange={(event) =>
                     onManagedRoleInputChange(event.target.value === "admin" ? "admin" : "user")
@@ -130,6 +134,7 @@ export function ManagedUserDialog({
                 </label>
                 <select
                   id="managed-user-status"
+                  name="managedUserStatus"
                   value={managedStatusInput}
                   onChange={(event) =>
                     onManagedStatusInputChange(
@@ -155,6 +160,7 @@ export function ManagedUserDialog({
                 </label>
                 <select
                   id="managed-user-banned"
+                  name="managedUserBanned"
                   value={managedIsBanned ? "true" : "false"}
                   onChange={(event) => onManagedIsBannedChange(event.target.value === "true")}
                   className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"

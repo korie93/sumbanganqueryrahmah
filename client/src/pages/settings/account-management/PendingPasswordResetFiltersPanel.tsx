@@ -30,6 +30,7 @@ export function PendingPasswordResetFiltersPanel({
           <div className="relative">
             <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
+              name="pendingResetSearchQuery"
               type="search"
               value={searchQuery}
               onChange={(event) => onSearchQueryChange(event.target.value)}
@@ -48,6 +49,7 @@ export function PendingPasswordResetFiltersPanel({
           </label>
           <select
             id="pending-reset-status-filter"
+            name="pendingResetStatusFilter"
             value={statusFilter}
             onChange={(event) => onStatusChange(event.target.value)}
             className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"

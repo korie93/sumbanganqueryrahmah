@@ -296,6 +296,8 @@ function MonitorAlertsSectionImpl({
                       <div className="flex flex-col gap-2 rounded-xl border border-border/60 bg-background/40 p-3 sm:items-end">
                         <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
                           <select
+                            id="monitor-alert-history-retention"
+                            name="monitorAlertHistoryRetentionDays"
                             value={historyRetentionDays}
                             onChange={(event) => setHistoryRetentionDays(event.target.value)}
                             className="h-9 rounded-md border border-input bg-background px-3 text-sm text-foreground shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"

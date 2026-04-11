@@ -71,6 +71,7 @@ export function CollectionRecordsFilters({
           <div className="relative">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
+              name="collectionRecordsSearchMobile"
               value={searchInput}
               onChange={(event) => onSearchInputChange(event.target.value)}
               placeholder="Cari nama / IC / akaun / batch / telefon / jumlah bayaran"
@@ -84,6 +85,7 @@ export function CollectionRecordsFilters({
             <Label htmlFor="collection-records-nickname-filter">Staff Nickname (optional)</Label>
             <select
               id="collection-records-nickname-filter"
+              name="collectionRecordsNicknameMobile"
               value={nicknameFilter}
               onChange={(event) => onNicknameFilterChange(event.target.value)}
               disabled={loadingNicknames}
@@ -152,6 +154,7 @@ export function CollectionRecordsFilters({
         <div className="relative">
           <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <Input
+            name="collectionRecordsSearch"
             value={searchInput}
             onChange={(event) => onSearchInputChange(event.target.value)}
             placeholder="Cari nama / IC / akaun / batch / telefon / jumlah bayaran"
@@ -164,6 +167,7 @@ export function CollectionRecordsFilters({
           <Label htmlFor="collection-records-nickname-filter">Staff Nickname (optional)</Label>
           <select
             id="collection-records-nickname-filter"
+            name="collectionRecordsNickname"
             value={nicknameFilter}
             onChange={(event) => onNicknameFilterChange(event.target.value)}
             disabled={loadingNicknames}

@@ -58,6 +58,7 @@ export function CollectionSummaryFilters({
         <Label htmlFor="collection-summary-year-filter">Year</Label>
         <select
           id="collection-summary-year-filter"
+          name="collectionSummaryYear"
           value={selectedYear}
           onChange={(event) => onSelectedYearChange(event.target.value)}
           aria-label="Year"

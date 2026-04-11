@@ -39,6 +39,7 @@ export function ManagedAccountsFiltersPanel({
           <div className="relative">
             <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
+              name="managedAccountsSearchQuery"
               type="search"
               value={searchQuery}
               onChange={(event) => onSearchQueryChange(event.target.value)}
@@ -57,6 +58,7 @@ export function ManagedAccountsFiltersPanel({
           </label>
           <select
             id="managed-accounts-role-filter"
+            name="managedAccountsRoleFilter"
             value={roleFilter}
             onChange={(event) => onRoleChange(event.target.value)}
             className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
@@ -74,6 +76,7 @@ export function ManagedAccountsFiltersPanel({
           </label>
           <select
             id="managed-accounts-status-filter"
+            name="managedAccountsStatusFilter"
             value={statusFilter}
             onChange={(event) => onStatusChange(event.target.value)}
             className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
