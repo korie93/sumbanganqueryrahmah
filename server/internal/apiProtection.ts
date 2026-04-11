@@ -13,6 +13,7 @@ const ADAPTIVE_RATE_MAX_BUCKETS = 5_000;
 
 type AdaptiveRateBucket = {
   count: number;
+  lastSeenAt: number;
   resetAt: number;
 };
 
@@ -35,6 +36,31 @@ function isSessionControlRoute(req: Request): boolean {
     || (method === "POST" && path === "/api/activity/logout");
 }
 
+export function resolveAdaptiveRateEvictionKey(
+  buckets: ReadonlyMap<string, AdaptiveRateBucket>,
+): string | null {
+  let oldestBucketKey: string | null = null;
+  let oldestLastSeenAt = Number.POSITIVE_INFINITY;
+  let oldestResetAt = Number.POSITIVE_INFINITY;
+
+  for (const [bucketKey, bucket] of buckets.entries()) {
+    const lastSeenAt = Number.isFinite(bucket.lastSeenAt) ? bucket.lastSeenAt : bucket.resetAt;
+    if (
+      lastSeenAt < oldestLastSeenAt
+      || (
+        lastSeenAt === oldestLastSeenAt
+        && bucket.resetAt < oldestResetAt
+      )
+    ) {
+      oldestBucketKey = bucketKey;
+      oldestLastSeenAt = lastSeenAt;
+      oldestResetAt = bucket.resetAt;
+    }
+  }
+
+  return oldestBucketKey;
+}
+
 export function createApiProtectionMiddleware(options: ApiProtectionOptions): {
   adaptiveRateLimit: RequestHandler;
   systemProtectionMiddleware: RequestHandler;
@@ -46,13 +72,10 @@ export function createApiProtectionMiddleware(options: ApiProtectionOptions): {
   let adaptiveRateSweepStopped = false;
 
   function setAdaptiveRateBucket(bucketKey: string, bucket: AdaptiveRateBucket) {
-    if (adaptiveRateState.has(bucketKey)) {
-      adaptiveRateState.delete(bucketKey);
-    }
     adaptiveRateState.set(bucketKey, bucket);
 
     while (adaptiveRateState.size > ADAPTIVE_RATE_MAX_BUCKETS) {
-      const oldestBucketKey = adaptiveRateState.keys().next().value;
+      const oldestBucketKey = resolveAdaptiveRateEvictionKey(adaptiveRateState);
       if (!oldestBucketKey) {
         break;
       }
@@ -144,12 +167,17 @@ export function createApiProtectionMiddleware(options: ApiProtectionOptions): {
     const bucket = adaptiveRateState.get(bucketKey);
 
     if (!bucket || now >= bucket.resetAt) {
-      setAdaptiveRateBucket(bucketKey, { count: 1, resetAt: now + ADAPTIVE_RATE_WINDOW_MS });
+      setAdaptiveRateBucket(bucketKey, {
+        count: 1,
+        lastSeenAt: now,
+        resetAt: now + ADAPTIVE_RATE_WINDOW_MS,
+      });
       return next();
     }
 
     const nextBucket = {
       count: bucket.count + 1,
+      lastSeenAt: now,
       resetAt: bucket.resetAt,
     };
     setAdaptiveRateBucket(bucketKey, nextBucket);

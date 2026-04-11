@@ -7,6 +7,8 @@ import {
 import { getBrowserLocalStorage, safeSetStorageItem } from "./browser-storage";
 import { createClientRandomId } from "./secure-id";
 
+const DEFAULT_API_REQUEST_TIMEOUT_MS = 60_000;
+
 export function createApiRequestId() {
   return createClientRandomId("api");
 }
@@ -125,7 +127,76 @@ export async function throwIfResNotOk(res: Response) {
 type ApiRequestOptions = {
   headers?: Record<string, string>;
   signal?: AbortSignal | undefined;
+  timeoutMs?: number | false | undefined;
 };
+
+function resolveApiRequestTimeoutMs(options?: ApiRequestOptions): number | null {
+  if (options?.timeoutMs === false) {
+    return null;
+  }
+
+  if (typeof options?.timeoutMs === "number" && Number.isFinite(options.timeoutMs)) {
+    return Math.max(1, Math.trunc(options.timeoutMs));
+  }
+
+  // Preserve caller-owned AbortSignal identity when one is already provided.
+  if (options?.signal) {
+    return null;
+  }
+
+  return DEFAULT_API_REQUEST_TIMEOUT_MS;
+}
+
+function buildApiRequestTimeoutError(method: string, url: string, timeoutMs: number) {
+  return new Error(`Request timed out after ${timeoutMs}ms: ${String(method || "GET").toUpperCase()} ${url}`);
+}
+
+function createApiRequestSignal(options?: ApiRequestOptions): {
+  cleanup: () => void;
+  signal?: AbortSignal | undefined;
+  timedOut: () => boolean;
+  timeoutMs: number | null;
+} {
+  const timeoutMs = resolveApiRequestTimeoutMs(options);
+  if (!timeoutMs) {
+    return {
+      cleanup: () => {},
+      signal: options?.signal,
+      timedOut: () => false,
+      timeoutMs: null,
+    };
+  }
+
+  const controller = new AbortController();
+  const callerSignal = options?.signal;
+  let timeoutTriggered = false;
+  let timeoutHandle: ReturnType<typeof setTimeout> | null = setTimeout(() => {
+    timeoutTriggered = true;
+    controller.abort();
+  }, timeoutMs);
+  const handleCallerAbort = () => {
+    controller.abort();
+  };
+
+  if (callerSignal?.aborted) {
+    controller.abort();
+  } else if (callerSignal) {
+    callerSignal.addEventListener("abort", handleCallerAbort, { once: true });
+  }
+
+  return {
+    cleanup: () => {
+      if (timeoutHandle !== null) {
+        clearTimeout(timeoutHandle);
+        timeoutHandle = null;
+      }
+      callerSignal?.removeEventListener("abort", handleCallerAbort);
+    },
+    signal: controller.signal,
+    timedOut: () => timeoutTriggered,
+    timeoutMs,
+  };
+}
 
 export async function apiRequest(
   method: string,
@@ -154,12 +225,27 @@ export async function apiRequest(
   if (data) {
     requestInit.body = isFormDataPayload ? data as FormData : JSON.stringify(data);
   }
-  if (options?.signal) {
-    requestInit.signal = options.signal;
+  const requestSignal = createApiRequestSignal(options);
+  if (requestSignal.signal) {
+    requestInit.signal = requestSignal.signal;
   }
 
-  const res = await fetch(url, requestInit);
+  try {
+    const res = await fetch(url, requestInit);
 
-  await throwIfResNotOk(res);
-  return res;
+    await throwIfResNotOk(res);
+    return res;
+  } catch (error) {
+    if (
+      requestSignal.timeoutMs
+      && requestSignal.timedOut()
+      && error instanceof DOMException
+      && error.name === "AbortError"
+    ) {
+      throw buildApiRequestTimeoutError(method, url, requestSignal.timeoutMs);
+    }
+    throw error;
+  } finally {
+    requestSignal.cleanup();
+  }
 }

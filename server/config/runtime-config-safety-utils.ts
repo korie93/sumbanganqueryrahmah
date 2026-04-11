@@ -130,6 +130,12 @@ export function hasCollectionPiiEncryptionKeyConfigured(params: {
   return Boolean(params.configuredCollectionPiiEncryptionKey);
 }
 
+export function hasTwoFactorEncryptionKeyConfigured(params: {
+  configuredTwoFactorEncryptionKey: string | null;
+}): boolean {
+  return Boolean(params.configuredTwoFactorEncryptionKey);
+}
+
 export function assessMailConfiguration(params: {
   smtpService: string | null;
   smtpHost: string | null;
@@ -175,6 +181,7 @@ export function assertRuntimeSafetyGuards(params: {
   backupFeatureEnabled: boolean;
   hasBackupEncryptionKeyConfigured: boolean;
   hasCollectionPiiEncryptionKeyConfigured: boolean;
+  hasTwoFactorEncryptionKeyConfigured: boolean;
   seedDefaultUsers: boolean;
   localSuperuserCredentialsFileEnabled: boolean;
   mailDevOutboxEnabled: boolean;
@@ -190,6 +197,12 @@ export function assertRuntimeSafetyGuards(params: {
   if (isProductionLike && !params.hasCollectionPiiEncryptionKeyConfigured) {
     throw new Error(
       "COLLECTION_PII_ENCRYPTION_KEY is required outside strict local development to protect collection PII shadow columns at rest.",
+    );
+  }
+
+  if (isProductionLike && !params.hasTwoFactorEncryptionKeyConfigured) {
+    throw new Error(
+      "TWO_FACTOR_ENCRYPTION_KEY is required outside strict local development to protect stored two-factor secrets at rest.",
     );
   }
 

@@ -85,6 +85,73 @@ test("apiRequest normalizes oversized HTML error pages into a friendly message",
   }
 });
 
+test("apiRequest aborts stalled requests after the configured timeout", async () => {
+  const originalFetch = globalThis.fetch;
+
+  globalThis.fetch = (((_url: string | URL | Request, init?: RequestInit) =>
+    new Promise<Response>((_resolve, reject) => {
+      const signal = init?.signal as AbortSignal | undefined;
+      if (signal?.aborted) {
+        reject(new DOMException("The operation was aborted.", "AbortError"));
+        return;
+      }
+
+      signal?.addEventListener(
+        "abort",
+        () => {
+          reject(new DOMException("The operation was aborted.", "AbortError"));
+        },
+        { once: true },
+      );
+    })) as unknown) as typeof fetch;
+
+  try {
+    await assert.rejects(
+      () => apiRequest("GET", "/api/test-timeout", undefined, { timeoutMs: 10 }),
+      /Request timed out after 10ms: GET \/api\/test-timeout/,
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("apiRequest preserves caller AbortSignal semantics when the caller aborts first", async () => {
+  const originalFetch = globalThis.fetch;
+  const controller = new AbortController();
+
+  globalThis.fetch = (((_url: string | URL | Request, init?: RequestInit) =>
+    new Promise<Response>((_resolve, reject) => {
+      const signal = init?.signal as AbortSignal | undefined;
+      if (signal?.aborted) {
+        reject(new DOMException("The operation was aborted.", "AbortError"));
+        return;
+      }
+
+      signal?.addEventListener(
+        "abort",
+        () => {
+          reject(new DOMException("The operation was aborted.", "AbortError"));
+        },
+        { once: true },
+      );
+    })) as unknown) as typeof fetch;
+
+  try {
+    const pendingRequest = apiRequest("GET", "/api/test-abort", undefined, {
+      signal: controller.signal,
+      timeoutMs: 60_000,
+    });
+    controller.abort();
+
+    await assert.rejects(
+      pendingRequest,
+      (error: unknown) => error instanceof DOMException && error.name === "AbortError",
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("getQueryFn injects x-request-id headers for query fetches", async () => {
   const originalFetch = globalThis.fetch;
   let observedRequestId = "";

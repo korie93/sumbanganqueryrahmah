@@ -6,6 +6,8 @@ This checklist is the final gate before controlled production launch.
 
 - [ ] Environment validation passes in production-like mode.
 - [ ] Missing critical secrets fail fast at startup.
+- [ ] `TWO_FACTOR_ENCRYPTION_KEY` is configured with a unique non-placeholder value.
+- [ ] `COLLECTION_PII_ENCRYPTION_KEY` is configured with a unique non-placeholder value.
 - [ ] `BACKUP_ENCRYPTION_KEY` (or `BACKUP_ENCRYPTION_KEYS`) is configured when backups are enabled.
 - [ ] Secret rotation runbook has been reviewed: `docs/SECRET_ROTATION.md`.
 - [ ] Dev-only bootstrap/mail-preview behavior is disabled in production-like mode.

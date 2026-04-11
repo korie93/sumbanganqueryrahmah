@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import express from "express";
-import { createApiProtectionMiddleware } from "../../internal/apiProtection";
+import {
+  createApiProtectionMiddleware,
+  resolveAdaptiveRateEvictionKey,
+} from "../../internal/apiProtection";
 import { startTestServer, stopTestServer } from "../../routes/tests/http-test-utils";
 import type { WorkerControlState } from "../../internal/runtime-monitor-manager";
 
@@ -196,4 +199,14 @@ test("adaptive API protection registers and clears its background sweep interval
   stopAdaptiveRateStateSweep();
 
   assert.equal(clearIntervalMock.mock.callCount(), 1);
+});
+
+test("resolveAdaptiveRateEvictionKey evicts the least recently touched bucket instead of relying on Map insertion order", () => {
+  const buckets = new Map<string, { count: number; lastSeenAt: number; resetAt: number }>([
+    ["attacker-hot", { count: 9, lastSeenAt: 2_000, resetAt: 12_000 }],
+    ["legit-old", { count: 1, lastSeenAt: 1_000, resetAt: 11_000 }],
+    ["attacker-new", { count: 2, lastSeenAt: 3_000, resetAt: 13_000 }],
+  ]);
+
+  assert.equal(resolveAdaptiveRateEvictionKey(buckets), "legit-old");
 });

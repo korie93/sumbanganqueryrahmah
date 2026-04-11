@@ -68,6 +68,7 @@ test("assertRuntimeSafetyGuards rejects production-like backups without encrypti
         backupFeatureEnabled: true,
         hasBackupEncryptionKeyConfigured: false,
         hasCollectionPiiEncryptionKeyConfigured: true,
+        hasTwoFactorEncryptionKeyConfigured: true,
         seedDefaultUsers: false,
         localSuperuserCredentialsFileEnabled: false,
         mailDevOutboxEnabled: false,
@@ -91,11 +92,36 @@ test("assertRuntimeSafetyGuards rejects production-like startup when collection 
         backupFeatureEnabled: true,
         hasBackupEncryptionKeyConfigured: true,
         hasCollectionPiiEncryptionKeyConfigured: false,
+        hasTwoFactorEncryptionKeyConfigured: true,
         seedDefaultUsers: false,
         localSuperuserCredentialsFileEnabled: false,
         mailDevOutboxEnabled: false,
       }),
     /COLLECTION_PII_ENCRYPTION_KEY is required outside strict local development/i,
+  );
+});
+
+test("assertRuntimeSafetyGuards rejects production-like startup when the two-factor encryption key is missing", () => {
+  assert.throws(
+    () =>
+      assertRuntimeSafetyGuards({
+        isProductionLike: true,
+        isStrictLocalDevelopment: false,
+        mailConfiguration: {
+          effectiveFrom: null,
+          hasAnyInput: false,
+          isConfigured: false,
+          isIncomplete: false,
+        },
+        backupFeatureEnabled: true,
+        hasBackupEncryptionKeyConfigured: true,
+        hasCollectionPiiEncryptionKeyConfigured: true,
+        hasTwoFactorEncryptionKeyConfigured: false,
+        seedDefaultUsers: false,
+        localSuperuserCredentialsFileEnabled: false,
+        mailDevOutboxEnabled: false,
+      }),
+    /TWO_FACTOR_ENCRYPTION_KEY is required outside strict local development/i,
   );
 });
 

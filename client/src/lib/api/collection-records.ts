@@ -14,6 +14,9 @@ type CollectionMutationRequestOptions = {
   idempotencyKey?: string;
 };
 
+const COLLECTION_MUTATION_UPLOAD_TIMEOUT_MS = 2 * 60_000;
+const COLLECTION_RECEIPT_DOWNLOAD_TIMEOUT_MS = 2 * 60_000;
+
 function appendCollectionFormValue(formData: FormData, key: string, value: unknown) {
   if (value === undefined || value === null) {
     return;
@@ -150,6 +153,7 @@ export async function createCollectionRecord(
 ) {
   const response = await apiRequest("POST", "/api/collection", payload, {
     headers: buildCollectionMutationHeaders(options),
+    timeoutMs: payload instanceof FormData ? COLLECTION_MUTATION_UPLOAD_TIMEOUT_MS : undefined,
   });
   return response.json();
 }
@@ -252,7 +256,10 @@ export async function fetchCollectionReceiptBlob(
     "GET",
     `/api/collection/${encodeURIComponent(recordId)}${receiptSegment}/${mode}`,
     undefined,
-    { signal: options?.signal },
+    {
+      signal: options?.signal,
+      timeoutMs: COLLECTION_RECEIPT_DOWNLOAD_TIMEOUT_MS,
+    },
   );
   const blob = await response.blob();
   const mimeType = String(response.headers.get("Content-Type") || blob.type || "").toLowerCase();
@@ -267,6 +274,7 @@ export async function updateCollectionRecord(
 ) {
   const response = await apiRequest("PATCH", `/api/collection/${encodeURIComponent(id)}`, payload, {
     headers: buildCollectionMutationHeaders(options),
+    timeoutMs: payload instanceof FormData ? COLLECTION_MUTATION_UPLOAD_TIMEOUT_MS : undefined,
   });
   return response.json();
 }

@@ -201,6 +201,8 @@ TRUSTED_PROXIES=loopback
 
 SESSION_SECRET=ganti-dengan-random-secret-yang-panjang-dan-kuat
 SESSION_SECRET_PREVIOUS=
+TWO_FACTOR_ENCRYPTION_KEY=ganti-dengan-secret-2fa-yang-kuat-dan-berbeza
+COLLECTION_PII_ENCRYPTION_KEY=ganti-dengan-secret-pii-yang-kuat-dan-berbeza
 AUTH_COOKIE_SECURE=auto
 
 PG_HOST=127.0.0.1
@@ -234,6 +236,8 @@ BACKUP_ENCRYPTION_KEY=ganti-dengan-kunci-enkripsi-backup-yang-kuat
 BACKUP_ENCRYPTION_KEYS=
 BACKUP_ENCRYPTION_KEY_ID=primary
 ```
+
+`TWO_FACTOR_ENCRYPTION_KEY` dan `COLLECTION_PII_ENCRYPTION_KEY` kini dianggap secret wajib di luar strict local development. Jika salah satu kosong, runtime akan fail fast semasa startup supaya server tidak berjalan dalam keadaan tidak selamat.
 
 Jika anda deploy di belakang Nginx sahaja pada server yang sama, `TRUSTED_PROXIES=loopback` biasanya memadai.
 

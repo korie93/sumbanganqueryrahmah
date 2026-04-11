@@ -218,6 +218,7 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
   wss.on("connection", async (ws, req) => {
     let activityId: string | null = null;
     let cleanedUp = false;
+    let closeRequested = false;
 
     const markSocketAlive = () => {
       if (!cleanedUp) {
@@ -237,6 +238,7 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
       }
 
       cleanedUp = true;
+      aliveSockets.delete(ws);
       detachSocketLifecycleHandlers();
 
       if (activityId && connectedClients.get(activityId) === ws) {
@@ -264,14 +266,24 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
     };
 
     const closeSocketIfNeeded = () => {
-      if (isTrackableSocket(ws)) {
+      if (closeRequested || !isTrackableSocket(ws)) {
+        return;
+      }
+
+      closeRequested = true;
+      try {
         ws.close();
+      } catch (error) {
+        logger.debug("WebSocket close request failed during cleanup", {
+          activityId,
+          error,
+        });
       }
     };
 
     ws.on("pong", markSocketAlive);
-    ws.on("close", handleSocketClose);
-    ws.on("error", handleSocketError);
+    ws.once("close", handleSocketClose);
+    ws.once("error", handleSocketError);
 
     const url = new URL(req.url!, `http://${req.headers.host}`);
     if (url.searchParams.has("token")) {

@@ -40,7 +40,16 @@ PG_PASSWORD=ganti-dengan-password-db
 PG_DATABASE=sqr_db
 ```
 
-`COLLECTION_PII_ENCRYPTION_KEY` wajib ada di luar strict local development. Tanpanya runtime akan block startup.
+`TWO_FACTOR_ENCRYPTION_KEY` dan `COLLECTION_PII_ENCRYPTION_KEY` wajib ada di luar strict local development. Tanpanya runtime akan block startup walaupun anda belum aktifkan 2FA atau rollout penuh PII retirement.
+
+Jika backup dihidupkan, tambah juga:
+
+```dotenv
+BACKUP_FEATURE_ENABLED=1
+BACKUP_ENCRYPTION_KEY=ganti-dengan-secret-random-yang-berbeza
+BACKUP_ENCRYPTION_KEYS=
+BACKUP_ENCRYPTION_KEY_ID=
+```
 
 ## 2. Guna Ecosystem File Tanpa Secret
 

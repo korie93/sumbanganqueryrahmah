@@ -1,6 +1,8 @@
 import { apiRequest } from "../api-client";
 import type { BackupJobEnqueueResponse, BackupJobRecord } from "@/pages/backup-restore/types";
 
+const BACKUP_EXPORT_TIMEOUT_MS = 5 * 60_000;
+
 export async function createBackup(name: string) {
   const response = await apiRequest("POST", "/api/backups", { name });
   return response.json();
@@ -59,6 +61,8 @@ export async function deleteBackup(id: string) {
 }
 
 export async function exportBackup(id: string): Promise<Blob> {
-  const response = await apiRequest("GET", `/api/backups/${id}/export`);
+  const response = await apiRequest("GET", `/api/backups/${id}/export`, undefined, {
+    timeoutMs: BACKUP_EXPORT_TIMEOUT_MS,
+  });
   return response.blob();
 }

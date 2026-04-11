@@ -25,6 +25,7 @@ import {
   buildRuntimeConfigWarnings,
   hasBackupEncryptionKeyConfigured,
   hasCollectionPiiEncryptionKeyConfigured,
+  hasTwoFactorEncryptionKeyConfigured,
   resolveCookieSecure,
   resolveCorsAllowedOrigins,
   resolvePreviousCollectionPiiSecrets,
@@ -160,6 +161,9 @@ assertRuntimeSafetyGuards({
   }),
   hasCollectionPiiEncryptionKeyConfigured: hasCollectionPiiEncryptionKeyConfigured({
     configuredCollectionPiiEncryptionKey,
+  }),
+  hasTwoFactorEncryptionKeyConfigured: hasTwoFactorEncryptionKeyConfigured({
+    configuredTwoFactorEncryptionKey,
   }),
   seedDefaultUsers,
   localSuperuserCredentialsFileEnabled,
