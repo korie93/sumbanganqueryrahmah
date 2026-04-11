@@ -76,7 +76,7 @@ export function GroupListPanel({
                     type="button"
                     className="inline-flex min-w-0 items-center gap-2 text-left"
                     onClick={() => onToggleExpandGroup(group.id)}
-                    aria-expanded={expanded}
+                    aria-expanded={expanded ? "true" : "false"}
                     aria-controls={memberListId}
                     title={expanded ? "Collapse group members" : "Expand group members"}
                   >
