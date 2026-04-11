@@ -94,12 +94,6 @@
     display: table-footer-group;
   }
 
-  p,
-  li {
-    orphans: 3;
-    widows: 3;
-  }
-
   .no-print,
   [data-print-hidden="true"] {
     display: none !important;
