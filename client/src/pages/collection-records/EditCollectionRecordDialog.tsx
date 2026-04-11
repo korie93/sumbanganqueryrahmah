@@ -112,34 +112,47 @@ export function EditCollectionRecordDialog({
         </DialogHeader>
         <div className="grid gap-4 md:grid-cols-2">
           <div className="space-y-2">
-            <Label>Customer Name</Label>
+            <Label htmlFor="edit-collection-customer-name">Customer Name</Label>
             <Input
+              id="edit-collection-customer-name"
+              name="customerName"
               value={editCustomerName}
               onChange={(event) => onCustomerNameChange(event.target.value)}
+              autoComplete="name"
               disabled={savingEdit}
             />
           </div>
           <div className="space-y-2">
-            <Label>IC Number</Label>
+            <Label htmlFor="edit-collection-ic-number">IC Number</Label>
             <Input
+              id="edit-collection-ic-number"
+              name="customerIcNumber"
               value={editIcNumber}
               onChange={(event) => onIcNumberChange(event.target.value)}
+              autoComplete="off"
               disabled={savingEdit}
             />
           </div>
           <div className="space-y-2">
-            <Label>Customer Phone Number</Label>
+            <Label htmlFor="edit-collection-customer-phone">Customer Phone Number</Label>
             <Input
+              id="edit-collection-customer-phone"
+              name="customerPhoneNumber"
+              type="tel"
               value={editCustomerPhone}
               onChange={(event) => onCustomerPhoneChange(event.target.value)}
+              autoComplete="tel"
               disabled={savingEdit}
             />
           </div>
           <div className="space-y-2">
-            <Label>Account Number</Label>
+            <Label htmlFor="edit-collection-account-number">Account Number</Label>
             <Input
+              id="edit-collection-account-number"
+              name="accountNumber"
               value={editAccountNumber}
               onChange={(event) => onAccountNumberChange(event.target.value)}
+              autoComplete="off"
               disabled={savingEdit}
             />
           </div>
@@ -171,13 +184,16 @@ export function EditCollectionRecordDialog({
             />
           </div>
           <div className="space-y-2">
-            <Label>Amount (RM)</Label>
+            <Label htmlFor="edit-collection-amount">Amount (RM)</Label>
             <Input
+              id="edit-collection-amount"
+              name="collectionAmount"
               type="number"
               min="0"
               step="0.01"
               value={editAmount}
               onChange={(event) => onAmountChange(event.target.value)}
+              autoComplete="off"
               disabled={savingEdit}
             />
           </div>

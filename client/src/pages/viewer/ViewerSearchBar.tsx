@@ -43,9 +43,13 @@ export function ViewerSearchBar({
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
             ref={searchInputRef}
+            id="viewer-search-query"
+            name="viewerSearchQuery"
+            type="search"
             value={search}
             onChange={(event) => onSearchChange(event.target.value)}
             placeholder="Search all rows..."
+            autoComplete="off"
             className="pl-9"
             data-testid="input-search-viewer"
           />

@@ -53,9 +53,13 @@ export function SavedFiltersBar({
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
             ref={searchInputRef}
+            id="saved-imports-search"
+            name="savedImportsSearchQuery"
+            type="search"
             value={searchTerm}
             onChange={(event) => onSearchTermChange(event.target.value)}
             placeholder="Search by name or filename..."
+            autoComplete="off"
             className="h-10 pl-9"
             data-testid="input-search-saved"
           />

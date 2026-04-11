@@ -4,6 +4,7 @@ import { InfoHint } from "@/components/monitor/InfoHint";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { ChaosType } from "@/lib/api";
 
@@ -58,29 +59,45 @@ function MonitorChaosControlsImpl({
 
           <div className="space-y-1.5">
             <div className="flex items-center gap-2">
-              <p className="text-xs uppercase tracking-wide text-muted-foreground">Magnitude</p>
+              <Label
+                htmlFor="monitor-chaos-magnitude"
+                className="text-xs uppercase tracking-wide text-muted-foreground"
+              >
+                Magnitude
+              </Label>
               <InfoHint text="Controls intensity of the selected chaos scenario." />
             </div>
             <Input
+              id="monitor-chaos-magnitude"
+              name="monitorChaosMagnitude"
               type="number"
               inputMode="decimal"
               value={chaosMagnitude}
               onChange={(event) => onChaosMagnitudeChange(event.target.value)}
               placeholder={String(selectedChaosProfile.defaultMagnitude)}
+              autoComplete="off"
             />
           </div>
 
           <div className="space-y-1.5">
             <div className="flex items-center gap-2">
-              <p className="text-xs uppercase tracking-wide text-muted-foreground">Duration (ms)</p>
+              <Label
+                htmlFor="monitor-chaos-duration"
+                className="text-xs uppercase tracking-wide text-muted-foreground"
+              >
+                Duration (ms)
+              </Label>
               <InfoHint text="Controls how long the injected scenario remains active before expiry." />
             </div>
             <Input
+              id="monitor-chaos-duration"
+              name="monitorChaosDurationMs"
               type="number"
               inputMode="numeric"
               value={chaosDurationMs}
               onChange={(event) => onChaosDurationChange(event.target.value)}
               placeholder={String(selectedChaosProfile.defaultDurationMs)}
+              autoComplete="off"
             />
           </div>
         </div>

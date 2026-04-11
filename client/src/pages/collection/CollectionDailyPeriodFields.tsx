@@ -21,8 +21,10 @@ export function CollectionDailyPeriodFields({
   return (
     <div className={wrapperClassName}>
       <div className="space-y-2">
-        <Label>Year</Label>
+        <Label htmlFor="collection-daily-year-input">Year</Label>
         <Input
+          id="collection-daily-year-input"
+          name="collectionDailyYear"
           type="number"
           min={minYear}
           max={maxYear}
@@ -39,8 +41,10 @@ export function CollectionDailyPeriodFields({
         />
       </div>
       <div className="space-y-2">
-        <Label>Month</Label>
+        <Label htmlFor="collection-daily-month-input">Month</Label>
         <Input
+          id="collection-daily-month-input"
+          name="collectionDailyMonth"
           type="number"
           min={1}
           max={12}

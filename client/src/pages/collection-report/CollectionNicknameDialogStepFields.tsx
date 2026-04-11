@@ -45,11 +45,17 @@ export function CollectionNicknameDialogStepFields({
     return (
       <div className="space-y-3">
         <div className="space-y-2">
-          <Label>Staff Nickname</Label>
+          <Label htmlFor="collection-nickname-input">Staff Nickname</Label>
           <Input
+            id="collection-nickname-input"
+            name="collectionNickname"
             value={nicknameInput}
             onChange={(event) => onNicknameInputChange(event.target.value)}
             placeholder="Contoh: SW.NAMA_NO"
+            autoComplete="username"
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
             disabled={submittingNicknameAuth}
           />
         </div>
@@ -67,11 +73,14 @@ export function CollectionNicknameDialogStepFields({
           {getCollectionNicknameSetupDescription(setupMode)}
         </p>
         <div className="space-y-2">
-          <Label>Nickname</Label>
-          <Input value={resolvedNickname} disabled />
+          <Label htmlFor="collection-nickname-setup-readonly">Nickname</Label>
+          <Input id="collection-nickname-setup-readonly" name="collectionNickname" value={resolvedNickname} disabled />
         </div>
         <CollectionNicknamePasswordField
+          autoComplete="new-password"
           disabled={submittingNicknameAuth}
+          inputId="collection-nickname-setup-password"
+          inputName="nicknamePassword"
           label="New Password"
           onChange={onNicknamePasswordChange}
           onToggleVisibility={onToggleSetupPassword}
@@ -80,7 +89,10 @@ export function CollectionNicknameDialogStepFields({
           value={nicknamePassword}
         />
         <CollectionNicknamePasswordField
+          autoComplete="new-password"
           disabled={submittingNicknameAuth}
+          inputId="collection-nickname-setup-confirm-password"
+          inputName="confirmNicknamePassword"
           label="Confirm Password"
           onChange={onConfirmNicknamePasswordChange}
           onToggleVisibility={onToggleSetupConfirmPassword}
@@ -95,11 +107,14 @@ export function CollectionNicknameDialogStepFields({
   return (
     <div className="space-y-3">
       <div className="space-y-2">
-        <Label>Nickname</Label>
-        <Input value={resolvedNickname} disabled />
+        <Label htmlFor="collection-nickname-login-readonly">Nickname</Label>
+        <Input id="collection-nickname-login-readonly" name="collectionNickname" value={resolvedNickname} disabled />
       </div>
       <CollectionNicknamePasswordField
+        autoComplete="current-password"
         disabled={submittingNicknameAuth}
+        inputId="collection-nickname-login-password"
+        inputName="nicknamePassword"
         label="Password"
         onChange={onNicknamePasswordChange}
         onToggleVisibility={onToggleLoginPassword}

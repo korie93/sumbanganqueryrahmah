@@ -99,10 +99,14 @@ export function NicknameAssignmentHeader({
 
       <div className="mb-3 grid gap-2 lg:grid-cols-[minmax(0,1fr)_auto]">
         <Input
+          id="nickname-assignment-search"
+          name="nicknameAssignmentSearchQuery"
+          type="search"
           value={nicknameSearch}
           onChange={(event) => onNicknameSearchChange(event.target.value)}
           placeholder="Cari nickname..."
           enterKeyHint="search"
+          autoComplete="off"
           className={isMobile ? "h-12 rounded-2xl" : undefined}
         />
         <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center" data-floating-ai-avoid="true">

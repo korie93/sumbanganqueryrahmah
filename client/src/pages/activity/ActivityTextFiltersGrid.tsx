@@ -19,9 +19,12 @@ export function ActivityTextFiltersGrid({
         </Label>
         <Input
           id="filter-username"
+          name="activityFilterUsername"
+          type="search"
           placeholder="Search username..."
           value={filters.username || ""}
           onChange={(event) => onFieldChange("username", event.target.value)}
+          autoComplete="off"
           data-testid="input-filter-username"
         />
       </div>
@@ -31,9 +34,12 @@ export function ActivityTextFiltersGrid({
         </Label>
         <Input
           id="filter-ip"
+          name="activityFilterIpAddress"
+          type="search"
           placeholder="Search IP..."
           value={filters.ipAddress || ""}
           onChange={(event) => onFieldChange("ipAddress", event.target.value)}
+          autoComplete="off"
           data-testid="input-filter-ip"
         />
       </div>
@@ -43,9 +49,12 @@ export function ActivityTextFiltersGrid({
         </Label>
         <Input
           id="filter-browser"
+          name="activityFilterBrowser"
+          type="search"
           placeholder="Search browser..."
           value={filters.browser || ""}
           onChange={(event) => onFieldChange("browser", event.target.value)}
+          autoComplete="off"
           data-testid="input-filter-browser"
         />
       </div>

@@ -141,11 +141,15 @@ export function GeneralSearchAdvancedControls({
 
             {filter.operator !== "isEmpty" && filter.operator !== "isNotEmpty" ? (
               <Input
+                id={`general-search-filter-value-${index}`}
+                name={`generalSearchFilterValue${index + 1}`}
+                type="search"
                 value={filter.value}
                 onChange={(event) =>
                   onUpdateFilter(filter.id, { value: event.target.value })
                 }
                 placeholder="Value..."
+                autoComplete="off"
                 className={isMobile ? "h-11 w-full" : "min-w-[150px] flex-1"}
                 data-testid={`input-value-${index}`}
               />

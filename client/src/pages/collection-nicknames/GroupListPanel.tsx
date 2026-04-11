@@ -44,12 +44,16 @@ export function GroupListPanel({
         </p>
       </div>
       <div className="space-y-2">
-        <Label>Admin Nickname Groups</Label>
+        <Label htmlFor="admin-group-search">Admin Nickname Groups</Label>
         <Input
+          id="admin-group-search"
+          name="adminGroupSearchQuery"
+          type="search"
           value={groupSearch}
           onChange={(event) => onGroupSearchChange(event.target.value)}
           placeholder="Cari leader/member..."
           enterKeyHint="search"
+          autoComplete="off"
           className={isMobile ? "h-12 rounded-2xl" : undefined}
         />
       </div>

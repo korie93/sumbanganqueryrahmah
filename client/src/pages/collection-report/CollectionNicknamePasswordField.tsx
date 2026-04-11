@@ -3,7 +3,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 export interface CollectionNicknamePasswordFieldProps {
+  autoComplete?: string;
   disabled: boolean;
+  inputId?: string;
+  inputName?: string;
   label: string;
   onChange: (value: string) => void;
   onToggleVisibility: () => void;
@@ -13,7 +16,10 @@ export interface CollectionNicknamePasswordFieldProps {
 }
 
 export function CollectionNicknamePasswordField({
+  autoComplete,
   disabled,
+  inputId,
+  inputName,
   label,
   onChange,
   onToggleVisibility,
@@ -23,13 +29,16 @@ export function CollectionNicknamePasswordField({
 }: CollectionNicknamePasswordFieldProps) {
   return (
     <div className="space-y-2">
-      <Label>{label}</Label>
+      <Label htmlFor={inputId}>{label}</Label>
       <div className="relative">
         <Input
+          id={inputId}
+          name={inputName}
           type={showPassword ? "text" : "password"}
           value={value}
           onChange={(event) => onChange(event.target.value)}
           placeholder={placeholder}
+          autoComplete={autoComplete}
           className="pr-10"
           disabled={disabled}
         />

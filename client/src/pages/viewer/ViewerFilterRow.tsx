@@ -58,9 +58,13 @@ export function ViewerFilterRow({
       </Select>
 
       <Input
+        id={`viewer-filter-value-${index}`}
+        name={`viewerFilterValue${index + 1}`}
+        type="search"
         value={filter.value}
         onChange={(event) => onUpdateFilter(index, "value", event.target.value)}
         placeholder="Value..."
+        autoComplete="off"
         className="min-w-0 flex-1"
         data-testid={`input-filter-value-${index}`}
       />

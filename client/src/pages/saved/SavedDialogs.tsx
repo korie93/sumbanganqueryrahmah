@@ -146,9 +146,12 @@ export function SavedDialogs({
               ) : null}
             </div>
             <Input
+              id="saved-import-rename"
+              name="savedImportName"
               value={newName}
               onChange={(event) => onNewNameChange(event.target.value)}
               placeholder="New name"
+              autoComplete="off"
               className="h-11"
               data-testid="input-rename"
             />

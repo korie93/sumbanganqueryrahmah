@@ -54,10 +54,13 @@ export function AuditLogsFilterFields({
           </Label>
           <Input
             id="search-text"
+            name="auditLogsSearchText"
+            type="search"
             placeholder="Search in details, resources..."
             value={searchText}
             onChange={(event) => onSearchTextChange(event.target.value)}
             enterKeyHint="search"
+            autoComplete="off"
             autoCapitalize="none"
             data-testid="input-search-text"
           />
@@ -70,9 +73,11 @@ export function AuditLogsFilterFields({
           </Label>
           <Input
             id="performed-by"
+            name="auditLogsPerformedBy"
             placeholder="Username..."
             value={performedByFilter}
             onChange={(event) => onPerformedByFilterChange(event.target.value)}
+            autoComplete="off"
             autoCapitalize="none"
             data-testid="input-performed-by"
           />
@@ -85,9 +90,11 @@ export function AuditLogsFilterFields({
           </Label>
           <Input
             id="target-user"
+            name="auditLogsTargetUser"
             placeholder="Target username..."
             value={targetUserFilter}
             onChange={(event) => onTargetUserFilterChange(event.target.value)}
+            autoComplete="off"
             autoCapitalize="none"
             data-testid="input-target-user"
           />

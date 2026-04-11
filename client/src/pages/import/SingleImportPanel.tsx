@@ -49,7 +49,7 @@ export function SingleImportPanel({
       <div className="glass-wrapper mb-4 p-4 sm:mb-6 sm:p-6" {...loadingBusyProps}>
         <div className="mb-4">
           <div className="mb-2 flex flex-wrap items-center gap-2">
-            <label className="block text-sm font-medium text-foreground">Import Name</label>
+            <label htmlFor="single-import-name" className="block text-sm font-medium text-foreground">Import Name</label>
             {parsedData.length > 0 ? (
               <Badge variant="secondary" className="rounded-full px-2 py-0.5 text-[11px]">
                 {parsedData.length.toLocaleString()} rows ready
@@ -57,9 +57,12 @@ export function SingleImportPanel({
             ) : null}
           </div>
           <Input
+            id="single-import-name"
+            name="singleImportName"
             value={importName}
             onChange={(event) => onImportNameChange(event.target.value)}
             placeholder="Enter a name for this import"
+            autoComplete="off"
             className="h-10 max-w-md"
             data-testid="input-import-name"
             disabled={loading}

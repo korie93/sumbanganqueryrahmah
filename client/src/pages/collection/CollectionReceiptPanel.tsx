@@ -73,6 +73,7 @@ export function CollectionReceiptPanel({
       </label>
       <input
         id={inputId}
+        name="collectionReceiptUpload"
         ref={inputRef}
         type="file"
         accept={accept}
@@ -154,26 +155,35 @@ export function CollectionReceiptPanel({
                     {existingDraft ? (
                       <div className="mt-3 grid gap-2 md:grid-cols-3">
                         <Input
+                          id={`existing-receipt-amount-${receipt.id}`}
+                          name={`existingReceiptAmount${receipt.id}`}
                           value={existingDraft.receiptAmount || ""}
                           onChange={(event) =>
                             onExistingDraftChange?.(receipt.id, { receiptAmount: event.target.value })}
                           placeholder="Receipt Amount (RM)"
                           disabled={disabled || markedForRemoval}
                           inputMode="decimal"
+                          autoComplete="off"
                         />
                         <Input
+                          id={`existing-receipt-date-${receipt.id}`}
+                          name={`existingReceiptDate${receipt.id}`}
                           type="date"
                           value={existingDraft.receiptDate || ""}
                           onChange={(event) =>
                             onExistingDraftChange?.(receipt.id, { receiptDate: event.target.value })}
                           disabled={disabled || markedForRemoval}
+                          autoComplete="off"
                         />
                         <Input
+                          id={`existing-receipt-reference-${receipt.id}`}
+                          name={`existingReceiptReference${receipt.id}`}
                           value={existingDraft.receiptReference || ""}
                           onChange={(event) =>
                             onExistingDraftChange?.(receipt.id, { receiptReference: event.target.value })}
                           placeholder="Receipt Reference"
                           disabled={disabled || markedForRemoval}
+                          autoComplete="off"
                         />
                       </div>
                     ) : null}
@@ -277,27 +287,36 @@ export function CollectionReceiptPanel({
                     {pendingReceiptDrafts[index] ? (
                       <div className="grid gap-2">
                         <Input
+                          id={`pending-receipt-amount-${index}`}
+                          name={`pendingReceiptAmount${index + 1}`}
                           value={pendingReceiptDrafts[index]?.receiptAmount || ""}
                           onChange={(event) =>
                             onPendingDraftChange?.(index, { receiptAmount: event.target.value })}
                           placeholder="Receipt Amount (RM)"
                           disabled={disabled}
                           inputMode="decimal"
+                          autoComplete="off"
                         />
                         <div className="grid gap-2 md:grid-cols-2">
                           <Input
+                            id={`pending-receipt-date-${index}`}
+                            name={`pendingReceiptDate${index + 1}`}
                             type="date"
                             value={pendingReceiptDrafts[index]?.receiptDate || ""}
                             onChange={(event) =>
                               onPendingDraftChange?.(index, { receiptDate: event.target.value })}
                             disabled={disabled}
+                            autoComplete="off"
                           />
                           <Input
+                            id={`pending-receipt-reference-${index}`}
+                            name={`pendingReceiptReference${index + 1}`}
                             value={pendingReceiptDrafts[index]?.receiptReference || ""}
                             onChange={(event) =>
                               onPendingDraftChange?.(index, { receiptReference: event.target.value })}
                             placeholder="Receipt Reference"
                             disabled={disabled}
+                            autoComplete="off"
                           />
                         </div>
                       </div>

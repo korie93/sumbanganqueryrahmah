@@ -59,11 +59,14 @@ export function CollectionNicknameStaffFormDialogs({
             <DialogDescription>Tambah nickname rasmi baharu dan tetapkan role scope.</DialogDescription>
           </DialogHeader>
           <div className="space-y-2">
-            <Label>Nickname</Label>
+            <Label htmlFor="collection-nickname-new-value">Nickname</Label>
             <Input
+              id="collection-nickname-new-value"
+              name="collectionNickname"
               value={newNickname}
               onChange={(event) => onNewNicknameChange(event.target.value)}
               placeholder="Contoh: SW.NAMA_NO"
+              autoComplete="off"
               maxLength={64}
               className={isMobile ? "h-12 rounded-2xl" : undefined}
             />
@@ -113,10 +116,13 @@ export function CollectionNicknameStaffFormDialogs({
             <DialogDescription>Kemaskini nama nickname dan role scope akses nickname.</DialogDescription>
           </DialogHeader>
           <div className="space-y-2">
-            <Label>Nickname</Label>
+            <Label htmlFor="collection-nickname-edit-value">Nickname</Label>
             <Input
+              id="collection-nickname-edit-value"
+              name="collectionNickname"
               value={editValue}
               onChange={(event) => onEditValueChange(event.target.value)}
+              autoComplete="off"
               maxLength={64}
               className={isMobile ? "h-12 rounded-2xl" : undefined}
             />

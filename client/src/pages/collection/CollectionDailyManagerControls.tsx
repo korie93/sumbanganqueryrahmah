@@ -160,8 +160,10 @@ export function CollectionDailyTargetControls({
       )}
     >
       <div className="space-y-1">
-        <Label>Monthly Target (RM)</Label>
+        <Label htmlFor="collection-daily-monthly-target">Monthly Target (RM)</Label>
         <Input
+          id="collection-daily-monthly-target"
+          name="collectionDailyMonthlyTarget"
           type="text"
           inputMode="decimal"
           placeholder="0.00"
