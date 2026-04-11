@@ -72,6 +72,8 @@ export class CollectionRollupRefreshNotificationSubscriber
   private connectPromise: Promise<void> | null = null;
   private reconnectTimer: NodeJS.Timeout | null = null;
   private currentClient: PgNotificationClientLike | null = null;
+  private readonly clientListenerCleanups = new WeakMap<PgNotificationClientLike, () => void>();
+  private readonly closingClients = new WeakSet<PgNotificationClientLike>();
   private notifyCallback: (() => unknown) | null = null;
 
   constructor(options: CollectionRollupRefreshNotificationSubscriberOptions = {}) {
@@ -99,6 +101,7 @@ export class CollectionRollupRefreshNotificationSubscriber
     const activeClient = this.currentClient;
     this.currentClient = null;
     if (activeClient) {
+      this.removeClientListeners(activeClient);
       await this.safeCloseClient(activeClient);
     }
   }
@@ -169,6 +172,11 @@ export class CollectionRollupRefreshNotificationSubscriber
     client.on("notification", handleNotification);
     client.on("error", handleError);
     client.on("end", handleEnd);
+    this.clientListenerCleanups.set(client, () => {
+      client.off?.("notification", handleNotification);
+      client.off?.("error", handleError);
+      client.off?.("end", handleEnd);
+    });
 
     try {
       await client.connect();
@@ -184,9 +192,7 @@ export class CollectionRollupRefreshNotificationSubscriber
         channel: this.channel,
       });
     } catch (error) {
-      client.off?.("notification", handleNotification);
-      client.off?.("error", handleError);
-      client.off?.("end", handleEnd);
+      this.removeClientListeners(client);
       await this.safeCloseClient(client);
       logger.warn("Failed to start collection rollup notification listener; polling fallback remains active", {
         channel: this.channel,
@@ -197,11 +203,31 @@ export class CollectionRollupRefreshNotificationSubscriber
   }
 
   private async handleDisconnect(client: PgNotificationClientLike): Promise<void> {
-    if (this.currentClient === client) {
-      this.currentClient = null;
+    if (this.closingClients.has(client)) {
+      return;
     }
-    await this.safeCloseClient(client);
-    this.scheduleReconnect();
+
+    this.closingClients.add(client);
+    try {
+      if (this.currentClient === client) {
+        this.currentClient = null;
+      }
+      this.removeClientListeners(client);
+      await this.safeCloseClient(client);
+      this.scheduleReconnect();
+    } finally {
+      this.closingClients.delete(client);
+    }
+  }
+
+  private removeClientListeners(client: PgNotificationClientLike): void {
+    const cleanup = this.clientListenerCleanups.get(client);
+    if (!cleanup) {
+      return;
+    }
+
+    cleanup();
+    this.clientListenerCleanups.delete(client);
   }
 
   private scheduleReconnect(): void {

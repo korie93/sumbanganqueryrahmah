@@ -78,6 +78,35 @@ test("CollectionRollupRefreshNotificationSubscriber listens on the queue channel
   assert.equal(client.endCalls, 1);
 });
 
+test("CollectionRollupRefreshNotificationSubscriber removes PostgreSQL listeners on stop", async () => {
+  const client = new FakeNotificationClient();
+  let wakeCount = 0;
+
+  const subscriber = new CollectionRollupRefreshNotificationSubscriber({
+    clientFactory: () => client,
+    reconnectDelayMs: 20,
+  });
+
+  await subscriber.start(() => {
+    wakeCount += 1;
+  });
+
+  assert.equal(client.listenerCount("notification"), 1);
+  assert.equal(client.listenerCount("error"), 1);
+  assert.equal(client.listenerCount("end"), 1);
+
+  await subscriber.stop();
+
+  assert.equal(client.listenerCount("notification"), 0);
+  assert.equal(client.listenerCount("error"), 0);
+  assert.equal(client.listenerCount("end"), 0);
+
+  client.emit("notification", {
+    channel: COLLECTION_ROLLUP_REFRESH_NOTIFICATION_CHANNEL,
+  });
+  assert.equal(wakeCount, 0);
+});
+
 test("CollectionRollupRefreshNotificationSubscriber retries after the initial connection fails", async () => {
   const firstClient = new FakeNotificationClient({
     connectError: new Error("connect failed"),
@@ -101,8 +130,45 @@ test("CollectionRollupRefreshNotificationSubscriber retries after the initial co
   assert.deepEqual(secondClient.listenQueries, [
     `LISTEN ${COLLECTION_ROLLUP_REFRESH_NOTIFICATION_CHANNEL}`,
   ]);
+  assert.equal(firstClient.listenerCount("notification"), 0);
+  assert.equal(firstClient.listenerCount("error"), 0);
+  assert.equal(firstClient.listenerCount("end"), 0);
+  assert.equal(firstClient.endCalls, 1);
 
   await subscriber.stop();
+});
+
+test("CollectionRollupRefreshNotificationSubscriber cleans old listeners before reconnecting after disconnect", async (t) => {
+  const firstClient = new FakeNotificationClient();
+  const secondClient = new FakeNotificationClient();
+  const createdClients: FakeNotificationClient[] = [];
+  t.mock.method(logger, "warn", (() => undefined) as typeof logger.warn);
+
+  const subscriber = new CollectionRollupRefreshNotificationSubscriber({
+    reconnectDelayMs: 20,
+    clientFactory: () => {
+      const client = createdClients.length === 0 ? firstClient : secondClient;
+      createdClients.push(client);
+      return client;
+    },
+  });
+
+  await subscriber.start(() => undefined);
+  firstClient.emit("error", new Error("connection dropped"));
+  await waitFor(() => secondClient.listenQueries.length === 1);
+
+  assert.equal(firstClient.listenerCount("notification"), 0);
+  assert.equal(firstClient.listenerCount("error"), 0);
+  assert.equal(firstClient.listenerCount("end"), 0);
+  assert.equal(firstClient.endCalls, 1);
+  assert.equal(secondClient.listenerCount("notification"), 1);
+  assert.equal(secondClient.listenerCount("error"), 1);
+  assert.equal(secondClient.listenerCount("end"), 1);
+
+  await subscriber.stop();
+  assert.equal(secondClient.listenerCount("notification"), 0);
+  assert.equal(secondClient.listenerCount("error"), 0);
+  assert.equal(secondClient.listenerCount("end"), 0);
 });
 
 test("CollectionRollupRefreshNotificationSubscriber contains notification callback failures", async (t) => {
