@@ -200,6 +200,7 @@ export function useFloatingAILayoutState({
     if (hiddenForAiPage || typeof document === "undefined" || typeof window === "undefined") return;
 
     let frame = 0;
+    let resizeDebounceHandle: number | null = null;
     let scheduled = false;
     let resizeObserver: ResizeObserver | null = null;
     const observedElements = new Set<Element>();
@@ -233,6 +234,17 @@ export function useFloatingAILayoutState({
       });
     };
 
+    const scheduleResizeSync = () => {
+      if (resizeDebounceHandle !== null) {
+        window.clearTimeout(resizeDebounceHandle);
+      }
+
+      resizeDebounceHandle = window.setTimeout(() => {
+        resizeDebounceHandle = null;
+        scheduleSync();
+      }, 80);
+    };
+
     scheduleSync();
 
     let observer: MutationObserver | null = null;
@@ -249,7 +261,7 @@ export function useFloatingAILayoutState({
       });
     }
 
-    window.addEventListener("resize", scheduleSync, { passive: true });
+    window.addEventListener("resize", scheduleResizeSync, { passive: true });
     if (shouldTrackObstacleLayout) {
       window.addEventListener("scroll", scheduleSync, { passive: true });
     }
@@ -257,9 +269,12 @@ export function useFloatingAILayoutState({
     return () => {
       observer?.disconnect();
       resizeObserver?.disconnect();
-      window.removeEventListener("resize", scheduleSync);
+      window.removeEventListener("resize", scheduleResizeSync);
       if (shouldTrackObstacleLayout) {
         window.removeEventListener("scroll", scheduleSync);
+      }
+      if (resizeDebounceHandle !== null) {
+        window.clearTimeout(resizeDebounceHandle);
       }
       if (frame) {
         window.cancelAnimationFrame(frame);

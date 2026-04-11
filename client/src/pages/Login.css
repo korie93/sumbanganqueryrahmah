@@ -1,5 +1,11 @@
 .login-page {
   background: var(--login-layout-bg);
+  --login-content-fade-duration: 1.2s;
+  --login-content-fade-offset: 18px;
+  --login-float-duration: 10s;
+  --login-float-offset: -14px;
+  --login-float-delay-medium: 1.5s;
+  --login-float-delay-slow: 3s;
 }
 
 .login-bg-pattern {
@@ -46,7 +52,7 @@
 }
 
 .login-content {
-  animation: content-fade 1.2s ease-out forwards;
+  animation: content-fade var(--login-content-fade-duration) ease-out forwards;
   opacity: 0;
   will-change: transform, opacity;
 }
@@ -54,7 +60,7 @@
 @keyframes content-fade {
   0% {
     opacity: 0;
-    transform: translateY(18px);
+    transform: translateY(var(--login-content-fade-offset));
   }
 
   100% {
@@ -217,7 +223,7 @@
   }
 
   50% {
-    transform: translateY(-14px);
+    transform: translateY(var(--login-float-offset));
   }
 
   100% {
@@ -226,15 +232,15 @@
 }
 
 .floating-slow {
-  animation: float-slow 10s ease-in-out infinite;
+  animation: float-slow var(--login-float-duration) ease-in-out infinite;
 }
 
 .floating-slow.delay-150 {
-  animation-delay: 1.5s;
+  animation-delay: var(--login-float-delay-medium);
 }
 
 .floating-slow.delay-300 {
-  animation-delay: 3s;
+  animation-delay: var(--login-float-delay-slow);
 }
 
 .low-spec .login-card {
@@ -348,9 +354,23 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .login-bg-orb,
+  .login-bg-effect,
   .login-content,
   .login-card,
   .floating-slow {
     animation: none !important;
+    transition: none !important;
+    will-change: auto !important;
+  }
+
+  .login-bg-orb,
+  .login-content,
+  .floating-slow {
+    transform: none !important;
+  }
+
+  .login-content {
+    opacity: 1 !important;
   }
 }

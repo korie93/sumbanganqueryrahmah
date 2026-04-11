@@ -55,6 +55,31 @@ test("parseCsvBuffer still parses simple CSV rows", () => {
   assert.deepEqual(result.rows, [{ name: "Alice", amount: "10" }]);
 });
 
+test("parseCsvBuffer rejects rows beyond the configured CSV row limit", () => {
+  const result = parseCsvBuffer(
+    Buffer.from("name,amount\nAlice,10\nBob,20\n", "utf8"),
+    { maxRows: 1 },
+  );
+
+  assert.match(String(result.error), /row limit of 1 rows/i);
+  assert.deepEqual(result.rows, []);
+});
+
+test("parseCsvFile stops reading and rejects rows beyond the configured CSV row limit", async (t) => {
+  const fakeStream = new FakeReadableStream();
+  const fakeLineReader = new FakeLineReader(["name,amount", "Alice,10", "Bob,20"]);
+
+  t.mock.method(fs, "createReadStream", () => fakeStream as unknown as fs.ReadStream);
+  t.mock.method(readline, "createInterface", () => fakeLineReader as unknown as readline.Interface);
+
+  const result = await parseCsvFile("customers.csv", { maxRows: 1 });
+
+  assert.match(String(result.error), /row limit of 1 rows/i);
+  assert.deepEqual(result.rows, []);
+  assert.equal(fakeLineReader.closed, true);
+  assert.equal(fakeStream.destroyed, true);
+});
+
 test("parseCsvFile returns a safe file access error when the CSV stream emits an error", async (t) => {
   const fakeStream = new FakeReadableStream();
   const accessError = Object.assign(new Error("permission denied"), { code: "EACCES" });

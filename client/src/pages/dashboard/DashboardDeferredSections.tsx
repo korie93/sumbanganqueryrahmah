@@ -13,17 +13,50 @@ const DashboardUserInsightsGrid = lazy(() =>
   })),
 );
 
-function DashboardSectionFallback({ label }: { label: string }) {
+function DashboardSectionFallback({
+  className,
+  label,
+  visualClassName = "h-[220px]",
+}: {
+  className?: string;
+  label: string;
+  visualClassName?: string;
+}) {
   return (
     <OperationalSectionCard
-      className="bg-background/80"
+      className={`bg-background/80 ${className ?? ""}`}
       contentClassName="space-y-4 p-6"
     >
       <div role="status" aria-live="polite" aria-label={label} className="space-y-4">
         <div className="h-6 w-40 animate-pulse rounded bg-slate-200/80 dark:bg-slate-700/80" />
-        <div className="h-[220px] animate-pulse rounded-xl bg-slate-200/60 dark:bg-slate-800/70" />
+        <div className={`animate-pulse rounded-xl bg-slate-200/60 dark:bg-slate-800/70 ${visualClassName}`} />
       </div>
     </OperationalSectionCard>
+  );
+}
+
+function DashboardChartsFallback({ labelPrefix }: { labelPrefix: string }) {
+  return (
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:gap-6">
+      <DashboardSectionFallback label={`${labelPrefix} login trends`} />
+      <DashboardSectionFallback label={`${labelPrefix} peak hours`} />
+    </div>
+  );
+}
+
+function DashboardUserInsightsFallback({ labelPrefix }: { labelPrefix: string }) {
+  return (
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 lg:gap-6">
+      <DashboardSectionFallback
+        className="lg:col-span-2"
+        label={`${labelPrefix} top active users`}
+        visualClassName="h-[300px]"
+      />
+      <DashboardSectionFallback
+        label={`${labelPrefix} user roles`}
+        visualClassName="h-[260px]"
+      />
+    </div>
   );
 }
 
@@ -140,7 +173,7 @@ export function DashboardDeferredSections({
     <>
       <div ref={chartsSection.triggerRef}>
         {chartsSection.shouldRender ? (
-          <Suspense fallback={<DashboardSectionFallback label="Loading dashboard charts" />}>
+          <Suspense fallback={<DashboardChartsFallback labelPrefix="Loading dashboard charts" />}>
             <DashboardChartsGrid
               onTrendDaysChange={onTrendDaysChange}
               peakHours={peakHours}
@@ -151,12 +184,12 @@ export function DashboardDeferredSections({
             />
           </Suspense>
         ) : (
-          <DashboardSectionFallback label="Dashboard charts will load as you scroll" />
+          <DashboardChartsFallback labelPrefix="Dashboard charts will load as you scroll" />
         )}
       </div>
       <div ref={userInsightsSection.triggerRef}>
         {userInsightsSection.shouldRender ? (
-          <Suspense fallback={<DashboardSectionFallback label="Loading dashboard user insights" />}>
+          <Suspense fallback={<DashboardUserInsightsFallback labelPrefix="Loading dashboard user insights" />}>
             <DashboardUserInsightsGrid
               roleDistribution={roleDistribution}
               roleLoading={roleLoading}
@@ -165,7 +198,7 @@ export function DashboardDeferredSections({
             />
           </Suspense>
         ) : (
-          <DashboardSectionFallback label="Dashboard user insights will load as you scroll" />
+          <DashboardUserInsightsFallback labelPrefix="Dashboard user insights will load as you scroll" />
         )}
       </div>
     </>

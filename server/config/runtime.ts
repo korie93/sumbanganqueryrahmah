@@ -284,6 +284,10 @@ export const runtimeConfig: RuntimeConfig = Object.freeze({
       lowMemoryMode ? 32 * 1024 * 1024 : 128 * 1024 * 1024,
       { min: 1_048_576, max: 536_870_912 },
     ),
+    importCsvMaxRows: readInt("IMPORT_CSV_MAX_ROWS", lowMemoryMode ? 100_000 : 250_000, {
+      min: 1,
+      max: 1_000_000,
+    }),
     importAnalysisTimeoutMs: readInt("IMPORT_ANALYSIS_TIMEOUT_MS", 45_000, { min: 5_000 }),
     collectionRollupListenReconnectMs: readInt("COLLECTION_ROLLUP_LISTEN_RECONNECT_MS", 5_000, { min: 1_000 }),
     httpSlowRequestMs: readInt("HTTP_SLOW_REQUEST_MS", 1_500, { min: 250 }),

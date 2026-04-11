@@ -109,6 +109,7 @@ export type RuntimeConfig = {
     pgPoolWarnCooldownMs: number;
     backupOperationTimeoutMs: number;
     backupMaxPayloadBytes: number;
+    importCsvMaxRows: number;
     importAnalysisTimeoutMs: number;
     collectionRollupListenReconnectMs: number;
     httpSlowRequestMs: number;

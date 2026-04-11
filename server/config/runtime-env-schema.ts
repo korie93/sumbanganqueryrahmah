@@ -111,6 +111,10 @@ const runtimeEnvironmentSchema = z.object({
   PUBLIC_APP_URL: optionalEnvString("PUBLIC_APP_URL"),
   DEFAULT_BODY_LIMIT: optionalEnvString("DEFAULT_BODY_LIMIT", 64),
   IMPORT_BODY_LIMIT: optionalEnvString("IMPORT_BODY_LIMIT", 64),
+  IMPORT_CSV_MAX_ROWS: optionalIntEnv("IMPORT_CSV_MAX_ROWS", {
+    min: 1,
+    max: 1_000_000,
+  }),
   COLLECTION_BODY_LIMIT: optionalEnvString("COLLECTION_BODY_LIMIT", 64),
   CORS_ALLOWED_ORIGINS: optionalEnvString("CORS_ALLOWED_ORIGINS"),
   TRUSTED_PROXIES: optionalEnvString("TRUSTED_PROXIES"),

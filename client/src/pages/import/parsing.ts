@@ -2,7 +2,13 @@ import type { ImportRow, ParsedBulkResult, ParsedPreviewResult } from "@/pages/i
 
 type XlsxModule = typeof import("xlsx");
 
+export const IMPORT_PREVIEW_MAX_CSV_ROWS = 100_000;
+
 let xlsxModulePromise: Promise<XlsxModule> | null = null;
+
+function createCsvRowLimitError() {
+  return `CSV import exceeds the preview row limit of ${IMPORT_PREVIEW_MAX_CSV_ROWS.toLocaleString("en-US")} rows. Split the file into smaller uploads.`;
+}
 
 async function loadXlsx(): Promise<XlsxModule> {
   if (!xlsxModulePromise) {
@@ -88,6 +94,9 @@ async function parseCsvFile(file: File): Promise<ParsedPreviewResult> {
     });
 
     if (Object.values(row).some((value) => value !== "")) {
+      if (rows.length >= IMPORT_PREVIEW_MAX_CSV_ROWS) {
+        return { headers: [], rows: [], error: createCsvRowLimitError() };
+      }
       rows.push(row);
     }
   }

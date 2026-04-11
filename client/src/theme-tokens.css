@@ -1,3 +1,8 @@
+/*
+ * Design token source of truth.
+ * Keep shared visual primitives here and document token family changes in
+ * docs/CSS_ARCHITECTURE.md before pruning broad token groups.
+ */
 /* LIGHT MODE */
 :root {
   --button-outline: rgba(0, 0, 0, 0.1);

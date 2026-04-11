@@ -33,6 +33,9 @@ sha512-+nKZ39+nvK7Qq6i0PvWWRA4j/EkfWOtkP/YhMtupm+lJIiHxUrgTr1CcKv1nBk1rHtkRRQ3O2
 
 This removes install-time dependency on the external vendor CDN while
 preserving the same SheetJS build used by the application import/export flows.
+The tarball metadata has been checked locally: `package/package.json` declares
+`Apache-2.0`, and the archive includes `package/LICENSE` with the Apache
+License 2.0 text.
 If the team later introduces an internal artifact registry, move the same
 tarball there and update `package.json` and `package-lock.json` in one PR.
 

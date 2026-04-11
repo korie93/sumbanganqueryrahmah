@@ -1,5 +1,6 @@
 import { parseCsvBuffer, parseCsvFile } from "./import-upload-csv-utils";
 import { parseExcelBuffer, parseExcelFile } from "./import-upload-excel-utils";
+import { runtimeConfig } from "../config/runtime";
 import {
   isSupportedSpreadsheet,
   stripImportUploadExtension,
@@ -16,7 +17,7 @@ export function parseImportUploadBuffer(filename: string, buffer: Buffer): Parse
   }
 
   if (normalizedFilename.endsWith(".csv")) {
-    return parseCsvBuffer(buffer);
+    return parseCsvBuffer(buffer, { maxRows: runtimeConfig.runtime.importCsvMaxRows });
   }
 
   return parseExcelBuffer(buffer);
@@ -29,7 +30,7 @@ export async function parseImportUploadFile(filename: string, filePath: string):
   }
 
   if (normalizedFilename.endsWith(".csv")) {
-    return parseCsvFile(filePath);
+    return parseCsvFile(filePath, { maxRows: runtimeConfig.runtime.importCsvMaxRows });
   }
 
   return await parseExcelFile(filePath);

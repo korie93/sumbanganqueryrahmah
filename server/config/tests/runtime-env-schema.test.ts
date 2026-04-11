@@ -57,6 +57,23 @@ test("runtime env schema rejects integer values outside configured bounds", () =
   );
 });
 
+test("runtime env schema validates CSV import row limits", () => {
+  assert.doesNotThrow(() => {
+    validateRuntimeEnvironmentSchema({
+      IMPORT_CSV_MAX_ROWS: "100000",
+    });
+  });
+
+  assert.throws(
+    () => {
+      validateRuntimeEnvironmentSchema({
+        IMPORT_CSV_MAX_ROWS: "0",
+      });
+    },
+    /IMPORT_CSV_MAX_ROWS.*at least 1/i,
+  );
+});
+
 test("runtime env schema rejects backup payload limits below the minimum bound", () => {
   assert.throws(
     () => {

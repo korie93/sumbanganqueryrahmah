@@ -20,3 +20,10 @@ Keep `package.json` and `package-lock.json` pointed at:
 ```text
 file:vendor/sheetjs/xlsx-0.20.2.tgz
 ```
+
+License verification:
+
+```text
+package/package.json license: Apache-2.0
+package/LICENSE: Apache License 2.0
+```
