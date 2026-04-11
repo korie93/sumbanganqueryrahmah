@@ -19,7 +19,7 @@ export default function Banned() {
       <section className="relative z-[var(--z-public-auth-main)] max-w-lg w-full" aria-labelledby="banned-page-title">
         <div className="banned-page__halo pointer-events-none absolute -inset-4 rounded-[2rem] blur-2xl" />
         
-        <div className="banned-page__card relative rounded-3xl p-10 backdrop-blur-xl">
+        <div className="banned-page__card relative rounded-3xl p-10 supports-[backdrop-filter]:backdrop-blur-xl">
           <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2">
             <div className="relative">
               <div className="banned-page__shield-glow absolute inset-0 rounded-full blur-xl opacity-50 animate-pulse" />
@@ -59,7 +59,7 @@ export default function Banned() {
               </div>
             </div>
 
-            <div className="banned-page__contact rounded-2xl p-5 backdrop-blur-sm">
+            <div className="banned-page__contact rounded-2xl p-5 supports-[backdrop-filter]:backdrop-blur-sm">
               <p className="banned-page__contact-copy mb-2 text-sm">
                 Jika anda percaya ini berlaku secara tidak sengaja, sila hubungi:
               </p>

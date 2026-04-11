@@ -37,7 +37,7 @@ function MonitorRollupQueueControlsSectionImpl({
 
   return (
     <section>
-      <Card className="border-border/60 bg-background/35 backdrop-blur-sm">
+      <Card className="border-border/60 bg-background/35 supports-[backdrop-filter]:backdrop-blur-sm">
         <CardContent className="space-y-4 p-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>

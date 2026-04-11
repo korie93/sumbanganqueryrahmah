@@ -16,7 +16,7 @@ export default function NotFound({ onNavigateHome, onLoginClick }: NotFoundProps
         <div className="not-found-page__orb--primary pointer-events-none absolute left-1/2 top-1/2 h-72 w-72 -translate-x-1/2 -translate-y-1/2 rounded-full blur-3xl" />
         <div className="not-found-page__orb--secondary pointer-events-none absolute right-10 top-20 hidden h-44 w-44 rounded-full blur-3xl sm:block" />
 
-        <div className="not-found-page__card relative w-full rounded-[2rem] p-6 backdrop-blur-xl sm:p-10">
+        <div className="not-found-page__card relative w-full rounded-[2rem] p-6 supports-[backdrop-filter]:backdrop-blur-xl sm:p-10">
           <div className="not-found-page__icon-shell mx-auto flex h-16 w-16 items-center justify-center rounded-2xl">
             <SearchX className="not-found-page__icon h-8 w-8" />
           </div>

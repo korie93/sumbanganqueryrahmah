@@ -151,7 +151,7 @@ function MonitorTechnicalChartsSectionImpl({
         {pagedChartGroups.items.map((group) => (
           <div
             key={group.title}
-            className="space-y-3 rounded-2xl border border-border/60 bg-background/35 p-4 backdrop-blur-sm"
+            className="space-y-3 rounded-2xl border border-border/60 bg-background/35 p-4 supports-[backdrop-filter]:backdrop-blur-sm"
           >
             <MonitorChartCategoryToggle
               group={group}

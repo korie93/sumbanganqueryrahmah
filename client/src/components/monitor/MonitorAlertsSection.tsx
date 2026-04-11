@@ -194,7 +194,7 @@ function MonitorAlertsSectionImpl({
   return (
     <section>
       <Collapsible open={alertsOpen} onOpenChange={onAlertsOpenChange}>
-        <Card className="border-border/60 bg-background/35 backdrop-blur-sm">
+        <Card className="border-border/60 bg-background/35 supports-[backdrop-filter]:backdrop-blur-sm">
           <CardContent className="p-4">
             <CollapsibleTrigger asChild>
               <button

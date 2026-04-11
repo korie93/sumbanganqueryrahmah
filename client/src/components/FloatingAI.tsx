@@ -188,7 +188,7 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
         >
           <section
             className={cn(
-              "flex h-full w-full flex-col overflow-hidden border bg-white/98 text-slate-900 shadow-xl ring-1 ring-slate-900/8 backdrop-blur-sm dark:bg-slate-950/98 dark:text-card-foreground dark:ring-white/10",
+              "flex h-full w-full flex-col overflow-hidden border bg-white/98 text-slate-900 shadow-xl ring-1 ring-slate-900/8 supports-[backdrop-filter]:backdrop-blur-sm dark:bg-slate-950/98 dark:text-card-foreground dark:ring-white/10",
               shouldShowPanel ? "pointer-events-auto" : "pointer-events-none",
               layoutState.panel.mode === "fullscreen"
                 ? styles.floatingPanelFullscreenSurface
@@ -216,7 +216,7 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
               className={cn(
                 "flex shrink-0 items-center justify-between border-b",
                 isMobile
-                  ? "border-slate-300/70 bg-slate-950/80 text-white backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/88"
+                  ? "border-slate-300/70 bg-slate-950/80 text-white supports-[backdrop-filter]:backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/88"
                   : "border-slate-200/80 bg-gradient-to-r from-sky-500/12 via-slate-100/60 to-transparent dark:border-white/10 dark:via-transparent",
                 isMobile && layoutState.panel.mode === "fullscreen"
                   ? "min-h-16 px-4"

@@ -75,7 +75,7 @@ export function MonitorMetricsFallback() {
           {MONITOR_METRIC_FALLBACK_KEYS.map((key) => (
             <div
               key={`monitor-metric-fallback-${key}`}
-              className="h-72 animate-pulse rounded-2xl border border-border/60 bg-background/35 backdrop-blur-sm"
+              className="h-72 animate-pulse rounded-2xl border border-border/60 bg-background/35 supports-[backdrop-filter]:backdrop-blur-sm"
             />
           ))}
         </div>
@@ -228,7 +228,7 @@ export function MonitorDeferredSectionToggle({
   const buttonClassName = "flex w-full items-start justify-between gap-3 text-left";
 
   return (
-    <div className="rounded-2xl border border-border/60 bg-background/30 p-4 backdrop-blur-sm">
+    <div className="rounded-2xl border border-border/60 bg-background/30 p-4 supports-[backdrop-filter]:backdrop-blur-sm">
       {open ? (
         <button
           type="button"

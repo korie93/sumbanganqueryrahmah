@@ -32,7 +32,7 @@ function TimeSeriesChartImpl({ title, color, unit = "", description, data }: Tim
   const chartData = useMemo(() => buildTimeSeriesChartData(data), [data]);
 
   return (
-    <Card className="border-border/60 bg-background/40 backdrop-blur-sm">
+    <Card className="border-border/60 bg-background/40 supports-[backdrop-filter]:backdrop-blur-sm">
       <CardHeader className="pb-2">
         <CardTitle className="flex items-center gap-2 text-sm font-medium">
           <span>{title}</span>

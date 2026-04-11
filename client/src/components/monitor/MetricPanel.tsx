@@ -39,7 +39,7 @@ function MetricPanelImpl({
   const formatted = formatMetricValue(value, decimals);
 
   return (
-    <Card className="border-border/60 bg-background/55 backdrop-blur-md shadow-sm">
+    <Card className="border-border/60 bg-background/55 shadow-sm supports-[backdrop-filter]:backdrop-blur-md">
       <CardContent className="p-4">
         <div className="flex items-start justify-between gap-3">
           <div>

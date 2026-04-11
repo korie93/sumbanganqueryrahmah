@@ -12,7 +12,7 @@ export function ActivityDesktopLogsHeader({
   return (
     <div
       className={cn(
-        "sticky top-0 z-[var(--z-sticky-header)] grid items-center gap-3 border-b border-border bg-muted/95 px-3 py-3 text-left text-sm font-medium text-muted-foreground backdrop-blur-sm",
+        "sticky top-0 z-[var(--z-sticky-header)] grid items-center gap-3 border-b border-border bg-muted/95 px-3 py-3 text-left text-sm font-medium text-muted-foreground supports-[backdrop-filter]:backdrop-blur-sm",
         gridClassName,
       )}
     >
