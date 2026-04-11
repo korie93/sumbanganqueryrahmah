@@ -93,6 +93,9 @@ export function GeneralSearchDesktopControls({
               }}
               placeholder="Enter IC No., name, or other keywords..."
               autoComplete="off"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
               className="h-12 pl-10 text-base"
               data-testid="input-search"
             />

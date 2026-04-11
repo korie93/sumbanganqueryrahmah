@@ -44,6 +44,11 @@ export function AuditLogsFilterFields({
   searchText,
   targetUserFilter,
 }: AuditLogsFilterFieldsProps) {
+  const actionTypeTriggerId = "audit-logs-action-type";
+  const datePresetTriggerId = "audit-logs-date-preset";
+  const dateFromButtonId = "audit-logs-date-from";
+  const dateToButtonId = "audit-logs-date-to";
+
   return (
     <CardContent className="space-y-5">
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -101,12 +106,12 @@ export function AuditLogsFilterFields({
         </div>
 
         <div className="space-y-2">
-          <Label className="text-sm font-medium flex items-center gap-1">
+          <Label htmlFor={actionTypeTriggerId} className="text-sm font-medium flex items-center gap-1">
             <Info className="h-3.5 w-3.5" />
             Action Type
           </Label>
           <Select value={actionFilter} onValueChange={onActionFilterChange}>
-            <SelectTrigger data-testid="select-action-type">
+            <SelectTrigger id={actionTypeTriggerId} data-testid="select-action-type">
               <SelectValue placeholder="Select action type" />
             </SelectTrigger>
             <SelectContent>
@@ -120,12 +125,12 @@ export function AuditLogsFilterFields({
         </div>
 
         <div className="space-y-2">
-          <Label className="text-sm font-medium flex items-center gap-1">
+          <Label htmlFor={datePresetTriggerId} className="text-sm font-medium flex items-center gap-1">
             <Calendar className="h-3.5 w-3.5" />
             Time Period
           </Label>
           <Select value={datePreset} onValueChange={onDatePresetChange}>
-            <SelectTrigger data-testid="select-date-preset">
+            <SelectTrigger id={datePresetTriggerId} data-testid="select-date-preset">
               <SelectValue placeholder="Select period" />
             </SelectTrigger>
             <SelectContent>
@@ -144,10 +149,11 @@ export function AuditLogsFilterFields({
             <Label className="text-sm font-medium">Custom Date Range</Label>
             <div className="grid gap-2 sm:grid-cols-2">
               <div className="space-y-2">
-                <Label className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                <Label htmlFor={dateFromButtonId} className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
                   From Date
                 </Label>
                 <DatePickerField
+                  buttonId={dateFromButtonId}
                   value={dateFrom}
                   onChange={onDateFromChange}
                   placeholder="Select start date..."
@@ -156,10 +162,11 @@ export function AuditLogsFilterFields({
                 />
               </div>
               <div className="space-y-2">
-                <Label className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                <Label htmlFor={dateToButtonId} className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
                   To Date
                 </Label>
                 <DatePickerField
+                  buttonId={dateToButtonId}
                   value={dateTo}
                   onChange={onDateToChange}
                   placeholder="Select end date..."

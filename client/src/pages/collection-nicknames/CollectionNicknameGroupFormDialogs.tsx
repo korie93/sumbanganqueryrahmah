@@ -38,6 +38,8 @@ export function CollectionNicknameGroupFormDialogs({
   onSaveLeader,
 }: CollectionNicknameGroupFormDialogsProps) {
   const isMobile = useIsMobile();
+  const createLeaderTriggerId = "create-admin-group-leader-nickname";
+  const changeLeaderTriggerId = "change-admin-group-leader-nickname";
 
   return (
     <>
@@ -51,9 +53,9 @@ export function CollectionNicknameGroupFormDialogs({
             <DialogDescription>Pilih leader nickname untuk group admin baharu.</DialogDescription>
           </DialogHeader>
           <div className="space-y-2">
-            <Label>Leader Nickname</Label>
+            <Label htmlFor={createLeaderTriggerId}>Leader Nickname</Label>
             <Select value={createLeaderId} onValueChange={onCreateLeaderIdChange}>
-              <SelectTrigger className={isMobile ? "h-12 rounded-2xl" : undefined}>
+              <SelectTrigger id={createLeaderTriggerId} className={isMobile ? "h-12 rounded-2xl" : undefined}>
                 <SelectValue placeholder="Pilih leader nickname" />
               </SelectTrigger>
               <SelectContent>
@@ -95,9 +97,9 @@ export function CollectionNicknameGroupFormDialogs({
             <DialogDescription>Leader nickname mesti unik dan bertaraf admin.</DialogDescription>
           </DialogHeader>
           <div className="space-y-2">
-            <Label>Leader Nickname</Label>
+            <Label htmlFor={changeLeaderTriggerId}>Leader Nickname</Label>
             <Select value={changeLeaderId} onValueChange={onChangeLeaderIdChange}>
-              <SelectTrigger className={isMobile ? "h-12 rounded-2xl" : undefined}>
+              <SelectTrigger id={changeLeaderTriggerId} className={isMobile ? "h-12 rounded-2xl" : undefined}>
                 <SelectValue placeholder="Pilih leader nickname" />
               </SelectTrigger>
               <SelectContent>

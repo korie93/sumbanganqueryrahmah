@@ -19,11 +19,17 @@ export function ActivityDateRangeFields({
   onDateToOpenChange,
   onFieldChange,
 }: ActivityDateRangeFieldsProps) {
+  const dateFromButtonId = "activity-date-from";
+  const dateToButtonId = "activity-date-to";
+
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
       <div>
-        <Label className="mb-2 block text-sm font-medium">Start Date</Label>
+        <Label htmlFor={dateFromButtonId} className="mb-2 block text-sm font-medium">
+          Start Date
+        </Label>
         <DatePickerField
+          buttonId={dateFromButtonId}
           value={filters.dateFrom || ""}
           onChange={(value) => onFieldChange("dateFrom", value)}
           placeholder="Select date..."
@@ -35,8 +41,11 @@ export function ActivityDateRangeFields({
       </div>
 
       <div>
-        <Label className="mb-2 block text-sm font-medium">End Date</Label>
+        <Label htmlFor={dateToButtonId} className="mb-2 block text-sm font-medium">
+          End Date
+        </Label>
         <DatePickerField
+          buttonId={dateToButtonId}
           value={filters.dateTo || ""}
           onChange={(value) => onFieldChange("dateTo", value)}
           placeholder="Select date..."

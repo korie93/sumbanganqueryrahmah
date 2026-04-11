@@ -34,6 +34,11 @@ export function BackupFilterFields({
   searchName,
   sortBy,
 }: BackupFilterFieldsProps) {
+  const datePresetTriggerId = "backup-date-preset";
+  const sortByTriggerId = "backup-sort-by";
+  const dateFromButtonId = "backup-date-from";
+  const dateToButtonId = "backup-date-to";
+
   return (
     <>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -45,10 +50,14 @@ export function BackupFilterFields({
           <Input
             id="search-name"
             name="backupSearchName"
+            type="search"
             placeholder="Search backup name..."
             value={searchName}
             onChange={(event) => onSearchNameChange(event.target.value)}
             autoComplete="off"
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
             data-testid="input-search-backup-name"
           />
         </div>
@@ -61,21 +70,25 @@ export function BackupFilterFields({
           <Input
             id="created-by"
             name="backupCreatedBy"
+            type="search"
             placeholder="Username..."
             value={createdByFilter}
             onChange={(event) => onCreatedByFilterChange(event.target.value)}
             autoComplete="off"
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
             data-testid="input-created-by"
           />
         </div>
 
         <div className="space-y-2">
-          <Label className="text-sm font-medium flex items-center gap-1">
+          <Label htmlFor={datePresetTriggerId} className="text-sm font-medium flex items-center gap-1">
             <Calendar className="h-3.5 w-3.5" />
             Time Period
           </Label>
           <Select value={datePreset} onValueChange={onDatePresetChange}>
-            <SelectTrigger data-testid="select-backup-date-preset">
+            <SelectTrigger id={datePresetTriggerId} data-testid="select-backup-date-preset">
               <SelectValue placeholder="Select period" />
             </SelectTrigger>
             <SelectContent>
@@ -90,12 +103,12 @@ export function BackupFilterFields({
         </div>
 
         <div className="space-y-2">
-          <Label className="text-sm font-medium flex items-center gap-1">
+          <Label htmlFor={sortByTriggerId} className="text-sm font-medium flex items-center gap-1">
             <Archive className="h-3.5 w-3.5" />
             Sort By
           </Label>
           <Select value={sortBy} onValueChange={onSortByChange}>
-            <SelectTrigger data-testid="select-backup-sort">
+            <SelectTrigger id={sortByTriggerId} data-testid="select-backup-sort">
               <SelectValue placeholder="Select sort order" />
             </SelectTrigger>
             <SelectContent>
@@ -112,8 +125,11 @@ export function BackupFilterFields({
       {datePreset === "custom" ? (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-2">
-            <Label className="text-sm font-medium">From Date</Label>
+            <Label htmlFor={dateFromButtonId} className="text-sm font-medium">
+              From Date
+            </Label>
             <DatePickerField
+              buttonId={dateFromButtonId}
               value={dateFrom}
               onChange={onDateFromChange}
               placeholder="Select start date..."
@@ -122,8 +138,11 @@ export function BackupFilterFields({
             />
           </div>
           <div className="space-y-2">
-            <Label className="text-sm font-medium">To Date</Label>
+            <Label htmlFor={dateToButtonId} className="text-sm font-medium">
+              To Date
+            </Label>
             <DatePickerField
+              buttonId={dateToButtonId}
               value={dateTo}
               onChange={onDateToChange}
               placeholder="Select end date..."

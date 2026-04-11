@@ -40,13 +40,18 @@ export function CollectionRecordsFilters({
   onReset,
 }: CollectionRecordsFiltersProps) {
   const isMobile = useIsMobile();
+  const mobileFromDateButtonId = "collection-records-from-date-mobile-button";
+  const mobileToDateButtonId = "collection-records-to-date-mobile-button";
+  const desktopFromDateButtonId = "collection-records-from-date-button";
+  const desktopToDateButtonId = "collection-records-to-date-button";
 
   if (isMobile) {
     return (
       <div className="space-y-4">
         <div className="space-y-2">
-          <Label>From Date</Label>
+          <Label htmlFor={mobileFromDateButtonId}>From Date</Label>
           <DatePickerField
+            buttonId={mobileFromDateButtonId}
             value={fromDate}
             onChange={onFromDateChange}
             placeholder="Select from date..."
@@ -56,8 +61,9 @@ export function CollectionRecordsFilters({
         </div>
 
         <div className="space-y-2">
-          <Label>To Date</Label>
+          <Label htmlFor={mobileToDateButtonId}>To Date</Label>
           <DatePickerField
+            buttonId={mobileToDateButtonId}
             value={toDate}
             onChange={onToDateChange}
             placeholder="Select to date..."
@@ -67,15 +73,21 @@ export function CollectionRecordsFilters({
         </div>
 
         <div className="space-y-2">
-          <Label>Search</Label>
+          <Label htmlFor="collection-records-search-mobile">Search</Label>
           <div className="relative">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
+              id="collection-records-search-mobile"
               name="collectionRecordsSearchMobile"
+              type="search"
               value={searchInput}
               onChange={(event) => onSearchInputChange(event.target.value)}
               placeholder="Cari nama / IC / akaun / batch / telefon / jumlah bayaran"
               className="h-12 rounded-2xl pl-9 text-base"
+              autoComplete="off"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
             />
           </div>
         </div>
@@ -130,8 +142,9 @@ export function CollectionRecordsFilters({
       }`}
     >
       <div className="space-y-1">
-        <Label>From Date</Label>
+        <Label htmlFor={desktopFromDateButtonId}>From Date</Label>
         <DatePickerField
+          buttonId={desktopFromDateButtonId}
           value={fromDate}
           onChange={onFromDateChange}
           placeholder="Select from date..."
@@ -140,8 +153,9 @@ export function CollectionRecordsFilters({
         />
       </div>
       <div className="space-y-1">
-        <Label>To Date</Label>
+        <Label htmlFor={desktopToDateButtonId}>To Date</Label>
         <DatePickerField
+          buttonId={desktopToDateButtonId}
           value={toDate}
           onChange={onToDateChange}
           placeholder="Select to date..."
@@ -150,15 +164,21 @@ export function CollectionRecordsFilters({
         />
       </div>
       <div className="space-y-1">
-        <Label>Search</Label>
+        <Label htmlFor="collection-records-search">Search</Label>
         <div className="relative">
           <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <Input
+            id="collection-records-search"
             name="collectionRecordsSearch"
+            type="search"
             value={searchInput}
             onChange={(event) => onSearchInputChange(event.target.value)}
             placeholder="Cari nama / IC / akaun / batch / telefon / jumlah bayaran"
             className="pl-9"
+            autoComplete="off"
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
           />
         </div>
       </div>

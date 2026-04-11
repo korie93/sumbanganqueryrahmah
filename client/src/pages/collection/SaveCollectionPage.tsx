@@ -23,6 +23,12 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
   const mutationFeedback = useMutationFeedback();
   const isMobile = useIsMobile();
   const keyboardOpen = useMobileKeyboardState();
+  const customerNameInputId = "save-collection-customer-name";
+  const customerIcNumberInputId = "save-collection-customer-ic-number";
+  const customerPhoneInputId = "save-collection-customer-phone";
+  const accountNumberInputId = "save-collection-account-number";
+  const paymentDateButtonId = "save-collection-payment-date-button";
+  const amountInputId = "save-collection-amount";
   const state = useSaveCollectionPageState({
     staffNickname,
     onSaved,
@@ -44,8 +50,9 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
   const customerFields = (
     <>
       <div className="space-y-2">
-        <Label>Customer Name</Label>
+        <Label htmlFor={customerNameInputId}>Customer Name</Label>
         <Input
+          id={customerNameInputId}
           name="customerName"
           value={state.customerName}
           onChange={(e) => state.setCustomerName(e.target.value)}
@@ -54,8 +61,9 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
         />
       </div>
       <div className="space-y-2">
-        <Label>IC Number</Label>
+        <Label htmlFor={customerIcNumberInputId}>IC Number</Label>
         <Input
+          id={customerIcNumberInputId}
           name="customerIcNumber"
           value={state.icNumber}
           onChange={(e) => state.setIcNumber(e.target.value)}
@@ -65,8 +73,9 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
         />
       </div>
       <div className="space-y-2">
-        <Label>Customer Phone Number</Label>
+        <Label htmlFor={customerPhoneInputId}>Customer Phone Number</Label>
         <Input
+          id={customerPhoneInputId}
           name="customerPhoneNumber"
           type="tel"
           value={state.customerPhone}
@@ -83,8 +92,9 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
   const paymentFields = (
     <>
       <div className="space-y-2">
-        <Label>Account Number</Label>
+        <Label htmlFor={accountNumberInputId}>Account Number</Label>
         <Input
+          id={accountNumberInputId}
           name="accountNumber"
           value={state.accountNumber}
           onChange={(e) => state.setAccountNumber(e.target.value)}
@@ -114,8 +124,9 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
         </select>
       </div>
       <div className="space-y-2">
-        <Label>Payment Date</Label>
+        <Label htmlFor={paymentDateButtonId}>Payment Date</Label>
         <DatePickerField
+          buttonId={paymentDateButtonId}
           value={state.paymentDate}
           onChange={state.setPaymentDate}
           disabled={state.submitting}
@@ -129,8 +140,9 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
         ) : null}
       </div>
       <div className="space-y-2">
-        <Label>Amount (RM)</Label>
+        <Label htmlFor={amountInputId}>Amount (RM)</Label>
         <Input
+          id={amountInputId}
           name="collectionAmount"
           type="number"
           min="0"
@@ -233,7 +245,7 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
             {customerFields}
             {paymentFields}
             <div className="space-y-2 md:col-span-3">
-              <Label>Receipt Upload</Label>
+              <p className="text-sm font-medium leading-none text-foreground">Receipt Upload</p>
               {receiptPanel}
             </div>
           </div>

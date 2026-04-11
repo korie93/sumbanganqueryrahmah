@@ -11,6 +11,9 @@ type CollectionNicknameSummaryDesktopFiltersProps = {
 export function CollectionNicknameSummaryDesktopFilters({
   summaryData,
 }: CollectionNicknameSummaryDesktopFiltersProps) {
+  const fromDateButtonId = "collection-nickname-summary-from-date-button";
+  const toDateButtonId = "collection-nickname-summary-to-date-button";
+
   return (
     <div className="ops-toolbar" data-floating-ai-avoid="true">
       <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_180px_180px_auto] xl:items-end">
@@ -31,8 +34,9 @@ export function CollectionNicknameSummaryDesktopFilters({
         />
 
         <div className="space-y-1">
-          <Label>From Date</Label>
+          <Label htmlFor={fromDateButtonId}>From Date</Label>
           <DatePickerField
+            buttonId={fromDateButtonId}
             value={summaryData.fromDate}
             onChange={summaryData.setFromDate}
             placeholder="Select from date..."
@@ -42,8 +46,9 @@ export function CollectionNicknameSummaryDesktopFilters({
         </div>
 
         <div className="space-y-1">
-          <Label>To Date</Label>
+          <Label htmlFor={toDateButtonId}>To Date</Label>
           <DatePickerField
+            buttonId={toDateButtonId}
             value={summaryData.toDate}
             onChange={summaryData.setToDate}
             placeholder="Select to date..."

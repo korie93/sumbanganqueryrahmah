@@ -28,6 +28,10 @@ export const SettingCard = memo(function SettingCard({
   const isMobile = useIsMobile();
   const disabled = !setting.permission.canEdit || saving;
   const asString = String(value ?? "");
+  const sanitizedSettingKey = setting.key.replace(/[^a-zA-Z0-9_-]+/g, "-");
+  const settingTitleId = `setting-card-title-${sanitizedSettingKey}`;
+  const settingControlId = `setting-card-control-${sanitizedSettingKey}`;
+  const settingControlName = `settingValue-${sanitizedSettingKey}`;
   const actionHint = getSettingActionTooltip(setting);
   const actionHintAriaLabelProps = actionHint ? { "aria-label": actionHint } : {};
   const controlClassName = isMobile ? "w-full" : "w-full max-w-sm";
@@ -73,12 +77,16 @@ export const SettingCard = memo(function SettingCard({
     if (setting.key === "maintenance_message") {
       return (
         <Textarea
+          id={settingControlId}
+          name={settingControlName}
+          aria-labelledby={settingTitleId}
           value={asString}
           disabled={disabled}
           onChange={(event) => handleValueChange(event.target.value)}
           rows={3}
           className={isMobile ? "w-full" : "max-w-2xl"}
           title={actionHint}
+          autoComplete="off"
           {...actionHintAriaLabelProps}
         />
       );
@@ -87,12 +95,16 @@ export const SettingCard = memo(function SettingCard({
     const inputValue = setting.type === "timestamp" ? toDateTimeLocalInputValue(asString) : asString;
     return (
       <Input
+        id={settingControlId}
+        name={settingControlName}
+        aria-labelledby={settingTitleId}
         type={setting.type === "number" ? "number" : setting.type === "timestamp" ? "datetime-local" : "text"}
         value={inputValue}
         disabled={disabled}
         onChange={(event) => handleValueChange(event.target.value)}
         className={controlClassName}
         title={actionHint}
+        autoComplete="off"
         {...actionHintAriaLabelProps}
       />
     );
@@ -107,7 +119,7 @@ export const SettingCard = memo(function SettingCard({
         <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
           <div className="space-y-1.5">
             <div className="flex flex-wrap items-center gap-2">
-              <h3 className="font-semibold">{setting.label}</h3>
+              <h3 id={settingTitleId} className="font-semibold">{setting.label}</h3>
               <span
                 className="text-muted-foreground"
                 title={descriptionLabel}

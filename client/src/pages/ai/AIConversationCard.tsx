@@ -145,12 +145,15 @@ export function AIConversationCard({
 
         <div className="flex items-end gap-2">
           <Textarea
+            id="ai-conversation-query"
+            name="aiConversationQuery"
             value={query}
             onChange={(event) => onQueryChange(event.target.value)}
             placeholder="Taip soalan anda..."
             rows={2}
             disabled={!aiEnabled || isProcessing}
             className={embedded ? "min-h-[72px]" : ""}
+            autoComplete="off"
           />
           <Button onClick={onSend} disabled={!aiEnabled || isProcessing}>
             {isProcessing ? "Memproses..." : "Send"}

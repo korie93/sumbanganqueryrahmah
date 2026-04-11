@@ -108,11 +108,14 @@ export default function AIChat({
       <div className="ai-input-container">
         <Textarea
           ref={textareaRef}
+          id="floating-ai-query"
+          name="floatingAiQuery"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           placeholder={compactMode ? "Taip soalan ringkas..." : "Taip soalan anda..."}
           className="ai-input"
           rows={compactMode ? 1 : 2}
+          autoComplete="off"
           disabled={!aiEnabled || isProcessing}
         />
         <Button

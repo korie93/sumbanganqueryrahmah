@@ -34,6 +34,9 @@ export function CollectionNicknameSummaryMobileFilters({
   remainingNicknameCount,
   setMobileFiltersOpen,
 }: CollectionNicknameSummaryMobileFiltersProps) {
+  const fromDateButtonId = "collection-nickname-summary-mobile-from-date-button";
+  const toDateButtonId = "collection-nickname-summary-mobile-to-date-button";
+
   return (
     <>
       <div
@@ -185,8 +188,9 @@ export function CollectionNicknameSummaryMobileFilters({
 
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
-                  <Label>From Date</Label>
+                  <Label htmlFor={fromDateButtonId}>From Date</Label>
                   <DatePickerField
+                    buttonId={fromDateButtonId}
                     value={summaryData.fromDate}
                     onChange={summaryData.setFromDate}
                     placeholder="Select from date..."
@@ -197,8 +201,9 @@ export function CollectionNicknameSummaryMobileFilters({
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>To Date</Label>
+                  <Label htmlFor={toDateButtonId}>To Date</Label>
                   <DatePickerField
+                    buttonId={toDateButtonId}
                     value={summaryData.toDate}
                     onChange={summaryData.setToDate}
                     placeholder="Select to date..."

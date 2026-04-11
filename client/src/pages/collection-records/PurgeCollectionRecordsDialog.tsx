@@ -62,8 +62,12 @@ export function PurgeCollectionRecordsDialog({
         </div>
 
         <div className="space-y-2">
-          <p className="text-sm font-medium">Sahkan dengan password login superuser</p>
+          <label htmlFor="purge-collection-records-password" className="text-sm font-medium">
+            Sahkan dengan password login superuser
+          </label>
           <Input
+            id="purge-collection-records-password"
+            name="purgeCollectionRecordsPassword"
             type="password"
             autoComplete="current-password"
             value={passwordInput}

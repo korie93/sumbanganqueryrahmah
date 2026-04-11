@@ -102,6 +102,9 @@ export function EditCollectionRecordDialog({
 }: EditCollectionRecordDialogProps) {
   const dialogDescription =
     "Kemaskini maklumat collection, staff nickname, dan receipt yang dipautkan pada rekod ini.";
+  const batchTriggerId = "edit-collection-batch";
+  const paymentDateButtonId = "edit-collection-payment-date-button";
+  const staffNicknameTriggerId = "edit-collection-staff-nickname";
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -157,9 +160,9 @@ export function EditCollectionRecordDialog({
             />
           </div>
           <div className="space-y-2">
-            <Label>Batch</Label>
+            <Label htmlFor={batchTriggerId}>Batch</Label>
             <Select value={editBatch} onValueChange={(value) => onBatchChange(value as CollectionBatch)} disabled={savingEdit}>
-              <SelectTrigger>
+              <SelectTrigger id={batchTriggerId}>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -172,8 +175,9 @@ export function EditCollectionRecordDialog({
             </Select>
           </div>
           <div className="space-y-2">
-            <Label>Payment Date</Label>
+            <Label htmlFor={paymentDateButtonId}>Payment Date</Label>
             <DatePickerField
+              buttonId={paymentDateButtonId}
               value={editPaymentDate}
               onChange={onPaymentDateChange}
               disabled={savingEdit}
@@ -198,13 +202,13 @@ export function EditCollectionRecordDialog({
             />
           </div>
           <div className="space-y-2">
-            <Label>Staff Nickname</Label>
+            <Label htmlFor={staffNicknameTriggerId}>Staff Nickname</Label>
             <Select
               value={editStaffNickname}
               onValueChange={onStaffNicknameChange}
               disabled={savingEdit || loadingNicknames}
             >
-              <SelectTrigger>
+              <SelectTrigger id={staffNicknameTriggerId}>
                 <SelectValue placeholder="Pilih staff nickname" />
               </SelectTrigger>
               <SelectContent>
@@ -227,7 +231,7 @@ export function EditCollectionRecordDialog({
             </Select>
           </div>
           <div className="space-y-2 md:col-span-2">
-            <Label>Receipt Upload</Label>
+            <p className="text-sm font-medium leading-none text-foreground">Receipt Upload</p>
             <CollectionReceiptPanel
               pendingFiles={editNewReceiptFiles}
               pendingReceiptDrafts={editPendingReceiptDrafts}

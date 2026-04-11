@@ -10,6 +10,7 @@ interface DatePickerFieldProps {
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
+  buttonId?: string;
   buttonTestId?: string;
   ariaLabel?: string;
   className?: string;
@@ -41,6 +42,7 @@ export function DatePickerField({
   value,
   onChange,
   placeholder = "Select date...",
+  buttonId,
   buttonTestId,
   ariaLabel,
   className,
@@ -61,6 +63,7 @@ export function DatePickerField({
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button
+          id={buttonId}
           type="button"
           variant="outline"
           disabled={disabled}

@@ -156,6 +156,9 @@ export function GeneralSearchMobileControls({
                 }}
                 placeholder="Enter IC No., name, or other keywords..."
                 autoComplete="off"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
                 className="h-11 rounded-xl pl-9 text-sm"
                 data-testid="input-search"
               />
@@ -272,6 +275,9 @@ export function GeneralSearchMobileControls({
                     }}
                     placeholder="Enter IC No., name, or other keywords..."
                     autoComplete="off"
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    spellCheck={false}
                     className="h-12 rounded-2xl pl-10 text-base"
                   />
                 </div>

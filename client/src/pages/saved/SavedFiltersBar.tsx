@@ -60,6 +60,9 @@ export function SavedFiltersBar({
             onChange={(event) => onSearchTermChange(event.target.value)}
             placeholder="Search by name or filename..."
             autoComplete="off"
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
             className="h-10 pl-9"
             data-testid="input-search-saved"
           />

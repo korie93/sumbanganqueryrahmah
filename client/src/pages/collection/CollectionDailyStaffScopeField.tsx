@@ -31,7 +31,7 @@ export function CollectionDailyStaffScopeField({
 
   return (
     <div className="space-y-2">
-      <Label>Staff Nickname</Label>
+      <Label htmlFor="collection-daily-current-username">Staff Nickname</Label>
       {canManage ? (
         <Suspense
           fallback={(
@@ -56,7 +56,14 @@ export function CollectionDailyStaffScopeField({
           />
         </Suspense>
       ) : (
-        <Input value={currentUsername} readOnly className={readOnlyClassName} />
+        <Input
+          id="collection-daily-current-username"
+          name="collectionDailyCurrentUsername"
+          value={currentUsername}
+          readOnly
+          autoComplete="username"
+          className={readOnlyClassName}
+        />
       )}
     </div>
   );

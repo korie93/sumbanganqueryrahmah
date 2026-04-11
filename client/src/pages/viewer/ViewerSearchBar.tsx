@@ -50,6 +50,9 @@ export function ViewerSearchBar({
             onChange={(event) => onSearchChange(event.target.value)}
             placeholder="Search all rows..."
             autoComplete="off"
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
             className="pl-9"
             data-testid="input-search-viewer"
           />
