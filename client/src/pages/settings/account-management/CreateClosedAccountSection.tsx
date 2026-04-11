@@ -47,8 +47,11 @@ export function CreateClosedAccountSection({
       <CardContent className="space-y-4">
         <div className="grid gap-4 xl:grid-cols-2">
           <div className="space-y-2">
-            <p className="text-sm font-medium">Full name</p>
+            <label htmlFor="create-closed-account-full-name" className="text-sm font-medium">
+              Full name
+            </label>
             <Input
+              id="create-closed-account-full-name"
               name="closedAccountFullName"
               value={createFullNameInput}
               onChange={(event) => onCreateFullNameInputChange(event.target.value)}
@@ -58,8 +61,11 @@ export function CreateClosedAccountSection({
             />
           </div>
           <div className="space-y-2">
-            <p className="text-sm font-medium">Username</p>
+            <label htmlFor="create-closed-account-username" className="text-sm font-medium">
+              Username
+            </label>
             <Input
+              id="create-closed-account-username"
               name="closedAccountUsername"
               value={createUsernameInput}
               onChange={(event) => onCreateUsernameInputChange(event.target.value)}
@@ -72,8 +78,11 @@ export function CreateClosedAccountSection({
             />
           </div>
           <div className="space-y-2">
-            <p className="text-sm font-medium">Email</p>
+            <label htmlFor="create-closed-account-email" className="text-sm font-medium">
+              Email
+            </label>
             <Input
+              id="create-closed-account-email"
               name="closedAccountEmail"
               type="email"
               value={createEmailInput}

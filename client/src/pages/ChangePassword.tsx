@@ -171,6 +171,8 @@ export default function ChangePasswordPage({
       </div>
 
       <PublicAuthInput
+        id="change-password-current-password"
+        name="currentPassword"
         type="password"
         value={currentPassword}
         onChange={(event) => {
@@ -179,6 +181,7 @@ export default function ChangePasswordPage({
           setError("");
         }}
         placeholder="Kata laluan semasa"
+        autoComplete="current-password"
         disabled={loading}
         {...currentPasswordInvalidProps}
       />
@@ -188,6 +191,8 @@ export default function ChangePasswordPage({
         </p>
       ) : null}
       <PublicAuthInput
+        id="change-password-new-password"
+        name="newPassword"
         type="password"
         value={newPassword}
         onChange={(event) => {
@@ -196,6 +201,7 @@ export default function ChangePasswordPage({
           setError("");
         }}
         placeholder="Kata laluan baharu"
+        autoComplete="new-password"
         disabled={loading}
         {...newPasswordInvalidProps}
       />
@@ -205,6 +211,8 @@ export default function ChangePasswordPage({
         </p>
       ) : null}
       <PublicAuthInput
+        id="change-password-confirm-password"
+        name="confirmPassword"
         type="password"
         value={confirmPassword}
         onChange={(event) => {
@@ -213,6 +221,7 @@ export default function ChangePasswordPage({
           setError("");
         }}
         placeholder="Sahkan kata laluan baharu"
+        autoComplete="new-password"
         disabled={loading}
         {...confirmPasswordInvalidProps}
       />

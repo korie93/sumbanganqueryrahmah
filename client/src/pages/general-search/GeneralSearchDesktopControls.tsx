@@ -83,12 +83,16 @@ export function GeneralSearchDesktopControls({
           <div className="relative">
             <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
             <Input
+              id="general-search-desktop-query"
+              name="generalSearchQuery"
+              type="search"
               value={query}
               onChange={(event) => onQueryChange(event.target.value)}
               onKeyDown={(event) => {
                 if (event.key === "Enter") onSearch();
               }}
               placeholder="Enter IC No., name, or other keywords..."
+              autoComplete="off"
               className="h-12 pl-10 text-base"
               data-testid="input-search"
             />

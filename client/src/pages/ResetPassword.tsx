@@ -165,6 +165,8 @@ export default function ResetPasswordPage() {
             <div><span className="font-semibold text-white">Tamat Tempoh:</span> {formatExpiry(reset.expiresAt)}</div>
           </div>
           <PublicAuthInput
+            id="reset-password-new-password"
+            name="newPassword"
             type="password"
             value={newPassword}
             onChange={(event) => {
@@ -173,6 +175,7 @@ export default function ResetPasswordPage() {
               setError("");
             }}
             placeholder="Kata laluan baharu"
+            autoComplete="new-password"
             disabled={loading}
             {...newPasswordInvalidProps}
           />
@@ -182,6 +185,8 @@ export default function ResetPasswordPage() {
             </p>
           ) : null}
           <PublicAuthInput
+            id="reset-password-confirm-password"
+            name="confirmPassword"
             type="password"
             value={confirmPassword}
             onChange={(event) => {
@@ -190,6 +195,7 @@ export default function ResetPasswordPage() {
               setError("");
             }}
             placeholder="Sahkan kata laluan baharu"
+            autoComplete="new-password"
             disabled={loading}
             {...confirmPasswordInvalidProps}
           />

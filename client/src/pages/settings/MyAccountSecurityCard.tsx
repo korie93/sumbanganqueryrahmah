@@ -121,8 +121,12 @@ export function MyAccountSecurityCard({
               </div>
               <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-end">
                 <div className="space-y-2">
-                  <p className="text-sm font-medium">Username</p>
+                  <label htmlFor="my-account-username" className="text-sm font-medium">
+                    Username
+                  </label>
                   <Input
+                    id="my-account-username"
+                    name="accountUsername"
                     value={usernameInput}
                     onChange={(event) => onUsernameInputChange(event.target.value)}
                     disabled={securityBusy}
@@ -142,8 +146,10 @@ export function MyAccountSecurityCard({
               </div>
 
               <div className="space-y-2">
-                <p className="text-sm font-medium">Role (read only)</p>
-                <Input value={currentUserRole} disabled />
+                <label htmlFor="my-account-role" className="text-sm font-medium">
+                  Role (read only)
+                </label>
+                <Input id="my-account-role" name="accountRole" value={currentUserRole} disabled />
               </div>
             </div>
 
@@ -156,8 +162,12 @@ export function MyAccountSecurityCard({
               </div>
               <div className="grid gap-4 md:grid-cols-3">
                 <div className="space-y-2">
-                  <p className="text-sm font-medium">Current Password</p>
+                  <label htmlFor="my-account-current-password" className="text-sm font-medium">
+                    Current Password
+                  </label>
                   <Input
+                    id="my-account-current-password"
+                    name="currentPassword"
                     type="password"
                     value={currentPasswordInput}
                     onChange={(event) => onCurrentPasswordInputChange(event.target.value)}
@@ -166,8 +176,12 @@ export function MyAccountSecurityCard({
                   />
                 </div>
                 <div className="space-y-2">
-                  <p className="text-sm font-medium">New Password</p>
+                  <label htmlFor="my-account-new-password" className="text-sm font-medium">
+                    New Password
+                  </label>
                   <Input
+                    id="my-account-new-password"
+                    name="newPassword"
                     type="password"
                     value={newPasswordInput}
                     onChange={(event) => onNewPasswordInputChange(event.target.value)}
@@ -176,8 +190,12 @@ export function MyAccountSecurityCard({
                   />
                 </div>
                 <div className="space-y-2">
-                  <p className="text-sm font-medium">Confirm Password</p>
+                  <label htmlFor="my-account-confirm-password" className="text-sm font-medium">
+                    Confirm Password
+                  </label>
                   <Input
+                    id="my-account-confirm-password"
+                    name="confirmPassword"
                     type="password"
                     value={confirmPasswordInput}
                     onChange={(event) => onConfirmPasswordInputChange(event.target.value)}
@@ -217,8 +235,12 @@ export function MyAccountSecurityCard({
 
                 <div className="grid gap-4 md:grid-cols-2">
                   <div className="space-y-2">
-                    <p className="text-sm font-medium">Current Password</p>
+                    <label htmlFor="my-account-two-factor-password" className="text-sm font-medium">
+                      Current Password
+                    </label>
                     <Input
+                      id="my-account-two-factor-password"
+                      name="twoFactorCurrentPassword"
                       type="password"
                       value={twoFactorPasswordInput}
                       onChange={(event) => onTwoFactorPasswordInputChange(event.target.value)}
@@ -227,8 +249,12 @@ export function MyAccountSecurityCard({
                     />
                   </div>
                   <div className="space-y-2">
-                    <p className="text-sm font-medium">Authenticator Code</p>
+                    <label htmlFor="my-account-two-factor-code" className="text-sm font-medium">
+                      Authenticator Code
+                    </label>
                     <Input
+                      id="my-account-two-factor-code"
+                      name="twoFactorAuthenticatorCode"
                       inputMode="numeric"
                       placeholder="000000"
                       value={twoFactorCodeInput}
@@ -247,22 +273,50 @@ export function MyAccountSecurityCard({
                     </p>
                     <div className="grid gap-3 md:grid-cols-2">
                       <div className="space-y-2">
-                        <p className="text-sm font-medium">Issuer</p>
-                        <Input value={twoFactorSetupIssuer} readOnly />
+                        <label htmlFor="my-account-two-factor-issuer" className="text-sm font-medium">
+                          Issuer
+                        </label>
+                        <Input
+                          id="my-account-two-factor-issuer"
+                          name="twoFactorSetupIssuer"
+                          value={twoFactorSetupIssuer}
+                          readOnly
+                        />
                       </div>
                       <div className="space-y-2">
-                        <p className="text-sm font-medium">Account Name</p>
-                        <Input value={twoFactorSetupAccountName} readOnly />
+                        <label htmlFor="my-account-two-factor-account-name" className="text-sm font-medium">
+                          Account Name
+                        </label>
+                        <Input
+                          id="my-account-two-factor-account-name"
+                          name="twoFactorSetupAccountName"
+                          value={twoFactorSetupAccountName}
+                          readOnly
+                        />
                       </div>
                     </div>
                     <div className="space-y-2">
-                      <p className="text-sm font-medium">Authenticator Secret</p>
-                      <Input value={twoFactorSetupSecret} readOnly />
+                      <label htmlFor="my-account-two-factor-secret" className="text-sm font-medium">
+                        Authenticator Secret
+                      </label>
+                      <Input
+                        id="my-account-two-factor-secret"
+                        name="twoFactorSetupSecret"
+                        value={twoFactorSetupSecret}
+                        readOnly
+                      />
                     </div>
                     {twoFactorSetupUri ? (
                       <div className="space-y-2">
-                        <p className="text-sm font-medium">OTP Auth URI</p>
-                        <Input value={twoFactorSetupUri} readOnly />
+                        <label htmlFor="my-account-two-factor-uri" className="text-sm font-medium">
+                          OTP Auth URI
+                        </label>
+                        <Input
+                          id="my-account-two-factor-uri"
+                          name="twoFactorSetupUri"
+                          value={twoFactorSetupUri}
+                          readOnly
+                        />
                       </div>
                     ) : null}
                   </div>

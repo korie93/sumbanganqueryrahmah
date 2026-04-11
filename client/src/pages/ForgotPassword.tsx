@@ -60,6 +60,8 @@ export default function ForgotPasswordPage() {
         <>
           <div className="space-y-2">
             <PublicAuthInput
+              id="forgot-password-identifier"
+              name="identifier"
               value={identifier}
               onChange={(event) => {
                 setIdentifier(event.target.value);
@@ -67,6 +69,10 @@ export default function ForgotPasswordPage() {
                 setError("");
               }}
               placeholder="Username atau emel"
+              autoComplete="username"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
               disabled={loading}
               {...identifierInvalidProps}
             />

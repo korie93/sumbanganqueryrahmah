@@ -44,9 +44,11 @@ export function BackupCreateDialog({
             <Label htmlFor="backup-name">Backup Name</Label>
             <Input
               id="backup-name"
+              name="backupName"
               placeholder="Example: Daily Backup 07-12-2025"
               value={backupName}
               onChange={(event) => onBackupNameChange(event.target.value)}
+              autoComplete="off"
               data-testid="input-backup-name"
             />
           </div>

@@ -146,12 +146,16 @@ export function GeneralSearchMobileControls({
             <div className="relative">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
+                id="general-search-mobile-query"
+                name="generalSearchQuery"
+                type="search"
                 value={query}
                 onChange={(event) => onQueryChange(event.target.value)}
                 onKeyDown={(event) => {
                   if (event.key === "Enter") onSearch();
                 }}
                 placeholder="Enter IC No., name, or other keywords..."
+                autoComplete="off"
                 className="h-11 rounded-xl pl-9 text-sm"
                 data-testid="input-search"
               />
@@ -255,6 +259,9 @@ export function GeneralSearchMobileControls({
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
                   <Input
+                    id="general-search-sheet-query"
+                    name="generalSearchQuery"
+                    type="search"
                     value={query}
                     onChange={(event) => onQueryChange(event.target.value)}
                     onKeyDown={(event) => {
@@ -264,6 +271,7 @@ export function GeneralSearchMobileControls({
                       }
                     }}
                     placeholder="Enter IC No., name, or other keywords..."
+                    autoComplete="off"
                     className="h-12 rounded-2xl pl-10 text-base"
                   />
                 </div>

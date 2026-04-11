@@ -242,6 +242,8 @@ export default function ActivateAccountPage() {
             <div><span className="font-semibold text-white">Tamat Tempoh:</span> {formatExpiry(activation.expiresAt)}</div>
           </div>
           <PublicAuthInput
+            id="activate-account-new-password"
+            name="newPassword"
             type="password"
             value={newPassword}
             onChange={(event) => {
@@ -251,6 +253,7 @@ export default function ActivateAccountPage() {
             }}
             onKeyDown={onPasswordKeyDown}
             placeholder="Kata laluan baharu"
+            autoComplete="new-password"
             autoFocus
             disabled={loading}
             {...newPasswordInvalidProps}
@@ -261,6 +264,8 @@ export default function ActivateAccountPage() {
             </p>
           ) : null}
           <PublicAuthInput
+            id="activate-account-confirm-password"
+            name="confirmPassword"
             type="password"
             value={confirmPassword}
             onChange={(event) => {
@@ -270,6 +275,7 @@ export default function ActivateAccountPage() {
             }}
             onKeyDown={onPasswordKeyDown}
             placeholder="Sahkan kata laluan baharu"
+            autoComplete="new-password"
             disabled={loading}
             {...confirmPasswordInvalidProps}
           />

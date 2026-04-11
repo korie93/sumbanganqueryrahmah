@@ -44,9 +44,11 @@ export function BackupFilterFields({
           </Label>
           <Input
             id="search-name"
+            name="backupSearchName"
             placeholder="Search backup name..."
             value={searchName}
             onChange={(event) => onSearchNameChange(event.target.value)}
+            autoComplete="off"
             data-testid="input-search-backup-name"
           />
         </div>
@@ -58,9 +60,11 @@ export function BackupFilterFields({
           </Label>
           <Input
             id="created-by"
+            name="backupCreatedBy"
             placeholder="Username..."
             value={createdByFilter}
             onChange={(event) => onCreatedByFilterChange(event.target.value)}
+            autoComplete="off"
             data-testid="input-created-by"
           />
         </div>

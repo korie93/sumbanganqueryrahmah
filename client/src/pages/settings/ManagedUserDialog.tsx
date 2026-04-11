@@ -83,27 +83,47 @@ export function ManagedUserDialog({
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
-              <p className="text-sm font-medium">Full Name</p>
+              <label htmlFor="managed-user-full-name" className="text-sm font-medium">
+                Full Name
+              </label>
               <Input
+                id="managed-user-full-name"
                 name="managedUserFullName"
+                autoComplete="name"
                 value={managedFullNameInput}
                 onChange={(event) => onManagedFullNameInputChange(event.target.value)}
                 disabled={managedSaving}
               />
             </div>
             <div className="space-y-2">
-              <p className="text-sm font-medium">Username</p>
+              <label htmlFor="managed-user-username" className="text-sm font-medium">
+                Username
+              </label>
               <Input
+                id="managed-user-username"
                 name="managedUserUsername"
+                autoComplete="username"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
                 value={managedUsernameInput}
                 onChange={(event) => onManagedUsernameInputChange(event.target.value)}
                 disabled={managedSaving}
               />
             </div>
             <div className="space-y-2">
-              <p className="text-sm font-medium">Email</p>
+              <label htmlFor="managed-user-email" className="text-sm font-medium">
+                Email
+              </label>
               <Input
+                id="managed-user-email"
                 name="managedUserEmail"
+                type="email"
+                inputMode="email"
+                autoComplete="email"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
                 value={managedEmailInput}
                 onChange={(event) => onManagedEmailInputChange(event.target.value)}
                 disabled={managedSaving}
