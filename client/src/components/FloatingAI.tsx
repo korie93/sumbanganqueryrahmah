@@ -1,4 +1,4 @@
-import { Suspense, lazy, type ReactNode, type Ref } from "react";
+import { Suspense, lazy, useCallback, type MouseEvent, type ReactNode, type Ref } from "react";
 import { Bot, Minimize2 } from "lucide-react";
 import { useLocation } from "wouter";
 import { Badge } from "@/components/ui/badge";
@@ -32,21 +32,8 @@ function FloatingRootContainer({
   hidden: boolean;
   children: ReactNode;
 }) {
-  return hidden ? (
-    <div
-      ref={rootRef}
-      className={className}
-      aria-hidden="true"
-      hidden
-    >
-      {children}
-    </div>
-  ) : (
-    <div
-      ref={rootRef}
-      className={className}
-      aria-hidden="false"
-    >
+  return (
+    <div ref={rootRef} className={className} hidden={hidden}>
       {children}
     </div>
   );
@@ -61,19 +48,8 @@ function FloatingPanelShell({
   hidden: boolean;
   children: ReactNode;
 }) {
-  return hidden ? (
-    <div
-      hidden
-      aria-hidden="true"
-      className={className}
-    >
-      {children}
-    </div>
-  ) : (
-    <div
-      aria-hidden="false"
-      className={className}
-    >
+  return (
+    <div hidden={hidden} className={className}>
       {children}
     </div>
   );
@@ -88,18 +64,8 @@ function FloatingTriggerShell({
   hidden: boolean;
   children: ReactNode;
 }) {
-  return hidden ? (
-    <div
-      className={className}
-      aria-hidden="true"
-    >
-      {children}
-    </div>
-  ) : (
-    <div
-      className={className}
-      aria-hidden="false"
-    >
+  return (
+    <div className={className} hidden={hidden}>
       {children}
     </div>
   );
@@ -153,6 +119,14 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
   const shouldShowPanel = shouldKeepPanelMounted && isOpen && !layoutState.rootHidden;
 
   const minimizedStatus = resolveFloatingAIMinimizedStatus(aiStatus);
+  const handleTriggerToggleClick = useCallback((event: MouseEvent<HTMLButtonElement>) => {
+    event.currentTarget.blur();
+    handleToggle();
+  }, [handleToggle]);
+  const handlePanelMinimizeClick = useCallback((event: MouseEvent<HTMLButtonElement>) => {
+    event.currentTarget.blur();
+    handleMinimize();
+  }, [handleMinimize]);
 
   if (hiddenForAiPage) return null;
 
@@ -274,7 +248,7 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
                         ? "h-11 w-11"
                         : "h-8 w-8",
                   )}
-                  onClick={handleMinimize}
+                  onClick={handlePanelMinimizeClick}
                   aria-label="Minimize AI panel"
                 >
                   <Minimize2 className="h-4 w-4" />
@@ -328,7 +302,7 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
         ) : null}
         <button
           type="button"
-          onClick={handleToggle}
+          onClick={handleTriggerToggleClick}
           title="AI SQR"
           className={cn(
             "pointer-events-auto relative flex items-center justify-center rounded-full border border-sky-300/30 bg-sky-500 text-white shadow-[0_18px_38px_rgba(14,165,233,0.33)] transition-transform hover:scale-[1.03]",
