@@ -10,6 +10,7 @@ import type { CollectionDailyUser } from "@/lib/api";
 import type { EditableCalendarDay } from "@/pages/collection/CollectionDailyShared";
 
 type CollectionDailyUserFilterControlProps = {
+  triggerId: string;
   userPopoverOpen: boolean;
   onUserPopoverOpenChange: (open: boolean) => void;
   loadingUsers: boolean;
@@ -25,6 +26,7 @@ type CollectionDailyUserFilterControlProps = {
 };
 
 export function CollectionDailyUserFilterControl({
+  triggerId,
   userPopoverOpen,
   onUserPopoverOpenChange,
   loadingUsers,
@@ -44,6 +46,7 @@ export function CollectionDailyUserFilterControl({
     <Popover open={userPopoverOpen} onOpenChange={onUserPopoverOpenChange}>
       <PopoverTrigger asChild>
         <Button
+          id={triggerId}
           variant="outline"
           className={cn(
             "w-full justify-between",

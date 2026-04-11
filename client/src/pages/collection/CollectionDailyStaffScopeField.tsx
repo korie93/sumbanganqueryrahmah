@@ -28,10 +28,11 @@ export function CollectionDailyStaffScopeField({
 }: CollectionDailyStaffScopeFieldProps) {
   const fallbackClassName = isMobile ? "h-12 rounded-2xl" : "h-10 rounded-md";
   const readOnlyClassName = isMobile ? "h-12 rounded-2xl" : undefined;
+  const fieldId = "collection-daily-current-username";
 
   return (
     <div className="space-y-2">
-      <Label htmlFor="collection-daily-current-username">Staff Nickname</Label>
+      <Label htmlFor={fieldId}>Staff Nickname</Label>
       {canManage ? (
         <Suspense
           fallback={(
@@ -41,6 +42,7 @@ export function CollectionDailyStaffScopeField({
           )}
         >
           <CollectionDailyUserFilterControl
+            triggerId={fieldId}
             userPopoverOpen={userPopoverOpen}
             onUserPopoverOpenChange={onUserPopoverOpenChange}
             loadingUsers={loadingUsers}
@@ -57,7 +59,7 @@ export function CollectionDailyStaffScopeField({
         </Suspense>
       ) : (
         <Input
-          id="collection-daily-current-username"
+          id={fieldId}
           name="collectionDailyCurrentUsername"
           value={currentUsername}
           readOnly
