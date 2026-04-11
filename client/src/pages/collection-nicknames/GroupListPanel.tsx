@@ -65,6 +65,12 @@ export function GroupListPanel({
             const members = (group.memberNicknames || [])
               .slice()
               .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+            const groupToggleContent = (
+              <>
+                <ChevronRight className={`h-4 w-4 transition ${expanded ? "rotate-90" : ""}`} />
+                <span className="truncate text-sm font-medium">{group.leaderNickname}</span>
+              </>
+            );
 
             return (
               <div
@@ -72,17 +78,29 @@ export function GroupListPanel({
                 className={`border border-border/60 bg-background/50 ${isMobile ? "rounded-2xl" : "rounded-xl"}`}
               >
                 <div className="flex flex-col gap-3 px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
-                  <button
-                    type="button"
-                    className="inline-flex min-w-0 items-center gap-2 text-left"
-                    onClick={() => onToggleExpandGroup(group.id)}
-                    aria-expanded={expanded ? "true" : "false"}
-                    aria-controls={memberListId}
-                    title={expanded ? "Collapse group members" : "Expand group members"}
-                  >
-                    <ChevronRight className={`h-4 w-4 transition ${expanded ? "rotate-90" : ""}`} />
-                    <span className="truncate text-sm font-medium">{group.leaderNickname}</span>
-                  </button>
+                  {expanded ? (
+                    <button
+                      type="button"
+                      className="inline-flex min-w-0 items-center gap-2 text-left"
+                      onClick={() => onToggleExpandGroup(group.id)}
+                      aria-expanded="true"
+                      aria-controls={memberListId}
+                      title="Collapse group members"
+                    >
+                      {groupToggleContent}
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className="inline-flex min-w-0 items-center gap-2 text-left"
+                      onClick={() => onToggleExpandGroup(group.id)}
+                      aria-expanded="false"
+                      aria-controls={memberListId}
+                      title="Expand group members"
+                    >
+                      {groupToggleContent}
+                    </button>
+                  )}
                   <div className="flex items-center gap-2" data-floating-ai-avoid="true">
                     <Badge variant="outline">{members.length}</Badge>
                     <Button
