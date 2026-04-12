@@ -9,10 +9,12 @@ import {
 import type { ImportRow, ParsedImportUploadResult } from "./import-upload-types";
 
 export const DEFAULT_IMPORT_CSV_MAX_ROWS = 100_000;
+export const DEFAULT_IMPORT_CSV_MAX_MATERIALIZED_ROWS = 5_000;
 
 type ParseCsvOptions = {
   maxRows?: number;
   maxBytes?: number;
+  maxMaterializedRows?: number;
 };
 
 type ReadlineErrorEmitter = {
@@ -41,6 +43,24 @@ function createCsvRowLimitError(maxRows: number): ParsedImportUploadResult {
     rows: [],
     error: `CSV import exceeds the configured row limit of ${maxRows.toLocaleString("en-US")} rows. Split the file into smaller uploads.`,
   };
+}
+
+function createCsvMaterializationLimitError(maxRows: number): ParsedImportUploadResult {
+  return {
+    headers: [],
+    rows: [],
+    error: `CSV import exceeds the in-memory materialization safety limit of ${maxRows.toLocaleString("en-US")} rows. Use the staged multipart import flow for larger files.`,
+  };
+}
+
+function resolveCsvMaterializedMaxRows(options?: ParseCsvOptions) {
+  const configuredMaxRows = resolveCsvMaxRows(options);
+  const requestedMaterializedLimit = options?.maxMaterializedRows;
+  const materializedLimit = requestedMaterializedLimit == null || !Number.isFinite(requestedMaterializedLimit)
+    ? DEFAULT_IMPORT_CSV_MAX_MATERIALIZED_ROWS
+    : Math.max(1, Math.trunc(requestedMaterializedLimit));
+
+  return Math.min(configuredMaxRows, materializedLimit);
 }
 
 function parseCsvLine(line: string): string[] {
@@ -213,6 +233,7 @@ export function parseCsvBuffer(buffer: Buffer, options?: ParseCsvOptions): Parse
   }
 
   const maxRows = resolveCsvMaxRows(options);
+  const materializedMaxRows = resolveCsvMaterializedMaxRows(options);
   const text = buffer.toString("utf8").replace(/^\ufeff/, "");
   const lines = text.split(/\r?\n/);
 
@@ -236,6 +257,9 @@ export function parseCsvBuffer(buffer: Buffer, options?: ParseCsvOptions): Parse
     if (Object.values(row).some((value) => value !== "")) {
       if (rows.length >= maxRows) {
         return createCsvRowLimitError(maxRows);
+      }
+      if (rows.length >= materializedMaxRows) {
+        return createCsvMaterializationLimitError(materializedMaxRows);
       }
       rows.push(row);
     }
@@ -261,10 +285,30 @@ export async function forEachCsvFileRow(
 
 export async function parseCsvFile(filePath: string, options?: ParseCsvOptions): Promise<ParsedImportUploadResult> {
   const rows: ImportRow[] = [];
+  const maxRows = resolveCsvMaterializedMaxRows(options);
 
-  const result = await walkCsvFile(filePath, options, (row) => {
-    rows.push(row);
-  });
+  let result;
+  try {
+    result = await walkCsvFile(filePath, options, (row) => {
+      if (rows.length >= maxRows) {
+        throw new Error(
+          createCsvMaterializationLimitError(maxRows).error
+            ?? `CSV import exceeds the in-memory materialization safety limit of ${maxRows.toLocaleString("en-US")} rows.`,
+        );
+      }
+      rows.push(row);
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Failed to parse CSV file.";
+    if (/in-memory materialization safety limit/i.test(message)) {
+      return {
+        headers: [],
+        rows: [],
+        error: message,
+      };
+    }
+    throw error;
+  }
 
   if (result.error) {
     return { headers: [], rows: [], error: result.error };

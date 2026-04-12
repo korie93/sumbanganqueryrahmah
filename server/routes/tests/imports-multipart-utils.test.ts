@@ -7,6 +7,7 @@ import {
   parseMultipartImportUpload,
   resolveImportMultipartFailure,
 } from "../imports-multipart-utils";
+import { DEFAULT_IMPORT_CSV_MAX_MATERIALIZED_ROWS } from "../../services/import-upload-csv-utils";
 
 test("normalizeImportName trims explicit names and falls back to the upload filename", () => {
   assert.equal(normalizeImportName("  March batch  ", "users.xlsx"), "March batch");
@@ -84,5 +85,21 @@ test("parseMultipartImportUpload rejects files that exceed the configured size l
   await assert.rejects(
     () => parsingPromise,
     new RegExp(IMPORT_TOO_LARGE_MESSAGE.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")),
+  );
+});
+
+test("parseMultipartImportUpload rejects CSV files that exceed the in-memory materialization safety limit", async () => {
+  const lines = ["name,amount"];
+  for (let index = 0; index <= DEFAULT_IMPORT_CSV_MAX_MATERIALIZED_ROWS; index += 1) {
+    lines.push(`User ${index},${index}`);
+  }
+
+  await assert.rejects(
+    () =>
+      parseMultipartImportUpload({
+        file: Readable.from(lines.join("\n")),
+        filename: "multipart-import.csv",
+      }),
+    /in-memory materialization safety limit/i,
   );
 });

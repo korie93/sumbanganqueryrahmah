@@ -9,6 +9,7 @@ import {
   parseImportUploadFile,
   stripImportUploadExtension,
 } from "../import-upload-parser";
+import { DEFAULT_IMPORT_CSV_MAX_MATERIALIZED_ROWS } from "../import-upload-csv-utils";
 
 test("parseImportUploadBuffer parses CSV uploads directly from memory", () => {
   const result = parseImportUploadBuffer(
@@ -111,6 +112,26 @@ test("parseImportUploadFile returns a safe error when a CSV stream cannot be ope
   try {
     const result = await parseImportUploadFile("missing.csv", filePath);
     assert.equal(result.error, "Cannot access the uploaded file. Please try again.");
+    assert.deepEqual(result.rows, []);
+  } finally {
+    await rm(tempDir, { recursive: true, force: true });
+  }
+});
+
+test("parseImportUploadFile rejects CSV files that exceed the in-memory materialization safety limit", async () => {
+  const tempDir = await mkdtemp(path.join(os.tmpdir(), "sqr-import-parser-"));
+  const filePath = path.join(tempDir, "customers.csv");
+  const lines = ["name,amount"];
+
+  try {
+    for (let index = 0; index <= DEFAULT_IMPORT_CSV_MAX_MATERIALIZED_ROWS; index += 1) {
+      lines.push(`User ${index},${index}`);
+    }
+    await writeFile(filePath, lines.join("\n"), "utf8");
+
+    const result = await parseImportUploadFile("customers.csv", filePath);
+
+    assert.match(String(result.error), /in-memory materialization safety limit/i);
     assert.deepEqual(result.rows, []);
   } finally {
     await rm(tempDir, { recursive: true, force: true });

@@ -8,6 +8,7 @@ import test from "node:test";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 
 import {
+  DEFAULT_IMPORT_CSV_MAX_MATERIALIZED_ROWS,
   forEachCsvFileRow,
   inspectCsvFile,
   parseCsvBuffer,
@@ -70,6 +71,18 @@ test("parseCsvBuffer rejects rows beyond the configured CSV row limit", () => {
   );
 
   assert.match(String(result.error), /row limit of 1 rows/i);
+  assert.deepEqual(result.rows, []);
+});
+
+test("parseCsvBuffer rejects CSV payloads that exceed the in-memory materialization safety limit", () => {
+  const lines = ["name,amount"];
+  for (let index = 0; index <= DEFAULT_IMPORT_CSV_MAX_MATERIALIZED_ROWS; index += 1) {
+    lines.push(`User ${index},${index}`);
+  }
+
+  const result = parseCsvBuffer(Buffer.from(lines.join("\n"), "utf8"));
+
+  assert.match(String(result.error), /in-memory materialization safety limit/i);
   assert.deepEqual(result.rows, []);
 });
 
@@ -187,6 +200,26 @@ test("parseCsvFile rejects oversized CSV files before opening the stream", async
     const result = await parseCsvFile(filePath, { maxBytes: 8 });
 
     assert.match(String(result.error), /too large to import/i);
+    assert.deepEqual(result.rows, []);
+  } finally {
+    await rm(tempDir, { recursive: true, force: true });
+  }
+});
+
+test("parseCsvFile rejects CSV files that exceed the in-memory materialization safety limit", async () => {
+  const tempDir = await mkdtemp(path.join(os.tmpdir(), "sqr-import-csv-utils-"));
+  const filePath = path.join(tempDir, "customers.csv");
+  const lines = ["name,amount"];
+
+  try {
+    for (let index = 0; index <= DEFAULT_IMPORT_CSV_MAX_MATERIALIZED_ROWS; index += 1) {
+      lines.push(`User ${index},${index}`);
+    }
+    await writeFile(filePath, lines.join("\n"), "utf8");
+
+    const result = await parseCsvFile(filePath);
+
+    assert.match(String(result.error), /in-memory materialization safety limit/i);
     assert.deepEqual(result.rows, []);
   } finally {
     await rm(tempDir, { recursive: true, force: true });
