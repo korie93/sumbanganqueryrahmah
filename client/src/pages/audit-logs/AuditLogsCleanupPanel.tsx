@@ -49,6 +49,7 @@ export function AuditLogsCleanupPanel({
   stats,
 }: AuditLogsCleanupPanelProps) {
   const isMobile = useIsMobile();
+  const cleanupDaysTriggerId = "cleanup-days";
 
   if (!canCleanupLogs) {
     return null;
@@ -141,11 +142,15 @@ export function AuditLogsCleanupPanel({
               >
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
                   <div className="w-full max-w-md space-y-2">
-                    <Label htmlFor="cleanup-days" className="text-sm font-medium">
+                    <Label htmlFor={cleanupDaysTriggerId} className="text-sm font-medium">
                       Delete logs older than
                     </Label>
                     <Select value={cleanupDays} onValueChange={onCleanupDaysChange}>
-                      <SelectTrigger className="h-11 w-full sm:w-[220px]" data-testid="select-cleanup-days">
+                      <SelectTrigger
+                        id={cleanupDaysTriggerId}
+                        className="h-11 w-full sm:w-[220px]"
+                        data-testid="select-cleanup-days"
+                      >
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
