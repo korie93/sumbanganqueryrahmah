@@ -1,4 +1,5 @@
 import Busboy from "busboy";
+import type { AuthenticatedRequest } from "../auth/guards";
 import type { RequestHandler } from "express";
 import { DEFAULT_IMPORT_UPLOAD_LIMIT_BYTES } from "../config/body-limit";
 import {
@@ -9,11 +10,25 @@ import {
   type PreparedMultipartImportUpload,
   type MultipartImportBody,
 } from "./imports-multipart-utils";
+import {
+  createActiveImportUploadQuotaTracker,
+  type ActiveImportUploadQuotaTracker,
+} from "./imports-upload-quota";
 
 export function createImportsMultipartRoute(
   maxFileSizeBytes: number = DEFAULT_IMPORT_UPLOAD_LIMIT_BYTES,
+  perUserQuotaBytes: number = maxFileSizeBytes,
+  uploadQuotaTracker?: ActiveImportUploadQuotaTracker,
 ): RequestHandler {
-  return (req, res, next) => {
+  const safeMaxFileSizeBytes = Number.isFinite(maxFileSizeBytes) && maxFileSizeBytes > 0
+    ? Math.floor(maxFileSizeBytes)
+    : DEFAULT_IMPORT_UPLOAD_LIMIT_BYTES;
+  const safePerUserQuotaBytes = Number.isFinite(perUserQuotaBytes) && perUserQuotaBytes > 0
+    ? Math.max(safeMaxFileSizeBytes, Math.floor(perUserQuotaBytes))
+    : safeMaxFileSizeBytes;
+  const quotaTracker = uploadQuotaTracker ?? createActiveImportUploadQuotaTracker(safePerUserQuotaBytes);
+
+  return (req: AuthenticatedRequest, res, next) => {
     if (!req.is("multipart/form-data")) {
       next();
       return;
@@ -22,10 +37,8 @@ export function createImportsMultipartRoute(
     const responseLocals = ((res as unknown as { locals?: Record<string, unknown> }).locals
       ?? {}) as Record<string, unknown>;
     (res as unknown as { locals?: Record<string, unknown> }).locals = responseLocals;
-
-    const safeMaxFileSizeBytes = Number.isFinite(maxFileSizeBytes) && maxFileSizeBytes > 0
-      ? Math.floor(maxFileSizeBytes)
-      : DEFAULT_IMPORT_UPLOAD_LIMIT_BYTES;
+    const quotaSubject = String(req.user?.username || "").trim().toLowerCase();
+    const reservedQuotaBytes = quotaSubject ? safeMaxFileSizeBytes : 0;
 
     const parser = Busboy({
       headers: req.headers,
@@ -39,11 +52,30 @@ export function createImportsMultipartRoute(
     const body: MultipartImportBody = {};
     let fileTask: Promise<PreparedMultipartImportUpload> | null = null;
     let settled = false;
+    let quotaReleased = false;
+
+    const releaseQuota = () => {
+      if (quotaReleased || !quotaSubject || reservedQuotaBytes <= 0) {
+        return;
+      }
+      quotaReleased = true;
+      quotaTracker.release(quotaSubject, reservedQuotaBytes);
+    };
+
+    if (quotaSubject && !quotaTracker.tryReserve(quotaSubject, reservedQuotaBytes)) {
+      res.status(413).json({
+        ok: false,
+        message:
+          "You already have an import upload in progress that uses your per-user upload quota. Please wait and try again.",
+      });
+      return;
+    }
 
     const fail = (status: number, message: string) => {
       if (settled) {
         return;
       }
+      releaseQuota();
       settled = true;
       res.status(status).json({
         ok: false,
@@ -101,6 +133,7 @@ export function createImportsMultipartRoute(
         } else {
           responseLocals.multipartImportUpload = upload;
         }
+        releaseQuota();
         settled = true;
         req.body = body;
         next();
@@ -112,6 +145,14 @@ export function createImportsMultipartRoute(
         const failure = resolveImportMultipartFailure(error);
         fail(failure.statusCode, failure.message);
       }
+    });
+
+    req.once("error", () => {
+      releaseQuota();
+    });
+
+    req.once("aborted", () => {
+      releaseQuota();
     });
 
     req.pipe(parser);

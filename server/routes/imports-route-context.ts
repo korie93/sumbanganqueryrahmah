@@ -9,6 +9,7 @@ export type ImportsRouteDeps = {
   requireTabAccess: (tabId: string) => RequestHandler;
   searchRateLimiter: RequestHandler;
   multipartMaxFileSizeBytes?: number | undefined;
+  multipartPerUserQuotaBytes?: number | undefined;
 };
 
 export type ImportsRouteContext = {
@@ -32,6 +33,9 @@ export function createImportsRouteContext(
     requireRole: deps.requireRole,
     requireTabAccess: deps.requireTabAccess,
     searchRateLimiter: deps.searchRateLimiter,
-    importsMultipartRoute: createImportsMultipartRoute(deps.multipartMaxFileSizeBytes),
+    importsMultipartRoute: createImportsMultipartRoute(
+      deps.multipartMaxFileSizeBytes,
+      deps.multipartPerUserQuotaBytes,
+    ),
   };
 }

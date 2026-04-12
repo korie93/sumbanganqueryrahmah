@@ -7,6 +7,7 @@ import {
 import { validateRuntimeEnvironmentSchema } from "./runtime-env-schema";
 import { resolveUploadsRootDir } from "./upload-paths";
 import { DEFAULT_IMPORT_BODY_LIMIT } from "./body-limit";
+import { parseBodyLimitToBytes, DEFAULT_IMPORT_UPLOAD_LIMIT_BYTES } from "./body-limit";
 import {
   buildEphemeralSecret,
   normalizeHttpUrl,
@@ -59,6 +60,10 @@ const seedDefaultUsers = readBoolean("SEED_DEFAULT_USERS", false);
 const backupFeatureEnabled = readBoolean("BACKUP_FEATURE_ENABLED", true);
 const localSuperuserCredentialsFileEnabled = readBoolean("LOCAL_SUPERUSER_CREDENTIALS_FILE_ENABLED", false);
 const mailDevOutboxEnabled = readBoolean("MAIL_DEV_OUTBOX_ENABLED", false);
+const resolvedDefaultImportUploadLimitBytes = parseBodyLimitToBytes(
+  readString("IMPORT_BODY_LIMIT", DEFAULT_IMPORT_BODY_LIMIT),
+  DEFAULT_IMPORT_UPLOAD_LIMIT_BYTES,
+);
 
 type ParsedDatabaseUrl = {
   database: string;
@@ -292,6 +297,11 @@ export const runtimeConfig: RuntimeConfig = Object.freeze({
       min: 1,
       max: 1_000_000,
     }),
+    importPerUserActiveUploadBytes: readInt(
+      "IMPORT_PER_USER_ACTIVE_UPLOAD_BYTES",
+      resolvedDefaultImportUploadLimitBytes,
+      { min: 1_048_576, max: 536_870_912 },
+    ),
     importAnalysisTimeoutMs: readInt("IMPORT_ANALYSIS_TIMEOUT_MS", 45_000, { min: 5_000 }),
     collectionRollupListenReconnectMs: readInt("COLLECTION_ROLLUP_LISTEN_RECONNECT_MS", 5_000, { min: 1_000 }),
     httpSlowRequestMs: readInt("HTTP_SLOW_REQUEST_MS", 1_500, { min: 250 }),

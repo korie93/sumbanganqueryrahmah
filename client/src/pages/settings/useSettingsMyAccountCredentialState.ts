@@ -11,10 +11,13 @@ import {
 import { buildNextCurrentUser } from "@/pages/settings/settings-my-account-utils";
 import type { CurrentUser } from "@/pages/settings/types";
 import {
-  CREDENTIAL_USERNAME_REGEX,
   isStrongPassword,
   normalizeSettingsErrorPayload,
 } from "@/pages/settings/utils";
+import {
+  normalizeCredentialUsername,
+  validateCredentialUsername,
+} from "@/pages/settings/settings-credential-validation";
 
 type UseSettingsMyAccountCredentialStateArgs = UseSettingsMyAccountArgs & {
   currentUser: CurrentUser | null;
@@ -38,12 +41,13 @@ export function useSettingsMyAccountCredentialState({
 
   const handleChangeUsername = useCallback(async () => {
     if (!currentUser || usernameSaving) return;
-    const normalized = usernameInput.trim().toLowerCase();
+    const normalized = normalizeCredentialUsername(usernameInput);
 
-    if (!CREDENTIAL_USERNAME_REGEX.test(normalized)) {
+    const usernameValidationError = validateCredentialUsername(normalized);
+    if (usernameValidationError) {
       toast({
         title: "Validation Error",
-        description: "Username must match ^[a-zA-Z0-9._-]{3,32}$.",
+        description: usernameValidationError,
         variant: "destructive",
       });
       return;

@@ -6,6 +6,10 @@ import {
   type ManagedUsersQueryState,
   type PendingResetRequestsQueryState,
 } from "@/pages/settings/settings-managed-user-data-shared";
+import {
+  normalizeManagedUserRoleFilter,
+  normalizeManagedUserStatusFilter,
+} from "@/pages/settings/settings-managed-user-filter-utils";
 
 export function isAbortError(error: unknown) {
   return error instanceof DOMException
@@ -26,16 +30,8 @@ export function normalizeManagedUsersQuery(
       ? Math.max(1, Math.min(MANAGED_USERS_MAX_PAGE_SIZE, Math.floor(pageSize)))
       : MANAGED_USERS_DEFAULT_PAGE_SIZE,
     search: String(query?.search || "").trim(),
-    role: role === "admin" || role === "user" ? role : "all",
-    status:
-      status === "active"
-      || status === "pending_activation"
-      || status === "suspended"
-      || status === "disabled"
-      || status === "locked"
-      || status === "banned"
-        ? status
-        : "all",
+    role: normalizeManagedUserRoleFilter(role),
+    status: normalizeManagedUserStatusFilter(status),
   };
 }
 
@@ -51,14 +47,6 @@ export function normalizePendingResetRequestsQuery(
       ? Math.max(1, Math.min(PENDING_RESET_REQUESTS_MAX_PAGE_SIZE, Math.floor(pageSize)))
       : PENDING_RESET_REQUESTS_DEFAULT_PAGE_SIZE,
     search: String(query?.search || "").trim(),
-    status:
-      status === "active"
-      || status === "pending_activation"
-      || status === "suspended"
-      || status === "disabled"
-      || status === "locked"
-      || status === "banned"
-        ? status
-        : "all",
+    status: normalizeManagedUserStatusFilter(status),
   };
 }

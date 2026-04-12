@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { PassThrough } from "node:stream";
 import test from "node:test";
 import { createImportsMultipartRoute } from "../imports-multipart-route";
+import { createActiveImportUploadQuotaTracker } from "../imports-upload-quota";
 
 type MultipartPart =
   | { kind: "field"; name: string; value: string }
@@ -44,6 +45,9 @@ function buildMultipartBody(boundary: string, parts: MultipartPart[]) {
 async function runMultipartHandler(
   parts: MultipartPart[],
   handler: ReturnType<typeof createImportsMultipartRoute>,
+  options?: {
+    username?: string;
+  },
 ) {
   const boundary = "----codex-import-multipart-boundary";
   const body = buildMultipartBody(boundary, parts);
@@ -51,6 +55,7 @@ async function runMultipartHandler(
     headers: Record<string, string>;
     is: (type: string) => boolean;
     body?: Record<string, unknown>;
+    user?: { username?: string };
   };
 
   const result = await new Promise<
@@ -74,6 +79,9 @@ async function runMultipartHandler(
       "content-type": `multipart/form-data; boundary=${boundary}`,
     };
     req.is = (type: string) => type === "multipart/form-data";
+    if (options?.username) {
+      req.user = { username: options.username };
+    }
 
     const res = {
       locals: {} as Record<string, unknown>,
@@ -215,4 +223,35 @@ test("createImportsMultipartRoute returns parser failures as safe client errors"
     },
     statusCode: 400,
   });
+});
+
+test("createImportsMultipartRoute rejects multipart uploads that exceed the active per-user quota", async () => {
+  const quotaTracker = createActiveImportUploadQuotaTracker(1024);
+  assert.equal(quotaTracker.tryReserve("admin.user", 1024), true);
+
+  const handler = createImportsMultipartRoute(1024, 1024, quotaTracker);
+  const result = await runMultipartHandler(
+    [
+      {
+        kind: "file",
+        name: "file",
+        filename: "customers.csv",
+        contentType: "text/csv",
+        content: "name,amount\nAlice,12\n",
+      },
+    ],
+    handler,
+    { username: "admin.user" },
+  );
+
+  assert.deepEqual(result, {
+    kind: "response",
+    payload: {
+      ok: false,
+      message:
+        "You already have an import upload in progress that uses your per-user upload quota. Please wait and try again.",
+    },
+    statusCode: 413,
+  });
+  quotaTracker.release("admin.user", 1024);
 });

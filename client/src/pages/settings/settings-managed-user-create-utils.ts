@@ -1,25 +1,32 @@
-import { CREDENTIAL_USERNAME_REGEX } from "@/pages/settings/utils";
 import type { ManagedUser } from "@/pages/settings/types";
 import type { ManagedUserCreateDraft } from "@/pages/settings/settings-managed-user-create-shared";
+import {
+  MANAGED_USER_EMAIL_REQUIRED_MESSAGE,
+  normalizeCredentialEmail,
+  normalizeCredentialFullName,
+  normalizeCredentialUsername,
+  validateCredentialUsername,
+} from "@/pages/settings/settings-credential-validation";
 
 export function normalizeManagedUserCreateDraft(draft: ManagedUserCreateDraft) {
   return {
-    normalizedEmail: draft.createEmailInput.trim().toLowerCase(),
-    normalizedFullName: draft.createFullNameInput.trim(),
-    normalizedUsername: draft.createUsernameInput.trim().toLowerCase(),
+    normalizedEmail: normalizeCredentialEmail(draft.createEmailInput),
+    normalizedFullName: normalizeCredentialFullName(draft.createFullNameInput),
+    normalizedUsername: normalizeCredentialUsername(draft.createUsernameInput),
     role: draft.createRoleInput,
   };
 }
 
 export function validateManagedUserCreateDraft(draft: ManagedUserCreateDraft) {
   const normalized = normalizeManagedUserCreateDraft(draft);
+  const usernameValidationError = validateCredentialUsername(normalized.normalizedUsername);
 
-  if (!CREDENTIAL_USERNAME_REGEX.test(normalized.normalizedUsername)) {
-    return "Username must match ^[a-zA-Z0-9._-]{3,32}$.";
+  if (usernameValidationError) {
+    return usernameValidationError;
   }
 
   if (!normalized.normalizedEmail) {
-    return "Email is required for account activation.";
+    return MANAGED_USER_EMAIL_REQUIRED_MESSAGE;
   }
 
   return null;
@@ -31,10 +38,10 @@ export function findDuplicateManagedUser(options: {
   users: ManagedUser[];
 }) {
   return options.users.find((user) => {
-    const sameUsername = user.username.toLowerCase() === options.normalizedUsername;
+    const sameUsername = normalizeCredentialUsername(user.username) === options.normalizedUsername;
     const sameEmail =
       options.normalizedEmail !== ""
-      && String(user.email || "").trim().toLowerCase() === options.normalizedEmail;
+      && normalizeCredentialEmail(user.email) === options.normalizedEmail;
 
     return sameUsername || sameEmail;
   });

@@ -14,9 +14,14 @@ import {
   buildMutationSuccessToast,
 } from "@/lib/mutation-feedback";
 import {
-  CREDENTIAL_USERNAME_REGEX,
   normalizeSettingsErrorPayload,
 } from "@/pages/settings/utils";
+import {
+  normalizeCredentialEmail,
+  normalizeCredentialFullName,
+  normalizeCredentialUsername,
+  validateCredentialUsername,
+} from "@/pages/settings/settings-credential-validation";
 
 type UseSettingsManagedUserUpdateArgs = {
   isMountedRef: MutableRefObject<boolean>;
@@ -54,19 +59,21 @@ export function useSettingsManagedUserUpdate({
   const handleSaveManagedUser = useCallback(async () => {
     if (!managedSelectedUser || managedSaving) return;
 
-    const normalizedUsername = managedUsernameInput.trim().toLowerCase();
-    const normalizedEmail = managedEmailInput.trim().toLowerCase();
+    const normalizedUsername = normalizeCredentialUsername(managedUsernameInput);
+    const normalizedEmail = normalizeCredentialEmail(managedEmailInput);
+    const normalizedFullName = normalizeCredentialFullName(managedFullNameInput);
     const payload: { username?: string; fullName?: string | null; email?: string | null } = {};
 
-    if (managedFullNameInput.trim() !== (managedSelectedUser.fullName || "")) {
-      payload.fullName = managedFullNameInput.trim() || null;
+    if (normalizedFullName !== (managedSelectedUser.fullName || "")) {
+      payload.fullName = normalizedFullName || null;
     }
 
     if (normalizedUsername !== managedSelectedUser.username) {
-      if (!CREDENTIAL_USERNAME_REGEX.test(normalizedUsername)) {
+      const usernameValidationError = validateCredentialUsername(normalizedUsername);
+      if (usernameValidationError) {
         toast({
           title: "Validation Error",
-          description: "Username must match ^[a-zA-Z0-9._-]{3,32}$.",
+          description: usernameValidationError,
           variant: "destructive",
         });
         return;

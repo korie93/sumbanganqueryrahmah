@@ -1,14 +1,9 @@
+import { normalizeManagedUserStatusFilter } from "@/pages/settings/settings-managed-user-filter-utils";
+
 export function normalizePendingResetStatusFilter(
   value: string,
 ): "all" | "active" | "pending_activation" | "suspended" | "disabled" | "locked" | "banned" {
-  return value === "active"
-    || value === "pending_activation"
-    || value === "suspended"
-    || value === "disabled"
-    || value === "locked"
-    || value === "banned"
-    ? value
-    : "all";
+  return normalizeManagedUserStatusFilter(value);
 }
 
 export function getPendingResetEmptyMessage(options: {

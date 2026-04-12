@@ -5,160 +5,14 @@ import * as RechartsPrimitive from "recharts"
 
 import { toTrustedHTML } from "@/lib/trusted-types"
 import { cn } from "@/lib/utils"
-
-// Format: { THEME_NAME: CSS_SELECTOR }
-const THEMES = { light: "", dark: ".dark" } as const
-
-export type ChartConfig = {
-  [k in string]: {
-    label?: React.ReactNode
-    icon?: React.ComponentType
-  } & (
-    | { color?: string; theme?: never }
-    | { color?: never; theme: Record<keyof typeof THEMES, string> }
-  )
-}
-
-type ChartContextProps = {
-  config: ChartConfig
-}
-
-const ChartContext = React.createContext<ChartContextProps | null>(null)
-
-function sanitizeChartToken(value: string) {
-  const normalized = String(value || "").trim().replace(/[^a-zA-Z0-9_-]/g, "-")
-  return normalized || "chart"
-}
-
-function sanitizeChartColorValue(value: string) {
-  const normalized = String(value || "").trim()
-  if (!normalized) {
-    return null
-  }
-
-  return /^[#(),.%/:\-\s\w]+$/.test(normalized) ? normalized : null
-}
-
-function buildChartStyleMarkup(id: string, config: ChartConfig) {
-  const colorConfig = Object.entries(config).filter(
-    ([, itemConfig]) => itemConfig.theme || itemConfig.color
-  )
-
-  if (!colorConfig.length) {
-    return null
-  }
-
-  const safeChartId = sanitizeChartToken(id)
-
-  const markup = Object.entries(THEMES)
-    .map(
-      ([theme, prefix]) => `\n${prefix} [data-chart="${safeChartId}"] {\n${colorConfig
-        .map(([key, itemConfig]) => {
-          const color =
-            itemConfig.theme?.[theme as keyof typeof itemConfig.theme] ||
-            itemConfig.color
-          const safeColor = color ? sanitizeChartColorValue(color) : null
-          return safeColor ? `  --color-${key}: ${safeColor};` : null
-        })
-        .filter((line): line is string => Boolean(line))
-        .join("\n")}\n}\n`
-    )
-    .join("\n")
-
-  return markup || null
-}
-
-function resolveChartPresentationColor(value: string | undefined) {
-  return sanitizeChartColorValue(value || "") || "currentColor"
-}
-
-function ChartIndicator({
-  color,
-  indicator,
-  nestLabel = false,
-}: {
-  color?: string | undefined
-  indicator: "line" | "dot" | "dashed"
-  nestLabel?: boolean
-}) {
-  const presentationColor = resolveChartPresentationColor(color)
-
-  if (indicator === "dot") {
-    return (
-      <span aria-hidden className="h-2.5 w-2.5 shrink-0">
-        <svg className="h-full w-full overflow-visible" viewBox="0 0 10 10">
-          <rect
-            x="0.75"
-            y="0.75"
-            width="8.5"
-            height="8.5"
-            rx="2"
-            fill={presentationColor}
-            stroke={presentationColor}
-          />
-        </svg>
-      </span>
-    )
-  }
-
-  return (
-    <span
-      aria-hidden
-      className={cn(
-        "shrink-0 self-stretch",
-        indicator === "line" ? "w-1" : "w-[3px]",
-        nestLabel && indicator === "dashed" && "my-0.5"
-      )}
-    >
-      <svg
-        className="h-full w-full overflow-visible"
-        viewBox="0 0 4 32"
-        preserveAspectRatio="none"
-      >
-        <line
-          x1="2"
-          y1="1"
-          x2="2"
-          y2="31"
-          stroke={presentationColor}
-          strokeWidth={indicator === "line" ? "4" : "3"}
-          strokeDasharray={indicator === "dashed" ? "5 4" : undefined}
-          strokeLinecap="round"
-        />
-      </svg>
-    </span>
-  )
-}
-
-function ChartLegendSwatch({ color }: { color?: string | undefined }) {
-  const presentationColor = resolveChartPresentationColor(color)
-
-  return (
-    <span aria-hidden className="h-2 w-2 shrink-0">
-      <svg className="h-full w-full overflow-visible" viewBox="0 0 8 8">
-        <rect
-          x="0.75"
-          y="0.75"
-          width="6.5"
-          height="6.5"
-          rx="1.5"
-          fill={presentationColor}
-          stroke={presentationColor}
-        />
-      </svg>
-    </span>
-  )
-}
-
-function useChart() {
-  const context = React.useContext(ChartContext)
-
-  if (!context) {
-    throw new Error("useChart must be used within a <ChartContainer />")
-  }
-
-  return context
-}
+import { ChartIndicator, ChartLegendSwatch } from "./chart-presentational"
+import {
+  ChartConfig,
+  ChartContext,
+  getPayloadConfigFromPayload,
+  useChart,
+} from "./chart-shared"
+import { buildChartStyleMarkup, sanitizeChartToken } from "./chart-style-utils"
 
 const ChartContainer = React.forwardRef<
   HTMLDivElement,
@@ -406,45 +260,6 @@ const ChartLegendContent = React.forwardRef<
   }
 )
 ChartLegendContent.displayName = "ChartLegend"
-
-// Helper to extract item config from a payload.
-function getPayloadConfigFromPayload(
-  config: ChartConfig,
-  payload: unknown,
-  key: string
-) {
-  if (typeof payload !== "object" || payload === null) {
-    return undefined
-  }
-
-  const payloadPayload =
-    "payload" in payload &&
-    typeof payload.payload === "object" &&
-    payload.payload !== null
-      ? payload.payload
-      : undefined
-
-  let configLabelKey: string = key
-
-  if (
-    key in payload &&
-    typeof payload[key as keyof typeof payload] === "string"
-  ) {
-    configLabelKey = payload[key as keyof typeof payload] as string
-  } else if (
-    payloadPayload &&
-    key in payloadPayload &&
-    typeof payloadPayload[key as keyof typeof payloadPayload] === "string"
-  ) {
-    configLabelKey = payloadPayload[
-      key as keyof typeof payloadPayload
-    ] as string
-  }
-
-  return configLabelKey in config
-    ? config[configLabelKey]
-    : config[key as keyof typeof config]
-}
 
 export {
   ChartContainer,

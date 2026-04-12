@@ -2,20 +2,17 @@ import type {
   ManagedAccountsRoleFilter,
   ManagedAccountsStatusFilter,
 } from "@/pages/settings/account-management/managed-accounts-shared";
+import {
+  normalizeManagedUserRoleFilter,
+  normalizeManagedUserStatusFilter,
+} from "@/pages/settings/settings-managed-user-filter-utils";
 
 export function normalizeManagedAccountsRoleFilter(value: string): ManagedAccountsRoleFilter {
-  return value === "admin" || value === "user" ? value : "all";
+  return normalizeManagedUserRoleFilter(value);
 }
 
 export function normalizeManagedAccountsStatusFilter(value: string): ManagedAccountsStatusFilter {
-  return value === "active"
-    || value === "pending_activation"
-    || value === "suspended"
-    || value === "disabled"
-    || value === "locked"
-    || value === "banned"
-    ? value
-    : "all";
+  return normalizeManagedUserStatusFilter(value);
 }
 
 export function getManagedAccountsEmptyMessage(options: {

@@ -207,6 +207,7 @@ export function registerLocalServerRoutes(options: RegisterLocalServerRoutesOpti
     requireTabAccess,
     searchRateLimiter,
     multipartMaxFileSizeBytes: importUploadLimitBytes,
+    multipartPerUserQuotaBytes: environmentRuntimeConfig.runtime.importPerUserActiveUploadBytes,
   });
 
   registerSearchRoutes(app, {

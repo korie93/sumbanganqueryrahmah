@@ -1,6 +1,6 @@
 import { useEffect, useState, type RefObject } from "react";
 
-type DesktopNavOverflowState = {
+export type DesktopNavOverflowState = {
   canScroll: boolean;
   canScrollLeft: boolean;
   canScrollRight: boolean;

@@ -319,6 +319,31 @@ test("runtime config accepts an explicit backup payload size override", async ()
   );
 });
 
+test("runtime config accepts an explicit per-user import upload quota override", async () => {
+  await withEnv(
+    {
+      NODE_ENV: "development",
+      HOST: "127.0.0.1",
+      PUBLIC_APP_URL: "http://127.0.0.1:5000",
+      SESSION_SECRET: null,
+      COLLECTION_NICKNAME_TEMP_PASSWORD: null,
+      COLLECTION_PII_ENCRYPTION_KEY: null,
+      PG_PASSWORD: null,
+      BACKUP_ENCRYPTION_KEY: null,
+      BACKUP_ENCRYPTION_KEYS: null,
+      BACKUP_FEATURE_ENABLED: "1",
+      IMPORT_PER_USER_ACTIVE_UPLOAD_BYTES: "2097152",
+      SEED_DEFAULT_USERS: "0",
+      LOCAL_SUPERUSER_CREDENTIALS_FILE_ENABLED: "0",
+      MAIL_DEV_OUTBOX_ENABLED: "0",
+    },
+    async () => {
+      const runtimeModule = await importRuntimeFresh();
+      assert.equal(runtimeModule.runtimeConfig.runtime.importPerUserActiveUploadBytes, 2_097_152);
+    },
+  );
+});
+
 test("runtime config keeps strict local development bootable when SMTP env vars are incomplete", async () => {
   await withEnv(
     {
