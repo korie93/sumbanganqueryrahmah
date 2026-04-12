@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, LifeBuoy } from "lucide-react";
 import { PublicAuthButton, PublicAuthInput } from "@/components/PublicAuthControls";
 import { PublicAuthLayout } from "@/components/PublicAuthLayout";
@@ -8,6 +8,7 @@ import {
   hasPublicAuthFieldErrors,
   validateIdentifierField,
 } from "@/pages/public-auth-form-utils";
+import { isPublicAuthAbortError } from "@/pages/public-auth-runtime-utils";
 
 export default function ForgotPasswordPage() {
   const [identifier, setIdentifier] = useState("");
@@ -15,11 +16,26 @@ export default function ForgotPasswordPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [submitted, setSubmitted] = useState(false);
+  const mountedRef = useRef(true);
+  const requestAbortControllerRef = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    mountedRef.current = true;
+
+    return () => {
+      mountedRef.current = false;
+      requestAbortControllerRef.current?.abort();
+      requestAbortControllerRef.current = null;
+    };
+  }, []);
 
   const handleSubmit = async () => {
+    if (loading || requestAbortControllerRef.current) {
+      return;
+    }
+
     setError("");
     setIdentifierError("");
-    setLoading(true);
 
     try {
       const fieldErrors = validateIdentifierField(identifier);
@@ -28,12 +44,25 @@ export default function ForgotPasswordPage() {
         return;
       }
 
-      await requestPasswordReset({ identifier: identifier.trim() });
+      setLoading(true);
+      const controller = new AbortController();
+      requestAbortControllerRef.current = controller;
+
+      await requestPasswordReset({ identifier: identifier.trim() }, { signal: controller.signal });
+      if (!mountedRef.current || controller.signal.aborted) {
+        return;
+      }
       setSubmitted(true);
     } catch (submitError) {
+      if (isPublicAuthAbortError(submitError) || !mountedRef.current) {
+        return;
+      }
       setError(getApiErrorMessage(submitError, "Permintaan tetapan semula gagal dihantar."));
     } finally {
-      setLoading(false);
+      requestAbortControllerRef.current = null;
+      if (mountedRef.current) {
+        setLoading(false);
+      }
     }
   };
 

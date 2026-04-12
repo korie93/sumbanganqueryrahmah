@@ -9,27 +9,22 @@ import {
 } from "@/lib/api/auth";
 import { getApiErrorMessage } from "@/lib/api-errors";
 import { persistAuthNotice } from "@/lib/auth-session";
-import { formatDateTimeDDMMYYYY } from "@/lib/date-format";
 import {
   hasPublicAuthFieldErrors,
   validatePasswordFields,
 } from "@/pages/public-auth-form-utils";
+import {
+  formatPublicAuthExpiry,
+  getPublicAuthTokenFromLocation,
+  isPublicAuthAbortError,
+} from "@/pages/public-auth-runtime-utils";
 
 type ActivationPhase = "invalid" | "ready" | "success" | "validating";
 
 const ACTIVATION_SUCCESS_REDIRECT_DELAY_MS = 1_200;
 
-function getTokenFromLocation() {
-  if (typeof window === "undefined") return "";
-  return new URLSearchParams(window.location.search).get("token") || "";
-}
-
-function formatExpiry(value: string) {
-  return formatDateTimeDDMMYYYY(value, { fallback: value });
-}
-
 export default function ActivateAccountPage() {
-  const token = useMemo(() => getTokenFromLocation(), []);
+  const token = useMemo(() => getPublicAuthTokenFromLocation(), []);
   const [activation, setActivation] = useState<ActivationTokenValidationPayload | null>(null);
   const [phase, setPhase] = useState<ActivationPhase>(token ? "validating" : "invalid");
   const [newPassword, setNewPassword] = useState("");
@@ -94,7 +89,7 @@ export default function ActivateAccountPage() {
         setPhase("ready");
       } catch (validationError) {
         if (
-          (validationError instanceof DOMException && validationError.name === "AbortError") ||
+          isPublicAuthAbortError(validationError) ||
           !mountedRef.current ||
           controller.signal.aborted
         ) {
@@ -157,7 +152,7 @@ export default function ActivateAccountPage() {
       setPhase("success");
     } catch (activationError) {
       if (
-        (activationError instanceof DOMException && activationError.name === "AbortError") ||
+        isPublicAuthAbortError(activationError) ||
         !mountedRef.current ||
         controller.signal.aborted
       ) {
@@ -239,7 +234,7 @@ export default function ActivateAccountPage() {
           <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm leading-7 text-slate-200">
             <div><span className="font-semibold text-white">Username:</span> {activation.username}</div>
             <div><span className="font-semibold text-white">Peranan:</span> {activation.role}</div>
-            <div><span className="font-semibold text-white">Tamat Tempoh:</span> {formatExpiry(activation.expiresAt)}</div>
+            <div><span className="font-semibold text-white">Tamat Tempoh:</span> {formatPublicAuthExpiry(activation.expiresAt)}</div>
           </div>
           <PublicAuthInput
             id="activate-account-new-password"

@@ -17,6 +17,7 @@ import {
 } from "@/lib/auth-session";
 import { generateFingerprint } from "@/lib/fingerprint";
 import { logClientError } from "@/lib/client-logger";
+import { normalizeTwoFactorCode } from "@/pages/auth-field-utils";
 import { isLockedAccountFlow, normalizeLoginIdentity } from "@/pages/login-lock-state";
 import {
   buildAuthenticatedUser,
@@ -170,7 +171,7 @@ export function useLoginPageState({ onLoginSuccess }: UseLoginPageStateParams) {
   };
 
   const handleTwoFactorCodeChange = (value: string) => {
-    setTwoFactorCode(value.replace(/\D/g, "").slice(0, 6));
+    setTwoFactorCode(normalizeTwoFactorCode(value));
     setTwoFactorCodeError("");
     if (!lockedFlow) {
       setError("");
@@ -262,7 +263,7 @@ export function useLoginPageState({ onLoginSuccess }: UseLoginPageStateParams) {
         setTwoFactorCodeError(fieldErrors.twoFactorCode ?? "");
         return;
       }
-      const normalizedCode = twoFactorCode.replace(/\D/g, "").slice(0, 6);
+      const normalizedCode = normalizeTwoFactorCode(twoFactorCode);
 
       controller = new AbortController();
       loginAbortControllerRef.current = controller;

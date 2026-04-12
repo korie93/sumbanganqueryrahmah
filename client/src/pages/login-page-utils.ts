@@ -1,5 +1,6 @@
 import type { User } from "@/app/types";
 import type { LoginSuccessResponse } from "@/lib/api/auth";
+import { normalizeAuthIdentifier, normalizeTwoFactorCode } from "@/pages/auth-field-utils";
 
 export type LoginFieldErrors = {
   username?: string | undefined;
@@ -16,7 +17,7 @@ export function buildAuthenticatedUser(response: LoginSuccessResponse): User {
 
   return {
     id: response.user?.id,
-    username: String(response.user?.username || username).toLowerCase(),
+    username: normalizeAuthIdentifier(response.user?.username || username),
     fullName: response.user?.fullName ?? null,
     email: response.user?.email ?? null,
     role: String(response.user?.role || role),
@@ -82,7 +83,7 @@ export function validatePasswordLoginFields(
   username: string,
   password: string,
 ): LoginFieldErrors {
-  const normalizedUsername = username.trim();
+  const normalizedUsername = normalizeAuthIdentifier(username);
 
   return {
     ...(!normalizedUsername ? { username: "Sila masukkan username." } : {}),
@@ -91,7 +92,7 @@ export function validatePasswordLoginFields(
 }
 
 export function validateTwoFactorCodeField(code: string): LoginFieldErrors {
-  const normalizedCode = code.replace(/\D/g, "").slice(0, 6);
+  const normalizedCode = normalizeTwoFactorCode(code);
   return normalizedCode.length === 6
     ? {}
     : { twoFactorCode: "Sila masukkan kod pengesah 6 digit." };

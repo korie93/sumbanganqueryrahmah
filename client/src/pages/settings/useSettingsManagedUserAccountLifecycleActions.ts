@@ -4,11 +4,10 @@ import {
   updateManagedUserStatus,
 } from "@/lib/api";
 import {
-  buildMutationErrorToast,
   buildMutationSuccessToast,
 } from "@/lib/mutation-feedback";
 import type { ManagedUser } from "@/pages/settings/types";
-import { normalizeSettingsErrorPayload } from "@/pages/settings/utils";
+import { buildSettingsMutationErrorToast } from "@/pages/settings/utils";
 import type { UseSettingsManagedUserLifecycleActionsArgs } from "@/pages/settings/settings-managed-user-lifecycle-shared";
 import { normalizeManagedUserLifecycleTargetId } from "@/pages/settings/settings-managed-user-lifecycle-utils";
 
@@ -52,12 +51,7 @@ export function useSettingsManagedUserAccountLifecycleActions({
       }));
       await Promise.all([loadManagedUsers(), loadPendingResetRequests()]);
     } catch (error: unknown) {
-      const parsed = normalizeSettingsErrorPayload(error);
-      toast(buildMutationErrorToast({
-        title: parsed.code || "Status Update Failed",
-        error,
-        fallbackDescription: parsed.message,
-      }));
+      toast(buildSettingsMutationErrorToast(error, "Status Update Failed"));
     }
   }, [loadManagedUsers, loadPendingResetRequests, toast]);
 
@@ -81,12 +75,7 @@ export function useSettingsManagedUserAccountLifecycleActions({
       }));
       await Promise.all([loadManagedUsers(), loadPendingResetRequests()]);
     } catch (error: unknown) {
-      const parsed = normalizeSettingsErrorPayload(error);
-      toast(buildMutationErrorToast({
-        title: parsed.code || "Delete Failed",
-        error,
-        fallbackDescription: parsed.message,
-      }));
+      toast(buildSettingsMutationErrorToast(error, "Delete Failed"));
     } finally {
       deleteManagedUserLocksRef.current.delete(normalizedId);
       if (isMountedRef.current) {

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, BadgeCheck, KeyRound, ShieldAlert } from "lucide-react";
 import { PublicAuthButton, PublicAuthInput } from "@/components/PublicAuthControls";
 import { PublicAuthLayout } from "@/components/PublicAuthLayout";
@@ -9,25 +9,20 @@ import {
 } from "@/lib/api/auth";
 import { getApiErrorMessage } from "@/lib/api-errors";
 import { broadcastForcedLogout } from "@/lib/auth-session";
-import { formatDateTimeDDMMYYYY } from "@/lib/date-format";
 import {
   hasPublicAuthFieldErrors,
   validatePasswordFields,
 } from "@/pages/public-auth-form-utils";
+import {
+  formatPublicAuthExpiry,
+  getPublicAuthTokenFromLocation,
+  isPublicAuthAbortError,
+} from "@/pages/public-auth-runtime-utils";
 
 type ResetPhase = "invalid" | "ready" | "success" | "validating";
 
-function getTokenFromLocation() {
-  if (typeof window === "undefined") return "";
-  return new URLSearchParams(window.location.search).get("token") || "";
-}
-
-function formatExpiry(value: string) {
-  return formatDateTimeDDMMYYYY(value, { fallback: value });
-}
-
 export default function ResetPasswordPage() {
-  const token = useMemo(() => getTokenFromLocation(), []);
+  const token = useMemo(() => getPublicAuthTokenFromLocation(), []);
   const [reset, setReset] = useState<PasswordResetTokenValidationPayload | null>(null);
   const [phase, setPhase] = useState<ResetPhase>(token ? "validating" : "invalid");
   const [newPassword, setNewPassword] = useState("");
@@ -36,43 +31,71 @@ export default function ResetPasswordPage() {
   const [confirmPasswordError, setConfirmPasswordError] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(token ? "" : "Pautan tetapan semula kata laluan tidak sah.");
+  const mountedRef = useRef(true);
+  const validationAbortControllerRef = useRef<AbortController | null>(null);
+  const resetAbortControllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
-    let cancelled = false;
+    mountedRef.current = true;
 
+    return () => {
+      mountedRef.current = false;
+      validationAbortControllerRef.current?.abort();
+      validationAbortControllerRef.current = null;
+      resetAbortControllerRef.current?.abort();
+      resetAbortControllerRef.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
     if (!token) {
       setPhase("invalid");
       setError("Pautan tetapan semula kata laluan tidak sah.");
-      return () => {
-        cancelled = true;
-      };
+      return undefined;
     }
+
+    validationAbortControllerRef.current?.abort();
+    const controller = new AbortController();
+    validationAbortControllerRef.current = controller;
 
     const runValidation = async () => {
       setPhase("validating");
       setError("");
 
       try {
-        const response = await validatePasswordResetToken({ token });
-        if (cancelled) return;
+        const response = await validatePasswordResetToken({ token }, { signal: controller.signal });
+        if (!mountedRef.current || controller.signal.aborted) return;
         setReset(response.reset);
         setPhase("ready");
       } catch (validationError) {
-        if (cancelled) return;
+        if (
+          isPublicAuthAbortError(validationError)
+          || !mountedRef.current
+          || controller.signal.aborted
+        ) {
+          return;
+        }
         setReset(null);
         setPhase("invalid");
         setError(getApiErrorMessage(validationError, "Pautan tetapan semula tidak sah atau telah tamat tempoh."));
+      } finally {
+        if (validationAbortControllerRef.current === controller) {
+          validationAbortControllerRef.current = null;
+        }
       }
     };
 
     void runValidation();
     return () => {
-      cancelled = true;
+      controller.abort();
+      if (validationAbortControllerRef.current === controller) {
+        validationAbortControllerRef.current = null;
+      }
     };
   }, [token]);
 
   const handleResetPassword = async () => {
-    if (!reset || loading || phase !== "ready") return;
+    if (!reset || loading || phase !== "ready" || resetAbortControllerRef.current) return;
 
     setError("");
     setNewPasswordError("");
@@ -89,13 +112,20 @@ export default function ResetPasswordPage() {
     }
 
     setLoading(true);
+    const controller = new AbortController();
+    resetAbortControllerRef.current = controller;
 
     try {
       await resetPasswordWithToken({
         token,
         newPassword,
         confirmPassword,
+      }, {
+        signal: controller.signal,
       });
+      if (!mountedRef.current || controller.signal.aborted) {
+        return;
+      }
       broadcastForcedLogout(
         "Sesi lama anda telah tamat kerana kata laluan telah ditetapkan semula. Sila log masuk semula.",
       );
@@ -103,9 +133,21 @@ export default function ResetPasswordPage() {
       setConfirmPassword("");
       setPhase("success");
     } catch (resetError) {
+      if (
+        isPublicAuthAbortError(resetError)
+        || !mountedRef.current
+        || controller.signal.aborted
+      ) {
+        return;
+      }
       setError(getApiErrorMessage(resetError, "Tetapan semula kata laluan gagal."));
     } finally {
-      setLoading(false);
+      if (resetAbortControllerRef.current === controller) {
+        resetAbortControllerRef.current = null;
+      }
+      if (mountedRef.current) {
+        setLoading(false);
+      }
     }
   };
 
@@ -162,7 +204,7 @@ export default function ResetPasswordPage() {
           <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm leading-7 text-slate-200">
             <div><span className="font-semibold text-white">Username:</span> {reset.username}</div>
             <div><span className="font-semibold text-white">Peranan:</span> {reset.role}</div>
-            <div><span className="font-semibold text-white">Tamat Tempoh:</span> {formatExpiry(reset.expiresAt)}</div>
+            <div><span className="font-semibold text-white">Tamat Tempoh:</span> {formatPublicAuthExpiry(reset.expiresAt)}</div>
           </div>
           <PublicAuthInput
             id="reset-password-new-password"

@@ -13,6 +13,7 @@ import {
   hasPublicAuthFieldErrors,
   validatePasswordFields,
 } from "@/pages/public-auth-form-utils";
+import { isPublicAuthAbortError } from "@/pages/public-auth-runtime-utils";
 
 type ChangePasswordPageProps = {
   username?: string;
@@ -119,7 +120,7 @@ export default function ChangePasswordPage({
       setSuccessMessage("Kata laluan berjaya dikemas kini.");
     } catch (submitError) {
       if (
-        (submitError instanceof DOMException && submitError.name === "AbortError") ||
+        isPublicAuthAbortError(submitError) ||
         !mountedRef.current
       ) {
         return;

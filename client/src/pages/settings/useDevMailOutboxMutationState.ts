@@ -1,6 +1,5 @@
 import { useCallback, useRef, useState } from "react";
 import {
-  buildMutationErrorToast,
   buildMutationSuccessToast,
 } from "@/lib/mutation-feedback";
 import {
@@ -11,7 +10,7 @@ import type {
   DevMailOutboxQueryState,
   UseSettingsDevMailOutboxArgs,
 } from "@/pages/settings/settings-dev-mail-outbox-shared";
-import { normalizeSettingsErrorPayload } from "@/pages/settings/utils";
+import { buildSettingsMutationErrorToast } from "@/pages/settings/utils";
 
 type UseDevMailOutboxMutationStateArgs = UseSettingsDevMailOutboxArgs & {
   getCurrentDevMailOutboxQuery: () => DevMailOutboxQueryState;
@@ -46,12 +45,7 @@ export function useDevMailOutboxMutationState({
       }));
       await loadDevMailOutbox(getCurrentDevMailOutboxQuery());
     } catch (error: unknown) {
-      const parsed = normalizeSettingsErrorPayload(error);
-      toast(buildMutationErrorToast({
-        title: parsed.code || "Delete Failed",
-        error,
-        fallbackDescription: parsed.message,
-      }));
+      toast(buildSettingsMutationErrorToast(error, "Delete Failed"));
     } finally {
       deleteDevMailPreviewLocksRef.current.delete(normalizedId);
       if (isMountedRef.current) {
@@ -75,12 +69,7 @@ export function useDevMailOutboxMutationState({
       }));
       await loadDevMailOutbox(getCurrentDevMailOutboxQuery());
     } catch (error: unknown) {
-      const parsed = normalizeSettingsErrorPayload(error);
-      toast(buildMutationErrorToast({
-        title: parsed.code || "Clear Failed",
-        error,
-        fallbackDescription: parsed.message,
-      }));
+      toast(buildSettingsMutationErrorToast(error, "Clear Failed"));
     } finally {
       if (isMountedRef.current) {
         setClearingDevMailOutbox(false);

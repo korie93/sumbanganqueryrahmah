@@ -1,5 +1,7 @@
+import { normalizeAuthIdentifier } from "@/pages/auth-field-utils";
+
 export function normalizeLoginIdentity(value: string | null | undefined): string {
-  return String(value || "").trim().toLowerCase();
+  return normalizeAuthIdentifier(value);
 }
 
 export function isLockedAccountFlow(params: {

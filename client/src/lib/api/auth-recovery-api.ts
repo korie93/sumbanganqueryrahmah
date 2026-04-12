@@ -35,24 +35,39 @@ export async function activateAccount(
   return response.json() as Promise<AuthUserResponse>;
 }
 
-export async function requestPasswordReset(payload: { identifier: string }) {
-  const response = await apiRequest("POST", "/api/auth/request-password-reset", payload);
+export async function requestPasswordReset(
+  payload: { identifier: string },
+  options?: RequestOptions,
+) {
+  const response = await apiRequest("POST", "/api/auth/request-password-reset", payload, {
+    signal: options?.signal,
+  });
   return response.json() as Promise<AuthMessageResponse>;
 }
 
-export async function validatePasswordResetToken(payload: { token: string }) {
-  const response = await apiRequest("POST", "/api/auth/validate-password-reset-token", payload);
+export async function validatePasswordResetToken(
+  payload: { token: string },
+  options?: RequestOptions,
+) {
+  const response = await apiRequest("POST", "/api/auth/validate-password-reset-token", payload, {
+    signal: options?.signal,
+  });
   return response.json() as Promise<{
     ok: boolean;
     reset: PasswordResetTokenValidationPayload;
   }>;
 }
 
-export async function resetPasswordWithToken(payload: {
-  token: string;
-  newPassword: string;
-  confirmPassword: string;
-}) {
-  const response = await apiRequest("POST", "/api/auth/reset-password-with-token", payload);
+export async function resetPasswordWithToken(
+  payload: {
+    token: string;
+    newPassword: string;
+    confirmPassword: string;
+  },
+  options?: RequestOptions,
+) {
+  const response = await apiRequest("POST", "/api/auth/reset-password-with-token", payload, {
+    signal: options?.signal,
+  });
   return response.json() as Promise<AuthUserResponse>;
 }

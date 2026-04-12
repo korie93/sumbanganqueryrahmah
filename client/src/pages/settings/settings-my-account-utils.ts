@@ -1,4 +1,5 @@
 import { broadcastForcedLogout, persistAuthenticatedUser } from "@/lib/auth-session";
+import { normalizeTwoFactorCode } from "@/pages/auth-field-utils";
 import type { CurrentUser } from "@/pages/settings/types";
 
 export function buildNextCurrentUser(
@@ -43,7 +44,7 @@ export function forceLogoutAfterPasswordChange() {
 }
 
 export function normalizeAuthenticatorCode(value: string) {
-  return value.replace(/\D/g, "").slice(0, 6);
+  return normalizeTwoFactorCode(value);
 }
 
 export function canConfigureTwoFactor(role: string | undefined) {

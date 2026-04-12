@@ -5,7 +5,6 @@ import {
   startTwoFactorSetup,
 } from "@/lib/api";
 import {
-  buildMutationErrorToast,
   buildMutationSuccessToast,
 } from "@/lib/mutation-feedback";
 import {
@@ -18,7 +17,7 @@ import {
   normalizeAuthenticatorCode,
 } from "@/pages/settings/settings-my-account-utils";
 import type { CurrentUser } from "@/pages/settings/types";
-import { normalizeSettingsErrorPayload } from "@/pages/settings/utils";
+import { buildSettingsMutationErrorToast } from "@/pages/settings/utils";
 
 type UseSettingsMyAccountTwoFactorStateArgs = UseSettingsMyAccountArgs & {
   currentUser: CurrentUser | null;
@@ -83,12 +82,7 @@ export function useSettingsMyAccountTwoFactorState({
         description: "Add the secret key to your authenticator app, then verify the 6-digit code.",
       }));
     } catch (error: unknown) {
-      const parsed = normalizeSettingsErrorPayload(error);
-      toast(buildMutationErrorToast({
-        title: parsed.code || "2FA Setup Failed",
-        error,
-        fallbackDescription: parsed.message,
-      }));
+      toast(buildSettingsMutationErrorToast(error, "2FA Setup Failed"));
     } finally {
       if (!isMountedRef.current) return;
       setTwoFactorLoading(false);
@@ -120,12 +114,7 @@ export function useSettingsMyAccountTwoFactorState({
         description: "Authenticator-based sign-in is now active for this account.",
       }));
     } catch (error: unknown) {
-      const parsed = normalizeSettingsErrorPayload(error);
-      toast(buildMutationErrorToast({
-        title: parsed.code || "2FA Enable Failed",
-        error,
-        fallbackDescription: parsed.message,
-      }));
+      toast(buildSettingsMutationErrorToast(error, "2FA Enable Failed"));
     } finally {
       if (!isMountedRef.current) return;
       setTwoFactorLoading(false);
@@ -169,12 +158,7 @@ export function useSettingsMyAccountTwoFactorState({
         description: "Authenticator-based sign-in has been turned off for this account.",
       }));
     } catch (error: unknown) {
-      const parsed = normalizeSettingsErrorPayload(error);
-      toast(buildMutationErrorToast({
-        title: parsed.code || "2FA Disable Failed",
-        error,
-        fallbackDescription: parsed.message,
-      }));
+      toast(buildSettingsMutationErrorToast(error, "2FA Disable Failed"));
     } finally {
       if (!isMountedRef.current) return;
       setTwoFactorLoading(false);

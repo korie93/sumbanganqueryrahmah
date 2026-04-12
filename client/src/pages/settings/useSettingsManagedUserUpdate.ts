@@ -10,11 +10,10 @@ import type {
   ToastFn,
 } from "@/pages/settings/useSettingsManagedUserMutationShared";
 import {
-  buildMutationErrorToast,
   buildMutationSuccessToast,
 } from "@/lib/mutation-feedback";
 import {
-  normalizeSettingsErrorPayload,
+  buildSettingsMutationErrorToast,
 } from "@/pages/settings/utils";
 import {
   normalizeCredentialEmail,
@@ -117,12 +116,7 @@ export function useSettingsManagedUserUpdate({
       onManagedDialogOpenChange(false);
       await Promise.all([loadManagedUsers(), loadPendingResetRequests()]);
     } catch (error: unknown) {
-      const parsed = normalizeSettingsErrorPayload(error);
-      toast(buildMutationErrorToast({
-        title: parsed.code || "Update Failed",
-        error,
-        fallbackDescription: parsed.message,
-      }));
+      toast(buildSettingsMutationErrorToast(error, "Update Failed"));
     } finally {
       if (!isMountedRef.current) return;
       setManagedSaving(false);

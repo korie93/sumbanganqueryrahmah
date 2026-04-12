@@ -1,3 +1,5 @@
+import { hasAuthIdentifier } from "@/pages/auth-field-utils";
+
 export type PublicAuthFieldErrors = {
   identifier?: string | undefined;
   currentPassword?: string | undefined;
@@ -22,7 +24,7 @@ export function hasPublicAuthFieldErrors(errors: PublicAuthFieldErrors): boolean
 }
 
 export function validateIdentifierField(identifier: string): PublicAuthFieldErrors {
-  return identifier.trim()
+  return hasAuthIdentifier(identifier)
     ? {}
     : { identifier: "Sila masukkan username atau emel anda." };
 }

@@ -12,7 +12,7 @@ import {
   isDevOutboxActivation,
 } from "@/pages/settings/useSettingsManagedUserMutationShared";
 import type { ManagedUser } from "@/pages/settings/types";
-import { normalizeSettingsErrorPayload } from "@/pages/settings/utils";
+import { buildSettingsMutationErrorToast } from "@/pages/settings/utils";
 import type { UseSettingsManagedUserLifecycleActionsArgs } from "@/pages/settings/settings-managed-user-lifecycle-shared";
 import {
   getManagedUserDeliveryPreviewUrl,
@@ -98,12 +98,7 @@ export function useSettingsManagedUserCommunicationActions({
 
       await Promise.all([loadManagedUsers(), loadPendingResetRequests(), loadDevMailOutbox()]);
     } catch (error: unknown) {
-      const parsed = normalizeSettingsErrorPayload(error);
-      toast(buildMutationErrorToast({
-        title: parsed.code || "Reset Failed",
-        error,
-        fallbackDescription: parsed.message,
-      }));
+      toast(buildSettingsMutationErrorToast(error, "Reset Failed"));
     } finally {
       resetPasswordLocksRef.current.delete(normalizedId);
     }
@@ -167,12 +162,7 @@ export function useSettingsManagedUserCommunicationActions({
 
       await Promise.all([loadManagedUsers(), loadDevMailOutbox()]);
     } catch (error: unknown) {
-      const parsed = normalizeSettingsErrorPayload(error);
-      toast(buildMutationErrorToast({
-        title: parsed.code || "Activation Failed",
-        error,
-        fallbackDescription: parsed.message,
-      }));
+      toast(buildSettingsMutationErrorToast(error, "Activation Failed"));
     } finally {
       resendActivationLocksRef.current.delete(normalizedId);
     }

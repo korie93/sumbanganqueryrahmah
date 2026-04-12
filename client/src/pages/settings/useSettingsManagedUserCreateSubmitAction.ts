@@ -1,7 +1,6 @@
 import { useCallback, useRef, useState } from "react";
 import { createManagedUserAccount } from "@/lib/api";
 import {
-  buildMutationErrorToast,
   buildMutationSuccessToast,
 } from "@/lib/mutation-feedback";
 import {
@@ -19,7 +18,10 @@ import {
   resolveManagedUserDeliveryRecipient,
   shouldOpenManagedUserSmtpPreview,
 } from "@/pages/settings/settings-managed-user-lifecycle-utils";
-import { normalizeSettingsErrorPayload } from "@/pages/settings/utils";
+import {
+  buildSettingsMutationErrorToast,
+  normalizeSettingsErrorPayload,
+} from "@/pages/settings/utils";
 
 type UseSettingsManagedUserCreateSubmitActionArgs = UseSettingsManagedUserCreateArgs & {
   createDraft: Parameters<typeof validateManagedUserCreateDraft>[0];
@@ -146,11 +148,7 @@ export function useSettingsManagedUserCreateSubmitAction({
         }
       }
 
-      toast(buildMutationErrorToast({
-        title: parsed.code || "Create Failed",
-        error,
-        fallbackDescription: parsed.message,
-      }));
+      toast(buildSettingsMutationErrorToast(error, "Create Failed"));
     } finally {
       createManagedUserLockRef.current = false;
       if (!isMountedRef.current) {

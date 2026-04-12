@@ -28,7 +28,10 @@ import {
   getDevMailOutboxPreviews,
   login,
   getPendingPasswordResetRequests,
+  requestPasswordReset,
+  resetPasswordWithToken,
   getSuperuserManagedUsers,
+  validatePasswordResetToken,
   validateActivationToken,
 } from "@/lib/api/auth";
 import { getCollectionRecords } from "@/lib/api/collection";
@@ -813,6 +816,66 @@ test("auth token and password wrappers forward AbortSignal", async () => {
   assert.equal(requests[0]?.url, "/api/auth/validate-activation-token");
   assert.equal(requests[1]?.url, "/api/auth/activate-account");
   assert.equal(requests[2]?.url, "/api/auth/change-password");
+});
+
+test("auth recovery wrappers forward AbortSignal", async () => {
+  const requests: Array<{ url: string; signal: AbortSignal | null }> = [];
+  const controller = new AbortController();
+  const restoreFetch = withMockFetch((async (input, init) => {
+    requests.push({
+      url: String(input),
+      signal: (init?.signal as AbortSignal | undefined) || null,
+    });
+
+    const url = String(input);
+    if (url === "/api/auth/request-password-reset") {
+      return jsonResponse({
+        ok: true,
+        message: "queued",
+      });
+    }
+    if (url === "/api/auth/validate-password-reset-token") {
+      return jsonResponse({
+        ok: true,
+        reset: {
+          expiresAt: "2026-03-24T00:00:00.000Z",
+          role: "admin",
+          username: "alice",
+        },
+      });
+    }
+    if (url === "/api/auth/reset-password-with-token") {
+      return jsonResponse({
+        ok: true,
+        user: null,
+      });
+    }
+
+    throw new Error(`Unexpected URL: ${url}`);
+  }) as typeof fetch);
+
+  try {
+    await requestPasswordReset({ identifier: "alice" }, { signal: controller.signal });
+    await validatePasswordResetToken({ token: "token-1" }, { signal: controller.signal });
+    await resetPasswordWithToken(
+      {
+        token: "token-1",
+        newPassword: "Password123!",
+        confirmPassword: "Password123!",
+      },
+      { signal: controller.signal },
+    );
+  } finally {
+    restoreFetch();
+  }
+
+  assert.equal(requests.length, 3);
+  assert.equal(requests[0]?.signal, controller.signal);
+  assert.equal(requests[1]?.signal, controller.signal);
+  assert.equal(requests[2]?.signal, controller.signal);
+  assert.equal(requests[0]?.url, "/api/auth/request-password-reset");
+  assert.equal(requests[1]?.url, "/api/auth/validate-password-reset-token");
+  assert.equal(requests[2]?.url, "/api/auth/reset-password-with-token");
 });
 
 test("activity heartbeat wrappers forward AbortSignal", async () => {

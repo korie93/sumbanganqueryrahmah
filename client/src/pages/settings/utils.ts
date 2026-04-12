@@ -1,3 +1,7 @@
+import {
+  buildMutationErrorToast,
+  type MutationToastPayload,
+} from "@/lib/mutation-feedback";
 import type { NormalizedSettingsError, SettingItem } from "@/pages/settings/types";
 
 export const settingsCategoryOrder = [
@@ -45,6 +49,18 @@ export function normalizeSettingsErrorPayload(rawError: unknown): NormalizedSett
   } catch {
     return { message: message || fallback.message };
   }
+}
+
+export function buildSettingsMutationErrorToast(
+  error: unknown,
+  fallbackTitle: string,
+): MutationToastPayload {
+  const parsed = normalizeSettingsErrorPayload(error);
+  return buildMutationErrorToast({
+    title: parsed.code || fallbackTitle,
+    error,
+    fallbackDescription: parsed.message,
+  });
 }
 
 export function getSettingActionTooltip(setting: SettingItem) {

@@ -1,7 +1,6 @@
 import { useCallback, useState } from "react";
 import { updateMyCredentials } from "@/lib/api";
 import {
-  buildMutationErrorToast,
   buildMutationSuccessToast,
 } from "@/lib/mutation-feedback";
 import {
@@ -11,8 +10,8 @@ import {
 import { buildNextCurrentUser } from "@/pages/settings/settings-my-account-utils";
 import type { CurrentUser } from "@/pages/settings/types";
 import {
+  buildSettingsMutationErrorToast,
   isStrongPassword,
-  normalizeSettingsErrorPayload,
 } from "@/pages/settings/utils";
 import {
   normalizeCredentialUsername,
@@ -72,12 +71,7 @@ export function useSettingsMyAccountCredentialState({
         description: "Your username has been updated successfully.",
       }));
     } catch (error: unknown) {
-      const parsed = normalizeSettingsErrorPayload(error);
-      toast(buildMutationErrorToast({
-        title: parsed.code || "Update Failed",
-        error,
-        fallbackDescription: parsed.message,
-      }));
+      toast(buildSettingsMutationErrorToast(error, "Update Failed"));
     } finally {
       if (!isMountedRef.current) return;
       setUsernameSaving(false);
@@ -136,12 +130,7 @@ export function useSettingsMyAccountCredentialState({
         forceLogoutAfterPasswordChange();
       }
     } catch (error: unknown) {
-      const parsed = normalizeSettingsErrorPayload(error);
-      toast(buildMutationErrorToast({
-        title: parsed.code || "Update Failed",
-        error,
-        fallbackDescription: parsed.message,
-      }));
+      toast(buildSettingsMutationErrorToast(error, "Update Failed"));
     } finally {
       if (!isMountedRef.current) return;
       setPasswordSaving(false);
