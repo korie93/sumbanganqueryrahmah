@@ -3,7 +3,7 @@ import type { WorkerFatalMessage } from "./internal/worker-ipc";
 import { startLocalServer } from "./internal/server-startup";
 import { createLocalRuntimeEnvironment } from "./internal/local-runtime-environment";
 import { markStartupFailed } from "./internal/startup-health";
-import { pool } from "./db-postgres";
+import { pool, stopPgPoolBackgroundTasks } from "./db-postgres";
 import { logger } from "./lib/logger";
 
 let startupFatalReason: string | null = null;
@@ -67,6 +67,7 @@ function gracefulShutdown(signal: string) {
   }
 
   server.close(async () => {
+    stopPgPoolBackgroundTasks();
     try { await pool.end(); } catch { /* best-effort */ }
     logger.info("Server closed gracefully");
     process.exit(0);
@@ -110,6 +111,7 @@ startServer().catch(async (error) => {
   markStartupFailed(startupReason, message);
   logger.error("Local server failed during startup", { error });
 
+  stopPgPoolBackgroundTasks();
   try {
     await pool.end();
   } catch {

@@ -58,3 +58,31 @@ test("sanitizeForLog keeps ordinary operational metadata intact", () => {
     },
   });
 });
+
+test("sanitizeForLog redacts phone numbers and valid credit cards inside freeform strings", () => {
+  const sanitized = sanitizeForLog({
+    details: "Contact 012-3111222 and retry card 4111 1111 1111 1111 immediately.",
+    nested: [
+      "Escalate to +6012 555 7788 if payment 4012-8888-8888-1881 still fails.",
+    ],
+  }) as Record<string, unknown>;
+
+  assert.equal(
+    sanitized.details,
+    "Contact [REDACTED] and retry card [REDACTED] immediately.",
+  );
+  assert.deepEqual(sanitized.nested, [
+    "Escalate to [REDACTED] if payment [REDACTED] still fails.",
+  ]);
+});
+
+test("sanitizeForLog keeps invalid card-like identifiers intact to avoid false positives", () => {
+  const sanitized = sanitizeForLog({
+    details: "Reference 4111 1111 1111 1112 belongs to audit replay 2026-04-12.",
+  }) as Record<string, unknown>;
+
+  assert.equal(
+    sanitized.details,
+    "Reference 4111 1111 1111 1112 belongs to audit replay 2026-04-12.",
+  );
+});

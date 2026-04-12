@@ -29,6 +29,24 @@ export type {
 } from "./search-repository-types";
 
 export class SearchRepository {
+  private async getImportColumnNames(importId: string): Promise<Set<string>> {
+    const result = await db.execute(sql`
+      SELECT DISTINCT key AS column_name
+      FROM public.data_rows dr
+      CROSS JOIN LATERAL jsonb_object_keys(dr.json_data::jsonb) AS key
+      WHERE dr.import_id = ${importId}
+        AND jsonb_typeof(dr.json_data::jsonb) = 'object'
+      ORDER BY key
+      LIMIT ${MAX_SEARCH_COLUMN_KEYS}
+    `);
+
+    return new Set(
+      (result.rows || [])
+        .map((row) => String((row as Record<string, unknown>).column_name || "").trim())
+        .filter(Boolean),
+    );
+  }
+
   async searchGlobalDataRows(params: {
     search: string;
     limit: number;
@@ -111,7 +129,7 @@ export class SearchRepository {
     const safeLimit = Math.min(Math.max(1, limit), MAX_SEARCH_LIMIT);
     const safeOffset = normalizeSearchOffset(offset);
     const cursor = String(params.cursor || "").trim() || null;
-    const safeColumnFilters = Array.isArray(params.columnFilters)
+    const requestedColumnFilters = Array.isArray(params.columnFilters)
       ? params.columnFilters
           .map((filter) => ({
             column: String(filter?.column ?? "").trim(),
@@ -123,6 +141,12 @@ export class SearchRepository {
             && filter.value !== ""
             && SEARCH_ALLOWED_OPERATORS.has(filter.operator),
           )
+      : [];
+    const allowedColumns = requestedColumnFilters.length > 0
+      ? await this.getImportColumnNames(importId)
+      : null;
+    const safeColumnFilters = allowedColumns
+      ? requestedColumnFilters.filter((filter) => allowedColumns.has(filter.column))
       : [];
 
     if (trimmedSearch && trimmedSearch.length < 2) {

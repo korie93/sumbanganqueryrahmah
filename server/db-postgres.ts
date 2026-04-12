@@ -1,7 +1,10 @@
 import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
 import { runtimeConfig } from "./config/runtime";
-import { bindPgPoolMonitoring } from "./db-pool-monitor";
+import {
+  bindPgPoolHealthCheck,
+  bindPgPoolMonitoring,
+} from "./db-pool-monitor";
 
 const { Pool } = pg;
 
@@ -40,8 +43,17 @@ export const pool = new Pool(
       },
 );
 
-bindPgPoolMonitoring(pool, {
+const stopPgPoolMonitoring = bindPgPoolMonitoring(pool, {
   warnCooldownMs: runtimeConfig.runtime.pgPoolWarnCooldownMs,
 });
+const stopPgPoolHealthCheck = bindPgPoolHealthCheck(pool, {
+  intervalMs: 60_000,
+  timeoutMs: Math.max(1_000, runtimeConfig.database.connectionTimeoutMs),
+});
+
+export function stopPgPoolBackgroundTasks() {
+  stopPgPoolMonitoring();
+  stopPgPoolHealthCheck();
+}
 
 export const db = drizzle(pool);

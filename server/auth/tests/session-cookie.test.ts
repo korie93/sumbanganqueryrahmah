@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   AUTH_SESSION_COOKIE_NAME,
+  AUTH_SESSION_CSRF_COOKIE_NAME,
   readCookieValueFromHeader,
+  rotateAuthSessionCsrfCookie,
 } from "../session-cookie";
 import { logger } from "../../lib/logger";
 
@@ -37,4 +39,21 @@ test("readCookieValueFromHeader rejects malformed percent-encoded cookies and lo
   } finally {
     logger.warn = originalWarn;
   }
+});
+
+test("rotateAuthSessionCsrfCookie refreshes only the csrf cookie", () => {
+  const cookies: Array<{ name: string; value: string; options: Record<string, unknown> }> = [];
+  const res = {
+    cookie: (name: string, value: string, options: Record<string, unknown>) => {
+      cookies.push({ name, value, options });
+    },
+  };
+
+  rotateAuthSessionCsrfCookie(res as never);
+
+  assert.equal(cookies.length, 1);
+  assert.equal(cookies[0]?.name, AUTH_SESSION_CSRF_COOKIE_NAME);
+  assert.equal(typeof cookies[0]?.value, "string");
+  assert.equal(cookies[0]?.value.length, 64);
+  assert.equal(cookies[0]?.options.httpOnly, false);
 });

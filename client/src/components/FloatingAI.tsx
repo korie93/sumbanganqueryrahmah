@@ -127,6 +127,10 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
     event.currentTarget.blur();
     handleMinimize();
   }, [handleMinimize]);
+  const handleBackdropClick = useCallback((event: MouseEvent<HTMLButtonElement>) => {
+    event.currentTarget.blur();
+    handleMinimize();
+  }, [handleMinimize]);
 
   if (hiddenForAiPage) return null;
 
@@ -144,10 +148,14 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
       hidden={layoutState.rootHidden}
     >
       {isMobile && shouldShowPanel ? (
-        <div
-          className={cn("pointer-events-auto", styles.floatingMobileBackdrop)}
-          aria-hidden="true"
-          onClick={handleMinimize}
+        <button
+          type="button"
+          className={cn(
+            "pointer-events-auto border-0 bg-transparent p-0",
+            styles.floatingMobileBackdrop,
+          )}
+          aria-label="Close AI panel"
+          onClick={handleBackdropClick}
         />
       ) : null}
       {shouldKeepPanelMounted ? (

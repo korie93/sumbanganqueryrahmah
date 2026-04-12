@@ -7,6 +7,7 @@ type PgPoolLike = {
   options?: {
     max?: number;
   };
+  query?(text: string): Promise<unknown>;
   on(event: string, listener: (...args: unknown[]) => void): unknown;
   off?(event: string, listener: (...args: unknown[]) => void): unknown;
 };
@@ -17,6 +18,15 @@ type BindPgPoolMonitoringOptions = {
   warnCooldownMs?: number;
   logger?: LoggerLike;
 };
+
+type BindPgPoolHealthCheckOptions = {
+  intervalMs?: number;
+  timeoutMs?: number;
+  logger?: LoggerLike;
+};
+
+const MIN_PG_POOL_HEALTH_CHECK_INTERVAL_MS = 1_000;
+const MIN_PG_POOL_HEALTH_CHECK_TIMEOUT_MS = 250;
 
 export type PgPoolSnapshot = {
   total: number;
@@ -96,5 +106,64 @@ export function bindPgPoolMonitoring(pool: PgPoolLike, options: BindPgPoolMonito
     pool.off?.("acquire", handleAcquire);
     pool.off?.("remove", handleRemove);
     pool.off?.("error", handleError);
+  };
+}
+
+export function bindPgPoolHealthCheck(pool: PgPoolLike, options: BindPgPoolHealthCheckOptions = {}) {
+  if (typeof pool.query !== "function") {
+    return () => undefined;
+  }
+
+  const intervalMs = Math.max(MIN_PG_POOL_HEALTH_CHECK_INTERVAL_MS, Number(options.intervalMs || 60_000));
+  const timeoutMs = Math.max(
+    MIN_PG_POOL_HEALTH_CHECK_TIMEOUT_MS,
+    Math.min(intervalMs, Number(options.timeoutMs || 5_000)),
+  );
+  const sink = options.logger ?? logger;
+  let stopped = false;
+  let checkInFlight = false;
+
+  const runHealthCheck = async () => {
+    if (stopped || checkInFlight) {
+      return;
+    }
+
+    checkInFlight = true;
+    let timeoutHandle: NodeJS.Timeout | null = null;
+
+    try {
+      await Promise.race([
+        pool.query!("SELECT 1"),
+        new Promise<never>((_, reject) => {
+          timeoutHandle = setTimeout(() => {
+            reject(new Error(`PostgreSQL pool health check timed out after ${timeoutMs}ms`));
+          }, timeoutMs);
+          timeoutHandle.unref?.();
+        }),
+      ]);
+    } catch (error) {
+      sink.warn("PostgreSQL pool health check failed", {
+        ...getPgPoolSnapshot(pool),
+        error,
+      });
+    } finally {
+      if (timeoutHandle) {
+        clearTimeout(timeoutHandle);
+      }
+      checkInFlight = false;
+    }
+  };
+
+  const intervalHandle = setInterval(() => {
+    void runHealthCheck();
+  }, intervalMs);
+  intervalHandle.unref?.();
+
+  return () => {
+    if (stopped) {
+      return;
+    }
+    stopped = true;
+    clearInterval(intervalHandle);
   };
 }

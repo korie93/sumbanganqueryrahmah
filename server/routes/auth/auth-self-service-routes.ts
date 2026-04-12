@@ -5,7 +5,10 @@ import {
   readTwoFactorDisableBody,
   readTwoFactorSetupBody,
 } from "./auth-request-parsers";
-import { clearAuthSessionCookie } from "../../auth/session-cookie";
+import {
+  clearAuthSessionCookie,
+  rotateAuthSessionCsrfCookie,
+} from "../../auth/session-cookie";
 import type { AuthRouteContext } from "./auth-route-shared";
 
 export function registerAuthSelfServiceRoutes(context: AuthRouteContext) {
@@ -51,9 +54,10 @@ export function registerAuthSelfServiceRoutes(context: AuthRouteContext) {
     "/api/auth/two-factor/setup",
     authenticateToken,
     rateLimiters.authenticatedAuth,
-    jsonRoute(async (req) => {
+    jsonRoute(async (req, res) => {
       const body = readTwoFactorSetupBody(req.body);
       const result = await authAccountService.startTwoFactorSetup(req.user, body);
+      rotateAuthSessionCsrfCookie(res);
       return buildOkPayload({
         setup: result.setup,
         user: buildUserPayload(result.user),
@@ -65,9 +69,10 @@ export function registerAuthSelfServiceRoutes(context: AuthRouteContext) {
     "/api/auth/two-factor/enable",
     authenticateToken,
     rateLimiters.authenticatedAuth,
-    jsonRoute(async (req) => {
+    jsonRoute(async (req, res) => {
       const body = readTwoFactorCodeBody(req.body);
       const user = await authAccountService.confirmTwoFactorSetup(req.user, body);
+      rotateAuthSessionCsrfCookie(res);
       return buildOkPayload({
         user: buildUserPayload(user),
       });
@@ -78,9 +83,10 @@ export function registerAuthSelfServiceRoutes(context: AuthRouteContext) {
     "/api/auth/two-factor/disable",
     authenticateToken,
     rateLimiters.authenticatedAuth,
-    jsonRoute(async (req) => {
+    jsonRoute(async (req, res) => {
       const body = readTwoFactorDisableBody(req.body);
       const user = await authAccountService.disableTwoFactor(req.user, body);
+      rotateAuthSessionCsrfCookie(res);
       return buildOkPayload({
         user: buildUserPayload(user),
       });
@@ -122,6 +128,8 @@ export function registerAuthSelfServiceRoutes(context: AuthRouteContext) {
           "Password changed. Please login again.",
         );
         clearAuthSessionCookie(res);
+      } else {
+        rotateAuthSessionCsrfCookie(res);
       }
 
       return {

@@ -16,6 +16,7 @@ export const settingCategories = pgTable("setting_categories", {
   description: text("description"),
   createdAt: utcTimestamp("created_at").defaultNow().notNull(),
 }, (table) => ({
+  // Settings bootstrap seeding uses ON CONFLICT (name) DO UPDATE against this index.
   nameUnique: uniqueIndex("setting_categories_name_unique").on(table.name),
 }));
 
@@ -34,6 +35,7 @@ export const systemSettings = pgTable("system_settings", {
   isCritical: boolean("is_critical").default(false),
   updatedAt: utcTimestamp("updated_at").defaultNow().notNull(),
 }, (table) => ({
+  // Settings bootstrap seeding uses ON CONFLICT (key) DO UPDATE against this index.
   keyUnique: uniqueIndex("system_settings_key_unique").on(table.key),
   categoryIdx: index("system_settings_category_id_idx").on(table.categoryId),
 }));
@@ -47,6 +49,7 @@ export const settingOptions = pgTable("setting_options", {
   value: text("value").notNull(),
   label: text("label").notNull(),
 }, (table) => ({
+  // Option seeders replace the option set per setting_id, and this index keeps any future upsert path deterministic.
   settingValueUnique: uniqueIndex("idx_setting_options_unique_value").on(table.settingId, table.value),
   settingIdx: index("idx_setting_options_setting_id").on(table.settingId),
 }));
@@ -58,6 +61,7 @@ export const roleSettingPermissions = pgTable("role_setting_permissions", {
   canView: boolean("can_view").default(false),
   canEdit: boolean("can_edit").default(false),
 }, (table) => ({
+  // Settings bootstrap seeding uses ON CONFLICT (role, setting_key) DO UPDATE against this index.
   roleSettingUnique: uniqueIndex("idx_role_setting_permissions_unique").on(table.role, table.settingKey),
 }));
 
@@ -79,5 +83,6 @@ export const featureFlags = pgTable("feature_flags", {
   description: text("description"),
   updatedAt: utcTimestamp("updated_at").defaultNow().notNull(),
 }, (table) => ({
+  // Feature-flag seed/bootstrap flows must treat key as the stable upsert identity.
   keyUnique: uniqueIndex("feature_flags_key_unique").on(table.key),
 }));

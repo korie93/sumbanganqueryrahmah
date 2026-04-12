@@ -10,6 +10,8 @@ import { createCorsMiddleware } from "../http/cors";
 import { SQR_TRUSTED_TYPES_POLICY_NAME } from "../../shared/trusted-types";
 
 const HTTP_SLOW_REQUEST_MS = runtimeConfig.runtime.httpSlowRequestMs;
+const API_VERSION_HEADER = "API-Version";
+const API_VERSION_VALUE = "1";
 
 function normalizeRequestUserAgent(rawUserAgent: unknown): string | undefined {
   const normalized = String(rawUserAgent || "").trim().replace(/\s+/g, " ");
@@ -102,6 +104,7 @@ export function registerLocalHttpPipeline(app: Express, options: LocalHttpPipeli
     const clientIp = String(req.ip || req.socket.remoteAddress || "").trim() || undefined;
     const userAgent = normalizeRequestUserAgent(req.headers["user-agent"]);
     res.setHeader("x-request-id", requestId);
+    res.setHeader(API_VERSION_HEADER, API_VERSION_VALUE);
 
     runWithRequestContext({
       requestId,

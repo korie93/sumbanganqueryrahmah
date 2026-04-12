@@ -651,6 +651,7 @@ test("PATCH /api/me/credentials updates the current username without forcing log
       previousUsername: "credential.user",
       nextUsername: "renamed.user",
     }]);
+    assert.match(String(response.headers.get("set-cookie") || ""), /sqr_csrf=/);
     assert.equal(auditLogs.length, 1);
     assert.equal(auditLogs[0].action, "USER_USERNAME_CHANGED");
   } finally {
@@ -1422,6 +1423,7 @@ test("authenticated users can set up, enable, and disable 2FA through auth route
     assert.equal(typeof setupPayload.setup.secret, "string");
     assert.equal(user.twoFactorEnabled, false);
     assert.equal(typeof user.twoFactorSecretEncrypted, "string");
+    assert.match(String(setupResponse.headers.get("set-cookie") || ""), /sqr_csrf=/);
 
     const code = generateCurrentTwoFactorCode(setupPayload.setup.secret);
     const enableResponse = await fetch(`${baseUrl}/api/auth/two-factor/enable`, {
@@ -1437,6 +1439,7 @@ test("authenticated users can set up, enable, and disable 2FA through auth route
     assert.equal(enableResponse.status, 200);
     assert.equal(user.twoFactorEnabled, true);
     assert.ok(user.twoFactorConfiguredAt instanceof Date);
+    assert.match(String(enableResponse.headers.get("set-cookie") || ""), /sqr_csrf=/);
 
     const disableResponse = await fetch(`${baseUrl}/api/auth/two-factor/disable`, {
       method: "POST",
@@ -1453,6 +1456,7 @@ test("authenticated users can set up, enable, and disable 2FA through auth route
     assert.equal(user.twoFactorEnabled, false);
     assert.equal(user.twoFactorSecretEncrypted, null);
     assert.equal(user.twoFactorConfiguredAt, null);
+    assert.match(String(disableResponse.headers.get("set-cookie") || ""), /sqr_csrf=/);
     assert.equal(auditLogs.some((entry) => entry.action === "TWO_FACTOR_SETUP_INITIATED"), true);
     assert.equal(auditLogs.some((entry) => entry.action === "TWO_FACTOR_ENABLED"), true);
     assert.equal(auditLogs.some((entry) => entry.action === "TWO_FACTOR_DISABLED"), true);

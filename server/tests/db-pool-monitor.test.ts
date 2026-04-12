@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
 import test from "node:test";
 import {
+  bindPgPoolHealthCheck,
   bindPgPoolMonitoring,
   getPgPoolSnapshot,
   hasPgPoolPressure,
@@ -14,6 +15,14 @@ class FakePool extends EventEmitter {
   options = {
     max: 0,
   };
+  queryImpl: (() => Promise<unknown>) | null = null;
+
+  async query(text: string) {
+    if (!this.queryImpl) {
+      return { rows: [{ "?column?": 1 }], text };
+    }
+    return this.queryImpl();
+  }
 }
 
 test("getPgPoolSnapshot normalizes pool counters", () => {
@@ -158,4 +167,58 @@ test("bindPgPoolMonitoring logs pool client errors with the current snapshot", (
   assert.equal(errors.length, 1);
   assert.equal(errors[0]?.total, 3);
   assert.equal((errors[0]?.error as Error)?.message, "socket lost");
+});
+
+test("bindPgPoolHealthCheck logs failures from a periodic SELECT 1 probe", async () => {
+  const pool = new FakePool();
+  const warnings: Array<Record<string, unknown>> = [];
+  let queryCalls = 0;
+  pool.queryImpl = async () => {
+    queryCalls += 1;
+    throw new Error("database unavailable");
+  };
+
+  const stopHealthCheck = bindPgPoolHealthCheck(pool, {
+    intervalMs: 1_000,
+    timeoutMs: 250,
+    logger: {
+      warn: (_message, meta) => {
+        warnings.push(meta || {});
+      },
+      error: () => undefined,
+    },
+  });
+
+  await new Promise((resolve) => setTimeout(resolve, 1_100));
+  stopHealthCheck();
+
+  assert.equal(queryCalls > 0, true);
+  assert.equal(warnings.length > 0, true);
+  assert.equal((warnings[0]?.error as Error)?.message, "database unavailable");
+});
+
+test("bindPgPoolHealthCheck cleanup stops future interval probes", async () => {
+  const pool = new FakePool();
+  let queryCalls = 0;
+  pool.queryImpl = async () => {
+    queryCalls += 1;
+    return { rows: [{ ok: 1 }] };
+  };
+
+  const stopHealthCheck = bindPgPoolHealthCheck(pool, {
+    intervalMs: 1_000,
+    timeoutMs: 250,
+    logger: {
+      warn: () => undefined,
+      error: () => undefined,
+    },
+  });
+
+  await new Promise((resolve) => setTimeout(resolve, 1_100));
+  stopHealthCheck();
+  const callsAfterStop = queryCalls;
+  await new Promise((resolve) => setTimeout(resolve, 25));
+
+  assert.equal(callsAfterStop > 0, true);
+  assert.equal(queryCalls, callsAfterStop);
 });

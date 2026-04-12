@@ -73,6 +73,7 @@ test("registerLocalHttpPipeline preserves caller-provided request ids", async ()
     });
     assert.equal(response.status, 200);
     assert.equal(response.headers.get("x-request-id"), "req-test-123");
+    assert.equal(response.headers.get("api-version"), "1");
   } finally {
     await stopTestServer(server);
   }

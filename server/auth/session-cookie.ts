@@ -55,6 +55,13 @@ function createCsrfToken() {
   return randomBytes(32).toString("hex");
 }
 
+function setAuthSessionCsrfCookie(res: Response, csrfToken: string) {
+  res.cookie(AUTH_SESSION_CSRF_COOKIE_NAME, csrfToken, {
+    ...getAuthSessionCsrfCookieOptions(),
+    maxAge: AUTH_SESSION_MAX_AGE_MS,
+  });
+}
+
 function equalSafeToken(left: string, right: string): boolean {
   const leftBuffer = Buffer.from(String(left || ""), "utf8");
   const rightBuffer = Buffer.from(String(right || ""), "utf8");
@@ -139,10 +146,11 @@ export function setAuthSessionCookie(res: Response, token: string) {
     ...getAuthSessionHintCookieOptions(),
     maxAge: AUTH_SESSION_MAX_AGE_MS,
   });
-  res.cookie(AUTH_SESSION_CSRF_COOKIE_NAME, csrfToken, {
-    ...getAuthSessionCsrfCookieOptions(),
-    maxAge: AUTH_SESSION_MAX_AGE_MS,
-  });
+  setAuthSessionCsrfCookie(res, csrfToken);
+}
+
+export function rotateAuthSessionCsrfCookie(res: Response) {
+  setAuthSessionCsrfCookie(res, createCsrfToken());
 }
 
 export function clearAuthSessionCookie(res: Response) {

@@ -6,6 +6,7 @@ import {
   accountActivationTokens,
   auditLogs,
   backupJobs,
+  backupPayloadChunks,
   backups,
   bannedSessions,
   dataRows,
@@ -246,6 +247,7 @@ export type InsertAuditLog = z.infer<typeof insertAuditLogSchema>;
 export type AuditLog = typeof auditLogs.$inferSelect;
 export type InsertBackup = z.infer<typeof insertBackupSchema>;
 export type Backup = typeof backups.$inferSelect;
+export type BackupPayloadChunkRow = typeof backupPayloadChunks.$inferSelect;
 export type BackupJobRow = typeof backupJobs.$inferSelect;
 export type MonitorAlertIncidentRow = typeof monitorAlertIncidents.$inferSelect;
 export type SystemStabilityPatternRow = typeof systemStabilityPatterns.$inferSelect;

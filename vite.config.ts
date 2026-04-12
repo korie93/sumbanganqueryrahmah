@@ -1,29 +1,6 @@
-import { createLogger, defineConfig } from "vite";
+import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "path";
-
-const suppressedPostcssWarning =
-  "A PostCSS plugin did not pass the `from` option to `postcss.parse`.";
-
-const viteLogger = createLogger();
-const originalWarn = viteLogger.warn;
-const originalWarnOnce = viteLogger.warnOnce;
-
-viteLogger.warn = (msg, options) => {
-  if (typeof msg === "string" && msg.includes(suppressedPostcssWarning)) {
-    return;
-  }
-
-  originalWarn(msg, options);
-};
-
-viteLogger.warnOnce = (msg, options) => {
-  if (typeof msg === "string" && msg.includes(suppressedPostcssWarning)) {
-    return;
-  }
-
-  originalWarnOnce(msg, options);
-};
 
 const enableSourceMaps =
   process.env.VITE_ENABLE_SOURCEMAPS === "1"
@@ -31,13 +8,15 @@ const enableSourceMaps =
   || process.env.APP_ENV === "staging";
 
 export default defineConfig({
-  customLogger: viteLogger,
   plugins: [react()],
   root: "./client",
   build: {
     outDir: "../dist-local/public",
     emptyOutDir: true,
     sourcemap: enableSourceMaps,
+    // 600 kB is an intentional warning threshold, not a target bundle size.
+    // Large feature-isolated chunks such as Excel/PDF/chart tooling are lazy-loaded
+    // and verified separately by bundle-budget checks in repo scripts.
     chunkSizeWarningLimit: 600,
     modulePreload: {
       resolveDependencies(_filename, dependencies, context) {

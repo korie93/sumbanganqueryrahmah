@@ -1,13 +1,18 @@
 import assert from "node:assert/strict";
+import os from "node:os";
+import path from "node:path";
 import test from "node:test";
+import { mkdtemp } from "node:fs/promises";
 import { Readable } from "node:stream";
 import {
   IMPORT_TOO_LARGE_MESSAGE,
+  cleanupPreparedMultipartImportUpload,
   normalizeImportName,
   parseMultipartImportUpload,
   resolveImportMultipartFailure,
 } from "../imports-multipart-utils";
 import { DEFAULT_IMPORT_CSV_MAX_MATERIALIZED_ROWS } from "../../services/import-upload-csv-utils";
+import { logger } from "../../lib/logger";
 
 test("normalizeImportName trims explicit names and falls back to the upload filename", () => {
   assert.equal(normalizeImportName("  March batch  ", "users.xlsx"), "March batch");
@@ -102,4 +107,28 @@ test("parseMultipartImportUpload rejects CSV files that exceed the in-memory mat
       }),
     /in-memory materialization safety limit/i,
   );
+});
+
+test("cleanupPreparedMultipartImportUpload logs cleanup failures before removing the staged directory", async () => {
+  const tempDir = await mkdtemp(path.join(os.tmpdir(), "sqr-import-cleanup-test-"));
+  const warnings: Array<{ message: string; meta: Record<string, unknown> | undefined }> = [];
+  const originalWarn = logger.warn;
+  logger.warn = (message, meta) => {
+    warnings.push({ message, meta });
+  };
+
+  try {
+    await cleanupPreparedMultipartImportUpload({
+      kind: "csv-file",
+      filename: "sample.csv",
+      filePath: tempDir,
+      tempDir,
+    });
+  } finally {
+    logger.warn = originalWarn;
+  }
+
+  assert.equal(warnings.length, 1);
+  assert.equal(warnings[0]?.message, "Failed to cleanup staged import upload path");
+  assert.equal(warnings[0]?.meta?.targetType, "file");
 });

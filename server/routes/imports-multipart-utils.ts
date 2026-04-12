@@ -4,6 +4,7 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import { pipeline } from "node:stream/promises";
+import { logger } from "../lib/logger";
 import {
   parseImportUploadFile,
   stripImportUploadExtension,
@@ -30,6 +31,22 @@ export type PreparedMultipartImportUpload =
   };
 
 export const IMPORT_TOO_LARGE_MESSAGE = IMPORT_UPLOAD_TOO_LARGE_MESSAGE;
+
+async function cleanupImportUploadPath(
+  targetPath: string,
+  options: { recursive?: boolean; force?: boolean },
+  targetType: "file" | "directory",
+) {
+  try {
+    await rm(targetPath, options);
+  } catch (error) {
+    logger.warn("Failed to cleanup staged import upload path", {
+      targetPath,
+      targetType,
+      error: error instanceof Error ? error.message : "Unknown cleanup failure",
+    });
+  }
+}
 
 export function normalizeImportName(rawValue: string | undefined, fallbackFilename: string) {
   const normalized = String(rawValue || "").trim();
@@ -86,8 +103,8 @@ export async function parseMultipartImportUpload(params: {
       filename,
     };
   } finally {
-    await rm(tempFilePath, { force: true }).catch(() => undefined);
-    await rm(tempDir, { recursive: true, force: true }).catch(() => undefined);
+    await cleanupImportUploadPath(tempFilePath, { force: true }, "file");
+    await cleanupImportUploadPath(tempDir, { recursive: true, force: true }, "directory");
   }
 }
 
@@ -137,8 +154,8 @@ export async function prepareMultipartImportUpload(params: {
     };
   } finally {
     if (!keepStagedFile) {
-      await rm(tempFilePath, { force: true }).catch(() => undefined);
-      await rm(tempDir, { recursive: true, force: true }).catch(() => undefined);
+      await cleanupImportUploadPath(tempFilePath, { force: true }, "file");
+      await cleanupImportUploadPath(tempDir, { recursive: true, force: true }, "directory");
     }
   }
 }
@@ -150,6 +167,6 @@ export async function cleanupPreparedMultipartImportUpload(
     return;
   }
 
-  await rm(upload.filePath, { force: true }).catch(() => undefined);
-  await rm(upload.tempDir, { recursive: true, force: true }).catch(() => undefined);
+  await cleanupImportUploadPath(upload.filePath, { force: true }, "file");
+  await cleanupImportUploadPath(upload.tempDir, { recursive: true, force: true }, "directory");
 }
