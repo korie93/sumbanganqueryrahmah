@@ -1,154 +1,31 @@
-import { createCipheriv, createDecipheriv, createHash, createHmac, randomBytes } from "node:crypto";
+import { createHmac } from "node:crypto";
 import {
   getCollectionPiiDecryptionSecrets,
   getCollectionPiiEncryptionSecret,
   isCollectionPiiPlaintextRetiredField,
 } from "../config/security";
-
-export type EncryptedCollectionRecordPiiValues = {
-  customerNameEncrypted: string | null;
-  icNumberEncrypted: string | null;
-  customerPhoneEncrypted: string | null;
-  accountNumberEncrypted: string | null;
-};
-
-export type CollectionRecordPiiSearchHashes = {
-  customerNameSearchHash: string | null;
-  customerNameSearchHashes: string[] | null;
-  icNumberSearchHash: string | null;
-  customerPhoneSearchHash: string | null;
-  accountNumberSearchHash: string | null;
-};
-
-export type CollectionPiiFieldName =
-  | "customerName"
-  | "icNumber"
-  | "customerPhone"
-  | "accountNumber";
-
-const MIN_CUSTOMER_NAME_SEARCH_TOKEN_LENGTH = 2;
-const MAX_CUSTOMER_NAME_SEARCH_PREFIX_LENGTH = 12;
-
-function getCollectionPiiCipherKey(secret: string) {
-  return createHash("sha256").update(secret).digest();
-}
-
-function normalizeCollectionPiiValue(value: unknown): string {
-  if (value == null) {
-    return "";
-  }
-
-  const normalized = String(value);
-  return normalized.trim() ? normalized : "";
-}
-
-function normalizeCollectionPiiSearchValue(field: CollectionPiiFieldName, value: unknown): string {
-  const normalized = normalizeCollectionPiiValue(value);
-  if (!normalized) {
-    return "";
-  }
-
-  if (field === "customerPhone") {
-    const digits = normalized.replace(/\D+/g, "");
-    if (digits.startsWith("0060") && digits.length > 4) {
-      return `0${digits.slice(4)}`;
-    }
-    if (digits.startsWith("60") && digits.length > 2) {
-      return `0${digits.slice(2)}`;
-    }
-    return digits;
-  }
-  if (field === "icNumber") {
-    return normalized.replace(/[^0-9A-Za-z]+/g, "").toUpperCase();
-  }
-  if (field === "accountNumber") {
-    return normalized.replace(/\s+/g, "").toUpperCase();
-  }
-
-  return normalized.trim().replace(/\s+/g, " ").toLowerCase();
-}
-
-function collectCustomerNameSearchTerms(value: unknown): string[] {
-  const normalized = normalizeCollectionPiiSearchValue("customerName", value);
-  if (!normalized) {
-    return [];
-  }
-
-  const terms = new Set<string>();
-  for (const token of normalized.split(" ")) {
-    const compactToken = token.trim();
-    if (compactToken.length < MIN_CUSTOMER_NAME_SEARCH_TOKEN_LENGTH) {
-      continue;
-    }
-
-    const maxPrefixLength = Math.min(
-      compactToken.length,
-      MAX_CUSTOMER_NAME_SEARCH_PREFIX_LENGTH,
-    );
-    for (let prefixLength = MIN_CUSTOMER_NAME_SEARCH_TOKEN_LENGTH; prefixLength <= maxPrefixLength; prefixLength += 1) {
-      terms.add(compactToken.slice(0, prefixLength));
-    }
-    if (compactToken.length > maxPrefixLength) {
-      terms.add(compactToken);
-    }
-  }
-
-  return Array.from(terms);
-}
-
-function normalizeCollectionPiiSearchHashArray(value: unknown): string[] {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-
-  return Array.from(
-    new Set(
-      value
-        .map((entry) => normalizeCollectionPiiValue(entry))
-        .filter(Boolean),
-    ),
-  ).sort();
-}
-
-function encryptCollectionPiiWithSecret(value: string, secret: string): string {
-  const iv = randomBytes(12);
-  const cipher = createCipheriv("aes-256-gcm", getCollectionPiiCipherKey(secret), iv);
-  const ciphertext = Buffer.concat([cipher.update(value, "utf8"), cipher.final()]);
-  const tag = cipher.getAuthTag();
-  return `${iv.toString("base64url")}.${ciphertext.toString("base64url")}.${tag.toString("base64url")}`;
-}
-
-function decryptCollectionPiiValueWithSecret(payload: string, secret: string): string {
-  const [ivRaw, ciphertextRaw, tagRaw] = String(payload || "").split(".");
-  if (!ivRaw || !ciphertextRaw || !tagRaw) {
-    throw new Error("Invalid collection PII payload.");
-  }
-
-  const iv = Buffer.from(ivRaw, "base64url");
-  const ciphertext = Buffer.from(ciphertextRaw, "base64url");
-  const tag = Buffer.from(tagRaw, "base64url");
-  const decipher = createDecipheriv("aes-256-gcm", getCollectionPiiCipherKey(secret), iv);
-  decipher.setAuthTag(tag);
-  const plaintext = Buffer.concat([
-    decipher.update(ciphertext),
-    decipher.final(),
-  ]);
-  return plaintext.toString("utf8");
-}
-
-function decryptCollectionPiiValueWithSecretSafe(payload: unknown, secret: string): string | null {
-  const normalized = normalizeCollectionPiiValue(payload);
-  if (!normalized) {
-    return null;
-  }
-
-  try {
-    const decrypted = decryptCollectionPiiValueWithSecret(normalized, secret);
-    return normalizeCollectionPiiValue(decrypted) || null;
-  } catch {
-    return null;
-  }
-}
+import {
+  collectCustomerNameSearchTerms,
+  normalizeCollectionPiiSearchHashArray,
+  normalizeCollectionPiiSearchValue,
+  normalizeCollectionPiiValue,
+} from "./collection-pii-encryption-normalize";
+import {
+  decryptCollectionPiiValueWithSecret,
+  decryptCollectionPiiValueWithSecretSafe,
+  encryptCollectionPiiWithSecret,
+  getCollectionPiiCipherKey,
+} from "./collection-pii-encryption-crypto";
+export type {
+  CollectionPiiFieldName,
+  CollectionRecordPiiSearchHashes,
+  EncryptedCollectionRecordPiiValues,
+} from "./collection-pii-encryption-types";
+import type {
+  CollectionPiiFieldName,
+  CollectionRecordPiiSearchHashes,
+  EncryptedCollectionRecordPiiValues,
+} from "./collection-pii-encryption-types";
 
 export function hasCollectionPiiEncryptionConfigured(): boolean {
   return Boolean(getCollectionPiiEncryptionSecret());
