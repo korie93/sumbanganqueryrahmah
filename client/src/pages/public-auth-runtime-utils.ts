@@ -1,4 +1,4 @@
-import { formatDateTimeDDMMYYYY } from "@/lib/date-format";
+import { formatDateTimeDDMMYYYYMalaysia } from "@/lib/date-format";
 
 export function getPublicAuthTokenFromLocation(locationSearch?: string | null | undefined) {
   const search =
@@ -11,7 +11,7 @@ export function getPublicAuthTokenFromLocation(locationSearch?: string | null | 
 }
 
 export function formatPublicAuthExpiry(value: string) {
-  return formatDateTimeDDMMYYYY(value, { fallback: value });
+  return formatDateTimeDDMMYYYYMalaysia(value, { fallback: value });
 }
 
 export function isPublicAuthAbortError(error: unknown) {
