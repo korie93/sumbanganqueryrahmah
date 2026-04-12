@@ -2,9 +2,11 @@ import Busboy from "busboy";
 import type { RequestHandler } from "express";
 import { DEFAULT_IMPORT_UPLOAD_LIMIT_BYTES } from "../config/body-limit";
 import {
+  cleanupPreparedMultipartImportUpload,
   normalizeImportName,
-  parseMultipartImportUpload,
+  prepareMultipartImportUpload,
   resolveImportMultipartFailure,
+  type PreparedMultipartImportUpload,
   type MultipartImportBody,
 } from "./imports-multipart-utils";
 
@@ -16,6 +18,10 @@ export function createImportsMultipartRoute(
       next();
       return;
     }
+
+    const responseLocals = ((res as unknown as { locals?: Record<string, unknown> }).locals
+      ?? {}) as Record<string, unknown>;
+    (res as unknown as { locals?: Record<string, unknown> }).locals = responseLocals;
 
     const safeMaxFileSizeBytes = Number.isFinite(maxFileSizeBytes) && maxFileSizeBytes > 0
       ? Math.floor(maxFileSizeBytes)
@@ -31,7 +37,7 @@ export function createImportsMultipartRoute(
     });
 
     const body: MultipartImportBody = {};
-    let fileTask: Promise<{ filename: string; dataRows: Record<string, string>[] }> | null = null;
+    let fileTask: Promise<PreparedMultipartImportUpload> | null = null;
     let settled = false;
 
     const fail = (status: number, message: string) => {
@@ -59,11 +65,19 @@ export function createImportsMultipartRoute(
 
       fileTask = (async () => {
         const filename = String(info.filename || "").trim();
-        return parseMultipartImportUpload({ file, filename });
+        return prepareMultipartImportUpload({ file, filename });
       })();
     });
 
     parser.once("error", (error) => {
+      if (fileTask) {
+        void fileTask
+          .then(async (upload) => {
+            await cleanupPreparedMultipartImportUpload(upload);
+          })
+          .catch(() => undefined);
+      }
+
       const failure = resolveImportMultipartFailure(error);
       fail(failure.statusCode, failure.message);
     });
@@ -79,14 +93,22 @@ export function createImportsMultipartRoute(
       }
 
       try {
-        const { filename, dataRows } = await fileTask;
-        body.filename = filename;
-        body.name = normalizeImportName(body.name, filename);
-        body.data = dataRows;
+        const upload = await fileTask;
+        body.filename = upload.filename;
+        body.name = normalizeImportName(body.name, upload.filename);
+        if (upload.kind === "parsed") {
+          body.data = upload.dataRows;
+        } else {
+          responseLocals.multipartImportUpload = upload;
+        }
         settled = true;
         req.body = body;
         next();
       } catch (error) {
+        if (responseLocals.multipartImportUpload) {
+          await cleanupPreparedMultipartImportUpload(responseLocals.multipartImportUpload as PreparedMultipartImportUpload);
+          delete responseLocals.multipartImportUpload;
+        }
         const failure = resolveImportMultipartFailure(error);
         fail(failure.statusCode, failure.message);
       }

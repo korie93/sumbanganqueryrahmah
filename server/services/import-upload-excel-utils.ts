@@ -2,9 +2,16 @@ import fs from "node:fs";
 import * as xlsx from "xlsx";
 import {
   createUploadFileAccessError,
+  createUploadFileTooLargeError,
   isFileAccessError,
+  validateUploadFileSize,
 } from "./import-upload-file-utils";
 import type { ImportRow, ParsedImportUploadResult } from "./import-upload-types";
+
+type ParseExcelOptions = {
+  maxRows?: number;
+  maxBytes?: number;
+};
 
 function mapExcelReadError(error: unknown): ParsedImportUploadResult {
   const message = error instanceof Error ? error.message : "Failed to read Excel file";
@@ -17,7 +24,24 @@ function mapExcelReadError(error: unknown): ParsedImportUploadResult {
   return { headers: [], rows: [], error: message };
 }
 
-function parseWorkbookJsonData(jsonData: unknown[][]): ParsedImportUploadResult {
+function resolveExcelMaxRows(options?: ParseExcelOptions) {
+  const value = options?.maxRows;
+  if (value == null || !Number.isFinite(value)) {
+    return Number.POSITIVE_INFINITY;
+  }
+
+  return Math.max(1, Math.trunc(value));
+}
+
+function createSpreadsheetRowLimitError(maxRows: number): ParsedImportUploadResult {
+  return {
+    headers: [],
+    rows: [],
+    error: `Spreadsheet import exceeds the configured row limit of ${maxRows.toLocaleString("en-US")} rows. Split the file into smaller uploads.`,
+  };
+}
+
+function parseWorkbookJsonData(jsonData: unknown[][], options?: ParseExcelOptions): ParsedImportUploadResult {
   if (jsonData.length === 0) {
     return { headers: [], rows: [], error: "Excel file is empty." };
   }
@@ -40,6 +64,7 @@ function parseWorkbookJsonData(jsonData: unknown[][]): ParsedImportUploadResult 
   });
 
   const rows: ImportRow[] = [];
+  const maxRows = resolveExcelMaxRows(options);
 
   for (let rowIndex = headerRowIndex + 1; rowIndex < jsonData.length; rowIndex += 1) {
     const rowData = jsonData[rowIndex];
@@ -49,6 +74,9 @@ function parseWorkbookJsonData(jsonData: unknown[][]): ParsedImportUploadResult 
     });
 
     if (!hasAnyData) continue;
+    if (rows.length >= maxRows) {
+      return createSpreadsheetRowLimitError(maxRows);
+    }
 
     const row: ImportRow = {};
     headers.forEach((header, index) => {
@@ -64,7 +92,11 @@ function parseWorkbookJsonData(jsonData: unknown[][]): ParsedImportUploadResult 
   return { headers, rows };
 }
 
-export function parseExcelBuffer(buffer: Buffer): ParsedImportUploadResult {
+export function parseExcelBuffer(buffer: Buffer, options?: ParseExcelOptions): ParsedImportUploadResult {
+  if (Number.isFinite(options?.maxBytes) && (options?.maxBytes as number) > 0 && buffer.length > (options?.maxBytes as number)) {
+    return createUploadFileTooLargeError();
+  }
+
   let workbook;
   try {
     workbook = xlsx.read(buffer, {
@@ -93,10 +125,18 @@ export function parseExcelBuffer(buffer: Buffer): ParsedImportUploadResult {
   (workbook as { SheetNames?: unknown; Sheets?: unknown }).Sheets = null;
   workbook = null as never;
 
-  return parseWorkbookJsonData(jsonData);
+  return parseWorkbookJsonData(jsonData, options);
 }
 
-export async function parseExcelFile(filePath: string): Promise<ParsedImportUploadResult> {
+export async function parseExcelFile(
+  filePath: string,
+  options?: ParseExcelOptions,
+): Promise<ParsedImportUploadResult> {
+  const sizeValidation = await validateUploadFileSize(filePath, options?.maxBytes);
+  if (sizeValidation) {
+    return sizeValidation;
+  }
+
   let buffer: Buffer;
   try {
     buffer = await fs.promises.readFile(filePath);
@@ -108,5 +148,5 @@ export async function parseExcelFile(filePath: string): Promise<ParsedImportUplo
     return { headers: [], rows: [], error: message };
   }
 
-  return parseExcelBuffer(buffer);
+  return parseExcelBuffer(buffer, options);
 }

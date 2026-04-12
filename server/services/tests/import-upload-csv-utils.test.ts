@@ -2,9 +2,17 @@ import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
 import fs from "node:fs";
 import readline from "node:readline";
+import os from "node:os";
+import path from "node:path";
 import test from "node:test";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 
-import { parseCsvBuffer, parseCsvFile } from "../import-upload-csv-utils";
+import {
+  forEachCsvFileRow,
+  inspectCsvFile,
+  parseCsvBuffer,
+  parseCsvFile,
+} from "../import-upload-csv-utils";
 
 class FakeReadableStream extends EventEmitter {
   destroyed = false;
@@ -65,6 +73,16 @@ test("parseCsvBuffer rejects rows beyond the configured CSV row limit", () => {
   assert.deepEqual(result.rows, []);
 });
 
+test("parseCsvBuffer rejects oversized uploads before parsing rows", () => {
+  const result = parseCsvBuffer(
+    Buffer.from("name,amount\nAlice,10\n", "utf8"),
+    { maxBytes: 8 },
+  );
+
+  assert.match(String(result.error), /too large to import/i);
+  assert.deepEqual(result.rows, []);
+});
+
 test("parseCsvFile stops reading and rejects rows beyond the configured CSV row limit", async (t) => {
   const fakeStream = new FakeReadableStream();
   const fakeLineReader = new FakeLineReader(["name,amount", "Alice,10", "Bob,20"]);
@@ -114,4 +132,63 @@ test("parseCsvFile returns a safe file access error when the readline interface 
   assert.deepEqual(result.rows, []);
   assert.equal(fakeLineReader.closed, true);
   assert.equal(fakeStream.destroyed, true);
+});
+
+test("inspectCsvFile counts rows without materializing them in memory", async () => {
+  const tempDir = await mkdtemp(path.join(os.tmpdir(), "sqr-import-csv-utils-"));
+  const filePath = path.join(tempDir, "customers.csv");
+
+  try {
+    await writeFile(filePath, "name,amount\nAlice,10\nBob,20\n", "utf8");
+
+    const result = await inspectCsvFile(filePath);
+
+    assert.deepEqual(result, {
+      headers: ["name", "amount"],
+      rowCount: 2,
+    });
+  } finally {
+    await rm(tempDir, { recursive: true, force: true });
+  }
+});
+
+test("forEachCsvFileRow streams CSV rows to the caller one by one", async () => {
+  const tempDir = await mkdtemp(path.join(os.tmpdir(), "sqr-import-csv-utils-"));
+  const filePath = path.join(tempDir, "customers.csv");
+  const collectedRows: Array<Record<string, string>> = [];
+
+  try {
+    await writeFile(filePath, "name,amount\nAlice,10\nBob,20\n", "utf8");
+
+    const result = await forEachCsvFileRow(filePath, (row) => {
+      collectedRows.push(row);
+    });
+
+    assert.deepEqual(result, {
+      headers: ["name", "amount"],
+      rowCount: 2,
+    });
+    assert.deepEqual(collectedRows, [
+      { name: "Alice", amount: "10" },
+      { name: "Bob", amount: "20" },
+    ]);
+  } finally {
+    await rm(tempDir, { recursive: true, force: true });
+  }
+});
+
+test("parseCsvFile rejects oversized CSV files before opening the stream", async () => {
+  const tempDir = await mkdtemp(path.join(os.tmpdir(), "sqr-import-csv-utils-"));
+  const filePath = path.join(tempDir, "customers.csv");
+
+  try {
+    await writeFile(filePath, "name,amount\nAlice,10\nBob,20\n", "utf8");
+
+    const result = await parseCsvFile(filePath, { maxBytes: 8 });
+
+    assert.match(String(result.error), /too large to import/i);
+    assert.deepEqual(result.rows, []);
+  } finally {
+    await rm(tempDir, { recursive: true, force: true });
+  }
 });

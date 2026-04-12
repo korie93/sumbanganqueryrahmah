@@ -1,6 +1,8 @@
+import { promises as fs } from "node:fs";
 import type { ParsedImportUploadResult } from "./import-upload-types";
 
 const SUPPORTED_IMPORT_UPLOAD_EXTENSION_PATTERN = /\.(csv|xlsx|xls|xlsb)$/i;
+export const IMPORT_UPLOAD_TOO_LARGE_MESSAGE = "The selected file is too large to import. Please split it into smaller files and try again.";
 
 export function isFileAccessError(error: unknown) {
   const code =
@@ -16,6 +18,37 @@ export function createUploadFileAccessError(): ParsedImportUploadResult {
     rows: [],
     error: "Cannot access the uploaded file. Please try again.",
   };
+}
+
+export function createUploadFileTooLargeError(): ParsedImportUploadResult {
+  return {
+    headers: [],
+    rows: [],
+    error: IMPORT_UPLOAD_TOO_LARGE_MESSAGE,
+  };
+}
+
+export async function validateUploadFileSize(
+  filePath: string,
+  maxBytes?: number,
+): Promise<ParsedImportUploadResult | null> {
+  if (!Number.isFinite(maxBytes) || (maxBytes as number) <= 0) {
+    return null;
+  }
+
+  let stats;
+  try {
+    stats = await fs.stat(filePath);
+  } catch (error) {
+    if (isFileAccessError(error)) {
+      return createUploadFileAccessError();
+    }
+    throw error;
+  }
+
+  return stats.size > (maxBytes as number)
+    ? createUploadFileTooLargeError()
+    : null;
 }
 
 export function isSupportedSpreadsheet(filename: string) {

@@ -4,6 +4,10 @@ import type { AuthenticatedRequest } from "../auth/guards";
 import { badRequest, notFound } from "../http/errors";
 import { runWithRequestDeadline } from "../http/request-deadline";
 import { readInteger, readNonEmptyString } from "../http/validation";
+import {
+  cleanupPreparedMultipartImportUpload,
+  type PreparedMultipartImportUpload,
+} from "../routes/imports-multipart-utils";
 import type { ImportDataColumnFilter, ImportsService } from "../services/imports.service";
 
 type RuntimeSettings = {
@@ -118,20 +122,51 @@ export function createImportsController(deps: CreateImportsControllerDeps) {
   };
 
   const createImport = async (req: AuthenticatedRequest, res: Response) => {
-    const { name, filename, dataRows } = importsService.parseCreateImportBody(req.body);
+    const multipartImportUpload = (res.locals as {
+      multipartImportUpload?: PreparedMultipartImportUpload;
+    }).multipartImportUpload;
 
-    if (!Array.isArray(dataRows) || dataRows.length === 0) {
-      throw badRequest("No data rows provided");
+    try {
+      if (multipartImportUpload?.kind === "csv-file") {
+        const body = req.body && typeof req.body === "object"
+          ? req.body as Record<string, unknown>
+          : {};
+        const name = String(body.name ?? "");
+        const filename = String(body.filename ?? multipartImportUpload.filename ?? "");
+
+        if (multipartImportUpload.rowCount <= 0) {
+          throw badRequest("No data rows provided");
+        }
+
+        const importRecord = await importsService.createImportFromCsvFile({
+          name,
+          filename,
+          filePath: multipartImportUpload.filePath,
+          rowCount: multipartImportUpload.rowCount,
+          createdBy: req.user?.username,
+        });
+
+        return res.json(importRecord);
+      }
+
+      const { name, filename, dataRows } = importsService.parseCreateImportBody(req.body);
+
+      if (!Array.isArray(dataRows) || dataRows.length === 0) {
+        throw badRequest("No data rows provided");
+      }
+
+      const importRecord = await importsService.createImport({
+        name,
+        filename,
+        dataRows,
+        createdBy: req.user?.username,
+      });
+
+      return res.json(importRecord);
+    } finally {
+      await cleanupPreparedMultipartImportUpload(multipartImportUpload);
+      delete (res.locals as { multipartImportUpload?: PreparedMultipartImportUpload }).multipartImportUpload;
     }
-
-    const importRecord = await importsService.createImport({
-      name,
-      filename,
-      dataRows,
-      createdBy: req.user?.username,
-    });
-
-    return res.json(importRecord);
   };
 
   const getImport = async (req: AuthenticatedRequest, res: Response) => {

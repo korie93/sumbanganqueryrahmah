@@ -54,13 +54,13 @@ async function runMultipartHandler(
   };
 
   const result = await new Promise<
-    | { kind: "next"; body: Record<string, unknown> | undefined }
+    | { kind: "next"; body: Record<string, unknown> | undefined; locals: Record<string, unknown> | undefined }
     | { kind: "response"; statusCode: number; payload: unknown }
   >((resolve) => {
     let settled = false;
     const complete = (
       value:
-        | { kind: "next"; body: Record<string, unknown> | undefined }
+        | { kind: "next"; body: Record<string, unknown> | undefined; locals: Record<string, unknown> | undefined }
         | { kind: "response"; statusCode: number; payload: unknown },
     ) => {
       if (settled) {
@@ -76,6 +76,7 @@ async function runMultipartHandler(
     req.is = (type: string) => type === "multipart/form-data";
 
     const res = {
+      locals: {} as Record<string, unknown>,
       status(statusCode: number) {
         return {
           json(payload: unknown) {
@@ -86,7 +87,7 @@ async function runMultipartHandler(
     };
 
     handler(req as never, res as never, () => {
-      complete({ kind: "next", body: req.body });
+      complete({ kind: "next", body: req.body, locals: res.locals });
     });
     req.end(body);
   });
@@ -140,13 +141,10 @@ test("createImportsMultipartRoute parses multipart uploads and normalizes the im
 
   assert.equal(result.kind, "next");
   assert.deepEqual(result.body, {
-    data: [
-      { amount: "12", name: "Alice" },
-      { amount: "33", name: "Bob" },
-    ],
     filename: "customers.csv",
     name: "March Batch",
   });
+  assert.equal(result.locals?.multipartImportUpload !== undefined, true);
 });
 
 test("createImportsMultipartRoute rejects multipart requests without a file", async () => {

@@ -5,6 +5,7 @@ import {
 import { ImportsServiceMutationOperations } from "./imports-service-mutation-operations";
 import { ImportsServiceReadOperations } from "./imports-service-read-operations";
 import type {
+  CreateImportFromCsvFileInput,
   CreateImportInput,
   ImportDataPageInput,
   ImportsServiceAnalysis,
@@ -42,6 +43,10 @@ export class ImportsService {
 
   async createImport(params: CreateImportInput) {
     return this.mutationOperations.createImport(params);
+  }
+
+  async createImportFromCsvFile(params: CreateImportFromCsvFileInput) {
+    return this.mutationOperations.createImportFromCsvFile(params);
   }
 
   async getImportDetails(importId: string) {

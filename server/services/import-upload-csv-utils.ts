@@ -2,7 +2,9 @@ import fs from "node:fs";
 import readline from "node:readline";
 import {
   createUploadFileAccessError,
+  createUploadFileTooLargeError,
   isFileAccessError,
+  validateUploadFileSize,
 } from "./import-upload-file-utils";
 import type { ImportRow, ParsedImportUploadResult } from "./import-upload-types";
 
@@ -10,11 +12,18 @@ export const DEFAULT_IMPORT_CSV_MAX_ROWS = 100_000;
 
 type ParseCsvOptions = {
   maxRows?: number;
+  maxBytes?: number;
 };
 
 type ReadlineErrorEmitter = {
   once(event: "error", listener: (error: Error) => void): unknown;
   off(event: "error", listener: (error: Error) => void): unknown;
+};
+
+export type CsvFileInspectionResult = {
+  headers: string[];
+  rowCount: number;
+  error?: string;
 };
 
 function resolveCsvMaxRows(options?: ParseCsvOptions) {
@@ -76,40 +85,23 @@ function toParsedCsvRow(headers: string[], values: string[]): ImportRow {
   return row;
 }
 
-export function parseCsvBuffer(buffer: Buffer, options?: ParseCsvOptions): ParsedImportUploadResult {
-  const maxRows = resolveCsvMaxRows(options);
-  const text = buffer.toString("utf8").replace(/^\ufeff/, "");
-  const lines = text.split(/\r?\n/);
-
-  if (lines.length === 0) {
-    return { headers: [], rows: [], error: "CSV file is empty." };
+async function walkCsvFile(
+  filePath: string,
+  options: ParseCsvOptions | undefined,
+  onRow?: (row: ImportRow) => Promise<void> | void,
+): Promise<CsvFileInspectionResult> {
+  const sizeValidation = await validateUploadFileSize(filePath, options?.maxBytes);
+  if (sizeValidation) {
+    const sizeValidationError = sizeValidation.error
+      ?? createUploadFileTooLargeError().error
+      ?? "The selected file is too large to import. Please split it into smaller files and try again.";
+    return {
+      headers: [],
+      rowCount: 0,
+      error: sizeValidationError,
+    };
   }
 
-  const headerLineIndex = findHeaderLine(lines);
-  if (headerLineIndex >= lines.length) {
-    return { headers: [], rows: [], error: "CSV file is empty." };
-  }
-
-  const headers = parseCsvLine(lines[headerLineIndex]);
-  const rows: ImportRow[] = [];
-
-  for (let index = headerLineIndex + 1; index < lines.length; index += 1) {
-    const line = lines[index];
-    if (!line.trim()) continue;
-
-    const row = toParsedCsvRow(headers, parseCsvLine(line));
-    if (Object.values(row).some((value) => value !== "")) {
-      if (rows.length >= maxRows) {
-        return createCsvRowLimitError(maxRows);
-      }
-      rows.push(row);
-    }
-  }
-
-  return { headers, rows };
-}
-
-export async function parseCsvFile(filePath: string, options?: ParseCsvOptions): Promise<ParsedImportUploadResult> {
   const maxRows = resolveCsvMaxRows(options);
   const stream = fs.createReadStream(filePath, { encoding: "utf8" });
   const lineReader = readline.createInterface({
@@ -149,9 +141,9 @@ export async function parseCsvFile(filePath: string, options?: ParseCsvOptions):
   stream.once("error", handleReaderError);
   lineReaderErrorEmitter.once("error", handleReaderError);
 
-  const rows: ImportRow[] = [];
   let headers: string[] = [];
   let headerResolved = false;
+  let rowCount = 0;
   let rowLimitExceeded = false;
 
   try {
@@ -170,13 +162,15 @@ export async function parseCsvFile(filePath: string, options?: ParseCsvOptions):
 
       const row = toParsedCsvRow(headers, parseCsvLine(normalizedLine));
       if (Object.values(row).some((value) => value !== "")) {
-        if (rows.length >= maxRows) {
+        if (rowCount >= maxRows) {
           rowLimitExceeded = true;
           closeLineReaderSafely();
           destroyStreamSafely();
           break;
         }
-        rows.push(row);
+
+        rowCount += 1;
+        await onRow?.(row);
       }
     }
 
@@ -185,7 +179,12 @@ export async function parseCsvFile(filePath: string, options?: ParseCsvOptions):
     }
   } catch (error) {
     if (isFileAccessError(error)) {
-      return createUploadFileAccessError();
+      const fileAccessError = createUploadFileAccessError().error ?? "Cannot access the uploaded file. Please try again.";
+      return {
+        headers: [],
+        rowCount: 0,
+        error: fileAccessError,
+      };
     }
     throw error;
   } finally {
@@ -196,12 +195,80 @@ export async function parseCsvFile(filePath: string, options?: ParseCsvOptions):
   }
 
   if (!headerResolved || headers.length === 0) {
-    return { headers: [], rows: [], error: "CSV file is empty." };
+    return { headers: [], rowCount: 0, error: "CSV file is empty." };
   }
 
   if (rowLimitExceeded) {
-    return createCsvRowLimitError(maxRows);
+    const rowLimitError = createCsvRowLimitError(maxRows).error
+      ?? `CSV import exceeds the configured row limit of ${maxRows.toLocaleString("en-US")} rows. Split the file into smaller uploads.`;
+    return { headers: [], rowCount: rowCount, error: rowLimitError };
+  }
+
+  return { headers, rowCount };
+}
+
+export function parseCsvBuffer(buffer: Buffer, options?: ParseCsvOptions): ParsedImportUploadResult {
+  if (Number.isFinite(options?.maxBytes) && (options?.maxBytes as number) > 0 && buffer.length > (options?.maxBytes as number)) {
+    return createUploadFileTooLargeError();
+  }
+
+  const maxRows = resolveCsvMaxRows(options);
+  const text = buffer.toString("utf8").replace(/^\ufeff/, "");
+  const lines = text.split(/\r?\n/);
+
+  if (lines.length === 0) {
+    return { headers: [], rows: [], error: "CSV file is empty." };
+  }
+
+  const headerLineIndex = findHeaderLine(lines);
+  if (headerLineIndex >= lines.length) {
+    return { headers: [], rows: [], error: "CSV file is empty." };
+  }
+
+  const headers = parseCsvLine(lines[headerLineIndex]);
+  const rows: ImportRow[] = [];
+
+  for (let index = headerLineIndex + 1; index < lines.length; index += 1) {
+    const line = lines[index];
+    if (!line.trim()) continue;
+
+    const row = toParsedCsvRow(headers, parseCsvLine(line));
+    if (Object.values(row).some((value) => value !== "")) {
+      if (rows.length >= maxRows) {
+        return createCsvRowLimitError(maxRows);
+      }
+      rows.push(row);
+    }
   }
 
   return { headers, rows };
+}
+
+export async function inspectCsvFile(
+  filePath: string,
+  options?: ParseCsvOptions,
+): Promise<CsvFileInspectionResult> {
+  return walkCsvFile(filePath, options);
+}
+
+export async function forEachCsvFileRow(
+  filePath: string,
+  onRow: (row: ImportRow) => Promise<void> | void,
+  options?: ParseCsvOptions,
+): Promise<CsvFileInspectionResult> {
+  return walkCsvFile(filePath, options, onRow);
+}
+
+export async function parseCsvFile(filePath: string, options?: ParseCsvOptions): Promise<ParsedImportUploadResult> {
+  const rows: ImportRow[] = [];
+
+  const result = await walkCsvFile(filePath, options, (row) => {
+    rows.push(row);
+  });
+
+  if (result.error) {
+    return { headers: [], rows: [], error: result.error };
+  }
+
+  return { headers: result.headers, rows };
 }

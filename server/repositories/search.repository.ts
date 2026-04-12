@@ -4,7 +4,9 @@ import type { DataRow } from "../../shared/schema-postgres";
 import { db } from "../db-postgres";
 import { buildLikePattern } from "./sql-like-utils";
 
-const MAX_SEARCH_LIMIT = 200;
+export const MAX_SEARCH_LIMIT = 200;
+// Bound deep OFFSET scans on JSON-heavy search queries while leaving cursor paging available for deeper traversal.
+export const MAX_SEARCH_OFFSET = 50_000;
 const MAX_COLUMN_KEYS = 500;
 const ALLOWED_OPERATORS = new Set([
   "contains",
@@ -134,6 +136,22 @@ export class SearchRepository {
   }): Promise<{ rows: SearchGlobalDataRow[]; total: number }> {
     const { search, limit, offset } = params;
     const searchPattern = buildLikePattern(search, "contains");
+    const safeOffset = normalizeSearchOffset(offset);
+
+    if (isSearchOffsetBeyondRuntimeWindow(safeOffset)) {
+      const totalResult = await db.execute(sql`
+        SELECT COUNT(*)::int AS total
+        FROM public.data_rows dr
+        JOIN public.imports i ON i.id = dr.import_id
+        WHERE i.is_deleted = false
+          AND dr.json_data::text ILIKE ${searchPattern} ESCAPE '\'
+      `);
+
+      return {
+        rows: [],
+        total: getTotalFromRows(totalResult.rows || []),
+      };
+    }
 
     const rowsResult = await db.execute(sql`
       SELECT
@@ -148,7 +166,7 @@ export class SearchRepository {
         AND dr.json_data::text ILIKE ${searchPattern} ESCAPE '\'
       ORDER BY dr.id
       LIMIT ${Math.max(1, Math.min(limit, MAX_SEARCH_LIMIT))}
-      OFFSET ${Math.max(0, offset)}
+      OFFSET ${safeOffset}
     `);
 
     const totalResult = await db.execute(sql`
@@ -200,7 +218,7 @@ export class SearchRepository {
     const { importId, search, limit, offset } = params;
     const trimmedSearch = search && search.trim() ? search.trim() : null;
     const safeLimit = Math.min(Math.max(1, limit), MAX_SEARCH_LIMIT);
-    const safeOffset = Math.max(offset, 0);
+    const safeOffset = normalizeSearchOffset(offset);
     const cursor = String(params.cursor || "").trim() || null;
     const safeColumnFilters = Array.isArray(params.columnFilters)
       ? params.columnFilters
@@ -237,6 +255,20 @@ export class SearchRepository {
       ? conditions[0]
       : sql.join(conditions, sql` AND `);
 
+    const totalResult = await db.execute(sql`
+      SELECT COUNT(*)::int AS total
+      FROM public.data_rows dr
+      WHERE ${whereClause}
+    `);
+
+    if (!cursor && isSearchOffsetBeyondRuntimeWindow(safeOffset)) {
+      return {
+        rows: [],
+        total: getTotalFromRows(totalResult.rows || []),
+        nextCursorRowId: null,
+      };
+    }
+
     const rowsResult = await db.execute(sql`
       SELECT
         dr.id,
@@ -247,12 +279,6 @@ export class SearchRepository {
       ORDER BY dr.id
       LIMIT ${safeLimit + 1}
       ${cursor ? sql`` : sql`OFFSET ${safeOffset}`}
-    `);
-
-    const totalResult = await db.execute(sql`
-      SELECT COUNT(*)::int AS total
-      FROM public.data_rows dr
-      WHERE ${whereClause}
     `);
 
     const rawRows = (rowsResult.rows || []).map((row) => {
@@ -298,7 +324,22 @@ export class SearchRepository {
       : sql.join(conditions, logic === "AND" ? sql` AND ` : sql` OR `);
 
     const safeLimit = Math.min(Math.max(1, limit), MAX_SEARCH_LIMIT);
-    const safeOffset = Math.max(offset, 0);
+    const safeOffset = normalizeSearchOffset(offset);
+
+    const totalResult = await db.execute(sql`
+      SELECT COUNT(*)::int AS total
+      FROM public.data_rows dr
+      JOIN public.imports i ON i.id = dr.import_id
+      WHERE i.is_deleted = false
+        AND (${conditionSql})
+    `);
+
+    if (isSearchOffsetBeyondRuntimeWindow(safeOffset)) {
+      return {
+        rows: [],
+        total: getTotalFromRows(totalResult.rows || []),
+      };
+    }
 
     const rowsResult = await db.execute(sql`
       SELECT
@@ -314,14 +355,6 @@ export class SearchRepository {
       ORDER BY dr.id
       LIMIT ${safeLimit}
       OFFSET ${safeOffset}
-    `);
-
-    const totalResult = await db.execute(sql`
-      SELECT COUNT(*)::int AS total
-      FROM public.data_rows dr
-      JOIN public.imports i ON i.id = dr.import_id
-      WHERE i.is_deleted = false
-        AND (${conditionSql})
     `);
 
     return {
@@ -355,4 +388,16 @@ export class SearchRepository {
       .map((row) => String((row as QueryRow).column_name || "").trim())
       .filter(Boolean);
   }
+}
+
+function normalizeSearchOffset(offset: number): number {
+  if (!Number.isFinite(offset)) {
+    return 0;
+  }
+
+  return Math.max(0, Math.floor(offset));
+}
+
+function isSearchOffsetBeyondRuntimeWindow(offset: number): boolean {
+  return normalizeSearchOffset(offset) > MAX_SEARCH_OFFSET;
 }

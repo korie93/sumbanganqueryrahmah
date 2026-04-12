@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useMemo, useRef, useState } from "react";
 import {
   ChevronDown,
   Home,
@@ -38,6 +38,7 @@ import { prefetchNavigationTarget } from "@/app/navigation-prefetch";
 import type { MonitorSection, TabVisibility } from "@/app/types";
 import { BrandLogo } from "@/components/BrandLogo";
 import { useTheme } from "@/components/useTheme";
+import { useDesktopNavOverflowState } from "@/components/useDesktopNavOverflowState";
 import { cn } from "@/lib/utils";
 import "./Navbar.css";
 
@@ -69,11 +70,6 @@ function NavbarImpl({
   const { theme, setTheme } = useTheme();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const navScrollerRef = useRef<HTMLElement | null>(null);
-  const [desktopNavOverflow, setDesktopNavOverflow] = useState({
-    canScroll: false,
-    canScrollLeft: false,
-    canScrollRight: false,
-  });
   const directItems = useMemo(
     () => getVisiblePrimaryNavItems(userRole, tabVisibility ?? null, featureLockdown),
     [featureLockdown, tabVisibility, userRole],
@@ -102,63 +98,14 @@ function NavbarImpl({
   const prefetchItem = useCallback((itemId: string) => {
     void prefetchNavigationTarget(resolveNavigationTarget(itemId));
   }, []);
-
-  useEffect(() => {
-    const navNode = navScrollerRef.current;
-
-    if (!navNode || typeof window === "undefined") {
-      return;
-    }
-
-    let frame = 0;
-    let resizeObserver: ResizeObserver | null = null;
-
-    const updateOverflowState = () => {
-      frame = 0;
-
-      const maxScrollLeft = Math.max(0, navNode.scrollWidth - navNode.clientWidth);
-      const nextState = {
-        canScroll: maxScrollLeft > 12,
-        canScrollLeft: navNode.scrollLeft > 8,
-        canScrollRight: maxScrollLeft - navNode.scrollLeft > 8,
-      };
-
-      setDesktopNavOverflow((previous) => (
-        previous.canScroll === nextState.canScroll
-        && previous.canScrollLeft === nextState.canScrollLeft
-        && previous.canScrollRight === nextState.canScrollRight
-      ) ? previous : nextState);
-    };
-
-    const scheduleOverflowUpdate = () => {
-      if (frame !== 0) {
-        return;
-      }
-
-      frame = window.requestAnimationFrame(updateOverflowState);
-    };
-
-    scheduleOverflowUpdate();
-    navNode.addEventListener("scroll", scheduleOverflowUpdate, { passive: true });
-    window.addEventListener("resize", scheduleOverflowUpdate);
-
-    if (typeof ResizeObserver === "function") {
-      resizeObserver = new ResizeObserver(() => {
-        scheduleOverflowUpdate();
-      });
-      resizeObserver.observe(navNode);
-    }
-
-    return () => {
-      navNode.removeEventListener("scroll", scheduleOverflowUpdate);
-      window.removeEventListener("resize", scheduleOverflowUpdate);
-      resizeObserver?.disconnect();
-
-      if (frame !== 0) {
-        window.cancelAnimationFrame(frame);
-      }
-    };
+  const desktopNavLayoutKey = useMemo(() => {
+    const directIds = directItems.map((item) => item.id).join("|");
+    const groupIds = groupedItems
+      .map((group) => `${group.id}:${group.items.map((item) => item.id).join(",")}`)
+      .join("|");
+    return `${directIds}::${groupIds}::${savedCount ?? 0}::${showHomeButton ? "home" : "no-home"}`;
   }, [directItems, groupedItems, savedCount, showHomeButton]);
+  const desktopNavOverflow = useDesktopNavOverflowState(navScrollerRef, desktopNavLayoutKey);
 
   const renderUserMenuContent = () => (
     <DropdownMenuContent

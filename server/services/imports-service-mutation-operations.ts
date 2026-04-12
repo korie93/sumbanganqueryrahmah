@@ -1,7 +1,10 @@
 import type {
+  CreateImportFromCsvFileInput,
   CreateImportInput,
   ImportsServiceStorage,
 } from "./imports-service-types";
+import { runtimeConfig } from "../config/runtime";
+import { forEachCsvFileRow } from "./import-upload-csv-utils";
 import { normalizeImportRow } from "./imports-service-parsers";
 
 const IMPORT_INSERT_CHUNK_SIZE = 20;
@@ -34,6 +37,60 @@ export class ImportsServiceMutationOperations {
         performedBy: params.createdBy,
         targetResource: params.name,
         details: `Imported ${params.dataRows.length} rows from ${params.filename}`,
+      });
+    }
+
+    return importRecord;
+  }
+
+  async createImportFromCsvFile(params: CreateImportFromCsvFileInput) {
+    const importRecord = await this.storage.createImport({
+      name: params.name,
+      filename: params.filename,
+      ...(params.createdBy ? { createdBy: params.createdBy } : {}),
+    });
+
+    let pendingRows: unknown[] = [];
+    const flushPendingRows = async () => {
+      if (pendingRows.length === 0) {
+        return;
+      }
+
+      const chunk = pendingRows;
+      pendingRows = [];
+      await Promise.all(
+        chunk.map((row) =>
+          this.storage.createDataRow({
+            importId: importRecord.id,
+            jsonDataJsonb: normalizeImportRow(row),
+          }),
+        ),
+      );
+    };
+
+    const parsed = await forEachCsvFileRow(
+      params.filePath,
+      async (row) => {
+        pendingRows.push(row);
+        if (pendingRows.length >= IMPORT_INSERT_CHUNK_SIZE) {
+          await flushPendingRows();
+        }
+      },
+      { maxRows: runtimeConfig.runtime.importCsvMaxRows },
+    );
+
+    if (parsed.error) {
+      throw new Error(parsed.error);
+    }
+
+    await flushPendingRows();
+
+    if (params.createdBy) {
+      await this.storage.createAuditLog({
+        action: "IMPORT_DATA",
+        performedBy: params.createdBy,
+        targetResource: params.name,
+        details: `Imported ${params.rowCount} rows from ${params.filename}`,
       });
     }
 

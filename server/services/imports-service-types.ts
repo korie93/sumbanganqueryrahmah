@@ -40,6 +40,14 @@ export type CreateImportInput = {
   createdBy?: string | undefined;
 };
 
+export type CreateImportFromCsvFileInput = {
+  name: string;
+  filename: string;
+  filePath: string;
+  rowCount: number;
+  createdBy?: string | undefined;
+};
+
 export type ImportDataPageInput = {
   importId: string;
   page: number;
