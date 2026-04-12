@@ -212,6 +212,12 @@
   color: hsl(var(--foreground));
 }
 
+.dark .nav-pill.nav-pill-active {
+  background: hsl(var(--foreground));
+  color: hsl(var(--background));
+  border-color: hsl(var(--foreground));
+}
+
 .dark .nav-pill-active .nav-pill-icon svg {
   color: currentColor;
   stroke: currentColor;
