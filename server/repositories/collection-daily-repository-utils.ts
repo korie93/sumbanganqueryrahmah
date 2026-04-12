@@ -1,7 +1,6 @@
 import { randomUUID } from "crypto";
-import { sql, type SQLWrapper } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import type { CollectionAmountMyrNumber } from "../../shared/collection-amount-types";
-import { parseCollectionAmountMyrNumber } from "../../shared/collection-amount-types";
 import { db } from "../db-postgres";
 import type {
   CollectionDailyCalendarDay,
@@ -14,35 +13,16 @@ import {
   mapCollectionDailyTargetRow,
 } from "./collection-repository-mappers";
 import { buildProtectedCollectionPiiSelect } from "./collection-pii-select-utils";
-import { resolveCollectionPiiFieldValue } from "../lib/collection-pii-encryption";
-
-type CollectionDailyQueryResult = {
-  rows?: unknown[];
-};
-
-type CollectionDailyExecutor = {
-  execute: (query: SQLWrapper | string) => PromiseLike<CollectionDailyQueryResult>;
-};
-
-type CollectionDailyUserRow = {
-  id?: unknown;
-  username?: unknown;
-  role?: unknown;
-};
-
-type CollectionDailyPaidCustomerRow = {
-  id?: unknown;
-  customer_name?: unknown;
-  customer_name_encrypted?: unknown;
-  account_number?: unknown;
-  account_number_encrypted?: unknown;
-  amount?: unknown;
-  collection_staff_nickname?: unknown;
-};
-
-function readRows<TRow>(result: CollectionDailyQueryResult): TRow[] {
-  return Array.isArray(result.rows) ? (result.rows as TRow[]) : [];
-}
+import {
+  mapCollectionDailyPaidCustomerRow,
+  mapCollectionDailyUserRow,
+  readCollectionDailyRows,
+} from "./collection-daily-repository-row-utils";
+import type {
+  CollectionDailyExecutor,
+  CollectionDailyPaidCustomerRow,
+  CollectionDailyUserRow,
+} from "./collection-daily-repository-types";
 
 export async function listCollectionDailyUsers(): Promise<CollectionDailyUser[]> {
   const result = await db.execute(sql`
@@ -54,11 +34,9 @@ export async function listCollectionDailyUsers(): Promise<CollectionDailyUser[]>
     ORDER BY lower(username) ASC
     LIMIT 5000
   `);
-  return readRows<CollectionDailyUserRow>(result).map((row) => ({
-    id: String(row.id ?? ""),
-    username: String(row.username ?? "").toLowerCase(),
-    role: String(row.role ?? "user"),
-  }));
+  return readCollectionDailyRows<CollectionDailyUserRow>(result).map((row) =>
+    mapCollectionDailyUserRow(row),
+  );
 }
 
 export async function getCollectionDailyTarget(params: {
@@ -162,7 +140,7 @@ export async function listCollectionDailyCalendar(params: {
       AND month = ${params.month}
     ORDER BY day ASC
   `);
-  return readRows(result).map((row) => mapCollectionDailyCalendarRow(row));
+  return readCollectionDailyRows(result).map((row) => mapCollectionDailyCalendarRow(row));
 }
 
 export async function upsertCollectionDailyCalendarDays(params: {
@@ -245,19 +223,7 @@ export async function listCollectionDailyPaidCustomers(params: {
       AND payment_date = ${params.date}::date
     ORDER BY created_at ASC, id ASC
   `);
-  return readRows<CollectionDailyPaidCustomerRow>(result).map((row) => ({
-    id: String(row.id ?? ""),
-    customerName: resolveCollectionPiiFieldValue({
-      field: "customerName",
-      plaintext: row.customer_name,
-      encrypted: row.customer_name_encrypted,
-    }),
-    accountNumber: resolveCollectionPiiFieldValue({
-      field: "accountNumber",
-      plaintext: row.account_number,
-      encrypted: row.account_number_encrypted,
-    }),
-    amount: parseCollectionAmountMyrNumber(row.amount ?? 0),
-    collectionStaffNickname: String(row.collection_staff_nickname ?? ""),
-  }));
+  return readCollectionDailyRows<CollectionDailyPaidCustomerRow>(result).map((row) =>
+    mapCollectionDailyPaidCustomerRow(row),
+  );
 }

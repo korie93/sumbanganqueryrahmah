@@ -1,26 +1,19 @@
 import crypto from "crypto";
 import { createWriteStream, promises as fs } from "node:fs";
-import { sql, type SQL } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import type {
   AuditLog,
   DataRow,
   Import,
 } from "../../shared/schema-postgres";
-import { db } from "../db-postgres";
 import {
-  BACKUP_MAX_SERIALIZED_ROW_BYTES,
   QUERY_PAGE_LIMIT,
   type BackupCollectionReceipt,
   type BackupCollectionRecord,
-  type BackupPayloadCounts,
   type BackupUserRecord,
   type PreparedBackupPayloadFile,
 } from "./backups-repository-types";
 import type { BackupEncryptionConfig } from "./backups-encryption";
-import {
-  resolveCollectionCustomerNameSearchHashesValue,
-  resolveStoredCollectionPiiPlaintextValue,
-} from "../lib/collection-pii-encryption";
 import { buildProtectedCollectionPiiSelect } from "./collection-pii-select-utils";
 import {
   closeBackupWriter,
@@ -29,6 +22,16 @@ import {
   writeBackupChunk,
   writeBackupStreamChunk,
 } from "./backups-payload-file-utils";
+import {
+  type BackupCursorRow,
+  safeSelectBackupRows,
+  selectBackupRows,
+} from "./backups-payload-db-utils";
+import { mapBackupCollectionRecordRow } from "./backups-payload-collection-utils";
+import {
+  appendPagedJsonArray,
+  createEmptyBackupPayloadCounts,
+} from "./backups-payload-write-utils";
 export {
   createBackupPayloadChunkReader,
   createBackupPayloadSectionReader,
@@ -38,174 +41,6 @@ export {
   iteratePreparedBackupPayloadStorageChunks,
   readPreparedBackupPayloadForStorage,
 } from "./backups-payload-file-utils";
-
-async function safeSelectRows<T extends Record<string, unknown>>(query: SQL): Promise<T[]> {
-  try {
-    const result = await db.execute(query);
-    return (Array.isArray(result.rows) ? result.rows : []) as T[];
-  } catch (error) {
-    const message = String((error as { message?: string })?.message || "");
-    if (/relation\s+["']?[\w.]+["']?\s+does not exist/i.test(message)) {
-      return [];
-    }
-    throw error;
-  }
-}
-
-async function selectRows<T extends Record<string, unknown>>(query: SQL): Promise<T[]> {
-  const result = await db.execute(query);
-  return (Array.isArray(result.rows) ? result.rows : []) as T[];
-}
-
-type BackupCursorRow = {
-  id: string;
-};
-
-type BackupPageFetcher<T extends BackupCursorRow> = (lastId: string | null) => Promise<T[]>;
-
-function hasNonEmptyString(value: unknown): value is string {
-  return typeof value === "string" && value.trim().length > 0;
-}
-
-function buildCollectionRecordBackupPiiFields(
-  row: Record<string, unknown>,
-): Pick<
-  BackupCollectionRecord,
-  | "customerName"
-  | "customerNameEncrypted"
-  | "customerNameSearchHashes"
-  | "icNumber"
-  | "icNumberEncrypted"
-  | "customerPhone"
-  | "customerPhoneEncrypted"
-  | "accountNumber"
-  | "accountNumberEncrypted"
-> {
-  const customerNameEncrypted = hasNonEmptyString(row.customerNameEncrypted)
-    ? row.customerNameEncrypted
-    : null;
-  const icNumberEncrypted = hasNonEmptyString(row.icNumberEncrypted)
-    ? row.icNumberEncrypted
-    : null;
-  const customerPhoneEncrypted = hasNonEmptyString(row.customerPhoneEncrypted)
-    ? row.customerPhoneEncrypted
-    : null;
-  const accountNumberEncrypted = hasNonEmptyString(row.accountNumberEncrypted)
-    ? row.accountNumberEncrypted
-    : null;
-  const customerName = resolveStoredCollectionPiiPlaintextValue({
-    field: "customerName",
-    plaintext: row.customerName,
-    encrypted: row.customerNameEncrypted,
-    fallback: null,
-  });
-  const icNumber = resolveStoredCollectionPiiPlaintextValue({
-    field: "icNumber",
-    plaintext: row.icNumber,
-    encrypted: row.icNumberEncrypted,
-    fallback: null,
-  });
-  const customerPhone = resolveStoredCollectionPiiPlaintextValue({
-    field: "customerPhone",
-    plaintext: row.customerPhone,
-    encrypted: row.customerPhoneEncrypted,
-    fallback: null,
-  });
-  const accountNumber = resolveStoredCollectionPiiPlaintextValue({
-    field: "accountNumber",
-    plaintext: row.accountNumber,
-    encrypted: row.accountNumberEncrypted,
-    fallback: null,
-  });
-  const customerNameSearchHashes = resolveCollectionCustomerNameSearchHashesValue({
-    plaintext: customerName,
-    encrypted: row.customerNameEncrypted,
-    hashes: row.customerNameSearchHashes,
-  });
-
-  return {
-    ...(customerNameEncrypted
-      ? {
-        customerNameEncrypted,
-        ...(customerNameSearchHashes?.length
-          ? { customerNameSearchHashes }
-          : {}),
-      }
-      : {
-        ...(customerName ? { customerName } : {}),
-      }),
-    ...(icNumberEncrypted
-      ? { icNumberEncrypted }
-      : {
-        ...(icNumber ? { icNumber } : {}),
-      }),
-    ...(customerPhoneEncrypted
-      ? { customerPhoneEncrypted }
-      : {
-        ...(customerPhone ? { customerPhone } : {}),
-      }),
-    ...(accountNumberEncrypted
-      ? { accountNumberEncrypted }
-      : {
-        ...(accountNumber ? { accountNumber } : {}),
-      }),
-  };
-}
-
-async function appendPagedJsonArray<T extends BackupCursorRow>(
-  state: PreparedBackupWriteState,
-  key: string,
-  fetchPage: BackupPageFetcher<T>,
-): Promise<number> {
-  await writeBackupChunk(state, `"${key}":[`);
-
-  let lastId: string | null = null;
-  let isFirstRow = true;
-  let total = 0;
-
-  while (true) {
-    const rows = await fetchPage(lastId);
-    if (!rows.length) {
-      break;
-    }
-
-    for (const row of rows) {
-      if (!isFirstRow) {
-        await writeBackupChunk(state, ",");
-      }
-      isFirstRow = false;
-      const serializedRow = JSON.stringify(row);
-      const serializedRowBytes = Buffer.byteLength(serializedRow, "utf8");
-      if (serializedRowBytes > BACKUP_MAX_SERIALIZED_ROW_BYTES) {
-        throw new Error(
-          `Backup export row in '${key}' exceeds the ${BACKUP_MAX_SERIALIZED_ROW_BYTES} byte serialization limit.`,
-        );
-      }
-      state.maxSerializedRowBytes = Math.max(state.maxSerializedRowBytes, serializedRowBytes);
-      await writeBackupChunk(state, serializedRow);
-      total += 1;
-      lastId = row.id;
-    }
-
-    if (rows.length < QUERY_PAGE_LIMIT) {
-      break;
-    }
-  }
-
-  await writeBackupChunk(state, "]");
-  return total;
-}
-
-function createEmptyBackupPayloadCounts(): BackupPayloadCounts {
-  return {
-    importsCount: 0,
-    dataRowsCount: 0,
-    usersCount: 0,
-    auditLogsCount: 0,
-    collectionRecordsCount: 0,
-    collectionRecordReceiptsCount: 0,
-  };
-}
 
 export async function prepareBackupPayloadFileForCreate(
   backupEncryption?: BackupEncryptionConfig,
@@ -241,7 +76,7 @@ export async function prepareBackupPayloadFileForCreate(
     await writeBackupChunk(state, "{");
 
     counts.importsCount = await appendPagedJsonArray(state, "imports", (lastId) =>
-      selectRows<Import & BackupCursorRow>(sql`
+      selectBackupRows<Import & BackupCursorRow>(sql`
         SELECT
           id,
           name,
@@ -260,7 +95,7 @@ export async function prepareBackupPayloadFileForCreate(
     await writeBackupChunk(state, ",");
 
     counts.dataRowsCount = await appendPagedJsonArray(state, "dataRows", (lastId) =>
-      selectRows<DataRow & BackupCursorRow>(sql`
+      selectBackupRows<DataRow & BackupCursorRow>(sql`
         SELECT
           id,
           import_id as "importId",
@@ -275,7 +110,7 @@ export async function prepareBackupPayloadFileForCreate(
     await writeBackupChunk(state, ",");
 
     counts.usersCount = await appendPagedJsonArray(state, "users", (lastId) =>
-      selectRows<BackupUserRecord & BackupCursorRow>(sql`
+      selectBackupRows<BackupUserRecord & BackupCursorRow>(sql`
         SELECT
           id,
           username,
@@ -299,7 +134,7 @@ export async function prepareBackupPayloadFileForCreate(
     await writeBackupChunk(state, ",");
 
     counts.auditLogsCount = await appendPagedJsonArray(state, "auditLogs", (lastId) =>
-      selectRows<AuditLog & BackupCursorRow>(sql`
+      selectBackupRows<AuditLog & BackupCursorRow>(sql`
         SELECT
           id,
           action,
@@ -319,7 +154,7 @@ export async function prepareBackupPayloadFileForCreate(
     await writeBackupChunk(state, ",");
 
     counts.collectionRecordsCount = await appendPagedJsonArray(state, "collectionRecords", (lastId) =>
-      safeSelectRows<(BackupCollectionRecord & BackupCursorRow) & Record<string, unknown>>(sql`
+      safeSelectBackupRows<(BackupCollectionRecord & BackupCursorRow) & Record<string, unknown>>(sql`
         SELECT
           id,
           ${buildProtectedCollectionPiiSelect("customer_name", "customer_name_encrypted", "customerName", "customerName")},
@@ -349,38 +184,7 @@ export async function prepareBackupPayloadFileForCreate(
         ORDER BY id ASC
         LIMIT ${QUERY_PAGE_LIMIT}
       `).then((rows) =>
-        rows.map((row) => {
-          return {
-            id: String(row.id || ""),
-            ...buildCollectionRecordBackupPiiFields(row),
-            batch: String(row.batch || ""),
-            paymentDate: String(row.paymentDate || ""),
-            amount: row.amount as BackupCollectionRecord["amount"],
-            receiptFile:
-              typeof row.receiptFile === "string" && row.receiptFile.trim().length > 0
-                ? row.receiptFile
-                : null,
-            receiptTotalAmountCents: row.receiptTotalAmountCents as BackupCollectionRecord["receiptTotalAmountCents"],
-            receiptValidationStatus:
-              row.receiptValidationStatus as BackupCollectionRecord["receiptValidationStatus"],
-            receiptValidationMessage:
-              typeof row.receiptValidationMessage === "string" && row.receiptValidationMessage.trim().length > 0
-                ? row.receiptValidationMessage
-                : null,
-            receiptCount:
-              typeof row.receiptCount === "number"
-                ? row.receiptCount
-                : Number(row.receiptCount || 0),
-            duplicateReceiptFlag: row.duplicateReceiptFlag === true,
-            createdByLogin: String(row.createdByLogin || ""),
-            collectionStaffNickname: String(row.collectionStaffNickname || ""),
-            staffUsername:
-              typeof row.staffUsername === "string" && row.staffUsername.trim().length > 0
-                ? row.staffUsername
-                : null,
-            createdAt: row.createdAt as BackupCollectionRecord["createdAt"],
-          };
-        }),
+        rows.map((row) => mapBackupCollectionRecordRow(row)),
       ),
     );
 
@@ -390,7 +194,7 @@ export async function prepareBackupPayloadFileForCreate(
       state,
       "collectionRecordReceipts",
       (lastId) =>
-        safeSelectRows<BackupCollectionReceipt & BackupCursorRow>(sql`
+        safeSelectBackupRows<BackupCollectionReceipt & BackupCursorRow>(sql`
           SELECT
             id,
             collection_record_id as "collectionRecordId",

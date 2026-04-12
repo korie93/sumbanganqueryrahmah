@@ -4,10 +4,19 @@ import {
   type MaintenanceState,
   type SettingsOption,
   type SystemSettingCategory,
-  type SystemSettingItem,
   ROLE_TAB_SETTINGS,
   roleTabSettingKey,
 } from "../config/system-settings";
+import {
+  buildSettingsValueMap,
+  buildTextInList,
+  firstQueryRow,
+  queryRows,
+} from "./settings-repository-query-utils";
+import type {
+  SettingsAppConfig,
+  SettingsUpdateResult,
+} from "./settings-repository-types";
 import {
   buildSettingsCategories,
   buildSystemSettingItem,
@@ -24,19 +33,21 @@ import {
   TRUTHY_SETTING_VALUES,
 } from "./settings-repository-value-utils";
 
-function buildTextInList(values: string[]) {
-  return sql.join(values.map((value) => sql`${value}`), sql`, `);
-}
-
-function queryRows<T extends Record<string, unknown>>(result: { rows?: unknown[] }): T[] {
-  return Array.isArray(result.rows) ? (result.rows as T[]) : [];
-}
-
-function firstQueryRow<T extends Record<string, unknown>>(result: { rows?: unknown[] }): T | undefined {
-  return queryRows<T>(result)[0];
-}
-
 export class SettingsRepository {
+  private async getSettingsValueMap(keys: string[]): Promise<Map<string, string>> {
+    if (keys.length === 0) {
+      return new Map();
+    }
+
+    const result = await db.execute(sql`
+      SELECT key, value
+      FROM public.system_settings
+      WHERE key IN (${buildTextInList(keys)})
+    `);
+
+    return buildSettingsValueMap(result);
+  }
+
   private async isAdminMaintenanceEditingEnabled(): Promise<boolean> {
     const result = await db.execute(sql`
       SELECT value
@@ -178,12 +189,7 @@ export class SettingsRepository {
     value: string | number | boolean | null;
     confirmCritical?: boolean;
     updatedBy: string;
-  }): Promise<{
-    status: "updated" | "unchanged" | "forbidden" | "not_found" | "requires_confirmation" | "invalid";
-    message: string;
-    setting?: SystemSettingItem;
-    shouldBroadcast?: boolean;
-  }> {
+  }): Promise<SettingsUpdateResult> {
     const settingRes = await db.execute(sql`
       SELECT
         s.id,
@@ -296,55 +302,29 @@ export class SettingsRepository {
   }
 
   async getMaintenanceState(now: Date = new Date()): Promise<MaintenanceState> {
-    const rows = await db.execute(sql`
-      SELECT key, value
-      FROM public.system_settings
-      WHERE key IN (
-        'maintenance_mode',
-        'maintenance_message',
-        'maintenance_type',
-        'maintenance_start_time',
-        'maintenance_end_time'
-      )
-    `);
+    const values = await this.getSettingsValueMap([
+      "maintenance_mode",
+      "maintenance_message",
+      "maintenance_type",
+      "maintenance_start_time",
+      "maintenance_end_time",
+    ]);
 
-    const values = new Map<string, string>();
-    for (const row of queryRows<{ key?: unknown; value?: unknown }>(rows)) {
-      values.set(String(row.key), String(row.value ?? ""));
-    }
     return buildMaintenanceState(values, now);
   }
 
-  async getAppConfig(): Promise<{
-    systemName: string;
-    sessionTimeoutMinutes: number;
-    heartbeatIntervalMinutes: number;
-    wsIdleMinutes: number;
-    aiEnabled: boolean;
-    semanticSearchEnabled: boolean;
-    aiTimeoutMs: number;
-    searchResultLimit: number;
-    viewerRowsPerPage: number;
-  }> {
-    const result = await db.execute(sql`
-      SELECT key, value
-      FROM public.system_settings
-      WHERE key IN (
-        'system_name',
-        'session_timeout_minutes',
-        'ws_idle_minutes',
-        'ai_enabled',
-        'semantic_search_enabled',
-        'ai_timeout_ms',
-        'search_result_limit',
-        'viewer_rows_per_page'
-      )
-    `);
+  async getAppConfig(): Promise<SettingsAppConfig> {
+    const values = await this.getSettingsValueMap([
+      "system_name",
+      "session_timeout_minutes",
+      "ws_idle_minutes",
+      "ai_enabled",
+      "semantic_search_enabled",
+      "ai_timeout_ms",
+      "search_result_limit",
+      "viewer_rows_per_page",
+    ]);
 
-    const values = new Map<string, string>();
-    for (const row of queryRows<{ key?: unknown; value?: unknown }>(result)) {
-      values.set(String(row.key), String(row.value ?? ""));
-    }
     return buildAppConfig(values);
   }
 }

@@ -1,47 +1,17 @@
 import { count, eq, gte, sql } from "drizzle-orm";
 import { auditLogs, dataRows, imports, userActivity, users } from "../../shared/schema-postgres";
-import { runtimeConfig } from "../config/runtime";
 import { db } from "../db-postgres";
+import {
+  ANALYTICS_TZ,
+  BACKUP_ACTIVITY_ACTIONS,
+  buildAuditActionList,
+  COLLECTION_RECORD_VERSION_CONFLICT_ACTION,
+  LOGIN_FAILURE_ACTIONS,
+  serializeAnalyticsTimestamp,
+  type TopActiveUserRow,
+} from "./analytics-repository-shared";
 
-const ANALYTICS_TZ = runtimeConfig.runtime.analyticsTimeZone;
-const COLLECTION_RECORD_VERSION_CONFLICT_ACTION = "COLLECTION_RECORD_VERSION_CONFLICT";
-const LOGIN_FAILURE_ACTIONS = [
-  "LOGIN_FAILED",
-  "LOGIN_FAILED_BANNED",
-  "LOGIN_FAILED_ACCOUNT_STATE",
-  "LOGIN_BLOCKED_SINGLE_SESSION",
-] as const;
-const BACKUP_ACTIVITY_ACTIONS = [
-  "CREATE_BACKUP",
-  "VIEW_BACKUP_METADATA",
-  "DOWNLOAD_BACKUP_EXPORT",
-  "RESTORE_BACKUP",
-  "DELETE_BACKUP",
-] as const;
-
-function buildAuditActionList(actions: readonly string[]) {
-  return sql.join(actions.map((action) => sql`${action}`), sql`, `);
-}
-
-type TopActiveUserRow = {
-  username: string;
-  role: string;
-  loginCount: number;
-  lastLogin: Date | string | null;
-};
-
-export function serializeAnalyticsTimestamp(value: Date | string | null | undefined): string | null {
-  if (!value) {
-    return null;
-  }
-
-  const parsed = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(parsed.getTime())) {
-    return null;
-  }
-
-  return parsed.toISOString();
-}
+export { serializeAnalyticsTimestamp } from "./analytics-repository-shared";
 
 export class AnalyticsRepository {
   async getDashboardSummary(): Promise<{

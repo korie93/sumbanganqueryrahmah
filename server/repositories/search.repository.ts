@@ -1,132 +1,32 @@
-import type { SQL } from "drizzle-orm";
-import { sql } from "drizzle-orm";
-import type { DataRow } from "../../shared/schema-postgres";
+import { sql, type SQL } from "drizzle-orm";
 import { db } from "../db-postgres";
 import { buildLikePattern } from "./sql-like-utils";
+import {
+  mapAdvancedSearchDataRow,
+  mapSearchDataRow,
+  mapSearchGlobalDataRow,
+} from "./search-repository-mappers";
+import {
+  buildSearchFieldCondition,
+  getSearchTotalFromRows,
+  isSearchOffsetBeyondRuntimeWindow,
+  MAX_SEARCH_COLUMN_KEYS,
+  MAX_SEARCH_LIMIT,
+  normalizeSearchOffset,
+  SEARCH_ALLOWED_OPERATORS,
+} from "./search-repository-shared";
+import type {
+  AdvancedSearchDataRow,
+  SearchColumnFilter,
+  SearchDataRow,
+  SearchGlobalDataRow,
+} from "./search-repository-types";
 
-export const MAX_SEARCH_LIMIT = 200;
-// Bound deep OFFSET scans on JSON-heavy search queries while leaving cursor paging available for deeper traversal.
-export const MAX_SEARCH_OFFSET = 50_000;
-const MAX_COLUMN_KEYS = 500;
-const ALLOWED_OPERATORS = new Set([
-  "contains",
-  "equals",
-  "notEquals",
-  "startsWith",
-  "endsWith",
-  "greaterThan",
-  "lessThan",
-  "greaterThanOrEqual",
-  "lessThanOrEqual",
-  "isEmpty",
-  "isNotEmpty",
-]);
-
-type QueryRow = Record<string, unknown>;
-
-export type SearchGlobalDataRow = {
-  id: string;
-  rowId?: string | null;
-  importId: string;
-  importName: string | null;
-  importFilename: string | null;
-  jsonDataJsonb: unknown;
-};
-
-export type SearchDataRow = {
-  id: string;
-  importId: string;
-  jsonDataJsonb: unknown;
-};
-
-type AdvancedSearchDataRow = DataRow & {
-  importName?: string | null;
-  importFilename?: string | null;
-};
-
-function getTotalFromRows(rows: unknown[]): number {
-  const firstRow = rows[0];
-  if (!firstRow || typeof firstRow !== "object") {
-    return 0;
-  }
-
-  return Number((firstRow as QueryRow).total || 0);
-}
-
-function detectValueType(value: string): "number" | "date" | "string" {
-  if (!value) return "string";
-  if (!Number.isNaN(Number(value))) return "number";
-
-  const date = new Date(value);
-  if (!Number.isNaN(date.getTime())) return "date";
-
-  return "string";
-}
-
-function normalizeJsonPayload(raw: unknown): unknown {
-  let value = raw;
-
-  if (typeof value === "string") {
-    try {
-      value = JSON.parse(value);
-    } catch {
-      return value;
-    }
-  }
-
-  if (Array.isArray(value)) {
-    const mapped: Record<string, unknown> = {};
-    for (let index = 0; index < value.length; index += 1) {
-      mapped[`col_${index + 1}`] = value[index];
-    }
-    return mapped;
-  }
-
-  return value;
-}
-
-function buildFieldCondition(field: string, operator: string, value: string): SQL {
-  const column = sql`dr.json_data::jsonb ->> ${field}`;
-  const valueType = detectValueType(value);
-  const containsPattern = buildLikePattern(value, "contains");
-  const startsWithPattern = buildLikePattern(value, "startsWith");
-  const endsWithPattern = buildLikePattern(value, "endsWith");
-
-  switch (operator) {
-    case "contains":
-      return sql`${column} ILIKE ${containsPattern} ESCAPE '\'`;
-    case "equals":
-      return sql`${column} = ${value}`;
-    case "notEquals":
-      return sql`${column} <> ${value}`;
-    case "startsWith":
-      return sql`${column} ILIKE ${startsWithPattern} ESCAPE '\'`;
-    case "endsWith":
-      return sql`${column} ILIKE ${endsWithPattern} ESCAPE '\'`;
-    case "greaterThan":
-      if (valueType === "number") return sql`NULLIF(${column}, '')::numeric > ${Number(value)}`;
-      if (valueType === "date") return sql`NULLIF(${column}, '')::date > ${value}`;
-      return sql`false`;
-    case "lessThan":
-      if (valueType === "number") return sql`NULLIF(${column}, '')::numeric < ${Number(value)}`;
-      if (valueType === "date") return sql`NULLIF(${column}, '')::date < ${value}`;
-      return sql`false`;
-    case "greaterThanOrEqual":
-      if (valueType === "number") return sql`NULLIF(${column}, '')::numeric >= ${Number(value)}`;
-      if (valueType === "date") return sql`NULLIF(${column}, '')::date >= ${value}`;
-      return sql`false`;
-    case "lessThanOrEqual":
-      if (valueType === "number") return sql`NULLIF(${column}, '')::numeric <= ${Number(value)}`;
-      if (valueType === "date") return sql`NULLIF(${column}, '')::date <= ${value}`;
-      return sql`false`;
-    case "isEmpty":
-      return sql`COALESCE(${column}, '') = ''`;
-    case "isNotEmpty":
-      return sql`COALESCE(${column}, '') <> ''`;
-    default:
-      return sql`false`;
-  }
-}
+export { MAX_SEARCH_LIMIT, MAX_SEARCH_OFFSET } from "./search-repository-shared";
+export type {
+  SearchDataRow,
+  SearchGlobalDataRow,
+} from "./search-repository-types";
 
 export class SearchRepository {
   async searchGlobalDataRows(params: {
@@ -149,7 +49,7 @@ export class SearchRepository {
 
       return {
         rows: [],
-        total: getTotalFromRows(totalResult.rows || []),
+        total: getSearchTotalFromRows(totalResult.rows || []),
       };
     }
 
@@ -177,18 +77,9 @@ export class SearchRepository {
         AND dr.json_data::text ILIKE ${searchPattern} ESCAPE '\'
     `);
 
-    const rows = (rowsResult.rows || []).map((row) => {
-      const record = row as QueryRow;
-      return {
-        id: String(record.id || ""),
-        importId: String(record.import_id || ""),
-        importName: typeof record.import_name === "string" ? record.import_name : null,
-        importFilename: typeof record.import_filename === "string" ? record.import_filename : null,
-        jsonDataJsonb: normalizeJsonPayload(record.json_data_jsonb),
-      };
-    });
+    const rows = (rowsResult.rows || []).map((row) => mapSearchGlobalDataRow(row as Record<string, unknown>));
 
-    const total = getTotalFromRows(totalResult.rows || []);
+    const total = getSearchTotalFromRows(totalResult.rows || []);
     return { rows, total };
   }
 
@@ -212,7 +103,7 @@ export class SearchRepository {
     search?: string | null;
     limit: number;
     offset: number;
-    columnFilters?: Array<{ column: string; operator: string; value: string }>;
+    columnFilters?: SearchColumnFilter[];
     cursor?: string | null;
   }): Promise<{ rows: SearchDataRow[]; total: number; nextCursorRowId: string | null }> {
     const { importId, search, limit, offset } = params;
@@ -230,7 +121,7 @@ export class SearchRepository {
           .filter((filter) =>
             filter.column !== ""
             && filter.value !== ""
-            && ALLOWED_OPERATORS.has(filter.operator),
+            && SEARCH_ALLOWED_OPERATORS.has(filter.operator),
           )
       : [];
 
@@ -244,7 +135,7 @@ export class SearchRepository {
     }
 
     for (const filter of safeColumnFilters) {
-      conditions.push(buildFieldCondition(filter.column, filter.operator, filter.value));
+      conditions.push(buildSearchFieldCondition(filter.column, filter.operator, filter.value));
     }
 
     if (cursor) {
@@ -264,7 +155,7 @@ export class SearchRepository {
     if (!cursor && isSearchOffsetBeyondRuntimeWindow(safeOffset)) {
       return {
         rows: [],
-        total: getTotalFromRows(totalResult.rows || []),
+        total: getSearchTotalFromRows(totalResult.rows || []),
         nextCursorRowId: null,
       };
     }
@@ -281,20 +172,15 @@ export class SearchRepository {
       ${cursor ? sql`` : sql`OFFSET ${safeOffset}`}
     `);
 
-    const rawRows = (rowsResult.rows || []).map((row) => {
-      const record = row as QueryRow;
-      return {
-        id: String(record.id || ""),
-        importId: String(record.importId || ""),
-        jsonDataJsonb: normalizeJsonPayload(record.jsonDataJsonb),
-      };
-    });
+    const rawRows = (rowsResult.rows || []).map((row) =>
+      mapSearchDataRow(row as Record<string, unknown>),
+    );
     const hasMore = rawRows.length > safeLimit;
     const items = hasMore ? rawRows.slice(0, safeLimit) : rawRows;
 
     return {
       rows: items,
-      total: getTotalFromRows(totalResult.rows || []),
+      total: getSearchTotalFromRows(totalResult.rows || []),
       nextCursorRowId: hasMore ? String(items[items.length - 1]?.id || "") || null : null,
     };
   }
@@ -308,7 +194,7 @@ export class SearchRepository {
     const allowedColumns = new Set(await this.getAllColumnNames());
 
     const safeFilters = filters.filter((filter) =>
-      allowedColumns.has(filter.field) && ALLOWED_OPERATORS.has(filter.operator),
+      allowedColumns.has(filter.field) && SEARCH_ALLOWED_OPERATORS.has(filter.operator),
     );
 
     if (safeFilters.length === 0) {
@@ -316,7 +202,7 @@ export class SearchRepository {
     }
 
     const conditions = safeFilters.map((filter) =>
-      buildFieldCondition(filter.field, filter.operator, String(filter.value ?? "")),
+      buildSearchFieldCondition(filter.field, filter.operator, String(filter.value ?? "")),
     );
 
     const conditionSql = conditions.length === 1
@@ -337,7 +223,7 @@ export class SearchRepository {
     if (isSearchOffsetBeyondRuntimeWindow(safeOffset)) {
       return {
         rows: [],
-        total: getTotalFromRows(totalResult.rows || []),
+        total: getSearchTotalFromRows(totalResult.rows || []),
       };
     }
 
@@ -358,17 +244,10 @@ export class SearchRepository {
     `);
 
     return {
-      rows: (rowsResult.rows || []).map((row) => {
-        const record = row as QueryRow;
-        return {
-          id: String(record.id || ""),
-          importId: String(record.importId || ""),
-          jsonDataJsonb: normalizeJsonPayload(record.jsonDataJsonb),
-          importName: typeof record.importName === "string" ? record.importName : null,
-          importFilename: typeof record.importFilename === "string" ? record.importFilename : null,
-        } as AdvancedSearchDataRow;
-      }),
-      total: getTotalFromRows(totalResult.rows || []),
+      rows: (rowsResult.rows || []).map((row) =>
+        mapAdvancedSearchDataRow(row as Record<string, unknown>),
+      ),
+      total: getSearchTotalFromRows(totalResult.rows || []),
     };
   }
 
@@ -381,23 +260,11 @@ export class SearchRepository {
       WHERE i.is_deleted = false
         AND jsonb_typeof(dr.json_data::jsonb) = 'object'
       ORDER BY key
-      LIMIT ${MAX_COLUMN_KEYS}
+      LIMIT ${MAX_SEARCH_COLUMN_KEYS}
     `);
 
     return (result.rows || [])
-      .map((row) => String((row as QueryRow).column_name || "").trim())
+      .map((row) => String((row as Record<string, unknown>).column_name || "").trim())
       .filter(Boolean);
   }
-}
-
-function normalizeSearchOffset(offset: number): number {
-  if (!Number.isFinite(offset)) {
-    return 0;
-  }
-
-  return Math.max(0, Math.floor(offset));
-}
-
-function isSearchOffsetBeyondRuntimeWindow(offset: number): boolean {
-  return normalizeSearchOffset(offset) > MAX_SEARCH_OFFSET;
 }

@@ -5,69 +5,25 @@ import {
   resolveCollectionNicknameRowsByIds,
   validateCollectionAdminGroupComposition,
   type CollectionAdminGroupDbRow,
-  type CollectionRepositoryExecutor,
-  type CollectionRepositoryQueryResult,
 } from "./collection-nickname-utils";
+import {
+  buildNicknameIdByLowerName,
+  insertAdminGroupMembers,
+  normalizeCollectionText,
+  normalizeVisibleNicknameValues,
+  readFirstRow,
+  readRows,
+} from "./collection-admin-group-shared";
+import type {
+  CollectionAdminGroupExecutor,
+  CollectionAdminGroupMemberRow,
+  CollectionExistingAdminGroupRow,
+  CollectionNicknameIdRow,
+  CollectionVisibleNicknameRow,
+} from "./collection-admin-group-types";
 import type { CollectionAdminGroup } from "../storage-postgres";
 
-type CollectionNicknameIdRow = {
-  id?: unknown;
-  nickname?: unknown;
-};
-
-type CollectionExistingAdminGroupRow = {
-  id?: unknown;
-  leader_nickname?: unknown;
-};
-
-type CollectionAdminGroupMemberRow = {
-  member_nickname?: unknown;
-};
-
-type CollectionVisibleNicknameRow = {
-  leader_nickname?: unknown;
-  member_nicknames?: unknown;
-};
-
-export type CollectionAdminGroupExecutor = CollectionRepositoryExecutor;
-
-function normalizeCollectionText(value: unknown): string {
-  return String(value || "").trim();
-}
-
-function readRows<TRow>(result: CollectionRepositoryQueryResult): TRow[] {
-  return Array.isArray(result.rows) ? (result.rows as TRow[]) : [];
-}
-
-function readFirstRow<TRow>(result: CollectionRepositoryQueryResult): TRow | undefined {
-  return readRows<TRow>(result)[0];
-}
-
-async function insertAdminGroupMembers(
-  executor: CollectionAdminGroupExecutor,
-  groupId: string,
-  leaderNickname: string,
-  memberNicknames: string[],
-) {
-  for (const memberNickname of memberNicknames) {
-    if (!memberNickname || memberNickname.toLowerCase() === leaderNickname.toLowerCase()) continue;
-    await executor.execute(sql`
-      INSERT INTO public.admin_group_members (
-        id,
-        admin_group_id,
-        member_nickname,
-        created_at
-      )
-      VALUES (
-        ${randomUUID()}::uuid,
-        ${groupId}::uuid,
-        ${memberNickname},
-        now()
-      )
-      ON CONFLICT DO NOTHING
-    `);
-  }
-}
+export type { CollectionAdminGroupExecutor } from "./collection-admin-group-types";
 
 export async function listCollectionAdminGroups(
   executor: CollectionAdminGroupExecutor,
@@ -77,13 +33,7 @@ export async function listCollectionAdminGroups(
     FROM public.collection_staff_nicknames
     LIMIT 5000
   `);
-  const nicknameIdByLowerName = new Map<string, string>();
-  for (const row of readRows<CollectionNicknameIdRow>(nicknameRows)) {
-    const nickname = normalizeCollectionText(row.nickname).toLowerCase();
-    const id = normalizeCollectionText(row.id);
-    if (!nickname || !id || nicknameIdByLowerName.has(nickname)) continue;
-    nicknameIdByLowerName.set(nickname, id);
-  }
+  const nicknameIdByLowerName = buildNicknameIdByLowerName(readRows<CollectionNicknameIdRow>(nicknameRows));
 
   const result = await executor.execute(sql`
     SELECT
@@ -317,11 +267,8 @@ export async function getCollectionAdminGroupVisibleNicknameValuesByLeader(
   if (!row) {
     return [normalizedLeader];
   }
-
-  const members: string[] = Array.isArray(row.member_nicknames)
-    ? row.member_nicknames.map((value: unknown) => normalizeCollectionText(value)).filter(Boolean)
-    : [];
-  const uniqueMembers = Array.from(new Set(members.filter((value) => value.toLowerCase() !== normalizedLeader.toLowerCase())))
-    .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
-  return [normalizeCollectionText(row.leader_nickname || normalizedLeader), ...uniqueMembers];
+  return normalizeVisibleNicknameValues(
+    normalizeCollectionText(row.leader_nickname || normalizedLeader),
+    row.member_nicknames,
+  );
 }
