@@ -1,4 +1,4 @@
-import { sql, inArray, type SQL } from "drizzle-orm";
+import { sql, inArray } from "drizzle-orm";
 import { db } from "../db-postgres";
 import {
   users,
@@ -18,10 +18,14 @@ import {
   type PendingPasswordResetRequestRecord,
 } from "./auth-repository-types";
 import {
-  normalizeManagedUserListFilters,
-  normalizePendingPasswordResetListFilters,
-} from "./auth-managed-user-shared";
-import { buildLikePattern } from "./sql-like-utils";
+  buildManagedUsersWhereSql,
+  buildPendingPasswordResetWhereSql,
+  readTotalRowCount,
+} from "./auth-managed-user-read-query-utils";
+import {
+  collectOffsetChunkRows,
+  collectPagedResults,
+} from "./auth-managed-user-read-pagination-utils";
 
 export async function getUsersByRoles(roles: string[]): Promise<Array<{
   id: string;
@@ -33,20 +37,8 @@ export async function getUsersByRoles(roles: string[]): Promise<Array<{
   isBanned: boolean | null;
 }>> {
   if (!Array.isArray(roles) || roles.length === 0) return [];
-
-  const results: Array<{
-    id: string;
-    username: string;
-    role: string;
-    createdAt: Date;
-    updatedAt: Date;
-    passwordChangedAt: Date | null;
-    isBanned: boolean | null;
-  }> = [];
-
-  let offset = 0;
-  while (true) {
-    const chunk = await db
+  return collectOffsetChunkRows(
+    async (offset) => db
       .select({
         id: users.id,
         username: users.username,
@@ -60,32 +52,19 @@ export async function getUsersByRoles(roles: string[]): Promise<Array<{
       .where(inArray(users.role, roles))
       .orderBy(users.role, users.username)
       .limit(QUERY_PAGE_LIMIT)
-      .offset(offset);
-
-    if (!chunk.length) break;
-    results.push(...chunk);
-    if (chunk.length < QUERY_PAGE_LIMIT) break;
-    offset += chunk.length;
-  }
-
-  return results;
+      .offset(offset),
+    QUERY_PAGE_LIMIT,
+  );
 }
 
 export async function getManagedUsers(): Promise<ManagedUserRecord[]> {
-  const rows: ManagedUserRecord[] = [];
-  let page = 1;
-  while (true) {
-    const pageResult = await listManagedUsersPage({
+  return collectPagedResults(
+    (page) => listManagedUsersPage({
       page,
       pageSize: MANAGED_USERS_MAX_PAGE_SIZE,
-    });
-    rows.push(...pageResult.users);
-    if (rows.length >= pageResult.total || pageResult.users.length < pageResult.pageSize) {
-      break;
-    }
-    page += 1;
-  }
-  return rows;
+    }),
+    (pageResult) => pageResult.users,
+  );
 }
 
 export async function listManagedUsersPage(
@@ -99,38 +78,7 @@ export async function listManagedUsersPage(
       maxPageSize: MANAGED_USERS_MAX_PAGE_SIZE,
     },
   );
-  const filters = normalizeManagedUserListFilters(params);
-
-  const whereClauses: SQL[] = [sql`role IN ('admin', 'user')`];
-  if (filters.search) {
-    const searchPattern = buildLikePattern(filters.search, "contains");
-    whereClauses.push(sql`(
-      username ILIKE ${searchPattern} ESCAPE '\'
-      OR COALESCE(full_name, '') ILIKE ${searchPattern} ESCAPE '\'
-      OR COALESCE(email, '') ILIKE ${searchPattern} ESCAPE '\'
-    )`);
-  }
-
-  if (filters.role === "admin" || filters.role === "user") {
-    whereClauses.push(sql`role = ${filters.role}`);
-  }
-
-  if (filters.status === "banned") {
-    whereClauses.push(sql`COALESCE(is_banned, false) = true`);
-  } else if (filters.status === "locked") {
-    whereClauses.push(sql`locked_at IS NOT NULL`);
-    whereClauses.push(sql`COALESCE(is_banned, false) = false`);
-  } else if (
-    filters.status === "active"
-    || filters.status === "pending_activation"
-    || filters.status === "suspended"
-    || filters.status === "disabled"
-  ) {
-    whereClauses.push(sql`status = ${filters.status}`);
-    whereClauses.push(sql`COALESCE(is_banned, false) = false`);
-  }
-
-  const whereSql = sql`WHERE ${sql.join(whereClauses, sql` AND `)}`;
+  const whereSql = buildManagedUsersWhereSql(params);
 
   const [countResult, rowsResult] = await Promise.all([
     db.execute(sql`
@@ -167,7 +115,7 @@ export async function listManagedUsersPage(
     `),
   ]);
 
-  const total = Number((countResult.rows?.[0] as { total?: number } | undefined)?.total || 0);
+  const total = readTotalRowCount(countResult.rows?.[0] as { total?: number | string } | undefined);
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   return {
@@ -180,20 +128,13 @@ export async function listManagedUsersPage(
 }
 
 export async function listPendingPasswordResetRequests(): Promise<PendingPasswordResetRequestRecord[]> {
-  const rows: PendingPasswordResetRequestRecord[] = [];
-  let page = 1;
-  while (true) {
-    const pageResult = await listPendingPasswordResetRequestsPage({
+  return collectPagedResults(
+    (page) => listPendingPasswordResetRequestsPage({
       page,
       pageSize: PENDING_PASSWORD_RESET_MAX_PAGE_SIZE,
-    });
-    rows.push(...pageResult.requests);
-    if (rows.length >= pageResult.total || pageResult.requests.length < pageResult.pageSize) {
-      break;
-    }
-    page += 1;
-  }
-  return rows;
+    }),
+    (pageResult) => pageResult.requests,
+  );
 }
 
 export async function listPendingPasswordResetRequestsPage(
@@ -207,36 +148,7 @@ export async function listPendingPasswordResetRequestsPage(
       maxPageSize: PENDING_PASSWORD_RESET_MAX_PAGE_SIZE,
     },
   );
-  const filters = normalizePendingPasswordResetListFilters(params);
-
-  const whereClauses: SQL[] = [
-    sql`r.approved_by IS NULL`,
-    sql`r.used_at IS NULL`,
-  ];
-
-  if (filters.search) {
-    const searchPattern = buildLikePattern(filters.search, "contains");
-    whereClauses.push(sql`(
-      u.username ILIKE ${searchPattern} ESCAPE '\'
-      OR COALESCE(u.full_name, '') ILIKE ${searchPattern} ESCAPE '\'
-      OR COALESCE(u.email, '') ILIKE ${searchPattern} ESCAPE '\'
-      OR COALESCE(r.requested_by_user, '') ILIKE ${searchPattern} ESCAPE '\'
-    )`);
-  }
-
-  if (filters.status === "banned") {
-    whereClauses.push(sql`COALESCE(u.is_banned, false) = true`);
-  } else if (
-    filters.status === "active"
-    || filters.status === "pending_activation"
-    || filters.status === "suspended"
-    || filters.status === "disabled"
-  ) {
-    whereClauses.push(sql`u.status = ${filters.status}`);
-    whereClauses.push(sql`COALESCE(u.is_banned, false) = false`);
-  }
-
-  const whereSql = sql`WHERE ${sql.join(whereClauses, sql` AND `)}`;
+  const whereSql = buildPendingPasswordResetWhereSql(params);
 
   const [countResult, rowsResult] = await Promise.all([
     db.execute(sql`
@@ -270,7 +182,7 @@ export async function listPendingPasswordResetRequestsPage(
     `),
   ]);
 
-  const total = Number((countResult.rows?.[0] as { total?: number } | undefined)?.total || 0);
+  const total = readTotalRowCount(countResult.rows?.[0] as { total?: number | string } | undefined);
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   return {
@@ -287,15 +199,8 @@ export async function getAccounts(): Promise<Array<{
   role: string;
   isBanned: boolean | null;
 }>> {
-  const rows: Array<{
-    username: string;
-    role: string;
-    isBanned: boolean | null;
-  }> = [];
-
-  let offset = 0;
-  while (true) {
-    const chunk = await db
+  return collectOffsetChunkRows(
+    async (offset) => db
       .select({
         username: users.username,
         role: users.role,
@@ -304,13 +209,7 @@ export async function getAccounts(): Promise<Array<{
       .from(users)
       .orderBy(users.role, users.username)
       .limit(QUERY_PAGE_LIMIT)
-      .offset(offset);
-
-    if (!chunk.length) break;
-    rows.push(...chunk);
-    if (chunk.length < QUERY_PAGE_LIMIT) break;
-    offset += chunk.length;
-  }
-
-  return rows;
+      .offset(offset),
+    QUERY_PAGE_LIMIT,
+  );
 }

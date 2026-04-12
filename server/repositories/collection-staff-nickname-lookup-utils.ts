@@ -1,4 +1,4 @@
-import { sql, type SQL } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 
 import {
   mapCollectionNicknameAuthProfileRow,
@@ -12,6 +12,7 @@ import {
   readRows,
   type CollectionStaffNicknameExecutor,
 } from "./collection-staff-nickname-shared";
+import { buildCollectionStaffNicknameListWhereSql } from "./collection-staff-nickname-lookup-query-utils";
 import type {
   CollectionNicknameAuthProfile,
   CollectionStaffNickname,
@@ -24,18 +25,7 @@ export async function listCollectionStaffNicknames(
     allowedRole?: "admin" | "user";
   },
 ): Promise<CollectionStaffNickname[]> {
-  const conditions: SQL[] = [];
-  if (filters?.activeOnly === true) {
-    conditions.push(sql`is_active = true`);
-  }
-  if (filters?.allowedRole === "admin") {
-    conditions.push(sql`role_scope IN ('admin', 'both')`);
-  } else if (filters?.allowedRole === "user") {
-    conditions.push(sql`role_scope IN ('user', 'both')`);
-  }
-  const whereSql = conditions.length > 0
-    ? sql`WHERE ${sql.join(conditions, sql` AND `)}`
-    : sql``;
+  const whereSql = buildCollectionStaffNicknameListWhereSql(filters);
 
   const result = await executor.execute(sql`
     SELECT

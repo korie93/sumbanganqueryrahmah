@@ -13,6 +13,11 @@ import {
   type CollectionRecordCountRow,
   type CollectionStaffNicknameExecutor,
 } from "./collection-staff-nickname-shared";
+import {
+  cascadeCollectionNicknameRename,
+  deleteCollectionStaffNicknameRelations,
+} from "./collection-staff-nickname-mutation-cascade-utils";
+import { buildCollectionStaffNicknameUpdateAssignments } from "./collection-staff-nickname-mutation-update-utils";
 import type {
   CollectionStaffNickname,
   CreateCollectionStaffNicknameInput,
@@ -114,16 +119,7 @@ export async function updateCollectionStaffNicknameValue(
   const existing = await getCollectionStaffNicknameByIdValue(executor, id);
   if (!existing) return undefined;
 
-  const updates: SQL[] = [];
-  if (data.nickname !== undefined) {
-    updates.push(sql`nickname = ${data.nickname}`);
-  }
-  if (data.isActive !== undefined) {
-    updates.push(sql`is_active = ${data.isActive}`);
-  }
-  if (data.roleScope !== undefined) {
-    updates.push(sql`role_scope = ${normalizeCollectionNicknameRoleScope(data.roleScope)}`);
-  }
+  const updates: SQL[] = buildCollectionStaffNicknameUpdateAssignments(data);
   if (!updates.length) {
     return existing;
   }
@@ -147,25 +143,7 @@ export async function updateCollectionStaffNicknameValue(
   if (shouldCascadeCollectionNicknameRename(existing.nickname, updated.nickname)) {
     const oldNickname = normalizeCollectionText(existing.nickname);
     const newNickname = normalizeCollectionText(updated.nickname);
-    await executor.execute(sql`
-      UPDATE public.admin_groups
-      SET
-        leader_nickname = ${newNickname},
-        updated_at = now()
-      WHERE lower(leader_nickname) = lower(${oldNickname})
-    `);
-    await executor.execute(sql`
-      UPDATE public.admin_group_members
-      SET member_nickname = ${newNickname}
-      WHERE lower(member_nickname) = lower(${oldNickname})
-    `);
-    await executor.execute(sql`
-      UPDATE public.collection_nickname_sessions
-      SET
-        nickname = ${newNickname},
-        updated_at = now()
-      WHERE lower(nickname) = lower(${oldNickname})
-    `);
+    await cascadeCollectionNicknameRename(executor, oldNickname, newNickname);
   }
   return updated;
 }
@@ -195,25 +173,10 @@ export async function deleteCollectionStaffNicknameValue(
     return { deleted: false, deactivated: true };
   }
 
-  await executor.execute(sql`
-    DELETE FROM public.admin_visible_nicknames
-    WHERE nickname_id = ${normalizeCollectionText(id)}::uuid
-  `);
-  await executor.execute(sql`
-    DELETE FROM public.admin_group_members
-    WHERE lower(member_nickname) = lower(${existing.nickname})
-  `);
-  await executor.execute(sql`
-    DELETE FROM public.admin_groups
-    WHERE lower(leader_nickname) = lower(${existing.nickname})
-  `);
-  await executor.execute(sql`
-    DELETE FROM public.collection_nickname_sessions
-    WHERE lower(nickname) = lower(${existing.nickname})
-  `);
-  await executor.execute(sql`
-    DELETE FROM public.collection_staff_nicknames
-    WHERE id = ${normalizeCollectionText(id)}::uuid
-  `);
+  await deleteCollectionStaffNicknameRelations(
+    executor,
+    normalizeCollectionText(id),
+    existing.nickname,
+  );
   return { deleted: true, deactivated: false };
 }

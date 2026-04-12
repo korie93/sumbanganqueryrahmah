@@ -2,6 +2,11 @@ export type AiRepositoryOptions = {
   ensureSpatialTables: () => Promise<void>;
 };
 
+export type AiConversationMessage = {
+  role: string;
+  content: string;
+};
+
 export type BranchSearchResult = {
   name: string;
   address: string | null;
@@ -58,6 +63,28 @@ export type CountRow = {
 export type ImportBranchSourceRow = {
   id: string;
   jsonDataJsonb: unknown;
+};
+
+export type AiEmbeddingSourceRow = {
+  id: string;
+  jsonDataJsonb: unknown;
+};
+
+export type AiBranchImportParams = {
+  importId: string;
+  nameKey?: string | null;
+  latKey?: string | null;
+  lngKey?: string | null;
+};
+
+export type AiBranchImportResult = {
+  inserted: number;
+  skipped: number;
+  usedKeys: {
+    nameKey: string;
+    latKey: string;
+    lngKey: string;
+  };
 };
 
 export type BranchSeedRow = {
