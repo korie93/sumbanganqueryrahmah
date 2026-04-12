@@ -5,6 +5,7 @@ import {
   formatOperationalDateTime,
 } from "@/lib/date-format";
 import type { SummaryCardItem, SummaryData } from "@/pages/dashboard/types";
+import type { LoginTrend } from "@/pages/dashboard/types";
 
 let html2canvasLoader: Promise<typeof import("html2canvas")["default"]> | null = null;
 let jsPdfLoader: Promise<typeof import("jspdf")["default"]> | null = null;
@@ -24,6 +25,41 @@ export function formatDashboardHour(hour: number) {
 
 export function formatDashboardDate(dateStr: string) {
   return formatDateDDMMYYYY(dateStr, dateStr);
+}
+
+export function formatDashboardAxisDate(dateStr: string) {
+  const formatted = formatDashboardDate(dateStr);
+  const [day, month] = formatted.split("/");
+  return day && month ? `${day}/${month}` : formatted;
+}
+
+export function buildDashboardTrendTickDates(
+  trends: readonly LoginTrend[] | undefined,
+  maxTickCount: number,
+) {
+  if (!trends?.length || maxTickCount <= 0) {
+    return [];
+  }
+
+  if (trends.length <= maxTickCount) {
+    return trends.map((trend) => trend.date);
+  }
+
+  if (maxTickCount === 1) {
+    return [trends[trends.length - 1]!.date];
+  }
+
+  const lastIndex = trends.length - 1;
+  const tickIndexes = new Set<number>([0, lastIndex]);
+
+  for (let segment = 1; segment < maxTickCount - 1; segment += 1) {
+    const index = Math.round((segment * lastIndex) / (maxTickCount - 1));
+    tickIndexes.add(index);
+  }
+
+  return Array.from(tickIndexes)
+    .sort((left, right) => left - right)
+    .map((index) => trends[index]!.date);
 }
 
 export function formatDashboardUserLastLogin(value: string | null | undefined) {

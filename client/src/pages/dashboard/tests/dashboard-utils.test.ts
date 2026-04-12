@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  buildDashboardTrendTickDates,
   buildSummaryCards,
+  formatDashboardAxisDate,
   formatDashboardUserLastLogin,
 } from "@/pages/dashboard/utils";
 
@@ -45,4 +47,41 @@ test("formatDashboardUserLastLogin keeps login timestamps in operational timezon
 
 test("formatDashboardUserLastLogin falls back safely when missing", () => {
   assert.equal(formatDashboardUserLastLogin(null), "Unknown");
+});
+
+test("formatDashboardAxisDate keeps dashboard x-axis labels compact", () => {
+  assert.equal(formatDashboardAxisDate("2026-04-12"), "12/04");
+});
+
+test("buildDashboardTrendTickDates keeps first and last dates while reducing crowded labels", () => {
+  const trends = Array.from({ length: 30 }, (_, index) => ({
+    date: `2026-04-${String(index + 1).padStart(2, "0")}`,
+    logins: index,
+    logouts: index,
+  }));
+
+  const tickDates = buildDashboardTrendTickDates(trends, 6);
+
+  assert.deepEqual(tickDates, [
+    "2026-04-01",
+    "2026-04-07",
+    "2026-04-13",
+    "2026-04-18",
+    "2026-04-24",
+    "2026-04-30",
+  ]);
+});
+
+test("buildDashboardTrendTickDates returns every date when the range is already short", () => {
+  const trends = [
+    { date: "2026-04-10", logins: 2, logouts: 1 },
+    { date: "2026-04-11", logins: 3, logouts: 2 },
+    { date: "2026-04-12", logins: 4, logouts: 3 },
+  ];
+
+  assert.deepEqual(buildDashboardTrendTickDates(trends, 6), [
+    "2026-04-10",
+    "2026-04-11",
+    "2026-04-12",
+  ]);
 });

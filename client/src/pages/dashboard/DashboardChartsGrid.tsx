@@ -4,7 +4,12 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { LoginTrend, PeakHour } from "@/pages/dashboard/types";
-import { formatDashboardDate, formatDashboardHour } from "@/pages/dashboard/utils";
+import {
+  buildDashboardTrendTickDates,
+  formatDashboardAxisDate,
+  formatDashboardDate,
+  formatDashboardHour,
+} from "@/pages/dashboard/utils";
 
 interface DashboardChartsGridProps {
   onTrendDaysChange: (days: number) => void;
@@ -43,12 +48,6 @@ function formatTooltipValue(value: DashboardTooltipPayloadItem["value"]) {
     return value.join(" / ");
   }
   return String(value ?? "");
-}
-
-function formatDashboardDateCompact(dateStr: string) {
-  const formatted = formatDashboardDate(dateStr);
-  const [day, month] = formatted.split("/");
-  return day && month ? `${day}/${month}` : formatted;
 }
 
 function formatDashboardHourCompact(hour: number) {
@@ -98,6 +97,7 @@ export function DashboardChartsGrid({
 }: DashboardChartsGridProps) {
   const isMobile = useIsMobile();
   const chartHeightClassName = isMobile ? "h-[220px]" : "h-[250px]";
+  const loginTrendTickDates = buildDashboardTrendTickDates(trends, isMobile ? 4 : trendDays >= 30 ? 6 : 7);
 
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:gap-6">
@@ -183,15 +183,14 @@ export function DashboardChartsGrid({
                     <CartesianGrid strokeDasharray="3 3" className="stroke-muted/70" vertical={false} />
                     <XAxis
                       dataKey="date"
+                      ticks={loginTrendTickDates}
                       axisLine={false}
                       tickLine={false}
-                      tickMargin={8}
-                      height={isMobile ? 28 : 34}
-                      minTickGap={isMobile ? 18 : 10}
-                      interval={isMobile ? "preserveStartEnd" : 0}
-                      tickFormatter={(value) =>
-                        isMobile ? formatDashboardDateCompact(String(value)) : formatDashboardDate(String(value))
-                      }
+                      tickMargin={10}
+                      height={isMobile ? 30 : 36}
+                      minTickGap={isMobile ? 20 : 24}
+                      interval={0}
+                      tickFormatter={(value) => formatDashboardAxisDate(String(value))}
                       className="text-[11px] text-muted-foreground"
                     />
                     <YAxis
