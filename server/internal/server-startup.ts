@@ -146,7 +146,7 @@ export async function startLocalServer(options: StartLocalServerOptions) {
   }
 
   // Run precompute in background so startup is fast.
-  setTimeout(async () => {
+  const precomputeHandle = setTimeout(async () => {
     try {
       const result = await categoryStatsService.warmCategoryStats();
       if (result.skipped) {
@@ -159,4 +159,5 @@ export async function startLocalServer(options: StartLocalServerOptions) {
       logger.error("Category stats precompute failed", { error: err });
     }
   }, 0);
+  precomputeHandle.unref?.();
 }

@@ -222,6 +222,7 @@ export function createClusterMasterOrchestrator({
         // Ignore best-effort worker termination failures.
       }
     }, 30_000);
+    timeout.unref();
 
     worker.once("exit", () => {
       clearTimeout(timeout);
@@ -245,9 +246,10 @@ export function createClusterMasterOrchestrator({
       }
       await drainAndRestartWorker(candidate, reason);
     } finally {
-      setTimeout(() => {
+      const resetHandle = setTimeout(() => {
         state.rollingRestartInProgress = false;
       }, 10_000);
+      resetHandle.unref();
     }
   }
 

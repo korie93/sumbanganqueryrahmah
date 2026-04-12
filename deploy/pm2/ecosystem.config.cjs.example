@@ -6,6 +6,11 @@ module.exports = {
       script: "npm",
       args: "start",
       interpreter: "none",
+      // This example keeps the npm wrapper for parity with `npm start`.
+      // PM2 `wait_ready` is intentionally not enabled here because readiness
+      // handshakes require a direct Node entrypoint that emits `process.send("ready")`.
+      // If you switch `script` to the built Node file directly, you can enable
+      // `wait_ready` and keep the listen/kill windows below.
       // The app loads secrets from .env in the working directory via dotenv/config.
       // Keep real secrets in .env, not in this file.
       env: {
@@ -14,6 +19,9 @@ module.exports = {
         PORT: "5000",
       },
       max_memory_restart: "768M",
+      min_uptime: "15s",
+      max_restarts: 10,
+      exp_backoff_restart_delay: 100,
       restart_delay: 5000,
       kill_timeout: 30000,
       listen_timeout: 10000,

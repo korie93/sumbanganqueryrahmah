@@ -52,6 +52,20 @@ Background runtime loops
   -> AI / DB circuit telemetry
 ```
 
+## Deployment Topology
+
+Topologi deployment yang disokong dan didokumenkan secara rasmi pada masa ini ialah:
+
+- satu primary app runtime
+- satu primary PostgreSQL database
+- Nginx reverse proxy di hadapan app
+
+Ini bermaksud:
+
+- read replica belum menjadi sebahagian daripada kontrak runtime/config rasmi
+- reporting dan analytics queries masih berjalan pada primary PostgreSQL yang sama
+- sebarang reka bentuk read-replica patut dianggap kerja seni bina berasingan, bukan andaian sedia ada
+
 ## Repository Structure
 
 Top-level folders yang paling penting:
@@ -209,6 +223,11 @@ constraints:
 - rollups and alerts rely on Postgres features
 - runtime health assumes pg pool metrics are available
 
+Current deployment assumption:
+
+- single-primary PostgreSQL connection
+- no dedicated read-replica DSN or routing contract yet
+
 ## Concrete Request Examples
 
 ### Auth Login Flow
@@ -259,6 +278,18 @@ GET /api/monitor/...
   -> repositories / alert history
   -> API response for monitor dashboard
 ```
+
+## Observability Model
+
+Observability semasa bertumpu pada:
+
+- structured logs
+- liveness/readiness health endpoints
+- PostgreSQL pool pressure + health-check monitoring
+- browser Web Vitals telemetry
+- runtime monitor snapshots/alerts
+
+Rujuk [OBSERVABILITY.md](./docs/OBSERVABILITY.md) untuk pecahan semasa dan sempadan apa yang belum dianggap siap, termasuk status OpenTelemetry.
 
 ## Database Schema
 

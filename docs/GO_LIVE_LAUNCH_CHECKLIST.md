@@ -15,6 +15,8 @@ This checklist is the final gate before controlled production launch.
 - [ ] Backup routes are superuser-protected.
 - [ ] Audit-log routes are superuser-protected.
 - [ ] Receipt preview/download access is ownership-safe.
+- [ ] Reviewed `systemd`, `nginx`, and `PM2` hardening defaults are preserved in deployment config.
+- [ ] `GET /api/health/ready` stays green after deploy before users are pointed to the instance.
 
 ## Phase 2: Critical Business Flow Gate
 

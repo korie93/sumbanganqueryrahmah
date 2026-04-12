@@ -73,6 +73,7 @@ export async function runExternalReceiptScan({
       timeoutTriggered = true;
       child.kill();
     }, config.timeoutMs);
+    timeoutId.unref?.();
 
     child.stdout?.setEncoding("utf8");
     child.stdout?.on("data", (chunk: string) => {

@@ -46,6 +46,7 @@ export async function ollamaChat(
     : [];
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  timeout.unref?.();
   let res: Response;
   try {
     res = await fetch(`${OLLAMA_HOST}/api/chat`, {

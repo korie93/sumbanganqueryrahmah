@@ -178,6 +178,12 @@ Contoh fail deploy yang boleh anda salin dan ubah suai ada di:
 - `deploy/pm2/ecosystem.config.cjs.example`
 - `deploy/systemd/sqr.service.example`
 
+Semasa menyalin contoh ini, kekalkan hardening yang sudah disediakan:
+
+- `systemd`: `NoNewPrivileges`, `ProtectSystem`, `ProtectHome`, `PrivateTmp`, `RestrictAddressFamilies`
+- `nginx`: HSTS, `X-Content-Type-Options`, `X-DNS-Prefetch-Control`, `Cross-Origin-Resource-Policy`
+- `PM2`: restart backoff dan `min_uptime`
+
 ## 8. Sediakan Production .env
 
 Salin contoh env:
@@ -257,6 +263,11 @@ npm run typecheck
 npm test
 ```
 
+Nota:
+
+- startup server semasa memang menjalankan bootstrap storage/database sebelum `listen()`, jadi kegagalan sambungan DB akan fail awal dan readiness tidak akan naik secara palsu
+- selepas deploy, semak `GET /api/health/ready` sebelum anggap instance benar-benar sedia
+
 ## 10. Jalankan App Dengan PM2
 
 Contoh:
@@ -292,9 +303,28 @@ module.exports = {
 };
 ```
 
+Lebih selamat lagi, bermula daripada:
+
+- `deploy/pm2/ecosystem.config.cjs.example`
+
+Nota penting untuk `wait_ready`:
+
+- contoh PM2 semasa masih menggunakan `npm start` sebagai wrapper
+- sebab itu `wait_ready` tidak dihidupkan secara default dalam contoh
+- aktifkan `wait_ready` hanya jika anda tukar `script` kepada entrypoint Node terus dan app memang menghantar `process.send("ready")`
+
 Jika anda lebih suka `systemd` berbanding PM2, gunakan contoh:
 
 - `deploy/systemd/sqr.service.example`
+
+Contoh `systemd` itu sudah termasuk hardening asas yang selamat untuk VPS tunggal:
+
+- `UMask=0077`
+- `NoNewPrivileges=true`
+- `PrivateTmp=true`
+- `PrivateDevices=true`
+- `ProtectSystem=full`
+- `ProtectHome=true`
 
 ## 11. Nginx Reverse Proxy
 
@@ -341,9 +371,11 @@ server {
     add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
     add_header X-Content-Type-Options "nosniff" always;
     add_header X-Frame-Options "DENY" always;
+    add_header X-DNS-Prefetch-Control "off" always;
     add_header Referrer-Policy "strict-origin-when-cross-origin" always;
     add_header Permissions-Policy "camera=(), microphone=(), geolocation=()" always;
     add_header Cross-Origin-Opener-Policy "same-origin" always;
+    add_header Cross-Origin-Resource-Policy "same-origin" always;
 
     client_max_body_size 64M;
 
@@ -415,6 +447,8 @@ server {
 Anda juga boleh terus bermula daripada:
 
 - `deploy/nginx/sqr.conf.example`
+
+Kekalkan header di atas melainkan anda benar-benar ada sebab produk untuk melonggarkannya.
 
 Aktifkan:
 

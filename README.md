@@ -73,6 +73,8 @@ Untuk manual penggunaan client yang lengkap (split ikut role `superuser`, `admin
 | `npm run verify:db-schema-governance` | Verify every discovered table is classified under the repo DB governance manifest |
 | `npm run db:studio` | Open Drizzle Studio |
 | `npm run typecheck` | Run TypeScript type checking |
+| `npm run test:e2e:smoke` | Run Playwright-backed browser smoke coverage against a running server |
+| `npm run test:e2e:ci-local` | Build, boot a local server, then run the CI-style Playwright smoke sequence |
 | `npm test` | Run all test suites |
 | `npm run test:contracts` | Run shared frontend/backend API contract checks for critical endpoints |
 | `npm run test:coverage` | Generate c8 coverage reports for the full main automated test suite |
@@ -80,6 +82,7 @@ Untuk manual penggunaan client yang lengkap (split ikut role `superuser`, `admin
 | `npm run smoke:preflight` | Validate smoke prerequisites and bootstrap assumptions |
 | `npm run smoke:ui` | Run UI smoke coverage against a running server |
 | `npm run smoke:ci-local` | Build + run local CI-style smoke sequence with artifacts |
+| `npm run verify:bundle-budgets` | Enforce reviewed client chunk-size budgets for heavy bundles |
 | `npm run dr:drill` | Execute backup disaster-recovery drill (create/export/checksum/optional restore) |
 | `npm run release:verify:local` | Run final local release gate (tests + smoke + backup drill) |
 | `npm run monitor:stale-conflicts` | Snapshot stale-conflict/429 runtime monitor signals |
@@ -131,9 +134,12 @@ See [ARCHITECTURE.md](./ARCHITECTURE.md) for a detailed architecture overview.
 - [docs/DATABASE_MIGRATIONS.md](./docs/DATABASE_MIGRATIONS.md) - Drizzle and legacy migration workflow
 - [scripts/db-schema-governance.manifest.mjs](./scripts/db-schema-governance.manifest.mjs) - Table-by-table schema ownership and migration governance manifest
 - [docs/QA_FINAL_CHECKLIST.md](./docs/QA_FINAL_CHECKLIST.md) - Final QA and smoke gate checklist
+- [docs/TESTING_STRATEGY.md](./docs/TESTING_STRATEGY.md) - Current automated test layers, Playwright smoke coverage, and bundle budget gates
+- [docs/OBSERVABILITY.md](./docs/OBSERVABILITY.md) - Current logging, health, telemetry, and runtime monitoring model
 - [docs/GO_LIVE_LAUNCH_CHECKLIST.md](./docs/GO_LIVE_LAUNCH_CHECKLIST.md) - Final go-live launch gate checklist
 - [docs/PRODUCTION_PROMOTION_PLAYBOOK.md](./docs/PRODUCTION_PROMOTION_PLAYBOOK.md) - Staging soak, canary, monitor, and rollback playbook
 - [docs/HETZNER_PRODUCTION_DEPLOYMENT.md](./docs/HETZNER_PRODUCTION_DEPLOYMENT.md) - Practical single-VPS production deployment guide for Hetzner, Nginx, PM2, PostgreSQL, and HTTPS
+- [docs/KEYBOARD_SHORTCUTS.md](./docs/KEYBOARD_SHORTCUTS.md) - Current documented keyboard shortcuts that exist in the client today
 - [docs/SMTP_SECRET_INCIDENT_RESPONSE.md](./docs/SMTP_SECRET_INCIDENT_RESPONSE.md) - Secret rotation and git-history cleanup guide for exposed SMTP credentials
 - [docs/RELEASE_HARDENING_SUMMARY.md](./docs/RELEASE_HARDENING_SUMMARY.md) - Current build hardening summary and controlled rollout checklist
 - [docs/GO_NO_GO_RELEASE_TEMPLATE.md](./docs/GO_NO_GO_RELEASE_TEMPLATE.md) - Fill-in template for final rollout decision during the release window

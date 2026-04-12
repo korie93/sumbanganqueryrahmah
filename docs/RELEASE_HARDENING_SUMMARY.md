@@ -39,6 +39,7 @@ Run these in order.
 - [ ] confirm `docs/SECRET_ROTATION.md` matches the active secret-management process
 - [ ] confirm `PUBLIC_APP_URL`, cookie config, and CORS origins match deployment
 - [ ] confirm latest reviewed migrations are committed and present in `drizzle/`
+- [ ] confirm deploy examples keep the reviewed hardening defaults for `systemd`, `nginx`, and `PM2`
 
 ### B. Staging Verification
 
@@ -47,6 +48,7 @@ Run these in order.
 - [ ] deploy to staging
 - [ ] verify `GET /api/health/live`
 - [ ] verify `GET /api/health/ready`
+- [ ] verify reverse proxy still returns reviewed security headers (`HSTS`, `X-Content-Type-Options`, `X-DNS-Prefetch-Control`, `Cross-Origin-Resource-Policy`)
 
 ### C. Smoke Flows In Staging
 
