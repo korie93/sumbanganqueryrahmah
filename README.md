@@ -21,6 +21,7 @@ Untuk manual penggunaan client yang lengkap (split ikut role `superuser`, `admin
 - **Node.js** >= 24 (see `.nvmrc` or `engines` field in `package.json`)
 - **PostgreSQL** database (local or remote)
 - Optional: **Ollama** running locally for AI search features
+- If you enable AI embeddings / semantic search: **pgvector** must be available in PostgreSQL (`CREATE EXTENSION IF NOT EXISTS vector;`)
 
 ## Setup Instructions
 
@@ -42,6 +43,10 @@ Untuk manual penggunaan client yang lengkap (split ikut role `superuser`, `admin
    ```bash
    npm run db:migrate
    ```
+   If your PostgreSQL host does not already expose `pgvector`, enable it before
+   relying on embedding-backed AI search. The reviewed migration attempts
+   `CREATE EXTENSION IF NOT EXISTS vector`, but some managed hosts require a
+   manual enable step first.
 
 4. **Development mode:**
    ```bash

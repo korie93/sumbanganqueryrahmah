@@ -157,10 +157,10 @@ export function normalizeBackupCollectionReceipt(
     fileSize: Number(receipt.fileSize || 0),
     receiptAmount:
       parseStoredCollectionAmountCents(receipt.receiptAmountCents)
-      ?? parseCollectionAmountToCents(receipt.receiptAmount, { allowZero: true, allowEmpty: true }),
+      ?? parseCollectionAmountToCents(receipt.receiptAmount, { allowZero: true }),
     extractedAmount:
       parseStoredCollectionAmountCents(receipt.extractedAmountCents)
-      ?? parseCollectionAmountToCents(receipt.extractedAmount, { allowZero: true, allowEmpty: true }),
+      ?? parseCollectionAmountToCents(receipt.extractedAmount, { allowZero: true }),
     extractionStatus: String(receipt.extractionStatus || "").trim() || "unprocessed",
     extractionConfidence:
       receipt.extractionConfidence === null ||

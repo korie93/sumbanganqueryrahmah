@@ -546,6 +546,10 @@ test("BackupsRepository stores prepared backup payload chunks without rebuilding
           true,
         );
         assert.equal(
+          executedSql.some((sqlText) => sqlText.includes("INSERT INTO public.backup_payload_chunks (id, backup_id, chunk_index, chunk_data)")),
+          true,
+        );
+        assert.equal(
           executedSql.some((sqlText) => sqlText.includes("UPDATE public.backups SET backup_data = backup_data ||")),
           false,
         );

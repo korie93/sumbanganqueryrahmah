@@ -33,6 +33,7 @@ test("collection amount helpers normalize MYR strings and numbers consistently",
 test("collection amount helpers centralize cents parsing and formatting consistently", () => {
   assert.equal(parseCollectionAmountToCents("1,250.50"), 125050);
   assert.equal(parseCollectionAmountToCents("15.555"), null);
+  assert.equal(parseCollectionAmountToCents(""), null);
   assert.equal(parseCollectionAmountToCents("0", { allowZero: true }), 0);
 
   assert.equal(parseStoredCollectionAmountCents("125050"), 125050);

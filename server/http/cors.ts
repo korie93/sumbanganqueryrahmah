@@ -1,5 +1,6 @@
 import type { RequestHandler } from "express";
 import { runtimeConfig } from "../config/runtime";
+import { logger } from "../lib/logger";
 
 const DEFAULT_ALLOWED_METHODS = "GET, POST, PUT, PATCH, DELETE, OPTIONS";
 const DEFAULT_ALLOWED_HEADERS = "Origin, X-Requested-With, Content-Type, Accept, Authorization, X-CSRF-Token, X-Request-Id";
@@ -28,15 +29,35 @@ type CorsEnvironment = {
 
 type CorsEnvironmentSource = CorsEnvironment | NodeJS.ProcessEnv;
 
-export function normalizeCorsOrigin(value: string | null | undefined): string | null {
+type NormalizeCorsOriginOptions = {
+  logInvalid?: boolean;
+  source?: string;
+};
+
+export function normalizeCorsOrigin(
+  value: string | null | undefined,
+  options?: NormalizeCorsOriginOptions,
+): string | null {
   if (!value) {
     return null;
   }
 
+  const normalizedValue = value.trim();
+  if (!normalizedValue) {
+    return null;
+  }
+
   try {
-    const normalized = new URL(value.trim()).origin;
+    const normalized = new URL(normalizedValue).origin;
     return normalized || null;
-  } catch {
+  } catch (error) {
+    if (options?.logInvalid) {
+      logger.warn("Ignoring invalid configured CORS origin", {
+        source: options.source ?? "unknown",
+        origin: normalizedValue,
+        error: error instanceof Error ? error.message : "Invalid URL",
+      });
+    }
     return null;
   }
 }
@@ -52,8 +73,11 @@ function buildDefaultCorsEnvironment(): CorsEnvironmentSource {
 
 export function resolveAllowedCorsOrigins(env: CorsEnvironmentSource = buildDefaultCorsEnvironment()): string[] {
   const origins = new Set<string>();
-  const addOrigin = (value: string | null | undefined) => {
-    const normalized = normalizeCorsOrigin(value);
+  const addOrigin = (value: string | null | undefined, source: string) => {
+    const normalized = normalizeCorsOrigin(value, {
+      logInvalid: true,
+      source,
+    });
     if (normalized) {
       origins.add(normalized);
     }
@@ -65,17 +89,17 @@ export function resolveAllowedCorsOrigins(env: CorsEnvironmentSource = buildDefa
     .filter(Boolean);
 
   for (const origin of configuredOrigins) {
-    addOrigin(origin);
+    addOrigin(origin, "CORS_ALLOWED_ORIGINS");
   }
 
-  addOrigin(env.PUBLIC_APP_URL);
+  addOrigin(env.PUBLIC_APP_URL, "PUBLIC_APP_URL");
 
   if (
     String(env.NODE_ENV || "development") !== "production"
     && String(env.ALLOW_LOCAL_DEV_CORS || "").trim() === "1"
   ) {
     for (const origin of LOCAL_DEV_ORIGINS) {
-      addOrigin(origin);
+      addOrigin(origin, "LOCAL_DEV_ORIGINS");
     }
   }
 

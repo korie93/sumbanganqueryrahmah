@@ -192,3 +192,41 @@ test("createCollectionReceiptMultipartRoute cleans up completed uploads when a l
     statusCode: 400,
   });
 });
+
+test("createCollectionReceiptMultipartRoute sanitizes multipart file names before handing them to receipt storage", async () => {
+  const handler = createCollectionReceiptMultipartRoute<
+    { filename: string },
+    Record<string, unknown>
+  >({
+    attachKey: "uploadedReceipts",
+    handleReceipt: async ({ fileName, stream }) => {
+      for await (const _chunk of stream) {
+        // Drain stream.
+      }
+
+      return {
+        filename: String(fileName || ""),
+      };
+    },
+  });
+
+  const result = await runMultipartHandler(
+    [
+      {
+        kind: "file",
+        name: "receipt",
+        filename: "..\\..\\receipt<>.txt",
+        contentType: "text/plain",
+        content: "receipt body",
+      },
+    ],
+    handler,
+  );
+
+  assert.equal(result.kind, "next");
+  assert.deepEqual(result.body?.uploadedReceipts, [
+    {
+      filename: "receipt_.txt",
+    },
+  ]);
+});

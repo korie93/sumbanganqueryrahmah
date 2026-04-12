@@ -398,8 +398,8 @@ export async function createBackupFromPreparedPayload(
       }
 
       await tx.execute(sql`
-        INSERT INTO public.backup_payload_chunks (backup_id, chunk_index, chunk_data)
-        VALUES (${id}, ${chunkIndex}, ${chunk})
+        INSERT INTO public.backup_payload_chunks (id, backup_id, chunk_index, chunk_data)
+        VALUES (${crypto.randomUUID()}, ${id}, ${chunkIndex}, ${chunk})
         ON CONFLICT (backup_id, chunk_index) DO UPDATE
         SET chunk_data = EXCLUDED.chunk_data
       `);

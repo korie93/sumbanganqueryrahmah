@@ -2,6 +2,7 @@ import type { IncomingHttpHeaders } from "node:http";
 import { randomBytes, timingSafeEqual } from "node:crypto";
 import type { Response } from "express";
 import { runtimeConfig } from "../config/runtime";
+import { logger } from "../lib/logger";
 
 export const AUTH_SESSION_COOKIE_NAME = "sqr_auth";
 export const AUTH_SESSION_HINT_COOKIE_NAME = "sqr_auth_hint";
@@ -88,8 +89,12 @@ export function readCookieValueFromHeader(cookieHeader: HeaderValue, cookieName:
 
     try {
       return decodeURIComponent(value);
-    } catch {
-      return value;
+    } catch (error) {
+      logger.warn("Failed to decode auth cookie value", {
+        cookieName,
+        error: error instanceof Error ? error.message : "Unknown cookie decode failure",
+      });
+      return null;
     }
   }
 

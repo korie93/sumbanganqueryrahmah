@@ -96,9 +96,9 @@ function NavbarImpl({
     || mobileItems[0]?.id
     || HOME_NAV_ITEM.id;
 
-  const navigateToItem = (itemId: string) => {
+  const navigateToItem = useCallback((itemId: string) => {
     onNavigate(resolveNavigationTarget(itemId));
-  };
+  }, [onNavigate]);
   const prefetchItem = useCallback((itemId: string) => {
     void prefetchNavigationTarget(resolveNavigationTarget(itemId));
   }, []);

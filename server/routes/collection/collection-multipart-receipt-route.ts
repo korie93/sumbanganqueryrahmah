@@ -1,3 +1,4 @@
+import path from "node:path";
 import Busboy from "busboy";
 import type { RequestHandler } from "express";
 import { logger } from "../../lib/logger";
@@ -5,6 +6,24 @@ import {
   appendCollectionMultipartField,
   isCollectionReceiptMultipartField,
 } from "./collection-multipart-body-utils";
+
+const MULTIPART_FILENAME_UNSAFE_CHAR_PATTERN = /[^a-zA-Z0-9._()-]+/g;
+
+function sanitizeMultipartUploadFilename(rawFileName: string): string | null {
+  const baseName = path.posix.basename(String(rawFileName || "").replace(/\\/g, "/")).trim();
+  if (!baseName) {
+    return null;
+  }
+
+  const sanitized = baseName
+    .replace(MULTIPART_FILENAME_UNSAFE_CHAR_PATTERN, "_")
+    .replace(/^\.+/, "")
+    .replace(/_+/g, "_")
+    .slice(0, 255)
+    .trim();
+
+  return sanitized || null;
+}
 
 export function createCollectionReceiptMultipartRoute<
   TReceipt,
@@ -43,14 +62,21 @@ export function createCollectionReceiptMultipartRoute<
       settled = true;
 
       if (params.cleanupReceipts) {
-        const completedUploads = await Promise.allSettled(uploadTasks);
-        const completedReceipts: TReceipt[] = [];
-        for (const result of completedUploads) {
-          if (result.status === "fulfilled") {
-            completedReceipts.push(result.value);
+        try {
+          const completedUploads = await Promise.allSettled(uploadTasks);
+          const completedReceipts: TReceipt[] = [];
+          for (const result of completedUploads) {
+            if (result.status === "fulfilled") {
+              completedReceipts.push(result.value);
+            }
           }
+          await params.cleanupReceipts(completedReceipts);
+        } catch (cleanupError) {
+          logger.error("Multipart cleanup failed", {
+            cleanupError,
+            originalError: error,
+          });
         }
-        await params.cleanupReceipts(completedReceipts);
       }
 
       const message =
@@ -73,9 +99,15 @@ export function createCollectionReceiptMultipartRoute<
         return;
       }
 
+      const safeFileName = sanitizeMultipartUploadFilename(info.filename);
+      if (!safeFileName) {
+        file.resume();
+        return;
+      }
+
       uploadTasks.push(
         params.handleReceipt({
-          fileName: info.filename,
+          fileName: safeFileName,
           mimeType: info.mimeType,
           stream: file,
         }),
@@ -85,6 +117,15 @@ export function createCollectionReceiptMultipartRoute<
     parser.once("error", (error) => {
       fail(error).catch((cleanupError) => {
         logger.error("Multipart cleanup failed after parser error", {
+          cleanupError,
+          originalError: error,
+        });
+      });
+    });
+
+    req.once("error", (error) => {
+      fail(error).catch((cleanupError) => {
+        logger.error("Multipart cleanup failed after request error", {
           cleanupError,
           originalError: error,
         });

@@ -127,14 +127,42 @@ export class BackupsBootstrap {
 
         await db.execute(sql`
           CREATE TABLE IF NOT EXISTS public.backup_payload_chunks (
+            id uuid PRIMARY KEY,
             backup_id text NOT NULL REFERENCES public.backups(id) ON DELETE CASCADE ON UPDATE CASCADE,
             chunk_index integer NOT NULL,
             chunk_data text NOT NULL
           )
         `);
+        await db.execute(sql`ALTER TABLE public.backup_payload_chunks ADD COLUMN IF NOT EXISTS id uuid`);
         await db.execute(sql`ALTER TABLE public.backup_payload_chunks ADD COLUMN IF NOT EXISTS backup_id text`);
         await db.execute(sql`ALTER TABLE public.backup_payload_chunks ADD COLUMN IF NOT EXISTS chunk_index integer`);
         await db.execute(sql`ALTER TABLE public.backup_payload_chunks ADD COLUMN IF NOT EXISTS chunk_data text`);
+        await db.execute(sql`
+          UPDATE public.backup_payload_chunks
+          SET id = (
+            substr(md5(COALESCE(backup_id, '') || ':' || COALESCE(chunk_index, 0)::text), 1, 8) || '-' ||
+            substr(md5(COALESCE(backup_id, '') || ':' || COALESCE(chunk_index, 0)::text), 9, 4) || '-' ||
+            substr(md5(COALESCE(backup_id, '') || ':' || COALESCE(chunk_index, 0)::text), 13, 4) || '-' ||
+            substr(md5(COALESCE(backup_id, '') || ':' || COALESCE(chunk_index, 0)::text), 17, 4) || '-' ||
+            substr(md5(COALESCE(backup_id, '') || ':' || COALESCE(chunk_index, 0)::text), 21, 12)
+          )::uuid
+          WHERE id IS NULL
+        `);
+        await db.execute(sql`ALTER TABLE public.backup_payload_chunks ALTER COLUMN id SET NOT NULL`);
+        await db.execute(sql`
+          DO $$
+          BEGIN
+            IF NOT EXISTS (
+              SELECT 1
+              FROM pg_constraint
+              WHERE conrelid = 'public.backup_payload_chunks'::regclass
+                AND contype = 'p'
+            ) THEN
+              ALTER TABLE public.backup_payload_chunks
+              ADD CONSTRAINT backup_payload_chunks_pkey PRIMARY KEY (id);
+            END IF;
+          END $$;
+        `);
         await db.execute(sql`
           CREATE UNIQUE INDEX IF NOT EXISTS idx_backup_payload_chunks_backup_chunk_unique
           ON public.backup_payload_chunks(backup_id, chunk_index)

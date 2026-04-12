@@ -1,5 +1,5 @@
 import path from "node:path";
-import fs from "node:fs";
+import fs from "node:fs/promises";
 import { spawn } from "node:child_process";
 import { readBooleanEnvFlag } from "../config/runtime-environment";
 import { logger } from "./logger";
@@ -65,18 +65,18 @@ function parseScannerArgsJson(): string[] {
   }
 }
 
-function resolveExistingFile(candidatePath: string): string | null {
+async function resolveExistingFile(candidatePath: string): Promise<string | null> {
   try {
-    if (!fs.statSync(candidatePath).isFile()) {
+    if (!(await fs.stat(candidatePath)).isFile()) {
       return null;
     }
-    return fs.realpathSync.native(candidatePath);
+    return await fs.realpath(candidatePath);
   } catch {
     return null;
   }
 }
 
-function resolveScannerCommandOnPath(command: string): string | null {
+async function resolveScannerCommandOnPath(command: string): Promise<string | null> {
   const pathEntries = String(process.env.PATH || "")
     .split(path.delimiter)
     .map((entry) => entry.trim())
@@ -88,7 +88,7 @@ function resolveScannerCommandOnPath(command: string): string | null {
 
   if (process.platform !== "win32") {
     for (const pathEntry of pathEntries) {
-      const resolved = resolveExistingFile(path.join(pathEntry, command));
+      const resolved = await resolveExistingFile(path.join(pathEntry, command));
       if (resolved) {
         return resolved;
       }
@@ -105,7 +105,7 @@ function resolveScannerCommandOnPath(command: string): string | null {
       .filter(Boolean);
 
   for (const pathEntry of pathEntries) {
-    const directMatch = resolveExistingFile(path.join(pathEntry, command));
+    const directMatch = await resolveExistingFile(path.join(pathEntry, command));
     if (directMatch) {
       return directMatch;
     }
@@ -115,7 +115,7 @@ function resolveScannerCommandOnPath(command: string): string | null {
     }
 
     for (const extension of pathExtensions) {
-      const resolved = resolveExistingFile(path.join(pathEntry, `${command}${extension}`));
+      const resolved = await resolveExistingFile(path.join(pathEntry, `${command}${extension}`));
       if (resolved) {
         return resolved;
       }
@@ -161,14 +161,14 @@ function validateScannerArgs(args: string[]): string[] {
   return args;
 }
 
-function validateExternalScanCommand(command: string): string {
+async function validateExternalScanCommand(command: string): Promise<string> {
   const normalized = command.trim();
   if (!normalized || UNSAFE_ENV_VALUE_PATTERN.test(normalized)) {
     throw new Error("COLLECTION_RECEIPT_EXTERNAL_SCAN_COMMAND is invalid.");
   }
 
   if (path.isAbsolute(normalized)) {
-    const resolved = resolveExistingFile(normalized);
+    const resolved = await resolveExistingFile(normalized);
     if (!resolved) {
       throw new Error("COLLECTION_RECEIPT_EXTERNAL_SCAN_COMMAND must point to an existing scanner executable.");
     }
@@ -181,7 +181,7 @@ function validateExternalScanCommand(command: string): string {
     );
   }
 
-  const resolved = resolveScannerCommandOnPath(normalized);
+  const resolved = await resolveScannerCommandOnPath(normalized);
   if (!resolved) {
     throw new Error("COLLECTION_RECEIPT_EXTERNAL_SCAN_COMMAND must resolve to an executable on PATH.");
   }
@@ -189,13 +189,13 @@ function validateExternalScanCommand(command: string): string {
   return resolved;
 }
 
-function validateExternalScanFilePath(filePath: string): string {
+async function validateExternalScanFilePath(filePath: string): Promise<string> {
   const normalized = String(filePath || "").trim();
   if (!normalized || UNSAFE_ENV_VALUE_PATTERN.test(normalized)) {
     throw new Error("receipt file path is invalid.");
   }
 
-  const resolved = resolveExistingFile(path.resolve(normalized));
+  const resolved = await resolveExistingFile(path.resolve(normalized));
   if (!resolved) {
     throw new Error("receipt file path must point to an existing file.");
   }
@@ -315,7 +315,7 @@ export async function scanCollectionReceiptWithExternalScanner(filePath: string)
 
   let scannerCommand: string;
   try {
-    scannerCommand = validateExternalScanCommand(config.command);
+    scannerCommand = await validateExternalScanCommand(config.command);
   } catch (error) {
     const operational = createOperationalScanError(
       config,
@@ -331,7 +331,7 @@ export async function scanCollectionReceiptWithExternalScanner(filePath: string)
 
   let validatedFilePath: string;
   try {
-    validatedFilePath = validateExternalScanFilePath(filePath);
+    validatedFilePath = await validateExternalScanFilePath(filePath);
   } catch (error) {
     const operational = createOperationalScanError(
       config,

@@ -10,7 +10,6 @@ export type CollectionAmountMyrLike = CollectionAmountMyrString | CollectionAmou
 export type CollectionAmountCents = number;
 export type CollectionAmountCentsLike = string | CollectionAmountCents;
 export type CollectionAmountCentsParseOptions = {
-  allowEmpty?: boolean;
   allowZero?: boolean;
 };
 export type CollectionAmountMyrParseOptions = CollectionAmountCentsParseOptions;
@@ -58,7 +57,10 @@ export function parseCollectionAmountToCents(
 ): CollectionAmountCents | null {
   const raw = String(value ?? "").trim();
   if (!raw) {
-    return options?.allowEmpty ? null : null;
+    // Empty collection amount fields intentionally stay "missing" rather than
+    // being coerced to zero so optional receipt metadata remains distinguishable
+    // from an explicit MYR 0.00 value.
+    return null;
   }
 
   const normalized = raw.replace(/,/g, "");

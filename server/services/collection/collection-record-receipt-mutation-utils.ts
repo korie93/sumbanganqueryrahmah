@@ -56,11 +56,9 @@ export function readUploadedReceiptRows(
       fileSize: Number(item.fileSize || 0),
       receiptAmountCents: parseCollectionAmountToCents(item.receiptAmountCents, {
         allowZero: true,
-        allowEmpty: true,
       }),
       extractedAmountCents: parseCollectionAmountToCents(item.extractedAmountCents, {
         allowZero: true,
-        allowEmpty: true,
       }),
       extractionStatus: normalizeCollectionReceiptExtractionStatus(item.extractionStatus ?? null),
       extractionConfidence: normalizeExtractionConfidence(item.extractionConfidence),
@@ -123,7 +121,6 @@ export function normalizeCollectionReceiptMetadata(
     receiptAmountCents: parseCollectionAmountToCents(raw.receiptAmount, { allowZero: true }),
     extractedAmountCents: parseCollectionAmountToCents(raw.extractedAmount, {
       allowZero: true,
-      allowEmpty: true,
     }),
     extractionStatus: normalizeCollectionReceiptExtractionStatus(raw.extractionStatus ?? null),
     extractionConfidence: normalizeExtractionConfidence(raw.extractionConfidence),
@@ -142,11 +139,9 @@ export function buildValidationDraftFromExistingReceipt(
     originalFileName: receipt.originalFileName,
     receiptAmountCents: parseCollectionAmountToCents(receipt.receiptAmount, {
       allowZero: true,
-      allowEmpty: true,
     }),
     extractedAmountCents: parseCollectionAmountToCents(receipt.extractedAmount, {
       allowZero: true,
-      allowEmpty: true,
     }),
     extractionStatus: normalizeCollectionReceiptExtractionStatus(receipt.extractionStatus),
     extractionConfidence:

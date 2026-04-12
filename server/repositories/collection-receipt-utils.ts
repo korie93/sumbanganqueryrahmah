@@ -264,11 +264,9 @@ export async function syncCollectionRecordReceiptValidation(
       fileHash: receipt.fileHash,
       receiptAmountCents: parseCollectionAmountToCents(receipt.receiptAmount, {
         allowZero: true,
-        allowEmpty: true,
       }),
       extractedAmountCents: parseCollectionAmountToCents(receipt.extractedAmount, {
         allowZero: true,
-        allowEmpty: true,
       }),
       extractionStatus: receipt.extractionStatus,
       extractionConfidence: receipt.extractionConfidence,

@@ -217,6 +217,7 @@ export const backups = pgTable("backups", {
 });
 
 export const backupPayloadChunks = pgTable("backup_payload_chunks", {
+  id: uuid("id").primaryKey(),
   backupId: text("backup_id")
     .notNull()
     .references(() => backups.id, { onDelete: "cascade", onUpdate: "cascade" }),
