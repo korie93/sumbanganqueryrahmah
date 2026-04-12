@@ -3,7 +3,12 @@ import {
   getLocalMailOutboxEmptyMessage,
   normalizeLocalMailOutboxSortDirection,
 } from "@/pages/settings/account-management/local-mail-outbox-utils";
-import { normalizeSearchValue } from "@/pages/settings/account-management/utils";
+import {
+  ACCOUNT_MANAGEMENT_FILTER_RESET_PAGE,
+  hasNormalizedSearchChanged,
+  normalizeSearchValue,
+  shouldSyncNormalizedSearch,
+} from "@/pages/settings/account-management/utils";
 import type { DevMailOutboxPreview } from "@/pages/settings/types";
 import type { DevMailOutboxQueryState } from "@/pages/settings/useSettingsDevMailOutbox";
 
@@ -61,15 +66,13 @@ export function useLocalMailOutboxState({
   }, [entries, previewEntry]);
 
   useEffect(() => {
-    const normalizedEmailFromQuery = normalizeSearchValue(query.searchEmail);
-    if (normalizeSearchValue(emailQuery) !== normalizedEmailFromQuery) {
+    if (hasNormalizedSearchChanged(emailQuery, query.searchEmail)) {
       setEmailQuery(query.searchEmail);
     }
   }, [emailQuery, query.searchEmail]);
 
   useEffect(() => {
-    const normalizedSubjectFromQuery = normalizeSearchValue(query.searchSubject);
-    if (normalizeSearchValue(subjectQuery) !== normalizedSubjectFromQuery) {
+    if (hasNormalizedSearchChanged(subjectQuery, query.searchSubject)) {
       setSubjectQuery(query.searchSubject);
     }
   }, [query.searchSubject, subjectQuery]);
@@ -82,13 +85,13 @@ export function useLocalMailOutboxState({
 
   useEffect(() => {
     if (
-      normalizedDeferredEmailQuery === normalizeSearchValue(query.searchEmail)
-      && normalizedDeferredSubjectQuery === normalizeSearchValue(query.searchSubject)
+      !shouldSyncNormalizedSearch(normalizedDeferredEmailQuery, query.searchEmail)
+      && !shouldSyncNormalizedSearch(normalizedDeferredSubjectQuery, query.searchSubject)
     ) {
       return;
     }
     onQueryChange({
-      page: 1,
+      page: ACCOUNT_MANAGEMENT_FILTER_RESET_PAGE,
       searchEmail: normalizedDeferredEmailQuery,
       searchSubject: normalizedDeferredSubjectQuery,
     });
@@ -130,7 +133,7 @@ export function useLocalMailOutboxState({
       const nextSortDirection = normalizeLocalMailOutboxSortDirection(value);
       setSortDirection(nextSortDirection);
       onQueryChange({
-        page: 1,
+        page: ACCOUNT_MANAGEMENT_FILTER_RESET_PAGE,
         sortDirection: nextSortDirection,
       });
     },

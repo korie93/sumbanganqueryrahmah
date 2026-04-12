@@ -5,7 +5,12 @@ import {
   normalizeManagedAccountsRoleFilter,
   normalizeManagedAccountsStatusFilter,
 } from "@/pages/settings/account-management/managed-accounts-utils";
-import { normalizeSearchValue } from "@/pages/settings/account-management/utils";
+import {
+  ACCOUNT_MANAGEMENT_FILTER_RESET_PAGE,
+  hasNormalizedSearchChanged,
+  normalizeSearchValue,
+  shouldSyncNormalizedSearch,
+} from "@/pages/settings/account-management/utils";
 import type { ManagedUser } from "@/pages/settings/types";
 import type { ManagedUsersQueryState } from "@/pages/settings/useSettingsManagedUserData";
 
@@ -56,7 +61,7 @@ export function useManagedAccountsFilterState({
               onRemove: () => {
                 setRoleFilter("all");
                 onQueryChange({
-                  page: 1,
+                  page: ACCOUNT_MANAGEMENT_FILTER_RESET_PAGE,
                   role: "all",
                 });
               },
@@ -69,7 +74,7 @@ export function useManagedAccountsFilterState({
               onRemove: () => {
                 setStatusFilter("all");
                 onQueryChange({
-                  page: 1,
+                  page: ACCOUNT_MANAGEMENT_FILTER_RESET_PAGE,
                   status: "all",
                 });
               },
@@ -83,8 +88,7 @@ export function useManagedAccountsFilterState({
   );
 
   useEffect(() => {
-    const normalizedSearchFromQuery = normalizeSearchValue(query.search);
-    if (normalizeSearchValue(searchQuery) !== normalizedSearchFromQuery) {
+    if (hasNormalizedSearchChanged(searchQuery, query.search)) {
       setSearchQuery(query.search);
     }
   }, [query.search, searchQuery]);
@@ -102,11 +106,11 @@ export function useManagedAccountsFilterState({
   }, [query.status, statusFilter]);
 
   useEffect(() => {
-    if (normalizedDeferredSearch === normalizeSearchValue(query.search)) {
+    if (!shouldSyncNormalizedSearch(normalizedDeferredSearch, query.search)) {
       return;
     }
     onQueryChange({
-      page: 1,
+      page: ACCOUNT_MANAGEMENT_FILTER_RESET_PAGE,
       search: normalizedDeferredSearch,
     });
   }, [normalizedDeferredSearch, onQueryChange, query.search]);
@@ -136,7 +140,7 @@ export function useManagedAccountsFilterState({
       setRoleFilter("all");
       setStatusFilter("all");
       onQueryChange({
-        page: 1,
+        page: ACCOUNT_MANAGEMENT_FILTER_RESET_PAGE,
         search: "",
         role: "all",
         status: "all",
@@ -155,7 +159,7 @@ export function useManagedAccountsFilterState({
       const nextRole = normalizeManagedAccountsRoleFilter(value);
       setRoleFilter(nextRole);
       onQueryChange({
-        page: 1,
+        page: ACCOUNT_MANAGEMENT_FILTER_RESET_PAGE,
         role: nextRole,
       });
     },
@@ -166,7 +170,7 @@ export function useManagedAccountsFilterState({
       const nextStatus = normalizeManagedAccountsStatusFilter(value);
       setStatusFilter(nextStatus);
       onQueryChange({
-        page: 1,
+        page: ACCOUNT_MANAGEMENT_FILTER_RESET_PAGE,
         status: nextStatus,
       });
     },

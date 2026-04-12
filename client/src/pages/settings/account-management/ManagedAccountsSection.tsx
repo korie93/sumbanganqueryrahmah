@@ -10,6 +10,7 @@ import { ManagedAccountsDesktopTable } from "@/pages/settings/account-management
 import { ManagedAccountsFiltersPanel } from "@/pages/settings/account-management/ManagedAccountsFiltersPanel";
 import { ManagedAccountsMobileList } from "@/pages/settings/account-management/ManagedAccountsMobileList";
 import type { ManagedAccountsSectionProps } from "@/pages/settings/account-management/managed-accounts-shared";
+import { ACCOUNT_MANAGEMENT_FILTER_RESET_PAGE } from "@/pages/settings/account-management/utils";
 import { useManagedAccountsFilterState } from "@/pages/settings/account-management/useManagedAccountsFilterState";
 
 export function ManagedAccountsSection({
@@ -82,7 +83,7 @@ export function ManagedAccountsSection({
             }}
             onPageSizeChange={(pageSize) => {
               onQueryChange({
-                page: 1,
+                page: ACCOUNT_MANAGEMENT_FILTER_RESET_PAGE,
                 pageSize,
               });
             }}

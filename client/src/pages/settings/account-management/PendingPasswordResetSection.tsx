@@ -8,6 +8,7 @@ import { PendingPasswordResetDesktopTable } from "@/pages/settings/account-manag
 import { PendingPasswordResetFiltersPanel } from "@/pages/settings/account-management/PendingPasswordResetFiltersPanel";
 import { PendingPasswordResetMobileList } from "@/pages/settings/account-management/PendingPasswordResetMobileList";
 import type { PendingPasswordResetSectionProps } from "@/pages/settings/account-management/pending-reset-shared";
+import { ACCOUNT_MANAGEMENT_FILTER_RESET_PAGE } from "@/pages/settings/account-management/utils";
 import { usePendingResetRequestsFilterState } from "@/pages/settings/account-management/usePendingResetRequestsFilterState";
 
 export function PendingPasswordResetSection({
@@ -68,7 +69,7 @@ export function PendingPasswordResetSection({
           }}
           onPageSizeChange={(pageSize) => {
             onQueryChange({
-              page: 1,
+              page: ACCOUNT_MANAGEMENT_FILTER_RESET_PAGE,
               pageSize,
             });
           }}

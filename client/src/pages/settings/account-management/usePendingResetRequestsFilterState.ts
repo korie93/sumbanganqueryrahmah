@@ -4,7 +4,12 @@ import {
   getPendingResetEmptyMessage,
   normalizePendingResetStatusFilter,
 } from "@/pages/settings/account-management/pending-reset-utils";
-import { normalizeSearchValue } from "@/pages/settings/account-management/utils";
+import {
+  ACCOUNT_MANAGEMENT_FILTER_RESET_PAGE,
+  hasNormalizedSearchChanged,
+  normalizeSearchValue,
+  shouldSyncNormalizedSearch,
+} from "@/pages/settings/account-management/utils";
 import type { PendingResetRequestsQueryState } from "@/pages/settings/useSettingsManagedUserData";
 
 type UsePendingResetRequestsFilterStateArgs = {
@@ -47,7 +52,7 @@ export function usePendingResetRequestsFilterState({
               onRemove: () => {
                 setStatusFilter("all");
                 onQueryChange({
-                  page: 1,
+                  page: ACCOUNT_MANAGEMENT_FILTER_RESET_PAGE,
                   status: "all",
                 });
               },
@@ -61,8 +66,7 @@ export function usePendingResetRequestsFilterState({
   );
 
   useEffect(() => {
-    const normalizedSearchFromQuery = normalizeSearchValue(query.search);
-    if (normalizeSearchValue(searchQuery) !== normalizedSearchFromQuery) {
+    if (hasNormalizedSearchChanged(searchQuery, query.search)) {
       setSearchQuery(query.search);
     }
   }, [query.search, searchQuery]);
@@ -74,11 +78,11 @@ export function usePendingResetRequestsFilterState({
   }, [query.status, statusFilter]);
 
   useEffect(() => {
-    if (normalizedDeferredSearch === normalizeSearchValue(query.search)) {
+    if (!shouldSyncNormalizedSearch(normalizedDeferredSearch, query.search)) {
       return;
     }
     onQueryChange({
-      page: 1,
+      page: ACCOUNT_MANAGEMENT_FILTER_RESET_PAGE,
       search: normalizedDeferredSearch,
     });
   }, [normalizedDeferredSearch, onQueryChange, query.search]);
@@ -103,7 +107,7 @@ export function usePendingResetRequestsFilterState({
       setSearchQuery("");
       setStatusFilter("all");
       onQueryChange({
-        page: 1,
+        page: ACCOUNT_MANAGEMENT_FILTER_RESET_PAGE,
         search: "",
         status: "all",
       });
@@ -115,7 +119,7 @@ export function usePendingResetRequestsFilterState({
       const nextStatus = normalizePendingResetStatusFilter(value);
       setStatusFilter(nextStatus);
       onQueryChange({
-        page: 1,
+        page: ACCOUNT_MANAGEMENT_FILTER_RESET_PAGE,
         status: nextStatus,
       });
     },

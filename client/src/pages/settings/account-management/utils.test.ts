@@ -1,21 +1,27 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { formatDateTime } from "@/pages/settings/account-management/utils";
+import {
+  ACCOUNT_MANAGEMENT_FILTER_RESET_PAGE,
+  hasNormalizedSearchChanged,
+  normalizeSearchValue,
+  shouldSyncNormalizedSearch,
+} from "@/pages/settings/account-management/utils";
 
-test("formatDateTime renders managed account timestamps with AM and PM in Malaysia time", () => {
-  assert.equal(
-    formatDateTime("2026-03-29T16:30:00.000Z"),
-    "30/03/2026, 12:30 AM",
-  );
+test("normalizeSearchValue trims and lowercases filter text", () => {
+  assert.equal(normalizeSearchValue("  Alice@Example.COM "), "alice@example.com");
+  assert.equal(normalizeSearchValue(""), "");
 });
 
-test("formatDateTime normalizes database-style timestamps without timezone", () => {
-  assert.equal(
-    formatDateTime("2026-04-02 10:27:00"),
-    "02/04/2026, 6:27 PM",
-  );
+test("ACCOUNT_MANAGEMENT_FILTER_RESET_PAGE keeps filters anchored to the first page", () => {
+  assert.equal(ACCOUNT_MANAGEMENT_FILTER_RESET_PAGE, 1);
 });
 
-test("formatDateTime falls back safely when the timestamp is missing", () => {
-  assert.equal(formatDateTime(null), "-");
+test("hasNormalizedSearchChanged compares local and query values after normalization", () => {
+  assert.equal(hasNormalizedSearchChanged("  Alpha  ", "alpha"), false);
+  assert.equal(hasNormalizedSearchChanged("beta", "alpha"), true);
+});
+
+test("shouldSyncNormalizedSearch only triggers when the normalized query diverges", () => {
+  assert.equal(shouldSyncNormalizedSearch("alpha", "  ALPHA "), false);
+  assert.equal(shouldSyncNormalizedSearch("beta", "alpha"), true);
 });

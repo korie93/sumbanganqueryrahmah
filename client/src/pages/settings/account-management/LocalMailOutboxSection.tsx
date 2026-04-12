@@ -8,6 +8,7 @@ import { LocalMailOutboxDialogs } from "@/pages/settings/account-management/Loca
 import { LocalMailOutboxFiltersPanel } from "@/pages/settings/account-management/LocalMailOutboxFiltersPanel";
 import { LocalMailOutboxMobileList } from "@/pages/settings/account-management/LocalMailOutboxMobileList";
 import type { LocalMailOutboxSectionProps } from "@/pages/settings/account-management/local-mail-outbox-shared";
+import { ACCOUNT_MANAGEMENT_FILTER_RESET_PAGE } from "@/pages/settings/account-management/utils";
 import { useLocalMailOutboxState } from "@/pages/settings/account-management/useLocalMailOutboxState";
 
 export function LocalMailOutboxSection({
@@ -85,7 +86,7 @@ export function LocalMailOutboxSection({
               onQueryChange({ page });
             }}
             onPageSizeChange={(pageSize) => {
-              onQueryChange({ page: 1, pageSize });
+              onQueryChange({ page: ACCOUNT_MANAGEMENT_FILTER_RESET_PAGE, pageSize });
             }}
           />
         }
