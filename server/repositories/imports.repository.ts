@@ -274,6 +274,15 @@ export class ImportsRepository {
     return true;
   }
 
+  async deleteDataRowsByImport(importId: string): Promise<number> {
+    const deletedRows = await db
+      .delete(dataRows)
+      .where(eq(dataRows.importId, importId))
+      .returning({ id: dataRows.id });
+
+    return deletedRows.length;
+  }
+
   async createDataRow(data: InsertDataRow): Promise<DataRow> {
     if (!data.jsonDataJsonb || typeof data.jsonDataJsonb !== "object") {
       throw new Error("Invalid jsonDataJsonb");

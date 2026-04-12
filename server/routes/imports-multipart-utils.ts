@@ -4,8 +4,6 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import { pipeline } from "node:stream/promises";
-import { runtimeConfig } from "../config/runtime";
-import { inspectCsvFile } from "../services/import-upload-csv-utils";
 import {
   parseImportUploadFile,
   stripImportUploadExtension,
@@ -29,7 +27,6 @@ export type PreparedMultipartImportUpload =
     filename: string;
     filePath: string;
     tempDir: string;
-    rowCount: number;
   };
 
 export const IMPORT_TOO_LARGE_MESSAGE = IMPORT_UPLOAD_TOO_LARGE_MESSAGE;
@@ -119,20 +116,12 @@ export async function prepareMultipartImportUpload(params: {
     }
 
     if (String(filename || "").trim().toLowerCase().endsWith(".csv")) {
-      const inspected = await inspectCsvFile(tempFilePath, {
-        maxRows: runtimeConfig.runtime.importCsvMaxRows,
-      });
-      if (inspected.error) {
-        throw new Error(inspected.error);
-      }
-
       keepStagedFile = true;
       return {
         kind: "csv-file",
         filename,
         filePath: tempFilePath,
         tempDir,
-        rowCount: inspected.rowCount,
       };
     }
 

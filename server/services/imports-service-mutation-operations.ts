@@ -68,29 +68,42 @@ export class ImportsServiceMutationOperations {
       );
     };
 
-    const parsed = await forEachCsvFileRow(
-      params.filePath,
-      async (row) => {
-        pendingRows.push(row);
-        if (pendingRows.length >= IMPORT_INSERT_CHUNK_SIZE) {
-          await flushPendingRows();
-        }
-      },
-      { maxRows: runtimeConfig.runtime.importCsvMaxRows },
-    );
+    let parsed: Awaited<ReturnType<typeof forEachCsvFileRow>>;
+    try {
+      parsed = await forEachCsvFileRow(
+        params.filePath,
+        async (row) => {
+          pendingRows.push(row);
+          if (pendingRows.length >= IMPORT_INSERT_CHUNK_SIZE) {
+            await flushPendingRows();
+          }
+        },
+        { maxRows: runtimeConfig.runtime.importCsvMaxRows },
+      );
 
-    if (parsed.error) {
-      throw new Error(parsed.error);
+      if (parsed.error) {
+        throw new Error(parsed.error);
+      }
+
+      await flushPendingRows();
+    } catch (error) {
+      await this.storage.deleteDataRowsByImport(importRecord.id);
+      await this.storage.deleteImport(importRecord.id);
+      throw error;
     }
 
-    await flushPendingRows();
+    if (parsed.rowCount <= 0) {
+      await this.storage.deleteDataRowsByImport(importRecord.id);
+      await this.storage.deleteImport(importRecord.id);
+      throw new Error("No data rows provided");
+    }
 
     if (params.createdBy) {
       await this.storage.createAuditLog({
         action: "IMPORT_DATA",
         performedBy: params.createdBy,
         targetResource: params.name,
-        details: `Imported ${params.rowCount} rows from ${params.filename}`,
+        details: `Imported ${parsed.rowCount} rows from ${params.filename}`,
       });
     }
 

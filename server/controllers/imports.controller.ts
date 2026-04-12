@@ -134,15 +134,10 @@ export function createImportsController(deps: CreateImportsControllerDeps) {
         const name = String(body.name ?? "");
         const filename = String(body.filename ?? multipartImportUpload.filename ?? "");
 
-        if (multipartImportUpload.rowCount <= 0) {
-          throw badRequest("No data rows provided");
-        }
-
         const importRecord = await importsService.createImportFromCsvFile({
           name,
           filename,
           filePath: multipartImportUpload.filePath,
-          rowCount: multipartImportUpload.rowCount,
           createdBy: req.user?.username,
         });
 

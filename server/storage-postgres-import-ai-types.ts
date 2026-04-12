@@ -32,6 +32,7 @@ export interface ImportAiStorageContract {
   getImportById(id: string): Promise<Import | undefined>;
   updateImportName(id: string, name: string): Promise<Import | undefined>;
   deleteImport(id: string): Promise<boolean>;
+  deleteDataRowsByImport(importId: string): Promise<number>;
 
   createDataRow(data: InsertDataRow): Promise<DataRow>;
   getDataRowsByImport(importId: string): Promise<DataRow[]>;

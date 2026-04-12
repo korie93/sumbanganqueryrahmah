@@ -42,6 +42,10 @@ export class PostgresImportsSearchStorage extends PostgresAuthAccountStorage {
     return this.importsRepository.deleteImport(id);
   }
 
+  async deleteDataRowsByImport(importId: string): Promise<number> {
+    return this.importsRepository.deleteDataRowsByImport(importId);
+  }
+
   async createDataRow(data: InsertDataRow): Promise<DataRow> {
     return this.importsRepository.createDataRow(data);
   }

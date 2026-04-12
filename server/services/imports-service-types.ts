@@ -15,6 +15,7 @@ type ImportsStorage = Pick<
   | "createAuditLog"
   | "createDataRow"
   | "createImport"
+  | "deleteDataRowsByImport"
   | "deleteImport"
   | "getDataRowsByImport"
   | "getImportById"
@@ -44,7 +45,6 @@ export type CreateImportFromCsvFileInput = {
   name: string;
   filename: string;
   filePath: string;
-  rowCount: number;
   createdBy?: string | undefined;
 };
 
