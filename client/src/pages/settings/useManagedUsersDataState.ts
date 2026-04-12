@@ -11,6 +11,7 @@ import {
   isAbortError,
   normalizeManagedUsersQuery,
 } from "@/pages/settings/settings-managed-user-data-utils";
+import { normalizeSettingsPaginationState } from "@/pages/settings/settings-request-utils";
 import type { ManagedUser } from "@/pages/settings/types";
 import { normalizeSettingsErrorPayload } from "@/pages/settings/utils";
 
@@ -64,13 +65,10 @@ export function useManagedUsersDataState({
     try {
       const response = await getSuperuserManagedUsers(query, { signal: controller.signal });
       const nextUsers = Array.isArray(response?.users) ? response.users : [];
-      const responsePagination = response?.pagination;
-      const nextPagination: ManagedUsersPaginationState = {
-        page: Math.max(1, Number(responsePagination?.page || query.page)),
-        pageSize: Math.max(1, Number(responsePagination?.pageSize || query.pageSize)),
-        total: Math.max(0, Number(responsePagination?.total || 0)),
-        totalPages: Math.max(1, Number(responsePagination?.totalPages || 1)),
-      };
+      const nextPagination: ManagedUsersPaginationState = normalizeSettingsPaginationState(
+        response?.pagination,
+        query,
+      );
       if (
         controller.signal.aborted
         || !isMountedRef.current
@@ -111,12 +109,7 @@ export function useManagedUsersDataState({
       });
       setManagedUsers([]);
       setManagedUsersLoaded(true);
-      setManagedUsersPagination({
-        page: query.page,
-        pageSize: query.pageSize,
-        total: 0,
-        totalPages: 1,
-      });
+      setManagedUsersPagination(normalizeSettingsPaginationState(undefined, query));
       return [];
     } finally {
       if (managedUsersAbortControllerRef.current === controller) {

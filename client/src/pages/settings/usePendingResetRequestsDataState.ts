@@ -11,6 +11,7 @@ import {
   isAbortError,
   normalizePendingResetRequestsQuery,
 } from "@/pages/settings/settings-managed-user-data-utils";
+import { normalizeSettingsPaginationState } from "@/pages/settings/settings-request-utils";
 import type { PendingPasswordResetRequest } from "@/pages/settings/types";
 import { normalizeSettingsErrorPayload } from "@/pages/settings/utils";
 
@@ -67,13 +68,10 @@ export function usePendingResetRequestsDataState({
       try {
         const response = await getPendingPasswordResetRequests(query, { signal: controller.signal });
         const nextRequests = Array.isArray(response?.requests) ? response.requests : [];
-        const responsePagination = response?.pagination;
-        const nextPagination: PendingResetRequestsPaginationState = {
-          page: Math.max(1, Number(responsePagination?.page || query.page)),
-          pageSize: Math.max(1, Number(responsePagination?.pageSize || query.pageSize)),
-          total: Math.max(0, Number(responsePagination?.total || 0)),
-          totalPages: Math.max(1, Number(responsePagination?.totalPages || 1)),
-        };
+        const nextPagination: PendingResetRequestsPaginationState = normalizeSettingsPaginationState(
+          response?.pagination,
+          query,
+        );
         if (
           controller.signal.aborted
           || !isMountedRef.current
@@ -113,12 +111,7 @@ export function usePendingResetRequestsDataState({
         });
         setPendingResetRequests([]);
         setPendingResetRequestsLoaded(true);
-        setPendingResetRequestsPagination({
-          page: query.page,
-          pageSize: query.pageSize,
-          total: 0,
-          totalPages: 1,
-        });
+        setPendingResetRequestsPagination(normalizeSettingsPaginationState(undefined, query));
         return [];
       } finally {
         if (pendingResetRequestsAbortControllerRef.current === controller) {

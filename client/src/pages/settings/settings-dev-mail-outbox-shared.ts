@@ -1,4 +1,9 @@
 import type { MutableRefObject } from "react";
+import {
+  SETTINGS_EMPTY_TOTAL,
+  SETTINGS_FIRST_PAGE,
+  SETTINGS_MIN_TOTAL_PAGES,
+} from "@/pages/settings/settings-request-utils";
 
 export type ToastFn = (payload: {
   title: string;
@@ -30,7 +35,7 @@ export const DEV_MAIL_OUTBOX_DEFAULT_PAGE_SIZE = 25;
 export const DEV_MAIL_OUTBOX_MAX_PAGE_SIZE = 100;
 
 export const DEV_MAIL_OUTBOX_DEFAULT_QUERY: DevMailOutboxQueryState = {
-  page: 1,
+  page: SETTINGS_FIRST_PAGE,
   pageSize: DEV_MAIL_OUTBOX_DEFAULT_PAGE_SIZE,
   searchEmail: "",
   searchSubject: "",
@@ -38,8 +43,8 @@ export const DEV_MAIL_OUTBOX_DEFAULT_QUERY: DevMailOutboxQueryState = {
 };
 
 export const DEV_MAIL_OUTBOX_DEFAULT_PAGINATION: DevMailOutboxPaginationState = {
-  page: 1,
+  page: SETTINGS_FIRST_PAGE,
   pageSize: DEV_MAIL_OUTBOX_DEFAULT_PAGE_SIZE,
-  total: 0,
-  totalPages: 1,
+  total: SETTINGS_EMPTY_TOTAL,
+  totalPages: SETTINGS_MIN_TOTAL_PAGES,
 };

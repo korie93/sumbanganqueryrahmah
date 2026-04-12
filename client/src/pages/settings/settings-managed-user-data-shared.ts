@@ -1,4 +1,9 @@
 import type { MutableRefObject } from "react";
+import {
+  SETTINGS_EMPTY_TOTAL,
+  SETTINGS_FIRST_PAGE,
+  SETTINGS_MIN_TOTAL_PAGES,
+} from "@/pages/settings/settings-request-utils";
 
 export type ToastFn = (payload: {
   title: string;
@@ -46,7 +51,7 @@ export const PENDING_RESET_REQUESTS_DEFAULT_PAGE_SIZE = 50;
 export const PENDING_RESET_REQUESTS_MAX_PAGE_SIZE = 100;
 
 export const DEFAULT_MANAGED_USERS_QUERY: ManagedUsersQueryState = {
-  page: 1,
+  page: SETTINGS_FIRST_PAGE,
   pageSize: MANAGED_USERS_DEFAULT_PAGE_SIZE,
   search: "",
   role: "all",
@@ -54,22 +59,22 @@ export const DEFAULT_MANAGED_USERS_QUERY: ManagedUsersQueryState = {
 };
 
 export const DEFAULT_MANAGED_USERS_PAGINATION: ManagedUsersPaginationState = {
-  page: 1,
+  page: SETTINGS_FIRST_PAGE,
   pageSize: MANAGED_USERS_DEFAULT_PAGE_SIZE,
-  total: 0,
-  totalPages: 1,
+  total: SETTINGS_EMPTY_TOTAL,
+  totalPages: SETTINGS_MIN_TOTAL_PAGES,
 };
 
 export const DEFAULT_PENDING_RESET_REQUESTS_QUERY: PendingResetRequestsQueryState = {
-  page: 1,
+  page: SETTINGS_FIRST_PAGE,
   pageSize: PENDING_RESET_REQUESTS_DEFAULT_PAGE_SIZE,
   search: "",
   status: "all",
 };
 
 export const DEFAULT_PENDING_RESET_REQUESTS_PAGINATION: PendingResetRequestsPaginationState = {
-  page: 1,
+  page: SETTINGS_FIRST_PAGE,
   pageSize: PENDING_RESET_REQUESTS_DEFAULT_PAGE_SIZE,
-  total: 0,
-  totalPages: 1,
+  total: SETTINGS_EMPTY_TOTAL,
+  totalPages: SETTINGS_MIN_TOTAL_PAGES,
 };

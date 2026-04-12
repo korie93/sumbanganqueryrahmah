@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type MutableRefObject } from "react";
 import { getMe } from "@/lib/api";
+import { isSettingsAbortError } from "@/pages/settings/settings-request-utils";
 import type { CurrentUser } from "@/pages/settings/types";
 import { normalizeSettingsErrorPayload } from "@/pages/settings/utils";
 
@@ -16,12 +17,6 @@ type UseSettingsBootstrapArgs = {
   loadSettings: () => Promise<void>;
   toast: ToastFn;
 };
-
-function isAbortError(error: unknown) {
-  return error instanceof DOMException
-    ? error.name === "AbortError"
-    : error instanceof Error && error.name === "AbortError";
-}
 
 export function useSettingsBootstrap({
   clearSettingsState,
@@ -74,7 +69,7 @@ export function useSettingsBootstrap({
       } catch (error: unknown) {
         if (
           controller.signal.aborted ||
-          isAbortError(error) ||
+          isSettingsAbortError(error) ||
           !isMountedRef.current ||
           requestId !== bootstrapRequestIdRef.current
         ) return;
