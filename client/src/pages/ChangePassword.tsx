@@ -36,6 +36,7 @@ export default function ChangePasswordPage({
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const mountedRef = useRef(true);
+  const submitInFlightRef = useRef(false);
   const changePasswordAbortControllerRef = useRef<AbortController | null>(null);
   const redirectTimeoutRef = useRef<number | null>(null);
 
@@ -44,6 +45,7 @@ export default function ChangePasswordPage({
 
     return () => {
       mountedRef.current = false;
+      submitInFlightRef.current = false;
       changePasswordAbortControllerRef.current?.abort();
       changePasswordAbortControllerRef.current = null;
       if (redirectTimeoutRef.current) {
@@ -54,6 +56,7 @@ export default function ChangePasswordPage({
   }, []);
 
   const handleLogout = () => {
+    submitInFlightRef.current = false;
     changePasswordAbortControllerRef.current?.abort();
     changePasswordAbortControllerRef.current = null;
     if (redirectTimeoutRef.current) {
@@ -65,10 +68,11 @@ export default function ChangePasswordPage({
   };
 
   const handleSubmit = async () => {
-    if (loading || changePasswordAbortControllerRef.current) {
+    if (loading || submitInFlightRef.current || changePasswordAbortControllerRef.current) {
       return;
     }
 
+    submitInFlightRef.current = true;
     setError("");
     setSuccessMessage("");
     setCurrentPasswordError("");
@@ -127,6 +131,7 @@ export default function ChangePasswordPage({
       }
       setError(getApiErrorMessage(submitError, "Pertukaran kata laluan gagal."));
     } finally {
+      submitInFlightRef.current = false;
       changePasswordAbortControllerRef.current = null;
       if (mountedRef.current) {
         setLoading(false);

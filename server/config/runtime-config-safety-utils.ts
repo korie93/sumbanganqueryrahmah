@@ -81,11 +81,14 @@ export function resolvePreviousCollectionPiiSecrets(
 
 export function resolveCookieSecure(
   rawValue: string | null,
-  params: { isProduction: boolean; publicAppUrl: string | null },
+  params: { isProductionLike: boolean; publicAppUrl: string | null },
 ) {
   const explicit = String(rawValue || "").toLowerCase();
   if (!AUTO_COOKIE_SECURE_VALUES.has(explicit)) {
     throw new Error("AUTH_COOKIE_SECURE must be one of: auto, true, false, 1, or 0.");
+  }
+  if (params.isProductionLike && (explicit === "0" || explicit === "false")) {
+    return true;
   }
   if (explicit === "1" || explicit === "true") {
     return true;
@@ -93,7 +96,7 @@ export function resolveCookieSecure(
   if (explicit === "0" || explicit === "false") {
     return false;
   }
-  return params.isProduction || String(params.publicAppUrl || "").toLowerCase().startsWith("https://");
+  return params.isProductionLike || String(params.publicAppUrl || "").toLowerCase().startsWith("https://");
 }
 
 export function resolveCorsAllowedOrigins(params: {
@@ -233,21 +236,25 @@ export function assertRuntimeSafetyGuards(params: {
 
 export function buildRuntimeConfigWarnings(params: {
   isStrictLocalDevelopment: boolean;
+  isProductionLike: boolean;
   publicAppUrl: string | null;
   configuredSessionSecret: string | null;
   configuredCollectionNicknameTempPassword: string | null;
   configuredCollectionPiiEncryptionKey: string | null;
   configuredPgPassword: string | null;
+  configuredAuthCookieSecure: string | null;
   mailConfiguration: MailConfigurationAssessment;
 }): RuntimeConfigDiagnostic[] {
   const warnings: RuntimeConfigDiagnostic[] = [];
   const {
     isStrictLocalDevelopment,
+    isProductionLike,
     publicAppUrl,
     configuredSessionSecret,
     configuredCollectionNicknameTempPassword,
     configuredCollectionPiiEncryptionKey,
     configuredPgPassword,
+    configuredAuthCookieSecure,
     mailConfiguration,
   } = params;
 
@@ -303,6 +310,15 @@ export function buildRuntimeConfigWarnings(params: {
       message: isStrictLocalDevelopment
         ? "Mail delivery env vars are partially configured. Email delivery will stay disabled until the SMTP env vars are completed."
         : "Mail delivery env vars are partially configured.",
+      severity: "warning",
+    });
+  }
+
+  if (isProductionLike && /^(?:0|false)$/i.test(String(configuredAuthCookieSecure || "").trim())) {
+    warnings.push({
+      code: "AUTH_COOKIE_SECURE_FORCED_ON_PRODUCTION",
+      envNames: ["AUTH_COOKIE_SECURE"],
+      message: "AUTH_COOKIE_SECURE=false was ignored because secure auth cookies are mandatory on production-like hosts.",
       severity: "warning",
     });
   }

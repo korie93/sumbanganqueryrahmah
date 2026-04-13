@@ -12,16 +12,16 @@ import {
 
 test("resolveCookieSecure respects explicit and auto values", () => {
   assert.equal(
-    resolveCookieSecure("true", { isProduction: false, publicAppUrl: "http://localhost:5000" }),
+    resolveCookieSecure("true", { isProductionLike: false, publicAppUrl: "http://localhost:5000" }),
     true,
   );
   assert.equal(
-    resolveCookieSecure(null, { isProduction: false, publicAppUrl: "https://sqr.example.com" }),
+    resolveCookieSecure(null, { isProductionLike: false, publicAppUrl: "https://sqr.example.com" }),
     true,
   );
   assert.equal(
-    resolveCookieSecure("0", { isProduction: true, publicAppUrl: "https://sqr.example.com" }),
-    false,
+    resolveCookieSecure("0", { isProductionLike: true, publicAppUrl: "https://sqr.example.com" }),
+    true,
   );
 });
 
@@ -166,11 +166,13 @@ test("assertNoPlaceholderSecrets rejects production-like previous collection PII
 test("buildRuntimeConfigWarnings warns when local collection PII encryption is not configured", () => {
   const warnings = buildRuntimeConfigWarnings({
     isStrictLocalDevelopment: true,
+    isProductionLike: false,
     publicAppUrl: "http://127.0.0.1:5000",
     configuredSessionSecret: null,
     configuredCollectionNicknameTempPassword: null,
     configuredCollectionPiiEncryptionKey: null,
     configuredPgPassword: null,
+    configuredAuthCookieSecure: null,
     mailConfiguration: {
       effectiveFrom: null,
       hasAnyInput: false,
@@ -182,5 +184,29 @@ test("buildRuntimeConfigWarnings warns when local collection PII encryption is n
   assert.match(
     warnings.map((warning) => warning.code).join(","),
     /COLLECTION_PII_ENCRYPTION_KEY_EMPTY_LOCAL/,
+  );
+});
+
+test("buildRuntimeConfigWarnings reports when insecure auth cookies are forced on production-like hosts", () => {
+  const warnings = buildRuntimeConfigWarnings({
+    isStrictLocalDevelopment: false,
+    isProductionLike: true,
+    publicAppUrl: "https://sqr.example.com",
+    configuredSessionSecret: "prod-session-secret",
+    configuredCollectionNicknameTempPassword: "TempPassword12345",
+    configuredCollectionPiiEncryptionKey: "collection-pii-secret",
+    configuredPgPassword: "prod-db-password",
+    configuredAuthCookieSecure: "false",
+    mailConfiguration: {
+      effectiveFrom: null,
+      hasAnyInput: false,
+      isConfigured: false,
+      isIncomplete: false,
+    },
+  });
+
+  assert.match(
+    warnings.map((warning) => warning.code).join(","),
+    /AUTH_COOKIE_SECURE_FORCED_ON_PRODUCTION/,
   );
 });

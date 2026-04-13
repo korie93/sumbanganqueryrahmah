@@ -526,6 +526,85 @@ test("runtime manager rejects browser handshakes when the origin protocol mismat
   }
 });
 
+test("runtime manager ignores forwarded host and proto headers unless explicitly trusted", async () => {
+  const wss = new FakeWebSocketServer();
+  const providedMap = new Map<string, WebSocket>();
+  const socket = new FakeWebSocket();
+  let lookupCalls = 0;
+
+  createRuntimeWebSocketManager({
+    wss: wss as unknown as import("ws").WebSocketServer,
+    storage: {
+      getActivityById: async () => {
+        lookupCalls += 1;
+        return createActiveSession("activity-forwarded-untrusted");
+      },
+      clearCollectionNicknameSessionByActivity: async () => undefined,
+    },
+    secret: TEST_SECRET,
+    connectedClients: providedMap,
+  });
+
+  try {
+    wss.emit(
+      "connection",
+      socket as unknown as WebSocket,
+      createConnectionRequest(createWsToken("activity-forwarded-untrusted"), {
+        host: "internal.gateway",
+        origin: "https://public.example",
+        forwardedHost: "public.example",
+        forwardedProto: "https",
+        encrypted: false,
+      }),
+    );
+    await flushAsyncWork();
+
+    assert.equal(lookupCalls, 0);
+    assert.equal(providedMap.size, 0);
+    assert.equal(socket.closeCalls, 1);
+  } finally {
+    wss.emit("close");
+  }
+});
+
+test("runtime manager accepts trusted forwarded host and proto headers", async () => {
+  const wss = new FakeWebSocketServer();
+  const providedMap = new Map<string, WebSocket>();
+  const socket = new FakeWebSocket();
+  const activityId = "activity-forwarded-trusted";
+
+  createRuntimeWebSocketManager({
+    wss: wss as unknown as import("ws").WebSocketServer,
+    storage: {
+      getActivityById: async () => createActiveSession(activityId),
+      clearCollectionNicknameSessionByActivity: async () => undefined,
+    },
+    secret: TEST_SECRET,
+    connectedClients: providedMap,
+    trustForwardedHeaders: true,
+  });
+
+  try {
+    wss.emit(
+      "connection",
+      socket as unknown as WebSocket,
+      createConnectionRequest(createWsToken(activityId), {
+        host: "internal.gateway",
+        origin: "https://public.example",
+        forwardedHost: "public.example",
+        forwardedProto: "https",
+        encrypted: false,
+      }),
+    );
+    await flushAsyncWork();
+
+    assert.equal(providedMap.get(activityId), socket as unknown as WebSocket);
+    assert.equal(socket.closeCalls, 0);
+  } finally {
+    wss.emit("close");
+  }
+});
+
 test("runtime manager does not register sockets that close during async session validation", async () => {
   const wss = new FakeWebSocketServer();
   const providedMap = new Map<string, WebSocket>();
@@ -705,6 +784,12 @@ test("runtime manager enforces a per-user connection limit", async () => {
   const wss = new FakeWebSocketServer();
   const providedMap = new Map<string, WebSocket>();
   const sockets = Array.from({ length: 6 }, () => new FakeWebSocket());
+  const originalLoggerWarn = logger.warn;
+  const warnings: Array<{ message: string; payload: unknown }> = [];
+
+  logger.warn = ((message: string, payload: unknown) => {
+    warnings.push({ message, payload });
+  }) as typeof logger.warn;
 
   createRuntimeWebSocketManager({
     wss: wss as unknown as import("ws").WebSocketServer,
@@ -734,7 +819,18 @@ test("runtime manager enforces a per-user connection limit", async () => {
     assert.equal(providedMap.size, 5);
     assert.equal(providedMap.has("activity-user-limit-5"), false);
     assert.equal(sockets[5].closeCalls, 1);
+    assert.equal(
+      warnings.some(
+        (entry) =>
+          entry.message === "WebSocket rejected because the user connection limit was reached"
+          && typeof entry.payload === "object"
+          && entry.payload !== null
+          && (entry.payload as { maxConnectionsPerUser?: unknown }).maxConnectionsPerUser === 5,
+      ),
+      true,
+    );
   } finally {
+    logger.warn = originalLoggerWarn;
     wss.emit("close");
   }
 });

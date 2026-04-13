@@ -454,6 +454,50 @@ test("runtime config rejects invalid AUTH_COOKIE_SECURE flags", async () => {
   );
 });
 
+test("runtime config forces secure auth cookies on production-like hosts even when AUTH_COOKIE_SECURE=false", async () => {
+  await withEnv(
+    {
+      ...productionBaseOverrides,
+      PUBLIC_APP_URL: "https://sqr.example.com",
+      AUTH_COOKIE_SECURE: "false",
+      BACKUP_ENCRYPTION_KEY: "A".repeat(32),
+    },
+    async () => {
+      const runtimeModule = await importRuntimeFresh();
+      assert.equal(runtimeModule.runtimeConfig.auth.cookieSecure, true);
+      assert.match(
+        runtimeModule.runtimeConfigValidation.warnings.map((warning: { code: string }) => warning.code).join(","),
+        /AUTH_COOKIE_SECURE_FORCED_ON_PRODUCTION/,
+      );
+    },
+  );
+});
+
+test("runtime config accepts an explicit graceful shutdown timeout override", async () => {
+  await withEnv(
+    {
+      NODE_ENV: "development",
+      HOST: "127.0.0.1",
+      PUBLIC_APP_URL: "http://127.0.0.1:5000",
+      SESSION_SECRET: null,
+      COLLECTION_NICKNAME_TEMP_PASSWORD: null,
+      COLLECTION_PII_ENCRYPTION_KEY: null,
+      PG_PASSWORD: null,
+      BACKUP_ENCRYPTION_KEY: null,
+      BACKUP_ENCRYPTION_KEYS: null,
+      BACKUP_FEATURE_ENABLED: "1",
+      GRACEFUL_SHUTDOWN_TIMEOUT_MS: "12000",
+      SEED_DEFAULT_USERS: "0",
+      LOCAL_SUPERUSER_CREDENTIALS_FILE_ENABLED: "0",
+      MAIL_DEV_OUTBOX_ENABLED: "0",
+    },
+    async () => {
+      const runtimeModule = await importRuntimeFresh();
+      assert.equal(runtimeModule.runtimeConfig.runtime.gracefulShutdownTimeoutMs, 12_000);
+    },
+  );
+});
+
 test("runtime config rejects malformed numeric env values before fallback clamping", async () => {
   await withEnv(
     {

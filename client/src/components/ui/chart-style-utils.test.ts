@@ -34,6 +34,25 @@ test("buildChartStyleMarkup emits CSS variables only for safe configured colors"
   assert.match(markup, /\[data-chart="chart-daily"]/)
   assert.match(markup, /--color-logins: #2563eb;/)
   assert.doesNotMatch(markup, /--color-ignored/)
+  assert.doesNotMatch(markup, /<\/style>/i)
+  assert.doesNotMatch(markup, /javascript:/i)
+  assert.doesNotMatch(markup, /expression\(/i)
+})
+
+test("buildChartStyleMarkup drops injected selector and style-breaking content", () => {
+  const markup = buildChartStyleMarkup("chart:\"></style><script>alert(1)</script>", {
+    injected: {
+      label: "Injected",
+      color: "\";background:url(javascript:alert(1))",
+    },
+  })
+
+  assert.ok(markup)
+  assert.doesNotMatch(markup, /<\/style>/i)
+  assert.doesNotMatch(markup, /<script>/i)
+  assert.doesNotMatch(markup, /javascript:/i)
+  assert.match(markup, /\[data-chart="chart-[a-z0-9-]+"]/i)
+  assert.doesNotMatch(markup, /--color-injected/)
 })
 
 test("resolveChartPresentationColor falls back to currentColor for invalid values", () => {

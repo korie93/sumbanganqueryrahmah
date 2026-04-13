@@ -271,3 +271,27 @@ test("pruneIdempotencyFingerprintValidationCache evicts the oldest fingerprint v
   assert.equal(cache.has("fingerprint-28"), false);
   assert.equal(cache.has("fingerprint-29"), true);
 });
+
+test("pruneIdempotencyFingerprintValidationCache keeps recently touched fingerprints ahead of older entries", () => {
+  const cache = new Map<string, { lastValidatedAt: number }>();
+
+  for (let index = 0; index < 12; index += 1) {
+    cache.set(`fingerprint-${index}`, {
+      lastValidatedAt: index,
+    });
+  }
+
+  const refreshedEntry = cache.get("fingerprint-0");
+  assert.ok(refreshedEntry);
+  cache.delete("fingerprint-0");
+  cache.set("fingerprint-0", {
+    lastValidatedAt: 99,
+  });
+
+  const pruned = pruneIdempotencyFingerprintValidationCache(cache, 10);
+
+  assert.equal(pruned, 3);
+  assert.equal(cache.has("fingerprint-0"), true);
+  assert.equal(cache.has("fingerprint-1"), false);
+  assert.equal(cache.has("fingerprint-2"), false);
+});

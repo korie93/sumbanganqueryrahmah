@@ -2,10 +2,14 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "path";
 
+const isProductionBuild = process.env.NODE_ENV === "production";
 const enableSourceMaps =
-  process.env.VITE_ENABLE_SOURCEMAPS === "1"
-  || process.env.DEPLOY_ENV === "staging"
-  || process.env.APP_ENV === "staging";
+  !isProductionBuild
+  && (
+    process.env.VITE_ENABLE_SOURCEMAPS === "1"
+    || process.env.DEPLOY_ENV === "staging"
+    || process.env.APP_ENV === "staging"
+  );
 
 export default defineConfig({
   plugins: [react()],

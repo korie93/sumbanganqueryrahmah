@@ -48,15 +48,17 @@ export function pruneIdempotencyFingerprintValidationCache(
     cache.size,
     cache.size - limit + Math.max(1, Math.floor(limit * 0.1)),
   );
-  const oldestEntries = Array.from(cache.entries())
-    .sort((left, right) => left[1].lastValidatedAt - right[1].lastValidatedAt)
-    .slice(0, pruneCount);
+  let removed = 0;
 
-  for (const [key] of oldestEntries) {
+  for (const key of cache.keys()) {
     cache.delete(key);
+    removed += 1;
+    if (removed >= pruneCount) {
+      break;
+    }
   }
 
-  return oldestEntries.length;
+  return removed;
 }
 
 function sendCollectionError(res: Response, err: unknown, fallbackMessage: string) {
@@ -126,6 +128,8 @@ export function normalizeIdempotencyFingerprintHeaderValue(value: unknown): stri
     pruneIdempotencyFingerprintValidationCache(idempotencyFingerprintValidationCache);
   } else {
     cached.lastValidatedAt = now;
+    idempotencyFingerprintValidationCache.delete(normalized);
+    idempotencyFingerprintValidationCache.set(normalized, cached);
   }
 
   return normalized;

@@ -17,6 +17,7 @@ type RuntimeManagerOptions = {
   };
   secret: string | readonly string[];
   connectedClients?: Map<string, WebSocket>;
+  trustForwardedHeaders?: boolean;
 };
 
 type RuntimeWebSocketActivity = {
@@ -42,14 +43,25 @@ function firstForwardedValue(value: string | string[] | undefined): string {
   return firstHeaderValue(value).split(",")[0]?.trim() || "";
 }
 
-function readWebSocketRequestHost(headers: IncomingHttpHeaders): string {
-  return (firstForwardedValue(headers["x-forwarded-host"]) || firstHeaderValue(headers.host))
+function readWebSocketRequestHost(
+  headers: IncomingHttpHeaders,
+  options: { trustForwardedHeaders: boolean },
+): string {
+  const trustedForwardedHost = options.trustForwardedHeaders
+    ? firstForwardedValue(headers["x-forwarded-host"])
+    : "";
+  return (trustedForwardedHost || firstHeaderValue(headers.host))
     .trim()
     .toLowerCase();
 }
 
-function readWebSocketRequestProto(req: Pick<IncomingMessage, "headers" | "socket">): string {
-  const forwardedProto = firstForwardedValue(req.headers["x-forwarded-proto"]).toLowerCase();
+function readWebSocketRequestProto(
+  req: Pick<IncomingMessage, "headers" | "socket">,
+  options: { trustForwardedHeaders: boolean },
+): string {
+  const forwardedProto = options.trustForwardedHeaders
+    ? firstForwardedValue(req.headers["x-forwarded-proto"]).toLowerCase()
+    : "";
   if (forwardedProto === "http" || forwardedProto === "https") {
     return forwardedProto;
   }
@@ -57,13 +69,16 @@ function readWebSocketRequestProto(req: Pick<IncomingMessage, "headers" | "socke
   return req.socket && "encrypted" in req.socket && req.socket.encrypted ? "https" : "http";
 }
 
-function isSameOriginWebSocketRequest(req: Pick<IncomingMessage, "headers" | "socket">): boolean {
+function isSameOriginWebSocketRequest(
+  req: Pick<IncomingMessage, "headers" | "socket">,
+  options: { trustForwardedHeaders: boolean },
+): boolean {
   const origin = firstHeaderValue(req.headers.origin).trim();
   if (!origin) {
     return true;
   }
 
-  const requestHost = readWebSocketRequestHost(req.headers);
+  const requestHost = readWebSocketRequestHost(req.headers, options);
   if (!requestHost) {
     return false;
   }
@@ -74,7 +89,7 @@ function isSameOriginWebSocketRequest(req: Pick<IncomingMessage, "headers" | "so
       return false;
     }
 
-    const requestProto = readWebSocketRequestProto(req);
+    const requestProto = readWebSocketRequestProto(req, options);
     return originUrl.protocol === `${requestProto}:`;
   } catch {
     return false;
@@ -139,6 +154,7 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
 } {
   const { wss, storage, secret } = options;
   const connectedClients = options.connectedClients ?? new Map<string, WebSocket>();
+  const trustForwardedHeaders = options.trustForwardedHeaders === true;
   const socketUserKeys = new Map<string, string>();
   const aliveSockets = new WeakSet<WebSocket>();
   const isTrackableSocket = (ws: WebSocket) =>
@@ -332,7 +348,7 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
       return;
     }
 
-    if (!isSameOriginWebSocketRequest(req)) {
+    if (!isSameOriginWebSocketRequest(req, { trustForwardedHeaders })) {
       logger.warn("WebSocket rejected cross-origin handshake", {
         origin: req.headers.origin || null,
         host: req.headers.host || null,
@@ -377,6 +393,8 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
       if (userKey && countTrackedUserConnections(userKey, activityId) >= MAX_CONNECTIONS_PER_USER) {
         logger.warn("WebSocket rejected because the user connection limit was reached", {
           activityId,
+          userKey,
+          maxConnectionsPerUser: MAX_CONNECTIONS_PER_USER,
         });
         cleanupSocket();
         closeSocketIfNeeded();
@@ -404,7 +422,9 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
       logger.debug("WebSocket connected", { activityId });
     } catch (error) {
       cleanupSocket();
-      logger.warn("WebSocket handshake failed", { error });
+      logger.warn("WebSocket handshake failed", {
+        error: sanitizeRuntimeWebSocketError(error),
+      });
       closeSocketIfNeeded();
     }
   });

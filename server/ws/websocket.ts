@@ -1,5 +1,6 @@
 import type { Server } from "node:http";
 import { WebSocketServer, WebSocket } from "ws";
+import { runtimeConfig } from "../config/runtime";
 import { getSessionJwtVerificationSecrets } from "../auth/session-jwt";
 import { PostgresStorage } from "../storage-postgres";
 import { createRuntimeWebSocketManager } from "./runtime-manager";
@@ -29,6 +30,7 @@ export function setupWebSocket(server: Server, options: LegacyWebSocketOptions =
     storage,
     secret: sessionSecret,
     connectedClients,
+    trustForwardedHeaders: runtimeConfig.app.trustedProxies.length > 0,
   });
 
   return { wss, connectedClients };

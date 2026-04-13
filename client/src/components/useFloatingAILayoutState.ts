@@ -192,7 +192,6 @@ export function useFloatingAILayoutState({
     mobileViewportHeight,
     preferCompactPanel,
     shouldTrackObstacleLayout,
-    syncLayout,
     viewportBottomInset,
   ]);
 
@@ -280,7 +279,7 @@ export function useFloatingAILayoutState({
         window.cancelAnimationFrame(frame);
       }
     };
-  }, [hiddenForAiPage, shouldTrackObstacleLayout, syncLayout]);
+  }, [hiddenForAiPage, shouldTrackObstacleLayout]);
 
   return {
     floatingRootRef,

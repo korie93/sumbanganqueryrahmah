@@ -146,8 +146,9 @@ const corsAllowedOrigins = resolveCorsAllowedOrigins({
   rawValue: readOptionalString("CORS_ALLOWED_ORIGINS"),
   publicAppUrl,
 });
-const cookieSecure = resolveCookieSecure(readOptionalString("AUTH_COOKIE_SECURE"), {
-  isProduction,
+const configuredAuthCookieSecure = readOptionalString("AUTH_COOKIE_SECURE");
+const cookieSecure = resolveCookieSecure(configuredAuthCookieSecure, {
+  isProductionLike,
   publicAppUrl,
 });
 
@@ -292,6 +293,7 @@ export const runtimeConfig: RuntimeConfig = Object.freeze({
     maintenanceCacheTtlMs: readInt("MAINTENANCE_CACHE_TTL_MS", 3_000, { min: 500 }),
     runtimeSettingsCacheTtlMs: readInt("RUNTIME_SETTINGS_CACHE_TTL_MS", 3_000, { min: 500 }),
     pgPoolWarnCooldownMs: readInt("PG_POOL_WARN_COOLDOWN_MS", 60_000, { min: 1_000 }),
+    gracefulShutdownTimeoutMs: readInt("GRACEFUL_SHUTDOWN_TIMEOUT_MS", 25_000, { min: 1_000 }),
     backupOperationTimeoutMs: readInt("BACKUP_OPERATION_TIMEOUT_MS", 120_000, { min: 5_000 }),
     backupMaxPayloadBytes: readInt(
       "BACKUP_MAX_PAYLOAD_BYTES",
@@ -377,11 +379,13 @@ export const runtimeConfig: RuntimeConfig = Object.freeze({
 
 const runtimeWarnings = buildRuntimeConfigWarnings({
   isStrictLocalDevelopment,
+  isProductionLike,
   publicAppUrl,
   configuredSessionSecret,
   configuredCollectionNicknameTempPassword,
   configuredCollectionPiiEncryptionKey,
   configuredPgPassword,
+  configuredAuthCookieSecure,
   mailConfiguration,
 });
 

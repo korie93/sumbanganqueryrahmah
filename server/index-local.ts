@@ -5,6 +5,7 @@ import { createLocalRuntimeEnvironment } from "./internal/local-runtime-environm
 import { markStartupFailed } from "./internal/startup-health";
 import { pool, stopPgPoolBackgroundTasks } from "./db-postgres";
 import { logger } from "./lib/logger";
+import { runtimeConfig } from "./config/runtime";
 
 let startupFatalReason: string | null = null;
 
@@ -49,7 +50,7 @@ const {
   notifyFatalStartup: notifyMasterFatalStartup,
 });
 
-const GRACEFUL_SHUTDOWN_TIMEOUT_MS = 25_000;
+const GRACEFUL_SHUTDOWN_TIMEOUT_MS = runtimeConfig.runtime.gracefulShutdownTimeoutMs;
 
 let shuttingDown = false;
 
