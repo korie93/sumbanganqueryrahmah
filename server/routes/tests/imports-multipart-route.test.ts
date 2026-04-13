@@ -278,3 +278,36 @@ test("cleanupTrackedMultipartUploadStreamsForTests destroys tracked multipart fi
   assert.equal(cleaned, 1);
   assert.deepEqual(lifecycleCalls, ["unpipe", "resume", "destroy:parser failed"]);
 });
+
+test("cleanupTrackedMultipartUploadStreamsForTests reports best-effort cleanup failures", () => {
+  const cleanupFailures: Array<{ step: string; message: string | undefined }> = [];
+  const stream = {
+    unpipe() {
+      throw new Error("unpipe failed");
+    },
+    resume() {
+      throw new Error("resume failed");
+    },
+    destroy() {
+      throw new Error("destroy failed");
+    },
+  };
+
+  const cleaned = cleanupTrackedMultipartUploadStreamsForTests(
+    [stream],
+    new Error("parser failed"),
+    (step, error) => {
+      cleanupFailures.push({
+        step,
+        message: error?.message,
+      });
+    },
+  );
+
+  assert.equal(cleaned, 0);
+  assert.deepEqual(cleanupFailures, [
+    { step: "unpipe", message: "unpipe failed" },
+    { step: "resume", message: "resume failed" },
+    { step: "destroy", message: "destroy failed" },
+  ]);
+});

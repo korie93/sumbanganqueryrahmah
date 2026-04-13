@@ -32,6 +32,13 @@ type RuntimeWebSocketErrorLike = {
   type?: unknown;
 };
 
+type RuntimeTrackedSocketEntry = {
+  activityId: string;
+  ws: WebSocket;
+  userKey: string | null;
+  alive: boolean;
+};
+
 function firstHeaderValue(value: string | string[] | undefined): string {
   if (Array.isArray(value)) {
     return String(value[0] || "");
@@ -155,9 +162,9 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
   const { wss, storage, secret } = options;
   const connectedClients = options.connectedClients ?? new Map<string, WebSocket>();
   const trustForwardedHeaders = options.trustForwardedHeaders === true;
-  const socketUserKeys = new Map<string, string>();
+  const socketEntriesByActivity = new Map<string, RuntimeTrackedSocketEntry>();
+  const socketEntriesByInstance = new WeakMap<WebSocket, RuntimeTrackedSocketEntry>();
   const trackedSockets = new Set<WebSocket>();
-  const aliveSockets = new WeakSet<WebSocket>();
   const socketCleanupCallbacks = new WeakMap<WebSocket, () => void>();
   const isTrackableSocket = (ws: WebSocket) =>
     ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING;
@@ -168,9 +175,34 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
         error: sanitizeRuntimeWebSocketError(error),
       });
     });
-  const removeTrackedSocket = (activityId: string) => {
-    connectedClients.delete(activityId);
-    socketUserKeys.delete(activityId);
+  const registerTrackedSocketEntry = (
+    activityId: string,
+    ws: WebSocket,
+    userKey: string | null,
+  ): RuntimeTrackedSocketEntry => {
+    const entry: RuntimeTrackedSocketEntry = {
+      activityId,
+      ws,
+      userKey,
+      alive: true,
+    };
+    socketEntriesByActivity.set(activityId, entry);
+    socketEntriesByInstance.set(ws, entry);
+    connectedClients.set(activityId, ws);
+    return entry;
+  };
+  const removeTrackedSocket = (activityId: string, ws?: WebSocket) => {
+    const currentEntry = socketEntriesByActivity.get(activityId);
+    if (currentEntry && (!ws || currentEntry.ws === ws)) {
+      socketEntriesByActivity.delete(activityId);
+      socketEntriesByInstance.delete(currentEntry.ws);
+      connectedClients.delete(activityId);
+      return;
+    }
+
+    if (!currentEntry && (!ws || connectedClients.get(activityId) === ws)) {
+      connectedClients.delete(activityId);
+    }
   };
   const dropBackpressuredSocket = (activityId: string, ws: WebSocket) => {
     logger.warn("WebSocket client dropped because the send buffer exceeded the runtime limit", {
@@ -178,7 +210,7 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
       bufferedAmount: ws.bufferedAmount,
       maxBufferedBytes: MAX_RUNTIME_WS_BUFFERED_BYTES,
     });
-    removeTrackedSocket(activityId);
+    removeTrackedSocket(activityId, ws);
     if (ws.readyState === WebSocket.OPEN) {
       ws.terminate();
     }
@@ -186,15 +218,11 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
   };
   const countTrackedUserConnections = (userKey: string, excludedActivityId?: string) => {
     let count = 0;
-    for (const [trackedActivityId, trackedUserKey] of socketUserKeys.entries()) {
-      if (trackedActivityId === excludedActivityId || trackedUserKey !== userKey) {
+    for (const entry of socketEntriesByActivity.values()) {
+      if (entry.activityId === excludedActivityId || entry.userKey !== userKey) {
         continue;
       }
-      const trackedSocket = connectedClients.get(trackedActivityId);
-      if (
-        trackedSocket
-        && (trackedSocket.readyState === WebSocket.OPEN || trackedSocket.readyState === WebSocket.CONNECTING)
-      ) {
+      if (entry.ws.readyState === WebSocket.OPEN || entry.ws.readyState === WebSocket.CONNECTING) {
         count += 1;
       }
     }
@@ -210,7 +238,7 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
 
     for (const [activityId, ws] of connectedClients.entries()) {
       if (!ws || ws.readyState !== WebSocket.OPEN) {
-        removeTrackedSocket(activityId);
+        removeTrackedSocket(activityId, ws);
         void clearNicknameSession(activityId);
         continue;
       }
@@ -233,16 +261,17 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
           activityId,
           error: sanitizeRuntimeWebSocketError(error),
         });
-        removeTrackedSocket(activityId);
+        removeTrackedSocket(activityId, ws);
         void clearNicknameSession(activityId);
       }
     }
   };
 
   const heartbeatHandle = setInterval(() => {
-    for (const [activityId, ws] of connectedClients.entries()) {
+    for (const entry of Array.from(socketEntriesByActivity.values())) {
+      const { activityId, ws } = entry;
       if (!ws || (ws.readyState !== WebSocket.OPEN && ws.readyState !== WebSocket.CONNECTING)) {
-        removeTrackedSocket(activityId);
+        removeTrackedSocket(activityId, ws);
         continue;
       }
 
@@ -250,15 +279,21 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
         continue;
       }
 
-      if (!aliveSockets.has(ws)) {
-        removeTrackedSocket(activityId);
+      const currentEntry = socketEntriesByActivity.get(activityId);
+      if (!currentEntry || currentEntry.ws !== ws) {
+        removeTrackedSocket(activityId, ws);
+        continue;
+      }
+
+      if (!currentEntry.alive) {
+        removeTrackedSocket(activityId, ws);
         if (ws.readyState === WebSocket.OPEN) {
           ws.terminate();
         }
         continue;
       }
 
-      aliveSockets.delete(ws);
+      currentEntry.alive = false;
       ws.ping();
     }
   }, HEARTBEAT_INTERVAL_MS);
@@ -281,18 +316,24 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
       }
     }
     connectedClients.clear();
-    socketUserKeys.clear();
+    socketEntriesByActivity.clear();
     trackedSockets.clear();
   });
 
   wss.on("connection", async (ws, req) => {
     let activityId: string | null = null;
+    let socketEntry: RuntimeTrackedSocketEntry | null = null;
     let cleanedUp = false;
     let closeRequested = false;
 
     const markSocketAlive = () => {
-      if (!cleanedUp) {
-        aliveSockets.add(ws);
+      if (cleanedUp) {
+        return;
+      }
+
+      const currentEntry = socketEntriesByInstance.get(ws) ?? socketEntry;
+      if (currentEntry?.ws === ws) {
+        currentEntry.alive = true;
       }
     };
 
@@ -310,11 +351,14 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
       cleanedUp = true;
       socketCleanupCallbacks.delete(ws);
       trackedSockets.delete(ws);
-      aliveSockets.delete(ws);
+      socketEntriesByInstance.delete(ws);
       detachSocketLifecycleHandlers();
 
-      if (activityId && connectedClients.get(activityId) === ws) {
-        removeTrackedSocket(activityId);
+      if (socketEntry) {
+        removeTrackedSocket(socketEntry.activityId, ws);
+        socketEntry = null;
+      } else if (activityId && connectedClients.get(activityId) === ws) {
+        removeTrackedSocket(activityId, ws);
       }
     };
 
@@ -422,13 +466,9 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
         return;
       }
 
-      const existingWs = connectedClients.get(activityId);
-      connectedClients.set(activityId, ws);
-      if (userKey) {
-        socketUserKeys.set(activityId, userKey);
-      } else {
-        socketUserKeys.delete(activityId);
-      }
+      const existingEntry = socketEntriesByActivity.get(activityId);
+      const existingWs = existingEntry?.ws ?? connectedClients.get(activityId);
+      socketEntry = registerTrackedSocketEntry(activityId, ws, userKey);
       markSocketAlive();
 
       if (cleanedUp || !isTrackableSocket(ws)) {

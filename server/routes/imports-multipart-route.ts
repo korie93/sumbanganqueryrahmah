@@ -22,6 +22,13 @@ type MultipartUploadFileStream = {
   unpipe?: (destination?: NodeJS.WritableStream | undefined) => unknown;
 };
 
+type MultipartTrackedStreamCleanupStep = "unpipe" | "resume" | "destroy";
+
+type MultipartTrackedStreamCleanupObserver = (
+  step: MultipartTrackedStreamCleanupStep,
+  error: Error | undefined,
+) => void;
+
 function toMultipartCleanupError(error: unknown): Error | undefined {
   if (error instanceof Error) {
     return error;
@@ -33,6 +40,7 @@ function toMultipartCleanupError(error: unknown): Error | undefined {
 export function cleanupTrackedMultipartUploadStreamsForTests(
   streams: Iterable<MultipartUploadFileStream>,
   error?: unknown,
+  onCleanupFailure?: MultipartTrackedStreamCleanupObserver,
 ): number {
   const cleanupError = toMultipartCleanupError(error);
   let cleaned = 0;
@@ -40,21 +48,21 @@ export function cleanupTrackedMultipartUploadStreamsForTests(
   for (const stream of streams) {
     try {
       stream.unpipe?.();
-    } catch {
-      // Ignore best-effort cleanup failures while tearing down multipart parsing.
+    } catch (cleanupFailure) {
+      onCleanupFailure?.("unpipe", toMultipartCleanupError(cleanupFailure));
     }
 
     try {
       stream.resume?.();
-    } catch {
-      // Ignore best-effort cleanup failures while tearing down multipart parsing.
+    } catch (cleanupFailure) {
+      onCleanupFailure?.("resume", toMultipartCleanupError(cleanupFailure));
     }
 
     try {
       stream.destroy?.(cleanupError);
       cleaned += 1;
-    } catch {
-      // Ignore best-effort cleanup failures while tearing down multipart parsing.
+    } catch (cleanupFailure) {
+      onCleanupFailure?.("destroy", toMultipartCleanupError(cleanupFailure));
     }
   }
 
@@ -103,6 +111,17 @@ export function createImportsMultipartRoute(
     let settled = false;
     let quotaReleased = false;
     const activeFileStreams = new Set<MultipartUploadFileStream>();
+    const logMultipartCleanupFailure = (
+      step: string,
+      cleanupFailure: unknown,
+      details?: Record<string, unknown>,
+    ) => {
+      logger.warn("Multipart import cleanup failed", {
+        step,
+        error: toMultipartCleanupError(cleanupFailure)?.message ?? "Unknown multipart cleanup failure",
+        ...details,
+      });
+    };
 
     const releaseQuota = () => {
       if (quotaReleased || !quotaSubject || reservedQuotaBytes <= 0) {
@@ -113,7 +132,11 @@ export function createImportsMultipartRoute(
     };
 
     const cleanupTrackedFileStreams = (error?: unknown) => {
-      cleanupTrackedMultipartUploadStreamsForTests(activeFileStreams, error);
+      cleanupTrackedMultipartUploadStreamsForTests(activeFileStreams, error, (step, cleanupFailure) => {
+        logMultipartCleanupFailure(`file-stream:${step}`, cleanupFailure, {
+          trackedStreamCount: activeFileStreams.size,
+        });
+      });
       activeFileStreams.clear();
     };
 
@@ -121,14 +144,14 @@ export function createImportsMultipartRoute(
       const cleanupError = toMultipartCleanupError(error);
       try {
         req.unpipe(parser);
-      } catch {
-        // Ignore best-effort request unpipe failures while tearing down multipart parsing.
+      } catch (cleanupFailure) {
+        logMultipartCleanupFailure("request-unpipe", cleanupFailure);
       }
 
       try {
         parserStream.destroy?.(cleanupError);
-      } catch {
-        // Ignore best-effort parser teardown failures while tearing down multipart parsing.
+      } catch (cleanupFailure) {
+        logMultipartCleanupFailure("parser-destroy", cleanupFailure);
       }
 
       cleanupTrackedFileStreams(cleanupError);
