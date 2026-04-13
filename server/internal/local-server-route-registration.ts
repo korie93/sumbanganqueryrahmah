@@ -13,7 +13,11 @@ import { injectChaos, getIntelligenceExplainability } from "../intelligence";
 import { CollectionRollupRefreshNotificationSubscriber } from "../lib/collection-rollup-refresh-notification";
 import { logger } from "../lib/logger";
 import { errorHandler } from "../middleware/error-handler";
-import { createAuthRouteRateLimiters, searchRateLimiter } from "../middleware/rate-limit";
+import {
+  createAuthRouteRateLimiters,
+  importsUploadRateLimiter,
+  searchRateLimiter,
+} from "../middleware/rate-limit";
 import { MonitorAlertHistoryRepository } from "../repositories/monitor-alert-history.repository";
 import { BackupJobRepository } from "../repositories/backup-job.repository";
 import { registerActivityRoutes } from "../routes/activity.routes";
@@ -206,6 +210,7 @@ export function registerLocalServerRoutes(options: RegisterLocalServerRoutesOpti
     requireRole,
     requireTabAccess,
     searchRateLimiter,
+    importsUploadRateLimiter,
     multipartMaxFileSizeBytes: importUploadLimitBytes,
     multipartPerUserQuotaBytes: environmentRuntimeConfig.runtime.importPerUserActiveUploadBytes,
   });

@@ -2,6 +2,7 @@ import { useCallback, type Dispatch, type MutableRefObject, type SetStateAction 
 
 import type { AIChatMessageInput } from "@/context/AIContext";
 import type { AIChatStatus } from "@/lib/ai-chat";
+import { canApplyAIChatUiUpdate, isActiveAIChatSession } from "@/components/ai-chat-session-guards";
 
 type UseAIChatTypingActionOptions = {
   appendMessage: (message: AIChatMessageInput) => void;
@@ -37,6 +38,10 @@ export function useAIChatTypingAction({
   typingIntervalRef,
 }: UseAIChatTypingActionOptions) {
   return useCallback((text: string, sessionId: number) => {
+    if (!canApplyAIChatUiUpdate(sessionId, sessionRef, isMountedRef)) {
+      return;
+    }
+
     stopTyping();
     setIsTyping(true);
     setAiStatus("TYPING");
@@ -44,37 +49,36 @@ export function useAIChatTypingAction({
 
     let index = 0;
     typingIntervalRef.current = window.setInterval(() => {
-      if (sessionId !== sessionRef.current) {
+      if (!isActiveAIChatSession(sessionId, sessionRef)) {
         stopTyping();
         return;
       }
 
       index += 1;
-      setStreamingText(text.slice(0, index));
+      if (isMountedRef.current) {
+        setStreamingText(text.slice(0, index));
+      }
 
       if (index >= text.length) {
         stopTyping();
-        if (sessionId !== sessionRef.current) {
+        if (!isActiveAIChatSession(sessionId, sessionRef)) {
           return;
         }
 
         if (isMountedRef.current) {
           setStreamingText("");
-        }
-
-        appendMessage({
-          role: "assistant",
-          content: text,
-          timestamp: new Date().toISOString(),
-        });
-
-        processingRef.current = false;
-        if (isMountedRef.current) {
+          appendMessage({
+            role: "assistant",
+            content: text,
+            timestamp: new Date().toISOString(),
+          });
           setIsProcessing(false);
           setIsThinking(false);
           setAiStatus("IDLE");
           setSlowNotice(false);
         }
+
+        processingRef.current = false;
         clearSlowNoticeTimer();
       }
     }, typingDelayMs);

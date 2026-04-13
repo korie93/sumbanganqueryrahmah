@@ -1,4 +1,4 @@
-import { Suspense, lazy, useCallback, useEffect, useId, type MouseEvent, type ReactNode, type Ref } from "react";
+import { Suspense, lazy, useCallback, useEffect, useId, useRef, type MouseEvent, type ReactNode, type Ref } from "react";
 import { Bot, Minimize2 } from "lucide-react";
 import { useLocation } from "wouter";
 import { Badge } from "@/components/ui/badge";
@@ -8,7 +8,8 @@ import { resolveFloatingAIMinimizedStatus } from "@/components/floating-ai-statu
 import {
   shouldKeepFloatingAiPanelMounted,
 } from "@/components/floating-ai-visibility";
-import { applyFloatingAiModalIsolation } from "@/components/floating-ai-accessibility";
+import { applyFloatingAiModalAccessibility } from "@/components/floating-ai-accessibility";
+import { FloatingAIChatErrorBoundary } from "@/components/FloatingAIChatErrorBoundary";
 import { useFloatingAIBehaviorState } from "@/components/useFloatingAIBehaviorState";
 import { useFloatingAILayoutState } from "@/components/useFloatingAILayoutState";
 import { cn } from "@/lib/utils";
@@ -129,6 +130,7 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
   const panelId = useId();
   const panelTitleId = useId();
   const panelDescriptionId = useId();
+  const panelSurfaceRef = useRef<HTMLElement | null>(null);
 
   const minimizedStatus = resolveFloatingAIMinimizedStatus(aiStatus);
   const handleTriggerToggleClick = useCallback((event: MouseEvent<HTMLButtonElement>) => {
@@ -154,7 +156,15 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
       return;
     }
 
-    return applyFloatingAiModalIsolation(rootElement);
+    const dialogElement = panelSurfaceRef.current;
+    if (!dialogElement) {
+      return;
+    }
+
+    return applyFloatingAiModalAccessibility({
+      rootElement,
+      dialogElement,
+    });
   }, [floatingRootRef, isMobile, shouldShowPanel]);
 
   if (hiddenForAiPage) return null;
@@ -194,6 +204,7 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
           )}
         >
           <section
+            ref={panelSurfaceRef}
             id={panelId}
             className={cn(
               "flex h-full w-full flex-col overflow-hidden border bg-white/98 text-slate-900 shadow-xl ring-1 ring-slate-900/8 supports-[backdrop-filter]:backdrop-blur-sm dark:bg-slate-950/98 dark:text-card-foreground dark:ring-white/10",
@@ -316,13 +327,15 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
                     </div>
                   }
                 >
-                  <AIChat
-                    timeoutMs={timeoutMs}
-                    aiEnabled={aiEnabled}
-                    compactMode={preferCompactPanel}
-                    onStatusChange={setAiStatus}
-                    onCancelAISearchReady={registerCancelAISearch}
-                  />
+                  <FloatingAIChatErrorBoundary boundaryKey={`${activePage}:${Number(isOpen)}`}>
+                    <AIChat
+                      timeoutMs={timeoutMs}
+                      aiEnabled={aiEnabled}
+                      compactMode={preferCompactPanel}
+                      onStatusChange={setAiStatus}
+                      onCancelAISearchReady={registerCancelAISearch}
+                    />
+                  </FloatingAIChatErrorBoundary>
                 </Suspense>
               </div>
             </div>

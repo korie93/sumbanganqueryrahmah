@@ -11,6 +11,13 @@ import {
   warnAutoLogoutDiagnostic,
 } from "@/components/auto-logout-diagnostics"
 
+export type AutoLogoutSocketLike = Pick<WebSocket, "close" | "readyState"> & {
+  onopen: ((this: WebSocket, event: Event) => unknown) | null
+  onmessage: ((this: WebSocket, event: MessageEvent) => unknown) | null
+  onclose: ((this: WebSocket, event: CloseEvent) => unknown) | null
+  onerror: ((this: WebSocket, event: Event) => unknown) | null
+}
+
 type BindAutoLogoutSocketArgs = {
   username: string | undefined
   mountedRef: MutableRefObject<boolean>
@@ -21,6 +28,34 @@ type BindAutoLogoutSocketArgs = {
   clearReconnect: () => void
   cleanupSocket: () => void
   runClientLogout: () => Promise<void>
+}
+
+export function disposeAutoLogoutSocket(
+  socket: AutoLogoutSocketLike | null | undefined,
+  wsRef?: MutableRefObject<WebSocket | null>,
+) {
+  if (!socket) {
+    return false
+  }
+
+  if (wsRef?.current === socket) {
+    wsRef.current = null
+  }
+
+  socket.onopen = null
+  socket.onmessage = null
+  socket.onclose = null
+  socket.onerror = null
+
+  if (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING) {
+    try {
+      socket.close()
+    } catch {
+      return false
+    }
+  }
+
+  return true
 }
 
 export function bindAutoLogoutSocket({
@@ -44,6 +79,14 @@ export function bindAutoLogoutSocket({
   const storage = getBrowserLocalStorage()
   reconnectEnabledRef.current = true
   reconnectAttemptRef.current = 0
+  let disposed = false
+
+  const isCurrentSocket = (socket: WebSocket) =>
+    !disposed && mountedRef.current && reconnectEnabledRef.current && wsRef.current === socket
+
+  const disposeSocketInstance = (socket: WebSocket | null | undefined) => {
+    disposeAutoLogoutSocket(socket, wsRef)
+  }
 
   const scheduleReconnect = () => {
     const nextUsername = username || getStoredUsername()
@@ -71,18 +114,25 @@ export function bindAutoLogoutSocket({
       return
     }
 
+    let socket: WebSocket | null = null
+
     try {
       const wsUrl = `${protocol}//${host}/ws`
-      const socket = new WebSocket(wsUrl)
-      wsRef.current = socket
+      socket = new WebSocket(wsUrl)
+      const activeSocket = socket
+      wsRef.current = activeSocket
 
-      socket.onopen = () => {
-        if (wsRef.current === socket) {
+      activeSocket.onopen = () => {
+        if (isCurrentSocket(activeSocket)) {
           reconnectAttemptRef.current = 0
         }
       }
 
-      socket.onmessage = (event) => {
+      activeSocket.onmessage = (event) => {
+        if (!isCurrentSocket(activeSocket)) {
+          return
+        }
+
         const message = parseAutoLogoutWebSocketMessage(event.data)
         if (!message) {
           warnAutoLogoutDiagnostic("Failed to parse WebSocket message:", event.data)
@@ -125,17 +175,26 @@ export function bindAutoLogoutSocket({
         }
       }
 
-      socket.onclose = () => {
-        if (wsRef.current === socket) {
-          wsRef.current = null
+      activeSocket.onclose = () => {
+        if (!isCurrentSocket(activeSocket)) {
+          if (wsRef.current === activeSocket) {
+            wsRef.current = null
+          }
+          return
         }
+
+        wsRef.current = null
         scheduleReconnect()
       }
 
-      socket.onerror = (error) => {
+      activeSocket.onerror = (error) => {
+        if (!isCurrentSocket(activeSocket)) {
+          return
+        }
         warnAutoLogoutDiagnostic("WebSocket error:", error)
       }
     } catch (error) {
+      disposeSocketInstance(socket)
       warnAutoLogoutDiagnostic("Failed to connect WebSocket:", error)
       scheduleReconnect()
     }
@@ -144,6 +203,7 @@ export function bindAutoLogoutSocket({
   connectWebSocket()
 
   return () => {
+    disposed = true
     reconnectEnabledRef.current = false
     reconnectAttemptRef.current = 0
     cleanupSocket()

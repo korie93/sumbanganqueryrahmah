@@ -2,6 +2,7 @@ import Busboy from "busboy";
 import type { AuthenticatedRequest } from "../auth/guards";
 import type { RequestHandler } from "express";
 import { DEFAULT_IMPORT_UPLOAD_LIMIT_BYTES } from "../config/body-limit";
+import { logger } from "../lib/logger";
 import {
   cleanupPreparedMultipartImportUpload,
   normalizeImportName,
@@ -14,6 +15,51 @@ import {
   createActiveImportUploadQuotaTracker,
   type ActiveImportUploadQuotaTracker,
 } from "./imports-upload-quota";
+
+type MultipartUploadFileStream = {
+  destroy?: (error?: Error) => void;
+  resume?: () => void;
+  unpipe?: (destination?: NodeJS.WritableStream | undefined) => unknown;
+};
+
+function toMultipartCleanupError(error: unknown): Error | undefined {
+  if (error instanceof Error) {
+    return error;
+  }
+
+  return error == null ? undefined : new Error(String(error));
+}
+
+export function cleanupTrackedMultipartUploadStreamsForTests(
+  streams: Iterable<MultipartUploadFileStream>,
+  error?: unknown,
+): number {
+  const cleanupError = toMultipartCleanupError(error);
+  let cleaned = 0;
+
+  for (const stream of streams) {
+    try {
+      stream.unpipe?.();
+    } catch {
+      // Ignore best-effort cleanup failures while tearing down multipart parsing.
+    }
+
+    try {
+      stream.resume?.();
+    } catch {
+      // Ignore best-effort cleanup failures while tearing down multipart parsing.
+    }
+
+    try {
+      stream.destroy?.(cleanupError);
+      cleaned += 1;
+    } catch {
+      // Ignore best-effort cleanup failures while tearing down multipart parsing.
+    }
+  }
+
+  return cleaned;
+}
 
 export function createImportsMultipartRoute(
   maxFileSizeBytes: number = DEFAULT_IMPORT_UPLOAD_LIMIT_BYTES,
@@ -48,11 +94,15 @@ export function createImportsMultipartRoute(
         fileSize: safeMaxFileSizeBytes,
       },
     });
+    const parserStream = parser as NodeJS.WritableStream & {
+      destroy?: (error?: Error) => void;
+    };
 
     const body: MultipartImportBody = {};
     let fileTask: Promise<PreparedMultipartImportUpload> | null = null;
     let settled = false;
     let quotaReleased = false;
+    const activeFileStreams = new Set<MultipartUploadFileStream>();
 
     const releaseQuota = () => {
       if (quotaReleased || !quotaSubject || reservedQuotaBytes <= 0) {
@@ -60,6 +110,28 @@ export function createImportsMultipartRoute(
       }
       quotaReleased = true;
       quotaTracker.release(quotaSubject, reservedQuotaBytes);
+    };
+
+    const cleanupTrackedFileStreams = (error?: unknown) => {
+      cleanupTrackedMultipartUploadStreamsForTests(activeFileStreams, error);
+      activeFileStreams.clear();
+    };
+
+    const stopMultipartParsing = (error?: unknown) => {
+      const cleanupError = toMultipartCleanupError(error);
+      try {
+        req.unpipe(parser);
+      } catch {
+        // Ignore best-effort request unpipe failures while tearing down multipart parsing.
+      }
+
+      try {
+        parserStream.destroy?.(cleanupError);
+      } catch {
+        // Ignore best-effort parser teardown failures while tearing down multipart parsing.
+      }
+
+      cleanupTrackedFileStreams(cleanupError);
     };
 
     if (quotaSubject && !quotaTracker.tryReserve(quotaSubject, reservedQuotaBytes)) {
@@ -95,6 +167,14 @@ export function createImportsMultipartRoute(
         return;
       }
 
+      activeFileStreams.add(file);
+      const unregisterStream = () => {
+        activeFileStreams.delete(file);
+      };
+      file.once("close", unregisterStream);
+      file.once("end", unregisterStream);
+      file.once("error", unregisterStream);
+
       fileTask = (async () => {
         const filename = String(info.filename || "").trim();
         return prepareMultipartImportUpload({ file, filename });
@@ -102,12 +182,20 @@ export function createImportsMultipartRoute(
     });
 
     parser.once("error", (error) => {
+      logger.warn("Multipart import parser error", {
+        error: error instanceof Error ? error.message : "Unknown multipart parser error",
+      });
+      stopMultipartParsing(error);
       if (fileTask) {
         void fileTask
           .then(async (upload) => {
             await cleanupPreparedMultipartImportUpload(upload);
           })
-          .catch(() => undefined);
+          .catch((cleanupError) => {
+            logger.warn("Failed to cleanup staged multipart import upload after parser error", {
+              error: cleanupError instanceof Error ? cleanupError.message : "Unknown upload cleanup failure",
+            });
+          });
       }
 
       const failure = resolveImportMultipartFailure(error);
@@ -147,12 +235,19 @@ export function createImportsMultipartRoute(
       }
     });
 
-    req.once("error", () => {
+    req.once("error", (error) => {
+      logger.warn("Multipart import request stream error", {
+        error: error instanceof Error ? error.message : "Unknown request stream error",
+      });
+      stopMultipartParsing(error);
       releaseQuota();
+      settled = true;
     });
 
     req.once("aborted", () => {
+      stopMultipartParsing(new Error("Multipart import request aborted."));
       releaseQuota();
+      settled = true;
     });
 
     req.pipe(parser);

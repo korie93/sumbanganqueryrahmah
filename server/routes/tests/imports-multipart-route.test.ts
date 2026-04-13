@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import { PassThrough } from "node:stream";
 import test from "node:test";
-import { createImportsMultipartRoute } from "../imports-multipart-route";
+import {
+  cleanupTrackedMultipartUploadStreamsForTests,
+  createImportsMultipartRoute,
+} from "../imports-multipart-route";
 import { createActiveImportUploadQuotaTracker } from "../imports-upload-quota";
 
 type MultipartPart =
@@ -254,4 +257,24 @@ test("createImportsMultipartRoute rejects multipart uploads that exceed the acti
     statusCode: 413,
   });
   quotaTracker.release("admin.user", 1024);
+});
+
+test("cleanupTrackedMultipartUploadStreamsForTests destroys tracked multipart file streams defensively", () => {
+  const lifecycleCalls: string[] = [];
+  const stream = {
+    unpipe() {
+      lifecycleCalls.push("unpipe");
+    },
+    resume() {
+      lifecycleCalls.push("resume");
+    },
+    destroy(error?: Error) {
+      lifecycleCalls.push(`destroy:${error?.message ?? "none"}`);
+    },
+  };
+
+  const cleaned = cleanupTrackedMultipartUploadStreamsForTests([stream], new Error("parser failed"));
+
+  assert.equal(cleaned, 1);
+  assert.deepEqual(lifecycleCalls, ["unpipe", "resume", "destroy:parser failed"]);
 });

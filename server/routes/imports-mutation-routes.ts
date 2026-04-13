@@ -6,6 +6,7 @@ export function registerImportsMutationRoutes(context: ImportsRouteContext) {
     app,
     importsController,
     authenticateToken,
+    importsUploadRateLimiter,
     requireRole,
     importsMultipartRoute,
   } = context;
@@ -13,6 +14,7 @@ export function registerImportsMutationRoutes(context: ImportsRouteContext) {
   app.post(
     "/api/imports",
     authenticateToken,
+    importsUploadRateLimiter,
     importsMultipartRoute,
     asyncHandler(importsController.createImport),
   );

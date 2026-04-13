@@ -13,7 +13,10 @@ import {
   bindAutoLogoutActivityListeners,
   bindAutoLogoutVisibilityChange,
 } from "@/components/auto-logout-activity-runtime";
-import { bindAutoLogoutSocket } from "@/components/auto-logout-socket-runtime";
+import {
+  bindAutoLogoutSocket,
+  disposeAutoLogoutSocket,
+} from "@/components/auto-logout-socket-runtime";
 
 interface AutoLogoutProps {
   onClientLogout: () => void | Promise<void>;
@@ -79,15 +82,7 @@ export default function AutoLogout({
   const cleanupSocket = useCallback(() => {
     clearReconnect();
 
-    if (wsRef.current) {
-      const socket = wsRef.current;
-      wsRef.current = null;
-      socket.onopen = null;
-      socket.onmessage = null;
-      socket.onclose = null;
-      socket.onerror = null;
-      socket.close();
-    }
+    disposeAutoLogoutSocket(wsRef.current, wsRef);
   }, [clearReconnect]);
 
   const runLogout = useCallback(async () => {

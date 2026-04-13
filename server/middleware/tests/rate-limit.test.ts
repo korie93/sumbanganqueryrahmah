@@ -1,9 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import express from "express";
 import type { Request } from "express";
+import { ERROR_CODES } from "../../../shared/error-codes";
+import { startTestServer, stopTestServer } from "../../routes/tests/http-test-utils";
 import {
   buildAuthRouteRateLimitSubject,
   buildRequestRateLimitFingerprint,
+  createImportsUploadRateLimiter,
   normalizeAuthRateLimitIdentifier,
 } from "../rate-limit";
 
@@ -97,4 +101,41 @@ test("buildAuthRouteRateLimitSubject ignores malformed request bodies safely", (
   });
 
   assert.equal(buildAuthRouteRateLimitSubject(malformed, "auth-login"), null);
+});
+
+test("createImportsUploadRateLimiter throttles repeated upload attempts from the same network", async () => {
+  const app = express();
+  app.post(
+    "/upload",
+    createImportsUploadRateLimiter({
+      windowMs: 60_000,
+      max: 1,
+    }),
+    (_req, res) => {
+      res.status(204).end();
+    },
+  );
+
+  const { baseUrl, server } = await startTestServer(app);
+
+  try {
+    const firstResponse = await fetch(`${baseUrl}/upload`, {
+      method: "POST",
+    });
+    const secondResponse = await fetch(`${baseUrl}/upload`, {
+      method: "POST",
+    });
+
+    assert.equal(firstResponse.status, 204);
+    assert.equal(secondResponse.status, 429);
+    assert.deepEqual(await secondResponse.json(), {
+      ok: false,
+      error: {
+        code: ERROR_CODES.IMPORT_UPLOAD_RATE_LIMITED,
+        message: "Too many import upload attempts from this network. Please wait before trying again.",
+      },
+    });
+  } finally {
+    await stopTestServer(server);
+  }
 });

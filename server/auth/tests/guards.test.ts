@@ -93,6 +93,43 @@ test("tab visibility guard caches role visibility and allows explicit cache clea
   assert.equal(nextCalls, 3);
 });
 
+test("tab visibility cache keeps the original TTL instead of extending it on cache hits", async (t) => {
+  let visibilityLookupCount = 0;
+  const nowValues = [
+    1_000_000,
+    1_000_000 + 4 * 60 * 1000,
+    1_000_000 + 5 * 60 * 1000 + 1,
+  ];
+
+  t.mock.method(Date, "now", () => nowValues.shift() ?? 1_000_000 + 5 * 60 * 1000 + 1);
+
+  const guards = createAuthGuards({
+    storage: {
+      getActivityById: async () => undefined,
+      getUser: async () => undefined,
+      getUserByUsername: async () => undefined,
+      isVisitorBanned: async () => false,
+      updateActivity: async () => undefined,
+      getRoleTabVisibility: async () => {
+        visibilityLookupCount += 1;
+        return { monitor: true };
+      },
+    },
+    secret: "guard-test-secret",
+  });
+
+  const handler = guards.requireTabAccess("monitor");
+  const request = { user: { role: "admin" } };
+  const response = createMockResponse();
+
+  await handler(request as never, response as never, () => undefined);
+  await handler(request as never, response as never, () => undefined);
+  await handler(request as never, response as never, () => undefined);
+  guards.stopTabVisibilityCacheSweep();
+
+  assert.equal(visibilityLookupCount, 2);
+});
+
 test("tab visibility cache helper evicts the least recently used role entry", () => {
   const cache = new Map([
     ["admin", { tabs: { monitor: true }, cachedAt: 100 }],
@@ -282,4 +319,60 @@ test("authenticateToken prefers the composite session snapshot when storage expo
   assert.equal(updateCalls, 1);
   assert.equal(nextCalls, 1);
   assert.equal((request as { user?: { username?: string } }).user?.username, "guard.user");
+});
+
+test("requireRole returns 401 when there is no authenticated user", () => {
+  const guards = createAuthGuards({
+    storage: {
+      getActivityById: async () => undefined,
+      getUser: async () => undefined,
+      getUserByUsername: async () => undefined,
+      isVisitorBanned: async () => false,
+      updateActivity: async () => undefined,
+      getRoleTabVisibility: async () => ({}),
+    },
+    secret: "guard-test-secret",
+  });
+
+  const response = createMockResponse();
+  let nextCalls = 0;
+
+  guards.requireRole("admin")({} as never, response as never, () => {
+    nextCalls += 1;
+  });
+  guards.stopTabVisibilityCacheSweep();
+
+  assert.equal(response.statusCode, 401);
+  assert.deepEqual(response.body, { message: "Unauthenticated" });
+  assert.equal(nextCalls, 0);
+});
+
+test("requireRole returns 403 when the authenticated user lacks the required role", () => {
+  const guards = createAuthGuards({
+    storage: {
+      getActivityById: async () => undefined,
+      getUser: async () => undefined,
+      getUserByUsername: async () => undefined,
+      isVisitorBanned: async () => false,
+      updateActivity: async () => undefined,
+      getRoleTabVisibility: async () => ({}),
+    },
+    secret: "guard-test-secret",
+  });
+
+  const response = createMockResponse();
+  let nextCalls = 0;
+
+  guards.requireRole("superuser")(
+    { user: { role: "admin" } } as never,
+    response as never,
+    () => {
+      nextCalls += 1;
+    },
+  );
+  guards.stopTabVisibilityCacheSweep();
+
+  assert.equal(response.statusCode, 403);
+  assert.deepEqual(response.body, { message: "Insufficient permissions" });
+  assert.equal(nextCalls, 0);
 });

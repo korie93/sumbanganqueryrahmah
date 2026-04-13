@@ -134,6 +134,19 @@ export const searchRateLimiter = createJsonRateLimiter({
   message: "Too many search requests. Please slow down.",
 });
 
+export function createImportsUploadRateLimiter(
+  options: Partial<Pick<JsonRateLimiterOptions, "windowMs" | "max">> = {},
+): RequestHandler {
+  return createJsonRateLimiter({
+    windowMs: options.windowMs ?? 5 * 60 * 1000,
+    max: options.max ?? 12,
+    code: ERROR_CODES.IMPORT_UPLOAD_RATE_LIMITED,
+    message: "Too many import upload attempts from this network. Please wait before trying again.",
+  });
+}
+
+export const importsUploadRateLimiter = createImportsUploadRateLimiter();
+
 export function createAuthRouteRateLimiters(): AuthRouteRateLimiters {
   return {
     loginIp: createJsonRateLimiter({

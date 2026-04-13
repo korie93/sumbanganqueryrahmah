@@ -21,11 +21,11 @@
   left: var(--floating-ai-panel-left, auto);
   right: var(--floating-ai-panel-right, var(--floating-ai-edge-gap));
   bottom: var(--floating-ai-panel-bottom, var(--floating-ai-edge-gap));
-  width: min(var(--floating-ai-panel-width, 380px), calc(100vw - (var(--floating-ai-edge-gap) * 2)));
+  width: min(var(--floating-ai-panel-width, 380px), calc(100% - (var(--floating-ai-edge-gap) * 2)));
   height: var(--floating-ai-panel-height, 420px);
-  min-width: min(260px, calc(100vw - (var(--floating-ai-edge-gap) * 2)));
+  min-width: min(260px, calc(100% - (var(--floating-ai-edge-gap) * 2)));
   min-height: 200px;
-  max-width: calc(100vw - (var(--floating-ai-edge-gap) * 2));
+  max-width: calc(100% - (var(--floating-ai-edge-gap) * 2));
   max-height: calc(100dvh - 5rem);
 }
 
@@ -80,9 +80,9 @@
 
 @media (min-width: 768px) {
   .floatingPanelShell {
-    min-width: min(360px, calc(100vw - (var(--floating-ai-edge-gap) * 2)));
+    min-width: min(360px, calc(100% - (var(--floating-ai-edge-gap) * 2)));
     min-height: 452px;
-    max-width: min(420px, calc(100vw - (var(--floating-ai-edge-gap) * 2)));
+    max-width: min(420px, calc(100% - (var(--floating-ai-edge-gap) * 2)));
     max-height: calc(100dvh - 6rem);
   }
 }

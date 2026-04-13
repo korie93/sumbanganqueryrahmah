@@ -17,6 +17,11 @@ import {
   readAIChatErrorResponse,
   readAIChatSuccessPayload,
 } from "./ai-chat-utils";
+import {
+  canApplyAIChatUiUpdate,
+  canRetryAIChatRequest,
+  isActiveAIChatSession,
+} from "./ai-chat-session-guards";
 import { useAIChatExternalEffects } from "./useAIChatExternalEffects";
 import { useAIChatRuntimeRefs } from "./useAIChatRuntimeRefs";
 import { useAIChatTypingAction } from "./useAIChatTypingAction";
@@ -122,12 +127,12 @@ export function useAIChatState({
   const startSlowNoticeWatch = useCallback((sessionId: number) => {
     clearSlowNoticeTimer();
     slowNoticeTimerRef.current = window.setTimeout(() => {
-      if (sessionId !== sessionRef.current || !processingRef.current) {
+      if (!canRetryAIChatRequest(sessionId, sessionRef, isMountedRef, processingRef)) {
         return;
       }
       setSlowNotice(true);
     }, 1500);
-  }, [clearSlowNoticeTimer]);
+  }, [clearSlowNoticeTimer, isMountedRef, processingRef, sessionRef]);
 
   const finishAsyncCycle = useCallback((options?: {
     clearStreamingText?: boolean;
@@ -150,7 +155,7 @@ export function useAIChatState({
   }, [clearSlowNoticeTimer, setIsThinking]);
 
   const executeSearch = useCallback(async (text: string, sessionId: number, retryCount = 0) => {
-    if (sessionId !== sessionRef.current) {
+    if (!isActiveAIChatSession(sessionId, sessionRef)) {
       return;
     }
 
@@ -165,7 +170,7 @@ export function useAIChatState({
       timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
       const response = await searchAI(text, { signal: controller.signal });
 
-      if (sessionId !== sessionRef.current) {
+      if (!isActiveAIChatSession(sessionId, sessionRef)) {
         return;
       }
 
@@ -175,22 +180,26 @@ export function useAIChatState({
       }
 
       const data = await readAIChatSuccessPayload(response, DEFAULT_AI_CHAT_ERROR_MESSAGE);
-      if (sessionId !== sessionRef.current) {
+      if (!isActiveAIChatSession(sessionId, sessionRef)) {
         return;
       }
 
-      if (gateWaitMs > 0) {
+      if (gateWaitMs > 0 && canApplyAIChatUiUpdate(sessionId, sessionRef, isMountedRef)) {
         setGateNotice(formatAIChatQueuedNotice(gateWaitMs));
       }
 
       if (data?.processing) {
-        setAiStatus("PROCESSING");
+        if (canApplyAIChatUiUpdate(sessionId, sessionRef, isMountedRef)) {
+          setAiStatus("PROCESSING");
+        }
         if (retryCount >= AI_CHAT_MAX_RETRIES) {
-          appendMessage({
-            role: "assistant",
-            content: "Sistem masih memproses. Sila cuba semula sebentar lagi.",
-            timestamp: new Date().toISOString(),
-          });
+          if (canApplyAIChatUiUpdate(sessionId, sessionRef, isMountedRef)) {
+            appendMessage({
+              role: "assistant",
+              content: "Sistem masih memproses. Sila cuba semula sebentar lagi.",
+              timestamp: new Date().toISOString(),
+            });
+          }
           finishAsyncCycle({
             clearStreamingText: true,
             gateNotice: null,
@@ -201,6 +210,9 @@ export function useAIChatState({
         waitingRetry = true;
         const timerId = window.setTimeout(() => {
           unregisterRetryTimer(timerId);
+          if (!canRetryAIChatRequest(sessionId, sessionRef, isMountedRef, processingRef)) {
+            return;
+          }
           void executeSearch(text, sessionId, retryCount + 1);
         }, AI_CHAT_RETRY_MS + retryCount * 500);
         registerRetryTimer(timerId);
@@ -215,7 +227,7 @@ export function useAIChatState({
       if (err?.name === "AbortError") {
         return;
       }
-      if (sessionId !== sessionRef.current) {
+      if (!canApplyAIChatUiUpdate(sessionId, sessionRef, isMountedRef)) {
         return;
       }
       const gateNotice = error instanceof AIChatRequestError ? error.gateNotice : null;
@@ -235,7 +247,11 @@ export function useAIChatState({
       if (requestControllerRef.current === controller) {
         requestControllerRef.current = null;
       }
-      if (!waitingRetry && !startedTyping && sessionId === sessionRef.current) {
+      if (
+        !waitingRetry
+        && !startedTyping
+        && canApplyAIChatUiUpdate(sessionId, sessionRef, isMountedRef)
+      ) {
         finishAsyncCycle();
       }
     }
@@ -243,7 +259,10 @@ export function useAIChatState({
     abortActiveRequest,
     appendMessage,
     finishAsyncCycle,
+    isMountedRef,
+    processingRef,
     registerRetryTimer,
+    sessionRef,
     startTyping,
     timeoutMs,
     unregisterRetryTimer,

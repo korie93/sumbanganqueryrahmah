@@ -147,7 +147,6 @@ export function createAuthGuards(options: CreateAuthGuardsOptions) {
     const cached = tabVisibilityCache.get(role);
     if (cached) {
       if (now - cached.cachedAt < TAB_VISIBILITY_CACHE_TTL_MS) {
-        cached.cachedAt = now;
         return cached.tabs;
       }
 
@@ -321,7 +320,11 @@ export function createAuthGuards(options: CreateAuthGuardsOptions) {
 
   const requireRole = (...roles: string[]): RequestHandler => {
     return (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
-      if (!req.user || !roles.includes(req.user.role)) {
+      if (!req.user) {
+        return res.status(401).json({ message: "Unauthenticated" });
+      }
+
+      if (!roles.includes(req.user.role)) {
         return res.status(403).json({ message: "Insufficient permissions" });
       }
       return next();
