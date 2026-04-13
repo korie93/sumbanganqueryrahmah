@@ -91,7 +91,20 @@ export type ImportDataPageResult = {
   page: number;
   limit: number;
   pageSize: number;
+  offset: number;
   nextCursor: string | null;
+  pagination: {
+    mode: "hybrid";
+    page: number;
+    pageSize: number;
+    limit: number;
+    offset: number;
+    total: number;
+    totalPages: number;
+    nextCursor: string | null;
+    hasNextPage: boolean;
+    hasPreviousPage: boolean;
+  };
 };
 
 export type CreateImportBody = {

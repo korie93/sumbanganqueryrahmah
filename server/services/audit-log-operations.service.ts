@@ -30,14 +30,20 @@ export class AuditLogOperationsService {
         ? "oldest"
         : "newest",
     });
+    const offset = (result.page - 1) * result.pageSize;
 
     return {
       logs: result.logs,
       pagination: {
+        mode: "offset" as const,
         page: result.page,
         pageSize: result.pageSize,
+        limit: result.pageSize,
+        offset,
         total: result.total,
         totalPages: result.totalPages,
+        hasNextPage: result.page < result.totalPages,
+        hasPreviousPage: result.page > 1,
       },
     };
   }

@@ -1,11 +1,20 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { Request } from "express";
-import { buildRequestRateLimitFingerprint } from "../rate-limit";
+import {
+  buildAuthRouteRateLimitSubject,
+  buildRequestRateLimitFingerprint,
+  normalizeAuthRateLimitIdentifier,
+} from "../rate-limit";
 
-function createRequest(headers: Record<string, string | undefined> = {}, ip = "203.0.113.10") {
+function createRequest(
+  headers: Record<string, string | undefined> = {},
+  ip = "203.0.113.10",
+  body: Record<string, unknown> | undefined = undefined,
+) {
   return {
     ip,
+    body,
     socket: {
       remoteAddress: "10.0.0.10",
     },
@@ -53,4 +62,39 @@ test("buildRequestRateLimitFingerprint avoids duplicating the direct peer when i
   } as unknown as Request;
 
   assert.deepEqual(buildRequestRateLimitFingerprint(req), ["198.51.100.8"]);
+});
+
+test("normalizeAuthRateLimitIdentifier trims and lowercases supported identifiers", () => {
+  assert.equal(normalizeAuthRateLimitIdentifier(" Admin.User "), "admin.user");
+  assert.equal(normalizeAuthRateLimitIdentifier(""), null);
+  assert.equal(normalizeAuthRateLimitIdentifier(123), null);
+});
+
+test("buildAuthRouteRateLimitSubject keeps auth identifiers stable across casing and field aliases", () => {
+  const fromUsername = createRequest({}, "203.0.113.10", {
+    username: " Admin.User ",
+  });
+  const fromIdentifier = createRequest({}, "203.0.113.10", {
+    identifier: "admin.user",
+  });
+  const fromEmail = createRequest({}, "203.0.113.10", {
+    email: " ADMIN.USER ",
+  });
+
+  assert.equal(
+    buildAuthRouteRateLimitSubject(fromUsername, "auth-login"),
+    buildAuthRouteRateLimitSubject(fromIdentifier, "auth-login"),
+  );
+  assert.equal(
+    buildAuthRouteRateLimitSubject(fromIdentifier, "auth-recovery:/api/auth/request-password-reset"),
+    buildAuthRouteRateLimitSubject(fromEmail, "auth-recovery:/api/auth/request-password-reset"),
+  );
+});
+
+test("buildAuthRouteRateLimitSubject ignores malformed request bodies safely", () => {
+  const malformed = createRequest({}, "203.0.113.10", {
+    username: 42,
+  });
+
+  assert.equal(buildAuthRouteRateLimitSubject(malformed, "auth-login"), null);
 });

@@ -427,6 +427,7 @@ test("GET /api/imports returns imports with row counts", async () => {
     assert.equal(payload.imports[0].id, "import-1");
     assert.equal(payload.imports[0].rowCount, 2);
     assert.deepEqual(payload.pagination, {
+      mode: "cursor",
       limit: 100,
       pageSize: 100,
       nextCursor: null,
@@ -459,6 +460,7 @@ test("GET /api/imports forwards cursor search and date filters", async () => {
     assert.equal(payload.imports.length, 1);
     assert.equal(payload.imports[0].id, "import-2");
     assert.deepEqual(payload.pagination, {
+      mode: "cursor",
       limit: 1,
       pageSize: 1,
       nextCursor: null,

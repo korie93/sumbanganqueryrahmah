@@ -19,10 +19,15 @@ export interface AuditLogStats {
 export interface AuditLogsResponse {
   logs: AuditLogRecord[];
   pagination: {
+    mode: "offset";
     page: number;
     pageSize: number;
+    limit: number;
+    offset: number;
     total: number;
     totalPages: number;
+    hasNextPage: boolean;
+    hasPreviousPage: boolean;
   };
 }
 

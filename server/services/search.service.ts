@@ -26,6 +26,31 @@ type SearchRepositoryPort = Pick<
   | "searchSimpleDataRows"
 >;
 
+function buildOffsetPaginationMeta(params: {
+  page: number;
+  limit: number;
+  total: number;
+  offset?: number;
+}) {
+  const page = Math.max(1, params.page);
+  const limit = Math.max(1, params.limit);
+  const total = Math.max(0, params.total);
+  const totalPages = Math.max(1, Math.ceil(total / limit));
+  const offset = Math.max(0, params.offset ?? ((page - 1) * limit));
+
+  return {
+    mode: "offset" as const,
+    page,
+    pageSize: limit,
+    limit,
+    offset,
+    total,
+    totalPages,
+    hasNextPage: page < totalPages,
+    hasPreviousPage: offset > 0,
+  };
+}
+
 function buildRowsWithSource(rows: SearchGlobalRow[]) {
   return rows.map((row) => {
     const base = row.jsonDataJsonb && typeof row.jsonDataJsonb === "object"
@@ -65,6 +90,12 @@ export class SearchService {
     const maxLimit = params.isDbProtected ? Math.min(params.maxTotal, 80) : params.maxTotal;
     const limit = Math.max(10, Math.min(params.requestedLimit, maxLimit));
     const offset = (params.page - 1) * limit;
+    const buildPagination = (total: number) => buildOffsetPaginationMeta({
+      page: params.page,
+      limit,
+      total,
+      offset,
+    });
 
     if (offset >= params.maxTotal) {
       return {
@@ -75,6 +106,8 @@ export class SearchService {
         page: params.page,
         limit,
         pageSize: limit,
+        offset,
+        pagination: buildPagination(params.maxTotal),
       };
     }
 
@@ -84,6 +117,11 @@ export class SearchService {
         rows: [],
         results: [],
         total: 0,
+        page: params.page,
+        limit,
+        pageSize: limit,
+        offset,
+        pagination: buildPagination(0),
       };
     }
 
@@ -105,6 +143,13 @@ export class SearchService {
       page: params.page,
       limit: effectiveLimit,
       pageSize: effectiveLimit,
+      offset,
+      pagination: buildOffsetPaginationMeta({
+        page: params.page,
+        limit: effectiveLimit,
+        total: Math.min(result.total, params.maxTotal),
+        offset,
+      }),
     };
   }
 
@@ -137,6 +182,12 @@ export class SearchService {
   }) {
     const limit = Math.max(10, Math.min(params.requestedLimit, params.maxTotal));
     const offset = (params.page - 1) * limit;
+    const buildPagination = (total: number) => buildOffsetPaginationMeta({
+      page: params.page,
+      limit,
+      total,
+      offset,
+    });
 
     if (offset >= params.maxTotal) {
       return {
@@ -146,6 +197,8 @@ export class SearchService {
         page: params.page,
         limit,
         pageSize: limit,
+        offset,
+        pagination: buildPagination(params.maxTotal),
       };
     }
 
@@ -167,6 +220,13 @@ export class SearchService {
       page: params.page,
       limit: effectiveLimit,
       pageSize: effectiveLimit,
+      offset,
+      pagination: buildOffsetPaginationMeta({
+        page: params.page,
+        limit: effectiveLimit,
+        total: Math.min(rawResult.total || 0, params.maxTotal),
+        offset,
+      }),
     };
   }
 }

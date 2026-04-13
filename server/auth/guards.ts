@@ -1,4 +1,5 @@
 import type { NextFunction, Request, RequestHandler, Response } from "express";
+import type { User, UserActivity } from "../../shared/schema-postgres";
 import type { IStorage } from "../storage-postgres";
 import { getSessionSecret } from "../config/security";
 import { verifySessionJwt } from "./session-jwt";
@@ -33,7 +34,13 @@ type CreateAuthGuardsOptions = {
     | "isVisitorBanned"
     | "updateActivity"
     | "getRoleTabVisibility"
-  >;
+  > & {
+    getAuthenticatedSessionSnapshot?: (activityId: string) => Promise<{
+      activity: UserActivity;
+      user?: User | undefined;
+      isVisitorBanned: boolean;
+    } | undefined>;
+  };
   secret?: string;
 };
 
@@ -160,6 +167,49 @@ export function createAuthGuards(options: CreateAuthGuardsOptions) {
     clearInterval(tabVisibilitySweepHandle);
   }
 
+  async function loadAuthenticatedSessionSnapshot(decoded: AuthenticatedUser): Promise<{
+    activity: UserActivity | undefined;
+    user?: User | undefined;
+    isVisitorBanned: boolean;
+  }> {
+    if (storage.getAuthenticatedSessionSnapshot) {
+      const snapshot = await storage.getAuthenticatedSessionSnapshot(decoded.activityId);
+      if (snapshot) {
+        return {
+          activity: snapshot.activity,
+          user: snapshot.user,
+          isVisitorBanned: snapshot.isVisitorBanned,
+        };
+      }
+    }
+
+    const activity = await storage.getActivityById(decoded.activityId);
+    if (!activity) {
+      return {
+        activity: undefined,
+        user: undefined,
+        isVisitorBanned: false,
+      };
+    }
+
+    const [isVisitorBanned, user] = await Promise.all([
+      storage.isVisitorBanned(
+        activity.fingerprint ?? null,
+        activity.ipAddress ?? null,
+        activity.username || decoded.username,
+      ),
+      activity.userId
+        ? storage.getUser(activity.userId)
+        : storage.getUserByUsername(activity.username || decoded.username),
+    ]);
+
+    return {
+      activity,
+      user,
+      isVisitorBanned,
+    };
+  }
+
   const authenticateToken: RequestHandler = async (
     req: AuthenticatedRequest,
     res: Response,
@@ -174,7 +224,7 @@ export function createAuthGuards(options: CreateAuthGuardsOptions) {
 
     try {
       const decoded = verifySessionJwt<AuthenticatedUser>(token, secret) as AuthenticatedUser;
-      const activity = await storage.getActivityById(decoded.activityId);
+      const { activity, user, isVisitorBanned } = await loadAuthenticatedSessionSnapshot(decoded);
 
       if (!activity || activity.isActive === false || activity.logoutTime !== null) {
         clearAuthSessionCookie(res);
@@ -184,12 +234,6 @@ export function createAuthGuards(options: CreateAuthGuardsOptions) {
         });
       }
 
-      const isVisitorBanned = await storage.isVisitorBanned(
-        activity.fingerprint ?? null,
-        activity.ipAddress ?? null,
-        activity.username || decoded.username,
-      );
-
       if (isVisitorBanned) {
         clearAuthSessionCookie(res);
         return res.status(401).json({
@@ -197,10 +241,6 @@ export function createAuthGuards(options: CreateAuthGuardsOptions) {
           forceLogout: true,
         });
       }
-
-      const user = activity.userId
-        ? await storage.getUser(activity.userId)
-        : await storage.getUserByUsername(activity.username || decoded.username);
 
       if (!user) {
         await storage.updateActivity(decoded.activityId, {

@@ -77,6 +77,9 @@ export class ImportsServiceReadOperations {
           page: effectivePage + 1,
         })
       : null;
+    const logicalOffset = Math.max(0, (effectivePage - 1) * limit);
+    const total = result.total || 0;
+    const totalPages = Math.max(1, Math.ceil(total / limit));
     const resolvedHeaders = headers.length > 0
       ? headers
       : Array.from(
@@ -105,7 +108,20 @@ export class ImportsServiceReadOperations {
       page: effectivePage,
       limit,
       pageSize: limit,
+      offset: logicalOffset,
       nextCursor,
+      pagination: {
+        mode: "hybrid",
+        page: effectivePage,
+        pageSize: limit,
+        limit,
+        offset: logicalOffset,
+        total,
+        totalPages,
+        nextCursor,
+        hasNextPage: nextCursor !== null,
+        hasPreviousPage: effectivePage > 1,
+      },
     };
   }
 

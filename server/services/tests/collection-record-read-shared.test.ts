@@ -32,6 +32,7 @@ test("collection record read shared helpers normalize booleans, validation filte
       nextCursor: "next-cursor",
     }),
     {
+      mode: "hybrid",
       page: 2,
       pageSize: 25,
       total: 101,

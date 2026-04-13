@@ -3,9 +3,14 @@ import type {
   User,
   UserActivity,
 } from "../../../shared/schema-postgres";
+import type { AuthenticatedSessionSnapshot } from "../../repositories/activity.repository";
 import { PostgresImportsSearchStorage } from "./postgres-imports-search-storage";
 
 export class PostgresActivityStorage extends PostgresImportsSearchStorage {
+  async getAuthenticatedSessionSnapshot(activityId: string): Promise<AuthenticatedSessionSnapshot | undefined> {
+    return this.activityRepository.getAuthenticatedSessionSnapshot(activityId);
+  }
+
   async createActivity(data: InsertUserActivity): Promise<UserActivity> {
     return this.activityRepository.createActivity(data);
   }

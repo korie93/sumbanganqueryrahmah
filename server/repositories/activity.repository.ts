@@ -6,6 +6,7 @@ import {
   isVisitorBanned,
   unbanVisitor,
 } from "./activity-repository-ban-operations";
+import { getAuthenticatedSessionSnapshot } from "./activity-repository-auth-guard-operations";
 import {
   createActivity,
   deactivateUserActivities,
@@ -23,6 +24,7 @@ import {
 import type {
   ActivityRepositoryOptions,
   ActivityWithStatus,
+  AuthenticatedSessionSnapshot,
   BannedUserWithInfo,
 } from "./activity-repository-shared";
 
@@ -42,6 +44,10 @@ export class ActivityRepository {
   readonly deactivateUserActivities = deactivateUserActivities;
   readonly deactivateUserSessionsByFingerprint = deactivateUserSessionsByFingerprint;
   readonly getBannedUsers = getBannedUsers;
+
+  async getAuthenticatedSessionSnapshot(activityId: string): Promise<AuthenticatedSessionSnapshot | undefined> {
+    return getAuthenticatedSessionSnapshot(this.options, activityId);
+  }
 
   async isVisitorBanned(
     fingerprint?: string | null,
@@ -80,4 +86,11 @@ export class ActivityRepository {
   }
 }
 
-export type { ActivityRepositoryOptions, ActivityWithStatus, BannedUserWithInfo, InsertUserActivity, UserActivity };
+export type {
+  ActivityRepositoryOptions,
+  ActivityWithStatus,
+  AuthenticatedSessionSnapshot,
+  BannedUserWithInfo,
+  InsertUserActivity,
+  UserActivity,
+};

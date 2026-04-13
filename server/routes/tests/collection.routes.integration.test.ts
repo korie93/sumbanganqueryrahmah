@@ -873,6 +873,7 @@ test("GET /api/collection/list applies pagination, receipt review filters, and u
     assert.equal(payload.limit, 20);
     assert.equal(payload.offset, 40);
     assert.deepEqual(payload.pagination, {
+      mode: "hybrid",
       page: 3,
       pageSize: 20,
       total: 1,
@@ -1019,6 +1020,7 @@ test("GET /api/collection/list returns nextCursor and accepts cursor-based follo
     assert.equal(firstPayload.total, 3);
     assert.equal(typeof firstPayload.nextCursor, "string");
     assert.deepEqual(firstPayload.pagination, {
+      mode: "hybrid",
       page: 1,
       pageSize: 2,
       total: 3,
@@ -1042,6 +1044,7 @@ test("GET /api/collection/list returns nextCursor and accepts cursor-based follo
     assert.equal(secondPayload.offset, 2);
     assert.equal(secondPayload.nextCursor, null);
     assert.deepEqual(secondPayload.pagination, {
+      mode: "hybrid",
       page: 2,
       pageSize: 2,
       total: 3,
@@ -2039,6 +2042,7 @@ test("GET /api/collection/nickname-summary honors summaryOnly and avoids loading
     assert.equal(payload.totalAmount, 450.5);
     assert.deepEqual(payload.records, []);
     assert.deepEqual(payload.pagination, {
+      mode: "hybrid",
       page: 1,
       pageSize: 250,
       total: 3,
@@ -2092,6 +2096,7 @@ test("GET /api/collection/nickname-summary clamps detail-row loading to a safer 
     assert.equal(payload.offset, 12);
     assert.equal(payload.records.length, 1);
     assert.deepEqual(payload.pagination, {
+      mode: "hybrid",
       page: 1,
       pageSize: 250,
       total: 3,
@@ -2158,6 +2163,7 @@ test("GET /api/collection/nickname-summary returns an empty payload immediately 
     assert.equal(payload.totalAmount, 0);
     assert.deepEqual(payload.records, []);
     assert.deepEqual(payload.pagination, {
+      mode: "hybrid",
       page: 1,
       pageSize: 250,
       total: 0,

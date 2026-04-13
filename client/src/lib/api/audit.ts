@@ -1,4 +1,6 @@
 import { apiRequest } from "../api-client";
+import { auditLogsResponseSchema } from "@shared/api-contracts";
+import { parseApiJson } from "./contract";
 
 export async function getAuditLogs(params?: {
   page?: number | undefined;
@@ -23,7 +25,7 @@ export async function getAuditLogs(params?: {
   if (params?.sortBy) query.set("sortBy", params.sortBy);
   const suffix = query.size > 0 ? `?${query.toString()}` : "";
   const response = await apiRequest("GET", `/api/audit-logs${suffix}`);
-  return response.json();
+  return parseApiJson(response, auditLogsResponseSchema, "/api/audit-logs");
 }
 
 export async function getAuditLogStats() {

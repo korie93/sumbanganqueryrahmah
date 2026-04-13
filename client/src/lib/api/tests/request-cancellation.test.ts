@@ -316,7 +316,20 @@ test("getImportData forwards AbortSignal and rejects on abort", async () => {
             page: 2,
             limit: 50,
             pageSize: 50,
+            offset: 50,
             nextCursor: null,
+            pagination: {
+              mode: "hybrid",
+              page: 2,
+              pageSize: 50,
+              limit: 50,
+              offset: 50,
+              total: 0,
+              totalPages: 1,
+              nextCursor: null,
+              hasNextPage: false,
+              hasPreviousPage: true,
+            },
           }),
         );
       }, 50);
@@ -397,6 +410,7 @@ test("saved import API wrappers forward AbortSignal", async () => {
       return jsonResponse({
         imports: [],
         pagination: {
+          mode: "cursor",
           limit: 50,
           pageSize: 50,
           nextCursor: null,
@@ -940,10 +954,49 @@ test("search API wrappers forward AbortSignal", async () => {
 
     const url = String(input);
     if (url === "/api/search/global?q=test&page=2&pageSize=25") {
-      return jsonResponse({ results: [], total: 0, page: 2, limit: 25, pageSize: 25 });
+      return jsonResponse({
+        columns: [],
+        rows: [],
+        results: [],
+        total: 0,
+        page: 2,
+        limit: 25,
+        pageSize: 25,
+        offset: 25,
+        pagination: {
+          mode: "offset",
+          page: 2,
+          pageSize: 25,
+          limit: 25,
+          offset: 25,
+          total: 0,
+          totalPages: 1,
+          hasNextPage: false,
+          hasPreviousPage: true,
+        },
+      });
     }
     if (url === "/api/search/advanced") {
-      return jsonResponse({ results: [], total: 0, page: 1, limit: 50, pageSize: 50 });
+      return jsonResponse({
+        results: [],
+        headers: [],
+        total: 0,
+        page: 1,
+        limit: 50,
+        pageSize: 50,
+        offset: 0,
+        pagination: {
+          mode: "offset",
+          page: 1,
+          pageSize: 50,
+          limit: 50,
+          offset: 0,
+          total: 0,
+          totalPages: 1,
+          hasNextPage: false,
+          hasPreviousPage: false,
+        },
+      });
     }
     if (url === "/api/search/columns") {
       return jsonResponse([]);

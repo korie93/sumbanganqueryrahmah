@@ -106,6 +106,7 @@ export function createImportsController(deps: CreateImportsControllerDeps) {
       return res.json({
         imports: result.items,
         pagination: {
+          mode: "cursor" as const,
           limit: result.limit,
           pageSize: result.limit,
           nextCursor: result.nextCursor,

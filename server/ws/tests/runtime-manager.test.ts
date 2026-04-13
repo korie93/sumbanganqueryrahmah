@@ -53,13 +53,28 @@ function createWsToken(activityId: string) {
   return jwt.sign({ activityId }, TEST_SECRET, { algorithm: "HS256" });
 }
 
-type RuntimeConnectionRequest = Pick<IncomingMessage, "url" | "headers">;
+type RuntimeConnectionRequest = Pick<IncomingMessage, "url" | "headers" | "socket">;
 
-function createConnectionRequest(token?: string): RuntimeConnectionRequest {
+function createConnectionRequest(
+  token?: string,
+  options?: {
+    host?: string;
+    origin?: string;
+    forwardedHost?: string;
+    forwardedProto?: string;
+    encrypted?: boolean;
+  },
+): RuntimeConnectionRequest {
   const headers: Record<string, string> = {
-    host: "example.test",
-    origin: "http://example.test",
+    host: options?.host ?? "example.test",
+    origin: options?.origin ?? "http://example.test",
   };
+  if (options?.forwardedHost) {
+    headers["x-forwarded-host"] = options.forwardedHost;
+  }
+  if (options?.forwardedProto) {
+    headers["x-forwarded-proto"] = options.forwardedProto;
+  }
   if (token) {
     headers.cookie = `sqr_auth=${encodeURIComponent(token)}`;
   }
@@ -67,6 +82,9 @@ function createConnectionRequest(token?: string): RuntimeConnectionRequest {
   return {
     url: "/ws",
     headers,
+    socket: ({
+      encrypted: options?.encrypted ?? false,
+    } as unknown) as IncomingMessage["socket"],
   };
 }
 
@@ -77,6 +95,9 @@ function createQueryTokenConnectionRequest(token: string): RuntimeConnectionRequ
       host: "example.test",
       origin: "http://example.test",
     },
+    socket: ({
+      encrypted: false,
+    } as unknown) as IncomingMessage["socket"],
   };
 }
 
@@ -88,6 +109,9 @@ function createCrossOriginConnectionRequest(token: string): RuntimeConnectionReq
       host: "example.test",
       origin: "https://evil.example",
     },
+    socket: ({
+      encrypted: true,
+    } as unknown) as IncomingMessage["socket"],
   };
 }
 
@@ -453,6 +477,44 @@ test("runtime manager rejects cross-origin browser handshakes", async () => {
       "connection",
       socket as unknown as WebSocket,
       createCrossOriginConnectionRequest(createWsToken("activity-cross-origin")),
+    );
+    await flushAsyncWork();
+
+    assert.equal(lookupCalls, 0);
+    assert.equal(providedMap.size, 0);
+    assert.equal(socket.closeCalls, 1);
+  } finally {
+    wss.emit("close");
+  }
+});
+
+test("runtime manager rejects browser handshakes when the origin protocol mismatches the request protocol", async () => {
+  const wss = new FakeWebSocketServer();
+  const providedMap = new Map<string, WebSocket>();
+  const socket = new FakeWebSocket();
+  let lookupCalls = 0;
+
+  createRuntimeWebSocketManager({
+    wss: wss as unknown as import("ws").WebSocketServer,
+    storage: {
+      getActivityById: async () => {
+        lookupCalls += 1;
+        return undefined;
+      },
+      clearCollectionNicknameSessionByActivity: async () => undefined,
+    },
+    secret: TEST_SECRET,
+    connectedClients: providedMap,
+  });
+
+  try {
+    wss.emit(
+      "connection",
+      socket as unknown as WebSocket,
+      createConnectionRequest(createWsToken("activity-proto-mismatch"), {
+        origin: "https://example.test",
+        encrypted: false,
+      }),
     );
     await flushAsyncWork();
 

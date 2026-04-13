@@ -131,6 +131,7 @@ export type UpdateCollectionPayload = Partial<CreateCollectionPayload> & {
 };
 
 export type CollectionPaginationMeta = {
+  mode: "hybrid";
   page: number;
   pageSize: number;
   total: number;

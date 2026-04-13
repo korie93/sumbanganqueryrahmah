@@ -8,6 +8,12 @@ export type ActivityRepositoryOptions = {
 
 export type ActivityWithStatus = UserActivity & { status: string };
 
+export type AuthenticatedSessionSnapshot = {
+  activity: UserActivity;
+  user?: User | undefined;
+  isVisitorBanned: boolean;
+};
+
 export type BannedUserWithInfo = User & {
   banInfo?: { ipAddress: string | null; browser: string | null; bannedAt: Date | null } | undefined;
 };

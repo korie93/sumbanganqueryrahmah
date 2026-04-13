@@ -20,7 +20,7 @@ export function resolveInitialAuditLogsLayoutState(width?: number) {
 }
 
 export function normalizeAuditLogsPagination(
-  pagination: AuditLogsResponse["pagination"] | null | undefined,
+  pagination: Pick<AuditLogsResponse["pagination"], "page" | "pageSize" | "total" | "totalPages"> | null | undefined,
   fallbackPage: number,
   fallbackPageSize: number,
   itemCount: number,

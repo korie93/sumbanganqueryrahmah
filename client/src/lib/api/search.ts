@@ -1,9 +1,16 @@
-import { apiRequest, createApiHeaders } from "../api-client";
-import { getAuthHeader } from "./shared";
+import { z } from "zod";
+import { apiRequest } from "../api-client";
+import {
+  advancedSearchResponseSchema,
+  searchGlobalResponseSchema,
+} from "@shared/api-contracts";
+import { parseApiJson } from "./contract";
 
 type SearchRequestOptions = {
   signal?: AbortSignal | undefined;
 };
+
+const searchColumnsResponseSchema = z.array(z.string().trim().min(1));
 
 export async function searchData(
   query: string,
@@ -11,23 +18,13 @@ export async function searchData(
   pageSize: number = 50,
   options?: SearchRequestOptions,
 ) {
-  const res = await fetch(
+  const response = await apiRequest(
+    "GET",
     `/api/search/global?q=${encodeURIComponent(query)}&page=${page}&pageSize=${pageSize}`,
-    {
-      credentials: "include",
-      headers: createApiHeaders({
-        ...getAuthHeader(),
-      }),
-      signal: options?.signal ?? null,
-    },
+    undefined,
+    options,
   );
-
-  if (!res.ok) {
-    const err = await res.json();
-    throw new Error(err.message || "Search failed");
-  }
-
-  return res.json();
+  return parseApiJson(response, searchGlobalResponseSchema, "/api/search/global");
 }
 
 export interface SearchFilter {
@@ -49,10 +46,10 @@ export async function advancedSearchData(
     { filters, logic, page, pageSize },
     options,
   );
-  return response.json();
+  return parseApiJson(response, advancedSearchResponseSchema, "/api/search/advanced");
 }
 
 export async function getSearchColumns(options?: SearchRequestOptions) {
   const response = await apiRequest("GET", "/api/search/columns", undefined, options);
-  return response.json();
+  return parseApiJson(response, searchColumnsResponseSchema, "/api/search/columns");
 }

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import jwt from "jsonwebtoken";
 import {
   createAuthGuards,
   evictOldestTabVisibilityCacheEntryForTests,
@@ -165,4 +166,120 @@ test("tab visibility cache registers an unrefed sweep interval and clears it ide
   guards.stopTabVisibilityCacheSweep();
 
   assert.equal(clearIntervalMock.mock.callCount(), 1);
+});
+
+test("authenticateToken prefers the composite session snapshot when storage exposes it", async () => {
+  const secret = "guard-test-secret";
+  let snapshotCalls = 0;
+  let activityCalls = 0;
+  let userCalls = 0;
+  let bannedCalls = 0;
+  let updateCalls = 0;
+
+  const guards = createAuthGuards({
+    storage: {
+      getAuthenticatedSessionSnapshot: async () => {
+        snapshotCalls += 1;
+        return {
+          activity: {
+            id: "activity-1",
+            userId: "user-1",
+            username: "guard.user",
+            role: "admin",
+            pcName: null,
+            browser: "Chrome",
+            fingerprint: "fingerprint-1",
+            ipAddress: "203.0.113.10",
+            loginTime: new Date("2026-04-13T00:00:00.000Z"),
+            logoutTime: null,
+            lastActivityTime: new Date("2026-04-13T00:05:00.000Z"),
+            isActive: true,
+            logoutReason: null,
+          },
+          user: {
+            id: "user-1",
+            username: "guard.user",
+            passwordHash: "hashed",
+            fullName: "Guard User",
+            email: "guard.user@example.test",
+            role: "admin",
+            status: "active",
+            mustChangePassword: false,
+            passwordResetBySuperuser: false,
+            createdBy: "system",
+            createdAt: new Date("2026-04-01T00:00:00.000Z"),
+            updatedAt: new Date("2026-04-01T00:00:00.000Z"),
+            passwordChangedAt: null,
+            activatedAt: null,
+            lastLoginAt: null,
+            isBanned: false,
+            twoFactorEnabled: false,
+            twoFactorSecretEncrypted: null,
+            twoFactorConfiguredAt: null,
+            failedLoginAttempts: 0,
+            lockedAt: null,
+            lockedReason: null,
+            lockedBySystem: false,
+          },
+          isVisitorBanned: false,
+        };
+      },
+      getActivityById: async () => {
+        activityCalls += 1;
+        return undefined;
+      },
+      getUser: async () => {
+        userCalls += 1;
+        return undefined;
+      },
+      getUserByUsername: async () => {
+        userCalls += 1;
+        return undefined;
+      },
+      isVisitorBanned: async () => {
+        bannedCalls += 1;
+        return false;
+      },
+      updateActivity: async () => {
+        updateCalls += 1;
+        return undefined;
+      },
+      getRoleTabVisibility: async () => ({}),
+    },
+    secret,
+  });
+
+  const token = jwt.sign(
+    {
+      userId: "user-1",
+      username: "guard.user",
+      role: "admin",
+      activityId: "activity-1",
+    },
+    secret,
+    { expiresIn: "24h" },
+  );
+
+  const request = {
+    headers: {
+      cookie: `sqr_auth=${encodeURIComponent(token)}`,
+    },
+    method: "GET",
+    path: "/api/me",
+  };
+  const response = createMockResponse();
+  let nextCalls = 0;
+
+  await guards.authenticateToken(request as never, response as never, () => {
+    nextCalls += 1;
+  });
+  guards.stopTabVisibilityCacheSweep();
+
+  assert.equal(snapshotCalls, 1);
+  assert.equal(activityCalls, 0);
+  assert.equal(userCalls, 0);
+  assert.equal(bannedCalls, 0);
+  assert.equal(updateCalls, 1);
+  assert.equal(nextCalls, 1);
+  assert.equal((request as { user?: { username?: string } }).user?.username, "guard.user");
 });

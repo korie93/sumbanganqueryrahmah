@@ -6,6 +6,8 @@ import {
   deleteImport,
   renameImport,
 } from "@/lib/api/imports";
+import { getAuditLogs } from "@/lib/api/audit";
+import { advancedSearchData, getSearchColumns, searchData } from "@/lib/api/search";
 import {
   getSettings,
   getTabVisibility,
@@ -47,7 +49,20 @@ test("imports API wrappers accept payloads that match the shared contract", asyn
         page: 1,
         limit: 50,
         pageSize: 50,
+        offset: 0,
         nextCursor: null,
+        pagination: {
+          mode: "hybrid",
+          page: 1,
+          pageSize: 50,
+          limit: 50,
+          offset: 0,
+          total: 1,
+          totalPages: 1,
+          nextCursor: null,
+          hasNextPage: false,
+          hasPreviousPage: false,
+        },
       });
     }
 
@@ -65,6 +80,7 @@ test("imports API wrappers accept payloads that match the shared contract", asyn
           },
         ],
         pagination: {
+          mode: "cursor",
           limit: 100,
           pageSize: 100,
           nextCursor: null,
@@ -102,10 +118,158 @@ test("imports API wrappers accept payloads that match the shared contract", asyn
     const deleted = await deleteImport("import-123");
 
     assert.equal(imports.imports[0]?.rowCount, 12);
+    assert.equal(imports.pagination.mode, "cursor");
     assert.equal(importPage.rows[0]?.jsonDataJsonb?.name, "Alice");
     assert.deepEqual(importPage.headers, ["name", "email"]);
+    assert.equal(importPage.pagination.mode, "hybrid");
     assert.equal(renamed.name, "Renamed Import");
     assert.equal(deleted.success, true);
+  } finally {
+    restoreFetch();
+  }
+});
+
+test("search and audit API wrappers accept payloads that match the shared contract", async () => {
+  const restoreFetch = withMockFetch((async (input, init) => {
+    const url = String(input);
+    const method = String(init?.method || "GET").toUpperCase();
+
+    if (url === "/api/search/global?q=alice&page=2&pageSize=25") {
+      return jsonResponse({
+        columns: ["name", "Source File"],
+        rows: [{ name: "Alice", "Source File": "march.csv" }],
+        results: [{ name: "Alice", "Source File": "march.csv" }],
+        total: 40,
+        page: 2,
+        limit: 25,
+        pageSize: 25,
+        offset: 25,
+        pagination: {
+          mode: "offset",
+          page: 2,
+          pageSize: 25,
+          limit: 25,
+          offset: 25,
+          total: 40,
+          totalPages: 2,
+          hasNextPage: false,
+          hasPreviousPage: true,
+        },
+      });
+    }
+
+    if (url === "/api/search/advanced" && method === "POST") {
+      return jsonResponse({
+        results: [{ name: "Alice", "Source File": "march.csv" }],
+        headers: ["name", "Source File"],
+        total: 40,
+        page: 2,
+        limit: 25,
+        pageSize: 25,
+        offset: 25,
+        pagination: {
+          mode: "offset",
+          page: 2,
+          pageSize: 25,
+          limit: 25,
+          offset: 25,
+          total: 40,
+          totalPages: 2,
+          hasNextPage: false,
+          hasPreviousPage: true,
+        },
+      });
+    }
+
+    if (url === "/api/search/columns") {
+      return jsonResponse(["name", "phone"]);
+    }
+
+    if (url === "/api/audit-logs?page=2&pageSize=25") {
+      return jsonResponse({
+        logs: [
+          {
+            id: "audit-1",
+            action: "LOGIN",
+            performedBy: "admin.user",
+            requestId: null,
+            targetUser: "alice",
+            targetResource: "auth:login",
+            details: "Successful login",
+            timestamp: "2026-03-26T00:00:00.000Z",
+          },
+        ],
+        pagination: {
+          mode: "offset",
+          page: 2,
+          pageSize: 25,
+          limit: 25,
+          offset: 25,
+          total: 26,
+          totalPages: 2,
+          hasNextPage: false,
+          hasPreviousPage: true,
+        },
+      });
+    }
+
+    throw new Error(`Unexpected URL: ${url}`);
+  }) as typeof fetch);
+
+  try {
+    const global = await searchData("alice", 2, 25);
+    const advanced = await advancedSearchData(
+      [{ field: "name", operator: "contains", value: "alice" }],
+      "AND",
+      2,
+      25,
+    );
+    const columns = await getSearchColumns();
+    const audit = await getAuditLogs({ page: 2, pageSize: 25 });
+
+    assert.equal(global.pagination.mode, "offset");
+    assert.equal(global.pagination.offset, 25);
+    assert.equal(advanced.pagination.totalPages, 2);
+    assert.deepEqual(columns, ["name", "phone"]);
+    assert.equal(audit.pagination.mode, "offset");
+    assert.equal(audit.logs[0]?.action, "LOGIN");
+  } finally {
+    restoreFetch();
+  }
+});
+
+test("search and audit API wrappers reject malformed contract payloads", async () => {
+  const restoreFetch = withMockFetch((async (input, init) => {
+    const url = String(input);
+    const method = String(init?.method || "GET").toUpperCase();
+
+    if (url.startsWith("/api/search/global?")) {
+      return jsonResponse({ results: [], total: 0 });
+    }
+
+    if (url === "/api/search/advanced" && method === "POST") {
+      return jsonResponse({ results: [], total: 0 });
+    }
+
+    if (url === "/api/search/columns") {
+      return jsonResponse([""]);
+    }
+
+    if (url.startsWith("/api/audit-logs?")) {
+      return jsonResponse({ logs: [] });
+    }
+
+    throw new Error(`Unexpected URL: ${url}`);
+  }) as typeof fetch);
+
+  try {
+    await assert.rejects(() => searchData("alice", 1, 25), /API contract mismatch for \/api\/search\/global/);
+    await assert.rejects(
+      () => advancedSearchData([{ field: "name", operator: "contains", value: "alice" }], "AND", 1, 25),
+      /API contract mismatch for \/api\/search\/advanced/,
+    );
+    await assert.rejects(() => getSearchColumns(), /API contract mismatch for \/api\/search\/columns/);
+    await assert.rejects(() => getAuditLogs({ page: 1, pageSize: 25 }), /API contract mismatch for \/api\/audit-logs/);
   } finally {
     restoreFetch();
   }

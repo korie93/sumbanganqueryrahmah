@@ -1,4 +1,4 @@
-import type { IncomingHttpHeaders } from "node:http";
+import type { IncomingHttpHeaders, IncomingMessage } from "node:http";
 import { WebSocket, type WebSocketServer } from "ws";
 import { readAuthSessionTokenFromHeaders } from "../auth/session-cookie";
 import { logger } from "../lib/logger";
@@ -42,17 +42,22 @@ function readWebSocketRequestHost(headers: IncomingHttpHeaders): string {
     .toLowerCase();
 }
 
-function readWebSocketRequestProto(headers: IncomingHttpHeaders): string {
-  return firstForwardedValue(headers["x-forwarded-proto"]).toLowerCase();
+function readWebSocketRequestProto(req: Pick<IncomingMessage, "headers" | "socket">): string {
+  const forwardedProto = firstForwardedValue(req.headers["x-forwarded-proto"]).toLowerCase();
+  if (forwardedProto === "http" || forwardedProto === "https") {
+    return forwardedProto;
+  }
+
+  return req.socket && "encrypted" in req.socket && req.socket.encrypted ? "https" : "http";
 }
 
-function isSameOriginWebSocketRequest(headers: IncomingHttpHeaders): boolean {
-  const origin = firstHeaderValue(headers.origin).trim();
+function isSameOriginWebSocketRequest(req: Pick<IncomingMessage, "headers" | "socket">): boolean {
+  const origin = firstHeaderValue(req.headers.origin).trim();
   if (!origin) {
     return true;
   }
 
-  const requestHost = readWebSocketRequestHost(headers);
+  const requestHost = readWebSocketRequestHost(req.headers);
   if (!requestHost) {
     return false;
   }
@@ -63,8 +68,8 @@ function isSameOriginWebSocketRequest(headers: IncomingHttpHeaders): boolean {
       return false;
     }
 
-    const requestProto = readWebSocketRequestProto(headers);
-    return !requestProto || originUrl.protocol === `${requestProto}:`;
+    const requestProto = readWebSocketRequestProto(req);
+    return originUrl.protocol === `${requestProto}:`;
   } catch {
     return false;
   }
@@ -295,7 +300,7 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
       return;
     }
 
-    if (!isSameOriginWebSocketRequest(req.headers)) {
+    if (!isSameOriginWebSocketRequest(req)) {
       logger.warn("WebSocket rejected cross-origin handshake", {
         origin: req.headers.origin || null,
         host: req.headers.host || null,

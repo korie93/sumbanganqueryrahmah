@@ -14,6 +14,7 @@ export type CollectionListCursor = {
 };
 
 export type CollectionPaginationMeta = {
+  mode: "hybrid";
   page: number;
   pageSize: number;
   total: number;
@@ -91,6 +92,7 @@ export function buildCollectionPaginationMeta(params: {
   const totalPages = Math.max(1, Math.ceil(Math.max(0, params.total) / pageSize));
 
   return {
+    mode: "hybrid",
     page: Math.max(1, params.page),
     pageSize,
     total: Math.max(0, params.total),

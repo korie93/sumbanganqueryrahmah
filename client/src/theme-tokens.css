@@ -723,7 +723,8 @@ input[type="search"]::-webkit-search-cancel-button {
   inset: -1px;
 }
 
-/* Does not work on elements with overflow:hidden! */
+/* Overflow-clipped surfaces cannot rely on the border-overlap variant below, so they get
+ * an inset fallback further down. */
 .hover-elevate:not(.no-default-hover-elevate),
 .active-elevate:not(.no-default-active-elevate),
 .hover-elevate-2:not(.no-default-hover-elevate),
@@ -748,8 +749,18 @@ input[type="search"]::-webkit-search-cancel-button {
   background-color: var(--elevate-1);
 }
 
+.overflow-hidden.border.active-elevate:active:not(.no-active-interaction-elevate)::after,
+.overflow-clip.border.active-elevate:active:not(.no-active-interaction-elevate)::after {
+  box-shadow: inset 0 0 0 1px var(--elevate-1);
+}
+
 .active-elevate-2:active:not(.no-default-active-elevate)::after {
   background-color: var(--elevate-2);
+}
+
+.overflow-hidden.border.active-elevate-2:active:not(.no-active-interaction-elevate)::after,
+.overflow-clip.border.active-elevate-2:active:not(.no-active-interaction-elevate)::after {
+  box-shadow: inset 0 0 0 1px var(--elevate-2);
 }
 
 /* If there's a 1px border, adjust the inset so that it covers that parent's border */
@@ -759,6 +770,18 @@ input[type="search"]::-webkit-search-cancel-button {
 .border.active-elevate-2:not(.no-active-interaction-elevate)::after,
 .border.hover-elevate:not(.no-hover-interaction-elevate)::after {
   inset: -1px;
+}
+
+.overflow-hidden.border.hover-elevate:not(.no-hover-interaction-elevate)::after,
+.overflow-hidden.border.active-elevate:not(.no-active-interaction-elevate)::after,
+.overflow-hidden.border.hover-elevate-2:not(.no-hover-interaction-elevate)::after,
+.overflow-hidden.border.active-elevate-2:not(.no-active-interaction-elevate)::after,
+.overflow-clip.border.hover-elevate:not(.no-hover-interaction-elevate)::after,
+.overflow-clip.border.active-elevate:not(.no-active-interaction-elevate)::after,
+.overflow-clip.border.hover-elevate-2:not(.no-hover-interaction-elevate)::after,
+.overflow-clip.border.active-elevate-2:not(.no-active-interaction-elevate)::after {
+  inset: 0;
+  box-shadow: inset 0 0 0 1px transparent;
 }
 
 .viewport-min-height {
@@ -795,8 +818,18 @@ input[type="search"]::-webkit-search-cancel-button {
     background-color: var(--elevate-1);
   }
 
+  .overflow-hidden.border.hover-elevate:hover:not(.no-hover-interaction-elevate)::after,
+  .overflow-clip.border.hover-elevate:hover:not(.no-hover-interaction-elevate)::after {
+    box-shadow: inset 0 0 0 1px var(--elevate-1);
+  }
+
   .hover-elevate-2:hover:not(.no-default-hover-elevate)::after {
     background-color: var(--elevate-2);
+  }
+
+  .overflow-hidden.border.hover-elevate-2:hover:not(.no-hover-interaction-elevate)::after,
+  .overflow-clip.border.hover-elevate-2:hover:not(.no-hover-interaction-elevate)::after {
+    box-shadow: inset 0 0 0 1px var(--elevate-2);
   }
 }
 

@@ -115,10 +115,15 @@ test("AuditLogOperationsService proxies audit log reads through the repository",
   assert.deepEqual(await service.listAuditLogs({}), {
     logs,
     pagination: {
+      mode: "offset",
       page: 1,
       pageSize: 50,
+      limit: 50,
+      offset: 0,
       total: logs.length,
       totalPages: 1,
+      hasNextPage: false,
+      hasPreviousPage: false,
     },
   });
   assert.deepEqual(await service.getAuditLogStats(), stats);

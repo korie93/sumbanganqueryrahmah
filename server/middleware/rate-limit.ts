@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import type { Request, RequestHandler } from "express";
 import rateLimit from "express-rate-limit";
 import { ERROR_CODES } from "../../shared/error-codes";
@@ -33,6 +34,8 @@ type AuthenticatedLikeRequest = Request & {
   };
 };
 
+const AUTH_RATE_LIMIT_HASH_LENGTH = 24;
+
 function normalizeKeyPart(value: unknown): string | null {
   if (typeof value !== "string") {
     return null;
@@ -40,6 +43,35 @@ function normalizeKeyPart(value: unknown): string | null {
 
   const normalized = value.trim().toLowerCase();
   return normalized ? normalized.slice(0, 160) : null;
+}
+
+export function normalizeAuthRateLimitIdentifier(value: unknown): string | null {
+  return normalizeKeyPart(value);
+}
+
+export function buildAuthRouteRateLimitSubject(req: Request, scope: string): string | null {
+  const body =
+    req.body && typeof req.body === "object"
+      ? req.body as Record<string, unknown>
+      : null;
+  if (!body) {
+    return null;
+  }
+
+  const normalizedIdentifier = normalizeAuthRateLimitIdentifier(
+    body.identifier ?? body.username ?? body.email,
+  );
+  if (!normalizedIdentifier) {
+    return null;
+  }
+
+  const digest = crypto
+    .createHash("sha256")
+    .update(`${scope}:${normalizedIdentifier}`)
+    .digest("hex")
+    .slice(0, AUTH_RATE_LIMIT_HASH_LENGTH);
+
+  return `acct:${digest}`;
 }
 
 export function buildRequestRateLimitFingerprint(req: Request): string[] {
@@ -116,7 +148,11 @@ export function createAuthRouteRateLimiters(): AuthRouteRateLimiters {
       max: 15,
       code: ERROR_CODES.AUTH_RATE_LIMITED,
       message: "Too many login attempts. Please try again shortly.",
-      keyGenerator: (req) => buildRateLimitKey(req, "auth-login", req.body?.username),
+      keyGenerator: (req) => buildRateLimitKey(
+        req,
+        "auth-login",
+        buildAuthRouteRateLimitSubject(req, "auth-login"),
+      ),
     }),
     publicRecovery: createJsonRateLimiter({
       windowMs: 10 * 60 * 1000,
@@ -126,9 +162,7 @@ export function createAuthRouteRateLimiters(): AuthRouteRateLimiters {
       keyGenerator: (req) => buildRateLimitKey(
         req,
         `auth-recovery:${req.path}`,
-        req.body?.identifier,
-        req.body?.username,
-        req.body?.email,
+        buildAuthRouteRateLimitSubject(req, `auth-recovery:${req.path}`),
       ),
     }),
     authenticatedAuth: createJsonRateLimiter({

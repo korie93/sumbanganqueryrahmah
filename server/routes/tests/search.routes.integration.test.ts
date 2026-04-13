@@ -154,6 +154,21 @@ test("GET /api/search/global returns an empty payload for short queries without 
       rows: [],
       results: [],
       total: 0,
+      page: 1,
+      limit: 50,
+      pageSize: 50,
+      offset: 0,
+      pagination: {
+        mode: "offset",
+        page: 1,
+        pageSize: 50,
+        limit: 50,
+        offset: 0,
+        total: 0,
+        totalPages: 1,
+        hasNextPage: false,
+        hasPreviousPage: false,
+      },
     });
     assert.equal(globalSearchCalls.length, 0);
   } finally {
@@ -175,7 +190,19 @@ test("GET /api/search/global applies the protected limit cap and formats rows wi
     assert.equal(payload.page, 2);
     assert.equal(payload.limit, 80);
     assert.equal(payload.pageSize, 80);
+    assert.equal(payload.offset, 80);
     assert.equal(payload.total, 25);
+    assert.deepEqual(payload.pagination, {
+      mode: "offset",
+      page: 2,
+      pageSize: 80,
+      limit: 80,
+      offset: 80,
+      total: 25,
+      totalPages: 1,
+      hasNextPage: false,
+      hasPreviousPage: true,
+    });
     assert.deepEqual(payload.columns, ["name", "ic", "Source File"]);
     assert.deepEqual(payload.rows, [
       {
@@ -211,6 +238,18 @@ test("GET /api/search/global returns an empty page when the offset exceeds the r
       page: 4,
       limit: 20,
       pageSize: 20,
+      offset: 60,
+      pagination: {
+        mode: "offset",
+        page: 4,
+        pageSize: 20,
+        limit: 20,
+        offset: 60,
+        total: 60,
+        totalPages: 3,
+        hasNextPage: false,
+        hasPreviousPage: true,
+      },
     });
     assert.equal(globalSearchCalls.length, 0);
   } finally {
@@ -266,7 +305,19 @@ test("POST /api/search/advanced applies runtime pagination and formats headers",
     assert.equal(payload.page, 2);
     assert.equal(payload.limit, 25);
     assert.equal(payload.pageSize, 25);
+    assert.equal(payload.offset, 50);
     assert.equal(payload.total, 18);
+    assert.deepEqual(payload.pagination, {
+      mode: "offset",
+      page: 2,
+      pageSize: 25,
+      limit: 25,
+      offset: 50,
+      total: 18,
+      totalPages: 1,
+      hasNextPage: false,
+      hasPreviousPage: true,
+    });
     assert.deepEqual(payload.headers, ["name", "phone", "Source File"]);
     assert.deepEqual(payload.results, [
       {
