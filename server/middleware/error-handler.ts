@@ -1,4 +1,5 @@
 import type { NextFunction, Request, Response } from "express";
+import { ERROR_CODES } from "../../shared/error-codes";
 import { HttpError } from "../http/errors";
 import { wasRouteErrorLogged } from "../http/route-observability";
 import { logger } from "../lib/logger";
@@ -71,7 +72,7 @@ export function errorHandler(err: unknown, req: Request, res: Response, next: Ne
 
   if (error?.type === "entity.too.large" || error?.status === 413 || error?.statusCode === 413) {
     return res.status(413).json(buildApiErrorResponse("The request payload is too large to process.", {
-      code: "PAYLOAD_TOO_LARGE",
+      code: ERROR_CODES.PAYLOAD_TOO_LARGE,
       includeError: true,
       requestId,
     }));

@@ -1,4 +1,5 @@
 import type { CollectionBatch, CollectionReceiptPayload, CollectionRecord } from "@/lib/api";
+import { apiErrorPayloadSchema } from "@shared/api-contracts";
 import {
   formatCollectionAmountMyrString,
   parseCollectionAmountMyrNumber,
@@ -39,26 +40,34 @@ export function parseCollectionApiErrorDetails(error: unknown): CollectionApiErr
   const jsonPart = raw.replace(/^\d+:\s*/, "");
 
   try {
-    const parsed = JSON.parse(jsonPart);
-    const parsedStatus = Number(parsed?.status);
+    const parsedUnknown = JSON.parse(jsonPart);
+    const normalized = apiErrorPayloadSchema.safeParse(parsedUnknown);
+    const parsed = normalized.success
+      ? normalized.data
+      : (typeof parsedUnknown === "object" && parsedUnknown !== null ? parsedUnknown : null);
+    const parsedStatus = Number((parsed as { status?: unknown } | null)?.status);
     const status = Number.isFinite(parsedStatus) ? parsedStatus : fallbackStatus;
     const code =
-      typeof parsed?.code === "string"
-        ? parsed.code
-        : typeof parsed?.error?.code === "string"
-          ? parsed.error.code
+      typeof (parsed as { code?: unknown } | null)?.code === "string"
+        ? String((parsed as { code?: unknown }).code)
+        : typeof (parsed as { error?: { code?: unknown } } | null)?.error?.code === "string"
+          ? String((parsed as { error?: { code?: unknown } }).error?.code)
           : null;
     const requestId =
-      typeof parsed?.requestId === "string"
-        ? parsed.requestId
-        : typeof parsed?.error?.requestId === "string"
-          ? parsed.error.requestId
+      typeof (parsed as { requestId?: unknown } | null)?.requestId === "string"
+        ? String((parsed as { requestId?: unknown }).requestId)
+        : typeof (parsed as { error?: { requestId?: unknown } } | null)?.error?.requestId === "string"
+          ? String((parsed as { error?: { requestId?: unknown } }).error?.requestId)
           : null;
     return {
       status: Number.isFinite(Number(status)) ? Number(status) : null,
       code,
       requestId,
-      message: String(parsed?.message || parsed?.error?.message || raw),
+      message: String(
+        (parsed as { message?: unknown } | null)?.message
+        || (parsed as { error?: { message?: unknown } } | null)?.error?.message
+        || raw,
+      ),
     };
   } catch {
     return {

@@ -15,6 +15,7 @@ import {
   buildPasswordResetSendFailedAuditDetails,
 } from "./auth-account-managed-utils";
 import type { AuthAccountManagedOpsDeps } from "./auth-account-managed-shared";
+import { ERROR_CODES } from "../../shared/error-codes";
 
 export class AuthAccountManagedRecoveryOperations {
   constructor(private readonly deps: AuthAccountManagedOpsDeps) {}
@@ -26,7 +27,7 @@ export class AuthAccountManagedRecoveryOperations {
     if (normalizeAccountStatus(target.status, "active") !== "pending_activation") {
       throw new AuthAccountError(
         409,
-        "ACCOUNT_UNAVAILABLE",
+        ERROR_CODES.ACCOUNT_UNAVAILABLE,
         "Activation can only be resent for pending accounts.",
       );
     }
@@ -61,7 +62,7 @@ export class AuthAccountManagedRecoveryOperations {
     if (normalizeAccountStatus(target.status, "active") === "pending_activation") {
       throw new AuthAccountError(
         409,
-        "ACCOUNT_UNAVAILABLE",
+        ERROR_CODES.ACCOUNT_UNAVAILABLE,
         "Pending accounts must complete activation instead of password reset.",
       );
     }

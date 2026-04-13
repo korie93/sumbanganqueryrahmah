@@ -1,3 +1,5 @@
+import type { ErrorCode } from "../../shared/error-codes";
+
 export const ACTIVATION_TOKEN_TTL_HOURS = 24;
 export const PASSWORD_RESET_TOKEN_TTL_HOURS = 4;
 
@@ -32,7 +34,7 @@ export type PasswordResetTokenValidationResult = {
 export class AuthAccountError extends Error {
   constructor(
     public readonly statusCode: number,
-    public readonly code: string,
+    public readonly code: ErrorCode,
     message: string,
     public readonly extra?: Record<string, unknown> | undefined,
   ) {

@@ -1,4 +1,5 @@
 import { getCsrfHeader } from "./api/shared";
+import { apiErrorPayloadSchema } from "@shared/api-contracts";
 import {
   broadcastForcedLogout,
   setBannedSessionFlag,
@@ -59,7 +60,12 @@ function isObjectRecord(value: unknown): value is Record<string, unknown> {
 function parseJsonObject(text: string): ApiErrorPayload | null {
   try {
     const parsed = JSON.parse(text) as unknown;
-    return isObjectRecord(parsed) ? parsed : null;
+    if (!isObjectRecord(parsed)) {
+      return null;
+    }
+
+    const normalized = apiErrorPayloadSchema.safeParse(parsed);
+    return normalized.success ? normalized.data : parsed;
   } catch {
     return null;
   }

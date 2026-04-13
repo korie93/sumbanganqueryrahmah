@@ -15,6 +15,7 @@ import {
   AuthAccountError,
 } from "./auth-account-types";
 import type { AuthAccountRecoveryDeps } from "./auth-account-recovery-shared";
+import { ERROR_CODES } from "../../shared/error-codes";
 
 export class AuthAccountActivationOperations {
   constructor(private readonly deps: AuthAccountRecoveryDeps) {}
@@ -25,13 +26,13 @@ export class AuthAccountActivationOperations {
     resent?: boolean | undefined;
   }) {
     if (!params.user) {
-      throw new AuthAccountError(404, "USER_NOT_FOUND", "Target user not found.");
+      throw new AuthAccountError(404, ERROR_CODES.USER_NOT_FOUND, "Target user not found.");
     }
 
     if (normalizeAccountStatus(params.user.status, "pending_activation") !== "pending_activation") {
       throw new AuthAccountError(
         409,
-        "ACCOUNT_UNAVAILABLE",
+        ERROR_CODES.ACCOUNT_UNAVAILABLE,
         "Activation can only be sent to pending accounts.",
       );
     }
@@ -39,7 +40,7 @@ export class AuthAccountActivationOperations {
     if (params.user.isBanned) {
       throw new AuthAccountError(
         409,
-        "ACCOUNT_UNAVAILABLE",
+        ERROR_CODES.ACCOUNT_UNAVAILABLE,
         "Activation can only be sent to non-banned accounts.",
       );
     }
@@ -56,7 +57,7 @@ export class AuthAccountActivationOperations {
   async validateActivationToken(rawTokenInput: string): Promise<ActivationTokenValidationResult> {
     const rawToken = String(rawTokenInput || "").trim();
     if (!rawToken) {
-      throw new AuthAccountError(400, "INVALID_TOKEN", "Activation token is invalid.");
+      throw new AuthAccountError(400, ERROR_CODES.INVALID_TOKEN, "Activation token is invalid.");
     }
 
     const tokenHash = hashOpaqueToken(rawToken);
@@ -86,7 +87,7 @@ export class AuthAccountActivationOperations {
     const confirmPassword = String(params.confirmPassword || "");
 
     if (!rawToken) {
-      throw new AuthAccountError(400, "INVALID_TOKEN", "Activation token is invalid.");
+      throw new AuthAccountError(400, ERROR_CODES.INVALID_TOKEN, "Activation token is invalid.");
     }
 
     assertConfirmedStrongPassword(newPassword, confirmPassword);
@@ -99,7 +100,7 @@ export class AuthAccountActivationOperations {
     );
     const requestedUsername = normalizeUsernameInput(params.username);
     if (requestedUsername && requestedUsername !== record.username) {
-      throw new AuthAccountError(400, "INVALID_TOKEN", "Activation token is invalid.");
+      throw new AuthAccountError(400, ERROR_CODES.INVALID_TOKEN, "Activation token is invalid.");
     }
 
     const consumed = await this.deps.storage.consumeActivationTokenById({
@@ -109,12 +110,12 @@ export class AuthAccountActivationOperations {
     if (!consumed) {
       const latest = await this.deps.storage.getActivationTokenRecordByHash(tokenHash);
       assertUsableActivationTokenRecord(latest, now);
-      throw new AuthAccountError(400, "INVALID_TOKEN", "Activation token is invalid.");
+      throw new AuthAccountError(400, ERROR_CODES.INVALID_TOKEN, "Activation token is invalid.");
     }
 
     const target = await this.deps.storage.getUser(record.userId);
     if (!target) {
-      throw new AuthAccountError(404, "USER_NOT_FOUND", "Target user not found.");
+      throw new AuthAccountError(404, ERROR_CODES.USER_NOT_FOUND, "Target user not found.");
     }
     if (
       target.isBanned
@@ -122,7 +123,7 @@ export class AuthAccountActivationOperations {
     ) {
       throw new AuthAccountError(
         409,
-        "ACCOUNT_UNAVAILABLE",
+        ERROR_CODES.ACCOUNT_UNAVAILABLE,
         "Account activation is no longer available.",
       );
     }

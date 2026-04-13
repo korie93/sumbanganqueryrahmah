@@ -1,5 +1,6 @@
 import type { NextFunction, Request, RequestHandler, Response } from "express";
 import type { User, UserActivity } from "../../shared/schema-postgres";
+import { ERROR_CODES } from "../../shared/error-codes";
 import type { IStorage } from "../storage-postgres";
 import { getSessionSecret } from "../config/security";
 import { verifySessionJwt } from "./session-jwt";
@@ -273,10 +274,10 @@ export function createAuthGuards(options: CreateAuthGuardsOptions) {
           forceLogout: true,
           code:
             blockReason === "banned"
-              ? "ACCOUNT_BANNED"
+              ? ERROR_CODES.ACCOUNT_BANNED
               : blockReason === "locked"
-                ? "ACCOUNT_LOCKED"
-                : "ACCOUNT_UNAVAILABLE",
+                ? ERROR_CODES.ACCOUNT_LOCKED
+                : ERROR_CODES.ACCOUNT_UNAVAILABLE,
         });
       }
 
@@ -285,7 +286,7 @@ export function createAuthGuards(options: CreateAuthGuardsOptions) {
       if (forcePasswordChange && !canAccessDuringForcedPasswordChange(req.method, req.path)) {
         return res.status(403).json({
           message: "Password change required before accessing the application.",
-          code: "PASSWORD_CHANGE_REQUIRED",
+          code: ERROR_CODES.PASSWORD_CHANGE_REQUIRED,
           forcePasswordChange: true,
         });
       }

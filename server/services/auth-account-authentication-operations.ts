@@ -68,7 +68,7 @@ export class AuthAccountAuthenticationOperations {
         performedBy: user.username,
         details: visitorBanned ? "Visitor is banned" : "User is banned",
       });
-      throw new AuthAccountError(403, "ACCOUNT_BANNED", "Account is banned", {
+      throw new AuthAccountError(403, ERROR_CODES.ACCOUNT_BANNED, "Account is banned", {
         banned: true,
       });
     }
@@ -143,7 +143,7 @@ export class AuthAccountAuthenticationOperations {
   async verifyTwoFactorLogin(input: TwoFactorLoginInput) {
     const user = await this.deps.storage.getUser(input.userId);
     if (!user) {
-      throw new AuthAccountError(404, "USER_NOT_FOUND", "User not found.");
+      throw new AuthAccountError(404, ERROR_CODES.USER_NOT_FOUND, "User not found.");
     }
 
     const visitorBanned = await this.deps.storage.isVisitorBanned(
@@ -159,7 +159,7 @@ export class AuthAccountAuthenticationOperations {
         targetUser: user.id,
         details: visitorBanned ? "Visitor is banned" : "User is banned",
       });
-      throw new AuthAccountError(403, "ACCOUNT_BANNED", "Account is banned", {
+      throw new AuthAccountError(403, ERROR_CODES.ACCOUNT_BANNED, "Account is banned", {
         banned: true,
       });
     }

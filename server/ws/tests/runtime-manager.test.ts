@@ -775,6 +775,49 @@ test("runtime manager registers the replacement socket before closing the previo
     assert.equal(previousSocket.closeCalls, 1);
     assert.equal(providedMap.get(activityId), replacementSocket as unknown as WebSocket);
     assert.equal(providedMap.has(activityId), true);
+    assert.equal(previousSocket.listenerCount("close"), 0);
+    assert.equal(previousSocket.listenerCount("error"), 0);
+    assert.equal(previousSocket.listenerCount("pong"), 0);
+  } finally {
+    wss.emit("close");
+  }
+});
+
+test("runtime manager detaches stale listeners from a replaced closed socket", async () => {
+  const wss = new FakeWebSocketServer();
+  const providedMap = new Map<string, WebSocket>();
+  const previousSocket = new FakeWebSocket();
+  const replacementSocket = new FakeWebSocket();
+  const activityId = "activity-reconnect-stale-closed";
+
+  createRuntimeWebSocketManager({
+    wss: wss as unknown as import("ws").WebSocketServer,
+    storage: {
+      getActivityById: async () => createActiveSession(activityId),
+      clearCollectionNicknameSessionByActivity: async () => undefined,
+    },
+    secret: TEST_SECRET,
+    connectedClients: providedMap,
+  });
+
+  try {
+    wss.emit("connection", previousSocket as unknown as WebSocket, createConnectionRequest(createWsToken(activityId)));
+    await flushAsyncWork();
+
+    previousSocket.readyState = WebSocket.CLOSED;
+
+    wss.emit(
+      "connection",
+      replacementSocket as unknown as WebSocket,
+      createConnectionRequest(createWsToken(activityId)),
+    );
+    await flushAsyncWork();
+
+    assert.equal(previousSocket.closeCalls, 0);
+    assert.equal(previousSocket.listenerCount("close"), 0);
+    assert.equal(previousSocket.listenerCount("error"), 0);
+    assert.equal(previousSocket.listenerCount("pong"), 0);
+    assert.equal(providedMap.get(activityId), replacementSocket as unknown as WebSocket);
   } finally {
     wss.emit("close");
   }
@@ -893,6 +936,10 @@ test("runtime manager clears tracked client state when the WebSocket server clos
   wss.emit("close");
 
   assert.equal(providedMap.size, 0);
+  assert.equal(socket.closeCalls, 1);
+  assert.equal(socket.listenerCount("close"), 0);
+  assert.equal(socket.listenerCount("error"), 0);
+  assert.equal(socket.listenerCount("pong"), 0);
 });
 
 test("runtime manager heartbeat does not terminate sockets that are still connecting", async () => {

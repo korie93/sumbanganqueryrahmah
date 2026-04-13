@@ -3,6 +3,7 @@ import { hashPassword, verifyPassword } from "../auth/passwords";
 import type { PostgresStorage } from "../storage-postgres";
 import { assertStrongPasswordInput } from "./auth-account-token-utils";
 import { AuthAccountError } from "./auth-account-types";
+import { ERROR_CODES } from "../../shared/error-codes";
 
 export type ChangePasswordInput = {
   currentPassword: string;
@@ -53,12 +54,12 @@ export class AuthAccountSelfCredentialOperations {
     const newPassword = String(input.newPassword || "");
 
     if (!currentPassword) {
-      throw new AuthAccountError(400, "INVALID_CURRENT_PASSWORD", "Current password is required.");
+      throw new AuthAccountError(400, ERROR_CODES.INVALID_CURRENT_PASSWORD, "Current password is required.");
     }
 
     const currentPasswordMatch = await verifyPassword(currentPassword, actor.passwordHash);
     if (!currentPasswordMatch) {
-      throw new AuthAccountError(400, "INVALID_CURRENT_PASSWORD", "Current password is invalid.");
+      throw new AuthAccountError(400, ERROR_CODES.INVALID_CURRENT_PASSWORD, "Current password is invalid.");
     }
 
     assertStrongPasswordInput(newPassword);
@@ -67,7 +68,7 @@ export class AuthAccountSelfCredentialOperations {
     if (sameAsCurrent) {
       throw new AuthAccountError(
         400,
-        "INVALID_PASSWORD",
+        ERROR_CODES.INVALID_PASSWORD,
         "New password must be different from current password.",
       );
     }
@@ -147,7 +148,7 @@ export class AuthAccountSelfCredentialOperations {
     if (actor.mustChangePassword && !input.hasPasswordField) {
       throw new AuthAccountError(
         403,
-        "PASSWORD_CHANGE_REQUIRED",
+        ERROR_CODES.PASSWORD_CHANGE_REQUIRED,
         "Password change is required before other account updates.",
       );
     }

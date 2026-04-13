@@ -54,3 +54,10 @@ test("parseImportDataPageCursor rejects invalid cursors", () => {
 test("normalizeImportRow rejects non-object rows", () => {
   assert.throws(() => normalizeImportRow("bad-row"), /Invalid jsonDataJsonb/);
 });
+
+test("normalizeImportRow rejects object rows with non-JSON values", () => {
+  assert.throws(
+    () => normalizeImportRow({ name: "Alice", nested: { invalid: Number.NaN } }),
+    /Invalid jsonDataJsonb/,
+  );
+});

@@ -19,6 +19,7 @@ import {
   AuthAccountError,
 } from "./auth-account-types";
 import type { AuthAccountRecoveryDeps } from "./auth-account-recovery-shared";
+import { ERROR_CODES } from "../../shared/error-codes";
 
 export class AuthAccountPasswordResetOperations {
   constructor(private readonly deps: AuthAccountRecoveryDeps) {}
@@ -39,7 +40,7 @@ export class AuthAccountPasswordResetOperations {
   async requestPasswordReset(identifier: string) {
     const normalized = String(identifier || "").trim().toLowerCase();
     if (!normalized) {
-      throw new AuthAccountError(400, "INVALID_IDENTIFIER", "Username or email is required.");
+      throw new AuthAccountError(400, ERROR_CODES.INVALID_IDENTIFIER, "Username or email is required.");
     }
 
     const user = CREDENTIAL_EMAIL_REGEX.test(normalized)
@@ -71,7 +72,7 @@ export class AuthAccountPasswordResetOperations {
   ): Promise<PasswordResetTokenValidationResult> {
     const rawToken = String(rawTokenInput || "").trim();
     if (!rawToken) {
-      throw new AuthAccountError(400, "INVALID_TOKEN", "Password reset token is invalid.");
+      throw new AuthAccountError(400, ERROR_CODES.INVALID_TOKEN, "Password reset token is invalid.");
     }
 
     const tokenHash = hashOpaqueToken(rawToken);
@@ -100,7 +101,7 @@ export class AuthAccountPasswordResetOperations {
     const confirmPassword = String(params.confirmPassword || "");
 
     if (!rawToken) {
-      throw new AuthAccountError(400, "INVALID_TOKEN", "Password reset token is invalid.");
+      throw new AuthAccountError(400, ERROR_CODES.INVALID_TOKEN, "Password reset token is invalid.");
     }
 
     assertConfirmedStrongPassword(newPassword, confirmPassword);
@@ -119,18 +120,18 @@ export class AuthAccountPasswordResetOperations {
     if (!consumed) {
       const latest = await this.deps.storage.getPasswordResetTokenRecordByHash(tokenHash);
       assertUsablePasswordResetTokenRecord(latest, now);
-      throw new AuthAccountError(400, "INVALID_TOKEN", "Password reset token is invalid.");
+      throw new AuthAccountError(400, ERROR_CODES.INVALID_TOKEN, "Password reset token is invalid.");
     }
 
     const target = await this.deps.storage.getUser(record.userId);
     if (!target) {
-      throw new AuthAccountError(404, "USER_NOT_FOUND", "Target user not found.");
+      throw new AuthAccountError(404, ERROR_CODES.USER_NOT_FOUND, "Target user not found.");
     }
 
     if (!isManageableUserRole(target.role)) {
       throw new AuthAccountError(
         409,
-        "ACCOUNT_UNAVAILABLE",
+        ERROR_CODES.ACCOUNT_UNAVAILABLE,
         "Password reset is not available for this account.",
       );
     }
@@ -138,7 +139,7 @@ export class AuthAccountPasswordResetOperations {
     if (normalizeAccountStatus(target.status, "active") === "pending_activation") {
       throw new AuthAccountError(
         409,
-        "ACCOUNT_UNAVAILABLE",
+        ERROR_CODES.ACCOUNT_UNAVAILABLE,
         "Pending accounts must complete activation before password reset.",
       );
     }

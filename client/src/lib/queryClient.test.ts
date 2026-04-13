@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { ERROR_CODES } from "@shared/error-codes";
 import { apiRequest, createApiHeaders, createApiRequestId } from "./api-client";
 import { getQueryFn, resolveDefaultQueryStaleTime } from "./queryClient";
 
@@ -78,6 +79,40 @@ test("apiRequest injects x-request-id headers and preserves backend request ids 
       /server-request-123/,
     );
     assert.ok(observedRequestId.length > 8);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("apiRequest preserves structured backend error codes alongside request ids", async () => {
+  const originalFetch = globalThis.fetch;
+
+  globalThis.fetch = (async () => new Response(JSON.stringify({
+    ok: false,
+    message: "Forbidden",
+    requestId: "server-request-456",
+    error: {
+      code: ERROR_CODES.PERMISSION_DENIED,
+      message: "Forbidden",
+    },
+  }), {
+    status: 403,
+    headers: {
+      "Content-Type": "application/json",
+      "x-request-id": "server-request-456",
+    },
+  })) as typeof fetch;
+
+  try {
+    await assert.rejects(
+      () => apiRequest("GET", "/api/test-forbidden"),
+      (error: unknown) => {
+        assert.ok(error instanceof Error);
+        assert.match(error.message, /PERMISSION_DENIED/);
+        assert.match(error.message, /server-request-456/);
+        return true;
+      },
+    );
   } finally {
     globalThis.fetch = originalFetch;
   }

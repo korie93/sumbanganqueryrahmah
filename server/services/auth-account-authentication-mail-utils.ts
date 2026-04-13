@@ -10,6 +10,7 @@ import {
   AuthAccountError,
 } from "./auth-account-types";
 import type { AuthAccountAuthenticationStorage } from "./auth-account-authentication-shared";
+import { ERROR_CODES } from "../../shared/error-codes";
 
 export async function issueActivationToken(
   storage: Pick<
@@ -45,7 +46,7 @@ export async function sendActivationEmailOperation(params: {
   user: Awaited<ReturnType<PostgresStorage["getUser"]>>;
 }) {
   if (!params.user) {
-    throw new AuthAccountError(404, "USER_NOT_FOUND", "Target user not found.");
+    throw new AuthAccountError(404, ERROR_CODES.USER_NOT_FOUND, "Target user not found.");
   }
 
   const recipientEmail = params.requireManagedEmail(
@@ -106,7 +107,7 @@ export async function sendPasswordResetEmailOperation(params: {
   user: Awaited<ReturnType<PostgresStorage["getUser"]>>;
 }): Promise<ManagedAccountPasswordResetDelivery> {
   if (!params.user) {
-    throw new AuthAccountError(404, "USER_NOT_FOUND", "Target user not found.");
+    throw new AuthAccountError(404, ERROR_CODES.USER_NOT_FOUND, "Target user not found.");
   }
 
   const recipientEmail = params.requireManagedEmail(

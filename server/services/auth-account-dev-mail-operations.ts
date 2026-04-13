@@ -11,6 +11,7 @@ import {
 import type { PostgresStorage } from "../storage-postgres";
 import { readPaginationMeta } from "./auth-account-pagination-utils";
 import { AuthAccountError } from "./auth-account-types";
+import { ERROR_CODES } from "../../shared/error-codes";
 
 type AuthAccountAdminUser = NonNullable<Awaited<ReturnType<PostgresStorage["getUser"]>>>;
 
@@ -78,7 +79,7 @@ export class AuthAccountDevMailOperations {
     const deleted = await deleteDevMailPreviewFile(previewId);
 
     if (!deleted) {
-      throw new AuthAccountError(404, "MAIL_PREVIEW_NOT_FOUND", "Mail preview not found.");
+      throw new AuthAccountError(404, ERROR_CODES.MAIL_PREVIEW_NOT_FOUND, "Mail preview not found.");
     }
 
     await this.deps.storage.createAuditLog({

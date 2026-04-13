@@ -11,6 +11,7 @@ import {
   generateTemporaryPassword,
   hashPassword,
 } from "../auth/passwords";
+import { ERROR_CODES } from "../../shared/error-codes";
 import type { PaginatedListMeta } from "./auth-account-pagination-utils";
 import { listManagedUsersPageOrAll } from "./auth-account-managed-list-utils";
 import { AuthAccountError } from "./auth-account-types";
@@ -52,7 +53,7 @@ export class AuthAccountManagedLifecycleOperations {
     if (actor.id === target.id) {
       throw new AuthAccountError(
         403,
-        "PERMISSION_DENIED",
+        ERROR_CODES.PERMISSION_DENIED,
         "Superuser cannot delete the current account from this action.",
       );
     }
@@ -64,7 +65,7 @@ export class AuthAccountManagedLifecycleOperations {
     const deleted = await this.deps.storage.deleteManagedUserAccount(target.id);
 
     if (!deleted) {
-      throw new AuthAccountError(404, "USER_NOT_FOUND", "Target user not found.");
+      throw new AuthAccountError(404, ERROR_CODES.USER_NOT_FOUND, "Target user not found.");
     }
 
     await this.deps.storage.createAuditLog({
@@ -152,7 +153,7 @@ export class AuthAccountManagedLifecycleOperations {
     ) {
       throw new AuthAccountError(
         400,
-        "INVALID_EMAIL",
+        ERROR_CODES.INVALID_EMAIL,
         "Pending accounts require an email address for activation.",
       );
     }
@@ -244,7 +245,7 @@ export class AuthAccountManagedLifecycleOperations {
     ) {
       throw new AuthAccountError(
         409,
-        "ACCOUNT_UNAVAILABLE",
+        ERROR_CODES.ACCOUNT_UNAVAILABLE,
         "Pending accounts must complete activation before becoming active.",
       );
     }

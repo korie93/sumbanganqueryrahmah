@@ -1,6 +1,7 @@
 import { createInsertSchema } from "drizzle-zod";
 import { relations } from "drizzle-orm";
 import { z } from "zod";
+import { jsonObjectSchema } from "./json-schema";
 
 import {
   accountActivationTokens,
@@ -110,7 +111,7 @@ export const insertImportSchema = createInsertSchema(imports).pick({
 
 export const insertDataRowSchema = z.object({
   importId: z.string(),
-  jsonDataJsonb: z.record(z.unknown()),
+  jsonDataJsonb: jsonObjectSchema,
 });
 
 export const insertUserActivitySchema = createInsertSchema(userActivity).pick({

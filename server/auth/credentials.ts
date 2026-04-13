@@ -1,19 +1,22 @@
 import type { Response } from "express";
+import { ERROR_CODES, type ErrorCode } from "../../shared/error-codes";
 
 export const CREDENTIAL_USERNAME_REGEX = /^[a-zA-Z0-9._-]{3,32}$/;
 export const CREDENTIAL_EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 export const CREDENTIAL_PASSWORD_MIN_LENGTH = 8;
 export const CREDENTIAL_BCRYPT_COST = 12;
 
-export type CredentialErrorCode =
-  | "USERNAME_TAKEN"
-  | "INVALID_PASSWORD"
-  | "INVALID_EMAIL"
-  | "INVALID_CURRENT_PASSWORD"
-  | "PERMISSION_DENIED"
-  | "USER_NOT_FOUND"
-  | "ACCOUNT_UNAVAILABLE"
-  | "PASSWORD_CHANGE_REQUIRED";
+export type CredentialErrorCode = Extract<
+  ErrorCode,
+  | typeof ERROR_CODES.USERNAME_TAKEN
+  | typeof ERROR_CODES.INVALID_PASSWORD
+  | typeof ERROR_CODES.INVALID_EMAIL
+  | typeof ERROR_CODES.INVALID_CURRENT_PASSWORD
+  | typeof ERROR_CODES.PERMISSION_DENIED
+  | typeof ERROR_CODES.USER_NOT_FOUND
+  | typeof ERROR_CODES.ACCOUNT_UNAVAILABLE
+  | typeof ERROR_CODES.PASSWORD_CHANGE_REQUIRED
+>;
 
 export type CredentialAuditPayload = {
   actor_user_id: string;

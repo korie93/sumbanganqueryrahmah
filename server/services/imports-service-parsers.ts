@@ -1,4 +1,5 @@
 import { ensureObject } from "../http/validation";
+import { jsonObjectSchema } from "../../shared/json-schema";
 import type {
   CreateImportBody,
   ImportDataPageCursor,
@@ -63,5 +64,10 @@ export function normalizeImportRow(row: unknown): NormalizeImportRowResult {
     throw new Error("Invalid jsonDataJsonb");
   }
 
-  return normalized;
+  const parsed = jsonObjectSchema.safeParse(normalized);
+  if (!parsed.success) {
+    throw new Error("Invalid jsonDataJsonb");
+  }
+
+  return parsed.data;
 }

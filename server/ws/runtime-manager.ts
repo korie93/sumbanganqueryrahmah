@@ -156,7 +156,9 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
   const connectedClients = options.connectedClients ?? new Map<string, WebSocket>();
   const trustForwardedHeaders = options.trustForwardedHeaders === true;
   const socketUserKeys = new Map<string, string>();
+  const trackedSockets = new Set<WebSocket>();
   const aliveSockets = new WeakSet<WebSocket>();
+  const socketCleanupCallbacks = new WeakMap<WebSocket, () => void>();
   const isTrackableSocket = (ws: WebSocket) =>
     ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING;
   const clearNicknameSession = (activityId: string) =>
@@ -264,8 +266,23 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
 
   wss.once("close", () => {
     clearInterval(heartbeatHandle);
+    for (const ws of Array.from(trackedSockets)) {
+      socketCleanupCallbacks.get(ws)?.();
+      if (!isTrackableSocket(ws)) {
+        continue;
+      }
+
+      try {
+        ws.close();
+      } catch (error) {
+        logger.debug("WebSocket close request failed during server shutdown cleanup", {
+          error: sanitizeRuntimeWebSocketError(error),
+        });
+      }
+    }
     connectedClients.clear();
     socketUserKeys.clear();
+    trackedSockets.clear();
   });
 
   wss.on("connection", async (ws, req) => {
@@ -291,6 +308,8 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
       }
 
       cleanedUp = true;
+      socketCleanupCallbacks.delete(ws);
+      trackedSockets.delete(ws);
       aliveSockets.delete(ws);
       detachSocketLifecycleHandlers();
 
@@ -337,6 +356,8 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
     ws.on("pong", markSocketAlive);
     ws.once("close", handleSocketClose);
     ws.once("error", handleSocketError);
+    trackedSockets.add(ws);
+    socketCleanupCallbacks.set(ws, cleanupSocket);
 
     const url = new URL(req.url!, `http://${req.headers.host}`);
     if (url.searchParams.has("token")) {
@@ -415,8 +436,18 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
         return;
       }
 
-      if (existingWs && existingWs !== ws && isTrackableSocket(existingWs)) {
-        existingWs.close();
+      if (existingWs && existingWs !== ws) {
+        socketCleanupCallbacks.get(existingWs)?.();
+        if (isTrackableSocket(existingWs)) {
+          try {
+            existingWs.close();
+          } catch (error) {
+            logger.debug("WebSocket close request failed during connection replacement cleanup", {
+              activityId,
+              error: sanitizeRuntimeWebSocketError(error),
+            });
+          }
+        }
       }
 
       logger.debug("WebSocket connected", { activityId });

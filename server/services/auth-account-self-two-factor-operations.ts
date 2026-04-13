@@ -38,7 +38,7 @@ export class AuthAccountSelfTwoFactorOperations {
     if (actor.role !== "admin" && actor.role !== "superuser") {
       throw new AuthAccountError(
         403,
-        "TWO_FACTOR_NOT_ALLOWED",
+        ERROR_CODES.TWO_FACTOR_NOT_ALLOWED,
         "Two-factor authentication is only available for admin and superuser accounts.",
       );
     }
@@ -47,12 +47,12 @@ export class AuthAccountSelfTwoFactorOperations {
   private async requireCurrentPassword(actor: AuthAccountUser, currentPasswordRaw: string) {
     const currentPassword = String(currentPasswordRaw || "");
     if (!currentPassword) {
-      throw new AuthAccountError(400, "INVALID_CURRENT_PASSWORD", "Current password is required.");
+      throw new AuthAccountError(400, ERROR_CODES.INVALID_CURRENT_PASSWORD, "Current password is required.");
     }
 
     const valid = await verifyPassword(currentPassword, actor.passwordHash);
     if (!valid) {
-      throw new AuthAccountError(400, "INVALID_CURRENT_PASSWORD", "Current password is invalid.");
+      throw new AuthAccountError(400, ERROR_CODES.INVALID_CURRENT_PASSWORD, "Current password is invalid.");
     }
   }
 
@@ -111,7 +111,7 @@ export class AuthAccountSelfTwoFactorOperations {
     if (!encryptedSecret) {
       throw new AuthAccountError(
         409,
-        "TWO_FACTOR_SETUP_MISSING",
+        ERROR_CODES.TWO_FACTOR_SETUP_MISSING,
         "Start two-factor setup before verifying an authenticator code.",
       );
     }

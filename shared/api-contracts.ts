@@ -1,10 +1,17 @@
 import { z } from "zod";
+import { jsonObjectSchema, jsonValueSchema } from "./json-schema";
+import { sharedErrorCodeSchema } from "./error-codes";
 
 const nonEmptyStringSchema = z.string().trim().min(1);
 const nullableStringSchema = z.string().nullable();
+const nullishStringSchema = z.string().nullish();
 const nonNegativeIntSchema = z.number().int().nonnegative();
 const positiveIntSchema = z.number().int().positive();
 const paginationLimitSchema = z.number().int().positive().max(1000);
+export const apiErrorCodeSchema = z.union([
+  sharedErrorCodeSchema,
+  z.string().trim().regex(/^[A-Z][A-Z0-9_]*$/),
+]);
 
 export const offsetPaginationMetaSchema = z.object({
   mode: z.literal("offset"),
@@ -46,7 +53,7 @@ export const importRecordSchema = z.object({
   filename: nonEmptyStringSchema,
   createdAt: nonEmptyStringSchema,
   isDeleted: z.boolean(),
-  createdBy: z.string().nullable().optional(),
+  createdBy: nullishStringSchema,
 });
 
 export const importListItemSchema = importRecordSchema.extend({
@@ -61,7 +68,7 @@ export const importsListResponseSchema = z.object({
 export const importDataRowSchema = z.object({
   id: nonEmptyStringSchema,
   importId: nonEmptyStringSchema,
-  jsonDataJsonb: z.record(z.unknown()),
+  jsonDataJsonb: jsonObjectSchema,
 });
 
 export const importDataPageResponseSchema = z.object({
@@ -76,7 +83,7 @@ export const importDataPageResponseSchema = z.object({
   pagination: hybridPaginationMetaSchema,
 });
 
-const searchResultRowSchema = z.record(z.unknown());
+const searchResultRowSchema = jsonObjectSchema;
 
 export const searchGlobalResponseSchema = z.object({
   columns: z.array(nonEmptyStringSchema),
@@ -105,10 +112,10 @@ export const auditLogRecordSchema = z.object({
   id: nonEmptyStringSchema,
   action: nonEmptyStringSchema,
   performedBy: nonEmptyStringSchema,
-  requestId: z.string().nullable().optional(),
-  targetUser: z.string().nullable().optional(),
-  targetResource: z.string().nullable().optional(),
-  details: z.string().nullable().optional(),
+  requestId: nullishStringSchema,
+  targetUser: nullishStringSchema,
+  targetResource: nullishStringSchema,
+  details: nullishStringSchema,
   timestamp: nonEmptyStringSchema,
 });
 
@@ -116,6 +123,21 @@ export const auditLogsResponseSchema = z.object({
   logs: z.array(auditLogRecordSchema),
   pagination: offsetPaginationMetaSchema,
 });
+
+export const apiErrorDetailsSchema = z.object({
+  code: apiErrorCodeSchema.optional(),
+  message: z.string(),
+  details: jsonValueSchema.optional(),
+  requestId: z.string().optional(),
+}).passthrough();
+
+export const apiErrorPayloadSchema = z.object({
+  ok: z.literal(false).optional(),
+  message: z.string(),
+  requestId: z.string().optional(),
+  code: apiErrorCodeSchema.optional(),
+  error: apiErrorDetailsSchema.optional(),
+}).passthrough();
 
 export const deleteImportResponseSchema = z.object({
   ok: z.literal(true).optional(),
@@ -174,6 +196,7 @@ export type ImportDataPageResponse = z.infer<typeof importDataPageResponseSchema
 export type SearchGlobalResponse = z.infer<typeof searchGlobalResponseSchema>;
 export type AdvancedSearchResponse = z.infer<typeof advancedSearchResponseSchema>;
 export type AuditLogsResponse = z.infer<typeof auditLogsResponseSchema>;
+export type ApiErrorPayload = z.infer<typeof apiErrorPayloadSchema>;
 export type SettingsResponse = z.infer<typeof settingsResponseSchema>;
 export type SettingsUpdateResponse = z.infer<typeof settingsUpdateResponseSchema>;
 export type TabVisibilityResponse = z.infer<typeof tabVisibilityResponseSchema>;

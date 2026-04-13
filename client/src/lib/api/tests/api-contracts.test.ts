@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  apiErrorPayloadSchema,
+  auditLogRecordSchema,
+  importListItemSchema,
+} from "@shared/api-contracts";
+import { ERROR_CODES } from "@shared/error-codes";
+import {
   getImportData,
   getImports,
   deleteImport,
@@ -30,6 +36,60 @@ function jsonResponse(body: unknown): Response {
     },
   });
 }
+
+test("shared API contracts accept nullish actor fields without widening required fields", () => {
+  const importRecord = importListItemSchema.safeParse({
+    id: "import-123",
+    name: "March Import",
+    filename: "march.csv",
+    createdAt: "2026-03-26T00:00:00.000Z",
+    isDeleted: false,
+    createdBy: null,
+    rowCount: 12,
+  });
+  assert.equal(importRecord.success, true);
+
+  const auditRecord = auditLogRecordSchema.safeParse({
+    id: "audit-1",
+    action: "LOGIN",
+    performedBy: "admin.user",
+    timestamp: "2026-03-26T00:00:00.000Z",
+  });
+  assert.equal(auditRecord.success, true);
+
+  const malformedAuditRecord = auditLogRecordSchema.safeParse({
+    id: "audit-1",
+    action: "LOGIN",
+    performedBy: "admin.user",
+  });
+  assert.equal(malformedAuditRecord.success, false);
+});
+
+test("shared API error payload contract accepts shared and domain-specific uppercase codes only", () => {
+  const sharedCodePayload = apiErrorPayloadSchema.safeParse({
+    ok: false,
+    message: "Forbidden",
+    code: ERROR_CODES.PERMISSION_DENIED,
+  });
+  assert.equal(sharedCodePayload.success, true);
+
+  const domainCodePayload = apiErrorPayloadSchema.safeParse({
+    ok: false,
+    message: "Conflict",
+    error: {
+      code: "USERNAME_TAKEN",
+      message: "Username already exists.",
+    },
+  });
+  assert.equal(domainCodePayload.success, true);
+
+  const malformedCodePayload = apiErrorPayloadSchema.safeParse({
+    ok: false,
+    message: "Bad request",
+    code: "permission_denied",
+  });
+  assert.equal(malformedCodePayload.success, false);
+});
 
 test("imports API wrappers accept payloads that match the shared contract", async () => {
   const restoreFetch = withMockFetch((async (input) => {
@@ -300,6 +360,107 @@ test("imports API wrappers reject malformed contract payloads", async () => {
     await assert.rejects(
       () => getImportData("import-123", 1, 50),
       /API contract mismatch for \/api\/imports\/import-123\/data/,
+    );
+  } finally {
+    restoreFetch();
+  }
+});
+
+test("API wrappers reject non-object JSON rows for import and search payloads", async () => {
+  const restoreFetch = withMockFetch((async (input, init) => {
+    const url = String(input);
+    const method = String(init?.method || "GET").toUpperCase();
+
+    if (url.startsWith("/api/imports/import-123/data")) {
+      return jsonResponse({
+        rows: [
+          {
+            id: "row-1",
+            importId: "import-123",
+            jsonDataJsonb: ["unexpected-array"],
+          },
+        ],
+        headers: ["name"],
+        total: 1,
+        page: 1,
+        limit: 50,
+        pageSize: 50,
+        offset: 0,
+        nextCursor: null,
+        pagination: {
+          mode: "hybrid",
+          page: 1,
+          pageSize: 50,
+          limit: 50,
+          offset: 0,
+          total: 1,
+          totalPages: 1,
+          nextCursor: null,
+          hasNextPage: false,
+          hasPreviousPage: false,
+        },
+      });
+    }
+
+    if (url.startsWith("/api/search/global?")) {
+      return jsonResponse({
+        columns: ["name"],
+        rows: [["unexpected-array"]],
+        results: [["unexpected-array"]],
+        total: 1,
+        page: 1,
+        limit: 25,
+        pageSize: 25,
+        offset: 0,
+        pagination: {
+          mode: "offset",
+          page: 1,
+          pageSize: 25,
+          limit: 25,
+          offset: 0,
+          total: 1,
+          totalPages: 1,
+          hasNextPage: false,
+          hasPreviousPage: false,
+        },
+      });
+    }
+
+    if (url === "/api/search/advanced" && method === "POST") {
+      return jsonResponse({
+        results: [["unexpected-array"]],
+        headers: ["name"],
+        total: 1,
+        page: 1,
+        limit: 25,
+        pageSize: 25,
+        offset: 0,
+        pagination: {
+          mode: "offset",
+          page: 1,
+          pageSize: 25,
+          limit: 25,
+          offset: 0,
+          total: 1,
+          totalPages: 1,
+          hasNextPage: false,
+          hasPreviousPage: false,
+        },
+      });
+    }
+
+    throw new Error(`Unexpected URL: ${url}`);
+  }) as typeof fetch);
+
+  try {
+    await assert.rejects(
+      () => getImportData("import-123", 1, 50),
+      /API contract mismatch for \/api\/imports\/import-123\/data/,
+    );
+    await assert.rejects(() => searchData("alice", 1, 25), /API contract mismatch for \/api\/search\/global/);
+    await assert.rejects(
+      () => advancedSearchData([{ field: "name", operator: "contains", value: "alice" }], "AND", 1, 25),
+      /API contract mismatch for \/api\/search\/advanced/,
     );
   } finally {
     restoreFetch();

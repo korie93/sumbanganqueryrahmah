@@ -1,4 +1,5 @@
 import { AuthAccountError } from "../../services/auth-account.service";
+import { ERROR_CODES } from "../../../shared/error-codes";
 import {
   readManagedCredentialsBody,
   readManagedUserBody,
@@ -174,7 +175,7 @@ export function registerAuthAdminMutationRoutes(context: AuthRouteContext) {
       if (body.newPassword) {
         throw new AuthAccountError(
           409,
-          "ACCOUNT_UNAVAILABLE",
+          ERROR_CODES.ACCOUNT_UNAVAILABLE,
           "Direct password assignment is disabled. Use the reset-password action instead.",
         );
       }

@@ -5,6 +5,7 @@ import type {
   AuthenticatedSessionInput,
 } from "./auth-account-authentication-shared";
 import { resolveTimestampMs } from "../lib/timestamp";
+import { ERROR_CODES } from "../../shared/error-codes";
 
 export async function getSuperuserSessionIdleWindowMs(
   storage: Pick<AuthAccountAuthenticationStorage, "getAppConfig">,
@@ -130,7 +131,7 @@ export async function createAuthenticatedSession(params: {
           });
           throw new AuthAccountError(
             409,
-            "SUPERUSER_SINGLE_SESSION_ENFORCED",
+            ERROR_CODES.SUPERUSER_SINGLE_SESSION_ENFORCED,
             "Single superuser session is enforced. Logout from the current session first.",
           );
         }

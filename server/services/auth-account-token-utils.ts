@@ -11,6 +11,7 @@ import {
   AuthAccountError,
   PASSWORD_RESET_TOKEN_TTL_HOURS,
 } from "./auth-account-types";
+import { ERROR_CODES } from "../../shared/error-codes";
 
 export type IssuedOpaqueToken = {
   token: string;
@@ -123,13 +124,13 @@ export function assertConfirmedStrongPassword(newPassword: string, confirmPasswo
   if (!isStrongPassword(newPassword)) {
     throw new AuthAccountError(
       400,
-      "INVALID_PASSWORD",
+      ERROR_CODES.INVALID_PASSWORD,
       "Password must be at least 8 characters and include at least one letter and one number.",
     );
   }
 
   if (newPassword !== confirmPassword) {
-    throw new AuthAccountError(400, "INVALID_PASSWORD", "Confirm password does not match.");
+    throw new AuthAccountError(400, ERROR_CODES.INVALID_PASSWORD, "Confirm password does not match.");
   }
 }
 
@@ -137,7 +138,7 @@ export function assertStrongPasswordInput(newPassword: string) {
   if (!isStrongPassword(newPassword)) {
     throw new AuthAccountError(
       400,
-      "INVALID_PASSWORD",
+      ERROR_CODES.INVALID_PASSWORD,
       "Password must be at least 8 characters and include at least one letter and one number.",
     );
   }
@@ -148,26 +149,26 @@ export function assertUsableActivationTokenRecord(
   now: Date,
 ): UsableActivationTokenRecord {
   if (!record) {
-    throw new AuthAccountError(400, "INVALID_TOKEN", "Activation token is invalid.");
+    throw new AuthAccountError(400, ERROR_CODES.INVALID_TOKEN, "Activation token is invalid.");
   }
 
   const normalizedRecord = normalizeTokenDates(record);
 
   if (normalizedRecord.usedAt) {
-    throw new AuthAccountError(410, "TOKEN_USED", "Activation link has already been used.");
+    throw new AuthAccountError(410, ERROR_CODES.TOKEN_USED, "Activation link has already been used.");
   }
 
   if (
     Number.isNaN(normalizedRecord.expiresAt.getTime())
     || normalizedRecord.expiresAt.getTime() <= now.getTime()
   ) {
-    throw new AuthAccountError(410, "TOKEN_EXPIRED", "Activation link has expired.");
+    throw new AuthAccountError(410, ERROR_CODES.TOKEN_EXPIRED, "Activation link has expired.");
   }
 
   if (normalizedRecord.isBanned) {
     throw new AuthAccountError(
       409,
-      "ACCOUNT_UNAVAILABLE",
+      ERROR_CODES.ACCOUNT_UNAVAILABLE,
       "Account activation is not available for this account.",
     );
   }
@@ -175,7 +176,7 @@ export function assertUsableActivationTokenRecord(
   if (normalizeAccountStatus(normalizedRecord.status, "pending_activation") !== "pending_activation") {
     throw new AuthAccountError(
       409,
-      "ACCOUNT_UNAVAILABLE",
+      ERROR_CODES.ACCOUNT_UNAVAILABLE,
       "Account activation is no longer available.",
     );
   }
@@ -183,7 +184,7 @@ export function assertUsableActivationTokenRecord(
   if (!isManageableUserRole(normalizedRecord.role)) {
     throw new AuthAccountError(
       409,
-      "ACCOUNT_UNAVAILABLE",
+      ERROR_CODES.ACCOUNT_UNAVAILABLE,
       "Account activation is not available for this account.",
     );
   }
@@ -196,26 +197,26 @@ export function assertUsablePasswordResetTokenRecord(
   now: Date,
 ): UsablePasswordResetTokenRecord {
   if (!record) {
-    throw new AuthAccountError(400, "INVALID_TOKEN", "Password reset token is invalid.");
+    throw new AuthAccountError(400, ERROR_CODES.INVALID_TOKEN, "Password reset token is invalid.");
   }
 
   const normalizedRecord = normalizeTokenDates(record);
 
   if (normalizedRecord.usedAt) {
-    throw new AuthAccountError(410, "TOKEN_USED", "Password reset link has already been used.");
+    throw new AuthAccountError(410, ERROR_CODES.TOKEN_USED, "Password reset link has already been used.");
   }
 
   if (
     Number.isNaN(normalizedRecord.expiresAt.getTime())
     || normalizedRecord.expiresAt.getTime() <= now.getTime()
   ) {
-    throw new AuthAccountError(410, "TOKEN_EXPIRED", "Password reset link has expired.");
+    throw new AuthAccountError(410, ERROR_CODES.TOKEN_EXPIRED, "Password reset link has expired.");
   }
 
   if (!isManageableUserRole(normalizedRecord.role)) {
     throw new AuthAccountError(
       409,
-      "ACCOUNT_UNAVAILABLE",
+      ERROR_CODES.ACCOUNT_UNAVAILABLE,
       "Password reset is not available for this account.",
     );
   }
@@ -223,7 +224,7 @@ export function assertUsablePasswordResetTokenRecord(
   if (normalizeAccountStatus(normalizedRecord.status, "active") === "pending_activation") {
     throw new AuthAccountError(
       409,
-      "ACCOUNT_UNAVAILABLE",
+      ERROR_CODES.ACCOUNT_UNAVAILABLE,
       "Pending accounts must complete activation before password reset.",
     );
   }
