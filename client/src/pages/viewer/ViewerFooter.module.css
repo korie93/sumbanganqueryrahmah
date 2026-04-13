@@ -1,3 +1,11 @@
 .footerSafeArea {
-  padding-bottom: calc(var(--safe-area-inset-bottom) + 0.75rem);
+  bottom: var(--safe-area-inset-bottom);
+  padding-bottom: 0.75rem;
+}
+
+@media (min-width: 768px) {
+  .footerSafeArea {
+    bottom: auto;
+    padding-bottom: 0;
+  }
 }

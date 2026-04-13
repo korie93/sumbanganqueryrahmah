@@ -67,12 +67,12 @@ export function wireClusterMasterWorker(options: {
         state.fatalStartupLockReason = outcome.reason;
         state.restartBlockedUntil = Date.now() + options.restartBlockMs;
         state.lastRestartBlockLogAt = Date.now();
-        logger.error("Worker reported fatal startup error and auto-restart is disabled", {
+        logger.error("Worker reported fatal error and auto-restart is disabled", {
           workerId: worker.id,
           reason: outcome.reason,
         });
       } else {
-        logger.error("Worker reported fatal startup error", {
+        logger.error("Worker reported fatal error", {
           workerId: worker.id,
           reason: outcome.reason,
         });

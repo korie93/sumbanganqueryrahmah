@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  createIdempotencyFingerprintValidationCacheController,
   clearIdempotencyFingerprintValidationCacheForTests,
   createCollectionJsonMutationRouteHandler,
   normalizeIdempotencyFingerprintHeaderValue,
+  pruneExpiredIdempotencyFingerprintValidationCache,
   pruneIdempotencyFingerprintValidationCache,
 } from "../collection/collection-route-handler-factories";
 import {
@@ -265,11 +267,11 @@ test("pruneIdempotencyFingerprintValidationCache evicts the oldest fingerprint v
 
   const pruned = pruneIdempotencyFingerprintValidationCache(cache, 256);
 
-  assert.equal(pruned, 29);
-  assert.equal(cache.size, 231);
+  assert.equal(pruned, 4);
+  assert.equal(cache.size, 256);
   assert.equal(cache.has("fingerprint-0"), false);
-  assert.equal(cache.has("fingerprint-28"), false);
-  assert.equal(cache.has("fingerprint-29"), true);
+  assert.equal(cache.has("fingerprint-3"), false);
+  assert.equal(cache.has("fingerprint-4"), true);
 });
 
 test("pruneIdempotencyFingerprintValidationCache keeps recently touched fingerprints ahead of older entries", () => {
@@ -290,8 +292,70 @@ test("pruneIdempotencyFingerprintValidationCache keeps recently touched fingerpr
 
   const pruned = pruneIdempotencyFingerprintValidationCache(cache, 10);
 
-  assert.equal(pruned, 3);
+  assert.equal(pruned, 2);
   assert.equal(cache.has("fingerprint-0"), true);
   assert.equal(cache.has("fingerprint-1"), false);
   assert.equal(cache.has("fingerprint-2"), false);
+});
+
+test("pruneExpiredIdempotencyFingerprintValidationCache removes stale entries by TTL", () => {
+  const cache = new Map<string, { lastValidatedAt: number }>();
+  cache.set("fresh", { lastValidatedAt: 9_500 });
+  cache.set("expired-a", { lastValidatedAt: 1_000 });
+  cache.set("expired-b", { lastValidatedAt: 4_000 });
+
+  const pruned = pruneExpiredIdempotencyFingerprintValidationCache(cache, {
+    now: 10_000,
+    ttlMs: 5_000,
+  });
+
+  assert.equal(pruned, 2);
+  assert.deepEqual(Array.from(cache.keys()), ["fresh"]);
+});
+
+test("idempotency fingerprint cache controller auto-evicts expired entries and stops its sweep timer", () => {
+  let now = 1_000;
+  let sweep: (() => void) | null = null;
+  let clearCalls = 0;
+  let unrefCalls = 0;
+  const invokeSweep = (handler: unknown) => {
+    assert.equal(typeof handler, "function");
+    (handler as () => void)();
+  };
+  const sweepHandle = {
+    unref() {
+      unrefCalls += 1;
+      return sweepHandle;
+    },
+  } as ReturnType<typeof setInterval>;
+
+  const controller = createIdempotencyFingerprintValidationCacheController({
+    limit: 4,
+    ttlMs: 50,
+    sweepIntervalMs: 10,
+    now: () => now,
+    setIntervalFn: ((handler: TimerHandler) => {
+      sweep = () => {
+        if (typeof handler === "function") {
+          handler();
+        }
+      };
+      return sweepHandle;
+    }) as unknown as typeof setInterval,
+    clearIntervalFn: ((handle?: Parameters<typeof clearInterval>[0]) => {
+      if (handle === sweepHandle) {
+        clearCalls += 1;
+      }
+    }) as typeof clearInterval,
+  });
+
+  controller.set("fingerprint-1", { lastValidatedAt: now });
+  assert.equal(unrefCalls, 1);
+  assert.equal(controller.cache.size, 1);
+
+  now = 1_100;
+  invokeSweep(sweep);
+
+  assert.equal(controller.cache.size, 0);
+  assert.equal(clearCalls, 1);
 });

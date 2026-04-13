@@ -1,13 +1,19 @@
 import "dotenv/config";
+import cluster from "node:cluster";
 import type { WorkerFatalMessage } from "./internal/worker-ipc";
 import { startLocalServer } from "./internal/server-startup";
 import { createLocalRuntimeEnvironment } from "./internal/local-runtime-environment";
+import {
+  resolvePgPoolShutdownTimeoutMs,
+  shutdownPgPoolSafely,
+} from "./internal/pg-pool-shutdown";
+import { registerWorkerProcessFatalHandlers } from "./internal/worker-process-fatal-handlers";
 import { markStartupFailed } from "./internal/startup-health";
 import { pool, stopPgPoolBackgroundTasks } from "./db-postgres";
 import { logger } from "./lib/logger";
 import { runtimeConfig } from "./config/runtime";
 
-let startupFatalReason: string | null = null;
+let reportedWorkerFatalReason: string | null = null;
 
 type WorkerIpcProcess = NodeJS.Process & {
   send?: (message: WorkerFatalMessage) => void;
@@ -19,9 +25,9 @@ type StartupReasonError = Error & {
 
 const workerIpcProcess = process as WorkerIpcProcess;
 
-function notifyMasterFatalStartup(reason: string, details?: string) {
-  if (startupFatalReason) return;
-  startupFatalReason = reason;
+function notifyMasterFatalReason(reason: string, details?: string) {
+  if (reportedWorkerFatalReason) return;
+  reportedWorkerFatalReason = reason;
 
   if (typeof workerIpcProcess.send === "function") {
     try {
@@ -47,18 +53,50 @@ const {
   port,
   host,
 } = createLocalRuntimeEnvironment({
-  notifyFatalStartup: notifyMasterFatalStartup,
+  notifyFatalStartup: notifyMasterFatalReason,
 });
 
 const GRACEFUL_SHUTDOWN_TIMEOUT_MS = runtimeConfig.runtime.gracefulShutdownTimeoutMs;
+const PG_POOL_SHUTDOWN_TIMEOUT_MS = resolvePgPoolShutdownTimeoutMs(GRACEFUL_SHUTDOWN_TIMEOUT_MS);
 
 let shuttingDown = false;
+let shutdownExitCode = 0;
+let shutdownTimer: ReturnType<typeof setTimeout> | null = null;
 
-function gracefulShutdown(signal: string) {
-  if (shuttingDown) return;
+async function finishShutdown() {
+  if (shutdownTimer) {
+    clearTimeout(shutdownTimer);
+    shutdownTimer = null;
+  }
+
+  await shutdownPgPoolSafely({
+    logger,
+    phase: "graceful-shutdown",
+    poolRef: pool,
+    stopBackgroundTasks: stopPgPoolBackgroundTasks,
+    timeoutMs: PG_POOL_SHUTDOWN_TIMEOUT_MS,
+  });
+
+  logger.info("Server closed gracefully");
+  process.exit(shutdownExitCode);
+}
+
+function shutdownProcess(reason: string, exitCode: number, details?: string) {
+  if (shuttingDown) {
+    shutdownExitCode = Math.max(shutdownExitCode, exitCode);
+    return;
+  }
   shuttingDown = true;
+  shutdownExitCode = exitCode;
 
-  logger.info("Received shutdown signal, closing gracefully", { signal });
+  if (exitCode === 0) {
+    logger.info("Received shutdown signal, closing gracefully", { signal: reason });
+  } else {
+    logger.error("Fatal worker error triggered shutdown", {
+      reason,
+      details,
+    });
+  }
 
   for (const [id, ws] of connectedClients.entries()) {
     if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
@@ -67,21 +105,38 @@ function gracefulShutdown(signal: string) {
     connectedClients.delete(id);
   }
 
-  server.close(async () => {
-    stopPgPoolBackgroundTasks();
-    try { await pool.end(); } catch { /* best-effort */ }
-    logger.info("Server closed gracefully");
-    process.exit(0);
-  });
-
-  setTimeout(() => {
+  shutdownTimer = setTimeout(() => {
     logger.warn("Graceful shutdown timed out, forcing exit");
-    process.exit(1);
-  }, GRACEFUL_SHUTDOWN_TIMEOUT_MS).unref();
+    process.exit(exitCode === 0 ? 1 : exitCode);
+  }, GRACEFUL_SHUTDOWN_TIMEOUT_MS);
+  shutdownTimer.unref();
+
+  if (!server.listening) {
+    void finishShutdown();
+    return;
+  }
+
+  server.close(() => {
+    void finishShutdown();
+  });
+}
+
+function gracefulShutdown(signal: string) {
+  shutdownProcess(signal, 0);
 }
 
 process.once("SIGTERM", () => gracefulShutdown("SIGTERM"));
 process.once("SIGINT", () => gracefulShutdown("SIGINT"));
+
+if (cluster.isWorker) {
+  registerWorkerProcessFatalHandlers({
+    logger,
+    notifyMasterFatal: notifyMasterFatalReason,
+    shutdown: ({ reason, details, exitCode }) => {
+      shutdownProcess(reason, exitCode, details);
+    },
+  });
+}
 
 async function startServer() {
   await startLocalServer({
@@ -93,7 +148,7 @@ async function startServer() {
     defaultSessionTimeoutMinutes,
     aiPrecomputeOnStart,
     categoryStatsService,
-    notifyFatalStartup: notifyMasterFatalStartup,
+    notifyFatalStartup: notifyMasterFatalReason,
     port,
     host,
   });
@@ -108,16 +163,17 @@ startServer().catch(async (error) => {
       ? startupReasonCandidate
       : "SERVER_STARTUP_ERROR";
 
-  notifyMasterFatalStartup(startupReason, message);
+  notifyMasterFatalReason(startupReason, message);
   markStartupFailed(startupReason, message);
   logger.error("Local server failed during startup", { error });
 
-  stopPgPoolBackgroundTasks();
-  try {
-    await pool.end();
-  } catch {
-    // best-effort cleanup
-  }
+  await shutdownPgPoolSafely({
+    logger,
+    phase: "startup-failure",
+    poolRef: pool,
+    stopBackgroundTasks: stopPgPoolBackgroundTasks,
+    timeoutMs: PG_POOL_SHUTDOWN_TIMEOUT_MS,
+  });
 
   process.exit(1);
 });

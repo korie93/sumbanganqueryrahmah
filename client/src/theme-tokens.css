@@ -403,7 +403,7 @@
   --accent: 217 20% 21%;
   --accent-foreground: 210 40% 98%;
   --destructive: 0 62% 59%;
-  --destructive-foreground: 222 47% 11%;
+  --destructive-foreground: 210 40% 98%;
   --input: 217 32% 38%;
   --ring: 217 91% 60%;
   --chart-1: 217 91% 65%;
@@ -604,8 +604,8 @@
   --ai-notice-text: hsl(214 32% 91%);
   --ai-scroll-thumb: hsl(215 25% 27%);
   --ai-empty-text: hsl(215 20% 65%);
-  --ai-assistant-bubble-bg: hsl(217 32% 17% / 0.94);
-  --ai-assistant-bubble-text: hsl(210 40% 92%);
+  --ai-assistant-bubble-bg: hsl(217 32% 22% / 0.98);
+  --ai-assistant-bubble-text: hsl(210 40% 98%);
   --ai-assistant-bubble-border: hsl(213 94% 68% / 0.18);
   --ai-input-surface-bg: hsl(222 47% 11% / 0.92);
   --ai-input-surface-border: hsl(215 25% 27% / 0.72);

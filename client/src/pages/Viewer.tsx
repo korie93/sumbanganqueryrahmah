@@ -1,7 +1,10 @@
-import { Suspense, lazy } from "react";
+import { Suspense, lazy, useEffect } from "react";
 import { OperationalPage } from "@/components/layout/OperationalPage";
 import { ViewerContentFallback, ViewerPageHeaderFallback } from "@/pages/viewer/ViewerPageFallbacks";
 import { useViewerPageState } from "@/pages/viewer/useViewerPageState";
+import "@/pages/viewer/ViewerPage.css";
+
+const VIEWER_SCROLL_PADDING_CLASS = "viewer-page-scroll-padding";
 
 const ViewerPageHeader = lazy(() =>
   import("@/pages/viewer/ViewerPageHeader").then((module) => ({
@@ -34,6 +37,17 @@ export default function Viewer({
     userRole,
     viewerRowsPerPage,
   });
+
+  useEffect(() => {
+    const { body, documentElement } = document;
+    documentElement.classList.add(VIEWER_SCROLL_PADDING_CLASS);
+    body.classList.add(VIEWER_SCROLL_PADDING_CLASS);
+
+    return () => {
+      documentElement.classList.remove(VIEWER_SCROLL_PADDING_CLASS);
+      body.classList.remove(VIEWER_SCROLL_PADDING_CLASS);
+    };
+  }, []);
 
   return (
     <OperationalPage width="content">
