@@ -172,7 +172,7 @@ export default function AuthenticatedAppShell({
           onNavigateHome={onNavigateHome}
         >
           <Suspense fallback={<PageSpinner />}>
-            <main className="app-shell-min-height">
+            <main id="main-content" tabIndex={-1} className="app-shell-min-height">
               <AppPageRenderer
                 user={user}
                 currentPage={currentPage}

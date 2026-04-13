@@ -1,24 +1,40 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {
-  DEFAULT_READ_STRING_MAX_LENGTH,
-  readNonEmptyString,
-  readOptionalString,
-} from "../validation";
+import { HttpError } from "../../http/errors";
+import { readBooleanFlag, readStringList } from "../../http/validation";
 
-test("readNonEmptyString rejects strings longer than the configured maximum", () => {
-  assert.equal(readNonEmptyString("  ok  ", 8), "ok");
+test("readBooleanFlag accepts explicit truthy and falsy literals", () => {
+  assert.equal(readBooleanFlag(true), true);
+  assert.equal(readBooleanFlag(false), false);
+  assert.equal(readBooleanFlag("true"), true);
+  assert.equal(readBooleanFlag(" YES "), true);
+  assert.equal(readBooleanFlag("0"), false);
+  assert.equal(readBooleanFlag("off"), false);
+  assert.equal(readBooleanFlag(undefined), false);
+  assert.equal(readBooleanFlag(""), false);
+});
+
+test("readBooleanFlag rejects ambiguous string values instead of silently coercing them", () => {
   assert.throws(
-    () => readNonEmptyString("x".repeat(DEFAULT_READ_STRING_MAX_LENGTH + 1)),
-    /exceeds maximum length/i,
+    () => readBooleanFlag("maybe"),
+    (error) =>
+      error instanceof HttpError
+      && error.statusCode === 400
+      && error.code === "REQUEST_BODY_INVALID"
+      && /Boolean flag must be one of/i.test(error.message),
   );
 });
 
-test("readOptionalString applies the same max length guard", () => {
-  assert.equal(readOptionalString("   "), undefined);
-  assert.throws(
-    () => readOptionalString("abcdef", 5),
-    /exceeds maximum length/i,
+test("readStringList supports escaped commas and backslashes", () => {
+  assert.deepEqual(
+    readStringList("active\\,trial,pending,team\\\\lead,\\,, trailing\\\\"),
+    ["active,trial", "pending", "team\\lead", ",", "trailing\\"],
   );
 });
 
+test("readStringList trims blank values after parsing escaped segments", () => {
+  assert.deepEqual(
+    readStringList(" first \\, value , ,second,,\\,,  "),
+    ["first , value", "second", ","],
+  );
+});

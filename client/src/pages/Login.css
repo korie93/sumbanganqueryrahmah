@@ -2,7 +2,7 @@
   background: var(--login-layout-bg);
   --login-content-fade-duration: 1.2s;
   --login-content-fade-offset: 18px;
-  --login-float-duration: 10s;
+  --login-float-duration: 8s;
   --login-float-offset: -14px;
   --login-float-delay-medium: 1.5s;
   --login-float-delay-slow: 3s;
@@ -337,6 +337,29 @@
 
   .login-footer {
     margin-top: 1rem;
+  }
+}
+
+@media (min-width: 1024px) and (max-width: 1366px) and (max-height: 900px) and (orientation: landscape) {
+  .login-content--shell {
+    align-items: flex-start;
+    padding:
+      max(var(--spacing-4), var(--safe-area-inset-top))
+      max(var(--spacing-5), var(--safe-area-inset-right))
+      calc(var(--spacing-4) + var(--safe-area-inset-bottom))
+      max(var(--spacing-5), var(--safe-area-inset-left));
+  }
+
+  .login-shell {
+    max-width: min(38rem, 46vw);
+  }
+
+  .login-card {
+    padding: 1.5rem 1.75rem !important;
+  }
+
+  .login-brand {
+    margin-bottom: 1.25rem;
   }
 }
 

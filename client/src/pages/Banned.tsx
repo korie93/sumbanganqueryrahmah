@@ -9,7 +9,11 @@ export default function Banned() {
     window.location.href = "/";
   };
   return (
-    <main className="banned-page relative flex viewport-min-height items-center justify-center overflow-hidden p-4">
+    <main
+      id="main-content"
+      tabIndex={-1}
+      className="banned-page relative flex viewport-min-height items-center justify-center overflow-hidden p-4"
+    >
       <div className="banned-page__pattern absolute inset-0 opacity-40" />
       
       <div className="banned-page__orb banned-page__orb--top absolute left-20 top-20 h-72 w-72 blur-3xl animate-pulse" />

@@ -8,7 +8,11 @@ type NotFoundProps = {
 
 export default function NotFound({ onNavigateHome, onLoginClick }: NotFoundProps) {
   return (
-    <main className="not-found-page viewport-min-height overflow-hidden px-4 py-8 sm:px-6">
+    <main
+      id="main-content"
+      tabIndex={-1}
+      className="not-found-page viewport-min-height overflow-hidden px-4 py-8 sm:px-6"
+    >
       <section
         className="relative mx-auto flex min-h-[calc(100svh-4rem)] max-w-4xl items-center justify-center"
         aria-labelledby="not-found-title"

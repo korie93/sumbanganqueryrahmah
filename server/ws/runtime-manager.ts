@@ -25,6 +25,12 @@ type RuntimeWebSocketActivity = {
   username?: string | null;
 };
 
+type RuntimeWebSocketErrorLike = {
+  name?: unknown;
+  code?: unknown;
+  type?: unknown;
+};
+
 function firstHeaderValue(value: string | string[] | undefined): string {
   if (Array.isArray(value)) {
     return String(value[0] || "");
@@ -85,6 +91,29 @@ function getActivityUserKey(activity: RuntimeWebSocketActivity): string | null {
   return username ? `username:${username}` : null;
 }
 
+function sanitizeRuntimeWebSocketError(error: unknown): Record<string, unknown> | undefined {
+  if (typeof error === "string") {
+    return {
+      type: "string",
+    };
+  }
+
+  if (!error || typeof error !== "object") {
+    return undefined;
+  }
+
+  const errorLike = error as RuntimeWebSocketErrorLike;
+  const name = typeof errorLike.name === "string" ? errorLike.name.trim() : "";
+  const code = typeof errorLike.code === "string" ? errorLike.code.trim() : "";
+  const type = typeof errorLike.type === "string" ? errorLike.type.trim() : "";
+
+  return {
+    ...(name ? { name } : {}),
+    ...(code ? { code } : {}),
+    ...(type ? { type } : {}),
+  };
+}
+
 function serializeRuntimeWsPayload(payload: Record<string, unknown>): string | null {
   try {
     const message = JSON.stringify(payload);
@@ -98,7 +127,7 @@ function serializeRuntimeWsPayload(payload: Record<string, unknown>): string | n
     return message;
   } catch (error) {
     logger.warn("WebSocket broadcast skipped because the payload could not be serialized", {
-      error,
+      error: sanitizeRuntimeWebSocketError(error),
     });
     return null;
   }
@@ -118,7 +147,7 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
     Promise.resolve(storage.clearCollectionNicknameSessionByActivity?.(activityId)).catch((error) => {
       logger.warn("Failed to clear nickname session after WebSocket cleanup", {
         activityId,
-        error,
+        error: sanitizeRuntimeWebSocketError(error),
       });
     });
   const removeTrackedSocket = (activityId: string) => {
@@ -182,7 +211,10 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
           dropBackpressuredSocket(activityId, ws);
         }
       } catch (error) {
-        logger.warn("WebSocket broadcast failed", { activityId, error });
+        logger.warn("WebSocket broadcast failed", {
+          activityId,
+          error: sanitizeRuntimeWebSocketError(error),
+        });
         removeTrackedSocket(activityId);
         void clearNicknameSession(activityId);
       }
@@ -265,7 +297,7 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
       if (erroredActivityId) {
         logger.debug("WebSocket errored", {
           activityId: erroredActivityId,
-          error,
+          error: sanitizeRuntimeWebSocketError(error),
         });
       }
     };
@@ -281,7 +313,7 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
       } catch (error) {
         logger.debug("WebSocket close request failed during cleanup", {
           activityId,
-          error,
+          error: sanitizeRuntimeWebSocketError(error),
         });
       }
     };

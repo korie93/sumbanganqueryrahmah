@@ -3,7 +3,7 @@ import "./Forbidden.css";
 
 export default function Forbidden() {
   return (
-    <div className="forbidden-page app-shell-min-height px-4 py-8 sm:px-6">
+    <main id="main-content" tabIndex={-1} className="forbidden-page app-shell-min-height px-4 py-8 sm:px-6">
       <div className="mx-auto max-w-3xl">
         <section className="forbidden-page__card glass-wrapper rounded-3xl p-8 text-center sm:p-10">
             <div className="forbidden-page__icon-shell mx-auto flex h-16 w-16 items-center justify-center rounded-full">
@@ -68,7 +68,7 @@ export default function Forbidden() {
             </div>
         </section>
       </div>
-    </div>
+    </main>
   );
 }
 

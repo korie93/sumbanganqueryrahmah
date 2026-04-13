@@ -152,3 +152,61 @@ test("bindAutoLogoutVisibilityChange logs out only after idle timeout and otherw
     globalScope.document = previousDocument
   }
 })
+
+test("bindAutoLogoutActivityListeners detaches events so later activity does not re-arm timers", async () => {
+  const fakeDocument = createFakeDocument()
+  const globalScope = globalThis as typeof globalThis & {
+    document?: Document
+    window?: Window & typeof globalThis
+  }
+  const previousDocument = globalScope.document
+  const previousWindow = globalScope.window
+
+  globalScope.document = fakeDocument as unknown as Document
+  globalScope.window = {
+    setInterval: () => 654,
+    clearInterval: () => undefined,
+  } as unknown as Window & typeof globalThis
+
+  const heartbeatRef = { current: null as number | null }
+  const activityListenersAttachedRef = { current: false }
+  const lastResetByEventRef = { current: 0 }
+  let resetCalls = 0
+  let syncCalls = 0
+  let heartbeatCalls = 0
+
+  try {
+    const cleanup = bindAutoLogoutActivityListeners({
+      heartbeatMs: 5_000,
+      heartbeatRef,
+      activityListenersAttachedRef,
+      lastResetByEventRef,
+      resetTimeout: () => {
+        resetCalls += 1
+      },
+      sendHeartbeat: async () => {
+        heartbeatCalls += 1
+      },
+      syncHeartbeatIfNeeded: () => {
+        syncCalls += 1
+      },
+      clearIdleTimeout: () => undefined,
+      clearHeartbeat: () => {
+        heartbeatRef.current = null
+      },
+      clearHeartbeatRequest: () => undefined,
+    })
+
+    await Promise.resolve()
+    assert.equal(heartbeatCalls, 1)
+    cleanup?.()
+
+    fakeDocument.emit("mousedown")
+    assert.equal(resetCalls, 1)
+    assert.equal(syncCalls, 0)
+    assert.equal(activityListenersAttachedRef.current, false)
+  } finally {
+    globalScope.document = previousDocument
+    globalScope.window = previousWindow
+  }
+})

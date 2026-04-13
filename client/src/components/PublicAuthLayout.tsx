@@ -35,7 +35,7 @@ export function PublicAuthLayout({
       <div className="public-auth-layout__glow public-auth-layout__glow--bottom" />
       <div className="public-auth-layout__center-glow" />
 
-      <main className="public-auth-layout__main viewport-min-height">
+      <main id="main-content" tabIndex={-1} className="public-auth-layout__main viewport-min-height">
         <div className="public-auth-layout__container">
           {showBackButton ? (
             <button

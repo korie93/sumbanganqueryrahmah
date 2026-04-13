@@ -102,7 +102,9 @@ export function LandingPageShell({ onLoginClick, children }: LandingPageShellPro
           </div>
         </header>
 
-        <main className="flex flex-1 flex-col justify-center py-10 sm:py-14">{children}</main>
+        <main id="main-content" tabIndex={-1} className="flex flex-1 flex-col justify-center py-10 sm:py-14">
+          {children}
+        </main>
       </div>
     </div>
   );

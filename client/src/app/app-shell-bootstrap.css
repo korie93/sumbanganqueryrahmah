@@ -6,21 +6,11 @@
 }
 
 .page-spinner-shell--fullscreen {
-  min-height: 100dvh;
+  min-height: var(--viewport-min-height-value);
 }
 
 .page-spinner-shell--app {
-  min-height: calc(100dvh - 3.5rem);
-}
-
-@supports not (height: 100dvh) {
-  .page-spinner-shell--fullscreen {
-    min-height: 100svh;
-  }
-
-  .page-spinner-shell--app {
-    min-height: calc(100svh - 3.5rem);
-  }
+  min-height: var(--app-shell-min-height-value);
 }
 
 .page-spinner-shell__indicator {
@@ -43,7 +33,7 @@
 }
 
 .app-route-error-boundary--fullscreen {
-  min-height: 100dvh;
+  min-height: var(--viewport-min-height-value);
 }
 
 .app-route-error-boundary__shell {
@@ -52,16 +42,9 @@
 
 .app-route-error-boundary__shell--fullscreen {
   display: flex;
-  min-height: 100dvh;
+  min-height: var(--viewport-min-height-value);
   align-items: center;
   justify-content: center;
-}
-
-@supports not (height: 100dvh) {
-  .app-route-error-boundary--fullscreen,
-  .app-route-error-boundary__shell--fullscreen {
-    min-height: 100svh;
-  }
 }
 
 .app-route-error-boundary__card {

@@ -74,10 +74,62 @@ export function clampInteger(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, Math.trunc(value)));
 }
 
+const TRUTHY_BOOLEAN_LITERALS = new Set(["1", "true", "yes", "on"]);
+const FALSY_BOOLEAN_LITERALS = new Set(["0", "false", "no", "off"]);
+
 export function readBooleanFlag(value: unknown): boolean {
   if (typeof value === "boolean") return value;
   const normalized = readNonEmptyString(value).toLowerCase();
-  return normalized === "1" || normalized === "true" || normalized === "yes";
+  if (!normalized) {
+    return false;
+  }
+
+  if (TRUTHY_BOOLEAN_LITERALS.has(normalized)) {
+    return true;
+  }
+
+  if (FALSY_BOOLEAN_LITERALS.has(normalized)) {
+    return false;
+  }
+
+  throw badRequest(
+    "Boolean flag must be one of: true, false, 1, 0, yes, no, on, off.",
+    ERROR_CODES.REQUEST_BODY_INVALID,
+  );
+}
+
+function parseEscapedStringList(value: string): string[] {
+  const values: string[] = [];
+  let current = "";
+  let escaping = false;
+
+  for (const character of value) {
+    if (escaping) {
+      current += character;
+      escaping = false;
+      continue;
+    }
+
+    if (character === "\\") {
+      escaping = true;
+      continue;
+    }
+
+    if (character === ",") {
+      values.push(current);
+      current = "";
+      continue;
+    }
+
+    current += character;
+  }
+
+  if (escaping) {
+    current += "\\";
+  }
+
+  values.push(current);
+  return values;
 }
 
 export function readStringList(value: unknown): string[] {
@@ -90,8 +142,7 @@ export function readStringList(value: unknown): string[] {
   const normalized = readNonEmptyString(value);
   if (!normalized) return [];
 
-  return normalized
-    .split(",")
+  return parseEscapedStringList(normalized)
     .map((part) => readNonEmptyString(part))
     .filter(Boolean);
 }

@@ -50,3 +50,53 @@ test("cleanupAIChatRuntimeRefs aborts requests and clears timers defensively", (
     globalThis.clearTimeout = originalClearTimeout;
   }
 });
+
+test("cleanupAIChatRuntimeRefs stays safe when cleanup runs more than once", () => {
+  const controller = new AbortController();
+  const clearedIntervals: number[] = [];
+  const clearedTimeouts: number[] = [];
+  const originalClearInterval = globalThis.clearInterval;
+  const originalClearTimeout = globalThis.clearTimeout;
+
+  globalThis.clearInterval = ((timerId: number) => {
+    clearedIntervals.push(Number(timerId));
+    return undefined;
+  }) as typeof globalThis.clearInterval;
+  globalThis.clearTimeout = ((timerId: number) => {
+    clearedTimeouts.push(Number(timerId));
+    return undefined;
+  }) as typeof globalThis.clearTimeout;
+
+  try {
+    const requestControllerRef = { current: controller };
+    const typingIntervalRef = { current: 23 };
+    const retryTimersRef = { current: [11] };
+    const slowNoticeTimerRef = { current: 13 };
+    const processingRef = { current: true };
+    const isMountedRef = { current: true };
+
+    cleanupAIChatRuntimeRefs({
+      requestControllerRef,
+      typingIntervalRef,
+      retryTimersRef,
+      slowNoticeTimerRef,
+      processingRef,
+      isMountedRef,
+    });
+    cleanupAIChatRuntimeRefs({
+      requestControllerRef,
+      typingIntervalRef,
+      retryTimersRef,
+      slowNoticeTimerRef,
+      processingRef,
+      isMountedRef,
+    });
+
+    assert.equal(controller.signal.aborted, true);
+    assert.deepEqual(clearedIntervals, [23]);
+    assert.deepEqual(clearedTimeouts, [11, 13]);
+  } finally {
+    globalThis.clearInterval = originalClearInterval;
+    globalThis.clearTimeout = originalClearTimeout;
+  }
+});

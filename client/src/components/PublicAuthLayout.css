@@ -238,6 +238,29 @@
   }
 }
 
+@media (min-width: 1024px) and (max-width: 1366px) and (max-height: 900px) and (orientation: landscape) {
+  .public-auth-layout__main {
+    align-items: flex-start;
+    padding:
+      max(var(--spacing-5), var(--safe-area-inset-top))
+      max(var(--spacing-5), var(--safe-area-inset-right))
+      calc(var(--spacing-5) + var(--safe-area-inset-bottom))
+      max(var(--spacing-5), var(--safe-area-inset-left));
+  }
+
+  .public-auth-layout__container {
+    max-width: min(40rem, 46vw);
+  }
+
+  .public-auth-layout__card {
+    padding: var(--spacing-6);
+  }
+
+  .public-auth-layout__intro {
+    margin-bottom: var(--spacing-5);
+  }
+}
+
 @media (hover: hover) and (pointer: fine) {
   .public-auth-layout__back-button:hover {
     background: var(--public-auth-shell-surface);

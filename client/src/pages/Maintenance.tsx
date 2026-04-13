@@ -163,7 +163,11 @@ export default function MaintenancePage() {
   };
 
   return (
-    <main className="maintenance-page viewport-min-height flex items-center justify-center p-4 sm:p-6">
+    <main
+      id="main-content"
+      tabIndex={-1}
+      className="maintenance-page viewport-min-height flex items-center justify-center p-4 sm:p-6"
+    >
       <section
         className="maintenance-page__shell w-full max-w-3xl rounded-3xl supports-[backdrop-filter]:backdrop-blur-md"
         aria-labelledby="maintenance-page-title"

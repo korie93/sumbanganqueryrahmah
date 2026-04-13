@@ -594,6 +594,47 @@ test("runtime manager does not register sockets that error during async session 
   }
 });
 
+test("runtime manager sanitizes socket error logs before writing debug output", async (t) => {
+  const wss = new FakeWebSocketServer();
+  const providedMap = new Map<string, WebSocket>();
+  const socket = new FakeWebSocket();
+  const activityId = "activity-sanitized-error";
+  const debugLogs: Array<{ message: string; payload: unknown }> = [];
+
+  const debugMock = t.mock.method(logger, "debug", (message: string, payload: unknown) => {
+    debugLogs.push({ message, payload });
+  });
+
+  createRuntimeWebSocketManager({
+    wss: wss as unknown as import("ws").WebSocketServer,
+    storage: {
+      getActivityById: async () => createActiveSession(activityId),
+      clearCollectionNicknameSessionByActivity: async () => undefined,
+    },
+    secret: TEST_SECRET,
+    connectedClients: providedMap,
+  });
+
+  try {
+    wss.emit("connection", socket as unknown as WebSocket, createConnectionRequest(createWsToken(activityId)));
+    await flushAsyncWork();
+
+    socket.fail(new Error("socket internals should stay out of logs"));
+    await flushAsyncWork();
+
+    assert.ok(debugMock.mock.callCount() >= 1);
+    const socketErrorLog = debugLogs.find((entry) => entry.message === "WebSocket errored");
+    assert.deepEqual(socketErrorLog?.payload, {
+      activityId,
+      error: {
+        name: "Error",
+      },
+    });
+  } finally {
+    wss.emit("close");
+  }
+});
+
 test("runtime manager removes registered sockets cleanly on close", async () => {
   const wss = new FakeWebSocketServer();
   const providedMap = new Map<string, WebSocket>();

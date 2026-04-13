@@ -82,3 +82,32 @@ test("errorHandler normalizes body parser payload-too-large errors", async () =>
     await stopTestServer(server);
   }
 });
+
+test("errorHandler includes the active request id when the pipeline already assigned one", async () => {
+  const app = express();
+  app.use((_req, res, next) => {
+    res.setHeader("x-request-id", "req-correlation-123");
+    next();
+  });
+  app.get("/hidden-error-with-request-id", () => {
+    throw new HttpError(500, "Sensitive database detail.", {
+      code: "INTERNAL_FAILURE",
+      expose: false,
+    });
+  });
+  app.use(errorHandler);
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const response = await fetch(`${baseUrl}/hidden-error-with-request-id`);
+
+    assert.equal(response.status, 500);
+    assert.deepEqual(await response.json(), {
+      ok: false,
+      message: "Internal server error",
+      requestId: "req-correlation-123",
+    });
+  } finally {
+    await stopTestServer(server);
+  }
+});

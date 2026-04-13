@@ -3,7 +3,11 @@ import { AlertCircle } from "lucide-react";
 
 export default function NotFound() {
   return (
-    <main className="viewport-min-height w-full flex items-center justify-center bg-gray-50">
+    <main
+      id="main-content"
+      tabIndex={-1}
+      className="viewport-min-height w-full flex items-center justify-center bg-gray-50"
+    >
       <Card className="w-full max-w-md mx-4" aria-labelledby="not-found-page-title">
         <CardContent className="pt-6">
           <header className="flex mb-4 gap-2">

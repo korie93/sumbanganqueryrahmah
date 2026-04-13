@@ -158,7 +158,14 @@ function AppContent() {
 }
 
 function App() {
-  return <AppContent />;
+  return (
+    <>
+      <a className="skip-to-main-link" href="#main-content">
+        Skip to main content
+      </a>
+      <AppContent />
+    </>
+  );
 }
 
 export default App;
