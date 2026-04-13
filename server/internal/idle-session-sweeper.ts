@@ -13,37 +13,37 @@ type IdleSessionSweeperOptions = {
     PostgresStorage,
     | "getActiveActivities"
     | "expireIdleActivitySession"
-  >;
+  > & {
+    expireIdleActivitySessions?: (params: {
+      idleCutoff: Date;
+      idleMinutes: number;
+    }) => Promise<Array<{
+      id: string;
+      username: string;
+    }>>;
+  };
   connectedClients: Map<string, WebSocket>;
   getRuntimeSettingsCached: () => Promise<RuntimeSettings>;
   defaultSessionTimeoutMinutes: number;
   intervalMs?: number;
 };
 
-export async function runIdleSessionSweeperPass(
-  options: Pick<
-    IdleSessionSweeperOptions,
-    "storage" | "connectedClients" | "getRuntimeSettingsCached" | "defaultSessionTimeoutMinutes"
-  >,
+async function expireIdleActivitiesBatch(
+  storage: IdleSessionSweeperOptions["storage"],
+  idleCutoff: Date,
+  idleMinutes: number,
 ) {
-  const {
-    storage,
-    connectedClients,
-    getRuntimeSettingsCached,
-    defaultSessionTimeoutMinutes,
-  } = options;
+  if (typeof storage.expireIdleActivitySessions === "function") {
+    return storage.expireIdleActivitySessions({
+      idleCutoff,
+      idleMinutes,
+    });
+  }
 
   const now = Date.now();
-  const activities = await storage.getActiveActivities();
-  const runtimeSettings = await getRuntimeSettingsCached();
-  const idleMinutes = Math.max(
-    1,
-    runtimeSettings.sessionTimeoutMinutes
-      || runtimeSettings.wsIdleMinutes
-      || defaultSessionTimeoutMinutes,
-  );
   const idleMs = idleMinutes * 60 * 1000;
-  const idleCutoff = new Date(now - idleMs);
+  const activities = await storage.getActiveActivities();
+  const expiredActivities: Array<{ id: string; username: string }> = [];
 
   for (const activity of activities) {
     if (!activity.lastActivityTime) {
@@ -60,6 +60,47 @@ export async function runIdleSessionSweeperPass(
       idleCutoff,
       idleMinutes,
     });
+    if (!expiredActivity) {
+      continue;
+    }
+
+    expiredActivities.push(expiredActivity);
+  }
+
+  return expiredActivities;
+}
+
+export async function runIdleSessionSweeperPass(
+  options: Pick<
+    IdleSessionSweeperOptions,
+    "storage" | "connectedClients" | "getRuntimeSettingsCached" | "defaultSessionTimeoutMinutes"
+  >,
+) {
+  const {
+    storage,
+    connectedClients,
+    getRuntimeSettingsCached,
+    defaultSessionTimeoutMinutes,
+  } = options;
+
+  const now = Date.now();
+  const runtimeSettings = await getRuntimeSettingsCached();
+  const idleMinutes = Math.max(
+    1,
+    runtimeSettings.sessionTimeoutMinutes
+      || runtimeSettings.wsIdleMinutes
+      || defaultSessionTimeoutMinutes,
+  );
+  const idleMs = idleMinutes * 60 * 1000;
+  const idleCutoff = new Date(now - idleMs);
+
+  const expiredActivities = await expireIdleActivitiesBatch(
+    storage,
+    idleCutoff,
+    idleMinutes,
+  );
+
+  for (const expiredActivity of expiredActivities) {
     if (!expiredActivity) {
       continue;
     }

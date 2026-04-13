@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, lte, type SQL } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, lte, type SQL } from "drizzle-orm";
 import type { InsertUserActivity, UserActivity } from "../../shared/schema-postgres";
 import { auditLogs, collectionNicknameSessions, userActivity } from "../../shared/schema-postgres";
 import { db } from "../db-postgres";
@@ -119,6 +119,57 @@ export async function expireIdleActivitySession(params: {
   });
 
   return expiredActivity;
+}
+
+export async function expireIdleActivitySessions(params: {
+  idleCutoff: Date;
+  idleMinutes: number;
+}): Promise<UserActivity[]> {
+  const logoutTime = new Date();
+  let expiredActivities: UserActivity[] = [];
+
+  await db.transaction(async (tx) => {
+    const updatedRows = await tx
+      .update(userActivity)
+      .set({
+        isActive: false,
+        logoutTime: createCurrentTimestampSql(),
+        logoutReason: "IDLE_TIMEOUT",
+      })
+      .where(
+        and(
+          eq(userActivity.isActive, true),
+          lte(userActivity.lastActivityTime, params.idleCutoff),
+        ),
+      )
+      .returning();
+
+    expiredActivities = updatedRows;
+    if (expiredActivities.length === 0) {
+      return;
+    }
+
+    const expiredActivityIds = expiredActivities.map((activity) => activity.id);
+
+    await tx
+      .delete(collectionNicknameSessions)
+      .where(inArray(collectionNicknameSessions.activityId, expiredActivityIds));
+
+    await tx.insert(auditLogs).values(
+      expiredActivities.map((activity) => ({
+        id: crypto.randomUUID(),
+        action: "SESSION_IDLE_TIMEOUT",
+        performedBy: activity.username,
+        targetUser: null,
+        targetResource: null,
+        requestId: null,
+        details: `Auto logout after ${params.idleMinutes} minutes idle`,
+        timestamp: logoutTime,
+      })),
+    );
+  });
+
+  return expiredActivities;
 }
 
 export async function getActivityById(id: string): Promise<UserActivity | undefined> {

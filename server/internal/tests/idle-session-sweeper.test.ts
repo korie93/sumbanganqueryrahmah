@@ -46,6 +46,80 @@ test("runIdleSessionSweeperPass expires stale sessions and closes connected sock
   const now = Date.now();
   const socketDouble = createSocketDouble();
   const connectedClients = new Map<string, WebSocket>([["activity-1", socketDouble.socket]]);
+  const expireCalls: Array<{ idleCutoff: Date; idleMinutes: number }> = [];
+
+  await runIdleSessionSweeperPass({
+    storage: {
+      getActiveActivities: async () => {
+        throw new Error("Batch idle sweeper should not load active activities");
+      },
+      expireIdleActivitySession: async () => {
+        throw new Error("Batch idle sweeper should not expire sessions one-by-one");
+      },
+      expireIdleActivitySessions: async (params) => {
+        expireCalls.push(params);
+        return [
+          createActiveActivity({
+            lastActivityTime: new Date(now - 10 * 60 * 1000),
+          }),
+        ];
+      },
+    },
+    connectedClients,
+    getRuntimeSettingsCached: async () => ({
+      sessionTimeoutMinutes: 5,
+      wsIdleMinutes: 5,
+    }),
+    defaultSessionTimeoutMinutes: 30,
+  });
+
+  assert.equal(expireCalls.length, 1);
+  assert.equal(expireCalls[0].idleMinutes, 5);
+  assert.equal(socketDouble.getCloseCalls(), 1);
+  assert.equal(socketDouble.sentPayloads.length, 1);
+  assert.deepEqual(JSON.parse(socketDouble.sentPayloads[0]), {
+    type: "idle_timeout",
+    reason: "Session expired due to inactivity",
+  });
+  assert.equal(connectedClients.has("activity-1"), false);
+});
+
+test("runIdleSessionSweeperPass leaves active sessions alone when batch expiry returns no expired sessions", async () => {
+  const socketDouble = createSocketDouble();
+  const connectedClients = new Map<string, WebSocket>([["activity-1", socketDouble.socket]]);
+  const expireCalls: Array<{ idleCutoff: Date; idleMinutes: number }> = [];
+
+  await runIdleSessionSweeperPass({
+    storage: {
+      getActiveActivities: async () => {
+        throw new Error("Batch idle sweeper should not load active activities");
+      },
+      expireIdleActivitySession: async () => {
+        throw new Error("Batch idle sweeper should not expire sessions one-by-one");
+      },
+      expireIdleActivitySessions: async (params) => {
+        expireCalls.push(params);
+        return [];
+      },
+    },
+    connectedClients,
+    getRuntimeSettingsCached: async () => ({
+      sessionTimeoutMinutes: 5,
+      wsIdleMinutes: 5,
+    }),
+    defaultSessionTimeoutMinutes: 30,
+  });
+
+  assert.equal(expireCalls.length, 1);
+  assert.equal(socketDouble.getCloseCalls(), 0);
+  assert.equal(socketDouble.sentPayloads.length, 0);
+  assert.equal(connectedClients.has("activity-1"), true);
+});
+
+test("runIdleSessionSweeperPass falls back to per-session expiry when batch storage is unavailable", async () => {
+  const now = Date.now();
+  const socketDouble = createSocketDouble();
+  const connectedClients = new Map<string, WebSocket>([["activity-1", socketDouble.socket]]);
   const expireCalls: Array<{ activityId: string; idleCutoff: Date; idleMinutes: number }> = [];
 
   await runIdleSessionSweeperPass({
@@ -75,43 +149,7 @@ test("runIdleSessionSweeperPass expires stale sessions and closes connected sock
   assert.equal(expireCalls[0].idleMinutes, 5);
   assert.equal(socketDouble.getCloseCalls(), 1);
   assert.equal(socketDouble.sentPayloads.length, 1);
-  assert.deepEqual(JSON.parse(socketDouble.sentPayloads[0]), {
-    type: "idle_timeout",
-    reason: "Session expired due to inactivity",
-  });
   assert.equal(connectedClients.has("activity-1"), false);
-});
-
-test("runIdleSessionSweeperPass leaves active sessions alone when atomic expiry rejects stale list data", async () => {
-  const now = Date.now();
-  const socketDouble = createSocketDouble();
-  const connectedClients = new Map<string, WebSocket>([["activity-1", socketDouble.socket]]);
-  const expireCalls: Array<{ activityId: string; idleCutoff: Date; idleMinutes: number }> = [];
-
-  await runIdleSessionSweeperPass({
-    storage: {
-      getActiveActivities: async () => [
-        createActiveActivity({
-          lastActivityTime: new Date(now - 10 * 60 * 1000),
-        }),
-      ],
-      expireIdleActivitySession: async (params) => {
-        expireCalls.push(params);
-        return undefined;
-      },
-    },
-    connectedClients,
-    getRuntimeSettingsCached: async () => ({
-      sessionTimeoutMinutes: 5,
-      wsIdleMinutes: 5,
-    }),
-    defaultSessionTimeoutMinutes: 30,
-  });
-
-  assert.equal(expireCalls.length, 1);
-  assert.equal(socketDouble.getCloseCalls(), 0);
-  assert.equal(socketDouble.sentPayloads.length, 0);
-  assert.equal(connectedClients.has("activity-1"), true);
 });
 
 test("startIdleSessionSweeper resets its running guard after a failed pass", async () => {
@@ -143,23 +181,23 @@ test("startIdleSessionSweeper resets its running guard after a failed pass", asy
   };
 
   try {
-    const now = Date.now();
     const connectedClients = new Map<string, WebSocket>();
     let expireCalls = 0;
     const handle = startIdleSessionSweeper({
       storage: {
-        getActiveActivities: async () => [
-          createActiveActivity({
-            lastActivityTime: new Date(now - 10 * 60 * 1000),
-          }),
-        ],
+        getActiveActivities: async () => {
+          throw new Error("Batch idle sweeper should not load active activities");
+        },
         expireIdleActivitySession: async () => {
+          throw new Error("Batch idle sweeper should not expire sessions one-by-one");
+        },
+        expireIdleActivitySessions: async () => {
           expireCalls += 1;
           if (expireCalls === 1) {
             throw new Error("simulated expiry failure");
           }
 
-          return undefined;
+          return [];
         },
       },
       connectedClients,

@@ -50,6 +50,51 @@ test("SearchRepository.searchGlobalDataRows skips deep offset scans and still re
   }
 });
 
+test("SearchRepository.searchGlobalDataRows reuses a single windowed query when page data is available", async () => {
+  const repository = new SearchRepository();
+  const queries: string[] = [];
+  const restore = withMockedDbExecute((queryText) => {
+    queries.push(queryText);
+    return {
+      rows: [
+        {
+          id: "row-1",
+          import_id: "import-1",
+          json_data_jsonb: { name: "Alice" },
+          import_name: "Import Alpha",
+          import_filename: "alpha.csv",
+          total: 12,
+        },
+      ],
+    };
+  });
+
+  try {
+    const result = await repository.searchGlobalDataRows({
+      search: "Alice",
+      limit: 50,
+      offset: 0,
+    });
+
+    assert.deepEqual(result, {
+      rows: [
+        {
+          id: "row-1",
+          importId: "import-1",
+          importName: "Import Alpha",
+          importFilename: "alpha.csv",
+          jsonDataJsonb: { name: "Alice" },
+        },
+      ],
+      total: 12,
+    });
+    assert.equal(queries.length, 1);
+    assert.match(queries[0] || "", /COUNT\(\*\)\s+OVER\(\)::int AS total/i);
+  } finally {
+    restore();
+  }
+});
+
 test("SearchRepository.searchDataRows skips deep offset data queries without using cursor pagination", async () => {
   const repository = new SearchRepository();
   const queries: string[] = [];
@@ -86,16 +131,13 @@ test("SearchRepository.searchDataRows still allows deep traversal via cursor pag
   const queries: string[] = [];
   const restore = withMockedDbExecute((queryText) => {
     queries.push(queryText);
-    if (/COUNT\(\*\)::int AS total/i.test(queryText)) {
-      return { rows: [{ total: 45 }] };
-    }
-
     return {
       rows: [
         {
           id: "row-1",
           importId: "import-1",
           jsonDataJsonb: { name: "Alice" },
+          total: 45,
         },
       ],
     };
@@ -122,10 +164,10 @@ test("SearchRepository.searchDataRows still allows deep traversal via cursor pag
       total: 45,
       nextCursorRowId: null,
     });
-    assert.equal(queries.length, 2);
-    assert.match(queries[0] || "", /COUNT\(\*\)::int AS total/i);
-    assert.match(queries[1] || "", /\bLIMIT\b/i);
-    assert.doesNotMatch(queries[1] || "", /\bOFFSET\b/i);
+    assert.equal(queries.length, 1);
+    assert.match(queries[0] || "", /COUNT\(\*\)\s+OVER\(\)::int AS total/i);
+    assert.match(queries[0] || "", /\bLIMIT\b/i);
+    assert.doesNotMatch(queries[0] || "", /\bOFFSET\b/i);
   } finally {
     restore();
   }
@@ -146,16 +188,13 @@ test("SearchRepository.searchDataRows ignores column filters that are not real c
       return { rows: [{ column_name: "name" }] };
     }
 
-    if (/COUNT\(\*\)::int AS total/i.test(queryText)) {
-      return { rows: [{ total: 1 }] };
-    }
-
     return {
       rows: [
         {
           id: "row-1",
           importId: "import-1",
           jsonDataJsonb: { name: "Alice" },
+          total: 1,
         },
       ],
     };
@@ -186,17 +225,14 @@ test("SearchRepository.searchDataRows ignores column filters that are not real c
       nextCursorRowId: null,
     });
 
-    assert.equal(rawQueries.length, 3);
+    assert.equal(rawQueries.length, 2);
     assert.match(collectSqlText(rawQueries[0]), /jsonb_object_keys/i);
 
-    const totalBoundValues = collectBoundValues(rawQueries[1]);
-    const dataBoundValues = collectBoundValues(rawQueries[2]);
+    const dataBoundValues = collectBoundValues(rawQueries[1]);
 
-    assert.ok(totalBoundValues.includes("name"));
+    assert.match(collectSqlText(rawQueries[1]), /COUNT\(\*\)\s+OVER\(\)::int AS total/i);
     assert.ok(dataBoundValues.includes("name"));
-    assert.ok(!totalBoundValues.includes("DROP TABLE users"));
     assert.ok(!dataBoundValues.includes("DROP TABLE users"));
-    assert.ok(!totalBoundValues.includes("blocked-value"));
     assert.ok(!dataBoundValues.includes("blocked-value"));
   } finally {
     (db as unknown as {

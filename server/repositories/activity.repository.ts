@@ -13,6 +13,7 @@ import {
   deactivateUserSessionsByFingerprint,
   deleteActivity,
   expireIdleActivitySession,
+  expireIdleActivitySessions,
   getActiveActivities,
   getActiveActivitiesByUsername,
   getActivityById,
@@ -36,6 +37,7 @@ export class ActivityRepository {
   readonly getActiveActivitiesByUsername = getActiveActivitiesByUsername;
   readonly updateActivity = updateActivity;
   readonly expireIdleActivitySession = expireIdleActivitySession;
+  readonly expireIdleActivitySessions = expireIdleActivitySessions;
   readonly getActivityById = getActivityById;
   readonly getActiveActivities = getActiveActivities;
   readonly getAllActivities = getAllActivities;

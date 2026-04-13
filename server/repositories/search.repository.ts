@@ -29,6 +29,28 @@ export type {
 } from "./search-repository-types";
 
 export class SearchRepository {
+  private async getGlobalSearchTotal(searchPattern: string): Promise<number> {
+    const totalResult = await db.execute(sql`
+      SELECT COUNT(*)::int AS total
+      FROM public.data_rows dr
+      JOIN public.imports i ON i.id = dr.import_id
+      WHERE i.is_deleted = false
+        AND dr.json_data::text ILIKE ${searchPattern} ESCAPE '\'
+    `);
+
+    return getSearchTotalFromRows(totalResult.rows || []);
+  }
+
+  private async getImportSearchTotal(whereClause: SQL): Promise<number> {
+    const totalResult = await db.execute(sql`
+      SELECT COUNT(*)::int AS total
+      FROM public.data_rows dr
+      WHERE ${whereClause}
+    `);
+
+    return getSearchTotalFromRows(totalResult.rows || []);
+  }
+
   private async getImportColumnNames(importId: string): Promise<Set<string>> {
     const result = await db.execute(sql`
       SELECT DISTINCT key AS column_name
@@ -54,20 +76,13 @@ export class SearchRepository {
   }): Promise<{ rows: SearchGlobalDataRow[]; total: number }> {
     const { search, limit, offset } = params;
     const searchPattern = buildLikePattern(search, "contains");
+    const safeLimit = Math.max(1, Math.min(limit, MAX_SEARCH_LIMIT));
     const safeOffset = normalizeSearchOffset(offset);
 
     if (isSearchOffsetBeyondRuntimeWindow(safeOffset)) {
-      const totalResult = await db.execute(sql`
-        SELECT COUNT(*)::int AS total
-        FROM public.data_rows dr
-        JOIN public.imports i ON i.id = dr.import_id
-        WHERE i.is_deleted = false
-          AND dr.json_data::text ILIKE ${searchPattern} ESCAPE '\'
-      `);
-
       return {
         rows: [],
-        total: getSearchTotalFromRows(totalResult.rows || []),
+        total: await this.getGlobalSearchTotal(searchPattern),
       };
     }
 
@@ -77,27 +92,24 @@ export class SearchRepository {
         dr.import_id,
         dr.json_data as json_data_jsonb,
         i.name as import_name,
-        i.filename as import_filename
+        i.filename as import_filename,
+        COUNT(*) OVER()::int AS total
       FROM public.data_rows dr
       JOIN public.imports i ON i.id = dr.import_id
       WHERE i.is_deleted = false
         AND dr.json_data::text ILIKE ${searchPattern} ESCAPE '\'
       ORDER BY dr.id
-      LIMIT ${Math.max(1, Math.min(limit, MAX_SEARCH_LIMIT))}
+      LIMIT ${safeLimit}
       OFFSET ${safeOffset}
     `);
 
-    const totalResult = await db.execute(sql`
-      SELECT COUNT(*)::int AS total
-      FROM public.data_rows dr
-      JOIN public.imports i ON i.id = dr.import_id
-      WHERE i.is_deleted = false
-        AND dr.json_data::text ILIKE ${searchPattern} ESCAPE '\'
-    `);
-
     const rows = (rowsResult.rows || []).map((row) => mapSearchGlobalDataRow(row as Record<string, unknown>));
+    const total = rows.length > 0
+      ? getSearchTotalFromRows(rowsResult.rows || [])
+      : safeOffset > 0
+        ? await this.getGlobalSearchTotal(searchPattern)
+        : 0;
 
-    const total = getSearchTotalFromRows(totalResult.rows || []);
     return { rows, total };
   }
 
@@ -170,16 +182,10 @@ export class SearchRepository {
       ? conditions[0]
       : sql.join(conditions, sql` AND `);
 
-    const totalResult = await db.execute(sql`
-      SELECT COUNT(*)::int AS total
-      FROM public.data_rows dr
-      WHERE ${whereClause}
-    `);
-
     if (!cursor && isSearchOffsetBeyondRuntimeWindow(safeOffset)) {
       return {
         rows: [],
-        total: getSearchTotalFromRows(totalResult.rows || []),
+        total: await this.getImportSearchTotal(whereClause),
         nextCursorRowId: null,
       };
     }
@@ -188,7 +194,8 @@ export class SearchRepository {
       SELECT
         dr.id,
         dr.import_id as "importId",
-        dr.json_data as "jsonDataJsonb"
+        dr.json_data as "jsonDataJsonb",
+        COUNT(*) OVER()::int AS total
       FROM public.data_rows dr
       WHERE ${whereClause}
       ORDER BY dr.id
@@ -201,10 +208,15 @@ export class SearchRepository {
     );
     const hasMore = rawRows.length > safeLimit;
     const items = hasMore ? rawRows.slice(0, safeLimit) : rawRows;
+    const total = rawRows.length > 0
+      ? getSearchTotalFromRows(rowsResult.rows || [])
+      : !cursor && safeOffset > 0
+        ? await this.getImportSearchTotal(whereClause)
+        : 0;
 
     return {
       rows: items,
-      total: getSearchTotalFromRows(totalResult.rows || []),
+      total,
       nextCursorRowId: hasMore ? String(items[items.length - 1]?.id || "") || null : null,
     };
   }
