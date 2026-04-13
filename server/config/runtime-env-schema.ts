@@ -105,6 +105,7 @@ function optionalCollectionPiiRetiredFieldsEnv(name: string) {
 const runtimeEnvironmentSchema = z.object({
   NODE_ENV: optionalEnvString("NODE_ENV", 64),
   DEBUG_LOGS: optionalBooleanEnv("DEBUG_LOGS"),
+  OPERATIONS_DEBUG_ROUTES_ENABLED: optionalBooleanEnv("OPERATIONS_DEBUG_ROUTES_ENABLED"),
   LOG_LEVEL: optionalEnvString("LOG_LEVEL", 64),
   HOST: optionalEnvString("HOST", 255),
   PORT: optionalIntEnv("PORT", { min: 1, max: 65_535 }),

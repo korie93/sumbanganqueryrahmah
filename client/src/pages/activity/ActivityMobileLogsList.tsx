@@ -127,10 +127,12 @@ function ActivityMobileVirtualRow({
             {activity.isActive ? (
               <>
                 <Button
+                  type="button"
                   variant="outline"
                   size="sm"
                   onClick={() => onKickClick(activity)}
                   disabled={actionLoading === activity.id}
+                  aria-label={`Force logout ${activity.username}`}
                   className="w-full"
                   data-testid={`button-kick-${activity.id}`}
                 >
@@ -139,10 +141,12 @@ function ActivityMobileVirtualRow({
                 </Button>
                 {activity.role !== "superuser" ? (
                   <Button
+                    type="button"
                     variant="outline"
                     size="sm"
                     onClick={() => onBanClick(activity)}
                     disabled={actionLoading === activity.id}
+                    aria-label={`Ban ${activity.username}`}
                     className="w-full text-destructive"
                     data-testid={`button-ban-${activity.id}`}
                   >
@@ -153,10 +157,12 @@ function ActivityMobileVirtualRow({
               </>
             ) : null}
             <Button
+              type="button"
               variant="outline"
               size="sm"
               onClick={() => onDeleteClick(activity)}
               disabled={actionLoading === activity.id}
+              aria-label={`Delete activity log for ${activity.username}`}
               className="w-full text-destructive"
               data-testid={`button-delete-${activity.id}`}
             >

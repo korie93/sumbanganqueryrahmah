@@ -28,6 +28,14 @@ const DENSE_PAGE_HINTS = [
   "viewer",
 ] as const;
 
+function isFloatingAiOwnedDialog(element: Element | null): boolean {
+  if (!element || typeof (element as { getAttribute?: unknown }).getAttribute !== "function") {
+    return false;
+  }
+
+  return (element as { getAttribute(name: string): string | null }).getAttribute("data-floating-ai-dialog") === "true";
+}
+
 export function isVisibleElement(element: Element | null): element is HTMLElement {
   if (!(element instanceof HTMLElement)) return false;
   const rect = element.getBoundingClientRect();
@@ -79,7 +87,7 @@ export function collectFloatingAiAvoidRects(elements?: Iterable<Element>): RectL
 
 export function hasFloatingAiBlockingDialog(elements?: Iterable<Element>): boolean {
   return Array.from(elements ?? document.querySelectorAll(FLOATING_AI_DIALOG_SELECTOR)).some((element) =>
-    isVisibleElement(element),
+    !isFloatingAiOwnedDialog(element) && isVisibleElement(element),
   );
 }
 

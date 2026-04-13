@@ -1,4 +1,4 @@
-import { Suspense, lazy, useCallback, type MouseEvent, type ReactNode, type Ref } from "react";
+import { Suspense, lazy, useCallback, useEffect, useId, type MouseEvent, type ReactNode, type Ref } from "react";
 import { Bot, Minimize2 } from "lucide-react";
 import { useLocation } from "wouter";
 import { Badge } from "@/components/ui/badge";
@@ -8,6 +8,7 @@ import { resolveFloatingAIMinimizedStatus } from "@/components/floating-ai-statu
 import {
   shouldKeepFloatingAiPanelMounted,
 } from "@/components/floating-ai-visibility";
+import { applyFloatingAiModalIsolation } from "@/components/floating-ai-accessibility";
 import { useFloatingAIBehaviorState } from "@/components/useFloatingAIBehaviorState";
 import { useFloatingAILayoutState } from "@/components/useFloatingAILayoutState";
 import { cn } from "@/lib/utils";
@@ -117,6 +118,9 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
     aiStatus,
   });
   const shouldShowPanel = shouldKeepPanelMounted && isOpen && !layoutState.rootHidden;
+  const panelId = useId();
+  const panelTitleId = useId();
+  const panelDescriptionId = useId();
 
   const minimizedStatus = resolveFloatingAIMinimizedStatus(aiStatus);
   const handleTriggerToggleClick = useCallback((event: MouseEvent<HTMLButtonElement>) => {
@@ -131,6 +135,19 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
     event.currentTarget.blur();
     handleMinimize();
   }, [handleMinimize]);
+
+  useEffect(() => {
+    if (!isMobile || !shouldShowPanel) {
+      return;
+    }
+
+    const rootElement = floatingRootRef.current;
+    if (!rootElement) {
+      return;
+    }
+
+    return applyFloatingAiModalIsolation(rootElement);
+  }, [floatingRootRef, isMobile, shouldShowPanel]);
 
   if (hiddenForAiPage) return null;
 
@@ -169,6 +186,7 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
           )}
         >
           <section
+            id={panelId}
             className={cn(
               "flex h-full w-full flex-col overflow-hidden border bg-white/98 text-slate-900 shadow-xl ring-1 ring-slate-900/8 supports-[backdrop-filter]:backdrop-blur-sm dark:bg-slate-950/98 dark:text-card-foreground dark:ring-white/10",
               shouldShowPanel ? "pointer-events-auto" : "pointer-events-none",
@@ -181,8 +199,13 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
                   ? "border-sky-400/20 shadow-2xl"
                   : "rounded-[18px] border-sky-400/15",
             )}
-            aria-label="AI SQR Popup"
+            role="dialog"
+            aria-modal={isMobile ? true : undefined}
+            aria-labelledby={panelTitleId}
+            aria-describedby={panelDescriptionId}
+            data-floating-ai-dialog="true"
             data-floating-ai-panel-mode={layoutState.panel.mode}
+            tabIndex={-1}
           >
             {isMobile ? (
               <div
@@ -209,6 +232,7 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
             >
               <div className="min-w-0">
                 <p
+                  id={panelTitleId}
                   className={cn(
                     "truncate font-semibold",
                     isMobile ? "text-white" : "text-slate-950 dark:text-slate-50",
@@ -217,7 +241,10 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
                 >
                   AI SQR
                 </p>
-                <p className={cn("truncate text-[11px]", isMobile ? "text-white/70" : "text-slate-600 dark:text-slate-300/90")}>
+                <p
+                  id={panelDescriptionId}
+                  className={cn("truncate text-[11px]", isMobile ? "text-white/70" : "text-slate-600 dark:text-slate-300/90")}
+                >
                   Smart Query Engine
                 </p>
               </div>
@@ -312,6 +339,10 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
           type="button"
           onClick={handleTriggerToggleClick}
           title="AI SQR"
+          aria-controls={panelId}
+          aria-expanded={isOpen}
+          aria-haspopup="dialog"
+          aria-label={isOpen ? "Minimize AI SQR panel" : "Open AI SQR panel"}
           className={cn(
             "pointer-events-auto relative flex items-center justify-center rounded-full border border-sky-300/30 bg-sky-500 text-white shadow-[0_18px_38px_rgba(14,165,233,0.33)] transition-transform hover:scale-[1.03]",
             isMobile ? "h-12 w-12" : "h-14 w-14",
@@ -319,7 +350,6 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
             layoutState.triggerHidden ? "pointer-events-none scale-95 opacity-0" : "",
             !isOpen && isThinking ? styles.aiThinkingRing : "",
           )}
-          aria-label="AI SQR"
           data-testid="floating-ai-toggle"
         >
           <Bot className="h-6 w-6" />

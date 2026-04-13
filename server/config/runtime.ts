@@ -54,6 +54,10 @@ const isProduction = nodeEnv === "production";
 const isStrictLocalDevelopment = isStrictLocalDevelopmentEnvironment();
 const isProductionLike = isProductionLikeEnvironment();
 const debugLogs = readBoolean("DEBUG_LOGS", false) && !isProductionLike;
+const operationsDebugRoutesEnabled = readBoolean(
+  "OPERATIONS_DEBUG_ROUTES_ENABLED",
+  !isProductionLike,
+);
 const logLevel = readString("LOG_LEVEL", debugLogs ? "debug" : "info");
 const lowMemoryMode = readBoolean("SQR_LOW_MEMORY_MODE", true);
 const seedDefaultUsers = readBoolean("SEED_DEFAULT_USERS", false);
@@ -197,6 +201,7 @@ export const runtimeConfig: RuntimeConfig = Object.freeze({
     host: readString("HOST", "0.0.0.0"),
     publicAppUrl,
     debugLogs,
+    operationsDebugRoutesEnabled,
     logLevel,
     allowLocalDevCors: readBoolean("ALLOW_LOCAL_DEV_CORS", false),
     uploadsRootDir: resolveUploadsRootDir(),

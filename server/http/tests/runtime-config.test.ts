@@ -164,6 +164,34 @@ test("runtime config accepts production startup when required hardening env vars
   );
 });
 
+test("runtime config disables operations debug routes by default on production-like hosts", async () => {
+  await withEnv(
+    {
+      ...productionBaseOverrides,
+      BACKUP_ENCRYPTION_KEY: "A".repeat(32),
+      OPERATIONS_DEBUG_ROUTES_ENABLED: null,
+    },
+    async () => {
+      const runtimeModule = await importRuntimeFresh();
+      assert.equal(runtimeModule.runtimeConfig.app.operationsDebugRoutesEnabled, false);
+    },
+  );
+});
+
+test("runtime config allows explicit operations debug route enablement for controlled troubleshooting", async () => {
+  await withEnv(
+    {
+      ...productionBaseOverrides,
+      BACKUP_ENCRYPTION_KEY: "A".repeat(32),
+      OPERATIONS_DEBUG_ROUTES_ENABLED: "1",
+    },
+    async () => {
+      const runtimeModule = await importRuntimeFresh();
+      assert.equal(runtimeModule.runtimeConfig.app.operationsDebugRoutesEnabled, true);
+    },
+  );
+});
+
 test("runtime config rejects production startup when default user seeding is enabled", async () => {
   await withEnv(
     {

@@ -129,3 +129,74 @@ test("collectFloatingAiDomSnapshot reuses queried elements to derive visible rec
     }
   }
 });
+
+test("collectFloatingAiDomSnapshot ignores the floating AI panel's own dialog semantics", () => {
+  const originalHTMLElement = Object.getOwnPropertyDescriptor(globalThis, "HTMLElement");
+  const originalWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
+
+  class FakeHTMLElement {
+    readonly isContentEditable = false;
+    readonly tagName = "DIV";
+
+    constructor(private readonly floatingAiOwned: boolean) {}
+
+    getAttribute(name: string) {
+      if (name === "data-floating-ai-dialog" && this.floatingAiOwned) {
+        return "true";
+      }
+
+      return null;
+    }
+
+    getBoundingClientRect(): DOMRect {
+      return {
+        bottom: 120,
+        height: 80,
+        left: 24,
+        right: 144,
+        top: 40,
+        width: 120,
+      } as DOMRect;
+    }
+  }
+
+  Object.defineProperty(globalThis, "HTMLElement", {
+    configurable: true,
+    value: FakeHTMLElement,
+    writable: true,
+  });
+  Object.defineProperty(globalThis, "window", {
+    configurable: true,
+    value: {
+      getComputedStyle() {
+        return {
+          display: "block",
+          visibility: "visible",
+        } as CSSStyleDeclaration;
+      },
+    },
+    writable: true,
+  });
+
+  try {
+    const snapshot = collectFloatingAiDomSnapshot({
+      avoidElements: [],
+      dialogElements: [new FakeHTMLElement(true)] as unknown as Element[],
+      observedElements: [],
+    });
+
+    assert.equal(snapshot.hasBlockingDialog, false);
+  } finally {
+    if (originalHTMLElement) {
+      Object.defineProperty(globalThis, "HTMLElement", originalHTMLElement);
+    } else {
+      Reflect.deleteProperty(globalThis, "HTMLElement");
+    }
+
+    if (originalWindow) {
+      Object.defineProperty(globalThis, "window", originalWindow);
+    } else {
+      Reflect.deleteProperty(globalThis, "window");
+    }
+  }
+});

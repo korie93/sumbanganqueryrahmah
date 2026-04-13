@@ -35,6 +35,7 @@ export type RuntimeConfig = {
     host: string;
     publicAppUrl: string | null;
     debugLogs: boolean;
+    operationsDebugRoutesEnabled: boolean;
     logLevel: string;
     allowLocalDevCors: boolean;
     uploadsRootDir: string;
