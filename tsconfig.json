@@ -15,8 +15,6 @@
     "noUnusedParameters": true,
     "noEmit": true,
     "jsx": "react-jsx",
-    "baseUrl": ".",
-    "ignoreDeprecations": "5.0",
     "paths": {
       "@/*": ["./client/src/*"],
       "@shared/*": ["./shared/*"]

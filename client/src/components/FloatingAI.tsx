@@ -118,6 +118,14 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
     aiStatus,
   });
   const shouldShowPanel = shouldKeepPanelMounted && isOpen && !layoutState.rootHidden;
+  const modalDialogA11yProps = isMobile
+    ? ({
+      "aria-modal": "true",
+    } as const)
+    : {};
+  const triggerDisclosureA11yProps = {
+    "aria-expanded": isOpen ? "true" : "false",
+  } as const;
   const panelId = useId();
   const panelTitleId = useId();
   const panelDescriptionId = useId();
@@ -200,12 +208,12 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
                   : "rounded-[18px] border-sky-400/15",
             )}
             role="dialog"
-            aria-modal={isMobile ? true : undefined}
             aria-labelledby={panelTitleId}
             aria-describedby={panelDescriptionId}
             data-floating-ai-dialog="true"
             data-floating-ai-panel-mode={layoutState.panel.mode}
             tabIndex={-1}
+            {...modalDialogA11yProps}
           >
             {isMobile ? (
               <div
@@ -340,9 +348,9 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
           onClick={handleTriggerToggleClick}
           title="AI SQR"
           aria-controls={panelId}
-          aria-expanded={isOpen}
           aria-haspopup="dialog"
           aria-label={isOpen ? "Minimize AI SQR panel" : "Open AI SQR panel"}
+          {...triggerDisclosureA11yProps}
           className={cn(
             "pointer-events-auto relative flex items-center justify-center rounded-full border border-sky-300/30 bg-sky-500 text-white shadow-[0_18px_38px_rgba(14,165,233,0.33)] transition-transform hover:scale-[1.03]",
             isMobile ? "h-12 w-12" : "h-14 w-14",

@@ -1,4 +1,12 @@
-import { useMemo } from "react";
+import {
+  memo,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
 import type { ListChildComponentProps } from "react-window";
 import { FixedSizeList } from "react-window";
 import { Shield, Trash2, UserX } from "lucide-react";
@@ -36,6 +44,77 @@ type ActivityMobileLogsListProps = Pick<
 
 type ActivityMobileVirtualListData = ActivityMobileLogsListProps;
 
+type ActivityVirtualRowStyleInput = {
+  position?: string | undefined;
+  top?: number | string | undefined;
+  left?: number | string | undefined;
+  right?: number | string | undefined;
+  bottom?: number | string | undefined;
+  height?: number | string | undefined;
+  width?: number | string | undefined;
+};
+
+const ACTIVITY_VIRTUAL_ROW_STYLE_KEYS = [
+  "position",
+  "top",
+  "left",
+  "right",
+  "bottom",
+  "height",
+  "width",
+] as const;
+
+const useClientLayoutEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
+
+function normalizeActivityVirtualCssValue(value: number | string | undefined): string {
+  if (value === undefined) {
+    return "";
+  }
+
+  if (typeof value === "number") {
+    return `${value}px`;
+  }
+
+  return value;
+}
+
+function applyActivityVirtualRowStyle(
+  target: CSSStyleDeclaration,
+  style: ActivityVirtualRowStyleInput,
+) {
+  for (const key of ACTIVITY_VIRTUAL_ROW_STYLE_KEYS) {
+    if (key === "position") {
+      target.position = typeof style.position === "string" ? style.position : "";
+      continue;
+    }
+
+    target[key] = normalizeActivityVirtualCssValue(style[key]);
+  }
+}
+
+const ActivityPositionedRowShell = memo(function ActivityPositionedRowShell({
+  positionStyle,
+  className,
+  children,
+}: {
+  positionStyle: CSSProperties;
+  className: string;
+  children: ReactNode;
+}) {
+  const shellRef = useRef<HTMLDivElement | null>(null);
+
+  useClientLayoutEffect(() => {
+    const node = shellRef.current;
+    if (!node) {
+      return;
+    }
+
+    applyActivityVirtualRowStyle(node.style, positionStyle);
+  }, [positionStyle]);
+
+  return <div ref={shellRef} className={className}>{children}</div>;
+});
+
 function ActivityMobileVirtualRow({
   data,
   index,
@@ -61,7 +140,7 @@ function ActivityMobileVirtualRow({
   const browserLabel = `${browser}${version ? ` ${version}` : ""}`;
 
   return (
-    <div style={style} className="box-border pb-3">
+    <ActivityPositionedRowShell positionStyle={style} className="box-border pb-3">
       <div
         className="flex h-full flex-col space-y-3 rounded-2xl border border-border/70 bg-card/80 p-3.5 shadow-xs"
         data-testid={`activity-row-${activity.id}`}
@@ -172,7 +251,7 @@ function ActivityMobileVirtualRow({
           </div>
         ) : null}
       </div>
-    </div>
+    </ActivityPositionedRowShell>
   );
 }
 

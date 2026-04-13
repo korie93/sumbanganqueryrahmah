@@ -40,4 +40,6 @@ test("ActivityMobileLogsList keeps moderation actions on native buttons for keyb
   assert.match(markup, /Ban operator\.one/);
   assert.match(markup, /Delete activity log for operator\.one/);
   assert.match(markup, /type="button"/);
+  assert.match(markup, /<div class="box-border pb-3">/);
+  assert.doesNotMatch(markup, /<div style="[^"]*" class="box-border pb-3">/);
 });
