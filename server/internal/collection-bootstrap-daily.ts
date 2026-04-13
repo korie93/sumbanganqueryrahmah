@@ -28,9 +28,45 @@ export async function ensureCollectionDailyTables(): Promise<void> {
     UPDATE public.collection_daily_targets
     SET
       username = lower(trim(COALESCE(username, ''))),
+      created_by = NULLIF(trim(COALESCE(created_by, '')), ''),
+      updated_by = NULLIF(trim(COALESCE(updated_by, '')), ''),
       monthly_target = COALESCE(monthly_target, 0),
       created_at = COALESCE(created_at, now()),
       updated_at = COALESCE(updated_at, now())
+  `);
+  await db.execute(sql`
+    UPDATE public.collection_daily_targets target
+    SET created_by = usr.username
+    FROM public.users usr
+    WHERE target.created_by IS NOT NULL
+      AND lower(usr.username) = lower(target.created_by)
+  `);
+  await db.execute(sql`
+    UPDATE public.collection_daily_targets target
+    SET updated_by = usr.username
+    FROM public.users usr
+    WHERE target.updated_by IS NOT NULL
+      AND lower(usr.username) = lower(target.updated_by)
+  `);
+  await db.execute(sql`
+    UPDATE public.collection_daily_targets
+    SET created_by = NULL
+    WHERE created_by IS NOT NULL
+      AND NOT EXISTS (
+        SELECT 1
+        FROM public.users usr
+        WHERE usr.username = public.collection_daily_targets.created_by
+      )
+  `);
+  await db.execute(sql`
+    UPDATE public.collection_daily_targets
+    SET updated_by = NULL
+    WHERE updated_by IS NOT NULL
+      AND NOT EXISTS (
+        SELECT 1
+        FROM public.users usr
+        WHERE usr.username = public.collection_daily_targets.updated_by
+      )
   `);
   await db.execute(sql`DELETE FROM public.collection_daily_targets WHERE trim(COALESCE(username, '')) = ''`);
   await db.execute(sql`
@@ -40,6 +76,36 @@ export async function ensureCollectionDailyTables(): Promise<void> {
   await db.execute(sql`
     CREATE INDEX IF NOT EXISTS idx_collection_daily_targets_year_month
     ON public.collection_daily_targets (year, month)
+  `);
+  await db.execute(sql`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'fk_collection_daily_targets_created_by_username'
+      ) THEN
+        ALTER TABLE public.collection_daily_targets
+        ADD CONSTRAINT fk_collection_daily_targets_created_by_username
+        FOREIGN KEY (created_by)
+        REFERENCES public.users(username)
+        ON UPDATE CASCADE
+        ON DELETE SET NULL;
+      END IF;
+
+      IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'fk_collection_daily_targets_updated_by_username'
+      ) THEN
+        ALTER TABLE public.collection_daily_targets
+        ADD CONSTRAINT fk_collection_daily_targets_updated_by_username
+        FOREIGN KEY (updated_by)
+        REFERENCES public.users(username)
+        ON UPDATE CASCADE
+        ON DELETE SET NULL;
+      END IF;
+    END $$;
   `);
 
   await db.execute(sql`
@@ -72,8 +138,44 @@ export async function ensureCollectionDailyTables(): Promise<void> {
     SET
       is_working_day = COALESCE(is_working_day, true),
       is_holiday = COALESCE(is_holiday, false),
+      created_by = NULLIF(trim(COALESCE(created_by, '')), ''),
+      updated_by = NULLIF(trim(COALESCE(updated_by, '')), ''),
       created_at = COALESCE(created_at, now()),
       updated_at = COALESCE(updated_at, now())
+  `);
+  await db.execute(sql`
+    UPDATE public.collection_daily_calendar calendar
+    SET created_by = usr.username
+    FROM public.users usr
+    WHERE calendar.created_by IS NOT NULL
+      AND lower(usr.username) = lower(calendar.created_by)
+  `);
+  await db.execute(sql`
+    UPDATE public.collection_daily_calendar calendar
+    SET updated_by = usr.username
+    FROM public.users usr
+    WHERE calendar.updated_by IS NOT NULL
+      AND lower(usr.username) = lower(calendar.updated_by)
+  `);
+  await db.execute(sql`
+    UPDATE public.collection_daily_calendar
+    SET created_by = NULL
+    WHERE created_by IS NOT NULL
+      AND NOT EXISTS (
+        SELECT 1
+        FROM public.users usr
+        WHERE usr.username = public.collection_daily_calendar.created_by
+      )
+  `);
+  await db.execute(sql`
+    UPDATE public.collection_daily_calendar
+    SET updated_by = NULL
+    WHERE updated_by IS NOT NULL
+      AND NOT EXISTS (
+        SELECT 1
+        FROM public.users usr
+        WHERE usr.username = public.collection_daily_calendar.updated_by
+      )
   `);
   await db.execute(sql`
     CREATE UNIQUE INDEX IF NOT EXISTS idx_collection_daily_calendar_unique
@@ -82,5 +184,35 @@ export async function ensureCollectionDailyTables(): Promise<void> {
   await db.execute(sql`
     CREATE INDEX IF NOT EXISTS idx_collection_daily_calendar_year_month
     ON public.collection_daily_calendar (year, month)
+  `);
+  await db.execute(sql`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'fk_collection_daily_calendar_created_by_username'
+      ) THEN
+        ALTER TABLE public.collection_daily_calendar
+        ADD CONSTRAINT fk_collection_daily_calendar_created_by_username
+        FOREIGN KEY (created_by)
+        REFERENCES public.users(username)
+        ON UPDATE CASCADE
+        ON DELETE SET NULL;
+      END IF;
+
+      IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'fk_collection_daily_calendar_updated_by_username'
+      ) THEN
+        ALTER TABLE public.collection_daily_calendar
+        ADD CONSTRAINT fk_collection_daily_calendar_updated_by_username
+        FOREIGN KEY (updated_by)
+        REFERENCES public.users(username)
+        ON UPDATE CASCADE
+        ON DELETE SET NULL;
+      END IF;
+    END $$;
   `);
 }

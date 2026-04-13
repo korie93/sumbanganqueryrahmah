@@ -158,13 +158,16 @@ export const bannedSessions = pgTable("banned_sessions", {
   id: text("id").primaryKey(),
   username: text("username").notNull(),
   role: text("role").notNull(),
-  activityId: text("activity_id").notNull(),
+  activityId: text("activity_id")
+    .notNull()
+    .references(() => userActivity.id, { onDelete: "cascade", onUpdate: "cascade" }),
   fingerprint: text("fingerprint"),
   ipAddress: text("ip_address"),
   browser: text("browser"),
   pcName: text("pc_name"),
   bannedAt: utcTimestamp("banned_at").defaultNow().notNull(),
 }, (table) => ({
+  activityIdIdx: index("idx_banned_sessions_activity_id").on(table.activityId),
   fingerprintIdx: index("idx_banned_sessions_fingerprint").on(table.fingerprint),
   ipAddressIdx: index("idx_banned_sessions_ip").on(table.ipAddress),
 }));

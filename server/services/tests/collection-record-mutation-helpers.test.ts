@@ -4,7 +4,9 @@ import test from "node:test";
 import {
   buildCollectionAuditFieldChanges,
   buildCollectionAuditSnapshot,
+  buildCreateReceiptInput,
   buildCollectionRecordUpdateDraft,
+  buildReceiptUpdateInput,
   maskCollectionAuditCustomerName,
   normalizeCollectionReceiptMetadata,
   normalizeCollectionRecordFields,
@@ -220,5 +222,61 @@ test("collection receipt helpers normalize metadata and uploaded receipt rows", 
   assert.equal(uploadedRows.length, 1);
   assert.equal(uploadedRows[0]?.originalMimeType, "application/octet-stream");
   assert.equal(uploadedRows[0]?.receiptAmountCents, 500);
+  assert.equal(uploadedRows[0]?.extractedAmountCents, 500);
   assert.equal(uploadedRows[0]?.fileHash, "hash-1");
+});
+
+test("collection receipt helpers keep suggested extraction state compatible with database constraints", () => {
+  const metadata = normalizeCollectionReceiptMetadata({
+    extractionStatus: "suggested",
+    receiptAmount: "55.30",
+  });
+
+  assert.deepEqual(metadata, {
+    receiptId: null,
+    receiptAmountCents: 5530,
+    extractedAmountCents: 5530,
+    extractionStatus: "suggested",
+    extractionConfidence: null,
+    receiptDate: null,
+    receiptReference: null,
+    fileHash: null,
+  });
+
+  const created = buildCreateReceiptInput(
+    {
+      storagePath: "receipts/a.jpg",
+      originalFileName: "a.jpg",
+      originalMimeType: "image/jpeg",
+      originalExtension: ".jpg",
+      fileSize: 42,
+      receiptAmountCents: null,
+      extractedAmountCents: null,
+      extractionStatus: "unprocessed",
+      extractionConfidence: null,
+      receiptDate: null,
+      receiptReference: null,
+      fileHash: null,
+    },
+    {
+      receiptId: null,
+      receiptAmountCents: 5530,
+      extractedAmountCents: null,
+      extractionStatus: "suggested",
+      extractionConfidence: null,
+      receiptDate: null,
+      receiptReference: null,
+      fileHash: null,
+    },
+  );
+  assert.equal(created.extractionStatus, "suggested");
+  assert.equal(created.extractedAmountCents, 5530);
+
+  const updated = buildReceiptUpdateInput("receipt-1", {
+    receiptAmountCents: null,
+    extractedAmountCents: null,
+    extractionStatus: "suggested",
+  });
+  assert.equal(updated.extractionStatus, "unprocessed");
+  assert.equal(updated.extractedAmountCents, null);
 });

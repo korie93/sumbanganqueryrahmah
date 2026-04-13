@@ -90,6 +90,30 @@ const collectionPiiPlaintextNullableMigrationSql = readFileSync(
   path.join(repoRoot, "drizzle", collectionPiiPlaintextNullableMigrationFileName),
   "utf8",
 );
+const collectionAuditConstraintMigrationFileName = migrationSqlFileNames.find((name) => /^0032_.*\.sql$/.test(name));
+if (!collectionAuditConstraintMigrationFileName) {
+  throw new Error("Expected a 0032 collection audit constraint migration file in drizzle/");
+}
+const collectionAuditConstraintMigrationSql = readFileSync(
+  path.join(repoRoot, "drizzle", collectionAuditConstraintMigrationFileName),
+  "utf8",
+);
+const collectionRecordActorIntegrityMigrationFileName = migrationSqlFileNames.find((name) => /^0033_.*\.sql$/.test(name));
+if (!collectionRecordActorIntegrityMigrationFileName) {
+  throw new Error("Expected a 0033 collection record actor integrity migration file in drizzle/");
+}
+const collectionRecordActorIntegrityMigrationSql = readFileSync(
+  path.join(repoRoot, "drizzle", collectionRecordActorIntegrityMigrationFileName),
+  "utf8",
+);
+const collectionRecordCreatedByForeignKeyMigrationFileName = migrationSqlFileNames.find((name) => /^0034_.*\.sql$/.test(name));
+if (!collectionRecordCreatedByForeignKeyMigrationFileName) {
+  throw new Error("Expected a 0034 collection record created_by foreign key migration file in drizzle/");
+}
+const collectionRecordCreatedByForeignKeyMigrationSql = readFileSync(
+  path.join(repoRoot, "drizzle", collectionRecordCreatedByForeignKeyMigrationFileName),
+  "utf8",
+);
 const preTimezoneMigrationSqlTexts = migrationSqlFileNames
   .filter((name) => name.localeCompare(timezoneMigrationFileName) < 0)
   .sort((left, right) => left.localeCompare(right))
@@ -325,6 +349,461 @@ test(
         assert.equal(await indexExists(pool, "idx_data_embeddings_import_id"), false);
         assert.equal(await indexExists(pool, "idx_data_embeddings_vector"), false);
       }
+    });
+  },
+);
+
+test(
+  "reviewed collection audit constraint migration canonicalizes nullable audit users and enforces safe foreign keys",
+  { skip: skipReason || false },
+  async () => {
+    await withTempDatabase(async ({ pool }) => {
+      await pool.query(`
+        CREATE TABLE public.users (
+          id text PRIMARY KEY,
+          username text NOT NULL UNIQUE
+        );
+
+        CREATE TABLE public.user_activity (
+          id text PRIMARY KEY
+        );
+
+        CREATE TABLE public.collection_staff_nicknames (
+          id uuid PRIMARY KEY,
+          nickname text NOT NULL,
+          created_by text
+        );
+
+        CREATE TABLE public.admin_groups (
+          id uuid PRIMARY KEY,
+          leader_nickname text NOT NULL,
+          created_by text NOT NULL
+        );
+
+        CREATE TABLE public.collection_daily_targets (
+          id uuid PRIMARY KEY,
+          username text NOT NULL,
+          year integer NOT NULL,
+          month integer NOT NULL,
+          created_by text,
+          updated_by text
+        );
+
+        CREATE TABLE public.collection_daily_calendar (
+          id uuid PRIMARY KEY,
+          year integer NOT NULL,
+          month integer NOT NULL,
+          day integer NOT NULL,
+          created_by text,
+          updated_by text
+        );
+
+        CREATE TABLE public.banned_sessions (
+          id text PRIMARY KEY,
+          username text NOT NULL,
+          role text NOT NULL,
+          activity_id text NOT NULL
+        );
+
+        CREATE TABLE public.collection_record_receipts (
+          id uuid PRIMARY KEY,
+          receipt_amount bigint,
+          extracted_amount bigint,
+          extraction_status text NOT NULL DEFAULT 'unprocessed'
+        );
+      `);
+
+      await pool.query(`
+        INSERT INTO public.users (id, username)
+        VALUES
+          ('user-1', 'admin.user'),
+          ('user-2', 'auditor.user');
+
+        INSERT INTO public.user_activity (id)
+        VALUES ('activity-1');
+
+        INSERT INTO public.collection_staff_nicknames (id, nickname, created_by)
+        VALUES
+          ('11111111-1111-1111-1111-111111111111'::uuid, 'Collector Alpha', ' Admin.User '),
+          ('11111111-1111-1111-1111-111111111112'::uuid, 'Collector Beta', 'system-seed');
+
+        INSERT INTO public.admin_groups (id, leader_nickname, created_by)
+        VALUES
+          ('22222222-2222-2222-2222-222222222221'::uuid, 'Collector Alpha', 'AUDITOR.USER'),
+          ('22222222-2222-2222-2222-222222222222'::uuid, 'Collector Beta', 'system-seed');
+
+        INSERT INTO public.collection_daily_targets (id, username, year, month, created_by, updated_by)
+        VALUES
+          ('33333333-3333-3333-3333-333333333331'::uuid, 'admin.user', 2026, 4, 'ADMIN.USER', 'auditor.user'),
+          ('33333333-3333-3333-3333-333333333332'::uuid, 'admin.user', 2026, 5, 'legacy.user', 'system-seed');
+
+        INSERT INTO public.collection_daily_calendar (id, year, month, day, created_by, updated_by)
+        VALUES
+          ('44444444-4444-4444-4444-444444444441'::uuid, 2026, 4, 8, ' auditor.user ', 'ADMIN.USER'),
+          ('44444444-4444-4444-4444-444444444442'::uuid, 2026, 4, 9, 'missing.user', '');
+
+        INSERT INTO public.banned_sessions (id, username, role, activity_id)
+        VALUES
+          ('ban-1', 'admin.user', 'admin', 'activity-1'),
+          ('ban-2', 'admin.user', 'admin', 'missing-activity');
+
+        INSERT INTO public.collection_record_receipts (id, receipt_amount, extracted_amount, extraction_status)
+        VALUES
+          ('55555555-5555-5555-5555-555555555551'::uuid, 1234, NULL, 'suggested'),
+          ('55555555-5555-5555-5555-555555555552'::uuid, NULL, NULL, 'suggested');
+      `);
+
+      await applySql(pool, collectionAuditConstraintMigrationSql);
+
+      assert.equal(await constraintExists(pool, "fk_collection_staff_nicknames_created_by_username"), true);
+      assert.equal(await constraintExists(pool, "fk_admin_groups_created_by_username"), true);
+      assert.equal(await constraintExists(pool, "fk_collection_daily_targets_created_by_username"), true);
+      assert.equal(await constraintExists(pool, "fk_collection_daily_targets_updated_by_username"), true);
+      assert.equal(await constraintExists(pool, "fk_collection_daily_calendar_created_by_username"), true);
+      assert.equal(await constraintExists(pool, "fk_collection_daily_calendar_updated_by_username"), true);
+      assert.equal(await constraintExists(pool, "fk_banned_sessions_activity_id"), true);
+      assert.equal(await constraintExists(pool, "chk_collection_record_receipts_suggested_extracted_amount"), true);
+      assert.equal(await indexExists(pool, "idx_banned_sessions_activity_id"), true);
+      assert.equal(await columnIsNotNull(pool, "admin_groups", "created_by"), false);
+
+      const nicknameAuditRows = await pool.query<{ created_by: string | null }>(`
+        SELECT created_by
+        FROM public.collection_staff_nicknames
+        ORDER BY nickname ASC
+      `);
+      assert.deepEqual(
+        nicknameAuditRows.rows.map((row) => row.created_by),
+        ["admin.user", null],
+      );
+
+      const adminGroupAuditRows = await pool.query<{ created_by: string | null }>(`
+        SELECT created_by
+        FROM public.admin_groups
+        ORDER BY leader_nickname ASC
+      `);
+      assert.deepEqual(
+        adminGroupAuditRows.rows.map((row) => row.created_by),
+        ["auditor.user", null],
+      );
+
+      const targetAuditRows = await pool.query<{ created_by: string | null; updated_by: string | null }>(`
+        SELECT created_by, updated_by
+        FROM public.collection_daily_targets
+        ORDER BY month ASC
+      `);
+      assert.deepEqual(targetAuditRows.rows, [
+        { created_by: "admin.user", updated_by: "auditor.user" },
+        { created_by: null, updated_by: null },
+      ]);
+
+      const calendarAuditRows = await pool.query<{ created_by: string | null; updated_by: string | null }>(`
+        SELECT created_by, updated_by
+        FROM public.collection_daily_calendar
+        ORDER BY day ASC
+      `);
+      assert.deepEqual(calendarAuditRows.rows, [
+        { created_by: "auditor.user", updated_by: "admin.user" },
+        { created_by: null, updated_by: null },
+      ]);
+
+      const bannedSessionIds = await pool.query<{ id: string }>(`
+        SELECT id
+        FROM public.banned_sessions
+        ORDER BY id ASC
+      `);
+      assert.deepEqual(bannedSessionIds.rows.map((row) => row.id), ["ban-1"]);
+
+      const receiptState = await pool.query<{
+        id: string;
+        receipt_amount: string | null;
+        extracted_amount: string | null;
+        extraction_status: string;
+      }>(`
+        SELECT id, receipt_amount::text, extracted_amount::text, extraction_status
+        FROM public.collection_record_receipts
+        ORDER BY id ASC
+      `);
+      assert.deepEqual(receiptState.rows, [
+        {
+          id: "55555555-5555-5555-5555-555555555551",
+          receipt_amount: "1234",
+          extracted_amount: "1234",
+          extraction_status: "suggested",
+        },
+        {
+          id: "55555555-5555-5555-5555-555555555552",
+          receipt_amount: null,
+          extracted_amount: null,
+          extraction_status: "unprocessed",
+        },
+      ]);
+
+      await assert.rejects(
+        () => pool.query(`
+          INSERT INTO public.collection_record_receipts (id, receipt_amount, extracted_amount, extraction_status)
+          VALUES ('55555555-5555-5555-5555-555555555553'::uuid, NULL, NULL, 'suggested')
+        `),
+        /chk_collection_record_receipts_suggested_extracted_amount/i,
+      );
+
+      const adminGroupRules = await foreignKeyRules(pool, "admin_groups", "created_by");
+      const staffNicknameRules = await foreignKeyRules(pool, "collection_staff_nicknames", "created_by");
+      const bannedSessionRules = await foreignKeyRules(pool, "banned_sessions", "activity_id");
+
+      assert.equal(adminGroupRules[0]?.delete_rule, "SET NULL");
+      assert.equal(adminGroupRules[0]?.update_rule, "CASCADE");
+      assert.equal(staffNicknameRules[0]?.delete_rule, "SET NULL");
+      assert.equal(staffNicknameRules[0]?.update_rule, "CASCADE");
+      assert.equal(bannedSessionRules[0]?.delete_rule, "CASCADE");
+      assert.equal(bannedSessionRules[0]?.update_rule, "CASCADE");
+    });
+  },
+);
+
+test(
+  "reviewed collection record actor integrity migration canonicalizes created_by_login and keeps staff_username aligned to nickname",
+  { skip: skipReason || false },
+  async () => {
+    await withTempDatabase(async ({ pool }) => {
+      await pool.query(`
+        CREATE TABLE public.users (
+          id text PRIMARY KEY,
+          username text NOT NULL UNIQUE
+        );
+
+        CREATE TABLE public.collection_records (
+          id uuid PRIMARY KEY,
+          batch text NOT NULL,
+          payment_date date NOT NULL,
+          amount numeric(14,2) NOT NULL,
+          created_by_login text NOT NULL,
+          collection_staff_nickname text NOT NULL,
+          staff_username text NOT NULL,
+          created_at timestamp with time zone NOT NULL DEFAULT now(),
+          updated_at timestamp with time zone NOT NULL DEFAULT now()
+        );
+      `);
+
+      await pool.query(`
+        INSERT INTO public.users (id, username)
+        VALUES
+          ('user-1', 'admin.user'),
+          ('user-2', 'staff.user');
+
+        INSERT INTO public.collection_records (
+          id,
+          batch,
+          payment_date,
+          amount,
+          created_by_login,
+          collection_staff_nickname,
+          staff_username
+        )
+        VALUES
+          (
+            '66666666-6666-6666-6666-666666666661'::uuid,
+            'P10',
+            DATE '2026-04-12',
+            10.00,
+            ' Admin.User ',
+            ' Collector Alpha ',
+            'staff.alpha'
+          ),
+          (
+            '66666666-6666-6666-6666-666666666662'::uuid,
+            'P10',
+            DATE '2026-04-12',
+            12.00,
+            'system',
+            '',
+            'Collector Beta'
+          );
+      `);
+
+      await applySql(pool, collectionRecordActorIntegrityMigrationSql);
+
+      assert.equal(
+        await constraintExists(pool, "chk_collection_records_staff_username_matches_nickname"),
+        true,
+      );
+
+      const actorRows = await pool.query<{
+        created_by_login: string;
+        collection_staff_nickname: string;
+        staff_username: string;
+      }>(`
+        SELECT created_by_login, collection_staff_nickname, staff_username
+        FROM public.collection_records
+        ORDER BY id ASC
+      `);
+      assert.deepEqual(actorRows.rows, [
+        {
+          created_by_login: "admin.user",
+          collection_staff_nickname: "Collector Alpha",
+          staff_username: "Collector Alpha",
+        },
+        {
+          created_by_login: "system",
+          collection_staff_nickname: "Collector Beta",
+          staff_username: "Collector Beta",
+        },
+      ]);
+
+      await assert.rejects(
+        () => pool.query(`
+          INSERT INTO public.collection_records (
+            id,
+            batch,
+            payment_date,
+            amount,
+            created_by_login,
+            collection_staff_nickname,
+            staff_username
+          )
+          VALUES (
+            '66666666-6666-6666-6666-666666666663'::uuid,
+            'P10',
+            DATE '2026-04-12',
+            15.00,
+            'staff.user',
+            'Collector Gamma',
+            'Mismatch Gamma'
+          )
+        `),
+        /chk_collection_records_staff_username_matches_nickname/i,
+      );
+    });
+  },
+);
+
+test(
+  "reviewed collection record created_by migration provisions a disabled system actor and enforces a safe foreign key",
+  { skip: skipReason || false },
+  async () => {
+    await withTempDatabase(async ({ pool }) => {
+      await pool.query(`
+        CREATE TABLE public.users (
+          id text PRIMARY KEY,
+          username text NOT NULL UNIQUE,
+          full_name text,
+          email text,
+          role text NOT NULL DEFAULT 'user',
+          password_hash text,
+          status text NOT NULL DEFAULT 'active',
+          must_change_password boolean NOT NULL DEFAULT false,
+          password_reset_by_superuser boolean NOT NULL DEFAULT false,
+          two_factor_enabled boolean NOT NULL DEFAULT false,
+          two_factor_secret_encrypted text,
+          two_factor_configured_at timestamp with time zone,
+          failed_login_attempts integer NOT NULL DEFAULT 0,
+          locked_at timestamp with time zone,
+          locked_reason text,
+          locked_by_system boolean NOT NULL DEFAULT false,
+          created_by text,
+          is_banned boolean DEFAULT false,
+          created_at timestamp with time zone DEFAULT now(),
+          updated_at timestamp with time zone DEFAULT now(),
+          password_changed_at timestamp with time zone,
+          activated_at timestamp with time zone,
+          last_login_at timestamp with time zone
+        );
+
+        CREATE TABLE public.collection_records (
+          id uuid PRIMARY KEY,
+          batch text NOT NULL,
+          payment_date date NOT NULL,
+          amount numeric(14,2) NOT NULL,
+          created_by_login text NOT NULL,
+          collection_staff_nickname text NOT NULL,
+          staff_username text NOT NULL,
+          created_at timestamp with time zone NOT NULL DEFAULT now(),
+          updated_at timestamp with time zone NOT NULL DEFAULT now()
+        );
+      `);
+
+      await pool.query(`
+        INSERT INTO public.users (id, username, role, password_hash, status)
+        VALUES ('user-1', 'admin.user', 'admin', '$2b$12$legacyhashlegacyhashlegacyhashlegacyhashlegacyhashlegacyh', 'active');
+
+        INSERT INTO public.collection_records (
+          id,
+          batch,
+          payment_date,
+          amount,
+          created_by_login,
+          collection_staff_nickname,
+          staff_username
+        )
+        VALUES
+          (
+            '77777777-7777-7777-7777-777777777771'::uuid,
+            'P10',
+            DATE '2026-04-12',
+            10.00,
+            ' Admin.User ',
+            'Collector Alpha',
+            'Collector Alpha'
+          ),
+          (
+            '77777777-7777-7777-7777-777777777772'::uuid,
+            'P10',
+            DATE '2026-04-12',
+            12.00,
+            'ghost.user',
+            'Collector Beta',
+            'Collector Beta'
+          );
+      `);
+
+      await applySql(pool, collectionRecordCreatedByForeignKeyMigrationSql);
+
+      const systemActor = await pool.query<{
+        username: string;
+        status: string;
+      }>(`
+        SELECT username, status
+        FROM public.users
+        WHERE username = 'system'
+      `);
+      assert.deepEqual(systemActor.rows, [{ username: "system", status: "disabled" }]);
+
+      const actorRows = await pool.query<{ created_by_login: string }>(`
+        SELECT created_by_login
+        FROM public.collection_records
+        ORDER BY id ASC
+      `);
+      assert.deepEqual(actorRows.rows, [
+        { created_by_login: "admin.user" },
+        { created_by_login: "system" },
+      ]);
+
+      const createdByRules = await foreignKeyRules(pool, "collection_records", "created_by_login");
+      assert.equal(createdByRules[0]?.constraint_name, "fk_collection_records_created_by_login_username");
+      assert.equal(createdByRules[0]?.update_rule, "CASCADE");
+
+      await assert.rejects(
+        () => pool.query(`
+          INSERT INTO public.collection_records (
+            id,
+            batch,
+            payment_date,
+            amount,
+            created_by_login,
+            collection_staff_nickname,
+            staff_username
+          )
+          VALUES (
+            '77777777-7777-7777-7777-777777777773'::uuid,
+            'P10',
+            DATE '2026-04-12',
+            15.00,
+            'missing.user',
+            'Collector Gamma',
+            'Collector Gamma'
+          )
+        `),
+        /fk_collection_records_created_by_login_username/i,
+      );
     });
   },
 );
@@ -1025,6 +1504,109 @@ test(
       assert.equal(await indexExists(pool, "idx_collection_record_daily_rollups_slice_unique"), true);
       assert.equal(await indexExists(pool, "idx_collection_rollup_refresh_queue_slice_unique"), true);
       assert.equal(await indexExists(pool, "idx_collection_record_monthly_rollups_slice_unique"), true);
+    });
+  },
+);
+
+test(
+  "reviewed collection bootstrap adds safe created_by_login foreign keys when users bootstrap already provisioned the system actor",
+  { skip: skipReason || false },
+  async () => {
+    await withTempDatabase(async ({ pool }) => {
+      await pool.query(`
+        CREATE TABLE public.users (
+          id text PRIMARY KEY,
+          username text,
+          password text,
+          role text,
+          status text,
+          created_at timestamp DEFAULT now(),
+          password_changed_at timestamp
+        );
+      `);
+      await pool.query(
+        `
+          INSERT INTO public.users (id, username, password, role, status)
+          VALUES ($1, $2, $3, $4, $5)
+        `,
+        ["legacy-user", "Admin.User", "legacy-plain-text", "ADMIN", "ACTIVE"],
+      );
+
+      await ensureUsersBootstrapSchema(drizzle(pool));
+
+      await pool.query(`
+        CREATE TABLE public.collection_records (
+          id uuid PRIMARY KEY,
+          customer_name text,
+          ic_number text,
+          customer_phone text,
+          account_number text,
+          batch text,
+          payment_date date,
+          amount numeric(14,2),
+          receipt_file text,
+          created_by_login text,
+          collection_staff_nickname text,
+          staff_username text,
+          created_at timestamp DEFAULT now(),
+          updated_at timestamp
+        );
+      `);
+      await pool.query(`
+        INSERT INTO public.collection_records (
+          id,
+          customer_name,
+          batch,
+          payment_date,
+          amount,
+          receipt_file,
+          created_by_login,
+          collection_staff_nickname,
+          staff_username,
+          created_at,
+          updated_at
+        )
+        VALUES
+          (
+            '88888888-8888-8888-8888-888888888881'::uuid,
+            'Customer A',
+            'B1',
+            DATE '2026-03-24',
+            50.00,
+            NULL,
+            ' admin.user ',
+            'Collector Alpha',
+            'Collector Alpha',
+            now(),
+            NULL
+          ),
+          (
+            '88888888-8888-8888-8888-888888888882'::uuid,
+            'Customer B',
+            'B1',
+            DATE '2026-03-24',
+            55.00,
+            NULL,
+            'ghost.user',
+            'Collector Beta',
+            'Collector Beta',
+            now(),
+            NULL
+          )
+      `);
+
+      await ensureCollectionRecordsTables(drizzle(pool));
+
+      const actorRows = await pool.query<{ created_by_login: string }>(`
+        SELECT created_by_login
+        FROM public.collection_records
+        ORDER BY id ASC
+      `);
+      assert.deepEqual(actorRows.rows, [
+        { created_by_login: "Admin.User" },
+        { created_by_login: "system" },
+      ]);
+      assert.equal(await constraintExists(pool, "fk_collection_records_created_by_login_username"), true);
     });
   },
 );

@@ -90,15 +90,82 @@ export async function ensureCollectionRecordBaseSchema(database: BootstrapSqlExe
     `,
     sql`
       UPDATE public.collection_records
-      SET created_by_login = COALESCE(NULLIF(created_by_login, ''), NULLIF(staff_username, ''), 'unknown')
+      SET created_by_login = COALESCE(
+        NULLIF(trim(COALESCE(created_by_login, '')), ''),
+        NULLIF(trim(COALESCE(staff_username, '')), ''),
+        'unknown'
+      )
     `,
     sql`
       UPDATE public.collection_records
-      SET collection_staff_nickname = COALESCE(NULLIF(collection_staff_nickname, ''), NULLIF(staff_username, ''), NULLIF(created_by_login, ''), 'unknown')
+      SET collection_staff_nickname = COALESCE(
+        NULLIF(trim(COALESCE(collection_staff_nickname, '')), ''),
+        NULLIF(trim(COALESCE(staff_username, '')), ''),
+        NULLIF(trim(COALESCE(created_by_login, '')), ''),
+        'unknown'
+      )
     `,
     sql`
       UPDATE public.collection_records
-      SET staff_username = COALESCE(NULLIF(staff_username, ''), NULLIF(collection_staff_nickname, ''), NULLIF(created_by_login, ''), 'unknown')
+      SET staff_username = COALESCE(
+        NULLIF(trim(COALESCE(staff_username, '')), ''),
+        NULLIF(trim(COALESCE(collection_staff_nickname, '')), ''),
+        NULLIF(trim(COALESCE(created_by_login, '')), ''),
+        'unknown'
+      )
+    `,
+    sql`
+      DO $$
+      BEGIN
+        IF to_regclass('public.users') IS NOT NULL THEN
+          EXECUTE $canonicalize_created_by_login$
+            UPDATE public.collection_records record
+            SET created_by_login = usr.username
+            FROM public.users usr
+            WHERE lower(usr.username) = lower(trim(COALESCE(record.created_by_login, '')))
+          $canonicalize_created_by_login$;
+
+          IF EXISTS (
+            SELECT 1
+            FROM public.users
+            WHERE username = 'system'
+          ) THEN
+            EXECUTE $fallback_created_by_login$
+              UPDATE public.collection_records record
+              SET created_by_login = 'system'
+              WHERE NOT EXISTS (
+                SELECT 1
+                FROM public.users usr
+                WHERE usr.username = record.created_by_login
+              )
+            $fallback_created_by_login$;
+
+            IF NOT EXISTS (
+              SELECT 1
+              FROM pg_constraint
+              WHERE conname = 'fk_collection_records_created_by_login_username'
+            ) THEN
+              ALTER TABLE public.collection_records
+              ADD CONSTRAINT fk_collection_records_created_by_login_username
+              FOREIGN KEY (created_by_login)
+              REFERENCES public.users(username)
+              ON UPDATE CASCADE;
+            END IF;
+          END IF;
+        END IF;
+      END $$;
+    `,
+    sql`
+      UPDATE public.collection_records
+      SET
+        collection_staff_nickname = trim(COALESCE(collection_staff_nickname, '')),
+        staff_username = trim(COALESCE(staff_username, ''))
+    `,
+    sql`
+      UPDATE public.collection_records
+      SET
+        collection_staff_nickname = COALESCE(NULLIF(collection_staff_nickname, ''), 'unknown'),
+        staff_username = COALESCE(NULLIF(collection_staff_nickname, ''), 'unknown')
     `,
     sql`UPDATE public.collection_records SET updated_at = COALESCE(updated_at, created_at, now())`,
     sql`
@@ -142,6 +209,20 @@ export async function ensureCollectionRecordBaseSchema(database: BootstrapSqlExe
     sql`
       CREATE INDEX IF NOT EXISTS idx_collection_records_lower_created_by_payment_created_id
       ON public.collection_records ((lower(created_by_login)), payment_date, created_at, id)
+    `,
+    sql`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1
+          FROM pg_constraint
+          WHERE conname = 'chk_collection_records_staff_username_matches_nickname'
+        ) THEN
+          ALTER TABLE public.collection_records
+          ADD CONSTRAINT chk_collection_records_staff_username_matches_nickname
+          CHECK (lower(staff_username) = lower(collection_staff_nickname));
+        END IF;
+      END $$;
     `,
     sql`
       COMMENT ON COLUMN public.collection_records.amount
@@ -204,6 +285,19 @@ export async function ensureCollectionReceiptSchema(database: BootstrapSqlExecut
         extraction_status = COALESCE(NULLIF(trim(COALESCE(extraction_status, '')), ''), 'unprocessed'),
         created_at = COALESCE(created_at, now())
     `,
+    sql`
+      UPDATE public.collection_record_receipts
+      SET extracted_amount = receipt_amount
+      WHERE extraction_status = 'suggested'
+        AND extracted_amount IS NULL
+        AND receipt_amount IS NOT NULL
+    `,
+    sql`
+      UPDATE public.collection_record_receipts
+      SET extraction_status = 'unprocessed'
+      WHERE extraction_status = 'suggested'
+        AND extracted_amount IS NULL
+    `,
     sql`DELETE FROM public.collection_record_receipts WHERE collection_record_id IS NULL OR trim(COALESCE(storage_path, '')) = ''`,
     sql`
       DELETE FROM public.collection_record_receipts receipt
@@ -265,6 +359,20 @@ export async function ensureCollectionReceiptSchema(database: BootstrapSqlExecut
     sql`
       COMMENT ON COLUMN public.collection_record_receipts.extracted_amount
       IS 'Stored in sen/cents as a bigint integer when OCR extraction returns a candidate amount.'
+    `,
+    sql`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1
+          FROM pg_constraint
+          WHERE conname = 'chk_collection_record_receipts_suggested_extracted_amount'
+        ) THEN
+          ALTER TABLE public.collection_record_receipts
+          ADD CONSTRAINT chk_collection_record_receipts_suggested_extracted_amount
+          CHECK (extraction_status <> 'suggested' OR extracted_amount IS NOT NULL);
+        END IF;
+      END $$;
     `,
   ]);
 

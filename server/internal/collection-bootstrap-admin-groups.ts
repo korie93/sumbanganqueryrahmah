@@ -7,7 +7,7 @@ export async function ensureCollectionAdminGroupsTables(): Promise<void> {
     CREATE TABLE IF NOT EXISTS public.admin_groups (
       id uuid PRIMARY KEY,
       leader_nickname text NOT NULL,
-      created_by text NOT NULL,
+      created_by text,
       created_at timestamp with time zone NOT NULL DEFAULT now(),
       updated_at timestamp with time zone NOT NULL DEFAULT now()
     )
@@ -25,6 +25,7 @@ export async function ensureCollectionAdminGroupsTables(): Promise<void> {
   await db.execute(sql`ALTER TABLE public.admin_groups ADD COLUMN IF NOT EXISTS created_by text`);
   await db.execute(sql`ALTER TABLE public.admin_groups ADD COLUMN IF NOT EXISTS created_at timestamp with time zone DEFAULT now()`);
   await db.execute(sql`ALTER TABLE public.admin_groups ADD COLUMN IF NOT EXISTS updated_at timestamp with time zone DEFAULT now()`);
+  await db.execute(sql`ALTER TABLE public.admin_groups ALTER COLUMN created_by DROP NOT NULL`);
 
   await db.execute(sql`ALTER TABLE public.admin_group_members ADD COLUMN IF NOT EXISTS admin_group_id uuid`);
   await db.execute(sql`ALTER TABLE public.admin_group_members ADD COLUMN IF NOT EXISTS member_nickname text`);
@@ -34,9 +35,29 @@ export async function ensureCollectionAdminGroupsTables(): Promise<void> {
     UPDATE public.admin_groups
     SET
       leader_nickname = trim(COALESCE(leader_nickname, '')),
-      created_by = COALESCE(NULLIF(trim(COALESCE(created_by, '')), ''), 'system-seed'),
+      created_by = NULLIF(trim(COALESCE(created_by, '')), ''),
       created_at = COALESCE(created_at, now()),
       updated_at = COALESCE(updated_at, now())
+  `);
+  await db.execute(sql`
+    UPDATE public.admin_groups admin_group
+    SET created_by = usr.username
+    FROM public.users usr
+    WHERE admin_group.created_by IS NOT NULL
+      AND lower(usr.username) = lower(admin_group.created_by)
+  `);
+  await db.execute(sql`
+    UPDATE public.admin_groups
+    SET created_by = NULL
+    WHERE created_by IS NOT NULL
+      AND (
+        lower(created_by) = 'system-seed'
+        OR NOT EXISTS (
+          SELECT 1
+          FROM public.users usr
+          WHERE usr.username = public.admin_groups.created_by
+        )
+      )
   `);
   await db.execute(sql`DELETE FROM public.admin_groups WHERE trim(COALESCE(leader_nickname, '')) = ''`);
 
@@ -115,6 +136,19 @@ export async function ensureCollectionAdminGroupsTables(): Promise<void> {
   await db.execute(sql`
     DO $$
     BEGIN
+      IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'fk_admin_groups_created_by_username'
+      ) THEN
+        ALTER TABLE public.admin_groups
+        ADD CONSTRAINT fk_admin_groups_created_by_username
+        FOREIGN KEY (created_by)
+        REFERENCES public.users(username)
+        ON UPDATE CASCADE
+        ON DELETE SET NULL;
+      END IF;
+
       IF NOT EXISTS (
         SELECT 1
         FROM pg_constraint

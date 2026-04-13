@@ -8,6 +8,7 @@ import type {
   CreateCollectionRecordReceiptInput,
   UpdateCollectionRecordReceiptInput,
 } from "../../storage-postgres";
+import { normalizeCollectionReceiptExtractionState } from "../../lib/collection-receipt-extraction-state";
 import {
   normalizeCollectionReceiptDate,
   normalizeCollectionReceiptExtractionStatus,
@@ -47,25 +48,32 @@ export function readUploadedReceiptRows(
   return body.uploadedReceipts
     .map((item) => ensureLooseObject(item))
     .filter((item): item is Record<string, unknown> => Boolean(item))
-    .map((item) => ({
-      storagePath: normalizeCollectionText(item.storagePath),
-      originalFileName: normalizeCollectionText(item.originalFileName),
-      originalMimeType:
-        normalizeCollectionText(item.originalMimeType) || "application/octet-stream",
-      originalExtension: normalizeCollectionText(item.originalExtension),
-      fileSize: Number(item.fileSize || 0),
-      receiptAmountCents: parseCollectionAmountToCents(item.receiptAmountCents, {
-        allowZero: true,
-      }),
-      extractedAmountCents: parseCollectionAmountToCents(item.extractedAmountCents, {
-        allowZero: true,
-      }),
-      extractionStatus: normalizeCollectionReceiptExtractionStatus(item.extractionStatus ?? null),
-      extractionConfidence: normalizeExtractionConfidence(item.extractionConfidence),
-      receiptDate: normalizeCollectionReceiptDate(item.receiptDate),
-      receiptReference: normalizeCollectionReceiptReference(item.receiptReference),
-      fileHash: normalizeCollectionText(item.fileHash).toLowerCase() || null,
-    }))
+    .map((item) => {
+      const normalizedReceiptState = normalizeCollectionReceiptExtractionState({
+        receiptAmountCents: parseCollectionAmountToCents(item.receiptAmountCents, {
+          allowZero: true,
+        }),
+        extractedAmountCents: parseCollectionAmountToCents(item.extractedAmountCents, {
+          allowZero: true,
+        }),
+        extractionStatus: item.extractionStatus ?? null,
+      });
+      return {
+        storagePath: normalizeCollectionText(item.storagePath),
+        originalFileName: normalizeCollectionText(item.originalFileName),
+        originalMimeType:
+          normalizeCollectionText(item.originalMimeType) || "application/octet-stream",
+        originalExtension: normalizeCollectionText(item.originalExtension),
+        fileSize: Number(item.fileSize || 0),
+        receiptAmountCents: normalizedReceiptState.receiptAmountCents,
+        extractedAmountCents: normalizedReceiptState.extractedAmountCents,
+        extractionStatus: normalizedReceiptState.extractionStatus,
+        extractionConfidence: normalizeExtractionConfidence(item.extractionConfidence),
+        receiptDate: normalizeCollectionReceiptDate(item.receiptDate),
+        receiptReference: normalizeCollectionReceiptReference(item.receiptReference),
+        fileHash: normalizeCollectionText(item.fileHash).toLowerCase() || null,
+      };
+    })
     .filter((item) => item.storagePath && item.originalFileName && Number.isFinite(item.fileSize));
 }
 
@@ -116,13 +124,18 @@ export function readCollectionReceiptMetadataList(
 export function normalizeCollectionReceiptMetadata(
   raw: CollectionReceiptMetadataPayload,
 ): NormalizedCollectionReceiptMetadata {
-  return {
-    receiptId: normalizeCollectionText(raw.receiptId) || null,
+  const normalizedReceiptState = normalizeCollectionReceiptExtractionState({
     receiptAmountCents: parseCollectionAmountToCents(raw.receiptAmount, { allowZero: true }),
     extractedAmountCents: parseCollectionAmountToCents(raw.extractedAmount, {
       allowZero: true,
     }),
-    extractionStatus: normalizeCollectionReceiptExtractionStatus(raw.extractionStatus ?? null),
+    extractionStatus: raw.extractionStatus ?? null,
+  });
+  return {
+    receiptId: normalizeCollectionText(raw.receiptId) || null,
+    receiptAmountCents: normalizedReceiptState.receiptAmountCents,
+    extractedAmountCents: normalizedReceiptState.extractedAmountCents,
+    extractionStatus: normalizedReceiptState.extractionStatus,
     extractionConfidence: normalizeExtractionConfidence(raw.extractionConfidence),
     receiptDate: normalizeCollectionReceiptDate(raw.receiptDate),
     receiptReference: normalizeCollectionReceiptReference(raw.receiptReference),
@@ -174,13 +187,18 @@ export function buildCreateReceiptInput(
   uploadedReceipt: CreateCollectionRecordReceiptInput,
   metadata: NormalizedCollectionReceiptMetadata,
 ): CreateCollectionRecordReceiptInput {
-  return {
-    ...uploadedReceipt,
+  const normalizedReceiptState = normalizeCollectionReceiptExtractionState({
     receiptAmountCents: metadata.receiptAmountCents,
     extractedAmountCents: metadata.extractedAmountCents,
     extractionStatus:
       metadata.extractionStatus
       || normalizeCollectionReceiptExtractionStatus(uploadedReceipt.extractionStatus),
+  });
+  return {
+    ...uploadedReceipt,
+    receiptAmountCents: normalizedReceiptState.receiptAmountCents,
+    extractedAmountCents: normalizedReceiptState.extractedAmountCents,
+    extractionStatus: normalizedReceiptState.extractionStatus,
     extractionConfidence: metadata.extractionConfidence,
     receiptDate: metadata.receiptDate,
     receiptReference: metadata.receiptReference,
@@ -193,11 +211,16 @@ export function buildReceiptUpdateInput(
   receiptId: string,
   draft: CollectionReceiptValidationDraft,
 ): UpdateCollectionRecordReceiptInput {
-  return {
-    receiptId,
+  const normalizedReceiptState = normalizeCollectionReceiptExtractionState({
     receiptAmountCents: draft.receiptAmountCents ?? null,
     extractedAmountCents: draft.extractedAmountCents ?? null,
     extractionStatus: draft.extractionStatus ?? null,
+  });
+  return {
+    receiptId,
+    receiptAmountCents: normalizedReceiptState.receiptAmountCents,
+    extractedAmountCents: normalizedReceiptState.extractedAmountCents,
+    extractionStatus: normalizedReceiptState.extractionStatus,
     extractionConfidence: draft.extractionConfidence ?? null,
     receiptDate: draft.receiptDate ?? null,
     receiptReference: draft.receiptReference ?? null,

@@ -24,6 +24,7 @@ import { buildTextArraySql } from "./sql-array-utils";
 
 const RESTORED_COLLECTION_RECORD_IDS_TEMP_TABLE = sql.raw("sqr_restored_collection_record_ids");
 const RESTORE_INSERT_BATCH_SIZE = 200;
+const RESTORE_SYSTEM_ACTOR_USERNAME = "system";
 
 type NormalizedBackupCollectionRecord = NonNullable<ReturnType<typeof normalizeBackupCollectionRecord>>;
 type NormalizedBackupCollectionReceipt = NonNullable<ReturnType<typeof normalizeBackupCollectionReceipt>>;
@@ -96,6 +97,15 @@ export async function restoreCollectionRecordsFromBackup(
           encrypted: encryptedPii?.customerNameEncrypted,
           hashes: row.customerNameSearchHashes,
         });
+        const createdByLoginSql = sql`COALESCE(
+          (
+            SELECT usr.username
+            FROM public.users usr
+            WHERE lower(usr.username) = lower(${row.createdByLogin})
+            LIMIT 1
+          ),
+          ${RESTORE_SYSTEM_ACTOR_USERNAME}
+        )`;
         return sql`(
           ${row.id}::uuid,
           ${persistedCustomerName},
@@ -122,7 +132,7 @@ export async function restoreCollectionRecordsFromBackup(
           ${row.receiptValidationMessage},
           ${row.receiptCount},
           ${row.duplicateReceiptFlag},
-          ${row.createdByLogin},
+          ${createdByLoginSql},
           ${row.collectionStaffNickname},
           ${row.staffUsername},
           ${row.createdAt}

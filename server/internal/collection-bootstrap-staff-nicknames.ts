@@ -46,7 +46,28 @@ export async function ensureCollectionStaffNicknamesTable(): Promise<void> {
         END
       ),
       password_reset_by_superuser = COALESCE(password_reset_by_superuser, false),
+      created_by = NULLIF(trim(COALESCE(created_by, '')), ''),
       created_at = COALESCE(created_at, now())
+  `);
+  await db.execute(sql`
+    UPDATE public.collection_staff_nicknames nickname
+    SET created_by = usr.username
+    FROM public.users usr
+    WHERE nickname.created_by IS NOT NULL
+      AND lower(usr.username) = lower(nickname.created_by)
+  `);
+  await db.execute(sql`
+    UPDATE public.collection_staff_nicknames
+    SET created_by = NULL
+    WHERE created_by IS NOT NULL
+      AND (
+        lower(created_by) = 'system-seed'
+        OR NOT EXISTS (
+          SELECT 1
+          FROM public.users usr
+          WHERE usr.username = public.collection_staff_nicknames.created_by
+        )
+      )
   `);
   await db.execute(sql`DELETE FROM public.collection_staff_nicknames WHERE nickname = ''`);
   await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_collection_staff_nicknames_lower_unique ON public.collection_staff_nicknames(lower(nickname))`);
@@ -54,6 +75,23 @@ export async function ensureCollectionStaffNicknamesTable(): Promise<void> {
   await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_collection_staff_nicknames_role_scope ON public.collection_staff_nicknames(role_scope)`);
   await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_collection_staff_nicknames_must_change_password ON public.collection_staff_nicknames(must_change_password)`);
   await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_collection_staff_nicknames_password_reset ON public.collection_staff_nicknames(password_reset_by_superuser)`);
+  await db.execute(sql`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'fk_collection_staff_nicknames_created_by_username'
+      ) THEN
+        ALTER TABLE public.collection_staff_nicknames
+        ADD CONSTRAINT fk_collection_staff_nicknames_created_by_username
+        FOREIGN KEY (created_by)
+        REFERENCES public.users(username)
+        ON UPDATE CASCADE
+        ON DELETE SET NULL;
+      END IF;
+    END $$;
+  `);
 
   const seedRows = await db.execute(sql`
     SELECT DISTINCT trim(collection_staff_nickname) AS nickname
@@ -85,7 +123,7 @@ export async function ensureCollectionStaffNicknamesTable(): Promise<void> {
         true,
         false,
         NULL,
-        'system-seed',
+        NULL,
         now()
       )
       ON CONFLICT ((lower(nickname))) DO NOTHING

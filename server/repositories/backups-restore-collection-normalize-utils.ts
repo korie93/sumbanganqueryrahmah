@@ -7,6 +7,7 @@ import {
 import {
   resolveCollectionPiiFieldValue,
 } from "../lib/collection-pii-encryption";
+import { normalizeCollectionReceiptExtractionState } from "../lib/collection-receipt-extraction-state";
 import type {
   BackupCollectionReceipt,
   BackupCollectionRecord,
@@ -64,6 +65,11 @@ export function normalizeBackupCollectionRecord(
     fallback: "-",
   }) || "-";
 
+  const collectionStaffNickname =
+    String(record.collectionStaffNickname || record.staffUsername || "unknown").trim()
+    || "unknown";
+  const createdByLogin = String(record.createdByLogin || "system").trim() || "system";
+
   return {
     id: String(record.id || crypto.randomUUID()),
     customerName,
@@ -83,9 +89,9 @@ export function normalizeBackupCollectionRecord(
     receiptValidationMessage: String(record.receiptValidationMessage || "").trim() || null,
     receiptCount: Math.max(0, Number(record.receiptCount || 0) || 0),
     duplicateReceiptFlag: record.duplicateReceiptFlag === true,
-    createdByLogin: String(record.createdByLogin || "system"),
-    collectionStaffNickname: String(record.collectionStaffNickname || record.staffUsername || "unknown"),
-    staffUsername: String(record.staffUsername || record.collectionStaffNickname || "unknown"),
+    createdByLogin,
+    collectionStaffNickname,
+    staffUsername: collectionStaffNickname,
     createdAt: toDate(record.createdAt) ?? new Date(),
   };
 }
@@ -94,6 +100,15 @@ export function normalizeBackupCollectionReceipt(
   receipt: BackupCollectionReceipt,
 ): RestorableCollectionReceiptRow | null {
   if (!receipt.collectionRecordId || !receipt.storagePath) return null;
+  const normalizedReceiptState = normalizeCollectionReceiptExtractionState({
+    receiptAmountCents:
+      parseStoredCollectionAmountCents(receipt.receiptAmountCents)
+      ?? parseCollectionAmountToCents(receipt.receiptAmount, { allowZero: true }),
+    extractedAmountCents:
+      parseStoredCollectionAmountCents(receipt.extractedAmountCents)
+      ?? parseCollectionAmountToCents(receipt.extractedAmount, { allowZero: true }),
+    extractionStatus: String(receipt.extractionStatus || "").trim() || "unprocessed",
+  });
   return {
     id: String(receipt.id || crypto.randomUUID()),
     collectionRecordId: String(receipt.collectionRecordId),
@@ -102,13 +117,9 @@ export function normalizeBackupCollectionReceipt(
     originalMimeType: String(receipt.originalMimeType || "application/octet-stream"),
     originalExtension: String(receipt.originalExtension || ""),
     fileSize: Number(receipt.fileSize || 0),
-    receiptAmount:
-      parseStoredCollectionAmountCents(receipt.receiptAmountCents)
-      ?? parseCollectionAmountToCents(receipt.receiptAmount, { allowZero: true }),
-    extractedAmount:
-      parseStoredCollectionAmountCents(receipt.extractedAmountCents)
-      ?? parseCollectionAmountToCents(receipt.extractedAmount, { allowZero: true }),
-    extractionStatus: String(receipt.extractionStatus || "").trim() || "unprocessed",
+    receiptAmount: normalizedReceiptState.receiptAmountCents,
+    extractedAmount: normalizedReceiptState.extractedAmountCents,
+    extractionStatus: normalizedReceiptState.extractionStatus,
     extractionConfidence:
       receipt.extractionConfidence === null
       || receipt.extractionConfidence === undefined

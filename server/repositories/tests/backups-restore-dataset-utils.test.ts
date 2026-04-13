@@ -157,6 +157,58 @@ test("collection restore tracks restored record ids through a temp table before 
   assert.equal(stats.collectionRecords.skipped, 0);
 });
 
+test("collection restore resolves created_by_login through users lookup with a system fallback", async () => {
+  const executedQueries: string[] = [];
+  const tx = createBackupRestoreExecutor(
+    async (query: unknown) => {
+      const sqlText = normalizeSqlText(query);
+      executedQueries.push(sqlText);
+
+      if (sqlText.includes("INSERT INTO public.collection_records")) {
+        return {
+          rows: [{ id: "11111111-1111-1111-1111-111111111111" }],
+        };
+      }
+
+      return { rows: [] };
+    },
+    "Unexpected insert() call during collection restore actor lookup test.",
+  );
+  const backupDataReader = createCollectionRecordReader([
+    {
+      id: "11111111-1111-1111-1111-111111111111",
+      customerName: "Alice Tan",
+      icNumber: "900101015555",
+      customerPhone: "0123000001",
+      accountNumber: "ACC-1001",
+      batch: "P10",
+      paymentDate: "2026-03-31",
+      amount: 100,
+      receiptFile: null,
+      receiptTotalAmountCents: 10000,
+      receiptValidationStatus: "matched",
+      receiptValidationMessage: null,
+      receiptCount: 1,
+      duplicateReceiptFlag: false,
+      createdByLogin: "Ghost.Actor",
+      collectionStaffNickname: "Collector Alpha",
+      staffUsername: "Collector Alpha",
+      createdAt: "2026-03-31T08:00:00.000Z",
+    },
+  ]);
+  const stats = createRestoreStats();
+
+  await initializeRestoreTrackingTempTable(tx);
+  await restoreCollectionRecordsFromBackup(tx, backupDataReader, stats);
+
+  const insertQuery = executedQueries.find((query) => query.includes("INSERT INTO public.collection_records"));
+  assert.ok(insertQuery);
+  assert.equal(insertQuery?.includes("SELECT usr.username FROM public.users usr"), true);
+  assert.equal(insertQuery?.includes("WHERE lower(usr.username) = lower("), true);
+  assert.equal(insertQuery?.includes("system"), true);
+  assert.equal(stats.collectionRecords.inserted, 1);
+});
+
 test("collection restore batches temp-table tracking and inserts for large restore chunks", async () => {
   const executedQueries: string[] = [];
   const tx = createBackupRestoreExecutor(
@@ -250,6 +302,7 @@ test("normalizeBackupCollectionRecord keeps restore fallbacks stable", () => {
   assert.equal(restoredRecord.receiptCount, 0);
   assert.equal(restoredRecord.collectionStaffNickname, "Staff Alpha");
   assert.equal(restoredRecord.staffUsername, "Staff Alpha");
+  assert.equal(restoredRecord.createdByLogin, "system");
 
   assert.equal(
     normalizeBackupCollectionRecord({
@@ -289,6 +342,8 @@ test("normalizeBackupCollectionRecord can recover PII from encrypted backup fiel
     assert.equal(restoredRecord?.icNumber, "900101019999");
     assert.equal(restoredRecord?.customerPhone, "0123999999");
     assert.equal(restoredRecord?.accountNumber, "ACC-ENC-1");
+    assert.equal(restoredRecord?.collectionStaffNickname, "Collector Alpha");
+    assert.equal(restoredRecord?.staffUsername, "Collector Alpha");
   });
 });
 

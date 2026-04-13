@@ -5,6 +5,10 @@ import {
 import {
   formatCollectionCurrencyLabelFromCents,
 } from "../../../shared/collection-amount-types";
+import {
+  normalizeCollectionReceiptExtractionState,
+  normalizeCollectionReceiptExtractionStatusValue,
+} from "../../lib/collection-receipt-extraction-state";
 
 export type CollectionReceiptValidationStatus =
   | "matched"
@@ -66,29 +70,23 @@ export function normalizeCollectionReceiptDate(value: unknown): string | null {
 export function normalizeCollectionReceiptExtractionStatus(
   value: unknown,
 ): CollectionReceiptExtractionStatus {
-  const normalized = normalizeCollectionText(value).toLowerCase();
-  if (
-    normalized === "suggested"
-    || normalized === "ambiguous"
-    || normalized === "unavailable"
-    || normalized === "error"
-  ) {
-    return normalized;
-  }
-  return "unprocessed";
+  return normalizeCollectionReceiptExtractionStatusValue(value);
 }
 
 function hasReceiptOcrReviewSignal(receipt: CollectionReceiptValidationDraft): boolean {
-  const status = normalizeCollectionReceiptExtractionStatus(receipt.extractionStatus);
+  const normalizedReceipt = normalizeCollectionReceiptExtractionState({
+    receiptAmountCents: receipt.receiptAmountCents,
+    extractedAmountCents: receipt.extractedAmountCents,
+    extractionStatus: receipt.extractionStatus,
+  });
+  const status = normalizedReceipt.extractionStatus;
   if (status === "ambiguous" || status === "error") {
     return true;
   }
   if (
     status !== "suggested"
-    || receipt.extractedAmountCents === null
-    || receipt.extractedAmountCents === undefined
-    || receipt.receiptAmountCents === null
-    || receipt.receiptAmountCents === undefined
+    || normalizedReceipt.extractedAmountCents === null
+    || normalizedReceipt.receiptAmountCents === null
   ) {
     return false;
   }
@@ -99,7 +97,7 @@ function hasReceiptOcrReviewSignal(receipt: CollectionReceiptValidationDraft): b
     return false;
   }
 
-  return Number(receipt.extractedAmountCents) !== Number(receipt.receiptAmountCents);
+  return Number(normalizedReceipt.extractedAmountCents) !== Number(normalizedReceipt.receiptAmountCents);
 }
 
 export function findDuplicateCollectionReceiptHashes(

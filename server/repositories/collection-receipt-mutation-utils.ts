@@ -1,6 +1,7 @@
 import { randomUUID } from "crypto";
 import { sql } from "drizzle-orm";
 import { normalizeCollectionReceiptExtractionStatus } from "../services/collection/collection-receipt-validation";
+import { normalizeCollectionReceiptExtractionState } from "../lib/collection-receipt-extraction-state";
 import {
   listCollectionRecordReceiptsByIds,
   listCollectionRecordReceiptsByRecordId,
@@ -39,6 +40,11 @@ export async function createCollectionRecordReceiptRows(
   for (const receipt of receipts) {
     const id = randomUUID();
     insertedIds.push(id);
+    const normalizedReceiptState = normalizeCollectionReceiptExtractionState({
+      receiptAmountCents: receipt.receiptAmountCents ?? null,
+      extractedAmountCents: receipt.extractedAmountCents ?? null,
+      extractionStatus: normalizeCollectionReceiptExtractionStatus(receipt.extractionStatus),
+    });
     await executor.execute(sql`
       INSERT INTO public.collection_record_receipts (
         id,
@@ -65,9 +71,9 @@ export async function createCollectionRecordReceiptRows(
         ${receipt.originalMimeType},
         ${receipt.originalExtension},
         ${receipt.fileSize},
-        ${receipt.receiptAmountCents ?? null},
-        ${receipt.extractedAmountCents ?? null},
-        ${normalizeCollectionReceiptExtractionStatus(receipt.extractionStatus)},
+        ${normalizedReceiptState.receiptAmountCents},
+        ${normalizedReceiptState.extractedAmountCents},
+        ${normalizedReceiptState.extractionStatus},
         ${receipt.extractionConfidence ?? null},
         ${receipt.receiptDate ?? null},
         ${receipt.receiptReference ?? null},
@@ -89,18 +95,25 @@ export async function updateCollectionRecordReceiptRows(
   const normalizedRecordId = String(recordId || "").trim();
   const normalizedUpdates = Array.isArray(updates)
     ? updates
-        .map((update) => ({
-          receiptId: String(update?.receiptId || "").trim(),
-          receiptAmountCents: update?.receiptAmountCents ?? null,
-          extractedAmountCents: update?.extractedAmountCents ?? null,
-          extractionStatus: normalizeCollectionReceiptExtractionStatus(update?.extractionStatus),
-          extractionConfidence:
-            update?.extractionConfidence === null || update?.extractionConfidence === undefined
-              ? null
-              : Number(update.extractionConfidence),
-          receiptDate: String(update?.receiptDate || "").trim() || null,
-          receiptReference: String(update?.receiptReference || "").trim() || null,
-        }))
+        .map((update) => {
+          const normalizedReceiptState = normalizeCollectionReceiptExtractionState({
+            receiptAmountCents: update?.receiptAmountCents ?? null,
+            extractedAmountCents: update?.extractedAmountCents ?? null,
+            extractionStatus: normalizeCollectionReceiptExtractionStatus(update?.extractionStatus),
+          });
+          return {
+            receiptId: String(update?.receiptId || "").trim(),
+            receiptAmountCents: normalizedReceiptState.receiptAmountCents,
+            extractedAmountCents: normalizedReceiptState.extractedAmountCents,
+            extractionStatus: normalizedReceiptState.extractionStatus,
+            extractionConfidence:
+              update?.extractionConfidence === null || update?.extractionConfidence === undefined
+                ? null
+                : Number(update.extractionConfidence),
+            receiptDate: String(update?.receiptDate || "").trim() || null,
+            receiptReference: String(update?.receiptReference || "").trim() || null,
+          };
+        })
         .filter((update) => Boolean(update.receiptId))
     : [];
   if (!normalizedRecordId || !normalizedUpdates.length) {

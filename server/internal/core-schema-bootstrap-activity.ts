@@ -128,7 +128,39 @@ export async function ensureCoreBannedSessionsTable(
     UPDATE public.banned_sessions
     SET banned_at = COALESCE(banned_at, now())
   `);
+  await database.execute(sql`
+    DO $$
+    BEGIN
+      IF to_regclass('public.user_activity') IS NOT NULL THEN
+        DELETE FROM public.banned_sessions session
+        WHERE NOT EXISTS (
+          SELECT 1
+          FROM public.user_activity activity
+          WHERE activity.id = session.activity_id
+        );
+      END IF;
+    END $$;
+  `);
   await database.execute(sql`ALTER TABLE public.banned_sessions ALTER COLUMN banned_at SET NOT NULL`);
+  await database.execute(sql`CREATE INDEX IF NOT EXISTS idx_banned_sessions_activity_id ON public.banned_sessions(activity_id)`);
   await database.execute(sql`CREATE INDEX IF NOT EXISTS idx_banned_sessions_fingerprint ON public.banned_sessions(fingerprint)`);
   await database.execute(sql`CREATE INDEX IF NOT EXISTS idx_banned_sessions_ip ON public.banned_sessions(ip_address)`);
+  await database.execute(sql`
+    DO $$
+    BEGIN
+      IF to_regclass('public.user_activity') IS NOT NULL
+        AND NOT EXISTS (
+          SELECT 1
+          FROM pg_constraint
+          WHERE conname = 'fk_banned_sessions_activity_id'
+        ) THEN
+        ALTER TABLE public.banned_sessions
+        ADD CONSTRAINT fk_banned_sessions_activity_id
+        FOREIGN KEY (activity_id)
+        REFERENCES public.user_activity(id)
+        ON UPDATE CASCADE
+        ON DELETE CASCADE;
+      END IF;
+    END $$;
+  `);
 }

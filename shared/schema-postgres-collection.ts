@@ -1,6 +1,7 @@
 import {
   bigint,
   boolean,
+  check,
   date,
   index,
   integer,
@@ -43,7 +44,9 @@ export const collectionRecords = pgTable("collection_records", {
   receiptValidationMessage: text("receipt_validation_message"),
   receiptCount: integer("receipt_count").notNull().default(0),
   duplicateReceiptFlag: boolean("duplicate_receipt_flag").notNull().default(false),
-  createdByLogin: text("created_by_login").notNull(),
+  createdByLogin: text("created_by_login")
+    .notNull()
+    .references(() => users.username, { onUpdate: "cascade" }),
   collectionStaffNickname: text("collection_staff_nickname").notNull(),
   staffUsername: text("staff_username").notNull(),
   createdAt: utcTimestamp("created_at").defaultNow().notNull(),
@@ -99,6 +102,10 @@ export const collectionRecords = pgTable("collection_records", {
     table.createdAt,
     table.id,
   ),
+  staffUsernameMatchesNickname: check(
+    "chk_collection_records_staff_username_matches_nickname",
+    sql`lower(${table.staffUsername}) = lower(${table.collectionStaffNickname})`,
+  ),
 }));
 
 export const collectionRecordReceipts = pgTable("collection_record_receipts", {
@@ -137,6 +144,10 @@ export const collectionRecordReceipts = pgTable("collection_record_receipts", {
   recordCreatedAtIdx: index("idx_collection_record_receipts_record_created_at").on(
     table.collectionRecordId,
     table.createdAt,
+  ),
+  suggestedStatusRequiresExtractedAmount: check(
+    "chk_collection_record_receipts_suggested_extracted_amount",
+    sql`${table.extractionStatus} <> 'suggested' OR ${table.extractedAmount} IS NOT NULL`,
   ),
 }));
 
@@ -227,7 +238,10 @@ export const collectionStaffNicknames = pgTable("collection_staff_nicknames", {
   mustChangePassword: boolean("must_change_password").notNull().default(true),
   passwordResetBySuperuser: boolean("password_reset_by_superuser").notNull().default(false),
   passwordUpdatedAt: utcTimestamp("password_updated_at"),
-  createdBy: text("created_by"),
+  createdBy: text("created_by").references(() => users.username, {
+    onDelete: "set null",
+    onUpdate: "cascade",
+  }),
   createdAt: utcTimestamp("created_at").defaultNow().notNull(),
 }, (table) => ({
   nicknameLowerUnique: uniqueIndex("idx_collection_staff_nicknames_lower_unique").using(
@@ -243,7 +257,10 @@ export const collectionStaffNicknames = pgTable("collection_staff_nicknames", {
 export const adminGroups = pgTable("admin_groups", {
   id: uuid("id").primaryKey(),
   leaderNickname: text("leader_nickname").notNull(),
-  createdBy: text("created_by").notNull(),
+  createdBy: text("created_by").references(() => users.username, {
+    onDelete: "set null",
+    onUpdate: "cascade",
+  }),
   createdAt: utcTimestamp("created_at").defaultNow().notNull(),
   updatedAt: utcTimestamp("updated_at").defaultNow().notNull(),
 }, (table) => ({
@@ -316,8 +333,14 @@ export const collectionDailyTargets = pgTable("collection_daily_targets", {
   year: integer("year").notNull(),
   month: integer("month").notNull(),
   monthlyTarget: numeric("monthly_target", { precision: 14, scale: 2 }).notNull().default("0"),
-  createdBy: text("created_by"),
-  updatedBy: text("updated_by"),
+  createdBy: text("created_by").references(() => users.username, {
+    onDelete: "set null",
+    onUpdate: "cascade",
+  }),
+  updatedBy: text("updated_by").references(() => users.username, {
+    onDelete: "set null",
+    onUpdate: "cascade",
+  }),
   createdAt: utcTimestamp("created_at").defaultNow().notNull(),
   updatedAt: utcTimestamp("updated_at").defaultNow().notNull(),
 }, (table) => ({
@@ -338,8 +361,14 @@ export const collectionDailyCalendar = pgTable("collection_daily_calendar", {
   isWorkingDay: boolean("is_working_day").notNull().default(true),
   isHoliday: boolean("is_holiday").notNull().default(false),
   holidayName: text("holiday_name"),
-  createdBy: text("created_by"),
-  updatedBy: text("updated_by"),
+  createdBy: text("created_by").references(() => users.username, {
+    onDelete: "set null",
+    onUpdate: "cascade",
+  }),
+  updatedBy: text("updated_by").references(() => users.username, {
+    onDelete: "set null",
+    onUpdate: "cascade",
+  }),
   createdAt: utcTimestamp("created_at").defaultNow().notNull(),
   updatedAt: utcTimestamp("updated_at").defaultNow().notNull(),
 }, (table) => ({
