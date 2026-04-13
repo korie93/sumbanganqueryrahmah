@@ -5,6 +5,8 @@ import test from "node:test";
 import { BackupsRepository } from "../backups.repository";
 import { db } from "../../db-postgres";
 import { decodeBackupDataFromStorage } from "../backups-encryption";
+import { restoreFromBackup } from "../backups-restore-utils";
+import { BackupPayloadTooLargeError } from "../../lib/backup-payload-limit";
 import {
   encryptCollectionPiiFieldValue,
   hashCollectionCustomerNameSearchTerms,
@@ -971,4 +973,87 @@ test("BackupsRepository rejects backup export rows that exceed the serialization
       dbHarness.execute = originalExecute;
     },
   );
+});
+
+test("restoreFromBackup aborts oversized async payloads while streaming restore input", async () => {
+  const dbHarness = getDbTestHarness();
+  const originalTransaction = dbHarness.transaction;
+  let transactionCalls = 0;
+  setDbTransaction(dbHarness, async (callback) => {
+    transactionCalls += 1;
+    return callback({
+      execute: async () => ({ rows: [] }),
+    });
+  });
+
+  try {
+    await assert.rejects(
+      () =>
+        restoreFromBackup(
+          (async function* () {
+            yield JSON.stringify({
+              imports: [{ id: "import-1", name: "Oversized Import" }],
+              dataRows: [],
+              users: [],
+              auditLogs: [],
+              collectionRecords: [],
+              collectionRecordReceipts: [],
+            });
+          })(),
+          { maxPayloadBytes: 32 },
+        ),
+      (error: unknown) => {
+        assert.ok(error instanceof BackupPayloadTooLargeError);
+        assert.equal(error.limitBytes, 32);
+        assert.ok((error.payloadBytes || 0) > 32);
+        return true;
+      },
+    );
+    assert.equal(transactionCalls, 1);
+  } finally {
+    dbHarness.transaction = originalTransaction;
+  }
+});
+
+test("restoreFromBackup blocks oversized structured payloads before opening a database transaction", async () => {
+  const dbHarness = getDbTestHarness();
+  const originalTransaction = dbHarness.transaction;
+  let transactionCalls = 0;
+  setDbTransaction(dbHarness, async (_callback) => {
+    transactionCalls += 1;
+    return undefined;
+  });
+
+  try {
+    await assert.rejects(
+      () =>
+        restoreFromBackup(
+          {
+            imports: [{
+              id: "import-1",
+              name: "Large Backup",
+              filename: "payload.csv",
+              createdAt: new Date("2026-04-13T00:00:00.000Z"),
+              isDeleted: false,
+              createdBy: "super.user",
+            }],
+            dataRows: [],
+            users: [],
+            auditLogs: [],
+            collectionRecords: [],
+            collectionRecordReceipts: [],
+          },
+          { maxPayloadBytes: 48 },
+        ),
+      (error: unknown) => {
+        assert.ok(error instanceof BackupPayloadTooLargeError);
+        assert.equal(error.limitBytes, 48);
+        assert.ok((error.payloadBytes || 0) > 48);
+        return true;
+      },
+    );
+    assert.equal(transactionCalls, 0);
+  } finally {
+    dbHarness.transaction = originalTransaction;
+  }
 });

@@ -139,9 +139,17 @@ export async function readPreparedBackupPayloadForStorage(
     "tempFilePath" | "tempPayloadEncrypted" | "tempPayloadStoragePrefix"
   >,
 ): Promise<string> {
-  let payload = "";
+  const chunks: string[] = [];
   for await (const chunk of iteratePreparedBackupPayloadStorageChunks(preparedBackupPayload)) {
-    payload += chunk;
+    if (chunk) {
+      chunks.push(chunk);
+    }
   }
-  return payload;
+  if (chunks.length === 0) {
+    return "";
+  }
+  if (chunks.length === 1) {
+    return chunks[0];
+  }
+  return chunks.join("");
 }

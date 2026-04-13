@@ -4,6 +4,7 @@ import test from "node:test";
 import os from "node:os";
 import path from "node:path";
 import { BackupOperationsService } from "../backup-operations.service";
+import { BackupPayloadTooLargeError } from "../../lib/backup-payload-limit";
 import type {
   BackupMetadataRecord,
   BackupOperationsBackupsRepository,
@@ -108,6 +109,7 @@ function createBackupOperationsHarness(options?: {
   backupReadErrorMessage?: string;
   preparedPayloadEncrypted?: boolean;
   createBackupErrorMessage?: string;
+  restoreBackupError?: unknown;
   maxPayloadBytes?: number;
   metadataPayloadBytes?: number;
 }) {
@@ -314,6 +316,9 @@ function createBackupOperationsHarness(options?: {
       >;
     },
     restoreFromBackup: async (backupData: unknown) => {
+      if (options?.restoreBackupError) {
+        throw options.restoreBackupError;
+      }
       if (isAsyncIterableStringSource(backupData)) {
         restoreInputKinds.push("async-iterable");
         restoreCalls.push(await collectAsyncTextChunks(backupData));
@@ -765,6 +770,25 @@ test("BackupOperationsService restoreBackup returns 409 when backup payload cann
   assert.deepEqual(result.body, {
     message:
       "Backup payload cannot be decrypted with the current encryption configuration.",
+  });
+  assert.equal(restoreCalls.length, 0);
+  assert.equal(auditLogs.length, 0);
+});
+
+test("BackupOperationsService restoreBackup keeps repository payload limit failures as 413 responses", async () => {
+  const { service, restoreCalls, auditLogs } = createBackupOperationsHarness({
+    restoreBackupError: new BackupPayloadTooLargeError(32, 64),
+  });
+
+  const result = await service.restoreBackup({
+    backupId: "backup-1",
+    username: "super.user",
+  });
+
+  assert.equal(result.statusCode, 413);
+  assert.deepEqual(result.body, {
+    message:
+      "Backup payload exceeds the configured 32 bytes limit. Narrow the dataset or increase BACKUP_MAX_PAYLOAD_BYTES.",
   });
   assert.equal(restoreCalls.length, 0);
   assert.equal(auditLogs.length, 0);

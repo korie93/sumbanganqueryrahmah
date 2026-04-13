@@ -4,6 +4,10 @@ import {
   type BackupOperationsStorage,
 } from "./backup-operations-types";
 import { getBackupPayloadReadErrorResponse } from "./backup-operations-integrity-utils";
+import {
+  buildBackupPayloadTooLargeMessage,
+  isBackupPayloadTooLargeError,
+} from "../lib/backup-payload-limit";
 
 export type BackupCircuitRunner = <T>(fn: () => Promise<T>) => Promise<T>;
 
@@ -19,28 +23,7 @@ export type BackupOperationsLimits = {
 };
 
 export const DEFAULT_BACKUP_MAX_PAYLOAD_BYTES = 64 * 1024 * 1024;
-
-function formatBackupPayloadLimit(bytes: number) {
-  if (bytes < 1024) {
-    return `${bytes} bytes`;
-  }
-  if (bytes < 1024 * 1024) {
-    const kibibytes = bytes / 1024;
-    if (kibibytes >= 10) {
-      return `${Math.round(kibibytes)} KiB`;
-    }
-    return `${kibibytes.toFixed(1)} KiB`;
-  }
-  const mebibytes = bytes / (1024 * 1024);
-  if (mebibytes >= 10) {
-    return `${Math.round(mebibytes)} MiB`;
-  }
-  return `${mebibytes.toFixed(1)} MiB`;
-}
-
-export function buildBackupPayloadTooLargeMessage(limitBytes: number) {
-  return `Backup payload exceeds the configured ${formatBackupPayloadLimit(limitBytes)} limit. Narrow the dataset or increase BACKUP_MAX_PAYLOAD_BYTES.`;
-}
+export { buildBackupPayloadTooLargeMessage } from "../lib/backup-payload-limit";
 
 export function getCircuitOpenResponse<T>(
   error: unknown,
@@ -59,5 +42,13 @@ export function getCircuitOpenResponse<T>(
 export function getBackupPayloadReadFailure<T>(
   error: unknown,
 ): BackupOperationResponse<T | { message: string }> | null {
+  if (isBackupPayloadTooLargeError(error)) {
+    return {
+      statusCode: 413,
+      body: {
+        message: buildBackupPayloadTooLargeMessage(error.limitBytes),
+      },
+    };
+  }
   return getBackupPayloadReadErrorResponse(error);
 }
