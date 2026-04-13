@@ -238,7 +238,7 @@
   }
 }
 
-@media (min-width: 1024px) and (max-width: 1366px) and (max-height: 900px) and (orientation: landscape) {
+@media (min-width: 1024px) and (max-height: 900px) and (orientation: landscape) {
   .public-auth-layout__main {
     align-items: flex-start;
     padding:

@@ -156,7 +156,7 @@
   }
 }
 
-@media (min-width: 1024px) and (max-width: 1366px) and (max-height: 900px) and (orientation: landscape) {
+@media (min-width: 1024px) and (max-height: 900px) and (orientation: landscape) {
   .ops-page {
     padding:
       var(--spacing-3)
