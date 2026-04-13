@@ -8,8 +8,8 @@ const BODY_LIMIT_UNITS: Record<string, number> = {
   g: 1024 * 1024 * 1024,
 };
 
-export const DEFAULT_IMPORT_BODY_LIMIT = "64mb";
-export const DEFAULT_IMPORT_UPLOAD_LIMIT_BYTES = 64 * 1024 * 1024;
+export const DEFAULT_IMPORT_BODY_LIMIT = "96mb";
+export const DEFAULT_IMPORT_UPLOAD_LIMIT_BYTES = 96 * 1024 * 1024;
 
 export function parseBodyLimitToBytes(
   rawValue: string | null | undefined,

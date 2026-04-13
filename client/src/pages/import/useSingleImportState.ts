@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { createImport } from "@/lib/api";
+import { createImport, createImportFromFile } from "@/lib/api";
 import { logClientError } from "@/lib/client-logger";
 import { useToast } from "@/hooks/use-toast";
 import { parseImportPreview } from "@/pages/import/parsing";
 import {
   isImportAbortError,
   resolveNextImportName,
+  shouldSaveSingleImportFromOriginalFile,
 } from "@/pages/import/import-page-state-utils";
 import type { ImportRow } from "@/pages/import/types";
 import {
@@ -137,12 +138,17 @@ export function useSingleImportState({
     try {
       const rowCount = parsedData.length;
       const savedName = importName.trim();
-      await createImport(
-        savedName,
-        file?.name || "unknown.csv",
-        parsedData,
-        { signal: controller.signal },
-      );
+      const selectedFile = file;
+      if (selectedFile && shouldSaveSingleImportFromOriginalFile(selectedFile, rowCount)) {
+        await createImportFromFile(savedName, selectedFile, { signal: controller.signal });
+      } else {
+        await createImport(
+          savedName,
+          selectedFile?.name || "unknown.csv",
+          parsedData,
+          { signal: controller.signal },
+        );
+      }
       if (controller.signal.aborted || !isMountedRef.current) {
         return;
       }

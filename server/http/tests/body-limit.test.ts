@@ -8,6 +8,7 @@ import {
 test("parseBodyLimitToBytes understands common size labels", () => {
   assert.equal(parseBodyLimitToBytes("64mb"), 64 * 1024 * 1024);
   assert.equal(parseBodyLimitToBytes("64M"), 64 * 1024 * 1024);
+  assert.equal(parseBodyLimitToBytes("96mb"), 96 * 1024 * 1024);
   assert.equal(parseBodyLimitToBytes("512kb"), 512 * 1024);
 });
 

@@ -4,6 +4,7 @@ import {
   buildBulkImportSelectionResults,
   filterSupportedImportFiles,
   resolveNextImportName,
+  shouldSaveSingleImportFromOriginalFile,
   summarizeBulkImportResults,
 } from "@/pages/import/import-page-state-utils";
 
@@ -43,6 +44,25 @@ test("buildBulkImportSelectionResults blocks oversized import files and keeps su
 test("resolveNextImportName preserves manual names and otherwise strips file extensions", () => {
   assert.equal(resolveNextImportName("Manual Name", "sales.xlsx"), "Manual Name");
   assert.equal(resolveNextImportName("", "sales.xlsx"), "sales");
+});
+
+test("shouldSaveSingleImportFromOriginalFile prefers the original spreadsheet upload when rows are ready", () => {
+  assert.equal(
+    shouldSaveSingleImportFromOriginalFile(createFile("sales.xlsb"), 10),
+    true,
+  );
+  assert.equal(
+    shouldSaveSingleImportFromOriginalFile(createFile("notes.txt"), 10),
+    false,
+  );
+  assert.equal(
+    shouldSaveSingleImportFromOriginalFile(createFile("sales.csv"), 0),
+    false,
+  );
+  assert.equal(
+    shouldSaveSingleImportFromOriginalFile(null, 10),
+    false,
+  );
 });
 
 test("summarizeBulkImportResults keeps success, failure, and blocked counts separate", () => {

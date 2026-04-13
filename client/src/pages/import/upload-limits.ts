@@ -1,4 +1,4 @@
-export const DEFAULT_IMPORT_UPLOAD_LIMIT_BYTES = 64 * 1024 * 1024;
+export const DEFAULT_IMPORT_UPLOAD_LIMIT_BYTES = 96 * 1024 * 1024;
 
 export function resolveImportUploadLimitBytes(importUploadLimitBytes?: number) {
   if (!Number.isFinite(importUploadLimitBytes) || Number(importUploadLimitBytes) < 1) {

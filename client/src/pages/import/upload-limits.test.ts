@@ -15,7 +15,7 @@ test("resolveImportUploadLimitBytes falls back to the default limit", () => {
 
 test("formatImportUploadSize returns readable labels", () => {
   assert.equal(formatImportUploadSize(512 * 1024), "512 KB");
-  assert.equal(formatImportUploadSize(64 * 1024 * 1024), "64 MB");
+  assert.equal(formatImportUploadSize(96 * 1024 * 1024), "96 MB");
 });
 
 test("isImportFileTooLarge compares against the configured limit", () => {
@@ -24,7 +24,7 @@ test("isImportFileTooLarge compares against the configured limit", () => {
 });
 
 test("buildImportFileTooLargeMessage includes the file and limit sizes", () => {
-  const message = buildImportFileTooLargeMessage(70 * 1024 * 1024, 64 * 1024 * 1024);
-  assert.match(message, /70 MB/i);
-  assert.match(message, /64 MB/i);
+  const message = buildImportFileTooLargeMessage(100 * 1024 * 1024, 96 * 1024 * 1024);
+  assert.match(message, /100 MB/i);
+  assert.match(message, /96 MB/i);
 });

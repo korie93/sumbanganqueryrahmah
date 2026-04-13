@@ -45,6 +45,17 @@ export function resolveNextImportName(currentImportName: string, filename: strin
   return stripImportExtension(filename);
 }
 
+export function shouldSaveSingleImportFromOriginalFile(
+  file: File | null,
+  parsedRowCount: number,
+) {
+  if (!file || parsedRowCount < 1) {
+    return false;
+  }
+
+  return SUPPORTED_IMPORT_FILE_PATTERN.test(file.name);
+}
+
 export function summarizeBulkImportResults(results: BulkFileResult[]) {
   return {
     successCount: results.filter((result) => result.status === "success").length,
