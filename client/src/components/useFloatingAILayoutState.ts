@@ -14,6 +14,10 @@ import {
   resolveFloatingAiHasDensePage,
   type FloatingAiObstacleQueryResult,
 } from "@/components/floating-ai-dom-utils";
+import {
+  cleanupFloatingAiSyncRuntime,
+  type FloatingAiSyncRuntimeState,
+} from "@/components/floating-ai-sync-runtime";
 import type { AIChatStatus } from "@/components/AIChat";
 
 type UseFloatingAILayoutStateParams = {
@@ -198,9 +202,11 @@ export function useFloatingAILayoutState({
   useEffect(() => {
     if (hiddenForAiPage || typeof document === "undefined" || typeof window === "undefined") return;
 
-    let frame = 0;
-    let resizeDebounceHandle: number | null = null;
-    let scheduled = false;
+    const syncRuntime: FloatingAiSyncRuntimeState = {
+      frame: 0,
+      resizeDebounceHandle: null,
+      scheduled: false,
+    };
     let resizeObserver: ResizeObserver | null = null;
     const observedElements = new Set<Element>();
 
@@ -223,10 +229,11 @@ export function useFloatingAILayoutState({
     };
 
     const scheduleSync = () => {
-      if (scheduled) return;
-      scheduled = true;
-      frame = window.requestAnimationFrame(() => {
-        scheduled = false;
+      if (syncRuntime.scheduled) return;
+      syncRuntime.scheduled = true;
+      syncRuntime.frame = window.requestAnimationFrame(() => {
+        syncRuntime.frame = 0;
+        syncRuntime.scheduled = false;
         const obstacleQuery = shouldTrackObstacleLayout ? queryFloatingAiObstacleElements() : null;
         syncObservedElements(obstacleQuery);
         syncLayout(obstacleQuery);
@@ -234,12 +241,12 @@ export function useFloatingAILayoutState({
     };
 
     const scheduleResizeSync = () => {
-      if (resizeDebounceHandle !== null) {
-        window.clearTimeout(resizeDebounceHandle);
+      if (syncRuntime.resizeDebounceHandle !== null) {
+        window.clearTimeout(syncRuntime.resizeDebounceHandle);
       }
 
-      resizeDebounceHandle = window.setTimeout(() => {
-        resizeDebounceHandle = null;
+      syncRuntime.resizeDebounceHandle = window.setTimeout(() => {
+        syncRuntime.resizeDebounceHandle = null;
         scheduleSync();
       }, 80);
     };
@@ -268,16 +275,10 @@ export function useFloatingAILayoutState({
     return () => {
       observer?.disconnect();
       resizeObserver?.disconnect();
+      observedElements.clear();
       window.removeEventListener("resize", scheduleResizeSync);
-      if (shouldTrackObstacleLayout) {
-        window.removeEventListener("scroll", scheduleSync);
-      }
-      if (resizeDebounceHandle !== null) {
-        window.clearTimeout(resizeDebounceHandle);
-      }
-      if (frame) {
-        window.cancelAnimationFrame(frame);
-      }
+      window.removeEventListener("scroll", scheduleSync);
+      cleanupFloatingAiSyncRuntime(window, syncRuntime);
     };
   }, [hiddenForAiPage, shouldTrackObstacleLayout]);
 

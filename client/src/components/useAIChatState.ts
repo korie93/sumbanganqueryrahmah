@@ -17,6 +17,7 @@ import {
   readAIChatErrorResponse,
   readAIChatSuccessPayload,
 } from "./ai-chat-utils";
+import { handleUnexpectedAIChatSendError } from "./ai-chat-send-guard";
 import { createAIChatSessionAccessors } from "./ai-chat-session-accessors";
 import { useAIChatExternalEffects } from "./useAIChatExternalEffects";
 import { useAIChatRuntimeRefs } from "./useAIChatRuntimeRefs";
@@ -277,36 +278,50 @@ export function useAIChatState({
       return;
     }
 
-    cancelAISearch(false);
-    sessionRef.current += 1;
-    const sessionId = sessionRef.current;
+    let sessionId: number | null = null;
 
-    setQuery("");
-    setGateNotice(null);
-    setSlowNotice(false);
-    setAiStatus("SEARCHING");
-    processingRef.current = true;
-    setIsProcessing(true);
-    setIsThinking(true);
-    setIsTyping(false);
+    try {
+      cancelAISearch(false);
+      sessionRef.current += 1;
+      sessionId = sessionRef.current;
 
-    appendMessage({
-      role: "user",
-      content: trimmed,
-      timestamp: new Date().toISOString(),
-    });
+      setQuery("");
+      setGateNotice(null);
+      setSlowNotice(false);
+      setAiStatus("SEARCHING");
+      processingRef.current = true;
+      setIsProcessing(true);
+      setIsThinking(true);
+      setIsTyping(false);
 
-    if (isMobile) {
-      textareaRef.current?.blur();
+      appendMessage({
+        role: "user",
+        content: trimmed,
+        timestamp: new Date().toISOString(),
+      });
+
+      if (isMobile) {
+        textareaRef.current?.blur();
+      }
+
+      startSlowNoticeWatch(sessionId);
+      await executeSearch(trimmed, sessionId, 0);
+    } catch (error: unknown) {
+      handleUnexpectedAIChatSendError({
+        error,
+        sessionId,
+        canApplyUiUpdate,
+        appendMessage,
+        finishAsyncCycle,
+      });
     }
-
-    startSlowNoticeWatch(sessionId);
-    await executeSearch(trimmed, sessionId, 0);
   }, [
     aiEnabled,
     appendMessage,
+    canApplyUiUpdate,
     cancelAISearch,
     executeSearch,
+    finishAsyncCycle,
     isMobile,
     query,
     setIsThinking,
