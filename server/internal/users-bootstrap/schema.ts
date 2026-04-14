@@ -238,7 +238,7 @@ export async function ensureUsersBootstrapSchema(
       false,
       0,
       false,
-      'system-bootstrap',
+      NULL,
       false,
       now(),
       now()
@@ -265,7 +265,7 @@ export async function ensureUsersBootstrapSchema(
       locked_at = NULL,
       locked_reason = NULL,
       locked_by_system = false,
-      created_by = COALESCE(NULLIF(trim(COALESCE(created_by, '')), ''), 'system-bootstrap'),
+      created_by = NULL,
       is_banned = false,
       created_at = COALESCE(created_at, now()),
       updated_at = COALESCE(updated_at, now()),
@@ -280,6 +280,42 @@ export async function ensureUsersBootstrapSchema(
   await database.execute(sql`ALTER TABLE public.users ALTER COLUMN status SET NOT NULL`);
   await database.execute(sql`ALTER TABLE public.users ALTER COLUMN password_hash SET NOT NULL`);
   await database.execute(sql`ALTER TABLE public.users ALTER COLUMN is_banned SET NOT NULL`);
+  await database.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username_unique ON public.users (username)`);
+  await database.execute(sql`
+    UPDATE public.users
+    SET created_by = NULLIF(trim(COALESCE(created_by, '')), '')
+  `);
+  await database.execute(sql`
+    UPDATE public.users
+    SET created_by = NULL
+    WHERE lower(username) = ${SYSTEM_ACTOR_USERNAME}
+      AND created_by IS NOT NULL
+      AND lower(created_by) IN ('system-bootstrap', 'legacy-create-user')
+  `);
+  await database.execute(sql`
+    UPDATE public.users
+    SET created_by = ${SYSTEM_ACTOR_USERNAME}
+    WHERE lower(username) <> ${SYSTEM_ACTOR_USERNAME}
+      AND created_by IS NOT NULL
+      AND lower(created_by) IN ('system-bootstrap', 'legacy-create-user')
+  `);
+  await database.execute(sql`
+    UPDATE public.users account
+    SET created_by = actor.username
+    FROM public.users actor
+    WHERE account.created_by IS NOT NULL
+      AND lower(actor.username) = lower(account.created_by)
+  `);
+  await database.execute(sql`
+    UPDATE public.users
+    SET created_by = NULL
+    WHERE created_by IS NOT NULL
+      AND NOT EXISTS (
+        SELECT 1
+        FROM public.users actor
+        WHERE actor.username = public.users.created_by
+      )
+  `);
 
   await database.execute(sql`
     DELETE FROM public.account_activation_tokens token
@@ -296,6 +332,85 @@ export async function ensureUsersBootstrapSchema(
       FROM public.users usr
       WHERE usr.id = req.user_id
     )
+  `);
+  await database.execute(sql`
+    UPDATE public.account_activation_tokens
+    SET created_by = NULLIF(trim(COALESCE(created_by, '')), '')
+  `);
+  await database.execute(sql`
+    UPDATE public.account_activation_tokens
+    SET created_by = ${SYSTEM_ACTOR_USERNAME}
+    WHERE created_by IS NOT NULL
+      AND lower(created_by) IN ('system-bootstrap', 'legacy-create-user')
+  `);
+  await database.execute(sql`
+    UPDATE public.account_activation_tokens token
+    SET created_by = usr.username
+    FROM public.users usr
+    WHERE token.created_by IS NOT NULL
+      AND lower(usr.username) = lower(token.created_by)
+  `);
+  await database.execute(sql`
+    UPDATE public.account_activation_tokens
+    SET created_by = NULL
+    WHERE created_by IS NOT NULL
+      AND NOT EXISTS (
+        SELECT 1
+        FROM public.users usr
+        WHERE usr.username = public.account_activation_tokens.created_by
+      )
+  `);
+  await database.execute(sql`
+    UPDATE public.password_reset_requests
+    SET
+      requested_by_user = NULLIF(trim(COALESCE(requested_by_user, '')), ''),
+      approved_by = NULLIF(trim(COALESCE(approved_by, '')), '')
+  `);
+  await database.execute(sql`
+    UPDATE public.password_reset_requests
+    SET requested_by_user = ${SYSTEM_ACTOR_USERNAME}
+    WHERE requested_by_user IS NOT NULL
+      AND lower(requested_by_user) IN ('system-bootstrap', 'legacy-create-user')
+  `);
+  await database.execute(sql`
+    UPDATE public.password_reset_requests
+    SET approved_by = ${SYSTEM_ACTOR_USERNAME}
+    WHERE approved_by IS NOT NULL
+      AND lower(approved_by) IN ('system-bootstrap', 'legacy-create-user')
+  `);
+  await database.execute(sql`
+    UPDATE public.password_reset_requests req
+    SET requested_by_user = usr.username
+    FROM public.users usr
+    WHERE req.requested_by_user IS NOT NULL
+      AND lower(usr.username) = lower(req.requested_by_user)
+  `);
+  await database.execute(sql`
+    UPDATE public.password_reset_requests req
+    SET approved_by = usr.username
+    FROM public.users usr
+    WHERE req.approved_by IS NOT NULL
+      AND lower(usr.username) = lower(req.approved_by)
+  `);
+  await database.execute(sql`
+    UPDATE public.password_reset_requests
+    SET requested_by_user = NULL
+    WHERE requested_by_user IS NOT NULL
+      AND NOT EXISTS (
+        SELECT 1
+        FROM public.users usr
+        WHERE usr.username = public.password_reset_requests.requested_by_user
+      )
+  `);
+  await database.execute(sql`
+    UPDATE public.password_reset_requests
+    SET approved_by = NULL
+    WHERE approved_by IS NOT NULL
+      AND NOT EXISTS (
+        SELECT 1
+        FROM public.users usr
+        WHERE usr.username = public.password_reset_requests.approved_by
+      )
   `);
   await database.execute(sql`
     DO $$
@@ -320,6 +435,58 @@ export async function ensureUsersBootstrapSchema(
       IF NOT EXISTS (
         SELECT 1
         FROM pg_constraint
+        WHERE conname = 'fk_users_created_by_username'
+      ) THEN
+        ALTER TABLE public.users
+        ADD CONSTRAINT fk_users_created_by_username
+        FOREIGN KEY (created_by)
+        REFERENCES public.users(username)
+        ON UPDATE CASCADE
+        ON DELETE SET NULL;
+      END IF;
+
+      IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'fk_account_activation_tokens_created_by_username'
+      ) THEN
+        ALTER TABLE public.account_activation_tokens
+        ADD CONSTRAINT fk_account_activation_tokens_created_by_username
+        FOREIGN KEY (created_by)
+        REFERENCES public.users(username)
+        ON UPDATE CASCADE
+        ON DELETE SET NULL;
+      END IF;
+
+      IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'fk_password_reset_requests_requested_by_user_username'
+      ) THEN
+        ALTER TABLE public.password_reset_requests
+        ADD CONSTRAINT fk_password_reset_requests_requested_by_user_username
+        FOREIGN KEY (requested_by_user)
+        REFERENCES public.users(username)
+        ON UPDATE CASCADE
+        ON DELETE SET NULL;
+      END IF;
+
+      IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'fk_password_reset_requests_approved_by_username'
+      ) THEN
+        ALTER TABLE public.password_reset_requests
+        ADD CONSTRAINT fk_password_reset_requests_approved_by_username
+        FOREIGN KEY (approved_by)
+        REFERENCES public.users(username)
+        ON UPDATE CASCADE
+        ON DELETE SET NULL;
+      END IF;
+
+      IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
         WHERE conname = 'fk_password_reset_requests_user_id'
       ) THEN
         ALTER TABLE public.password_reset_requests
@@ -331,7 +498,9 @@ export async function ensureUsersBootstrapSchema(
       END IF;
     END $$;
   `);
-  await database.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username_unique ON public.users (username)`);
+  await database.execute(sql`CREATE INDEX IF NOT EXISTS idx_account_activation_tokens_created_by ON public.account_activation_tokens (created_by)`);
+  await database.execute(sql`CREATE INDEX IF NOT EXISTS idx_password_reset_requests_requested_by_user ON public.password_reset_requests (requested_by_user)`);
+  await database.execute(sql`CREATE INDEX IF NOT EXISTS idx_password_reset_requests_approved_by ON public.password_reset_requests (approved_by)`);
   await database.execute(sql`
     DO $$
     BEGIN

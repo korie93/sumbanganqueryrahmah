@@ -80,7 +80,7 @@ export class AuthAccountSelfTwoFactorOperations {
 
     await this.deps.storage.createAuditLog({
       action: "TWO_FACTOR_SETUP_INITIATED",
-      performedBy: actor.id,
+      performedBy: actor.username,
       targetUser: actor.id,
       details: JSON.stringify({
         metadata: {
@@ -140,7 +140,7 @@ export class AuthAccountSelfTwoFactorOperations {
 
     await this.deps.storage.createAuditLog({
       action: "TWO_FACTOR_ENABLED",
-      performedBy: actor.id,
+      performedBy: actor.username,
       targetUser: actor.id,
       details: JSON.stringify({
         metadata: {
@@ -190,7 +190,7 @@ export class AuthAccountSelfTwoFactorOperations {
 
     await this.deps.storage.createAuditLog({
       action: "TWO_FACTOR_DISABLED",
-      performedBy: actor.id,
+      performedBy: actor.username,
       targetUser: actor.id,
       details: JSON.stringify({
         metadata: {

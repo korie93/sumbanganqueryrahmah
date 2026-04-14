@@ -1,4 +1,5 @@
 import {
+  AnyPgColumn,
   bigint,
   bigserial,
   boolean,
@@ -25,7 +26,10 @@ export const users = pgTable("users", {
   status: text("status").notNull().default("active"),
   mustChangePassword: boolean("must_change_password").default(false).notNull(),
   passwordResetBySuperuser: boolean("password_reset_by_superuser").default(false).notNull(),
-  createdBy: text("created_by"),
+  createdBy: text("created_by").references((): AnyPgColumn => users.username, {
+    onDelete: "set null",
+    onUpdate: "cascade",
+  }),
   createdAt: utcTimestamp("created_at").defaultNow().notNull(),
   updatedAt: utcTimestamp("updated_at").defaultNow().notNull(),
   passwordChangedAt: utcTimestamp("password_changed_at"),
@@ -70,10 +74,14 @@ export const accountActivationTokens = pgTable("account_activation_tokens", {
   tokenHash: text("token_hash").notNull(),
   expiresAt: utcTimestamp("expires_at").notNull(),
   usedAt: utcTimestamp("used_at"),
-  createdBy: text("created_by"),
+  createdBy: text("created_by").references(() => users.username, {
+    onDelete: "set null",
+    onUpdate: "cascade",
+  }),
   createdAt: utcTimestamp("created_at").defaultNow().notNull(),
 }, (table) => ({
   userIdIdx: index("idx_account_activation_tokens_user_id").on(table.userId),
+  createdByIdx: index("idx_account_activation_tokens_created_by").on(table.createdBy),
   expiresAtIdx: index("idx_account_activation_tokens_expires_at").on(table.expiresAt),
   tokenHashUnique: uniqueIndex("idx_account_activation_tokens_hash_unique").on(table.tokenHash),
 }));
@@ -83,8 +91,14 @@ export const passwordResetRequests = pgTable("password_reset_requests", {
   userId: text("user_id")
     .notNull()
     .references(() => users.id, { onDelete: "cascade", onUpdate: "cascade" }),
-  requestedByUser: text("requested_by_user"),
-  approvedBy: text("approved_by"),
+  requestedByUser: text("requested_by_user").references(() => users.username, {
+    onDelete: "set null",
+    onUpdate: "cascade",
+  }),
+  approvedBy: text("approved_by").references(() => users.username, {
+    onDelete: "set null",
+    onUpdate: "cascade",
+  }),
   resetType: text("reset_type").notNull().default("email_link"),
   tokenHash: text("token_hash"),
   expiresAt: utcTimestamp("expires_at"),
@@ -92,6 +106,8 @@ export const passwordResetRequests = pgTable("password_reset_requests", {
   createdAt: utcTimestamp("created_at").defaultNow().notNull(),
 }, (table) => ({
   userIdIdx: index("idx_password_reset_requests_user_id").on(table.userId),
+  requestedByUserIdx: index("idx_password_reset_requests_requested_by_user").on(table.requestedByUser),
+  approvedByIdx: index("idx_password_reset_requests_approved_by").on(table.approvedBy),
   createdAtIdx: index("idx_password_reset_requests_created_at").on(table.createdAt.desc()),
   tokenHashUnique: uniqueIndex("idx_password_reset_requests_token_hash_unique")
     .on(table.tokenHash)
@@ -110,7 +126,10 @@ export const imports = pgTable("imports", {
   filename: text("filename").notNull(),
   createdAt: utcTimestamp("created_at").defaultNow().notNull(),
   isDeleted: boolean("is_deleted").default(false).notNull(),
-  createdBy: text("created_by"),
+  createdBy: text("created_by").references(() => users.username, {
+    onDelete: "set null",
+    onUpdate: "cascade",
+  }),
 }, (table) => ({
   createdAtIdx: index("idx_imports_created_at").on(table.createdAt),
   isDeletedIdx: index("idx_imports_is_deleted").on(table.isDeleted),
@@ -214,10 +233,15 @@ export const backups = pgTable("backups", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
   createdAt: utcTimestamp("created_at").defaultNow().notNull(),
-  createdBy: text("created_by").notNull(),
+  createdBy: text("created_by")
+    .notNull()
+    .references(() => users.username, { onDelete: "restrict", onUpdate: "cascade" }),
   backupData: text("backup_data").notNull(),
   metadata: text("metadata"),
-});
+}, (table) => ({
+  createdAtIdx: index("idx_backups_created_at").on(table.createdAt.desc()),
+  createdByIdx: index("idx_backups_created_by").on(table.createdBy),
+}));
 
 export const backupPayloadChunks = pgTable("backup_payload_chunks", {
   id: uuid("id").primaryKey(),
@@ -238,7 +262,9 @@ export const backupJobs = pgTable("backup_jobs", {
   id: uuid("id").primaryKey(),
   type: text("type").notNull(),
   status: text("status").notNull().default("queued"),
-  requestedBy: text("requested_by").notNull(),
+  requestedBy: text("requested_by")
+    .notNull()
+    .references(() => users.username, { onDelete: "restrict", onUpdate: "cascade" }),
   requestedAt: utcTimestamp("requested_at").defaultNow().notNull(),
   startedAt: utcTimestamp("started_at"),
   finishedAt: utcTimestamp("finished_at"),
@@ -250,6 +276,7 @@ export const backupJobs = pgTable("backup_jobs", {
 }, (table) => ({
   statusRequestedAtIdx: index("idx_backup_jobs_status_requested_at").on(table.status, table.requestedAt),
   updatedAtIdx: index("idx_backup_jobs_updated_at").on(table.updatedAt),
+  requestedByIdx: index("idx_backup_jobs_requested_by").on(table.requestedBy),
 }));
 
 export const monitorAlertIncidents = pgTable("monitor_alert_incidents", {

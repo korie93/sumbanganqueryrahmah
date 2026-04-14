@@ -1,11 +1,31 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  buildLegacyUserInsertRecord,
   buildManagedUserInsertRecord,
   buildUserAccountUpdateRecord,
   buildUserCredentialsUpdateRecord,
   deriveFailedLoginAttemptState,
 } from "../auth-user-repository-shared";
+
+test("auth user repository shared keeps legacy account inserts actor-safe for user foreign keys", () => {
+  const now = new Date("2026-04-06T12:00:00.000Z");
+  const record = buildLegacyUserInsertRecord({
+    id: "user-legacy",
+    now,
+    hashedPassword: "hash-1",
+    user: {
+      username: "Legacy.User",
+      password: "password-1",
+      fullName: "Legacy User",
+      email: undefined,
+      role: "user",
+    },
+  });
+
+  assert.equal(record.createdBy, null);
+  assert.equal(record.createdAt, now);
+});
 
 test("auth user repository shared normalizes managed account inserts", () => {
   const now = new Date("2026-04-06T12:00:00.000Z");

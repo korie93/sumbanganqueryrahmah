@@ -90,7 +90,7 @@ export class AuthAccountSelfCredentialOperations {
 
     await this.deps.storage.createAuditLog({
       action: "USER_PASSWORD_CHANGED",
-      performedBy: actor.id,
+      performedBy: actor.username,
       targetUser: actor.id,
       details: buildCredentialAuditDetails({
         actor_user_id: actor.id,
@@ -124,7 +124,7 @@ export class AuthAccountSelfCredentialOperations {
     await this.deps.storage.updateActivitiesUsername(previousUsername, newUsername);
     await this.deps.storage.createAuditLog({
       action: "USER_USERNAME_CHANGED",
-      performedBy: actor.id,
+      performedBy: actor.username,
       targetUser: actor.id,
       details: buildCredentialAuditDetails({
         actor_user_id: actor.id,

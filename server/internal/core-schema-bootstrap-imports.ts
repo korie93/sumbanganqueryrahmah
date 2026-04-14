@@ -27,10 +27,53 @@ export async function ensureCoreImportsTable(
       created_at = COALESCE(created_at, now()),
       is_deleted = COALESCE(is_deleted, false)
   `);
+  await database.execute(sql`
+    UPDATE public.imports
+    SET created_by = NULLIF(trim(COALESCE(created_by, '')), '')
+  `);
   await database.execute(sql`ALTER TABLE public.imports ALTER COLUMN name SET NOT NULL`);
   await database.execute(sql`ALTER TABLE public.imports ALTER COLUMN filename SET NOT NULL`);
   await database.execute(sql`ALTER TABLE public.imports ALTER COLUMN created_at SET NOT NULL`);
   await database.execute(sql`ALTER TABLE public.imports ALTER COLUMN is_deleted SET NOT NULL`);
+  await database.execute(sql`
+    DO $$
+    BEGIN
+      IF to_regclass('public.users') IS NOT NULL THEN
+        UPDATE public.imports
+        SET created_by = 'system'
+        WHERE created_by IS NOT NULL
+          AND lower(created_by) IN ('system-bootstrap', 'legacy-create-user');
+
+        UPDATE public.imports import_row
+        SET created_by = usr.username
+        FROM public.users usr
+        WHERE import_row.created_by IS NOT NULL
+          AND lower(usr.username) = lower(import_row.created_by);
+
+        UPDATE public.imports
+        SET created_by = NULL
+        WHERE created_by IS NOT NULL
+          AND NOT EXISTS (
+            SELECT 1
+            FROM public.users usr
+            WHERE usr.username = public.imports.created_by
+          );
+
+        IF NOT EXISTS (
+          SELECT 1
+          FROM pg_constraint
+          WHERE conname = 'fk_imports_created_by_username'
+        ) THEN
+          ALTER TABLE public.imports
+          ADD CONSTRAINT fk_imports_created_by_username
+          FOREIGN KEY (created_by)
+          REFERENCES public.users(username)
+          ON UPDATE CASCADE
+          ON DELETE SET NULL;
+        END IF;
+      END IF;
+    END $$;
+  `);
   await database.execute(sql`CREATE INDEX IF NOT EXISTS idx_imports_created_at ON public.imports(created_at DESC)`);
   await database.execute(sql`CREATE INDEX IF NOT EXISTS idx_imports_is_deleted ON public.imports(is_deleted)`);
   await database.execute(sql`CREATE INDEX IF NOT EXISTS idx_imports_created_by ON public.imports(created_by)`);

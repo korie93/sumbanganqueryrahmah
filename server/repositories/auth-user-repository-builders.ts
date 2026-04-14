@@ -25,7 +25,7 @@ export function buildLegacyUserInsertRecord(params: {
     status: "active",
     mustChangePassword: false,
     passwordResetBySuperuser: false,
-    createdBy: "legacy-create-user",
+    createdBy: null,
     createdAt: now,
     updatedAt: now,
     passwordChangedAt: now,

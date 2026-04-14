@@ -7,6 +7,7 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
+import { ensureBackupsBootstrapSchema } from "../../internal/backupsBootstrap";
 import { ensureCollectionRecordsTables } from "../../internal/collection-bootstrap-records";
 import { ensureCoreImportsTable } from "../../internal/core-schema-bootstrap-imports";
 import { ensureSettingsSchema } from "../../internal/settings-bootstrap-schema";
@@ -24,6 +25,10 @@ const aiSupportMigrationSql = readFileSync(
 );
 const dataEmbeddingsMigrationSql = readFileSync(
   path.join(repoRoot, "drizzle", "0008_reviewed_data_embeddings.sql"),
+  "utf8",
+);
+const opsMigrationSql = readFileSync(
+  path.join(repoRoot, "drizzle", "0002_reviewed_ops_tables.sql"),
   "utf8",
 );
 const storageMigrationSql = readFileSync(
@@ -56,6 +61,14 @@ const monitorAndMonthlyRollupsMigrationSql = readFileSync(
 );
 const usersMigrationSql = readFileSync(
   path.join(repoRoot, "drizzle", "0012_reviewed_users_table.sql"),
+  "utf8",
+);
+const usersTwoFactorMigrationSql = readFileSync(
+  path.join(repoRoot, "drizzle", "0013_reviewed_users_two_factor.sql"),
+  "utf8",
+);
+const usersLoginLockoutMigrationSql = readFileSync(
+  path.join(repoRoot, "drizzle", "0017_reviewed_users_login_lockout.sql"),
   "utf8",
 );
 const timezoneMigrationFileName = "0024_stormy_mockingbird.sql";
@@ -128,6 +141,14 @@ if (!usersIsBannedNotNullMigrationFileName) {
 }
 const usersIsBannedNotNullMigrationSql = readFileSync(
   path.join(repoRoot, "drizzle", usersIsBannedNotNullMigrationFileName),
+  "utf8",
+);
+const coreUserReferenceForeignKeyMigrationFileName = migrationSqlFileNames.find((name) => /^0037_.*\.sql$/.test(name));
+if (!coreUserReferenceForeignKeyMigrationFileName) {
+  throw new Error("Expected a 0037 core user-reference foreign key migration file in drizzle/");
+}
+const coreUserReferenceForeignKeyMigrationSql = readFileSync(
+  path.join(repoRoot, "drizzle", coreUserReferenceForeignKeyMigrationFileName),
   "utf8",
 );
 const preTimezoneMigrationSqlTexts = migrationSqlFileNames
@@ -901,10 +922,15 @@ test(
   { skip: skipReason || false },
   async () => {
     await withTempDatabase(async ({ pool }) => {
+      await applySql(pool, opsMigrationSql);
       await applySql(pool, storageMigrationSql);
       await applySql(pool, collectionAccessMigrationSql);
       await applySql(pool, usersMigrationSql);
+      await applySql(pool, usersTwoFactorMigrationSql);
+      await applySql(pool, authLifecycleMigrationSql);
+      await applySql(pool, usersLoginLockoutMigrationSql);
       await applySql(pool, usersIsBannedNotNullMigrationSql);
+      await applySql(pool, coreUserReferenceForeignKeyMigrationSql);
 
       assert.equal(await constraintExists(pool, "fk_user_activity_user_id"), true);
       assert.equal(await constraintExists(pool, "fk_data_rows_import_id"), true);
@@ -912,6 +938,13 @@ test(
       assert.equal(await constraintExists(pool, "fk_collection_nickname_sessions_activity_id"), true);
       assert.equal(await constraintExists(pool, "fk_admin_visible_nicknames_nickname_id"), true);
       assert.equal(await constraintExists(pool, "fk_admin_visible_nicknames_admin_user_id"), true);
+      assert.equal(await constraintExists(pool, "fk_users_created_by_username"), true);
+      assert.equal(await constraintExists(pool, "fk_account_activation_tokens_created_by_username"), true);
+      assert.equal(await constraintExists(pool, "fk_password_reset_requests_requested_by_user_username"), true);
+      assert.equal(await constraintExists(pool, "fk_password_reset_requests_approved_by_username"), true);
+      assert.equal(await constraintExists(pool, "fk_imports_created_by_username"), true);
+      assert.equal(await constraintExists(pool, "fk_backups_created_by_username"), true);
+      assert.equal(await constraintExists(pool, "fk_backup_jobs_requested_by_username"), true);
       assert.equal(await indexExists(pool, "idx_user_activity_user_id"), true);
       assert.equal(await indexExists(pool, "idx_admin_visible_nicknames_admin_nickname_unique"), true);
       assert.equal(await columnIsNotNull(pool, "users", "is_banned"), true);
@@ -958,6 +991,254 @@ test(
           VALUES ('user-3', 'null.user', NULL)
         `),
         /null value in column "is_banned"/i,
+      );
+    });
+  },
+);
+
+test(
+  "reviewed core user-reference foreign key migration canonicalizes legacy actor fields and enforces safe rules",
+  { skip: skipReason || false },
+  async () => {
+    await withTempDatabase(async ({ pool }) => {
+      await pool.query(`
+        CREATE TABLE public.users (
+          id text PRIMARY KEY,
+          username text NOT NULL UNIQUE,
+          password_hash text NOT NULL,
+          full_name text,
+          email text,
+          role text NOT NULL DEFAULT 'user',
+          status text NOT NULL DEFAULT 'active',
+          must_change_password boolean NOT NULL DEFAULT false,
+          password_reset_by_superuser boolean NOT NULL DEFAULT false,
+          two_factor_enabled boolean NOT NULL DEFAULT false,
+          failed_login_attempts integer NOT NULL DEFAULT 0,
+          locked_by_system boolean NOT NULL DEFAULT false,
+          created_by text,
+          is_banned boolean NOT NULL DEFAULT false,
+          created_at timestamp with time zone DEFAULT now(),
+          updated_at timestamp with time zone DEFAULT now(),
+          two_factor_secret_encrypted text,
+          two_factor_configured_at timestamp with time zone,
+          locked_at timestamp with time zone,
+          locked_reason text,
+          password_changed_at timestamp with time zone,
+          activated_at timestamp with time zone,
+          last_login_at timestamp with time zone
+        );
+
+        CREATE TABLE public.account_activation_tokens (
+          id text PRIMARY KEY,
+          user_id text NOT NULL,
+          token_hash text NOT NULL,
+          expires_at timestamp with time zone NOT NULL,
+          used_at timestamp with time zone,
+          created_by text,
+          created_at timestamp with time zone DEFAULT now()
+        );
+
+        CREATE TABLE public.password_reset_requests (
+          id text PRIMARY KEY,
+          user_id text NOT NULL,
+          requested_by_user text,
+          approved_by text,
+          reset_type text NOT NULL DEFAULT 'email_link',
+          token_hash text,
+          expires_at timestamp with time zone,
+          used_at timestamp with time zone,
+          created_at timestamp with time zone DEFAULT now()
+        );
+
+        CREATE TABLE public.imports (
+          id text PRIMARY KEY,
+          name text NOT NULL,
+          filename text NOT NULL,
+          created_at timestamp with time zone DEFAULT now() NOT NULL,
+          is_deleted boolean DEFAULT false NOT NULL,
+          created_by text
+        );
+
+        CREATE TABLE public.backups (
+          id text PRIMARY KEY,
+          name text NOT NULL,
+          created_at timestamp with time zone DEFAULT now() NOT NULL,
+          created_by text,
+          backup_data text NOT NULL,
+          metadata text
+        );
+
+        CREATE TABLE public.backup_jobs (
+          id uuid PRIMARY KEY,
+          type text NOT NULL,
+          status text NOT NULL DEFAULT 'queued',
+          requested_by text,
+          requested_at timestamp with time zone DEFAULT now() NOT NULL,
+          started_at timestamp with time zone,
+          finished_at timestamp with time zone,
+          updated_at timestamp with time zone DEFAULT now() NOT NULL,
+          backup_id text,
+          backup_name text,
+          result jsonb,
+          error jsonb
+        );
+      `);
+
+      await pool.query(`
+        INSERT INTO public.users (id, username, password_hash, created_by)
+        VALUES
+          ('admin-user', 'Admin.User', 'hash', NULL),
+          ('auditor-user', 'Auditor.User', 'hash', NULL),
+          ('subject-user', 'Subject.User', 'hash', ' Admin.User '),
+          ('legacy-user', 'Legacy.User', 'hash', 'legacy-create-user'),
+          ('ghost-user', 'Ghost.User', 'hash', 'ghost.actor')
+      `);
+      await pool.query(`
+        INSERT INTO public.account_activation_tokens (id, user_id, token_hash, expires_at, created_by)
+        VALUES
+          ('activation-1', 'subject-user', 'hash-1', now() + interval '1 day', ' admin.user '),
+          ('activation-2', 'legacy-user', 'hash-2', now() + interval '1 day', 'ghost.actor')
+      `);
+      await pool.query(`
+        INSERT INTO public.password_reset_requests (
+          id,
+          user_id,
+          requested_by_user,
+          approved_by,
+          reset_type,
+          token_hash,
+          expires_at
+        )
+        VALUES
+          ('reset-1', 'subject-user', 'AUDITOR.USER', 'ghost.actor', 'email_link', 'token-1', now() + interval '1 day'),
+          ('reset-2', 'legacy-user', 'system-bootstrap', ' legacy-create-user ', 'manual_reset', NULL, NULL)
+      `);
+      await pool.query(`
+        INSERT INTO public.imports (id, name, filename, created_by)
+        VALUES
+          ('import-1', 'Import 1', 'one.csv', ' system-bootstrap '),
+          ('import-2', 'Import 2', 'two.csv', 'ghost.actor')
+      `);
+      await pool.query(`
+        INSERT INTO public.backups (id, name, created_by, backup_data, metadata)
+        VALUES
+          ('backup-1', 'Nightly', ' admin.user ', '{}'::text, NULL),
+          ('backup-2', 'Legacy', 'ghost.actor', '{}'::text, NULL)
+      `);
+      await pool.query(`
+        INSERT INTO public.backup_jobs (id, type, status, requested_by)
+        VALUES
+          ('11111111-1111-1111-1111-111111111111'::uuid, 'create', 'queued', ' system-bootstrap '),
+          ('22222222-2222-2222-2222-222222222222'::uuid, 'restore', 'queued', 'ghost.actor')
+      `);
+
+      await applySql(pool, coreUserReferenceForeignKeyMigrationSql);
+
+      assert.equal(await constraintExists(pool, "fk_users_created_by_username"), true);
+      assert.equal(await constraintExists(pool, "fk_account_activation_tokens_created_by_username"), true);
+      assert.equal(await constraintExists(pool, "fk_password_reset_requests_requested_by_user_username"), true);
+      assert.equal(await constraintExists(pool, "fk_password_reset_requests_approved_by_username"), true);
+      assert.equal(await constraintExists(pool, "fk_imports_created_by_username"), true);
+      assert.equal(await constraintExists(pool, "fk_backups_created_by_username"), true);
+      assert.equal(await constraintExists(pool, "fk_backup_jobs_requested_by_username"), true);
+
+      const userCreatedByRules = await foreignKeyRules(pool, "users", "created_by");
+      const tokenCreatedByRules = await foreignKeyRules(pool, "account_activation_tokens", "created_by");
+      const resetRequestedByRules = await foreignKeyRules(pool, "password_reset_requests", "requested_by_user");
+      const resetApprovedByRules = await foreignKeyRules(pool, "password_reset_requests", "approved_by");
+      const importCreatedByRules = await foreignKeyRules(pool, "imports", "created_by");
+      const backupCreatedByRules = await foreignKeyRules(pool, "backups", "created_by");
+      const backupJobRequestedByRules = await foreignKeyRules(pool, "backup_jobs", "requested_by");
+
+      assert.equal(userCreatedByRules[0]?.delete_rule, "SET NULL");
+      assert.equal(tokenCreatedByRules[0]?.delete_rule, "SET NULL");
+      assert.equal(resetRequestedByRules[0]?.delete_rule, "SET NULL");
+      assert.equal(resetApprovedByRules[0]?.delete_rule, "SET NULL");
+      assert.equal(importCreatedByRules[0]?.delete_rule, "SET NULL");
+      assert.equal(backupCreatedByRules[0]?.delete_rule, "RESTRICT");
+      assert.equal(backupJobRequestedByRules[0]?.delete_rule, "RESTRICT");
+
+      const userRows = await pool.query<{ username: string; created_by: string | null }>(`
+        SELECT username, created_by
+        FROM public.users
+        ORDER BY username ASC
+      `);
+      assert.deepEqual(userRows.rows, [
+        { username: "Admin.User", created_by: null },
+        { username: "Auditor.User", created_by: null },
+        { username: "Ghost.User", created_by: null },
+        { username: "Legacy.User", created_by: "system" },
+        { username: "Subject.User", created_by: "Admin.User" },
+        { username: "system", created_by: null },
+      ]);
+
+      const tokenRows = await pool.query<{ id: string; created_by: string | null }>(`
+        SELECT id, created_by
+        FROM public.account_activation_tokens
+        ORDER BY id ASC
+      `);
+      assert.deepEqual(tokenRows.rows, [
+        { id: "activation-1", created_by: "Admin.User" },
+        { id: "activation-2", created_by: null },
+      ]);
+
+      const resetRows = await pool.query<{
+        id: string;
+        requested_by_user: string | null;
+        approved_by: string | null;
+      }>(`
+        SELECT id, requested_by_user, approved_by
+        FROM public.password_reset_requests
+        ORDER BY id ASC
+      `);
+      assert.deepEqual(resetRows.rows, [
+        { id: "reset-1", requested_by_user: "Auditor.User", approved_by: null },
+        { id: "reset-2", requested_by_user: "system", approved_by: "system" },
+      ]);
+
+      const importRows = await pool.query<{ id: string; created_by: string | null }>(`
+        SELECT id, created_by
+        FROM public.imports
+        ORDER BY id ASC
+      `);
+      assert.deepEqual(importRows.rows, [
+        { id: "import-1", created_by: "system" },
+        { id: "import-2", created_by: null },
+      ]);
+
+      const backupRows = await pool.query<{ id: string; created_by: string }>(`
+        SELECT id, created_by
+        FROM public.backups
+        ORDER BY id ASC
+      `);
+      assert.deepEqual(backupRows.rows, [
+        { id: "backup-1", created_by: "Admin.User" },
+        { id: "backup-2", created_by: "system" },
+      ]);
+      assert.equal(await columnIsNotNull(pool, "backups", "created_by"), true);
+
+      const backupJobRows = await pool.query<{ id: string; requested_by: string }>(`
+        SELECT id::text AS id, requested_by
+        FROM public.backup_jobs
+        ORDER BY id ASC
+      `);
+      assert.deepEqual(backupJobRows.rows, [
+        { id: "11111111-1111-1111-1111-111111111111", requested_by: "system" },
+        { id: "22222222-2222-2222-2222-222222222222", requested_by: "system" },
+      ]);
+      assert.equal(await columnIsNotNull(pool, "backup_jobs", "requested_by"), true);
+
+      await pool.query(`DELETE FROM public.users WHERE username = 'Auditor.User'`);
+      const deletedAuditorRefs = await pool.query<{ requested_by_user: string | null }>(`
+        SELECT requested_by_user
+        FROM public.password_reset_requests
+        WHERE id = 'reset-1'
+      `);
+      assert.equal(deletedAuditorRefs.rows[0]?.requested_by_user, null);
+
+      await assert.rejects(
+        () => pool.query(`DELETE FROM public.users WHERE username = 'Admin.User'`),
+        /fk_backups_created_by_username/i,
       );
     });
   },
@@ -1378,6 +1659,163 @@ test(
         await pool.query(`SELECT COUNT(*)::int AS count FROM public.password_reset_requests WHERE user_id = 'missing-user'`).then((result) => result.rows[0]?.count),
         0,
       );
+    });
+  },
+);
+
+test(
+  "users, imports, and backups bootstrap helpers normalize user-reference actors and add safe foreign keys",
+  { skip: skipReason || false },
+  async () => {
+    await withTempDatabase(async ({ pool }) => {
+      await pool.query(`
+        CREATE TABLE public.users (
+          id text PRIMARY KEY,
+          username text,
+          password text,
+          role text,
+          status text,
+          created_by text,
+          created_at timestamp DEFAULT now(),
+          password_changed_at timestamp
+        );
+
+        CREATE TABLE public.account_activation_tokens (
+          id text PRIMARY KEY,
+          user_id text NOT NULL,
+          token_hash text NOT NULL,
+          expires_at timestamp NOT NULL,
+          used_at timestamp,
+          created_by text
+        );
+
+        CREATE TABLE public.password_reset_requests (
+          id text PRIMARY KEY,
+          user_id text NOT NULL,
+          requested_by_user text,
+          approved_by text,
+          created_at timestamp DEFAULT now()
+        );
+
+        CREATE TABLE public.imports (
+          id text PRIMARY KEY,
+          name text,
+          filename text,
+          created_at timestamp,
+          is_deleted boolean,
+          created_by text
+        );
+
+        CREATE TABLE public.backups (
+          id text PRIMARY KEY,
+          name text,
+          created_at timestamp,
+          created_by text,
+          backup_data text,
+          metadata text
+        );
+
+        CREATE TABLE public.backup_jobs (
+          id uuid PRIMARY KEY,
+          type text,
+          status text,
+          requested_by text,
+          requested_at timestamp,
+          started_at timestamp,
+          finished_at timestamp,
+          updated_at timestamp,
+          backup_id text,
+          backup_name text,
+          result jsonb,
+          error jsonb
+        );
+      `);
+
+      await pool.query(`
+        INSERT INTO public.users (id, username, password, role, status, created_by)
+        VALUES
+          ('admin-user', 'Admin.User', 'legacy-password', 'ADMIN', 'ACTIVE', NULL),
+          ('member-user', 'Member.User', 'legacy-password', 'USER', 'ACTIVE', 'legacy-create-user')
+      `);
+      await pool.query(`
+        INSERT INTO public.account_activation_tokens (id, user_id, token_hash, expires_at, created_by)
+        VALUES ('activation-1', 'member-user', 'hash-1', now() + interval '1 day', ' admin.user ')
+      `);
+      await pool.query(`
+        INSERT INTO public.password_reset_requests (id, user_id, requested_by_user, approved_by)
+        VALUES ('reset-1', 'member-user', ' system-bootstrap ', 'ghost.actor')
+      `);
+      await pool.query(`
+        INSERT INTO public.imports (id, name, filename, created_by)
+        VALUES
+          ('import-1', NULL, 'legacy.csv', ' admin.user '),
+          ('import-2', 'Ghost import', 'ghost.csv', 'ghost.actor')
+      `);
+      await pool.query(`
+        INSERT INTO public.backups (id, name, created_by, backup_data)
+        VALUES
+          ('backup-1', 'Nightly', ' admin.user ', '{}'::text),
+          ('backup-2', 'Legacy', NULL, '{}'::text)
+      `);
+      await pool.query(`
+        INSERT INTO public.backup_jobs (id, type, status, requested_by, requested_at, updated_at)
+        VALUES
+          ('33333333-3333-3333-3333-333333333333'::uuid, 'create', NULL, 'ghost.actor', now(), now()),
+          ('44444444-4444-4444-4444-444444444444'::uuid, 'restore', 'queued', NULL, now(), now())
+      `);
+
+      await ensureUsersBootstrapSchema(drizzle(pool));
+      await ensureCoreImportsTable(drizzle(pool));
+      await ensureBackupsBootstrapSchema(drizzle(pool));
+
+      assert.equal(await constraintExists(pool, "fk_users_created_by_username"), true);
+      assert.equal(await constraintExists(pool, "fk_account_activation_tokens_created_by_username"), true);
+      assert.equal(await constraintExists(pool, "fk_password_reset_requests_requested_by_user_username"), true);
+      assert.equal(await constraintExists(pool, "fk_password_reset_requests_approved_by_username"), true);
+      assert.equal(await constraintExists(pool, "fk_imports_created_by_username"), true);
+      assert.equal(await constraintExists(pool, "fk_backups_created_by_username"), true);
+      assert.equal(await constraintExists(pool, "fk_backup_jobs_requested_by_username"), true);
+
+      const usersRows = await pool.query<{ username: string; created_by: string | null }>(`
+        SELECT username, created_by
+        FROM public.users
+        ORDER BY username ASC
+      `);
+      assert.deepEqual(usersRows.rows, [
+        { username: "Admin.User", created_by: null },
+        { username: "Member.User", created_by: "system" },
+        { username: "system", created_by: null },
+      ]);
+
+      const importsRows = await pool.query<{ id: string; created_by: string | null }>(`
+        SELECT id, created_by
+        FROM public.imports
+        ORDER BY id ASC
+      `);
+      assert.deepEqual(importsRows.rows, [
+        { id: "import-1", created_by: "Admin.User" },
+        { id: "import-2", created_by: null },
+      ]);
+
+      const backupRows = await pool.query<{ id: string; created_by: string }>(`
+        SELECT id, created_by
+        FROM public.backups
+        ORDER BY id ASC
+      `);
+      assert.deepEqual(backupRows.rows, [
+        { id: "backup-1", created_by: "Admin.User" },
+        { id: "backup-2", created_by: "system" },
+      ]);
+
+      const backupJobRows = await pool.query<{ id: string; requested_by: string }>(`
+        SELECT id::text AS id, requested_by
+        FROM public.backup_jobs
+        ORDER BY id ASC
+      `);
+      assert.deepEqual(backupJobRows.rows, [
+        { id: "33333333-3333-3333-3333-333333333333", requested_by: "system" },
+        { id: "44444444-4444-4444-4444-444444444444", requested_by: "system" },
+      ]);
     });
   },
 );

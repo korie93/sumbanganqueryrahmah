@@ -126,7 +126,7 @@ export async function seedUsersBootstrapDefaults(): Promise<void> {
       status: "active",
       mustChangePassword: isFreshLocalBootstrap && user.role === "superuser",
       passwordResetBySuperuser: isFreshLocalBootstrap && user.role === "superuser",
-      createdBy: "system-bootstrap",
+      createdBy: "system",
       createdAt: now,
       updatedAt: now,
       passwordChangedAt: now,
