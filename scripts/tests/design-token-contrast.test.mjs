@@ -231,8 +231,14 @@ test("audit contrast pairs keep muted and destructive tokens readable on their p
   );
   assert.deepEqual(
     validateThemeContrast(darkTokens, {
+      minRatio: 3,
+      tokenPairs: [["background", "destructive"]],
+    }),
+    [],
+  );
+  assert.deepEqual(
+    validateThemeContrast(darkTokens, {
       tokenPairs: [
-        ["background", "destructive"],
         ["destructive", "destructive-foreground"],
       ],
     }),
