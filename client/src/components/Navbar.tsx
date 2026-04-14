@@ -42,6 +42,10 @@ interface NavbarProps {
   monitorSection?: MonitorSection | undefined
 }
 
+function prefetchNavbarItem(itemId: string) {
+  void prefetchNavigationTarget(resolveNavigationTarget(itemId))
+}
+
 function NavbarImpl({
   currentPage,
   onNavigate,
@@ -95,9 +99,6 @@ function NavbarImpl({
     },
     [onNavigate]
   )
-  const prefetchItem = useCallback((itemId: string) => {
-    void prefetchNavigationTarget(resolveNavigationTarget(itemId))
-  }, [])
 
   const desktopNavLayoutKey = useMemo(
     () => buildDesktopNavLayoutKey(directItems, groupedItems, savedCount, showHomeButton),
@@ -133,7 +134,7 @@ function NavbarImpl({
               <NavbarHomeButton
                 active={activeNavigationItemId === HOME_NAV_ITEM.id}
                 onNavigate={navigateToItem}
-                onPrefetch={prefetchItem}
+                onPrefetch={prefetchNavbarItem}
               />
             ) : null}
           </div>
@@ -192,7 +193,7 @@ function NavbarImpl({
           activeNavigationItemId={activeNavigationItemId}
           savedCount={savedCount}
           onNavigate={navigateToItem}
-          onPrefetch={prefetchItem}
+          onPrefetch={prefetchNavbarItem}
           navScrollerRef={navScrollerRef}
           desktopNavOverflow={desktopNavOverflow}
         />
@@ -232,7 +233,7 @@ function NavbarImpl({
         activeMobileItemId={activeMobileItemId}
         savedCount={savedCount}
         onNavigate={navigateToItem}
-        onPrefetch={prefetchItem}
+        onPrefetch={prefetchNavbarItem}
       />
     </header>
   )

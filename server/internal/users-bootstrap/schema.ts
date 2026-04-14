@@ -44,7 +44,7 @@ export async function ensureUsersBootstrapSchema(
       locked_reason text,
       locked_by_system boolean NOT NULL DEFAULT false,
       created_by text,
-      is_banned boolean DEFAULT false,
+      is_banned boolean NOT NULL DEFAULT false,
       created_at timestamp with time zone DEFAULT now(),
       updated_at timestamp with time zone DEFAULT now(),
       password_changed_at timestamp with time zone,
@@ -279,6 +279,7 @@ export async function ensureUsersBootstrapSchema(
   await database.execute(sql`ALTER TABLE public.users ALTER COLUMN role SET NOT NULL`);
   await database.execute(sql`ALTER TABLE public.users ALTER COLUMN status SET NOT NULL`);
   await database.execute(sql`ALTER TABLE public.users ALTER COLUMN password_hash SET NOT NULL`);
+  await database.execute(sql`ALTER TABLE public.users ALTER COLUMN is_banned SET NOT NULL`);
 
   await database.execute(sql`
     DELETE FROM public.account_activation_tokens token

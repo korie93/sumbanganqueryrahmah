@@ -49,6 +49,14 @@ WHERE
   OR updated_at IS NULL
   OR is_banned IS NULL;
 
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM users WHERE is_banned IS NULL) THEN
+    ALTER TABLE users ALTER COLUMN is_banned SET NOT NULL;
+  END IF;
+END
+$$;
+
 CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username_lower_unique ON users (lower(username));
 CREATE INDEX IF NOT EXISTS idx_users_username_lower ON users (lower(username));
 CREATE INDEX IF NOT EXISTS idx_users_role ON users (role);

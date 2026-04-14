@@ -122,6 +122,14 @@ const collectionRecordCreatedByDeleteRuleMigrationSql = readFileSync(
   path.join(repoRoot, "drizzle", collectionRecordCreatedByDeleteRuleMigrationFileName),
   "utf8",
 );
+const usersIsBannedNotNullMigrationFileName = migrationSqlFileNames.find((name) => /^0036_.*\.sql$/.test(name));
+if (!usersIsBannedNotNullMigrationFileName) {
+  throw new Error("Expected a 0036 users is_banned not null migration file in drizzle/");
+}
+const usersIsBannedNotNullMigrationSql = readFileSync(
+  path.join(repoRoot, "drizzle", usersIsBannedNotNullMigrationFileName),
+  "utf8",
+);
 const preTimezoneMigrationSqlTexts = migrationSqlFileNames
   .filter((name) => name.localeCompare(timezoneMigrationFileName) < 0)
   .sort((left, right) => left.localeCompare(right))
@@ -896,6 +904,7 @@ test(
       await applySql(pool, storageMigrationSql);
       await applySql(pool, collectionAccessMigrationSql);
       await applySql(pool, usersMigrationSql);
+      await applySql(pool, usersIsBannedNotNullMigrationSql);
 
       assert.equal(await constraintExists(pool, "fk_user_activity_user_id"), true);
       assert.equal(await constraintExists(pool, "fk_data_rows_import_id"), true);
@@ -905,6 +914,51 @@ test(
       assert.equal(await constraintExists(pool, "fk_admin_visible_nicknames_admin_user_id"), true);
       assert.equal(await indexExists(pool, "idx_user_activity_user_id"), true);
       assert.equal(await indexExists(pool, "idx_admin_visible_nicknames_admin_nickname_unique"), true);
+      assert.equal(await columnIsNotNull(pool, "users", "is_banned"), true);
+    });
+  },
+);
+
+test(
+  "reviewed users is_banned migration backfills null bans and enforces not-null safely",
+  { skip: skipReason || false },
+  async () => {
+    await withTempDatabase(async ({ pool }) => {
+      await pool.query(`
+        CREATE TABLE public.users (
+          id text PRIMARY KEY,
+          username text NOT NULL UNIQUE,
+          is_banned boolean DEFAULT false
+        );
+
+        INSERT INTO public.users (id, username, is_banned)
+        VALUES
+          ('user-1', 'active.user', NULL),
+          ('user-2', 'banned.user', true);
+      `);
+
+      await applySql(pool, usersIsBannedNotNullMigrationSql);
+
+      assert.equal(await columnIsNotNull(pool, "users", "is_banned"), true);
+      assert.match(String(await columnDefault(pool, "users", "is_banned") || ""), /false/i);
+
+      const rows = await pool.query<{ username: string; is_banned: boolean }>(`
+        SELECT username, is_banned
+        FROM public.users
+        ORDER BY username ASC
+      `);
+      assert.deepEqual(rows.rows, [
+        { username: "active.user", is_banned: false },
+        { username: "banned.user", is_banned: true },
+      ]);
+
+      await assert.rejects(
+        () => pool.query(`
+          INSERT INTO public.users (id, username, is_banned)
+          VALUES ('user-3', 'null.user', NULL)
+        `),
+        /null value in column "is_banned"/i,
+      );
     });
   },
 );
@@ -1228,6 +1282,7 @@ test(
       assert.equal(user?.status, "pending_activation");
       assert.match(String(user?.password_hash || ""), /^\$2[aby]\$/);
       assert.equal(await columnIsNotNull(pool, "users", "password_hash"), true);
+      assert.equal(await columnIsNotNull(pool, "users", "is_banned"), true);
       assert.equal(
         await pool.query(`SELECT COUNT(*)::int AS count FROM public.account_activation_tokens WHERE user_id = 'missing-user'`).then((result) => result.rows[0]?.count),
         0,
@@ -1315,6 +1370,7 @@ test(
       assert.equal(user?.role, "admin");
       assert.equal(user?.status, "pending_activation");
       assert.match(String(user?.password_hash || ""), /^\$2[aby]\$/);
+      assert.equal(await columnIsNotNull(pool, "users", "is_banned"), true);
       assert.equal(await constraintExists(pool, "fk_account_activation_tokens_user_id"), true);
       assert.match(String(await columnDefault(pool, "password_reset_requests", "reset_type") || ""), /email_link/i);
       assert.equal(await indexExists(pool, "idx_password_reset_requests_pending_review"), true);

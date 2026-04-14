@@ -17,11 +17,7 @@ import {
   readAIChatErrorResponse,
   readAIChatSuccessPayload,
 } from "./ai-chat-utils";
-import {
-  canApplyAIChatUiUpdate,
-  canRetryAIChatRequest,
-  isActiveAIChatSession,
-} from "./ai-chat-session-guards";
+import { createAIChatSessionAccessors } from "./ai-chat-session-accessors";
 import { useAIChatExternalEffects } from "./useAIChatExternalEffects";
 import { useAIChatRuntimeRefs } from "./useAIChatRuntimeRefs";
 import { useAIChatTypingAction } from "./useAIChatTypingAction";
@@ -123,16 +119,20 @@ export function useAIChatState({
     typingDelayMs,
     typingIntervalRef,
   });
+  const { canApplyUiUpdate, canRetryRequest, isActiveSession } = useMemo(
+    () => createAIChatSessionAccessors(sessionRef, isMountedRef, processingRef),
+    [isMountedRef, processingRef, sessionRef],
+  );
 
   const startSlowNoticeWatch = useCallback((sessionId: number) => {
     clearSlowNoticeTimer();
     slowNoticeTimerRef.current = window.setTimeout(() => {
-      if (!canRetryAIChatRequest(sessionId, sessionRef, isMountedRef, processingRef)) {
+      if (!canRetryRequest(sessionId)) {
         return;
       }
       setSlowNotice(true);
     }, 1500);
-  }, [clearSlowNoticeTimer, isMountedRef, processingRef, sessionRef]);
+  }, [canRetryRequest, clearSlowNoticeTimer]);
 
   const finishAsyncCycle = useCallback((options?: {
     clearStreamingText?: boolean;
@@ -155,7 +155,7 @@ export function useAIChatState({
   }, [clearSlowNoticeTimer, setIsThinking]);
 
   const executeSearch = useCallback(async (text: string, sessionId: number, retryCount = 0) => {
-    if (!isActiveAIChatSession(sessionId, sessionRef)) {
+    if (!isActiveSession(sessionId)) {
       return;
     }
 
@@ -170,7 +170,7 @@ export function useAIChatState({
       timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
       const response = await searchAI(text, { signal: controller.signal });
 
-      if (!isActiveAIChatSession(sessionId, sessionRef)) {
+      if (!isActiveSession(sessionId)) {
         return;
       }
 
@@ -180,20 +180,20 @@ export function useAIChatState({
       }
 
       const data = await readAIChatSuccessPayload(response, DEFAULT_AI_CHAT_ERROR_MESSAGE);
-      if (!isActiveAIChatSession(sessionId, sessionRef)) {
+      if (!isActiveSession(sessionId)) {
         return;
       }
 
-      if (gateWaitMs > 0 && canApplyAIChatUiUpdate(sessionId, sessionRef, isMountedRef)) {
+      if (gateWaitMs > 0 && canApplyUiUpdate(sessionId)) {
         setGateNotice(formatAIChatQueuedNotice(gateWaitMs));
       }
 
       if (data?.processing) {
-        if (canApplyAIChatUiUpdate(sessionId, sessionRef, isMountedRef)) {
+        if (canApplyUiUpdate(sessionId)) {
           setAiStatus("PROCESSING");
         }
         if (retryCount >= AI_CHAT_MAX_RETRIES) {
-          if (canApplyAIChatUiUpdate(sessionId, sessionRef, isMountedRef)) {
+          if (canApplyUiUpdate(sessionId)) {
             appendMessage({
               role: "assistant",
               content: "Sistem masih memproses. Sila cuba semula sebentar lagi.",
@@ -210,7 +210,7 @@ export function useAIChatState({
         waitingRetry = true;
         const timerId = window.setTimeout(() => {
           unregisterRetryTimer(timerId);
-          if (!canRetryAIChatRequest(sessionId, sessionRef, isMountedRef, processingRef)) {
+          if (!canRetryRequest(sessionId)) {
             return;
           }
           void executeSearch(text, sessionId, retryCount + 1);
@@ -227,7 +227,7 @@ export function useAIChatState({
       if (err?.name === "AbortError") {
         return;
       }
-      if (!canApplyAIChatUiUpdate(sessionId, sessionRef, isMountedRef)) {
+      if (!canApplyUiUpdate(sessionId)) {
         return;
       }
       const gateNotice = error instanceof AIChatRequestError ? error.gateNotice : null;
@@ -250,7 +250,7 @@ export function useAIChatState({
       if (
         !waitingRetry
         && !startedTyping
-        && canApplyAIChatUiUpdate(sessionId, sessionRef, isMountedRef)
+        && canApplyUiUpdate(sessionId)
       ) {
         finishAsyncCycle();
       }
@@ -258,11 +258,11 @@ export function useAIChatState({
   }, [
     abortActiveRequest,
     appendMessage,
+    canApplyUiUpdate,
+    canRetryRequest,
     finishAsyncCycle,
-    isMountedRef,
-    processingRef,
+    isActiveSession,
     registerRetryTimer,
-    sessionRef,
     startTyping,
     timeoutMs,
     unregisterRetryTimer,

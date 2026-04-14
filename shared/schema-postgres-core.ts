@@ -31,7 +31,7 @@ export const users = pgTable("users", {
   passwordChangedAt: utcTimestamp("password_changed_at"),
   activatedAt: utcTimestamp("activated_at"),
   lastLoginAt: utcTimestamp("last_login_at"),
-  isBanned: boolean("is_banned").default(false),
+  isBanned: boolean("is_banned").default(false).notNull(),
   twoFactorEnabled: boolean("two_factor_enabled").default(false).notNull(),
   twoFactorSecretEncrypted: text("two_factor_secret_encrypted"),
   twoFactorConfiguredAt: utcTimestamp("two_factor_configured_at"),
