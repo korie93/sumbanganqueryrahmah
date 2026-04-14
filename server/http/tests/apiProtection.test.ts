@@ -63,6 +63,12 @@ function createApiProtectionTestApp() {
   app.post("/api/activity/logout", (_req, res) => {
     res.json({ ok: true, route: "logout" });
   });
+  app.get("/api/backups", (_req, res) => {
+    res.json({ ok: true, route: "backup-list" });
+  });
+  app.post("/api/backups", (_req, res) => {
+    res.status(202).json({ ok: true, route: "backup-create" });
+  });
 
   return app;
 }
@@ -153,6 +159,70 @@ test("adaptive API protection ignores spoofed x-forwarded-for headers when trust
     assert.equal(throttled.status, 429);
     const payload = await throttled.json();
     assert.equal(payload.limit, 8);
+    assert.equal(payload.mode, "NORMAL");
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("adaptive API protection does not let generic API bursts consume the backup create write bucket", async () => {
+  const app = createApiProtectionTestApp();
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    for (let index = 0; index < 8; index += 1) {
+      const response = await fetch(`${baseUrl}/api/noisy`);
+      assert.equal(response.status, 200);
+    }
+
+    const noisyOverflow = await fetch(`${baseUrl}/api/noisy`);
+    assert.equal(noisyOverflow.status, 429);
+
+    const backupCreate = await fetch(`${baseUrl}/api/backups`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ name: "Smoke backup" }),
+    });
+
+    assert.equal(backupCreate.status, 202);
+    assert.deepEqual(await backupCreate.json(), {
+      ok: true,
+      route: "backup-create",
+    });
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("adaptive API protection still throttles repeated backup create writes within their own bucket", async () => {
+  const app = createApiProtectionTestApp();
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    for (let index = 0; index < 2; index += 1) {
+      const response = await fetch(`${baseUrl}/api/backups`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ name: `Backup ${index}` }),
+      });
+      assert.equal(response.status, 202);
+    }
+
+    const throttled = await fetch(`${baseUrl}/api/backups`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ name: "Backup overflow" }),
+    });
+
+    assert.equal(throttled.status, 429);
+    const payload = await throttled.json();
+    assert.equal(payload.limit, 2);
     assert.equal(payload.mode, "NORMAL");
   } finally {
     await stopTestServer(server);

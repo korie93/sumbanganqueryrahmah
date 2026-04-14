@@ -36,6 +36,10 @@ function isSessionControlRoute(req: Request): boolean {
     || (method === "POST" && path === "/api/activity/logout");
 }
 
+function isBackupRoute(path: string): boolean {
+  return path.startsWith("/api/backups");
+}
+
 export function resolveAdaptiveRateEvictionKey(
   buckets: ReadonlyMap<string, AdaptiveRateBucket>,
 ): string | null {
@@ -136,6 +140,10 @@ export function createApiProtectionMiddleware(options: ApiProtectionOptions): {
       bucketScope = "ai";
       baseLimit = 14;
       minLimit = 4;
+    } else if (isBackupRoute(path)) {
+      bucketScope = method === "GET" ? "backup-read" : "backup-write";
+      baseLimit = method === "GET" ? 20 : 10;
+      minLimit = method === "GET" ? 4 : 2;
     } else if (path.startsWith("/api/activity/heartbeat")) {
       bucketScope = "heartbeat";
       baseLimit = 120;
