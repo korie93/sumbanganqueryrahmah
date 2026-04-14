@@ -2,6 +2,7 @@ import type { ReactNode, UIEvent } from "react";
 import { Eye } from "lucide-react";
 import { HorizontalScrollHint } from "@/components/HorizontalScrollHint";
 import { Button } from "@/components/ui/button";
+import { buildGeneralSearchRowAriaLabel } from "@/pages/general-search/general-search-row-aria";
 import type { SearchResultRow } from "@/pages/general-search/types";
 import { getCellDisplayText, getPriorityRank } from "@/pages/general-search/utils";
 
@@ -89,9 +90,18 @@ export function GeneralSearchDesktopResultsTable({
           ) : null}
           {virtualRows.map((row, rowIndex) => {
             const actualRowIndex = enableVirtualRows ? virtualStartRow + rowIndex : rowIndex;
+            const rowAriaLabel = buildGeneralSearchRowAriaLabel({
+              headers,
+              resultNumber: actualRowIndex + 1,
+              row,
+            });
 
             return (
-              <tr key={buildRowKey(row, actualRowIndex)} className="h-[52px] border-t border-border hover:bg-muted/50">
+              <tr
+                key={buildRowKey(row, actualRowIndex)}
+                aria-label={rowAriaLabel}
+                className="h-[52px] border-t border-border hover:bg-muted/50"
+              >
                 <td className="p-3 text-muted-foreground">{actualRowIndex + 1}</td>
                 <td className="p-3">
                   <Button

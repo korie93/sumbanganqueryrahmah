@@ -13,6 +13,7 @@ export default function Activity() {
     canModerateActivity,
     activities,
     bannedUsers,
+    errorMessage,
     loading,
     actionLoading,
     kickDialogOpen,
@@ -81,6 +82,7 @@ export default function Activity() {
         dateFromOpen={dateFromOpen}
         dateToOpen={dateToOpen}
         deleteDialogOpen={deleteDialogOpen}
+        errorMessage={errorMessage}
         filters={filters}
         handleApplyFilters={handleApplyFilters}
         handleBanConfirm={handleBanConfirm}

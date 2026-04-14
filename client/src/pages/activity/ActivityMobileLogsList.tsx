@@ -26,6 +26,7 @@ import {
   parseActivityUserAgent,
 } from "@/pages/activity/utils";
 import { getActivitySelectionCountLabel } from "@/pages/activity/activity-logs-table-utils";
+import { buildActivityRowAriaLabel } from "@/pages/activity/activity-row-aria";
 
 type ActivityMobileLogsListProps = Pick<
   ActivityLogsTableProps,
@@ -142,6 +143,8 @@ function ActivityMobileVirtualRow({
   return (
     <ActivityPositionedRowShell positionStyle={style} className="box-border pb-3">
       <div
+        role="group"
+        aria-label={buildActivityRowAriaLabel(activity, browserLabel)}
         className="flex h-full flex-col space-y-3 rounded-2xl border border-border/70 bg-card/80 p-3.5 shadow-xs"
         data-testid={`activity-row-${activity.id}`}
       >

@@ -1,4 +1,10 @@
 import type { CollectionBatch } from "@/lib/api";
+import {
+  getBrowserSessionStorage,
+  safeGetStorageItem,
+  safeRemoveStorageItem,
+  safeSetStorageItem,
+} from "@/lib/browser-storage";
 import { COLLECTION_BATCH_OPTIONS } from "@/pages/collection/utils";
 
 export type SaveCollectionDraft = {
@@ -67,34 +73,37 @@ export function parseSaveCollectionDraft(raw: string | null | undefined): SaveCo
 }
 
 export function readSaveCollectionDraft(staffNickname: string): SaveCollectionDraft | null {
-  if (typeof sessionStorage === "undefined") {
+  const storage = getBrowserSessionStorage();
+  if (!storage) {
     return null;
   }
 
   return parseSaveCollectionDraft(
-    sessionStorage.getItem(buildSaveCollectionDraftStorageKey(staffNickname)),
+    safeGetStorageItem(storage, buildSaveCollectionDraftStorageKey(staffNickname)),
   );
 }
 
 export function clearSaveCollectionDraft(staffNickname: string) {
-  if (typeof sessionStorage === "undefined") {
+  const storage = getBrowserSessionStorage();
+  if (!storage) {
     return;
   }
 
-  sessionStorage.removeItem(buildSaveCollectionDraftStorageKey(staffNickname));
+  safeRemoveStorageItem(storage, buildSaveCollectionDraftStorageKey(staffNickname));
 }
 
 export function persistSaveCollectionDraft(
   staffNickname: string,
   draft: Omit<SaveCollectionDraft, "savedAt">,
 ) {
-  if (typeof sessionStorage === "undefined") {
+  const storage = getBrowserSessionStorage();
+  if (!storage) {
     return;
   }
 
   const storageKey = buildSaveCollectionDraftStorageKey(staffNickname);
   if (isSaveCollectionDraftEmpty(draft)) {
-    sessionStorage.removeItem(storageKey);
+    safeRemoveStorageItem(storage, storageKey);
     return;
   }
 
@@ -102,5 +111,5 @@ export function persistSaveCollectionDraft(
     ...draft,
     savedAt: new Date().toISOString(),
   };
-  sessionStorage.setItem(storageKey, JSON.stringify(payload));
+  safeSetStorageItem(storage, storageKey, JSON.stringify(payload));
 }

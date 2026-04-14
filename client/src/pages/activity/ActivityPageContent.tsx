@@ -1,3 +1,4 @@
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { ActivityActionDialogsSection } from "@/pages/activity/ActivityActionDialogsSection";
 import { ActivityBannedUsersSection } from "@/pages/activity/ActivityBannedUsersSection";
 import { ActivityFiltersSection } from "@/pages/activity/ActivityFiltersSection";
@@ -16,6 +17,7 @@ export function ActivityPageContent({
   dateFromOpen,
   dateToOpen,
   deleteDialogOpen,
+  errorMessage,
   filters,
   handleApplyFilters,
   handleBanConfirm,
@@ -65,6 +67,13 @@ export function ActivityPageContent({
         onToggleStatus={onToggleStatus}
         showFilters={showFilters}
       />
+
+      {errorMessage ? (
+        <Alert variant="destructive" className="mb-4">
+          <AlertTitle>Aktiviti tidak dapat dimuat semula</AlertTitle>
+          <AlertDescription>{errorMessage}</AlertDescription>
+        </Alert>
+      ) : null}
 
       <ActivityQuickSnapshotSection
         bannedCount={bannedUsers.length}

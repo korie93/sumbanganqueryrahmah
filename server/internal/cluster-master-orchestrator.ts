@@ -253,6 +253,15 @@ export function createClusterMasterOrchestrator({
     }
   }
 
+  function scheduleRollingRestart(reason: string) {
+    void rollingRestartOne(reason).catch((error) => {
+      logger.error("Cluster rolling restart failed", {
+        reason,
+        error,
+      });
+    });
+  }
+
   function evaluateScale() {
     const workers = getWorkers();
     const metricSamples = Array.from(state.workerMetrics.values());
@@ -316,11 +325,11 @@ export function createClusterMasterOrchestrator({
     state.lowLoadSince = plan.nextLowLoadSince;
 
     if (plan.shouldScaleDown) {
-      void rollingRestartOne("scale-down-low-load");
+      scheduleRollingRestart("scale-down-low-load");
     }
 
     if (plan.shouldRestartForMemoryPressure) {
-      void rollingRestartOne("memory-pressure");
+      scheduleRollingRestart("memory-pressure");
     }
 
     broadcastControl(plan.control);

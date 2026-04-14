@@ -81,6 +81,13 @@ async function finishShutdown() {
   process.exit(shutdownExitCode);
 }
 
+function finishShutdownSafely() {
+  void finishShutdown().catch((error) => {
+    logger.error("Server shutdown finalization failed", { error });
+    process.exit(shutdownExitCode === 0 ? 1 : shutdownExitCode);
+  });
+}
+
 function shutdownProcess(reason: string, exitCode: number, details?: string) {
   if (shuttingDown) {
     shutdownExitCode = Math.max(shutdownExitCode, exitCode);
@@ -112,12 +119,12 @@ function shutdownProcess(reason: string, exitCode: number, details?: string) {
   shutdownTimer.unref();
 
   if (!server.listening) {
-    void finishShutdown();
+    finishShutdownSafely();
     return;
   }
 
   server.close(() => {
-    void finishShutdown();
+    finishShutdownSafely();
   });
 }
 

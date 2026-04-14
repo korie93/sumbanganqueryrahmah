@@ -12,10 +12,10 @@ import { Badge } from "@/components/ui/badge";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { getBrowserLocalStorage, safeSetStorageItem } from "@/lib/browser-storage";
 import {
-  COLLECTION_STAFF_NICKNAME_KEY,
   getCurrentRole,
   getCurrentUsername,
 } from "@/pages/collection/utils";
+import { getStoredCollectionNickname } from "@/pages/collection-report/utils";
 import { CollectionReportContent } from "@/pages/collection-report/CollectionReportContent";
 import { CollectionSidebar } from "@/pages/collection-report/CollectionSidebar";
 import { useCollectionNicknameAccess } from "@/pages/collection-report/useCollectionNicknameAccess";
@@ -155,9 +155,7 @@ export default function CollectionReport() {
             onResetTemporaryValues={() => {
               nicknameAccess.setNicknamePassword("");
               nicknameAccess.setConfirmNicknamePassword("");
-              nicknameAccess.setResolvedNickname(
-                String(sessionStorage.getItem(COLLECTION_STAFF_NICKNAME_KEY) || "").trim(),
-              );
+              nicknameAccess.setResolvedNickname(getStoredCollectionNickname());
               nicknameAccess.setShowLoginPassword(false);
               nicknameAccess.setShowSetupPassword(false);
               nicknameAccess.setShowSetupConfirmPassword(false);

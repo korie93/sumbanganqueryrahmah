@@ -7,12 +7,17 @@ import {
 } from "@/lib/api";
 import { getCollectionNicknameForcedChangeToast } from "@/pages/collection-report/collection-nickname-auth-feedback";
 import {
-  COLLECTION_STAFF_NICKNAME_AUTH_KEY,
-  COLLECTION_STAFF_NICKNAME_KEY,
   parseApiError,
 } from "@/pages/collection/utils";
 import type { NicknameDialogStep } from "@/pages/collection-report/types";
-import { clearCollectionNicknameSessionStorage, hasLetterAndNumber, isValidNicknameAuthSession } from "@/pages/collection-report/utils";
+import {
+  clearCollectionNicknameSessionStorage,
+  getStoredCollectionNickname,
+  getStoredCollectionNicknameAuthRaw,
+  hasLetterAndNumber,
+  isValidNicknameAuthSession,
+  persistCollectionNicknameSessionStorage,
+} from "@/pages/collection-report/utils";
 
 interface UseCollectionNicknameAccessOptions {
   currentUsername: string;
@@ -30,12 +35,12 @@ export function useCollectionNicknameAccess({
   const { toast } = useToast();
   const [staffNickname, setStaffNickname] = useState(() => {
     if (typeof window === "undefined") return "";
-    return String(sessionStorage.getItem(COLLECTION_STAFF_NICKNAME_KEY) || "").trim();
+    return getStoredCollectionNickname();
   });
   const [nicknameSessionVerified, setNicknameSessionVerified] = useState(() => {
     if (typeof window === "undefined") return false;
-    const nickname = String(sessionStorage.getItem(COLLECTION_STAFF_NICKNAME_KEY) || "").trim();
-    const authRaw = String(sessionStorage.getItem(COLLECTION_STAFF_NICKNAME_AUTH_KEY) || "");
+    const nickname = getStoredCollectionNickname();
+    const authRaw = getStoredCollectionNicknameAuthRaw();
     return isValidNicknameAuthSession(authRaw, currentUsername, role, nickname);
   });
   const [nicknameDialogOpen, setNicknameDialogOpen] = useState(false);
@@ -81,16 +86,11 @@ export function useCollectionNicknameAccess({
     const normalized = String(nickname || "").trim();
     if (!normalized) return;
 
-    sessionStorage.setItem(COLLECTION_STAFF_NICKNAME_KEY, normalized);
-    sessionStorage.setItem(
-      COLLECTION_STAFF_NICKNAME_AUTH_KEY,
-      JSON.stringify({
-        nickname: normalized,
-        username: currentUsername,
-        role,
-        verifiedAt: Date.now(),
-      }),
-    );
+    persistCollectionNicknameSessionStorage({
+      nickname: normalized,
+      username: currentUsername,
+      role,
+    });
 
     setStaffNickname(normalized);
     setNicknameSessionVerified(true);

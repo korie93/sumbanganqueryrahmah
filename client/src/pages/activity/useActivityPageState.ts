@@ -32,6 +32,7 @@ export function useActivityPageState() {
     canModerateActivity,
     activities: dataState.activities,
     bannedUsers: dataState.bannedUsers,
+    errorMessage: dataState.errorMessage,
     loading: dataState.loading,
     actionLoading: actionState.actionLoading,
     kickDialogOpen: actionState.kickDialogOpen,

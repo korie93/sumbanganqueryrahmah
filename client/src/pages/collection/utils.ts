@@ -1,5 +1,6 @@
 import type { CollectionBatch, CollectionReceiptPayload, CollectionRecord } from "@/lib/api";
 import { apiErrorPayloadSchema } from "@shared/api-contracts";
+import { getBrowserSessionStorage, safeGetStorageItem } from "@/lib/browser-storage";
 import {
   formatCollectionAmountMyrString,
   parseCollectionAmountMyrNumber,
@@ -129,11 +130,9 @@ export function getCurrentUsername(): string {
 }
 
 export function getCurrentCollectionStaffNickname(): string {
-  try {
-    return String(sessionStorage.getItem(COLLECTION_STAFF_NICKNAME_KEY) || "").trim();
-  } catch {
-    return "";
-  }
+  return String(
+    safeGetStorageItem(getBrowserSessionStorage(), COLLECTION_STAFF_NICKNAME_KEY) || "",
+  ).trim();
 }
 
 export function emitCollectionDataChanged() {

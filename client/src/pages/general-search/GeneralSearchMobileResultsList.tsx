@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { buildGeneralSearchRowAriaLabel } from "@/pages/general-search/general-search-row-aria";
 import type { SearchResultRow } from "@/pages/general-search/types";
 import {
   getGeneralSearchPopulatedHeaders,
@@ -37,6 +38,11 @@ export function GeneralSearchMobileResultsList({
         return (
           <article
             key={`mobile-result-${resultNumber}`}
+            aria-label={buildGeneralSearchRowAriaLabel({
+              headers,
+              resultNumber,
+              row,
+            })}
             className="rounded-2xl border border-border/60 bg-background/80 p-3 shadow-sm"
           >
             <div className="flex items-start justify-between gap-3">

@@ -21,6 +21,7 @@ export type ActivityPageContentProps = {
   dateToOpen: boolean;
   deleteDialogOpen: boolean;
   filters: ActivityFilters;
+  errorMessage: string | null;
   handleApplyFilters: () => void;
   handleBanConfirm: () => void | Promise<void>;
   handleBulkDeleteConfirm: () => void | Promise<void>;

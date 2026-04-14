@@ -130,3 +130,46 @@ test("parseSaveCollectionDraft rejects malformed payloads and clearSaveCollectio
   clearSaveCollectionDraft("Collector Alpha");
   assert.equal(readSaveCollectionDraft("Collector Alpha"), null);
 });
+
+test("save collection draft helpers stay safe when sessionStorage access throws", () => {
+  const deniedStorage = {
+    getItem() {
+      throw new Error("denied");
+    },
+    setItem() {
+      throw new Error("denied");
+    },
+    removeItem() {
+      throw new Error("denied");
+    },
+    clear() {
+      throw new Error("denied");
+    },
+    key() {
+      return null;
+    },
+    get length() {
+      return 0;
+    },
+  } satisfies StorageLike;
+
+  Object.defineProperty(globalThis, "sessionStorage", {
+    configurable: true,
+    value: deniedStorage,
+  });
+
+  assert.equal(readSaveCollectionDraft("Collector Alpha"), null);
+  assert.doesNotThrow(() => clearSaveCollectionDraft("Collector Alpha"));
+  assert.doesNotThrow(() =>
+    persistSaveCollectionDraft("Collector Alpha", {
+      customerName: "Siti",
+      icNumber: "",
+      customerPhone: "",
+      accountNumber: "",
+      batch: "P10",
+      paymentDate: "",
+      amount: "",
+      hadPendingReceipts: false,
+    }),
+  );
+});

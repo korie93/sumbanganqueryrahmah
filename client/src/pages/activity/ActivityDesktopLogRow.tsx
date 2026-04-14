@@ -2,6 +2,7 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import { ActivityDesktopLogActions } from "@/pages/activity/ActivityDesktopLogActions";
+import { buildActivityRowAriaLabel } from "@/pages/activity/activity-row-aria";
 import { getActivityBrowserText } from "@/pages/activity/activity-desktop-logs-utils";
 import type { ActivityDesktopLogRowProps } from "@/pages/activity/activity-desktop-logs-shared";
 import {
@@ -23,9 +24,12 @@ export function ActivityDesktopLogRow({
   onToggleSelected,
 }: ActivityDesktopLogRowProps) {
   const browserInfo = parseActivityUserAgent(activity.browser);
+  const browserLabel = getActivityBrowserText(browserInfo);
 
   return (
     <div
+      role="group"
+      aria-label={buildActivityRowAriaLabel(activity, browserLabel)}
       className={cn(
         "grid h-full items-center gap-3 border-b border-border/70 px-3 py-3 hover:bg-muted/50",
         gridClassName,
@@ -53,8 +57,8 @@ export function ActivityDesktopLogRow({
       <div className="truncate text-xs text-muted-foreground" title={activity.ipAddress || "-"}>
         {activity.ipAddress || "-"}
       </div>
-      <div className="truncate text-xs text-muted-foreground" title={getActivityBrowserText(browserInfo)}>
-        {getActivityBrowserText(browserInfo)}
+      <div className="truncate text-xs text-muted-foreground" title={browserLabel}>
+        {browserLabel}
       </div>
       <div className="text-xs text-muted-foreground">{formatActivityTime(activity.loginTime)}</div>
       <div className="text-xs text-muted-foreground">

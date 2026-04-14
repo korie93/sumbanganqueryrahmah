@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getAllActivity, getBannedUsers, getFilteredActivity } from "@/lib/api";
 import { logClientError } from "@/lib/client-logger";
+import { readActivityFeedErrorMessage } from "@/pages/activity/activity-feed-error-utils";
 import {
   shouldAutoRefreshVisibleActivity,
   shouldUseFilteredActivityFetch,
@@ -16,6 +17,7 @@ export function useActivityFeedState({
 }: UseActivityFeedStateOptions) {
   const [activities, setActivities] = useState<ActivityRecord[]>([]);
   const [bannedUsers, setBannedUsers] = useState<BannedUser[]>([]);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   const activeRequestIdRef = useRef(0);
@@ -37,6 +39,7 @@ export function useActivityFeedState({
     fetchControllerRef.current?.abort();
     const controller = new AbortController();
     fetchControllerRef.current = controller;
+    setErrorMessage(null);
     setLoading(true);
 
     try {
@@ -61,9 +64,11 @@ export function useActivityFeedState({
         setBannedUsers([]);
       }
     } catch (error) {
-      if (error instanceof DOMException && error.name === "AbortError") {
+      const nextErrorMessage = readActivityFeedErrorMessage(error);
+      if (!nextErrorMessage) {
         return;
       }
+      setErrorMessage(nextErrorMessage);
       logClientError("Failed to fetch activities:", error);
     } finally {
       if (fetchControllerRef.current === controller) {
@@ -131,6 +136,7 @@ export function useActivityFeedState({
   return {
     activities,
     bannedUsers,
+    errorMessage,
     loading,
     fetchActivities,
     refreshCurrentView,

@@ -6,6 +6,10 @@ export function getBrowserLocalStorage(): Storage | null {
   return typeof localStorage !== "undefined" ? localStorage : null;
 }
 
+export function getBrowserSessionStorage(): Storage | null {
+  return typeof sessionStorage !== "undefined" ? sessionStorage : null;
+}
+
 export function isQuotaExceededStorageError(error: unknown): boolean {
   if (!(error instanceof Error)) {
     return false;

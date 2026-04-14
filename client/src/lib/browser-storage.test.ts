@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  getBrowserSessionStorage,
   isQuotaExceededStorageError,
   safeGetStorageItem,
   safeRemoveStorageItem,
@@ -52,6 +53,25 @@ test("browser storage helpers tolerate read and cleanup failures", () => {
 
   assert.equal(safeGetStorageItem(readFailure, "theme"), null);
   assert.doesNotThrow(() => safeRemoveStorageItem(removeFailure, "theme"));
+});
+
+test("getBrowserSessionStorage returns the browser session storage when available", () => {
+  const originalSessionStorage = globalThis.sessionStorage;
+  const storage = createStorageMock();
+
+  Object.defineProperty(globalThis, "sessionStorage", {
+    configurable: true,
+    value: storage,
+  });
+
+  try {
+    assert.equal(getBrowserSessionStorage(), storage);
+  } finally {
+    Object.defineProperty(globalThis, "sessionStorage", {
+      configurable: true,
+      value: originalSessionStorage,
+    });
+  }
 });
 
 test("safe storage set retries once after quota cleanup", () => {
