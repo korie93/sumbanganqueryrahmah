@@ -36,8 +36,10 @@ type ExternalScanChildReadable = Pick<Readable, "setEncoding" | "on" | "removeLi
 };
 
 type ExternalScanChildProcess = {
-  once(event: string, listener: (...args: any[]) => void): unknown;
-  removeListener(event: string, listener: (...args: any[]) => void): unknown;
+  once(event: "error", listener: (error: Error) => void): unknown;
+  once(event: "close", listener: (code: number | null, signal: NodeJS.Signals | null) => void): unknown;
+  removeListener(event: "error", listener: (error: Error) => void): unknown;
+  removeListener(event: "close", listener: (code: number | null, signal: NodeJS.Signals | null) => void): unknown;
   kill(): unknown;
   stdout?: ExternalScanChildReadable | null;
   stderr?: ExternalScanChildReadable | null;
