@@ -2,6 +2,7 @@ import path from "node:path";
 import fs from "node:fs/promises";
 import {
   BARE_COMMAND_PATTERN,
+  readOptionalString,
   UNSAFE_ENV_VALUE_PATTERN,
 } from "./collection-receipt-external-scan-shared";
 
@@ -17,7 +18,7 @@ async function resolveExistingFile(candidatePath: string): Promise<string | null
 }
 
 async function resolveScannerCommandOnPath(command: string): Promise<string | null> {
-  const pathEntries = String(process.env.PATH || "")
+  const pathEntries = String(readOptionalString("PATH") || "")
     .split(path.delimiter)
     .map((entry) => entry.trim())
     .filter(Boolean);
@@ -39,7 +40,7 @@ async function resolveScannerCommandOnPath(command: string): Promise<string | nu
   const hasExtension = path.extname(command).length > 0;
   const pathExtensions = hasExtension
     ? [""]
-    : String(process.env.PATHEXT || ".COM;.EXE;.BAT;.CMD")
+    : String(readOptionalString("PATHEXT") || ".COM;.EXE;.BAT;.CMD")
       .split(";")
       .map((entry) => entry.trim())
       .filter(Boolean);
