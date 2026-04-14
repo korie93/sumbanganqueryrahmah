@@ -1,5 +1,6 @@
 import path from "node:path";
 import { spawn } from "node:child_process";
+import type { Readable } from "node:stream";
 import { logger } from "./logger";
 import { CollectionReceiptSecurityError } from "./collection-receipt-security";
 import {
@@ -30,21 +31,44 @@ export function createOperationalScanError(
   return null;
 }
 
+type ExternalScanChildReadable = Pick<Readable, "setEncoding" | "on" | "removeListener" | "destroy"> & {
+  destroyed?: boolean;
+};
+
+type ExternalScanChildProcess = {
+  once(event: string, listener: (...args: any[]) => void): unknown;
+  removeListener(event: string, listener: (...args: any[]) => void): unknown;
+  kill(): unknown;
+  stdout?: ExternalScanChildReadable | null;
+  stderr?: ExternalScanChildReadable | null;
+};
+
+type SpawnExternalScanProcess = (
+  command: string,
+  args: readonly string[],
+  options: {
+    stdio: ["ignore", "pipe", "pipe"];
+    windowsHide: boolean;
+  },
+) => ExternalScanChildProcess;
+
 export async function runExternalReceiptScan({
   config,
   filePath,
   scannerCommand,
   args,
+  spawnProcess = spawn as SpawnExternalScanProcess,
 }: {
   config: ExternalScanConfig;
   filePath: string;
   scannerCommand: string;
   args: string[];
+  spawnProcess?: SpawnExternalScanProcess;
 }) {
   const fileName = path.basename(filePath);
 
   await new Promise<void>((resolve, reject) => {
-    const child = spawn(scannerCommand, args, {
+    const child = spawnProcess(scannerCommand, args, {
       stdio: ["ignore", "pipe", "pipe"],
       windowsHide: true,
     });
@@ -53,6 +77,40 @@ export async function runExternalReceiptScan({
     let stdout = "";
     let stderr = "";
     let timeoutTriggered = false;
+    const handleStdoutData = (chunk: string) => {
+      stdout = `${stdout}${chunk}`.slice(-EXTERNAL_SCAN_OUTPUT_LIMIT);
+    };
+    const handleStderrData = (chunk: string) => {
+      stderr = `${stderr}${chunk}`.slice(-EXTERNAL_SCAN_OUTPUT_LIMIT);
+    };
+
+    const cleanupChildProcessResources = () => {
+      child.removeListener("error", handleChildError);
+      child.removeListener("close", handleChildClose);
+      child.stdout?.removeListener("data", handleStdoutData);
+      child.stderr?.removeListener("data", handleStderrData);
+
+      for (const [streamName, stream] of [
+        ["stdout", child.stdout],
+        ["stderr", child.stderr],
+      ] as const) {
+        if (!stream) {
+          continue;
+        }
+
+        try {
+          if (!stream.destroyed) {
+            stream.destroy();
+          }
+        } catch (error) {
+          logger.warn("Failed to clean up collection receipt external scan stream", {
+            fileName,
+            stream: streamName,
+            error: error instanceof Error ? { name: error.name } : undefined,
+          });
+        }
+      }
+    };
 
     const finish = (error?: Error | null) => {
       if (resolved) {
@@ -62,6 +120,7 @@ export async function runExternalReceiptScan({
       if (timeoutId) {
         clearTimeout(timeoutId);
       }
+      cleanupChildProcessResources();
       if (error) {
         reject(error);
       } else {
@@ -76,16 +135,12 @@ export async function runExternalReceiptScan({
     timeoutId.unref?.();
 
     child.stdout?.setEncoding("utf8");
-    child.stdout?.on("data", (chunk: string) => {
-      stdout = `${stdout}${chunk}`.slice(-EXTERNAL_SCAN_OUTPUT_LIMIT);
-    });
+    child.stdout?.on("data", handleStdoutData);
 
     child.stderr?.setEncoding("utf8");
-    child.stderr?.on("data", (chunk: string) => {
-      stderr = `${stderr}${chunk}`.slice(-EXTERNAL_SCAN_OUTPUT_LIMIT);
-    });
+    child.stderr?.on("data", handleStderrData);
 
-    child.once("error", (error) => {
+    const handleChildError = (error: Error) => {
       if (resolved) {
         return;
       }
@@ -96,9 +151,9 @@ export async function runExternalReceiptScan({
         error.message,
       );
       finish(operational);
-    });
+    };
 
-    child.once("close", (code, signal) => {
+    const handleChildClose = (code: number | null, signal: NodeJS.Signals | null) => {
       if (resolved) {
         return;
       }
@@ -139,6 +194,9 @@ export async function runExternalReceiptScan({
         `exit=${code ?? "null"} signal=${signal ?? "none"}${outputSummary ? ` ${outputSummary}` : ""}`,
       );
       finish(operational);
-    });
+    };
+
+    child.once("error", handleChildError);
+    child.once("close", handleChildClose);
   });
 }

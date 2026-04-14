@@ -52,6 +52,13 @@ Verify after each mutation:
 - no duplicate counting
 - no hard refresh required for correctness
 
+Before starting the soak, confirm the staging reverse proxy still matches the reviewed defaults:
+
+- `TRUSTED_PROXIES` only reflects the actual proxy topology
+- `client_max_body_size` stays aligned with `IMPORT_BODY_LIMIT`
+- `/ws` keeps the reviewed handshake rate limit
+- `X-Forwarded-Host` and `X-Forwarded-Proto` are still forwarded
+
 ## 4. Runtime Monitoring During Soak and Canary
 
 Single snapshot:
@@ -72,6 +79,8 @@ Track these signals:
 - `status429Count` (5s window)
 - `errorRate`
 - `activeAlertCount`
+- reverse proxy 413 spikes during import/upload flows
+- reverse proxy handshake throttling anomalies for `/ws`
 
 Suggested escalation thresholds:
 

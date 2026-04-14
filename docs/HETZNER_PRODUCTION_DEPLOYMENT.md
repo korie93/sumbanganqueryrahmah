@@ -344,6 +344,7 @@ map $http_upgrade $connection_upgrade {
 
 limit_req_zone $binary_remote_addr zone=sqr_api_per_ip:10m rate=30r/m;
 limit_req_zone $binary_remote_addr zone=sqr_auth_per_ip:10m rate=10r/m;
+limit_req_zone $binary_remote_addr zone=sqr_ws_per_ip:10m rate=20r/m;
 limit_conn_zone $binary_remote_addr zone=sqr_conn_per_ip:10m;
 
 server {
@@ -377,7 +378,9 @@ server {
     add_header Cross-Origin-Opener-Policy "same-origin" always;
     add_header Cross-Origin-Resource-Policy "same-origin" always;
 
-    client_max_body_size 64M;
+    # Keep this aligned with IMPORT_BODY_LIMIT so the reverse proxy does not
+    # reject valid uploads before the Node.js app can apply its own checks.
+    client_max_body_size 96M;
 
     location = /api/auth/login {
         limit_req zone=sqr_auth_per_ip burst=5 nodelay;
@@ -386,6 +389,7 @@ server {
         proxy_pass http://127.0.0.1:5000;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto https;
@@ -402,6 +406,7 @@ server {
         proxy_pass http://127.0.0.1:5000;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto https;
@@ -412,11 +417,14 @@ server {
     }
 
     location /ws {
+        # Apply a handshake request rate limit without affecting established upgraded sockets.
+        limit_req zone=sqr_ws_per_ip burst=10 nodelay;
         limit_conn sqr_conn_per_ip 20;
 
         proxy_pass http://127.0.0.1:5000;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto https;
@@ -433,6 +441,7 @@ server {
         proxy_pass http://127.0.0.1:5000;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto https;

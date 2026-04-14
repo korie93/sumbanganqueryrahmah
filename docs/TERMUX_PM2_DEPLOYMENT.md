@@ -28,6 +28,7 @@ PORT=5000
 PUBLIC_APP_URL=https://domain-anda.com
 CORS_ALLOWED_ORIGINS=https://domain-anda.com
 TRUSTED_PROXIES=loopback
+IMPORT_BODY_LIMIT=96mb
 
 SESSION_SECRET=ganti-dengan-secret-random-yang-kuat
 TWO_FACTOR_ENCRYPTION_KEY=ganti-dengan-secret-random-yang-berbeza
@@ -39,6 +40,10 @@ PG_USER=postgres
 PG_PASSWORD=ganti-dengan-password-db
 PG_DATABASE=sqr_db
 ```
+
+Jika anda **tidak** meletakkan app di belakang reverse proxy seperti Nginx atau Caddy, kosongkan `TRUSTED_PROXIES=` supaya runtime tidak mempercayai `X-Forwarded-*` headers daripada klien terus.
+
+Jika anda memang berada di belakang Nginx, kekalkan `TRUSTED_PROXIES=loopback` dan pastikan `client_max_body_size` dalam proxy config sekurang-kurangnya sepadan dengan `IMPORT_BODY_LIMIT` supaya upload sah tidak ditolak lebih awal oleh reverse proxy.
 
 `TWO_FACTOR_ENCRYPTION_KEY` dan `COLLECTION_PII_ENCRYPTION_KEY` wajib ada di luar strict local development. Tanpanya runtime akan block startup walaupun anda belum aktifkan 2FA atau rollout penuh PII retirement.
 

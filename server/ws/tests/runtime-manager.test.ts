@@ -41,6 +41,10 @@ class FakeWebSocket extends EventEmitter {
     this.pingCalls += 1;
   }
 
+  sendMessage(payload = "ping", isBinary = false) {
+    this.emit("message", payload, isBinary);
+  }
+
   fail(error = new Error("socket failed")) {
     this.readyState = WebSocket.CLOSED;
     this.emit("error", error);
@@ -133,6 +137,13 @@ function createDeferred<T>() {
 async function flushAsyncWork() {
   await Promise.resolve();
   await new Promise((resolve) => setImmediate(resolve));
+}
+
+function assertNoRuntimeSocketListeners(socket: FakeWebSocket) {
+  assert.equal(socket.listenerCount("close"), 0);
+  assert.equal(socket.listenerCount("error"), 0);
+  assert.equal(socket.listenerCount("pong"), 0);
+  assert.equal(socket.listenerCount("message"), 0);
 }
 
 function createActiveSession(activityId: string): UserActivity {
@@ -410,9 +421,7 @@ test("runtime manager rejects sockets before registration without leaving tracke
 
     assert.equal(providedMap.size, 0);
     assert.equal(socket.closeCalls, 1);
-    assert.equal(socket.listenerCount("close"), 0);
-    assert.equal(socket.listenerCount("error"), 0);
-    assert.equal(socket.listenerCount("pong"), 0);
+    assertNoRuntimeSocketListeners(socket);
   } finally {
     wss.emit("close");
   }
@@ -631,9 +640,7 @@ test("runtime manager does not register sockets that close during async session 
     await flushAsyncWork();
 
     assert.equal(providedMap.has(activityId), false);
-    assert.equal(socket.listenerCount("close"), 0);
-    assert.equal(socket.listenerCount("error"), 0);
-    assert.equal(socket.listenerCount("pong"), 0);
+    assertNoRuntimeSocketListeners(socket);
   } finally {
     wss.emit("close");
   }
@@ -665,9 +672,7 @@ test("runtime manager does not register sockets that error during async session 
     await flushAsyncWork();
 
     assert.equal(providedMap.has(activityId), false);
-    assert.equal(socket.listenerCount("close"), 0);
-    assert.equal(socket.listenerCount("error"), 0);
-    assert.equal(socket.listenerCount("pong"), 0);
+    assertNoRuntimeSocketListeners(socket);
   } finally {
     wss.emit("close");
   }
@@ -739,9 +744,7 @@ test("runtime manager removes registered sockets cleanly on close", async () => 
     socket.close();
 
     assert.equal(providedMap.has(activityId), false);
-    assert.equal(socket.listenerCount("close"), 0);
-    assert.equal(socket.listenerCount("error"), 0);
-    assert.equal(socket.listenerCount("pong"), 0);
+    assertNoRuntimeSocketListeners(socket);
   } finally {
     wss.emit("close");
   }
@@ -775,9 +778,7 @@ test("runtime manager registers the replacement socket before closing the previo
     assert.equal(previousSocket.closeCalls, 1);
     assert.equal(providedMap.get(activityId), replacementSocket as unknown as WebSocket);
     assert.equal(providedMap.has(activityId), true);
-    assert.equal(previousSocket.listenerCount("close"), 0);
-    assert.equal(previousSocket.listenerCount("error"), 0);
-    assert.equal(previousSocket.listenerCount("pong"), 0);
+    assertNoRuntimeSocketListeners(previousSocket);
   } finally {
     wss.emit("close");
   }
@@ -814,10 +815,109 @@ test("runtime manager detaches stale listeners from a replaced closed socket", a
     await flushAsyncWork();
 
     assert.equal(previousSocket.closeCalls, 0);
-    assert.equal(previousSocket.listenerCount("close"), 0);
-    assert.equal(previousSocket.listenerCount("error"), 0);
-    assert.equal(previousSocket.listenerCount("pong"), 0);
+    assertNoRuntimeSocketListeners(previousSocket);
     assert.equal(providedMap.get(activityId), replacementSocket as unknown as WebSocket);
+  } finally {
+    wss.emit("close");
+  }
+});
+
+test("runtime manager drops sockets that exceed the inbound message rate limit", async (t) => {
+  const wss = new FakeWebSocketServer();
+  const providedMap = new Map<string, WebSocket>();
+  const socket = new FakeWebSocket();
+  const activityId = "activity-inbound-rate-limit";
+  const warnings: Array<{ message: string; payload: unknown }> = [];
+
+  const warnMock = t.mock.method(logger, "warn", (message: string, payload: unknown) => {
+    warnings.push({ message, payload });
+  });
+
+  createRuntimeWebSocketManager({
+    wss: wss as unknown as import("ws").WebSocketServer,
+    storage: {
+      getActivityById: async () => createActiveSession(activityId),
+      clearCollectionNicknameSessionByActivity: async () => undefined,
+    },
+    secret: TEST_SECRET,
+    connectedClients: providedMap,
+  });
+
+  try {
+    wss.emit("connection", socket as unknown as WebSocket, createConnectionRequest(createWsToken(activityId)));
+    await flushAsyncWork();
+
+    for (let index = 0; index < 101; index += 1) {
+      socket.sendMessage(`message-${index}`);
+    }
+
+    assert.equal(providedMap.has(activityId), false);
+    assert.equal(socket.closeCalls, 1);
+    assert.ok(warnMock.mock.callCount() >= 1);
+    assert.equal(
+      warnings.some(
+        (entry) =>
+          entry.message === "WebSocket client dropped because the inbound message rate exceeded the runtime limit"
+          && typeof entry.payload === "object"
+          && entry.payload !== null
+          && (entry.payload as { maxMessagesPerMinute?: unknown }).maxMessagesPerMinute === 100,
+      ),
+      true,
+    );
+    assertNoRuntimeSocketListeners(socket);
+  } finally {
+    wss.emit("close");
+  }
+});
+
+test("runtime manager logs connected client growth when monitored thresholds are crossed", async (t) => {
+  const wss = new FakeWebSocketServer();
+  const providedMap = new Map<string, WebSocket>();
+  const sockets = Array.from({ length: 10 }, () => new FakeWebSocket());
+  const infoLogs: Array<{ message: string; payload: unknown }> = [];
+
+  const infoMock = t.mock.method(logger, "info", (message: string, payload: unknown) => {
+    infoLogs.push({ message, payload });
+  });
+
+  createRuntimeWebSocketManager({
+    wss: wss as unknown as import("ws").WebSocketServer,
+    storage: {
+      getActivityById: async (activityId: string) => ({
+        ...createActiveSession(activityId),
+        userId: activityId,
+        username: `${activityId}.user`,
+      }),
+      clearCollectionNicknameSessionByActivity: async () => undefined,
+    },
+    secret: TEST_SECRET,
+    connectedClients: providedMap,
+  });
+
+  try {
+    for (let index = 0; index < sockets.length; index += 1) {
+      const activityId = `activity-threshold-${index}`;
+      wss.emit(
+        "connection",
+        sockets[index] as unknown as WebSocket,
+        createConnectionRequest(createWsToken(activityId)),
+      );
+      await flushAsyncWork();
+    }
+
+    assert.equal(providedMap.size, 10);
+    assert.ok(infoMock.mock.callCount() >= 1);
+    assert.equal(
+      infoLogs.some(
+        (entry) =>
+          entry.message === "WebSocket connectedClients map reached a monitored size threshold"
+          && typeof entry.payload === "object"
+          && entry.payload !== null
+          && (entry.payload as { threshold?: unknown }).threshold === 10
+          && (entry.payload as { peakConnectedClients?: unknown }).peakConnectedClients === 10,
+      ),
+      true,
+    );
   } finally {
     wss.emit("close");
   }
@@ -904,9 +1004,7 @@ test("runtime manager tolerates repeated terminal lifecycle signals without dupl
     });
 
     assert.equal(providedMap.has(activityId), false);
-    assert.equal(socket.listenerCount("close"), 0);
-    assert.equal(socket.listenerCount("error"), 0);
-    assert.equal(socket.listenerCount("pong"), 0);
+    assertNoRuntimeSocketListeners(socket);
   } finally {
     wss.emit("close");
   }
@@ -937,9 +1035,7 @@ test("runtime manager clears tracked client state when the WebSocket server clos
 
   assert.equal(providedMap.size, 0);
   assert.equal(socket.closeCalls, 1);
-  assert.equal(socket.listenerCount("close"), 0);
-  assert.equal(socket.listenerCount("error"), 0);
-  assert.equal(socket.listenerCount("pong"), 0);
+  assertNoRuntimeSocketListeners(socket);
 });
 
 test("runtime manager heartbeat does not terminate sockets that are still connecting", async () => {

@@ -7,8 +7,11 @@ import { extractWsActivityId, isActiveWebSocketSession } from "./session-auth";
 
 const HEARTBEAT_INTERVAL_MS = 30_000;
 const MAX_CONNECTIONS_PER_USER = 5;
+const MAX_INBOUND_MESSAGES_PER_MINUTE = 100;
+const INBOUND_MESSAGE_RATE_WINDOW_MS = 60_000;
 const MAX_RUNTIME_WS_MESSAGE_BYTES = 64 * 1024;
 const MAX_RUNTIME_WS_BUFFERED_BYTES = 256 * 1024;
+const CONNECTED_CLIENT_MONITOR_THRESHOLDS = [10, 25, 50, 100, 250, 500, 1_000] as const;
 
 type RuntimeManagerOptions = {
   wss: WebSocketServer;
@@ -37,6 +40,11 @@ type RuntimeTrackedSocketEntry = {
   ws: WebSocket;
   userKey: string | null;
   alive: boolean;
+};
+
+type RuntimeInboundMessageRateState = {
+  windowStartedAt: number;
+  messageCount: number;
 };
 
 function firstHeaderValue(value: string | string[] | undefined): string {
@@ -166,8 +174,15 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
   const socketEntriesByInstance = new WeakMap<WebSocket, RuntimeTrackedSocketEntry>();
   const trackedSockets = new Set<WebSocket>();
   const socketCleanupCallbacks = new WeakMap<WebSocket, () => void>();
+  const loggedConnectedClientThresholds = new Set<number>();
+  let peakConnectedClients = connectedClients.size;
   const isTrackableSocket = (ws: WebSocket) =>
     ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING;
+  for (const threshold of CONNECTED_CLIENT_MONITOR_THRESHOLDS) {
+    if (connectedClients.size >= threshold) {
+      loggedConnectedClientThresholds.add(threshold);
+    }
+  }
   const clearNicknameSession = (activityId: string) =>
     Promise.resolve(storage.clearCollectionNicknameSessionByActivity?.(activityId)).catch((error) => {
       logger.warn("Failed to clear nickname session after WebSocket cleanup", {
@@ -175,6 +190,24 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
         error: sanitizeRuntimeWebSocketError(error),
       });
     });
+  const trackConnectedClientGrowth = () => {
+    const connectedClientCount = connectedClients.size;
+    peakConnectedClients = Math.max(peakConnectedClients, connectedClientCount);
+
+    for (const threshold of CONNECTED_CLIENT_MONITOR_THRESHOLDS) {
+      if (connectedClientCount < threshold || loggedConnectedClientThresholds.has(threshold)) {
+        continue;
+      }
+
+      loggedConnectedClientThresholds.add(threshold);
+      const log = threshold >= 500 ? logger.warn : logger.info;
+      log("WebSocket connectedClients map reached a monitored size threshold", {
+        connectedClients: connectedClientCount,
+        threshold,
+        peakConnectedClients,
+      });
+    }
+  };
   const registerTrackedSocketEntry = (
     activityId: string,
     ws: WebSocket,
@@ -189,6 +222,7 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
     socketEntriesByActivity.set(activityId, entry);
     socketEntriesByInstance.set(ws, entry);
     connectedClients.set(activityId, ws);
+    trackConnectedClientGrowth();
     return entry;
   };
   const removeTrackedSocket = (activityId: string, ws?: WebSocket) => {
@@ -301,6 +335,12 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
 
   wss.once("close", () => {
     clearInterval(heartbeatHandle);
+    if (peakConnectedClients > 0) {
+      logger.info("WebSocket connectedClients map shutdown summary", {
+        connectedClients: connectedClients.size,
+        peakConnectedClients,
+      });
+    }
     for (const ws of Array.from(trackedSockets)) {
       socketCleanupCallbacks.get(ws)?.();
       if (!isTrackableSocket(ws)) {
@@ -325,6 +365,10 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
     let socketEntry: RuntimeTrackedSocketEntry | null = null;
     let cleanedUp = false;
     let closeRequested = false;
+    const inboundMessageRateState: RuntimeInboundMessageRateState = {
+      windowStartedAt: Date.now(),
+      messageCount: 0,
+    };
 
     const markSocketAlive = () => {
       if (cleanedUp) {
@@ -339,6 +383,7 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
 
     const detachSocketLifecycleHandlers = () => {
       ws.removeListener("pong", markSocketAlive);
+      ws.removeListener("message", handleSocketMessage);
       ws.removeListener("close", handleSocketClose);
       ws.removeListener("error", handleSocketError);
     };
@@ -381,6 +426,32 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
       }
     };
 
+    const handleSocketMessage = () => {
+      if (cleanedUp) {
+        return;
+      }
+
+      const now = Date.now();
+      if (now - inboundMessageRateState.windowStartedAt >= INBOUND_MESSAGE_RATE_WINDOW_MS) {
+        inboundMessageRateState.windowStartedAt = now;
+        inboundMessageRateState.messageCount = 0;
+      }
+
+      inboundMessageRateState.messageCount += 1;
+      if (inboundMessageRateState.messageCount <= MAX_INBOUND_MESSAGES_PER_MINUTE) {
+        return;
+      }
+
+      logger.warn("WebSocket client dropped because the inbound message rate exceeded the runtime limit", {
+        activityId,
+        messageCount: inboundMessageRateState.messageCount,
+        maxMessagesPerMinute: MAX_INBOUND_MESSAGES_PER_MINUTE,
+        windowMs: INBOUND_MESSAGE_RATE_WINDOW_MS,
+      });
+      cleanupSocket();
+      closeSocketIfNeeded();
+    };
+
     const closeSocketIfNeeded = () => {
       if (closeRequested || !isTrackableSocket(ws)) {
         return;
@@ -398,6 +469,7 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
     };
 
     ws.on("pong", markSocketAlive);
+    ws.on("message", handleSocketMessage);
     ws.once("close", handleSocketClose);
     ws.once("error", handleSocketError);
     trackedSockets.add(ws);

@@ -12,10 +12,14 @@ This checklist is the final gate before controlled production launch.
 - [ ] Secret rotation runbook has been reviewed: `docs/SECRET_ROTATION.md`.
 - [ ] Dev-only bootstrap/mail-preview behavior is disabled in production-like mode.
 - [ ] Session/auth cookie configuration is production-safe.
+- [ ] `TRUSTED_PROXIES` matches the real network topology and is not enabled for direct-to-app exposure.
 - [ ] Backup routes are superuser-protected.
 - [ ] Audit-log routes are superuser-protected.
 - [ ] Receipt preview/download access is ownership-safe.
 - [ ] Reviewed `systemd`, `nginx`, and `PM2` hardening defaults are preserved in deployment config.
+- [ ] Reverse proxy `client_max_body_size` still matches `IMPORT_BODY_LIMIT`.
+- [ ] Reverse proxy still forwards `X-Forwarded-Host` and `X-Forwarded-Proto`.
+- [ ] Reverse proxy `/ws` handshake rate limiting is still present and does not break upgraded sockets.
 - [ ] `GET /api/health/ready` stays green after deploy before users are pointed to the instance.
 
 ## Phase 2: Critical Business Flow Gate

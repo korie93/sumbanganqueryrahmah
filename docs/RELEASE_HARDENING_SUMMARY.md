@@ -15,6 +15,7 @@ This summary is a short release-oriented view of the hardening work completed on
 - runtime config validation now fails early for unsafe or incomplete startup configuration
 - health endpoints distinguish live vs ready state
 - critical collection mutations have stronger duplicate-submit and idempotency protection
+- reverse proxy trust is now stricter, so `TRUSTED_PROXIES` must only be enabled when the app is actually behind a reviewed proxy
 - receipt runtime flow is aligned to `collection_record_receipts` as the authoritative relation
 - receipt upload/view/download paths were hardened for safer validation and access behavior
 - backup jobs now survive process restarts more safely through persistent job tracking
@@ -38,8 +39,11 @@ Run these in order.
 - [ ] confirm PostgreSQL credentials and backup encryption config are correct
 - [ ] confirm `docs/SECRET_ROTATION.md` matches the active secret-management process
 - [ ] confirm `PUBLIC_APP_URL`, cookie config, and CORS origins match deployment
+- [ ] confirm `TRUSTED_PROXIES` matches the real topology: leave it empty for direct exposure, use `loopback` only when the app is behind a reviewed local reverse proxy
 - [ ] confirm latest reviewed migrations are committed and present in `drizzle/`
 - [ ] confirm deploy examples keep the reviewed hardening defaults for `systemd`, `nginx`, and `PM2`
+- [ ] confirm reverse proxy upload limits still match `IMPORT_BODY_LIMIT` so valid imports are not rejected at the proxy layer
+- [ ] confirm reverse proxy WebSocket handshake rate limiting is still present on `/ws`
 
 ### B. Staging Verification
 
@@ -49,6 +53,9 @@ Run these in order.
 - [ ] verify `GET /api/health/live`
 - [ ] verify `GET /api/health/ready`
 - [ ] verify reverse proxy still returns reviewed security headers (`HSTS`, `X-Content-Type-Options`, `X-DNS-Prefetch-Control`, `Cross-Origin-Resource-Policy`)
+- [ ] verify reverse proxy still forwards `X-Forwarded-Host` and `X-Forwarded-Proto` to the app
+- [ ] verify reverse proxy `client_max_body_size` is still aligned with `IMPORT_BODY_LIMIT`
+- [ ] verify reverse proxy `/ws` handshake rate limiting is still present without breaking upgraded sockets
 
 ### C. Smoke Flows In Staging
 
