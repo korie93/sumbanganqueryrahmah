@@ -1,6 +1,7 @@
 import { createRoot } from "react-dom/client";
 import App from "./App";
 import { getBrowserLocalStorage, safeGetStorageItem } from "./lib/browser-storage";
+import { installGlobalUnhandledRejectionHandler } from "./lib/global-unhandled-rejection";
 import { initializeWebVitalsReporting } from "./lib/web-vitals";
 import "./public-shell.css";
 import "./theme-tokens.css";
@@ -30,6 +31,8 @@ if (detectLowSpecMode()) {
   document.documentElement.classList.add("low-spec");
   document.body.classList.add("low-spec");
 }
+
+installGlobalUnhandledRejectionHandler();
 
 initializeWebVitalsReporting();
 
