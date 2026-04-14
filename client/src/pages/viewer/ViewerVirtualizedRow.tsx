@@ -1,6 +1,7 @@
 import type { ListChildComponentProps } from "react-window";
 import { Checkbox } from "@/components/ui/checkbox";
 import { PositionedRowShell, ViewerGridShell } from "@/pages/viewer/viewer-grid-shell";
+import { buildViewerRowAriaLabel } from "@/pages/viewer/viewer-row-aria";
 import type { ViewerVirtualRowData } from "@/pages/viewer/types";
 
 export function ViewerVirtualizedRow({
@@ -14,6 +15,10 @@ export function ViewerVirtualizedRow({
   return (
     <PositionedRowShell positionStyle={style}>
       <ViewerGridShell
+        ariaLabel={buildViewerRowAriaLabel({
+          row,
+          visibleHeaders: data.visibleHeaders,
+        })}
         gridTemplateColumns={data.gridTemplateColumns}
         className={`h-[48px] items-center border-t border-border px-0 hover:bg-muted/50 ${selected ? "bg-primary/10" : ""}`}
       >

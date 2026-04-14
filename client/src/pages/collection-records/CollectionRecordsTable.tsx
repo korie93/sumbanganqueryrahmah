@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { useIsMobile } from "@/hooks/use-mobile";
 import type { CollectionRecord } from "@/lib/api";
 import { formatIsoDateToDDMMYYYY } from "@/lib/date-format";
+import { buildCollectionRecordRowAriaLabel } from "@/pages/collection-records/collection-record-row-aria";
 import { formatAmountRM } from "@/pages/collection/utils";
 
 const CollectionRecordsDesktopTable = lazy(() =>
@@ -60,7 +61,14 @@ export function CollectionRecordsTable({
           paginatedRecords.map((record, index) => (
             <article
               key={record.id}
+              aria-label={buildCollectionRecordRowAriaLabel({
+                formattedAmount: formatAmountRM(record.amount),
+                formattedPaymentDate: formatIsoDateToDDMMYYYY(record.paymentDate),
+                record,
+                recordNumber: pageOffset + index + 1,
+              })}
               className="space-y-3 rounded-xl border border-border/70 bg-background/75 p-4 shadow-sm"
+              role="group"
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0 space-y-1">

@@ -7,6 +7,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { formatAmountRM } from "@/pages/collection/utils";
+import { buildCollectionMonthDetailsRowAriaLabel } from "@/pages/collection-summary/collection-summary-row-aria";
 import type { CollectionMonthDetailsDialogProps } from "@/pages/collection-summary/CollectionMonthDetailsDialog";
 
 type CollectionMonthDetailsDesktopTableProps = Pick<
@@ -50,19 +51,33 @@ export function CollectionMonthDetailsDesktopTable({
             </TableCell>
           </TableRow>
         ) : (
-          records.map((row, index) => (
-            <TableRow key={row.id}>
-              <TableCell>{(page - 1) * pageSize + index + 1}</TableCell>
-              <TableCell>{toDisplayDate(row.paymentDate)}</TableCell>
-              <TableCell className="font-medium">{row.customerName}</TableCell>
-              <TableCell>{row.icNumber}</TableCell>
-              <TableCell>{row.customerPhone}</TableCell>
-              <TableCell>{row.accountNumber}</TableCell>
-              <TableCell>{row.batch}</TableCell>
-              <TableCell>{formatAmountRM(row.amount)}</TableCell>
-              <TableCell>{row.collectionStaffNickname}</TableCell>
-            </TableRow>
-          ))
+          records.map((row, index) => {
+            const recordIndex = (page - 1) * pageSize + index + 1;
+            const formattedPaymentDate = toDisplayDate(row.paymentDate);
+            const formattedAmount = formatAmountRM(row.amount);
+
+            return (
+              <TableRow
+                key={row.id}
+                aria-label={buildCollectionMonthDetailsRowAriaLabel({
+                  formattedAmount,
+                  formattedPaymentDate,
+                  index: recordIndex,
+                  record: row,
+                })}
+              >
+                <TableCell>{recordIndex}</TableCell>
+                <TableCell>{formattedPaymentDate}</TableCell>
+                <TableCell className="font-medium">{row.customerName}</TableCell>
+                <TableCell>{row.icNumber}</TableCell>
+                <TableCell>{row.customerPhone}</TableCell>
+                <TableCell>{row.accountNumber}</TableCell>
+                <TableCell>{row.batch}</TableCell>
+                <TableCell>{formattedAmount}</TableCell>
+                <TableCell>{row.collectionStaffNickname}</TableCell>
+              </TableRow>
+            );
+          })
         )}
       </TableBody>
     </Table>

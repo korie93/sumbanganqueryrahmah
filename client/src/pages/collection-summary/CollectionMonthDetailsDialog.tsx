@@ -5,6 +5,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { useIsMobile } from "@/hooks/use-mobile";
 import { CollectionPaginationBar } from "@/pages/collection-report/CollectionPaginationBar";
 import type { CollectionMonthlySummary, CollectionRecord } from "@/lib/api";
+import { buildCollectionMonthDetailsRowAriaLabel } from "@/pages/collection-summary/collection-summary-row-aria";
 import { formatAmountRM } from "@/pages/collection/utils";
 
 export type CollectionMonthDetailsDialogProps = {
@@ -143,47 +144,60 @@ export function CollectionMonthDetailsDialog({
                   Tiada rekod kutipan untuk bulan yang dipilih.
                 </div>
               ) : (
-                records.map((row, index) => (
-                  <article
-                    key={row.id}
-                    className="space-y-3 rounded-2xl border border-border/70 bg-background/80 p-3.5 shadow-sm"
-                  >
-                    <div className="space-y-1.5">
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                        Record {(page - 1) * pageSize + index + 1}
-                      </p>
-                      <div className="flex items-start justify-between gap-3">
-                        <p className="min-w-0 break-words font-semibold">{row.customerName}</p>
-                        <span className="shrink-0 rounded-full border border-border/50 bg-muted/15 px-2.5 py-1 text-xs font-semibold">
-                          {formatAmountRM(row.amount)}
-                        </span>
+                records.map((row, index) => {
+                  const recordIndex = (page - 1) * pageSize + index + 1;
+                  const formattedPaymentDate = toDisplayDate(row.paymentDate);
+                  const formattedAmount = formatAmountRM(row.amount);
+
+                  return (
+                    <article
+                      key={row.id}
+                      role="group"
+                      aria-label={buildCollectionMonthDetailsRowAriaLabel({
+                        formattedAmount,
+                        formattedPaymentDate,
+                        index: recordIndex,
+                        record: row,
+                      })}
+                      className="space-y-3 rounded-2xl border border-border/70 bg-background/80 p-3.5 shadow-sm"
+                    >
+                      <div className="space-y-1.5">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                          Record {recordIndex}
+                        </p>
+                        <div className="flex items-start justify-between gap-3">
+                          <p className="min-w-0 break-words font-semibold">{row.customerName}</p>
+                          <span className="shrink-0 rounded-full border border-border/50 bg-muted/15 px-2.5 py-1 text-xs font-semibold">
+                            {formattedAmount}
+                          </span>
+                        </div>
+                        <p className="text-xs text-muted-foreground">{formattedPaymentDate}</p>
                       </div>
-                      <p className="text-xs text-muted-foreground">{toDisplayDate(row.paymentDate)}</p>
-                    </div>
-                    <dl className="grid gap-2 rounded-xl border border-border/60 bg-muted/15 p-3 text-sm sm:grid-cols-2">
-                      <div className="space-y-1">
-                        <dt className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Account Number</dt>
-                        <dd className="break-words">{row.accountNumber}</dd>
-                      </div>
-                      <div className="space-y-1">
-                        <dt className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Batch</dt>
-                        <dd>{row.batch}</dd>
-                      </div>
-                      <div className="space-y-1">
-                        <dt className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Staff Nickname</dt>
-                        <dd className="break-words">{row.collectionStaffNickname}</dd>
-                      </div>
-                      <div className="space-y-1">
-                        <dt className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Customer Phone</dt>
-                        <dd className="break-words">{row.customerPhone}</dd>
-                      </div>
-                      <div className="space-y-1">
-                        <dt className="text-xs uppercase tracking-[0.14em] text-muted-foreground">IC Number</dt>
-                        <dd className="break-words">{row.icNumber}</dd>
-                      </div>
-                    </dl>
-                  </article>
-                ))
+                      <dl className="grid gap-2 rounded-xl border border-border/60 bg-muted/15 p-3 text-sm sm:grid-cols-2">
+                        <div className="space-y-1">
+                          <dt className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Account Number</dt>
+                          <dd className="break-words">{row.accountNumber}</dd>
+                        </div>
+                        <div className="space-y-1">
+                          <dt className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Batch</dt>
+                          <dd>{row.batch}</dd>
+                        </div>
+                        <div className="space-y-1">
+                          <dt className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Staff Nickname</dt>
+                          <dd className="break-words">{row.collectionStaffNickname}</dd>
+                        </div>
+                        <div className="space-y-1">
+                          <dt className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Customer Phone</dt>
+                          <dd className="break-words">{row.customerPhone}</dd>
+                        </div>
+                        <div className="space-y-1">
+                          <dt className="text-xs uppercase tracking-[0.14em] text-muted-foreground">IC Number</dt>
+                          <dd className="break-words">{row.icNumber}</dd>
+                        </div>
+                      </dl>
+                    </article>
+                  );
+                })
               )}
             </div>
           ) : (

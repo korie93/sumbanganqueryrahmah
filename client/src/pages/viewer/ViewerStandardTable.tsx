@@ -1,4 +1,5 @@
 import { Checkbox } from "@/components/ui/checkbox";
+import { buildViewerRowAriaLabel } from "@/pages/viewer/viewer-row-aria";
 import type { DataRowWithId } from "@/pages/viewer/types";
 
 interface ViewerStandardTableProps {
@@ -42,6 +43,7 @@ export function ViewerStandardTable({
           {filteredRows.map((row) => (
             <tr
               key={row.__rowId}
+              aria-label={buildViewerRowAriaLabel({ row, visibleHeaders })}
               className={`h-[48px] border-t border-border hover:bg-muted/50 ${selectedRowIds.has(row.__rowId) ? "bg-primary/10" : ""}`}
             >
               <td className="p-3">

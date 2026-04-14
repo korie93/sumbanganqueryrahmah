@@ -1,5 +1,6 @@
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { buildPendingPasswordResetRowAriaLabel } from "@/pages/settings/account-management/account-management-row-aria";
 import { formatDateTime, getStatusVariant } from "@/pages/settings/account-management/utils";
 import type { PendingPasswordResetRequest } from "@/pages/settings/types";
 
@@ -33,7 +34,13 @@ export function PendingPasswordResetDesktopTable({
           </TableRow>
         ) : (
           requests.map((request) => (
-            <TableRow key={request.id}>
+            <TableRow
+              key={request.id}
+              aria-label={buildPendingPasswordResetRowAriaLabel({
+                formattedCreatedAt: formatDateTime(request.createdAt),
+                request,
+              })}
+            >
               <TableCell>
                 <div className="space-y-1">
                   <div className="font-medium">{request.username}</div>

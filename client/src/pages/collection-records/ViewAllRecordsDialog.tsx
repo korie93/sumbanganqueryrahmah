@@ -12,6 +12,7 @@ import { STANDARD_PAGE_SIZE_OPTIONS } from "@/components/data/AppPaginationBar";
 import { useIsMobile } from "@/hooks/use-mobile";
 import type { CollectionRecord } from "@/lib/api";
 import { CollectionPaginationBar } from "@/pages/collection-report/CollectionPaginationBar";
+import { buildCollectionRecordRowAriaLabel } from "@/pages/collection-records/collection-record-row-aria";
 import { formatAmountRM } from "@/pages/collection/utils";
 import { formatIsoDateToDDMMYYYY } from "@/lib/date-format";
 import type { CollectionAmountMyrNumber } from "@shared/collection-amount-types";
@@ -174,7 +175,14 @@ export function ViewAllRecordsDialog({
                         return (
                           <article
                             key={`view-all-${record.id}`}
+                            aria-label={buildCollectionRecordRowAriaLabel({
+                              formattedAmount: formatAmountRM(record.amount),
+                              formattedPaymentDate: formatIsoDateToDDMMYYYY(record.paymentDate),
+                              record,
+                              recordNumber: (page - 1) * pageSize + index + 1,
+                            })}
                             className="space-y-3 rounded-xl border border-border/70 bg-background/75 p-4 shadow-sm"
+                            role="group"
                           >
                             <div className="space-y-2">
                               <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">

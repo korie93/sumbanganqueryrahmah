@@ -2,6 +2,7 @@ import { Archive, Clock, Database, FileText, HardDrive, RotateCcw, Trash2, User,
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { buildBackupRowAriaLabel } from "@/pages/backup-restore/backup-row-aria";
 import type { BackupRecord } from "@/pages/backup-restore/types";
 import { formatBackupTime } from "@/pages/backup-restore/utils";
 
@@ -25,13 +26,19 @@ export function BackupListItem({
   restoringId,
 }: BackupListItemProps) {
   const isMobile = useIsMobile();
+  const formattedCreatedAt = formatBackupTime(backup.createdAt);
 
   return (
     <div
+      aria-label={buildBackupRowAriaLabel({
+        backup,
+        formattedCreatedAt,
+      })}
       className={`space-y-3 border border-border/70 bg-card/70 shadow-sm ${
         isMobile ? "rounded-2xl p-3.5" : "rounded-xl p-4"
       }`}
       data-testid={`backup-item-${backup.id}`}
+      role="group"
     >
       <div className={`flex justify-between gap-4 flex-wrap ${isMobile ? "items-start" : "items-center"}`}>
         <div className="flex min-w-0 flex-col gap-2">
@@ -46,13 +53,13 @@ export function BackupListItem({
           </div>
           {isMobile ? (
             <span className="text-xs text-muted-foreground" data-testid={`text-backup-date-${backup.id}`}>
-              {formatBackupTime(backup.createdAt)}
+              {formattedCreatedAt}
             </span>
           ) : null}
         </div>
         <div className={`items-center gap-1 text-sm text-foreground/80 ${isMobile ? "hidden" : "flex"}`}>
           <Clock className="h-4 w-4 text-muted-foreground" />
-          <span data-testid={`text-backup-date-${backup.id}`}>{formatBackupTime(backup.createdAt)}</span>
+          <span data-testid={`text-backup-date-${backup.id}`}>{formattedCreatedAt}</span>
         </div>
       </div>
 

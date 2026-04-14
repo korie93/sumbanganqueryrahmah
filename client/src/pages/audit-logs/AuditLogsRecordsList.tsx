@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { buildAuditLogRowAriaLabel } from "@/pages/audit-logs/audit-log-row-aria";
 import type { AuditLogRecord } from "@/pages/audit-logs/types";
 import {
   formatAuditTime,
@@ -87,14 +88,21 @@ export function AuditLogsRecordsList({
                   const actionInfo = getAuditActionInfo(log.action);
                   const details = log.details ?? "";
                   const collapseDetails = Boolean(details) && isMobile && shouldCollapseAuditDetails(details);
+                  const formattedTimestamp = formatAuditTime(log.timestamp);
 
                   return (
                     <div
                       key={log.id}
+                      aria-label={buildAuditLogRowAriaLabel({
+                        actionLabel: actionInfo.label,
+                        formattedTimestamp,
+                        log,
+                      })}
                       className={`space-y-3 border border-border/70 bg-card/70 shadow-xs ${
                         isMobile ? "rounded-2xl p-3.5" : "rounded-xl p-4"
                       }`}
                       data-testid={`audit-log-${log.id}`}
+                      role="group"
                     >
                       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                         <div className="min-w-0 space-y-2">
@@ -118,7 +126,7 @@ export function AuditLogsRecordsList({
                             <span className="font-medium text-foreground/85">Recorded</span>
                           </div>
                           <p className="mt-1 break-words leading-relaxed" data-testid={`text-timestamp-${log.id}`}>
-                            {formatAuditTime(log.timestamp)}
+                            {formattedTimestamp}
                           </p>
                         </div>
                       </div>

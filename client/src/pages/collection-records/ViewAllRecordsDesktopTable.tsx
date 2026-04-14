@@ -9,6 +9,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { formatIsoDateToDDMMYYYY } from "@/lib/date-format";
+import { buildCollectionRecordRowAriaLabel } from "@/pages/collection-records/collection-record-row-aria";
 import { formatAmountRM } from "@/pages/collection/utils";
 import type { ViewAllRecordsDialogProps } from "@/pages/collection-records/ViewAllRecordsDialog";
 
@@ -59,7 +60,15 @@ export function ViewAllRecordsDesktopTable({
           </TableRow>
         ) : (
           viewAllRecords.map((record, index) => (
-            <TableRow key={`view-all-${record.id}`}>
+            <TableRow
+              key={`view-all-${record.id}`}
+              aria-label={buildCollectionRecordRowAriaLabel({
+                formattedAmount: formatAmountRM(record.amount),
+                formattedPaymentDate: formatIsoDateToDDMMYYYY(record.paymentDate),
+                record,
+                recordNumber: (page - 1) * pageSize + index + 1,
+              })}
+            >
               <TableCell className="py-2 text-muted-foreground">
                 {(page - 1) * pageSize + index + 1}
               </TableCell>

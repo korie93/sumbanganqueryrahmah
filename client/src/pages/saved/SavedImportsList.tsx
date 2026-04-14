@@ -8,6 +8,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
+import { buildSavedImportRowAriaLabel } from "@/pages/saved/saved-import-row-aria";
 import type { ImportItem } from "@/pages/saved/types";
 
 interface SavedImportsListProps {
@@ -108,6 +109,10 @@ export function SavedImportsList({
             {imports.map((item) => (
               <div
                 key={item.id}
+                aria-label={buildSavedImportRowAriaLabel({
+                  formattedCreatedAt: formatDate(item.createdAt),
+                  item,
+                })}
                 className={cn(
                   "rounded-xl border bg-background/70 p-3 shadow-sm transition-colors sm:p-4",
                   selectedImportIds.has(item.id)
@@ -115,6 +120,7 @@ export function SavedImportsList({
                     : "border-border/70",
                 )}
                 data-testid={`card-import-${item.id}`}
+                role="group"
               >
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div className="flex min-w-0 items-start gap-3">

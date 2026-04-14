@@ -1,0 +1,71 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { buildCollectionRecordRowAriaLabel } from "@/pages/collection-records/collection-record-row-aria";
+
+test("buildCollectionRecordRowAriaLabel summarizes key record details", () => {
+  assert.equal(
+    buildCollectionRecordRowAriaLabel({
+      formattedAmount: "RM 125.00",
+      formattedPaymentDate: "14/04/2026",
+      record: {
+        accountNumber: "1234567890",
+        amount: "125.00",
+        archivedReceipts: [],
+        batch: "P10",
+        collectionStaffNickname: "alpha",
+        createdAt: "2026-04-14T00:00:00.000Z",
+        createdByLogin: "staff.one",
+        customerName: "Siti Aminah",
+        customerPhone: "0123456789",
+        duplicateReceiptFlag: false,
+        icNumber: "900101-01-1234",
+        id: "record-1",
+        paymentDate: "2026-04-14",
+        receiptCount: 2,
+        receiptFile: null,
+        receiptTotalAmount: "125.00",
+        receiptValidationMessage: null,
+        receiptValidationStatus: "matched",
+        receipts: [
+          {
+            collectionRecordId: "record-1",
+            createdAt: "2026-04-14T00:00:00.000Z",
+            extractionConfidence: null,
+            extractionStatus: "unprocessed",
+            extractedAmount: null,
+            fileHash: null,
+            fileSize: 2048,
+            id: "receipt-1",
+            originalExtension: "jpg",
+            originalFileName: "receipt.jpg",
+            originalMimeType: "image/jpeg",
+            receiptAmount: null,
+            receiptDate: null,
+            receiptReference: null,
+            storagePath: "/receipts/receipt.jpg",
+          },
+          {
+            collectionRecordId: "record-1",
+            createdAt: "2026-04-14T00:00:00.000Z",
+            extractionConfidence: null,
+            extractionStatus: "unprocessed",
+            extractedAmount: null,
+            fileHash: null,
+            fileSize: 2048,
+            id: "receipt-2",
+            originalExtension: "jpg",
+            originalFileName: "receipt-2.jpg",
+            originalMimeType: "image/jpeg",
+            receiptAmount: null,
+            receiptDate: null,
+            receiptReference: null,
+            storagePath: "/receipts/receipt-2.jpg",
+          },
+        ],
+        updatedAt: "2026-04-14T00:00:00.000Z",
+      },
+      recordNumber: 7,
+    }),
+    "Collection record 7, customer Siti Aminah, amount RM 125.00, payment date 14/04/2026, batch P10, staff nickname alpha, 2 receipts attached",
+  );
+});

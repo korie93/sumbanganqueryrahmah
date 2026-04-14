@@ -2,6 +2,7 @@ import { memo } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { TableCell, TableRow } from "@/components/ui/table";
+import { buildManagedAccountRowAriaLabel } from "@/pages/settings/account-management/account-management-row-aria";
 import type { ManagedUser } from "@/pages/settings/types";
 import { formatDateTime, getStatusVariant } from "@/pages/settings/account-management/utils";
 
@@ -24,8 +25,17 @@ export const ManagedAccountRow = memo(function ManagedAccountRow({
   onResendActivation,
   user,
 }: ManagedAccountRowProps) {
+  const formattedLastLoginAt = formatDateTime(user.lastLoginAt);
+  const formattedLockedAt = user.lockedAt ? formatDateTime(user.lockedAt) : null;
+
   return (
-    <TableRow>
+    <TableRow
+      aria-label={buildManagedAccountRowAriaLabel({
+        formattedLastLoginAt,
+        formattedLockedAt,
+        user,
+      })}
+    >
       <TableCell>
         <div className="space-y-1">
           <div className="font-medium">{user.username}</div>
@@ -51,11 +61,11 @@ export const ManagedAccountRow = memo(function ManagedAccountRow({
         </div>
         {user.lockedAt ? (
           <div className="mt-1 text-xs text-muted-foreground">
-            Locked {formatDateTime(user.lockedAt)}
+            Locked {formattedLockedAt}
           </div>
         ) : null}
       </TableCell>
-      <TableCell>{formatDateTime(user.lastLoginAt)}</TableCell>
+      <TableCell>{formattedLastLoginAt}</TableCell>
       <TableCell className="text-right">
         <div className="flex flex-wrap justify-end gap-2">
           <Button variant="outline" size="sm" onClick={() => onEdit(user)}>

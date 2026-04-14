@@ -2,6 +2,7 @@ import { Edit3, Eye, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import type { CollectionRecordsTableProps } from "@/pages/collection-records/CollectionRecordsTable";
+import { buildCollectionRecordRowAriaLabel } from "@/pages/collection-records/collection-record-row-aria";
 import { formatIsoDateToDDMMYYYY } from "@/lib/date-format";
 import { formatAmountRM } from "@/pages/collection/utils";
 
@@ -51,7 +52,15 @@ export function CollectionRecordsDesktopTable({
             </TableRow>
           ) : (
             paginatedRecords.map((record, index) => (
-              <TableRow key={record.id}>
+              <TableRow
+                key={record.id}
+                aria-label={buildCollectionRecordRowAriaLabel({
+                  formattedAmount: formatAmountRM(record.amount),
+                  formattedPaymentDate: formatIsoDateToDDMMYYYY(record.paymentDate),
+                  record,
+                  recordNumber: pageOffset + index + 1,
+                })}
+              >
                 <TableCell className="py-1.5 text-muted-foreground">
                   {pageOffset + index + 1}
                 </TableCell>

@@ -1,5 +1,6 @@
 import { MobileActionMenu } from "@/components/data/MobileActionMenu";
 import { Button } from "@/components/ui/button";
+import { buildLocalMailOutboxRowAriaLabel } from "@/pages/settings/account-management/account-management-row-aria";
 import { formatDateTime } from "@/pages/settings/account-management/utils";
 import type { DevMailOutboxPreview } from "@/pages/settings/types";
 
@@ -39,7 +40,12 @@ export function LocalMailOutboxMobileList({
       {entries.map((entry) => (
         <div
           key={entry.id}
+          aria-label={buildLocalMailOutboxRowAriaLabel({
+            entry,
+            formattedCreatedAt: formatDateTime(entry.createdAt),
+          })}
           className="space-y-3 rounded-xl border border-border/70 bg-background/75 p-4 shadow-sm"
+          role="group"
         >
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0 space-y-1">

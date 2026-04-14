@@ -1,5 +1,6 @@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
+import { buildLocalMailOutboxRowAriaLabel } from "@/pages/settings/account-management/account-management-row-aria";
 import { formatDateTime } from "@/pages/settings/account-management/utils";
 import type { DevMailOutboxPreview } from "@/pages/settings/types";
 
@@ -43,7 +44,13 @@ export function LocalMailOutboxDesktopTable({
           </TableRow>
         ) : (
           entries.map((entry) => (
-            <TableRow key={entry.id}>
+            <TableRow
+              key={entry.id}
+              aria-label={buildLocalMailOutboxRowAriaLabel({
+                entry,
+                formattedCreatedAt: formatDateTime(entry.createdAt),
+              })}
+            >
               <TableCell className="font-medium">{entry.to}</TableCell>
               <TableCell>{entry.subject}</TableCell>
               <TableCell>{formatDateTime(entry.createdAt)}</TableCell>

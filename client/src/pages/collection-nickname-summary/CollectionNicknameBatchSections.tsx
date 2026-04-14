@@ -5,6 +5,7 @@ import {
   OperationalSummaryStrip,
 } from "@/components/layout/OperationalPage";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { buildCollectionNicknameSummaryRowAriaLabel } from "@/pages/collection-nickname-summary/collection-nickname-summary-row-aria";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import type { NicknameTotalSummary } from "@/pages/collection-nickname-summary/utils";
 import { formatAmountRM } from "@/pages/collection/utils";
@@ -92,6 +93,12 @@ export function CollectionNicknameBatchSections({
             nicknameTotals.map((item, index) => (
               <article
                 key={item.nickname}
+                role="group"
+                aria-label={buildCollectionNicknameSummaryRowAriaLabel({
+                  formattedAmount: formatAmountRM(item.totalAmount),
+                  index: index + 1,
+                  item,
+                })}
                 className="space-y-3 rounded-xl border border-border/70 bg-background/75 p-4 shadow-sm"
               >
                 <div className="space-y-1">
@@ -144,7 +151,14 @@ export function CollectionNicknameBatchSections({
                   </TableRow>
                 ) : (
                   nicknameTotals.map((item, index) => (
-                    <TableRow key={item.nickname}>
+                    <TableRow
+                      key={item.nickname}
+                      aria-label={buildCollectionNicknameSummaryRowAriaLabel({
+                        formattedAmount: formatAmountRM(item.totalAmount),
+                        index: index + 1,
+                        item,
+                      })}
+                    >
                       <TableCell>{index + 1}</TableCell>
                       <TableCell className="font-medium">{item.nickname}</TableCell>
                       <TableCell className="text-right">{item.totalRecords}</TableCell>

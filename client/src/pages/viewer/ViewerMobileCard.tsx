@@ -1,5 +1,6 @@
 import { Checkbox } from "@/components/ui/checkbox";
 import { ViewerDataFieldCard } from "@/pages/viewer/ViewerDataFieldCard";
+import { buildViewerRowAriaLabel } from "@/pages/viewer/viewer-row-aria";
 import type { DataRowWithId } from "@/pages/viewer/types";
 import {
   buildViewerOverflowFieldsLabel,
@@ -24,7 +25,9 @@ export function ViewerMobileCard({
 
   return (
     <article
+      aria-label={buildViewerRowAriaLabel({ row, visibleHeaders })}
       className={`rounded-2xl border border-border/60 bg-background/80 p-3 shadow-sm ${selected ? "border-primary/40 bg-primary/5" : ""}`}
+      role="group"
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 space-y-1">

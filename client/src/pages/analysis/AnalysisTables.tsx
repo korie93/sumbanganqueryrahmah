@@ -4,6 +4,10 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useIsMobile } from "@/hooks/use-mobile";
+import {
+  buildAnalysisDuplicateRowAriaLabel,
+  buildAnalysisFileRowAriaLabel,
+} from "@/pages/analysis/analysis-row-aria";
 import type { AllAnalysisResult, DuplicateItem } from "@/pages/analysis/types";
 import { TABLE_PAGE_SIZE } from "@/pages/analysis/utils";
 
@@ -117,6 +121,11 @@ export function AnalysisFilesList({
                 {filesPaged.items.map((item, index) => (
                   <article
                     key={item.id}
+                    role="group"
+                    aria-label={buildAnalysisFileRowAriaLabel({
+                      index: filesPaged.start + index + 1,
+                      item,
+                    })}
                     className="rounded-xl border border-border/70 bg-background/75 p-4 shadow-sm"
                   >
                     <div className="flex items-start justify-between gap-3">
@@ -155,7 +164,14 @@ export function AnalysisFilesList({
                   </thead>
                   <tbody>
                     {filesPaged.items.map((item, index) => (
-                      <tr key={item.id} className="border-t border-border hover:bg-muted/50">
+                      <tr
+                        key={item.id}
+                        aria-label={buildAnalysisFileRowAriaLabel({
+                          index: filesPaged.start + index + 1,
+                          item,
+                        })}
+                        className="border-t border-border hover:bg-muted/50"
+                      >
                         <td className="p-3 text-muted-foreground">{filesPaged.start + index + 1}</td>
                         <td className="p-3 font-medium text-foreground">{item.name}</td>
                         <td className="p-3 text-muted-foreground">{item.filename}</td>
@@ -241,6 +257,11 @@ export function AnalysisDuplicatesPanel({
                   {duplicatesPaged.items.map((duplicate, index) => (
                     <article
                       key={duplicate.value}
+                      role="group"
+                      aria-label={buildAnalysisDuplicateRowAriaLabel({
+                        duplicate,
+                        index: duplicatesPaged.start + index + 1,
+                      })}
                       className="rounded-xl border border-border/70 bg-background/75 p-4 shadow-sm"
                     >
                       <div className="flex items-start justify-between gap-3">
@@ -281,7 +302,14 @@ export function AnalysisDuplicatesPanel({
                     </thead>
                     <tbody>
                       {duplicatesPaged.items.map((duplicate, index) => (
-                        <tr key={duplicate.value} className="border-t border-border hover:bg-muted/50">
+                        <tr
+                          key={duplicate.value}
+                          aria-label={buildAnalysisDuplicateRowAriaLabel({
+                            duplicate,
+                            index: duplicatesPaged.start + index + 1,
+                          })}
+                          className="border-t border-border hover:bg-muted/50"
+                        >
                           <td className="p-3 text-muted-foreground">{duplicatesPaged.start + index + 1}</td>
                           <td className="p-3 font-mono text-foreground">{duplicate.value}</td>
                           <td className="p-3">

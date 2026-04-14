@@ -3,6 +3,10 @@ import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  buildDashboardRoleDistributionRowAriaLabel,
+  buildDashboardTopUserRowAriaLabel,
+} from "@/pages/dashboard/dashboard-row-aria";
 import type { RoleData, TopUser } from "@/pages/dashboard/types";
 import { formatDashboardUserLastLogin, ROLE_COLORS } from "@/pages/dashboard/utils";
 
@@ -92,9 +96,18 @@ export function DashboardUserInsightsGrid({
             </div>
           ) : topUsers && topUsers.length > 0 ? (
             <div className="max-h-[340px] space-y-3 overflow-y-auto pr-1">
-              {topUsers.map((user, index) => (
+              {topUsers.map((user, index) => {
+                const formattedLastLogin = formatDashboardUserLastLogin(user.lastLogin);
+
+                return (
                 <article
                   key={user.username}
+                  role="group"
+                  aria-label={buildDashboardTopUserRowAriaLabel({
+                    formattedLastLogin,
+                    index: index + 1,
+                    user,
+                  })}
                   className="rounded-xl border border-border/60 bg-background/55 p-3.5 shadow-sm sm:p-4"
                   data-testid={`row-top-user-${index}`}
                 >
@@ -122,11 +135,12 @@ export function DashboardUserInsightsGrid({
                   <p className="mt-3 text-xs leading-5 text-muted-foreground">
                     Last login:{" "}
                     <span className="text-foreground">
-                      {formatDashboardUserLastLogin(user.lastLogin)}
+                      {formattedLastLogin}
                     </span>
                   </p>
                 </article>
-              ))}
+              );
+              })}
             </div>
           ) : (
             <div
@@ -192,6 +206,8 @@ export function DashboardUserInsightsGrid({
                 {roleDistribution.map((item) => (
                   <div
                     key={item.role}
+                    role="group"
+                    aria-label={buildDashboardRoleDistributionRowAriaLabel({ item })}
                     className="flex items-center justify-between rounded-xl border border-border/60 bg-background/60 px-3 py-2 text-sm"
                   >
                     <div className="flex min-w-0 items-center gap-2">

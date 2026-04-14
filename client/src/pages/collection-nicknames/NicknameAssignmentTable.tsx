@@ -5,6 +5,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import type { CollectionAdminGroup, CollectionStaffNickname } from "@/lib/api";
+import { buildNicknameAssignmentRowAriaLabel } from "@/pages/collection-nicknames/collection-nickname-row-aria";
 import { collectionScopeLabel } from "@/pages/collection-nicknames/utils";
 
 export interface NicknameAssignmentTableProps {
@@ -57,6 +58,12 @@ export function NicknameAssignmentTable({
             return (
               <article
                 key={item.id}
+                role="group"
+                aria-label={buildNicknameAssignmentRowAriaLabel({
+                  isAssigned: checked,
+                  isLeader,
+                  nickname: item,
+                })}
                 className="space-y-3 rounded-xl border border-border/60 bg-background/70 p-4 shadow-sm"
               >
                 <div className="flex items-start justify-between gap-3">
@@ -138,7 +145,14 @@ export function NicknameAssignmentTable({
               const checked = isLeader || assignedIds.includes(item.id);
 
               return (
-                <TableRow key={item.id}>
+                <TableRow
+                  key={item.id}
+                  aria-label={buildNicknameAssignmentRowAriaLabel({
+                    isAssigned: checked,
+                    isLeader,
+                    nickname: item,
+                  })}
+                >
                   <TableCell>
                     {isLeader ? (
                       <Badge variant="outline">Leader</Badge>

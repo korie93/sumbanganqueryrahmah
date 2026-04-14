@@ -1,4 +1,5 @@
 import { Badge } from "@/components/ui/badge";
+import { buildPendingPasswordResetRowAriaLabel } from "@/pages/settings/account-management/account-management-row-aria";
 import { formatDateTime, getStatusVariant } from "@/pages/settings/account-management/utils";
 import type { PendingPasswordResetRequest } from "@/pages/settings/types";
 
@@ -28,7 +29,12 @@ export function PendingPasswordResetMobileList({
       {requests.map((request) => (
         <div
           key={request.id}
+          aria-label={buildPendingPasswordResetRowAriaLabel({
+            formattedCreatedAt: formatDateTime(request.createdAt),
+            request,
+          })}
           className="space-y-3 rounded-xl border border-border/70 bg-background/75 p-4 shadow-sm"
+          role="group"
         >
           <div className="space-y-1">
             <div className="break-words font-medium">{request.username}</div>
