@@ -3,6 +3,7 @@ import {
   bigint,
   bigserial,
   boolean,
+  check,
   index,
   integer,
   jsonb,
@@ -64,6 +65,11 @@ export const users = pgTable("users", {
   emailLowerUnique: uniqueIndex("idx_users_email_lower_unique")
     .using("btree", sql`lower(${table.email})`)
     .where(sql`${table.email} IS NOT NULL AND trim(${table.email}) <> ''`),
+  roleCheck: check("chk_users_role", sql`${table.role} IN ('user', 'admin', 'superuser')`),
+  statusCheck: check(
+    "chk_users_status",
+    sql`${table.status} IN ('pending_activation', 'active', 'suspended', 'disabled')`,
+  ),
 }));
 
 export const accountActivationTokens = pgTable("account_activation_tokens", {
@@ -171,6 +177,7 @@ export const userActivity = pgTable("user_activity", {
   lastActivityTimeIdx: index("idx_user_activity_last_activity_time").on(table.lastActivityTime),
   fingerprintIdx: index("idx_user_activity_fingerprint").on(table.fingerprint),
   ipAddressIdx: index("idx_user_activity_ip_address").on(table.ipAddress),
+  roleCheck: check("chk_user_activity_role", sql`${table.role} IN ('user', 'admin', 'superuser')`),
 }));
 
 export const bannedSessions = pgTable("banned_sessions", {
@@ -189,6 +196,7 @@ export const bannedSessions = pgTable("banned_sessions", {
   activityIdIdx: index("idx_banned_sessions_activity_id").on(table.activityId),
   fingerprintIdx: index("idx_banned_sessions_fingerprint").on(table.fingerprint),
   ipAddressIdx: index("idx_banned_sessions_ip").on(table.ipAddress),
+  roleCheck: check("chk_banned_sessions_role", sql`${table.role} IN ('user', 'admin', 'superuser')`),
 }));
 
 export const auditLogs = pgTable("audit_logs", {
@@ -277,6 +285,10 @@ export const backupJobs = pgTable("backup_jobs", {
   statusRequestedAtIdx: index("idx_backup_jobs_status_requested_at").on(table.status, table.requestedAt),
   updatedAtIdx: index("idx_backup_jobs_updated_at").on(table.updatedAt),
   requestedByIdx: index("idx_backup_jobs_requested_by").on(table.requestedBy),
+  statusCheck: check(
+    "chk_backup_jobs_status",
+    sql`${table.status} IN ('queued', 'running', 'completed', 'failed')`,
+  ),
 }));
 
 export const monitorAlertIncidents = pgTable("monitor_alert_incidents", {
@@ -299,6 +311,14 @@ export const monitorAlertIncidents = pgTable("monitor_alert_incidents", {
     table.updatedAt.desc(),
   ),
   resolvedAtIdx: index("idx_monitor_alert_incidents_resolved_at").on(table.resolvedAt.desc()),
+  severityCheck: check(
+    "chk_monitor_alert_incidents_severity",
+    sql`${table.severity} IN ('CRITICAL', 'WARNING', 'INFO')`,
+  ),
+  statusCheck: check(
+    "chk_monitor_alert_incidents_status",
+    sql`${table.status} IN ('open', 'resolved')`,
+  ),
 }));
 
 export const systemStabilityPatterns = pgTable("system_stability_patterns", {

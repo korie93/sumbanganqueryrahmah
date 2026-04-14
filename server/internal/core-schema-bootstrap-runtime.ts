@@ -84,13 +84,47 @@ export async function ensureCoreMonitorAlertHistoryTable(
   await database.execute(sql`
     UPDATE public.monitor_alert_incidents
     SET
-      severity = COALESCE(NULLIF(severity, ''), 'INFO'),
+      severity = CASE
+        WHEN upper(trim(COALESCE(severity, ''))) IN ('CRITICAL', 'WARNING', 'INFO')
+          THEN upper(trim(COALESCE(severity, '')))
+        ELSE 'INFO'
+      END,
       message = COALESCE(NULLIF(message, ''), 'Monitor alert'),
-      status = COALESCE(NULLIF(status, ''), 'open'),
+      status = CASE
+        WHEN lower(trim(COALESCE(status, ''))) IN ('open', 'resolved')
+          THEN lower(trim(COALESCE(status, '')))
+        ELSE 'open'
+      END,
       first_seen_at = COALESCE(first_seen_at, now()),
       last_seen_at = COALESCE(last_seen_at, first_seen_at, now()),
       updated_at = COALESCE(updated_at, last_seen_at, first_seen_at, now())
   `);
+  await database.execute(sql`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'chk_monitor_alert_incidents_severity'
+      ) THEN
+        ALTER TABLE public.monitor_alert_incidents
+        ADD CONSTRAINT chk_monitor_alert_incidents_severity
+        CHECK (severity IN ('CRITICAL', 'WARNING', 'INFO'));
+      END IF;
+
+      IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'chk_monitor_alert_incidents_status'
+      ) THEN
+        ALTER TABLE public.monitor_alert_incidents
+        ADD CONSTRAINT chk_monitor_alert_incidents_status
+        CHECK (status IN ('open', 'resolved'));
+      END IF;
+    END $$;
+  `);
+  await database.execute(sql`ALTER TABLE public.monitor_alert_incidents ALTER COLUMN severity SET NOT NULL`);
+  await database.execute(sql`ALTER TABLE public.monitor_alert_incidents ALTER COLUMN status SET NOT NULL`);
   await database.execute(sql`
     CREATE UNIQUE INDEX IF NOT EXISTS idx_monitor_alert_incidents_open_key_unique
     ON public.monitor_alert_incidents(alert_key)

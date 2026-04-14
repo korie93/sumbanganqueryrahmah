@@ -9,7 +9,12 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
 import { ensureBackupsBootstrapSchema } from "../../internal/backupsBootstrap";
 import { ensureCollectionRecordsTables } from "../../internal/collection-bootstrap-records";
+import {
+  ensureCoreBannedSessionsTable,
+  ensureCoreUserActivityTable,
+} from "../../internal/core-schema-bootstrap-activity";
 import { ensureCoreImportsTable } from "../../internal/core-schema-bootstrap-imports";
+import { ensureCoreMonitorAlertHistoryTable } from "../../internal/core-schema-bootstrap-runtime";
 import { ensureSettingsSchema } from "../../internal/settings-bootstrap-schema";
 import { ensureUsersBootstrapSchema } from "../../internal/users-bootstrap/schema";
 import { decryptCollectionPiiValue } from "../../lib/collection-pii-encryption";
@@ -149,6 +154,14 @@ if (!coreUserReferenceForeignKeyMigrationFileName) {
 }
 const coreUserReferenceForeignKeyMigrationSql = readFileSync(
   path.join(repoRoot, "drizzle", coreUserReferenceForeignKeyMigrationFileName),
+  "utf8",
+);
+const coreEnumChecksMigrationFileName = migrationSqlFileNames.find((name) => /^0038_.*\.sql$/.test(name));
+if (!coreEnumChecksMigrationFileName) {
+  throw new Error("Expected a 0038 core enum checks migration file in drizzle/");
+}
+const coreEnumChecksMigrationSql = readFileSync(
+  path.join(repoRoot, "drizzle", coreEnumChecksMigrationFileName),
   "utf8",
 );
 const preTimezoneMigrationSqlTexts = migrationSqlFileNames
@@ -931,6 +944,7 @@ test(
       await applySql(pool, usersLoginLockoutMigrationSql);
       await applySql(pool, usersIsBannedNotNullMigrationSql);
       await applySql(pool, coreUserReferenceForeignKeyMigrationSql);
+      await applySql(pool, coreEnumChecksMigrationSql);
 
       assert.equal(await constraintExists(pool, "fk_user_activity_user_id"), true);
       assert.equal(await constraintExists(pool, "fk_data_rows_import_id"), true);
@@ -945,9 +959,18 @@ test(
       assert.equal(await constraintExists(pool, "fk_imports_created_by_username"), true);
       assert.equal(await constraintExists(pool, "fk_backups_created_by_username"), true);
       assert.equal(await constraintExists(pool, "fk_backup_jobs_requested_by_username"), true);
+      assert.equal(await constraintExists(pool, "chk_users_role"), true);
+      assert.equal(await constraintExists(pool, "chk_users_status"), true);
+      assert.equal(await constraintExists(pool, "chk_user_activity_role"), true);
+      assert.equal(await constraintExists(pool, "chk_backup_jobs_status"), true);
       assert.equal(await indexExists(pool, "idx_user_activity_user_id"), true);
+      assert.equal(await indexExists(pool, "idx_users_created_by"), true);
+      assert.equal(await indexExists(pool, "idx_backups_created_by"), true);
+      assert.equal(await indexExists(pool, "idx_backup_jobs_requested_by"), true);
       assert.equal(await indexExists(pool, "idx_admin_visible_nicknames_admin_nickname_unique"), true);
       assert.equal(await columnIsNotNull(pool, "users", "is_banned"), true);
+      assert.equal(await columnIsNotNull(pool, "user_activity", "role"), true);
+      assert.equal(await columnIsNotNull(pool, "backup_jobs", "status"), true);
     });
   },
 );
@@ -991,6 +1014,148 @@ test(
           VALUES ('user-3', 'null.user', NULL)
         `),
         /null value in column "is_banned"/i,
+      );
+    });
+  },
+);
+
+test(
+  "reviewed core enum checks migration normalizes legacy enum text fields and enforces safe CHECK constraints",
+  { skip: skipReason || false },
+  async () => {
+    await withTempDatabase(async ({ pool }) => {
+      await pool.query(`
+        CREATE TABLE public.users (
+          id text PRIMARY KEY,
+          username text NOT NULL UNIQUE,
+          password_hash text NOT NULL,
+          role text NOT NULL,
+          status text NOT NULL,
+          created_by text
+        );
+
+        CREATE TABLE public.user_activity (
+          id text PRIMARY KEY,
+          user_id text NOT NULL,
+          username text NOT NULL,
+          role text NOT NULL
+        );
+
+        CREATE TABLE public.banned_sessions (
+          id text PRIMARY KEY,
+          username text NOT NULL,
+          role text NOT NULL,
+          activity_id text NOT NULL,
+          banned_at timestamp with time zone DEFAULT now() NOT NULL
+        );
+
+        CREATE TABLE public.backups (
+          id text PRIMARY KEY,
+          created_by text
+        );
+
+        CREATE TABLE public.backup_jobs (
+          id uuid PRIMARY KEY,
+          status text NOT NULL,
+          requested_by text
+        );
+
+        CREATE TABLE public.monitor_alert_incidents (
+          id uuid PRIMARY KEY,
+          severity text NOT NULL,
+          status text NOT NULL
+        );
+      `);
+
+      await pool.query(`
+        INSERT INTO public.users (id, username, password_hash, role, status, created_by)
+        VALUES
+          ('user-1', 'Legacy.User', '$2b$12$legacyhashlegacyhashlegacyhashlegacyhashlegacyhashlegacyh', 'ADMIN', 'ACTIVE', NULL),
+          ('user-2', 'Broken.User', 'plain-text-password', 'owner', 'mystery', NULL);
+
+        INSERT INTO public.user_activity (id, user_id, username, role)
+        VALUES ('activity-1', 'user-1', 'Legacy.User', 'ADMINISTRATOR');
+
+        INSERT INTO public.banned_sessions (id, username, role, activity_id)
+        VALUES ('ban-1', 'Legacy.User', 'Moderator', 'activity-1');
+
+        INSERT INTO public.backups (id, created_by)
+        VALUES ('backup-1', 'Legacy.User');
+
+        INSERT INTO public.backup_jobs (id, status, requested_by)
+        VALUES ('55555555-5555-5555-5555-555555555555'::uuid, 'stuck', 'Legacy.User');
+
+        INSERT INTO public.monitor_alert_incidents (id, severity, status)
+        VALUES ('66666666-6666-6666-6666-666666666666'::uuid, 'critical ', 'OPEN');
+      `);
+
+      await applySql(pool, coreEnumChecksMigrationSql);
+
+      const usersRows = await pool.query<{ username: string; role: string; status: string }>(`
+        SELECT username, role, status
+        FROM public.users
+        ORDER BY username ASC
+      `);
+      assert.deepEqual(usersRows.rows, [
+        { username: "Broken.User", role: "user", status: "pending_activation" },
+        { username: "Legacy.User", role: "admin", status: "active" },
+      ]);
+
+      const activityRows = await pool.query<{ role: string }>(`
+        SELECT role
+        FROM public.user_activity
+        WHERE id = 'activity-1'
+      `);
+      assert.deepEqual(activityRows.rows, [{ role: "user" }]);
+
+      const bannedRows = await pool.query<{ role: string }>(`
+        SELECT role
+        FROM public.banned_sessions
+        WHERE id = 'ban-1'
+      `);
+      assert.deepEqual(bannedRows.rows, [{ role: "user" }]);
+
+      const backupJobRows = await pool.query<{ status: string }>(`
+        SELECT status
+        FROM public.backup_jobs
+        WHERE id = '55555555-5555-5555-5555-555555555555'::uuid
+      `);
+      assert.deepEqual(backupJobRows.rows, [{ status: "queued" }]);
+
+      const incidentRows = await pool.query<{ severity: string; status: string }>(`
+        SELECT severity, status
+        FROM public.monitor_alert_incidents
+        WHERE id = '66666666-6666-6666-6666-666666666666'::uuid
+      `);
+      assert.deepEqual(incidentRows.rows, [{ severity: "CRITICAL", status: "open" }]);
+
+      assert.equal(await constraintExists(pool, "chk_users_role"), true);
+      assert.equal(await constraintExists(pool, "chk_users_status"), true);
+      assert.equal(await constraintExists(pool, "chk_user_activity_role"), true);
+      assert.equal(await constraintExists(pool, "chk_banned_sessions_role"), true);
+      assert.equal(await constraintExists(pool, "chk_backup_jobs_status"), true);
+      assert.equal(await constraintExists(pool, "chk_monitor_alert_incidents_severity"), true);
+      assert.equal(await constraintExists(pool, "chk_monitor_alert_incidents_status"), true);
+      assert.equal(await indexExists(pool, "idx_users_created_by"), true);
+      assert.equal(await indexExists(pool, "idx_backups_created_by"), true);
+      assert.equal(await indexExists(pool, "idx_backup_jobs_requested_by"), true);
+      assert.equal(await columnIsNotNull(pool, "user_activity", "role"), true);
+      assert.equal(await columnIsNotNull(pool, "banned_sessions", "role"), true);
+      assert.equal(await columnIsNotNull(pool, "backup_jobs", "status"), true);
+      assert.equal(await columnIsNotNull(pool, "monitor_alert_incidents", "severity"), true);
+      assert.equal(await columnIsNotNull(pool, "monitor_alert_incidents", "status"), true);
+
+      await assert.rejects(
+        () => pool.query(`UPDATE public.users SET role = 'owner' WHERE id = 'user-1'`),
+        /chk_users_role/i,
+      );
+      await assert.rejects(
+        () => pool.query(`UPDATE public.backup_jobs SET status = 'paused' WHERE id = '55555555-5555-5555-5555-555555555555'::uuid`),
+        /chk_backup_jobs_status/i,
+      );
+      await assert.rejects(
+        () => pool.query(`UPDATE public.monitor_alert_incidents SET severity = 'LOW' WHERE id = '66666666-6666-6666-6666-666666666666'::uuid`),
+        /chk_monitor_alert_incidents_severity/i,
       );
     });
   },
@@ -1775,6 +1940,13 @@ test(
       assert.equal(await constraintExists(pool, "fk_imports_created_by_username"), true);
       assert.equal(await constraintExists(pool, "fk_backups_created_by_username"), true);
       assert.equal(await constraintExists(pool, "fk_backup_jobs_requested_by_username"), true);
+      assert.equal(await constraintExists(pool, "chk_users_role"), true);
+      assert.equal(await constraintExists(pool, "chk_users_status"), true);
+      assert.equal(await constraintExists(pool, "chk_backup_jobs_status"), true);
+      assert.equal(await indexExists(pool, "idx_users_created_by"), true);
+      assert.equal(await indexExists(pool, "idx_backups_created_by"), true);
+      assert.equal(await indexExists(pool, "idx_backup_jobs_requested_by"), true);
+      assert.equal(await columnIsNotNull(pool, "backup_jobs", "status"), true);
 
       const usersRows = await pool.query<{ username: string; created_by: string | null }>(`
         SELECT username, created_by
@@ -1807,15 +1979,130 @@ test(
         { id: "backup-2", created_by: "system" },
       ]);
 
-      const backupJobRows = await pool.query<{ id: string; requested_by: string }>(`
-        SELECT id::text AS id, requested_by
+      const backupJobRows = await pool.query<{ id: string; requested_by: string; status: string }>(`
+        SELECT id::text AS id, requested_by, status
         FROM public.backup_jobs
         ORDER BY id ASC
       `);
       assert.deepEqual(backupJobRows.rows, [
-        { id: "33333333-3333-3333-3333-333333333333", requested_by: "system" },
-        { id: "44444444-4444-4444-4444-444444444444", requested_by: "system" },
+        { id: "33333333-3333-3333-3333-333333333333", requested_by: "system", status: "queued" },
+        { id: "44444444-4444-4444-4444-444444444444", requested_by: "system", status: "queued" },
       ]);
+    });
+  },
+);
+
+test(
+  "core activity and monitor bootstrap helpers normalize enum-like text fields and add safe check constraints",
+  { skip: skipReason || false },
+  async () => {
+    await withTempDatabase(async ({ pool }) => {
+      await pool.query(`
+        CREATE TABLE public.users (
+          id text PRIMARY KEY,
+          username text,
+          password text,
+          role text,
+          status text,
+          created_at timestamp DEFAULT now(),
+          password_changed_at timestamp
+        );
+
+        CREATE TABLE public.user_activity (
+          id text PRIMARY KEY,
+          user_id text NOT NULL,
+          username text NOT NULL,
+          role text NOT NULL,
+          is_active boolean,
+          login_time timestamp with time zone,
+          last_activity_time timestamp with time zone
+        );
+
+        CREATE TABLE public.banned_sessions (
+          id text PRIMARY KEY,
+          username text NOT NULL,
+          role text NOT NULL,
+          activity_id text NOT NULL,
+          fingerprint text,
+          ip_address text,
+          browser text,
+          pc_name text,
+          banned_at timestamp with time zone
+        );
+
+        CREATE TABLE public.monitor_alert_incidents (
+          id uuid PRIMARY KEY,
+          alert_key text,
+          severity text,
+          source text,
+          message text,
+          status text,
+          first_seen_at timestamp with time zone,
+          last_seen_at timestamp with time zone,
+          resolved_at timestamp with time zone,
+          updated_at timestamp with time zone
+        );
+      `);
+
+      await pool.query(`
+        INSERT INTO public.users (id, username, password, role, status)
+        VALUES ('legacy-user', 'LegacyUser', 'legacy-plain-text', 'ADMIN', 'ACTIVE');
+
+        INSERT INTO public.user_activity (id, user_id, username, role, is_active)
+        VALUES ('activity-1', 'legacy-user', 'LegacyUser', 'operator', NULL);
+
+        INSERT INTO public.banned_sessions (id, username, role, activity_id, banned_at)
+        VALUES ('ban-1', 'LegacyUser', 'root', 'activity-1', NULL);
+
+        INSERT INTO public.monitor_alert_incidents (
+          id, alert_key, severity, message, status, first_seen_at, last_seen_at, updated_at
+        )
+        VALUES (
+          '77777777-7777-7777-7777-777777777777'::uuid,
+          'alert-1',
+          'warn',
+          '',
+          'closed',
+          NULL,
+          NULL,
+          NULL
+        );
+      `);
+
+      await ensureUsersBootstrapSchema(drizzle(pool));
+      await ensureCoreUserActivityTable(drizzle(pool));
+      await ensureCoreBannedSessionsTable(drizzle(pool));
+      await ensureCoreMonitorAlertHistoryTable(drizzle(pool));
+
+      assert.equal(await constraintExists(pool, "chk_user_activity_role"), true);
+      assert.equal(await constraintExists(pool, "chk_banned_sessions_role"), true);
+      assert.equal(await constraintExists(pool, "chk_monitor_alert_incidents_severity"), true);
+      assert.equal(await constraintExists(pool, "chk_monitor_alert_incidents_status"), true);
+      assert.equal(await columnIsNotNull(pool, "user_activity", "role"), true);
+      assert.equal(await columnIsNotNull(pool, "banned_sessions", "role"), true);
+      assert.equal(await columnIsNotNull(pool, "monitor_alert_incidents", "severity"), true);
+      assert.equal(await columnIsNotNull(pool, "monitor_alert_incidents", "status"), true);
+
+      const activityRows = await pool.query<{ role: string; is_active: boolean }>(`
+        SELECT role, is_active
+        FROM public.user_activity
+        WHERE id = 'activity-1'
+      `);
+      assert.deepEqual(activityRows.rows, [{ role: "user", is_active: true }]);
+
+      const bannedRows = await pool.query<{ role: string }>(`
+        SELECT role
+        FROM public.banned_sessions
+        WHERE id = 'ban-1'
+      `);
+      assert.deepEqual(bannedRows.rows, [{ role: "user" }]);
+
+      const monitorRows = await pool.query<{ severity: string; status: string; message: string }>(`
+        SELECT severity, status, message
+        FROM public.monitor_alert_incidents
+        WHERE id = '77777777-7777-7777-7777-777777777777'::uuid
+      `);
+      assert.deepEqual(monitorRows.rows, [{ severity: "INFO", status: "open", message: "Monitor alert" }]);
     });
   },
 );

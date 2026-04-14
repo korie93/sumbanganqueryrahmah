@@ -280,6 +280,30 @@ export async function ensureUsersBootstrapSchema(
   await database.execute(sql`ALTER TABLE public.users ALTER COLUMN status SET NOT NULL`);
   await database.execute(sql`ALTER TABLE public.users ALTER COLUMN password_hash SET NOT NULL`);
   await database.execute(sql`ALTER TABLE public.users ALTER COLUMN is_banned SET NOT NULL`);
+  await database.execute(sql`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'chk_users_role'
+      ) THEN
+        ALTER TABLE public.users
+        ADD CONSTRAINT chk_users_role
+        CHECK (role IN ('user', 'admin', 'superuser'));
+      END IF;
+
+      IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'chk_users_status'
+      ) THEN
+        ALTER TABLE public.users
+        ADD CONSTRAINT chk_users_status
+        CHECK (status IN ('pending_activation', 'active', 'suspended', 'disabled'));
+      END IF;
+    END $$;
+  `);
   await database.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username_unique ON public.users (username)`);
   await database.execute(sql`
     UPDATE public.users

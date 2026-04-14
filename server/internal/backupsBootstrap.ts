@@ -68,10 +68,29 @@ export async function ensureBackupsBootstrapSchema(
   await database.execute(sql`
     UPDATE public.backup_jobs
     SET
-      status = COALESCE(NULLIF(status, ''), 'queued'),
+      status = CASE
+        WHEN lower(trim(COALESCE(status, ''))) IN ('queued', 'running', 'completed', 'failed')
+          THEN lower(trim(COALESCE(status, '')))
+        ELSE 'queued'
+      END,
       requested_at = COALESCE(requested_at, now()),
       updated_at = COALESCE(updated_at, requested_at, now())
   `);
+  await database.execute(sql`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'chk_backup_jobs_status'
+      ) THEN
+        ALTER TABLE public.backup_jobs
+        ADD CONSTRAINT chk_backup_jobs_status
+        CHECK (status IN ('queued', 'running', 'completed', 'failed'));
+      END IF;
+    END $$;
+  `);
+  await database.execute(sql`ALTER TABLE public.backup_jobs ALTER COLUMN status SET NOT NULL`);
   await database.execute(sql`
     CREATE INDEX IF NOT EXISTS idx_backup_jobs_status_requested_at
     ON public.backup_jobs(status, requested_at)

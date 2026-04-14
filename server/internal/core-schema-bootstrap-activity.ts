@@ -36,9 +36,28 @@ export async function ensureCoreUserActivityTable(
   await database.execute(sql`
     UPDATE public.user_activity
     SET
+      role = CASE
+        WHEN lower(trim(COALESCE(role, ''))) IN ('user', 'admin', 'superuser')
+          THEN lower(trim(COALESCE(role, '')))
+        ELSE 'user'
+      END,
       is_active = COALESCE(is_active, true),
       login_time = COALESCE(login_time, now()),
       last_activity_time = COALESCE(last_activity_time, login_time, now())
+  `);
+  await database.execute(sql`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'chk_user_activity_role'
+      ) THEN
+        ALTER TABLE public.user_activity
+        ADD CONSTRAINT chk_user_activity_role
+        CHECK (role IN ('user', 'admin', 'superuser'));
+      END IF;
+    END $$;
   `);
   await database.execute(sql`
     DELETE FROM public.user_activity activity
@@ -65,6 +84,7 @@ export async function ensureCoreUserActivityTable(
       END IF;
     END $$;
   `);
+  await database.execute(sql`ALTER TABLE public.user_activity ALTER COLUMN role SET NOT NULL`);
   await database.execute(sql`CREATE INDEX IF NOT EXISTS idx_user_activity_user_id ON public.user_activity(user_id)`);
   await database.execute(sql`CREATE INDEX IF NOT EXISTS idx_user_activity_username ON public.user_activity(username)`);
   await database.execute(sql`CREATE INDEX IF NOT EXISTS idx_user_activity_is_active ON public.user_activity(is_active)`);
@@ -126,7 +146,13 @@ export async function ensureCoreBannedSessionsTable(
   await database.execute(sql`ALTER TABLE public.banned_sessions ADD COLUMN IF NOT EXISTS banned_at timestamp with time zone DEFAULT now()`);
   await database.execute(sql`
     UPDATE public.banned_sessions
-    SET banned_at = COALESCE(banned_at, now())
+    SET
+      role = CASE
+        WHEN lower(trim(COALESCE(role, ''))) IN ('user', 'admin', 'superuser')
+          THEN lower(trim(COALESCE(role, '')))
+        ELSE 'user'
+      END,
+      banned_at = COALESCE(banned_at, now())
   `);
   await database.execute(sql`
     DO $$
@@ -142,12 +168,23 @@ export async function ensureCoreBannedSessionsTable(
     END $$;
   `);
   await database.execute(sql`ALTER TABLE public.banned_sessions ALTER COLUMN banned_at SET NOT NULL`);
+  await database.execute(sql`ALTER TABLE public.banned_sessions ALTER COLUMN role SET NOT NULL`);
   await database.execute(sql`CREATE INDEX IF NOT EXISTS idx_banned_sessions_activity_id ON public.banned_sessions(activity_id)`);
   await database.execute(sql`CREATE INDEX IF NOT EXISTS idx_banned_sessions_fingerprint ON public.banned_sessions(fingerprint)`);
   await database.execute(sql`CREATE INDEX IF NOT EXISTS idx_banned_sessions_ip ON public.banned_sessions(ip_address)`);
   await database.execute(sql`
     DO $$
     BEGIN
+      IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'chk_banned_sessions_role'
+      ) THEN
+        ALTER TABLE public.banned_sessions
+        ADD CONSTRAINT chk_banned_sessions_role
+        CHECK (role IN ('user', 'admin', 'superuser'));
+      END IF;
+
       IF to_regclass('public.user_activity') IS NOT NULL
         AND NOT EXISTS (
           SELECT 1
