@@ -804,6 +804,13 @@ input[type="search"]::-webkit-search-cancel-button {
   }
 }
 
+@supports not (height: 100svh) {
+  :root {
+    --viewport-min-height-value: 100vh;
+    --app-shell-min-height-value: calc(100vh - 3.5rem);
+  }
+}
+
 .skip-to-main-link {
   position: fixed;
   left: var(--spacing-3);

@@ -357,6 +357,26 @@ export async function ensureUsersBootstrapSchema(
           ADD CONSTRAINT fk_collection_records_created_by_login_username
           FOREIGN KEY (created_by_login)
           REFERENCES public.users(username)
+          ON DELETE RESTRICT
+          ON UPDATE CASCADE;
+        ELSIF EXISTS (
+          SELECT 1
+          FROM information_schema.referential_constraints rc
+          WHERE rc.constraint_schema = 'public'
+            AND rc.constraint_name = 'fk_collection_records_created_by_login_username'
+            AND (
+              rc.delete_rule <> 'RESTRICT'
+              OR rc.update_rule <> 'CASCADE'
+            )
+        ) THEN
+          ALTER TABLE public.collection_records
+          DROP CONSTRAINT fk_collection_records_created_by_login_username;
+
+          ALTER TABLE public.collection_records
+          ADD CONSTRAINT fk_collection_records_created_by_login_username
+          FOREIGN KEY (created_by_login)
+          REFERENCES public.users(username)
+          ON DELETE RESTRICT
           ON UPDATE CASCADE;
         END IF;
       END IF;

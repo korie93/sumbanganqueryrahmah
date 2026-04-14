@@ -46,7 +46,7 @@ export const collectionRecords = pgTable("collection_records", {
   duplicateReceiptFlag: boolean("duplicate_receipt_flag").notNull().default(false),
   createdByLogin: text("created_by_login")
     .notNull()
-    .references(() => users.username, { onUpdate: "cascade" }),
+    .references(() => users.username, { onDelete: "restrict", onUpdate: "cascade" }),
   collectionStaffNickname: text("collection_staff_nickname").notNull(),
   staffUsername: text("staff_username").notNull(),
   createdAt: utcTimestamp("created_at").defaultNow().notNull(),

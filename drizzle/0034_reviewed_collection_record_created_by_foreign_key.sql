@@ -86,6 +86,7 @@ BEGIN
     ADD CONSTRAINT fk_collection_records_created_by_login_username
     FOREIGN KEY (created_by_login)
     REFERENCES public.users(username)
+    ON DELETE RESTRICT
     ON UPDATE CASCADE;
   END IF;
 END $$;

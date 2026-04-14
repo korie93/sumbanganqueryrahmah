@@ -114,6 +114,14 @@ const collectionRecordCreatedByForeignKeyMigrationSql = readFileSync(
   path.join(repoRoot, "drizzle", collectionRecordCreatedByForeignKeyMigrationFileName),
   "utf8",
 );
+const collectionRecordCreatedByDeleteRuleMigrationFileName = migrationSqlFileNames.find((name) => /^0035_.*\.sql$/.test(name));
+if (!collectionRecordCreatedByDeleteRuleMigrationFileName) {
+  throw new Error("Expected a 0035 collection record created_by delete rule migration file in drizzle/");
+}
+const collectionRecordCreatedByDeleteRuleMigrationSql = readFileSync(
+  path.join(repoRoot, "drizzle", collectionRecordCreatedByDeleteRuleMigrationFileName),
+  "utf8",
+);
 const preTimezoneMigrationSqlTexts = migrationSqlFileNames
   .filter((name) => name.localeCompare(timezoneMigrationFileName) < 0)
   .sort((left, right) => left.localeCompare(right))
@@ -780,6 +788,7 @@ test(
       const createdByRules = await foreignKeyRules(pool, "collection_records", "created_by_login");
       assert.equal(createdByRules[0]?.constraint_name, "fk_collection_records_created_by_login_username");
       assert.equal(createdByRules[0]?.update_rule, "CASCADE");
+      assert.equal(createdByRules[0]?.delete_rule, "RESTRICT");
 
       await assert.rejects(
         () => pool.query(`
@@ -802,6 +811,77 @@ test(
             'Collector Gamma'
           )
         `),
+        /fk_collection_records_created_by_login_username/i,
+      );
+
+      await assert.rejects(
+        () => pool.query(`DELETE FROM public.users WHERE username = 'admin.user'`),
+        /fk_collection_records_created_by_login_username/i,
+      );
+    });
+  },
+);
+
+test(
+  "reviewed collection record created_by delete rule migration upgrades legacy cascade deletes to restrict",
+  { skip: skipReason || false },
+  async () => {
+    await withTempDatabase(async ({ pool }) => {
+      await pool.query(`
+        CREATE TABLE public.users (
+          id text PRIMARY KEY,
+          username text NOT NULL UNIQUE
+        );
+
+        CREATE TABLE public.collection_records (
+          id uuid PRIMARY KEY,
+          batch text NOT NULL,
+          payment_date date NOT NULL,
+          amount numeric(14,2) NOT NULL,
+          created_by_login text NOT NULL,
+          collection_staff_nickname text NOT NULL,
+          staff_username text NOT NULL,
+          created_at timestamp with time zone NOT NULL DEFAULT now(),
+          updated_at timestamp with time zone NOT NULL DEFAULT now(),
+          CONSTRAINT fk_collection_records_created_by_login_username
+            FOREIGN KEY (created_by_login)
+            REFERENCES public.users(username)
+            ON DELETE CASCADE
+            ON UPDATE CASCADE
+        );
+
+        INSERT INTO public.users (id, username)
+        VALUES ('user-1', 'admin.user');
+
+        INSERT INTO public.collection_records (
+          id,
+          batch,
+          payment_date,
+          amount,
+          created_by_login,
+          collection_staff_nickname,
+          staff_username
+        )
+        VALUES (
+          '77777777-7777-7777-7777-777777777774'::uuid,
+          'P10',
+          DATE '2026-04-12',
+          18.00,
+          'admin.user',
+          'Collector Delta',
+          'Collector Delta'
+        );
+      `);
+
+      await applySql(pool, collectionRecordCreatedByDeleteRuleMigrationSql);
+
+      const createdByRules = await foreignKeyRules(pool, "collection_records", "created_by_login");
+      assert.equal(createdByRules[0]?.constraint_name, "fk_collection_records_created_by_login_username");
+      assert.equal(createdByRules[0]?.update_rule, "CASCADE");
+      assert.equal(createdByRules[0]?.delete_rule, "RESTRICT");
+
+      await assert.rejects(
+        () => pool.query(`DELETE FROM public.users WHERE username = 'admin.user'`),
         /fk_collection_records_created_by_login_username/i,
       );
     });

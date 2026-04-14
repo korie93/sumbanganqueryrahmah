@@ -21,7 +21,7 @@
   gap: 8px;
   padding: 10px 12px;
   border-bottom: 1px solid hsl(var(--border) / 0.6);
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--ai-status-text);
   background: var(--ai-status-bg);
 }
@@ -38,7 +38,7 @@
   border-radius: 8px;
   background: var(--ai-notice-bg);
   color: var(--ai-notice-text);
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 
 .ai-notice-title {
@@ -86,13 +86,13 @@
 
 .ai-empty-hint {
   color: var(--ai-empty-text);
-  font-size: 13px;
+  font-size: 0.8125rem;
   line-height: var(--line-height-normal);
   padding: 6px 2px;
 }
 
 .ai-chat-container[data-compact='true'] .ai-empty-hint {
-  font-size: 12px;
+  font-size: 0.75rem;
   line-height: var(--line-height-tight);
   padding-top: 2px;
 }
@@ -118,7 +118,7 @@
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   word-break: break-word;
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 
 .ai-bubble-assistant {
@@ -147,7 +147,7 @@
 }
 
 .ai-typing-label {
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 
 .ai-typing-dots {
