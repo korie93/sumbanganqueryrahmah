@@ -9,6 +9,7 @@
 }
 
 .navbar-premium-glass {
+  --navbar-premium-glass-fallback-bg: hsl(var(--card) / 0.92);
   display: inline-flex;
   align-items: center;
   justify-content: flex-start;
@@ -19,6 +20,7 @@
   min-width: 0;
   flex-wrap: nowrap;
   overflow-x: auto;
+  scroll-behavior: smooth;
   border-radius: 9999px;
   background: hsl(var(--card) / 0.78);
   border: 1px solid hsl(var(--border) / 0.9);
@@ -26,6 +28,14 @@
   transition:
     box-shadow 0.2s ease,
     background 0.3s ease;
+}
+
+.navbar-premium-glass:focus-visible {
+  outline: none;
+  border-color: hsl(var(--ring));
+  box-shadow:
+    0 0 0 3px hsl(var(--ring) / 0.28),
+    var(--nav-focus-shadow);
 }
 
 .navbar-scroll-fade {
@@ -203,6 +213,7 @@
 }
 
 .dark .navbar-premium-glass {
+  --navbar-premium-glass-fallback-bg: hsl(var(--card) / 0.94);
   background: hsl(var(--card) / 0.82);
   border: 1px solid hsl(var(--border) / 0.85);
   box-shadow: var(--nav-surface-shadow-dark);
@@ -237,6 +248,7 @@
 .low-spec .navbar-premium-glass {
   -webkit-backdrop-filter: none !important;
   backdrop-filter: none !important;
+  background: var(--navbar-premium-glass-fallback-bg) !important;
   box-shadow: none !important;
 }
 
@@ -249,11 +261,7 @@
 
 @supports not ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
   .navbar-premium-glass {
-    background: hsl(var(--card) / 0.92);
-  }
-
-  .dark .navbar-premium-glass {
-    background: hsl(var(--card) / 0.94);
+    background: var(--navbar-premium-glass-fallback-bg);
   }
 }
 

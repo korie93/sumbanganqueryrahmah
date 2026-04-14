@@ -221,7 +221,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 0;
+  padding: 6px;
   background: var(--ai-send-btn-bg);
   color: var(--public-auth-text-strong);
   border: 1px solid var(--ai-send-btn-border);
@@ -260,6 +260,13 @@
 
   .ai-input-container {
     padding: 10px 10px calc(10px + var(--safe-area-inset-bottom));
+  }
+
+  .ai-send-btn {
+    height: 48px;
+    width: 48px;
+    min-width: 48px;
+    padding: 8px;
   }
 
   .ai-actions {

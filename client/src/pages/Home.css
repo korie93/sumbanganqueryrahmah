@@ -25,6 +25,9 @@
 @media (prefers-reduced-motion: reduce) {
   .welcome-title {
     animation: none !important;
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    text-shadow: var(--home-title-shadow-rest);
   }
 }
 

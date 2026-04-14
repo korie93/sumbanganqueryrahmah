@@ -1,4 +1,4 @@
-import { memo, type RefObject } from "react"
+import { memo, type KeyboardEvent, type RefObject } from "react"
 import { ChevronDown } from "lucide-react"
 
 import type {
@@ -6,6 +6,7 @@ import type {
   NavigationGroup,
 } from "@/app/navigation"
 import { cn } from "@/lib/utils"
+import { getNavbarKeyboardScrollLeftDelta } from "@/components/navbar-scroll-utils"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -38,12 +39,39 @@ function NavbarDesktopNavigationImpl({
   navScrollerRef,
   desktopNavOverflow,
 }: NavbarDesktopNavigationProps) {
+  const handleNavScrollerKeyDown = (event: KeyboardEvent<HTMLElement>) => {
+    const navNode = event.currentTarget
+
+    if (event.key === "Home") {
+      event.preventDefault()
+      navNode.scrollTo({ left: 0, behavior: "smooth" })
+      return
+    }
+
+    if (event.key === "End") {
+      event.preventDefault()
+      navNode.scrollTo({ left: navNode.scrollWidth, behavior: "smooth" })
+      return
+    }
+
+    const leftDelta = getNavbarKeyboardScrollLeftDelta(event.key, navNode.clientWidth)
+
+    if (leftDelta === 0) {
+      return
+    }
+
+    event.preventDefault()
+    navNode.scrollBy({ left: leftDelta, behavior: "smooth" })
+  }
+
   return (
     <div className="navbar-nav-shell hidden min-w-0 flex-1 items-center justify-start overflow-hidden lg:flex">
       <nav
         ref={navScrollerRef as RefObject<HTMLElement>}
         className="navbar-premium-glass w-full justify-start"
         aria-label="Primary navigation"
+        onKeyDown={handleNavScrollerKeyDown}
+        tabIndex={desktopNavOverflow.canScroll ? 0 : undefined}
       >
         {directItems.map((item) => {
           const Icon = item.icon
