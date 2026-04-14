@@ -67,6 +67,7 @@ function createConnectionRequest(
     forwardedHost?: string;
     forwardedProto?: string;
     encrypted?: boolean;
+    remoteAddress?: string;
   },
 ): RuntimeConnectionRequest {
   const headers: Record<string, string> = {
@@ -88,6 +89,7 @@ function createConnectionRequest(
     headers,
     socket: ({
       encrypted: options?.encrypted ?? false,
+      remoteAddress: options?.remoteAddress ?? "127.0.0.1",
     } as unknown) as IncomingMessage["socket"],
   };
 }
@@ -591,6 +593,7 @@ test("runtime manager accepts trusted forwarded host and proto headers", async (
     secret: TEST_SECRET,
     connectedClients: providedMap,
     trustForwardedHeaders: true,
+    trustedForwardedProxies: ["loopback"],
   });
 
   try {
@@ -603,12 +606,57 @@ test("runtime manager accepts trusted forwarded host and proto headers", async (
         forwardedHost: "public.example",
         forwardedProto: "https",
         encrypted: false,
+        remoteAddress: "127.0.0.1",
       }),
     );
     await flushAsyncWork();
 
     assert.equal(providedMap.get(activityId), socket as unknown as WebSocket);
     assert.equal(socket.closeCalls, 0);
+  } finally {
+    wss.emit("close");
+  }
+});
+
+test("runtime manager rejects forwarded host and proto headers when the remote peer is not in the trusted proxy allowlist", async () => {
+  const wss = new FakeWebSocketServer();
+  const providedMap = new Map<string, WebSocket>();
+  const socket = new FakeWebSocket();
+  let lookupCalls = 0;
+
+  createRuntimeWebSocketManager({
+    wss: wss as unknown as import("ws").WebSocketServer,
+    storage: {
+      getActivityById: async () => {
+        lookupCalls += 1;
+        return createActiveSession("activity-forwarded-unallowlisted");
+      },
+      clearCollectionNicknameSessionByActivity: async () => undefined,
+    },
+    secret: TEST_SECRET,
+    connectedClients: providedMap,
+    trustForwardedHeaders: true,
+    trustedForwardedProxies: ["loopback"],
+  });
+
+  try {
+    wss.emit(
+      "connection",
+      socket as unknown as WebSocket,
+      createConnectionRequest(createWsToken("activity-forwarded-unallowlisted"), {
+        host: "internal.gateway",
+        origin: "https://public.example",
+        forwardedHost: "public.example",
+        forwardedProto: "https",
+        encrypted: false,
+        remoteAddress: "203.0.113.8",
+      }),
+    );
+    await flushAsyncWork();
+
+    assert.equal(lookupCalls, 0);
+    assert.equal(providedMap.size, 0);
+    assert.equal(socket.closeCalls, 1);
   } finally {
     wss.emit("close");
   }
@@ -1004,6 +1052,53 @@ test("runtime manager tolerates repeated terminal lifecycle signals without dupl
     });
 
     assert.equal(providedMap.has(activityId), false);
+    assertNoRuntimeSocketListeners(socket);
+  } finally {
+    wss.emit("close");
+  }
+});
+
+test("runtime manager still detaches socket listeners when tracked map cleanup throws", async (t) => {
+  class ThrowingDeleteMap<K, V> extends Map<K, V> {
+    override delete(key: K): boolean {
+      super.delete(key);
+      throw new Error(`delete failed for ${String(key)}`);
+    }
+  }
+
+  const wss = new FakeWebSocketServer();
+  const providedMap = new ThrowingDeleteMap<string, WebSocket>();
+  const socket = new FakeWebSocket();
+  const activityId = "activity-cleanup-throws";
+  const warnings: Array<{ message: string; payload: unknown }> = [];
+
+  const warnMock = t.mock.method(logger, "warn", (message: string, payload: unknown) => {
+    warnings.push({ message, payload });
+  });
+
+  createRuntimeWebSocketManager({
+    wss: wss as unknown as import("ws").WebSocketServer,
+    storage: {
+      getActivityById: async () => createActiveSession(activityId),
+      clearCollectionNicknameSessionByActivity: async () => undefined,
+    },
+    secret: TEST_SECRET,
+    connectedClients: providedMap,
+  });
+
+  try {
+    wss.emit("connection", socket as unknown as WebSocket, createConnectionRequest(createWsToken(activityId)));
+    await flushAsyncWork();
+
+    assert.doesNotThrow(() => {
+      socket.fail(new Error("cleanup should not leak listeners"));
+    });
+
+    assert.ok(warnMock.mock.callCount() >= 1);
+    assert.equal(
+      warnings.some((entry) => entry.message === "WebSocket cleanup failed"),
+      true,
+    );
     assertNoRuntimeSocketListeners(socket);
   } finally {
     wss.emit("close");

@@ -69,6 +69,37 @@ test("validateSchemaGovernance rejects unmanaged tables and missing reviewed mig
   assert.match(validation.failures.join("\n"), /mystery_table.+not declared/i);
 });
 
+test("validateSchemaGovernance rejects legacy SQL tables that are not backed by reviewed Drizzle ownership", () => {
+  const discoveredTables = new Map([
+    [
+      "legacy_table",
+      {
+        table: "legacy_table",
+        sourceTypes: ["legacy-sql", "runtime-ddl"],
+        sourceFiles: ["server/sql/legacy_table.sql", "server/internal/legacy-table.ts"],
+      },
+    ],
+  ]);
+
+  const manifest = {
+    tables: {
+      legacy_table: {
+        authority: "runtime-ddl",
+        mode: "runtime-managed",
+        allowedSources: ["runtime-ddl", "legacy-sql"],
+        notes: "Legacy table intentionally misclassified for governance regression coverage.",
+      },
+    },
+  };
+
+  const validation = validateSchemaGovernance({ discoveredTables, manifest });
+  const failures = validation.failures.join("\n");
+
+  assert.match(failures, /legacy_table.+legacy-sql sources but is not marked drizzle-reviewed/i);
+  assert.match(failures, /legacy_table.+missing a Drizzle schema authority/i);
+  assert.match(failures, /legacy_table.+missing a reviewed Drizzle SQL migration companion/i);
+});
+
 test("validateSchemaGovernance rejects weak manifest metadata", () => {
   const discoveredTables = new Map([
     [

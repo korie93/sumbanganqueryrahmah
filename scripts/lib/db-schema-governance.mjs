@@ -183,6 +183,18 @@ function validateManifestEntryMetadata(table, entry, failures) {
 }
 
 function validateModeRequirements(table, entry, failures) {
+  if (entry.sourceTypes.includes("legacy-sql")) {
+    if (entry.mode !== "drizzle-reviewed") {
+      failures.push(`Table "${table}" still uses legacy-sql sources but is not marked drizzle-reviewed.`);
+    }
+    if (!entry.sourceTypes.includes("drizzle-schema")) {
+      failures.push(`Table "${table}" still uses legacy-sql sources but is missing a Drizzle schema authority.`);
+    }
+    if (!entry.sourceTypes.includes("drizzle-migration")) {
+      failures.push(`Table "${table}" still uses legacy-sql sources but is missing a reviewed Drizzle SQL migration companion.`);
+    }
+  }
+
   if (entry.mode === "drizzle-reviewed") {
     if (!entry.sourceTypes.includes("drizzle-schema")) {
       failures.push(`Table "${table}" is marked drizzle-reviewed but is missing a Drizzle schema entry.`);

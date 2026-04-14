@@ -25,10 +25,17 @@ const generatedOutputPaths = [
   "var/perf",
 ];
 
+const requiredRepositoryFiles = [
+  ".env.example",
+  "SECURITY.md",
+];
+
 const failures = [];
 
-if (!existsSync(".env.example")) {
-  failures.push("Missing required .env.example file.");
+for (const filePath of requiredRepositoryFiles) {
+  if (!existsSync(filePath)) {
+    failures.push(`Missing required ${filePath} file.`);
+  }
 }
 
 if (!existsSync(".gitignore")) {

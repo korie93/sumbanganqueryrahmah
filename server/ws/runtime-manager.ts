@@ -1,4 +1,5 @@
 import type { IncomingHttpHeaders, IncomingMessage } from "node:http";
+import { BlockList, isIP } from "node:net";
 import { WebSocket, type WebSocketServer } from "ws";
 import { readAuthSessionTokenFromHeaders } from "../auth/session-cookie";
 import { logger } from "../lib/logger";
@@ -21,6 +22,7 @@ type RuntimeManagerOptions = {
   secret: string | readonly string[];
   connectedClients?: Map<string, WebSocket>;
   trustForwardedHeaders?: boolean;
+  trustedForwardedProxies?: readonly string[];
 };
 
 type RuntimeWebSocketActivity = {
@@ -47,6 +49,11 @@ type RuntimeInboundMessageRateState = {
   messageCount: number;
 };
 
+type RuntimeForwardedHeaderTrustOptions = {
+  trustForwardedHeaders: boolean;
+  trustedForwardedProxies: readonly string[];
+};
+
 function firstHeaderValue(value: string | string[] | undefined): string {
   if (Array.isArray(value)) {
     return String(value[0] || "");
@@ -56,6 +63,108 @@ function firstHeaderValue(value: string | string[] | undefined): string {
 
 function firstForwardedValue(value: string | string[] | undefined): string {
   return firstHeaderValue(value).split(",")[0]?.trim() || "";
+}
+
+function normalizeSocketAddress(value: string | undefined): string {
+  const trimmed = String(value || "").trim();
+  if (!trimmed) {
+    return "";
+  }
+
+  const zoneLess = trimmed.split("%")[0] || "";
+  const ipv4MappedMatch = /^::ffff:(\d+\.\d+\.\d+\.\d+)$/i.exec(zoneLess);
+  return (ipv4MappedMatch?.[1] || zoneLess).toLowerCase();
+}
+
+function buildTrustedProxyMatcher(trustedProxies: readonly string[]) {
+  if (trustedProxies.length === 0) {
+    return null;
+  }
+
+  const blockList = new BlockList();
+  const exactAddresses = new Set<string>();
+
+  const addSubnet = (address: string, prefix: number) => {
+    const normalizedAddress = normalizeSocketAddress(address);
+    const family = isIP(normalizedAddress);
+    if (!family) {
+      return;
+    }
+    blockList.addSubnet(normalizedAddress, prefix, family === 4 ? "ipv4" : "ipv6");
+  };
+
+  const addAddress = (address: string) => {
+    const normalizedAddress = normalizeSocketAddress(address);
+    if (!isIP(normalizedAddress)) {
+      return;
+    }
+    exactAddresses.add(normalizedAddress);
+  };
+
+  for (const entry of trustedProxies) {
+    const normalizedEntry = String(entry || "").trim().toLowerCase();
+    if (!normalizedEntry) {
+      continue;
+    }
+
+    if (normalizedEntry === "loopback") {
+      addSubnet("127.0.0.0", 8);
+      addAddress("::1");
+      continue;
+    }
+
+    if (normalizedEntry === "linklocal") {
+      addSubnet("169.254.0.0", 16);
+      addSubnet("fe80::", 10);
+      continue;
+    }
+
+    if (normalizedEntry === "uniquelocal") {
+      addSubnet("10.0.0.0", 8);
+      addSubnet("172.16.0.0", 12);
+      addSubnet("192.168.0.0", 16);
+      addSubnet("fc00::", 7);
+      continue;
+    }
+
+    const slashIndex = normalizedEntry.lastIndexOf("/");
+    if (slashIndex > 0) {
+      const candidateAddress = normalizeSocketAddress(normalizedEntry.slice(0, slashIndex));
+      const prefix = Number.parseInt(normalizedEntry.slice(slashIndex + 1), 10);
+      if (Number.isFinite(prefix) && isIP(candidateAddress)) {
+        addSubnet(candidateAddress, prefix);
+        continue;
+      }
+    }
+
+    addAddress(normalizedEntry);
+  }
+
+  return (remoteAddress: string) => {
+    const normalizedAddress = normalizeSocketAddress(remoteAddress);
+    const family = isIP(normalizedAddress);
+    if (!family) {
+      return false;
+    }
+
+    return exactAddresses.has(normalizedAddress) || blockList.check(normalizedAddress, family === 4 ? "ipv4" : "ipv6");
+  };
+}
+
+function shouldTrustForwardedHeaders(
+  req: Pick<IncomingMessage, "socket">,
+  options: RuntimeForwardedHeaderTrustOptions,
+  matcher: ReturnType<typeof buildTrustedProxyMatcher>,
+): boolean {
+  if (!options.trustForwardedHeaders) {
+    return false;
+  }
+
+  if (!matcher) {
+    return true;
+  }
+
+  return matcher(normalizeSocketAddress(req.socket?.remoteAddress));
 }
 
 function readWebSocketRequestHost(
@@ -170,6 +279,8 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
   const { wss, storage, secret } = options;
   const connectedClients = options.connectedClients ?? new Map<string, WebSocket>();
   const trustForwardedHeaders = options.trustForwardedHeaders === true;
+  const trustedForwardedProxies = options.trustedForwardedProxies ?? [];
+  const trustedForwardedProxyMatcher = buildTrustedProxyMatcher(trustedForwardedProxies);
   const socketEntriesByActivity = new Map<string, RuntimeTrackedSocketEntry>();
   const socketEntriesByInstance = new WeakMap<WebSocket, RuntimeTrackedSocketEntry>();
   const trackedSockets = new Set<WebSocket>();
@@ -394,22 +505,37 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
       }
 
       cleanedUp = true;
-      socketCleanupCallbacks.delete(ws);
-      trackedSockets.delete(ws);
-      socketEntriesByInstance.delete(ws);
-      detachSocketLifecycleHandlers();
+      try {
+        socketCleanupCallbacks.delete(ws);
+        trackedSockets.delete(ws);
+        socketEntriesByInstance.delete(ws);
 
-      if (socketEntry) {
-        removeTrackedSocket(socketEntry.activityId, ws);
-        socketEntry = null;
-      } else if (activityId && connectedClients.get(activityId) === ws) {
-        removeTrackedSocket(activityId, ws);
+        if (socketEntry) {
+          removeTrackedSocket(socketEntry.activityId, ws);
+          socketEntry = null;
+        } else if (activityId && connectedClients.get(activityId) === ws) {
+          removeTrackedSocket(activityId, ws);
+        }
+      } finally {
+        detachSocketLifecycleHandlers();
+      }
+    };
+
+    const cleanupSocketSafely = (phase: string) => {
+      try {
+        cleanupSocket();
+      } catch (error) {
+        logger.warn("WebSocket cleanup failed", {
+          activityId,
+          error: sanitizeRuntimeWebSocketError(error),
+          phase,
+        });
       }
     };
 
     const handleSocketClose = () => {
       const closedActivityId = activityId;
-      cleanupSocket();
+      cleanupSocketSafely("close");
       if (closedActivityId) {
         logger.debug("WebSocket closed", { activityId: closedActivityId });
       }
@@ -417,7 +543,7 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
 
     const handleSocketError = (error: unknown) => {
       const erroredActivityId = activityId;
-      cleanupSocket();
+      cleanupSocketSafely("error");
       if (erroredActivityId) {
         logger.debug("WebSocket errored", {
           activityId: erroredActivityId,
@@ -448,7 +574,7 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
         maxMessagesPerMinute: MAX_INBOUND_MESSAGES_PER_MINUTE,
         windowMs: INBOUND_MESSAGE_RATE_WINDOW_MS,
       });
-      cleanupSocket();
+      cleanupSocketSafely("message-rate-limit");
       closeSocketIfNeeded();
     };
 
@@ -473,7 +599,9 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
     ws.once("close", handleSocketClose);
     ws.once("error", handleSocketError);
     trackedSockets.add(ws);
-    socketCleanupCallbacks.set(ws, cleanupSocket);
+    socketCleanupCallbacks.set(ws, () => {
+      cleanupSocketSafely("registered-callback");
+    });
 
     const url = new URL(req.url!, `http://${req.headers.host}`);
     if (url.searchParams.has("token")) {
@@ -485,12 +613,23 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
       return;
     }
 
-    if (!isSameOriginWebSocketRequest(req, { trustForwardedHeaders })) {
+    if (
+      !isSameOriginWebSocketRequest(req, {
+        trustForwardedHeaders: shouldTrustForwardedHeaders(
+          req,
+          {
+            trustForwardedHeaders,
+            trustedForwardedProxies,
+          },
+          trustedForwardedProxyMatcher,
+        ),
+      })
+    ) {
       logger.warn("WebSocket rejected cross-origin handshake", {
         origin: req.headers.origin || null,
         host: req.headers.host || null,
       });
-      cleanupSocket();
+      cleanupSocketSafely("cross-origin-reject");
       closeSocketIfNeeded();
       return;
     }
@@ -498,7 +637,7 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
     const token = readAuthSessionTokenFromHeaders(req.headers);
 
     if (!token) {
-      cleanupSocket();
+      cleanupSocketSafely("missing-token");
       closeSocketIfNeeded();
       return;
     }
@@ -506,14 +645,14 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
     try {
       activityId = extractWsActivityId(token, secret);
       if (!activityId) {
-        cleanupSocket();
+        cleanupSocketSafely("invalid-token");
         closeSocketIfNeeded();
         return;
       }
 
       const activity = await storage.getActivityById(activityId);
       if (cleanedUp || !isTrackableSocket(ws)) {
-        cleanupSocket();
+        cleanupSocketSafely("validation-race");
         return;
       }
 
@@ -521,7 +660,7 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
         logger.debug("WebSocket rejected because the session is invalid or expired", {
           activityId,
         });
-        cleanupSocket();
+        cleanupSocketSafely("inactive-session");
         closeSocketIfNeeded();
         return;
       }
@@ -533,7 +672,7 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
           userKey,
           maxConnectionsPerUser: MAX_CONNECTIONS_PER_USER,
         });
-        cleanupSocket();
+        cleanupSocketSafely("user-limit");
         closeSocketIfNeeded();
         return;
       }
@@ -544,7 +683,7 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
       markSocketAlive();
 
       if (cleanedUp || !isTrackableSocket(ws)) {
-        cleanupSocket();
+        cleanupSocketSafely("post-register-race");
         return;
       }
 
@@ -564,7 +703,7 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
 
       logger.debug("WebSocket connected", { activityId });
     } catch (error) {
-      cleanupSocket();
+      cleanupSocketSafely("handshake-catch");
       logger.warn("WebSocket handshake failed", {
         error: sanitizeRuntimeWebSocketError(error),
       });

@@ -66,6 +66,9 @@ jobs:
       - name: Verify repo hygiene
         run: npm run verify:repo-hygiene
 
+      - name: Verify dependency supply chain
+        run: npm run verify:dependency-supply-chain
+
       - name: Audit dependencies
         run: npm run audit:dependencies
 

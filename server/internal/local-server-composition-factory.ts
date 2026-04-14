@@ -45,6 +45,7 @@ export function createLocalServerComposition(
     storage,
     secret,
     trustForwardedHeaders: runtimeConfig.app.trustedProxies.length > 0,
+    trustedForwardedProxies: runtimeConfig.app.trustedProxies,
   });
   const authGuards = createAuthGuards({ storage, secret });
   const categoryStatsService = new CategoryStatsService(storage);

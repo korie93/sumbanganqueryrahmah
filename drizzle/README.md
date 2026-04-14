@@ -6,6 +6,10 @@ Current state:
 - `shared/schema-postgres.ts` covers only the subset of tables already modeled in Drizzle.
 - Additional tables are still provisioned by idempotent bootstrap code under `server/internal/*Bootstrap.ts`.
 - Legacy hand-written SQL migrations still live in `server/sql/`.
+- Those legacy SQL files are compatibility artifacts only; every legacy SQL-backed
+  table must also remain covered by a reviewed Drizzle schema entry and a
+  reviewed Drizzle migration, and `npm run verify:db-schema-governance` now
+  fails if that pairing drifts.
 
 Safe workflow:
 1. Update `shared/schema-postgres.ts` for Drizzle-managed tables.

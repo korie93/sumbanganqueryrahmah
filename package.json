@@ -16,6 +16,7 @@
     "verify:browser-storage-safety": "node scripts/verify-browser-storage-safety.mjs",
     "verify:design-token-color-compatibility": "node scripts/verify-design-token-color-compatibility.mjs",
     "verify:design-token-spacing": "node scripts/verify-design-token-spacing.mjs",
+    "verify:dependency-supply-chain": "node scripts/verify-dependency-supply-chain.mjs",
     "verify:repo-hygiene": "node scripts/verify-repo-hygiene.mjs",
     "verify:db-schema-governance": "node scripts/verify-db-schema-governance.mjs",
     "verify:bundle-budgets": "node scripts/verify-client-bundle-budgets.mjs",
