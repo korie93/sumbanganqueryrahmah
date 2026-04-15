@@ -370,22 +370,26 @@ export const runtimeConfig: RuntimeConfig = Object.freeze({
         username: readString("SEED_SUPERUSER_USERNAME", "superuser"),
         password: readString("SEED_SUPERUSER_PASSWORD", ""),
         fullName: readString("SEED_SUPERUSER_FULL_NAME", "Superuser"),
+        twoFactorSecret: readOptionalString("SEED_SUPERUSER_TWO_FACTOR_SECRET"),
       },
       admin: {
         username: readString("SEED_ADMIN_USERNAME", "admin1"),
         password: readString("SEED_ADMIN_PASSWORD", ""),
         fullName: readString("SEED_ADMIN_FULL_NAME", "Admin"),
+        twoFactorSecret: readOptionalString("SEED_ADMIN_TWO_FACTOR_SECRET"),
       },
       user: {
         username: readString("SEED_USER_USERNAME", "user1"),
         password: readString("SEED_USER_PASSWORD", ""),
         fullName: readString("SEED_USER_FULL_NAME", "User"),
+        twoFactorSecret: null,
       },
     },
     freshLocalSuperuser: {
       username: readString("SEED_SUPERUSER_USERNAME", "superuser"),
       password: readString("SEED_SUPERUSER_PASSWORD", ""),
       fullName: readString("SEED_SUPERUSER_FULL_NAME", "Local Superuser"),
+      twoFactorSecret: readOptionalString("SEED_SUPERUSER_TWO_FACTOR_SECRET"),
     },
   },
 });

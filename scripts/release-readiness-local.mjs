@@ -8,6 +8,7 @@ import "dotenv/config";
 import { assertPostgresConnection } from "./lib/postgres-preflight.mjs";
 import { resolveCollectionPiiReadinessConfig } from "./lib/collection-pii-readiness.mjs";
 import { waitForServer } from "./lib/server-readiness.mjs";
+import { LOCAL_SMOKE_SUPERUSER_TWO_FACTOR_SECRET } from "./lib/smoke-two-factor.mjs";
 
 const npmCliPath = String(process.env.npm_execpath || "").trim();
 const npmCommand = npmCliPath ? process.execPath : (process.platform === "win32" ? "npm.cmd" : "npm");
@@ -137,6 +138,8 @@ const run = async () => {
     PUBLIC_APP_URL: process.env.PUBLIC_APP_URL || baseUrl,
     CORS_ALLOWED_ORIGINS: process.env.CORS_ALLOWED_ORIGINS || baseUrl,
     SESSION_SECRET: process.env.SESSION_SECRET || "ci-session-secret",
+    TWO_FACTOR_ENCRYPTION_KEY:
+      process.env.TWO_FACTOR_ENCRYPTION_KEY || "strict-local-smoke-two-factor-encryption-key",
     PG_HOST: process.env.PG_HOST || "127.0.0.1",
     PG_PORT: process.env.PG_PORT || "5432",
     PG_USER: process.env.PG_USER || "postgres",
@@ -146,13 +149,19 @@ const run = async () => {
     SEED_SUPERUSER_USERNAME: process.env.SEED_SUPERUSER_USERNAME || smokeUser,
     SEED_SUPERUSER_PASSWORD: process.env.SEED_SUPERUSER_PASSWORD || smokePassword,
     SEED_SUPERUSER_FULL_NAME: process.env.SEED_SUPERUSER_FULL_NAME || "CI Superuser",
+    SEED_SUPERUSER_TWO_FACTOR_SECRET:
+      process.env.SEED_SUPERUSER_TWO_FACTOR_SECRET || LOCAL_SMOKE_SUPERUSER_TWO_FACTOR_SECRET,
     SMOKE_TEST_USERNAME: smokeUser,
     SMOKE_TEST_PASSWORD: smokePassword,
+    SMOKE_TEST_TWO_FACTOR_SECRET:
+      process.env.SMOKE_TEST_TWO_FACTOR_SECRET || LOCAL_SMOKE_SUPERUSER_TWO_FACTOR_SECRET,
     SMOKE_BASE_URL: baseUrl,
     SMOKE_ARTIFACTS_DIR: path.join(artifactsDir, "smoke-ui"),
     DRILL_BASE_URL: baseUrl,
     DRILL_SUPERUSER_USERNAME: smokeUser,
     DRILL_SUPERUSER_PASSWORD: smokePassword,
+    DRILL_SUPERUSER_TWO_FACTOR_SECRET:
+      process.env.DRILL_SUPERUSER_TWO_FACTOR_SECRET || LOCAL_SMOKE_SUPERUSER_TWO_FACTOR_SECRET,
   };
   const releaseBuildEnv = {
     ...env,

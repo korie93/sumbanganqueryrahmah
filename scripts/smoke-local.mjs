@@ -4,6 +4,7 @@ import { existsSync } from "node:fs";
 import { spawn } from "node:child_process";
 import dotenv from "dotenv";
 import { resolveManagedLoopbackBaseUrl } from "./lib/local-loopback-server.mjs";
+import { LOCAL_SMOKE_SUPERUSER_TWO_FACTOR_SECRET } from "./lib/smoke-two-factor.mjs";
 
 const smokeEnvPath = path.resolve(process.cwd(), ".env.smoke.local");
 if (existsSync(smokeEnvPath)) {
@@ -84,6 +85,8 @@ const run = async () => {
     PUBLIC_APP_URL: process.env.PUBLIC_APP_URL || baseUrl,
     CORS_ALLOWED_ORIGINS: process.env.CORS_ALLOWED_ORIGINS || baseUrl,
     SESSION_SECRET: process.env.SESSION_SECRET || "ci-session-secret",
+    TWO_FACTOR_ENCRYPTION_KEY:
+      process.env.TWO_FACTOR_ENCRYPTION_KEY || "strict-local-smoke-two-factor-encryption-key",
     PG_HOST: process.env.PG_HOST || "127.0.0.1",
     PG_PORT: process.env.PG_PORT || "5432",
     PG_USER: String(process.env.PG_USER || "").trim(),
@@ -93,8 +96,12 @@ const run = async () => {
     SEED_SUPERUSER_USERNAME: seededSmokeUsername,
     SEED_SUPERUSER_PASSWORD: seededSmokePassword,
     SEED_SUPERUSER_FULL_NAME: process.env.SEED_SUPERUSER_FULL_NAME || "Local Smoke Superuser",
+    SEED_SUPERUSER_TWO_FACTOR_SECRET:
+      process.env.SEED_SUPERUSER_TWO_FACTOR_SECRET || LOCAL_SMOKE_SUPERUSER_TWO_FACTOR_SECRET,
     SMOKE_TEST_USERNAME: seededSmokeUsername,
     SMOKE_TEST_PASSWORD: seededSmokePassword,
+    SMOKE_TEST_TWO_FACTOR_SECRET:
+      process.env.SMOKE_TEST_TWO_FACTOR_SECRET || LOCAL_SMOKE_SUPERUSER_TWO_FACTOR_SECRET,
     SMOKE_BASE_URL: baseUrl,
     SMOKE_ARTIFACTS_DIR: process.env.SMOKE_ARTIFACTS_DIR || "artifacts/smoke-ui-local",
   };

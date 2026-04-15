@@ -23,6 +23,7 @@ export type SeedUserRuntimeConfig = {
   username: string;
   password: string;
   fullName: string;
+  twoFactorSecret: string | null;
 };
 
 export type RuntimeConfig = {

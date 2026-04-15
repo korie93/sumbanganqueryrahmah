@@ -2,6 +2,7 @@ import process from "node:process";
 import fs from "node:fs/promises";
 import path from "node:path";
 import "dotenv/config";
+import { performLoginWithOptionalTwoFactor } from "./lib/smoke-two-factor.mjs";
 
 const baseUrl = String(
   process.env.MONITOR_BASE_URL
@@ -19,6 +20,12 @@ const password = String(
   process.env.MONITOR_SUPERUSER_PASSWORD
   || process.env.DRILL_SUPERUSER_PASSWORD
   || process.env.SMOKE_TEST_PASSWORD
+  || "",
+).trim();
+const twoFactorSecret = String(
+  process.env.MONITOR_SUPERUSER_TWO_FACTOR_SECRET
+  || process.env.DRILL_SUPERUSER_TWO_FACTOR_SECRET
+  || process.env.SMOKE_TEST_TWO_FACTOR_SECRET
   || "",
 ).trim();
 const loopMode = String(process.env.MONITOR_LOOP || "").trim() === "1";
@@ -195,15 +202,14 @@ async function run() {
     };
   };
 
-  await request("/api/login", {
-    method: "POST",
-    body: JSON.stringify({
-      username,
-      password,
-      fingerprint: "stale-conflict-monitor",
-      pcName: "Stale Conflict Monitor",
-      browser: "monitor-script",
-    }),
+  await performLoginWithOptionalTwoFactor({
+    request,
+    username,
+    password,
+    fingerprint: "stale-conflict-monitor",
+    pcName: "Stale Conflict Monitor",
+    browser: "monitor-script",
+    twoFactorSecret,
   });
 
   try {

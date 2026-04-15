@@ -1,10 +1,16 @@
 import "dotenv/config";
 import crypto from "node:crypto";
 import process from "node:process";
+import { performLoginWithOptionalTwoFactor } from "./lib/smoke-two-factor.mjs";
 
 const baseUrl = String(process.env.DRILL_BASE_URL || process.env.SMOKE_BASE_URL || "http://127.0.0.1:5000").trim();
 const username = String(process.env.DRILL_SUPERUSER_USERNAME || process.env.SMOKE_TEST_USERNAME || "").trim();
 const password = String(process.env.DRILL_SUPERUSER_PASSWORD || process.env.SMOKE_TEST_PASSWORD || "").trim();
+const twoFactorSecret = String(
+  process.env.DRILL_SUPERUSER_TWO_FACTOR_SECRET
+  || process.env.SMOKE_TEST_TWO_FACTOR_SECRET
+  || "",
+).trim();
 const runRestore = String(process.env.DRILL_RUN_RESTORE || "").trim() === "1";
 const keepBackup = String(process.env.DRILL_KEEP_BACKUP || "").trim() === "1";
 const requestTimeoutMs = Math.max(2000, Number.parseInt(String(process.env.DRILL_TIMEOUT_MS || "15000"), 10) || 15000);
@@ -138,16 +144,16 @@ async function run() {
     console.log(`Running DR drill against ${baseUrl}`);
     console.log(`Restore step enabled: ${runRestore ? "yes" : "no"}`);
 
-    const loginResponse = await request("/api/login", {
-      method: "POST",
-      body: JSON.stringify({
-        username,
-        password,
-        fingerprint: "drill-script",
-        pcName: "DR Drill Runner",
-        browser: "drill-script",
-      }),
+    const loginAttempt = await performLoginWithOptionalTwoFactor({
+      request,
+      username,
+      password,
+      fingerprint: "drill-script",
+      pcName: "DR Drill Runner",
+      browser: "drill-script",
+      twoFactorSecret,
     });
+    const loginResponse = loginAttempt.finalResponse;
     assert(loginResponse.status === 200, `Login failed with ${loginResponse.status}`);
     assert(cookieJar.has("sqr_auth"), "Login did not return sqr_auth session cookie.");
     assert(cookieJar.has("sqr_csrf"), "Login did not return sqr_csrf cookie required for mutation protection.");

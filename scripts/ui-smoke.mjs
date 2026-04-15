@@ -2,10 +2,15 @@ import process from "node:process";
 import path from "node:path";
 import { mkdir, writeFile } from "node:fs/promises";
 import { chromium } from "playwright";
+import {
+  generateCurrentSmokeTwoFactorCode,
+  resolveSmokeTwoFactorSecret,
+} from "./lib/smoke-two-factor.mjs";
 
 const baseUrl = process.env.SMOKE_BASE_URL || "http://127.0.0.1:5000";
 const username = process.env.SMOKE_TEST_USERNAME || "";
 const password = process.env.SMOKE_TEST_PASSWORD || "";
+const smokeTwoFactorSecret = String(process.env.SMOKE_TEST_TWO_FACTOR_SECRET || "").trim();
 const rawArtifactsDir = String(process.env.SMOKE_ARTIFACTS_DIR || "").trim();
 const artifactsDir = rawArtifactsDir ? path.resolve(process.cwd(), rawArtifactsDir) : "";
 const errors = [];
@@ -2294,14 +2299,44 @@ const run = async () => {
         loginPayload = null;
       }
 
+      let finalAuthResponse = loginResponse;
+      let finalAuthPayload = loginPayload;
+      if (loginPayload?.twoFactorRequired === true) {
+        const twoFactorSecret = resolveSmokeTwoFactorSecret({
+          explicitSecret: smokeTwoFactorSecret,
+          role: String(loginPayload?.role || "").trim().toLowerCase(),
+        });
+        assert(twoFactorSecret, "UI smoke login requires a 2FA secret, but none was configured.");
+
+        const verifyResponsePromise = page.waitForResponse(
+          (response) =>
+            response.request().method() === "POST"
+            && response.url().includes("/api/auth/verify-two-factor-login"),
+        );
+
+        await page.getByTestId("input-two-factor-code").fill(
+          await generateCurrentSmokeTwoFactorCode(twoFactorSecret),
+        );
+        await page.getByRole("button", { name: "Sahkan Kod" }).click();
+        await page.waitForLoadState("networkidle");
+        await page.waitForTimeout(250);
+
+        finalAuthResponse = await verifyResponsePromise;
+        try {
+          finalAuthPayload = await finalAuthResponse.json();
+        } catch {
+          finalAuthPayload = null;
+        }
+      }
+
       const cookieNames = await waitForAuthCookies(context);
       const authProbe = await probeAuthSession(page);
       assert(
         authProbe.ok && authProbe.hasUser,
         [
           "Login should establish an authenticated session.",
-          `POST /api/login status: ${loginResponse.status()}`,
-          `POST /api/login message: ${String(loginPayload?.message || "(none)")}`,
+          `Auth status: ${finalAuthResponse.status()}`,
+          `Auth message: ${String(finalAuthPayload?.message || "(none)")}`,
           `GET /api/me status: ${authProbe.status}`,
           `GET /api/me message: ${String(authProbe.message || "(none)")}`,
           `Cookies seen after login: ${Array.from(cookieNames).join(", ") || "(none)"}`,

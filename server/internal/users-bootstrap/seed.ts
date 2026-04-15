@@ -3,6 +3,7 @@ import { randomUUID } from "crypto";
 import { count, sql } from "drizzle-orm";
 import { users } from "../../../shared/schema-postgres";
 import { normalizeUserRole } from "../../auth/account-lifecycle";
+import { encryptTwoFactorSecret } from "../../auth/two-factor";
 import { runtimeConfig } from "../../config/runtime";
 import { shouldSeedDefaultUsers } from "../../config/security";
 import { db } from "../../db-postgres";
@@ -16,6 +17,7 @@ type SeedableUser = {
   password: string;
   fullName: string;
   role: string;
+  twoFactorSecret: string | null;
 };
 
 function resolveConfiguredSeedUsers(): SeedableUser[] {
@@ -25,18 +27,21 @@ function resolveConfiguredSeedUsers(): SeedableUser[] {
       password: runtimeConfig.bootstrap.users.superuser.password,
       fullName: runtimeConfig.bootstrap.users.superuser.fullName,
       role: "superuser",
+      twoFactorSecret: runtimeConfig.bootstrap.users.superuser.twoFactorSecret,
     },
     {
       username: runtimeConfig.bootstrap.users.admin.username,
       password: runtimeConfig.bootstrap.users.admin.password,
       fullName: runtimeConfig.bootstrap.users.admin.fullName,
       role: "admin",
+      twoFactorSecret: runtimeConfig.bootstrap.users.admin.twoFactorSecret,
     },
     {
       username: runtimeConfig.bootstrap.users.user.username,
       password: runtimeConfig.bootstrap.users.user.password,
       fullName: runtimeConfig.bootstrap.users.user.fullName,
       role: "user",
+      twoFactorSecret: runtimeConfig.bootstrap.users.user.twoFactorSecret,
     },
   ].filter((user) => Boolean(String(user.password || "").trim()));
 }
@@ -98,6 +103,7 @@ export async function seedUsersBootstrapDefaults(): Promise<void> {
       password: bootstrapPassword,
       fullName: runtimeConfig.bootstrap.freshLocalSuperuser.fullName,
       role: "superuser",
+      twoFactorSecret: runtimeConfig.bootstrap.freshLocalSuperuser.twoFactorSecret,
     });
   } else if (!shouldSeedConfiguredUsers) {
     return;
@@ -117,6 +123,10 @@ export async function seedUsersBootstrapDefaults(): Promise<void> {
 
     const now = new Date();
     const hashedPassword = await bcrypt.hash(user.password, USERS_BOOTSTRAP_BCRYPT_COST);
+    const normalizedTwoFactorSecret = String(user.twoFactorSecret || "").trim();
+    const encryptedTwoFactorSecret = normalizedTwoFactorSecret
+      ? encryptTwoFactorSecret(normalizedTwoFactorSecret)
+      : null;
     await db.insert(users).values({
       id: randomUUID(),
       username: user.username,
@@ -132,6 +142,9 @@ export async function seedUsersBootstrapDefaults(): Promise<void> {
       passwordChangedAt: now,
       activatedAt: now,
       isBanned: false,
+      twoFactorEnabled: encryptedTwoFactorSecret ? true : false,
+      twoFactorSecretEncrypted: encryptedTwoFactorSecret,
+      twoFactorConfiguredAt: encryptedTwoFactorSecret ? now : null,
     });
   }
 

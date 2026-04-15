@@ -1,8 +1,10 @@
 import process from "node:process";
+import { performLoginWithOptionalTwoFactor } from "./lib/smoke-two-factor.mjs";
 
 const baseUrl = process.env.SMOKE_BASE_URL || "http://127.0.0.1:5000";
 const username = String(process.env.SMOKE_TEST_USERNAME || "").trim();
 const password = String(process.env.SMOKE_TEST_PASSWORD || "").trim();
+const twoFactorSecret = String(process.env.SMOKE_TEST_TWO_FACTOR_SECRET || "").trim();
 const requestTimeoutMs = Number(process.env.SMOKE_PREFLIGHT_REQUEST_TIMEOUT_MS || 10_000);
 
 const assert = (condition, message) => {
@@ -18,14 +20,6 @@ const withTimeout = async (promise, label) => {
     throw new Error(`${label} timed out after ${requestTimeoutMs}ms`);
   });
   return Promise.race([promise, timeout]);
-};
-
-const readJsonSafely = async (response) => {
-  try {
-    return await response.json();
-  } catch {
-    return null;
-  }
 };
 
 const parseCookieValues = (headers) => {
@@ -59,7 +53,7 @@ const buildCookieHeader = (cookieJar) =>
 
 const run = async () => {
   const cookieJar = new Map();
-  const request = async (path, init = {}) => {
+  const request = async (path, init = {}, options = {}) => {
     const method = String(init.method || "GET").toUpperCase();
     const headers = new Headers(init.headers || {});
     const cookieHeader = buildCookieHeader(cookieJar);
@@ -94,32 +88,55 @@ const run = async () => {
       }
     }
 
-    return response;
+    const bodyText = await response.text();
+    let bodyJson = null;
+    try {
+      bodyJson = bodyText ? JSON.parse(bodyText) : null;
+    } catch {
+      bodyJson = null;
+    }
+
+    if (!options.allowFailure && !response.ok) {
+      throw new Error(
+        [
+          `${method} ${path} failed with ${response.status}.`,
+          bodyJson?.message ? `Message: ${bodyJson.message}` : bodyText ? `Body: ${bodyText}` : "",
+        ]
+          .filter(Boolean)
+          .join("\n"),
+      );
+    }
+
+    return {
+      ok: response.ok,
+      status: response.status,
+      headers: response.headers,
+      text: bodyText,
+      json: bodyJson,
+    };
   };
 
   const liveHealth = await request("/api/health/live");
-  const livePayload = await readJsonSafely(liveHealth);
   assert(
-    liveHealth.ok && livePayload?.live === true,
+    liveHealth.ok && liveHealth.json?.live === true,
     `GET /api/health/live should report a live process, received ${liveHealth.status}`,
   );
 
   const readyHealth = await request("/api/health/ready");
-  const readyPayload = await readJsonSafely(readyHealth);
   assert(
-    readyHealth.ok && readyPayload?.ready === true,
+    readyHealth.ok && readyHealth.json?.ready === true,
     [
       "GET /api/health/ready should report a ready application.",
       `Status: ${readyHealth.status}`,
-      `Startup check: ${String(readyPayload?.checks?.startup || "(missing)")}`,
-      `Database check: ${String(readyPayload?.checks?.database || "(missing)")}`,
+      `Startup check: ${String(readyHealth.json?.checks?.startup || "(missing)")}`,
+      `Database check: ${String(readyHealth.json?.checks?.database || "(missing)")}`,
     ].join("\n"),
   );
 
   const home = await request("/");
   assert(home.ok, `GET / should be reachable, received ${home.status}`);
 
-  const unauthMe = await request("/api/me");
+  const unauthMe = await request("/api/me", {}, { allowFailure: true });
   assert(
     unauthMe.status === 401,
     `GET /api/me without cookies should return 401, received ${unauthMe.status}`,
@@ -130,20 +147,17 @@ const run = async () => {
     return;
   }
 
-  const loginResponse = await request("/api/login", {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-    },
-    body: JSON.stringify({
-      username,
-      password,
-      fingerprint: "smoke-preflight",
-      pcName: "CI Preflight",
-      browser: "smoke-preflight",
-    }),
+  const loginAttempt = await performLoginWithOptionalTwoFactor({
+    request,
+    username,
+    password,
+    fingerprint: "smoke-preflight",
+    pcName: "CI Preflight",
+    browser: "smoke-preflight",
+    twoFactorSecret,
   });
-  const loginPayload = await readJsonSafely(loginResponse);
+  const loginResponse = loginAttempt.finalResponse;
+  const loginPayload = loginResponse.json;
   assert(
     loginResponse.ok,
     [
@@ -157,30 +171,28 @@ const run = async () => {
   assert(cookieJar.has("sqr_csrf"), "Smoke preflight login did not return sqr_csrf cookie.");
 
   const authedMe = await request("/api/me");
-  const authedPayload = await readJsonSafely(authedMe);
   assert(
-    authedMe.ok && Boolean(authedPayload?.user),
+    authedMe.ok && Boolean(authedMe.json?.user),
     [
       "Smoke preflight /api/me check failed after login.",
       `GET /api/me status: ${authedMe.status}`,
-      `GET /api/me message: ${String(authedPayload?.message || "(none)")}`,
+      `GET /api/me message: ${String(authedMe.json?.message || "(none)")}`,
     ].join("\n"),
   );
 
   const logoutResponse = await request("/api/activity/logout", {
     method: "POST",
   });
-  const logoutPayload = await readJsonSafely(logoutResponse);
   assert(
     logoutResponse.ok,
     [
       "Smoke preflight logout failed.",
       `POST /api/activity/logout status: ${logoutResponse.status}`,
-      `POST /api/activity/logout message: ${String(logoutPayload?.message || "(none)")}`,
+      `POST /api/activity/logout message: ${String(logoutResponse.json?.message || "(none)")}`,
     ].join("\n"),
   );
 
-  const postLogoutMe = await request("/api/me");
+  const postLogoutMe = await request("/api/me", {}, { allowFailure: true });
   assert(
     postLogoutMe.status === 401,
     `GET /api/me after preflight logout should return 401, received ${postLogoutMe.status}`,
