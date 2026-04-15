@@ -1,6 +1,7 @@
-import { Suspense, lazy, useState } from "react";
+import { Suspense, useState } from "react";
 import { Download, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { lazyWithPreload } from "@/lib/lazy-with-preload";
 import {
   Popover,
   PopoverContent,
@@ -20,7 +21,7 @@ import {
   type ViewerExportActionKind,
 } from "@/pages/viewer/export-menu-utils";
 
-const ViewerExportOptionsList = lazy(() =>
+const ViewerExportOptionsList = lazyWithPreload(() =>
   import("@/pages/viewer/ViewerExportOptionsList").then((module) => ({
     default: module.ViewerExportOptionsList,
   })),

@@ -1,5 +1,6 @@
 import type { Metric } from "web-vitals";
 import type { WebVitalTelemetryPayload } from "@shared/web-vitals";
+import { createRetryableModuleLoader } from "@/lib/retryable-module-loader";
 import { createClientRandomId } from "@/lib/secure-id";
 
 const WEB_VITALS_ENDPOINT = "/telemetry/web-vitals";
@@ -15,6 +16,9 @@ const PUBLIC_PATHS = new Set([
 ]);
 
 let webVitalsInitialized = false;
+const loadWebVitalsModule = createRetryableModuleLoader<typeof import("web-vitals")>(
+  () => import("web-vitals"),
+);
 
 type NavigatorWithConnection = Navigator & {
   connection?: {
@@ -99,7 +103,7 @@ function sendWebVitalPayload(payload: WebVitalTelemetryPayload) {
 }
 
 async function startWebVitalsCollection() {
-  const { onCLS, onFCP, onINP, onLCP, onTTFB } = await import("web-vitals");
+  const { onCLS, onFCP, onINP, onLCP, onTTFB } = await loadWebVitalsModule();
   const nav = navigator as NavigatorWithConnection;
 
   const reportMetric = (metric: Metric) => {

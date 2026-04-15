@@ -1,22 +1,19 @@
+import { createRetryableModuleLoader } from "@/lib/retryable-module-loader";
 export type ViewerExportExtension = "csv" | "pdf" | "xlsx";
 
-let viewerJsPdfModulePromise: Promise<typeof import("jspdf")> | null = null;
-let viewerXlsxModulePromise: Promise<typeof import("xlsx")> | null = null;
+const loadViewerJsPdfModuleInternal = createRetryableModuleLoader<typeof import("jspdf")>(
+  () => import("jspdf"),
+);
+const loadViewerXlsxModuleInternal = createRetryableModuleLoader<typeof import("xlsx")>(
+  () => import("xlsx"),
+);
 
 export function loadViewerJsPdfModule() {
-  if (!viewerJsPdfModulePromise) {
-    viewerJsPdfModulePromise = import("jspdf");
-  }
-
-  return viewerJsPdfModulePromise;
+  return loadViewerJsPdfModuleInternal();
 }
 
 export function loadViewerXlsxModule() {
-  if (!viewerXlsxModulePromise) {
-    viewerXlsxModulePromise = import("xlsx");
-  }
-
-  return viewerXlsxModulePromise;
+  return loadViewerXlsxModuleInternal();
 }
 
 export function buildViewerExportFilename(

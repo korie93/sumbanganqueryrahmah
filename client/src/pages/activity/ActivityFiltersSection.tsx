@@ -1,9 +1,10 @@
-import { Suspense, lazy } from "react";
+import { Suspense } from "react";
 import type { ActivityFilters } from "@/lib/api";
+import { lazyWithPreload } from "@/lib/lazy-with-preload";
 import { ActivitySectionFallback } from "@/pages/activity/ActivityDeferredSection";
 import type { ActivityStatus } from "@/pages/activity/types";
 
-const ActivityFiltersPanel = lazy(() =>
+const ActivityFiltersPanel = lazyWithPreload(() =>
   import("@/pages/activity/ActivityFiltersPanel").then((module) => ({
     default: module.ActivityFiltersPanel,
   })),

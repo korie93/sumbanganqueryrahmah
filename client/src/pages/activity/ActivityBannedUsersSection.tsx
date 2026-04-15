@@ -1,9 +1,10 @@
-import { Suspense, lazy } from "react";
+import { Suspense } from "react";
+import { lazyWithPreload } from "@/lib/lazy-with-preload";
 import { ActivitySectionFallback, useDeferredActivitySectionMount } from "@/pages/activity/ActivityDeferredSection";
 import { shouldRenderBannedUsersSection } from "@/pages/activity/activity-page-content-utils";
 import type { BannedUser } from "@/pages/activity/types";
 
-const ActivityBannedUsersPanel = lazy(() =>
+const ActivityBannedUsersPanel = lazyWithPreload(() =>
   import("@/pages/activity/ActivityBannedUsersPanel").then((module) => ({
     default: module.ActivityBannedUsersPanel,
   })),

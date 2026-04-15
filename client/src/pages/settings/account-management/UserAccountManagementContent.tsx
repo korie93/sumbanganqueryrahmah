@@ -1,21 +1,22 @@
-import { Suspense, lazy } from "react";
+import { Suspense } from "react";
+import { lazyWithPreload } from "@/lib/lazy-with-preload";
 import { CreateClosedAccountSection } from "@/pages/settings/account-management/CreateClosedAccountSection";
 import type {
   UserAccountManagementSectionProps,
   UserAccountManagementSectionState,
 } from "@/pages/settings/account-management/user-account-management-shared";
 
-const LocalMailOutboxSection = lazy(() =>
+const LocalMailOutboxSection = lazyWithPreload(() =>
   import("@/pages/settings/account-management/LocalMailOutboxSection").then((module) => ({
     default: module.LocalMailOutboxSection,
   })),
 );
-const ManagedAccountsSection = lazy(() =>
+const ManagedAccountsSection = lazyWithPreload(() =>
   import("@/pages/settings/account-management/ManagedAccountsSection").then((module) => ({
     default: module.ManagedAccountsSection,
   })),
 );
-const PendingPasswordResetSection = lazy(() =>
+const PendingPasswordResetSection = lazyWithPreload(() =>
   import("@/pages/settings/account-management/PendingPasswordResetSection").then((module) => ({
     default: module.PendingPasswordResetSection,
   })),

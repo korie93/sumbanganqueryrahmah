@@ -1,6 +1,7 @@
-import { Suspense, lazy, useEffect, useMemo, useState, type UIEvent } from "react";
+import { Suspense, useEffect, useMemo, useState, type UIEvent } from "react";
 import { FileText } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { lazyWithPreload } from "@/lib/lazy-with-preload";
 import { GeneralSearchMobileResultsList } from "@/pages/general-search/GeneralSearchMobileResultsList";
 import { GeneralSearchResultsPagination } from "@/pages/general-search/GeneralSearchResultsPagination";
 import { GeneralSearchResultsToolbar } from "@/pages/general-search/GeneralSearchResultsToolbar";
@@ -12,7 +13,7 @@ import {
 } from "@/pages/general-search/general-search-results-utils";
 import { highlightMatch } from "@/pages/general-search/utils";
 
-const GeneralSearchDesktopResultsTable = lazy(() =>
+const GeneralSearchDesktopResultsTable = lazyWithPreload(() =>
   import("@/pages/general-search/GeneralSearchDesktopResultsTable").then((module) => ({
     default: module.GeneralSearchDesktopResultsTable,
   })),

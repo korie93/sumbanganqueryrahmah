@@ -1,9 +1,10 @@
-import { Suspense, lazy, useCallback, useEffect, useId, useRef, type MouseEvent, type ReactNode, type Ref } from "react";
+import { Suspense, useCallback, useEffect, useId, useRef, type MouseEvent, type ReactNode, type Ref } from "react";
 import { Bot, Minimize2 } from "lucide-react";
 import { useLocation } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { lazyWithPreload } from "@/lib/lazy-with-preload";
 import { resolveFloatingAIMinimizedStatus } from "@/components/floating-ai-status";
 import {
   shouldKeepFloatingAiPanelMounted,
@@ -15,7 +16,7 @@ import { useFloatingAILayoutState } from "@/components/useFloatingAILayoutState"
 import { cn } from "@/lib/utils";
 import styles from "./FloatingAI.module.css";
 
-const AIChat = lazy(() => import("@/components/AIChat"));
+const AIChat = lazyWithPreload(() => import("@/components/AIChat"));
 
 type FloatingAIProps = {
   timeoutMs: number;

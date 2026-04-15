@@ -1,5 +1,6 @@
-import { Suspense, lazy } from "react";
+import { Suspense } from "react";
 import type { Dispatch, SetStateAction } from "react";
+import { lazyWithPreload } from "@/lib/lazy-with-preload";
 import { ActivitySectionFallback } from "@/pages/activity/ActivityDeferredSection";
 import {
   updateActivitySelection,
@@ -7,7 +8,7 @@ import {
 } from "@/pages/activity/activity-page-content-utils";
 import type { ActivityRecord } from "@/pages/activity/types";
 
-const ActivityLogsTable = lazy(() =>
+const ActivityLogsTable = lazyWithPreload(() =>
   import("@/pages/activity/ActivityLogsTable").then((module) => ({
     default: module.ActivityLogsTable,
   })),

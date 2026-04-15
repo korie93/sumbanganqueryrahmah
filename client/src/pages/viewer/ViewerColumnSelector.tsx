@@ -1,6 +1,7 @@
-import { Suspense, lazy } from "react";
+import { Suspense } from "react";
 import { Columns } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { lazyWithPreload } from "@/lib/lazy-with-preload";
 import {
   Popover,
   PopoverContent,
@@ -17,7 +18,7 @@ import {
 import { useIsMobile } from "@/hooks/use-mobile";
 import { buildViewerColumnSelectorLabel } from "@/pages/viewer/column-selector-utils";
 
-const ViewerColumnSelectorList = lazy(() =>
+const ViewerColumnSelectorList = lazyWithPreload(() =>
   import("@/pages/viewer/ViewerColumnSelectorList").then((module) => ({
     default: module.ViewerColumnSelectorList,
   })),

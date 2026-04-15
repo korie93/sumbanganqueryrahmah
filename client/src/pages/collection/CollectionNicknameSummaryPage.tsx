@@ -1,4 +1,5 @@
-import { lazy, memo, Suspense, useMemo, useState } from "react";
+import { Suspense, memo, useMemo, useState } from "react";
+import { lazyWithPreload } from "@/lib/lazy-with-preload";
 import { CollectionReportFreshnessBadge } from "@/components/collection-report/CollectionReportFreshnessBadge";
 import { OperationalSectionCard } from "@/components/layout/OperationalPage";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -15,7 +16,7 @@ import {
   getCollectionNicknameSummaryPreview,
 } from "@/pages/collection/collection-nickname-summary-page-utils";
 
-const CollectionNicknameBatchSections = lazy(() =>
+const CollectionNicknameBatchSections = lazyWithPreload(() =>
   import("@/pages/collection-nickname-summary/CollectionNicknameBatchSections").then((module) => ({
     default: module.CollectionNicknameBatchSections,
   })),

@@ -1,20 +1,14 @@
 import type { ImportRow, ParsedBulkResult, ParsedPreviewResult } from "@/pages/import/types";
+import { createRetryableModuleLoader } from "@/lib/retryable-module-loader";
 
 type XlsxModule = typeof import("xlsx");
 
 export const IMPORT_PREVIEW_MAX_CSV_ROWS = 100_000;
 
-let xlsxModulePromise: Promise<XlsxModule> | null = null;
+const loadXlsx = createRetryableModuleLoader<XlsxModule>(() => import("xlsx"));
 
 function createCsvRowLimitError() {
   return `CSV import exceeds the preview row limit of ${IMPORT_PREVIEW_MAX_CSV_ROWS.toLocaleString("en-US")} rows. Split the file into smaller uploads.`;
-}
-
-async function loadXlsx(): Promise<XlsxModule> {
-  if (!xlsxModulePromise) {
-    xlsxModulePromise = import("xlsx");
-  }
-  return xlsxModulePromise;
 }
 
 function isSupportedSpreadsheet(filename: string) {

@@ -1,20 +1,15 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import { cleanupAuditLogs } from "@/lib/api";
 import { logClientError } from "@/lib/client-logger";
+import { createRetryableModuleLoader } from "@/lib/retryable-module-loader";
 import { useToast } from "@/hooks/use-toast";
 import { getLogsToDeleteCount } from "@/pages/audit-logs/utils";
 import { resolveAuditLogsExportBlockReason } from "@/pages/audit-logs/export-guards";
 import type { AuditLogRecord, AuditLogStats } from "@/pages/audit-logs/types";
 
-let auditLogsExportModulePromise: Promise<typeof import("@/pages/audit-logs/audit-logs-export")> | null = null;
-
-function loadAuditLogsExportModule() {
-  if (!auditLogsExportModulePromise) {
-    auditLogsExportModulePromise = import("@/pages/audit-logs/audit-logs-export");
-  }
-
-  return auditLogsExportModulePromise;
-}
+const loadAuditLogsExportModule = createRetryableModuleLoader<
+  typeof import("@/pages/audit-logs/audit-logs-export")
+>(() => import("@/pages/audit-logs/audit-logs-export"));
 
 type UseAuditLogsActionStateOptions = {
   currentRole: string | null;

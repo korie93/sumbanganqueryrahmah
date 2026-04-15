@@ -1,9 +1,10 @@
-import { Suspense, lazy } from "react";
+import { Suspense } from "react";
+import { lazyWithPreload } from "@/lib/lazy-with-preload";
 import { Label } from "@/components/ui/label";
 import { useIsMobile } from "@/hooks/use-mobile";
 import type { CollectionStaffNickname } from "@/lib/api";
 
-const CollectionNicknameMultiSelect = lazy(() =>
+const CollectionNicknameMultiSelect = lazyWithPreload(() =>
   import("@/pages/collection-report/CollectionNicknameMultiSelect").then((module) => ({
     default: module.CollectionNicknameMultiSelect,
   })),

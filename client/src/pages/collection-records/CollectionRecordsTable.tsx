@@ -1,4 +1,5 @@
-import { Suspense, lazy } from "react";
+import { Suspense } from "react";
+import { lazyWithPreload } from "@/lib/lazy-with-preload";
 import { Edit3, Eye, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -7,7 +8,7 @@ import { formatIsoDateToDDMMYYYY } from "@/lib/date-format";
 import { buildCollectionRecordRowAriaLabel } from "@/pages/collection-records/collection-record-row-aria";
 import { formatAmountRM } from "@/pages/collection/utils";
 
-const CollectionRecordsDesktopTable = lazy(() =>
+const CollectionRecordsDesktopTable = lazyWithPreload(() =>
   import("@/pages/collection-records/CollectionRecordsDesktopTable").then((module) => ({
     default: module.CollectionRecordsDesktopTable,
   })),

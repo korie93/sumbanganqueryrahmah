@@ -2,6 +2,7 @@ import { formatAmountRM } from "@/pages/collection/utils";
 import { fitCollectionRecordText } from "@/pages/collection-records/utils";
 import type { CollectionRecord } from "@/lib/api";
 import { formatDateTimeDDMMYYYY, formatIsoDateToDDMMYYYY } from "@/lib/date-format";
+import { createRetryableModuleLoader } from "@/lib/retryable-module-loader";
 import {
   parseCollectionAmountMyrNumber,
   type CollectionAmountMyrNumber,
@@ -20,6 +21,13 @@ type WorksheetCell = {
   z?: string;
 };
 
+const loadCollectionRecordsXlsxModule = createRetryableModuleLoader<typeof import("xlsx")>(
+  () => import("xlsx"),
+);
+const loadCollectionRecordsJsPdfModule = createRetryableModuleLoader<typeof import("jspdf")>(
+  () => import("jspdf"),
+);
+
 function getWorksheetCell(worksheet: Record<string, unknown>, address: string): WorksheetCell | undefined {
   const value = worksheet[address];
   return typeof value === "object" && value !== null ? (value as WorksheetCell) : undefined;
@@ -35,7 +43,7 @@ export async function exportCollectionRecordsToExcel({
   toDate,
   summary,
 }: CollectionRecordsExportParams) {
-  const XLSX = await import("xlsx");
+  const XLSX = await loadCollectionRecordsXlsxModule();
   const reportRows = visibleRecords.map((record) => [
     record.customerName,
     record.icNumber,
@@ -102,7 +110,7 @@ export async function exportCollectionRecordsToPdf({
   canUseNicknameFilter,
   nicknameFilter,
 }: CollectionRecordsExportParams) {
-  const { default: jsPDF } = await import("jspdf");
+  const { default: jsPDF } = await loadCollectionRecordsJsPdfModule();
   const pdf = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
 
   const margin = 10;

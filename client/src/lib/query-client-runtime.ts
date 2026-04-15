@@ -1,5 +1,11 @@
+import { createRetryableModuleLoader } from "@/lib/retryable-module-loader";
+
+const loadQueryClientModule = createRetryableModuleLoader<typeof import("./queryClient")>(
+  () => import("./queryClient"),
+);
+
 export function clearAppQueryCache() {
-  void import("./queryClient")
+  void loadQueryClientModule()
     .then(({ queryClient }) => {
       queryClient.clear();
     })

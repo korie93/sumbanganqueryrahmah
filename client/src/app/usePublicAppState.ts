@@ -5,6 +5,7 @@ import {
   safeGetStorageItem,
   safeSetStorageItem,
 } from "@/lib/browser-storage";
+import { createRetryableModuleLoader } from "@/lib/retryable-module-loader";
 import {
   buildPathForPage,
   isPublicAuthRoutePage,
@@ -30,6 +31,10 @@ type PublicBootstrapState = {
   resolvedRoute: ResolvedRoute | null;
   shouldRestoreSession: boolean;
 };
+
+const loadAuthApiModule = createRetryableModuleLoader<typeof import("@/lib/api/auth")>(
+  () => import("@/lib/api/auth"),
+);
 
 function resolvePublicBootstrapState(): PublicBootstrapState {
   if (typeof window === "undefined") {
@@ -198,7 +203,7 @@ export function usePublicAppState() {
 
     const restoreAuthenticatedSession = async () => {
       try {
-        const { getMe } = await import("@/lib/api/auth");
+        const { getMe } = await loadAuthApiModule();
         const me = await getMe();
         if (cancelled) {
           return;

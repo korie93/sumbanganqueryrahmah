@@ -1,4 +1,5 @@
 import { lazy, type LazyExoticComponent } from "react";
+import { createRetryableModuleLoader } from "@/lib/retryable-module-loader";
 
 type IdleCallbackHandle = number;
 type IdleCallbackDeadline = {
@@ -25,18 +26,7 @@ export type LazyWithPreload<TModule extends LazyModule> =
 export function lazyWithPreload<TModule extends LazyModule>(
   factory: () => Promise<TModule>,
 ): LazyWithPreload<TModule> {
-  let cachedPromise: Promise<TModule> | null = null;
-
-  const load = () => {
-    if (!cachedPromise) {
-      cachedPromise = factory().catch((error) => {
-        cachedPromise = null;
-        throw error;
-      });
-    }
-
-    return cachedPromise;
-  };
+  const load = createRetryableModuleLoader(factory);
 
   const component = lazy(load) as unknown as LazyWithPreload<TModule>;
   component.preload = load;

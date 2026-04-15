@@ -1,10 +1,11 @@
-import { Suspense, lazy } from "react";
+import { Suspense } from "react";
+import { lazyWithPreload } from "@/lib/lazy-with-preload";
 import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { OperationalPageHeader } from "@/components/layout/OperationalPage";
 import { buildViewerPageHeaderDescription } from "@/pages/viewer/page-header-utils";
 
-const ViewerPageHeaderActions = lazy(() =>
+const ViewerPageHeaderActions = lazyWithPreload(() =>
   import("@/pages/viewer/ViewerPageHeaderActions").then((module) => ({
     default: module.ViewerPageHeaderActions,
   })),

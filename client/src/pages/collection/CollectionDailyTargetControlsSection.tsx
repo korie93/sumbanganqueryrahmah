@@ -1,7 +1,8 @@
-import { Suspense, lazy } from "react";
+import { Suspense } from "react";
+import { lazyWithPreload } from "@/lib/lazy-with-preload";
 import type { CollectionDailyTargetControlsSectionProps } from "@/pages/collection/collection-daily-filters-card-shared";
 
-const CollectionDailyTargetControls = lazy(() =>
+const CollectionDailyTargetControls = lazyWithPreload(() =>
   import("@/pages/collection/CollectionDailyManagerControls").then((module) => ({
     default: module.CollectionDailyTargetControls,
   })),

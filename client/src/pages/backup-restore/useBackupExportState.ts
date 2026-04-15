@@ -1,18 +1,13 @@
 import { useCallback, useRef, useState } from "react";
 import { logClientError } from "@/lib/client-logger";
+import { createRetryableModuleLoader } from "@/lib/retryable-module-loader";
 import { useMutationFeedback } from "@/hooks/useMutationFeedback";
 import type { BackupRecord } from "@/pages/backup-restore/types";
 import { resolveBackupsExportBlockReason } from "@/pages/backup-restore/export-guards";
 
-let backupExportModulePromise: Promise<typeof import("@/pages/backup-restore/backup-export")> | null = null;
-
-function loadBackupExportModule() {
-  if (!backupExportModulePromise) {
-    backupExportModulePromise = import("@/pages/backup-restore/backup-export");
-  }
-
-  return backupExportModulePromise;
-}
+const loadBackupExportModule = createRetryableModuleLoader<
+  typeof import("@/pages/backup-restore/backup-export")
+>(() => import("@/pages/backup-restore/backup-export"));
 
 export function useBackupExportState(visibleBackups: BackupRecord[]) {
   const [exportingPdf, setExportingPdf] = useState(false);

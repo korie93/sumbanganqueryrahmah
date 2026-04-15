@@ -1,20 +1,21 @@
-import { Suspense, lazy, useLayoutEffect, useMemo, useRef } from "react";
+import { Suspense, useLayoutEffect, useMemo, useRef } from "react";
 import { HorizontalScrollHint } from "@/components/HorizontalScrollHint";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { lazyWithPreload } from "@/lib/lazy-with-preload";
 import type { DataRowWithId, ViewerVirtualRowData } from "@/pages/viewer/types";
 import { ViewerDataTableFeedback } from "@/pages/viewer/ViewerDataTableFeedback";
 
-const ViewerMobileCardsTable = lazy(() =>
+const ViewerMobileCardsTable = lazyWithPreload(() =>
   import("@/pages/viewer/ViewerMobileCardsTable").then((module) => ({
     default: module.ViewerMobileCardsTable,
   })),
 );
-const ViewerStandardTable = lazy(() =>
+const ViewerStandardTable = lazyWithPreload(() =>
   import("@/pages/viewer/ViewerStandardTable").then((module) => ({
     default: module.ViewerStandardTable,
   })),
 );
-const ViewerVirtualizedTable = lazy(() =>
+const ViewerVirtualizedTable = lazyWithPreload(() =>
   import("@/pages/viewer/ViewerVirtualizedTable").then((module) => ({
     default: module.ViewerVirtualizedTable,
   })),

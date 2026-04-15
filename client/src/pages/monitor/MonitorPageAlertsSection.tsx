@@ -1,11 +1,12 @@
-import { Suspense, lazy } from "react";
+import { Suspense } from "react";
 import {
   MonitorSectionCardFallback,
   useDeferredMonitorSectionMount,
 } from "@/components/monitor/MonitorDeferredSection";
+import { lazyWithPreload } from "@/lib/lazy-with-preload";
 import { useMonitorPageContext } from "@/pages/monitor/MonitorPageContext";
 
-const MonitorAlertsSection = lazy(() =>
+const MonitorAlertsSection = lazyWithPreload(() =>
   import("@/components/monitor/MonitorAlertsSection").then((module) => ({
     default: module.MonitorAlertsSection,
   })),

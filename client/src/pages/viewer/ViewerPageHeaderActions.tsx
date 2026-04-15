@@ -1,14 +1,15 @@
-import { Suspense, lazy } from "react";
+import { Suspense } from "react";
+import { lazyWithPreload } from "@/lib/lazy-with-preload";
 import { Filter, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { buildViewerFiltersButtonLabel } from "@/pages/viewer/page-header-utils";
 
-const ViewerColumnSelector = lazy(() =>
+const ViewerColumnSelector = lazyWithPreload(() =>
   import("@/pages/viewer/ViewerColumnSelector").then((module) => ({
     default: module.ViewerColumnSelector,
   })),
 );
-const ViewerExportMenu = lazy(() =>
+const ViewerExportMenu = lazyWithPreload(() =>
   import("@/pages/viewer/ViewerExportMenu").then((module) => ({
     default: module.ViewerExportMenu,
   })),

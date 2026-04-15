@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createRetryableModuleLoader } from "@/lib/retryable-module-loader";
 import type { SearchResultRow } from "@/pages/general-search/types";
 import { resolveGeneralSearchExportBlockReason } from "@/pages/general-search/export-guards";
 import { downloadSearchResultsAsCsv } from "@/pages/general-search/utils";
@@ -11,6 +12,10 @@ interface UseGeneralSearchExportStateParams {
   query: string;
   results: SearchResultRow[];
 }
+
+const loadGeneralSearchExportModule = createRetryableModuleLoader<
+  typeof import("@/pages/general-search/export")
+>(() => import("@/pages/general-search/export"));
 
 export function useGeneralSearchExportState({
   activeFiltersCount,
@@ -50,9 +55,7 @@ export function useGeneralSearchExportState({
     exportInFlightRef.current = true;
     setExportingPdf(true);
     try {
-      const { exportSearchResultsToPdf } = await import(
-        "@/pages/general-search/export"
-      );
+      const { exportSearchResultsToPdf } = await loadGeneralSearchExportModule();
       await exportSearchResultsToPdf({
         advancedMode,
         activeFiltersCount,

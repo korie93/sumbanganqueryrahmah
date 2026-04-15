@@ -1,4 +1,5 @@
-import { Suspense, lazy } from "react";
+import { Suspense } from "react";
+import { lazyWithPreload } from "@/lib/lazy-with-preload";
 import { Download, FileText, Loader2, RefreshCw } from "lucide-react";
 import { AppPaginationBar } from "@/components/data/AppPaginationBar";
 import { Button } from "@/components/ui/button";
@@ -6,13 +7,13 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { AuditLogsFiltersPanel } from "@/pages/audit-logs/AuditLogsFiltersPanel";
 import { useAuditLogsPageState } from "@/pages/audit-logs/useAuditLogsPageState";
 
-const AuditLogsCleanupPanel = lazy(() =>
+const AuditLogsCleanupPanel = lazyWithPreload(() =>
   import("@/pages/audit-logs/AuditLogsCleanupPanel").then((module) => ({
     default: module.AuditLogsCleanupPanel,
   })),
 );
 
-const AuditLogsRecordsList = lazy(() =>
+const AuditLogsRecordsList = lazyWithPreload(() =>
   import("@/pages/audit-logs/AuditLogsRecordsList").then((module) => ({
     default: module.AuditLogsRecordsList,
   })),

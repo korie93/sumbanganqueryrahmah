@@ -1,4 +1,5 @@
-import { Suspense, lazy } from "react";
+import { Suspense } from "react";
+import { lazyWithPreload } from "@/lib/lazy-with-preload";
 import {
   Sheet,
   SheetContent,
@@ -9,7 +10,7 @@ import {
 import type { ColumnFilter, ViewerFilterMutableField } from "@/pages/viewer/types";
 import { ViewerFiltersPanelFallback } from "@/pages/viewer/ViewerContentFallbacks";
 
-const ViewerFiltersPanel = lazy(() =>
+const ViewerFiltersPanel = lazyWithPreload(() =>
   import("@/pages/viewer/ViewerFiltersPanel").then((module) => ({
     default: module.ViewerFiltersPanel,
   })),

@@ -1,4 +1,4 @@
-import { Suspense, lazy, memo, useMemo, useState } from "react";
+import { Suspense, memo, useMemo, useState } from "react";
 import { Filter, RotateCcw } from "lucide-react";
 import { ActiveFilterChips, type ActiveFilterChip } from "@/components/data/ActiveFilterChips";
 import { OperationalSectionCard } from "@/components/layout/OperationalPage";
@@ -12,42 +12,43 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { lazyWithPreload } from "@/lib/lazy-with-preload";
 import { formatIsoDateToDDMMYYYY } from "@/lib/date-format";
 import { CollectionRecordsTable } from "@/pages/collection-records/CollectionRecordsTable";
 import { buildCollectionRecordsPageViewModel } from "@/pages/collection-records/collection-records-page-view-models";
 import { useCollectionRecordsController } from "@/pages/collection-records/useCollectionRecordsController";
 
-const CollectionRecordsFilters = lazy(() =>
+const CollectionRecordsFilters = lazyWithPreload(() =>
   import("@/pages/collection-records/CollectionRecordsFilters").then((module) => ({
     default: module.CollectionRecordsFilters,
   })),
 );
-const CollectionRecordsToolbar = lazy(() =>
+const CollectionRecordsToolbar = lazyWithPreload(() =>
   import("@/pages/collection-records/CollectionRecordsToolbar").then((module) => ({
     default: module.CollectionRecordsToolbar,
   })),
 );
-const ReceiptPreviewDialog = lazy(() =>
+const ReceiptPreviewDialog = lazyWithPreload(() =>
   import("@/pages/collection-records/ReceiptPreviewDialog").then((module) => ({
     default: module.ReceiptPreviewDialog,
   })),
 );
-const EditCollectionRecordDialog = lazy(() =>
+const EditCollectionRecordDialog = lazyWithPreload(() =>
   import("@/pages/collection-records/EditCollectionRecordDialog").then((module) => ({
     default: module.EditCollectionRecordDialog,
   })),
 );
-const DeleteCollectionRecordDialog = lazy(() =>
+const DeleteCollectionRecordDialog = lazyWithPreload(() =>
   import("@/pages/collection-records/DeleteCollectionRecordDialog").then((module) => ({
     default: module.DeleteCollectionRecordDialog,
   })),
 );
-const PurgeCollectionRecordsDialog = lazy(() =>
+const PurgeCollectionRecordsDialog = lazyWithPreload(() =>
   import("@/pages/collection-records/PurgeCollectionRecordsDialog").then((module) => ({
     default: module.PurgeCollectionRecordsDialog,
   })),
 );
-const ViewAllRecordsDialog = lazy(() =>
+const ViewAllRecordsDialog = lazyWithPreload(() =>
   import("@/pages/collection-records/ViewAllRecordsDialog").then((module) => ({
     default: module.ViewAllRecordsDialog,
   })),

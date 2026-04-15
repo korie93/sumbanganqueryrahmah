@@ -1,18 +1,13 @@
 import type { DataRowWithId } from "@/pages/viewer/types";
 import { toast } from "@/hooks/use-toast";
 import { logClientError } from "@/lib/client-logger";
+import { createRetryableModuleLoader } from "@/lib/retryable-module-loader";
 import { resolveViewerExportBlockReason } from "@/pages/viewer/export-guards";
 import { isAbortError } from "@/pages/viewer/page-utils";
 
-let viewerExportModulePromise: Promise<typeof import("@/pages/viewer/export")> | null = null;
-
-function loadViewerExportModule() {
-  if (!viewerExportModulePromise) {
-    viewerExportModulePromise = import("@/pages/viewer/export");
-  }
-
-  return viewerExportModulePromise;
-}
+const loadViewerExportModule = createRetryableModuleLoader<typeof import("@/pages/viewer/export")>(
+  () => import("@/pages/viewer/export"),
+);
 
 type ExecuteViewerExportOptions = {
   kind: "CSV" | "PDF" | "Excel";

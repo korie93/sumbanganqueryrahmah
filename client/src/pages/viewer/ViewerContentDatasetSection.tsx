@@ -1,6 +1,7 @@
-import { Suspense, lazy, type RefObject } from "react";
+import { Suspense, type RefObject } from "react";
 import { OperationalSectionCard } from "@/components/layout/OperationalPage";
 import type { ActiveFilterChip } from "@/components/data/ActiveFilterChips";
+import { lazyWithPreload } from "@/lib/lazy-with-preload";
 import type { DataRowWithId } from "@/pages/viewer/types";
 import {
   ViewerDataTableFallback,
@@ -8,17 +9,17 @@ import {
   ViewerSearchBarFallback,
 } from "@/pages/viewer/ViewerContentFallbacks";
 
-const ViewerSearchBar = lazy(() =>
+const ViewerSearchBar = lazyWithPreload(() =>
   import("@/pages/viewer/ViewerSearchBar").then((module) => ({
     default: module.ViewerSearchBar,
   })),
 );
-const ViewerDataTable = lazy(() =>
+const ViewerDataTable = lazyWithPreload(() =>
   import("@/pages/viewer/ViewerDataTable").then((module) => ({
     default: module.ViewerDataTable,
   })),
 );
-const ViewerFooter = lazy(() =>
+const ViewerFooter = lazyWithPreload(() =>
   import("@/pages/viewer/ViewerFooter").then((module) => ({
     default: module.ViewerFooter,
   })),

@@ -1,4 +1,4 @@
-import { Suspense, lazy } from "react";
+import { Suspense } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import {
   getMonitorSummaryToneClass,
@@ -6,9 +6,10 @@ import {
 } from "@/components/monitor/MonitorDeferredSection";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { lazyWithPreload } from "@/lib/lazy-with-preload";
 import { useMonitorPageContext } from "@/pages/monitor/MonitorPageContext";
 
-const MonitorWebVitalsSection = lazy(() =>
+const MonitorWebVitalsSection = lazyWithPreload(() =>
   import("@/components/monitor/MonitorWebVitalsSection").then((module) => ({
     default: module.MonitorWebVitalsSection,
   })),

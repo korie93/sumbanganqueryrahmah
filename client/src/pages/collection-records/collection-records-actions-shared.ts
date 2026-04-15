@@ -2,6 +2,7 @@ import type {
   CollectionPurgeSummaryResponse,
   CollectionRecord,
 } from "@/lib/api";
+import { createRetryableModuleLoader } from "@/lib/retryable-module-loader";
 import type { CollectionAmountMyrNumber } from "@shared/collection-amount-types";
 
 export type CollectionRecordsSummary = {
@@ -27,15 +28,9 @@ export type CollectionRecordsPurgeSummaryViewModel = Pick<
 
 type CollectionRecordsExportModule = typeof import("@/pages/collection-records/export");
 
-let collectionRecordsExportModulePromise: Promise<CollectionRecordsExportModule> | null = null;
-
-export function loadCollectionRecordsExportModule() {
-  if (!collectionRecordsExportModulePromise) {
-    collectionRecordsExportModulePromise = import("@/pages/collection-records/export");
-  }
-
-  return collectionRecordsExportModulePromise;
-}
+export const loadCollectionRecordsExportModule = createRetryableModuleLoader<CollectionRecordsExportModule>(
+  () => import("@/pages/collection-records/export"),
+);
 
 export function toCollectionRecordsPurgeSummaryViewModel(
   summary: CollectionPurgeSummaryResponse | null,

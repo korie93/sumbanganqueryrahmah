@@ -1,4 +1,5 @@
-import { Suspense, lazy } from "react";
+import { Suspense } from "react";
+import { lazyWithPreload } from "@/lib/lazy-with-preload";
 import { AlertTriangle, CheckCircle2, CircleSlash, Loader2 } from "lucide-react";
 import { OperationalSectionCard } from "@/components/layout/OperationalPage";
 import { Badge } from "@/components/ui/badge";
@@ -25,7 +26,7 @@ type CollectionDailyCalendarCardProps = {
   onUpdateEditableDay: (day: number, patch: Partial<EditableCalendarDay>) => void;
 };
 
-const CollectionDailyDesktopCalendarGrid = lazy(() =>
+const CollectionDailyDesktopCalendarGrid = lazyWithPreload(() =>
   import("@/pages/collection/CollectionDailyDesktopCalendarGrid").then((module) => ({
     default: module.CollectionDailyDesktopCalendarGrid,
   })),

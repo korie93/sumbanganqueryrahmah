@@ -1,7 +1,8 @@
-import { Suspense, lazy } from "react";
+import { Suspense } from "react";
+import { lazyWithPreload } from "@/lib/lazy-with-preload";
 import type { ActivityRecord, BannedUser } from "@/pages/activity/types";
 
-const ActivityActionDialogs = lazy(() =>
+const ActivityActionDialogs = lazyWithPreload(() =>
   import("@/pages/activity/ActivityActionDialogs").then((module) => ({
     default: module.ActivityActionDialogs,
   })),

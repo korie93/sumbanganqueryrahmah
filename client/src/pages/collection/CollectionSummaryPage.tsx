@@ -1,4 +1,4 @@
-import { Suspense, lazy, memo, useMemo, useState } from "react";
+import { Suspense, memo, useMemo, useState } from "react";
 import { CalendarRange, Filter, RotateCcw } from "lucide-react";
 import { CollectionReportFreshnessBadge } from "@/components/collection-report/CollectionReportFreshnessBadge";
 import { OperationalSectionCard } from "@/components/layout/OperationalPage";
@@ -12,6 +12,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { lazyWithPreload } from "@/lib/lazy-with-preload";
 import { buildCollectionSummaryPageViewModels } from "@/pages/collection-summary/collection-summary-page-view-models";
 import { CollectionSummaryFilters } from "@/pages/collection-summary/CollectionSummaryFilters";
 import { useCollectionSummaryData } from "@/pages/collection-summary/useCollectionSummaryData";
@@ -19,7 +20,7 @@ import { useCollectionSummaryMonthDialog } from "@/pages/collection-summary/useC
 import { CollectionSummaryTable } from "@/pages/collection-summary/CollectionSummaryTable";
 import { CollectionSummaryTotals } from "@/pages/collection-summary/CollectionSummaryTotals";
 
-const CollectionMonthDetailsDialog = lazy(() =>
+const CollectionMonthDetailsDialog = lazyWithPreload(() =>
   import("@/pages/collection-summary/CollectionMonthDetailsDialog").then((module) => ({
     default: module.CollectionMonthDetailsDialog,
   })),

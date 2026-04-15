@@ -1,7 +1,8 @@
-import { Suspense, lazy } from "react";
+import { Suspense } from "react";
+import { lazyWithPreload } from "@/lib/lazy-with-preload";
 import { ViewerEmptyStateFallback } from "@/pages/viewer/ViewerContentFallbacks";
 
-const ViewerEmptyState = lazy(() =>
+const ViewerEmptyState = lazyWithPreload(() =>
   import("@/pages/viewer/ViewerEmptyState").then((module) => ({
     default: module.ViewerEmptyState,
   })),

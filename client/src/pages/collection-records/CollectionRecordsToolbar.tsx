@@ -1,4 +1,5 @@
-import { Suspense, lazy } from "react";
+import { Suspense } from "react";
+import { lazyWithPreload } from "@/lib/lazy-with-preload";
 import { Download, FileText } from "lucide-react";
 import {
   OperationalMetric,
@@ -9,7 +10,7 @@ import { buildCollectionRecordsPaginationControlsState } from "@/pages/collectio
 import { formatAmountRM } from "@/pages/collection/utils";
 import type { CollectionAmountMyrNumber } from "@shared/collection-amount-types";
 
-const CollectionRecordsPurgeSummaryCard = lazy(() =>
+const CollectionRecordsPurgeSummaryCard = lazyWithPreload(() =>
   import("@/pages/collection-records/CollectionRecordsPurgeSummaryCard").then((module) => ({
     default: module.CollectionRecordsPurgeSummaryCard,
   })),

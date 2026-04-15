@@ -1,22 +1,23 @@
-import { Suspense, lazy } from "react";
+import { Suspense } from "react";
 import type { Dispatch, SetStateAction } from "react";
+import { lazyWithPreload } from "@/lib/lazy-with-preload";
 import { Plane, Shield, Users } from "lucide-react";
 import { AnalysisCategoryCard } from "@/pages/analysis/AnalysisCategoryCard";
 import { AnalysisSectionFallback } from "@/pages/analysis/AnalysisSectionFallback";
 import type { AnalysisData, AnalysisMode, AllAnalysisResult } from "@/pages/analysis/types";
 import type { useDeferredAnalysisSectionMount } from "@/pages/analysis/useDeferredAnalysisSectionMount";
 
-const AnalysisExpandableSection = lazy(() =>
+const AnalysisExpandableSection = lazyWithPreload(() =>
   import("@/pages/analysis/AnalysisExpandableSection").then((module) => ({
     default: module.AnalysisExpandableSection,
   })),
 );
-const AnalysisFilesList = lazy(() =>
+const AnalysisFilesList = lazyWithPreload(() =>
   import("@/pages/analysis/AnalysisTables").then((module) => ({
     default: module.AnalysisFilesList,
   })),
 );
-const AnalysisDuplicatesPanel = lazy(() =>
+const AnalysisDuplicatesPanel = lazyWithPreload(() =>
   import("@/pages/analysis/AnalysisTables").then((module) => ({
     default: module.AnalysisDuplicatesPanel,
   })),

@@ -1,3 +1,5 @@
+import { isChunkLoadRouteError } from "@/app/route-error-boundary-retry-utils";
+
 const ROUTE_LABELS: Record<string, string> = {
   activity: "Activity",
   ai: "AI Assistant",
@@ -34,11 +36,7 @@ export function resolveRouteErrorDescription(error: unknown): string {
       ? error.message.trim()
       : String(error || "").trim();
 
-  if (
-    /ChunkLoadError|Loading chunk|Failed to fetch dynamically imported module|Importing a module script failed/i.test(
-      message,
-    )
-  ) {
+  if (isChunkLoadRouteError(error)) {
     return "A page bundle failed to load. Retry this page first, or reload the app if the problem persists.";
   }
 

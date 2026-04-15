@@ -1,23 +1,24 @@
-import { lazy, Suspense, type ReactNode } from "react";
+import { Suspense, type ReactNode } from "react";
 import { AppRouteErrorBoundary } from "@/app/AppRouteErrorBoundary";
 import { OperationalSectionCard } from "@/components/layout/OperationalPage";
 import { Button } from "@/components/ui/button";
+import { lazyWithPreload } from "@/lib/lazy-with-preload";
 import type { CollectionSubPage } from "@/pages/collection-report/types";
 
-const SaveCollectionPage = lazy(() => import("@/pages/collection/SaveCollectionPage"));
-const CollectionRecordsPage = lazy(
+const SaveCollectionPage = lazyWithPreload(() => import("@/pages/collection/SaveCollectionPage"));
+const CollectionRecordsPage = lazyWithPreload(
   () => import("@/pages/collection/CollectionRecordsPage"),
 );
-const CollectionSummaryPage = lazy(
+const CollectionSummaryPage = lazyWithPreload(
   () => import("@/pages/collection/CollectionSummaryPage"),
 );
-const CollectionDailyPage = lazy(
+const CollectionDailyPage = lazyWithPreload(
   () => import("@/pages/collection/CollectionDailyPage"),
 );
-const CollectionNicknameSummaryPage = lazy(
+const CollectionNicknameSummaryPage = lazyWithPreload(
   () => import("@/pages/collection/CollectionNicknameSummaryPage"),
 );
-const ManageCollectionNicknamesPage = lazy(
+const ManageCollectionNicknamesPage = lazyWithPreload(
   () => import("@/pages/collection/ManageCollectionNicknamesPage"),
 );
 

@@ -1,4 +1,5 @@
-import { Suspense, lazy } from "react";
+import { Suspense } from "react";
+import { lazyWithPreload } from "@/lib/lazy-with-preload";
 import { ChevronDown, Filter, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
@@ -6,7 +7,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { useIsMobile } from "@/hooks/use-mobile";
 import type { AuditLogsFilterFieldsProps } from "@/pages/audit-logs/AuditLogsFilterFields";
 
-const AuditLogsFilterFields = lazy(() =>
+const AuditLogsFilterFields = lazyWithPreload(() =>
   import("@/pages/audit-logs/AuditLogsFilterFields").then((module) => ({
     default: module.AuditLogsFilterFields,
   })),

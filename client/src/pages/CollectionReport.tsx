@@ -1,9 +1,9 @@
 import {
   Suspense,
   useCallback,
-  lazy,
   useMemo,
 } from "react";
+import { lazyWithPreload } from "@/lib/lazy-with-preload";
 import {
   OperationalPage,
   OperationalPageHeader,
@@ -21,7 +21,7 @@ import { CollectionSidebar } from "@/pages/collection-report/CollectionSidebar";
 import { useCollectionNicknameAccess } from "@/pages/collection-report/useCollectionNicknameAccess";
 import { useCollectionReportNavigation } from "@/pages/collection-report/useCollectionReportNavigation";
 
-const CollectionNicknameDialog = lazy(() =>
+const CollectionNicknameDialog = lazyWithPreload(() =>
   import("@/pages/collection-report/CollectionNicknameDialog").then((module) => ({
     default: module.CollectionNicknameDialog,
   })),

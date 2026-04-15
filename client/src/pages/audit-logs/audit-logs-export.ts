@@ -1,9 +1,12 @@
 import { downloadBlob } from "@/lib/download";
 import { formatDateTimeMalaysia } from "@/lib/date-format";
+import { createRetryableModuleLoader } from "@/lib/retryable-module-loader";
 import type { AuditLogRecord } from "@/pages/audit-logs/types";
 import { getAuditActionLabel } from "@/pages/audit-logs/utils";
 
-let auditLogsJsPdfModulePromise: Promise<typeof import("jspdf")> | null = null;
+const loadAuditLogsJsPdfModule = createRetryableModuleLoader<typeof import("jspdf")>(
+  () => import("jspdf"),
+);
 
 function escapeCsvValue(value: string) {
   return `"${(value || "").replace(/"/g, '""')}"`;
@@ -36,14 +39,6 @@ export function exportAuditLogsToCsv(logs: AuditLogRecord[]) {
   const csvContent = buildAuditLogsCsvContent(logs);
   const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
   downloadBlob(blob, `SQR-audit-logs-${new Date().toISOString().split("T")[0]}.csv`);
-}
-
-function loadAuditLogsJsPdfModule() {
-  if (!auditLogsJsPdfModulePromise) {
-    auditLogsJsPdfModulePromise = import("jspdf");
-  }
-
-  return auditLogsJsPdfModulePromise;
 }
 
 export async function exportAuditLogsToPdf(logs: AuditLogRecord[]) {

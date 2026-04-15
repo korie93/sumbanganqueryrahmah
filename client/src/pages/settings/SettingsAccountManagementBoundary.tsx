@@ -1,16 +1,17 @@
-import { Suspense, lazy, useEffect, useRef } from "react";
+import { Suspense, useEffect, useRef } from "react";
 import { useToast } from "@/hooks/use-toast";
+import { lazyWithPreload } from "@/lib/lazy-with-preload";
 import { UserAccountManagementSection } from "@/pages/settings/UserAccountManagementSection";
 import { useSettingsAccountManagementPreload } from "@/pages/settings/useSettingsAccountManagementPreload";
 import { useSettingsAccountManagement } from "@/pages/settings/useSettingsAccountManagement";
 import { useSettingsManagedDialogViewModels } from "@/pages/settings/useSettingsManagedDialogViewModels";
 
-const ManagedUserDialog = lazy(() =>
+const ManagedUserDialog = lazyWithPreload(() =>
   import("@/pages/settings/ManagedUserDialog").then((module) => ({
     default: module.ManagedUserDialog,
   })),
 );
-const ManagedSecretDialog = lazy(() =>
+const ManagedSecretDialog = lazyWithPreload(() =>
   import("@/pages/settings/ManagedSecretDialog").then((module) => ({
     default: module.ManagedSecretDialog,
   })),

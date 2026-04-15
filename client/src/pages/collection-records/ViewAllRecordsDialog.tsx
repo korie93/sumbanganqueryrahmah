@@ -1,4 +1,5 @@
-import { Suspense, lazy, useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
+import { lazyWithPreload } from "@/lib/lazy-with-preload";
 import { ChevronDown, ChevronUp, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -18,7 +19,7 @@ import { formatIsoDateToDDMMYYYY } from "@/lib/date-format";
 import type { CollectionAmountMyrNumber } from "@shared/collection-amount-types";
 
 const VIEW_ALL_PAGE_SIZE_OPTIONS = [...STANDARD_PAGE_SIZE_OPTIONS];
-const ViewAllRecordsDesktopTable = lazy(() =>
+const ViewAllRecordsDesktopTable = lazyWithPreload(() =>
   import("@/pages/collection-records/ViewAllRecordsDesktopTable").then((module) => ({
     default: module.ViewAllRecordsDesktopTable,
   })),

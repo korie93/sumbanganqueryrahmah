@@ -1,15 +1,16 @@
-import { Suspense, lazy } from "react";
+import { Suspense } from "react";
 import { Search } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { lazyWithPreload } from "@/lib/lazy-with-preload";
 import { GeneralSearchControls } from "@/pages/general-search/GeneralSearchControls";
 import { useGeneralSearchController } from "@/pages/general-search/useGeneralSearchController";
 
-const GeneralSearchResults = lazy(() =>
+const GeneralSearchResults = lazyWithPreload(() =>
   import("@/pages/general-search/GeneralSearchResults").then((module) => ({
     default: module.GeneralSearchResults,
   })),
 );
-const GeneralSearchRecordDialog = lazy(() =>
+const GeneralSearchRecordDialog = lazyWithPreload(() =>
   import("@/pages/general-search/GeneralSearchRecordDialog").then((module) => ({
     default: module.GeneralSearchRecordDialog,
   })),

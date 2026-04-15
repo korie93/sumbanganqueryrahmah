@@ -1,11 +1,12 @@
-import { Suspense, lazy } from "react";
+import { Suspense } from "react";
 import { AlertCircle, Filter, RotateCcw, Search } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { lazyWithPreload } from "@/lib/lazy-with-preload";
 import type { FilterRow } from "@/pages/general-search/types";
 
-const GeneralSearchAdvancedControls = lazy(() =>
+const GeneralSearchAdvancedControls = lazyWithPreload(() =>
   import("@/pages/general-search/GeneralSearchAdvancedControls").then((module) => ({
     default: module.GeneralSearchAdvancedControls,
   })),

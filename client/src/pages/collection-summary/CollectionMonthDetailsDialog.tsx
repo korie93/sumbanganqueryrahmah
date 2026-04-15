@@ -1,8 +1,9 @@
-import { Suspense, lazy } from "react";
+import { Suspense } from "react";
 import { STANDARD_PAGE_SIZE_OPTIONS } from "@/components/data/AppPaginationBar";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { lazyWithPreload } from "@/lib/lazy-with-preload";
 import { CollectionPaginationBar } from "@/pages/collection-report/CollectionPaginationBar";
 import type { CollectionMonthlySummary, CollectionRecord } from "@/lib/api";
 import { buildCollectionMonthDetailsRowAriaLabel } from "@/pages/collection-summary/collection-summary-row-aria";
@@ -26,7 +27,7 @@ export type CollectionMonthDetailsDialogProps = {
 };
 
 const MONTH_PAGE_SIZE_OPTIONS = [...STANDARD_PAGE_SIZE_OPTIONS];
-const CollectionMonthDetailsDesktopTable = lazy(() =>
+const CollectionMonthDetailsDesktopTable = lazyWithPreload(() =>
   import("@/pages/collection-summary/CollectionMonthDetailsDesktopTable").then((module) => ({
     default: module.CollectionMonthDetailsDesktopTable,
   })),

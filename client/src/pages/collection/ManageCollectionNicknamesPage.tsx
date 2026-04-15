@@ -1,4 +1,5 @@
-import { Suspense, lazy, memo, useMemo } from "react";
+import { Suspense, memo, useMemo } from "react";
+import { lazyWithPreload } from "@/lib/lazy-with-preload";
 import { ShieldCheck } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,7 +11,7 @@ import { useCollectionNicknameManagementActions } from "@/pages/collection-nickn
 import { useCollectionNicknameManagementData } from "@/pages/collection-nicknames/useCollectionNicknameManagementData";
 import { useCollectionNicknameManagementDialogs } from "@/pages/collection-nicknames/useCollectionNicknameManagementDialogs";
 
-const CollectionNicknameDialogs = lazy(() =>
+const CollectionNicknameDialogs = lazyWithPreload(() =>
   import("@/pages/collection-nicknames/CollectionNicknameDialogs").then((module) => ({
     default: module.CollectionNicknameDialogs,
   })),

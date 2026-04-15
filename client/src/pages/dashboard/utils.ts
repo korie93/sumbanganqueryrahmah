@@ -4,11 +4,16 @@ import {
   formatDateTimeDDMMYYYY,
   formatOperationalDateTime,
 } from "@/lib/date-format";
+import { createRetryableModuleLoader } from "@/lib/retryable-module-loader";
 import type { SummaryCardItem, SummaryData } from "@/pages/dashboard/types";
 import type { LoginTrend } from "@/pages/dashboard/types";
 
-let html2canvasLoader: Promise<typeof import("html2canvas")["default"]> | null = null;
-let jsPdfLoader: Promise<typeof import("jspdf")["default"]> | null = null;
+const loadHtml2Canvas = createRetryableModuleLoader<typeof import("html2canvas")["default"]>(
+  async () => (await import("html2canvas")).default,
+);
+const loadJsPdf = createRetryableModuleLoader<typeof import("jspdf")["default"]>(
+  async () => (await import("jspdf")).default,
+);
 
 export const ROLE_COLORS: Record<string, string> = {
   superuser: "hsl(var(--chart-1))",
@@ -112,20 +117,6 @@ export function buildSummaryCards(summary: SummaryData | undefined): SummaryCard
       color: "text-amber-600 dark:text-amber-400",
     },
   ];
-}
-
-function loadHtml2Canvas() {
-  if (!html2canvasLoader) {
-    html2canvasLoader = import("html2canvas").then((module) => module.default);
-  }
-  return html2canvasLoader;
-}
-
-function loadJsPdf() {
-  if (!jsPdfLoader) {
-    jsPdfLoader = import("jspdf").then((module) => module.default);
-  }
-  return jsPdfLoader;
 }
 
 export async function exportDashboardToPdf(element: HTMLDivElement) {

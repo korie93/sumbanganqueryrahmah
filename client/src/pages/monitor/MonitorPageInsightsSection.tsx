@@ -1,12 +1,13 @@
-import { Suspense, lazy } from "react";
+import { Suspense } from "react";
 import {
   MonitorDeferredSectionToggle,
   MonitorInsightsFallback,
 } from "@/components/monitor/MonitorDeferredSection";
+import { lazyWithPreload } from "@/lib/lazy-with-preload";
 import { useMonitorPageContext } from "@/pages/monitor/MonitorPageContext";
 import { renderMonitorSummaryBadges } from "@/pages/monitor/monitor-page-summary-badges";
 
-const MonitorInsightsSection = lazy(() =>
+const MonitorInsightsSection = lazyWithPreload(() =>
   import("@/components/monitor/MonitorInsightsSection").then((module) => ({
     default: module.MonitorInsightsSection,
   })),

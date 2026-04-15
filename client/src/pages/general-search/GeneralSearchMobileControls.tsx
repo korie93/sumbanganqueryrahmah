@@ -1,9 +1,10 @@
-import { Suspense, lazy, useState } from "react";
+import { Suspense, useState } from "react";
 import { AlertCircle, Filter, RotateCcw, Search, SlidersHorizontal } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { HorizontalScrollHint } from "@/components/HorizontalScrollHint";
 import { Input } from "@/components/ui/input";
+import { lazyWithPreload } from "@/lib/lazy-with-preload";
 import {
   Sheet,
   SheetContent,
@@ -18,7 +19,7 @@ import {
 } from "@/pages/general-search/general-search-controls-utils";
 import type { FilterRow } from "@/pages/general-search/types";
 
-const GeneralSearchAdvancedControls = lazy(() =>
+const GeneralSearchAdvancedControls = lazyWithPreload(() =>
   import("@/pages/general-search/GeneralSearchAdvancedControls").then((module) => ({
     default: module.GeneralSearchAdvancedControls,
   })),

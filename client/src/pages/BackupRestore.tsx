@@ -1,8 +1,9 @@
-import { Suspense, lazy } from "react";
+import { Suspense } from "react";
 import { AppQueryProvider } from "@/app/AppQueryProvider";
 import { AppPaginationBar } from "@/components/data/AppPaginationBar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { lazyWithPreload } from "@/lib/lazy-with-preload";
 import { BackupFiltersPanel } from "@/pages/backup-restore/BackupFiltersPanel";
 import { BackupList } from "@/pages/backup-restore/BackupList";
 import { BackupRestoreHeader } from "@/pages/backup-restore/BackupRestoreHeader";
@@ -11,19 +12,19 @@ import { useBackupExportState } from "@/pages/backup-restore/useBackupExportStat
 import { useBackupListState } from "@/pages/backup-restore/useBackupListState";
 import { useBackupMutationState } from "@/pages/backup-restore/useBackupMutationState";
 
-const LazyBackupActiveJobCard = lazy(() =>
+const LazyBackupActiveJobCard = lazyWithPreload(() =>
   import("@/pages/backup-restore/BackupActiveJobCard").then((module) => ({
     default: module.BackupActiveJobCard,
   })),
 );
 
-const LazyBackupRestoreResultCard = lazy(() =>
+const LazyBackupRestoreResultCard = lazyWithPreload(() =>
   import("@/pages/backup-restore/BackupRestoreResultCard").then((module) => ({
     default: module.BackupRestoreResultCard,
   })),
 );
 
-const LazyBackupDialogs = lazy(() =>
+const LazyBackupDialogs = lazyWithPreload(() =>
   import("@/pages/backup-restore/BackupDialogs").then((module) => ({
     default: module.BackupDialogs,
   })),

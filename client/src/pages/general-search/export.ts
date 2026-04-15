@@ -1,4 +1,5 @@
 import { formatDateTimeDDMMYYYY } from "@/lib/date-format";
+import { createRetryableModuleLoader } from "@/lib/retryable-module-loader";
 import type { SearchResultRow } from "@/pages/general-search/types";
 import { getCellDisplayText } from "@/pages/general-search/utils";
 
@@ -10,15 +11,9 @@ interface ExportSearchResultsToPdfParams {
   results: SearchResultRow[];
 }
 
-let generalSearchJsPdfModulePromise: Promise<typeof import("jspdf")> | null = null;
-
-function loadGeneralSearchJsPdfModule() {
-  if (!generalSearchJsPdfModulePromise) {
-    generalSearchJsPdfModulePromise = import("jspdf");
-  }
-
-  return generalSearchJsPdfModulePromise;
-}
+const loadGeneralSearchJsPdfModule = createRetryableModuleLoader<typeof import("jspdf")>(
+  () => import("jspdf"),
+);
 
 export async function exportSearchResultsToPdf({
   advancedMode,

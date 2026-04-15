@@ -1,7 +1,8 @@
-import { Suspense, lazy, type ReactNode } from "react";
+import { Suspense, type ReactNode } from "react";
+import { lazyWithPreload } from "@/lib/lazy-with-preload";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
-const Toaster = lazy(() =>
+const Toaster = lazyWithPreload(() =>
   import("@/components/ui/toaster").then((module) => ({ default: module.Toaster })),
 );
 

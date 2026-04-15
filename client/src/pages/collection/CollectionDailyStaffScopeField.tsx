@@ -1,9 +1,10 @@
-import { Suspense, lazy } from "react";
+import { Suspense } from "react";
+import { lazyWithPreload } from "@/lib/lazy-with-preload";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { CollectionDailyStaffScopeFieldProps } from "@/pages/collection/collection-daily-filters-card-shared";
 
-const CollectionDailyUserFilterControl = lazy(() =>
+const CollectionDailyUserFilterControl = lazyWithPreload(() =>
   import("@/pages/collection/CollectionDailyManagerControls").then((module) => ({
     default: module.CollectionDailyUserFilterControl,
   })),

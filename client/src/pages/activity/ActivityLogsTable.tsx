@@ -1,13 +1,14 @@
-import { Suspense, lazy } from "react";
+import { Suspense } from "react";
 import { Activity as ActivityIcon } from "lucide-react";
 import { Collapsible, CollapsibleContent } from "@/components/ui/collapsible";
+import { lazyWithPreload } from "@/lib/lazy-with-preload";
 import { ActivityLogsTableHeader } from "@/pages/activity/ActivityLogsTableHeader";
 import { ActivityMobileLogsList } from "@/pages/activity/ActivityMobileLogsList";
 import { getActivityLogsEmptyLabel } from "@/pages/activity/activity-logs-table-utils";
 import type { ActivityLogsTableProps } from "@/pages/activity/types";
 import { useActivityLogsLayoutPreference } from "@/pages/activity/useActivityLogsLayoutPreference";
 
-const ActivityDesktopLogsTable = lazy(() =>
+const ActivityDesktopLogsTable = lazyWithPreload(() =>
   import("@/pages/activity/ActivityDesktopLogsTable").then((module) => ({
     default: module.ActivityDesktopLogsTable,
   })),

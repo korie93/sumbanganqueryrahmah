@@ -1,8 +1,9 @@
-import { Suspense, lazy } from "react";
+import { Suspense } from "react";
+import { lazyWithPreload } from "@/lib/lazy-with-preload";
 import { AnalysisChartsSkeleton } from "@/pages/analysis/AnalysisChartsSkeleton";
 import type { useDeferredAnalysisSectionMount } from "@/pages/analysis/useDeferredAnalysisSectionMount";
 
-const AnalysisCharts = lazy(() =>
+const AnalysisCharts = lazyWithPreload(() =>
   import("@/pages/analysis/AnalysisCharts").then((module) => ({ default: module.AnalysisCharts })),
 );
 

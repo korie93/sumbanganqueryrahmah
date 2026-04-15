@@ -1,10 +1,11 @@
-import { Suspense, lazy } from "react";
+import { Suspense } from "react";
 import { Menu } from "lucide-react";
 import type { SideTabNavigationProps } from "@/components/navigation/SideTabNavigation";
 import { Button } from "@/components/ui/button";
+import { lazyWithPreload } from "@/lib/lazy-with-preload";
 import { cn } from "@/lib/utils";
 
-const SideTabNavigation = lazy(() =>
+const SideTabNavigation = lazyWithPreload(() =>
   import("@/components/navigation/SideTabNavigation").then((module) => ({
     default: module.SideTabNavigation,
   })),

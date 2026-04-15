@@ -1,15 +1,16 @@
-import { Suspense, lazy } from "react";
+import { Suspense } from "react";
+import { lazyWithPreload } from "@/lib/lazy-with-preload";
 import { CollectionDailyCalendarCard } from "@/pages/collection/CollectionDailyCalendarCard";
 import { CollectionDailyFiltersCard } from "@/pages/collection/CollectionDailyFiltersCard";
 import { CollectionDailySummaryCard } from "@/pages/collection/CollectionDailySummaryCard";
 import { useCollectionDailyPageModel } from "@/pages/collection/useCollectionDailyPageModel";
 
-const CollectionDailyDayDetailsDialog = lazy(() =>
+const CollectionDailyDayDetailsDialog = lazyWithPreload(() =>
   import("@/pages/collection/CollectionDailyDayDetailsDialog").then((module) => ({
     default: module.CollectionDailyDayDetailsDialog,
   })),
 );
-const ReceiptPreviewDialog = lazy(() =>
+const ReceiptPreviewDialog = lazyWithPreload(() =>
   import("@/pages/collection-records/ReceiptPreviewDialog").then((module) => ({
     default: module.ReceiptPreviewDialog,
   })),

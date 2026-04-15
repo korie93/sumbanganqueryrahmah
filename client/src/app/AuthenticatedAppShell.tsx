@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { AppPageRenderer } from "@/app/AppPageRenderer";
 import { prefetchNavigationTarget, resolvePredictivePrefetchTargets } from "@/app/navigation-prefetch";
 import { AppRouteErrorBoundary } from "@/app/AppRouteErrorBoundary";
@@ -14,10 +14,10 @@ import type {
 import AutoLogout from "@/components/AutoLogout";
 import Navbar from "@/components/Navbar";
 import { AIProvider } from "@/context/AIContext";
-import { scheduleIdlePreload } from "@/lib/lazy-with-preload";
+import { lazyWithPreload, scheduleIdlePreload } from "@/lib/lazy-with-preload";
 import "./AuthenticatedAppShell.css";
 
-const FloatingAI = lazy(() => import("@/components/FloatingAI"));
+const FloatingAI = lazyWithPreload(() => import("@/components/FloatingAI"));
 const FLOATING_AI_FALLBACK_READY_DELAY_MS = 1_200;
 const FLOATING_AI_IDLE_READY_TIMEOUT_MS = 1_500;
 const NAVIGATION_PREFETCH_IDLE_DELAY_MS = 900;

@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { AppRouteErrorBoundary } from "@/app/AppRouteErrorBoundary";
 import { ACTIVE_SETTINGS_SECTION_KEY } from "@/app/constants";
 import { replaceHistory } from "@/app/routing";
@@ -11,6 +11,7 @@ import {
   OperationalPageHeader,
   OperationalSectionCard,
 } from "@/components/layout/OperationalPage";
+import { lazyWithPreload } from "@/lib/lazy-with-preload";
 import { SettingsSaveBar } from "@/pages/settings/SettingsSaveBar";
 import { SettingsSidebar } from "@/pages/settings/SettingsSidebar";
 import { SettingsCriticalSaveDialog } from "@/pages/settings/SettingsCriticalSaveDialog";
@@ -22,18 +23,18 @@ type SettingsPageProps = {
   initialSectionId?: string;
 };
 
-const BackupRestore = lazy(() => import("@/pages/BackupRestore"));
-const AccountSecuritySection = lazy(() =>
+const BackupRestore = lazyWithPreload(() => import("@/pages/BackupRestore"));
+const AccountSecuritySection = lazyWithPreload(() =>
   import("@/pages/settings/AccountSecuritySection").then((module) => ({
     default: module.AccountSecuritySection,
   })),
 );
-const SettingsRoleSections = lazy(() =>
+const SettingsRoleSections = lazyWithPreload(() =>
   import("@/pages/settings/SettingsRoleSections").then((module) => ({
     default: module.SettingsRoleSections,
   })),
 );
-const SettingsAccountManagementBoundary = lazy(() =>
+const SettingsAccountManagementBoundary = lazyWithPreload(() =>
   import("@/pages/settings/SettingsAccountManagementBoundary").then((module) => ({
     default: module.SettingsAccountManagementBoundary,
   })),

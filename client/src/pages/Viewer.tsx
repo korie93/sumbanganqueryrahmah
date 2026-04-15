@@ -1,4 +1,5 @@
-import { Suspense, lazy, useEffect } from "react";
+import { Suspense, useEffect } from "react";
+import { lazyWithPreload } from "@/lib/lazy-with-preload";
 import { OperationalPage } from "@/components/layout/OperationalPage";
 import { ViewerContentFallback, ViewerPageHeaderFallback } from "@/pages/viewer/ViewerPageFallbacks";
 import { useViewerPageState } from "@/pages/viewer/useViewerPageState";
@@ -6,13 +7,13 @@ import "@/pages/viewer/ViewerPage.css";
 
 const VIEWER_SCROLL_PADDING_CLASS = "viewer-page-scroll-padding";
 
-const ViewerPageHeader = lazy(() =>
+const ViewerPageHeader = lazyWithPreload(() =>
   import("@/pages/viewer/ViewerPageHeader").then((module) => ({
     default: module.ViewerPageHeader,
   })),
 );
 
-const ViewerContent = lazy(() =>
+const ViewerContent = lazyWithPreload(() =>
   import("@/pages/viewer/ViewerContent").then((module) => ({
     default: module.ViewerContent,
   })),

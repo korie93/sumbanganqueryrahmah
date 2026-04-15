@@ -1,8 +1,11 @@
 import { downloadBlob } from "@/lib/download";
 import { formatDateTimeMalaysia } from "@/lib/date-format";
+import { createRetryableModuleLoader } from "@/lib/retryable-module-loader";
 import type { BackupRecord } from "@/pages/backup-restore/types";
 
-let backupJsPdfModulePromise: Promise<typeof import("jspdf")> | null = null;
+const loadBackupsJsPdfModule = createRetryableModuleLoader<typeof import("jspdf")>(
+  () => import("jspdf"),
+);
 
 function escapeCsvValue(value: string) {
   return `"${(value || "").replace(/"/g, '""')}"`;
@@ -36,14 +39,6 @@ export function exportBackupsToCsv(backups: BackupRecord[]) {
   const csvContent = buildBackupsCsvContent(backups);
   const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
   downloadBlob(blob, `SQR-backups-${new Date().toISOString().split("T")[0]}.csv`);
-}
-
-function loadBackupsJsPdfModule() {
-  if (!backupJsPdfModulePromise) {
-    backupJsPdfModulePromise = import("jspdf");
-  }
-
-  return backupJsPdfModulePromise;
 }
 
 export async function exportBackupsToPdf(backups: BackupRecord[]) {
