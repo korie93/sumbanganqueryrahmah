@@ -1,4 +1,4 @@
-import { Suspense, useEffect } from "react";
+import { Suspense, useEffect, useRef } from "react";
 import { AppRouteErrorBoundary } from "@/app/AppRouteErrorBoundary";
 import { applyDocumentMetadata, resolveDocumentMetadata } from "@/app/document-metadata";
 import {
@@ -16,6 +16,7 @@ import { AuthenticatedAppEntry } from "@/app/authenticated-entry-lazy";
 import { isBannedSessionFlagSet } from "@/lib/auth-session";
 import { scheduleIdlePreload } from "@/lib/lazy-with-preload";
 import LandingRouteFallback from "@/pages/LandingRouteFallback";
+import { scheduleMainContentFocus } from "@/app/route-focus-management";
 import { usePublicAppState } from "@/app/usePublicAppState";
 
 function AppContent() {
@@ -29,6 +30,8 @@ function AppContent() {
     handlePublicNavigate,
     user,
   } = usePublicAppState();
+  const hasHandledInitialRouteFocusRef = useRef(false);
+  const hasUser = Boolean(user);
 
   useEffect(() => {
     applyDocumentMetadata(
@@ -40,6 +43,19 @@ function AppContent() {
       }),
     );
   }, [currentPage, monitorSection, systemName, user]);
+
+  useEffect(() => {
+    if (!isInitialized) {
+      return;
+    }
+
+    if (!hasHandledInitialRouteFocusRef.current) {
+      hasHandledInitialRouteFocusRef.current = true;
+      return;
+    }
+
+    return scheduleMainContentFocus();
+  }, [currentPage, monitorSection, isInitialized, hasUser]);
 
   useEffect(() => {
     if (!isInitialized || user) {

@@ -7,6 +7,7 @@ import type { AuditLogOperationsService } from "../services/audit-log-operations
 import type { BackupJobQueueService } from "../services/backup-job-queue.service";
 import type { BackupOperationsService } from "../services/backup-operations.service";
 import type { OperationsAnalyticsService } from "../services/operations-analytics.service";
+import { sendBackupExportResponse } from "./backup-export-response";
 
 type CreateOperationsControllerDeps = {
   auditLogOperationsService: Pick<
@@ -174,17 +175,15 @@ export function createOperationsController(deps: CreateOperationsControllerDeps)
       return res.status(result.statusCode).json(result.body);
     }
 
-    res.setHeader("Content-Type", "application/json; charset=utf-8");
-    res.setHeader("Cache-Control", "no-store");
-    res.setHeader("Content-Disposition", `attachment; filename="${result.body.fileName}"`);
-    res.status(200);
-    res.write(result.body.payloadPrefixJson);
-    for await (const chunk of result.body.backupDataJsonChunks) {
-      if (chunk) {
-        res.write(chunk);
-      }
-    }
-    res.end(result.body.payloadSuffixJson);
+    await sendBackupExportResponse({
+      res,
+      backupId: req.params.id,
+      fileName: result.body.fileName,
+      payloadPrefixJson: result.body.payloadPrefixJson,
+      backupDataJsonChunks: result.body.backupDataJsonChunks,
+      payloadSuffixJson: result.body.payloadSuffixJson,
+      username: req.user!.username,
+    });
     return;
   };
 

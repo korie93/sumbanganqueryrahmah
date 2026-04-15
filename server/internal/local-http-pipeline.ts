@@ -4,6 +4,7 @@ import express, { type Express, type RequestHandler } from "express";
 import helmet from "helmet";
 import { runtimeConfig } from "../config/runtime";
 import { dbQueryProfiler } from "../db-postgres";
+import { buildContentDispositionHeader } from "../http/content-disposition";
 import { logger } from "../lib/logger";
 import { runWithRequestContext } from "../lib/request-context";
 import { createCsrfProtectionMiddleware } from "../http/csrf";
@@ -95,7 +96,10 @@ export function registerLocalHttpPipeline(app: Express, options: LocalHttpPipeli
   });
   app.use("/uploads", express.static(uploadsRootDir, {
     setHeaders: (res, filePath) => {
-      res.setHeader("Content-Disposition", `attachment; filename="${resolveAttachmentFilename(filePath)}"`);
+      res.setHeader(
+        "Content-Disposition",
+        buildContentDispositionHeader("attachment", resolveAttachmentFilename(filePath), "download"),
+      );
     },
   }));
 

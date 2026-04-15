@@ -243,10 +243,7 @@ jobs:
       - name: Stop built server
         if: always()
         run: |
-          if [ -f server.pid ]; then
-            kill "$(cat server.pid)" || true
-          fi
-          pkill -f "dist-local/server/index-local.js" || true
+          node scripts/stop-background-server.mjs server.pid
 
       - name: Upload smoke artifacts
         if: always()

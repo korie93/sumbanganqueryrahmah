@@ -17,13 +17,13 @@ export function getPublicAppBaseUrl(): string {
 export function buildActivationUrl(token: string): string {
   const baseUrl = getPublicAppBaseUrl();
   const url = new URL("/activate-account", baseUrl);
-  url.searchParams.set("token", token);
+  url.hash = new URLSearchParams({ token }).toString();
   return url.toString();
 }
 
 export function buildPasswordResetUrl(token: string): string {
   const baseUrl = getPublicAppBaseUrl();
   const url = new URL("/reset-password", baseUrl);
-  url.searchParams.set("token", token);
+  url.hash = new URLSearchParams({ token }).toString();
   return url.toString();
 }

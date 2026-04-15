@@ -14,18 +14,45 @@ function ensureText(input: string) {
   return (input || "").trim();
 }
 
-export async function ollamaEmbed(input: string): Promise<number[]> {
+function createOllamaTimeoutController(timeoutMsRaw: number) {
+  const timeoutMs = Number(timeoutMsRaw);
+  const normalizedTimeoutMs = Number.isFinite(timeoutMs)
+    ? Math.max(1, Math.trunc(timeoutMs))
+    : runtimeConfig.ai.timeoutMs;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), normalizedTimeoutMs);
+  timeout.unref?.();
+
+  return {
+    signal: controller.signal,
+    clear() {
+      clearTimeout(timeout);
+    },
+  };
+}
+
+export async function ollamaEmbed(
+  input: string,
+  options?: { timeoutMs?: number },
+): Promise<number[]> {
   const prompt = ensureText(input);
   if (!prompt) return [];
 
-  const res = await fetch(`${OLLAMA_HOST}/api/embeddings`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: OLLAMA_EMBED_MODEL,
-      prompt,
-    }),
-  });
+  const controller = createOllamaTimeoutController(options?.timeoutMs ?? runtimeConfig.ai.timeoutMs);
+  let res: Response;
+  try {
+    res = await fetch(`${OLLAMA_HOST}/api/embeddings`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      signal: controller.signal,
+      body: JSON.stringify({
+        model: OLLAMA_EMBED_MODEL,
+        prompt,
+      }),
+    });
+  } finally {
+    controller.clear();
+  }
 
   if (!res.ok) {
     const text = await res.text();
@@ -40,13 +67,10 @@ export async function ollamaChat(
   messages: OllamaMessage[],
   options?: { num_predict?: number; temperature?: number; top_p?: number; timeoutMs?: number }
 ): Promise<string> {
-  const timeoutMs = Number(options?.timeoutMs ?? runtimeConfig.ai.timeoutMs);
   const boundedMessages = Array.isArray(messages)
     ? messages.slice(Math.max(0, messages.length - MAX_OLLAMA_MESSAGES))
     : [];
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
-  timeout.unref?.();
+  const controller = createOllamaTimeoutController(options?.timeoutMs ?? runtimeConfig.ai.timeoutMs);
   let res: Response;
   try {
     res = await fetch(`${OLLAMA_HOST}/api/chat`, {
@@ -65,7 +89,7 @@ export async function ollamaChat(
       }),
     });
   } finally {
-    clearTimeout(timeout);
+    controller.clear();
   }
 
   if (!res.ok) {

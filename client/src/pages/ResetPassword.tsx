@@ -17,6 +17,7 @@ import {
   formatPublicAuthExpiry,
   getPublicAuthTokenFromLocation,
   isPublicAuthAbortError,
+  scrubPublicAuthTokenFromLocation,
 } from "@/pages/public-auth-runtime-utils";
 
 type ResetPhase = "invalid" | "ready" | "success" | "validating";
@@ -46,6 +47,12 @@ export default function ResetPasswordPage() {
       resetAbortControllerRef.current = null;
     };
   }, []);
+
+  useEffect(() => {
+    if (token) {
+      scrubPublicAuthTokenFromLocation();
+    }
+  }, [token]);
 
   useEffect(() => {
     if (!token) {

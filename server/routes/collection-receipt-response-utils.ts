@@ -1,5 +1,6 @@
 import type { Response } from "express";
 import type { AuthenticatedRequest } from "../auth/guards";
+import { buildContentDispositionHeader } from "../http/content-disposition";
 import { logger } from "../lib/logger";
 
 export function logCollectionReceiptWarning(params: {
@@ -29,7 +30,11 @@ export function applyCollectionReceiptResponseHeaders(params: {
   params.res.setHeader("Content-Type", params.mimeType);
   params.res.setHeader(
     "Content-Disposition",
-    `${params.mode === "download" ? "attachment" : "inline"}; filename="${params.safeFileName}"`,
+    buildContentDispositionHeader(
+      params.mode === "download" ? "attachment" : "inline",
+      params.safeFileName,
+      "receipt",
+    ),
   );
   params.res.setHeader("X-Content-Type-Options", "nosniff");
   params.res.setHeader("Cache-Control", "private, no-store, max-age=0");

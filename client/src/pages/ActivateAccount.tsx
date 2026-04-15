@@ -17,6 +17,7 @@ import {
   formatPublicAuthExpiry,
   getPublicAuthTokenFromLocation,
   isPublicAuthAbortError,
+  scrubPublicAuthTokenFromLocation,
 } from "@/pages/public-auth-runtime-utils";
 
 type ActivationPhase = "invalid" | "ready" | "success" | "validating";
@@ -48,6 +49,12 @@ export default function ActivateAccountPage() {
       activationAbortControllerRef.current = null;
     };
   }, []);
+
+  useEffect(() => {
+    if (token) {
+      scrubPublicAuthTokenFromLocation();
+    }
+  }, [token]);
 
   useEffect(() => {
     if (phase !== "success" || !activation) return;
