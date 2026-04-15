@@ -22,6 +22,24 @@ export function requiresTwoFactor(
   );
 }
 
+export function requiresMandatoryTwoFactorEnrollment(
+  user: Awaited<ReturnType<PostgresStorage["getUser"]>>,
+) {
+  if (!user) {
+    return false;
+  }
+
+  if (user.role !== "admin" && user.role !== "superuser") {
+    return false;
+  }
+
+  if (user.twoFactorEnabled === true && Boolean(String(user.twoFactorSecretEncrypted || "").trim())) {
+    return false;
+  }
+
+  return true;
+}
+
 export async function clearFailedLoginState(
   storage: Pick<AuthAccountAuthenticationStorage, "updateUserAccount">,
   user: AuthAccountUser,
@@ -155,11 +173,23 @@ export function verifyTwoFactorSecretCode(params: {
     );
   }
 
-  if (!verifyTwoFactorCode(secret, params.code)) {
+  try {
+    if (!verifyTwoFactorCode(secret, params.code)) {
+      throw new AuthAccountError(
+        401,
+        ERROR_CODES.TWO_FACTOR_INVALID_CODE,
+        "Authenticator code is invalid.",
+      );
+    }
+  } catch (error) {
+    if (error instanceof AuthAccountError) {
+      throw error;
+    }
+
     throw new AuthAccountError(
-      401,
-      ERROR_CODES.TWO_FACTOR_INVALID_CODE,
-      "Authenticator code is invalid.",
+      500,
+      ERROR_CODES.TWO_FACTOR_SECRET_INVALID,
+      "Two-factor authentication is unavailable.",
     );
   }
 

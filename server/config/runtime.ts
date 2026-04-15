@@ -54,10 +54,8 @@ const isProduction = nodeEnv === "production";
 const isStrictLocalDevelopment = isStrictLocalDevelopmentEnvironment();
 const isProductionLike = isProductionLikeEnvironment();
 const debugLogs = readBoolean("DEBUG_LOGS", false) && !isProductionLike;
-const operationsDebugRoutesEnabled = readBoolean(
-  "OPERATIONS_DEBUG_ROUTES_ENABLED",
-  !isProductionLike,
-);
+const operationsDebugRoutesEnabled = !isProductionLike
+  && readBoolean("OPERATIONS_DEBUG_ROUTES_ENABLED", true);
 const logLevel = readString("LOG_LEVEL", debugLogs ? "debug" : "info");
 const lowMemoryMode = readBoolean("SQR_LOW_MEMORY_MODE", true);
 const seedDefaultUsers = readBoolean("SEED_DEFAULT_USERS", false);
@@ -238,6 +236,8 @@ export const runtimeConfig: RuntimeConfig = Object.freeze({
     maxConnections: readInt("PG_MAX_CONNECTIONS", resolveDefaultPgMaxConnections(), { min: 1, max: 50 }),
     idleTimeoutMs: readInt("PG_IDLE_TIMEOUT_MS", 30_000, { min: 1_000 }),
     connectionTimeoutMs: readInt("PG_CONNECTION_TIMEOUT_MS", 5_000, { min: 1_000 }),
+    queryTimeoutMs: readInt("PG_QUERY_TIMEOUT_MS", 120_000, { min: 1_000 }),
+    statementTimeoutMs: readInt("PG_STATEMENT_TIMEOUT_MS", 90_000, { min: 1_000 }),
     searchPath: readString("PG_SEARCH_PATH", "public"),
   },
   auth: {

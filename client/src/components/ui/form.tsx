@@ -103,18 +103,32 @@ const FormLabel = React.forwardRef<
 })
 FormLabel.displayName = "FormLabel"
 
+export function mergeAriaDescribedByIds(...values: Array<string | undefined>) {
+  const ids = values
+    .flatMap((value) => String(value || "").split(/\s+/))
+    .map((value) => value.trim())
+    .filter(Boolean)
+
+  return ids.length > 0 ? Array.from(new Set(ids)).join(" ") : undefined
+}
+
 const FormControl = React.forwardRef<
   React.ElementRef<typeof Slot>,
   React.ComponentPropsWithoutRef<typeof Slot>
 >(({ ...props }, ref) => {
   const { error, formItemId, formDescriptionId, formMessageId } = useFormField()
+  const ariaDescribedBy = mergeAriaDescribedByIds(
+    props["aria-describedby"],
+    formDescriptionId,
+    error ? formMessageId : undefined,
+  )
 
   return error ? (
     <Slot
       ref={ref}
       id={formItemId}
       aria-invalid="true"
-      {...{ "aria-describedby": `${formDescriptionId} ${formMessageId}` }}
+      aria-describedby={ariaDescribedBy}
       {...props}
     />
   ) : (
@@ -122,7 +136,7 @@ const FormControl = React.forwardRef<
       ref={ref}
       id={formItemId}
       aria-invalid="false"
-      {...{ "aria-describedby": `${formDescriptionId}` }}
+      aria-describedby={ariaDescribedBy}
       {...props}
     />
   )

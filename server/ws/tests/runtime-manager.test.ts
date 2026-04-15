@@ -63,7 +63,7 @@ function createConnectionRequest(
   token?: string,
   options?: {
     host?: string;
-    origin?: string;
+    origin?: string | null;
     forwardedHost?: string;
     forwardedProto?: string;
     encrypted?: boolean;
@@ -72,8 +72,10 @@ function createConnectionRequest(
 ): RuntimeConnectionRequest {
   const headers: Record<string, string> = {
     host: options?.host ?? "example.test",
-    origin: options?.origin ?? "http://example.test",
   };
+  if (options?.origin !== null) {
+    headers.origin = options?.origin ?? "http://example.test";
+  }
   if (options?.forwardedHost) {
     headers["x-forwarded-host"] = options.forwardedHost;
   }
@@ -488,6 +490,80 @@ test("runtime manager rejects cross-origin browser handshakes", async () => {
       "connection",
       socket as unknown as WebSocket,
       createCrossOriginConnectionRequest(createWsToken("activity-cross-origin")),
+    );
+    await flushAsyncWork();
+
+    assert.equal(lookupCalls, 0);
+    assert.equal(providedMap.size, 0);
+    assert.equal(socket.closeCalls, 1);
+  } finally {
+    wss.emit("close");
+  }
+});
+
+test("runtime manager rejects browser handshakes when the origin header is missing", async () => {
+  const wss = new FakeWebSocketServer();
+  const providedMap = new Map<string, WebSocket>();
+  const socket = new FakeWebSocket();
+  let lookupCalls = 0;
+
+  createRuntimeWebSocketManager({
+    wss: wss as unknown as import("ws").WebSocketServer,
+    storage: {
+      getActivityById: async () => {
+        lookupCalls += 1;
+        return undefined;
+      },
+      clearCollectionNicknameSessionByActivity: async () => undefined,
+    },
+    secret: TEST_SECRET,
+    connectedClients: providedMap,
+  });
+
+  try {
+    wss.emit(
+      "connection",
+      socket as unknown as WebSocket,
+      createConnectionRequest(createWsToken("activity-missing-origin"), {
+        origin: null,
+      }),
+    );
+    await flushAsyncWork();
+
+    assert.equal(lookupCalls, 0);
+    assert.equal(providedMap.size, 0);
+    assert.equal(socket.closeCalls, 1);
+  } finally {
+    wss.emit("close");
+  }
+});
+
+test("runtime manager rejects browser handshakes when the origin header is malformed", async () => {
+  const wss = new FakeWebSocketServer();
+  const providedMap = new Map<string, WebSocket>();
+  const socket = new FakeWebSocket();
+  let lookupCalls = 0;
+
+  createRuntimeWebSocketManager({
+    wss: wss as unknown as import("ws").WebSocketServer,
+    storage: {
+      getActivityById: async () => {
+        lookupCalls += 1;
+        return undefined;
+      },
+      clearCollectionNicknameSessionByActivity: async () => undefined,
+    },
+    secret: TEST_SECRET,
+    connectedClients: providedMap,
+  });
+
+  try {
+    wss.emit(
+      "connection",
+      socket as unknown as WebSocket,
+      createConnectionRequest(createWsToken("activity-malformed-origin"), {
+        origin: "not a valid origin",
+      }),
     );
     await flushAsyncWork();
 

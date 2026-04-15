@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { createCipheriv, createHash, randomBytes } from "node:crypto";
 import test from "node:test";
 import { getSessionSecret } from "../../config/security";
-import { decryptTwoFactorSecret, encryptTwoFactorSecret } from "../two-factor";
+import { decryptTwoFactorSecret, encryptTwoFactorSecret, verifyTwoFactorCode } from "../two-factor";
 
 function encryptLegacyTwoFactorSecret(secret: string) {
   const iv = randomBytes(12);
@@ -64,4 +64,11 @@ test("decryptTwoFactorSecret rejects legacy payloads encrypted with the session 
       process.env.TWO_FACTOR_ENCRYPTION_KEY = previousKey;
     }
   }
+});
+
+test("verifyTwoFactorCode rejects malformed base32 secrets instead of silently normalizing them", () => {
+  assert.throws(
+    () => verifyTwoFactorCode("JBSWY3DP***", "123456"),
+    /Invalid 2FA secret payload/i,
+  );
 });

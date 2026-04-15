@@ -57,6 +57,8 @@ export type RuntimeConfig = {
     maxConnections: number;
     idleTimeoutMs: number;
     connectionTimeoutMs: number;
+    queryTimeoutMs: number;
+    statementTimeoutMs: number;
     searchPath: string;
   };
   auth: {

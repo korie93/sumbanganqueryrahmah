@@ -211,7 +211,37 @@ test("runtime config allows explicit operations debug route enablement for contr
     },
     async () => {
       const runtimeModule = await importRuntimeFresh();
+      assert.equal(runtimeModule.runtimeConfig.app.operationsDebugRoutesEnabled, false);
+    },
+  );
+});
+
+test("runtime config enables operations debug routes outside production-like environments when explicitly allowed", async () => {
+  await withEnv(
+    {
+      NODE_ENV: "development",
+      HOST: "127.0.0.1",
+      OPERATIONS_DEBUG_ROUTES_ENABLED: "1",
+    },
+    async () => {
+      const runtimeModule = await importRuntimeFresh();
       assert.equal(runtimeModule.runtimeConfig.app.operationsDebugRoutesEnabled, true);
+    },
+  );
+});
+
+test("runtime config reads explicit PostgreSQL query timeout settings", async () => {
+  await withEnv(
+    {
+      NODE_ENV: "development",
+      HOST: "127.0.0.1",
+      PG_QUERY_TIMEOUT_MS: "61000",
+      PG_STATEMENT_TIMEOUT_MS: "47000",
+    },
+    async () => {
+      const runtimeModule = await importRuntimeFresh();
+      assert.equal(runtimeModule.runtimeConfig.database.queryTimeoutMs, 61_000);
+      assert.equal(runtimeModule.runtimeConfig.database.statementTimeoutMs, 47_000);
     },
   );
 });

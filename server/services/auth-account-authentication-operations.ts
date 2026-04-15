@@ -15,6 +15,7 @@ import {
   failLockedLogin,
   handleFailedPasswordAttempt,
   invalidateUserSessions,
+  requiresMandatoryTwoFactorEnrollment,
   requiresTwoFactor,
   verifyTwoFactorSecretCode,
 } from "./auth-account-authentication-utils";
@@ -110,6 +111,23 @@ export class AuthAccountAuthenticationOperations {
     }
 
     const unlockedUser = await clearFailedLoginState(this.deps.storage, user);
+
+    if (requiresMandatoryTwoFactorEnrollment(unlockedUser)) {
+      await this.deps.storage.createAuditLog({
+        action: "LOGIN_BLOCKED_2FA_SETUP_REQUIRED",
+        performedBy: unlockedUser.username,
+        targetUser: unlockedUser.id,
+        details: `Login blocked because ${unlockedUser.role} account is missing mandatory two-factor enrollment.`,
+      });
+      throw new AuthAccountError(
+        403,
+        ERROR_CODES.TWO_FACTOR_SETUP_MISSING,
+        "Two-factor authentication must be enabled for this account before login is allowed.",
+        {
+          twoFactorEnrollmentRequired: true,
+        },
+      );
+    }
 
     if (requiresTwoFactor(unlockedUser)) {
       await this.deps.storage.createAuditLog({

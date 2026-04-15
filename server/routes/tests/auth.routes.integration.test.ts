@@ -1722,6 +1722,50 @@ test("POST /api/auth/validate-password-reset-token returns reset metadata for a 
   }
 });
 
+test("POST /api/auth/login blocks admin accounts that are not enrolled in mandatory 2FA", async () => {
+  const { storage, user, auditLogs } = await createLoginStorageDouble({
+    user: {
+      role: "admin",
+      twoFactorEnabled: false,
+      twoFactorSecretEncrypted: null,
+      twoFactorConfiguredAt: null,
+    },
+  });
+  const app = createJsonTestApp();
+
+  registerAuthRoutes(app, {
+    storage,
+    authenticateToken: (_req, _res, next) => next(),
+    requireRole: () => (_req, _res, next) => next(),
+    connectedClients: new Map(),
+  });
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const response = await fetch(`${baseUrl}/api/auth/login`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        username: user.username,
+        password: "StrongPass123!",
+        fingerprint: "fingerprint-login",
+        browser: "Mozilla/5.0",
+      }),
+    });
+
+    assert.equal(response.status, 403);
+    const payload = await response.json();
+    assert.equal(payload.ok, false);
+    assert.equal(payload.error?.code, "TWO_FACTOR_SETUP_MISSING");
+    assert.equal(payload.twoFactorEnrollmentRequired, true);
+    assert.equal(auditLogs.some((entry) => entry.action === "LOGIN_BLOCKED_2FA_SETUP_REQUIRED"), true);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
 test("POST /api/auth/validate-password-reset-token accepts database-style UTC timestamps without timezone", async () => {
   const { storage, rawToken } = createPasswordResetStorageDouble({
     resetRecord: {

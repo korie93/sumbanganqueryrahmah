@@ -110,6 +110,7 @@ export function createImportsMultipartRoute(
     let fileTask: Promise<PreparedMultipartImportUpload> | null = null;
     let settled = false;
     let quotaReleased = false;
+    let parserStopped = false;
     const activeFileStreams = new Set<MultipartUploadFileStream>();
     const logMultipartCleanupFailure = (
       step: string,
@@ -141,6 +142,10 @@ export function createImportsMultipartRoute(
     };
 
     const stopMultipartParsing = (error?: unknown) => {
+      if (parserStopped) {
+        return;
+      }
+      parserStopped = true;
       const cleanupError = toMultipartCleanupError(error);
       try {
         req.unpipe(parser);

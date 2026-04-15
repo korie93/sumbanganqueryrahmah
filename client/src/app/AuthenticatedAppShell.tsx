@@ -12,6 +12,7 @@ import type {
   User,
 } from "@/app/types";
 import AutoLogout from "@/components/AutoLogout";
+import { FloatingAIErrorBoundary } from "@/components/FloatingAIErrorBoundary";
 import Navbar from "@/components/Navbar";
 import { AIProvider } from "@/context/AIContext";
 import { lazyWithPreload, scheduleIdlePreload } from "@/lib/lazy-with-preload";
@@ -190,13 +191,15 @@ export default function AuthenticatedAppShell({
           </Suspense>
         </AppRouteErrorBoundary>
         {runtimeConfig.aiEnabled && currentPage !== "ai" && floatingAiReady ? (
-          <Suspense fallback={null}>
-            <FloatingAI
-              timeoutMs={runtimeConfig.aiTimeoutMs}
-              aiEnabled={runtimeConfig.aiEnabled}
-              activePage={currentPage}
-            />
-          </Suspense>
+          <FloatingAIErrorBoundary boundaryKey={`${currentPage}:${Number(runtimeConfig.aiEnabled)}`}>
+            <Suspense fallback={null}>
+              <FloatingAI
+                timeoutMs={runtimeConfig.aiTimeoutMs}
+                aiEnabled={runtimeConfig.aiEnabled}
+                activePage={currentPage}
+              />
+            </Suspense>
+          </FloatingAIErrorBoundary>
         ) : null}
       </div>
     </AIProvider>

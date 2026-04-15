@@ -5,6 +5,7 @@ import * as SelectPrimitive from "@radix-ui/react-select"
 import { Check, ChevronDown, ChevronUp } from "lucide-react"
 
 import { cn } from "@/lib/utils"
+import { FOCUS_VISIBLE_RING_CLASS_NAME } from "@/components/ui/focus-ring"
 
 const Select = SelectPrimitive.Root
 
@@ -19,7 +20,7 @@ const SelectTrigger = React.forwardRef<
   <SelectPrimitive.Trigger
     ref={ref}
     className={cn(
-      "flex h-9 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background data-[placeholder]:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1",
+      `flex h-9 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm data-[placeholder]:text-muted-foreground ${FOCUS_VISIBLE_RING_CLASS_NAME} disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1`,
       className
     )}
     {...props}

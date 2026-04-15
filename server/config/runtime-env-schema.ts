@@ -131,6 +131,8 @@ const runtimeEnvironmentSchema = z.object({
   PG_MAX_CONNECTIONS: optionalIntEnv("PG_MAX_CONNECTIONS", { min: 1, max: 50 }),
   PG_IDLE_TIMEOUT_MS: optionalIntEnv("PG_IDLE_TIMEOUT_MS", { min: 1_000 }),
   PG_CONNECTION_TIMEOUT_MS: optionalIntEnv("PG_CONNECTION_TIMEOUT_MS", { min: 1_000 }),
+  PG_QUERY_TIMEOUT_MS: optionalIntEnv("PG_QUERY_TIMEOUT_MS", { min: 1_000 }),
+  PG_STATEMENT_TIMEOUT_MS: optionalIntEnv("PG_STATEMENT_TIMEOUT_MS", { min: 1_000 }),
   PG_SEARCH_PATH: optionalEnvString("PG_SEARCH_PATH", 255),
 
   SESSION_SECRET: optionalEnvString("SESSION_SECRET", SECRET_STRING_MAX_LENGTH),

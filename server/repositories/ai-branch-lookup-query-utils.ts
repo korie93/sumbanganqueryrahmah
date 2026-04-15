@@ -237,13 +237,18 @@ export async function getPostcodeLatLngValue(params: {
       FROM public.aeon_branches
     `);
 
+    const seedValues = [];
     for (const branch of readRows<BranchSeedRow>(branches)) {
       const normalized = extractAiBranchSeedPostcode(branch.branch_address);
       if (!normalized) continue;
 
+      seedValues.push(sql`(${normalized}, ${Number(branch.branch_lat)}, ${Number(branch.branch_lng)}, ${String(branch.name)}, null)`);
+    }
+
+    if (seedValues.length > 0) {
       await db.execute(sql`
         INSERT INTO public.aeon_branch_postcodes (postcode, lat, lng, source_branch, state)
-        VALUES (${normalized}, ${Number(branch.branch_lat)}, ${Number(branch.branch_lng)}, ${String(branch.name)}, null)
+        VALUES ${sql.join(seedValues, sql`, `)}
         ON CONFLICT (postcode) DO NOTHING
       `);
     }

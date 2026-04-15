@@ -11,27 +11,32 @@ import { logger } from "./lib/logger";
 
 const { Pool } = pg;
 
-export const pool = new Pool(
-  runtimeConfig.database.connectionString
+export function buildPgPoolConfig(config: typeof runtimeConfig.database): pg.PoolConfig {
+  const sharedConfig = {
+    max: config.maxConnections,
+    idleTimeoutMillis: config.idleTimeoutMs,
+    connectionTimeoutMillis: config.connectionTimeoutMs,
+    query_timeout: config.queryTimeoutMs,
+    statement_timeout: config.statementTimeoutMs,
+    options: `-c search_path=${validatePgSearchPath(config.searchPath)}`,
+  } satisfies pg.PoolConfig;
+
+  return config.connectionString
     ? {
-        connectionString: runtimeConfig.database.connectionString,
-        max: runtimeConfig.database.maxConnections,
-        idleTimeoutMillis: runtimeConfig.database.idleTimeoutMs,
-        connectionTimeoutMillis: runtimeConfig.database.connectionTimeoutMs,
-        options: `-c search_path=${validatePgSearchPath(runtimeConfig.database.searchPath)}`,
+        ...sharedConfig,
+        connectionString: config.connectionString,
       }
     : {
-        host: runtimeConfig.database.host,
-        port: runtimeConfig.database.port,
-        user: runtimeConfig.database.user,
-        password: runtimeConfig.database.password,
-        database: runtimeConfig.database.database,
-        max: runtimeConfig.database.maxConnections,
-        idleTimeoutMillis: runtimeConfig.database.idleTimeoutMs,
-        connectionTimeoutMillis: runtimeConfig.database.connectionTimeoutMs,
-        options: `-c search_path=${validatePgSearchPath(runtimeConfig.database.searchPath)}`,
-      },
-);
+        ...sharedConfig,
+        host: config.host,
+        port: config.port,
+        user: config.user,
+        password: config.password,
+        database: config.database,
+      };
+}
+
+export const pool = new Pool(buildPgPoolConfig(runtimeConfig.database));
 
 export const dbQueryProfiler = createDbQueryProfiler({
   ...runtimeConfig.runtime.dbQueryProfiling,

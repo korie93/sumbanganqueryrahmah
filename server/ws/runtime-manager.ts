@@ -54,6 +54,23 @@ type RuntimeForwardedHeaderTrustOptions = {
   trustedForwardedProxies: readonly string[];
 };
 
+type RuntimeOriginValidationReason =
+  | "missing_origin"
+  | "invalid_origin"
+  | "unsupported_origin_protocol"
+  | "missing_request_host"
+  | "host_mismatch"
+  | "protocol_mismatch";
+
+type RuntimeOriginValidationResult =
+  | {
+      ok: true;
+    }
+  | {
+      ok: false;
+      reason: RuntimeOriginValidationReason;
+    };
+
 function firstHeaderValue(value: string | string[] | undefined): string {
   if (Array.isArray(value)) {
     return String(value[0] || "");
@@ -193,31 +210,96 @@ function readWebSocketRequestProto(
   return req.socket && "encrypted" in req.socket && req.socket.encrypted ? "https" : "http";
 }
 
-function isSameOriginWebSocketRequest(
+function validateSameOriginWebSocketRequest(
   req: Pick<IncomingMessage, "headers" | "socket">,
   options: { trustForwardedHeaders: boolean },
-): boolean {
+): RuntimeOriginValidationResult {
   const origin = firstHeaderValue(req.headers.origin).trim();
   if (!origin) {
-    return true;
+    return {
+      ok: false,
+      reason: "missing_origin",
+    };
   }
 
   const requestHost = readWebSocketRequestHost(req.headers, options);
   if (!requestHost) {
-    return false;
+    return {
+      ok: false,
+      reason: "missing_request_host",
+    };
   }
 
   try {
     const originUrl = new URL(origin);
+    if (originUrl.protocol !== "http:" && originUrl.protocol !== "https:") {
+      return {
+        ok: false,
+        reason: "unsupported_origin_protocol",
+      };
+    }
+
     if (originUrl.host.toLowerCase() !== requestHost) {
-      return false;
+      return {
+        ok: false,
+        reason: "host_mismatch",
+      };
     }
 
     const requestProto = readWebSocketRequestProto(req, options);
-    return originUrl.protocol === `${requestProto}:`;
+    if (originUrl.protocol !== `${requestProto}:`) {
+      return {
+        ok: false,
+        reason: "protocol_mismatch",
+      };
+    }
+
+    return {
+      ok: true,
+    };
   } catch {
-    return false;
+    return {
+      ok: false,
+      reason: "invalid_origin",
+    };
   }
+}
+
+function buildWebSocketHandshakeLogDetails(params: {
+  req: Pick<IncomingMessage, "headers" | "socket">;
+  trustForwardedHeaders: boolean;
+  trustedForwardedProxyMatcher: ReturnType<typeof buildTrustedProxyMatcher>;
+  rejectionReason: RuntimeOriginValidationReason | "query_token";
+}) {
+  const forwardedHeadersTrusted = shouldTrustForwardedHeaders(
+    params.req,
+    {
+      trustForwardedHeaders: params.trustForwardedHeaders,
+      trustedForwardedProxies: [],
+    },
+    params.trustedForwardedProxyMatcher,
+  );
+  const origin = firstHeaderValue(params.req.headers.origin).trim();
+  const originProtocol = origin ? (() => {
+    try {
+      return new URL(origin).protocol.replace(/:$/, "");
+    } catch {
+      return "invalid";
+    }
+  })() : "missing";
+
+  return {
+    rejectionReason: params.rejectionReason,
+    originPresent: origin.length > 0,
+    originProtocol,
+    requestHostPresent: readWebSocketRequestHost(params.req.headers, {
+      trustForwardedHeaders: forwardedHeadersTrusted,
+    }).length > 0,
+    requestProto: readWebSocketRequestProto(params.req, {
+      trustForwardedHeaders: forwardedHeadersTrusted,
+    }),
+    forwardedHeadersTrusted,
+  };
 }
 
 function getActivityUserKey(activity: RuntimeWebSocketActivity): string | null {
@@ -604,31 +686,44 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
     });
 
     const url = new URL(req.url!, `http://${req.headers.host}`);
+    const forwardedHeadersTrusted = shouldTrustForwardedHeaders(
+      req,
+      {
+        trustForwardedHeaders,
+        trustedForwardedProxies,
+      },
+      trustedForwardedProxyMatcher,
+    );
+
     if (url.searchParams.has("token")) {
-      logger.warn("WebSocket rejected query-string session token", {
-        origin: req.headers.origin || null,
-      });
+      logger.warn(
+        "WebSocket rejected query-string session token",
+        buildWebSocketHandshakeLogDetails({
+          req,
+          trustForwardedHeaders,
+          trustedForwardedProxyMatcher,
+          rejectionReason: "query_token",
+        }),
+      );
       cleanupSocket();
       closeSocketIfNeeded();
       return;
     }
 
-    if (
-      !isSameOriginWebSocketRequest(req, {
-        trustForwardedHeaders: shouldTrustForwardedHeaders(
+    const originValidation = validateSameOriginWebSocketRequest(req, {
+      trustForwardedHeaders: forwardedHeadersTrusted,
+    });
+
+    if (!originValidation.ok) {
+      logger.warn(
+        "WebSocket rejected invalid same-origin handshake",
+        buildWebSocketHandshakeLogDetails({
           req,
-          {
-            trustForwardedHeaders,
-            trustedForwardedProxies,
-          },
+          trustForwardedHeaders,
           trustedForwardedProxyMatcher,
-        ),
-      })
-    ) {
-      logger.warn("WebSocket rejected cross-origin handshake", {
-        origin: req.headers.origin || null,
-        host: req.headers.host || null,
-      });
+          rejectionReason: originValidation.reason,
+        }),
+      );
       cleanupSocketSafely("cross-origin-reject");
       closeSocketIfNeeded();
       return;

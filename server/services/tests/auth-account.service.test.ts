@@ -164,14 +164,19 @@ async function createLockoutHarness(overrides?: Record<string, unknown>) {
   };
 }
 
-test("AuthAccountService.login clears stale superuser sessions before issuing a new session", async () => {
+test("AuthAccountService.verifyTwoFactorLogin clears stale superuser sessions before issuing a new session", async () => {
   const passwordHash = await hashPassword("Password123!");
-  const user = buildSuperuser(passwordHash);
+  const user = {
+    ...buildSuperuser(passwordHash),
+    twoFactorEnabled: true,
+    twoFactorSecretEncrypted: encryptTwoFactorSecret("JBSWY3DPEHPK3PXP"),
+    twoFactorConfiguredAt: new Date("2026-03-20T00:00:00.000Z"),
+  };
   const auditActions: string[] = [];
   let deactivated = false;
 
   const service = createAuthAccountService({
-    getUserByUsername: async () => user,
+    getUser: async () => user,
     isVisitorBanned: async () => false,
     createAuditLog: async (entry: AuditLogInput) => {
       auditActions.push(String(entry?.action || ""));
@@ -220,16 +225,15 @@ test("AuthAccountService.login clears stale superuser sessions before issuing a 
     }),
   });
 
-  const result = await service.login({
-    username: "superuser",
-    password: "Password123!",
+  const result = await service.verifyTwoFactorLogin({
+    userId: user.id,
+    code: generateCurrentTwoFactorCode("JBSWY3DPEHPK3PXP"),
     browserName: "chrome",
     fingerprint: "fp-1",
     ipAddress: "127.0.0.1",
     pcName: "pc",
   });
 
-  assert.equal(result.kind, "authenticated");
   assert.equal(result.user.username, "superuser");
   assert.equal(result.activity.id, "activity-new-1");
   assert.equal(deactivated, true);
@@ -237,12 +241,17 @@ test("AuthAccountService.login clears stale superuser sessions before issuing a 
   assert.ok(auditActions.includes("LOGIN_SUCCESS"));
 });
 
-test("AuthAccountService.login blocks superuser when another recent session is still active", async () => {
+test("AuthAccountService.verifyTwoFactorLogin blocks superuser when another recent session is still active", async () => {
   const passwordHash = await hashPassword("Password123!");
-  const user = buildSuperuser(passwordHash);
+  const user = {
+    ...buildSuperuser(passwordHash),
+    twoFactorEnabled: true,
+    twoFactorSecretEncrypted: encryptTwoFactorSecret("JBSWY3DPEHPK3PXP"),
+    twoFactorConfiguredAt: new Date("2026-03-20T00:00:00.000Z"),
+  };
 
   const service = createAuthAccountService({
-    getUserByUsername: async () => user,
+    getUser: async () => user,
     isVisitorBanned: async () => false,
     createAuditLog: async (entry: AuditLogInput) => buildAuditLog(entry),
     getBooleanSystemSetting: async () => true,
@@ -258,9 +267,9 @@ test("AuthAccountService.login blocks superuser when another recent session is s
   });
 
   await assert.rejects(
-    service.login({
-      username: "superuser",
-      password: "Password123!",
+    service.verifyTwoFactorLogin({
+      userId: user.id,
+      code: generateCurrentTwoFactorCode("JBSWY3DPEHPK3PXP"),
       browserName: "chrome",
       fingerprint: "fp-1",
       ipAddress: "127.0.0.1",
@@ -382,6 +391,47 @@ test("AuthAccountService.login requires second factor for admin accounts with 2F
   assert.equal(result.user.username, "admin.user");
   assert.equal(createActivityCalled, false);
   assert.ok(auditActions.includes("LOGIN_SECOND_FACTOR_REQUIRED"));
+});
+
+test("AuthAccountService.login blocks admin accounts that are missing mandatory 2FA enrollment", async () => {
+  const passwordHash = await hashPassword("Password123!");
+  const user = {
+    ...buildSuperuser(passwordHash),
+    id: "admin-enrollment-1",
+    username: "admin.enrollment",
+    role: "admin",
+    twoFactorEnabled: false,
+    twoFactorSecretEncrypted: null,
+  };
+  const auditActions: string[] = [];
+
+  const service = createAuthAccountService({
+    getUserByUsername: async () => user,
+    isVisitorBanned: async () => false,
+    createAuditLog: async (entry: AuditLogInput) => {
+      auditActions.push(String(entry?.action || ""));
+      return buildAuditLog(entry);
+    },
+  });
+
+  await assert.rejects(
+    service.login({
+      username: "admin.enrollment",
+      password: "Password123!",
+      browserName: "chrome",
+      fingerprint: "fp-admin-enrollment",
+      ipAddress: "127.0.0.1",
+      pcName: "pc",
+    }),
+    (error: unknown) => {
+      assert.ok(error instanceof AuthAccountError);
+      assert.equal(error.statusCode, 403);
+      assert.equal(error.code, "TWO_FACTOR_SETUP_MISSING");
+      return true;
+    },
+  );
+
+  assert.ok(auditActions.includes("LOGIN_BLOCKED_2FA_SETUP_REQUIRED"));
 });
 
 test("AuthAccountService.verifyTwoFactorLogin replaces existing admin sessions after successful verification", async () => {

@@ -30,8 +30,13 @@ function base32Encode(buffer: Buffer) {
 function base32Decode(value: string) {
   const normalized = String(value || "")
     .toUpperCase()
+    .replace(/[\s-]+/g, "")
     .replace(/=+$/g, "")
-    .replace(/[^A-Z2-7]/g, "");
+    .trim();
+
+  if (!normalized || /[^A-Z2-7]/.test(normalized)) {
+    throw new Error("Invalid 2FA secret payload.");
+  }
 
   let bits = 0;
   let current = 0;
@@ -40,7 +45,7 @@ function base32Decode(value: string) {
   for (const character of normalized) {
     const index = BASE32_ALPHABET.indexOf(character);
     if (index === -1) {
-      continue;
+      throw new Error("Invalid 2FA secret payload.");
     }
 
     current = (current << 5) | index;

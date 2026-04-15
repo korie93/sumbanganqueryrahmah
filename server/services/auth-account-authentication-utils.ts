@@ -10,6 +10,7 @@ export {
 } from "./auth-account-authentication-mail-utils";
 export {
   requiresTwoFactor,
+  requiresMandatoryTwoFactorEnrollment,
   getSuperuserSessionIdleWindowMs,
   isRecentActivitySession,
   invalidateUserSessions,

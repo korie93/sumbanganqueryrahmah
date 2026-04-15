@@ -40,36 +40,46 @@ function DashboardContent() {
   const { data: summary, isLoading: summaryLoading, refetch: refetchSummary } = useQuery<SummaryData>({
     queryKey: ["/api/analytics/summary"],
     queryFn: ({ signal }) => getAnalyticsSummary({ signal }),
+    staleTime: DASHBOARD_PRIMARY_REFETCH_INTERVAL_MS,
     refetchInterval: () => resolveVisibleDashboardRefetchInterval(DASHBOARD_PRIMARY_REFETCH_INTERVAL_MS),
     refetchIntervalInBackground: false,
+    refetchOnReconnect: false,
   });
 
   const { data: trends, isLoading: trendsLoading, refetch: refetchTrends } = useQuery<LoginTrend[]>({
     queryKey: ["/api/analytics/login-trends", trendDays],
     queryFn: ({ signal }) => getLoginTrends(trendDays, { signal }),
+    staleTime: DASHBOARD_PRIMARY_REFETCH_INTERVAL_MS,
     refetchInterval: () => resolveVisibleDashboardRefetchInterval(DASHBOARD_PRIMARY_REFETCH_INTERVAL_MS),
     refetchIntervalInBackground: false,
+    refetchOnReconnect: false,
   });
 
   const { data: topUsers, isLoading: topUsersLoading, refetch: refetchTopUsers } = useQuery<TopUser[]>({
     queryKey: ["/api/analytics/top-users"],
     queryFn: ({ signal }) => getTopActiveUsers(10, { signal }),
+    staleTime: DASHBOARD_PRIMARY_REFETCH_INTERVAL_MS,
     refetchInterval: () => resolveVisibleDashboardRefetchInterval(DASHBOARD_PRIMARY_REFETCH_INTERVAL_MS),
     refetchIntervalInBackground: false,
+    refetchOnReconnect: false,
   });
 
   const { data: peakHours, isLoading: peakHoursLoading, refetch: refetchPeakHours } = useQuery<PeakHour[]>({
     queryKey: ["/api/analytics/peak-hours"],
     queryFn: ({ signal }) => getPeakHours({ signal }),
+    staleTime: DASHBOARD_SECONDARY_REFETCH_INTERVAL_MS,
     refetchInterval: () => resolveVisibleDashboardRefetchInterval(DASHBOARD_SECONDARY_REFETCH_INTERVAL_MS),
     refetchIntervalInBackground: false,
+    refetchOnReconnect: false,
   });
 
   const { data: roleDistribution, isLoading: roleLoading, refetch: refetchRoles } = useQuery<RoleData[]>({
     queryKey: ["/api/analytics/role-distribution"],
     queryFn: ({ signal }) => getRoleDistribution({ signal }),
+    staleTime: DASHBOARD_SECONDARY_REFETCH_INTERVAL_MS,
     refetchInterval: () => resolveVisibleDashboardRefetchInterval(DASHBOARD_SECONDARY_REFETCH_INTERVAL_MS),
     refetchIntervalInBackground: false,
+    refetchOnReconnect: false,
   });
 
   const summaryCards = useMemo(() => buildSummaryCards(summary), [summary]);
