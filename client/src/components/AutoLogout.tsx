@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useLatestRef } from "@/hooks/use-latest-ref";
 import {
   resolveActivityHeartbeatSyncWindowMs,
@@ -17,6 +17,10 @@ import {
   bindAutoLogoutSocket,
   disposeAutoLogoutSocket,
 } from "@/components/auto-logout-socket-runtime";
+import {
+  AUTO_LOGOUT_RECONNECT_FEEDBACK_IDLE_STATE,
+  buildAutoLogoutReconnectFeedbackMessage,
+} from "@/components/auto-logout-reconnect-feedback";
 
 interface AutoLogoutProps {
   onClientLogout: () => void | Promise<void>;
@@ -33,6 +37,9 @@ export default function AutoLogout({
   heartbeatIntervalMinutes = 5,
   username,
 }: AutoLogoutProps) {
+  const [reconnectFeedback, setReconnectFeedback] = useState(
+    AUTO_LOGOUT_RECONNECT_FEEDBACK_IDLE_STATE,
+  );
   const timeoutRef = useRef<number | null>(null);
   const heartbeatRef = useRef<number | null>(null);
   const heartbeatAbortControllerRef = useRef<AbortController | null>(null);
@@ -52,6 +59,7 @@ export default function AutoLogout({
   const timeoutMs = timeoutMinutes * 60 * 1000;
   const heartbeatMs = heartbeatIntervalMinutes * 60 * 1000;
   const heartbeatSyncWindowMs = resolveActivityHeartbeatSyncWindowMs(heartbeatMs);
+  const reconnectFeedbackMessage = buildAutoLogoutReconnectFeedbackMessage(reconnectFeedback);
 
   const clearIdleTimeout = useCallback(() => {
     if (timeoutRef.current) {
@@ -79,6 +87,10 @@ export default function AutoLogout({
     heartbeatAbortControllerRef.current = null;
   }, []);
 
+  const resetReconnectFeedback = useCallback(() => {
+    setReconnectFeedback(AUTO_LOGOUT_RECONNECT_FEEDBACK_IDLE_STATE);
+  }, []);
+
   const cleanupSocket = useCallback(() => {
     clearReconnect();
 
@@ -93,9 +105,17 @@ export default function AutoLogout({
     clearIdleTimeout();
     clearHeartbeat();
     clearHeartbeatRequest();
+    resetReconnectFeedback();
     cleanupSocket();
     await onLogoutRef.current();
-  }, [cleanupSocket, clearHeartbeat, clearHeartbeatRequest, clearIdleTimeout, onLogoutRef]);
+  }, [
+    cleanupSocket,
+    clearHeartbeat,
+    clearHeartbeatRequest,
+    clearIdleTimeout,
+    onLogoutRef,
+    resetReconnectFeedback,
+  ]);
 
   const runClientLogout = useCallback(async () => {
     if (logoutStartedRef.current) return;
@@ -105,9 +125,17 @@ export default function AutoLogout({
     clearIdleTimeout();
     clearHeartbeat();
     clearHeartbeatRequest();
+    resetReconnectFeedback();
     cleanupSocket();
     await onClientLogoutRef.current();
-  }, [cleanupSocket, clearHeartbeat, clearHeartbeatRequest, clearIdleTimeout, onClientLogoutRef]);
+  }, [
+    cleanupSocket,
+    clearHeartbeat,
+    clearHeartbeatRequest,
+    clearIdleTimeout,
+    onClientLogoutRef,
+    resetReconnectFeedback,
+  ]);
 
   const resetTimeout = useCallback(() => {
     lastActivityRef.current = Date.now();
@@ -208,6 +236,7 @@ export default function AutoLogout({
   }, [runClientLogout]);
 
   useEffect(() => {
+    resetReconnectFeedback();
     return bindAutoLogoutSocket({
       username,
       mountedRef,
@@ -218,8 +247,27 @@ export default function AutoLogout({
       clearReconnect,
       cleanupSocket,
       runClientLogout,
+      onReconnectStateChange: setReconnectFeedback,
     });
-  }, [cleanupSocket, clearReconnect, runClientLogout, username]);
+  }, [cleanupSocket, clearReconnect, resetReconnectFeedback, runClientLogout, username]);
 
-  return null;
+  return reconnectFeedback.visible ? (
+    <div className="pointer-events-none fixed left-1/2 top-[max(0.75rem,env(safe-area-inset-top,0px))] z-[var(--z-toast)] -translate-x-1/2 px-4">
+      <div
+        role="status"
+        aria-live="polite"
+        aria-label={`Menyambung semula sesi. ${reconnectFeedbackMessage}`}
+        className="flex w-[calc(100vw-2rem)] max-w-sm items-start gap-3 rounded-2xl border border-amber-400/30 bg-background/95 px-4 py-3 text-sm shadow-lg backdrop-blur supports-[backdrop-filter]:bg-background/85"
+      >
+        <span
+          aria-hidden="true"
+          className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full bg-amber-400 animate-pulse"
+        />
+        <div className="min-w-0 space-y-1">
+          <p className="font-semibold text-foreground">Menyambung semula sesi</p>
+          <p className="text-xs leading-5 text-muted-foreground">{reconnectFeedbackMessage}</p>
+        </div>
+      </div>
+    </div>
+  ) : null;
 }

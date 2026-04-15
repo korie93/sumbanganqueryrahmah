@@ -10,6 +10,11 @@ import {
   notifyAutoLogoutNotice,
   warnAutoLogoutDiagnostic,
 } from "@/components/auto-logout-diagnostics"
+import {
+  AUTO_LOGOUT_RECONNECT_FEEDBACK_IDLE_STATE,
+  createAutoLogoutReconnectFeedbackState,
+  type AutoLogoutReconnectFeedbackState,
+} from "@/components/auto-logout-reconnect-feedback"
 
 export type AutoLogoutSocketLike = Pick<WebSocket, "close" | "readyState"> & {
   onopen: ((this: WebSocket, event: Event) => unknown) | null
@@ -28,6 +33,7 @@ type BindAutoLogoutSocketArgs = {
   clearReconnect: () => void
   cleanupSocket: () => void
   runClientLogout: () => Promise<void>
+  onReconnectStateChange?: (state: AutoLogoutReconnectFeedbackState) => void
 }
 
 export function disposeAutoLogoutSocket(
@@ -68,6 +74,7 @@ export function bindAutoLogoutSocket({
   clearReconnect,
   cleanupSocket,
   runClientLogout,
+  onReconnectStateChange,
 }: BindAutoLogoutSocketArgs) {
   const currentUsername = username || getStoredUsername()
   if (!currentUsername) {
@@ -80,6 +87,15 @@ export function bindAutoLogoutSocket({
   reconnectEnabledRef.current = true
   reconnectAttemptRef.current = 0
   let disposed = false
+  const notifyReconnectStateChange = (state: AutoLogoutReconnectFeedbackState) => {
+    if (disposed || !mountedRef.current) {
+      return
+    }
+
+    onReconnectStateChange?.(state)
+  }
+
+  notifyReconnectStateChange(AUTO_LOGOUT_RECONNECT_FEEDBACK_IDLE_STATE)
 
   const isCurrentSocket = (socket: WebSocket) =>
     !disposed && mountedRef.current && reconnectEnabledRef.current && wsRef.current === socket
@@ -97,6 +113,7 @@ export function bindAutoLogoutSocket({
     clearReconnect()
     const attempt = reconnectAttemptRef.current
     const delayMs = resolveAutoLogoutReconnectDelayMs(attempt)
+    notifyReconnectStateChange(createAutoLogoutReconnectFeedbackState(attempt, delayMs))
     reconnectRef.current = window.setTimeout(() => {
       reconnectRef.current = null
       reconnectAttemptRef.current = attempt + 1
@@ -125,6 +142,7 @@ export function bindAutoLogoutSocket({
       activeSocket.onopen = () => {
         if (isCurrentSocket(activeSocket)) {
           reconnectAttemptRef.current = 0
+          notifyReconnectStateChange(AUTO_LOGOUT_RECONNECT_FEEDBACK_IDLE_STATE)
         }
       }
 
