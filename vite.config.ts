@@ -1,6 +1,7 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "path";
+import { createViteBrotliAssetsPlugin } from "./scripts/lib/vite-brotli-assets-plugin.mjs";
 
 const isProductionBuild = process.env.NODE_ENV === "production";
 const enableSourceMaps =
@@ -12,7 +13,7 @@ const enableSourceMaps =
   );
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), createViteBrotliAssetsPlugin()],
   root: "./client",
   build: {
     outDir: "../dist-local/public",

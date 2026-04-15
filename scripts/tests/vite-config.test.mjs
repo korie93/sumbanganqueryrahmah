@@ -76,3 +76,19 @@ test("vite config still allows source maps for explicit staging-style non-produc
     },
   );
 });
+
+test("vite config wires the Brotli sidecar plugin for build output", async () => {
+  await withEnv(
+    {
+      NODE_ENV: "production",
+    },
+    async () => {
+      const config = await importViteConfigFresh();
+      const pluginNames = (config.plugins ?? [])
+        .map((plugin) => (plugin && typeof plugin === "object" ? plugin.name : null))
+        .filter(Boolean);
+
+      assert.ok(pluginNames.includes("sqr-brotli-assets"));
+    },
+  );
+});
