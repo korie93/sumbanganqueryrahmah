@@ -6,6 +6,8 @@ import {
   bindPgPoolHealthCheck,
   bindPgPoolMonitoring,
 } from "./db-pool-monitor";
+import { createDbQueryProfiler } from "./lib/db-query-profiler";
+import { logger } from "./lib/logger";
 
 const { Pool } = pg;
 
@@ -30,6 +32,13 @@ export const pool = new Pool(
         options: `-c search_path=${validatePgSearchPath(runtimeConfig.database.searchPath)}`,
       },
 );
+
+export const dbQueryProfiler = createDbQueryProfiler({
+  ...runtimeConfig.runtime.dbQueryProfiling,
+  logger,
+});
+
+dbQueryProfiler.instrumentPgClientQueryMethod(pg.Client.prototype);
 
 const stopPgPoolMonitoring = bindPgPoolMonitoring(pool, {
   warnCooldownMs: runtimeConfig.runtime.pgPoolWarnCooldownMs,

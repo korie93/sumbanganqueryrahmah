@@ -117,6 +117,14 @@ export type RuntimeConfig = {
     collectionRollupListenReconnectMs: number;
     httpSlowRequestMs: number;
     analyticsTimeZone: string;
+    dbQueryProfiling: {
+      enabled: boolean;
+      samplePercent: number;
+      minQueryCount: number;
+      minTotalQueryMs: number;
+      repeatedStatementThreshold: number;
+      maxLoggedStatements: number;
+    };
   };
   collection: {
     routeWarnMs: number;

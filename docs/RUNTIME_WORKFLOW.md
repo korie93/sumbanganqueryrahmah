@@ -96,6 +96,13 @@ For stale-tab/429 health snapshots:
 
 - `npm run monitor:stale-conflicts`
 
+Untuk pengesahan N+1 query di bawah load pada staging atau local soak:
+
+- set `DB_QUERY_PROFILING_ENABLED=1`
+- jalankan smoke/load flow biasa seperti `npm run smoke:ui`
+- semak warning log `Database query profiling ...`
+- matikan semula profiler selepas sesi profiling selesai
+
 To persist the monitor snapshot to disk during staging or CI:
 
 - set `MONITOR_OUTPUT_FILE`

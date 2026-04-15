@@ -313,6 +313,19 @@ export const runtimeConfig: RuntimeConfig = Object.freeze({
     collectionRollupListenReconnectMs: readInt("COLLECTION_ROLLUP_LISTEN_RECONNECT_MS", 5_000, { min: 1_000 }),
     httpSlowRequestMs: readInt("HTTP_SLOW_REQUEST_MS", 1_500, { min: 250 }),
     analyticsTimeZone: readString("ANALYTICS_TZ", "Asia/Kuala_Lumpur"),
+    dbQueryProfiling: {
+      enabled: readBoolean("DB_QUERY_PROFILING_ENABLED", false),
+      samplePercent: readInt("DB_QUERY_PROFILING_SAMPLE_PERCENT", 100, { min: 0, max: 100 }),
+      minQueryCount: readInt("DB_QUERY_PROFILING_MIN_QUERY_COUNT", 8, { min: 1 }),
+      minTotalQueryMs: readInt("DB_QUERY_PROFILING_MIN_TOTAL_QUERY_MS", 40, { min: 0 }),
+      repeatedStatementThreshold: readInt("DB_QUERY_PROFILING_REPEATED_STATEMENT_THRESHOLD", 3, {
+        min: 2,
+      }),
+      maxLoggedStatements: readInt("DB_QUERY_PROFILING_MAX_LOGGED_STATEMENTS", 5, {
+        min: 1,
+        max: 20,
+      }),
+    },
   },
   collection: {
     routeWarnMs: readInt("COLLECTION_ROUTE_WARN_MS", 750, { min: 250 }),

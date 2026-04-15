@@ -39,6 +39,32 @@ Repo sudah ada runtime monitor untuk pool PostgreSQL:
 
 Ini memberi signal operasi yang cukup berguna walaupun belum menggunakan platform tracing penuh.
 
+### Opt-In DB Query Profiling Untuk Semakan N+1
+
+Repo kini juga ada profiler query per-request yang boleh dihidupkan sementara semasa staging, smoke,
+atau load test untuk menyemak corak N+1 sebenar pada laluan HTTP.
+
+Env yang berkaitan:
+
+- `DB_QUERY_PROFILING_ENABLED=1`
+- `DB_QUERY_PROFILING_SAMPLE_PERCENT=100`
+- `DB_QUERY_PROFILING_MIN_QUERY_COUNT=8`
+- `DB_QUERY_PROFILING_MIN_TOTAL_QUERY_MS=40`
+- `DB_QUERY_PROFILING_REPEATED_STATEMENT_THRESHOLD=3`
+- `DB_QUERY_PROFILING_MAX_LOGGED_STATEMENTS=5`
+
+Bila aktif, request yang mempunyai query count tinggi atau statement berulang akan emit warning
+berstruktur dengan:
+
+- `queryCount`
+- `totalQueryDurationMs`
+- `uniqueStatementCount`
+- `possibleNPlusOne`
+- ringkasan `repeatedStatements`
+
+Ini sengaja disabled secara default supaya traffic production biasa tidak berubah. Gunakan ia
+untuk pengesahan terkawal di bawah load, kemudian matikan semula selepas analisis selesai.
+
 ### Browser Telemetry
 
 Frontend menghantar Web Vitals ke:

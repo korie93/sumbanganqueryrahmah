@@ -164,6 +164,30 @@ test("runtime config accepts production startup when required hardening env vars
   );
 });
 
+test("runtime config accepts optional DB query profiling controls", async () => {
+  await withEnv(
+    {
+      ...productionBaseOverrides,
+      BACKUP_ENCRYPTION_KEY: "A".repeat(32),
+      DB_QUERY_PROFILING_ENABLED: "1",
+      DB_QUERY_PROFILING_SAMPLE_PERCENT: "75",
+      DB_QUERY_PROFILING_MIN_QUERY_COUNT: "9",
+      DB_QUERY_PROFILING_MIN_TOTAL_QUERY_MS: "55",
+      DB_QUERY_PROFILING_REPEATED_STATEMENT_THRESHOLD: "4",
+      DB_QUERY_PROFILING_MAX_LOGGED_STATEMENTS: "6",
+    },
+    async () => {
+      const runtimeModule = await importRuntimeFresh();
+      assert.equal(runtimeModule.runtimeConfig.runtime.dbQueryProfiling.enabled, true);
+      assert.equal(runtimeModule.runtimeConfig.runtime.dbQueryProfiling.samplePercent, 75);
+      assert.equal(runtimeModule.runtimeConfig.runtime.dbQueryProfiling.minQueryCount, 9);
+      assert.equal(runtimeModule.runtimeConfig.runtime.dbQueryProfiling.minTotalQueryMs, 55);
+      assert.equal(runtimeModule.runtimeConfig.runtime.dbQueryProfiling.repeatedStatementThreshold, 4);
+      assert.equal(runtimeModule.runtimeConfig.runtime.dbQueryProfiling.maxLoggedStatements, 6);
+    },
+  );
+});
+
 test("runtime config disables operations debug routes by default on production-like hosts", async () => {
   await withEnv(
     {
