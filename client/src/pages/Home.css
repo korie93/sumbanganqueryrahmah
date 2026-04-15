@@ -35,7 +35,7 @@
   position: relative;
   overflow: hidden;
   padding: 1.35rem;
-  border-radius: 2rem;
+  border-radius: var(--home-hero-radius);
   border: 1px solid var(--home-hero-border);
   background:
     radial-gradient(circle at top right, var(--home-hero-glow), transparent 34%),
@@ -73,7 +73,7 @@
 
 .home-mobile-surface {
   padding: 1rem;
-  border-radius: 1.75rem;
+  border-radius: var(--home-surface-radius);
   border: 1px solid hsl(var(--border) / 0.72);
   background: hsl(var(--card) / 0.92);
   box-shadow: var(--home-surface-shadow);
@@ -85,7 +85,7 @@
   flex-direction: column;
   gap: 0.85rem;
   padding: 0.95rem;
-  border-radius: 1.3rem;
+  border-radius: var(--home-card-radius);
   border: 1px solid hsl(var(--border) / 0.68);
   background: linear-gradient(180deg, hsl(var(--card)), hsl(var(--accent) / 0.46));
   box-shadow: var(--home-quick-card-shadow);
@@ -127,7 +127,7 @@
   gap: 0.85rem;
   width: 100%;
   padding: 0.95rem 1rem;
-  border-radius: 1.2rem;
+  border-radius: var(--home-card-radius);
   border: 1px solid hsl(var(--border) / 0.68);
   background: hsl(var(--background) / 0.82);
   box-shadow: var(--home-list-card-shadow);
@@ -145,7 +145,7 @@
 .home-card {
   position: relative;
   padding: 1rem 1.1rem;
-  border-radius: 1.2rem;
+  border-radius: var(--home-card-radius);
   border: 1px solid hsl(var(--border) / 0.75);
   background: hsl(var(--card) / 0.86);
   box-shadow: var(--home-card-shadow);

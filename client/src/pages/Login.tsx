@@ -178,7 +178,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                     <PublicAuthInput
                       id="login-password"
                       name="password"
-                      className="login-input w-full rounded-xl px-4 py-3 pr-12 transition-all"
+                      className="login-input login-password-input w-full rounded-xl px-4 py-3 transition-all"
                       placeholder="Password"
                       type={showPassword ? "text" : "password"}
                       value={password}
@@ -194,7 +194,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                         type="button"
                         onClick={toggleShowPassword}
                         disabled={loading}
-                        className="login-password-toggle absolute right-1 top-1/2 inline-flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-xl transition-colors"
+                        className="login-password-toggle absolute top-1/2 inline-flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-xl transition-colors"
                         data-testid="button-toggle-password"
                         aria-label="Hide password"
                         title="Hide password"
@@ -206,7 +206,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                         type="button"
                         onClick={toggleShowPassword}
                         disabled={loading}
-                        className="login-password-toggle absolute right-1 top-1/2 inline-flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-xl transition-colors"
+                        className="login-password-toggle absolute top-1/2 inline-flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-xl transition-colors"
                         data-testid="button-toggle-password"
                         aria-label="Show password"
                         title="Show password"

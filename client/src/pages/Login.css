@@ -67,7 +67,7 @@
 .login-card {
   position: relative;
   overflow: hidden;
-  border-radius: 32px;
+  border-radius: var(--public-auth-card-radius);
   background: var(--login-card-surface);
   background-clip: padding-box;
   border: 1px solid var(--login-card-border);
@@ -128,6 +128,7 @@
 
 .login-password-toggle {
   color: var(--login-password-toggle-text);
+  inset-inline-end: 0.25rem;
 }
 
 .login-password-toggle:focus-visible {
@@ -135,10 +136,16 @@
   box-shadow: 0 0 0 3px var(--login-password-toggle-ring);
 }
 
+.login-password-input {
+  padding-inline-end: 3rem;
+}
+
 .login-submit {
-  background: var(--login-submit-gradient);
-  color: var(--login-submit-text);
-  box-shadow: var(--login-submit-shadow);
+  --public-auth-button-primary-bg: var(--login-submit-gradient);
+  --public-auth-button-primary-bg-hover: var(--login-submit-gradient-hover);
+  --public-auth-button-primary-text: var(--login-submit-text);
+  --public-auth-button-primary-shadow: var(--login-submit-shadow);
+  --public-auth-button-primary-ring: var(--login-submit-ring);
 }
 
 .login-submit:focus-visible {
@@ -296,7 +303,7 @@
 
   .login-card {
     padding: 1rem 1.1rem !important;
-    border-radius: 1.5rem;
+    border-radius: var(--public-auth-card-radius-compact);
     animation: none;
     -webkit-backdrop-filter: none;
     backdrop-filter: none;

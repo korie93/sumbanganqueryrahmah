@@ -5,7 +5,7 @@
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
-  border-radius: 0.75rem;
+  border-radius: var(--public-auth-control-radius);
   padding-inline: 1rem;
   font-size: var(--font-size-sm);
   font-weight: 600;
@@ -25,25 +25,29 @@
 }
 
 .public-auth-button-primary {
-  background: var(--public-auth-primary-bg);
-  color: var(--public-auth-text-strong);
+  background: var(--public-auth-button-primary-bg, var(--public-auth-primary-bg));
+  color: var(--public-auth-button-primary-text, var(--public-auth-text-strong));
+  box-shadow: var(--public-auth-button-primary-shadow);
 }
 
 .public-auth-button-primary:focus-visible {
-  box-shadow: 0 0 0 3px var(--public-auth-primary-ring);
+  box-shadow:
+    var(--public-auth-button-primary-shadow),
+    0 0 0 3px var(--public-auth-button-primary-ring, var(--public-auth-primary-ring));
 }
 
 .public-auth-button-ghost {
-  color: var(--public-auth-ghost-text);
+  background: var(--public-auth-button-ghost-bg, transparent);
+  color: var(--public-auth-button-ghost-text, var(--public-auth-ghost-text));
 }
 
 .public-auth-button-ghost:focus-visible {
-  box-shadow: 0 0 0 3px var(--public-auth-ghost-ring);
+  box-shadow: 0 0 0 3px var(--public-auth-button-ghost-ring, var(--public-auth-ghost-ring));
 }
 
 .public-auth-input {
   width: 100%;
-  border-radius: 0.75rem;
+  border-radius: var(--public-auth-control-radius);
   border: 1px solid var(--public-auth-input-border);
   background: var(--public-auth-input-bg);
   padding: 0.75rem 1rem;
@@ -62,11 +66,11 @@
 
 @media (hover: hover) and (pointer: fine) {
   .public-auth-button-primary:hover {
-    background: var(--public-auth-primary-bg-hover);
+    background: var(--public-auth-button-primary-bg-hover, var(--public-auth-primary-bg-hover));
   }
 
   .public-auth-button-ghost:hover {
-    background: var(--public-auth-ghost-hover-bg);
-    color: var(--public-auth-text-strong);
+    background: var(--public-auth-button-ghost-hover-bg, var(--public-auth-ghost-hover-bg));
+    color: var(--public-auth-button-ghost-text-hover, var(--public-auth-text-strong));
   }
 }

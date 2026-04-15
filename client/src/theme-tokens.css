@@ -96,6 +96,10 @@
   --public-auth-primary-bg: hsl(221 83% 55%);
   --public-auth-primary-bg-hover: hsl(221 83% 50%);
   --public-auth-primary-ring: hsl(var(--ring) / 0.56);
+  --public-auth-control-radius: 0.75rem;
+  --public-auth-card-radius: 2rem;
+  --public-auth-card-radius-compact: 1.5rem;
+  --public-auth-button-primary-shadow: none;
   --public-auth-ghost-text: hsl(214 32% 91%);
   --public-auth-ghost-hover-bg: hsl(0 0% 100% / 0.05);
   --public-auth-ghost-ring: hsl(var(--ring) / 0.4);
@@ -324,6 +328,9 @@
   --home-hero-action-bg-hover: hsl(0 0% 100% / 0.22);
   --home-hero-action-text: hsl(0 0% 100%);
   --home-hero-action-shadow: 0 12px 22px hsl(215 28% 11% / 0.12);
+  --home-hero-radius: 2rem;
+  --home-surface-radius: 1.75rem;
+  --home-card-radius: 1.25rem;
   --home-surface-shadow: 0 18px 34px hsl(215 28% 11% / 0.08);
   --home-quick-card-shadow: 0 14px 28px hsl(215 28% 11% / 0.06);
   --home-quick-card-shadow-hover: 0 18px 32px hsl(215 28% 11% / 0.1);
@@ -445,6 +452,10 @@
   --public-auth-primary-bg: hsl(221 83% 55%);
   --public-auth-primary-bg-hover: hsl(221 83% 50%);
   --public-auth-primary-ring: hsl(var(--ring) / 0.6);
+  --public-auth-control-radius: 0.75rem;
+  --public-auth-card-radius: 2rem;
+  --public-auth-card-radius-compact: 1.5rem;
+  --public-auth-button-primary-shadow: none;
   --public-auth-ghost-text: hsl(214 32% 91%);
   --public-auth-ghost-hover-bg: hsl(0 0% 100% / 0.08);
   --public-auth-ghost-ring: hsl(var(--ring) / 0.44);
@@ -654,6 +665,9 @@
   --home-hero-action-bg-hover: hsl(222 47% 11% / 0.52);
   --home-hero-action-text: hsl(210 40% 98%);
   --home-hero-action-shadow: 0 12px 22px hsl(222 47% 4% / 0.3);
+  --home-hero-radius: 2rem;
+  --home-surface-radius: 1.75rem;
+  --home-card-radius: 1.25rem;
   --home-surface-shadow: 0 20px 34px hsl(222 47% 4% / 0.26);
   --home-quick-card-shadow: 0 18px 30px hsl(222 47% 4% / 0.26);
   --home-quick-card-shadow-hover: 0 18px 32px hsl(222 47% 4% / 0.3);
@@ -813,7 +827,7 @@ input[type="search"]::-webkit-search-cancel-button {
 
 .skip-to-main-link {
   position: fixed;
-  left: var(--spacing-3);
+  inset-inline-start: var(--spacing-3);
   top: max(var(--spacing-3), var(--safe-area-inset-top));
   z-index: var(--z-tooltip);
   transform: translateY(calc(-100% - var(--spacing-2)));
