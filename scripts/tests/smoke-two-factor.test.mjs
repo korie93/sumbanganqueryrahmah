@@ -80,6 +80,7 @@ test("performLoginWithOptionalTwoFactor returns the login response when no chall
   assert.equal(requests.length, 1);
   assert.equal(requests[0].path, "/api/login");
   assert.equal(requests[0].options?.allowFailure, true);
+  assert.equal(requests[0].init?.headers?.["content-type"], "application/json");
 });
 
 test("performLoginWithOptionalTwoFactor completes the challenge flow when login requires 2FA", async () => {
@@ -130,6 +131,8 @@ test("performLoginWithOptionalTwoFactor completes the challenge flow when login 
   assert.equal(requests.length, 2);
   assert.equal(requests[1].path, "/api/auth/verify-two-factor-login");
   assert.equal(requests[1].options?.allowFailure, true);
+  assert.equal(requests[0].init?.headers?.["content-type"], "application/json");
+  assert.equal(requests[1].init?.headers?.["content-type"], "application/json");
 
   const verifyBody = JSON.parse(String(requests[1].init?.body || "{}"));
   assert.equal(verifyBody.challengeToken, "challenge-token");

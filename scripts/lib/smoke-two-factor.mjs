@@ -80,6 +80,9 @@ export function resolveSmokeTwoFactorSecret({ explicitSecret, role }) {
 export async function performLoginWithOptionalTwoFactor(params) {
   const loginResponse = await params.request("/api/login", {
     method: "POST",
+    headers: {
+      "content-type": "application/json",
+    },
     body: JSON.stringify({
       username: params.username,
       password: params.password,
@@ -106,6 +109,9 @@ export async function performLoginWithOptionalTwoFactor(params) {
 
     const verifyResponse = await params.request("/api/auth/verify-two-factor-login", {
       method: "POST",
+      headers: {
+        "content-type": "application/json",
+      },
       body: JSON.stringify({
         challengeToken,
         code: await generateCurrentSmokeTwoFactorCode(secret),
