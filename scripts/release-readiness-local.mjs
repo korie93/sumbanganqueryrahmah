@@ -168,6 +168,7 @@ const run = async () => {
   await runNpm(["run", "verify:collection-amount-contract"], { env });
   await runNpm(["run", "verify:collection-pii-rollout-contract"], { env });
   await runNpm(["run", "verify:browser-storage-safety"], { env });
+  await runNpm(["run", "verify:client-lazy-loader-contract"], { env });
   await runNpm(["run", "verify:dependency-supply-chain"], { env });
   await runNpm(["run", "verify:client-breakpoint-contract"], { env });
   await runNpm(["run", "verify:client-entry-shell-contract"], { env });

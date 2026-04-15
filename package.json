@@ -14,6 +14,7 @@
     "verify:client-tsconfig-contract": "node scripts/verify-client-tsconfig-contract.mjs",
     "verify:server-env-access-contract": "node scripts/verify-server-env-access-contract.mjs",
     "verify:browser-storage-safety": "node scripts/verify-browser-storage-safety.mjs",
+    "verify:client-lazy-loader-contract": "node scripts/verify-client-lazy-loader-contract.mjs",
     "verify:design-token-color-compatibility": "node scripts/verify-design-token-color-compatibility.mjs",
     "verify:design-token-spacing": "node scripts/verify-design-token-spacing.mjs",
     "verify:dependency-supply-chain": "node scripts/verify-dependency-supply-chain.mjs",
