@@ -473,6 +473,33 @@ test("runtime config forces secure auth cookies on production-like hosts even wh
   );
 });
 
+test("runtime config rejects OLLAMA_HOST values that do not use http or https", async () => {
+  await withEnv(
+    {
+      NODE_ENV: "development",
+      HOST: "127.0.0.1",
+      PUBLIC_APP_URL: "http://127.0.0.1:5000",
+      SESSION_SECRET: null,
+      COLLECTION_NICKNAME_TEMP_PASSWORD: null,
+      COLLECTION_PII_ENCRYPTION_KEY: null,
+      PG_PASSWORD: null,
+      BACKUP_ENCRYPTION_KEY: null,
+      BACKUP_ENCRYPTION_KEYS: null,
+      BACKUP_FEATURE_ENABLED: "1",
+      SEED_DEFAULT_USERS: "0",
+      LOCAL_SUPERUSER_CREDENTIALS_FILE_ENABLED: "0",
+      MAIL_DEV_OUTBOX_ENABLED: "0",
+      OLLAMA_HOST: "ftp://127.0.0.1:11434",
+    },
+    async () => {
+      await assert.rejects(
+        importRuntimeFresh(),
+        /OLLAMA_HOST must use http:\/\/ or https:\/\//i,
+      );
+    },
+  );
+});
+
 test("runtime config accepts an explicit graceful shutdown timeout override", async () => {
   await withEnv(
     {

@@ -253,7 +253,7 @@ export const runtimeConfig: RuntimeConfig = Object.freeze({
     cookieSecure,
   },
   ai: {
-    host: readString("OLLAMA_HOST", "http://127.0.0.1:11434"),
+    host: normalizeHttpUrl("OLLAMA_HOST", readOptionalString("OLLAMA_HOST")) ?? "http://127.0.0.1:11434",
     chatModel: readString("OLLAMA_CHAT_MODEL", "llama3:8b"),
     embedModel: readString("OLLAMA_EMBED_MODEL", "nomic-embed-text"),
     timeoutMs: readInt("OLLAMA_TIMEOUT_MS", 6_000, { min: 1_000 }),
