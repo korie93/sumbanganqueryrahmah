@@ -1,3 +1,5 @@
+/// <reference types="node" />
+
 import { deepEqual, match } from "node:assert/strict";
 import { test } from "node:test";
 import {
