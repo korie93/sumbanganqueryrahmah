@@ -128,6 +128,10 @@ export function isPublicAuthRoutePage(page: string) {
 
 export function buildPathForPage(page: string, monitorSection: MonitorSection = "monitor") {
   if (page === "home") return "/";
+  if (page === "general-search") return "/general-search";
+  if (page === "import") return "/import";
+  if (page === "saved") return "/saved";
+  if (page === "viewer") return "/viewer";
   if (page === "login") return "/login";
   if (page === "settings") return "/settings";
   if (page === "backup") return "/settings?section=backup-restore";

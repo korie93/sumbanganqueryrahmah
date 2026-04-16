@@ -23,6 +23,10 @@ test("resolveRouteFromLocation supports direct app route aliases inside the auth
 
 test("buildPathForPage returns stable public paths", () => {
   assert.equal(buildPathForPage("home"), "/");
+  assert.equal(buildPathForPage("general-search"), "/general-search");
+  assert.equal(buildPathForPage("import"), "/import");
+  assert.equal(buildPathForPage("saved"), "/saved");
+  assert.equal(buildPathForPage("viewer"), "/viewer");
   assert.equal(buildPathForPage("login"), "/login");
   assert.equal(buildPathForPage("not-found"), "/404");
 });
