@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { createClientErrorTelemetryController } from "../../controllers/client-error-telemetry.controller";
 import { createWebVitalsTelemetryController } from "../../controllers/web-vitals-telemetry.controller";
 import { errorHandler } from "../../middleware/error-handler";
 import { registerTelemetryRoutes } from "../telemetry.routes";
@@ -20,6 +21,9 @@ function createTelemetryRouteHarness() {
           recordedPayloads.push(payload as Record<string, unknown>);
         },
       },
+    }).report,
+    reportClientError: createClientErrorTelemetryController({
+      enabled: false,
     }).report,
   });
   app.use(errorHandler);
@@ -60,6 +64,46 @@ test("POST /telemetry/web-vitals accepts a valid web vitals payload", async () =
     assert.equal(recordedPayloads.length, 1);
     assert.equal(recordedPayloads[0]?.name, "LCP");
     assert.equal(recordedPayloads[0]?.path, "/login");
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("POST /telemetry/client-errors accepts a sanitized client runtime error payload", async () => {
+  const app = createJsonTestApp();
+  registerTelemetryRoutes(app, {
+    reportWebVital: createWebVitalsTelemetryController({
+      webVitalsTelemetryService: {
+        record() {
+          return undefined;
+        },
+      },
+    }).report,
+    reportClientError: createClientErrorTelemetryController({
+      enabled: true,
+    }).report,
+  });
+  app.use(errorHandler);
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const response = await fetch(`${baseUrl}/telemetry/client-errors`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        message: "Floating AI shell render failed",
+        source: "error-boundary",
+        pagePath: "/dashboard",
+        errorName: "TypeError",
+        component: "FloatingAI",
+        boundaryKey: "dashboard:1",
+        ts: "2026-04-16T09:30:00.000Z",
+      }),
+    });
+
+    assert.equal(response.status, 204);
   } finally {
     await stopTestServer(server);
   }

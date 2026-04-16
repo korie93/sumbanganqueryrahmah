@@ -246,6 +246,34 @@ test("runtime config reads explicit PostgreSQL query timeout settings", async ()
   );
 });
 
+test("runtime config reads explicit global HTTP request timeout settings", async () => {
+  await withEnv(
+    {
+      NODE_ENV: "development",
+      HOST: "127.0.0.1",
+      HTTP_REQUEST_TIMEOUT_MS: "42000",
+    },
+    async () => {
+      const runtimeModule = await importRuntimeFresh();
+      assert.equal(runtimeModule.runtimeConfig.runtime.requestTimeoutMs, 42_000);
+    },
+  );
+});
+
+test("runtime config reads explicit client error telemetry enablement", async () => {
+  await withEnv(
+    {
+      NODE_ENV: "development",
+      HOST: "127.0.0.1",
+      CLIENT_ERROR_TELEMETRY_ENABLED: "1",
+    },
+    async () => {
+      const runtimeModule = await importRuntimeFresh();
+      assert.equal(runtimeModule.runtimeConfig.observability.clientErrorTelemetryEnabled, true);
+    },
+  );
+});
+
 test("runtime config rejects production startup when default user seeding is enabled", async () => {
   await withEnv(
     {

@@ -1,4 +1,4 @@
-import { Suspense, startTransition, useEffect, useRef, useState } from "react";
+import { Suspense, memo, startTransition, useEffect, useRef, useState } from "react";
 import { lazyWithPreload } from "@/lib/lazy-with-preload";
 import { OperationalSectionCard } from "@/components/layout/OperationalPage";
 import type { LoginTrend, PeakHour, RoleData, TopUser } from "@/pages/dashboard/types";
@@ -154,7 +154,7 @@ type DashboardDeferredSectionsProps = {
   topUsersLoading: boolean;
 };
 
-export function DashboardDeferredSections({
+export const DashboardDeferredSections = memo(function DashboardDeferredSections({
   defer,
   trendDays,
   onTrendDaysChange,
@@ -212,4 +212,4 @@ export function DashboardDeferredSections({
       </div>
     </>
   );
-}
+});

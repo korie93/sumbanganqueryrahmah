@@ -1,4 +1,4 @@
-import { Suspense } from "react";
+import { Suspense, memo } from "react";
 import { HorizontalScrollHint } from "@/components/HorizontalScrollHint";
 import { Button } from "@/components/ui/button";
 import {
@@ -28,7 +28,7 @@ interface GeneralSearchResultsToolbarProps {
   totalResults: number;
 }
 
-export function GeneralSearchResultsToolbar({
+export const GeneralSearchResultsToolbar = memo(function GeneralSearchResultsToolbar({
   activeFilterSummaries,
   advancedMode,
   canExport,
@@ -186,4 +186,4 @@ export function GeneralSearchResultsToolbar({
       </div>
     </div>
   );
-}
+});

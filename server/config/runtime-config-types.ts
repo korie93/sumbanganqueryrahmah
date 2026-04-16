@@ -100,6 +100,9 @@ export type RuntimeConfig = {
       lastPersonTtlMs: number;
     };
   };
+  observability: {
+    clientErrorTelemetryEnabled: boolean;
+  };
   runtime: {
     defaults: {
       sessionTimeoutMinutes: number;
@@ -119,6 +122,7 @@ export type RuntimeConfig = {
     importAnalysisTimeoutMs: number;
     collectionRollupListenReconnectMs: number;
     httpSlowRequestMs: number;
+    requestTimeoutMs: number;
     analyticsTimeZone: string;
     dbQueryProfiling: {
       enabled: boolean;

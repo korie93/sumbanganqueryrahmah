@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { OperationalSectionCard } from "@/components/layout/OperationalPage";
 import { DashboardSummaryCards } from "@/pages/dashboard/DashboardSummaryCards";
 import type { SummaryCardItem } from "@/pages/dashboard/types";
@@ -7,7 +8,7 @@ type DashboardSnapshotSectionProps = {
   summaryLoading: boolean;
 };
 
-export function DashboardSnapshotSection({
+export const DashboardSnapshotSection = memo(function DashboardSnapshotSection({
   summaryCards,
   summaryLoading,
 }: DashboardSnapshotSectionProps) {
@@ -20,4 +21,4 @@ export function DashboardSnapshotSection({
       <DashboardSummaryCards items={summaryCards} summaryLoading={summaryLoading} />
     </OperationalSectionCard>
   );
-}
+});

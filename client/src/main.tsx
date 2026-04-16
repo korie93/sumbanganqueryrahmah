@@ -1,6 +1,7 @@
 import { createRoot } from "react-dom/client";
 import App from "./App";
 import { installGlobalUnhandledRejectionHandler } from "./lib/global-unhandled-rejection";
+import { installGlobalWindowErrorHandler } from "./lib/global-window-error";
 import { detectLowSpecMode } from "./lib/low-spec-mode";
 import { initializeWebVitalsReporting } from "./lib/web-vitals";
 import "./public-shell.css";
@@ -16,6 +17,7 @@ if (detectLowSpecMode()) {
 }
 
 installGlobalUnhandledRejectionHandler();
+installGlobalWindowErrorHandler();
 
 initializeWebVitalsReporting();
 

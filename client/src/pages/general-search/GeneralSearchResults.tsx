@@ -1,9 +1,10 @@
-import { Suspense, useEffect, useMemo, useState, type UIEvent } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState, type UIEvent } from "react";
 import { FileText } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { lazyWithPreload } from "@/lib/lazy-with-preload";
 import { GeneralSearchMobileResultsList } from "@/pages/general-search/GeneralSearchMobileResultsList";
 import { GeneralSearchResultsPagination } from "@/pages/general-search/GeneralSearchResultsPagination";
+import { GeneralSearchResultsSkeleton } from "@/pages/general-search/GeneralSearchResultsSkeleton";
 import { GeneralSearchResultsToolbar } from "@/pages/general-search/GeneralSearchResultsToolbar";
 import type { SearchResultRow } from "@/pages/general-search/types";
 import {
@@ -107,8 +108,22 @@ export function GeneralSearchResults({
     [enableVirtualRows, results, virtualEndRow, virtualStartRow],
   );
 
-  const renderCellValue = (safeText: string) =>
-    advancedMode || isLowSpecMode ? safeText : highlightMatch(safeText, query);
+  const renderCellValue = useCallback(
+    (safeText: string) => (advancedMode || isLowSpecMode ? safeText : highlightMatch(safeText, query)),
+    [advancedMode, isLowSpecMode, query],
+  );
+
+  const handleDesktopTableScroll = useCallback((event: UIEvent<HTMLDivElement>) => {
+    if (!enableVirtualRows) {
+      return;
+    }
+
+    setTableScrollTop(event.currentTarget.scrollTop);
+  }, [enableVirtualRows]);
+
+  if (loading && results.length === 0) {
+    return <GeneralSearchResultsSkeleton />;
+  }
 
   if (results.length === 0) {
     return (
@@ -136,11 +151,6 @@ export function GeneralSearchResults({
       </div>
     );
   }
-
-  const handleDesktopTableScroll = enableVirtualRows
-    ? (event: UIEvent<HTMLDivElement>) =>
-        setTableScrollTop(event.currentTarget.scrollTop)
-    : undefined;
 
   return (
     <div className="glass-wrapper p-4 sm:p-6" data-floating-ai-avoid="true">
@@ -173,9 +183,7 @@ export function GeneralSearchResults({
       ) : (
         <Suspense
           fallback={
-            <div className="rounded-lg border border-border/60 px-4 py-8 text-center text-sm text-muted-foreground">
-              Loading result table...
-            </div>
+            <GeneralSearchResultsSkeleton />
           }
         >
           <GeneralSearchDesktopResultsTable
@@ -183,7 +191,7 @@ export function GeneralSearchResults({
             enableVirtualRows={enableVirtualRows}
             headers={headers}
             onRecordSelect={onRecordSelect}
-            onScroll={handleDesktopTableScroll}
+            onScroll={enableVirtualRows ? handleDesktopTableScroll : undefined}
             renderCellValue={renderCellValue}
             topSpacerHeight={topSpacerHeight}
             virtualRows={virtualRows}

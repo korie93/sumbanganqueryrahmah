@@ -5,6 +5,7 @@ import path from "node:path";
 import test from "node:test";
 import express from "express";
 import { registerLocalHttpPipeline } from "../../internal/local-http-pipeline";
+import { getRequestContext } from "../../lib/request-context";
 import { startTestServer, stopTestServer } from "../../routes/tests/http-test-utils";
 import { SQR_TRUSTED_TYPES_POLICY_NAME } from "../../../shared/trusted-types";
 
@@ -105,5 +106,57 @@ test("registerLocalHttpPipeline serves generic uploads as attachments", async ()
   } finally {
     await stopTestServer(server);
     await rm(uploadsRootDir, { recursive: true, force: true });
+  }
+});
+
+test("registerLocalHttpPipeline returns 504 and aborts the request context when the global timeout elapses", async () => {
+  const app = express();
+  let abortObserved = false;
+
+  registerLocalHttpPipeline(app, {
+    importBodyLimit: "1mb",
+    collectionBodyLimit: "1mb",
+    defaultBodyLimit: "100kb",
+    uploadsRootDir: path.resolve(process.cwd(), "uploads"),
+    recordRequestStarted: () => undefined,
+    recordRequestFinished: () => undefined,
+    adaptiveRateLimit: (_req, _res, next) => next(),
+    systemProtectionMiddleware: (_req, _res, next) => next(),
+    maintenanceGuard: (_req, _res, next) => next(),
+    requestTimeoutMs: 40,
+  });
+
+  app.get("/slow", async (_req, res) => {
+    const abortSignal = getRequestContext()?.abortSignal;
+    await new Promise<void>((resolve) => {
+      abortSignal?.addEventListener("abort", () => {
+        abortObserved = true;
+        resolve();
+      }, { once: true });
+    });
+
+    if (!res.headersSent) {
+      res.json({ ok: true });
+    }
+  });
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const response = await fetch(`${baseUrl}/slow`);
+    assert.equal(response.status, 504);
+    assert.deepEqual(await response.json(), {
+      ok: false,
+      message: "The request took too long to complete.",
+      error: {
+        code: "REQUEST_TIMEOUT",
+        message: "The request took too long to complete.",
+        details: {
+          timeoutMs: 40,
+        },
+      },
+    });
+    assert.equal(abortObserved, true);
+  } finally {
+    await stopTestServer(server);
   }
 });

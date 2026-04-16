@@ -25,6 +25,56 @@ test("logClientError stays silent outside client diagnostic mode", () => {
   }
 });
 
+test("logClientError forwards sanitized telemetry when client error telemetry is enabled", async () => {
+  const capturedRequests: Array<{ url: string; body: string }> = [];
+  const originalFetch = globalThis.fetch;
+  const originalWindow = globalThis.window;
+
+  try {
+    Object.assign(globalThis, {
+      window: {
+        location: {
+          pathname: "/dashboard",
+        },
+      },
+    });
+    globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+      capturedRequests.push({
+        url: String(input),
+        body: String(init?.body || ""),
+      });
+      return new Response(null, { status: 204 });
+    }) as typeof fetch;
+
+    logClientError(
+      "Floating AI shell render failed",
+      new Error("boom"),
+      {
+        source: "error-boundary",
+        component: "FloatingAI",
+        boundaryKey: "dashboard:1",
+      },
+      {
+        DEV: false,
+        VITE_CLIENT_DEBUG: "0",
+        VITE_CLIENT_ERROR_TELEMETRY: "1",
+      },
+    );
+
+    await Promise.resolve();
+
+    assert.equal(capturedRequests.length, 1);
+    assert.equal(capturedRequests[0]?.url, "/telemetry/client-errors");
+    assert.match(capturedRequests[0]?.body || "", /"source":"error-boundary"/);
+    assert.match(capturedRequests[0]?.body || "", /"component":"FloatingAI"/);
+  } finally {
+    globalThis.fetch = originalFetch;
+    Object.assign(globalThis, {
+      window: originalWindow,
+    });
+  }
+});
+
 test("logClientError writes to console during development diagnostics", () => {
   const captured: unknown[][] = [];
   const originalConsoleError = console.error;

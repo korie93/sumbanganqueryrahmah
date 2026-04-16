@@ -29,11 +29,16 @@ export class FloatingAIErrorBoundary extends Component<
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    logClientError("Floating AI shell render failed", {
-      boundaryKey: this.props.boundaryKey,
+    logClientError(
+      "Floating AI shell render failed",
       error,
-      componentStack: errorInfo.componentStack,
-    });
+      {
+        source: "error-boundary",
+        component: "FloatingAI",
+        boundaryKey: this.props.boundaryKey,
+        componentStack: errorInfo.componentStack,
+      },
+    );
   }
 
   componentDidUpdate(prevProps: FloatingAIErrorBoundaryProps) {

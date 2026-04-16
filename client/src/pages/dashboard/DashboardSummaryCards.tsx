@@ -1,4 +1,6 @@
+import { memo } from "react";
 import { Card, CardContent } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useIsMobile } from "@/hooks/use-mobile";
 import type { SummaryCardItem } from "@/pages/dashboard/types";
 
@@ -7,7 +9,10 @@ interface DashboardSummaryCardsProps {
   summaryLoading: boolean;
 }
 
-export function DashboardSummaryCards({ items, summaryLoading }: DashboardSummaryCardsProps) {
+export const DashboardSummaryCards = memo(function DashboardSummaryCards({
+  items,
+  summaryLoading,
+}: DashboardSummaryCardsProps) {
   const isMobile = useIsMobile();
 
   return (
@@ -29,7 +34,8 @@ export function DashboardSummaryCards({ items, summaryLoading }: DashboardSummar
                 <div aria-live="polite" className="min-w-0 space-y-1">
                   {summaryLoading ? (
                     <div className="space-y-1">
-                      <div className="h-7 w-12 bg-muted/50 rounded animate-pulse" aria-label="Loading value" />
+                      <Skeleton className="h-7 w-14" aria-label="Loading value" />
+                      <Skeleton className="h-3 w-24" />
                       <p className="text-xs leading-5 text-muted-foreground">{card.title}</p>
                     </div>
                   ) : (
@@ -52,4 +58,4 @@ export function DashboardSummaryCards({ items, summaryLoading }: DashboardSummar
       })}
     </div>
   );
-}
+});

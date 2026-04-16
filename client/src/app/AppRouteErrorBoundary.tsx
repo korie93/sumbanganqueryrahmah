@@ -53,11 +53,16 @@ export class AppRouteErrorBoundary extends Component<
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    logClientError("App route render failed", {
-      routeKey: this.props.routeKey,
+    logClientError(
+      "App route render failed",
       error,
-      componentStack: errorInfo.componentStack,
-    });
+      {
+        source: "error-boundary",
+        component: "AppRouteBoundary",
+        boundaryKey: this.props.routeKey,
+        componentStack: errorInfo.componentStack,
+      },
+    );
   }
 
   componentDidUpdate(

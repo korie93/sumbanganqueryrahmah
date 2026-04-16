@@ -1,6 +1,7 @@
 import type { Response } from "express";
 import { ERROR_CODES } from "../../shared/error-codes";
 import { logger } from "../lib/logger";
+import { getRequestContext } from "../lib/request-context";
 
 type RequestDeadlineOptions = {
   timeoutMs: number;
@@ -17,19 +18,44 @@ export async function runWithRequestDeadline<T>(
   options: RequestDeadlineOptions,
   operation: (signal: AbortSignal) => Promise<T>,
 ): Promise<RequestDeadlineResult<T>> {
+  const requestContext = getRequestContext();
+  const requestAbortSignal = requestContext?.abortSignal;
   const timeoutMs = Number.isFinite(options.timeoutMs)
     ? Math.max(1, Math.trunc(options.timeoutMs))
     : 0;
 
+  const controller = new AbortController();
+  let detachRequestAbortListener: (() => void) | null = null;
+  const attachRequestAbortListener = () => {
+    if (!requestAbortSignal) {
+      return;
+    }
+
+    if (requestAbortSignal.aborted) {
+      controller.abort();
+      return;
+    }
+
+    const handleRequestAbort = () => {
+      controller.abort();
+    };
+
+    requestAbortSignal.addEventListener("abort", handleRequestAbort, { once: true });
+    detachRequestAbortListener = () => {
+      requestAbortSignal.removeEventListener("abort", handleRequestAbort);
+    };
+  };
+
   if (timeoutMs <= 0) {
-    const controller = new AbortController();
+    attachRequestAbortListener();
     return {
       timedOut: false,
-      value: await operation(controller.signal),
+      value: await Promise.resolve(operation(controller.signal)).finally(() => {
+        detachRequestAbortListener?.();
+      }),
     };
   }
 
-  const controller = new AbortController();
   let settled = false;
   let timer: NodeJS.Timeout | null = null;
 
@@ -39,7 +65,11 @@ export async function runWithRequestDeadline<T>(
       clearTimeout(timer);
       timer = null;
     }
+    detachRequestAbortListener?.();
+    detachRequestAbortListener = null;
   };
+
+  attachRequestAbortListener();
 
   const operationPromise = Promise.resolve()
     .then(() => operation(controller.signal))

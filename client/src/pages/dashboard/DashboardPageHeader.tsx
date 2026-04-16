@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { Download, RefreshCw } from "lucide-react";
 import { OperationalPageHeader } from "@/components/layout/OperationalPage";
 import { Button } from "@/components/ui/button";
@@ -13,7 +14,7 @@ type DashboardPageHeaderProps = {
   onRefresh: () => void;
 };
 
-export function DashboardPageHeader({
+export const DashboardPageHeader = memo(function DashboardPageHeader({
   isMobile,
   trendDays,
   exportingPdf,
@@ -72,4 +73,4 @@ export function DashboardPageHeader({
       className={isMobile ? "rounded-[28px] border-border/60 bg-background/85" : undefined}
     />
   );
-}
+});

@@ -141,6 +141,14 @@ function DashboardContent() {
     }
   }, [exportBlockReason]);
 
+  const handleRefreshClick = useCallback(() => {
+    void handleRefreshAll();
+  }, [handleRefreshAll]);
+
+  const handleExportPdfClick = useCallback(() => {
+    void handleExportPdf();
+  }, [handleExportPdf]);
+
   return (
     <OperationalPage width="content">
       <DashboardPageHeader
@@ -149,12 +157,8 @@ function DashboardContent() {
         exportingPdf={exportingPdf}
         exportBlockReason={exportBlockReason}
         refreshing={refreshing}
-        onExportPdf={() => {
-          void handleExportPdf();
-        }}
-        onRefresh={() => {
-          void handleRefreshAll();
-        }}
+        onExportPdf={handleExportPdfClick}
+        onRefresh={handleRefreshClick}
       />
 
       <div ref={dashboardRef} className="space-y-4 sm:space-y-6">

@@ -1,0 +1,323 @@
+import type { IncomingMessage } from "node:http";
+import { WebSocket } from "ws";
+import { readAuthSessionTokenFromHeaders } from "../auth/session-cookie";
+import { logger } from "../lib/logger";
+import { extractWsActivityId, isActiveWebSocketSession } from "./session-auth";
+import {
+  INBOUND_MESSAGE_RATE_WINDOW_MS,
+  MAX_CONNECTIONS_PER_USER,
+  MAX_INBOUND_MESSAGES_PER_MINUTE,
+  type RuntimeInboundMessageRateState,
+  type RuntimeTrackedSocketEntry,
+  type RuntimeTrustedForwardedProxyMatcher,
+  type RuntimeWebSocketActivity,
+} from "./ws-runtime-types";
+import {
+  buildWebSocketHandshakeLogDetails,
+  getActivityUserKey,
+  sanitizeRuntimeWebSocketError,
+  shouldTrustForwardedHeaders,
+  validateSameOriginWebSocketRequest,
+} from "./ws-runtime-utils";
+
+type CreateRuntimeConnectionHandlerOptions = {
+  connectedClients: Map<string, WebSocket>;
+  socketEntriesByActivity: Map<string, RuntimeTrackedSocketEntry>;
+  socketEntriesByInstance: WeakMap<WebSocket, RuntimeTrackedSocketEntry>;
+  trackedSockets: Set<WebSocket>;
+  socketCleanupCallbacks: WeakMap<WebSocket, () => void>;
+  storage: {
+    getActivityById: (
+      activityId: string,
+    ) => Promise<(RuntimeWebSocketActivity & {
+      isActive?: boolean | null;
+      logoutTime?: string | Date | null;
+    }) | null | undefined>;
+  };
+  secret: string | readonly string[];
+  trustForwardedHeaders: boolean;
+  trustedForwardedProxies: readonly string[];
+  trustedForwardedProxyMatcher: RuntimeTrustedForwardedProxyMatcher;
+  registerTrackedSocketEntry: (
+    activityId: string,
+    ws: WebSocket,
+    userKey: string | null,
+  ) => RuntimeTrackedSocketEntry;
+  removeTrackedSocket: (activityId: string, ws?: WebSocket) => void;
+  countTrackedUserConnections: (userKey: string, excludedActivityId?: string) => number;
+  isTrackableSocket: (ws: WebSocket) => boolean;
+};
+
+export function createRuntimeConnectionHandler(
+  options: CreateRuntimeConnectionHandlerOptions,
+) {
+  const {
+    connectedClients,
+    socketEntriesByActivity,
+    socketEntriesByInstance,
+    trackedSockets,
+    socketCleanupCallbacks,
+    storage,
+    secret,
+    trustForwardedHeaders,
+    trustedForwardedProxies,
+    trustedForwardedProxyMatcher,
+    registerTrackedSocketEntry,
+    removeTrackedSocket,
+    countTrackedUserConnections,
+    isTrackableSocket,
+  } = options;
+
+  return async (ws: WebSocket, req: Pick<IncomingMessage, "url" | "headers" | "socket">) => {
+    let activityId: string | null = null;
+    let socketEntry: RuntimeTrackedSocketEntry | null = null;
+    let cleanedUp = false;
+    let closeRequested = false;
+    const inboundMessageRateState: RuntimeInboundMessageRateState = {
+      windowStartedAt: Date.now(),
+      messageCount: 0,
+    };
+
+    const markSocketAlive = () => {
+      if (cleanedUp) {
+        return;
+      }
+
+      const currentEntry = socketEntriesByInstance.get(ws) ?? socketEntry;
+      if (currentEntry?.ws === ws) {
+        currentEntry.alive = true;
+      }
+    };
+
+    const detachSocketLifecycleHandlers = () => {
+      ws.removeListener("pong", markSocketAlive);
+      ws.removeListener("message", handleSocketMessage);
+      ws.removeListener("close", handleSocketClose);
+      ws.removeListener("error", handleSocketError);
+    };
+
+    const cleanupSocket = () => {
+      if (cleanedUp) {
+        return;
+      }
+
+      cleanedUp = true;
+      try {
+        socketCleanupCallbacks.delete(ws);
+        trackedSockets.delete(ws);
+        socketEntriesByInstance.delete(ws);
+
+        if (socketEntry) {
+          removeTrackedSocket(socketEntry.activityId, ws);
+          socketEntry = null;
+        } else if (activityId && connectedClients.get(activityId) === ws) {
+          removeTrackedSocket(activityId, ws);
+        }
+      } finally {
+        detachSocketLifecycleHandlers();
+      }
+    };
+
+    const cleanupSocketSafely = (phase: string) => {
+      try {
+        cleanupSocket();
+      } catch (error) {
+        logger.warn("WebSocket cleanup failed", {
+          activityId,
+          error: sanitizeRuntimeWebSocketError(error),
+          phase,
+        });
+      }
+    };
+
+    const handleSocketClose = () => {
+      const closedActivityId = activityId;
+      cleanupSocketSafely("close");
+      if (closedActivityId) {
+        logger.debug("WebSocket closed", { activityId: closedActivityId });
+      }
+    };
+
+    const handleSocketError = (error: unknown) => {
+      const erroredActivityId = activityId;
+      cleanupSocketSafely("error");
+      if (erroredActivityId) {
+        logger.debug("WebSocket errored", {
+          activityId: erroredActivityId,
+          error: sanitizeRuntimeWebSocketError(error),
+        });
+      }
+    };
+
+    const closeSocketIfNeeded = () => {
+      if (closeRequested || !isTrackableSocket(ws)) {
+        return;
+      }
+
+      closeRequested = true;
+      try {
+        ws.close();
+      } catch (error) {
+        logger.debug("WebSocket close request failed during cleanup", {
+          activityId,
+          error: sanitizeRuntimeWebSocketError(error),
+        });
+      }
+    };
+
+    const handleSocketMessage = () => {
+      if (cleanedUp) {
+        return;
+      }
+
+      const now = Date.now();
+      if (now - inboundMessageRateState.windowStartedAt >= INBOUND_MESSAGE_RATE_WINDOW_MS) {
+        inboundMessageRateState.windowStartedAt = now;
+        inboundMessageRateState.messageCount = 0;
+      }
+
+      inboundMessageRateState.messageCount += 1;
+      if (inboundMessageRateState.messageCount <= MAX_INBOUND_MESSAGES_PER_MINUTE) {
+        return;
+      }
+
+      logger.warn("WebSocket client dropped because the inbound message rate exceeded the runtime limit", {
+        activityId,
+        messageCount: inboundMessageRateState.messageCount,
+        maxMessagesPerMinute: MAX_INBOUND_MESSAGES_PER_MINUTE,
+        windowMs: INBOUND_MESSAGE_RATE_WINDOW_MS,
+      });
+      cleanupSocketSafely("message-rate-limit");
+      closeSocketIfNeeded();
+    };
+
+    ws.on("pong", markSocketAlive);
+    ws.on("message", handleSocketMessage);
+    ws.once("close", handleSocketClose);
+    ws.once("error", handleSocketError);
+    trackedSockets.add(ws);
+    socketCleanupCallbacks.set(ws, () => {
+      cleanupSocketSafely("registered-callback");
+    });
+
+    const url = new URL(req.url!, `http://${req.headers.host}`);
+    const forwardedHeadersTrusted = shouldTrustForwardedHeaders(
+      req,
+      {
+        trustForwardedHeaders,
+        trustedForwardedProxies,
+      },
+      trustedForwardedProxyMatcher,
+    );
+
+    if (url.searchParams.has("token")) {
+      logger.warn(
+        "WebSocket rejected query-string session token",
+        buildWebSocketHandshakeLogDetails({
+          req,
+          trustForwardedHeaders,
+          trustedForwardedProxyMatcher,
+          rejectionReason: "query_token",
+        }),
+      );
+      cleanupSocket();
+      closeSocketIfNeeded();
+      return;
+    }
+
+    const originValidation = validateSameOriginWebSocketRequest(req, {
+      trustForwardedHeaders: forwardedHeadersTrusted,
+    });
+
+    if (!originValidation.ok) {
+      logger.warn(
+        "WebSocket rejected invalid same-origin handshake",
+        buildWebSocketHandshakeLogDetails({
+          req,
+          trustForwardedHeaders,
+          trustedForwardedProxyMatcher,
+          rejectionReason: originValidation.reason,
+        }),
+      );
+      cleanupSocketSafely("cross-origin-reject");
+      closeSocketIfNeeded();
+      return;
+    }
+
+    const token = readAuthSessionTokenFromHeaders(req.headers);
+
+    if (!token) {
+      cleanupSocketSafely("missing-token");
+      closeSocketIfNeeded();
+      return;
+    }
+
+    try {
+      activityId = extractWsActivityId(token, secret);
+      if (!activityId) {
+        cleanupSocketSafely("invalid-token");
+        closeSocketIfNeeded();
+        return;
+      }
+
+      const activity = await storage.getActivityById(activityId);
+      if (cleanedUp || !isTrackableSocket(ws)) {
+        cleanupSocketSafely("validation-race");
+        return;
+      }
+
+      if (!isActiveWebSocketSession(activity)) {
+        logger.debug("WebSocket rejected because the session is invalid or expired", {
+          activityId,
+        });
+        cleanupSocketSafely("inactive-session");
+        closeSocketIfNeeded();
+        return;
+      }
+
+      const userKey = getActivityUserKey(activity);
+      if (userKey && countTrackedUserConnections(userKey, activityId) >= MAX_CONNECTIONS_PER_USER) {
+        logger.warn("WebSocket rejected because the user connection limit was reached", {
+          activityId,
+          userKey,
+          maxConnectionsPerUser: MAX_CONNECTIONS_PER_USER,
+        });
+        cleanupSocketSafely("user-limit");
+        closeSocketIfNeeded();
+        return;
+      }
+
+      const existingEntry = socketEntriesByActivity.get(activityId);
+      const existingWs = existingEntry?.ws ?? connectedClients.get(activityId);
+      socketEntry = registerTrackedSocketEntry(activityId, ws, userKey);
+      markSocketAlive();
+
+      if (cleanedUp || !isTrackableSocket(ws)) {
+        cleanupSocketSafely("post-register-race");
+        return;
+      }
+
+      if (existingWs && existingWs !== ws) {
+        socketCleanupCallbacks.get(existingWs)?.();
+        if (isTrackableSocket(existingWs)) {
+          try {
+            existingWs.close();
+          } catch (error) {
+            logger.debug("WebSocket close request failed during connection replacement cleanup", {
+              activityId,
+              error: sanitizeRuntimeWebSocketError(error),
+            });
+          }
+        }
+      }
+
+      logger.debug("WebSocket connected", { activityId });
+    } catch (error) {
+      cleanupSocketSafely("handshake-catch");
+      logger.warn("WebSocket handshake failed", {
+        error: sanitizeRuntimeWebSocketError(error),
+      });
+      closeSocketIfNeeded();
+    }
+  };
+}

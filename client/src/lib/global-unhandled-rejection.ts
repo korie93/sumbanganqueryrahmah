@@ -40,16 +40,16 @@ export function installGlobalUnhandledRejectionHandler(
     const reason = event.reason;
     const details = buildUnhandledRejectionDetails(reason);
 
-    if (shouldLogClientDiagnostics(env)) {
-      if (reason instanceof Error) {
-        logError("Unhandled promise rejection", reason, details, env);
-        return;
-      }
-
+    if (reason instanceof Error) {
+      logError("Unhandled promise rejection", reason, details, env);
+    } else {
       logError("Unhandled promise rejection", undefined, {
         ...details,
         reason,
       }, env);
+    }
+
+    if (shouldLogClientDiagnostics(env)) {
       return;
     }
 

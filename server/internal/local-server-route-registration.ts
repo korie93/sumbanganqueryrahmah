@@ -7,6 +7,7 @@ import { runtimeConfig as environmentRuntimeConfig } from "../config/runtime";
 import { createImportsController } from "../controllers/imports.controller";
 import { createOperationsController } from "../controllers/operations.controller";
 import { createSearchController } from "../controllers/search.controller";
+import { createClientErrorTelemetryController } from "../controllers/client-error-telemetry.controller";
 import { createWebVitalsTelemetryController } from "../controllers/web-vitals-telemetry.controller";
 import { pool } from "../db-postgres";
 import { injectChaos, getIntelligenceExplainability } from "../intelligence";
@@ -138,6 +139,9 @@ export function registerLocalServerRoutes(options: RegisterLocalServerRoutesOpti
   const webVitalsTelemetryController = createWebVitalsTelemetryController({
     webVitalsTelemetryService,
   });
+  const clientErrorTelemetryController = createClientErrorTelemetryController({
+    enabled: environmentRuntimeConfig.observability.clientErrorTelemetryEnabled,
+  });
 
   registerSystemRoutes(app, {
     authenticateToken,
@@ -186,6 +190,7 @@ export function registerLocalServerRoutes(options: RegisterLocalServerRoutesOpti
 
   registerTelemetryRoutes(app, {
     reportWebVital: webVitalsTelemetryController.report,
+    reportClientError: clientErrorTelemetryController.report,
   });
 
   registerActivityRoutes(app, {

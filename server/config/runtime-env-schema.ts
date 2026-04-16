@@ -121,6 +121,7 @@ const runtimeEnvironmentSchema = z.object({
   TRUSTED_PROXIES: optionalEnvString("TRUSTED_PROXIES"),
   ALLOW_LOCAL_DEV_CORS: optionalBooleanEnv("ALLOW_LOCAL_DEV_CORS"),
   HTTP_SLOW_REQUEST_MS: optionalIntEnv("HTTP_SLOW_REQUEST_MS", { min: 250 }),
+  HTTP_REQUEST_TIMEOUT_MS: optionalIntEnv("HTTP_REQUEST_TIMEOUT_MS", { min: 1_000 }),
 
   DATABASE_URL: optionalEnvString("DATABASE_URL", SECRET_STRING_MAX_LENGTH),
   PG_HOST: optionalEnvString("PG_HOST", 255),
@@ -259,6 +260,7 @@ const runtimeEnvironmentSchema = z.object({
     "DB_QUERY_PROFILING_MAX_LOGGED_STATEMENTS",
     { min: 1, max: 20 },
   ),
+  CLIENT_ERROR_TELEMETRY_ENABLED: optionalBooleanEnv("CLIENT_ERROR_TELEMETRY_ENABLED"),
 
   SQR_FORCE_CLUSTER: optionalBooleanEnv("SQR_FORCE_CLUSTER"),
   SQR_MAX_WORKERS: optionalIntEnv("SQR_MAX_WORKERS", { min: 1 }),

@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { Button } from "@/components/ui/button";
 
 interface GeneralSearchResultsPaginationProps {
@@ -13,7 +14,7 @@ interface GeneralSearchResultsPaginationProps {
   totalResults: number;
 }
 
-export function GeneralSearchResultsPagination({
+export const GeneralSearchResultsPagination = memo(function GeneralSearchResultsPagination({
   currentPage,
   isMobile,
   loading,
@@ -104,4 +105,4 @@ export function GeneralSearchResultsPagination({
       ) : null}
     </div>
   );
-}
+});

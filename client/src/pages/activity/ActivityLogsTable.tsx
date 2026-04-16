@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import { Activity as ActivityIcon } from "lucide-react";
 import { Collapsible, CollapsibleContent } from "@/components/ui/collapsible";
 import { lazyWithPreload } from "@/lib/lazy-with-preload";
+import { ActivityLogsLoadingSkeleton } from "@/pages/activity/ActivityLogsLoadingSkeleton";
 import { ActivityLogsTableHeader } from "@/pages/activity/ActivityLogsTableHeader";
 import { ActivityMobileLogsList } from "@/pages/activity/ActivityMobileLogsList";
 import { getActivityLogsEmptyLabel } from "@/pages/activity/activity-logs-table-utils";
@@ -15,11 +16,7 @@ const ActivityDesktopLogsTable = lazyWithPreload(() =>
 );
 
 function ActivityDesktopLogsTableFallback() {
-  return (
-    <div className="py-8 text-center text-sm text-muted-foreground">
-      Loading activity table...
-    </div>
-  );
+  return <ActivityLogsLoadingSkeleton />;
 }
 
 export function ActivityLogsTable({
@@ -49,10 +46,7 @@ export function ActivityLogsTable({
         />
         <CollapsibleContent>
           {loading ? (
-            <div className="py-8 text-center">
-              <div className="w-8 h-8 border-4 border-primary/30 border-t-primary rounded-full animate-spin mx-auto mb-3" />
-              <p className="text-muted-foreground">Loading...</p>
-            </div>
+            <ActivityLogsLoadingSkeleton />
           ) : activities.length === 0 ? (
             <div className="py-8 text-center">
               <ActivityIcon className="w-8 h-8 text-muted-foreground mx-auto mb-2" />

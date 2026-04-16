@@ -6,6 +6,11 @@ export type RequestContext = {
   httpPath?: string | undefined;
   clientIp?: string | undefined;
   userAgent?: string | undefined;
+  abortController?: AbortController | undefined;
+  abortSignal?: AbortSignal | undefined;
+  requestTimeoutMs?: number | undefined;
+  requestDeadlineAtMs?: number | undefined;
+  requestTimedOut?: boolean | undefined;
 };
 
 const requestContextStorage = new AsyncLocalStorage<RequestContext>();

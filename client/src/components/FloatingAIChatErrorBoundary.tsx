@@ -30,11 +30,16 @@ export class FloatingAIChatErrorBoundary extends Component<
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    logClientError("Floating AI chat render failed", {
-      boundaryKey: this.props.boundaryKey,
+    logClientError(
+      "Floating AI chat render failed",
       error,
-      componentStack: errorInfo.componentStack,
-    });
+      {
+        source: "error-boundary",
+        component: "AIChat",
+        boundaryKey: this.props.boundaryKey,
+        componentStack: errorInfo.componentStack,
+      },
+    );
   }
 
   componentDidUpdate(prevProps: FloatingAIChatErrorBoundaryProps) {

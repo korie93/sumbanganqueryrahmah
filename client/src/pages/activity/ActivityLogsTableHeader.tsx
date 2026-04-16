@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { Activity as ActivityIcon, ChevronDown } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -9,7 +10,7 @@ type ActivityLogsTableHeaderProps = {
   logsOpen: boolean;
 };
 
-export function ActivityLogsTableHeader({
+export const ActivityLogsTableHeader = memo(function ActivityLogsTableHeader({
   activityCount,
   logsOpen,
 }: ActivityLogsTableHeaderProps) {
@@ -33,4 +34,4 @@ export function ActivityLogsTableHeader({
       </Button>
     </CollapsibleTrigger>
   );
-}
+});

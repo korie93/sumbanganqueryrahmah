@@ -5,6 +5,7 @@ import helmet from "helmet";
 import { runtimeConfig } from "../config/runtime";
 import { dbQueryProfiler } from "../db-postgres";
 import { buildContentDispositionHeader } from "../http/content-disposition";
+import { createRequestTimeoutMiddleware } from "../http/request-timeout-middleware";
 import { logger } from "../lib/logger";
 import { runWithRequestContext } from "../lib/request-context";
 import { createCsrfProtectionMiddleware } from "../http/csrf";
@@ -40,6 +41,7 @@ type LocalHttpPipelineOptions = {
   adaptiveRateLimit: RequestHandler;
   systemProtectionMiddleware: RequestHandler;
   maintenanceGuard: RequestHandler;
+  requestTimeoutMs?: number;
 };
 
 export function registerLocalHttpPipeline(app: Express, options: LocalHttpPipelineOptions) {
@@ -53,6 +55,7 @@ export function registerLocalHttpPipeline(app: Express, options: LocalHttpPipeli
     adaptiveRateLimit,
     systemProtectionMiddleware,
     maintenanceGuard,
+    requestTimeoutMs = runtimeConfig.runtime.requestTimeoutMs,
   } = options;
 
   app.use(helmet({
@@ -108,6 +111,7 @@ export function registerLocalHttpPipeline(app: Express, options: LocalHttpPipeli
     const requestId = incomingRequestId || randomUUID();
     const clientIp = String(req.ip || req.socket.remoteAddress || "").trim() || undefined;
     const userAgent = normalizeRequestUserAgent(req.headers["user-agent"]);
+    const requestAbortController = new AbortController();
     res.setHeader("x-request-id", requestId);
     res.setHeader(API_VERSION_HEADER, API_VERSION_VALUE);
 
@@ -117,6 +121,11 @@ export function registerLocalHttpPipeline(app: Express, options: LocalHttpPipeli
       httpPath: req.path,
       clientIp,
       userAgent,
+      abortController: requestAbortController,
+      abortSignal: requestAbortController.signal,
+      requestTimeoutMs,
+      requestDeadlineAtMs: Date.now() + Math.max(0, requestTimeoutMs),
+      requestTimedOut: false,
     }, () => {
       dbQueryProfiler.runWithRequestProfiling({
         requestId,
@@ -155,7 +164,9 @@ export function registerLocalHttpPipeline(app: Express, options: LocalHttpPipeli
             userAgent,
           };
 
-          if (res.statusCode >= 500) {
+          if (res.statusCode === 504) {
+            logger.warn("HTTP request completed after the global timeout deadline", requestMeta);
+          } else if (res.statusCode >= 500) {
             logger.error("HTTP request completed with server error", requestMeta);
           } else if (res.statusCode >= 400) {
             logger.warn("HTTP request completed with client error", requestMeta);
@@ -175,6 +186,7 @@ export function registerLocalHttpPipeline(app: Express, options: LocalHttpPipeli
     });
   });
 
+  app.use(createRequestTimeoutMiddleware({ timeoutMs: requestTimeoutMs }));
   app.use(createCsrfProtectionMiddleware());
   app.use(adaptiveRateLimit);
   app.use(systemProtectionMiddleware);

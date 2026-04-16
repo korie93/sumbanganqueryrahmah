@@ -282,6 +282,9 @@ export const runtimeConfig: RuntimeConfig = Object.freeze({
       lastPersonTtlMs: readInt("SQR_AI_LAST_PERSON_TTL_MS", 1_800_000, { min: 60_000 }),
     },
   },
+  observability: {
+    clientErrorTelemetryEnabled: readBoolean("CLIENT_ERROR_TELEMETRY_ENABLED", false),
+  },
   runtime: {
     defaults: {
       sessionTimeoutMinutes: readInt("DEFAULT_SESSION_TIMEOUT_MINUTES", 30, { min: 1 }),
@@ -312,6 +315,7 @@ export const runtimeConfig: RuntimeConfig = Object.freeze({
     importAnalysisTimeoutMs: readInt("IMPORT_ANALYSIS_TIMEOUT_MS", 45_000, { min: 5_000 }),
     collectionRollupListenReconnectMs: readInt("COLLECTION_ROLLUP_LISTEN_RECONNECT_MS", 5_000, { min: 1_000 }),
     httpSlowRequestMs: readInt("HTTP_SLOW_REQUEST_MS", 1_500, { min: 250 }),
+    requestTimeoutMs: readInt("HTTP_REQUEST_TIMEOUT_MS", 30_000, { min: 1_000 }),
     analyticsTimeZone: readString("ANALYTICS_TZ", "Asia/Kuala_Lumpur"),
     dbQueryProfiling: {
       enabled: readBoolean("DB_QUERY_PROFILING_ENABLED", false),

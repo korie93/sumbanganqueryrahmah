@@ -1,5 +1,6 @@
 import type { NextFunction, Request, RequestHandler, Response } from "express";
 import { logger } from "../lib/logger";
+import { getRequestContext } from "../lib/request-context";
 
 const ROUTE_ERROR_LOGGED_SYMBOL = Symbol.for("sqr.routeErrorLogged");
 
@@ -56,6 +57,12 @@ export function logRouteHandlerError(
     return;
   }
 
+  const requestContext = getRequestContext();
+  if (requestContext?.requestTimedOut && isAbortLike(error)) {
+    markRouteErrorLogged(error);
+    return;
+  }
+
   logger.error(options?.message || "Unhandled route handler error", {
     error,
     method: req.method,
@@ -67,6 +74,15 @@ export function logRouteHandlerError(
   });
 
   markRouteErrorLogged(error);
+}
+
+function isAbortLike(error: unknown): boolean {
+  if (!error || typeof error !== "object") {
+    return false;
+  }
+
+  const abortLike = error as { name?: unknown; code?: unknown };
+  return abortLike.name === "AbortError" || abortLike.code === "ABORT_ERR";
 }
 
 export function routeHandler(
