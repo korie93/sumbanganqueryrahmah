@@ -45,6 +45,8 @@ export function SingleImportPanel({
   const singleImportFileErrorId = "single-import-file-error";
   const isImportNameError = /import name/i.test(error);
   const hasFileScopedError = Boolean(error) && !isImportNameError;
+  const importNameAriaInvalid = isImportNameError ? "true" : undefined;
+  const importFileAriaInvalid = hasFileScopedError ? "true" : undefined;
   const loadingBusyProps = loading ? { "aria-busy": "true" as const } : {};
   const loadingDropzoneDisabledProps = loading
     ? { "aria-disabled": "true" as const }
@@ -86,7 +88,7 @@ export function SingleImportPanel({
             data-testid="input-import-name"
             disabled={loading}
             aria-describedby={`${singleImportNameHelpId}${isImportNameError ? ` ${singleImportFileErrorId}` : ""}`}
-            aria-invalid={isImportNameError || undefined}
+            aria-invalid={importNameAriaInvalid}
           />
           <p id={singleImportNameHelpId} className="mt-2 text-xs text-muted-foreground">
             This name is used as the saved dataset label in Viewer and Analysis.
@@ -118,7 +120,7 @@ export function SingleImportPanel({
             type="file"
             aria-label="Select single import file"
             aria-describedby={`${singleImportFileHelpId} ${singleImportFileStatusId}${hasFileScopedError ? ` ${singleImportFileErrorId}` : ""}`}
-            aria-invalid={hasFileScopedError || undefined}
+            aria-invalid={importFileAriaInvalid}
             accept=".csv,.xlsx,.xls,.xlsb"
             onChange={onFileChange}
             className="hidden"
