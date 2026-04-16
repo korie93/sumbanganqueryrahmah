@@ -25,6 +25,28 @@ const assert = (condition, message) => {
 
 const waitMs = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 
+const waitForClientRoute = async (page, matcher, options = {}) => {
+  const timeout = options.timeout ?? 20_000;
+
+  await page.waitForFunction(
+    ({ expected }) => {
+      const current = `${window.location.pathname}${window.location.search}`;
+
+      if (expected.type === "string") {
+        return current === expected.value;
+      }
+
+      return new RegExp(expected.source, expected.flags).test(current);
+    },
+    {
+      expected: typeof matcher === "string"
+        ? { type: "string", value: matcher }
+        : { type: "regex", source: matcher.source, flags: matcher.flags },
+    },
+    { timeout },
+  );
+};
+
 const ensureArtifactsDir = async () => {
   if (!artifactsDir) {
     return;
@@ -185,7 +207,7 @@ const checkDesktopNavbar = async (page, tracker) => {
   await page.getByRole("menuitem", { name: /Backup & Restore/i }).waitFor();
   await page.getByRole("menuitem", { name: /Backup & Restore/i }).click();
   await page.waitForLoadState("networkidle");
-  await page.waitForURL(/\/settings\?section=backup-restore/);
+  await waitForClientRoute(page, /\/settings\?section=backup-restore/);
   await page.getByText("Backup & Restore").first().waitFor();
 
   tracker.assertClean("desktop navbar");
@@ -289,7 +311,7 @@ const checkHomeEntryPoint = async (page, tracker) => {
   await page.getByRole("navigation", { name: "Settings Navigation" }).waitFor();
   await page.getByTestId("nav-home").click();
   await page.waitForLoadState("networkidle");
-  await page.waitForURL(/\/$/);
+  await waitForClientRoute(page, "/");
   await page.getByRole("heading", { name: "Welcome" }).waitFor();
   await page.getByTestId("card-general-search").waitFor();
 
@@ -1274,7 +1296,7 @@ const checkImportUiFlow = async (page, context, tracker) => {
     );
 
     const createdImportId = String(createPayload?.id || "").trim();
-    await page.waitForURL(/\/saved/, { timeout: 20_000 });
+    await waitForClientRoute(page, /\/saved/, { timeout: 20_000 });
     await page.getByText("Saved Imports").first().waitFor({ timeout: 15_000 });
 
     const createdImportCard = createdImportId
