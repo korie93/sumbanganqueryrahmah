@@ -76,9 +76,9 @@ export const documentedOverrideMetadata = new Map([
   [
     "dompurify",
     {
-      advisories: ["GHSA-p3vf-v8qc-cwcr", "CVE-2024-48910"],
-      lastReviewedOn: "2026-04-15",
-      reason: "Pins DOMPurify sanitizer fixes for transitive HTML sanitization consumers.",
+      advisories: ["GHSA-p3vf-v8qc-cwcr", "CVE-2024-48910", "GHSA-39q2-94rc-95cp"],
+      lastReviewedOn: "2026-04-16",
+      reason: "Pins patched DOMPurify releases for the Trusted Types runtime and transitive HTML sanitization consumers.",
       reviewCadence: "quarterly",
     },
   ],

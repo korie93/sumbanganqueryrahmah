@@ -73,7 +73,7 @@ Current overrides:
 | `qs` | `GHSA-hrpp-h998-j3pp`, `CVE-2022-24999` | Pins patched query-string parsing behavior for transitive Express middleware until all upstream packages converge. | Quarterly | 2026-04-15 |
 | `lodash` | `GHSA-35jh-r3h4-6jhm`, `CVE-2021-23337`, `GHSA-p6mc-m468-83gw`, `CVE-2020-8203` | Pins patched lodash template handling for transitive consumers and keeps npm audit clean across nested packages. | Quarterly | 2026-04-15 |
 | `rollup` | `GHSA-gcx4-mw62-g8wm`, `CVE-2024-47068` | Pins Rollup to a patched release used by the Vite toolchain and prevents vulnerable nested Rollup versions. | Quarterly | 2026-04-15 |
-| `dompurify` | `GHSA-p3vf-v8qc-cwcr`, `CVE-2024-48910` | Pins DOMPurify sanitizer fixes for transitive HTML sanitization consumers. | Quarterly | 2026-04-15 |
+| `dompurify` | `GHSA-p3vf-v8qc-cwcr`, `CVE-2024-48910`, `GHSA-39q2-94rc-95cp` | Pins patched DOMPurify releases for the Trusted Types runtime and transitive HTML sanitization consumers. | Quarterly | 2026-04-16 |
 | `esbuild` | `GHSA-67mh-4wv8-2f99` | Pins patched esbuild for dev/build tooling, including older `drizzle-kit` transitive `@esbuild-kit` packages. | Quarterly | 2026-04-15 |
 
 When removing an override, remove its entry from this table and from the audit
