@@ -222,7 +222,7 @@ test("createImportsMultipartRoute returns parser failures as safe client errors"
     kind: "response",
     payload: {
       ok: false,
-      message: "Please select a CSV or Excel file (.xlsx, .xls, .xlsb)",
+      message: "Please select a CSV or Excel file (.xlsx, .xls, .xlsb).",
     },
     statusCode: 400,
   });

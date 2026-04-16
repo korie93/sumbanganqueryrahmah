@@ -208,6 +208,11 @@ export function createImportsMultipartRoute(
         const mimeType = String(info.mimeType || "").trim();
         return prepareMultipartImportUpload({ file, filename, mimeType });
       })();
+      void fileTask.catch((error) => {
+        const failure = resolveImportMultipartFailure(error);
+        stopMultipartParsing();
+        fail(failure.statusCode, failure.message);
+      });
     });
 
     parser.once("error", (error) => {
