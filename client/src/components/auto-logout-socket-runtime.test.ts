@@ -135,6 +135,7 @@ test("bindAutoLogoutSocket reports reconnect attempts and clears feedback after 
     const mountedRef = { current: true }
     const reconnectEnabledRef = { current: true }
     const reconnectAttemptRef = { current: 0 }
+    const socketGenerationRef = { current: 0 }
     const wsRef = { current: null as WebSocket | null }
     const reconnectRef = { current: null as number | null }
     const clearReconnect = () => {
@@ -153,6 +154,7 @@ test("bindAutoLogoutSocket reports reconnect attempts and clears feedback after 
       mountedRef,
       reconnectEnabledRef,
       reconnectAttemptRef,
+      socketGenerationRef,
       wsRef,
       reconnectRef,
       clearReconnect,
@@ -200,6 +202,146 @@ test("bindAutoLogoutSocket reports reconnect attempts and clears feedback after 
     assert.equal(reconnectAttemptRef.current, 0)
 
     cleanup?.()
+  } finally {
+    Object.assign(globalThis, {
+      window: originalWindow,
+      WebSocket: originalWebSocket,
+      localStorage: originalLocalStorage,
+    })
+  }
+})
+
+test("bindAutoLogoutSocket ignores stale reconnect timers after a newer lifecycle takes over", () => {
+  const originalWindow = globalThis.window
+  const originalWebSocket = globalThis.WebSocket
+  const originalLocalStorage = globalThis.localStorage
+
+  const scheduledTimers = new Map<number, () => void>()
+  const createdSockets: FakeWebSocket[] = []
+  let nextTimerId = 1
+
+  class FakeWebSocket {
+    static CONNECTING = 0
+    static OPEN = 1
+    static CLOSED = 3
+
+    readyState = FakeWebSocket.CONNECTING
+    onopen: ((this: WebSocket, event: Event) => unknown) | null = null
+    onmessage: ((this: WebSocket, event: MessageEvent) => unknown) | null = null
+    onclose: ((this: WebSocket, event: CloseEvent) => unknown) | null = null
+    onerror: ((this: WebSocket, event: Event) => unknown) | null = null
+
+    constructor(readonly url: string) {
+      createdSockets.push(this)
+    }
+
+    close() {
+      this.readyState = FakeWebSocket.CLOSED
+    }
+  }
+
+  const windowMock = {
+    location: {
+      protocol: "https:",
+      host: "example.test",
+      href: "https://example.test/dashboard",
+    },
+    setTimeout(callback: () => void) {
+      const timerId = nextTimerId
+      nextTimerId += 1
+      scheduledTimers.set(timerId, callback)
+      return timerId
+    },
+    clearTimeout(timerId: number) {
+      scheduledTimers.delete(timerId)
+    },
+    dispatchEvent() {
+      return true
+    },
+  } as unknown as Window & typeof globalThis
+
+  const localStorageMock = {
+    get length() {
+      return 0
+    },
+    getItem() {
+      return null
+    },
+    setItem() {},
+    removeItem() {},
+    clear() {},
+    key() {
+      return null
+    },
+  } as unknown as Storage
+
+  Object.assign(globalThis, {
+    window: windowMock,
+    WebSocket: FakeWebSocket as unknown as typeof WebSocket,
+    localStorage: localStorageMock,
+  })
+
+  try {
+    const mountedRef = { current: true }
+    const reconnectEnabledRef = { current: true }
+    const reconnectAttemptRef = { current: 0 }
+    const socketGenerationRef = { current: 0 }
+    const wsRef = { current: null as WebSocket | null }
+    const reconnectRef = { current: null as number | null }
+    const clearReconnect = () => {
+      if (reconnectRef.current !== null) {
+        windowMock.clearTimeout(reconnectRef.current)
+        reconnectRef.current = null
+      }
+    }
+    const cleanupSocket = () => {
+      clearReconnect()
+      disposeAutoLogoutSocket(wsRef.current, wsRef)
+    }
+
+    const firstCleanup = bindAutoLogoutSocket({
+      username: "operator.one",
+      mountedRef,
+      reconnectEnabledRef,
+      reconnectAttemptRef,
+      socketGenerationRef,
+      wsRef,
+      reconnectRef,
+      clearReconnect,
+      cleanupSocket,
+      runClientLogout: async () => undefined,
+    })
+
+    assert.equal(createdSockets.length, 1)
+
+    const firstSocket = createdSockets[0]
+    firstSocket.readyState = FakeWebSocket.CLOSED
+    firstSocket.onclose?.call(firstSocket as unknown as WebSocket, {} as CloseEvent)
+    const staleReconnectId = reconnectRef.current
+    assert.notEqual(staleReconnectId, null)
+
+    firstCleanup?.()
+
+    const secondCleanup = bindAutoLogoutSocket({
+      username: "operator.one",
+      mountedRef,
+      reconnectEnabledRef,
+      reconnectAttemptRef,
+      socketGenerationRef,
+      wsRef,
+      reconnectRef,
+      clearReconnect,
+      cleanupSocket,
+      runClientLogout: async () => undefined,
+    })
+
+    assert.equal(createdSockets.length, 2)
+
+    scheduledTimers.get(staleReconnectId!)?.()
+
+    assert.equal(createdSockets.length, 2)
+
+    secondCleanup?.()
   } finally {
     Object.assign(globalThis, {
       window: originalWindow,

@@ -72,7 +72,7 @@ export function registerLocalHttpPipeline(app: Express, options: LocalHttpPipeli
     hsts: {
       maxAge: 15552000,
       includeSubDomains: true,
-      preload: false,
+      preload: true,
     },
     noSniff: true,
     contentSecurityPolicy: {

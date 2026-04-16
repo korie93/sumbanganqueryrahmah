@@ -8,6 +8,19 @@ import {
   sweepExpiredTabVisibilityCacheEntriesForTests,
 } from "../guards";
 
+function createDeferred<T>(): {
+  promise: Promise<T>;
+  resolve: (value: T | PromiseLike<T>) => void;
+} {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+
+  const promise = new Promise<T>((innerResolve) => {
+    resolve = innerResolve;
+  });
+
+  return { promise, resolve };
+}
+
 test("getInvalidatedSessionMessage returns reset-specific messaging for password reset invalidation", () => {
   assert.equal(
     getInvalidatedSessionMessage("PASSWORD_RESET_BY_SUPERUSER"),
@@ -128,6 +141,48 @@ test("tab visibility cache keeps the original TTL instead of extending it on cac
   guards.stopTabVisibilityCacheSweep();
 
   assert.equal(visibilityLookupCount, 2);
+});
+
+test("tab visibility guard coalesces concurrent role visibility lookups", async () => {
+  let visibilityLookupCount = 0;
+  const visibilityLookup = createDeferred<Record<string, boolean>>();
+
+  const guards = createAuthGuards({
+    storage: {
+      getActivityById: async () => undefined,
+      getUser: async () => undefined,
+      getUserByUsername: async () => undefined,
+      isVisitorBanned: async () => false,
+      updateActivity: async () => undefined,
+      getRoleTabVisibility: async () => {
+        visibilityLookupCount += 1;
+        return await visibilityLookup.promise;
+      },
+    },
+    secret: "guard-test-secret",
+  });
+
+  const handler = guards.requireTabAccess("monitor");
+  const request = { user: { role: "admin" } };
+  const firstResponse = createMockResponse();
+  const secondResponse = createMockResponse();
+  let nextCalls = 0;
+
+  const first = handler(request as never, firstResponse as never, () => {
+    nextCalls += 1;
+  });
+  const second = handler(request as never, secondResponse as never, () => {
+    nextCalls += 1;
+  });
+
+  assert.equal(visibilityLookupCount, 1);
+  visibilityLookup.resolve({ monitor: true });
+
+  await Promise.all([first, second]);
+  guards.stopTabVisibilityCacheSweep();
+
+  assert.equal(visibilityLookupCount, 1);
+  assert.equal(nextCalls, 2);
 });
 
 test("tab visibility cache helper evicts the least recently used role entry", () => {

@@ -25,6 +25,7 @@
     "audit:dependencies": "node scripts/audit-dependencies.mjs",
     "lint": "eslint client/src server shared scripts --cache --max-warnings=0",
     "lint:fix": "eslint client/src server shared scripts --cache --fix",
+    "lint:secrets": "node scripts/run-secretlint.mjs",
     "typecheck": "tsc --noEmit",
     "docs:api": "tsx scripts/generate-api-contract-docs.ts",
     "db:generate": "drizzle-kit generate --config drizzle.config.ts",
@@ -78,9 +79,18 @@
     "dev:server": "tsx server/index-local.ts",
     "build": "node scripts/run-client-build.mjs && npx esbuild server/index-local.ts --bundle --platform=node --packages=external --outfile=dist-local/server/index-local.js --format=esm && npx esbuild server/cluster-local.ts --bundle --platform=node --packages=external --outfile=dist-local/server/cluster-local.js --format=esm",
     "start": "npm run start:built",
+    "prepare": "husky",
     "prestart": "node scripts/ensure-build.mjs",
     "start:built": "node dist-local/server/cluster-local.js",
     "import:aeon-branches": "node scripts/import-aeon-branches.mjs"
+  },
+  "lint-staged": {
+    "*.{js,mjs,cjs,ts,tsx,mts,cts}": [
+      "eslint --cache --max-warnings=0"
+    ],
+    "*": [
+      "secretlint --secretlintignore .secretlintignore"
+    ]
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
@@ -154,6 +164,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",
+    "@secretlint/secretlint-rule-preset-recommend": "^11.7.1",
     "@tailwindcss/typography": "^0.5.16",
     "@types/bcrypt": "^6.0.0",
     "@types/busboy": "^1.5.4",
@@ -176,8 +187,11 @@
     "eslint": "^9.39.4",
     "eslint-plugin-react-hooks": "^6.1.1",
     "globals": "^17.5.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.4.0",
     "playwright": "^1.58.2",
     "postcss": "^8.4.47",
+    "secretlint": "^11.7.1",
     "tailwindcss": "^3.4.17",
     "tsx": "^4.21.0",
     "typescript": "5.6.3",

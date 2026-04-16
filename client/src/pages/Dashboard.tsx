@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { AppQueryProvider } from "@/app/AppQueryProvider";
-import { OperationalPage } from "@/components/layout/OperationalPage";
 import {
   getAnalyticsSummary,
   getLoginTrends,
@@ -13,9 +12,7 @@ import { logClientError } from "@/lib/client-logger";
 import { toast } from "@/hooks/use-toast";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { isMobileViewportWidth } from "@/lib/responsive";
-import { DashboardDeferredSections } from "@/pages/dashboard/DashboardDeferredSections";
-import { DashboardPageHeader } from "@/pages/dashboard/DashboardPageHeader";
-import { DashboardSnapshotSection } from "@/pages/dashboard/DashboardSnapshotSection";
+import { DashboardContentView } from "@/pages/dashboard/DashboardContentView";
 import { resolveDashboardExportBlockReason } from "@/pages/dashboard/export-guards";
 import {
   DASHBOARD_PRIMARY_REFETCH_INTERVAL_MS,
@@ -24,6 +21,17 @@ import {
 } from "@/pages/dashboard/refetch-visibility";
 import type { LoginTrend, PeakHour, RoleData, SummaryData, TopUser } from "@/pages/dashboard/types";
 import { buildSummaryCards, exportDashboardToPdf } from "@/pages/dashboard/utils";
+
+function resolveDashboardQueryErrorMessage(error: unknown, fallback: string) {
+  if (error instanceof Error) {
+    const message = error.message.trim();
+    if (message) {
+      return message;
+    }
+  }
+
+  return fallback;
+}
 
 function DashboardContent() {
   const isMobile = useIsMobile();
@@ -37,7 +45,13 @@ function DashboardContent() {
   const refreshInFlightRef = useRef(false);
   const mountedRef = useRef(true);
 
-  const { data: summary, isLoading: summaryLoading, refetch: refetchSummary } = useQuery<SummaryData>({
+  const {
+    data: summary,
+    error: summaryError,
+    isError: summaryIsError,
+    isLoading: summaryLoading,
+    refetch: refetchSummary,
+  } = useQuery<SummaryData>({
     queryKey: ["/api/analytics/summary"],
     queryFn: ({ signal }) => getAnalyticsSummary({ signal }),
     staleTime: DASHBOARD_PRIMARY_REFETCH_INTERVAL_MS,
@@ -46,7 +60,13 @@ function DashboardContent() {
     refetchOnReconnect: false,
   });
 
-  const { data: trends, isLoading: trendsLoading, refetch: refetchTrends } = useQuery<LoginTrend[]>({
+  const {
+    data: trends,
+    error: trendsError,
+    isError: trendsIsError,
+    isLoading: trendsLoading,
+    refetch: refetchTrends,
+  } = useQuery<LoginTrend[]>({
     queryKey: ["/api/analytics/login-trends", trendDays],
     queryFn: ({ signal }) => getLoginTrends(trendDays, { signal }),
     staleTime: DASHBOARD_PRIMARY_REFETCH_INTERVAL_MS,
@@ -55,7 +75,13 @@ function DashboardContent() {
     refetchOnReconnect: false,
   });
 
-  const { data: topUsers, isLoading: topUsersLoading, refetch: refetchTopUsers } = useQuery<TopUser[]>({
+  const {
+    data: topUsers,
+    error: topUsersError,
+    isError: topUsersIsError,
+    isLoading: topUsersLoading,
+    refetch: refetchTopUsers,
+  } = useQuery<TopUser[]>({
     queryKey: ["/api/analytics/top-users"],
     queryFn: ({ signal }) => getTopActiveUsers(10, { signal }),
     staleTime: DASHBOARD_PRIMARY_REFETCH_INTERVAL_MS,
@@ -64,7 +90,13 @@ function DashboardContent() {
     refetchOnReconnect: false,
   });
 
-  const { data: peakHours, isLoading: peakHoursLoading, refetch: refetchPeakHours } = useQuery<PeakHour[]>({
+  const {
+    data: peakHours,
+    error: peakHoursError,
+    isError: peakHoursIsError,
+    isLoading: peakHoursLoading,
+    refetch: refetchPeakHours,
+  } = useQuery<PeakHour[]>({
     queryKey: ["/api/analytics/peak-hours"],
     queryFn: ({ signal }) => getPeakHours({ signal }),
     staleTime: DASHBOARD_SECONDARY_REFETCH_INTERVAL_MS,
@@ -73,7 +105,13 @@ function DashboardContent() {
     refetchOnReconnect: false,
   });
 
-  const { data: roleDistribution, isLoading: roleLoading, refetch: refetchRoles } = useQuery<RoleData[]>({
+  const {
+    data: roleDistribution,
+    error: roleError,
+    isError: roleIsError,
+    isLoading: roleLoading,
+    refetch: refetchRoles,
+  } = useQuery<RoleData[]>({
     queryKey: ["/api/analytics/role-distribution"],
     queryFn: ({ signal }) => getRoleDistribution({ signal }),
     staleTime: DASHBOARD_SECONDARY_REFETCH_INTERVAL_MS,
@@ -83,6 +121,81 @@ function DashboardContent() {
   });
 
   const summaryCards = useMemo(() => buildSummaryCards(summary), [summary]);
+  const initialLoading = useMemo(
+    () =>
+      summary === undefined
+      && trends === undefined
+      && topUsers === undefined
+      && peakHours === undefined
+      && roleDistribution === undefined
+      && summaryLoading
+      && trendsLoading
+      && topUsersLoading
+      && peakHoursLoading
+      && roleLoading,
+    [
+      peakHours,
+      peakHoursLoading,
+      roleDistribution,
+      roleLoading,
+      summary,
+      summaryLoading,
+      topUsers,
+      topUsersLoading,
+      trends,
+      trendsLoading,
+    ],
+  );
+  const pageErrorMessage = useMemo(() => {
+    if (summaryIsError && summary === undefined && !summaryLoading) {
+      return resolveDashboardQueryErrorMessage(
+        summaryError,
+        "The quick snapshot is unavailable right now. Please try refreshing the dashboard.",
+      );
+    }
+
+    return null;
+  }, [summary, summaryError, summaryIsError, summaryLoading]);
+  const trendsErrorMessage = useMemo(() => {
+    if (trendsIsError && trends === undefined && !trendsLoading) {
+      return resolveDashboardQueryErrorMessage(
+        trendsError,
+        "Login trend data could not be loaded.",
+      );
+    }
+
+    return null;
+  }, [trends, trendsError, trendsIsError, trendsLoading]);
+  const topUsersErrorMessage = useMemo(() => {
+    if (topUsersIsError && topUsers === undefined && !topUsersLoading) {
+      return resolveDashboardQueryErrorMessage(
+        topUsersError,
+        "Top active user data could not be loaded.",
+      );
+    }
+
+    return null;
+  }, [topUsers, topUsersError, topUsersIsError, topUsersLoading]);
+  const peakHoursErrorMessage = useMemo(() => {
+    if (peakHoursIsError && peakHours === undefined && !peakHoursLoading) {
+      return resolveDashboardQueryErrorMessage(
+        peakHoursError,
+        "Peak activity hour data could not be loaded.",
+      );
+    }
+
+    return null;
+  }, [peakHours, peakHoursError, peakHoursIsError, peakHoursLoading]);
+  const roleErrorMessage = useMemo(() => {
+    if (roleIsError && roleDistribution === undefined && !roleLoading) {
+      return resolveDashboardQueryErrorMessage(
+        roleError,
+        "User role distribution could not be loaded.",
+      );
+    }
+
+    return null;
+  }, [roleDistribution, roleError, roleIsError, roleLoading]);
   const exportBlockReason = useMemo(
     () => resolveDashboardExportBlockReason({ exportingPdf, refreshing }),
     [exportingPdf, refreshing],
@@ -149,35 +262,59 @@ function DashboardContent() {
     void handleExportPdf();
   }, [handleExportPdf]);
 
-  return (
-    <OperationalPage width="content">
-      <DashboardPageHeader
-        isMobile={isMobile}
-        trendDays={trendDays}
-        exportingPdf={exportingPdf}
-        exportBlockReason={exportBlockReason}
-        refreshing={refreshing}
-        onExportPdf={handleExportPdfClick}
-        onRefresh={handleRefreshClick}
-      />
+  const handleRetrySummary = useCallback(() => {
+    void refetchSummary();
+  }, [refetchSummary]);
 
-      <div ref={dashboardRef} className="space-y-4 sm:space-y-6">
-        <DashboardSnapshotSection summaryCards={summaryCards} summaryLoading={summaryLoading} />
-        <DashboardDeferredSections
-          defer={shouldDeferSecondaryMobileSections}
-          trendDays={trendDays}
-          onTrendDaysChange={setTrendDays}
-          trends={trends}
-          trendsLoading={trendsLoading}
-          peakHours={peakHours}
-          peakHoursLoading={peakHoursLoading}
-          roleDistribution={roleDistribution}
-          roleLoading={roleLoading}
-          topUsers={topUsers}
-          topUsersLoading={topUsersLoading}
-        />
-      </div>
-    </OperationalPage>
+  const handleRetryTrends = useCallback(() => {
+    void refetchTrends();
+  }, [refetchTrends]);
+
+  const handleRetryTopUsers = useCallback(() => {
+    void refetchTopUsers();
+  }, [refetchTopUsers]);
+
+  const handleRetryPeakHours = useCallback(() => {
+    void refetchPeakHours();
+  }, [refetchPeakHours]);
+
+  const handleRetryRoles = useCallback(() => {
+    void refetchRoles();
+  }, [refetchRoles]);
+
+  return (
+    <DashboardContentView
+      dashboardRef={dashboardRef}
+      deferSecondary={shouldDeferSecondaryMobileSections}
+      exportBlockReason={exportBlockReason}
+      exportingPdf={exportingPdf}
+      initialLoading={initialLoading}
+      isMobile={isMobile}
+      onExportPdf={handleExportPdfClick}
+      onRefresh={handleRefreshClick}
+      onRetryPeakHours={handleRetryPeakHours}
+      onRetryRoleDistribution={handleRetryRoles}
+      onRetryTopUsers={handleRetryTopUsers}
+      onRetryTrends={pageErrorMessage ? handleRetrySummary : handleRetryTrends}
+      pageErrorMessage={pageErrorMessage}
+      peakHours={peakHours}
+      peakHoursErrorMessage={peakHoursErrorMessage}
+      peakHoursLoading={peakHoursLoading}
+      refreshing={refreshing}
+      roleDistribution={roleDistribution}
+      roleErrorMessage={roleErrorMessage}
+      roleLoading={roleLoading}
+      summaryCards={summaryCards}
+      summaryLoading={summaryLoading}
+      topUsers={topUsers}
+      topUsersErrorMessage={topUsersErrorMessage}
+      topUsersLoading={topUsersLoading}
+      trendDays={trendDays}
+      trends={trends}
+      trendsErrorMessage={pageErrorMessage ? null : trendsErrorMessage}
+      trendsLoading={trendsLoading}
+      onTrendDaysChange={setTrendDays}
+    />
   );
 }
 

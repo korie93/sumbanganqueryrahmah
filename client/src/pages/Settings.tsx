@@ -5,7 +5,7 @@ import { replaceHistory } from "@/app/routing";
 import type { TabVisibility } from "@/app/types";
 import { Badge } from "@/components/ui/badge";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { getBrowserLocalStorage, safeGetStorageItem, safeSetStorageItem } from "@/lib/browser-storage";
+import { getBrowserLocalStorage, safeSetStorageItem } from "@/lib/browser-storage";
 import {
   OperationalPage,
   OperationalPageHeader,
@@ -16,6 +16,7 @@ import { SettingsSaveBar } from "@/pages/settings/SettingsSaveBar";
 import { SettingsSidebar } from "@/pages/settings/SettingsSidebar";
 import { SettingsCriticalSaveDialog } from "@/pages/settings/SettingsCriticalSaveDialog";
 import { MaintenanceSettingsNotice } from "@/pages/settings/MaintenanceSettingsNotice";
+import { resolveRequestedSettingsSection } from "@/pages/settings/settings-section-selection";
 import { useSettingsController } from "@/pages/settings/useSettingsController";
 
 type SettingsPageProps = {
@@ -55,13 +56,20 @@ export default function SettingsPage({
   initialSectionId,
 }: SettingsPageProps) {
   const isMobile = useIsMobile();
-  const storage = getBrowserLocalStorage();
+  const storage = useMemo(() => getBrowserLocalStorage(), []);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const requestedSection = useMemo(() => {
     if (typeof window === "undefined") return initialSectionId;
-    const sectionFromUrl = new URLSearchParams(window.location.search).get("section");
-    return sectionFromUrl || initialSectionId || safeGetStorageItem(storage, ACTIVE_SETTINGS_SECTION_KEY) || undefined;
+    const requestedSectionParams = {
+      search: window.location.search,
+      storage,
+      ...(initialSectionId === undefined ? {} : { initialSectionId }),
+    };
+
+    return resolveRequestedSettingsSection({
+      ...requestedSectionParams,
+    });
   }, [initialSectionId, storage]);
 
   const controller = useSettingsController({

@@ -1,6 +1,7 @@
 import { Clock, TrendingUp } from "lucide-react";
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { QueryErrorFallback } from "@/components/QueryErrorFallback";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AccessibleChartSummary } from "@/components/ui/chart-accessibility";
@@ -14,10 +15,14 @@ import {
 
 interface DashboardChartsGridProps {
   onTrendDaysChange: (days: number) => void;
+  onRetryPeakHours: () => void;
+  onRetryTrends: () => void;
   peakHours: PeakHour[] | undefined;
+  peakHoursErrorMessage?: string | null;
   peakHoursLoading: boolean;
   trendDays: number;
   trends: LoginTrend[] | undefined;
+  trendsErrorMessage?: string | null;
   trendsLoading: boolean;
 }
 
@@ -90,10 +95,14 @@ function CompactChartTooltip({
 
 export function DashboardChartsGrid({
   onTrendDaysChange,
+  onRetryPeakHours,
+  onRetryTrends,
   peakHours,
+  peakHoursErrorMessage,
   peakHoursLoading,
   trendDays,
   trends,
+  trendsErrorMessage,
   trendsLoading,
 }: DashboardChartsGridProps) {
   const isMobile = useIsMobile();
@@ -273,6 +282,14 @@ export function DashboardChartsGrid({
                 ))}
               </div>
             </>
+          ) : trendsErrorMessage ? (
+            <QueryErrorFallback
+              compact
+              title="Login trends are unavailable"
+              description={trendsErrorMessage}
+              onRetry={onRetryTrends}
+              data-testid="dashboard-trends-error"
+            />
           ) : (
             <div
               className={`flex items-center justify-center rounded-xl border border-dashed border-border/60 bg-background/35 text-muted-foreground ${chartHeightClassName}`}
@@ -305,6 +322,14 @@ export function DashboardChartsGrid({
               <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary/30 border-t-primary" />
               <span className="sr-only">Loading peak hours chart</span>
             </div>
+          ) : peakHoursErrorMessage ? (
+            <QueryErrorFallback
+              compact
+              title="Peak activity hours are unavailable"
+              description={peakHoursErrorMessage}
+              onRetry={onRetryPeakHours}
+              data-testid="dashboard-peak-hours-error"
+            />
           ) : peakHours && peakHours.length > 0 ? (
             <>
               <div className={`min-w-0 ${chartHeightClassName}`} aria-hidden="true">

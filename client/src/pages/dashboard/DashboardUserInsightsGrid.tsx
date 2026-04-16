@@ -3,6 +3,7 @@ import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { QueryErrorFallback } from "@/components/QueryErrorFallback";
 import { AccessibleChartSummary } from "@/components/ui/chart-accessibility";
 import {
   buildDashboardRoleDistributionRowAriaLabel,
@@ -12,9 +13,13 @@ import type { RoleData, TopUser } from "@/pages/dashboard/types";
 import { formatDashboardUserLastLogin, ROLE_COLORS } from "@/pages/dashboard/utils";
 
 interface DashboardUserInsightsGridProps {
+  onRetryRoleDistribution: () => void;
+  onRetryTopUsers: () => void;
   roleDistribution: RoleData[] | undefined;
+  roleErrorMessage?: string | null;
   roleLoading: boolean;
   topUsers: TopUser[] | undefined;
+  topUsersErrorMessage?: string | null;
   topUsersLoading: boolean;
 }
 
@@ -61,9 +66,13 @@ function CompactRoleTooltip({ active, payload }: CompactRoleTooltipProps) {
 }
 
 export function DashboardUserInsightsGrid({
+  onRetryRoleDistribution,
+  onRetryTopUsers,
   roleDistribution,
+  roleErrorMessage,
   roleLoading,
   topUsers,
+  topUsersErrorMessage,
   topUsersLoading,
 }: DashboardUserInsightsGridProps) {
   const isMobile = useIsMobile();
@@ -95,6 +104,14 @@ export function DashboardUserInsightsGrid({
               <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary/30 border-t-primary" />
               <span className="sr-only">Loading top active users</span>
             </div>
+          ) : topUsersErrorMessage ? (
+            <QueryErrorFallback
+              compact
+              title="Top active users are unavailable"
+              description={topUsersErrorMessage}
+              onRetry={onRetryTopUsers}
+              data-testid="dashboard-top-users-error"
+            />
           ) : topUsers && topUsers.length > 0 ? (
             <div className="max-h-[340px] space-y-3 overflow-y-auto pr-1">
               {topUsers.map((user, index) => {
@@ -175,6 +192,14 @@ export function DashboardUserInsightsGrid({
               <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary/30 border-t-primary" />
               <span className="sr-only">Loading user role distribution</span>
             </div>
+          ) : roleErrorMessage ? (
+            <QueryErrorFallback
+              compact
+              title="User role distribution is unavailable"
+              description={roleErrorMessage}
+              onRetry={onRetryRoleDistribution}
+              data-testid="dashboard-role-error"
+            />
           ) : roleDistribution && roleDistribution.length > 0 ? (
             <>
               <div className={`min-w-0 ${chartHeightClassName}`} aria-hidden="true">

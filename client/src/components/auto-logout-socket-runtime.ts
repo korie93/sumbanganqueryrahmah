@@ -28,6 +28,7 @@ type BindAutoLogoutSocketArgs = {
   mountedRef: MutableRefObject<boolean>
   reconnectEnabledRef: MutableRefObject<boolean>
   reconnectAttemptRef: MutableRefObject<number>
+  socketGenerationRef: MutableRefObject<number>
   wsRef: MutableRefObject<WebSocket | null>
   reconnectRef: MutableRefObject<number | null>
   clearReconnect: () => void
@@ -69,6 +70,7 @@ export function bindAutoLogoutSocket({
   mountedRef,
   reconnectEnabledRef,
   reconnectAttemptRef,
+  socketGenerationRef,
   wsRef,
   reconnectRef,
   clearReconnect,
@@ -87,8 +89,17 @@ export function bindAutoLogoutSocket({
   reconnectEnabledRef.current = true
   reconnectAttemptRef.current = 0
   let disposed = false
+  const lifecycleGeneration = socketGenerationRef.current + 1
+  socketGenerationRef.current = lifecycleGeneration
+
+  const isActiveLifecycle = () =>
+    !disposed
+    && mountedRef.current
+    && reconnectEnabledRef.current
+    && socketGenerationRef.current === lifecycleGeneration
+
   const notifyReconnectStateChange = (state: AutoLogoutReconnectFeedbackState) => {
-    if (disposed || !mountedRef.current) {
+    if (!isActiveLifecycle()) {
       return
     }
 
@@ -98,7 +109,7 @@ export function bindAutoLogoutSocket({
   notifyReconnectStateChange(AUTO_LOGOUT_RECONNECT_FEEDBACK_IDLE_STATE)
 
   const isCurrentSocket = (socket: WebSocket) =>
-    !disposed && mountedRef.current && reconnectEnabledRef.current && wsRef.current === socket
+    isActiveLifecycle() && wsRef.current === socket
 
   const disposeSocketInstance = (socket: WebSocket | null | undefined) => {
     disposeAutoLogoutSocket(socket, wsRef)
@@ -106,7 +117,7 @@ export function bindAutoLogoutSocket({
 
   const scheduleReconnect = () => {
     const nextUsername = username || getStoredUsername()
-    if (!mountedRef.current || !reconnectEnabledRef.current || !nextUsername) {
+    if (!isActiveLifecycle() || !nextUsername) {
       return
     }
 
@@ -116,13 +127,16 @@ export function bindAutoLogoutSocket({
     notifyReconnectStateChange(createAutoLogoutReconnectFeedbackState(attempt, delayMs))
     reconnectRef.current = window.setTimeout(() => {
       reconnectRef.current = null
+      if (!isActiveLifecycle()) {
+        return
+      }
       reconnectAttemptRef.current = attempt + 1
       connectWebSocket()
     }, delayMs)
   }
 
   const connectWebSocket = () => {
-    if (!mountedRef.current || !reconnectEnabledRef.current) return
+    if (!isActiveLifecycle()) return
     if (
       wsRef.current &&
       (wsRef.current.readyState === WebSocket.OPEN ||
@@ -224,6 +238,9 @@ export function bindAutoLogoutSocket({
     disposed = true
     reconnectEnabledRef.current = false
     reconnectAttemptRef.current = 0
+    if (socketGenerationRef.current === lifecycleGeneration) {
+      socketGenerationRef.current += 1
+    }
     cleanupSocket()
   }
 }

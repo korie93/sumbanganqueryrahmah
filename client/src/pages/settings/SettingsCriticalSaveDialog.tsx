@@ -1,3 +1,4 @@
+import { Loader2 } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -49,6 +50,7 @@ export function SettingsCriticalSaveDialog({
             disabled={saving}
             onClick={handleConfirmClick}
           >
+            {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
             {saving ? "Saving..." : "Yes, Save"}
           </AlertDialogAction>
         </AlertDialogFooter>

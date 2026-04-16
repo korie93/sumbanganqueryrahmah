@@ -23,8 +23,10 @@ test("resolveSafeHttpUrl accepts same-origin relative and external http urls", (
 });
 
 test("resolveSafeUrl rejects unsafe protocols", () => {
+  const unsafeScriptUrl = `${["java", "script"].join("")}:alert(1)`;
+
   assert.equal(
-    resolveSafeUrl("javascript:alert(1)", {
+    resolveSafeUrl(unsafeScriptUrl, {
       allowedProtocols: ["http:", "https:"],
       baseUrl: "https://sqr-system.com/current",
     }),

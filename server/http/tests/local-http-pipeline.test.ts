@@ -34,6 +34,7 @@ test("registerLocalHttpPipeline allows blob receipt previews in the CSP header",
     assert.match(String(response.headers.get("x-frame-options") || ""), /sameorigin/i);
     assert.equal(response.headers.get("x-content-type-options"), "nosniff");
     assert.match(String(response.headers.get("strict-transport-security") || ""), /max-age=15552000/i);
+    assert.match(String(response.headers.get("strict-transport-security") || ""), /preload/i);
     assert.match(csp, /base-uri 'self'/i);
     assert.match(csp, /img-src 'self' data: blob:/i);
     assert.match(csp, /frame-src 'self' blob:/i);

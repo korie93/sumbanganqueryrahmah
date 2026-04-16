@@ -1,3 +1,4 @@
+import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   AlertDialog,
@@ -208,6 +209,7 @@ export function ManagedUserDialog({
               Cancel
             </Button>
             <Button onClick={onConfirmManagedSave} disabled={managedSaving}>
+              {managedSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
               {managedSaving ? "Saving..." : "Save"}
             </Button>
           </DialogFooter>
@@ -228,6 +230,7 @@ export function ManagedUserDialog({
               disabled={saving}
               onClick={handleConfirmCriticalSave}
             >
+              {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
               Yes, Save
             </AlertDialogAction>
           </AlertDialogFooter>

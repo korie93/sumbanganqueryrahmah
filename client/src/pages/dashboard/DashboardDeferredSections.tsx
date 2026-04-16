@@ -144,13 +144,21 @@ type DashboardDeferredSectionsProps = {
   defer: boolean;
   trendDays: number;
   onTrendDaysChange: (days: number) => void;
+  onRetryPeakHours: () => void;
+  onRetryRoleDistribution: () => void;
+  onRetryTopUsers: () => void;
+  onRetryTrends: () => void;
   trends: LoginTrend[] | undefined;
+  trendsErrorMessage: string | null;
   trendsLoading: boolean;
   peakHours: PeakHour[] | undefined;
+  peakHoursErrorMessage: string | null;
   peakHoursLoading: boolean;
   roleDistribution: RoleData[] | undefined;
+  roleErrorMessage: string | null;
   roleLoading: boolean;
   topUsers: TopUser[] | undefined;
+  topUsersErrorMessage: string | null;
   topUsersLoading: boolean;
 };
 
@@ -158,13 +166,21 @@ export const DashboardDeferredSections = memo(function DashboardDeferredSections
   defer,
   trendDays,
   onTrendDaysChange,
+  onRetryPeakHours,
+  onRetryRoleDistribution,
+  onRetryTopUsers,
+  onRetryTrends,
   trends,
+  trendsErrorMessage,
   trendsLoading,
   peakHours,
+  peakHoursErrorMessage,
   peakHoursLoading,
   roleDistribution,
+  roleErrorMessage,
   roleLoading,
   topUsers,
+  topUsersErrorMessage,
   topUsersLoading,
 }: DashboardDeferredSectionsProps) {
   const chartsSection = useDeferredDashboardSectionMount({
@@ -185,10 +201,14 @@ export const DashboardDeferredSections = memo(function DashboardDeferredSections
           <Suspense fallback={<DashboardChartsFallback labelPrefix="Loading dashboard charts" />}>
             <DashboardChartsGrid
               onTrendDaysChange={onTrendDaysChange}
+              onRetryPeakHours={onRetryPeakHours}
+              onRetryTrends={onRetryTrends}
               peakHours={peakHours}
+              peakHoursErrorMessage={peakHoursErrorMessage}
               peakHoursLoading={peakHoursLoading}
               trendDays={trendDays}
               trends={trends}
+              trendsErrorMessage={trendsErrorMessage}
               trendsLoading={trendsLoading}
             />
           </Suspense>
@@ -200,9 +220,13 @@ export const DashboardDeferredSections = memo(function DashboardDeferredSections
         {userInsightsSection.shouldRender ? (
           <Suspense fallback={<DashboardUserInsightsFallback labelPrefix="Loading dashboard user insights" />}>
             <DashboardUserInsightsGrid
+              onRetryRoleDistribution={onRetryRoleDistribution}
+              onRetryTopUsers={onRetryTopUsers}
               roleDistribution={roleDistribution}
+              roleErrorMessage={roleErrorMessage}
               roleLoading={roleLoading}
               topUsers={topUsers}
+              topUsersErrorMessage={topUsersErrorMessage}
               topUsersLoading={topUsersLoading}
             />
           </Suspense>

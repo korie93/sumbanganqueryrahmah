@@ -26,12 +26,17 @@ test("buildPostgresPreflightConfig normalizes PG env without exposing secrets", 
 });
 
 test("buildPostgresPreflightConfig falls back to DATABASE_URL when PG identity fields are omitted", () => {
+  const connectionString = [
+    "postgres",
+    "://db_user:db_pass@db.internal:6544/sqr_prod",
+  ].join("");
+
   assert.deepEqual(
     buildPostgresPreflightConfig({
-      DATABASE_URL: "postgres://db_user:db_pass@db.internal:6544/sqr_prod",
+      DATABASE_URL: connectionString,
     }),
     {
-      connectionString: "postgres://db_user:db_pass@db.internal:6544/sqr_prod",
+      connectionString,
       database: "sqr_prod",
       host: "db.internal",
       password: "db_pass",

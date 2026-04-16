@@ -59,15 +59,15 @@ export function useAIChatState({
     abortActiveRequest,
     clearRetryTimers,
     clearSlowNoticeTimer,
+    clearTrackedTimeout,
     isMountedRef,
     processingRef,
-    registerRetryTimer,
     requestControllerRef,
+    safeTimeout,
     sessionRef,
     slowNoticeTimerRef,
     stopTyping,
     typingIntervalRef,
-    unregisterRetryTimer,
   } = useAIChatRuntimeRefs({ setIsTyping });
 
   const appendMessage = useCallback((message: AIChatMessageInput) => {
@@ -127,13 +127,13 @@ export function useAIChatState({
 
   const startSlowNoticeWatch = useCallback((sessionId: number) => {
     clearSlowNoticeTimer();
-    slowNoticeTimerRef.current = window.setTimeout(() => {
+    slowNoticeTimerRef.current = safeTimeout(() => {
       if (!canRetryRequest(sessionId)) {
         return;
       }
       setSlowNotice(true);
     }, 1500);
-  }, [canRetryRequest, clearSlowNoticeTimer]);
+  }, [canRetryRequest, clearSlowNoticeTimer, safeTimeout]);
 
   const finishAsyncCycle = useCallback((options?: {
     clearStreamingText?: boolean;
@@ -168,7 +168,9 @@ export function useAIChatState({
     let timeoutId: number | null = null;
 
     try {
-      timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
+      timeoutId = safeTimeout(() => {
+        controller.abort();
+      }, timeoutMs);
       const response = await searchAI(text, { signal: controller.signal });
 
       if (!isActiveSession(sessionId)) {
@@ -209,14 +211,12 @@ export function useAIChatState({
         }
 
         waitingRetry = true;
-        const timerId = window.setTimeout(() => {
-          unregisterRetryTimer(timerId);
+        safeTimeout(() => {
           if (!canRetryRequest(sessionId)) {
             return;
           }
           void executeSearch(text, sessionId, retryCount + 1);
         }, AI_CHAT_RETRY_MS + retryCount * 500);
-        registerRetryTimer(timerId);
         return;
       }
 
@@ -242,9 +242,7 @@ export function useAIChatState({
         gateNotice,
       });
     } finally {
-      if (timeoutId !== null) {
-        window.clearTimeout(timeoutId);
-      }
+      clearTrackedTimeout(timeoutId);
       if (requestControllerRef.current === controller) {
         requestControllerRef.current = null;
       }
@@ -261,12 +259,12 @@ export function useAIChatState({
     appendMessage,
     canApplyUiUpdate,
     canRetryRequest,
+    clearTrackedTimeout,
     finishAsyncCycle,
     isActiveSession,
-    registerRetryTimer,
+    safeTimeout,
     startTyping,
     timeoutMs,
-    unregisterRetryTimer,
   ]);
 
   const handleSend = useCallback(async () => {

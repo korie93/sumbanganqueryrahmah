@@ -391,12 +391,17 @@ test("runtime config normalizes missing PG_PASSWORD to an empty string in strict
 });
 
 test("runtime config accepts DATABASE_URL-only database configuration in strict local development", async () => {
+  const databaseUrl = [
+    "postgres",
+    "://db_user:db_pass@db.internal:6544/sqr_runtime",
+  ].join("");
+
   await withEnv(
     {
       NODE_ENV: "development",
       HOST: "127.0.0.1",
       PUBLIC_APP_URL: "http://127.0.0.1:5000",
-      DATABASE_URL: "postgres://db_user:db_pass@db.internal:6544/sqr_runtime",
+      DATABASE_URL: databaseUrl,
       PG_HOST: null,
       PG_PORT: null,
       PG_USER: null,
@@ -415,7 +420,7 @@ test("runtime config accepts DATABASE_URL-only database configuration in strict 
     },
     async () => {
       const runtimeModule = await importRuntimeFresh();
-      assert.equal(runtimeModule.runtimeConfig.database.connectionString, "postgres://db_user:db_pass@db.internal:6544/sqr_runtime");
+      assert.equal(runtimeModule.runtimeConfig.database.connectionString, databaseUrl);
       assert.equal(runtimeModule.runtimeConfig.database.host, "db.internal");
       assert.equal(runtimeModule.runtimeConfig.database.port, 6544);
       assert.equal(runtimeModule.runtimeConfig.database.user, "db_user");

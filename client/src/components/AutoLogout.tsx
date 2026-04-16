@@ -8,6 +8,7 @@ import {
   persistAuthNotice,
   subscribeForcedLogout,
 } from "@/lib/auth-session";
+import { logClientError } from "@/lib/client-logger";
 import { sendAutoLogoutHeartbeat } from "@/components/auto-logout-heartbeat-runtime";
 import {
   bindAutoLogoutActivityListeners,
@@ -47,6 +48,7 @@ export default function AutoLogout({
   const lastActivityRef = useRef<number>(Date.now());
   const lastResetByEventRef = useRef<number>(0);
   const reconnectAttemptRef = useRef(0);
+  const socketGenerationRef = useRef(0);
   const wsRef = useRef<WebSocket | null>(null);
   const mountedRef = useRef(true);
   const reconnectEnabledRef = useRef(true);
@@ -88,7 +90,9 @@ export default function AutoLogout({
   }, []);
 
   const resetReconnectFeedback = useCallback(() => {
-    setReconnectFeedback(AUTO_LOGOUT_RECONNECT_FEEDBACK_IDLE_STATE);
+    if (mountedRef.current) {
+      setReconnectFeedback(AUTO_LOGOUT_RECONNECT_FEEDBACK_IDLE_STATE);
+    }
   }, []);
 
   const cleanupSocket = useCallback(() => {
@@ -107,7 +111,14 @@ export default function AutoLogout({
     clearHeartbeatRequest();
     resetReconnectFeedback();
     cleanupSocket();
-    await onLogoutRef.current();
+    try {
+      await onLogoutRef.current();
+    } catch (error: unknown) {
+      logClientError("Auto logout callback failed", error, {
+        source: "client.log",
+        component: "AutoLogout",
+      });
+    }
   }, [
     cleanupSocket,
     clearHeartbeat,
@@ -127,7 +138,14 @@ export default function AutoLogout({
     clearHeartbeatRequest();
     resetReconnectFeedback();
     cleanupSocket();
-    await onClientLogoutRef.current();
+    try {
+      await onClientLogoutRef.current();
+    } catch (error: unknown) {
+      logClientError("Auto client logout callback failed", error, {
+        source: "client.log",
+        component: "AutoLogout",
+      });
+    }
   }, [
     cleanupSocket,
     clearHeartbeat,
@@ -242,6 +260,7 @@ export default function AutoLogout({
       mountedRef,
       reconnectEnabledRef,
       reconnectAttemptRef,
+      socketGenerationRef,
       wsRef,
       reconnectRef,
       clearReconnect,

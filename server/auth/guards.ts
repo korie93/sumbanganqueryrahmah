@@ -122,6 +122,7 @@ export function createAuthGuards(options: CreateAuthGuardsOptions) {
   const storage = options.storage;
   const secret = options.secret || getSessionSecret();
   const tabVisibilityCache = new Map<string, TabVisibilityCacheEntry>();
+  const tabVisibilityInflight = new Map<string, Promise<Record<string, boolean>>>();
   let tabVisibilitySweepStopped = false;
   const tabVisibilitySweepHandle = setInterval(() => {
     sweepExpiredTabVisibilityCacheEntries(tabVisibilityCache);
@@ -154,9 +155,22 @@ export function createAuthGuards(options: CreateAuthGuardsOptions) {
       tabVisibilityCache.delete(role);
     }
 
-    const tabs = await storage.getRoleTabVisibility(role);
-    setRoleTabVisibilityCache(role, tabs, now);
-    return tabs;
+    const inFlight = tabVisibilityInflight.get(role);
+    if (inFlight) {
+      return inFlight;
+    }
+
+    const nextLookup = Promise.resolve(storage.getRoleTabVisibility(role))
+      .then((tabs) => {
+        setRoleTabVisibilityCache(role, tabs, now);
+        return tabs;
+      })
+      .finally(() => {
+        tabVisibilityInflight.delete(role);
+      });
+
+    tabVisibilityInflight.set(role, nextLookup);
+    return nextLookup;
   }
 
   function stopTabVisibilityCacheSweep() {
@@ -403,6 +417,7 @@ export function createAuthGuards(options: CreateAuthGuardsOptions) {
     requireMonitorAccess,
     clearTabVisibilityCache() {
       tabVisibilityCache.clear();
+      tabVisibilityInflight.clear();
     },
     stopTabVisibilityCacheSweep,
   };

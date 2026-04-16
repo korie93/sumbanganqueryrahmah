@@ -11,16 +11,49 @@ type RuntimeMutableRef<T> = {
 type CleanupAIChatRuntimeRefsParams = {
   requestControllerRef: RuntimeMutableRef<AbortController | null>;
   typingIntervalRef: RuntimeMutableRef<number | null>;
-  retryTimersRef: RuntimeMutableRef<number[]>;
+  trackedTimeoutsRef: RuntimeMutableRef<Set<number>>;
   slowNoticeTimerRef: RuntimeMutableRef<number | null>;
   processingRef: RuntimeMutableRef<boolean>;
   isMountedRef: RuntimeMutableRef<boolean>;
 };
 
+export function scheduleTrackedAIChatTimeout(
+  trackedTimeouts: Set<number>,
+  callback: () => void,
+  delayMs: number,
+) {
+  let timeoutId = 0;
+  timeoutId = window.setTimeout(() => {
+    trackedTimeouts.delete(timeoutId);
+    callback();
+  }, delayMs);
+  trackedTimeouts.add(timeoutId);
+  return timeoutId;
+}
+
+export function clearTrackedAIChatTimeout(
+  trackedTimeouts: Set<number>,
+  timeoutId: number | null,
+) {
+  if (timeoutId === null) {
+    return;
+  }
+
+  trackedTimeouts.delete(timeoutId);
+  globalThis.clearTimeout(timeoutId);
+}
+
+export function clearTrackedAIChatTimeouts(trackedTimeouts: Set<number>) {
+  trackedTimeouts.forEach((timeoutId) => {
+    globalThis.clearTimeout(timeoutId);
+  });
+  trackedTimeouts.clear();
+}
+
 export function cleanupAIChatRuntimeRefs({
   requestControllerRef,
   typingIntervalRef,
-  retryTimersRef,
+  trackedTimeoutsRef,
   slowNoticeTimerRef,
   processingRef,
   isMountedRef,
@@ -38,13 +71,8 @@ export function cleanupAIChatRuntimeRefs({
     typingIntervalRef.current = null;
   }
 
-  retryTimersRef.current.forEach((timerId) => globalThis.clearTimeout(timerId));
-  retryTimersRef.current = [];
-
-  if (slowNoticeTimerRef.current !== null) {
-    globalThis.clearTimeout(slowNoticeTimerRef.current);
-    slowNoticeTimerRef.current = null;
-  }
+  clearTrackedAIChatTimeouts(trackedTimeoutsRef.current);
+  slowNoticeTimerRef.current = null;
 }
 
 export function useAIChatRuntimeRefs({
@@ -52,7 +80,7 @@ export function useAIChatRuntimeRefs({
 }: UseAIChatRuntimeRefsOptions) {
   const requestControllerRef = useRef<AbortController | null>(null);
   const typingIntervalRef = useRef<number | null>(null);
-  const retryTimersRef = useRef<number[]>([]);
+  const trackedTimeoutsRef = useRef<Set<number>>(new Set());
   const slowNoticeTimerRef = useRef<number | null>(null);
   const sessionRef = useRef(0);
   const processingRef = useRef(false);
@@ -64,7 +92,7 @@ export function useAIChatRuntimeRefs({
       cleanupAIChatRuntimeRefs({
         requestControllerRef,
         typingIntervalRef,
-        retryTimersRef,
+        trackedTimeoutsRef,
         slowNoticeTimerRef,
         processingRef,
         isMountedRef,
@@ -80,23 +108,21 @@ export function useAIChatRuntimeRefs({
   }, []);
 
   const clearRetryTimers = useCallback(() => {
-    retryTimersRef.current.forEach((timerId) => globalThis.clearTimeout(timerId));
-    retryTimersRef.current = [];
+    clearTrackedAIChatTimeouts(trackedTimeoutsRef.current);
+    slowNoticeTimerRef.current = null;
   }, []);
 
   const clearSlowNoticeTimer = useCallback(() => {
-    if (slowNoticeTimerRef.current !== null) {
-      globalThis.clearTimeout(slowNoticeTimerRef.current);
-      slowNoticeTimerRef.current = null;
-    }
+    clearTrackedAIChatTimeout(trackedTimeoutsRef.current, slowNoticeTimerRef.current);
+    slowNoticeTimerRef.current = null;
   }, []);
 
-  const registerRetryTimer = useCallback((timerId: number) => {
-    retryTimersRef.current.push(timerId);
+  const safeTimeout = useCallback((callback: () => void, delayMs: number) => {
+    return scheduleTrackedAIChatTimeout(trackedTimeoutsRef.current, callback, delayMs);
   }, []);
 
-  const unregisterRetryTimer = useCallback((timerId: number) => {
-    retryTimersRef.current = retryTimersRef.current.filter((existingId) => existingId !== timerId);
+  const clearTrackedTimeout = useCallback((timeoutId: number | null) => {
+    clearTrackedAIChatTimeout(trackedTimeoutsRef.current, timeoutId);
   }, []);
 
   const stopTyping = useCallback(() => {
@@ -113,14 +139,14 @@ export function useAIChatRuntimeRefs({
     abortActiveRequest,
     clearRetryTimers,
     clearSlowNoticeTimer,
+    clearTrackedTimeout,
     isMountedRef,
     processingRef,
-    registerRetryTimer,
     requestControllerRef,
+    safeTimeout,
     sessionRef,
     slowNoticeTimerRef,
     stopTyping,
     typingIntervalRef,
-    unregisterRetryTimer,
   };
 }

@@ -1,102 +1,70 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import {
+  clearTrackedAIChatTimeout,
+  clearTrackedAIChatTimeouts,
+  scheduleTrackedAIChatTimeout,
+} from "@/components/useAIChatRuntimeRefs";
 
-import { cleanupAIChatRuntimeRefs } from "@/components/useAIChatRuntimeRefs";
+test("scheduleTrackedAIChatTimeout unregisters settled timers and runs the callback once", () => {
+  const originalWindow = globalThis.window;
+  const trackedTimeouts = new Set<number>();
+  const scheduledCallbacks = new Map<number, () => void>();
+  let nextTimerId = 1;
+  let callbackCalls = 0;
 
-test("cleanupAIChatRuntimeRefs aborts requests and clears timers defensively", () => {
-  const controller = new AbortController();
-  const clearedIntervals: number[] = [];
-  const clearedTimeouts: number[] = [];
-  const originalClearInterval = globalThis.clearInterval;
-  const originalClearTimeout = globalThis.clearTimeout;
-
-  globalThis.clearInterval = ((timerId: number) => {
-    clearedIntervals.push(Number(timerId));
-    return undefined;
-  }) as typeof globalThis.clearInterval;
-  globalThis.clearTimeout = ((timerId: number) => {
-    clearedTimeouts.push(Number(timerId));
-    return undefined;
-  }) as typeof globalThis.clearTimeout;
+  Object.assign(globalThis, {
+    window: {
+      setTimeout(callback: () => void) {
+        const timerId = nextTimerId;
+        nextTimerId += 1;
+        scheduledCallbacks.set(timerId, callback);
+        return timerId;
+      },
+      clearTimeout(timerId: number) {
+        scheduledCallbacks.delete(timerId);
+      },
+    },
+  });
 
   try {
-    const requestControllerRef = { current: controller };
-    const typingIntervalRef = { current: 23 };
-    const retryTimersRef = { current: [11, 12] };
-    const slowNoticeTimerRef = { current: 13 };
-    const processingRef = { current: true };
-    const isMountedRef = { current: true };
+    const timerId = scheduleTrackedAIChatTimeout(trackedTimeouts, () => {
+      callbackCalls += 1;
+    }, 1500);
 
-    cleanupAIChatRuntimeRefs({
-      requestControllerRef,
-      typingIntervalRef,
-      retryTimersRef,
-      slowNoticeTimerRef,
-      processingRef,
-      isMountedRef,
-    });
+    assert.equal(trackedTimeouts.has(timerId), true);
 
-    assert.equal(controller.signal.aborted, true);
-    assert.equal(requestControllerRef.current, null);
-    assert.equal(typingIntervalRef.current, null);
-    assert.deepEqual(retryTimersRef.current, []);
-    assert.equal(slowNoticeTimerRef.current, null);
-    assert.equal(processingRef.current, false);
-    assert.equal(isMountedRef.current, false);
-    assert.deepEqual(clearedIntervals, [23]);
-    assert.deepEqual(clearedTimeouts, [11, 12, 13]);
+    scheduledCallbacks.get(timerId)?.();
+
+    assert.equal(callbackCalls, 1);
+    assert.equal(trackedTimeouts.size, 0);
   } finally {
-    globalThis.clearInterval = originalClearInterval;
-    globalThis.clearTimeout = originalClearTimeout;
+    Object.assign(globalThis, {
+      window: originalWindow,
+    });
   }
 });
 
-test("cleanupAIChatRuntimeRefs stays safe when cleanup runs more than once", () => {
-  const controller = new AbortController();
-  const clearedIntervals: number[] = [];
-  const clearedTimeouts: number[] = [];
-  const originalClearInterval = globalThis.clearInterval;
+test("clearTrackedAIChatTimeout and clearTrackedAIChatTimeouts clear registered browser timers", () => {
   const originalClearTimeout = globalThis.clearTimeout;
+  const clearedTimers: number[] = [];
+  const trackedTimeouts = new Set<number>([11, 22, 33]);
 
-  globalThis.clearInterval = ((timerId: number) => {
-    clearedIntervals.push(Number(timerId));
-    return undefined;
-  }) as typeof globalThis.clearInterval;
-  globalThis.clearTimeout = ((timerId: number) => {
-    clearedTimeouts.push(Number(timerId));
-    return undefined;
-  }) as typeof globalThis.clearTimeout;
+  globalThis.clearTimeout = (((timerId?: number) => {
+    if (typeof timerId === "number") {
+      clearedTimers.push(timerId);
+    }
+  }) as unknown) as typeof clearTimeout;
 
   try {
-    const requestControllerRef = { current: controller };
-    const typingIntervalRef = { current: 23 };
-    const retryTimersRef = { current: [11] };
-    const slowNoticeTimerRef = { current: 13 };
-    const processingRef = { current: true };
-    const isMountedRef = { current: true };
+    clearTrackedAIChatTimeout(trackedTimeouts, 22);
+    assert.deepEqual(clearedTimers, [22]);
+    assert.deepEqual(Array.from(trackedTimeouts), [11, 33]);
 
-    cleanupAIChatRuntimeRefs({
-      requestControllerRef,
-      typingIntervalRef,
-      retryTimersRef,
-      slowNoticeTimerRef,
-      processingRef,
-      isMountedRef,
-    });
-    cleanupAIChatRuntimeRefs({
-      requestControllerRef,
-      typingIntervalRef,
-      retryTimersRef,
-      slowNoticeTimerRef,
-      processingRef,
-      isMountedRef,
-    });
-
-    assert.equal(controller.signal.aborted, true);
-    assert.deepEqual(clearedIntervals, [23]);
-    assert.deepEqual(clearedTimeouts, [11, 13]);
+    clearTrackedAIChatTimeouts(trackedTimeouts);
+    assert.deepEqual(clearedTimers, [22, 11, 33]);
+    assert.equal(trackedTimeouts.size, 0);
   } finally {
-    globalThis.clearInterval = originalClearInterval;
     globalThis.clearTimeout = originalClearTimeout;
   }
 });

@@ -86,6 +86,7 @@ Untuk manual penggunaan client yang lengkap (split ikut role `superuser`, `admin
 | `npm run dr:drill` | Execute backup disaster-recovery drill (create/export/checksum/optional restore) |
 | `npm run release:verify:local` | Run final local release gate (tests + smoke + backup drill) |
 | `npm run monitor:stale-conflicts` | Snapshot stale-conflict/429 runtime monitor signals |
+| `npm run lint:secrets` | Run secret scanning with the repo secretlint policy |
 
 ## Troubleshooting
 
@@ -136,6 +137,9 @@ See [ARCHITECTURE.md](./ARCHITECTURE.md) for a detailed architecture overview.
 - [docs/QA_FINAL_CHECKLIST.md](./docs/QA_FINAL_CHECKLIST.md) - Final QA and smoke gate checklist
 - [docs/TESTING_STRATEGY.md](./docs/TESTING_STRATEGY.md) - Current automated test layers, Playwright smoke coverage, and bundle budget gates
 - [docs/OBSERVABILITY.md](./docs/OBSERVABILITY.md) - Current logging, health, telemetry, and runtime monitoring model
+- [docs/SECURITY_HEADERS.md](./docs/SECURITY_HEADERS.md) - HSTS preload, CSP, and Trusted Types assumptions now enforced by the app
+- [docs/THREAT_MODEL.md](./docs/THREAT_MODEL.md) - Compact threat model for the current auth, upload, and runtime surfaces
+- [docs/INCIDENT_RESPONSE.md](./docs/INCIDENT_RESPONSE.md) - Practical first-response guide for runtime and secret incidents
 - [docs/GO_LIVE_LAUNCH_CHECKLIST.md](./docs/GO_LIVE_LAUNCH_CHECKLIST.md) - Final go-live launch gate checklist
 - [docs/PRODUCTION_PROMOTION_PLAYBOOK.md](./docs/PRODUCTION_PROMOTION_PLAYBOOK.md) - Staging soak, canary, monitor, and rollback playbook
 - [docs/HETZNER_PRODUCTION_DEPLOYMENT.md](./docs/HETZNER_PRODUCTION_DEPLOYMENT.md) - Practical single-VPS production deployment guide for Hetzner, Nginx, PM2, PostgreSQL, and HTTPS
