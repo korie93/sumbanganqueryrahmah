@@ -2,6 +2,7 @@ import { Suspense, memo, useMemo, useState } from "react";
 import { Filter, RotateCcw } from "lucide-react";
 import { ActiveFilterChips, type ActiveFilterChip } from "@/components/data/ActiveFilterChips";
 import { OperationalSectionCard } from "@/components/layout/OperationalPage";
+import { PanelErrorBoundary } from "@/components/PanelErrorBoundary";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -257,7 +258,12 @@ function CollectionRecordsPage({ role }: CollectionRecordsPageProps) {
           <CollectionRecordsToolbar {...viewModel.toolbar} />
         </Suspense>
 
-        <CollectionRecordsTable {...viewModel.table} />
+        <PanelErrorBoundary
+          boundaryKey={`collection-records:${viewModel.table.visibleRecords.length}:${viewModel.filters.searchInput}:${viewModel.table.loadingRecords ? "loading" : "ready"}`}
+          panelLabel="Rekod Collection"
+        >
+          <CollectionRecordsTable {...viewModel.table} />
+        </PanelErrorBoundary>
       </OperationalSectionCard>
 
       {isMobile ? (

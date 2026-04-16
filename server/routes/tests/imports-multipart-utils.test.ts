@@ -66,6 +66,20 @@ test("parseMultipartImportUpload rejects unsupported upload extensions", async (
   );
 });
 
+test("parseMultipartImportUpload rejects mismatched upload mime types before parsing", async () => {
+  const file = Readable.from("name,amount\nAlice,12\n");
+
+  await assert.rejects(
+    () =>
+      parseMultipartImportUpload({
+        file,
+        filename: "multipart-import.csv",
+        mimeType: "image/png",
+      }),
+    /csv or excel/i,
+  );
+});
+
 test("parseMultipartImportUpload rejects files that exceed the configured size limit", async () => {
   class LimitReadable extends Readable {
     private hasSentData = false;

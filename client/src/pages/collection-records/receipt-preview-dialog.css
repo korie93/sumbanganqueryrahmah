@@ -2,3 +2,24 @@
   transform: scale(var(--receipt-preview-zoom, 1));
   transform-origin: top center;
 }
+
+.receipt-preview-dialog {
+  background: hsl(var(--background) / 0.98);
+  border-color: hsl(var(--border) / 0.9);
+}
+
+.receipt-preview-content {
+  background: hsl(var(--background) / 0.55);
+  border-color: hsl(var(--border) / 0.7);
+}
+
+.dark .receipt-preview-dialog {
+  background: hsl(222 47% 11% / 0.98);
+  border-color: hsl(217 19% 30% / 1);
+  box-shadow: 0 24px 48px hsl(222 47% 4% / 0.45);
+}
+
+.dark .receipt-preview-content {
+  background: hsl(222 47% 12% / 0.92);
+  border-color: hsl(217 19% 31% / 0.95);
+}

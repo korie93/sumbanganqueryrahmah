@@ -1,21 +1,7 @@
-const hybridManaged = (allowedSources, notes) => ({
-  authority: "drizzle-schema",
-  mode: "hybrid-managed",
-  allowedSources,
-  notes,
-});
-
 const drizzleReviewed = (allowedSources, notes) => ({
   authority: "drizzle-schema",
   mode: "drizzle-reviewed",
   allowedSources,
-  notes,
-});
-
-const runtimeManaged = (notes) => ({
-  authority: "runtime-ddl",
-  mode: "runtime-managed",
-  allowedSources: ["runtime-ddl"],
   notes,
 });
 

@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, Clock3, ShieldAlert, TimerReset, Wrench } from "lucide-react";
 import { getMaintenanceStatus } from "@/lib/api/settings";
 import { getBrowserLocalStorage, safeGetStorageItem, safeSetStorageItem } from "@/lib/browser-storage";
+import { logClientError } from "@/lib/client-logger";
 import { formatDateTimeDDMMYYYY } from "@/lib/date-format";
 import {
   MAINTENANCE_COUNTDOWN_TICK_INTERVAL_MS,
@@ -36,6 +37,8 @@ function formatCountdown(endTime: string | null, now: number) {
 export default function MaintenancePage() {
   const [state, setState] = useState<MaintenancePayload>(DEFAULT_MAINTENANCE_STATE);
   const [now, setNow] = useState(Date.now());
+  const [pollFailureCount, setPollFailureCount] = useState(0);
+  const hasLoggedPollingFailureRef = useRef(false);
 
   useEffect(() => {
     let mounted = true;
@@ -57,12 +60,29 @@ export default function MaintenancePage() {
         if (latest && typeof latest === "object") {
           setState((prev) => mergeMaintenancePayload(prev, latest));
           safeSetStorageItem(storage, "maintenanceState", JSON.stringify(latest));
+          setPollFailureCount(0);
+          hasLoggedPollingFailureRef.current = false;
         }
       } catch (error) {
         if (error instanceof DOMException && error.name === "AbortError") {
           return;
         }
-        // keep last known state
+        setPollFailureCount((previous) => {
+          const nextCount = previous + 1;
+          if (nextCount >= 3 && !hasLoggedPollingFailureRef.current) {
+            hasLoggedPollingFailureRef.current = true;
+            logClientError(
+              "Maintenance status polling failed repeatedly",
+              error,
+              {
+                source: "maintenance-status-poll",
+                component: "MaintenancePage",
+                consecutiveFailures: nextCount,
+              },
+            );
+          }
+          return nextCount;
+        });
       }
     };
 
@@ -218,6 +238,18 @@ export default function MaintenancePage() {
               </div>
             </div>
           )}
+
+          {pollFailureCount >= 2 ? (
+            <div
+              className="maintenance-page__message rounded-lg p-4"
+              role="status"
+              aria-live="polite"
+            >
+              <p className="text-sm leading-relaxed">
+                Maklumat maintenance tidak dapat dikemas kini sekarang. Paparan ini masih menggunakan status terakhir yang berjaya dimuatkan.
+              </p>
+            </div>
+          ) : null}
 
           <div className="maintenance-page__info flex items-center gap-2 rounded-md p-3 text-xs">
             <Wrench className="maintenance-page__info-icon w-4 h-4" />

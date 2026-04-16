@@ -17,6 +17,8 @@ export const BACKUP_LIST_MAX_PAGE_SIZE = 100;
 export const BACKUP_MAX_SERIALIZED_ROW_BYTES = 512 * 1024;
 export const BACKUP_STORAGE_APPEND_CHUNK_BYTES = 128 * 1024;
 export const BACKUP_STORAGE_DB_READ_PAGE_SIZE = 64;
+export const BACKUP_RESTORE_MAX_COLLECTION_SEARCH_HASHES_PER_RECORD = 32;
+export const BACKUP_RESTORE_MAX_COLLECTION_SEARCH_HASH_LENGTH = 160;
 
 export type BackupsRepositoryOptions = {
   ensureBackupsTable: () => Promise<void>;

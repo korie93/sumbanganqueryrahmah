@@ -98,3 +98,24 @@ test("external scan runner cleans up child listeners when process spawn fails", 
   assert.equal(child.stdout.destroyed, true);
   assert.equal(child.stderr.destroyed, true);
 });
+
+test("external scan runner rejects invalid timeout values before spawning", async () => {
+  let spawnCalled = false;
+
+  await assert.rejects(
+    () =>
+      runExternalReceiptScan({
+        config: createExternalScanConfig({ timeoutMs: 0 }),
+        filePath: "C:\\temp\\receipt.pdf",
+        scannerCommand: "scanner",
+        args: ["--scan", "C:\\temp\\receipt.pdf"],
+        spawnProcess: ((() => {
+          spawnCalled = true;
+          return new FakeChildProcess();
+        }) as unknown) as NonNullable<Parameters<typeof runExternalReceiptScan>[0]["spawnProcess"]>,
+      }),
+    /timeout must be at least/i,
+  );
+
+  assert.equal(spawnCalled, false);
+});

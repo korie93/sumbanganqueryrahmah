@@ -994,6 +994,43 @@ test("runtime manager drops sockets that exceed the inbound message rate limit",
   }
 });
 
+test("runtime manager refills inbound message tokens over time", async (t) => {
+  const wss = new FakeWebSocketServer();
+  const providedMap = new Map<string, WebSocket>();
+  const socket = new FakeWebSocket();
+  const activityId = "activity-inbound-token-refill";
+  let now = 1_000;
+  const dateNowMock = t.mock.method(Date, "now", () => now);
+
+  createRuntimeWebSocketManager({
+    wss: wss as unknown as import("ws").WebSocketServer,
+    storage: {
+      getActivityById: async () => createActiveSession(activityId),
+      clearCollectionNicknameSessionByActivity: async () => undefined,
+    },
+    secret: TEST_SECRET,
+    connectedClients: providedMap,
+  });
+
+  try {
+    wss.emit("connection", socket as unknown as WebSocket, createConnectionRequest(createWsToken(activityId)));
+    await flushAsyncWork();
+
+    for (let index = 0; index < 100; index += 1) {
+      socket.sendMessage(`message-${index}`);
+    }
+
+    now += 30_000;
+    socket.sendMessage("message-after-half-refill");
+
+    assert.equal(socket.closeCalls, 0);
+    assert.equal(providedMap.has(activityId), true);
+  } finally {
+    dateNowMock.mock.restore();
+    wss.emit("close");
+  }
+});
+
 test("runtime manager logs connected client growth when monitored thresholds are crossed", async (t) => {
   const wss = new FakeWebSocketServer();
   const providedMap = new Map<string, WebSocket>();

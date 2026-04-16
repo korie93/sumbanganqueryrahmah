@@ -13,6 +13,8 @@ interface DatePickerFieldProps {
   buttonId?: string;
   buttonTestId?: string;
   ariaLabel?: string;
+  ariaDescribedBy?: string | undefined;
+  ariaInvalid?: boolean | undefined;
   className?: string;
   contentClassName?: string;
   disabled?: boolean;
@@ -45,6 +47,8 @@ export function DatePickerField({
   buttonId,
   buttonTestId,
   ariaLabel,
+  ariaDescribedBy,
+  ariaInvalid = false,
   className,
   contentClassName,
   disabled = false,
@@ -68,6 +72,8 @@ export function DatePickerField({
           variant="outline"
           disabled={disabled}
           {...triggerAriaLabelProps}
+          aria-describedby={ariaDescribedBy}
+          aria-invalid={ariaInvalid}
           title={triggerLabel}
           className={cn(
             "h-10 w-full justify-start rounded-lg border-border/80 bg-background/95 text-left font-normal shadow-sm transition-colors hover:bg-accent/50 hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2",

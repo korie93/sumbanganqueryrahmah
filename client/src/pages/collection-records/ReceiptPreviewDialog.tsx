@@ -88,11 +88,12 @@ export function ReceiptPreviewDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className={
+        className={cn(
+          "receipt-preview-dialog",
           isMobile
             ? "flex h-[100dvh] max-h-[100dvh] w-screen max-w-none flex-col overflow-hidden rounded-none border-0 p-0"
-            : "flex h-[90vh] w-[96vw] max-w-6xl flex-col"
-        }
+            : "flex h-[90vh] w-[96vw] max-w-6xl flex-col",
+        )}
       >
         <DialogHeader className={isMobile ? "border-b border-border/60 px-4 py-4 pr-12 text-left" : ""}>
           <DialogTitle>Receipt Preview</DialogTitle>

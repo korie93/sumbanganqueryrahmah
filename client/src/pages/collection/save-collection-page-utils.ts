@@ -40,6 +40,16 @@ export type SaveCollectionMutationPayload = {
   newReceiptMetadata: CollectionReceiptMetadata[];
 };
 
+export type SaveCollectionFieldErrorMap = Partial<{
+  customerName: string;
+  icNumber: string;
+  customerPhone: string;
+  accountNumber: string;
+  batch: string;
+  paymentDate: string;
+  amount: string;
+}>;
+
 export function formatSaveCollectionRestoreNoticeLabel(restoredAt: string | null | undefined) {
   if (!restoredAt) {
     return null;
@@ -68,6 +78,66 @@ export function validateSaveCollectionForm(values: SaveCollectionFormValues): st
   if (isFutureDate(values.paymentDate)) return "Payment Date cannot be in the future.";
   if (!isPositiveAmount(values.amount)) return "Amount must be greater than 0.";
   return null;
+}
+
+export function buildSaveCollectionFieldErrorMap(
+  values: SaveCollectionFormValues,
+  options?: {
+    showRequired?: boolean;
+  },
+): SaveCollectionFieldErrorMap {
+  const showRequired = options?.showRequired === true;
+  const errors: SaveCollectionFieldErrorMap = {};
+
+  if (!values.customerName.trim()) {
+    if (showRequired) {
+      errors.customerName = "Customer Name is required.";
+    }
+  }
+
+  if (!values.icNumber.trim()) {
+    if (showRequired) {
+      errors.icNumber = "IC Number is required.";
+    }
+  }
+
+  if (!values.customerPhone.trim()) {
+    if (showRequired) {
+      errors.customerPhone = "Customer Phone Number is required.";
+    }
+  } else if (!isValidCustomerPhone(values.customerPhone)) {
+    errors.customerPhone = "Use 8-20 chars with digits, spaces, dashes, or +.";
+  }
+
+  if (!values.accountNumber.trim()) {
+    if (showRequired) {
+      errors.accountNumber = "Account Number is required.";
+    }
+  }
+
+  if (!COLLECTION_BATCH_OPTIONS.includes(values.batch)) {
+    errors.batch = "Batch is not valid.";
+  }
+
+  if (!values.paymentDate.trim()) {
+    if (showRequired) {
+      errors.paymentDate = "Payment Date is required.";
+    }
+  } else if (!isValidDate(values.paymentDate)) {
+    errors.paymentDate = "Payment Date is invalid.";
+  } else if (isFutureDate(values.paymentDate)) {
+    errors.paymentDate = "Payment Date cannot be in the future.";
+  }
+
+  if (!values.amount.trim()) {
+    if (showRequired) {
+      errors.amount = "Amount is required.";
+    }
+  } else if (!isPositiveAmount(values.amount)) {
+    errors.amount = "Amount must be greater than 0.";
+  }
+
+  return errors;
 }
 
 export function buildSaveCollectionMutationPayload(options: {

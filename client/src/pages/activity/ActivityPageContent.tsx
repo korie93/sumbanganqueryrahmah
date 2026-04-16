@@ -1,4 +1,5 @@
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { PanelErrorBoundary } from "@/components/PanelErrorBoundary";
 import { ActivityActionDialogsSection } from "@/pages/activity/ActivityActionDialogsSection";
 import { ActivityBannedUsersSection } from "@/pages/activity/ActivityBannedUsersSection";
 import { ActivityFiltersSection } from "@/pages/activity/ActivityFiltersSection";
@@ -89,22 +90,27 @@ export function ActivityPageContent({
         shouldDeferSecondaryMobileSections={shouldDeferSecondaryMobileSections}
       />
 
-      <ActivityLogsSection
-        actionLoading={actionLoading}
-        activities={activities}
-        allVisibleSelected={allVisibleSelected}
-        canModerateActivity={canModerateActivity}
-        loading={loading}
-        logsOpen={logsOpen}
-        onBanDialogOpenChange={onBanDialogOpenChange}
-        onDeleteDialogOpenChange={onDeleteDialogOpenChange}
-        onKickDialogOpenChange={onKickDialogOpenChange}
-        onLogsOpenChange={onLogsOpenChange}
-        onSelectActivity={onSelectActivity}
-        onSetSelectedActivityIds={onSetSelectedActivityIds}
-        partiallySelected={partiallySelected}
-        selectedActivityIds={selectedActivityIds}
-      />
+      <PanelErrorBoundary
+        boundaryKey={`activity-logs:${activities.length}:${selectedActivityIds.size}:${loading ? "loading" : "ready"}`}
+        panelLabel="Activity logs"
+      >
+        <ActivityLogsSection
+          actionLoading={actionLoading}
+          activities={activities}
+          allVisibleSelected={allVisibleSelected}
+          canModerateActivity={canModerateActivity}
+          loading={loading}
+          logsOpen={logsOpen}
+          onBanDialogOpenChange={onBanDialogOpenChange}
+          onDeleteDialogOpenChange={onDeleteDialogOpenChange}
+          onKickDialogOpenChange={onKickDialogOpenChange}
+          onLogsOpenChange={onLogsOpenChange}
+          onSelectActivity={onSelectActivity}
+          onSetSelectedActivityIds={onSetSelectedActivityIds}
+          partiallySelected={partiallySelected}
+          selectedActivityIds={selectedActivityIds}
+        />
+      </PanelErrorBoundary>
 
       <ActivityActionDialogsSection
         banDialogOpen={banDialogOpen}

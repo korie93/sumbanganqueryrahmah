@@ -9,7 +9,10 @@ import {
   parseImportUploadFile,
   stripImportUploadExtension,
 } from "../services/import-upload-parser";
-import { IMPORT_UPLOAD_TOO_LARGE_MESSAGE } from "../services/import-upload-file-utils";
+import {
+  IMPORT_UPLOAD_TOO_LARGE_MESSAGE,
+  isSupportedSpreadsheet,
+} from "../services/import-upload-file-utils";
 
 export type MultipartImportBody = {
   name?: string;
@@ -31,6 +34,31 @@ export type PreparedMultipartImportUpload =
   };
 
 export const IMPORT_TOO_LARGE_MESSAGE = IMPORT_UPLOAD_TOO_LARGE_MESSAGE;
+const IMPORT_UPLOAD_INVALID_TYPE_MESSAGE = "Please select a CSV or Excel file (.xlsx, .xls, .xlsb).";
+const IMPORT_UPLOAD_MIME_WHITELIST_BY_EXTENSION = {
+  ".csv": new Set(["text/csv", "application/csv", "text/plain", "application/vnd.ms-excel"]),
+  ".xlsx": new Set(["application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"]),
+  ".xls": new Set(["application/vnd.ms-excel"]),
+  ".xlsb": new Set(["application/vnd.ms-excel.sheet.binary.macroenabled.12"]),
+} as const;
+
+function validateMultipartImportType(filename: string, mimeType?: string) {
+  const normalizedFilename = String(filename || "").trim().toLowerCase();
+  if (!isSupportedSpreadsheet(normalizedFilename)) {
+    throw new Error(IMPORT_UPLOAD_INVALID_TYPE_MESSAGE);
+  }
+
+  const normalizedMimeType = String(mimeType || "").trim().toLowerCase();
+  if (!normalizedMimeType || normalizedMimeType === "application/octet-stream") {
+    return;
+  }
+
+  const extension = path.extname(normalizedFilename) as keyof typeof IMPORT_UPLOAD_MIME_WHITELIST_BY_EXTENSION;
+  const allowedMimeTypes = IMPORT_UPLOAD_MIME_WHITELIST_BY_EXTENSION[extension];
+  if (!allowedMimeTypes?.has(normalizedMimeType)) {
+    throw new Error(IMPORT_UPLOAD_INVALID_TYPE_MESSAGE);
+  }
+}
 
 async function cleanupImportUploadPath(
   targetPath: string,
@@ -73,8 +101,10 @@ export function resolveImportMultipartFailure(error: unknown, fallbackMessage = 
 export async function parseMultipartImportUpload(params: {
   file: NodeJS.ReadableStream;
   filename: string;
+  mimeType?: string;
 }) {
-  const { file, filename } = params;
+  const { file, filename, mimeType } = params;
+  validateMultipartImportType(filename, mimeType);
   const tempDir = await mkdtemp(path.join(os.tmpdir(), "sqr-import-upload-"));
   const tempFilePath = path.join(tempDir, `${Date.now()}-${randomUUID()}.upload`);
   let exceededSizeLimit = false;
@@ -111,8 +141,10 @@ export async function parseMultipartImportUpload(params: {
 export async function prepareMultipartImportUpload(params: {
   file: NodeJS.ReadableStream;
   filename: string;
+  mimeType?: string;
 }): Promise<PreparedMultipartImportUpload> {
-  const { file, filename } = params;
+  const { file, filename, mimeType } = params;
+  validateMultipartImportType(filename, mimeType);
   const tempDir = await mkdtemp(path.join(os.tmpdir(), "sqr-import-upload-"));
   const tempFilePath = path.join(tempDir, `${Date.now()}-${randomUUID()}.upload`);
   let exceededSizeLimit = false;

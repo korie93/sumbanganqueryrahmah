@@ -50,6 +50,13 @@ the repository proceeds to the full audit/build stages.
 If the team later introduces an internal artifact registry, move the same
 tarball there and update `package.json` and `package-lock.json` in one PR.
 
+Maintenance expectations for the vendored tarball:
+
+- review upstream SheetJS releases and advisories at least quarterly
+- keep the vendored checksum, `package-lock.json` integrity, and CI metadata in sync
+- update this document in the same PR whenever the vendored artifact changes
+- prefer a fresh vendored tarball or internal artifact mirror over ad-hoc local patches
+
 Do not add additional external tarball dependencies without updating the audit
 gate and documenting the release rationale here.
 

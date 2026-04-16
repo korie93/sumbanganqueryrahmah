@@ -18,6 +18,9 @@ import type {
   BackupCollectionReceipt,
   BackupCollectionRecord,
 } from "../backups-repository-types";
+import {
+  BACKUP_RESTORE_MAX_COLLECTION_SEARCH_HASHES_PER_RECORD,
+} from "../backups-repository-types";
 import type {
   BackupPayloadChunkReader,
   BackupRestoreExecutor,
@@ -345,6 +348,28 @@ test("normalizeBackupCollectionRecord can recover PII from encrypted backup fiel
     assert.equal(restoredRecord?.collectionStaffNickname, "Collector Alpha");
     assert.equal(restoredRecord?.staffUsername, "Collector Alpha");
   });
+});
+
+test("normalizeBackupCollectionRecord rejects pathological customer-name search hash arrays", () => {
+  assert.throws(
+    () =>
+      normalizeBackupCollectionRecord({
+        id: "44444444-4444-4444-4444-444444444444",
+        customerName: "Alice",
+        customerNameSearchHashes: Array.from(
+          { length: BACKUP_RESTORE_MAX_COLLECTION_SEARCH_HASHES_PER_RECORD + 1 },
+          (_, index) => `hash.customer.${index}`,
+        ),
+        batch: "P10",
+        paymentDate: "2026-03-31",
+        amount: "10.00",
+        receiptFile: null,
+        createdByLogin: "system",
+        collectionStaffNickname: "Collector Alpha",
+        createdAt: "2026-03-31T08:00:00.000Z",
+      } as unknown as BackupCollectionRecord),
+    /too many customer name search hashes/i,
+  );
 });
 
 test("collection restore recomputes customer-name blind indexes instead of trusting stale backup hashes", async () => {

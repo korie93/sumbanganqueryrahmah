@@ -1,4 +1,5 @@
 import { getBackupEncryptionRuntimeConfig } from "../config/security";
+import { runtimeConfig } from "../config/runtime";
 import {
   assertBackupEncryptionConfig,
   resolveBackupEncryptionConfig,
@@ -90,6 +91,8 @@ export class BackupsRepository {
   async restoreFromBackup(
     backupDataRaw: BackupDataPayload | string | AsyncIterable<string>,
   ): Promise<{ success: boolean; stats: RestoreStats }> {
-    return restoreFromBackup(backupDataRaw);
+    return restoreFromBackup(backupDataRaw, {
+      maxPayloadBytes: runtimeConfig.runtime.backupMaxPayloadBytes,
+    });
   }
 }

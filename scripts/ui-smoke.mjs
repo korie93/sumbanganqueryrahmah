@@ -164,13 +164,6 @@ const createTracker = () => {
   };
 };
 
-const checkRoute = async (page, tracker, path, expectedText, contextLabel) => {
-  await page.goto(`${baseUrl}${path}`, { waitUntil: "networkidle" });
-  await page.getByText(expectedText).first().waitFor();
-  tracker.assertClean(contextLabel);
-  tracker.clear();
-};
-
 const checkDesktopNavbar = async (page, tracker) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.waitForLoadState("networkidle");

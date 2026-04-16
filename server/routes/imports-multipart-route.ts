@@ -205,7 +205,8 @@ export function createImportsMultipartRoute(
 
       fileTask = (async () => {
         const filename = String(info.filename || "").trim();
-        return prepareMultipartImportUpload({ file, filename });
+        const mimeType = String(info.mimeType || "").trim();
+        return prepareMultipartImportUpload({ file, filename, mimeType });
       })();
     });
 

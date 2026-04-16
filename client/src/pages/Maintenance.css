@@ -75,3 +75,23 @@
 .maintenance-page__info-icon {
   color: var(--maintenance-warning-text);
 }
+
+@media (max-height: 560px) and (orientation: landscape) {
+  .maintenance-page {
+    align-items: flex-start;
+    overflow-y: auto;
+    padding-block: max(0.75rem, env(safe-area-inset-top, 0px));
+  }
+
+  .maintenance-page__header {
+    padding-bottom: 1rem;
+    padding-top: 1rem;
+  }
+
+  .maintenance-page__message,
+  .maintenance-page__panel,
+  .maintenance-page__countdown,
+  .maintenance-page__info {
+    padding: 0.875rem;
+  }
+}

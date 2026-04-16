@@ -20,6 +20,16 @@ type ReceiptPreviewContentProps = {
   onDownload: () => void;
 };
 
+function resolveReceiptPreviewImageAlt(
+  fileName: string,
+  selectedReceipt: CollectionRecordReceipt | null,
+) {
+  const resolvedFileName = String(fileName || selectedReceipt?.originalFileName || "").trim();
+  return resolvedFileName
+    ? `Receipt image preview for ${resolvedFileName}`
+    : "Receipt image preview";
+}
+
 export function ReceiptPreviewContent({
   loading,
   error,
@@ -47,7 +57,7 @@ export function ReceiptPreviewContent({
   }, [zoomValue]);
 
   return (
-    <div className={cn("min-h-0 flex-1 rounded-md border border-border/60 bg-background/40 p-3", isMobile ? "mx-3 my-3" : "mt-3")}>
+    <div className={cn("receipt-preview-content min-h-0 flex-1 rounded-md border border-border/60 bg-background/40 p-3", isMobile ? "mx-3 my-3" : "mt-3")}>
       {loading ? (
         <div className="flex h-full min-h-[240px] items-center justify-center text-sm text-muted-foreground">
           Loading preview...
@@ -112,7 +122,7 @@ export function ReceiptPreviewContent({
           <img
             ref={imageZoomRef}
             src={safeSource}
-            alt={fileName || "Receipt preview"}
+            alt={resolveReceiptPreviewImageAlt(fileName, selectedReceipt)}
             className={cn(
               "receipt-preview-zoom block rounded-sm object-contain",
               isMobile ? "max-w-full" : "max-w-none",

@@ -4,7 +4,8 @@ import { readAuthSessionTokenFromHeaders } from "../auth/session-cookie";
 import { logger } from "../lib/logger";
 import { extractWsActivityId, isActiveWebSocketSession } from "./session-auth";
 import {
-  INBOUND_MESSAGE_RATE_WINDOW_MS,
+  INBOUND_MESSAGE_TOKEN_BUCKET_CAPACITY,
+  INBOUND_MESSAGE_TOKEN_BUCKET_WINDOW_MS,
   MAX_CONNECTIONS_PER_USER,
   MAX_INBOUND_MESSAGES_PER_MINUTE,
   type RuntimeInboundMessageRateState,
@@ -67,6 +68,8 @@ export function createRuntimeConnectionHandler(
     countTrackedUserConnections,
     isTrackableSocket,
   } = options;
+  const inboundMessageTokenRefillRatePerMs =
+    MAX_INBOUND_MESSAGES_PER_MINUTE / INBOUND_MESSAGE_TOKEN_BUCKET_WINDOW_MS;
 
   return async (ws: WebSocket, req: Pick<IncomingMessage, "url" | "headers" | "socket">) => {
     let activityId: string | null = null;
@@ -74,8 +77,8 @@ export function createRuntimeConnectionHandler(
     let cleanedUp = false;
     let closeRequested = false;
     const inboundMessageRateState: RuntimeInboundMessageRateState = {
-      windowStartedAt: Date.now(),
-      messageCount: 0,
+      availableTokens: INBOUND_MESSAGE_TOKEN_BUCKET_CAPACITY,
+      lastRefillAt: Date.now(),
     };
 
     const markSocketAlive = () => {
@@ -171,21 +174,26 @@ export function createRuntimeConnectionHandler(
       }
 
       const now = Date.now();
-      if (now - inboundMessageRateState.windowStartedAt >= INBOUND_MESSAGE_RATE_WINDOW_MS) {
-        inboundMessageRateState.windowStartedAt = now;
-        inboundMessageRateState.messageCount = 0;
+      const elapsedMs = Math.max(0, now - inboundMessageRateState.lastRefillAt);
+      if (elapsedMs > 0) {
+        inboundMessageRateState.availableTokens = Math.min(
+          INBOUND_MESSAGE_TOKEN_BUCKET_CAPACITY,
+          inboundMessageRateState.availableTokens + (elapsedMs * inboundMessageTokenRefillRatePerMs),
+        );
+        inboundMessageRateState.lastRefillAt = now;
       }
 
-      inboundMessageRateState.messageCount += 1;
-      if (inboundMessageRateState.messageCount <= MAX_INBOUND_MESSAGES_PER_MINUTE) {
+      if (inboundMessageRateState.availableTokens >= 1) {
+        inboundMessageRateState.availableTokens -= 1;
         return;
       }
 
       logger.warn("WebSocket client dropped because the inbound message rate exceeded the runtime limit", {
         activityId,
-        messageCount: inboundMessageRateState.messageCount,
+        availableTokens: Math.max(0, Number(inboundMessageRateState.availableTokens.toFixed(3))),
         maxMessagesPerMinute: MAX_INBOUND_MESSAGES_PER_MINUTE,
-        windowMs: INBOUND_MESSAGE_RATE_WINDOW_MS,
+        tokenBucketCapacity: INBOUND_MESSAGE_TOKEN_BUCKET_CAPACITY,
+        refillWindowMs: INBOUND_MESSAGE_TOKEN_BUCKET_WINDOW_MS,
       });
       cleanupSocketSafely("message-rate-limit");
       closeSocketIfNeeded();

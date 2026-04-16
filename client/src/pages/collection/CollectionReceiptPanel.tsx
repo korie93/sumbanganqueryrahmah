@@ -247,7 +247,8 @@ export function CollectionReceiptPanel({
                       safePreviewUrl ? (
                         <img
                           src={safePreviewUrl}
-                          alt={preview.file.name}
+                          alt=""
+                          aria-hidden="true"
                           className="h-full w-full object-cover"
                           loading="lazy"
                           decoding="async"

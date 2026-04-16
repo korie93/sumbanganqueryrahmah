@@ -12,6 +12,10 @@ import type {
   BackupCollectionReceipt,
   BackupCollectionRecord,
 } from "./backups-repository-types";
+import {
+  BACKUP_RESTORE_MAX_COLLECTION_SEARCH_HASHES_PER_RECORD,
+  BACKUP_RESTORE_MAX_COLLECTION_SEARCH_HASH_LENGTH,
+} from "./backups-repository-types";
 import { toDate } from "./backups-restore-shared-utils";
 import type {
   RestorableCollectionReceiptRow,
@@ -23,13 +27,31 @@ function normalizeBackupCustomerNameSearchHashes(value: unknown): string[] | nul
     return null;
   }
 
-  const hashes = Array.from(
-    new Set(
-      value
-        .map((entry) => String(entry || "").trim())
-        .filter(Boolean),
-    ),
-  );
+  const seen = new Set<string>();
+  const hashes: string[] = [];
+
+  for (const entry of value) {
+    const normalized = String(entry || "").trim();
+    if (!normalized) {
+      continue;
+    }
+
+    if (normalized.length > BACKUP_RESTORE_MAX_COLLECTION_SEARCH_HASH_LENGTH) {
+      throw new Error("Backup collection record contains an oversized customer name search hash.");
+    }
+
+    if (seen.has(normalized)) {
+      continue;
+    }
+
+    if (hashes.length >= BACKUP_RESTORE_MAX_COLLECTION_SEARCH_HASHES_PER_RECORD) {
+      throw new Error("Backup collection record contains too many customer name search hashes.");
+    }
+
+    seen.add(normalized);
+    hashes.push(normalized);
+  }
+
   return hashes.length > 0 ? hashes : null;
 }
 

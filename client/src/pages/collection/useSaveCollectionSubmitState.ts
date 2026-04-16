@@ -39,9 +39,11 @@ export function useSaveCollectionSubmitState({
   const submitInFlightRef = useRef(false);
   const submitMutationIntentRef = useRef<{ fingerprint: string; key: string } | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [hasTriedSubmit, setHasTriedSubmit] = useState(false);
 
   const resetSubmitMutationIntent = useCallback(() => {
     submitMutationIntentRef.current = null;
+    setHasTriedSubmit(false);
   }, []);
 
   const handleSubmit = useCallback(async () => {
@@ -49,6 +51,7 @@ export function useSaveCollectionSubmitState({
       return;
     }
 
+    setHasTriedSubmit(true);
     const validationError = validateSaveCollectionForm(values);
     if (validationError) {
       mutationFeedback.notifyMutationError({
@@ -117,6 +120,7 @@ export function useSaveCollectionSubmitState({
   ]);
 
   return {
+    hasTriedSubmit,
     submitting,
     handleSubmit,
     resetSubmitMutationIntent,

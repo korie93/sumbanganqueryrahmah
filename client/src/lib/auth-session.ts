@@ -1,4 +1,10 @@
 import type { User } from "@/app/types";
+import {
+  getBrowserSessionStorage,
+  safeGetStorageItem,
+  safeRemoveStorageItem,
+  safeSetStorageItem,
+} from "@/lib/browser-storage";
 import { createClientRandomId } from "@/lib/secure-id";
 import {
   clearLegacyAuthLocalStorage,
@@ -33,49 +39,58 @@ function canUseAuthStorage() {
     && typeof sessionStorage !== "undefined";
 }
 
-function readAuthSessionValue(key: AuthSessionStorageKey): string | null {
-  if (!canUseAuthStorage()) {
-    return null;
-  }
+function getAuthSessionStorage() {
+  return canUseAuthStorage() ? getBrowserSessionStorage() : null;
+}
 
-  try {
-    const sessionValue = sessionStorage.getItem(key);
-    if (sessionValue !== null) {
-      return sessionValue;
+function clearAuthSessionStorageKeys(
+  storage: Storage | null,
+  preservedKey?: AuthSessionStorageKey | typeof AUTH_NOTICE_STORAGE_KEY,
+) {
+  for (const key of AUTH_SESSION_STORAGE_KEYS) {
+    if (key === preservedKey) {
+      continue;
     }
-
-    clearLegacyAuthLocalStorageValue(key);
-  } catch {
-    return null;
+    safeRemoveStorageItem(storage, key);
   }
 
+  if (preservedKey !== AUTH_NOTICE_STORAGE_KEY) {
+    safeRemoveStorageItem(storage, AUTH_NOTICE_STORAGE_KEY);
+  }
+}
+
+function readAuthSessionValue(key: AuthSessionStorageKey): string | null {
+  const storage = getAuthSessionStorage();
+  const sessionValue = safeGetStorageItem(storage, key);
+  if (sessionValue !== null) {
+    clearLegacyAuthLocalStorageValue(key);
+    return sessionValue;
+  }
+
+  clearLegacyAuthLocalStorageValue(key);
   return null;
 }
 
 function writeAuthSessionValue(key: AuthSessionStorageKey, value: string) {
-  if (!canUseAuthStorage()) {
+  const storage = getAuthSessionStorage();
+  if (!storage) {
     return;
   }
 
-  try {
-    sessionStorage.setItem(key, value);
+  if (
+    safeSetStorageItem(storage, key, value, {
+      onQuotaExceeded: () => {
+        clearAuthSessionStorageKeys(storage, key);
+      },
+    })
+  ) {
     clearLegacyAuthLocalStorageValue(key);
-  } catch {
-    // Ignore storage access failures and fall back to the active in-memory session.
   }
 }
 
 function removeAuthSessionValue(key: AuthSessionStorageKey) {
-  if (!canUseAuthStorage()) {
-    return;
-  }
-
-  try {
-    sessionStorage.removeItem(key);
-    clearLegacyAuthLocalStorageValue(key);
-  } catch {
-    // Ignore storage access failures during best-effort cleanup.
-  }
+  safeRemoveStorageItem(getAuthSessionStorage(), key);
+  clearLegacyAuthLocalStorageValue(key);
 }
 
 function clearAuthSessionHintCookie() {
@@ -103,44 +118,40 @@ function parseAuthNoticePayload(raw: string | null | undefined): string {
 }
 
 export function persistAuthNotice(message: string | null | undefined) {
-  if (!canUseAuthStorage()) {
+  const storage = getAuthSessionStorage();
+  if (!storage) {
     return;
   }
 
   const normalized = normalizeAuthNoticeMessage(message);
   if (!normalized) {
-    try {
-      sessionStorage.removeItem(AUTH_NOTICE_STORAGE_KEY);
-    } catch {
-      // Ignore storage cleanup failures.
-    }
+    safeRemoveStorageItem(storage, AUTH_NOTICE_STORAGE_KEY);
     return;
   }
 
-  try {
-    sessionStorage.setItem(
-      AUTH_NOTICE_STORAGE_KEY,
-      JSON.stringify({
-        message: normalized,
-      }),
-    );
-  } catch {
-    // Ignore storage write failures during best-effort notice persistence.
-  }
+  safeSetStorageItem(
+    storage,
+    AUTH_NOTICE_STORAGE_KEY,
+    JSON.stringify({
+      message: normalized,
+    }),
+    {
+      onQuotaExceeded: () => {
+        clearAuthSessionStorageKeys(storage, AUTH_NOTICE_STORAGE_KEY);
+      },
+    },
+  );
 }
 
 export function consumeStoredAuthNotice(): string {
-  if (!canUseAuthStorage()) {
+  const storage = getAuthSessionStorage();
+  if (!storage) {
     return "";
   }
 
-  try {
-    const raw = sessionStorage.getItem(AUTH_NOTICE_STORAGE_KEY);
-    sessionStorage.removeItem(AUTH_NOTICE_STORAGE_KEY);
-    return parseAuthNoticePayload(raw);
-  } catch {
-    return "";
-  }
+  const raw = safeGetStorageItem(storage, AUTH_NOTICE_STORAGE_KEY);
+  safeRemoveStorageItem(storage, AUTH_NOTICE_STORAGE_KEY);
+  return parseAuthNoticePayload(raw);
 }
 
 export function parseForcedLogoutStorageValue(raw: string | null | undefined): ForcedLogoutPayload | null {
@@ -385,16 +396,12 @@ export function persistAuthenticatedUser(user: User) {
 
 export function clearAuthenticatedUserStorage() {
   clearAuthSessionHintCookie();
+  const storage = getAuthSessionStorage();
   for (const key of AUTH_SESSION_STORAGE_KEYS) {
     removeAuthSessionValue(key);
   }
+  safeRemoveStorageItem(storage, AUTH_NOTICE_STORAGE_KEY);
   clearLegacyAuthLocalStorage();
-  if (typeof sessionStorage !== "undefined") {
-    try {
-      sessionStorage.removeItem("collection_staff_nickname");
-      sessionStorage.removeItem("collection_staff_nickname_auth");
-    } catch {
-      // Ignore storage cleanup failures.
-    }
-  }
+  safeRemoveStorageItem(storage, "collection_staff_nickname");
+  safeRemoveStorageItem(storage, "collection_staff_nickname_auth");
 }

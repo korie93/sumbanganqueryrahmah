@@ -75,6 +75,16 @@
   contain: paint;
 }
 
+.dark .login-card {
+  border-color: hsl(0 0% 100% / 0.58);
+  box-shadow: 0 30px 48px hsl(222 47% 4% / 0.48), inset 0 0 32px hsl(0 0% 100% / 0.1);
+}
+
+.dark .login-subtitle,
+.dark .login-footer {
+  color: hsl(0 0% 100% / 0.78);
+}
+
 .login-card::before {
   content: "";
   position: absolute;

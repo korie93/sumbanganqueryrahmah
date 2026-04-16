@@ -7,6 +7,7 @@
   },
   "scripts": {
     "verify:node-version": "node scripts/verify-node-version.mjs",
+    "verify:api-docs": "tsx scripts/generate-api-contract-docs.ts --check",
     "verify:collection-amount-contract": "node scripts/verify-collection-amount-contract.mjs",
     "verify:collection-pii-rollout-contract": "node scripts/verify-collection-pii-rollout-contract.mjs",
     "verify:client-breakpoint-contract": "node scripts/verify-client-breakpoint-contract.mjs",
@@ -22,7 +23,10 @@
     "verify:db-schema-governance": "node scripts/verify-db-schema-governance.mjs",
     "verify:bundle-budgets": "node scripts/verify-client-bundle-budgets.mjs",
     "audit:dependencies": "node scripts/audit-dependencies.mjs",
+    "lint": "eslint client/src server shared scripts --cache --max-warnings=0",
+    "lint:fix": "eslint client/src server shared scripts --cache --fix",
     "typecheck": "tsc --noEmit",
+    "docs:api": "tsx scripts/generate-api-contract-docs.ts",
     "db:generate": "drizzle-kit generate --config drizzle.config.ts",
     "db:generate:custom": "drizzle-kit generate --config drizzle.config.ts --custom",
     "db:migrate": "node scripts/db-migrate.mjs",
@@ -148,6 +152,7 @@
     "zod-validation-error": "^3.4.0"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.4",
     "@tailwindcss/typography": "^0.5.16",
     "@types/bcrypt": "^6.0.0",
     "@types/busboy": "^1.5.4",
@@ -167,11 +172,15 @@
     "c8": "^11.0.0",
     "drizzle-kit": "^0.31.10",
     "esbuild": "^0.25.4",
+    "eslint": "^9.39.4",
+    "eslint-plugin-react-hooks": "^6.1.1",
+    "globals": "^17.5.0",
     "playwright": "^1.58.2",
     "postcss": "^8.4.47",
     "tailwindcss": "^3.4.17",
     "tsx": "^4.21.0",
     "typescript": "5.6.3",
+    "typescript-eslint": "^8.58.2",
     "vite": "^6.4.1"
   },
   "overrides": {

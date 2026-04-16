@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import { Search } from "lucide-react";
+import { PanelErrorBoundary } from "@/components/PanelErrorBoundary";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { lazyWithPreload } from "@/lib/lazy-with-preload";
 import { GeneralSearchControls } from "@/pages/general-search/GeneralSearchControls";
@@ -79,38 +80,43 @@ export default function GeneralSearch({
         />
 
         {shouldShowResults ? (
-          <Suspense
-            fallback={
-              <div className="glass-wrapper p-6" role="status" aria-live="polite">
-                <div className="flex min-h-[240px] items-center justify-center">
-                  <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary/30 border-t-primary" />
-                </div>
-              </div>
-            }
+          <PanelErrorBoundary
+            boundaryKey={`general-search:${state.currentPage}:${state.results.length}:${state.displayQuery}`}
+            panelLabel="Search results"
           >
-            <GeneralSearchResults
-              activeFilterSummaries={state.activeFilterSummaries}
-              advancedMode={state.advancedMode}
-              canExport={canExport}
-              currentPage={state.currentPage}
-              exportingPdf={state.exportingPdf}
-              filtersCount={state.activeFiltersCount}
-              headers={state.headers}
-              isLowSpecMode={isLowSpecMode}
-              loading={state.loading}
-              logic={state.logic}
-              onExportCsv={actions.exportToCSV}
-              onExportPdf={actions.exportToPDF}
-              onPageChange={actions.handlePageChange}
-              onRecordSelect={actions.setSelectedRecord}
-              onRowsPerPageChange={actions.handleResultsPerPageChange}
-              pageSizeOptions={state.pageSizeOptions}
-              query={state.displayQuery}
-              results={state.results}
-              resultsPerPage={state.resultsPerPage}
-              totalResults={state.totalResults}
-            />
-          </Suspense>
+            <Suspense
+              fallback={
+                <div className="glass-wrapper p-6" role="status" aria-live="polite">
+                  <div className="flex min-h-[240px] items-center justify-center">
+                    <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary/30 border-t-primary" />
+                  </div>
+                </div>
+              }
+            >
+              <GeneralSearchResults
+                activeFilterSummaries={state.activeFilterSummaries}
+                advancedMode={state.advancedMode}
+                canExport={canExport}
+                currentPage={state.currentPage}
+                exportingPdf={state.exportingPdf}
+                filtersCount={state.activeFiltersCount}
+                headers={state.headers}
+                isLowSpecMode={isLowSpecMode}
+                loading={state.loading}
+                logic={state.logic}
+                onExportCsv={actions.exportToCSV}
+                onExportPdf={actions.exportToPDF}
+                onPageChange={actions.handlePageChange}
+                onRecordSelect={actions.setSelectedRecord}
+                onRowsPerPageChange={actions.handleResultsPerPageChange}
+                pageSizeOptions={state.pageSizeOptions}
+                query={state.displayQuery}
+                results={state.results}
+                resultsPerPage={state.resultsPerPage}
+                totalResults={state.totalResults}
+              />
+            </Suspense>
+          </PanelErrorBoundary>
         ) : null}
 
         {!state.searched ? (

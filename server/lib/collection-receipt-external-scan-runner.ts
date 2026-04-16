@@ -54,6 +54,24 @@ type SpawnExternalScanProcess = (
   },
 ) => ExternalScanChildProcess;
 
+const MIN_EXTERNAL_SCAN_TIMEOUT_MS = 1_000;
+const MAX_EXTERNAL_SCAN_TIMEOUT_MS = 300_000;
+
+function resolveValidatedExternalScanTimeoutMs(timeoutMs: number) {
+  if (!Number.isFinite(timeoutMs)) {
+    throw new Error("Receipt external malware scan timeout must be a finite number.");
+  }
+
+  const normalized = Math.trunc(timeoutMs);
+  if (normalized < MIN_EXTERNAL_SCAN_TIMEOUT_MS) {
+    throw new Error(
+      `Receipt external malware scan timeout must be at least ${MIN_EXTERNAL_SCAN_TIMEOUT_MS}ms.`,
+    );
+  }
+
+  return Math.min(normalized, MAX_EXTERNAL_SCAN_TIMEOUT_MS);
+}
+
 export async function runExternalReceiptScan({
   config,
   filePath,
@@ -68,6 +86,7 @@ export async function runExternalReceiptScan({
   spawnProcess?: SpawnExternalScanProcess;
 }) {
   const fileName = path.basename(filePath);
+  const timeoutMs = resolveValidatedExternalScanTimeoutMs(config.timeoutMs);
 
   await new Promise<void>((resolve, reject) => {
     const child = spawnProcess(scannerCommand, args, {
@@ -133,7 +152,7 @@ export async function runExternalReceiptScan({
     const timeoutId = setTimeout(() => {
       timeoutTriggered = true;
       child.kill();
-    }, config.timeoutMs);
+    }, timeoutMs);
     timeoutId.unref?.();
 
     child.stdout?.setEncoding("utf8");
@@ -164,7 +183,7 @@ export async function runExternalReceiptScan({
           config,
           filePath,
           "external-scan-timeout",
-          `timed out after ${config.timeoutMs}ms`,
+          `timed out after ${timeoutMs}ms`,
         );
         finish(operational);
         return;

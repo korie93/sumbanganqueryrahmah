@@ -275,11 +275,23 @@
   --floating-ai-thinking-ring: hsl(217 91% 60% / 0.7);
   --floating-ai-thinking-ring-clear: hsl(217 91% 60% / 0);
   --floating-ai-edge-gap: clamp(0.5rem, 2vw, 1.5rem);
+  /*
+   * Z-index scale:
+   *  - decorative/background: negative values to 4
+   *  - sticky app chrome: 5 to 39
+   *  - transient in-app shells: 40 to 89
+   *  - modal stack: 100+
+   * Keep new layers on these rails instead of hardcoding ad-hoc values.
+   */
   --z-login-card-border: -2;
   --z-login-card-overlay: -1;
+  --z-navbar-scroll-fade: 1;
+  --z-navbar-scroll-hint: 2;
   --z-public-auth-main: 5;
+  --z-sidebar-desktop: 8;
   --z-sticky-header: 15;
   --z-sticky-content: 20;
+  --z-sidebar-rail: 20;
   --z-navbar: 30;
   /* Transient app shells must stay below modal overlay/content. */
   --z-floating-ai-root: 40;
@@ -292,10 +304,6 @@
   --z-popover: 120;
   --z-tooltip: 130;
   --z-toast: 140;
-  --z-sidebar-desktop: 8;
-  --z-sidebar-rail: 20;
-  --z-navbar-scroll-fade: 1;
-  --z-navbar-scroll-hint: 2;
   --login-card-shadow: 0 25px 40px hsl(0 0% 0% / 0.25), inset 0 0 35px hsl(0 0% 100% / 0.18);
   --login-card-mobile-shadow: 0 16px 32px hsl(0 0% 0% / 0.24);
   --app-shell-glass-shadow: 0 14px 28px hsl(215 28% 11% / 0.07);
@@ -476,7 +484,7 @@
   --login-back-button-text-hover: var(--public-auth-text-strong);
   --login-back-button-ring: var(--public-auth-focus-ring);
   --login-card-surface: hsl(0 0% 100% / 0.12);
-  --login-card-border: hsl(0 0% 100% / 0.44);
+  --login-card-border: hsl(0 0% 100% / 0.56);
   --login-card-border-gradient: linear-gradient(
     160deg,
     hsl(0 0% 100% / 0.48),
@@ -495,7 +503,7 @@
   --login-brand-surface: hsl(0 0% 100% / 0.16);
   --login-brand-border: hsl(0 0% 100% / 0.2);
   --login-title-text: var(--public-auth-text-strong);
-  --login-subtitle-text: hsl(0 0% 100% / 0.72);
+  --login-subtitle-text: hsl(0 0% 100% / 0.82);
   --login-input-bg: var(--public-auth-input-bg);
   --login-input-text: var(--public-auth-input-text);
   --login-input-placeholder: var(--public-auth-input-placeholder);
@@ -524,7 +532,7 @@
   --login-alert-success-bg: hsl(152 72% 32% / 0.24);
   --login-alert-success-border: hsl(152 72% 44% / 0.36);
   --login-alert-success-text: hsl(152 100% 94%);
-  --login-footer-text: hsl(0 0% 100% / 0.5);
+  --login-footer-text: hsl(0 0% 100% / 0.68);
   --banned-layout-bg: linear-gradient(135deg, hsl(222 47% 8%), hsl(0 58% 18% / 0.44), hsl(222 47% 8%));
   --banned-pattern-dot: hsl(0 54% 22% / 0.3);
   --banned-orb-top: hsl(0 72% 52% / 0.1);

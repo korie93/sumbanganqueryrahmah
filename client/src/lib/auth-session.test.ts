@@ -51,6 +51,12 @@ function createStorageMock(): StorageLike {
   };
 }
 
+function createQuotaExceededError() {
+  return Object.assign(new Error("Quota exceeded"), {
+    name: "QuotaExceededError",
+  });
+}
+
 function installStorageMocks() {
   const local = createStorageMock();
   const session = createStorageMock();
@@ -208,4 +214,45 @@ test("broadcastForcedLogout broadcasts through BroadcastChannel and dispatches a
   assert.equal(payload.message, "Password was reset. Please login again.");
   assert.match(String(payload.nonce || ""), /^force-logout-/);
   assert.deepEqual(events, ["Password was reset. Please login again."]);
+});
+
+test("persistAuthenticatedUser recovers gracefully from sessionStorage quota exhaustion", () => {
+  const { session } = installStorageMocks();
+  session.setItem("activityId", "activity-123");
+  let firstWrite = true;
+  const originalSetItem = session.setItem.bind(session);
+
+  session.setItem = (key, value) => {
+    if (firstWrite) {
+      firstWrite = false;
+      throw createQuotaExceededError();
+    }
+    originalSetItem(key, value);
+  };
+
+  persistAuthenticatedUser(sampleUser);
+
+  assert.equal(session.getItem("username"), "alice");
+  assert.equal(session.getItem("role"), "admin");
+  assert.equal(session.getItem("activityId"), null);
+});
+
+test("persistAuthNotice recovers gracefully from sessionStorage quota exhaustion", () => {
+  const { session } = installStorageMocks();
+  session.setItem("username", "alice");
+  let firstWrite = true;
+  const originalSetItem = session.setItem.bind(session);
+
+  session.setItem = (key, value) => {
+    if (firstWrite) {
+      firstWrite = false;
+      throw createQuotaExceededError();
+    }
+    originalSetItem(key, value);
+  };
+
+  persistAuthNotice("Session expired.");
+
+  assert.equal(consumeStoredAuthNotice(), "Session expired.");
+  assert.equal(session.getItem("username"), null);
 });

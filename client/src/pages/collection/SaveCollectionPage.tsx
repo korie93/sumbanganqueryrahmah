@@ -10,6 +10,7 @@ import { useMutationFeedback } from "@/hooks/useMutationFeedback";
 import { usePageShortcuts } from "@/hooks/usePageShortcuts";
 import { cn } from "@/lib/utils";
 import { CollectionReceiptPanel } from "@/pages/collection/CollectionReceiptPanel";
+import { buildSaveCollectionFieldErrorMap } from "@/pages/collection/save-collection-page-utils";
 import { COLLECTION_BATCH_OPTIONS } from "./utils";
 import { useSaveCollectionPageState } from "./useSaveCollectionPageState";
 import type { CollectionBatch } from "@/lib/api";
@@ -34,6 +35,20 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
     onSaved,
     mutationFeedback,
   });
+  const fieldErrors = buildSaveCollectionFieldErrorMap(state.values, {
+    showRequired: state.hasTriedSubmit,
+  });
+  const customerNameErrorId = `${customerNameInputId}-error`;
+  const customerIcNumberErrorId = `${customerIcNumberInputId}-error`;
+  const customerPhoneErrorId = `${customerPhoneInputId}-error`;
+  const accountNumberErrorId = `${accountNumberInputId}-error`;
+  const paymentDateHelpId = `${paymentDateButtonId}-help`;
+  const paymentDateErrorId = `${paymentDateButtonId}-error`;
+  const amountHelpId = `${amountInputId}-help`;
+  const amountErrorId = `${amountInputId}-error`;
+
+  const joinDescribedByIds = (...ids: Array<string | null | undefined>) =>
+    ids.filter(Boolean).join(" ") || undefined;
 
   usePageShortcuts([
     {
@@ -58,7 +73,14 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
           onChange={(e) => state.setCustomerName(e.target.value)}
           disabled={state.submitting}
           autoComplete="name"
+          aria-invalid={Boolean(fieldErrors.customerName)}
+          aria-describedby={fieldErrors.customerName ? customerNameErrorId : undefined}
         />
+        {fieldErrors.customerName ? (
+          <p id={customerNameErrorId} className="text-xs text-destructive" aria-live="polite">
+            {fieldErrors.customerName}
+          </p>
+        ) : null}
       </div>
       <div className="space-y-2">
         <Label htmlFor={customerIcNumberInputId}>IC Number</Label>
@@ -70,7 +92,14 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
           disabled={state.submitting}
           inputMode="numeric"
           autoComplete="off"
+          aria-invalid={Boolean(fieldErrors.icNumber)}
+          aria-describedby={fieldErrors.icNumber ? customerIcNumberErrorId : undefined}
         />
+        {fieldErrors.icNumber ? (
+          <p id={customerIcNumberErrorId} className="text-xs text-destructive" aria-live="polite">
+            {fieldErrors.icNumber}
+          </p>
+        ) : null}
       </div>
       <div className="space-y-2">
         <Label htmlFor={customerPhoneInputId}>Customer Phone Number</Label>
@@ -84,7 +113,14 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
           placeholder="+60 12-345 6789"
           inputMode="tel"
           autoComplete="tel"
+          aria-invalid={Boolean(fieldErrors.customerPhone)}
+          aria-describedby={fieldErrors.customerPhone ? customerPhoneErrorId : undefined}
         />
+        {fieldErrors.customerPhone ? (
+          <p id={customerPhoneErrorId} className="text-xs text-destructive" aria-live="polite">
+            {fieldErrors.customerPhone}
+          </p>
+        ) : null}
       </div>
     </>
   );
@@ -100,7 +136,14 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
           onChange={(e) => state.setAccountNumber(e.target.value)}
           disabled={state.submitting}
           autoComplete="off"
+          aria-invalid={Boolean(fieldErrors.accountNumber)}
+          aria-describedby={fieldErrors.accountNumber ? accountNumberErrorId : undefined}
         />
+        {fieldErrors.accountNumber ? (
+          <p id={accountNumberErrorId} className="text-xs text-destructive" aria-live="polite">
+            {fieldErrors.accountNumber}
+          </p>
+        ) : null}
       </div>
       <div className="space-y-2">
         <Label htmlFor="save-collection-batch">Batch</Label>
@@ -132,11 +175,21 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
           disabled={state.submitting}
           placeholder="Select payment date..."
           ariaLabel="Payment Date"
+          ariaDescribedBy={joinDescribedByIds(
+            paymentDateHelpId,
+            fieldErrors.paymentDate ? paymentDateErrorId : null,
+          )}
+          ariaInvalid={Boolean(fieldErrors.paymentDate)}
           buttonTestId="save-collection-payment-date"
           disabledDates={{ after: new Date(`${state.maxPaymentDate}T23:59:59`) }}
         />
-        {state.isPaymentDateInFuture ? (
-          <p className="text-xs text-destructive">Payment Date cannot be in the future.</p>
+        <p id={paymentDateHelpId} className="text-xs text-muted-foreground">
+          Select a payment date on or before today.
+        </p>
+        {fieldErrors.paymentDate ? (
+          <p id={paymentDateErrorId} className="text-xs text-destructive" aria-live="polite">
+            {fieldErrors.paymentDate}
+          </p>
         ) : null}
       </div>
       <div className="space-y-2">
@@ -151,7 +204,20 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
           onChange={(e) => state.setAmount(e.target.value)}
           disabled={state.submitting}
           inputMode="decimal"
+          aria-invalid={Boolean(fieldErrors.amount)}
+          aria-describedby={joinDescribedByIds(
+            amountHelpId,
+            fieldErrors.amount ? amountErrorId : null,
+          )}
         />
+        <p id={amountHelpId} className="text-xs text-muted-foreground">
+          Enter the amount in Ringgit Malaysia, for example 12.50.
+        </p>
+        {fieldErrors.amount ? (
+          <p id={amountErrorId} className="text-xs text-destructive" aria-live="polite">
+            {fieldErrors.amount}
+          </p>
+        ) : null}
       </div>
     </>
   );
