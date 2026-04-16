@@ -1,5 +1,5 @@
-import assert from "node:assert/strict";
-import test from "node:test";
+import { deepEqual, match } from "node:assert/strict";
+import { test } from "node:test";
 import {
   IMPORT_PREVIEW_MAX_CSV_ROWS,
   normalizeExcelMatrixRows,
@@ -8,7 +8,7 @@ import {
 } from "@/pages/import/parsing";
 
 test("normalizeExcelMatrixRows coerces non-array rows into safe worksheet rows", () => {
-  assert.deepEqual(
+  deepEqual(
     normalizeExcelMatrixRows([
       ["name", "amount"],
       "unexpected-row",
@@ -25,7 +25,7 @@ test("normalizeExcelMatrixRows coerces non-array rows into safe worksheet rows",
 });
 
 test("parseCsvLine preserves escaped quotes in quoted cells", () => {
-  assert.deepEqual(
+  deepEqual(
     parseCsvLine('"Ali","He said ""hello""",123'),
     ["Ali", 'He said "hello"', "123"],
   );
@@ -40,6 +40,6 @@ test("parseImportPreview rejects CSV files beyond the preview row limit", async 
 
   const result = await parseImportPreview(file);
 
-  assert.match(String(result.error), /preview row limit/i);
-  assert.deepEqual(result.rows, []);
+  match(String(result.error), /preview row limit/i);
+  deepEqual(result.rows, []);
 });
