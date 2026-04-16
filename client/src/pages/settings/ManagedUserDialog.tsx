@@ -18,6 +18,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { logClientError } from "@/lib/client-logger";
 import type { ManagedUser } from "@/pages/settings/types";
 
 export interface ManagedUserDialogProps {
@@ -71,6 +72,16 @@ export function ManagedUserDialog({
   onSaveCriticalSettings,
   saving,
 }: ManagedUserDialogProps) {
+  const handleConfirmCriticalSave = () => {
+    onConfirmCriticalOpenChange(false);
+    void onSaveCriticalSettings().catch((error: unknown) => {
+      logClientError("Managed user critical save confirmation failed", error, {
+        source: "client.log",
+        component: "ManagedUserDialog",
+      });
+    });
+  };
+
   return (
     <>
       <Dialog open={managedDialogOpen} onOpenChange={onManagedDialogOpenChange}>
@@ -215,10 +226,7 @@ export function ManagedUserDialog({
             <AlertDialogCancel disabled={saving}>Cancel</AlertDialogCancel>
             <AlertDialogAction
               disabled={saving}
-              onClick={async () => {
-                onConfirmCriticalOpenChange(false);
-                await onSaveCriticalSettings();
-              }}
+              onClick={handleConfirmCriticalSave}
             >
               Yes, Save
             </AlertDialogAction>

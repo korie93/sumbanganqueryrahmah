@@ -1,5 +1,6 @@
 import { Bar, BarChart, CartesianGrid, Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { AccessibleChartSummary } from "@/components/ui/chart-accessibility";
 import { useIsMobile } from "@/hooks/use-mobile";
 
 interface AnalysisChartsProps {
@@ -28,26 +29,36 @@ export function AnalysisCharts({ categoryBarData, genderPieData }: AnalysisChart
         <CardContent>
           {genderPieData.length > 0 ? (
             <>
-              <ResponsiveContainer width="100%" height={isMobile ? 220 : 250}>
-                <PieChart>
-                  <Pie
-                    data={genderPieData}
-                    cx="50%"
-                    cy="50%"
-                    labelLine={false}
-                    label={isMobile ? false : ({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-                    outerRadius={isMobile ? 68 : 80}
-                    fill="#8884d8"
-                    dataKey="value"
-                  >
-                    {genderPieData.map((entry) => (
-                      <Cell key={`${entry.name}-${entry.color}`} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip formatter={(value: number) => value.toLocaleString()} />
-                  {!isMobile ? <Legend /> : null}
-                </PieChart>
-              </ResponsiveContainer>
+              <div aria-hidden="true">
+                <ResponsiveContainer width="100%" height={isMobile ? 220 : 250}>
+                  <PieChart>
+                    <Pie
+                      data={genderPieData}
+                      cx="50%"
+                      cy="50%"
+                      labelLine={false}
+                      label={isMobile ? false : ({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                      outerRadius={isMobile ? 68 : 80}
+                      fill="#8884d8"
+                      dataKey="value"
+                    >
+                      {genderPieData.map((entry) => (
+                        <Cell key={`${entry.name}-${entry.color}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip formatter={(value: number) => value.toLocaleString()} />
+                    {!isMobile ? <Legend /> : null}
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+              <AccessibleChartSummary
+                title="Gender Distribution summary"
+                summary="Gender distribution derived from IC data."
+                items={genderPieData.map((entry) => ({
+                  label: entry.name,
+                  value: entry.value.toLocaleString(),
+                }))}
+              />
 
               {isMobile ? (
                 <div className="mt-3 grid gap-2">
@@ -82,24 +93,34 @@ export function AnalysisCharts({ categoryBarData, genderPieData }: AnalysisChart
           <CardTitle className="text-lg font-semibold text-foreground">ID Category Distribution</CardTitle>
         </CardHeader>
         <CardContent>
-          <ResponsiveContainer width="100%" height={isMobile ? 240 : 250}>
-            <BarChart
-              data={categoryBarData}
-              layout="vertical"
-              margin={isMobile ? { top: 4, right: 8, bottom: 4, left: 0 } : { top: 0, right: 0, bottom: 0, left: 20 }}
-            >
-              <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
-              <XAxis type="number" />
-              <YAxis
-                type="category"
-                dataKey="name"
-                width={isMobile ? 88 : 100}
-                tick={{ fontSize: isMobile ? 11 : 12 }}
-              />
-              <Tooltip formatter={(value: number) => value.toLocaleString()} />
-              <Bar dataKey="count" radius={[0, 4, 4, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
+          <div aria-hidden="true">
+            <ResponsiveContainer width="100%" height={isMobile ? 240 : 250}>
+              <BarChart
+                data={categoryBarData}
+                layout="vertical"
+                margin={isMobile ? { top: 4, right: 8, bottom: 4, left: 0 } : { top: 0, right: 0, bottom: 0, left: 20 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+                <XAxis type="number" />
+                <YAxis
+                  type="category"
+                  dataKey="name"
+                  width={isMobile ? 88 : 100}
+                  tick={{ fontSize: isMobile ? 11 : 12 }}
+                />
+                <Tooltip formatter={(value: number) => value.toLocaleString()} />
+                <Bar dataKey="count" radius={[0, 4, 4, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+          <AccessibleChartSummary
+            title="ID Category Distribution summary"
+            summary="Distribution of rows by ID category."
+            items={categoryBarData.map((entry) => ({
+              label: entry.name,
+              value: entry.count.toLocaleString(),
+            }))}
+          />
         </CardContent>
       </Card>
     </div>

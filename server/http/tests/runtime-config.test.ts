@@ -260,6 +260,28 @@ test("runtime config reads explicit global HTTP request timeout settings", async
   );
 });
 
+test("runtime config reads explicit pool monitor and backup restore safety settings", async () => {
+  await withEnv(
+    {
+      NODE_ENV: "development",
+      HOST: "127.0.0.1",
+      PG_POOL_ALERT_WAITING_COUNT: "4",
+      PG_POOL_ALERT_UTILIZATION_PERCENT: "95",
+      PG_POOL_HEALTH_CHECK_INTERVAL_MS: "75000",
+      PG_POOL_HEALTH_CHECK_TIMEOUT_MS: "3200",
+      BACKUP_RESTORE_MAX_TRACKED_COLLECTION_RECORD_IDS: "345678",
+    },
+    async () => {
+      const runtimeModule = await importRuntimeFresh();
+      assert.equal(runtimeModule.runtimeConfig.runtime.pgPoolAlertWaitingCount, 4);
+      assert.equal(runtimeModule.runtimeConfig.runtime.pgPoolAlertUtilizationPercent, 95);
+      assert.equal(runtimeModule.runtimeConfig.runtime.pgPoolHealthCheckIntervalMs, 75_000);
+      assert.equal(runtimeModule.runtimeConfig.runtime.pgPoolHealthCheckTimeoutMs, 3_200);
+      assert.equal(runtimeModule.runtimeConfig.runtime.backupRestoreMaxTrackedCollectionRecordIds, 345_678);
+    },
+  );
+});
+
 test("runtime config reads explicit client error telemetry enablement", async () => {
   await withEnv(
     {

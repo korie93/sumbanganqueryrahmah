@@ -269,6 +269,45 @@ test("collection restore batches temp-table tracking and inserts for large resto
   assert.equal(stats.collectionRecords.skipped, 0);
 });
 
+test("collection restore rejects pathological tracking growth beyond the configured safety limit", async () => {
+  const tx = createBackupRestoreExecutor(
+    async () => ({ rows: [] }),
+    "Unexpected insert() call during collection restore tracking limit test.",
+  );
+  const backupDataReader = createCollectionRecordReader(
+    Array.from({ length: 1_001 }, (_, index) => ({
+      id: `11111111-1111-1111-1111-${String(index + 1).padStart(12, "0")}`,
+      customerName: `Customer ${index + 1}`,
+      icNumber: `90010101${String(index + 1).padStart(4, "0")}`,
+      customerPhone: `012300${String(index + 1).padStart(4, "0")}`,
+      accountNumber: `ACC-${index + 1}`,
+      batch: "P10",
+      paymentDate: "2026-03-31",
+      amount: 100,
+      receiptFile: null,
+      receiptTotalAmountCents: 10000,
+      receiptValidationStatus: "matched",
+      receiptValidationMessage: null,
+      receiptCount: 1,
+      duplicateReceiptFlag: false,
+      createdByLogin: "system",
+      collectionStaffNickname: "Collector Alpha",
+      staffUsername: "Collector Alpha",
+      createdAt: "2026-03-31T08:00:00.000Z",
+    })),
+  );
+  const stats = createRestoreStats();
+
+  await initializeRestoreTrackingTempTable(tx);
+
+  await assert.rejects(
+    () => restoreCollectionRecordsFromBackup(tx, backupDataReader, stats, {
+      maxTrackedRecordIds: 1_000,
+    }),
+    /configured safety limit/i,
+  );
+});
+
 test("normalizeBackupCollectionRecord keeps restore fallbacks stable", () => {
   const restoredRecord = normalizeBackupCollectionRecord({
     id: "11111111-1111-1111-1111-111111111111",

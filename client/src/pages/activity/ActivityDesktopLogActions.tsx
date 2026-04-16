@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { Shield, Trash2, UserX } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -6,7 +7,7 @@ import {
 } from "@/pages/activity/activity-desktop-logs-utils";
 import type { ActivityDesktopLogActionsProps } from "@/pages/activity/activity-desktop-logs-shared";
 
-export function ActivityDesktopLogActions({
+export const ActivityDesktopLogActions = memo(function ActivityDesktopLogActions({
   actionLoading,
   activity,
   onBanClick,
@@ -24,6 +25,7 @@ export function ActivityDesktopLogActions({
           onClick={() => onKickClick(activity)}
           disabled={isActionDisabled}
           data-testid={`button-kick-${activity.id}`}
+          aria-label={`Kick activity session for ${activity.username}`}
         >
           <UserX className="w-4 h-4" />
         </Button>
@@ -36,6 +38,7 @@ export function ActivityDesktopLogActions({
           disabled={isActionDisabled}
           className="text-destructive"
           data-testid={`button-ban-${activity.id}`}
+          aria-label={`Ban account access for ${activity.username}`}
         >
           <Shield className="w-4 h-4" />
         </Button>
@@ -47,9 +50,10 @@ export function ActivityDesktopLogActions({
         disabled={isActionDisabled}
         className="text-destructive"
         data-testid={`button-delete-${activity.id}`}
+        aria-label={`Delete activity log for ${activity.username}`}
       >
         <Trash2 className="w-4 h-4" />
       </Button>
     </div>
   );
-}
+});

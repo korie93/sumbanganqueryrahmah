@@ -31,6 +31,8 @@ export function BulkImportPanel({
   onClearBulk,
   onStartBulkImport,
 }: BulkImportPanelProps) {
+  const bulkFileInputHelpId = "bulk-import-file-help";
+  const bulkFileInputStatusId = "bulk-import-file-status";
   const blockedCount = bulkResults.filter((result) => result.blocked).length;
   const hasImportableFiles = bulkResults.some((result) => !result.blocked);
   const failedCount = bulkResults.filter((result) => result.status === "error").length;
@@ -39,6 +41,19 @@ export function BulkImportPanel({
   const bulkDropzoneDisabledProps = bulkProcessing
     ? { "aria-disabled": "true" as const }
     : {};
+
+  const handleDropzoneKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (bulkProcessing) {
+      return;
+    }
+
+    if (event.key !== "Enter" && event.key !== " ") {
+      return;
+    }
+
+    event.preventDefault();
+    bulkInputRef.current?.click();
+  };
 
   return (
     <div className="glass-wrapper mb-4 p-4 sm:mb-6 sm:p-6" {...bulkBusyProps}>
@@ -52,6 +67,10 @@ export function BulkImportPanel({
       <div
         onDrop={onBulkDrop}
         onDragOver={onBulkDragOver}
+        onKeyDown={handleDropzoneKeyDown}
+        role="button"
+        tabIndex={bulkProcessing ? -1 : 0}
+        aria-describedby={`${bulkFileInputHelpId} ${bulkFileInputStatusId}`}
         className={`rounded-xl border-2 border-dashed border-slate-300 p-5 text-center transition-colors dark:border-slate-600 sm:p-8 ${
           bulkProcessing ? "cursor-not-allowed opacity-70" : "cursor-pointer hover:border-primary"
         }`}
@@ -69,6 +88,7 @@ export function BulkImportPanel({
           ref={bulkInputRef}
           type="file"
           aria-label="Select bulk import files"
+          aria-describedby={`${bulkFileInputHelpId} ${bulkFileInputStatusId}`}
           accept=".csv,.xlsx,.xls,.xlsb"
           multiple
           onChange={onBulkFileSelect}
@@ -82,8 +102,17 @@ export function BulkImportPanel({
           </div>
           <div>
             <p className="text-foreground font-medium">Click or drag multiple files here</p>
-            <p className="mt-1 text-sm text-muted-foreground">Select multiple CSV or Excel files at once</p>
+            <p id={bulkFileInputHelpId} className="mt-1 text-sm text-muted-foreground">
+              Select multiple CSV or Excel files at once.
+            </p>
             <p className="mt-1 text-xs text-muted-foreground">Maximum upload size per file: {maxUploadSizeLabel}</p>
+            <p id={bulkFileInputStatusId} className="sr-only">
+              {bulkProcessing
+                ? `Bulk import in progress at ${Math.round(bulkProgress)} percent.`
+                : blockedCount > 0
+                  ? `${blockedCount} selected file or files exceed the current upload limit and will be skipped.`
+                  : `${bulkFiles.length} files currently selected for bulk import.`}
+            </p>
           </div>
         </div>
       </div>

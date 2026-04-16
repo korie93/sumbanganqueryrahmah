@@ -296,8 +296,20 @@ export const runtimeConfig: RuntimeConfig = Object.freeze({
     maintenanceCacheTtlMs: readInt("MAINTENANCE_CACHE_TTL_MS", 3_000, { min: 500 }),
     runtimeSettingsCacheTtlMs: readInt("RUNTIME_SETTINGS_CACHE_TTL_MS", 3_000, { min: 500 }),
     pgPoolWarnCooldownMs: readInt("PG_POOL_WARN_COOLDOWN_MS", 60_000, { min: 1_000 }),
+    pgPoolAlertWaitingCount: readInt("PG_POOL_ALERT_WAITING_COUNT", 2, { min: 1, max: 1_000 }),
+    pgPoolAlertUtilizationPercent: readInt("PG_POOL_ALERT_UTILIZATION_PERCENT", 100, {
+      min: 50,
+      max: 100,
+    }),
+    pgPoolHealthCheckIntervalMs: readInt("PG_POOL_HEALTH_CHECK_INTERVAL_MS", 60_000, { min: 1_000 }),
+    pgPoolHealthCheckTimeoutMs: readInt("PG_POOL_HEALTH_CHECK_TIMEOUT_MS", 5_000, { min: 250 }),
     gracefulShutdownTimeoutMs: readInt("GRACEFUL_SHUTDOWN_TIMEOUT_MS", 25_000, { min: 1_000 }),
     backupOperationTimeoutMs: readInt("BACKUP_OPERATION_TIMEOUT_MS", 120_000, { min: 5_000 }),
+    backupRestoreMaxTrackedCollectionRecordIds: readInt(
+      "BACKUP_RESTORE_MAX_TRACKED_COLLECTION_RECORD_IDS",
+      lowMemoryMode ? 100_000 : 250_000,
+      { min: 1_000, max: 2_000_000 },
+    ),
     backupMaxPayloadBytes: readInt(
       "BACKUP_MAX_PAYLOAD_BYTES",
       lowMemoryMode ? 32 * 1024 * 1024 : 128 * 1024 * 1024,

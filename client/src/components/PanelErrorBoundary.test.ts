@@ -14,9 +14,11 @@ test("PanelErrorBoundary renders an isolated recovery fallback", () => {
   boundary.state = {
     error: new Error("boom"),
     boundaryKey: "collections:records",
+    failureCount: 3,
   };
 
   const markup = renderToStaticMarkup(boundary.render());
   assert.match(markup, /Rekod Collection tidak dapat dimuatkan/i);
   assert.match(markup, /Cuba semula panel/i);
+  assert.match(markup, /sudah gagal beberapa kali/i);
 });

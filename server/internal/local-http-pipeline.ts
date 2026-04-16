@@ -5,7 +5,10 @@ import helmet from "helmet";
 import { runtimeConfig } from "../config/runtime";
 import { dbQueryProfiler } from "../db-postgres";
 import { buildContentDispositionHeader } from "../http/content-disposition";
-import { createRequestTimeoutMiddleware } from "../http/request-timeout-middleware";
+import {
+  createRequestTimeoutMiddleware,
+  createRequestTimeoutOverrideMiddleware,
+} from "../http/request-timeout-middleware";
 import { logger } from "../lib/logger";
 import { runWithRequestContext } from "../lib/request-context";
 import { createCsrfProtectionMiddleware } from "../http/csrf";
@@ -42,6 +45,8 @@ type LocalHttpPipelineOptions = {
   systemProtectionMiddleware: RequestHandler;
   maintenanceGuard: RequestHandler;
   requestTimeoutMs?: number;
+  backupOperationTimeoutMs?: number;
+  importAnalysisTimeoutMs?: number;
 };
 
 export function registerLocalHttpPipeline(app: Express, options: LocalHttpPipelineOptions) {
@@ -56,6 +61,8 @@ export function registerLocalHttpPipeline(app: Express, options: LocalHttpPipeli
     systemProtectionMiddleware,
     maintenanceGuard,
     requestTimeoutMs = runtimeConfig.runtime.requestTimeoutMs,
+    backupOperationTimeoutMs = runtimeConfig.runtime.backupOperationTimeoutMs,
+    importAnalysisTimeoutMs = runtimeConfig.runtime.importAnalysisTimeoutMs,
   } = options;
 
   app.use(helmet({
@@ -186,6 +193,15 @@ export function registerLocalHttpPipeline(app: Express, options: LocalHttpPipeli
     });
   });
 
+  app.use("/api/backups", createRequestTimeoutOverrideMiddleware({
+    timeoutMs: backupOperationTimeoutMs,
+  }));
+  app.use("/api/imports/:id/analyze", createRequestTimeoutOverrideMiddleware({
+    timeoutMs: importAnalysisTimeoutMs,
+  }));
+  app.use("/api/analyze/all", createRequestTimeoutOverrideMiddleware({
+    timeoutMs: importAnalysisTimeoutMs,
+  }));
   app.use(createRequestTimeoutMiddleware({ timeoutMs: requestTimeoutMs }));
   app.use(createCsrfProtectionMiddleware());
   app.use(adaptiveRateLimit);

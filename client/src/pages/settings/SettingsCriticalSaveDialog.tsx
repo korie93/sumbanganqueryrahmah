@@ -8,6 +8,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { logClientError } from "@/lib/client-logger";
 
 type SettingsCriticalSaveDialogProps = {
   open: boolean;
@@ -22,6 +23,16 @@ export function SettingsCriticalSaveDialog({
   onOpenChange,
   onConfirm,
 }: SettingsCriticalSaveDialogProps) {
+  const handleConfirmClick = () => {
+    onOpenChange(false);
+    void onConfirm().catch((error: unknown) => {
+      logClientError("Critical settings save confirmation failed", error, {
+        source: "client.log",
+        component: "SettingsCriticalSaveDialog",
+      });
+    });
+  };
+
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
       <AlertDialogContent>
@@ -36,10 +47,7 @@ export function SettingsCriticalSaveDialog({
           <AlertDialogCancel disabled={saving}>Cancel</AlertDialogCancel>
           <AlertDialogAction
             disabled={saving}
-            onClick={async () => {
-              onOpenChange(false);
-              await onConfirm();
-            }}
+            onClick={handleConfirmClick}
           >
             {saving ? "Saving..." : "Yes, Save"}
           </AlertDialogAction>

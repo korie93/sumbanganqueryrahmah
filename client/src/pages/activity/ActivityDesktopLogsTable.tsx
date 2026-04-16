@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { memo, useMemo } from "react";
 import { HorizontalScrollHint } from "@/components/HorizontalScrollHint";
 import { ActivityDesktopLogsHeader } from "@/pages/activity/ActivityDesktopLogsHeader";
 import { ActivityDesktopLogRow } from "@/pages/activity/ActivityDesktopLogRow";
@@ -7,7 +7,7 @@ import {
 } from "@/pages/activity/activity-virtualization";
 import type { ActivityDesktopLogsTableProps } from "@/pages/activity/activity-desktop-logs-shared";
 
-export function ActivityDesktopLogsTable({
+export const ActivityDesktopLogsTable = memo(function ActivityDesktopLogsTable({
   actionLoading,
   activities,
   allVisibleSelected,
@@ -54,4 +54,4 @@ export function ActivityDesktopLogsTable({
       </div>
     </HorizontalScrollHint>
   );
-}
+});

@@ -12,6 +12,7 @@ type PanelErrorBoundaryProps = {
 type PanelErrorBoundaryState = {
   error: Error | null;
   boundaryKey: string;
+  failureCount: number;
 };
 
 export class PanelErrorBoundary extends Component<
@@ -23,6 +24,7 @@ export class PanelErrorBoundary extends Component<
     this.state = {
       error: null,
       boundaryKey: props.boundaryKey,
+      failureCount: 0,
     };
   }
 
@@ -31,6 +33,9 @@ export class PanelErrorBoundary extends Component<
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    this.setState((currentState) => ({
+      failureCount: currentState.failureCount + 1,
+    }));
     logClientError(
       "Operational panel render failed",
       error,
@@ -45,10 +50,14 @@ export class PanelErrorBoundary extends Component<
   }
 
   componentDidUpdate(prevProps: PanelErrorBoundaryProps) {
-    if (prevProps.boundaryKey !== this.props.boundaryKey && this.state.error) {
+    if (
+      prevProps.boundaryKey !== this.props.boundaryKey
+      && (this.state.error || this.state.failureCount !== 0 || this.state.boundaryKey !== this.props.boundaryKey)
+    ) {
       this.setState({
         error: null,
         boundaryKey: this.props.boundaryKey,
+        failureCount: 0,
       });
     }
   }
@@ -81,6 +90,11 @@ export class PanelErrorBoundary extends Component<
               <p className="text-xs text-amber-900/80 dark:text-amber-100/80">
                 Panel ini gagal dirender, tetapi bahagian lain pada halaman masih boleh digunakan.
               </p>
+              {this.state.failureCount >= 3 ? (
+                <p className="text-xs text-amber-900/80 dark:text-amber-100/80">
+                  Panel ini sudah gagal beberapa kali. Muat semula aplikasi atau hubungi pentadbir sistem jika masalah berterusan.
+                </p>
+              ) : null}
             </div>
             <Button type="button" size="sm" variant="secondary" onClick={this.handleRetry}>
               <RotateCcw className="mr-2 h-4 w-4" aria-hidden="true" />

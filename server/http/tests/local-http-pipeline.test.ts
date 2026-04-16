@@ -160,3 +160,56 @@ test("registerLocalHttpPipeline returns 504 and aborts the request context when 
     await stopTestServer(server);
   }
 });
+
+test("registerLocalHttpPipeline honors backup timeout overrides ahead of the global timeout", async () => {
+  const app = express();
+  let abortObserved = false;
+
+  registerLocalHttpPipeline(app, {
+    importBodyLimit: "1mb",
+    collectionBodyLimit: "1mb",
+    defaultBodyLimit: "100kb",
+    uploadsRootDir: path.resolve(process.cwd(), "uploads"),
+    recordRequestStarted: () => undefined,
+    recordRequestFinished: () => undefined,
+    adaptiveRateLimit: (_req, _res, next) => next(),
+    systemProtectionMiddleware: (_req, _res, next) => next(),
+    maintenanceGuard: (_req, _res, next) => next(),
+    requestTimeoutMs: 40,
+    backupOperationTimeoutMs: 120,
+  });
+
+  app.get("/api/backups/slow", async (_req, res) => {
+    const abortSignal = getRequestContext()?.abortSignal;
+    await new Promise<void>((resolve) => {
+      abortSignal?.addEventListener("abort", () => {
+        abortObserved = true;
+        resolve();
+      }, { once: true });
+    });
+
+    if (!res.headersSent) {
+      res.json({ ok: true });
+    }
+  });
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const response = await fetch(`${baseUrl}/api/backups/slow`);
+    assert.equal(response.status, 504);
+    assert.deepEqual(await response.json(), {
+      ok: false,
+      message: "The request took too long to complete.",
+      error: {
+        code: "REQUEST_TIMEOUT",
+        message: "The request took too long to complete.",
+        details: {
+          timeoutMs: 120,
+        },
+      },
+    });
+    assert.equal(abortObserved, true);
+  } finally {
+    await stopTestServer(server);
+  }
+});

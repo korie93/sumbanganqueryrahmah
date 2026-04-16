@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   bindPgPoolHealthCheck,
   bindPgPoolMonitoring,
+  getPgPoolUtilizationPercent,
   getPgPoolSnapshot,
   hasPgPoolPressure,
 } from "../db-pool-monitor";
@@ -117,6 +118,55 @@ test("hasPgPoolPressure only reports pressure when clients are queueing", () => 
       waiting: 1,
       max: 3,
     }),
+    true,
+  );
+});
+
+test("getPgPoolUtilizationPercent returns a bounded saturation percentage", () => {
+  assert.equal(getPgPoolUtilizationPercent({
+    total: 0,
+    idle: 0,
+    waiting: 0,
+    max: 0,
+  }), 0);
+  assert.equal(getPgPoolUtilizationPercent({
+    total: 9,
+    idle: 0,
+    waiting: 2,
+    max: 10,
+  }), 90);
+});
+
+test("hasPgPoolPressure respects explicit queue and utilization thresholds", () => {
+  assert.equal(
+    hasPgPoolPressure(
+      {
+        total: 9,
+        idle: 0,
+        waiting: 1,
+        max: 10,
+      },
+      {
+        minWaitingCount: 2,
+        minUtilizationPercent: 90,
+      },
+    ),
+    false,
+  );
+
+  assert.equal(
+    hasPgPoolPressure(
+      {
+        total: 9,
+        idle: 0,
+        waiting: 2,
+        max: 10,
+      },
+      {
+        minWaitingCount: 2,
+        minUtilizationPercent: 90,
+      },
+    ),
     true,
   );
 });

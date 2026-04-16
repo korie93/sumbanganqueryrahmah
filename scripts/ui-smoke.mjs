@@ -476,6 +476,27 @@ const ensureCollectionSmokeAsset = async (fileName) => {
   return filePath;
 };
 
+const ensureSmokeImportCsvAsset = async (fileName, rows) => {
+  const normalizedName = String(fileName || "").trim();
+  assert(normalizedName, "import smoke asset file name is required");
+
+  const safeRows = Array.isArray(rows) && rows.length > 0
+    ? rows
+    : [
+        ["customer_name", "amount", "city"],
+        ["Smoke UI Import", "12.34", "Shah Alam"],
+      ];
+
+  const csvContent = safeRows
+    .map((row) => row.map((value) => `"${String(value).replace(/"/g, "\"\"")}"`).join(","))
+    .join("\n");
+
+  await mkdir(smokeFixtureDir, { recursive: true });
+  const filePath = path.join(smokeFixtureDir, normalizedName);
+  await writeFile(filePath, `${csvContent}\n`, "utf8");
+  return filePath;
+};
+
 const getInputByLabel = (page, labelText) =>
   page
     .locator("label", { hasText: labelText })
@@ -918,6 +939,41 @@ const cleanupBackupByName = async (context, backupName) => {
   }
 };
 
+const cleanupImportByName = async (context, importName) => {
+  const normalizedName = String(importName || "").trim();
+  if (!normalizedName) {
+    return;
+  }
+
+  const params = new URLSearchParams();
+  params.set("search", normalizedName);
+  params.set("pageSize", "25");
+  const listResponse = await apiJsonRequestWithRetry(
+    context,
+    "GET",
+    `/api/imports?${params.toString()}`,
+    undefined,
+    [200],
+  );
+  const imports = Array.isArray(listResponse.payload?.imports)
+    ? listResponse.payload.imports
+    : [];
+
+  for (const item of imports) {
+    if (String(item?.name || "").trim() !== normalizedName) {
+      continue;
+    }
+
+    await apiJsonRequest(
+      context,
+      "DELETE",
+      `/api/imports/${encodeURIComponent(String(item.id || "").trim())}`,
+      undefined,
+      [200, 404],
+    );
+  }
+};
+
 const readJsonResponseBody = async (response) => {
   const rawText = await response.text().catch(() => "");
   try {
@@ -1178,6 +1234,58 @@ const checkBackupRestoreUiFlow = async (page, context, tracker) => {
     if (!backupDeleted) {
       await cleanupBackupByName(context, backupName).catch(() => {});
     }
+  }
+};
+
+const checkImportUiFlow = async (page, context, tracker) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`${baseUrl}/import`, { waitUntil: "networkidle" });
+  await page.getByText("Import Data").first().waitFor();
+
+  const uniqueSuffix = `${Date.now()}`;
+  const importName = `Smoke UI Import ${uniqueSuffix}`;
+  const importFilePath = await ensureSmokeImportCsvAsset(
+    `smoke-ui-import-${uniqueSuffix}.csv`,
+    [
+      ["customer_name", "amount", "city"],
+      ["Smoke UI Import Alpha", "15.50", "Klang"],
+      ["Smoke UI Import Beta", "22.10", "Petaling Jaya"],
+    ],
+  );
+
+  try {
+    await page.getByTestId("input-file").setInputFiles(importFilePath);
+    await page.getByText(/rows ready/i).first().waitFor({ timeout: 15_000 });
+    await page.getByTestId("input-import-name").fill(importName);
+
+    const createResponsePromise = page.waitForResponse(
+      (response) =>
+        response.request().method() === "POST"
+        && response.url().includes("/api/imports"),
+      { timeout: 30_000 },
+    );
+
+    await page.getByTestId("button-save").click();
+    const createResponse = await createResponsePromise;
+    const createPayload = await readJsonResponseBody(createResponse);
+    assert(
+      createResponse.status() === 200 || createResponse.status() === 201,
+      `import UI smoke expected a successful create response, got ${createResponse.status()}`,
+    );
+
+    const createdImportId = String(createPayload?.id || "").trim();
+    await page.waitForURL(/\/saved/, { timeout: 20_000 });
+    await page.getByText("Saved Imports").first().waitFor({ timeout: 15_000 });
+
+    const createdImportCard = createdImportId
+      ? page.getByTestId(`card-import-${createdImportId}`)
+      : page.locator('[data-testid^="card-import-"]').filter({ hasText: importName }).first();
+    await createdImportCard.waitFor({ state: "visible", timeout: 20_000 });
+
+    tracker.assertClean("import UI flow");
+    tracker.clear();
+  } finally {
+    await cleanupImportByName(context, importName).catch(() => {});
   }
 };
 
@@ -2346,6 +2454,7 @@ const run = async () => {
       await checkUserMenuThemeMode(page, tracker);
       await checkMobileNavbar(page, tracker);
       await checkHomeEntryPoint(page, tracker);
+      await checkImportUiFlow(page, context, tracker);
       await checkCollectionDailyPage(page, tracker);
       await checkCollectionMutationConsistency(context);
       await checkCollectionRecordsStaleDeleteConflict(page, context, tracker);

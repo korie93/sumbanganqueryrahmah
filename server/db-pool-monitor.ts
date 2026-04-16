@@ -16,6 +16,8 @@ type LoggerLike = Pick<typeof logger, "warn" | "error">;
 
 type BindPgPoolMonitoringOptions = {
   warnCooldownMs?: number;
+  minWaitingCount?: number;
+  minUtilizationPercent?: number;
   logger?: LoggerLike;
 };
 
@@ -35,6 +37,14 @@ export type PgPoolSnapshot = {
   max: number;
 };
 
+export function getPgPoolUtilizationPercent(snapshot: PgPoolSnapshot): number {
+  if (snapshot.max <= 0) {
+    return 0;
+  }
+
+  return Math.min(100, Math.max(0, Math.round((snapshot.total / snapshot.max) * 100)));
+}
+
 export function getPgPoolSnapshot(pool: PgPoolLike): PgPoolSnapshot {
   return {
     total: Math.max(0, Number(pool.totalCount || 0)),
@@ -44,20 +54,32 @@ export function getPgPoolSnapshot(pool: PgPoolLike): PgPoolSnapshot {
   };
 }
 
-export function hasPgPoolPressure(snapshot: PgPoolSnapshot): boolean {
-  return snapshot.max > 0 && snapshot.waiting > 0 && snapshot.idle <= 0 && snapshot.total >= snapshot.max;
+export function hasPgPoolPressure(
+  snapshot: PgPoolSnapshot,
+  options: Pick<BindPgPoolMonitoringOptions, "minUtilizationPercent" | "minWaitingCount"> = {},
+): boolean {
+  const minWaitingCount = Math.max(1, Number(options.minWaitingCount || 1));
+  const minUtilizationPercent = Math.max(50, Math.min(100, Number(options.minUtilizationPercent || 100)));
+
+  return snapshot.max > 0
+    && snapshot.waiting >= minWaitingCount
+    && snapshot.idle <= 0
+    && getPgPoolUtilizationPercent(snapshot) >= minUtilizationPercent;
 }
 
 export function bindPgPoolMonitoring(pool: PgPoolLike, options: BindPgPoolMonitoringOptions = {}) {
   const warnCooldownMs = Math.max(1_000, Number(options.warnCooldownMs || 60_000));
+  const minWaitingCount = Math.max(1, Number(options.minWaitingCount || 1));
+  const minUtilizationPercent = Math.max(50, Math.min(100, Number(options.minUtilizationPercent || 100)));
   const sink = options.logger ?? logger;
   let lastWarningAt = 0;
   let lastWarningSignature = "";
 
   const maybeWarnPressure = (source: string) => {
     const snapshot = getPgPoolSnapshot(pool);
+    const utilizationPercent = getPgPoolUtilizationPercent(snapshot);
 
-    if (!hasPgPoolPressure(snapshot)) {
+    if (!hasPgPoolPressure(snapshot, { minWaitingCount, minUtilizationPercent })) {
       lastWarningSignature = "";
       return;
     }
@@ -72,6 +94,9 @@ export function bindPgPoolMonitoring(pool: PgPoolLike, options: BindPgPoolMonito
     lastWarningSignature = signature;
     sink.warn("PostgreSQL pool pressure detected", {
       ...snapshot,
+      utilizationPercent,
+      minWaitingCount,
+      minUtilizationPercent,
       source,
     });
   };

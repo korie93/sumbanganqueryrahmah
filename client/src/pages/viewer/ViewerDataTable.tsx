@@ -1,4 +1,4 @@
-import { Suspense, useLayoutEffect, useMemo, useRef } from "react";
+import { Suspense, memo, useLayoutEffect, useMemo, useRef } from "react";
 import { HorizontalScrollHint } from "@/components/HorizontalScrollHint";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { lazyWithPreload } from "@/lib/lazy-with-preload";
@@ -37,7 +37,25 @@ interface ViewerDataTableProps {
   visibleHeaders: string[];
 }
 
-export function ViewerDataTable({
+const desktopTableFallback = (
+  <div className="flex min-h-[320px] items-center justify-center rounded-xl border border-border/60 bg-background/60">
+    <div className="h-7 w-7 animate-spin rounded-full border-2 border-primary/30 border-t-primary" />
+  </div>
+);
+
+const mobileTableFallback = (
+  <div className="space-y-3">
+    <div className="h-12 animate-pulse rounded-xl border border-border/60 bg-background/60" />
+    {Array.from({ length: 3 }).map((_, index) => (
+      <div
+        key={`viewer-mobile-card-fallback-${index}`}
+        className="h-40 animate-pulse rounded-2xl border border-border/60 bg-background/60"
+      />
+    ))}
+  </div>
+);
+
+export const ViewerDataTable = memo(function ViewerDataTable({
   debouncedSearch,
   enableVirtualRows,
   filteredRows,
@@ -71,23 +89,6 @@ export function ViewerDataTable({
       gridTemplateColumns,
     }),
     [filteredRows, gridTemplateColumns, onToggleRowSelection, selectedRowIds, visibleHeaders],
-  );
-
-  const desktopTableFallback = (
-    <div className="flex min-h-[320px] items-center justify-center rounded-xl border border-border/60 bg-background/60">
-      <div className="h-7 w-7 animate-spin rounded-full border-2 border-primary/30 border-t-primary" />
-    </div>
-  );
-  const mobileTableFallback = (
-    <div className="space-y-3">
-      <div className="h-12 animate-pulse rounded-xl border border-border/60 bg-background/60" />
-      {Array.from({ length: 3 }).map((_, index) => (
-        <div
-          key={`viewer-mobile-card-fallback-${index}`}
-          className="h-40 animate-pulse rounded-2xl border border-border/60 bg-background/60"
-        />
-      ))}
-    </div>
   );
 
   return (
@@ -141,4 +142,4 @@ export function ViewerDataTable({
       />
     </div>
   );
-}
+});

@@ -144,7 +144,9 @@ export async function restoreFromBackup(
     await restoreDataRowsFromBackup(restoreTx, backupDataReader, stats);
     await restoreUsersFromBackup(restoreTx, backupDataReader, stats);
     await restoreAuditLogsFromBackup(restoreTx, backupDataReader, stats);
-    await restoreCollectionRecordsFromBackup(restoreTx, backupDataReader, stats);
+    await restoreCollectionRecordsFromBackup(restoreTx, backupDataReader, stats, {
+      maxTrackedRecordIds: runtimeConfig.runtime.backupRestoreMaxTrackedCollectionRecordIds,
+    });
     await restoreCollectionRecordReceiptsFromBackup(restoreTx, backupDataReader, stats);
     await syncRestoredCollectionReceiptCache(restoreTx);
     await finalizeRestoredCollectionRollups(restoreTx);

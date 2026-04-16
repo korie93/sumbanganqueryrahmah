@@ -36,8 +36,17 @@ Repo sudah ada runtime monitor untuk pool PostgreSQL:
 - pressure warnings
 - periodic `SELECT 1` health check
 - timeout logging untuk health check yang gagal
+- configurable queue and utilization thresholds for pressure warnings
 
 Ini memberi signal operasi yang cukup berguna walaupun belum menggunakan platform tracing penuh.
+
+Env yang berkaitan:
+
+- `PG_POOL_WARN_COOLDOWN_MS=60000`
+- `PG_POOL_ALERT_WAITING_COUNT=2`
+- `PG_POOL_ALERT_UTILIZATION_PERCENT=100`
+- `PG_POOL_HEALTH_CHECK_INTERVAL_MS=60000`
+- `PG_POOL_HEALTH_CHECK_TIMEOUT_MS=5000`
 
 ### Opt-In DB Query Profiling Untuk Semakan N+1
 
@@ -64,6 +73,21 @@ berstruktur dengan:
 
 Ini sengaja disabled secara default supaya traffic production biasa tidak berubah. Gunakan ia
 untuk pengesahan terkawal di bawah load, kemudian matikan semula selepas analisis selesai.
+
+### Request Timeout Semantics
+
+Global request timeout masih dikawal melalui:
+
+- `HTTP_REQUEST_TIMEOUT_MS=30000`
+
+Tetapi operasi yang memang lebih berat dan dijangka mengambil masa lebih lama kini
+menggunakan timeout route-scoped yang jelas:
+
+- `BACKUP_OPERATION_TIMEOUT_MS=120000`
+- `IMPORT_ANALYSIS_TIMEOUT_MS=45000`
+
+Ini memastikan request biasa tetap bounded, sambil mengelakkan backup/export/analyze
+diputuskan terlalu awal oleh timeout global yang lebih pendek.
 
 ### Browser Telemetry
 

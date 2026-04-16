@@ -7,6 +7,10 @@ type CreateRequestTimeoutMiddlewareOptions = {
   timeoutMs: number;
 };
 
+type CreateRequestTimeoutOverrideMiddlewareOptions = {
+  timeoutMs: number;
+};
+
 function normalizeTimeoutMs(timeoutMs: number) {
   if (!Number.isFinite(timeoutMs)) {
     return 0;
@@ -15,8 +19,8 @@ function normalizeTimeoutMs(timeoutMs: number) {
   return Math.max(0, Math.trunc(timeoutMs));
 }
 
-export function createRequestTimeoutMiddleware(
-  options: CreateRequestTimeoutMiddlewareOptions,
+export function createRequestTimeoutOverrideMiddleware(
+  options: CreateRequestTimeoutOverrideMiddlewareOptions,
 ): RequestHandler {
   const timeoutMs = normalizeTimeoutMs(options.timeoutMs);
 
@@ -24,11 +28,32 @@ export function createRequestTimeoutMiddleware(
     return (_req, _res, next) => next();
   }
 
-  return (_req, res, next) => {
+  return (_req, _res, next) => {
     const requestContext = getRequestContext();
     if (requestContext) {
       requestContext.requestTimeoutMs = timeoutMs;
       requestContext.requestDeadlineAtMs = Date.now() + timeoutMs;
+    }
+    next();
+  };
+}
+
+export function createRequestTimeoutMiddleware(
+  options: CreateRequestTimeoutMiddlewareOptions,
+): RequestHandler {
+  const baseTimeoutMs = normalizeTimeoutMs(options.timeoutMs);
+
+  if (baseTimeoutMs <= 0) {
+    return (_req, _res, next) => next();
+  }
+
+  return (_req, res, next) => {
+    const requestContext = getRequestContext();
+    const timeoutMs = normalizeTimeoutMs(requestContext?.requestTimeoutMs ?? baseTimeoutMs);
+    const requestDeadlineAtMs = Date.now() + timeoutMs;
+    if (requestContext) {
+      requestContext.requestTimeoutMs = timeoutMs;
+      requestContext.requestDeadlineAtMs = requestDeadlineAtMs;
       requestContext.requestTimedOut = false;
     }
 

@@ -7,6 +7,7 @@ import {
 } from "../lib/collection-pii-encryption";
 import {
   BACKUP_CHUNK_SIZE,
+  BACKUP_RESTORE_MAX_TRACKED_COLLECTION_RECORD_IDS_DEFAULT,
   type BackupCollectionReceipt,
   type BackupCollectionRecord,
   type RestoreStats,
@@ -42,10 +43,26 @@ export async function restoreCollectionRecordsFromBackup(
   tx: BackupRestoreExecutor,
   backupDataReader: BackupPayloadChunkReader,
   stats: RestoreStats,
+  options?: {
+    maxTrackedRecordIds?: number;
+  },
 ) {
+  const maxTrackedRecordIds = Math.max(
+    1_000,
+    Math.trunc(options?.maxTrackedRecordIds ?? BACKUP_RESTORE_MAX_TRACKED_COLLECTION_RECORD_IDS_DEFAULT),
+  );
+  let trackedRecordIds = 0;
+
   const flushRecordInsertBatch = async (insertBatch: NormalizedBackupCollectionRecord[]) => {
     if (!insertBatch.length) {
       return;
+    }
+
+    const nextTrackedRecordIds = trackedRecordIds + insertBatch.length;
+    if (nextTrackedRecordIds > maxTrackedRecordIds) {
+      throw new Error(
+        `Backup restore requires tracking ${nextTrackedRecordIds.toLocaleString()} collection record ids, exceeding the configured safety limit of ${maxTrackedRecordIds.toLocaleString()}.`,
+      );
     }
 
     const restoredIdValuesSql = sql.join(
@@ -57,6 +74,7 @@ export async function restoreCollectionRecordsFromBackup(
       VALUES ${restoredIdValuesSql}
       ON CONFLICT (id) DO NOTHING
     `);
+    trackedRecordIds = nextTrackedRecordIds;
 
     const valuesSql = sql.join(
       insertBatch.map((row) => {

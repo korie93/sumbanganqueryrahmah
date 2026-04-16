@@ -47,10 +47,15 @@ dbQueryProfiler.instrumentPgClientQueryMethod(pg.Client.prototype);
 
 const stopPgPoolMonitoring = bindPgPoolMonitoring(pool, {
   warnCooldownMs: runtimeConfig.runtime.pgPoolWarnCooldownMs,
+  minWaitingCount: runtimeConfig.runtime.pgPoolAlertWaitingCount,
+  minUtilizationPercent: runtimeConfig.runtime.pgPoolAlertUtilizationPercent,
 });
 const stopPgPoolHealthCheck = bindPgPoolHealthCheck(pool, {
-  intervalMs: 60_000,
-  timeoutMs: Math.max(1_000, runtimeConfig.database.connectionTimeoutMs),
+  intervalMs: runtimeConfig.runtime.pgPoolHealthCheckIntervalMs,
+  timeoutMs: Math.min(
+    runtimeConfig.runtime.pgPoolHealthCheckIntervalMs,
+    Math.max(250, runtimeConfig.runtime.pgPoolHealthCheckTimeoutMs),
+  ),
 });
 
 export function stopPgPoolBackgroundTasks() {

@@ -114,8 +114,13 @@ export type RuntimeConfig = {
     maintenanceCacheTtlMs: number;
     runtimeSettingsCacheTtlMs: number;
     pgPoolWarnCooldownMs: number;
+    pgPoolAlertWaitingCount: number;
+    pgPoolAlertUtilizationPercent: number;
+    pgPoolHealthCheckIntervalMs: number;
+    pgPoolHealthCheckTimeoutMs: number;
     gracefulShutdownTimeoutMs: number;
     backupOperationTimeoutMs: number;
+    backupRestoreMaxTrackedCollectionRecordIds: number;
     backupMaxPayloadBytes: number;
     importCsvMaxRows: number;
     importPerUserActiveUploadBytes: number;

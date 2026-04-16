@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
@@ -12,7 +13,7 @@ import {
   parseActivityUserAgent,
 } from "@/pages/activity/utils";
 
-export function ActivityDesktopLogRow({
+export const ActivityDesktopLogRow = memo(function ActivityDesktopLogRow({
   actionLoading,
   activity,
   canModerateActivity,
@@ -78,4 +79,4 @@ export function ActivityDesktopLogRow({
       ) : null}
     </div>
   );
-}
+});

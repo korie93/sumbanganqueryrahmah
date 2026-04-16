@@ -4,6 +4,7 @@ import { reloadAppPreservingSingleTabLock } from "@/app/single-tab-session";
 import { logClientError } from "@/lib/client-logger";
 import {
   resolveRouteErrorDescription,
+  resolveRouteRetrySupportNotice,
   resolveRouteErrorTitle,
 } from "@/app/route-error-boundary-utils";
 import {
@@ -196,6 +197,11 @@ export class AppRouteErrorBoundary extends Component<
       APP_ROUTE_CHUNK_RETRY_MAX_ATTEMPTS,
       this.state.autoRetryAttempt + 1,
     );
+    const retrySupportNotice = resolveRouteRetrySupportNotice(
+      this.state.error,
+      this.state.autoRetryAttempt,
+      autoRetrying,
+    );
 
     return (
       <div
@@ -231,6 +237,11 @@ export class AppRouteErrorBoundary extends Component<
                       ? `A page bundle failed to load. Trying again automatically (${pendingAttempt}/${APP_ROUTE_CHUNK_RETRY_MAX_ATTEMPTS})${this.state.autoRetryDelayMs ? ` in ${Math.max(1, Math.ceil(this.state.autoRetryDelayMs / 1000))}s` : ""}.`
                       : resolveRouteErrorDescription(this.state.error)}
                   </p>
+                  {retrySupportNotice ? (
+                    <p className="app-route-error-boundary__description">
+                      {retrySupportNotice}
+                    </p>
+                  ) : null}
                 </div>
               </div>
             </div>

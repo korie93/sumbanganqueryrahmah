@@ -162,6 +162,8 @@ export function createLocalRuntimeEnvironment(options: CreateLocalRuntimeEnviron
     adaptiveRateLimit,
     systemProtectionMiddleware,
     maintenanceGuard,
+    backupOperationTimeoutMs: runtimeConfig.runtime.backupOperationTimeoutMs,
+    importAnalysisTimeoutMs: runtimeConfig.runtime.importAnalysisTimeoutMs,
   });
   registerLocalServerRoutes({
     app,

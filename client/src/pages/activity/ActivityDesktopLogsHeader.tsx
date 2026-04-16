@@ -1,8 +1,9 @@
+import { memo } from "react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import type { ActivityDesktopLogsHeaderProps } from "@/pages/activity/activity-desktop-logs-shared";
 
-export function ActivityDesktopLogsHeader({
+export const ActivityDesktopLogsHeader = memo(function ActivityDesktopLogsHeader({
   allVisibleSelected,
   canModerateActivity,
   gridClassName,
@@ -35,4 +36,4 @@ export function ActivityDesktopLogsHeader({
       {canModerateActivity ? <div className="text-right">Actions</div> : null}
     </div>
   );
-}
+});

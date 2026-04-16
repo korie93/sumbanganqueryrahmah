@@ -3,6 +3,7 @@ import { Area, AreaChart, Bar, BarChart, CartesianGrid, ResponsiveContainer, Too
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { AccessibleChartSummary } from "@/components/ui/chart-accessibility";
 import type { LoginTrend, PeakHour } from "@/pages/dashboard/types";
 import {
   buildDashboardTrendTickDates,
@@ -98,6 +99,21 @@ export function DashboardChartsGrid({
   const isMobile = useIsMobile();
   const chartHeightClassName = isMobile ? "h-[220px]" : "h-[250px]";
   const loginTrendTickDates = buildDashboardTrendTickDates(trends, isMobile ? 4 : trendDays >= 30 ? 6 : 7);
+  const totalLogins = trends?.reduce((sum, item) => sum + item.logins, 0) ?? 0;
+  const totalLogouts = trends?.reduce((sum, item) => sum + item.logouts, 0) ?? 0;
+  const busiestTrendDay = trends?.reduce<LoginTrend | null>(
+    (currentBest, item) => (!currentBest || item.logins > currentBest.logins ? item : currentBest),
+    null,
+  );
+  const peakHour = peakHours?.reduce<PeakHour | null>(
+    (currentBest, item) => (!currentBest || item.count > currentBest.count ? item : currentBest),
+    null,
+  );
+  const latestTrendDay = trends?.[trends.length - 1] ?? null;
+  const topPeakHours = (peakHours ?? [])
+    .slice()
+    .sort((left, right) => right.count - left.count)
+    .slice(0, 3);
 
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:gap-6">
@@ -164,7 +180,7 @@ export function DashboardChartsGrid({
             </div>
           ) : trends && trends.length > 0 ? (
             <>
-              <div className={`min-w-0 ${chartHeightClassName}`}>
+              <div className={`min-w-0 ${chartHeightClassName}`} aria-hidden="true">
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart
                     data={trends}
@@ -227,6 +243,24 @@ export function DashboardChartsGrid({
                   </AreaChart>
                 </ResponsiveContainer>
               </div>
+              <AccessibleChartSummary
+                title="Login Trends summary"
+                summary={`Login trends over ${trendDays} days. Total logins ${totalLogins}, total logouts ${totalLogouts}.${busiestTrendDay ? ` Highest login day ${formatDashboardDate(busiestTrendDay.date)} with ${busiestTrendDay.logins} logins.` : ""}`}
+                items={[
+                  ...(latestTrendDay
+                    ? [{
+                        label: `Latest day ${formatDashboardDate(latestTrendDay.date)}`,
+                        value: `${latestTrendDay.logins} logins, ${latestTrendDay.logouts} logouts`,
+                      }]
+                    : []),
+                  ...(busiestTrendDay && busiestTrendDay !== latestTrendDay
+                    ? [{
+                        label: `Busiest day ${formatDashboardDate(busiestTrendDay.date)}`,
+                        value: `${busiestTrendDay.logins} logins, ${busiestTrendDay.logouts} logouts`,
+                      }]
+                    : []),
+                ]}
+              />
               <div className="flex flex-wrap gap-2">
                 {LOGIN_TREND_LEGEND_ITEMS.map((item) => (
                   <div
@@ -272,46 +306,56 @@ export function DashboardChartsGrid({
               <span className="sr-only">Loading peak hours chart</span>
             </div>
           ) : peakHours && peakHours.length > 0 ? (
-            <div className={`min-w-0 ${chartHeightClassName}`}>
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart
-                  data={peakHours}
-                  margin={{ top: 8, right: isMobile ? 8 : 16, left: isMobile ? -22 : -8, bottom: 0 }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted/70" vertical={false} />
-                  <XAxis
-                    dataKey="hour"
-                    axisLine={false}
-                    tickLine={false}
-                    tickMargin={8}
-                    height={isMobile ? 28 : 34}
-                    interval={isMobile ? 5 : 2}
-                    tickFormatter={(hour) =>
-                      isMobile
-                        ? formatDashboardHourCompact(Number(hour))
-                        : formatDashboardHour(Number(hour))
-                    }
-                    className="text-[11px] text-muted-foreground"
-                  />
-                  <YAxis
-                    axisLine={false}
-                    tickLine={false}
-                    tickMargin={8}
-                    width={isMobile ? 28 : 36}
-                    className="text-[11px] text-muted-foreground"
-                  />
-                  <Tooltip
-                    content={(props) => (
-                      <CompactChartTooltip
-                        {...props}
-                        labelFormatter={(value) => formatDashboardHour(Number(value))}
-                      />
-                    )}
-                  />
-                  <Bar dataKey="count" fill="hsl(var(--chart-3))" radius={[8, 8, 0, 0]} name="Logins" />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
+            <>
+              <div className={`min-w-0 ${chartHeightClassName}`} aria-hidden="true">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={peakHours}
+                    margin={{ top: 8, right: isMobile ? 8 : 16, left: isMobile ? -22 : -8, bottom: 0 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" className="stroke-muted/70" vertical={false} />
+                    <XAxis
+                      dataKey="hour"
+                      axisLine={false}
+                      tickLine={false}
+                      tickMargin={8}
+                      height={isMobile ? 28 : 34}
+                      interval={isMobile ? 5 : 2}
+                      tickFormatter={(hour) =>
+                        isMobile
+                          ? formatDashboardHourCompact(Number(hour))
+                          : formatDashboardHour(Number(hour))
+                      }
+                      className="text-[11px] text-muted-foreground"
+                    />
+                    <YAxis
+                      axisLine={false}
+                      tickLine={false}
+                      tickMargin={8}
+                      width={isMobile ? 28 : 36}
+                      className="text-[11px] text-muted-foreground"
+                    />
+                    <Tooltip
+                      content={(props) => (
+                        <CompactChartTooltip
+                          {...props}
+                          labelFormatter={(value) => formatDashboardHour(Number(value))}
+                        />
+                      )}
+                    />
+                    <Bar dataKey="count" fill="hsl(var(--chart-3))" radius={[8, 8, 0, 0]} name="Logins" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+              <AccessibleChartSummary
+                title="Peak Activity Hours summary"
+                summary={`Peak activity hours for login volume.${peakHour ? ` Highest activity occurs at ${formatDashboardHour(peakHour.hour)} with ${peakHour.count} logins.` : ""}`}
+                items={topPeakHours.map((item) => ({
+                  label: formatDashboardHour(item.hour),
+                  value: `${item.count} logins`,
+                }))}
+              />
+            </>
           ) : (
             <div
               className={`flex items-center justify-center rounded-xl border border-dashed border-border/60 bg-background/35 text-muted-foreground ${chartHeightClassName}`}

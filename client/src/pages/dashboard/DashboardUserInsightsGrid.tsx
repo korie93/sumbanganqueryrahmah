@@ -3,6 +3,7 @@ import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { AccessibleChartSummary } from "@/components/ui/chart-accessibility";
 import {
   buildDashboardRoleDistributionRowAriaLabel,
   buildDashboardTopUserRowAriaLabel,
@@ -176,7 +177,7 @@ export function DashboardUserInsightsGrid({
             </div>
           ) : roleDistribution && roleDistribution.length > 0 ? (
             <>
-              <div className={`min-w-0 ${chartHeightClassName}`}>
+              <div className={`min-w-0 ${chartHeightClassName}`} aria-hidden="true">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
@@ -202,6 +203,14 @@ export function DashboardUserInsightsGrid({
                   </PieChart>
                 </ResponsiveContainer>
               </div>
+              <AccessibleChartSummary
+                title="User Roles summary"
+                summary="User role distribution across the current account set."
+                items={roleDistribution.map((item) => ({
+                  label: item.role,
+                  value: `${item.count} accounts`,
+                }))}
+              />
               <div className="grid gap-2">
                 {roleDistribution.map((item) => (
                   <div

@@ -39,10 +39,29 @@ export function SingleImportPanel({
   onSave,
   parsedData,
 }: SingleImportPanelProps) {
+  const singleImportNameHelpId = "single-import-name-help";
+  const singleImportFileHelpId = "single-import-file-help";
+  const singleImportFileStatusId = "single-import-file-status";
+  const singleImportFileErrorId = "single-import-file-error";
+  const isImportNameError = /import name/i.test(error);
+  const hasFileScopedError = Boolean(error) && !isImportNameError;
   const loadingBusyProps = loading ? { "aria-busy": "true" as const } : {};
   const loadingDropzoneDisabledProps = loading
     ? { "aria-disabled": "true" as const }
     : {};
+
+  const handleDropzoneKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (loading) {
+      return;
+    }
+
+    if (event.key !== "Enter" && event.key !== " ") {
+      return;
+    }
+
+    event.preventDefault();
+    fileInputRef.current?.click();
+  };
 
   return (
     <>
@@ -66,12 +85,21 @@ export function SingleImportPanel({
             className="h-10 max-w-md"
             data-testid="input-import-name"
             disabled={loading}
+            aria-describedby={`${singleImportNameHelpId}${isImportNameError ? ` ${singleImportFileErrorId}` : ""}`}
+            aria-invalid={isImportNameError || undefined}
           />
+          <p id={singleImportNameHelpId} className="mt-2 text-xs text-muted-foreground">
+            This name is used as the saved dataset label in Viewer and Analysis.
+          </p>
         </div>
 
         <div
           onDrop={onDrop}
           onDragOver={onDragOver}
+          onKeyDown={handleDropzoneKeyDown}
+          role="button"
+          tabIndex={loading ? -1 : 0}
+          aria-describedby={`${singleImportFileHelpId} ${singleImportFileStatusId}${hasFileScopedError ? ` ${singleImportFileErrorId}` : ""}`}
           className={`rounded-xl border-2 border-dashed border-slate-300 p-5 text-center transition-colors dark:border-slate-600 sm:p-8 ${
             loading ? "cursor-not-allowed opacity-70" : "cursor-pointer hover:border-primary"
           }`}
@@ -89,6 +117,8 @@ export function SingleImportPanel({
             ref={fileInputRef}
             type="file"
             aria-label="Select single import file"
+            aria-describedby={`${singleImportFileHelpId} ${singleImportFileStatusId}${hasFileScopedError ? ` ${singleImportFileErrorId}` : ""}`}
+            aria-invalid={hasFileScopedError || undefined}
             accept=".csv,.xlsx,.xls,.xlsb"
             onChange={onFileChange}
             className="hidden"
@@ -101,11 +131,16 @@ export function SingleImportPanel({
             </div>
             <div>
               <p className="text-foreground font-medium">Click or drag file here</p>
-              <p className="mt-1 text-sm text-muted-foreground">
+              <p id={singleImportFileHelpId} className="mt-1 text-sm text-muted-foreground">
                 Supported: CSV, Excel (.xlsx, .xls, .xlsb)
               </p>
               <p className="mt-1 text-xs text-muted-foreground">
                 Maximum upload size per file: {maxUploadSizeLabel}
+              </p>
+              <p id={singleImportFileStatusId} className="sr-only">
+                {file
+                  ? `${file.name} selected and ready for preview.`
+                  : "No import file is currently selected."}
               </p>
             </div>
           </div>
@@ -145,7 +180,11 @@ export function SingleImportPanel({
         ) : null}
 
         {error ? (
-          <div className="mt-4 flex items-start gap-2 rounded-lg bg-destructive/10 p-3 text-destructive" role="alert">
+          <div
+            id={singleImportFileErrorId}
+            className="mt-4 flex items-start gap-2 rounded-lg bg-destructive/10 p-3 text-destructive"
+            role="alert"
+          >
             <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
             <span className="text-sm">{error}</span>
           </div>

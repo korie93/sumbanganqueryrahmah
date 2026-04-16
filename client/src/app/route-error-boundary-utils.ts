@@ -1,4 +1,7 @@
-import { isChunkLoadRouteError } from "@/app/route-error-boundary-retry-utils";
+import {
+  APP_ROUTE_CHUNK_RETRY_MAX_ATTEMPTS,
+  isChunkLoadRouteError,
+} from "@/app/route-error-boundary-retry-utils";
 
 const ROUTE_LABELS: Record<string, string> = {
   activity: "Activity",
@@ -45,4 +48,26 @@ export function resolveRouteErrorDescription(error: unknown): string {
   }
 
   return "The page crashed unexpectedly. Retry this page, go back home, or reload the app.";
+}
+
+export function shouldShowRouteRetrySupportNotice(
+  error: unknown,
+  autoRetryAttempt: number,
+  autoRetrying: boolean,
+): boolean {
+  return isChunkLoadRouteError(error)
+    && !autoRetrying
+    && Math.max(0, Math.trunc(autoRetryAttempt)) >= APP_ROUTE_CHUNK_RETRY_MAX_ATTEMPTS;
+}
+
+export function resolveRouteRetrySupportNotice(
+  error: unknown,
+  autoRetryAttempt: number,
+  autoRetrying: boolean,
+): string {
+  if (!shouldShowRouteRetrySupportNotice(error, autoRetryAttempt, autoRetrying)) {
+    return "";
+  }
+
+  return "Automatic recovery has already been attempted. Reload the app, then contact your system administrator if this page keeps failing.";
 }
