@@ -1,4 +1,4 @@
-FROM node:24-bookworm-slim AS deps
+FROM node:24.12.0-bookworm-slim AS deps
 
 WORKDIR /app
 
@@ -13,7 +13,7 @@ COPY . .
 
 RUN npm run build
 
-FROM node:24-bookworm-slim AS runtime
+FROM node:24.12.0-bookworm-slim AS runtime
 
 WORKDIR /app
 

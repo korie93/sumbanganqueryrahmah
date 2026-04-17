@@ -26,7 +26,7 @@ function NavbarHomeButtonImpl({
       aria-current={active ? "page" : undefined}
     >
       <span className="nav-pill-icon">
-        <Home className="h-4 w-4" />
+        <Home className="h-4 w-4" aria-hidden="true" />
       </span>
       <span className="nav-pill-label">Home</span>
     </button>

@@ -28,20 +28,37 @@ type IdleSessionSweeperOptions = {
   intervalMs?: number;
 };
 
+let hasWarnedLegacyIdleSessionFallback = false;
+
+function hasBatchIdleSessionExpiry(
+  storage: IdleSessionSweeperOptions["storage"],
+): storage is IdleSessionSweeperOptions["storage"] & {
+  expireIdleActivitySessions: NonNullable<IdleSessionSweeperOptions["storage"]["expireIdleActivitySessions"]>;
+} {
+  return typeof storage.expireIdleActivitySessions === "function";
+}
+
 async function expireIdleActivitiesBatch(
   storage: IdleSessionSweeperOptions["storage"],
   idleCutoff: Date,
   idleMinutes: number,
 ) {
-  if (typeof storage.expireIdleActivitySessions === "function") {
+  if (hasBatchIdleSessionExpiry(storage)) {
     return storage.expireIdleActivitySessions({
       idleCutoff,
       idleMinutes,
     });
   }
 
-  const now = Date.now();
-  const idleMs = idleMinutes * 60 * 1000;
+  if (!hasWarnedLegacyIdleSessionFallback) {
+    hasWarnedLegacyIdleSessionFallback = true;
+    logger.warn("Idle session sweeper is using the legacy per-session expiry fallback", {
+      idleMinutes,
+      note: "Production storage should expose expireIdleActivitySessions to avoid one-query-per-session expiry work.",
+    });
+  }
+
+  const idleCutoffMs = resolveTimestampMs(idleCutoff);
   const activities = await storage.getActiveActivities();
   const expiredActivities: Array<{ id: string; username: string }> = [];
 
@@ -51,7 +68,7 @@ async function expireIdleActivitiesBatch(
     }
 
     const last = resolveTimestampMs(activity.lastActivityTime);
-    if (now - last <= idleMs) {
+    if (last > idleCutoffMs) {
       continue;
     }
 
@@ -135,24 +152,26 @@ export function startIdleSessionSweeper(options: IdleSessionSweeperOptions) {
 
   let running = false;
 
-  const handle = setInterval(async () => {
+  const handle = setInterval(() => {
     if (running) {
       return;
     }
 
     running = true;
-    try {
-      await runIdleSessionSweeperPass({
-        storage,
-        connectedClients,
-        getRuntimeSettingsCached,
-        defaultSessionTimeoutMinutes,
-      });
-    } catch (error) {
-      logger.error("Idle session checker failed", { error });
-    } finally {
-      running = false;
-    }
+    void (async () => {
+      try {
+        await runIdleSessionSweeperPass({
+          storage,
+          connectedClients,
+          getRuntimeSettingsCached,
+          defaultSessionTimeoutMinutes,
+        });
+      } catch (error) {
+        logger.error("Idle session checker failed", { error });
+      } finally {
+        running = false;
+      }
+    })();
   }, intervalMs);
 
   handle.unref();

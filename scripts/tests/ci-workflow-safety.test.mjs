@@ -21,6 +21,13 @@ test("CI workflow enforces client accessibility tests and bundle budgets", () =>
   assert.match(workflow, /npm run verify:bundle-budgets/);
 });
 
+test("CI workflow pins Node.js to the reproducible runtime patch version", () => {
+  const workflow = readFileSync(ciWorkflowPath, "utf8");
+
+  assert.doesNotMatch(workflow, /node-version:\s*24(?:\s|$)/);
+  assert.match(workflow, /node-version:\s*24\.12\.0/);
+});
+
 test("CI workflow keeps the Playwright smoke gate enabled", () => {
   const workflow = readFileSync(ciWorkflowPath, "utf8");
 

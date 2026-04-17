@@ -58,7 +58,9 @@ export function LocalMailOutboxMobileList({
                 {
                   id: `copy-${entry.id}`,
                   label: "Copy Link",
-                  onSelect: async () => onCopyPreviewLink(entry.previewUrl),
+                  onSelect: () => {
+                    void onCopyPreviewLink(entry.previewUrl);
+                  },
                 },
                 {
                   id: `delete-${entry.id}`,

@@ -178,6 +178,9 @@ test("startIdleSessionSweeper resets its running guard after a failed pass", asy
       throw new Error("Idle session sweeper test expected a scheduled interval handler");
     }
     await currentHandler();
+    await new Promise<void>((resolve) => {
+      setImmediate(resolve);
+    });
   };
 
   try {

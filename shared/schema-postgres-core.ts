@@ -70,6 +70,18 @@ export const users = pgTable("users", {
     "chk_users_status",
     sql`${table.status} IN ('pending_activation', 'active', 'suspended', 'disabled')`,
   ),
+  twoFactorSecretNotBlankCheck: check(
+    "chk_users_two_factor_secret_not_blank",
+    sql`${table.twoFactorSecretEncrypted} IS NULL OR btrim(${table.twoFactorSecretEncrypted}) <> ''`,
+  ),
+  twoFactorEnabledSecretCheck: check(
+    "chk_users_two_factor_enabled_secret",
+    sql`${table.twoFactorEnabled} = false OR (${table.twoFactorSecretEncrypted} IS NOT NULL AND btrim(${table.twoFactorSecretEncrypted}) <> '')`,
+  ),
+  twoFactorConfiguredStateCheck: check(
+    "chk_users_two_factor_configured_state",
+    sql`${table.twoFactorConfiguredAt} IS NULL OR (${table.twoFactorEnabled} = true AND ${table.twoFactorSecretEncrypted} IS NOT NULL AND btrim(${table.twoFactorSecretEncrypted}) <> '')`,
+  ),
 }));
 
 export const accountActivationTokens = pgTable("account_activation_tokens", {

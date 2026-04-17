@@ -236,37 +236,39 @@ export function createImportsMultipartRoute(
       fail(failure.statusCode, failure.message);
     });
 
-    parser.once("finish", async () => {
+    parser.once("finish", () => {
       if (settled) {
         return;
       }
 
-      if (!fileTask) {
-        fail(400, "Please select a CSV or Excel file to import.");
-        return;
-      }
+      void (async () => {
+        if (!fileTask) {
+          fail(400, "Please select a CSV or Excel file to import.");
+          return;
+        }
 
-      try {
-        const upload = await fileTask;
-        body.filename = upload.filename;
-        body.name = normalizeImportName(body.name, upload.filename);
-        if (upload.kind === "parsed") {
-          body.data = upload.dataRows;
-        } else {
-          responseLocals.multipartImportUpload = upload;
+        try {
+          const upload = await fileTask;
+          body.filename = upload.filename;
+          body.name = normalizeImportName(body.name, upload.filename);
+          if (upload.kind === "parsed") {
+            body.data = upload.dataRows;
+          } else {
+            responseLocals.multipartImportUpload = upload;
+          }
+          releaseQuota();
+          settled = true;
+          req.body = body;
+          next();
+        } catch (error) {
+          if (responseLocals.multipartImportUpload) {
+            await cleanupPreparedMultipartImportUpload(responseLocals.multipartImportUpload as PreparedMultipartImportUpload);
+            delete responseLocals.multipartImportUpload;
+          }
+          const failure = resolveImportMultipartFailure(error);
+          fail(failure.statusCode, failure.message);
         }
-        releaseQuota();
-        settled = true;
-        req.body = body;
-        next();
-      } catch (error) {
-        if (responseLocals.multipartImportUpload) {
-          await cleanupPreparedMultipartImportUpload(responseLocals.multipartImportUpload as PreparedMultipartImportUpload);
-          delete responseLocals.multipartImportUpload;
-        }
-        const failure = resolveImportMultipartFailure(error);
-        fail(failure.statusCode, failure.message);
-      }
+      })();
     });
 
     req.once("error", (error) => {

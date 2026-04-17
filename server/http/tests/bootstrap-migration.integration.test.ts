@@ -164,6 +164,14 @@ const coreEnumChecksMigrationSql = readFileSync(
   path.join(repoRoot, "drizzle", coreEnumChecksMigrationFileName),
   "utf8",
 );
+const usersTwoFactorStateConsistencyMigrationFileName = migrationSqlFileNames.find((name) => /^0039_.*\.sql$/.test(name));
+if (!usersTwoFactorStateConsistencyMigrationFileName) {
+  throw new Error("Expected a 0039 users two-factor state consistency migration file in drizzle/");
+}
+const usersTwoFactorStateConsistencyMigrationSql = readFileSync(
+  path.join(repoRoot, "drizzle", usersTwoFactorStateConsistencyMigrationFileName),
+  "utf8",
+);
 const preTimezoneMigrationSqlTexts = migrationSqlFileNames
   .filter((name) => name.localeCompare(timezoneMigrationFileName) < 0)
   .sort((left, right) => left.localeCompare(right))
@@ -2468,6 +2476,301 @@ test(
         { created_by_login: "system" },
       ]);
       assert.equal(await constraintExists(pool, "fk_collection_records_created_by_login_username"), true);
+    });
+  },
+);
+
+test(
+  "users bootstrap normalizes inconsistent two-factor states and enforces safe constraints",
+  { skip: skipReason || false },
+  async () => {
+    await withTempDatabase(async ({ pool }) => {
+      await pool.query(`
+        CREATE TABLE public.users (
+          id text PRIMARY KEY,
+          username text,
+          password_hash text,
+          role text,
+          status text,
+          must_change_password boolean,
+          password_reset_by_superuser boolean,
+          two_factor_enabled boolean,
+          two_factor_secret_encrypted text,
+          two_factor_configured_at timestamp with time zone,
+          failed_login_attempts integer,
+          locked_at timestamp with time zone,
+          locked_reason text,
+          locked_by_system boolean,
+          created_by text,
+          is_banned boolean,
+          created_at timestamp with time zone DEFAULT now(),
+          updated_at timestamp with time zone DEFAULT now(),
+          password_changed_at timestamp with time zone,
+          activated_at timestamp with time zone,
+          last_login_at timestamp with time zone
+        );
+      `);
+
+      await pool.query(`
+        INSERT INTO public.users (
+          id,
+          username,
+          password_hash,
+          role,
+          status,
+          two_factor_enabled,
+          two_factor_secret_encrypted,
+          two_factor_configured_at,
+          is_banned
+        )
+        VALUES
+          ('pending-user', 'Pending.User', '$2b$12$012345678901234567890u6c1sV8R5cX9pM9tTzdwqVQjL8o8C5uK', 'admin', 'active', false, '  pending-secret  ', now(), false),
+          ('broken-user', 'Broken.User', '$2b$12$012345678901234567890u6c1sV8R5cX9pM9tTzdwqVQjL8o8C5uK', 'admin', 'active', true, '   ', now(), false),
+          ('enabled-user', 'Enabled.User', '$2b$12$012345678901234567890u6c1sV8R5cX9pM9tTzdwqVQjL8o8C5uK', 'admin', 'active', true, 'enabled-secret', now(), false)
+      `);
+
+      await ensureUsersBootstrapSchema(drizzle(pool));
+
+      const rows = await pool.query<{
+        id: string;
+        two_factor_enabled: boolean;
+        two_factor_secret_encrypted: string | null;
+        two_factor_configured_at: Date | null;
+      }>(`
+        SELECT
+          id,
+          two_factor_enabled,
+          two_factor_secret_encrypted,
+          two_factor_configured_at
+        FROM public.users
+        WHERE id IN ('pending-user', 'broken-user', 'enabled-user')
+        ORDER BY id ASC
+      `);
+
+      assert.deepEqual(rows.rows, [
+        {
+          id: "broken-user",
+          two_factor_enabled: false,
+          two_factor_secret_encrypted: null,
+          two_factor_configured_at: null,
+        },
+        {
+          id: "enabled-user",
+          two_factor_enabled: true,
+          two_factor_secret_encrypted: "enabled-secret",
+          two_factor_configured_at: rows.rows[1]?.two_factor_configured_at ?? null,
+        },
+        {
+          id: "pending-user",
+          two_factor_enabled: false,
+          two_factor_secret_encrypted: "pending-secret",
+          two_factor_configured_at: null,
+        },
+      ]);
+      assert.ok(rows.rows[1]?.two_factor_configured_at instanceof Date);
+      assert.equal(await constraintExists(pool, "chk_users_two_factor_secret_not_blank"), true);
+      assert.equal(await constraintExists(pool, "chk_users_two_factor_enabled_secret"), true);
+      assert.equal(await constraintExists(pool, "chk_users_two_factor_configured_state"), true);
+
+      await assert.rejects(
+        () => pool.query(`
+          INSERT INTO public.users (
+            id,
+            username,
+            password_hash,
+            role,
+            status,
+            two_factor_enabled,
+            two_factor_secret_encrypted,
+            is_banned
+          )
+          VALUES (
+            'invalid-secret',
+            'Invalid.Secret',
+            '$2b$12$012345678901234567890u6c1sV8R5cX9pM9tTzdwqVQjL8o8C5uK',
+            'admin',
+            'active',
+            false,
+            '   ',
+            false
+          )
+        `),
+        /chk_users_two_factor_secret_not_blank/i,
+      );
+    });
+  },
+);
+
+test(
+  "reviewed users two-factor consistency migration normalizes legacy rows and rejects impossible states",
+  { skip: skipReason || false },
+  async () => {
+    await withTempDatabase(async ({ pool }) => {
+      await pool.query(`
+        CREATE TABLE public.users (
+          id text PRIMARY KEY,
+          username text NOT NULL UNIQUE,
+          password_hash text NOT NULL,
+          role text NOT NULL DEFAULT 'user',
+          status text NOT NULL DEFAULT 'active',
+          must_change_password boolean NOT NULL DEFAULT false,
+          password_reset_by_superuser boolean NOT NULL DEFAULT false,
+          two_factor_enabled boolean NOT NULL DEFAULT false,
+          two_factor_secret_encrypted text,
+          two_factor_configured_at timestamp with time zone,
+          failed_login_attempts integer NOT NULL DEFAULT 0,
+          locked_by_system boolean NOT NULL DEFAULT false,
+          created_by text,
+          is_banned boolean NOT NULL DEFAULT false,
+          created_at timestamp with time zone DEFAULT now(),
+          updated_at timestamp with time zone DEFAULT now()
+        );
+      `);
+
+      await pool.query(`
+        INSERT INTO public.users (
+          id,
+          username,
+          password_hash,
+          role,
+          status,
+          two_factor_enabled,
+          two_factor_secret_encrypted,
+          two_factor_configured_at,
+          is_banned
+        )
+        VALUES
+          ('pending-user', 'Pending.User', 'hash', 'admin', 'active', false, ' pending-secret ', now(), false),
+          ('broken-user', 'Broken.User', 'hash', 'admin', 'active', true, '   ', now(), false),
+          ('enabled-user', 'Enabled.User', 'hash', 'admin', 'active', true, 'enabled-secret', now(), false),
+          ('disabled-user', 'Disabled.User', 'hash', 'admin', 'active', false, NULL, NULL, false)
+      `);
+
+      await applySql(pool, usersTwoFactorStateConsistencyMigrationSql);
+
+      const rows = await pool.query<{
+        id: string;
+        two_factor_enabled: boolean;
+        two_factor_secret_encrypted: string | null;
+        two_factor_configured_at: Date | null;
+      }>(`
+        SELECT
+          id,
+          two_factor_enabled,
+          two_factor_secret_encrypted,
+          two_factor_configured_at
+        FROM public.users
+        ORDER BY id ASC
+      `);
+
+      assert.deepEqual(rows.rows, [
+        {
+          id: "broken-user",
+          two_factor_enabled: false,
+          two_factor_secret_encrypted: null,
+          two_factor_configured_at: null,
+        },
+        {
+          id: "disabled-user",
+          two_factor_enabled: false,
+          two_factor_secret_encrypted: null,
+          two_factor_configured_at: null,
+        },
+        {
+          id: "enabled-user",
+          two_factor_enabled: true,
+          two_factor_secret_encrypted: "enabled-secret",
+          two_factor_configured_at: rows.rows[2]?.two_factor_configured_at ?? null,
+        },
+        {
+          id: "pending-user",
+          two_factor_enabled: false,
+          two_factor_secret_encrypted: "pending-secret",
+          two_factor_configured_at: null,
+        },
+      ]);
+      assert.ok(rows.rows[2]?.two_factor_configured_at instanceof Date);
+      assert.equal(await constraintExists(pool, "chk_users_two_factor_secret_not_blank"), true);
+      assert.equal(await constraintExists(pool, "chk_users_two_factor_enabled_secret"), true);
+      assert.equal(await constraintExists(pool, "chk_users_two_factor_configured_state"), true);
+
+      await assert.rejects(
+        () => pool.query(`
+          INSERT INTO public.users (
+            id,
+            username,
+            password_hash,
+            role,
+            status,
+            two_factor_enabled,
+            two_factor_secret_encrypted,
+            is_banned
+          )
+          VALUES (
+            'invalid-enabled',
+            'Invalid.Enabled',
+            'hash',
+            'admin',
+            'active',
+            true,
+            NULL,
+            false
+          )
+        `),
+        /chk_users_two_factor_enabled_secret/i,
+      );
+      await assert.rejects(
+        () => pool.query(`
+          INSERT INTO public.users (
+            id,
+            username,
+            password_hash,
+            role,
+            status,
+            two_factor_enabled,
+            two_factor_secret_encrypted,
+            two_factor_configured_at,
+            is_banned
+          )
+          VALUES (
+            'invalid-configured',
+            'Invalid.Configured',
+            'hash',
+            'admin',
+            'active',
+            false,
+            'pending-secret',
+            now(),
+            false
+          )
+        `),
+        /chk_users_two_factor_configured_state/i,
+      );
+
+      await pool.query(`
+        INSERT INTO public.users (
+          id,
+          username,
+          password_hash,
+          role,
+          status,
+          two_factor_enabled,
+          two_factor_secret_encrypted,
+          two_factor_configured_at,
+          is_banned
+        )
+        VALUES (
+          'pending-valid',
+          'Pending.Valid',
+          'hash',
+          'admin',
+          'active',
+          false,
+          'pending-secret',
+          NULL,
+          false
+        )
+      `);
     });
   },
 );

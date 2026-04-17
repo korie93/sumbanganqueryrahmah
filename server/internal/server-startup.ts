@@ -24,6 +24,7 @@ type StartupStorage = Pick<
   | "init"
   | "getActiveActivities"
   | "expireIdleActivitySession"
+  | "expireIdleActivitySessions"
 >;
 
 type StartLocalServerOptions = {
@@ -102,6 +103,11 @@ export async function startLocalServer(options: StartLocalServerOptions) {
 
   markStartupStage("registering-runtime");
   registerFrontendStatic(app);
+  if (typeof storage.expireIdleActivitySessions !== "function") {
+    throw new Error(
+      "Local server startup requires batch idle session expiry support to avoid per-session sweeper queries.",
+    );
+  }
   const idleSweeperHandle = startIdleSessionSweeper({
     storage,
     connectedClients,
@@ -146,18 +152,20 @@ export async function startLocalServer(options: StartLocalServerOptions) {
   }
 
   // Run precompute in background so startup is fast.
-  const precomputeHandle = setTimeout(async () => {
-    try {
-      const result = await categoryStatsService.warmCategoryStats();
-      if (result.skipped) {
-        logger.info("Category stats precompute skipped because cached data is already available");
-        return;
+  const precomputeHandle = setTimeout(() => {
+    void (async () => {
+      try {
+        const result = await categoryStatsService.warmCategoryStats();
+        if (result.skipped) {
+          logger.info("Category stats precompute skipped because cached data is already available");
+          return;
+        }
+        logger.info("Precomputing category stats", { computeKeys: result.computeKeys });
+        logger.info("Precomputed category stats");
+      } catch (err) {
+        logger.error("Category stats precompute failed", { error: err });
       }
-      logger.info("Precomputing category stats", { computeKeys: result.computeKeys });
-      logger.info("Precomputed category stats");
-    } catch (err) {
-      logger.error("Category stats precompute failed", { error: err });
-    }
+    })();
   }, 0);
   precomputeHandle.unref?.();
 }

@@ -89,7 +89,7 @@ export default function Landing({ onLoginClick }: LandingProps) {
 
   useEffect(() => {
     return scheduleIdlePreload(() => {
-      LandingDeferredSections.preload();
+      void LandingDeferredSections.preload();
     }, LANDING_DEFERRED_SECTION_PRELOAD_DELAY_MS);
   }, []);
 

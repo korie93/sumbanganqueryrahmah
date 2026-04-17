@@ -74,7 +74,9 @@ export function useAppShellMaintenanceState({
     };
 
     void checkMaintenance();
-    const timer = window.setInterval(checkMaintenance, MAINTENANCE_STATUS_POLL_INTERVAL_MS);
+    const timer = window.setInterval(() => {
+      void checkMaintenance();
+    }, MAINTENANCE_STATUS_POLL_INTERVAL_MS);
     if (typeof document !== "undefined") {
       document.addEventListener("visibilitychange", handleVisibilityChange);
     }

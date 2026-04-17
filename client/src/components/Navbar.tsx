@@ -149,7 +149,7 @@ function NavbarImpl({
               onClick={() => setMobileNavOpen(true)}
               data-testid="button-open-mobile-nav"
             >
-              <Menu className="h-4 w-4" />
+              <Menu className="h-4 w-4" aria-hidden="true" />
               <span className="hidden sm:inline">Menu</span>
             </button>
 
@@ -173,7 +173,7 @@ function NavbarImpl({
                       {userRole}
                     </span>
                   </span>
-                  <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                  <ChevronDown className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
                 </button>
               </DropdownMenuTrigger>
               <NavbarUserMenuContent
@@ -212,7 +212,7 @@ function NavbarImpl({
                   <span className="truncate font-medium text-foreground">{username}</span>
                   <span className="user-menu-role">{userRole}</span>
                 </span>
-                <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                <ChevronDown className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
               </button>
             </DropdownMenuTrigger>
             <NavbarUserMenuContent

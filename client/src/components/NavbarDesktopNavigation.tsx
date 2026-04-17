@@ -92,7 +92,7 @@ function NavbarDesktopNavigationImpl({
               className={`nav-pill${isActive ? " nav-pill-active" : ""}`}
             >
               <span className="nav-pill-icon">
-                <Icon className="h-4 w-4" />
+                <Icon className="h-4 w-4" aria-hidden="true" />
               </span>
               <span className="nav-pill-label">{item.label}</span>
               {savedBadge ? (
@@ -124,10 +124,10 @@ function NavbarDesktopNavigationImpl({
                   data-testid={`nav-group-${group.id}`}
                 >
                   <span className="nav-pill-icon">
-                    <GroupIcon className="h-4 w-4" />
+                    <GroupIcon className="h-4 w-4" aria-hidden="true" />
                   </span>
                   <span className="nav-pill-label">{group.label}</span>
-                  <ChevronDown className="h-3.5 w-3.5 opacity-70" />
+                  <ChevronDown className="h-3.5 w-3.5 opacity-70" aria-hidden="true" />
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="center" className="w-80 p-2">
@@ -150,7 +150,7 @@ function NavbarDesktopNavigationImpl({
                         className={`items-start gap-3 rounded-xl px-3 py-3 ${activeItem ? "bg-accent text-accent-foreground" : ""}`}
                       >
                         <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                          <Icon className="h-4 w-4" />
+                          <Icon className="h-4 w-4" aria-hidden="true" />
                         </span>
                         <span className="min-w-0 space-y-0.5">
                           <span className="block text-sm font-medium leading-none">{item.label}</span>

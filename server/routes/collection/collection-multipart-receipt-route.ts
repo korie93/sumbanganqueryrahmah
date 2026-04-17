@@ -132,19 +132,21 @@ export function createCollectionReceiptMultipartRoute<
       });
     });
 
-    parser.once("finish", async () => {
+    parser.once("finish", () => {
       if (settled) {
         return;
       }
 
-      try {
-        body[params.attachKey] = await Promise.all(uploadTasks) as TBody[keyof TBody];
-        settled = true;
-        req.body = body;
-        next();
-      } catch (error) {
-        await fail(error);
-      }
+      void (async () => {
+        try {
+          body[params.attachKey] = await Promise.all(uploadTasks) as TBody[keyof TBody];
+          settled = true;
+          req.body = body;
+          next();
+        } catch (error) {
+          await fail(error);
+        }
+      })();
     });
 
     req.pipe(parser);

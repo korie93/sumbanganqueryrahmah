@@ -44,11 +44,11 @@ export function NavbarUserMenuContent({
         onValueChange={(value) => setTheme(value === "dark" ? "dark" : "light")}
       >
         <DropdownMenuRadioItem value="light" className="rounded-lg px-3 py-2.5">
-          <Sun className="h-4 w-4" />
+          <Sun className="h-4 w-4" aria-hidden="true" />
           <span>Light Mode</span>
         </DropdownMenuRadioItem>
         <DropdownMenuRadioItem value="dark" className="rounded-lg px-3 py-2.5">
-          <Moon className="h-4 w-4" />
+          <Moon className="h-4 w-4" aria-hidden="true" />
           <span>Dark Mode</span>
         </DropdownMenuRadioItem>
       </DropdownMenuRadioGroup>
@@ -60,7 +60,7 @@ export function NavbarUserMenuContent({
         className="rounded-lg px-3 py-2.5 text-destructive focus:text-destructive"
         data-testid="button-logout"
       >
-        <LogOut className="h-4 w-4" />
+        <LogOut className="h-4 w-4" aria-hidden="true" />
         <span>Logout</span>
       </DropdownMenuItem>
     </DropdownMenuContent>

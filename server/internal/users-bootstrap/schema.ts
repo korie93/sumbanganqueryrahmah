@@ -181,10 +181,6 @@ export async function ensureUsersBootstrapSchema(
       must_change_password = COALESCE(must_change_password, false),
       password_reset_by_superuser = COALESCE(password_reset_by_superuser, false),
       two_factor_enabled = COALESCE(two_factor_enabled, false),
-      two_factor_configured_at = CASE
-        WHEN COALESCE(two_factor_enabled, false) = false THEN NULL
-        ELSE two_factor_configured_at
-      END,
       failed_login_attempts = GREATEST(COALESCE(failed_login_attempts, 0), 0),
       locked_at = CASE
         WHEN locked_at IS NULL THEN NULL
@@ -207,6 +203,24 @@ export async function ensureUsersBootstrapSchema(
         ELSE activated_at
       END,
       is_banned = COALESCE(is_banned, false)
+  `);
+  await database.execute(sql`
+    UPDATE public.users
+    SET two_factor_secret_encrypted = NULLIF(btrim(COALESCE(two_factor_secret_encrypted, '')), '')
+  `);
+  await database.execute(sql`
+    UPDATE public.users
+    SET
+      two_factor_enabled = false,
+      two_factor_configured_at = NULL
+    WHERE two_factor_enabled = true
+      AND two_factor_secret_encrypted IS NULL
+  `);
+  await database.execute(sql`
+    UPDATE public.users
+    SET two_factor_configured_at = NULL
+    WHERE two_factor_enabled = false
+      OR two_factor_secret_encrypted IS NULL
   `);
   await database.execute(sql`
     INSERT INTO public.users (
@@ -301,6 +315,46 @@ export async function ensureUsersBootstrapSchema(
         ALTER TABLE public.users
         ADD CONSTRAINT chk_users_status
         CHECK (status IN ('pending_activation', 'active', 'suspended', 'disabled'));
+      END IF;
+
+      IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'chk_users_two_factor_secret_not_blank'
+      ) THEN
+        ALTER TABLE public.users
+        ADD CONSTRAINT chk_users_two_factor_secret_not_blank
+        CHECK (two_factor_secret_encrypted IS NULL OR btrim(two_factor_secret_encrypted) <> '');
+      END IF;
+
+      IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'chk_users_two_factor_enabled_secret'
+      ) THEN
+        ALTER TABLE public.users
+        ADD CONSTRAINT chk_users_two_factor_enabled_secret
+        CHECK (
+          two_factor_enabled = false
+          OR (two_factor_secret_encrypted IS NOT NULL AND btrim(two_factor_secret_encrypted) <> '')
+        );
+      END IF;
+
+      IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'chk_users_two_factor_configured_state'
+      ) THEN
+        ALTER TABLE public.users
+        ADD CONSTRAINT chk_users_two_factor_configured_state
+        CHECK (
+          two_factor_configured_at IS NULL
+          OR (
+            two_factor_enabled = true
+            AND two_factor_secret_encrypted IS NOT NULL
+            AND btrim(two_factor_secret_encrypted) <> ''
+          )
+        );
       END IF;
     END $$;
   `);

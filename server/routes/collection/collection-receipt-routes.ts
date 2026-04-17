@@ -7,14 +7,15 @@ function createCollectionReceiptRouteHandler(params: {
   mode: "view" | "download";
   resolveReceiptId?: (req: AuthenticatedRequest) => string | null | undefined;
 }) {
-  return async (req: AuthenticatedRequest, res: Parameters<typeof serveCollectionReceipt>[2]) =>
-    serveCollectionReceipt(
+  return (req: AuthenticatedRequest, res: Parameters<typeof serveCollectionReceipt>[2]) => {
+    void serveCollectionReceipt(
       params.context.storage,
       req,
       res,
       params.mode,
       params.resolveReceiptId ? params.resolveReceiptId(req) : undefined,
     );
+  };
 }
 
 export function registerCollectionReceiptRoutes(context: CollectionRouteContext) {

@@ -64,19 +64,19 @@ function AppContent() {
 
     if (currentPage === "home") {
       return scheduleIdlePreload(() => {
-        LoginPage.preload();
+        void LoginPage.preload();
       }, 700);
     }
 
     if (currentPage === "login") {
       return scheduleIdlePreload(() => {
-        ForgotPasswordPage.preload();
+        void ForgotPasswordPage.preload();
       }, 250);
     }
 
     if (currentPage === "forgot-password") {
       return scheduleIdlePreload(() => {
-        LoginPage.preload();
+        void LoginPage.preload();
       }, 250);
     }
 
