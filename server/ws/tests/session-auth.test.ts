@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import jwt from "jsonwebtoken";
 import { logger } from "../../lib/logger";
-import { extractWsActivityId, isActiveWebSocketSession } from "../session-auth";
+import { extractWsActivityId, isActiveWebSocketSession, validateWsSessionToken } from "../session-auth";
 
 const SECRET = "ws-test-secret";
 
@@ -18,6 +18,25 @@ test("extractWsActivityId rejects invalid or missing activity ids", () => {
   assert.equal(extractWsActivityId("not-a-token", SECRET), null);
   assert.equal(extractWsActivityId(missingActivityIdToken, SECRET), null);
   assert.equal(extractWsActivityId("", SECRET), null);
+});
+
+test("validateWsSessionToken distinguishes expired tokens from other token failures", () => {
+  const expiredToken = jwt.sign(
+    {
+      activityId: "activity-expired",
+      exp: Math.floor(Date.now() / 1000) - 31,
+    },
+    SECRET,
+  );
+
+  assert.deepEqual(validateWsSessionToken(expiredToken, SECRET), {
+    ok: false,
+    reason: "expired_token",
+  });
+  assert.deepEqual(validateWsSessionToken("not-a-token", SECRET), {
+    ok: false,
+    reason: "invalid_token",
+  });
 });
 
 test("extractWsActivityId logs invalid token verification failures without returning an activity id", () => {

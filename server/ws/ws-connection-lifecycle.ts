@@ -1,8 +1,13 @@
 import type { IncomingMessage } from "node:http";
 import { WebSocket } from "ws";
+import {
+  RUNTIME_WS_CLOSE_REASON_SESSION_EXPIRED,
+  RUNTIME_WS_CLOSE_REASON_SESSION_INVALID,
+  RUNTIME_WS_POLICY_VIOLATION_CLOSE_CODE,
+} from "../../shared/websocket-close-reasons";
 import { readAuthSessionTokenFromHeaders } from "../auth/session-cookie";
 import { logger } from "../lib/logger";
-import { extractWsActivityId, isActiveWebSocketSession } from "./session-auth";
+import { isActiveWebSocketSession, validateWsSessionToken } from "./session-auth";
 import {
   INBOUND_MESSAGE_TOKEN_BUCKET_CAPACITY,
   INBOUND_MESSAGE_TOKEN_BUCKET_WINDOW_MS,
@@ -10,6 +15,7 @@ import {
   MAX_INBOUND_MESSAGES_PER_MINUTE,
   type RuntimeInboundMessageRateState,
   type RuntimeTrackedSocketEntry,
+  type RuntimeTrackedSocketState,
   type RuntimeTrustedForwardedProxyMatcher,
   type RuntimeWebSocketActivity,
 } from "./ws-runtime-types";
@@ -25,7 +31,7 @@ type CreateRuntimeConnectionHandlerOptions = {
   connectedClients: Map<string, WebSocket>;
   socketEntriesByActivity: Map<string, RuntimeTrackedSocketEntry>;
   socketEntriesByInstance: WeakMap<WebSocket, RuntimeTrackedSocketEntry>;
-  trackedSockets: Set<WebSocket>;
+  trackedSockets: Map<WebSocket, RuntimeTrackedSocketState>;
   socketCleanupCallbacks: WeakMap<WebSocket, () => void>;
   storage: {
     getActivityById: (
@@ -81,11 +87,25 @@ export function createRuntimeConnectionHandler(
       lastRefillAt: Date.now(),
     };
 
+    const touchTrackedSocket = (markAuthenticated = false) => {
+      const trackedSocketState = trackedSockets.get(ws);
+      if (!trackedSocketState) {
+        return;
+      }
+
+      const now = Date.now();
+      trackedSocketState.lastSeenAt = now;
+      if (markAuthenticated && trackedSocketState.authenticatedAt === null) {
+        trackedSocketState.authenticatedAt = now;
+      }
+    };
+
     const markSocketAlive = () => {
       if (cleanedUp) {
         return;
       }
 
+      touchTrackedSocket();
       const currentEntry = socketEntriesByInstance.get(ws) ?? socketEntry;
       if (currentEntry?.ws === ws) {
         currentEntry.alive = true;
@@ -152,13 +172,18 @@ export function createRuntimeConnectionHandler(
       }
     };
 
-    const closeSocketIfNeeded = () => {
+    const closeSocketIfNeeded = (code?: number, reason?: string) => {
       if (closeRequested || !isTrackableSocket(ws)) {
         return;
       }
 
       closeRequested = true;
       try {
+        if (typeof code === "number") {
+          ws.close(code, reason);
+          return;
+        }
+
         ws.close();
       } catch (error) {
         logger.debug("WebSocket close request failed during cleanup", {
@@ -173,6 +198,7 @@ export function createRuntimeConnectionHandler(
         return;
       }
 
+      touchTrackedSocket();
       const now = Date.now();
       const elapsedMs = Math.max(0, now - inboundMessageRateState.lastRefillAt);
       if (elapsedMs > 0) {
@@ -203,7 +229,12 @@ export function createRuntimeConnectionHandler(
     ws.on("message", handleSocketMessage);
     ws.once("close", handleSocketClose);
     ws.once("error", handleSocketError);
-    trackedSockets.add(ws);
+    const trackedAt = Date.now();
+    trackedSockets.set(ws, {
+      trackedAt,
+      lastSeenAt: trackedAt,
+      authenticatedAt: null,
+    });
     socketCleanupCallbacks.set(ws, () => {
       cleanupSocketSafely("registered-callback");
     });
@@ -256,17 +287,26 @@ export function createRuntimeConnectionHandler(
 
     if (!token) {
       cleanupSocketSafely("missing-token");
-      closeSocketIfNeeded();
+      closeSocketIfNeeded(
+        RUNTIME_WS_POLICY_VIOLATION_CLOSE_CODE,
+        RUNTIME_WS_CLOSE_REASON_SESSION_INVALID,
+      );
       return;
     }
 
     try {
-      activityId = extractWsActivityId(token, secret);
-      if (!activityId) {
-        cleanupSocketSafely("invalid-token");
-        closeSocketIfNeeded();
+      const tokenValidation = validateWsSessionToken(token, secret);
+      if (!tokenValidation.ok) {
+        cleanupSocketSafely(tokenValidation.reason);
+        closeSocketIfNeeded(
+          RUNTIME_WS_POLICY_VIOLATION_CLOSE_CODE,
+          tokenValidation.reason === "expired_token"
+            ? RUNTIME_WS_CLOSE_REASON_SESSION_EXPIRED
+            : RUNTIME_WS_CLOSE_REASON_SESSION_INVALID,
+        );
         return;
       }
+      activityId = tokenValidation.activityId;
 
       const activity = await storage.getActivityById(activityId);
       if (cleanedUp || !isTrackableSocket(ws)) {
@@ -279,7 +319,10 @@ export function createRuntimeConnectionHandler(
           activityId,
         });
         cleanupSocketSafely("inactive-session");
-        closeSocketIfNeeded();
+        closeSocketIfNeeded(
+          RUNTIME_WS_POLICY_VIOLATION_CLOSE_CODE,
+          RUNTIME_WS_CLOSE_REASON_SESSION_INVALID,
+        );
         return;
       }
 
@@ -298,6 +341,7 @@ export function createRuntimeConnectionHandler(
       const existingEntry = socketEntriesByActivity.get(activityId);
       const existingWs = existingEntry?.ws ?? connectedClients.get(activityId);
       socketEntry = registerTrackedSocketEntry(activityId, ws, userKey);
+      touchTrackedSocket(true);
       markSocketAlive();
 
       if (cleanedUp || !isTrackableSocket(ws)) {

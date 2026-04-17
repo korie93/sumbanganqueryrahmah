@@ -4,6 +4,10 @@ import { runtimeConfig } from "../config/runtime";
 export const SESSION_JWT_ALGORITHM = "HS256" as const;
 export const SESSION_JWT_DEFAULT_EXPIRY = "24h";
 
+type SessionJwtVerificationOptions = {
+  clockToleranceSeconds?: number;
+};
+
 function normalizeVerificationSecrets(secrets: string | readonly string[] | null | undefined): string[] {
   if (Array.isArray(secrets)) {
     return secrets.map((value) => String(value || "").trim()).filter(Boolean);
@@ -34,6 +38,7 @@ export function signSessionJwt<TPayload extends object>(
 export function verifyJwtWithAnySecret<TPayload>(
   token: string,
   secrets: string | readonly string[],
+  options?: SessionJwtVerificationOptions,
 ): TPayload {
   const candidates = normalizeVerificationSecrets(secrets);
   if (candidates.length === 0) {
@@ -45,6 +50,9 @@ export function verifyJwtWithAnySecret<TPayload>(
     try {
       return jwt.verify(token, secret, {
         algorithms: [SESSION_JWT_ALGORITHM],
+        ...(options?.clockToleranceSeconds && options.clockToleranceSeconds > 0
+          ? { clockTolerance: options.clockToleranceSeconds }
+          : {}),
       }) as TPayload;
     } catch (error) {
       lastError = error;
@@ -57,10 +65,12 @@ export function verifyJwtWithAnySecret<TPayload>(
 export function verifySessionJwt<TPayload>(
   token: string,
   secrets?: string | readonly string[] | null,
+  options?: SessionJwtVerificationOptions,
 ): TPayload {
   const candidates = normalizeVerificationSecrets(secrets);
   return verifyJwtWithAnySecret<TPayload>(
     token,
     candidates.length > 0 ? candidates : getSessionJwtVerificationSecrets(),
+    options,
   );
 }

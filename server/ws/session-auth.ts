@@ -1,5 +1,7 @@
+import type { TokenExpiredError } from "jsonwebtoken";
 import { verifySessionJwt } from "../auth/session-jwt";
 import { logger } from "../lib/logger";
+import { WS_SESSION_CLOCK_TOLERANCE_SECONDS } from "./ws-runtime-types";
 
 type ActivitySessionLike = {
   id?: string | null;
@@ -11,21 +13,61 @@ type WsTokenPayload = {
   activityId?: string | null;
 };
 
-export function extractWsActivityId(token: string, secret: string | readonly string[]): string | null {
-  if (!token || !secret) return null;
+export type WsSessionTokenValidationResult =
+  | {
+      ok: true;
+      activityId: string;
+    }
+  | {
+      ok: false;
+      reason: "expired_token" | "invalid_token" | "missing_activity_id";
+    };
+
+export function validateWsSessionToken(
+  token: string,
+  secret: string | readonly string[],
+): WsSessionTokenValidationResult {
+  if (!token || !secret) {
+    return {
+      ok: false,
+      reason: "invalid_token",
+    };
+  }
 
   try {
-    const decoded = verifySessionJwt<WsTokenPayload>(token, secret);
+    const decoded = verifySessionJwt<WsTokenPayload>(token, secret, {
+      clockToleranceSeconds: WS_SESSION_CLOCK_TOLERANCE_SECONDS,
+    });
     const activityId = String(decoded?.activityId || "").trim();
-    return activityId || null;
+    if (!activityId) {
+      return {
+        ok: false,
+        reason: "missing_activity_id",
+      };
+    }
+
+    return {
+      ok: true,
+      activityId,
+    };
   } catch (error) {
-    const authError = error as Error;
+    const authError = error as Error & Partial<TokenExpiredError>;
+    const reason = authError?.name === "TokenExpiredError" ? "expired_token" : "invalid_token";
     logger.warn("WebSocket session token verification failed", {
       errorName: authError?.name,
       errorMessage: authError?.message,
+      reason,
     });
-    return null;
+    return {
+      ok: false,
+      reason,
+    };
   }
+}
+
+export function extractWsActivityId(token: string, secret: string | readonly string[]): string | null {
+  const result = validateWsSessionToken(token, secret);
+  return result.ok ? result.activityId : null;
 }
 
 export function isActiveWebSocketSession(activity: ActivitySessionLike): activity is {

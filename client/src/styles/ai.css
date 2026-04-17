@@ -5,21 +5,21 @@
   flex-direction: column;
   overflow: hidden;
   border: 1px solid var(--ai-surface-border);
-  border-radius: 14px;
+  border-radius: var(--spacing-3_5);
   background: var(--ai-surface-bg);
   box-shadow: inset 0 1px 0 var(--ai-surface-inset-shadow);
   isolation: isolate;
 }
 
 .ai-chat-container[data-compact='true'] {
-  border-radius: 12px;
+  border-radius: var(--spacing-3);
 }
 
 .ai-status-bar {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 10px 12px;
+  gap: var(--spacing-2);
+  padding: var(--spacing-2_5) var(--spacing-3);
   border-bottom: 1px solid hsl(var(--border) / 0.6);
   font-size: 0.75rem;
   color: var(--ai-status-text);
@@ -27,15 +27,15 @@
 }
 
 .ai-status-icon {
-  width: 14px;
-  height: 14px;
+  width: var(--spacing-3_5);
+  height: var(--spacing-3_5);
 }
 
 .ai-notice {
-  margin: 8px 12px 0 12px;
-  padding: 8px 10px;
+  margin: var(--spacing-2) var(--spacing-3) 0 var(--spacing-3);
+  padding: var(--spacing-2) var(--spacing-2_5);
   border: 1px solid hsl(var(--border) / 0.65);
-  border-radius: 8px;
+  border-radius: var(--spacing-2);
   background: var(--ai-notice-bg);
   color: var(--ai-notice-text);
   font-size: 0.75rem;
@@ -48,36 +48,36 @@
 .ai-notice-error {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
   color: hsl(var(--destructive));
   border-color: hsl(var(--destructive) / 0.4);
   background: hsl(var(--destructive) / 0.08);
-  margin-bottom: 8px;
+  margin-bottom: var(--spacing-2);
 }
 
 .ai-messages {
   flex: 1;
   overflow-y: auto;
-  padding: 14px 10px 14px 16px;
+  padding: var(--spacing-3_5) var(--spacing-2_5) var(--spacing-3_5) var(--spacing-4);
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--spacing-3);
   min-height: 0;
   overscroll-behavior: contain;
 }
 
 .ai-chat-container[data-compact='true'] .ai-messages {
-  padding-top: 10px;
-  gap: 8px;
+  padding-top: var(--spacing-2_5);
+  gap: var(--spacing-2);
 }
 
 .ai-messages::-webkit-scrollbar {
-  width: 8px;
+  width: var(--spacing-2);
 }
 
 .ai-messages::-webkit-scrollbar-thumb {
   background: var(--ai-scroll-thumb);
-  border-radius: 6px;
+  border-radius: var(--spacing-1_5);
 }
 
 .ai-messages::-webkit-scrollbar-track {
@@ -88,13 +88,13 @@
   color: var(--ai-empty-text);
   font-size: 0.8125rem;
   line-height: var(--line-height-normal);
-  padding: 6px 2px;
+  padding: var(--spacing-1_5) var(--spacing-0_5);
 }
 
 .ai-chat-container[data-compact='true'] .ai-empty-hint {
   font-size: 0.75rem;
   line-height: var(--line-height-tight);
-  padding-top: 2px;
+  padding-top: var(--spacing-0_5);
 }
 
 .ai-message-row {
@@ -112,9 +112,9 @@
 
 .ai-bubble {
   max-width: 92%;
-  padding: 12px 14px;
+  padding: var(--spacing-3) var(--spacing-3_5);
   line-height: var(--line-height-normal);
-  border-radius: 10px;
+  border-radius: var(--spacing-2_5);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   word-break: break-word;
@@ -136,14 +136,15 @@
 .ai-typing-bubble {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .ai-typing-spinner {
-  width: 14px;
-  height: 14px;
+  width: var(--spacing-3_5);
+  height: var(--spacing-3_5);
   animation: aiSpin 0.9s linear infinite;
   opacity: 0.85;
+  will-change: transform;
 }
 
 .ai-typing-label {
@@ -163,6 +164,7 @@
   background: currentColor;
   opacity: 0.55;
   animation: aiTypingDot 1.2s ease-in-out infinite;
+  will-change: transform, opacity;
 }
 
 .ai-typing-dots span:nth-child(2) {
@@ -197,17 +199,17 @@
 
 .ai-input-container {
   display: flex;
-  padding: 12px;
-  gap: 8px;
+  padding: var(--spacing-3);
+  gap: var(--spacing-2);
   border-top: 1px solid var(--ai-input-surface-border);
   background: var(--ai-input-surface-bg);
 }
 
 .ai-input {
   flex: 1;
-  min-height: 44px;
-  padding: 10px 12px;
-  border-radius: 8px;
+  min-height: var(--spacing-11);
+  padding: var(--spacing-2_5) var(--spacing-3);
+  border-radius: var(--spacing-2);
   resize: none;
   background: var(--ai-input-bg);
   border: 1px solid var(--ai-input-border);
@@ -215,13 +217,13 @@
 }
 
 .ai-send-btn {
-  height: 44px;
-  width: 44px;
-  min-width: 44px;
+  height: var(--spacing-11);
+  width: var(--spacing-11);
+  min-width: var(--spacing-11);
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 6px;
+  padding: var(--spacing-1_5);
   background: var(--ai-send-btn-bg);
   color: var(--public-auth-text-strong);
   border: 1px solid var(--ai-send-btn-border);
@@ -231,45 +233,47 @@
   display: flex;
   justify-content: flex-end;
   align-items: center;
-  padding: 0 12px 10px 12px;
+  padding: 0 var(--spacing-3) var(--spacing-2_5) var(--spacing-3);
 }
 
 .ai-stop-btn {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  min-height: 44px;
-  padding-inline: 10px;
+  gap: var(--spacing-1_5);
+  min-height: var(--spacing-11);
+  padding-inline: var(--spacing-2_5);
   color: var(--ai-stop-btn-text);
 }
 
 @media (max-width: 767px) {
   .ai-status-bar {
-    padding: 8px 10px;
+    padding: var(--spacing-2) var(--spacing-2_5);
   }
 
   .ai-notice {
-    margin: 8px 10px 0 10px;
-    padding: 8px 10px;
+    margin: var(--spacing-2) var(--spacing-2_5) 0 var(--spacing-2_5);
+    padding: var(--spacing-2) var(--spacing-2_5);
   }
 
   .ai-messages {
-    padding: 12px 10px 10px 12px;
-    gap: 10px;
+    padding: var(--spacing-3) var(--spacing-2_5) var(--spacing-2_5) var(--spacing-3);
+    gap: var(--spacing-2_5);
   }
 
   .ai-input-container {
-    padding: 10px 10px calc(10px + var(--safe-area-inset-bottom));
+    padding: var(--spacing-2_5) var(--spacing-2_5)
+      calc(var(--spacing-2_5) + var(--safe-area-inset-bottom));
   }
 
   .ai-send-btn {
-    height: 48px;
-    width: 48px;
-    min-width: 48px;
-    padding: 8px;
+    height: var(--spacing-12);
+    width: var(--spacing-12);
+    min-width: var(--spacing-12);
+    padding: var(--spacing-2);
   }
 
   .ai-actions {
-    padding: 0 10px calc(8px + var(--safe-area-inset-bottom)) 10px;
+    padding: 0 var(--spacing-2_5) calc(var(--spacing-2) + var(--safe-area-inset-bottom))
+      var(--spacing-2_5);
   }
 }

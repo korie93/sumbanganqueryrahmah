@@ -1,4 +1,8 @@
 import { WebSocket, type WebSocketServer } from "ws";
+import {
+  RUNTIME_WS_CLOSE_REASON_SESSION_INVALID,
+  RUNTIME_WS_POLICY_VIOLATION_CLOSE_CODE,
+} from "../../shared/websocket-close-reasons";
 import { logger } from "../lib/logger";
 import { createBroadcastWsMessage } from "./ws-broadcast";
 import { createRuntimeConnectionHandler } from "./ws-connection-lifecycle";
@@ -6,8 +10,11 @@ import { startRuntimeWebSocketHeartbeat } from "./ws-heartbeat";
 import {
   CONNECTED_CLIENT_MONITOR_THRESHOLDS,
   MAX_RUNTIME_WS_BUFFERED_BYTES,
+  RUNTIME_WS_PENDING_AUTH_TTL_MS,
+  RUNTIME_WS_TRACKED_SOCKET_SWEEP_INTERVAL_MS,
   type RuntimeManagerOptions,
   type RuntimeTrackedSocketEntry,
+  type RuntimeTrackedSocketState,
 } from "./ws-runtime-types";
 import {
   buildTrustedProxyMatcher,
@@ -25,7 +32,7 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
   const trustedForwardedProxyMatcher = buildTrustedProxyMatcher(trustedForwardedProxies);
   const socketEntriesByActivity = new Map<string, RuntimeTrackedSocketEntry>();
   const socketEntriesByInstance = new WeakMap<WebSocket, RuntimeTrackedSocketEntry>();
-  const trackedSockets = new Set<WebSocket>();
+  const trackedSockets = new Map<WebSocket, RuntimeTrackedSocketState>();
   const socketCleanupCallbacks = new WeakMap<WebSocket, () => void>();
   const loggedConnectedClientThresholds = new Set<number>();
   let peakConnectedClients = connectedClients.size;
@@ -137,16 +144,54 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
     socketEntriesByActivity,
     removeTrackedSocket,
   });
+  const trackedSocketSweepHandle = setInterval(() => {
+    const now = Date.now();
+
+    for (const [ws, trackedSocketState] of Array.from(trackedSockets.entries())) {
+      if (!isTrackableSocket(ws)) {
+        socketCleanupCallbacks.get(ws)?.();
+        trackedSockets.delete(ws);
+        continue;
+      }
+
+      if (
+        trackedSocketState.authenticatedAt !== null
+        || now - trackedSocketState.trackedAt <= RUNTIME_WS_PENDING_AUTH_TTL_MS
+      ) {
+        continue;
+      }
+
+      logger.warn("WebSocket pending-auth socket exceeded the runtime tracking TTL", {
+        trackedForMs: now - trackedSocketState.trackedAt,
+        maxTrackedMs: RUNTIME_WS_PENDING_AUTH_TTL_MS,
+      });
+      socketCleanupCallbacks.get(ws)?.();
+
+      if (!isTrackableSocket(ws)) {
+        continue;
+      }
+
+      try {
+        ws.close(RUNTIME_WS_POLICY_VIOLATION_CLOSE_CODE, RUNTIME_WS_CLOSE_REASON_SESSION_INVALID);
+      } catch (error) {
+        logger.debug("WebSocket close request failed during tracked socket sweep", {
+          error: sanitizeRuntimeWebSocketError(error),
+        });
+      }
+    }
+  }, RUNTIME_WS_TRACKED_SOCKET_SWEEP_INTERVAL_MS);
+  trackedSocketSweepHandle.unref?.();
 
   wss.once("close", () => {
     clearInterval(heartbeatHandle);
+    clearInterval(trackedSocketSweepHandle);
     if (peakConnectedClients > 0) {
       logger.info("WebSocket connectedClients map shutdown summary", {
         connectedClients: connectedClients.size,
         peakConnectedClients,
       });
     }
-    for (const ws of Array.from(trackedSockets)) {
+    for (const ws of Array.from(trackedSockets.keys())) {
       socketCleanupCallbacks.get(ws)?.();
       if (!isTrackableSocket(ws)) {
         continue;

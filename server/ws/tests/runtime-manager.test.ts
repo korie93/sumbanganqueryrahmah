@@ -4,14 +4,26 @@ import type { IncomingMessage } from "node:http";
 import test from "node:test";
 import jwt from "jsonwebtoken";
 import { WebSocket } from "ws";
+import {
+  RUNTIME_WS_CLOSE_REASON_SESSION_EXPIRED,
+  RUNTIME_WS_CLOSE_REASON_SESSION_INVALID,
+  RUNTIME_WS_POLICY_VIOLATION_CLOSE_CODE,
+} from "../../../shared/websocket-close-reasons";
 import type { UserActivity } from "../../../shared/schema-postgres";
 import { logger } from "../../lib/logger";
 import { createRuntimeWebSocketManager } from "../runtime-manager";
+import {
+  HEARTBEAT_INTERVAL_MS,
+  RUNTIME_WS_PENDING_AUTH_TTL_MS,
+  RUNTIME_WS_TRACKED_SOCKET_SWEEP_INTERVAL_MS,
+} from "../ws-runtime-types";
 
 class FakeWebSocketServer extends EventEmitter {}
 class FakeWebSocket extends EventEmitter {
   readyState: number = WebSocket.OPEN;
   closeCalls = 0;
+  closeCode: number | undefined = undefined;
+  closeReason = "";
   terminateCalls = 0;
   pingCalls = 0;
   bufferedAmount = 0;
@@ -21,14 +33,20 @@ class FakeWebSocket extends EventEmitter {
     this.sentMessages.push(String(payload));
   }
 
-  close() {
+  close(code?: number, reason?: Buffer | string) {
     this.closeCalls += 1;
+    this.closeCode = code;
+    this.closeReason = typeof reason === "string" ? reason : reason ? String(reason) : "";
     if (this.readyState === WebSocket.CLOSED) {
       return;
     }
 
     this.readyState = WebSocket.CLOSED;
-    this.emit("close");
+    this.emit("close", {
+      code: code ?? 1005,
+      reason: this.closeReason,
+      wasClean: true,
+    });
   }
 
   terminate() {
@@ -168,22 +186,23 @@ function createActiveSession(activityId: string): UserActivity {
   };
 }
 
-function interceptHeartbeatRegistration() {
+function interceptRuntimeIntervalRegistrations() {
   const originalSetInterval = global.setInterval;
-  let heartbeatCallback: (() => void) | null = null;
+  const callbacksByDelay = new Map<number, () => void>();
 
   global.setInterval = (((
     callback: TimerHandler,
     delay?: number,
     ...args: unknown[]
   ) => {
-    heartbeatCallback = () => {
+    const normalizedDelay = Math.max(0, Number(delay ?? 0));
+    callbacksByDelay.set(normalizedDelay, () => {
       if (typeof callback === "function") {
         callback(...args);
         return;
       }
       throw new Error(`Unexpected string timer callback: ${String(callback)} with delay ${String(delay)}`);
-    };
+    });
 
     const handle = originalSetInterval(() => undefined, 60_000);
     handle.unref();
@@ -191,11 +210,18 @@ function interceptHeartbeatRegistration() {
   }) as unknown as typeof global.setInterval);
 
   return {
-    getHeartbeatCallback() {
-      if (!heartbeatCallback) {
-        throw new Error("Expected heartbeat interval to be registered.");
+    getCallback(delayMs: number) {
+      const callback = callbacksByDelay.get(delayMs);
+      if (!callback) {
+        throw new Error(`Expected interval with delay ${delayMs}ms to be registered.`);
       }
-      return heartbeatCallback;
+      return callback;
+    },
+    getHeartbeatCallback() {
+      return this.getCallback(HEARTBEAT_INTERVAL_MS);
+    },
+    getTrackedSocketSweepCallback() {
+      return this.getCallback(RUNTIME_WS_TRACKED_SOCKET_SWEEP_INTERVAL_MS);
     },
     restore() {
       global.setInterval = originalSetInterval;
@@ -1246,8 +1272,88 @@ test("runtime manager clears tracked client state when the WebSocket server clos
   assertNoRuntimeSocketListeners(socket);
 });
 
+test("runtime manager closes expired session tokens with a terminal auth reason", async () => {
+  const wss = new FakeWebSocketServer();
+  const providedMap = new Map<string, WebSocket>();
+  const socket = new FakeWebSocket();
+  const expiredToken = jwt.sign(
+    {
+      activityId: "activity-expired-token",
+      exp: Math.floor(Date.now() / 1000) - 31,
+    },
+    TEST_SECRET,
+    { algorithm: "HS256" },
+  );
+
+  createRuntimeWebSocketManager({
+    wss: wss as unknown as import("ws").WebSocketServer,
+    storage: {
+      getActivityById: async () => undefined,
+      clearCollectionNicknameSessionByActivity: async () => undefined,
+    },
+    secret: TEST_SECRET,
+    connectedClients: providedMap,
+  });
+
+  try {
+    wss.emit("connection", socket as unknown as WebSocket, createConnectionRequest(expiredToken));
+    await flushAsyncWork();
+
+    assert.equal(socket.closeCalls, 1);
+    assert.equal(socket.closeCode, RUNTIME_WS_POLICY_VIOLATION_CLOSE_CODE);
+    assert.equal(socket.closeReason, RUNTIME_WS_CLOSE_REASON_SESSION_EXPIRED);
+    assert.equal(providedMap.size, 0);
+    assertNoRuntimeSocketListeners(socket);
+  } finally {
+    wss.emit("close");
+  }
+});
+
+test("runtime manager expires stale pending-auth sockets from the tracked registry", async (t) => {
+  const intervals = interceptRuntimeIntervalRegistrations();
+  const wss = new FakeWebSocketServer();
+  const providedMap = new Map<string, WebSocket>();
+  const socket = new FakeWebSocket();
+  const activityId = "activity-pending-auth-expiry";
+  const activityLookup = createDeferred<ReturnType<typeof createActiveSession> | undefined>();
+  let now = 1_000_000;
+
+  t.mock.method(Date, "now", () => now);
+
+  createRuntimeWebSocketManager({
+    wss: wss as unknown as import("ws").WebSocketServer,
+    storage: {
+      getActivityById: async () => activityLookup.promise,
+      clearCollectionNicknameSessionByActivity: async () => undefined,
+    },
+    secret: TEST_SECRET,
+    connectedClients: providedMap,
+  });
+
+  try {
+    wss.emit("connection", socket as unknown as WebSocket, createConnectionRequest(createWsToken(activityId)));
+    await flushAsyncWork();
+
+    now += RUNTIME_WS_PENDING_AUTH_TTL_MS + 1;
+    intervals.getTrackedSocketSweepCallback()();
+    await flushAsyncWork();
+
+    activityLookup.resolve(createActiveSession(activityId));
+    await flushAsyncWork();
+
+    assert.equal(socket.closeCalls, 1);
+    assert.equal(socket.closeCode, RUNTIME_WS_POLICY_VIOLATION_CLOSE_CODE);
+    assert.equal(socket.closeReason, RUNTIME_WS_CLOSE_REASON_SESSION_INVALID);
+    assert.equal(providedMap.has(activityId), false);
+    assertNoRuntimeSocketListeners(socket);
+  } finally {
+    intervals.restore();
+    wss.emit("close");
+  }
+});
+
 test("runtime manager heartbeat does not terminate sockets that are still connecting", async () => {
-  const heartbeat = interceptHeartbeatRegistration();
+  const intervals = interceptRuntimeIntervalRegistrations();
   const wss = new FakeWebSocketServer();
   const providedMap = new Map<string, WebSocket>();
   const socket = new FakeWebSocket();
@@ -1268,13 +1374,13 @@ test("runtime manager heartbeat does not terminate sockets that are still connec
     await flushAsyncWork();
 
     socket.readyState = WebSocket.CONNECTING;
-    heartbeat.getHeartbeatCallback()();
+    intervals.getHeartbeatCallback()();
 
     assert.equal(socket.terminateCalls, 0);
     assert.equal(socket.pingCalls, 0);
     assert.equal(providedMap.get(activityId), socket as unknown as WebSocket);
   } finally {
-    heartbeat.restore();
+    intervals.restore();
     wss.emit("close");
   }
 });

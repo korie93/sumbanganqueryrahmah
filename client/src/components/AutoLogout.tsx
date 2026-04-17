@@ -20,6 +20,7 @@ import {
 } from "@/components/auto-logout-socket-runtime";
 import {
   AUTO_LOGOUT_RECONNECT_FEEDBACK_IDLE_STATE,
+  buildAutoLogoutReconnectFeedbackTitle,
   buildAutoLogoutReconnectFeedbackMessage,
 } from "@/components/auto-logout-reconnect-feedback";
 
@@ -61,6 +62,7 @@ export default function AutoLogout({
   const timeoutMs = timeoutMinutes * 60 * 1000;
   const heartbeatMs = heartbeatIntervalMinutes * 60 * 1000;
   const heartbeatSyncWindowMs = resolveActivityHeartbeatSyncWindowMs(heartbeatMs);
+  const reconnectFeedbackTitle = buildAutoLogoutReconnectFeedbackTitle(reconnectFeedback);
   const reconnectFeedbackMessage = buildAutoLogoutReconnectFeedbackMessage(reconnectFeedback);
 
   const clearIdleTimeout = useCallback(() => {
@@ -275,15 +277,19 @@ export default function AutoLogout({
       <div
         role="status"
         aria-live="polite"
-        aria-label={`Menyambung semula sesi. ${reconnectFeedbackMessage}`}
+        aria-label={`${reconnectFeedbackTitle}. ${reconnectFeedbackMessage}`}
         className="flex w-[calc(100vw-2rem)] max-w-sm items-start gap-3 rounded-2xl border border-amber-400/30 bg-background/95 px-4 py-3 text-sm shadow-lg backdrop-blur supports-[backdrop-filter]:bg-background/85"
       >
         <span
           aria-hidden="true"
-          className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full bg-amber-400 animate-pulse"
+          className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${
+            reconnectFeedback.mode === "terminal"
+              ? "bg-destructive"
+              : "bg-amber-400 animate-pulse"
+          }`}
         />
         <div className="min-w-0 space-y-1">
-          <p className="font-semibold text-foreground">Menyambung semula sesi</p>
+          <p className="font-semibold text-foreground">{reconnectFeedbackTitle}</p>
           <p className="text-xs leading-5 text-muted-foreground">{reconnectFeedbackMessage}</p>
         </div>
       </div>

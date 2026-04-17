@@ -2,6 +2,9 @@ import type { WebSocket, WebSocketServer } from "ws";
 import type { PostgresStorage } from "../storage-postgres";
 
 export const HEARTBEAT_INTERVAL_MS = 30_000;
+export const RUNTIME_WS_TRACKED_SOCKET_SWEEP_INTERVAL_MS = 60_000;
+export const RUNTIME_WS_PENDING_AUTH_TTL_MS = 60_000;
+export const WS_SESSION_CLOCK_TOLERANCE_SECONDS = 30;
 export const MAX_CONNECTIONS_PER_USER = 5;
 export const MAX_INBOUND_MESSAGES_PER_MINUTE = 100;
 export const INBOUND_MESSAGE_TOKEN_BUCKET_WINDOW_MS = 60_000;
@@ -38,6 +41,12 @@ export type RuntimeTrackedSocketEntry = {
   ws: WebSocket;
   userKey: string | null;
   alive: boolean;
+};
+
+export type RuntimeTrackedSocketState = {
+  trackedAt: number;
+  lastSeenAt: number;
+  authenticatedAt: number | null;
 };
 
 export type RuntimeInboundMessageRateState = {

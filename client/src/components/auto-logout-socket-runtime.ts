@@ -5,6 +5,7 @@ import { getStoredUsername, setBannedSessionFlag } from "@/lib/auth-session"
 import {
   parseAutoLogoutWebSocketMessage,
   resolveAutoLogoutReconnectDelayMs,
+  resolveAutoLogoutSocketCloseOutcome,
 } from "@/components/auto-logout-websocket"
 import {
   notifyAutoLogoutNotice,
@@ -13,6 +14,7 @@ import {
 import {
   AUTO_LOGOUT_RECONNECT_FEEDBACK_IDLE_STATE,
   createAutoLogoutReconnectFeedbackState,
+  createAutoLogoutReconnectTerminalState,
   type AutoLogoutReconnectFeedbackState,
 } from "@/components/auto-logout-reconnect-feedback"
 
@@ -115,9 +117,34 @@ export function bindAutoLogoutSocket({
     disposeAutoLogoutSocket(socket, wsRef)
   }
 
+  const stopReconnect = (terminalMessage?: string) => {
+    clearReconnect()
+    if (
+      !disposed
+      && mountedRef.current
+      && socketGenerationRef.current === lifecycleGeneration
+      && typeof onReconnectStateChange === "function"
+    ) {
+      onReconnectStateChange(
+        terminalMessage
+          ? createAutoLogoutReconnectTerminalState(terminalMessage)
+          : AUTO_LOGOUT_RECONNECT_FEEDBACK_IDLE_STATE,
+      )
+    }
+
+    reconnectEnabledRef.current = false
+    reconnectAttemptRef.current = 0
+  }
+
   const scheduleReconnect = () => {
     const nextUsername = username || getStoredUsername()
     if (!isActiveLifecycle() || !nextUsername) {
+      return
+    }
+
+    const closeOutcome = resolveAutoLogoutSocketCloseOutcome(null, reconnectAttemptRef.current)
+    if (!closeOutcome.retry) {
+      stopReconnect(closeOutcome.terminalMessage)
       return
     }
 
@@ -207,7 +234,7 @@ export function bindAutoLogoutSocket({
         }
       }
 
-      activeSocket.onclose = () => {
+      activeSocket.onclose = (event) => {
         if (!isCurrentSocket(activeSocket)) {
           if (wsRef.current === activeSocket) {
             wsRef.current = null
@@ -216,6 +243,15 @@ export function bindAutoLogoutSocket({
         }
 
         wsRef.current = null
+        const closeOutcome = resolveAutoLogoutSocketCloseOutcome(event, reconnectAttemptRef.current)
+        if (!closeOutcome.retry) {
+          stopReconnect(closeOutcome.terminalMessage)
+          if (closeOutcome.shouldLogout) {
+            notifyAutoLogoutNotice(undefined, closeOutcome.terminalMessage)
+            void runClientLogout()
+          }
+          return
+        }
         scheduleReconnect()
       }
 

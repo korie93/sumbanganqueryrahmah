@@ -1,9 +1,16 @@
+import {
+  RUNTIME_WS_CLOSE_REASON_SESSION_EXPIRED,
+  RUNTIME_WS_CLOSE_REASON_SESSION_INVALID,
+  RUNTIME_WS_POLICY_VIOLATION_CLOSE_CODE,
+} from "@shared/websocket-close-reasons"
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
   parseAutoLogoutWebSocketMessage,
   resolveAutoLogoutReconnectDelayMs,
+  resolveAutoLogoutSocketCloseOutcome,
   WS_RECONNECT_BASE_DELAY_MS,
+  WS_RECONNECT_MAX_ATTEMPTS,
   WS_RECONNECT_MAX_DELAY_MS,
 } from "@/components/auto-logout-websocket";
 
@@ -31,6 +38,40 @@ test("resolveAutoLogoutReconnectDelayMs caps reconnect delays for long outage wi
     resolveAutoLogoutReconnectDelayMs(10, 0),
     24000,
   );
+});
+
+test("resolveAutoLogoutSocketCloseOutcome stops retrying for terminal auth closes and reconnect exhaustion", () => {
+  assert.deepEqual(
+    resolveAutoLogoutSocketCloseOutcome({
+      code: RUNTIME_WS_POLICY_VIOLATION_CLOSE_CODE,
+      reason: RUNTIME_WS_CLOSE_REASON_SESSION_EXPIRED,
+    } as Pick<CloseEvent, "code" | "reason">, 0),
+    {
+      retry: false,
+      shouldLogout: true,
+      terminalMessage: "Sesi anda telah tamat. Sila log masuk semula.",
+    },
+  );
+
+  assert.deepEqual(
+    resolveAutoLogoutSocketCloseOutcome({
+      code: RUNTIME_WS_POLICY_VIOLATION_CLOSE_CODE,
+      reason: RUNTIME_WS_CLOSE_REASON_SESSION_INVALID,
+    } as Pick<CloseEvent, "code" | "reason">, 0),
+    {
+      retry: false,
+      shouldLogout: true,
+      terminalMessage: "Sesi semasa tidak lagi sah. Sila log masuk semula.",
+    },
+  );
+
+  assert.deepEqual(resolveAutoLogoutSocketCloseOutcome(null, WS_RECONNECT_MAX_ATTEMPTS), {
+    retry: false,
+    shouldLogout: false,
+    terminalMessage:
+      `Sambungan ke server masih gagal selepas ${WS_RECONNECT_MAX_ATTEMPTS} percubaan. `
+      + "Sila muat semula halaman atau log masuk semula.",
+  });
 });
 
 test("parseAutoLogoutWebSocketMessage normalizes supported socket payloads", () => {
