@@ -1,7 +1,14 @@
 import * as React from "react";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { resolveMobileViewportState } from "@/hooks/use-mobile-viewport-state";
 
-const MOBILE_KEYBOARD_THRESHOLD_PX = 120;
+export function resolveMobileKeyboardOpenState(
+  windowInnerHeight: number,
+  viewportHeight: number,
+  viewportOffsetTop = 0,
+) {
+  return resolveMobileViewportState(windowInnerHeight, viewportHeight, viewportOffsetTop).keyboardOpen;
+}
 
 export function useMobileKeyboardState() {
   const isMobile = useIsMobile();
@@ -17,8 +24,11 @@ export function useMobileKeyboardState() {
     let frame = 0;
 
     const syncKeyboardState = () => {
-      const viewportHeightDelta = window.innerHeight - viewport.height;
-      const nextKeyboardOpen = viewportHeightDelta > MOBILE_KEYBOARD_THRESHOLD_PX;
+      const nextKeyboardOpen = resolveMobileKeyboardOpenState(
+        window.innerHeight,
+        viewport.height,
+        viewport.offsetTop,
+      );
       setKeyboardOpen((previous) => (previous === nextKeyboardOpen ? previous : nextKeyboardOpen));
     };
 

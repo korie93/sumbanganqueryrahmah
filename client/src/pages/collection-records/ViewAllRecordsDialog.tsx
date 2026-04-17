@@ -88,7 +88,7 @@ export function ViewAllRecordsDialog({
         className={
           isMobile
             ? "flex h-[100dvh] max-h-[100dvh] w-screen max-w-none flex-col gap-0 overflow-hidden rounded-none border-0 p-0"
-            : "flex h-[90vh] w-[96vw] max-w-[96vw] flex-col gap-0 overflow-hidden p-0"
+            : "flex h-[90vh] w-[96vw] max-w-[112rem] flex-col gap-0 overflow-hidden p-0"
         }
       >
         <DialogHeader className="sr-only">
