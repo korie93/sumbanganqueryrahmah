@@ -68,9 +68,9 @@ export function SingleImportPanel({
   return (
     <>
       <div className="glass-wrapper mb-4 p-4 sm:mb-6 sm:p-6" {...loadingBusyProps}>
-        <div className="mb-4">
-          <div className="mb-2 flex flex-wrap items-center gap-2">
-            <label htmlFor="single-import-name" className="block text-sm font-medium text-foreground">Import Name</label>
+      <div className="mb-4">
+        <div className="mb-2 flex flex-wrap items-center gap-2">
+          <label htmlFor="single-import-name" className="block text-sm font-medium text-foreground">Import Name</label>
             {parsedData.length > 0 ? (
               <Badge variant="secondary" className="rounded-full px-2 py-0.5 text-[11px]">
                 {parsedData.length.toLocaleString()} rows ready
@@ -95,6 +95,20 @@ export function SingleImportPanel({
           </p>
         </div>
 
+        <input
+          id="single-import-file-input"
+          name="singleImportFile"
+          ref={fileInputRef}
+          type="file"
+          aria-label="Select single import file"
+          aria-describedby={`${singleImportFileHelpId} ${singleImportFileStatusId}${hasFileScopedError ? ` ${singleImportFileErrorId}` : ""}`}
+          aria-invalid={importFileAriaInvalid}
+          accept=".csv,.xlsx,.xls,.xlsb"
+          onChange={onFileChange}
+          className="hidden"
+          data-testid="input-file"
+          disabled={loading}
+        />
         <div
           onDrop={onDrop}
           onDragOver={onDragOver}
@@ -113,20 +127,6 @@ export function SingleImportPanel({
           data-testid="dropzone-file"
           {...loadingDropzoneDisabledProps}
         >
-          <input
-            id="single-import-file-input"
-            name="singleImportFile"
-            ref={fileInputRef}
-            type="file"
-            aria-label="Select single import file"
-            aria-describedby={`${singleImportFileHelpId} ${singleImportFileStatusId}${hasFileScopedError ? ` ${singleImportFileErrorId}` : ""}`}
-            aria-invalid={importFileAriaInvalid}
-            accept=".csv,.xlsx,.xls,.xlsb"
-            onChange={onFileChange}
-            className="hidden"
-            data-testid="input-file"
-            disabled={loading}
-          />
           <div className="flex flex-col items-center gap-3">
             <div className="flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 sm:h-16 sm:w-16">
               <Upload className="h-7 w-7 text-primary sm:h-8 sm:w-8" />

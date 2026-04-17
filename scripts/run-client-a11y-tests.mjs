@@ -8,22 +8,22 @@ const require = createRequire(import.meta.url);
 const rootDir = process.cwd();
 const clientSrcDir = path.join(rootDir, "client", "src");
 
-async function findClientTestFiles(dir) {
+async function findClientAccessibilityTestFiles(dir) {
   const entries = await readdir(dir, { withFileTypes: true });
   const files = [];
 
   for (const entry of entries) {
     const entryPath = path.join(dir, entry.name);
     if (entry.isDirectory()) {
-      files.push(...await findClientTestFiles(entryPath));
+      files.push(...await findClientAccessibilityTestFiles(entryPath));
       continue;
     }
 
     if (
       entry.isFile()
       && (
-        entry.name.endsWith(".test.ts")
-        || entry.name.endsWith(".test.tsx")
+        entry.name.endsWith(".a11y.test.ts")
+        || entry.name.endsWith(".a11y.test.tsx")
       )
     ) {
       files.push(entryPath);
@@ -34,11 +34,11 @@ async function findClientTestFiles(dir) {
 }
 
 async function run() {
-  const testFiles = (await findClientTestFiles(clientSrcDir))
+  const testFiles = (await findClientAccessibilityTestFiles(clientSrcDir))
     .sort((left, right) => left.localeCompare(right));
 
   if (testFiles.length === 0) {
-    console.error("No client test files were found under client/src.");
+    console.error("No client accessibility test files were found under client/src.");
     process.exitCode = 1;
     return;
   }
@@ -58,12 +58,12 @@ async function run() {
     child.on("error", reject);
     child.on("exit", (code, signal) => {
       if (signal) {
-        reject(new Error(`Client tests terminated by signal ${signal}`));
+        reject(new Error(`Client accessibility tests terminated by signal ${signal}`));
         return;
       }
 
       if (typeof code === "number" && code !== 0) {
-        reject(new Error(`Client tests exited with code ${code}`));
+        reject(new Error(`Client accessibility tests exited with code ${code}`));
         return;
       }
 

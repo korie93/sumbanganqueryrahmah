@@ -1,5 +1,6 @@
 import type { Request, RequestHandler } from "express";
 import type { WorkerControlState } from "./runtime-monitor-manager";
+import { resolveRetryAfterHeaderValue } from "../http/retry-after";
 
 type ApiProtectionOptions = {
   getControlState: () => WorkerControlState;
@@ -190,6 +191,9 @@ export function createApiProtectionMiddleware(options: ApiProtectionOptions): {
     };
     setAdaptiveRateBucket(bucketKey, nextBucket);
     if (nextBucket.count > dynamicLimit) {
+      res.setHeader("Retry-After", resolveRetryAfterHeaderValue({
+        retryAfterMs: nextBucket.resetAt - now,
+      }));
       return res.status(429).json({
         message: "Too many requests under current system load.",
         limit: dynamicLimit,

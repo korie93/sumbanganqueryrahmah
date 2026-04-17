@@ -1,9 +1,14 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   findForbiddenTypeScriptTypeSafetyPatterns,
   findPotentialCommittedSmtpSecrets,
 } from "../lib/repo-hygiene.mjs";
+
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
 test("repo hygiene allows clearly fake SMTP placeholders in env templates", () => {
   const envKey = "SMTP_PASSWORD";
@@ -103,4 +108,11 @@ const third = fn<any>();
   assert.match(findings[1], /: any/i);
   assert.match(findings[2], /@ts-ignore/i);
   assert.match(findings[3], /<any>/i);
+});
+
+test("repo hygiene gitignore protects lint and coverage artifacts from tracking", () => {
+  const gitignore = readFileSync(path.join(repoRoot, ".gitignore"), "utf8");
+
+  assert.match(gitignore, /^\.eslintcache$/m);
+  assert.match(gitignore, /^coverage\/$/m);
 });

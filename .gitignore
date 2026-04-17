@@ -1,4 +1,5 @@
 node_modules
+.eslintcache
 dist-local/
 output/
 uploads/
@@ -7,6 +8,7 @@ tmp-smoke-server.out
 tmp-smoke-server.err
 var/dev-mail-outbox/
 artifacts/
+coverage/
 var/perf/
 .env
 .env.*

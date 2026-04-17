@@ -16,12 +16,16 @@ const requiredGitignoreEntries = [
   ".env",
   ".env.*",
   "!.env.example",
+  ".eslintcache",
   "artifacts/",
+  "coverage/",
   "var/perf/",
 ];
 
 const generatedOutputPaths = [
+  ".eslintcache",
   "artifacts",
+  "coverage",
   "var/perf",
 ];
 

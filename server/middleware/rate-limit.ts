@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import type { Request, RequestHandler } from "express";
 import rateLimit from "express-rate-limit";
 import { ERROR_CODES } from "../../shared/error-codes";
+import { resolveRetryAfterHeaderValue } from "../http/retry-after";
 
 type RateLimitPayload = {
   ok: false;
@@ -31,6 +32,12 @@ type JsonRateLimiterOptions = {
 type AuthenticatedLikeRequest = Request & {
   user?: {
     username?: string | null;
+  };
+};
+
+type RateLimitedRequest = Request & {
+  rateLimit?: {
+    resetTime?: Date | undefined;
   };
 };
 
@@ -121,7 +128,13 @@ function createJsonRateLimiter(options: JsonRateLimiterOptions): RequestHandler 
     standardHeaders: true,
     legacyHeaders: false,
     ...(options.keyGenerator ? { keyGenerator: options.keyGenerator } : {}),
-    handler: (_req, res) => {
+    handler: (req, res) => {
+      res.setHeader("Retry-After", resolveRetryAfterHeaderValue({
+        windowMs: options.windowMs,
+        ...((req as RateLimitedRequest).rateLimit?.resetTime
+          ? { resetTime: (req as RateLimitedRequest).rateLimit?.resetTime }
+          : {}),
+      }));
       res.status(429).json(payload);
     },
   });

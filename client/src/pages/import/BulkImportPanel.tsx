@@ -64,6 +64,20 @@ export function BulkImportPanel({
         </p>
       </div>
 
+      <input
+        id="bulk-import-file-input"
+        name="bulkImportFiles"
+        ref={bulkInputRef}
+        type="file"
+        aria-label="Select bulk import files"
+        aria-describedby={`${bulkFileInputHelpId} ${bulkFileInputStatusId}`}
+        accept=".csv,.xlsx,.xls,.xlsb"
+        multiple
+        onChange={onBulkFileSelect}
+        className="hidden"
+        data-testid="input-bulk-files"
+        disabled={bulkProcessing}
+      />
       <div
         onDrop={onBulkDrop}
         onDragOver={onBulkDragOver}
@@ -82,20 +96,6 @@ export function BulkImportPanel({
         data-testid="dropzone-bulk"
         {...bulkDropzoneDisabledProps}
       >
-        <input
-          id="bulk-import-file-input"
-          name="bulkImportFiles"
-          ref={bulkInputRef}
-          type="file"
-          aria-label="Select bulk import files"
-          aria-describedby={`${bulkFileInputHelpId} ${bulkFileInputStatusId}`}
-          accept=".csv,.xlsx,.xls,.xlsb"
-          multiple
-          onChange={onBulkFileSelect}
-          className="hidden"
-          data-testid="input-bulk-files"
-          disabled={bulkProcessing}
-        />
         <div className="flex flex-col items-center gap-3">
           <div className="flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 sm:h-16 sm:w-16">
             <FolderOpen className="h-7 w-7 text-primary sm:h-8 sm:w-8" />

@@ -59,6 +59,27 @@ Untuk manual penggunaan client yang lengkap (split ikut role `superuser`, `admin
    npm start
    ```
 
+## Docker Baseline
+
+Repo ini kini ada baseline container yang reviewable untuk deployment atau smoke runtime yang lebih konsisten.
+
+1. **Build image**
+   ```bash
+   docker build -t sqr-local .
+   ```
+
+2. **Run migrations secara one-off jika perlu**
+   ```bash
+   docker run --rm --env-file .env sqr-local node scripts/db-migrate.mjs
+   ```
+
+3. **Start app**
+   ```bash
+   docker run --rm -p 5000:5000 --env-file .env sqr-local
+   ```
+
+Anda masih perlu menyediakan PostgreSQL secara berasingan. Image ini sengaja tidak mengandungi secrets, data volume, atau compose stack penuh supaya blast radius kekal kecil dan production assumptions kekal jelas.
+
 ## Scripts
 
 | Command | Description |
@@ -73,6 +94,7 @@ Untuk manual penggunaan client yang lengkap (split ikut role `superuser`, `admin
 | `npm run verify:db-schema-governance` | Verify every discovered table is classified under the repo DB governance manifest |
 | `npm run db:studio` | Open Drizzle Studio |
 | `npm run typecheck` | Run TypeScript type checking |
+| `npm run test:client:a11y` | Run focused axe-core/jsdom accessibility coverage for high-value client surfaces |
 | `npm run test:e2e:smoke` | Run Playwright-backed browser smoke coverage against a running server |
 | `npm run test:e2e:ci-local` | Build, boot a local server, then run the CI-style Playwright smoke sequence |
 | `npm test` | Run all test suites |
