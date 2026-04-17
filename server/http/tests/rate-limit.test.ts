@@ -42,6 +42,11 @@ test("JSON rate limiter emits Retry-After alongside the existing 429 payload", a
     assert.ok(Number.isFinite(retryAfter));
     assert.ok(retryAfter >= 59);
     assert.ok(retryAfter <= 60);
+    assert.equal(throttledResponse.headers.get("x-ratelimit-limit"), "1");
+    assert.equal(throttledResponse.headers.get("x-ratelimit-remaining"), "0");
+    const resetAt = Number(throttledResponse.headers.get("x-ratelimit-reset"));
+    assert.ok(Number.isFinite(resetAt));
+    assert.ok(resetAt >= Math.floor(Date.now() / 1000));
     assert.deepEqual(await throttledResponse.json(), {
       ok: false,
       error: {

@@ -167,6 +167,7 @@ test("buildRuntimeConfigWarnings warns when local collection PII encryption is n
   const warnings = buildRuntimeConfigWarnings({
     isStrictLocalDevelopment: true,
     isProductionLike: false,
+    trustedProxies: [],
     publicAppUrl: "http://127.0.0.1:5000",
     configuredSessionSecret: null,
     configuredCollectionNicknameTempPassword: null,
@@ -191,6 +192,7 @@ test("buildRuntimeConfigWarnings reports when insecure auth cookies are forced o
   const warnings = buildRuntimeConfigWarnings({
     isStrictLocalDevelopment: false,
     isProductionLike: true,
+    trustedProxies: ["loopback"],
     publicAppUrl: "https://sqr.example.com",
     configuredSessionSecret: "prod-session-secret",
     configuredCollectionNicknameTempPassword: "TempPassword12345",
@@ -208,5 +210,30 @@ test("buildRuntimeConfigWarnings reports when insecure auth cookies are forced o
   assert.match(
     warnings.map((warning) => warning.code).join(","),
     /AUTH_COOKIE_SECURE_FORCED_ON_PRODUCTION/,
+  );
+});
+
+test("buildRuntimeConfigWarnings recommends reviewing trusted proxies for production-like https deployments", () => {
+  const warnings = buildRuntimeConfigWarnings({
+    isStrictLocalDevelopment: false,
+    isProductionLike: true,
+    trustedProxies: [],
+    publicAppUrl: "https://sqr.example.com",
+    configuredSessionSecret: "prod-session-secret",
+    configuredCollectionNicknameTempPassword: "TempPassword12345",
+    configuredCollectionPiiEncryptionKey: "collection-pii-secret",
+    configuredPgPassword: "prod-db-password",
+    configuredAuthCookieSecure: "auto",
+    mailConfiguration: {
+      effectiveFrom: null,
+      hasAnyInput: false,
+      isConfigured: false,
+      isIncomplete: false,
+    },
+  });
+
+  assert.match(
+    warnings.map((warning) => warning.code).join(","),
+    /TRUSTED_PROXIES_REVIEW_RECOMMENDED/,
   );
 });

@@ -102,6 +102,11 @@ export type RuntimeConfig = {
   };
   observability: {
     clientErrorTelemetryEnabled: boolean;
+    remoteErrorTracking: {
+      enabled: boolean;
+      endpoint: string | null;
+      timeoutMs: number;
+    };
   };
   runtime: {
     defaults: {

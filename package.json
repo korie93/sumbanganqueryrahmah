@@ -22,6 +22,7 @@
     "verify:repo-hygiene": "node scripts/verify-repo-hygiene.mjs",
     "verify:db-schema-governance": "node scripts/verify-db-schema-governance.mjs",
     "verify:bundle-budgets": "node scripts/verify-client-bundle-budgets.mjs",
+    "analyze:bundle": "npm run build && node scripts/analyze-client-bundle.mjs",
     "audit:dependencies": "node scripts/audit-dependencies.mjs",
     "lint": "eslint client/src server shared scripts --cache --max-warnings=0",
     "lint:fix": "eslint client/src server shared scripts --cache --fix",

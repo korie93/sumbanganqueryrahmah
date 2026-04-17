@@ -237,6 +237,7 @@ export function assertRuntimeSafetyGuards(params: {
 export function buildRuntimeConfigWarnings(params: {
   isStrictLocalDevelopment: boolean;
   isProductionLike: boolean;
+  trustedProxies: readonly string[];
   publicAppUrl: string | null;
   configuredSessionSecret: string | null;
   configuredCollectionNicknameTempPassword: string | null;
@@ -249,6 +250,7 @@ export function buildRuntimeConfigWarnings(params: {
   const {
     isStrictLocalDevelopment,
     isProductionLike,
+    trustedProxies,
     publicAppUrl,
     configuredSessionSecret,
     configuredCollectionNicknameTempPassword,
@@ -263,6 +265,20 @@ export function buildRuntimeConfigWarnings(params: {
       code: "PUBLIC_APP_URL_MISSING",
       envNames: ["PUBLIC_APP_URL"],
       message: "PUBLIC_APP_URL is not set; generated links and deployment health checks may be less reliable.",
+      severity: "warning",
+    });
+  }
+
+  if (
+    isProductionLike
+    && String(publicAppUrl || "").toLowerCase().startsWith("https://")
+    && trustedProxies.length === 0
+  ) {
+    warnings.push({
+      code: "TRUSTED_PROXIES_REVIEW_RECOMMENDED",
+      envNames: ["PUBLIC_APP_URL", "TRUSTED_PROXIES"],
+      message:
+        "PUBLIC_APP_URL is using https:// while TRUSTED_PROXIES is empty. If this app is deployed behind a reverse proxy or TLS terminator, configure TRUSTED_PROXIES explicitly so req.ip and forwarded-origin security checks stay accurate.",
       severity: "warning",
     });
   }

@@ -51,9 +51,9 @@ function MetricPanelImpl({
                     <button
                       type="button"
                       className="inline-flex rounded-sm text-muted-foreground transition hover:text-foreground"
-                      aria-label={`${label} description`}
+                      aria-label={`Show more information about ${label}`}
                     >
-                      <CircleHelp className="h-3.5 w-3.5" />
+                      <CircleHelp className="h-3.5 w-3.5" aria-hidden="true" />
                     </button>
                   </TooltipTrigger>
                   <TooltipContent>

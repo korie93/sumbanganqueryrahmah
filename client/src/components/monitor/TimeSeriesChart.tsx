@@ -42,9 +42,9 @@ function TimeSeriesChartImpl({ title, color, unit = "", description, data }: Tim
                 <button
                   type="button"
                   className="inline-flex rounded-sm text-muted-foreground transition hover:text-foreground"
-                  aria-label={`${title} description`}
+                  aria-label={`Show more information about ${title}`}
                 >
-                  <CircleHelp className="h-3.5 w-3.5" />
+                  <CircleHelp className="h-3.5 w-3.5" aria-hidden="true" />
                 </button>
               </TooltipTrigger>
               <TooltipContent>

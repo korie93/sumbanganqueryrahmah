@@ -341,6 +341,44 @@ test("runtime config reads explicit client error telemetry enablement", async ()
   );
 });
 
+test("runtime config reads explicit remote error tracking settings", async () => {
+  await withEnv(
+    {
+      NODE_ENV: "development",
+      HOST: "127.0.0.1",
+      REMOTE_ERROR_TRACKING_ENABLED: "1",
+      REMOTE_ERROR_TRACKING_ENDPOINT: "https://errors.example.com/ingest",
+      REMOTE_ERROR_TRACKING_TIMEOUT_MS: "4500",
+    },
+    async () => {
+      const runtimeModule = await importRuntimeFresh();
+      assert.equal(runtimeModule.runtimeConfig.observability.remoteErrorTracking.enabled, true);
+      assert.equal(
+        runtimeModule.runtimeConfig.observability.remoteErrorTracking.endpoint,
+        "https://errors.example.com/ingest",
+      );
+      assert.equal(runtimeModule.runtimeConfig.observability.remoteErrorTracking.timeoutMs, 4_500);
+    },
+  );
+});
+
+test("runtime config rejects remote error tracking enablement without an endpoint", async () => {
+  await withEnv(
+    {
+      NODE_ENV: "development",
+      HOST: "127.0.0.1",
+      REMOTE_ERROR_TRACKING_ENABLED: "1",
+      REMOTE_ERROR_TRACKING_ENDPOINT: null,
+    },
+    async () => {
+      await assert.rejects(
+        importRuntimeFresh(),
+        /REMOTE_ERROR_TRACKING_ENDPOINT is required when REMOTE_ERROR_TRACKING_ENABLED=1/i,
+      );
+    },
+  );
+});
+
 test("runtime config rejects production startup when default user seeding is enabled", async () => {
   await withEnv(
     {
@@ -759,6 +797,24 @@ test("runtime config rejects unsafe TRUSTED_PROXIES wildcard-style values", asyn
       await assert.rejects(
         importRuntimeFresh(),
         /TRUSTED_PROXIES must list explicit proxy ranges or names/i,
+      );
+    },
+  );
+});
+
+test("runtime config warns when production-like https deployments leave TRUSTED_PROXIES empty", async () => {
+  await withEnv(
+    {
+      ...productionBaseOverrides,
+      PUBLIC_APP_URL: "https://sqr.example.com",
+      TRUSTED_PROXIES: null,
+      BACKUP_ENCRYPTION_KEY: "A".repeat(32),
+    },
+    async () => {
+      const runtimeModule = await importRuntimeFresh();
+      assert.match(
+        runtimeModule.runtimeConfigValidation.warnings.map((warning: { code: string }) => warning.code).join(","),
+        /TRUSTED_PROXIES_REVIEW_RECOMMENDED/,
       );
     },
   );

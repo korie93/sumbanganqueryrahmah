@@ -26,7 +26,7 @@ test("logClientError stays silent outside client diagnostic mode", () => {
 });
 
 test("logClientError forwards sanitized telemetry when client error telemetry is enabled", async () => {
-  const capturedRequests: Array<{ url: string; body: string }> = [];
+  const capturedRequests: Array<{ url: string; body: string; requestId: string }> = [];
   const originalFetch = globalThis.fetch;
   const originalWindow = globalThis.window;
 
@@ -42,6 +42,7 @@ test("logClientError forwards sanitized telemetry when client error telemetry is
       capturedRequests.push({
         url: String(input),
         body: String(init?.body || ""),
+        requestId: String(new Headers(init?.headers).get("x-request-id") || ""),
       });
       return new Response(null, { status: 204 });
     }) as typeof fetch;
@@ -65,6 +66,7 @@ test("logClientError forwards sanitized telemetry when client error telemetry is
 
     assert.equal(capturedRequests.length, 1);
     assert.equal(capturedRequests[0]?.url, "/telemetry/client-errors");
+    assert.match(capturedRequests[0]?.requestId || "", /^cerr-/);
     assert.match(capturedRequests[0]?.body || "", /"source":"error-boundary"/);
     assert.match(capturedRequests[0]?.body || "", /"component":"FloatingAI"/);
   } finally {

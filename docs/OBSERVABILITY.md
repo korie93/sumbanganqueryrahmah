@@ -105,6 +105,30 @@ Frontend menghantar Web Vitals ke:
 
 Dan monitor/admin flow boleh membaca ringkasan ini semula melalui route dalaman yang sesuai. Ini membantu melihat pengalaman pengguna sebenar tanpa menunggu external RUM platform.
 
+### Optional Remote Error Tracking
+
+Repo kini juga ada laluan remote error tracking yang opt-in untuk dua sumber:
+
+- client runtime errors yang sudah ditangkap oleh error boundaries dan global handlers
+- backend request errors yang berakhir sebagai 5xx / hidden `HttpError`
+
+Env yang berkaitan:
+
+- `CLIENT_ERROR_TELEMETRY_ENABLED=1`
+- `VITE_CLIENT_ERROR_TELEMETRY=1`
+- `REMOTE_ERROR_TRACKING_ENABLED=1`
+- `REMOTE_ERROR_TRACKING_ENDPOINT=https://errors.example.com/ingest`
+- `REMOTE_ERROR_TRACKING_TIMEOUT_MS=3000`
+
+Tingkah laku sengaja kekal konservatif:
+
+- tracking dimatikan secara default
+- tiada DSN atau endpoint yang di-hardcode
+- payload dihantar dalam bentuk sanitised dan bounded
+- request correlation menggunakan `x-request-id` bila tersedia
+- hidden server errors dihantar sebagai `Internal server error` dan bukannya mesej dalaman mentah
+- kegagalan penghantaran remote hanya emit warning terhad dengan cooldown, supaya log production tidak menjadi bising
+
 ### Runtime Monitor Signals
 
 Repo juga sudah ada signal operasi seperti:

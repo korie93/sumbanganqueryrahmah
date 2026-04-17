@@ -70,6 +70,7 @@ test("POST /telemetry/web-vitals accepts a valid web vitals payload", async () =
 });
 
 test("POST /telemetry/client-errors accepts a sanitized client runtime error payload", async () => {
+  const capturedErrors: Array<Record<string, unknown>> = [];
   const app = createJsonTestApp();
   registerTelemetryRoutes(app, {
     reportWebVital: createWebVitalsTelemetryController({
@@ -81,6 +82,14 @@ test("POST /telemetry/client-errors accepts a sanitized client runtime error pay
     }).report,
     reportClientError: createClientErrorTelemetryController({
       enabled: true,
+      remoteErrorTracker: {
+        async captureClientError(payload, context) {
+          capturedErrors.push({
+            ...payload,
+            ...(context?.requestId ? { requestId: context.requestId } : {}),
+          });
+        },
+      },
     }).report,
   });
   app.use(errorHandler);
@@ -91,6 +100,7 @@ test("POST /telemetry/client-errors accepts a sanitized client runtime error pay
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        "x-request-id": "req-client-telemetry-1",
       },
       body: JSON.stringify({
         message: "Floating AI shell render failed",
@@ -104,6 +114,18 @@ test("POST /telemetry/client-errors accepts a sanitized client runtime error pay
     });
 
     assert.equal(response.status, 204);
+    assert.deepEqual(capturedErrors, [
+      {
+        message: "Floating AI shell render failed",
+        source: "error-boundary",
+        pagePath: "/dashboard",
+        errorName: "TypeError",
+        component: "FloatingAI",
+        boundaryKey: "dashboard:1",
+        ts: "2026-04-16T09:30:00.000Z",
+        requestId: "req-client-telemetry-1",
+      },
+    ]);
   } finally {
     await stopTestServer(server);
   }

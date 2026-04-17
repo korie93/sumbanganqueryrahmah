@@ -66,6 +66,17 @@ const requestedDbQueryProfilingEnabled = readBoolean("DB_QUERY_PROFILING_ENABLED
 const allowDbQueryProfilingInProduction = readBoolean("DB_QUERY_PROFILING_ALLOW_IN_PRODUCTION", false);
 const dbQueryProfilingEnabled =
   requestedDbQueryProfilingEnabled && (!isProduction || allowDbQueryProfilingInProduction);
+const remoteErrorTrackingEnabled = readBoolean("REMOTE_ERROR_TRACKING_ENABLED", false);
+const remoteErrorTrackingEndpoint = normalizeHttpUrl(
+  "REMOTE_ERROR_TRACKING_ENDPOINT",
+  readOptionalString("REMOTE_ERROR_TRACKING_ENDPOINT"),
+);
+
+if (remoteErrorTrackingEnabled && !remoteErrorTrackingEndpoint) {
+  throw new Error(
+    "REMOTE_ERROR_TRACKING_ENDPOINT is required when REMOTE_ERROR_TRACKING_ENABLED=1.",
+  );
+}
 const resolvedDefaultImportUploadLimitBytes = parseBodyLimitToBytes(
   readString("IMPORT_BODY_LIMIT", DEFAULT_IMPORT_BODY_LIMIT),
   DEFAULT_IMPORT_UPLOAD_LIMIT_BYTES,
@@ -288,6 +299,14 @@ export const runtimeConfig: RuntimeConfig = Object.freeze({
   },
   observability: {
     clientErrorTelemetryEnabled: readBoolean("CLIENT_ERROR_TELEMETRY_ENABLED", false),
+    remoteErrorTracking: {
+      enabled: remoteErrorTrackingEnabled,
+      endpoint: remoteErrorTrackingEndpoint,
+      timeoutMs: readInt("REMOTE_ERROR_TRACKING_TIMEOUT_MS", 3_000, {
+        min: 500,
+        max: 30_000,
+      }),
+    },
   },
   runtime: {
     defaults: {
@@ -421,6 +440,7 @@ export const runtimeConfig: RuntimeConfig = Object.freeze({
 const runtimeWarnings = buildRuntimeConfigWarnings({
   isStrictLocalDevelopment,
   isProductionLike,
+  trustedProxies,
   publicAppUrl,
   configuredSessionSecret,
   configuredCollectionNicknameTempPassword,

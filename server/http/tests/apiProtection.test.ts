@@ -93,6 +93,9 @@ test("adaptive API protection still throttles generic API bursts", async () => {
     assert.ok(payload.retryAfterMs >= 0);
     assert.equal(typeof throttled.headers.get("retry-after"), "string");
     assert.ok(Number(throttled.headers.get("retry-after")) >= 1);
+    assert.equal(throttled.headers.get("x-ratelimit-limit"), "8");
+    assert.equal(throttled.headers.get("x-ratelimit-remaining"), "0");
+    assert.ok(Number(throttled.headers.get("x-ratelimit-reset")) >= Math.floor(Date.now() / 1000));
   } finally {
     await stopTestServer(server);
   }
@@ -228,6 +231,9 @@ test("adaptive API protection still throttles repeated backup create writes with
     assert.equal(payload.mode, "NORMAL");
     assert.equal(typeof throttled.headers.get("retry-after"), "string");
     assert.ok(Number(throttled.headers.get("retry-after")) >= 1);
+    assert.equal(throttled.headers.get("x-ratelimit-limit"), "2");
+    assert.equal(throttled.headers.get("x-ratelimit-remaining"), "0");
+    assert.ok(Number(throttled.headers.get("x-ratelimit-reset")) >= Math.floor(Date.now() / 1000));
   } finally {
     await stopTestServer(server);
   }

@@ -2,6 +2,8 @@ import type { NextFunction, Request, Response } from "express";
 import { ERROR_CODES } from "../../shared/error-codes";
 import { HttpError } from "../http/errors";
 import { wasRouteErrorLogged } from "../http/route-observability";
+import type { RemoteErrorTracker } from "../lib/remote-error-tracking";
+import { remoteErrorTracker } from "../lib/remote-error-tracking";
 import { logger } from "../lib/logger";
 
 type ErrorLike = {
@@ -21,6 +23,10 @@ type ApiErrorResponse = {
     message: string;
     details?: unknown;
   };
+};
+
+type ErrorHandlerOptions = {
+  remoteErrorTracker?: Pick<RemoteErrorTracker, "captureServerError"> | null;
 };
 
 function readCorrelationRequestId(req: Request, res: Response): string | undefined {
@@ -62,58 +68,104 @@ function buildApiErrorResponse(
   };
 }
 
-export function errorHandler(err: unknown, req: Request, res: Response, next: NextFunction) {
-  if (res.headersSent) {
-    return next(err);
+function readRoutePath(req: Request): string | undefined {
+  const routePath = req.route?.path;
+  if (typeof routePath === "string") {
+    return routePath;
   }
 
-  const error = err as ErrorLike;
-  const requestId = readCorrelationRequestId(req, res);
-
-  if (error?.type === "entity.too.large" || error?.status === 413 || error?.statusCode === 413) {
-    return res.status(413).json(buildApiErrorResponse("The request payload is too large to process.", {
-      code: ERROR_CODES.PAYLOAD_TOO_LARGE,
-      includeError: true,
-      requestId,
-    }));
+  if (Array.isArray(routePath)) {
+    return routePath.join(",");
   }
 
-  if (err instanceof HttpError) {
-    if (!err.expose) {
-      if (!wasRouteErrorLogged(err)) {
-        logger.error("Unhandled API HttpError", {
-          path: req.path,
-          method: req.method,
-          requestId,
-          code: err.code,
-          statusCode: err.statusCode,
-          message: err.message,
-        });
-      }
+  return undefined;
+}
 
-      return res.status(err.statusCode).json(buildApiErrorResponse("Internal server error", {
+export function createErrorHandler(options: ErrorHandlerOptions = {}) {
+  const tracking = options.remoteErrorTracker ?? remoteErrorTracker;
+
+  return function errorHandler(err: unknown, req: Request, res: Response, next: NextFunction) {
+    if (res.headersSent) {
+      return next(err);
+    }
+
+    const error = err as ErrorLike;
+    const requestId = readCorrelationRequestId(req, res);
+    const routePath = readRoutePath(req);
+
+    if (error?.type === "entity.too.large" || error?.status === 413 || error?.statusCode === 413) {
+      return res.status(413).json(buildApiErrorResponse("The request payload is too large to process.", {
+        code: ERROR_CODES.PAYLOAD_TOO_LARGE,
+        includeError: true,
         requestId,
       }));
     }
 
-    return res.status(err.statusCode).json(buildApiErrorResponse(err.message, {
-      requestId,
-      ...(err.code ? { code: err.code } : {}),
-      ...(err.details !== undefined ? { details: err.details } : {}),
-    }));
-  }
+    if (err instanceof HttpError) {
+      if (!err.expose) {
+        if (!wasRouteErrorLogged(err)) {
+          logger.error("Unhandled API HttpError", {
+            path: req.path,
+            method: req.method,
+            requestId,
+            code: err.code,
+            statusCode: err.statusCode,
+            message: err.message,
+          });
+        }
 
-  if (!wasRouteErrorLogged(err)) {
-    logger.error("Unhandled API error", {
-      path: req.path,
-      method: req.method,
-      requestId,
+        void tracking.captureServerError({
+          code: err.code,
+          errorName: "HttpError",
+          eventType: "server.http_error",
+          message: "Internal server error",
+          method: req.method,
+          path: req.path,
+          requestId,
+          routePath,
+          statusCode: err.statusCode,
+        });
+
+        return res.status(err.statusCode).json(buildApiErrorResponse("Internal server error", {
+          requestId,
+        }));
+      }
+
+      return res.status(err.statusCode).json(buildApiErrorResponse(err.message, {
+        requestId,
+        ...(err.code ? { code: err.code } : {}),
+        ...(err.details !== undefined ? { details: err.details } : {}),
+      }));
+    }
+
+    if (!wasRouteErrorLogged(err)) {
+      logger.error("Unhandled API error", {
+        path: req.path,
+        method: req.method,
+        requestId,
+        code: error?.code,
+        message: error?.message,
+      });
+    }
+
+    void tracking.captureServerError({
       code: error?.code,
-      message: error?.message,
+      errorName: typeof (err as { name?: unknown })?.name === "string"
+        ? String((err as { name?: unknown }).name)
+        : undefined,
+      eventType: "server.unhandled_error",
+      message: "Internal server error",
+      method: req.method,
+      path: req.path,
+      requestId,
+      routePath,
+      statusCode: 500,
     });
-  }
 
-  return res.status(500).json(buildApiErrorResponse("Internal server error", {
-    requestId,
-  }));
+    return res.status(500).json(buildApiErrorResponse("Internal server error", {
+      requestId,
+    }));
+  };
 }
+
+export const errorHandler = createErrorHandler();

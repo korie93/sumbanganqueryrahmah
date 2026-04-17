@@ -1,4 +1,5 @@
 import type { ClientErrorTelemetryPayload } from "@shared/client-error-telemetry";
+import { createClientRandomId } from "@/lib/secure-id";
 
 export type ClientLoggerEnvironment = {
   DEV?: boolean;
@@ -14,6 +15,10 @@ export function shouldLogClientDiagnostics(env: ClientLoggerEnvironment = import
 
 function shouldSendClientErrorTelemetry(env: ClientLoggerEnvironment = import.meta.env): boolean {
   return env?.VITE_CLIENT_ERROR_TELEMETRY === "1";
+}
+
+function createClientTelemetryRequestId() {
+  return createClientRandomId("cerr");
 }
 
 function truncateString(value: string, maxLength: number) {
@@ -74,6 +79,7 @@ function sendClientErrorTelemetry(payload: ClientErrorTelemetryPayload) {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
+      "x-request-id": createClientTelemetryRequestId(),
     },
     credentials: "same-origin",
     keepalive: true,

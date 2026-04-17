@@ -274,6 +274,12 @@ const runtimeEnvironmentSchema = z.object({
     { min: 10, max: 1_000 },
   ),
   CLIENT_ERROR_TELEMETRY_ENABLED: optionalBooleanEnv("CLIENT_ERROR_TELEMETRY_ENABLED"),
+  REMOTE_ERROR_TRACKING_ENABLED: optionalBooleanEnv("REMOTE_ERROR_TRACKING_ENABLED"),
+  REMOTE_ERROR_TRACKING_ENDPOINT: optionalEnvString("REMOTE_ERROR_TRACKING_ENDPOINT"),
+  REMOTE_ERROR_TRACKING_TIMEOUT_MS: optionalIntEnv("REMOTE_ERROR_TRACKING_TIMEOUT_MS", {
+    min: 500,
+    max: 30_000,
+  }),
 
   SQR_FORCE_CLUSTER: optionalBooleanEnv("SQR_FORCE_CLUSTER"),
   SQR_MAX_WORKERS: optionalIntEnv("SQR_MAX_WORKERS", { min: 1 }),

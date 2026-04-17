@@ -1,4 +1,5 @@
 import type { Request, RequestHandler } from "express";
+import { applyLegacyRateLimitHeaders } from "../http/rate-limit-headers";
 import type { WorkerControlState } from "./runtime-monitor-manager";
 import { resolveRetryAfterHeaderValue } from "../http/retry-after";
 
@@ -191,6 +192,11 @@ export function createApiProtectionMiddleware(options: ApiProtectionOptions): {
     };
     setAdaptiveRateBucket(bucketKey, nextBucket);
     if (nextBucket.count > dynamicLimit) {
+      applyLegacyRateLimitHeaders(res, {
+        limit: dynamicLimit,
+        remaining: 0,
+        resetTime: nextBucket.resetAt,
+      });
       res.setHeader("Retry-After", resolveRetryAfterHeaderValue({
         retryAfterMs: nextBucket.resetAt - now,
       }));
