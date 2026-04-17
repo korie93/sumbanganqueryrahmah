@@ -58,22 +58,23 @@ export async function restoreCollectionRecordsFromBackup(
       return;
     }
 
-    const nextTrackedRecordIds = trackedRecordIds + insertBatch.length;
-    if (nextTrackedRecordIds > maxTrackedRecordIds) {
-      throw new Error(
-        `Backup restore requires tracking ${nextTrackedRecordIds.toLocaleString()} collection record ids, exceeding the configured safety limit of ${maxTrackedRecordIds.toLocaleString()}.`,
-      );
-    }
-
     const restoredIdValuesSql = sql.join(
       insertBatch.map((row) => sql`(${row.id}::uuid)`),
       sql`, `,
     );
-    await tx.execute(sql`
+    const trackedIdsResult = await tx.execute(sql`
       INSERT INTO ${RESTORED_COLLECTION_RECORD_IDS_TEMP_TABLE} (id)
       VALUES ${restoredIdValuesSql}
       ON CONFLICT (id) DO NOTHING
+      RETURNING id
     `);
+    const newlyTrackedRecordIds = trackedIdsResult.rows?.length || 0;
+    const nextTrackedRecordIds = trackedRecordIds + newlyTrackedRecordIds;
+    if (nextTrackedRecordIds > maxTrackedRecordIds) {
+      throw new Error(
+        `Backup restore requires tracking ${nextTrackedRecordIds.toLocaleString()} unique collection record ids, exceeding the configured safety limit of ${maxTrackedRecordIds.toLocaleString()}.`,
+      );
+    }
     trackedRecordIds = nextTrackedRecordIds;
 
     const valuesSql = sql.join(

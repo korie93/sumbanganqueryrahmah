@@ -136,6 +136,7 @@ export type RuntimeConfig = {
       minTotalQueryMs: number;
       repeatedStatementThreshold: number;
       maxLoggedStatements: number;
+      maxUniqueStatements: number;
     };
   };
   collection: {

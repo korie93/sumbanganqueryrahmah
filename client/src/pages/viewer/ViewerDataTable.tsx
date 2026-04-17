@@ -1,5 +1,6 @@
 import { Suspense, memo, useLayoutEffect, useMemo, useRef } from "react";
 import { HorizontalScrollHint } from "@/components/HorizontalScrollHint";
+import { PanelErrorBoundary } from "@/components/PanelErrorBoundary";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { lazyWithPreload } from "@/lib/lazy-with-preload";
 import type { DataRowWithId, ViewerVirtualRowData } from "@/pages/viewer/types";
@@ -93,47 +94,52 @@ export const ViewerDataTable = memo(function ViewerDataTable({
 
   return (
     <div className="ops-table-shell">
-      <HorizontalScrollHint hint="Scroll columns">
-        {isMobile ? (
-          <Suspense fallback={mobileTableFallback}>
-            <ViewerMobileCardsTable
-              filteredRows={filteredRows}
-              onToggleRowSelection={onToggleRowSelection}
-              onToggleSelectAllFiltered={onToggleSelectAllFiltered}
-              selectedRowIds={selectedRowIds}
-              selectAllFiltered={selectAllFiltered}
-              visibleHeaders={visibleHeaders}
-            />
-          </Suspense>
-        ) : enableVirtualRows ? (
-          <Suspense fallback={desktopTableFallback}>
-            <ViewerVirtualizedTable
-              filteredRows={filteredRows}
-              gridTemplateColumns={gridTemplateColumns}
-              onToggleRowSelection={onToggleRowSelection}
-              onToggleSelectAllFiltered={onToggleSelectAllFiltered}
-              rowHeightPx={rowHeightPx}
-              selectedRowIds={selectedRowIds}
-              selectAllFiltered={selectAllFiltered}
-              virtualRowData={virtualRowData}
-              viewportHeightPx={viewportHeightPx}
-              virtualTableWidthRef={virtualTableWidthRef}
-              visibleHeaders={visibleHeaders}
-            />
-          </Suspense>
-        ) : (
-          <Suspense fallback={desktopTableFallback}>
-            <ViewerStandardTable
-              filteredRows={filteredRows}
-              onToggleRowSelection={onToggleRowSelection}
-              onToggleSelectAllFiltered={onToggleSelectAllFiltered}
-              selectedRowIds={selectedRowIds}
-              selectAllFiltered={selectAllFiltered}
-              visibleHeaders={visibleHeaders}
-            />
-          </Suspense>
-        )}
-      </HorizontalScrollHint>
+      <PanelErrorBoundary
+        boundaryKey={`viewer-data-table:${isMobile ? "mobile" : enableVirtualRows ? "virtual" : "standard"}:${filteredRows.length}:${visibleHeaders.length}:${debouncedSearch}`}
+        panelLabel="Viewer data table"
+      >
+        <HorizontalScrollHint hint="Scroll columns">
+          {isMobile ? (
+            <Suspense fallback={mobileTableFallback}>
+              <ViewerMobileCardsTable
+                filteredRows={filteredRows}
+                onToggleRowSelection={onToggleRowSelection}
+                onToggleSelectAllFiltered={onToggleSelectAllFiltered}
+                selectedRowIds={selectedRowIds}
+                selectAllFiltered={selectAllFiltered}
+                visibleHeaders={visibleHeaders}
+              />
+            </Suspense>
+          ) : enableVirtualRows ? (
+            <Suspense fallback={desktopTableFallback}>
+              <ViewerVirtualizedTable
+                filteredRows={filteredRows}
+                gridTemplateColumns={gridTemplateColumns}
+                onToggleRowSelection={onToggleRowSelection}
+                onToggleSelectAllFiltered={onToggleSelectAllFiltered}
+                rowHeightPx={rowHeightPx}
+                selectedRowIds={selectedRowIds}
+                selectAllFiltered={selectAllFiltered}
+                virtualRowData={virtualRowData}
+                viewportHeightPx={viewportHeightPx}
+                virtualTableWidthRef={virtualTableWidthRef}
+                visibleHeaders={visibleHeaders}
+              />
+            </Suspense>
+          ) : (
+            <Suspense fallback={desktopTableFallback}>
+              <ViewerStandardTable
+                filteredRows={filteredRows}
+                onToggleRowSelection={onToggleRowSelection}
+                onToggleSelectAllFiltered={onToggleSelectAllFiltered}
+                selectedRowIds={selectedRowIds}
+                selectAllFiltered={selectAllFiltered}
+                visibleHeaders={visibleHeaders}
+              />
+            </Suspense>
+          )}
+        </HorizontalScrollHint>
+      </PanelErrorBoundary>
 
       <ViewerDataTableFeedback
         debouncedSearch={debouncedSearch}

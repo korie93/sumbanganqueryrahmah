@@ -62,6 +62,7 @@ Env yang berkaitan:
 - `DB_QUERY_PROFILING_MIN_TOTAL_QUERY_MS=40`
 - `DB_QUERY_PROFILING_REPEATED_STATEMENT_THRESHOLD=3`
 - `DB_QUERY_PROFILING_MAX_LOGGED_STATEMENTS=5`
+- `DB_QUERY_PROFILING_MAX_UNIQUE_STATEMENTS=250`
 
 Bila aktif, request yang mempunyai query count tinggi atau statement berulang akan emit warning
 berstruktur dengan:
@@ -69,6 +70,7 @@ berstruktur dengan:
 - `queryCount`
 - `totalQueryDurationMs`
 - `uniqueStatementCount`
+- `evictedStatementCount`
 - `possibleNPlusOne`
 - ringkasan `repeatedStatements`
 
@@ -77,6 +79,8 @@ untuk pengesahan terkawal di bawah load, kemudian matikan semula selepas analisi
 Jika `NODE_ENV=production`, profiler kini akan kekal mati melainkan anda set kedua-dua
 `DB_QUERY_PROFILING_ENABLED=1` dan `DB_QUERY_PROFILING_ALLOW_IN_PRODUCTION=1` secara
 eksplisit untuk sesi troubleshooting yang sementara.
+Permintaan yang menjana terlalu banyak SQL shape unik kini akan mengekalkan hanya tetingkap
+LRU yang bounded supaya profiling tidak membesar tanpa had dalam runtime yang hidup lama.
 
 ### Request Timeout Semantics
 
@@ -150,3 +154,19 @@ OpenTelemetry mula berbaloi apabila sekurang-kurangnya satu daripada ini benar:
 - perlu korelasi request merentas reverse proxy, app, queue, dan external AI provider
 
 Sebelum titik itu, logging berstruktur + health endpoints + runtime monitor repo ini biasanya memberi nisbah manfaat/risk yang lebih baik.
+
+## 5. Log Rotation Dan Retention
+
+Aplikasi ini sengaja log ke stdout/stderr melalui `pino`, jadi rotation dan
+retention patut dikendalikan oleh lapisan runtime sebenar:
+
+- container runtime / orchestrator
+- systemd journald
+- PM2 atau process manager setara
+
+Repo ini tidak cuba mereka rotation palsu di level aplikasi kerana itu mudah
+bercanggah dengan platform deploy sebenar. Semasa production review, semak:
+
+- had retention log
+- saiz maksimum per file/stream jika runtime menyokongnya
+- forwarding ke sink pusat jika diwajibkan oleh operasi

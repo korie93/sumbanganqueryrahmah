@@ -269,6 +269,10 @@ const runtimeEnvironmentSchema = z.object({
     "DB_QUERY_PROFILING_MAX_LOGGED_STATEMENTS",
     { min: 1, max: 20 },
   ),
+  DB_QUERY_PROFILING_MAX_UNIQUE_STATEMENTS: optionalIntEnv(
+    "DB_QUERY_PROFILING_MAX_UNIQUE_STATEMENTS",
+    { min: 10, max: 1_000 },
+  ),
   CLIENT_ERROR_TELEMETRY_ENABLED: optionalBooleanEnv("CLIENT_ERROR_TELEMETRY_ENABLED"),
 
   SQR_FORCE_CLUSTER: optionalBooleanEnv("SQR_FORCE_CLUSTER"),

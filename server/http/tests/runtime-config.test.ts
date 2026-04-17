@@ -175,6 +175,7 @@ test("runtime config forces DB query profiling off in production unless the expl
       DB_QUERY_PROFILING_MIN_TOTAL_QUERY_MS: "55",
       DB_QUERY_PROFILING_REPEATED_STATEMENT_THRESHOLD: "4",
       DB_QUERY_PROFILING_MAX_LOGGED_STATEMENTS: "6",
+      DB_QUERY_PROFILING_MAX_UNIQUE_STATEMENTS: "150",
     },
     async () => {
       const runtimeModule = await importRuntimeFresh();
@@ -184,6 +185,7 @@ test("runtime config forces DB query profiling off in production unless the expl
       assert.equal(runtimeModule.runtimeConfig.runtime.dbQueryProfiling.minTotalQueryMs, 55);
       assert.equal(runtimeModule.runtimeConfig.runtime.dbQueryProfiling.repeatedStatementThreshold, 4);
       assert.equal(runtimeModule.runtimeConfig.runtime.dbQueryProfiling.maxLoggedStatements, 6);
+      assert.equal(runtimeModule.runtimeConfig.runtime.dbQueryProfiling.maxUniqueStatements, 150);
       assert.equal(
         runtimeModule.runtimeConfigValidation.warnings.some(
           (warning: { code: string }) => warning.code === "db-query-profiling-production-forced-off",

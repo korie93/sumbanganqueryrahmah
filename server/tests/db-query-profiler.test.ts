@@ -60,6 +60,7 @@ test("createDbQueryProfiler logs repeated statements as a possible N+1 signal", 
     minTotalQueryMs: 0,
     repeatedStatementThreshold: 2,
     maxLoggedStatements: 5,
+    maxUniqueStatements: 50,
     random: () => 0,
     logger: {
       warn(message, meta) {
@@ -110,6 +111,7 @@ test("createDbQueryProfiler stays silent when profiling is disabled", async () =
     minTotalQueryMs: 0,
     repeatedStatementThreshold: 2,
     maxLoggedStatements: 5,
+    maxUniqueStatements: 50,
     logger: {
       warn() {
         warningCount += 1;
@@ -135,4 +137,49 @@ test("createDbQueryProfiler stays silent when profiling is disabled", async () =
   });
 
   assert.equal(warningCount, 0);
+});
+
+test("createDbQueryProfiler evicts the oldest tracked statements when a profiled request exceeds the unique statement cap", async () => {
+  const warnings: Array<Record<string, unknown> | undefined> = [];
+  const profiler = createDbQueryProfiler({
+    enabled: true,
+    samplePercent: 100,
+    minQueryCount: 1,
+    minTotalQueryMs: 0,
+    repeatedStatementThreshold: 10,
+    maxLoggedStatements: 5,
+    maxUniqueStatements: 10,
+    random: () => 0,
+    logger: {
+      warn(_message, meta) {
+        warnings.push(meta);
+      },
+    },
+  });
+  const clientPrototype = {
+    query(...args: unknown[]) {
+      const sqlText = String(args[0] || "");
+      return Promise.resolve({ sqlText });
+    },
+  };
+
+  const cleanup = profiler.instrumentPgClientQueryMethod(clientPrototype);
+
+  await profiler.runWithRequestProfiling({
+    requestId: "req-lru",
+    method: "GET",
+    path: "/api/debug/sql",
+  }, async () => {
+    for (let index = 1; index <= 11; index += 1) {
+      await clientPrototype.query(`SELECT id FROM lru_test_table_${index}`);
+    }
+    profiler.flushRequestProfile(200, 4.2);
+  });
+
+  cleanup();
+
+  assert.equal(warnings.length, 1);
+  assert.equal(warnings[0]?.queryCount, 11);
+  assert.equal(warnings[0]?.uniqueStatementCount, 10);
+  assert.equal(warnings[0]?.evictedStatementCount, 1);
 });

@@ -4,8 +4,11 @@ import type {
   AuthAccountUser,
   AuthenticatedSessionInput,
 } from "./auth-account-authentication-shared";
+import { logger } from "../lib/logger";
 import { resolveTimestampMs } from "../lib/timestamp";
 import { ERROR_CODES } from "../../shared/error-codes";
+
+let hasWarnedSuperuserSessionIdleWindowFallback = false;
 
 export async function getSuperuserSessionIdleWindowMs(
   storage: Pick<AuthAccountAuthenticationStorage, "getAppConfig">,
@@ -18,7 +21,14 @@ export async function getSuperuserSessionIdleWindowMs(
       ? Math.min(1440, Math.max(1, Math.floor(configuredMinutes)))
       : fallbackMinutes;
     return safeMinutes * 60 * 1000;
-  } catch {
+  } catch (error) {
+    if (!hasWarnedSuperuserSessionIdleWindowFallback) {
+      hasWarnedSuperuserSessionIdleWindowFallback = true;
+      logger.warn("Failed to read the configured superuser session timeout; falling back to the safe default", {
+        error: error instanceof Error ? error.message : "Unknown runtime settings read failure",
+        fallbackMinutes,
+      });
+    }
     return fallbackMinutes * 60 * 1000;
   }
 }

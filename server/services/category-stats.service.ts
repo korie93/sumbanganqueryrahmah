@@ -15,6 +15,7 @@ import {
 export class CategoryStatsService {
   private categoryRulesCache: { ts: number; rules: CategoryRule[] } | null = null;
   private readonly categoryStatsInflight = new Map<string, Promise<void>>();
+  private hasWarnedCategoryRuleFallback = false;
 
   constructor(private readonly storage: PostgresStorage) {}
 
@@ -99,8 +100,14 @@ export class CategoryStatsService {
         this.categoryRulesCache = { ts: Date.now(), rules };
         return rules;
       }
-    } catch {
-      // fallback below
+    } catch (error) {
+      if (!this.hasWarnedCategoryRuleFallback) {
+        this.hasWarnedCategoryRuleFallback = true;
+        logger.warn("Category stats rules could not be loaded; using the built-in fallback rule set", {
+          error: error instanceof Error ? error.message : "Unknown category rule load failure",
+          fallbackRuleCount: DEFAULT_COUNT_GROUPS.length,
+        });
+      }
     }
 
     return DEFAULT_COUNT_GROUPS;

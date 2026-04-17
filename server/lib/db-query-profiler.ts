@@ -20,6 +20,7 @@ type DbQueryProfileStatementSummary = {
 };
 
 type DbQueryProfileRequestSummary = {
+  evictedStatementCount: number;
   method: string;
   path: string;
   possibleNPlusOne: boolean;
@@ -38,6 +39,7 @@ type DbQueryProfilerOptions = RuntimeConfig["runtime"]["dbQueryProfiling"] & {
 };
 
 type DbQueryProfileRequestState = {
+  evictedStatementCount: number;
   method: string;
   path: string;
   queryCount: number;
@@ -158,6 +160,7 @@ function buildDbQueryProfileSummary(
   }
 
   return {
+    evictedStatementCount: state.evictedStatementCount,
     requestId: state.requestId,
     method: state.method,
     path: state.path,
@@ -170,6 +173,39 @@ function buildDbQueryProfileSummary(
       repeatedStatements.length > 0 && state.queryCount >= options.minQueryCount,
     repeatedStatements,
   };
+}
+
+function upsertDbQueryProfileStatement(
+  state: DbQueryProfileRequestState,
+  normalized: string,
+  sqlText: string,
+  durationMs: number,
+  maxUniqueStatements: number,
+) {
+  const existing = state.statementMap.get(normalized);
+  if (existing) {
+    state.statementMap.delete(normalized);
+    existing.count += 1;
+    existing.totalDurationMs += durationMs;
+    existing.maxDurationMs = Math.max(existing.maxDurationMs, durationMs);
+    state.statementMap.set(normalized, existing);
+    return;
+  }
+
+  if (state.statementMap.size >= maxUniqueStatements) {
+    const oldestTrackedStatement = state.statementMap.keys().next().value;
+    if (typeof oldestTrackedStatement === "string") {
+      state.statementMap.delete(oldestTrackedStatement);
+      state.evictedStatementCount += 1;
+    }
+  }
+
+  state.statementMap.set(normalized, {
+    count: 1,
+    sample: summarizeDbQueryProfileSample(sqlText),
+    totalDurationMs: durationMs,
+    maxDurationMs: durationMs,
+  });
 }
 
 export function instrumentPgClientQueryMethod(
@@ -249,6 +285,7 @@ export function instrumentPgClientQueryMethod(
 export function createDbQueryProfiler(options: DbQueryProfilerOptions) {
   const requestStorage = new AsyncLocalStorage<DbQueryProfileRequestState | null>();
   const random = options.random ?? Math.random;
+  const maxUniqueStatements = Math.max(10, Math.trunc(options.maxUniqueStatements));
 
   const recordQuerySample = (sqlText: string, durationMs: number) => {
     const state = requestStorage.getStore();
@@ -257,19 +294,13 @@ export function createDbQueryProfiler(options: DbQueryProfilerOptions) {
     }
 
     const normalized = normalizeDbQueryProfileStatement(sqlText);
-    const existing = state.statementMap.get(normalized);
-    if (existing) {
-      existing.count += 1;
-      existing.totalDurationMs += durationMs;
-      existing.maxDurationMs = Math.max(existing.maxDurationMs, durationMs);
-    } else {
-      state.statementMap.set(normalized, {
-        count: 1,
-        sample: summarizeDbQueryProfileSample(sqlText),
-        totalDurationMs: durationMs,
-        maxDurationMs: durationMs,
-      });
-    }
+    upsertDbQueryProfileStatement(
+      state,
+      normalized,
+      sqlText,
+      durationMs,
+      maxUniqueStatements,
+    );
 
     state.queryCount += 1;
     state.totalQueryDurationMs += durationMs;
@@ -295,6 +326,7 @@ export function createDbQueryProfiler(options: DbQueryProfilerOptions) {
         path: meta.path,
         queryCount: 0,
         totalQueryDurationMs: 0,
+        evictedStatementCount: 0,
         statementMap: new Map<string, DbQueryProfileStatementState>(),
       }, fn);
     },

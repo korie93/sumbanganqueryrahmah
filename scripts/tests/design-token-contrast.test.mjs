@@ -215,6 +215,63 @@ test("public auth primary buttons and login submit gradients keep readable white
   }
 });
 
+test("dark mode defines the critical semantic token families used across app shells", () => {
+  const css = readFileSync(
+    path.resolve(process.cwd(), "client/src/theme-tokens.css"),
+    "utf8",
+  );
+  const rootBlock = extractCssRuleBlock(css, ":root");
+  const darkBlock = extractCssRuleBlock(css, ".dark");
+  const requiredTokens = [
+    "background",
+    "foreground",
+    "border",
+    "card",
+    "card-foreground",
+    "popover",
+    "popover-foreground",
+    "primary",
+    "primary-foreground",
+    "secondary",
+    "secondary-foreground",
+    "muted",
+    "muted-foreground",
+    "accent",
+    "accent-foreground",
+    "destructive",
+    "destructive-foreground",
+    "input",
+    "ring",
+    "chart-1",
+    "chart-2",
+    "chart-3",
+    "chart-4",
+    "chart-5",
+    "sidebar",
+    "sidebar-foreground",
+    "sidebar-border",
+    "public-auth-shell-surface-strong",
+    "public-auth-text-muted",
+    "login-card-surface",
+    "login-title-text",
+    "maintenance-panel-surface",
+    "maintenance-muted-text",
+    "ai-surface-bg",
+    "ai-input-text",
+  ];
+
+  for (const tokenName of requiredTokens) {
+    assert.ok(
+      extractCssVariableValue(rootBlock, tokenName),
+      `:root must define --${tokenName}`,
+    );
+    assert.ok(
+      extractCssVariableValue(darkBlock, tokenName),
+      `.dark must define --${tokenName}`,
+    );
+  }
+});
+
 test("audit contrast pairs keep muted and destructive tokens readable on their parent backgrounds", () => {
   const css = readFileSync(
     path.resolve(process.cwd(), "client/src/theme-tokens.css"),

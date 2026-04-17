@@ -1,4 +1,18 @@
 import { readOptionalString } from "../config/runtime-config-read-utils";
+import { logger } from "../lib/logger";
+
+let hasWarnedInvalidPublicAppUrlConfiguration = false;
+
+function warnInvalidPublicAppUrlConfiguration(configured: string) {
+  if (hasWarnedInvalidPublicAppUrlConfiguration) {
+    return;
+  }
+
+  hasWarnedInvalidPublicAppUrlConfiguration = true;
+  logger.warn("PUBLIC_APP_URL is invalid; activation links are falling back to the local default base URL", {
+    configuredLength: configured.length,
+  });
+}
 
 export function getPublicAppBaseUrl(): string {
   const configured = readOptionalString("PUBLIC_APP_URL");
@@ -6,8 +20,11 @@ export function getPublicAppBaseUrl(): string {
   if (configured) {
     try {
       return new URL(configured).toString().replace(/\/+$/, "");
-    } catch {
-      // Fall back to local default below when the configured value is invalid.
+    } catch (error) {
+      warnInvalidPublicAppUrlConfiguration(configured);
+      logger.debug("PUBLIC_APP_URL parse failed before activation-link fallback", {
+        error: error instanceof Error ? error.message : "Invalid PUBLIC_APP_URL",
+      });
     }
   }
 

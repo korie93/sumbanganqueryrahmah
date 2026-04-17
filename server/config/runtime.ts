@@ -345,6 +345,10 @@ export const runtimeConfig: RuntimeConfig = Object.freeze({
         min: 1,
         max: 20,
       }),
+      maxUniqueStatements: readInt("DB_QUERY_PROFILING_MAX_UNIQUE_STATEMENTS", 250, {
+        min: 10,
+        max: 1_000,
+      }),
     },
   },
   collection: {

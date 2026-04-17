@@ -53,6 +53,13 @@ function normalizeSqlText(query: unknown): string {
   return flattenSqlChunk(query).replace(/\s+/g, " ").trim();
 }
 
+function extractUuidValues(sqlText: string): string[] {
+  return Array.from(
+    sqlText.matchAll(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi),
+    (match) => match[0].toLowerCase(),
+  );
+}
+
 function createBackupRestoreExecutor(
   execute: (query: unknown) => Promise<{ rows: unknown[] }>,
   insertMessage: string,
@@ -270,8 +277,23 @@ test("collection restore batches temp-table tracking and inserts for large resto
 });
 
 test("collection restore rejects pathological tracking growth beyond the configured safety limit", async () => {
+  const trackedIds = new Set<string>();
   const tx = createBackupRestoreExecutor(
-    async () => ({ rows: [] }),
+    async (query: unknown) => {
+      const sqlText = normalizeSqlText(query);
+      if (sqlText.includes("INSERT INTO sqr_restored_collection_record_ids")) {
+        const insertedIds = extractUuidValues(sqlText).filter((id) => {
+          if (trackedIds.has(id)) {
+            return false;
+          }
+          trackedIds.add(id);
+          return true;
+        });
+        return { rows: insertedIds.map((id) => ({ id })) };
+      }
+
+      return { rows: [] };
+    },
     "Unexpected insert() call during collection restore tracking limit test.",
   );
   const backupDataReader = createCollectionRecordReader(
@@ -306,6 +328,82 @@ test("collection restore rejects pathological tracking growth beyond the configu
     }),
     /configured safety limit/i,
   );
+});
+
+test("collection restore counts only newly tracked ids against the safety limit for duplicate-heavy batches", async () => {
+  const trackedIds = new Set<string>();
+  const insertedRecordIds = new Set<string>();
+  const tx = createBackupRestoreExecutor(
+    async (query: unknown) => {
+      const sqlText = normalizeSqlText(query);
+      const ids = extractUuidValues(sqlText);
+
+      if (sqlText.includes("INSERT INTO sqr_restored_collection_record_ids")) {
+        const insertedIds = ids.filter((id) => {
+          if (trackedIds.has(id)) {
+            return false;
+          }
+          trackedIds.add(id);
+          return true;
+        });
+        return {
+          rows: insertedIds.map((id) => ({ id })),
+        };
+      }
+
+      if (sqlText.includes("INSERT INTO public.collection_records")) {
+        const insertedIds = ids.filter((id) => {
+          if (insertedRecordIds.has(id)) {
+            return false;
+          }
+          insertedRecordIds.add(id);
+          return true;
+        });
+        return {
+          rows: insertedIds.map((id) => ({ id })),
+        };
+      }
+
+      return { rows: [] };
+    },
+    "Unexpected insert() call during duplicate-heavy collection restore test.",
+  );
+  const duplicateHeavyRecords = Array.from({ length: 1_005 }, (_, index) => {
+    const recordNumber = (index % 5) + 1;
+    return {
+      id: `11111111-1111-1111-1111-${String(recordNumber).padStart(12, "0")}`,
+      customerName: `Customer ${recordNumber}`,
+      icNumber: `90010101${String(recordNumber).padStart(4, "0")}`,
+      customerPhone: `012300${String(recordNumber).padStart(4, "0")}`,
+      accountNumber: `ACC-${recordNumber}`,
+      batch: "P10",
+      paymentDate: "2026-03-31",
+      amount: 100,
+      receiptFile: null,
+      receiptTotalAmountCents: 10000,
+      receiptValidationStatus: "matched",
+      receiptValidationMessage: null,
+      receiptCount: 1,
+      duplicateReceiptFlag: false,
+      createdByLogin: "system",
+      collectionStaffNickname: "Collector Alpha",
+      staffUsername: "Collector Alpha",
+      createdAt: "2026-03-31T08:00:00.000Z",
+    };
+  });
+  const backupDataReader = createCollectionRecordReader(duplicateHeavyRecords);
+  const stats = createRestoreStats();
+
+  await initializeRestoreTrackingTempTable(tx);
+  await restoreCollectionRecordsFromBackup(tx, backupDataReader, stats, {
+    maxTrackedRecordIds: 1_000,
+  });
+
+  assert.equal(trackedIds.size, 5);
+  assert.equal(insertedRecordIds.size, 5);
+  assert.equal(stats.collectionRecords.processed, 1_005);
+  assert.equal(stats.collectionRecords.inserted, 5);
+  assert.equal(stats.collectionRecords.skipped, 1_000);
 });
 
 test("normalizeBackupCollectionRecord keeps restore fallbacks stable", () => {

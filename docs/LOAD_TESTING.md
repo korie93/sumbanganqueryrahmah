@@ -44,3 +44,22 @@ script "mega test" yang rapuh.
 - tambah scenario import upload untuk fail kecil
 - tambah threshold assertions pada latency percentile staging
 - tambah separate soak test profile untuk WebSocket concurrency
+
+## Working Thresholds
+
+Gunakan threshold ini sebagai baseline operasi yang kecil tetapi berguna semasa
+staging atau smoke load runs. Ia bukan SLA muktamad, tetapi ia memberi signal
+awal yang konsisten sebelum threshold lebih formal diperketatkan.
+
+- `GET /api/health/ready`: p95 di bawah `500ms`
+- login, imports listing, dan backups listing: p95 di bawah `1500ms`
+- unexpected `5xx`: `0`
+- request timeout warnings: `0`
+- pool pressure warnings: tiada amaran berterusan yang kekal lebih daripada satu cooldown window
+
+Jika run melanggar threshold ini, simpan:
+
+- structured logs
+- bundle/node commit hash
+- pool pressure warnings
+- query profiling warnings jika profiler dihidupkan secara terkawal
