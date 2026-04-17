@@ -36,6 +36,15 @@ export function createCookieAuthStorageDouble() {
   };
 
   const storage = {
+    getAuthenticatedSessionSnapshot: async (activityId: string) => (
+      activityId === activity.id
+        ? {
+            activity,
+            user,
+            isVisitorBanned: false,
+          }
+        : undefined
+    ),
     getActivityById: async (activityId: string) => (activityId === activity.id ? activity : null),
     getUser: async (userId: string) => (userId === user.id ? user : null),
     getUserByUsername: async (username: string) => (username === user.username ? user : null),

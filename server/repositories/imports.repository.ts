@@ -8,9 +8,11 @@ import type {
 } from "../../shared/schema-postgres";
 import { dataRows, imports } from "../../shared/schema-postgres";
 import { db } from "../db-postgres";
+import { logger } from "../lib/logger";
 import { buildLikePattern } from "./sql-like-utils";
 
 const QUERY_PAGE_LIMIT = 1000;
+const GET_IMPORTS_MAX_RESULTS = 10_000;
 const IMPORT_LIST_PAGE_DEFAULT_LIMIT = 100;
 const IMPORT_LIST_PAGE_MAX_LIMIT = 200;
 const IMPORT_COLUMN_KEYS_MAX_LIMIT = 500;
@@ -51,6 +53,11 @@ function readImportRows<TRow>(rows: unknown[] | undefined): TRow[] {
 function clampImportListLimit(limit: number | undefined): number {
   const safeLimit = Number.isFinite(limit) ? Math.trunc(Number(limit)) : IMPORT_LIST_PAGE_DEFAULT_LIMIT;
   return Math.max(1, Math.min(IMPORT_LIST_PAGE_MAX_LIMIT, safeLimit));
+}
+
+export function resolveRemainingImportsReadLimit(loadedCount: number): number {
+  const safeLoadedCount = Math.max(0, Math.trunc(Number(loadedCount) || 0));
+  return Math.max(0, Math.min(QUERY_PAGE_LIMIT, GET_IMPORTS_MAX_RESULTS - safeLoadedCount));
 }
 
 function encodeImportListCursor(cursor: ImportListCursor): string {
@@ -155,20 +162,49 @@ export class ImportsRepository {
   async getImports(): Promise<Import[]> {
     const results: Import[] = [];
     let offset = 0;
+    let reachedSafetyCap = false;
 
-    while (true) {
+    for (;;) {
+      const limit = resolveRemainingImportsReadLimit(results.length);
+      if (limit <= 0) {
+        reachedSafetyCap = true;
+        break;
+      }
+
       const chunk = await db
         .select()
         .from(imports)
         .where(eq(imports.isDeleted, false))
         .orderBy(desc(imports.createdAt))
-        .limit(QUERY_PAGE_LIMIT)
+        .limit(limit)
         .offset(offset);
 
-      if (!chunk.length) break;
+      if (!chunk.length) {
+        break;
+      }
+
       results.push(...chunk);
-      if (chunk.length < QUERY_PAGE_LIMIT) break;
       offset += chunk.length;
+      if (chunk.length < limit) {
+        break;
+      }
+    }
+
+    if (reachedSafetyCap) {
+      const remainingProbe = await db
+        .select({ id: imports.id })
+        .from(imports)
+        .where(eq(imports.isDeleted, false))
+        .orderBy(desc(imports.createdAt))
+        .limit(1)
+        .offset(offset);
+
+      if (remainingProbe.length > 0) {
+        logger.warn("Imports repository reached the bounded getImports safety cap", {
+          loadedImports: results.length,
+          maxResults: GET_IMPORTS_MAX_RESULTS,
+        });
+      }
     }
 
     return results;

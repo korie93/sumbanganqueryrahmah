@@ -62,12 +62,22 @@ const PG_POOL_SHUTDOWN_TIMEOUT_MS = resolvePgPoolShutdownTimeoutMs(GRACEFUL_SHUT
 let shuttingDown = false;
 let shutdownExitCode = 0;
 let shutdownTimer: ReturnType<typeof setTimeout> | null = null;
+let shutdownConnectionDrainTimer: ReturnType<typeof setTimeout> | null = null;
 
-async function finishShutdown() {
+function clearShutdownTimers() {
   if (shutdownTimer) {
     clearTimeout(shutdownTimer);
     shutdownTimer = null;
   }
+
+  if (shutdownConnectionDrainTimer) {
+    clearTimeout(shutdownConnectionDrainTimer);
+    shutdownConnectionDrainTimer = null;
+  }
+}
+
+async function finishShutdown() {
+  clearShutdownTimers();
 
   await shutdownPgPoolSafely({
     logger,
@@ -112,8 +122,19 @@ function shutdownProcess(reason: string, exitCode: number, details?: string) {
     connectedClients.delete(id);
   }
 
+  server.closeIdleConnections?.();
+  shutdownConnectionDrainTimer = setTimeout(() => {
+    logger.warn("Graceful shutdown is still draining active connections, forcing idle connection closure", {
+      connectedClients: connectedClients.size,
+    });
+    server.closeIdleConnections?.();
+    server.closeAllConnections?.();
+  }, Math.max(1_000, Math.floor(GRACEFUL_SHUTDOWN_TIMEOUT_MS * 0.8)));
+  shutdownConnectionDrainTimer.unref();
   shutdownTimer = setTimeout(() => {
-    logger.warn("Graceful shutdown timed out, forcing exit");
+    logger.warn("Graceful shutdown timed out, forcing exit", {
+      connectedClients: connectedClients.size,
+    });
     process.exit(exitCode === 0 ? 1 : exitCode);
   }, GRACEFUL_SHUTDOWN_TIMEOUT_MS);
   shutdownTimer.unref();
@@ -126,6 +147,7 @@ function shutdownProcess(reason: string, exitCode: number, details?: string) {
   server.close(() => {
     finishShutdownSafely();
   });
+  server.closeIdleConnections?.();
 }
 
 function gracefulShutdown(signal: string) {

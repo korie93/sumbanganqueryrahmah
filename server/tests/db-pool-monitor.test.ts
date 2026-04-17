@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   bindPgPoolHealthCheck,
   bindPgPoolMonitoring,
+  buildPgPoolHealthCheckMetadata,
   getPgPoolUtilizationPercent,
   getPgPoolSnapshot,
   hasPgPoolPressure,
@@ -245,6 +246,10 @@ test("bindPgPoolHealthCheck logs failures from a periodic SELECT 1 probe", async
   assert.equal(queryCalls > 0, true);
   assert.equal(warnings.length > 0, true);
   assert.equal((warnings[0]?.error as Error)?.message, "database unavailable");
+  assert.equal(warnings[0]?.intervalMs, 1_000);
+  assert.equal(warnings[0]?.timeoutMs, 250);
+  assert.equal(warnings[0]?.checkInFlight, true);
+  assert.equal(warnings[0]?.utilizationPercent, 0);
 });
 
 test("bindPgPoolHealthCheck cleanup stops future interval probes", async () => {
@@ -271,4 +276,28 @@ test("bindPgPoolHealthCheck cleanup stops future interval probes", async () => {
 
   assert.equal(callsAfterStop > 0, true);
   assert.equal(queryCalls, callsAfterStop);
+});
+
+test("buildPgPoolHealthCheckMetadata includes a bounded pool snapshot and useful timeout context", () => {
+  const pool = new FakePool();
+  pool.totalCount = 4;
+  pool.idleCount = 1;
+  pool.waitingCount = 2;
+  pool.options.max = 8;
+
+  assert.deepEqual(buildPgPoolHealthCheckMetadata({
+    pool,
+    intervalMs: 60_000,
+    timeoutMs: 5_000,
+    checkInFlight: true,
+  }), {
+    total: 4,
+    idle: 1,
+    waiting: 2,
+    max: 8,
+    utilizationPercent: 50,
+    intervalMs: 60_000,
+    timeoutMs: 5_000,
+    checkInFlight: true,
+  });
 });

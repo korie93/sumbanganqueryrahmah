@@ -46,17 +46,17 @@ test("focusMainContent falls back to a plain focus call when preventScroll is un
 
 test("scheduleMainContentFocus uses requestAnimationFrame and supports cancellation", () => {
   const focusCalls: Array<{ preventScroll?: boolean } | undefined> = [];
-  let scheduledCallback: FrameRequestCallback | null = null;
-  let cancelledHandle: number | null = null;
+  const scheduledCallbacks: FrameRequestCallback[] = [];
+  const cancelledHandles: number[] = [];
 
   const cancel = scheduleMainContentFocus(
     {
       requestAnimationFrame(callback: FrameRequestCallback) {
-        scheduledCallback = callback;
-        return 77;
+        scheduledCallbacks.push(callback);
+        return 77 + scheduledCallbacks.length - 1;
       },
       cancelAnimationFrame(handle: number) {
-        cancelledHandle = handle;
+        cancelledHandles.push(handle);
       },
     },
     {
@@ -70,12 +70,43 @@ test("scheduleMainContentFocus uses requestAnimationFrame and supports cancellat
     },
   );
 
-  const callback = scheduledCallback as ((timestamp: number) => void) | null;
-  if (callback !== null) {
-    callback(0);
-  }
+  scheduledCallbacks[0]?.(0);
+  scheduledCallbacks[1]?.(16);
   cancel();
 
   assert.deepEqual(focusCalls, [{ preventScroll: true }]);
-  assert.equal(cancelledHandle, 77);
+  assert.deepEqual(cancelledHandles, [77, 78]);
+});
+
+test("scheduleMainContentFocus can be cancelled before the nested frame runs", () => {
+  const focusCalls: Array<{ preventScroll?: boolean } | undefined> = [];
+  const scheduledCallbacks: FrameRequestCallback[] = [];
+  const cancelledHandles: number[] = [];
+
+  const cancel = scheduleMainContentFocus(
+    {
+      requestAnimationFrame(callback: FrameRequestCallback) {
+        scheduledCallbacks.push(callback);
+        return 91 + scheduledCallbacks.length - 1;
+      },
+      cancelAnimationFrame(handle: number) {
+        cancelledHandles.push(handle);
+      },
+    },
+    {
+      getElementById() {
+        return {
+          focus(options?: { preventScroll?: boolean }) {
+            focusCalls.push(options);
+          },
+        };
+      },
+    },
+  );
+
+  scheduledCallbacks[0]?.(0);
+  cancel();
+
+  assert.deepEqual(focusCalls, []);
+  assert.deepEqual(cancelledHandles, [91, 92]);
 });

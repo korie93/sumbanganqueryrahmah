@@ -487,6 +487,7 @@ test("runtime manager rejects query-string session tokens before lookup", async 
     assert.equal(lookupCalls, 0);
     assert.equal(providedMap.size, 0);
     assert.equal(socket.closeCalls, 1);
+    assertNoRuntimeSocketListeners(socket);
   } finally {
     wss.emit("close");
   }
@@ -1235,7 +1236,18 @@ test("runtime manager still detaches socket listeners when tracked map cleanup t
 
     assert.ok(warnMock.mock.callCount() >= 1);
     assert.equal(
-      warnings.some((entry) => entry.message === "WebSocket cleanup failed"),
+      warnings.some(
+        (entry) =>
+          entry.message === "WebSocket cleanup failed"
+          && typeof entry.payload === "object"
+          && entry.payload !== null
+          && (entry.payload as { activityId?: unknown }).activityId === activityId
+          && (entry.payload as { phase?: unknown }).phase === "error"
+          && (entry.payload as { hadCleanupCallback?: unknown }).hadCleanupCallback === true
+          && (entry.payload as { hadSocketEntry?: unknown }).hadSocketEntry === true
+          && (entry.payload as { hadTrackedSocketState?: unknown }).hadTrackedSocketState === true
+          && (entry.payload as { wsReadyState?: unknown }).wsReadyState === WebSocket.CLOSED,
+      ),
       true,
     );
     assertNoRuntimeSocketListeners(socket);

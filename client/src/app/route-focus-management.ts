@@ -29,11 +29,17 @@ export function scheduleMainContentFocus(
   windowLike: WindowLike = window,
   documentLike: DocumentLike = document,
 ): () => void {
+  let nestedFrameHandle: number | null = null;
   const frameHandle = windowLike.requestAnimationFrame(() => {
-    focusMainContent(documentLike);
+    nestedFrameHandle = windowLike.requestAnimationFrame(() => {
+      focusMainContent(documentLike);
+    });
   });
 
   return () => {
     windowLike.cancelAnimationFrame(frameHandle);
+    if (nestedFrameHandle !== null) {
+      windowLike.cancelAnimationFrame(nestedFrameHandle);
+    }
   };
 }

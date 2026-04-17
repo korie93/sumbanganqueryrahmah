@@ -98,9 +98,10 @@ export default function AutoLogout({
   }, []);
 
   const cleanupSocket = useCallback(() => {
+    const activeSocket = wsRef.current;
     clearReconnect();
 
-    disposeAutoLogoutSocket(wsRef.current, wsRef);
+    disposeAutoLogoutSocket(activeSocket, wsRef);
   }, [clearReconnect]);
 
   const runLogout = useCallback(async () => {

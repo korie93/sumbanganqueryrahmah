@@ -174,12 +174,27 @@ function AppContent() {
 }
 
 function App() {
+  const handleNavigateHome = () => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    window.location.assign("/");
+  };
+
   return (
     <>
       <a className="skip-to-main-link" href="#main-content">
         Skip to main content
       </a>
-      <AppContent />
+      <AppRouteErrorBoundary
+        routeKey="app-root"
+        routeLabel="application"
+        fullscreen
+        onNavigateHome={handleNavigateHome}
+      >
+        <AppContent />
+      </AppRouteErrorBoundary>
     </>
   );
 }

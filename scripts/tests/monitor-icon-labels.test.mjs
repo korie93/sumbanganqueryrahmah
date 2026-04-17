@@ -16,6 +16,9 @@ test("monitor icon-only helper controls avoid generic aria labels", async () => 
   ]);
 
   assert.doesNotMatch(infoHintSource, /aria-label="Description"/);
+  assert.match(infoHintSource, /touch-target inline-flex/);
   assert.match(metricPanelSource, /aria-label={`Show more information about \$\{label\}`}/);
+  assert.match(metricPanelSource, /touch-target inline-flex/);
   assert.match(timeSeriesSource, /aria-label={`Show more information about \$\{title\}`}/);
+  assert.match(timeSeriesSource, /touch-target inline-flex/);
 });

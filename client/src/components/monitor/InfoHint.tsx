@@ -29,7 +29,7 @@ function InfoHintImpl({ label, text }: InfoHintProps) {
       <TooltipTrigger asChild>
         <button
           type="button"
-          className="inline-flex rounded-sm text-muted-foreground transition hover:text-foreground"
+          className="touch-target inline-flex rounded-sm text-muted-foreground transition hover:text-foreground"
           aria-label={resolveInfoHintLabel(text, label)}
         >
           <CircleHelp className="h-3.5 w-3.5" aria-hidden="true" />

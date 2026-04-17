@@ -141,14 +141,24 @@ export function createRuntimeConnectionHandler(
       }
     };
 
+    const captureCleanupStateSnapshot = () => ({
+      hadCleanupCallback: socketCleanupCallbacks.has(ws),
+      hadSocketEntry: Boolean(socketEntriesByInstance.get(ws) ?? socketEntry),
+      hadTrackedSocketState: trackedSockets.has(ws),
+      closeRequested,
+      wsReadyState: ws.readyState,
+    });
+
     const cleanupSocketSafely = (phase: string) => {
+      const cleanupState = captureCleanupStateSnapshot();
       try {
         cleanupSocket();
       } catch (error) {
         logger.warn("WebSocket cleanup failed", {
           activityId,
-          error: sanitizeRuntimeWebSocketError(error),
           phase,
+          ...cleanupState,
+          error: sanitizeRuntimeWebSocketError(error),
         });
       }
     };
@@ -225,20 +235,6 @@ export function createRuntimeConnectionHandler(
       closeSocketIfNeeded();
     };
 
-    ws.on("pong", markSocketAlive);
-    ws.on("message", handleSocketMessage);
-    ws.once("close", handleSocketClose);
-    ws.once("error", handleSocketError);
-    const trackedAt = Date.now();
-    trackedSockets.set(ws, {
-      trackedAt,
-      lastSeenAt: trackedAt,
-      authenticatedAt: null,
-    });
-    socketCleanupCallbacks.set(ws, () => {
-      cleanupSocketSafely("registered-callback");
-    });
-
     const url = new URL(req.url!, `http://${req.headers.host}`);
     const forwardedHeadersTrusted = shouldTrustForwardedHeaders(
       req,
@@ -282,6 +278,20 @@ export function createRuntimeConnectionHandler(
       closeSocketIfNeeded();
       return;
     }
+
+    ws.on("pong", markSocketAlive);
+    ws.on("message", handleSocketMessage);
+    ws.once("close", handleSocketClose);
+    ws.once("error", handleSocketError);
+    const trackedAt = Date.now();
+    trackedSockets.set(ws, {
+      trackedAt,
+      lastSeenAt: trackedAt,
+      authenticatedAt: null,
+    });
+    socketCleanupCallbacks.set(ws, () => {
+      cleanupSocketSafely("registered-callback");
+    });
 
     const token = readAuthSessionTokenFromHeaders(req.headers);
 

@@ -34,3 +34,13 @@ test("CI workflow keeps the Playwright smoke gate enabled", () => {
   assert.match(workflow, /Run UI smoke/);
   assert.match(workflow, /npm run smoke:ui/);
 });
+
+test("CI workflow keeps coverage gate reporting and artifact publishing wired", () => {
+  const workflow = readFileSync(ciWorkflowPath, "utf8");
+
+  assert.match(workflow, /Enforce coverage gate/);
+  assert.match(workflow, /npm run test:coverage:gate/);
+  assert.match(workflow, /Publish coverage summary/);
+  assert.match(workflow, /npm run report:coverage-summary/);
+  assert.match(workflow, /Upload coverage artifact/);
+});

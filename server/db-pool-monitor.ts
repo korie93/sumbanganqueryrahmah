@@ -134,6 +134,23 @@ export function bindPgPoolMonitoring(pool: PgPoolLike, options: BindPgPoolMonito
   };
 }
 
+export function buildPgPoolHealthCheckMetadata(params: {
+  pool: PgPoolLike;
+  intervalMs: number;
+  timeoutMs: number;
+  checkInFlight: boolean;
+}) {
+  const snapshot = getPgPoolSnapshot(params.pool);
+
+  return {
+    ...snapshot,
+    utilizationPercent: getPgPoolUtilizationPercent(snapshot),
+    intervalMs: params.intervalMs,
+    timeoutMs: params.timeoutMs,
+    checkInFlight: params.checkInFlight,
+  };
+}
+
 export function bindPgPoolHealthCheck(pool: PgPoolLike, options: BindPgPoolHealthCheckOptions = {}) {
   if (typeof pool.query !== "function") {
     return () => undefined;
@@ -168,7 +185,12 @@ export function bindPgPoolHealthCheck(pool: PgPoolLike, options: BindPgPoolHealt
       ]);
     } catch (error) {
       sink.warn("PostgreSQL pool health check failed", {
-        ...getPgPoolSnapshot(pool),
+        ...buildPgPoolHealthCheckMetadata({
+          pool,
+          intervalMs,
+          timeoutMs,
+          checkInFlight: true,
+        }),
         error,
       });
     } finally {

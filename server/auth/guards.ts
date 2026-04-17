@@ -4,6 +4,7 @@ import { ERROR_CODES } from "../../shared/error-codes";
 import type { IStorage } from "../storage-postgres";
 import { getSessionSecret } from "../config/security";
 import { verifySessionJwt } from "./session-jwt";
+import { z } from "zod";
 import {
   canUserBypassForcedPasswordChange,
   getAccountAccessBlockReason,
@@ -29,14 +30,10 @@ export interface AuthenticatedRequest extends Request {
 type CreateAuthGuardsOptions = {
   storage: Pick<
     IStorage,
-    | "getActivityById"
-    | "getUser"
-    | "getUserByUsername"
-    | "isVisitorBanned"
     | "updateActivity"
     | "getRoleTabVisibility"
   > & {
-    getAuthenticatedSessionSnapshot?: (activityId: string) => Promise<{
+    getAuthenticatedSessionSnapshot: (activityId: string) => Promise<{
       activity: UserActivity;
       user?: User | undefined;
       isVisitorBanned: boolean;
@@ -61,6 +58,17 @@ const FORCED_PASSWORD_CHANGE_ALLOWLIST = new Set([
   "POST:/api/activity/logout",
   "POST:/api/activity/heartbeat",
 ]);
+
+const authenticatedSessionTokenSchema = z.object({
+  userId: z.string().trim().min(1).optional(),
+  username: z.string().trim().min(1),
+  role: z.string().trim().min(1),
+  activityId: z.string().trim().min(1),
+  status: z.string().trim().min(1).optional(),
+  mustChangePassword: z.boolean().optional(),
+  passwordResetBySuperuser: z.boolean().optional(),
+  isBanned: z.boolean().nullable().optional(),
+});
 
 function canAccessDuringForcedPasswordChange(method: string, path: string) {
   return FORCED_PASSWORD_CHANGE_ALLOWLIST.has(`${method.toUpperCase()}:${path}`);
@@ -186,19 +194,8 @@ export function createAuthGuards(options: CreateAuthGuardsOptions) {
     user?: User | undefined;
     isVisitorBanned: boolean;
   }> {
-    if (storage.getAuthenticatedSessionSnapshot) {
-      const snapshot = await storage.getAuthenticatedSessionSnapshot(decoded.activityId);
-      if (snapshot) {
-        return {
-          activity: snapshot.activity,
-          user: snapshot.user,
-          isVisitorBanned: snapshot.isVisitorBanned,
-        };
-      }
-    }
-
-    const activity = await storage.getActivityById(decoded.activityId);
-    if (!activity) {
+    const snapshot = await storage.getAuthenticatedSessionSnapshot(decoded.activityId);
+    if (!snapshot) {
       return {
         activity: undefined,
         user: undefined,
@@ -206,21 +203,10 @@ export function createAuthGuards(options: CreateAuthGuardsOptions) {
       };
     }
 
-    const [isVisitorBanned, user] = await Promise.all([
-      storage.isVisitorBanned(
-        activity.fingerprint ?? null,
-        activity.ipAddress ?? null,
-        activity.username || decoded.username,
-      ),
-      activity.userId
-        ? storage.getUser(activity.userId)
-        : storage.getUserByUsername(activity.username || decoded.username),
-    ]);
-
     return {
-      activity,
-      user,
-      isVisitorBanned,
+      activity: snapshot.activity,
+      user: snapshot.user,
+      isVisitorBanned: snapshot.isVisitorBanned,
     };
   }
 
@@ -237,7 +223,7 @@ export function createAuthGuards(options: CreateAuthGuardsOptions) {
     }
 
     try {
-      const decoded = verifySessionJwt<AuthenticatedUser>(token, secret) as AuthenticatedUser;
+      const decoded = authenticatedSessionTokenSchema.parse(verifySessionJwt<unknown>(token, secret));
       const { activity, user, isVisitorBanned } = await loadAuthenticatedSessionSnapshot(decoded);
 
       if (!activity || activity.isActive === false || activity.logoutTime !== null) {

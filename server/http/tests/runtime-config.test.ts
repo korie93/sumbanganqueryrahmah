@@ -275,6 +275,20 @@ test("runtime config enables operations debug routes outside production-like env
   );
 });
 
+test("runtime config keeps operations debug routes disabled by default in development", async () => {
+  await withEnv(
+    {
+      NODE_ENV: "development",
+      HOST: "127.0.0.1",
+      OPERATIONS_DEBUG_ROUTES_ENABLED: null,
+    },
+    async () => {
+      const runtimeModule = await importRuntimeFresh();
+      assert.equal(runtimeModule.runtimeConfig.app.operationsDebugRoutesEnabled, false);
+    },
+  );
+});
+
 test("runtime config reads explicit PostgreSQL query timeout settings", async () => {
   await withEnv(
     {

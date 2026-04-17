@@ -61,8 +61,13 @@ function createMockResponse() {
   return {
     statusCode: 200,
     body: undefined as unknown,
+    cookies: [] as Array<{ name: string; value: string; options: Record<string, unknown> }>,
     status(code: number) {
       this.statusCode = code;
+      return this;
+    },
+    cookie(name: string, value: string, options: Record<string, unknown>) {
+      this.cookies.push({ name, value, options });
       return this;
     },
     json(payload: unknown) {
@@ -72,20 +77,24 @@ function createMockResponse() {
   };
 }
 
+function createGuardStorageDouble(overrides: Partial<Parameters<typeof createAuthGuards>[0]["storage"]> = {}) {
+  return {
+    getAuthenticatedSessionSnapshot: async () => undefined,
+    updateActivity: async () => undefined,
+    getRoleTabVisibility: async () => ({}),
+    ...overrides,
+  };
+}
+
 test("tab visibility guard caches role visibility and allows explicit cache clearing", async () => {
   let visibilityLookupCount = 0;
   const guards = createAuthGuards({
-    storage: {
-      getActivityById: async () => undefined,
-      getUser: async () => undefined,
-      getUserByUsername: async () => undefined,
-      isVisitorBanned: async () => false,
-      updateActivity: async () => undefined,
+    storage: createGuardStorageDouble({
       getRoleTabVisibility: async () => {
         visibilityLookupCount += 1;
         return { monitor: true };
       },
-    },
+    }),
     secret: "guard-test-secret",
   });
   const handler = guards.requireTabAccess("monitor");
@@ -117,17 +126,12 @@ test("tab visibility cache keeps the original TTL instead of extending it on cac
   t.mock.method(Date, "now", () => nowValues.shift() ?? 1_000_000 + 5 * 60 * 1000 + 1);
 
   const guards = createAuthGuards({
-    storage: {
-      getActivityById: async () => undefined,
-      getUser: async () => undefined,
-      getUserByUsername: async () => undefined,
-      isVisitorBanned: async () => false,
-      updateActivity: async () => undefined,
+    storage: createGuardStorageDouble({
       getRoleTabVisibility: async () => {
         visibilityLookupCount += 1;
         return { monitor: true };
       },
-    },
+    }),
     secret: "guard-test-secret",
   });
 
@@ -148,17 +152,12 @@ test("tab visibility guard coalesces concurrent role visibility lookups", async 
   const visibilityLookup = createDeferred<Record<string, boolean>>();
 
   const guards = createAuthGuards({
-    storage: {
-      getActivityById: async () => undefined,
-      getUser: async () => undefined,
-      getUserByUsername: async () => undefined,
-      isVisitorBanned: async () => false,
-      updateActivity: async () => undefined,
+    storage: createGuardStorageDouble({
       getRoleTabVisibility: async () => {
         visibilityLookupCount += 1;
         return await visibilityLookup.promise;
       },
-    },
+    }),
     secret: "guard-test-secret",
   });
 
@@ -239,14 +238,7 @@ test("tab visibility cache registers an unrefed sweep interval and clears it ide
   );
 
   const guards = createAuthGuards({
-    storage: {
-      getActivityById: async () => undefined,
-      getUser: async () => undefined,
-      getUserByUsername: async () => undefined,
-      isVisitorBanned: async () => false,
-      updateActivity: async () => undefined,
-      getRoleTabVisibility: async () => ({}),
-    },
+    storage: createGuardStorageDouble(),
     secret: "guard-test-secret",
   });
 
@@ -263,13 +255,10 @@ test("tab visibility cache registers an unrefed sweep interval and clears it ide
 test("authenticateToken prefers the composite session snapshot when storage exposes it", async () => {
   const secret = "guard-test-secret";
   let snapshotCalls = 0;
-  let activityCalls = 0;
-  let userCalls = 0;
-  let bannedCalls = 0;
   let updateCalls = 0;
 
   const guards = createAuthGuards({
-    storage: {
+    storage: createGuardStorageDouble({
       getAuthenticatedSessionSnapshot: async () => {
         snapshotCalls += 1;
         return {
@@ -316,28 +305,11 @@ test("authenticateToken prefers the composite session snapshot when storage expo
           isVisitorBanned: false,
         };
       },
-      getActivityById: async () => {
-        activityCalls += 1;
-        return undefined;
-      },
-      getUser: async () => {
-        userCalls += 1;
-        return undefined;
-      },
-      getUserByUsername: async () => {
-        userCalls += 1;
-        return undefined;
-      },
-      isVisitorBanned: async () => {
-        bannedCalls += 1;
-        return false;
-      },
       updateActivity: async () => {
         updateCalls += 1;
         return undefined;
       },
-      getRoleTabVisibility: async () => ({}),
-    },
+    }),
     secret,
   });
 
@@ -368,24 +340,58 @@ test("authenticateToken prefers the composite session snapshot when storage expo
   guards.stopTabVisibilityCacheSweep();
 
   assert.equal(snapshotCalls, 1);
-  assert.equal(activityCalls, 0);
-  assert.equal(userCalls, 0);
-  assert.equal(bannedCalls, 0);
   assert.equal(updateCalls, 1);
   assert.equal(nextCalls, 1);
   assert.equal((request as { user?: { username?: string } }).user?.username, "guard.user");
 });
 
+test("authenticateToken rejects structurally invalid decoded JWT payloads before snapshot lookup", async () => {
+  const secret = "guard-test-secret";
+  let snapshotCalls = 0;
+  const guards = createAuthGuards({
+    storage: createGuardStorageDouble({
+      getAuthenticatedSessionSnapshot: async () => {
+        snapshotCalls += 1;
+        return undefined;
+      },
+    }),
+    secret,
+  });
+
+  const token = jwt.sign(
+    {
+      username: "guard.user",
+      role: "admin",
+      activityId: 12345,
+    },
+    secret,
+    { expiresIn: "24h" },
+  );
+
+  const request = {
+    headers: {
+      cookie: `sqr_auth=${encodeURIComponent(token)}`,
+    },
+    method: "GET",
+    path: "/api/me",
+  };
+  const response = createMockResponse();
+  let nextCalls = 0;
+
+  await guards.authenticateToken(request as never, response as never, () => {
+    nextCalls += 1;
+  });
+  guards.stopTabVisibilityCacheSweep();
+
+  assert.equal(snapshotCalls, 0);
+  assert.equal(nextCalls, 0);
+  assert.equal(response.statusCode, 403);
+  assert.deepEqual(response.body, { message: "Invalid token" });
+});
+
 test("requireRole returns 401 when there is no authenticated user", () => {
   const guards = createAuthGuards({
-    storage: {
-      getActivityById: async () => undefined,
-      getUser: async () => undefined,
-      getUserByUsername: async () => undefined,
-      isVisitorBanned: async () => false,
-      updateActivity: async () => undefined,
-      getRoleTabVisibility: async () => ({}),
-    },
+    storage: createGuardStorageDouble(),
     secret: "guard-test-secret",
   });
 
@@ -404,14 +410,7 @@ test("requireRole returns 401 when there is no authenticated user", () => {
 
 test("requireRole returns 403 when the authenticated user lacks the required role", () => {
   const guards = createAuthGuards({
-    storage: {
-      getActivityById: async () => undefined,
-      getUser: async () => undefined,
-      getUserByUsername: async () => undefined,
-      isVisitorBanned: async () => false,
-      updateActivity: async () => undefined,
-      getRoleTabVisibility: async () => ({}),
-    },
+    storage: createGuardStorageDouble(),
     secret: "guard-test-secret",
   });
 
