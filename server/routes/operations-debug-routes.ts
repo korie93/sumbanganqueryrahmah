@@ -11,7 +11,7 @@ export function isOperationsDebugRoutesEnabled(
 export function registerOperationsDebugRoutes(
   context: OperationsRouteContext,
   options: {
-    enabled?: boolean;
+    enabled?: boolean | undefined;
   } = {},
 ) {
   if (!isOperationsDebugRoutesEnabled(options.enabled)) {

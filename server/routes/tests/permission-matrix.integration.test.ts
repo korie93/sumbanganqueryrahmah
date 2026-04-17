@@ -203,6 +203,7 @@ function createOperationsPermissionHarness() {
     authenticateToken: createTestAuthenticateToken(),
     requireRole: createTestRequireRole(),
     requireTabAccess: createTestRequireTabAccess(),
+    operationsDebugRoutesEnabled: true,
   });
 
   return {

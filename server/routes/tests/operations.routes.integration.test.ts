@@ -83,6 +83,7 @@ function createOperationsRouteHarness(options?: {
   backupExportDelayMs?: number;
   backupRestoreDelayMs?: number;
   maxPayloadBytes?: number;
+  operationsDebugRoutesEnabled?: boolean;
 }) {
   const auditLogs: AuditEntry[] = [];
   const cleanupCalls: Date[] = [];
@@ -346,6 +347,7 @@ function createOperationsRouteHarness(options?: {
     }),
     requireRole: createTestRequireRole(),
     requireTabAccess: () => allowAllTabs(),
+    operationsDebugRoutesEnabled: options?.operationsDebugRoutesEnabled,
   });
 
   return {
@@ -766,7 +768,9 @@ test("GET /api/backups requires superuser role", async () => {
 });
 
 test("GET /api/debug/websocket-clients returns the connected activity ids", async () => {
-  const { app } = createOperationsRouteHarness();
+  const { app } = createOperationsRouteHarness({
+    operationsDebugRoutesEnabled: true,
+  });
   const { server, baseUrl } = await startTestServer(app);
 
   try {

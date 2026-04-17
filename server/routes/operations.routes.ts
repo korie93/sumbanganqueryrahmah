@@ -13,7 +13,9 @@ export function registerOperationsRoutes(app: Express, deps: OperationsRouteDeps
   registerOperationsAuditRoutes(context);
   registerOperationsAnalyticsRoutes(context);
   registerOperationsBackupRoutes(context);
-  registerOperationsDebugRoutes(context);
+  registerOperationsDebugRoutes(context, {
+    enabled: deps.operationsDebugRoutesEnabled,
+  });
 }
 
 export type { OperationsRouteDeps } from "./operations-route-context";

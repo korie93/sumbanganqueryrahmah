@@ -6,6 +6,7 @@ export type OperationsRouteDeps = {
   authenticateToken: RequestHandler;
   requireRole: (...roles: string[]) => RequestHandler;
   requireTabAccess: (tabId: string) => RequestHandler;
+  operationsDebugRoutesEnabled?: boolean | undefined;
 };
 
 export type OperationsRouteContext = {
