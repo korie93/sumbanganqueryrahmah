@@ -67,12 +67,19 @@
 .login-card {
   position: relative;
   overflow: hidden;
+  padding: 1.75rem 1.25rem;
   border-radius: var(--public-auth-card-radius);
   background: var(--login-card-surface);
   background-clip: padding-box;
   border: 1px solid var(--login-card-border);
   box-shadow: var(--login-card-shadow);
   contain: paint;
+}
+
+@media (min-width: 640px) {
+  .login-card {
+    padding: 2.5rem 2rem;
+  }
 }
 
 .dark .login-card {
@@ -241,21 +248,21 @@
 }
 
 .low-spec .login-card {
-  -webkit-backdrop-filter: none !important;
-  backdrop-filter: none !important;
-  box-shadow: none !important;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  box-shadow: none;
 }
 
 .low-spec .floating-slow,
 .low-spec .login-video-bg,
 .low-spec .login-particles,
 .low-spec .login-bg-effect {
-  display: none !important;
+  display: none;
 }
 
 .low-spec .login-content {
-  opacity: 1 !important;
-  transform: none !important;
+  opacity: 1;
+  transform: none;
 }
 
 @supports ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
@@ -312,7 +319,7 @@
   }
 
   .login-card {
-    padding: 1rem 1.1rem !important;
+    padding: 1rem 1.1rem;
     border-radius: var(--public-auth-card-radius-compact);
     animation: none;
     -webkit-backdrop-filter: none;
@@ -372,7 +379,7 @@
   }
 
   .login-card {
-    padding: 1.5rem 1.75rem !important;
+    padding: 1.5rem 1.75rem;
   }
 
   .login-brand {
@@ -386,19 +393,19 @@
   .login-content,
   .login-card,
   .floating-slow {
-    animation: none !important;
-    transition: none !important;
-    will-change: auto !important;
+    animation: none;
+    transition: none;
+    will-change: auto;
   }
 
   .login-bg-orb,
   .login-content,
   .floating-slow {
-    transform: none !important;
+    transform: none;
   }
 
   .login-content {
-    opacity: 1 !important;
+    opacity: 1;
   }
 }
 

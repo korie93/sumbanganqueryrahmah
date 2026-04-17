@@ -164,7 +164,7 @@ test("runtime config accepts production startup when required hardening env vars
   );
 });
 
-test("runtime config accepts optional DB query profiling controls", async () => {
+test("runtime config forces DB query profiling off in production unless the explicit override is present", async () => {
   await withEnv(
     {
       ...productionBaseOverrides,
@@ -178,12 +178,55 @@ test("runtime config accepts optional DB query profiling controls", async () => 
     },
     async () => {
       const runtimeModule = await importRuntimeFresh();
-      assert.equal(runtimeModule.runtimeConfig.runtime.dbQueryProfiling.enabled, true);
+      assert.equal(runtimeModule.runtimeConfig.runtime.dbQueryProfiling.enabled, false);
       assert.equal(runtimeModule.runtimeConfig.runtime.dbQueryProfiling.samplePercent, 75);
       assert.equal(runtimeModule.runtimeConfig.runtime.dbQueryProfiling.minQueryCount, 9);
       assert.equal(runtimeModule.runtimeConfig.runtime.dbQueryProfiling.minTotalQueryMs, 55);
       assert.equal(runtimeModule.runtimeConfig.runtime.dbQueryProfiling.repeatedStatementThreshold, 4);
       assert.equal(runtimeModule.runtimeConfig.runtime.dbQueryProfiling.maxLoggedStatements, 6);
+      assert.equal(
+        runtimeModule.runtimeConfigValidation.warnings.some(
+          (warning: { code: string }) => warning.code === "db-query-profiling-production-forced-off",
+        ),
+        true,
+      );
+    },
+  );
+});
+
+test("runtime config allows temporary DB query profiling in production only when the explicit override is present", async () => {
+  await withEnv(
+    {
+      ...productionBaseOverrides,
+      BACKUP_ENCRYPTION_KEY: "A".repeat(32),
+      DB_QUERY_PROFILING_ENABLED: "1",
+      DB_QUERY_PROFILING_ALLOW_IN_PRODUCTION: "1",
+    },
+    async () => {
+      const runtimeModule = await importRuntimeFresh();
+      assert.equal(runtimeModule.runtimeConfig.runtime.dbQueryProfiling.enabled, true);
+      assert.equal(
+        runtimeModule.runtimeConfigValidation.warnings.some(
+          (warning: { code: string }) => warning.code === "db-query-profiling-production-forced-off",
+        ),
+        false,
+      );
+    },
+  );
+});
+
+test("runtime config keeps DB query profiling opt-in outside production", async () => {
+  await withEnv(
+    {
+      NODE_ENV: "development",
+      HOST: "127.0.0.1",
+      DB_QUERY_PROFILING_ENABLED: "1",
+      DB_QUERY_PROFILING_SAMPLE_PERCENT: "60",
+    },
+    async () => {
+      const runtimeModule = await importRuntimeFresh();
+      assert.equal(runtimeModule.runtimeConfig.runtime.dbQueryProfiling.enabled, true);
+      assert.equal(runtimeModule.runtimeConfig.runtime.dbQueryProfiling.samplePercent, 60);
     },
   );
 });

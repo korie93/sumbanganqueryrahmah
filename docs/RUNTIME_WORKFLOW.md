@@ -99,6 +99,7 @@ For stale-tab/429 health snapshots:
 Untuk pengesahan N+1 query di bawah load pada staging atau local soak:
 
 - set `DB_QUERY_PROFILING_ENABLED=1`
+- jika `NODE_ENV=production`, set juga `DB_QUERY_PROFILING_ALLOW_IN_PRODUCTION=1`
 - jalankan smoke/load flow biasa seperti `npm run smoke:ui`
 - semak warning log `Database query profiling ...`
 - matikan semula profiler selepas sesi profiling selesai

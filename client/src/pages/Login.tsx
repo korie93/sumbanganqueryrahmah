@@ -106,7 +106,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
 
           <div className="login-bg-effect login-halo pointer-events-none absolute -inset-4 hidden rounded-[2rem] blur-2xl sm:block" />
 
-          <div className="login-card px-5 py-7 sm:px-8 sm:py-10">
+          <div className="login-card">
             <div className="login-brand mb-8 flex flex-col items-center">
               <div className="login-brand-mark mb-4 flex h-20 w-20 items-center justify-center rounded-full shadow-xl supports-[backdrop-filter]:backdrop-blur-md">
                 <BrandLogo

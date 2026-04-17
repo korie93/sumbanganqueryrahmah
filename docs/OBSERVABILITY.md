@@ -56,6 +56,7 @@ atau load test untuk menyemak corak N+1 sebenar pada laluan HTTP.
 Env yang berkaitan:
 
 - `DB_QUERY_PROFILING_ENABLED=1`
+- `DB_QUERY_PROFILING_ALLOW_IN_PRODUCTION=1`
 - `DB_QUERY_PROFILING_SAMPLE_PERCENT=100`
 - `DB_QUERY_PROFILING_MIN_QUERY_COUNT=8`
 - `DB_QUERY_PROFILING_MIN_TOTAL_QUERY_MS=40`
@@ -73,6 +74,9 @@ berstruktur dengan:
 
 Ini sengaja disabled secara default supaya traffic production biasa tidak berubah. Gunakan ia
 untuk pengesahan terkawal di bawah load, kemudian matikan semula selepas analisis selesai.
+Jika `NODE_ENV=production`, profiler kini akan kekal mati melainkan anda set kedua-dua
+`DB_QUERY_PROFILING_ENABLED=1` dan `DB_QUERY_PROFILING_ALLOW_IN_PRODUCTION=1` secara
+eksplisit untuk sesi troubleshooting yang sementara.
 
 ### Request Timeout Semantics
 

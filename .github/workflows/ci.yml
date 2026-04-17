@@ -53,6 +53,9 @@ jobs:
       - name: Run client tests
         run: npm run test:client
 
+      - name: Run client accessibility tests
+        run: npm run test:client:a11y
+
       - name: Run script tests
         run: npm run test:scripts
 

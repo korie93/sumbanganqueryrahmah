@@ -11,3 +11,19 @@ test("CI workflow stops the built server without pkill", () => {
   assert.doesNotMatch(workflow, /\bpkill\b/);
   assert.match(workflow, /node scripts\/stop-background-server\.mjs server\.pid/);
 });
+
+test("CI workflow enforces client accessibility tests and bundle budgets", () => {
+  const workflow = readFileSync(ciWorkflowPath, "utf8");
+
+  assert.match(workflow, /Run client accessibility tests/);
+  assert.match(workflow, /npm run test:client:a11y/);
+  assert.match(workflow, /Verify client bundle budgets/);
+  assert.match(workflow, /npm run verify:bundle-budgets/);
+});
+
+test("CI workflow keeps the Playwright smoke gate enabled", () => {
+  const workflow = readFileSync(ciWorkflowPath, "utf8");
+
+  assert.match(workflow, /Run UI smoke/);
+  assert.match(workflow, /npm run smoke:ui/);
+});

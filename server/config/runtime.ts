@@ -62,6 +62,10 @@ const seedDefaultUsers = readBoolean("SEED_DEFAULT_USERS", false);
 const backupFeatureEnabled = readBoolean("BACKUP_FEATURE_ENABLED", true);
 const localSuperuserCredentialsFileEnabled = readBoolean("LOCAL_SUPERUSER_CREDENTIALS_FILE_ENABLED", false);
 const mailDevOutboxEnabled = readBoolean("MAIL_DEV_OUTBOX_ENABLED", false);
+const requestedDbQueryProfilingEnabled = readBoolean("DB_QUERY_PROFILING_ENABLED", false);
+const allowDbQueryProfilingInProduction = readBoolean("DB_QUERY_PROFILING_ALLOW_IN_PRODUCTION", false);
+const dbQueryProfilingEnabled =
+  requestedDbQueryProfilingEnabled && (!isProduction || allowDbQueryProfilingInProduction);
 const resolvedDefaultImportUploadLimitBytes = parseBodyLimitToBytes(
   readString("IMPORT_BODY_LIMIT", DEFAULT_IMPORT_BODY_LIMIT),
   DEFAULT_IMPORT_UPLOAD_LIMIT_BYTES,
@@ -330,7 +334,7 @@ export const runtimeConfig: RuntimeConfig = Object.freeze({
     requestTimeoutMs: readInt("HTTP_REQUEST_TIMEOUT_MS", 30_000, { min: 1_000 }),
     analyticsTimeZone: readString("ANALYTICS_TZ", "Asia/Kuala_Lumpur"),
     dbQueryProfiling: {
-      enabled: readBoolean("DB_QUERY_PROFILING_ENABLED", false),
+      enabled: dbQueryProfilingEnabled,
       samplePercent: readInt("DB_QUERY_PROFILING_SAMPLE_PERCENT", 100, { min: 0, max: 100 }),
       minQueryCount: readInt("DB_QUERY_PROFILING_MIN_QUERY_COUNT", 8, { min: 1 }),
       minTotalQueryMs: readInt("DB_QUERY_PROFILING_MIN_TOTAL_QUERY_MS", 40, { min: 0 }),
@@ -421,6 +425,16 @@ const runtimeWarnings = buildRuntimeConfigWarnings({
   configuredAuthCookieSecure,
   mailConfiguration,
 });
+
+if (isProduction && requestedDbQueryProfilingEnabled && !allowDbQueryProfilingInProduction) {
+  runtimeWarnings.push({
+    code: "db-query-profiling-production-forced-off",
+    envNames: ["NODE_ENV", "DB_QUERY_PROFILING_ENABLED", "DB_QUERY_PROFILING_ALLOW_IN_PRODUCTION"],
+    message:
+      "DB query profiling was forced off because production only allows temporary profiling when DB_QUERY_PROFILING_ALLOW_IN_PRODUCTION=1 is set explicitly.",
+    severity: "warning",
+  });
+}
 
 export const runtimeConfigValidation: RuntimeConfigValidationType = Object.freeze({
   warningCount: runtimeWarnings.length,

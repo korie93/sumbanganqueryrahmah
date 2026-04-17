@@ -7,6 +7,7 @@ Dokumen ini menerangkan bentuk ujian automatik yang benar-benar wujud dalam repo
 Repo ini sudah mempunyai coverage untuk:
 
 - `client` unit tests
+- `client` accessibility assertions berasaskan `axe-core` + `jsdom`
 - `server` HTTP, services, repositories, routes, WebSocket, dan intelligence tests
 - reviewed migration/bootstrap integration tests
 
@@ -20,6 +21,7 @@ Untuk semakan lebih cepat:
 
 ```bash
 npm run test:client
+npm run test:client:a11y
 npm run test:http
 npm run test:services
 npm run test:repositories
@@ -69,6 +71,18 @@ npm run verify:bundle-budgets
 ```
 
 Ini membantu pastikan dependency besar seperti `recharts`, `xlsx`, `jspdf`, dan `html2canvas` tidak melampaui had chunk yang sudah disemak.
+
+## 3a. A11y Gate Dalam CI
+
+Accessibility coverage bernilai tinggi kini memang dipanggil secara nyata dalam
+`.github/workflows/ci.yml` melalui:
+
+```bash
+npm run test:client:a11y
+```
+
+Ini melengkapkan `npm run test:client` supaya perubahan markup kritikal seperti
+error boundary fallback dan import surface gagal lebih awal jika melanggar axe.
 
 ## 4. Apa Yang Belum Dianggap Lengkap
 

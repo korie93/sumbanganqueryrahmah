@@ -159,6 +159,7 @@ See [ARCHITECTURE.md](./ARCHITECTURE.md) for a detailed architecture overview.
 - [docs/QA_FINAL_CHECKLIST.md](./docs/QA_FINAL_CHECKLIST.md) - Final QA and smoke gate checklist
 - [docs/TESTING_STRATEGY.md](./docs/TESTING_STRATEGY.md) - Current automated test layers, Playwright smoke coverage, and bundle budget gates
 - [docs/OBSERVABILITY.md](./docs/OBSERVABILITY.md) - Current logging, health, telemetry, and runtime monitoring model
+- [docs/WEBSOCKET_PROTOCOL.md](./docs/WEBSOCKET_PROTOCOL.md) - Runtime WebSocket auth, payload, heartbeat, reconnection, and close-code contract
 - [docs/SECURITY_HEADERS.md](./docs/SECURITY_HEADERS.md) - HSTS preload, CSP, and Trusted Types assumptions now enforced by the app
 - [docs/THREAT_MODEL.md](./docs/THREAT_MODEL.md) - Compact threat model for the current auth, upload, and runtime surfaces
 - [docs/INCIDENT_RESPONSE.md](./docs/INCIDENT_RESPONSE.md) - Practical first-response guide for runtime and secret incidents

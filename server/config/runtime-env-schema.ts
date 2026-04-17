@@ -250,6 +250,7 @@ const runtimeEnvironmentSchema = z.object({
     { min: 1_000 },
   ),
   DB_QUERY_PROFILING_ENABLED: optionalBooleanEnv("DB_QUERY_PROFILING_ENABLED"),
+  DB_QUERY_PROFILING_ALLOW_IN_PRODUCTION: optionalBooleanEnv("DB_QUERY_PROFILING_ALLOW_IN_PRODUCTION"),
   DB_QUERY_PROFILING_SAMPLE_PERCENT: optionalIntEnv("DB_QUERY_PROFILING_SAMPLE_PERCENT", {
     min: 0,
     max: 100,
