@@ -89,6 +89,10 @@ export function getInvalidatedSessionMessage(logoutReason?: string | null): stri
     return "Password changed. Please login again.";
   }
 
+  if (normalized === "ROLE_CHANGED") {
+    return "Account role changed. Please login again.";
+  }
+
   return "Session expired. Please login again.";
 }
 
@@ -278,6 +282,21 @@ export function createAuthGuards(options: CreateAuthGuardsOptions) {
               : blockReason === "locked"
                 ? ERROR_CODES.ACCOUNT_LOCKED
                 : ERROR_CODES.ACCOUNT_UNAVAILABLE,
+        });
+      }
+
+      const currentRole = String(user.role || activity.role || decoded.role).trim().toLowerCase();
+      const tokenRole = String(decoded.role || "").trim().toLowerCase();
+      if (currentRole && tokenRole && currentRole !== tokenRole) {
+        await storage.updateActivity(decoded.activityId, {
+          isActive: false,
+          logoutTime: new Date(),
+          logoutReason: "ROLE_CHANGED",
+        });
+        clearAuthSessionCookie(res);
+        return res.status(401).json({
+          message: getInvalidatedSessionMessage("ROLE_CHANGED"),
+          forceLogout: true,
         });
       }
 

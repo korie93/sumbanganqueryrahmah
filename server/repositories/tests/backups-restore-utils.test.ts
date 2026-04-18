@@ -1,8 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  buildSlowRestoreTransactionLogMetadata,
   createBackupPayloadChunkReader,
   createBackupPayloadSectionReader,
+  resolveBackupPayloadSourceKind,
+  shouldLogSlowRestoreTransaction,
 } from "../backups-restore-utils";
 import type { BackupDataPayload } from "../backups-repository-types";
 
@@ -208,4 +211,51 @@ test("createBackupPayloadChunkReader can stream restore chunks from an async JSO
     await collectChunkIds(reader.iterateArrayChunks<{ id: string }>("collectionRecords", 2)),
     [["record-1", "record-2"], ["record-3"]],
   );
+});
+
+test("restore observability helpers classify payload sources and slow-threshold crossings", () => {
+  assert.equal(resolveBackupPayloadSourceKind("{}"), "json-string");
+  assert.equal(resolveBackupPayloadSourceKind({
+    imports: [],
+    dataRows: [],
+    users: [],
+    auditLogs: [],
+  }), "structured-object");
+  assert.equal(resolveBackupPayloadSourceKind((async function* () {
+    yield "{}";
+  })()), "json-stream");
+
+  assert.equal(shouldLogSlowRestoreTransaction(15_000, 15_000), true);
+  assert.equal(shouldLogSlowRestoreTransaction(14_999, 15_000), false);
+});
+
+test("restore observability log metadata stays aggregate-only and excludes warning payloads", () => {
+  const metadata = buildSlowRestoreTransactionLogMetadata({
+    durationMs: 18_500,
+    maxPayloadBytes: 16_777_216,
+    slowThresholdMs: 15_000,
+    sourceKind: "json-string",
+    stats: {
+      imports: { inserted: 1, processed: 2, reactivated: 0, skipped: 1 },
+      dataRows: { inserted: 3, processed: 3, reactivated: 0, skipped: 0 },
+      users: { inserted: 1, processed: 1, reactivated: 0, skipped: 0 },
+      auditLogs: { inserted: 5, processed: 5, reactivated: 0, skipped: 0 },
+      collectionRecords: { inserted: 2, processed: 2, reactivated: 0, skipped: 0 },
+      collectionRecordReceipts: { inserted: 2, processed: 2, reactivated: 0, skipped: 0 },
+      warnings: ["record-1 missing optional receipt metadata"],
+      totalProcessed: 15,
+      totalInserted: 14,
+      totalSkipped: 1,
+      totalReactivated: 0,
+    },
+  });
+
+  assert.equal(metadata.warningCount, 1);
+  assert.equal("warnings" in metadata, false);
+  assert.deepEqual(metadata.datasetStats.imports, {
+    inserted: 1,
+    processed: 2,
+    reactivated: 0,
+    skipped: 1,
+  });
 });

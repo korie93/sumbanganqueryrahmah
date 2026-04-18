@@ -36,7 +36,11 @@ function FloatingRootContainer({
   children: ReactNode;
 }) {
   return (
-    <div ref={rootRef} className={className} hidden={hidden}>
+    <div
+      ref={rootRef}
+      className={cn(className, hidden ? "hidden" : "")}
+      aria-hidden={hidden ? "true" : undefined}
+    >
       {children}
     </div>
   );
@@ -52,7 +56,10 @@ function FloatingPanelShell({
   children: ReactNode;
 }) {
   return (
-    <div hidden={hidden} className={className}>
+    <div
+      className={cn(className, hidden ? "hidden" : "")}
+      aria-hidden={hidden ? "true" : undefined}
+    >
       {children}
     </div>
   );
@@ -68,7 +75,10 @@ function FloatingTriggerShell({
   children: ReactNode;
 }) {
   return (
-    <div className={className} hidden={hidden}>
+    <div
+      className={cn(className, hidden ? "hidden" : "")}
+      aria-hidden={hidden ? "true" : undefined}
+    >
       {children}
     </div>
   );

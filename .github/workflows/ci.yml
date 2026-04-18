@@ -50,11 +50,17 @@ jobs:
       - name: Run API contract tests
         run: npm run test:contracts
 
+      - name: Verify API docs
+        run: npm run verify:api-docs
+
       - name: Run client tests
         run: npm run test:client
 
       - name: Run client accessibility tests
         run: npm run test:client:a11y
+
+      - name: Verify theme contrast
+        run: npm run verify:contrast
 
       - name: Run script tests
         run: npm run test:scripts

@@ -5,6 +5,7 @@ import {
   hasLoginFieldErrors,
   isAbortRequestError,
   isLockedAccountError,
+  isRetryableLoginError,
   normalizeLoginErrorMessage,
   readErrorMessage,
   resolveAuthenticatedDefaultTab,
@@ -60,6 +61,14 @@ test("normalizeLoginErrorMessage rewrites banned-account messages", () => {
 test("isAbortRequestError detects AbortError DOMExceptions", () => {
   assert.equal(isAbortRequestError(new DOMException("Request aborted", "AbortError")), true);
   assert.equal(isAbortRequestError(new Error("Other error")), false);
+});
+
+test("isRetryableLoginError recognizes transient auth failures without treating invalid credentials as retryable", () => {
+  assert.equal(isRetryableLoginError(new TypeError("Failed to fetch")), true);
+  assert.equal(isRetryableLoginError({ status: 429, message: "Too many requests" }), true);
+  assert.equal(isRetryableLoginError({ status: 503, message: "Service unavailable" }), true);
+  assert.equal(isRetryableLoginError({ status: 401, message: "Invalid credentials" }), false);
+  assert.equal(isRetryableLoginError({ status: 423, message: "Account locked" }), false);
 });
 
 test("login error helpers read safe fields from unknown errors", () => {

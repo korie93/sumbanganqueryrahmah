@@ -51,6 +51,37 @@ export function normalizeLoginErrorMessage(message: string): string {
   return message;
 }
 
+export function isRetryableLoginError(error: unknown): boolean {
+  if (error instanceof TypeError) {
+    return true;
+  }
+
+  if (!error || typeof error !== "object") {
+    return false;
+  }
+
+  const errorRecord = error as {
+    message?: unknown;
+    name?: unknown;
+    status?: unknown;
+  };
+  const status =
+    typeof errorRecord.status === "number" && Number.isFinite(errorRecord.status)
+      ? errorRecord.status
+      : null;
+  if (status !== null) {
+    return status === 408 || status === 429 || status >= 500;
+  }
+
+  const errorName = typeof errorRecord.name === "string" ? errorRecord.name : "";
+  if (errorName === "NetworkError") {
+    return true;
+  }
+
+  const message = readErrorMessage(error, "");
+  return /failed to fetch|network|temporar(?:y|ily)|timeout|try again later/i.test(message);
+}
+
 export function isAbortRequestError(error: unknown): boolean {
   return error instanceof DOMException && error.name === "AbortError";
 }

@@ -38,3 +38,27 @@ test("FloatingAI respects reduced-motion by disabling backdrop blur and thinking
   assert.match(css, /\.floatingMobileBackdrop\s*\{\s*-webkit-backdrop-filter:\s*none;\s*backdrop-filter:\s*none;/s);
   assert.match(css, /\.aiThinkingRing::after\s*\{\s*animation:\s*none;\s*opacity:\s*0;\s*transform:\s*none;/s);
 });
+
+test("FloatingAI keeps a dvh to svh to vh fallback chain for panel sizing", () => {
+  const css = readFileSync(
+    path.resolve(process.cwd(), "client/src/components/FloatingAI.module.css"),
+    "utf8",
+  );
+
+  assert.match(css, /max-height:\s*calc\(100dvh - 5rem\);/);
+  assert.match(css, /height:\s*var\(--floating-ai-panel-height, 100dvh\);/);
+  assert.match(css, /@supports not \(height: 100dvh\)\s*\{\s*\.floatingPanelShell\s*\{\s*max-height:\s*calc\(100svh - 5rem\);/s);
+  assert.match(css, /@supports not \(height: 100dvh\)[\s\S]*\.floatingPanelShellFullscreen\s*\{\s*height:\s*var\(--floating-ai-panel-height, 100svh\);/s);
+  assert.match(css, /@supports not \(height: 100svh\)\s*\{\s*\.floatingPanelShell\s*\{\s*max-height:\s*calc\(100vh - 5rem\);/s);
+  assert.match(css, /@supports not \(height: 100svh\)[\s\S]*\.floatingPanelShellFullscreen\s*\{\s*height:\s*var\(--floating-ai-panel-height, 100vh\);/s);
+});
+
+test("boot shell shimmer respects prefers-reduced-motion", () => {
+  const css = readFileSync(
+    path.resolve(process.cwd(), "client/public/boot-shell.css"),
+    "utf8",
+  );
+
+  assert.match(css, /@media \(prefers-reduced-motion: reduce\)\s*\{/);
+  assert.match(css, /\.public-auth-boot-shell__field::after,\s*\.public-auth-boot-shell__button::after,\s*\.public-auth-boot-shell__link::after\s*\{\s*animation:\s*none;\s*transform:\s*none;\s*opacity:\s*0;/s);
+});

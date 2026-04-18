@@ -33,6 +33,8 @@ export default function Login({ onLoginSuccess }: LoginProps) {
     handleUsernameChange,
     handleSubmit,
     handleInputKeyDown,
+    canRetrySubmission,
+    retrySubmission,
     toggleShowPassword,
     returnToPasswordLogin,
     goToLandingPage,
@@ -126,6 +128,9 @@ export default function Login({ onLoginSuccess }: LoginProps) {
 
             <form className="login-form space-y-4" onSubmit={handleSubmit} {...loginFormBusyProps}>
               <div className="space-y-2">
+                <label className="sr-only" htmlFor="login-username">
+                  Username
+                </label>
                 <PublicAuthInput
                   id="login-username"
                   name="username"
@@ -149,6 +154,9 @@ export default function Login({ onLoginSuccess }: LoginProps) {
 
               {twoFactorChallengeToken ? (
                 <div className="space-y-2">
+                  <label className="sr-only" htmlFor="login-two-factor-code">
+                    Kod pengesah 6 digit
+                  </label>
                   <PublicAuthInput
                     id="login-two-factor-code"
                     name="twoFactorCode"
@@ -174,6 +182,9 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                 </div>
               ) : (
                 <div className="space-y-2">
+                  <label className="sr-only" htmlFor="login-password">
+                    Password
+                  </label>
                   <div className="relative">
                     <PublicAuthInput
                       id="login-password"
@@ -274,7 +285,16 @@ export default function Login({ onLoginSuccess }: LoginProps) {
 
             {error && !lockedFlow && (
               <div className="login-alert login-alert--error mt-4 text-sm" role="alert">
-                {error}
+                <div>{error}</div>
+                {canRetrySubmission ? (
+                  <button
+                    type="button"
+                    onClick={retrySubmission}
+                    className="login-alert-retry mt-3 inline-flex min-h-11 items-center justify-center rounded-xl px-4 py-2 text-sm font-medium transition-colors"
+                  >
+                    Cuba semula
+                  </button>
+                ) : null}
               </div>
             )}
 

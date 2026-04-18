@@ -59,6 +59,18 @@
   box-shadow: 0 0 0 2px var(--not-found-primary-button-ring);
 }
 
+.dark .not-found-page__card {
+  background: var(--not-found-card-surface);
+  border-color: var(--not-found-card-border);
+  box-shadow: var(--not-found-card-shadow);
+}
+
+.dark .not-found-page__secondary-button {
+  border-color: var(--not-found-secondary-button-border);
+  background: var(--not-found-secondary-button-bg);
+  color: var(--not-found-secondary-button-text);
+}
+
 @media (hover: hover) and (pointer: fine) {
   .not-found-page__secondary-button:hover {
     background: var(--not-found-secondary-button-bg-hover);

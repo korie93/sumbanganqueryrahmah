@@ -328,6 +328,7 @@ test("runtime config reads explicit pool monitor and backup restore safety setti
       PG_POOL_ALERT_UTILIZATION_PERCENT: "95",
       PG_POOL_HEALTH_CHECK_INTERVAL_MS: "75000",
       PG_POOL_HEALTH_CHECK_TIMEOUT_MS: "3200",
+      BACKUP_RESTORE_SLOW_TRANSACTION_MS: "18000",
       BACKUP_RESTORE_MAX_TRACKED_COLLECTION_RECORD_IDS: "345678",
     },
     async () => {
@@ -336,6 +337,7 @@ test("runtime config reads explicit pool monitor and backup restore safety setti
       assert.equal(runtimeModule.runtimeConfig.runtime.pgPoolAlertUtilizationPercent, 95);
       assert.equal(runtimeModule.runtimeConfig.runtime.pgPoolHealthCheckIntervalMs, 75_000);
       assert.equal(runtimeModule.runtimeConfig.runtime.pgPoolHealthCheckTimeoutMs, 3_200);
+      assert.equal(runtimeModule.runtimeConfig.runtime.backupRestoreSlowTransactionMs, 18_000);
       assert.equal(runtimeModule.runtimeConfig.runtime.backupRestoreMaxTrackedCollectionRecordIds, 345_678);
     },
   );
@@ -388,6 +390,24 @@ test("runtime config rejects remote error tracking enablement without an endpoin
       await assert.rejects(
         importRuntimeFresh(),
         /REMOTE_ERROR_TRACKING_ENDPOINT is required when REMOTE_ERROR_TRACKING_ENABLED=1/i,
+      );
+    },
+  );
+});
+
+test("runtime config warns when production-like remote error tracking uses plaintext transport", async () => {
+  await withEnv(
+    {
+      ...productionBaseOverrides,
+      BACKUP_ENCRYPTION_KEY: "A".repeat(32),
+      REMOTE_ERROR_TRACKING_ENABLED: "1",
+      REMOTE_ERROR_TRACKING_ENDPOINT: "http://errors.example.com/ingest",
+    },
+    async () => {
+      const runtimeModule = await importRuntimeFresh();
+      assert.match(
+        runtimeModule.runtimeConfigValidation.warnings.map((warning: { code: string }) => warning.code).join(","),
+        /REMOTE_ERROR_TRACKING_HTTPS_RECOMMENDED/,
       );
     },
   );

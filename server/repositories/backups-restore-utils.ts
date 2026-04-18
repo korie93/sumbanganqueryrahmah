@@ -1,6 +1,7 @@
 import { runtimeConfig } from "../config/runtime";
 import { db } from "../db-postgres";
 import { BackupPayloadTooLargeError } from "../lib/backup-payload-limit";
+import { logger } from "../lib/logger";
 import type { BackupDataPayload, RestoreStats } from "./backups-repository-types";
 import {
   createBackupPayloadChunkReader,
@@ -34,6 +35,48 @@ function isAsyncBackupPayloadSource(source: BackupPayloadSource): source is Asyn
     && source !== null
     && Symbol.asyncIterator in source
     && typeof source[Symbol.asyncIterator] === "function";
+}
+
+export function resolveBackupPayloadSourceKind(source: BackupPayloadSource): "json-stream" | "json-string" | "structured-object" {
+  if (typeof source === "string") {
+    return "json-string";
+  }
+
+  return isAsyncBackupPayloadSource(source) ? "json-stream" : "structured-object";
+}
+
+export function shouldLogSlowRestoreTransaction(durationMs: number, thresholdMs: number): boolean {
+  return Number.isFinite(durationMs) && Number.isFinite(thresholdMs) && durationMs >= thresholdMs;
+}
+
+export function buildSlowRestoreTransactionLogMetadata(params: {
+  durationMs: number;
+  maxPayloadBytes: number;
+  slowThresholdMs: number;
+  sourceKind: ReturnType<typeof resolveBackupPayloadSourceKind>;
+  stats: RestoreStats;
+}) {
+  const { durationMs, maxPayloadBytes, slowThresholdMs, sourceKind, stats } = params;
+
+  return {
+    durationMs,
+    maxPayloadBytes,
+    slowThresholdMs,
+    sourceKind,
+    warningCount: stats.warnings.length,
+    totalInserted: stats.totalInserted,
+    totalProcessed: stats.totalProcessed,
+    totalReactivated: stats.totalReactivated,
+    totalSkipped: stats.totalSkipped,
+    datasetStats: {
+      auditLogs: { ...stats.auditLogs },
+      collectionRecordReceipts: { ...stats.collectionRecordReceipts },
+      collectionRecords: { ...stats.collectionRecords },
+      dataRows: { ...stats.dataRows },
+      imports: { ...stats.imports },
+      users: { ...stats.users },
+    },
+  };
 }
 
 export {
@@ -136,22 +179,37 @@ export async function restoreFromBackup(
     limitedBackupSource,
   );
   const stats = createRestoreStats();
+  const restoreStartedAt = Date.now();
+  const slowRestoreThresholdMs = runtimeConfig.runtime.backupRestoreSlowTransactionMs;
 
-  await db.transaction(async (tx) => {
-    const restoreTx = tx as import("./backups-restore-shared-utils").BackupRestoreExecutor;
-    await initializeRestoreTrackingTempTable(restoreTx);
-    await restoreImportsFromBackup(restoreTx, backupDataReader, stats);
-    await restoreDataRowsFromBackup(restoreTx, backupDataReader, stats);
-    await restoreUsersFromBackup(restoreTx, backupDataReader, stats);
-    await restoreAuditLogsFromBackup(restoreTx, backupDataReader, stats);
-    await restoreCollectionRecordsFromBackup(restoreTx, backupDataReader, stats, {
-      maxTrackedRecordIds: runtimeConfig.runtime.backupRestoreMaxTrackedCollectionRecordIds,
+  try {
+    await db.transaction(async (tx) => {
+      const restoreTx = tx as import("./backups-restore-shared-utils").BackupRestoreExecutor;
+      await initializeRestoreTrackingTempTable(restoreTx);
+      await restoreImportsFromBackup(restoreTx, backupDataReader, stats);
+      await restoreDataRowsFromBackup(restoreTx, backupDataReader, stats);
+      await restoreUsersFromBackup(restoreTx, backupDataReader, stats);
+      await restoreAuditLogsFromBackup(restoreTx, backupDataReader, stats);
+      await restoreCollectionRecordsFromBackup(restoreTx, backupDataReader, stats, {
+        maxTrackedRecordIds: runtimeConfig.runtime.backupRestoreMaxTrackedCollectionRecordIds,
+      });
+      await restoreCollectionRecordReceiptsFromBackup(restoreTx, backupDataReader, stats);
+      await syncRestoredCollectionReceiptCache(restoreTx);
+      await finalizeRestoredCollectionRollups(restoreTx);
     });
-    await restoreCollectionRecordReceiptsFromBackup(restoreTx, backupDataReader, stats);
-    await syncRestoredCollectionReceiptCache(restoreTx);
-    await finalizeRestoredCollectionRollups(restoreTx);
-  });
+  } finally {
+    updateRestoreTotals(stats);
+    const restoreDurationMs = Date.now() - restoreStartedAt;
+    if (shouldLogSlowRestoreTransaction(restoreDurationMs, slowRestoreThresholdMs)) {
+      logger.warn("Backup restore transaction exceeded slow-operation threshold", buildSlowRestoreTransactionLogMetadata({
+        durationMs: restoreDurationMs,
+        maxPayloadBytes,
+        slowThresholdMs: slowRestoreThresholdMs,
+        sourceKind: resolveBackupPayloadSourceKind(limitedBackupSource),
+        stats,
+      }));
+    }
+  }
 
-  updateRestoreTotals(stats);
   return { success: true, stats };
 }

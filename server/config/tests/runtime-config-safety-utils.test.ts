@@ -174,6 +174,8 @@ test("buildRuntimeConfigWarnings warns when local collection PII encryption is n
     configuredCollectionPiiEncryptionKey: null,
     configuredPgPassword: null,
     configuredAuthCookieSecure: null,
+    remoteErrorTrackingEnabled: false,
+    remoteErrorTrackingEndpoint: null,
     mailConfiguration: {
       effectiveFrom: null,
       hasAnyInput: false,
@@ -199,6 +201,8 @@ test("buildRuntimeConfigWarnings reports when insecure auth cookies are forced o
     configuredCollectionPiiEncryptionKey: "collection-pii-secret",
     configuredPgPassword: "prod-db-password",
     configuredAuthCookieSecure: "false",
+    remoteErrorTrackingEnabled: false,
+    remoteErrorTrackingEndpoint: null,
     mailConfiguration: {
       effectiveFrom: null,
       hasAnyInput: false,
@@ -224,6 +228,8 @@ test("buildRuntimeConfigWarnings recommends reviewing trusted proxies for produc
     configuredCollectionPiiEncryptionKey: "collection-pii-secret",
     configuredPgPassword: "prod-db-password",
     configuredAuthCookieSecure: "auto",
+    remoteErrorTrackingEnabled: false,
+    remoteErrorTrackingEndpoint: null,
     mailConfiguration: {
       effectiveFrom: null,
       hasAnyInput: false,

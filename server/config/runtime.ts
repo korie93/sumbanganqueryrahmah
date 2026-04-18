@@ -328,6 +328,7 @@ export const runtimeConfig: RuntimeConfig = Object.freeze({
     pgPoolHealthCheckTimeoutMs: readInt("PG_POOL_HEALTH_CHECK_TIMEOUT_MS", 5_000, { min: 250 }),
     gracefulShutdownTimeoutMs: readInt("GRACEFUL_SHUTDOWN_TIMEOUT_MS", 25_000, { min: 1_000 }),
     backupOperationTimeoutMs: readInt("BACKUP_OPERATION_TIMEOUT_MS", 120_000, { min: 5_000 }),
+    backupRestoreSlowTransactionMs: readInt("BACKUP_RESTORE_SLOW_TRANSACTION_MS", 15_000, { min: 1_000 }),
     backupRestoreMaxTrackedCollectionRecordIds: readInt(
       "BACKUP_RESTORE_MAX_TRACKED_COLLECTION_RECORD_IDS",
       lowMemoryMode ? 100_000 : 250_000,
@@ -447,6 +448,8 @@ const runtimeWarnings = buildRuntimeConfigWarnings({
   configuredCollectionPiiEncryptionKey,
   configuredPgPassword,
   configuredAuthCookieSecure,
+  remoteErrorTrackingEnabled,
+  remoteErrorTrackingEndpoint,
   mailConfiguration,
 });
 

@@ -6,3 +6,14 @@
 .sidebarMobileWidth {
   --sidebar-width: 18rem;
 }
+
+:global(.dark) .sidebarWrapper {
+  color-scheme: dark;
+}
+
+:global(.dark) .sidebarMobileWidth {
+  color-scheme: dark;
+  background: hsl(var(--sidebar) / 1);
+  color: hsl(var(--sidebar-foreground) / 1);
+  border-color: hsl(var(--sidebar-border) / 1);
+}

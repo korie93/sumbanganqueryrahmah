@@ -125,6 +125,7 @@ export type RuntimeConfig = {
     pgPoolHealthCheckTimeoutMs: number;
     gracefulShutdownTimeoutMs: number;
     backupOperationTimeoutMs: number;
+    backupRestoreSlowTransactionMs: number;
     backupRestoreMaxTrackedCollectionRecordIds: number;
     backupMaxPayloadBytes: number;
     importCsvMaxRows: number;

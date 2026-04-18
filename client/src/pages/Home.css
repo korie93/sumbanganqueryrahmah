@@ -81,7 +81,7 @@
 
 .home-mobile-quick-card {
   display: flex;
-  min-height: 8.6rem;
+  min-height: clamp(8.25rem, 28vw, 9.75rem);
   flex-direction: column;
   gap: 0.85rem;
   padding: 0.95rem;

@@ -5,6 +5,25 @@ import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "@/lib/utils"
 import { FOCUS_VISIBLE_RING_CLASS_NAME } from "@/components/ui/focus-ring"
 
+function setButtonRef(
+  ref: React.ForwardedRef<HTMLButtonElement>,
+  value: HTMLButtonElement | null,
+) {
+  if (typeof ref === "function") {
+    ref(value)
+    return
+  }
+
+  if (ref) {
+    ref.current = value
+  }
+}
+
+function shouldWarnForMissingAccessibleName() {
+  return typeof window !== "undefined"
+    && (import.meta.env?.DEV ?? process.env.NODE_ENV !== "production")
+}
+
 const buttonVariants = cva(
   `inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium ${FOCUS_VISIBLE_RING_CLASS_NAME} disabled:pointer-events-none disabled:opacity-50 max-sm:min-w-11 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0` +
   " hover-elevate active-elevate-2",
@@ -48,16 +67,56 @@ export interface ButtonProps
 }
 
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant, size, asChild = false, title, "aria-label": ariaLabel, ...props }, ref) => {
+  (
+    {
+      className,
+      variant,
+      size,
+      asChild = false,
+      title,
+      "aria-label": ariaLabel,
+      "aria-labelledby": ariaLabelledBy,
+      ...props
+    },
+    ref,
+  ) => {
     const Comp = asChild ? Slot : "button"
+    const buttonRef = React.useRef<HTMLButtonElement | null>(null)
+    const combinedRef = React.useCallback((node: HTMLButtonElement | null) => {
+      if (!asChild) {
+        buttonRef.current = node
+      }
+      setButtonRef(ref, node)
+    }, [asChild, ref])
     const resolvedAriaLabel =
       ariaLabel ?? (size === "icon" && typeof title === "string" ? title : undefined)
     const ariaLabelProps = resolvedAriaLabel ? { "aria-label": resolvedAriaLabel } : {}
 
+    React.useEffect(() => {
+      if (!shouldWarnForMissingAccessibleName() || asChild || size !== "icon") {
+        return
+      }
+
+      const button = buttonRef.current
+      if (!button) {
+        return
+      }
+
+      const hasTextContent = Boolean(button.textContent?.trim())
+      if (resolvedAriaLabel || ariaLabelledBy || hasTextContent) {
+        return
+      }
+
+      console.warn("Icon button rendered without an accessible name. Add a title, aria-label, or visually hidden text.", {
+        type: props.type || "button",
+        variant: variant || "default",
+      })
+    }, [ariaLabelledBy, asChild, props.type, resolvedAriaLabel, size, variant])
+
     return (
       <Comp
         className={cn(buttonVariants({ variant, size, className }))}
-        ref={ref}
+        ref={combinedRef}
         title={title}
         {...ariaLabelProps}
         {...props}

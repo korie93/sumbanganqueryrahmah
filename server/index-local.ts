@@ -4,6 +4,13 @@ import type { WorkerFatalMessage } from "./internal/worker-ipc";
 import { startLocalServer } from "./internal/server-startup";
 import { createLocalRuntimeEnvironment } from "./internal/local-runtime-environment";
 import {
+  createShutdownPhaseTracker,
+  markShutdownPhase,
+  readShutdownDurationMs,
+  type ShutdownPhaseName,
+  type ShutdownPhaseTracker,
+} from "./internal/shutdown-observability";
+import {
   resolvePgPoolShutdownTimeoutMs,
   shutdownPgPoolSafely,
 } from "./internal/pg-pool-shutdown";
@@ -63,6 +70,18 @@ let shuttingDown = false;
 let shutdownExitCode = 0;
 let shutdownTimer: ReturnType<typeof setTimeout> | null = null;
 let shutdownConnectionDrainTimer: ReturnType<typeof setTimeout> | null = null;
+let shutdownPhaseTracker: ShutdownPhaseTracker | null = null;
+
+function captureShutdownPhase(phase: ShutdownPhaseName) {
+  if (!shutdownPhaseTracker) {
+    shutdownPhaseTracker = createShutdownPhaseTracker();
+  }
+  return markShutdownPhase(shutdownPhaseTracker, phase);
+}
+
+function readShutdownElapsedMs() {
+  return shutdownPhaseTracker ? readShutdownDurationMs(shutdownPhaseTracker) : 0;
+}
 
 function clearShutdownTimers() {
   if (shutdownTimer) {
@@ -86,14 +105,24 @@ async function finishShutdown() {
     stopBackgroundTasks: stopPgPoolBackgroundTasks,
     timeoutMs: PG_POOL_SHUTDOWN_TIMEOUT_MS,
   });
+  logger.info("PostgreSQL pool shutdown completed", {
+    ...captureShutdownPhase("pg-pool-closed"),
+    pgPoolShutdownTimeoutMs: PG_POOL_SHUTDOWN_TIMEOUT_MS,
+  });
 
-  logger.info("Server closed gracefully");
+  logger.info("Server closed gracefully", {
+    ...captureShutdownPhase("complete"),
+    exitCode: shutdownExitCode,
+  });
   process.exit(shutdownExitCode);
 }
 
 function finishShutdownSafely() {
   void finishShutdown().catch((error) => {
-    logger.error("Server shutdown finalization failed", { error });
+    logger.error("Server shutdown finalization failed", {
+      error,
+      shutdownDurationMs: readShutdownElapsedMs(),
+    });
     process.exit(shutdownExitCode === 0 ? 1 : shutdownExitCode);
   });
 }
@@ -105,13 +134,20 @@ function shutdownProcess(reason: string, exitCode: number, details?: string) {
   }
   shuttingDown = true;
   shutdownExitCode = exitCode;
+  shutdownPhaseTracker = createShutdownPhaseTracker();
 
   if (exitCode === 0) {
-    logger.info("Received shutdown signal, closing gracefully", { signal: reason });
+    logger.info("Received shutdown signal, closing gracefully", {
+      signal: reason,
+      gracefulShutdownTimeoutMs: GRACEFUL_SHUTDOWN_TIMEOUT_MS,
+      ...captureShutdownPhase("signal-received"),
+    });
   } else {
     logger.error("Fatal worker error triggered shutdown", {
       reason,
       details,
+      gracefulShutdownTimeoutMs: GRACEFUL_SHUTDOWN_TIMEOUT_MS,
+      ...captureShutdownPhase("signal-received"),
     });
   }
 
@@ -126,6 +162,7 @@ function shutdownProcess(reason: string, exitCode: number, details?: string) {
   shutdownConnectionDrainTimer = setTimeout(() => {
     logger.warn("Graceful shutdown is still draining active connections, forcing idle connection closure", {
       connectedClients: connectedClients.size,
+      ...captureShutdownPhase("connection-drain-escalation"),
     });
     server.closeIdleConnections?.();
     server.closeAllConnections?.();
@@ -134,6 +171,7 @@ function shutdownProcess(reason: string, exitCode: number, details?: string) {
   shutdownTimer = setTimeout(() => {
     logger.warn("Graceful shutdown timed out, forcing exit", {
       connectedClients: connectedClients.size,
+      ...captureShutdownPhase("timeout"),
     });
     process.exit(exitCode === 0 ? 1 : exitCode);
   }, GRACEFUL_SHUTDOWN_TIMEOUT_MS);
@@ -145,6 +183,7 @@ function shutdownProcess(reason: string, exitCode: number, details?: string) {
   }
 
   server.close(() => {
+    logger.info("HTTP server closed active connections", captureShutdownPhase("http-server-closed"));
     finishShutdownSafely();
   });
   server.closeIdleConnections?.();

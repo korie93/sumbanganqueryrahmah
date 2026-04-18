@@ -244,6 +244,8 @@ export function buildRuntimeConfigWarnings(params: {
   configuredCollectionPiiEncryptionKey: string | null;
   configuredPgPassword: string | null;
   configuredAuthCookieSecure: string | null;
+  remoteErrorTrackingEnabled: boolean;
+  remoteErrorTrackingEndpoint: string | null;
   mailConfiguration: MailConfigurationAssessment;
 }): RuntimeConfigDiagnostic[] {
   const warnings: RuntimeConfigDiagnostic[] = [];
@@ -257,6 +259,8 @@ export function buildRuntimeConfigWarnings(params: {
     configuredCollectionPiiEncryptionKey,
     configuredPgPassword,
     configuredAuthCookieSecure,
+    remoteErrorTrackingEnabled,
+    remoteErrorTrackingEndpoint,
     mailConfiguration,
   } = params;
 
@@ -335,6 +339,19 @@ export function buildRuntimeConfigWarnings(params: {
       code: "AUTH_COOKIE_SECURE_FORCED_ON_PRODUCTION",
       envNames: ["AUTH_COOKIE_SECURE"],
       message: "AUTH_COOKIE_SECURE=false was ignored because secure auth cookies are mandatory on production-like hosts.",
+      severity: "warning",
+    });
+  }
+
+  if (
+    isProductionLike
+    && remoteErrorTrackingEnabled
+    && String(remoteErrorTrackingEndpoint || "").trim().toLowerCase().startsWith("http://")
+  ) {
+    warnings.push({
+      code: "REMOTE_ERROR_TRACKING_HTTPS_RECOMMENDED",
+      envNames: ["REMOTE_ERROR_TRACKING_ENABLED", "REMOTE_ERROR_TRACKING_ENDPOINT"],
+      message: "REMOTE_ERROR_TRACKING_ENDPOINT should use https:// on production-like hosts so telemetry is not sent over plaintext transport.",
       severity: "warning",
     });
   }

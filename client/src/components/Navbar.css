@@ -1,7 +1,7 @@
 .navbar-safe-area-shell {
   padding-top: var(--safe-area-inset-top);
-  padding-right: var(--safe-area-inset-right);
-  padding-left: var(--safe-area-inset-left);
+  padding-inline-end: var(--safe-area-inset-right);
+  padding-inline-start: var(--safe-area-inset-left);
 }
 
 .navbar-nav-shell {
@@ -50,14 +50,16 @@
 }
 
 .navbar-scroll-fade--left {
-  left: 0.35rem;
-  border-radius: 9999px 0 0 9999px;
+  inset-inline-start: 0.35rem;
+  border-start-start-radius: 9999px;
+  border-end-start-radius: 9999px;
   background: linear-gradient(to right, hsl(var(--background) / 0.98), hsl(var(--background) / 0));
 }
 
 .navbar-scroll-fade--right {
-  right: 0.35rem;
-  border-radius: 0 9999px 9999px 0;
+  inset-inline-end: 0.35rem;
+  border-start-end-radius: 9999px;
+  border-end-end-radius: 9999px;
   background: linear-gradient(to left, hsl(var(--background) / 0.98), hsl(var(--background) / 0));
 }
 
@@ -67,7 +69,7 @@
 
 .navbar-scroll-hint {
   position: absolute;
-  right: 0.8rem;
+  inset-inline-end: 0.8rem;
   top: 50%;
   transform: translateY(-50%);
   pointer-events: none;
@@ -75,12 +77,21 @@
   border: 1px solid hsl(var(--border) / 0.85);
   background: hsl(var(--background) / 0.92);
   color: hsl(var(--muted-foreground));
-  padding: 0.22rem 0.55rem;
+  padding-block: 0.22rem;
+  padding-inline: 0.55rem;
   font-size: var(--font-size-xs);
   font-weight: 600;
   letter-spacing: 0.01em;
   box-shadow: 0 8px 20px hsl(var(--foreground) / 0.08);
   z-index: var(--z-navbar-scroll-hint);
+}
+
+[dir="rtl"] .navbar-scroll-fade--left {
+  background: linear-gradient(to left, hsl(var(--background) / 0.98), hsl(var(--background) / 0));
+}
+
+[dir="rtl"] .navbar-scroll-fade--right {
+  background: linear-gradient(to right, hsl(var(--background) / 0.98), hsl(var(--background) / 0));
 }
 
 .navbar-premium-glass::-webkit-scrollbar {
@@ -294,5 +305,13 @@
   .user-menu-trigger {
     min-height: 2.75rem;
     padding: 0.55rem 0.8rem;
+  }
+}
+
+@media print {
+  .navbar-safe-area-shell,
+  .navbar-scroll-fade,
+  .navbar-scroll-hint {
+    display: none !important;
   }
 }

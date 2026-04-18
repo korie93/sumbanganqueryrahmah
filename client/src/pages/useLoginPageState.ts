@@ -24,6 +24,7 @@ import {
   hasLoginFieldErrors,
   isAbortRequestError,
   isLockedAccountError,
+  isRetryableLoginError,
   normalizeLoginErrorMessage,
   readErrorMessage,
   resolveAuthenticatedDefaultTab,
@@ -34,6 +35,10 @@ import {
 type UseLoginPageStateParams = {
   onLoginSuccess: (user: User) => void;
 };
+
+type RetryableSubmissionKind = "login" | "two-factor";
+
+const TWO_FACTOR_PROMPT_NOTICE = "Masukkan kod pengesah 6 digit untuk melengkapkan log masuk.";
 
 export function useLoginPageState({ onLoginSuccess }: UseLoginPageStateParams) {
   const [username, setUsername] = useState("");
@@ -49,6 +54,7 @@ export function useLoginPageState({ onLoginSuccess }: UseLoginPageStateParams) {
   const [showPassword, setShowPassword] = useState(false);
   const [twoFactorChallengeToken, setTwoFactorChallengeToken] = useState("");
   const [twoFactorCode, setTwoFactorCode] = useState("");
+  const [retryableSubmissionKind, setRetryableSubmissionKind] = useState<RetryableSubmissionKind | null>(null);
   const mountedRef = useRef(true);
   const storedNoticeConsumedRef = useRef(false);
   const loginInFlightRef = useRef(false);
@@ -105,15 +111,34 @@ export function useLoginPageState({ onLoginSuccess }: UseLoginPageStateParams) {
     setLockedAccountMessage("");
   };
 
+  const clearValidationErrors = () => {
+    setUsernameError("");
+    setPasswordError("");
+    setTwoFactorCodeError("");
+  };
+
+  const clearRetryableSubmission = () => {
+    setRetryableSubmissionKind(null);
+  };
+
+  const clearTwoFactorChallenge = (options?: { clearNotice?: boolean }) => {
+    setTwoFactorChallengeToken("");
+    setTwoFactorCode("");
+    setTwoFactorCodeError("");
+    clearRetryableSubmission();
+    if (options?.clearNotice || notice === TWO_FACTOR_PROMPT_NOTICE) {
+      setNotice("");
+    }
+  };
+
   const beginRequest = () => {
     loginInFlightRef.current = true;
     const requestId = loginRequestIdRef.current + 1;
     loginRequestIdRef.current = requestId;
     setError("");
     setNotice("");
-    setUsernameError("");
-    setPasswordError("");
-    setTwoFactorCodeError("");
+    clearValidationErrors();
+    clearRetryableSubmission();
     setLockedAccountMessage("");
     setLoading(true);
     return requestId;
@@ -142,8 +167,9 @@ export function useLoginPageState({ onLoginSuccess }: UseLoginPageStateParams) {
     safeSetStorageItem(storage, "lastPage", defaultTab);
 
     if (options?.clearTwoFactor) {
-      setTwoFactorChallengeToken("");
-      setTwoFactorCode("");
+      clearTwoFactorChallenge({ clearNotice: true });
+    } else {
+      clearRetryableSubmission();
     }
 
     onLoginSuccess(authenticatedUser);
@@ -152,6 +178,7 @@ export function useLoginPageState({ onLoginSuccess }: UseLoginPageStateParams) {
   const handleUsernameChange = (value: string) => {
     setUsername(value);
     setUsernameError("");
+    clearRetryableSubmission();
     if (!isLockedAccountFlow({
       lockedUsername,
       currentUsername: value,
@@ -165,6 +192,7 @@ export function useLoginPageState({ onLoginSuccess }: UseLoginPageStateParams) {
   const handlePasswordChange = (value: string) => {
     setPassword(value);
     setPasswordError("");
+    clearRetryableSubmission();
     if (!lockedFlow) {
       setError("");
     }
@@ -173,6 +201,7 @@ export function useLoginPageState({ onLoginSuccess }: UseLoginPageStateParams) {
   const handleTwoFactorCodeChange = (value: string) => {
     setTwoFactorCode(normalizeTwoFactorCode(value));
     setTwoFactorCodeError("");
+    clearRetryableSubmission();
     if (!lockedFlow) {
       setError("");
     }
@@ -221,7 +250,8 @@ export function useLoginPageState({ onLoginSuccess }: UseLoginPageStateParams) {
         clearLockedAccountState();
         setTwoFactorChallengeToken(String(response.challengeToken || ""));
         setTwoFactorCode("");
-        setNotice("Masukkan kod pengesah 6 digit untuk melengkapkan log masuk.");
+        setNotice(TWO_FACTOR_PROMPT_NOTICE);
+        clearRetryableSubmission();
         return;
       }
 
@@ -236,10 +266,12 @@ export function useLoginPageState({ onLoginSuccess }: UseLoginPageStateParams) {
         setLockedUsername(normalizeLoginIdentity(username));
         setLockedAccountMessage(readErrorMessage(err, "Akaun anda telah dikunci kerana terlalu banyak percubaan log masuk yang tidak sah."));
         setError("");
+        clearRetryableSubmission();
         return;
       }
 
       setError(normalizeLoginErrorMessage(readErrorMessage(err, "Login failed. Please try again.")));
+      setRetryableSubmissionKind(isRetryableLoginError(err) ? "login" : null);
     } finally {
       finalizeRequest(requestId, controller);
     }
@@ -286,8 +318,7 @@ export function useLoginPageState({ onLoginSuccess }: UseLoginPageStateParams) {
 
       logClientError("Two-factor verification failed:", err);
       if (isLockedAccountError(err)) {
-        setTwoFactorChallengeToken("");
-        setTwoFactorCode("");
+        clearTwoFactorChallenge({ clearNotice: true });
         setLockedUsername(normalizeLoginIdentity(username));
         setLockedAccountMessage(readErrorMessage(err, "Akaun anda telah dikunci kerana terlalu banyak percubaan log masuk yang tidak sah."));
         setError("");
@@ -295,6 +326,7 @@ export function useLoginPageState({ onLoginSuccess }: UseLoginPageStateParams) {
       }
 
       setError(readErrorMessage(err, "Pengesahan dua faktor gagal. Sila cuba lagi."));
+      setRetryableSubmissionKind(isRetryableLoginError(err) ? "two-factor" : null);
     } finally {
       finalizeRequest(requestId, controller);
     }
@@ -323,14 +355,19 @@ export function useLoginPageState({ onLoginSuccess }: UseLoginPageStateParams) {
   };
 
   const returnToPasswordLogin = () => {
-    setTwoFactorChallengeToken("");
-    setTwoFactorCode("");
-    setTwoFactorCodeError("");
-    setNotice("");
+    clearTwoFactorChallenge({ clearNotice: true });
     setError("");
-    setUsernameError("");
-    setPasswordError("");
+    clearValidationErrors();
     setLockedAccountMessage("");
+    clearRetryableSubmission();
+  };
+
+  const retrySubmission = () => {
+    if (loading || lockedFlow || retryableSubmissionKind === null) {
+      return;
+    }
+
+    void (retryableSubmissionKind === "two-factor" ? handleVerifyTwoFactor() : handleLogin());
   };
 
   return {
@@ -347,11 +384,13 @@ export function useLoginPageState({ onLoginSuccess }: UseLoginPageStateParams) {
     twoFactorChallengeToken,
     twoFactorCode,
     lockedFlow,
+    canRetrySubmission: Boolean(error && retryableSubmissionKind && !loading && !lockedFlow),
     setPassword: handlePasswordChange,
     setTwoFactorCode: handleTwoFactorCodeChange,
     handleUsernameChange,
     handleSubmit,
     handleInputKeyDown,
+    retrySubmission,
     toggleShowPassword: () => setShowPassword((current) => !current),
     returnToPasswordLogin,
     goToLandingPage: () => {

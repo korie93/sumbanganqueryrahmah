@@ -11,15 +11,15 @@
 
 .floatingTriggerShell {
   position: absolute;
-  left: var(--floating-ai-trigger-left, auto);
-  right: var(--floating-ai-trigger-right, var(--floating-ai-edge-gap));
+  inset-inline-start: var(--floating-ai-trigger-left, auto);
+  inset-inline-end: var(--floating-ai-trigger-right, var(--floating-ai-edge-gap));
   bottom: var(--floating-ai-trigger-bottom, var(--floating-ai-edge-gap));
 }
 
 .floatingPanelShell {
   position: absolute;
-  left: var(--floating-ai-panel-left, auto);
-  right: var(--floating-ai-panel-right, var(--floating-ai-edge-gap));
+  inset-inline-start: var(--floating-ai-panel-left, auto);
+  inset-inline-end: var(--floating-ai-panel-right, var(--floating-ai-edge-gap));
   bottom: var(--floating-ai-panel-bottom, var(--floating-ai-edge-gap));
   width: min(var(--floating-ai-panel-width, 380px), calc(100% - (var(--floating-ai-edge-gap) * 2)));
   height: var(--floating-ai-panel-height, 420px);
@@ -30,8 +30,7 @@
 }
 
 .floatingPanelShellFullscreen {
-  left: 0;
-  right: 0;
+  inset-inline: 0;
   bottom: var(--floating-ai-panel-bottom, 0px);
   width: auto;
   height: var(--floating-ai-panel-height, 100dvh);
@@ -41,8 +40,8 @@
 
 .floatingPanelFullscreenSurface {
   border-radius: 0;
-  border-left: 0;
-  border-right: 0;
+  border-inline-start: 0;
+  border-inline-end: 0;
   border-bottom: 0;
   padding-top: var(--safe-area-inset-top);
   padding-bottom: var(--safe-area-inset-bottom);
@@ -78,12 +77,48 @@
   animation: pulseOutline 1.5s infinite;
 }
 
+@supports not (height: 100dvh) {
+  .floatingPanelShell {
+    max-height: calc(100svh - 5rem);
+  }
+
+  .floatingPanelShellFullscreen {
+    height: var(--floating-ai-panel-height, 100svh);
+  }
+}
+
+@supports not (height: 100svh) {
+  .floatingPanelShell {
+    max-height: calc(100vh - 5rem);
+  }
+
+  .floatingPanelShellFullscreen {
+    height: var(--floating-ai-panel-height, 100vh);
+  }
+}
+
 @media (min-width: 768px) {
   .floatingPanelShell {
     min-width: min(360px, calc(100% - (var(--floating-ai-edge-gap) * 2)));
     min-height: 452px;
     max-width: min(420px, calc(100% - (var(--floating-ai-edge-gap) * 2)));
     max-height: calc(100dvh - 6rem);
+  }
+}
+
+@supports not (height: 100dvh) {
+  @media (min-width: 768px) {
+    .floatingPanelShell {
+      max-height: calc(100svh - 6rem);
+    }
+  }
+}
+
+@supports not (height: 100svh) {
+  @media (min-width: 768px) {
+    .floatingPanelShell {
+      max-height: calc(100vh - 6rem);
+    }
   }
 }
 
@@ -97,6 +132,12 @@
     animation: none;
     opacity: 0;
     transform: none;
+  }
+}
+
+@media print {
+  .floatingRoot {
+    display: none !important;
   }
 }
 

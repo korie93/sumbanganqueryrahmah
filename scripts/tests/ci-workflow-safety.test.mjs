@@ -15,8 +15,12 @@ test("CI workflow stops the built server without pkill", () => {
 test("CI workflow enforces client accessibility tests and bundle budgets", () => {
   const workflow = readFileSync(ciWorkflowPath, "utf8");
 
+  assert.match(workflow, /Verify API docs/);
+  assert.match(workflow, /npm run verify:api-docs/);
   assert.match(workflow, /Run client accessibility tests/);
   assert.match(workflow, /npm run test:client:a11y/);
+  assert.match(workflow, /Verify theme contrast/);
+  assert.match(workflow, /npm run verify:contrast/);
   assert.match(workflow, /Verify client bundle budgets/);
   assert.match(workflow, /npm run verify:bundle-budgets/);
 });

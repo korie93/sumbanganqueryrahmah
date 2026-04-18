@@ -142,7 +142,21 @@ html.app-ready .public-auth-boot-shell {
   }
 }
 
-@media (max-width: 640px) {
+@media (prefers-reduced-motion: reduce) {
+  html.app-ready .public-auth-boot-shell {
+    transition: none;
+  }
+
+  .public-auth-boot-shell__field::after,
+  .public-auth-boot-shell__button::after,
+  .public-auth-boot-shell__link::after {
+    animation: none;
+    transform: none;
+    opacity: 0;
+  }
+}
+
+@media (max-width: 639px) {
   .public-auth-boot-shell {
     padding: 18px;
   }
