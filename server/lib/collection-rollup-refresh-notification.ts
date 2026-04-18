@@ -100,6 +100,16 @@ export class CollectionRollupRefreshNotificationSubscriber
       this.reconnectTimer = null;
     }
 
+    const pendingConnect = this.connectPromise;
+    if (pendingConnect) {
+      await pendingConnect.catch((error) => {
+        logger.warn("Collection rollup notification stop observed a pending connection failure", {
+          channel: this.channel,
+          error,
+        });
+      });
+    }
+
     const activeClient = this.currentClient;
     this.currentClient = null;
     if (activeClient) {
@@ -185,6 +195,7 @@ export class CollectionRollupRefreshNotificationSubscriber
       await client.query(`LISTEN ${this.channel}`);
 
       if (!this.started) {
+        this.removeClientListeners(client);
         await this.safeCloseClient(client, "start-aborted");
         return;
       }

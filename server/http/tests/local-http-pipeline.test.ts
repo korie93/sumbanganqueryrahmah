@@ -5,6 +5,7 @@ import path from "node:path";
 import test from "node:test";
 import express from "express";
 import { registerLocalHttpPipeline } from "../../internal/local-http-pipeline";
+import { logger } from "../../lib/logger";
 import { getRequestContext } from "../../lib/request-context";
 import { startTestServer, stopTestServer } from "../../routes/tests/http-test-utils";
 import { SQR_TRUSTED_TYPES_POLICY_NAME } from "../../../shared/trusted-types";
@@ -39,11 +40,102 @@ test("registerLocalHttpPipeline allows blob receipt previews in the CSP header",
     assert.match(csp, /img-src 'self' data: blob:/i);
     assert.match(csp, /frame-src 'self' blob:/i);
     assert.match(csp, /object-src 'none'/i);
+    assert.match(csp, /report-uri \/api\/security\/csp-reports/i);
     assert.match(csp, /script-src 'self'/i);
     assert.match(csp, /script-src-attr 'none'/i);
     assert.match(csp, /require-trusted-types-for 'script'/i);
     assert.match(csp, new RegExp(`trusted-types default ${SQR_TRUSTED_TYPES_POLICY_NAME}`, "i"));
     assert.doesNotMatch(csp, /script-src[^;]*unsafe-inline/i);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("registerLocalHttpPipeline accepts sanitized CSP violation reports", async (t) => {
+  const warnings: Array<Record<string, unknown> | undefined> = [];
+  t.mock.method(logger, "warn", ((message: string, payload?: Record<string, unknown>) => {
+    if (message === "Content Security Policy violation report received") {
+      warnings.push(payload);
+    }
+  }) as typeof logger.warn);
+
+  const app = express();
+  registerLocalHttpPipeline(app, {
+    importBodyLimit: "1mb",
+    collectionBodyLimit: "1mb",
+    defaultBodyLimit: "100kb",
+    uploadsRootDir: path.resolve(process.cwd(), "uploads"),
+    recordRequestStarted: () => undefined,
+    recordRequestFinished: () => undefined,
+    adaptiveRateLimit: (_req, _res, next) => next(),
+    systemProtectionMiddleware: (_req, _res, next) => next(),
+    maintenanceGuard: (_req, _res, next) => next(),
+  });
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const response = await fetch(`${baseUrl}/api/security/csp-reports`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/csp-report",
+      },
+      body: JSON.stringify({
+        "csp-report": {
+          "document-uri": "https://sqr.example.com/dashboard",
+          "blocked-uri": "https://evil.example/inline.js",
+          "violated-directive": "script-src-elem",
+          "effective-directive": "script-src-elem",
+        },
+      }),
+    });
+
+    assert.equal(response.status, 204);
+    assert.deepEqual(warnings, [
+      {
+        blockedUri: "https://evil.example/inline.js",
+        documentUri: "https://sqr.example.com/dashboard",
+        effectiveDirective: "script-src-elem",
+        originalPolicy: undefined,
+        referrer: undefined,
+        violatedDirective: "script-src-elem",
+      },
+    ]);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("registerLocalHttpPipeline rejects malformed CSP violation reports", async () => {
+  const app = express();
+  registerLocalHttpPipeline(app, {
+    importBodyLimit: "1mb",
+    collectionBodyLimit: "1mb",
+    defaultBodyLimit: "100kb",
+    uploadsRootDir: path.resolve(process.cwd(), "uploads"),
+    recordRequestStarted: () => undefined,
+    recordRequestFinished: () => undefined,
+    adaptiveRateLimit: (_req, _res, next) => next(),
+    systemProtectionMiddleware: (_req, _res, next) => next(),
+    maintenanceGuard: (_req, _res, next) => next(),
+  });
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const response = await fetch(`${baseUrl}/api/security/csp-reports`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        invalid: true,
+      }),
+    });
+
+    assert.equal(response.status, 400);
+    assert.deepEqual(await response.json(), {
+      ok: false,
+      message: "Invalid CSP report payload.",
+    });
   } finally {
     await stopTestServer(server);
   }

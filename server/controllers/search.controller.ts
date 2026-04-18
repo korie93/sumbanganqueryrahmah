@@ -14,6 +14,11 @@ type CreateSearchControllerDeps = {
 };
 
 export type SearchController = ReturnType<typeof createSearchController>;
+const SEARCH_MAX_PAGE_SIZE = 100;
+
+function clampSearchPageSize(value: unknown) {
+  return Math.max(1, Math.min(SEARCH_MAX_PAGE_SIZE, readInteger(value, 50)));
+}
 
 export function createSearchController(deps: CreateSearchControllerDeps) {
   const {
@@ -30,7 +35,7 @@ export function createSearchController(deps: CreateSearchControllerDeps) {
     const search = String(req.query.q || "").trim();
     const runtimeSettings = await getRuntimeSettingsCached();
     const page = Math.max(1, readInteger(req.query.page, 1));
-    const requestedLimit = readInteger(req.query.pageSize ?? req.query.limit, 50);
+    const requestedLimit = clampSearchPageSize(req.query.pageSize ?? req.query.limit);
 
     return res.json(await searchService.searchGlobal({
       search,
@@ -51,7 +56,7 @@ export function createSearchController(deps: CreateSearchControllerDeps) {
     const logic = body.logic === "OR" ? "OR" : "AND";
     const runtimeSettings = await getRuntimeSettingsCached();
     const page = Math.max(1, readInteger(body.page, 1));
-    const requestedLimit = readInteger(body.pageSize ?? body.limit, 50);
+    const requestedLimit = clampSearchPageSize(body.pageSize ?? body.limit);
 
     return res.json(await searchService.advancedSearch({
       filters,

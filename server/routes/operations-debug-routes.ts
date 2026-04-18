@@ -5,6 +5,10 @@ import type { OperationsRouteContext } from "./operations-route-context";
 export function isOperationsDebugRoutesEnabled(
   enabled: boolean = runtimeConfig.app.operationsDebugRoutesEnabled,
 ) {
+  if (runtimeConfig.app.isProductionLike) {
+    return false;
+  }
+
   return enabled;
 }
 

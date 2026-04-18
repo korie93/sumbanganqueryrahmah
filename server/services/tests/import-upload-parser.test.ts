@@ -138,6 +138,26 @@ test("parseImportUploadFile rejects CSV files that exceed the in-memory material
   }
 });
 
+test("parseImportUploadFile rejects CSV paths that resolve outside the allowed upload root", async () => {
+  const allowedRootDir = await mkdtemp(path.join(os.tmpdir(), "sqr-import-parser-allowed-"));
+  const fileDir = await mkdtemp(path.join(os.tmpdir(), "sqr-import-parser-file-"));
+  const filePath = path.join(fileDir, "customers.csv");
+
+  try {
+    await writeFile(filePath, "name,amount\nAlice,15\n", "utf8");
+
+    const result = await parseImportUploadFile("customers.csv", filePath, {
+      allowedRootDir,
+    });
+
+    assert.equal(result.error, "Cannot access the uploaded file. Please try again.");
+    assert.deepEqual(result.rows, []);
+  } finally {
+    await rm(allowedRootDir, { recursive: true, force: true });
+    await rm(fileDir, { recursive: true, force: true });
+  }
+});
+
 test("stripImportUploadExtension removes supported spreadsheet extensions", () => {
   assert.equal(stripImportUploadExtension("report.xlsx"), "report");
   assert.equal(stripImportUploadExtension("report.csv"), "report");

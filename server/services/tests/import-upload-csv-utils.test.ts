@@ -225,3 +225,23 @@ test("parseCsvFile rejects CSV files that exceed the in-memory materialization s
     await rm(tempDir, { recursive: true, force: true });
   }
 });
+
+test("forEachCsvFileRow rejects CSV paths that resolve outside the allowed upload root", async () => {
+  const allowedRootDir = await mkdtemp(path.join(os.tmpdir(), "sqr-import-csv-utils-allowed-"));
+  const fileDir = await mkdtemp(path.join(os.tmpdir(), "sqr-import-csv-utils-file-"));
+  const filePath = path.join(fileDir, "customers.csv");
+
+  try {
+    await writeFile(filePath, "name,amount\nAlice,10\n", "utf8");
+
+    const result = await forEachCsvFileRow(filePath, () => undefined, {
+      allowedRootDir,
+    });
+
+    assert.equal(result.error, "Cannot access the uploaded file. Please try again.");
+    assert.equal(result.rowCount, 0);
+  } finally {
+    await rm(allowedRootDir, { recursive: true, force: true });
+    await rm(fileDir, { recursive: true, force: true });
+  }
+});

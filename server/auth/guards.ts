@@ -191,6 +191,8 @@ export function createAuthGuards(options: CreateAuthGuardsOptions) {
     }
     tabVisibilitySweepStopped = true;
     clearInterval(tabVisibilitySweepHandle);
+    tabVisibilityCache.clear();
+    tabVisibilityInflight.clear();
   }
 
   async function loadAuthenticatedSessionSnapshot(decoded: AuthenticatedUser): Promise<{

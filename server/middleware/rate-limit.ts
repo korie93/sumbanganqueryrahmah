@@ -45,6 +45,10 @@ type RateLimitedRequest = Request & {
 };
 
 const AUTH_RATE_LIMIT_HASH_LENGTH = 24;
+const RATE_LIMIT_KEY_ADMISSION_TTL_MS = 15 * 60 * 1000;
+const RATE_LIMIT_KEY_ADMISSION_MAX_BUCKETS = 2_048;
+const RATE_LIMIT_KEY_ADMISSION_MAX_SUFFIXES_PER_BUCKET = 32;
+const RATE_LIMIT_OVERFLOW_BUCKET_SUFFIX = "overflow";
 
 function normalizeKeyPart(value: unknown): string | null {
   if (typeof value !== "string") {
@@ -105,8 +109,121 @@ export function buildRequestRateLimitFingerprint(req: Request): string[] {
   return parts;
 }
 
+function buildRequestRateLimitNetworkIdentity(req: Request): string[] {
+  const parts: string[] = [normalizeKeyPart(req.ip) ?? "unknown"];
+  const directPeer = normalizeKeyPart(req.socket?.remoteAddress);
+
+  if (directPeer && directPeer !== parts[0]) {
+    parts.push(`peer:${directPeer}`);
+  }
+
+  return parts;
+}
+
+type RateLimitKeyAdmissionControllerOptions = {
+  maxBuckets?: number;
+  maxSuffixesPerBucket?: number;
+  now?: () => number;
+  ttlMs?: number;
+};
+
+type RateLimitKeyAdmissionBucket = {
+  lastSeenAt: number;
+  suffixes: Map<string, number>;
+};
+
+export function createRateLimitKeyAdmissionController(
+  options: RateLimitKeyAdmissionControllerOptions = {},
+) {
+  const buckets = new Map<string, RateLimitKeyAdmissionBucket>();
+  const maxBuckets = options.maxBuckets ?? RATE_LIMIT_KEY_ADMISSION_MAX_BUCKETS;
+  const maxSuffixesPerBucket = options.maxSuffixesPerBucket ?? RATE_LIMIT_KEY_ADMISSION_MAX_SUFFIXES_PER_BUCKET;
+  const now = options.now ?? Date.now;
+  const ttlMs = options.ttlMs ?? RATE_LIMIT_KEY_ADMISSION_TTL_MS;
+
+  const pruneExpiredBuckets = (observedAt: number) => {
+    for (const [bucketKey, bucket] of buckets.entries()) {
+      if (observedAt - bucket.lastSeenAt < ttlMs) {
+        continue;
+      }
+
+      buckets.delete(bucketKey);
+    }
+  };
+
+  const pruneExpiredSuffixes = (bucket: RateLimitKeyAdmissionBucket, observedAt: number) => {
+    for (const [suffix, lastSeenAt] of bucket.suffixes.entries()) {
+      if (observedAt - lastSeenAt < ttlMs) {
+        continue;
+      }
+
+      bucket.suffixes.delete(suffix);
+    }
+  };
+
+  const pruneOverflowBuckets = () => {
+    while (buckets.size > maxBuckets) {
+      const oldestBucketKey = buckets.keys().next().value;
+      if (!oldestBucketKey) {
+        break;
+      }
+      buckets.delete(oldestBucketKey);
+    }
+  };
+
+  return {
+    admit(bucketKey: string, suffix: string) {
+      const normalizedBucketKey = String(bucketKey || "").trim();
+      const normalizedSuffix = String(suffix || "").trim();
+      if (!normalizedBucketKey || !normalizedSuffix) {
+        return RATE_LIMIT_OVERFLOW_BUCKET_SUFFIX;
+      }
+
+      const observedAt = now();
+      pruneExpiredBuckets(observedAt);
+
+      const existingBucket = buckets.get(normalizedBucketKey);
+      const bucket = existingBucket ?? {
+        lastSeenAt: observedAt,
+        suffixes: new Map<string, number>(),
+      };
+
+      if (existingBucket) {
+        buckets.delete(normalizedBucketKey);
+      }
+
+      bucket.lastSeenAt = observedAt;
+      pruneExpiredSuffixes(bucket, observedAt);
+
+      const existingSuffixSeenAt = bucket.suffixes.get(normalizedSuffix);
+      if (existingSuffixSeenAt != null) {
+        bucket.suffixes.delete(normalizedSuffix);
+        bucket.suffixes.set(normalizedSuffix, observedAt);
+        buckets.set(normalizedBucketKey, bucket);
+        return normalizedSuffix;
+      }
+
+      if (bucket.suffixes.size < maxSuffixesPerBucket) {
+        bucket.suffixes.set(normalizedSuffix, observedAt);
+        buckets.set(normalizedBucketKey, bucket);
+        pruneOverflowBuckets();
+        return normalizedSuffix;
+      }
+
+      buckets.set(normalizedBucketKey, bucket);
+      pruneOverflowBuckets();
+      return RATE_LIMIT_OVERFLOW_BUCKET_SUFFIX;
+    },
+    clear() {
+      buckets.clear();
+    },
+  };
+}
+
+const rateLimitKeyAdmissionController = createRateLimitKeyAdmissionController();
+
 function buildRateLimitKey(req: Request, scope: string, ...parts: Array<unknown>): string {
-  const keyParts = [scope, ...buildRequestRateLimitFingerprint(req)];
+  const keyParts = [scope, ...buildRequestRateLimitNetworkIdentity(req)];
   for (const part of parts) {
     const normalized = normalizeKeyPart(part);
     if (normalized) {
@@ -114,6 +231,17 @@ function buildRateLimitKey(req: Request, scope: string, ...parts: Array<unknown>
     }
   }
   return keyParts.join("|");
+}
+
+function buildBoundedRateLimitKey(req: Request, scope: string, subject: unknown): string {
+  const baseKey = buildRateLimitKey(req, scope);
+  const normalizedSubject = normalizeKeyPart(subject);
+  if (!normalizedSubject) {
+    return baseKey;
+  }
+
+  const admittedSubjectSuffix = rateLimitKeyAdmissionController.admit(baseKey, normalizedSubject);
+  return `${baseKey}|${admittedSubjectSuffix}`;
 }
 
 function createJsonRateLimiter(options: JsonRateLimiterOptions): RequestHandler {
@@ -182,7 +310,7 @@ export function createAuthRouteRateLimiters(): AuthRouteRateLimiters {
       max: 15,
       code: ERROR_CODES.AUTH_RATE_LIMITED,
       message: "Too many login attempts. Please try again shortly.",
-      keyGenerator: (req) => buildRateLimitKey(
+      keyGenerator: (req) => buildBoundedRateLimitKey(
         req,
         "auth-login",
         buildAuthRouteRateLimitSubject(req, "auth-login"),
@@ -193,7 +321,7 @@ export function createAuthRouteRateLimiters(): AuthRouteRateLimiters {
       max: 20,
       code: ERROR_CODES.AUTH_RECOVERY_RATE_LIMITED,
       message: "Too many activation or password reset attempts. Please try again shortly.",
-      keyGenerator: (req) => buildRateLimitKey(
+      keyGenerator: (req) => buildBoundedRateLimitKey(
         req,
         `auth-recovery:${req.path}`,
         buildAuthRouteRateLimitSubject(req, `auth-recovery:${req.path}`),
@@ -206,7 +334,7 @@ export function createAuthRouteRateLimiters(): AuthRouteRateLimiters {
       message: "Too many account security updates. Please wait before trying again.",
       keyGenerator: (req) => {
         const authReq = req as AuthenticatedLikeRequest;
-        return buildRateLimitKey(req, `auth-mutation:${req.path}`, authReq.user?.username);
+        return buildBoundedRateLimitKey(req, `auth-mutation:${req.path}`, authReq.user?.username);
       },
     }),
     adminAction: createJsonRateLimiter({
@@ -216,7 +344,7 @@ export function createAuthRouteRateLimiters(): AuthRouteRateLimiters {
       message: "Too many admin account actions. Please slow down and try again.",
       keyGenerator: (req) => {
         const authReq = req as AuthenticatedLikeRequest;
-        return buildRateLimitKey(req, `admin-action:${req.path}`, authReq.user?.username);
+        return buildBoundedRateLimitKey(req, `admin-action:${req.path}`, authReq.user?.username);
       },
     }),
     adminDestructiveAction: createJsonRateLimiter({
@@ -226,7 +354,7 @@ export function createAuthRouteRateLimiters(): AuthRouteRateLimiters {
       message: "Too many destructive admin actions. Please slow down and try again.",
       keyGenerator: (req) => {
         const authReq = req as AuthenticatedLikeRequest;
-        return buildRateLimitKey(req, `admin-destructive:${req.path}`, authReq.user?.username);
+        return buildBoundedRateLimitKey(req, `admin-destructive:${req.path}`, authReq.user?.username);
       },
     }),
   };

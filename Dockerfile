@@ -17,6 +17,16 @@ FROM node:24.12.0-bookworm-slim AS runtime
 
 WORKDIR /app
 
+ARG BUILD_DATE=unknown
+ARG VCS_REF=unknown
+
+LABEL org.opencontainers.image.title="Sumbangan Query Rahmah" \
+  org.opencontainers.image.description="Production image for the SQR application runtime" \
+  org.opencontainers.image.url="https://github.com/openai/sumbanganqueryrahmah" \
+  org.opencontainers.image.source="https://github.com/openai/sumbanganqueryrahmah" \
+  org.opencontainers.image.revision=$VCS_REF \
+  org.opencontainers.image.created=$BUILD_DATE
+
 ENV NODE_ENV=production
 ENV HOST=0.0.0.0
 ENV PORT=5000
@@ -39,6 +49,6 @@ USER node
 EXPOSE 5000
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-  CMD node -e "fetch(`http://127.0.0.1:${process.env.PORT || 5000}/api/health/live`).then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"
+  CMD node -e "const controller = new AbortController(); const timeout = setTimeout(() => controller.abort(), 4000); timeout.unref?.(); fetch(`http://127.0.0.1:${process.env.PORT || 5000}/api/health/live`, { signal: controller.signal }).then((response) => { clearTimeout(timeout); process.exit(response.ok ? 0 : 1); }).catch(() => { clearTimeout(timeout); process.exit(1); })"
 
 CMD ["node", "dist-local/server/cluster-local.js"]

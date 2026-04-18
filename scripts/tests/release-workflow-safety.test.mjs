@@ -11,3 +11,14 @@ test("release verification workflow keeps the lightweight load-testing scaffold 
   assert.match(workflow, /Verify load-testing scaffold/);
   assert.match(workflow, /node --test scripts\/tests\/load-testing-contract\.test\.mjs/);
 });
+
+test("release verification workflow generates cryptographic per-run runtime secrets instead of deriving them from public metadata", () => {
+  const workflow = readFileSync(releaseWorkflowPath, "utf8");
+
+  assert.match(workflow, /Generate secure CI runtime secrets/);
+  assert.match(workflow, /node scripts\/ci\/generate-runtime-secrets\.mjs/);
+  assert.doesNotMatch(workflow, /SESSION_SECRET:\s*.*github\.run_id/i);
+  assert.doesNotMatch(workflow, /TWO_FACTOR_ENCRYPTION_KEY:\s*.*github\.run_id/i);
+  assert.doesNotMatch(workflow, /PG_PASSWORD:\s*.*github\.run_id/i);
+  assert.doesNotMatch(workflow, /SEED_SUPERUSER_PASSWORD:\s*.*github\.run_id/i);
+});

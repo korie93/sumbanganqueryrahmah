@@ -1,3 +1,11 @@
+function normalizeHttpErrorStatusCode(statusCode: number) {
+  if (!Number.isInteger(statusCode) || statusCode < 400 || statusCode > 599) {
+    return 500;
+  }
+
+  return statusCode;
+}
+
 export class HttpError extends Error {
   readonly statusCode: number;
   readonly code?: string | undefined;
@@ -10,11 +18,12 @@ export class HttpError extends Error {
     options?: { code?: string | undefined; details?: unknown; expose?: boolean | undefined },
   ) {
     super(message);
+    const normalizedStatusCode = normalizeHttpErrorStatusCode(statusCode);
     this.name = "HttpError";
-    this.statusCode = statusCode;
+    this.statusCode = normalizedStatusCode;
     this.code = options?.code;
     this.details = options?.details;
-    this.expose = options?.expose ?? statusCode < 500;
+    this.expose = options?.expose ?? normalizedStatusCode < 500;
   }
 }
 

@@ -601,24 +601,29 @@ function createFallbackPagedDailyOverviewService() {
       limit?: number | undefined;
       offset?: number | undefined;
     }) => {
+      const filterFrom = filters?.from;
+      const filterTo = filters?.to;
+      const filterLimit = filters?.limit;
+      const filterOffset = filters?.offset;
+      const filterNicknames = Array.isArray(filters?.nicknames) ? filters.nicknames : [];
       listCalls.push({
-        from: filters?.from,
-        to: filters?.to,
-        nicknames: Array.isArray(filters?.nicknames) ? [...filters?.nicknames] : [],
-        limit: filters?.limit,
-        offset: filters?.offset,
+        from: filterFrom,
+        to: filterTo,
+        nicknames: [...filterNicknames],
+        limit: filterLimit,
+        offset: filterOffset,
       });
       const allowedNicknames = new Set(
-        (Array.isArray(filters?.nicknames) ? filters.nicknames : [])
+        filterNicknames
           .map((value) => String(value || "").toLowerCase()),
       );
       const matched = records.filter((record) =>
-        (!filters?.from || record.paymentDate >= filters.from)
-        && (!filters?.to || record.paymentDate <= filters.to)
+        (!filterFrom || record.paymentDate >= filterFrom)
+        && (!filterTo || record.paymentDate <= filterTo)
         && (allowedNicknames.size === 0 || allowedNicknames.has(record.collectionStaffNickname.toLowerCase())),
       );
-      const limit = Number.isFinite(Number(filters?.limit)) ? Number(filters?.limit) : matched.length;
-      const offset = Number.isFinite(Number(filters?.offset)) ? Number(filters?.offset) : 0;
+      const limit = Number.isFinite(Number(filterLimit)) ? Number(filterLimit) : matched.length;
+      const offset = Number.isFinite(Number(filterOffset)) ? Number(filterOffset) : 0;
       return matched.slice(offset, offset + limit);
     },
   };

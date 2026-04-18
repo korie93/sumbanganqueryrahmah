@@ -6,6 +6,10 @@ map $http_upgrade $connection_upgrade {
     "" close;
 }
 
+# These proxy-side limits are a coarse first line of defense only.
+# Keep them looser than the application's identity-aware rate limiters so Nginx
+# absorbs obvious floods while the app still enforces the authoritative
+# per-route/per-user throttling decisions and response metadata.
 limit_req_zone $binary_remote_addr zone=sqr_api_per_ip:10m rate=30r/m;
 limit_req_zone $binary_remote_addr zone=sqr_auth_per_ip:10m rate=10r/m;
 limit_req_zone $binary_remote_addr zone=sqr_ws_per_ip:10m rate=20r/m;

@@ -48,3 +48,15 @@ test("CI workflow keeps coverage gate reporting and artifact publishing wired", 
   assert.match(workflow, /npm run report:coverage-summary/);
   assert.match(workflow, /Upload coverage artifact/);
 });
+
+test("CI workflow generates cryptographic per-run runtime secrets instead of deriving them from public metadata", () => {
+  const workflow = readFileSync(ciWorkflowPath, "utf8");
+
+  assert.match(workflow, /Generate secure CI runtime secrets/);
+  assert.match(workflow, /node scripts\/ci\/generate-runtime-secrets\.mjs/);
+  assert.match(workflow, /Start PostgreSQL/);
+  assert.doesNotMatch(workflow, /SESSION_SECRET:\s*.*github\.run_id/i);
+  assert.doesNotMatch(workflow, /TWO_FACTOR_ENCRYPTION_KEY:\s*.*github\.run_id/i);
+  assert.doesNotMatch(workflow, /PG_PASSWORD:\s*.*github\.run_id/i);
+  assert.doesNotMatch(workflow, /SEED_SUPERUSER_PASSWORD:\s*.*github\.run_id/i);
+});

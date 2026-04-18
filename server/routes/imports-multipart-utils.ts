@@ -123,7 +123,9 @@ export async function parseMultipartImportUpload(params: {
       throw new Error(IMPORT_TOO_LARGE_MESSAGE);
     }
 
-    const parsed = await parseImportUploadFile(filename, tempFilePath);
+    const parsed = await parseImportUploadFile(filename, tempFilePath, {
+      allowedRootDir: tempDir,
+    });
     if (parsed.error) {
       throw new Error(parsed.error);
     }
@@ -174,7 +176,9 @@ export async function prepareMultipartImportUpload(params: {
       };
     }
 
-    const parsed = await parseImportUploadFile(filename, tempFilePath);
+    const parsed = await parseImportUploadFile(filename, tempFilePath, {
+      allowedRootDir: tempDir,
+    });
     if (parsed.error) {
       throw new Error(parsed.error);
     }

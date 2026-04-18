@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import path from "node:path";
 import express, { type Express, type RequestHandler } from "express";
 import helmet from "helmet";
+import { z } from "zod";
 import { runtimeConfig } from "../config/runtime";
 import { dbQueryProfiler } from "../db-postgres";
 import { buildContentDispositionHeader } from "../http/content-disposition";
@@ -18,6 +19,68 @@ import { SQR_TRUSTED_TYPES_POLICY_NAME } from "../../shared/trusted-types";
 const HTTP_SLOW_REQUEST_MS = runtimeConfig.runtime.httpSlowRequestMs;
 const API_VERSION_HEADER = "API-Version";
 const API_VERSION_VALUE = "1";
+const CSP_REPORT_ENDPOINT_PATH = "/api/security/csp-reports";
+
+const cspReportDocumentSchema = z.object({
+  "blocked-uri": z.string().max(2_048).optional(),
+  "document-uri": z.string().max(2_048).optional(),
+  "effective-directive": z.string().max(255).optional(),
+  "original-policy": z.string().max(8_192).optional(),
+  referrer: z.string().max(2_048).optional(),
+  "violated-directive": z.string().max(255).optional(),
+}).passthrough();
+
+const cspReportEnvelopeSchema = z.object({
+  "csp-report": cspReportDocumentSchema,
+});
+
+const cspReportingApiSchema = z.array(z.object({
+  body: cspReportDocumentSchema.optional(),
+  type: z.string().max(255).optional(),
+})).max(10);
+
+function normalizeCspReportValue(value: string | undefined, maxLength: number) {
+  const normalized = String(value || "").trim().replace(/\s+/g, " ");
+  return normalized ? normalized.slice(0, maxLength) : undefined;
+}
+
+function extractSanitizedCspReportPayloads(payload: unknown) {
+  const envelopeResult = cspReportEnvelopeSchema.safeParse(payload);
+  if (envelopeResult.success) {
+    const report = envelopeResult.data["csp-report"];
+    return [{
+      blockedUri: normalizeCspReportValue(report["blocked-uri"], 512),
+      documentUri: normalizeCspReportValue(report["document-uri"], 512),
+      effectiveDirective: normalizeCspReportValue(report["effective-directive"], 128),
+      originalPolicy: normalizeCspReportValue(report["original-policy"], 1_024),
+      referrer: normalizeCspReportValue(report.referrer, 512),
+      violatedDirective: normalizeCspReportValue(report["violated-directive"], 128),
+    }];
+  }
+
+  const reportingApiResult = cspReportingApiSchema.safeParse(payload);
+  if (!reportingApiResult.success) {
+    return null;
+  }
+
+  return reportingApiResult.data
+    .map((entry) => {
+      const report = entry.body;
+      if (!report) {
+        return null;
+      }
+
+      return {
+        blockedUri: normalizeCspReportValue(report["blocked-uri"], 512),
+        documentUri: normalizeCspReportValue(report["document-uri"], 512),
+        effectiveDirective: normalizeCspReportValue(report["effective-directive"], 128),
+        originalPolicy: normalizeCspReportValue(report["original-policy"], 1_024),
+        referrer: normalizeCspReportValue(report.referrer, 512),
+        violatedDirective: normalizeCspReportValue(report["violated-directive"], 128),
+      };
+    })
+    .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry));
+}
 
 function normalizeRequestUserAgent(rawUserAgent: unknown): string | undefined {
   const normalized = String(rawUserAgent || "").trim().replace(/\s+/g, " ");
@@ -72,6 +135,9 @@ export function registerLocalHttpPipeline(app: Express, options: LocalHttpPipeli
     hsts: {
       maxAge: 15552000,
       includeSubDomains: true,
+      // Keep preload aligned with an explicit operator review of hstspreload.org requirements.
+      // The runtime warning surface reminds operators not to treat this header as proof that a domain
+      // has already been accepted into browser preload lists.
       preload: true,
     },
     noSniff: true,
@@ -79,9 +145,12 @@ export function registerLocalHttpPipeline(app: Express, options: LocalHttpPipeli
       useDefaults: true,
       directives: {
         baseUri: ["'self'"],
+        // `data:` and `blob:` stay enabled because the app uses object URLs and safe inline data URLs
+        // for authenticated receipt previews, image export flows, and canvas-based client rendering.
         imgSrc: ["'self'", "data:", "blob:"],
         frameSrc: ["'self'", "blob:"],
         objectSrc: ["'none'"],
+        "report-uri": [CSP_REPORT_ENDPOINT_PATH],
         scriptSrc: ["'self'"],
         scriptSrcAttr: ["'none'"],
         trustedTypes: ["default", SQR_TRUSTED_TYPES_POLICY_NAME],
@@ -192,6 +261,29 @@ export function registerLocalHttpPipeline(app: Express, options: LocalHttpPipeli
       });
     });
   });
+
+  app.post(
+    CSP_REPORT_ENDPOINT_PATH,
+    express.json({
+      type: ["application/csp-report", "application/json", "application/reports+json"],
+      limit: "32kb",
+    }),
+    (req, res) => {
+      const sanitizedReports = extractSanitizedCspReportPayloads(req.body);
+      if (!sanitizedReports) {
+        return res.status(400).json({
+          ok: false,
+          message: "Invalid CSP report payload.",
+        });
+      }
+
+      for (const report of sanitizedReports) {
+        logger.warn("Content Security Policy violation report received", report);
+      }
+
+      return res.status(204).end();
+    },
+  );
 
   app.use("/api/backups", createRequestTimeoutOverrideMiddleware({
     timeoutMs: backupOperationTimeoutMs,

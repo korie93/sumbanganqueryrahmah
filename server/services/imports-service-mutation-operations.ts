@@ -78,7 +78,10 @@ export class ImportsServiceMutationOperations {
             await flushPendingRows();
           }
         },
-        { maxRows: runtimeConfig.runtime.importCsvMaxRows },
+        {
+          maxRows: runtimeConfig.runtime.importCsvMaxRows,
+          ...(params.allowedRootDir ? { allowedRootDir: params.allowedRootDir } : {}),
+        },
       );
 
       if (parsed.error) {

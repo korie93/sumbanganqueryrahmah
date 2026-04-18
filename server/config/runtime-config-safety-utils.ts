@@ -20,6 +20,8 @@ const PLACEHOLDER_BACKUP_ENCRYPTION_KEYS = new Set([
   "GENERATE_ME_BACKUP_KEY_AND_STORE_OFFLINE",
 ]);
 const UNSAFE_TRUST_PROXY_VALUES = new Set(["*", "all", "true", "1"]);
+const OBVIOUS_PLACEHOLDER_SECRET_PATTERN = /(?:generate[_-]?me|change[_-]?(?:this|me)|replace[_-]?(?:this|me)|do[_-]?not[_-]?use|placeholder-secret|example-secret)/i;
+const PRODUCTION_SECRET_MIN_LENGTH = 32;
 
 export function resolveTrustedProxies(rawValues: string[]): string[] {
   if (rawValues.length === 0) {
@@ -356,6 +358,15 @@ export function buildRuntimeConfigWarnings(params: {
     });
   }
 
+  if (isProductionLike && String(publicAppUrl || "").trim().toLowerCase().startsWith("https://")) {
+    warnings.push({
+      code: "HSTS_PRELOAD_REVIEW_RECOMMENDED",
+      envNames: ["PUBLIC_APP_URL"],
+      message: "HSTS preload is enabled for HTTPS hosts. Confirm the registrable domain meets hstspreload.org requirements before treating preload as operationally active.",
+      severity: "warning",
+    });
+  }
+
   return warnings;
 }
 
@@ -374,18 +385,49 @@ export function assertNoPlaceholderSecrets(params: {
     return;
   }
 
+  const isObviousPlaceholderSecret = (value: string) =>
+    OBVIOUS_PLACEHOLDER_SECRET_PATTERN.test(String(value || "").trim().toLowerCase());
+
+  const assertMinimumSecretLength = (
+    envName: string,
+    value: string | null,
+    minimumLength = PRODUCTION_SECRET_MIN_LENGTH,
+  ) => {
+    const normalizedValue = String(value || "").trim();
+    if (!normalizedValue) {
+      return;
+    }
+
+    if (normalizedValue.length < minimumLength) {
+      throw new Error(
+        `${envName} must be at least ${minimumLength} characters long on production-like hosts.`,
+      );
+    }
+  };
+
   if (params.configuredSessionSecret && PLACEHOLDER_SESSION_SECRETS.has(params.configuredSessionSecret)) {
     throw new Error("SESSION_SECRET is using the default placeholder value and must be replaced before non-local startup.");
   }
+  if (params.configuredSessionSecret && isObviousPlaceholderSecret(params.configuredSessionSecret)) {
+    throw new Error("SESSION_SECRET is using an obvious placeholder/demo value and must be replaced before non-local startup.");
+  }
+  assertMinimumSecretLength("SESSION_SECRET", params.configuredSessionSecret);
 
   for (const previousSecret of params.configuredPreviousSessionSecrets) {
     if (PLACEHOLDER_SESSION_SECRETS.has(previousSecret)) {
       throw new Error("SESSION_SECRET_PREVIOUS contains a placeholder value and must be replaced before non-local startup.");
     }
+    if (isObviousPlaceholderSecret(previousSecret)) {
+      throw new Error("SESSION_SECRET_PREVIOUS contains an obvious placeholder/demo value and must be replaced before non-local startup.");
+    }
+    assertMinimumSecretLength("SESSION_SECRET_PREVIOUS", previousSecret);
   }
 
   if (params.configuredPgPassword && PLACEHOLDER_DATABASE_PASSWORDS.has(params.configuredPgPassword)) {
     throw new Error("PG_PASSWORD is using the default placeholder value and must be replaced before non-local startup.");
+  }
+  if (params.configuredPgPassword && isObviousPlaceholderSecret(params.configuredPgPassword)) {
+    throw new Error("PG_PASSWORD is using an obvious placeholder/demo value and must be replaced before non-local startup.");
   }
 
   if (
@@ -396,6 +438,15 @@ export function assertNoPlaceholderSecrets(params: {
       "TWO_FACTOR_ENCRYPTION_KEY is using the default placeholder value and must be replaced before non-local startup.",
     );
   }
+  if (
+    params.configuredTwoFactorEncryptionKey
+    && isObviousPlaceholderSecret(params.configuredTwoFactorEncryptionKey)
+  ) {
+    throw new Error(
+      "TWO_FACTOR_ENCRYPTION_KEY is using an obvious placeholder/demo value and must be replaced before non-local startup.",
+    );
+  }
+  assertMinimumSecretLength("TWO_FACTOR_ENCRYPTION_KEY", params.configuredTwoFactorEncryptionKey);
 
   if (
     params.configuredCollectionPiiEncryptionKey
@@ -405,6 +456,18 @@ export function assertNoPlaceholderSecrets(params: {
       "COLLECTION_PII_ENCRYPTION_KEY is using the default placeholder value and must be replaced before non-local startup.",
     );
   }
+  if (
+    params.configuredCollectionPiiEncryptionKey
+    && isObviousPlaceholderSecret(params.configuredCollectionPiiEncryptionKey)
+  ) {
+    throw new Error(
+      "COLLECTION_PII_ENCRYPTION_KEY is using an obvious placeholder/demo value and must be replaced before non-local startup.",
+    );
+  }
+  assertMinimumSecretLength(
+    "COLLECTION_PII_ENCRYPTION_KEY",
+    params.configuredCollectionPiiEncryptionKey,
+  );
 
   for (const previousCollectionPiiKey of params.configuredPreviousCollectionPiiEncryptionKeys) {
     if (PLACEHOLDER_COLLECTION_PII_ENCRYPTION_KEYS.has(previousCollectionPiiKey)) {
@@ -412,6 +475,12 @@ export function assertNoPlaceholderSecrets(params: {
         "COLLECTION_PII_ENCRYPTION_KEY_PREVIOUS contains a placeholder value and must be replaced before non-local startup.",
       );
     }
+    if (isObviousPlaceholderSecret(previousCollectionPiiKey)) {
+      throw new Error(
+        "COLLECTION_PII_ENCRYPTION_KEY_PREVIOUS contains an obvious placeholder/demo value and must be replaced before non-local startup.",
+      );
+    }
+    assertMinimumSecretLength("COLLECTION_PII_ENCRYPTION_KEY_PREVIOUS", previousCollectionPiiKey);
   }
 
   const configuredBackupKeys = [
@@ -428,5 +497,11 @@ export function assertNoPlaceholderSecrets(params: {
         "BACKUP_ENCRYPTION_KEY or BACKUP_ENCRYPTION_KEYS contains a placeholder value and must be replaced before non-local startup.",
       );
     }
+    if (isObviousPlaceholderSecret(backupKey)) {
+      throw new Error(
+        "BACKUP_ENCRYPTION_KEY or BACKUP_ENCRYPTION_KEYS contains an obvious placeholder/demo value and must be replaced before non-local startup.",
+      );
+    }
+    assertMinimumSecretLength("BACKUP_ENCRYPTION_KEY", backupKey);
   }
 }

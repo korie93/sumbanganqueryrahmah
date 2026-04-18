@@ -28,7 +28,12 @@ export default tseslint.config(
       },
     },
     rules: {
-      "no-constant-condition": "off",
+      "no-constant-condition": [
+        "error",
+        {
+          checkLoops: false,
+        },
+      ],
       "no-control-regex": "off",
       "no-empty": "off",
       "no-eval": "error",
@@ -37,7 +42,7 @@ export default tseslint.config(
       "no-new-func": "error",
       "no-script-url": "error",
       "no-unsafe-finally": "off",
-      "no-unsafe-optional-chaining": "off",
+      "no-unsafe-optional-chaining": "error",
       "no-useless-escape": "off",
       "prefer-const": "off",
     },

@@ -493,6 +493,38 @@ test("runtime manager rejects query-string session tokens before lookup", async 
   }
 });
 
+test("runtime manager does not re-close sockets that are already closed during early rejection", async () => {
+  const wss = new FakeWebSocketServer();
+  const providedMap = new Map<string, WebSocket>();
+  const socket = new FakeWebSocket();
+  socket.readyState = WebSocket.CLOSED;
+
+  createRuntimeWebSocketManager({
+    wss: wss as unknown as import("ws").WebSocketServer,
+    storage: {
+      getActivityById: async () => undefined,
+      clearCollectionNicknameSessionByActivity: async () => undefined,
+    },
+    secret: TEST_SECRET,
+    connectedClients: providedMap,
+  });
+
+  try {
+    wss.emit(
+      "connection",
+      socket as unknown as WebSocket,
+      createQueryTokenConnectionRequest(createWsToken("activity-query-token-closed")),
+    );
+    await flushAsyncWork();
+
+    assert.equal(socket.closeCalls, 0);
+    assert.equal(providedMap.size, 0);
+    assertNoRuntimeSocketListeners(socket);
+  } finally {
+    wss.emit("close");
+  }
+});
+
 test("runtime manager rejects cross-origin browser handshakes", async () => {
   const wss = new FakeWebSocketServer();
   const providedMap = new Map<string, WebSocket>();

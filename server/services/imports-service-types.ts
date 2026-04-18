@@ -45,6 +45,7 @@ export type CreateImportFromCsvFileInput = {
   name: string;
   filename: string;
   filePath: string;
+  allowedRootDir?: string | undefined;
   createdBy?: string | undefined;
 };
 

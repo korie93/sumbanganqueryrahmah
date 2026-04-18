@@ -19,6 +19,7 @@
     "verify:contrast": "node scripts/verify-theme-contrast.mjs",
     "verify:design-token-color-compatibility": "node scripts/verify-design-token-color-compatibility.mjs",
     "verify:design-token-spacing": "node scripts/verify-design-token-spacing.mjs",
+    "verify:commit-message": "node scripts/verify-commit-message.mjs",
     "verify:dependency-supply-chain": "node scripts/verify-dependency-supply-chain.mjs",
     "verify:repo-hygiene": "node scripts/verify-repo-hygiene.mjs",
     "verify:db-schema-governance": "node scripts/verify-db-schema-governance.mjs",
@@ -65,7 +66,7 @@
     "test:intelligence": "tsx --test server/intelligence/tests/*.test.ts",
     "test": "npm run test:client && npm run test:scripts && npm run test:http && npm run test:services && npm run test:repositories && npm run test:routes && npm run test:ws && npm run test:intelligence",
     "test:coverage": "c8 --reporter=text --reporter=lcov --reporter=json-summary npm test",
-    "test:coverage:gate": "c8 --reporter=text --reporter=lcov --reporter=json-summary --check-coverage --lines 70 --branches 60 --include=client/src/lib/api/contract.ts --include=client/src/lib/api/imports.ts --include=client/src/lib/api/settings.ts --include=server/controllers/imports.controller.ts --include=server/routes/imports.routes.ts --include=server/routes/settings.routes.ts --include=server/services/imports.service.ts --include=server/services/settings.service.ts --include=shared/api-contracts.ts npm run test:contracts",
+    "test:coverage:gate": "c8 --reporter=text --reporter=lcov --reporter=json-summary --check-coverage --lines 70 --branches 60 --include=client/src/lib/api/contract.ts --include=client/src/lib/api/imports.ts --include=client/src/lib/api/settings.ts --include=server/auth/session-cookie.ts --include=server/controllers/imports.controller.ts --include=server/http/csrf.ts --include=server/middleware/rate-limit.ts --include=server/routes/imports.routes.ts --include=server/routes/settings.routes.ts --include=server/services/imports.service.ts --include=server/services/settings.service.ts --include=shared/api-contracts.ts tsx --test server/routes/tests/imports.routes.integration.test.ts server/routes/tests/settings.routes.integration.test.ts client/src/lib/api/tests/api-contracts.test.ts server/auth/tests/session-cookie.test.ts server/http/tests/csrf.test.ts server/middleware/tests/rate-limit.test.ts",
     "report:coverage-summary": "node scripts/report-coverage-summary.mjs",
     "perf:collection:baseline": "node scripts/perf-collection-baseline.mjs",
     "perf:pagespeed:local": "node scripts/run-pagespeed-local.mjs",
@@ -96,7 +97,6 @@
     ]
   },
   "dependencies": {
-    "@hookform/resolvers": "^3.10.0",
     "@radix-ui/react-accordion": "^1.2.4",
     "@radix-ui/react-alert-dialog": "^1.1.7",
     "@radix-ui/react-aspect-ratio": "^1.1.8",
@@ -132,7 +132,7 @@
     "cmdk": "^1.1.1",
     "compression": "^1.8.1",
     "date-fns": "^3.6.0",
-    "dompurify": "^3.4.0",
+    "dompurify": "3.4.0",
     "dotenv": "^16.6.1",
     "drizzle-orm": "^0.45.2",
     "drizzle-zod": "^0.7.0",
@@ -188,7 +188,7 @@
     "axe-core": "^4.11.3",
     "c8": "^11.0.0",
     "drizzle-kit": "^0.31.10",
-    "esbuild": "^0.25.4",
+    "esbuild": "0.25.4",
     "eslint": "^9.39.4",
     "eslint-plugin-react-hooks": "^6.1.1",
     "globals": "^17.5.0",
@@ -205,10 +205,10 @@
     "vite": "^6.4.1"
   },
   "overrides": {
-    "qs": "^6.15.0",
-    "lodash": "^4.17.23",
-    "rollup": "^4.59.0",
-    "dompurify": "^3.4.0",
-    "esbuild": "^0.25.4"
+    "qs": "6.15.0",
+    "lodash": "4.17.23",
+    "rollup": "4.59.0",
+    "dompurify": "3.4.0",
+    "esbuild": "0.25.4"
   }
 }

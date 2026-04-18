@@ -6,6 +6,11 @@ module.exports = {
       script: "npm",
       args: "start",
       interpreter: "none",
+      instances: 1,
+      // Keep one PM2 app instance here because `npm start` launches the repo's
+      // own clustered runtime entrypoint. Scale worker count through
+      // SQR_MAX_WORKERS / SQR_INITIAL_WORKERS instead of layering PM2 cluster
+      // mode on top of the app's internal cluster manager.
       // This example keeps the npm wrapper for parity with `npm start`.
       // PM2 `wait_ready` is intentionally not enabled here because readiness
       // handshakes require a direct Node entrypoint that emits `process.send("ready")`.

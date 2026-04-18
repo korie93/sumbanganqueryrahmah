@@ -148,18 +148,54 @@ test("assertNoPlaceholderSecrets rejects production-like previous collection PII
     () =>
       assertNoPlaceholderSecrets({
         isProductionLike: true,
-        configuredSessionSecret: "prod-session-secret",
+        configuredSessionSecret: "S".repeat(32),
         configuredPreviousSessionSecrets: [],
         configuredPgPassword: "prod-db-password",
-        configuredTwoFactorEncryptionKey: "prod-2fa-secret",
-        configuredCollectionPiiEncryptionKey: "prod-collection-pii-secret",
+        configuredTwoFactorEncryptionKey: "T".repeat(32),
+        configuredCollectionPiiEncryptionKey: "C".repeat(32),
         configuredPreviousCollectionPiiEncryptionKeys: [
           "GENERATE_ME_COLLECTION_PII_KEY_DO_NOT_REUSE_SESSION_SECRET",
         ],
-        configuredBackupEncryptionKey: "prod-backup-secret",
+        configuredBackupEncryptionKey: "B".repeat(32),
         configuredBackupEncryptionKeys: null,
       }),
     /COLLECTION_PII_ENCRYPTION_KEY_PREVIOUS contains a placeholder value/i,
+  );
+});
+
+test("assertNoPlaceholderSecrets rejects short production-like session secrets", () => {
+  assert.throws(
+    () =>
+      assertNoPlaceholderSecrets({
+        isProductionLike: true,
+        configuredSessionSecret: "short-session-secret",
+        configuredPreviousSessionSecrets: [],
+        configuredPgPassword: "prod-db-password",
+        configuredTwoFactorEncryptionKey: "T".repeat(32),
+        configuredCollectionPiiEncryptionKey: "C".repeat(32),
+        configuredPreviousCollectionPiiEncryptionKeys: [],
+        configuredBackupEncryptionKey: "B".repeat(32),
+        configuredBackupEncryptionKeys: null,
+      }),
+    /SESSION_SECRET must be at least 32 characters long/i,
+  );
+});
+
+test("assertNoPlaceholderSecrets rejects production-like demo marker secrets", () => {
+  assert.throws(
+    () =>
+      assertNoPlaceholderSecrets({
+        isProductionLike: true,
+        configuredSessionSecret: "example-secret-for-production",
+        configuredPreviousSessionSecrets: [],
+        configuredPgPassword: "prod-db-password",
+        configuredTwoFactorEncryptionKey: "T".repeat(32),
+        configuredCollectionPiiEncryptionKey: "C".repeat(32),
+        configuredPreviousCollectionPiiEncryptionKeys: [],
+        configuredBackupEncryptionKey: "B".repeat(32),
+        configuredBackupEncryptionKeys: null,
+      }),
+    /SESSION_SECRET is using an obvious placeholder\/demo value/i,
   );
 });
 
@@ -241,5 +277,32 @@ test("buildRuntimeConfigWarnings recommends reviewing trusted proxies for produc
   assert.match(
     warnings.map((warning) => warning.code).join(","),
     /TRUSTED_PROXIES_REVIEW_RECOMMENDED/,
+  );
+});
+
+test("buildRuntimeConfigWarnings reminds operators to review HSTS preload expectations on HTTPS deployments", () => {
+  const warnings = buildRuntimeConfigWarnings({
+    isStrictLocalDevelopment: false,
+    isProductionLike: true,
+    trustedProxies: ["loopback"],
+    publicAppUrl: "https://sqr.example.com",
+    configuredSessionSecret: "prod-session-secret",
+    configuredCollectionNicknameTempPassword: "TempPassword12345",
+    configuredCollectionPiiEncryptionKey: "collection-pii-secret",
+    configuredPgPassword: "prod-db-password",
+    configuredAuthCookieSecure: "auto",
+    remoteErrorTrackingEnabled: false,
+    remoteErrorTrackingEndpoint: null,
+    mailConfiguration: {
+      effectiveFrom: null,
+      hasAnyInput: false,
+      isConfigured: false,
+      isIncomplete: false,
+    },
+  });
+
+  assert.match(
+    warnings.map((warning) => warning.code).join(","),
+    /HSTS_PRELOAD_REVIEW_RECOMMENDED/,
   );
 });

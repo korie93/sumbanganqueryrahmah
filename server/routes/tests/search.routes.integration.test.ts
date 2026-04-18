@@ -221,6 +221,30 @@ test("GET /api/search/global applies the protected limit cap and formats rows wi
   }
 });
 
+test("GET /api/search/global clamps oversized requested page sizes before reaching the service layer", async () => {
+  const { app, globalSearchCalls } = createSearchRouteHarness({
+    searchResultLimit: 400,
+    isDbProtected: false,
+  });
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(`${baseUrl}/api/search/global?q=Alice&page=1&pageSize=500`);
+    assert.equal(response.status, 200);
+    const payload = await response.json();
+
+    assert.equal(payload.limit, 100);
+    assert.equal(payload.pageSize, 100);
+    assert.deepEqual(globalSearchCalls, [{
+      search: "Alice",
+      limit: 100,
+      offset: 0,
+    }]);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
 test("GET /api/search/global returns an empty page when the offset exceeds the runtime max", async () => {
   const { app, globalSearchCalls } = createSearchRouteHarness({
     searchResultLimit: 60,
@@ -331,6 +355,42 @@ test("POST /api/search/advanced applies runtime pagination and formats headers",
       logic: "OR",
       limit: 25,
       offset: 50,
+    }]);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("POST /api/search/advanced clamps oversized requested page sizes before reaching the service layer", async () => {
+  const { app, advancedSearchCalls } = createSearchRouteHarness({
+    searchResultLimit: 400,
+  });
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(`${baseUrl}/api/search/advanced`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        filters: [{ field: "name", operator: "contains", value: "Bob" }],
+        logic: "AND",
+        page: 1,
+        pageSize: 500,
+      }),
+    });
+
+    assert.equal(response.status, 200);
+    const payload = await response.json();
+
+    assert.equal(payload.limit, 100);
+    assert.equal(payload.pageSize, 100);
+    assert.deepEqual(advancedSearchCalls, [{
+      filters: [{ field: "name", operator: "contains", value: "Bob" }],
+      logic: "AND",
+      limit: 100,
+      offset: 0,
     }]);
   } finally {
     await stopTestServer(server);

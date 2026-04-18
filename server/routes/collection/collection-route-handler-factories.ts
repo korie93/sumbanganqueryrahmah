@@ -57,10 +57,12 @@ export function pruneIdempotencyFingerprintValidationCache(
     return 0;
   }
 
-  const pruneCount = cache.size - limit;
+  const entriesByLeastRecentValidation = Array.from(cache.entries())
+    .sort((left, right) => left[1].lastValidatedAt - right[1].lastValidatedAt);
+  const pruneCount = entriesByLeastRecentValidation.length - limit;
   let removed = 0;
 
-  for (const key of cache.keys()) {
+  for (const [key] of entriesByLeastRecentValidation) {
     cache.delete(key);
     removed += 1;
     if (removed >= pruneCount) {

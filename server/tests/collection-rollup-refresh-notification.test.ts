@@ -51,6 +51,37 @@ class FakeNotificationClient extends EventEmitter {
   }
 }
 
+class DeferredNotificationClient extends FakeNotificationClient {
+  private readonly deferredConnect = createDeferred<void>();
+
+  resolveConnect() {
+    this.deferredConnect.resolve();
+  }
+
+  rejectConnect(error: Error) {
+    this.deferredConnect.reject(error);
+  }
+
+  async connect(): Promise<void> {
+    await this.deferredConnect.promise;
+  }
+}
+
+function createDeferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((innerResolve, innerReject) => {
+    resolve = innerResolve;
+    reject = innerReject;
+  });
+
+  return {
+    promise,
+    resolve,
+    reject,
+  };
+}
+
 test("CollectionRollupRefreshNotificationSubscriber listens on the queue channel and forwards notifications", async () => {
   const client = new FakeNotificationClient();
   let wakeCount = 0;
@@ -239,4 +270,27 @@ test("CollectionRollupRefreshNotificationSubscriber logs close failures without 
     )),
     true,
   );
+});
+
+test("CollectionRollupRefreshNotificationSubscriber waits for an in-flight connect during stop", async () => {
+  const client = new DeferredNotificationClient();
+  const subscriber = new CollectionRollupRefreshNotificationSubscriber({
+    clientFactory: () => client,
+    reconnectDelayMs: 20,
+  });
+
+  const startPromise = subscriber.start(() => undefined);
+  await Promise.resolve();
+
+  const stopPromise = subscriber.stop();
+  client.resolveConnect();
+
+  await assert.doesNotReject(async () => {
+    await Promise.all([startPromise, stopPromise]);
+  });
+
+  assert.equal(client.endCalls, 1);
+  assert.equal(client.listenerCount("notification"), 0);
+  assert.equal(client.listenerCount("error"), 0);
+  assert.equal(client.listenerCount("end"), 0);
 });

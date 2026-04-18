@@ -139,6 +139,7 @@ export function createImportsController(deps: CreateImportsControllerDeps) {
           name,
           filename,
           filePath: multipartImportUpload.filePath,
+          allowedRootDir: multipartImportUpload.tempDir,
           createdBy: req.user?.username,
         });
 

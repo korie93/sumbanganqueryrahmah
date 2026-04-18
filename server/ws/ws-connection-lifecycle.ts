@@ -183,7 +183,12 @@ export function createRuntimeConnectionHandler(
     };
 
     const closeSocketIfNeeded = (code?: number, reason?: string) => {
-      if (closeRequested || !isTrackableSocket(ws)) {
+      if (
+        closeRequested
+        || !isTrackableSocket(ws)
+        || ws.readyState === WebSocket.CLOSED
+        || ws.readyState === WebSocket.CLOSING
+      ) {
         return;
       }
 

@@ -4,6 +4,7 @@ import {
   createUploadFileAccessError,
   createUploadFileTooLargeError,
   isFileAccessError,
+  resolveVerifiedUploadFilePath,
   validateUploadFileSize,
 } from "./import-upload-file-utils";
 import type { ImportRow, ParsedImportUploadResult } from "./import-upload-types";
@@ -12,6 +13,7 @@ export const DEFAULT_IMPORT_CSV_MAX_ROWS = 100_000;
 export const DEFAULT_IMPORT_CSV_MAX_MATERIALIZED_ROWS = 5_000;
 
 type ParseCsvOptions = {
+  allowedRootDir?: string;
   maxRows?: number;
   maxBytes?: number;
   maxMaterializedRows?: number;
@@ -110,7 +112,21 @@ async function walkCsvFile(
   options: ParseCsvOptions | undefined,
   onRow?: (row: ImportRow) => Promise<void> | void,
 ): Promise<CsvFileInspectionResult> {
-  const sizeValidation = await validateUploadFileSize(filePath, options?.maxBytes);
+  let verifiedFilePath = filePath;
+  try {
+    verifiedFilePath = await resolveVerifiedUploadFilePath(filePath, options?.allowedRootDir);
+  } catch (error) {
+    if (isFileAccessError(error)) {
+      return {
+        headers: [],
+        rowCount: 0,
+        error: createUploadFileAccessError().error ?? "Cannot access the uploaded file. Please try again.",
+      };
+    }
+    throw error;
+  }
+
+  const sizeValidation = await validateUploadFileSize(verifiedFilePath, options?.maxBytes);
   if (sizeValidation) {
     const sizeValidationError = sizeValidation.error
       ?? createUploadFileTooLargeError().error
@@ -123,7 +139,7 @@ async function walkCsvFile(
   }
 
   const maxRows = resolveCsvMaxRows(options);
-  const stream = fs.createReadStream(filePath, { encoding: "utf8" });
+  const stream = fs.createReadStream(verifiedFilePath, { encoding: "utf8" });
   const lineReader = readline.createInterface({
     input: stream,
     crlfDelay: Infinity,

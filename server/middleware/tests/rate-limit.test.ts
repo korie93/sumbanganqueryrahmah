@@ -7,6 +7,7 @@ import { startTestServer, stopTestServer } from "../../routes/tests/http-test-ut
 import {
   buildAuthRouteRateLimitSubject,
   buildRequestRateLimitFingerprint,
+  createRateLimitKeyAdmissionController,
   createImportsUploadRateLimiter,
   normalizeAuthRateLimitIdentifier,
 } from "../rate-limit";
@@ -101,6 +102,24 @@ test("buildAuthRouteRateLimitSubject ignores malformed request bodies safely", (
   });
 
   assert.equal(buildAuthRouteRateLimitSubject(malformed, "auth-login"), null);
+});
+
+test("createRateLimitKeyAdmissionController collapses excessive unique subjects into an overflow bucket", () => {
+  let now = 10_000;
+  const controller = createRateLimitKeyAdmissionController({
+    maxBuckets: 2,
+    maxSuffixesPerBucket: 2,
+    now: () => now,
+    ttlMs: 1_000,
+  });
+
+  assert.equal(controller.admit("auth-login|203.0.113.10", "acct:one"), "acct:one");
+  assert.equal(controller.admit("auth-login|203.0.113.10", "acct:two"), "acct:two");
+  assert.equal(controller.admit("auth-login|203.0.113.10", "acct:three"), "overflow");
+
+  now += 1_500;
+
+  assert.equal(controller.admit("auth-login|203.0.113.10", "acct:three"), "acct:three");
 });
 
 test("createImportsUploadRateLimiter throttles repeated upload attempts from the same network", async () => {

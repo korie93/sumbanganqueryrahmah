@@ -12,11 +12,15 @@ coverage/
 var/perf/
 .env
 .env.*
+.env.*.local
+.env.*.secret
 !.env.example
 ecosystem.config.cjs
 ecosystem.config.js
 ecosystem.termux.config.cjs
 ecosystem.termux.config.js
+.aws/credentials
+.aws/config
 
 # Build outputs
 dist/

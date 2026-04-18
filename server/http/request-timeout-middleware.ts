@@ -49,6 +49,7 @@ export function createRequestTimeoutMiddleware(
 
   return (_req, res, next) => {
     const requestContext = getRequestContext();
+    const requestAbortController = requestContext?.abortController ?? null;
     const timeoutMs = normalizeTimeoutMs(requestContext?.requestTimeoutMs ?? baseTimeoutMs);
     const requestDeadlineAtMs = Date.now() + timeoutMs;
     if (requestContext) {
@@ -70,7 +71,7 @@ export function createRequestTimeoutMiddleware(
         requestContext.requestTimedOut = true;
       }
 
-      requestContext?.abortController?.abort();
+      requestAbortController?.abort();
 
       logger.warn("HTTP request timed out", {
         timeoutMs,

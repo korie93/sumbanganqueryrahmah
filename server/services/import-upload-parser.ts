@@ -30,7 +30,13 @@ export function parseImportUploadBuffer(filename: string, buffer: Buffer): Parse
   return parseExcelBuffer(buffer, { maxRows, maxBytes });
 }
 
-export async function parseImportUploadFile(filename: string, filePath: string): Promise<ParsedImportUploadResult> {
+export async function parseImportUploadFile(
+  filename: string,
+  filePath: string,
+  options?: {
+    allowedRootDir?: string;
+  },
+): Promise<ParsedImportUploadResult> {
   const normalizedFilename = String(filename || "").trim().toLowerCase();
   const maxBytes = resolveImportUploadMaxBytes();
   const maxRows = runtimeConfig.runtime.importCsvMaxRows;
@@ -39,7 +45,11 @@ export async function parseImportUploadFile(filename: string, filePath: string):
   }
 
   if (normalizedFilename.endsWith(".csv")) {
-    return parseCsvFile(filePath, { maxRows, maxBytes });
+    return parseCsvFile(filePath, {
+      maxRows,
+      maxBytes,
+      ...(options?.allowedRootDir ? { allowedRootDir: options.allowedRootDir } : {}),
+    });
   }
 
   return await parseExcelFile(filePath, { maxRows, maxBytes });

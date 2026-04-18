@@ -22,6 +22,25 @@ import { collectBoundValues, collectSqlText, createSequenceExecutor } from "./sq
 
 type AttachableCollectionRecord = Parameters<typeof attachCollectionReceipts>[1][number];
 
+async function cleanupReceiptFixturePath(filePath: string) {
+  try {
+    await fs.unlink(filePath);
+  } catch (error) {
+    const cleanupCode = error instanceof Error && "code" in error
+      ? String((error as { code?: unknown }).code || "")
+      : "";
+    if (cleanupCode === "ENOENT") {
+      return;
+    }
+
+    console.warn("Failed to cleanup managed receipt fixture", {
+      filePath,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    throw error;
+  }
+}
+
 async function createManagedCollectionReceiptFixture(extension: ".png" | ".pdf" = ".png") {
   const uploadsDir = path.resolve(process.cwd(), "uploads", "collection-receipts");
   const storedFileName = `repo-receipt-${Date.now()}-${Math.random().toString(16).slice(2)}${extension}`;
@@ -291,9 +310,9 @@ test("attachCollectionReceipts promotes legacy receipt_file rows into relation-b
     assert.match(collectSqlText(queries[3]), /UPDATE public\.collection_records/i);
     assert.match(collectSqlText(queries[5]), /deleted_at IS NOT NULL/i);
   } finally {
-    await fs.unlink(receiptOne.absolutePath).catch(() => undefined);
-    await fs.unlink(receiptTwo.absolutePath).catch(() => undefined);
-    await fs.unlink(legacyReceipt.absolutePath).catch(() => undefined);
+    await cleanupReceiptFixturePath(receiptOne.absolutePath);
+    await cleanupReceiptFixturePath(receiptTwo.absolutePath);
+    await cleanupReceiptFixturePath(legacyReceipt.absolutePath);
   }
 });
 
@@ -349,7 +368,7 @@ test("attachCollectionReceipts prunes relation-backed receipts whose files are m
     assert.match(collectSqlText(queries[3]), /UPDATE public\.collection_records/i);
     assert.match(collectSqlText(queries[4]), /deleted_at IS NOT NULL/i);
   } finally {
-    await fs.unlink(validReceipt.absolutePath).catch(() => undefined);
+    await cleanupReceiptFixturePath(validReceipt.absolutePath);
   }
 });
 

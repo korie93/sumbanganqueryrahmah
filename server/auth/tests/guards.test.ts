@@ -256,6 +256,29 @@ test("tab visibility cache registers an unrefed sweep interval and clears it ide
   assert.equal(clearIntervalMock.mock.callCount(), 1);
 });
 
+test("stopping the tab visibility sweep also clears cached role visibility state", async () => {
+  let visibilityLookupCount = 0;
+  const guards = createAuthGuards({
+    storage: createGuardStorageDouble({
+      getRoleTabVisibility: async () => {
+        visibilityLookupCount += 1;
+        return { monitor: true };
+      },
+    }),
+    secret: "guard-test-secret",
+  });
+
+  const handler = guards.requireTabAccess("monitor");
+  const request = { user: { role: "admin" } };
+  const response = createMockResponse();
+
+  await handler(request as never, response as never, () => undefined);
+  guards.stopTabVisibilityCacheSweep();
+  await handler(request as never, response as never, () => undefined);
+
+  assert.equal(visibilityLookupCount, 2);
+});
+
 test("authenticateToken prefers the composite session snapshot when storage exposes it", async () => {
   const secret = "guard-test-secret";
   let snapshotCalls = 0;
