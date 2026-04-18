@@ -165,7 +165,6 @@ function NavbarImpl({
                   data-testid="button-user-menu-mobile"
                   aria-label="Open user menu"
                   aria-haspopup="menu"
-                  aria-expanded={mobileUserMenuOpen ? "true" : "false"}
                   aria-controls={mobileUserMenuId}
                 >
                   <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold uppercase text-primary">
@@ -214,7 +213,6 @@ function NavbarImpl({
                 data-testid="button-user-menu"
                 aria-label="Open user menu"
                 aria-haspopup="menu"
-                aria-expanded={desktopUserMenuOpen ? "true" : "false"}
                 aria-controls={desktopUserMenuId}
               >
                 <span className="user-menu-copy max-w-[10.5rem] xl:max-w-none">
