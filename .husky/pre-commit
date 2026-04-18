@@ -1,2 +1,2 @@
 #!/usr/bin/env sh
-npm exec lint-staged --concurrent true
+npm exec -- lint-staged --concurrent true

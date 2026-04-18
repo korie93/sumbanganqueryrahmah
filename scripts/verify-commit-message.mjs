@@ -6,14 +6,24 @@ if (!commitMessagePath) {
   process.exit(1);
 }
 
-const commitMessage = readFileSync(commitMessagePath, "utf8").trim();
+function resolveCommitSubject(commitMessageText) {
+  const lines = String(commitMessageText || "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0 && !line.startsWith("#"));
+
+  return lines[0] ?? "";
+}
+
+const commitMessage = readFileSync(commitMessagePath, "utf8");
+const commitSubject = resolveCommitSubject(commitMessage);
 const conventionalCommitPattern = /^(?:build|chore|ci|docs|feat|fix|perf|refactor|revert|style|test)(?:\([a-z0-9._/-]+\))?!?:\s\S.{2,}$/i;
 
 if (
-  !commitMessage
-  || (!conventionalCommitPattern.test(commitMessage)
-    && !/^(?:Merge|Revert)\b/.test(commitMessage)
-    && !/^(?:fixup!|squash!)/.test(commitMessage))
+  !commitSubject
+  || (!conventionalCommitPattern.test(commitSubject)
+    && !/^(?:Merge|Revert)\b/.test(commitSubject)
+    && !/^(?:fixup!|squash!)/.test(commitSubject))
 ) {
   console.error(
     'Commit messages must follow "type(scope): summary" or be a Git-generated Merge/Revert/fixup!/squash! message.',
