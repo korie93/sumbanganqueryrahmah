@@ -50,3 +50,39 @@ test("DashboardChartsGrid renders an inline fallback when chart queries fail", (
   assert.match(markup, /Login trends are unavailable/i);
   assert.match(markup, /Peak activity hours are unavailable/i);
 });
+
+test("DashboardChartsGrid exposes busy semantics while chart queries are loading", () => {
+  const loadingMarkup = renderToStaticMarkup(
+    createElement(DashboardChartsGrid, {
+      onTrendDaysChange: () => undefined,
+      onRetryPeakHours: () => undefined,
+      onRetryTrends: () => undefined,
+      peakHours: undefined,
+      peakHoursErrorMessage: null,
+      peakHoursLoading: true,
+      trendDays: 7,
+      trends: undefined,
+      trendsErrorMessage: null,
+      trendsLoading: true,
+    }),
+  );
+
+  const emptyMarkup = renderToStaticMarkup(
+    createElement(DashboardChartsGrid, {
+      onTrendDaysChange: () => undefined,
+      onRetryPeakHours: () => undefined,
+      onRetryTrends: () => undefined,
+      peakHours: [],
+      peakHoursErrorMessage: null,
+      peakHoursLoading: false,
+      trendDays: 7,
+      trends: [],
+      trendsErrorMessage: null,
+      trendsLoading: false,
+    }),
+  );
+
+  assert.match(loadingMarkup, /aria-busy="true"/i);
+  assert.match(emptyMarkup, /No login trend data yet/i);
+  assert.match(emptyMarkup, /No peak-hour activity yet/i);
+});

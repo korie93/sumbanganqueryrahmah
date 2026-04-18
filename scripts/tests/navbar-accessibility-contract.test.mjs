@@ -25,3 +25,14 @@ test("navbar decorative icons stay hidden from assistive technology", () => {
   assert.match(userMenu, /<Moon className="h-4 w-4" aria-hidden="true" \/>/);
   assert.match(userMenu, /<LogOut className="h-4 w-4" aria-hidden="true" \/>/);
 });
+
+test("navbar menu triggers expose expanded state and controlled content ids", () => {
+  const navbar = readComponent("client/src/components/Navbar.tsx");
+
+  assert.match(navbar, /aria-expanded=\{mobileNavOpen\}/);
+  assert.match(navbar, /aria-controls="mobile-navigation-drawer"/);
+  assert.match(navbar, /aria-expanded=\{mobileUserMenuOpen\}/);
+  assert.match(navbar, /aria-controls=\{mobileUserMenuId\}/);
+  assert.match(navbar, /aria-expanded=\{desktopUserMenuOpen\}/);
+  assert.match(navbar, /aria-controls=\{desktopUserMenuId\}/);
+});

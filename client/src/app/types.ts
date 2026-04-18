@@ -13,6 +13,40 @@ export interface User {
   twoFactorConfiguredAt?: string | null | undefined;
 }
 
+export const APP_PAGE_NAMES = [
+  "home",
+  "login",
+  "banned",
+  "maintenance",
+  "forgot-password",
+  "activate-account",
+  "reset-password",
+  "change-password",
+  "settings",
+  "backup",
+  "collection-report",
+  "general-search",
+  "import",
+  "saved",
+  "viewer",
+  "ai",
+  "monitor",
+  "dashboard",
+  "activity",
+  "analysis",
+  "audit",
+  "audit-logs",
+  "forbidden",
+  "not-found",
+] as const;
+
+export type PageName = (typeof APP_PAGE_NAMES)[number];
+const PAGE_NAME_SET = new Set<string>(APP_PAGE_NAMES);
+
+export function isPageName(value: string): value is PageName {
+  return PAGE_NAME_SET.has(value);
+}
+
 export type MonitorSection = "dashboard" | "activity" | "monitor" | "analysis" | "audit";
 
 export type TabVisibility = Record<string, boolean> | null;

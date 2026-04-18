@@ -21,6 +21,7 @@ import {
 } from "./runtime-config-read-utils";
 import {
   assessMailConfiguration,
+  assertSafeOllamaHost,
   assertNoPlaceholderSecrets,
   assertRuntimeSafetyGuards,
   buildRuntimeConfigWarnings,
@@ -164,6 +165,15 @@ const cookieSecure = resolveCookieSecure(configuredAuthCookieSecure, {
   isProductionLike,
   publicAppUrl,
 });
+const configuredOllamaHost =
+  normalizeHttpUrl("OLLAMA_HOST", readOptionalString("OLLAMA_HOST")) ?? "http://127.0.0.1:11434";
+const ollamaAllowRemoteHost = readBoolean("OLLAMA_ALLOW_REMOTE_HOST", false);
+
+assertSafeOllamaHost({
+  allowRemoteHost: ollamaAllowRemoteHost,
+  isProductionLike,
+  ollamaHost: configuredOllamaHost,
+});
 
 const mailConfiguration = assessMailConfiguration({
   smtpService: readOptionalString("SMTP_SERVICE"),
@@ -268,7 +278,7 @@ export const runtimeConfig: RuntimeConfig = Object.freeze({
     cookieSecure,
   },
   ai: {
-    host: normalizeHttpUrl("OLLAMA_HOST", readOptionalString("OLLAMA_HOST")) ?? "http://127.0.0.1:11434",
+    host: configuredOllamaHost,
     chatModel: readString("OLLAMA_CHAT_MODEL", "llama3:8b"),
     embedModel: readString("OLLAMA_EMBED_MODEL", "nomic-embed-text"),
     timeoutMs: readInt("OLLAMA_TIMEOUT_MS", 6_000, { min: 1_000 }),
@@ -352,6 +362,10 @@ export const runtimeConfig: RuntimeConfig = Object.freeze({
     collectionRollupListenReconnectMs: readInt("COLLECTION_ROLLUP_LISTEN_RECONNECT_MS", 5_000, { min: 1_000 }),
     httpSlowRequestMs: readInt("HTTP_SLOW_REQUEST_MS", 1_500, { min: 250 }),
     requestTimeoutMs: readInt("HTTP_REQUEST_TIMEOUT_MS", 30_000, { min: 1_000 }),
+    wsMaxConnectionsPerInstance: readInt("RUNTIME_WS_MAX_CONNECTIONS_PER_INSTANCE", lowMemoryMode ? 250 : 1_000, {
+      min: 10,
+      max: 10_000,
+    }),
     analyticsTimeZone: readString("ANALYTICS_TZ", "Asia/Kuala_Lumpur"),
     dbQueryProfiling: {
       enabled: dbQueryProfilingEnabled,
@@ -448,6 +462,8 @@ const runtimeWarnings = buildRuntimeConfigWarnings({
   configuredCollectionPiiEncryptionKey,
   configuredPgPassword,
   configuredAuthCookieSecure,
+  configuredOllamaHost,
+  ollamaAllowRemoteHost,
   remoteErrorTrackingEnabled,
   remoteErrorTrackingEndpoint,
   mailConfiguration,

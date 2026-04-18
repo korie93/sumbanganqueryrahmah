@@ -6,6 +6,7 @@ import {
   RUNTIME_WS_POLICY_VIOLATION_CLOSE_CODE,
 } from "../../shared/websocket-close-reasons";
 import { readAuthSessionTokenFromHeaders } from "../auth/session-cookie";
+import { isSessionRevoked, revokeSession } from "../auth/session-revocation-registry";
 import { logger } from "../lib/logger";
 import { isActiveWebSocketSession, validateWsSessionToken } from "./session-auth";
 import {
@@ -52,7 +53,9 @@ type CreateRuntimeConnectionHandlerOptions = {
   ) => RuntimeTrackedSocketEntry;
   removeTrackedSocket: (activityId: string, ws?: WebSocket) => void;
   countTrackedUserConnections: (userKey: string, excludedActivityId?: string) => number;
+  countTrackedSockets: () => number;
   isTrackableSocket: (ws: WebSocket) => boolean;
+  maxConnectionsPerInstance: number;
 };
 
 export function createRuntimeConnectionHandler(
@@ -72,7 +75,9 @@ export function createRuntimeConnectionHandler(
     registerTrackedSocketEntry,
     removeTrackedSocket,
     countTrackedUserConnections,
+    countTrackedSockets,
     isTrackableSocket,
+    maxConnectionsPerInstance,
   } = options;
   const inboundMessageTokenRefillRatePerMs =
     MAX_INBOUND_MESSAGES_PER_MINUTE / INBOUND_MESSAGE_TOKEN_BUCKET_WINDOW_MS;
@@ -250,6 +255,18 @@ export function createRuntimeConnectionHandler(
       trustedForwardedProxyMatcher,
     );
 
+    if (countTrackedSockets() >= maxConnectionsPerInstance) {
+      logger.warn(
+        "WebSocket rejected because the instance connection limit was reached",
+        {
+          connectedSockets: countTrackedSockets(),
+          maxConnectionsPerInstance,
+        },
+      );
+      closeSocketIfNeeded();
+      return;
+    }
+
     if (url.searchParams.has("token")) {
       logger.warn(
         "WebSocket rejected query-string session token",
@@ -323,6 +340,15 @@ export function createRuntimeConnectionHandler(
       }
       activityId = tokenValidation.activityId;
 
+      if (isSessionRevoked(activityId)) {
+        cleanupSocketSafely("revoked-session");
+        closeSocketIfNeeded(
+          RUNTIME_WS_POLICY_VIOLATION_CLOSE_CODE,
+          RUNTIME_WS_CLOSE_REASON_SESSION_INVALID,
+        );
+        return;
+      }
+
       const activity = await storage.getActivityById(activityId);
       if (cleanedUp || !isTrackableSocket(ws)) {
         cleanupSocketSafely("validation-race");
@@ -330,6 +356,7 @@ export function createRuntimeConnectionHandler(
       }
 
       if (!isActiveWebSocketSession(activity)) {
+        revokeSession(activityId);
         logger.debug("WebSocket rejected because the session is invalid or expired", {
           activityId,
         });

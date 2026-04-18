@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { Crown, Users } from "lucide-react";
 import {
   Cell,
@@ -11,6 +12,7 @@ import {
 } from "recharts";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Badge } from "@/components/ui/badge";
+import { EmptyState } from "@/components/EmptyState";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { QueryErrorFallback } from "@/components/QueryErrorFallback";
 import { AccessibleChartSummary } from "@/components/ui/chart-accessibility";
@@ -71,7 +73,7 @@ function CompactRoleTooltip({ active, payload }: CompactRoleTooltipProps) {
   );
 }
 
-export function DashboardUserInsightsGrid({
+export const DashboardUserInsightsGrid = memo(function DashboardUserInsightsGrid({
   onRetryRoleDistribution,
   onRetryTopUsers,
   roleDistribution,
@@ -100,7 +102,7 @@ export function DashboardUserInsightsGrid({
               : "Most active accounts, with login count and latest access kept readable on narrow screens."}
           </p>
         </CardHeader>
-        <CardContent aria-live="polite">
+        <CardContent aria-live="polite" aria-busy={topUsersLoading}>
           {topUsersLoading ? (
             <div
               className={`flex items-center justify-center rounded-xl border border-border/50 bg-background/35 ${chartHeightClassName}`}
@@ -167,11 +169,11 @@ export function DashboardUserInsightsGrid({
               })}
             </div>
           ) : (
-            <div
-              className={`flex items-center justify-center rounded-xl border border-dashed border-border/60 bg-background/35 text-muted-foreground ${chartHeightClassName}`}
-            >
-              No data available
-            </div>
+            <EmptyState
+              className={chartHeightClassName}
+              title="No active-user insights yet"
+              description="Top user activity will appear here after successful sign-ins are recorded for this environment."
+            />
           )}
         </CardContent>
       </Card>
@@ -188,7 +190,7 @@ export function DashboardUserInsightsGrid({
               : "Role mix shown in a smaller donut with a clearer breakdown for phone screens."}
           </p>
         </CardHeader>
-        <CardContent className="space-y-3" aria-live="polite">
+        <CardContent className="space-y-3" aria-live="polite" aria-busy={roleLoading}>
           {roleLoading ? (
             <div
               className={`flex items-center justify-center rounded-xl border border-border/50 bg-background/35 ${chartHeightClassName}`}
@@ -267,14 +269,14 @@ export function DashboardUserInsightsGrid({
               </div>
             </>
           ) : (
-            <div
-              className={`flex items-center justify-center rounded-xl border border-dashed border-border/60 bg-background/35 text-muted-foreground ${chartHeightClassName}`}
-            >
-              No data available
-            </div>
+            <EmptyState
+              className={chartHeightClassName}
+              title="No role distribution data yet"
+              description="Role counts will appear here once the current account set is available to the dashboard."
+            />
           )}
         </CardContent>
       </Card>
     </div>
   );
-}
+});

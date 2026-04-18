@@ -1,5 +1,5 @@
 import { useEffect, type Dispatch, type SetStateAction } from "react";
-import type { User } from "@/app/types";
+import type { PageName, User } from "@/app/types";
 import { getMaintenanceStatus } from "@/lib/api";
 import { getBrowserLocalStorage, safeSetStorageItem } from "@/lib/browser-storage";
 import { MAINTENANCE_STATUS_POLL_INTERVAL_MS } from "@/pages/maintenance-state";
@@ -9,8 +9,8 @@ type MaintenanceUpdatedDetail = {
 };
 
 type UseAppShellMaintenanceStateArgs = {
-  currentPage: string;
-  setCurrentPage: Dispatch<SetStateAction<string>>;
+  currentPage: PageName;
+  setCurrentPage: Dispatch<SetStateAction<PageName>>;
   user: User | null;
 };
 

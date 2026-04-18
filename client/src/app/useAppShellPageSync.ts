@@ -1,11 +1,11 @@
 import { useEffect, type Dispatch, type SetStateAction } from "react";
 import { getDefaultPageForRole } from "@/app/monitorAccess";
 import { buildPathForPage, replaceHistory } from "@/app/routing";
-import type { TabVisibility, User } from "@/app/types";
+import type { PageName, TabVisibility, User } from "@/app/types";
 
 type UseAppShellPageSyncArgs = {
-  currentPage: string;
-  setCurrentPage: Dispatch<SetStateAction<string>>;
+  currentPage: PageName;
+  setCurrentPage: Dispatch<SetStateAction<PageName>>;
   tabVisibility: TabVisibility;
   tabVisibilityLoaded: boolean;
   user: User | null;

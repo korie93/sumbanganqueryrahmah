@@ -5,13 +5,13 @@ import {
 import type { ResolvedRoute } from "@/app/routing";
 import { useAppShellAuthBootstrap } from "@/app/useAppShellAuthBootstrap";
 import { useAppShellAuthEvents } from "@/app/useAppShellAuthEvents";
-import type { MonitorSection, User } from "@/app/types";
+import type { MonitorSection, PageName, User } from "@/app/types";
 
 type UseAppShellAuthLifecycleArgs = {
   applyLoggedOutClientState: (redirectToLogin?: boolean, broadcast?: boolean) => void;
   applyResolvedRoute: (route: ResolvedRoute | null) => boolean;
   clearClientSessionStorage: () => void;
-  setCurrentPage: Dispatch<SetStateAction<string>>;
+  setCurrentPage: Dispatch<SetStateAction<PageName>>;
   setIsInitialized: Dispatch<SetStateAction<boolean>>;
   setMonitorSection: Dispatch<SetStateAction<MonitorSection>>;
   setUser: Dispatch<SetStateAction<User | null>>;

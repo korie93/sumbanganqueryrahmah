@@ -7,9 +7,9 @@ export interface SummaryData {
   totalDataRows: number;
   totalImports: number;
   bannedUsers: number;
-  collectionRecordVersionConflicts24h?: number;
-  loginFailures24h?: number;
-  backupActions24h?: number;
+  collectionRecordVersionConflicts24h?: number | undefined;
+  loginFailures24h?: number | undefined;
+  backupActions24h?: number | undefined;
 }
 
 export interface LoginTrend {

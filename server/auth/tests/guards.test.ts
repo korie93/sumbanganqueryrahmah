@@ -7,6 +7,15 @@ import {
   getInvalidatedSessionMessage,
   sweepExpiredTabVisibilityCacheEntriesForTests,
 } from "../guards";
+import { clearSessionRevocationsForTests, revokeSession } from "../session-revocation-registry";
+
+test.beforeEach(() => {
+  clearSessionRevocationsForTests();
+});
+
+test.afterEach(() => {
+  clearSessionRevocationsForTests();
+});
 
 function createDeferred<T>(): {
   promise: Promise<T>;
@@ -414,6 +423,57 @@ test("authenticateToken rejects structurally invalid decoded JWT payloads before
   assert.equal(nextCalls, 0);
   assert.equal(response.statusCode, 403);
   assert.deepEqual(response.body, { message: "Invalid token" });
+});
+
+test("authenticateToken rejects revoked sessions before snapshot lookup", async () => {
+  const secret = "guard-test-secret";
+  let snapshotCalls = 0;
+  const guards = createAuthGuards({
+    storage: createGuardStorageDouble({
+      getAuthenticatedSessionSnapshot: async () => {
+        snapshotCalls += 1;
+        return undefined;
+      },
+    }),
+    secret,
+  });
+
+  const token = jwt.sign(
+    {
+      userId: "user-3",
+      username: "guard.user",
+      role: "admin",
+      activityId: "activity-revoked",
+    },
+    secret,
+    { expiresIn: "24h" },
+  );
+
+  revokeSession("activity-revoked");
+
+  const request = {
+    headers: {
+      cookie: `sqr_auth=${encodeURIComponent(token)}`,
+    },
+    method: "GET",
+    path: "/api/me",
+  };
+  const response = createMockResponse();
+  let nextCalls = 0;
+
+  await guards.authenticateToken(request as never, response as never, () => {
+    nextCalls += 1;
+  });
+  guards.stopTabVisibilityCacheSweep();
+
+  assert.equal(snapshotCalls, 0);
+  assert.equal(nextCalls, 0);
+  assert.equal(response.statusCode, 401);
+  assert.deepEqual(response.body, {
+    message: "Session revoked. Please login again.",
+    forceLogout: true,
+  });
+  assert.equal(response.cookies.length > 0, true);
 });
 
 test("authenticateToken invalidates a stale session immediately when the persisted role changes", async () => {

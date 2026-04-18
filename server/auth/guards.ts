@@ -9,6 +9,7 @@ import {
   canUserBypassForcedPasswordChange,
   getAccountAccessBlockReason,
 } from "./account-lifecycle";
+import { isSessionRevoked, revokeSession } from "./session-revocation-registry";
 import { clearAuthSessionCookie, readAuthSessionTokenFromHeaders } from "./session-cookie";
 import { logger } from "../lib/logger";
 
@@ -230,9 +231,17 @@ export function createAuthGuards(options: CreateAuthGuardsOptions) {
 
     try {
       const decoded = authenticatedSessionTokenSchema.parse(verifySessionJwt<unknown>(token, secret));
+      if (isSessionRevoked(decoded.activityId)) {
+        clearAuthSessionCookie(res);
+        return res.status(401).json({
+          message: "Session revoked. Please login again.",
+          forceLogout: true,
+        });
+      }
       const { activity, user, isVisitorBanned } = await loadAuthenticatedSessionSnapshot(decoded);
 
       if (!activity || activity.isActive === false || activity.logoutTime !== null) {
+        revokeSession(decoded.activityId);
         clearAuthSessionCookie(res);
         return res.status(401).json({
           message: getInvalidatedSessionMessage(activity?.logoutReason),
@@ -254,6 +263,7 @@ export function createAuthGuards(options: CreateAuthGuardsOptions) {
           logoutTime: new Date(),
           logoutReason: "USER_NOT_FOUND",
         });
+        revokeSession(decoded.activityId);
         clearAuthSessionCookie(res);
         return res.status(401).json({
           message: "Session expired. Please login again.",
@@ -268,6 +278,7 @@ export function createAuthGuards(options: CreateAuthGuardsOptions) {
           logoutTime: new Date(),
           logoutReason: blockReason.toUpperCase(),
         });
+        revokeSession(decoded.activityId);
         clearAuthSessionCookie(res);
         return res.status(blockReason === "banned" ? 403 : blockReason === "locked" ? 423 : 401).json({
           message: blockReason === "banned"
@@ -295,6 +306,7 @@ export function createAuthGuards(options: CreateAuthGuardsOptions) {
           logoutTime: new Date(),
           logoutReason: "ROLE_CHANGED",
         });
+        revokeSession(decoded.activityId);
         clearAuthSessionCookie(res);
         return res.status(401).json({
           message: getInvalidatedSessionMessage("ROLE_CHANGED"),

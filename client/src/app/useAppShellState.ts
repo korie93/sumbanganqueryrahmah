@@ -4,7 +4,7 @@ import { useAppShellAuthState } from "@/app/useAppShellAuthState";
 import { useAppShellMaintenanceState } from "@/app/useAppShellMaintenanceState";
 import { useAppShellMonitorAccess } from "@/app/useAppShellMonitorAccess";
 import { useAppShellPageSync } from "@/app/useAppShellPageSync";
-import type { MonitorSection } from "@/app/types";
+import type { MonitorSection, PageName } from "@/app/types";
 import { useAppShellRuntimeState } from "@/app/useAppShellRuntimeState";
 import { useAppShellSavedCount } from "@/app/useAppShellSavedCount";
 import { useAppShellTabVisibility } from "@/app/useAppShellTabVisibility";
@@ -14,7 +14,7 @@ import { getStoredActivityId } from "@/lib/auth-session";
 import { logClientWarning } from "@/lib/client-logger";
 
 export function useAppShellState() {
-  const [currentPage, setCurrentPage] = useState("home");
+  const [currentPage, setCurrentPage] = useState<PageName>("home");
   const [monitorSection, setMonitorSection] = useState<MonitorSection>("monitor");
   const [selectedImportId, setSelectedImportId] = useState<string | undefined>();
   const [savedCount, setSavedCount] = useState(0);

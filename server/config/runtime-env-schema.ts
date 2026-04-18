@@ -122,6 +122,10 @@ const runtimeEnvironmentSchema = z.object({
   ALLOW_LOCAL_DEV_CORS: optionalBooleanEnv("ALLOW_LOCAL_DEV_CORS"),
   HTTP_SLOW_REQUEST_MS: optionalIntEnv("HTTP_SLOW_REQUEST_MS", { min: 250 }),
   HTTP_REQUEST_TIMEOUT_MS: optionalIntEnv("HTTP_REQUEST_TIMEOUT_MS", { min: 1_000 }),
+  RUNTIME_WS_MAX_CONNECTIONS_PER_INSTANCE: optionalIntEnv("RUNTIME_WS_MAX_CONNECTIONS_PER_INSTANCE", {
+    min: 10,
+    max: 10_000,
+  }),
   PG_POOL_ALERT_WAITING_COUNT: optionalIntEnv("PG_POOL_ALERT_WAITING_COUNT", { min: 1, max: 1_000 }),
   PG_POOL_ALERT_UTILIZATION_PERCENT: optionalIntEnv("PG_POOL_ALERT_UTILIZATION_PERCENT", { min: 50, max: 100 }),
   PG_POOL_HEALTH_CHECK_INTERVAL_MS: optionalIntEnv("PG_POOL_HEALTH_CHECK_INTERVAL_MS", { min: 1_000 }),
@@ -213,6 +217,7 @@ const runtimeEnvironmentSchema = z.object({
   MAIL_FROM: optionalEnvString("MAIL_FROM", 255),
 
   OLLAMA_HOST: optionalEnvString("OLLAMA_HOST"),
+  OLLAMA_ALLOW_REMOTE_HOST: optionalBooleanEnv("OLLAMA_ALLOW_REMOTE_HOST"),
   OLLAMA_CHAT_MODEL: optionalEnvString("OLLAMA_CHAT_MODEL", 255),
   OLLAMA_EMBED_MODEL: optionalEnvString("OLLAMA_EMBED_MODEL", 255),
   OLLAMA_TIMEOUT_MS: optionalIntEnv("OLLAMA_TIMEOUT_MS", { min: 1_000 }),

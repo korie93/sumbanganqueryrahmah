@@ -134,6 +134,7 @@ export type RuntimeConfig = {
     collectionRollupListenReconnectMs: number;
     httpSlowRequestMs: number;
     requestTimeoutMs: number;
+    wsMaxConnectionsPerInstance: number;
     analyticsTimeZone: string;
     dbQueryProfiling: {
       enabled: boolean;

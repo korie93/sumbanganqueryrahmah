@@ -58,7 +58,7 @@ function HomeImpl({ onNavigate, userRole, tabVisibility }: HomeProps) {
                 <p className="text-[0.68rem] font-semibold uppercase tracking-[0.26em] text-white/80">
                   Operational Workspace
                 </p>
-                <h1 className="mt-3 text-3xl font-bold tracking-tight text-white">Welcome</h1>
+                <h1 className="mt-3 text-[clamp(2rem,6vw,2.5rem)] font-bold tracking-tight text-white">Welcome</h1>
                 <p className="mt-2 max-w-xs text-sm leading-relaxed text-white/85">
                   Move between the modules you use most without digging through the full desktop navigation.
                 </p>
@@ -194,7 +194,7 @@ function HomeImpl({ onNavigate, userRole, tabVisibility }: HomeProps) {
           <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Workspace</p>
           <div className="mt-3 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
             <div>
-              <h1 className="welcome-title text-4xl font-bold text-foreground md:text-5xl">Welcome</h1>
+              <h1 className="welcome-title text-[clamp(2.5rem,4vw,3.5rem)] font-bold text-foreground">Welcome</h1>
               <p className="mt-2 text-base text-muted-foreground md:text-lg">
                 Sumbangan Query Rahmah - Data Management System
               </p>

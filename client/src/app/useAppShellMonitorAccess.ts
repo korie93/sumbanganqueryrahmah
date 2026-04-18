@@ -5,7 +5,7 @@ import {
   isPageEnabled,
 } from "@/app/monitorAccess";
 import { replaceHistory } from "@/app/routing";
-import type { MonitorSection, TabVisibility, User } from "@/app/types";
+import type { MonitorSection, PageName, TabVisibility, User } from "@/app/types";
 
 type MonitorVisibility = {
   activity: boolean;
@@ -16,11 +16,11 @@ type MonitorVisibility = {
 };
 
 type UseAppShellMonitorAccessArgs = {
-  currentPage: string;
+  currentPage: PageName;
   featureLockdown: boolean;
   monitorSection: MonitorSection;
   monitorVisibility: MonitorVisibility;
-  setCurrentPage: Dispatch<SetStateAction<string>>;
+  setCurrentPage: Dispatch<SetStateAction<PageName>>;
   setMonitorSection: Dispatch<SetStateAction<MonitorSection>>;
   tabVisibility: TabVisibility;
   tabVisibilityLoaded: boolean;

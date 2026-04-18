@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 
 type NavbarUserMenuContentProps = {
+  contentId?: string | undefined
   username: string
   userRole: string
   theme: string
@@ -18,6 +19,7 @@ type NavbarUserMenuContentProps = {
 }
 
 export function NavbarUserMenuContent({
+  contentId,
   username,
   userRole,
   theme,
@@ -26,6 +28,7 @@ export function NavbarUserMenuContent({
 }: NavbarUserMenuContentProps) {
   return (
     <DropdownMenuContent
+      id={contentId}
       align="end"
       className="w-[min(18rem,calc(100vw-1rem))] rounded-xl p-2"
     >

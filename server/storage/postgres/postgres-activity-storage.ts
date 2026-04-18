@@ -46,6 +46,10 @@ export class PostgresActivityStorage extends PostgresImportsSearchStorage {
     return this.activityRepository.getActivityById(id);
   }
 
+  async getActivitiesByIds(ids: readonly string[]): Promise<UserActivity[]> {
+    return this.activityRepository.getActivitiesByIds(ids);
+  }
+
   async getActiveActivities(): Promise<UserActivity[]> {
     return this.activityRepository.getActiveActivities();
   }

@@ -22,11 +22,11 @@ import {
   resolveRouteFromLocation,
   type ResolvedRoute,
 } from "@/app/routing";
-import type { MonitorSection, User } from "@/app/types";
+import type { MonitorSection, PageName, User } from "@/app/types";
 import { clearAppQueryCache } from "@/lib/query-client-runtime";
 
 type UseAppShellAuthActionsArgs = {
-  setCurrentPage: Dispatch<SetStateAction<string>>;
+  setCurrentPage: Dispatch<SetStateAction<PageName>>;
   setMonitorSection: Dispatch<SetStateAction<MonitorSection>>;
   setSavedCount: Dispatch<SetStateAction<number>>;
   setSelectedImportId: Dispatch<SetStateAction<string | undefined>>;

@@ -6,6 +6,7 @@ export const RUNTIME_WS_TRACKED_SOCKET_SWEEP_INTERVAL_MS = 60_000;
 export const RUNTIME_WS_PENDING_AUTH_TTL_MS = 60_000;
 export const WS_SESSION_CLOCK_TOLERANCE_SECONDS = 30;
 export const MAX_CONNECTIONS_PER_USER = 5;
+export const DEFAULT_MAX_CONNECTIONS_PER_INSTANCE = 1_000;
 export const MAX_INBOUND_MESSAGES_PER_MINUTE = 100;
 export const INBOUND_MESSAGE_TOKEN_BUCKET_WINDOW_MS = 60_000;
 export const INBOUND_MESSAGE_TOKEN_BUCKET_CAPACITY = MAX_INBOUND_MESSAGES_PER_MINUTE;
@@ -22,6 +23,7 @@ export type RuntimeManagerOptions = {
   connectedClients?: Map<string, WebSocket>;
   trustForwardedHeaders?: boolean;
   trustedForwardedProxies?: readonly string[];
+  maxConnectionsPerInstance?: number;
 };
 
 export type RuntimeWebSocketActivity = {

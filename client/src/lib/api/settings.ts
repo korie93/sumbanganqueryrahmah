@@ -2,6 +2,8 @@ import { apiRequest, createApiHeaders } from "../api-client";
 import { getAuthHeader } from "./shared";
 import { parseApiJson } from "./contract";
 import {
+  appConfigResponseSchema,
+  maintenanceStatusResponseSchema,
   settingsResponseSchema,
   settingsUpdateResponseSchema,
   tabVisibilityResponseSchema,
@@ -18,7 +20,7 @@ export async function getSettings() {
 
 export async function getAppConfig() {
   const response = await apiRequest("GET", "/api/app-config");
-  return response.json();
+  return parseApiJson(response, appConfigResponseSchema, "/api/app-config");
 }
 
 export async function getTabVisibility() {
@@ -43,5 +45,5 @@ export async function getMaintenanceStatus(options?: SettingsRequestOptions) {
     }),
     signal: options?.signal ?? null,
   });
-  return response.json();
+  return parseApiJson(response, maintenanceStatusResponseSchema, "/api/maintenance-status");
 }

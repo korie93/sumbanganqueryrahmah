@@ -1,11 +1,24 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  analyticsSummaryResponseSchema,
+  appConfigResponseSchema,
   apiErrorPayloadSchema,
   auditLogRecordSchema,
   importListItemSchema,
+  maintenanceStatusResponseSchema,
 } from "@shared/api-contracts";
 import { ERROR_CODES } from "@shared/error-codes";
+import {
+  ApiContractError,
+} from "@/lib/api/contract";
+import {
+  getAnalyticsSummary,
+  getLoginTrends,
+  getPeakHours,
+  getRoleDistribution,
+  getTopActiveUsers,
+} from "@/lib/api/analytics";
 import {
   getImportData,
   getImports,
@@ -15,6 +28,8 @@ import {
 import { getAuditLogs } from "@/lib/api/audit";
 import { advancedSearchData, getSearchColumns, searchData } from "@/lib/api/search";
 import {
+  getAppConfig,
+  getMaintenanceStatus,
   getSettings,
   getTabVisibility,
   updateSetting,
@@ -35,6 +50,11 @@ function jsonResponse(body: unknown): Response {
       "Content-Type": "application/json",
     },
   });
+}
+
+function isApiContractErrorFor(endpoint: string) {
+  return (error: unknown) =>
+    error instanceof ApiContractError && error.endpoint === endpoint;
 }
 
 test("shared API contracts accept nullish actor fields without widening required fields", () => {
@@ -89,6 +109,44 @@ test("shared API error payload contract accepts shared and domain-specific upper
     code: "permission_denied",
   });
   assert.equal(malformedCodePayload.success, false);
+});
+
+test("shared app runtime and maintenance contracts accept the expected payload shapes", () => {
+  const appConfigPayload = appConfigResponseSchema.safeParse({
+    systemName: "SQR",
+    sessionTimeoutMinutes: 30,
+    heartbeatIntervalMinutes: 5,
+    wsIdleMinutes: 30,
+    aiEnabled: true,
+    semanticSearchEnabled: true,
+    aiTimeoutMs: 20_000,
+    searchResultLimit: 100,
+    viewerRowsPerPage: 50,
+    importUploadLimitBytes: 100 * 1024 * 1024,
+  });
+  assert.equal(appConfigPayload.success, true);
+
+  const maintenancePayload = maintenanceStatusResponseSchema.safeParse({
+    maintenance: false,
+    message: "",
+    type: "soft",
+    startTime: null,
+    endTime: null,
+  });
+  assert.equal(maintenancePayload.success, true);
+
+  const analyticsSummaryPayload = analyticsSummaryResponseSchema.safeParse({
+    totalUsers: 1,
+    activeSessions: 1,
+    loginsToday: 1,
+    totalDataRows: 0,
+    totalImports: 0,
+    bannedUsers: 0,
+    collectionRecordVersionConflicts24h: 0,
+    loginFailures24h: 0,
+    backupActions24h: 0,
+  });
+  assert.equal(analyticsSummaryPayload.success, true);
 });
 
 test("imports API wrappers accept payloads that match the shared contract", async () => {
@@ -323,13 +381,16 @@ test("search and audit API wrappers reject malformed contract payloads", async (
   }) as typeof fetch);
 
   try {
-    await assert.rejects(() => searchData("alice", 1, 25), /API contract mismatch for \/api\/search\/global/);
+    await assert.rejects(() => searchData("alice", 1, 25), isApiContractErrorFor("/api/search/global"));
     await assert.rejects(
       () => advancedSearchData([{ field: "name", operator: "contains", value: "alice" }], "AND", 1, 25),
-      /API contract mismatch for \/api\/search\/advanced/,
+      isApiContractErrorFor("/api/search/advanced"),
     );
-    await assert.rejects(() => getSearchColumns(), /API contract mismatch for \/api\/search\/columns/);
-    await assert.rejects(() => getAuditLogs({ page: 1, pageSize: 25 }), /API contract mismatch for \/api\/audit-logs/);
+    await assert.rejects(() => getSearchColumns(), isApiContractErrorFor("/api/search/columns"));
+    await assert.rejects(
+      () => getAuditLogs({ page: 1, pageSize: 25 }),
+      isApiContractErrorFor("/api/audit-logs"),
+    );
   } finally {
     restoreFetch();
   }
@@ -356,10 +417,10 @@ test("imports API wrappers reject malformed contract payloads", async () => {
   }) as typeof fetch);
 
   try {
-    await assert.rejects(() => getImports(), /API contract mismatch for \/api\/imports/);
+    await assert.rejects(() => getImports(), isApiContractErrorFor("/api/imports"));
     await assert.rejects(
       () => getImportData("import-123", 1, 50),
-      /API contract mismatch for \/api\/imports\/import-123\/data/,
+      isApiContractErrorFor("/api/imports/import-123/data"),
     );
   } finally {
     restoreFetch();
@@ -455,12 +516,12 @@ test("API wrappers reject non-object JSON rows for import and search payloads", 
   try {
     await assert.rejects(
       () => getImportData("import-123", 1, 50),
-      /API contract mismatch for \/api\/imports\/import-123\/data/,
+      isApiContractErrorFor("/api/imports/import-123/data"),
     );
-    await assert.rejects(() => searchData("alice", 1, 25), /API contract mismatch for \/api\/search\/global/);
+    await assert.rejects(() => searchData("alice", 1, 25), isApiContractErrorFor("/api/search/global"));
     await assert.rejects(
       () => advancedSearchData([{ field: "name", operator: "contains", value: "alice" }], "AND", 1, 25),
-      /API contract mismatch for \/api\/search\/advanced/,
+      isApiContractErrorFor("/api/search/advanced"),
     );
   } finally {
     restoreFetch();
@@ -561,7 +622,191 @@ test("updateSetting rejects malformed success payloads", async () => {
   try {
     await assert.rejects(
       () => updateSetting({ key: "system_name", value: "SQR Next" }),
-      /API contract mismatch for \/api\/settings/,
+      isApiContractErrorFor("/api/settings"),
+    );
+  } finally {
+    restoreFetch();
+  }
+});
+
+test("settings runtime API wrappers accept payloads that match the shared contract", async () => {
+  const restoreFetch = withMockFetch((async (input) => {
+    const url = String(input);
+
+    if (url === "/api/app-config") {
+      return jsonResponse({
+        systemName: "SQR",
+        sessionTimeoutMinutes: 30,
+        heartbeatIntervalMinutes: 5,
+        wsIdleMinutes: 30,
+        aiEnabled: true,
+        semanticSearchEnabled: true,
+        aiTimeoutMs: 20_000,
+        searchResultLimit: 100,
+        viewerRowsPerPage: 50,
+        importUploadLimitBytes: 96 * 1024 * 1024,
+      });
+    }
+
+    if (url === "/api/maintenance-status") {
+      return jsonResponse({
+        maintenance: false,
+        message: "",
+        type: "soft",
+        startTime: null,
+        endTime: null,
+      });
+    }
+
+    throw new Error(`Unexpected URL: ${url}`);
+  }) as typeof fetch);
+
+  try {
+    const appConfig = await getAppConfig();
+    const maintenance = await getMaintenanceStatus();
+
+    assert.equal(appConfig.systemName, "SQR");
+    assert.equal(appConfig.importUploadLimitBytes, 96 * 1024 * 1024);
+    assert.equal(maintenance.type, "soft");
+    assert.equal(maintenance.maintenance, false);
+  } finally {
+    restoreFetch();
+  }
+});
+
+test("settings runtime API wrappers reject malformed contract payloads", async () => {
+  const restoreFetch = withMockFetch((async (input) => {
+    const url = String(input);
+
+    if (url === "/api/app-config") {
+      return jsonResponse({
+        systemName: "SQR",
+      });
+    }
+
+    if (url === "/api/maintenance-status") {
+      return jsonResponse({
+        maintenance: "yes",
+      });
+    }
+
+    throw new Error(`Unexpected URL: ${url}`);
+  }) as typeof fetch);
+
+  try {
+    await assert.rejects(() => getAppConfig(), isApiContractErrorFor("/api/app-config"));
+    await assert.rejects(
+      () => getMaintenanceStatus(),
+      isApiContractErrorFor("/api/maintenance-status"),
+    );
+  } finally {
+    restoreFetch();
+  }
+});
+
+test("analytics API wrappers accept payloads that match the shared contract", async () => {
+  const restoreFetch = withMockFetch((async (input) => {
+    const url = String(input);
+
+    if (url === "/api/analytics/summary") {
+      return jsonResponse({
+        totalUsers: 12,
+        activeSessions: 4,
+        loginsToday: 9,
+        totalDataRows: 200,
+        totalImports: 8,
+        bannedUsers: 1,
+        collectionRecordVersionConflicts24h: 2,
+        loginFailures24h: 3,
+        backupActions24h: 1,
+      });
+    }
+
+    if (url === "/api/analytics/login-trends?days=7") {
+      return jsonResponse([{ date: "2026-04-18", logins: 4, logouts: 3 }]);
+    }
+
+    if (url === "/api/analytics/top-users?pageSize=10") {
+      return jsonResponse([
+        { username: "alice", role: "admin", loginCount: 6, lastLogin: "2026-04-18T10:00:00.000Z" },
+      ]);
+    }
+
+    if (url === "/api/analytics/peak-hours") {
+      return jsonResponse([{ hour: 9, count: 8 }]);
+    }
+
+    if (url === "/api/analytics/role-distribution") {
+      return jsonResponse([{ role: "admin", count: 2 }]);
+    }
+
+    throw new Error(`Unexpected URL: ${url}`);
+  }) as typeof fetch);
+
+  try {
+    const summary = await getAnalyticsSummary();
+    const trends = await getLoginTrends();
+    const topUsers = await getTopActiveUsers();
+    const peakHours = await getPeakHours();
+    const roleDistribution = await getRoleDistribution();
+
+    assert.equal(summary.totalUsers, 12);
+    assert.equal(trends[0]?.logins, 4);
+    assert.equal(topUsers[0]?.username, "alice");
+    assert.equal(peakHours[0]?.hour, 9);
+    assert.equal(roleDistribution[0]?.role, "admin");
+  } finally {
+    restoreFetch();
+  }
+});
+
+test("analytics API wrappers reject malformed contract payloads", async () => {
+  const restoreFetch = withMockFetch((async (input) => {
+    const url = String(input);
+
+    if (url === "/api/analytics/summary") {
+      return jsonResponse({ totalUsers: 1 });
+    }
+
+    if (url === "/api/analytics/login-trends?days=7") {
+      return jsonResponse([{ date: "2026-04-18", logins: "four", logouts: 3 }]);
+    }
+
+    if (url === "/api/analytics/top-users?pageSize=10") {
+      return jsonResponse([{ username: "alice" }]);
+    }
+
+    if (url === "/api/analytics/peak-hours") {
+      return jsonResponse([{ hour: 25, count: 1 }]);
+    }
+
+    if (url === "/api/analytics/role-distribution") {
+      return jsonResponse([{ role: "", count: 1 }]);
+    }
+
+    throw new Error(`Unexpected URL: ${url}`);
+  }) as typeof fetch);
+
+  try {
+    await assert.rejects(
+      () => getAnalyticsSummary(),
+      isApiContractErrorFor("/api/analytics/summary"),
+    );
+    await assert.rejects(
+      () => getLoginTrends(),
+      isApiContractErrorFor("/api/analytics/login-trends"),
+    );
+    await assert.rejects(
+      () => getTopActiveUsers(),
+      isApiContractErrorFor("/api/analytics/top-users"),
+    );
+    await assert.rejects(
+      () => getPeakHours(),
+      isApiContractErrorFor("/api/analytics/peak-hours"),
+    );
+    await assert.rejects(
+      () => getRoleDistribution(),
+      isApiContractErrorFor("/api/analytics/role-distribution"),
     );
   } finally {
     restoreFetch();

@@ -38,6 +38,9 @@ Untuk manual penggunaan client yang lengkap (split ikut role `superuser`, `admin
    ```
    Edit `.env` and fill in your PostgreSQL credentials and session secret.
    See [.env.example](./.env.example) for all available options.
+   For AI runtime safety, keep `OLLAMA_HOST` on a loopback URL unless you have
+   explicitly reviewed the upstream network boundary and intentionally set
+   `OLLAMA_ALLOW_REMOTE_HOST=1`.
 
 3. **Run database migrations:**
    ```bash
@@ -109,6 +112,13 @@ Anda masih perlu menyediakan PostgreSQL secara berasingan. Image ini sengaja tid
 | `npm run release:verify:local` | Run final local release gate (tests + smoke + backup drill) |
 | `npm run monitor:stale-conflicts` | Snapshot stale-conflict/429 runtime monitor signals |
 | `npm run lint:secrets` | Run secret scanning with the repo secretlint policy |
+
+## Operational Notes
+
+- Reviewed rate-limit mappings now live in [docs/RATE_LIMITS.md](./docs/RATE_LIMITS.md).
+- A scoped Drizzle-managed relationship diagram now lives in [docs/ER_DIAGRAM.md](./docs/ER_DIAGRAM.md).
+- Playwright critical-flow and visual-smoke guidance now lives in [docs/E2E_VISUAL_TESTING.md](./docs/E2E_VISUAL_TESTING.md).
+- Reviewed image delivery guidance now lives in [docs/IMAGE_OPTIMIZATION.md](./docs/IMAGE_OPTIMIZATION.md).
 
 ## Troubleshooting
 

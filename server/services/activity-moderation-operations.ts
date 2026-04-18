@@ -4,6 +4,7 @@ import type {
   BanActivityResult,
   KickActivityResult,
 } from "./activity-service-types";
+import { revokeSession, revokeSessions } from "../auth/session-revocation-registry";
 
 type CloseActivitySocket = (
   activityId: string,
@@ -26,6 +27,7 @@ export function createActivityModerationOperations(
         logoutTime: new Date(),
         logoutReason: "KICKED",
       });
+      revokeSession(activityId);
 
       await closeSocket(activityId, {
         type: "kicked",
@@ -68,6 +70,7 @@ export function createActivityModerationOperations(
         logoutTime: new Date(),
         logoutReason: "BANNED",
       });
+      revokeSession(activityId);
 
       await closeSocket(activityId, {
         type: "banned",
@@ -97,6 +100,7 @@ export function createActivityModerationOperations(
 
       await storage.updateUserBan(username, true);
       await storage.deactivateUserActivities(username, "BANNED");
+      revokeSessions(activeSessions.map((activity) => activity.id));
 
       for (const activity of activeSessions) {
         await closeSocket(activity.id, {

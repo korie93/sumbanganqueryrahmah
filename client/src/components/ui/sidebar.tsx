@@ -53,6 +53,8 @@ type SidebarContextProps = {
   setOpenMobile: (open: boolean) => void
   isMobile: boolean
   toggleSidebar: () => void
+  desktopSidebarId: string
+  mobileSidebarId: string
 }
 
 const SidebarContext = React.createContext<SidebarContextProps | null>(null)
@@ -80,6 +82,8 @@ function SidebarProvider({
 }) {
   const isMobile = useIsMobile()
   const [openMobile, setOpenMobile] = React.useState(false)
+  const desktopSidebarId = React.useId()
+  const mobileSidebarId = React.useId()
 
   // This is the internal state of the sidebar.
   // We use openProp and setOpenProp for control from outside the component.
@@ -122,8 +126,10 @@ function SidebarProvider({
       openMobile,
       setOpenMobile,
       toggleSidebar,
+      desktopSidebarId,
+      mobileSidebarId,
     }),
-    [state, open, setOpen, isMobile, openMobile, setOpenMobile, toggleSidebar]
+    [state, open, setOpen, isMobile, openMobile, setOpenMobile, toggleSidebar, desktopSidebarId, mobileSidebarId]
   )
 
   return (
@@ -157,7 +163,7 @@ function Sidebar({
   variant?: "sidebar" | "floating" | "inset"
   collapsible?: "offcanvas" | "icon" | "none"
 }) {
-  const { isMobile, state, openMobile, setOpenMobile } = useSidebar()
+  const { desktopSidebarId, isMobile, mobileSidebarId, state, openMobile, setOpenMobile } = useSidebar()
 
   if (collapsible === "none") {
     return (
@@ -178,6 +184,7 @@ function Sidebar({
     return (
       <Sheet open={openMobile} onOpenChange={setOpenMobile} {...props}>
         <SheetContent
+          id={mobileSidebarId}
           data-sidebar="sidebar"
           data-slot="sidebar"
           data-mobile="true"
@@ -219,6 +226,7 @@ function Sidebar({
         )}
       />
       <div
+        id={desktopSidebarId}
         data-slot="sidebar-container"
         className={cn(
           "fixed inset-y-0 z-[var(--z-sidebar-desktop)] hidden h-svh w-[var(--sidebar-width)] transition-[left,right,width] duration-200 ease-linear md:flex",
@@ -250,7 +258,7 @@ function SidebarTrigger({
   onClick,
   ...props
 }: React.ComponentProps<typeof Button>) {
-  const { toggleSidebar } = useSidebar()
+  const { desktopSidebarId, isMobile, mobileSidebarId, open, openMobile, toggleSidebar } = useSidebar()
 
   return (
     <Button
@@ -260,6 +268,8 @@ function SidebarTrigger({
       size="icon"
       className={cn("h-7 w-7", className)}
       aria-label="Toggle sidebar"
+      aria-controls={isMobile ? mobileSidebarId : desktopSidebarId}
+      aria-expanded={isMobile ? openMobile : open}
       title="Toggle sidebar"
       onClick={(event) => {
         onClick?.(event)
@@ -274,7 +284,7 @@ function SidebarTrigger({
 }
 
 function SidebarRail({ className, ...props }: React.ComponentProps<"button">) {
-  const { toggleSidebar } = useSidebar()
+  const { desktopSidebarId, isMobile, mobileSidebarId, open, openMobile, toggleSidebar } = useSidebar()
 
   // Note: Tailwind v3.4 doesn't support "in-" selectors. So the rail won't work perfectly.
   return (
@@ -282,6 +292,8 @@ function SidebarRail({ className, ...props }: React.ComponentProps<"button">) {
       data-sidebar="rail"
       data-slot="sidebar-rail"
       aria-label="Toggle Sidebar"
+      aria-controls={isMobile ? mobileSidebarId : desktopSidebarId}
+      aria-expanded={isMobile ? openMobile : open}
       tabIndex={-1}
       onClick={toggleSidebar}
       title="Toggle Sidebar"

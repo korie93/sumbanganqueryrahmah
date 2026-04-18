@@ -4,6 +4,7 @@ import type { PostgresStorage } from "../storage-postgres";
 import { assertStrongPasswordInput } from "./auth-account-token-utils";
 import { AuthAccountError } from "./auth-account-types";
 import { ERROR_CODES } from "../../shared/error-codes";
+import { revokeSessions } from "../auth/session-revocation-registry";
 
 export type ChangePasswordInput = {
   currentPassword: string;
@@ -46,7 +47,9 @@ export class AuthAccountSelfCredentialOperations {
   private async invalidateUserSessions(username: string, reason: string) {
     const activeSessions = await this.deps.storage.getActiveActivitiesByUsername(username);
     await this.deps.storage.deactivateUserActivities(username, reason);
-    return activeSessions.map((activity) => activity.id);
+    const closedSessionIds = activeSessions.map((activity) => activity.id);
+    revokeSessions(closedSessionIds);
+    return closedSessionIds;
   }
 
   async changeOwnPassword(actor: AuthAccountUser, input: ChangePasswordInput) {

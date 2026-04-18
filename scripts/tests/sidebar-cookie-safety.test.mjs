@@ -10,3 +10,10 @@ test("sidebar persistence cookie keeps SameSite=Lax", () => {
 
   assert.match(source, /SameSite=Lax/);
 });
+
+test("sidebar toggle controls expose expanded state and controlled regions", () => {
+  const source = readFileSync(sidebarPath, "utf8");
+
+  assert.match(source, /aria-controls=\{isMobile \? mobileSidebarId : desktopSidebarId\}/);
+  assert.match(source, /aria-expanded=\{isMobile \? openMobile : open\}/);
+});

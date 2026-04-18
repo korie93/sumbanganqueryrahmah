@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import path from "node:path";
-import express, { type Express, type RequestHandler } from "express";
+import compression from "compression";
+import express, { type Express, type Request, type Response, type RequestHandler } from "express";
 import helmet from "helmet";
 import { z } from "zod";
 import { runtimeConfig } from "../config/runtime";
@@ -20,6 +21,7 @@ const HTTP_SLOW_REQUEST_MS = runtimeConfig.runtime.httpSlowRequestMs;
 const API_VERSION_HEADER = "API-Version";
 const API_VERSION_VALUE = "1";
 const CSP_REPORT_ENDPOINT_PATH = "/api/security/csp-reports";
+const API_COMPRESSION_THRESHOLD_BYTES = 1024;
 
 const cspReportDocumentSchema = z.object({
   "blocked-uri": z.string().max(2_048).optional(),
@@ -97,6 +99,29 @@ function resolveAttachmentFilename(filePath: string): string {
   return trimmed || "download";
 }
 
+function shouldBypassApiCompression(requestPath: string) {
+  if (!requestPath) {
+    return false;
+  }
+
+  if (requestPath.startsWith("/uploads") || requestPath.startsWith("/api/backups")) {
+    return true;
+  }
+
+  return /^\/api\/collection\/[^/]+\/(?:receipt(?:\/|$)|receipts\/)/i.test(requestPath);
+}
+
+function shouldCompressApiResponse(req: Request, res: Response) {
+  if (
+    (!req.path.startsWith("/api") && !req.path.startsWith("/internal"))
+    || shouldBypassApiCompression(req.path)
+  ) {
+    return false;
+  }
+
+  return compression.filter(req, res);
+}
+
 type LocalHttpPipelineOptions = {
   importBodyLimit: string;
   collectionBodyLimit: string;
@@ -157,6 +182,10 @@ export function registerLocalHttpPipeline(app: Express, options: LocalHttpPipeli
         "require-trusted-types-for": ["'script'"],
       },
     },
+  }));
+  app.use(compression({
+    threshold: API_COMPRESSION_THRESHOLD_BYTES,
+    filter: shouldCompressApiResponse,
   }));
 
   // Keep default parser small; enable larger payload only for import endpoints.

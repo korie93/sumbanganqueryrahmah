@@ -7,6 +7,7 @@ import type {
 import { logger } from "../lib/logger";
 import { resolveTimestampMs } from "../lib/timestamp";
 import { ERROR_CODES } from "../../shared/error-codes";
+import { revokeSessions } from "../auth/session-revocation-registry";
 
 let hasWarnedSuperuserSessionIdleWindowFallback = false;
 
@@ -59,7 +60,9 @@ export async function invalidateUserSessions(
 ) {
   const activeSessions = await storage.getActiveActivitiesByUsername(username);
   await storage.deactivateUserActivities(username, reason);
-  return activeSessions.map((activity) => activity.id);
+  const closedSessionIds = activeSessions.map((activity) => activity.id);
+  revokeSessions(closedSessionIds);
+  return closedSessionIds;
 }
 
 export async function replaceExistingSessionsForLogin(
@@ -76,6 +79,7 @@ export async function replaceExistingSessionsForLogin(
   }
 
   await storage.deactivateUserActivities(user.username, "NEW_SESSION");
+  revokeSessions(activeSessions.map((activity) => activity.id));
   await storage.createAuditLog({
     action: "LOGIN_REPLACED_EXISTING_SESSION",
     performedBy: user.username,
@@ -127,6 +131,7 @@ export async function createAuthenticatedSession(params: {
         if (freshSessions.length === 0) {
           await params.storage.deactivateUserActivities(params.user.username, "IDLE_TIMEOUT");
           closedSessionIds = activeSessions.map((activity) => activity.id);
+          revokeSessions(closedSessionIds);
           await params.storage.createAuditLog({
             action: "LOGIN_STALE_SESSION_RECOVERED",
             performedBy: params.user.username,

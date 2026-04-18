@@ -20,6 +20,7 @@ export type ActivityStorage = Pick<
   | "getActiveActivities"
   | "getActiveActivitiesByUsername"
   | "getActivityById"
+  | "getActivitiesByIds"
   | "getAllActivities"
   | "getBannedSessions"
   | "getFilteredActivities"

@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { Clock, TrendingUp } from "lucide-react";
 import {
   Area,
@@ -13,6 +14,7 @@ import {
   type TooltipValueType,
 } from "recharts";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { EmptyState } from "@/components/EmptyState";
 import { QueryErrorFallback } from "@/components/QueryErrorFallback";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -102,7 +104,7 @@ function CompactChartTooltip({
   );
 }
 
-export function DashboardChartsGrid({
+export const DashboardChartsGrid = memo(function DashboardChartsGrid({
   onTrendDaysChange,
   onRetryPeakHours,
   onRetryTrends,
@@ -186,7 +188,7 @@ export function DashboardChartsGrid({
             </div>
           </div>
         </CardHeader>
-        <CardContent className="space-y-3" aria-live="polite">
+        <CardContent className="space-y-3" aria-live="polite" aria-busy={trendsLoading}>
           {trendsLoading ? (
             <div
               className={`flex items-center justify-center rounded-xl border border-border/50 bg-background/35 ${chartHeightClassName}`}
@@ -300,11 +302,11 @@ export function DashboardChartsGrid({
               data-testid="dashboard-trends-error"
             />
           ) : (
-            <div
-              className={`flex items-center justify-center rounded-xl border border-dashed border-border/60 bg-background/35 text-muted-foreground ${chartHeightClassName}`}
-            >
-              No data available
-            </div>
+            <EmptyState
+              className={chartHeightClassName}
+              title="No login trend data yet"
+              description="Login and logout activity will appear here after the first completed sessions are recorded."
+            />
           )}
         </CardContent>
       </Card>
@@ -321,7 +323,7 @@ export function DashboardChartsGrid({
               : "Login volume by hour so busy periods stay easy to spot on smaller screens."}
           </p>
         </CardHeader>
-        <CardContent className="space-y-3" aria-live="polite">
+        <CardContent className="space-y-3" aria-live="polite" aria-busy={peakHoursLoading}>
           {peakHoursLoading ? (
             <div
               className={`flex items-center justify-center rounded-xl border border-border/50 bg-background/35 ${chartHeightClassName}`}
@@ -391,14 +393,14 @@ export function DashboardChartsGrid({
               />
             </>
           ) : (
-            <div
-              className={`flex items-center justify-center rounded-xl border border-dashed border-border/60 bg-background/35 text-muted-foreground ${chartHeightClassName}`}
-            >
-              No data available
-            </div>
+            <EmptyState
+              className={chartHeightClassName}
+              title="No peak-hour activity yet"
+              description="Busy-hour insights will appear once enough login activity has been recorded for this workspace."
+            />
           )}
         </CardContent>
       </Card>
     </div>
   );
-}
+});

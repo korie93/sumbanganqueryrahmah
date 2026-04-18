@@ -191,6 +191,67 @@ export const tabVisibilityResponseSchema = z.object({
   tabs: z.record(z.boolean()),
 });
 
+export const appConfigResponseSchema = z.object({
+  systemName: nonEmptyStringSchema,
+  sessionTimeoutMinutes: positiveIntSchema,
+  heartbeatIntervalMinutes: positiveIntSchema,
+  wsIdleMinutes: positiveIntSchema,
+  aiEnabled: z.boolean(),
+  semanticSearchEnabled: z.boolean(),
+  aiTimeoutMs: positiveIntSchema,
+  searchResultLimit: positiveIntSchema,
+  viewerRowsPerPage: positiveIntSchema,
+  importUploadLimitBytes: positiveIntSchema,
+});
+
+export const maintenanceStatusResponseSchema = z.object({
+  maintenance: z.boolean(),
+  message: z.string(),
+  type: z.enum(["soft", "hard"]),
+  startTime: z.string().nullable(),
+  endTime: z.string().nullable(),
+});
+
+export const analyticsSummaryResponseSchema = z.object({
+  totalUsers: nonNegativeIntSchema,
+  activeSessions: nonNegativeIntSchema,
+  loginsToday: nonNegativeIntSchema,
+  totalDataRows: nonNegativeIntSchema,
+  totalImports: nonNegativeIntSchema,
+  bannedUsers: nonNegativeIntSchema,
+  collectionRecordVersionConflicts24h: nonNegativeIntSchema.optional(),
+  loginFailures24h: nonNegativeIntSchema.optional(),
+  backupActions24h: nonNegativeIntSchema.optional(),
+});
+
+export const loginTrendSchema = z.object({
+  date: nonEmptyStringSchema,
+  logins: nonNegativeIntSchema,
+  logouts: nonNegativeIntSchema,
+});
+
+export const topActiveUserSchema = z.object({
+  username: nonEmptyStringSchema,
+  role: nonEmptyStringSchema,
+  loginCount: nonNegativeIntSchema,
+  lastLogin: z.string().nullable(),
+});
+
+export const peakHourSchema = z.object({
+  hour: z.number().int().min(0).max(23),
+  count: nonNegativeIntSchema,
+});
+
+export const roleDistributionItemSchema = z.object({
+  role: nonEmptyStringSchema,
+  count: nonNegativeIntSchema,
+});
+
+export const analyticsLoginTrendsResponseSchema = z.array(loginTrendSchema);
+export const analyticsTopUsersResponseSchema = z.array(topActiveUserSchema);
+export const analyticsPeakHoursResponseSchema = z.array(peakHourSchema);
+export const analyticsRoleDistributionResponseSchema = z.array(roleDistributionItemSchema);
+
 export type ImportsListResponse = z.infer<typeof importsListResponseSchema>;
 export type ImportDataPageResponse = z.infer<typeof importDataPageResponseSchema>;
 export type SearchGlobalResponse = z.infer<typeof searchGlobalResponseSchema>;
@@ -200,3 +261,10 @@ export type ApiErrorPayload = z.infer<typeof apiErrorPayloadSchema>;
 export type SettingsResponse = z.infer<typeof settingsResponseSchema>;
 export type SettingsUpdateResponse = z.infer<typeof settingsUpdateResponseSchema>;
 export type TabVisibilityResponse = z.infer<typeof tabVisibilityResponseSchema>;
+export type AppConfigResponse = z.infer<typeof appConfigResponseSchema>;
+export type MaintenanceStatusResponse = z.infer<typeof maintenanceStatusResponseSchema>;
+export type AnalyticsSummaryResponse = z.infer<typeof analyticsSummaryResponseSchema>;
+export type AnalyticsLoginTrendsResponse = z.infer<typeof analyticsLoginTrendsResponseSchema>;
+export type AnalyticsTopUsersResponse = z.infer<typeof analyticsTopUsersResponseSchema>;
+export type AnalyticsPeakHoursResponse = z.infer<typeof analyticsPeakHoursResponseSchema>;
+export type AnalyticsRoleDistributionResponse = z.infer<typeof analyticsRoleDistributionResponseSchema>;

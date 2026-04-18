@@ -9,6 +9,7 @@ import { createRuntimeConnectionHandler } from "./ws-connection-lifecycle";
 import { startRuntimeWebSocketHeartbeat } from "./ws-heartbeat";
 import {
   CONNECTED_CLIENT_MONITOR_THRESHOLDS,
+  DEFAULT_MAX_CONNECTIONS_PER_INSTANCE,
   MAX_RUNTIME_WS_BUFFERED_BYTES,
   RUNTIME_WS_PENDING_AUTH_TTL_MS,
   RUNTIME_WS_TRACKED_SOCKET_SWEEP_INTERVAL_MS,
@@ -29,6 +30,10 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
   const connectedClients = options.connectedClients ?? new Map<string, WebSocket>();
   const trustForwardedHeaders = options.trustForwardedHeaders === true;
   const trustedForwardedProxies = options.trustedForwardedProxies ?? [];
+  const maxConnectionsPerInstance = Math.max(
+    1,
+    Math.floor(options.maxConnectionsPerInstance ?? DEFAULT_MAX_CONNECTIONS_PER_INSTANCE),
+  );
   const trustedForwardedProxyMatcher = buildTrustedProxyMatcher(trustedForwardedProxies);
   const socketEntriesByActivity = new Map<string, RuntimeTrackedSocketEntry>();
   const socketEntriesByInstance = new WeakMap<WebSocket, RuntimeTrackedSocketEntry>();
@@ -224,7 +229,9 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
     registerTrackedSocketEntry,
     removeTrackedSocket,
     countTrackedUserConnections,
+    countTrackedSockets: () => trackedSockets.size,
     isTrackableSocket,
+    maxConnectionsPerInstance,
   });
 
   wss.on("connection", handleConnection as Parameters<WebSocketServer["on"]>[1]);

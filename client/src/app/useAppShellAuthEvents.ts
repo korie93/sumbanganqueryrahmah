@@ -4,7 +4,7 @@ import {
   type SetStateAction,
 } from "react";
 import { replaceHistory } from "@/app/routing";
-import type { User } from "@/app/types";
+import type { PageName, User } from "@/app/types";
 import { persistAuthenticatedUser } from "@/lib/auth-session";
 
 type ProfileUpdatedDetail = {
@@ -14,7 +14,7 @@ type ProfileUpdatedDetail = {
 
 type UseAppShellAuthEventsArgs = {
   applyLoggedOutClientState: (redirectToLogin?: boolean, broadcast?: boolean) => void;
-  setCurrentPage: Dispatch<SetStateAction<string>>;
+  setCurrentPage: Dispatch<SetStateAction<PageName>>;
   setUser: Dispatch<SetStateAction<User | null>>;
 };
 

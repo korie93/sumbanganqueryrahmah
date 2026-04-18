@@ -18,6 +18,7 @@ export interface ActivitySettingsStorageContract {
     idleMinutes: number;
   }): Promise<UserActivity | undefined>;
   getActivityById(id: string): Promise<UserActivity | undefined>;
+  getActivitiesByIds(ids: readonly string[]): Promise<UserActivity[]>;
   getActiveActivities(): Promise<UserActivity[]>;
   getAllActivities(): Promise<UserActivity[]>;
   deleteActivity(id: string): Promise<boolean>;

@@ -5,6 +5,7 @@ import {
   verifySessionJwt,
   SESSION_JWT_DEFAULT_EXPIRY,
 } from "../../auth/session-jwt";
+import { revokeSessions } from "../../auth/session-revocation-registry";
 import { setAuthSessionCookie } from "../../auth/session-cookie";
 import { parseBrowser } from "../../lib/browser";
 import { ERROR_CODES } from "../../../shared/error-codes";
@@ -62,6 +63,7 @@ export function closeAuthActivitySockets({
   connectedClients,
   storage,
 }: CloseAuthActivitySocketsInput) {
+  revokeSessions(activityIds);
   for (const activityId of activityIds) {
     const socket = connectedClients.get(activityId);
     if (socket && socket.readyState === WebSocket.OPEN) {

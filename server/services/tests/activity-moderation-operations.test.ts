@@ -8,6 +8,10 @@ type UserRecord = NonNullable<Awaited<ReturnType<ActivityStorage["getUserByUsern
 type AuditRecord = Awaited<ReturnType<ActivityStorage["createAuditLog"]>>;
 
 function createStorageMock(overrides: Partial<ActivityStorage> = {}): ActivityStorage {
+  const getActivityById =
+    overrides.getActivityById
+    ?? (async () => undefined);
+
   return {
     banVisitor: async () => undefined,
     clearCollectionNicknameSessionByActivity: async () => undefined,
@@ -26,7 +30,11 @@ function createStorageMock(overrides: Partial<ActivityStorage> = {}): ActivitySt
     deleteActivity: async () => true,
     getActiveActivities: async () => [],
     getActiveActivitiesByUsername: async () => [],
-    getActivityById: async () => undefined,
+    getActivitiesByIds: async (activityIds: readonly string[]) => {
+      const resolvedActivities = await Promise.all(activityIds.map((activityId) => getActivityById(activityId)));
+      return resolvedActivities.filter((activity): activity is ActivityRecord => Boolean(activity));
+    },
+    getActivityById,
     getAllActivities: async () => [],
     getBannedSessions: async () => [],
     getFilteredActivities: async () => [],

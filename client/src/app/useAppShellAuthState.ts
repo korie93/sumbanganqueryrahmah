@@ -6,10 +6,10 @@ import {
 import { useAppShellAuthActions } from "@/app/useAppShellAuthActions";
 import { useAppShellAuthLifecycle } from "@/app/useAppShellAuthLifecycle";
 import { useAppShellSessionValidation } from "@/app/useAppShellSessionValidation";
-import type { MonitorSection, User } from "@/app/types";
+import type { MonitorSection, PageName, User } from "@/app/types";
 
 type UseAppShellAuthStateArgs = {
-  setCurrentPage: Dispatch<SetStateAction<string>>;
+  setCurrentPage: Dispatch<SetStateAction<PageName>>;
   setMonitorSection: Dispatch<SetStateAction<MonitorSection>>;
   setSavedCount: Dispatch<SetStateAction<number>>;
   setSelectedImportId: Dispatch<SetStateAction<string | undefined>>;

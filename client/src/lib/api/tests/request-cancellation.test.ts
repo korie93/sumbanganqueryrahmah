@@ -625,7 +625,14 @@ test("analytics API wrappers forward AbortSignal", async () => {
 
     const url = String(input);
     if (url === "/api/analytics/summary") {
-      return jsonResponse({ totalUsers: 0 });
+      return jsonResponse({
+        totalUsers: 0,
+        activeSessions: 0,
+        loginsToday: 0,
+        totalDataRows: 0,
+        totalImports: 0,
+        bannedUsers: 0,
+      });
     }
     if (url === "/api/analytics/login-trends?days=14") {
       return jsonResponse([]);
@@ -1041,6 +1048,8 @@ test("getMaintenanceStatus forwards AbortSignal", async () => {
       maintenance: false,
       message: "",
       type: "soft",
+      startTime: null,
+      endTime: null,
     });
   }) as typeof fetch);
 

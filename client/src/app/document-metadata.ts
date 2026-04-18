@@ -1,8 +1,8 @@
-import type { MonitorSection, User } from "@/app/types";
+import type { MonitorSection, PageName, User } from "@/app/types";
 import { DEFAULT_SYSTEM_NAME } from "@/app/constants";
 
 type DocumentMetadataInput = {
-  currentPage: string;
+  currentPage: PageName;
   monitorSection?: MonitorSection;
   systemName?: string | null;
   user?: User | null;

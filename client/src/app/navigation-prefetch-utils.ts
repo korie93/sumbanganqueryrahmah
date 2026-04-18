@@ -1,9 +1,9 @@
 import { getVisibleHomeItems, getVisibleNavItems, resolveNavigationTarget } from "@/app/navigation";
 import { parseMonitorSectionFromPageInput } from "@/app/routing";
-import type { MonitorSection, TabVisibility } from "@/app/types";
+import type { MonitorSection, PageName, TabVisibility } from "@/app/types";
 
 type PredictivePrefetchArgs = {
-  currentPage: string;
+  currentPage: PageName;
   featureLockdown: boolean;
   monitorSection?: MonitorSection | null | undefined;
   tabVisibility: TabVisibility;
@@ -61,7 +61,7 @@ function getNavigationPriority(target: NavigationPrefetchTarget) {
 }
 
 function resolveCurrentNavigationTarget(
-  currentPage: string,
+  currentPage: PageName,
   monitorSection?: MonitorSection | null | undefined,
 ): NavigationPrefetchTarget | null {
   if (currentPage === "monitor") {

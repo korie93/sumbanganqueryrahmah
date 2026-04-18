@@ -1,3 +1,4 @@
+import { isIP } from "node:net";
 import type { MailConfigurationAssessment, RuntimeConfigDiagnostic } from "./runtime-config-types";
 import { normalizeCorsOrigin } from "./runtime-config-read-utils";
 
@@ -22,6 +23,41 @@ const PLACEHOLDER_BACKUP_ENCRYPTION_KEYS = new Set([
 const UNSAFE_TRUST_PROXY_VALUES = new Set(["*", "all", "true", "1"]);
 const OBVIOUS_PLACEHOLDER_SECRET_PATTERN = /(?:generate[_-]?me|change[_-]?(?:this|me)|replace[_-]?(?:this|me)|do[_-]?not[_-]?use|placeholder-secret|example-secret)/i;
 const PRODUCTION_SECRET_MIN_LENGTH = 32;
+
+function isLoopbackHostname(hostname: string) {
+  const normalizedHostname = String(hostname || "").trim().replace(/^\[|\]$/g, "").toLowerCase();
+  if (!normalizedHostname) {
+    return false;
+  }
+
+  if (normalizedHostname === "localhost" || normalizedHostname === "::1") {
+    return true;
+  }
+
+  const ipVersion = isIP(normalizedHostname);
+  if (ipVersion === 4) {
+    return normalizedHostname.startsWith("127.");
+  }
+
+  return false;
+}
+
+export function assertSafeOllamaHost(params: {
+  allowRemoteHost: boolean;
+  isProductionLike: boolean;
+  ollamaHost: string | null;
+}) {
+  if (!params.isProductionLike || !params.ollamaHost) {
+    return;
+  }
+
+  const url = new URL(params.ollamaHost);
+  if (!params.allowRemoteHost && !isLoopbackHostname(url.hostname)) {
+    throw new Error(
+      "OLLAMA_HOST must stay on a loopback host outside local development unless OLLAMA_ALLOW_REMOTE_HOST=1 is set explicitly.",
+    );
+  }
+}
 
 export function resolveTrustedProxies(rawValues: string[]): string[] {
   if (rawValues.length === 0) {
@@ -246,6 +282,8 @@ export function buildRuntimeConfigWarnings(params: {
   configuredCollectionPiiEncryptionKey: string | null;
   configuredPgPassword: string | null;
   configuredAuthCookieSecure: string | null;
+  configuredOllamaHost: string | null;
+  ollamaAllowRemoteHost: boolean;
   remoteErrorTrackingEnabled: boolean;
   remoteErrorTrackingEndpoint: string | null;
   mailConfiguration: MailConfigurationAssessment;
@@ -261,6 +299,8 @@ export function buildRuntimeConfigWarnings(params: {
     configuredCollectionPiiEncryptionKey,
     configuredPgPassword,
     configuredAuthCookieSecure,
+    configuredOllamaHost,
+    ollamaAllowRemoteHost,
     remoteErrorTrackingEnabled,
     remoteErrorTrackingEndpoint,
     mailConfiguration,
@@ -354,6 +394,20 @@ export function buildRuntimeConfigWarnings(params: {
       code: "REMOTE_ERROR_TRACKING_HTTPS_RECOMMENDED",
       envNames: ["REMOTE_ERROR_TRACKING_ENABLED", "REMOTE_ERROR_TRACKING_ENDPOINT"],
       message: "REMOTE_ERROR_TRACKING_ENDPOINT should use https:// on production-like hosts so telemetry is not sent over plaintext transport.",
+      severity: "warning",
+    });
+  }
+
+  if (
+    isProductionLike
+    && ollamaAllowRemoteHost
+    && configuredOllamaHost
+    && !isLoopbackHostname(new URL(configuredOllamaHost).hostname)
+  ) {
+    warnings.push({
+      code: "OLLAMA_REMOTE_HOST_EXPLICITLY_ALLOWED",
+      envNames: ["OLLAMA_HOST", "OLLAMA_ALLOW_REMOTE_HOST"],
+      message: "OLLAMA_HOST is targeting a non-loopback host on a production-like deployment because OLLAMA_ALLOW_REMOTE_HOST=1 is set explicitly. Review the upstream network policy carefully.",
       severity: "warning",
     });
   }

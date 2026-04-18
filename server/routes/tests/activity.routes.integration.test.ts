@@ -234,6 +234,10 @@ function createActivityRouteHarness(options?: {
       return activities.delete(activityId);
     },
     getActivityById: async (activityId: string) => activities.get(activityId),
+    getActivitiesByIds: async (activityIds: readonly string[]) =>
+      activityIds
+        .map((activityId) => activities.get(activityId))
+        .filter((activity): activity is ActivityRecord => Boolean(activity)),
     getAllActivities: async () => Array.from(activities.values()),
     getFilteredActivities: async (filters: Record<string, unknown>) => {
       filteredActivityCalls.push(filters);

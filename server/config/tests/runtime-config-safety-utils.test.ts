@@ -210,6 +210,8 @@ test("buildRuntimeConfigWarnings warns when local collection PII encryption is n
     configuredCollectionPiiEncryptionKey: null,
     configuredPgPassword: null,
     configuredAuthCookieSecure: null,
+    configuredOllamaHost: null,
+    ollamaAllowRemoteHost: false,
     remoteErrorTrackingEnabled: false,
     remoteErrorTrackingEndpoint: null,
     mailConfiguration: {
@@ -237,6 +239,8 @@ test("buildRuntimeConfigWarnings reports when insecure auth cookies are forced o
     configuredCollectionPiiEncryptionKey: "collection-pii-secret",
     configuredPgPassword: "prod-db-password",
     configuredAuthCookieSecure: "false",
+    configuredOllamaHost: null,
+    ollamaAllowRemoteHost: false,
     remoteErrorTrackingEnabled: false,
     remoteErrorTrackingEndpoint: null,
     mailConfiguration: {
@@ -264,6 +268,8 @@ test("buildRuntimeConfigWarnings recommends reviewing trusted proxies for produc
     configuredCollectionPiiEncryptionKey: "collection-pii-secret",
     configuredPgPassword: "prod-db-password",
     configuredAuthCookieSecure: "auto",
+    configuredOllamaHost: null,
+    ollamaAllowRemoteHost: false,
     remoteErrorTrackingEnabled: false,
     remoteErrorTrackingEndpoint: null,
     mailConfiguration: {
@@ -291,6 +297,8 @@ test("buildRuntimeConfigWarnings reminds operators to review HSTS preload expect
     configuredCollectionPiiEncryptionKey: "collection-pii-secret",
     configuredPgPassword: "prod-db-password",
     configuredAuthCookieSecure: "auto",
+    configuredOllamaHost: null,
+    ollamaAllowRemoteHost: false,
     remoteErrorTrackingEnabled: false,
     remoteErrorTrackingEndpoint: null,
     mailConfiguration: {

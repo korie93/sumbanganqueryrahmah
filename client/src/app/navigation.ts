@@ -23,7 +23,7 @@ import {
   canViewMonitorSection,
 } from "@/app/monitorAccess";
 import { parseMonitorSectionFromQuery } from "@/app/routing";
-import type { MonitorSection, TabVisibility } from "@/app/types";
+import type { MonitorSection, PageName, TabVisibility } from "@/app/types";
 
 export type NavigationEntry = {
   id: string;
@@ -301,7 +301,7 @@ type ResolveActiveNavigationItemOptions = {
 };
 
 export function resolveActiveNavigationItemId(
-  currentPage: string,
+  currentPage: PageName,
   options: ResolveActiveNavigationItemOptions = {},
 ) {
   const normalizedSearch = options.search ?? "";
@@ -341,7 +341,7 @@ export function formatNavigationLabel(label: string, itemId: string, savedCount?
   return label;
 }
 
-export function isNavigationItemActive(currentPage: string, itemId: string) {
+export function isNavigationItemActive(currentPage: PageName, itemId: string) {
   if (itemId === "monitor") {
     return ["monitor", "dashboard", "activity", "analysis", "audit", "audit-logs"].includes(currentPage);
   }
@@ -351,6 +351,6 @@ export function isNavigationItemActive(currentPage: string, itemId: string) {
   return currentPage === itemId;
 }
 
-export function isNavigationGroupActive(currentPage: string, group: NavigationGroup) {
+export function isNavigationGroupActive(currentPage: PageName, group: NavigationGroup) {
   return group.items.some((item) => isNavigationItemActive(currentPage, item.id));
 }

@@ -14,7 +14,7 @@ import {
   resolveActiveNavigationItemId,
 } from "@/app/navigation"
 import { prefetchNavigationTarget } from "@/app/navigation-prefetch"
-import type { MonitorSection, TabVisibility } from "@/app/types"
+import type { MonitorSection, PageName, TabVisibility } from "@/app/types"
 import { BrandLogo } from "@/components/BrandLogo"
 import { NavbarDesktopNavigation } from "@/components/NavbarDesktopNavigation"
 import { NavbarHomeButton } from "@/components/NavbarHomeButton"
@@ -30,7 +30,7 @@ import { useDesktopNavOverflowState } from "@/components/useDesktopNavOverflowSt
 import "./Navbar.css"
 
 interface NavbarProps {
-  currentPage: string
+  currentPage: PageName
   onNavigate: (page: string, importId?: string) => void
   onLogout: () => void | Promise<void>
   userRole: string
@@ -60,7 +60,11 @@ function NavbarImpl({
 }: NavbarProps) {
   const { theme, setTheme } = useTheme()
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
+  const [mobileUserMenuOpen, setMobileUserMenuOpen] = useState(false)
+  const [desktopUserMenuOpen, setDesktopUserMenuOpen] = useState(false)
   const navScrollerRef = useRef<HTMLElement | null>(null)
+  const mobileUserMenuId = "navbar-mobile-user-menu"
+  const desktopUserMenuId = "navbar-desktop-user-menu"
 
   const directItems = useMemo(
     () => getVisiblePrimaryNavItems(userRole, tabVisibility ?? null, featureLockdown),
@@ -145,6 +149,7 @@ function NavbarImpl({
               className="nav-mobile-trigger px-3"
               aria-label="Open navigation menu"
               aria-haspopup="dialog"
+              aria-expanded={mobileNavOpen}
               aria-controls="mobile-navigation-drawer"
               onClick={() => setMobileNavOpen(true)}
               data-testid="button-open-mobile-nav"
@@ -153,7 +158,7 @@ function NavbarImpl({
               <span className="hidden sm:inline">Menu</span>
             </button>
 
-            <DropdownMenu>
+            <DropdownMenu open={mobileUserMenuOpen} onOpenChange={setMobileUserMenuOpen}>
               <DropdownMenuTrigger asChild>
                 <button
                   type="button"
@@ -161,6 +166,8 @@ function NavbarImpl({
                   data-testid="button-user-menu-mobile"
                   aria-label="Open user menu"
                   aria-haspopup="menu"
+                  aria-expanded={mobileUserMenuOpen}
+                  aria-controls={mobileUserMenuId}
                 >
                   <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold uppercase text-primary">
                     {username.slice(0, 1)}
@@ -177,6 +184,7 @@ function NavbarImpl({
                 </button>
               </DropdownMenuTrigger>
               <NavbarUserMenuContent
+                contentId={mobileUserMenuId}
                 username={username}
                 userRole={userRole}
                 theme={theme}
@@ -199,7 +207,7 @@ function NavbarImpl({
         />
 
         <div className="ml-auto hidden shrink-0 items-center gap-2 lg:flex">
-          <DropdownMenu>
+          <DropdownMenu open={desktopUserMenuOpen} onOpenChange={setDesktopUserMenuOpen}>
             <DropdownMenuTrigger asChild>
               <button
                 type="button"
@@ -207,6 +215,8 @@ function NavbarImpl({
                 data-testid="button-user-menu"
                 aria-label="Open user menu"
                 aria-haspopup="menu"
+                aria-expanded={desktopUserMenuOpen}
+                aria-controls={desktopUserMenuId}
               >
                 <span className="user-menu-copy max-w-[10.5rem] xl:max-w-none">
                   <span className="truncate font-medium text-foreground">{username}</span>
@@ -216,6 +226,7 @@ function NavbarImpl({
               </button>
             </DropdownMenuTrigger>
             <NavbarUserMenuContent
+              contentId={desktopUserMenuId}
               username={username}
               userRole={userRole}
               theme={theme}

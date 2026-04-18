@@ -1,4 +1,4 @@
-import type { MonitorSection, MonitorSectionVisibility, TabVisibility } from "@/app/types";
+import type { MonitorSection, MonitorSectionVisibility, PageName, TabVisibility } from "@/app/types";
 
 export function isSuperuserFeatureOffMode(
   role: string | undefined,
@@ -95,11 +95,13 @@ export function getDefaultPageForRole(
   role: string,
   tabs: TabVisibility,
   tabVisibilityLoaded: boolean,
-) {
+): PageName {
   if (isSuperuserFeatureOffMode(role, tabs, tabVisibilityLoaded)) return "general-search";
   if (role === "superuser") return "home";
 
-  const candidates = role === "user" ? ["general-search"] : ["home", "general-search", "saved"];
+  const candidates: PageName[] = role === "user"
+    ? ["general-search"]
+    : ["home", "general-search", "saved"];
 
   for (const candidate of candidates) {
     if (candidate === "general-search" && isSuperuserFeatureOffMode(role, tabs, tabVisibilityLoaded)) {
@@ -113,7 +115,7 @@ export function getDefaultPageForRole(
 
 export function isPageEnabled(
   role: string | undefined,
-  page: string,
+  page: PageName,
   tabs: TabVisibility,
   tabVisibilityLoaded: boolean,
 ) {

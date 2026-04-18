@@ -10,6 +10,10 @@ import {
   RUNTIME_WS_POLICY_VIOLATION_CLOSE_CODE,
 } from "../../../shared/websocket-close-reasons";
 import type { UserActivity } from "../../../shared/schema-postgres";
+import {
+  clearSessionRevocationsForTests,
+  revokeSession,
+} from "../../auth/session-revocation-registry";
 import { logger } from "../../lib/logger";
 import { createRuntimeWebSocketManager } from "../runtime-manager";
 import {
@@ -70,6 +74,14 @@ class FakeWebSocket extends EventEmitter {
 }
 
 const TEST_SECRET = "runtime-manager-test-secret";
+
+test.beforeEach(() => {
+  clearSessionRevocationsForTests();
+});
+
+test.afterEach(() => {
+  clearSessionRevocationsForTests();
+});
 
 function createWsToken(activityId: string) {
   return jwt.sign({ activityId }, TEST_SECRET, { algorithm: "HS256" });
@@ -487,6 +499,46 @@ test("runtime manager rejects query-string session tokens before lookup", async 
     assert.equal(lookupCalls, 0);
     assert.equal(providedMap.size, 0);
     assert.equal(socket.closeCalls, 1);
+    assertNoRuntimeSocketListeners(socket);
+  } finally {
+    wss.emit("close");
+  }
+});
+
+test("runtime manager rejects revoked session tokens before activity lookup", async () => {
+  const wss = new FakeWebSocketServer();
+  const providedMap = new Map<string, WebSocket>();
+  const socket = new FakeWebSocket();
+  let lookupCalls = 0;
+
+  revokeSession("activity-revoked-socket");
+
+  createRuntimeWebSocketManager({
+    wss: wss as unknown as import("ws").WebSocketServer,
+    storage: {
+      getActivityById: async () => {
+        lookupCalls += 1;
+        return undefined;
+      },
+      clearCollectionNicknameSessionByActivity: async () => undefined,
+    },
+    secret: TEST_SECRET,
+    connectedClients: providedMap,
+  });
+
+  try {
+    wss.emit(
+      "connection",
+      socket as unknown as WebSocket,
+      createConnectionRequest(createWsToken("activity-revoked-socket")),
+    );
+    await flushAsyncWork();
+
+    assert.equal(lookupCalls, 0);
+    assert.equal(socket.closeCalls, 1);
+    assert.equal(socket.closeCode, RUNTIME_WS_POLICY_VIOLATION_CLOSE_CODE);
+    assert.equal(socket.closeReason, RUNTIME_WS_CLOSE_REASON_SESSION_INVALID);
+    assert.equal(providedMap.size, 0);
     assertNoRuntimeSocketListeners(socket);
   } finally {
     wss.emit("close");
@@ -1194,6 +1246,63 @@ test("runtime manager enforces a per-user connection limit", async () => {
     );
   } finally {
     logger.warn = originalLoggerWarn;
+    wss.emit("close");
+  }
+});
+
+test("runtime manager enforces a per-instance connection limit", async (t) => {
+  const wss = new FakeWebSocketServer();
+  const providedMap = new Map<string, WebSocket>();
+  const sockets = [new FakeWebSocket(), new FakeWebSocket()];
+  const warnings: Array<{ message: string; payload: unknown }> = [];
+
+  const warnMock = t.mock.method(logger, "warn", (message: string, payload: unknown) => {
+    warnings.push({ message, payload });
+  });
+
+  createRuntimeWebSocketManager({
+    wss: wss as unknown as import("ws").WebSocketServer,
+    storage: {
+      getActivityById: async (activityId: string) => createActiveSession(activityId),
+      clearCollectionNicknameSessionByActivity: async () => undefined,
+    },
+    secret: TEST_SECRET,
+    connectedClients: providedMap,
+    maxConnectionsPerInstance: 1,
+  });
+
+  try {
+    wss.emit(
+      "connection",
+      sockets[0] as unknown as WebSocket,
+      createConnectionRequest(createWsToken("activity-instance-limit-1")),
+    );
+    await flushAsyncWork();
+
+    wss.emit(
+      "connection",
+      sockets[1] as unknown as WebSocket,
+      createConnectionRequest(createWsToken("activity-instance-limit-2")),
+    );
+    await flushAsyncWork();
+
+    assert.equal(providedMap.size, 1);
+    assert.equal(providedMap.has("activity-instance-limit-1"), true);
+    assert.equal(providedMap.has("activity-instance-limit-2"), false);
+    assert.equal(sockets[1].closeCalls, 1);
+    assert.ok(warnMock.mock.callCount() >= 1);
+    assert.equal(
+      warnings.some(
+        (entry) =>
+          entry.message === "WebSocket rejected because the instance connection limit was reached"
+          && typeof entry.payload === "object"
+          && entry.payload !== null
+          && (entry.payload as { maxConnectionsPerInstance?: unknown }).maxConnectionsPerInstance === 1,
+      ),
+      true,
+    );
+    assertNoRuntimeSocketListeners(sockets[1]);
+  } finally {
     wss.emit("close");
   }
 });

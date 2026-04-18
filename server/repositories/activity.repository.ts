@@ -17,6 +17,7 @@ import {
   getActiveActivities,
   getActiveActivitiesByUsername,
   getActivityById,
+  getActivitiesByIds,
   getAllActivities,
   getFilteredActivities,
   touchActivity,
@@ -39,6 +40,7 @@ export class ActivityRepository {
   readonly expireIdleActivitySession = expireIdleActivitySession;
   readonly expireIdleActivitySessions = expireIdleActivitySessions;
   readonly getActivityById = getActivityById;
+  readonly getActivitiesByIds = getActivitiesByIds;
   readonly getActiveActivities = getActiveActivities;
   readonly getAllActivities = getAllActivities;
   readonly deleteActivity = deleteActivity;

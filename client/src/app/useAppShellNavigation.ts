@@ -14,13 +14,14 @@ import {
   buildPathForPage,
   parseMonitorSectionFromPageInput,
   replaceHistory,
+  resolveRouteFromLocation,
 } from "@/app/routing";
-import type { MonitorSection, TabVisibility, User } from "@/app/types";
+import { isPageName, type MonitorSection, type PageName, type TabVisibility, type User } from "@/app/types";
 
 type UseAppShellNavigationArgs = {
   featureLockdown: boolean;
   monitorVisibilityMonitor: boolean;
-  setCurrentPage: Dispatch<SetStateAction<string>>;
+  setCurrentPage: Dispatch<SetStateAction<PageName>>;
   setMonitorSection: Dispatch<SetStateAction<MonitorSection>>;
   setSelectedImportId: Dispatch<SetStateAction<string | undefined>>;
   tabVisibility: TabVisibility;
@@ -45,6 +46,57 @@ export function useAppShellNavigation({
     safeRemoveStorageItem(storage, "selectedImportName");
   }, [setSelectedImportId]);
 
+  const resolveRequestedPage = useCallback((page: string): {
+    requestedPage: PageName;
+    requestedMonitorSection: MonitorSection | null;
+  } => {
+    const normalizedPage = String(page || "").trim();
+    const requestedMonitorSection = parseMonitorSectionFromPageInput(normalizedPage);
+    if (requestedMonitorSection) {
+      return {
+        requestedPage: "monitor",
+        requestedMonitorSection,
+      };
+    }
+
+    if (isPageName(normalizedPage)) {
+      return {
+        requestedPage: normalizedPage,
+        requestedMonitorSection: null,
+      };
+    }
+
+    if (normalizedPage.startsWith("/")) {
+      const route = resolveRouteFromLocation(
+        (() => {
+          try {
+            return new URL(normalizedPage, "https://app.local").pathname;
+          } catch {
+            return normalizedPage;
+          }
+        })(),
+        (() => {
+          try {
+            return new URL(normalizedPage, "https://app.local").search;
+          } catch {
+            return "";
+          }
+        })(),
+      );
+      if (route) {
+        return {
+          requestedPage: route.page,
+          requestedMonitorSection: route.monitorSection ?? null,
+        };
+      }
+    }
+
+    return {
+      requestedPage: getDefaultPageForRole(user?.role || "user", tabVisibility, tabVisibilityLoaded),
+      requestedMonitorSection: null,
+    };
+  }, [tabVisibility, tabVisibilityLoaded, user?.role]);
+
   const handleNavigate = useCallback((page: string, importId?: string) => {
     const storage = getBrowserLocalStorage();
     if (page === "backup") {
@@ -60,8 +112,7 @@ export function useAppShellNavigation({
       return;
     }
 
-    const monitorSectionTarget = parseMonitorSectionFromPageInput(page);
-    const requestedPage = monitorSectionTarget ? "monitor" : page;
+    const { requestedMonitorSection, requestedPage } = resolveRequestedPage(page);
     const preserveViewerSelection = requestedPage === "viewer" && Boolean(importId);
 
     if (!preserveViewerSelection) {
@@ -97,8 +148,8 @@ export function useAppShellNavigation({
       return;
     }
 
-    if (monitorSectionTarget) {
-      let nextSection = monitorSectionTarget;
+    if (requestedPage === "monitor") {
+      let nextSection = requestedMonitorSection ?? "monitor";
       if (nextSection === "monitor" && !monitorVisibilityMonitor) {
         nextSection = getDefaultMonitorSection(user?.role, tabVisibility, tabVisibilityLoaded);
       }
@@ -126,6 +177,7 @@ export function useAppShellNavigation({
     clearViewerSelection,
     featureLockdown,
     monitorVisibilityMonitor,
+    resolveRequestedPage,
     setCurrentPage,
     setMonitorSection,
     setSelectedImportId,

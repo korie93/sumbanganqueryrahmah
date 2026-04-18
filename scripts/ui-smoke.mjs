@@ -13,6 +13,7 @@ const password = process.env.SMOKE_TEST_PASSWORD || "";
 const smokeTwoFactorSecret = String(process.env.SMOKE_TEST_TWO_FACTOR_SECRET || "").trim();
 const rawArtifactsDir = String(process.env.SMOKE_ARTIFACTS_DIR || "").trim();
 const artifactsDir = rawArtifactsDir ? path.resolve(process.cwd(), rawArtifactsDir) : "";
+const captureVisualBaselines = String(process.env.SMOKE_CAPTURE_VISUAL_BASELINES || "").trim() === "1";
 const errors = [];
 const BACKUP_JOB_TIMEOUT_MS = 180_000;
 const BACKUP_JOB_POLL_INTERVAL_MS = 1_500;
@@ -52,6 +53,18 @@ const ensureArtifactsDir = async () => {
     return;
   }
   await mkdir(artifactsDir, { recursive: true });
+};
+
+const captureVisualSnapshot = async (page, fileName) => {
+  if (!artifactsDir || !captureVisualBaselines) {
+    return;
+  }
+
+  await ensureArtifactsDir();
+  await page.screenshot({
+    path: path.join(artifactsDir, `${fileName}.png`),
+    fullPage: true,
+  });
 };
 
 const captureFailureArtifacts = async ({ context, page, tracker, error }) => {
@@ -2375,6 +2388,7 @@ const run = async () => {
   try {
     await page.goto(baseUrl, { waitUntil: "networkidle" });
     await ensureLoginPageVisible(page);
+    await captureVisualSnapshot(page, "login-page");
 
     await context.clearCookies();
     await page.evaluate(() => {
@@ -2468,6 +2482,7 @@ const run = async () => {
 
       const bodyText = (await page.locator("body").innerText()).toLowerCase();
       assert(!bodyText.includes("log in sqr system"), "login page should be replaced after successful login");
+      await captureVisualSnapshot(page, "authenticated-home");
       tracker.assertClean("login");
       tracker.clear();
 
@@ -2478,6 +2493,7 @@ const run = async () => {
       await checkHomeEntryPoint(page, tracker);
       await checkImportUiFlow(page, context, tracker);
       await checkCollectionDailyPage(page, tracker);
+      await captureVisualSnapshot(page, "collection-daily");
       await checkCollectionMutationConsistency(context);
       await checkCollectionRecordsStaleDeleteConflict(page, context, tracker);
       await checkCollectionReceiptUiFlow(page, context, tracker);

@@ -8,6 +8,7 @@ import type {
   AppRuntimeConfig,
   MonitorSection,
   MonitorSectionVisibility,
+  PageName,
   TabVisibility,
   User,
 } from "@/app/types";
@@ -25,7 +26,7 @@ const NAVIGATION_PREFETCH_IDLE_DELAY_MS = 900;
 
 type AuthenticatedAppShellProps = {
   user: User;
-  currentPage: string;
+  currentPage: PageName;
   monitorSection: MonitorSection;
   selectedImportId?: string | undefined;
   runtimeConfig: AppRuntimeConfig;

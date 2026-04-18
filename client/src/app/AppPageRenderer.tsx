@@ -17,13 +17,14 @@ import type {
   AppRuntimeConfig,
   MonitorSection,
   MonitorSectionVisibility,
+  PageName,
   TabVisibility,
   User,
 } from "@/app/types";
 
 type AppPageRendererProps = {
   user: User;
-  currentPage: string;
+  currentPage: PageName;
   monitorSection: MonitorSection;
   selectedImportId?: string | undefined;
   runtimeConfig: AppRuntimeConfig;

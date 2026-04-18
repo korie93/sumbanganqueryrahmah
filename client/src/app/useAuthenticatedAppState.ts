@@ -9,7 +9,7 @@ import { useAppShellRuntimeState } from "@/app/useAppShellRuntimeState";
 import { useAppShellSavedCount } from "@/app/useAppShellSavedCount";
 import { useAppShellSessionValidation } from "@/app/useAppShellSessionValidation";
 import { useAppShellTabVisibility } from "@/app/useAppShellTabVisibility";
-import type { MonitorSection, User } from "@/app/types";
+import type { MonitorSection, PageName, User } from "@/app/types";
 import { performAppLogout, performClientLogout } from "@/app/logout-flow";
 import { activityLogout } from "@/lib/api";
 import { getStoredActivityId } from "@/lib/auth-session";
@@ -17,7 +17,7 @@ import { logClientWarning } from "@/lib/client-logger";
 
 type UseAuthenticatedAppStateArgs = {
   initialMonitorSection: MonitorSection;
-  initialPage: string;
+  initialPage: PageName;
   initialUser: User;
 };
 
@@ -26,7 +26,7 @@ export function useAuthenticatedAppState({
   initialPage,
   initialUser,
 }: UseAuthenticatedAppStateArgs) {
-  const [currentPage, setCurrentPage] = useState(initialPage);
+  const [currentPage, setCurrentPage] = useState<PageName>(initialPage);
   const [monitorSection, setMonitorSection] = useState<MonitorSection>(initialMonitorSection);
   const [selectedImportId, setSelectedImportId] = useState<string | undefined>();
   const [savedCount, setSavedCount] = useState(0);

@@ -14,7 +14,7 @@ import {
   resolveRouteFromLocation,
   type ResolvedRoute,
 } from "@/app/routing";
-import type { MonitorSection, User } from "@/app/types";
+import { isPageName, type MonitorSection, type PageName, type User } from "@/app/types";
 import {
   clearAuthenticatedUserStorage,
   getStoredAuthenticatedUser,
@@ -25,12 +25,17 @@ import {
 } from "@/lib/auth-session";
 
 type PublicBootstrapState = {
-  currentPage: string;
+  currentPage: PageName;
   monitorSection: MonitorSection;
   isInitialized: boolean;
   resolvedRoute: ResolvedRoute | null;
   shouldRestoreSession: boolean;
 };
+
+function resolveStoredPageName(value: string | null): PageName | null {
+  const normalized = String(value || "").trim();
+  return isPageName(normalized) ? normalized : null;
+}
 
 const loadAuthApiModule = createRetryableModuleLoader<typeof import("@/lib/api/auth")>(
   () => import("@/lib/api/auth"),
@@ -64,9 +69,16 @@ function resolvePublicBootstrapState(): PublicBootstrapState {
   };
 }
 
-function resolveAuthenticatedEntryPage(route: ResolvedRoute | null, user: User) {
+function resolveAuthenticatedEntryPage(
+  route: ResolvedRoute | null,
+  user: User,
+): {
+  currentPage: PageName;
+  monitorSection: MonitorSection;
+} {
   const storage = getBrowserLocalStorage();
   const savedPage = safeGetStorageItem(storage, "activeTab") || safeGetStorageItem(storage, "lastPage");
+  const resolvedSavedPage = resolveStoredPageName(savedPage);
 
   if (route && route.page !== "not-found" && !isPublicAuthRoutePage(route.page)) {
     return {
@@ -93,7 +105,7 @@ function resolveAuthenticatedEntryPage(route: ResolvedRoute | null, user: User) 
   }
 
   if (user.role === "user") {
-    const nextPage = savedPage === "settings" ? "settings" : "general-search";
+    const nextPage = resolvedSavedPage === "settings" ? "settings" : "general-search";
     return {
       currentPage: nextPage,
       monitorSection: "monitor" as MonitorSection,
@@ -109,10 +121,12 @@ function resolveAuthenticatedEntryPage(route: ResolvedRoute | null, user: User) 
       };
     }
 
-    return {
-      currentPage: savedPage,
-      monitorSection: "monitor" as MonitorSection,
-    };
+    if (resolvedSavedPage) {
+      return {
+        currentPage: resolvedSavedPage,
+        monitorSection: "monitor" as MonitorSection,
+      };
+    }
   }
 
   return {
@@ -128,15 +142,14 @@ export function usePublicAppState() {
   }
 
   const bootstrap = bootstrapRef.current;
-  const [currentPage, setCurrentPage] = useState(bootstrap.currentPage);
+  const [currentPage, setCurrentPage] = useState<PageName>(bootstrap.currentPage);
   const [monitorSection, setMonitorSection] = useState<MonitorSection>(bootstrap.monitorSection);
   const [user, setUser] = useState<User | null>(null);
   const [isInitialized, setIsInitialized] = useState(bootstrap.isInitialized);
 
-  const handlePublicNavigate = useCallback((page: string) => {
-    const nextPage = page.trim() || "home";
-    setCurrentPage(nextPage);
-    replaceHistory(buildPathForPage(nextPage));
+  const handlePublicNavigate = useCallback((page: PageName) => {
+    setCurrentPage(page);
+    replaceHistory(buildPathForPage(page));
   }, []);
 
   const handleAuthenticatedLogout = useCallback(() => {

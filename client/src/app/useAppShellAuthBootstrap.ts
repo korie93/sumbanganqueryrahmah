@@ -13,7 +13,7 @@ import {
   resolveRouteFromLocation,
   type ResolvedRoute,
 } from "@/app/routing";
-import type { MonitorSection, User } from "@/app/types";
+import { isPageName, type MonitorSection, type PageName, type User } from "@/app/types";
 import {
   getStoredAuthenticatedUser,
   getStoredForcePasswordChange,
@@ -31,12 +31,17 @@ import { getMe } from "@/lib/api";
 type UseAppShellAuthBootstrapArgs = {
   applyResolvedRoute: (route: ResolvedRoute | null) => boolean;
   clearClientSessionStorage: () => void;
-  setCurrentPage: Dispatch<SetStateAction<string>>;
+  setCurrentPage: Dispatch<SetStateAction<PageName>>;
   setIsInitialized: Dispatch<SetStateAction<boolean>>;
   setMonitorSection: Dispatch<SetStateAction<MonitorSection>>;
   setUser: Dispatch<SetStateAction<User | null>>;
   user: User | null;
 };
+
+function resolveStoredPageName(value: string | null): PageName | null {
+  const normalized = String(value || "").trim();
+  return isPageName(normalized) ? normalized : null;
+}
 
 export function useAppShellAuthBootstrap({
   applyResolvedRoute,
@@ -68,6 +73,7 @@ export function useAppShellAuthBootstrap({
     const savedUser = getStoredAuthenticatedUser();
     const storage = getBrowserLocalStorage();
     const savedPage = safeGetStorageItem(storage, "activeTab") || safeGetStorageItem(storage, "lastPage");
+    const resolvedSavedPage = resolveStoredPageName(savedPage);
     const forcePasswordChange = getStoredForcePasswordChange();
     const hasAuthHintCookie = hasAuthSessionHintCookie();
 
@@ -115,14 +121,14 @@ export function useAppShellAuthBootstrap({
               setCurrentPage("settings");
               replaceHistory("/settings?section=backup-restore");
             } else if (nextUser.role === "user") {
-              setCurrentPage(savedPage === "settings" ? "settings" : "general-search");
+              setCurrentPage(resolvedSavedPage === "settings" ? "settings" : "general-search");
             } else if (savedPage) {
               const savedMonitorSection = parseMonitorSectionFromPageInput(savedPage);
               if (savedMonitorSection) {
                 setCurrentPage("monitor");
                 setMonitorSection(savedMonitorSection);
-              } else {
-                setCurrentPage(savedPage);
+              } else if (resolvedSavedPage) {
+                setCurrentPage(resolvedSavedPage);
               }
             }
           }

@@ -177,6 +177,15 @@ export async function getActivityById(id: string): Promise<UserActivity | undefi
   return result[0];
 }
 
+export async function getActivitiesByIds(ids: readonly string[]): Promise<UserActivity[]> {
+  const normalizedIds = Array.from(new Set(ids.map((id) => String(id || "").trim()).filter(Boolean)));
+  if (normalizedIds.length === 0) {
+    return [];
+  }
+
+  return db.select().from(userActivity).where(inArray(userActivity.id, normalizedIds));
+}
+
 export async function getActiveActivities(): Promise<UserActivity[]> {
   return loadActivityPages(eq(userActivity.isActive, true));
 }

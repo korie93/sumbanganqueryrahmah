@@ -1,14 +1,48 @@
 import assert from "node:assert/strict";
+import http from "node:http";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { gunzipSync } from "node:zlib";
 import express from "express";
 import { registerLocalHttpPipeline } from "../../internal/local-http-pipeline";
 import { logger } from "../../lib/logger";
 import { getRequestContext } from "../../lib/request-context";
 import { startTestServer, stopTestServer } from "../../routes/tests/http-test-utils";
 import { SQR_TRUSTED_TYPES_POLICY_NAME } from "../../../shared/trusted-types";
+
+async function requestRaw(baseUrl: string, requestPath: string) {
+  const url = new URL(requestPath, baseUrl);
+
+  return new Promise<{
+    body: Buffer;
+    headers: http.IncomingHttpHeaders;
+    statusCode: number;
+  }>((resolve, reject) => {
+    const request = http.request(url, {
+      headers: {
+        "accept-encoding": "gzip",
+      },
+    }, (response) => {
+      const chunks: Buffer[] = [];
+
+      response.on("data", (chunk) => {
+        chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+      });
+      response.on("end", () => {
+        resolve({
+          body: Buffer.concat(chunks),
+          headers: response.headers,
+          statusCode: response.statusCode ?? 0,
+        });
+      });
+    });
+
+    request.on("error", reject);
+    request.end();
+  });
+}
 
 test("registerLocalHttpPipeline allows blob receipt previews in the CSP header", async () => {
   const app = express();
@@ -175,7 +209,11 @@ test("registerLocalHttpPipeline preserves caller-provided request ids", async ()
 
 test("registerLocalHttpPipeline serves generic uploads as attachments", async () => {
   const uploadsRootDir = await mkdtemp(path.join(os.tmpdir(), "sqr-uploads-"));
-  await writeFile(path.join(uploadsRootDir, "sample report.txt"), "example upload", "utf8");
+  await writeFile(
+    path.join(uploadsRootDir, "sample report.txt"),
+    "example upload ".repeat(400),
+    "utf8",
+  );
 
   const app = express();
   registerLocalHttpPipeline(app, {
@@ -195,7 +233,73 @@ test("registerLocalHttpPipeline serves generic uploads as attachments", async ()
     const response = await fetch(`${baseUrl}/uploads/sample%20report.txt`);
     assert.equal(response.status, 200);
     assert.equal(response.headers.get("content-disposition"), 'attachment; filename="sample_report.txt"');
-    assert.equal(await response.text(), "example upload");
+    assert.equal(await response.text(), "example upload ".repeat(400));
+  } finally {
+    await stopTestServer(server);
+    await rm(uploadsRootDir, { recursive: true, force: true });
+  }
+});
+
+test("registerLocalHttpPipeline compresses large API JSON responses", async () => {
+  const app = express();
+  registerLocalHttpPipeline(app, {
+    importBodyLimit: "1mb",
+    collectionBodyLimit: "1mb",
+    defaultBodyLimit: "100kb",
+    uploadsRootDir: path.resolve(process.cwd(), "uploads"),
+    recordRequestStarted: () => undefined,
+    recordRequestFinished: () => undefined,
+    adaptiveRateLimit: (_req, _res, next) => next(),
+    systemProtectionMiddleware: (_req, _res, next) => next(),
+    maintenanceGuard: (_req, _res, next) => next(),
+  });
+  app.get("/api/large-json", (_req, res) => {
+    res.json({
+      items: Array.from({ length: 200 }, (_, index) => ({
+        id: index,
+        label: `dashboard-item-${index.toString().padStart(3, "0")}`,
+      })),
+    });
+  });
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const response = await requestRaw(baseUrl, "/api/large-json");
+
+    assert.equal(response.statusCode, 200);
+    assert.equal(response.headers["content-encoding"], "gzip");
+    assert.match(String(response.headers.vary || ""), /accept-encoding/i);
+    assert.equal(JSON.parse(gunzipSync(response.body).toString("utf8")).items.length, 200);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("registerLocalHttpPipeline skips compression for attachment-oriented uploads", async () => {
+  const uploadsRootDir = await mkdtemp(path.join(os.tmpdir(), "sqr-uploads-"));
+  const largeUploadText = "example upload ".repeat(400);
+  await writeFile(path.join(uploadsRootDir, "sample report.txt"), largeUploadText, "utf8");
+
+  const app = express();
+  registerLocalHttpPipeline(app, {
+    importBodyLimit: "1mb",
+    collectionBodyLimit: "1mb",
+    defaultBodyLimit: "100kb",
+    uploadsRootDir,
+    recordRequestStarted: () => undefined,
+    recordRequestFinished: () => undefined,
+    adaptiveRateLimit: (_req, _res, next) => next(),
+    systemProtectionMiddleware: (_req, _res, next) => next(),
+    maintenanceGuard: (_req, _res, next) => next(),
+  });
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const response = await requestRaw(baseUrl, "/uploads/sample%20report.txt");
+
+    assert.equal(response.statusCode, 200);
+    assert.equal(response.headers["content-encoding"], undefined);
+    assert.equal(response.body.toString("utf8"), largeUploadText);
   } finally {
     await stopTestServer(server);
     await rm(uploadsRootDir, { recursive: true, force: true });

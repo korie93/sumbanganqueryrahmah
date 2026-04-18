@@ -1,4 +1,5 @@
 import { resolveTimestampMs, serializeTimestamp } from "../lib/timestamp";
+import { revokeSession } from "../auth/session-revocation-registry";
 import type { ActivityFilters, ActivityStorage } from "./activity-service-types";
 
 type CloseActivitySocket = (
@@ -152,6 +153,7 @@ export function createActivitySessionOperations(
         logoutTime: new Date(),
         logoutReason: "USER_LOGOUT",
       });
+      revokeSession(activityId);
 
       // A manual logout already has an in-flight HTTP response that will
       // transition the current tab; closing the socket is enough here and avoids
@@ -201,11 +203,15 @@ export function createActivitySessionOperations(
     },
 
     async bulkDeleteActivityLogs(activityIds: string[]) {
+      const normalizedIds = Array.from(new Set(activityIds.map((activityId) => String(activityId || "").trim()).filter(Boolean)));
+      const activitiesById = new Map(
+        (await storage.getActivitiesByIds(normalizedIds)).map((activity) => [activity.id, activity] as const),
+      );
       let deletedCount = 0;
       const notFoundIds: string[] = [];
 
-      for (const activityId of activityIds) {
-        const activity = await storage.getActivityById(activityId);
+      for (const activityId of normalizedIds) {
+        const activity = activitiesById.get(activityId);
         if (!activity) {
           notFoundIds.push(activityId);
           continue;

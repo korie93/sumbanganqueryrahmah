@@ -1,8 +1,13 @@
-import { Suspense, useCallback, useEffect, useId, useRef, type MouseEvent, type ReactNode, type Ref } from "react";
+import { Suspense, useCallback, useEffect, useId, useRef, type MouseEvent } from "react";
 import { Bot, Minimize2 } from "lucide-react";
 import { useLocation } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  FloatingPanelShell,
+  FloatingRootContainer,
+  FloatingTriggerShell,
+} from "@/components/FloatingAIShell";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { lazyWithPreload } from "@/lib/lazy-with-preload";
 import { resolveFloatingAIMinimizedStatus } from "@/components/floating-ai-status";
@@ -23,80 +28,6 @@ type FloatingAIProps = {
   aiEnabled: boolean;
   activePage: string;
 };
-
-function FloatingRootContainer({
-  rootRef,
-  className,
-  hidden,
-  children,
-}: {
-  rootRef: Ref<HTMLDivElement>;
-  className: string;
-  hidden: boolean;
-  children: ReactNode;
-}) {
-  if (hidden) {
-    return (
-      <div ref={rootRef} className={cn(className, "hidden")} aria-hidden="true">
-        {children}
-      </div>
-    );
-  }
-
-  return (
-    <div ref={rootRef} className={className}>
-      {children}
-    </div>
-  );
-}
-
-function FloatingPanelShell({
-  className,
-  hidden,
-  children,
-}: {
-  className: string;
-  hidden: boolean;
-  children: ReactNode;
-}) {
-  if (hidden) {
-    return (
-      <div className={cn(className, "hidden")} aria-hidden="true">
-        {children}
-      </div>
-    );
-  }
-
-  return (
-    <div className={className}>
-      {children}
-    </div>
-  );
-}
-
-function FloatingTriggerShell({
-  className,
-  hidden,
-  children,
-}: {
-  className: string;
-  hidden: boolean;
-  children: ReactNode;
-}) {
-  if (hidden) {
-    return (
-      <div className={cn(className, "hidden")} aria-hidden="true">
-        {children}
-      </div>
-    );
-  }
-
-  return (
-    <div className={className}>
-      {children}
-    </div>
-  );
-}
 
 export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: FloatingAIProps) {
   const isMobile = useIsMobile();

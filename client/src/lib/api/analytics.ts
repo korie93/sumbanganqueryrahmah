@@ -1,4 +1,12 @@
 import { apiRequest } from "../api-client";
+import { parseApiJson } from "./contract";
+import {
+  analyticsLoginTrendsResponseSchema,
+  analyticsPeakHoursResponseSchema,
+  analyticsRoleDistributionResponseSchema,
+  analyticsSummaryResponseSchema,
+  analyticsTopUsersResponseSchema,
+} from "@shared/api-contracts";
 
 type AnalyticsRequestOptions = {
   signal?: AbortSignal | undefined;
@@ -6,7 +14,7 @@ type AnalyticsRequestOptions = {
 
 export async function getAnalyticsSummary(options?: AnalyticsRequestOptions) {
   const response = await apiRequest("GET", "/api/analytics/summary", undefined, options);
-  return response.json();
+  return parseApiJson(response, analyticsSummaryResponseSchema, "/api/analytics/summary");
 }
 
 export async function getLoginTrends(days: number = 7, options?: AnalyticsRequestOptions) {
@@ -16,7 +24,11 @@ export async function getLoginTrends(days: number = 7, options?: AnalyticsReques
     undefined,
     options,
   );
-  return response.json();
+  return parseApiJson(
+    response,
+    analyticsLoginTrendsResponseSchema,
+    "/api/analytics/login-trends",
+  );
 }
 
 export async function getTopActiveUsers(pageSize: number = 10, options?: AnalyticsRequestOptions) {
@@ -26,15 +38,19 @@ export async function getTopActiveUsers(pageSize: number = 10, options?: Analyti
     undefined,
     options,
   );
-  return response.json();
+  return parseApiJson(response, analyticsTopUsersResponseSchema, "/api/analytics/top-users");
 }
 
 export async function getPeakHours(options?: AnalyticsRequestOptions) {
   const response = await apiRequest("GET", "/api/analytics/peak-hours", undefined, options);
-  return response.json();
+  return parseApiJson(response, analyticsPeakHoursResponseSchema, "/api/analytics/peak-hours");
 }
 
 export async function getRoleDistribution(options?: AnalyticsRequestOptions) {
   const response = await apiRequest("GET", "/api/analytics/role-distribution", undefined, options);
-  return response.json();
+  return parseApiJson(
+    response,
+    analyticsRoleDistributionResponseSchema,
+    "/api/analytics/role-distribution",
+  );
 }

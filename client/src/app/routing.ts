@@ -1,12 +1,12 @@
-import type { MonitorSection } from "@/app/types";
+import { isPageName, type MonitorSection, type PageName } from "@/app/types";
 
 export type ResolvedRoute = {
-  page: string;
+  page: PageName;
   monitorSection?: MonitorSection;
   normalizedPath?: string;
 };
 
-const PUBLIC_AUTH_ROUTES = new Set([
+const PUBLIC_AUTH_ROUTES = new Set<PageName>([
   "login",
   "forgot-password",
   "activate-account",
@@ -21,7 +21,7 @@ const LEGACY_MONITOR_ROUTES: Record<string, MonitorSection> = {
   "/audit-logs": "audit",
 };
 
-const DIRECT_APP_ROUTE_ALIASES: Record<string, string> = {
+const DIRECT_APP_ROUTE_ALIASES: Record<string, PageName> = {
   "/search": "general-search",
   "/general-search": "general-search",
   "/import": "import",
@@ -122,17 +122,20 @@ export function resolveRouteFromLocation(pathname: string, search: string): Reso
   return null;
 }
 
-export function isPublicAuthRoutePage(page: string) {
-  return PUBLIC_AUTH_ROUTES.has(String(page || "").trim());
+export function isPublicAuthRoutePage(page: string | PageName) {
+  const normalizedPage = String(page || "").trim();
+  return isPageName(normalizedPage) ? PUBLIC_AUTH_ROUTES.has(normalizedPage) : false;
 }
 
-export function buildPathForPage(page: string, monitorSection: MonitorSection = "monitor") {
+export function buildPathForPage(page: PageName, monitorSection: MonitorSection = "monitor") {
   if (page === "home") return "/";
+  if (page === "ai") return "/ai";
   if (page === "general-search") return "/general-search";
   if (page === "import") return "/import";
   if (page === "saved") return "/saved";
   if (page === "viewer") return "/viewer";
   if (page === "login") return "/login";
+  if (page === "banned") return "/";
   if (page === "settings") return "/settings";
   if (page === "backup") return "/settings?section=backup-restore";
   if (page === "collection-report") return "/collection/save";
@@ -143,6 +146,10 @@ export function buildPathForPage(page: string, monitorSection: MonitorSection = 
   if (page === "change-password") return "/change-password";
   if (page === "forbidden") return "/403";
   if (page === "not-found") return "/404";
+  if (page === "dashboard") return "/monitor?section=dashboard";
+  if (page === "activity") return "/monitor?section=activity";
+  if (page === "analysis") return "/monitor?section=analysis";
+  if (page === "audit" || page === "audit-logs") return "/monitor?section=audit";
   if (page === "monitor") return `/monitor?section=${monitorSection}`;
   return "/";
 }

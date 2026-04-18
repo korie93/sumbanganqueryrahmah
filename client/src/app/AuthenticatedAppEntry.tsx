@@ -5,7 +5,7 @@ import { PageSpinner } from "@/app/PageSpinner";
 import { applyDocumentMetadata, resolveDocumentMetadata } from "@/app/document-metadata";
 import { MaintenanceRoutePage, SingleTabBlockedPage } from "@/app/lazy-pages";
 import { lazyWithPreload } from "@/lib/lazy-with-preload";
-import type { MonitorSection, User } from "@/app/types";
+import type { MonitorSection, PageName, User } from "@/app/types";
 import { initializeTrustedTypesRuntime } from "@/lib/trusted-types-runtime";
 import { useAuthenticatedAppState } from "@/app/useAuthenticatedAppState";
 import { useSingleTabSession } from "@/app/useSingleTabSession";
@@ -20,7 +20,7 @@ initializeTrustedTypesRuntime();
 
 type AuthenticatedAppEntryProps = {
   initialMonitorSection: MonitorSection;
-  initialPage: string;
+  initialPage: PageName;
   initialUser: User;
   onLoggedOut: () => void;
 };

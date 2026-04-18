@@ -367,6 +367,17 @@ function createActivityPermissionHarness() {
         browser: "Chrome",
         pcName: "PC-1",
       }),
+      getActivitiesByIds: async (ids: readonly string[]) =>
+        ids.map((id) => ({
+          id,
+          username: "regular.user",
+          role: "user",
+          isActive: true,
+          fingerprint: "fp-1",
+          ipAddress: "127.0.0.1",
+          browser: "Chrome",
+          pcName: "PC-1",
+        })),
       deleteActivity: async () => {
         calls.deleteActivity += 1;
         return true;

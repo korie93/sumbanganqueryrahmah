@@ -8,7 +8,9 @@ import {
   getRoleDistribution,
   getTopActiveUsers,
 } from "@/lib/api";
+import { ApiContractError } from "@/lib/api/contract";
 import { logClientError } from "@/lib/client-logger";
+import { getUiMessage } from "@/lib/i18n/messages";
 import { toast } from "@/hooks/use-toast";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { isMobileViewportWidth } from "@/lib/responsive";
@@ -23,6 +25,10 @@ import type { LoginTrend, PeakHour, RoleData, SummaryData, TopUser } from "@/pag
 import { buildSummaryCards, exportDashboardToPdf } from "@/pages/dashboard/utils";
 
 function resolveDashboardQueryErrorMessage(error: unknown, fallback: string) {
+  if (error instanceof ApiContractError) {
+    return getUiMessage("dashboardUnexpectedResponse");
+  }
+
   if (error instanceof Error) {
     const message = error.message.trim();
     if (message) {

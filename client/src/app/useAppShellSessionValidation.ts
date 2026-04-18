@@ -4,13 +4,13 @@ import {
   type SetStateAction,
 } from "react";
 import { replaceHistory } from "@/app/routing";
-import type { User } from "@/app/types";
+import type { PageName, User } from "@/app/types";
 import { getMe } from "@/lib/api";
 import { persistAuthenticatedUser } from "@/lib/auth-session";
 
 type UseAppShellSessionValidationArgs = {
   applyLoggedOutClientState: (redirectToLogin?: boolean, broadcast?: boolean) => void;
-  setCurrentPage: Dispatch<SetStateAction<string>>;
+  setCurrentPage: Dispatch<SetStateAction<PageName>>;
   setUser: Dispatch<SetStateAction<User | null>>;
   user: User | null;
 };

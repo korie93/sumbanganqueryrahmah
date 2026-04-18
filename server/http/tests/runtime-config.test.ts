@@ -742,6 +742,69 @@ test("runtime config rejects OLLAMA_HOST values that do not use http or https", 
   );
 });
 
+test("runtime config rejects remote OLLAMA_HOST values on production-like hosts unless explicitly allowed", async () => {
+  await withEnv(
+    {
+      ...productionBaseOverrides,
+      PUBLIC_APP_URL: "https://sqr.example.com",
+      BACKUP_ENCRYPTION_KEY: "A".repeat(32),
+      OLLAMA_HOST: "https://ollama.internal.example.com:11434",
+      OLLAMA_ALLOW_REMOTE_HOST: null,
+    },
+    async () => {
+      await assert.rejects(
+        importRuntimeFresh(),
+        /OLLAMA_HOST must stay on a loopback host outside local development unless OLLAMA_ALLOW_REMOTE_HOST=1 is set explicitly/i,
+      );
+    },
+  );
+});
+
+test("runtime config allows remote OLLAMA_HOST values on production-like hosts only with an explicit override", async () => {
+  await withEnv(
+    {
+      ...productionBaseOverrides,
+      PUBLIC_APP_URL: "https://sqr.example.com",
+      BACKUP_ENCRYPTION_KEY: "A".repeat(32),
+      OLLAMA_HOST: "https://ollama.internal.example.com:11434",
+      OLLAMA_ALLOW_REMOTE_HOST: "1",
+    },
+    async () => {
+      const runtimeModule = await importRuntimeFresh();
+      assert.equal(runtimeModule.runtimeConfig.ai.host, "https://ollama.internal.example.com:11434");
+      assert.match(
+        runtimeModule.runtimeConfigValidation.warnings.map((warning: { code: string }) => warning.code).join(","),
+        /OLLAMA_REMOTE_HOST_EXPLICITLY_ALLOWED/,
+      );
+    },
+  );
+});
+
+test("runtime config reads an explicit per-instance WebSocket connection limit override", async () => {
+  await withEnv(
+    {
+      NODE_ENV: "development",
+      HOST: "127.0.0.1",
+      PUBLIC_APP_URL: "http://127.0.0.1:5000",
+      SESSION_SECRET: null,
+      COLLECTION_NICKNAME_TEMP_PASSWORD: null,
+      COLLECTION_PII_ENCRYPTION_KEY: null,
+      PG_PASSWORD: null,
+      BACKUP_ENCRYPTION_KEY: null,
+      BACKUP_ENCRYPTION_KEYS: null,
+      BACKUP_FEATURE_ENABLED: "1",
+      RUNTIME_WS_MAX_CONNECTIONS_PER_INSTANCE: "345",
+      SEED_DEFAULT_USERS: "0",
+      LOCAL_SUPERUSER_CREDENTIALS_FILE_ENABLED: "0",
+      MAIL_DEV_OUTBOX_ENABLED: "0",
+    },
+    async () => {
+      const runtimeModule = await importRuntimeFresh();
+      assert.equal(runtimeModule.runtimeConfig.runtime.wsMaxConnectionsPerInstance, 345);
+    },
+  );
+});
+
 test("runtime config accepts an explicit graceful shutdown timeout override", async () => {
   await withEnv(
     {

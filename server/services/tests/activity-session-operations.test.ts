@@ -7,6 +7,10 @@ type ActivityRecord = NonNullable<Awaited<ReturnType<ActivityStorage["getActivit
 type AuditRecord = Awaited<ReturnType<ActivityStorage["createAuditLog"]>>;
 
 function createStorageMock(overrides: Partial<ActivityStorage> = {}): ActivityStorage {
+  const getActivityById =
+    overrides.getActivityById
+    ?? (async () => undefined);
+
   return {
     banVisitor: async () => undefined,
     clearCollectionNicknameSessionByActivity: async () => undefined,
@@ -25,7 +29,11 @@ function createStorageMock(overrides: Partial<ActivityStorage> = {}): ActivitySt
     deleteActivity: async () => true,
     getActiveActivities: async () => [],
     getActiveActivitiesByUsername: async () => [],
-    getActivityById: async () => undefined,
+    getActivitiesByIds: async (activityIds: readonly string[]) => {
+      const resolvedActivities = await Promise.all(activityIds.map((activityId) => getActivityById(activityId)));
+      return resolvedActivities.filter((activity): activity is ActivityRecord => Boolean(activity));
+    },
+    getActivityById,
     getAllActivities: async () => [],
     getBannedSessions: async () => [],
     getFilteredActivities: async () => [],
@@ -40,11 +48,34 @@ function createStorageMock(overrides: Partial<ActivityStorage> = {}): ActivitySt
 test("bulkDeleteActivityLogs reports not found ids and closes deleted activities", async () => {
   const deletedIds: string[] = [];
   const closedIds: string[] = [];
+  const batchedLookupCalls: string[][] = [];
+  let singleLookupCalls = 0;
 
   const operations = createActivitySessionOperations(
     createStorageMock({
-      getActivityById: async (activityId: string) =>
-        activityId === "missing"
+      getActivitiesByIds: async (activityIds: readonly string[]) => {
+        batchedLookupCalls.push([...activityIds]);
+        return activityIds
+          .filter((activityId) => activityId !== "missing")
+          .map((activityId) => ({
+            id: activityId,
+            userId: "user-1",
+            username: "ali",
+            role: "user",
+            fingerprint: null,
+            ipAddress: null,
+            browser: null,
+            isActive: true,
+            pcName: null,
+            loginTime: null,
+            logoutTime: null,
+            lastActivityTime: null,
+            logoutReason: null,
+          } as ActivityRecord));
+      },
+      getActivityById: async (activityId: string) => {
+        singleLookupCalls += 1;
+        return activityId === "missing"
           ? undefined
           : ({
               id: activityId,
@@ -60,7 +91,8 @@ test("bulkDeleteActivityLogs reports not found ids and closes deleted activities
               logoutTime: null,
               lastActivityTime: null,
               logoutReason: null,
-            } as ActivityRecord),
+            } as ActivityRecord);
+      },
       deleteActivity: async (activityId: string) => {
         deletedIds.push(activityId);
         return true;
@@ -77,6 +109,8 @@ test("bulkDeleteActivityLogs reports not found ids and closes deleted activities
     deletedCount: 2,
     notFoundIds: ["missing"],
   });
+  assert.deepEqual(batchedLookupCalls, [["a1", "missing", "a2"]]);
+  assert.equal(singleLookupCalls, 0);
   assert.deepEqual(deletedIds, ["a1", "a2"]);
   assert.deepEqual(closedIds, ["a1", "a2"]);
 });

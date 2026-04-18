@@ -25,7 +25,7 @@ export function LandingHeroShell({
           Untuk kegunaan operasi dalaman berdaftar
         </div>
         <div className="space-y-4">
-          <h1 className="landing-title max-w-3xl text-4xl font-semibold tracking-tight sm:text-5xl">
+          <h1 className="landing-title max-w-3xl text-[clamp(2.5rem,4vw,3.5rem)] font-semibold tracking-tight">
             Platform kerja dalaman untuk carian, semakan, dan pengurusan rekod sumbangan.
           </h1>
           <p className="landing-copy max-w-2xl text-base leading-7 sm:text-lg">
