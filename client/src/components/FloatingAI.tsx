@@ -35,12 +35,16 @@ function FloatingRootContainer({
   hidden: boolean;
   children: ReactNode;
 }) {
+  if (hidden) {
+    return (
+      <div ref={rootRef} className={cn(className, "hidden")} aria-hidden="true">
+        {children}
+      </div>
+    );
+  }
+
   return (
-    <div
-      ref={rootRef}
-      className={cn(className, hidden ? "hidden" : "")}
-      aria-hidden={hidden ? "true" : undefined}
-    >
+    <div ref={rootRef} className={className}>
       {children}
     </div>
   );
@@ -55,11 +59,16 @@ function FloatingPanelShell({
   hidden: boolean;
   children: ReactNode;
 }) {
+  if (hidden) {
+    return (
+      <div className={cn(className, "hidden")} aria-hidden="true">
+        {children}
+      </div>
+    );
+  }
+
   return (
-    <div
-      className={cn(className, hidden ? "hidden" : "")}
-      aria-hidden={hidden ? "true" : undefined}
-    >
+    <div className={className}>
       {children}
     </div>
   );
@@ -74,11 +83,16 @@ function FloatingTriggerShell({
   hidden: boolean;
   children: ReactNode;
 }) {
+  if (hidden) {
+    return (
+      <div className={cn(className, "hidden")} aria-hidden="true">
+        {children}
+      </div>
+    );
+  }
+
   return (
-    <div
-      className={cn(className, hidden ? "hidden" : "")}
-      aria-hidden={hidden ? "true" : undefined}
-    >
+    <div className={className}>
       {children}
     </div>
   );
