@@ -1,4 +1,18 @@
-import { Bar, BarChart, CartesianGrid, Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  Legend,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+  type PieLabelRenderProps,
+  type TooltipValueType,
+} from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AccessibleChartSummary } from "@/components/ui/chart-accessibility";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -16,6 +30,18 @@ const PIE_LEGEND_DOT_CLASS_BY_COLOR: Record<string, string> = {
   "#9333ea": "bg-purple-600",
   "#ea580c": "bg-orange-600",
 };
+
+function formatChartTooltipValue(value: TooltipValueType | undefined) {
+  if (Array.isArray(value)) {
+    return value.join(" / ");
+  }
+
+  if (typeof value === "number") {
+    return value.toLocaleString();
+  }
+
+  return String(value ?? "");
+}
 
 export function AnalysisCharts({ categoryBarData, genderPieData }: AnalysisChartsProps) {
   const isMobile = useIsMobile();
@@ -37,7 +63,9 @@ export function AnalysisCharts({ categoryBarData, genderPieData }: AnalysisChart
                       cx="50%"
                       cy="50%"
                       labelLine={false}
-                      label={isMobile ? false : ({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                      label={isMobile
+                        ? false
+                        : ({ name, percent }: PieLabelRenderProps) => `${String(name ?? "")}: ${((percent ?? 0) * 100).toFixed(0)}%`}
                       outerRadius={isMobile ? 68 : 80}
                       fill="#8884d8"
                       dataKey="value"
@@ -46,7 +74,7 @@ export function AnalysisCharts({ categoryBarData, genderPieData }: AnalysisChart
                         <Cell key={`${entry.name}-${entry.color}`} fill={entry.color} />
                       ))}
                     </Pie>
-                    <Tooltip formatter={(value: number) => value.toLocaleString()} />
+                    <Tooltip formatter={(value) => formatChartTooltipValue(value)} />
                     {!isMobile ? <Legend /> : null}
                   </PieChart>
                 </ResponsiveContainer>
@@ -108,7 +136,7 @@ export function AnalysisCharts({ categoryBarData, genderPieData }: AnalysisChart
                   width={isMobile ? 88 : 100}
                   tick={{ fontSize: isMobile ? 11 : 12 }}
                 />
-                <Tooltip formatter={(value: number) => value.toLocaleString()} />
+                <Tooltip formatter={(value) => formatChartTooltipValue(value)} />
                 <Bar dataKey="count" radius={[0, 4, 4, 0]} />
               </BarChart>
             </ResponsiveContainer>

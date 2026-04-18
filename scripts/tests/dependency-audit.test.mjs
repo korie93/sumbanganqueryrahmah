@@ -109,8 +109,8 @@ test("package source audit fails unexpected external tarballs", () => {
 test("package override audit requires every override to be documented", () => {
   const result = analyzePackageOverrides({
     overrides: {
-      qs: "^6.15.0",
-      "undocumented-package": "^1.0.0",
+      qs: "6.15.0",
+      "undocumented-package": "1.0.0",
     },
   });
 
@@ -125,11 +125,11 @@ test("package override audit requires every override to be documented", () => {
 test("package override audit accepts documented override set", () => {
   const result = analyzePackageOverrides({
     overrides: {
-      qs: "^6.15.0",
-      lodash: "^4.17.23",
-      rollup: "^4.59.0",
-      dompurify: "^3.4.0",
-      esbuild: "^0.25.4",
+      qs: "6.15.0",
+      lodash: "4.18.1",
+      rollup: "4.59.0",
+      dompurify: "3.4.0",
+      esbuild: "0.25.4",
     },
   });
 
@@ -146,7 +146,7 @@ test("package override audit rejects incomplete advisory metadata", () => {
 
     const result = analyzePackageOverrides({
       overrides: {
-        qs: "^6.15.0",
+        qs: "6.15.0",
       },
     });
 

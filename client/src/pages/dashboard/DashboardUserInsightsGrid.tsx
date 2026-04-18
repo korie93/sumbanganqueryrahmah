@@ -1,5 +1,14 @@
 import { Crown, Users } from "lucide-react";
-import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
+import {
+  Cell,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
+  type PieLabelRenderProps,
+  type TooltipContentProps,
+  type TooltipValueType,
+} from "recharts";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -23,16 +32,10 @@ interface DashboardUserInsightsGridProps {
   topUsersLoading: boolean;
 }
 
-type PieTooltipPayloadItem = {
-  color?: string | undefined;
-  name?: string | number | undefined;
-  value?: string | number | readonly (string | number)[] | undefined;
-};
-
-type CompactRoleTooltipProps = {
-  active?: boolean | undefined;
-  payload?: PieTooltipPayloadItem[] | undefined;
-};
+type CompactRoleTooltipProps = Pick<
+  TooltipContentProps<TooltipValueType, string | number>,
+  "active" | "payload"
+>;
 
 const ROLE_DOT_CLASS_BY_ROLE: Record<string, string> = {
   admin: "bg-[hsl(var(--chart-2))]",
@@ -46,6 +49,9 @@ function CompactRoleTooltip({ active, payload }: CompactRoleTooltipProps) {
   }
 
   const item = payload[0];
+  if (!item) {
+    return null;
+  }
   const role = String(item.name || "Unknown");
   const value = Array.isArray(item.value) ? item.value.join(" / ") : String(item.value ?? "");
 
@@ -214,7 +220,11 @@ export function DashboardUserInsightsGrid({
                       innerRadius={donutInnerRadius}
                       outerRadius={donutOuterRadius}
                       paddingAngle={isMobile ? 3 : 2}
-                      label={!isMobile ? ({ role, count }) => `${role}: ${count}` : false}
+                      label={!isMobile
+                        ? ({ name, value }: PieLabelRenderProps) => (
+                            `${String(name ?? "")}: ${typeof value === "number" ? value.toLocaleString() : String(value ?? "")}`
+                          )
+                        : false}
                       labelLine={false}
                     >
                       {roleDistribution.map((entry, index) => (

@@ -1,5 +1,17 @@
 import { Clock, TrendingUp } from "lucide-react";
-import { Area, AreaChart, Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import {
+  Area,
+  AreaChart,
+  Bar,
+  BarChart,
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+  type TooltipContentProps,
+  type TooltipValueType,
+} from "recharts";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { QueryErrorFallback } from "@/components/QueryErrorFallback";
 import { Button } from "@/components/ui/button";
@@ -26,16 +38,10 @@ interface DashboardChartsGridProps {
   trendsLoading: boolean;
 }
 
-type DashboardTooltipPayloadItem = {
-  color?: string | undefined;
-  name?: string | number | undefined;
-  value?: string | number | readonly (string | number)[] | undefined;
-};
-
-type CompactChartTooltipProps = {
-  active?: boolean | undefined;
-  payload?: DashboardTooltipPayloadItem[] | undefined;
-  label?: string | number | undefined;
+type CompactChartTooltipProps = Pick<
+  TooltipContentProps<TooltipValueType, string | number>,
+  "active" | "payload" | "label"
+> & {
   labelFormatter: (label: string | number) => string;
 };
 
@@ -49,7 +55,7 @@ const TOOLTIP_DOT_CLASS_BY_NAME: Record<string, string> = {
   Logouts: "bg-[hsl(var(--chart-2))]",
 };
 
-function formatTooltipValue(value: DashboardTooltipPayloadItem["value"]) {
+function formatTooltipValue(value: TooltipValueType | undefined) {
   if (Array.isArray(value)) {
     return value.join(" / ");
   }
@@ -76,8 +82,11 @@ function CompactChartTooltip({
         {labelFormatter(label)}
       </p>
       <div className="mt-2 space-y-1.5">
-        {payload.map((item) => (
-          <div key={String(item.name)} className="flex items-center justify-between gap-3 text-xs">
+        {payload.map((item, index) => (
+          <div
+            key={`${String(item.name ?? item.dataKey ?? "value")}:${index}`}
+            className="flex items-center justify-between gap-3 text-xs"
+          >
             <div className="flex min-w-0 items-center gap-2">
               <span
                 className={`h-2.5 w-2.5 shrink-0 rounded-full ${TOOLTIP_DOT_CLASS_BY_NAME[String(item.name || "")] || "bg-[hsl(var(--chart-3))]"}`}

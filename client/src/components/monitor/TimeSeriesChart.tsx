@@ -77,8 +77,16 @@ function TimeSeriesChartImpl({ title, color, unit = "", description, data }: Tim
               <RechartsTooltip
                 isAnimationActive={false}
                 contentStyle={timeSeriesTooltipStyle}
-                labelFormatter={formatTimeSeriesTooltipLabel}
-                formatter={(value: number) => formatTimeSeriesTooltipValue(value, unit, title)}
+                labelFormatter={(value) => (
+                  typeof value === "number" || typeof value === "string"
+                    ? formatTimeSeriesTooltipLabel(value)
+                    : ""
+                )}
+                formatter={(value) => formatTimeSeriesTooltipValue(
+                  Number(Array.isArray(value) ? value[0] : value ?? 0),
+                  unit,
+                  title,
+                )}
               />
               <Line
                 type="monotone"
