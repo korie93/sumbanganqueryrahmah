@@ -149,7 +149,7 @@ function NavbarImpl({
               className="nav-mobile-trigger px-3"
               aria-label="Open navigation menu"
               aria-haspopup="dialog"
-              aria-expanded={mobileNavOpen}
+              aria-expanded={mobileNavOpen ? "true" : "false"}
               aria-controls="mobile-navigation-drawer"
               onClick={() => setMobileNavOpen(true)}
               data-testid="button-open-mobile-nav"
@@ -166,7 +166,7 @@ function NavbarImpl({
                   data-testid="button-user-menu-mobile"
                   aria-label="Open user menu"
                   aria-haspopup="menu"
-                  aria-expanded={mobileUserMenuOpen}
+                  aria-expanded={mobileUserMenuOpen ? "true" : "false"}
                   aria-controls={mobileUserMenuId}
                 >
                   <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold uppercase text-primary">
@@ -215,7 +215,7 @@ function NavbarImpl({
                 data-testid="button-user-menu"
                 aria-label="Open user menu"
                 aria-haspopup="menu"
-                aria-expanded={desktopUserMenuOpen}
+                aria-expanded={desktopUserMenuOpen ? "true" : "false"}
                 aria-controls={desktopUserMenuId}
               >
                 <span className="user-menu-copy max-w-[10.5rem] xl:max-w-none">
