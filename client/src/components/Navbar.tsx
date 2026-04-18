@@ -149,7 +149,6 @@ function NavbarImpl({
               className="nav-mobile-trigger px-3"
               aria-label="Open navigation menu"
               aria-haspopup="dialog"
-              aria-expanded={mobileNavOpen ? "true" : "false"}
               aria-controls="mobile-navigation-drawer"
               onClick={() => setMobileNavOpen(true)}
               data-testid="button-open-mobile-nav"
