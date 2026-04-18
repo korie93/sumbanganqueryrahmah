@@ -29,7 +29,8 @@ test("repo security tooling keeps lint-staged, husky, and secretlint wired toget
   assert.equal(secretlintConfig.rules[0]?.id, "@secretlint/secretlint-rule-preset-recommend");
   assert.match(secretlintIgnore, /\.env\.example/i);
   assert.match(secretlintIgnore, /package-lock\.json/i);
-  assert.match(huskyHook, /npm exec lint-staged/i);
+  assert.match(huskyHook, /npm exec(?:\s+--)?\s+lint-staged/i);
+  assert.match(huskyHook, /--concurrent\s+true/i);
 });
 
 test("eslint security rules stay enabled for dangerous code-evaluation paths", async () => {
