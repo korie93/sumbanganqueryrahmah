@@ -3,6 +3,7 @@ import {
   type MutationToastPayload,
 } from "@/lib/mutation-feedback";
 import type { NormalizedSettingsError, SettingItem } from "@/pages/settings/types";
+import { isStrongPassword as isStrongPasswordValue } from "@shared/password-policy";
 
 export const settingsCategoryOrder = [
   "General",
@@ -90,5 +91,5 @@ export function toDateTimeLocalInputValue(value: string): string {
 }
 
 export function isStrongPassword(value: string): boolean {
-  return value.length >= 8 && /[A-Za-z]/.test(value) && /\d/.test(value);
+  return isStrongPasswordValue(value);
 }

@@ -3,6 +3,7 @@ import { updateMyCredentials } from "@/lib/api";
 import {
   buildMutationSuccessToast,
 } from "@/lib/mutation-feedback";
+import { PASSWORD_POLICY_ERROR_MESSAGE_EN } from "@shared/password-policy";
 import {
   type SyncCurrentUserFn,
   type UseSettingsMyAccountArgs,
@@ -93,8 +94,7 @@ export function useSettingsMyAccountCredentialState({
     if (!isStrongPassword(newPasswordInput)) {
       toast({
         title: "Validation Error",
-        description:
-          "New password must be at least 8 characters and include at least one letter and one number.",
+        description: PASSWORD_POLICY_ERROR_MESSAGE_EN,
         variant: "destructive",
       });
       return;

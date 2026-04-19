@@ -13,5 +13,6 @@ test("collection receipt panel keeps an explicit image-preview failure fallback"
 
   assert.match(source, /failedImagePreviewKeys/);
   assert.match(source, /onError=\{\(\) =>/);
+  assert.match(source, /Receipt preview for/);
   assert.match(source, /Preview unavailable/);
 });

@@ -1,4 +1,8 @@
 import { hasAuthIdentifier } from "@/pages/auth-field-utils";
+import {
+  PASSWORD_POLICY_ERROR_MESSAGE_MS,
+  isStrongPassword,
+} from "@shared/password-policy";
 
 export type PublicAuthFieldErrors = {
   identifier?: string | undefined;
@@ -43,6 +47,8 @@ export function validatePasswordFields({
 
   if (!newPassword) {
     errors.newPassword = "Sila masukkan kata laluan baharu.";
+  } else if (!isStrongPassword(newPassword)) {
+    errors.newPassword = PASSWORD_POLICY_ERROR_MESSAGE_MS;
   }
 
   if (!confirmPassword) {

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { PASSWORD_POLICY_ERROR_MESSAGE_MS, isStrongPassword } from "@shared/password-policy";
 import { useToast } from "@/hooks/use-toast";
 import {
   checkCollectionNicknameAuth,
@@ -14,7 +15,6 @@ import {
   clearCollectionNicknameSessionStorage,
   getStoredCollectionNickname,
   getStoredCollectionNicknameAuthRaw,
-  hasLetterAndNumber,
   isValidNicknameAuthSession,
   persistCollectionNicknameSessionStorage,
 } from "@/pages/collection-report/utils";
@@ -158,18 +158,10 @@ export function useCollectionNicknameAccess({
     const nickname = String(resolvedNickname || nicknameInput || "").trim();
     if (!nickname) return;
 
-    if (nicknamePassword.length < 8) {
+    if (!isStrongPassword(nicknamePassword)) {
       toast({
         title: "Validation Error",
-        description: "Password mesti sekurang-kurangnya 8 aksara.",
-        variant: "destructive",
-      });
-      return;
-    }
-    if (!hasLetterAndNumber(nicknamePassword)) {
-      toast({
-        title: "Validation Error",
-        description: "Password mesti mengandungi sekurang-kurangnya satu huruf dan satu nombor.",
+        description: PASSWORD_POLICY_ERROR_MESSAGE_MS,
         variant: "destructive",
       });
       return;

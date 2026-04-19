@@ -204,7 +204,7 @@ function MonitorInsightsSectionImpl({
           <TimeSeriesChart
             title="Forecast Projection"
             description="Predicted latency projection over the next decision horizon."
-            color="#64748b"
+            color="hsl(var(--muted-foreground))"
             unit="ms"
             data={forecastSeries}
           />

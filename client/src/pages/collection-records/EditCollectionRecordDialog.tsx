@@ -233,22 +233,27 @@ export function EditCollectionRecordDialog({
           <div className="space-y-2 md:col-span-2">
             <p className="text-sm font-medium leading-none text-foreground">Receipt Upload</p>
             <CollectionReceiptPanel
-              pendingFiles={editNewReceiptFiles}
-              pendingReceiptDrafts={editPendingReceiptDrafts}
-              inputRef={editReceiptInputRef}
-              existingReceipts={editingRecord?.receipts || []}
-              existingReceiptDrafts={editExistingReceiptDrafts}
-              removedReceiptIds={editRemovedReceiptIds}
-              disabled={savingEdit}
-              onFileChange={onReceiptChange}
-              onPendingDraftChange={onPendingReceiptDraftChange}
-              onExistingDraftChange={onExistingReceiptDraftChange}
-              onRemovePending={onRemovePendingReceipt}
-              onClearPending={onClearPendingReceipts}
-              onViewExisting={onViewExistingReceipt}
-              onToggleRemoveExisting={onToggleRemoveExistingReceipt}
-              uploadLabel="Add Receipt One by One"
-              helperText="Receipt sedia ada kekal dipautkan sehingga anda tandakan buang. Receipt baru hanya akan disimpan selepas Save, dan status remove/replace dipaparkan di bawah."
+              pending={{
+                pendingFiles: editNewReceiptFiles,
+                pendingReceiptDrafts: editPendingReceiptDrafts,
+                inputRef: editReceiptInputRef,
+                disabled: savingEdit,
+                onFileChange: onReceiptChange,
+                onPendingDraftChange: onPendingReceiptDraftChange,
+                onRemovePending: onRemovePendingReceipt,
+                onClearPending: onClearPendingReceipts,
+                uploadLabel: "Add Receipt One by One",
+                helperText:
+                  "Receipt sedia ada kekal dipautkan sehingga anda tandakan buang. Receipt baru hanya akan disimpan selepas Save, dan status remove/replace dipaparkan di bawah.",
+              }}
+              existing={{
+                existingReceipts: editingRecord?.receipts || [],
+                existingReceiptDrafts: editExistingReceiptDrafts,
+                removedReceiptIds: editRemovedReceiptIds,
+                onViewExisting: onViewExistingReceipt,
+                onToggleRemoveExisting: onToggleRemoveExistingReceipt,
+                onExistingDraftChange: onExistingReceiptDraftChange,
+              }}
             />
           </div>
         </div>

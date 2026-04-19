@@ -1,9 +1,13 @@
 import type { Response } from "express";
 import { ERROR_CODES, type ErrorCode } from "../../shared/error-codes";
+import {
+  PASSWORD_POLICY_MIN_LENGTH,
+  isStrongPassword as isStrongPasswordValue,
+} from "../../shared/password-policy";
 
 export const CREDENTIAL_USERNAME_REGEX = /^[a-zA-Z0-9._-]{3,32}$/;
 export const CREDENTIAL_EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-export const CREDENTIAL_PASSWORD_MIN_LENGTH = 8;
+export const CREDENTIAL_PASSWORD_MIN_LENGTH = PASSWORD_POLICY_MIN_LENGTH;
 export const CREDENTIAL_BCRYPT_COST = 12;
 
 export type CredentialErrorCode = Extract<
@@ -33,8 +37,7 @@ export function normalizeEmailInput(raw: unknown): string {
 }
 
 export function isStrongPassword(raw: string): boolean {
-  if (raw.length < CREDENTIAL_PASSWORD_MIN_LENGTH) return false;
-  return /[A-Za-z]/.test(raw) && /\d/.test(raw);
+  return isStrongPasswordValue(raw);
 }
 
 export function sendCredentialError(

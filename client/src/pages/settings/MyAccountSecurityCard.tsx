@@ -5,23 +5,31 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { useIsMobile } from "@/hooks/use-mobile";
 
-interface MyAccountSecurityCardProps {
+export interface MyAccountSecurityIdentityFields {
+  currentUserRole: string;
+  onChangeUsername: () => void;
+  onUsernameInputChange: (value: string) => void;
+  usernameInput: string;
+  usernameSaving: boolean;
+}
+
+export interface MyAccountSecurityPasswordFields {
   confirmPasswordInput: string;
   currentPasswordInput: string;
-  currentUserRole: string;
   newPasswordInput: string;
-  onDisableTwoFactor: () => void;
-  onEnableTwoFactor: () => void;
   onChangePassword: () => void;
-  onChangeUsername: () => void;
   onConfirmPasswordInputChange: (value: string) => void;
   onCurrentPasswordInputChange: (value: string) => void;
   onNewPasswordInputChange: (value: string) => void;
+  passwordSaving: boolean;
+}
+
+export interface MyAccountSecurityTwoFactorFields {
+  onDisableTwoFactor: () => void;
+  onEnableTwoFactor: () => void;
   onStartTwoFactorSetup: () => void;
   onTwoFactorCodeInputChange: (value: string) => void;
   onTwoFactorPasswordInputChange: (value: string) => void;
-  onUsernameInputChange: (value: string) => void;
-  passwordSaving: boolean;
   twoFactorCodeInput: string;
   twoFactorEnabled: boolean;
   twoFactorLoading: boolean;
@@ -31,50 +39,32 @@ interface MyAccountSecurityCardProps {
   twoFactorSetupIssuer: string;
   twoFactorSetupSecret: string;
   twoFactorSetupUri: string;
-  usernameInput: string;
-  usernameSaving: boolean;
+}
+
+export interface MyAccountSecurityCardProps {
+  identity: MyAccountSecurityIdentityFields;
+  password: MyAccountSecurityPasswordFields;
+  twoFactor: MyAccountSecurityTwoFactorFields;
 }
 
 export function MyAccountSecurityCard({
-  confirmPasswordInput,
-  currentPasswordInput,
-  currentUserRole,
-  newPasswordInput,
-  onDisableTwoFactor,
-  onEnableTwoFactor,
-  onChangePassword,
-  onChangeUsername,
-  onConfirmPasswordInputChange,
-  onCurrentPasswordInputChange,
-  onNewPasswordInputChange,
-  onStartTwoFactorSetup,
-  onTwoFactorCodeInputChange,
-  onTwoFactorPasswordInputChange,
-  onUsernameInputChange,
-  passwordSaving,
-  twoFactorCodeInput,
-  twoFactorEnabled,
-  twoFactorLoading,
-  twoFactorPasswordInput,
-  twoFactorPendingSetup,
-  twoFactorSetupAccountName,
-  twoFactorSetupIssuer,
-  twoFactorSetupSecret,
-  twoFactorSetupUri,
-  usernameInput,
-  usernameSaving,
+  identity,
+  password,
+  twoFactor,
 }: MyAccountSecurityCardProps) {
   const isMobile = useIsMobile();
-  const supportsTwoFactor = currentUserRole === "admin" || currentUserRole === "superuser";
-  const securityBusy = usernameSaving || passwordSaving || twoFactorLoading;
-  const twoFactorStatus = twoFactorEnabled
+  const supportsTwoFactor =
+    identity.currentUserRole === "admin" || identity.currentUserRole === "superuser";
+  const securityBusy =
+    identity.usernameSaving || password.passwordSaving || twoFactor.twoFactorLoading;
+  const twoFactorStatus = twoFactor.twoFactorEnabled
     ? "Enabled"
-    : twoFactorPendingSetup
+    : twoFactor.twoFactorPendingSetup
       ? "Setup pending"
       : "Not enabled";
-  const twoFactorStatusVariant = twoFactorEnabled
+  const twoFactorStatusVariant = twoFactor.twoFactorEnabled
     ? "default"
-    : twoFactorPendingSetup
+    : twoFactor.twoFactorPendingSetup
       ? "secondary"
       : "outline";
 
@@ -93,7 +83,7 @@ export function MyAccountSecurityCard({
         {isMobile ? (
           <div className="flex flex-wrap gap-2">
             <Badge variant="secondary" className="rounded-full px-3 py-1">
-              Role {currentUserRole}
+              Role {identity.currentUserRole}
             </Badge>
             {supportsTwoFactor ? (
               <Badge
@@ -127,8 +117,8 @@ export function MyAccountSecurityCard({
                   <Input
                     id="my-account-username"
                     name="accountUsername"
-                    value={usernameInput}
-                    onChange={(event) => onUsernameInputChange(event.target.value)}
+                    value={identity.usernameInput}
+                    onChange={(event) => identity.onUsernameInputChange(event.target.value)}
                     disabled={securityBusy}
                     autoComplete="username"
                     autoCapitalize="none"
@@ -137,11 +127,11 @@ export function MyAccountSecurityCard({
                   />
                 </div>
                 <Button
-                  onClick={onChangeUsername}
+                  onClick={identity.onChangeUsername}
                   disabled={securityBusy}
                   className="w-full md:w-auto"
                 >
-                  {usernameSaving ? "Updating..." : "Change Username"}
+                  {identity.usernameSaving ? "Updating..." : "Change Username"}
                 </Button>
               </div>
 
@@ -149,7 +139,7 @@ export function MyAccountSecurityCard({
                 <label htmlFor="my-account-role" className="text-sm font-medium">
                   Role (read only)
                 </label>
-                <Input id="my-account-role" name="accountRole" value={currentUserRole} disabled />
+                <Input id="my-account-role" name="accountRole" value={identity.currentUserRole} disabled />
               </div>
             </div>
 
@@ -169,8 +159,8 @@ export function MyAccountSecurityCard({
                     id="my-account-current-password"
                     name="currentPassword"
                     type="password"
-                    value={currentPasswordInput}
-                    onChange={(event) => onCurrentPasswordInputChange(event.target.value)}
+                    value={password.currentPasswordInput}
+                    onChange={(event) => password.onCurrentPasswordInputChange(event.target.value)}
                     disabled={securityBusy}
                     autoComplete="current-password"
                   />
@@ -183,8 +173,8 @@ export function MyAccountSecurityCard({
                     id="my-account-new-password"
                     name="newPassword"
                     type="password"
-                    value={newPasswordInput}
-                    onChange={(event) => onNewPasswordInputChange(event.target.value)}
+                    value={password.newPasswordInput}
+                    onChange={(event) => password.onNewPasswordInputChange(event.target.value)}
                     disabled={securityBusy}
                     autoComplete="new-password"
                   />
@@ -197,16 +187,16 @@ export function MyAccountSecurityCard({
                     id="my-account-confirm-password"
                     name="confirmPassword"
                     type="password"
-                    value={confirmPasswordInput}
-                    onChange={(event) => onConfirmPasswordInputChange(event.target.value)}
+                    value={password.confirmPasswordInput}
+                    onChange={(event) => password.onConfirmPasswordInputChange(event.target.value)}
                     disabled={securityBusy}
                     autoComplete="new-password"
                   />
                 </div>
               </div>
               <div className="flex flex-col gap-2 sm:flex-row sm:justify-end" data-floating-ai-avoid="true">
-                <Button onClick={onChangePassword} disabled={securityBusy} className="w-full sm:w-auto">
-                  {passwordSaving ? "Updating..." : "Change Password"}
+                <Button onClick={password.onChangePassword} disabled={securityBusy} className="w-full sm:w-auto">
+                  {password.passwordSaving ? "Updating..." : "Change Password"}
                 </Button>
               </div>
             </div>
@@ -222,7 +212,7 @@ export function MyAccountSecurityCard({
                     >
                       {twoFactorStatus}
                     </Badge>
-                    {twoFactorSetupSecret ? (
+                    {twoFactor.twoFactorSetupSecret ? (
                       <Badge variant="outline" className="rounded-full px-3 py-1">
                         Setup secret ready
                       </Badge>
@@ -242,8 +232,8 @@ export function MyAccountSecurityCard({
                       id="my-account-two-factor-password"
                       name="twoFactorCurrentPassword"
                       type="password"
-                      value={twoFactorPasswordInput}
-                      onChange={(event) => onTwoFactorPasswordInputChange(event.target.value)}
+                      value={twoFactor.twoFactorPasswordInput}
+                      onChange={(event) => twoFactor.onTwoFactorPasswordInputChange(event.target.value)}
                       disabled={securityBusy}
                       autoComplete="current-password"
                     />
@@ -257,16 +247,16 @@ export function MyAccountSecurityCard({
                       name="twoFactorAuthenticatorCode"
                       inputMode="numeric"
                       placeholder="000000"
-                      value={twoFactorCodeInput}
-                      onChange={(event) => onTwoFactorCodeInputChange(event.target.value)}
-                      disabled={securityBusy && !twoFactorPendingSetup}
+                      value={twoFactor.twoFactorCodeInput}
+                      onChange={(event) => twoFactor.onTwoFactorCodeInputChange(event.target.value)}
+                      disabled={securityBusy && !twoFactor.twoFactorPendingSetup}
                       pattern="[0-9]*"
                       autoComplete="one-time-code"
                     />
                   </div>
                 </div>
 
-                {twoFactorSetupSecret ? (
+                {twoFactor.twoFactorSetupSecret ? (
                   <div className="space-y-3 rounded-xl border border-border/60 bg-background/55 p-4">
                     <p className="text-sm text-muted-foreground">
                       Add this secret to your authenticator app, then enter the 6-digit code to enable 2FA.
@@ -279,7 +269,7 @@ export function MyAccountSecurityCard({
                         <Input
                           id="my-account-two-factor-issuer"
                           name="twoFactorSetupIssuer"
-                          value={twoFactorSetupIssuer}
+                          value={twoFactor.twoFactorSetupIssuer}
                           readOnly
                         />
                       </div>
@@ -290,7 +280,7 @@ export function MyAccountSecurityCard({
                         <Input
                           id="my-account-two-factor-account-name"
                           name="twoFactorSetupAccountName"
-                          value={twoFactorSetupAccountName}
+                          value={twoFactor.twoFactorSetupAccountName}
                           readOnly
                         />
                       </div>
@@ -302,11 +292,11 @@ export function MyAccountSecurityCard({
                       <Input
                         id="my-account-two-factor-secret"
                         name="twoFactorSetupSecret"
-                        value={twoFactorSetupSecret}
+                        value={twoFactor.twoFactorSetupSecret}
                         readOnly
                       />
                     </div>
-                    {twoFactorSetupUri ? (
+                    {twoFactor.twoFactorSetupUri ? (
                       <div className="space-y-2">
                         <label htmlFor="my-account-two-factor-uri" className="text-sm font-medium">
                           OTP Auth URI
@@ -314,7 +304,7 @@ export function MyAccountSecurityCard({
                         <Input
                           id="my-account-two-factor-uri"
                           name="twoFactorSetupUri"
-                          value={twoFactorSetupUri}
+                          value={twoFactor.twoFactorSetupUri}
                           readOnly
                         />
                       </div>
@@ -323,24 +313,24 @@ export function MyAccountSecurityCard({
                 ) : null}
 
                 <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap" data-floating-ai-avoid="true">
-                  {!twoFactorEnabled ? (
-                    <Button onClick={onStartTwoFactorSetup} disabled={securityBusy} className="w-full sm:w-auto">
-                      {twoFactorLoading && !twoFactorSetupSecret ? "Preparing..." : "Start 2FA Setup"}
+                  {!twoFactor.twoFactorEnabled ? (
+                    <Button onClick={twoFactor.onStartTwoFactorSetup} disabled={securityBusy} className="w-full sm:w-auto">
+                      {twoFactor.twoFactorLoading && !twoFactor.twoFactorSetupSecret ? "Preparing..." : "Start 2FA Setup"}
                     </Button>
                   ) : null}
-                  {(twoFactorPendingSetup || twoFactorSetupSecret) && !twoFactorEnabled ? (
-                    <Button onClick={onEnableTwoFactor} disabled={securityBusy} className="w-full sm:w-auto">
-                      {twoFactorLoading ? "Verifying..." : "Verify & Enable 2FA"}
+                  {(twoFactor.twoFactorPendingSetup || twoFactor.twoFactorSetupSecret) && !twoFactor.twoFactorEnabled ? (
+                    <Button onClick={twoFactor.onEnableTwoFactor} disabled={securityBusy} className="w-full sm:w-auto">
+                      {twoFactor.twoFactorLoading ? "Verifying..." : "Verify & Enable 2FA"}
                     </Button>
                   ) : null}
-                  {twoFactorEnabled ? (
+                  {twoFactor.twoFactorEnabled ? (
                     <Button
                       variant="destructive"
-                      onClick={onDisableTwoFactor}
+                      onClick={twoFactor.onDisableTwoFactor}
                       disabled={securityBusy}
                       className="w-full sm:w-auto"
                     >
-                      {twoFactorLoading ? "Disabling..." : "Disable 2FA"}
+                      {twoFactor.twoFactorLoading ? "Disabling..." : "Disable 2FA"}
                     </Button>
                   ) : null}
                 </div>

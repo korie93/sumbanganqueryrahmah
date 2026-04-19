@@ -1,11 +1,11 @@
 import bcrypt from "bcrypt";
 import {
   CREDENTIAL_BCRYPT_COST,
-  CREDENTIAL_PASSWORD_MIN_LENGTH,
   isStrongPassword,
 } from "../../auth/credentials";
 import type { AuthenticatedUser } from "../../auth/guards";
 import { badRequest, notFound, unauthorized } from "../../http/errors";
+import { PASSWORD_POLICY_ERROR_MESSAGE_MS } from "../../../shared/password-policy";
 import {
   COLLECTION_NICKNAME_TEMP_PASSWORD,
   ensureLooseObject,
@@ -62,9 +62,7 @@ export class CollectionNicknameAuthOperations extends CollectionServiceSupport {
       throw badRequest("Password dan confirm password tidak sepadan.");
     }
     if (!isStrongPassword(newPassword)) {
-      throw badRequest(
-        `Password mesti sekurang-kurangnya ${CREDENTIAL_PASSWORD_MIN_LENGTH} aksara dan mengandungi huruf serta nombor.`,
-      );
+      throw badRequest(PASSWORD_POLICY_ERROR_MESSAGE_MS);
     }
 
     const existingHash = normalizeCollectionText(profile.nicknamePasswordHash);

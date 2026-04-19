@@ -23,11 +23,46 @@ import {
   quarantineRejectedCollectionReceipt,
 } from "./collection-receipt-storage-utils";
 
+const COLLECTION_RECEIPT_BASE64_PREFIX_PATTERN = /^data:[^;]+;base64,/i;
+const COLLECTION_RECEIPT_BASE64_ALLOWED_PATTERN = /^[A-Za-z0-9+/]*={0,2}$/;
+
+export function estimateCollectionReceiptDecodedSizeFromBase64(rawBase64: unknown): number | null {
+  const sanitized = String(rawBase64 ?? "")
+    .trim()
+    .replace(COLLECTION_RECEIPT_BASE64_PREFIX_PATTERN, "")
+    .replace(/\s+/g, "");
+
+  if (!sanitized) {
+    return null;
+  }
+
+  if (sanitized.length % 4 !== 0 || !COLLECTION_RECEIPT_BASE64_ALLOWED_PATTERN.test(sanitized)) {
+    return null;
+  }
+
+  const paddingLength = sanitized.endsWith("==")
+    ? 2
+    : sanitized.endsWith("=")
+      ? 1
+      : 0;
+
+  return ((sanitized.length / 4) * 3) - paddingLength;
+}
+
 export async function saveCollectionReceipt(
   receipt: CollectionReceiptPayload,
 ): Promise<StoredCollectionReceiptFile> {
   const declaredMimeType = normalizeCollectionReceiptMimeType(receipt.mimeType || "");
   const declaredMimeTypeAccepted = COLLECTION_RECEIPT_ALLOWED_MIME.has(declaredMimeType);
+  const estimatedDecodedSize = estimateCollectionReceiptDecodedSizeFromBase64(receipt.contentBase64);
+
+  if (estimatedDecodedSize === null) {
+    throw new Error("Invalid receipt payload.");
+  }
+
+  if (estimatedDecodedSize > COLLECTION_RECEIPT_MAX_BYTES) {
+    throw new Error("Receipt file exceeds 5MB.");
+  }
 
   const buffer = extractReceiptBuffer(receipt);
   if (!buffer) {

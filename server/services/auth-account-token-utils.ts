@@ -2,6 +2,7 @@ import { addHours } from "date-fns";
 import { isManageableUserRole, normalizeAccountStatus } from "../auth/account-lifecycle";
 import { isStrongPassword } from "../auth/credentials";
 import { generateOneTimeToken, hashOpaqueToken } from "../auth/passwords";
+import { PASSWORD_POLICY_ERROR_MESSAGE_EN } from "../../shared/password-policy";
 import type {
   AccountActivationTokenSummary,
   PasswordResetTokenSummary,
@@ -125,7 +126,7 @@ export function assertConfirmedStrongPassword(newPassword: string, confirmPasswo
     throw new AuthAccountError(
       400,
       ERROR_CODES.INVALID_PASSWORD,
-      "Password must be at least 8 characters and include at least one letter and one number.",
+      PASSWORD_POLICY_ERROR_MESSAGE_EN,
     );
   }
 
@@ -139,7 +140,7 @@ export function assertStrongPasswordInput(newPassword: string) {
     throw new AuthAccountError(
       400,
       ERROR_CODES.INVALID_PASSWORD,
-      "Password must be at least 8 characters and include at least one letter and one number.",
+      PASSWORD_POLICY_ERROR_MESSAGE_EN,
     );
   }
 }

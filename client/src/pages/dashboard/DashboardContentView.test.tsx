@@ -69,6 +69,7 @@ test("DashboardContentView renders a first-load shell without a blank dashboard"
   );
 
   assert.match(markup, /Loading dashboard charts/i);
+  assert.match(markup, /Loading dashboard analytics/i);
   assert.match(markup, /Quick Snapshot/i);
 });
 

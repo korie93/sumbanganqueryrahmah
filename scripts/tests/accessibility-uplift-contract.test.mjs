@@ -29,6 +29,24 @@ test("stable reviewed keyboard shortcuts stay exposed via aria-keyshortcuts", ()
   assert.match(saveCollectionSource, /aria-keyshortcuts="Control\+S Meta\+S"/);
 });
 
+test("reviewed navigation surfaces keep explicit active-page semantics and html lang", () => {
+  const navbarHomeSource = readRepoFile("client/src/components/NavbarHomeButton.tsx");
+  const navbarDesktopSource = readRepoFile("client/src/components/NavbarDesktopNavigation.tsx");
+  const htmlSource = readRepoFile("client/index.html");
+
+  assert.match(navbarHomeSource, /aria-current=\{active \? "page" : undefined\}/);
+  assert.match(navbarDesktopSource, /aria-current=\{isActive \? "page" : undefined\}/);
+  assert.match(htmlSource, /<html lang="ms">/);
+});
+
+test("global accessibility CSS keeps the reviewed touch-target math and forced-colors support", () => {
+  const indexCssSource = readRepoFile("client/src/index.css");
+
+  assert.match(indexCssSource, /inset:\s*-14px;/);
+  assert.match(indexCssSource, /@media \(forced-colors: active\)/);
+  assert.match(indexCssSource, /\[data-slot="dialog-content"\]/);
+});
+
 test("the existing dark mode toggle remains available in the reviewed user menu", () => {
   const navbarUserMenuSource = readRepoFile("client/src/components/NavbarUserMenuContent.tsx");
 

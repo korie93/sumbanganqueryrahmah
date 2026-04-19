@@ -98,8 +98,14 @@ export function DashboardContentView({
   if (initialLoading) {
     return (
       <OperationalPage width="content">
-        <DashboardHeaderSkeleton isMobile={isMobile} />
-        <div className="space-y-4 sm:space-y-6">
+        <div
+          role="status"
+          aria-live="polite"
+          aria-label="Loading dashboard analytics"
+          aria-busy="true"
+          className="space-y-4 sm:space-y-6"
+        >
+          <DashboardHeaderSkeleton isMobile={isMobile} />
           <DashboardSnapshotSection summaryCards={summaryCards} summaryLoading />
           <DashboardDeferredSections
             defer={false}

@@ -224,16 +224,19 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
 
   const receiptPanel = (
     <CollectionReceiptPanel
-      pendingFiles={state.receiptFiles}
-      pendingReceiptDrafts={state.receiptDrafts}
-      inputRef={state.fileInputRef}
-      disabled={state.submitting}
-      onFileChange={state.handleReceiptChange}
-      onPendingDraftChange={state.handlePendingDraftChange}
-      onRemovePending={state.handleRemoveReceipt}
-      onClearPending={state.handleClearPendingReceipts}
-      uploadLabel="Upload Receipt One by One"
-      helperText="Tambah satu receipt pada satu masa. Status Existing, Pending Upload, dan perubahan simpan/buang akan ditunjukkan di bawah sebelum anda klik Save Collection."
+      pending={{
+        pendingFiles: state.receiptFiles,
+        pendingReceiptDrafts: state.receiptDrafts,
+        inputRef: state.fileInputRef,
+        disabled: state.submitting,
+        onFileChange: state.handleReceiptChange,
+        onPendingDraftChange: state.handlePendingDraftChange,
+        onRemovePending: state.handleRemoveReceipt,
+        onClearPending: state.handleClearPendingReceipts,
+        uploadLabel: "Upload Receipt One by One",
+        helperText:
+          "Tambah satu receipt pada satu masa. Status Existing, Pending Upload, dan perubahan simpan/buang akan ditunjukkan di bawah sebelum anda klik Save Collection.",
+      }}
     />
   );
 

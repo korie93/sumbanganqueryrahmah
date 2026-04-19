@@ -9,6 +9,7 @@ import {
   clearAuthenticatedUserStorage,
   setStoredForcePasswordChange,
 } from "@/lib/auth-session";
+import { PASSWORD_POLICY_HINT_MESSAGE_MS } from "@shared/password-policy";
 import {
   hasPublicAuthFieldErrors,
   validatePasswordFields,
@@ -173,7 +174,7 @@ export default function ChangePasswordPage({
     >
       <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm leading-6 text-white/75">
         Gunakan kata laluan baharu yang sukar diteka dan pastikan pengesahan kata laluan sama
-        seperti yang dimasukkan.
+        seperti yang dimasukkan. {PASSWORD_POLICY_HINT_MESSAGE_MS}
       </div>
 
       <PublicAuthInput

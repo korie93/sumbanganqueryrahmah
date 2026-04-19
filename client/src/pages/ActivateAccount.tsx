@@ -9,6 +9,7 @@ import {
 } from "@/lib/api/auth";
 import { getApiErrorMessage } from "@/lib/api-errors";
 import { persistAuthNotice } from "@/lib/auth-session";
+import { PASSWORD_POLICY_HINT_MESSAGE_MS } from "@shared/password-policy";
 import {
   hasPublicAuthFieldErrors,
   validatePasswordFields,
@@ -242,6 +243,7 @@ export default function ActivateAccountPage() {
             <div><span className="font-semibold text-white">Username:</span> {activation.username}</div>
             <div><span className="font-semibold text-white">Peranan:</span> {activation.role}</div>
             <div><span className="font-semibold text-white">Tamat Tempoh:</span> {formatPublicAuthExpiry(activation.expiresAt)}</div>
+            <p className="mt-3 text-white/80">{PASSWORD_POLICY_HINT_MESSAGE_MS}</p>
           </div>
           <PublicAuthInput
             id="activate-account-new-password"

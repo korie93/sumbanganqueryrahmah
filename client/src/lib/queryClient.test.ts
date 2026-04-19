@@ -146,6 +146,36 @@ test("apiRequest normalizes oversized HTML error pages into a friendly message",
   }
 });
 
+test("apiRequest normalizes invalid JSON error payloads without exposing raw response text", async () => {
+  const originalFetch = globalThis.fetch;
+
+  globalThis.fetch = (async () => new Response(
+    "{not-json",
+    {
+      status: 502,
+      headers: {
+        "Content-Type": "application/json",
+        "x-request-id": "server-request-invalid-json",
+      },
+    },
+  )) as typeof fetch;
+
+  try {
+    await assert.rejects(
+      () => apiRequest("GET", "/api/test-invalid-json-error"),
+      (error: unknown) => {
+        assert.ok(error instanceof Error);
+        assert.match(error.message, /invalid JSON error response/i);
+        assert.match(error.message, /server-request-invalid-json/);
+        assert.doesNotMatch(error.message, /\{not-json/);
+        return true;
+      },
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("apiRequest aborts stalled requests after the configured timeout", async () => {
   const originalFetch = globalThis.fetch;
 

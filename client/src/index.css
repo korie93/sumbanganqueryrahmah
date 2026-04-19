@@ -8,8 +8,36 @@
 .touch-target::before {
   content: "";
   position: absolute;
+  /* 16px control + 14px inset on each side yields a 44px effective hit area. */
   inset: -14px;
   border-radius: inherit;
+}
+
+@media (forced-colors: active) {
+  :focus-visible {
+    outline: 2px solid Highlight;
+    outline-offset: 2px;
+  }
+
+  a {
+    color: LinkText;
+  }
+
+  button,
+  input,
+  select,
+  textarea,
+  [role="button"] {
+    border-color: ButtonText;
+  }
+
+  [role="dialog"],
+  [data-slot="dialog-content"],
+  [data-slot="alert-dialog-content"] {
+    border: 1px solid CanvasText;
+    background: Canvas;
+    color: CanvasText;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

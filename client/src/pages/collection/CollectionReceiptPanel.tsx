@@ -18,45 +18,59 @@ import {
   useCollectionReceiptDraftPreviews,
 } from "@/pages/collection/useCollectionReceiptDraftPreviews";
 
-interface CollectionReceiptPanelProps {
+export interface CollectionReceiptPanelPendingState {
   pendingFiles: File[];
   inputRef: MutableRefObject<HTMLInputElement | null>;
   disabled?: boolean;
   accept?: string;
-  existingReceipts?: CollectionRecordReceipt[];
-  existingReceiptDrafts?: CollectionReceiptDraftInput[];
-  removedReceiptIds?: string[];
   pendingReceiptDrafts?: CollectionReceiptDraftInput[];
   onFileChange: (event: ChangeEvent<HTMLInputElement>) => void;
   onRemovePending: (index: number) => void;
   onClearPending?: () => void;
-  onViewExisting?: (receipt: CollectionRecordReceipt) => void;
-  onToggleRemoveExisting?: (receiptId: string) => void;
-  onExistingDraftChange?: (receiptId: string, patch: Partial<CollectionReceiptDraftInput>) => void;
   onPendingDraftChange?: (index: number, patch: Partial<CollectionReceiptDraftInput>) => void;
   uploadLabel?: string;
   helperText?: string;
 }
 
+export interface CollectionReceiptPanelExistingState {
+  existingReceipts?: CollectionRecordReceipt[];
+  existingReceiptDrafts?: CollectionReceiptDraftInput[];
+  removedReceiptIds?: string[];
+  onViewExisting?: (receipt: CollectionRecordReceipt) => void;
+  onToggleRemoveExisting?: (receiptId: string) => void;
+  onExistingDraftChange?: (receiptId: string, patch: Partial<CollectionReceiptDraftInput>) => void;
+}
+
+interface CollectionReceiptPanelProps {
+  pending: CollectionReceiptPanelPendingState;
+  existing?: CollectionReceiptPanelExistingState;
+}
+
 export function CollectionReceiptPanel({
-  pendingFiles,
-  inputRef,
-  disabled = false,
-  accept = ".jpg,.jpeg,.png,.webp,.pdf",
-  existingReceipts = [],
-  existingReceiptDrafts = [],
-  removedReceiptIds = [],
-  pendingReceiptDrafts = [],
-  onFileChange,
-  onRemovePending,
-  onClearPending,
-  onViewExisting,
-  onToggleRemoveExisting,
-  onExistingDraftChange,
-  onPendingDraftChange,
-  uploadLabel = "Upload Receipt",
-  helperText = "Upload one receipt at a time. JPG, PNG, and PDF up to 5MB.",
+  pending,
+  existing,
 }: CollectionReceiptPanelProps) {
+  const {
+    pendingFiles,
+    inputRef,
+    disabled = false,
+    accept = ".jpg,.jpeg,.png,.webp,.pdf",
+    pendingReceiptDrafts = [],
+    onFileChange,
+    onRemovePending,
+    onClearPending,
+    onPendingDraftChange,
+    uploadLabel = "Upload Receipt",
+    helperText = "Upload one receipt at a time. JPG, PNG, and PDF up to 5MB.",
+  } = pending;
+  const {
+    existingReceipts = [],
+    existingReceiptDrafts = [],
+    removedReceiptIds = [],
+    onViewExisting,
+    onToggleRemoveExisting,
+    onExistingDraftChange,
+  } = existing ?? {};
   const inputId = useId();
   const helperTextId = `${inputId}-help`;
   const draftPreviews = useCollectionReceiptDraftPreviews(pendingFiles);
@@ -275,8 +289,7 @@ export function CollectionReceiptPanel({
                         ) : (
                           <img
                             src={safePreviewUrl}
-                            alt=""
-                            aria-hidden="true"
+                            alt={`Receipt preview for ${preview.file.name}`}
                             className="h-full w-full object-cover"
                             loading="lazy"
                             decoding="async"

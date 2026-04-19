@@ -9,6 +9,7 @@ import {
 } from "@/lib/api/auth";
 import { getApiErrorMessage } from "@/lib/api-errors";
 import { broadcastForcedLogout } from "@/lib/auth-session";
+import { PASSWORD_POLICY_HINT_MESSAGE_MS } from "@shared/password-policy";
 import {
   hasPublicAuthFieldErrors,
   validatePasswordFields,
@@ -212,6 +213,7 @@ export default function ResetPasswordPage() {
             <div><span className="font-semibold text-white">Username:</span> {reset.username}</div>
             <div><span className="font-semibold text-white">Peranan:</span> {reset.role}</div>
             <div><span className="font-semibold text-white">Tamat Tempoh:</span> {formatPublicAuthExpiry(reset.expiresAt)}</div>
+            <p className="mt-3 text-white/80">{PASSWORD_POLICY_HINT_MESSAGE_MS}</p>
           </div>
           <PublicAuthInput
             id="reset-password-new-password"
