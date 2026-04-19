@@ -90,9 +90,11 @@ export function routeHandler(
   options?: RouteLoggerOptions,
 ): RequestHandler {
   return (req, res, next) => {
-    void Promise.resolve(handler(req, res, next)).catch((error) => {
+    void Promise.resolve()
+      .then(() => handler(req, res, next))
+      .catch((error) => {
       logRouteHandlerError(error, req, options);
       next(error);
-    });
+      });
   };
 }

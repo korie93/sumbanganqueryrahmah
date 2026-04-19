@@ -197,6 +197,64 @@ test("registerLocalHttpPipeline aggregates repeated CSP violation reports instea
   }
 });
 
+test("registerLocalHttpPipeline rate limits CSP reports without surfacing noisy errors to browsers", async (t) => {
+  const warnings: Array<{ message: string; payload: Record<string, unknown> | undefined }> = [];
+  t.mock.method(logger, "warn", ((message: string, payload?: Record<string, unknown>) => {
+    if (/Content Security Policy violation report/.test(message)) {
+      warnings.push({ message, payload });
+    }
+  }) as typeof logger.warn);
+
+  const app = express();
+  registerLocalHttpPipeline(app, {
+    importBodyLimit: "1mb",
+    collectionBodyLimit: "1mb",
+    defaultBodyLimit: "100kb",
+    uploadsRootDir: path.resolve(process.cwd(), "uploads"),
+    recordRequestStarted: () => undefined,
+    recordRequestFinished: () => undefined,
+    adaptiveRateLimit: (_req, _res, next) => next(),
+    systemProtectionMiddleware: (_req, _res, next) => next(),
+    maintenanceGuard: (_req, _res, next) => next(),
+    cspReportRateLimitWindowMs: 60_000,
+    cspReportRateLimitMax: 1,
+  });
+
+  const { server, baseUrl } = await startTestServer(app);
+  const body = JSON.stringify({
+    "csp-report": {
+      "document-uri": "https://sqr.example.com/dashboard",
+      "blocked-uri": "https://evil.example/inline.js",
+      "violated-directive": "script-src-elem",
+      "effective-directive": "script-src-elem",
+    },
+  });
+
+  try {
+    const first = await fetch(`${baseUrl}/api/security/csp-reports`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/csp-report",
+      },
+      body,
+    });
+    const second = await fetch(`${baseUrl}/api/security/csp-reports`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/csp-report",
+      },
+      body,
+    });
+
+    assert.equal(first.status, 204);
+    assert.equal(second.status, 204);
+    assert.equal(warnings.length, 1);
+    assert.equal(warnings[0]?.message, "Content Security Policy violation report received");
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
 test("registerLocalHttpPipeline keeps urlencoded request bodies flat for API routes", async () => {
   const app = express();
   registerLocalHttpPipeline(app, {

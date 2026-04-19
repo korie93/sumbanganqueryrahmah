@@ -34,6 +34,35 @@ test("routeHandler logs unexpected route errors once and forwards them to Expres
   assert.equal(errorLogMock.mock.callCount(), 1);
 });
 
+test("routeHandler also forwards synchronous route throws through the shared error path", async (t) => {
+  const errorLogMock = t.mock.method(logger, "error", () => {});
+  const error = new Error("sync route exploded");
+  let forwardedError: unknown = null;
+
+  const handler = routeHandler(() => {
+    throw error;
+  });
+
+  handler(
+    {
+      method: "POST",
+      path: "/api/test-sync-route",
+      originalUrl: "/api/test-sync-route",
+      route: { path: "/api/test-sync-route" },
+    } as never,
+    {} as never,
+    (nextError) => {
+      forwardedError = nextError;
+    },
+  );
+
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.equal(forwardedError, error);
+  assert.equal(wasRouteErrorLogged(error), true);
+  assert.equal(errorLogMock.mock.callCount(), 1);
+});
+
 test("errorHandler skips duplicate logging when the route layer already logged the error", (t) => {
   const errorLogMock = t.mock.method(logger, "error", () => {});
   const error = new HttpError(500, "Hidden failure", {

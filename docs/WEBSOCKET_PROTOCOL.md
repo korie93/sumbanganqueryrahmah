@@ -87,3 +87,11 @@ Client kini mengenali payload JSON berikut:
 
 Repo semasa tidak mendokumenkan command channel umum daripada client ke server; inbound
 messages pada runtime ini lebih kepada liveness dan abuse surface, bukan public mutation API.
+
+Inbound messages yang diterima sekarang sengaja sempit:
+
+- `"ping"`
+- `{"type":"ping"}`
+
+Payload binary, JSON tidak sah, atau shape lain akan ditolak sebagai policy violation dan socket
+akan ditutup.

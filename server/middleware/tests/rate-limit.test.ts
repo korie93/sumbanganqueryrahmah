@@ -10,6 +10,7 @@ import {
   createRateLimitKeyAdmissionController,
   createImportsUploadRateLimiter,
   normalizeAuthRateLimitIdentifier,
+  resolveAuthenticatedRateLimitSubject,
 } from "../rate-limit";
 
 function createRequest(
@@ -120,6 +121,32 @@ test("createRateLimitKeyAdmissionController collapses excessive unique subjects 
   now += 1_500;
 
   assert.equal(controller.admit("auth-login|203.0.113.10", "acct:three"), "acct:three");
+});
+
+test("createRateLimitKeyAdmissionController refuses to evict active buckets just to admit new bucket churn", () => {
+  const controller = createRateLimitKeyAdmissionController({
+    maxBuckets: 2,
+    maxSuffixesPerBucket: 2,
+    now: () => 10_000,
+    ttlMs: 60_000,
+  });
+
+  assert.equal(controller.admit("auth-login|198.51.100.1", "acct:one"), "acct:one");
+  assert.equal(controller.admit("auth-login|198.51.100.2", "acct:two"), "acct:two");
+  assert.equal(controller.admit("auth-login|198.51.100.3", "acct:three"), "overflow");
+  assert.equal(controller.admit("auth-login|198.51.100.1", "acct:one"), "acct:one");
+});
+
+test("resolveAuthenticatedRateLimitSubject prefers stable authenticated identifiers before usernames", () => {
+  const req = {
+    user: {
+      userId: "user-42",
+      username: "admin.user",
+      activityId: "activity-9",
+    },
+  } as unknown as Request;
+
+  assert.equal(resolveAuthenticatedRateLimitSubject(req), "user-42");
 });
 
 test("createImportsUploadRateLimiter throttles repeated upload attempts from the same network", async () => {

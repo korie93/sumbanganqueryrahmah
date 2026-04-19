@@ -23,6 +23,7 @@ import {
   buildAutoLogoutReconnectFeedbackTitle,
   buildAutoLogoutReconnectFeedbackMessage,
 } from "@/components/auto-logout-reconnect-feedback";
+import { cleanupAutoLogoutRuntimeResources } from "@/components/auto-logout-runtime-cleanup";
 
 interface AutoLogoutProps {
   onClientLogout: () => void | Promise<void>;
@@ -99,21 +100,40 @@ export default function AutoLogout({
 
   const cleanupSocket = useCallback(() => {
     const activeSocket = wsRef.current;
-    clearReconnect();
-
     disposeAutoLogoutSocket(activeSocket, wsRef);
-  }, [clearReconnect]);
+  }, []);
+
+  const stopRuntimeResources = useCallback(() => {
+    cleanupAutoLogoutRuntimeResources({
+      clearHeartbeat,
+      clearHeartbeatRequest,
+      clearIdleTimeout,
+      clearReconnect,
+      cleanupSocket,
+      reconnectAttemptRef,
+      reconnectEnabledRef,
+    });
+  }, [
+    cleanupSocket,
+    clearHeartbeat,
+    clearHeartbeatRequest,
+    clearIdleTimeout,
+    clearReconnect,
+  ]);
+
+  const prepareLogoutTransition = useCallback(() => {
+    if (logoutStartedRef.current) {
+      return false;
+    }
+
+    logoutStartedRef.current = true;
+    resetReconnectFeedback();
+    stopRuntimeResources();
+    return true;
+  }, [resetReconnectFeedback, stopRuntimeResources]);
 
   const runLogout = useCallback(async () => {
-    if (logoutStartedRef.current) return;
-    logoutStartedRef.current = true;
-    reconnectEnabledRef.current = false;
-    reconnectAttemptRef.current = 0;
-    clearIdleTimeout();
-    clearHeartbeat();
-    clearHeartbeatRequest();
-    resetReconnectFeedback();
-    cleanupSocket();
+    if (!prepareLogoutTransition()) return;
     try {
       await onLogoutRef.current();
     } catch (error: unknown) {
@@ -122,25 +142,10 @@ export default function AutoLogout({
         component: "AutoLogout",
       });
     }
-  }, [
-    cleanupSocket,
-    clearHeartbeat,
-    clearHeartbeatRequest,
-    clearIdleTimeout,
-    onLogoutRef,
-    resetReconnectFeedback,
-  ]);
+  }, [onLogoutRef, prepareLogoutTransition]);
 
   const runClientLogout = useCallback(async () => {
-    if (logoutStartedRef.current) return;
-    logoutStartedRef.current = true;
-    reconnectEnabledRef.current = false;
-    reconnectAttemptRef.current = 0;
-    clearIdleTimeout();
-    clearHeartbeat();
-    clearHeartbeatRequest();
-    resetReconnectFeedback();
-    cleanupSocket();
+    if (!prepareLogoutTransition()) return;
     try {
       await onClientLogoutRef.current();
     } catch (error: unknown) {
@@ -149,14 +154,7 @@ export default function AutoLogout({
         component: "AutoLogout",
       });
     }
-  }, [
-    cleanupSocket,
-    clearHeartbeat,
-    clearHeartbeatRequest,
-    clearIdleTimeout,
-    onClientLogoutRef,
-    resetReconnectFeedback,
-  ]);
+  }, [onClientLogoutRef, prepareLogoutTransition]);
 
   const resetTimeout = useCallback(() => {
     lastActivityRef.current = Date.now();
@@ -200,14 +198,9 @@ export default function AutoLogout({
 
     return () => {
       mountedRef.current = false;
-      reconnectEnabledRef.current = false;
-      reconnectAttemptRef.current = 0;
-      clearIdleTimeout();
-      clearHeartbeat();
-      clearHeartbeatRequest();
-      cleanupSocket();
+      stopRuntimeResources();
     };
-  }, [cleanupSocket, clearHeartbeat, clearHeartbeatRequest, clearIdleTimeout]);
+  }, [stopRuntimeResources]);
 
   useEffect(() => {
     return bindAutoLogoutActivityListeners({

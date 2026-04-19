@@ -44,6 +44,45 @@ export type { RuntimeConfigDiagnostic, RuntimeConfigValidation } from "./runtime
 
 validateRuntimeEnvironmentSchema();
 
+function readRuntimeConfigErrorMessage(error: unknown) {
+  return error instanceof Error && error.message
+    ? error.message
+    : "Unknown runtime configuration validation error.";
+}
+
+function collectRuntimeConfigValue<T>(
+  issues: string[],
+  readValue: () => T,
+  fallbackValue: T,
+) {
+  try {
+    return readValue();
+  } catch (error) {
+    issues.push(readRuntimeConfigErrorMessage(error));
+    return fallbackValue;
+  }
+}
+
+function collectRuntimeConfigIssue(
+  issues: string[],
+  validation: () => void,
+) {
+  try {
+    validation();
+  } catch (error) {
+    issues.push(readRuntimeConfigErrorMessage(error));
+  }
+}
+
+function throwIfRuntimeConfigIssues(issues: readonly string[]) {
+  if (issues.length === 0) {
+    return;
+  }
+
+  const uniqueIssues = Array.from(new Set(issues.map((issue) => String(issue || "").trim()).filter(Boolean)));
+  throw new Error(`Runtime configuration validation failed:\n- ${uniqueIssues.join("\n- ")}`);
+}
+
 const COLLECTION_PII_FIELD_NAMES = new Set([
   "customerName",
   "icNumber",
@@ -69,13 +108,17 @@ const allowDbQueryProfilingInProduction = readBoolean("DB_QUERY_PROFILING_ALLOW_
 const dbQueryProfilingEnabled =
   requestedDbQueryProfilingEnabled && (!isProduction || allowDbQueryProfilingInProduction);
 const remoteErrorTrackingEnabled = readBoolean("REMOTE_ERROR_TRACKING_ENABLED", false);
-const remoteErrorTrackingEndpoint = normalizeHttpUrl(
-  "REMOTE_ERROR_TRACKING_ENDPOINT",
-  readOptionalString("REMOTE_ERROR_TRACKING_ENDPOINT"),
+const runtimeValidationIssues: string[] = [];
+const remoteErrorTrackingEndpoint = collectRuntimeConfigValue(
+  runtimeValidationIssues,
+  () => normalizeHttpUrl(
+    "REMOTE_ERROR_TRACKING_ENDPOINT",
+    readOptionalString("REMOTE_ERROR_TRACKING_ENDPOINT"),
+  ),
+  null,
 );
-
 if (remoteErrorTrackingEnabled && !remoteErrorTrackingEndpoint) {
-  throw new Error(
+  runtimeValidationIssues.push(
     "REMOTE_ERROR_TRACKING_ENDPOINT is required when REMOTE_ERROR_TRACKING_ENABLED=1.",
   );
 }
@@ -129,19 +172,31 @@ function resolveDefaultPgMaxConnections() {
 }
 
 const configuredSessionSecret = readOptionalString("SESSION_SECRET");
-const configuredPreviousSessionSecrets = resolvePreviousSessionSecrets(
-  readCommaSeparatedList("SESSION_SECRET_PREVIOUS"),
-  configuredSessionSecret,
+const configuredPreviousSessionSecrets = collectRuntimeConfigValue(
+  runtimeValidationIssues,
+  () => resolvePreviousSessionSecrets(
+    readCommaSeparatedList("SESSION_SECRET_PREVIOUS"),
+    configuredSessionSecret,
+  ),
+  [],
 );
 const configuredDatabaseUrl = readOptionalString("DATABASE_URL");
-const parsedDatabaseUrl = parseDatabaseUrl(configuredDatabaseUrl);
+const parsedDatabaseUrl = collectRuntimeConfigValue(
+  runtimeValidationIssues,
+  () => parseDatabaseUrl(configuredDatabaseUrl),
+  null,
+);
 const configuredCollectionNicknameTempPassword = readOptionalString("COLLECTION_NICKNAME_TEMP_PASSWORD");
 const configuredPgPassword = readOptionalString("PG_PASSWORD");
 const configuredTwoFactorEncryptionKey = readOptionalString("TWO_FACTOR_ENCRYPTION_KEY");
 const configuredCollectionPiiEncryptionKey = readOptionalString("COLLECTION_PII_ENCRYPTION_KEY");
-const configuredPreviousCollectionPiiEncryptionKeys = resolvePreviousCollectionPiiSecrets(
-  readCommaSeparatedList("COLLECTION_PII_ENCRYPTION_KEY_PREVIOUS"),
-  configuredCollectionPiiEncryptionKey,
+const configuredPreviousCollectionPiiEncryptionKeys = collectRuntimeConfigValue(
+  runtimeValidationIssues,
+  () => resolvePreviousCollectionPiiSecrets(
+    readCommaSeparatedList("COLLECTION_PII_ENCRYPTION_KEY_PREVIOUS"),
+    configuredCollectionPiiEncryptionKey,
+  ),
+  [],
 );
 const configuredCollectionPiiRetiredFields = readCommaSeparatedList("COLLECTION_PII_RETIRED_FIELDS")
   .filter((field) => COLLECTION_PII_FIELD_NAMES.has(field));
@@ -155,25 +210,45 @@ const configuredMailDevOutboxDir = readOptionalString("MAIL_DEV_OUTBOX_DIR");
 const resolvedMailDevOutboxDir = configuredMailDevOutboxDir
   ? path.resolve(configuredMailDevOutboxDir)
   : path.resolve(process.cwd(), "var", "dev-mail-outbox");
-const publicAppUrl = normalizeHttpUrl("PUBLIC_APP_URL", readOptionalString("PUBLIC_APP_URL"));
-const trustedProxies = resolveTrustedProxies(readCommaSeparatedList("TRUSTED_PROXIES"));
-const corsAllowedOrigins = resolveCorsAllowedOrigins({
-  rawValue: readOptionalString("CORS_ALLOWED_ORIGINS"),
-  publicAppUrl,
-});
+const publicAppUrl = collectRuntimeConfigValue(
+  runtimeValidationIssues,
+  () => normalizeHttpUrl("PUBLIC_APP_URL", readOptionalString("PUBLIC_APP_URL")),
+  null,
+);
+const trustedProxies = collectRuntimeConfigValue(
+  runtimeValidationIssues,
+  () => resolveTrustedProxies(readCommaSeparatedList("TRUSTED_PROXIES")),
+  [],
+);
+const corsAllowedOrigins = collectRuntimeConfigValue(
+  runtimeValidationIssues,
+  () => resolveCorsAllowedOrigins({
+    rawValue: readOptionalString("CORS_ALLOWED_ORIGINS"),
+    publicAppUrl,
+  }),
+  publicAppUrl ? [publicAppUrl] : [],
+);
 const configuredAuthCookieSecure = readOptionalString("AUTH_COOKIE_SECURE");
-const cookieSecure = resolveCookieSecure(configuredAuthCookieSecure, {
-  isProductionLike,
-  publicAppUrl,
-});
-const configuredOllamaHost =
-  normalizeHttpUrl("OLLAMA_HOST", readOptionalString("OLLAMA_HOST")) ?? "http://127.0.0.1:11434";
+const cookieSecure = collectRuntimeConfigValue(
+  runtimeValidationIssues,
+  () => resolveCookieSecure(configuredAuthCookieSecure, {
+    isProductionLike,
+    publicAppUrl,
+  }),
+  isProductionLike || String(publicAppUrl || "").startsWith("https://"),
+);
+const configuredOllamaHost = collectRuntimeConfigValue(
+  runtimeValidationIssues,
+  () => normalizeHttpUrl("OLLAMA_HOST", readOptionalString("OLLAMA_HOST")) ?? "http://127.0.0.1:11434",
+  "http://127.0.0.1:11434",
+);
 const ollamaAllowRemoteHost = readBoolean("OLLAMA_ALLOW_REMOTE_HOST", false);
-
-assertSafeOllamaHost({
-  allowRemoteHost: ollamaAllowRemoteHost,
-  isProductionLike,
-  ollamaHost: configuredOllamaHost,
+collectRuntimeConfigIssue(runtimeValidationIssues, () => {
+  assertSafeOllamaHost({
+    allowRemoteHost: ollamaAllowRemoteHost,
+    isProductionLike,
+    ollamaHost: configuredOllamaHost,
+  });
 });
 
 const mailConfiguration = assessMailConfiguration({
@@ -184,37 +259,66 @@ const mailConfiguration = assessMailConfiguration({
   mailFrom: readOptionalString("MAIL_FROM"),
 });
 
-assertRuntimeSafetyGuards({
-  isProductionLike,
-  isStrictLocalDevelopment,
-  mailConfiguration,
-  backupFeatureEnabled,
-  hasBackupEncryptionKeyConfigured: hasBackupEncryptionKeyConfigured({
-    configuredBackupEncryptionKey,
-    configuredBackupEncryptionKeys,
-  }),
-  hasCollectionPiiEncryptionKeyConfigured: hasCollectionPiiEncryptionKeyConfigured({
-    configuredCollectionPiiEncryptionKey,
-  }),
-  hasTwoFactorEncryptionKeyConfigured: hasTwoFactorEncryptionKeyConfigured({
-    configuredTwoFactorEncryptionKey,
-  }),
-  seedDefaultUsers,
-  localSuperuserCredentialsFileEnabled,
-  mailDevOutboxEnabled,
+collectRuntimeConfigIssue(runtimeValidationIssues, () => {
+  assertRuntimeSafetyGuards({
+    isProductionLike,
+    isStrictLocalDevelopment,
+    mailConfiguration,
+    backupFeatureEnabled,
+    hasBackupEncryptionKeyConfigured: hasBackupEncryptionKeyConfigured({
+      configuredBackupEncryptionKey,
+      configuredBackupEncryptionKeys,
+    }),
+    hasCollectionPiiEncryptionKeyConfigured: hasCollectionPiiEncryptionKeyConfigured({
+      configuredCollectionPiiEncryptionKey,
+    }),
+    hasTwoFactorEncryptionKeyConfigured: hasTwoFactorEncryptionKeyConfigured({
+      configuredTwoFactorEncryptionKey,
+    }),
+    seedDefaultUsers,
+    localSuperuserCredentialsFileEnabled,
+    mailDevOutboxEnabled,
+  });
 });
 
-assertNoPlaceholderSecrets({
-  isProductionLike,
-  configuredSessionSecret,
-  configuredPreviousSessionSecrets,
-  configuredPgPassword,
-  configuredTwoFactorEncryptionKey,
-  configuredCollectionPiiEncryptionKey,
-  configuredPreviousCollectionPiiEncryptionKeys,
-  configuredBackupEncryptionKey,
-  configuredBackupEncryptionKeys,
+collectRuntimeConfigIssue(runtimeValidationIssues, () => {
+  assertNoPlaceholderSecrets({
+    isProductionLike,
+    configuredSessionSecret,
+    configuredCollectionNicknameTempPassword,
+    configuredPreviousSessionSecrets,
+    configuredPgPassword,
+    configuredTwoFactorEncryptionKey,
+    configuredCollectionPiiEncryptionKey,
+    configuredPreviousCollectionPiiEncryptionKeys,
+    configuredBackupEncryptionKey,
+    configuredBackupEncryptionKeys,
+  });
 });
+
+const resolvedDatabasePassword = configuredPgPassword || parsedDatabaseUrl?.password || "";
+if (isProductionLike && !resolvedDatabasePassword) {
+  runtimeValidationIssues.push(
+    "PG_PASSWORD or DATABASE_URL password is required outside strict local development.",
+  );
+}
+
+const resolvedSessionSecret = collectRuntimeConfigValue(
+  runtimeValidationIssues,
+  () => readSecretOrThrow("SESSION_SECRET", isProductionLike, () => buildEphemeralSecret("session")),
+  buildEphemeralSecret("session"),
+);
+const resolvedCollectionNicknameTempPassword = collectRuntimeConfigValue(
+  runtimeValidationIssues,
+  () => readSecretOrThrow(
+    "COLLECTION_NICKNAME_TEMP_PASSWORD",
+    isProductionLike,
+    () => buildEphemeralSecret("collection-temp").slice(0, 16),
+  ),
+  buildEphemeralSecret("collection-temp").slice(0, 16),
+);
+
+throwIfRuntimeConfigIssues(runtimeValidationIssues);
 
 export const runtimeConfig: RuntimeConfig = Object.freeze({
   app: {
@@ -243,21 +347,7 @@ export const runtimeConfig: RuntimeConfig = Object.freeze({
     host: readString("PG_HOST", parsedDatabaseUrl?.host || "localhost"),
     port: readInt("PG_PORT", parsedDatabaseUrl?.port || 5432, { min: 1, max: 65535 }),
     user: readString("PG_USER", parsedDatabaseUrl?.user || "postgres"),
-    password: (() => {
-      if (configuredPgPassword) {
-        return configuredPgPassword;
-      }
-      if (parsedDatabaseUrl?.password) {
-        return parsedDatabaseUrl.password;
-      }
-      if (isProductionLike) {
-        throw new Error("PG_PASSWORD or DATABASE_URL password is required outside strict local development.");
-      }
-      // Keep the local-development path passwordless-friendly while ensuring pg
-      // always receives a string and can surface a normal auth failure instead
-      // of throwing on undefined during SCRAM negotiation.
-      return "";
-    })(),
+    password: resolvedDatabasePassword,
     database: readString("PG_DATABASE", parsedDatabaseUrl?.database || "sqr_db"),
     maxConnections: readInt("PG_MAX_CONNECTIONS", resolveDefaultPgMaxConnections(), { min: 1, max: 50 }),
     idleTimeoutMs: readInt("PG_IDLE_TIMEOUT_MS", 30_000, { min: 1_000 }),
@@ -267,13 +357,9 @@ export const runtimeConfig: RuntimeConfig = Object.freeze({
     searchPath: readString("PG_SEARCH_PATH", "public"),
   },
   auth: {
-    sessionSecret: readSecretOrThrow("SESSION_SECRET", isProductionLike, () => buildEphemeralSecret("session")),
+    sessionSecret: resolvedSessionSecret,
     previousSessionSecrets: configuredPreviousSessionSecrets,
-    collectionNicknameTempPassword: readSecretOrThrow(
-      "COLLECTION_NICKNAME_TEMP_PASSWORD",
-      isProductionLike,
-      () => buildEphemeralSecret("collection-temp").slice(0, 16),
-    ),
+    collectionNicknameTempPassword: resolvedCollectionNicknameTempPassword,
     twoFactorEncryptionSecret: configuredTwoFactorEncryptionKey,
     seedDefaultUsers,
     cookieSecure,

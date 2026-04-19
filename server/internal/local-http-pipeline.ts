@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import path from "node:path";
 import compression from "compression";
 import express, { type Express, type Request, type Response, type RequestHandler } from "express";
+import rateLimit from "express-rate-limit";
 import helmet from "helmet";
 import { z } from "zod";
 import { runtimeConfig } from "../config/runtime";
@@ -192,6 +193,8 @@ type LocalHttpPipelineOptions = {
   requestTimeoutMs?: number;
   backupOperationTimeoutMs?: number;
   importAnalysisTimeoutMs?: number;
+  cspReportRateLimitWindowMs?: number;
+  cspReportRateLimitMax?: number;
 };
 
 export function registerLocalHttpPipeline(app: Express, options: LocalHttpPipelineOptions) {
@@ -208,8 +211,19 @@ export function registerLocalHttpPipeline(app: Express, options: LocalHttpPipeli
     requestTimeoutMs = runtimeConfig.runtime.requestTimeoutMs,
     backupOperationTimeoutMs = runtimeConfig.runtime.backupOperationTimeoutMs,
     importAnalysisTimeoutMs = runtimeConfig.runtime.importAnalysisTimeoutMs,
+    cspReportRateLimitWindowMs = 60_000,
+    cspReportRateLimitMax = 30,
   } = options;
   const cspReportFingerprintTracker = new Map<string, TrackedCspReportObservation>();
+  const cspReportRateLimiter = rateLimit({
+    windowMs: Math.max(1_000, Math.trunc(cspReportRateLimitWindowMs)),
+    max: Math.max(1, Math.trunc(cspReportRateLimitMax)),
+    standardHeaders: false,
+    legacyHeaders: false,
+    handler: (_req, res) => {
+      res.status(204).end();
+    },
+  });
 
   app.use(helmet({
     frameguard: {
@@ -366,6 +380,7 @@ export function registerLocalHttpPipeline(app: Express, options: LocalHttpPipeli
 
   app.post(
     CSP_REPORT_ENDPOINT_PATH,
+    cspReportRateLimiter,
     express.json({
       type: ["application/csp-report", "application/json", "application/reports+json"],
       limit: "32kb",

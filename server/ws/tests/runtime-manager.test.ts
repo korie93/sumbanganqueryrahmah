@@ -1091,6 +1091,56 @@ test("runtime manager detaches stale listeners from a replaced closed socket", a
   }
 });
 
+test("runtime manager drops sockets that send malformed inbound payloads", async (t) => {
+  const wss = new FakeWebSocketServer();
+  const providedMap = new Map<string, WebSocket>();
+  const socket = new FakeWebSocket();
+  const activityId = "activity-inbound-invalid-payload";
+  const warnings: Array<{ message: string; payload: unknown }> = [];
+
+  const warnMock = t.mock.method(logger, "warn", (message: string, payload: unknown) => {
+    warnings.push({ message, payload });
+  });
+
+  createRuntimeWebSocketManager({
+    wss: wss as unknown as import("ws").WebSocketServer,
+    storage: {
+      getActivityById: async () => createActiveSession(activityId),
+      clearCollectionNicknameSessionByActivity: async () => undefined,
+    },
+    secret: TEST_SECRET,
+    connectedClients: providedMap,
+  });
+
+  try {
+    wss.emit("connection", socket as unknown as WebSocket, createConnectionRequest(createWsToken(activityId)));
+    await flushAsyncWork();
+
+    for (let index = 0; index < 10; index += 1) {
+      socket.sendMessage("ping");
+    }
+
+    socket.sendMessage("{not-json");
+
+    assert.equal(providedMap.has(activityId), false);
+    assert.equal(socket.closeCalls, 1);
+    assert.ok(warnMock.mock.callCount() >= 1);
+    assert.equal(
+      warnings.some(
+        (entry) =>
+          entry.message === "WebSocket client dropped because the inbound message payload was invalid"
+          && typeof entry.payload === "object"
+          && entry.payload !== null
+          && (entry.payload as { reason?: unknown }).reason === "invalid-json",
+      ),
+      true,
+    );
+    assertNoRuntimeSocketListeners(socket);
+  } finally {
+    wss.emit("close");
+  }
+});
+
 test("runtime manager drops sockets that exceed the inbound message rate limit", async (t) => {
   const wss = new FakeWebSocketServer();
   const providedMap = new Map<string, WebSocket>();
@@ -1117,7 +1167,7 @@ test("runtime manager drops sockets that exceed the inbound message rate limit",
     await flushAsyncWork();
 
     for (let index = 0; index < 101; index += 1) {
-      socket.sendMessage(`message-${index}`);
+      socket.sendMessage("ping");
     }
 
     assert.equal(providedMap.has(activityId), false);
@@ -1162,11 +1212,11 @@ test("runtime manager refills inbound message tokens over time", async (t) => {
     await flushAsyncWork();
 
     for (let index = 0; index < 100; index += 1) {
-      socket.sendMessage(`message-${index}`);
+      socket.sendMessage("ping");
     }
 
     now += 30_000;
-    socket.sendMessage("message-after-half-refill");
+    socket.sendMessage("ping");
 
     assert.equal(socket.closeCalls, 0);
     assert.equal(providedMap.has(activityId), true);

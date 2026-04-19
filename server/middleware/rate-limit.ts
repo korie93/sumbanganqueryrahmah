@@ -32,6 +32,9 @@ type JsonRateLimiterOptions = {
 
 type AuthenticatedLikeRequest = Request & {
   user?: {
+    activityId?: string | null;
+    id?: string | null;
+    userId?: string | null;
     username?: string | null;
   };
 };
@@ -183,6 +186,9 @@ export function createRateLimitKeyAdmissionController(
       pruneExpiredBuckets(observedAt);
 
       const existingBucket = buckets.get(normalizedBucketKey);
+      if (!existingBucket && buckets.size >= maxBuckets) {
+        return RATE_LIMIT_OVERFLOW_BUCKET_SUFFIX;
+      }
       const bucket = existingBucket ?? {
         lastSeenAt: observedAt,
         suffixes: new Map<string, number>(),
@@ -242,6 +248,15 @@ function buildBoundedRateLimitKey(req: Request, scope: string, subject: unknown)
 
   const admittedSubjectSuffix = rateLimitKeyAdmissionController.admit(baseKey, normalizedSubject);
   return `${baseKey}|${admittedSubjectSuffix}`;
+}
+
+export function resolveAuthenticatedRateLimitSubject(req: AuthenticatedLikeRequest): string | null {
+  return normalizeKeyPart(
+    req.user?.userId
+      ?? req.user?.id
+      ?? req.user?.username
+      ?? req.user?.activityId,
+  );
 }
 
 function createJsonRateLimiter(options: JsonRateLimiterOptions): RequestHandler {
@@ -334,7 +349,11 @@ export function createAuthRouteRateLimiters(): AuthRouteRateLimiters {
       message: "Too many account security updates. Please wait before trying again.",
       keyGenerator: (req) => {
         const authReq = req as AuthenticatedLikeRequest;
-        return buildBoundedRateLimitKey(req, `auth-mutation:${req.path}`, authReq.user?.username);
+        return buildBoundedRateLimitKey(
+          req,
+          `auth-mutation:${req.path}`,
+          resolveAuthenticatedRateLimitSubject(authReq),
+        );
       },
     }),
     adminAction: createJsonRateLimiter({
@@ -344,7 +363,11 @@ export function createAuthRouteRateLimiters(): AuthRouteRateLimiters {
       message: "Too many admin account actions. Please slow down and try again.",
       keyGenerator: (req) => {
         const authReq = req as AuthenticatedLikeRequest;
-        return buildBoundedRateLimitKey(req, `admin-action:${req.path}`, authReq.user?.username);
+        return buildBoundedRateLimitKey(
+          req,
+          `admin-action:${req.path}`,
+          resolveAuthenticatedRateLimitSubject(authReq),
+        );
       },
     }),
     adminDestructiveAction: createJsonRateLimiter({
@@ -354,7 +377,11 @@ export function createAuthRouteRateLimiters(): AuthRouteRateLimiters {
       message: "Too many destructive admin actions. Please slow down and try again.",
       keyGenerator: (req) => {
         const authReq = req as AuthenticatedLikeRequest;
-        return buildBoundedRateLimitKey(req, `admin-destructive:${req.path}`, authReq.user?.username);
+        return buildBoundedRateLimitKey(
+          req,
+          `admin-destructive:${req.path}`,
+          resolveAuthenticatedRateLimitSubject(authReq),
+        );
       },
     }),
   };

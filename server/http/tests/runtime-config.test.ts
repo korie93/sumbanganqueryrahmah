@@ -114,6 +114,33 @@ test("runtime config rejects production startup when the two-factor encryption k
   );
 });
 
+test("runtime config aggregates production startup safety errors into a single failure report", async () => {
+  await withEnv(
+    {
+      ...productionBaseOverrides,
+      COLLECTION_PII_ENCRYPTION_KEY: null,
+      TWO_FACTOR_ENCRYPTION_KEY: null,
+      BACKUP_ENCRYPTION_KEY: null,
+      REMOTE_ERROR_TRACKING_ENABLED: "1",
+      REMOTE_ERROR_TRACKING_ENDPOINT: null,
+    },
+    async () => {
+      await assert.rejects(
+        importRuntimeFresh(),
+        (error: unknown) => {
+          assert.ok(error instanceof Error);
+          assert.match(error.message, /Runtime configuration validation failed/i);
+          assert.match(error.message, /REMOTE_ERROR_TRACKING_ENDPOINT is required when REMOTE_ERROR_TRACKING_ENABLED=1/i);
+          assert.match(error.message, /BACKUP_ENCRYPTION_KEY or BACKUP_ENCRYPTION_KEYS is required/i);
+          assert.match(error.message, /COLLECTION_PII_ENCRYPTION_KEY is required outside strict local development/i);
+          assert.match(error.message, /TWO_FACTOR_ENCRYPTION_KEY is required outside strict local development/i);
+          return true;
+        },
+      );
+    },
+  );
+});
+
 test("runtime config rejects production startup when previous collection PII keys include the active key", async () => {
   await withEnv(
     {

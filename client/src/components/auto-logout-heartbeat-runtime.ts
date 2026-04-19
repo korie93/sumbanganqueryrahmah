@@ -27,6 +27,13 @@ export async function sendAutoLogoutHeartbeat({
     await activityHeartbeatLight({
       signal: controller.signal,
     })
+    if (
+      controller.signal.aborted
+      || !mountedRef.current
+      || logoutStartedRef.current
+    ) {
+      return
+    }
     lastHeartbeatSyncAtRef.current = Date.now()
     if (typeof window !== "undefined") {
       window.dispatchEvent(new CustomEvent("activity-heartbeat-synced"))

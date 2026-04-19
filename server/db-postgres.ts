@@ -12,13 +12,18 @@ import { logger } from "./lib/logger";
 const { Pool } = pg;
 
 export function buildPgPoolConfig(config: typeof runtimeConfig.database): pg.PoolConfig {
+  const pgOptions = [
+    `-c search_path=${validatePgSearchPath(config.searchPath)}`,
+    `-c statement_timeout=${Math.max(1, Math.trunc(config.statementTimeoutMs))}`,
+  ].join(" ");
+
   const sharedConfig = {
     max: config.maxConnections,
     idleTimeoutMillis: config.idleTimeoutMs,
     connectionTimeoutMillis: config.connectionTimeoutMs,
     query_timeout: config.queryTimeoutMs,
     statement_timeout: config.statementTimeoutMs,
-    options: `-c search_path=${validatePgSearchPath(config.searchPath)}`,
+    options: pgOptions,
   } satisfies pg.PoolConfig;
 
   return config.connectionString
@@ -43,7 +48,7 @@ export const dbQueryProfiler = createDbQueryProfiler({
   logger,
 });
 
-dbQueryProfiler.instrumentPgPool(pool);
+const stopDbQueryProfiler = dbQueryProfiler.instrumentPgPool(pool);
 
 const stopPgPoolMonitoring = bindPgPoolMonitoring(pool, {
   warnCooldownMs: runtimeConfig.runtime.pgPoolWarnCooldownMs,
@@ -59,6 +64,7 @@ const stopPgPoolHealthCheck = bindPgPoolHealthCheck(pool, {
 });
 
 export function stopPgPoolBackgroundTasks() {
+  stopDbQueryProfiler?.();
   stopPgPoolMonitoring();
   stopPgPoolHealthCheck();
 }

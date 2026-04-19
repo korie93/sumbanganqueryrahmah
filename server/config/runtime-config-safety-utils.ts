@@ -14,6 +14,11 @@ const PLACEHOLDER_DATABASE_PASSWORDS = new Set([
 const PLACEHOLDER_TWO_FACTOR_ENCRYPTION_KEYS = new Set([
   "GENERATE_ME_DISTINCT_2FA_KEY_DO_NOT_REUSE_SESSION_SECRET",
 ]);
+const PLACEHOLDER_COLLECTION_NICKNAME_TEMP_PASSWORDS = new Set([
+  "change-this-temp-password",
+  "temporary-password",
+  "temp-password",
+]);
 const PLACEHOLDER_COLLECTION_PII_ENCRYPTION_KEYS = new Set([
   "GENERATE_ME_COLLECTION_PII_KEY_DO_NOT_REUSE_SESSION_SECRET",
 ]);
@@ -22,8 +27,27 @@ const PLACEHOLDER_BACKUP_ENCRYPTION_KEYS = new Set([
 ]);
 const UNSAFE_TRUST_PROXY_VALUES = new Set(["*", "all", "true", "1"]);
 const OBVIOUS_PLACEHOLDER_SECRET_PATTERN = /(?:generate[_-]?me|change[_-]?(?:this|me)|replace[_-]?(?:this|me)|do[_-]?not[_-]?use|placeholder-secret|example-secret)/i;
+const COMMON_WEAK_SECRET_VALUES = new Set([
+  "password",
+  "password123",
+  "changeme",
+  "changeit",
+  "defaultpassword",
+  "temp-password",
+  "temporary-password",
+]);
 const PRODUCTION_SECRET_MIN_LENGTH = 32;
+const COLLECTION_TEMP_PASSWORD_MIN_LENGTH = 16;
 const WEAK_SESSION_SECRET_MIN_UNIQUE_CHARACTERS = 8;
+
+function throwCombinedRuntimeSafetyErrors(issues: readonly string[]) {
+  if (issues.length === 0) {
+    return;
+  }
+
+  const uniqueIssues = Array.from(new Set(issues.map((issue) => String(issue || "").trim()).filter(Boolean)));
+  throw new Error(uniqueIssues.join("\n"));
+}
 
 function hasRepeatedSecretPattern(value: string) {
   for (let patternLength = 1; patternLength <= Math.floor(value.length / 2); patternLength += 1) {
@@ -262,48 +286,51 @@ export function assertRuntimeSafetyGuards(params: {
   mailDevOutboxEnabled: boolean;
 }) {
   const { isProductionLike, isStrictLocalDevelopment, mailConfiguration } = params;
+  const issues: string[] = [];
 
   if (isProductionLike && params.backupFeatureEnabled && !params.hasBackupEncryptionKeyConfigured) {
-    throw new Error(
+    issues.push(
       "BACKUP_ENCRYPTION_KEY or BACKUP_ENCRYPTION_KEYS is required when backups are enabled outside strict local development.",
     );
   }
 
   if (isProductionLike && !params.hasCollectionPiiEncryptionKeyConfigured) {
-    throw new Error(
+    issues.push(
       "COLLECTION_PII_ENCRYPTION_KEY is required outside strict local development to protect collection PII shadow columns at rest.",
     );
   }
 
   if (isProductionLike && !params.hasTwoFactorEncryptionKeyConfigured) {
-    throw new Error(
+    issues.push(
       "TWO_FACTOR_ENCRYPTION_KEY is required outside strict local development to protect stored two-factor secrets at rest.",
     );
   }
 
   if (!isStrictLocalDevelopment && params.seedDefaultUsers) {
-    throw new Error(
+    issues.push(
       "SEED_DEFAULT_USERS is only allowed in strict local development mode.",
     );
   }
 
   if (!isStrictLocalDevelopment && params.localSuperuserCredentialsFileEnabled) {
-    throw new Error(
+    issues.push(
       "LOCAL_SUPERUSER_CREDENTIALS_FILE_ENABLED is only allowed in strict local development mode.",
     );
   }
 
   if (!isStrictLocalDevelopment && params.mailDevOutboxEnabled) {
-    throw new Error(
+    issues.push(
       "MAIL_DEV_OUTBOX_ENABLED is only allowed in strict local development mode.",
     );
   }
 
   if (!isStrictLocalDevelopment && mailConfiguration.isIncomplete) {
-    throw new Error(
+    issues.push(
       "SMTP mail configuration is incomplete. Configure MAIL_FROM/SMTP_* fully or clear the SMTP env vars entirely before startup.",
     );
   }
+
+  throwCombinedRuntimeSafetyErrors(issues);
 }
 
 export function buildRuntimeConfigWarnings(params: {
@@ -472,6 +499,7 @@ export function buildRuntimeConfigWarnings(params: {
 export function assertNoPlaceholderSecrets(params: {
   isProductionLike: boolean;
   configuredSessionSecret: string | null;
+  configuredCollectionNicknameTempPassword: string | null;
   configuredPreviousSessionSecrets: readonly string[];
   configuredPgPassword: string | null;
   configuredTwoFactorEncryptionKey: string | null;
@@ -483,9 +511,12 @@ export function assertNoPlaceholderSecrets(params: {
   if (!params.isProductionLike) {
     return;
   }
+  const issues: string[] = [];
 
   const isObviousPlaceholderSecret = (value: string) =>
     OBVIOUS_PLACEHOLDER_SECRET_PATTERN.test(String(value || "").trim().toLowerCase());
+  const isCommonWeakSecretValue = (value: string) =>
+    COMMON_WEAK_SECRET_VALUES.has(String(value || "").trim().toLowerCase());
 
   const assertMinimumSecretLength = (
     envName: string,
@@ -498,50 +529,76 @@ export function assertNoPlaceholderSecrets(params: {
     }
 
     if (normalizedValue.length < minimumLength) {
-      throw new Error(
+      issues.push(
         `${envName} must be at least ${minimumLength} characters long on production-like hosts.`,
       );
     }
   };
 
   if (params.configuredSessionSecret && PLACEHOLDER_SESSION_SECRETS.has(params.configuredSessionSecret)) {
-    throw new Error("SESSION_SECRET is using the default placeholder value and must be replaced before non-local startup.");
-  }
-  if (params.configuredSessionSecret && isObviousPlaceholderSecret(params.configuredSessionSecret)) {
-    throw new Error("SESSION_SECRET is using an obvious placeholder/demo value and must be replaced before non-local startup.");
+    issues.push("SESSION_SECRET is using the default placeholder value and must be replaced before non-local startup.");
+  } else if (params.configuredSessionSecret && isObviousPlaceholderSecret(params.configuredSessionSecret)) {
+    issues.push("SESSION_SECRET is using an obvious placeholder/demo value and must be replaced before non-local startup.");
   }
   assertMinimumSecretLength("SESSION_SECRET", params.configuredSessionSecret);
 
+  if (
+    params.configuredCollectionNicknameTempPassword
+    && PLACEHOLDER_COLLECTION_NICKNAME_TEMP_PASSWORDS.has(params.configuredCollectionNicknameTempPassword)
+  ) {
+    issues.push(
+      "COLLECTION_NICKNAME_TEMP_PASSWORD is using a placeholder value and must be replaced before non-local startup.",
+    );
+  } else if (
+    params.configuredCollectionNicknameTempPassword
+    && (
+      isObviousPlaceholderSecret(params.configuredCollectionNicknameTempPassword)
+      || isCommonWeakSecretValue(params.configuredCollectionNicknameTempPassword)
+    )
+  ) {
+    issues.push(
+      "COLLECTION_NICKNAME_TEMP_PASSWORD is using an obvious placeholder or weak demo value and must be replaced before non-local startup.",
+    );
+  }
+  assertMinimumSecretLength(
+    "COLLECTION_NICKNAME_TEMP_PASSWORD",
+    params.configuredCollectionNicknameTempPassword,
+    COLLECTION_TEMP_PASSWORD_MIN_LENGTH,
+  );
+
   for (const previousSecret of params.configuredPreviousSessionSecrets) {
     if (PLACEHOLDER_SESSION_SECRETS.has(previousSecret)) {
-      throw new Error("SESSION_SECRET_PREVIOUS contains a placeholder value and must be replaced before non-local startup.");
-    }
-    if (isObviousPlaceholderSecret(previousSecret)) {
-      throw new Error("SESSION_SECRET_PREVIOUS contains an obvious placeholder/demo value and must be replaced before non-local startup.");
+      issues.push("SESSION_SECRET_PREVIOUS contains a placeholder value and must be replaced before non-local startup.");
+    } else if (isObviousPlaceholderSecret(previousSecret)) {
+      issues.push("SESSION_SECRET_PREVIOUS contains an obvious placeholder/demo value and must be replaced before non-local startup.");
     }
     assertMinimumSecretLength("SESSION_SECRET_PREVIOUS", previousSecret);
   }
 
   if (params.configuredPgPassword && PLACEHOLDER_DATABASE_PASSWORDS.has(params.configuredPgPassword)) {
-    throw new Error("PG_PASSWORD is using the default placeholder value and must be replaced before non-local startup.");
-  }
-  if (params.configuredPgPassword && isObviousPlaceholderSecret(params.configuredPgPassword)) {
-    throw new Error("PG_PASSWORD is using an obvious placeholder/demo value and must be replaced before non-local startup.");
+    issues.push("PG_PASSWORD is using the default placeholder value and must be replaced before non-local startup.");
+  } else if (
+    params.configuredPgPassword
+    && (
+      isObviousPlaceholderSecret(params.configuredPgPassword)
+      || isCommonWeakSecretValue(params.configuredPgPassword)
+    )
+  ) {
+    issues.push("PG_PASSWORD is using an obvious placeholder/demo value and must be replaced before non-local startup.");
   }
 
   if (
     params.configuredTwoFactorEncryptionKey
     && PLACEHOLDER_TWO_FACTOR_ENCRYPTION_KEYS.has(params.configuredTwoFactorEncryptionKey)
   ) {
-    throw new Error(
+    issues.push(
       "TWO_FACTOR_ENCRYPTION_KEY is using the default placeholder value and must be replaced before non-local startup.",
     );
-  }
-  if (
+  } else if (
     params.configuredTwoFactorEncryptionKey
     && isObviousPlaceholderSecret(params.configuredTwoFactorEncryptionKey)
   ) {
-    throw new Error(
+    issues.push(
       "TWO_FACTOR_ENCRYPTION_KEY is using an obvious placeholder/demo value and must be replaced before non-local startup.",
     );
   }
@@ -551,15 +608,14 @@ export function assertNoPlaceholderSecrets(params: {
     params.configuredCollectionPiiEncryptionKey
     && PLACEHOLDER_COLLECTION_PII_ENCRYPTION_KEYS.has(params.configuredCollectionPiiEncryptionKey)
   ) {
-    throw new Error(
+    issues.push(
       "COLLECTION_PII_ENCRYPTION_KEY is using the default placeholder value and must be replaced before non-local startup.",
     );
-  }
-  if (
+  } else if (
     params.configuredCollectionPiiEncryptionKey
     && isObviousPlaceholderSecret(params.configuredCollectionPiiEncryptionKey)
   ) {
-    throw new Error(
+    issues.push(
       "COLLECTION_PII_ENCRYPTION_KEY is using an obvious placeholder/demo value and must be replaced before non-local startup.",
     );
   }
@@ -570,12 +626,11 @@ export function assertNoPlaceholderSecrets(params: {
 
   for (const previousCollectionPiiKey of params.configuredPreviousCollectionPiiEncryptionKeys) {
     if (PLACEHOLDER_COLLECTION_PII_ENCRYPTION_KEYS.has(previousCollectionPiiKey)) {
-      throw new Error(
+      issues.push(
         "COLLECTION_PII_ENCRYPTION_KEY_PREVIOUS contains a placeholder value and must be replaced before non-local startup.",
       );
-    }
-    if (isObviousPlaceholderSecret(previousCollectionPiiKey)) {
-      throw new Error(
+    } else if (isObviousPlaceholderSecret(previousCollectionPiiKey)) {
+      issues.push(
         "COLLECTION_PII_ENCRYPTION_KEY_PREVIOUS contains an obvious placeholder/demo value and must be replaced before non-local startup.",
       );
     }
@@ -592,15 +647,16 @@ export function assertNoPlaceholderSecrets(params: {
 
   for (const backupKey of configuredBackupKeys) {
     if (PLACEHOLDER_BACKUP_ENCRYPTION_KEYS.has(backupKey)) {
-      throw new Error(
+      issues.push(
         "BACKUP_ENCRYPTION_KEY or BACKUP_ENCRYPTION_KEYS contains a placeholder value and must be replaced before non-local startup.",
       );
-    }
-    if (isObviousPlaceholderSecret(backupKey)) {
-      throw new Error(
+    } else if (isObviousPlaceholderSecret(backupKey)) {
+      issues.push(
         "BACKUP_ENCRYPTION_KEY or BACKUP_ENCRYPTION_KEYS contains an obvious placeholder/demo value and must be replaced before non-local startup.",
       );
     }
     assertMinimumSecretLength("BACKUP_ENCRYPTION_KEY", backupKey);
   }
+
+  throwCombinedRuntimeSafetyErrors(issues);
 }

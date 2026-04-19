@@ -1,5 +1,6 @@
 import type { IncomingMessage } from "node:http";
-import { WebSocket } from "ws";
+import { WebSocket, type RawData } from "ws";
+import { z } from "zod";
 import {
   RUNTIME_WS_CLOSE_REASON_SESSION_EXPIRED,
   RUNTIME_WS_CLOSE_REASON_SESSION_INVALID,
@@ -14,6 +15,7 @@ import {
   INBOUND_MESSAGE_TOKEN_BUCKET_WINDOW_MS,
   MAX_CONNECTIONS_PER_USER,
   MAX_INBOUND_MESSAGES_PER_MINUTE,
+  MAX_RUNTIME_WS_MESSAGE_BYTES,
   type RuntimeInboundMessageRateState,
   type RuntimeTrackedSocketEntry,
   type RuntimeTrackedSocketState,
@@ -27,6 +29,76 @@ import {
   shouldTrustForwardedHeaders,
   validateSameOriginWebSocketRequest,
 } from "./ws-runtime-utils";
+
+const runtimeInboundPingMessageSchema = z.union([
+  z.literal("ping"),
+  z.object({
+    type: z.literal("ping"),
+  }).strict(),
+]);
+
+function decodeRuntimeInboundMessagePayload(payload: RawData, isBinary: boolean) {
+  if (isBinary) {
+    return {
+      ok: false as const,
+      reason: "binary-not-supported",
+    };
+  }
+
+  const rawPayload = typeof payload === "string"
+    ? payload
+    : Buffer.isBuffer(payload)
+      ? payload.toString("utf8")
+      : Array.isArray(payload)
+        ? Buffer.concat(payload).toString("utf8")
+        : Buffer.from(payload).toString("utf8");
+  const normalizedPayload = rawPayload.trim();
+
+  if (!normalizedPayload) {
+    return {
+      ok: false as const,
+      reason: "empty-message",
+    };
+  }
+
+  if (Buffer.byteLength(normalizedPayload, "utf8") > MAX_RUNTIME_WS_MESSAGE_BYTES) {
+    return {
+      ok: false as const,
+      reason: "message-too-large",
+    };
+  }
+
+  if (normalizedPayload === "ping") {
+    return {
+      ok: true as const,
+      message: "ping" as const,
+    };
+  }
+
+  let parsedPayload: unknown;
+  try {
+    parsedPayload = JSON.parse(normalizedPayload);
+  } catch (error) {
+    void error;
+    return {
+      ok: false as const,
+      reason: "invalid-json",
+    };
+  }
+
+  const parsedMessage = runtimeInboundPingMessageSchema.safeParse(parsedPayload);
+  if (!parsedMessage.success) {
+    return {
+      ok: false as const,
+      reason: "unsupported-message-shape",
+    };
+  }
+
+  return {
+    ok: true as const,
+    message: parsedMessage.data,
+  };
+}
 
 type CreateRuntimeConnectionHandlerOptions = {
   connectedClients: Map<string, WebSocket>;
@@ -213,7 +285,7 @@ export function createRuntimeConnectionHandler(
       }
     };
 
-    const handleSocketMessage = () => {
+    const handleSocketMessage = (payload: RawData, isBinary: boolean) => {
       if (cleanedUp) {
         return;
       }
@@ -231,18 +303,31 @@ export function createRuntimeConnectionHandler(
 
       if (inboundMessageRateState.availableTokens >= 1) {
         inboundMessageRateState.availableTokens -= 1;
+      } else {
+        logger.warn("WebSocket client dropped because the inbound message rate exceeded the runtime limit", {
+          activityId,
+          availableTokens: Math.max(0, Number(inboundMessageRateState.availableTokens.toFixed(3))),
+          maxMessagesPerMinute: MAX_INBOUND_MESSAGES_PER_MINUTE,
+          tokenBucketCapacity: INBOUND_MESSAGE_TOKEN_BUCKET_CAPACITY,
+          refillWindowMs: INBOUND_MESSAGE_TOKEN_BUCKET_WINDOW_MS,
+        });
+        cleanupSocketSafely("message-rate-limit");
+        closeSocketIfNeeded();
         return;
       }
 
-      logger.warn("WebSocket client dropped because the inbound message rate exceeded the runtime limit", {
+      const decodedMessage = decodeRuntimeInboundMessagePayload(payload, isBinary);
+      if (decodedMessage.ok) {
+        return;
+      }
+
+      logger.warn("WebSocket client dropped because the inbound message payload was invalid", {
         activityId,
-        availableTokens: Math.max(0, Number(inboundMessageRateState.availableTokens.toFixed(3))),
-        maxMessagesPerMinute: MAX_INBOUND_MESSAGES_PER_MINUTE,
-        tokenBucketCapacity: INBOUND_MESSAGE_TOKEN_BUCKET_CAPACITY,
-        refillWindowMs: INBOUND_MESSAGE_TOKEN_BUCKET_WINDOW_MS,
+        reason: decodedMessage.reason,
+        maxMessageBytes: MAX_RUNTIME_WS_MESSAGE_BYTES,
       });
-      cleanupSocketSafely("message-rate-limit");
-      closeSocketIfNeeded();
+      cleanupSocketSafely("message-parse");
+      closeSocketIfNeeded(RUNTIME_WS_POLICY_VIOLATION_CLOSE_CODE);
     };
 
     const url = new URL(req.url!, `http://${req.headers.host}`);

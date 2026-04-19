@@ -125,12 +125,37 @@ test("assertRuntimeSafetyGuards rejects production-like startup when the two-fac
   );
 });
 
+test("assertRuntimeSafetyGuards aggregates multiple production-like safety issues", () => {
+  assert.throws(
+    () =>
+      assertRuntimeSafetyGuards({
+        isProductionLike: true,
+        isStrictLocalDevelopment: false,
+        mailConfiguration: {
+          effectiveFrom: null,
+          hasAnyInput: false,
+          isConfigured: false,
+          isIncomplete: false,
+        },
+        backupFeatureEnabled: true,
+        hasBackupEncryptionKeyConfigured: false,
+        hasCollectionPiiEncryptionKeyConfigured: false,
+        hasTwoFactorEncryptionKeyConfigured: false,
+        seedDefaultUsers: true,
+        localSuperuserCredentialsFileEnabled: false,
+        mailDevOutboxEnabled: false,
+      }),
+    /BACKUP_ENCRYPTION_KEY or BACKUP_ENCRYPTION_KEYS is required[\s\S]*COLLECTION_PII_ENCRYPTION_KEY is required[\s\S]*TWO_FACTOR_ENCRYPTION_KEY is required[\s\S]*SEED_DEFAULT_USERS is only allowed/i,
+  );
+});
+
 test("assertNoPlaceholderSecrets rejects production-like generated placeholders", () => {
   assert.throws(
     () =>
       assertNoPlaceholderSecrets({
         isProductionLike: true,
         configuredSessionSecret: "GENERATE_ME_AT_LEAST_32_CHARS_DO_NOT_USE_IN_PRODUCTION",
+        configuredCollectionNicknameTempPassword: "TempPassword12345",
         configuredPreviousSessionSecrets: [],
         configuredPgPassword: "GENERATE_ME_DB_PASSWORD_DO_NOT_USE_IN_PRODUCTION",
         configuredTwoFactorEncryptionKey: "GENERATE_ME_DISTINCT_2FA_KEY_DO_NOT_REUSE_SESSION_SECRET",
@@ -149,6 +174,7 @@ test("assertNoPlaceholderSecrets rejects production-like previous collection PII
       assertNoPlaceholderSecrets({
         isProductionLike: true,
         configuredSessionSecret: "S".repeat(32),
+        configuredCollectionNicknameTempPassword: "TempPassword12345",
         configuredPreviousSessionSecrets: [],
         configuredPgPassword: "prod-db-password",
         configuredTwoFactorEncryptionKey: "T".repeat(32),
@@ -169,6 +195,7 @@ test("assertNoPlaceholderSecrets rejects short production-like session secrets",
       assertNoPlaceholderSecrets({
         isProductionLike: true,
         configuredSessionSecret: "short-session-secret",
+        configuredCollectionNicknameTempPassword: "TempPassword12345",
         configuredPreviousSessionSecrets: [],
         configuredPgPassword: "prod-db-password",
         configuredTwoFactorEncryptionKey: "T".repeat(32),
@@ -187,6 +214,7 @@ test("assertNoPlaceholderSecrets rejects production-like demo marker secrets", (
       assertNoPlaceholderSecrets({
         isProductionLike: true,
         configuredSessionSecret: "example-secret-for-production",
+        configuredCollectionNicknameTempPassword: "TempPassword12345",
         configuredPreviousSessionSecrets: [],
         configuredPgPassword: "prod-db-password",
         configuredTwoFactorEncryptionKey: "T".repeat(32),
@@ -196,6 +224,25 @@ test("assertNoPlaceholderSecrets rejects production-like demo marker secrets", (
         configuredBackupEncryptionKeys: null,
       }),
     /SESSION_SECRET is using an obvious placeholder\/demo value/i,
+  );
+});
+
+test("assertNoPlaceholderSecrets rejects weak production-like collection nickname temp passwords", () => {
+  assert.throws(
+    () =>
+      assertNoPlaceholderSecrets({
+        isProductionLike: true,
+        configuredSessionSecret: "S".repeat(32),
+        configuredCollectionNicknameTempPassword: "password123",
+        configuredPreviousSessionSecrets: [],
+        configuredPgPassword: "prod-db-password",
+        configuredTwoFactorEncryptionKey: "T".repeat(32),
+        configuredCollectionPiiEncryptionKey: "C".repeat(32),
+        configuredPreviousCollectionPiiEncryptionKeys: [],
+        configuredBackupEncryptionKey: "B".repeat(32),
+        configuredBackupEncryptionKeys: null,
+      }),
+    /COLLECTION_NICKNAME_TEMP_PASSWORD is using an obvious placeholder or weak demo value/i,
   );
 });
 
@@ -263,7 +310,7 @@ test("buildRuntimeConfigWarnings avoids weak-entropy warnings for diverse sessio
     isProductionLike: true,
     trustedProxies: ["loopback"],
     publicAppUrl: "https://sqr.example.com",
-    configuredSessionSecret: "0123456789abcdef0123456789abcdef",
+    configuredSessionSecret: "s3cure-Prod-Session-Key-9xK2mL7pQ4rT8vW",
     configuredCollectionNicknameTempPassword: "TempPassword12345",
     configuredCollectionPiiEncryptionKey: "collection-pii-secret",
     configuredPgPassword: "prod-db-password",
