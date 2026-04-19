@@ -15,5 +15,9 @@ test("sidebar toggle controls expose expanded state and controlled regions", () 
   const source = readFileSync(sidebarPath, "utf8");
 
   assert.match(source, /aria-controls=\{isMobile \? mobileSidebarId : desktopSidebarId\}/);
-  assert.match(source, /aria-expanded=\{isMobile \? openMobile : open\}/);
+  assert.match(source, /function getAriaExpandedProps\(isExpanded: boolean\)/);
+  assert.match(source, /"aria-expanded": "true" as const/);
+  assert.match(source, /"aria-expanded": "false" as const/);
+  assert.match(source, /getAriaExpandedProps\(isMobile \? openMobile : open\)/);
+  assert.match(source, /\{\.\.\.ariaExpandedProps\}/);
 });
