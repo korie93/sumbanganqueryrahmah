@@ -1,9 +1,10 @@
 import type { Response } from "express";
 import { z } from "zod";
+import { ERROR_CODES } from "../../shared/error-codes";
 import type { AuthenticatedRequest } from "../auth/guards";
 import { badRequest, notFound } from "../http/errors";
 import { runWithRequestDeadline } from "../http/request-deadline";
-import { readInteger, readNonEmptyString } from "../http/validation";
+import { readBoundedPageSize, readInteger, readNonEmptyString, readPositivePage } from "../http/validation";
 import {
   cleanupPreparedMultipartImportUpload,
   type PreparedMultipartImportUpload,
@@ -30,6 +31,8 @@ const viewerColumnFilterSchema = z.object({
 });
 
 const viewerColumnFiltersSchema = z.array(viewerColumnFilterSchema).max(10);
+const IMPORTS_LIST_MAX_PAGE_SIZE = 200;
+const IMPORTS_LEGACY_DATA_ROWS_MAX_PAGE_SIZE = 200;
 
 function buildImportMutationSuccessPayload<T extends Record<string, unknown>>(payload?: T) {
   return {
@@ -70,8 +73,12 @@ export function createImportsController(deps: CreateImportsControllerDeps) {
 
   const listDataRows = async (req: AuthenticatedRequest, res: Response) => {
     const importId = readNonEmptyString(req.query.importId);
-    const pageSize = readInteger(req.query.pageSize ?? req.query.limit, 10);
-    const page = Math.max(1, readInteger(req.query.page, 1));
+    const pageSize = readBoundedPageSize(
+      req.query.pageSize ?? req.query.limit,
+      10,
+      IMPORTS_LEGACY_DATA_ROWS_MAX_PAGE_SIZE,
+    );
+    const page = readPositivePage(req.query.page, 1);
     const offsetQuery = readNonEmptyString(req.query.offset);
     const offset = offsetQuery ? readInteger(req.query.offset, 0) : (page - 1) * pageSize;
     const search = String(req.query.q || "").trim();
@@ -92,7 +99,11 @@ export function createImportsController(deps: CreateImportsControllerDeps) {
 
   const listImports = async (_req: AuthenticatedRequest, res: Response) => {
     const cursor = readNonEmptyString(_req.query.cursor);
-    const pageSize = readInteger(_req.query.pageSize ?? _req.query.limit, 100);
+    const pageSize = readBoundedPageSize(
+      _req.query.pageSize ?? _req.query.limit,
+      100,
+      IMPORTS_LIST_MAX_PAGE_SIZE,
+    );
     const search = readNonEmptyString(_req.query.search);
     const createdOn = readNonEmptyString(_req.query.createdOn);
 
@@ -116,7 +127,7 @@ export function createImportsController(deps: CreateImportsControllerDeps) {
       });
     } catch (error) {
       if (error instanceof Error && /invalid imports cursor/i.test(error.message)) {
-        throw badRequest("Invalid imports cursor.");
+        throw badRequest("Invalid imports cursor.", ERROR_CODES.INVALID_CURSOR);
       }
       throw error;
     }
@@ -183,7 +194,7 @@ export function createImportsController(deps: CreateImportsControllerDeps) {
   const getImportDataPage = async (req: AuthenticatedRequest, res: Response) => {
     const runtimeSettings = await getRuntimeSettingsCached();
     const importId = readNonEmptyString(req.params.id);
-    const page = Math.max(1, readInteger(req.query.page, 1));
+    const page = readPositivePage(req.query.page, 1);
     const cursor = readNonEmptyString(req.query.cursor);
     const requestedPageSize = readInteger(
       req.query.pageSize ?? req.query.limit,
@@ -211,7 +222,7 @@ export function createImportsController(deps: CreateImportsControllerDeps) {
       return res.json(result);
     } catch (error) {
       if (error instanceof Error && /invalid import data cursor/i.test(error.message)) {
-        throw badRequest("Invalid import data cursor.");
+        throw badRequest("Invalid import data cursor.", ERROR_CODES.INVALID_CURSOR);
       }
       throw error;
     }

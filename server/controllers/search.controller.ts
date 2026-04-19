@@ -1,6 +1,6 @@
 import type { Response } from "express";
 import type { AuthenticatedRequest } from "../auth/guards";
-import { ensureObject, readInteger } from "../http/validation";
+import { ensureObject, readBoundedPageSize, readPositivePage } from "../http/validation";
 import type { SearchService } from "../services/search.service";
 
 type RuntimeSettings = {
@@ -17,7 +17,7 @@ export type SearchController = ReturnType<typeof createSearchController>;
 const SEARCH_MAX_PAGE_SIZE = 100;
 
 function clampSearchPageSize(value: unknown) {
-  return Math.max(1, Math.min(SEARCH_MAX_PAGE_SIZE, readInteger(value, 50)));
+  return readBoundedPageSize(value, 50, SEARCH_MAX_PAGE_SIZE);
 }
 
 export function createSearchController(deps: CreateSearchControllerDeps) {
@@ -34,7 +34,7 @@ export function createSearchController(deps: CreateSearchControllerDeps) {
   const searchGlobal = async (req: AuthenticatedRequest, res: Response) => {
     const search = String(req.query.q || "").trim();
     const runtimeSettings = await getRuntimeSettingsCached();
-    const page = Math.max(1, readInteger(req.query.page, 1));
+    const page = readPositivePage(req.query.page, 1);
     const requestedLimit = clampSearchPageSize(req.query.pageSize ?? req.query.limit);
 
     return res.json(await searchService.searchGlobal({
@@ -55,7 +55,7 @@ export function createSearchController(deps: CreateSearchControllerDeps) {
     const filters = Array.isArray(body.filters) ? body.filters : [];
     const logic = body.logic === "OR" ? "OR" : "AND";
     const runtimeSettings = await getRuntimeSettingsCached();
-    const page = Math.max(1, readInteger(body.page, 1));
+    const page = readPositivePage(body.page, 1);
     const requestedLimit = clampSearchPageSize(body.pageSize ?? body.limit);
 
     return res.json(await searchService.advancedSearch({

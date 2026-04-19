@@ -229,6 +229,12 @@ test("runtime config allows temporary DB query profiling in production only when
         ),
         false,
       );
+      assert.equal(
+        runtimeModule.runtimeConfigValidation.warnings.some(
+          (warning: { code: string }) => warning.code === "db-query-profiling-production-explicitly-enabled",
+        ),
+        true,
+      );
     },
   );
 });

@@ -228,6 +228,64 @@ test("buildRuntimeConfigWarnings warns when local collection PII encryption is n
   );
 });
 
+test("buildRuntimeConfigWarnings warns when SESSION_SECRET looks weak or overly repetitive", () => {
+  const warnings = buildRuntimeConfigWarnings({
+    isStrictLocalDevelopment: false,
+    isProductionLike: true,
+    trustedProxies: ["loopback"],
+    publicAppUrl: "https://sqr.example.com",
+    configuredSessionSecret: "abcd".repeat(8),
+    configuredCollectionNicknameTempPassword: "TempPassword12345",
+    configuredCollectionPiiEncryptionKey: "collection-pii-secret",
+    configuredPgPassword: "prod-db-password",
+    configuredAuthCookieSecure: "auto",
+    configuredOllamaHost: null,
+    ollamaAllowRemoteHost: false,
+    remoteErrorTrackingEnabled: false,
+    remoteErrorTrackingEndpoint: null,
+    mailConfiguration: {
+      effectiveFrom: null,
+      hasAnyInput: false,
+      isConfigured: false,
+      isIncomplete: false,
+    },
+  });
+
+  assert.match(
+    warnings.map((warning) => warning.code).join(","),
+    /SESSION_SECRET_WEAK_ENTROPY_REVIEW_RECOMMENDED/,
+  );
+});
+
+test("buildRuntimeConfigWarnings avoids weak-entropy warnings for diverse session secrets", () => {
+  const warnings = buildRuntimeConfigWarnings({
+    isStrictLocalDevelopment: false,
+    isProductionLike: true,
+    trustedProxies: ["loopback"],
+    publicAppUrl: "https://sqr.example.com",
+    configuredSessionSecret: "0123456789abcdef0123456789abcdef",
+    configuredCollectionNicknameTempPassword: "TempPassword12345",
+    configuredCollectionPiiEncryptionKey: "collection-pii-secret",
+    configuredPgPassword: "prod-db-password",
+    configuredAuthCookieSecure: "auto",
+    configuredOllamaHost: null,
+    ollamaAllowRemoteHost: false,
+    remoteErrorTrackingEnabled: false,
+    remoteErrorTrackingEndpoint: null,
+    mailConfiguration: {
+      effectiveFrom: null,
+      hasAnyInput: false,
+      isConfigured: false,
+      isIncomplete: false,
+    },
+  });
+
+  assert.doesNotMatch(
+    warnings.map((warning) => warning.code).join(","),
+    /SESSION_SECRET_WEAK_ENTROPY_REVIEW_RECOMMENDED/,
+  );
+});
+
 test("buildRuntimeConfigWarnings reports when insecure auth cookies are forced on production-like hosts", () => {
   const warnings = buildRuntimeConfigWarnings({
     isStrictLocalDevelopment: false,

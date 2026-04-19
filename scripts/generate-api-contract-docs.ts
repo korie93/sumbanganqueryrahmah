@@ -22,6 +22,8 @@ type ApiDocEntry = {
   responseSchema: z.ZodTypeAny;
 };
 
+type OpenApiSchema = Record<string, unknown>;
+
 const API_DOC_ENTRIES: ApiDocEntry[] = [
   {
     method: "GET",
@@ -161,7 +163,7 @@ function formatSchema(schema: z.ZodTypeAny, indent = 2): string {
     return "null";
   }
 
-  if (unwrapped instanceof z.ZodUnknown) {
+  if (unwrapped instanceof z.ZodUnknown || unwrapped instanceof z.ZodLazy) {
     return "unknown";
   }
 
@@ -192,6 +194,7 @@ function renderApiContractsMarkdown(): string {
     "Regenerate it with `npm run docs:api`.",
     "",
     "Only stable, client-facing authenticated routes are documented here on purpose. Internal-only, operational, and debug-only routes stay out of this document to reduce drift and accidental exposure.",
+    "The same source-of-truth also produces `docs/openapi.public.json` for Swagger/OpenAPI tooling.",
     "",
     "## Shared error envelope",
     "",
@@ -204,21 +207,236 @@ function renderApiContractsMarkdown(): string {
   ].join("\n");
 }
 
-function main() {
-  const outputPath = path.resolve("docs/API_CONTRACTS.md");
-  const nextContent = renderApiContractsMarkdown();
+function buildOpenApiPath(routePath: string) {
+  return routePath.replace(/:([A-Za-z0-9_]+)/g, "{$1}");
+}
 
-  if (process.argv.includes("--check")) {
-    const currentContent = fs.existsSync(outputPath)
-      ? fs.readFileSync(outputPath, "utf8")
-      : "";
+function buildOperationId(entry: ApiDocEntry) {
+  const normalizedPath = entry.path
+    .replace(/\/:([A-Za-z0-9_]+)/g, "-by-$1")
+    .replace(/[^A-Za-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return `${entry.method.toLowerCase()}-${normalizedPath}`;
+}
+
+function buildPathParameters(routePath: string) {
+  return Array.from(routePath.matchAll(/:([A-Za-z0-9_]+)/g)).map((match) => ({
+    name: match[1],
+    in: "path",
+    required: true,
+    schema: {
+      type: "string",
+    },
+  }));
+}
+
+function buildLiteralSchema(value: unknown): OpenApiSchema {
+  if (value === null) {
+    return {
+      type: "null",
+    };
+  }
+
+  switch (typeof value) {
+    case "string":
+      return { type: "string", const: value };
+    case "number":
+      return { type: Number.isInteger(value) ? "integer" : "number", const: value };
+    case "boolean":
+      return { type: "boolean", const: value };
+    default:
+      return { const: value };
+  }
+}
+
+function convertZodSchemaToOpenApiSchema(
+  schema: z.ZodTypeAny,
+  seen = new Set<z.ZodTypeAny>(),
+): OpenApiSchema {
+  if (schema instanceof z.ZodDefault) {
+    return convertZodSchemaToOpenApiSchema(schema.removeDefault(), seen);
+  }
+
+  if (schema instanceof z.ZodOptional) {
+    return convertZodSchemaToOpenApiSchema(schema.unwrap(), seen);
+  }
+
+  if (schema instanceof z.ZodNullable) {
+    return {
+      ...convertZodSchemaToOpenApiSchema(schema.unwrap(), seen),
+      nullable: true,
+    };
+  }
+
+  if (schema instanceof z.ZodLazy) {
+    if (seen.has(schema)) {
+      return {};
+    }
+
+    seen.add(schema);
+    const resolved = convertZodSchemaToOpenApiSchema(schema._def.getter(), seen);
+    seen.delete(schema);
+    return resolved;
+  }
+
+  if (schema instanceof z.ZodObject) {
+    const shape = schema.shape;
+    const properties = Object.fromEntries(
+      Object.entries(shape).map(([key, value]) => [
+        key,
+        convertZodSchemaToOpenApiSchema(value, seen),
+      ]),
+    );
+    const required = Object.entries(shape)
+      .filter(([, value]) => !value.isOptional())
+      .map(([key]) => key);
+
+    return {
+      type: "object",
+      properties,
+      additionalProperties: false,
+      ...(required.length > 0 ? { required } : {}),
+    };
+  }
+
+  if (schema instanceof z.ZodArray) {
+    return {
+      type: "array",
+      items: convertZodSchemaToOpenApiSchema(schema.element, seen),
+    };
+  }
+
+  if (schema instanceof z.ZodRecord) {
+    return {
+      type: "object",
+      additionalProperties: convertZodSchemaToOpenApiSchema(schema._def.valueType, seen),
+    };
+  }
+
+  if (schema instanceof z.ZodEnum) {
+    return {
+      type: "string",
+      enum: [...schema.options],
+    };
+  }
+
+  if (schema instanceof z.ZodLiteral) {
+    return buildLiteralSchema(schema.value);
+  }
+
+  if (schema instanceof z.ZodUnion) {
+    return {
+      oneOf: schema._def.options.map((option) => convertZodSchemaToOpenApiSchema(option, seen)),
+    };
+  }
+
+  if (schema instanceof z.ZodString) {
+    return { type: "string" };
+  }
+
+  if (schema instanceof z.ZodNumber) {
+    return { type: "number" };
+  }
+
+  if (schema instanceof z.ZodBoolean) {
+    return { type: "boolean" };
+  }
+
+  if (schema instanceof z.ZodNull) {
+    return { type: "null" };
+  }
+
+  if (schema instanceof z.ZodUnknown) {
+    return {};
+  }
+
+  return {};
+}
+
+function buildOpenApiDocument() {
+  const paths = Object.fromEntries(
+    API_DOC_ENTRIES.map((entry) => [
+      buildOpenApiPath(entry.path),
+      {
+        [entry.method.toLowerCase()]: {
+          operationId: buildOperationId(entry),
+          summary: entry.description,
+          description: `${entry.description}\n\n${entry.requestSummary}`,
+          tags: ["public-client"],
+          parameters: buildPathParameters(entry.path),
+          responses: {
+            "200": {
+              description: "Successful response.",
+              content: {
+                "application/json": {
+                  schema: convertZodSchemaToOpenApiSchema(entry.responseSchema),
+                },
+              },
+            },
+            default: {
+              description: "Standard API error response.",
+              content: {
+                "application/json": {
+                  schema: {
+                    $ref: "#/components/schemas/ApiError",
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    ]),
+  );
+
+  return {
+    openapi: "3.1.0",
+    info: {
+      title: "SQR Public API",
+      version: "1.0.0",
+      description: [
+        "Generated from `shared/api-contracts.ts` and `scripts/generate-api-contract-docs.ts`.",
+        "This document intentionally covers only stable, client-facing authenticated routes.",
+      ].join(" "),
+    },
+    servers: [
+      {
+        url: "/",
+      },
+    ],
+    paths,
+    components: {
+      schemas: {
+        ApiError: convertZodSchemaToOpenApiSchema(apiErrorPayloadSchema),
+      },
+    },
+  };
+}
+
+function writeGeneratedFile(outputPath: string, nextContent: string, checkMode: boolean) {
+  const currentContent = fs.existsSync(outputPath)
+    ? fs.readFileSync(outputPath, "utf8")
+    : "";
+
+  if (checkMode) {
     if (currentContent !== nextContent) {
-      throw new Error("API contracts documentation is out of date. Run `npm run docs:api`.");
+      throw new Error(`Generated API documentation is out of date for ${path.relative(process.cwd(), outputPath)}.`);
     }
     return;
   }
 
   fs.writeFileSync(outputPath, nextContent);
+}
+
+function main() {
+  const markdownOutputPath = path.resolve("docs/API_CONTRACTS.md");
+  const openApiOutputPath = path.resolve("docs/openapi.public.json");
+  const checkMode = process.argv.includes("--check");
+  const markdownContent = renderApiContractsMarkdown();
+  const openApiContent = JSON.stringify(buildOpenApiDocument(), null, 2).concat("\n");
+
+  writeGeneratedFile(markdownOutputPath, markdownContent, checkMode);
+  writeGeneratedFile(openApiOutputPath, openApiContent, checkMode);
 }
 
 main();

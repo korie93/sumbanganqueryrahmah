@@ -79,6 +79,7 @@ export function CollectionDailyDesktopCalendarGrid({
                     id={workingDayCheckboxId}
                     name={workingDayCheckboxId}
                     type="checkbox"
+                    aria-label={`Mark ${formatDateDDMMYYYY(day.date)} as a working day`}
                     checked={editable.isWorkingDay}
                     onChange={(event) =>
                       onUpdateEditableDay(editable.day, { isWorkingDay: event.target.checked })
@@ -91,6 +92,7 @@ export function CollectionDailyDesktopCalendarGrid({
                     id={holidayCheckboxId}
                     name={holidayCheckboxId}
                     type="checkbox"
+                    aria-label={`Mark ${formatDateDDMMYYYY(day.date)} as a holiday`}
                     checked={editable.isHoliday}
                     onChange={(event) =>
                       onUpdateEditableDay(editable.day, { isHoliday: event.target.checked })

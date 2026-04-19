@@ -478,6 +478,28 @@ test("GET /api/imports forwards cursor search and date filters", async () => {
   }
 });
 
+test("GET /api/imports clamps oversized page sizes before calling the service layer", async () => {
+  const { app, listImportsPageCalls } = createImportsRouteHarness();
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(`${baseUrl}/api/imports?pageSize=999`);
+    assert.equal(response.status, 200);
+
+    const payload = await response.json();
+    assert.doesNotThrow(() => importsListResponseSchema.parse(payload));
+    assert.equal(payload.pagination.pageSize, 200);
+    assert.deepEqual(listImportsPageCalls, [{
+      cursor: null,
+      limit: 200,
+      search: null,
+      createdOn: null,
+    }]);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
 test("GET /api/imports rejects malformed cursor tokens", async () => {
   const { app } = createImportsRouteHarness();
   const { server, baseUrl } = await startTestServer(app);
@@ -488,6 +510,10 @@ test("GET /api/imports rejects malformed cursor tokens", async () => {
     assert.deepEqual(await response.json(), {
       ok: false,
       message: "Invalid imports cursor.",
+      error: {
+        code: "INVALID_CURSOR",
+        message: "Invalid imports cursor.",
+      },
     });
   } finally {
     await stopTestServer(server);
@@ -531,6 +557,29 @@ test("GET /api/data-rows forwards pagination and search params to the service la
       search: "Bob",
       limit: 1,
       offset: 1,
+    });
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("GET /api/data-rows clamps oversized page sizes before calling the service layer", async () => {
+  const { app, searchCalls } = createImportsRouteHarness();
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(`${baseUrl}/api/data-rows?importId=import-1&pageSize=999&page=2`);
+    assert.equal(response.status, 200);
+
+    const payload = await response.json();
+    assert.equal(payload.total, 2);
+    assert.deepEqual(searchCalls[0], {
+      columnFilters: [],
+      cursor: null,
+      importId: "import-1",
+      search: "",
+      limit: 200,
+      offset: 200,
     });
   } finally {
     await stopTestServer(server);
@@ -969,6 +1018,10 @@ test("GET /api/imports/:id/data rejects malformed cursor tokens", async () => {
     assert.deepEqual(await response.json(), {
       ok: false,
       message: "Invalid import data cursor.",
+      error: {
+        code: "INVALID_CURSOR",
+        message: "Invalid import data cursor.",
+      },
     });
   } finally {
     await stopTestServer(server);

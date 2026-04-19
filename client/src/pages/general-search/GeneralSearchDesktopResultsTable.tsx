@@ -85,7 +85,13 @@ export function GeneralSearchDesktopResultsTable({
         <tbody>
           {enableVirtualRows && topSpacerHeight > 0 ? (
             <tr aria-hidden="true">
-              <td colSpan={headers.length + 2} height={topSpacerHeight} className="p-0" />
+              <td
+                colSpan={headers.length + 2}
+                height={topSpacerHeight}
+                className="p-0"
+                role="presentation"
+                aria-hidden="true"
+              />
             </tr>
           ) : null}
           {virtualRows.map((row, rowIndex) => {
@@ -107,6 +113,7 @@ export function GeneralSearchDesktopResultsTable({
                   <Button
                     variant="ghost"
                     size="sm"
+                    aria-label={`View search result ${actualRowIndex + 1}`}
                     onClick={() => onRecordSelect(row)}
                     data-testid={`button-view-${actualRowIndex}`}
                   >
@@ -133,7 +140,13 @@ export function GeneralSearchDesktopResultsTable({
           })}
           {enableVirtualRows && bottomSpacerHeight > 0 ? (
             <tr aria-hidden="true">
-              <td colSpan={headers.length + 2} height={bottomSpacerHeight} className="p-0" />
+              <td
+                colSpan={headers.length + 2}
+                height={bottomSpacerHeight}
+                className="p-0"
+                role="presentation"
+                aria-hidden="true"
+              />
             </tr>
           ) : null}
         </tbody>

@@ -1,6 +1,8 @@
-import { readDate, readInteger, readOptionalString } from "../http/validation";
+import { readBoundedPageSize, readDate, readOptionalString, readPositivePage } from "../http/validation";
 import type { AuditRepository } from "../repositories/audit.repository";
 import type { PostgresStorage } from "../storage-postgres";
+
+const AUDIT_LOGS_MAX_PAGE_SIZE = 100;
 
 type AuditLogOperationsStorage = Pick<PostgresStorage, "createAuditLog">;
 type AuditLogOperationsRepository = Pick<
@@ -15,8 +17,8 @@ export class AuditLogOperationsService {
   ) {}
 
   async listAuditLogs(query: Record<string, unknown>) {
-    const page = Math.max(1, readInteger(query.page, 1));
-    const pageSize = Math.max(1, Math.min(100, readInteger(query.pageSize, 50)));
+    const page = readPositivePage(query.page, 1);
+    const pageSize = readBoundedPageSize(query.pageSize, 50, AUDIT_LOGS_MAX_PAGE_SIZE);
     const result = await this.auditRepository.listAuditLogsPage({
       page,
       pageSize,
@@ -53,7 +55,7 @@ export class AuditLogOperationsService {
   }
 
   async cleanupAuditLogs(params: { olderThanDays?: unknown; username?: string }) {
-    const olderThanDays = Math.max(1, readInteger(params.olderThanDays, 30));
+    const olderThanDays = readPositivePage(params.olderThanDays, 30);
     const cutoffDate = new Date();
     cutoffDate.setDate(cutoffDate.getDate() - olderThanDays);
 

@@ -2,6 +2,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import js from "@eslint/js";
 import globals from "globals";
+import jsxA11y from "eslint-plugin-jsx-a11y";
 import reactHooks from "eslint-plugin-react-hooks";
 import tseslint from "typescript-eslint";
 
@@ -85,10 +86,17 @@ export default tseslint.config(
   {
     files: ["client/src/**/*.{ts,tsx}"],
     plugins: {
+      "jsx-a11y": jsxA11y,
       "react-hooks": reactHooks,
     },
     rules: {
       ...reactHooks.configs.recommended.rules,
+      "jsx-a11y/alt-text": "error",
+      "jsx-a11y/aria-props": "error",
+      "jsx-a11y/control-has-associated-label": "error",
+      "jsx-a11y/interactive-supports-focus": "error",
+      "jsx-a11y/no-access-key": "error",
+      "jsx-a11y/role-has-required-aria-props": "error",
     },
   },
   {

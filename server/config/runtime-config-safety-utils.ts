@@ -23,6 +23,40 @@ const PLACEHOLDER_BACKUP_ENCRYPTION_KEYS = new Set([
 const UNSAFE_TRUST_PROXY_VALUES = new Set(["*", "all", "true", "1"]);
 const OBVIOUS_PLACEHOLDER_SECRET_PATTERN = /(?:generate[_-]?me|change[_-]?(?:this|me)|replace[_-]?(?:this|me)|do[_-]?not[_-]?use|placeholder-secret|example-secret)/i;
 const PRODUCTION_SECRET_MIN_LENGTH = 32;
+const WEAK_SESSION_SECRET_MIN_UNIQUE_CHARACTERS = 8;
+
+function hasRepeatedSecretPattern(value: string) {
+  for (let patternLength = 1; patternLength <= Math.floor(value.length / 2); patternLength += 1) {
+    if (value.length % patternLength !== 0) {
+      continue;
+    }
+
+    const candidate = value.slice(0, patternLength);
+    if (candidate.repeat(value.length / patternLength) === value) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function shouldWarnAboutWeakSessionSecret(value: string | null) {
+  const normalizedValue = String(value || "").trim();
+  if (!normalizedValue) {
+    return false;
+  }
+
+  if (normalizedValue.length < PRODUCTION_SECRET_MIN_LENGTH) {
+    return true;
+  }
+
+  const uniqueCharacterCount = new Set(normalizedValue).size;
+  if (uniqueCharacterCount < WEAK_SESSION_SECRET_MIN_UNIQUE_CHARACTERS) {
+    return true;
+  }
+
+  return hasRepeatedSecretPattern(normalizedValue);
+}
 
 function isLoopbackHostname(hostname: string) {
   const normalizedHostname = String(hostname || "").trim().replace(/^\[|\]$/g, "").toLowerCase();
@@ -343,6 +377,17 @@ export function buildRuntimeConfigWarnings(params: {
       code: "SESSION_SECRET_EPHEMERAL_LOCAL",
       envNames: ["SESSION_SECRET"],
       message: "SESSION_SECRET is not set, so a temporary in-memory secret will be generated on each boot.",
+      severity: "warning",
+    });
+  }
+
+  if (configuredSessionSecret && shouldWarnAboutWeakSessionSecret(configuredSessionSecret)) {
+    warnings.push({
+      code: "SESSION_SECRET_WEAK_ENTROPY_REVIEW_RECOMMENDED",
+      envNames: ["SESSION_SECRET"],
+      message: isProductionLike
+        ? "SESSION_SECRET looks weak or overly repetitive for a production-like deployment. Rotate it to a cryptographically random value with better entropy."
+        : "SESSION_SECRET looks weak or overly repetitive. Prefer a cryptographically random value so local and staging behavior stays closer to production.",
       severity: "warning",
     });
   }

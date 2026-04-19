@@ -306,6 +306,52 @@ test("registerLocalHttpPipeline skips compression for attachment-oriented upload
   }
 });
 
+test("registerLocalHttpPipeline logs compression metadata for compressed API error responses", async (t) => {
+  const errorLogs: Array<Record<string, unknown> | undefined> = [];
+  t.mock.method(logger, "error", ((message: string, metadata?: Record<string, unknown>) => {
+    if (message === "HTTP request completed with server error") {
+      errorLogs.push(metadata);
+    }
+  }) as typeof logger.error);
+
+  const app = express();
+  registerLocalHttpPipeline(app, {
+    importBodyLimit: "1mb",
+    collectionBodyLimit: "1mb",
+    defaultBodyLimit: "100kb",
+    uploadsRootDir: path.resolve(process.cwd(), "uploads"),
+    recordRequestStarted: () => undefined,
+    recordRequestFinished: () => undefined,
+    adaptiveRateLimit: (_req, _res, next) => next(),
+    systemProtectionMiddleware: (_req, _res, next) => next(),
+    maintenanceGuard: (_req, _res, next) => next(),
+  });
+  app.get("/api/error-json", (_req, res) => {
+    res.status(500).json({
+      items: Array.from({ length: 200 }, (_, index) => ({
+        id: index,
+        label: `error-item-${index.toString().padStart(3, "0")}`,
+      })),
+    });
+  });
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const response = await requestRaw(baseUrl, "/api/error-json");
+    assert.equal(response.statusCode, 500);
+    assert.equal(response.headers["content-encoding"], "gzip");
+    assert.equal(errorLogs.length, 1);
+    assert.equal(errorLogs[0]?.method, "GET");
+    assert.equal(errorLogs[0]?.path, "/api/error-json");
+    assert.equal(errorLogs[0]?.statusCode, 500);
+    assert.equal(errorLogs[0]?.responseEncoding, "gzip");
+    assert.equal(errorLogs[0]?.compressionEligible, true);
+    assert.equal(errorLogs[0]?.compressionBypassed, false);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
 test("registerLocalHttpPipeline returns 504 and aborts the request context when the global timeout elapses", async () => {
   const app = express();
   let abortObserved = false;

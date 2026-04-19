@@ -1,0 +1,1172 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "SQR Public API",
+    "version": "1.0.0",
+    "description": "Generated from `shared/api-contracts.ts` and `scripts/generate-api-contract-docs.ts`. This document intentionally covers only stable, client-facing authenticated routes."
+  },
+  "servers": [
+    {
+      "url": "/"
+    }
+  ],
+  "paths": {
+    "/api/imports": {
+      "get": {
+        "operationId": "get-api-imports",
+        "summary": "Lists imports available to the authenticated user.",
+        "description": "Lists imports available to the authenticated user.\n\nQuery params: `cursor`, `pageSize`, `search`, `createdOn`.",
+        "tags": [
+          "public-client"
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "imports": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "filename": {
+                            "type": "string"
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          },
+                          "isDeleted": {
+                            "type": "boolean"
+                          },
+                          "createdBy": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "rowCount": {
+                            "type": "number"
+                          }
+                        },
+                        "additionalProperties": false,
+                        "required": [
+                          "id",
+                          "name",
+                          "filename",
+                          "createdAt",
+                          "isDeleted",
+                          "rowCount"
+                        ]
+                      }
+                    },
+                    "pagination": {
+                      "type": "object",
+                      "properties": {
+                        "mode": {
+                          "type": "string",
+                          "const": "cursor"
+                        },
+                        "limit": {
+                          "type": "number"
+                        },
+                        "pageSize": {
+                          "type": "number"
+                        },
+                        "nextCursor": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "hasMore": {
+                          "type": "boolean"
+                        },
+                        "total": {
+                          "type": "number"
+                        }
+                      },
+                      "additionalProperties": false,
+                      "required": [
+                        "mode",
+                        "limit",
+                        "nextCursor",
+                        "hasMore",
+                        "total"
+                      ]
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "imports",
+                    "pagination"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Standard API error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/imports/{id}/data": {
+      "get": {
+        "operationId": "get-api-imports-by-id-data",
+        "summary": "Returns paginated import rows for viewer-style table rendering.",
+        "description": "Returns paginated import rows for viewer-style table rendering.\n\nQuery params: `page`, `pageSize`, `search`, `cursor`, `columnFilters`.",
+        "tags": [
+          "public-client"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "importId": {
+                            "type": "string"
+                          },
+                          "jsonDataJsonb": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "oneOf": [
+                                {
+                                  "oneOf": [
+                                    {
+                                      "type": "string"
+                                    },
+                                    {
+                                      "type": "number"
+                                    },
+                                    {
+                                      "type": "boolean"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "array",
+                                  "items": {}
+                                },
+                                {
+                                  "type": "object",
+                                  "additionalProperties": {}
+                                }
+                              ]
+                            }
+                          }
+                        },
+                        "additionalProperties": false,
+                        "required": [
+                          "id",
+                          "importId",
+                          "jsonDataJsonb"
+                        ]
+                      }
+                    },
+                    "headers": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "total": {
+                      "type": "number"
+                    },
+                    "page": {
+                      "type": "number"
+                    },
+                    "limit": {
+                      "type": "number"
+                    },
+                    "pageSize": {
+                      "type": "number"
+                    },
+                    "offset": {
+                      "type": "number"
+                    },
+                    "nextCursor": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "pagination": {
+                      "type": "object",
+                      "properties": {
+                        "mode": {
+                          "type": "string",
+                          "const": "hybrid"
+                        },
+                        "page": {
+                          "type": "number"
+                        },
+                        "pageSize": {
+                          "type": "number"
+                        },
+                        "limit": {
+                          "type": "number"
+                        },
+                        "offset": {
+                          "type": "number"
+                        },
+                        "total": {
+                          "type": "number"
+                        },
+                        "totalPages": {
+                          "type": "number"
+                        },
+                        "nextCursor": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "hasNextPage": {
+                          "type": "boolean"
+                        },
+                        "hasPreviousPage": {
+                          "type": "boolean"
+                        }
+                      },
+                      "additionalProperties": false,
+                      "required": [
+                        "mode",
+                        "page",
+                        "pageSize",
+                        "limit",
+                        "offset",
+                        "total",
+                        "totalPages",
+                        "nextCursor",
+                        "hasNextPage",
+                        "hasPreviousPage"
+                      ]
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "rows",
+                    "headers",
+                    "total",
+                    "page",
+                    "limit",
+                    "offset",
+                    "nextCursor",
+                    "pagination"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Standard API error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/imports/{id}": {
+      "delete": {
+        "operationId": "delete-api-imports-by-id",
+        "summary": "Deletes a single import record.",
+        "description": "Deletes a single import record.\n\nPath param: `id`.",
+        "tags": [
+          "public-client"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "success": {
+                      "type": "boolean"
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "success"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Standard API error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/search/global": {
+      "get": {
+        "operationId": "get-api-search-global",
+        "summary": "Runs the main global search experience used by the search page.",
+        "description": "Runs the main global search experience used by the search page.\n\nQuery params: `q`, `page`, `pageSize`.",
+        "tags": [
+          "public-client"
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "columns": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": {
+                          "oneOf": [
+                            {
+                              "oneOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "number"
+                                },
+                                {
+                                  "type": "boolean"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "array",
+                              "items": {}
+                            },
+                            {
+                              "type": "object",
+                              "additionalProperties": {}
+                            }
+                          ]
+                        }
+                      }
+                    },
+                    "results": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": {
+                          "oneOf": [
+                            {
+                              "oneOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "number"
+                                },
+                                {
+                                  "type": "boolean"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "array",
+                              "items": {}
+                            },
+                            {
+                              "type": "object",
+                              "additionalProperties": {}
+                            }
+                          ]
+                        }
+                      }
+                    },
+                    "total": {
+                      "type": "number"
+                    },
+                    "page": {
+                      "type": "number"
+                    },
+                    "limit": {
+                      "type": "number"
+                    },
+                    "pageSize": {
+                      "type": "number"
+                    },
+                    "offset": {
+                      "type": "number"
+                    },
+                    "pagination": {
+                      "type": "object",
+                      "properties": {
+                        "mode": {
+                          "type": "string",
+                          "const": "offset"
+                        },
+                        "page": {
+                          "type": "number"
+                        },
+                        "pageSize": {
+                          "type": "number"
+                        },
+                        "limit": {
+                          "type": "number"
+                        },
+                        "offset": {
+                          "type": "number"
+                        },
+                        "total": {
+                          "type": "number"
+                        },
+                        "totalPages": {
+                          "type": "number"
+                        },
+                        "hasNextPage": {
+                          "type": "boolean"
+                        },
+                        "hasPreviousPage": {
+                          "type": "boolean"
+                        }
+                      },
+                      "additionalProperties": false,
+                      "required": [
+                        "mode",
+                        "page",
+                        "pageSize",
+                        "limit",
+                        "offset",
+                        "total",
+                        "totalPages",
+                        "hasNextPage",
+                        "hasPreviousPage"
+                      ]
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "columns",
+                    "rows",
+                    "results",
+                    "total",
+                    "page",
+                    "limit",
+                    "pageSize",
+                    "offset",
+                    "pagination"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Standard API error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/search/advanced": {
+      "post": {
+        "operationId": "post-api-search-advanced",
+        "summary": "Runs advanced search with structured filters and AND/OR logic.",
+        "description": "Runs advanced search with structured filters and AND/OR logic.\n\nJSON body: `{ filters, logic, page, pageSize }`.",
+        "tags": [
+          "public-client"
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "results": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": {
+                          "oneOf": [
+                            {
+                              "oneOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "number"
+                                },
+                                {
+                                  "type": "boolean"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "array",
+                              "items": {}
+                            },
+                            {
+                              "type": "object",
+                              "additionalProperties": {}
+                            }
+                          ]
+                        }
+                      }
+                    },
+                    "headers": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "total": {
+                      "type": "number"
+                    },
+                    "page": {
+                      "type": "number"
+                    },
+                    "limit": {
+                      "type": "number"
+                    },
+                    "pageSize": {
+                      "type": "number"
+                    },
+                    "offset": {
+                      "type": "number"
+                    },
+                    "pagination": {
+                      "type": "object",
+                      "properties": {
+                        "mode": {
+                          "type": "string",
+                          "const": "offset"
+                        },
+                        "page": {
+                          "type": "number"
+                        },
+                        "pageSize": {
+                          "type": "number"
+                        },
+                        "limit": {
+                          "type": "number"
+                        },
+                        "offset": {
+                          "type": "number"
+                        },
+                        "total": {
+                          "type": "number"
+                        },
+                        "totalPages": {
+                          "type": "number"
+                        },
+                        "hasNextPage": {
+                          "type": "boolean"
+                        },
+                        "hasPreviousPage": {
+                          "type": "boolean"
+                        }
+                      },
+                      "additionalProperties": false,
+                      "required": [
+                        "mode",
+                        "page",
+                        "pageSize",
+                        "limit",
+                        "offset",
+                        "total",
+                        "totalPages",
+                        "hasNextPage",
+                        "hasPreviousPage"
+                      ]
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "results",
+                    "headers",
+                    "total",
+                    "page",
+                    "limit",
+                    "pageSize",
+                    "offset",
+                    "pagination"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Standard API error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/audit-logs": {
+      "get": {
+        "operationId": "get-api-audit-logs",
+        "summary": "Returns audit log records with offset pagination.",
+        "description": "Returns audit log records with offset pagination.\n\nQuery params: `page`, `pageSize`, `action`, `performedBy`, `targetUser`, `search`, `dateFrom`, `dateTo`, `sortBy`.",
+        "tags": [
+          "public-client"
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "logs": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "action": {
+                            "type": "string"
+                          },
+                          "performedBy": {
+                            "type": "string"
+                          },
+                          "requestId": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "targetUser": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "targetResource": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "details": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "timestamp": {
+                            "type": "string"
+                          }
+                        },
+                        "additionalProperties": false,
+                        "required": [
+                          "id",
+                          "action",
+                          "performedBy",
+                          "timestamp"
+                        ]
+                      }
+                    },
+                    "pagination": {
+                      "type": "object",
+                      "properties": {
+                        "mode": {
+                          "type": "string",
+                          "const": "offset"
+                        },
+                        "page": {
+                          "type": "number"
+                        },
+                        "pageSize": {
+                          "type": "number"
+                        },
+                        "limit": {
+                          "type": "number"
+                        },
+                        "offset": {
+                          "type": "number"
+                        },
+                        "total": {
+                          "type": "number"
+                        },
+                        "totalPages": {
+                          "type": "number"
+                        },
+                        "hasNextPage": {
+                          "type": "boolean"
+                        },
+                        "hasPreviousPage": {
+                          "type": "boolean"
+                        }
+                      },
+                      "additionalProperties": false,
+                      "required": [
+                        "mode",
+                        "page",
+                        "pageSize",
+                        "limit",
+                        "offset",
+                        "total",
+                        "totalPages",
+                        "hasNextPage",
+                        "hasPreviousPage"
+                      ]
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "logs",
+                    "pagination"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Standard API error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/settings": {
+      "patch": {
+        "operationId": "patch-api-settings",
+        "summary": "Updates one setting value while preserving permission checks.",
+        "description": "Updates one setting value while preserving permission checks.\n\nJSON body: `{ key, value, confirmCritical? }`.",
+        "tags": [
+          "public-client"
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "updated",
+                        "unchanged"
+                      ]
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "setting": {
+                      "type": "object",
+                      "properties": {
+                        "key": {
+                          "type": "string"
+                        },
+                        "label": {
+                          "type": "string"
+                        },
+                        "description": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "type": {
+                          "type": "string",
+                          "enum": [
+                            "text",
+                            "number",
+                            "boolean",
+                            "select",
+                            "timestamp"
+                          ]
+                        },
+                        "value": {
+                          "type": "string"
+                        },
+                        "defaultValue": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "isCritical": {
+                          "type": "boolean"
+                        },
+                        "updatedAt": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "permission": {
+                          "type": "object",
+                          "properties": {
+                            "canView": {
+                              "type": "boolean"
+                            },
+                            "canEdit": {
+                              "type": "boolean"
+                            }
+                          },
+                          "additionalProperties": false,
+                          "required": [
+                            "canView",
+                            "canEdit"
+                          ]
+                        },
+                        "options": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "value": {
+                                "type": "string"
+                              },
+                              "label": {
+                                "type": "string"
+                              }
+                            },
+                            "additionalProperties": false,
+                            "required": [
+                              "value",
+                              "label"
+                            ]
+                          }
+                        }
+                      },
+                      "additionalProperties": false,
+                      "required": [
+                        "key",
+                        "label",
+                        "description",
+                        "type",
+                        "value",
+                        "defaultValue",
+                        "isCritical",
+                        "updatedAt",
+                        "permission",
+                        "options"
+                      ],
+                      "nullable": true
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "success",
+                    "status",
+                    "message",
+                    "setting"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Standard API error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/settings/tab-visibility": {
+      "get": {
+        "operationId": "get-api-settings-tab-visibility",
+        "summary": "Returns current tab visibility for the active role.",
+        "description": "Returns current tab visibility for the active role.\n\nNo request body. Authenticated access only.",
+        "tags": [
+          "public-client"
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "role": {
+                      "type": "string"
+                    },
+                    "tabs": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "boolean"
+                      }
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "role",
+                    "tabs"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Standard API error response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ApiError": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "requestId": {
+            "type": "string"
+          },
+          "code": {
+            "oneOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "REQUEST_TIMEOUT",
+                  "REQUEST_BODY_INVALID",
+                  "PAYLOAD_TOO_LARGE",
+                  "INVALID_CURSOR",
+                  "INVALID_CREDENTIALS",
+                  "INVALID_IDENTIFIER",
+                  "INVALID_EMAIL",
+                  "INVALID_PASSWORD",
+                  "INVALID_CURRENT_PASSWORD",
+                  "INVALID_TOKEN",
+                  "PERMISSION_DENIED",
+                  "USER_NOT_FOUND",
+                  "USERNAME_TAKEN",
+                  "NOT_FOUND",
+                  "TOKEN_USED",
+                  "TOKEN_EXPIRED",
+                  "ACCOUNT_LOCKED",
+                  "ACCOUNT_UNAVAILABLE",
+                  "ACCOUNT_BANNED",
+                  "PASSWORD_CHANGE_REQUIRED",
+                  "SUPERUSER_SINGLE_SESSION_ENFORCED",
+                  "AUTH_RATE_LIMITED",
+                  "IMPORT_UPLOAD_RATE_LIMITED",
+                  "AUTH_RECOVERY_RATE_LIMITED",
+                  "AUTH_MUTATION_RATE_LIMITED",
+                  "ADMIN_ACTION_RATE_LIMITED",
+                  "SEARCH_RATE_LIMITED",
+                  "TWO_FACTOR_CHALLENGE_INVALID",
+                  "TWO_FACTOR_INVALID_CODE",
+                  "TWO_FACTOR_NOT_ENABLED",
+                  "TWO_FACTOR_NOT_ALLOWED",
+                  "TWO_FACTOR_SECRET_INVALID",
+                  "TWO_FACTOR_SETUP_MISSING",
+                  "MAIL_PREVIEW_NOT_FOUND"
+                ]
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "oneOf": [
+                  {
+                    "type": "string",
+                    "enum": [
+                      "REQUEST_TIMEOUT",
+                      "REQUEST_BODY_INVALID",
+                      "PAYLOAD_TOO_LARGE",
+                      "INVALID_CURSOR",
+                      "INVALID_CREDENTIALS",
+                      "INVALID_IDENTIFIER",
+                      "INVALID_EMAIL",
+                      "INVALID_PASSWORD",
+                      "INVALID_CURRENT_PASSWORD",
+                      "INVALID_TOKEN",
+                      "PERMISSION_DENIED",
+                      "USER_NOT_FOUND",
+                      "USERNAME_TAKEN",
+                      "NOT_FOUND",
+                      "TOKEN_USED",
+                      "TOKEN_EXPIRED",
+                      "ACCOUNT_LOCKED",
+                      "ACCOUNT_UNAVAILABLE",
+                      "ACCOUNT_BANNED",
+                      "PASSWORD_CHANGE_REQUIRED",
+                      "SUPERUSER_SINGLE_SESSION_ENFORCED",
+                      "AUTH_RATE_LIMITED",
+                      "IMPORT_UPLOAD_RATE_LIMITED",
+                      "AUTH_RECOVERY_RATE_LIMITED",
+                      "AUTH_MUTATION_RATE_LIMITED",
+                      "ADMIN_ACTION_RATE_LIMITED",
+                      "SEARCH_RATE_LIMITED",
+                      "TWO_FACTOR_CHALLENGE_INVALID",
+                      "TWO_FACTOR_INVALID_CODE",
+                      "TWO_FACTOR_NOT_ENABLED",
+                      "TWO_FACTOR_NOT_ALLOWED",
+                      "TWO_FACTOR_SECRET_INVALID",
+                      "TWO_FACTOR_SETUP_MISSING",
+                      "MAIL_PREVIEW_NOT_FOUND"
+                    ]
+                  },
+                  {
+                    "type": "string"
+                  }
+                ]
+              },
+              "message": {
+                "type": "string"
+              },
+              "details": {
+                "oneOf": [
+                  {
+                    "oneOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "boolean"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  {
+                    "type": "array",
+                    "items": {}
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": {}
+                  }
+                ]
+              },
+              "requestId": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "message"
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "message"
+        ]
+      }
+    }
+  }
+}

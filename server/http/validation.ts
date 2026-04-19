@@ -74,6 +74,18 @@ export function clampInteger(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, Math.trunc(value)));
 }
 
+export function readPositivePage(value: unknown, fallback: number): number {
+  return Math.max(1, readInteger(value, fallback));
+}
+
+export function readBoundedPageSize(
+  value: unknown,
+  fallback: number,
+  max: number,
+): number {
+  return clampInteger(readInteger(value, fallback), 1, Math.max(1, Math.trunc(max)));
+}
+
 const TRUTHY_BOOLEAN_LITERALS = new Set(["1", "true", "yes", "on"]);
 const FALSY_BOOLEAN_LITERALS = new Set(["0", "false", "no", "off"]);
 

@@ -1,18 +1,9 @@
 import type { AuthenticatedRequest } from "../auth/guards";
 import { asyncHandler, routeHandler } from "../http/async-handler";
+import { readBoundedPageSize, readPositivePage } from "../http/validation";
 import type { SystemRouteContext } from "./system-route-context";
 
-function readPositivePage(value: unknown, fallback: number) {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? Math.max(1, Math.floor(parsed)) : fallback;
-}
-
-function readPageSize(value: unknown, fallback: number) {
-  const parsed = Number(value);
-  return Number.isFinite(parsed)
-    ? Math.min(100, Math.max(1, Math.floor(parsed)))
-    : fallback;
-}
+const SYSTEM_ALERTS_MAX_PAGE_SIZE = 100;
 
 function readCleanupDays(value: unknown, fallback: number) {
   const parsed = Number(value);
@@ -43,7 +34,7 @@ export function registerSystemAlertRoutes(context: SystemRouteContext) {
       const snapshot = computeInternalMonitorSnapshot();
       const alerts = buildInternalMonitorAlerts(snapshot);
       const page = readPositivePage(req.query.page, 1);
-      const pageSize = readPageSize(req.query.pageSize, 5);
+      const pageSize = readBoundedPageSize(req.query.pageSize, 5, SYSTEM_ALERTS_MAX_PAGE_SIZE);
       const totalItems = alerts.length;
       const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
       const safePage = Math.min(page, totalPages);
@@ -69,7 +60,7 @@ export function registerSystemAlertRoutes(context: SystemRouteContext) {
     asyncHandler(async (req, res) => {
       const incidents = await listMonitorAlertHistory({
         page: readPositivePage(req.query.page, 1),
-        pageSize: readPageSize(req.query.pageSize, 5),
+        pageSize: readBoundedPageSize(req.query.pageSize, 5, SYSTEM_ALERTS_MAX_PAGE_SIZE),
       });
       res.json({
         incidents: incidents.incidents,

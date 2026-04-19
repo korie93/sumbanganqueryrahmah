@@ -117,6 +117,7 @@ Anda masih perlu menyediakan PostgreSQL secara berasingan. Image ini sengaja tid
 
 - Reviewed rate-limit mappings now live in [docs/RATE_LIMITS.md](./docs/RATE_LIMITS.md).
 - A scoped Drizzle-managed relationship diagram now lives in [docs/ER_DIAGRAM.md](./docs/ER_DIAGRAM.md).
+- Generated public API references now live in [docs/API_CONTRACTS.md](./docs/API_CONTRACTS.md) and [docs/openapi.public.json](./docs/openapi.public.json).
 - Playwright critical-flow and visual-smoke guidance now lives in [docs/E2E_VISUAL_TESTING.md](./docs/E2E_VISUAL_TESTING.md).
 - Reviewed image delivery guidance now lives in [docs/IMAGE_OPTIMIZATION.md](./docs/IMAGE_OPTIMIZATION.md).
 

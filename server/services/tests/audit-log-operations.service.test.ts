@@ -128,3 +128,49 @@ test("AuditLogOperationsService proxies audit log reads through the repository",
   });
   assert.deepEqual(await service.getAuditLogStats(), stats);
 });
+
+test("AuditLogOperationsService clamps audit log pagination to the reviewed maximum", async () => {
+  const pageCalls: Array<{ page: number; pageSize: number }> = [];
+  const logs = [createAuditRow()];
+  const service = new AuditLogOperationsService(
+    {
+      createAuditLog: async () => createAuditRow({ id: "audit-2" }),
+    },
+    {
+      getAuditLogs: async () => logs,
+      listAuditLogsPage: async (params = { page: 1, pageSize: 50 }) => {
+        const page = params.page ?? 1;
+        const pageSize = params.pageSize ?? 50;
+        pageCalls.push({
+          page,
+          pageSize,
+        });
+        return {
+          logs,
+          page,
+          pageSize,
+          total: logs.length,
+          totalPages: 1,
+        };
+      },
+      getAuditLogStats: async () => ({
+        totalLogs: 0,
+        todayLogs: 0,
+        actionBreakdown: {},
+      }),
+      cleanupAuditLogsOlderThan: async () => 0,
+    },
+  );
+
+  const result = await service.listAuditLogs({
+    page: 0,
+    pageSize: 999,
+  });
+
+  assert.deepEqual(pageCalls, [{
+    page: 1,
+    pageSize: 100,
+  }]);
+  assert.equal(result.pagination.page, 1);
+  assert.equal(result.pagination.pageSize, 100);
+});

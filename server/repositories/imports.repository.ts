@@ -16,6 +16,7 @@ const GET_IMPORTS_MAX_RESULTS = 10_000;
 const IMPORT_LIST_PAGE_DEFAULT_LIMIT = 100;
 const IMPORT_LIST_PAGE_MAX_LIMIT = 200;
 const IMPORT_COLUMN_KEYS_MAX_LIMIT = 500;
+const SAFE_SQL_IDENTIFIER_ALIAS_PATTERN = /^[A-Za-z0-9_]+$/;
 
 export type ImportWithRowCount = Import & { rowCount: number };
 export type ImportListPage = {
@@ -53,6 +54,15 @@ function readImportRows<TRow>(rows: unknown[] | undefined): TRow[] {
 function clampImportListLimit(limit: number | undefined): number {
   const safeLimit = Number.isFinite(limit) ? Math.trunc(Number(limit)) : IMPORT_LIST_PAGE_DEFAULT_LIMIT;
   return Math.max(1, Math.min(IMPORT_LIST_PAGE_MAX_LIMIT, safeLimit));
+}
+
+export function assertSafeSqlIdentifierAlias(alias: string): string {
+  const normalizedAlias = String(alias || "").trim();
+  if (!SAFE_SQL_IDENTIFIER_ALIAS_PATTERN.test(normalizedAlias)) {
+    throw new Error("Invalid SQL alias identifier.");
+  }
+
+  return normalizedAlias;
 }
 
 export function resolveRemainingImportsReadLimit(loadedCount: number): number {
@@ -109,7 +119,7 @@ function buildImportListFilterSql(params: {
   cursor?: ImportListCursor | null | undefined;
   includeCursor: boolean;
 }) {
-  const alias = sql.raw(params.alias);
+  const alias = sql.raw(assertSafeSqlIdentifierAlias(params.alias));
   const conditions = [sql`${alias}.is_deleted = false`];
   const search = String(params.search || "").trim();
   if (search) {

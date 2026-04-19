@@ -236,6 +236,7 @@ export function CollectionDailyCalendarCard({
                       id={workingDayCheckboxId}
                       name={workingDayCheckboxId}
                       type="checkbox"
+                      aria-label={`Mark ${formatDateDDMMYYYY(selectedDay.date)} as a working day`}
                       checked={selectedEditableDay.isWorkingDay}
                       onChange={(event) =>
                         onUpdateEditableDay(selectedEditableDay.day, { isWorkingDay: event.target.checked })
@@ -251,6 +252,7 @@ export function CollectionDailyCalendarCard({
                       id={holidayCheckboxId}
                       name={holidayCheckboxId}
                       type="checkbox"
+                      aria-label={`Mark ${formatDateDDMMYYYY(selectedDay.date)} as a holiday`}
                       checked={selectedEditableDay.isHoliday}
                       onChange={(event) =>
                         onUpdateEditableDay(selectedEditableDay.day, { isHoliday: event.target.checked })

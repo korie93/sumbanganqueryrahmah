@@ -2,7 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { Import } from "../../../shared/schema-postgres";
 import { logger } from "../../lib/logger";
-import { ImportsRepository, resolveRemainingImportsReadLimit } from "../imports.repository";
+import {
+  assertSafeSqlIdentifierAlias,
+  ImportsRepository,
+  resolveRemainingImportsReadLimit,
+} from "../imports.repository";
 import { db } from "../../db-postgres";
 
 class MockPagedSelectBuilder<TRow extends object> {
@@ -55,6 +59,22 @@ test("resolveRemainingImportsReadLimit enforces the page size and hard cap", () 
   assert.equal(resolveRemainingImportsReadLimit(9_500), 500);
   assert.equal(resolveRemainingImportsReadLimit(10_000), 0);
   assert.equal(resolveRemainingImportsReadLimit(99_999), 0);
+});
+
+test("assertSafeSqlIdentifierAlias accepts strict alphanumeric aliases", () => {
+  assert.equal(assertSafeSqlIdentifierAlias("i"), "i");
+  assert.equal(assertSafeSqlIdentifierAlias("import_rows_2026"), "import_rows_2026");
+});
+
+test("assertSafeSqlIdentifierAlias rejects unsafe alias input before sql.raw is used", () => {
+  assert.throws(
+    () => assertSafeSqlIdentifierAlias("i; DROP TABLE imports; --"),
+    /Invalid SQL alias identifier/i,
+  );
+  assert.throws(
+    () => assertSafeSqlIdentifierAlias("data-rows"),
+    /Invalid SQL alias identifier/i,
+  );
 });
 
 test("getImports returns all rows below the safety cap without warning", async (t) => {

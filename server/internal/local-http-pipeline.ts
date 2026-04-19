@@ -122,6 +122,11 @@ function shouldCompressApiResponse(req: Request, res: Response) {
   return compression.filter(req, res);
 }
 
+function readResponseEncoding(res: Response): string | undefined {
+  const normalized = String(res.getHeader("content-encoding") || "").trim().toLowerCase();
+  return normalized || undefined;
+}
+
 type LocalHttpPipelineOptions = {
   importBodyLimit: string;
   collectionBodyLimit: string;
@@ -257,6 +262,9 @@ export function registerLocalHttpPipeline(app: Express, options: LocalHttpPipeli
         res.on("finish", () => {
           const elapsedMs = Number(process.hrtime.bigint() - start) / 1_000_000;
           recordRequestFinished(elapsedMs, Number(res.statusCode || 0));
+          const compressionEligible = req.path.startsWith("/api") || req.path.startsWith("/internal");
+          const compressionBypassed = compressionEligible && shouldBypassApiCompression(req.path);
+          const responseEncoding = readResponseEncoding(res);
           const requestMeta = {
             requestId,
             method: req.method,
@@ -265,9 +273,21 @@ export function registerLocalHttpPipeline(app: Express, options: LocalHttpPipeli
             elapsedMs: Number(elapsedMs.toFixed(2)),
             contentLength: Number(req.headers["content-length"] || 0) || 0,
             responseSize: Number(res.getHeader("content-length") || 0) || 0,
+            responseEncoding,
+            compressionEligible,
+            compressionBypassed,
             clientIp,
             userAgent,
           };
+
+          if (
+            runtimeConfig.app.debugLogs
+            && responseEncoding
+            && compressionEligible
+            && !compressionBypassed
+          ) {
+            logger.debug("HTTP response compression applied", requestMeta);
+          }
 
           if (res.statusCode === 504) {
             logger.warn("HTTP request completed after the global timeout deadline", requestMeta);

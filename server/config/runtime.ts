@@ -479,6 +479,16 @@ if (isProduction && requestedDbQueryProfilingEnabled && !allowDbQueryProfilingIn
   });
 }
 
+if (isProduction && dbQueryProfilingEnabled) {
+  runtimeWarnings.push({
+    code: "db-query-profiling-production-explicitly-enabled",
+    envNames: ["NODE_ENV", "DB_QUERY_PROFILING_ENABLED", "DB_QUERY_PROFILING_ALLOW_IN_PRODUCTION"],
+    message:
+      "DB query profiling is enabled on a production deployment because DB_QUERY_PROFILING_ALLOW_IN_PRODUCTION=1 was set explicitly. Expect higher log volume until the temporary profiling window is closed.",
+    severity: "warning",
+  });
+}
+
 export const runtimeConfigValidation: RuntimeConfigValidationType = Object.freeze({
   warningCount: runtimeWarnings.length,
   warnings: Object.freeze(runtimeWarnings.map((warning) => Object.freeze({ ...warning }))),

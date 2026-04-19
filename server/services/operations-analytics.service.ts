@@ -1,5 +1,7 @@
-import { readInteger } from "../http/validation";
+import { readBoundedPageSize, readInteger } from "../http/validation";
 import type { AnalyticsRepository } from "../repositories/analytics.repository";
+
+const TOP_ACTIVE_USERS_MAX_LIMIT = 100;
 
 type OperationsAnalyticsRepository = Pick<
   AnalyticsRepository,
@@ -22,7 +24,9 @@ export class OperationsAnalyticsService {
   }
 
   async getTopActiveUsers(limit?: unknown) {
-    return this.analyticsRepository.getTopActiveUsers(Math.max(1, readInteger(limit, 10)));
+    return this.analyticsRepository.getTopActiveUsers(
+      readBoundedPageSize(limit, 10, TOP_ACTIVE_USERS_MAX_LIMIT),
+    );
   }
 
   async getPeakHours() {
