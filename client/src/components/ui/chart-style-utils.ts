@@ -6,6 +6,11 @@ export function sanitizeChartToken(value: string) {
   return normalized || "chart"
 }
 
+export function sanitizeChartConfigKey(value: string) {
+  const normalized = String(value || "").trim().replace(/[^a-zA-Z0-9_-]/g, "-")
+  return normalized || "series"
+}
+
 export function sanitizeChartColorValue(value: string) {
   const normalized = String(value || "").trim()
   if (!normalized) {
@@ -42,7 +47,8 @@ export function buildChartStyleMarkup(id: string, config: ChartConfig) {
             itemConfig.theme?.[theme as keyof typeof itemConfig.theme] ||
             itemConfig.color
           const safeColor = color ? sanitizeChartColorValue(color) : null
-          return safeColor ? `  --color-${key}: ${safeColor};` : null
+          const safeKey = sanitizeChartConfigKey(key)
+          return safeColor ? `  --color-${safeKey}: ${safeColor};` : null
         })
         .filter((line): line is string => Boolean(line))
         .join("\n")}\n}\n`

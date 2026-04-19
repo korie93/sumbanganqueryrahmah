@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   createDbQueryProfiler,
   instrumentPgClientQueryMethod,
+  instrumentPgPoolQueryMethods,
   normalizeDbQueryProfileStatement,
   shouldSampleDbQueryProfile,
 } from "../lib/db-query-profiler";
@@ -182,4 +183,38 @@ test("createDbQueryProfiler evicts the oldest tracked statements when a profiled
   assert.equal(warnings[0]?.queryCount, 11);
   assert.equal(warnings[0]?.uniqueStatementCount, 10);
   assert.equal(warnings[0]?.evictedStatementCount, 1);
+});
+
+test("instrumentPgPoolQueryMethods scopes profiling to the provided pool and its clients", async () => {
+  const samples: Array<{ durationMs: number; sqlText: string }> = [];
+  const client = {
+    query(...args: unknown[]) {
+      const sqlText = String(args[0] || "");
+      return Promise.resolve({ sqlText });
+    },
+  };
+  const pool = {
+    query(...args: unknown[]) {
+      const sqlText = String(args[0] || "");
+      return Promise.resolve({ sqlText });
+    },
+    async connect() {
+      return client;
+    },
+  };
+
+  const cleanup = instrumentPgPoolQueryMethods(pool, (sqlText, durationMs) => {
+    samples.push({ sqlText, durationMs });
+  });
+
+  await pool.query("SELECT 1");
+  const connectedClient = await pool.connect();
+  await connectedClient.query("SELECT 2");
+  cleanup();
+
+  assert.equal(samples.length, 2);
+  assert.equal(samples[0]?.sqlText, "SELECT 1");
+  assert.equal(samples[1]?.sqlText, "SELECT 2");
+  assert.equal(typeof samples[0]?.durationMs, "number");
+  assert.equal(typeof samples[1]?.durationMs, "number");
 });

@@ -17,6 +17,7 @@ test("README links the reviewed rate-limit and ER diagram docs", () => {
   assert.match(readme, /\[docs\/API_CONTRACTS\.md\]\(\.\/docs\/API_CONTRACTS\.md\)/);
   assert.match(readme, /\[docs\/openapi\.public\.json\]\(\.\/docs\/openapi\.public\.json\)/);
   assert.match(readme, /\[docs\/DEPENDENCY_SUPPLY_CHAIN\.md\]\(\.\/docs\/DEPENDENCY_SUPPLY_CHAIN\.md\)/);
+  assert.match(readme, /\[docs\/AUDIT_NO_CHANGE_DECISIONS\.md\]\(\.\/docs\/AUDIT_NO_CHANGE_DECISIONS\.md\)/);
 });
 
 test("rate-limit reference stays anchored to the runtime source of truth", () => {
@@ -34,4 +35,14 @@ test("ER diagram doc stays explicitly scoped to the reviewed Drizzle subset", ()
   assert.match(erDiagramDoc, /\[shared\/schema-postgres\.ts\]/);
   assert.match(erDiagramDoc, /This diagram intentionally covers the reviewed Drizzle-managed relationship subset/i);
   assert.match(erDiagramDoc, /```mermaid/);
+});
+
+test("audit no-change decisions doc records reviewed deferments and revisit triggers", () => {
+  const noChangeDoc = readRepoFile("docs/AUDIT_NO_CHANGE_DECISIONS.md");
+
+  assert.match(noChangeDoc, /Audit #4 findings that were reviewed on 19 April 2026/i);
+  assert.match(noChangeDoc, /WebSocket event listener leak hardening/i);
+  assert.match(noChangeDoc, /Missing focus management on modal dialogs/i);
+  assert.match(noChangeDoc, /Chunk size verification/i);
+  assert.match(noChangeDoc, /What would justify revisiting/i);
 });

@@ -162,3 +162,64 @@ test("csrf middleware allows requests without auth session cookies", async () =>
     await stopTestServer(server);
   }
 });
+
+test("csrf middleware rejects cross-site browser-signaled mutations even without an auth cookie", async () => {
+  const app = createCsrfTestApp();
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(`${baseUrl}/api/mutate`, {
+      method: "POST",
+      headers: {
+        Origin: "https://evil.example",
+      },
+    });
+
+    assert.equal(response.status, 403);
+    assert.deepEqual(await response.json(), {
+      ok: false,
+      message: "CSRF protection blocked a request with invalid origin.",
+      code: "CSRF_ORIGIN_REJECTED",
+    });
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("csrf middleware accepts same-origin browser-signaled mutations without an auth cookie", async () => {
+  const app = createCsrfTestApp();
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(`${baseUrl}/api/mutate`, {
+      method: "POST",
+      headers: {
+        Origin: "http://127.0.0.1:5000",
+      },
+    });
+
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), { ok: true });
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("csrf middleware still allows non-browser token-style mutations without same-origin signals", async () => {
+  const app = createCsrfTestApp();
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(`${baseUrl}/api/mutate`, {
+      method: "POST",
+      headers: {
+        Authorization: "Bearer token-value",
+      },
+    });
+
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), { ok: true });
+  } finally {
+    await stopTestServer(server);
+  }
+});

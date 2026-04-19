@@ -10,7 +10,6 @@ import type {
   TooltipValueType,
 } from "recharts"
 
-import { toTrustedHTML } from "@/lib/trusted-types"
 import { cn } from "@/lib/utils"
 import { ChartIndicator, ChartLegendSwatch } from "./chart-presentational"
 import {
@@ -62,11 +61,7 @@ const ChartStyle = ({ id, config }: { id: string; config: ChartConfig }) => {
   }
 
   return (
-    <style
-      dangerouslySetInnerHTML={{
-        __html: toTrustedHTML(styleMarkup),
-      }}
-    />
+    <style>{styleMarkup}</style>
   )
 }
 

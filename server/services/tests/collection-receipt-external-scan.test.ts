@@ -81,6 +81,63 @@ test("external receipt scanner rejects args config without a file placeholder", 
   }
 });
 
+test("external receipt scanner rejects invalid JSON scanner args safely", async () => {
+  const previousEnv = snapshotEnv();
+  process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_ENABLED = "1";
+  process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_COMMAND = process.execPath;
+  process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_ARGS_JSON = "[\"{file}\"";
+  process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_FAIL_CLOSED = "1";
+
+  try {
+    await assert.rejects(
+      () => scanCollectionReceiptWithExternalScanner("receipt.pdf"),
+      (error: unknown) =>
+        error instanceof CollectionReceiptSecurityError
+        && error.reasonCode === "external-scan-config-invalid",
+    );
+  } finally {
+    restoreEnv(previousEnv);
+  }
+});
+
+test("external receipt scanner rejects scanner args with unsupported characters", async () => {
+  const previousEnv = snapshotEnv();
+  process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_ENABLED = "1";
+  process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_COMMAND = process.execPath;
+  process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_ARGS_JSON = "[\"--profile=team;rm\",\"{file}\"]";
+  process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_FAIL_CLOSED = "1";
+
+  try {
+    await assert.rejects(
+      () => scanCollectionReceiptWithExternalScanner("receipt.pdf"),
+      (error: unknown) =>
+        error instanceof CollectionReceiptSecurityError
+        && error.reasonCode === "external-scan-config-invalid",
+    );
+  } finally {
+    restoreEnv(previousEnv);
+  }
+});
+
+test("external receipt scanner rejects non-string scanner args", async () => {
+  const previousEnv = snapshotEnv();
+  process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_ENABLED = "1";
+  process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_COMMAND = process.execPath;
+  process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_ARGS_JSON = "[\"{file}\", 42]";
+  process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_FAIL_CLOSED = "1";
+
+  try {
+    await assert.rejects(
+      () => scanCollectionReceiptWithExternalScanner("receipt.pdf"),
+      (error: unknown) =>
+        error instanceof CollectionReceiptSecurityError
+        && error.reasonCode === "external-scan-config-invalid",
+    );
+  } finally {
+    restoreEnv(previousEnv);
+  }
+});
+
 test("external receipt scanner rejects bare commands that do not resolve on PATH", async () => {
   const previousEnv = snapshotEnv();
   process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_ENABLED = "1";

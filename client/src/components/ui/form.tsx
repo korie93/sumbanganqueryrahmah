@@ -117,6 +117,9 @@ const FormControl = React.forwardRef<
   React.ComponentPropsWithoutRef<typeof Slot>
 >(({ ...props }, ref) => {
   const { error, formItemId, formDescriptionId, formMessageId } = useFormField()
+  const requiredProp = Reflect.get(props, "required")
+  const ariaRequired =
+    props["aria-required"] ?? (requiredProp === true ? "true" : undefined)
   const ariaDescribedBy = mergeAriaDescribedByIds(
     props["aria-describedby"],
     formDescriptionId,
@@ -128,6 +131,7 @@ const FormControl = React.forwardRef<
       ref={ref}
       id={formItemId}
       aria-invalid="true"
+      aria-required={ariaRequired}
       aria-describedby={ariaDescribedBy}
       aria-errormessage={formMessageId}
       {...props}
@@ -137,6 +141,7 @@ const FormControl = React.forwardRef<
       ref={ref}
       id={formItemId}
       aria-invalid="false"
+      aria-required={ariaRequired}
       aria-describedby={ariaDescribedBy}
       {...props}
     />

@@ -43,7 +43,7 @@ export const dbQueryProfiler = createDbQueryProfiler({
   logger,
 });
 
-dbQueryProfiler.instrumentPgClientQueryMethod(pg.Client.prototype);
+dbQueryProfiler.instrumentPgPool(pool);
 
 const stopPgPoolMonitoring = bindPgPoolMonitoring(pool, {
   warnCooldownMs: runtimeConfig.runtime.pgPoolWarnCooldownMs,

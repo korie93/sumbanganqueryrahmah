@@ -1,4 +1,10 @@
-import { useId, type ChangeEvent, type MutableRefObject } from "react";
+import {
+  useEffect,
+  useId,
+  useState,
+  type ChangeEvent,
+  type MutableRefObject,
+} from "react";
 import { FileImage, FileText, RotateCcw, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -54,6 +60,7 @@ export function CollectionReceiptPanel({
   const inputId = useId();
   const helperTextId = `${inputId}-help`;
   const draftPreviews = useCollectionReceiptDraftPreviews(pendingFiles);
+  const [failedImagePreviewKeys, setFailedImagePreviewKeys] = useState<Set<string>>(() => new Set());
   const removedSet = new Set(removedReceiptIds);
   const existingDraftMap = new Map(
     existingReceiptDrafts
@@ -65,6 +72,20 @@ export function CollectionReceiptPanel({
     removedExistingCount: removedReceiptIds.length,
     pendingCount: pendingFiles.length,
   });
+
+  useEffect(() => {
+    const previewKeys = new Set(draftPreviews.map((preview) => preview.key));
+    setFailedImagePreviewKeys((previous) => {
+      const next = new Set(Array.from(previous).filter((key) => previewKeys.has(key)));
+      if (
+        next.size === previous.size
+        && Array.from(next).every((key) => previous.has(key))
+      ) {
+        return previous;
+      }
+      return next;
+    });
+  }, [draftPreviews]);
 
   return (
     <div className="space-y-3">
@@ -236,6 +257,7 @@ export function CollectionReceiptPanel({
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
             {draftPreviews.map((preview, index) => {
               const safePreviewUrl = resolveSafePreviewSourceUrl(preview.url);
+              const imagePreviewFailed = failedImagePreviewKeys.has(preview.key);
 
               return (
                 <div
@@ -245,14 +267,31 @@ export function CollectionReceiptPanel({
                   <div className="flex h-36 items-center justify-center bg-muted/20">
                     {preview.kind === "image" ? (
                       safePreviewUrl ? (
-                        <img
-                          src={safePreviewUrl}
-                          alt=""
-                          aria-hidden="true"
-                          className="h-full w-full object-cover"
-                          loading="lazy"
-                          decoding="async"
-                        />
+                        imagePreviewFailed ? (
+                          <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                            <FileImage className="h-8 w-8" />
+                            <Badge variant="outline">Preview unavailable</Badge>
+                          </div>
+                        ) : (
+                          <img
+                            src={safePreviewUrl}
+                            alt=""
+                            aria-hidden="true"
+                            className="h-full w-full object-cover"
+                            loading="lazy"
+                            decoding="async"
+                            onError={() => {
+                              setFailedImagePreviewKeys((previous) => {
+                                if (previous.has(preview.key)) {
+                                  return previous;
+                                }
+                                const next = new Set(previous);
+                                next.add(preview.key);
+                                return next;
+                              });
+                            }}
+                          />
+                        )
                       ) : (
                         <div className="flex flex-col items-center gap-2 text-muted-foreground">
                           <FileImage className="h-8 w-8" />

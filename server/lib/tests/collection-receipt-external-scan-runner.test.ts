@@ -119,3 +119,45 @@ test("external scan runner rejects invalid timeout values before spawning", asyn
 
   assert.equal(spawnCalled, false);
 });
+
+test("external scan runner rejects non-string argument shapes before spawning", async () => {
+  let spawnCalled = false;
+
+  await assert.rejects(
+    () =>
+      runExternalReceiptScan({
+        config: createExternalScanConfig(),
+        filePath: "C:\\temp\\receipt.pdf",
+        scannerCommand: "scanner",
+        args: (["--scan", { unexpected: true }] as unknown) as string[],
+        spawnProcess: ((() => {
+          spawnCalled = true;
+          return new FakeChildProcess();
+        }) as unknown) as NonNullable<Parameters<typeof runExternalReceiptScan>[0]["spawnProcess"]>,
+      }),
+    /arguments must be an array of strings/i,
+  );
+
+  assert.equal(spawnCalled, false);
+});
+
+test("external scan runner rejects control characters in resolved arguments before spawning", async () => {
+  let spawnCalled = false;
+
+  await assert.rejects(
+    () =>
+      runExternalReceiptScan({
+        config: createExternalScanConfig(),
+        filePath: "C:\\temp\\receipt.pdf",
+        scannerCommand: "scanner",
+        args: ["--scan", "bad\0value"],
+        spawnProcess: ((() => {
+          spawnCalled = true;
+          return new FakeChildProcess();
+        }) as unknown) as NonNullable<Parameters<typeof runExternalReceiptScan>[0]["spawnProcess"]>,
+      }),
+    /must not contain control characters/i,
+  );
+
+  assert.equal(spawnCalled, false);
+});

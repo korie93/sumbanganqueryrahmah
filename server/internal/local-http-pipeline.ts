@@ -22,6 +22,9 @@ const API_VERSION_HEADER = "API-Version";
 const API_VERSION_VALUE = "1";
 const CSP_REPORT_ENDPOINT_PATH = "/api/security/csp-reports";
 const API_COMPRESSION_THRESHOLD_BYTES = 1024;
+const CSP_REPORT_LOG_WINDOW_MS = 5 * 60 * 1000;
+const CSP_REPORT_REPEAT_LOG_INTERVAL = 10;
+const MAX_TRACKED_CSP_REPORT_FINGERPRINTS = 200;
 
 const cspReportDocumentSchema = z.object({
   "blocked-uri": z.string().max(2_048).optional(),
@@ -127,6 +130,55 @@ function readResponseEncoding(res: Response): string | undefined {
   return normalized || undefined;
 }
 
+type TrackedCspReportObservation = {
+  count: number;
+  firstSeenAt: number;
+  lastSeenAt: number;
+};
+
+function observeCspReportFingerprint(
+  tracker: Map<string, TrackedCspReportObservation>,
+  fingerprint: string,
+  now = Date.now(),
+) {
+  for (const [trackedFingerprint, observation] of tracker.entries()) {
+    if (now - observation.lastSeenAt <= CSP_REPORT_LOG_WINDOW_MS) {
+      continue;
+    }
+    tracker.delete(trackedFingerprint);
+  }
+
+  const existing = tracker.get(fingerprint);
+  if (existing) {
+    existing.count += 1;
+    existing.lastSeenAt = now;
+    tracker.delete(fingerprint);
+    tracker.set(fingerprint, existing);
+    return {
+      count: existing.count,
+      shouldLog: existing.count % CSP_REPORT_REPEAT_LOG_INTERVAL === 0,
+    };
+  }
+
+  while (tracker.size >= MAX_TRACKED_CSP_REPORT_FINGERPRINTS) {
+    const oldestFingerprint = tracker.keys().next().value;
+    if (!oldestFingerprint) {
+      break;
+    }
+    tracker.delete(oldestFingerprint);
+  }
+
+  tracker.set(fingerprint, {
+    count: 1,
+    firstSeenAt: now,
+    lastSeenAt: now,
+  });
+  return {
+    count: 1,
+    shouldLog: true,
+  };
+}
+
 type LocalHttpPipelineOptions = {
   importBodyLimit: string;
   collectionBodyLimit: string;
@@ -157,6 +209,7 @@ export function registerLocalHttpPipeline(app: Express, options: LocalHttpPipeli
     backupOperationTimeoutMs = runtimeConfig.runtime.backupOperationTimeoutMs,
     importAnalysisTimeoutMs = runtimeConfig.runtime.importAnalysisTimeoutMs,
   } = options;
+  const cspReportFingerprintTracker = new Map<string, TrackedCspReportObservation>();
 
   app.use(helmet({
     frameguard: {
@@ -195,11 +248,11 @@ export function registerLocalHttpPipeline(app: Express, options: LocalHttpPipeli
 
   // Keep default parser small; enable larger payload only for import endpoints.
   app.use("/api/imports", express.json({ limit: importBodyLimit }));
-  app.use("/api/imports", express.urlencoded({ extended: true, limit: importBodyLimit }));
+  app.use("/api/imports", express.urlencoded({ extended: false, limit: importBodyLimit }));
   app.use("/api/collection", express.json({ limit: collectionBodyLimit }));
-  app.use("/api/collection", express.urlencoded({ extended: true, limit: collectionBodyLimit }));
+  app.use("/api/collection", express.urlencoded({ extended: false, limit: collectionBodyLimit }));
   app.use(express.json({ limit: defaultBodyLimit }));
-  app.use(express.urlencoded({ extended: true, limit: defaultBodyLimit }));
+  app.use(express.urlencoded({ extended: false, limit: defaultBodyLimit }));
 
   app.use(createCorsMiddleware());
 
@@ -327,7 +380,21 @@ export function registerLocalHttpPipeline(app: Express, options: LocalHttpPipeli
       }
 
       for (const report of sanitizedReports) {
-        logger.warn("Content Security Policy violation report received", report);
+        const fingerprint = JSON.stringify(report);
+        const observation = observeCspReportFingerprint(cspReportFingerprintTracker, fingerprint);
+        if (!observation.shouldLog) {
+          continue;
+        }
+
+        logger.warn(
+          observation.count === 1
+            ? "Content Security Policy violation report received"
+            : "Content Security Policy violation report repeated",
+          {
+            ...report,
+            reportCount: observation.count,
+          },
+        );
       }
 
       return res.status(204).end();

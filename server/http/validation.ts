@@ -41,12 +41,19 @@ export function parseRequestBody<TSchema extends z.ZodTypeAny>(
 }
 
 export const DEFAULT_READ_STRING_MAX_LENGTH = 2_048;
+const UNSAFE_REQUEST_STRING_CONTROL_CHARACTER_PATTERN = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/;
 
 export function readNonEmptyString(
   value: unknown,
   maxLength = DEFAULT_READ_STRING_MAX_LENGTH,
 ): string {
   const normalized = String(value ?? "").trim();
+  if (UNSAFE_REQUEST_STRING_CONTROL_CHARACTER_PATTERN.test(normalized)) {
+    throw badRequest(
+      "String value contains unsupported control characters.",
+      ERROR_CODES.REQUEST_BODY_INVALID,
+    );
+  }
   if (normalized.length > maxLength) {
     throw badRequest(
       `String value exceeds maximum length of ${maxLength} characters.`,

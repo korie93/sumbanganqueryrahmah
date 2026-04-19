@@ -9,6 +9,7 @@ test("form controls keep stable error linkage and polite message announcements",
   const source = readFileSync(formPath, "utf8");
 
   assert.match(source, /aria-errormessage=\{formMessageId\}/);
+  assert.match(source, /aria-required=\{ariaRequired\}/);
   assert.match(source, /aria-live="polite"/);
   assert.match(source, /aria-atomic="true"/);
   assert.match(source, /mergeAriaDescribedByIds\(/);

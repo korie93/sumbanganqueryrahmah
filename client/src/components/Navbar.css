@@ -95,12 +95,12 @@
 }
 
 .navbar-premium-glass::-webkit-scrollbar {
-  height: 0.35rem;
+  height: 0.45rem;
 }
 
 .navbar-premium-glass::-webkit-scrollbar-thumb {
   border-radius: 9999px;
-  background: hsl(var(--muted-foreground) / 0.42);
+  background: hsl(var(--muted-foreground) / 0.58);
 }
 
 .navbar-premium-glass::-webkit-scrollbar-track {

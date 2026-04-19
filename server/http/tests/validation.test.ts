@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { HttpError } from "../../http/errors";
-import { readBooleanFlag, readStringList } from "../../http/validation";
+import { readBooleanFlag, readNonEmptyString, readStringList } from "../../http/validation";
 
 test("readBooleanFlag accepts explicit truthy and falsy literals", () => {
   assert.equal(readBooleanFlag(true), true);
@@ -37,4 +37,17 @@ test("readStringList trims blank values after parsing escaped segments", () => {
     readStringList(" first \\, value , ,second,,\\,,  "),
     ["first , value", "second", ","],
   );
+});
+
+test("readNonEmptyString rejects unsafe control characters while keeping ordinary whitespace safe", () => {
+  assert.throws(
+    () => readNonEmptyString("hello\u0000world"),
+    (error) =>
+      error instanceof HttpError
+      && error.statusCode === 400
+      && error.code === "REQUEST_BODY_INVALID"
+      && /unsupported control characters/i.test(error.message),
+  );
+
+  assert.equal(readNonEmptyString("line 1\nline 2"), "line 1\nline 2");
 });

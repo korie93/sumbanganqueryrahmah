@@ -16,4 +16,7 @@ test("dashboard PDF export resolves theme colors from design tokens instead of l
   assert.match(dashboardUtils, /hsl\(var\(--foreground\)\)/);
   assert.match(dashboardUtils, /hsl\(var\(--border\)\)/);
   assert.match(dashboardUtils, /hsl\(var\(--muted-foreground\)\)/);
+  assert.match(dashboardUtils, /formatDashboardExportRgbColor/);
+  assert.match(dashboardUtils, /backgroundColor: safeBackgroundColor/);
+  assert.match(dashboardUtils, /color: \$\{safeForegroundColor\} !important/);
 });

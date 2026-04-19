@@ -12,6 +12,7 @@ export const UNSAFE_ENV_VALUE_PATTERN = /[\0\r\n]/;
 export const EXTERNAL_SCAN_TEMPLATE_PATTERN = /\{[^}]+\}/g;
 export const EXTERNAL_SCAN_FILE_PLACEHOLDER = "{file}";
 export const EXTERNAL_SCAN_FILENAME_PLACEHOLDER = "{filename}";
+const SAFE_EXTERNAL_SCAN_ARG_PATTERN = /^[A-Za-z0-9_./:@%+=,\\{}()~\- ]+$/;
 
 export type ExternalScanConfig = {
   enabled: boolean;
@@ -64,10 +65,27 @@ export function parseScannerArgsJson(): string[] {
   }
 }
 
+function validateExternalScanArgTemplate(entry: string) {
+  if (!entry.trim()) {
+    throw new Error("must not include blank scanner arguments.");
+  }
+
+  if (UNSAFE_ENV_VALUE_PATTERN.test(entry)) {
+    throw new Error("must not contain control characters");
+  }
+
+  if (!SAFE_EXTERNAL_SCAN_ARG_PATTERN.test(entry)) {
+    throw new Error(
+      "contains unsupported characters. Use simple flags, values, and supported placeholders only.",
+    );
+  }
+}
+
 export function validateScannerArgs(args: string[]): string[] {
   let containsFilePlaceholder = false;
 
   for (const entry of args) {
+    validateExternalScanArgTemplate(entry);
     const placeholders = entry.match(EXTERNAL_SCAN_TEMPLATE_PATTERN) ?? [];
     for (const placeholder of placeholders) {
       if (
@@ -95,6 +113,20 @@ export function validateScannerArgs(args: string[]): string[] {
     throw new Error(
       `must include at least one ${EXTERNAL_SCAN_FILE_PLACEHOLDER} or ${EXTERNAL_SCAN_FILENAME_PLACEHOLDER} placeholder.`,
     );
+  }
+
+  return args;
+}
+
+export function validateResolvedScannerArgs(args: unknown): string[] {
+  if (!Array.isArray(args) || args.some((entry) => typeof entry !== "string")) {
+    throw new Error("Receipt external malware scan arguments must be an array of strings.");
+  }
+
+  for (const entry of args) {
+    if (UNSAFE_ENV_VALUE_PATTERN.test(entry)) {
+      throw new Error("Receipt external malware scan arguments must not contain control characters.");
+    }
   }
 
   return args;

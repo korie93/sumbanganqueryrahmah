@@ -1,0 +1,42 @@
+# Audit No-Change Decisions
+
+This document records Audit #4 findings that were reviewed on 19 April 2026 and intentionally left unchanged in code during the precision hardening pass.
+
+The goal is to make the reasoning explicit so maintainers can distinguish:
+
+- reviewed and intentionally deferred work
+- issues already covered by existing protections
+- areas where a runtime change would have created more risk than value in one conservative pass
+
+## Reviewed No-Change Items
+
+| Audit item | Surface | Why code was left unchanged | What would justify revisiting |
+| --- | --- | --- | --- |
+| `3. WebSocket event listener leak hardening` | `server/ws/ws-connection-lifecycle.ts` | The current lifecycle already performs defensive cleanup, close handling, and idempotent teardown. Adding extra forced listener removal without a reproduced leak path risked introducing duplicate cleanup races in a mature WebSocket stack. | A reproducible interrupted-close leak, heap snapshot evidence, or a failing lifecycle test that proves listeners survive teardown. |
+| `7. Missing focus management on modal dialogs` | `client/src/components/ui/dialog.tsx` | Radix Dialog already provides initial focus, focus trap, Escape handling, and focus return. Adding custom focus logic on top of Radix would be redundant and could conflict with library behavior. | A verified accessibility bug showing Radix defaults are insufficient in this app's usage pattern. |
+| `9. Rate limiting memory boundedness refinement` | `server/middleware/rate-limit.ts` | The current design already uses bounded state, caps, pruning, and overflow handling. A broader admission-control rewrite would have been higher risk than the evidence justified in this pass. | Load-test evidence showing attacker-controlled identifier churn still causes unacceptable memory growth. |
+| `11. Global WebSocket connection map limit` | `server/ws/websocket.ts`, `server/ws/runtime-manager.ts` | The runtime already has an instance-level WebSocket connection cap from prior hardening. Adding a second overlapping global cap here would duplicate rejection logic and risk inconsistent failure behavior. | If the existing per-instance cap is bypassable or if a distinct unbounded map path is found outside the tracked runtime connection guard. |
+| `13. Missing transaction wrapping in multi-step repository writes` | reviewed repository write paths | The clearly relevant high-risk multi-step write paths were reviewed and were already transactional or sufficiently atomic. Blanket transaction wrapping across repositories would have created churn without evidence of a real gap. | A concrete write path that spans multiple tables without transactional protection and can leave partial state on failure. |
+| `14. Connection pool drain at graceful shutdown` | `server/internal/pg-pool-shutdown.ts`, `server/index-local.ts` | The current shutdown helper already performs bounded graceful drain behavior with timeout-based shutdown semantics. Further changes here would have been speculative without evidence of pool-close races in production. | Logs or tests showing in-flight queries are being truncated or pool shutdown is racing active work. |
+| `15. Dark mode contrast verification tightening` | `client/src/theme-tokens.css` and existing contrast tooling | Existing contrast verification already covers the token set, and this pass did not produce evidence of a failing dark-mode contrast combination. Random token tuning would have risked design regressions without an accessibility bug to fix. | A failing contrast test, axe result, or manual verification showing a specific token pair misses WCAG thresholds. |
+| `18. Loading-state live region audit` | app loading states | Several critical loading regions were already improved in prior passes. I did not add more announcements in this pass because the remaining surfaces were not clearly missing, and over-annotation would risk noisy or repetitive screen-reader output. | A specific loading surface with user impact where status changes are not currently announced. |
+| `19. Large component files decomposition` | `sidebar.tsx`, `DashboardChartsGrid.tsx`, `MyAccountSecurityCard.tsx` | This audit was a hardening pass, not a structural refactor pass. Splitting large files without a behavior bug would have increased review surface and regression risk more than it would have reduced operational risk. | A component-specific defect or testability problem that is materially improved by a small extraction. |
+| `20. Auth rate limiting distributed attack gap` | `server/routes/auth.routes.ts` | Progressive delay or lockout logic can easily create self-denial-of-service paths for valid users if done hastily. A safe design here needs deliberate UX and abuse-model review, not a one-pass patch. | A reviewed lockout/delay design with operator controls, user recovery considerations, and attack simulation coverage. |
+| `23. Manual cookie parsing` | `server/auth/session-cookie.ts` | The current parser is small, deterministic, and already tailored to the repo's cookie usage. Replacing it with a library would add dependency and behavior change risk without a demonstrated bug. | Evidence that the current parser mishandles valid cookie shapes used by this app or introduces a parsing ambiguity. |
+| `24. MIME whitelist refinement` | `server/routes/collection-receipt-file-type-utils.ts` | The receipt pipeline already relies on signature-based validation as the authoritative file-type control. Adding a hard reject for `application/octet-stream` at the MIME layer would likely block legitimate uploads from inconsistent clients without adding meaningful security. | Evidence that MIME ambiguity is bypassing signature validation or that a reviewed allowlist adjustment can be made without false rejects. |
+| `25. WebSocket session vs HTTP session lifecycle sync` | `server/ws/` | Prior session revocation hardening already covers the important invalidation paths. I did not add another synchronization layer in this pass because extra WS/session coupling would increase lifecycle complexity without a demonstrated gap. | A reproducible case where a revoked or invalidated HTTP session remains incorrectly active over WebSocket. |
+| `26. Weak secret warnings completeness` | `server/config/runtime.ts` | Existing runtime safety warnings already provide practical secret-quality coverage. Broader entropy heuristics risk noisy false positives on valid deployments unless they are carefully calibrated and reviewed. | Real operator confusion around current warnings or a reviewed heuristic that improves signal without spamming valid environments. |
+| `27. Prop drilling in App.tsx` | `client/src/App.tsx` | Prop-drilling cleanup would be a maintainability refactor, not a direct hardening fix. It was intentionally left out to avoid architecture churn outside the audited risk surface. | A bug, performance issue, or testability issue directly caused by the current prop flow. |
+| `28. BrandLogo fallback` | `client/src/components/BrandLogo.tsx` | The audit already marked this surface as correct, and no bug was found during review. | A real fallback rendering bug or asset-loading failure not covered by the current implementation. |
+| `29. Skip link visibility cross-browser verification` | `client/src/theme-tokens.css` | Existing accessibility coverage and code review did not reveal a concrete cross-browser defect, so no speculative CSS change was made. | Reproducible browser-specific evidence that the skip link is hidden or unreadable under current tokens. |
+| `31. Chunk size verification` | `vite.config.ts`, `.github/workflows/ci.yml` | Bundle-size monitoring is already enforced elsewhere in the repo, so adding another gate here would have duplicated an existing control instead of improving it. | If the current chunk/budget check is removed, stops running in CI, or is shown to miss relevant bundles. |
+
+## Maintenance Note
+
+These entries are not "ignored" findings. They were reviewed during the same audit pass and left unchanged because the safest production decision was:
+
+1. preserve already-strong behavior,
+2. avoid speculative rewrites, and
+3. require stronger evidence before touching mature subsystems.
+
+If one of the revisit conditions above becomes true, the related item should move back into active engineering scope with focused reproduction steps and targeted tests.

@@ -121,6 +121,7 @@ Anda masih perlu menyediakan PostgreSQL secara berasingan. Image ini sengaja tid
 - Playwright critical-flow and visual-smoke guidance now lives in [docs/E2E_VISUAL_TESTING.md](./docs/E2E_VISUAL_TESTING.md).
 - Reviewed image delivery guidance now lives in [docs/IMAGE_OPTIMIZATION.md](./docs/IMAGE_OPTIMIZATION.md).
 - Dependency versioning and workflow maintenance policy now live in [docs/DEPENDENCY_SUPPLY_CHAIN.md](./docs/DEPENDENCY_SUPPLY_CHAIN.md).
+- Audit-reviewed no-change decisions now live in [docs/AUDIT_NO_CHANGE_DECISIONS.md](./docs/AUDIT_NO_CHANGE_DECISIONS.md).
 
 ## Troubleshooting
 

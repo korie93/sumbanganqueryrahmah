@@ -7,6 +7,7 @@ import {
   EXTERNAL_SCAN_OUTPUT_LIMIT,
   type ExternalScanConfig,
   summarizeOutput,
+  validateResolvedScannerArgs,
 } from "./collection-receipt-external-scan-shared";
 
 export function createOperationalScanError(
@@ -87,9 +88,10 @@ export async function runExternalReceiptScan({
 }) {
   const fileName = path.basename(filePath);
   const timeoutMs = resolveValidatedExternalScanTimeoutMs(config.timeoutMs);
+  const validatedArgs = validateResolvedScannerArgs(args);
 
   await new Promise<void>((resolve, reject) => {
-    const child = spawnProcess(scannerCommand, args, {
+    const child = spawnProcess(scannerCommand, validatedArgs, {
       stdio: ["ignore", "pipe", "pipe"],
       windowsHide: true,
     });

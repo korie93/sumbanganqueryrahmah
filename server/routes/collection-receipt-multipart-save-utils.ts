@@ -32,6 +32,11 @@ export type MultipartCollectionReceiptInput = {
   stream: NodeJS.ReadableStream;
 };
 
+type MultipartStreamFailureObservation = {
+  stage: "source" | "transform" | "write";
+  errorName: string | null;
+};
+
 export async function saveMultipartCollectionReceipt(
   receipt: MultipartCollectionReceiptInput,
 ): Promise<StoredCollectionReceiptFile> {
@@ -56,6 +61,7 @@ export async function saveMultipartCollectionReceipt(
   let fileSize = 0;
   let signatureType: CollectionReceiptFileType | null = null;
   let maxBytesExceeded = false;
+  let observedStreamFailure: MultipartStreamFailureObservation | null = null;
 
   const captureAndValidate = new Transform({
     transform(chunk, _encoding, callback) {
@@ -76,13 +82,49 @@ export async function saveMultipartCollectionReceipt(
       callback(null, bufferChunk);
     },
   });
+  const noteStreamFailure = (
+    stage: "source" | "transform" | "write",
+    error: unknown,
+  ) => {
+    observedStreamFailure = {
+      stage,
+      errorName: error instanceof Error ? error.name : null,
+    };
+  };
+  const handleSourceStreamError = (error: unknown) => {
+    noteStreamFailure("source", error);
+  };
+  const handleTransformStreamError = (error: unknown) => {
+    noteStreamFailure("transform", error);
+  };
+
+  const sourceStream = receipt.stream as NodeJS.ReadableStream & {
+    destroyed?: boolean;
+    destroy?: (error?: Error) => void;
+    once: (event: "error", listener: (error: unknown) => void) => unknown;
+    removeListener: (event: "error", listener: (error: unknown) => void) => unknown;
+  };
+  sourceStream.once("error", handleSourceStreamError);
+  captureAndValidate.once("error", handleTransformStreamError);
+  let writeStream: fs.WriteStream | null = null;
+  const handleWriteStreamError = (error: unknown) => {
+    noteStreamFailure("write", error);
+  };
+  const detachObservedStreamListeners = () => {
+    sourceStream.removeListener("error", handleSourceStreamError);
+    captureAndValidate.removeListener("error", handleTransformStreamError);
+    writeStream?.removeListener("error", handleWriteStreamError);
+  };
 
   try {
+    writeStream = fs.createWriteStream(temporaryFilePath, { flags: "wx" });
+    writeStream.once("error", handleWriteStreamError);
     await pipeline(
-      receipt.stream,
+      sourceStream,
       captureAndValidate,
-      fs.createWriteStream(temporaryFilePath, { flags: "wx" }),
+      writeStream,
     );
+    detachObservedStreamListeners();
 
     if (!fileSize) {
       throw new Error("Invalid receipt payload.");
@@ -124,11 +166,26 @@ export async function saveMultipartCollectionReceipt(
       fileSize: prepared.sanitizedBuffer.length,
     });
   } catch (error) {
+    detachObservedStreamListeners();
     if (maxBytesExceeded) {
-      const destroyableStream = receipt.stream as NodeJS.ReadableStream & {
-        destroy?: (error?: Error) => void;
-      };
-      destroyableStream.destroy?.(error instanceof Error ? error : undefined);
+      sourceStream.destroy?.(error instanceof Error ? error : undefined);
+    }
+    captureAndValidate.destroy(error instanceof Error ? error : undefined);
+    writeStream?.destroy(error instanceof Error ? error : undefined);
+    sourceStream.destroy?.(error instanceof Error ? error : undefined);
+
+    const streamFailure = observedStreamFailure as MultipartStreamFailureObservation | null;
+    if (streamFailure !== null) {
+      logCollectionReceiptBestEffortFailure(
+        "Multipart collection receipt stream failed during save",
+        {
+          fileName,
+          temporaryFilePath,
+          maxBytesExceeded,
+          stage: streamFailure.stage,
+          errorName: streamFailure.errorName,
+        },
+      );
     }
 
     if (error instanceof CollectionReceiptSecurityError) {

@@ -130,6 +130,16 @@ function parseDashboardExportRgbChannels(
   return [fallback[0], fallback[1], fallback[2]];
 }
 
+function formatDashboardExportRgbColor(
+  channels: readonly [number, number, number],
+): string {
+  const [red, green, blue] = channels.map((channel) =>
+    Math.max(0, Math.min(255, Math.round(channel))),
+  ) as [number, number, number];
+
+  return `rgb(${red}, ${green}, ${blue})`;
+}
+
 export function formatDashboardHour(hour: number) {
   if (hour === 0) return "12 AM";
   if (hour === 12) return "12 PM";
@@ -239,13 +249,16 @@ export async function exportDashboardToPdf(element: HTMLDivElement) {
   const foregroundRgb = parseDashboardExportRgbChannels(exportTheme.foreground, [30, 41, 59]);
   const mutedForegroundRgb = parseDashboardExportRgbChannels(exportTheme.mutedForeground, [100, 116, 139]);
   const borderRgb = parseDashboardExportRgbChannels(exportTheme.border, [226, 232, 240]);
+  const safeBackgroundColor = formatDashboardExportRgbColor(backgroundRgb);
+  const safeForegroundColor = formatDashboardExportRgbColor(foregroundRgb);
+  const safeBorderColor = formatDashboardExportRgbColor(borderRgb);
 
   const canvas = await html2canvas(element, {
     scale: 2,
     useCORS: true,
     allowTaint: true,
     logging: false,
-    backgroundColor,
+    backgroundColor: safeBackgroundColor,
     width: element.scrollWidth,
     height: element.scrollHeight,
     scrollX: 0,
@@ -258,11 +271,11 @@ export async function exportDashboardToPdf(element: HTMLDivElement) {
           color-scheme: ${element.ownerDocument.documentElement.classList.contains("dark") ? "dark" : "light"};
         }
         * {
-          color: ${exportTheme.foreground} !important;
-          background-color: ${backgroundColor} !important;
-          border-color: ${exportTheme.border} !important;
+          color: ${safeForegroundColor} !important;
+          background-color: ${safeBackgroundColor} !important;
+          border-color: ${safeBorderColor} !important;
         }
-        .recharts-text { fill: ${exportTheme.foreground} !important; }
+        .recharts-text { fill: ${safeForegroundColor} !important; }
       `;
       clonedDoc.head.appendChild(style);
     },

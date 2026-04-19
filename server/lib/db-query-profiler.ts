@@ -57,12 +57,20 @@ type DbQueryProfileStatementState = {
 
 const dbQueryProfilerPatchedSymbol = Symbol("sqr.dbQueryProfiler.patched");
 const dbQueryProfilerOriginalQuerySymbol = Symbol("sqr.dbQueryProfiler.originalQuery");
+const dbQueryProfilerPoolConnectPatchedSymbol = Symbol("sqr.dbQueryProfiler.poolConnectPatched");
+const dbQueryProfilerOriginalPoolConnectSymbol = Symbol("sqr.dbQueryProfiler.originalPoolConnect");
 const MAX_QUERY_SAMPLE_LENGTH = 220;
 
 type InstrumentablePgQueryPrototype = {
   query: (...args: unknown[]) => unknown;
   [dbQueryProfilerOriginalQuerySymbol]?: (...args: unknown[]) => unknown;
   [dbQueryProfilerPatchedSymbol]?: boolean;
+};
+
+type InstrumentablePgPool = InstrumentablePgQueryPrototype & {
+  connect?: (...args: unknown[]) => Promise<InstrumentablePgQueryPrototype>;
+  [dbQueryProfilerOriginalPoolConnectSymbol]?: (...args: unknown[]) => Promise<InstrumentablePgQueryPrototype>;
+  [dbQueryProfilerPoolConnectPatchedSymbol]?: boolean;
 };
 
 function roundToTwoDecimals(value: number): number {
@@ -282,6 +290,56 @@ export function instrumentPgClientQueryMethod(
   };
 }
 
+export function instrumentPgPoolQueryMethods(
+  poolRef: InstrumentablePgPool,
+  recordQuerySample: (sqlText: string, durationMs: number) => void,
+): () => void {
+  const cleanupPatchedClients = new Set<() => void>();
+  const cleanupPoolQuery = instrumentPgClientQueryMethod(poolRef, recordQuerySample);
+
+  if (
+    typeof poolRef.connect !== "function"
+    || poolRef[dbQueryProfilerPoolConnectPatchedSymbol]
+  ) {
+    return () => {
+      cleanupPoolQuery();
+      for (const cleanupClient of cleanupPatchedClients) {
+        cleanupClient();
+      }
+      cleanupPatchedClients.clear();
+    };
+  }
+
+  const originalConnect = poolRef.connect;
+  poolRef[dbQueryProfilerOriginalPoolConnectSymbol] = originalConnect;
+  poolRef[dbQueryProfilerPoolConnectPatchedSymbol] = true;
+
+  poolRef.connect = async function profiledPoolConnect(...args: unknown[]) {
+    const client = await originalConnect.apply(this, args);
+    if (client && typeof client.query === "function" && !client[dbQueryProfilerPatchedSymbol]) {
+      cleanupPatchedClients.add(instrumentPgClientQueryMethod(client, recordQuerySample));
+    }
+    return client;
+  };
+
+  return () => {
+    cleanupPoolQuery();
+    for (const cleanupClient of cleanupPatchedClients) {
+      cleanupClient();
+    }
+    cleanupPatchedClients.clear();
+
+    if (poolRef[dbQueryProfilerPoolConnectPatchedSymbol]) {
+      const storedOriginalConnect = poolRef[dbQueryProfilerOriginalPoolConnectSymbol];
+      if (storedOriginalConnect) {
+        poolRef.connect = storedOriginalConnect;
+      }
+      delete poolRef[dbQueryProfilerOriginalPoolConnectSymbol];
+      delete poolRef[dbQueryProfilerPoolConnectPatchedSymbol];
+    }
+  };
+}
+
 export function createDbQueryProfiler(options: DbQueryProfilerOptions) {
   const requestStorage = new AsyncLocalStorage<DbQueryProfileRequestState | null>();
   const random = options.random ?? Math.random;
@@ -313,6 +371,14 @@ export function createDbQueryProfiler(options: DbQueryProfilerOptions) {
       }
 
       return instrumentPgClientQueryMethod(clientPrototype, recordQuerySample);
+    },
+
+    instrumentPgPool(poolRef: InstrumentablePgPool) {
+      if (!options.enabled) {
+        return () => undefined;
+      }
+
+      return instrumentPgPoolQueryMethods(poolRef, recordQuerySample);
     },
 
     runWithRequestProfiling<T>(meta: DbQueryProfileRequestMeta, fn: () => T): T {

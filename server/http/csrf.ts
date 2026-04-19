@@ -13,6 +13,14 @@ type CsrfMiddlewareOptions = {
   allowedOrigins?: string[];
 };
 
+function hasBrowserRequestSignal(req: Parameters<RequestHandler>[0]) {
+  return Boolean(
+    String(req.headers["sec-fetch-site"] || "").trim()
+    || String(req.headers.origin || "").trim()
+    || String(req.headers.referer || "").trim(),
+  );
+}
+
 function logCsrfRejection(req: Parameters<RequestHandler>[0], code: string, details?: Record<string, unknown>) {
   logger.warn("CSRF request rejected", {
     code,
@@ -41,9 +49,10 @@ export function createCsrfProtectionMiddleware(options: CsrfMiddlewareOptions = 
       return next();
     }
 
-    // Protect cookie-authenticated API mutations; token-only/Bearer calls can bypass.
+    // Protect cookie-authenticated API mutations. Token-only and non-browser clients may bypass
+    // when they do not present browser-origin signals that can be evaluated safely.
     const authCookie = readCookieValueFromHeader(req.headers.cookie, AUTH_SESSION_COOKIE_NAME);
-    if (!authCookie) {
+    if (!authCookie && !hasBrowserRequestSignal(req)) {
       return next();
     }
 
