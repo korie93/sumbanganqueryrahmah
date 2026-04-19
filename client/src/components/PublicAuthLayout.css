@@ -104,6 +104,7 @@
 .public-auth-layout__card {
   position: relative;
   overflow: hidden;
+  contain: paint;
   border-radius: 2rem;
   border: 1px solid var(--public-auth-shell-border);
   background: var(--public-auth-shell-surface-strong);
@@ -209,10 +210,23 @@
 @supports ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
   @media (min-width: 640px) {
     .public-auth-layout__card {
-      -webkit-backdrop-filter: blur(20px);
-      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(14px);
+      backdrop-filter: blur(14px);
     }
   }
+}
+
+.low-spec .public-auth-layout__card {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  box-shadow: 0 18px 34px -20px var(--public-auth-shadow);
+}
+
+.low-spec .public-auth-layout__pattern,
+.low-spec .public-auth-layout__glow,
+.low-spec .public-auth-layout__center-glow,
+.low-spec .public-auth-layout__halo {
+  display: none;
 }
 
 @media (min-width: 768px) {

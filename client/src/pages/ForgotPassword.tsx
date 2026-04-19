@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, LifeBuoy } from "lucide-react";
 import { PublicAuthButton, PublicAuthInput } from "@/components/PublicAuthControls";
 import { PublicAuthLayout } from "@/components/PublicAuthLayout";
-import { requestPasswordReset } from "@/lib/api/auth";
+import { requestPasswordReset } from "@/lib/api/auth-recovery-api";
 import { getApiErrorMessage } from "@/lib/api-errors";
 import {
   hasPublicAuthFieldErrors,
@@ -10,7 +10,11 @@ import {
 } from "@/pages/public-auth-form-utils";
 import { isPublicAuthAbortError } from "@/pages/public-auth-runtime-utils";
 
-export default function ForgotPasswordPage() {
+type ForgotPasswordPageProps = {
+  onNavigateLogin?: (() => void) | undefined;
+};
+
+export default function ForgotPasswordPage({ onNavigateLogin }: ForgotPasswordPageProps) {
   const [identifier, setIdentifier] = useState("");
   const [identifierError, setIdentifierError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -133,7 +137,11 @@ export default function ForgotPasswordPage() {
         type="button"
         variant="ghost"
         onClick={() => {
-          window.location.href = "/";
+          if (onNavigateLogin) {
+            onNavigateLogin();
+            return;
+          }
+          window.location.href = "/login";
         }}
       >
         <ArrowLeft className="mr-2 h-4 w-4" />

@@ -10,9 +10,15 @@ import "./Login.css";
 
 interface LoginProps {
   onLoginSuccess: (user: User) => void;
+  onNavigateHome?: (() => void) | undefined;
+  onNavigateForgotPassword?: (() => void) | undefined;
 }
 
-export default function Login({ onLoginSuccess }: LoginProps) {
+export default function Login({
+  onLoginSuccess,
+  onNavigateHome,
+  onNavigateForgotPassword,
+}: LoginProps) {
   const hasPreloadedAuthenticatedShellRef = useRef(false);
   const {
     username,
@@ -39,7 +45,11 @@ export default function Login({ onLoginSuccess }: LoginProps) {
     returnToPasswordLogin,
     goToLandingPage,
     goToForgotPassword,
-  } = useLoginPageState({ onLoginSuccess });
+  } = useLoginPageState({
+    onLoginSuccess,
+    onNavigateHome,
+    onNavigateForgotPassword,
+  });
   const hasAuthenticationIntent =
     Boolean(twoFactorChallengeToken)
     || username.trim().length > 0

@@ -34,13 +34,19 @@ import {
 
 type UseLoginPageStateParams = {
   onLoginSuccess: (user: User) => void;
+  onNavigateHome?: (() => void) | undefined;
+  onNavigateForgotPassword?: (() => void) | undefined;
 };
 
 type RetryableSubmissionKind = "login" | "two-factor";
 
 const TWO_FACTOR_PROMPT_NOTICE = "Masukkan kod pengesah 6 digit untuk melengkapkan log masuk.";
 
-export function useLoginPageState({ onLoginSuccess }: UseLoginPageStateParams) {
+export function useLoginPageState({
+  onLoginSuccess,
+  onNavigateHome,
+  onNavigateForgotPassword,
+}: UseLoginPageStateParams) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -394,9 +400,17 @@ export function useLoginPageState({ onLoginSuccess }: UseLoginPageStateParams) {
     toggleShowPassword: () => setShowPassword((current) => !current),
     returnToPasswordLogin,
     goToLandingPage: () => {
+      if (onNavigateHome) {
+        onNavigateHome();
+        return;
+      }
       window.location.href = "/";
     },
     goToForgotPassword: () => {
+      if (onNavigateForgotPassword) {
+        onNavigateForgotPassword();
+        return;
+      }
       window.location.href = "/forgot-password";
     },
   };
