@@ -1,6 +1,6 @@
 # Audit No-Change Decisions
 
-This document records Audit #4 findings that were reviewed on 19 April 2026 and intentionally left unchanged in code during the precision hardening pass.
+This document records Audit #4 and Audit #5 findings that were reviewed on 19 April 2026 and intentionally left unchanged in code during the precision hardening and uplift passes.
 
 The goal is to make the reasoning explicit so maintainers can distinguish:
 
@@ -8,7 +8,7 @@ The goal is to make the reasoning explicit so maintainers can distinguish:
 - issues already covered by existing protections
 - areas where a runtime change would have created more risk than value in one conservative pass
 
-## Reviewed No-Change Items
+## Audit #4 Reviewed No-Change Items
 
 | Audit item | Surface | Why code was left unchanged | What would justify revisiting |
 | --- | --- | --- | --- |
@@ -30,6 +30,19 @@ The goal is to make the reasoning explicit so maintainers can distinguish:
 | `28. BrandLogo fallback` | `client/src/components/BrandLogo.tsx` | The audit already marked this surface as correct, and no bug was found during review. | A real fallback rendering bug or asset-loading failure not covered by the current implementation. |
 | `29. Skip link visibility cross-browser verification` | `client/src/theme-tokens.css` | Existing accessibility coverage and code review did not reveal a concrete cross-browser defect, so no speculative CSS change was made. | Reproducible browser-specific evidence that the skip link is hidden or unreadable under current tokens. |
 | `31. Chunk size verification` | `vite.config.ts`, `.github/workflows/ci.yml` | Bundle-size monitoring is already enforced elsewhere in the repo, so adding another gate here would have duplicated an existing control instead of improving it. | If the current chunk/budget check is removed, stops running in CI, or is shown to miss relevant bundles. |
+
+## Audit #5 Reviewed No-Change Items
+
+| Audit item | Surface | Why code was left unchanged | What would justify revisiting |
+| --- | --- | --- | --- |
+| `2. Reassess and potentially disable skipLibCheck` | `tsconfig.json`, `client/tsconfig.json` | The 19 April 2026 reassessment still fails under `tsc --noEmit --skipLibCheck false` because of third-party declarations, especially Drizzle cross-driver packages and Redux Toolkit vendor typings. The local duplicate CSS-module declaration was removed, so the remaining blockers are upstream rather than app code. | A clean upstream dependency set or reviewed package upgrade path that lets `--skipLibCheck false` pass without local hacks. |
+| `4. Add dark mode toggle UI only if low-risk and aligned with existing theme architecture` | `client/src/components/NavbarUserMenuContent.tsx`, `client/src/components/useTheme.ts` | A real light/dark toggle already exists in the authenticated user menu and preserves the current explicit-theme behavior. Adding another toggle elsewhere would duplicate controls and create UX drift instead of improving theme support. | If product requirements call for a second, more prominent theme control and the design team wants that discoverability tradeoff. |
+| `5. Decompose DashboardChartsGrid.tsx and CollectionReceiptPanel.tsx only if clearly low-risk` | `client/src/pages/dashboard/DashboardChartsGrid.tsx`, `client/src/pages/collection/CollectionReceiptPanel.tsx` | Both files were reviewed, but this pass focused on hardening and verification rather than structural churn. A split here would have increased regression surface without addressing a proven bug or performance issue. | A targeted defect, testability bottleneck, or rendering problem that can be solved with a small extraction rather than a broad reshuffle. |
+| `6. Add React.memo to Dashboard child components only where it is clearly beneficial` | dashboard subcomponents | The reviewed dashboard children that benefit from memoization already use it. Adding more wrappers now would have been speculative complexity rather than a measured rerender win. | Profiling evidence that a specific non-memoized child is rerendering heavily with stable props. |
+| `7. Add explicit "no data" states to secondary dashboard sections where missing` | secondary dashboard sections | The reviewed secondary dashboard sections already render explicit empty-state messaging, and existing tests cover those states. Adding another layer of empty-state UI would have duplicated behavior rather than clarifying it. | A newly identified section that still appears blank or ambiguous when data is empty. |
+| `9. Bundle size analysis / monitoring` | existing bundle budget scripts and CI enforcement | Bundle governance is already explicit through `npm run verify:bundle-budgets` and the CI workflow gate. Adding another analyzer or second gate would duplicate an existing control instead of making decisions clearer. | If the current budget gate stops running, misses an important chunk class, or maintainers want a reviewed report artifact in addition to the pass/fail budget check. |
+| `10. Inline documentation for complex React components` | only touched audited React components | The touched React surfaces in this pass only needed small attribute/test changes, not architectural explanation. Adding comments there would have been noise rather than real maintenance help. | A future patch that changes a genuinely non-obvious control flow or rendering contract inside one of these components. |
+| `11. Read replica support / scalability preparation` | database / infra guidance | Read replicas remain a future scaling concern, not an immediate production gap. Introducing runtime replica plumbing now would be architecture churn for a topology the repo does not operate yet. | A concrete deployment plan that introduces replica hosts, query-routing rules, and failover expectations worth encoding in code or ops docs. |
 
 ## Maintenance Note
 

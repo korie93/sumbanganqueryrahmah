@@ -97,7 +97,7 @@ Anda masih perlu menyediakan PostgreSQL secara berasingan. Image ini sengaja tid
 | `npm run verify:db-schema-governance` | Verify every discovered table is classified under the repo DB governance manifest |
 | `npm run db:studio` | Open Drizzle Studio |
 | `npm run typecheck` | Run TypeScript type checking |
-| `npm run test:client:a11y` | Run focused axe-core/jsdom accessibility coverage for high-value client surfaces |
+| `npm run test:client:a11y` | Run focused client accessibility coverage for high-value surfaces, including login/auth flows |
 | `npm run test:e2e:smoke` | Run Playwright-backed browser smoke coverage against a running server |
 | `npm run test:e2e:ci-local` | Build, boot a local server, then run the CI-style Playwright smoke sequence |
 | `npm test` | Run all test suites |

@@ -7,10 +7,11 @@
     "strict": true,
     "exactOptionalPropertyTypes": true,
     "forceConsistentCasingInFileNames": true,
-    // Keep skipLibCheck enabled for now. A 2026-04-19 review still fails in
-    // third-party library declarations (not app code), including Drizzle
-    // cross-driver types, Redux Toolkit vendor typings, and duplicate CSS
-    // module declarations from the Vite client type surface.
+    // Keep skipLibCheck enabled after the 2026-04-19 reassessment.
+    // `tsc --noEmit --skipLibCheck false` still fails in third-party
+    // declarations (not app code), including Drizzle cross-driver packages
+    // and Redux Toolkit vendor typings. The previous local CSS module
+    // duplicate was removed, so the remaining blockers are upstream typings.
     "skipLibCheck": true,
     "esModuleInterop": true,
     "resolveJsonModule": true,

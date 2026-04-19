@@ -4,6 +4,10 @@
     "useDefineForClassFields": true,
     "lib": ["ES2020", "DOM", "DOM.Iterable"],
     "module": "ESNext",
+    // Keep skipLibCheck enabled after the 2026-04-19 reassessment.
+    // The remaining failures under `--skipLibCheck false` are external
+    // declaration issues (not client app code), so forcing this off would
+    // destabilize the toolchain without improving source safety yet.
     "skipLibCheck": true,
     "moduleResolution": "bundler",
     "resolveJsonModule": true,

@@ -82,7 +82,12 @@ npm run test:client:a11y
 ```
 
 Ini melengkapkan `npm run test:client` supaya perubahan markup kritikal seperti
-error boundary fallback dan import surface gagal lebih awal jika melanggar axe.
+error boundary fallback, import surface, dan login/auth flows gagal lebih awal
+melalui kombinasi semakan axe/jsdom dan kontrak a11y yang lebih ringan untuk
+surface yang tidak sesuai diimport terus dalam Node test runner. Contrast untuk
+token auth/login pula kekal disemak secara berasingan melalui kontrak token
+warna repo supaya HSL + opacity combinations tidak dibiarkan bergantung pada
+semakan manual semata-mata.
 
 ## 4. Apa Yang Belum Dianggap Lengkap
 

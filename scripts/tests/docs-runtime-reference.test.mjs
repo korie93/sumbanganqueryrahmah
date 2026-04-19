@@ -40,9 +40,20 @@ test("ER diagram doc stays explicitly scoped to the reviewed Drizzle subset", ()
 test("audit no-change decisions doc records reviewed deferments and revisit triggers", () => {
   const noChangeDoc = readRepoFile("docs/AUDIT_NO_CHANGE_DECISIONS.md");
 
-  assert.match(noChangeDoc, /Audit #4 findings that were reviewed on 19 April 2026/i);
+  assert.match(noChangeDoc, /Audit #4 and Audit #5 findings that were reviewed on 19 April 2026/i);
   assert.match(noChangeDoc, /WebSocket event listener leak hardening/i);
-  assert.match(noChangeDoc, /Missing focus management on modal dialogs/i);
-  assert.match(noChangeDoc, /Chunk size verification/i);
+  assert.match(noChangeDoc, /skipLibCheck/i);
+  assert.match(noChangeDoc, /dark mode toggle/i);
+  assert.match(noChangeDoc, /Bundle size analysis/i);
   assert.match(noChangeDoc, /What would justify revisiting/i);
+});
+
+test("observability doc stays aligned with the reviewed web-vitals runtime contract", () => {
+  const observabilityDoc = readRepoFile("docs/OBSERVABILITY.md");
+
+  assert.match(observabilityDoc, /POST \/telemetry\/web-vitals/);
+  assert.match(observabilityDoc, /sendBeacon\(\)/);
+  assert.match(observabilityDoc, /keepalive: true/);
+  assert.match(observabilityDoc, /pageType: "public"/);
+  assert.match(observabilityDoc, /pageType: "authenticated"/);
 });

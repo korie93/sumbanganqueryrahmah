@@ -103,6 +103,12 @@ Frontend menghantar Web Vitals ke:
 
 - `POST /telemetry/web-vitals`
 
+Butiran yang kini disengajakan dan patut kekal stabil:
+
+- pengumpulan hanya bermula dalam production build, bukan semasa dev biasa
+- penghantaran utama menggunakan `navigator.sendBeacon()` dengan `fetch(..., { keepalive: true })` sebagai fallback
+- payload membezakan `pageType: "public"` untuk route seperti `/login`, `/forgot-password`, dan `pageType: "authenticated"` untuk app shell biasa
+
 Dan monitor/admin flow boleh membaca ringkasan ini semula melalui route dalaman yang sesuai. Ini membantu melihat pengalaman pengguna sebenar tanpa menunggu external RUM platform.
 
 ### Optional Remote Error Tracking

@@ -268,6 +268,7 @@ function SidebarTrigger({
       size="icon"
       className={cn("h-7 w-7", className)}
       aria-label="Toggle sidebar"
+      aria-keyshortcuts="Control+B Meta+B"
       aria-controls={isMobile ? mobileSidebarId : desktopSidebarId}
       aria-expanded={isMobile ? openMobile : open}
       title="Toggle sidebar"

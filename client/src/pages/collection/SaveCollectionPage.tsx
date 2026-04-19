@@ -333,7 +333,13 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
           >
             Reset Form
           </Button>
-          <Button type="button" onClick={state.handleSubmit} disabled={state.submitting} className="w-full sm:w-auto">
+          <Button
+            type="button"
+            onClick={state.handleSubmit}
+            disabled={state.submitting}
+            className="w-full sm:w-auto"
+            aria-keyshortcuts="Control+S Meta+S"
+          >
             {state.submitting ? "Saving..." : "Save Collection"}
           </Button>
         </div>
