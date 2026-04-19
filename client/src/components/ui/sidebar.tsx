@@ -68,6 +68,12 @@ function useSidebar() {
   return context
 }
 
+function getAriaExpandedProps(isExpanded: boolean) {
+  return isExpanded
+    ? ({ "aria-expanded": "true" as const })
+    : ({ "aria-expanded": "false" as const })
+}
+
 function SidebarProvider({
   defaultOpen = true,
   open: openProp,
@@ -259,6 +265,7 @@ function SidebarTrigger({
   ...props
 }: React.ComponentProps<typeof Button>) {
   const { desktopSidebarId, isMobile, mobileSidebarId, open, openMobile, toggleSidebar } = useSidebar()
+  const ariaExpandedProps = getAriaExpandedProps(isMobile ? openMobile : open)
 
   return (
     <Button
@@ -270,12 +277,12 @@ function SidebarTrigger({
       aria-label="Toggle sidebar"
       aria-keyshortcuts="Control+B Meta+B"
       aria-controls={isMobile ? mobileSidebarId : desktopSidebarId}
-      aria-expanded={isMobile ? openMobile : open}
       title="Toggle sidebar"
       onClick={(event) => {
         onClick?.(event)
         toggleSidebar()
       }}
+      {...ariaExpandedProps}
       {...props}
     >
       <PanelLeftIcon />
@@ -286,6 +293,7 @@ function SidebarTrigger({
 
 function SidebarRail({ className, ...props }: React.ComponentProps<"button">) {
   const { desktopSidebarId, isMobile, mobileSidebarId, open, openMobile, toggleSidebar } = useSidebar()
+  const ariaExpandedProps = getAriaExpandedProps(isMobile ? openMobile : open)
 
   // Note: Tailwind v3.4 doesn't support "in-" selectors. So the rail won't work perfectly.
   return (
@@ -294,10 +302,10 @@ function SidebarRail({ className, ...props }: React.ComponentProps<"button">) {
       data-slot="sidebar-rail"
       aria-label="Toggle Sidebar"
       aria-controls={isMobile ? mobileSidebarId : desktopSidebarId}
-      aria-expanded={isMobile ? openMobile : open}
       tabIndex={-1}
       onClick={toggleSidebar}
       title="Toggle Sidebar"
+      {...ariaExpandedProps}
       className={cn(
         "hover:after:bg-sidebar-border absolute inset-y-0 z-[var(--z-sidebar-rail)] hidden w-4 -translate-x-1/2 transition-all ease-linear group-data-[side=left]:-right-4 group-data-[side=right]:left-0 after:absolute after:inset-y-0 after:left-1/2 after:w-[2px] sm:flex",
         "in-data-[side=left]:cursor-w-resize in-data-[side=right]:cursor-e-resize",
