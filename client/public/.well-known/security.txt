@@ -1,0 +1,4 @@
+Contact: https://github.com/korie93/sumbanganqueryrahmah/security/advisories/new
+Preferred-Languages: en, ms
+Policy: https://github.com/korie93/sumbanganqueryrahmah/security/policy
+Expires: 2027-04-19T00:00:00.000Z

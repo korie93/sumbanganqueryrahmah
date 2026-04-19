@@ -16,6 +16,7 @@ import {
   normalizeBackupCollectionReceipt,
   normalizeBackupCollectionRecord,
 } from "./backups-restore-collection-normalize-utils";
+import { logger } from "../lib/logger";
 import { rebuildCollectionRecordDailyRollups } from "./collection-record-repository-utils";
 import {
   type BackupPayloadChunkReader,
@@ -26,6 +27,7 @@ import { buildTextArraySql } from "./sql-array-utils";
 const RESTORED_COLLECTION_RECORD_IDS_TEMP_TABLE = sql.raw("sqr_restored_collection_record_ids");
 const RESTORE_INSERT_BATCH_SIZE = 200;
 const RESTORE_SYSTEM_ACTOR_USERNAME = "system";
+const RESTORE_TRACKED_RECORD_IDS_WARNING_RATIO = 0.8;
 
 type NormalizedBackupCollectionRecord = NonNullable<ReturnType<typeof normalizeBackupCollectionRecord>>;
 type NormalizedBackupCollectionReceipt = NonNullable<ReturnType<typeof normalizeBackupCollectionReceipt>>;
@@ -52,6 +54,7 @@ export async function restoreCollectionRecordsFromBackup(
     Math.trunc(options?.maxTrackedRecordIds ?? BACKUP_RESTORE_MAX_TRACKED_COLLECTION_RECORD_IDS_DEFAULT),
   );
   let trackedRecordIds = 0;
+  let trackedRecordIdsWarningLogged = false;
 
   const flushRecordInsertBatch = async (insertBatch: NormalizedBackupCollectionRecord[]) => {
     if (!insertBatch.length) {
@@ -76,6 +79,19 @@ export async function restoreCollectionRecordsFromBackup(
       );
     }
     trackedRecordIds = nextTrackedRecordIds;
+    if (
+      !trackedRecordIdsWarningLogged
+      && trackedRecordIds >= Math.floor(maxTrackedRecordIds * RESTORE_TRACKED_RECORD_IDS_WARNING_RATIO)
+    ) {
+      trackedRecordIdsWarningLogged = true;
+      logger.warn("Backup restore tracking is approaching the configured safety limit", {
+        trackedRecordIds,
+        maxTrackedRecordIds,
+        trackedRecordIdsWarningThreshold: Math.floor(
+          maxTrackedRecordIds * RESTORE_TRACKED_RECORD_IDS_WARNING_RATIO,
+        ),
+      });
+    }
 
     const valuesSql = sql.join(
       insertBatch.map((row) => {

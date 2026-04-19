@@ -4,6 +4,11 @@ import { logger, sanitizeForLog } from "./logger";
 
 const REMOTE_ERROR_DELIVERY_FAILURE_LOG_COOLDOWN_MS = 5 * 60 * 1000;
 const DEFAULT_REMOTE_ERROR_TRACKING_SERVICE = "sqr";
+const REMOTE_EMAIL_CANDIDATE_PATTERN = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi;
+const REMOTE_AUTH_HEADER_CANDIDATE_PATTERN = /\b(Bearer|Basic)\s+[A-Za-z0-9._~+/=-]+\b/gi;
+const REMOTE_JWT_CANDIDATE_PATTERN = /\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b/g;
+const REMOTE_SENSITIVE_QUERY_VALUE_PATTERN = /([?&](?:token|code|email|phone|password|secret|key)=)[^&\s]+/gi;
+const REMOTE_LABELED_SECRET_PATTERN = /\b(token|secret|api[_ -]?key|password|session)\b\s*[:=]\s*([^\s,;]+)/gi;
 
 type RemoteErrorTrackingConfig = {
   enabled: boolean;
@@ -91,9 +96,14 @@ function trimOptionalString(value: unknown, maxLength: number): string | undefin
 function sanitizeRemoteMessage(message: unknown): string {
   const normalized = trimOptionalString(String(message || ""), 300);
   const sanitized = sanitizeForLog(normalized || "Remote runtime error");
-  return typeof sanitized === "string" && sanitized.trim()
-    ? sanitized
-    : "Remote runtime error";
+  const sanitizedText = typeof sanitized === "string" ? sanitized : "Remote runtime error";
+  const redacted = sanitizedText
+    .replace(REMOTE_EMAIL_CANDIDATE_PATTERN, "[REDACTED_EMAIL]")
+    .replace(REMOTE_AUTH_HEADER_CANDIDATE_PATTERN, (_match, scheme: string) => `${scheme} [REDACTED]`)
+    .replace(REMOTE_JWT_CANDIDATE_PATTERN, "[REDACTED_TOKEN]")
+    .replace(REMOTE_SENSITIVE_QUERY_VALUE_PATTERN, "$1[REDACTED]")
+    .replace(REMOTE_LABELED_SECRET_PATTERN, (_match, label: string) => `${label}=[REDACTED]`);
+  return redacted.trim() || "Remote runtime error";
 }
 
 function sanitizeRemoteEvent(event: RemoteErrorTrackingEvent): RemoteErrorTrackingEvent {

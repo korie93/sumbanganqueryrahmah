@@ -59,6 +59,63 @@ test("remote error tracker forwards sanitized client runtime errors when enabled
   });
 });
 
+test("remote error tracker redacts emails and secret-like values before external delivery", async () => {
+  const deliveredPayloads: unknown[] = [];
+  const tracker = createRemoteErrorTracker({
+    config: {
+      enabled: true,
+      endpoint: "https://errors.example.com/ingest",
+      timeoutMs: 1_000,
+      environment: "production",
+      release: "1.2.3",
+      service: "sqr",
+    },
+    fetchImpl: (async (_input, init) => {
+      deliveredPayloads.push(JSON.parse(String(init?.body || "{}")));
+      return new Response(null, { status: 204 });
+    }) as typeof fetch,
+  });
+
+  await tracker.captureServerError({
+    errorName: "Error",
+    message: "Reset for alice@example.com failed at /reset-password?token=eyJhbGciOiJIUzI1NiJ9.abcdefghijk.lmnopqrstuv with Bearer abcdefghijklmnop",
+    method: "POST",
+    path: "/api/auth/reset-password-with-token",
+    requestId: "req-server-sensitive",
+    statusCode: 500,
+  });
+
+  assert.equal(deliveredPayloads.length, 1);
+  const deliveredPayload = deliveredPayloads[0] as {
+    environment?: string;
+    error?: { message?: string; name?: string };
+    eventType?: string;
+    release?: string;
+    request?: { id?: string; method?: string; path?: string; statusCode?: number };
+    service?: string;
+    severity?: string;
+    source?: string;
+    ts?: string;
+  };
+
+  assert.equal(deliveredPayload.environment, "production");
+  assert.equal(deliveredPayload.eventType, "server.request_error");
+  assert.equal(deliveredPayload.release, "1.2.3");
+  assert.equal(deliveredPayload.request?.id, "req-server-sensitive");
+  assert.equal(deliveredPayload.request?.method, "POST");
+  assert.equal(deliveredPayload.request?.path, "/api/auth/reset-password-with-token");
+  assert.equal(deliveredPayload.request?.statusCode, 500);
+  assert.equal(deliveredPayload.service, "sqr");
+  assert.equal(deliveredPayload.severity, "error");
+  assert.equal(deliveredPayload.source, "server");
+  assert.match(String(deliveredPayload.ts || ""), /^\d{4}-\d{2}-\d{2}T/);
+  assert.equal(deliveredPayload.error?.name, "Error");
+  assert.equal(
+    deliveredPayload.error?.message,
+    "Reset for [REDACTED_EMAIL] failed at /reset-password?token=[REDACTED] with Bearer [REDACTED]",
+  );
+});
+
 test("remote error tracker bounds delivery failures to warnings without throwing", async () => {
   const warningLogs: Array<Record<string, unknown> | undefined> = [];
   const tracker = createRemoteErrorTracker({

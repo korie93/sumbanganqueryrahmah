@@ -66,7 +66,7 @@ test("registerLocalHttpPipeline allows blob receipt previews in the CSP header",
     const response = await fetch(`${baseUrl}/healthz`);
     assert.equal(response.status, 200);
     const csp = String(response.headers.get("content-security-policy") || "");
-    assert.match(String(response.headers.get("x-frame-options") || ""), /sameorigin/i);
+    assert.match(String(response.headers.get("x-frame-options") || ""), /deny/i);
     assert.equal(response.headers.get("x-content-type-options"), "nosniff");
     assert.match(String(response.headers.get("strict-transport-security") || ""), /max-age=15552000/i);
     assert.match(String(response.headers.get("strict-transport-security") || ""), /preload/i);

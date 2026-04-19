@@ -4,6 +4,7 @@ import { QueryErrorFallback } from "@/components/QueryErrorFallback";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DashboardDeferredSections } from "@/pages/dashboard/DashboardDeferredSections";
 import { DashboardPageHeader } from "@/pages/dashboard/DashboardPageHeader";
+import { DashboardSectionBoundary } from "@/pages/dashboard/DashboardSectionBoundary";
 import { DashboardSnapshotSection } from "@/pages/dashboard/DashboardSnapshotSection";
 import type { LoginTrend, PeakHour, RoleData, SummaryCardItem, TopUser } from "@/pages/dashboard/types";
 
@@ -156,7 +157,12 @@ export function DashboardContentView({
         </OperationalSectionCard>
       ) : (
         <div ref={dashboardRef} className="space-y-4 sm:space-y-6">
-          <DashboardSnapshotSection summaryCards={summaryCards} summaryLoading={summaryLoading} />
+          <DashboardSectionBoundary
+            boundaryKey={`dashboard-snapshot:${summaryLoading ? "loading" : "ready"}:${summaryCards.length}`}
+            panelLabel="Dashboard snapshot"
+          >
+            <DashboardSnapshotSection summaryCards={summaryCards} summaryLoading={summaryLoading} />
+          </DashboardSectionBoundary>
           <DashboardDeferredSections
             defer={deferSecondary}
             trendDays={trendDays}

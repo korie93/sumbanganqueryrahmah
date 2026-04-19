@@ -2,7 +2,9 @@ import jwt, { type SignOptions } from "jsonwebtoken";
 import { runtimeConfig } from "../config/runtime";
 
 export const SESSION_JWT_ALGORITHM = "HS256" as const;
-export const SESSION_JWT_DEFAULT_EXPIRY = "24h";
+export const SESSION_JWT_NON_PRODUCTION_EXPIRY = "24h";
+export const SESSION_JWT_PRODUCTION_EXPIRY = "8h";
+export const SESSION_JWT_DEFAULT_EXPIRY = resolveSessionJwtExpiry(runtimeConfig.app.isProduction);
 
 type SessionJwtVerificationOptions = {
   clockToleranceSeconds?: number;
@@ -33,6 +35,10 @@ export function signSessionJwt<TPayload extends object>(
     expiresIn: SESSION_JWT_DEFAULT_EXPIRY,
     ...options,
   });
+}
+
+export function resolveSessionJwtExpiry(isProduction: boolean) {
+  return isProduction ? SESSION_JWT_PRODUCTION_EXPIRY : SESSION_JWT_NON_PRODUCTION_EXPIRY;
 }
 
 export function verifyJwtWithAnySecret<TPayload>(

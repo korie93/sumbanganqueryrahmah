@@ -4,6 +4,7 @@ import {
   encryptCollectionPiiFieldValue,
   hashCollectionCustomerNameSearchTerms,
 } from "../../lib/collection-pii-encryption";
+import { logger } from "../../lib/logger";
 import {
   createRestoreStats,
   initializeRestoreTrackingTempTable,
@@ -404,6 +405,69 @@ test("collection restore counts only newly tracked ids against the safety limit 
   assert.equal(stats.collectionRecords.processed, 1_005);
   assert.equal(stats.collectionRecords.inserted, 5);
   assert.equal(stats.collectionRecords.skipped, 1_000);
+});
+
+test("collection restore logs a single aggregate warning when tracked ids approach the safety limit", async (t) => {
+  const warnings: Array<Record<string, unknown> | undefined> = [];
+  t.mock.method(logger, "warn", ((_message, metadata) => {
+    warnings.push(metadata);
+  }) as typeof logger.warn);
+
+  const trackedIds = new Set<string>();
+  const tx = createBackupRestoreExecutor(
+    async (query: unknown) => {
+      const sqlText = normalizeSqlText(query);
+      if (sqlText.includes("INSERT INTO sqr_restored_collection_record_ids")) {
+        const insertedIds = extractUuidValues(sqlText).filter((id) => {
+          if (trackedIds.has(id)) {
+            return false;
+          }
+          trackedIds.add(id);
+          return true;
+        });
+        return { rows: insertedIds.map((id) => ({ id })) };
+      }
+
+      return { rows: [] };
+    },
+    "Unexpected insert() call during collection restore tracking warning test.",
+  );
+  const backupDataReader = createCollectionRecordReader(
+    Array.from({ length: 850 }, (_, index) => ({
+      id: `11111111-1111-1111-1111-${String(index + 1).padStart(12, "0")}`,
+      customerName: `Customer ${index + 1}`,
+      icNumber: `90010101${String(index + 1).padStart(4, "0")}`,
+      customerPhone: `012300${String(index + 1).padStart(4, "0")}`,
+      accountNumber: `ACC-${index + 1}`,
+      batch: "P10",
+      paymentDate: "2026-03-31",
+      amount: 100,
+      receiptFile: null,
+      receiptTotalAmountCents: 10000,
+      receiptValidationStatus: "matched",
+      receiptValidationMessage: null,
+      receiptCount: 1,
+      duplicateReceiptFlag: false,
+      createdByLogin: "system",
+      collectionStaffNickname: "Collector Alpha",
+      staffUsername: "Collector Alpha",
+      createdAt: "2026-03-31T08:00:00.000Z",
+    })),
+  );
+  const stats = createRestoreStats();
+
+  await initializeRestoreTrackingTempTable(tx);
+  await restoreCollectionRecordsFromBackup(tx, backupDataReader, stats, {
+    maxTrackedRecordIds: 1_000,
+  });
+
+  assert.deepEqual(warnings, [
+    {
+      trackedRecordIds: 800,
+      maxTrackedRecordIds: 1_000,
+      trackedRecordIdsWarningThreshold: 800,
+    },
+  ]);
 });
 
 test("normalizeBackupCollectionRecord keeps restore fallbacks stable", () => {

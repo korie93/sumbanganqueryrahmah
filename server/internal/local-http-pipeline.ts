@@ -213,7 +213,7 @@ export function registerLocalHttpPipeline(app: Express, options: LocalHttpPipeli
 
   app.use(helmet({
     frameguard: {
-      action: "sameorigin",
+      action: "deny",
     },
     hsts: {
       maxAge: 15552000,

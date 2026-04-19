@@ -1,6 +1,6 @@
 # Audit No-Change Decisions
 
-This document records Audit #4, Audit #5, and Audit #6 findings that were reviewed on 19 April 2026 and intentionally left unchanged in code during the precision hardening and uplift passes.
+This document records Audit #4, Audit #5, Audit #6, and Audit #7 findings that were reviewed on 19 April 2026 and intentionally left unchanged in code during the precision hardening and uplift passes.
 
 The goal is to make the reasoning explicit so maintainers can distinguish:
 
@@ -73,6 +73,17 @@ The goal is to make the reasoning explicit so maintainers can distinguish:
 | `37. skipLibCheck scheduled reassessment note` | `tsconfig.json`, `client/tsconfig.json` | The reassessment note was already updated in the previous audit pass, and the current blockers remain upstream typings rather than app code. | A future successful reassessment where `--skipLibCheck false` passes cleanly. |
 | `38. Windows absolute paths in docs` | directly relevant docs | The docs touched in this pass already use repo-relative paths, so there was no cross-platform doc bug to fix. | A specific directly relevant doc entry that still contains a Windows-only absolute path. |
 | `39. npm audit in release pipeline` | release/CI workflows | The release verification pipeline already runs `npm run audit:dependencies`, and CI also enforces dependency audit coverage. Adding another audit step would duplicate an existing gate. | If the release or CI dependency audit step is removed, starts failing to run, or no longer covers the intended release workflow. |
+
+## Audit #7 Reviewed No-Change Items
+
+| Audit item | Surface | Why code was left unchanged | What would justify revisiting |
+| --- | --- | --- | --- |
+| `1. Decompose oversized components safely` | `client/src/components/ui/sidebar.tsx` | The other audited frontend hotspots in this pass were decomposed, but `sidebar.tsx` remains heavily covered by source-contract tests and live sidebar context behavior. Splitting it further without a concrete bug or profiling evidence would add review churn to a mature navigation surface. | A specific sidebar defect, profiling hotspot, or testability problem that is materially improved by a small extraction instead of broad churn. |
+| `9. CSP violation external logging / long-term analysis` | `server/internal/local-http-pipeline.ts` and observability docs | The current CSP report path already sanitizes, deduplicates, and bounds in-memory fingerprints per instance. Shipping reports to an external sink in this pass would add operational noise and deployment coupling without a reviewed transport or retention policy. | A concrete requirement for centralized CSP analytics with an approved external sink and retention policy. |
+| `12. Virtualization groundwork for large lists` | audited large list surfaces | `ActivityMobileLogsList` is already virtualized with `react-window`, so a second virtualization pass elsewhere would have been speculative churn. This pass focused on memoizing the repeated mobile row card instead. | A clearly identified large list that is still unvirtualized and shows measurable render or memory pressure. |
+| `13. Web Vitals verification` | `client/src/lib/web-vitals.ts`, `docs/OBSERVABILITY.md` | The reviewed web-vitals path is already wired, production-gated, and documented. I re-verified it and left the runtime unchanged because the integration was already in a good state. | A broken ingestion path, missing startup hook, or a requirement to add a new backend sink beyond the current telemetry route. |
+| `14. Bundle budget / chunk monitoring follow-up` | CI bundle governance | Bundle governance is already enforced through `npm run verify:bundle-budgets` in CI and release verification. Adding another gate would duplicate an existing control. | If the existing bundle-budget gate stops running, misses important chunks, or maintainers need an additional reviewed reporting artifact. |
+| `16. skipLibCheck documentation refresh` | `tsconfig.json`, `client/tsconfig.json` | The 19 April 2026 Audit #7 reassessment still fails under `tsc --noEmit --skipLibCheck false` because the remaining blockers are upstream typings rather than app code. The config note was refreshed, but disabling the flag would still be unsafe in this pass. | A clean upstream dependency set or reviewed package upgrade path that lets `--skipLibCheck false` pass without local workarounds. |
 
 ## Maintenance Note
 

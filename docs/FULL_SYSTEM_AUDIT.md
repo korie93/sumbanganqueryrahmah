@@ -19,16 +19,16 @@ SQR is stable enough for **controlled production deployment**. The architecture 
 
 ### Biggest Strengths
 
-- Clear backend composition through [server/internal/local-server-composition.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/server/internal/local-server-composition.ts).
-- Strong session, role, and CSRF protections via [server/auth/guards.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/server/auth/guards.ts) and [server/http/csrf.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/server/http/csrf.ts).
-- Centralized structured logging and error handling via [server/lib/logger.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/server/lib/logger.ts) and [server/middleware/error-handler.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/server/middleware/error-handler.ts).
-- Backup export/create path is much safer because [server/repositories/backups-payload-utils.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/server/repositories/backups-payload-utils.ts) now streams paged JSON arrays instead of materializing a single giant payload.
-- Frontend shell viewport handling is materially better through `100dvh` fallbacks in [client/src/index.css](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/client/src/index.css) and shell usage in [client/src/App.tsx](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/client/src/App.tsx).
+- Clear backend composition through [server/internal/local-server-composition.ts](../server/internal/local-server-composition.ts).
+- Strong session, role, and CSRF protections via [server/auth/guards.ts](../server/auth/guards.ts) and [server/http/csrf.ts](../server/http/csrf.ts).
+- Centralized structured logging and error handling via [server/lib/logger.ts](../server/lib/logger.ts) and [server/middleware/error-handler.ts](../server/middleware/error-handler.ts).
+- Backup export/create path is much safer because [server/repositories/backups-payload-utils.ts](../server/repositories/backups-payload-utils.ts) now streams paged JSON arrays instead of materializing a single giant payload.
+- Frontend shell viewport handling is materially better through `100dvh` fallbacks in [client/src/index.css](../client/src/index.css) and shell usage in [client/src/App.tsx](../client/src/App.tsx).
 - Viewer, monitor, receipt, backup, and collection modules show real decomposition progress.
 
 ### Biggest Risks
 
-- Restore still has scale-sensitive memory behavior in [server/repositories/backups-restore-utils.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/server/repositories/backups-restore-utils.ts) and [server/repositories/backups-restore-dataset-utils.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/server/repositories/backups-restore-dataset-utils.ts), especially the unbounded `Set<string>` of restored record IDs.
+- Restore still has scale-sensitive memory behavior in [server/repositories/backups-restore-utils.ts](../server/repositories/backups-restore-utils.ts) and [server/repositories/backups-restore-dataset-utils.ts](../server/repositories/backups-restore-dataset-utils.ts), especially the unbounded `Set<string>` of restored record IDs.
 - Pagination contracts remain mixed across imports, search, audit, auth-admin, and collection flows.
 - Two non-test source files still exceed 700 lines.
 - Dense mobile/admin surfaces still require runtime verification; static inspection alone cannot prove final usability.
@@ -60,18 +60,18 @@ The backend is broadly aligned with the intended layering:
 
 Evidence:
 
-- [server/internal/local-server-composition.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/server/internal/local-server-composition.ts) acts as the composition root.
-- Import flow uses [server/controllers/imports.controller.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/server/controllers/imports.controller.ts), services, and repositories in the expected order.
+- [server/internal/local-server-composition.ts](../server/internal/local-server-composition.ts) acts as the composition root.
+- Import flow uses [server/controllers/imports.controller.ts](../server/controllers/imports.controller.ts), services, and repositories in the expected order.
 - Backup, activity, auth, and collection domains follow the same broad pattern.
 
 Weaknesses:
 
-- Some large orchestration services remain, especially [server/services/collection/collection-record-mutation-operations.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/server/services/collection/collection-record-mutation-operations.ts).
+- Some large orchestration services remain, especially [server/services/collection/collection-record-mutation-operations.ts](../server/services/collection/collection-record-mutation-operations.ts).
 - Route naming and response envelopes are not yet fully standardized.
 
 ### Frontend Architecture
 
-The frontend is a React + TypeScript application centered on [client/src/App.tsx](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/client/src/App.tsx), app-shell state, and modular page domains.
+The frontend is a React + TypeScript application centered on [client/src/App.tsx](../client/src/App.tsx), app-shell state, and modular page domains.
 
 Strengths:
 
@@ -81,15 +81,15 @@ Strengths:
 
 Weaknesses:
 
-- [client/src/pages/Viewer.tsx](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/client/src/pages/Viewer.tsx) remains a large orchestration page at 764 lines.
+- [client/src/pages/Viewer.tsx](../client/src/pages/Viewer.tsx) remains a large orchestration page at 764 lines.
 - Some data-heavy mobile pages still need runtime QA to validate touch ergonomics and scroll behavior.
 
 ### Data Flow
 
 - Cookie/JWT-authenticated browser requests hit Express APIs.
-- Input normalization uses helpers in [server/http/validation.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/server/http/validation.ts).
-- Repositories use Drizzle and SQL against [shared/schema-postgres.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/shared/schema-postgres.ts).
-- Real-time monitor and activity updates use WebSockets via [server/ws/runtime-manager.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/server/ws/runtime-manager.ts).
+- Input normalization uses helpers in [server/http/validation.ts](../server/http/validation.ts).
+- Repositories use Drizzle and SQL against [shared/schema-postgres.ts](../shared/schema-postgres.ts).
+- Real-time monitor and activity updates use WebSockets via [server/ws/runtime-manager.ts](../server/ws/runtime-manager.ts).
 
 ### Architectural Judgment
 
@@ -100,7 +100,7 @@ The system is no longer suffering from missing structure. Current risks are abou
 ### 1. Rollup table composite PKs
 
 - **Status:** FIXED
-- **Exact location:** [shared/schema-postgres.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/shared/schema-postgres.ts)
+- **Exact location:** [shared/schema-postgres.ts](../shared/schema-postgres.ts)
 - **What was found:** `primaryKey()` exists on all three previously flagged rollup and queue tables at the `slicePrimaryKey` declarations around lines 425, 450, and 479.
 - **Why it matters:** This resolves the earlier identity/schema concern.
 - **Recommendation direction:** Keep as-is.
@@ -109,7 +109,7 @@ The system is no longer suffering from missing structure. Current risks are abou
 ### 2. N+1 day-insert batch
 
 - **Status:** FIXED
-- **Exact location:** [server/repositories/collection-daily-repository-utils.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/server/repositories/collection-daily-repository-utils.ts), `upsertCollectionDailyCalendarDays`
+- **Exact location:** [server/repositories/collection-daily-repository-utils.ts](../server/repositories/collection-daily-repository-utils.ts), `upsertCollectionDailyCalendarDays`
 - **What was found:** The implementation now uses one batched `VALUES` block via `sql.join(...)`.
 - **Why it matters:** This removes the earlier serial insert inefficiency.
 - **Recommendation direction:** Keep as-is.
@@ -118,7 +118,7 @@ The system is no longer suffering from missing structure. Current risks are abou
 ### 3. 100dvh viewport fallback
 
 - **Status:** FIXED
-- **Exact location:** [client/src/index.css](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/client/src/index.css), [client/src/App.tsx](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/client/src/App.tsx)
+- **Exact location:** [client/src/index.css](../client/src/index.css), [client/src/App.tsx](../client/src/App.tsx)
 - **What was found:** `.viewport-min-height` and `.app-shell-min-height` now use `@supports (height: 100dvh)`.
 - **Why it matters:** This resolves the earlier shell-level mobile clipping issue.
 - **Recommendation direction:** Keep applying the same shell pattern.
@@ -127,7 +127,7 @@ The system is no longer suffering from missing structure. Current risks are abou
 ### 4. SQL LIKE wildcard escaping
 
 - **Status:** FIXED
-- **Exact location:** [server/repositories/sql-like-utils.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/server/repositories/sql-like-utils.ts)
+- **Exact location:** [server/repositories/sql-like-utils.ts](../server/repositories/sql-like-utils.ts)
 - **What was found:** `escapeLikePattern` and `buildLikePattern` are reused across search, imports, audit, backups, auth-admin, collection, and AI search repositories.
 - **Why it matters:** This closes the previous wildcard correctness issue.
 - **Recommendation direction:** Keep as-is.
@@ -136,7 +136,7 @@ The system is no longer suffering from missing structure. Current risks are abou
 ### 5. Backup export OOM via all-table in-memory loading
 
 - **Status:** FIXED
-- **Exact location:** [server/repositories/backups-payload-utils.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/server/repositories/backups-payload-utils.ts)
+- **Exact location:** [server/repositories/backups-payload-utils.ts](../server/repositories/backups-payload-utils.ts)
 - **What was found:** Backup payload creation now uses `appendPagedJsonArray(...)` with paged fetches rather than the earlier all-in-memory pattern.
 - **Why it matters:** This materially reduces the previous export/create backup OOM risk.
 - **Recommendation direction:** Keep export/create architecture; focus next on restore-path scale behavior.
@@ -145,7 +145,7 @@ The system is no longer suffering from missing structure. Current risks are abou
 ### 6. WebSocket early-close cleanup
 
 - **Status:** LOW-RISK WATCH AREA
-- **Exact location:** [server/ws/runtime-manager.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/server/ws/runtime-manager.ts)
+- **Exact location:** [server/ws/runtime-manager.ts](../server/ws/runtime-manager.ts)
 - **What was found:** Early `ws.close()` branches still exist, but they run before `connectedClients.set(activityId, ws)`.
 - **Why it matters:** Earlier audit language overstated this as a connection-map leak. In current code, rejected sockets are closed before they are stored.
 - **Recommendation direction:** Do not prioritize unless runtime evidence shows a different socket lifecycle problem.
@@ -154,7 +154,7 @@ The system is no longer suffering from missing structure. Current risks are abou
 ### 7. Silent receipt catch blocks
 
 - **Status:** FIXED
-- **Exact location:** [server/routes/collection-receipt.service.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/server/routes/collection-receipt.service.ts), [server/routes/collection-receipt-file-utils.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/server/routes/collection-receipt-file-utils.ts)
+- **Exact location:** [server/routes/collection-receipt.service.ts](../server/routes/collection-receipt.service.ts), [server/routes/collection-receipt-file-utils.ts](../server/routes/collection-receipt-file-utils.ts)
 - **What was found:** Best-effort failures are now routed through `logCollectionReceiptBestEffortFailure(...)` and logged.
 - **Why it matters:** This closes the previous observability blind spot.
 - **Recommendation direction:** Keep as-is.
@@ -163,7 +163,7 @@ The system is no longer suffering from missing structure. Current risks are abou
 ### 8. CSRF fallback bypass
 
 - **Status:** FIXED
-- **Exact location:** [server/http/csrf.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/server/http/csrf.ts)
+- **Exact location:** [server/http/csrf.ts](../server/http/csrf.ts)
 - **What was found:** Cookie-authenticated unsafe API requests now fail closed with `CSRF_SIGNAL_MISSING` when required same-origin signals are absent.
 - **Why it matters:** This closes the earlier fallback bypass concern.
 - **Recommendation direction:** Keep as-is.
@@ -172,7 +172,7 @@ The system is no longer suffering from missing structure. Current risks are abou
 ### 9. Bulk admin rate limiting
 
 - **Status:** FIXED
-- **Exact location:** [server/routes/activity.routes.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/server/routes/activity.routes.ts), [server/middleware/rate-limit.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/server/middleware/rate-limit.ts)
+- **Exact location:** [server/routes/activity.routes.ts](../server/routes/activity.routes.ts), [server/middleware/rate-limit.ts](../server/middleware/rate-limit.ts)
 - **What was found:** Sensitive moderation routes now use `adminAction` limiting at 30 requests per 10 minutes.
 - **Why it matters:** This closes the previous abuse-hardening gap.
 - **Recommendation direction:** Keep as-is.
@@ -184,7 +184,7 @@ The system is no longer suffering from missing structure. Current risks are abou
 
 - **Severity:** Medium
 - **Category:** API
-- **Exact location:** [server/controllers/imports.controller.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/server/controllers/imports.controller.ts), [shared/api-contracts.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/shared/api-contracts.ts), [client/src/lib/api/imports.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/client/src/lib/api/imports.ts), [server/services/search.service.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/server/services/search.service.ts)
+- **Exact location:** [server/controllers/imports.controller.ts](../server/controllers/imports.controller.ts), [shared/api-contracts.ts](../shared/api-contracts.ts), [client/src/lib/api/imports.ts](../client/src/lib/api/imports.ts), [server/services/search.service.ts](../server/services/search.service.ts)
 - **What was found:** The system currently mixes `cursor + limit`, `page + pageSize`, `page + limit`, and `offset + limit`. Imports alone expose multiple patterns.
 - **Why it matters:** This increases frontend branching, test surface, and contract drift risk.
 - **Current status:** New
@@ -195,7 +195,7 @@ The system is no longer suffering from missing structure. Current risks are abou
 
 - **Severity:** Medium
 - **Category:** Database / Performance
-- **Exact location:** [server/repositories/backups-restore-utils.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/server/repositories/backups-restore-utils.ts), [server/repositories/backups-restore-dataset-utils.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/server/repositories/backups-restore-dataset-utils.ts)
+- **Exact location:** [server/repositories/backups-restore-utils.ts](../server/repositories/backups-restore-utils.ts), [server/repositories/backups-restore-dataset-utils.ts](../server/repositories/backups-restore-dataset-utils.ts)
 - **What was found:** Restore still tracks restored collection record IDs in `new Set<string>()`, then materializes them for receipt-cache sync.
 - **Why it matters:** Export/create backup improved, but restore still has scale-sensitive in-memory accumulation.
 - **Current status:** New
@@ -206,7 +206,7 @@ The system is no longer suffering from missing structure. Current risks are abou
 
 - **Severity:** Medium
 - **Category:** Maintainability
-- **Exact location:** [shared/schema-postgres.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/shared/schema-postgres.ts), [client/src/pages/Viewer.tsx](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/client/src/pages/Viewer.tsx)
+- **Exact location:** [shared/schema-postgres.ts](../shared/schema-postgres.ts), [client/src/pages/Viewer.tsx](../client/src/pages/Viewer.tsx)
 - **What was found:** Current source line counts are 839 and 764 respectively.
 - **Why it matters:** These files are still large coordination surfaces that increase regression and onboarding cost.
 - **Current status:** Still Present
@@ -217,7 +217,7 @@ The system is no longer suffering from missing structure. Current risks are abou
 
 - **Severity:** Low
 - **Category:** Maintainability
-- **Exact location:** [server/services/collection/collection-record-mutation-operations.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/server/services/collection/collection-record-mutation-operations.ts), [client/src/components/ui/sidebar.tsx](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/client/src/components/ui/sidebar.tsx), [server/routes/tests/operations.routes.integration.test.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/server/routes/tests/operations.routes.integration.test.ts), [client/src/pages/BackupRestore.tsx](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/client/src/pages/BackupRestore.tsx), [server/http/tests/bootstrap-migration.integration.test.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/server/http/tests/bootstrap-migration.integration.test.ts), [server/services/auth-account-managed-operations.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/server/services/auth-account-managed-operations.ts)
+- **Exact location:** [server/services/collection/collection-record-mutation-operations.ts](../server/services/collection/collection-record-mutation-operations.ts), [client/src/components/ui/sidebar.tsx](../client/src/components/ui/sidebar.tsx), [server/routes/tests/operations.routes.integration.test.ts](../server/routes/tests/operations.routes.integration.test.ts), [client/src/pages/BackupRestore.tsx](../client/src/pages/BackupRestore.tsx), [server/http/tests/bootstrap-migration.integration.test.ts](../server/http/tests/bootstrap-migration.integration.test.ts), [server/services/auth-account-managed-operations.ts](../server/services/auth-account-managed-operations.ts)
 - **What was found:** Several files now sit in the 624-685 line range, close enough to become the next oversized hotspots.
 - **Why it matters:** This shows where maintainability pressure will reappear first.
 - **Current status:** Watch Area
@@ -229,7 +229,7 @@ The system is no longer suffering from missing structure. Current risks are abou
 - **Severity:** Low
 - **Category:** Maintainability
 - **Exact location:** collection record, receipt, backup, viewer, and monitor modules
-- **What was found:** The decomposition claim is supported, and progress is better than the minimum claim. Formerly oversized operational files such as [server/repositories/collection-record-repository-utils.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/server/repositories/collection-record-repository-utils.ts), [server/routes/collection-receipt.service.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/server/routes/collection-receipt.service.ts), [server/services/backup-operations.service.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/server/services/backup-operations.service.ts), [server/repositories/backups-restore-utils.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/server/repositories/backups-restore-utils.ts), and [server/services/auth-account-authentication-operations.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/server/services/auth-account-authentication-operations.ts) are now materially smaller at 401, 301, 340, 49, and 488 lines respectively.
+- **What was found:** The decomposition claim is supported, and progress is better than the minimum claim. Formerly oversized operational files such as [server/repositories/collection-record-repository-utils.ts](../server/repositories/collection-record-repository-utils.ts), [server/routes/collection-receipt.service.ts](../server/routes/collection-receipt.service.ts), [server/services/backup-operations.service.ts](../server/services/backup-operations.service.ts), [server/repositories/backups-restore-utils.ts](../server/repositories/backups-restore-utils.ts), and [server/services/auth-account-authentication-operations.ts](../server/services/auth-account-authentication-operations.ts) are now materially smaller at 401, 301, 340, 49, and 488 lines respectively.
 - **Why it matters:** The maintainability trend is clearly positive, but the work is not complete while Viewer and schema remain oversized.
 - **Current status:** Partially Fixed
 - **Recommendation direction:** continue opportunistic decomposition during domain work.
@@ -243,7 +243,7 @@ The system is no longer suffering from missing structure. Current risks are abou
 
 - **Severity:** Low
 - **Category:** Backend
-- **Exact location:** [server/internal/local-server-composition.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/server/internal/local-server-composition.ts)
+- **Exact location:** [server/internal/local-server-composition.ts](../server/internal/local-server-composition.ts)
 - **What was found:** Composition root cleanly wires repositories, services, guards, controllers, WebSocket manager, and route registration.
 - **Why it matters:** This keeps application assembly centralized and reduces hidden coupling.
 - **Current status:** Fixed
@@ -254,7 +254,7 @@ The system is no longer suffering from missing structure. Current risks are abou
 
 - **Severity:** Low
 - **Category:** Backend
-- **Exact location:** [server/middleware/error-handler.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/server/middleware/error-handler.ts)
+- **Exact location:** [server/middleware/error-handler.ts](../server/middleware/error-handler.ts)
 - **What was found:** The app uses a centralized JSON error handler with explicit 413 behavior, `HttpError` handling, and structured logging for unexpected failures.
 - **Why it matters:** This is a strong production baseline.
 - **Current status:** Fixed
@@ -265,7 +265,7 @@ The system is no longer suffering from missing structure. Current risks are abou
 
 - **Severity:** Low
 - **Category:** Backend
-- **Exact location:** [server/routes/activity.routes.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/server/routes/activity.routes.ts)
+- **Exact location:** [server/routes/activity.routes.ts](../server/routes/activity.routes.ts)
 - **What was found:** The activity surface exposes both `/api/activity/...` and `/api/activities...` patterns.
 - **Why it matters:** This is not a correctness defect, but it increases mental overhead and API ambiguity.
 - **Current status:** Still Present
@@ -278,7 +278,7 @@ The system is no longer suffering from missing structure. Current risks are abou
 
 - **Severity:** Low
 - **Category:** Frontend
-- **Exact location:** [client/src/App.tsx](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/client/src/App.tsx)
+- **Exact location:** [client/src/App.tsx](../client/src/App.tsx)
 - **What was found:** Providers, route boundaries, shell layout, auto logout, and Floating AI are separated cleanly.
 - **Why it matters:** This keeps global concerns centralized and easier to reason about.
 - **Current status:** Fixed
@@ -289,7 +289,7 @@ The system is no longer suffering from missing structure. Current risks are abou
 
 - **Severity:** Medium
 - **Category:** Frontend
-- **Exact location:** [client/src/pages/Viewer.tsx](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/client/src/pages/Viewer.tsx)
+- **Exact location:** [client/src/pages/Viewer.tsx](../client/src/pages/Viewer.tsx)
 - **What was found:** Viewer improved through many extracted subcomponents and utilities, but the page still coordinates fetch, pagination, selection, export, and responsive rendering in one large orchestrator.
 - **Why it matters:** Viewer remains a likely future regression hotspot.
 - **Current status:** Still Present
@@ -300,7 +300,7 @@ The system is no longer suffering from missing structure. Current risks are abou
 
 - **Severity:** Low
 - **Category:** Frontend
-- **Exact location:** [client/src/pages/Activity.tsx](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/client/src/pages/Activity.tsx)
+- **Exact location:** [client/src/pages/Activity.tsx](../client/src/pages/Activity.tsx)
 - **What was found:** The page uses abort controllers, request IDs, visibility refresh, interval cleanup, and mounted guards with proper teardown.
 - **Why it matters:** This reduces stale-state and leak risk on a live operational page.
 - **Current status:** Fixed
@@ -313,7 +313,7 @@ The system is no longer suffering from missing structure. Current risks are abou
 
 - **Severity:** Medium
 - **Category:** UI/UX
-- **Exact location:** [client/src/pages/AuditLogs.tsx](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/client/src/pages/AuditLogs.tsx), [client/src/pages/Activity.tsx](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/client/src/pages/Activity.tsx)
+- **Exact location:** [client/src/pages/AuditLogs.tsx](../client/src/pages/AuditLogs.tsx), [client/src/pages/Activity.tsx](../client/src/pages/Activity.tsx)
 - **What was found:** Both pages now contain more mobile-aware toggles and smaller sections, but they remain dense admin surfaces.
 - **Why it matters:** Static inspection cannot fully prove mobile usability or touch ergonomics here.
 - **Current status:** Runtime Verification Needed
@@ -324,7 +324,7 @@ The system is no longer suffering from missing structure. Current risks are abou
 
 - **Severity:** Low
 - **Category:** UI/UX
-- **Exact location:** [client/src/components/FloatingAI.tsx](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/client/src/components/FloatingAI.tsx)
+- **Exact location:** [client/src/components/FloatingAI.tsx](../client/src/components/FloatingAI.tsx)
 - **What was found:** Floating AI now uses dedicated layout resolution, scroll lock, visibility policies, and mobile viewport awareness.
 - **Why it matters:** This is no longer a generic audit weakness. It is a sensitive but stabilized surface.
 - **Current status:** LOW-RISK WATCH AREA
@@ -337,7 +337,7 @@ The system is no longer suffering from missing structure. Current risks are abou
 
 - **Severity:** Medium
 - **Category:** API
-- **Exact location:** [server/middleware/error-handler.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/server/middleware/error-handler.ts), [server/routes/activity.routes.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/server/routes/activity.routes.ts), [server/controllers/imports.controller.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/server/controllers/imports.controller.ts)
+- **Exact location:** [server/middleware/error-handler.ts](../server/middleware/error-handler.ts), [server/routes/activity.routes.ts](../server/routes/activity.routes.ts), [server/controllers/imports.controller.ts](../server/controllers/imports.controller.ts)
 - **What was found:** There is progress toward `ok: true/false`, but some endpoints still return domain-shaped payloads without one consistent envelope across modules.
 - **Why it matters:** This increases client normalization work and schema drift risk.
 - **Current status:** Partially Fixed
@@ -348,7 +348,7 @@ The system is no longer suffering from missing structure. Current risks are abou
 
 - **Severity:** Low
 - **Category:** API
-- **Exact location:** [server/http/validation.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/server/http/validation.ts), [shared/api-contracts.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/shared/api-contracts.ts)
+- **Exact location:** [server/http/validation.ts](../server/http/validation.ts), [shared/api-contracts.ts](../shared/api-contracts.ts)
 - **What was found:** The codebase uses reusable readers and Zod contracts rather than ad hoc parsing everywhere.
 - **Why it matters:** This improves consistency and reduces sloppy input handling.
 - **Current status:** Fixed
@@ -361,7 +361,7 @@ The system is no longer suffering from missing structure. Current risks are abou
 
 - **Severity:** Low
 - **Category:** Database
-- **Exact location:** [shared/schema-postgres.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/shared/schema-postgres.ts)
+- **Exact location:** [shared/schema-postgres.ts](../shared/schema-postgres.ts)
 - **What was found:** Composite primary keys now exist on the rollup and rollup-refresh tables that previously lacked them.
 - **Why it matters:** This removes a meaningful schema hygiene concern from the earlier audit.
 - **Current status:** Fixed
@@ -372,7 +372,7 @@ The system is no longer suffering from missing structure. Current risks are abou
 
 - **Severity:** Medium
 - **Category:** Database
-- **Exact location:** [server/repositories/backups-restore-utils.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/server/repositories/backups-restore-utils.ts), [server/repositories/backups-restore-dataset-utils.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/server/repositories/backups-restore-dataset-utils.ts)
+- **Exact location:** [server/repositories/backups-restore-utils.ts](../server/repositories/backups-restore-utils.ts), [server/repositories/backups-restore-dataset-utils.ts](../server/repositories/backups-restore-dataset-utils.ts)
 - **What was found:** Restore is better than before, but still accumulates state in memory and performs large payload handling during recovery.
 - **Why it matters:** Disaster-recovery code does not need to be optimized first in a product, but it must remain trustworthy under realistic large datasets.
 - **Current status:** Still Present
@@ -385,7 +385,7 @@ The system is no longer suffering from missing structure. Current risks are abou
 
 - **Severity:** Low
 - **Category:** Security
-- **Exact location:** [server/auth/guards.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/server/auth/guards.ts), [server/http/csrf.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/server/http/csrf.ts)
+- **Exact location:** [server/auth/guards.ts](../server/auth/guards.ts), [server/http/csrf.ts](../server/http/csrf.ts)
 - **What was found:** Authentication checks session validity against activity state, account bans and locks, forced password change rules, role access, and tab visibility. CSRF middleware now fails closed for cookie-authenticated unsafe API requests.
 - **Why it matters:** This is a real strength and materially supports controlled production use.
 - **Current status:** Fixed
@@ -396,7 +396,7 @@ The system is no longer suffering from missing structure. Current risks are abou
 
 - **Severity:** Low
 - **Category:** Security
-- **Exact location:** [server/routes/activity.routes.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/server/routes/activity.routes.ts), [server/middleware/rate-limit.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/server/middleware/rate-limit.ts)
+- **Exact location:** [server/routes/activity.routes.ts](../server/routes/activity.routes.ts), [server/middleware/rate-limit.ts](../server/middleware/rate-limit.ts)
 - **What was found:** Bulk delete, kick, ban, and unban admin flows now run behind a dedicated limiter keyed by IP, path, and acting username.
 - **Why it matters:** This meaningfully reduces abuse surface on sensitive moderation routes.
 - **Current status:** Fixed
@@ -409,7 +409,7 @@ The system is no longer suffering from missing structure. Current risks are abou
 
 - **Severity:** Low
 - **Category:** Performance
-- **Exact location:** [server/repositories/backups-payload-utils.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/server/repositories/backups-payload-utils.ts), [server/services/backup-operations.service.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/server/services/backup-operations.service.ts)
+- **Exact location:** [server/repositories/backups-payload-utils.ts](../server/repositories/backups-payload-utils.ts), [server/services/backup-operations.service.ts](../server/services/backup-operations.service.ts)
 - **What was found:** Export/create now pages through datasets and avoids the earlier all-tables-in-memory pattern.
 - **Why it matters:** This removed the largest previously verified memory-stability issue on the backup side.
 - **Current status:** Fixed
@@ -420,7 +420,7 @@ The system is no longer suffering from missing structure. Current risks are abou
 
 - **Severity:** Medium
 - **Category:** Performance
-- **Exact location:** [client/src/pages/Viewer.tsx](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/client/src/pages/Viewer.tsx), [client/src/pages/Monitor.tsx](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/client/src/pages/Monitor.tsx), [client/src/pages/BackupRestore.tsx](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/client/src/pages/BackupRestore.tsx)
+- **Exact location:** [client/src/pages/Viewer.tsx](../client/src/pages/Viewer.tsx), [client/src/pages/Monitor.tsx](../client/src/pages/Monitor.tsx), [client/src/pages/BackupRestore.tsx](../client/src/pages/BackupRestore.tsx)
 - **What was found:** These pages orchestrate large datasets, charts, export flows, or restore controls and remain among the heaviest frontend surfaces.
 - **Why it matters:** Static inspection alone cannot guarantee low-spec device behavior, even though the code now uses virtualization, lazy loading, and decomposition in the right places.
 - **Current status:** Runtime Verification Needed
@@ -444,7 +444,7 @@ The system is no longer suffering from missing structure. Current risks are abou
 
 - **Severity:** Low
 - **Category:** Maintainability
-- **Exact location:** [shared/schema-postgres.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/shared/schema-postgres.ts)
+- **Exact location:** [shared/schema-postgres.ts](../shared/schema-postgres.ts)
 - **What was found:** At 839 lines, the schema file is large, but this is partly a consequence of acting as the central database schema definition.
 - **Why it matters:** This is less concerning than an oversized mixed-responsibility service, but still worth watching.
 - **Current status:** Watch Area
@@ -455,11 +455,11 @@ The system is no longer suffering from missing structure. Current risks are abou
 
 ### Auth / Account / Session
 
-Strong overall. [server/auth/guards.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/server/auth/guards.ts), cookie/session helpers, 2FA modules, and rate limiters form a credible production auth stack. Managed-user operations remain somewhat large, but the risk is maintainability, not correctness.
+Strong overall. [server/auth/guards.ts](../server/auth/guards.ts), cookie/session helpers, 2FA modules, and rate limiters form a credible production auth stack. Managed-user operations remain somewhat large, but the risk is maintainability, not correctness.
 
 ### Collection Flows
 
-Collection remains one of the largest domains, but structure has improved. Mutation and rollup helpers are now better separated than before. The main remaining hotspot is [server/services/collection/collection-record-mutation-operations.ts](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/server/services/collection/collection-record-mutation-operations.ts), which still coordinates many steps.
+Collection remains one of the largest domains, but structure has improved. Mutation and rollup helpers are now better separated than before. The main remaining hotspot is [server/services/collection/collection-record-mutation-operations.ts](../server/services/collection/collection-record-mutation-operations.ts), which still coordinates many steps.
 
 ### Collection Daily
 
@@ -479,7 +479,7 @@ General search appears stable architecturally. The main risks are contract consi
 
 ### Viewer
 
-Viewer has seen substantial decomposition and is markedly healthier than before, but [client/src/pages/Viewer.tsx](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/client/src/pages/Viewer.tsx) is still a high-complexity orchestration surface. This is now a maintainability issue, not a broken-architecture issue.
+Viewer has seen substantial decomposition and is markedly healthier than before, but [client/src/pages/Viewer.tsx](../client/src/pages/Viewer.tsx) is still a high-complexity orchestration surface. This is now a maintainability issue, not a broken-architecture issue.
 
 ### Activity / Audit
 
@@ -553,7 +553,7 @@ Settings and admin surfaces appear structurally sound. The strongest engineering
 
 ### Short-term
 
-- Continue decomposing [client/src/pages/Viewer.tsx](c:/Users/Administrator/Desktop/sumbanganqueryrahmah/client/src/pages/Viewer.tsx) and any next-nearest orchestration hotspots when touched.
+- Continue decomposing [client/src/pages/Viewer.tsx](../client/src/pages/Viewer.tsx) and any next-nearest orchestration hotspots when touched.
 - Run focused runtime QA on viewer, audit, activity, monitor, and backup/restore mobile and low-spec paths.
 
 ### Medium-term

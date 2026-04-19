@@ -1,6 +1,7 @@
 import { Suspense, memo, startTransition, useEffect, useRef, useState } from "react";
 import { lazyWithPreload } from "@/lib/lazy-with-preload";
 import { OperationalSectionCard } from "@/components/layout/OperationalPage";
+import { DashboardSectionBoundary } from "@/pages/dashboard/DashboardSectionBoundary";
 import type { LoginTrend, PeakHour, RoleData, TopUser } from "@/pages/dashboard/types";
 
 const DashboardChartsGrid = lazyWithPreload(() =>
@@ -198,38 +199,48 @@ export const DashboardDeferredSections = memo(function DashboardDeferredSections
     <>
       <div ref={chartsSection.triggerRef}>
         {chartsSection.shouldRender ? (
-          <Suspense fallback={<DashboardChartsFallback labelPrefix="Loading dashboard charts" />}>
-            <DashboardChartsGrid
-              onTrendDaysChange={onTrendDaysChange}
-              onRetryPeakHours={onRetryPeakHours}
-              onRetryTrends={onRetryTrends}
-              peakHours={peakHours}
-              peakHoursErrorMessage={peakHoursErrorMessage}
-              peakHoursLoading={peakHoursLoading}
-              trendDays={trendDays}
-              trends={trends}
-              trendsErrorMessage={trendsErrorMessage}
-              trendsLoading={trendsLoading}
-            />
-          </Suspense>
+          <DashboardSectionBoundary
+            boundaryKey={`dashboard-charts:${trendDays}:${trendsLoading ? "loading" : "ready"}:${peakHoursLoading ? "loading" : "ready"}`}
+            panelLabel="Dashboard charts"
+          >
+            <Suspense fallback={<DashboardChartsFallback labelPrefix="Loading dashboard charts" />}>
+              <DashboardChartsGrid
+                onTrendDaysChange={onTrendDaysChange}
+                onRetryPeakHours={onRetryPeakHours}
+                onRetryTrends={onRetryTrends}
+                peakHours={peakHours}
+                peakHoursErrorMessage={peakHoursErrorMessage}
+                peakHoursLoading={peakHoursLoading}
+                trendDays={trendDays}
+                trends={trends}
+                trendsErrorMessage={trendsErrorMessage}
+                trendsLoading={trendsLoading}
+              />
+            </Suspense>
+          </DashboardSectionBoundary>
         ) : (
           <DashboardChartsFallback labelPrefix="Dashboard charts will load as you scroll" />
         )}
       </div>
       <div ref={userInsightsSection.triggerRef}>
         {userInsightsSection.shouldRender ? (
-          <Suspense fallback={<DashboardUserInsightsFallback labelPrefix="Loading dashboard user insights" />}>
-            <DashboardUserInsightsGrid
-              onRetryRoleDistribution={onRetryRoleDistribution}
-              onRetryTopUsers={onRetryTopUsers}
-              roleDistribution={roleDistribution}
-              roleErrorMessage={roleErrorMessage}
-              roleLoading={roleLoading}
-              topUsers={topUsers}
-              topUsersErrorMessage={topUsersErrorMessage}
-              topUsersLoading={topUsersLoading}
-            />
-          </Suspense>
+          <DashboardSectionBoundary
+            boundaryKey={`dashboard-user-insights:${roleLoading ? "loading" : "ready"}:${topUsersLoading ? "loading" : "ready"}`}
+            panelLabel="Dashboard user insights"
+          >
+            <Suspense fallback={<DashboardUserInsightsFallback labelPrefix="Loading dashboard user insights" />}>
+              <DashboardUserInsightsGrid
+                onRetryRoleDistribution={onRetryRoleDistribution}
+                onRetryTopUsers={onRetryTopUsers}
+                roleDistribution={roleDistribution}
+                roleErrorMessage={roleErrorMessage}
+                roleLoading={roleLoading}
+                topUsers={topUsers}
+                topUsersErrorMessage={topUsersErrorMessage}
+                topUsersLoading={topUsersLoading}
+              />
+            </Suspense>
+          </DashboardSectionBoundary>
         ) : (
           <DashboardUserInsightsFallback labelPrefix="Dashboard user insights will load as you scroll" />
         )}

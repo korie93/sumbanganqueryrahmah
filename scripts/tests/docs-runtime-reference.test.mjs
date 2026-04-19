@@ -40,13 +40,15 @@ test("ER diagram doc stays explicitly scoped to the reviewed Drizzle subset", ()
 test("audit no-change decisions doc records reviewed deferments and revisit triggers", () => {
   const noChangeDoc = readRepoFile("docs/AUDIT_NO_CHANGE_DECISIONS.md");
 
-  assert.match(noChangeDoc, /Audit #4, Audit #5, and Audit #6 findings that were reviewed on 19 April 2026/i);
+  assert.match(noChangeDoc, /Audit #4, Audit #5, Audit #6, and Audit #7 findings that were reviewed on 19 April 2026/i);
   assert.match(noChangeDoc, /WebSocket event listener leak hardening/i);
   assert.match(noChangeDoc, /skipLibCheck/i);
   assert.match(noChangeDoc, /dark mode toggle/i);
   assert.match(noChangeDoc, /Bundle size analysis/i);
   assert.match(noChangeDoc, /AutoLogout WebSocket cleanup hardening/i);
   assert.match(noChangeDoc, /npm audit in release pipeline/i);
+  assert.match(noChangeDoc, /CSP violation external logging/i);
+  assert.match(noChangeDoc, /Web Vitals verification/i);
   assert.match(noChangeDoc, /What would justify revisiting/i);
 });
 
@@ -58,4 +60,14 @@ test("observability doc stays aligned with the reviewed web-vitals runtime contr
   assert.match(observabilityDoc, /keepalive: true/);
   assert.match(observabilityDoc, /pageType: "public"/);
   assert.match(observabilityDoc, /pageType: "authenticated"/);
+  assert.match(observabilityDoc, /POST \/api\/security\/csp-reports/);
+  assert.match(observabilityDoc, /fingerprint bounded per instance/i);
+});
+
+test("full system audit doc keeps repository-relative links instead of Windows absolute paths", () => {
+  const fullSystemAuditDoc = readRepoFile("docs/FULL_SYSTEM_AUDIT.md");
+
+  assert.doesNotMatch(fullSystemAuditDoc, /\(c:\/Users\/Administrator\/Desktop\/sumbanganqueryrahmah\//i);
+  assert.match(fullSystemAuditDoc, /\(\.\.\/server\//);
+  assert.match(fullSystemAuditDoc, /\(\.\.\/client\//);
 });

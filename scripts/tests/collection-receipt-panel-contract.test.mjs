@@ -7,12 +7,18 @@ const panelPath = path.resolve(
   process.cwd(),
   "client/src/pages/collection/CollectionReceiptPanel.tsx",
 );
+const pendingGridPath = path.resolve(
+  process.cwd(),
+  "client/src/pages/collection/CollectionReceiptPendingGrid.tsx",
+);
 
 test("collection receipt panel keeps an explicit image-preview failure fallback", () => {
-  const source = readFileSync(panelPath, "utf8");
+  const panelSource = readFileSync(panelPath, "utf8");
+  const pendingGridSource = readFileSync(pendingGridPath, "utf8");
 
-  assert.match(source, /failedImagePreviewKeys/);
-  assert.match(source, /onError=\{\(\) =>/);
-  assert.match(source, /Receipt preview for/);
-  assert.match(source, /Preview unavailable/);
+  assert.match(panelSource, /failedImagePreviewKeys/);
+  assert.match(panelSource, /CollectionReceiptPendingGrid/);
+  assert.match(pendingGridSource, /onError=\{\(\) => onMarkImagePreviewFailed\(preview\.key\)\}/);
+  assert.match(pendingGridSource, /Receipt preview for/);
+  assert.match(pendingGridSource, /Preview unavailable/);
 });

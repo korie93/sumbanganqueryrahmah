@@ -61,6 +61,29 @@ function revokeCollectionReceiptDraftPreview(preview: CollectionReceiptDraftPrev
   URL.revokeObjectURL(preview.url);
 }
 
+export function disposeCollectionReceiptDraftPreviewCache(
+  previewCache: Map<string, CollectionReceiptDraftPreview>,
+) {
+  for (const preview of previewCache.values()) {
+    revokeCollectionReceiptDraftPreview(preview);
+  }
+  previewCache.clear();
+}
+
+export function pruneCollectionReceiptDraftPreviewCache(
+  previewCache: Map<string, CollectionReceiptDraftPreview>,
+  activeFileIds: ReadonlySet<string>,
+) {
+  for (const [fileId, preview] of previewCache.entries()) {
+    if (activeFileIds.has(fileId)) {
+      continue;
+    }
+
+    revokeCollectionReceiptDraftPreview(preview);
+    previewCache.delete(fileId);
+  }
+}
+
 function buildCollectionReceiptDraftPreviewKey(fileId: string): string {
   return fileId;
 }
@@ -202,10 +225,7 @@ export function useCollectionReceiptDraftPreviews(
 
   useEffect(() => {
     return () => {
-      for (const preview of previewCacheRef.current.values()) {
-        revokeCollectionReceiptDraftPreview(preview);
-      }
-      previewCacheRef.current.clear();
+      disposeCollectionReceiptDraftPreviewCache(previewCacheRef.current);
     };
   }, []);
 
@@ -214,14 +234,7 @@ export function useCollectionReceiptDraftPreviews(
     const resolveFileId = resolveFileIdRef.current;
     const activeFileIds = new Set(files.map((file) => resolveFileId(file)));
 
-    for (const [fileId, preview] of previewCache.entries()) {
-      if (activeFileIds.has(fileId)) {
-        continue;
-      }
-
-      revokeCollectionReceiptDraftPreview(preview);
-      previewCache.delete(fileId);
-    }
+    pruneCollectionReceiptDraftPreviewCache(previewCache, activeFileIds);
 
     setPreviews(orderCollectionReceiptDraftPreviews(files, previewCache, resolveFileId));
 
@@ -240,7 +253,7 @@ export function useCollectionReceiptDraftPreviews(
         }
 
         const preview = await createCollectionReceiptDraftPreview(file, fileId);
-        if (disposed || !activeFileIds.has(fileId)) {
+        if (disposed || !activeFileIds.has(fileId) || previewCache.has(fileId)) {
           revokeCollectionReceiptDraftPreview(preview);
           continue;
         }

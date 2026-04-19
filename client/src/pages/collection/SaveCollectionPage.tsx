@@ -1,6 +1,5 @@
 import { memo } from "react";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { DatePickerField } from "@/components/ui/date-picker-field";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -10,6 +9,9 @@ import { useMutationFeedback } from "@/hooks/useMutationFeedback";
 import { usePageShortcuts } from "@/hooks/usePageShortcuts";
 import { cn } from "@/lib/utils";
 import { CollectionReceiptPanel } from "@/pages/collection/CollectionReceiptPanel";
+import { SaveCollectionActionBar } from "@/pages/collection/SaveCollectionActionBar";
+import { SaveCollectionFormSection } from "@/pages/collection/SaveCollectionFormSection";
+import { SaveCollectionPageHeaderContent } from "@/pages/collection/SaveCollectionPageHeaderContent";
 import { buildSaveCollectionFieldErrorMap } from "@/pages/collection/save-collection-page-utils";
 import { COLLECTION_BATCH_OPTIONS } from "./utils";
 import { useSaveCollectionPageState } from "./useSaveCollectionPageState";
@@ -246,68 +248,35 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
         {isMobile ? (
           <div className="absolute inset-x-0 top-0 h-24 bg-gradient-to-br from-primary/12 via-primary/6 to-transparent" />
         ) : null}
-        <div className="relative space-y-2">
-          {isMobile ? (
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-              Collection
-            </p>
-          ) : null}
-          <CardTitle className="text-xl">Simpan Collection Individual</CardTitle>
-          {isMobile ? (
-            <p className="text-sm leading-relaxed text-muted-foreground">
-              Save one collection record at a time with a cleaner mobile flow for customer details, payment
-              info, and receipt upload.
-            </p>
-          ) : null}
-        </div>
-        <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
-          <span>Draft auto-saves in this browser session.</span>
-          <span>
-            Use <span className="font-medium text-foreground">Ctrl/Cmd+S</span> to save quickly.
-          </span>
-        </div>
-        {state.draftRestoreNotice ? (
-          <div className="rounded-lg border border-primary/25 bg-primary/5 px-3 py-2 text-sm text-muted-foreground">
-            <span className="font-medium text-foreground">Draft restored.</span>
-            {state.restoreNoticeLabel ? ` Last saved ${state.restoreNoticeLabel}.` : null}
-            {state.draftRestoreNotice.hadPendingReceipts
-              ? " Pending receipt files need to be uploaded again before saving."
-              : null}
-          </div>
-        ) : null}
+        <SaveCollectionPageHeaderContent
+          draftRestoreNotice={state.draftRestoreNotice}
+          isMobile={isMobile}
+          restoreNoticeLabel={state.restoreNoticeLabel}
+        />
       </CardHeader>
       <CardContent className="space-y-4">
         {isMobile ? (
           <div className="space-y-4">
-            <section className="space-y-4 rounded-2xl border border-border/60 bg-muted/10 p-4">
-              <div className="space-y-1">
-                <h3 className="text-base font-semibold text-foreground">Customer Details</h3>
-                <p className="text-sm leading-relaxed text-muted-foreground">
-                  Start with the payer identity so the record stays easy to verify later.
-                </p>
-              </div>
-              <div className="grid gap-4">{customerFields}</div>
-            </section>
+            <SaveCollectionFormSection
+              title="Customer Details"
+              description="Start with the payer identity so the record stays easy to verify later."
+            >
+              {customerFields}
+            </SaveCollectionFormSection>
 
-            <section className="space-y-4 rounded-2xl border border-border/60 bg-muted/10 p-4">
-              <div className="space-y-1">
-                <h3 className="text-base font-semibold text-foreground">Payment Details</h3>
-                <p className="text-sm leading-relaxed text-muted-foreground">
-                  Capture the account, batch, payment date, and amount before attaching receipts.
-                </p>
-              </div>
-              <div className="grid gap-4">{paymentFields}</div>
-            </section>
+            <SaveCollectionFormSection
+              title="Payment Details"
+              description="Capture the account, batch, payment date, and amount before attaching receipts."
+            >
+              {paymentFields}
+            </SaveCollectionFormSection>
 
-            <section className="space-y-4 rounded-2xl border border-border/60 bg-muted/10 p-4">
-              <div className="space-y-1">
-                <h3 className="text-base font-semibold text-foreground">Receipt Upload</h3>
-                <p className="text-sm leading-relaxed text-muted-foreground">
-                  Add receipts one by one, review pending uploads, then save when everything looks right.
-                </p>
-              </div>
+            <SaveCollectionFormSection
+              title="Receipt Upload"
+              description="Add receipts one by one, review pending uploads, then save when everything looks right."
+            >
               {receiptPanel}
-            </section>
+            </SaveCollectionFormSection>
           </div>
         ) : (
           <div className="grid gap-4 md:grid-cols-3">
@@ -319,33 +288,12 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
             </div>
           </div>
         )}
-
-        <div
-          className={cn(
-            "-mx-6 flex flex-col gap-2 border-t border-border/60 bg-background/95 px-6 pt-3 pb-[calc(env(safe-area-inset-bottom,0px)+0.75rem)] shadow-lg backdrop-blur supports-[backdrop-filter]:bg-background/85 sm:static sm:mx-0 sm:flex-row sm:flex-wrap sm:justify-end sm:border-0 sm:bg-transparent sm:px-0 sm:pt-0 sm:pb-0 sm:shadow-none sm:backdrop-blur-0",
-            keyboardOpen ? "static" : "sticky bottom-0 z-[var(--z-sticky-content)]",
-          )}
-          data-floating-ai-avoid="true"
-        >
-          <Button
-            type="button"
-            variant="outline"
-            onClick={state.clearForm}
-            disabled={state.submitting}
-            className="w-full sm:w-auto"
-          >
-            Reset Form
-          </Button>
-          <Button
-            type="button"
-            onClick={state.handleSubmit}
-            disabled={state.submitting}
-            className="w-full sm:w-auto"
-            aria-keyshortcuts="Control+S Meta+S"
-          >
-            {state.submitting ? "Saving..." : "Save Collection"}
-          </Button>
-        </div>
+        <SaveCollectionActionBar
+          keyboardOpen={keyboardOpen}
+          onClear={state.clearForm}
+          onSave={state.handleSubmit}
+          submitting={state.submitting}
+        />
       </CardContent>
     </Card>
   );

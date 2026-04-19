@@ -23,10 +23,10 @@ test("reviewed icon-only controls keep explicit accessible names", () => {
 
 test("stable reviewed keyboard shortcuts stay exposed via aria-keyshortcuts", () => {
   const sidebarSource = readRepoFile("client/src/components/ui/sidebar.tsx");
-  const saveCollectionSource = readRepoFile("client/src/pages/collection/SaveCollectionPage.tsx");
+  const saveCollectionActionBarSource = readRepoFile("client/src/pages/collection/SaveCollectionActionBar.tsx");
 
   assert.match(sidebarSource, /aria-keyshortcuts="Control\+B Meta\+B"/);
-  assert.match(saveCollectionSource, /aria-keyshortcuts="Control\+S Meta\+S"/);
+  assert.match(saveCollectionActionBarSource, /aria-keyshortcuts="Control\+S Meta\+S"/);
 });
 
 test("reviewed navigation surfaces keep explicit active-page semantics and html lang", () => {

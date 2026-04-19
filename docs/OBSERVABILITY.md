@@ -111,6 +111,21 @@ Butiran yang kini disengajakan dan patut kekal stabil:
 
 Dan monitor/admin flow boleh membaca ringkasan ini semula melalui route dalaman yang sesuai. Ini membantu melihat pengalaman pengguna sebenar tanpa menunggu external RUM platform.
 
+### CSP Violation Reports
+
+Repo juga sudah ada endpoint untuk CSP violation reports:
+
+- `POST /api/security/csp-reports`
+
+Tingkah laku semasa sengaja kekal konservatif:
+
+- payload disanitasi sebelum dilog
+- laporan berulang digabungkan menggunakan fingerprint bounded per instance
+- laporan ini belum dihantar ke sink luaran atau storan jangka panjang
+
+Ini cukup untuk local troubleshooting dan pengesahan policy semasa, tetapi ia masih
+belum menjadi pengganti kepada centralized long-term CSP analytics.
+
 ### Optional Remote Error Tracking
 
 Repo kini juga ada laluan remote error tracking yang opt-in untuk dua sumber:

@@ -7,7 +7,7 @@
     "strict": true,
     "exactOptionalPropertyTypes": true,
     "forceConsistentCasingInFileNames": true,
-    // Keep skipLibCheck enabled after the 2026-04-19 reassessment.
+    // Keep skipLibCheck enabled after the 2026-04-19 Audit #7 reassessment.
     // `tsc --noEmit --skipLibCheck false` still fails in third-party
     // declarations (not app code), including Drizzle cross-driver packages
     // and Redux Toolkit vendor typings. The previous local CSS module
