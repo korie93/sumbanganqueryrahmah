@@ -5,6 +5,7 @@ import {
   createAuthGuards,
   evictOldestTabVisibilityCacheEntryForTests,
   getInvalidatedSessionMessage,
+  noteTabVisibilityCacheCapacityEvictionForTests,
   sweepExpiredTabVisibilityCacheEntriesForTests,
 } from "../guards";
 import { clearSessionRevocationsForTests, revokeSession } from "../session-revocation-registry";
@@ -131,6 +132,7 @@ test("tab visibility guard caches role visibility and allows explicit cache clea
 test("tab visibility cache keeps the original TTL instead of extending it on cache hits", async (t) => {
   let visibilityLookupCount = 0;
   const nowValues = [
+    1_000_000 - 1,
     1_000_000,
     1_000_000 + 4 * 60 * 1000,
     1_000_000 + 5 * 60 * 1000 + 1,
@@ -221,6 +223,55 @@ test("tab visibility cache sweep removes expired entries without waiting for a r
 
   assert.equal(removed, 1);
   assert.deepEqual(Array.from(cache.keys()), ["fresh"]);
+});
+
+test("tab visibility cache eviction telemetry stays quiet until the repeated-eviction threshold is crossed", () => {
+  const initialTelemetry = {
+    totalEvictions: 0,
+    evictionsInWindow: 0,
+    windowStartedAt: 1_000_000,
+    lastWarningAt: null,
+  };
+
+  const first = noteTabVisibilityCacheCapacityEvictionForTests(initialTelemetry, 1_000_000);
+  const second = noteTabVisibilityCacheCapacityEvictionForTests(first.telemetry, 1_000_001);
+  const third = noteTabVisibilityCacheCapacityEvictionForTests(second.telemetry, 1_000_002);
+
+  assert.equal(first.warning, null);
+  assert.equal(second.warning, null);
+  assert.deepEqual(third.warning, {
+    totalEvictions: 3,
+    evictionsInWindow: 3,
+    windowMs: 5 * 60 * 1000,
+  });
+});
+
+test("tab visibility cache eviction telemetry resets its rolling window before warning again", () => {
+  const initialTelemetry = {
+    totalEvictions: 2,
+    evictionsInWindow: 2,
+    windowStartedAt: 1_000_000,
+    lastWarningAt: null,
+  };
+
+  const firstWarning = noteTabVisibilityCacheCapacityEvictionForTests(initialTelemetry, 1_000_002);
+  const nextWindow = noteTabVisibilityCacheCapacityEvictionForTests(
+    firstWarning.telemetry,
+    1_000_000 + 5 * 60 * 1000 + 1,
+  );
+
+  assert.deepEqual(firstWarning.warning, {
+    totalEvictions: 3,
+    evictionsInWindow: 3,
+    windowMs: 5 * 60 * 1000,
+  });
+  assert.equal(nextWindow.warning, null);
+  assert.deepEqual(nextWindow.telemetry, {
+    totalEvictions: 4,
+    evictionsInWindow: 1,
+    windowStartedAt: 1_000_000 + 5 * 60 * 1000 + 1,
+    lastWarningAt: 1_000_002,
+  });
 });
 
 test("tab visibility cache registers an unrefed sweep interval and clears it idempotently", (t) => {

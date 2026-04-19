@@ -811,6 +811,58 @@ test("runtime config reads an explicit per-instance WebSocket connection limit o
   );
 });
 
+test("runtime config reads an explicit per-socket WebSocket buffer limit override", async () => {
+  await withEnv(
+    {
+      NODE_ENV: "development",
+      HOST: "127.0.0.1",
+      PUBLIC_APP_URL: "http://127.0.0.1:5000",
+      SESSION_SECRET: null,
+      COLLECTION_NICKNAME_TEMP_PASSWORD: null,
+      COLLECTION_PII_ENCRYPTION_KEY: null,
+      PG_PASSWORD: null,
+      BACKUP_ENCRYPTION_KEY: null,
+      BACKUP_ENCRYPTION_KEYS: null,
+      BACKUP_FEATURE_ENABLED: "1",
+      RUNTIME_WS_MAX_BUFFERED_BYTES: "524288",
+      SEED_DEFAULT_USERS: "0",
+      LOCAL_SUPERUSER_CREDENTIALS_FILE_ENABLED: "0",
+      MAIL_DEV_OUTBOX_ENABLED: "0",
+    },
+    async () => {
+      const runtimeModule = await importRuntimeFresh();
+      assert.equal(runtimeModule.runtimeConfig.runtime.wsMaxBufferedBytes, 524_288);
+    },
+  );
+});
+
+test("runtime config rejects unsafe per-socket WebSocket buffer limits below the reviewed minimum", async () => {
+  await withEnv(
+    {
+      NODE_ENV: "development",
+      HOST: "127.0.0.1",
+      PUBLIC_APP_URL: "http://127.0.0.1:5000",
+      SESSION_SECRET: null,
+      COLLECTION_NICKNAME_TEMP_PASSWORD: null,
+      COLLECTION_PII_ENCRYPTION_KEY: null,
+      PG_PASSWORD: null,
+      BACKUP_ENCRYPTION_KEY: null,
+      BACKUP_ENCRYPTION_KEYS: null,
+      BACKUP_FEATURE_ENABLED: "1",
+      RUNTIME_WS_MAX_BUFFERED_BYTES: "1024",
+      SEED_DEFAULT_USERS: "0",
+      LOCAL_SUPERUSER_CREDENTIALS_FILE_ENABLED: "0",
+      MAIL_DEV_OUTBOX_ENABLED: "0",
+    },
+    async () => {
+      await assert.rejects(
+        importRuntimeFresh(),
+        /RUNTIME_WS_MAX_BUFFERED_BYTES.*at least 65536/i,
+      );
+    },
+  );
+});
+
 test("runtime config accepts an explicit graceful shutdown timeout override", async () => {
   await withEnv(
     {

@@ -135,6 +135,7 @@ export type RuntimeConfig = {
     httpSlowRequestMs: number;
     requestTimeoutMs: number;
     wsMaxConnectionsPerInstance: number;
+    wsMaxBufferedBytes: number;
     analyticsTimeZone: string;
     dbQueryProfiling: {
       enabled: boolean;

@@ -46,6 +46,7 @@ export function createLocalServerComposition(
     secret,
     trustForwardedHeaders: runtimeConfig.app.trustedProxies.length > 0,
     trustedForwardedProxies: runtimeConfig.app.trustedProxies,
+    maxBufferedBytes: runtimeConfig.runtime.wsMaxBufferedBytes,
     maxConnectionsPerInstance: runtimeConfig.runtime.wsMaxConnectionsPerInstance,
   });
   const authGuards = createAuthGuards({ storage, secret });

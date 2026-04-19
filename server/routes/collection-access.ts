@@ -1,5 +1,8 @@
 import type { AuthenticatedUser } from "../auth/guards";
-import type { CollectionNicknameAuthProfile } from "../storage-postgres";
+import type {
+  CollectionAdminNicknameAccessContext,
+  CollectionNicknameAuthProfile,
+} from "../storage-postgres";
 import type { CollectionStoragePort } from "../services/collection/collection-service-support";
 import {
   COLLECTION_STAFF_NICKNAME_MIN_LENGTH,
@@ -39,6 +42,28 @@ export async function getAdminGroupNicknameValues(
   storage: CollectionStoragePort,
   user: CollectionAccessUser,
 ): Promise<string[]> {
+  const normalizedUsername = normalizeCollectionText(user.username);
+  const normalizedRole = normalizeCollectionText(user.role);
+  const normalizedActivityId = normalizeCollectionText(user.activityId);
+  const getCollectionAdminNicknameAccessContextByActivity =
+    storage.getCollectionAdminNicknameAccessContextByActivity;
+  if (
+    normalizedActivityId
+    && normalizedUsername
+    && normalizedRole
+    && getCollectionAdminNicknameAccessContextByActivity
+  ) {
+    const accessContext = await getCollectionAdminNicknameAccessContextByActivity({
+      activityId: normalizedActivityId,
+      username: normalizedUsername,
+      userRole: normalizedRole,
+    });
+
+    return accessContext
+      ? resolveAdminVisibleNicknameValues(accessContext, user.role)
+      : [];
+  }
+
   const currentNickname = await resolveCurrentCollectionNicknameFromSession(storage, user);
   if (!currentNickname) return [];
 
@@ -57,6 +82,31 @@ export async function getAdminGroupNicknameValues(
   if (ownProfile && ownProfile.isActive && isNicknameScopeAllowedForRole(ownProfile.roleScope, user.role)) {
     return [ownProfile.nickname];
   }
+  return [];
+}
+
+function resolveAdminVisibleNicknameValues(
+  accessContext: CollectionAdminNicknameAccessContext,
+  userRole: string,
+): string[] {
+  const normalized = normalizeCollectionStringList(accessContext.visibleNicknames);
+  if (normalized.length > 0) {
+    const leaderLower = accessContext.nickname.toLowerCase();
+    const own = normalized.filter((value) => value.toLowerCase() === leaderLower);
+    const others = normalized
+      .filter((value) => value.toLowerCase() !== leaderLower)
+      .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+    return [...own, ...others];
+  }
+
+  if (
+    accessContext.ownProfile
+    && accessContext.ownProfile.isActive
+    && isNicknameScopeAllowedForRole(accessContext.ownProfile.roleScope, userRole)
+  ) {
+    return [accessContext.nickname];
+  }
+
   return [];
 }
 

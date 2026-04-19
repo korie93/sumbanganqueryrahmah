@@ -120,6 +120,7 @@ Anda masih perlu menyediakan PostgreSQL secara berasingan. Image ini sengaja tid
 - Generated public API references now live in [docs/API_CONTRACTS.md](./docs/API_CONTRACTS.md) and [docs/openapi.public.json](./docs/openapi.public.json).
 - Playwright critical-flow and visual-smoke guidance now lives in [docs/E2E_VISUAL_TESTING.md](./docs/E2E_VISUAL_TESTING.md).
 - Reviewed image delivery guidance now lives in [docs/IMAGE_OPTIMIZATION.md](./docs/IMAGE_OPTIMIZATION.md).
+- Dependency versioning and workflow maintenance policy now live in [docs/DEPENDENCY_SUPPLY_CHAIN.md](./docs/DEPENDENCY_SUPPLY_CHAIN.md).
 
 ## Troubleshooting
 
@@ -169,6 +170,7 @@ See [ARCHITECTURE.md](./ARCHITECTURE.md) for a detailed architecture overview.
 - [scripts/db-schema-governance.manifest.mjs](./scripts/db-schema-governance.manifest.mjs) - Table-by-table schema ownership and migration governance manifest
 - [docs/QA_FINAL_CHECKLIST.md](./docs/QA_FINAL_CHECKLIST.md) - Final QA and smoke gate checklist
 - [docs/TESTING_STRATEGY.md](./docs/TESTING_STRATEGY.md) - Current automated test layers, Playwright smoke coverage, and bundle budget gates
+- [docs/DEPENDENCY_SUPPLY_CHAIN.md](./docs/DEPENDENCY_SUPPLY_CHAIN.md) - Dependency provenance, exact-pin policy, overrides, and workflow-version maintenance notes
 - [docs/OBSERVABILITY.md](./docs/OBSERVABILITY.md) - Current logging, health, telemetry, and runtime monitoring model
 - [docs/WEBSOCKET_PROTOCOL.md](./docs/WEBSOCKET_PROTOCOL.md) - Runtime WebSocket auth, payload, heartbeat, reconnection, and close-code contract
 - [docs/SECURITY_HEADERS.md](./docs/SECURITY_HEADERS.md) - HSTS preload, CSP, and Trusted Types assumptions now enforced by the app

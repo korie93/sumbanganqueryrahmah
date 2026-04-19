@@ -19,6 +19,7 @@ import {
   readString,
   resolveNodeEnv,
 } from "./runtime-config-read-utils";
+import { DEFAULT_MAX_RUNTIME_WS_BUFFERED_BYTES } from "../ws/ws-runtime-types";
 import {
   assessMailConfiguration,
   assertSafeOllamaHost,
@@ -365,6 +366,10 @@ export const runtimeConfig: RuntimeConfig = Object.freeze({
     wsMaxConnectionsPerInstance: readInt("RUNTIME_WS_MAX_CONNECTIONS_PER_INSTANCE", lowMemoryMode ? 250 : 1_000, {
       min: 10,
       max: 10_000,
+    }),
+    wsMaxBufferedBytes: readInt("RUNTIME_WS_MAX_BUFFERED_BYTES", DEFAULT_MAX_RUNTIME_WS_BUFFERED_BYTES, {
+      min: 65_536,
+      max: 16_777_216,
     }),
     analyticsTimeZone: readString("ANALYTICS_TZ", "Asia/Kuala_Lumpur"),
     dbQueryProfiling: {

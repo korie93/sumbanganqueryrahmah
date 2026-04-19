@@ -442,6 +442,40 @@ test("broadcastWsMessage drops sockets before send when the next payload would e
   }
 });
 
+test("broadcastWsMessage respects an explicit runtime send-buffer limit override", () => {
+  const wss = new FakeWebSocketServer();
+  const providedMap = new Map<string, WebSocket>();
+  const slowSocket = new FakeWebSocket();
+  let clearSessionCalls = 0;
+
+  slowSocket.bufferedAmount = 900;
+  providedMap.set("activity-custom-buffer-limit", slowSocket as unknown as WebSocket);
+
+  const manager = createRuntimeWebSocketManager({
+    wss: wss as unknown as import("ws").WebSocketServer,
+    storage: {
+      getActivityById: async () => undefined,
+      clearCollectionNicknameSessionByActivity: async () => {
+        clearSessionCalls += 1;
+      },
+    },
+    secret: "test-secret",
+    connectedClients: providedMap,
+    maxBufferedBytes: 1_024,
+  });
+
+  try {
+    manager.broadcastWsMessage({ type: "ping", payload: "x".repeat(300) });
+
+    assert.equal(slowSocket.sentMessages.length, 0);
+    assert.equal(slowSocket.terminateCalls, 1);
+    assert.equal(providedMap.has("activity-custom-buffer-limit"), false);
+    assert.equal(clearSessionCalls, 1);
+  } finally {
+    wss.emit("close");
+  }
+});
+
 test("runtime manager rejects sockets before registration without leaving tracked state or listeners", async () => {
   const wss = new FakeWebSocketServer();
   const providedMap = new Map<string, WebSocket>();

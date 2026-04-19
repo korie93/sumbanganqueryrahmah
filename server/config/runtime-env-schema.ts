@@ -126,6 +126,10 @@ const runtimeEnvironmentSchema = z.object({
     min: 10,
     max: 10_000,
   }),
+  RUNTIME_WS_MAX_BUFFERED_BYTES: optionalIntEnv("RUNTIME_WS_MAX_BUFFERED_BYTES", {
+    min: 65_536,
+    max: 16_777_216,
+  }),
   PG_POOL_ALERT_WAITING_COUNT: optionalIntEnv("PG_POOL_ALERT_WAITING_COUNT", { min: 1, max: 1_000 }),
   PG_POOL_ALERT_UTILIZATION_PERCENT: optionalIntEnv("PG_POOL_ALERT_UTILIZATION_PERCENT", { min: 50, max: 100 }),
   PG_POOL_HEALTH_CHECK_INTERVAL_MS: optionalIntEnv("PG_POOL_HEALTH_CHECK_INTERVAL_MS", { min: 1_000 }),

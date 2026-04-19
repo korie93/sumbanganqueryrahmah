@@ -48,9 +48,18 @@ type TabVisibilityCacheEntry = {
   cachedAt: number;
 };
 
+type TabVisibilityCacheEvictionTelemetry = {
+  totalEvictions: number;
+  evictionsInWindow: number;
+  windowStartedAt: number;
+  lastWarningAt: number | null;
+};
+
 const TAB_VISIBILITY_CACHE_TTL_MS = 5 * 60 * 1000;
 const TAB_VISIBILITY_CACHE_SWEEP_INTERVAL_MS = TAB_VISIBILITY_CACHE_TTL_MS;
 const TAB_VISIBILITY_CACHE_MAX_SIZE = 100;
+const TAB_VISIBILITY_CACHE_EVICTION_WARN_THRESHOLD = 3;
+const TAB_VISIBILITY_CACHE_EVICTION_WINDOW_MS = 5 * 60 * 1000;
 const FORCED_PASSWORD_CHANGE_ALLOWLIST = new Set([
   "GET:/api/auth/me",
   "GET:/api/me",
@@ -131,11 +140,58 @@ function sweepExpiredTabVisibilityCacheEntries(
   return removed;
 }
 
+function noteTabVisibilityCacheCapacityEviction(
+  telemetry: TabVisibilityCacheEvictionTelemetry,
+  now = Date.now(),
+) {
+  const nextTelemetry: TabVisibilityCacheEvictionTelemetry =
+    now - telemetry.windowStartedAt >= TAB_VISIBILITY_CACHE_EVICTION_WINDOW_MS
+      ? {
+        totalEvictions: telemetry.totalEvictions,
+        evictionsInWindow: 0,
+        windowStartedAt: now,
+        lastWarningAt: telemetry.lastWarningAt,
+      }
+      : { ...telemetry };
+
+  nextTelemetry.totalEvictions += 1;
+  nextTelemetry.evictionsInWindow += 1;
+
+  const shouldWarn =
+    nextTelemetry.evictionsInWindow >= TAB_VISIBILITY_CACHE_EVICTION_WARN_THRESHOLD
+    && (
+      nextTelemetry.lastWarningAt === null
+      || now - nextTelemetry.lastWarningAt >= TAB_VISIBILITY_CACHE_EVICTION_WINDOW_MS
+    );
+
+  if (shouldWarn) {
+    nextTelemetry.lastWarningAt = now;
+  }
+
+  return {
+    telemetry: nextTelemetry,
+    warning:
+      shouldWarn
+        ? {
+          totalEvictions: nextTelemetry.totalEvictions,
+          evictionsInWindow: nextTelemetry.evictionsInWindow,
+          windowMs: TAB_VISIBILITY_CACHE_EVICTION_WINDOW_MS,
+        }
+        : null,
+  };
+}
+
 export function createAuthGuards(options: CreateAuthGuardsOptions) {
   const storage = options.storage;
   const secret = options.secret || getSessionSecret();
   const tabVisibilityCache = new Map<string, TabVisibilityCacheEntry>();
   const tabVisibilityInflight = new Map<string, Promise<Record<string, boolean>>>();
+  let tabVisibilityEvictionTelemetry: TabVisibilityCacheEvictionTelemetry = {
+    totalEvictions: 0,
+    evictionsInWindow: 0,
+    windowStartedAt: Date.now(),
+    lastWarningAt: null,
+  };
   let tabVisibilitySweepStopped = false;
   const tabVisibilitySweepHandle = setInterval(() => {
     sweepExpiredTabVisibilityCacheEntries(tabVisibilityCache);
@@ -149,6 +205,19 @@ export function createAuthGuards(options: CreateAuthGuardsOptions) {
       while (tabVisibilityCache.size >= TAB_VISIBILITY_CACHE_MAX_SIZE) {
         if (!evictOldestTabVisibilityCacheEntry(tabVisibilityCache)) {
           break;
+        }
+
+        const evictionObservation = noteTabVisibilityCacheCapacityEviction(
+          tabVisibilityEvictionTelemetry,
+          cachedAt,
+        );
+        tabVisibilityEvictionTelemetry = evictionObservation.telemetry;
+        if (evictionObservation.warning) {
+          logger.warn("Tab visibility cache is evicting entries repeatedly", {
+            cacheSize: tabVisibilityCache.size,
+            maxEntries: TAB_VISIBILITY_CACHE_MAX_SIZE,
+            ...evictionObservation.warning,
+          });
         }
       }
     }
@@ -467,4 +536,11 @@ export function sweepExpiredTabVisibilityCacheEntriesForTests(
   now?: number,
 ): number {
   return sweepExpiredTabVisibilityCacheEntries(cache, now);
+}
+
+export function noteTabVisibilityCacheCapacityEvictionForTests(
+  telemetry: TabVisibilityCacheEvictionTelemetry,
+  now?: number,
+) {
+  return noteTabVisibilityCacheCapacityEviction(telemetry, now);
 }

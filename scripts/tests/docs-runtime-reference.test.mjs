@@ -16,6 +16,7 @@ test("README links the reviewed rate-limit and ER diagram docs", () => {
   assert.match(readme, /\[docs\/ER_DIAGRAM\.md\]\(\.\/docs\/ER_DIAGRAM\.md\)/);
   assert.match(readme, /\[docs\/API_CONTRACTS\.md\]\(\.\/docs\/API_CONTRACTS\.md\)/);
   assert.match(readme, /\[docs\/openapi\.public\.json\]\(\.\/docs\/openapi\.public\.json\)/);
+  assert.match(readme, /\[docs\/DEPENDENCY_SUPPLY_CHAIN\.md\]\(\.\/docs\/DEPENDENCY_SUPPLY_CHAIN\.md\)/);
 });
 
 test("rate-limit reference stays anchored to the runtime source of truth", () => {

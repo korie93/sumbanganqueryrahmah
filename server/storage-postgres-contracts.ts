@@ -4,6 +4,7 @@ import type { IStorage } from "./storage-postgres-types";
 export type {
   AccountActivationTokenSummary,
   CollectionAdminGroup,
+  CollectionAdminNicknameAccessContext,
   CollectionAdminUser,
   CollectionDailyCalendarDay,
   CollectionDailyPaidCustomer,

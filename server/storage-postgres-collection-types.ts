@@ -176,6 +176,12 @@ export type CollectionNicknameSession = {
   updatedAt: Date;
 };
 
+export type CollectionAdminNicknameAccessContext = {
+  nickname: string;
+  visibleNicknames: string[];
+  ownProfile: Pick<CollectionStaffNickname, "isActive" | "roleScope"> | null;
+};
+
 export type CollectionDailyUser = {
   id: string;
   username: string;

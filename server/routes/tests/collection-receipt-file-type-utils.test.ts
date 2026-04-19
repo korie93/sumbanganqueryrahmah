@@ -41,3 +41,18 @@ test("collection receipt storage metadata keeps managed paths and canonical exte
   assert.equal(metadata.storedFileName.endsWith(".jpg"), true);
   assert.equal(metadata.storagePath.startsWith("/uploads/collection-receipts/"), true);
 });
+
+test("collection receipt storage metadata generates a unique managed filename for each upload attempt", () => {
+  const first = buildStoredCollectionReceiptMetadata({
+    fileName: "shared-receipt.png",
+    signatureType: "png",
+  });
+  const second = buildStoredCollectionReceiptMetadata({
+    fileName: "shared-receipt.png",
+    signatureType: "png",
+  });
+
+  assert.notEqual(first.storedFileName, second.storedFileName);
+  assert.notEqual(first.absolutePath, second.absolutePath);
+  assert.notEqual(first.storagePath, second.storagePath);
+});

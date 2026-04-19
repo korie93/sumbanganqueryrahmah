@@ -11,7 +11,7 @@ export const MAX_INBOUND_MESSAGES_PER_MINUTE = 100;
 export const INBOUND_MESSAGE_TOKEN_BUCKET_WINDOW_MS = 60_000;
 export const INBOUND_MESSAGE_TOKEN_BUCKET_CAPACITY = MAX_INBOUND_MESSAGES_PER_MINUTE;
 export const MAX_RUNTIME_WS_MESSAGE_BYTES = 64 * 1024;
-export const MAX_RUNTIME_WS_BUFFERED_BYTES = 256 * 1024;
+export const DEFAULT_MAX_RUNTIME_WS_BUFFERED_BYTES = 256 * 1024;
 export const CONNECTED_CLIENT_MONITOR_THRESHOLDS = [10, 25, 50, 100, 250, 500, 1_000] as const;
 
 export type RuntimeManagerOptions = {
@@ -24,6 +24,7 @@ export type RuntimeManagerOptions = {
   trustForwardedHeaders?: boolean;
   trustedForwardedProxies?: readonly string[];
   maxConnectionsPerInstance?: number;
+  maxBufferedBytes?: number;
 };
 
 export type RuntimeWebSocketActivity = {

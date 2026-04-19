@@ -1,6 +1,10 @@
 import { badRequest, conflict, forbidden, notFound, unauthorized } from "../../http/errors";
 import type { AuthenticatedUser } from "../../auth/guards";
-import type { CollectionNicknameAuthProfile, PostgresStorage } from "../../storage-postgres";
+import type {
+  CollectionAdminNicknameAccessContext,
+  CollectionNicknameAuthProfile,
+  PostgresStorage,
+} from "../../storage-postgres";
 import { resolveCollectionNicknameAccessForUser } from "../../routes/collection-access";
 import { COLLECTION_SUMMARY_MONTH_NAMES } from "../../routes/collection.validation";
 import { logger } from "../../lib/logger";
@@ -58,7 +62,13 @@ export type CollectionStoragePort = Pick<
   | "updateCollectionRecord"
   | "syncCollectionRecordReceiptValidation"
   | "updateCollectionStaffNickname"
->;
+> & {
+  getCollectionAdminNicknameAccessContextByActivity?: (params: {
+    activityId: string;
+    username: string;
+    userRole: string;
+  }) => Promise<CollectionAdminNicknameAccessContext | undefined>;
+};
 
 type CollectionPiiAccessAuditParams = {
   action:

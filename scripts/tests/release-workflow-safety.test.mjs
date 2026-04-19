@@ -22,3 +22,10 @@ test("release verification workflow generates cryptographic per-run runtime secr
   assert.doesNotMatch(workflow, /PG_PASSWORD:\s*.*github\.run_id/i);
   assert.doesNotMatch(workflow, /SEED_SUPERUSER_PASSWORD:\s*.*github\.run_id/i);
 });
+
+test("release verification workflow pins Node.js to the reproducible runtime patch version", () => {
+  const workflow = readFileSync(releaseWorkflowPath, "utf8");
+
+  assert.doesNotMatch(workflow, /node-version:\s*24(?:\s|$)/);
+  assert.match(workflow, /node-version:\s*24\.12\.0/);
+});

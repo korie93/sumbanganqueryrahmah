@@ -1,4 +1,5 @@
 import type {
+  CollectionAdminNicknameAccessContext,
   CollectionAdminGroup,
   CollectionAdminUser,
   CollectionDailyCalendarDay,
@@ -118,6 +119,14 @@ export class PostgresCollectionStorage extends PostgresSettingsStorage {
 
   async clearCollectionNicknameSessionByActivity(activityId: string): Promise<void> {
     return this.collectionRepository.clearCollectionNicknameSessionByActivity(activityId);
+  }
+
+  async getCollectionAdminNicknameAccessContextByActivity(params: {
+    activityId: string;
+    username: string;
+    userRole: string;
+  }): Promise<CollectionAdminNicknameAccessContext | undefined> {
+    return this.collectionRepository.getCollectionAdminNicknameAccessContextByActivity(params);
   }
 
   async listCollectionDailyUsers(): Promise<CollectionDailyUser[]> {

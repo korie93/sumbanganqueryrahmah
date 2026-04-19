@@ -10,7 +10,7 @@ import { startRuntimeWebSocketHeartbeat } from "./ws-heartbeat";
 import {
   CONNECTED_CLIENT_MONITOR_THRESHOLDS,
   DEFAULT_MAX_CONNECTIONS_PER_INSTANCE,
-  MAX_RUNTIME_WS_BUFFERED_BYTES,
+  DEFAULT_MAX_RUNTIME_WS_BUFFERED_BYTES,
   RUNTIME_WS_PENDING_AUTH_TTL_MS,
   RUNTIME_WS_TRACKED_SOCKET_SWEEP_INTERVAL_MS,
   type RuntimeManagerOptions,
@@ -33,6 +33,10 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
   const maxConnectionsPerInstance = Math.max(
     1,
     Math.floor(options.maxConnectionsPerInstance ?? DEFAULT_MAX_CONNECTIONS_PER_INSTANCE),
+  );
+  const maxBufferedBytes = Math.max(
+    1,
+    Math.floor(options.maxBufferedBytes ?? DEFAULT_MAX_RUNTIME_WS_BUFFERED_BYTES),
   );
   const trustedForwardedProxyMatcher = buildTrustedProxyMatcher(trustedForwardedProxies);
   const socketEntriesByActivity = new Map<string, RuntimeTrackedSocketEntry>();
@@ -116,7 +120,7 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
     logger.warn("WebSocket client dropped because the send buffer exceeded the runtime limit", {
       activityId,
       bufferedAmount: ws.bufferedAmount,
-      maxBufferedBytes: MAX_RUNTIME_WS_BUFFERED_BYTES,
+      maxBufferedBytes,
     });
     removeTrackedSocket(activityId, ws);
     if (ws.readyState === WebSocket.OPEN) {
@@ -142,6 +146,7 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
     connectedClients,
     clearNicknameSession,
     dropBackpressuredSocket,
+    maxBufferedBytes,
     removeTrackedSocket,
   });
 

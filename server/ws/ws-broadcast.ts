@@ -1,6 +1,5 @@
 import { WebSocket } from "ws";
 import { logger } from "../lib/logger";
-import { MAX_RUNTIME_WS_BUFFERED_BYTES } from "./ws-runtime-types";
 import {
   sanitizeRuntimeWebSocketError,
   serializeRuntimeWsPayload,
@@ -10,6 +9,7 @@ type CreateBroadcastWsMessageOptions = {
   connectedClients: Map<string, WebSocket>;
   clearNicknameSession: (activityId: string) => Promise<void>;
   dropBackpressuredSocket: (activityId: string, ws: WebSocket) => void;
+  maxBufferedBytes: number;
   removeTrackedSocket: (activityId: string, ws?: WebSocket) => void;
 };
 
@@ -20,6 +20,7 @@ export function createBroadcastWsMessage(
     connectedClients,
     clearNicknameSession,
     dropBackpressuredSocket,
+    maxBufferedBytes,
     removeTrackedSocket,
   } = options;
 
@@ -39,8 +40,8 @@ export function createBroadcastWsMessage(
       }
 
       if (
-        ws.bufferedAmount > MAX_RUNTIME_WS_BUFFERED_BYTES
-        || ws.bufferedAmount + messageBytes > MAX_RUNTIME_WS_BUFFERED_BYTES
+        ws.bufferedAmount > maxBufferedBytes
+        || ws.bufferedAmount + messageBytes > maxBufferedBytes
       ) {
         dropBackpressuredSocket(activityId, ws);
         continue;
@@ -48,7 +49,7 @@ export function createBroadcastWsMessage(
 
       try {
         ws.send(message);
-        if (ws.bufferedAmount > MAX_RUNTIME_WS_BUFFERED_BYTES) {
+        if (ws.bufferedAmount > maxBufferedBytes) {
           dropBackpressuredSocket(activityId, ws);
         }
       } catch (error) {

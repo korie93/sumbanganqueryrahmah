@@ -20,6 +20,29 @@ metadata in `scripts/lib/dependency-audit.mjs`. Any allowlist entry must
 include a reason, advisory references, and quarterly review metadata in
 `scripts/lib/dependency-audit.mjs`.
 
+## Versioning Strategy
+
+This repository uses two dependency versioning modes on purpose:
+
+- Exact pins are used when a package sits on a security or contract boundary, has
+  already needed an audited compatibility pin, is vendored, or must stay aligned
+  with a reviewed runtime patch version.
+- Caret ranges are used for ordinary semver-stable libraries where the repo's
+  audit, test, and release gates are expected to catch regressions before
+  release.
+
+Examples of intentional exact pins today:
+
+- `zod`, because schema semantics feed shared runtime validation across client,
+  server, and generated API docs.
+- `dompurify`, `recharts`, `react-is`, and the `overrides` block, because those
+  versions were kept on reviewed compatibility or security baselines.
+- `typescript`, `@types/node`, and the workflow Node.js patch version, because
+  they are part of the repo's deterministic toolchain surface.
+
+If a dependency needs to move from caret to exact pinning, do it in a dedicated
+dependency-focused PR with the associated audit/test evidence.
+
 ## SheetJS `xlsx`
 
 `xlsx@0.20.2` is vendored locally at:
@@ -78,3 +101,15 @@ Current overrides:
 
 When removing an override, remove its entry from this table and from the audit
 helper in the same dependency-only PR.
+
+## GitHub Actions Version Policy
+
+Workflow actions follow the same conservative maintenance rule:
+
+- `actions/checkout@v5` and `actions/setup-node@v5` stay on the reviewed stable
+  major until there is a deliberate upgrade PR.
+- Node.js itself is patch-pinned in CI and release verification for
+  reproducibility.
+- Revisit action majors during dependency/workflow audits and when GitHub
+  publishes deprecation or EOL guidance. Do not auto-bump workflow actions
+  blindly just because a new major exists.

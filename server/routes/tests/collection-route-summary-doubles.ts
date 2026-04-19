@@ -136,9 +136,25 @@ export function createAdminCollectionSummaryStorageDouble() {
   const sessionActivityCalls: string[] = [];
   const groupLeaderCalls: string[] = [];
   const staffNicknameLookups: string[] = [];
+  const accessContextCalls: Array<{ activityId: string; username: string; userRole: string }> = [];
   const allowedNicknames = ["Collector Alpha", "Collector Beta"];
 
   const storage = {
+    getCollectionAdminNicknameAccessContextByActivity: async (params: {
+      activityId: string;
+      username: string;
+      userRole: string;
+    }) => {
+      accessContextCalls.push(params);
+      return {
+        nickname: "Collector Alpha",
+        visibleNicknames: allowedNicknames,
+        ownProfile: {
+          isActive: true,
+          roleScope: "both",
+        },
+      };
+    },
     getCollectionNicknameSessionByActivity: async (activityId: string) => {
       sessionActivityCalls.push(activityId);
       return {
@@ -234,6 +250,7 @@ export function createAdminCollectionSummaryStorageDouble() {
     monthlySummaryCalls,
     nicknameSummaryCalls,
     nicknameListCalls,
+    accessContextCalls,
     sessionActivityCalls,
     groupLeaderCalls,
     staffNicknameLookups,
@@ -253,8 +270,17 @@ export function createAdminCollectionNoVisibilityStorageDouble() {
   const sessionActivityCalls: string[] = [];
   const groupLeaderCalls: string[] = [];
   const staffNicknameLookups: string[] = [];
+  const accessContextCalls: Array<{ activityId: string; username: string; userRole: string }> = [];
 
   const storage = {
+    getCollectionAdminNicknameAccessContextByActivity: async (params: {
+      activityId: string;
+      username: string;
+      userRole: string;
+    }) => {
+      accessContextCalls.push(params);
+      return undefined;
+    },
     getCollectionNicknameSessionByActivity: async (activityId: string) => {
       sessionActivityCalls.push(activityId);
       return null;
@@ -322,6 +348,7 @@ export function createAdminCollectionNoVisibilityStorageDouble() {
     monthlySummaryCalls,
     nicknameSummaryCalls,
     nicknameListCalls,
+    accessContextCalls,
     sessionActivityCalls,
     groupLeaderCalls,
     staffNicknameLookups,

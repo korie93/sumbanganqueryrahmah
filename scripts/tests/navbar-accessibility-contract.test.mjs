@@ -29,6 +29,8 @@ test("navbar decorative icons stay hidden from assistive technology", () => {
 test("navbar menu triggers expose the reviewed dialog and controlled menu wiring", () => {
   const navbar = readComponent("client/src/components/Navbar.tsx");
 
+  assert.match(navbar, /<button\s+type="button"\s+className="nav-mobile-trigger px-3"/);
+  assert.match(navbar, /data-testid="button-open-mobile-nav"/);
   assert.match(navbar, /aria-haspopup="dialog"/);
   assert.match(navbar, /aria-controls="mobile-navigation-drawer"/);
   assert.match(navbar, /<DropdownMenu open=\{mobileUserMenuOpen\} onOpenChange=\{setMobileUserMenuOpen\}>/);

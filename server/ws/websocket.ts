@@ -32,6 +32,7 @@ export function setupWebSocket(server: Server, options: LegacyWebSocketOptions =
     connectedClients,
     trustForwardedHeaders: runtimeConfig.app.trustedProxies.length > 0,
     trustedForwardedProxies: runtimeConfig.app.trustedProxies,
+    maxBufferedBytes: runtimeConfig.runtime.wsMaxBufferedBytes,
     maxConnectionsPerInstance: runtimeConfig.runtime.wsMaxConnectionsPerInstance,
   });
 

@@ -21,6 +21,7 @@ import {
 } from "./collection-repository-daily-operations";
 import {
   clearCollectionNicknameSessionByActivityRepository,
+  getCollectionAdminNicknameAccessContextByActivityRepository,
   createCollectionStaffNicknameRepository,
   deleteCollectionStaffNicknameRepository,
   getCollectionNicknameAuthProfileByNameRepository,
@@ -60,6 +61,8 @@ import {
 
 export class CollectionRepository {
   readonly clearCollectionNicknameSessionByActivity = clearCollectionNicknameSessionByActivityRepository;
+  readonly getCollectionAdminNicknameAccessContextByActivity =
+    getCollectionAdminNicknameAccessContextByActivityRepository;
   readonly createCollectionAdminGroup = createCollectionAdminGroupRepository;
   readonly createCollectionRecord = createCollectionRecordRepository;
   readonly createCollectionRecordReceipts = createCollectionRecordReceiptsRepository;

@@ -1927,7 +1927,7 @@ test("GET /api/collection/summary scopes user requests to the active staff nickn
 });
 
 test("GET /api/collection/summary scopes admin requests to the visible nickname group when no nickname filter is provided", async () => {
-  const { storage, allowedNicknames, monthlySummaryCalls, sessionActivityCalls, groupLeaderCalls, staffNicknameLookups } =
+  const { storage, allowedNicknames, monthlySummaryCalls, accessContextCalls, sessionActivityCalls, groupLeaderCalls, staffNicknameLookups } =
     createAdminCollectionSummaryStorageDouble();
   const app = createJsonTestApp();
 
@@ -1952,8 +1952,15 @@ test("GET /api/collection/summary scopes admin requests to the visible nickname 
     assert.equal(payload.ok, true);
     assert.equal(payload.year, 2026);
     assert.equal(payload.summary.length, 1);
-    assert.deepEqual(sessionActivityCalls, ["activity-admin-1"]);
-    assert.deepEqual(groupLeaderCalls, ["Collector Alpha"]);
+    assert.deepEqual(accessContextCalls, [
+      {
+        activityId: "activity-admin-1",
+        username: "admin.user",
+        userRole: "admin",
+      },
+    ]);
+    assert.deepEqual(sessionActivityCalls, []);
+    assert.deepEqual(groupLeaderCalls, []);
     assert.deepEqual(monthlySummaryCalls, [
       {
         year: 2026,
@@ -1967,7 +1974,7 @@ test("GET /api/collection/summary scopes admin requests to the visible nickname 
 });
 
 test("GET /api/collection/summary returns an empty summary for admins without nickname session visibility", async () => {
-  const { storage, monthlySummaryCalls, sessionActivityCalls, groupLeaderCalls, staffNicknameLookups } =
+  const { storage, monthlySummaryCalls, accessContextCalls, sessionActivityCalls, groupLeaderCalls, staffNicknameLookups } =
     createAdminCollectionNoVisibilityStorageDouble();
   const app = createJsonTestApp();
 
@@ -2004,7 +2011,14 @@ test("GET /api/collection/summary returns an empty summary for admins without ni
       totalRecords: 0,
       totalAmount: 0,
     });
-    assert.deepEqual(sessionActivityCalls, ["activity-admin-empty-1"]);
+    assert.deepEqual(accessContextCalls, [
+      {
+        activityId: "activity-admin-empty-1",
+        username: "admin.user",
+        userRole: "admin",
+      },
+    ]);
+    assert.deepEqual(sessionActivityCalls, []);
     assert.equal(groupLeaderCalls.length, 0);
     assert.equal(staffNicknameLookups.length, 0);
     assert.equal(monthlySummaryCalls.length, 0);
@@ -2183,7 +2197,7 @@ test("GET /api/collection/nickname-summary returns an empty payload immediately 
 });
 
 test("GET /api/collection/nickname-summary rejects admin filters outside the visible nickname scope", async () => {
-  const { storage, nicknameSummaryCalls, nicknameListCalls, sessionActivityCalls, groupLeaderCalls } =
+  const { storage, nicknameSummaryCalls, nicknameListCalls, accessContextCalls, sessionActivityCalls, groupLeaderCalls } =
     createAdminCollectionSummaryStorageDouble();
   const app = createJsonTestApp();
 
@@ -2208,8 +2222,15 @@ test("GET /api/collection/nickname-summary rejects admin filters outside the vis
     assert.equal(response.status, 400);
     const payload = await response.json();
     assert.match(String(payload.message), /invalid nickname filter/i);
-    assert.deepEqual(sessionActivityCalls, ["activity-admin-2"]);
-    assert.deepEqual(groupLeaderCalls, ["Collector Alpha"]);
+    assert.deepEqual(accessContextCalls, [
+      {
+        activityId: "activity-admin-2",
+        username: "admin.user",
+        userRole: "admin",
+      },
+    ]);
+    assert.deepEqual(sessionActivityCalls, []);
+    assert.deepEqual(groupLeaderCalls, []);
     assert.equal(nicknameSummaryCalls.length, 0);
     assert.equal(nicknameListCalls.length, 0);
   } finally {
@@ -2218,7 +2239,7 @@ test("GET /api/collection/nickname-summary rejects admin filters outside the vis
 });
 
 test("GET /api/collection/nickname-summary allows admin-visible nicknames and skips record loading when summaryOnly is enabled", async () => {
-  const { storage, nicknameSummaryCalls, nicknameListCalls, sessionActivityCalls, groupLeaderCalls } =
+  const { storage, nicknameSummaryCalls, nicknameListCalls, accessContextCalls, sessionActivityCalls, groupLeaderCalls } =
     createAdminCollectionSummaryStorageDouble();
   const app = createJsonTestApp();
 
@@ -2247,8 +2268,15 @@ test("GET /api/collection/nickname-summary allows admin-visible nicknames and sk
     assert.equal(payload.totalRecords, 2);
     assert.equal(payload.totalAmount, 420.75);
     assert.deepEqual(payload.records, []);
-    assert.deepEqual(sessionActivityCalls, ["activity-admin-3"]);
-    assert.deepEqual(groupLeaderCalls, ["Collector Alpha"]);
+    assert.deepEqual(accessContextCalls, [
+      {
+        activityId: "activity-admin-3",
+        username: "admin.user",
+        userRole: "admin",
+      },
+    ]);
+    assert.deepEqual(sessionActivityCalls, []);
+    assert.deepEqual(groupLeaderCalls, []);
     assert.deepEqual(nicknameSummaryCalls, [
       {
         from: "2026-03-01",
@@ -2263,7 +2291,7 @@ test("GET /api/collection/nickname-summary allows admin-visible nicknames and sk
 });
 
 test("GET /api/collection/list returns an empty payload for admins without nickname session visibility", async () => {
-  const { storage, monthlySummaryCalls, nicknameSummaryCalls, nicknameListCalls, sessionActivityCalls, groupLeaderCalls, staffNicknameLookups } =
+  const { storage, monthlySummaryCalls, nicknameSummaryCalls, nicknameListCalls, accessContextCalls, sessionActivityCalls, groupLeaderCalls, staffNicknameLookups } =
     createAdminCollectionNoVisibilityStorageDouble();
   const app = createJsonTestApp();
 
@@ -2295,7 +2323,14 @@ test("GET /api/collection/list returns an empty payload for admins without nickn
     assert.equal(payload.pageSize, 20);
     assert.equal(payload.limit, 20);
     assert.equal(payload.offset, 40);
-    assert.deepEqual(sessionActivityCalls, ["activity-admin-empty-2"]);
+    assert.deepEqual(accessContextCalls, [
+      {
+        activityId: "activity-admin-empty-2",
+        username: "admin.user",
+        userRole: "admin",
+      },
+    ]);
+    assert.deepEqual(sessionActivityCalls, []);
     assert.equal(groupLeaderCalls.length, 0);
     assert.equal(staffNicknameLookups.length, 0);
     assert.equal(monthlySummaryCalls.length, 0);
