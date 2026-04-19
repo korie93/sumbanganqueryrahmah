@@ -1631,8 +1631,8 @@ test("POST /api/auth/activate-account activates a pending account, hashes the pa
       body: JSON.stringify({
         username: "pending.user",
         token: rawToken,
-        newPassword: "StrongPass123",
-        confirmPassword: "StrongPass123",
+        newPassword: "StrongPass123!",
+        confirmPassword: "StrongPass123!",
       }),
     });
 
@@ -1642,8 +1642,8 @@ test("POST /api/auth/activate-account activates a pending account, hashes the pa
     assert.equal(payload.user.status, "active");
     assert.equal(updateCalls.length, 1);
     assert.equal(typeof user.passwordHash, "string");
-    assert.notEqual(user.passwordHash, "StrongPass123");
-    assert.equal(await verifyPassword("StrongPass123", user.passwordHash), true);
+    assert.notEqual(user.passwordHash, "StrongPass123!");
+    assert.equal(await verifyPassword("StrongPass123!", user.passwordHash), true);
     assert.deepEqual(invalidateCalls, [user.id]);
     assert.equal(auditLogs.length, 1);
     assert.equal(auditLogs[0].action, "ACCOUNT_ACTIVATION_COMPLETED");
@@ -1676,8 +1676,8 @@ test("POST /api/auth/activate-account rejects a token that has already been used
       },
       body: JSON.stringify({
         token: rawToken,
-        newPassword: "StrongPass123",
-        confirmPassword: "StrongPass123",
+        newPassword: "StrongPass123!",
+        confirmPassword: "StrongPass123!",
       }),
     });
 
@@ -1830,8 +1830,8 @@ test("POST /api/auth/reset-password-with-token updates credentials, invalidates 
       },
       body: JSON.stringify({
         token: rawToken,
-        newPassword: "ResetStrong123",
-        confirmPassword: "ResetStrong123",
+        newPassword: "ResetStrong123!",
+        confirmPassword: "ResetStrong123!",
       }),
     });
 
@@ -1840,7 +1840,7 @@ test("POST /api/auth/reset-password-with-token updates credentials, invalidates 
     assert.equal(payload.ok, true);
     assert.equal(updateCalls.length, 1);
     assert.equal(typeof user.passwordHash, "string");
-    assert.equal(await verifyPassword("ResetStrong123", user.passwordHash), true);
+    assert.equal(await verifyPassword("ResetStrong123!", user.passwordHash), true);
     assert.equal(user.mustChangePassword, false);
     assert.equal(user.passwordResetBySuperuser, false);
     assert.equal(invalidateCalls.length, 1);
@@ -1880,8 +1880,8 @@ test("POST /api/auth/reset-password-with-token rejects a token that has already 
       },
       body: JSON.stringify({
         token: rawToken,
-        newPassword: "ResetStrong123",
-        confirmPassword: "ResetStrong123",
+        newPassword: "ResetStrong123!",
+        confirmPassword: "ResetStrong123!",
       }),
     });
 
