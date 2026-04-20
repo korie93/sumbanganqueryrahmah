@@ -14,6 +14,7 @@ test("resolveDevelopmentAccessibilityWarningMode only enables warnings for brows
   assert.equal(resolveDevelopmentAccessibilityWarningMode({
     hasWindow: true,
     viteDev: false,
+    viteProd: true,
   }), false);
   assert.equal(resolveDevelopmentAccessibilityWarningMode({
     hasWindow: true,
@@ -25,4 +26,9 @@ test("resolveDevelopmentAccessibilityWarningMode only enables warnings for brows
     nodeEnv: "production",
     viteDev: undefined,
   }), false);
+  assert.equal(resolveDevelopmentAccessibilityWarningMode({
+    hasWindow: true,
+    viteDev: false,
+    viteProd: false,
+  }), true);
 });
