@@ -62,7 +62,19 @@ export class AuthAccountManagedLifecycleOperations {
       target.username,
       "ACCOUNT_DELETED",
     );
-    const deleted = await this.deps.storage.deleteManagedUserAccount(target.id);
+    let deleted: boolean;
+    try {
+      deleted = await this.deps.storage.deleteManagedUserAccount(target.id);
+    } catch (error) {
+      if (isManagedUserDeleteDependencyError(error)) {
+        throw new AuthAccountError(
+          409,
+          ERROR_CODES.ACCOUNT_UNAVAILABLE,
+          "This account cannot be deleted because it is still referenced by existing operational records. Disable the account instead or reassign/remove the dependent records first.",
+        );
+      }
+      throw error;
+    }
 
     if (!deleted) {
       throw new AuthAccountError(404, ERROR_CODES.USER_NOT_FOUND, "Target user not found.");
@@ -294,4 +306,49 @@ export class AuthAccountManagedLifecycleOperations {
       closedSessionIds,
     };
   }
+}
+
+function isManagedUserDeleteDependencyError(error: unknown) {
+  if (hasPostgresErrorCode(error, "23503")) {
+    return true;
+  }
+
+  const message = readManagedUserDeleteErrorMessage(error);
+  return message.includes("violates foreign key constraint")
+    || (
+      message.includes("update or delete on table")
+      && message.includes("users")
+    );
+}
+
+function hasPostgresErrorCode(error: unknown, expectedCode: string) {
+  const visited = new Set<object>();
+  let current: unknown = error;
+
+  while (current && typeof current === "object" && !visited.has(current)) {
+    visited.add(current);
+    const code = "code" in current ? current.code : undefined;
+    if (code === expectedCode) {
+      return true;
+    }
+    current = "cause" in current ? current.cause : undefined;
+  }
+
+  return false;
+}
+
+function readManagedUserDeleteErrorMessage(error: unknown) {
+  const visited = new Set<object>();
+  let current: unknown = error;
+
+  while (current && typeof current === "object" && !visited.has(current)) {
+    visited.add(current);
+    const message = "message" in current ? current.message : undefined;
+    if (typeof message === "string" && message.trim()) {
+      return message.toLowerCase();
+    }
+    current = "cause" in current ? current.cause : undefined;
+  }
+
+  return "";
 }

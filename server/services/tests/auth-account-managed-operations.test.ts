@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { ERROR_CODES } from "../../../shared/error-codes";
 import type { AuthenticatedUser } from "../../auth/guards";
 import { AuthAccountManagedLifecycleOperations } from "../auth-account-managed-lifecycle-operations";
 import { AuthAccountManagedRecoveryOperations } from "../auth-account-managed-recovery-operations";
@@ -559,5 +560,55 @@ test("AuthAccountManagedLifecycleOperations.deleteManagedUser invalidates sessio
     `invalidate:${target.username}:ACCOUNT_DELETED`,
     "delete-account",
     "ACCOUNT_DELETED",
+  ]);
+});
+
+test("AuthAccountManagedLifecycleOperations.deleteManagedUser converts dependency conflicts into a user-facing AuthAccountError", async () => {
+  const actor = buildSuperuserAuth();
+  const actorAccount = buildSuperuser();
+  const target = buildManagedTarget();
+  const invalidatedSessions: Array<{ username: string; reason: string }> = [];
+  const dependencyError = new Error("update or delete on table \"users\" violates foreign key constraint");
+  Object.assign(dependencyError, {
+    code: "23503",
+  });
+
+  const operations = new AuthAccountManagedLifecycleOperations({
+    storage: createManagedStorage({
+      deleteManagedUserAccount: async () => {
+        throw dependencyError;
+      },
+    }, target),
+    ensureUniqueIdentity: async () => undefined,
+    invalidateUserSessions: async (username: string, reason: string) => {
+      invalidatedSessions.push({ username, reason });
+      return ["activity-delete-1"];
+    },
+    requireManageableTarget: async () => target,
+    requireManagedEmail: (email: string | null) => email || "",
+    requireSuperuser: async () => actorAccount,
+    sendActivationEmail: async () => {
+      throw new Error("not used");
+    },
+    sendPasswordResetEmail: async () => buildDelivery(),
+    validateEmail: () => undefined,
+    validateUsername: () => undefined,
+  });
+
+  await assert.rejects(
+    () => operations.deleteManagedUser(actor, target.id),
+    (error: unknown) => {
+      assert.ok(error instanceof AuthAccountError);
+      assert.equal(error.statusCode, 409);
+      assert.equal(error.code, ERROR_CODES.ACCOUNT_UNAVAILABLE);
+      assert.match(
+        error.message,
+        /cannot be deleted because it is still referenced by existing operational records/i,
+      );
+      return true;
+    },
+  );
+  assert.deepEqual(invalidatedSessions, [
+    { username: target.username, reason: "ACCOUNT_DELETED" },
   ]);
 });

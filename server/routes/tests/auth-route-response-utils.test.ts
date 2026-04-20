@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import type { NextFunction, Request, Response } from "express";
 import { HttpError } from "../../http/errors";
 import { ERROR_CODES } from "../../../shared/error-codes";
 import { AuthAccountError } from "../../services/auth-account.service";
@@ -84,6 +85,36 @@ test("auth route response utils serialize AuthAccountError and HttpError consist
         message: "Conflict",
         details: { scope: "username" },
       },
+    });
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("auth route response utils forward unknown async errors into the Express error pipeline", async () => {
+  const app = createJsonTestApp();
+  app.get(
+    "/api/test-unhandled-auth-route-error",
+    createAuthJsonRoute(async () => {
+      throw new Error("delete dependency exploded");
+    }),
+  );
+  app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
+    const message = error instanceof Error ? error.message : "Unknown error";
+    res.status(500).json({
+      ok: false,
+      message,
+    });
+  });
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const response = await fetch(`${baseUrl}/api/test-unhandled-auth-route-error`);
+
+    assert.equal(response.status, 500);
+    assert.deepEqual(await response.json(), {
+      ok: false,
+      message: "delete dependency exploded",
     });
   } finally {
     await stopTestServer(server);

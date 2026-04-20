@@ -1,4 +1,4 @@
-import type { RequestHandler, Response } from "express";
+import type { NextFunction, RequestHandler, Response } from "express";
 import type { AuthenticatedRequest } from "../../auth/guards";
 import { HttpError } from "../../http/errors";
 import { logRouteHandlerError } from "../../http/route-observability";
@@ -127,18 +127,20 @@ export function sendAuthRouteError(res: Response, error: unknown) {
 }
 
 export function createAuthJsonRoute(handler: AuthRouteJsonHandler): RequestHandler {
-  return async (req: AuthenticatedRequest, res) => {
-    try {
-      const payload = await handler(req, res);
-      if (!res.headersSent && payload !== undefined) {
-        res.json(payload);
-      }
-    } catch (error) {
-      if (sendAuthRouteError(res, error)) {
-        return;
-      }
-      logRouteHandlerError(error, req, { message: "Unhandled auth route error" });
-      throw error;
-    }
+  return (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    void Promise.resolve()
+      .then(() => handler(req, res))
+      .then((payload) => {
+        if (!res.headersSent && payload !== undefined) {
+          res.json(payload);
+        }
+      })
+      .catch((error) => {
+        if (sendAuthRouteError(res, error)) {
+          return;
+        }
+        logRouteHandlerError(error, req, { message: "Unhandled auth route error" });
+        next(error);
+      });
   };
 }
