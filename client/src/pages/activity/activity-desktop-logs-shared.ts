@@ -40,4 +40,8 @@ export interface ActivityDesktopLogRowProps
   gridClassName: string;
   isSelected: boolean;
   onToggleSelected: (activityId: string, checked: boolean) => void;
+  position?: {
+    index: number;
+    total: number;
+  } | undefined;
 }

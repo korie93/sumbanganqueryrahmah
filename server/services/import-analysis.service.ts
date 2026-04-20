@@ -45,18 +45,20 @@ export class ImportAnalysisService {
 
     const accumulator = createImportAnalysisAccumulator();
     let totalRows = 0;
+    const importIds: string[] = [];
 
     for (const importRecord of importsWithCounts) {
       totalRows += Number(importRecord.rowCount || 0);
+      importIds.push(importRecord.id);
+    }
 
-      for (let offset = 0; offset < Number(importRecord.rowCount || 0); offset += IMPORT_ANALYSIS_BATCH_SIZE) {
-        const rows = await this.importsRepository.getDataRowsByImportPage(
-          importRecord.id,
-          IMPORT_ANALYSIS_BATCH_SIZE,
-          offset,
-        );
-        consumeImportAnalysisRows(accumulator, rows);
-      }
+    for (let offset = 0; offset < totalRows; offset += IMPORT_ANALYSIS_BATCH_SIZE) {
+      const rows = await this.importsRepository.getDataRowsByImportIdsPage(
+        importIds,
+        IMPORT_ANALYSIS_BATCH_SIZE,
+        offset,
+      );
+      consumeImportAnalysisRows(accumulator, rows);
     }
 
     return {

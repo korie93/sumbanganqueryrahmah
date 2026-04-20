@@ -8,19 +8,19 @@ export const DESIGN_TOKEN_COLOR_COMPATIBILITY_REQUIREMENTS = [
       },
       {
         label: "light theme exposes an explicit primary border token",
-        predicate: (text) => text.includes("--primary-border: hsl(217 91% 42%);"),
+        predicate: (text) => text.includes("--primary-border: 217 91% 42%;"),
       },
       {
         label: "light theme exposes an explicit accent border token",
-        predicate: (text) => text.includes("--accent-border: hsl(214 28% 74%);"),
+        predicate: (text) => text.includes("--accent-border: 214 28% 74%;"),
       },
       {
         label: "dark theme exposes an explicit primary border token",
-        predicate: (text) => text.includes("--primary-border: hsl(217 91% 59%);"),
+        predicate: (text) => text.includes("--primary-border: 217 91% 59%;"),
       },
       {
         label: "dark theme exposes an explicit destructive border token",
-        predicate: (text) => text.includes("--destructive-border: hsl(0 62% 39%);"),
+        predicate: (text) => text.includes("--destructive-border: 0 62% 39%;"),
       },
     ],
   },
@@ -69,7 +69,7 @@ export function formatDesignTokenColorCompatibilityReport(validation) {
   const inspected = `Design token color compatibility inspected ${summary.checkedFileCount || 0}/${summary.fileCount || 0} files and ${summary.checkedRuleCount || 0}/${summary.ruleCount || 0} color rules.`;
 
   if (failures.length === 0) {
-    return `${inspected}\nTheme border tokens stay on explicit browser-safe HSL values without hsl(from ...) syntax.`;
+    return `${inspected}\nTheme border tokens stay on explicit browser-safe HSL channel values without hsl(from ...) syntax.`;
   }
 
   return [

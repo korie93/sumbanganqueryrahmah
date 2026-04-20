@@ -20,6 +20,10 @@ type ActivityMobileLogCardProps = {
   onDeleteClick: (activity: ActivityRecord) => void;
   onKickClick: (activity: ActivityRecord) => void;
   onToggleSelected: (activityId: string, checked: boolean) => void;
+  position?: {
+    index: number;
+    total: number;
+  } | undefined;
   selected: boolean;
 };
 
@@ -32,6 +36,7 @@ export const ActivityMobileLogCard = memo(function ActivityMobileLogCard({
   onDeleteClick,
   onKickClick,
   onToggleSelected,
+  position,
   selected,
 }: ActivityMobileLogCardProps) {
   const sessionDuration = getSessionDuration(activity.loginTime, activity.logoutTime);
@@ -40,7 +45,7 @@ export const ActivityMobileLogCard = memo(function ActivityMobileLogCard({
   return (
     <div
       role="group"
-      aria-label={buildActivityRowAriaLabel(activity, browserLabel)}
+      aria-label={buildActivityRowAriaLabel(activity, browserLabel, position)}
       className="flex h-full flex-col space-y-3 rounded-2xl border border-border/70 bg-card/80 p-3.5 shadow-xs"
       data-testid={`activity-row-${activity.id}`}
     >

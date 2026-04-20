@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { AIChatStatus } from "@/components/AIChat";
-import { useAIContext } from "@/context/AIContext";
+import {
+  useAIMessagesContext,
+  useAIThinkingContext,
+  useAIUnreadCountContext,
+} from "@/context/AIContext";
 
 const AI_RESET_EVENT = "ai-chat-reset";
 
@@ -17,13 +21,9 @@ export function useFloatingAIBehaviorState({
   const [hasActivated, setHasActivated] = useState(false);
   const [aiStatus, setAiStatus] = useState<AIChatStatus>("IDLE");
   const cancelAISearchRef = useRef<(() => void) | null>(null);
-  const {
-    messages,
-    isThinking,
-    unreadCount,
-    setUnreadCount,
-    resetSession,
-  } = useAIContext();
+  const { messages, resetSession } = useAIMessagesContext();
+  const { isThinking } = useAIThinkingContext();
+  const { unreadCount, setUnreadCount } = useAIUnreadCountContext();
   const assistantCount = useMemo(
     () => messages.reduce((count, message) => (message.role === "assistant" ? count + 1 : count), 0),
     [messages],

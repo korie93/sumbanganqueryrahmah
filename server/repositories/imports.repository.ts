@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import type {
   DataRow,
   Import,
@@ -388,6 +388,20 @@ export class ImportsRepository {
       .select()
       .from(dataRows)
       .where(eq(dataRows.importId, importId))
+      .limit(Math.max(1, limit))
+      .offset(Math.max(0, offset));
+  }
+
+  async getDataRowsByImportIdsPage(importIds: string[], limit: number, offset: number): Promise<DataRow[]> {
+    if (importIds.length === 0) {
+      return [];
+    }
+
+    return db
+      .select()
+      .from(dataRows)
+      .where(inArray(dataRows.importId, importIds))
+      .orderBy(asc(dataRows.importId), asc(dataRows.id))
       .limit(Math.max(1, limit))
       .offset(Math.max(0, offset));
   }

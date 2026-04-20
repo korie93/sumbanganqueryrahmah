@@ -58,6 +58,7 @@ export function SavedFiltersBar({
             type="search"
             value={searchTerm}
             onChange={(event) => onSearchTermChange(event.target.value)}
+            aria-label="Search saved imports"
             placeholder="Search by name or filename..."
             autoComplete="off"
             autoCapitalize="none"

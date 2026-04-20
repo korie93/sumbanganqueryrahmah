@@ -1,6 +1,10 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 
-import { type AIChatMessageInput, useAIContext } from "@/context/AIContext";
+import {
+  type AIChatMessageInput,
+  useAIMessagesContext,
+  useAIThinkingContext,
+} from "@/context/AIContext";
 import { type AIChatStatus } from "@/lib/ai-chat";
 import { resolveAiErrorMessage } from "@/lib/ai-error";
 import { searchAI } from "@/lib/api";
@@ -38,7 +42,8 @@ export function useAIChatState({
   onCancelAISearchReady,
   onStatusChange,
 }: UseAIChatStateOptions) {
-  const { messages, setMessages, setIsThinking } = useAIContext();
+  const { messages, setMessages } = useAIMessagesContext();
+  const { setIsThinking } = useAIThinkingContext();
 
   const isLowSpecMode =
     typeof document !== "undefined"

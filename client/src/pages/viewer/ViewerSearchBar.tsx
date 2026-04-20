@@ -48,6 +48,7 @@ export function ViewerSearchBar({
             type="search"
             value={search}
             onChange={(event) => onSearchChange(event.target.value)}
+            aria-label="Search all rows"
             placeholder="Search all rows..."
             autoComplete="off"
             autoCapitalize="none"

@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { type AIChatMessageInput, useAIContext } from "@/context/AIContext";
+import {
+  type AIChatMessageInput,
+  useAIMessagesContext,
+  useAIThinkingContext,
+} from "@/context/AIContext";
 import { AI_CANCEL_EVENT, AI_RESET_EVENT, type AIChatStatus } from "@/lib/ai-chat";
 import { resolveAiErrorMessage } from "@/lib/ai-error";
 import { searchAI } from "@/lib/api";
@@ -28,7 +32,8 @@ export function useAIPageController({
   aiEnabled,
   typingIntervalMs,
 }: UseAIPageControllerOptions) {
-  const { messages, isThinking, setIsThinking, setMessages, resetSession } = useAIContext();
+  const { messages, setMessages, resetSession } = useAIMessagesContext();
+  const { isThinking, setIsThinking } = useAIThinkingContext();
 
   const [query, setQuery] = useState("");
   const [aiStatus, setAiStatus] = useState<AIChatStatus>("IDLE");

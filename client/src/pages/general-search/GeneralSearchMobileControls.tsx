@@ -156,6 +156,7 @@ export function GeneralSearchMobileControls({
                   if (event.key === "Enter") onSearch();
                 }}
                 placeholder="Enter IC No., name, or other keywords..."
+                aria-label="Search records"
                 autoComplete="off"
                 autoCapitalize="none"
                 autoCorrect="off"
@@ -275,6 +276,7 @@ export function GeneralSearchMobileControls({
                       }
                     }}
                     placeholder="Enter IC No., name, or other keywords..."
+                    aria-label="Search records"
                     autoComplete="off"
                     autoCapitalize="none"
                     autoCorrect="off"

@@ -9,11 +9,11 @@ import {
 function buildCompliantFilesByPath() {
   return {
     "client/src/theme-tokens.css": [
-      "--primary-border: hsl(217 91% 42%);",
-      "--accent-border: hsl(214 28% 74%);",
+      "--primary-border: 217 91% 42%;",
+      "--accent-border: 214 28% 74%;",
       ".dark {",
-      "--primary-border: hsl(217 91% 59%);",
-      "--destructive-border: hsl(0 62% 39%);",
+      "--primary-border: 217 91% 59%;",
+      "--destructive-border: 0 62% 39%;",
       "}",
     ].join("\n"),
   };
@@ -46,11 +46,11 @@ test("design token color compatibility flags relative hsl syntax", () => {
   const validation = validateDesignTokenColorCompatibility({
     filesByPath: {
       "client/src/theme-tokens.css": [
-        "--primary-border: hsl(217 91% 42%);",
-        "--accent-border: hsl(214 28% 74%);",
+        "--primary-border: 217 91% 42%;",
+        "--accent-border: 214 28% 74%;",
         ".dark {",
-        "--primary-border: hsl(217 91% 59%);",
-        "--destructive-border: hsl(0 62% 39%);",
+        "--primary-border: 217 91% 59%;",
+        "--destructive-border: 0 62% 39%;",
         "}",
         "--accent-border: hsl(from hsl(var(--accent)) h s l / alpha);",
       ].join("\n"),
@@ -73,5 +73,5 @@ test("design token color compatibility report summarizes successful checks", () 
   });
 
   assert.match(report, /inspected 1\/1 files and 5\/5 color rules/i);
-  assert.match(report, /browser-safe hsl values/i);
+  assert.match(report, /browser-safe hsl channel values/i);
 });

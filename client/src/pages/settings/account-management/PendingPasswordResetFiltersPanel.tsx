@@ -34,6 +34,7 @@ export function PendingPasswordResetFiltersPanel({
               type="search"
               value={searchQuery}
               onChange={(event) => onSearchQueryChange(event.target.value)}
+              aria-label="Search by user"
               placeholder="Search user, username, email, or requester"
               className="pl-9"
               enterKeyHint="search"

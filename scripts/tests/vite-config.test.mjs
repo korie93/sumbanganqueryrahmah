@@ -62,17 +62,32 @@ test("vite config never enables source maps for production builds even when trou
   );
 });
 
-test("vite config still allows source maps for explicit staging-style non-production builds", async () => {
+test("vite config only allows non-production source maps after an explicit private audience opt-in", async () => {
   await withEnv(
     {
       NODE_ENV: "development",
       VITE_ENABLE_SOURCEMAPS: "1",
-      DEPLOY_ENV: null,
-      APP_ENV: null,
+      VITE_SOURCEMAP_AUDIENCE: "private",
     },
     async () => {
       const config = await importViteConfigFresh();
       assert.equal(config.build?.sourcemap, true);
+    },
+  );
+});
+
+test("vite config keeps staging-style builds from exposing source maps without a private audience opt-in", async () => {
+  await withEnv(
+    {
+      NODE_ENV: "development",
+      VITE_ENABLE_SOURCEMAPS: "1",
+      VITE_SOURCEMAP_AUDIENCE: null,
+      DEPLOY_ENV: "staging",
+      APP_ENV: "staging",
+    },
+    async () => {
+      const config = await importViteConfigFresh();
+      assert.equal(config.build?.sourcemap, false);
     },
   );
 });

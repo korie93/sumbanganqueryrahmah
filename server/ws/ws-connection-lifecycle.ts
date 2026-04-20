@@ -159,6 +159,7 @@ export function createRuntimeConnectionHandler(
   return async (ws: WebSocket, req: Pick<IncomingMessage, "url" | "headers" | "socket">) => {
     let activityId: string | null = null;
     let socketEntry: RuntimeTrackedSocketEntry | null = null;
+    let token: string | null = null;
     let cleanedUp = false;
     let closeRequested = false;
     let lastSessionValidatedAt = 0;
@@ -166,6 +167,28 @@ export function createRuntimeConnectionHandler(
     const inboundMessageRateState: RuntimeInboundMessageRateState = {
       availableTokens: INBOUND_MESSAGE_TOKEN_BUCKET_CAPACITY,
       lastRefillAt: Date.now(),
+    };
+
+    const captureWebSocketStateSnapshot = () => ({
+      closeRequested,
+      cleanedUp,
+      hasToken: Boolean(token),
+      sessionRevalidationIntervalMs,
+      wsReadyState: ws.readyState,
+    });
+
+    const resolveCleanupErrorCategory = (phase: string, error: unknown) => {
+      const sanitizedError = sanitizeRuntimeWebSocketError(error);
+      if (phase.startsWith("session-revalidation")) {
+        return "session-revalidation-cleanup";
+      }
+      if (sanitizedError?.name === "AbortError") {
+        return "abort";
+      }
+      if (ws.readyState === WebSocket.CLOSED || ws.readyState === WebSocket.CLOSING) {
+        return "terminal-socket-state";
+      }
+      return "runtime-cleanup";
     };
 
     const revalidateRuntimeSessionIfDue = () => {
@@ -233,6 +256,9 @@ export function createRuntimeConnectionHandler(
         } catch (error) {
           logger.warn("WebSocket session revalidation failed", {
             activityId: activeActivityId,
+            phase: "inbound-message",
+            lastSessionValidatedAt,
+            ...captureWebSocketStateSnapshot(),
             error: sanitizeRuntimeWebSocketError(error),
           });
         } finally {
@@ -308,10 +334,13 @@ export function createRuntimeConnectionHandler(
       try {
         cleanupSocket();
       } catch (error) {
+        const errorCategory = resolveCleanupErrorCategory(phase, error);
         logger.warn("WebSocket cleanup failed", {
           activityId,
+          category: errorCategory,
           phase,
           ...cleanupState,
+          ...captureWebSocketStateSnapshot(),
           error: sanitizeRuntimeWebSocketError(error),
         });
       }
@@ -478,7 +507,7 @@ export function createRuntimeConnectionHandler(
       cleanupSocketSafely("registered-callback");
     });
 
-    const token = readAuthSessionTokenFromHeaders(req.headers);
+    token = readAuthSessionTokenFromHeaders(req.headers);
 
     if (!token) {
       cleanupSocketSafely("missing-token");

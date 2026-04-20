@@ -23,6 +23,7 @@ export const ActivityDesktopLogRow = memo(function ActivityDesktopLogRow({
   onDeleteClick,
   onKickClick,
   onToggleSelected,
+  position,
 }: ActivityDesktopLogRowProps) {
   const browserInfo = parseActivityUserAgent(activity.browser);
   const browserLabel = getActivityBrowserText(browserInfo);
@@ -30,7 +31,7 @@ export const ActivityDesktopLogRow = memo(function ActivityDesktopLogRow({
   return (
     <div
       role="group"
-      aria-label={buildActivityRowAriaLabel(activity, browserLabel)}
+      aria-label={buildActivityRowAriaLabel(activity, browserLabel, position)}
       className={cn(
         "grid h-full items-center gap-3 border-b border-border/70 px-3 py-3 hover:bg-muted/50",
         gridClassName,

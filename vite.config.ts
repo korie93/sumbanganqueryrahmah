@@ -3,14 +3,15 @@ import react from "@vitejs/plugin-react";
 import path from "path";
 import { createViteBrotliAssetsPlugin } from "./scripts/lib/vite-brotli-assets-plugin.mjs";
 
-const isProductionBuild = process.env.NODE_ENV === "production";
-const enableSourceMaps =
-  !isProductionBuild
-  && (
-    process.env.VITE_ENABLE_SOURCEMAPS === "1"
-    || process.env.DEPLOY_ENV === "staging"
-    || process.env.APP_ENV === "staging"
-  );
+export function resolveBuildSourceMapMode(env = process.env): boolean {
+  if (env.NODE_ENV === "production") {
+    return false;
+  }
+
+  return env.VITE_ENABLE_SOURCEMAPS === "1" && env.VITE_SOURCEMAP_AUDIENCE === "private";
+}
+
+const enableSourceMaps = resolveBuildSourceMapMode(process.env);
 
 export default defineConfig({
   plugins: [react(), createViteBrotliAssetsPlugin()],
@@ -18,6 +19,9 @@ export default defineConfig({
   build: {
     outDir: "../dist-local/public",
     emptyOutDir: true,
+    // Non-production source maps stay opt-in so staging/public hosts do not expose them by accident.
+    // Operators must explicitly acknowledge a private debugging/upload flow with
+    // VITE_ENABLE_SOURCEMAPS=1 and VITE_SOURCEMAP_AUDIENCE=private.
     sourcemap: enableSourceMaps,
     // 600 kB is an intentional warning threshold, not a target bundle size.
     // Large feature-isolated chunks such as Excel/PDF/chart tooling are lazy-loaded

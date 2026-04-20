@@ -104,6 +104,7 @@ export function NicknameAssignmentHeader({
           type="search"
           value={nicknameSearch}
           onChange={(event) => onNicknameSearchChange(event.target.value)}
+          aria-label="Cari nickname"
           placeholder="Cari nickname..."
           enterKeyHint="search"
           autoComplete="off"

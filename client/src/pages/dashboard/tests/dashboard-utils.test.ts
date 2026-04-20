@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { JSDOM } from "jsdom";
 import {
   buildDashboardTrendTickDates,
   buildSummaryCards,
   formatDashboardAxisDate,
   formatDashboardUserLastLogin,
+  resolveDashboardExportThemePalette,
 } from "@/pages/dashboard/utils";
 
 test("buildSummaryCards includes stale conflict monitor value when provided", () => {
@@ -84,4 +86,30 @@ test("buildDashboardTrendTickDates returns every date when the range is already 
     "2026-04-11",
     "2026-04-12",
   ]);
+});
+
+test("resolveDashboardExportThemePalette batches DOM color probes in a single hidden container", () => {
+  const dom = new JSDOM("<!doctype html><html><body></body></html>");
+  const { document } = dom.window;
+  const appendTargets: string[] = [];
+  const originalAppendChild = document.body.appendChild.bind(document.body);
+
+  document.body.appendChild = ((node: Node) => {
+    appendTargets.push((node as HTMLElement).tagName);
+    return originalAppendChild(node);
+  }) as typeof document.body.appendChild;
+
+  try {
+    const palette = resolveDashboardExportThemePalette(document);
+
+    assert.equal(appendTargets.length, 1);
+    assert.deepEqual(Object.keys(palette).sort(), [
+      "background",
+      "border",
+      "foreground",
+      "mutedForeground",
+    ]);
+  } finally {
+    dom.window.close();
+  }
 });

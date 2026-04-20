@@ -26,14 +26,15 @@ export function ViewerMobileCardsTable({
           <span>
             {filteredRows.length} row{filteredRows.length === 1 ? "" : "s"} on this page
           </span>
-          <label className="flex items-center gap-2 text-foreground">
+          <div className="flex items-center gap-2 text-foreground">
             <Checkbox
               checked={selectAllFiltered && filteredRows.length > 0}
               onCheckedChange={onToggleSelectAllFiltered}
+              aria-label="Select all rows on this page"
               data-testid="checkbox-select-all-rows"
             />
             <span className="text-sm font-medium">Select all</span>
-          </label>
+          </div>
         </div>
       ) : null}
 

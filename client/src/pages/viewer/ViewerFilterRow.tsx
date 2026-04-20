@@ -63,6 +63,7 @@ export function ViewerFilterRow({
         type="search"
         value={filter.value}
         onChange={(event) => onUpdateFilter(index, "value", event.target.value)}
+        aria-label={`Filter ${index + 1} value`}
         placeholder="Value..."
         autoComplete="off"
         className="min-w-0 flex-1"

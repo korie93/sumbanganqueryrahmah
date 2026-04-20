@@ -28,6 +28,15 @@ type DashboardExportThemePalette = {
   mutedForeground: string;
 };
 
+type DashboardExportColorProbeKey = keyof DashboardExportThemePalette;
+type DashboardExportColorProbeDefinition = Record<
+  DashboardExportColorProbeKey,
+  {
+    cssValue: string;
+    fallback: string;
+  }
+>;
+
 const DASHBOARD_EXPORT_FALLBACK_PALETTE: DashboardExportThemePalette = {
   background: "rgb(255, 255, 255)",
   border: "rgb(226, 232, 240)",
@@ -35,65 +44,86 @@ const DASHBOARD_EXPORT_FALLBACK_PALETTE: DashboardExportThemePalette = {
   mutedForeground: "rgb(100, 116, 139)",
 };
 
-function resolveDashboardExportCssColor(
+function resolveDashboardExportCssColors(
   targetDocument: Document | undefined,
-  cssValue: string,
-  fallback: string,
-) {
+  definitions: DashboardExportColorProbeDefinition,
+): DashboardExportThemePalette {
   const view = targetDocument?.defaultView;
   if (!targetDocument || !view) {
-    return fallback;
+    return {
+      background: definitions.background.fallback,
+      border: definitions.border.fallback,
+      foreground: definitions.foreground.fallback,
+      mutedForeground: definitions.mutedForeground.fallback,
+    };
   }
 
   const probeParent = targetDocument.body ?? targetDocument.documentElement;
   if (!probeParent) {
-    return fallback;
+    return {
+      background: definitions.background.fallback,
+      border: definitions.border.fallback,
+      foreground: definitions.foreground.fallback,
+      mutedForeground: definitions.mutedForeground.fallback,
+    };
   }
 
-  const probe = targetDocument.createElement("span");
-  probe.style.color = fallback;
-  probe.style.color = cssValue;
-  probe.style.position = "absolute";
-  probe.style.width = "0";
-  probe.style.height = "0";
-  probe.style.opacity = "0";
-  probe.style.pointerEvents = "none";
-  probe.setAttribute("aria-hidden", "true");
-  probeParent.appendChild(probe);
+  const probeContainer = targetDocument.createElement("div");
+  probeContainer.style.position = "absolute";
+  probeContainer.style.width = "0";
+  probeContainer.style.height = "0";
+  probeContainer.style.opacity = "0";
+  probeContainer.style.pointerEvents = "none";
+  probeContainer.style.overflow = "hidden";
+  probeContainer.setAttribute("aria-hidden", "true");
+
+  const probeEntries = Object.entries(definitions).map(([key, definition]) => {
+    const probe = targetDocument.createElement("span");
+    probe.style.color = definition.fallback;
+    probe.style.color = definition.cssValue;
+    probe.dataset.dashboardProbeKey = key;
+    probeContainer.appendChild(probe);
+    return [key as DashboardExportColorProbeKey, probe] as const;
+  });
+  probeParent.appendChild(probeContainer);
 
   try {
-    const resolvedColor = view.getComputedStyle(probe).color;
-    return resolvedColor || fallback;
+    return probeEntries.reduce<DashboardExportThemePalette>((palette, [key, probe]) => {
+      const resolvedColor = view.getComputedStyle(probe).color;
+      palette[key] = resolvedColor || definitions[key].fallback;
+      return palette;
+    }, {
+      background: definitions.background.fallback,
+      border: definitions.border.fallback,
+      foreground: definitions.foreground.fallback,
+      mutedForeground: definitions.mutedForeground.fallback,
+    });
   } finally {
-    probe.remove();
+    probeContainer.remove();
   }
 }
 
-function resolveDashboardExportThemePalette(
+export function resolveDashboardExportThemePalette(
   targetDocument?: Document,
 ): DashboardExportThemePalette {
-  return {
-    background: resolveDashboardExportCssColor(
-      targetDocument,
-      "hsl(var(--background))",
-      DASHBOARD_EXPORT_FALLBACK_PALETTE.background,
-    ),
-    border: resolveDashboardExportCssColor(
-      targetDocument,
-      "hsl(var(--border))",
-      DASHBOARD_EXPORT_FALLBACK_PALETTE.border,
-    ),
-    foreground: resolveDashboardExportCssColor(
-      targetDocument,
-      "hsl(var(--foreground))",
-      DASHBOARD_EXPORT_FALLBACK_PALETTE.foreground,
-    ),
-    mutedForeground: resolveDashboardExportCssColor(
-      targetDocument,
-      "hsl(var(--muted-foreground))",
-      DASHBOARD_EXPORT_FALLBACK_PALETTE.mutedForeground,
-    ),
-  };
+  return resolveDashboardExportCssColors(targetDocument, {
+    background: {
+      cssValue: "hsl(var(--background))",
+      fallback: DASHBOARD_EXPORT_FALLBACK_PALETTE.background,
+    },
+    border: {
+      cssValue: "hsl(var(--border))",
+      fallback: DASHBOARD_EXPORT_FALLBACK_PALETTE.border,
+    },
+    foreground: {
+      cssValue: "hsl(var(--foreground))",
+      fallback: DASHBOARD_EXPORT_FALLBACK_PALETTE.foreground,
+    },
+    mutedForeground: {
+      cssValue: "hsl(var(--muted-foreground))",
+      fallback: DASHBOARD_EXPORT_FALLBACK_PALETTE.mutedForeground,
+    },
+  });
 }
 
 function parseDashboardExportRgbChannels(

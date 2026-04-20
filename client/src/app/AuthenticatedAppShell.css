@@ -267,17 +267,17 @@
   }
 }
 
-.low-spec .glass-wrapper {
-  -webkit-backdrop-filter: none !important;
-  backdrop-filter: none !important;
-  box-shadow: none !important;
-}
-
 @supports ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
   .glass-wrapper {
     -webkit-backdrop-filter: blur(10px);
     backdrop-filter: blur(10px);
   }
+}
+
+.low-spec .glass-wrapper {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  box-shadow: none;
 }
 
 @supports not ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {

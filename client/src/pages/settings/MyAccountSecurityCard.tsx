@@ -234,6 +234,7 @@ export function MyAccountSecurityCard({
                       type="password"
                       value={twoFactor.twoFactorPasswordInput}
                       onChange={(event) => twoFactor.onTwoFactorPasswordInputChange(event.target.value)}
+                      aria-label="Current password"
                       disabled={securityBusy}
                       autoComplete="current-password"
                     />
@@ -249,6 +250,7 @@ export function MyAccountSecurityCard({
                       placeholder="000000"
                       value={twoFactor.twoFactorCodeInput}
                       onChange={(event) => twoFactor.onTwoFactorCodeInputChange(event.target.value)}
+                      aria-label="Authenticator code"
                       disabled={securityBusy && !twoFactor.twoFactorPendingSetup}
                       pattern="[0-9]*"
                       autoComplete="one-time-code"
@@ -270,6 +272,7 @@ export function MyAccountSecurityCard({
                           id="my-account-two-factor-issuer"
                           name="twoFactorSetupIssuer"
                           value={twoFactor.twoFactorSetupIssuer}
+                          aria-label="Issuer"
                           readOnly
                         />
                       </div>
@@ -281,6 +284,7 @@ export function MyAccountSecurityCard({
                           id="my-account-two-factor-account-name"
                           name="twoFactorSetupAccountName"
                           value={twoFactor.twoFactorSetupAccountName}
+                          aria-label="Account name"
                           readOnly
                         />
                       </div>
@@ -293,6 +297,7 @@ export function MyAccountSecurityCard({
                         id="my-account-two-factor-secret"
                         name="twoFactorSetupSecret"
                         value={twoFactor.twoFactorSetupSecret}
+                        aria-label="Authenticator secret"
                         readOnly
                       />
                     </div>
@@ -305,6 +310,7 @@ export function MyAccountSecurityCard({
                           id="my-account-two-factor-uri"
                           name="twoFactorSetupUri"
                           value={twoFactor.twoFactorSetupUri}
+                          aria-label="OTP auth URI"
                           readOnly
                         />
                       </div>

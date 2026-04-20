@@ -3,6 +3,11 @@ import { AlertTriangle, Home, RefreshCw, RotateCcw } from "lucide-react";
 import { reloadAppPreservingSingleTabLock } from "@/app/single-tab-session";
 import { logClientError } from "@/lib/client-logger";
 import {
+  formatAppRouteAutoRetryDescription,
+  getUiMessage,
+} from "@/lib/i18n/messages";
+import {
+  resolveRouteErrorDebugDetails,
   resolveRouteErrorDescription,
   resolveRouteRetrySupportNotice,
   resolveRouteErrorTitle,
@@ -202,6 +207,7 @@ export class AppRouteErrorBoundary extends Component<
       this.state.autoRetryAttempt,
       autoRetrying,
     );
+    const debugDetails = resolveRouteErrorDebugDetails(this.state.error);
 
     return (
       <div
@@ -229,18 +235,27 @@ export class AppRouteErrorBoundary extends Component<
                 <div>
                   <h2 className="app-route-error-boundary__title">
                     {autoRetrying
-                      ? "Retrying This Page Automatically"
+                      ? getUiMessage("appRouteAutoRetryTitle")
                       : resolveRouteErrorTitle(this.props.routeLabel)}
                   </h2>
                   <p className="app-route-error-boundary__description">
                     {autoRetrying
-                      ? `A page bundle failed to load. Trying again automatically (${pendingAttempt}/${APP_ROUTE_CHUNK_RETRY_MAX_ATTEMPTS})${this.state.autoRetryDelayMs ? ` in ${Math.max(1, Math.ceil(this.state.autoRetryDelayMs / 1000))}s` : ""}.`
+                      ? formatAppRouteAutoRetryDescription({
+                          attempt: pendingAttempt,
+                          delayMs: this.state.autoRetryDelayMs,
+                          maxAttempts: APP_ROUTE_CHUNK_RETRY_MAX_ATTEMPTS,
+                        })
                       : resolveRouteErrorDescription(this.state.error)}
                   </p>
                   {retrySupportNotice ? (
                     <p className="app-route-error-boundary__description">
                       {retrySupportNotice}
                     </p>
+                  ) : null}
+                  {debugDetails ? (
+                    <pre className="app-route-error-boundary__description whitespace-pre-wrap break-words rounded-xl border border-border/60 bg-muted/30 p-3 text-xs text-foreground/80">
+                      {debugDetails}
+                    </pre>
                   ) : null}
                 </div>
               </div>
@@ -253,7 +268,7 @@ export class AppRouteErrorBoundary extends Component<
                   className="app-route-error-boundary__action app-route-error-boundary__action--primary"
                 >
                   <RotateCcw className="h-4 w-4" />
-                  Retry Page
+                  {getUiMessage("appRouteRetryPageAction")}
                 </button>
               ) : null}
               {this.props.onNavigateHome ? (
@@ -263,7 +278,7 @@ export class AppRouteErrorBoundary extends Component<
                   className="app-route-error-boundary__action app-route-error-boundary__action--secondary"
                 >
                   <Home className="h-4 w-4" />
-                  Go Home
+                  {getUiMessage("appRouteGoHomeAction")}
                 </button>
               ) : null}
               <button
@@ -272,7 +287,7 @@ export class AppRouteErrorBoundary extends Component<
                 className="app-route-error-boundary__action app-route-error-boundary__action--secondary"
               >
                 <RefreshCw className="h-4 w-4" />
-                Reload App
+                {getUiMessage("appRouteReloadAppAction")}
               </button>
             </div>
           </section>

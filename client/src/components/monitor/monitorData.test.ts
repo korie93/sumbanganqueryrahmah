@@ -102,4 +102,15 @@ test("buildChartSeries keeps technical devops charts grouped into stable categor
       "Data And AI:AI Latency",
     ],
   );
+  assert.deepEqual(
+    charts.map((chart) => chart.color),
+    [
+      "hsl(var(--chart-4))",
+      "hsl(var(--chart-1))",
+      "hsl(var(--muted-foreground))",
+      "hsl(var(--destructive))",
+      "hsl(var(--chart-2))",
+      "hsl(var(--chart-3))",
+    ],
+  );
 });

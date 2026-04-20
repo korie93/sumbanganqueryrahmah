@@ -62,6 +62,13 @@
   --font-size-2xl: 1.5rem;
   --font-size-3xl: 1.875rem;
   --font-size-4xl: 2.25rem;
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+  --duration-fast: 120ms;
+  --duration-medium: 200ms;
+  --duration-slow: 320ms;
   --safe-area-inset-top: env(safe-area-inset-top, 0px);
   --safe-area-inset-right: env(safe-area-inset-right, 0px);
   --safe-area-inset-bottom: env(safe-area-inset-bottom, 0px);
@@ -383,13 +390,13 @@
   --spacing-24: calc(var(--spacing) * 24);
 
   /* Explicit border color companions for semantic tokens */
-  --sidebar-primary-border: hsl(217 91% 42%);
-  --sidebar-accent-border: hsl(214 28% 70%);
-  --primary-border: hsl(217 91% 42%);
-  --secondary-border: hsl(214 25% 78%);
-  --muted-border: hsl(214 20% 82%);
-  --accent-border: hsl(214 28% 74%);
-  --destructive-border: hsl(0 84% 37%);
+  --sidebar-primary-border: 217 91% 42%;
+  --sidebar-accent-border: 214 28% 70%;
+  --primary-border: 217 91% 42%;
+  --secondary-border: 214 25% 78%;
+  --muted-border: 214 20% 82%;
+  --accent-border: 214 28% 74%;
+  --destructive-border: 0 84% 37%;
 }
 
 /* DARK MODE OVERRIDES */
@@ -686,13 +693,13 @@
   --error-boundary-card-shadow: 0 20px 25px -5px hsl(0 0% 0% / 0.24), 0 8px 10px -6px hsl(0 0% 0% / 0.22);
   --error-boundary-card-focus-shadow: 0 0 0 3px hsl(var(--ring) / 0.35), var(--error-boundary-card-shadow);
 
-  --sidebar-primary-border: hsl(217 91% 59%);
-  --sidebar-accent-border: hsl(217 20% 30%);
-  --primary-border: hsl(217 91% 59%);
-  --secondary-border: hsl(217 20% 31%);
-  --muted-border: hsl(217 19% 30%);
-  --accent-border: hsl(217 20% 30%);
-  --destructive-border: hsl(0 62% 39%);
+  --sidebar-primary-border: 217 91% 59%;
+  --sidebar-accent-border: 217 20% 30%;
+  --primary-border: 217 91% 59%;
+  --secondary-border: 217 20% 31%;
+  --muted-border: 217 19% 30%;
+  --accent-border: 217 20% 30%;
+  --destructive-border: 0 62% 39%;
 }
 
 * {

@@ -43,6 +43,7 @@ export function ManagedAccountsFiltersPanel({
               type="search"
               value={searchQuery}
               onChange={(event) => onSearchQueryChange(event.target.value)}
+              aria-label="Search by user name"
               placeholder="Search username, full name, or email"
               className="pl-9"
               enterKeyHint="search"

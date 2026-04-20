@@ -8,6 +8,14 @@ import {
 export type AppTheme = "light" | "dark";
 const THEME_STORAGE_KEY = "theme";
 
+type ThemeChangeDetail = {
+  theme?: unknown;
+};
+
+function isThemeChangeEvent(event: Event): event is CustomEvent<ThemeChangeDetail> {
+  return "detail" in event;
+}
+
 function getSystemTheme(): AppTheme {
   if (typeof window === "undefined") return "light";
   return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
@@ -50,6 +58,23 @@ export function applyTheme(theme: AppTheme, options?: { persist?: boolean }) {
   }
 }
 
+export function bindThemeMediaChangeListener(
+  mediaQueryList: MediaQueryList,
+  listener: (event: MediaQueryListEvent) => void,
+): () => void {
+  if (typeof mediaQueryList.addEventListener === "function") {
+    mediaQueryList.addEventListener("change", listener);
+    return () => {
+      mediaQueryList.removeEventListener("change", listener);
+    };
+  }
+
+  mediaQueryList.addListener(listener);
+  return () => {
+    mediaQueryList.removeListener(listener);
+  };
+}
+
 export function useTheme() {
   const [theme, setThemeState] = useState<AppTheme>(resolveInitialTheme);
   const [hasExplicitThemePreference, setHasExplicitThemePreference] = useState(
@@ -89,8 +114,8 @@ export function useTheme() {
       }
     };
 
-    const onThemeChange = (event: Event) => {
-      const nextTheme = (event as CustomEvent<{ theme?: unknown }>).detail?.theme;
+    const onThemeChange: EventListener = (event) => {
+      const nextTheme = isThemeChangeEvent(event) ? event.detail?.theme : undefined;
       syncTheme(nextTheme);
     };
 
@@ -109,21 +134,16 @@ export function useTheme() {
     };
 
     window.addEventListener("storage", onStorage);
-    window.addEventListener("app-theme-change", onThemeChange as EventListener);
-    if (typeof systemThemeMedia.addEventListener === "function") {
-      systemThemeMedia.addEventListener("change", onSystemThemeChange);
-    } else {
-      systemThemeMedia.addListener(onSystemThemeChange);
-    }
+    window.addEventListener("app-theme-change", onThemeChange);
+    const cleanupSystemThemeListener = bindThemeMediaChangeListener(
+      systemThemeMedia,
+      onSystemThemeChange,
+    );
     syncStoredThemeOrSystemTheme();
     return () => {
       window.removeEventListener("storage", onStorage);
-      window.removeEventListener("app-theme-change", onThemeChange as EventListener);
-      if (typeof systemThemeMedia.removeEventListener === "function") {
-        systemThemeMedia.removeEventListener("change", onSystemThemeChange);
-      } else {
-        systemThemeMedia.removeListener(onSystemThemeChange);
-      }
+      window.removeEventListener("app-theme-change", onThemeChange);
+      cleanupSystemThemeListener();
     };
   }, []);
 

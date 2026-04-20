@@ -6,6 +6,8 @@ import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import {
   AIProvider,
+  useAIThinkingContext,
+  useAIUnreadCountContext,
   useAIContext,
   type AIContextValue,
 } from "@/context/AIContext";
@@ -97,6 +99,67 @@ test("AIProvider keeps resetSession stable across rerenders and clears session s
 
     assert.equal(readLatestContext().messages.length, 0);
     assert.equal(readLatestContext().unreadCount, 0);
+
+    flushSync(() => {
+      root.unmount();
+    });
+    await flushReactEffects();
+  } finally {
+    restoreDom();
+  }
+});
+
+test("AIProvider keeps unrelated unread-count updates from rerendering thinking-only consumers", async () => {
+  const dom = new JSDOM("<!doctype html><html><body><div id=\"root\"></div></body></html>", {
+    url: "http://localhost/",
+  });
+  const restoreDom = installDomGlobals(dom);
+  const renderCounts = {
+    thinking: 0,
+    unread: 0,
+  };
+  let setUnreadCount: AIContextValue["setUnreadCount"] | null = null;
+
+  function ThinkingProbe() {
+    renderCounts.thinking += 1;
+    useAIThinkingContext();
+    return null;
+  }
+
+  function UnreadProbe() {
+    renderCounts.unread += 1;
+    ({ setUnreadCount } = useAIUnreadCountContext());
+    return null;
+  }
+
+  try {
+    const rootElement = document.getElementById("root");
+    assert.ok(rootElement);
+    const root = createRoot(rootElement);
+
+    flushSync(() => {
+      root.render(
+        createElement(
+          AIProvider,
+          null,
+          createElement(ThinkingProbe),
+          createElement(UnreadProbe),
+        ),
+      );
+    });
+    await flushReactEffects();
+
+    assert.equal(renderCounts.thinking, 1);
+    assert.equal(renderCounts.unread, 1);
+    assert.ok(setUnreadCount);
+
+    flushSync(() => {
+      setUnreadCount?.(2);
+    });
+    await flushReactEffects();
+
+    assert.equal(renderCounts.thinking, 1);
+    assert.equal(renderCounts.unread, 2);
 
     flushSync(() => {
       root.unmount();

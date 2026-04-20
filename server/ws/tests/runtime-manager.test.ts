@@ -1467,15 +1467,82 @@ test("runtime manager still detaches socket listeners when tracked map cleanup t
           && typeof entry.payload === "object"
           && entry.payload !== null
           && (entry.payload as { activityId?: unknown }).activityId === activityId
+          && (entry.payload as { category?: unknown }).category === "terminal-socket-state"
           && (entry.payload as { phase?: unknown }).phase === "error"
           && (entry.payload as { hadCleanupCallback?: unknown }).hadCleanupCallback === true
           && (entry.payload as { hadSocketEntry?: unknown }).hadSocketEntry === true
           && (entry.payload as { hadTrackedSocketState?: unknown }).hadTrackedSocketState === true
+          && (entry.payload as { closeRequested?: unknown }).closeRequested === false
+          && (entry.payload as { cleanedUp?: unknown }).cleanedUp === true
+          && (entry.payload as { hasToken?: unknown }).hasToken === true
           && (entry.payload as { wsReadyState?: unknown }).wsReadyState === WebSocket.CLOSED,
       ),
       true,
     );
     assertNoRuntimeSocketListeners(socket);
+  } finally {
+    wss.emit("close");
+  }
+});
+
+test("runtime manager logs contextual metadata when session revalidation storage lookup fails", async (t) => {
+  const wss = new FakeWebSocketServer();
+  const providedMap = new Map<string, WebSocket>();
+  const socket = new FakeWebSocket();
+  const activityId = "activity-session-revalidation-error";
+  let now = 10_000;
+  let lookupCalls = 0;
+  const warnings: Array<{ message: string; payload: unknown }> = [];
+
+  t.mock.method(Date, "now", () => now);
+  const warnMock = t.mock.method(logger, "warn", (message: string, payload: unknown) => {
+    warnings.push({ message, payload });
+  });
+
+  createRuntimeWebSocketManager({
+    wss: wss as unknown as import("ws").WebSocketServer,
+    storage: {
+      getActivityById: async (requestedActivityId: string) => {
+        lookupCalls += 1;
+        if (requestedActivityId === activityId && lookupCalls >= 2) {
+          throw new Error("lookup exploded");
+        }
+        return createActiveSession(requestedActivityId);
+      },
+      clearCollectionNicknameSessionByActivity: async () => undefined,
+    },
+    secret: TEST_SECRET,
+    connectedClients: providedMap,
+    sessionRevalidationIntervalMs: 1_000,
+  });
+
+  try {
+    wss.emit("connection", socket as unknown as WebSocket, createConnectionRequest(createWsToken(activityId)));
+    await flushAsyncWork();
+
+    now += 1_001;
+    socket.sendMessage("ping");
+    await flushAsyncWork();
+
+    assert.equal(lookupCalls, 2);
+    assert.equal(providedMap.has(activityId), true);
+    assert.equal(socket.closeCalls, 0);
+    assert.ok(warnMock.mock.callCount() >= 1);
+    assert.equal(
+      warnings.some(
+        (entry) =>
+          entry.message === "WebSocket session revalidation failed"
+          && typeof entry.payload === "object"
+          && entry.payload !== null
+          && (entry.payload as { activityId?: unknown }).activityId === activityId
+          && (entry.payload as { phase?: unknown }).phase === "inbound-message"
+          && (entry.payload as { closeRequested?: unknown }).closeRequested === false
+          && (entry.payload as { cleanedUp?: unknown }).cleanedUp === false
+          && (entry.payload as { hasToken?: unknown }).hasToken === true
+          && (entry.payload as { sessionRevalidationIntervalMs?: unknown }).sessionRevalidationIntervalMs === 1_000,
+      ),
+      true,
+    );
   } finally {
     wss.emit("close");
   }

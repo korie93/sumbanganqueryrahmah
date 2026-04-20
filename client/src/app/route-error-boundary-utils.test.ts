@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  resolveRouteErrorDebugDetails,
   resolveRouteErrorDescription,
   resolveRouteRetrySupportNotice,
   resolveRouteErrorTitle,
@@ -38,4 +39,15 @@ test("route retry support notice appears only after chunk-load retries are exhau
     resolveRouteRetrySupportNotice(chunkError, APP_ROUTE_CHUNK_RETRY_MAX_ATTEMPTS, false),
     /Automatic recovery has already been attempted/i,
   );
+});
+
+test("resolveRouteErrorDebugDetails only exposes stack details in development", () => {
+  const error = new Error("Chunk exploded");
+  error.name = "ChunkLoadError";
+
+  assert.match(
+    resolveRouteErrorDebugDetails(error, { DEV: true }) ?? "",
+    /ChunkLoadError[\s\S]*Chunk exploded/,
+  );
+  assert.equal(resolveRouteErrorDebugDetails(error, { DEV: false }), null);
 });

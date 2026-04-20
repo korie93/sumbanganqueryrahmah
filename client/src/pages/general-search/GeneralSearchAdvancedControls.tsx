@@ -148,6 +148,7 @@ export function GeneralSearchAdvancedControls({
                 onChange={(event) =>
                   onUpdateFilter(filter.id, { value: event.target.value })
                 }
+                aria-label={`Filter ${index + 1} value`}
                 placeholder="Value..."
                 autoComplete="off"
                 className={isMobile ? "h-11 w-full" : "min-w-[150px] flex-1"}

@@ -2,6 +2,7 @@ import {
   APP_ROUTE_CHUNK_RETRY_MAX_ATTEMPTS,
   isChunkLoadRouteError,
 } from "@/app/route-error-boundary-retry-utils";
+import type { ClientLoggerEnvironment } from "@/lib/client-logger";
 
 const ROUTE_LABELS: Record<string, string> = {
   activity: "Activity",
@@ -70,4 +71,21 @@ export function resolveRouteRetrySupportNotice(
   }
 
   return "Automatic recovery has already been attempted. Reload the app, then contact your system administrator if this page keeps failing.";
+}
+
+export function resolveRouteErrorDebugDetails(
+  error: unknown,
+  env: ClientLoggerEnvironment = import.meta.env,
+): string | null {
+  if (!env?.DEV || !(error instanceof Error)) {
+    return null;
+  }
+
+  const debugSections = [error.name, error.message.trim()].filter(Boolean);
+  const stack = typeof error.stack === "string" ? error.stack.trim() : "";
+  if (stack) {
+    debugSections.push(stack);
+  }
+
+  return debugSections.length > 0 ? debugSections.join("\n\n") : null;
 }

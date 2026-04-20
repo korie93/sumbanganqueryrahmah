@@ -4,6 +4,7 @@ import {
   ACTIVITY_DESKTOP_ROW_HEIGHT_PX,
   getActivityDesktopGridClassName,
   getVirtualizedListHeight,
+  shouldVirtualizeActivityDesktopLogs,
 } from "@/pages/activity/activity-virtualization";
 
 test("getVirtualizedListHeight returns a single-row height when no items are present", () => {
@@ -18,4 +19,9 @@ test("getVirtualizedListHeight clamps list height to the configured maximum", ()
 test("getActivityDesktopGridClassName reserves selection and action columns only for moderation views", () => {
   assert.match(getActivityDesktopGridClassName(true), /^grid-cols-\[3rem_/);
   assert.doesNotMatch(getActivityDesktopGridClassName(false), /^grid-cols-\[3rem_/);
+});
+
+test("shouldVirtualizeActivityDesktopLogs only enables virtualization once the bounded desktop list becomes large enough", () => {
+  assert.equal(shouldVirtualizeActivityDesktopLogs(10), false);
+  assert.equal(shouldVirtualizeActivityDesktopLogs(11), true);
 });

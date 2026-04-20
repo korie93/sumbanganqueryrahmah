@@ -32,6 +32,7 @@ export function LocalMailOutboxFiltersPanel({
             type="search"
             value={emailQuery}
             onChange={(event) => onEmailQueryChange(event.target.value)}
+            aria-label="Search by email"
             placeholder="Filter recipient email"
             className="pl-9"
             enterKeyHint="search"
@@ -50,6 +51,7 @@ export function LocalMailOutboxFiltersPanel({
             type="search"
             value={subjectQuery}
             onChange={(event) => onSubjectQueryChange(event.target.value)}
+            aria-label="Search by subject"
             placeholder="Filter email subject"
             className="pl-9"
             enterKeyHint="search"

@@ -93,6 +93,7 @@ export function GeneralSearchDesktopControls({
                 if (event.key === "Enter") onSearch();
               }}
               placeholder="Enter IC No., name, or other keywords..."
+              aria-label="Search records"
               autoComplete="off"
               autoCapitalize="none"
               autoCorrect="off"

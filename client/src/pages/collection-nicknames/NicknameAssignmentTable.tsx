@@ -80,14 +80,15 @@ export function NicknameAssignmentTable({
                   {isLeader ? (
                     <Badge variant="outline" className="shrink-0">Leader</Badge>
                   ) : (
-                    <label className="flex shrink-0 items-center gap-2 rounded-lg border border-border/60 bg-muted/15 px-3 py-2 text-sm">
+                    <div className="flex shrink-0 items-center gap-2 rounded-lg border border-border/60 bg-muted/15 px-3 py-2 text-sm">
                       <Checkbox
                         checked={checked}
                         onCheckedChange={(value) => onToggleAssigned(item.id, Boolean(value))}
                         disabled={!item.isActive || !selectedGroupId}
+                        aria-label={`Assign ${item.nickname}`}
                       />
                       <span>Assign</span>
-                    </label>
+                    </div>
                   )}
                 </div>
 

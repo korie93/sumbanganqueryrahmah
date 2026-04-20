@@ -150,6 +150,7 @@ export function SavedDialogs({
               name="savedImportName"
               value={newName}
               onChange={(event) => onNewNameChange(event.target.value)}
+              aria-label="New import name"
               placeholder="New name"
               autoComplete="off"
               className="h-11"
