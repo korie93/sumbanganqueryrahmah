@@ -1,4 +1,8 @@
 import { sql, type SQL } from "drizzle-orm";
+import {
+  INTERNAL_SYSTEM_ACCOUNT_USERNAME,
+  MANAGED_ACCOUNT_DELETED_LOCK_REASON,
+} from "../auth/managed-account-constants";
 import type {
   ManagedUserListPageParams,
   PendingPasswordResetListPageParams,
@@ -24,7 +28,11 @@ function isManagedUserStatusWithDirectMatch(value: string): value is
 
 export function buildManagedUsersWhereSql(params: ManagedUserListPageParams = {}): SQL {
   const filters = normalizeManagedUserListFilters(params);
-  const whereClauses: SQL[] = [sql`role IN ('admin', 'user')`];
+  const whereClauses: SQL[] = [
+    sql`role IN ('admin', 'user')`,
+    sql`lower(username) <> ${INTERNAL_SYSTEM_ACCOUNT_USERNAME}`,
+    sql`COALESCE(locked_reason, '') <> ${MANAGED_ACCOUNT_DELETED_LOCK_REASON}`,
+  ];
 
   if (filters.search) {
     const searchPattern = buildLikePattern(filters.search, "contains");

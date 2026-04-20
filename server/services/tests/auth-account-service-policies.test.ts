@@ -15,18 +15,36 @@ function createPolicyStorage() {
     username: "managed.user",
     email: "managed.user@example.com",
     role: "user",
+    lockedReason: null,
+  };
+  const hiddenDeletedUser = {
+    id: "user-deleted-1",
+    username: "deleted.user",
+    email: null,
+    role: "user",
+    lockedReason: "account_deleted",
+  };
+  const systemActor = {
+    id: "system-user",
+    username: "system",
+    email: null,
+    role: "user",
+    lockedReason: null,
   };
   const unmanagedUser = {
     id: "report-1",
     username: "report.manager",
     email: "report.manager@example.com",
     role: "report",
+    lockedReason: null,
   };
 
   return {
     getUser: async (userId: string) => {
       if (userId === superuser.id) return superuser;
       if (userId === managedUser.id) return managedUser;
+      if (userId === hiddenDeletedUser.id) return hiddenDeletedUser;
+      if (userId === systemActor.id) return systemActor;
       if (userId === unmanagedUser.id) return unmanagedUser;
       return null;
     },
@@ -73,6 +91,22 @@ test("auth account service policies enforce actor and manageable-target checks",
       error instanceof AuthAccountError
       && error.statusCode === 403
       && error.code === "PERMISSION_DENIED",
+  );
+
+  await assert.rejects(
+    () => policies.requireManageableTarget("user-deleted-1"),
+    (error: unknown) =>
+      error instanceof AuthAccountError
+      && error.statusCode === 404
+      && error.code === "USER_NOT_FOUND",
+  );
+
+  await assert.rejects(
+    () => policies.requireManageableTarget("system-user"),
+    (error: unknown) =>
+      error instanceof AuthAccountError
+      && error.statusCode === 404
+      && error.code === "USER_NOT_FOUND",
   );
 });
 

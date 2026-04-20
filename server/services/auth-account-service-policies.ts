@@ -4,6 +4,7 @@ import {
   CREDENTIAL_USERNAME_REGEX,
   normalizeEmailInput,
 } from "../auth/credentials";
+import { isHiddenManagedAccountRecord } from "../auth/managed-account-constants";
 import { ERROR_CODES } from "../../shared/error-codes";
 import { isManageableUserRole } from "../auth/account-lifecycle";
 import type { PostgresStorage } from "../storage-postgres";
@@ -70,6 +71,10 @@ export function createAuthAccountServicePolicies(storage: AuthAccountPolicyStora
 
     const target = await storage.getUser(normalizedId);
     if (!target) {
+      throw new AuthAccountError(404, ERROR_CODES.USER_NOT_FOUND, "Target user not found.");
+    }
+
+    if (isHiddenManagedAccountRecord(target)) {
       throw new AuthAccountError(404, ERROR_CODES.USER_NOT_FOUND, "Target user not found.");
     }
 

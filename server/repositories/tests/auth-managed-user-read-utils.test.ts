@@ -21,12 +21,16 @@ test("auth managed user read helpers build managed-user WHERE clauses consistent
   const boundValues = collectBoundValues(query);
 
   assert.match(sqlText, /role IN \('admin', 'user'\)/);
+  assert.match(sqlText, /lower\(username\) <> /);
+  assert.match(sqlText, /COALESCE\(locked_reason, ''\) <> /);
   assert.match(sqlText, /username ILIKE /);
   assert.match(sqlText, /role = /);
   assert.match(sqlText, /locked_at IS NOT NULL/);
   assert.match(sqlText, /COALESCE\(is_banned, false\) = false/);
   assert.ok(boundValues.includes("%alice%"));
   assert.ok(boundValues.includes("admin"));
+  assert.ok(boundValues.includes("system"));
+  assert.ok(boundValues.includes("account_deleted"));
 });
 
 test("auth managed user read helpers build pending-reset WHERE clauses consistently", () => {
