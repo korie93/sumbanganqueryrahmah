@@ -1,6 +1,9 @@
 import type { Serializable } from "node:child_process";
 import type { Worker } from "node:cluster";
-import type { WorkerControlState } from "./worker-ipc";
+import type {
+  SessionRevocationReplicationPayload,
+  WorkerControlState,
+} from "./worker-ipc";
 
 type LoggerLike = {
   info: (message: string, metadata?: Record<string, unknown>) => void;
@@ -59,6 +62,30 @@ export function sendGracefulShutdownToWorker(params: {
     worker.send(params.createGracefulShutdownMessage(params.reason));
     return true;
   } catch {
+    return false;
+  }
+}
+
+export function sendSessionRevocationToWorker(params: {
+  worker: Worker;
+  payload: SessionRevocationReplicationPayload;
+  logger: LoggerLike;
+  createSessionRevokedMessage: (payload: SessionRevocationReplicationPayload) => Serializable;
+}): boolean {
+  const worker = params.worker;
+
+  if (!isConnectedClusterWorker(worker)) {
+    return false;
+  }
+
+  try {
+    worker.send(params.createSessionRevokedMessage(params.payload));
+    return true;
+  } catch (error) {
+    params.logger.warn("Failed to send session-revoked message to worker", {
+      workerId: worker.id,
+      error,
+    });
     return false;
   }
 }

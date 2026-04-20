@@ -1,4 +1,6 @@
 import type { CircuitState } from "./circuitBreaker";
+export type { SessionRevocationReplicationPayload } from "../auth/session-revocation-registry";
+import type { SessionRevocationReplicationPayload } from "../auth/session-revocation-registry";
 
 export type WorkerControlState = {
   mode: "NORMAL" | "DEGRADED" | "PROTECTION";
@@ -90,10 +92,16 @@ export type WorkerFatalMessage = {
   };
 };
 
+export type WorkerSessionRevokedMessage = {
+  type: "worker-session-revoked";
+  payload: SessionRevocationReplicationPayload;
+};
+
 export type WorkerToMasterMessage =
   | WorkerMetricsMessage
   | WorkerEventMessage
-  | WorkerFatalMessage;
+  | WorkerFatalMessage
+  | WorkerSessionRevokedMessage;
 
 export type ControlStateMessage = {
   type: "control-state";
@@ -105,9 +113,15 @@ export type GracefulShutdownMessage = {
   reason?: string;
 };
 
+export type SessionRevokedMessage = {
+  type: "session-revoked";
+  payload: SessionRevocationReplicationPayload;
+};
+
 export type MasterToWorkerMessage =
   | ControlStateMessage
-  | GracefulShutdownMessage;
+  | GracefulShutdownMessage
+  | SessionRevokedMessage;
 
 function isMessageRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object";
@@ -136,9 +150,25 @@ export function isWorkerMetricsMessage(message: unknown): message is WorkerMetri
     && isMessageRecord(message.payload);
 }
 
+export function isWorkerSessionRevokedMessage(message: unknown): message is WorkerSessionRevokedMessage {
+  return isMessageRecord(message)
+    && message.type === "worker-session-revoked"
+    && isMessageRecord(message.payload)
+    && typeof message.payload.activityId === "string"
+    && Number.isFinite(message.payload.expiresAt);
+}
+
 export function isWorkerMemoryPressureMessage(message: unknown): message is WorkerEventMessage {
   return isMessageRecord(message)
     && message.type === "worker-event"
     && isMessageRecord(message.payload)
     && message.payload.kind === "memory-pressure";
+}
+
+export function isSessionRevokedMessage(message: unknown): message is SessionRevokedMessage {
+  return isMessageRecord(message)
+    && message.type === "session-revoked"
+    && isMessageRecord(message.payload)
+    && typeof message.payload.activityId === "string"
+    && Number.isFinite(message.payload.expiresAt);
 }

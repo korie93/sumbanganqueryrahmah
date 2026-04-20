@@ -1,5 +1,6 @@
 import { createRoot } from "react-dom/client";
 import App from "./App";
+import { resolveAppRoot } from "./bootstrap-root";
 import { installGlobalUnhandledRejectionHandler } from "./lib/global-unhandled-rejection";
 import { installGlobalWindowErrorHandler } from "./lib/global-window-error";
 import { detectLowSpecMode } from "./lib/low-spec-mode";
@@ -21,7 +22,7 @@ installGlobalWindowErrorHandler();
 
 initializeWebVitalsReporting();
 
-createRoot(document.getElementById("root")!).render(<App />);
+createRoot(resolveAppRoot(document)).render(<App />);
 
 if ((window as WindowWithBootShell).__SQR_BOOT_SHELL__) {
   window.requestAnimationFrame(() => {

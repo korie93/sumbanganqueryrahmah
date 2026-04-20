@@ -12,6 +12,7 @@ import {
   DEFAULT_MAX_CONNECTIONS_PER_INSTANCE,
   DEFAULT_MAX_RUNTIME_WS_BUFFERED_BYTES,
   RUNTIME_WS_PENDING_AUTH_TTL_MS,
+  RUNTIME_WS_SESSION_REVALIDATION_INTERVAL_MS,
   RUNTIME_WS_TRACKED_SOCKET_SWEEP_INTERVAL_MS,
   type RuntimeManagerOptions,
   type RuntimeTrackedSocketEntry,
@@ -37,6 +38,10 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
   const maxBufferedBytes = Math.max(
     1,
     Math.floor(options.maxBufferedBytes ?? DEFAULT_MAX_RUNTIME_WS_BUFFERED_BYTES),
+  );
+  const sessionRevalidationIntervalMs = Math.max(
+    1,
+    Math.floor(options.sessionRevalidationIntervalMs ?? RUNTIME_WS_SESSION_REVALIDATION_INTERVAL_MS),
   );
   const trustedForwardedProxyMatcher = buildTrustedProxyMatcher(trustedForwardedProxies);
   const socketEntriesByActivity = new Map<string, RuntimeTrackedSocketEntry>();
@@ -237,6 +242,7 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
     countTrackedSockets: () => trackedSockets.size,
     isTrackableSocket,
     maxConnectionsPerInstance,
+    sessionRevalidationIntervalMs,
   });
 
   wss.on("connection", handleConnection as Parameters<WebSocketServer["on"]>[1]);

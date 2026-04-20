@@ -1,7 +1,10 @@
 import type { Worker } from "node:cluster";
 import type cluster from "node:cluster";
 
-import { toControlStateMessage } from "./cluster-control-state";
+import {
+  toControlStateMessage,
+  toSessionRevokedMessage,
+} from "./cluster-control-state";
 import {
   planClusterSpawnAttempt,
   recordUnexpectedWorkerExit,
@@ -12,8 +15,14 @@ import type {
   ClusterMasterOrchestratorConfig,
 } from "./cluster-master-types";
 import { parseClusterWorkerMessage } from "./cluster-worker-message-policy";
-import { sendControlStateToWorker } from "./cluster-worker-runtime";
+import {
+  sendControlStateToWorker,
+  sendSessionRevocationToWorker,
+} from "./cluster-worker-runtime";
 import type { WorkerControlState, WorkerMetricsPayload } from "./worker-ipc";
+import type { SessionRevocationReplicationPayload } from "../auth/session-revocation-registry";
+
+const CLUSTER_SESSION_REVOCATION_MAX_ENTRIES = 10_000;
 
 type ClusterMasterMutableState = {
   workerMetrics: Map<number, WorkerMetricsPayload>;
@@ -27,6 +36,7 @@ type ClusterMasterMutableState = {
   restartBlockedUntil: number;
   lastRestartBlockLogAt: number;
   fatalStartupLockReason: string | null;
+  sessionRevocations: Map<string, SessionRevocationReplicationPayload>;
 };
 
 type ClusterMasterLifecycleControls = {
@@ -44,11 +54,40 @@ type RegisterClusterMasterLifecycleOptions = {
   controls: ClusterMasterLifecycleControls;
 };
 
+function pruneClusterSessionRevocations(
+  sessionRevocations: Map<string, SessionRevocationReplicationPayload>,
+  now = Date.now(),
+) {
+  for (const [activityId, payload] of sessionRevocations.entries()) {
+    if (payload.expiresAt <= now) {
+      sessionRevocations.delete(activityId);
+    }
+  }
+}
+
+function rememberClusterSessionRevocation(
+  sessionRevocations: Map<string, SessionRevocationReplicationPayload>,
+  payload: SessionRevocationReplicationPayload,
+  now = Date.now(),
+) {
+  pruneClusterSessionRevocations(sessionRevocations, now);
+  sessionRevocations.delete(payload.activityId);
+  sessionRevocations.set(payload.activityId, payload);
+
+  while (sessionRevocations.size > CLUSTER_SESSION_REVOCATION_MAX_ENTRIES) {
+    const oldestEntry = sessionRevocations.keys().next();
+    if (oldestEntry.done) {
+      break;
+    }
+    sessionRevocations.delete(oldestEntry.value);
+  }
+}
+
 export function wireClusterMasterWorker(options: {
   logger: ClusterMasterLogger;
   restartBlockMs: number;
   state: ClusterMasterMutableState;
-  controls: Pick<ClusterMasterLifecycleControls, "rollingRestartOne">;
+  controls: Pick<ClusterMasterLifecycleControls, "getWorkers" | "rollingRestartOne">;
   worker: Worker;
 }) {
   const { controls, logger, state, worker } = options;
@@ -89,6 +128,23 @@ export function wireClusterMasterWorker(options: {
       return;
     }
 
+    if (outcome.kind === "session-revoked") {
+      rememberClusterSessionRevocation(state.sessionRevocations, outcome.payload);
+      for (const targetWorker of controls.getWorkers()) {
+        if (targetWorker.id === worker.id) {
+          continue;
+        }
+
+        sendSessionRevocationToWorker({
+          worker: targetWorker,
+          payload: outcome.payload,
+          logger,
+          createSessionRevokedMessage: toSessionRevokedMessage,
+        });
+      }
+      return;
+    }
+
     if (outcome.kind === "memory-pressure") {
       void controls.rollingRestartOne("worker-memory-pressure");
     }
@@ -112,6 +168,15 @@ export function registerClusterMasterLifecycle(options: RegisterClusterMasterLif
         control: state.lastBroadcast,
         logger,
         createControlStateMessage: toControlStateMessage,
+      });
+    }
+    pruneClusterSessionRevocations(state.sessionRevocations);
+    for (const payload of state.sessionRevocations.values()) {
+      sendSessionRevocationToWorker({
+        worker,
+        payload,
+        logger,
+        createSessionRevokedMessage: toSessionRevokedMessage,
       });
     }
   });

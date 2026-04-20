@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  applyReplicatedSessionRevocation,
   clearSessionRevocationsForTests,
+  configureSessionRevocationReplication,
   getSessionRevocationRegistrySizeForTests,
   isSessionRevoked,
   revokeSession,
@@ -38,4 +40,30 @@ test("session revocation registry keeps the most recent entries when the cap is 
   assert.equal(getSessionRevocationRegistrySizeForTests(), 10_000);
   assert.equal(isSessionRevoked("activity-0", now + 30_000), false);
   assert.equal(isSessionRevoked("activity-10004", now + 30_000), true);
+});
+
+test("session revocation registry publishes local revocations but does not rebroadcast replicated ones", () => {
+  const publishedPayloads: Array<{ activityId: string; expiresAt: number }> = [];
+
+  configureSessionRevocationReplication({
+    publishRevocation(payload) {
+      publishedPayloads.push(payload);
+    },
+  });
+
+  revokeSession("activity-local", {
+    now: 10_000,
+    ttlMs: 120_000,
+  });
+  applyReplicatedSessionRevocation({
+    activityId: "activity-remote",
+    expiresAt: 50_000,
+  }, 20_000);
+
+  assert.deepEqual(publishedPayloads, [{
+    activityId: "activity-local",
+    expiresAt: 130_000,
+  }]);
+  assert.equal(isSessionRevoked("activity-local", 20_000), true);
+  assert.equal(isSessionRevoked("activity-remote", 20_000), true);
 });

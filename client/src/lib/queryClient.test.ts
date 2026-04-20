@@ -1,8 +1,17 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { ERROR_CODES } from "@shared/error-codes";
-import { apiRequest, createApiHeaders, createApiRequestId } from "./api-client";
-import { getQueryFn, resolveDefaultQueryStaleTime } from "./queryClient";
+import {
+  ApiRequestError,
+  apiRequest,
+  createApiHeaders,
+  createApiRequestId,
+} from "./api-client";
+import {
+  getQueryFn,
+  resolveDefaultQueryStaleTime,
+  shouldRetrySafeQueryFailure,
+} from "./queryClient";
 
 async function withNavigatorOnlineState(
   online: boolean,
@@ -138,6 +147,37 @@ test("apiRequest normalizes oversized HTML error pages into a friendly message",
         assert.ok(error instanceof Error);
         assert.match(error.message, /too large to import/i);
         assert.doesNotMatch(error.message, /<!doctype html|<html/i);
+        return true;
+      },
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("apiRequest keeps a fuller sanitized plain-text error detail alongside the concise UI message", async () => {
+  const originalFetch = globalThis.fetch;
+  const veryLongPlainTextError = `Plain text backend failure ${"detail ".repeat(80)}`;
+
+  globalThis.fetch = (async () => new Response(
+    veryLongPlainTextError,
+    {
+      status: 502,
+      headers: {
+        "Content-Type": "text/plain",
+        "x-request-id": "server-request-long-text",
+      },
+    },
+  )) as typeof fetch;
+
+  try {
+    await assert.rejects(
+      () => apiRequest("GET", "/api/test-long-plain-text-error"),
+      (error: unknown) => {
+        assert.ok(error instanceof ApiRequestError);
+        assert.match(error.message, /server-request-long-text/);
+        assert.ok((error.detail || "").includes("Plain text backend failure"));
+        assert.ok((error.detail || "").length > 240);
         return true;
       },
     );
@@ -319,9 +359,56 @@ test("getQueryFn injects x-request-id headers for query fetches", async () => {
   }
 });
 
+test("getQueryFn forwards the React Query abort signal to fetch", async () => {
+  const originalFetch = globalThis.fetch;
+  let observedSignal: AbortSignal | null = null;
+
+  globalThis.fetch = (async (_url: string | URL | Request, init?: RequestInit) => {
+    observedSignal = init?.signal ?? null;
+    return new Response(JSON.stringify({ ok: true }), {
+      status: 200,
+      headers: {
+        "Content-Type": "application/json",
+      },
+    });
+  }) as typeof fetch;
+
+  try {
+    const queryFn = getQueryFn<{ ok: boolean }>({ on401: "throw" });
+    const controller = new AbortController();
+    await queryFn({
+      queryKey: ["/api/system-health"],
+      client: undefined as never,
+      meta: undefined,
+      signal: controller.signal,
+      pageParam: undefined,
+      direction: undefined,
+    });
+
+    assert.equal(observedSignal, controller.signal);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("resolveDefaultQueryStaleTime tunes query freshness by endpoint profile", () => {
   assert.equal(resolveDefaultQueryStaleTime(["/api/health/live"]), 15_000);
   assert.equal(resolveDefaultQueryStaleTime(["/api/analytics/summary"]), 30_000);
   assert.equal(resolveDefaultQueryStaleTime(["/api/settings"]), 90_000);
   assert.equal(resolveDefaultQueryStaleTime(["/api/collection/list"]), 60_000);
+});
+
+test("shouldRetrySafeQueryFailure retries only conservative transient query failures", () => {
+  assert.equal(shouldRetrySafeQueryFailure(0, new TypeError("Failed to fetch")), true);
+  assert.equal(shouldRetrySafeQueryFailure(1, new TypeError("Failed to fetch")), false);
+  assert.equal(shouldRetrySafeQueryFailure(0, new ApiRequestError({
+    message: "Server unavailable",
+    responsePayload: { message: "Server unavailable" },
+    status: 503,
+  })), true);
+  assert.equal(shouldRetrySafeQueryFailure(0, new ApiRequestError({
+    message: "Forbidden",
+    responsePayload: { message: "Forbidden" },
+    status: 403,
+  })), false);
 });

@@ -2,6 +2,8 @@ import type { LoadTrendSnapshot } from "./loadPredictor";
 import type {
   ControlStateMessage,
   GracefulShutdownMessage,
+  SessionRevocationReplicationPayload,
+  SessionRevokedMessage,
   WorkerControlState,
   WorkerMetricsPayload,
 } from "./worker-ipc";
@@ -167,5 +169,14 @@ export function toGracefulShutdownMessage(reason: string): GracefulShutdownMessa
   return {
     type: "graceful-shutdown",
     reason,
+  };
+}
+
+export function toSessionRevokedMessage(
+  payload: SessionRevocationReplicationPayload,
+): SessionRevokedMessage {
+  return {
+    type: "session-revoked",
+    payload,
   };
 }

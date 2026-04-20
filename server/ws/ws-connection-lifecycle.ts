@@ -128,6 +128,7 @@ type CreateRuntimeConnectionHandlerOptions = {
   countTrackedSockets: () => number;
   isTrackableSocket: (ws: WebSocket) => boolean;
   maxConnectionsPerInstance: number;
+  sessionRevalidationIntervalMs: number;
 };
 
 export function createRuntimeConnectionHandler(
@@ -150,6 +151,7 @@ export function createRuntimeConnectionHandler(
     countTrackedSockets,
     isTrackableSocket,
     maxConnectionsPerInstance,
+    sessionRevalidationIntervalMs,
   } = options;
   const inboundMessageTokenRefillRatePerMs =
     MAX_INBOUND_MESSAGES_PER_MINUTE / INBOUND_MESSAGE_TOKEN_BUCKET_WINDOW_MS;
@@ -159,9 +161,84 @@ export function createRuntimeConnectionHandler(
     let socketEntry: RuntimeTrackedSocketEntry | null = null;
     let cleanedUp = false;
     let closeRequested = false;
+    let lastSessionValidatedAt = 0;
+    let sessionRevalidationInFlight = false;
     const inboundMessageRateState: RuntimeInboundMessageRateState = {
       availableTokens: INBOUND_MESSAGE_TOKEN_BUCKET_CAPACITY,
       lastRefillAt: Date.now(),
+    };
+
+    const revalidateRuntimeSessionIfDue = () => {
+      if (
+        cleanedUp
+        || sessionRevalidationInFlight
+        || !activityId
+        || (Date.now() - lastSessionValidatedAt) < sessionRevalidationIntervalMs
+      ) {
+        return;
+      }
+
+      sessionRevalidationInFlight = true;
+      const activeActivityId = activityId;
+      const activeToken = token;
+
+      void (async () => {
+        try {
+          if (!activeToken) {
+            cleanupSocketSafely("session-revalidation-missing-token");
+            closeSocketIfNeeded(
+              RUNTIME_WS_POLICY_VIOLATION_CLOSE_CODE,
+              RUNTIME_WS_CLOSE_REASON_SESSION_INVALID,
+            );
+            return;
+          }
+
+          const tokenValidation = validateWsSessionToken(activeToken, secret);
+          if (!tokenValidation.ok || tokenValidation.activityId !== activeActivityId) {
+            cleanupSocketSafely("session-revalidation-token");
+            closeSocketIfNeeded(
+              RUNTIME_WS_POLICY_VIOLATION_CLOSE_CODE,
+              tokenValidation.ok || tokenValidation.reason !== "expired_token"
+                ? RUNTIME_WS_CLOSE_REASON_SESSION_INVALID
+                : RUNTIME_WS_CLOSE_REASON_SESSION_EXPIRED,
+            );
+            return;
+          }
+
+          if (isSessionRevoked(activeActivityId)) {
+            cleanupSocketSafely("session-revalidation-revoked");
+            closeSocketIfNeeded(
+              RUNTIME_WS_POLICY_VIOLATION_CLOSE_CODE,
+              RUNTIME_WS_CLOSE_REASON_SESSION_INVALID,
+            );
+            return;
+          }
+
+          const latestActivity = await storage.getActivityById(activeActivityId);
+          if (cleanedUp || !isTrackableSocket(ws)) {
+            return;
+          }
+
+          if (!isActiveWebSocketSession(latestActivity)) {
+            revokeSession(activeActivityId);
+            cleanupSocketSafely("session-revalidation-inactive");
+            closeSocketIfNeeded(
+              RUNTIME_WS_POLICY_VIOLATION_CLOSE_CODE,
+              RUNTIME_WS_CLOSE_REASON_SESSION_INVALID,
+            );
+            return;
+          }
+
+          lastSessionValidatedAt = Date.now();
+        } catch (error) {
+          logger.warn("WebSocket session revalidation failed", {
+            activityId: activeActivityId,
+            error: sanitizeRuntimeWebSocketError(error),
+          });
+        } finally {
+          sessionRevalidationInFlight = false;
+        }
+      })();
     };
 
     const touchTrackedSocket = (markAuthenticated = false) => {
@@ -318,6 +395,7 @@ export function createRuntimeConnectionHandler(
 
       const decodedMessage = decodeRuntimeInboundMessagePayload(payload, isBinary);
       if (decodedMessage.ok) {
+        revalidateRuntimeSessionIfDue();
         return;
       }
 
@@ -423,9 +501,10 @@ export function createRuntimeConnectionHandler(
         );
         return;
       }
-      activityId = tokenValidation.activityId;
+      const validatedActivityId = tokenValidation.activityId;
+      activityId = validatedActivityId;
 
-      if (isSessionRevoked(activityId)) {
+      if (isSessionRevoked(validatedActivityId)) {
         cleanupSocketSafely("revoked-session");
         closeSocketIfNeeded(
           RUNTIME_WS_POLICY_VIOLATION_CLOSE_CODE,
@@ -434,16 +513,16 @@ export function createRuntimeConnectionHandler(
         return;
       }
 
-      const activity = await storage.getActivityById(activityId);
+      const activity = await storage.getActivityById(validatedActivityId);
       if (cleanedUp || !isTrackableSocket(ws)) {
         cleanupSocketSafely("validation-race");
         return;
       }
 
       if (!isActiveWebSocketSession(activity)) {
-        revokeSession(activityId);
+        revokeSession(validatedActivityId);
         logger.debug("WebSocket rejected because the session is invalid or expired", {
-          activityId,
+          activityId: validatedActivityId,
         });
         cleanupSocketSafely("inactive-session");
         closeSocketIfNeeded(
@@ -453,10 +532,12 @@ export function createRuntimeConnectionHandler(
         return;
       }
 
+      lastSessionValidatedAt = Date.now();
+
       const userKey = getActivityUserKey(activity);
-      if (userKey && countTrackedUserConnections(userKey, activityId) >= MAX_CONNECTIONS_PER_USER) {
+      if (userKey && countTrackedUserConnections(userKey, validatedActivityId) >= MAX_CONNECTIONS_PER_USER) {
         logger.warn("WebSocket rejected because the user connection limit was reached", {
-          activityId,
+          activityId: validatedActivityId,
           userKey,
           maxConnectionsPerUser: MAX_CONNECTIONS_PER_USER,
         });
@@ -465,9 +546,9 @@ export function createRuntimeConnectionHandler(
         return;
       }
 
-      const existingEntry = socketEntriesByActivity.get(activityId);
-      const existingWs = existingEntry?.ws ?? connectedClients.get(activityId);
-      socketEntry = registerTrackedSocketEntry(activityId, ws, userKey);
+      const existingEntry = socketEntriesByActivity.get(validatedActivityId);
+      const existingWs = existingEntry?.ws ?? connectedClients.get(validatedActivityId);
+      socketEntry = registerTrackedSocketEntry(validatedActivityId, ws, userKey);
       touchTrackedSocket(true);
       markSocketAlive();
 
@@ -483,14 +564,14 @@ export function createRuntimeConnectionHandler(
             existingWs.close();
           } catch (error) {
             logger.debug("WebSocket close request failed during connection replacement cleanup", {
-              activityId,
+              activityId: validatedActivityId,
               error: sanitizeRuntimeWebSocketError(error),
             });
           }
         }
       }
 
-      logger.debug("WebSocket connected", { activityId });
+      logger.debug("WebSocket connected", { activityId: validatedActivityId });
     } catch (error) {
       cleanupSocketSafely("handshake-catch");
       logger.warn("WebSocket handshake failed", {

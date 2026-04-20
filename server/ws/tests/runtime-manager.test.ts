@@ -1546,6 +1546,55 @@ test("runtime manager closes expired session tokens with a terminal auth reason"
   }
 });
 
+test("runtime manager revalidates long-lived sessions on inbound messages and closes invalidated sessions", async (t) => {
+  const wss = new FakeWebSocketServer();
+  const providedMap = new Map<string, WebSocket>();
+  const socket = new FakeWebSocket();
+  const activityId = "activity-session-revalidation";
+  let now = 1_000_000;
+  let lookupCalls = 0;
+
+  t.mock.method(Date, "now", () => now);
+
+  createRuntimeWebSocketManager({
+    wss: wss as unknown as import("ws").WebSocketServer,
+    storage: {
+      getActivityById: async () => {
+        lookupCalls += 1;
+        return lookupCalls >= 2
+          ? {
+              ...createActiveSession(activityId),
+              isActive: false,
+              logoutTime: new Date("2026-04-20T00:00:00.000Z"),
+            }
+          : createActiveSession(activityId);
+      },
+      clearCollectionNicknameSessionByActivity: async () => undefined,
+    },
+    secret: TEST_SECRET,
+    connectedClients: providedMap,
+    sessionRevalidationIntervalMs: 1_000,
+  });
+
+  try {
+    wss.emit("connection", socket as unknown as WebSocket, createConnectionRequest(createWsToken(activityId)));
+    await flushAsyncWork();
+
+    now += 1_001;
+    socket.sendMessage("ping");
+    await flushAsyncWork();
+
+    assert.equal(lookupCalls, 2);
+    assert.equal(socket.closeCalls, 1);
+    assert.equal(socket.closeCode, RUNTIME_WS_POLICY_VIOLATION_CLOSE_CODE);
+    assert.equal(socket.closeReason, RUNTIME_WS_CLOSE_REASON_SESSION_INVALID);
+    assert.equal(providedMap.has(activityId), false);
+    assertNoRuntimeSocketListeners(socket);
+  } finally {
+    wss.emit("close");
+  }
+});
+
 test("runtime manager expires stale pending-auth sockets from the tracked registry", async (t) => {
   const intervals = interceptRuntimeIntervalRegistrations();
   const wss = new FakeWebSocketServer();

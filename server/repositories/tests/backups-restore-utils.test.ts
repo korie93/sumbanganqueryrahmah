@@ -1,13 +1,16 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  BACKUP_RESTORE_TRANSACTION_PHASES,
   buildSlowRestoreTransactionLogMetadata,
   createBackupPayloadChunkReader,
   createBackupPayloadSectionReader,
+  executeBackupRestorePhases,
   resolveBackupPayloadSourceKind,
   shouldLogSlowRestoreTransaction,
 } from "../backups-restore-utils";
 import type { BackupDataPayload } from "../backups-repository-types";
+import type { BackupRestoreExecutor } from "../backups-restore-shared-utils";
 
 type BackupCollectionRecord = NonNullable<BackupDataPayload["collectionRecords"]>[number];
 
@@ -36,6 +39,45 @@ function createBackupCollectionRecord(
     createdAt: "2026-03-31T00:00:00.000Z",
     ...overrides,
   };
+}
+
+function flattenSqlChunk(chunk: unknown): string {
+  if (chunk === null || chunk === undefined) {
+    return "";
+  }
+  if (typeof chunk === "string") {
+    return chunk;
+  }
+  if (Array.isArray(chunk)) {
+    return chunk.map((item) => flattenSqlChunk(item)).join("");
+  }
+  if (typeof chunk === "object") {
+    const value = (chunk as { value?: unknown; queryChunks?: unknown[] }).value;
+    if (value !== undefined) {
+      return flattenSqlChunk(value);
+    }
+    const queryChunks = (chunk as { queryChunks?: unknown[] }).queryChunks;
+    if (Array.isArray(queryChunks)) {
+      return queryChunks.map((item) => flattenSqlChunk(item)).join("");
+    }
+  }
+  return "";
+}
+
+function normalizeSqlText(query: unknown): string {
+  return flattenSqlChunk(query).replace(/\s+/g, " ").trim();
+}
+
+function createBackupRestoreExecutor(
+  execute: (query: unknown) => Promise<{ rows: unknown[] }>,
+  insertMessage: string,
+): BackupRestoreExecutor {
+  return {
+    execute: execute as BackupRestoreExecutor["execute"],
+    insert() {
+      throw new Error(insertMessage);
+    },
+  } as unknown as BackupRestoreExecutor;
 }
 
 test("createBackupPayloadSectionReader reads top-level backup arrays from a raw JSON string", () => {
@@ -258,4 +300,74 @@ test("restore observability log metadata stays aggregate-only and excludes warni
     reactivated: 0,
     skipped: 1,
   });
+  assert.equal(metadata.stagedTransactions, BACKUP_RESTORE_TRANSACTION_PHASES.length);
+});
+
+test("executeBackupRestorePhases runs core and collection work in separate ordered transactions", async () => {
+  const phases: string[] = [];
+  const executedQueriesByPhase = new Map<string, string[]>();
+  const reader = createBackupPayloadChunkReader({
+    imports: [],
+    dataRows: [],
+    users: [],
+    auditLogs: [],
+    collectionRecords: [
+      createBackupCollectionRecord({
+        id: "11111111-1111-1111-1111-111111111111",
+      }),
+    ],
+    collectionRecordReceipts: [],
+  });
+  const stats = {
+    imports: { inserted: 0, processed: 0, reactivated: 0, skipped: 0 },
+    dataRows: { inserted: 0, processed: 0, reactivated: 0, skipped: 0 },
+    users: { inserted: 0, processed: 0, reactivated: 0, skipped: 0 },
+    auditLogs: { inserted: 0, processed: 0, reactivated: 0, skipped: 0 },
+    collectionRecords: { inserted: 0, processed: 0, reactivated: 0, skipped: 0 },
+    collectionRecordReceipts: { inserted: 0, processed: 0, reactivated: 0, skipped: 0 },
+    warnings: [],
+    totalInserted: 0,
+    totalProcessed: 0,
+    totalReactivated: 0,
+    totalSkipped: 0,
+  };
+
+  await executeBackupRestorePhases({
+    backupDataReader: reader,
+    maxTrackedRecordIds: 1_000,
+    runTransaction: async (phase, operation) => {
+      phases.push(phase);
+      const executedQueries: string[] = [];
+      executedQueriesByPhase.set(phase, executedQueries);
+      const tx = createBackupRestoreExecutor(
+        async (query: unknown) => {
+          const sqlText = normalizeSqlText(query);
+          executedQueries.push(sqlText);
+          if (sqlText.includes("INSERT INTO public.collection_records")) {
+            return {
+              rows: [{ id: "11111111-1111-1111-1111-111111111111" }],
+            };
+          }
+          return { rows: [] };
+        },
+        "Unexpected insert() call during staged restore test.",
+      );
+      await operation(tx);
+    },
+    stats,
+  });
+
+  assert.deepEqual(phases, [
+    "core-datasets",
+    "collection-datasets",
+  ]);
+  assert.deepEqual(executedQueriesByPhase.get("core-datasets"), []);
+  assert.equal(
+    executedQueriesByPhase.get("collection-datasets")?.some((query) =>
+      query.includes("CREATE TEMP TABLE sqr_restored_collection_record_ids"),
+    ),
+    true,
+  );
+  assert.equal(stats.collectionRecords.processed, 1);
+  assert.equal(stats.collectionRecords.inserted, 1);
 });

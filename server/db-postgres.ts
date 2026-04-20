@@ -10,6 +10,7 @@ import { createDbQueryProfiler } from "./lib/db-query-profiler";
 import { logger } from "./lib/logger";
 
 const { Pool } = pg;
+export const PG_QUERY_TIMEOUT_AUTHORITY = "statement_timeout";
 
 export function buildPgPoolConfig(config: typeof runtimeConfig.database): pg.PoolConfig {
   const pgOptions = [
@@ -21,7 +22,8 @@ export function buildPgPoolConfig(config: typeof runtimeConfig.database): pg.Poo
     max: config.maxConnections,
     idleTimeoutMillis: config.idleTimeoutMs,
     connectionTimeoutMillis: config.connectionTimeoutMs,
-    query_timeout: config.queryTimeoutMs,
+    // `statement_timeout` is the single authoritative normal-query timeout so route-
+    // specific SQL can still override it with `SET LOCAL` when needed.
     statement_timeout: config.statementTimeoutMs,
     options: pgOptions,
   } satisfies pg.PoolConfig;

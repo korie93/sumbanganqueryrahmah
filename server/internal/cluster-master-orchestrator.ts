@@ -55,6 +55,7 @@ export function createClusterMasterOrchestrator({
     lastRestartBlockLogAt: 0,
     fatalStartupLockReason: null as string | null,
     fatalShutdownScheduled: false,
+    sessionRevocations: new Map(),
   };
   let scaleIntervalHandle: ReturnType<typeof setInterval> | null = null;
   let gracefulShutdownScheduled = false;
@@ -349,6 +350,7 @@ export function createClusterMasterOrchestrator({
           restartBlockMs: config.restartBlockMs,
           state,
           controls: {
+            getWorkers,
             rollingRestartOne,
           },
         });

@@ -1,6 +1,7 @@
 import * as React from "react"
 
 import { cn } from "@/lib/utils"
+import { shouldWarnForMissingAccessibilityName } from "@/components/ui/accessibility-warning-mode"
 import { FOCUS_VISIBLE_RING_CLASS_NAME } from "@/components/ui/focus-ring"
 
 function setInputRef(
@@ -17,11 +18,6 @@ function setInputRef(
   }
 }
 
-function shouldWarnForMissingAccessibleName() {
-  return typeof window !== "undefined"
-    && (import.meta.env?.DEV ?? process.env.NODE_ENV !== "production")
-}
-
 const Input = React.forwardRef<HTMLInputElement, React.ComponentProps<"input">>(
   ({ className, type, ...props }, ref) => {
     const generatedId = React.useId()
@@ -33,7 +29,7 @@ const Input = React.forwardRef<HTMLInputElement, React.ComponentProps<"input">>(
     }, [ref])
 
     React.useEffect(() => {
-      if (!shouldWarnForMissingAccessibleName()) {
+      if (!shouldWarnForMissingAccessibilityName()) {
         return
       }
 

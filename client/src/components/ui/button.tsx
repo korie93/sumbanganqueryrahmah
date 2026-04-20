@@ -2,6 +2,7 @@ import * as React from "react"
 import { Slot } from "@radix-ui/react-slot"
 import { cva, type VariantProps } from "class-variance-authority"
 
+import { shouldWarnForMissingAccessibilityName } from "@/components/ui/accessibility-warning-mode"
 import { cn } from "@/lib/utils"
 import { FOCUS_VISIBLE_RING_CLASS_NAME } from "@/components/ui/focus-ring"
 
@@ -17,11 +18,6 @@ function setButtonRef(
   if (ref) {
     ref.current = value
   }
-}
-
-function shouldWarnForMissingAccessibleName() {
-  return typeof window !== "undefined"
-    && (import.meta.env?.DEV ?? process.env.NODE_ENV !== "production")
 }
 
 const buttonVariants = cva(
@@ -93,7 +89,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     const ariaLabelProps = resolvedAriaLabel ? { "aria-label": resolvedAriaLabel } : {}
 
     React.useEffect(() => {
-      if (!shouldWarnForMissingAccessibleName() || asChild || size !== "icon") {
+      if (!shouldWarnForMissingAccessibilityName() || asChild || size !== "icon") {
         return
       }
 

@@ -15,6 +15,7 @@ import {
   shutdownPgPoolSafely,
 } from "./internal/pg-pool-shutdown";
 import { registerWorkerProcessFatalHandlers } from "./internal/worker-process-fatal-handlers";
+import { bindWorkerSessionRevocationReplication } from "./internal/session-revocation-replication";
 import { markStartupFailed } from "./internal/startup-health";
 import { pool, stopPgPoolBackgroundTasks } from "./db-postgres";
 import { logger } from "./lib/logger";
@@ -71,6 +72,7 @@ let shutdownExitCode = 0;
 let shutdownTimer: ReturnType<typeof setTimeout> | null = null;
 let shutdownConnectionDrainTimer: ReturnType<typeof setTimeout> | null = null;
 let shutdownPhaseTracker: ShutdownPhaseTracker | null = null;
+let stopSessionRevocationReplication: () => void = () => undefined;
 
 function captureShutdownPhase(phase: ShutdownPhaseName) {
   if (!shutdownPhaseTracker) {
@@ -97,6 +99,8 @@ function clearShutdownTimers() {
 
 async function finishShutdown() {
   clearShutdownTimers();
+  stopSessionRevocationReplication();
+  stopSessionRevocationReplication = () => undefined;
 
   await shutdownPgPoolSafely({
     logger,
@@ -197,6 +201,7 @@ process.once("SIGTERM", () => gracefulShutdown("SIGTERM"));
 process.once("SIGINT", () => gracefulShutdown("SIGINT"));
 
 if (cluster.isWorker) {
+  stopSessionRevocationReplication = bindWorkerSessionRevocationReplication();
   registerWorkerProcessFatalHandlers({
     logger,
     notifyMasterFatal: notifyMasterFatalReason,
@@ -234,6 +239,8 @@ startServer().catch(async (error) => {
   notifyMasterFatalReason(startupReason, message);
   markStartupFailed(startupReason, message);
   logger.error("Local server failed during startup", { error });
+  stopSessionRevocationReplication();
+  stopSessionRevocationReplication = () => undefined;
 
   await shutdownPgPoolSafely({
     logger,

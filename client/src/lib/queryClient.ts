@@ -1,5 +1,5 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
-import { createApiHeaders, throwIfResNotOk } from "./api-client";
+import { ApiRequestError, createApiHeaders, throwIfResNotOk } from "./api-client";
 import { detectLowSpecMode } from "./low-spec-mode";
 
 const isLowSpecClient = typeof window !== "undefined" ? detectLowSpecMode() : false;
@@ -9,6 +9,7 @@ const DEFAULT_QUERY_STALE_TIME = isLowSpecClient ? 20_000 : 60_000;
 const ANALYTICS_QUERY_STALE_TIME = isLowSpecClient ? 20_000 : 30_000;
 const STATIC_QUERY_STALE_TIME = isLowSpecClient ? 45_000 : 90_000;
 const QUERY_GC_TIME = isLowSpecClient ? 45_000 : 2 * 60_000;
+const SAFE_QUERY_MAX_RETRIES = 1;
 
 const LIVE_QUERY_PREFIXES = [
   "/api/activity",
@@ -58,15 +59,37 @@ export function resolveDefaultQueryStaleTime(queryKey: readonly unknown[]): numb
   return DEFAULT_QUERY_STALE_TIME;
 }
 
+export function shouldRetrySafeQueryFailure(failureCount: number, error: unknown) {
+  // React Query query functions in this app are GET-only, so a single retry is acceptable
+  // for transient transport/server failures but should stay conservative for auth and 4xx paths.
+  if (failureCount >= SAFE_QUERY_MAX_RETRIES) {
+    return false;
+  }
+
+  if (error instanceof ApiRequestError) {
+    return error.status === 408
+      || error.status === 425
+      || error.status === 429
+      || error.status >= 500;
+  }
+
+  if (error instanceof DOMException) {
+    return error.name !== "AbortError";
+  }
+
+  return error instanceof TypeError;
+}
+
 type UnauthorizedBehavior = "returnNull" | "throw";
 export const getQueryFn: <T>(options: {
   on401: UnauthorizedBehavior;
 }) => QueryFunction<T> =
   ({ on401: unauthorizedBehavior }) =>
-  async ({ queryKey }) => {
+  async ({ queryKey, signal }) => {
     const res = await fetch(queryKey.join("/") as string, {
       credentials: "include",
       headers: createApiHeaders(),
+      signal,
     });
 
     if (unauthorizedBehavior === "returnNull" && res.status === 401) {
@@ -86,7 +109,7 @@ export const queryClient = new QueryClient({
       refetchOnMount: false,
       staleTime: (query) => resolveDefaultQueryStaleTime(query.queryKey),
       gcTime: QUERY_GC_TIME,
-      retry: false,
+      retry: shouldRetrySafeQueryFailure,
     },
     mutations: {
       retry: false,

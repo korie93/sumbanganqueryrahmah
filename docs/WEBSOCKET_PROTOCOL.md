@@ -15,6 +15,8 @@ Ia merujuk kepada `server/ws/*`, `shared/websocket-close-reasons.ts`, dan
   - mempunyai `activityId`
   - belum melepasi `exp` claim
   - masih aktif dalam storage (`isActive !== false` dan `logoutTime === null`)
+- Selepas handshake, sambungan jangka panjang akan disemak semula secara berkala pada inbound
+  traffic supaya sesi yang telah tamat tempoh atau direvoke tidak kekal hidup selama-lamanya
 
 Jika syarat ini gagal, server akan tutup sambungan dengan close code `1008`.
 
@@ -32,6 +34,7 @@ Selain itu, broadcast akan menggugurkan client yang sudah terlalu backpressured:
 Inbound abuse juga dikawal:
 
 - token bucket: `100` message seminit per sambungan
+- session revalidation interval: `5 minit`
 - max concurrent socket per user: `5`
 - pending-auth socket TTL: `60 saat`
 

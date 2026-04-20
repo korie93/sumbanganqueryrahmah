@@ -63,6 +63,7 @@ test("csrf middleware accepts session mutations with a valid double-submit token
 
     assert.equal(response.status, 200);
     assert.deepEqual(await response.json(), { ok: true });
+    assert.match(String(response.headers.get("set-cookie") || ""), /sqr_csrf=/i);
   } finally {
     await stopTestServer(server);
   }
@@ -142,6 +143,7 @@ test("csrf middleware accepts cookie-authenticated mutations with a same-origin 
 
     assert.equal(response.status, 200);
     assert.deepEqual(await response.json(), { ok: true });
+    assert.match(String(response.headers.get("set-cookie") || ""), /sqr_csrf=/i);
   } finally {
     await stopTestServer(server);
   }
@@ -200,6 +202,7 @@ test("csrf middleware accepts same-origin browser-signaled mutations without an 
 
     assert.equal(response.status, 200);
     assert.deepEqual(await response.json(), { ok: true });
+    assert.equal(response.headers.get("set-cookie"), null);
   } finally {
     await stopTestServer(server);
   }

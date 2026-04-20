@@ -2,12 +2,15 @@ import {
   isWorkerFatalMessage,
   isWorkerMemoryPressureMessage,
   isWorkerMetricsMessage,
+  isWorkerSessionRevokedMessage,
+  type SessionRevocationReplicationPayload,
   type WorkerMetricsPayload,
 } from "./worker-ipc";
 
 export type ClusterWorkerMessageOutcome =
   | { kind: "fatal"; reason: string; shouldLockAutomaticRestart: boolean }
   | { kind: "metrics"; payload: WorkerMetricsPayload }
+  | { kind: "session-revoked"; payload: SessionRevocationReplicationPayload }
   | { kind: "memory-pressure" }
   | { kind: "ignored" };
 
@@ -24,6 +27,13 @@ export function parseClusterWorkerMessage(message: unknown): ClusterWorkerMessag
   if (isWorkerMetricsMessage(message)) {
     return {
       kind: "metrics",
+      payload: message.payload,
+    };
+  }
+
+  if (isWorkerSessionRevokedMessage(message)) {
+    return {
+      kind: "session-revoked",
       payload: message.payload,
     };
   }

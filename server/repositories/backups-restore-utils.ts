@@ -29,6 +29,12 @@ const BACKUP_PAYLOAD_DATASET_KEYS = [
   "collectionRecords",
   "collectionRecordReceipts",
 ] as const;
+export const BACKUP_RESTORE_TRANSACTION_PHASES = [
+  "core-datasets",
+  "collection-datasets",
+] as const;
+
+export type BackupRestoreTransactionPhase = (typeof BACKUP_RESTORE_TRANSACTION_PHASES)[number];
 
 function isAsyncBackupPayloadSource(source: BackupPayloadSource): source is AsyncIterable<string> {
   return typeof source === "object"
@@ -68,6 +74,7 @@ export function buildSlowRestoreTransactionLogMetadata(params: {
     totalProcessed: stats.totalProcessed,
     totalReactivated: stats.totalReactivated,
     totalSkipped: stats.totalSkipped,
+    stagedTransactions: BACKUP_RESTORE_TRANSACTION_PHASES.length,
     datasetStats: {
       auditLogs: { ...stats.auditLogs },
       collectionRecordReceipts: { ...stats.collectionRecordReceipts },
@@ -77,6 +84,43 @@ export function buildSlowRestoreTransactionLogMetadata(params: {
       users: { ...stats.users },
     },
   };
+}
+
+export async function executeBackupRestorePhases(params: {
+  backupDataReader: ReturnType<typeof createBackupPayloadChunkReader>;
+  maxTrackedRecordIds: number;
+  runTransaction: (
+    phase: BackupRestoreTransactionPhase,
+    operation: (tx: import("./backups-restore-shared-utils").BackupRestoreExecutor) => Promise<void>,
+  ) => Promise<void>;
+  stats: RestoreStats;
+}) {
+  const {
+    backupDataReader,
+    maxTrackedRecordIds,
+    runTransaction,
+    stats,
+  } = params;
+
+  // Restore is intentionally staged so large payloads do not hold one global transaction
+  // open across every dataset. Collection datasets remain grouped together because receipt
+  // cache repair and rollup finalization still rely on the restored-record tracking table.
+  await runTransaction("core-datasets", async (restoreTx) => {
+    await restoreImportsFromBackup(restoreTx, backupDataReader, stats);
+    await restoreDataRowsFromBackup(restoreTx, backupDataReader, stats);
+    await restoreUsersFromBackup(restoreTx, backupDataReader, stats);
+    await restoreAuditLogsFromBackup(restoreTx, backupDataReader, stats);
+  });
+
+  await runTransaction("collection-datasets", async (restoreTx) => {
+    await initializeRestoreTrackingTempTable(restoreTx);
+    await restoreCollectionRecordsFromBackup(restoreTx, backupDataReader, stats, {
+      maxTrackedRecordIds,
+    });
+    await restoreCollectionRecordReceiptsFromBackup(restoreTx, backupDataReader, stats);
+    await syncRestoredCollectionReceiptCache(restoreTx);
+    await finalizeRestoredCollectionRollups(restoreTx);
+  });
 }
 
 export {
@@ -183,19 +227,15 @@ export async function restoreFromBackup(
   const slowRestoreThresholdMs = runtimeConfig.runtime.backupRestoreSlowTransactionMs;
 
   try {
-    await db.transaction(async (tx) => {
-      const restoreTx = tx as import("./backups-restore-shared-utils").BackupRestoreExecutor;
-      await initializeRestoreTrackingTempTable(restoreTx);
-      await restoreImportsFromBackup(restoreTx, backupDataReader, stats);
-      await restoreDataRowsFromBackup(restoreTx, backupDataReader, stats);
-      await restoreUsersFromBackup(restoreTx, backupDataReader, stats);
-      await restoreAuditLogsFromBackup(restoreTx, backupDataReader, stats);
-      await restoreCollectionRecordsFromBackup(restoreTx, backupDataReader, stats, {
-        maxTrackedRecordIds: runtimeConfig.runtime.backupRestoreMaxTrackedCollectionRecordIds,
-      });
-      await restoreCollectionRecordReceiptsFromBackup(restoreTx, backupDataReader, stats);
-      await syncRestoredCollectionReceiptCache(restoreTx);
-      await finalizeRestoredCollectionRollups(restoreTx);
+    await executeBackupRestorePhases({
+      backupDataReader,
+      maxTrackedRecordIds: runtimeConfig.runtime.backupRestoreMaxTrackedCollectionRecordIds,
+      runTransaction: async (_phase, operation) => {
+        await db.transaction(async (tx) => {
+          await operation(tx as import("./backups-restore-shared-utils").BackupRestoreExecutor);
+        });
+      },
+      stats,
     });
   } finally {
     updateRestoreTotals(stats);

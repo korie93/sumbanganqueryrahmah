@@ -10,6 +10,8 @@ import { logClientWarning } from "./client-logger";
 import { createClientRandomId } from "./secure-id";
 
 const DEFAULT_API_REQUEST_TIMEOUT_MS = 60_000;
+const DEFAULT_API_ERROR_MESSAGE_MAX_CHARS = 240;
+const DEFAULT_API_ERROR_DEBUG_DETAIL_MAX_CHARS = 1_200;
 
 export function createApiRequestId() {
   return createClientRandomId("api");
@@ -52,8 +54,27 @@ function normalizePlainTextErrorMessage(
     return res.statusText || "Request failed";
   }
 
-  return normalizedText.length > 240
-    ? `${normalizedText.slice(0, 237)}...`
+  return normalizedText.length > DEFAULT_API_ERROR_MESSAGE_MAX_CHARS
+    ? `${normalizedText.slice(0, DEFAULT_API_ERROR_MESSAGE_MAX_CHARS - 3)}...`
+    : normalizedText;
+}
+
+function buildPlainTextErrorDebugDetail(
+  res: Response,
+  text: string,
+  options?: { expectedJsonPayload?: boolean },
+) {
+  const normalizedText = String(text || "").replace(/\s+/g, " ").trim();
+  if (!normalizedText || looksLikeHtmlDocument(normalizedText) || options?.expectedJsonPayload) {
+    return null;
+  }
+
+  if (res.status === 413) {
+    return null;
+  }
+
+  return normalizedText.length > DEFAULT_API_ERROR_DEBUG_DETAIL_MAX_CHARS
+    ? `${normalizedText.slice(0, DEFAULT_API_ERROR_DEBUG_DETAIL_MAX_CHARS - 3)}...`
     : normalizedText;
 }
 
@@ -113,6 +134,26 @@ function readApiMessage(payload: ApiErrorPayload | null): string {
   return typeof message === "string" ? message : "";
 }
 
+export class ApiRequestError extends Error {
+  readonly status: number;
+  readonly requestId: string | null;
+  readonly detail: string | null;
+
+  constructor(params: {
+    detail?: string | null;
+    message: string;
+    requestId?: string | null;
+    responsePayload: Record<string, unknown>;
+    status: number;
+  }) {
+    super(`${params.status}: ${JSON.stringify(params.responsePayload)}`);
+    this.name = "ApiRequestError";
+    this.status = params.status;
+    this.requestId = params.requestId ?? null;
+    this.detail = params.detail ?? null;
+  }
+}
+
 export async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
     const text = (await res.text()) || res.statusText;
@@ -156,17 +197,42 @@ export async function throwIfResNotOk(res: Response) {
       }
     }
 
-    const errorMessage = readApiMessage(parsed)
-      || normalizePlainTextErrorMessage(res, text, {
+    const normalizedPlainTextErrorMessage = normalizePlainTextErrorMessage(res, text, {
         expectedJsonPayload: !parsed && isJsonContentType(contentType),
       });
+    const plainTextErrorDebugDetail = buildPlainTextErrorDebugDetail(res, text, {
+      expectedJsonPayload: !parsed && isJsonContentType(contentType),
+    });
+    const errorMessage = readApiMessage(parsed) || normalizedPlainTextErrorMessage;
     const normalizedPayload = parsed || { message: errorMessage };
     if (requestId && !normalizedPayload.requestId) {
       normalizedPayload.requestId = requestId;
     }
-    throw new Error(
-      `${res.status}: ${JSON.stringify(normalizedPayload)}`,
-    );
+
+    if (
+      plainTextErrorDebugDetail
+      && plainTextErrorDebugDetail !== normalizedPlainTextErrorMessage
+    ) {
+      logClientWarning(
+        "API error detail was truncated for safe UI display",
+        undefined,
+        {
+          source: "client.log",
+          component: "api-client",
+          responseStatus: res.status,
+          requestId: requestId || undefined,
+          detail: plainTextErrorDebugDetail,
+        },
+      );
+    }
+
+    throw new ApiRequestError({
+      detail: plainTextErrorDebugDetail,
+      message: errorMessage,
+      requestId,
+      responsePayload: normalizedPayload,
+      status: res.status,
+    });
   }
 }
 

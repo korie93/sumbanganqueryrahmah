@@ -3,6 +3,7 @@ import {
   AUTH_SESSION_COOKIE_NAME,
   readAuthSessionCsrfTokenFromHeaders,
   readCookieValueFromHeader,
+  rotateAuthSessionCsrfCookie,
 } from "../auth/session-cookie";
 import { logger } from "../lib/logger";
 import { normalizeCorsOrigin, resolveAllowedCorsOrigins } from "./cors";
@@ -33,6 +34,23 @@ function logCsrfRejection(req: Parameters<RequestHandler>[0], code: string, deta
   });
 }
 
+function attachCsrfRotationOnSuccessfulResponse(
+  res: Parameters<RequestHandler>[1],
+) {
+  // Rotate the double-submit token when a cookie-authenticated mutation succeeds so the
+  // browser keeps a short-lived token without introducing server-side CSRF session state.
+  let rotated = false;
+  const originalWriteHead = res.writeHead.bind(res);
+
+  res.writeHead = ((...args: Parameters<typeof res.writeHead>) => {
+    if (!rotated && res.statusCode < 400) {
+      rotateAuthSessionCsrfCookie(res);
+      rotated = true;
+    }
+    return originalWriteHead(...args);
+  }) as typeof res.writeHead;
+}
+
 export function createCsrfProtectionMiddleware(options: CsrfMiddlewareOptions = {}): RequestHandler {
   const allowedOrigins = new Set(
     (options.allowedOrigins || resolveAllowedCorsOrigins())
@@ -58,6 +76,9 @@ export function createCsrfProtectionMiddleware(options: CsrfMiddlewareOptions = 
 
     // Strong check path: double-submit token (cookie + header).
     if (readAuthSessionCsrfTokenFromHeaders(req.headers)) {
+      if (authCookie) {
+        attachCsrfRotationOnSuccessfulResponse(res);
+      }
       return next();
     }
 
@@ -72,12 +93,18 @@ export function createCsrfProtectionMiddleware(options: CsrfMiddlewareOptions = 
       });
     }
     if (fetchSite === "same-origin") {
+      if (authCookie) {
+        attachCsrfRotationOnSuccessfulResponse(res);
+      }
       return next();
     }
 
     const requestOrigin = normalizeCorsOrigin(req.headers.origin);
     if (requestOrigin) {
       if (allowedOrigins.has(requestOrigin)) {
+        if (authCookie) {
+          attachCsrfRotationOnSuccessfulResponse(res);
+        }
         return next();
       }
       logCsrfRejection(req, "CSRF_ORIGIN_REJECTED", { requestOrigin });
@@ -91,6 +118,9 @@ export function createCsrfProtectionMiddleware(options: CsrfMiddlewareOptions = 
     const requestReferer = normalizeCorsOrigin(req.headers.referer);
     if (requestReferer) {
       if (allowedOrigins.has(requestReferer)) {
+        if (authCookie) {
+          attachCsrfRotationOnSuccessfulResponse(res);
+        }
         return next();
       }
       logCsrfRejection(req, "CSRF_REFERER_REJECTED", { requestReferer });
