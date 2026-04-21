@@ -80,7 +80,7 @@ export async function prepareMandatoryTwoFactorEnrollment(
   if (existingEncryptedSecret) {
     try {
       secret = decryptTwoFactorSecret(existingEncryptedSecret);
-    } catch {
+    } catch (_error) {
       secret = "";
     }
   }
@@ -90,7 +90,7 @@ export async function prepareMandatoryTwoFactorEnrollment(
     let encryptedSecret = "";
     try {
       encryptedSecret = encryptTwoFactorSecret(generatedSecret);
-    } catch {
+    } catch (_error) {
       throw new AuthAccountError(
         503,
         ERROR_CODES.TWO_FACTOR_SECRET_INVALID,

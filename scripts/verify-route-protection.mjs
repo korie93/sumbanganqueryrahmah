@@ -17,6 +17,7 @@ const PUBLIC_ROUTE_PATTERNS = [
   /^\/api\/login$/,
   /^\/api\/auth\/login$/,
   /^\/api\/auth\/verify-two-factor-login$/,
+  /^\/api\/auth\/complete-login-two-factor-setup$/,
   /^\/api\/auth\/activate-account$/,
   /^\/api\/auth\/validate-activation-token$/,
   /^\/api\/auth\/request-password-reset$/,
