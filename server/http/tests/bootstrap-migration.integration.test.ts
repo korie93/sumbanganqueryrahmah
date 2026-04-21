@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
 import { ensureBackupsBootstrapSchema } from "../../internal/backupsBootstrap";
+import { ensureAiCoreTables } from "../../internal/ai-bootstrap-schema";
 import { ensureCollectionRecordsTables } from "../../internal/collection-bootstrap-records";
 import {
   ensureCoreBannedSessionsTable,
@@ -614,6 +615,121 @@ test(
       assert.equal(staffNicknameRules[0]?.update_rule, "CASCADE");
       assert.equal(bannedSessionRules[0]?.delete_rule, "CASCADE");
       assert.equal(bannedSessionRules[0]?.update_rule, "CASCADE");
+    });
+  },
+);
+
+test(
+  "AI bootstrap provisions safe ownership constraints and text id defaults for AI tables",
+  { skip: skipReason || false },
+  async () => {
+    await withTempDatabase(async ({ pool }) => {
+      await pool.query(`
+        CREATE TABLE public.users (
+          id text PRIMARY KEY,
+          username text NOT NULL UNIQUE
+        );
+
+        CREATE TABLE public.imports (
+          id text PRIMARY KEY
+        );
+
+        CREATE TABLE public.data_rows (
+          id text PRIMARY KEY
+        );
+      `);
+
+      await pool.query(`
+        INSERT INTO public.users (id, username)
+        VALUES
+          ('user-system', 'system'),
+          ('user-alice', 'alice');
+
+        INSERT INTO public.imports (id)
+        VALUES ('import-1');
+
+        INSERT INTO public.data_rows (id)
+        VALUES ('row-1');
+      `);
+
+      await pool.query(`
+        CREATE TABLE public.ai_conversations (
+          id text PRIMARY KEY,
+          created_by text NOT NULL,
+          created_at timestamp with time zone DEFAULT now() NOT NULL
+        );
+
+        CREATE TABLE public.ai_messages (
+          id text PRIMARY KEY,
+          conversation_id text NOT NULL,
+          role text NOT NULL,
+          content text NOT NULL,
+          created_at timestamp with time zone DEFAULT now() NOT NULL
+        );
+      `);
+
+      await pool.query(`
+        INSERT INTO public.ai_conversations (id, created_by)
+        VALUES
+          ('conversation-valid', 'alice'),
+          ('conversation-invalid', 'missing.user');
+      `);
+
+      await ensureAiCoreTables(drizzle(pool));
+
+      assert.equal(await constraintExists(pool, "fk_ai_conversations_created_by_username"), true);
+      assert.equal(await constraintExists(pool, "fk_ai_messages_conversation_id"), true);
+      assert.equal(await indexExists(pool, "idx_ai_conversations_created_by"), true);
+      assert.equal(await indexExists(pool, "idx_ai_messages_conversation_id"), true);
+
+      const pgcryptoInstalled = await pool.query<{ present: boolean }>(`
+        SELECT EXISTS (
+          SELECT 1
+          FROM pg_extension
+          WHERE extname = 'pgcrypto'
+        ) AS present
+      `).then((result) => Boolean(result.rows[0]?.present));
+      const vectorInstalled = await pool.query<{ present: boolean }>(`
+        SELECT EXISTS (
+          SELECT 1
+          FROM pg_extension
+          WHERE extname = 'vector'
+        ) AS present
+      `).then((result) => Boolean(result.rows[0]?.present));
+
+      if (pgcryptoInstalled) {
+        assert.match(String(await columnDefault(pool, "ai_conversations", "id") || ""), /gen_random_uuid/i);
+        assert.match(String(await columnDefault(pool, "ai_messages", "id") || ""), /gen_random_uuid/i);
+        if (vectorInstalled) {
+          assert.match(String(await columnDefault(pool, "data_embeddings", "id") || ""), /gen_random_uuid/i);
+        }
+      }
+
+      const conversationRows = await pool.query<{ id: string; created_by: string }>(`
+        SELECT id, created_by
+        FROM public.ai_conversations
+        ORDER BY id ASC
+      `);
+      assert.deepEqual(conversationRows.rows, [
+        { id: "conversation-invalid", created_by: "system" },
+        { id: "conversation-valid", created_by: "alice" },
+      ]);
+
+      if (pgcryptoInstalled) {
+        const insertedConversation = await pool.query<{ id: string }>(`
+          INSERT INTO public.ai_conversations (created_by)
+          VALUES ('alice')
+          RETURNING id
+        `);
+        assert.ok((insertedConversation.rows[0]?.id || "").length > 10);
+
+        const insertedMessage = await pool.query<{ id: string }>(`
+          INSERT INTO public.ai_messages (conversation_id, role, content)
+          VALUES ($1, 'user', 'hello')
+          RETURNING id
+        `, [insertedConversation.rows[0]?.id]);
+        assert.ok((insertedMessage.rows[0]?.id || "").length > 10);
+      }
     });
   },
 );

@@ -1,5 +1,6 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
 import { ApiRequestError, createApiHeaders, throwIfResNotOk } from "./api-client";
+import { logClientWarning } from "./client-logger";
 import { detectLowSpecMode } from "./low-spec-mode";
 
 const isLowSpecClient = typeof window !== "undefined" ? detectLowSpecMode() : false;
@@ -45,6 +46,30 @@ function readQueryPath(queryKey: readonly unknown[]): string {
     : "";
 }
 
+async function readQueryJsonResponse<T>(res: Response, queryKey: readonly unknown[]): Promise<T> {
+  try {
+    return await res.json() as T;
+  } catch (error) {
+    const requestId = String(res.headers.get("x-request-id") || "").trim();
+    const queryPath = readQueryPath(queryKey) || "query";
+
+    logClientWarning(
+      "React Query response could not be parsed as JSON",
+      error,
+      {
+        source: "client.log",
+        component: "query-client",
+        queryPath,
+        requestId: requestId || undefined,
+        responseStatus: res.status,
+      },
+    );
+
+    const requestSuffix = requestId ? ` (request ${requestId})` : "";
+    throw new Error(`The server returned invalid JSON for ${queryPath}${requestSuffix}.`);
+  }
+}
+
 export function resolveDefaultQueryStaleTime(queryKey: readonly unknown[]): number {
   const path = readQueryPath(queryKey);
   if (LIVE_QUERY_PREFIXES.some((prefix) => path.startsWith(prefix))) {
@@ -81,24 +106,30 @@ export function shouldRetrySafeQueryFailure(failureCount: number, error: unknown
 }
 
 type UnauthorizedBehavior = "returnNull" | "throw";
-export const getQueryFn: <T>(options: {
+export function getQueryFn<T>(options: {
+  on401: "returnNull";
+}): QueryFunction<T | null>;
+export function getQueryFn<T>(options: {
+  on401: "throw";
+}): QueryFunction<T>;
+export function getQueryFn<T>(options: {
   on401: UnauthorizedBehavior;
-}) => QueryFunction<T> =
-  ({ on401: unauthorizedBehavior }) =>
-  async ({ queryKey, signal }) => {
+}): QueryFunction<T | null> {
+  return async ({ queryKey, signal }) => {
     const res = await fetch(queryKey.join("/") as string, {
       credentials: "include",
       headers: createApiHeaders(),
       signal,
     });
 
-    if (unauthorizedBehavior === "returnNull" && res.status === 401) {
+    if (options.on401 === "returnNull" && res.status === 401) {
       return null;
     }
 
     await throwIfResNotOk(res);
-    return await res.json();
+    return await readQueryJsonResponse<T>(res, queryKey);
   };
+}
 
 export const queryClient = new QueryClient({
   defaultOptions: {

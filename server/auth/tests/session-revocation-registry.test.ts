@@ -42,6 +42,26 @@ test("session revocation registry keeps the most recent entries when the cap is 
   assert.equal(isSessionRevoked("activity-10004", now + 30_000), true);
 });
 
+test("session revocation registry prefers keeping the longest-lived revocations under churn", () => {
+  const now = Date.now();
+
+  revokeSession("protected-activity", {
+    now,
+    ttlMs: 24 * 60 * 60 * 1000,
+  });
+
+  for (let index = 0; index < 10_004; index += 1) {
+    revokeSession(`short-lived-${index}`, {
+      now: now + index,
+      ttlMs: 60_000,
+    });
+  }
+
+  assert.equal(getSessionRevocationRegistrySizeForTests(), 10_000);
+  assert.equal(isSessionRevoked("protected-activity", now + 120_000), true);
+  assert.equal(isSessionRevoked("short-lived-0", now + 120_000), false);
+});
+
 test("session revocation registry publishes local revocations but does not rebroadcast replicated ones", () => {
   const publishedPayloads: Array<{ activityId: string; expiresAt: number }> = [];
 

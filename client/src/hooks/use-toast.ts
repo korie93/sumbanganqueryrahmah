@@ -46,6 +46,22 @@ interface State {
 
 const toastTimeouts = new Map<string, ReturnType<typeof setTimeout>>()
 
+function clearToastTimeout(toastId: string) {
+  const timeout = toastTimeouts.get(toastId)
+  if (!timeout) {
+    return
+  }
+
+  clearTimeout(timeout)
+  toastTimeouts.delete(toastId)
+}
+
+function clearAllToastTimeouts() {
+  for (const toastId of toastTimeouts.keys()) {
+    clearToastTimeout(toastId)
+  }
+}
+
 const addToRemoveQueue = (toastId: string) => {
   if (toastTimeouts.has(toastId)) {
     return
@@ -105,11 +121,13 @@ export const reducer = (state: State, action: Action): State => {
     }
     case "REMOVE_TOAST":
       if (action.toastId === undefined) {
+        clearAllToastTimeouts()
         return {
           ...state,
           toasts: [],
         }
       }
+      clearToastTimeout(action.toastId)
       return {
         ...state,
         toasts: state.toasts.filter((t) => t.id !== action.toastId),
@@ -135,6 +153,11 @@ export function subscribeToastState(listener: (state: State) => void) {
     const index = listeners.indexOf(listener)
     if (index > -1) {
       listeners.splice(index, 1)
+    }
+
+    if (listeners.length === 0) {
+      clearAllToastTimeouts()
+      memoryState = { toasts: [] }
     }
   }
 }
@@ -168,6 +191,21 @@ function toast({ ...props }: Toast) {
     dismiss,
     update,
   }
+}
+
+export function clearToastStateForTests() {
+  clearAllToastTimeouts()
+  memoryState = { toasts: [] }
+  listeners.splice(0, listeners.length)
+  count = 0
+}
+
+export function getToastTimeoutCountForTests() {
+  return toastTimeouts.size
+}
+
+export function getToastStateForTests() {
+  return memoryState
 }
 
 function useToast() {

@@ -48,7 +48,7 @@ USER node
 
 EXPOSE 5000
 
-HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-  CMD node -e "const controller = new AbortController(); const timeout = setTimeout(() => controller.abort(), 4000); timeout.unref?.(); fetch(`http://127.0.0.1:${process.env.PORT || 5000}/api/health/live`, { signal: controller.signal }).then((response) => { clearTimeout(timeout); process.exit(response.ok ? 0 : 1); }).catch(() => { clearTimeout(timeout); process.exit(1); })"
+HEALTHCHECK --interval=30s --timeout=10s --start-period=20s --retries=3 \
+  CMD node -e "const controller = new AbortController(); const timeout = setTimeout(() => controller.abort(), 8000); timeout.unref?.(); fetch(`http://127.0.0.1:${process.env.PORT || 5000}/api/health/live`, { signal: controller.signal }).then((response) => { clearTimeout(timeout); process.exit(response.ok ? 0 : 1); }).catch(() => { clearTimeout(timeout); process.exit(1); })"
 
 CMD ["node", "dist-local/server/cluster-local.js"]

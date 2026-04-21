@@ -143,6 +143,17 @@ export function createRateLimitKeyAdmissionController(
   const maxSuffixesPerBucket = options.maxSuffixesPerBucket ?? RATE_LIMIT_KEY_ADMISSION_MAX_SUFFIXES_PER_BUCKET;
   const now = options.now ?? Date.now;
   const ttlMs = options.ttlMs ?? RATE_LIMIT_KEY_ADMISSION_TTL_MS;
+  let lastObservedAt = 0;
+
+  const normalizeObservedAt = (observedAtRaw: number) => {
+    const observedAt = Number.isFinite(observedAtRaw) ? observedAtRaw : lastObservedAt;
+    if (observedAt < lastObservedAt) {
+      buckets.clear();
+    }
+
+    lastObservedAt = observedAt;
+    return observedAt;
+  };
 
   const pruneExpiredBuckets = (observedAt: number) => {
     for (const [bucketKey, bucket] of buckets.entries()) {
@@ -182,7 +193,7 @@ export function createRateLimitKeyAdmissionController(
         return RATE_LIMIT_OVERFLOW_BUCKET_SUFFIX;
       }
 
-      const observedAt = now();
+      const observedAt = normalizeObservedAt(now());
       pruneExpiredBuckets(observedAt);
 
       const existingBucket = buckets.get(normalizedBucketKey);

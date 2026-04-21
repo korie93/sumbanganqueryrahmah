@@ -391,6 +391,44 @@ test("getQueryFn forwards the React Query abort signal to fetch", async () => {
   }
 });
 
+test("getQueryFn normalizes invalid JSON responses into a bounded error message", async () => {
+  const originalFetch = globalThis.fetch;
+
+  globalThis.fetch = (async () => new Response("{not-json", {
+    status: 200,
+    headers: {
+      "Content-Type": "application/json",
+      "x-request-id": "server-query-invalid-json",
+    },
+  })) as typeof fetch;
+
+  try {
+    const queryFn = getQueryFn<{ ok: boolean }>({ on401: "throw" });
+
+    await assert.rejects(
+      async () => {
+        await queryFn({
+          queryKey: ["/api/query-invalid-json"],
+          client: undefined as never,
+          meta: undefined,
+          signal: new AbortController().signal,
+          pageParam: undefined,
+          direction: undefined,
+        });
+      },
+      (error: unknown) => {
+        assert.ok(error instanceof Error);
+        assert.match(error.message, /invalid JSON/i);
+        assert.match(error.message, /server-query-invalid-json/);
+        assert.match(error.message, /\/api\/query-invalid-json/);
+        return true;
+      },
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("resolveDefaultQueryStaleTime tunes query freshness by endpoint profile", () => {
   assert.equal(resolveDefaultQueryStaleTime(["/api/health/live"]), 15_000);
   assert.equal(resolveDefaultQueryStaleTime(["/api/analytics/summary"]), 30_000);

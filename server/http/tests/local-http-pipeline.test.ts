@@ -140,6 +140,63 @@ test("registerLocalHttpPipeline accepts sanitized CSP violation reports", async 
   }
 });
 
+test("registerLocalHttpPipeline ignores unknown nested CSP fields instead of surfacing them to logs", async (t) => {
+  const warnings: Array<Record<string, unknown> | undefined> = [];
+  t.mock.method(logger, "warn", ((message: string, payload?: Record<string, unknown>) => {
+    if (message === "Content Security Policy violation report received") {
+      warnings.push(payload);
+    }
+  }) as typeof logger.warn);
+
+  const app = express();
+  registerLocalHttpPipeline(app, {
+    importBodyLimit: "1mb",
+    collectionBodyLimit: "1mb",
+    defaultBodyLimit: "100kb",
+    uploadsRootDir: path.resolve(process.cwd(), "uploads"),
+    recordRequestStarted: () => undefined,
+    recordRequestFinished: () => undefined,
+    adaptiveRateLimit: (_req, _res, next) => next(),
+    systemProtectionMiddleware: (_req, _res, next) => next(),
+    maintenanceGuard: (_req, _res, next) => next(),
+  });
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const response = await fetch(`${baseUrl}/api/security/csp-reports`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/csp-report",
+      },
+      body: JSON.stringify({
+        "csp-report": {
+          "document-uri": "https://sqr.example.com/dashboard",
+          "blocked-uri": "https://evil.example/inline.js",
+          "violated-directive": "script-src-elem",
+          nested: {
+            attackerControlled: "ignored",
+          },
+        },
+      }),
+    });
+
+    assert.equal(response.status, 204);
+    assert.deepEqual(warnings, [
+      {
+        blockedUri: "https://evil.example/inline.js",
+        documentUri: "https://sqr.example.com/dashboard",
+        effectiveDirective: undefined,
+        originalPolicy: undefined,
+        reportCount: 1,
+        referrer: undefined,
+        violatedDirective: "script-src-elem",
+      },
+    ]);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
 test("registerLocalHttpPipeline aggregates repeated CSP violation reports instead of logging every duplicate", async (t) => {
   const warnings: Array<{ message: string; payload: Record<string, unknown> | undefined }> = [];
   t.mock.method(logger, "warn", ((message: string, payload?: Record<string, unknown>) => {

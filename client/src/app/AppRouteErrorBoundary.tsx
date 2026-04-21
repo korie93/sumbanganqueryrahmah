@@ -40,6 +40,7 @@ export class AppRouteErrorBoundary extends Component<
 > {
   private readonly errorCardRef = createRef<HTMLElement>();
   private autoRetryTimeout: ReturnType<typeof setTimeout> | null = null;
+  private hasUnmounted = false;
 
   constructor(props: AppRouteErrorBoundaryProps) {
     super(props);
@@ -136,6 +137,7 @@ export class AppRouteErrorBoundary extends Component<
   }
 
   componentWillUnmount() {
+    this.hasUnmounted = true;
     this.clearAutoRetryTimeout();
   }
 
@@ -150,6 +152,11 @@ export class AppRouteErrorBoundary extends Component<
   private scheduleAutoRetry(delayMs: number) {
     this.clearAutoRetryTimeout();
     this.autoRetryTimeout = setTimeout(() => {
+      if (this.hasUnmounted) {
+        this.autoRetryTimeout = null;
+        return;
+      }
+
       this.autoRetryTimeout = null;
       this.setState((currentState, props) => {
         if (!currentState.error) {

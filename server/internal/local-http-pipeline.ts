@@ -34,7 +34,7 @@ const cspReportDocumentSchema = z.object({
   "original-policy": z.string().max(8_192).optional(),
   referrer: z.string().max(2_048).optional(),
   "violated-directive": z.string().max(255).optional(),
-}).passthrough();
+}).strip();
 
 const cspReportEnvelopeSchema = z.object({
   "csp-report": cspReportDocumentSchema,

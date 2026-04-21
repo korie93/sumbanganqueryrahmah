@@ -17,6 +17,7 @@ Safe workflow:
 3. Review the generated SQL before applying it.
 4. Run `npm run db:migrate`.
 5. Run `npm run verify:db-schema-governance` if the change affects table ownership or introduces new schema sources.
+6. Review [docs/DATABASE_ROLLBACK_PROCEDURE.md](../docs/DATABASE_ROLLBACK_PROCEDURE.md) before production rollout.
 
 Until more of the schema is moved into Drizzle:
 - Prefer `npm run db:generate:custom -- --name <migration_name>` for custom SQL when a change still depends on legacy bootstrap-managed tables.

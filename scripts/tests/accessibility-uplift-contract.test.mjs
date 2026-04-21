@@ -17,7 +17,11 @@ test("reviewed icon-only controls keep explicit accessible names", () => {
   assert.match(loginSource, /aria-label="Hide password"/);
   assert.match(loginSource, /aria-label="Show password"/);
   assert.match(floatingAiSource, /aria-label="Minimize AI panel"/);
-  assert.match(floatingAiSource, /aria-label=\{isOpen \? "Minimize AI SQR panel" : "Open AI SQR panel"\}/);
+  assert.match(floatingAiSource, /const triggerAriaLabel =/);
+  assert.match(floatingAiSource, /"Open AI SQR panel"/);
+  assert.match(floatingAiSource, /"Minimize AI SQR panel"/);
+  assert.match(floatingAiSource, /unread messages/);
+  assert.match(floatingAiSource, /aria-label=\{triggerAriaLabel\}/);
   assert.match(sidebarSource, /aria-label="Toggle sidebar"/);
 });
 

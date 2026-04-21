@@ -29,6 +29,8 @@ type ErrorHandlerOptions = {
   remoteErrorTracker?: Pick<RemoteErrorTracker, "captureServerError"> | null;
 };
 
+type RemoteErrorTrackingPayload = Parameters<RemoteErrorTracker["captureServerError"]>[0];
+
 function readCorrelationRequestId(req: Request, res: Response): string | undefined {
   const responseRequestId = typeof res.getHeader === "function"
     ? String(res.getHeader("x-request-id") || "").trim()
@@ -81,6 +83,39 @@ function readRoutePath(req: Request): string | undefined {
   return undefined;
 }
 
+function serializeRemoteTrackingFailure(error: unknown) {
+  if (error instanceof Error) {
+    return {
+      name: error.name,
+      message: error.message,
+    };
+  }
+
+  return {
+    message: String(error),
+  };
+}
+
+function captureServerErrorSafely(
+  tracking: Pick<RemoteErrorTracker, "captureServerError"> | null,
+  payload: RemoteErrorTrackingPayload,
+) {
+  if (!tracking) {
+    return;
+  }
+
+  void tracking.captureServerError(payload).catch((error) => {
+    logger.warn("Remote error tracking failed while handling an API error", {
+      eventType: payload.eventType,
+      path: payload.path,
+      method: payload.method,
+      requestId: payload.requestId,
+      statusCode: payload.statusCode,
+      error: serializeRemoteTrackingFailure(error),
+    });
+  });
+}
+
 export function createErrorHandler(options: ErrorHandlerOptions = {}) {
   const tracking = options.remoteErrorTracker ?? remoteErrorTracker;
 
@@ -114,7 +149,7 @@ export function createErrorHandler(options: ErrorHandlerOptions = {}) {
           });
         }
 
-        void tracking.captureServerError({
+        captureServerErrorSafely(tracking, {
           code: err.code,
           errorName: "HttpError",
           eventType: "server.http_error",
@@ -148,7 +183,7 @@ export function createErrorHandler(options: ErrorHandlerOptions = {}) {
       });
     }
 
-    void tracking.captureServerError({
+    captureServerErrorSafely(tracking, {
       code: error?.code,
       errorName: typeof (err as { name?: unknown })?.name === "string"
         ? String((err as { name?: unknown }).name)

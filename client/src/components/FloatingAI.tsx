@@ -89,6 +89,11 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
   const panelSurfaceRef = useRef<HTMLElement | null>(null);
 
   const minimizedStatus = resolveFloatingAIMinimizedStatus(aiStatus);
+  const triggerAriaLabel = isOpen
+    ? "Minimize AI SQR panel"
+    : unreadCount > 0
+      ? `Open AI SQR panel (${unreadCount > 99 ? "99+" : unreadCount} unread messages)`
+      : "Open AI SQR panel";
   const handleTriggerToggleClick = useCallback((event: MouseEvent<HTMLButtonElement>) => {
     event.currentTarget.blur();
     handleToggle();
@@ -318,7 +323,7 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
           title="AI SQR"
           aria-controls={panelId}
           aria-haspopup="dialog"
-          aria-label={isOpen ? "Minimize AI SQR panel" : "Open AI SQR panel"}
+          aria-label={triggerAriaLabel}
           {...triggerDisclosureA11yProps}
           className={cn(
             "pointer-events-auto relative flex items-center justify-center rounded-full border border-sky-300/30 bg-sky-500 text-white shadow-[0_18px_38px_rgba(14,165,233,0.33)] transition-transform hover:scale-[1.03]",

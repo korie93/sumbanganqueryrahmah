@@ -4,13 +4,14 @@ import { runtimeConfig } from "../config/runtime";
 import { getSessionJwtVerificationSecrets } from "../auth/session-jwt";
 import { PostgresStorage } from "../storage-postgres";
 import { createRuntimeWebSocketManager } from "./runtime-manager";
+import { MAX_RUNTIME_WS_MESSAGE_BYTES } from "./ws-runtime-types";
 
 type LegacyWebSocketOptions = {
   storage?: Pick<PostgresStorage, "getActivityById" | "clearCollectionNicknameSessionByActivity">;
   secret?: string | readonly string[];
 };
 
-const WEBSOCKET_MAX_PAYLOAD_BYTES = 100 * 1024;
+const WEBSOCKET_MAX_PAYLOAD_BYTES = MAX_RUNTIME_WS_MESSAGE_BYTES;
 const defaultStorage = new PostgresStorage();
 const defaultSessionSecrets = getSessionJwtVerificationSecrets();
 

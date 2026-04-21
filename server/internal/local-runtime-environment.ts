@@ -24,13 +24,14 @@ import { createRuntimeConfigManager } from "./runtime-config-manager";
 import { createRuntimeMonitorManager } from "./runtime-monitor-manager";
 import { wrapAsyncPrototypeMethods } from "./wrapAsyncPrototypeMethods";
 import { applyTrustedProxies } from "../http/trust-proxy";
+import { MAX_RUNTIME_WS_MESSAGE_BYTES } from "../ws/ws-runtime-types";
 
 type CreateLocalRuntimeEnvironmentOptions = {
   notifyFatalStartup?: (reason: string, details?: string) => void;
 };
 
 const DB_METHOD_WRAP_EXCLUDE = new Set<string>(["constructor"]);
-const WEBSOCKET_MAX_PAYLOAD_BYTES = 100 * 1024;
+const WEBSOCKET_MAX_PAYLOAD_BYTES = MAX_RUNTIME_WS_MESSAGE_BYTES;
 const HTTP_SERVER_TIMEOUT_MS = 120_000;
 
 export function createLocalRuntimeEnvironment(options: CreateLocalRuntimeEnvironmentOptions = {}) {

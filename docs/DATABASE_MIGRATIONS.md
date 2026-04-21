@@ -25,6 +25,8 @@ That means Drizzle is ready to manage new schema work, but it is not yet the com
 - `npm run db:studio`
 - `npm run db:introspect`
 
+Rollback and pre-flight guidance now lives in [docs/DATABASE_ROLLBACK_PROCEDURE.md](./DATABASE_ROLLBACK_PROCEDURE.md).
+
 ## Governance Manifest
 
 Schema ownership now lives in [scripts/db-schema-governance.manifest.mjs](../scripts/db-schema-governance.manifest.mjs).

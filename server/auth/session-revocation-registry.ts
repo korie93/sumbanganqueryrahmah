@@ -29,16 +29,36 @@ function pruneExpiredSessionRevocations(now = Date.now()) {
   }
 }
 
-function evictOldestSessionRevocationEntry() {
-  const oldestEntry = revokedSessionEntries.keys().next();
-  if (!oldestEntry.done) {
-    revokedSessionEntries.delete(oldestEntry.value);
+function resolveSessionRevocationEvictionKey() {
+  let candidateActivityId: string | null = null;
+  let candidateExpiresAt = Number.POSITIVE_INFINITY;
+
+  for (const [activityId, entry] of revokedSessionEntries.entries()) {
+    const expiresAt = Number.isFinite(entry.expiresAt)
+      ? entry.expiresAt
+      : Number.NEGATIVE_INFINITY;
+
+    if (expiresAt >= candidateExpiresAt) {
+      continue;
+    }
+
+    candidateActivityId = activityId;
+    candidateExpiresAt = expiresAt;
+  }
+
+  return candidateActivityId;
+}
+
+function evictLeastProtectiveSessionRevocationEntry() {
+  const evictionKey = resolveSessionRevocationEvictionKey();
+  if (evictionKey) {
+    revokedSessionEntries.delete(evictionKey);
   }
 }
 
 function capSessionRevocationRegistrySize() {
   while (revokedSessionEntries.size > SESSION_REVOCATION_MAX_ENTRIES) {
-    evictOldestSessionRevocationEntry();
+    evictLeastProtectiveSessionRevocationEntry();
   }
 }
 

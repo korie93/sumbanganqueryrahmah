@@ -137,6 +137,24 @@ test("createRateLimitKeyAdmissionController refuses to evict active buckets just
   assert.equal(controller.admit("auth-login|198.51.100.1", "acct:one"), "acct:one");
 });
 
+test("createRateLimitKeyAdmissionController clears stale state safely when the clock moves backward", () => {
+  let now = 10_000;
+  const controller = createRateLimitKeyAdmissionController({
+    maxBuckets: 2,
+    maxSuffixesPerBucket: 2,
+    now: () => now,
+    ttlMs: 60_000,
+  });
+
+  assert.equal(controller.admit("auth-login|198.51.100.1", "acct:one"), "acct:one");
+  assert.equal(controller.admit("auth-login|198.51.100.2", "acct:two"), "acct:two");
+
+  now = 9_000;
+
+  assert.equal(controller.admit("auth-login|198.51.100.3", "acct:three"), "acct:three");
+  assert.equal(controller.admit("auth-login|198.51.100.1", "acct:one"), "acct:one");
+});
+
 test("resolveAuthenticatedRateLimitSubject prefers stable authenticated identifiers before usernames", () => {
   const req = {
     user: {

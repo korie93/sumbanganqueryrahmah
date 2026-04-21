@@ -1,6 +1,20 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { subscribeToastState, toast } from "@/hooks/use-toast";
+import {
+  clearToastStateForTests,
+  getToastStateForTests,
+  getToastTimeoutCountForTests,
+  subscribeToastState,
+  toast,
+} from "@/hooks/use-toast";
+
+test.beforeEach(() => {
+  clearToastStateForTests();
+});
+
+test.afterEach(() => {
+  clearToastStateForTests();
+});
 
 test("subscribeToastState receives updates and unsubscribes cleanly", () => {
   const seenToastCounts: number[] = [];
@@ -23,4 +37,20 @@ test("subscribeToastState receives updates and unsubscribes cleanly", () => {
   });
 
   assert.deepEqual(seenToastCounts, [1]);
+});
+
+test("toast state cleanup clears pending removal timers when the last subscriber unsubscribes", () => {
+  const unsubscribe = subscribeToastState(() => undefined);
+  const firstToast = toast({
+    title: "First",
+    description: "hello",
+  });
+
+  firstToast.dismiss();
+
+  assert.equal(getToastTimeoutCountForTests(), 1);
+  unsubscribe();
+
+  assert.equal(getToastTimeoutCountForTests(), 0);
+  assert.deepEqual(getToastStateForTests(), { toasts: [] });
 });
