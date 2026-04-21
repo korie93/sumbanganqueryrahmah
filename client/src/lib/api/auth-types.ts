@@ -104,6 +104,13 @@ export type LoginSuccessResponse = AuthOkResponse<{
   user: CurrentUser | null;
 }>;
 
+export type TwoFactorSetupPayload = {
+  accountName: string;
+  issuer: string;
+  otpauthUrl: string;
+  secret: string;
+};
+
 export type LoginTwoFactorChallengeResponse = AuthOkResponse<{
   twoFactorRequired: true;
   challengeToken: string;
@@ -114,7 +121,21 @@ export type LoginTwoFactorChallengeResponse = AuthOkResponse<{
   user: CurrentUser | null;
 }>;
 
-export type LoginResponse = LoginSuccessResponse | LoginTwoFactorChallengeResponse;
+export type LoginTwoFactorSetupChallengeResponse = AuthOkResponse<{
+  twoFactorSetupRequired: true;
+  challengeToken: string;
+  username: string;
+  role: string;
+  mustChangePassword: boolean;
+  status: string;
+  setup: TwoFactorSetupPayload;
+  user: CurrentUser | null;
+}>;
+
+export type LoginResponse =
+  | LoginSuccessResponse
+  | LoginTwoFactorChallengeResponse
+  | LoginTwoFactorSetupChallengeResponse;
 
 export type AuthUserResponse = AuthOkResponse<{
   user: CurrentUser | null;
@@ -139,12 +160,7 @@ export type TwoFactorStatusResponse = AuthOkResponse<{
 }>;
 
 export type TwoFactorSetupResponse = AuthOkResponse<{
-  setup: {
-    accountName: string;
-    issuer: string;
-    otpauthUrl: string;
-    secret: string;
-  };
+  setup: TwoFactorSetupPayload;
   user: CurrentUser | null;
 }>;
 

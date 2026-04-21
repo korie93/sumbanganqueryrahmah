@@ -23,7 +23,9 @@ import {
   parseAuthBrowserName,
   signAuthSessionToken,
   signAuthTwoFactorChallengeToken,
+  signAuthTwoFactorSetupChallengeToken,
   verifyAuthTwoFactorChallengeToken,
+  verifyAuthTwoFactorSetupChallengeToken,
 } from "./auth-route-session-utils";
 
 export type AuthRouteDeps = {
@@ -81,8 +83,29 @@ export type AuthRouteContext = {
     pcName?: string | null | undefined;
     ipAddress?: string | null | undefined;
   }) => string;
+  signTwoFactorSetupChallengeToken: (payload: {
+    userId: string;
+    username: string;
+    role: string;
+    fingerprint?: string | null | undefined;
+    browserName: string;
+    pcName?: string | null | undefined;
+    ipAddress?: string | null | undefined;
+  }) => string;
   verifyTwoFactorChallengeToken: (token: string) => {
     purpose: "two_factor_login";
+    userId: string;
+    username: string;
+    role: string;
+    fingerprint?: string | null | undefined;
+    browserName: string;
+    pcName?: string | null | undefined;
+    ipAddress?: string | null | undefined;
+    iat?: number | undefined;
+    exp?: number | undefined;
+  };
+  verifyTwoFactorSetupChallengeToken: (token: string) => {
+    purpose: "two_factor_setup_login";
     userId: string;
     username: string;
     role: string;
@@ -131,8 +154,14 @@ export function createAuthRouteContext(app: Express, deps: AuthRouteDeps): AuthR
     signTwoFactorChallengeToken(payload) {
       return signAuthTwoFactorChallengeToken(payload);
     },
+    signTwoFactorSetupChallengeToken(payload) {
+      return signAuthTwoFactorSetupChallengeToken(payload);
+    },
     verifyTwoFactorChallengeToken(token) {
       return verifyAuthTwoFactorChallengeToken(token);
+    },
+    verifyTwoFactorSetupChallengeToken(token) {
+      return verifyAuthTwoFactorSetupChallengeToken(token);
     },
     parseBrowserName(browserHeader, userAgentHeader) {
       return parseAuthBrowserName(browserHeader, userAgentHeader);

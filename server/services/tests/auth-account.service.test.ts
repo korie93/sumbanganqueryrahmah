@@ -393,7 +393,7 @@ test("AuthAccountService.login requires second factor for admin accounts with 2F
   assert.ok(auditActions.includes("LOGIN_SECOND_FACTOR_REQUIRED"));
 });
 
-test("AuthAccountService.login blocks admin accounts that are missing mandatory 2FA enrollment", async () => {
+test("AuthAccountService.login returns a mandatory 2FA setup challenge for admin accounts that are not enrolled", async () => {
   const passwordHash = await hashPassword("Password123!");
   const user = {
     ...buildSuperuser(passwordHash),
@@ -406,32 +406,79 @@ test("AuthAccountService.login blocks admin accounts that are missing mandatory 
   const auditActions: string[] = [];
 
   const service = createAuthAccountService({
+    getUser: async () => user,
     getUserByUsername: async () => user,
     isVisitorBanned: async () => false,
+    updateUserAccount: async (params: UpdateUserAccountInput) => {
+      Object.assign(user, {
+        twoFactorEnabled:
+          params.twoFactorEnabled === undefined ? user.twoFactorEnabled : params.twoFactorEnabled,
+        twoFactorSecretEncrypted:
+          params.twoFactorSecretEncrypted === undefined
+            ? user.twoFactorSecretEncrypted
+            : params.twoFactorSecretEncrypted,
+        twoFactorConfiguredAt:
+          params.twoFactorConfiguredAt === undefined
+            ? user.twoFactorConfiguredAt
+            : params.twoFactorConfiguredAt,
+      });
+      return user;
+    },
     createAuditLog: async (entry: AuditLogInput) => {
       auditActions.push(String(entry?.action || ""));
       return buildAuditLog(entry);
     },
+    getActiveActivitiesByUsername: async () => [],
+    deactivateUserActivities: async () => undefined,
+    deactivateUserSessionsByFingerprint: async () => undefined,
+    createActivity: async () => ({
+      id: "activity-admin-enrollment-1",
+      userId: user.id,
+      username: user.username,
+      role: user.role,
+      loginTime: new Date("2026-03-20T00:20:00.000Z"),
+      lastActivityTime: new Date("2026-03-20T00:20:00.000Z"),
+      logoutTime: null,
+      isActive: true,
+      logoutReason: null,
+      fingerprint: "fp-admin-enrollment",
+      browser: "chrome",
+      pcName: "pc",
+      ipAddress: "127.0.0.1",
+    }),
+    touchLastLogin: async () => undefined,
   });
 
-  await assert.rejects(
-    service.login({
-      username: "admin.enrollment",
-      password: "Password123!",
-      browserName: "chrome",
-      fingerprint: "fp-admin-enrollment",
-      ipAddress: "127.0.0.1",
-      pcName: "pc",
-    }),
-    (error: unknown) => {
-      assert.ok(error instanceof AuthAccountError);
-      assert.equal(error.statusCode, 403);
-      assert.equal(error.code, "TWO_FACTOR_SETUP_MISSING");
-      return true;
-    },
-  );
+  const loginResult = await service.login({
+    username: "admin.enrollment",
+    password: "Password123!",
+    browserName: "chrome",
+    fingerprint: "fp-admin-enrollment",
+    ipAddress: "127.0.0.1",
+    pcName: "pc",
+  });
 
-  assert.ok(auditActions.includes("LOGIN_BLOCKED_2FA_SETUP_REQUIRED"));
+  assert.equal(loginResult.kind, "two_factor_setup_required");
+  assert.equal(loginResult.user.username, "admin.enrollment");
+  assert.equal(typeof loginResult.setup.secret, "string");
+  assert.equal(typeof user.twoFactorSecretEncrypted, "string");
+  assert.ok(auditActions.includes("TWO_FACTOR_SETUP_INITIATED"));
+  assert.ok(auditActions.includes("LOGIN_TWO_FACTOR_SETUP_REQUIRED"));
+
+  const setupResult = await service.completeLoginTwoFactorSetup({
+    userId: user.id,
+    code: generateCurrentTwoFactorCode(loginResult.setup.secret),
+    fingerprint: "fp-admin-enrollment",
+    browserName: "chrome",
+    ipAddress: "127.0.0.1",
+    pcName: "pc",
+  });
+
+  assert.equal(setupResult.user.twoFactorEnabled, true);
+  assert.ok(setupResult.user.twoFactorConfiguredAt instanceof Date);
+  assert.equal(setupResult.activity.id, "activity-admin-enrollment-1");
+  assert.ok(auditActions.includes("TWO_FACTOR_ENABLED"));
+  assert.ok(auditActions.includes("LOGIN_SUCCESS"));
 });
 
 test("AuthAccountService.verifyTwoFactorLogin replaces existing admin sessions after successful verification", async () => {

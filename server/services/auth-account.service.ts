@@ -60,6 +60,10 @@ export class AuthAccountService {
     return this.authenticationOperations.verifyTwoFactorLogin(input);
   }
 
+  async completeLoginTwoFactorSetup(input: TwoFactorLoginInput) {
+    return this.authenticationOperations.completeLoginTwoFactorSetup(input);
+  }
+
   async validateActivationToken(rawTokenInput: string): Promise<ActivationTokenValidationResult> {
     return this.recoveryOperations.validateActivationToken(rawTokenInput);
   }

@@ -15,6 +15,7 @@ import {
   failLockedLogin,
   handleFailedPasswordAttempt,
   invalidateUserSessions,
+  prepareMandatoryTwoFactorEnrollment,
   requiresMandatoryTwoFactorEnrollment,
   requiresTwoFactor,
   verifyTwoFactorSecretCode,
@@ -113,20 +114,18 @@ export class AuthAccountAuthenticationOperations {
     const unlockedUser = await clearFailedLoginState(this.deps.storage, user);
 
     if (requiresMandatoryTwoFactorEnrollment(unlockedUser)) {
+      const enrollment = await prepareMandatoryTwoFactorEnrollment(this.deps.storage, unlockedUser);
       await this.deps.storage.createAuditLog({
-        action: "LOGIN_BLOCKED_2FA_SETUP_REQUIRED",
-        performedBy: unlockedUser.username,
-        targetUser: unlockedUser.id,
-        details: `Login blocked because ${unlockedUser.role} account is missing mandatory two-factor enrollment.`,
+        action: "LOGIN_TWO_FACTOR_SETUP_REQUIRED",
+        performedBy: enrollment.user.username,
+        targetUser: enrollment.user.id,
+        details: `Login requires mandatory two-factor enrollment for ${enrollment.user.role} account.`,
       });
-      throw new AuthAccountError(
-        403,
-        ERROR_CODES.TWO_FACTOR_SETUP_MISSING,
-        "Two-factor authentication must be enabled for this account before login is allowed.",
-        {
-          twoFactorEnrollmentRequired: true,
-        },
-      );
+      return {
+        kind: "two_factor_setup_required" as const,
+        setup: enrollment.setup,
+        user: enrollment.user,
+      };
     }
 
     if (requiresTwoFactor(unlockedUser)) {
@@ -247,6 +246,135 @@ export class AuthAccountAuthenticationOperations {
 
     return {
       user,
+      activity: sessionResult.activity,
+      closedSessionIds: sessionResult.closedSessionIds,
+    };
+  }
+
+  async completeLoginTwoFactorSetup(input: TwoFactorLoginInput) {
+    const user = await this.deps.storage.getUser(input.userId);
+    if (!user) {
+      throw new AuthAccountError(404, ERROR_CODES.USER_NOT_FOUND, "User not found.");
+    }
+
+    const visitorBanned = await this.deps.storage.isVisitorBanned(
+      input.fingerprint ?? null,
+      input.ipAddress ?? null,
+      user.username,
+    );
+
+    if (visitorBanned || user.isBanned) {
+      await this.deps.storage.createAuditLog({
+        action: "LOGIN_2FA_SETUP_FAILED_BANNED",
+        performedBy: user.username,
+        targetUser: user.id,
+        details: visitorBanned ? "Visitor is banned" : "User is banned",
+      });
+      throw new AuthAccountError(403, ERROR_CODES.ACCOUNT_BANNED, "Account is banned", {
+        banned: true,
+      });
+    }
+
+    const blockReason = getAccountAccessBlockReason(user);
+    if (blockReason && blockReason !== "banned") {
+      if (blockReason === "locked") {
+        await failLockedLogin(this.deps.storage, user, {
+          action: "LOGIN_2FA_SETUP_BLOCKED_LOCKED_ACCOUNT",
+          details: "Two-factor setup login blocked because the account is locked after repeated failed password attempts.",
+          lockedAccountMessage: AuthAccountAuthenticationOperations.LOCKED_ACCOUNT_MESSAGE,
+        });
+      }
+
+      await this.deps.storage.createAuditLog({
+        action: "LOGIN_2FA_SETUP_FAILED_ACCOUNT_STATE",
+        performedBy: user.username,
+        targetUser: user.id,
+        details: `Two-factor setup login blocked due to account state: ${blockReason}`,
+      });
+      throw new AuthAccountError(401, ERROR_CODES.INVALID_CREDENTIALS, "Invalid credentials");
+    }
+
+    if (user.role !== "admin" && user.role !== "superuser") {
+      throw new AuthAccountError(
+        403,
+        ERROR_CODES.TWO_FACTOR_NOT_ALLOWED,
+        "Two-factor authentication is only available for admin and superuser accounts.",
+      );
+    }
+
+    const encryptedSecret = String(user.twoFactorSecretEncrypted || "").trim();
+    if (!encryptedSecret) {
+      throw new AuthAccountError(
+        409,
+        ERROR_CODES.TWO_FACTOR_SETUP_MISSING,
+        "Two-factor setup must be restarted before login can continue.",
+      );
+    }
+
+    try {
+      verifyTwoFactorSecretCode({
+        code: input.code,
+        encryptedSecret,
+      });
+    } catch (error) {
+      if (
+        error instanceof AuthAccountError
+        && error.code === ERROR_CODES.TWO_FACTOR_SECRET_INVALID
+      ) {
+        await this.deps.storage.createAuditLog({
+          action: "LOGIN_2FA_SETUP_FAILED_SECRET",
+          performedBy: user.username,
+          targetUser: user.id,
+          details: "Stored two-factor secret could not be decrypted during setup login.",
+        });
+        throw error;
+      }
+      await this.deps.storage.createAuditLog({
+        action: "LOGIN_2FA_SETUP_FAILED",
+        performedBy: user.username,
+        targetUser: user.id,
+        details: `Invalid authenticator code from ${input.browserName} during setup login`,
+      });
+      throw error;
+    }
+
+    let authenticatedUser = user;
+    if (!requiresTwoFactor(user)) {
+      const enabledAt = new Date();
+      authenticatedUser = (await this.deps.storage.updateUserAccount({
+        userId: user.id,
+        twoFactorEnabled: true,
+        twoFactorConfiguredAt: enabledAt,
+      })) ?? user;
+
+      await this.deps.storage.createAuditLog({
+        action: "TWO_FACTOR_ENABLED",
+        performedBy: user.username,
+        targetUser: user.id,
+        details: JSON.stringify({
+          metadata: {
+            enabled_at: enabledAt.toISOString(),
+            role: user.role,
+            source: "login",
+          },
+        }),
+      });
+    }
+
+    const sessionResult = await createAuthenticatedSession({
+      details: `Login with 2FA setup from ${input.browserName}`,
+      input: {
+        fingerprint: input.fingerprint,
+        browserName: input.browserName,
+        pcName: input.pcName,
+        ipAddress: input.ipAddress,
+      },
+      storage: this.deps.storage,
+      user: authenticatedUser,
+    });
+
+    return {
+      user: authenticatedUser,
       activity: sessionResult.activity,
       closedSessionIds: sessionResult.closedSessionIds,
     };

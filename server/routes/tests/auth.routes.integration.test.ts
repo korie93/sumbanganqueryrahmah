@@ -1722,7 +1722,7 @@ test("POST /api/auth/validate-password-reset-token returns reset metadata for a 
   }
 });
 
-test("POST /api/auth/login blocks admin accounts that are not enrolled in mandatory 2FA", async () => {
+test("POST /api/auth/login returns a mandatory 2FA setup challenge for admin accounts that are not enrolled", async () => {
   const { storage, user, auditLogs } = await createLoginStorageDouble({
     user: {
       role: "admin",
@@ -1755,12 +1755,32 @@ test("POST /api/auth/login blocks admin accounts that are not enrolled in mandat
       }),
     });
 
-    assert.equal(response.status, 403);
+    assert.equal(response.status, 200);
     const payload = await response.json();
-    assert.equal(payload.ok, false);
-    assert.equal(payload.error?.code, "TWO_FACTOR_SETUP_MISSING");
-    assert.equal(payload.twoFactorEnrollmentRequired, true);
-    assert.equal(auditLogs.some((entry) => entry.action === "LOGIN_BLOCKED_2FA_SETUP_REQUIRED"), true);
+    assert.equal(payload.ok, true);
+    assert.equal(payload.twoFactorSetupRequired, true);
+    assert.equal(typeof payload.challengeToken, "string");
+    assert.equal(typeof payload.setup?.secret, "string");
+    assert.equal(auditLogs.some((entry) => entry.action === "TWO_FACTOR_SETUP_INITIATED"), true);
+    assert.equal(auditLogs.some((entry) => entry.action === "LOGIN_TWO_FACTOR_SETUP_REQUIRED"), true);
+
+    const completeResponse = await fetch(`${baseUrl}/api/auth/complete-login-two-factor-setup`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        challengeToken: payload.challengeToken,
+        code: generateCurrentTwoFactorCode(payload.setup.secret),
+      }),
+    });
+
+    assert.equal(completeResponse.status, 200);
+    const completePayload = await completeResponse.json();
+    assert.equal(completePayload.ok, true);
+    assert.equal(completePayload.user?.twoFactorEnabled, true);
+    assert.match(String(completeResponse.headers.get("set-cookie") || ""), /sqr_auth=/);
+    assert.equal(auditLogs.some((entry) => entry.action === "TWO_FACTOR_ENABLED"), true);
   } finally {
     await stopTestServer(server);
   }

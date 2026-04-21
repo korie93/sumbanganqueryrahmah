@@ -2,11 +2,13 @@ import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 
 import type { User } from "@/app/types";
 import { getBrowserLocalStorage, safeSetStorageItem } from "@/lib/browser-storage";
 import {
+  completeLoginTwoFactorSetup,
   login,
   verifyTwoFactorLogin,
   type LoginResponse,
   type LoginSuccessResponse,
   type LoginTwoFactorChallengeResponse,
+  type LoginTwoFactorSetupChallengeResponse,
 } from "@/lib/api/auth";
 import {
   consumeStoredAuthNotice,
@@ -41,6 +43,8 @@ type UseLoginPageStateParams = {
 type RetryableSubmissionKind = "login" | "two-factor";
 
 const TWO_FACTOR_PROMPT_NOTICE = "Masukkan kod pengesah 6 digit untuk melengkapkan log masuk.";
+const TWO_FACTOR_SETUP_PROMPT_NOTICE =
+  "Lengkapkan persediaan 2FA sekarang dengan menambah secret ini ke aplikasi pengesah anda dan masukkan kod 6 digit.";
 
 export function useLoginPageState({
   onLoginSuccess,
@@ -60,6 +64,10 @@ export function useLoginPageState({
   const [showPassword, setShowPassword] = useState(false);
   const [twoFactorChallengeToken, setTwoFactorChallengeToken] = useState("");
   const [twoFactorCode, setTwoFactorCode] = useState("");
+  const [twoFactorSetupAccountName, setTwoFactorSetupAccountName] = useState("");
+  const [twoFactorSetupIssuer, setTwoFactorSetupIssuer] = useState("");
+  const [twoFactorSetupSecret, setTwoFactorSetupSecret] = useState("");
+  const [twoFactorSetupUri, setTwoFactorSetupUri] = useState("");
   const [retryableSubmissionKind, setRetryableSubmissionKind] = useState<RetryableSubmissionKind | null>(null);
   const mountedRef = useRef(true);
   const storedNoticeConsumedRef = useRef(false);
@@ -71,6 +79,7 @@ export function useLoginPageState({
     currentUsername: username,
     twoFactorChallengeToken,
   });
+  const twoFactorSetupFlow = Boolean(twoFactorChallengeToken && twoFactorSetupSecret);
 
   useEffect(() => {
     if (storedNoticeConsumedRef.current) {
@@ -127,12 +136,24 @@ export function useLoginPageState({
     setRetryableSubmissionKind(null);
   };
 
+  const clearTwoFactorSetupState = () => {
+    setTwoFactorSetupAccountName("");
+    setTwoFactorSetupIssuer("");
+    setTwoFactorSetupSecret("");
+    setTwoFactorSetupUri("");
+  };
+
   const clearTwoFactorChallenge = (options?: { clearNotice?: boolean }) => {
     setTwoFactorChallengeToken("");
     setTwoFactorCode("");
     setTwoFactorCodeError("");
+    clearTwoFactorSetupState();
     clearRetryableSubmission();
-    if (options?.clearNotice || notice === TWO_FACTOR_PROMPT_NOTICE) {
+    if (
+      options?.clearNotice
+      || notice === TWO_FACTOR_PROMPT_NOTICE
+      || notice === TWO_FACTOR_SETUP_PROMPT_NOTICE
+    ) {
       setNotice("");
     }
   };
@@ -256,7 +277,22 @@ export function useLoginPageState({
         clearLockedAccountState();
         setTwoFactorChallengeToken(String(response.challengeToken || ""));
         setTwoFactorCode("");
+        clearTwoFactorSetupState();
         setNotice(TWO_FACTOR_PROMPT_NOTICE);
+        clearRetryableSubmission();
+        return;
+      }
+
+      if (isTwoFactorSetupChallengeResponse(response)) {
+        setStoredFingerprint(fingerprint);
+        clearLockedAccountState();
+        setTwoFactorChallengeToken(String(response.challengeToken || ""));
+        setTwoFactorCode("");
+        setTwoFactorSetupAccountName(String(response.setup.accountName || ""));
+        setTwoFactorSetupIssuer(String(response.setup.issuer || ""));
+        setTwoFactorSetupSecret(String(response.setup.secret || ""));
+        setTwoFactorSetupUri(String(response.setup.otpauthUrl || ""));
+        setNotice(TWO_FACTOR_SETUP_PROMPT_NOTICE);
         clearRetryableSubmission();
         return;
       }
@@ -338,8 +374,68 @@ export function useLoginPageState({
     }
   };
 
+  const handleCompleteTwoFactorSetup = async () => {
+    if (loginInFlightRef.current) {
+      return;
+    }
+
+    const requestId = beginRequest();
+    let controller: AbortController | null = null;
+
+    try {
+      if (!twoFactorChallengeToken.trim()) {
+        throw new Error("Sesi persediaan dua faktor tiada. Sila log masuk semula.");
+      }
+
+      const fieldErrors = validateTwoFactorCodeField(twoFactorCode);
+      if (hasLoginFieldErrors(fieldErrors)) {
+        setTwoFactorCodeError(fieldErrors.twoFactorCode ?? "");
+        return;
+      }
+      const normalizedCode = normalizeTwoFactorCode(twoFactorCode);
+
+      controller = new AbortController();
+      loginAbortControllerRef.current = controller;
+      const response = await completeLoginTwoFactorSetup(
+        {
+          challengeToken: twoFactorChallengeToken,
+          code: normalizedCode,
+        },
+        { signal: controller.signal },
+      );
+      if (shouldIgnoreRequest(requestId, controller)) {
+        return;
+      }
+
+      completeAuthenticatedSession(response, { clearTwoFactor: true });
+    } catch (err: unknown) {
+      if (isAbortRequestError(err) || shouldIgnoreRequest(requestId)) {
+        return;
+      }
+
+      logClientError("Two-factor setup completion failed:", err);
+      if (isLockedAccountError(err)) {
+        clearTwoFactorChallenge({ clearNotice: true });
+        setLockedUsername(normalizeLoginIdentity(username));
+        setLockedAccountMessage(readErrorMessage(err, "Akaun anda telah dikunci kerana terlalu banyak percubaan log masuk yang tidak sah."));
+        setError("");
+        return;
+      }
+
+      setError(readErrorMessage(err, "Persediaan dua faktor gagal. Sila cuba lagi."));
+      setRetryableSubmissionKind(isRetryableLoginError(err) ? "two-factor" : null);
+    } finally {
+      finalizeRequest(requestId, controller);
+    }
+  };
+
   const submitCurrentFlow = () => {
     if (lockedFlow) {
+      return;
+    }
+
+    if (twoFactorSetupFlow) {
+      void handleCompleteTwoFactorSetup();
       return;
     }
 
@@ -373,7 +469,12 @@ export function useLoginPageState({
       return;
     }
 
-    void (retryableSubmissionKind === "two-factor" ? handleVerifyTwoFactor() : handleLogin());
+    if (retryableSubmissionKind === "two-factor") {
+      void (twoFactorSetupFlow ? handleCompleteTwoFactorSetup() : handleVerifyTwoFactor());
+      return;
+    }
+
+    void handleLogin();
   };
 
   return {
@@ -389,6 +490,11 @@ export function useLoginPageState({
     showPassword,
     twoFactorChallengeToken,
     twoFactorCode,
+    twoFactorSetupAccountName,
+    twoFactorSetupFlow,
+    twoFactorSetupIssuer,
+    twoFactorSetupSecret,
+    twoFactorSetupUri,
     lockedFlow,
     canRetrySubmission: Boolean(error && retryableSubmissionKind && !loading && !lockedFlow),
     setPassword: handlePasswordChange,
@@ -418,4 +524,10 @@ export function useLoginPageState({
 
 function isTwoFactorChallengeResponse(response: LoginResponse): response is LoginTwoFactorChallengeResponse {
   return "twoFactorRequired" in response && response.twoFactorRequired === true;
+}
+
+function isTwoFactorSetupChallengeResponse(
+  response: LoginResponse,
+): response is LoginTwoFactorSetupChallengeResponse {
+  return "twoFactorSetupRequired" in response && response.twoFactorSetupRequired === true;
 }

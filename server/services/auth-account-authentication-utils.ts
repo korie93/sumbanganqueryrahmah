@@ -11,6 +11,8 @@ export {
 export {
   requiresTwoFactor,
   requiresMandatoryTwoFactorEnrollment,
+  prepareMandatoryTwoFactorEnrollment,
+  type MandatoryTwoFactorEnrollmentSetup,
   getSuperuserSessionIdleWindowMs,
   isRecentActivitySession,
   invalidateUserSessions,

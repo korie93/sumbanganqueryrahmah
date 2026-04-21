@@ -1,5 +1,8 @@
 import {
+  buildTwoFactorOtpAuthUrl,
   decryptTwoFactorSecret,
+  encryptTwoFactorSecret,
+  generateTwoFactorSecret,
   verifyTwoFactorCode,
 } from "../auth/two-factor";
 import type { PostgresStorage } from "../storage-postgres";
@@ -11,6 +14,13 @@ import type {
   AuthenticatedSessionInput,
 } from "./auth-account-authentication-shared";
 import { invalidateUserSessions } from "./auth-account-session-lifecycle-utils";
+
+export type MandatoryTwoFactorEnrollmentSetup = {
+  accountName: string;
+  issuer: string;
+  otpauthUrl: string;
+  secret: string;
+};
 
 export function requiresTwoFactor(
   user: Awaited<ReturnType<PostgresStorage["getUser"]>>,
@@ -38,6 +48,81 @@ export function requiresMandatoryTwoFactorEnrollment(
   }
 
   return true;
+}
+
+function buildMandatoryTwoFactorEnrollmentSetup(
+  user: Pick<AuthAccountUser, "username">,
+  secret: string,
+): MandatoryTwoFactorEnrollmentSetup {
+  return {
+    accountName: user.username,
+    issuer: "SQR",
+    otpauthUrl: buildTwoFactorOtpAuthUrl({
+      issuer: "SQR",
+      username: user.username,
+      secret,
+    }),
+    secret,
+  };
+}
+
+export async function prepareMandatoryTwoFactorEnrollment(
+  storage: Pick<AuthAccountAuthenticationStorage, "createAuditLog" | "updateUserAccount">,
+  user: AuthAccountUser,
+): Promise<{
+  setup: MandatoryTwoFactorEnrollmentSetup;
+  user: AuthAccountUser;
+}> {
+  let secret = "";
+  let nextUser = user;
+  const existingEncryptedSecret = String(user.twoFactorSecretEncrypted || "").trim();
+
+  if (existingEncryptedSecret) {
+    try {
+      secret = decryptTwoFactorSecret(existingEncryptedSecret);
+    } catch {
+      secret = "";
+    }
+  }
+
+  if (!secret) {
+    const generatedSecret = generateTwoFactorSecret();
+    let encryptedSecret = "";
+    try {
+      encryptedSecret = encryptTwoFactorSecret(generatedSecret);
+    } catch {
+      throw new AuthAccountError(
+        503,
+        ERROR_CODES.TWO_FACTOR_SECRET_INVALID,
+        "Two-factor authentication setup is unavailable. Contact an administrator.",
+      );
+    }
+
+    nextUser = (await storage.updateUserAccount({
+      userId: user.id,
+      twoFactorEnabled: false,
+      twoFactorSecretEncrypted: encryptedSecret,
+      twoFactorConfiguredAt: null,
+    })) ?? user;
+    secret = generatedSecret;
+
+    await storage.createAuditLog({
+      action: "TWO_FACTOR_SETUP_INITIATED",
+      performedBy: user.username,
+      targetUser: user.id,
+      details: JSON.stringify({
+        metadata: {
+          role: user.role,
+          source: "login",
+        },
+      }),
+    });
+  }
+
+  return {
+    setup: buildMandatoryTwoFactorEnrollmentSetup(nextUser, secret),
+    user: nextUser,
+  };
 }
 
 export async function clearFailedLoginState(

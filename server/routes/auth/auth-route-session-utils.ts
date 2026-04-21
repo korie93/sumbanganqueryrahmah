@@ -31,6 +31,8 @@ type TwoFactorChallengeTokenPayload = {
   ipAddress?: string | null | undefined;
 };
 
+type TwoFactorSetupChallengeTokenPayload = TwoFactorChallengeTokenPayload;
+
 type TwoFactorChallengeTokenClaims = {
   purpose?: string | undefined;
   userId?: string | undefined;
@@ -43,6 +45,8 @@ type TwoFactorChallengeTokenClaims = {
   iat?: number | undefined;
   exp?: number | undefined;
 };
+
+type TwoFactorSetupChallengeTokenClaims = TwoFactorChallengeTokenClaims;
 
 type CloseAuthActivitySocketsInput = {
   activityIds: string[];
@@ -95,6 +99,18 @@ export function signAuthTwoFactorChallengeToken(payload: TwoFactorChallengeToken
   );
 }
 
+export function signAuthTwoFactorSetupChallengeToken(payload: TwoFactorSetupChallengeTokenPayload) {
+  return signSessionJwt(
+    {
+      ...payload,
+      purpose: "two_factor_setup_login",
+    },
+    {
+      expiresIn: "10m",
+    },
+  );
+}
+
 export function verifyAuthTwoFactorChallengeToken(token: string) {
   const decoded = verifySessionJwt<TwoFactorChallengeTokenClaims>(token);
 
@@ -114,6 +130,37 @@ export function verifyAuthTwoFactorChallengeToken(token: string) {
 
   return {
     purpose: "two_factor_login" as const,
+    userId: decoded.userId,
+    username: decoded.username,
+    role: decoded.role,
+    fingerprint: decoded.fingerprint ?? null,
+    browserName: decoded.browserName,
+    pcName: decoded.pcName ?? null,
+    ipAddress: decoded.ipAddress ?? null,
+    iat: decoded.iat,
+    exp: decoded.exp,
+  };
+}
+
+export function verifyAuthTwoFactorSetupChallengeToken(token: string) {
+  const decoded = verifySessionJwt<TwoFactorSetupChallengeTokenClaims>(token);
+
+  if (
+    decoded.purpose !== "two_factor_setup_login"
+    || !decoded.userId
+    || !decoded.username
+    || !decoded.role
+    || !decoded.browserName
+  ) {
+    throw new AuthAccountError(
+      401,
+      ERROR_CODES.TWO_FACTOR_CHALLENGE_INVALID,
+      "Two-factor setup challenge is invalid or expired.",
+    );
+  }
+
+  return {
+    purpose: "two_factor_setup_login" as const,
     userId: decoded.userId,
     username: decoded.username,
     role: decoded.role,

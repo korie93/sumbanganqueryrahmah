@@ -33,6 +33,11 @@ export default function Login({
     showPassword,
     twoFactorChallengeToken,
     twoFactorCode,
+    twoFactorSetupAccountName,
+    twoFactorSetupFlow,
+    twoFactorSetupIssuer,
+    twoFactorSetupSecret,
+    twoFactorSetupUri,
     lockedFlow,
     setPassword,
     setTwoFactorCode,
@@ -181,8 +186,37 @@ export default function Login({
                     disabled={loading}
                     {...twoFactorInvalidProps}
                   />
+                  {twoFactorSetupFlow ? (
+                    <div className="login-alert login-alert--success text-left text-sm" role="status" aria-live="polite">
+                      <div className="font-medium">Aktifkan 2FA untuk akaun admin ini sebelum log masuk.</div>
+                      <div className="mt-3 space-y-2">
+                        <div>
+                          <span className="font-medium">Issuer:</span> {twoFactorSetupIssuer}
+                        </div>
+                        <div>
+                          <span className="font-medium">Account:</span> {twoFactorSetupAccountName}
+                        </div>
+                        <div>
+                          <span className="font-medium">Secret:</span>
+                          <div className="mt-1 break-all rounded-xl border border-white/10 bg-white/10 px-3 py-2 text-xs tracking-[0.2em]">
+                            {twoFactorSetupSecret}
+                          </div>
+                        </div>
+                        {twoFactorSetupUri ? (
+                          <div>
+                            <span className="font-medium">OTP URI:</span>
+                            <div className="mt-1 break-all rounded-xl border border-white/10 bg-white/10 px-3 py-2 text-[11px]">
+                              {twoFactorSetupUri}
+                            </div>
+                          </div>
+                        ) : null}
+                      </div>
+                    </div>
+                  ) : null}
                   <p id="login-two-factor-help" className="login-subtitle text-center text-xs">
-                    Masukkan kod 6 digit daripada aplikasi pengesah anda.
+                    {twoFactorSetupFlow
+                      ? "Tambah secret di atas ke aplikasi pengesah anda, kemudian masukkan kod 6 digit untuk mengaktifkan 2FA."
+                      : "Masukkan kod 6 digit daripada aplikasi pengesah anda."}
                   </p>
                   {twoFactorCodeError ? (
                     <p id="login-two-factor-error" className="login-field-error text-center text-sm" role="alert">
@@ -251,17 +285,27 @@ export default function Login({
                 data-testid="button-login"
               >
                 {loading ? (
-                  <div className="flex items-center gap-2">
-                    <div className="login-submit-spinner h-5 w-5 animate-spin rounded-full border-2" aria-hidden="true" />
-                    {twoFactorChallengeToken ? "Mengesahkan..." : "Sedang log masuk..."}
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-2">
-                    <LogIn className="w-5 h-5" />
-                    {lockedFlow ? "Akaun Dikunci" : twoFactorChallengeToken ? "Sahkan Kod" : "Log In"}
-                  </div>
-                )}
-              </PublicAuthButton>
+                    <div className="flex items-center gap-2">
+                      <div className="login-submit-spinner h-5 w-5 animate-spin rounded-full border-2" aria-hidden="true" />
+                      {twoFactorChallengeToken
+                        ? twoFactorSetupFlow
+                          ? "Mengaktifkan 2FA..."
+                          : "Mengesahkan..."
+                        : "Sedang log masuk..."}
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <LogIn className="w-5 h-5" />
+                      {lockedFlow
+                        ? "Akaun Dikunci"
+                        : twoFactorChallengeToken
+                          ? twoFactorSetupFlow
+                            ? "Aktifkan 2FA"
+                            : "Sahkan Kod"
+                          : "Log In"}
+                    </div>
+                  )}
+                </PublicAuthButton>
             </form>
 
             {lockedFlow ? (

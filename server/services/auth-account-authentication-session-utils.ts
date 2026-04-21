@@ -9,6 +9,8 @@ export {
   clearFailedLoginState,
   failLockedLogin,
   handleFailedPasswordAttempt,
+  prepareMandatoryTwoFactorEnrollment,
+  type MandatoryTwoFactorEnrollmentSetup,
   requiresMandatoryTwoFactorEnrollment,
   requiresTwoFactor,
   verifyTwoFactorSecretCode,

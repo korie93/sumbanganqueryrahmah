@@ -67,6 +67,16 @@ export async function verifyTwoFactorLogin(
   return response.json() as Promise<LoginSuccessResponse>;
 }
 
+export async function completeLoginTwoFactorSetup(
+  payload: { challengeToken: string; code: string },
+  options?: RequestOptions,
+) {
+  const response = await apiRequest("POST", "/api/auth/complete-login-two-factor-setup", payload, {
+    signal: options?.signal,
+  });
+  return response.json() as Promise<LoginSuccessResponse>;
+}
+
 export async function checkHealth(options?: RequestOptions) {
   const response = await fetch(`${API_BASE}/api/health`, {
     headers: createApiHeaders(),

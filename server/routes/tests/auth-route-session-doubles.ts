@@ -130,6 +130,15 @@ export async function createLoginStorageDouble(options?: {
         lockedReason: params.lockedReason === undefined ? user.lockedReason : params.lockedReason,
         lockedBySystem: params.lockedBySystem === undefined ? user.lockedBySystem : params.lockedBySystem,
         lastLoginAt: params.lastLoginAt === undefined ? user.lastLoginAt : params.lastLoginAt,
+        twoFactorEnabled: params.twoFactorEnabled === undefined ? user.twoFactorEnabled : params.twoFactorEnabled,
+        twoFactorSecretEncrypted:
+          params.twoFactorSecretEncrypted === undefined
+            ? user.twoFactorSecretEncrypted
+            : params.twoFactorSecretEncrypted,
+        twoFactorConfiguredAt:
+          params.twoFactorConfiguredAt === undefined
+            ? user.twoFactorConfiguredAt
+            : params.twoFactorConfiguredAt,
       });
       return user;
     },
