@@ -119,7 +119,7 @@ test("package override audit accepts documented override set", () => {
       qs: "^6.15.0",
       lodash: "^4.17.23",
       rollup: "^4.59.0",
-      dompurify: "^3.3.3",
+      dompurify: "^3.4.1",
       esbuild: "^0.25.4",
     },
   });
