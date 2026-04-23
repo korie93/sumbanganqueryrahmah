@@ -6,6 +6,11 @@ type ResolveSafeUrlOptions = {
   sameOriginOnly?: boolean;
 };
 
+type ResolveSafePreviewUrlOptions = {
+  baseUrl?: string | URL;
+  allowBlob?: boolean;
+};
+
 function normalizeUrlValue(value: string | null | undefined): string {
   return String(value || "").trim();
 }
@@ -86,10 +91,32 @@ export function resolveSafeNavigationUrl(
 
 export function resolveSafePreviewSourceUrl(
   value: string | null | undefined,
-  options: Omit<ResolveSafeUrlOptions, "allowedProtocols"> = {},
+  { baseUrl, allowBlob = true }: ResolveSafePreviewUrlOptions = {},
 ): string | null {
-  return resolveSafeUrl(value, {
-    ...options,
-    allowedProtocols: ["http:", "https:", "blob:", "data:"],
-  });
+  const normalizedValue = normalizeUrlValue(value);
+  if (!normalizedValue) {
+    return null;
+  }
+
+  const resolvedBase = resolveUrlBase(baseUrl);
+  const allowedProtocols = allowBlob
+    ? new Set(["http:", "https:", "blob:"])
+    : new Set(["http:", "https:"]);
+
+  try {
+    const resolvedUrl = new URL(normalizedValue, resolvedBase);
+    const normalizedProtocol = resolvedUrl.protocol.toLowerCase();
+
+    if (!allowedProtocols.has(normalizedProtocol)) {
+      return null;
+    }
+
+    if (resolvedUrl.origin !== resolvedBase.origin) {
+      return null;
+    }
+
+    return resolvedUrl.toString();
+  } catch {
+    return null;
+  }
 }

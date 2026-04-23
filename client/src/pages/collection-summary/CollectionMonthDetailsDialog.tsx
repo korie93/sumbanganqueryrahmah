@@ -1,6 +1,7 @@
 import { Suspense, lazy } from "react";
 import { STANDARD_PAGE_SIZE_OPTIONS } from "@/components/data/AppPaginationBar";
 import { Badge } from "@/components/ui/badge";
+import { mobileFullscreenDialogViewportClassName } from "@/components/ui/dialog-viewport";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { CollectionPaginationBar } from "@/pages/collection-report/CollectionPaginationBar";
@@ -66,7 +67,7 @@ export function CollectionMonthDetailsDialog({
       <DialogContent
         className={
           isMobile
-            ? "flex h-[100dvh] max-h-[100dvh] w-screen max-w-none flex-col overflow-hidden rounded-none border-0 p-0"
+            ? `${mobileFullscreenDialogViewportClassName} flex w-screen max-w-none flex-col overflow-hidden rounded-none border-0 p-0`
             : "flex h-[88vh] w-[96vw] max-w-6xl flex-col overflow-hidden"
         }
       >

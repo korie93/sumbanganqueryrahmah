@@ -6,6 +6,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { mobileFullscreenDialogViewportClassName } from "@/components/ui/dialog-viewport";
 import { useIsMobile } from "@/hooks/use-mobile";
 import type { SearchResultRow } from "@/pages/general-search/types";
 import {
@@ -45,7 +46,7 @@ export function GeneralSearchRecordDialog({
       <DialogContent
         className={
           isMobile
-            ? "left-0 top-0 flex h-[100dvh] w-screen max-w-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden rounded-none border-0 p-0"
+            ? `${mobileFullscreenDialogViewportClassName} left-0 top-0 flex w-screen max-w-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden rounded-none border-0 p-0`
             : "w-[95vw] max-w-5xl max-h-[85vh] overflow-y-auto"
         }
       >

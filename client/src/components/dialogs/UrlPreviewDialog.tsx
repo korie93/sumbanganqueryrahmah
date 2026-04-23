@@ -1,4 +1,5 @@
 import { Button } from "@/components/ui/button";
+import { mobileFullscreenDialogViewportClassName } from "@/components/ui/dialog-viewport";
 import {
   Dialog,
   DialogContent,
@@ -8,6 +9,10 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useIsMobile } from "@/hooks/use-mobile";
+import {
+  getSandboxedPreviewIframeProps,
+  resolveSafeInlineIframePreviewUrl,
+} from "@/lib/iframe-preview";
 import { resolveSafeHttpUrl } from "@/lib/safe-url";
 
 type UrlPreviewDialogProps = {
@@ -28,8 +33,11 @@ export function UrlPreviewDialog({
   onClose,
 }: UrlPreviewDialogProps) {
   const isMobile = useIsMobile();
-  const safePreviewUrl = resolveSafeHttpUrl(url);
-  const hasUnsafeUrl = Boolean(String(url || "").trim()) && !safePreviewUrl;
+  const safeInlinePreviewUrl = resolveSafeInlineIframePreviewUrl(url);
+  const safeOpenUrl = resolveSafeHttpUrl(url);
+  const hasUnsafeUrl = Boolean(String(url || "").trim()) && !safeOpenUrl;
+  const hasExternalOnlyUrl = Boolean(safeOpenUrl) && !safeInlinePreviewUrl;
+  const iframePreviewProps = getSandboxedPreviewIframeProps("document");
 
   if (!open) {
     return null;
@@ -40,7 +48,7 @@ export function UrlPreviewDialog({
       <DialogContent
         className={
           isMobile
-            ? "flex h-[100dvh] max-h-[100dvh] w-screen max-w-none flex-col gap-0 overflow-hidden rounded-none border-0 p-0"
+            ? `${mobileFullscreenDialogViewportClassName} flex w-screen max-w-none flex-col gap-0 overflow-hidden rounded-none border-0 p-0`
             : "flex h-[88vh] w-[96vw] max-w-6xl flex-col overflow-hidden"
         }
       >
@@ -50,17 +58,21 @@ export function UrlPreviewDialog({
         </DialogHeader>
 
         <div className={`min-h-0 flex-1 overflow-hidden bg-background/40 ${isMobile ? "" : "rounded-md border border-border/60"}`}>
-          {safePreviewUrl ? (
+          {safeInlinePreviewUrl ? (
             <iframe
-              key={safePreviewUrl}
-              src={safePreviewUrl}
+              key={safeInlinePreviewUrl}
+              src={safeInlinePreviewUrl}
               title={title}
               className="h-full w-full bg-white"
+              loading="lazy"
+              {...iframePreviewProps}
             />
           ) : (
             <div className="flex h-full min-h-[240px] items-center justify-center px-4 text-center text-sm text-muted-foreground">
               {hasUnsafeUrl
                 ? "Preview URL was blocked for safety."
+                : hasExternalOnlyUrl
+                  ? "Inline preview is limited to trusted in-app content. Open this link in a new tab instead."
                 : "Preview URL is unavailable right now."}
             </div>
           )}
@@ -73,9 +85,9 @@ export function UrlPreviewDialog({
           }
           style={isMobile ? { paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 0.75rem)" } : undefined}
         >
-          {safePreviewUrl ? (
+          {safeOpenUrl ? (
             <Button type="button" variant="outline" asChild>
-              <a href={safePreviewUrl} target="_blank" rel="noreferrer noopener">
+              <a href={safeOpenUrl} target="_blank" rel="noreferrer noopener">
                 Open in New Tab
               </a>
             </Button>

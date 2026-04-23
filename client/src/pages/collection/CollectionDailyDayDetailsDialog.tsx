@@ -2,6 +2,7 @@ import { Eye, Loader2 } from "lucide-react";
 import { CollectionReportFreshnessBadge } from "@/components/collection-report/CollectionReportFreshnessBadge";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { mobileFullscreenDialogViewportClassName } from "@/components/ui/dialog-viewport";
 import {
   Dialog,
   DialogContent,
@@ -48,7 +49,7 @@ export function CollectionDailyDayDetailsDialog({
       <DialogContent
         className={
           isMobile
-            ? "flex h-[100dvh] max-h-[100dvh] w-screen max-w-none flex-col overflow-hidden rounded-none border-0 p-0"
+            ? `${mobileFullscreenDialogViewportClassName} flex w-screen max-w-none flex-col overflow-hidden rounded-none border-0 p-0`
             : "flex max-h-[92vh] max-w-5xl flex-col overflow-hidden"
         }
         data-testid="collection-daily-day-dialog"

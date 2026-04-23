@@ -158,7 +158,7 @@ export function useCollectionReceiptPreview() {
           inferReceiptMimeTypeFromName(fileName || "");
         const previewBlob =
           effectiveMimeType.startsWith("image/")
-            ? await optimizeImageBlobForPreview(blob)
+            ? await optimizeImageBlobForPreview(blob, { signal: controller.signal })
             : blob;
         if (
           controller.signal.aborted ||

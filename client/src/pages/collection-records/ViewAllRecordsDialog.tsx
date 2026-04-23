@@ -1,6 +1,7 @@
 import { Suspense, lazy, useCallback, useEffect, useState } from "react";
 import { ChevronDown, ChevronUp, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { mobileFullscreenDialogViewportClassName } from "@/components/ui/dialog-viewport";
 import {
   Dialog,
   DialogContent,
@@ -86,7 +87,7 @@ export function ViewAllRecordsDialog({
       <DialogContent
         className={
           isMobile
-            ? "flex h-[100dvh] max-h-[100dvh] w-screen max-w-none flex-col gap-0 overflow-hidden rounded-none border-0 p-0"
+            ? `${mobileFullscreenDialogViewportClassName} flex w-screen max-w-none flex-col gap-0 overflow-hidden rounded-none border-0 p-0`
             : "flex h-[90vh] w-[96vw] max-w-[96vw] flex-col gap-0 overflow-hidden p-0"
         }
       >

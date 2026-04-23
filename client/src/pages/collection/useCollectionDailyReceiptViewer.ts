@@ -147,7 +147,9 @@ export function useCollectionDailyReceiptViewer(): UseCollectionDailyReceiptView
           selectedPreviewReceipt?.originalMimeType ||
           inferReceiptMimeTypeFromName(fileName || "");
         const previewBlob =
-          effectiveMimeType.startsWith("image/") ? await optimizeImageBlobForPreview(blob) : blob;
+          effectiveMimeType.startsWith("image/")
+            ? await optimizeImageBlobForPreview(blob, { signal: controller.signal })
+            : blob;
         if (
           controller.signal.aborted ||
           !isMountedRef.current ||

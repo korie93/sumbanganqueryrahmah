@@ -1,6 +1,10 @@
 import { useEffect, useRef } from "react";
 import { Download, ExternalLink, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  getSandboxedPreviewIframeProps,
+  resolveSafeInlineIframePreviewUrl,
+} from "@/lib/iframe-preview";
 import { cn } from "@/lib/utils";
 import type { CollectionRecordReceipt } from "@/lib/api";
 import type { ReceiptPreviewKind } from "@/pages/collection-records/types";
@@ -36,6 +40,11 @@ export function ReceiptPreviewContent({
 }: ReceiptPreviewContentProps) {
   const pdfZoomRef = useRef<HTMLDivElement | null>(null);
   const imageZoomRef = useRef<HTMLImageElement | null>(null);
+  const safeInlinePdfSource =
+    kind === "pdf"
+      ? resolveSafeInlineIframePreviewUrl(safeSource, { allowBlob: true })
+      : null;
+  const pdfIframePreviewProps = getSandboxedPreviewIframeProps("pdf");
 
   useEffect(() => {
     if (pdfZoomRef.current) {
@@ -99,12 +108,19 @@ export function ReceiptPreviewContent({
             ref={pdfZoomRef}
             className={cn("receipt-preview-zoom mx-auto w-full", isMobile ? "h-full" : "h-[72vh]")}
           >
-            <iframe
-              src={safeSource}
-              title="Receipt PDF Preview"
-              className="h-full w-full rounded-sm bg-white"
-              loading="lazy"
-            />
+            {safeInlinePdfSource ? (
+              <iframe
+                src={safeInlinePdfSource}
+                title="Receipt PDF Preview"
+                className="h-full w-full rounded-sm bg-white"
+                loading="lazy"
+                {...pdfIframePreviewProps}
+              />
+            ) : (
+              <div className="flex h-full min-h-[240px] items-center justify-center px-4 text-center text-sm text-muted-foreground">
+                Inline PDF preview is limited to trusted local receipt sources. Use the download action to inspect the original file.
+              </div>
+            )}
           </div>
         </div>
       ) : kind === "image" ? (

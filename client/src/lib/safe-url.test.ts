@@ -39,7 +39,7 @@ test("resolveSafeUrl rejects unsafe protocols", () => {
   );
 });
 
-test("resolveSafePreviewSourceUrl allows blob and data preview sources", () => {
+test("resolveSafePreviewSourceUrl keeps preview sources same-origin and blocks data urls", () => {
   assert.equal(
     resolveSafePreviewSourceUrl("blob:https://sqr-system.com/receipt-id", {
       baseUrl: "https://sqr-system.com/current",
@@ -47,10 +47,28 @@ test("resolveSafePreviewSourceUrl allows blob and data preview sources", () => {
     "blob:https://sqr-system.com/receipt-id",
   );
   assert.equal(
+    resolveSafePreviewSourceUrl("/receipts/current.png", {
+      baseUrl: "https://sqr-system.com/current",
+    }),
+    "https://sqr-system.com/receipts/current.png",
+  );
+  assert.equal(
+    resolveSafePreviewSourceUrl("https://preview.example.test/receipt.png", {
+      baseUrl: "https://sqr-system.com/current",
+    }),
+    null,
+  );
+  assert.equal(
     resolveSafePreviewSourceUrl("data:image/png;base64,AAA=", {
       baseUrl: "https://sqr-system.com/current",
     }),
-    "data:image/png;base64,AAA=",
+    null,
+  );
+  assert.equal(
+    resolveSafePreviewSourceUrl("blob:https://preview.example.test/receipt-id", {
+      baseUrl: "https://sqr-system.com/current",
+    }),
+    null,
   );
 });
 

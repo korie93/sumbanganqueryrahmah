@@ -150,6 +150,13 @@ const run = async () => {
       serverProcess,
     });
     await runNpm(["run", "smoke:preflight"], { env });
+    await runNpm(["run", "test:e2e:visual"], {
+      env: {
+        ...env,
+        VISUAL_BASE_URL: baseUrl,
+        VISUAL_ARTIFACTS_DIR: path.join(artifactsDir, "visual-layout"),
+      },
+    });
     await runNpm(["run", "smoke:ui"], { env });
   } finally {
     await stopServer(serverProcess);
