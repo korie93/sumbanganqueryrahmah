@@ -768,12 +768,15 @@ test(
       const systemActor = await pool.query<{
         username: string;
         status: string;
+        created_by: string | null;
       }>(`
-        SELECT username, status
+        SELECT username, status, created_by
         FROM public.users
         WHERE username = 'system'
       `);
-      assert.deepEqual(systemActor.rows, [{ username: "system", status: "disabled" }]);
+      assert.deepEqual(systemActor.rows, [
+        { username: "system", status: "disabled", created_by: "system" },
+      ]);
 
       const actorRows = await pool.query<{ created_by_login: string }>(`
         SELECT created_by_login
@@ -1239,6 +1242,45 @@ test(
       assert.match(String(await columnDefault(pool, "password_reset_requests", "reset_type") || ""), /email_link/i);
       assert.equal(await constraintExists(pool, "fk_password_reset_requests_user_id"), true);
       assert.equal(await indexExists(pool, "idx_password_reset_requests_token_hash_unique"), true);
+    });
+  },
+);
+
+test(
+  "users bootstrap provisions the system actor when user audit created_by is foreign-keyed to usernames",
+  { skip: skipReason || false },
+  async () => {
+    await withTempDatabase(async ({ pool }) => {
+      await pool.query(`
+        CREATE TABLE public.users (
+          id text PRIMARY KEY,
+          username text NOT NULL UNIQUE,
+          password_hash text,
+          role text,
+          status text,
+          created_by text,
+          CONSTRAINT fk_users_created_by_username
+            FOREIGN KEY (created_by)
+            REFERENCES public.users(username)
+            ON UPDATE CASCADE
+            ON DELETE SET NULL
+        );
+      `);
+
+      await ensureUsersBootstrapSchema(drizzle(pool));
+
+      const systemActor = await pool.query<{
+        username: string;
+        created_by: string | null;
+        status: string;
+      }>(`
+        SELECT username, created_by, status
+        FROM public.users
+        WHERE username = 'system'
+      `);
+      assert.deepEqual(systemActor.rows, [
+        { username: "system", created_by: "system", status: "disabled" },
+      ]);
     });
   },
 );

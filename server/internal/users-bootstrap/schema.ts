@@ -6,12 +6,16 @@ import {
   normalizeAccountStatus,
 } from "../../auth/account-lifecycle";
 import { db } from "../../db-postgres";
-import { USERS_BOOTSTRAP_BCRYPT_COST } from "./constants";
+import {
+  USERS_BOOTSTRAP_BCRYPT_COST,
+  USERS_BOOTSTRAP_LEGACY_CREATED_BY,
+  USERS_BOOTSTRAP_SYSTEM_ACTOR_USERNAME,
+} from "./constants";
 
 type BootstrapSqlExecutor = Pick<typeof db, "execute">;
 
 const SYSTEM_ACTOR_USER_ID = "system-user";
-const SYSTEM_ACTOR_USERNAME = "system";
+const SYSTEM_ACTOR_USERNAME = USERS_BOOTSTRAP_SYSTEM_ACTOR_USERNAME;
 const SYSTEM_ACTOR_FULL_NAME = "System Actor";
 const SYSTEM_ACTOR_PASSWORD_HASH = "$2b$12$jHDoINM4IPl88oSr7lb3Z.aVlpBWVraltDnPv1ibuuu2gd2vLxpAm";
 
@@ -238,7 +242,7 @@ export async function ensureUsersBootstrapSchema(
       false,
       0,
       false,
-      'system-bootstrap',
+      ${SYSTEM_ACTOR_USERNAME},
       false,
       now(),
       now()
@@ -265,7 +269,11 @@ export async function ensureUsersBootstrapSchema(
       locked_at = NULL,
       locked_reason = NULL,
       locked_by_system = false,
-      created_by = COALESCE(NULLIF(trim(COALESCE(created_by, '')), ''), 'system-bootstrap'),
+      created_by = CASE
+        WHEN lower(trim(COALESCE(created_by, ''))) IN ('', ${USERS_BOOTSTRAP_LEGACY_CREATED_BY})
+          THEN ${SYSTEM_ACTOR_USERNAME}
+        ELSE created_by
+      END,
       is_banned = false,
       created_at = COALESCE(created_at, now()),
       updated_at = COALESCE(updated_at, now()),
@@ -273,6 +281,11 @@ export async function ensureUsersBootstrapSchema(
       activated_at = NULL,
       last_login_at = NULL
     WHERE lower(username) = ${SYSTEM_ACTOR_USERNAME}
+  `);
+  await database.execute(sql`
+    UPDATE public.users
+    SET created_by = ${SYSTEM_ACTOR_USERNAME}
+    WHERE lower(trim(COALESCE(created_by, ''))) = ${USERS_BOOTSTRAP_LEGACY_CREATED_BY}
   `);
 
   await database.execute(sql`ALTER TABLE public.users ALTER COLUMN username SET NOT NULL`);

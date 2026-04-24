@@ -27,7 +27,7 @@ SELECT
   false,
   0,
   false,
-  'system-bootstrap',
+  'system',
   false,
   now(),
   now()
@@ -53,7 +53,10 @@ SET
   locked_at = NULL,
   locked_reason = NULL,
   locked_by_system = false,
-  created_by = COALESCE(NULLIF(trim(COALESCE(created_by, '')), ''), 'system-bootstrap'),
+  created_by = CASE
+    WHEN lower(trim(COALESCE(created_by, ''))) IN ('', 'system-bootstrap') THEN 'system'
+    ELSE created_by
+  END,
   is_banned = false,
   created_at = COALESCE(created_at, now()),
   updated_at = COALESCE(updated_at, now()),
@@ -61,6 +64,10 @@ SET
   activated_at = NULL,
   last_login_at = NULL
 WHERE lower(username) = 'system';
+
+UPDATE public.users
+SET created_by = 'system'
+WHERE lower(trim(COALESCE(created_by, ''))) = 'system-bootstrap';
 
 UPDATE public.collection_records record
 SET created_by_login = usr.username

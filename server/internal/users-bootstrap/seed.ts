@@ -7,7 +7,10 @@ import { runtimeConfig } from "../../config/runtime";
 import { shouldSeedDefaultUsers } from "../../config/security";
 import { db } from "../../db-postgres";
 import { logger } from "../../lib/logger";
-import { USERS_BOOTSTRAP_BCRYPT_COST } from "./constants";
+import {
+  USERS_BOOTSTRAP_BCRYPT_COST,
+  USERS_BOOTSTRAP_SYSTEM_ACTOR_USERNAME,
+} from "./constants";
 import { writeLocalSuperuserCredentialsFile } from "./credentials-file";
 import { isUsersBootstrapStrictLocalDevelopmentEnvironment } from "./runtime";
 
@@ -126,7 +129,7 @@ export async function seedUsersBootstrapDefaults(): Promise<void> {
       status: "active",
       mustChangePassword: isFreshLocalBootstrap && user.role === "superuser",
       passwordResetBySuperuser: isFreshLocalBootstrap && user.role === "superuser",
-      createdBy: "system-bootstrap",
+      createdBy: USERS_BOOTSTRAP_SYSTEM_ACTOR_USERNAME,
       createdAt: now,
       updatedAt: now,
       passwordChangedAt: now,
