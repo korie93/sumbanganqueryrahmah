@@ -3,6 +3,8 @@ import test from "node:test";
 
 import { shutdownClusterMasterDueToFatalError } from "../../internal/cluster-master-shutdown";
 
+const EXPECTED_FATAL_SHUTDOWN_TIMEOUT_CALLBACKS = 2;
+
 test("shutdownClusterMasterDueToFatalError logs worker notification failures", () => {
   const loggerCalls: Array<{ message: string; metadata?: Record<string, unknown> | undefined }> = [];
   const logger = {
@@ -44,7 +46,7 @@ test("shutdownClusterMasterDueToFatalError logs worker notification failures", (
       createGracefulShutdownMessage: (reason) => ({ type: "graceful-shutdown", reason }),
     });
 
-    assert.equal(timeoutCallbacks.length, 2);
+    assert.equal(timeoutCallbacks.length, EXPECTED_FATAL_SHUTDOWN_TIMEOUT_CALLBACKS);
     assert.equal(
       loggerCalls.some((entry) =>
         entry.message === "Failed to notify cluster worker about fatal master shutdown" &&

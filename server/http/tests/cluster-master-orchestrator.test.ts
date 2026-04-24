@@ -217,7 +217,7 @@ test("cluster master orchestrator logs when a draining worker cannot be force-ki
 
     orchestrator.bootCluster();
     intervalHandler?.();
-    assert.equal(timeoutHandlers.length >= 1, true);
+    assert.ok(timeoutHandlers.length >= 1);
     timeoutHandlers[0]?.();
 
     assert.equal(
