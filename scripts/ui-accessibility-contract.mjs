@@ -216,6 +216,35 @@ async function loginForAuthenticatedContracts(page) {
   await page.locator("main#main-content").first().waitFor({ timeout: 15_000 });
 }
 
+async function logoutAuthenticatedContractSession(page) {
+  const response = await page.evaluate(async () => {
+    const logoutResponse = await fetch("/api/activity/logout", {
+      body: "{}",
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      method: "POST",
+    });
+
+    return {
+      ok: logoutResponse.ok,
+      status: logoutResponse.status,
+    };
+  });
+
+  assert(
+    response.ok || response.status === 401,
+    `authenticated a11y logout cleanup failed with HTTP ${response.status}`,
+  );
+
+  await page.evaluate(() => {
+    localStorage.clear();
+    sessionStorage.clear();
+  });
+  await page.context().clearCookies();
+}
+
 const run = async () => {
   const browser = await chromium.launch({ headless: true });
   const context = await browser.newContext({
@@ -223,6 +252,9 @@ const run = async () => {
     locale: "en-US",
     reducedMotion: "reduce",
   });
+
+  let authenticatedSessionCreated = false;
+  let primaryError = null;
 
   try {
     const page = await context.newPage();
@@ -241,14 +273,37 @@ const run = async () => {
     }
 
     await loginForAuthenticatedContracts(page);
+    authenticatedSessionCreated = true;
     for (const viewportSpec of viewportSpecs) {
       for (const routeSpec of authenticatedRouteSpecs) {
         await verifyRouteAccessibility(page, routeSpec, viewportSpec);
       }
     }
+  } catch (error) {
+    primaryError = error;
+    throw error;
   } finally {
+    let cleanupError = null;
+    if (authenticatedSessionCreated) {
+      const page = context.pages()[0];
+      try {
+        if (page) {
+          await logoutAuthenticatedContractSession(page);
+        }
+      } catch (error) {
+        if (!primaryError) {
+          cleanupError = error;
+        } else {
+          const message = error instanceof Error ? error.message : String(error);
+          console.warn(`Authenticated accessibility logout cleanup failed after primary error: ${message}`);
+        }
+      }
+    }
     await context.close().catch(() => {});
     await browser.close().catch(() => {});
+    if (cleanupError) {
+      throw cleanupError;
+    }
   }
 };
 
