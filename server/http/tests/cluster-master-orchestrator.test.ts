@@ -220,12 +220,12 @@ test("cluster master orchestrator logs when a draining worker cannot be force-ki
     assert.ok(timeoutHandlers.length >= 1);
     timeoutHandlers[0]?.();
 
-    assert.equal(
-      logger.warnCalls.some((entry) =>
+    const loggedForceKillFailure = logger.warnCalls.some(
+      (entry) =>
         entry.message === "Failed to force-kill draining cluster worker after graceful-shutdown timeout" &&
-        entry.metadata?.reason === "scale-down-low-load"),
-      true,
+        entry.metadata?.reason === "scale-down-low-load",
     );
+    assert.equal(loggedForceKillFailure, true);
   } finally {
     globalThis.setInterval = originalSetInterval;
     globalThis.clearInterval = originalClearInterval;

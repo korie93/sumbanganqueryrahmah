@@ -47,13 +47,13 @@ test("shutdownClusterMasterDueToFatalError logs worker notification failures", (
     });
 
     assert.equal(timeoutCallbacks.length, EXPECTED_FATAL_SHUTDOWN_TIMEOUT_CALLBACKS);
-    assert.equal(
-      loggerCalls.some((entry) =>
+    const loggedWorkerNotificationFailure = loggerCalls.some(
+      (entry) =>
         entry.message === "Failed to notify cluster worker about fatal master shutdown" &&
         entry.metadata?.reason === "fatal-test" &&
-        entry.metadata?.workerId === 7),
-      true,
+        entry.metadata?.workerId === 7,
     );
+    assert.equal(loggedWorkerNotificationFailure, true);
   } finally {
     process.exit = originalExit;
     process.exitCode = originalExitCode;
