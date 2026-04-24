@@ -218,8 +218,13 @@ export function createClusterMasterOrchestrator({
     const timeout = setTimeout(() => {
       try {
         worker.kill();
-      } catch {
-        // Ignore best-effort worker termination failures.
+      } catch (error) {
+        logger.warn("Failed to force-kill draining cluster worker after graceful-shutdown timeout", {
+          error,
+          reason,
+          workerId: worker.id,
+          workerPid: worker.process.pid,
+        });
       }
     }, 30_000);
     timeout.unref();

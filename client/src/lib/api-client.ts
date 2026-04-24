@@ -6,6 +6,7 @@ import {
   setStoredForcePasswordChange,
 } from "./auth-session";
 import { getBrowserLocalStorage, safeSetStorageItem } from "./browser-storage";
+import { logClientWarning } from "./client-logger";
 import { createClientRandomId } from "./secure-id";
 
 const DEFAULT_API_REQUEST_TIMEOUT_MS = 60_000;
@@ -114,8 +115,11 @@ export async function throwIfResNotOk(res: Response) {
             window.location.href = "/maintenance";
           }
         }
-      } catch {
-        // ignore JSON parse failure, keep default error path
+      } catch (error) {
+        logClientWarning("Failed to apply maintenance response handling", error, {
+          requestId: requestId || null,
+          status: res.status,
+        });
       }
     }
 

@@ -142,3 +142,93 @@ test("cluster master orchestrator boots primary workers and registers lifecycle 
     globalThis.clearInterval = originalClearInterval;
   }
 });
+
+test("cluster master orchestrator logs when a draining worker cannot be force-killed", async () => {
+  const logger = createLogger();
+  const firstWorker = createWorker(1);
+  const secondWorker = createWorker(2);
+  firstWorker.worker.kill = () => {
+    throw new Error("kill failed");
+  };
+  secondWorker.worker.kill = () => {
+    throw new Error("kill failed");
+  };
+  const workers: Record<number, unknown> = {};
+  const clusterHandlers = new Map<string, Function>();
+  let intervalHandler: (() => void) | undefined;
+  const timeoutHandlers: Array<() => void> = [];
+
+  const clusterModule = {
+    workers,
+    isPrimary: true,
+    setupPrimary() {
+      return undefined;
+    },
+    fork() {
+      throw new Error("unexpected fork");
+    },
+    on(event: string, handler: Function) {
+      clusterHandlers.set(event, handler);
+      return clusterModule;
+    },
+  } as unknown as typeof cluster;
+
+  workers[firstWorker.worker.id] = firstWorker.worker;
+  workers[secondWorker.worker.id] = secondWorker.worker;
+
+  const originalSetInterval = globalThis.setInterval;
+  const originalClearInterval = globalThis.clearInterval;
+  const originalSetTimeout = globalThis.setTimeout;
+  globalThis.setInterval = (((handler: TimerHandler) => {
+    intervalHandler = handler as () => void;
+    return { unref() {} } as ReturnType<typeof setInterval>;
+  }) as unknown) as typeof setInterval;
+  globalThis.clearInterval = (((_handle?: Parameters<typeof clearInterval>[0]) => {
+    return undefined;
+  }) as unknown) as typeof clearInterval;
+  globalThis.setTimeout = (((handler: TimerHandler) => {
+    timeoutHandlers.push(handler as () => void);
+    return { unref() {} } as ReturnType<typeof setTimeout>;
+  }) as unknown) as typeof setTimeout;
+
+  try {
+    const orchestrator = createClusterMasterOrchestrator({
+      clusterModule,
+      logger,
+      workerExec: "dist-local/server/index-local.js",
+      config: {
+        scaleIntervalMs: 5_000,
+        lowLoadHoldMs: 0,
+        activeRequestsThreshold: 80,
+        lowReqRateThreshold: 8,
+        lowMemoryMode: false,
+        preallocateMb: 0,
+        maxSpawnPerCycle: 1,
+        maxWorkers: 2,
+        minWorkers: 1,
+        initialWorkers: 0,
+        scaleCooldownMs: 0,
+        restartThrottleMs: 2_000,
+        maxRestartAttempts: 5,
+        restartFailureWindowMs: 60_000,
+        restartBlockMs: 60_000,
+      },
+    });
+
+    orchestrator.bootCluster();
+    intervalHandler?.();
+    assert.equal(timeoutHandlers.length >= 1, true);
+    timeoutHandlers[0]?.();
+
+    assert.equal(
+      logger.warnCalls.some((entry) =>
+        entry.message === "Failed to force-kill draining cluster worker after graceful-shutdown timeout" &&
+        entry.metadata?.reason === "scale-down-low-load"),
+      true,
+    );
+  } finally {
+    globalThis.setInterval = originalSetInterval;
+    globalThis.clearInterval = originalClearInterval;
+    globalThis.setTimeout = originalSetTimeout;
+  }
+});

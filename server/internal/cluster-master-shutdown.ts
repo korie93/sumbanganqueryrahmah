@@ -41,8 +41,13 @@ export function shutdownClusterMasterDueToFatalError(params: {
 
     try {
       worker.send(params.createGracefulShutdownMessage(`master-fatal:${params.reason}`));
-    } catch {
-      // Ignore IPC send failures while the master is already shutting down.
+    } catch (error) {
+      params.logger.error("Failed to notify cluster worker about fatal master shutdown", {
+        reason: params.reason,
+        workerId: worker.id,
+        workerPid: worker.process.pid,
+        error,
+      });
     }
   }
 

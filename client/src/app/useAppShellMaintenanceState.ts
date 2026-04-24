@@ -2,6 +2,7 @@ import { useEffect, type Dispatch, type SetStateAction } from "react";
 import type { User } from "@/app/types";
 import { getMaintenanceStatus } from "@/lib/api";
 import { getBrowserLocalStorage, safeSetStorageItem } from "@/lib/browser-storage";
+import { logClientWarning } from "@/lib/client-logger";
 import { MAINTENANCE_STATUS_POLL_INTERVAL_MS } from "@/pages/maintenance-state";
 
 type MaintenanceUpdatedDetail = {
@@ -63,7 +64,11 @@ export function useAppShellMaintenanceState({
         if (error instanceof DOMException && error.name === "AbortError") {
           return;
         }
-        // Ignore maintenance polling errors.
+        logClientWarning("Maintenance status polling failed", error, {
+          currentPage,
+          hasUser: Boolean(user),
+          role: user?.role ?? null,
+        });
       }
     };
 
