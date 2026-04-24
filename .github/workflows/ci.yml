@@ -193,7 +193,7 @@ jobs:
       - name: Start built server
         run: |
           : > server.log
-          npm run start:built >> server.log 2>&1 &
+          node dist-local/server/cluster-local.js >> server.log 2>&1 &
           echo $! > server.pid
 
       - name: Wait for server
@@ -243,10 +243,33 @@ jobs:
       - name: Stop built server
         if: always()
         run: |
-          if [ -f server.pid ]; then
-            kill "$(cat server.pid)" || true
+          if [ ! -f server.pid ]; then
+            exit 0
           fi
-          pkill -f "dist-local/server/index-local.js" || true
+          SERVER_PID="$(cat server.pid)"
+          if [ -z "$SERVER_PID" ]; then
+            exit 0
+          fi
+
+          SERVER_COMMAND="$(ps -p "$SERVER_PID" -o args= 2>/dev/null || true)"
+          case "$SERVER_COMMAND" in
+            *"dist-local/server/cluster-local.js"*)
+              kill "$SERVER_PID" 2>/dev/null || true
+              for i in {1..10}; do
+                if ! kill -0 "$SERVER_PID" 2>/dev/null; then
+                  exit 0
+                fi
+                sleep 1
+              done
+              kill -9 "$SERVER_PID" 2>/dev/null || true
+              ;;
+            "")
+              echo "Built server process already exited."
+              ;;
+            *)
+              echo "Skipping shutdown for unexpected PID $SERVER_PID command: $SERVER_COMMAND"
+              ;;
+          esac
 
       - name: Upload smoke artifacts
         if: always()

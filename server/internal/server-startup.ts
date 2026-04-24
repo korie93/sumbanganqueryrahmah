@@ -13,6 +13,7 @@ import { logger } from "../lib/logger";
 import { registerFrontendStatic } from "./frontend-static";
 import { startIdleSessionSweeper } from "./idle-session-sweeper";
 import { assertCollectionPiiRetirementStartupReady } from "./collection-pii-retirement-startup";
+import { buildRateLimiterTopologyWarning } from "../middleware/rate-limit-runtime";
 
 type RuntimeSettings = {
   sessionTimeoutMinutes: number;
@@ -79,6 +80,17 @@ export async function startLocalServer(options: StartLocalServerOptions) {
     logger.warn("Runtime configuration warnings detected", {
       warningCount: runtimeConfigValidation.warningCount,
       warnings: runtimeConfigValidation.warnings,
+    });
+  }
+  const rateLimiterTopologyWarning = buildRateLimiterTopologyWarning({
+    distributedStoreConfigured: false,
+    workerCount: runtimeConfig.cluster.maxWorkers,
+  });
+  if (rateLimiterTopologyWarning) {
+    logger.warn("Rate limiter topology requires a shared store before scaling past one worker", {
+      workerCount: runtimeConfig.cluster.maxWorkers,
+      message: rateLimiterTopologyWarning,
+      storage: "memory",
     });
   }
 

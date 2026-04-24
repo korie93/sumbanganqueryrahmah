@@ -181,7 +181,9 @@ export class BackupsBootstrap {
 
         this.ready = true;
       } catch (err) {
+        this.ready = false;
         logger.error("Failed to ensure backups table", { error: err });
+        throw err;
       }
     })();
 

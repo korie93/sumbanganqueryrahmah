@@ -54,6 +54,17 @@ const FORBIDDEN_TYPESCRIPT_PATTERN_RULES = [
   },
 ];
 
+const UNSAFE_AUTOMATION_KILL_PATTERN_RULES = [
+  {
+    label: "broad automation process kill via 'pkill -f'",
+    regex: /\bpkill\s+-f\b/,
+  },
+  {
+    label: "broad automation process kill via 'killall'",
+    regex: /\bkillall\b/,
+  },
+];
+
 function isAllowedSecretValue(rawValue) {
   const value = String(rawValue || "")
     .trim()
@@ -111,6 +122,34 @@ export function findForbiddenTypeScriptTypeSafetyPatterns(params) {
       ) {
         continue;
       }
+      if (rule.regex.test(line)) {
+        findings.push(`${filePath}:${index + 1} ${rule.label}`);
+      }
+    }
+  }
+
+  return findings;
+}
+
+export function findUnsafeAutomationKillPatterns(params) {
+  const filePath = String(params?.filePath || "");
+  const normalizedFilePath = filePath.replace(/\\/g, "/");
+  const text = String(params?.text || "");
+  const findings = [];
+
+  if (!/^(?:\.github\/workflows\/|scripts\/(?!lib\/|tests\/)).+\.(?:ya?ml|[cm]?js|sh)$/i.test(normalizedFilePath)) {
+    return findings;
+  }
+
+  const lines = text.split(/\r?\n/);
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) {
+      continue;
+    }
+
+    for (const rule of UNSAFE_AUTOMATION_KILL_PATTERN_RULES) {
       if (rule.regex.test(line)) {
         findings.push(`${filePath}:${index + 1} ${rule.label}`);
       }

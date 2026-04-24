@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   findForbiddenTypeScriptTypeSafetyPatterns,
   findPotentialCommittedSmtpSecrets,
+  findUnsafeAutomationKillPatterns,
 } from "../lib/repo-hygiene.mjs";
 
 test("repo hygiene allows clearly fake SMTP placeholders in env templates", () => {
@@ -103,4 +104,30 @@ const third = fn<any>();
   assert.match(findings[1], /: any/i);
   assert.match(findings[2], /@ts-ignore/i);
   assert.match(findings[3], /<any>/i);
+});
+
+test("repo hygiene flags broad process kill patterns in automation files", () => {
+  const findings = findUnsafeAutomationKillPatterns({
+    filePath: ".github/workflows/ci.yml",
+    text: `
+run: |
+  pkill -f "dist-local/server/index-local.js" || true
+`,
+  });
+
+  assert.equal(findings.length, 1);
+  assert.match(findings[0], /pkill -f/i);
+});
+
+test("repo hygiene allows targeted pid-based shutdowns in automation files", () => {
+  const findings = findUnsafeAutomationKillPatterns({
+    filePath: "scripts/smoke-ci-local.mjs",
+    text: `
+if (serverPid) {
+  process.kill(serverPid);
+}
+`,
+  });
+
+  assert.deepEqual(findings, []);
 });

@@ -3,6 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import {
   findForbiddenTypeScriptTypeSafetyPatterns,
   findPotentialCommittedSmtpSecrets,
+  findUnsafeAutomationKillPatterns,
 } from "./lib/repo-hygiene.mjs";
 
 const forbiddenEnvFiles = [
@@ -105,11 +106,15 @@ if (allTrackedFilesResult.error) {
 
   const smtpSecretFindings = [];
   const typeSafetyFindings = [];
+  const automationKillFindings = [];
   for (const filePath of trackedFiles) {
     try {
       const text = readFileSync(filePath, "utf8");
       smtpSecretFindings.push(
         ...findPotentialCommittedSmtpSecrets({ filePath, text }),
+      );
+      automationKillFindings.push(
+        ...findUnsafeAutomationKillPatterns({ filePath, text }),
       );
       if (/\.(?:ts|tsx)$/i.test(filePath)) {
         typeSafetyFindings.push(
@@ -130,6 +135,12 @@ if (allTrackedFilesResult.error) {
   if (typeSafetyFindings.length > 0) {
     failures.push(
       `Forbidden TypeScript type-safety regressions detected: ${typeSafetyFindings.join("; ")}`,
+    );
+  }
+
+  if (automationKillFindings.length > 0) {
+    failures.push(
+      `Unsafe broad automation process kills detected: ${automationKillFindings.join("; ")}`,
     );
   }
 }

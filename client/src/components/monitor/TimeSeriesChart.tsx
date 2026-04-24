@@ -1,4 +1,4 @@
-import { memo, useMemo } from "react";
+import { memo, useId, useMemo } from "react";
 import { CircleHelp } from "lucide-react";
 import {
   CartesianGrid,
@@ -10,6 +10,7 @@ import {
   YAxis,
 } from "recharts";
 import {
+  buildTimeSeriesChartAccessibilityContent,
   buildTimeSeriesChartData,
   formatTimeSeriesTickLabel,
   formatTimeSeriesTooltipLabel,
@@ -30,6 +31,11 @@ type TimeSeriesChartProps = {
 
 function TimeSeriesChartImpl({ title, color, unit = "", description, data }: TimeSeriesChartProps) {
   const chartData = useMemo(() => buildTimeSeriesChartData(data), [data]);
+  const accessibility = useMemo(
+    () => buildTimeSeriesChartAccessibilityContent(data, title, unit),
+    [data, title, unit],
+  );
+  const accessibilitySummaryId = useId();
 
   return (
     <Card className="border-border/60 bg-background/40 supports-[backdrop-filter]:backdrop-blur-sm">
@@ -56,7 +62,29 @@ function TimeSeriesChartImpl({ title, color, unit = "", description, data }: Tim
         {description ? <p className="text-xs text-muted-foreground">{description}</p> : null}
       </CardHeader>
       <CardContent className="p-3 pt-0">
-        <div className="h-44 w-full">
+        <div className="sr-only">
+          <p id={accessibilitySummaryId}>{accessibility.summary}</p>
+          {accessibility.rows.length > 0 ? (
+            <table aria-describedby={accessibilitySummaryId}>
+              <caption>{title} data points</caption>
+              <thead>
+                <tr>
+                  <th scope="col">Timestamp</th>
+                  <th scope="col">Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                {accessibility.rows.map((row, index) => (
+                  <tr key={`${row.timestampLabel}-${index}`}>
+                    <td>{row.timestampLabel}</td>
+                    <td>{row.valueLabel}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : null}
+        </div>
+        <div className="h-44 w-full" aria-hidden="true">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={chartData} margin={{ top: 8, right: 8, left: -12, bottom: 2 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.35} />
