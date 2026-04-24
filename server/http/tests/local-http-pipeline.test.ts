@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -79,9 +79,13 @@ test("registerLocalHttpPipeline preserves caller-provided request ids", async ()
   }
 });
 
-test("registerLocalHttpPipeline serves generic uploads as attachments", async () => {
+test("registerLocalHttpPipeline blocks direct public uploads", async () => {
   const uploadsRootDir = await mkdtemp(path.join(os.tmpdir(), "sqr-uploads-"));
   await writeFile(path.join(uploadsRootDir, "sample report.txt"), "example upload", "utf8");
+  await mkdir(path.join(uploadsRootDir, "collection-receipts"), { recursive: true });
+  await mkdir(path.join(uploadsRootDir, "receipts"), { recursive: true });
+  await writeFile(path.join(uploadsRootDir, "collection-receipts", "managed.jpg"), "managed", "utf8");
+  await writeFile(path.join(uploadsRootDir, "receipts", "legacy-proof.jpg"), "legacy", "utf8");
 
   const app = express();
   registerLocalHttpPipeline(app, {
@@ -98,10 +102,16 @@ test("registerLocalHttpPipeline serves generic uploads as attachments", async ()
 
   const { server, baseUrl } = await startTestServer(app);
   try {
-    const response = await fetch(`${baseUrl}/uploads/sample%20report.txt`);
-    assert.equal(response.status, 200);
-    assert.equal(response.headers.get("content-disposition"), 'attachment; filename="sample_report.txt"');
-    assert.equal(await response.text(), "example upload");
+    const directUploadResponse = await fetch(`${baseUrl}/uploads/sample%20report.txt`);
+    assert.equal(directUploadResponse.status, 404);
+    assert.equal(directUploadResponse.headers.get("content-disposition"), null);
+    assert.deepEqual(await directUploadResponse.json(), { ok: false, message: "Not found." });
+
+    const managedReceiptResponse = await fetch(`${baseUrl}/uploads/collection-receipts/managed.jpg`);
+    assert.equal(managedReceiptResponse.status, 404);
+
+    const legacyReceiptResponse = await fetch(`${baseUrl}/uploads/receipts/legacy-proof.jpg`);
+    assert.equal(legacyReceiptResponse.status, 404);
   } finally {
     await stopTestServer(server);
     await rm(uploadsRootDir, { recursive: true, force: true });

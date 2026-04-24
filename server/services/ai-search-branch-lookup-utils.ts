@@ -60,6 +60,31 @@ export type ResolveAiBranchLookupParams = {
 const BRANCH_TEXT_QUERY_PATTERN =
   /cawangan|branch|terdekat|nearest|lokasi|alamat|di|yang|paling|dekat/gi;
 
+const loggedAiBranchLookupWarnings = new Set<string>();
+
+function summarizeAiBranchLookupError(error: unknown) {
+  if (!(error instanceof Error)) {
+    return { errorMessage: String(error).slice(0, 240) };
+  }
+  const maybeCode = (error as NodeJS.ErrnoException).code;
+  return {
+    ...(maybeCode ? { errorCode: maybeCode } : {}),
+    errorMessage: error.message.slice(0, 240),
+    errorName: error.name,
+  };
+}
+
+function warnAiBranchLookupOnce(code: string, meta: Record<string, unknown>) {
+  if (loggedAiBranchLookupWarnings.has(code)) {
+    return;
+  }
+  loggedAiBranchLookupWarnings.add(code);
+  logger.warn("AI branch lookup fallback degraded", {
+    code,
+    ...meta,
+  });
+}
+
 function extractBranchLookupText(query: string): string {
   return normalizeLocationHint(query.replace(BRANCH_TEXT_QUERY_PATTERN, " "));
 }
@@ -189,7 +214,12 @@ export async function resolveAiBranchLookup(
           if (!branches.length && lookups.findBranchesByPostcodeFallback) {
             try {
               branches = await lookups.findBranchesByPostcodeFallback(postcode, 1);
-            } catch {
+            } catch (error) {
+              warnAiBranchLookupOnce("AI_BRANCH_POSTCODE_FALLBACK_FAILED", {
+                reason: "postcode_fallback_failed",
+                postcodeLength: postcode.length,
+                ...summarizeAiBranchLookupError(error),
+              });
               branches = [];
             }
           }
@@ -221,7 +251,14 @@ export async function resolveAiBranchLookup(
         nearestBranch = branches[0] ? branches[0] : null;
       }
     }
-  } catch {
+  } catch (error) {
+    warnAiBranchLookupOnce("AI_BRANCH_LOOKUP_FAILED", {
+      reason: "branch_lookup_failed",
+      shouldFindBranch,
+      hasPersonId,
+      branchTextSearch,
+      ...summarizeAiBranchLookupError(error),
+    });
     missingCoords = true;
     nearestBranch = null;
   }

@@ -98,6 +98,8 @@ server {
         proxy_send_timeout 600s;
     }
 
+    # Do not serve /uploads directly from Nginx. Receipt/upload files are
+    # intentionally resolved through authenticated app API routes.
     location / {
         limit_conn sqr_conn_per_ip 40;
 

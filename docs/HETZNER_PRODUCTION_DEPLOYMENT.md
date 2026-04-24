@@ -448,7 +448,7 @@ Anda juga boleh terus bermula daripada:
 
 - `deploy/nginx/sqr.conf.example`
 
-Kekalkan header di atas melainkan anda benar-benar ada sebab produk untuk melonggarkannya.
+Kekalkan header di atas melainkan anda benar-benar ada sebab produk untuk melonggarkannya. Jangan tambah `location /uploads` yang menghidangkan fail secara statik dari Nginx; fail resit/upload perlu kekal melalui route API authenticated supaya legacy storage path tidak menjadi public URL.
 
 Aktifkan:
 

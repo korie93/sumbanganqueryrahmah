@@ -32,6 +32,9 @@ Gate ini sekarang mengunci:
 - URL safety / iframe preview helpers
 - dialog viewport contract
 - receipt preview downscale helpers
+- local HTTP hardening untuk direct `/uploads`
+- telemetry web-vitals throttling guard
+- AI branch lookup fallback observability
 
 Untuk semakan lebih cepat:
 
@@ -94,7 +97,7 @@ Lapisan ini bukan pixel-diff penuh, tetapi ia mengunci regression visual yang se
 
 ## 4. Accessibility Contract
 
-Repo ini juga mempunyai Playwright accessibility contract yang ringan untuk route awam stabil.
+Repo ini juga mempunyai Playwright accessibility contract yang ringan untuk route awam stabil, dan route authenticated kritikal apabila kredensial smoke disediakan.
 
 Perintah:
 
@@ -107,7 +110,9 @@ Lapisan ini bukan pengganti audit manual, axe penuh, atau Lighthouse accessibili
 - page mesti ada `main` landmark dan heading
 - visible focusable controls mesti ada accessible name
 - focusable controls tidak boleh berada dalam subtree `aria-hidden`
-- duplicate `id` pada DOM route awam akan gagal
+- duplicate `id` pada DOM route yang diperiksa akan gagal
+
+Jika `A11Y_TEST_USERNAME` / `A11Y_TEST_PASSWORD` atau `SMOKE_TEST_USERNAME` / `SMOKE_TEST_PASSWORD` tersedia, kontrak ini turut login dan menyemak app shell authenticated untuk `/`, `/collection/save`, dan `/viewer`. Tanpa kredensial, route authenticated ini diskip supaya contract route awam kekal boleh dijalankan secara standalone.
 
 CI dan local smoke orchestration menjalankan kontrak ini selepas visual layout contract dan sebelum smoke UI penuh.
 
@@ -129,7 +134,7 @@ Beberapa item audit masih wajar dianggap terbuka atau separa terbuka:
 
 - belum ada visual regression baseline pixel-diff penuh dengan golden screenshot merentas semua route
 - visual contract semasa lebih fokus pada layout invariants untuk route kritikal, bukan diff piksel menyeluruh
-- accessibility contract semasa ialah invariant guard ringan, bukan axe/Lighthouse audit penuh untuk semua route authenticated
+- accessibility contract semasa ialah invariant guard ringan dengan subset authenticated apabila kredensial wujud, bukan axe/Lighthouse audit penuh untuk semua route authenticated
 - device QA sebenar masih diperlukan untuk route padat, touch target ergonomics, dan polish di peranti sebenar
 - belum ada read replica/reporting topology test kerana seni bina production semasa masih single-primary
 - observability penuh seperti OpenTelemetry belum diaktifkan
@@ -138,7 +143,7 @@ Maksudnya:
 
 - kita **sudah ada** browser E2E/smoke framework yang nyata
 - kita **sudah ada** visual layout contract ringan untuk route awam
-- kita **sudah ada** accessibility contract ringan untuk route awam
+- kita **sudah ada** accessibility contract ringan untuk route awam dan subset authenticated utama apabila kredensial smoke tersedia
 - tetapi kita **belum** patut mendakwa sudah ada visual regression suite pixel-baseline penuh
 - kita **belum** patut mendakwa accessibility suite penuh merentas semua route authenticated
 

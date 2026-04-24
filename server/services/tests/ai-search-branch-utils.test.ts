@@ -4,6 +4,7 @@ import {
   deriveAiTravelDecision,
   resolveAiBranchLookup,
 } from "../ai-search-branch-utils";
+import { logger } from "../../lib/logger";
 import type {
   AiBranchSearchResult,
   AiNearestBranchResult,
@@ -192,4 +193,40 @@ test("resolveAiBranchLookup falls back to direct postcode branch match when coor
   assert.equal(fallbackUsed, true);
   assert.equal(result.missingCoords, false);
   assert.equal(result.nearestBranch?.name, "AEON Cheras Selatan");
+});
+
+test("resolveAiBranchLookup logs postcode fallback failures without leaking raw query data", async (t) => {
+  const warnings: unknown[][] = [];
+  t.mock.method(logger, "warn", (...args: unknown[]) => {
+    warnings.push(args);
+  });
+
+  const result = await resolveAiBranchLookup({
+    query: "cari cawangan untuk pelanggan ini",
+    shouldFindBranch: true,
+    hasPersonId: true,
+    best: createCandidate("row-1", {
+      HomePostcode: "43200",
+    }),
+    fallbackPerson: null,
+    keywordResults: [],
+    fallbackDigitsResults: [],
+    branchTimeoutMs: 1200,
+    lookups: {
+      findBranchesByText: async () => [],
+      findBranchesByPostcode: async () => [],
+      findBranchesByPostcodeFallback: async () => {
+        throw new Error("fallback table unavailable");
+      },
+      nearestBranches: async () => [],
+      postcodeLatLng: async () => null,
+    },
+  });
+
+  assert.equal(result.missingCoords, false);
+  assert.equal(result.nearestBranch, null);
+  assert.equal(warnings.length, 1);
+  assert.equal(warnings[0]?.[0], "AI branch lookup fallback degraded");
+  assert.equal((warnings[0]?.[1] as { code?: string }).code, "AI_BRANCH_POSTCODE_FALLBACK_FAILED");
+  assert.doesNotMatch(JSON.stringify(warnings), /43200/);
 });

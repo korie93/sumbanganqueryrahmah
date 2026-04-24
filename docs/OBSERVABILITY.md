@@ -45,7 +45,7 @@ Frontend menghantar Web Vitals ke:
 
 - `POST /telemetry/web-vitals`
 
-Dan monitor/admin flow boleh membaca ringkasan ini semula melalui route dalaman yang sesuai. Ini membantu melihat pengalaman pengguna sebenar tanpa menunggu external RUM platform.
+Route public ini dilindungi oleh throttling ringan per client window dan lebihan sample dijatuhkan secara senyap dengan `204`, supaya ingestion sah tidak rosak tetapi spam tidak menambah log noise atau churn ring buffer. Monitor/admin flow boleh membaca ringkasan ini semula melalui route dalaman yang sesuai. Ini membantu melihat pengalaman pengguna sebenar tanpa menunggu external RUM platform.
 
 ### Runtime Monitor Signals
 

@@ -1,5 +1,4 @@
 import { randomUUID } from "node:crypto";
-import path from "node:path";
 import express, { type Express, type RequestHandler } from "express";
 import helmet from "helmet";
 import { runtimeConfig } from "../config/runtime";
@@ -22,12 +21,6 @@ function normalizeRequestUserAgent(rawUserAgent: unknown): string | undefined {
   return normalized.slice(0, 180);
 }
 
-function resolveAttachmentFilename(filePath: string): string {
-  const basename = path.basename(filePath).replace(/[^\w.!#$&+^`|~-]+/g, "_");
-  const trimmed = basename.replace(/^\.+/, "").slice(0, 180);
-  return trimmed || "download";
-}
-
 type LocalHttpPipelineOptions = {
   importBodyLimit: string;
   collectionBodyLimit: string;
@@ -45,7 +38,6 @@ export function registerLocalHttpPipeline(app: Express, options: LocalHttpPipeli
     importBodyLimit,
     collectionBodyLimit,
     defaultBodyLimit,
-    uploadsRootDir,
     recordRequestStarted,
     recordRequestFinished,
     adaptiveRateLimit,
@@ -88,15 +80,12 @@ export function registerLocalHttpPipeline(app: Express, options: LocalHttpPipeli
 
   app.use(createCorsMiddleware());
 
-  // Receipt files are served via authenticated API endpoints only.
-  app.use("/uploads/collection-receipts", (_req, res) => {
+  // Upload-backed files are served only through authenticated API endpoints.
+  // Keeping the whole subtree dark prevents legacy receipt paths from becoming
+  // public if their storage path is leaked or guessed.
+  app.use("/uploads", (_req, res) => {
     return res.status(404).json({ ok: false, message: "Not found." });
   });
-  app.use("/uploads", express.static(uploadsRootDir, {
-    setHeaders: (res, filePath) => {
-      res.setHeader("Content-Disposition", `attachment; filename="${resolveAttachmentFilename(filePath)}"`);
-    },
-  }));
 
   app.use((req, res, next) => {
     const incomingRequestId = String(req.headers["x-request-id"] || "").trim();

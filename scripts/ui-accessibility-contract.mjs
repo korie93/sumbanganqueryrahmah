@@ -2,6 +2,8 @@ import process from "node:process";
 import { chromium } from "playwright";
 
 const baseUrl = process.env.A11Y_BASE_URL || process.env.SMOKE_BASE_URL || "http://127.0.0.1:5000";
+const authUsername = String(process.env.A11Y_TEST_USERNAME || process.env.SMOKE_TEST_USERNAME || "").trim();
+const authPassword = String(process.env.A11Y_TEST_PASSWORD || process.env.SMOKE_TEST_PASSWORD || "").trim();
 
 const assert = (condition, message) => {
   if (!condition) {
@@ -9,7 +11,7 @@ const assert = (condition, message) => {
   }
 };
 
-const routeSpecs = [
+const publicRouteSpecs = [
   {
     id: "login",
     path: "/login",
@@ -19,6 +21,24 @@ const routeSpecs = [
     id: "forgot-password",
     path: "/forgot-password",
     contentSelector: ".public-auth-layout__card",
+  },
+];
+
+const authenticatedRouteSpecs = [
+  {
+    id: "authenticated-home",
+    path: "/",
+    contentSelector: "main#main-content",
+  },
+  {
+    id: "collection-records",
+    path: "/collection/save",
+    contentSelector: "main#main-content",
+  },
+  {
+    id: "viewer",
+    path: "/viewer",
+    contentSelector: "main#main-content",
   },
 ];
 
@@ -176,6 +196,26 @@ async function verifyRouteAccessibility(page, routeSpec, viewportSpec) {
   );
 }
 
+async function loginForAuthenticatedContracts(page) {
+  await page.goto(`${baseUrl}/login`, { waitUntil: "networkidle" });
+  const loginResponsePromise = page.waitForResponse(
+    (response) =>
+      response.request().method() === "POST"
+      && response.url().includes("/api/login"),
+    { timeout: 15_000 },
+  );
+  await page.getByPlaceholder("Username").fill(authUsername);
+  await page.getByPlaceholder("Password").fill(authPassword);
+  await page.getByRole("button", { name: "Log In" }).click();
+  const loginResponse = await loginResponsePromise;
+  assert(
+    loginResponse.ok(),
+    `authenticated a11y login failed with HTTP ${loginResponse.status()}`,
+  );
+  await page.waitForLoadState("networkidle");
+  await page.locator("main#main-content").first().waitFor({ timeout: 15_000 });
+}
+
 const run = async () => {
   const browser = await chromium.launch({ headless: true });
   const context = await browser.newContext({
@@ -188,7 +228,21 @@ const run = async () => {
     const page = await context.newPage();
 
     for (const viewportSpec of viewportSpecs) {
-      for (const routeSpec of routeSpecs) {
+      for (const routeSpec of publicRouteSpecs) {
+        await verifyRouteAccessibility(page, routeSpec, viewportSpec);
+      }
+    }
+
+    if (!authUsername || !authPassword) {
+      console.log(
+        "Skipping authenticated accessibility contract routes because A11Y_TEST_USERNAME/A11Y_TEST_PASSWORD (or SMOKE_TEST_USERNAME/SMOKE_TEST_PASSWORD) are not set.",
+      );
+      return;
+    }
+
+    await loginForAuthenticatedContracts(page);
+    for (const viewportSpec of viewportSpecs) {
+      for (const routeSpec of authenticatedRouteSpecs) {
         await verifyRouteAccessibility(page, routeSpec, viewportSpec);
       }
     }

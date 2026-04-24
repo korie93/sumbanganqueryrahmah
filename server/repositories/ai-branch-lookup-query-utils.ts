@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import { db } from "../db-postgres";
+import { logger } from "../lib/logger";
 import { mapBranchRow, readRows } from "./ai-repository-mappers";
 import { buildLikePattern } from "./sql-like-utils";
 import {
@@ -15,6 +16,34 @@ import type {
   CountRow,
   PostcodeLatLngRow,
 } from "./ai-repository-types";
+
+const loggedAiBranchLookupFallbacks = new Set<string>();
+
+function summarizeAiBranchLookupError(error: unknown) {
+  if (!(error instanceof Error)) {
+    return { errorMessage: String(error).slice(0, 240) };
+  }
+  const maybeCode = (error as NodeJS.ErrnoException).code;
+  return {
+    ...(maybeCode ? { errorCode: maybeCode } : {}),
+    errorMessage: error.message.slice(0, 240),
+    errorName: error.name,
+  };
+}
+
+function logAiBranchLookupFallbackOnce(
+  code: string,
+  meta: Record<string, unknown>,
+) {
+  if (loggedAiBranchLookupFallbacks.has(code)) {
+    return;
+  }
+  loggedAiBranchLookupFallbacks.add(code);
+  logger.warn("AI branch lookup fallback activated", {
+    code,
+    ...meta,
+  });
+}
 
 function mapBranchRows(rows: unknown): BranchSearchResult[] {
   return readRows<BranchRowDb>({ rows: Array.isArray(rows) ? rows : [] }).map(mapBranchRow);
@@ -68,7 +97,13 @@ export async function findBranchesByTextRows(params: {
     `);
 
     return mapBranchRows(result.rows);
-  } catch {
+  } catch (error) {
+    logAiBranchLookupFallbackOnce("AI_BRANCH_TEXT_SIMILARITY_FALLBACK", {
+      reason: "similarity_query_failed",
+      queryLength: q.length,
+      limit,
+      ...summarizeAiBranchLookupError(error),
+    });
     const result = await db.execute(sql`
       SELECT
         name,
