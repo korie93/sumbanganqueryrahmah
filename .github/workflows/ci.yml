@@ -218,6 +218,9 @@ jobs:
       - name: Run visual layout contracts
         run: VISUAL_BASE_URL=http://127.0.0.1:5000 VISUAL_ARTIFACTS_DIR=artifacts/visual-layout npm run test:e2e:visual
 
+      - name: Run accessibility contracts
+        run: A11Y_BASE_URL=http://127.0.0.1:5000 npm run test:e2e:a11y
+
       - name: Run UI smoke
         run: |
           echo "Running smoke-ui on commit: $GITHUB_SHA"

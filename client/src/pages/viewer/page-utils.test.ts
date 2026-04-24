@@ -75,6 +75,44 @@ test("normalizeViewerPageResult prefers pageSize when present", () => {
   });
 });
 
+test("normalizeViewerPageResult can consume shared hybrid pagination metadata", () => {
+  const normalized = normalizeViewerPageResult(
+    {
+      rows: [
+        { jsonDataJsonb: { name: "A" } },
+      ],
+      total: 999,
+      page: 99,
+      limit: 99,
+      nextCursor: "legacy-cursor",
+      pagination: {
+        mode: "hybrid",
+        page: 3,
+        pageSize: 20,
+        limit: 20,
+        offset: 40,
+        total: 41,
+        totalPages: 3,
+        nextCursor: null,
+        hasNextPage: false,
+        hasPreviousPage: true,
+      },
+    },
+    1,
+    25,
+  );
+
+  assert.deepEqual(normalized, {
+    rows: [
+      { __rowId: 40, name: "A" },
+    ],
+    total: 41,
+    page: 3,
+    limit: 20,
+    nextCursor: null,
+  });
+});
+
 test("resolveViewerPageHeaders prefers dataset-level headers and falls back safely", () => {
   assert.deepEqual(
     resolveViewerPageHeaders(

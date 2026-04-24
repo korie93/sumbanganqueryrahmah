@@ -1,6 +1,10 @@
 import type { ActiveFilterChip } from "@/components/data/ActiveFilterChips";
 import type { ColumnFilter, DataRowWithId } from "@/pages/viewer/types";
 import { extractHeadersFromRows } from "@/pages/viewer/utils";
+import {
+  normalizeApiPaginationMeta,
+  type ApiPaginationMeta,
+} from "@shared/api-contracts";
 
 export const VIEWER_FILTER_OPERATOR_LABELS: Record<ColumnFilter["operator"], string> = {
   contains: "contains",
@@ -14,6 +18,12 @@ type ViewerApiRow = {
   jsonDataJsonb?: Record<string, unknown> | undefined;
 };
 
+const toPositiveInt = (value: unknown, fallback: number) =>
+  Number.isFinite(Number(value)) ? Math.max(1, Math.trunc(Number(value))) : fallback;
+
+const toNonNegativeInt = (value: unknown, fallback: number) =>
+  Number.isFinite(Number(value)) ? Math.max(0, Math.trunc(Number(value))) : fallback;
+
 export type ViewerPageResponse = {
   rows?: ViewerApiRow[] | undefined;
   headers?: string[] | undefined;
@@ -22,6 +32,7 @@ export type ViewerPageResponse = {
   limit?: number | undefined;
   pageSize?: number | undefined;
   nextCursor?: string | null | undefined;
+  pagination?: ApiPaginationMeta | undefined;
 };
 
 export function resolveViewerImportName(
@@ -52,17 +63,13 @@ export function normalizeViewerPageResult(
   limit: number;
   nextCursor: string | null;
 } {
-  const page = Number.isFinite(Number(response?.page))
-    ? Math.max(1, Math.trunc(Number(response?.page)))
-    : requestedPage;
-  const limit = Number.isFinite(Number(response?.pageSize))
-    ? Math.max(1, Math.trunc(Number(response?.pageSize)))
-    : Number.isFinite(Number(response?.limit))
-      ? Math.max(1, Math.trunc(Number(response?.limit)))
-    : fallbackLimit;
-  const total = Number.isFinite(Number(response?.total))
-    ? Math.max(0, Math.trunc(Number(response?.total)))
-    : 0;
+  const normalizedPagination = response.pagination
+    ? normalizeApiPaginationMeta(response.pagination)
+    : null;
+  const page = normalizedPagination?.page ?? toPositiveInt(response?.page, requestedPage);
+  const limit = normalizedPagination?.pageSize
+    ?? toPositiveInt(response?.pageSize, toPositiveInt(response?.limit, fallbackLimit));
+  const total = normalizedPagination?.total ?? toNonNegativeInt(response?.total, 0);
   const pageBase = (page - 1) * limit;
   const apiRows = Array.isArray(response?.rows) ? response.rows : [];
 
@@ -74,7 +81,9 @@ export function normalizeViewerPageResult(
     total,
     page,
     limit,
-    nextCursor: typeof response?.nextCursor === "string" ? response.nextCursor : null,
+    nextCursor: normalizedPagination
+      ? normalizedPagination.nextCursor
+      : typeof response?.nextCursor === "string" ? response.nextCursor : null,
   };
 }
 

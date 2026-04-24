@@ -2,8 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   apiErrorPayloadSchema,
+  apiPaginationMetaSchema,
   auditLogRecordSchema,
   importListItemSchema,
+  normalizeApiPaginationMeta,
 } from "@shared/api-contracts";
 import { ERROR_CODES } from "@shared/error-codes";
 import {
@@ -89,6 +91,71 @@ test("shared API error payload contract accepts shared and domain-specific upper
     code: "permission_denied",
   });
   assert.equal(malformedCodePayload.success, false);
+});
+
+test("shared pagination metadata can be normalized without changing wire contracts", () => {
+  assert.equal(apiPaginationMetaSchema.safeParse({
+    mode: "offset",
+    page: 2,
+    pageSize: 25,
+    limit: 25,
+    offset: 25,
+    total: 40,
+    totalPages: 2,
+    hasNextPage: false,
+    hasPreviousPage: true,
+  }).success, true);
+
+  assert.deepEqual(
+    normalizeApiPaginationMeta({
+      mode: "cursor",
+      limit: 100,
+      nextCursor: "cursor-2",
+      hasMore: true,
+      total: 250,
+    }),
+    {
+      mode: "cursor",
+      page: null,
+      pageSize: 100,
+      limit: 100,
+      offset: null,
+      total: 250,
+      totalPages: null,
+      nextCursor: "cursor-2",
+      hasNextPage: true,
+      hasPreviousPage: false,
+      hasMore: true,
+    },
+  );
+
+  assert.deepEqual(
+    normalizeApiPaginationMeta({
+      mode: "hybrid",
+      page: 3,
+      pageSize: 50,
+      limit: 50,
+      offset: 100,
+      total: 151,
+      totalPages: 4,
+      nextCursor: "cursor-4",
+      hasNextPage: false,
+      hasPreviousPage: true,
+    }),
+    {
+      mode: "hybrid",
+      page: 3,
+      pageSize: 50,
+      limit: 50,
+      offset: 100,
+      total: 151,
+      totalPages: 4,
+      nextCursor: "cursor-4",
+      hasNextPage: false,
+      hasPreviousPage: true,
+      hasMore: true,
+    },
+  );
 });
 
 test("imports API wrappers accept payloads that match the shared contract", async () => {

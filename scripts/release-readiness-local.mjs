@@ -240,13 +240,19 @@ const run = async () => {
       logPath: serverLogPath,
       serverProcess,
     });
-    console.log("Release readiness: running smoke preflight + visual layout contracts + UI smoke...");
+    console.log("Release readiness: running smoke preflight + visual/a11y contracts + UI smoke...");
     await runNpm(["run", "smoke:preflight"], { env });
     await runNpm(["run", "test:e2e:visual"], {
       env: {
         ...env,
         VISUAL_BASE_URL: baseUrl,
         VISUAL_ARTIFACTS_DIR: path.join(artifactsDir, "visual-layout"),
+      },
+    });
+    await runNpm(["run", "test:e2e:a11y"], {
+      env: {
+        ...env,
+        A11Y_BASE_URL: baseUrl,
       },
     });
     await runNpm(["run", "smoke:ui"], { env });

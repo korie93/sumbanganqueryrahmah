@@ -27,6 +27,8 @@ Gate ini sekarang mengunci:
 
 - shared API contract wrappers
 - route contract kritikal untuk `imports` dan `settings`
+- server-side import data pagination/read normalization
+- viewer pagination adapter untuk contract bercampur
 - URL safety / iframe preview helpers
 - dialog viewport contract
 - receipt preview downscale helpers
@@ -90,7 +92,26 @@ Lapisan ini bukan pixel-diff penuh, tetapi ia mengunci regression visual yang se
 - primary action yang tidak lagi kelihatan dalam initial viewport
 - perubahan layout asas yang tidak akan ditangkap oleh unit test biasa
 
-## 4. Bundle Budget Gate
+## 4. Accessibility Contract
+
+Repo ini juga mempunyai Playwright accessibility contract yang ringan untuk route awam stabil.
+
+Perintah:
+
+```bash
+npm run test:e2e:a11y
+```
+
+Lapisan ini bukan pengganti audit manual, axe penuh, atau Lighthouse accessibility score. Ia mengunci regression praktikal yang kerap berlaku:
+
+- page mesti ada `main` landmark dan heading
+- visible focusable controls mesti ada accessible name
+- focusable controls tidak boleh berada dalam subtree `aria-hidden`
+- duplicate `id` pada DOM route awam akan gagal
+
+CI dan local smoke orchestration menjalankan kontrak ini selepas visual layout contract dan sebelum smoke UI penuh.
+
+## 5. Bundle Budget Gate
 
 Heavy client chunks seperti `charts`, `excel`, `pdf`, dan `capture` sudah dikawal melalui budget gate.
 
@@ -102,12 +123,14 @@ npm run verify:bundle-budgets
 
 Ini membantu pastikan dependency besar seperti `recharts`, `xlsx`, `jspdf`, dan `html2canvas` tidak melampaui had chunk yang sudah disemak.
 
-## 5. Apa Yang Belum Dianggap Lengkap
+## 6. Apa Yang Belum Dianggap Lengkap
 
 Beberapa item audit masih wajar dianggap terbuka atau separa terbuka:
 
 - belum ada visual regression baseline pixel-diff penuh dengan golden screenshot merentas semua route
 - visual contract semasa lebih fokus pada layout invariants untuk route kritikal, bukan diff piksel menyeluruh
+- accessibility contract semasa ialah invariant guard ringan, bukan axe/Lighthouse audit penuh untuk semua route authenticated
+- device QA sebenar masih diperlukan untuk route padat, touch target ergonomics, dan polish di peranti sebenar
 - belum ada read replica/reporting topology test kerana seni bina production semasa masih single-primary
 - observability penuh seperti OpenTelemetry belum diaktifkan
 
@@ -115,9 +138,11 @@ Maksudnya:
 
 - kita **sudah ada** browser E2E/smoke framework yang nyata
 - kita **sudah ada** visual layout contract ringan untuk route awam
+- kita **sudah ada** accessibility contract ringan untuk route awam
 - tetapi kita **belum** patut mendakwa sudah ada visual regression suite pixel-baseline penuh
+- kita **belum** patut mendakwa accessibility suite penuh merentas semua route authenticated
 
-## 6. Release Gate Yang Disyorkan
+## 7. Release Gate Yang Disyorkan
 
 Untuk local/staging sebelum promotion:
 
@@ -129,6 +154,7 @@ npm run test:client
 npm run test:http
 npm run build
 npm run test:e2e:visual
+npm run test:e2e:a11y
 npm run test:e2e:smoke
 ```
 

@@ -157,6 +157,12 @@ const run = async () => {
         VISUAL_ARTIFACTS_DIR: path.join(artifactsDir, "visual-layout"),
       },
     });
+    await runNpm(["run", "test:e2e:a11y"], {
+      env: {
+        ...env,
+        A11Y_BASE_URL: baseUrl,
+      },
+    });
     await runNpm(["run", "smoke:ui"], { env });
   } finally {
     await stopServer(serverProcess);

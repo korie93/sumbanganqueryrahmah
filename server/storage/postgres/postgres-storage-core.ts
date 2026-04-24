@@ -50,10 +50,30 @@ export class PostgresStorageCore {
   protected readonly settingsRepository = new SettingsRepository();
   protected readonly settingsBootstrap = new SettingsBootstrap();
   protected readonly spatialBootstrap = new SpatialBootstrap();
+  private initialized = false;
+  private initPromise: Promise<void> | null = null;
 
   constructor() {}
 
   public async init() {
+    if (this.initialized) {
+      return;
+    }
+
+    if (this.initPromise) {
+      return this.initPromise;
+    }
+
+    this.initPromise = this.runInit();
+    try {
+      await this.initPromise;
+      this.initialized = true;
+    } finally {
+      this.initPromise = null;
+    }
+  }
+
+  private async runInit() {
     await this.ensureUsersTable();
     await this.ensureImportsTable();
     await this.ensureDataRowsTable();

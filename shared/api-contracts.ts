@@ -47,6 +47,12 @@ export const hybridPaginationMetaSchema = z.object({
   hasPreviousPage: z.boolean(),
 });
 
+export const apiPaginationMetaSchema = z.discriminatedUnion("mode", [
+  offsetPaginationMetaSchema,
+  cursorPaginationMetaSchema,
+  hybridPaginationMetaSchema,
+]);
+
 export const importRecordSchema = z.object({
   id: nonEmptyStringSchema,
   name: nonEmptyStringSchema,
@@ -200,3 +206,55 @@ export type ApiErrorPayload = z.infer<typeof apiErrorPayloadSchema>;
 export type SettingsResponse = z.infer<typeof settingsResponseSchema>;
 export type SettingsUpdateResponse = z.infer<typeof settingsUpdateResponseSchema>;
 export type TabVisibilityResponse = z.infer<typeof tabVisibilityResponseSchema>;
+export type ApiPaginationMeta = z.infer<typeof apiPaginationMetaSchema>;
+export type NormalizedApiPaginationMeta = {
+  mode: ApiPaginationMeta["mode"];
+  page: number | null;
+  pageSize: number;
+  limit: number;
+  offset: number | null;
+  total: number;
+  totalPages: number | null;
+  nextCursor: string | null;
+  hasNextPage: boolean;
+  hasPreviousPage: boolean;
+  hasMore: boolean;
+};
+
+export function normalizeApiPaginationMeta(
+  pagination: ApiPaginationMeta,
+): NormalizedApiPaginationMeta {
+  if (pagination.mode === "cursor") {
+    return {
+      mode: pagination.mode,
+      page: null,
+      pageSize: pagination.pageSize ?? pagination.limit,
+      limit: pagination.limit,
+      offset: null,
+      total: pagination.total,
+      totalPages: null,
+      nextCursor: pagination.nextCursor,
+      hasNextPage: pagination.hasMore,
+      hasPreviousPage: false,
+      hasMore: pagination.hasMore,
+    };
+  }
+
+  const hasMore = pagination.mode === "hybrid"
+    ? pagination.hasNextPage || pagination.nextCursor !== null
+    : pagination.hasNextPage;
+
+  return {
+    mode: pagination.mode,
+    page: pagination.page,
+    pageSize: pagination.pageSize,
+    limit: pagination.limit,
+    offset: pagination.offset,
+    total: pagination.total,
+    totalPages: pagination.totalPages,
+    nextCursor: pagination.mode === "hybrid" ? pagination.nextCursor : null,
+    hasNextPage: pagination.hasNextPage,
+    hasPreviousPage: pagination.hasPreviousPage,
+    hasMore,
+  };
+}
