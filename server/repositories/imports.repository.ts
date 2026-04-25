@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import { and, asc, desc, eq, gt, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, sql } from "drizzle-orm";
 import type {
   DataRow,
   Import,
@@ -374,17 +374,17 @@ export class ImportsRepository {
       return new Map();
     }
 
-    const result = await db.execute(sql`
-      SELECT
-        dr.import_id as "importId",
-        COUNT(dr.id)::int as "rowCount"
-      FROM public.data_rows dr
-      WHERE dr.import_id = ANY(${importIds}::text[])
-      GROUP BY dr.import_id
-    `);
+    const result = await db
+      .select({
+        importId: dataRows.importId,
+        rowCount: sql<number>`COUNT(${dataRows.id})::int`,
+      })
+      .from(dataRows)
+      .where(inArray(dataRows.importId, importIds))
+      .groupBy(dataRows.importId);
 
     return new Map(
-      readImportRows<ImportRowCountByImportIdRow>(result.rows)
+      readImportRows<ImportRowCountByImportIdRow>(result)
         .map((row) => [String(row.importId ?? ""), Number(row.rowCount ?? 0)]),
     );
   }

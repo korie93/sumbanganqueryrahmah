@@ -1165,73 +1165,83 @@ test(
   "core imports bootstrap backfills legacy camelCase import and data row columns",
   { skip: skipReason || false },
   async () => {
+    const previousBackfillFlag = process.env.SQR_ENABLE_LEGACY_IMPORTS_BACKFILL;
+    process.env.SQR_ENABLE_LEGACY_IMPORTS_BACKFILL = "1";
     await withTempDatabase(async ({ pool }) => {
-      await pool.query(`
-        CREATE TABLE public.imports (
-          id text PRIMARY KEY,
-          name text,
-          filename text,
-          "createdAt" timestamp,
-          "isDeleted" boolean,
-          "createdBy" text
-        );
+      try {
+        await pool.query(`
+          CREATE TABLE public.imports (
+            id text PRIMARY KEY,
+            name text,
+            filename text,
+            "createdAt" timestamp,
+            "isDeleted" boolean,
+            "createdBy" text
+          );
 
-        CREATE TABLE public.data_rows (
-          id text PRIMARY KEY,
-          "importId" text,
-          "jsonDataJsonb" jsonb
-        );
+          CREATE TABLE public.data_rows (
+            id text PRIMARY KEY,
+            "importId" text,
+            "jsonDataJsonb" jsonb
+          );
 
-        INSERT INTO public.imports (id, name, filename, "createdAt", "isDeleted", "createdBy")
-        VALUES (
-          'legacy-import',
-          'Legacy Import',
-          'legacy.csv',
-          timestamp '2026-04-25 08:30:00',
-          false,
-          'legacy.admin'
-        );
+          INSERT INTO public.imports (id, name, filename, "createdAt", "isDeleted", "createdBy")
+          VALUES (
+            'legacy-import',
+            'Legacy Import',
+            'legacy.csv',
+            timestamp '2026-04-25 08:30:00',
+            false,
+            'legacy.admin'
+          );
 
-        INSERT INTO public.data_rows (id, "importId", "jsonDataJsonb")
-        VALUES (
-          'legacy-row',
-          'legacy-import',
-          '{"Name":"Ali","Amount":25}'::jsonb
-        );
-      `);
+          INSERT INTO public.data_rows (id, "importId", "jsonDataJsonb")
+          VALUES (
+            'legacy-row',
+            'legacy-import',
+            '{"Name":"Ali","Amount":25}'::jsonb
+          );
+        `);
 
-      const database = drizzle(pool);
-      await ensureCoreImportsTable(database);
-      await ensureCoreDataRowsTable(database);
+        const database = drizzle(pool);
+        await ensureCoreImportsTable(database);
+        await ensureCoreDataRowsTable(database);
 
-      const importResult = await pool.query<{
-        created_by: string | null;
-        is_deleted: boolean;
-        utc_value: string;
-      }>(`
-        SELECT
-          created_by,
-          is_deleted,
-          to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS') AS utc_value
-        FROM public.imports
-        WHERE id = 'legacy-import'
-      `);
-      assert.equal(importResult.rows[0]?.created_by, "legacy.admin");
-      assert.equal(importResult.rows[0]?.is_deleted, false);
-      assert.equal(importResult.rows[0]?.utc_value, "2026-04-25 08:30:00");
+        const importResult = await pool.query<{
+          created_by: string | null;
+          is_deleted: boolean;
+          utc_value: string;
+        }>(`
+          SELECT
+            created_by,
+            is_deleted,
+            to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS') AS utc_value
+          FROM public.imports
+          WHERE id = 'legacy-import'
+        `);
+        assert.equal(importResult.rows[0]?.created_by, "legacy.admin");
+        assert.equal(importResult.rows[0]?.is_deleted, false);
+        assert.equal(importResult.rows[0]?.utc_value, "2026-04-25 08:30:00");
 
-      const rowResult = await pool.query<{
-        import_id: string;
-        json_data: { Name?: string; Amount?: number };
-      }>(`
-        SELECT import_id, json_data
-        FROM public.data_rows
-        WHERE id = 'legacy-row'
-      `);
-      assert.equal(rowResult.rows[0]?.import_id, "legacy-import");
-      assert.deepEqual(rowResult.rows[0]?.json_data, { Name: "Ali", Amount: 25 });
-      assert.equal(await columnIsNotNull(pool, "data_rows", "import_id"), true);
-      assert.equal(await constraintExists(pool, "fk_data_rows_import_id"), true);
+        const rowResult = await pool.query<{
+          import_id: string;
+          json_data: { Name?: string; Amount?: number };
+        }>(`
+          SELECT import_id, json_data
+          FROM public.data_rows
+          WHERE id = 'legacy-row'
+        `);
+        assert.equal(rowResult.rows[0]?.import_id, "legacy-import");
+        assert.deepEqual(rowResult.rows[0]?.json_data, { Name: "Ali", Amount: 25 });
+        assert.equal(await columnIsNotNull(pool, "data_rows", "import_id"), true);
+        assert.equal(await constraintExists(pool, "fk_data_rows_import_id"), true);
+      } finally {
+        if (previousBackfillFlag === undefined) {
+          delete process.env.SQR_ENABLE_LEGACY_IMPORTS_BACKFILL;
+        } else {
+          process.env.SQR_ENABLE_LEGACY_IMPORTS_BACKFILL = previousBackfillFlag;
+        }
+      }
     });
   },
 );
