@@ -65,6 +65,7 @@ export function useAuthenticatedAppState({
   } = useAppShellTabVisibility({ user });
 
   useAppShellSavedCount({
+    currentPage,
     setSavedCount,
     user,
   });

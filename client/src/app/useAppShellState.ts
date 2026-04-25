@@ -41,6 +41,7 @@ export function useAppShellState() {
   } = useAppShellTabVisibility({ user });
 
   useAppShellSavedCount({
+    currentPage,
     setSavedCount,
     user,
   });

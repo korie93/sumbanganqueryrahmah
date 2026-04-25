@@ -3,16 +3,19 @@ import type { User } from "@/app/types";
 import { getImports } from "@/lib/api";
 
 type UseAppShellSavedCountArgs = {
+  currentPage: string;
   setSavedCount: Dispatch<SetStateAction<number>>;
   user: User | null;
 };
 
 export function useAppShellSavedCount({
+  currentPage,
   setSavedCount,
   user,
 }: UseAppShellSavedCountArgs) {
   useEffect(() => {
     let cancelled = false;
+    const controller = new AbortController();
 
     const syncSavedCount = async () => {
       if (!user || user.role === "user") {
@@ -22,8 +25,12 @@ export function useAppShellSavedCount({
         return;
       }
 
+      if (currentPage === "saved") {
+        return;
+      }
+
       try {
-        const data = await getImports({ limit: 1 });
+        const data = await getImports({ limit: 1, signal: controller.signal });
         if (!cancelled) {
           setSavedCount(
             typeof data?.pagination?.total === "number"
@@ -32,6 +39,9 @@ export function useAppShellSavedCount({
           );
         }
       } catch {
+        if (controller.signal.aborted) {
+          return;
+        }
         if (!cancelled) {
           setSavedCount(0);
         }
@@ -41,6 +51,7 @@ export function useAppShellSavedCount({
     void syncSavedCount();
     return () => {
       cancelled = true;
+      controller.abort();
     };
-  }, [setSavedCount, user]);
+  }, [currentPage, setSavedCount, user]);
 }

@@ -20,6 +20,65 @@ export async function ensureCoreImportsTable(
   await database.execute(sql`ALTER TABLE public.imports ADD COLUMN IF NOT EXISTS is_deleted boolean DEFAULT false`);
   await database.execute(sql`ALTER TABLE public.imports ADD COLUMN IF NOT EXISTS created_by text`);
   await database.execute(sql`
+    DO $$
+    DECLARE
+      legacy_created_at_column text;
+      legacy_created_at_type text;
+      legacy_is_deleted_column text;
+      legacy_created_by_column text;
+    BEGIN
+      SELECT column_name, data_type INTO legacy_created_at_column, legacy_created_at_type
+      FROM information_schema.columns
+      WHERE table_schema = 'public'
+        AND table_name = 'imports'
+        AND column_name IN ('createdAt', 'createdat')
+      ORDER BY CASE column_name WHEN 'createdAt' THEN 0 ELSE 1 END
+      LIMIT 1;
+
+      IF legacy_created_at_column IS NOT NULL AND legacy_created_at_type = 'timestamp with time zone' THEN
+        EXECUTE format(
+          'UPDATE public.imports SET created_at = %1$I WHERE %1$I IS NOT NULL',
+          legacy_created_at_column
+        );
+      ELSIF legacy_created_at_column IS NOT NULL THEN
+        EXECUTE format(
+          'UPDATE public.imports SET created_at = %1$I AT TIME ZONE ''UTC'' WHERE %1$I IS NOT NULL',
+          legacy_created_at_column
+        );
+      END IF;
+
+      SELECT column_name INTO legacy_is_deleted_column
+      FROM information_schema.columns
+      WHERE table_schema = 'public'
+        AND table_name = 'imports'
+        AND column_name IN ('isDeleted', 'isdeleted')
+      ORDER BY CASE column_name WHEN 'isDeleted' THEN 0 ELSE 1 END
+      LIMIT 1;
+
+      IF legacy_is_deleted_column IS NOT NULL THEN
+        EXECUTE format(
+          'UPDATE public.imports SET is_deleted = %1$I::boolean WHERE %1$I IS NOT NULL',
+          legacy_is_deleted_column
+        );
+      END IF;
+
+      SELECT column_name INTO legacy_created_by_column
+      FROM information_schema.columns
+      WHERE table_schema = 'public'
+        AND table_name = 'imports'
+        AND column_name IN ('createdBy', 'createdby')
+      ORDER BY CASE column_name WHEN 'createdBy' THEN 0 ELSE 1 END
+      LIMIT 1;
+
+      IF legacy_created_by_column IS NOT NULL THEN
+        EXECUTE format(
+          'UPDATE public.imports SET created_by = COALESCE(NULLIF(created_by, ''''), NULLIF(%1$I::text, '''')) WHERE NULLIF(%1$I::text, '''') IS NOT NULL',
+          legacy_created_by_column
+        );
+      END IF;
+    END $$;
+  `);
+  await database.execute(sql`
     UPDATE public.imports
     SET
       name = COALESCE(NULLIF(name, ''), NULLIF(filename, ''), 'Untitled Import'),
@@ -48,6 +107,49 @@ export async function ensureCoreDataRowsTable(
   `);
   await database.execute(sql`ALTER TABLE public.data_rows ADD COLUMN IF NOT EXISTS import_id text`);
   await database.execute(sql`ALTER TABLE public.data_rows ADD COLUMN IF NOT EXISTS json_data jsonb DEFAULT '{}'::jsonb`);
+  await database.execute(sql`
+    DO $$
+    DECLARE
+      legacy_import_id_column text;
+      legacy_json_column text;
+      legacy_json_type text;
+    BEGIN
+      SELECT column_name INTO legacy_import_id_column
+      FROM information_schema.columns
+      WHERE table_schema = 'public'
+        AND table_name = 'data_rows'
+        AND column_name IN ('importId', 'importid')
+      ORDER BY CASE column_name WHEN 'importId' THEN 0 ELSE 1 END
+      LIMIT 1;
+
+      IF legacy_import_id_column IS NOT NULL THEN
+        EXECUTE format(
+          'UPDATE public.data_rows SET import_id = COALESCE(NULLIF(import_id, ''''), NULLIF(%1$I::text, '''')) WHERE (import_id IS NULL OR btrim(import_id) = '''') AND NULLIF(%1$I::text, '''') IS NOT NULL',
+          legacy_import_id_column
+        );
+      END IF;
+
+      SELECT column_name, udt_name INTO legacy_json_column, legacy_json_type
+      FROM information_schema.columns
+      WHERE table_schema = 'public'
+        AND table_name = 'data_rows'
+        AND column_name IN ('jsonDataJsonb', 'jsondatajsonb', 'jsonData', 'jsondata')
+      ORDER BY CASE column_name
+        WHEN 'jsonDataJsonb' THEN 0
+        WHEN 'jsondatajsonb' THEN 1
+        WHEN 'jsonData' THEN 2
+        ELSE 3
+      END
+      LIMIT 1;
+
+      IF legacy_json_column IS NOT NULL AND legacy_json_type IN ('jsonb', 'json') THEN
+        EXECUTE format(
+          'UPDATE public.data_rows SET json_data = %1$I::jsonb WHERE (json_data IS NULL OR json_data = ''{}''::jsonb) AND %1$I IS NOT NULL',
+          legacy_json_column
+        );
+      END IF;
+    END $$;
+  `);
   await database.execute(sql`
     UPDATE public.data_rows
     SET json_data = COALESCE(json_data, '{}'::jsonb)
