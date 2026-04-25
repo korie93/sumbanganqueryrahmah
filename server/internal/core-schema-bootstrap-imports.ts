@@ -80,4 +80,5 @@ export async function ensureCoreDataRowsTable(
     END $$;
   `);
   await database.execute(sql`CREATE INDEX IF NOT EXISTS idx_data_rows_import_id ON public.data_rows(import_id)`);
+  await database.execute(sql`CREATE INDEX IF NOT EXISTS idx_data_rows_import_id_id ON public.data_rows(import_id, id)`);
 }

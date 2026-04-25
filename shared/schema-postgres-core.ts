@@ -125,6 +125,7 @@ export const dataRows = pgTable("data_rows", {
   jsonDataJsonb: jsonb("json_data").notNull(),
 }, (table) => ({
   importIdIdx: index("idx_data_rows_import_id").on(table.importId),
+  importIdIdIdx: index("idx_data_rows_import_id_id").on(table.importId, table.id),
 }));
 
 export const userActivity = pgTable("user_activity", {

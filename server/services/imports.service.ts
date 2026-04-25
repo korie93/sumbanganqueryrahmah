@@ -57,12 +57,12 @@ export class ImportsService {
     return this.readOperations.getImportDataPage(params);
   }
 
-  async analyzeImport(importId: string) {
-    return this.readOperations.analyzeImport(importId);
+  async analyzeImport(importId: string, signal?: AbortSignal) {
+    return this.readOperations.analyzeImport(importId, signal);
   }
 
-  async analyzeAll() {
-    return this.readOperations.analyzeAll();
+  async analyzeAll(signal?: AbortSignal) {
+    return this.readOperations.analyzeAll(signal);
   }
 
   async renameImport(importId: string, name: string, updatedBy?: string) {

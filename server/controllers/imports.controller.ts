@@ -225,7 +225,7 @@ export function createImportsController(deps: CreateImportsControllerDeps) {
         timeoutMessage:
           "Import analysis is taking longer than expected. Please retry in a moment.",
       },
-      () => importsService.analyzeImport(req.params.id),
+      (signal) => importsService.analyzeImport(req.params.id, signal),
     );
     if (outcome.timedOut) {
       return;
@@ -248,7 +248,7 @@ export function createImportsController(deps: CreateImportsControllerDeps) {
         timeoutMessage:
           "Import analysis is taking longer than expected. Please retry in a moment.",
       },
-      () => importsService.analyzeAll(),
+      (signal) => importsService.analyzeAll(signal),
     );
     if (outcome.timedOut) {
       return;

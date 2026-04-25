@@ -39,6 +39,18 @@ function createReadOperations(params: {
   return new ImportsServiceReadOperations(storage, repository, analysis);
 }
 
+function createEmptyAnalysisResult() {
+  return {
+    icLelaki: { count: 0, samples: [] },
+    icPerempuan: { count: 0, samples: [] },
+    noPolis: { count: 0, samples: [] },
+    noTentera: { count: 0, samples: [] },
+    passportMY: { count: 0, samples: [] },
+    passportLuarNegara: { count: 0, samples: [] },
+    duplicates: { count: 0, items: [] },
+  };
+}
+
 test("getImportDataPage emits stable hybrid pagination metadata", async () => {
   let capturedSearch: Parameters<ImportsServiceStorage["searchDataRows"]>[0] | null = null;
   const operations = createReadOperations({
@@ -171,4 +183,56 @@ test("getImportDataPage rejects malformed cursors before querying storage", asyn
     /Invalid import data cursor/,
   );
   assert.equal(searchCalls, 0);
+});
+
+test("analysis operations forward abort signals to the analysis service", async () => {
+  const controller = new AbortController();
+  const capturedSignals: Array<AbortSignal | undefined> = [];
+  const operations = createReadOperations({
+    storage: {
+      getImportById: async () => ({
+        id: "import-1",
+        name: "Dataset",
+        filename: "dataset.csv",
+        createdAt: new Date(),
+        isDeleted: false,
+        createdBy: "admin.user",
+      }),
+    },
+    repository: {
+      getImportsWithRowCounts: async () => [{
+        id: "import-1",
+        name: "Dataset",
+        filename: "dataset.csv",
+        createdAt: new Date(),
+        isDeleted: false,
+        createdBy: "admin.user",
+        rowCount: 1,
+      }],
+    },
+    analysis: {
+      analyzeImport: async (_importRecord, signal) => {
+        capturedSignals.push(signal);
+        return {
+          import: { id: "import-1", name: "Dataset", filename: "dataset.csv" },
+          totalRows: 1,
+          analysis: createEmptyAnalysisResult(),
+        };
+      },
+      analyzeAll: async (_imports, signal) => {
+        capturedSignals.push(signal);
+        return {
+          totalImports: 1,
+          totalRows: 1,
+          imports: [],
+          analysis: createEmptyAnalysisResult(),
+        };
+      },
+    },
+  });
+
+  await operations.analyzeImport("import-1", controller.signal);
+  await operations.analyzeAll(controller.signal);
+
+  assert.deepEqual(capturedSignals, [controller.signal, controller.signal]);
 });

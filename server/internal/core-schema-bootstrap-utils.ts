@@ -54,6 +54,7 @@ export async function ensureCorePerformanceIndexes(
   database: CoreSchemaSqlExecutor = db,
 ) {
   await database.execute(sql`CREATE INDEX IF NOT EXISTS idx_data_rows_import_id ON data_rows(import_id)`);
+  await database.execute(sql`CREATE INDEX IF NOT EXISTS idx_data_rows_import_id_id ON data_rows(import_id, id)`);
   await database.execute(sql`CREATE INDEX IF NOT EXISTS idx_imports_is_deleted ON imports(is_deleted)`);
   await database.execute(sql`CREATE INDEX IF NOT EXISTS idx_user_activity_login_time ON user_activity(login_time)`);
   await database.execute(sql`CREATE INDEX IF NOT EXISTS idx_user_activity_logout_time ON user_activity(logout_time)`);

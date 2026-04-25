@@ -9,17 +9,39 @@ import {
 export class ImportAnalysisService {
   constructor(private readonly importsRepository: ImportsRepository) {}
 
-  async analyzeImport(importRecord: { id: string; name: string; filename: string }) {
+  private throwIfAborted(signal?: AbortSignal) {
+    if (!signal?.aborted) {
+      return;
+    }
+
+    const error = new Error("Import analysis was aborted.");
+    error.name = "AbortError";
+    throw error;
+  }
+
+  async analyzeImport(
+    importRecord: { id: string; name: string; filename: string },
+    signal?: AbortSignal,
+  ) {
     const accumulator = createImportAnalysisAccumulator();
     const totalRows = await this.importsRepository.getDataRowCountByImport(importRecord.id);
+    let afterRowId: string | null = null;
+    let processedRows = 0;
 
-    for (let offset = 0; offset < totalRows; offset += IMPORT_ANALYSIS_BATCH_SIZE) {
-      const rows = await this.importsRepository.getDataRowsByImportPage(
+    while (processedRows < totalRows) {
+      this.throwIfAborted(signal);
+      const rows = await this.importsRepository.getDataRowsByImportPageAfterId(
         importRecord.id,
         IMPORT_ANALYSIS_BATCH_SIZE,
-        offset,
+        afterRowId,
       );
+      if (rows.length === 0) {
+        break;
+      }
+
       consumeImportAnalysisRows(accumulator, rows);
+      processedRows += rows.length;
+      afterRowId = rows[rows.length - 1]?.id ?? afterRowId;
     }
 
     return {
@@ -33,7 +55,7 @@ export class ImportAnalysisService {
     };
   }
 
-  async analyzeAll(importsWithCounts: ImportWithRowCount[]) {
+  async analyzeAll(importsWithCounts: ImportWithRowCount[], signal?: AbortSignal) {
     if (importsWithCounts.length === 0) {
       return {
         totalImports: 0,
@@ -48,14 +70,23 @@ export class ImportAnalysisService {
 
     for (const importRecord of importsWithCounts) {
       totalRows += Number(importRecord.rowCount || 0);
+      let afterRowId: string | null = null;
+      let processedRows = 0;
 
-      for (let offset = 0; offset < Number(importRecord.rowCount || 0); offset += IMPORT_ANALYSIS_BATCH_SIZE) {
-        const rows = await this.importsRepository.getDataRowsByImportPage(
+      while (processedRows < Number(importRecord.rowCount || 0)) {
+        this.throwIfAborted(signal);
+        const rows = await this.importsRepository.getDataRowsByImportPageAfterId(
           importRecord.id,
           IMPORT_ANALYSIS_BATCH_SIZE,
-          offset,
+          afterRowId,
         );
+        if (rows.length === 0) {
+          break;
+        }
+
         consumeImportAnalysisRows(accumulator, rows);
+        processedRows += rows.length;
+        afterRowId = rows[rows.length - 1]?.id ?? afterRowId;
       }
     }
 

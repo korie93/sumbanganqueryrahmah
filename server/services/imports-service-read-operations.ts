@@ -125,17 +125,17 @@ export class ImportsServiceReadOperations {
     };
   }
 
-  async analyzeImport(importId: string): Promise<AnalyzeImportResult | null> {
+  async analyzeImport(importId: string, signal?: AbortSignal): Promise<AnalyzeImportResult | null> {
     const importRecord = await this.storage.getImportById(importId);
     if (!importRecord) {
       return null;
     }
 
-    return this.importAnalysisService.analyzeImport(importRecord);
+    return this.importAnalysisService.analyzeImport(importRecord, signal);
   }
 
-  async analyzeAll(): Promise<AnalyzeAllImportsResult> {
+  async analyzeAll(signal?: AbortSignal): Promise<AnalyzeAllImportsResult> {
     const imports = await this.importsRepository.getImportsWithRowCounts();
-    return this.importAnalysisService.analyzeAll(imports);
+    return this.importAnalysisService.analyzeAll(imports, signal);
   }
 }

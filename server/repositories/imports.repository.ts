@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, sql } from "drizzle-orm";
 import type {
   DataRow,
   Import,
@@ -175,23 +175,15 @@ export class ImportsRepository {
   }
 
   async getImportsWithRowCounts(): Promise<ImportWithRowCount[]> {
-    const result = await db.execute(sql`
-      SELECT
-        i.id,
-        i.name,
-        i.filename,
-        i.created_at as "createdAt",
-        i.is_deleted as "isDeleted",
-        i.created_by as "createdBy",
-        COALESCE(COUNT(dr.id), 0)::int as "rowCount"
-      FROM public.imports i
-      LEFT JOIN public.data_rows dr ON dr.import_id = i.id
-      WHERE i.is_deleted = false
-      GROUP BY i.id, i.name, i.filename, i.created_at, i.is_deleted, i.created_by
-      ORDER BY i.created_at DESC
-    `);
+    const importRecords = await this.getImports();
+    const rowCountsByImportId = await this.getDataRowCountsByImportIds(
+      importRecords.map((importRecord) => importRecord.id),
+    );
 
-    return (result.rows || []) as ImportWithRowCount[];
+    return importRecords.map((importRecord) => ({
+      ...importRecord,
+      rowCount: rowCountsByImportId.get(importRecord.id) ?? 0,
+    }));
   }
 
   async listImportsWithRowCountsPage(params: ImportListPageParams = {}): Promise<ImportListPage> {
@@ -220,10 +212,8 @@ export class ImportsRepository {
         i.filename,
         i.created_at as "createdAt",
         i.is_deleted as "isDeleted",
-        i.created_by as "createdBy",
-        COALESCE(COUNT(dr.id), 0)::int as "rowCount"
+        i.created_by as "createdBy"
       FROM public.imports i
-      LEFT JOIN public.data_rows dr ON dr.import_id = i.id
       WHERE ${buildImportListFilterSql({
         alias: "i",
         search: params.search,
@@ -231,14 +221,20 @@ export class ImportsRepository {
         cursor,
         includeCursor: true,
       })}
-      GROUP BY i.id, i.name, i.filename, i.created_at, i.is_deleted, i.created_by
       ORDER BY i.created_at DESC, i.id DESC
       LIMIT ${limit + 1}
     `);
 
-    const rows = ((pageResult.rows || []) as ImportWithRowCount[]);
+    const rows = ((pageResult.rows || []) as Import[]);
     const hasMore = rows.length > limit;
-    const items = hasMore ? rows.slice(0, limit) : rows;
+    const pageItems = hasMore ? rows.slice(0, limit) : rows;
+    const rowCountsByImportId = await this.getDataRowCountsByImportIds(
+      pageItems.map((importRecord) => importRecord.id),
+    );
+    const items = pageItems.map((importRecord) => ({
+      ...importRecord,
+      rowCount: rowCountsByImportId.get(importRecord.id) ?? 0,
+    }));
     const nextCursor = hasMore && items.length > 0
       ? encodeImportListCursor({
           createdAt: normalizeImportCursorCreatedAt(items[items.length - 1].createdAt),
@@ -344,6 +340,24 @@ export class ImportsRepository {
       .where(eq(dataRows.importId, importId))
       .limit(Math.max(1, limit))
       .offset(Math.max(0, offset));
+  }
+
+  async getDataRowsByImportPageAfterId(
+    importId: string,
+    limit: number,
+    afterRowId: string | null = null,
+  ): Promise<DataRow[]> {
+    const conditions = [eq(dataRows.importId, importId)];
+    if (afterRowId) {
+      conditions.push(gt(dataRows.id, afterRowId));
+    }
+
+    return db
+      .select()
+      .from(dataRows)
+      .where(and(...conditions))
+      .orderBy(asc(dataRows.id))
+      .limit(Math.max(1, limit));
   }
 
   async getDataRowCountByImport(importId: string): Promise<number> {

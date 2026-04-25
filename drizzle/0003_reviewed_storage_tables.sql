@@ -73,6 +73,9 @@ END $$;
 CREATE INDEX IF NOT EXISTS idx_data_rows_import_id
 ON public.data_rows(import_id);
 
+CREATE INDEX IF NOT EXISTS idx_data_rows_import_id_id
+ON public.data_rows(import_id, id);
+
 CREATE TABLE IF NOT EXISTS public.user_activity (
   id text PRIMARY KEY,
   user_id text NOT NULL,
