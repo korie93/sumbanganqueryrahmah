@@ -10,7 +10,15 @@ import {
 } from "@/pages/public-auth-form-utils";
 import { isPublicAuthAbortError } from "@/pages/public-auth-runtime-utils";
 
-export default function ForgotPasswordPage() {
+type ForgotPasswordPageProps = {
+  onBackToHome?: () => void;
+  onBackToLogin?: () => void;
+};
+
+export default function ForgotPasswordPage({
+  onBackToHome,
+  onBackToLogin,
+}: ForgotPasswordPageProps) {
   const [identifier, setIdentifier] = useState("");
   const [identifierError, setIdentifierError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -72,6 +80,7 @@ export default function ForgotPasswordPage() {
       "aria-describedby": "forgot-password-identifier-error",
     }
     : {};
+  const layoutBackProps = onBackToHome ? { onBackClick: onBackToHome } : {};
 
   return (
     <PublicAuthLayout
@@ -80,6 +89,7 @@ export default function ForgotPasswordPage() {
       description="Masukkan username atau emel anda untuk menghantar permintaan tetapan semula. Permintaan ini akan disemak oleh superuser sebelum pautan selamat dihantar kepada akaun yang berkaitan."
       icon={<LifeBuoy className="h-7 w-7" />}
       contentBusy={loading}
+      {...layoutBackProps}
     >
       {submitted ? (
         <div className="rounded-2xl border border-emerald-400/25 bg-emerald-500/10 p-4 text-sm leading-7 text-emerald-100" role="status" aria-live="polite">
@@ -133,6 +143,10 @@ export default function ForgotPasswordPage() {
         type="button"
         variant="ghost"
         onClick={() => {
+          if (onBackToLogin) {
+            onBackToLogin();
+            return;
+          }
           window.location.href = "/";
         }}
       >

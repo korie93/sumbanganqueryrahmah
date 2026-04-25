@@ -1,19 +1,17 @@
-import { useEffect, useRef } from "react";
-import { AuthenticatedAppEntry } from "@/app/authenticated-entry-lazy";
 import { Eye, EyeOff, LogIn } from "lucide-react";
 import type { User } from "@/app/types";
 import { BrandLogo } from "@/components/BrandLogo";
 import { PublicAuthButton, PublicAuthInput } from "@/components/PublicAuthControls";
-import { scheduleIdlePreload } from "@/lib/lazy-with-preload";
 import { useLoginPageState } from "@/pages/useLoginPageState";
 import "./Login.css";
 
 interface LoginProps {
   onLoginSuccess: (user: User) => void;
+  onForgotPasswordClick?: () => void;
+  onLandingClick?: () => void;
 }
 
-export default function Login({ onLoginSuccess }: LoginProps) {
-  const hasPreloadedAuthenticatedShellRef = useRef(false);
+export default function Login({ onForgotPasswordClick, onLandingClick, onLoginSuccess }: LoginProps) {
   const {
     username,
     password,
@@ -37,23 +35,11 @@ export default function Login({ onLoginSuccess }: LoginProps) {
     returnToPasswordLogin,
     goToLandingPage,
     goToForgotPassword,
-  } = useLoginPageState({ onLoginSuccess });
-  const hasAuthenticationIntent =
-    Boolean(twoFactorChallengeToken)
-    || username.trim().length > 0
-    || password.length > 0
-    || twoFactorCode.length > 0;
-
-  useEffect(() => {
-    if (!hasAuthenticationIntent || hasPreloadedAuthenticatedShellRef.current) {
-      return;
-    }
-
-    hasPreloadedAuthenticatedShellRef.current = true;
-    return scheduleIdlePreload(() => {
-      void AuthenticatedAppEntry.preload();
-    }, 150);
-  }, [hasAuthenticationIntent]);
+  } = useLoginPageState({
+    onForgotPasswordClick,
+    onLandingClick,
+    onLoginSuccess,
+  });
 
   const loginFormBusyProps = loading ? { "aria-busy": "true" as const } : {};
   const usernameInvalidProps = usernameError

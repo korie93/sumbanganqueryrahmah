@@ -32,10 +32,16 @@ import {
 } from "@/pages/login-page-utils";
 
 type UseLoginPageStateParams = {
+  onForgotPasswordClick?: (() => void) | undefined;
+  onLandingClick?: (() => void) | undefined;
   onLoginSuccess: (user: User) => void;
 };
 
-export function useLoginPageState({ onLoginSuccess }: UseLoginPageStateParams) {
+export function useLoginPageState({
+  onForgotPasswordClick,
+  onLandingClick,
+  onLoginSuccess,
+}: UseLoginPageStateParams) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -355,9 +361,17 @@ export function useLoginPageState({ onLoginSuccess }: UseLoginPageStateParams) {
     toggleShowPassword: () => setShowPassword((current) => !current),
     returnToPasswordLogin,
     goToLandingPage: () => {
+      if (onLandingClick) {
+        onLandingClick();
+        return;
+      }
       window.location.href = "/";
     },
     goToForgotPassword: () => {
+      if (onForgotPasswordClick) {
+        onForgotPasswordClick();
+        return;
+      }
       window.location.href = "/forgot-password";
     },
   };

@@ -12,7 +12,6 @@ import { useSingleTabSession } from "@/app/useSingleTabSession";
 import "../index.css";
 
 const AuthenticatedAppShell = lazyWithPreload(() => import("@/app/AuthenticatedAppShell"));
-void AuthenticatedAppShell.preload();
 
 // Authenticated surfaces rely on Radix/React portals and injected style tags more often
 // than the public shell, so keep the Trusted Types compatibility policy scoped here.

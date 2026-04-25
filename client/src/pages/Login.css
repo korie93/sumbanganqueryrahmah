@@ -16,7 +16,6 @@
 .login-bg-orb {
   border-radius: 9999px;
   filter: blur(64px);
-  will-change: transform, opacity;
 }
 
 .login-bg-orb--top {
@@ -49,7 +48,6 @@
 .login-content {
   animation: content-fade var(--login-content-fade-duration) ease-out forwards;
   opacity: 0;
-  will-change: transform, opacity;
 }
 
 @keyframes content-fade {

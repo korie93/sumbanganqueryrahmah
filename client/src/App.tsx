@@ -112,7 +112,15 @@ function AppContent() {
     }
 
     if (currentPage === "forgot-password") {
-      return renderRoutePage("forgot-password", <ForgotPasswordPage />);
+      return renderRoutePage(
+        "forgot-password",
+        (
+          <ForgotPasswordPage
+            onBackToHome={() => handlePublicNavigate("home")}
+            onBackToLogin={() => handlePublicNavigate("login")}
+          />
+        ),
+      );
     }
 
     if (currentPage === "activate-account") {
@@ -135,7 +143,16 @@ function AppContent() {
       );
     }
 
-    return renderRoutePage("login", <LoginPage onLoginSuccess={handleLoginSuccess} />);
+    return renderRoutePage(
+      "login",
+      (
+        <LoginPage
+          onForgotPasswordClick={() => handlePublicNavigate("forgot-password")}
+          onLandingClick={() => handlePublicNavigate("home")}
+          onLoginSuccess={handleLoginSuccess}
+        />
+      ),
+    );
   }
 
   return (
