@@ -9,6 +9,7 @@ type PublicAuthLayoutProps = {
   description: string;
   icon: ReactNode;
   children: ReactNode;
+  visualMode?: "standard" | "minimal";
   showBackButton?: boolean;
   backLabel?: string;
   contentBusy?: boolean;
@@ -21,15 +22,19 @@ export function PublicAuthLayout({
   description,
   icon,
   children,
+  visualMode = "standard",
   showBackButton = true,
   backLabel = "Kembali ke landing page",
   contentBusy = false,
   onBackClick,
 }: PublicAuthLayoutProps) {
   const contentBusyProps = contentBusy ? { "aria-busy": "true" as const } : {};
+  const layoutClassName = visualMode === "minimal"
+    ? "public-auth-layout public-auth-layout--minimal viewport-min-height"
+    : "public-auth-layout viewport-min-height";
 
   return (
-    <div className="public-auth-layout viewport-min-height">
+    <div className={layoutClassName}>
       <div className="public-auth-layout__pattern" />
       <div className="public-auth-layout__glow public-auth-layout__glow--top" />
       <div className="public-auth-layout__glow public-auth-layout__glow--bottom" />

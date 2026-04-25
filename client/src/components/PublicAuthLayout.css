@@ -111,6 +111,18 @@
   box-shadow: 0 25px 50px -12px var(--public-auth-shadow);
 }
 
+.public-auth-layout--minimal .public-auth-layout__pattern,
+.public-auth-layout--minimal .public-auth-layout__glow,
+.public-auth-layout--minimal .public-auth-layout__center-glow,
+.public-auth-layout--minimal .public-auth-layout__halo {
+  display: none;
+}
+
+.public-auth-layout--minimal .public-auth-layout__card {
+  background: var(--public-auth-shell-surface-strong);
+  box-shadow: 0 18px 34px -24px var(--public-auth-shadow);
+}
+
 .public-auth-layout__brand {
   margin-bottom: var(--spacing-8);
   display: flex;
@@ -207,11 +219,24 @@
 
 @supports ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
   @media (min-width: 640px) {
-    .public-auth-layout__card {
+    .public-auth-layout:not(.public-auth-layout--minimal) .public-auth-layout__card {
       -webkit-backdrop-filter: blur(20px);
       backdrop-filter: blur(20px);
     }
   }
+}
+
+.low-spec .public-auth-layout__pattern,
+.low-spec .public-auth-layout__glow,
+.low-spec .public-auth-layout__center-glow,
+.low-spec .public-auth-layout__halo {
+  display: none !important;
+}
+
+.low-spec .public-auth-layout__card {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+  box-shadow: 0 18px 34px -24px var(--public-auth-shadow);
 }
 
 @media (min-width: 768px) {

@@ -88,6 +88,7 @@ export default function ForgotPasswordPage({
       title="Permintaan Tetapan Semula Kata Laluan"
       description="Masukkan username atau emel anda untuk menghantar permintaan tetapan semula. Permintaan ini akan disemak oleh superuser sebelum pautan selamat dihantar kepada akaun yang berkaitan."
       icon={<LifeBuoy className="h-7 w-7" />}
+      visualMode="minimal"
       contentBusy={loading}
       {...layoutBackProps}
     >

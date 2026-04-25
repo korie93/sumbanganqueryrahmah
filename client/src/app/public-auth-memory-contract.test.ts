@@ -31,3 +31,17 @@ test("login shell avoids persistent compositor hints on large decorative layers"
   assert.doesNotMatch(readFirstCssRuleBlock(loginCss, ".login-bg-orb"), /will-change:/);
   assert.doesNotMatch(readFirstCssRuleBlock(loginCss, ".login-content"), /will-change:/);
 });
+
+test("forgot password route uses lightweight auth chrome without eager recovery preloading", () => {
+  const appSource = readClientSource("../App.tsx");
+  const forgotPasswordSource = readClientSource("../pages/ForgotPassword.tsx");
+  const publicAuthCss = readClientSource("../components/PublicAuthLayout.css");
+
+  assert.doesNotMatch(appSource, /ForgotPasswordPage\.preload\s*\(/);
+  assert.match(forgotPasswordSource, /visualMode="minimal"/);
+  assert.match(publicAuthCss, /\.public-auth-layout--minimal\s+\.public-auth-layout__glow/);
+  assert.match(
+    publicAuthCss,
+    /\.public-auth-layout:not\(\.public-auth-layout--minimal\)\s+\.public-auth-layout__card/,
+  );
+});

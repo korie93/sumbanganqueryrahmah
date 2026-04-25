@@ -52,16 +52,10 @@ function AppContent() {
       }, 700);
     }
 
-    if (currentPage === "login") {
-      return scheduleIdlePreload(() => {
-        ForgotPasswordPage.preload();
-      }, 250);
-    }
-
     if (currentPage === "forgot-password") {
       return scheduleIdlePreload(() => {
         LoginPage.preload();
-      }, 250);
+      }, 700);
     }
 
     return;
