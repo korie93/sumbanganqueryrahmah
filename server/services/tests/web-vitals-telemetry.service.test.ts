@@ -115,3 +115,63 @@ test("WebVitalsTelemetryService prunes stale samples outside the retention windo
   assert.equal(publicCls?.sampleCount, 1);
   assert.equal(publicCls?.latestValue, 0.12);
 });
+
+test("WebVitalsTelemetryService samples non-poor info logs while preserving poor warnings", () => {
+  const infoLogs: unknown[] = [];
+  const warnLogs: unknown[] = [];
+  const service = new WebVitalsTelemetryService({
+    logger: {
+      info(_message, meta) {
+        infoLogs.push(meta);
+      },
+      warn(_message, meta) {
+        warnLogs.push(meta);
+      },
+    },
+    infoLogSampleRate: 2,
+  });
+
+  service.record({
+    name: "FCP",
+    value: 600,
+    delta: 10,
+    rating: "good",
+    id: "fcp-1",
+    path: "/login",
+    pageType: "public",
+    ts: "2026-04-04T09:00:00.000Z",
+  });
+  service.record({
+    name: "FCP",
+    value: 700,
+    delta: 20,
+    rating: "good",
+    id: "fcp-2",
+    path: "/login",
+    pageType: "public",
+    ts: "2026-04-04T09:00:01.000Z",
+  });
+  service.record({
+    name: "LCP",
+    value: 4_500,
+    delta: 300,
+    rating: "poor",
+    id: "lcp-poor",
+    path: "/",
+    pageType: "public",
+    ts: "2026-04-04T09:00:02.000Z",
+  });
+  service.record({
+    name: "TTFB",
+    value: 200,
+    delta: 30,
+    rating: "good",
+    id: "ttfb-1",
+    path: "/",
+    pageType: "public",
+    ts: "2026-04-04T09:00:03.000Z",
+  });
+
+  assert.equal(infoLogs.length, 2);
+  assert.equal(warnLogs.length, 1);
+});

@@ -11,6 +11,7 @@ import { SQR_TRUSTED_TYPES_POLICY_NAME } from "../../shared/trusted-types";
 const HTTP_SLOW_REQUEST_MS = runtimeConfig.runtime.httpSlowRequestMs;
 const API_VERSION_HEADER = "API-Version";
 const API_VERSION_VALUE = "1";
+const WEB_VITALS_BODY_LIMIT = "4kb";
 
 function normalizeRequestUserAgent(rawUserAgent: unknown): string | undefined {
   const normalized = String(rawUserAgent || "").trim().replace(/\s+/g, " ");
@@ -75,6 +76,7 @@ export function registerLocalHttpPipeline(app: Express, options: LocalHttpPipeli
   app.use("/api/imports", express.urlencoded({ extended: true, limit: importBodyLimit }));
   app.use("/api/collection", express.json({ limit: collectionBodyLimit }));
   app.use("/api/collection", express.urlencoded({ extended: true, limit: collectionBodyLimit }));
+  app.use("/telemetry/web-vitals", express.json({ limit: WEB_VITALS_BODY_LIMIT }));
   app.use(express.json({ limit: defaultBodyLimit }));
   app.use(express.urlencoded({ extended: true, limit: defaultBodyLimit }));
 

@@ -64,3 +64,14 @@ For schema work that still touches legacy bootstrap-managed areas:
 Avoid using `db:push` as the default workflow in this repository. The current Drizzle schema does not yet represent the full database, so a push-style sync would be a riskier fit than reviewed SQL migrations.
 
 `npm run db:migrate` intentionally uses the repo's Node wrapper around Drizzle's runtime migrator instead of the raw Drizzle CLI. This has been more reliable in the current local environment and surfaces normal Node errors if a migration fails. `npm run db:migrate:cli` is still available for upstream debugging when needed.
+
+## Runtime Bootstrap Boundary
+
+`PostgresStorageCore.init()` still runs idempotent bootstrap checks during process startup for hybrid-managed/runtime-managed domains. This is intentionally preserved for compatibility while the database remains hybrid. Startup now emits per-step timing/failure context so slow or fragile bootstrap sections can be identified before changing rollout behavior.
+
+Do not disable runtime bootstrap in production until the affected table domain has:
+
+1. typed schema coverage,
+2. reviewed SQL migration coverage,
+3. governance manifest ownership updated away from runtime-only authority,
+4. an ops rollout plan that runs migrations before app startup across all instances.

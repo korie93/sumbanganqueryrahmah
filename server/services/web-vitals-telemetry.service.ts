@@ -10,6 +10,7 @@ type LoggerLike = Pick<typeof defaultLogger, "info" | "warn">;
 
 type WebVitalsTelemetryServiceOptions = {
   logger?: LoggerLike;
+  infoLogSampleRate?: number;
   maxSamples?: number;
   maxAgeMs?: number;
 };
@@ -20,6 +21,7 @@ type StoredWebVitalTelemetry = WebVitalTelemetryPayload & {
 
 const DEFAULT_MAX_SAMPLES = 500;
 const DEFAULT_MAX_AGE_MS = 15 * 60 * 1000;
+const DEFAULT_INFO_LOG_SAMPLE_RATE = 20;
 
 const WEB_VITAL_THRESHOLDS: Record<
   WebVitalTelemetryPayload["name"],
@@ -77,12 +79,19 @@ function rateWebVital(
 
 export class WebVitalsTelemetryService {
   private readonly logger: LoggerLike;
+  private readonly infoLogSampleRate: number;
   private readonly maxSamples: number;
   private readonly maxAgeMs: number;
   private samples: StoredWebVitalTelemetry[] = [];
+  private recordedSampleCount = 0;
+  private nonPoorInfoSampleCount = 0;
 
   constructor(options: WebVitalsTelemetryServiceOptions = {}) {
     this.logger = options.logger ?? defaultLogger;
+    this.infoLogSampleRate = Math.max(
+      1,
+      Math.floor(options.infoLogSampleRate ?? DEFAULT_INFO_LOG_SAMPLE_RATE),
+    );
     this.maxSamples = options.maxSamples ?? DEFAULT_MAX_SAMPLES;
     this.maxAgeMs = options.maxAgeMs ?? DEFAULT_MAX_AGE_MS;
   }
@@ -103,6 +112,7 @@ export class WebVitalsTelemetryService {
       capturedAtMs,
     });
     this.prune(capturedAtMs);
+    this.recordedSampleCount += 1;
 
     const logMeta = {
       metric: payload.name,
@@ -124,7 +134,15 @@ export class WebVitalsTelemetryService {
       return;
     }
 
-    this.logger.info("Client web vital reported", logMeta);
+    this.nonPoorInfoSampleCount += 1;
+    if (this.nonPoorInfoSampleCount === 1 || this.nonPoorInfoSampleCount % this.infoLogSampleRate === 0) {
+      this.logger.info("Client web vital reported", {
+        ...logMeta,
+        infoLogSampleRate: this.infoLogSampleRate,
+        recordedSampleCount: this.recordedSampleCount,
+        nonPoorInfoSampleCount: this.nonPoorInfoSampleCount,
+      });
+    }
   }
 
   getOverview(nowMs = Date.now()): WebVitalOverviewPayload {

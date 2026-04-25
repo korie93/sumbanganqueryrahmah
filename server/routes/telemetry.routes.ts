@@ -1,9 +1,11 @@
 import type { Express, Request, RequestHandler } from "express";
 import { routeHandler } from "../http/async-handler";
+import { normalizeCorsOrigin, resolveAllowedCorsOrigins } from "../http/cors";
 
 type TelemetryRouteDeps = {
   reportWebVital: RequestHandler;
   webVitalsDropGuard?: RequestHandler;
+  webVitalsRequestGuard?: RequestHandler;
 };
 
 type WebVitalsTelemetryDropGuardOptions = {
@@ -11,6 +13,11 @@ type WebVitalsTelemetryDropGuardOptions = {
   maxBuckets?: number;
   now?: () => number;
   windowMs?: number;
+};
+
+type WebVitalsTelemetryRequestGuardOptions = {
+  allowedOrigins?: string[];
+  maxContentLengthBytes?: number;
 };
 
 type TelemetryBucket = {
@@ -21,6 +28,7 @@ type TelemetryBucket = {
 const DEFAULT_WEB_VITALS_MAX_EVENTS_PER_WINDOW = 60;
 const DEFAULT_WEB_VITALS_MAX_BUCKETS = 2_000;
 const DEFAULT_WEB_VITALS_WINDOW_MS = 60_000;
+const DEFAULT_WEB_VITALS_MAX_CONTENT_LENGTH_BYTES = 4 * 1024;
 
 function clampPositiveInteger(value: unknown, fallback: number) {
   const parsed = Number(value);
@@ -32,6 +40,77 @@ function clampPositiveInteger(value: unknown, fallback: number) {
 
 function resolveTelemetryBucketKey(req: Request) {
   return String(req.ip || req.socket.remoteAddress || "unknown").trim() || "unknown";
+}
+
+function parseContentLength(value: unknown) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+}
+
+function isJsonContentType(value: unknown) {
+  const contentType = String(value || "").toLowerCase();
+  if (!contentType) {
+    return false;
+  }
+  return contentType.includes("application/json") || contentType.includes("+json");
+}
+
+function resolveAllowedOriginSet(allowedOrigins?: string[]) {
+  const origins = allowedOrigins ?? resolveAllowedCorsOrigins();
+  return new Set(
+    origins
+      .map((origin) => normalizeCorsOrigin(origin))
+      .filter((origin): origin is string => Boolean(origin)),
+  );
+}
+
+function isSameSiteTelemetryRequest(req: Request, allowedOriginSet: Set<string>) {
+  const fetchSite = String(req.headers["sec-fetch-site"] || "").toLowerCase();
+  if (fetchSite === "cross-site") {
+    return false;
+  }
+
+  const origin = normalizeCorsOrigin(req.headers.origin);
+  if (origin && !allowedOriginSet.has(origin)) {
+    return false;
+  }
+
+  const referer = normalizeCorsOrigin(req.headers.referer);
+  if (!origin && referer && !allowedOriginSet.has(referer)) {
+    return false;
+  }
+
+  return true;
+}
+
+export function createWebVitalsTelemetryRequestGuard(
+  options: WebVitalsTelemetryRequestGuardOptions = {},
+): RequestHandler {
+  const allowedOriginSet = resolveAllowedOriginSet(options.allowedOrigins);
+  const maxContentLengthBytes = clampPositiveInteger(
+    options.maxContentLengthBytes,
+    DEFAULT_WEB_VITALS_MAX_CONTENT_LENGTH_BYTES,
+  );
+
+  return (req, res, next) => {
+    if (!isSameSiteTelemetryRequest(req, allowedOriginSet)) {
+      res.status(204).end();
+      return;
+    }
+
+    const contentLength = parseContentLength(req.headers["content-length"]);
+    if (contentLength !== null && contentLength > maxContentLengthBytes) {
+      res.status(204).end();
+      return;
+    }
+
+    if (!isJsonContentType(req.headers["content-type"])) {
+      res.status(204).end();
+      return;
+    }
+
+    next();
+  };
 }
 
 export function createWebVitalsTelemetryDropGuard(
@@ -94,6 +173,7 @@ export function createWebVitalsTelemetryDropGuard(
 export function registerTelemetryRoutes(app: Express, deps: TelemetryRouteDeps) {
   app.post(
     "/telemetry/web-vitals",
+    deps.webVitalsRequestGuard ?? createWebVitalsTelemetryRequestGuard(),
     deps.webVitalsDropGuard ?? createWebVitalsTelemetryDropGuard(),
     routeHandler(deps.reportWebVital),
   );

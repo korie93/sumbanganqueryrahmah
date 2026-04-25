@@ -2,7 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createWebVitalsTelemetryController } from "../../controllers/web-vitals-telemetry.controller";
 import { errorHandler } from "../../middleware/error-handler";
-import { createWebVitalsTelemetryDropGuard, registerTelemetryRoutes } from "../telemetry.routes";
+import {
+  createWebVitalsTelemetryDropGuard,
+  createWebVitalsTelemetryRequestGuard,
+  registerTelemetryRoutes,
+} from "../telemetry.routes";
 import {
   createJsonTestApp,
   startTestServer,
@@ -11,12 +15,14 @@ import {
 
 function createTelemetryRouteHarness(options: {
   webVitalsDropGuard?: Parameters<typeof registerTelemetryRoutes>[1]["webVitalsDropGuard"];
+  webVitalsRequestGuard?: Parameters<typeof registerTelemetryRoutes>[1]["webVitalsRequestGuard"];
 } = {}) {
   const recordedPayloads: Array<Record<string, unknown>> = [];
 
   const app = createJsonTestApp();
   registerTelemetryRoutes(app, {
     ...(options.webVitalsDropGuard ? { webVitalsDropGuard: options.webVitalsDropGuard } : {}),
+    ...(options.webVitalsRequestGuard ? { webVitalsRequestGuard: options.webVitalsRequestGuard } : {}),
     reportWebVital: createWebVitalsTelemetryController({
       webVitalsTelemetryService: {
         record(payload) {
@@ -106,6 +112,78 @@ test("POST /telemetry/web-vitals silently drops excess samples per client window
     const afterWindow = await postMetric("v3-1710000000000-4");
     assert.equal(afterWindow.status, 204);
     assert.equal(recordedPayloads.length, 3);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("POST /telemetry/web-vitals silently drops cross-site browser telemetry attempts", async () => {
+  const { app, recordedPayloads } = createTelemetryRouteHarness({
+    webVitalsRequestGuard: createWebVitalsTelemetryRequestGuard({
+      allowedOrigins: ["https://sqr-system.test"],
+    }),
+  });
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(`${baseUrl}/telemetry/web-vitals`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Origin: "https://attacker.example",
+        "Sec-Fetch-Site": "cross-site",
+      },
+      body: JSON.stringify(createValidWebVitalsPayload()),
+    });
+
+    assert.equal(response.status, 204);
+    assert.equal(recordedPayloads.length, 0);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("POST /telemetry/web-vitals silently drops non-json telemetry bodies", async () => {
+  const { app, recordedPayloads } = createTelemetryRouteHarness();
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(`${baseUrl}/telemetry/web-vitals`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "text/plain",
+      },
+      body: JSON.stringify(createValidWebVitalsPayload()),
+    });
+
+    assert.equal(response.status, 204);
+    assert.equal(recordedPayloads.length, 0);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("POST /telemetry/web-vitals silently drops oversized telemetry bodies before recording", async () => {
+  const { app, recordedPayloads } = createTelemetryRouteHarness({
+    webVitalsRequestGuard: createWebVitalsTelemetryRequestGuard({
+      maxContentLengthBytes: 128,
+    }),
+  });
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(`${baseUrl}/telemetry/web-vitals`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(createValidWebVitalsPayload({
+        id: `v3-${"oversized".repeat(20)}`,
+      })),
+    });
+
+    assert.equal(response.status, 204);
+    assert.equal(recordedPayloads.length, 0);
   } finally {
     await stopTestServer(server);
   }

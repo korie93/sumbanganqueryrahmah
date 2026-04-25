@@ -14,6 +14,25 @@ type UseAppShellMaintenanceStateArgs = {
   user: User | null;
 };
 
+const MAINTENANCE_POLL_ERROR_WARNING_COOLDOWN_MS = 60_000;
+
+export function isMaintenancePollingAbortError(error: unknown) {
+  return error instanceof DOMException && error.name === "AbortError";
+}
+
+export function shouldReportMaintenancePollingError(
+  error: unknown,
+  nowMs: number,
+  lastReportedAtMs: number,
+  cooldownMs = MAINTENANCE_POLL_ERROR_WARNING_COOLDOWN_MS,
+) {
+  if (isMaintenancePollingAbortError(error)) {
+    return false;
+  }
+
+  return lastReportedAtMs <= 0 || nowMs - lastReportedAtMs >= cooldownMs;
+}
+
 export function useAppShellMaintenanceState({
   currentPage,
   setCurrentPage,
@@ -37,6 +56,7 @@ export function useAppShellMaintenanceState({
     if (!user || user.role === "admin" || user.role === "superuser") return;
     let cancelled = false;
     let activeController: AbortController | null = null;
+    let lastPollingWarningAtMs = 0;
     const storage = getBrowserLocalStorage();
 
     const canPollNow = () =>
@@ -60,10 +80,17 @@ export function useAppShellMaintenanceState({
           setCurrentPage("general-search");
         }
       } catch (error) {
-        if (error instanceof DOMException && error.name === "AbortError") {
+        if (isMaintenancePollingAbortError(error)) {
           return;
         }
-        // Ignore maintenance polling errors.
+        const nowMs = Date.now();
+        if (
+          import.meta.env.DEV
+          && shouldReportMaintenancePollingError(error, nowMs, lastPollingWarningAtMs)
+        ) {
+          lastPollingWarningAtMs = nowMs;
+          console.warn("Maintenance polling failed; keeping the current app state.", error);
+        }
       }
     };
 

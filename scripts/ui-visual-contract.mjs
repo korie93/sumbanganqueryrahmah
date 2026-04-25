@@ -6,6 +6,8 @@ import { chromium } from "playwright";
 const baseUrl = process.env.VISUAL_BASE_URL || process.env.SMOKE_BASE_URL || "http://127.0.0.1:5000";
 const rawArtifactsDir = String(process.env.VISUAL_ARTIFACTS_DIR || "").trim();
 const artifactsDir = rawArtifactsDir ? path.resolve(process.cwd(), rawArtifactsDir) : "";
+const authUsername = String(process.env.VISUAL_TEST_USERNAME || process.env.SMOKE_TEST_USERNAME || "").trim();
+const authPassword = String(process.env.VISUAL_TEST_PASSWORD || process.env.SMOKE_TEST_PASSWORD || "").trim();
 
 const assert = (condition, message) => {
   if (!condition) {
@@ -38,7 +40,7 @@ const captureRouteArtifacts = async (page, routeId, viewportId, layoutSummary) =
   );
 };
 
-const routeSpecs = [
+const publicRouteSpecs = [
   {
     id: "login",
     path: "/login",
@@ -50,6 +52,24 @@ const routeSpecs = [
     path: "/forgot-password",
     contentSelector: ".public-auth-layout__card",
     primarySelector: ".public-auth-layout__content button",
+  },
+];
+
+const authenticatedRouteSpecs = [
+  {
+    id: "authenticated-home",
+    path: "/",
+    contentSelector: "main#main-content",
+  },
+  {
+    id: "collection-records",
+    path: "/collection/save",
+    contentSelector: "main#main-content",
+  },
+  {
+    id: "viewer",
+    path: "/viewer",
+    contentSelector: "main#main-content",
   },
 ];
 
@@ -144,6 +164,52 @@ async function verifyRouteLayout(page, routeSpec, viewportSpec) {
   }
 }
 
+async function loginForAuthenticatedContracts(page) {
+  await page.goto(`${baseUrl}/login`, { waitUntil: "networkidle" });
+  const loginResponsePromise = page.waitForResponse(
+    (response) =>
+      response.request().method() === "POST"
+      && response.url().includes("/api/login"),
+    { timeout: 15_000 },
+  );
+  await page.getByPlaceholder("Username").fill(authUsername);
+  await page.getByPlaceholder("Password").fill(authPassword);
+  await page.getByRole("button", { name: "Log In" }).click();
+  const loginResponse = await loginResponsePromise;
+  assert(loginResponse.ok(), `authenticated visual login failed with HTTP ${loginResponse.status()}`);
+  await page.waitForLoadState("networkidle");
+  await page.locator("main#main-content").first().waitFor({ timeout: 15_000 });
+}
+
+async function logoutAuthenticatedContractSession(page) {
+  const response = await page.evaluate(async () => {
+    const logoutResponse = await fetch("/api/activity/logout", {
+      body: "{}",
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      method: "POST",
+    });
+
+    return {
+      ok: logoutResponse.ok,
+      status: logoutResponse.status,
+    };
+  });
+
+  assert(
+    response.ok || response.status === 401,
+    `authenticated visual logout cleanup failed with HTTP ${response.status}`,
+  );
+
+  await page.evaluate(() => {
+    localStorage.clear();
+    sessionStorage.clear();
+  });
+  await page.context().clearCookies();
+}
+
 const run = async () => {
   const browser = await chromium.launch({ headless: true });
   const context = await browser.newContext({
@@ -152,17 +218,57 @@ const run = async () => {
     reducedMotion: "reduce",
   });
 
+  let authenticatedSessionCreated = false;
+  let primaryError = null;
+
   try {
     const page = await context.newPage();
 
     for (const viewportSpec of viewportSpecs) {
-      for (const routeSpec of routeSpecs) {
+      for (const routeSpec of publicRouteSpecs) {
         await verifyRouteLayout(page, routeSpec, viewportSpec);
       }
     }
+
+    if (!authUsername || !authPassword) {
+      console.log(
+        "Skipping authenticated visual contract routes because VISUAL_TEST_USERNAME/VISUAL_TEST_PASSWORD (or SMOKE_TEST_USERNAME/SMOKE_TEST_PASSWORD) are not set.",
+      );
+      return;
+    }
+
+    await loginForAuthenticatedContracts(page);
+    authenticatedSessionCreated = true;
+    for (const viewportSpec of viewportSpecs) {
+      for (const routeSpec of authenticatedRouteSpecs) {
+        await verifyRouteLayout(page, routeSpec, viewportSpec);
+      }
+    }
+  } catch (error) {
+    primaryError = error;
+    throw error;
   } finally {
+    let cleanupError = null;
+    if (authenticatedSessionCreated) {
+      const page = context.pages()[0];
+      try {
+        if (page) {
+          await logoutAuthenticatedContractSession(page);
+        }
+      } catch (error) {
+        if (!primaryError) {
+          cleanupError = error;
+        } else {
+          const message = error instanceof Error ? error.message : String(error);
+          console.warn(`Authenticated visual logout cleanup failed after primary error: ${message}`);
+        }
+      }
+    }
     await context.close().catch(() => {});
     await browser.close().catch(() => {});
+    if (cleanupError) {
+      throw cleanupError;
+    }
   }
 };
 

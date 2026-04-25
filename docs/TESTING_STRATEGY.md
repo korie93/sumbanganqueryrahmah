@@ -80,7 +80,7 @@ Perintah ini:
 
 ## 3. Visual Layout Contract
 
-Repo ini kini mempunyai `Playwright` visual layout contract yang ringan untuk route awam yang stabil.
+Repo ini kini mempunyai `Playwright` visual layout contract yang ringan untuk route awam stabil, dan route authenticated kritikal apabila kredensial smoke disediakan.
 
 Perintah:
 
@@ -94,6 +94,8 @@ Lapisan ini bukan pixel-diff penuh, tetapi ia mengunci regression visual yang se
 - auth shell yang terkeluar dari skrin
 - primary action yang tidak lagi kelihatan dalam initial viewport
 - perubahan layout asas yang tidak akan ditangkap oleh unit test biasa
+
+Jika `VISUAL_TEST_USERNAME` / `VISUAL_TEST_PASSWORD` atau `SMOKE_TEST_USERNAME` / `SMOKE_TEST_PASSWORD` tersedia, kontrak ini turut login dan menyemak app shell authenticated untuk `/`, `/collection/save`, dan `/viewer`. Tanpa kredensial, route authenticated ini diskip dengan mesej jelas supaya route awam masih boleh diuji secara standalone.
 
 ## 4. Accessibility Contract
 
