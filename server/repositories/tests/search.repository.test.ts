@@ -85,7 +85,7 @@ test("SearchRepository.searchGlobalDataRows avoids exact counts on normal result
 
   try {
     const result = await repository.searchGlobalDataRows({
-      search: "Alice",
+      search: "ALICE",
       limit: 2,
       offset: 0,
     });
@@ -112,6 +112,7 @@ test("SearchRepository.searchGlobalDataRows avoids exact counts on normal result
     });
     assert.equal(queries.length, 1);
     assert.doesNotMatch(queries[0] || "", /COUNT\(\*\)\s+OVER\(\)::int AS total/i);
+    assert.match(queries[0] || "", /lower\(dr\.json_data::text\)\s+LIKE/i);
     assert.match(queries[0] || "", /\bLIMIT\b/i);
   } finally {
     restore();

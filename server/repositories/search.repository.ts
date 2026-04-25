@@ -1,6 +1,5 @@
 import { sql, type SQL } from "drizzle-orm";
 import { db } from "../db-postgres";
-import { buildLikePattern } from "./sql-like-utils";
 import {
   mapAdvancedSearchDataRow,
   mapSearchDataRow,
@@ -8,6 +7,7 @@ import {
 } from "./search-repository-mappers";
 import {
   buildSearchFieldCondition,
+  buildJsonTextContainsCondition,
   getSearchTotalFromRows,
   isSearchOffsetBeyondRuntimeWindow,
   MAX_SEARCH_COLUMN_KEYS,
@@ -29,13 +29,14 @@ export type {
 } from "./search-repository-types";
 
 export class SearchRepository {
-  private async getGlobalSearchTotal(searchPattern: string): Promise<number> {
+  private async getGlobalSearchTotal(search: string): Promise<number> {
+    const jsonSearchCondition = buildJsonTextContainsCondition(search);
     const totalResult = await db.execute(sql`
       SELECT COUNT(*)::int AS total
       FROM public.data_rows dr
       JOIN public.imports i ON i.id = dr.import_id
       WHERE i.is_deleted = false
-        AND dr.json_data::text ILIKE ${searchPattern} ESCAPE '\'
+        AND ${jsonSearchCondition}
     `);
 
     return getSearchTotalFromRows(totalResult.rows || []);
@@ -75,14 +76,14 @@ export class SearchRepository {
     offset: number;
   }): Promise<{ rows: SearchGlobalDataRow[]; total: number; totalIsApproximate: boolean }> {
     const { search, limit, offset } = params;
-    const searchPattern = buildLikePattern(search, "contains");
+    const jsonSearchCondition = buildJsonTextContainsCondition(search);
     const safeLimit = Math.max(1, Math.min(limit, MAX_SEARCH_LIMIT));
     const safeOffset = normalizeSearchOffset(offset);
 
     if (isSearchOffsetBeyondRuntimeWindow(safeOffset)) {
       return {
         rows: [],
-        total: await this.getGlobalSearchTotal(searchPattern),
+        total: await this.getGlobalSearchTotal(search),
         totalIsApproximate: false,
       };
     }
@@ -97,7 +98,7 @@ export class SearchRepository {
       FROM public.data_rows dr
       JOIN public.imports i ON i.id = dr.import_id
       WHERE i.is_deleted = false
-        AND dr.json_data::text ILIKE ${searchPattern} ESCAPE '\'
+        AND ${jsonSearchCondition}
       ORDER BY dr.id
       LIMIT ${safeLimit + 1}
       OFFSET ${safeOffset}
@@ -114,14 +115,14 @@ export class SearchRepository {
     } else if (rows.length > 0) {
       total = safeOffset + rows.length;
     } else if (safeOffset > 0) {
-      total = await this.getGlobalSearchTotal(searchPattern);
+      total = await this.getGlobalSearchTotal(search);
     }
 
     return { rows, total, totalIsApproximate: hasMore };
   }
 
   async searchSimpleDataRows(search: string) {
-    const searchPattern = buildLikePattern(search, "contains");
+    const jsonSearchCondition = buildJsonTextContainsCondition(search);
     return db.execute(sql`
       SELECT
         dr.import_id as "importId",
@@ -130,7 +131,7 @@ export class SearchRepository {
       FROM public.data_rows dr
       JOIN public.imports i ON i.id = dr.import_id
       WHERE i.is_deleted = false
-        AND dr.json_data::text ILIKE ${searchPattern} ESCAPE '\'
+        AND ${jsonSearchCondition}
       LIMIT ${MAX_SEARCH_LIMIT}
     `);
   }
@@ -174,7 +175,7 @@ export class SearchRepository {
     const conditions: SQL[] = [sql`dr.import_id = ${importId}`];
 
     if (trimmedSearch) {
-      conditions.push(sql`dr.json_data::text ILIKE ${buildLikePattern(trimmedSearch, "contains")} ESCAPE '\'`);
+      conditions.push(buildJsonTextContainsCondition(trimmedSearch));
     }
 
     for (const filter of safeColumnFilters) {

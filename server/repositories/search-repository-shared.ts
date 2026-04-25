@@ -106,6 +106,11 @@ export function buildSearchFieldCondition(field: string, operator: string, value
   }
 }
 
+export function buildJsonTextContainsCondition(search: string): SQL {
+  const searchPattern = buildLikePattern(search.toLowerCase(), "contains");
+  return sql`lower(dr.json_data::text) LIKE ${searchPattern} ESCAPE '\'`;
+}
+
 export function normalizeSearchOffset(offset: number): number {
   if (!Number.isFinite(offset)) {
     return 0;

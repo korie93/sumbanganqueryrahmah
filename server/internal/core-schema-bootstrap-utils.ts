@@ -70,6 +70,11 @@ export async function ensureCorePerformanceTrigramIndexes(
     USING GIN ((json_data::text) gin_trgm_ops)
   `);
   await database.execute(sql`
+    CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_data_rows_json_text_lower_trgm
+    ON data_rows
+    USING GIN (lower(json_data::text) gin_trgm_ops)
+  `);
+  await database.execute(sql`
     CREATE INDEX IF NOT EXISTS idx_data_rows_mykad_digits
     ON data_rows ((regexp_replace(coalesce((json_data::jsonb)->>'No. MyKad',''), '[^0-9]', '', 'g')))
   `);
