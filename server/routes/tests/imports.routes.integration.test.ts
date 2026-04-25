@@ -664,12 +664,13 @@ test("POST /api/imports accepts multipart Excel uploads without leaking temp fil
       type: "buffer",
       bookType: "xlsx",
     }) as Uint8Array;
+    const workbookBlobPart = new Uint8Array(workbookBuffer);
     const formData = new FormData();
     formData.set("name", "Multipart Excel Import");
     formData.append(
       "file",
       new File(
-        [workbookBuffer],
+        [workbookBlobPart],
         "multipart-import.xlsx",
         {
           type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

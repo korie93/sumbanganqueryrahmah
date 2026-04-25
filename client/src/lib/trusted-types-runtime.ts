@@ -30,12 +30,12 @@ function sanitizeTrustedTypesHtml(input: string) {
   const trustedTypesPolicy = getSqrTrustedTypesPolicy()
   const domPurifyTrustedTypesPolicy =
     trustedTypesPolicy && typeof trustedTypesPolicy.createScriptURL === "function"
-      ? trustedTypesPolicy as unknown as TrustedTypePolicy
+      ? trustedTypesPolicy
       : undefined
   return purifier.sanitize(input, {
     RETURN_TRUSTED_TYPE: false,
     ...(domPurifyTrustedTypesPolicy
-      ? { TRUSTED_TYPES_POLICY: domPurifyTrustedTypesPolicy }
+      ? { TRUSTED_TYPES_POLICY: domPurifyTrustedTypesPolicy as never }
       : {}),
   })
 }

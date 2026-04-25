@@ -49,7 +49,7 @@ function normalizePlainTextErrorMessage(res: Response, text: string) {
 }
 
 type ApiErrorPayload = Record<string, unknown> & {
-  error?: { message?: unknown };
+  error?: unknown;
   message?: unknown;
 };
 
@@ -65,14 +65,14 @@ function parseJsonObject(text: string): ApiErrorPayload | null {
     }
 
     const normalized = apiErrorPayloadSchema.safeParse(parsed);
-    return normalized.success ? normalized.data : parsed;
+    return normalized.success && isObjectRecord(normalized.data) ? normalized.data : parsed;
   } catch {
     return null;
   }
 }
 
 function readApiMessage(payload: ApiErrorPayload | null): string {
-  const nestedMessage = payload?.error?.message;
+  const nestedMessage = isObjectRecord(payload?.error) ? payload.error.message : undefined;
   if (typeof nestedMessage === "string" && nestedMessage.trim()) {
     return nestedMessage;
   }
