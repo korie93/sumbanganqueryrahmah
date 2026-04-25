@@ -73,7 +73,7 @@ export class SearchRepository {
     search: string;
     limit: number;
     offset: number;
-  }): Promise<{ rows: SearchGlobalDataRow[]; total: number }> {
+  }): Promise<{ rows: SearchGlobalDataRow[]; total: number; totalIsApproximate: boolean }> {
     const { search, limit, offset } = params;
     const searchPattern = buildLikePattern(search, "contains");
     const safeLimit = Math.max(1, Math.min(limit, MAX_SEARCH_LIMIT));
@@ -83,6 +83,7 @@ export class SearchRepository {
       return {
         rows: [],
         total: await this.getGlobalSearchTotal(searchPattern),
+        totalIsApproximate: false,
       };
     }
 
@@ -92,25 +93,31 @@ export class SearchRepository {
         dr.import_id,
         dr.json_data as json_data_jsonb,
         i.name as import_name,
-        i.filename as import_filename,
-        COUNT(*) OVER()::int AS total
+        i.filename as import_filename
       FROM public.data_rows dr
       JOIN public.imports i ON i.id = dr.import_id
       WHERE i.is_deleted = false
         AND dr.json_data::text ILIKE ${searchPattern} ESCAPE '\'
       ORDER BY dr.id
-      LIMIT ${safeLimit}
+      LIMIT ${safeLimit + 1}
       OFFSET ${safeOffset}
     `);
 
-    const rows = (rowsResult.rows || []).map((row) => mapSearchGlobalDataRow(row as Record<string, unknown>));
-    const total = rows.length > 0
-      ? getSearchTotalFromRows(rowsResult.rows || [])
-      : safeOffset > 0
-        ? await this.getGlobalSearchTotal(searchPattern)
-        : 0;
+    const rawRows = (rowsResult.rows || []).map((row) =>
+      mapSearchGlobalDataRow(row as Record<string, unknown>),
+    );
+    const hasMore = rawRows.length > safeLimit;
+    const rows = hasMore ? rawRows.slice(0, safeLimit) : rawRows;
+    let total = 0;
+    if (hasMore) {
+      total = safeOffset + rows.length + 1;
+    } else if (rows.length > 0) {
+      total = safeOffset + rows.length;
+    } else if (safeOffset > 0) {
+      total = await this.getGlobalSearchTotal(searchPattern);
+    }
 
-    return { rows, total };
+    return { rows, total, totalIsApproximate: hasMore };
   }
 
   async searchSimpleDataRows(search: string) {

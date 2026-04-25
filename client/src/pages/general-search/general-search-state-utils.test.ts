@@ -5,6 +5,7 @@ import {
   clampGeneralSearchResultsPageSize,
   getValidGeneralSearchFilters,
   normalizeGeneralSearchResponse,
+  resolveDefaultGeneralSearchPageSize,
   resolveConfiguredSearchResultLimit,
 } from "@/pages/general-search/general-search-state-utils";
 
@@ -18,6 +19,12 @@ test("resolveConfiguredSearchResultLimit clamps invalid and out-of-range inputs"
 test("buildGeneralSearchPageSizeOptions keeps configured limit and mode defaults sorted", () => {
   assert.deepEqual(buildGeneralSearchPageSizeOptions(120, false), [25, 50, 100, 120]);
   assert.deepEqual(buildGeneralSearchPageSizeOptions(35, true), [20, 35]);
+});
+
+test("resolveDefaultGeneralSearchPageSize keeps first search payloads bounded", () => {
+  assert.equal(resolveDefaultGeneralSearchPageSize(5000, false), 50);
+  assert.equal(resolveDefaultGeneralSearchPageSize(5000, true), 40);
+  assert.equal(resolveDefaultGeneralSearchPageSize(25, false), 25);
 });
 
 test("clampGeneralSearchResultsPageSize respects configured result cap", () => {
@@ -53,6 +60,25 @@ test("normalizeGeneralSearchResponse caps totals and falls back to rows", () => 
     {
       cappedTotal: 200,
       nextResults: [{ name: "Ali" }],
+      totalIsApproximate: false,
+    },
+  );
+});
+
+test("normalizeGeneralSearchResponse preserves lower-bound total metadata below the configured cap", () => {
+  assert.deepEqual(
+    normalizeGeneralSearchResponse(
+      {
+        rows: [{ name: "Ali" }],
+        total: 51,
+        totalIsApproximate: true,
+      },
+      200,
+    ),
+    {
+      cappedTotal: 51,
+      nextResults: [{ name: "Ali" }],
+      totalIsApproximate: true,
     },
   );
 });

@@ -14,6 +14,7 @@ import {
   clampGeneralSearchResultsPageSize,
   getValidGeneralSearchFilters,
   normalizeGeneralSearchResponse,
+  resolveDefaultGeneralSearchPageSize,
 } from "@/pages/general-search/general-search-state-utils";
 import { collectSearchHeaders } from "@/pages/general-search/utils";
 
@@ -49,7 +50,16 @@ export function useGeneralSearchDataState({
   const [searched, setSearched] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalResults, setTotalResults] = useState(0);
-  const [resultsPerPage, setResultsPerPage] = useState(configuredSearchResultLimit);
+  const [totalResultsIsApproximate, setTotalResultsIsApproximate] = useState(false);
+  const defaultResultsPerPage = useMemo(
+    () =>
+      resolveDefaultGeneralSearchPageSize(
+        configuredSearchResultLimit,
+        isLowSpecMode,
+      ),
+    [configuredSearchResultLimit, isLowSpecMode],
+  );
+  const [resultsPerPage, setResultsPerPage] = useState(defaultResultsPerPage);
   const [columns, setColumns] = useState<string[]>([]);
   const [loadingColumns, setLoadingColumns] = useState(false);
 
@@ -75,11 +85,7 @@ export function useGeneralSearchDataState({
   }, []);
 
   useEffect(() => {
-    setResultsPerPage((previous) =>
-      previous === configuredSearchResultLimit
-        ? previous
-        : configuredSearchResultLimit,
-    );
+    setResultsPerPage((previous) => Math.min(previous, configuredSearchResultLimit));
     setCurrentPage(1);
   }, [configuredSearchResultLimit]);
 
@@ -87,10 +93,12 @@ export function useGeneralSearchDataState({
     (
       nextResults: SearchResultRow[],
       total: number,
+      totalIsApproximate: boolean,
       pageNumber: number,
       effectiveLimit: number,
     ) => {
       setTotalResults(total);
+      setTotalResultsIsApproximate(totalIsApproximate);
       setCurrentPage(pageNumber);
       setHeaders(
         nextResults.length > 0
@@ -154,11 +162,11 @@ export function useGeneralSearchDataState({
           signal: controller.signal,
         });
         if (!isMountedRef.current || requestId !== searchRequestIdRef.current) return;
-        const { cappedTotal, nextResults } = normalizeGeneralSearchResponse(
+        const { cappedTotal, nextResults, totalIsApproximate } = normalizeGeneralSearchResponse(
           response,
           configuredSearchResultLimit,
         );
-        updateSearchResults(nextResults, cappedTotal, pageNumber, effectiveLimit);
+        updateSearchResults(nextResults, cappedTotal, totalIsApproximate, pageNumber, effectiveLimit);
       } catch (searchError) {
         if (searchError instanceof DOMException && searchError.name === "AbortError") {
           return;
@@ -171,6 +179,7 @@ export function useGeneralSearchDataState({
         );
         setResults([]);
         setHeaders([]);
+        setTotalResultsIsApproximate(false);
       } finally {
         if (searchAbortControllerRef.current === controller) {
           searchAbortControllerRef.current = null;
@@ -213,11 +222,11 @@ export function useGeneralSearchDataState({
           { signal: controller.signal },
         );
         if (!isMountedRef.current || requestId !== searchRequestIdRef.current) return;
-        const { cappedTotal, nextResults } = normalizeGeneralSearchResponse(
+        const { cappedTotal, nextResults, totalIsApproximate } = normalizeGeneralSearchResponse(
           response,
           configuredSearchResultLimit,
         );
-        updateSearchResults(nextResults, cappedTotal, pageNumber, effectiveLimit);
+        updateSearchResults(nextResults, cappedTotal, totalIsApproximate, pageNumber, effectiveLimit);
       } catch (searchError) {
         if (searchError instanceof DOMException && searchError.name === "AbortError") {
           return;
@@ -230,6 +239,7 @@ export function useGeneralSearchDataState({
         );
         setResults([]);
         setHeaders([]);
+        setTotalResultsIsApproximate(false);
       } finally {
         if (searchAbortControllerRef.current === controller) {
           searchAbortControllerRef.current = null;
@@ -286,6 +296,7 @@ export function useGeneralSearchDataState({
       setSearched(false);
       setError("");
       setTotalResults(0);
+      setTotalResultsIsApproximate(false);
       setCurrentPage(1);
     }
   }, []);
@@ -300,6 +311,7 @@ export function useGeneralSearchDataState({
     setError("");
     setSearched(false);
     setTotalResults(0);
+    setTotalResultsIsApproximate(false);
     setCurrentPage(1);
   }, []);
 
@@ -323,6 +335,7 @@ export function useGeneralSearchDataState({
       resultsPerPage,
       searched,
       totalResults,
+      totalResultsIsApproximate,
     },
     actions: {
       handlePageChange,

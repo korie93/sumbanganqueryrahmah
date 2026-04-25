@@ -39,6 +39,7 @@ interface GeneralSearchResultsProps {
   results: SearchResultRow[];
   resultsPerPage: number;
   totalResults: number;
+  totalResultsIsApproximate: boolean;
 }
 
 export function GeneralSearchResults({
@@ -62,6 +63,7 @@ export function GeneralSearchResults({
   results,
   resultsPerPage,
   totalResults,
+  totalResultsIsApproximate,
 }: GeneralSearchResultsProps) {
   const isMobile = useIsMobile();
   const [tableScrollTop, setTableScrollTop] = useState(0);
@@ -159,6 +161,7 @@ export function GeneralSearchResults({
         resultsLength={results.length}
         resultsPerPage={resultsPerPage}
         totalResults={totalResults}
+        totalResultsIsApproximate={totalResultsIsApproximate}
       />
 
       {isMobile ? (

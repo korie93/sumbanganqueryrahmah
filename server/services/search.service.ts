@@ -26,6 +26,8 @@ type SearchRepositoryPort = Pick<
   | "searchSimpleDataRows"
 >;
 
+type SearchGlobalRepositoryResult = Awaited<ReturnType<SearchRepositoryPort["searchGlobalDataRows"]>>;
+
 function buildOffsetPaginationMeta(params: {
   page: number;
   limit: number;
@@ -103,6 +105,7 @@ export class SearchService {
         rows: [],
         results: [],
         total: params.maxTotal,
+        totalIsApproximate: false,
         page: params.page,
         limit,
         pageSize: limit,
@@ -117,6 +120,7 @@ export class SearchService {
         rows: [],
         results: [],
         total: 0,
+        totalIsApproximate: false,
         page: params.page,
         limit,
         pageSize: limit,
@@ -126,7 +130,7 @@ export class SearchService {
     }
 
     const effectiveLimit = Math.min(limit, Math.max(1, params.maxTotal - offset));
-    const result = await this.searchRepository.searchGlobalDataRows({
+    const result: SearchGlobalRepositoryResult = await this.searchRepository.searchGlobalDataRows({
       search: normalizedSearch,
       limit: effectiveLimit,
       offset,
@@ -140,6 +144,7 @@ export class SearchService {
       rows: parsedRows,
       results: parsedRows,
       total: Math.min(result.total, params.maxTotal),
+      totalIsApproximate: Boolean(result.totalIsApproximate && result.total < params.maxTotal),
       page: params.page,
       limit: effectiveLimit,
       pageSize: effectiveLimit,

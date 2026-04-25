@@ -108,6 +108,7 @@ export default function GeneralSearch({
               results={state.results}
               resultsPerPage={state.resultsPerPage}
               totalResults={state.totalResults}
+              totalResultsIsApproximate={state.totalResultsIsApproximate}
             />
           </Suspense>
         ) : null}

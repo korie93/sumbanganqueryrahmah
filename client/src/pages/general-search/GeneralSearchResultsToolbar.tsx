@@ -26,6 +26,7 @@ interface GeneralSearchResultsToolbarProps {
   resultsLength: number;
   resultsPerPage: number;
   totalResults: number;
+  totalResultsIsApproximate: boolean;
 }
 
 export function GeneralSearchResultsToolbar({
@@ -44,8 +45,10 @@ export function GeneralSearchResultsToolbar({
   resultsLength,
   resultsPerPage,
   totalResults,
+  totalResultsIsApproximate,
 }: GeneralSearchResultsToolbarProps) {
   const trimmedQuery = query.trim();
+  const resultCountPrefix = totalResultsIsApproximate ? "At least " : "";
   const mobileSummaryChips = advancedMode
     ? activeFilterSummaries
     : trimmedQuery
@@ -57,7 +60,7 @@ export function GeneralSearchResultsToolbar({
       <div className="mb-4 space-y-3">
         <div className="min-w-0 space-y-3">
           <p className="text-foreground font-medium">
-            {totalResults} result{totalResults === 1 ? "" : "s"} found
+            {resultCountPrefix}{totalResults} result{totalResults === 1 ? "" : "s"} found
           </p>
           {advancedMode ? (
             <p className="text-sm text-muted-foreground">
@@ -137,7 +140,7 @@ export function GeneralSearchResultsToolbar({
     <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
       <div className="min-w-0 space-y-3">
         <p className="text-foreground font-medium">
-          {totalResults} result{totalResults === 1 ? "" : "s"} found
+          {resultCountPrefix}{totalResults} result{totalResults === 1 ? "" : "s"} found
         </p>
         {advancedMode ? (
           <p className="text-sm text-muted-foreground">

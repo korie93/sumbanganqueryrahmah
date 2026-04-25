@@ -1,9 +1,13 @@
 import type { FilterRow, SearchResultRow } from "@/pages/general-search/types";
 
+export const GENERAL_SEARCH_DEFAULT_PAGE_SIZE = 50;
+export const GENERAL_SEARCH_LOW_SPEC_DEFAULT_PAGE_SIZE = 40;
+
 type SearchResponsePayload = {
   results?: SearchResultRow[];
   rows?: SearchResultRow[];
   total?: number;
+  totalIsApproximate?: boolean | undefined;
 };
 
 export function resolveConfiguredSearchResultLimit(searchResultLimit?: number) {
@@ -22,6 +26,17 @@ export function buildGeneralSearchPageSizeOptions(
     new Set([...withinLimit, configuredSearchResultLimit]),
   );
   return withConfigured.sort((left, right) => left - right);
+}
+
+export function resolveDefaultGeneralSearchPageSize(
+  configuredSearchResultLimit: number,
+  isLowSpecMode: boolean,
+) {
+  const preferredPageSize = isLowSpecMode
+    ? GENERAL_SEARCH_LOW_SPEC_DEFAULT_PAGE_SIZE
+    : GENERAL_SEARCH_DEFAULT_PAGE_SIZE;
+
+  return Math.min(configuredSearchResultLimit, preferredPageSize);
 }
 
 export function clampGeneralSearchResultsPageSize(
@@ -53,6 +68,9 @@ export function normalizeGeneralSearchResponse(
     Number(response.total || nextResults.length),
     configuredSearchResultLimit,
   );
+  const totalIsApproximate = Boolean(
+    response.totalIsApproximate && Number(response.total || 0) < configuredSearchResultLimit,
+  );
 
-  return { cappedTotal, nextResults };
+  return { cappedTotal, nextResults, totalIsApproximate };
 }

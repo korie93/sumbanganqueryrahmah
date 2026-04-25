@@ -41,6 +41,7 @@ test("SearchRepository.searchGlobalDataRows skips deep offset scans and still re
     assert.deepEqual(result, {
       rows: [],
       total: 321,
+      totalIsApproximate: false,
     });
     assert.equal(queries.length, 1);
     assert.match(queries[0] || "", /COUNT\(\*\)::int AS total/i);
@@ -50,7 +51,7 @@ test("SearchRepository.searchGlobalDataRows skips deep offset scans and still re
   }
 });
 
-test("SearchRepository.searchGlobalDataRows reuses a single windowed query when page data is available", async () => {
+test("SearchRepository.searchGlobalDataRows avoids exact counts on normal result pages", async () => {
   const repository = new SearchRepository();
   const queries: string[] = [];
   const restore = withMockedDbExecute((queryText) => {
@@ -63,7 +64,20 @@ test("SearchRepository.searchGlobalDataRows reuses a single windowed query when 
           json_data_jsonb: { name: "Alice" },
           import_name: "Import Alpha",
           import_filename: "alpha.csv",
-          total: 12,
+        },
+        {
+          id: "row-2",
+          import_id: "import-1",
+          json_data_jsonb: { name: "Alicia" },
+          import_name: "Import Alpha",
+          import_filename: "alpha.csv",
+        },
+        {
+          id: "row-3",
+          import_id: "import-2",
+          json_data_jsonb: { name: "Alina" },
+          import_name: "Import Beta",
+          import_filename: "beta.csv",
         },
       ],
     };
@@ -72,7 +86,7 @@ test("SearchRepository.searchGlobalDataRows reuses a single windowed query when 
   try {
     const result = await repository.searchGlobalDataRows({
       search: "Alice",
-      limit: 50,
+      limit: 2,
       offset: 0,
     });
 
@@ -85,11 +99,20 @@ test("SearchRepository.searchGlobalDataRows reuses a single windowed query when 
           importFilename: "alpha.csv",
           jsonDataJsonb: { name: "Alice" },
         },
+        {
+          id: "row-2",
+          importId: "import-1",
+          importName: "Import Alpha",
+          importFilename: "alpha.csv",
+          jsonDataJsonb: { name: "Alicia" },
+        },
       ],
-      total: 12,
+      total: 3,
+      totalIsApproximate: true,
     });
     assert.equal(queries.length, 1);
-    assert.match(queries[0] || "", /COUNT\(\*\)\s+OVER\(\)::int AS total/i);
+    assert.doesNotMatch(queries[0] || "", /COUNT\(\*\)\s+OVER\(\)::int AS total/i);
+    assert.match(queries[0] || "", /\bLIMIT\b/i);
   } finally {
     restore();
   }

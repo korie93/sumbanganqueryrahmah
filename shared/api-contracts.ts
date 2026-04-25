@@ -96,6 +96,7 @@ export const searchGlobalResponseSchema = z.object({
   rows: z.array(searchResultRowSchema),
   results: z.array(searchResultRowSchema),
   total: nonNegativeIntSchema,
+  totalIsApproximate: z.boolean().optional(),
   page: positiveIntSchema,
   limit: paginationLimitSchema,
   pageSize: paginationLimitSchema,
