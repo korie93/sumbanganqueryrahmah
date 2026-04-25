@@ -63,6 +63,9 @@ function createApiProtectionTestApp() {
   app.post("/api/activity/logout", (_req, res) => {
     res.json({ ok: true, route: "logout" });
   });
+  app.post("/api/collection", (_req, res) => {
+    res.json({ ok: true, route: "collection" });
+  });
 
   return app;
 }
@@ -124,6 +127,34 @@ test("adaptive API protection does not throttle session control endpoints under 
     assert.deepEqual(await logoutResponse.json(), {
       ok: true,
       route: "logout",
+    });
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("adaptive API protection isolates collection writes from generic API bursts", async () => {
+  const app = createApiProtectionTestApp();
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    for (let index = 0; index < 8; index += 1) {
+      const response = await fetch(`${baseUrl}/api/noisy`);
+      assert.equal(response.status, 200);
+    }
+
+    const noisyOverflow = await fetch(`${baseUrl}/api/noisy`);
+    assert.equal(noisyOverflow.status, 429);
+
+    const collectionResponse = await fetch(`${baseUrl}/api/collection`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ ok: true }),
+    });
+    assert.equal(collectionResponse.status, 200);
+    assert.deepEqual(await collectionResponse.json(), {
+      ok: true,
+      route: "collection",
     });
   } finally {
     await stopTestServer(server);
