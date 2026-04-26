@@ -3,7 +3,7 @@ import type { IframeHTMLAttributes } from "react";
 import { resolveSafePreviewSourceUrl } from "@/lib/safe-url";
 
 export const DOCUMENT_PREVIEW_IFRAME_SANDBOX = "";
-export const PDF_PREVIEW_IFRAME_SANDBOX = "allow-downloads allow-scripts";
+export const PDF_PREVIEW_IFRAME_SANDBOX = "allow-downloads allow-same-origin allow-scripts";
 export const PREVIEW_IFRAME_REFERRER_POLICY: IframeHTMLAttributes<HTMLIFrameElement>["referrerPolicy"] =
   "no-referrer";
 
