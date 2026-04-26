@@ -33,6 +33,11 @@ test("registerLocalHttpPipeline allows blob receipt previews in the CSP header",
     assert.match(String(response.headers.get("x-frame-options") || ""), /sameorigin/i);
     assert.equal(response.headers.get("x-content-type-options"), "nosniff");
     assert.match(String(response.headers.get("strict-transport-security") || ""), /max-age=15552000/i);
+    const permissionsPolicy = String(response.headers.get("permissions-policy") || "");
+    assert.match(permissionsPolicy, /camera=\(\)/i);
+    assert.match(permissionsPolicy, /geolocation=\(\)/i);
+    assert.match(permissionsPolicy, /microphone=\(\)/i);
+    assert.match(permissionsPolicy, /payment=\(\)/i);
     assert.match(csp, /base-uri 'self'/i);
     assert.match(csp, /img-src 'self' data: blob:/i);
     assert.match(csp, /frame-src 'self' blob:/i);
@@ -74,6 +79,37 @@ test("registerLocalHttpPipeline preserves caller-provided request ids", async ()
     assert.equal(response.status, 200);
     assert.equal(response.headers.get("x-request-id"), "req-test-123");
     assert.equal(response.headers.get("api-version"), "1");
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("registerLocalHttpPipeline sanitizes caller-provided request ids", async () => {
+  const app = express();
+  registerLocalHttpPipeline(app, {
+    importBodyLimit: "1mb",
+    collectionBodyLimit: "1mb",
+    defaultBodyLimit: "100kb",
+    uploadsRootDir: path.resolve(process.cwd(), "uploads"),
+    recordRequestStarted: () => undefined,
+    recordRequestFinished: () => undefined,
+    adaptiveRateLimit: (_req, _res, next) => next(),
+    systemProtectionMiddleware: (_req, _res, next) => next(),
+    maintenanceGuard: (_req, _res, next) => next(),
+  });
+  app.get("/request-id", (_req, res) => {
+    res.json({ ok: true });
+  });
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const response = await fetch(`${baseUrl}/request-id`, {
+      headers: {
+        "x-request-id": " api-<script>|bad id/123 ",
+      },
+    });
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get("x-request-id"), "api-scriptbadid123");
   } finally {
     await stopTestServer(server);
   }

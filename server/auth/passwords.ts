@@ -1,5 +1,5 @@
 import bcrypt from "bcrypt";
-import { createHash, randomBytes } from "node:crypto";
+import { createHash, randomBytes, randomInt } from "node:crypto";
 import { CREDENTIAL_BCRYPT_COST } from "./credentials";
 import { isBcryptHash } from "./account-lifecycle";
 
@@ -7,7 +7,7 @@ const TEMP_PASSWORD_ALPHABET =
   "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%^&*()-_=+";
 
 function pickRandomCharacter(): string {
-  const index = randomBytes(1)[0] % TEMP_PASSWORD_ALPHABET.length;
+  const index = randomInt(TEMP_PASSWORD_ALPHABET.length);
   return TEMP_PASSWORD_ALPHABET[index];
 }
 

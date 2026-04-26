@@ -839,7 +839,16 @@ input[type="search"]::-webkit-search-cancel-button {
 }
 
 #main-content:focus {
-  outline: none;
+  outline: 2px solid hsl(var(--ring) / 0.42);
+  outline-offset: 4px;
+}
+
+#main-content:focus:not(:focus-visible) {
+  outline-color: transparent;
+}
+
+#main-content:focus-visible {
+  outline-color: hsl(var(--ring) / 0.68);
 }
 
 /* ===========================================================

@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import express, { type Express, type RequestHandler } from "express";
 import helmet from "helmet";
 import { runtimeConfig } from "../config/runtime";
@@ -6,12 +5,21 @@ import { logger } from "../lib/logger";
 import { runWithRequestContext } from "../lib/request-context";
 import { createCsrfProtectionMiddleware } from "../http/csrf";
 import { createCorsMiddleware } from "../http/cors";
+import { resolveRequestId } from "../http/request-id";
 import { SQR_TRUSTED_TYPES_POLICY_NAME } from "../../shared/trusted-types";
 
 const HTTP_SLOW_REQUEST_MS = runtimeConfig.runtime.httpSlowRequestMs;
 const API_VERSION_HEADER = "API-Version";
 const API_VERSION_VALUE = "1";
 const WEB_VITALS_BODY_LIMIT = "4kb";
+const PERMISSIONS_POLICY_HEADER = [
+  "camera=()",
+  "geolocation=()",
+  "microphone=()",
+  "payment=()",
+  "usb=()",
+  "xr-spatial-tracking=()",
+].join(", ");
 
 function normalizeRequestUserAgent(rawUserAgent: unknown): string | undefined {
   const normalized = String(rawUserAgent || "").trim().replace(/\s+/g, " ");
@@ -71,6 +79,11 @@ export function registerLocalHttpPipeline(app: Express, options: LocalHttpPipeli
     },
   }));
 
+  app.use((_req, res, next) => {
+    res.setHeader("Permissions-Policy", PERMISSIONS_POLICY_HEADER);
+    next();
+  });
+
   // Keep default parser small; enable larger payload only for import endpoints.
   app.use("/api/imports", express.json({ limit: importBodyLimit }));
   app.use("/api/imports", express.urlencoded({ extended: true, limit: importBodyLimit }));
@@ -90,8 +103,7 @@ export function registerLocalHttpPipeline(app: Express, options: LocalHttpPipeli
   });
 
   app.use((req, res, next) => {
-    const incomingRequestId = String(req.headers["x-request-id"] || "").trim();
-    const requestId = incomingRequestId || randomUUID();
+    const requestId = resolveRequestId(req.headers["x-request-id"]);
     const clientIp = String(req.ip || req.socket.remoteAddress || "").trim() || undefined;
     const userAgent = normalizeRequestUserAgent(req.headers["user-agent"]);
     res.setHeader("x-request-id", requestId);

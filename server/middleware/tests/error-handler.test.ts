@@ -121,3 +121,30 @@ test("errorHandler includes the active request id when the pipeline already assi
     await stopTestServer(server);
   }
 });
+
+test("errorHandler sanitizes request ids before returning error payloads", async () => {
+  const app = express();
+  app.use((_req, res, next) => {
+    res.setHeader("x-request-id", "api-<script>|bad id/123");
+    next();
+  });
+  app.get("/hidden-error-with-unsafe-request-id", () => {
+    throw new HttpError(500, "Sensitive database detail.", {
+      code: "INTERNAL_FAILURE",
+      expose: false,
+    });
+  });
+  app.use(errorHandler);
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const response = await fetch(`${baseUrl}/hidden-error-with-unsafe-request-id`);
+    const payload = await response.json();
+
+    assert.equal(response.status, 500);
+    assert.doesNotThrow(() => apiErrorPayloadSchema.parse(payload));
+    assert.equal(payload.requestId, "api-scriptbadid123");
+  } finally {
+    await stopTestServer(server);
+  }
+});

@@ -1,6 +1,7 @@
 import type { NextFunction, Request, Response } from "express";
 import { ERROR_CODES } from "../../shared/error-codes";
 import { HttpError } from "../http/errors";
+import { sanitizeRequestId } from "../http/request-id";
 import { wasRouteErrorLogged } from "../http/route-observability";
 import { logger } from "../lib/logger";
 
@@ -25,13 +26,13 @@ type ApiErrorResponse = {
 
 function readCorrelationRequestId(req: Request, res: Response): string | undefined {
   const responseRequestId = typeof res.getHeader === "function"
-    ? String(res.getHeader("x-request-id") || "").trim()
+    ? sanitizeRequestId(res.getHeader("x-request-id"))
     : "";
   if (responseRequestId) {
     return responseRequestId;
   }
 
-  const requestHeader = req.headers ? String(req.headers["x-request-id"] || "").trim() : "";
+  const requestHeader = req.headers ? sanitizeRequestId(req.headers["x-request-id"]) : "";
   return requestHeader || undefined;
 }
 
