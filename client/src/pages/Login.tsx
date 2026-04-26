@@ -112,7 +112,7 @@ export default function Login({ onForgotPasswordClick, onLandingClick, onLoginSu
 
             <form className="login-form space-y-4" onSubmit={handleSubmit} {...loginFormBusyProps}>
               <div className="space-y-2">
-                <label htmlFor="login-username" className="sr-only">
+                <label htmlFor="login-username" className="login-field-label block text-left text-sm font-medium">
                   Username
                 </label>
                 <PublicAuthInput
@@ -138,7 +138,7 @@ export default function Login({ onForgotPasswordClick, onLandingClick, onLoginSu
 
               {twoFactorChallengeToken ? (
                 <div className="space-y-2">
-                  <label htmlFor="login-two-factor-code" className="sr-only">
+                  <label htmlFor="login-two-factor-code" className="login-field-label block text-left text-sm font-medium">
                     Kod pengesahan dua faktor
                   </label>
                   <PublicAuthInput
@@ -147,6 +147,7 @@ export default function Login({ onForgotPasswordClick, onLandingClick, onLoginSu
                     className="login-input w-full rounded-xl px-4 py-3 text-center tracking-[0.45em] transition-all"
                     placeholder="000000"
                     inputMode="numeric"
+                    pattern="[0-9]*"
                     value={twoFactorCode}
                     onChange={(e) => setTwoFactorCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
                     onKeyDown={handleInputKeyDown}
@@ -166,7 +167,7 @@ export default function Login({ onForgotPasswordClick, onLandingClick, onLoginSu
                 </div>
               ) : (
                 <div className="space-y-2">
-                  <label htmlFor="login-password" className="sr-only">
+                  <label htmlFor="login-password" className="login-field-label block text-left text-sm font-medium">
                     Password
                   </label>
                   <div className="relative">

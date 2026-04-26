@@ -2,6 +2,10 @@ import {
   decryptTwoFactorSecret,
   verifyTwoFactorCode,
 } from "../auth/two-factor";
+import {
+  consumeTwoFactorReplayCode,
+  type TwoFactorReplayPurpose,
+} from "../auth/two-factor-replay-cache";
 import type { PostgresStorage } from "../storage-postgres";
 import { ERROR_CODES } from "../../shared/error-codes";
 import { AuthAccountError } from "./auth-account-types";
@@ -141,6 +145,10 @@ export async function handleFailedPasswordAttempt(params: {
 export function verifyTwoFactorSecretCode(params: {
   code: string;
   encryptedSecret: string;
+  replay?: {
+    purpose: TwoFactorReplayPurpose;
+    subjectId: string;
+  };
 }): {
   ok: true;
 } {
@@ -156,6 +164,21 @@ export function verifyTwoFactorSecretCode(params: {
   }
 
   if (!verifyTwoFactorCode(secret, params.code)) {
+    throw new AuthAccountError(
+      401,
+      ERROR_CODES.TWO_FACTOR_INVALID_CODE,
+      "Authenticator code is invalid.",
+    );
+  }
+
+  if (
+    params.replay
+    && !consumeTwoFactorReplayCode({
+      code: params.code,
+      purpose: params.replay.purpose,
+      subjectId: params.replay.subjectId,
+    })
+  ) {
     throw new AuthAccountError(
       401,
       ERROR_CODES.TWO_FACTOR_INVALID_CODE,

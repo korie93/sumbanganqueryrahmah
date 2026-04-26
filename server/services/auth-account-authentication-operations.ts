@@ -192,6 +192,10 @@ export class AuthAccountAuthenticationOperations {
       verifyTwoFactorSecretCode({
         code: input.code,
         encryptedSecret,
+        replay: {
+          purpose: "login",
+          subjectId: user.id,
+        },
       });
     } catch (error) {
       if (

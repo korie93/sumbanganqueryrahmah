@@ -5,6 +5,7 @@ import {
   generateTwoFactorSecret,
   verifyTwoFactorCode,
 } from "../auth/two-factor";
+import { consumeTwoFactorReplayCode } from "../auth/two-factor-replay-cache";
 import { verifyPassword } from "../auth/passwords";
 import type { PostgresStorage } from "../storage-postgres";
 import { ERROR_CODES } from "../../shared/error-codes";
@@ -131,6 +132,10 @@ export class AuthAccountSelfTwoFactorOperations {
       throw new AuthAccountError(400, ERROR_CODES.TWO_FACTOR_INVALID_CODE, "Authenticator code is invalid.");
     }
 
+    if (!consumeTwoFactorReplayCode({ code: input.code, purpose: "setup", subjectId: actor.id })) {
+      throw new AuthAccountError(400, ERROR_CODES.TWO_FACTOR_INVALID_CODE, "Authenticator code is invalid.");
+    }
+
     const now = new Date();
     const updatedUser = await this.deps.storage.updateUserAccount({
       userId: actor.id,
@@ -178,6 +183,10 @@ export class AuthAccountSelfTwoFactorOperations {
     }
 
     if (!verifyTwoFactorCode(secret, input.code)) {
+      throw new AuthAccountError(400, ERROR_CODES.TWO_FACTOR_INVALID_CODE, "Authenticator code is invalid.");
+    }
+
+    if (!consumeTwoFactorReplayCode({ code: input.code, purpose: "disable", subjectId: actor.id })) {
       throw new AuthAccountError(400, ERROR_CODES.TWO_FACTOR_INVALID_CODE, "Authenticator code is invalid.");
     }
 

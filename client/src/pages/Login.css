@@ -107,6 +107,10 @@
   color: var(--login-subtitle-text);
 }
 
+.login-field-label {
+  color: var(--login-subtitle-text);
+}
+
 .login-input {
   border-color: transparent;
   background: var(--login-input-bg);

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { hashPassword } from "../../auth/passwords";
 import { encryptTwoFactorSecret, generateCurrentTwoFactorCode } from "../../auth/two-factor";
+import { resetTwoFactorReplayCacheForTests } from "../../auth/two-factor-replay-cache";
 import { AuthAccountService, AuthAccountError } from "../auth-account.service";
 
 const previousTwoFactorEncryptionKey = process.env.TWO_FACTOR_ENCRYPTION_KEY;
@@ -19,6 +20,10 @@ test.after(() => {
     return;
   }
   process.env.TWO_FACTOR_ENCRYPTION_KEY = previousTwoFactorEncryptionKey;
+});
+
+test.beforeEach(() => {
+  resetTwoFactorReplayCacheForTests();
 });
 
 function createAuthAccountService(storage: object): AuthAccountService {
@@ -449,6 +454,82 @@ test("AuthAccountService.verifyTwoFactorLogin replaces existing admin sessions a
   assert.deepEqual(deactivatedReasons, ["NEW_SESSION"]);
   assert.ok(auditActions.includes("LOGIN_REPLACED_EXISTING_SESSION"));
   assert.ok(auditActions.includes("LOGIN_SUCCESS"));
+});
+
+test("AuthAccountService.verifyTwoFactorLogin rejects replayed authenticator codes", async () => {
+  const passwordHash = await hashPassword("Password123!");
+  const secret = "JBSWY3DPEHPK3PXP";
+  const user = {
+    ...buildSuperuser(passwordHash),
+    id: "admin-replay-1",
+    username: "admin.replay",
+    role: "admin",
+    twoFactorEnabled: true,
+    twoFactorSecretEncrypted: encryptTwoFactorSecret(secret),
+    twoFactorConfiguredAt: new Date("2026-03-20T00:00:00.000Z"),
+  };
+  const auditActions: string[] = [];
+  let createActivityCalls = 0;
+
+  const service = createAuthAccountService({
+    getUser: async () => user,
+    isVisitorBanned: async () => false,
+    getActiveActivitiesByUsername: async () => [],
+    deactivateUserActivities: async () => undefined,
+    createAuditLog: async (entry: AuditLogInput) => {
+      auditActions.push(String(entry?.action || ""));
+      return buildAuditLog(entry);
+    },
+    createActivity: async () => {
+      createActivityCalls += 1;
+      return {
+        id: `activity-admin-replay-${createActivityCalls}`,
+        userId: user.id,
+        username: user.username,
+        role: user.role,
+        loginTime: new Date("2026-03-20T00:20:00.000Z"),
+        lastActivityTime: new Date("2026-03-20T00:20:00.000Z"),
+        logoutTime: null,
+        isActive: true,
+        logoutReason: null,
+        fingerprint: "fp-admin-replay",
+        browser: "chrome",
+        pcName: "pc",
+        ipAddress: "127.0.0.1",
+      };
+    },
+    touchLastLogin: async () => undefined,
+  });
+
+  const code = generateCurrentTwoFactorCode(secret);
+  const firstResult = await service.verifyTwoFactorLogin({
+    userId: user.id,
+    code,
+    fingerprint: "fp-admin-replay",
+    browserName: "chrome",
+    ipAddress: "127.0.0.1",
+    pcName: "pc",
+  });
+
+  assert.equal(firstResult.activity.id, "activity-admin-replay-1");
+
+  await assert.rejects(
+    service.verifyTwoFactorLogin({
+      userId: user.id,
+      code,
+      fingerprint: "fp-admin-replay",
+      browserName: "chrome",
+      ipAddress: "127.0.0.1",
+      pcName: "pc",
+    }),
+    (error: unknown) =>
+      error instanceof AuthAccountError
+      && error.statusCode === 401
+      && error.code === "TWO_FACTOR_INVALID_CODE",
+  );
+
+  assert.equal(createActivityCalls, 1);
+  assert.ok(auditActions.includes("LOGIN_2FA_FAILED"));
 });
 
 test("AuthAccountService supports starting, confirming, and disabling 2FA for admin accounts", async () => {

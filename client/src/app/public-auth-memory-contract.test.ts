@@ -51,9 +51,10 @@ test("login page exposes real labels and a stable primary heading", () => {
 
   assert.match(loginSource, /<h1 className="login-title/);
   assert.doesNotMatch(loginSource, /<h2 className="login-title/);
-  assert.match(loginSource, /<label htmlFor="login-username" className="sr-only">/);
-  assert.match(loginSource, /<label htmlFor="login-password" className="sr-only">/);
-  assert.match(loginSource, /<label htmlFor="login-two-factor-code" className="sr-only">/);
+  assert.match(loginSource, /<label htmlFor="login-username" className="login-field-label/);
+  assert.match(loginSource, /<label htmlFor="login-password" className="login-field-label/);
+  assert.match(loginSource, /<label htmlFor="login-two-factor-code" className="login-field-label/);
+  assert.match(loginSource, /pattern="\[0-9\]\*"/);
 });
 
 test("client entry fails clearly if the app root is missing", () => {
