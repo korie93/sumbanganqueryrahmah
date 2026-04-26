@@ -42,7 +42,7 @@ export const CLIENT_BREAKPOINT_CONTRACT_REQUIREMENTS = [
       },
       {
         label: "useIsMobile resolves viewport width via the shared helper",
-        snippet: "isMobileViewportWidth(window.innerWidth)",
+        snippet: "isMobileViewportWidth(viewportWindow.innerWidth)",
       },
     ],
   },
