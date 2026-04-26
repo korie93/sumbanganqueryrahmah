@@ -11,7 +11,7 @@ type PgNotification = {
 };
 
 type PgNotificationClientLike = {
-  connect(): Promise<void>;
+  connect(): Promise<unknown>;
   end(): Promise<void>;
   on(event: "notification", listener: (message: PgNotification) => void): unknown;
   on(event: "error", listener: (error: unknown) => void): unknown;
