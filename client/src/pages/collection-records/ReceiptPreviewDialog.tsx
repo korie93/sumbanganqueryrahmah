@@ -21,6 +21,7 @@ import { ReceiptPreviewToolbar } from "@/pages/collection-records/ReceiptPreview
 import {
   getReceiptPreviewZoomValue,
   resolveSelectedReceipt,
+  shouldShowReceiptPreviewZoomControls,
 } from "@/pages/collection-records/receipt-preview-dialog-utils";
 import type { ReceiptPreviewKind } from "@/pages/collection-records/types";
 import { shouldRenderInlineReceiptPdfPreview } from "@/pages/collection-records/utils";
@@ -67,7 +68,7 @@ export function ReceiptPreviewDialog({
   const selectedReceipt = resolveSelectedReceipt(receipts, selectedReceiptId);
   const canRenderInlinePdfPreview = shouldRenderInlineReceiptPdfPreview({ kind, isMobile });
   const showPdfFallback = Boolean(safeSource) && kind === "pdf" && !canRenderInlinePdfPreview;
-  const canZoom = Boolean(safeSource) && (kind === "image" || canRenderInlinePdfPreview);
+  const canZoom = shouldShowReceiptPreviewZoomControls({ kind, safeSource });
   const zoomValue = getReceiptPreviewZoomValue(zoom);
 
   useEffect(() => {

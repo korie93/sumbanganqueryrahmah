@@ -4,6 +4,10 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { CollectionRecordReceipt } from "@/lib/api";
+import {
+  MAX_RECEIPT_IMAGE_PREVIEW_ZOOM,
+  MIN_RECEIPT_PREVIEW_ZOOM,
+} from "@/pages/collection-records/receipt-preview-dialog-utils";
 
 type ReceiptPreviewToolbarProps = {
   selectedReceipt: CollectionRecordReceipt | null;
@@ -96,8 +100,15 @@ export function ReceiptPreviewToolbar({
               type="button"
               size="sm"
               variant="outline"
-              onClick={() => setZoom((previous) => Math.max(0.5, Number((previous - 0.1).toFixed(2))))}
-              disabled={zoom <= 0.5}
+              onClick={() =>
+                setZoom((previous) =>
+                  Math.max(
+                    MIN_RECEIPT_PREVIEW_ZOOM,
+                    Number((previous - 0.1).toFixed(2)),
+                  ),
+                )
+              }
+              disabled={zoom <= MIN_RECEIPT_PREVIEW_ZOOM}
               className={isMobile ? "w-full" : ""}
             >
               <ZoomOut className="mr-2 h-4 w-4" />
@@ -118,8 +129,15 @@ export function ReceiptPreviewToolbar({
               type="button"
               size="sm"
               variant="outline"
-              onClick={() => setZoom((previous) => Math.min(3, Number((previous + 0.1).toFixed(2))))}
-              disabled={zoom >= 3}
+              onClick={() =>
+                setZoom((previous) =>
+                  Math.min(
+                    MAX_RECEIPT_IMAGE_PREVIEW_ZOOM,
+                    Number((previous + 0.1).toFixed(2)),
+                  ),
+                )
+              }
+              disabled={zoom >= MAX_RECEIPT_IMAGE_PREVIEW_ZOOM}
               className={isMobile ? "col-span-2 w-full" : ""}
             >
               <ZoomIn className="mr-2 h-4 w-4" />

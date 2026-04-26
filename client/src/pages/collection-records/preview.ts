@@ -2,8 +2,8 @@ const DEFAULT_MAX_PREVIEW_EDGE = 2_048;
 const DEFAULT_MAX_PREVIEW_PIXELS = 4_194_304;
 const PREVIEW_WEBP_QUALITY = 0.82;
 
-export const RECEIPT_IMAGE_PREVIEW_MAX_EDGE = 1_600;
-export const RECEIPT_IMAGE_PREVIEW_MAX_PIXELS = 2_000_000;
+export const RECEIPT_IMAGE_PREVIEW_MAX_EDGE = 1_200;
+export const RECEIPT_IMAGE_PREVIEW_MAX_PIXELS = 1_200_000;
 
 type OptimizeImageBlobForPreviewOptions = {
   signal?: AbortSignal;

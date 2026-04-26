@@ -1,4 +1,5 @@
 .receipt-preview-zoom {
+  contain: layout paint;
   transform: scale(var(--receipt-preview-zoom, 1));
   transform-origin: top center;
 }

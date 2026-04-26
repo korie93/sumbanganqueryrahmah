@@ -37,6 +37,9 @@ test("fitImagePreviewDimensions respects tighter custom pixel caps for extreme a
 });
 
 test("receipt image preview caps keep rendered receipts inside the UI memory budget", () => {
+  assert.equal(RECEIPT_IMAGE_PREVIEW_MAX_EDGE, 1_200);
+  assert.equal(RECEIPT_IMAGE_PREVIEW_MAX_PIXELS, 1_200_000);
+
   const dimensions = fitImagePreviewDimensions(5_000, 4_000, {
     maxEdge: RECEIPT_IMAGE_PREVIEW_MAX_EDGE,
     maxPixels: RECEIPT_IMAGE_PREVIEW_MAX_PIXELS,

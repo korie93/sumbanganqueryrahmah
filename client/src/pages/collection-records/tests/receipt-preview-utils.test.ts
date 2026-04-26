@@ -10,6 +10,7 @@ import {
   clampReceiptPreviewZoom,
   getReceiptPreviewZoomValue,
   resolveSelectedReceipt,
+  shouldShowReceiptPreviewZoomControls,
 } from "../receipt-preview-dialog-utils";
 
 test("inferReceiptMimeTypeFromName recognizes webp receipt files", () => {
@@ -45,8 +46,23 @@ test("shouldRenderInlineReceiptPdfPreview disables inline PDF preview on mobile"
 
 test("receipt preview dialog utils clamp zoom and resolve selected receipt", () => {
   assert.equal(clampReceiptPreviewZoom(0.1), 0.5);
-  assert.equal(clampReceiptPreviewZoom(3.5), 3);
+  assert.equal(clampReceiptPreviewZoom(3.5), 2);
   assert.equal(getReceiptPreviewZoomValue(1.24), "1.24");
+  assert.equal(
+    shouldShowReceiptPreviewZoomControls({
+      kind: "image",
+      safeSource: "blob:http://127.0.0.1/image",
+    }),
+    true,
+  );
+  assert.equal(
+    shouldShowReceiptPreviewZoomControls({
+      kind: "pdf",
+      safeSource: "blob:http://127.0.0.1/pdf",
+    }),
+    false,
+  );
+  assert.equal(shouldShowReceiptPreviewZoomControls({ kind: "image", safeSource: null }), false);
 
   const createReceipt = (id: string, originalFileName: string): CollectionRecordReceipt => ({
     id,

@@ -24,6 +24,84 @@ type ReceiptPreviewContentProps = {
   onDownload: () => void;
 };
 
+type ReceiptPdfPreviewFrameProps = {
+  source: string;
+  iframePreviewProps: ReturnType<typeof getPdfPreviewIframeProps>;
+};
+
+function ReceiptPdfPreviewFrame({
+  source,
+  iframePreviewProps,
+}: ReceiptPdfPreviewFrameProps) {
+  const frameRef = useRef<HTMLIFrameElement | null>(null);
+
+  useEffect(() => {
+    const frame = frameRef.current;
+
+    return () => {
+      if (frame) {
+        frame.removeAttribute("src");
+        frame.src = "about:blank";
+      }
+    };
+  }, [source]);
+
+  return (
+    <iframe
+      key={source}
+      ref={frameRef}
+      src={source}
+      title="Receipt PDF Preview"
+      className="h-full w-full rounded-sm border-0 bg-white"
+      loading="lazy"
+      {...iframePreviewProps}
+    />
+  );
+}
+
+type ReceiptImagePreviewProps = {
+  source: string;
+  alt: string;
+  className: string;
+  zoomValue: string;
+};
+
+function ReceiptImagePreview({
+  source,
+  alt,
+  className,
+  zoomValue,
+}: ReceiptImagePreviewProps) {
+  const imageRef = useRef<HTMLImageElement | null>(null);
+
+  useEffect(() => {
+    imageRef.current?.style.setProperty("--receipt-preview-zoom", zoomValue);
+  }, [zoomValue]);
+
+  useEffect(() => {
+    const image = imageRef.current;
+
+    return () => {
+      if (image) {
+        image.removeAttribute("src");
+        image.src = "";
+      }
+    };
+  }, [source]);
+
+  return (
+    <img
+      key={source}
+      ref={imageRef}
+      src={source}
+      alt={alt}
+      className={className}
+      decoding="async"
+      draggable={false}
+    />
+  );
+}
+
 export function ReceiptPreviewContent({
   loading,
   error,
@@ -38,8 +116,6 @@ export function ReceiptPreviewContent({
   downloading,
   onDownload,
 }: ReceiptPreviewContentProps) {
-  const pdfZoomRef = useRef<HTMLDivElement | null>(null);
-  const imageZoomRef = useRef<HTMLImageElement | null>(null);
   const safeInlinePdfSource =
     kind === "pdf"
       ? resolveSafeInlineIframePreviewUrl(safeSource, { allowBlob: true })
@@ -48,17 +124,13 @@ export function ReceiptPreviewContent({
     trustedBlobSource: Boolean(safeInlinePdfSource),
   });
 
-  useEffect(() => {
-    if (pdfZoomRef.current) {
-      pdfZoomRef.current.style.setProperty("--receipt-preview-zoom", zoomValue);
-    }
-    if (imageZoomRef.current) {
-      imageZoomRef.current.style.setProperty("--receipt-preview-zoom", zoomValue);
-    }
-  }, [zoomValue]);
-
   return (
-    <div className={cn("min-h-0 flex-1 rounded-md border border-border/60 bg-background/40 p-3", isMobile ? "mx-3 my-3" : "mt-3")}>
+    <div
+      className={cn(
+        "min-h-0 flex-1 rounded-md border border-border/60 bg-background/40 p-3",
+        isMobile ? "mx-3 my-3" : "mt-3",
+      )}
+    >
       {loading ? (
         <div className="flex h-full min-h-[240px] items-center justify-center text-sm text-muted-foreground">
           Loading preview...
@@ -97,7 +169,13 @@ export function ReceiptPreviewContent({
                   Open PDF in Browser
                 </a>
               </Button>
-              <Button type="button" variant="outline" onClick={onDownload} disabled={downloading} className="w-full">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={onDownload}
+                disabled={downloading}
+                className="w-full"
+              >
                 <Download className="mr-2 h-4 w-4" />
                 {downloading ? "Downloading..." : "Download Original"}
               </Button>
@@ -107,17 +185,12 @@ export function ReceiptPreviewContent({
       ) : kind === "pdf" ? (
         <div className="h-full overflow-auto">
           <div
-            ref={pdfZoomRef}
-            className={cn("receipt-preview-zoom mx-auto h-full w-full", isMobile ? "" : "min-h-[360px]")}
+            className={cn("mx-auto h-full w-full", isMobile ? "" : "min-h-[360px]")}
           >
             {safeInlinePdfSource ? (
-              <iframe
-                key={safeInlinePdfSource}
-                src={safeInlinePdfSource}
-                title="Receipt PDF Preview"
-                className="h-full w-full rounded-sm bg-white"
-                loading="lazy"
-                {...pdfIframePreviewProps}
+              <ReceiptPdfPreviewFrame
+                source={safeInlinePdfSource}
+                iframePreviewProps={pdfIframePreviewProps}
               />
             ) : (
               <div className="flex h-full min-h-[240px] items-center justify-center px-4 text-center text-sm text-muted-foreground">
@@ -128,11 +201,10 @@ export function ReceiptPreviewContent({
         </div>
       ) : kind === "image" ? (
         <div className="flex h-full items-center justify-center overflow-auto">
-          <img
-            key={safeSource}
-            ref={imageZoomRef}
-            src={safeSource}
+          <ReceiptImagePreview
+            source={safeSource}
             alt={fileName || "Receipt preview"}
+            zoomValue={zoomValue}
             className={cn(
               "receipt-preview-zoom block rounded-sm object-contain",
               isMobile ? "max-w-full" : "max-h-full max-w-full",
