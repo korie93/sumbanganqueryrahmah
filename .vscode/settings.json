@@ -5,15 +5,18 @@
     "less.lint.unknownAtRules": "ignore",
     "files.exclude": {
         "**/artifacts": true,
+        "**/coverage": true,
         "**/var/perf": true
     },
     "files.watcherExclude": {
         "**/artifacts/**": true,
+        "**/coverage/**": true,
         "**/dist-local/**": true,
         "**/var/perf/**": true
     },
     "search.exclude": {
         "**/artifacts": true,
+        "**/coverage": true,
         "**/dist-local": true,
         "**/var/perf": true
     }
