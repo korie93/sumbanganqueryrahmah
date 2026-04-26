@@ -61,18 +61,18 @@ test("sanitizeForLog keeps ordinary operational metadata intact", () => {
 
 test("sanitizeForLog redacts phone numbers and valid credit cards inside freeform strings", () => {
   const sanitized = sanitizeForLog({
-    details: "Contact 012-3111222 and retry card 4111 1111 1111 1111 immediately.",
+    details: "Contact ops@example.com or 012-3111222 and retry card 4111 1111 1111 1111 immediately.",
     nested: [
-      "Escalate to +6012 555 7788 if payment 4012-8888-8888-1881 still fails.",
+      "Escalate to finance.ops@example.my or +6012 555 7788 if payment 4012-8888-8888-1881 still fails.",
     ],
   }) as Record<string, unknown>;
 
   assert.equal(
     sanitized.details,
-    "Contact [REDACTED] and retry card [REDACTED] immediately.",
+    "Contact [REDACTED] or [REDACTED] and retry card [REDACTED] immediately.",
   );
   assert.deepEqual(sanitized.nested, [
-    "Escalate to [REDACTED] if payment [REDACTED] still fails.",
+    "Escalate to [REDACTED] or [REDACTED] if payment [REDACTED] still fails.",
   ]);
 });
 

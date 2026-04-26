@@ -210,3 +210,27 @@ test("buildRuntimeConfigWarnings reports when insecure auth cookies are forced o
     /AUTH_COOKIE_SECURE_FORCED_ON_PRODUCTION/,
   );
 });
+
+test("buildRuntimeConfigWarnings reports missing non-local SMTP configuration", () => {
+  const warnings = buildRuntimeConfigWarnings({
+    isStrictLocalDevelopment: false,
+    isProductionLike: true,
+    publicAppUrl: "https://sqr.example.com",
+    configuredSessionSecret: "prod-session-secret",
+    configuredCollectionNicknameTempPassword: "TempPassword12345",
+    configuredCollectionPiiEncryptionKey: "collection-pii-secret",
+    configuredPgPassword: "prod-db-password",
+    configuredAuthCookieSecure: null,
+    mailConfiguration: {
+      effectiveFrom: null,
+      hasAnyInput: false,
+      isConfigured: false,
+      isIncomplete: false,
+    },
+  });
+
+  assert.match(
+    warnings.map((warning) => warning.code).join(","),
+    /MAIL_CONFIGURATION_MISSING/,
+  );
+});

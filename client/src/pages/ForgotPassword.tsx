@@ -94,7 +94,8 @@ export default function ForgotPasswordPage({
     >
       {submitted ? (
         <div className="rounded-2xl border border-emerald-400/25 bg-emerald-500/10 p-4 text-sm leading-7 text-emerald-100" role="status" aria-live="polite">
-          Jika akaun wujud, permintaan tetapan semula telah dihantar untuk semakan.
+          Jika akaun wujud, permintaan tetapan semula telah dihantar kepada superuser untuk semakan.
+          Email reset hanya akan dihantar selepas permintaan diluluskan.
         </div>
       ) : (
         <>

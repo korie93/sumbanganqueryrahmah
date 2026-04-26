@@ -42,6 +42,7 @@ function isSensitiveLogKey(key: string): boolean {
   return REDACT_KEYS.some((sensitive) => normalizedKey.includes(sensitive));
 }
 
+const EMAIL_CANDIDATE_PATTERN = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi;
 const PHONE_CANDIDATE_PATTERN = /(?<!\d)(?:\+?60|0)(?:1(?:[ -]?\d){8,9}|[3-9](?:[ -]?\d){7,8})(?!\d)/g;
 const CREDIT_CARD_CANDIDATE_PATTERN = /\b(?:\d[ -]?){13,19}\b/g;
 
@@ -71,7 +72,8 @@ function passesLuhnCheck(rawDigits: string): boolean {
 }
 
 function sanitizeLogString(value: string): string {
-  const withPhoneNumbersRedacted = value.replace(PHONE_CANDIDATE_PATTERN, "[REDACTED]");
+  const withEmailAddressesRedacted = value.replace(EMAIL_CANDIDATE_PATTERN, "[REDACTED]");
+  const withPhoneNumbersRedacted = withEmailAddressesRedacted.replace(PHONE_CANDIDATE_PATTERN, "[REDACTED]");
 
   return withPhoneNumbersRedacted.replace(CREDIT_CARD_CANDIDATE_PATTERN, (candidate) => {
     const trailingSeparator = candidate.match(/[ -]+$/)?.[0] ?? "";

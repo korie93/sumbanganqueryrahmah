@@ -1,3 +1,5 @@
+import { escapeEmailHtml } from "./email-html-utils";
+
 type BuildAccountActivationEmailInput = {
   activationUrl: string;
   expiresAt: Date;
@@ -16,6 +18,10 @@ export function buildAccountActivationEmail(input: BuildAccountActivationEmailIn
   const intro = `A new account has been created for you in ${systemName}.`;
   const usernameLine = `Username: ${input.username}`;
   const expiryLine = `This activation link expires on ${expiresAtText}.`;
+  const safeActivationUrl = escapeEmailHtml(input.activationUrl);
+  const safeExpiryLine = escapeEmailHtml(expiryLine);
+  const safeIntro = escapeEmailHtml(intro);
+  const safeUsernameLine = escapeEmailHtml(usernameLine);
 
   const text = [
     intro,
@@ -32,20 +38,20 @@ export function buildAccountActivationEmail(input: BuildAccountActivationEmailIn
 
   const html = `
     <div style="font-family:Segoe UI,Arial,sans-serif;line-height:1.6;color:#0f172a;">
-      <p>${intro}</p>
-      <p><strong>${usernameLine}</strong></p>
+      <p>${safeIntro}</p>
+      <p><strong>${safeUsernameLine}</strong></p>
       <p>Click the button below to activate your account and create your password.</p>
       <p>
         <a
-          href="${input.activationUrl}"
+          href="${safeActivationUrl}"
           style="display:inline-block;padding:12px 20px;background:#2563eb;color:#ffffff;text-decoration:none;border-radius:8px;font-weight:600;"
         >
           Activate Account
         </a>
       </p>
       <p>If the button does not work, copy and paste this link into your browser:</p>
-      <p><a href="${input.activationUrl}">${input.activationUrl}</a></p>
-      <p>${expiryLine}</p>
+      <p><a href="${safeActivationUrl}">${safeActivationUrl}</a></p>
+      <p>${safeExpiryLine}</p>
       <p>If you did not expect this account, please contact the system administrator.</p>
     </div>
   `.trim();

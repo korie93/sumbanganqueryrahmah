@@ -314,6 +314,16 @@ export function buildRuntimeConfigWarnings(params: {
     });
   }
 
+  if (!isStrictLocalDevelopment && !mailConfiguration.hasAnyInput) {
+    warnings.push({
+      code: "MAIL_CONFIGURATION_MISSING",
+      envNames: ["MAIL_FROM", "SMTP_SERVICE", "SMTP_HOST", "SMTP_USER", "SMTP_PASSWORD"],
+      message:
+        "SMTP mail configuration is not set. Activation and password-reset emails will not be delivered until MAIL_FROM/SMTP_* are configured.",
+      severity: "warning",
+    });
+  }
+
   if (isProductionLike && /^(?:0|false)$/i.test(String(configuredAuthCookieSecure || "").trim())) {
     warnings.push({
       code: "AUTH_COOKIE_SECURE_FORCED_ON_PRODUCTION",
