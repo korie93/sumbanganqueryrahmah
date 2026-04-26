@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { fitImagePreviewDimensions, optimizeImageBlobForPreview } from "./preview";
+import {
+  RECEIPT_IMAGE_PREVIEW_MAX_EDGE,
+  RECEIPT_IMAGE_PREVIEW_MAX_PIXELS,
+  fitImagePreviewDimensions,
+  optimizeImageBlobForPreview,
+} from "./preview";
 
 test("fitImagePreviewDimensions keeps preview canvases inside the default memory budget", () => {
   assert.deepEqual(
@@ -29,6 +34,16 @@ test("fitImagePreviewDimensions respects tighter custom pixel caps for extreme a
     }),
     { width: 2_048, height: 68 },
   );
+});
+
+test("receipt image preview caps keep rendered receipts inside the UI memory budget", () => {
+  const dimensions = fitImagePreviewDimensions(5_000, 4_000, {
+    maxEdge: RECEIPT_IMAGE_PREVIEW_MAX_EDGE,
+    maxPixels: RECEIPT_IMAGE_PREVIEW_MAX_PIXELS,
+  });
+
+  assert.equal(Math.max(dimensions.width, dimensions.height) <= RECEIPT_IMAGE_PREVIEW_MAX_EDGE, true);
+  assert.equal(dimensions.width * dimensions.height <= RECEIPT_IMAGE_PREVIEW_MAX_PIXELS, true);
 });
 
 test("fitImagePreviewDimensions returns a safe empty shape for invalid inputs", () => {

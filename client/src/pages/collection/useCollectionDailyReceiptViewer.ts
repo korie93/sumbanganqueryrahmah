@@ -6,7 +6,11 @@ import {
 } from "@/lib/api";
 import { downloadBlob } from "@/lib/download";
 import type { ReceiptPreviewDialogProps } from "@/pages/collection-records/ReceiptPreviewDialog";
-import { optimizeImageBlobForPreview } from "@/pages/collection-records/preview";
+import {
+  RECEIPT_IMAGE_PREVIEW_MAX_EDGE,
+  RECEIPT_IMAGE_PREVIEW_MAX_PIXELS,
+  optimizeImageBlobForPreview,
+} from "@/pages/collection-records/preview";
 import { inferReceiptMimeTypeFromName, resolveReceiptPreviewKind } from "@/pages/collection-records/utils";
 import { parseApiError } from "@/pages/collection/utils";
 import {
@@ -148,7 +152,11 @@ export function useCollectionDailyReceiptViewer(): UseCollectionDailyReceiptView
           inferReceiptMimeTypeFromName(fileName || "");
         const previewBlob =
           effectiveMimeType.startsWith("image/")
-            ? await optimizeImageBlobForPreview(blob, { signal: controller.signal })
+            ? await optimizeImageBlobForPreview(blob, {
+                signal: controller.signal,
+                maxEdge: RECEIPT_IMAGE_PREVIEW_MAX_EDGE,
+                maxPixels: RECEIPT_IMAGE_PREVIEW_MAX_PIXELS,
+              })
             : blob;
         if (
           controller.signal.aborted ||

@@ -5,7 +5,9 @@ import {
   DOCUMENT_PREVIEW_IFRAME_SANDBOX,
   PDF_PREVIEW_IFRAME_SANDBOX,
   PREVIEW_IFRAME_REFERRER_POLICY,
+  getPdfPreviewIframeProps,
   getSandboxedPreviewIframeProps,
+  isBlobPreviewSourceUrl,
   resolveSafeInlineIframePreviewUrl,
 } from "./iframe-preview";
 
@@ -47,6 +49,23 @@ test("getSandboxedPreviewIframeProps keeps preview frames locked down by content
     sandbox: "",
   });
   assert.deepEqual(getSandboxedPreviewIframeProps("pdf"), {
+    referrerPolicy: "no-referrer",
+    sandbox: "allow-downloads allow-same-origin allow-scripts",
+  });
+});
+
+test("getPdfPreviewIframeProps only relaxes sandboxing for local blob PDF previews", () => {
+  assert.equal(isBlobPreviewSourceUrl("blob:https://sqr-system.com/receipt-id"), true);
+  assert.equal(isBlobPreviewSourceUrl("https://sqr-system.com/receipt.pdf"), false);
+
+  assert.deepEqual(getPdfPreviewIframeProps("blob:https://sqr-system.com/receipt-id"), {
+    referrerPolicy: "no-referrer",
+    sandbox: "allow-downloads allow-same-origin allow-scripts",
+  });
+  assert.deepEqual(getPdfPreviewIframeProps("blob:https://sqr-system.com/receipt-id", { trustedBlobSource: true }), {
+    referrerPolicy: "no-referrer",
+  });
+  assert.deepEqual(getPdfPreviewIframeProps("https://sqr-system.com/receipt.pdf"), {
     referrerPolicy: "no-referrer",
     sandbox: "allow-downloads allow-same-origin allow-scripts",
   });

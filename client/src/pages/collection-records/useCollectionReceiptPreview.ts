@@ -11,7 +11,11 @@ import {
   fetchCollectionReceiptBlob,
   type CollectionRecord,
 } from "@/lib/api";
-import { optimizeImageBlobForPreview } from "@/pages/collection-records/preview";
+import {
+  RECEIPT_IMAGE_PREVIEW_MAX_EDGE,
+  RECEIPT_IMAGE_PREVIEW_MAX_PIXELS,
+  optimizeImageBlobForPreview,
+} from "@/pages/collection-records/preview";
 import type { ReceiptPreviewKind } from "@/pages/collection-records/types";
 import {
   inferReceiptMimeTypeFromName,
@@ -158,7 +162,11 @@ export function useCollectionReceiptPreview() {
           inferReceiptMimeTypeFromName(fileName || "");
         const previewBlob =
           effectiveMimeType.startsWith("image/")
-            ? await optimizeImageBlobForPreview(blob, { signal: controller.signal })
+            ? await optimizeImageBlobForPreview(blob, {
+                signal: controller.signal,
+                maxEdge: RECEIPT_IMAGE_PREVIEW_MAX_EDGE,
+                maxPixels: RECEIPT_IMAGE_PREVIEW_MAX_PIXELS,
+              })
             : blob;
         if (
           controller.signal.aborted ||

@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import { Download, ExternalLink, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
-  getSandboxedPreviewIframeProps,
+  getPdfPreviewIframeProps,
   resolveSafeInlineIframePreviewUrl,
 } from "@/lib/iframe-preview";
 import { cn } from "@/lib/utils";
@@ -44,7 +44,9 @@ export function ReceiptPreviewContent({
     kind === "pdf"
       ? resolveSafeInlineIframePreviewUrl(safeSource, { allowBlob: true })
       : null;
-  const pdfIframePreviewProps = getSandboxedPreviewIframeProps("pdf");
+  const pdfIframePreviewProps = getPdfPreviewIframeProps(safeInlinePdfSource, {
+    trustedBlobSource: Boolean(safeInlinePdfSource),
+  });
 
   useEffect(() => {
     if (pdfZoomRef.current) {
@@ -106,10 +108,11 @@ export function ReceiptPreviewContent({
         <div className="h-full overflow-auto">
           <div
             ref={pdfZoomRef}
-            className={cn("receipt-preview-zoom mx-auto w-full", isMobile ? "h-full" : "h-[72vh]")}
+            className={cn("receipt-preview-zoom mx-auto h-full w-full", isMobile ? "" : "min-h-[360px]")}
           >
             {safeInlinePdfSource ? (
               <iframe
+                key={safeInlinePdfSource}
                 src={safeInlinePdfSource}
                 title="Receipt PDF Preview"
                 className="h-full w-full rounded-sm bg-white"
@@ -126,12 +129,13 @@ export function ReceiptPreviewContent({
       ) : kind === "image" ? (
         <div className="flex h-full items-center justify-center overflow-auto">
           <img
+            key={safeSource}
             ref={imageZoomRef}
             src={safeSource}
             alt={fileName || "Receipt preview"}
             className={cn(
               "receipt-preview-zoom block rounded-sm object-contain",
-              isMobile ? "max-w-full" : "max-w-none",
+              isMobile ? "max-w-full" : "max-h-full max-w-full",
             )}
           />
         </div>

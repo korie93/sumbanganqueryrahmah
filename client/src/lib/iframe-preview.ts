@@ -12,6 +12,10 @@ type ResolveSafeInlineIframePreviewUrlOptions = {
   allowBlob?: boolean;
 };
 
+type PdfPreviewIframePropsOptions = {
+  trustedBlobSource?: boolean;
+};
+
 export function resolveSafeInlineIframePreviewUrl(
   value: string | null | undefined,
   { baseUrl, allowBlob = false }: ResolveSafeInlineIframePreviewUrlOptions = {},
@@ -47,4 +51,24 @@ export function getSandboxedPreviewIframeProps(
         ? PDF_PREVIEW_IFRAME_SANDBOX
         : DOCUMENT_PREVIEW_IFRAME_SANDBOX,
   };
+}
+
+export function isBlobPreviewSourceUrl(value: string | null | undefined): boolean {
+  return String(value || "").trim().toLowerCase().startsWith("blob:");
+}
+
+export function getPdfPreviewIframeProps(
+  source: string | null | undefined,
+  { trustedBlobSource = false }: PdfPreviewIframePropsOptions = {},
+): Pick<IframeHTMLAttributes<HTMLIFrameElement>, "referrerPolicy"> &
+  Partial<Pick<IframeHTMLAttributes<HTMLIFrameElement>, "sandbox">> {
+  if (trustedBlobSource && isBlobPreviewSourceUrl(source)) {
+    // Chrome's PDF viewer may block sandboxed blob PDFs. This path is limited
+    // to same-origin blob URLs created from authenticated receipt API responses.
+    return {
+      referrerPolicy: PREVIEW_IFRAME_REFERRER_POLICY,
+    };
+  }
+
+  return getSandboxedPreviewIframeProps("pdf");
 }
