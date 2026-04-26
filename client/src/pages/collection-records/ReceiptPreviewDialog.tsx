@@ -20,6 +20,7 @@ import { ReceiptPreviewSelector } from "@/pages/collection-records/ReceiptPrevie
 import { ReceiptPreviewToolbar } from "@/pages/collection-records/ReceiptPreviewToolbar";
 import {
   getReceiptPreviewZoomValue,
+  normalizeReceiptPreviewRotation,
   resolveSelectedReceipt,
   shouldShowReceiptPreviewZoomControls,
 } from "@/pages/collection-records/receipt-preview-dialog-utils";
@@ -62,6 +63,7 @@ export function ReceiptPreviewDialog({
 }: ReceiptPreviewDialogProps) {
   const isMobile = useIsMobile();
   const [zoom, setZoom] = useState(1);
+  const [rotationDegrees, setRotationDegrees] = useState(0);
   const [showDetails, setShowDetails] = useState(false);
   const safeSource = resolveSafePreviewSourceUrl(source);
   const hasUnsafeSource = Boolean(String(source || "").trim()) && !safeSource;
@@ -74,6 +76,7 @@ export function ReceiptPreviewDialog({
   useEffect(() => {
     if (open) {
       setZoom(1);
+      setRotationDegrees(0);
     }
   }, [fileName, open, selectedReceiptId, source]);
 
@@ -120,6 +123,8 @@ export function ReceiptPreviewDialog({
           canZoom={canZoom}
           zoom={zoom}
           setZoom={setZoom}
+          rotationDegrees={rotationDegrees}
+          setRotationDegrees={setRotationDegrees}
           isMobile={isMobile}
         />
 
@@ -139,6 +144,7 @@ export function ReceiptPreviewDialog({
           kind={kind}
           isMobile={isMobile}
           zoomValue={zoomValue}
+          rotationDegrees={normalizeReceiptPreviewRotation(rotationDegrees)}
           fileName={fileName}
           selectedReceipt={selectedReceipt}
           downloading={downloading}

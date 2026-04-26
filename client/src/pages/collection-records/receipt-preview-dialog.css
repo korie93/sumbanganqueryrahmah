@@ -1,5 +1,22 @@
-.receipt-preview-zoom {
+.receipt-preview-image-scroller {
+  overscroll-behavior: contain;
+  padding: 0.75rem;
+}
+
+.receipt-preview-image {
   contain: layout paint;
-  transform: scale(var(--receipt-preview-zoom, 1));
-  transform-origin: top center;
+  height: auto;
+  max-width: none;
+  transform: rotate(var(--receipt-preview-rotation, 0deg));
+  transform-origin: center center;
+  width: var(--receipt-preview-display-width, 960px);
+}
+
+.receipt-preview-image--mobile {
+  width: min(100%, var(--receipt-preview-display-width, 960px));
+}
+
+.receipt-preview-image[data-rotation="90"],
+.receipt-preview-image[data-rotation="270"] {
+  margin-block: clamp(6rem, 24vw, 18rem);
 }

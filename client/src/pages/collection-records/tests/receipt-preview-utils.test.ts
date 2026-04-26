@@ -9,6 +9,7 @@ import type { CollectionRecordReceipt } from "@/lib/api";
 import {
   clampReceiptPreviewZoom,
   getReceiptPreviewZoomValue,
+  normalizeReceiptPreviewRotation,
   resolveSelectedReceipt,
   shouldShowReceiptPreviewZoomControls,
 } from "../receipt-preview-dialog-utils";
@@ -46,8 +47,10 @@ test("shouldRenderInlineReceiptPdfPreview disables inline PDF preview on mobile"
 
 test("receipt preview dialog utils clamp zoom and resolve selected receipt", () => {
   assert.equal(clampReceiptPreviewZoom(0.1), 0.5);
-  assert.equal(clampReceiptPreviewZoom(3.5), 2);
+  assert.equal(clampReceiptPreviewZoom(3.5), 1.75);
   assert.equal(getReceiptPreviewZoomValue(1.24), "1.24");
+  assert.equal(normalizeReceiptPreviewRotation(450), 90);
+  assert.equal(normalizeReceiptPreviewRotation(-90), 270);
   assert.equal(
     shouldShowReceiptPreviewZoomControls({
       kind: "image",

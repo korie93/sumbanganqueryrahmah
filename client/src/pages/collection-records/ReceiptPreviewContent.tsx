@@ -18,6 +18,7 @@ type ReceiptPreviewContentProps = {
   kind: ReceiptPreviewKind;
   isMobile: boolean;
   zoomValue: string;
+  rotationDegrees: number;
   fileName: string;
   selectedReceipt: CollectionRecordReceipt | null;
   downloading: boolean;
@@ -64,19 +65,39 @@ type ReceiptImagePreviewProps = {
   alt: string;
   className: string;
   zoomValue: string;
+  rotationDegrees: number;
 };
+
+const RECEIPT_IMAGE_BASE_DISPLAY_WIDTH_PX = 960;
+const RECEIPT_IMAGE_MAX_DISPLAY_WIDTH_PX = 1_520;
 
 function ReceiptImagePreview({
   source,
   alt,
   className,
   zoomValue,
+  rotationDegrees,
 }: ReceiptImagePreviewProps) {
   const imageRef = useRef<HTMLImageElement | null>(null);
 
   useEffect(() => {
-    imageRef.current?.style.setProperty("--receipt-preview-zoom", zoomValue);
-  }, [zoomValue]);
+    const image = imageRef.current;
+    if (!image) {
+      return;
+    }
+
+    const zoom = Number(zoomValue);
+    const displayWidth = Number.isFinite(zoom)
+      ? Math.min(
+          RECEIPT_IMAGE_MAX_DISPLAY_WIDTH_PX,
+          Math.round(RECEIPT_IMAGE_BASE_DISPLAY_WIDTH_PX * zoom),
+        )
+      : RECEIPT_IMAGE_BASE_DISPLAY_WIDTH_PX;
+
+    image.style.setProperty("--receipt-preview-display-width", `${displayWidth}px`);
+    image.style.setProperty("--receipt-preview-rotation", `${rotationDegrees}deg`);
+    image.dataset.rotation = String(rotationDegrees);
+  }, [rotationDegrees, zoomValue]);
 
   useEffect(() => {
     const image = imageRef.current;
@@ -111,6 +132,7 @@ export function ReceiptPreviewContent({
   kind,
   isMobile,
   zoomValue,
+  rotationDegrees,
   fileName,
   selectedReceipt,
   downloading,
@@ -200,14 +222,15 @@ export function ReceiptPreviewContent({
           </div>
         </div>
       ) : kind === "image" ? (
-        <div className="flex h-full items-center justify-center overflow-auto">
+        <div className="receipt-preview-image-scroller flex h-full items-start justify-center overflow-auto">
           <ReceiptImagePreview
             source={safeSource}
             alt={fileName || "Receipt preview"}
             zoomValue={zoomValue}
+            rotationDegrees={rotationDegrees}
             className={cn(
-              "receipt-preview-zoom block rounded-sm object-contain",
-              isMobile ? "max-w-full" : "max-h-full max-w-full",
+              "receipt-preview-image block rounded-sm object-contain",
+              isMobile ? "receipt-preview-image--mobile" : "",
             )}
           />
         </div>

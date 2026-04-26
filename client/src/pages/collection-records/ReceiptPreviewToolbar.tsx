@@ -1,5 +1,5 @@
 import type { Dispatch, SetStateAction } from "react";
-import { ExternalLink, RotateCcw, ZoomIn, ZoomOut } from "lucide-react";
+import { ExternalLink, RotateCcw, RotateCw, ZoomIn, ZoomOut } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -7,6 +7,7 @@ import type { CollectionRecordReceipt } from "@/lib/api";
 import {
   MAX_RECEIPT_IMAGE_PREVIEW_ZOOM,
   MIN_RECEIPT_PREVIEW_ZOOM,
+  RECEIPT_PREVIEW_ROTATION_STEP_DEGREES,
 } from "@/pages/collection-records/receipt-preview-dialog-utils";
 
 type ReceiptPreviewToolbarProps = {
@@ -18,6 +19,8 @@ type ReceiptPreviewToolbarProps = {
   canZoom: boolean;
   zoom: number;
   setZoom: Dispatch<SetStateAction<number>>;
+  rotationDegrees: number;
+  setRotationDegrees: Dispatch<SetStateAction<number>>;
   isMobile: boolean;
 };
 
@@ -30,6 +33,8 @@ export function ReceiptPreviewToolbar({
   canZoom,
   zoom,
   setZoom,
+  rotationDegrees,
+  setRotationDegrees,
   isMobile,
 }: ReceiptPreviewToolbarProps) {
   const receiptDetailsId = selectedReceipt ? `receipt-preview-details-${selectedReceipt.id}` : undefined;
@@ -118,12 +123,29 @@ export function ReceiptPreviewToolbar({
               type="button"
               size="sm"
               variant="outline"
-              onClick={() => setZoom(1)}
-              disabled={zoom === 1}
+              onClick={() => {
+                setZoom(1);
+                setRotationDegrees(0);
+              }}
+              disabled={zoom === 1 && rotationDegrees === 0}
               className={isMobile ? "w-full" : ""}
             >
               <RotateCcw className="mr-2 h-4 w-4" />
               Reset
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() =>
+                setRotationDegrees((previous) =>
+                  (previous + RECEIPT_PREVIEW_ROTATION_STEP_DEGREES) % 360,
+                )
+              }
+              className={isMobile ? "w-full" : ""}
+            >
+              <RotateCw className="mr-2 h-4 w-4" />
+              Rotate
             </Button>
             <Button
               type="button"
@@ -138,7 +160,7 @@ export function ReceiptPreviewToolbar({
                 )
               }
               disabled={zoom >= MAX_RECEIPT_IMAGE_PREVIEW_ZOOM}
-              className={isMobile ? "col-span-2 w-full" : ""}
+              className={isMobile ? "w-full" : ""}
             >
               <ZoomIn className="mr-2 h-4 w-4" />
               {isMobile ? "Zoom +" : "Zoom In"}
