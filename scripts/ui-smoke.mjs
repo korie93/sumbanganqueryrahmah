@@ -2165,7 +2165,7 @@ const waitForVisible = async (locator, timeout = 1_500) => {
 const ensureLoginPageVisible = async (page) => {
   const loginHeading = page.getByRole("heading", {
     name: "Log In SQR System",
-    level: 2,
+    level: 1,
   });
   const usernameInput = page.getByTestId("input-username");
 
