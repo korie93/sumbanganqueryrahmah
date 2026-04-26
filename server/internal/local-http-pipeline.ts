@@ -58,6 +58,9 @@ export function registerLocalHttpPipeline(app: Express, options: LocalHttpPipeli
     frameguard: {
       action: "sameorigin",
     },
+    referrerPolicy: {
+      policy: "no-referrer",
+    },
     hsts: {
       maxAge: 15552000,
       includeSubDomains: true,

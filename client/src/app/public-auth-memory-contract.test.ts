@@ -45,3 +45,27 @@ test("forgot password route uses lightweight auth chrome without eager recovery 
     /\.public-auth-layout:not\(\.public-auth-layout--minimal\)\s+\.public-auth-layout__card/,
   );
 });
+
+test("login page exposes real labels and a stable primary heading", () => {
+  const loginSource = readClientSource("../pages/Login.tsx");
+
+  assert.match(loginSource, /<h1 className="login-title/);
+  assert.doesNotMatch(loginSource, /<h2 className="login-title/);
+  assert.match(loginSource, /<label htmlFor="login-username" className="sr-only">/);
+  assert.match(loginSource, /<label htmlFor="login-password" className="sr-only">/);
+  assert.match(loginSource, /<label htmlFor="login-two-factor-code" className="sr-only">/);
+});
+
+test("client entry fails clearly if the app root is missing", () => {
+  const mainSource = readClientSource("../main.tsx");
+
+  assert.match(mainSource, /const rootElement = document\.getElementById\("root"\);/);
+  assert.match(mainSource, /throw new Error\("SQR app root element was not found\."\);/);
+  assert.doesNotMatch(mainSource, /createRoot\(document\.getElementById\("root"\)!\)/);
+});
+
+test("browser color scheme metadata matches the light and dark token strategy", () => {
+  const indexSource = readClientSource("../../index.html");
+
+  assert.match(indexSource, /<meta name="color-scheme" content="light dark" \/>/);
+});

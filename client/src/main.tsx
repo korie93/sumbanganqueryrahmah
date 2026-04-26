@@ -36,7 +36,12 @@ installGlobalUnhandledRejectionHandler();
 
 initializeWebVitalsReporting();
 
-createRoot(document.getElementById("root")!).render(<App />);
+const rootElement = document.getElementById("root");
+if (!rootElement) {
+  throw new Error("SQR app root element was not found.");
+}
+
+createRoot(rootElement).render(<App />);
 
 if ((window as WindowWithBootShell).__SQR_BOOT_SHELL__) {
   window.requestAnimationFrame(() => {

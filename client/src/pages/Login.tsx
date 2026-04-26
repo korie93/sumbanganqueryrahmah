@@ -102,9 +102,9 @@ export default function Login({ onForgotPasswordClick, onLandingClick, onLoginSu
                   imageClassName="h-full w-full"
                 />
               </div>
-              <h2 className="login-title text-center text-2xl font-bold tracking-tight">
+              <h1 className="login-title text-center text-2xl font-bold tracking-tight">
                 Log In SQR System
-              </h2>
+              </h1>
               <p className="login-subtitle mt-2 text-sm">
                 Platform operasi dalaman Sumbangan Query Rahmah
               </p>
@@ -112,6 +112,9 @@ export default function Login({ onForgotPasswordClick, onLandingClick, onLoginSu
 
             <form className="login-form space-y-4" onSubmit={handleSubmit} {...loginFormBusyProps}>
               <div className="space-y-2">
+                <label htmlFor="login-username" className="sr-only">
+                  Username
+                </label>
                 <PublicAuthInput
                   id="login-username"
                   name="username"
@@ -135,6 +138,9 @@ export default function Login({ onForgotPasswordClick, onLandingClick, onLoginSu
 
               {twoFactorChallengeToken ? (
                 <div className="space-y-2">
+                  <label htmlFor="login-two-factor-code" className="sr-only">
+                    Kod pengesahan dua faktor
+                  </label>
                   <PublicAuthInput
                     id="login-two-factor-code"
                     name="twoFactorCode"
@@ -160,6 +166,9 @@ export default function Login({ onForgotPasswordClick, onLandingClick, onLoginSu
                 </div>
               ) : (
                 <div className="space-y-2">
+                  <label htmlFor="login-password" className="sr-only">
+                    Password
+                  </label>
                   <div className="relative">
                     <PublicAuthInput
                       id="login-password"
