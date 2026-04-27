@@ -181,7 +181,7 @@ Contoh fail deploy yang boleh anda salin dan ubah suai ada di:
 Semasa menyalin contoh ini, kekalkan hardening yang sudah disediakan:
 
 - `systemd`: `NoNewPrivileges`, `ProtectSystem`, `ProtectHome`, `PrivateTmp`, `RestrictAddressFamilies`
-- `nginx`: HSTS, `X-Content-Type-Options`, `X-DNS-Prefetch-Control`, `Cross-Origin-Resource-Policy`
+- `nginx`: TLS termination, request/connection limits, import body-size alignment, dan proxying. Browser security headers kekal diurus oleh Express/Helmet supaya tiada header HSTS/X-Frame-Options bercanggah.
 - `PM2`: restart backoff dan `min_uptime`
 
 ## 8. Sediakan Production .env
@@ -344,6 +344,7 @@ map $http_upgrade $connection_upgrade {
 
 limit_req_zone $binary_remote_addr zone=sqr_api_per_ip:10m rate=30r/m;
 limit_req_zone $binary_remote_addr zone=sqr_auth_per_ip:10m rate=10r/m;
+limit_req_zone $binary_remote_addr zone=sqr_telemetry_per_ip:10m rate=60r/m;
 limit_conn_zone $binary_remote_addr zone=sqr_conn_per_ip:10m;
 
 server {
@@ -368,16 +369,15 @@ server {
     ssl_session_tickets off;
 
     server_tokens off;
-    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
-    add_header X-Content-Type-Options "nosniff" always;
-    add_header X-Frame-Options "DENY" always;
-    add_header X-DNS-Prefetch-Control "off" always;
-    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
-    add_header Permissions-Policy "camera=(), microphone=(), geolocation=()" always;
-    add_header Cross-Origin-Opener-Policy "same-origin" always;
-    add_header Cross-Origin-Resource-Policy "same-origin" always;
+    # Browser security headers are owned by the Express/Helmet app layer.
+    # Do not duplicate HSTS/X-Frame-Options here unless Helmet is disabled or
+    # both layers are aligned. Helmet currently keeps X-Frame-Options at
+    # SAMEORIGIN for same-origin/blob preview flows and keeps HSTS preload off
+    # until every production subdomain is HTTPS-ready.
 
-    client_max_body_size 64M;
+    # Keep this equal to or higher than IMPORT_BODY_LIMIT so Express can return
+    # application-level import validation errors instead of generic Nginx 413s.
+    client_max_body_size 100M;
 
     location = /api/auth/login {
         limit_req zone=sqr_auth_per_ip burst=5 nodelay;
@@ -409,6 +409,24 @@ server {
         proxy_set_header Connection $connection_upgrade;
         proxy_read_timeout 300s;
         proxy_send_timeout 300s;
+    }
+
+    # Web Vitals telemetry intentionally stays outside /api for sendBeacon
+    # compatibility. The app still validates same-site Origin/Referer signals,
+    # JSON content type, a 4KB body limit, and bounded per-IP drop buckets.
+    # Do not send personal data, auth tokens, cookies, or session identifiers.
+    location = /telemetry/web-vitals {
+        limit_req zone=sqr_telemetry_per_ip burst=20 nodelay;
+        limit_conn sqr_conn_per_ip 10;
+
+        proxy_pass http://127.0.0.1:5000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_read_timeout 30s;
+        proxy_send_timeout 30s;
     }
 
     location /ws {

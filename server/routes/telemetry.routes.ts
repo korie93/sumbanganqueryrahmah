@@ -171,6 +171,11 @@ export function createWebVitalsTelemetryDropGuard(
 }
 
 export function registerTelemetryRoutes(app: Express, deps: TelemetryRouteDeps) {
+  // This route intentionally stays outside /api so browser sendBeacon/keepalive
+  // Web Vitals reports do not require a CSRF token. It is still guarded by
+  // same-site Origin/Referer checks, JSON content-type validation, a 4KB parser
+  // limit in the HTTP pipeline, and bounded per-IP drop buckets. Do not send
+  // PII, auth/session identifiers, cookies, tokens, or raw user input here.
   app.post(
     "/telemetry/web-vitals",
     deps.webVitalsRequestGuard ?? createWebVitalsTelemetryRequestGuard(),

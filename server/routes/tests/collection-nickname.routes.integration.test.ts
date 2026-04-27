@@ -12,6 +12,10 @@ import {
   stopTestServer,
 } from "./http-test-utils";
 
+// Keep this route integration test fast. Production hashing still uses
+// CREDENTIAL_BCRYPT_COST through the real password service path.
+const TEST_BCRYPT_COST = 10;
+
 type CollectionNicknameRouteStorageDouble = Pick<
   CollectionRouteDeps["storage"],
   | "getCollectionNicknameAuthProfileByName"
@@ -149,7 +153,7 @@ test("POST /api/collection/nickname-auth/login accepts the reset temporary passw
   await storage.setCollectionNicknamePassword({
     nicknameId: profile.id,
     passwordHash: await import("bcrypt").then(({ default: bcrypt }) =>
-      bcrypt.hash(COLLECTION_NICKNAME_TEMP_PASSWORD, 10)),
+      bcrypt.hash(COLLECTION_NICKNAME_TEMP_PASSWORD, TEST_BCRYPT_COST)),
     mustChangePassword: true,
     passwordResetBySuperuser: true,
     passwordUpdatedAt: new Date("2026-03-27T00:00:00.000Z"),

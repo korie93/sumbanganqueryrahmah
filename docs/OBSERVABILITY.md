@@ -45,7 +45,7 @@ Frontend menghantar Web Vitals ke:
 
 - `POST /telemetry/web-vitals`
 
-Route public ini dilindungi oleh throttling ringan per client window dan lebihan sample dijatuhkan secara senyap dengan `204`, supaya ingestion sah tidak rosak tetapi spam tidak menambah log noise atau churn ring buffer. Monitor/admin flow boleh membaca ringkasan ini semula melalui route dalaman yang sesuai. Ini membantu melihat pengalaman pengguna sebenar tanpa menunggu external RUM platform.
+Route ini sengaja berada di luar `/api/*` supaya `sendBeacon`/`keepalive` browser telemetry tidak bergantung pada CSRF token. Ia bukan endpoint ingestion umum: server masih menguatkuasakan same-site Origin/Referer signal, JSON content type, limit body 4KB, dan drop guard per-IP yang bounded. Lebihan sample dijatuhkan secara senyap dengan `204`, supaya ingestion sah tidak rosak tetapi spam tidak menambah log noise atau churn ring buffer. Jangan hantar data peribadi, token, cookie, session id, atau identifier auth ke payload Web Vitals. Monitor/admin flow boleh membaca ringkasan ini semula melalui route dalaman yang sesuai. Ini membantu melihat pengalaman pengguna sebenar tanpa menunggu external RUM platform.
 
 ### Runtime Monitor Signals
 
