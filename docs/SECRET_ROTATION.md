@@ -64,30 +64,28 @@ guards reject that configuration.
 ## `TWO_FACTOR_ENCRYPTION_KEY`
 
 `TWO_FACTOR_ENCRYPTION_KEY` encrypts stored TOTP secrets. The current runtime
-uses the configured key for both encryption and decryption, so rotation is more
-sensitive than session secret rotation.
+uses the configured key for new encryption and accepts
+`TWO_FACTOR_ENCRYPTION_KEY_PREVIOUS` for decryption during a manual rotation
+window. Keep previous keys only for the shortest operational window needed to
+avoid locking out already-enrolled 2FA users.
 
-### Safe Options
+### Planned Rotation
 
-- Preferred: add a dedicated migration/re-encryption task before rotating this
-  key.
-- Emergency: disable and re-enroll 2FA for affected users after replacing the
-  key.
+1. Generate a new `TWO_FACTOR_ENCRYPTION_KEY`.
+2. Move the current key into `TWO_FACTOR_ENCRYPTION_KEY_PREVIOUS`.
+3. Set the generated value as the new `TWO_FACTOR_ENCRYPTION_KEY`.
+4. Deploy or restart all app processes together.
+5. Verify login with an already-enrolled 2FA user.
+6. Verify starting and confirming new 2FA setup still works.
+7. Remove old values from `TWO_FACTOR_ENCRYPTION_KEY_PREVIOUS` after the
+   compatibility window or after a dedicated re-encryption/re-enrollment pass.
 
-### Planned Rotation Requirements
+### Rollback
 
-Do not replace `TWO_FACTOR_ENCRYPTION_KEY` in production unless one of these is
-true:
-
-- all encrypted 2FA secrets have been re-encrypted with the new key, or
-- affected users have had 2FA disabled and will re-enroll.
-
-After rotation, verify:
-
-- starting 2FA setup works
-- confirming 2FA setup works
-- login with 2FA works for a re-enrolled user
-- disabling 2FA works
+If users cannot decrypt existing 2FA secrets after a rotation, restore the old
+key as the active `TWO_FACTOR_ENCRYPTION_KEY` or keep it in
+`TWO_FACTOR_ENCRYPTION_KEY_PREVIOUS`, then restart all app processes with the
+correct environment.
 
 ## `COLLECTION_PII_ENCRYPTION_KEY`
 

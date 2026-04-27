@@ -21,6 +21,10 @@ export function getTwoFactorEncryptionSecret(): string | null {
   return readOptionalString("TWO_FACTOR_ENCRYPTION_KEY");
 }
 
+function getTwoFactorPreviousSecrets(): string[] {
+  return readCommaSeparatedList("TWO_FACTOR_ENCRYPTION_KEY_PREVIOUS");
+}
+
 export function getCollectionPiiEncryptionSecret(): string | null {
   return readOptionalString("COLLECTION_PII_ENCRYPTION_KEY");
 }
@@ -34,6 +38,9 @@ export function getTwoFactorDecryptionSecrets(): string[] {
   const configured = getTwoFactorEncryptionSecret();
   if (configured) {
     secrets.add(configured);
+  }
+  for (const previousSecret of getTwoFactorPreviousSecrets()) {
+    secrets.add(previousSecret);
   }
   return Array.from(secrets);
 }

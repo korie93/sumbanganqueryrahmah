@@ -146,6 +146,21 @@ test("runtime config accepts production startup when previous collection PII key
   );
 });
 
+test("runtime config accepts production startup when previous two-factor keys are configured for compatibility", async () => {
+  await withEnv(
+    {
+      ...productionBaseOverrides,
+      TWO_FACTOR_ENCRYPTION_KEY: "T".repeat(32),
+      TWO_FACTOR_ENCRYPTION_KEY_PREVIOUS: "U".repeat(32),
+      BACKUP_ENCRYPTION_KEY: "A".repeat(32),
+    },
+    async () => {
+      const runtimeModule = await importRuntimeFresh();
+      assert.equal(runtimeModule.runtimeConfig.app.nodeEnv, "production");
+    },
+  );
+});
+
 test("runtime config accepts production startup when required hardening env vars are configured", async () => {
   await withEnv(
     {
