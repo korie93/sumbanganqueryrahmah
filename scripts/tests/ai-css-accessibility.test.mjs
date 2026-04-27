@@ -24,6 +24,6 @@ test("theme tokens keep a dvh to svh to vh viewport fallback chain", () => {
   assert.match(css, /--viewport-min-height-value:\s*100dvh;/);
   assert.match(css, /--app-shell-min-height-value:\s*calc\(100dvh - 3\.5rem\);/);
   assert.match(css, /@supports not \(height: 100dvh\)\s*\{\s*:root \{\s*--viewport-min-height-value:\s*100svh;/s);
-  assert.match(css, /@supports not \(height: 100svh\)\s*\{\s*:root \{\s*--viewport-min-height-value:\s*100vh;/s);
+  assert.match(css, /@supports not \(height: 100dvh\) and not \(height: 100svh\)\s*\{\s*:root \{\s*--viewport-min-height-value:\s*100vh;/s);
   assert.match(css, /--app-shell-min-height-value:\s*calc\(100vh - 3\.5rem\);/);
 });

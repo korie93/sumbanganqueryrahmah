@@ -125,12 +125,14 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
     } as const)
     : {};
   const triggerDisclosureA11yProps = {
-    "aria-expanded": isOpen ? "true" : "false",
+    "aria-expanded": isOpen,
   } as const;
   const panelId = useId();
   const panelTitleId = useId();
   const panelDescriptionId = useId();
   const panelSurfaceRef = useRef<HTMLElement | null>(null);
+  const triggerButtonRef = useRef<HTMLButtonElement | null>(null);
+  const wasDesktopPanelVisibleRef = useRef(false);
 
   const minimizedStatus = resolveFloatingAIMinimizedStatus(aiStatus);
   const handleTriggerToggleClick = useCallback((event: MouseEvent<HTMLButtonElement>) => {
@@ -167,6 +169,44 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
     });
   }, [floatingRootRef, isMobile, shouldShowPanel]);
 
+  useEffect(() => {
+    if (isMobile || !shouldShowPanel || typeof window === "undefined") {
+      return;
+    }
+
+    const frame = window.requestAnimationFrame(() => {
+      const dialogElement = panelSurfaceRef.current;
+      const queryInput = dialogElement?.querySelector<HTMLElement>(
+        "[data-floating-ai-query-input='true']",
+      );
+
+      (queryInput ?? dialogElement)?.focus();
+    });
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+    };
+  }, [isMobile, shouldShowPanel]);
+
+  useEffect(() => {
+    if (isMobile) {
+      wasDesktopPanelVisibleRef.current = false;
+      return;
+    }
+
+    const wasVisible = wasDesktopPanelVisibleRef.current;
+    wasDesktopPanelVisibleRef.current = shouldShowPanel;
+
+    if (
+      wasVisible
+      && !shouldShowPanel
+      && !layoutState.rootHidden
+      && !layoutState.triggerHidden
+    ) {
+      triggerButtonRef.current?.focus();
+    }
+  }, [isMobile, layoutState.rootHidden, layoutState.triggerHidden, shouldShowPanel]);
+
   if (hiddenForAiPage) return null;
 
   return (
@@ -197,7 +237,7 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
         <FloatingPanelShell
           hidden={!shouldShowPanel}
           className={cn(
-            "pointer-events-none absolute transition-all duration-200",
+            "pointer-events-none absolute transition-[opacity,transform] duration-200",
             styles.floatingPanelShell,
             layoutState.panel.mode === "fullscreen" ? styles.floatingPanelShellFullscreen : "",
             shouldShowPanel ? "translate-y-0 opacity-100" : "translate-y-2 opacity-0",
@@ -250,7 +290,7 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
               )}
             >
               <div className="min-w-0">
-                <p
+                <h2
                   id={panelTitleId}
                   className={cn(
                     "truncate font-semibold",
@@ -259,7 +299,7 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
                   )}
                 >
                   AI SQR
-                </p>
+                </h2>
                 <p
                   id={panelDescriptionId}
                   className={cn("truncate text-[11px]", isMobile ? "text-white/70" : "text-slate-600 dark:text-slate-300/90")}
@@ -323,7 +363,7 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
                 <Suspense
                   fallback={
                     <div className="flex h-full items-center justify-center">
-                      <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary/30 border-t-primary" />
+                      <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary/30 border-t-primary motion-reduce:animate-none" />
                     </div>
                   }
                 >
@@ -357,6 +397,7 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
           </div>
         ) : null}
         <button
+          ref={triggerButtonRef}
           type="button"
           onClick={handleTriggerToggleClick}
           title="AI SQR"

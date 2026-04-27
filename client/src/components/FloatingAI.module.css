@@ -78,6 +78,14 @@
   animation: pulseOutline 1.5s infinite;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .aiThinkingRing::after {
+    animation: none;
+    opacity: 0.45;
+    transform: none;
+  }
+}
+
 @media (min-width: 768px) {
   .floatingPanelShell {
     min-width: min(360px, calc(100% - (var(--floating-ai-edge-gap) * 2)));

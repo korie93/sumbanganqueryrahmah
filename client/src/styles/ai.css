@@ -64,6 +64,9 @@
   gap: 12px;
   min-height: 0;
   overscroll-behavior: contain;
+  scrollbar-color: var(--ai-scroll-thumb) transparent;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
 }
 
 .ai-chat-container[data-compact='true'] .ai-messages {
@@ -192,6 +195,18 @@
   40% {
     transform: translateY(-2px);
     opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ai-typing-spinner,
+  .ai-typing-dots span {
+    animation: none;
+  }
+
+  .ai-typing-dots span {
+    opacity: 0.65;
+    transform: none;
   }
 }
 

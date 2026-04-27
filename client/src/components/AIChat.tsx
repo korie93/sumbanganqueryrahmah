@@ -1,3 +1,4 @@
+import { useId } from "react";
 import { Loader2, StopCircle, SendHorizonal, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -25,6 +26,7 @@ export default function AIChat({
   onStatusChange,
 }: AIChatProps) {
   const isMobile = useIsMobile();
+  const queryInputId = useId();
   const {
     aiStatus,
     cancelAISearch,
@@ -106,10 +108,14 @@ export default function AIChat({
       </div>
 
       <div className="ai-input-container">
+        <label htmlFor={queryInputId} className="sr-only">
+          Taip soalan kepada AI SQR
+        </label>
         <Textarea
           ref={textareaRef}
-          id="floating-ai-query"
+          id={queryInputId}
           name="floatingAiQuery"
+          data-floating-ai-query-input="true"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           placeholder={compactMode ? "Taip soalan ringkas..." : "Taip soalan anda..."}
