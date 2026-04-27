@@ -64,7 +64,6 @@
   gap: 12px;
   min-height: 0;
   overscroll-behavior: contain;
-  scrollbar-color: var(--ai-scroll-thumb) transparent;
   scrollbar-gutter: stable;
   scrollbar-width: thin;
 }
