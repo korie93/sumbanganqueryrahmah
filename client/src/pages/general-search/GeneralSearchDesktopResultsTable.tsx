@@ -73,10 +73,10 @@ export function GeneralSearchDesktopResultsTable({
       <table className="w-full text-sm">
         <thead className="sticky top-0 bg-muted">
           <tr>
-            <th className="p-3 text-left font-medium text-muted-foreground">#</th>
-            <th className="p-3 text-left font-medium text-muted-foreground">Action</th>
+            <th scope="col" className="p-3 text-left font-medium text-muted-foreground">#</th>
+            <th scope="col" className="p-3 text-left font-medium text-muted-foreground">Action</th>
             {headers.map((header) => (
-              <th key={header} className="whitespace-nowrap p-3 text-left font-medium text-muted-foreground">
+              <th key={header} scope="col" className="whitespace-nowrap p-3 text-left font-medium text-muted-foreground">
                 {header}
               </th>
             ))}

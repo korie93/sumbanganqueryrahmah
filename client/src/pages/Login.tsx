@@ -47,24 +47,19 @@ export default function Login({ onForgotPasswordClick, onLandingClick, onLoginSu
       "aria-invalid": "true" as const,
       "aria-describedby": "login-username-error",
     }
-    : {
-      "aria-invalid": "false" as const,
-    };
+    : {};
   const passwordInvalidProps = passwordError
     ? {
       "aria-invalid": "true" as const,
       "aria-describedby": "login-password-error",
     }
-    : {
-      "aria-invalid": "false" as const,
-    };
+    : {};
   const twoFactorInvalidProps = twoFactorCodeError
     ? {
       "aria-invalid": "true" as const,
       "aria-describedby": "login-two-factor-help login-two-factor-error",
     }
     : {
-      "aria-invalid": "false" as const,
       "aria-describedby": "login-two-factor-help",
     };
 

@@ -24,16 +24,16 @@ export function ViewerStandardTable({
       <table className="ops-data-table w-full text-sm">
         <thead className="sticky top-0 z-[var(--z-sticky-header)] bg-muted">
           <tr>
-            <th className="w-10 p-3 text-left font-medium text-muted-foreground">
+            <th scope="col" className="w-10 p-3 text-left font-medium text-muted-foreground">
               <Checkbox
                 checked={selectAllFiltered && filteredRows.length > 0}
                 onCheckedChange={onToggleSelectAllFiltered}
                 data-testid="checkbox-select-all-rows"
               />
             </th>
-            <th className="w-12 p-3 text-left font-medium text-muted-foreground">#</th>
+            <th scope="col" className="w-12 p-3 text-left font-medium text-muted-foreground">#</th>
             {visibleHeaders.map((header) => (
-              <th key={header} className="whitespace-nowrap p-3 text-left font-medium text-muted-foreground">
+              <th key={header} scope="col" className="whitespace-nowrap p-3 text-left font-medium text-muted-foreground">
                 {header}
               </th>
             ))}

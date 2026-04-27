@@ -156,10 +156,10 @@ export function AnalysisFilesList({
                 <table className="w-full text-sm">
                   <thead className="bg-muted sticky top-0 z-[var(--z-sticky-header)]">
                     <tr>
-                      <th className="text-left p-3 font-medium text-muted-foreground">#</th>
-                      <th className="text-left p-3 font-medium text-muted-foreground">Name</th>
-                      <th className="text-left p-3 font-medium text-muted-foreground">Filename</th>
-                      <th className="text-right p-3 font-medium text-muted-foreground">Row Count</th>
+                      <th scope="col" className="text-left p-3 font-medium text-muted-foreground">#</th>
+                      <th scope="col" className="text-left p-3 font-medium text-muted-foreground">Name</th>
+                      <th scope="col" className="text-left p-3 font-medium text-muted-foreground">Filename</th>
+                      <th scope="col" className="text-right p-3 font-medium text-muted-foreground">Row Count</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -294,10 +294,10 @@ export function AnalysisDuplicatesPanel({
                   <table className="w-full text-sm">
                   <thead className="bg-muted sticky top-0 z-[var(--z-sticky-header)]">
                       <tr>
-                        <th className="text-left p-3 font-medium text-muted-foreground">#</th>
-                        <th className="text-left p-3 font-medium text-muted-foreground">Value</th>
-                        <th className="text-left p-3 font-medium text-muted-foreground">Count</th>
-                        <th className="text-left p-3 font-medium text-muted-foreground">Action</th>
+                        <th scope="col" className="text-left p-3 font-medium text-muted-foreground">#</th>
+                        <th scope="col" className="text-left p-3 font-medium text-muted-foreground">Value</th>
+                        <th scope="col" className="text-left p-3 font-medium text-muted-foreground">Count</th>
+                        <th scope="col" className="text-left p-3 font-medium text-muted-foreground">Action</th>
                       </tr>
                     </thead>
                     <tbody>

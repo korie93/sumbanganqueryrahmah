@@ -187,9 +187,9 @@ export function SingleImportPanel({
             <table className="w-full text-sm">
               <thead className="bg-muted">
                 <tr>
-                  <th className="p-3 text-left font-medium text-muted-foreground">#</th>
+                  <th scope="col" className="p-3 text-left font-medium text-muted-foreground">#</th>
                   {headers.map((header) => (
-                    <th key={header} className="p-3 text-left font-medium text-muted-foreground">
+                    <th key={header} scope="col" className="p-3 text-left font-medium text-muted-foreground">
                       {header}
                     </th>
                   ))}
