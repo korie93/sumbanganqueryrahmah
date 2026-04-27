@@ -47,10 +47,10 @@ test("floating AI motion and scroll styles include accessibility fallbacks", () 
   const aiCss = readClientSource("styles/ai.css");
   const floatingCss = readComponentSource("FloatingAI.module.css");
 
-  assert.match(aiCss, /scrollbar-width:\s*thin/);
-  assert.match(aiCss, /scrollbar-gutter:\s*stable/);
   assert.match(aiCss, /\.ai-messages::-webkit-scrollbar-thumb[\s\S]*background:\s*var\(--ai-scroll-thumb\)/);
   assert.doesNotMatch(aiCss, /scrollbar-color:/);
+  assert.doesNotMatch(aiCss, /scrollbar-gutter:/);
+  assert.doesNotMatch(aiCss, /scrollbar-width:/);
   assert.match(aiCss, /@media \(prefers-reduced-motion: reduce\)/);
   assert.match(floatingCss, /@media \(prefers-reduced-motion: reduce\)/);
   assert.match(floatingCss, /\.aiThinkingRing::after[\s\S]*animation:\s*none/);
