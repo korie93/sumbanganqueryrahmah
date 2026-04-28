@@ -20,9 +20,8 @@ type AiGateQueueItem = {
   role: AiRole;
   route: AiRoute;
   enqueuedAt: number;
-  resolve: (result: AiGateAcquireResult) => void;
-  reject: (error: Error & { code?: string; status?: number }) => void;
-  timeout: ReturnType<typeof setTimeout>;
+  finalize: (outcome: { result?: AiGateAcquireResult; error?: Error & { code?: string; status?: number } }) => void;
+  timeout: ReturnType<typeof setTimeout> | null;
 };
 
 type AiRoleLimits = Record<AiRole, number>;
@@ -67,6 +66,16 @@ export function createAiConcurrencyGate(options: CreateAiConcurrencyGateOptions)
   };
   const queue: AiGateQueueItem[] = [];
 
+  const removeQueuedItem = (id: number) => {
+    const index = queue.findIndex((item) => item.id === id);
+    if (index < 0) {
+      return null;
+    }
+
+    const [item] = queue.splice(index, 1);
+    return item ?? null;
+  };
+
   const normalizeAiRole = (role: string | undefined): AiRole => {
     if (role === "superuser") return "superuser";
     if (role === "admin") return "admin";
@@ -110,13 +119,13 @@ export function createAiConcurrencyGate(options: CreateAiConcurrencyGateOptions)
         const item = queue[index];
         if (!canAcquire(item.role)) continue;
 
-        queue.splice(index, 1);
-        clearTimeout(item.timeout);
         progressed = true;
 
-        item.resolve({
-          lease: acquire(item.role, item.route),
-          waitedMs: Math.max(0, Date.now() - item.enqueuedAt),
+        item.finalize({
+          result: {
+            lease: acquire(item.role, item.route),
+            waitedMs: Math.max(0, Date.now() - item.enqueuedAt),
+          },
         });
         break;
       }
@@ -159,8 +168,9 @@ export function createAiConcurrencyGate(options: CreateAiConcurrencyGateOptions)
 
     const queuedItems = queue.splice(0, queue.length);
     for (const item of queuedItems) {
-      clearTimeout(item.timeout);
-      item.reject(createGateStoppedError());
+      item.finalize({
+        error: createGateStoppedError(),
+      });
     }
   };
 
@@ -188,28 +198,48 @@ export function createAiConcurrencyGate(options: CreateAiConcurrencyGateOptions)
 
     return new Promise<AiGateAcquireResult>((resolve, reject) => {
       const id = ++sequence;
-      const timeout = setTimeout(() => {
-        const index = queue.findIndex((item) => item.id === id);
-        if (index >= 0) {
-          queue.splice(index, 1);
+      let settled = false;
+      let timeout: ReturnType<typeof setTimeout> | null = null;
+
+      const finalize = (outcome: { result?: AiGateAcquireResult; error?: Error & { code?: string; status?: number } }) => {
+        if (settled) {
+          return;
         }
 
-        reject(
-          createGateError(
+        settled = true;
+
+        if (timeout) {
+          clearTimeout(timeout);
+          timeout = null;
+        }
+
+        removeQueuedItem(id);
+
+        if (outcome.error) {
+          reject(outcome.error);
+          return;
+        }
+
+        resolve(outcome.result!);
+      };
+
+      timeout = setTimeout(() => {
+        finalize({
+          error: createGateError(
             "AI queue wait timed out. Please retry.",
             "AI_GATE_WAIT_TIMEOUT",
             429,
           ),
-        );
-      }, queueWaitMs).unref();
+        });
+      }, queueWaitMs);
+      timeout.unref();
 
       queue.push({
         id,
         role,
         route,
         enqueuedAt: Date.now(),
-        resolve,
-        reject,
+        finalize,
         timeout,
       });
 

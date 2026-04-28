@@ -12,6 +12,7 @@ import {
   startTestServer,
   stopTestServer,
 } from "./http-test-utils";
+import type { Request, Response } from "express";
 
 function createTelemetryRouteHarness(options: {
   webVitalsDropGuard?: Parameters<typeof registerTelemetryRoutes>[1]["webVitalsDropGuard"];
@@ -55,6 +56,39 @@ function createValidWebVitalsPayload(overrides: Record<string, unknown> = {}) {
     ts: "2026-04-04T08:30:00.000Z",
     ...overrides,
   };
+}
+
+function runDropGuard(
+  guard: ReturnType<typeof createWebVitalsTelemetryDropGuard>,
+  ip: string,
+) {
+  let statusCode = 200;
+  let ended = false;
+  let nextCalled = false;
+
+  const req = {
+    ip,
+    socket: {
+      remoteAddress: ip,
+    },
+    headers: {},
+  } as Request;
+  const res = {
+    status(code: number) {
+      statusCode = code;
+      return this;
+    },
+    end() {
+      ended = true;
+      return this;
+    },
+  } as unknown as Response;
+
+  guard(req, res, () => {
+    nextCalled = true;
+  });
+
+  return { statusCode, ended, nextCalled };
 }
 
 test("POST /telemetry/web-vitals accepts a valid web vitals payload", async () => {
@@ -115,6 +149,76 @@ test("POST /telemetry/web-vitals silently drops excess samples per client window
   } finally {
     await stopTestServer(server);
   }
+});
+
+test("web vitals drop guard evicts the oldest buckets once the configured cap is exceeded", () => {
+  const nowMs = 1_000;
+  const guard = createWebVitalsTelemetryDropGuard({
+    maxEventsPerWindow: 1,
+    maxBuckets: 2,
+    now: () => nowMs,
+    windowMs: 10_000,
+  });
+
+  assert.deepEqual(runDropGuard(guard, "10.0.0.1"), {
+    statusCode: 200,
+    ended: false,
+    nextCalled: true,
+  });
+  assert.deepEqual(runDropGuard(guard, "10.0.0.2"), {
+    statusCode: 200,
+    ended: false,
+    nextCalled: true,
+  });
+  assert.deepEqual(runDropGuard(guard, "10.0.0.3"), {
+    statusCode: 200,
+    ended: false,
+    nextCalled: true,
+  });
+
+  assert.deepEqual(runDropGuard(guard, "10.0.0.1"), {
+    statusCode: 200,
+    ended: false,
+    nextCalled: true,
+  });
+  assert.deepEqual(runDropGuard(guard, "10.0.0.1"), {
+    statusCode: 204,
+    ended: true,
+    nextCalled: false,
+  });
+  assert.deepEqual(runDropGuard(guard, "10.0.0.3"), {
+    statusCode: 204,
+    ended: true,
+    nextCalled: false,
+  });
+});
+
+test("web vitals drop guard removes idle buckets on the next request after the window expires", () => {
+  let nowMs = 0;
+  const guard = createWebVitalsTelemetryDropGuard({
+    maxEventsPerWindow: 1,
+    maxBuckets: 2,
+    now: () => nowMs,
+    windowMs: 1_000,
+  });
+
+  assert.deepEqual(runDropGuard(guard, "10.0.1.1"), {
+    statusCode: 200,
+    ended: false,
+    nextCalled: true,
+  });
+
+  nowMs = 1_500;
+  assert.deepEqual(runDropGuard(guard, "10.0.1.2"), {
+    statusCode: 200,
+    ended: false,
+    nextCalled: true,
+  });
+  assert.deepEqual(runDropGuard(guard, "10.0.1.1"), {
+    statusCode: 200,
+    ended: false,
+    nextCalled: true,
+  });
 });
 
 test("POST /telemetry/web-vitals silently drops cross-site browser telemetry attempts", async () => {

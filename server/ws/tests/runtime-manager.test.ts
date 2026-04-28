@@ -747,6 +747,40 @@ test("runtime manager removes registered sockets cleanly on close", async () => 
   }
 });
 
+test("runtime manager removes registered sockets cleanly on error", async () => {
+  const wss = new FakeWebSocketServer();
+  const providedMap = new Map<string, WebSocket>();
+  const socket = new FakeWebSocket();
+  const activityId = "activity-registered-error";
+
+  createRuntimeWebSocketManager({
+    wss: wss as unknown as import("ws").WebSocketServer,
+    storage: {
+      getActivityById: async () => createActiveSession(activityId),
+      clearCollectionNicknameSessionByActivity: async () => undefined,
+    },
+    secret: TEST_SECRET,
+    connectedClients: providedMap,
+  });
+
+  try {
+    wss.emit("connection", socket as unknown as WebSocket, createConnectionRequest(createWsToken(activityId)));
+    await flushAsyncWork();
+
+    assert.equal(providedMap.get(activityId), socket as unknown as WebSocket);
+
+    socket.fail(new Error("registered socket failed"));
+    await flushAsyncWork();
+
+    assert.equal(providedMap.has(activityId), false);
+    assert.equal(socket.listenerCount("close"), 0);
+    assert.equal(socket.listenerCount("error"), 0);
+    assert.equal(socket.listenerCount("pong"), 0);
+  } finally {
+    wss.emit("close");
+  }
+});
+
 test("runtime manager registers the replacement socket before closing the previous connection", async () => {
   const wss = new FakeWebSocketServer();
   const providedMap = new Map<string, WebSocket>();
@@ -969,6 +1003,45 @@ test("runtime manager heartbeat does not terminate sockets that are still connec
     assert.equal(socket.terminateCalls, 0);
     assert.equal(socket.pingCalls, 0);
     assert.equal(providedMap.get(activityId), socket as unknown as WebSocket);
+  } finally {
+    heartbeat.restore();
+    wss.emit("close");
+  }
+});
+
+test("runtime manager heartbeat terminates stale sockets and clears tracked state", async () => {
+  const heartbeat = interceptHeartbeatRegistration();
+  const wss = new FakeWebSocketServer();
+  const providedMap = new Map<string, WebSocket>();
+  const socket = new FakeWebSocket();
+  const activityId = "activity-heartbeat-stale";
+
+  createRuntimeWebSocketManager({
+    wss: wss as unknown as import("ws").WebSocketServer,
+    storage: {
+      getActivityById: async () => createActiveSession(activityId),
+      clearCollectionNicknameSessionByActivity: async () => undefined,
+    },
+    secret: TEST_SECRET,
+    connectedClients: providedMap,
+  });
+
+  try {
+    wss.emit("connection", socket as unknown as WebSocket, createConnectionRequest(createWsToken(activityId)));
+    await flushAsyncWork();
+
+    heartbeat.getHeartbeatCallback()();
+    assert.equal(socket.pingCalls, 1);
+    assert.equal(providedMap.get(activityId), socket as unknown as WebSocket);
+
+    heartbeat.getHeartbeatCallback()();
+    await flushAsyncWork();
+
+    assert.equal(socket.terminateCalls, 1);
+    assert.equal(providedMap.has(activityId), false);
+    assert.equal(socket.listenerCount("close"), 0);
+    assert.equal(socket.listenerCount("error"), 0);
+    assert.equal(socket.listenerCount("pong"), 0);
   } finally {
     heartbeat.restore();
     wss.emit("close");
