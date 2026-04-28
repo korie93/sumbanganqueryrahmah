@@ -1,19 +1,43 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { generateTemporaryPassword } from "../passwords";
+import bcrypt from "bcrypt";
+import {
+  CREDENTIAL_PASSWORD_MAX_LENGTH,
+  isCredentialPasswordWithinMaxLength,
+  isStrongPassword,
+} from "../credentials";
+import { hashPassword, verifyPassword } from "../passwords";
 
-test("generateTemporaryPassword keeps minimum length and credential complexity", () => {
-  const password = generateTemporaryPassword(8);
+const VALID_BCRYPT_HASH = "$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewY5NU7z6xUfIjm6";
 
-  assert.equal(password.length, 16);
-  assert.match(password, /[A-Z]/);
-  assert.match(password, /[a-z]/);
-  assert.match(password, /\d/);
-  assert.match(password, /[!@#$%^&*()\-_=+]/);
+test("credential password policy accepts normal passwords and rejects oversized input", () => {
+  assert.equal(isStrongPassword("StrongPass123"), true);
+  assert.equal(isStrongPassword("short1"), false);
+  assert.equal(isStrongPassword("a".repeat(CREDENTIAL_PASSWORD_MAX_LENGTH + 1)), false);
+  assert.equal(isCredentialPasswordWithinMaxLength("a".repeat(CREDENTIAL_PASSWORD_MAX_LENGTH)), true);
+  assert.equal(isCredentialPasswordWithinMaxLength("a".repeat(CREDENTIAL_PASSWORD_MAX_LENGTH + 1)), false);
 });
 
-test("generateTemporaryPassword honors longer requested lengths", () => {
-  const password = generateTemporaryPassword(24);
+test("verifyPassword rejects oversized password input before bcrypt comparison", async (t) => {
+  const compareMock = t.mock.method(bcrypt, "compare", async () => {
+    throw new Error("bcrypt.compare should not be called for oversized passwords");
+  });
 
-  assert.equal(password.length, 24);
+  assert.equal(
+    await verifyPassword("x".repeat(CREDENTIAL_PASSWORD_MAX_LENGTH + 1), VALID_BCRYPT_HASH),
+    false,
+  );
+  assert.equal(compareMock.mock.callCount(), 0);
+});
+
+test("hashPassword rejects oversized password input before bcrypt hashing", async (t) => {
+  const hashMock = t.mock.method(bcrypt, "hash", async () => {
+    throw new Error("bcrypt.hash should not be called for oversized passwords");
+  });
+
+  await assert.rejects(
+    () => hashPassword("x".repeat(CREDENTIAL_PASSWORD_MAX_LENGTH + 1)),
+    /maximum supported length/i,
+  );
+  assert.equal(hashMock.mock.callCount(), 0);
 });

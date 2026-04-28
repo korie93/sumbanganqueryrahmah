@@ -13,6 +13,7 @@ import {
   buildSettingsMutationErrorToast,
   isStrongPassword,
 } from "@/pages/settings/utils";
+import { getCredentialPasswordPolicyMessage } from "@shared/password-policy";
 import {
   normalizeCredentialUsername,
   validateCredentialUsername,
@@ -93,8 +94,7 @@ export function useSettingsMyAccountCredentialState({
     if (!isStrongPassword(newPasswordInput)) {
       toast({
         title: "Validation Error",
-        description:
-          "New password must be at least 8 characters and include at least one letter and one number.",
+        description: getCredentialPasswordPolicyMessage(),
         variant: "destructive",
       });
       return;

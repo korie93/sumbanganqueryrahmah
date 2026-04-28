@@ -9,6 +9,7 @@ type RateLimitPayload = {
     code: string;
     message: string;
   };
+  retryAfterMs?: number;
 };
 
 export type AuthRouteRateLimiters = {
@@ -121,8 +122,19 @@ function createJsonRateLimiter(options: JsonRateLimiterOptions): RequestHandler 
     standardHeaders: true,
     legacyHeaders: false,
     ...(options.keyGenerator ? { keyGenerator: options.keyGenerator } : {}),
-    handler: (_req, res) => {
-      res.status(429).json(payload);
+    handler: (req, res, _next, optionsUsed) => {
+      const rateLimitInfo = (req as Request & { rateLimit?: { resetTime?: Date } }).rateLimit;
+      const resetTimeMs = rateLimitInfo?.resetTime instanceof Date
+        ? rateLimitInfo.resetTime.getTime()
+        : null;
+      const retryAfterMs = resetTimeMs
+        ? Math.max(0, resetTimeMs - Date.now())
+        : optionsUsed.windowMs;
+
+      res.status(429).json({
+        ...payload,
+        retryAfterMs,
+      });
     },
   });
 }

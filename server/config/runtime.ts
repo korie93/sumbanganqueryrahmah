@@ -54,12 +54,10 @@ const isProduction = nodeEnv === "production";
 const isStrictLocalDevelopment = isStrictLocalDevelopmentEnvironment();
 const isProductionLike = isProductionLikeEnvironment();
 const debugLogs = readBoolean("DEBUG_LOGS", false) && !isProductionLike;
-const operationsDebugRoutesEnabled = readBoolean(
-  "OPERATIONS_DEBUG_ROUTES_ENABLED",
-  !isProductionLike,
-);
+const operationsDebugRoutesEnabled = readBoolean("OPERATIONS_DEBUG_ROUTES_ENABLED", false);
 const logLevel = readString("LOG_LEVEL", debugLogs ? "debug" : "info");
 const lowMemoryMode = readBoolean("SQR_LOW_MEMORY_MODE", true);
+const configuredClusterMaxWorkers = readInt("SQR_MAX_WORKERS", lowMemoryMode ? 1 : 4, { min: 1 });
 const seedDefaultUsers = readBoolean("SEED_DEFAULT_USERS", false);
 const backupFeatureEnabled = readBoolean("BACKUP_FEATURE_ENABLED", true);
 const localSuperuserCredentialsFileEnabled = readBoolean("LOCAL_SUPERUSER_CREDENTIALS_FILE_ENABLED", false);
@@ -345,7 +343,7 @@ export const runtimeConfig: RuntimeConfig = Object.freeze({
   },
   cluster: {
     lowMemoryMode,
-    maxWorkers: readInt("SQR_MAX_WORKERS", lowMemoryMode ? 1 : 4, { min: 1 }),
+    maxWorkers: configuredClusterMaxWorkers,
     initialWorkers: readInt("SQR_INITIAL_WORKERS", 1, { min: 1 }),
     preallocateMb: readInt("SQR_PREALLOCATE_MB", lowMemoryMode ? 0 : 32, { min: 0 }),
     forceCluster: readBoolean("SQR_FORCE_CLUSTER", false),
@@ -386,6 +384,7 @@ const runtimeWarnings = buildRuntimeConfigWarnings({
   configuredCollectionPiiEncryptionKey,
   configuredPgPassword,
   configuredAuthCookieSecure,
+  configuredClusterMaxWorkers,
   mailConfiguration,
 });
 

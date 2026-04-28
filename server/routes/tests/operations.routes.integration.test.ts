@@ -346,6 +346,7 @@ function createOperationsRouteHarness(options?: {
     }),
     requireRole: createTestRequireRole(),
     requireTabAccess: () => allowAllTabs(),
+    operationsDebugRoutesEnabled: true,
   });
 
   return {

@@ -70,6 +70,14 @@ test("login error helpers read safe fields from unknown errors", () => {
   assert.equal(readErrorMessage(new Error("Boom"), "Fallback"), "Boom");
   assert.equal(readErrorMessage({ message: "Plain object error" }, "Fallback"), "Plain object error");
   assert.equal(readErrorMessage({ message: "" }, "Fallback"), "Fallback");
+  assert.equal(
+    readErrorMessage({ status: 429, retryAfterMs: 1_250, message: "Too many requests" }, "Fallback"),
+    "Terlalu banyak percubaan. Sila cuba semula dalam 2 saat.",
+  );
+  assert.equal(
+    readErrorMessage(new Error('429: {"message":"Too many requests","retryAfterMs":2500}'), "Fallback"),
+    "Terlalu banyak percubaan. Sila cuba semula dalam 3 saat.",
+  );
 });
 
 test("login field validation flags missing username/password and incomplete 2FA codes", () => {

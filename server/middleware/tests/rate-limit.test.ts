@@ -128,13 +128,14 @@ test("createImportsUploadRateLimiter throttles repeated upload attempts from the
 
     assert.equal(firstResponse.status, 204);
     assert.equal(secondResponse.status, 429);
-    assert.deepEqual(await secondResponse.json(), {
-      ok: false,
-      error: {
-        code: ERROR_CODES.IMPORT_UPLOAD_RATE_LIMITED,
-        message: "Too many import upload attempts from this network. Please wait before trying again.",
-      },
+    const payload = await secondResponse.json();
+    assert.equal(typeof payload.retryAfterMs, "number");
+    assert.ok(payload.retryAfterMs >= 0);
+    assert.deepEqual(payload.error, {
+      code: ERROR_CODES.IMPORT_UPLOAD_RATE_LIMITED,
+      message: "Too many import upload attempts from this network. Please wait before trying again.",
     });
+    assert.equal(payload.ok, false);
   } finally {
     await stopTestServer(server);
   }

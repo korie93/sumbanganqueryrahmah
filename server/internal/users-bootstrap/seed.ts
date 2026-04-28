@@ -1,14 +1,13 @@
-import bcrypt from "bcrypt";
 import { randomUUID } from "crypto";
 import { count, sql } from "drizzle-orm";
 import { users } from "../../../shared/schema-postgres";
 import { normalizeUserRole } from "../../auth/account-lifecycle";
 import { runtimeConfig } from "../../config/runtime";
+import { hashPassword } from "../../auth/passwords";
 import { shouldSeedDefaultUsers } from "../../config/security";
 import { db } from "../../db-postgres";
 import { logger } from "../../lib/logger";
 import {
-  USERS_BOOTSTRAP_BCRYPT_COST,
   USERS_BOOTSTRAP_SYSTEM_ACTOR_USERNAME,
 } from "./constants";
 import { writeLocalSuperuserCredentialsFile } from "./credentials-file";
@@ -119,7 +118,7 @@ export async function seedUsersBootstrapDefaults(): Promise<void> {
     }
 
     const now = new Date();
-    const hashedPassword = await bcrypt.hash(user.password, USERS_BOOTSTRAP_BCRYPT_COST);
+    const hashedPassword = await hashPassword(user.password);
     await db.insert(users).values({
       id: randomUUID(),
       username: user.username,

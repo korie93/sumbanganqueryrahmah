@@ -64,7 +64,76 @@ export function isLockedAccountError(error: unknown): boolean {
   return errorRecord.code === "ACCOUNT_LOCKED" || errorRecord.locked === true;
 }
 
+function parseStructuredErrorMessage(message: string): Record<string, unknown> | null {
+  const match = message.match(/^\d+:\s*(\{.*\})$/s);
+  if (!match) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(match[1]) as unknown;
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? parsed as Record<string, unknown>
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function readRetryAfterMs(error: unknown): number | null {
+  if (!error || typeof error !== "object") {
+    return null;
+  }
+
+  const errorRecord = error as { message?: unknown; retryAfterMs?: unknown; status?: unknown };
+  const directRetryAfterMs = Number(errorRecord.retryAfterMs);
+  if (Number.isFinite(directRetryAfterMs) && directRetryAfterMs >= 0) {
+    return directRetryAfterMs;
+  }
+
+  if (typeof errorRecord.message !== "string") {
+    return null;
+  }
+
+  const parsed = parseStructuredErrorMessage(errorRecord.message);
+  const parsedRetryAfterMs = Number(parsed?.retryAfterMs);
+  if (Number.isFinite(parsedRetryAfterMs) && parsedRetryAfterMs >= 0) {
+    return parsedRetryAfterMs;
+  }
+
+  return null;
+}
+
+function readErrorStatus(error: unknown): number | null {
+  if (!error || typeof error !== "object") {
+    return null;
+  }
+
+  const directStatus = Number((error as { status?: unknown }).status);
+  if (Number.isFinite(directStatus)) {
+    return directStatus;
+  }
+
+  const message = (error as { message?: unknown }).message;
+  if (typeof message !== "string") {
+    return null;
+  }
+
+  const match = message.match(/^(\d+):\s*/);
+  return match ? Number(match[1]) : null;
+}
+
+function formatRetryAfterMessage(retryAfterMs: number): string {
+  const seconds = Math.max(1, Math.ceil(retryAfterMs / 1000));
+  return `Terlalu banyak percubaan. Sila cuba semula dalam ${seconds} saat.`;
+}
+
 export function readErrorMessage(error: unknown, fallback: string): string {
+  const retryAfterMs = readRetryAfterMs(error);
+  if (retryAfterMs !== null && readErrorStatus(error) === 429) {
+    return formatRetryAfterMessage(retryAfterMs);
+  }
+
   if (error instanceof Error && error.message) {
     return error.message;
   }

@@ -31,8 +31,8 @@ test("validatePasswordFields enforces required password fields and confirmation 
 
   assert.deepEqual(
     validatePasswordFields({
-      newPassword: "secret-1",
-      confirmPassword: "secret-2",
+      newPassword: "secret-1a",
+      confirmPassword: "secret-2a",
     }),
     {
       confirmPassword: "Pengesahan kata laluan tidak sepadan.",
@@ -43,11 +43,33 @@ test("validatePasswordFields enforces required password fields and confirmation 
     hasPublicAuthFieldErrors(
       validatePasswordFields({
         currentPassword: "old-secret",
-        newPassword: "new-secret",
-        confirmPassword: "new-secret",
+        newPassword: "new-secret1",
+        confirmPassword: "new-secret1",
         requireCurrentPassword: true,
       }),
     ),
     false,
+  );
+});
+
+test("validatePasswordFields mirrors the backend password policy", () => {
+  assert.deepEqual(
+    validatePasswordFields({
+      newPassword: "nodigits",
+      confirmPassword: "nodigits",
+    }),
+    {
+      newPassword: "Password mesti antara 8 hingga 256 aksara dan mengandungi huruf serta nombor.",
+    },
+  );
+
+  assert.deepEqual(
+    validatePasswordFields({
+      newPassword: `${"A".repeat(256)}1`,
+      confirmPassword: `${"A".repeat(256)}1`,
+    }),
+    {
+      newPassword: "Password mesti antara 8 hingga 256 aksara dan mengandungi huruf serta nombor.",
+    },
   );
 });

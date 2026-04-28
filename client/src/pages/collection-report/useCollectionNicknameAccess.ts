@@ -14,10 +14,13 @@ import {
   clearCollectionNicknameSessionStorage,
   getStoredCollectionNickname,
   getStoredCollectionNicknameAuthRaw,
-  hasLetterAndNumber,
   isValidNicknameAuthSession,
   persistCollectionNicknameSessionStorage,
 } from "@/pages/collection-report/utils";
+import {
+  getCredentialPasswordPolicyMessage,
+  isCredentialPasswordPolicyCompliant,
+} from "@shared/password-policy";
 
 interface UseCollectionNicknameAccessOptions {
   currentUsername: string;
@@ -158,18 +161,10 @@ export function useCollectionNicknameAccess({
     const nickname = String(resolvedNickname || nicknameInput || "").trim();
     if (!nickname) return;
 
-    if (nicknamePassword.length < 8) {
+    if (!isCredentialPasswordPolicyCompliant(nicknamePassword)) {
       toast({
         title: "Validation Error",
-        description: "Password mesti sekurang-kurangnya 8 aksara.",
-        variant: "destructive",
-      });
-      return;
-    }
-    if (!hasLetterAndNumber(nicknamePassword)) {
-      toast({
-        title: "Validation Error",
-        description: "Password mesti mengandungi sekurang-kurangnya satu huruf dan satu nombor.",
+        description: getCredentialPasswordPolicyMessage("ms"),
         variant: "destructive",
       });
       return;

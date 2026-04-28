@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   buildSettingsMutationErrorToast,
+  isStrongPassword,
   normalizeSettingsErrorPayload,
 } from "@/pages/settings/utils";
 
@@ -37,4 +38,10 @@ test("buildSettingsMutationErrorToast falls back when the error is unstructured"
     description: "Network request failed",
     variant: "destructive",
   });
+});
+
+test("isStrongPassword follows the shared credential password policy", () => {
+  assert.equal(isStrongPassword("StrongPass123"), true);
+  assert.equal(isStrongPassword("nodigits"), false);
+  assert.equal(isStrongPassword(`${"A".repeat(256)}1`), false);
 });

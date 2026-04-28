@@ -11,6 +11,20 @@ import { API_BASE, getCsrfHeader } from "./shared";
 
 import type { AuthUserResponse } from "./auth-types";
 
+function readRetryAfterMs(res: Response, data: unknown): number | undefined {
+  const payloadRetryAfterMs = Number((data as { retryAfterMs?: unknown } | null)?.retryAfterMs);
+  if (Number.isFinite(payloadRetryAfterMs) && payloadRetryAfterMs >= 0) {
+    return payloadRetryAfterMs;
+  }
+
+  const headerRetryAfterSeconds = Number(res.headers.get("retry-after"));
+  if (Number.isFinite(headerRetryAfterSeconds) && headerRetryAfterSeconds >= 0) {
+    return headerRetryAfterSeconds * 1000;
+  }
+
+  return undefined;
+}
+
 export async function login(
   username: string,
   password: string,
@@ -41,6 +55,7 @@ export async function login(
     const error = new Error(data?.message || data?.error?.message || "Login failed") as Error & {
       code?: string;
       locked?: boolean;
+      retryAfterMs?: number;
       status?: number;
       requestId?: string | null;
     };
@@ -48,6 +63,10 @@ export async function login(
     error.locked = data?.locked === true;
     if (error.code === ERROR_CODES.ACCOUNT_LOCKED) {
       error.locked = true;
+    }
+    const retryAfterMs = readRetryAfterMs(res, data);
+    if (retryAfterMs !== undefined) {
+      error.retryAfterMs = retryAfterMs;
     }
     error.status = res.status;
     error.requestId = res.headers.get("x-request-id");

@@ -6,6 +6,7 @@ export type OperationsRouteDeps = {
   authenticateToken: RequestHandler;
   requireRole: (...roles: string[]) => RequestHandler;
   requireTabAccess: (tabId: string) => RequestHandler;
+  operationsDebugRoutesEnabled?: boolean | undefined;
 };
 
 export type OperationsRouteContext = {
@@ -14,6 +15,7 @@ export type OperationsRouteContext = {
   authenticateToken: RequestHandler;
   requireRole: (...roles: string[]) => RequestHandler;
   requireTabAccess: (tabId: string) => RequestHandler;
+  operationsDebugRoutesEnabled?: boolean | undefined;
 };
 
 export function createOperationsRouteContext(
@@ -26,5 +28,6 @@ export function createOperationsRouteContext(
     authenticateToken: deps.authenticateToken,
     requireRole: deps.requireRole,
     requireTabAccess: deps.requireTabAccess,
+    operationsDebugRoutesEnabled: deps.operationsDebugRoutesEnabled,
   };
 }

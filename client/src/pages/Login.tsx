@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { Eye, EyeOff, LogIn } from "lucide-react";
 import type { User } from "@/app/types";
 import { BrandLogo } from "@/components/BrandLogo";
@@ -12,6 +13,7 @@ interface LoginProps {
 }
 
 export default function Login({ onForgotPasswordClick, onLandingClick, onLoginSuccess }: LoginProps) {
+  const usernameInputRef = useRef<HTMLInputElement | null>(null);
   const {
     username,
     password,
@@ -63,6 +65,28 @@ export default function Login({ onForgotPasswordClick, onLandingClick, onLoginSu
       "aria-describedby": "login-two-factor-help",
     };
 
+  useEffect(() => {
+    if (typeof window === "undefined" || !usernameInputRef.current) {
+      return;
+    }
+
+    const shouldAutoFocus =
+      typeof window.matchMedia === "function"
+      && window.matchMedia("(pointer: fine)").matches;
+
+    if (!shouldAutoFocus) {
+      return;
+    }
+
+    const frameId = window.requestAnimationFrame(() => {
+      usernameInputRef.current?.focus();
+    });
+
+    return () => {
+      window.cancelAnimationFrame(frameId);
+    };
+  }, []);
+
   return (
     <div className="login-page relative w-full viewport-min-height overflow-hidden">
       <div className="login-bg-effect login-bg-pattern absolute inset-0 opacity-30" />
@@ -111,6 +135,7 @@ export default function Login({ onForgotPasswordClick, onLandingClick, onLoginSu
                   Username
                 </label>
                 <PublicAuthInput
+                  ref={usernameInputRef}
                   id="login-username"
                   name="username"
                   className="login-input w-full rounded-xl px-4 py-3 transition-all"
@@ -120,7 +145,6 @@ export default function Login({ onForgotPasswordClick, onLandingClick, onLoginSu
                   onKeyDown={handleInputKeyDown}
                   autoComplete="username"
                   data-testid="input-username"
-                  autoFocus
                   disabled={loading || Boolean(twoFactorChallengeToken)}
                   {...usernameInvalidProps}
                 />

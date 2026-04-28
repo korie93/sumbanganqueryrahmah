@@ -31,7 +31,7 @@ test("assertConfirmedStrongPassword and assertStrongPasswordInput enforce shared
 
   assert.throws(
     () => assertConfirmedStrongPassword("weak", "weak"),
-    /Password must be at least 8 characters/i,
+    /Password must be between 8 and 256 characters/i,
   );
   assert.throws(
     () => assertConfirmedStrongPassword("StrongPass123", "StrongPass124"),
@@ -39,7 +39,7 @@ test("assertConfirmedStrongPassword and assertStrongPasswordInput enforce shared
   );
   assert.throws(
     () => assertStrongPasswordInput("weak"),
-    /Password must be at least 8 characters/i,
+    /Password must be between 8 and 256 characters/i,
   );
 });
 

@@ -48,6 +48,11 @@ function createMockResponse() {
   return {
     statusCode: 200,
     body: undefined as unknown,
+    cookies: [] as Array<{ name: string; value: string }>,
+    cookie(name: string, value: string) {
+      this.cookies.push({ name, value });
+      return this;
+    },
     status(code: number) {
       this.statusCode = code;
       return this;
@@ -319,6 +324,57 @@ test("authenticateToken prefers the composite session snapshot when storage expo
   assert.equal(updateCalls, 1);
   assert.equal(nextCalls, 1);
   assert.equal((request as { user?: { username?: string } }).user?.username, "guard.user");
+});
+
+test("authenticateToken returns 401 for invalid and expired JWTs", async () => {
+  const secret = "guard-test-secret";
+  const guards = createAuthGuards({
+    storage: {
+      getActivityById: async () => undefined,
+      getUser: async () => undefined,
+      getUserByUsername: async () => undefined,
+      isVisitorBanned: async () => false,
+      updateActivity: async () => undefined,
+      getRoleTabVisibility: async () => ({}),
+    },
+    secret,
+  });
+
+  const expiredToken = jwt.sign(
+    {
+      userId: "user-1",
+      username: "guard.user",
+      role: "admin",
+      activityId: "activity-1",
+    },
+    secret,
+    { expiresIn: "-1s" },
+  );
+
+  for (const token of ["not-a-valid-token", expiredToken]) {
+    const response = createMockResponse();
+    let nextCalls = 0;
+
+    await guards.authenticateToken(
+      {
+        headers: {
+          cookie: `sqr_auth=${encodeURIComponent(token)}`,
+        },
+        method: "GET",
+        path: "/api/me",
+      } as never,
+      response as never,
+      () => {
+        nextCalls += 1;
+      },
+    );
+
+    assert.equal(response.statusCode, 401);
+    assert.deepEqual(response.body, { message: "Invalid token" });
+    assert.equal(nextCalls, 0);
+  }
+
+  guards.stopTabVisibilityCacheSweep();
 });
 
 test("requireRole returns 401 when there is no authenticated user", () => {

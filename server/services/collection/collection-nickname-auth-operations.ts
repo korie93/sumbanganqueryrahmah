@@ -1,9 +1,8 @@
-import bcrypt from "bcrypt";
 import {
-  CREDENTIAL_BCRYPT_COST,
-  CREDENTIAL_PASSWORD_MIN_LENGTH,
+  getCredentialPasswordPolicyMessage,
   isStrongPassword,
 } from "../../auth/credentials";
+import { hashPassword, verifyPassword } from "../../auth/passwords";
 import type { AuthenticatedUser } from "../../auth/guards";
 import { badRequest, notFound, unauthorized } from "../../http/errors";
 import {
@@ -62,9 +61,7 @@ export class CollectionNicknameAuthOperations extends CollectionServiceSupport {
       throw badRequest("Password dan confirm password tidak sepadan.");
     }
     if (!isStrongPassword(newPassword)) {
-      throw badRequest(
-        `Password mesti sekurang-kurangnya ${CREDENTIAL_PASSWORD_MIN_LENGTH} aksara dan mengandungi huruf serta nombor.`,
-      );
+      throw badRequest(getCredentialPasswordPolicyMessage("ms"));
     }
 
     const existingHash = normalizeCollectionText(profile.nicknamePasswordHash);
@@ -73,17 +70,17 @@ export class CollectionNicknameAuthOperations extends CollectionServiceSupport {
       if (!currentPassword) {
         throw badRequest("Current password diperlukan untuk tukar password nickname.");
       }
-      const validCurrentPassword = await bcrypt.compare(currentPassword, existingHash);
+      const validCurrentPassword = await verifyPassword(currentPassword, existingHash);
       if (!validCurrentPassword) {
         throw unauthorized("Current password nickname tidak sah.");
       }
-      const sameAsCurrent = await bcrypt.compare(newPassword, existingHash);
+      const sameAsCurrent = await verifyPassword(newPassword, existingHash);
       if (sameAsCurrent) {
         throw badRequest("Password baharu mesti berbeza daripada password semasa.");
       }
     }
 
-    const passwordHash = await bcrypt.hash(newPassword, CREDENTIAL_BCRYPT_COST);
+    const passwordHash = await hashPassword(newPassword);
     await this.storage.setCollectionNicknamePassword({
       nicknameId: profile.id,
       passwordHash,
@@ -137,7 +134,7 @@ export class CollectionNicknameAuthOperations extends CollectionServiceSupport {
       throw badRequest("Sila tetapkan kata laluan baharu untuk nickname ini sebelum meneruskan.");
     }
 
-    const valid = await bcrypt.compare(password, hash);
+    const valid = await verifyPassword(password, hash);
     if (!valid) {
       throw unauthorized("Password nickname tidak sah.");
     }
@@ -192,7 +189,7 @@ export class CollectionNicknameAuthOperations extends CollectionServiceSupport {
       throw notFound("Nickname not found.");
     }
 
-    const passwordHash = await bcrypt.hash(COLLECTION_NICKNAME_TEMP_PASSWORD, CREDENTIAL_BCRYPT_COST);
+    const passwordHash = await hashPassword(COLLECTION_NICKNAME_TEMP_PASSWORD);
     await this.storage.setCollectionNicknamePassword({
       nicknameId: nickname.id,
       passwordHash,

@@ -1,6 +1,10 @@
 import bcrypt from "bcrypt";
 import { createHash, randomBytes, randomInt } from "node:crypto";
-import { CREDENTIAL_BCRYPT_COST } from "./credentials";
+import {
+  CREDENTIAL_BCRYPT_COST,
+  CREDENTIAL_PASSWORD_MAX_LENGTH,
+  isCredentialPasswordWithinMaxLength,
+} from "./credentials";
 import { isBcryptHash } from "./account-lifecycle";
 
 const TEMP_PASSWORD_ALPHABET =
@@ -12,6 +16,10 @@ function pickRandomCharacter(): string {
 }
 
 export async function hashPassword(raw: string): Promise<string> {
+  if (!isCredentialPasswordWithinMaxLength(raw)) {
+    throw new Error(`Password exceeds the maximum supported length of ${CREDENTIAL_PASSWORD_MAX_LENGTH} characters.`);
+  }
+
   return bcrypt.hash(raw, CREDENTIAL_BCRYPT_COST);
 }
 
@@ -21,6 +29,10 @@ export async function hashPassword(raw: string): Promise<string> {
 const DUMMY_BCRYPT_HASH = "$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewY5NU7z6xUfIjm6";
 
 export async function verifyPassword(raw: string, hash: string | null | undefined): Promise<boolean> {
+  if (!isCredentialPasswordWithinMaxLength(raw)) {
+    return false;
+  }
+
   const normalizedHash = String(hash || "").trim();
   if (!normalizedHash || !isBcryptHash(normalizedHash)) {
     // Perform a dummy comparison to prevent timing-based user enumeration.

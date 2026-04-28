@@ -315,7 +315,7 @@ export function createAuthGuards(options: CreateAuthGuardsOptions) {
         error: (error as Error)?.message,
       });
       clearAuthSessionCookie(res);
-      return res.status(403).json({ message: "Invalid token" });
+      return res.status(401).json({ message: "Invalid token" });
     }
   };
 

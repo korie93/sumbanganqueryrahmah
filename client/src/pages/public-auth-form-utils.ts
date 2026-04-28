@@ -1,4 +1,8 @@
 import { hasAuthIdentifier } from "@/pages/auth-field-utils";
+import {
+  getCredentialPasswordPolicyMessage,
+  isCredentialPasswordPolicyCompliant,
+} from "@shared/password-policy";
 
 export type PublicAuthFieldErrors = {
   identifier?: string | undefined;
@@ -43,6 +47,8 @@ export function validatePasswordFields({
 
   if (!newPassword) {
     errors.newPassword = "Sila masukkan kata laluan baharu.";
+  } else if (!isCredentialPasswordPolicyCompliant(newPassword)) {
+    errors.newPassword = getCredentialPasswordPolicyMessage("ms");
   }
 
   if (!confirmPassword) {

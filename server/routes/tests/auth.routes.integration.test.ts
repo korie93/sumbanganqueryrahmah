@@ -710,6 +710,50 @@ test("POST /api/auth/change-password clears auth and CSRF cookies when forcing l
   }
 });
 
+test("POST /api/auth/change-password rejects oversized new passwords before updating credentials", async () => {
+  const passwordHash = await hashPassword("Password123!");
+  const {
+    storage,
+    user,
+    accountUpdates,
+  } = createOwnCredentialsStorageDouble({
+    user: {
+      passwordHash,
+    },
+  });
+  const app = createJsonTestApp();
+
+  registerAuthRoutes(app, {
+    storage,
+    authenticateToken: authenticateAs(user),
+    requireRole: () => (_req, _res, next) => next(),
+    connectedClients: new Map(),
+  });
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const response = await fetch(`${baseUrl}/api/auth/change-password`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        currentPassword: "Password123!",
+        newPassword: `${"A".repeat(256)}1`,
+      }),
+    });
+
+    assert.equal(response.status, 400);
+    const payload = await response.json();
+    assert.equal(payload.ok, false);
+    assert.equal(payload.error.code, "INVALID_PASSWORD");
+    assert.match(payload.error.message, /between 8 and 256 characters/i);
+    assert.equal(accountUpdates.length, 0);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
 test("PATCH /api/me/credentials clears auth and CSRF cookies when password updates force logout", async () => {
   const passwordHash = await hashPassword("Password123!");
   const {

@@ -243,6 +243,7 @@ export function buildRuntimeConfigWarnings(params: {
   configuredCollectionPiiEncryptionKey: string | null;
   configuredPgPassword: string | null;
   configuredAuthCookieSecure: string | null;
+  configuredClusterMaxWorkers: number;
   mailConfiguration: MailConfigurationAssessment;
 }): RuntimeConfigDiagnostic[] {
   const warnings: RuntimeConfigDiagnostic[] = [];
@@ -255,6 +256,7 @@ export function buildRuntimeConfigWarnings(params: {
     configuredCollectionPiiEncryptionKey,
     configuredPgPassword,
     configuredAuthCookieSecure,
+    configuredClusterMaxWorkers,
     mailConfiguration,
   } = params;
 
@@ -329,6 +331,16 @@ export function buildRuntimeConfigWarnings(params: {
       code: "AUTH_COOKIE_SECURE_FORCED_ON_PRODUCTION",
       envNames: ["AUTH_COOKIE_SECURE"],
       message: "AUTH_COOKIE_SECURE=false was ignored because secure auth cookies are mandatory on production-like hosts.",
+      severity: "warning",
+    });
+  }
+
+  if (configuredClusterMaxWorkers > 1) {
+    warnings.push({
+      code: "TWO_FACTOR_REPLAY_CACHE_PROCESS_LOCAL",
+      envNames: ["SQR_MAX_WORKERS"],
+      message:
+        "2FA TOTP replay protection is process-local. Multi-worker deployments should use one worker, sticky routing, or a shared replay store before enabling more than one worker.",
       severity: "warning",
     });
   }

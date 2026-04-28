@@ -173,6 +173,7 @@ test("buildRuntimeConfigWarnings warns when local collection PII encryption is n
     configuredCollectionPiiEncryptionKey: null,
     configuredPgPassword: null,
     configuredAuthCookieSecure: null,
+    configuredClusterMaxWorkers: 1,
     mailConfiguration: {
       effectiveFrom: null,
       hasAnyInput: false,
@@ -197,6 +198,7 @@ test("buildRuntimeConfigWarnings reports when insecure auth cookies are forced o
     configuredCollectionPiiEncryptionKey: "collection-pii-secret",
     configuredPgPassword: "prod-db-password",
     configuredAuthCookieSecure: "false",
+    configuredClusterMaxWorkers: 1,
     mailConfiguration: {
       effectiveFrom: null,
       hasAnyInput: false,
@@ -221,6 +223,7 @@ test("buildRuntimeConfigWarnings reports missing non-local SMTP configuration", 
     configuredCollectionPiiEncryptionKey: "collection-pii-secret",
     configuredPgPassword: "prod-db-password",
     configuredAuthCookieSecure: null,
+    configuredClusterMaxWorkers: 1,
     mailConfiguration: {
       effectiveFrom: null,
       hasAnyInput: false,
@@ -232,5 +235,30 @@ test("buildRuntimeConfigWarnings reports missing non-local SMTP configuration", 
   assert.match(
     warnings.map((warning) => warning.code).join(","),
     /MAIL_CONFIGURATION_MISSING/,
+  );
+});
+
+test("buildRuntimeConfigWarnings reports process-local 2FA replay cache risk in multi-worker mode", () => {
+  const warnings = buildRuntimeConfigWarnings({
+    isStrictLocalDevelopment: false,
+    isProductionLike: true,
+    publicAppUrl: "https://sqr.example.com",
+    configuredSessionSecret: "prod-session-secret",
+    configuredCollectionNicknameTempPassword: "TempPassword12345",
+    configuredCollectionPiiEncryptionKey: "collection-pii-secret",
+    configuredPgPassword: "prod-db-password",
+    configuredAuthCookieSecure: null,
+    configuredClusterMaxWorkers: 2,
+    mailConfiguration: {
+      effectiveFrom: "noreply@sqr.example.com",
+      hasAnyInput: true,
+      isConfigured: true,
+      isIncomplete: false,
+    },
+  });
+
+  assert.match(
+    warnings.map((warning) => warning.code).join(","),
+    /TWO_FACTOR_REPLAY_CACHE_PROCESS_LOCAL/,
   );
 });
