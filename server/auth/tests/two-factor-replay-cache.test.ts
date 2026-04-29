@@ -33,3 +33,18 @@ test("TwoFactorReplayCache remains bounded when many distinct codes are consumed
 
   assert.equal(cache.size, 2);
 });
+
+test("TwoFactorReplayCache trims the earliest expiring active entry instead of relying on insertion order", () => {
+  let now = 100_000;
+  const cache = new TwoFactorReplayCache({ now: () => now, ttlMs: 120_000, maxEntries: 2 });
+
+  assert.equal(cache.consume({ purpose: "login", subjectId: "user-1", code: "111111" }), true);
+  now = 1_000;
+  assert.equal(cache.consume({ purpose: "login", subjectId: "user-1", code: "222222" }), true);
+  now = 2_000;
+  assert.equal(cache.consume({ purpose: "login", subjectId: "user-1", code: "333333" }), true);
+
+  assert.equal(cache.size, 2);
+  assert.equal(cache.consume({ purpose: "login", subjectId: "user-1", code: "111111" }), false);
+  assert.equal(cache.consume({ purpose: "login", subjectId: "user-1", code: "222222" }), true);
+});

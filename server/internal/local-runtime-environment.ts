@@ -108,6 +108,7 @@ export function createLocalRuntimeEnvironment(options: CreateLocalRuntimeEnviron
     lowMemoryMode: runtimeConfig.cluster.lowMemoryMode,
   });
   server.once("close", composition.stopTabVisibilityCacheSweep);
+  server.once("close", composition.stopActivityUpdateCacheSweep);
   const {
     aiSearchService,
     categoryStatsService,

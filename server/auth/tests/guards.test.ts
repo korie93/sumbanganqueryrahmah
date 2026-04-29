@@ -5,6 +5,7 @@ import {
   createAuthGuards,
   evictOldestTabVisibilityCacheEntryForTests,
   getInvalidatedSessionMessage,
+  sweepExpiredActivityUpdateCacheEntriesForTests,
   sweepExpiredTabVisibilityCacheEntriesForTests,
 } from "../guards";
 
@@ -161,30 +162,51 @@ test("tab visibility cache sweep removes expired entries without waiting for a r
   assert.deepEqual(Array.from(cache.keys()), ["fresh"]);
 });
 
-test("tab visibility cache registers an unrefed sweep interval and clears it idempotently", (t) => {
-  let capturedIntervalMs = 0;
-  let unrefCalled = false;
-  const fakeHandle = {
+test("activity update cache sweep removes expired entries without waiting for the next request", () => {
+  const now = 1_000_000;
+  const cache = new Map([
+    ["fresh", now - 30_000],
+    ["expired", now - 3 * 60_000],
+  ]);
+
+  const removed = sweepExpiredActivityUpdateCacheEntriesForTests(cache, now);
+
+  assert.equal(removed, 1);
+  assert.deepEqual(Array.from(cache.keys()), ["fresh"]);
+});
+
+test("auth guard caches register unrefed sweep intervals and clear them idempotently", (t) => {
+  const capturedIntervalMs: number[] = [];
+  let unrefCalls = 0;
+  const fakeHandles = [{
     unref() {
-      unrefCalled = true;
+      unrefCalls += 1;
       return this;
     },
-  } as unknown as NodeJS.Timeout;
+  }, {
+    unref() {
+      unrefCalls += 1;
+      return this;
+    },
+  }] as unknown as NodeJS.Timeout[];
+  const clearedHandles: NodeJS.Timeout[] = [];
 
   const setIntervalMock = t.mock.method(
     globalThis,
     "setInterval",
     (((handler: TimerHandler, delay?: number) => {
       assert.equal(typeof handler, "function");
-      capturedIntervalMs = Number(delay ?? 0);
-      return fakeHandle;
+      capturedIntervalMs.push(Number(delay ?? 0));
+      return fakeHandles[capturedIntervalMs.length - 1];
     }) as unknown) as typeof setInterval,
   );
   const clearIntervalMock = t.mock.method(
     globalThis,
     "clearInterval",
     (((handle?: NodeJS.Timeout) => {
-      assert.equal(handle, fakeHandle);
+      if (handle) {
+        clearedHandles.push(handle);
+      }
     }) as unknown) as typeof clearInterval,
   );
 
@@ -200,14 +222,17 @@ test("tab visibility cache registers an unrefed sweep interval and clears it ide
     secret: "guard-test-secret",
   });
 
-  assert.equal(setIntervalMock.mock.callCount(), 1);
-  assert.equal(capturedIntervalMs, 5 * 60 * 1000);
-  assert.equal(unrefCalled, true);
+  assert.equal(setIntervalMock.mock.callCount(), 2);
+  assert.deepEqual(capturedIntervalMs, [5 * 60 * 1000, 2 * 60 * 1000]);
+  assert.equal(unrefCalls, 2);
 
   guards.stopTabVisibilityCacheSweep();
+  guards.stopActivityUpdateCacheSweep();
   guards.stopTabVisibilityCacheSweep();
+  guards.stopActivityUpdateCacheSweep();
 
-  assert.equal(clearIntervalMock.mock.callCount(), 1);
+  assert.equal(clearIntervalMock.mock.callCount(), 2);
+  assert.deepEqual(clearedHandles, fakeHandles);
 });
 
 test("authenticateToken prefers the composite session snapshot when storage exposes it", async () => {

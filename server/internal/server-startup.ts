@@ -3,6 +3,8 @@ import type { Server } from "http";
 import type { WebSocket } from "ws";
 import { runtimeConfig, runtimeConfigValidation } from "../config/runtime";
 import {
+  clearStartupServiceDegraded,
+  markStartupServiceDegraded,
   markStartupFailed,
   markStartupReady,
   markStartupStage,
@@ -92,6 +94,13 @@ export async function startLocalServer(options: StartLocalServerOptions) {
       message: rateLimiterTopologyWarning,
       storage: "memory",
     });
+    markStartupServiceDegraded(
+      "rate-limiter-topology",
+      "PROCESS_LOCAL_RATE_LIMITER_MULTI_WORKER",
+      rateLimiterTopologyWarning,
+    );
+  } else {
+    clearStartupServiceDegraded("rate-limiter-topology");
   }
 
   markStartupStage("initializing-storage");

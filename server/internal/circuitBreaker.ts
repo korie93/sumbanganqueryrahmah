@@ -161,9 +161,8 @@ export class CircuitBreaker {
     const maxWindow = 2000;
     if (this.totalRequests <= maxWindow) return;
     const keepRatio = 0.5;
-    this.totalRequests = Math.max(this.minRequests, Math.floor(this.totalRequests * keepRatio));
     this.failures = Math.floor(this.failures * keepRatio);
     this.successes = Math.floor(this.successes * keepRatio);
+    this.totalRequests = this.failures + this.successes;
   }
 }
-

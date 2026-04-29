@@ -21,13 +21,22 @@ const PERMISSIONS_POLICY_HEADER = [
   "xr-spatial-tracking=()",
 ].join(", ");
 
-function normalizeRequestUserAgent(rawUserAgent: unknown): string | undefined {
+type NormalizedRequestUserAgent = {
+  truncated: boolean;
+  userAgent: string | undefined;
+};
+
+function normalizeRequestUserAgent(rawUserAgent: unknown): NormalizedRequestUserAgent {
   const normalized = String(rawUserAgent || "").trim().replace(/\s+/g, " ");
   if (!normalized) {
-    return undefined;
+    return { truncated: false, userAgent: undefined };
   }
 
-  return normalized.slice(0, 180);
+  const maxLength = 180;
+  return {
+    truncated: normalized.length > maxLength,
+    userAgent: normalized.slice(0, maxLength),
+  };
 }
 
 type LocalHttpPipelineOptions = {
@@ -62,6 +71,8 @@ export function registerLocalHttpPipeline(app: Express, options: LocalHttpPipeli
       policy: "no-referrer",
     },
     hsts: {
+      // HSTS preload requires maxAge >= 31536000 plus verified HTTPS coverage
+      // for every production subdomain; keep preload opt-in via deployment review.
       maxAge: 15552000,
       includeSubDomains: true,
       preload: false,
@@ -108,7 +119,8 @@ export function registerLocalHttpPipeline(app: Express, options: LocalHttpPipeli
   app.use((req, res, next) => {
     const requestId = resolveRequestId(req.headers["x-request-id"]);
     const clientIp = String(req.ip || req.socket.remoteAddress || "").trim() || undefined;
-    const userAgent = normalizeRequestUserAgent(req.headers["user-agent"]);
+    const normalizedUserAgent = normalizeRequestUserAgent(req.headers["user-agent"]);
+    const userAgent = normalizedUserAgent.userAgent;
     res.setHeader("x-request-id", requestId);
     res.setHeader(API_VERSION_HEADER, API_VERSION_VALUE);
 
@@ -135,6 +147,7 @@ export function registerLocalHttpPipeline(app: Express, options: LocalHttpPipeli
           responseSize: Number(res.getHeader("content-length") || 0) || 0,
           clientIp,
           userAgent,
+          ...(normalizedUserAgent.truncated ? { userAgentTruncated: true } : {}),
         };
 
         if (res.statusCode >= 500) {

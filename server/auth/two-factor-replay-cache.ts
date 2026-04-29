@@ -89,13 +89,29 @@ export class TwoFactorReplayCache {
   }
 
   private trimToMaxEntries() {
+    this.sweep(this.now());
+
     while (this.entries.size > this.maxEntries) {
-      const oldestKey = this.entries.keys().next().value as string | undefined;
-      if (!oldestKey) {
+      const earliestExpiryKey = this.resolveEarliestExpiryKey();
+      if (!earliestExpiryKey) {
         break;
       }
-      this.entries.delete(oldestKey);
+      this.entries.delete(earliestExpiryKey);
     }
+  }
+
+  private resolveEarliestExpiryKey() {
+    let earliestExpiryKey: string | null = null;
+    let earliestExpiresAtMs = Number.POSITIVE_INFINITY;
+
+    for (const [key, entry] of this.entries.entries()) {
+      if (entry.expiresAtMs < earliestExpiresAtMs) {
+        earliestExpiryKey = key;
+        earliestExpiresAtMs = entry.expiresAtMs;
+      }
+    }
+
+    return earliestExpiryKey;
   }
 }
 

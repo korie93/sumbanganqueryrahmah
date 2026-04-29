@@ -56,6 +56,7 @@ const TAB_VISIBILITY_CACHE_SWEEP_INTERVAL_MS = TAB_VISIBILITY_CACHE_TTL_MS;
 const TAB_VISIBILITY_CACHE_MAX_SIZE = 100;
 const ACTIVITY_UPDATE_THROTTLE_MS = 30 * 1000;
 const ACTIVITY_UPDATE_CACHE_TTL_MS = 2 * 60 * 1000;
+const ACTIVITY_UPDATE_CACHE_SWEEP_INTERVAL_MS = ACTIVITY_UPDATE_CACHE_TTL_MS;
 const ACTIVITY_UPDATE_CACHE_MAX_SIZE = 5_000;
 const FORCED_PASSWORD_CHANGE_ALLOWLIST = new Set([
   "GET:/api/auth/me",
@@ -161,10 +162,15 @@ export function createAuthGuards(options: CreateAuthGuardsOptions) {
   const activityUpdateCache = new Map<string, number>();
   const tabVisibilityCache = new Map<string, TabVisibilityCacheEntry>();
   let tabVisibilitySweepStopped = false;
+  let activityUpdateSweepStopped = false;
   const tabVisibilitySweepHandle = setInterval(() => {
     sweepExpiredTabVisibilityCacheEntries(tabVisibilityCache);
   }, TAB_VISIBILITY_CACHE_SWEEP_INTERVAL_MS);
   tabVisibilitySweepHandle.unref?.();
+  const activityUpdateSweepHandle = setInterval(() => {
+    sweepExpiredActivityUpdateCacheEntries(activityUpdateCache);
+  }, ACTIVITY_UPDATE_CACHE_SWEEP_INTERVAL_MS);
+  activityUpdateSweepHandle.unref?.();
 
   function setRoleTabVisibilityCache(role: string, tabs: Record<string, boolean>, cachedAt: number) {
     sweepExpiredTabVisibilityCacheEntries(tabVisibilityCache, cachedAt);
@@ -203,6 +209,14 @@ export function createAuthGuards(options: CreateAuthGuardsOptions) {
     }
     tabVisibilitySweepStopped = true;
     clearInterval(tabVisibilitySweepHandle);
+  }
+
+  function stopActivityUpdateCacheSweep() {
+    if (activityUpdateSweepStopped) {
+      return;
+    }
+    activityUpdateSweepStopped = true;
+    clearInterval(activityUpdateSweepHandle);
   }
 
   async function loadAuthenticatedSessionSnapshot(decoded: AuthenticatedUser): Promise<{
@@ -477,6 +491,7 @@ export function createAuthGuards(options: CreateAuthGuardsOptions) {
     clearActivityUpdateCache() {
       activityUpdateCache.clear();
     },
+    stopActivityUpdateCacheSweep,
     stopTabVisibilityCacheSweep,
   };
 }
@@ -506,4 +521,11 @@ export function sweepExpiredTabVisibilityCacheEntriesForTests(
   now?: number,
 ): number {
   return sweepExpiredTabVisibilityCacheEntries(cache, now);
+}
+
+export function sweepExpiredActivityUpdateCacheEntriesForTests(
+  cache: Map<string, number>,
+  now?: number,
+): number {
+  return sweepExpiredActivityUpdateCacheEntries(cache, now);
 }

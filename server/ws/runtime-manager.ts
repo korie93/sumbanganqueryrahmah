@@ -9,6 +9,7 @@ const HEARTBEAT_INTERVAL_MS = 30_000;
 const MAX_CONNECTIONS_PER_USER = 5;
 const MAX_RUNTIME_WS_MESSAGE_BYTES = 64 * 1024;
 const MAX_RUNTIME_WS_BUFFERED_BYTES = 256 * 1024;
+const WS_CLOSE_POLICY_VIOLATION = 1008;
 
 type RuntimeManagerOptions = {
   wss: WebSocketServer;
@@ -498,14 +499,18 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
       }
     };
 
-    const closeSocketIfNeeded = () => {
+    const closeSocketIfNeeded = (code?: number, reason?: string) => {
       if (closeRequested || !isTrackableSocket(ws)) {
         return;
       }
 
       closeRequested = true;
       try {
-        ws.close();
+        if (code !== undefined) {
+          ws.close(code, reason);
+        } else {
+          ws.close();
+        }
       } catch (error) {
         logger.debug("WebSocket close request failed during cleanup", {
           activityId,
@@ -579,7 +584,7 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
           maxConnectionsPerUser: MAX_CONNECTIONS_PER_USER,
         });
         cleanupSocket();
-        closeSocketIfNeeded();
+        closeSocketIfNeeded(WS_CLOSE_POLICY_VIOLATION, "connection limit reached");
         return;
       }
 

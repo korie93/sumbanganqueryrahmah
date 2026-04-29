@@ -84,6 +84,7 @@ export type LocalServerComposition = {
   requireTabAccess: AuthGuards["requireTabAccess"];
   requireMonitorAccess: AuthGuards["requireMonitorAccess"];
   clearTabVisibilityCache: AuthGuards["clearTabVisibilityCache"];
+  stopActivityUpdateCacheSweep: AuthGuards["stopActivityUpdateCacheSweep"];
   stopTabVisibilityCacheSweep: AuthGuards["stopTabVisibilityCacheSweep"];
 };
 

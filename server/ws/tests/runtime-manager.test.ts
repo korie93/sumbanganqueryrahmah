@@ -12,6 +12,7 @@ class FakeWebSocketServer extends EventEmitter {}
 class FakeWebSocket extends EventEmitter {
   readyState: number = WebSocket.OPEN;
   closeCalls = 0;
+  closeCodes: Array<{ code?: number; reason?: string }> = [];
   terminateCalls = 0;
   pingCalls = 0;
   bufferedAmount = 0;
@@ -21,8 +22,16 @@ class FakeWebSocket extends EventEmitter {
     this.sentMessages.push(String(payload));
   }
 
-  close() {
+  close(code?: number, reason?: string) {
     this.closeCalls += 1;
+    const closeInfo: { code?: number; reason?: string } = {};
+    if (code !== undefined) {
+      closeInfo.code = code;
+    }
+    if (reason !== undefined) {
+      closeInfo.reason = reason;
+    }
+    this.closeCodes.push(closeInfo);
     if (this.readyState === WebSocket.CLOSED) {
       return;
     }
@@ -956,6 +965,9 @@ test("runtime manager enforces a per-user connection limit", async () => {
     assert.equal(providedMap.size, 5);
     assert.equal(providedMap.has("activity-user-limit-5"), false);
     assert.equal(sockets[5].closeCalls, 1);
+    assert.deepEqual(sockets[5].closeCodes, [
+      { code: 1008, reason: "connection limit reached" },
+    ]);
     assert.equal(
       warnings.some(
         (entry) =>

@@ -5,6 +5,7 @@ import path from "node:path";
 import test from "node:test";
 import express from "express";
 import { registerLocalHttpPipeline } from "../../internal/local-http-pipeline";
+import { logger } from "../../lib/logger";
 import { startTestServer, stopTestServer } from "../../routes/tests/http-test-utils";
 import { SQR_TRUSTED_TYPES_POLICY_NAME } from "../../../shared/trusted-types";
 
@@ -111,6 +112,48 @@ test("registerLocalHttpPipeline sanitizes caller-provided request ids", async ()
     });
     assert.equal(response.status, 200);
     assert.equal(response.headers.get("x-request-id"), "api-scriptbadid123");
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("registerLocalHttpPipeline marks truncated user agents without logging the raw value", async (t) => {
+  const warningLogs: Array<{ message: string; payload: unknown }> = [];
+  t.mock.method(logger, "warn", (message: string, payload: unknown) => {
+    warningLogs.push({ message, payload });
+  });
+
+  const app = express();
+  registerLocalHttpPipeline(app, {
+    importBodyLimit: "1mb",
+    collectionBodyLimit: "1mb",
+    defaultBodyLimit: "100kb",
+    uploadsRootDir: path.resolve(process.cwd(), "uploads"),
+    recordRequestStarted: () => undefined,
+    recordRequestFinished: () => undefined,
+    adaptiveRateLimit: (_req, _res, next) => next(),
+    systemProtectionMiddleware: (_req, _res, next) => next(),
+    maintenanceGuard: (_req, _res, next) => next(),
+  });
+  app.get("/client-error", (_req, res) => {
+    res.status(404).json({ ok: false });
+  });
+
+  const longUserAgent = `SQR-Test/${"x".repeat(260)}`;
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const response = await fetch(`${baseUrl}/client-error`, {
+      headers: {
+        "user-agent": longUserAgent,
+      },
+    });
+
+    assert.equal(response.status, 404);
+    assert.equal(warningLogs.length, 1);
+    assert.equal(warningLogs[0].message, "HTTP request completed with client error");
+    assert.equal((warningLogs[0].payload as { userAgent?: string }).userAgent?.length, 180);
+    assert.equal((warningLogs[0].payload as { userAgentTruncated?: boolean }).userAgentTruncated, true);
+    assert.notEqual((warningLogs[0].payload as { userAgent?: string }).userAgent, longUserAgent);
   } finally {
     await stopTestServer(server);
   }
