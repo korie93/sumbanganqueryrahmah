@@ -1,31 +1,31 @@
 const ROUTE_LABELS: Record<string, string> = {
-  activity: "Activity",
-  ai: "AI Assistant",
-  analysis: "Analysis",
-  audit: "Audit Logs",
-  "audit-logs": "Audit Logs",
-  backup: "Backup & Restore",
-  banned: "Account Access",
-  "change-password": "Change Password",
-  "collection-report": "Collection",
-  dashboard: "Dashboard",
-  "forgot-password": "Forgot Password",
-  "general-search": "General Search",
-  home: "Home",
+  activity: "Aktiviti",
+  ai: "Pembantu AI",
+  analysis: "Analisis",
+  audit: "Log Audit",
+  "audit-logs": "Log Audit",
+  backup: "Sandaran & Pemulihan",
+  banned: "Akses Akaun",
+  "change-password": "Tukar Kata Laluan",
+  "collection-report": "Kutipan",
+  dashboard: "Papan Pemuka",
+  "forgot-password": "Lupa Kata Laluan",
+  "general-search": "Carian Umum",
+  home: "Laman Utama",
   import: "Import",
-  login: "Login",
-  maintenance: "Maintenance Mode",
-  monitor: "System Monitor",
-  "not-found": "Not Found",
-  saved: "Saved Imports",
-  settings: "Settings",
-  viewer: "Viewer",
+  login: "Log Masuk",
+  maintenance: "Mod Penyelenggaraan",
+  monitor: "Monitor Sistem",
+  "not-found": "Halaman Tidak Ditemui",
+  saved: "Import Tersimpan",
+  settings: "Tetapan",
+  viewer: "Paparan Data",
 };
 
 export function resolveRouteErrorTitle(routeLabel?: string | null): string {
   const normalized = String(routeLabel || "").trim();
   const humanLabel = ROUTE_LABELS[normalized] || normalized;
-  return humanLabel ? `${humanLabel} Ran Into a Problem` : "This Page Ran Into a Problem";
+  return humanLabel ? `${humanLabel} Menghadapi Masalah` : "Halaman Ini Menghadapi Masalah";
 }
 
 export function resolveRouteErrorDescription(error: unknown): string {
@@ -39,12 +39,12 @@ export function resolveRouteErrorDescription(error: unknown): string {
       message,
     )
   ) {
-    return "A page bundle failed to load. Retry this page first, or reload the app if the problem persists.";
+    return "Bundle halaman gagal dimuatkan. Cuba semula halaman ini dahulu, atau muat semula aplikasi jika masalah berterusan.";
   }
 
   if (message) {
     return message;
   }
 
-  return "The page crashed unexpectedly. Retry this page, go back home, or reload the app.";
+  return "Halaman berhenti secara tidak dijangka. Cuba semula halaman ini, kembali ke laman utama, atau muat semula aplikasi.";
 }

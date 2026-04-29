@@ -118,7 +118,10 @@ function AppContent() {
     }
 
     if (currentPage === "activate-account") {
-      return renderRoutePage("activate-account", <ActivateAccountPage />);
+      return renderRoutePage(
+        "activate-account",
+        <ActivateAccountPage onBackToLogin={() => handlePublicNavigate("login")} />,
+      );
     }
 
     if (currentPage === "reset-password") {
@@ -172,7 +175,7 @@ function App() {
   return (
     <>
       <a className="skip-to-main-link" href="#main-content">
-        Skip to main content
+        Langkau ke kandungan utama
       </a>
       <AppContent />
     </>

@@ -116,7 +116,7 @@ export class AppRouteErrorBoundary extends Component<
                 className="app-route-error-boundary__action app-route-error-boundary__action--primary"
               >
                 <RotateCcw className="h-4 w-4" />
-                Retry Page
+                Cuba Semula
               </button>
               {this.props.onNavigateHome ? (
                 <button
@@ -125,7 +125,7 @@ export class AppRouteErrorBoundary extends Component<
                   className="app-route-error-boundary__action app-route-error-boundary__action--secondary"
                 >
                   <Home className="h-4 w-4" />
-                  Go Home
+                  Ke Laman Utama
                 </button>
               ) : null}
               <button
@@ -134,7 +134,7 @@ export class AppRouteErrorBoundary extends Component<
                 className="app-route-error-boundary__action app-route-error-boundary__action--secondary"
               >
                 <RefreshCw className="h-4 w-4" />
-                Reload App
+                Muat Semula Aplikasi
               </button>
             </div>
           </section>

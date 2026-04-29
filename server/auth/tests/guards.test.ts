@@ -326,6 +326,107 @@ test("authenticateToken prefers the composite session snapshot when storage expo
   assert.equal((request as { user?: { username?: string } }).user?.username, "guard.user");
 });
 
+test("authenticateToken throttles healthy activity updates per session id", async (t) => {
+  const secret = "guard-test-secret";
+  let now = new Date("2026-04-29T00:00:00.000Z").getTime();
+  t.mock.method(Date, "now", () => now);
+
+  const updateActivityPayloads: unknown[] = [];
+  const guards = createAuthGuards({
+    storage: {
+      getAuthenticatedSessionSnapshot: async () => ({
+        activity: {
+          id: "activity-1",
+          userId: "user-1",
+          username: "guard.user",
+          role: "admin",
+          pcName: null,
+          browser: "Chrome",
+          fingerprint: "fingerprint-1",
+          ipAddress: "203.0.113.10",
+          loginTime: new Date("2026-04-13T00:00:00.000Z"),
+          logoutTime: null,
+          lastActivityTime: new Date("2026-04-13T00:05:00.000Z"),
+          isActive: true,
+          logoutReason: null,
+        },
+        user: {
+          id: "user-1",
+          username: "guard.user",
+          passwordHash: "hashed",
+          fullName: "Guard User",
+          email: "guard.user@example.test",
+          role: "admin",
+          status: "active",
+          mustChangePassword: false,
+          passwordResetBySuperuser: false,
+          createdBy: "system",
+          createdAt: new Date("2026-04-01T00:00:00.000Z"),
+          updatedAt: new Date("2026-04-01T00:00:00.000Z"),
+          passwordChangedAt: null,
+          activatedAt: null,
+          lastLoginAt: null,
+          isBanned: false,
+          twoFactorEnabled: false,
+          twoFactorSecretEncrypted: null,
+          twoFactorConfiguredAt: null,
+          failedLoginAttempts: 0,
+          lockedAt: null,
+          lockedReason: null,
+          lockedBySystem: false,
+        },
+        isVisitorBanned: false,
+      }),
+      getActivityById: async () => undefined,
+      getUser: async () => undefined,
+      getUserByUsername: async () => undefined,
+      isVisitorBanned: async () => false,
+      updateActivity: async (_activityId, payload) => {
+        updateActivityPayloads.push(payload);
+        return undefined;
+      },
+      getRoleTabVisibility: async () => ({}),
+    },
+    secret,
+    activityUpdateThrottleMs: 30_000,
+  });
+
+  const token = jwt.sign(
+    {
+      userId: "user-1",
+      username: "guard.user",
+      role: "admin",
+      activityId: "activity-1",
+    },
+    secret,
+    { expiresIn: "24h" },
+  );
+  const makeRequest = () => ({
+    headers: {
+      cookie: `sqr_auth=${encodeURIComponent(token)}`,
+    },
+    method: "GET",
+    path: "/api/me",
+  });
+
+  let nextCalls = 0;
+  await guards.authenticateToken(makeRequest() as never, createMockResponse() as never, () => {
+    nextCalls += 1;
+  });
+  now += 5_000;
+  await guards.authenticateToken(makeRequest() as never, createMockResponse() as never, () => {
+    nextCalls += 1;
+  });
+  now += 31_000;
+  await guards.authenticateToken(makeRequest() as never, createMockResponse() as never, () => {
+    nextCalls += 1;
+  });
+  guards.stopTabVisibilityCacheSweep();
+
+  assert.equal(nextCalls, 3);
+  assert.equal(updateActivityPayloads.length, 2);
+});
+
 test("authenticateToken returns 401 for invalid and expired JWTs", async () => {
   const secret = "guard-test-secret";
   const guards = createAuthGuards({

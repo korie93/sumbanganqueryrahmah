@@ -1,4 +1,11 @@
-import { createCipheriv, createDecipheriv, createHmac, createHash, randomBytes } from "node:crypto";
+import {
+  createCipheriv,
+  createDecipheriv,
+  createHmac,
+  createHash,
+  randomBytes,
+  timingSafeEqual,
+} from "node:crypto";
 import { getTwoFactorDecryptionSecrets, getTwoFactorEncryptionSecret } from "../config/security";
 
 const BASE32_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
@@ -87,6 +94,16 @@ function generateTotpAt(secret: string, timestampMs: number) {
   return String(binary).padStart(TOTP_DIGITS, "0");
 }
 
+function isTotpCodeMatch(candidate: string, code: string) {
+  if (!/^\d{6}$/.test(candidate) || !/^\d{6}$/.test(code)) {
+    return false;
+  }
+
+  const candidateBuffer = Buffer.from(candidate, "utf8");
+  const codeBuffer = Buffer.from(code, "utf8");
+  return candidateBuffer.length === codeBuffer.length && timingSafeEqual(candidateBuffer, codeBuffer);
+}
+
 export function generateTwoFactorSecret() {
   return base32Encode(randomBytes(20));
 }
@@ -104,7 +121,7 @@ export function verifyTwoFactorCode(secret: string, rawCode: string, window = 1)
   const now = Date.now();
   for (let step = -window; step <= window; step += 1) {
     const candidate = generateTotpAt(secret, now + step * TOTP_PERIOD_SECONDS * 1000);
-    if (candidate === code) {
+    if (isTotpCodeMatch(candidate, code)) {
       return true;
     }
   }

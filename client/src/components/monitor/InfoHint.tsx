@@ -10,14 +10,13 @@ function InfoHintImpl({ text }: InfoHintProps) {
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <span
-          tabIndex={0}
-          role="note"
-          className="inline-flex rounded-sm text-muted-foreground transition hover:text-foreground"
-          aria-label="Description"
+        <button
+          type="button"
+          className="inline-flex rounded-sm border-0 bg-transparent p-0 text-muted-foreground transition hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          aria-label="Maklumat bantuan"
         >
           <CircleHelp className="h-3.5 w-3.5" />
-        </span>
+        </button>
       </TooltipTrigger>
       <TooltipContent>
         <p className="max-w-xs text-xs">{text}</p>

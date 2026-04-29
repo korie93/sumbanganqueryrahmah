@@ -72,6 +72,8 @@ test("initializeTrustedTypesRuntime installs a default trusted types policy once
       policy?.createHTML("<style>.x{}</style>"),
       "sanitized:&lt;style>.x{}&lt;/style>"
     )
+    assert.equal(policy?.createScriptURL?.("/assets/app.js"), "trusted-script:/assets/app.js")
+    assert.throws(() => policy?.createScriptURL?.("https://cdn.example.test/app.js"), /same-origin/i)
 
     const secondPolicy = initializeTrustedTypesRuntime((input) => input)
     assert.equal(secondPolicy, policy)

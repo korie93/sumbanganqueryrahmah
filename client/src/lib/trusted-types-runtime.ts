@@ -1,4 +1,5 @@
 import createDOMPurify from "dompurify"
+import { sanitizeTrustedScriptURL } from "./trusted-script-url"
 import { getSqrTrustedTypesPolicy } from "./trusted-types"
 
 type TrustedTypesPolicyLike = {
@@ -58,7 +59,7 @@ export function initializeTrustedTypesRuntime(
   try {
     const policy = trustedTypesFactory.createPolicy("default", {
       createHTML: (input) => sanitizeHtml(input),
-      createScriptURL: (input) => input,
+      createScriptURL: (input) => sanitizeTrustedScriptURL(input),
     })
     trustedTypesGlobal.__sqrTrustedTypesDefaultPolicy = policy
     return policy

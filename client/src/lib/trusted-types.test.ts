@@ -74,9 +74,15 @@ test("toTrustedHTML creates and reuses the sqr trusted types policy when availab
 
     assert.equal(toTrustedHTML("<b>hello</b>"), "trusted:<b>hello</b>")
     assert.equal(toTrustedHTML("<i>world</i>"), "trusted:<i>world</i>")
+    const policy = trustedTypesGlobal.__sqrTrustedTypesPolicy as unknown as TrustedTypesPolicyLike
+    assert.equal(policy.createScriptURL?.("/assets/app.js"), "trusted-script:/assets/app.js")
+    assert.throws(
+      () => policy.createScriptURL?.("javascript:alert(1)"),
+      /protocol/i,
+    )
     assert.equal(createPolicyCalls, 1)
     assert.equal(createHTMLCalls, 2)
-    assert.equal(createScriptUrlCalls, 0)
+    assert.equal(createScriptUrlCalls, 2)
   } finally {
     restoreTrustedTypesState(trustedTypesGlobal, previousFactory, previousPolicy)
   }

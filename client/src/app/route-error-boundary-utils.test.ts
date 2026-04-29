@@ -6,9 +6,9 @@ import {
 } from "@/app/route-error-boundary-utils";
 
 test("resolveRouteErrorTitle maps internal route ids to user-friendly labels", () => {
-  assert.equal(resolveRouteErrorTitle("backup"), "Backup & Restore Ran Into a Problem");
-  assert.equal(resolveRouteErrorTitle("collection-report"), "Collection Ran Into a Problem");
-  assert.equal(resolveRouteErrorTitle("settings"), "Settings Ran Into a Problem");
+  assert.equal(resolveRouteErrorTitle("backup"), "Sandaran & Pemulihan Menghadapi Masalah");
+  assert.equal(resolveRouteErrorTitle("collection-report"), "Kutipan Menghadapi Masalah");
+  assert.equal(resolveRouteErrorTitle("settings"), "Tetapan Menghadapi Masalah");
 });
 
 test("resolveRouteErrorDescription gives chunk-load guidance for lazy pages", () => {
@@ -16,6 +16,6 @@ test("resolveRouteErrorDescription gives chunk-load guidance for lazy pages", ()
     new Error("ChunkLoadError: Loading chunk 17 failed."),
   );
 
-  assert.match(description, /bundle failed to load/i);
-  assert.match(description, /reload the app/i);
+  assert.match(description, /Bundle halaman gagal dimuatkan/i);
+  assert.match(description, /muat semula aplikasi/i);
 });

@@ -1,4 +1,5 @@
 import { SQR_TRUSTED_TYPES_POLICY_NAME } from "../../../shared/trusted-types"
+import { sanitizeTrustedScriptURL } from "./trusted-script-url"
 
 type TrustedTypesPolicyLike = {
   createHTML: (input: string) => unknown
@@ -40,7 +41,7 @@ export function getSqrTrustedTypesPolicy() {
   try {
     const policy = trustedTypesFactory.createPolicy(SQR_TRUSTED_TYPES_POLICY_NAME, {
       createHTML: (input) => input,
-      createScriptURL: (input) => input,
+      createScriptURL: (input) => sanitizeTrustedScriptURL(input),
     })
     trustedTypesGlobal.__sqrTrustedTypesPolicy = policy
     return policy

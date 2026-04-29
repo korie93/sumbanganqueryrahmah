@@ -2,7 +2,13 @@ import assert from "node:assert/strict";
 import { createCipheriv, createHash, randomBytes } from "node:crypto";
 import test from "node:test";
 import { getSessionSecret, getTwoFactorDecryptionSecrets } from "../../config/security";
-import { decryptTwoFactorSecret, encryptTwoFactorSecret } from "../two-factor";
+import {
+  decryptTwoFactorSecret,
+  encryptTwoFactorSecret,
+  generateCurrentTwoFactorCode,
+  generateTwoFactorSecret,
+  verifyTwoFactorCode,
+} from "../two-factor";
 
 function withTwoFactorEncryptionEnv<T>(
   env: {
@@ -125,4 +131,32 @@ test("decryptTwoFactorSecret rejects legacy payloads encrypted with the session 
       /Invalid 2FA secret payload/i,
     );
   });
+});
+
+test("verifyTwoFactorCode accepts the current valid TOTP code", (t) => {
+  const secret = generateTwoFactorSecret();
+  t.mock.method(Date, "now", () => new Date("2026-04-29T00:00:00.000Z").getTime());
+  const code = generateCurrentTwoFactorCode(secret);
+
+  assert.equal(verifyTwoFactorCode(secret, code), true);
+});
+
+test("verifyTwoFactorCode rejects invalid, short, and non-digit-only TOTP codes", (t) => {
+  const secret = generateTwoFactorSecret();
+  t.mock.method(Date, "now", () => new Date("2026-04-29T00:00:00.000Z").getTime());
+  const validCode = generateCurrentTwoFactorCode(secret);
+  const invalidCode = validCode === "000000" ? "111111" : "000000";
+
+  assert.equal(verifyTwoFactorCode(secret, invalidCode), false);
+  assert.equal(verifyTwoFactorCode(secret, "12345"), false);
+  assert.equal(verifyTwoFactorCode(secret, "abcdef"), false);
+});
+
+test("verifyTwoFactorCode keeps existing normalization for pasted spaced codes", (t) => {
+  const secret = generateTwoFactorSecret();
+  t.mock.method(Date, "now", () => new Date("2026-04-29T00:00:00.000Z").getTime());
+  const code = generateCurrentTwoFactorCode(secret);
+  const formattedCode = `${code.slice(0, 3)} ${code.slice(3)}`;
+
+  assert.equal(verifyTwoFactorCode(secret, formattedCode), true);
 });

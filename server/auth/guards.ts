@@ -43,6 +43,7 @@ type CreateAuthGuardsOptions = {
     } | undefined>;
   };
   secret?: string;
+  activityUpdateThrottleMs?: number;
 };
 
 type TabVisibilityCacheEntry = {
@@ -53,6 +54,9 @@ type TabVisibilityCacheEntry = {
 const TAB_VISIBILITY_CACHE_TTL_MS = 5 * 60 * 1000;
 const TAB_VISIBILITY_CACHE_SWEEP_INTERVAL_MS = TAB_VISIBILITY_CACHE_TTL_MS;
 const TAB_VISIBILITY_CACHE_MAX_SIZE = 100;
+const ACTIVITY_UPDATE_THROTTLE_MS = 30 * 1000;
+const ACTIVITY_UPDATE_CACHE_TTL_MS = 2 * 60 * 1000;
+const ACTIVITY_UPDATE_CACHE_MAX_SIZE = 5_000;
 const FORCED_PASSWORD_CHANGE_ALLOWLIST = new Set([
   "GET:/api/auth/me",
   "GET:/api/me",
@@ -118,9 +122,43 @@ function sweepExpiredTabVisibilityCacheEntries(
   return removed;
 }
 
+function evictOldestActivityUpdateCacheEntry(cache: Map<string, number>): string | null {
+  let oldestKey: string | null = null;
+  let oldestUpdatedAt = Number.POSITIVE_INFINITY;
+
+  for (const [key, updatedAt] of cache.entries()) {
+    if (updatedAt < oldestUpdatedAt) {
+      oldestUpdatedAt = updatedAt;
+      oldestKey = key;
+    }
+  }
+
+  if (oldestKey) {
+    cache.delete(oldestKey);
+  }
+
+  return oldestKey;
+}
+
+function sweepExpiredActivityUpdateCacheEntries(
+  cache: Map<string, number>,
+  now = Date.now(),
+): number {
+  let removed = 0;
+  for (const [key, updatedAt] of cache.entries()) {
+    if (now - updatedAt >= ACTIVITY_UPDATE_CACHE_TTL_MS) {
+      cache.delete(key);
+      removed += 1;
+    }
+  }
+  return removed;
+}
+
 export function createAuthGuards(options: CreateAuthGuardsOptions) {
   const storage = options.storage;
   const secret = options.secret || getSessionSecret();
+  const activityUpdateThrottleMs = Math.max(0, options.activityUpdateThrottleMs ?? ACTIVITY_UPDATE_THROTTLE_MS);
+  const activityUpdateCache = new Map<string, number>();
   const tabVisibilityCache = new Map<string, TabVisibilityCacheEntry>();
   let tabVisibilitySweepStopped = false;
   const tabVisibilitySweepHandle = setInterval(() => {
@@ -210,6 +248,41 @@ export function createAuthGuards(options: CreateAuthGuardsOptions) {
     };
   }
 
+  function shouldUpdateActivity(activityId: string, now: number) {
+    if (activityUpdateThrottleMs <= 0) {
+      return true;
+    }
+
+    sweepExpiredActivityUpdateCacheEntries(activityUpdateCache, now);
+    const lastUpdatedAt = activityUpdateCache.get(activityId);
+    if (lastUpdatedAt !== undefined && now - lastUpdatedAt < activityUpdateThrottleMs) {
+      return false;
+    }
+
+    if (!activityUpdateCache.has(activityId)) {
+      while (activityUpdateCache.size >= ACTIVITY_UPDATE_CACHE_MAX_SIZE) {
+        if (!evictOldestActivityUpdateCacheEntry(activityUpdateCache)) {
+          break;
+        }
+      }
+    }
+
+    return true;
+  }
+
+  async function updateAuthenticatedActivity(activityId: string) {
+    const now = Date.now();
+    if (!shouldUpdateActivity(activityId, now)) {
+      return;
+    }
+
+    await storage.updateActivity(activityId, {
+      lastActivityTime: new Date(now),
+      isActive: true,
+    });
+    activityUpdateCache.set(activityId, now);
+  }
+
   const authenticateToken: RequestHandler = async (
     req: AuthenticatedRequest,
     res: Response,
@@ -291,10 +364,7 @@ export function createAuthGuards(options: CreateAuthGuardsOptions) {
         });
       }
 
-      await storage.updateActivity(decoded.activityId, {
-        lastActivityTime: new Date(),
-        isActive: true,
-      });
+      await updateAuthenticatedActivity(decoded.activityId);
 
       req.user = {
         userId: user.id || activity.userId || decoded.userId,
@@ -403,6 +473,9 @@ export function createAuthGuards(options: CreateAuthGuardsOptions) {
     requireMonitorAccess,
     clearTabVisibilityCache() {
       tabVisibilityCache.clear();
+    },
+    clearActivityUpdateCache() {
+      activityUpdateCache.clear();
     },
     stopTabVisibilityCacheSweep,
   };

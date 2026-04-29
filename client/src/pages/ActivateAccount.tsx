@@ -23,7 +23,11 @@ type ActivationPhase = "invalid" | "ready" | "success" | "validating";
 
 const ACTIVATION_SUCCESS_REDIRECT_DELAY_MS = 1_200;
 
-export default function ActivateAccountPage() {
+type ActivateAccountPageProps = {
+  onBackToLogin?: () => void;
+};
+
+export default function ActivateAccountPage({ onBackToLogin }: ActivateAccountPageProps) {
   const token = useMemo(() => getPublicAuthTokenFromLocation(), []);
   const [activation, setActivation] = useState<ActivationTokenValidationPayload | null>(null);
   const [phase, setPhase] = useState<ActivationPhase>(token ? "validating" : "invalid");
@@ -34,8 +38,18 @@ export default function ActivateAccountPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(token ? "" : "Pautan aktivasi tidak sah.");
   const mountedRef = useRef(true);
+  const newPasswordInputRef = useRef<HTMLInputElement | null>(null);
   const validationAbortControllerRef = useRef<AbortController | null>(null);
   const activationAbortControllerRef = useRef<AbortController | null>(null);
+
+  const navigateToLogin = () => {
+    if (onBackToLogin) {
+      onBackToLogin();
+      return;
+    }
+
+    window.location.href = "/";
+  };
 
   useEffect(() => {
     mountedRef.current = true;
@@ -57,11 +71,31 @@ export default function ActivateAccountPage() {
     );
 
     const timeoutId = window.setTimeout(() => {
-      window.location.href = "/";
+      navigateToLogin();
     }, ACTIVATION_SUCCESS_REDIRECT_DELAY_MS);
 
     return () => {
       window.clearTimeout(timeoutId);
+    };
+  }, [activation, phase, onBackToLogin]);
+
+  useEffect(() => {
+    if (
+      phase !== "ready" ||
+      !activation ||
+      typeof window === "undefined" ||
+      typeof window.matchMedia !== "function" ||
+      !window.matchMedia("(pointer: fine)").matches
+    ) {
+      return undefined;
+    }
+
+    const frameId = window.requestAnimationFrame(() => {
+      newPasswordInputRef.current?.focus();
+    });
+
+    return () => {
+      window.cancelAnimationFrame(frameId);
     };
   }, [activation, phase]);
 
@@ -232,11 +266,12 @@ export default function ActivateAccountPage() {
       {phase === "ready" && activation ? (
         <>
           <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm leading-7 text-slate-200">
-            <div><span className="font-semibold text-white">Username:</span> {activation.username}</div>
+            <div><span className="font-semibold text-white">Nama pengguna:</span> {activation.username}</div>
             <div><span className="font-semibold text-white">Peranan:</span> {activation.role}</div>
             <div><span className="font-semibold text-white">Tamat Tempoh:</span> {formatPublicAuthExpiry(activation.expiresAt)}</div>
           </div>
           <PublicAuthInput
+            ref={newPasswordInputRef}
             id="activate-account-new-password"
             name="newPassword"
             type="password"
@@ -249,7 +284,6 @@ export default function ActivateAccountPage() {
             onKeyDown={onPasswordKeyDown}
             placeholder="Kata laluan baharu"
             autoComplete="new-password"
-            autoFocus
             disabled={loading}
             {...newPasswordInvalidProps}
           />
@@ -297,7 +331,7 @@ export default function ActivateAccountPage() {
         <PublicAuthButton
           type="button"
           onClick={() => {
-            window.location.href = "/";
+            navigateToLogin();
           }}
         >
           Buka Halaman Log Masuk
@@ -308,7 +342,7 @@ export default function ActivateAccountPage() {
         type="button"
         variant="ghost"
         onClick={() => {
-          window.location.href = "/";
+          navigateToLogin();
         }}
       >
         <ArrowLeft className="mr-2 h-4 w-4" />
