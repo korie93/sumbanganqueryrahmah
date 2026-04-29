@@ -730,6 +730,8 @@ function createSystemPermissionHarness() {
     } as never),
     checkDbConnectivity: async () => true,
     getStartupHealthSnapshot: () => ({
+      degraded: false,
+      degradedServices: [],
       failed: false,
       failureDetails: null,
       failureReason: null,

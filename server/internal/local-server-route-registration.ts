@@ -43,6 +43,7 @@ import { SearchService } from "../services/search.service";
 import { WebVitalsTelemetryService } from "../services/web-vitals-telemetry.service";
 import { createAiController } from "../controllers/ai.controller";
 import { CircuitOpenError } from "./circuitBreaker";
+import { startBackgroundServiceWithHealthSignal } from "./background-service-health";
 import { getStartupHealthSnapshot } from "./startup-health";
 import type { RegisterLocalServerRoutesOptions } from "./local-server-composition-types";
 
@@ -112,8 +113,12 @@ export function registerLocalServerRoutes(options: RegisterLocalServerRoutesOpti
     executeRestore: (params) => backupOperationsService.restoreBackup(params),
     ensureReady: () => storage.ensureBackupsReady(),
   });
-  void backupJobQueueService.start().catch((error) => {
-    logger.error("Failed to start backup background job queue", { error });
+  startBackgroundServiceWithHealthSignal({
+    service: "backup-job-queue",
+    failureReason: "BACKUP_JOB_QUEUE_START_FAILED",
+    failureDetails: "Backup background job queue failed to start; see server logs.",
+    failureLogMessage: "Failed to start backup background job queue",
+    start: () => backupJobQueueService.start(),
   });
   const collectionRollupRefreshQueueService = new CollectionRollupRefreshQueueService({
     ensureReady: () => storage.ensureCollectionRecordsReady(),
@@ -121,8 +126,12 @@ export function registerLocalServerRoutes(options: RegisterLocalServerRoutesOpti
       reconnectDelayMs: environmentRuntimeConfig.runtime.collectionRollupListenReconnectMs,
     }),
   });
-  void collectionRollupRefreshQueueService.start().catch((error) => {
-    logger.error("Failed to start collection rollup refresh queue", { error });
+  startBackgroundServiceWithHealthSignal({
+    service: "collection-rollup-refresh-queue",
+    failureReason: "COLLECTION_ROLLUP_REFRESH_QUEUE_START_FAILED",
+    failureDetails: "Collection rollup refresh queue failed to start; see server logs.",
+    failureLogMessage: "Failed to start collection rollup refresh queue",
+    start: () => collectionRollupRefreshQueueService.start(),
   });
   server.once("close", () => {
     void collectionRollupRefreshQueueService.stop().catch((error) => {

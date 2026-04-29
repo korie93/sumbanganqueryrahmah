@@ -39,6 +39,11 @@ type RuntimeTrackedSocketEntry = {
   alive: boolean;
 };
 
+type RuntimeSocketCleanupOptions = {
+  clearSession?: boolean;
+  reason?: string;
+};
+
 function firstHeaderValue(value: string | string[] | undefined): string {
   if (Array.isArray(value)) {
     return String(value[0] || "");
@@ -165,13 +170,15 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
   const socketEntriesByActivity = new Map<string, RuntimeTrackedSocketEntry>();
   const socketEntriesByInstance = new WeakMap<WebSocket, RuntimeTrackedSocketEntry>();
   const trackedSockets = new Set<WebSocket>();
-  const socketCleanupCallbacks = new WeakMap<WebSocket, () => void>();
+  const socketCleanupCallbacks = new WeakMap<WebSocket, (options?: RuntimeSocketCleanupOptions) => void>();
   const isTrackableSocket = (ws: WebSocket) =>
     ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING;
-  const clearNicknameSession = (activityId: string) =>
+  const clearNicknameSession = (activityId: string, reason: string) =>
     Promise.resolve(storage.clearCollectionNicknameSessionByActivity?.(activityId)).catch((error) => {
-      logger.warn("Failed to clear nickname session after WebSocket cleanup", {
+      logger.error("Failed to clear nickname session after WebSocket cleanup", {
         activityId,
+        operation: "clearCollectionNicknameSessionByActivity",
+        reason,
         error: sanitizeRuntimeWebSocketError(error),
       });
     });
@@ -208,8 +215,16 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
       return false;
     }
 
+    let cleanupCallbackHandled = false;
     if (targetWs) {
-      socketCleanupCallbacks.get(targetWs)?.();
+      const cleanupCallback = socketCleanupCallbacks.get(targetWs);
+      if (cleanupCallback) {
+        cleanupCallback({
+          clearSession: options.clearSession === true,
+          reason: options.closeWith ? `client-${options.closeWith}` : "client-cleanup",
+        });
+        cleanupCallbackHandled = true;
+      }
       socketCleanupCallbacks.delete(targetWs);
       socketEntriesByInstance.delete(targetWs);
       trackedSockets.delete(targetWs);
@@ -242,8 +257,8 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
       connectedClients.delete(activityId);
     }
 
-    if (options.clearSession) {
-      void clearNicknameSession(activityId);
+    if (options.clearSession && !cleanupCallbackHandled) {
+      void clearNicknameSession(activityId, options.closeWith ? `client-${options.closeWith}` : "client-cleanup");
     }
 
     return true;
@@ -345,6 +360,7 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
       if (!ws || (ws.readyState !== WebSocket.OPEN && ws.readyState !== WebSocket.CONNECTING)) {
         cleanupClient(activityId, {
           expectedWs: ws,
+          clearSession: true,
         });
         continue;
       }
@@ -365,6 +381,7 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
         cleanupClient(activityId, {
           expectedWs: ws,
           closeWith: "terminate",
+          clearSession: true,
         });
         continue;
       }
@@ -378,7 +395,10 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
   wss.once("close", () => {
     clearInterval(heartbeatHandle);
     for (const ws of Array.from(trackedSockets)) {
-      socketCleanupCallbacks.get(ws)?.();
+      socketCleanupCallbacks.get(ws)?.({
+        clearSession: true,
+        reason: "server-close",
+      });
       if (!isTrackableSocket(ws)) {
         continue;
       }
@@ -401,6 +421,7 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
     let socketEntry: RuntimeTrackedSocketEntry | null = null;
     let cleanedUp = false;
     let closeRequested = false;
+    let nicknameSessionClearQueued = false;
 
     const markSocketAlive = () => {
       if (cleanedUp) {
@@ -419,7 +440,16 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
       ws.removeListener("error", handleSocketError);
     };
 
-    const cleanupSocket = () => {
+    const queueNicknameSessionClear = (sessionActivityId: string, reason: string) => {
+      if (nicknameSessionClearQueued) {
+        return;
+      }
+
+      nicknameSessionClearQueued = true;
+      void clearNicknameSession(sessionActivityId, reason);
+    };
+
+    const cleanupSocket = (options: RuntimeSocketCleanupOptions = {}) => {
       if (cleanedUp) {
         return;
       }
@@ -430,17 +460,25 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
       socketEntriesByInstance.delete(ws);
       detachSocketLifecycleHandlers();
 
+      const sessionActivityId = socketEntry?.activityId ?? activityId;
       if (socketEntry) {
         removeTrackedSocket(socketEntry.activityId, ws);
         socketEntry = null;
       } else if (activityId && connectedClients.get(activityId) === ws) {
         removeTrackedSocket(activityId, ws);
       }
+
+      if (options.clearSession && sessionActivityId) {
+        queueNicknameSessionClear(sessionActivityId, options.reason ?? "socket-cleanup");
+      }
     };
 
     const handleSocketClose = () => {
       const closedActivityId = activityId;
-      cleanupSocket();
+      cleanupSocket({
+        clearSession: socketEntry !== null,
+        reason: "socket-close",
+      });
       if (closedActivityId) {
         logger.debug("WebSocket closed", { activityId: closedActivityId });
       }
@@ -448,7 +486,10 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
 
     const handleSocketError = (error: unknown) => {
       const erroredActivityId = activityId;
-      cleanupSocket();
+      cleanupSocket({
+        clearSession: socketEntry !== null,
+        reason: "socket-error",
+      });
       if (erroredActivityId) {
         logger.debug("WebSocket errored", {
           activityId: erroredActivityId,

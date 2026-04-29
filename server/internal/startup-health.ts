@@ -8,6 +8,8 @@ export type StartupStage =
   | "failed";
 
 export type StartupHealthSnapshot = {
+  degraded: boolean;
+  degradedServices: StartupHealthDegradedService[];
   failed: boolean;
   failureDetails: string | null;
   failureReason: string | null;
@@ -19,6 +21,13 @@ export type StartupHealthSnapshot = {
     warningCount: number;
     warnings: RuntimeConfigDiagnostic[];
   };
+};
+
+export type StartupHealthDegradedService = {
+  details: string | null;
+  reason: string;
+  service: string;
+  updatedAt: string;
 };
 
 const state: {
@@ -39,8 +48,36 @@ const state: {
   updatedAt: new Date().toISOString(),
 };
 
+const degradedServices = new Map<string, StartupHealthDegradedService>();
+
 function touch() {
   state.updatedAt = new Date().toISOString();
+}
+
+export function markStartupServiceDegraded(service: string, reason: string, details?: string) {
+  const serviceName = String(service || "").trim();
+  if (!serviceName) {
+    return;
+  }
+
+  degradedServices.set(serviceName, {
+    details: details ? String(details) : null,
+    reason: String(reason || "SERVICE_DEGRADED"),
+    service: serviceName,
+    updatedAt: new Date().toISOString(),
+  });
+  touch();
+}
+
+export function clearStartupServiceDegraded(service: string) {
+  const serviceName = String(service || "").trim();
+  if (!serviceName) {
+    return;
+  }
+
+  if (degradedServices.delete(serviceName)) {
+    touch();
+  }
 }
 
 export function markStartupStage(stage: StartupStage) {
@@ -73,7 +110,13 @@ export function markStartupFailed(reason: string, details?: string) {
 }
 
 export function getStartupHealthSnapshot(): StartupHealthSnapshot {
+  const degradedServiceSnapshots = Array.from(degradedServices.values())
+    .sort((left, right) => left.service.localeCompare(right.service))
+    .map((service) => ({ ...service }));
+
   return {
+    degraded: degradedServiceSnapshots.length > 0,
+    degradedServices: degradedServiceSnapshots,
     failed: state.failed,
     failureDetails: state.failureDetails,
     failureReason: state.failureReason,

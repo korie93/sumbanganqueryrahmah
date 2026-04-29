@@ -27,6 +27,8 @@ import {
 
 function createStartupSnapshot(overrides: Partial<StartupHealthSnapshot> = {}): StartupHealthSnapshot {
   return {
+    degraded: false,
+    degradedServices: [],
     failed: false,
     failureDetails: null,
     failureReason: null,
@@ -422,6 +424,42 @@ test("GET /api/health/ready returns 503 while startup is still in progress", asy
     assert.equal(payload.ready, false);
     assert.equal(payload.checks.startup, "starting");
     assert.equal(payload.checks.database, "connected");
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("GET /api/health/ready returns 503 when startup background services are degraded", async () => {
+  const { app } = createSystemRouteHarness({
+    dbOk: true,
+    startup: {
+      degraded: true,
+      degradedServices: [
+        {
+          details: "Backup background job queue failed to start; see server logs.",
+          reason: "BACKUP_JOB_QUEUE_START_FAILED",
+          service: "backup-job-queue",
+          updatedAt: "2026-03-24T00:00:02.000Z",
+        },
+      ],
+      ready: true,
+      stage: "ready",
+    },
+  });
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(`${baseUrl}/api/health/ready`);
+    assert.equal(response.status, 503);
+
+    const payload = await response.json();
+    assert.equal(payload.status, "degraded");
+    assert.equal(payload.ready, false);
+    assert.equal(payload.checks.startup, "degraded");
+    assert.equal(payload.checks.database, "connected");
+    assert.equal(payload.startup.degraded, true);
+    assert.equal(payload.startup.degradedServices[0].service, "backup-job-queue");
+    assert.equal(payload.startup.degradedServices[0].reason, "BACKUP_JOB_QUEUE_START_FAILED");
   } finally {
     await stopTestServer(server);
   }

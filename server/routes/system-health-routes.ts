@@ -19,14 +19,21 @@ function buildReadinessPayload(params: {
   startup: StartupHealthSnapshot;
 }) {
   const { dbOk, startup } = params;
-  const ready = dbOk && startup.ready && !startup.failed;
+  const ready = dbOk && startup.ready && !startup.failed && !startup.degraded;
   const status = ready
     ? "ok"
     : startup.failed
       ? "failed"
-      : dbOk
-        ? "starting"
-        : "degraded";
+      : startup.degraded || !dbOk
+        ? "degraded"
+        : "starting";
+  const startupStatus = startup.failed
+    ? "failed"
+    : startup.degraded
+      ? "degraded"
+      : startup.ready
+        ? "ready"
+        : "starting";
 
   return {
     status,
@@ -37,7 +44,7 @@ function buildReadinessPayload(params: {
     timestamp: new Date().toISOString(),
     checks: {
       process: "live" as const,
-      startup: startup.failed ? "failed" as const : startup.ready ? "ready" as const : "starting" as const,
+      startup: startupStatus,
       database: dbOk ? "connected" as const : "unreachable" as const,
     },
     startup,
