@@ -3,7 +3,6 @@ import path from "node:path";
 import { copyFileSync, createWriteStream, existsSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import { spawn } from "node:child_process";
-import { once } from "node:events";
 import dotenv from "dotenv";
 import {
   getLighthouseRuntimeErrorCode,
@@ -13,6 +12,10 @@ import {
   summarizeLighthouseReport,
 } from "./lib/pagespeed-local.mjs";
 import { resolveManagedLoopbackBaseUrl } from "./lib/local-loopback-server.mjs";
+import {
+  startManagedServerProcess,
+  stopManagedServerProcess,
+} from "./lib/managed-server-process.mjs";
 import { assertPostgresConnection } from "./lib/postgres-preflight.mjs";
 import { waitForServer } from "./lib/server-readiness.mjs";
 
@@ -76,39 +79,6 @@ const runNpm = (args, options = {}) =>
     npmCliPath ? [npmCliPath, ...args] : args,
     options,
   );
-
-const stopServer = async (serverProcess) => {
-  if (!serverProcess || serverProcess.killed) {
-    return;
-  }
-
-  if (process.platform === "win32") {
-    await runCommand("taskkill", ["/pid", String(serverProcess.pid), "/t", "/f"], {
-      stdio: "ignore",
-      allowFailure: true,
-    });
-    return;
-  }
-
-  try {
-    serverProcess.kill("SIGTERM");
-  } catch {
-    return;
-  }
-
-  await Promise.race([
-    once(serverProcess, "exit"),
-    sleep(5_000),
-  ]);
-
-  if (!serverProcess.killed) {
-    try {
-      serverProcess.kill("SIGKILL");
-    } catch {
-      // no-op
-    }
-  }
-};
 
 function buildLighthouseArgs(url, outputPath, preset) {
   return [
@@ -434,7 +404,7 @@ async function run() {
 
   try {
     if (!shouldReuseServer) {
-      serverProcess = spawn(
+      serverProcess = startManagedServerProcess(
         npmCommand,
         npmCliPath ? [npmCliPath, "run", "start:built"] : ["run", "start:built"],
         {
@@ -493,7 +463,7 @@ async function run() {
       );
     }
   } finally {
-    await stopServer(serverProcess);
+    await stopManagedServerProcess(serverProcess, { runCommand });
     serverLogStream?.end();
   }
 }

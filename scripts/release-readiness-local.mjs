@@ -3,11 +3,14 @@ import path from "node:path";
 import { createWriteStream } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import { spawn } from "node:child_process";
-import { once } from "node:events";
 import "dotenv/config";
 import { assertPostgresConnection } from "./lib/postgres-preflight.mjs";
 import { resolveCollectionPiiReadinessConfig } from "./lib/collection-pii-readiness.mjs";
 import { waitForServer } from "./lib/server-readiness.mjs";
+import {
+  startManagedServerProcess,
+  stopManagedServerProcess,
+} from "./lib/managed-server-process.mjs";
 
 const npmCliPath = String(process.env.npm_execpath || "").trim();
 const npmCommand = npmCliPath ? process.execPath : (process.platform === "win32" ? "npm.cmd" : "npm");
@@ -17,8 +20,6 @@ const artifactsDir = path.resolve(
   process.env.RELEASE_ARTIFACTS_DIR || "artifacts/release-readiness-local",
 );
 const serverLogPath = path.join(artifactsDir, "server.log");
-
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const runCommand = (command, args, options = {}) =>
   new Promise((resolve, reject) => {
@@ -89,39 +90,6 @@ const runNpmCapture = (args, options = {}) =>
     npmCliPath ? [npmCliPath, ...args] : args,
     options,
   );
-
-const stopServer = async (serverProcess) => {
-  if (!serverProcess || serverProcess.killed) {
-    return;
-  }
-
-  if (process.platform === "win32") {
-    await runCommand("taskkill", ["/pid", String(serverProcess.pid), "/t", "/f"], {
-      stdio: "ignore",
-      allowFailure: true,
-    });
-    return;
-  }
-
-  try {
-    serverProcess.kill("SIGTERM");
-  } catch {
-    return;
-  }
-
-  await Promise.race([
-    once(serverProcess, "exit"),
-    sleep(5_000),
-  ]);
-
-  if (!serverProcess.killed) {
-    try {
-      serverProcess.kill("SIGKILL");
-    } catch {
-      // no-op
-    }
-  }
-};
 
 const run = async () => {
   await mkdir(artifactsDir, { recursive: true });
@@ -221,7 +189,7 @@ const run = async () => {
   await runNpm(["run", "build"], { env: releaseBuildEnv });
   await runNpm(["run", "verify:bundle-budgets"], { env: releaseBuildEnv });
 
-  const serverProcess = spawn(
+  const serverProcess = startManagedServerProcess(
     npmCommand,
     npmCliPath ? [npmCliPath, "run", "start:built"] : ["run", "start:built"],
     {
@@ -271,7 +239,7 @@ const run = async () => {
       },
     });
   } finally {
-    await stopServer(serverProcess);
+    await stopManagedServerProcess(serverProcess, { runCommand });
     serverLogStream.end();
   }
 
