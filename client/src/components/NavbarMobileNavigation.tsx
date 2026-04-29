@@ -36,17 +36,17 @@ function NavbarMobileNavigationImpl({
         className="w-[min(92vw,22rem)]"
       >
         <SheetHeader className="pr-8 text-left">
-          <SheetTitle>Navigation</SheetTitle>
+          <SheetTitle>Navigasi</SheetTitle>
           <SheetDescription>
-            Current section: {formatNavigationLabel(
-              mobileItems.find((item) => item.id === activeMobileItemId)?.label || "Home",
+            Bahagian semasa: {formatNavigationLabel(
+              mobileItems.find((item) => item.id === activeMobileItemId)?.label || "Utama",
               activeMobileItemId,
               savedCount
             )}
           </SheetDescription>
         </SheetHeader>
 
-        <nav className="mt-4 space-y-2" aria-label="Mobile navigation">
+        <nav className="mt-4 space-y-2" aria-label="Navigasi mudah alih">
           {mobileItems.map((item) => {
             const Icon = item.icon
             const active = item.id === activeMobileItemId
@@ -68,7 +68,7 @@ function NavbarMobileNavigationImpl({
                 }`}
               >
                 <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                  <Icon className="h-4 w-4" />
+                  <Icon className="h-4 w-4" aria-hidden="true" />
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm font-medium">

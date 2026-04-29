@@ -129,9 +129,9 @@ export default function AIChat({
           onClick={handleSend}
           className="ai-send-btn"
           disabled={!aiEnabled || isProcessing || !query.trim()}
-          aria-label="Send AI query"
+          aria-label="Hantar soalan AI"
         >
-          <SendHorizonal className="h-4 w-4" />
+          <SendHorizonal className="h-4 w-4" aria-hidden="true" />
         </Button>
       </div>
 
@@ -145,16 +145,16 @@ export default function AIChat({
             onClick={() => cancelAISearch(true)}
             disabled={!isProcessing && !isTyping}
           >
-            <StopCircle className="h-4 w-4" />
-            <span>Stop AI</span>
+            <StopCircle className="h-4 w-4" aria-hidden="true" />
+            <span>Hentikan AI</span>
           </Button>
         </div>
       ) : null}
 
       {!aiEnabled ? (
         <div className="ai-notice ai-notice-error">
-          <TriangleAlert className="h-4 w-4" />
-          <span>AI assistant is disabled by system settings.</span>
+          <TriangleAlert className="h-4 w-4" aria-hidden="true" />
+          <span>Pembantu AI dinyahaktifkan oleh tetapan sistem.</span>
         </div>
       ) : null}
     </div>

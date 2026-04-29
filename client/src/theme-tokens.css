@@ -273,6 +273,7 @@
   --floating-ai-edge-gap: clamp(0.5rem, 2vw, 1.5rem);
   --z-login-card-border: -2;
   --z-login-card-overlay: -1;
+  /* Layer order: page chrome < navbar < transient AI/nav overlays < modal < popover < tooltip < toast. */
   --z-public-auth-main: 5;
   --z-sticky-header: 15;
   --z-sticky-content: 20;
@@ -362,6 +363,12 @@
   --spacing-16: calc(var(--spacing) * 16);
   --spacing-20: calc(var(--spacing) * 20);
   --spacing-24: calc(var(--spacing) * 24);
+  --spacing-28: calc(var(--spacing) * 28);
+  --spacing-32: calc(var(--spacing) * 32);
+  --spacing-36: calc(var(--spacing) * 36);
+  --spacing-40: calc(var(--spacing) * 40);
+  --spacing-44: calc(var(--spacing) * 44);
+  --spacing-48: calc(var(--spacing) * 48);
 
   --sidebar-primary-border: hsl(217 91% 42%);
   --sidebar-accent-border: hsl(214 28% 70%);

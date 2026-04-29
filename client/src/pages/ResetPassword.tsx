@@ -21,7 +21,12 @@ import {
 
 type ResetPhase = "invalid" | "ready" | "success" | "validating";
 
-export default function ResetPasswordPage() {
+type ResetPasswordPageProps = {
+  onBackToHome?: () => void;
+  onBackToLogin?: () => void;
+};
+
+export default function ResetPasswordPage({ onBackToHome, onBackToLogin }: ResetPasswordPageProps = {}) {
   const token = useMemo(() => getPublicAuthTokenFromLocation(), []);
   const [reset, setReset] = useState<PasswordResetTokenValidationPayload | null>(null);
   const [phase, setPhase] = useState<ResetPhase>(token ? "validating" : "invalid");
@@ -34,6 +39,17 @@ export default function ResetPasswordPage() {
   const mountedRef = useRef(true);
   const validationAbortControllerRef = useRef<AbortController | null>(null);
   const resetAbortControllerRef = useRef<AbortController | null>(null);
+
+  const navigateToLogin = () => {
+    if (onBackToLogin) {
+      onBackToLogin();
+      return;
+    }
+
+    window.location.href = "/";
+  };
+
+  const layoutBackProps = onBackToHome ? { onBackClick: onBackToHome } : {};
 
   useEffect(() => {
     mountedRef.current = true;
@@ -179,6 +195,7 @@ export default function ResetPasswordPage() {
           <KeyRound className="h-7 w-7" />
         )
       }
+      {...layoutBackProps}
     >
       {phase === "validating" ? (
         <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-slate-200" role="status" aria-live="polite">
@@ -263,9 +280,7 @@ export default function ResetPasswordPage() {
       <PublicAuthButton
         type="button"
         variant="ghost"
-        onClick={() => {
-          window.location.href = "/";
-        }}
+        onClick={navigateToLogin}
       >
         <ArrowLeft className="mr-2 h-4 w-4" />
         Kembali ke log masuk

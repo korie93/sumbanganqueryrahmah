@@ -32,3 +32,12 @@ test("breadcrumb current page is not exposed as an inactive link", () => {
   assert.doesNotMatch(breadcrumbSource, /role="link"/);
   assert.match(breadcrumbSource, /aria-current="page"/);
 });
+
+test("toast notifications expose polite and assertive live-region semantics", () => {
+  const toastSource = readSource("toast.tsx");
+
+  assert.match(toastSource, /role: "alert" as const/);
+  assert.match(toastSource, /"aria-live": "assertive" as const/);
+  assert.match(toastSource, /role: "status" as const/);
+  assert.match(toastSource, /"aria-live": "polite" as const/);
+});

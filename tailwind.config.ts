@@ -33,6 +33,12 @@ export default {
         "16": "var(--spacing-16)",
         "20": "var(--spacing-20)",
         "24": "var(--spacing-24)",
+        "28": "var(--spacing-28)",
+        "32": "var(--spacing-32)",
+        "36": "var(--spacing-36)",
+        "40": "var(--spacing-40)",
+        "44": "var(--spacing-44)",
+        "48": "var(--spacing-48)",
       },
       colors: {
         // Flat / base colors (regular buttons)

@@ -125,7 +125,15 @@ function AppContent() {
     }
 
     if (currentPage === "reset-password") {
-      return renderRoutePage("reset-password", <ResetPasswordPage />);
+      return renderRoutePage(
+        "reset-password",
+        (
+          <ResetPasswordPage
+            onBackToHome={() => handlePublicNavigate("home")}
+            onBackToLogin={() => handlePublicNavigate("login")}
+          />
+        ),
+      );
     }
 
     if (currentPage === "not-found") {

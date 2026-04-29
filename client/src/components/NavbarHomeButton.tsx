@@ -22,13 +22,13 @@ function NavbarHomeButtonImpl({
       onFocus={() => onPrefetch(HOME_NAV_ITEM.id)}
       className={`nav-pill nav-home-pill hidden lg:inline-flex${active ? " nav-pill-active" : ""}`}
       data-testid="nav-home"
-      aria-label={HOME_NAV_ITEM.label}
+      aria-label="Utama"
       aria-current={active ? "page" : undefined}
     >
       <span className="nav-pill-icon">
-        <Home className="h-4 w-4" />
+        <Home className="h-4 w-4" aria-hidden="true" />
       </span>
-      <span className="nav-pill-label">Home</span>
+      <span className="nav-pill-label">Utama</span>
     </button>
   )
 }

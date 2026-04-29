@@ -1,3 +1,5 @@
+import "./GlassWrapper.css";
+
 interface GlassWrapperProps {
   children: React.ReactNode;
   className?: string;

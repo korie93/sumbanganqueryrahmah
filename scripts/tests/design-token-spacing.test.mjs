@@ -47,8 +47,9 @@ test("design token spacing contract flags missing spacing markers with readable 
 
   const validation = validateDesignTokenSpacingContract({ filesByPath });
 
-  assert.equal(validation.failures.length, 2);
+  assert.equal(validation.failures.length, 3);
   assert.match(validation.failures[0], /half-step token/i);
+  assert.match(validation.failures[2], /48-step token/i);
 });
 
 test("design token spacing contract report summarizes successful checks", () => {

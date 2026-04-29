@@ -26,6 +26,10 @@ export const DESIGN_TOKEN_SPACING_REQUIREMENTS = [
         label: "theme tokens expose the extended 24-step spacing token",
         snippet: "--spacing-24: calc(var(--spacing) * 24);",
       },
+      {
+        label: "theme tokens expose the extended 48-step spacing token",
+        snippet: "--spacing-48: calc(var(--spacing) * 48);",
+      },
     ],
   },
   {
@@ -47,6 +51,10 @@ export const DESIGN_TOKEN_SPACING_REQUIREMENTS = [
         label: "tailwind spacing maps the extended 24-step token",
         snippet: "\"24\": \"var(--spacing-24)\"",
       },
+      {
+        label: "tailwind spacing maps the extended 48-step token",
+        snippet: "\"48\": \"var(--spacing-48)\"",
+      },
     ],
   },
   {
@@ -54,7 +62,7 @@ export const DESIGN_TOKEN_SPACING_REQUIREMENTS = [
     checks: [
       {
         label: "public auth layout consumes shared spacing tokens for shell padding",
-        snippet: "padding: var(--spacing-6) var(--spacing-4);",
+        snippet: "max(var(--spacing-6), var(--safe-area-inset-top))",
       },
       {
         label: "public auth layout consumes shared spacing tokens for card gaps",

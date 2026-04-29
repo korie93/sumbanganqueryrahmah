@@ -58,7 +58,7 @@ export function AIConversationCard({
       <div className="space-y-4">
         {!aiEnabled ? (
           <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
-            AI assistant is disabled by system settings.
+            Pembantu AI dinyahaktifkan oleh tetapan sistem.
           </div>
         ) : null}
 
@@ -66,7 +66,7 @@ export function AIConversationCard({
           <div
             className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-xs ${statusContent.className}`}
           >
-            <statusContent.icon className="h-3.5 w-3.5" />
+            <statusContent.icon className="h-3.5 w-3.5" aria-hidden="true" />
             <span>{statusContent.text}</span>
           </div>
         ) : null}
@@ -87,11 +87,11 @@ export function AIConversationCard({
         {showResetButton ? (
           <div className="flex items-center justify-end gap-2">
             <Button variant="outline" onClick={onCancel} disabled={!canStop}>
-              <StopCircle className="mr-2 h-4 w-4" />
-              Stop AI
+              <StopCircle className="mr-2 h-4 w-4" aria-hidden="true" />
+              Hentikan AI
             </Button>
             <Button variant="outline" onClick={onReset} disabled={!canReset}>
-              New Chat
+              Sembang Baharu
             </Button>
           </div>
         ) : null}
@@ -144,6 +144,9 @@ export function AIConversationCard({
         </div>
 
         <div className="flex items-end gap-2">
+          <label htmlFor="ai-conversation-query" className="sr-only">
+            Taip soalan kepada AI SQR
+          </label>
           <Textarea
             id="ai-conversation-query"
             name="aiConversationQuery"
@@ -156,22 +159,22 @@ export function AIConversationCard({
             autoComplete="off"
           />
           <Button onClick={onSend} disabled={!aiEnabled || isProcessing}>
-            {isProcessing ? "Memproses..." : "Send"}
+            {isProcessing ? "Memproses..." : "Hantar"}
           </Button>
         </div>
 
         {!showResetButton ? (
           <div className="flex items-center justify-end gap-2">
             <Button variant="outline" size="sm" onClick={onCancel} disabled={!canStop}>
-              <StopCircle className="mr-2 h-4 w-4" />
-              Stop AI
+              <StopCircle className="mr-2 h-4 w-4" aria-hidden="true" />
+              Hentikan AI
             </Button>
           </div>
         ) : null}
 
         {aiEnabled && aiStatus === "IDLE" && gateNotice === null && slowNotice === false ? (
           <div className="flex items-start gap-2 rounded-lg border border-border bg-muted/20 p-3 text-xs text-muted-foreground">
-            <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
             <p>Tip: untuk respon lebih cepat pada komputer lama, gunakan soalan ringkas dan spesifik.</p>
           </div>
         ) : null}

@@ -124,7 +124,7 @@ function NavbarImpl({
                   {systemName || "SQR System"}
                 </p>
                 <p className="hidden text-[11px] text-muted-foreground sm:block">
-                  Operational workspace
+                  Ruang kerja operasi
                 </p>
               </div>
             </div>
@@ -142,13 +142,13 @@ function NavbarImpl({
             <button
               type="button"
               className="nav-mobile-trigger px-3"
-              aria-label="Open navigation menu"
+              aria-label="Buka menu navigasi"
               aria-haspopup="dialog"
               aria-controls="mobile-navigation-drawer"
               onClick={() => setMobileNavOpen(true)}
               data-testid="button-open-mobile-nav"
             >
-              <Menu className="h-4 w-4" />
+              <Menu className="h-4 w-4" aria-hidden="true" />
               <span className="hidden sm:inline">Menu</span>
             </button>
 
@@ -158,7 +158,7 @@ function NavbarImpl({
                   type="button"
                   className="user-menu-trigger px-2.5 sm:px-3"
                   data-testid="button-user-menu-mobile"
-                  aria-label="Open user menu"
+                  aria-label={`Buka menu pengguna untuk ${username}`}
                   aria-haspopup="menu"
                 >
                   <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold uppercase text-primary">
@@ -172,7 +172,7 @@ function NavbarImpl({
                       {userRole}
                     </span>
                   </span>
-                  <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                  <ChevronDown className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
                 </button>
               </DropdownMenuTrigger>
               <NavbarUserMenuContent
@@ -204,14 +204,14 @@ function NavbarImpl({
                 type="button"
                 className="user-menu-trigger max-w-[15rem] xl:max-w-none"
                 data-testid="button-user-menu"
-                aria-label="Open user menu"
+                aria-label={`Buka menu pengguna untuk ${username}`}
                 aria-haspopup="menu"
               >
                 <span className="user-menu-copy max-w-[10.5rem] xl:max-w-none">
                   <span className="truncate font-medium text-foreground">{username}</span>
                   <span className="user-menu-role">{userRole}</span>
                 </span>
-                <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                <ChevronDown className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
               </button>
             </DropdownMenuTrigger>
             <NavbarUserMenuContent

@@ -229,7 +229,7 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
             "pointer-events-auto border-0 bg-transparent p-0",
             styles.floatingMobileBackdrop,
           )}
-          aria-label="Close AI panel"
+          aria-label="Tutup panel AI"
           onClick={handleBackdropClick}
         />
       ) : null}
@@ -343,9 +343,9 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
                         : "h-8 w-8",
                   )}
                   onClick={handlePanelMinimizeClick}
-                  aria-label="Minimize AI panel"
+                  aria-label="Kecilkan panel AI"
                 >
-                  <Minimize2 className="h-4 w-4" />
+                  <Minimize2 className="h-4 w-4" aria-hidden="true" />
                 </Button>
               </div>
             </header>
@@ -403,7 +403,7 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
           title="AI SQR"
           aria-controls={panelId}
           aria-haspopup="dialog"
-          aria-label={isOpen ? "Minimize AI SQR panel" : "Open AI SQR panel"}
+          aria-label={isOpen ? "Kecilkan panel AI SQR" : "Buka panel AI SQR"}
           {...triggerDisclosureA11yProps}
           className={cn(
             "pointer-events-auto relative flex items-center justify-center rounded-full border border-sky-300/30 bg-sky-500 text-white shadow-[0_18px_38px_rgba(14,165,233,0.33)] transition-transform hover:scale-[1.03]",
@@ -414,7 +414,7 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
           )}
           data-testid="floating-ai-toggle"
         >
-          <Bot className="h-6 w-6" />
+          <Bot className="h-6 w-6" aria-hidden="true" />
           {!isOpen && unreadCount > 0 ? (
             <Badge
               className="absolute -right-1 -top-1 h-5 min-w-5 justify-center rounded-full bg-destructive px-1 text-[10px] text-destructive-foreground"

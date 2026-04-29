@@ -15,6 +15,7 @@ import AutoLogout from "@/components/AutoLogout";
 import Navbar from "@/components/Navbar";
 import { AIProvider } from "@/context/AIContext";
 import { scheduleIdlePreload } from "@/lib/lazy-with-preload";
+import "@/components/GlassWrapper.css";
 import "./AuthenticatedAppShell.css";
 
 const FloatingAI = lazy(() => import("@/components/FloatingAI"));

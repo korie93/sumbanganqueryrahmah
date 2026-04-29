@@ -19,7 +19,7 @@ export function HorizontalScrollHint({
   children,
   className,
   viewportClassName,
-  hint = "Scroll for more",
+  hint = "Tatal untuk lagi",
   onScroll,
 }: HorizontalScrollHintProps) {
   const viewportRef = useRef<HTMLDivElement | null>(null);

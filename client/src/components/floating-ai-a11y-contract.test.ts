@@ -21,6 +21,11 @@ test("floating AI chat input has a formal accessible label", () => {
   assert.match(source, /<label htmlFor=\{queryInputId\} className="sr-only">/);
   assert.match(source, /Taip soalan kepada AI SQR/);
   assert.match(source, /data-floating-ai-query-input="true"/);
+  assert.match(source, /aria-label="Hantar soalan AI"/);
+  assert.match(source, /<span>Hentikan AI<\/span>/);
+  assert.match(source, /Pembantu AI dinyahaktifkan oleh tetapan sistem\./);
+  assert.doesNotMatch(source, /aria-label="Send AI query"/);
+  assert.doesNotMatch(source, />Stop AI</);
 });
 
 test("floating AI dialog exposes boolean disclosure state and semantic heading", () => {
@@ -31,6 +36,12 @@ test("floating AI dialog exposes boolean disclosure state and semantic heading",
   assert.match(source, /role="dialog"/);
   assert.match(source, /aria-labelledby=\{panelTitleId\}/);
   assert.match(source, /<h2\s+id=\{panelTitleId\}/);
+  assert.match(source, /aria-label="Tutup panel AI"/);
+  assert.match(source, /aria-label="Kecilkan panel AI"/);
+  assert.match(source, /aria-label=\{isOpen \? "Kecilkan panel AI SQR" : "Buka panel AI SQR"\}/);
+  assert.doesNotMatch(source, /Close AI panel/);
+  assert.doesNotMatch(source, /Minimize AI panel/);
+  assert.doesNotMatch(source, /Open AI SQR panel/);
 });
 
 test("floating AI desktop focus handoff is bounded and panel transition is property-specific", () => {

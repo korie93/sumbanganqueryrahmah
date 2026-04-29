@@ -46,6 +46,32 @@ test("forgot password route uses lightweight auth chrome without eager recovery 
   );
 });
 
+test("public auth recovery routes receive SPA navigation callbacks", () => {
+  const appSource = readClientSource("../App.tsx");
+  const activateSource = readClientSource("../pages/ActivateAccount.tsx");
+  const resetPasswordSource = readClientSource("../pages/ResetPassword.tsx");
+
+  assert.match(appSource, /<ResetPasswordPage[\s\S]*onBackToHome=\{\(\) => handlePublicNavigate\("home"\)\}/);
+  assert.match(appSource, /onBackToLogin=\{\(\) => handlePublicNavigate\("login"\)\}/);
+  assert.match(activateSource, /onBackClick=\{navigateToLogin\}/);
+  assert.match(resetPasswordSource, /const layoutBackProps = onBackToHome \? \{ onBackClick: onBackToHome \} : \{\};/);
+  assert.match(resetPasswordSource, /onClick=\{navigateToLogin\}/);
+});
+
+test("glass wrapper base styles are owned by the component stylesheet", () => {
+  const shellSource = readClientSource("AuthenticatedAppShell.tsx");
+  const shellCss = readClientSource("AuthenticatedAppShell.css");
+  const glassWrapperSource = readClientSource("../components/GlassWrapper.tsx");
+  const glassWrapperCss = readClientSource("../components/GlassWrapper.css");
+
+  assert.match(shellSource, /import "@\/components\/GlassWrapper\.css";/);
+  assert.match(glassWrapperSource, /import "\.\/GlassWrapper\.css";/);
+  assert.match(glassWrapperCss, /\.glass-wrapper\s*{/);
+  assert.match(glassWrapperCss, /\.low-spec \.glass-wrapper/);
+  assert.doesNotMatch(shellCss, /^\.glass-wrapper\s*{/m);
+  assert.doesNotMatch(shellCss, /^\.low-spec \.glass-wrapper/m);
+});
+
 test("login page exposes real labels and a stable primary heading", () => {
   const loginSource = readClientSource("../pages/Login.tsx");
 
