@@ -73,7 +73,7 @@ const getVisibleUserMenuTrigger = async (page) => {
     return mobileTrigger;
   }
 
-  return page.locator('button[aria-label="Open user menu"]:visible').first();
+  return page.locator('button[aria-label^="Buka menu pengguna"]:visible').first();
 };
 
 const openUserMenu = async (page) => {
@@ -274,8 +274,8 @@ const checkMobileNavbar = async (page, tracker) => {
   await mobileNavTrigger.waitFor();
   await mobileNavTrigger.click();
 
-  const mobileNavigation = page.getByRole("navigation", { name: "Mobile navigation" });
-  await page.getByRole("heading", { name: "Navigation" }).waitFor();
+  const mobileNavigation = page.getByRole("navigation", { name: "Navigasi mudah alih" });
+  await page.getByRole("heading", { name: "Navigasi" }).waitFor();
   await mobileNavigation.getByRole("button", { name: /^Home\b/i }).waitFor();
   await mobileNavigation.getByRole("button", { name: /Backup & Restore/i }).waitFor();
 

@@ -1,9 +1,9 @@
 import { sql } from "drizzle-orm";
+import { readBooleanEnvFlag } from "../config/runtime-environment";
 import type { CoreSchemaSqlExecutor } from "./core-schema-bootstrap-utils";
 
 function isLegacyImportsBackfillEnabled(): boolean {
-  const value = process.env.SQR_ENABLE_LEGACY_IMPORTS_BACKFILL?.trim().toLowerCase();
-  return value === "1" || value === "true" || value === "yes";
+  return readBooleanEnvFlag("SQR_ENABLE_LEGACY_IMPORTS_BACKFILL", false);
 }
 
 export async function ensureCoreImportsTable(

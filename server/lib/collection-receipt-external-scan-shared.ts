@@ -1,4 +1,5 @@
 import path from "node:path";
+import { readOptionalString as readRuntimeOptionalString } from "../config/runtime-config-read-utils";
 
 export const DEFAULT_COLLECTION_RECEIPT_EXTERNAL_SCAN_TIMEOUT_MS = 15_000;
 export const DEFAULT_COLLECTION_RECEIPT_EXTERNAL_SCAN_REJECT_EXIT_CODES = "1";
@@ -20,13 +21,7 @@ export type ExternalScanConfig = {
 };
 
 export function readOptionalString(name: string): string | null {
-  const value = process.env[name];
-  if (typeof value !== "string") {
-    return null;
-  }
-
-  const normalized = value.trim();
-  return normalized ? normalized : null;
+  return readRuntimeOptionalString(name);
 }
 
 export function readInt(name: string, fallback: number, minimum = 1) {
