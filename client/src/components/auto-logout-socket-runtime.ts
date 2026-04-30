@@ -152,7 +152,13 @@ export function bindAutoLogoutSocket({
         if (message.type === "banned") {
           setBannedSessionFlag(true)
           notifyAutoLogoutNotice(message.reason, "Akaun anda telah disekat.")
-          window.location.href = "/"
+          reconnectEnabledRef.current = false
+          reconnectAttemptRef.current = 0
+          clearReconnect()
+          disposeSocketInstance(activeSocket)
+          void runClientLogout().finally(() => {
+            setBannedSessionFlag(true)
+          })
         }
 
         if (message.type === "maintenance_update") {

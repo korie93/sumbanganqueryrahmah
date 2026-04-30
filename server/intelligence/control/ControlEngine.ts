@@ -1,6 +1,7 @@
 import { GovernanceState } from "../governance/GovernanceEngine";
 import type { GovernanceStateName, RecommendedAction, SeverityLevel } from "../types";
 import { AdaptiveControlEngine } from "./AdaptiveControlEngine";
+import { logIntelligenceFailSafe } from "../intelligence-failsafe-logger";
 
 const ACTION_COOLDOWN_MS = 60_000;
 export const AUTO_HEALING_ENABLED = false;
@@ -131,7 +132,12 @@ export class ControlEngine {
     try {
       const result = await Promise.resolve(callback());
       return result !== false;
-    } catch {
+    } catch (error) {
+      logIntelligenceFailSafe({
+        engine: "ControlEngine",
+        operation: "runCallback",
+        error,
+      });
       return false;
     }
   }

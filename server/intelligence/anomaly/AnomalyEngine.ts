@@ -7,6 +7,7 @@ import type {
   SystemHistory,
   SystemSnapshot,
 } from "../types";
+import { logIntelligenceFailSafe } from "../intelligence-failsafe-logger";
 import { StatisticalEngine } from "../statistical/StatisticalEngine";
 
 const WEIGHTS = {
@@ -83,7 +84,12 @@ export class AnomalyEngine {
         severity,
         breakdown,
       };
-    } catch {
+    } catch (error) {
+      logIntelligenceFailSafe({
+        engine: "AnomalyEngine",
+        operation: "evaluate",
+        error,
+      });
       return this.failSafe();
     }
   }

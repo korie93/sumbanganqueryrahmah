@@ -5,6 +5,10 @@ import { Textarea } from "@/components/ui/textarea";
 import type { AIChatMessage } from "@/context/AIContext";
 import type { AIChatStatus } from "@/lib/ai-chat";
 import type { AIPageStatusContent } from "@/pages/ai/ai-page-controller-utils";
+import {
+  AI_REQUEST_MAX_CHARACTERS,
+  getAIChatRemainingCharacterCount,
+} from "@/components/ai-chat-utils";
 
 interface AIConversationCardProps {
   aiEnabled: boolean;
@@ -52,6 +56,8 @@ export function AIConversationCard({
   const chatHeightClass = embedded ? "h-full max-h-[350px]" : "h-[60vh]";
   const canStop = isProcessing || isTyping;
   const canReset = messages.length > 0 || isProcessing || isTyping;
+  const remainingCharacters = getAIChatRemainingCharacterCount(query);
+  const showCharacterLimit = remainingCharacters <= 200;
 
   return (
     <div className="rounded-2xl border border-border bg-background/70 p-4 backdrop-blur">
@@ -86,11 +92,11 @@ export function AIConversationCard({
 
         {showResetButton ? (
           <div className="flex items-center justify-end gap-2">
-            <Button variant="outline" onClick={onCancel} disabled={!canStop}>
+            <Button type="button" variant="outline" onClick={onCancel} disabled={!canStop} aria-disabled={!canStop}>
               <StopCircle className="mr-2 h-4 w-4" aria-hidden="true" />
               Hentikan AI
             </Button>
-            <Button variant="outline" onClick={onReset} disabled={!canReset}>
+            <Button type="button" variant="outline" onClick={onReset} disabled={!canReset} aria-disabled={!canReset}>
               Sembang Baharu
             </Button>
           </div>
@@ -157,15 +163,24 @@ export function AIConversationCard({
             disabled={!aiEnabled || isProcessing}
             className={embedded ? "min-h-[72px]" : ""}
             autoComplete="off"
+            maxLength={AI_REQUEST_MAX_CHARACTERS}
+            aria-describedby="ai-conversation-query-limit"
           />
-          <Button onClick={onSend} disabled={!aiEnabled || isProcessing}>
+          <Button type="button" onClick={onSend} disabled={!aiEnabled || isProcessing}>
             {isProcessing ? "Memproses..." : "Hantar"}
           </Button>
         </div>
+        <p
+          id="ai-conversation-query-limit"
+          className={showCharacterLimit ? "text-right text-[11px] leading-snug text-muted-foreground" : "sr-only"}
+          aria-live="polite"
+        >
+          Had soalan AI {AI_REQUEST_MAX_CHARACTERS} aksara. {remainingCharacters} aksara berbaki.
+        </p>
 
         {!showResetButton ? (
           <div className="flex items-center justify-end gap-2">
-            <Button variant="outline" size="sm" onClick={onCancel} disabled={!canStop}>
+            <Button type="button" variant="outline" size="sm" onClick={onCancel} disabled={!canStop} aria-disabled={!canStop}>
               <StopCircle className="mr-2 h-4 w-4" aria-hidden="true" />
               Hentikan AI
             </Button>

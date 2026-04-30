@@ -1,5 +1,6 @@
 import { memo, useCallback, useMemo, useRef, useState } from "react"
 import { ChevronDown, Menu } from "lucide-react"
+import { useLocation } from "wouter"
 
 import {
   DropdownMenu,
@@ -55,6 +56,7 @@ function NavbarImpl({
   monitorSection,
 }: NavbarProps) {
   const { theme, setTheme } = useTheme()
+  const [routerLocation] = useLocation()
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const navScrollerRef = useRef<HTMLElement | null>(null)
 
@@ -75,14 +77,33 @@ function NavbarImpl({
     () => resolveNavbarShowHomeButton(mobileItems),
     [mobileItems]
   )
+  const activeLocation = useMemo(() => {
+    if (typeof window !== "undefined") {
+      return {
+        pathname: window.location.pathname,
+        search: window.location.search,
+      }
+    }
+
+    const queryIndex = routerLocation.indexOf("?")
+    return queryIndex >= 0
+      ? {
+        pathname: routerLocation.slice(0, queryIndex),
+        search: routerLocation.slice(queryIndex),
+      }
+      : {
+        pathname: routerLocation,
+        search: "",
+      }
+  }, [routerLocation])
   const activeNavigationItemId = useMemo(
     () =>
       resolveActiveNavigationItemId(currentPage, {
         monitorSection,
-        pathname: typeof window !== "undefined" ? window.location.pathname : "",
-        search: typeof window !== "undefined" ? window.location.search : "",
+        pathname: activeLocation.pathname,
+        search: activeLocation.search,
       }),
-    [currentPage, monitorSection]
+    [activeLocation.pathname, activeLocation.search, currentPage, monitorSection]
   )
   const activeMobileItemId = useMemo(
     () => resolveNavbarActiveMobileItemId(mobileItems, activeNavigationItemId),

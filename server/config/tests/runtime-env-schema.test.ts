@@ -96,6 +96,33 @@ test("runtime env schema preserves the existing AUTH_COOKIE_SECURE error contrac
   );
 });
 
+test("runtime env schema validates HSTS preload tuning flags", () => {
+  assert.doesNotThrow(() => {
+    validateRuntimeEnvironmentSchema({
+      HSTS_MAX_AGE_SECONDS: "31536000",
+      HSTS_PRELOAD_ENABLED: "0",
+    });
+  });
+
+  assert.throws(
+    () => {
+      validateRuntimeEnvironmentSchema({
+        HSTS_MAX_AGE_SECONDS: "-1",
+      });
+    },
+    /HSTS_MAX_AGE_SECONDS.*at least 0/i,
+  );
+
+  assert.throws(
+    () => {
+      validateRuntimeEnvironmentSchema({
+        HSTS_PRELOAD_ENABLED: "maybe",
+      });
+    },
+    /HSTS_PRELOAD_ENABLED.*boolean flag/i,
+  );
+});
+
 test("runtime env schema accepts staged collection PII retirement field lists when encryption is configured", () => {
   assert.doesNotThrow(() => {
     validateRuntimeEnvironmentSchema({

@@ -4,6 +4,7 @@ import {
   assertNoPlaceholderSecrets,
   assertRuntimeSafetyGuards,
   buildRuntimeConfigWarnings,
+  resolveHstsHeaderConfig,
   resolveCookieSecure,
   resolveCorsAllowedOrigins,
   resolvePreviousCollectionPiiSecrets,
@@ -210,6 +211,56 @@ test("buildRuntimeConfigWarnings reports when insecure auth cookies are forced o
   assert.match(
     warnings.map((warning) => warning.code).join(","),
     /AUTH_COOKIE_SECURE_FORCED_ON_PRODUCTION/,
+  );
+});
+
+test("resolveHstsHeaderConfig keeps preload opt-in and enforces preload max-age", () => {
+  assert.deepEqual(
+    resolveHstsHeaderConfig({
+      isProductionLike: true,
+      maxAgeSeconds: 15_552_000,
+      preloadEnabled: false,
+    }),
+    {
+      maxAge: 15_552_000,
+      includeSubDomains: true,
+      preload: false,
+    },
+  );
+
+  assert.throws(
+    () =>
+      resolveHstsHeaderConfig({
+        isProductionLike: true,
+        maxAgeSeconds: 15_552_000,
+        preloadEnabled: true,
+      }),
+    /HSTS_PRELOAD_ENABLED requires HSTS_MAX_AGE_SECONDS to be at least 31536000/i,
+  );
+});
+
+test("resolveHstsHeaderConfig rejects production max-age below the hardened baseline", () => {
+  assert.throws(
+    () =>
+      resolveHstsHeaderConfig({
+        isProductionLike: true,
+        maxAgeSeconds: 0,
+        preloadEnabled: false,
+      }),
+    /Production HSTS_MAX_AGE_SECONDS must be at least 15552000/i,
+  );
+
+  assert.deepEqual(
+    resolveHstsHeaderConfig({
+      isProductionLike: false,
+      maxAgeSeconds: 0,
+      preloadEnabled: false,
+    }),
+    {
+      maxAge: 0,
+      includeSubDomains: true,
+      preload: false,
+    },
   );
 });
 

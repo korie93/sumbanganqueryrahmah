@@ -27,6 +27,7 @@ import {
   hasBackupEncryptionKeyConfigured,
   hasCollectionPiiEncryptionKeyConfigured,
   hasTwoFactorEncryptionKeyConfigured,
+  resolveHstsHeaderConfig,
   resolveCookieSecure,
   resolveCorsAllowedOrigins,
   resolvePreviousCollectionPiiSecrets,
@@ -62,6 +63,14 @@ const seedDefaultUsers = readBoolean("SEED_DEFAULT_USERS", false);
 const backupFeatureEnabled = readBoolean("BACKUP_FEATURE_ENABLED", true);
 const localSuperuserCredentialsFileEnabled = readBoolean("LOCAL_SUPERUSER_CREDENTIALS_FILE_ENABLED", false);
 const mailDevOutboxEnabled = readBoolean("MAIL_DEV_OUTBOX_ENABLED", false);
+const hstsHeaderConfig = resolveHstsHeaderConfig({
+  isProductionLike,
+  maxAgeSeconds: readInt("HSTS_MAX_AGE_SECONDS", 15_552_000, {
+    min: 0,
+    max: 63_072_000,
+  }),
+  preloadEnabled: readBoolean("HSTS_PRELOAD_ENABLED", false),
+});
 const resolvedDefaultImportUploadLimitBytes = parseBodyLimitToBytes(
   readString("IMPORT_BODY_LIMIT", DEFAULT_IMPORT_BODY_LIMIT),
   DEFAULT_IMPORT_UPLOAD_LIMIT_BYTES,
@@ -204,6 +213,9 @@ export const runtimeConfig: RuntimeConfig = Object.freeze({
     logLevel,
     allowLocalDevCors: readBoolean("ALLOW_LOCAL_DEV_CORS", false),
     uploadsRootDir: resolveUploadsRootDir(),
+    securityHeaders: {
+      hsts: hstsHeaderConfig,
+    },
     bodyLimits: {
       default: readString("DEFAULT_BODY_LIMIT", "2mb"),
       imports: readString("IMPORT_BODY_LIMIT", DEFAULT_IMPORT_BODY_LIMIT),

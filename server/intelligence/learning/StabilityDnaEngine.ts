@@ -1,5 +1,6 @@
 import { pool } from "../../db-postgres";
 import type { RecommendedAction, SeverityLevel, SystemSnapshot } from "../types";
+import { logIntelligenceFailSafe } from "../intelligence-failsafe-logger";
 
 type StabilityPatternInput = {
   metricSignature: string;
@@ -63,7 +64,12 @@ export class StabilityDnaEngine {
       const count = Number(result.rows?.[0]?.count || 0);
       if (count > 5) return 0.85;
       return 1;
-    } catch {
+    } catch (error) {
+      logIntelligenceFailSafe({
+        engine: "StabilityDnaEngine",
+        operation: "getMutationFactor",
+        error,
+      });
       return 1;
     }
   }
@@ -92,7 +98,12 @@ export class StabilityDnaEngine {
           Math.max(0, Math.round(input.durationMs)),
         ],
       );
-    } catch {
+    } catch (error) {
+      logIntelligenceFailSafe({
+        engine: "StabilityDnaEngine",
+        operation: "recordPattern",
+        error,
+      });
       // Fail-safe: learning storage must never break runtime flow.
     }
   }

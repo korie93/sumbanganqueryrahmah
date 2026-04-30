@@ -1,4 +1,8 @@
 import type { InsertAuditLog } from "../../shared/schema-postgres";
+import {
+  AI_REQUEST_MAX_CHARACTERS,
+  isAiRequestTextTooLong,
+} from "../../shared/ai-limits";
 import { logger } from "../lib/logger";
 import type { AiChatService } from "./ai-chat.service";
 import type { AiSearchService } from "./ai-search.service";
@@ -49,6 +53,12 @@ export class AiInteractionService {
         return {
           statusCode: 400,
           body: { message: "Query required" },
+        };
+      }
+      if (isAiRequestTextTooLong(query)) {
+        return {
+          statusCode: 400,
+          body: { message: `Query exceeds the ${AI_REQUEST_MAX_CHARACTERS} character limit.` },
         };
       }
 
@@ -127,6 +137,12 @@ export class AiInteractionService {
         return {
           statusCode: 400,
           body: { message: "Message required" },
+        };
+      }
+      if (isAiRequestTextTooLong(message)) {
+        return {
+          statusCode: 400,
+          body: { message: `Message exceeds the ${AI_REQUEST_MAX_CHARACTERS} character limit.` },
         };
       }
 

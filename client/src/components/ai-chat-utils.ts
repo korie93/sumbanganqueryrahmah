@@ -1,5 +1,10 @@
 import { Brain, PencilLine, Search, type LucideIcon } from "lucide-react";
 
+import {
+  AI_REQUEST_MAX_CHARACTERS,
+  isAiRequestTextTooLong,
+  normalizeAiRequestTextInput,
+} from "@shared/ai-limits";
 import type { AIChatMessage, AIChatMessageInput } from "@/context/AIContext";
 import type { AIChatStatus } from "@/lib/ai-chat";
 import { createClientRandomId } from "@/lib/secure-id";
@@ -8,6 +13,8 @@ export const MAX_AI_CHAT_MESSAGES = 30;
 export const AI_CHAT_MAX_RETRIES = 6;
 export const AI_CHAT_RETRY_MS = 2500;
 export const DEFAULT_AI_CHAT_ERROR_MESSAGE = "AI tidak dapat memproses permintaan sekarang.\nSila cuba semula.";
+export { AI_REQUEST_MAX_CHARACTERS };
+export const AI_CHAT_CHARACTER_LIMIT_NOTICE = `Had maksimum soalan AI ialah ${AI_REQUEST_MAX_CHARACTERS} aksara.`;
 
 type AIChatResponseLike = {
   headers: {
@@ -33,6 +40,18 @@ export class AIChatRequestError extends Error {
 
 export function getAIChatTypingDelayMs(isLowSpecMode: boolean) {
   return isLowSpecMode ? 18 : 14;
+}
+
+export function normalizeAIChatQueryInput(value: string): string {
+  return normalizeAiRequestTextInput(value);
+}
+
+export function isAIChatQueryOverLimit(value: string): boolean {
+  return isAiRequestTextTooLong(value);
+}
+
+export function getAIChatRemainingCharacterCount(value: string): number {
+  return Math.max(0, AI_REQUEST_MAX_CHARACTERS - value.length);
 }
 
 export function appendAIChatMessage(

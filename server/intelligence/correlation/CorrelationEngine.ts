@@ -1,4 +1,5 @@
 import type { CorrelationMatrix, CorrelationPair, SystemHistory } from "../types";
+import { logIntelligenceFailSafe } from "../intelligence-failsafe-logger";
 import { StatisticalEngine } from "../statistical/StatisticalEngine";
 
 const BOOST_THRESHOLD = 0.6;
@@ -38,7 +39,12 @@ export class CorrelationEngine {
   private safeCorrelation(x: number[], y: number[]): number {
     try {
       return this.stats.computeCorrelation(x, y);
-    } catch {
+    } catch (error) {
+      logIntelligenceFailSafe({
+        engine: "CorrelationEngine",
+        operation: "safeCorrelation",
+        error,
+      });
       return 0;
     }
   }

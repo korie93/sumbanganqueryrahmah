@@ -69,13 +69,24 @@ function isSameSiteTelemetryRequest(req: Request, allowedOriginSet: Set<string>)
   if (fetchSite === "cross-site") {
     return false;
   }
+  if (fetchSite && fetchSite !== "same-origin" && fetchSite !== "same-site" && fetchSite !== "none") {
+    return false;
+  }
 
+  const rawOrigin = req.headers.origin;
   const origin = normalizeCorsOrigin(req.headers.origin);
+  if (rawOrigin && !origin) {
+    return false;
+  }
   if (origin && !allowedOriginSet.has(origin)) {
     return false;
   }
 
+  const rawReferer = req.headers.referer;
   const referer = normalizeCorsOrigin(req.headers.referer);
+  if (rawReferer && !referer) {
+    return false;
+  }
   if (!origin && referer && !allowedOriginSet.has(referer)) {
     return false;
   }

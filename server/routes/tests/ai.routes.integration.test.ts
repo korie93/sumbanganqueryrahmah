@@ -10,6 +10,7 @@ import { AiInteractionService } from "../../services/ai-interaction.service";
 import type { AiSearchService } from "../../services/ai-search.service";
 import type { CategoryStatsService } from "../../services/category-stats.service";
 import { registerAiRoutes } from "../ai.routes";
+import { AI_REQUEST_MAX_CHARACTERS } from "../../../shared/ai-limits";
 import {
   createJsonTestApp,
   createTestAuthenticateToken,
@@ -214,6 +215,30 @@ test("POST /api/ai/search rejects blank queries before service execution", async
 
     assert.equal(response.status, 400);
     assert.deepEqual(await response.json(), { message: "Query required" });
+    assert.equal(searchCalls.length, 0);
+    assert.equal(countSummaryCalls.length, 0);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("POST /api/ai/search rejects overlong queries before service execution", async () => {
+  const { app, searchCalls, countSummaryCalls } = createAiRouteHarness();
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(`${baseUrl}/api/ai/search`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ query: "x".repeat(AI_REQUEST_MAX_CHARACTERS + 1) }),
+    });
+
+    assert.equal(response.status, 400);
+    assert.deepEqual(await response.json(), {
+      message: `Query exceeds the ${AI_REQUEST_MAX_CHARACTERS} character limit.`,
+    });
     assert.equal(searchCalls.length, 0);
     assert.equal(countSummaryCalls.length, 0);
   } finally {

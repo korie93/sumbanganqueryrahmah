@@ -16,7 +16,7 @@ export function BrandLogo({
   const resolvedAlt = decorative ? "" : alt;
 
   return (
-    <picture className={className}>
+    <picture className={className} aria-hidden={decorative ? "true" : undefined}>
       <source srcSet="/brand/sqr-logo-minimal.webp" type="image/webp" />
       {decorative ? (
         <img

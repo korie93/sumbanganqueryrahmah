@@ -33,8 +33,10 @@ test("registerLocalHttpPipeline allows blob receipt previews in the CSP header",
     const csp = String(response.headers.get("content-security-policy") || "");
     assert.match(String(response.headers.get("x-frame-options") || ""), /sameorigin/i);
     assert.equal(response.headers.get("x-content-type-options"), "nosniff");
+    assert.equal(response.headers.get("x-powered-by"), null);
     assert.equal(response.headers.get("referrer-policy"), "no-referrer");
     assert.match(String(response.headers.get("strict-transport-security") || ""), /max-age=15552000/i);
+    assert.doesNotMatch(String(response.headers.get("strict-transport-security") || ""), /preload/i);
     const permissionsPolicy = String(response.headers.get("permissions-policy") || "");
     assert.match(permissionsPolicy, /camera=\(\)/i);
     assert.match(permissionsPolicy, /geolocation=\(\)/i);

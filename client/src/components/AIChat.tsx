@@ -7,6 +7,10 @@ import AIMessage from "@/components/AIMessage";
 import { type AIChatStatus as SharedAIChatStatus } from "@/lib/ai-chat";
 import "@/styles/ai.css";
 import { useAIChatState } from "@/components/useAIChatState";
+import {
+  AI_REQUEST_MAX_CHARACTERS,
+  getAIChatRemainingCharacterCount,
+} from "@/components/ai-chat-utils";
 
 type AIChatProps = {
   timeoutMs: number;
@@ -27,6 +31,7 @@ export default function AIChat({
 }: AIChatProps) {
   const isMobile = useIsMobile();
   const queryInputId = useId();
+  const queryLimitId = useId();
   const {
     aiStatus,
     cancelAISearch,
@@ -50,6 +55,8 @@ export default function AIChat({
     onStatusChange,
     timeoutMs,
   });
+  const remainingCharacters = getAIChatRemainingCharacterCount(query);
+  const showCharacterLimit = remainingCharacters <= 200;
 
   return (
     <div className="ai-chat-container" data-compact={compactMode ? "true" : "false"}>
@@ -122,6 +129,8 @@ export default function AIChat({
           className="ai-input"
           rows={compactMode ? 1 : 2}
           autoComplete="off"
+          maxLength={AI_REQUEST_MAX_CHARACTERS}
+          aria-describedby={queryLimitId}
           disabled={!aiEnabled || isProcessing}
         />
         <Button
@@ -134,6 +143,13 @@ export default function AIChat({
           <SendHorizonal className="h-4 w-4" aria-hidden="true" />
         </Button>
       </div>
+      <p
+        id={queryLimitId}
+        className={showCharacterLimit ? "ai-input-limit" : "sr-only"}
+        aria-live="polite"
+      >
+        Had soalan AI {AI_REQUEST_MAX_CHARACTERS} aksara. {remainingCharacters} aksara berbaki.
+      </p>
 
       {showActions ? (
         <div className="ai-actions">
@@ -144,6 +160,7 @@ export default function AIChat({
             className="ai-stop-btn"
             onClick={() => cancelAISearch(true)}
             disabled={!isProcessing && !isTyping}
+            aria-disabled={!isProcessing && !isTyping}
           >
             <StopCircle className="h-4 w-4" aria-hidden="true" />
             <span>Hentikan AI</span>

@@ -4,6 +4,11 @@ import { AI_CANCEL_EVENT, AI_RESET_EVENT, type AIChatStatus } from "@/lib/ai-cha
 import { resolveAiErrorMessage } from "@/lib/ai-error";
 import { searchAI } from "@/lib/api";
 import {
+  AI_CHAT_CHARACTER_LIMIT_NOTICE,
+  isAIChatQueryOverLimit,
+  normalizeAIChatQueryInput,
+} from "@/components/ai-chat-utils";
+import {
   AI_PAGE_MAX_RETRIES,
   AI_PAGE_RETRY_MS,
   appendAIPageMessage,
@@ -86,6 +91,18 @@ export function useAIPageController({
     }
     stopProcessingState();
   }, [abortActiveRequest, clearRetryTimers, clearSlowNoticeTimer, stopProcessingState, stopTyping]);
+
+  const updateQuery = useCallback((value: string) => {
+    const normalized = normalizeAIChatQueryInput(value);
+    setQuery(normalized);
+    if (value.length > normalized.length) {
+      setGateNotice(AI_CHAT_CHARACTER_LIMIT_NOTICE);
+      return;
+    }
+    if (gateNotice === AI_CHAT_CHARACTER_LIMIT_NOTICE) {
+      setGateNotice(null);
+    }
+  }, [gateNotice]);
 
   const resetChat = useCallback(() => {
     cancelAI();
@@ -303,6 +320,10 @@ export function useAIPageController({
     if (!aiEnabled) return;
     const trimmed = query.trim();
     if (!trimmed || processingRef.current || pendingSendRef.current) return;
+    if (isAIChatQueryOverLimit(query)) {
+      setGateNotice(AI_CHAT_CHARACTER_LIMIT_NOTICE);
+      return;
+    }
     setQuery("");
     await sendQuery(trimmed);
   }, [aiEnabled, query, sendQuery]);
@@ -324,7 +345,7 @@ export function useAIPageController({
     isTyping,
     messagesContainerRef,
     statusContent,
-    setQuery,
+    setQuery: updateQuery,
     handleSend,
     cancelAI,
     resetChat,

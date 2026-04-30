@@ -121,6 +121,11 @@ const runtimeEnvironmentSchema = z.object({
   TRUSTED_PROXIES: optionalEnvString("TRUSTED_PROXIES"),
   ALLOW_LOCAL_DEV_CORS: optionalBooleanEnv("ALLOW_LOCAL_DEV_CORS"),
   HTTP_SLOW_REQUEST_MS: optionalIntEnv("HTTP_SLOW_REQUEST_MS", { min: 250 }),
+  HSTS_MAX_AGE_SECONDS: optionalIntEnv("HSTS_MAX_AGE_SECONDS", {
+    min: 0,
+    max: 63_072_000,
+  }),
+  HSTS_PRELOAD_ENABLED: optionalBooleanEnv("HSTS_PRELOAD_ENABLED"),
 
   DATABASE_URL: optionalEnvString("DATABASE_URL", SECRET_STRING_MAX_LENGTH),
   PG_HOST: optionalEnvString("PG_HOST", 255),

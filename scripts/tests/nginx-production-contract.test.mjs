@@ -80,6 +80,8 @@ test("production Nginx example does not emit conflicting Helmet-owned headers", 
   assert.match(nginxText, /Browser security headers are owned by the Express\/Helmet app layer/);
   assert.match(nginxText, /X-Frame-Options at\s+# SAMEORIGIN/i);
   assert.match(nginxText, /HSTS preload off/i);
+  assert.match(nginxText, /HSTS_MAX_AGE_SECONDS=31536000/i);
+  assert.match(nginxText, /https:\/\/hstspreload\.org/i);
 });
 
 test("production Nginx example gives web-vitals telemetry its own bounded edge throttle", () => {
@@ -103,4 +105,6 @@ test("Hetzner deployment guide mirrors the hardened Nginx contract", () => {
   assert.match(docText, /zone=sqr_telemetry_per_ip:10m rate=60r\/m/);
   assert.match(docText, /location = \/telemetry\/web-vitals/);
   assert.match(docText, /Browser security headers kekal diurus oleh Express\/Helmet/);
+  assert.match(docText, /HSTS_MAX_AGE_SECONDS=31536000/i);
+  assert.match(docText, /https:\/\/hstspreload\.org/i);
 });

@@ -39,6 +39,13 @@ export type RuntimeConfig = {
     logLevel: string;
     allowLocalDevCors: boolean;
     uploadsRootDir: string;
+    securityHeaders: {
+      hsts: {
+        maxAge: number;
+        includeSubDomains: boolean;
+        preload: boolean;
+      };
+    };
     bodyLimits: {
       default: string;
       imports: string;

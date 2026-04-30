@@ -9,11 +9,14 @@ import {
   AIChatRequestError,
   AI_CHAT_MAX_RETRIES,
   AI_CHAT_RETRY_MS,
+  AI_CHAT_CHARACTER_LIMIT_NOTICE,
   DEFAULT_AI_CHAT_ERROR_MESSAGE,
   appendAIChatMessage,
   formatAIChatQueuedNotice,
   getAIChatStatusMeta,
   getAIChatTypingDelayMs,
+  isAIChatQueryOverLimit,
+  normalizeAIChatQueryInput,
   readAIChatErrorResponse,
   readAIChatSuccessPayload,
 } from "./ai-chat-utils";
@@ -100,6 +103,18 @@ export function useAIChatState({
       setAiStatus("IDLE");
     }
   }, [abortActiveRequest, clearRetryTimers, clearSlowNoticeTimer, setIsThinking, stopTyping]);
+
+  const updateQuery = useCallback((value: string) => {
+    const normalized = normalizeAIChatQueryInput(value);
+    setQuery(normalized);
+    if (value.length > normalized.length) {
+      setGateNotice(AI_CHAT_CHARACTER_LIMIT_NOTICE);
+      return;
+    }
+    if (gateNotice === AI_CHAT_CHARACTER_LIMIT_NOTICE) {
+      setGateNotice(null);
+    }
+  }, [gateNotice]);
 
   const resetSession = useCallback(() => {
     cancelAISearch(true);
@@ -276,6 +291,10 @@ export function useAIChatState({
     if (!trimmed || processingRef.current) {
       return;
     }
+    if (isAIChatQueryOverLimit(query)) {
+      setGateNotice(AI_CHAT_CHARACTER_LIMIT_NOTICE);
+      return;
+    }
 
     cancelAISearch(false);
     sessionRef.current += 1;
@@ -336,7 +355,7 @@ export function useAIChatState({
     messages,
     messagesRef,
     query,
-    setQuery,
+    setQuery: updateQuery,
     showActions: isProcessing || isTyping,
     slowNotice,
     statusMeta,

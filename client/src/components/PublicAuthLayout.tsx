@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { ArrowLeft } from "lucide-react";
+import { useLocation } from "wouter";
 import { BrandLogo } from "@/components/BrandLogo";
 import "./PublicAuthLayout.css";
 
@@ -28,6 +29,7 @@ export function PublicAuthLayout({
   contentBusy = false,
   onBackClick,
 }: PublicAuthLayoutProps) {
+  const [, navigate] = useLocation();
   const contentBusyProps = contentBusy ? { "aria-busy": "true" as const } : {};
   const layoutClassName = visualMode === "minimal"
     ? "public-auth-layout public-auth-layout--minimal viewport-min-height"
@@ -50,7 +52,7 @@ export function PublicAuthLayout({
                   onBackClick();
                   return;
                 }
-                window.location.href = "/";
+                navigate("/");
               }}
               className="public-auth-layout__back-button"
             >

@@ -21,6 +21,9 @@ const PLACEHOLDER_BACKUP_ENCRYPTION_KEYS = new Set([
 ]);
 const UNSAFE_TRUST_PROXY_VALUES = new Set(["*", "all", "true", "1"]);
 
+export const HSTS_PRELOAD_MIN_MAX_AGE_SECONDS = 31_536_000;
+export const HSTS_PRODUCTION_MIN_MAX_AGE_SECONDS = 15_552_000;
+
 export function resolveTrustedProxies(rawValues: string[]): string[] {
   if (rawValues.length === 0) {
     return [];
@@ -97,6 +100,30 @@ export function resolveCookieSecure(
     return false;
   }
   return params.isProductionLike || String(params.publicAppUrl || "").toLowerCase().startsWith("https://");
+}
+
+export function resolveHstsHeaderConfig(params: {
+  isProductionLike: boolean;
+  maxAgeSeconds: number;
+  preloadEnabled: boolean;
+}) {
+  if (params.isProductionLike && params.maxAgeSeconds < HSTS_PRODUCTION_MIN_MAX_AGE_SECONDS) {
+    throw new Error(
+      `Production HSTS_MAX_AGE_SECONDS must be at least ${HSTS_PRODUCTION_MIN_MAX_AGE_SECONDS}. Use a non-production environment for shorter HSTS experiments.`,
+    );
+  }
+
+  if (params.preloadEnabled && params.maxAgeSeconds < HSTS_PRELOAD_MIN_MAX_AGE_SECONDS) {
+    throw new Error(
+      `HSTS_PRELOAD_ENABLED requires HSTS_MAX_AGE_SECONDS to be at least ${HSTS_PRELOAD_MIN_MAX_AGE_SECONDS}. Verify every production subdomain is HTTPS-only before enabling preload.`,
+    );
+  }
+
+  return {
+    maxAge: params.maxAgeSeconds,
+    includeSubDomains: true,
+    preload: params.preloadEnabled,
+  };
 }
 
 export function resolveCorsAllowedOrigins(params: {

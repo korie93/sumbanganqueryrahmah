@@ -325,6 +325,8 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
                   )}
                   onClick={handleReset}
                   disabled={messages.length === 0 && !isThinking}
+                  aria-disabled={messages.length === 0 && !isThinking}
+                  aria-label="Reset sesi AI SQR"
                 >
                   Reset Sesi
                 </Button>
@@ -362,8 +364,16 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
               <div className="h-full min-h-0">
                 <Suspense
                   fallback={
-                    <div className="flex h-full items-center justify-center">
-                      <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary/30 border-t-primary motion-reduce:animate-none" />
+                    <div
+                      className="flex h-full items-center justify-center"
+                      role="status"
+                      aria-label="Memuatkan panel AI SQR"
+                      aria-live="polite"
+                    >
+                      <div
+                        className="h-8 w-8 animate-spin rounded-full border-2 border-primary/30 border-t-primary motion-reduce:animate-none"
+                        aria-hidden="true"
+                      />
                     </div>
                   }
                 >

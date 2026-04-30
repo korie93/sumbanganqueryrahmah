@@ -226,6 +226,14 @@
   color: var(--ai-input-text);
 }
 
+.ai-input-limit {
+  margin: -4px 12px 8px;
+  color: hsl(var(--muted-foreground));
+  font-size: 11px;
+  line-height: 1.35;
+  text-align: right;
+}
+
 .ai-send-btn {
   height: 44px;
   width: 44px;

@@ -247,6 +247,58 @@ test("POST /telemetry/web-vitals silently drops cross-site browser telemetry att
   }
 });
 
+test("POST /telemetry/web-vitals accepts same-origin browser telemetry signals", async () => {
+  const { app, recordedPayloads } = createTelemetryRouteHarness({
+    webVitalsRequestGuard: createWebVitalsTelemetryRequestGuard({
+      allowedOrigins: ["https://sqr-system.test"],
+    }),
+  });
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(`${baseUrl}/telemetry/web-vitals`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Origin: "https://sqr-system.test",
+        "Sec-Fetch-Site": "same-origin",
+      },
+      body: JSON.stringify(createValidWebVitalsPayload()),
+    });
+
+    assert.equal(response.status, 204);
+    assert.equal(recordedPayloads.length, 1);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("POST /telemetry/web-vitals silently drops malformed same-site headers", async () => {
+  const { app, recordedPayloads } = createTelemetryRouteHarness({
+    webVitalsRequestGuard: createWebVitalsTelemetryRequestGuard({
+      allowedOrigins: ["https://sqr-system.test"],
+    }),
+  });
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(`${baseUrl}/telemetry/web-vitals`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Origin: "null",
+        "Sec-Fetch-Site": "same-origin",
+      },
+      body: JSON.stringify(createValidWebVitalsPayload()),
+    });
+
+    assert.equal(response.status, 204);
+    assert.equal(recordedPayloads.length, 0);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
 test("POST /telemetry/web-vitals silently drops non-json telemetry bodies", async () => {
   const { app, recordedPayloads } = createTelemetryRouteHarness();
   const { server, baseUrl } = await startTestServer(app);

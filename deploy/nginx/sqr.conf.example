@@ -39,6 +39,10 @@ server {
     # both layers are aligned. Helmet currently keeps X-Frame-Options at
     # SAMEORIGIN for same-origin/blob preview flows and keeps HSTS preload off
     # until every production subdomain is HTTPS-ready.
+    # HSTS preload is an explicit app env opt-in: use HSTS_MAX_AGE_SECONDS=31536000
+    # or higher and HSTS_PRELOAD_ENABLED=1 only after every production subdomain
+    # is HTTPS-only, includeSubDomains is acceptable for the whole domain tree,
+    # and the domain is ready for manual submission to https://hstspreload.org.
 
     # Keep this equal to or higher than IMPORT_BODY_LIMIT so Express can return
     # application-level import validation errors instead of generic Nginx 413s.

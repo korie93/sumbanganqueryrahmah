@@ -63,6 +63,8 @@ export function registerLocalHttpPipeline(app: Express, options: LocalHttpPipeli
     maintenanceGuard,
   } = options;
 
+  app.disable("x-powered-by");
+
   app.use(helmet({
     frameguard: {
       action: "sameorigin",
@@ -71,11 +73,9 @@ export function registerLocalHttpPipeline(app: Express, options: LocalHttpPipeli
       policy: "no-referrer",
     },
     hsts: {
-      // HSTS preload requires maxAge >= 31536000 plus verified HTTPS coverage
-      // for every production subdomain; keep preload opt-in via deployment review.
-      maxAge: 15552000,
-      includeSubDomains: true,
-      preload: false,
+      // HSTS preload remains opt-in because it requires verified HTTPS
+      // coverage for every production subdomain before registry submission.
+      ...runtimeConfig.app.securityHeaders.hsts,
     },
     noSniff: true,
     contentSecurityPolicy: {

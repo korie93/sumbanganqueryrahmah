@@ -3,12 +3,17 @@ import test from "node:test";
 
 import {
   AIChatRequestError,
+  AI_CHAT_CHARACTER_LIMIT_NOTICE,
+  AI_REQUEST_MAX_CHARACTERS,
   appendAIChatMessage,
   formatAIChatQueueBusyNotice,
   formatAIChatQueuedNotice,
+  getAIChatRemainingCharacterCount,
   getAIChatErrorDetailsFromPayload,
   getAIChatStatusMeta,
   getAIChatTypingDelayMs,
+  isAIChatQueryOverLimit,
+  normalizeAIChatQueryInput,
   readAIChatErrorResponse,
   readAIChatSuccessPayload,
 } from "@/components/ai-chat-utils";
@@ -58,6 +63,16 @@ test("AI chat queue notices preserve existing copy", () => {
     formatAIChatQueuedNotice(2400),
     "AI request queued for 2s due to current traffic.",
   );
+});
+
+test("AI chat query limit helpers clamp and report overlong input", () => {
+  const overlong = "x".repeat(AI_REQUEST_MAX_CHARACTERS + 5);
+
+  assert.equal(normalizeAIChatQueryInput(overlong).length, AI_REQUEST_MAX_CHARACTERS);
+  assert.equal(isAIChatQueryOverLimit(overlong), true);
+  assert.equal(isAIChatQueryOverLimit("x".repeat(AI_REQUEST_MAX_CHARACTERS)), false);
+  assert.equal(getAIChatRemainingCharacterCount("abc"), AI_REQUEST_MAX_CHARACTERS - 3);
+  assert.match(AI_CHAT_CHARACTER_LIMIT_NOTICE, /Had maksimum soalan AI/);
 });
 
 test("getAIChatErrorDetailsFromPayload extracts message and queue notice", () => {

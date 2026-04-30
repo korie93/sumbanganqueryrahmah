@@ -4,6 +4,7 @@ import type { AiChatService } from "../ai-chat.service";
 import { AiInteractionService } from "../ai-interaction.service";
 import type { AiSearchService } from "../ai-search.service";
 import type { CategoryStatsService } from "../category-stats.service";
+import { AI_REQUEST_MAX_CHARACTERS } from "../../../shared/ai-limits";
 
 type RuntimeSettings = {
   aiEnabled: boolean;
@@ -128,6 +129,23 @@ test("AiInteractionService search rejects blank queries before service execution
   assert.equal(countSummaryCalls.length, 0);
 });
 
+test("AiInteractionService search rejects overlong queries before service execution", async () => {
+  const { service, searchCalls, countSummaryCalls } = createAiInteractionHarness();
+
+  const result = await service.search({
+    query: "x".repeat(AI_REQUEST_MAX_CHARACTERS + 1),
+    userKey: "activity-1",
+    username: "user.one",
+  });
+
+  assert.equal(result.statusCode, 400);
+  assert.deepEqual(result.body, {
+    message: `Query exceeds the ${AI_REQUEST_MAX_CHARACTERS} character limit.`,
+  });
+  assert.equal(searchCalls.length, 0);
+  assert.equal(countSummaryCalls.length, 0);
+});
+
 test("AiInteractionService search returns count summary without hitting AI search", async () => {
   const { service, searchCalls, countSummaryCalls } = createAiInteractionHarness({
     runtimeSettings: {
@@ -231,6 +249,21 @@ test("AiInteractionService chat respects disabled AI runtime settings", async ()
   assert.equal(result.statusCode, 503);
   assert.deepEqual(result.body, {
     message: "AI assistant is disabled by system settings.",
+  });
+  assert.equal(chatCalls.length, 0);
+});
+
+test("AiInteractionService chat rejects overlong messages before service execution", async () => {
+  const { service, chatCalls } = createAiInteractionHarness();
+
+  const result = await service.chat({
+    message: "x".repeat(AI_REQUEST_MAX_CHARACTERS + 1),
+    username: "user.one",
+  });
+
+  assert.equal(result.statusCode, 400);
+  assert.deepEqual(result.body, {
+    message: `Message exceeds the ${AI_REQUEST_MAX_CHARACTERS} character limit.`,
   });
   assert.equal(chatCalls.length, 0);
 });
