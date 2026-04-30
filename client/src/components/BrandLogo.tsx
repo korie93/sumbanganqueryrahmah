@@ -15,10 +15,10 @@ export function BrandLogo({
 }: BrandLogoProps) {
   const resolvedAlt = decorative ? "" : alt;
 
-  return (
-    <picture className={className} aria-hidden={decorative ? "true" : undefined}>
-      <source srcSet="/brand/sqr-logo-minimal.webp" type="image/webp" />
-      {decorative ? (
+  if (decorative) {
+    return (
+      <picture className={className} aria-hidden="true">
+        <source srcSet="/brand/sqr-logo-minimal.webp" type="image/webp" />
         <img
           src="/brand/sqr-logo-minimal.svg"
           alt={resolvedAlt}
@@ -29,17 +29,22 @@ export function BrandLogo({
           decoding="async"
           loading={priority ? "eager" : "lazy"}
         />
-      ) : (
-        <img
-          src="/brand/sqr-logo-minimal.svg"
-          alt={resolvedAlt}
-          className={imageClassName}
-          width={128}
-          height={128}
-          decoding="async"
-          loading={priority ? "eager" : "lazy"}
-        />
-      )}
+      </picture>
+    );
+  }
+
+  return (
+    <picture className={className}>
+      <source srcSet="/brand/sqr-logo-minimal.webp" type="image/webp" />
+      <img
+        src="/brand/sqr-logo-minimal.svg"
+        alt={resolvedAlt}
+        className={imageClassName}
+        width={128}
+        height={128}
+        decoding="async"
+        loading={priority ? "eager" : "lazy"}
+      />
     </picture>
   );
 }
