@@ -9,6 +9,7 @@ type TelemetryRouteDeps = {
 };
 
 type WebVitalsTelemetryDropGuardOptions = {
+  maxAnonymousEventsPerWindow?: number;
   maxEventsPerWindow?: number;
   maxBuckets?: number;
   now?: () => number;
@@ -35,6 +36,7 @@ type TelemetryBucket = {
 };
 
 const DEFAULT_WEB_VITALS_MAX_EVENTS_PER_WINDOW = 60;
+const DEFAULT_WEB_VITALS_MAX_ANONYMOUS_EVENTS_PER_WINDOW = 10;
 const DEFAULT_WEB_VITALS_MAX_BUCKETS = 2_000;
 const DEFAULT_WEB_VITALS_WINDOW_MS = 60_000;
 const DEFAULT_WEB_VITALS_MAX_CONTENT_LENGTH_BYTES = 4 * 1024;
@@ -62,6 +64,14 @@ function isJsonContentType(value: unknown) {
     return false;
   }
   return contentType.includes("application/json") || contentType.includes("+json");
+}
+
+function hasBrowserProvenanceSignal(req: Request) {
+  const fetchSite = String(req.headers["sec-fetch-site"] || "").trim();
+  const origin = String(req.headers.origin || "").trim();
+  const referer = String(req.headers.referer || "").trim();
+
+  return Boolean(fetchSite || origin || referer);
 }
 
 function resolveAllowedOriginSet(allowedOrigins?: string[]) {
@@ -140,6 +150,13 @@ export function createWebVitalsTelemetryDropGuard(
     options.maxEventsPerWindow,
     DEFAULT_WEB_VITALS_MAX_EVENTS_PER_WINDOW,
   );
+  const maxAnonymousEventsPerWindow = Math.min(
+    maxEventsPerWindow,
+    clampPositiveInteger(
+      options.maxAnonymousEventsPerWindow,
+      DEFAULT_WEB_VITALS_MAX_ANONYMOUS_EVENTS_PER_WINDOW,
+    ),
+  );
   const maxBuckets = clampPositiveInteger(options.maxBuckets, DEFAULT_WEB_VITALS_MAX_BUCKETS);
   const windowMs = clampPositiveInteger(options.windowMs, DEFAULT_WEB_VITALS_WINDOW_MS);
   const sweepIntervalMs = options.sweepIntervalMs === false
@@ -204,7 +221,11 @@ export function createWebVitalsTelemetryDropGuard(
       sweepExpiredBuckets(nowMs);
     }
 
-    if (bucket.count > maxEventsPerWindow) {
+    const maxAllowedEvents = hasBrowserProvenanceSignal(req)
+      ? maxEventsPerWindow
+      : maxAnonymousEventsPerWindow;
+
+    if (bucket.count > maxAllowedEvents) {
       res.status(204).end();
       return;
     }
@@ -239,7 +260,8 @@ export function registerTelemetryRoutes(app: Express, deps: TelemetryRouteDeps) 
   // This route intentionally stays outside /api so browser sendBeacon/keepalive
   // Web Vitals reports do not require a CSRF token. It is still guarded by
   // same-site Origin/Referer checks, JSON content-type validation, a 4KB parser
-  // limit in the HTTP pipeline, and bounded per-IP drop buckets. Do not send
+  // limit in the HTTP pipeline, stricter anonymous/no-provenance request caps,
+  // and bounded per-IP drop buckets. Do not send
   // PII, auth/session identifiers, cookies, tokens, or raw user input here.
   app.post(
     "/telemetry/web-vitals",

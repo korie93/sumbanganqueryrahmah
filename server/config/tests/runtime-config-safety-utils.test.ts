@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   assertNoPlaceholderSecrets,
+  assertProductionRateLimiterTopologySafety,
   assertRuntimeSafetyGuards,
   assertStrongRuntimeSecret,
   buildRuntimeConfigWarnings,
@@ -132,6 +133,34 @@ test("assertRuntimeSafetyGuards rejects production-like startup when the two-fac
         mailDevOutboxEnabled: false,
       }),
     /TWO_FACTOR_ENCRYPTION_KEY is required outside strict local development/i,
+  );
+});
+
+test("assertProductionRateLimiterTopologySafety rejects production-like multi-worker startup without a shared store", () => {
+  assert.throws(
+    () =>
+      assertProductionRateLimiterTopologySafety({
+        isProductionLike: true,
+        configuredClusterMaxWorkers: 2,
+        distributedStoreConfigured: false,
+      }),
+    /SQR_MAX_WORKERS greater than 1 is not allowed outside strict local development/i,
+  );
+
+  assert.doesNotThrow(() =>
+    assertProductionRateLimiterTopologySafety({
+      isProductionLike: false,
+      configuredClusterMaxWorkers: 2,
+      distributedStoreConfigured: false,
+    }),
+  );
+
+  assert.doesNotThrow(() =>
+    assertProductionRateLimiterTopologySafety({
+      isProductionLike: true,
+      configuredClusterMaxWorkers: 1,
+      distributedStoreConfigured: false,
+    }),
   );
 });
 

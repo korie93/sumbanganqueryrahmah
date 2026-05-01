@@ -166,6 +166,7 @@ function NavbarImpl({
               aria-label="Buka menu navigasi"
               aria-haspopup="dialog"
               aria-controls="mobile-navigation-drawer"
+              aria-expanded={mobileNavOpen}
               onClick={() => setMobileNavOpen(true)}
               data-testid="button-open-mobile-nav"
             >

@@ -10,6 +10,7 @@ type RuntimeMutableRef<T> = {
 
 type CleanupAIChatRuntimeRefsParams = {
   requestControllerRef: RuntimeMutableRef<AbortController | null>;
+  requestTimeoutRef: RuntimeMutableRef<number | null>;
   typingIntervalRef: RuntimeMutableRef<number | null>;
   retryTimersRef: RuntimeMutableRef<number[]>;
   slowNoticeTimerRef: RuntimeMutableRef<number | null>;
@@ -19,6 +20,7 @@ type CleanupAIChatRuntimeRefsParams = {
 
 export function cleanupAIChatRuntimeRefs({
   requestControllerRef,
+  requestTimeoutRef,
   typingIntervalRef,
   retryTimersRef,
   slowNoticeTimerRef,
@@ -31,6 +33,11 @@ export function cleanupAIChatRuntimeRefs({
   if (requestControllerRef.current) {
     requestControllerRef.current.abort();
     requestControllerRef.current = null;
+  }
+
+  if (requestTimeoutRef.current !== null) {
+    globalThis.clearTimeout(requestTimeoutRef.current);
+    requestTimeoutRef.current = null;
   }
 
   if (typingIntervalRef.current !== null) {
@@ -51,6 +58,7 @@ export function useAIChatRuntimeRefs({
   setIsTyping,
 }: UseAIChatRuntimeRefsOptions) {
   const requestControllerRef = useRef<AbortController | null>(null);
+  const requestTimeoutRef = useRef<number | null>(null);
   const typingIntervalRef = useRef<number | null>(null);
   const retryTimersRef = useRef<number[]>([]);
   const slowNoticeTimerRef = useRef<number | null>(null);
@@ -63,6 +71,7 @@ export function useAIChatRuntimeRefs({
     return () => {
       cleanupAIChatRuntimeRefs({
         requestControllerRef,
+        requestTimeoutRef,
         typingIntervalRef,
         retryTimersRef,
         slowNoticeTimerRef,
@@ -82,6 +91,13 @@ export function useAIChatRuntimeRefs({
   const clearRetryTimers = useCallback(() => {
     retryTimersRef.current.forEach((timerId) => globalThis.clearTimeout(timerId));
     retryTimersRef.current = [];
+  }, []);
+
+  const clearRequestTimeout = useCallback(() => {
+    if (requestTimeoutRef.current !== null) {
+      globalThis.clearTimeout(requestTimeoutRef.current);
+      requestTimeoutRef.current = null;
+    }
   }, []);
 
   const clearSlowNoticeTimer = useCallback(() => {
@@ -112,11 +128,13 @@ export function useAIChatRuntimeRefs({
   return {
     abortActiveRequest,
     clearRetryTimers,
+    clearRequestTimeout,
     clearSlowNoticeTimer,
     isMountedRef,
     processingRef,
     registerRetryTimer,
     requestControllerRef,
+    requestTimeoutRef,
     sessionRef,
     slowNoticeTimerRef,
     stopTyping,

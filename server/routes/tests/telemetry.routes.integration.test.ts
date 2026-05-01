@@ -223,6 +223,94 @@ test("web vitals drop guard removes idle buckets on the next request after the w
   });
 });
 
+test("web vitals drop guard applies a tighter cap when browser provenance headers are missing", () => {
+  const nowMs = 1_000;
+  const guard = createWebVitalsTelemetryDropGuard({
+    maxEventsPerWindow: 4,
+    maxAnonymousEventsPerWindow: 1,
+    now: () => nowMs,
+    windowMs: 10_000,
+  });
+
+  assert.deepEqual(runDropGuard(guard, "10.0.3.1"), {
+    statusCode: 200,
+    ended: false,
+    nextCalled: true,
+  });
+  assert.deepEqual(runDropGuard(guard, "10.0.3.1"), {
+    statusCode: 204,
+    ended: true,
+    nextCalled: false,
+  });
+});
+
+test("web vitals drop guard keeps same-origin browser telemetry on the regular per-IP limit", () => {
+  const nowMs = 1_000;
+  const guard = createWebVitalsTelemetryDropGuard({
+    maxEventsPerWindow: 2,
+    maxAnonymousEventsPerWindow: 1,
+    now: () => nowMs,
+    windowMs: 10_000,
+  });
+
+  const request = {
+    ip: "10.0.3.2",
+    socket: {
+      remoteAddress: "10.0.3.2",
+    },
+    headers: {
+      origin: "https://sqr-system.test",
+      "sec-fetch-site": "same-origin",
+    },
+  } as Request;
+  let statusCode = 200;
+  let ended = false;
+  let nextCalled = false;
+  const response = {
+    status(code: number) {
+      statusCode = code;
+      return this;
+    },
+    end() {
+      ended = true;
+      return this;
+    },
+  } as unknown as Response;
+
+  guard(request, response, () => {
+    nextCalled = true;
+  });
+  assert.deepEqual({ statusCode, ended, nextCalled }, {
+    statusCode: 200,
+    ended: false,
+    nextCalled: true,
+  });
+
+  statusCode = 200;
+  ended = false;
+  nextCalled = false;
+  guard(request, response, () => {
+    nextCalled = true;
+  });
+  assert.deepEqual({ statusCode, ended, nextCalled }, {
+    statusCode: 200,
+    ended: false,
+    nextCalled: true,
+  });
+
+  statusCode = 200;
+  ended = false;
+  nextCalled = false;
+  guard(request, response, () => {
+    nextCalled = true;
+  });
+  assert.deepEqual({ statusCode, ended, nextCalled }, {
+    statusCode: 204,
+    ended: true,
+    nextCalled: false,
+  });
+});
+
 test("web vitals drop guard sweeps expired buckets without waiting for request traffic", (t) => {
   let nowMs = 0;
   let intervalCallback: (() => void) | null = null;

@@ -22,6 +22,7 @@ import {
 import {
   assessMailConfiguration,
   assertNoPlaceholderSecrets,
+  assertProductionRateLimiterTopologySafety,
   assertRuntimeSafetyGuards,
   buildRuntimeConfigWarnings,
   hasBackupEncryptionKeyConfigured,
@@ -188,6 +189,12 @@ assertRuntimeSafetyGuards({
   seedDefaultUsers,
   localSuperuserCredentialsFileEnabled,
   mailDevOutboxEnabled,
+});
+
+assertProductionRateLimiterTopologySafety({
+  isProductionLike,
+  configuredClusterMaxWorkers,
+  distributedStoreConfigured: false,
 });
 
 assertNoPlaceholderSecrets({

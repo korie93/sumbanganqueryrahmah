@@ -56,7 +56,7 @@ export function PublicAuthLayout({
               }}
               className="public-auth-layout__back-button"
             >
-              <ArrowLeft className="h-4 w-4" />
+              <ArrowLeft className="h-4 w-4" aria-hidden="true" focusable="false" />
               {backLabel}
             </button>
           ) : null}

@@ -64,11 +64,13 @@ export function useAIChatState({
   const {
     abortActiveRequest,
     clearRetryTimers,
+    clearRequestTimeout,
     clearSlowNoticeTimer,
     isMountedRef,
     processingRef,
     registerRetryTimer,
     requestControllerRef,
+    requestTimeoutRef,
     sessionRef,
     slowNoticeTimerRef,
     stopTyping,
@@ -87,6 +89,7 @@ export function useAIChatState({
 
     abortActiveRequest();
     clearRetryTimers();
+    clearRequestTimeout();
     clearSlowNoticeTimer();
     stopTyping();
 
@@ -167,7 +170,8 @@ export function useAIChatState({
       }
     }
     clearSlowNoticeTimer();
-  }, [clearSlowNoticeTimer, setIsThinking]);
+    clearRequestTimeout();
+  }, [clearRequestTimeout, clearSlowNoticeTimer, setIsThinking]);
 
   const executeSearch = useCallback(async (text: string, sessionId: number, retryCount = 0) => {
     if (!isActiveAIChatSession(sessionId, sessionRef)) {
@@ -175,14 +179,15 @@ export function useAIChatState({
     }
 
     abortActiveRequest();
+    clearRequestTimeout();
     const controller = new AbortController();
     requestControllerRef.current = controller;
     let waitingRetry = false;
     let startedTyping = false;
-    let timeoutId: number | null = null;
+    const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
+    requestTimeoutRef.current = timeoutId;
 
     try {
-      timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
       const response = await searchAI(text, { signal: controller.signal });
 
       if (!isActiveAIChatSession(sessionId, sessionRef)) {
@@ -256,8 +261,9 @@ export function useAIChatState({
         gateNotice,
       });
     } finally {
-      if (timeoutId !== null) {
-        window.clearTimeout(timeoutId);
+      window.clearTimeout(timeoutId);
+      if (requestTimeoutRef.current === timeoutId) {
+        requestTimeoutRef.current = null;
       }
       if (requestControllerRef.current === controller) {
         requestControllerRef.current = null;
@@ -273,10 +279,12 @@ export function useAIChatState({
   }, [
     abortActiveRequest,
     appendMessage,
+    clearRequestTimeout,
     finishAsyncCycle,
     isMountedRef,
     processingRef,
     registerRetryTimer,
+    requestTimeoutRef,
     sessionRef,
     startTyping,
     timeoutMs,

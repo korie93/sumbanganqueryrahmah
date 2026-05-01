@@ -237,7 +237,7 @@ test("runtime config allows explicit operations debug route enablement for contr
   );
 });
 
-test("runtime config warns when multi-worker mode uses process-local 2FA replay cache", async () => {
+test("runtime config rejects production startup when multi-worker mode still uses process-local rate limiting and replay state", async () => {
   await withEnv(
     {
       ...productionBaseOverrides,
@@ -246,11 +246,36 @@ test("runtime config warns when multi-worker mode uses process-local 2FA replay 
       SQR_MAX_WORKERS: "2",
     },
     async () => {
-      const runtimeModule = await importRuntimeFresh();
-      assert.match(
-        runtimeModule.runtimeConfigValidation.warnings.map((warning: { code: string }) => warning.code).join(","),
-        /TWO_FACTOR_REPLAY_CACHE_PROCESS_LOCAL/,
+      await assert.rejects(
+        importRuntimeFresh(),
+        /SQR_MAX_WORKERS greater than 1 is not allowed outside strict local development/i,
       );
+    },
+  );
+});
+
+test("runtime config keeps strict local development bootable when multi-worker mode is enabled for local verification", async () => {
+  await withEnv(
+    {
+      NODE_ENV: "development",
+      HOST: "127.0.0.1",
+      PUBLIC_APP_URL: "http://127.0.0.1:5000",
+      SESSION_SECRET: null,
+      COLLECTION_NICKNAME_TEMP_PASSWORD: null,
+      COLLECTION_PII_ENCRYPTION_KEY: null,
+      PG_PASSWORD: null,
+      BACKUP_ENCRYPTION_KEY: null,
+      BACKUP_ENCRYPTION_KEYS: null,
+      BACKUP_FEATURE_ENABLED: "1",
+      SEED_DEFAULT_USERS: "0",
+      LOCAL_SUPERUSER_CREDENTIALS_FILE_ENABLED: "0",
+      MAIL_DEV_OUTBOX_ENABLED: "0",
+      SQR_MAX_WORKERS: "2",
+    },
+    async () => {
+      const runtimeModule = await importRuntimeFresh();
+      assert.equal(runtimeModule.runtimeConfig.cluster.maxWorkers, 2);
+      assert.equal(runtimeModule.runtimeConfig.app.isStrictLocalDevelopment, true);
     },
   );
 });

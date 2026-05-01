@@ -21,6 +21,7 @@ test("cleanupAIChatRuntimeRefs aborts requests and clears timers defensively", (
 
   try {
     const requestControllerRef = { current: controller };
+    const requestTimeoutRef = { current: 10 };
     const typingIntervalRef = { current: 23 };
     const retryTimersRef = { current: [11, 12] };
     const slowNoticeTimerRef = { current: 13 };
@@ -29,6 +30,7 @@ test("cleanupAIChatRuntimeRefs aborts requests and clears timers defensively", (
 
     cleanupAIChatRuntimeRefs({
       requestControllerRef,
+      requestTimeoutRef,
       typingIntervalRef,
       retryTimersRef,
       slowNoticeTimerRef,
@@ -38,13 +40,14 @@ test("cleanupAIChatRuntimeRefs aborts requests and clears timers defensively", (
 
     assert.equal(controller.signal.aborted, true);
     assert.equal(requestControllerRef.current, null);
+    assert.equal(requestTimeoutRef.current, null);
     assert.equal(typingIntervalRef.current, null);
     assert.deepEqual(retryTimersRef.current, []);
     assert.equal(slowNoticeTimerRef.current, null);
     assert.equal(processingRef.current, false);
     assert.equal(isMountedRef.current, false);
     assert.deepEqual(clearedIntervals, [23]);
-    assert.deepEqual(clearedTimeouts, [11, 12, 13]);
+    assert.deepEqual(clearedTimeouts, [10, 11, 12, 13]);
   } finally {
     globalThis.clearInterval = originalClearInterval;
     globalThis.clearTimeout = originalClearTimeout;
@@ -69,6 +72,7 @@ test("cleanupAIChatRuntimeRefs stays safe when cleanup runs more than once", () 
 
   try {
     const requestControllerRef = { current: controller };
+    const requestTimeoutRef = { current: 10 };
     const typingIntervalRef = { current: 23 };
     const retryTimersRef = { current: [11] };
     const slowNoticeTimerRef = { current: 13 };
@@ -77,6 +81,7 @@ test("cleanupAIChatRuntimeRefs stays safe when cleanup runs more than once", () 
 
     cleanupAIChatRuntimeRefs({
       requestControllerRef,
+      requestTimeoutRef,
       typingIntervalRef,
       retryTimersRef,
       slowNoticeTimerRef,
@@ -85,6 +90,7 @@ test("cleanupAIChatRuntimeRefs stays safe when cleanup runs more than once", () 
     });
     cleanupAIChatRuntimeRefs({
       requestControllerRef,
+      requestTimeoutRef,
       typingIntervalRef,
       retryTimersRef,
       slowNoticeTimerRef,
@@ -94,7 +100,7 @@ test("cleanupAIChatRuntimeRefs stays safe when cleanup runs more than once", () 
 
     assert.equal(controller.signal.aborted, true);
     assert.deepEqual(clearedIntervals, [23]);
-    assert.deepEqual(clearedTimeouts, [11, 13]);
+    assert.deepEqual(clearedTimeouts, [10, 11, 13]);
   } finally {
     globalThis.clearInterval = originalClearInterval;
     globalThis.clearTimeout = originalClearTimeout;
