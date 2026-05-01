@@ -13,12 +13,16 @@ type CollectionMonthlyComparisonSectionProps = {
   canFilterByNickname: boolean;
   currentNickname: string;
   nicknameOptions: CollectionStaffNickname[];
+  showHeader?: boolean | undefined;
+  standalone?: boolean | undefined;
 };
 
 function CollectionMonthlyComparisonSection({
   canFilterByNickname,
   currentNickname,
   nicknameOptions,
+  showHeader = true,
+  standalone = false,
 }: CollectionMonthlyComparisonSectionProps) {
   const comparisonData = useCollectionMonthlyComparisonData({
     canFilterByNickname,
@@ -37,6 +41,8 @@ function CollectionMonthlyComparisonSection({
       errorMessage={comparisonData.errorMessage}
       data={comparisonData.data}
       hasAvailableNickname={comparisonData.hasAvailableNickname}
+      showHeader={showHeader}
+      standalone={standalone}
       onSelectedNicknameChange={comparisonData.setSelectedNickname}
       onStartMonthChange={comparisonData.setStartMonth}
       onEndMonthChange={comparisonData.setEndMonth}
@@ -44,7 +50,13 @@ function CollectionMonthlyComparisonSection({
       onReset={comparisonData.reset}
       chartSlot={
         comparisonData.data ? (
-          <Suspense fallback={null}>
+          <Suspense
+            fallback={(
+              <div className="rounded-2xl border border-border/60 bg-muted/10 px-4 py-6 text-sm text-muted-foreground">
+                Loading monthly comparison chart...
+              </div>
+            )}
+          >
             <MonthlyCollectionComparisonChart data={comparisonData.data} />
           </Suspense>
         ) : null

@@ -4,6 +4,7 @@ export type CollectionSubPage =
   | "save"
   | "records"
   | "summary"
+  | "monthly-comparison"
   | "daily"
   | "nickname-summary"
   | "manage-nicknames";
@@ -13,4 +14,5 @@ export type CollectionSidebarItem = {
   key: CollectionSubPage;
   label: string;
   icon: LucideIcon;
+  description?: string | undefined;
 };

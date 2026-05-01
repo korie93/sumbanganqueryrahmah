@@ -13,7 +13,6 @@ import {
 } from "@/components/ui/sheet";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { buildCollectionSummaryPageViewModels } from "@/pages/collection-summary/collection-summary-page-view-models";
-import { CollectionMonthlyComparisonSection } from "@/pages/collection-summary/CollectionMonthlyComparisonSection";
 import { CollectionSummaryFilters } from "@/pages/collection-summary/CollectionSummaryFilters";
 import { useCollectionSummaryData } from "@/pages/collection-summary/useCollectionSummaryData";
 import { useCollectionSummaryMonthDialog } from "@/pages/collection-summary/useCollectionSummaryMonthDialog";
@@ -28,10 +27,9 @@ const CollectionMonthDetailsDialog = lazy(() =>
 
 type CollectionSummaryPageProps = {
   role: string;
-  staffNickname?: string | undefined;
 };
 
-function CollectionSummaryPage({ role, staffNickname = "" }: CollectionSummaryPageProps) {
+function CollectionSummaryPage({ role }: CollectionSummaryPageProps) {
   const canFilterByNickname = role === "admin" || role === "superuser";
   const isMobile = useIsMobile();
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
@@ -194,12 +192,6 @@ function CollectionSummaryPage({ role, staffNickname = "" }: CollectionSummaryPa
           <CollectionSummaryFilters {...viewModels.filters} />
         </div>
       )}
-
-      <CollectionMonthlyComparisonSection
-        canFilterByNickname={canFilterByNickname}
-        currentNickname={staffNickname}
-        nicknameOptions={summaryData.visibleNicknameOptions}
-      />
 
       <CollectionSummaryTable {...viewModels.table} />
 

@@ -24,6 +24,8 @@ type CollectionMonthlyComparisonPanelProps = {
   errorMessage: string | null;
   data: CollectionMonthlyComparisonResponse | null;
   hasAvailableNickname: boolean;
+  showHeader?: boolean | undefined;
+  standalone?: boolean | undefined;
   onSelectedNicknameChange: (value: string) => void;
   onStartMonthChange: (value: string) => void;
   onEndMonthChange: (value: string) => void;
@@ -42,6 +44,8 @@ export function CollectionMonthlyComparisonPanel({
   errorMessage,
   data,
   hasAvailableNickname,
+  showHeader = true,
+  standalone = false,
   onSelectedNicknameChange,
   onStartMonthChange,
   onEndMonthChange,
@@ -66,19 +70,26 @@ export function CollectionMonthlyComparisonPanel({
   return (
     <section
       aria-labelledby="collection-monthly-comparison-title"
-      className="space-y-4 border-t border-border/60 pt-4"
+      className={standalone ? "space-y-5" : "space-y-5 border-t border-border/60 pt-4"}
       data-floating-ai-avoid="true"
     >
-      <div className="space-y-1">
-        <h2 id="collection-monthly-comparison-title" className="text-lg font-semibold text-foreground">
+      {showHeader ? (
+        <div className="space-y-1">
+          <h2 id="collection-monthly-comparison-title" className="text-lg font-semibold text-foreground">
+            Monthly Collection Comparison
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            Compare month-by-month collection totals for a single staff nickname across a bounded reporting range.
+          </p>
+        </div>
+      ) : (
+        <h2 id="collection-monthly-comparison-title" className="sr-only">
           Monthly Collection Comparison
         </h2>
-        <p className="text-sm text-muted-foreground">
-          Compare month-by-month collection totals for a single staff nickname across a bounded reporting range.
-        </p>
-      </div>
+      )}
 
-      <div className="grid gap-3 lg:grid-cols-[minmax(0,1.4fr)_160px_160px_auto_auto] lg:items-end">
+      <div className="rounded-2xl border border-border/60 bg-background/75 p-4 shadow-sm">
+        <div className="grid gap-3 lg:grid-cols-[minmax(0,1.4fr)_160px_160px_auto_auto] lg:items-end">
         <div className="space-y-1">
           <label
             htmlFor="collection-monthly-comparison-nickname"
@@ -156,6 +167,7 @@ export function CollectionMonthlyComparisonPanel({
           type="button"
           className="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition hover:bg-primary/90"
           onClick={onApply}
+          disabled={loading || !hasAvailableNickname}
         >
           Apply
         </button>
@@ -163,9 +175,14 @@ export function CollectionMonthlyComparisonPanel({
           type="button"
           className="inline-flex h-10 items-center justify-center rounded-md border border-input bg-background px-4 text-sm font-medium text-foreground transition hover:bg-accent hover:text-accent-foreground"
           onClick={onReset}
+          disabled={loading}
         >
           Reset
         </button>
+      </div>
+        <p className="mt-3 text-xs text-muted-foreground">
+          Compare one nickname at a time. The first selected month acts as the base month and the last selected month acts as the target month.
+        </p>
       </div>
 
       {!hasAvailableNickname ? (
@@ -227,36 +244,63 @@ export function CollectionMonthlyComparisonPanel({
             />
           </OperationalSummaryStrip>
 
-          <p className="text-sm text-foreground">{comparison?.summary}</p>
+          <div className="rounded-2xl border border-border/60 bg-muted/10 px-4 py-4">
+            <p className="text-sm font-medium text-foreground">Comparison summary</p>
+            <p className="mt-1 text-sm leading-6 text-muted-foreground">{comparison?.summary}</p>
+          </div>
           {comparisonSummary ? <p className="sr-only">{comparisonSummary}</p> : null}
 
-          <div className="space-y-3">
-            <div className="grid gap-2">
-              {data.months.map((month) => (
-                <div
-                  key={month.month}
-                  className="grid gap-2 rounded-md border border-border/50 px-3 py-3 sm:grid-cols-[minmax(0,1fr)_auto_auto_auto] sm:items-center"
-                >
-                  <div>
-                    <p className="text-sm font-medium text-foreground">{month.label}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {month.recordCount} record(s)
-                    </p>
-                  </div>
-                  <div className="text-sm font-medium text-foreground">
-                    {formatAmountRM(month.totalCollection)}
-                  </div>
-                  <div className="text-sm text-muted-foreground">
-                    Avg {formatAmountRM(month.averagePerRecord)}
-                  </div>
-                  <div className="text-xs text-muted-foreground">
-                    {month.recordCount === 0 ? "No collection recorded" : "Active month"}
-                  </div>
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(300px,0.9fr)] xl:items-start">
+            <div className="space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <h3 className="text-sm font-semibold text-foreground">Monthly breakdown</h3>
+                  <p className="text-xs text-muted-foreground">
+                    Each month stays visible even when the selected nickname has no collection in that period.
+                  </p>
                 </div>
-              ))}
+                <p className="text-xs text-muted-foreground">
+                  {data.nickname}
+                </p>
+              </div>
+
+              <div className="grid gap-2">
+                {data.months.map((month) => (
+                  <div
+                    key={month.month}
+                    className="grid gap-2 rounded-xl border border-border/50 bg-background/55 px-3 py-3 sm:grid-cols-[minmax(0,1fr)_auto_auto_auto] sm:items-center"
+                  >
+                    <div>
+                      <p className="text-sm font-medium text-foreground">{month.label}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {month.recordCount} record(s)
+                      </p>
+                    </div>
+                    <div className="text-sm font-medium text-foreground">
+                      {formatAmountRM(month.totalCollection)}
+                    </div>
+                    <div className="text-sm text-muted-foreground">
+                      Avg {formatAmountRM(month.averagePerRecord)}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      {month.recordCount === 0 ? "No collection recorded" : "Active month"}
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
 
-            {chartSlot}
+            {chartSlot ? (
+              <div className="space-y-3">
+                <div>
+                  <h3 className="text-sm font-semibold text-foreground">Trend chart</h3>
+                  <p className="text-xs text-muted-foreground">
+                    Use the chart for a quick visual comparison, then confirm exact totals in the month cards.
+                  </p>
+                </div>
+                {chartSlot}
+              </div>
+            ) : null}
           </div>
         </div>
       ) : null}

@@ -1,4 +1,12 @@
-import { BarChart3, CalendarDays, FolderPlus, ListChecks, Settings2, Users } from "lucide-react";
+import {
+  BarChart3,
+  CalendarDays,
+  FolderPlus,
+  LayoutGrid,
+  ListChecks,
+  Settings2,
+  Users,
+} from "lucide-react";
 import { startTransition, useCallback, useEffect, useMemo, useState } from "react";
 import type {
   CollectionSidebarItem,
@@ -27,16 +35,43 @@ export function useCollectionReportNavigation({
 
   const sidebarItems = useMemo<CollectionSidebarItem[]>(() => {
     const items: CollectionSidebarItem[] = [
-      { key: "save", label: "Simpan Collection Individual", icon: FolderPlus },
-      { key: "records", label: "View Rekod Collection", icon: ListChecks },
-      { key: "summary", label: "Collection Summary", icon: BarChart3 },
-      { key: "daily", label: "Collection Daily", icon: CalendarDays },
+      {
+        key: "save",
+        label: "Simpan Collection Individual",
+        icon: FolderPlus,
+        description: "Rekod kutipan individu dan resit berkaitan.",
+      },
+      {
+        key: "records",
+        label: "View Rekod Collection",
+        icon: ListChecks,
+        description: "Semak, tapis, dan kemas kini rekod collection.",
+      },
+      {
+        key: "summary",
+        label: "Collection Summary",
+        icon: LayoutGrid,
+        description: "Pantau ringkasan bulanan keseluruhan mengikut tahun.",
+      },
+      {
+        key: "monthly-comparison",
+        label: "Monthly Comparison",
+        icon: BarChart3,
+        description: "Bandingkan trend bulanan bagi satu nickname terpilih.",
+      },
+      {
+        key: "daily",
+        label: "Collection Daily",
+        icon: CalendarDays,
+        description: "Jejaki prestasi harian dan kalendar collection.",
+      },
     ];
     if (canAccessNicknameSummary) {
       items.push({
         key: "nickname-summary",
         label: "Nickname Summary",
         icon: Users,
+        description: "Bandingkan beberapa nickname dalam satu julat tarikh.",
       });
     }
     if (isSuperuser) {
@@ -44,6 +79,7 @@ export function useCollectionReportNavigation({
         key: "manage-nicknames",
         label: "Manage Nickname",
         icon: Settings2,
+        description: "Urus senarai nickname dan akses collection.",
       });
     }
     return items;
