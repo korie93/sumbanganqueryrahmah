@@ -127,7 +127,7 @@ export function sendAuthRouteError(res: Response, error: unknown) {
 }
 
 export function createAuthJsonRoute(handler: AuthRouteJsonHandler): RequestHandler {
-  return async (req: AuthenticatedRequest, res) => {
+  return async (req: AuthenticatedRequest, res, next) => {
     try {
       const payload = await handler(req, res);
       if (!res.headersSent && payload !== undefined) {
@@ -138,7 +138,7 @@ export function createAuthJsonRoute(handler: AuthRouteJsonHandler): RequestHandl
         return;
       }
       logRouteHandlerError(error, req, { message: "Unhandled auth route error" });
-      throw error;
+      next(error);
     }
   };
 }

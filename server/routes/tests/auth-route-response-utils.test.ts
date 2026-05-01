@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import type { NextFunction, Request, Response } from "express";
 import { HttpError } from "../../http/errors";
 import { ERROR_CODES } from "../../../shared/error-codes";
 import { AuthAccountError } from "../../services/auth-account.service";
@@ -13,6 +14,23 @@ import {
   startTestServer,
   stopTestServer,
 } from "./http-test-utils";
+
+async function assertNoUnhandledRejectionDuring(action: () => Promise<void>) {
+  const unhandledRejections: unknown[] = [];
+  const listener = (reason: unknown) => {
+    unhandledRejections.push(reason);
+  };
+
+  process.on("unhandledRejection", listener);
+  try {
+    await action();
+    await new Promise((resolve) => setImmediate(resolve));
+  } finally {
+    process.off("unhandledRejection", listener);
+  }
+
+  assert.deepEqual(unhandledRejections, []);
+}
 
 test("auth route response utils build stable success and error payloads", () => {
   assert.deepEqual(buildOkPayload({ user: { id: "user-1" } }), {
@@ -35,6 +53,41 @@ test("auth route response utils build stable success and error payloads", () => 
       },
     },
   );
+});
+
+test("createAuthJsonRoute forwards unknown errors to the global error handler", async () => {
+  const app = createJsonTestApp();
+  const thrown = new Error("boom");
+  let capturedError: unknown = null;
+
+  app.get(
+    "/api/test-unknown-auth-error",
+    createAuthJsonRoute(async () => {
+      throw thrown;
+    }),
+  );
+  app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
+    capturedError = error;
+    res.status(500).json({
+      ok: false,
+      message: "Controlled test error",
+    });
+  });
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    await assertNoUnhandledRejectionDuring(async () => {
+      const response = await fetch(`${baseUrl}/api/test-unknown-auth-error`);
+      assert.equal(response.status, 500);
+      assert.deepEqual(await response.json(), {
+        ok: false,
+        message: "Controlled test error",
+      });
+    });
+    assert.equal(capturedError, thrown);
+  } finally {
+    await stopTestServer(server);
+  }
 });
 
 test("auth route response utils serialize AuthAccountError and HttpError consistently", async () => {

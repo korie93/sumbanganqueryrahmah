@@ -59,3 +59,25 @@ test("buildProtectedCollectionPiiSelect emits NULL aliases for retired plaintext
     }
   }
 });
+
+test("buildProtectedCollectionPiiSelect rejects unsafe SQL identifiers", () => {
+  assert.throws(
+    () =>
+      buildProtectedCollectionPiiSelect(
+        "customer_name; DROP TABLE collection_records",
+        "customer_name_encrypted",
+        "customerName",
+      ),
+    /Unsafe SQL identifier/i,
+  );
+
+  assert.throws(
+    () =>
+      buildProtectedCollectionPiiSelect(
+        "customer_name",
+        "customer_name_encrypted",
+        'customerName" FROM collection_records; --',
+      ),
+    /Unsafe SQL identifier/i,
+  );
+});

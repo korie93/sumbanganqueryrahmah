@@ -1,4 +1,5 @@
 import {
+  sanitizeWebVitalTelemetryPath,
   WEB_VITAL_NAMES,
   WEB_VITAL_PAGE_TYPES,
   type WebVitalOverviewPayload,
@@ -107,8 +108,12 @@ export class WebVitalsTelemetryService {
 
   record(payload: WebVitalTelemetryPayload) {
     const capturedAtMs = normalizeCapturedAtMs(payload.ts);
-    this.samples.push({
+    const sanitizedPayload = {
       ...payload,
+      path: sanitizeWebVitalTelemetryPath(payload.path),
+    };
+    this.samples.push({
+      ...sanitizedPayload,
       capturedAtMs,
     });
     this.prune(capturedAtMs);
@@ -120,7 +125,7 @@ export class WebVitalsTelemetryService {
       delta: roundMetricValue(payload.delta),
       rating: payload.rating,
       metricId: payload.id,
-      path: payload.path,
+      path: sanitizedPayload.path,
       pageType: payload.pageType,
       navigationType: payload.navigationType,
       visibilityState: payload.visibilityState,

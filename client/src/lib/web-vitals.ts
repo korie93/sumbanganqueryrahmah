@@ -1,5 +1,8 @@
 import type { Metric } from "web-vitals";
-import type { WebVitalTelemetryPayload } from "@shared/web-vitals";
+import {
+  sanitizeWebVitalTelemetryPath,
+  type WebVitalTelemetryPayload,
+} from "@shared/web-vitals";
 import { createClientRandomId } from "@/lib/secure-id";
 
 const WEB_VITALS_ENDPOINT = "/telemetry/web-vitals";
@@ -39,6 +42,10 @@ export function classifyWebVitalPageType(pathname: string) {
   return PUBLIC_PATHS.has(pathname) ? "public" : "authenticated";
 }
 
+export function sanitizeTelemetryPath(pathname: string) {
+  return sanitizeWebVitalTelemetryPath(pathname);
+}
+
 export function buildWebVitalPayload(
   metric: Pick<Metric, "name" | "value" | "delta" | "rating" | "id" | "navigationType">,
   options: {
@@ -49,7 +56,7 @@ export function buildWebVitalPayload(
     capturedAt?: string | undefined;
   } = {},
 ): WebVitalTelemetryPayload {
-  const pathname = options.pathname || "/";
+  const pathname = sanitizeTelemetryPath(options.pathname || "/");
 
   return {
     name: metric.name,

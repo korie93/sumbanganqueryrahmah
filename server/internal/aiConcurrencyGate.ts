@@ -1,4 +1,4 @@
-import type { RequestHandler, Response } from "express";
+import type { NextFunction, RequestHandler, Response } from "express";
 import type { AuthenticatedRequest } from "../auth/guards";
 
 type AiRole = "user" | "admin" | "superuser";
@@ -271,7 +271,7 @@ export function createAiConcurrencyGate(options: CreateAiConcurrencyGateOptions)
     route: AiRoute,
     handler: (req: AuthenticatedRequest, res: Response) => Promise<unknown>,
   ): RequestHandler => {
-    return async (req: AuthenticatedRequest, res: Response) => {
+    return async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
       const role = normalizeAiRole(req.user?.role);
       let acquired: AiGateAcquireResult | null = null;
 
@@ -308,7 +308,9 @@ export function createAiConcurrencyGate(options: CreateAiConcurrencyGateOptions)
       }
 
       try {
-        return await handler(req, res);
+        await handler(req, res);
+      } catch (error) {
+        next(error);
       } finally {
         releaseOnce();
       }

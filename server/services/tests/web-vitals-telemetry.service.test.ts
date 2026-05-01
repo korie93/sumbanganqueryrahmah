@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { WebVitalsTelemetryService } from "../web-vitals-telemetry.service";
+import { sanitizeWebVitalTelemetryPath } from "../../../shared/web-vitals";
 
 test("WebVitalsTelemetryService builds page summaries with p75 ratings", () => {
   const service = new WebVitalsTelemetryService({
@@ -174,4 +175,53 @@ test("WebVitalsTelemetryService samples non-poor info logs while preserving poor
 
   assert.equal(infoLogs.length, 2);
   assert.equal(warnLogs.length, 1);
+});
+
+test("WebVitalsTelemetryService redacts identifier-like paths before storing and logging", () => {
+  const infoLogs: unknown[] = [];
+  const service = new WebVitalsTelemetryService({
+    logger: {
+      info(_message, meta) {
+        infoLogs.push(meta);
+      },
+      warn() {},
+    },
+    infoLogSampleRate: 1,
+  });
+
+  service.record({
+    name: "LCP",
+    value: 1200,
+    delta: 30,
+    rating: "good",
+    id: "lcp-sensitive",
+    path: "/collection/123456789?customer=private",
+    pageType: "authenticated",
+    ts: "2026-04-04T09:00:00.000Z",
+  });
+  service.record({
+    name: "INP",
+    value: 150,
+    delta: 5,
+    rating: "good",
+    id: "inp-sensitive",
+    path: "/records/550e8400-e29b-41d4-a716-446655440000/details",
+    pageType: "authenticated",
+    ts: "2026-04-04T09:00:01.000Z",
+  });
+
+  const overview = service.getOverview(Date.parse("2026-04-04T09:00:02.000Z"));
+  const authenticatedSummary = overview.pageSummaries.find(
+    (summary) => summary.pageType === "authenticated",
+  );
+  const latestLcp = authenticatedSummary?.metrics.find((metric) => metric.name === "LCP");
+  const latestInp = authenticatedSummary?.metrics.find((metric) => metric.name === "INP");
+
+  assert.equal(sanitizeWebVitalTelemetryPath("/collection/123456789"), "/collection/:number");
+  assert.equal(latestLcp?.latestPath, "/collection/:number");
+  assert.equal(latestInp?.latestPath, "/records/:id/details");
+  assert.equal(
+    (infoLogs[0] as { path?: string } | undefined)?.path,
+    "/collection/:number",
+  );
 });

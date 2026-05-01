@@ -4,7 +4,7 @@ import { normalizeCorsOrigin, resolveAllowedCorsOrigins } from "../http/cors";
 
 type TelemetryRouteDeps = {
   reportWebVital: RequestHandler;
-  webVitalsDropGuard?: RequestHandler;
+  webVitalsDropGuard?: WebVitalsTelemetryDropGuard;
   webVitalsRequestGuard?: RequestHandler;
 };
 
@@ -16,13 +16,17 @@ type WebVitalsTelemetryDropGuardOptions = {
   windowMs?: number;
 };
 
-type WebVitalsTelemetryDropGuard = RequestHandler & {
+export type WebVitalsTelemetryDropGuard = RequestHandler & {
   stopWebVitalsTelemetryDropGuard?: () => void;
 };
 
 type WebVitalsTelemetryRequestGuardOptions = {
   allowedOrigins?: string[];
   maxContentLengthBytes?: number;
+};
+
+type CloseLifecycle = {
+  once: (event: "close", listener: () => void) => unknown;
 };
 
 type TelemetryBucket = {
@@ -220,7 +224,18 @@ export function createWebVitalsTelemetryDropGuard(
   return guard;
 }
 
+export function registerWebVitalsTelemetryDropGuardCleanup(
+  server: CloseLifecycle,
+  webVitalsDropGuard: WebVitalsTelemetryDropGuard,
+) {
+  server.once("close", () => {
+    webVitalsDropGuard.stopWebVitalsTelemetryDropGuard?.();
+  });
+}
+
 export function registerTelemetryRoutes(app: Express, deps: TelemetryRouteDeps) {
+  const webVitalsDropGuard = deps.webVitalsDropGuard ?? createWebVitalsTelemetryDropGuard();
+
   // This route intentionally stays outside /api so browser sendBeacon/keepalive
   // Web Vitals reports do not require a CSRF token. It is still guarded by
   // same-site Origin/Referer checks, JSON content-type validation, a 4KB parser
@@ -229,7 +244,7 @@ export function registerTelemetryRoutes(app: Express, deps: TelemetryRouteDeps) 
   app.post(
     "/telemetry/web-vitals",
     deps.webVitalsRequestGuard ?? createWebVitalsTelemetryRequestGuard(),
-    deps.webVitalsDropGuard ?? createWebVitalsTelemetryDropGuard(),
+    webVitalsDropGuard,
     routeHandler(deps.reportWebVital),
   );
 }

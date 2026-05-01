@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   assertNoPlaceholderSecrets,
   assertRuntimeSafetyGuards,
+  assertStrongRuntimeSecret,
   buildRuntimeConfigWarnings,
   resolveHstsHeaderConfig,
   resolveCookieSecure,
@@ -10,6 +11,14 @@ import {
   resolvePreviousCollectionPiiSecrets,
   resolveTrustedProxies,
 } from "../runtime-config-safety-utils";
+
+const STRONG_SESSION_SECRET = "sqr-prod-session-secret-32-chars-minimum-001";
+const STRONG_PREVIOUS_SESSION_SECRET = "sqr-prod-previous-session-secret-minimum-001";
+const STRONG_TWO_FACTOR_SECRET = "sqr-prod-two-factor-secret-32-chars-minimum-001";
+const STRONG_PREVIOUS_TWO_FACTOR_SECRET = "sqr-prod-previous-two-factor-secret-minimum-001";
+const STRONG_COLLECTION_PII_SECRET = "sqr-prod-collection-pii-secret-minimum-001";
+const STRONG_PREVIOUS_COLLECTION_PII_SECRET =
+  "sqr-prod-previous-collection-pii-secret-minimum-001";
 
 test("resolveCookieSecure respects explicit and auto values", () => {
   assert.equal(
@@ -135,12 +144,13 @@ test("assertNoPlaceholderSecrets rejects production-like generated placeholders"
         configuredPreviousSessionSecrets: [],
         configuredPgPassword: "GENERATE_ME_DB_PASSWORD_DO_NOT_USE_IN_PRODUCTION",
         configuredTwoFactorEncryptionKey: "GENERATE_ME_DISTINCT_2FA_KEY_DO_NOT_REUSE_SESSION_SECRET",
+        configuredPreviousTwoFactorEncryptionKeys: [],
         configuredCollectionPiiEncryptionKey: "GENERATE_ME_COLLECTION_PII_KEY_DO_NOT_REUSE_SESSION_SECRET",
         configuredPreviousCollectionPiiEncryptionKeys: [],
         configuredBackupEncryptionKey: "GENERATE_ME_BACKUP_KEY_AND_STORE_OFFLINE",
         configuredBackupEncryptionKeys: null,
       }),
-    /SESSION_SECRET is using the default placeholder value/i,
+    /SESSION_SECRET must not use an example, placeholder, or template value/i,
   );
 });
 
@@ -149,18 +159,107 @@ test("assertNoPlaceholderSecrets rejects production-like previous collection PII
     () =>
       assertNoPlaceholderSecrets({
         isProductionLike: true,
-        configuredSessionSecret: "prod-session-secret",
+        configuredSessionSecret: STRONG_SESSION_SECRET,
         configuredPreviousSessionSecrets: [],
         configuredPgPassword: "prod-db-password",
-        configuredTwoFactorEncryptionKey: "prod-2fa-secret",
-        configuredCollectionPiiEncryptionKey: "prod-collection-pii-secret",
+        configuredTwoFactorEncryptionKey: STRONG_TWO_FACTOR_SECRET,
+        configuredPreviousTwoFactorEncryptionKeys: [],
+        configuredCollectionPiiEncryptionKey: STRONG_COLLECTION_PII_SECRET,
         configuredPreviousCollectionPiiEncryptionKeys: [
           "GENERATE_ME_COLLECTION_PII_KEY_DO_NOT_REUSE_SESSION_SECRET",
         ],
         configuredBackupEncryptionKey: "prod-backup-secret",
         configuredBackupEncryptionKeys: null,
       }),
-    /COLLECTION_PII_ENCRYPTION_KEY_PREVIOUS contains a placeholder value/i,
+    /COLLECTION_PII_ENCRYPTION_KEY_PREVIOUS must not use an example, placeholder, or template value/i,
+  );
+});
+
+test("assertStrongRuntimeSecret rejects short and template production secrets", () => {
+  assert.throws(
+    () => assertStrongRuntimeSecret("SESSION_SECRET", "too-short"),
+    /SESSION_SECRET must be a unique random secret of at least 32 characters/i,
+  );
+  assert.throws(
+    () =>
+      assertStrongRuntimeSecret(
+        "SESSION_SECRET",
+        "ganti-dengan-random-secret-yang-panjang-dan-kuat",
+      ),
+    /SESSION_SECRET must not use an example, placeholder, or template value/i,
+  );
+  assert.throws(
+    () => assertStrongRuntimeSecret("SESSION_SECRET", "change-this-secret-with-32-characters"),
+    /SESSION_SECRET must not use an example, placeholder, or template value/i,
+  );
+  assert.doesNotThrow(() => assertStrongRuntimeSecret("SESSION_SECRET", STRONG_SESSION_SECRET));
+});
+
+test("assertNoPlaceholderSecrets validates production current and previous runtime secrets", () => {
+  assert.doesNotThrow(() =>
+    assertNoPlaceholderSecrets({
+      isProductionLike: true,
+      configuredSessionSecret: STRONG_SESSION_SECRET,
+      configuredPreviousSessionSecrets: [STRONG_PREVIOUS_SESSION_SECRET],
+      configuredPgPassword: "prod-db-password",
+      configuredTwoFactorEncryptionKey: STRONG_TWO_FACTOR_SECRET,
+      configuredPreviousTwoFactorEncryptionKeys: [STRONG_PREVIOUS_TWO_FACTOR_SECRET],
+      configuredCollectionPiiEncryptionKey: STRONG_COLLECTION_PII_SECRET,
+      configuredPreviousCollectionPiiEncryptionKeys: [STRONG_PREVIOUS_COLLECTION_PII_SECRET],
+      configuredBackupEncryptionKey: "prod-backup-secret",
+      configuredBackupEncryptionKeys: null,
+    }),
+  );
+
+  assert.throws(
+    () =>
+      assertNoPlaceholderSecrets({
+        isProductionLike: true,
+        configuredSessionSecret: STRONG_SESSION_SECRET,
+        configuredPreviousSessionSecrets: ["short-previous"],
+        configuredPgPassword: "prod-db-password",
+        configuredTwoFactorEncryptionKey: STRONG_TWO_FACTOR_SECRET,
+        configuredPreviousTwoFactorEncryptionKeys: [],
+        configuredCollectionPiiEncryptionKey: STRONG_COLLECTION_PII_SECRET,
+        configuredPreviousCollectionPiiEncryptionKeys: [],
+        configuredBackupEncryptionKey: "prod-backup-secret",
+        configuredBackupEncryptionKeys: null,
+      }),
+    /SESSION_SECRET_PREVIOUS must be a unique random secret of at least 32 characters/i,
+  );
+
+  assert.throws(
+    () =>
+      assertNoPlaceholderSecrets({
+        isProductionLike: true,
+        configuredSessionSecret: STRONG_SESSION_SECRET,
+        configuredPreviousSessionSecrets: [],
+        configuredPgPassword: "prod-db-password",
+        configuredTwoFactorEncryptionKey: STRONG_TWO_FACTOR_SECRET,
+        configuredPreviousTwoFactorEncryptionKeys: ["ganti-dengan-secret-2fa-yang-kuat-dan-berbeza"],
+        configuredCollectionPiiEncryptionKey: STRONG_COLLECTION_PII_SECRET,
+        configuredPreviousCollectionPiiEncryptionKeys: [],
+        configuredBackupEncryptionKey: "prod-backup-secret",
+        configuredBackupEncryptionKeys: null,
+      }),
+    /TWO_FACTOR_ENCRYPTION_KEY_PREVIOUS must not use an example, placeholder, or template value/i,
+  );
+});
+
+test("assertNoPlaceholderSecrets keeps local development placeholder behavior unchanged", () => {
+  assert.doesNotThrow(() =>
+    assertNoPlaceholderSecrets({
+      isProductionLike: false,
+      configuredSessionSecret: "change-this-session-secret",
+      configuredPreviousSessionSecrets: ["short"],
+      configuredPgPassword: "GENERATE_ME_DB_PASSWORD_DO_NOT_USE_IN_PRODUCTION",
+      configuredTwoFactorEncryptionKey: "ganti-dengan-secret-2fa-yang-kuat-dan-berbeza",
+      configuredPreviousTwoFactorEncryptionKeys: ["short"],
+      configuredCollectionPiiEncryptionKey: "ganti-dengan-secret-pii-yang-kuat-dan-berbeza",
+      configuredPreviousCollectionPiiEncryptionKeys: ["short"],
+      configuredBackupEncryptionKey: "GENERATE_ME_BACKUP_KEY_AND_STORE_OFFLINE",
+      configuredBackupEncryptionKeys: null,
+    }),
   );
 });
 

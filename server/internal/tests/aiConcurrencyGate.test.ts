@@ -44,6 +44,23 @@ function createDeferred() {
   return { promise, resolve };
 }
 
+async function assertNoUnhandledRejectionDuring(action: () => Promise<void>) {
+  const unhandledRejections: unknown[] = [];
+  const listener = (reason: unknown) => {
+    unhandledRejections.push(reason);
+  };
+
+  process.on("unhandledRejection", listener);
+  try {
+    await action();
+    await new Promise((resolve) => setImmediate(resolve));
+  } finally {
+    process.off("unhandledRejection", listener);
+  }
+
+  assert.deepEqual(unhandledRejections, []);
+}
+
 function interceptQueueTimers(t: TestContext) {
   const originalSetTimeout = global.setTimeout;
   const originalClearTimeout = global.clearTimeout;
@@ -264,6 +281,51 @@ test("AI concurrency gate times out queued work once and never runs it after cap
   await Promise.resolve();
 
   assert.equal(handlerCalls, 1);
+});
+
+test("AI concurrency gate forwards handler failures to next and releases the lease once", async () => {
+  const gate = createAiConcurrencyGate({
+    globalLimit: 1,
+    queueLimit: 0,
+    queueWaitMs: 1_000,
+    roleLimits: {
+      user: 1,
+      admin: 1,
+      superuser: 1,
+    },
+  });
+  const thrown = new Error("AI handler exploded");
+  const forwardedErrors: unknown[] = [];
+  let handlerCalls = 0;
+  const handler = gate.withAiConcurrencyGate("chat", async () => {
+    handlerCalls += 1;
+    if (handlerCalls === 1) {
+      throw thrown;
+    }
+  });
+
+  await assertNoUnhandledRejectionDuring(async () => {
+    await handler(
+      createRequest(),
+      new MockResponse() as never,
+      ((error: unknown) => {
+        forwardedErrors.push(error);
+      }) as never,
+    );
+  });
+
+  const secondResponse = new MockResponse();
+  await handler(
+    createRequest(),
+    secondResponse as never,
+    ((error: unknown) => {
+      forwardedErrors.push(error);
+    }) as never,
+  );
+
+  assert.equal(handlerCalls, 2);
+  assert.deepEqual(forwardedErrors, [thrown]);
+  assert.equal(secondResponse.statusCode, 200);
 });
 
 test("AI concurrency gate clears every queued timer during shutdown under high queue pressure", async (t) => {

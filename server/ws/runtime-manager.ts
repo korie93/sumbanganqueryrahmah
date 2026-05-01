@@ -1,6 +1,7 @@
 import type { IncomingHttpHeaders, IncomingMessage } from "node:http";
 import { WebSocket, type WebSocketServer } from "ws";
 import { readAuthSessionTokenFromHeaders } from "../auth/session-cookie";
+import { resolveNodeEnv } from "../config/runtime-config-read-utils";
 import { logger } from "../lib/logger";
 import type { PostgresStorage } from "../storage-postgres";
 import { extractWsActivityId, isActiveWebSocketSession } from "./session-auth";
@@ -46,7 +47,8 @@ type RuntimeSocketCleanupOptions = {
 };
 
 function shouldLogRuntimeWebSocketCleanupDiagnostics(): boolean {
-  return process.env.NODE_ENV === "development" || process.env.NODE_ENV === "test";
+  const nodeEnv = resolveNodeEnv();
+  return nodeEnv === "development" || nodeEnv === "test";
 }
 
 function firstHeaderValue(value: string | string[] | undefined): string {

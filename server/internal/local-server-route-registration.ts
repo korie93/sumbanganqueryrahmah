@@ -29,7 +29,11 @@ import { registerOperationsRoutes } from "../routes/operations.routes";
 import { registerSearchRoutes } from "../routes/search.routes";
 import { registerSettingsRoutes } from "../routes/settings.routes";
 import { registerSystemRoutes } from "../routes/system.routes";
-import { registerTelemetryRoutes } from "../routes/telemetry.routes";
+import {
+  createWebVitalsTelemetryDropGuard,
+  registerTelemetryRoutes,
+  registerWebVitalsTelemetryDropGuardCleanup,
+} from "../routes/telemetry.routes";
 import { AiIndexOperationsService } from "../services/ai-index-operations.service";
 import { AiInteractionService } from "../services/ai-interaction.service";
 import { AuditLogOperationsService } from "../services/audit-log-operations.service";
@@ -147,6 +151,8 @@ export function registerLocalServerRoutes(options: RegisterLocalServerRoutesOpti
   const webVitalsTelemetryController = createWebVitalsTelemetryController({
     webVitalsTelemetryService,
   });
+  const webVitalsDropGuard = createWebVitalsTelemetryDropGuard();
+  registerWebVitalsTelemetryDropGuardCleanup(server, webVitalsDropGuard);
 
   registerSystemRoutes(app, {
     authenticateToken,
@@ -195,6 +201,7 @@ export function registerLocalServerRoutes(options: RegisterLocalServerRoutesOpti
 
   registerTelemetryRoutes(app, {
     reportWebVital: webVitalsTelemetryController.report,
+    webVitalsDropGuard,
   });
 
   registerActivityRoutes(app, {

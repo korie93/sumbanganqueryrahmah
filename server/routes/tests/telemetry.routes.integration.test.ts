@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { EventEmitter } from "node:events";
 import test from "node:test";
 import { createWebVitalsTelemetryController } from "../../controllers/web-vitals-telemetry.controller";
 import { errorHandler } from "../../middleware/error-handler";
@@ -6,6 +7,7 @@ import {
   createWebVitalsTelemetryDropGuard,
   createWebVitalsTelemetryRequestGuard,
   registerTelemetryRoutes,
+  registerWebVitalsTelemetryDropGuardCleanup,
 } from "../telemetry.routes";
 import {
   createJsonTestApp,
@@ -274,6 +276,24 @@ test("web vitals drop guard sweeps expired buckets without waiting for request t
 
   guard.stopWebVitalsTelemetryDropGuard?.();
   assert.equal(clearedHandle, intervalHandle);
+});
+
+test("web vitals drop guard lifecycle cleanup stops the guard on server close", () => {
+  const server = new EventEmitter();
+  let stopCalls = 0;
+  const guard = createWebVitalsTelemetryDropGuard({
+    sweepIntervalMs: false,
+  });
+  guard.stopWebVitalsTelemetryDropGuard = () => {
+    stopCalls += 1;
+  };
+
+  registerWebVitalsTelemetryDropGuardCleanup(server, guard);
+
+  server.emit("close");
+  server.emit("close");
+
+  assert.equal(stopCalls, 1);
 });
 
 test("POST /telemetry/web-vitals silently drops cross-site browser telemetry attempts", async () => {

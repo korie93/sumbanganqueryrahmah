@@ -9,6 +9,7 @@ import type {
 import { dataRows, imports } from "../../shared/schema-postgres";
 import { db } from "../db-postgres";
 import { buildLikePattern } from "./sql-like-utils";
+import { assertSqlIdentifier } from "./sql-identifier-utils";
 
 const QUERY_PAGE_LIMIT = 1000;
 const IMPORT_LIST_PAGE_DEFAULT_LIMIT = 100;
@@ -102,7 +103,7 @@ function buildImportListFilterSql(params: {
   cursor?: ImportListCursor | null | undefined;
   includeCursor: boolean;
 }) {
-  const alias = sql.raw(params.alias);
+  const alias = sql.raw(assertSqlIdentifier(params.alias));
   const conditions = [sql`${alias}.is_deleted = false`];
   const search = String(params.search || "").trim();
   if (search) {

@@ -4,6 +4,23 @@ export const WEB_VITAL_NAMES = ["CLS", "FCP", "INP", "LCP", "TTFB"] as const;
 export const WEB_VITAL_RATINGS = ["good", "needs-improvement", "poor"] as const;
 export const WEB_VITAL_PAGE_TYPES = ["public", "authenticated"] as const;
 
+export function sanitizeWebVitalTelemetryPath(pathname: string) {
+  const rawPathname = String(pathname || "/").trim() || "/";
+  let pathOnly = rawPathname.split(/[?#]/, 1)[0] || "/";
+
+  try {
+    pathOnly = new URL(rawPathname, "https://sqr.local").pathname || "/";
+  } catch {
+    // Keep the split path fallback for malformed values.
+  }
+
+  const normalizedPath = pathOnly.startsWith("/") ? pathOnly : `/${pathOnly}`;
+
+  return normalizedPath
+    .replace(/\/[0-9a-f]{8}-[0-9a-f-]{27,}(?=\/|$)/gi, "/:id")
+    .replace(/\/\d{6,}(?=\/|$)/g, "/:number");
+}
+
 export const webVitalTelemetrySchema = z.object({
   name: z.enum(WEB_VITAL_NAMES),
   value: z.number().finite().min(0).max(120_000),

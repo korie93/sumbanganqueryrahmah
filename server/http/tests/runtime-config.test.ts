@@ -11,6 +11,11 @@ function importRuntimeFresh() {
   return import(`${runtimeModuleUrl}?t=${Date.now()}-${Math.random()}`);
 }
 
+const PROD_SESSION_SECRET = "prod-session-secret-minimum-32-characters-001";
+const PROD_LIKE_SESSION_SECRET = "prod-like-session-secret-minimum-32-characters-001";
+const PROD_PREVIOUS_SESSION_SECRET = "prod-previous-session-secret-minimum-32-characters-001";
+const PROD_OLDER_SESSION_SECRET = "prod-older-session-secret-minimum-32-characters-001";
+
 async function withEnv<T>(
   overrides: Record<string, string | null>,
   fn: () => Promise<T>,
@@ -40,7 +45,7 @@ async function withEnv<T>(
 
 const productionBaseOverrides: Record<string, string | null> = {
   NODE_ENV: "production",
-  SESSION_SECRET: "prod-session-secret",
+  SESSION_SECRET: PROD_SESSION_SECRET,
   COLLECTION_NICKNAME_TEMP_PASSWORD: "ProdTempPass12345",
   COLLECTION_PII_ENCRYPTION_KEY: "C".repeat(32),
   TWO_FACTOR_ENCRYPTION_KEY: "T".repeat(32),
@@ -57,7 +62,7 @@ const productionLikeDevelopmentBaseOverrides: Record<string, string | null> = {
   NODE_ENV: "development",
   HOST: "0.0.0.0",
   PUBLIC_APP_URL: "http://10.10.10.10:5000",
-  SESSION_SECRET: "prod-like-session-secret",
+  SESSION_SECRET: PROD_LIKE_SESSION_SECRET,
   COLLECTION_NICKNAME_TEMP_PASSWORD: "ProdLikeTempPass12345",
   COLLECTION_PII_ENCRYPTION_KEY: "C".repeat(32),
   TWO_FACTOR_ENCRYPTION_KEY: "T".repeat(32),
@@ -646,7 +651,7 @@ test("runtime config rejects SESSION_SECRET_PREVIOUS entries that duplicate the 
     {
       ...productionBaseOverrides,
       PUBLIC_APP_URL: "https://sqr.example.com",
-      SESSION_SECRET_PREVIOUS: "prod-session-secret",
+      SESSION_SECRET_PREVIOUS: PROD_SESSION_SECRET,
       BACKUP_ENCRYPTION_KEY: "A".repeat(32),
     },
     async () => {
@@ -663,14 +668,14 @@ test("runtime config keeps previous session secrets for manual rotation verifica
     {
       ...productionBaseOverrides,
       PUBLIC_APP_URL: "https://sqr.example.com",
-      SESSION_SECRET_PREVIOUS: "older-secret,oldest-secret",
+      SESSION_SECRET_PREVIOUS: `${PROD_PREVIOUS_SESSION_SECRET},${PROD_OLDER_SESSION_SECRET}`,
       BACKUP_ENCRYPTION_KEY: "A".repeat(32),
     },
     async () => {
       const runtimeModule = await importRuntimeFresh();
       assert.deepEqual(runtimeModule.runtimeConfig.auth.previousSessionSecrets, [
-        "older-secret",
-        "oldest-secret",
+        PROD_PREVIOUS_SESSION_SECRET,
+        PROD_OLDER_SESSION_SECRET,
       ]);
     },
   );

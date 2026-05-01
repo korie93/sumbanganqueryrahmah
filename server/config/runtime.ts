@@ -130,6 +130,9 @@ const parsedDatabaseUrl = parseDatabaseUrl(configuredDatabaseUrl);
 const configuredCollectionNicknameTempPassword = readOptionalString("COLLECTION_NICKNAME_TEMP_PASSWORD");
 const configuredPgPassword = readOptionalString("PG_PASSWORD");
 const configuredTwoFactorEncryptionKey = readOptionalString("TWO_FACTOR_ENCRYPTION_KEY");
+const configuredPreviousTwoFactorEncryptionKeys = readCommaSeparatedList(
+  "TWO_FACTOR_ENCRYPTION_KEY_PREVIOUS",
+);
 const configuredCollectionPiiEncryptionKey = readOptionalString("COLLECTION_PII_ENCRYPTION_KEY");
 const configuredPreviousCollectionPiiEncryptionKeys = resolvePreviousCollectionPiiSecrets(
   readCommaSeparatedList("COLLECTION_PII_ENCRYPTION_KEY_PREVIOUS"),
@@ -193,6 +196,7 @@ assertNoPlaceholderSecrets({
   configuredPreviousSessionSecrets,
   configuredPgPassword,
   configuredTwoFactorEncryptionKey,
+  configuredPreviousTwoFactorEncryptionKeys,
   configuredCollectionPiiEncryptionKey,
   configuredPreviousCollectionPiiEncryptionKeys,
   configuredBackupEncryptionKey,
