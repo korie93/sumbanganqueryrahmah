@@ -1,4 +1,5 @@
 import type { OllamaMessage } from "../ai-ollama";
+import { logger } from "../lib/logger";
 import { extractJsonObject, parseIntentFallback } from "./ai-search-query-utils";
 import type { AiIntent } from "./ai-search-types";
 
@@ -50,8 +51,11 @@ export async function resolveAiSearchIntent(params: {
         need_nearest_branch: Boolean(parsed.need_nearest_branch),
       };
     }
-  } catch {
-    // fallback below
+  } catch (error) {
+    logger.debug("AI search intent model parsing failed; using fallback intent parser", {
+      operationName: "ai-search-intent-resolution",
+      error,
+    });
   }
 
   return parseIntentFallback(params.query);

@@ -74,7 +74,7 @@
   --shadow-md: 0px 2px 0px 0px hsl(217 91% 60% / 0.1), 0px 2px 4px -1px hsl(217 91% 60% / 0.18);
   --shadow-lg: 0px 2px 0px 0px hsl(217 91% 60% / 0.12), 0px 4px 6px -1px hsl(217 91% 60% / 0.2);
   --shadow-xl: 0px 2px 0px 0px hsl(217 91% 60% / 0.14), 0px 8px 10px -1px hsl(217 91% 60% / 0.22);
-  --shadow-2xl: 0px 2px 0px 0px hsl(217 91% 60% / 0.18);
+  --shadow-2xl: 0px 2px 0px 0px hsl(217 91% 60% / 0.18), 0px 16px 24px -4px hsl(217 91% 60% / 0.24);
   --public-auth-layout-bg: linear-gradient(135deg, hsl(222 47% 11%), hsl(221 83% 35%), hsl(222 47% 11%));
   --public-auth-pattern-dot: hsl(210 72% 54% / 0.4);
   --public-auth-glow-top: hsl(217 91% 60% / 0.15);
@@ -430,7 +430,7 @@
   --shadow-md: 0px 2px 0px 0px hsl(217 91% 60% / 0.18), 0px 2px 4px -1px hsl(217 91% 60% / 0.28);
   --shadow-lg: 0px 2px 0px 0px hsl(217 91% 60% / 0.2), 0px 4px 6px -1px hsl(217 91% 60% / 0.3);
   --shadow-xl: 0px 2px 0px 0px hsl(217 91% 60% / 0.22), 0px 8px 10px -1px hsl(217 91% 60% / 0.34);
-  --shadow-2xl: 0px 2px 0px 0px hsl(217 91% 60% / 0.28);
+  --shadow-2xl: 0px 2px 0px 0px hsl(217 91% 60% / 0.28), 0px 16px 24px -4px hsl(217 91% 60% / 0.38);
   --public-auth-layout-bg: linear-gradient(135deg, hsl(222 47% 11%), hsl(221 83% 35%), hsl(222 47% 11%));
   --public-auth-pattern-dot: hsl(210 72% 54% / 0.4);
   --public-auth-glow-top: hsl(217 91% 60% / 0.18);

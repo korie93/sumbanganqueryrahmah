@@ -77,3 +77,37 @@ test("client entry shell contract collector finds inline blocks and missing exte
   assert.match(labels.join("\n"), /external boot shell stylesheet/i);
   assert.match(labels.join("\n"), /external boot shell script/i);
 });
+
+test("client entry shell contract requires the boot shell script to be deferred", async () => {
+  const { mkdtempSync, mkdirSync, writeFileSync } = await import("node:fs");
+  const { tmpdir } = await import("node:os");
+  const path = await import("node:path");
+
+  const repoRoot = mkdtempSync(path.join(tmpdir(), "client-entry-shell-contract-defer-"));
+  const clientDir = path.join(repoRoot, "client");
+  mkdirSync(path.join(clientDir, "public"), { recursive: true });
+  writeFileSync(path.join(clientDir, "public", "boot-shell.css"), "", "utf8");
+  writeFileSync(path.join(clientDir, "public", "boot-shell.js"), "", "utf8");
+  writeFileSync(
+    path.join(clientDir, "index.html"),
+    [
+      "<!doctype html>",
+      "<html>",
+      "  <head>",
+      "    <link rel=\"stylesheet\" href=\"/boot-shell.css\">",
+      "    <script src=\"/boot-shell.js\"></script>",
+      "  </head>",
+      "  <body>",
+      "    <div id=\"boot-shell\"></div>",
+      "  </body>",
+      "</html>",
+    ].join("\n"),
+    "utf8",
+  );
+
+  const result = collectClientEntryShellContractMatches({ repoRoot });
+  const labels = result.matches.map((match) => match.label);
+
+  assert.equal(result.matches.length, 1);
+  assert.match(labels.join("\n"), /must use defer/i);
+});

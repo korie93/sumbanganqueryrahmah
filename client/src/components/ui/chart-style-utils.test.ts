@@ -15,7 +15,12 @@ test("sanitizeChartToken normalizes unsafe ids into stable CSS tokens", () => {
 
 test("sanitizeChartColorValue keeps safe CSS color text and rejects unsafe input", () => {
   assert.equal(sanitizeChartColorValue("hsl(210 80% 50%)"), "hsl(210 80% 50%)")
+  assert.equal(sanitizeChartColorValue("var(--chart-1)"), "var(--chart-1)")
   assert.equal(sanitizeChartColorValue("url(javascript:alert(1))"), null)
+  assert.equal(sanitizeChartColorValue("expression(alert(1))"), null)
+  assert.equal(sanitizeChartColorValue("</style><script>alert(1)</script>"), null)
+  assert.equal(sanitizeChartColorValue("red;background:blue"), null)
+  assert.equal(sanitizeChartColorValue(String.raw`hsl\(210 80% 50%\)`), null)
 })
 
 test("buildChartStyleMarkup emits CSS variables only for safe configured colors", () => {
@@ -53,6 +58,19 @@ test("buildChartStyleMarkup drops injected selector and style-breaking content",
   assert.doesNotMatch(markup, /javascript:/i)
   assert.match(markup, /\[data-chart="chart-[a-z0-9-]+"]/i)
   assert.doesNotMatch(markup, /--color-injected/)
+})
+
+test("buildChartStyleMarkup sanitizes series keys before CSS variable emission", () => {
+  const markup = buildChartStyleMarkup("chart:daily", {
+    "safe; color": {
+      label: "Safe",
+      color: "#0ea5e9",
+    },
+  })
+
+  assert.ok(markup)
+  assert.match(markup, /--color-safe--color: #0ea5e9;/)
+  assert.doesNotMatch(markup, /safe; color/)
 })
 
 test("resolveChartPresentationColor falls back to currentColor for invalid values", () => {

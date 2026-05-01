@@ -1,5 +1,6 @@
 import cluster from "node:cluster";
 import { PerformanceObserver, monitorEventLoopDelay } from "node:perf_hooks";
+import { logger } from "../lib/logger";
 import {
   createRuntimeControlStateManager,
 } from "./runtime-monitor-control-state";
@@ -193,8 +194,13 @@ export function createRuntimeMonitorManager(options: RuntimeMonitorManagerOption
         recordGcEntries(list.getEntries().length);
       });
       gcObserver.observe({ entryTypes: ["gc"] });
-    } catch {
-      // GC observer is best-effort only.
+    } catch (error) {
+      if (options.apiDebugLogs) {
+        logger.debug("Runtime GC observer attachment failed; continuing without GC samples", {
+          operationName: "runtime-monitor-gc-observer",
+          error,
+        });
+      }
     }
   }
 
@@ -284,8 +290,13 @@ export function createRuntimeMonitorManager(options: RuntimeMonitorManagerOption
         if (typeof runtimeGlobal.gc === "function" && requestTracker.getActiveRequests() === 0) {
           try {
             runtimeGlobal.gc();
-          } catch {
-            // noop
+          } catch (error) {
+            if (options.apiDebugLogs) {
+              logger.debug("Runtime explicit GC request failed during memory pressure handling", {
+                operationName: "runtime-monitor-explicit-gc",
+                error,
+              });
+            }
           }
         }
       }

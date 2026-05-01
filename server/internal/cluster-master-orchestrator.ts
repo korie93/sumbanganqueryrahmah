@@ -218,8 +218,12 @@ export function createClusterMasterOrchestrator({
     const timeout = setTimeout(() => {
       try {
         worker.kill();
-      } catch {
-        // Ignore best-effort worker termination failures.
+      } catch (error) {
+        logger.warn("Cluster worker kill failed during rolling restart timeout", {
+          reason,
+          workerId: worker.id,
+          error,
+        });
       }
     }, 30_000);
     timeout.unref();

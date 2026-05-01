@@ -15,7 +15,11 @@ export function sanitizeChartColorValue(value: string) {
   const lowerNormalized = normalized.toLowerCase()
   if (
     lowerNormalized.includes("url(") ||
-    lowerNormalized.includes("expression(")
+    lowerNormalized.includes("expression(") ||
+    lowerNormalized.includes("@import") ||
+    lowerNormalized.includes("</style") ||
+    lowerNormalized.includes("/*") ||
+    lowerNormalized.includes("*/")
   ) {
     return null
   }
@@ -38,11 +42,12 @@ export function buildChartStyleMarkup(id: string, config: ChartConfig) {
     .map(
       ([theme, prefix]) => `\n${prefix} [data-chart="${safeChartId}"] {\n${colorConfig
         .map(([key, itemConfig]) => {
+          const safeKey = sanitizeChartToken(key)
           const color =
             itemConfig.theme?.[theme as keyof typeof itemConfig.theme] ||
             itemConfig.color
           const safeColor = color ? sanitizeChartColorValue(color) : null
-          return safeColor ? `  --color-${key}: ${safeColor};` : null
+          return safeColor ? `  --color-${safeKey}: ${safeColor};` : null
         })
         .filter((line): line is string => Boolean(line))
         .join("\n")}\n}\n`

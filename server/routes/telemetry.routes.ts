@@ -136,6 +136,19 @@ export function createWebVitalsTelemetryDropGuard(
   const now = options.now ?? Date.now;
   const buckets = new Map<string, TelemetryBucket>();
 
+  const resolveOldestBucketKey = () => {
+    let oldestKey: string | null = null;
+    let oldestWindowEndsAtMs = Number.POSITIVE_INFINITY;
+    for (const [key, bucket] of buckets) {
+      if (bucket.windowEndsAtMs < oldestWindowEndsAtMs) {
+        oldestKey = key;
+        oldestWindowEndsAtMs = bucket.windowEndsAtMs;
+      }
+    }
+
+    return oldestKey;
+  };
+
   const sweepExpiredBuckets = (nowMs: number) => {
     for (const [key, bucket] of buckets) {
       if (bucket.windowEndsAtMs <= nowMs) {
@@ -147,13 +160,12 @@ export function createWebVitalsTelemetryDropGuard(
       return;
     }
 
-    const excessCount = buckets.size - maxBuckets;
-    const oldestKeys = Array.from(buckets.entries())
-      .sort((left, right) => left[1].windowEndsAtMs - right[1].windowEndsAtMs)
-      .slice(0, excessCount)
-      .map(([key]) => key);
-    for (const key of oldestKeys) {
-      buckets.delete(key);
+    while (buckets.size > maxBuckets) {
+      const oldestKey = resolveOldestBucketKey();
+      if (!oldestKey) {
+        break;
+      }
+      buckets.delete(oldestKey);
     }
   };
 

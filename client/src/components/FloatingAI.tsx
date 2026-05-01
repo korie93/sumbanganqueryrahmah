@@ -119,6 +119,8 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
     aiStatus,
   });
   const shouldShowPanel = shouldKeepPanelMounted && isOpen && !layoutState.rootHidden;
+  // Desktop floating AI remains a non-modal dialog; only the mobile sheet traps
+  // focus and isolates the page, so only mobile should claim aria-modal=true.
   const modalDialogA11yProps = isMobile
     ? ({
       "aria-modal": "true",

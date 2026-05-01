@@ -213,6 +213,12 @@ Current storage shape:
 This means some older flows still go through a broader storage facade,
 but the extraction direction is toward narrower repository/service seams.
 
+`PostgresStorageCore.init()` still performs several idempotent compatibility,
+seed, and readiness checks during startup. For production, reviewed Drizzle
+migrations should be applied before the runtime starts; the bootstrap path is a
+guardrail for mixed-version and legacy compatibility, not the primary schema
+delivery mechanism.
+
 ### 5. Database
 
 PostgreSQL is the only supported production-grade database target. Core
@@ -438,6 +444,12 @@ Runtime config provides:
 
 This separation is important because one leaked secret should not
 automatically compromise every control surface.
+
+Session JWTs currently use HS256, which fits the documented single-service
+runtime where one Express app signs and verifies session material with the
+central runtime secret. A move to RS256 or another asymmetric algorithm should
+be treated as a separate migration if token verification must be delegated to
+multiple services or external verifiers.
 
 ### Session Cookie and CSRF
 

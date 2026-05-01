@@ -53,7 +53,15 @@ export function collectClientEntryShellContractMatches(params = {}) {
 
   const hasBootShellMarkup = /\bid\s*=\s*["']boot-shell["']/i.test(html);
   const hasBootShellCssLink = new RegExp(`<link\\b[^>]*href=["']${BOOT_SHELL_CSS_PUBLIC_PATH}["'][^>]*>`, "i").test(html);
-  const hasBootShellJsScript = new RegExp(`<script\\b[^>]*src=["']${BOOT_SHELL_JS_PUBLIC_PATH}["'][^>]*><\\/script>`, "i").test(html);
+  const bootShellJsScriptMatch = html.match(
+    new RegExp(`<script\\b([^>]*)\\bsrc=["']${BOOT_SHELL_JS_PUBLIC_PATH}["']([^>]*)><\\/script>`, "i"),
+  );
+  const hasBootShellJsScript = Boolean(bootShellJsScriptMatch);
+  const bootShellJsScriptAttributes = [
+    bootShellJsScriptMatch?.[1] || "",
+    bootShellJsScriptMatch?.[2] || "",
+  ].join(" ");
+  const hasDeferredBootShellScript = /\bdefer\b/i.test(bootShellJsScriptAttributes);
 
   if (hasBootShellMarkup && !hasBootShellCssLink) {
     matches.push({
@@ -68,6 +76,14 @@ export function collectClientEntryShellContractMatches(params = {}) {
       filePath: CLIENT_INDEX_HTML_PATH,
       label: "boot shell markup must load the external boot shell script",
       snippet: BOOT_SHELL_JS_PUBLIC_PATH,
+    });
+  }
+
+  if (hasBootShellJsScript && !hasDeferredBootShellScript) {
+    matches.push({
+      filePath: CLIENT_INDEX_HTML_PATH,
+      label: "boot shell script must use defer so it does not block initial rendering",
+      snippet: bootShellJsScriptMatch?.[0] || BOOT_SHELL_JS_PUBLIC_PATH,
     });
   }
 

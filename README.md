@@ -43,6 +43,10 @@ Untuk manual penggunaan client yang lengkap (split ikut role `superuser`, `admin
    ```bash
    npm run db:migrate
    ```
+   Production deployments should run reviewed Drizzle migrations before
+   starting or restarting the app. Runtime bootstrap remains an idempotent
+   compatibility, readiness, and required seed path; it is not a replacement
+   for the reviewed migration workflow.
    If your PostgreSQL host does not already expose `pgvector`, enable it before
    relying on embedding-backed AI search. The reviewed migration attempts
    `CREATE EXTENSION IF NOT EXISTS vector`, but some managed hosts require a
