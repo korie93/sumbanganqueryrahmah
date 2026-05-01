@@ -62,11 +62,13 @@ test("CollectionMonthlyComparisonPanel renders accessible controls and action bu
 
   assert.match(markup, /Monthly Collection Comparison/);
   assert.match(markup, /id="collection-monthly-comparison-nickname"/);
-  assert.match(markup, /list="collection-monthly-comparison-nicknames"/);
+  assert.match(markup, /aria-haspopup="dialog"/);
+  assert.match(markup, /Choose a staff nickname|Collector Alpha/);
   assert.match(markup, /type="month"/);
   assert.match(markup, />Apply</);
   assert.match(markup, />Reset</);
   assert.match(markup, /type="button"/);
+  assert.match(markup, /Single nickname only/);
 });
 
 test("CollectionMonthlyComparisonPanel announces loading, errors, and empty nickname availability clearly", () => {

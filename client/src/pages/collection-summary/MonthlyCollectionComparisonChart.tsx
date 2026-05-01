@@ -1,5 +1,8 @@
+import { ChevronDown, ChevronUp, Maximize2, Minimize2 } from "lucide-react";
+import { useId, useState } from "react";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import type { CollectionMonthlyComparisonResponse } from "@/lib/api";
+import { Button } from "@/components/ui/button";
 import { formatAmountRM } from "@/pages/collection/utils";
 
 type MonthlyCollectionComparisonChartProps = {
@@ -43,43 +46,119 @@ function MonthlyCollectionComparisonTooltip({
 export function MonthlyCollectionComparisonChart({
   data,
 }: MonthlyCollectionComparisonChartProps) {
+  const [expanded, setExpanded] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
+  const chartRegionId = useId();
+
   return (
-    <div className="space-y-2">
-      <div className="h-[260px] min-w-0 rounded-xl border border-border/60 bg-background/40 p-3">
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart
-            data={data.months}
-            margin={{ top: 8, right: 16, left: -8, bottom: 0 }}
+    <div className="rounded-2xl border border-border/60 bg-background/65 p-3 shadow-sm">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div className="space-y-1">
+          <p className="text-sm font-semibold text-foreground">Monthly trend chart</p>
+          <p className="text-xs text-muted-foreground">
+            Compare total collection by month for the selected nickname.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-8 gap-1 rounded-full px-3 text-xs"
+            onClick={() => {
+              setCollapsed((previous) => {
+                const nextCollapsed = !previous;
+                if (nextCollapsed) {
+                  setExpanded(false);
+                }
+                return nextCollapsed;
+              });
+            }}
+            aria-expanded={!collapsed}
+            aria-controls={chartRegionId}
           >
-            <CartesianGrid strokeDasharray="3 3" className="stroke-muted/60" vertical={false} />
-            <XAxis
-              dataKey="label"
-              axisLine={false}
-              tickLine={false}
-              tickMargin={10}
-              className="text-[11px] text-muted-foreground"
-            />
-            <YAxis
-              axisLine={false}
-              tickLine={false}
-              tickMargin={8}
-              tickFormatter={(value) => formatAmountRM(Number(value || 0))}
-              className="text-[11px] text-muted-foreground"
-              width={72}
-            />
-            <Tooltip content={(props) => <MonthlyCollectionComparisonTooltip {...props} />} />
-            <Bar
-              dataKey="totalCollection"
-              name="Total collection"
-              fill="hsl(var(--chart-3))"
-              radius={[8, 8, 0, 0]}
-            />
-          </BarChart>
-        </ResponsiveContainer>
+            {collapsed ? (
+              <>
+                <ChevronDown className="h-3.5 w-3.5" aria-hidden="true" />
+                Show chart
+              </>
+            ) : (
+              <>
+                <ChevronUp className="h-3.5 w-3.5" aria-hidden="true" />
+                Minimize chart
+              </>
+            )}
+          </Button>
+          {!collapsed ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-8 gap-1 rounded-full px-3 text-xs"
+              onClick={() => setExpanded((previous) => !previous)}
+              aria-pressed={expanded}
+              aria-controls={chartRegionId}
+            >
+              {expanded ? (
+                <>
+                  <Minimize2 className="h-3.5 w-3.5" aria-hidden="true" />
+                  Compact view
+                </>
+              ) : (
+                <>
+                  <Maximize2 className="h-3.5 w-3.5" aria-hidden="true" />
+                  Expand chart
+                </>
+              )}
+            </Button>
+          ) : null}
+        </div>
       </div>
-      <p className="text-xs text-muted-foreground">
-        Bar chart compares total collection amount by month for the selected nickname.
-      </p>
+
+      {!collapsed ? (
+        <div
+          id={chartRegionId}
+          className={`mt-3 min-w-0 rounded-xl border border-border/60 bg-background/40 p-3 ${expanded ? "h-[340px]" : "h-[220px]"}`}
+        >
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart
+              data={data.months}
+              margin={{ top: 8, right: 16, left: -8, bottom: 0 }}
+            >
+              <CartesianGrid strokeDasharray="3 3" className="stroke-muted/60" vertical={false} />
+              <XAxis
+                dataKey="label"
+                axisLine={false}
+                tickLine={false}
+                tickMargin={10}
+                className="text-[11px] text-muted-foreground"
+              />
+              <YAxis
+                axisLine={false}
+                tickLine={false}
+                tickMargin={8}
+                tickFormatter={(value) => formatAmountRM(Number(value || 0))}
+                className="text-[11px] text-muted-foreground"
+                width={72}
+              />
+              <Tooltip content={(props) => <MonthlyCollectionComparisonTooltip {...props} />} />
+              <Bar
+                dataKey="totalCollection"
+                name="Total collection"
+                fill="hsl(var(--chart-3))"
+                radius={[8, 8, 0, 0]}
+              />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      ) : (
+        <p
+          id={chartRegionId}
+          className="mt-3 rounded-xl border border-dashed border-border/60 px-3 py-3 text-xs text-muted-foreground"
+        >
+          Chart is minimized. Expand it again to review the monthly bar trend.
+        </p>
+      )}
     </div>
   );
 }

@@ -66,68 +66,37 @@ function CollectionMonthlyComparisonPage({
   return (
     <OperationalSectionCard
       title="Monthly Collection Comparison"
-      description="Compare one staff nickname across a bounded month range, review month-to-month changes, and spot collection movement quickly without mixing it into the broader summary workflow."
+      description="Compare one staff nickname across a bounded month range without crowding the broader collection summary workflow."
       contentClassName="space-y-5"
     >
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(280px,0.65fr)]">
-        <div className="rounded-2xl border border-border/60 bg-background/75 p-4 shadow-sm">
+      <div className="rounded-2xl border border-border/60 bg-background/75 p-4 shadow-sm">
+        <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
           <div className="flex items-start gap-3">
-            <span className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+            <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary">
               <BarChart3 className="h-5 w-5" aria-hidden="true" />
             </span>
-            <div className="space-y-2">
-              <h2 className="text-base font-semibold text-foreground">
-                Focus on one nickname at a time
+            <div className="space-y-1">
+              <h2 className="text-sm font-semibold text-foreground">
+                One nickname, one compact monthly view
               </h2>
               <p className="text-sm leading-6 text-muted-foreground">
-                Choose a visible nickname, set the month range, and review total collection,
-                difference, percentage change, and the month-by-month bar chart in one place.
+                Pick a visible nickname, compare the first and last months in your range, and keep the monthly chart close to the totals without crowding the page.
               </p>
-              <div className="flex flex-wrap gap-2 pt-1">
-                <Badge variant="secondary" className="rounded-full px-3 py-1 text-[11px]">
-                  Up to 24 months
-                </Badge>
-                <Badge variant="outline" className="rounded-full px-3 py-1 text-[11px]">
-                  Empty months stay visible as RM0
-                </Badge>
-                <Badge variant="outline" className="rounded-full px-3 py-1 text-[11px]">
-                  Single-nickname analysis
-                </Badge>
-              </div>
             </div>
           </div>
-        </div>
 
-        <div className="grid gap-3 sm:grid-cols-3 xl:grid-cols-1">
-          <div className="rounded-2xl border border-border/60 bg-muted/10 p-4">
-            <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
-              <CalendarRange className="h-4 w-4 text-primary" aria-hidden="true" />
-              Choose a range
-            </div>
-            <p className="mt-2 text-sm leading-6 text-muted-foreground">
-              Start with the recent six months or narrow the analysis to the exact reporting
-              window you need.
-            </p>
-          </div>
-          <div className="rounded-2xl border border-border/60 bg-muted/10 p-4">
-            <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
-              <TrendingUp className="h-4 w-4 text-primary" aria-hidden="true" />
-              Review the change
-            </div>
-            <p className="mt-2 text-sm leading-6 text-muted-foreground">
-              Difference and percentage change are calculated deterministically between the
-              first and last selected months.
-            </p>
-          </div>
-          <div className="rounded-2xl border border-border/60 bg-muted/10 p-4">
-            <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
-              <BarChart3 className="h-4 w-4 text-primary" aria-hidden="true" />
-              Read the trend
-            </div>
-            <p className="mt-2 text-sm leading-6 text-muted-foreground">
-              The chart keeps the monthly trend easy to scan while the detailed month cards stay
-              available below it.
-            </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="secondary" className="rounded-full px-3 py-1 text-[11px]">
+              <CalendarRange className="mr-1 h-3.5 w-3.5" aria-hidden="true" />
+              Up to 24 months
+            </Badge>
+            <Badge variant="outline" className="rounded-full px-3 py-1 text-[11px]">
+              <TrendingUp className="mr-1 h-3.5 w-3.5" aria-hidden="true" />
+              First vs last month
+            </Badge>
+            <Badge variant="outline" className="rounded-full px-3 py-1 text-[11px]">
+              Empty months stay visible
+            </Badge>
           </div>
         </div>
       </div>

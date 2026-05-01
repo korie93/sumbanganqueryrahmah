@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { useMemo, useState } from "react";
 import {
   OperationalMetric,
   OperationalSummaryStrip,
@@ -6,6 +7,7 @@ import {
 import type {
   CollectionMonthlyComparisonResponse,
 } from "@/lib/api";
+import { CollectionNicknameSingleSelect } from "@/pages/collection-report/CollectionNicknameSingleSelect";
 import { formatAmountRM } from "@/pages/collection/utils";
 import {
   buildCollectionMonthlyComparisonAccessibleSummary,
@@ -60,12 +62,20 @@ export function CollectionMonthlyComparisonPanel({
   const comparisonSummary = data
     ? buildCollectionMonthlyComparisonAccessibleSummary(data)
     : null;
+  const [nicknameSelectOpen, setNicknameSelectOpen] = useState(false);
   const baseMonthRecordCount = comparison?.baseMonth
     ? data?.months.find((entry) => entry.month === comparison.baseMonth)?.recordCount || 0
     : 0;
   const targetMonthRecordCount = comparison
     ? data?.months.find((entry) => entry.month === comparison.targetMonth)?.recordCount || 0
     : 0;
+  const selectedNicknameLabel = useMemo(() => {
+    const normalizedValue = String(selectedNickname || "").trim();
+    if (!normalizedValue) {
+      return loading ? "Loading visible nicknames..." : "Choose a staff nickname";
+    }
+    return normalizedValue;
+  }, [loading, selectedNickname]);
 
   return (
     <section
@@ -88,101 +98,102 @@ export function CollectionMonthlyComparisonPanel({
         </h2>
       )}
 
-      <div className="rounded-2xl border border-border/60 bg-background/75 p-4 shadow-sm">
-        <div className="grid gap-3 lg:grid-cols-[minmax(0,1.4fr)_160px_160px_auto_auto] lg:items-end">
-        <div className="space-y-1">
-          <label
-            htmlFor="collection-monthly-comparison-nickname"
-            className="text-sm font-medium text-foreground"
-          >
-            Staff nickname
-          </label>
-          {canFilterByNickname ? (
-            <>
-              <input
-                id="collection-monthly-comparison-nickname"
-                list="collection-monthly-comparison-nicknames"
+      <div className="rounded-2xl border border-border/60 bg-background/75 p-3.5 shadow-sm">
+        <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_150px_150px_auto_auto] xl:items-end">
+          <div className="space-y-1">
+            {canFilterByNickname ? (
+              <CollectionNicknameSingleSelect
+                label="Staff nickname"
+                triggerId="collection-monthly-comparison-nickname"
+                open={nicknameSelectOpen}
+                loading={loading && !selectedNickname}
+                selectedLabel={selectedNicknameLabel}
+                options={availableNicknames}
                 value={selectedNickname}
-                onChange={(event) => onSelectedNicknameChange(event.target.value)}
-                className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-                placeholder="Search or select a nickname"
-                aria-describedby="collection-monthly-comparison-nickname-help"
+                onOpenChange={setNicknameSelectOpen}
+                onSelect={onSelectedNicknameChange}
+                triggerClassName="h-10 rounded-xl bg-background/95"
+                popoverClassName="rounded-2xl border-border/70 bg-popover/98 shadow-lg"
               />
-              <datalist id="collection-monthly-comparison-nicknames">
-                {availableNicknames.map((nickname) => (
-                  <option key={nickname} value={nickname} />
-                ))}
-              </datalist>
-              <p
-                id="collection-monthly-comparison-nickname-help"
-                className="text-xs text-muted-foreground"
-              >
-                Choose one visible nickname to compare monthly totals.
-              </p>
-            </>
-          ) : (
+            ) : (
+              <div className="space-y-1">
+                <label
+                  htmlFor="collection-monthly-comparison-nickname"
+                  className="text-sm font-medium text-foreground"
+                >
+                  Staff nickname
+                </label>
+                <input
+                  id="collection-monthly-comparison-nickname"
+                  value={selectedNickname}
+                  readOnly
+                  className="h-10 w-full rounded-xl border border-input bg-muted/30 px-3 text-sm text-foreground"
+                  aria-readonly="true"
+                />
+              </div>
+            )}
+          </div>
+
+          <div className="space-y-1">
+            <label
+              htmlFor="collection-monthly-comparison-start-month"
+              className="text-sm font-medium text-foreground"
+            >
+              Start month
+            </label>
             <input
-              id="collection-monthly-comparison-nickname"
-              value={selectedNickname}
-              readOnly
-              className="h-10 w-full rounded-md border border-input bg-muted/30 px-3 text-sm text-foreground"
-              aria-readonly="true"
+              id="collection-monthly-comparison-start-month"
+              type="month"
+              value={startMonth}
+              onChange={(event) => onStartMonthChange(event.target.value)}
+              className="h-10 w-full rounded-xl border border-input bg-background px-3 text-sm"
             />
-          )}
-        </div>
+          </div>
 
-        <div className="space-y-1">
-          <label
-            htmlFor="collection-monthly-comparison-start-month"
-            className="text-sm font-medium text-foreground"
+          <div className="space-y-1">
+            <label
+              htmlFor="collection-monthly-comparison-end-month"
+              className="text-sm font-medium text-foreground"
+            >
+              End month
+            </label>
+            <input
+              id="collection-monthly-comparison-end-month"
+              type="month"
+              value={endMonth}
+              onChange={(event) => onEndMonthChange(event.target.value)}
+              className="h-10 w-full rounded-xl border border-input bg-background px-3 text-sm"
+            />
+          </div>
+
+          <button
+            type="button"
+            className="inline-flex h-10 items-center justify-center rounded-xl bg-primary px-4 text-sm font-medium text-primary-foreground transition hover:bg-primary/90"
+            onClick={onApply}
+            disabled={loading || !hasAvailableNickname}
           >
-            Start month
-          </label>
-          <input
-            id="collection-monthly-comparison-start-month"
-            type="month"
-            value={startMonth}
-            onChange={(event) => onStartMonthChange(event.target.value)}
-            className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-          />
-        </div>
-
-        <div className="space-y-1">
-          <label
-            htmlFor="collection-monthly-comparison-end-month"
-            className="text-sm font-medium text-foreground"
+            Apply
+          </button>
+          <button
+            type="button"
+            className="inline-flex h-10 items-center justify-center rounded-xl border border-input bg-background px-4 text-sm font-medium text-foreground transition hover:bg-accent hover:text-accent-foreground"
+            onClick={onReset}
+            disabled={loading}
           >
-            End month
-          </label>
-          <input
-            id="collection-monthly-comparison-end-month"
-            type="month"
-            value={endMonth}
-            onChange={(event) => onEndMonthChange(event.target.value)}
-            className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-          />
+            Reset
+          </button>
         </div>
-
-        <button
-          type="button"
-          className="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition hover:bg-primary/90"
-          onClick={onApply}
-          disabled={loading || !hasAvailableNickname}
-        >
-          Apply
-        </button>
-        <button
-          type="button"
-          className="inline-flex h-10 items-center justify-center rounded-md border border-input bg-background px-4 text-sm font-medium text-foreground transition hover:bg-accent hover:text-accent-foreground"
-          onClick={onReset}
-          disabled={loading}
-        >
-          Reset
-        </button>
-      </div>
-        <p className="mt-3 text-xs text-muted-foreground">
-          Compare one nickname at a time. The first selected month acts as the base month and the last selected month acts as the target month.
-        </p>
+        <div className="mt-2.5 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+          <span className="rounded-full border border-border/60 bg-muted/10 px-2.5 py-1">
+            Single nickname only
+          </span>
+          <span className="rounded-full border border-border/60 bg-muted/10 px-2.5 py-1">
+            First month = base
+          </span>
+          <span className="rounded-full border border-border/60 bg-muted/10 px-2.5 py-1">
+            Last month = target
+          </span>
+        </div>
       </div>
 
       {!hasAvailableNickname ? (
@@ -250,57 +261,49 @@ export function CollectionMonthlyComparisonPanel({
           </div>
           {comparisonSummary ? <p className="sr-only">{comparisonSummary}</p> : null}
 
-          <div className="grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(300px,0.9fr)] xl:items-start">
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px] xl:items-start">
+            {chartSlot ? (
+              <div className="space-y-3">
+                {chartSlot}
+              </div>
+            ) : null}
+
             <div className="space-y-3">
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <h3 className="text-sm font-semibold text-foreground">Monthly breakdown</h3>
                   <p className="text-xs text-muted-foreground">
-                    Each month stays visible even when the selected nickname has no collection in that period.
+                    Empty months stay visible as RM0 for quick trend review.
                   </p>
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  {data.nickname}
-                </p>
+                <p className="text-xs text-muted-foreground">{data.nickname}</p>
               </div>
 
               <div className="grid gap-2">
                 {data.months.map((month) => (
                   <div
                     key={month.month}
-                    className="grid gap-2 rounded-xl border border-border/50 bg-background/55 px-3 py-3 sm:grid-cols-[minmax(0,1fr)_auto_auto_auto] sm:items-center"
+                    className="grid gap-2 rounded-xl border border-border/50 bg-background/55 px-3 py-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
                   >
-                    <div>
-                      <p className="text-sm font-medium text-foreground">{month.label}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {month.recordCount} record(s)
-                      </p>
-                    </div>
-                    <div className="text-sm font-medium text-foreground">
-                      {formatAmountRM(month.totalCollection)}
-                    </div>
-                    <div className="text-sm text-muted-foreground">
-                      Avg {formatAmountRM(month.averagePerRecord)}
-                    </div>
-                    <div className="text-xs text-muted-foreground">
-                      {month.recordCount === 0 ? "No collection recorded" : "Active month"}
+                    <div className="space-y-1">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <p className="text-sm font-medium text-foreground">{month.label}</p>
+                        <p className="text-sm font-semibold text-foreground">
+                          {formatAmountRM(month.totalCollection)}
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                        <span>{month.recordCount} record(s)</span>
+                        <span>Avg {formatAmountRM(month.averagePerRecord)}</span>
+                        <span>
+                          {month.recordCount === 0 ? "No collection recorded" : "Active month"}
+                        </span>
+                      </div>
                     </div>
                   </div>
                 ))}
               </div>
             </div>
-
-            {chartSlot ? (
-              <div className="space-y-3">
-                <div>
-                  <h3 className="text-sm font-semibold text-foreground">Trend chart</h3>
-                  <p className="text-xs text-muted-foreground">
-                    Use the chart for a quick visual comparison, then confirm exact totals in the month cards.
-                  </p>
-                </div>
-                {chartSlot}
-              </div>
-            ) : null}
           </div>
         </div>
       ) : null}

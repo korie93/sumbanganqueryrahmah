@@ -13,8 +13,8 @@ test("CollectionMonthlyComparisonPage renders a dedicated monthly comparison wor
   );
 
   assert.match(markup, /Monthly Collection Comparison/);
-  assert.match(markup, /Focus on one nickname at a time/);
-  assert.match(markup, /Choose a range/);
-  assert.match(markup, /Review the change/);
-  assert.match(markup, /Read the trend/);
+  assert.match(markup, /One nickname, one compact monthly view/);
+  assert.match(markup, /Up to 24 months/);
+  assert.match(markup, /First vs last month/);
+  assert.match(markup, /Empty months stay visible/);
 });
