@@ -3,12 +3,14 @@ import test from "node:test";
 import {
   buildCollectionMonthlySummaryWhereSql,
   buildCollectionRecordDailyRollupWhereSql,
+  buildCollectionRecordMonthlyComparisonWhereSql,
   buildCollectionRecordMonthlyRollupWhereSql,
   buildCollectionRecordConditions,
   canUseCollectionRecordDailyRollups,
   collectCollectionReceiptPaths,
   extractCollectionRecordIds,
   mapCollectionAggregateRow,
+  mapCollectionMonthlyComparisonAggregateRows,
   mapCollectionNicknameDailyAggregateRows,
   mapCollectionMonthlySummaryRows,
   sumCollectionRowAmounts,
@@ -142,6 +144,25 @@ test("buildCollectionRecordMonthlyRollupWhereSql clamps years and normalizes dup
   assert.ok(whereSql);
 });
 
+test("buildCollectionRecordMonthlyComparisonWhereSql constrains monthly rollup ranges safely", () => {
+  const whereSql = buildCollectionRecordMonthlyComparisonWhereSql({
+    from: "2026-04-01",
+    to: "2026-06-30",
+    nicknames: [" Collector Alpha ", "collector alpha", "Collector Beta"],
+    createdByLogin: "staff.user",
+  });
+
+  const sqlText = collectSqlText(whereSql);
+  const boundValues = collectBoundValues(whereSql);
+  assert.match(sqlText, /\(\(year \* 100\) \+ month\) >= /);
+  assert.match(sqlText, /\(\(year \* 100\) \+ month\) <= /);
+  assert.ok(boundValues.includes(202604));
+  assert.ok(boundValues.includes(202606));
+  assert.ok(boundValues.includes("collector alpha"));
+  assert.ok(boundValues.includes("collector beta"));
+  assert.ok(boundValues.includes("staff.user"));
+});
+
 test("collection daily rollups are only used for summary-safe filters", () => {
   assert.equal(
     canUseCollectionRecordDailyRollups({
@@ -194,6 +215,30 @@ test("mapCollectionMonthlySummaryRows fills missing months with zero totals", ()
     totalRecords: 0,
     totalAmount: 0,
   });
+});
+
+test("mapCollectionMonthlyComparisonAggregateRows normalizes year-month totals safely", () => {
+  assert.deepEqual(
+    mapCollectionMonthlyComparisonAggregateRows([
+      { year: "2026", month: "4", total_records: "2", total_amount: "123.45" },
+      { year: 2026, month: 5, total_records: 1, total_amount: "88.00" },
+      { year: 1900, month: 5, total_records: 9, total_amount: "999.99" },
+    ]),
+    [
+      {
+        year: 2026,
+        month: 4,
+        totalRecords: 2,
+        totalAmount: 123.45,
+      },
+      {
+        year: 2026,
+        month: 5,
+        totalRecords: 1,
+        totalAmount: 88,
+      },
+    ],
+  );
 });
 
 test("aggregate and receipt helpers normalize values and dedupe paths", () => {

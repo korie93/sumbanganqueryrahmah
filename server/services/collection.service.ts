@@ -99,6 +99,10 @@ export class CollectionService {
     return this.recordService.getPurgeSummary(user);
   }
 
+  getMonthlyComparison(user: AuthenticatedUser | undefined, query: SummaryQuery) {
+    return this.recordService.getMonthlyComparison(user, query);
+  }
+
   getNicknameSummary(user: AuthenticatedUser | undefined, query: ListQuery) {
     return this.recordService.getNicknameSummary(user, query);
   }

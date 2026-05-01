@@ -25,6 +25,7 @@ export type {
 } from "./collection-record-rollup-utils";
 
 export {
+  getCollectionMonthlyComparison,
   getCollectionMonthlySummary,
   getCollectionRecordById,
   listCollectionRecords,

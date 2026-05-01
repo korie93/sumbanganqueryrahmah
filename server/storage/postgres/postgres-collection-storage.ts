@@ -5,6 +5,7 @@ import type {
   CollectionDailyPaidCustomer,
   CollectionDailyTarget,
   CollectionDailyUser,
+  CollectionMonthlyComparisonAggregate,
   CollectionNicknameAuthProfile,
   CollectionNicknameDailyAggregate,
   CollectionNicknameSession,
@@ -270,6 +271,15 @@ export class PostgresCollectionStorage extends PostgresSettingsStorage {
     nicknames?: string[];
   }): Promise<CollectionMonthlySummary[]> {
     return this.collectionRepository.getCollectionMonthlySummary(filters);
+  }
+
+  async getCollectionMonthlyComparison(filters: {
+    from: string;
+    to: string;
+    createdByLogin?: string;
+    nicknames?: string[];
+  }): Promise<CollectionMonthlyComparisonAggregate[]> {
+    return this.collectionRepository.getCollectionMonthlyComparison(filters);
   }
 
   async getCollectionRecordById(id: string): Promise<CollectionRecord | undefined> {

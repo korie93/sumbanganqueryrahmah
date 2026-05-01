@@ -1,4 +1,5 @@
 import type {
+  CollectionMonthlyComparisonAggregate,
   CollectionMonthlySummary,
   CollectionNicknameDailyAggregate,
   CollectionRecord,
@@ -11,6 +12,7 @@ import type {
 } from "../storage-postgres";
 import {
   createCollectionRecord,
+  getCollectionMonthlyComparison,
   deleteCollectionRecord,
   getCollectionMonthlySummary,
   getCollectionRecordById,
@@ -83,6 +85,15 @@ export async function getCollectionMonthlySummaryRepository(filters: {
   createdByLogin?: string;
 }): Promise<CollectionMonthlySummary[]> {
   return getCollectionMonthlySummary(filters);
+}
+
+export async function getCollectionMonthlyComparisonRepository(filters: {
+  from: string;
+  to: string;
+  nicknames?: string[];
+  createdByLogin?: string;
+}): Promise<CollectionMonthlyComparisonAggregate[]> {
+  return getCollectionMonthlyComparison(filters);
 }
 
 export async function getCollectionRecordByIdRepository(

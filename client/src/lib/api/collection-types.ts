@@ -198,6 +198,35 @@ export type CollectionMonthlySummary = {
   totalAmount: CollectionAmountMyrNumber;
 };
 
+export type CollectionMonthlyComparisonMonth = {
+  month: string;
+  label: string;
+  totalCollection: CollectionAmountMyrNumber;
+  recordCount: number;
+  averagePerRecord: CollectionAmountMyrNumber;
+};
+
+export type CollectionMonthlyComparisonResponse = {
+  ok: boolean;
+  nickname: string;
+  startMonth: string;
+  endMonth: string;
+  months: CollectionMonthlyComparisonMonth[];
+  comparison: {
+    baseMonth: string | null;
+    targetMonth: string;
+    baseLabel: string | null;
+    targetLabel: string;
+    baseTotal: CollectionAmountMyrNumber | null;
+    targetTotal: CollectionAmountMyrNumber;
+    difference: CollectionAmountMyrNumber | null;
+    percentageChange: number | null;
+    direction: "increase" | "decrease" | "no_change" | "no_previous_data";
+    summary: string;
+  };
+  freshness?: CollectionReportFreshness;
+};
+
 export type CollectionReportFreshness = {
   status: "fresh" | "warming" | "stale";
   pendingCount: number;

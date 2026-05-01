@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import { db } from "../db-postgres";
 import type { CollectionAmountMyrNumber } from "../../shared/collection-amount-types";
 import type {
+  CollectionMonthlyComparisonAggregate,
   CollectionNicknameAggregate,
   CollectionMonthlySummary,
   CollectionNicknameDailyAggregate,
@@ -11,11 +12,13 @@ import type {
 } from "../storage-postgres";
 import {
   buildCollectionMonthlySummaryWhereSql,
+  buildCollectionRecordMonthlyComparisonWhereSql,
   buildCollectionRecordMonthlyRollupWhereSql,
   buildCollectionRecordDailyRollupWhereSql,
   buildCollectionRecordWhereSql,
   canUseCollectionRecordDailyRollups,
   mapCollectionAggregateRow,
+  mapCollectionMonthlyComparisonAggregateRows,
   mapCollectionNicknameAggregateRows,
   mapCollectionNicknameDailyAggregateRows,
   mapCollectionMonthlySummaryRows,
@@ -273,6 +276,50 @@ export async function getCollectionMonthlySummary(filters: {
   `);
 
   return mapCollectionMonthlySummaryRows(result.rows);
+}
+
+export async function getCollectionMonthlyComparison(filters: {
+  from: string;
+  to: string;
+  nicknames?: string[];
+  createdByLogin?: string;
+}): Promise<CollectionMonthlyComparisonAggregate[]> {
+  if (
+    canUseCollectionRecordDailyRollups(filters)
+    && !(await hasPendingCollectionRecordDailyRollupSlices(filters))
+  ) {
+    const monthlyWhere = buildCollectionRecordMonthlyComparisonWhereSql(filters);
+    const result = await db.execute(sql`
+      SELECT
+        year,
+        month,
+        COALESCE(SUM(total_records), 0)::int AS total_records,
+        COALESCE(SUM(total_amount), 0)::numeric(14,2) AS total_amount
+      FROM public.collection_record_monthly_rollups
+      ${monthlyWhere}
+      GROUP BY year, month
+      ORDER BY year ASC, month ASC
+      LIMIT 24
+    `);
+
+    return mapCollectionMonthlyComparisonAggregateRows(result.rows);
+  }
+
+  const whereSql = buildCollectionRecordWhereSql(filters);
+  const fallbackResult = await db.execute(sql`
+    SELECT
+      EXTRACT(YEAR FROM payment_date)::int AS year,
+      EXTRACT(MONTH FROM payment_date)::int AS month,
+      COUNT(*)::int AS total_records,
+      COALESCE(SUM(amount), 0)::numeric(14,2) AS total_amount
+    FROM public.collection_records
+    ${whereSql}
+    GROUP BY 1, 2
+    ORDER BY 1 ASC, 2 ASC
+    LIMIT 24
+  `);
+
+  return mapCollectionMonthlyComparisonAggregateRows(fallbackResult.rows);
 }
 
 export async function getCollectionRecordById(id: string): Promise<CollectionRecord | undefined> {

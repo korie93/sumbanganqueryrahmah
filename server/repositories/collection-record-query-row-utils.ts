@@ -3,6 +3,7 @@ import type {
   CollectionAmountMyrNumber,
 } from "../../shared/collection-amount-types";
 import type {
+  CollectionMonthlyComparisonAggregate,
   CollectionMonthlySummary,
   CollectionNicknameAggregate,
   CollectionNicknameDailyAggregate,
@@ -13,6 +14,7 @@ import {
   normalizeCollectionQueryRows,
   type CollectionAggregateRow,
   type CollectionAmountRow,
+  type CollectionMonthlyComparisonAggregateRow,
   type CollectionMonthlySummaryRow,
   type CollectionNicknameAggregateRow,
   type CollectionNicknameDailyAggregateRow,
@@ -55,6 +57,29 @@ export function mapCollectionMonthlySummaryRows(
       totalRecords: data?.totalRecords ?? 0,
       totalAmount: data?.totalAmount ?? 0,
     };
+  });
+}
+
+export function mapCollectionMonthlyComparisonAggregateRows(
+  rows: readonly unknown[] | null | undefined,
+): CollectionMonthlyComparisonAggregate[] {
+  return normalizeCollectionQueryRows(rows).flatMap((row) => {
+    const normalizedRow = normalizeCollectionQueryRow<CollectionMonthlyComparisonAggregateRow>(row);
+    const year = Number(normalizedRow.year ?? 0);
+    const month = Number(normalizedRow.month ?? 0);
+    if (!Number.isInteger(year) || year < 2000 || year > 2100) {
+      return [];
+    }
+    if (!Number.isInteger(month) || month < 1 || month > 12) {
+      return [];
+    }
+
+    return [{
+      year,
+      month,
+      totalRecords: Number(normalizedRow.total_records ?? 0),
+      totalAmount: parseCollectionAmountMyrNumber(normalizedRow.total_amount ?? 0),
+    }];
   });
 }
 

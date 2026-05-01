@@ -20,6 +20,7 @@ export const COLLECTION_SUMMARY_MONTH_NAMES = [
 export const COLLECTION_NICKNAME_TEMP_PASSWORD = getCollectionNicknameTempPassword();
 
 const COLLECTION_DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
+const COLLECTION_MONTH_KEY_REGEX = /^\d{4}-\d{2}$/;
 const COLLECTION_PHONE_REGEX = /^[0-9+\-\s]{8,20}$/;
 const COLLECTION_NICKNAME_ROLE_SCOPE_SET = new Set(["admin", "user", "both"]);
 
@@ -132,6 +133,21 @@ export function isValidCollectionDate(value: string): boolean {
   if (!COLLECTION_DATE_REGEX.test(value)) return false;
   const parsed = new Date(`${value}T00:00:00Z`);
   return Number.isFinite(parsed.getTime());
+}
+
+export function isValidCollectionMonthKey(value: string): boolean {
+  if (!COLLECTION_MONTH_KEY_REGEX.test(value)) return false;
+  const [yearRaw, monthRaw] = value.split("-");
+  const year = Number.parseInt(yearRaw || "", 10);
+  const month = Number.parseInt(monthRaw || "", 10);
+  return (
+    Number.isInteger(year)
+    && year >= 2000
+    && year <= 2100
+    && Number.isInteger(month)
+    && month >= 1
+    && month <= 12
+  );
 }
 
 export function getCollectionTodayDateString(referenceDate = new Date()): string {

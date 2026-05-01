@@ -25,6 +25,7 @@ export type CollectionStoragePort = Pick<
   | "getCollectionAdminGroups"
   | "getCollectionAdminUserById"
   | "getCollectionAdminUsers"
+  | "getCollectionMonthlyComparison"
   | "getCollectionMonthlySummary"
   | "getCollectionDailyTarget"
   | "listCollectionDailyCalendar"

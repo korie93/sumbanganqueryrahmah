@@ -160,6 +160,49 @@ export function buildCollectionRecordMonthlyRollupWhereSql(filters: {
   };
 }
 
+export function buildCollectionRecordMonthlyComparisonWhereSql(filters: {
+  from: string;
+  to: string;
+  nicknames?: string[] | undefined;
+  createdByLogin?: string | undefined;
+}): SQL {
+  const startYear = Math.min(
+    2100,
+    Math.max(2000, Number.parseInt(String(filters.from || "").slice(0, 4), 10) || 2000),
+  );
+  const startMonth = Math.min(
+    12,
+    Math.max(1, Number.parseInt(String(filters.from || "").slice(5, 7), 10) || 1),
+  );
+  const endYear = Math.min(
+    2100,
+    Math.max(2000, Number.parseInt(String(filters.to || "").slice(0, 4), 10) || 2100),
+  );
+  const endMonth = Math.min(
+    12,
+    Math.max(1, Number.parseInt(String(filters.to || "").slice(5, 7), 10) || 12),
+  );
+  const startKey = (startYear * 100) + startMonth;
+  const endKey = (endYear * 100) + endMonth;
+  const conditions: SQL[] = [
+    sql`((year * 100) + month) >= ${startKey}`,
+    sql`((year * 100) + month) <= ${endKey}`,
+  ];
+
+  const nicknames = normalizeCollectionNicknameFilters(filters.nicknames);
+  if (nicknames.length > 0) {
+    const nicknameSql = sql.join(nicknames.map((value) => sql`${value}`), sql`, `);
+    conditions.push(sql`lower(collection_staff_nickname) IN (${nicknameSql})`);
+  }
+
+  const createdByLogin = String(filters.createdByLogin || "").trim();
+  if (createdByLogin) {
+    conditions.push(sql`created_by_login = ${createdByLogin}`);
+  }
+
+  return sql`WHERE ${sql.join(conditions, sql` AND `)}`;
+}
+
 export function buildCollectionMonthlySummaryWhereSql(filters: {
   year: number;
   nicknames?: string[] | undefined;

@@ -2,6 +2,12 @@ import type { PostgresStorage } from "../../storage-postgres";
 
 export function createCollectionSummaryStorageDouble(options?: {
   sessionNickname?: string | null;
+  monthlyComparisonRows?: Array<{
+    year: number;
+    month: number;
+    totalRecords: number;
+    totalAmount: number;
+  }>;
 }) {
   const auditLogs: Array<{
     action: string;
@@ -10,6 +16,7 @@ export function createCollectionSummaryStorageDouble(options?: {
     details?: string;
   }> = [];
   const monthlySummaryCalls: Array<Record<string, unknown>> = [];
+  const monthlyComparisonCalls: Array<Record<string, unknown>> = [];
   const nicknameActiveChecks: string[] = [];
   const nicknameSummaryCalls: Array<Record<string, unknown>> = [];
   const nicknameListCalls: Array<Record<string, unknown>> = [];
@@ -54,6 +61,20 @@ export function createCollectionSummaryStorageDouble(options?: {
         { month: 1, monthName: "January", totalRecords: 2, totalAmount: 300 },
         { month: 2, monthName: "February", totalRecords: 1, totalAmount: 150.5 },
       ];
+    },
+    getCollectionMonthlyComparison: async (filters: Record<string, unknown>) => {
+      monthlyComparisonCalls.push(filters);
+      return options?.monthlyComparisonRows ?? [
+        { year: 2026, month: 4, totalRecords: 123, totalAmount: 70450 },
+        { year: 2026, month: 5, totalRecords: 146, totalAmount: 82900 },
+      ];
+    },
+    getCollectionStaffNicknameByName: async (nickname: string) => {
+      const normalizedNickname = String(nickname || "").trim();
+      const matched = activeNicknames.find(
+        (item) => item.nickname.toLowerCase() === normalizedNickname.toLowerCase(),
+      );
+      return matched || null;
     },
     isCollectionStaffNicknameActive: async (nickname: string) => {
       nicknameActiveChecks.push(nickname);
@@ -117,6 +138,7 @@ export function createCollectionSummaryStorageDouble(options?: {
     storage,
     auditLogs,
     monthlySummaryCalls,
+    monthlyComparisonCalls,
     nicknameActiveChecks,
     nicknameSummaryCalls,
     nicknameListCalls,
@@ -131,6 +153,7 @@ export function createAdminCollectionSummaryStorageDouble() {
     details?: string;
   }> = [];
   const monthlySummaryCalls: Array<Record<string, unknown>> = [];
+  const monthlyComparisonCalls: Array<Record<string, unknown>> = [];
   const nicknameSummaryCalls: Array<Record<string, unknown>> = [];
   const nicknameListCalls: Array<Record<string, unknown>> = [];
   const sessionActivityCalls: string[] = [];
@@ -172,6 +195,13 @@ export function createAdminCollectionSummaryStorageDouble() {
     getCollectionMonthlySummary: async (filters: Record<string, unknown>) => {
       monthlySummaryCalls.push(filters);
       return [{ month: 3, monthName: "March", totalRecords: 2, totalAmount: 420.75 }];
+    },
+    getCollectionMonthlyComparison: async (filters: Record<string, unknown>) => {
+      monthlyComparisonCalls.push(filters);
+      return [
+        { year: 2026, month: 4, totalRecords: 2, totalAmount: 420.75 },
+        { year: 2026, month: 5, totalRecords: 4, totalAmount: 840.5 },
+      ];
     },
     summarizeCollectionRecords: async (_filters: Record<string, unknown>) => {
       return {
@@ -232,6 +262,7 @@ export function createAdminCollectionSummaryStorageDouble() {
     auditLogs,
     allowedNicknames,
     monthlySummaryCalls,
+    monthlyComparisonCalls,
     nicknameSummaryCalls,
     nicknameListCalls,
     sessionActivityCalls,
@@ -248,6 +279,7 @@ export function createAdminCollectionNoVisibilityStorageDouble() {
     details?: string;
   }> = [];
   const monthlySummaryCalls: Array<Record<string, unknown>> = [];
+  const monthlyComparisonCalls: Array<Record<string, unknown>> = [];
   const nicknameSummaryCalls: Array<Record<string, unknown>> = [];
   const nicknameListCalls: Array<Record<string, unknown>> = [];
   const sessionActivityCalls: string[] = [];
@@ -270,6 +302,10 @@ export function createAdminCollectionNoVisibilityStorageDouble() {
     getCollectionMonthlySummary: async (filters: Record<string, unknown>) => {
       monthlySummaryCalls.push(filters);
       return [{ month: 3, monthName: "March", totalRecords: 99, totalAmount: 9999 }];
+    },
+    getCollectionMonthlyComparison: async (filters: Record<string, unknown>) => {
+      monthlyComparisonCalls.push(filters);
+      return [{ year: 2026, month: 4, totalRecords: 99, totalAmount: 9999 }];
     },
     summarizeCollectionRecords: async (filters: Record<string, unknown>) => {
       nicknameSummaryCalls.push(filters);
@@ -320,6 +356,7 @@ export function createAdminCollectionNoVisibilityStorageDouble() {
     storage,
     auditLogs,
     monthlySummaryCalls,
+    monthlyComparisonCalls,
     nicknameSummaryCalls,
     nicknameListCalls,
     sessionActivityCalls,

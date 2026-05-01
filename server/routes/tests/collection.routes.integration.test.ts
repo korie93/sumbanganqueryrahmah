@@ -2013,6 +2013,236 @@ test("GET /api/collection/summary returns an empty summary for admins without ni
   }
 });
 
+test("GET /api/collection/monthly-comparison returns monthly totals, fills missing months, and builds a deterministic comparison summary", async () => {
+  const { storage, monthlyComparisonCalls } = createCollectionSummaryStorageDouble({
+    monthlyComparisonRows: [
+      { year: 2026, month: 4, totalRecords: 123, totalAmount: 70450 },
+      { year: 2026, month: 6, totalRecords: 140, totalAmount: 82900 },
+    ],
+  });
+  const app = createJsonTestApp();
+
+  registerCollectionRoutes(app, {
+    storage,
+    authenticateToken: createTestAuthenticateToken({
+      userId: "superuser-1",
+      username: "superuser",
+      role: "superuser",
+    }),
+    requireRole: createTestRequireRole(),
+    requireTabAccess: () => allowAllTabs(),
+  });
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const response = await fetch(
+      `${baseUrl}/api/collection/monthly-comparison?nickname=Collector%20Alpha&startMonth=2026-04&endMonth=2026-06`,
+    );
+
+    assert.equal(response.status, 200);
+    const payload = await response.json();
+    assert.equal(payload.ok, true);
+    assert.equal(payload.nickname, "Collector Alpha");
+    assert.equal(payload.startMonth, "2026-04");
+    assert.equal(payload.endMonth, "2026-06");
+    assert.deepEqual(payload.months, [
+      {
+        month: "2026-04",
+        label: "Apr 2026",
+        totalCollection: 70450,
+        recordCount: 123,
+        averagePerRecord: 572.76,
+      },
+      {
+        month: "2026-05",
+        label: "May 2026",
+        totalCollection: 0,
+        recordCount: 0,
+        averagePerRecord: 0,
+      },
+      {
+        month: "2026-06",
+        label: "Jun 2026",
+        totalCollection: 82900,
+        recordCount: 140,
+        averagePerRecord: 592.14,
+      },
+    ]);
+    assert.deepEqual(payload.comparison, {
+      baseMonth: "2026-04",
+      targetMonth: "2026-06",
+      baseLabel: "Apr 2026",
+      targetLabel: "Jun 2026",
+      baseTotal: 70450,
+      targetTotal: 82900,
+      difference: 12450,
+      percentageChange: 17.67,
+      direction: "increase",
+      summary: "Collection increased by RM12,450.00 (+17.67%) compared to Apr 2026.",
+    });
+    assert.deepEqual(monthlyComparisonCalls, [
+      {
+        from: "2026-04-01",
+        to: "2026-06-30",
+        nicknames: ["Collector Alpha"],
+      },
+    ]);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("GET /api/collection/monthly-comparison scopes user requests to the verified session nickname", async () => {
+  const { storage, monthlyComparisonCalls } = createCollectionSummaryStorageDouble({
+    sessionNickname: "Collector Alpha",
+  });
+  const app = createJsonTestApp();
+
+  registerCollectionRoutes(app, {
+    storage,
+    authenticateToken: createTestAuthenticateToken({
+      userId: "user-1",
+      username: "staff.user",
+      role: "user",
+      activityId: "activity-user-monthly-comparison-1",
+    }),
+    requireRole: createTestRequireRole(),
+    requireTabAccess: () => allowAllTabs(),
+  });
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const response = await fetch(
+      `${baseUrl}/api/collection/monthly-comparison?startMonth=2026-04&endMonth=2026-05`,
+    );
+
+    assert.equal(response.status, 200);
+    const payload = await response.json();
+    assert.equal(payload.ok, true);
+    assert.equal(payload.nickname, "Collector Alpha");
+    assert.deepEqual(monthlyComparisonCalls, [
+      {
+        from: "2026-04-01",
+        to: "2026-05-31",
+        nicknames: ["Collector Alpha"],
+      },
+    ]);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("GET /api/collection/monthly-comparison rejects admin filters outside the visible nickname scope", async () => {
+  const { storage, monthlyComparisonCalls, sessionActivityCalls, groupLeaderCalls } =
+    createAdminCollectionSummaryStorageDouble();
+  const app = createJsonTestApp();
+
+  registerCollectionRoutes(app, {
+    storage,
+    authenticateToken: createTestAuthenticateToken({
+      userId: "admin-1",
+      username: "admin.user",
+      role: "admin",
+      activityId: "activity-admin-monthly-comparison-1",
+    }),
+    requireRole: createTestRequireRole(),
+    requireTabAccess: () => allowAllTabs(),
+  });
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const response = await fetch(
+      `${baseUrl}/api/collection/monthly-comparison?nickname=Collector%20Gamma&startMonth=2026-04&endMonth=2026-05`,
+    );
+
+    assert.equal(response.status, 400);
+    const payload = await response.json();
+    assert.match(String(payload.message), /invalid nickname filter/i);
+    assert.deepEqual(sessionActivityCalls, ["activity-admin-monthly-comparison-1"]);
+    assert.deepEqual(groupLeaderCalls, ["Collector Alpha"]);
+    assert.equal(monthlyComparisonCalls.length, 0);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("GET /api/collection/monthly-comparison rejects invalid month ranges", async () => {
+  const { storage } = createCollectionSummaryStorageDouble();
+  const app = createJsonTestApp();
+
+  registerCollectionRoutes(app, {
+    storage,
+    authenticateToken: createTestAuthenticateToken({
+      userId: "superuser-1",
+      username: "superuser",
+      role: "superuser",
+    }),
+    requireRole: createTestRequireRole(),
+    requireTabAccess: () => allowAllTabs(),
+  });
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const invalidMonthResponse = await fetch(
+      `${baseUrl}/api/collection/monthly-comparison?nickname=Collector%20Alpha&startMonth=2026-13&endMonth=2026-05`,
+    );
+    assert.equal(invalidMonthResponse.status, 400);
+
+    const reversedRangeResponse = await fetch(
+      `${baseUrl}/api/collection/monthly-comparison?nickname=Collector%20Alpha&startMonth=2026-06&endMonth=2026-05`,
+    );
+    assert.equal(reversedRangeResponse.status, 400);
+
+    const oversizedRangeResponse = await fetch(
+      `${baseUrl}/api/collection/monthly-comparison?nickname=Collector%20Alpha&startMonth=2024-01&endMonth=2026-05`,
+    );
+    assert.equal(oversizedRangeResponse.status, 400);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("GET /api/collection/monthly-comparison keeps percentageChange null when the base month total is zero", async () => {
+  const { storage } = createCollectionSummaryStorageDouble({
+    monthlyComparisonRows: [
+      { year: 2026, month: 5, totalRecords: 4, totalAmount: 840.5 },
+    ],
+  });
+  const app = createJsonTestApp();
+
+  registerCollectionRoutes(app, {
+    storage,
+    authenticateToken: createTestAuthenticateToken({
+      userId: "superuser-1",
+      username: "superuser",
+      role: "superuser",
+    }),
+    requireRole: createTestRequireRole(),
+    requireTabAccess: () => allowAllTabs(),
+  });
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const response = await fetch(
+      `${baseUrl}/api/collection/monthly-comparison?nickname=Collector%20Alpha&startMonth=2026-04&endMonth=2026-05`,
+    );
+
+    assert.equal(response.status, 200);
+    const payload = await response.json();
+    assert.equal(payload.comparison.baseTotal, 0);
+    assert.equal(payload.comparison.targetTotal, 840.5);
+    assert.equal(payload.comparison.difference, 840.5);
+    assert.equal(payload.comparison.percentageChange, null);
+    assert.equal(payload.comparison.direction, "increase");
+    assert.match(
+      String(payload.comparison.summary),
+      /No previous month total is available for percentage comparison\./,
+    );
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
 test("GET /api/collection/nickname-summary honors summaryOnly and avoids loading record rows", async () => {
   const { storage, nicknameActiveChecks, nicknameSummaryCalls, nicknameListCalls } = createCollectionSummaryStorageDouble();
   const app = createJsonTestApp();

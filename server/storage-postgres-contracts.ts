@@ -9,6 +9,7 @@ export type {
   CollectionDailyPaidCustomer,
   CollectionDailyTarget,
   CollectionDailyUser,
+  CollectionMonthlyComparisonAggregate,
   CollectionMonthlySummary,
   CollectionNicknameAggregate,
   CollectionNicknameDailyAggregate,

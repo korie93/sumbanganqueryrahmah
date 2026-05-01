@@ -35,6 +35,7 @@ import {
 } from "./collection-repository-nickname-operations";
 import {
   createCollectionRecordRepository,
+  getCollectionMonthlyComparisonRepository,
   deleteCollectionRecordRepository,
   getCollectionMonthlySummaryRepository,
   getCollectionRecordByIdRepository,
@@ -79,6 +80,7 @@ export class CollectionRepository {
   readonly getCollectionAdminUsers = getCollectionAdminUsersRepository;
   readonly getCollectionAdminVisibleNicknames = getCollectionAdminVisibleNicknamesRepository;
   readonly getCollectionDailyTarget = getCollectionDailyTargetRepository;
+  readonly getCollectionMonthlyComparison = getCollectionMonthlyComparisonRepository;
   readonly getCollectionMonthlySummary = getCollectionMonthlySummaryRepository;
   readonly getCollectionNicknameAuthProfileByName = getCollectionNicknameAuthProfileByNameRepository;
   readonly getCollectionNicknameSessionByActivity = getCollectionNicknameSessionByActivityRepository;

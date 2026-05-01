@@ -117,6 +117,13 @@ export type CollectionMonthlySummary = {
   totalAmount: CollectionAmountMyrNumber;
 };
 
+export type CollectionMonthlyComparisonAggregate = {
+  year: number;
+  month: number;
+  totalRecords: number;
+  totalAmount: CollectionAmountMyrNumber;
+};
+
 export type CollectionRollupFreshnessSnapshot = {
   status: "fresh" | "warming" | "stale";
   pendingCount: number;

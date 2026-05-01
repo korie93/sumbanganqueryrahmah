@@ -82,7 +82,10 @@ export function CollectionReportContent({
     return renderCollectionSection("records", <CollectionRecordsPage role={role} />);
   }
   if (subPage === "summary") {
-    return renderCollectionSection("summary", <CollectionSummaryPage role={role} />);
+    return renderCollectionSection(
+      "summary",
+      <CollectionSummaryPage role={role} staffNickname={staffNickname} />,
+    );
   }
   if (subPage === "daily") {
     return renderCollectionSection("daily", <CollectionDailyPage role={role} />);

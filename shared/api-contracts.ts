@@ -198,6 +198,46 @@ export const tabVisibilityResponseSchema = z.object({
   tabs: z.record(z.boolean()),
 });
 
+export const collectionReportFreshnessSchema = z.object({
+  status: z.enum(["fresh", "warming", "stale"]),
+  pendingCount: nonNegativeIntSchema,
+  runningCount: nonNegativeIntSchema,
+  retryCount: nonNegativeIntSchema,
+  oldestPendingAgeMs: nonNegativeIntSchema,
+  message: z.string(),
+});
+
+const collectionMonthKeySchema = z.string().regex(/^\d{4}-\d{2}$/);
+
+export const collectionMonthlyComparisonMonthSchema = z.object({
+  month: collectionMonthKeySchema,
+  label: nonEmptyStringSchema,
+  totalCollection: z.number().finite(),
+  recordCount: nonNegativeIntSchema,
+  averagePerRecord: z.number().finite(),
+});
+
+export const collectionMonthlyComparisonResponseSchema = z.object({
+  ok: z.literal(true),
+  nickname: nonEmptyStringSchema,
+  startMonth: collectionMonthKeySchema,
+  endMonth: collectionMonthKeySchema,
+  months: z.array(collectionMonthlyComparisonMonthSchema),
+  comparison: z.object({
+    baseMonth: collectionMonthKeySchema.nullable(),
+    targetMonth: collectionMonthKeySchema,
+    baseLabel: nullableStringSchema,
+    targetLabel: nonEmptyStringSchema,
+    baseTotal: z.number().finite().nullable(),
+    targetTotal: z.number().finite(),
+    difference: z.number().finite().nullable(),
+    percentageChange: z.number().finite().nullable(),
+    direction: z.enum(["increase", "decrease", "no_change", "no_previous_data"]),
+    summary: nonEmptyStringSchema,
+  }),
+  freshness: collectionReportFreshnessSchema.optional(),
+});
+
 export type ImportsListResponse = z.infer<typeof importsListResponseSchema>;
 export type ImportDataPageResponse = z.infer<typeof importDataPageResponseSchema>;
 export type SearchGlobalResponse = z.infer<typeof searchGlobalResponseSchema>;
@@ -207,6 +247,8 @@ export type ApiErrorPayload = z.infer<typeof apiErrorPayloadSchema>;
 export type SettingsResponse = z.infer<typeof settingsResponseSchema>;
 export type SettingsUpdateResponse = z.infer<typeof settingsUpdateResponseSchema>;
 export type TabVisibilityResponse = z.infer<typeof tabVisibilityResponseSchema>;
+export type CollectionReportFreshnessContract = z.infer<typeof collectionReportFreshnessSchema>;
+export type CollectionMonthlyComparisonResponse = z.infer<typeof collectionMonthlyComparisonResponseSchema>;
 export type ApiPaginationMeta = z.infer<typeof apiPaginationMetaSchema>;
 export type NormalizedApiPaginationMeta = {
   mode: ApiPaginationMeta["mode"];

@@ -1,9 +1,12 @@
 import { apiRequest } from "../api-client";
+import { parseApiJson } from "./contract";
 import type {
+  CollectionMonthlyComparisonResponse,
   CollectionMonthlySummary,
   CollectionNicknameSummaryResponse,
   CollectionReportFreshness,
 } from "./collection-types";
+import { collectionMonthlyComparisonResponseSchema } from "@shared/api-contracts";
 
 export async function getCollectionMonthlySummary(filters: { year: number; nickname?: string | undefined; nicknames?: string[] | undefined }) {
   const params = new URLSearchParams();
@@ -29,6 +32,34 @@ export async function getCollectionMonthlySummary(filters: { year: number; nickn
 type CollectionReportRequestOptions = {
   signal?: AbortSignal | undefined;
 };
+
+export async function getCollectionMonthlyComparison(
+  filters: {
+    nickname?: string | undefined;
+    startMonth: string;
+    endMonth: string;
+  },
+  options?: CollectionReportRequestOptions,
+) {
+  const params = new URLSearchParams();
+  if (filters.nickname && filters.nickname.trim()) {
+    params.set("nickname", filters.nickname.trim());
+  }
+  params.set("startMonth", String(filters.startMonth || "").trim());
+  params.set("endMonth", String(filters.endMonth || "").trim());
+
+  const response = await apiRequest(
+    "GET",
+    `/api/collection/monthly-comparison?${params.toString()}`,
+    undefined,
+    options,
+  );
+  return parseApiJson(
+    response,
+    collectionMonthlyComparisonResponseSchema,
+    "/api/collection/monthly-comparison",
+  ) as Promise<CollectionMonthlyComparisonResponse>;
+}
 
 export async function getCollectionNicknameSummary(filters: {
   from?: string | undefined;

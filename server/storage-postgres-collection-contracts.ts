@@ -5,6 +5,7 @@ import type {
   CollectionDailyPaidCustomer,
   CollectionDailyTarget,
   CollectionDailyUser,
+  CollectionMonthlyComparisonAggregate,
   CollectionMonthlySummary,
   CollectionNicknameAggregate,
   CollectionNicknameAuthProfile,
@@ -54,6 +55,12 @@ export interface CollectionStorageContract {
     nicknames?: string[];
     createdByLogin?: string;
   }): Promise<CollectionMonthlySummary[]>;
+  getCollectionMonthlyComparison(filters: {
+    from: string;
+    to: string;
+    nicknames?: string[];
+    createdByLogin?: string;
+  }): Promise<CollectionMonthlyComparisonAggregate[]>;
   getCollectionStaffNicknames(filters?: {
     activeOnly?: boolean;
     allowedRole?: "admin" | "user";

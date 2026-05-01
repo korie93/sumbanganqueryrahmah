@@ -1,4 +1,5 @@
 import type {
+  CollectionMonthlyComparisonAggregate,
   CollectionNicknameAggregate,
   CollectionMonthlySummary,
   CollectionNicknameDailyAggregate,
@@ -42,6 +43,11 @@ export type CollectionMonthlySummaryRow = CollectionAggregateRow & {
   month?: unknown;
 };
 
+export type CollectionMonthlyComparisonAggregateRow = CollectionAggregateRow & {
+  year?: unknown;
+  month?: unknown;
+};
+
 export type CollectionNicknameAggregateRow = CollectionAggregateRow & {
   nickname?: unknown;
   nickname_key?: unknown;
@@ -73,6 +79,7 @@ export type CollectionAggregateResult = {
 };
 
 export type CollectionMonthlySummaryResult = CollectionMonthlySummary;
+export type CollectionMonthlyComparisonAggregateResult = CollectionMonthlyComparisonAggregate;
 export type CollectionNicknameAggregateResult = CollectionNicknameAggregate;
 export type CollectionNicknameDailyAggregateResult = CollectionNicknameDailyAggregate;
 
