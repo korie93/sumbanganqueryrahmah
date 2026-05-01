@@ -221,6 +221,61 @@ test("web vitals drop guard removes idle buckets on the next request after the w
   });
 });
 
+test("web vitals drop guard sweeps expired buckets without waiting for request traffic", (t) => {
+  let nowMs = 0;
+  let intervalCallback: (() => void) | null = null;
+  let intervalDelayMs: number | undefined;
+  let clearedHandle: unknown = null;
+  const intervalHandle = {
+    unref: () => undefined,
+  };
+
+  t.mock.method(globalThis, "setInterval", (((callback: TimerHandler, delay?: number, ...args: unknown[]) => {
+    intervalDelayMs = delay;
+    intervalCallback = () => {
+      if (typeof callback === "function") {
+        callback(...args);
+      }
+    };
+    return intervalHandle as unknown as ReturnType<typeof setInterval>;
+  }) as unknown) as typeof globalThis.setInterval);
+  t.mock.method(globalThis, "clearInterval", ((handle?: Parameters<typeof clearInterval>[0]) => {
+    clearedHandle = handle;
+  }) as typeof globalThis.clearInterval);
+
+  const guard = createWebVitalsTelemetryDropGuard({
+    maxEventsPerWindow: 1,
+    maxBuckets: 2,
+    now: () => nowMs,
+    sweepIntervalMs: 250,
+    windowMs: 1_000,
+  });
+
+  assert.equal(intervalDelayMs, 250);
+  assert.deepEqual(runDropGuard(guard, "10.0.2.1"), {
+    statusCode: 200,
+    ended: false,
+    nextCalled: true,
+  });
+  assert.deepEqual(runDropGuard(guard, "10.0.2.1"), {
+    statusCode: 204,
+    ended: true,
+    nextCalled: false,
+  });
+
+  nowMs = 1_500;
+  (intervalCallback as unknown as () => void)();
+
+  assert.deepEqual(runDropGuard(guard, "10.0.2.1"), {
+    statusCode: 200,
+    ended: false,
+    nextCalled: true,
+  });
+
+  guard.stopWebVitalsTelemetryDropGuard?.();
+  assert.equal(clearedHandle, intervalHandle);
+});
+
 test("POST /telemetry/web-vitals silently drops cross-site browser telemetry attempts", async () => {
   const { app, recordedPayloads } = createTelemetryRouteHarness({
     webVitalsRequestGuard: createWebVitalsTelemetryRequestGuard({

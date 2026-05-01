@@ -21,6 +21,9 @@ type AiGateQueueItem = {
   route: AiRoute;
   enqueuedAt: number;
   finalize: (outcome: { result?: AiGateAcquireResult; error?: Error & { code?: string; status?: number } }) => void;
+  reject: (reason?: unknown) => void;
+  resolve: (value: AiGateAcquireResult) => void;
+  settled: boolean;
   timeout: ReturnType<typeof setTimeout> | null;
 };
 
@@ -98,6 +101,52 @@ export function createAiConcurrencyGate(options: CreateAiConcurrencyGateOptions)
   const canAcquire = (role: AiRole) =>
     inflightGlobal < globalLimit && inflightByRole[role] < roleLimits[role];
 
+  const createGateError = (
+    message: string,
+    code: string,
+    status = 429,
+  ): Error & { code?: string; status?: number } => {
+    const error = new Error(message) as Error & { code?: string; status?: number };
+    error.code = code;
+    error.status = status;
+    return error;
+  };
+
+  const finalizeQueuedItem = (
+    item: AiGateQueueItem,
+    outcome: { result?: AiGateAcquireResult; error?: Error & { code?: string; status?: number } },
+  ) => {
+    if (item.settled) {
+      return false;
+    }
+
+    item.settled = true;
+
+    if (item.timeout) {
+      clearTimeout(item.timeout);
+      item.timeout = null;
+    }
+
+    removeQueuedItem(item.id);
+
+    if (outcome.error) {
+      item.reject(outcome.error);
+      return true;
+    }
+
+    if (!outcome.result) {
+      item.reject(createGateError(
+        "AI queue failed to acquire a worker slot. Please retry.",
+        "AI_GATE_ACQUIRE_FAILED",
+        503,
+      ));
+      return true;
+    }
+
+    item.resolve(outcome.result);
+    return true;
+  };
+
   const acquire = (role: AiRole, route: AiRoute): AiGateLease => {
     inflightGlobal += 1;
     inflightByRole[role] += 1;
@@ -144,17 +193,6 @@ export function createAiConcurrencyGate(options: CreateAiConcurrencyGateOptions)
     });
   };
 
-  const createGateError = (
-    message: string,
-    code: string,
-    status = 429,
-  ): Error & { code?: string; status?: number } => {
-    const error = new Error(message) as Error & { code?: string; status?: number };
-    error.code = code;
-    error.status = status;
-    return error;
-  };
-
   const createGateStoppedError = () =>
     createGateError(
       "AI service is shutting down. Please retry shortly.",
@@ -198,33 +236,22 @@ export function createAiConcurrencyGate(options: CreateAiConcurrencyGateOptions)
 
     return new Promise<AiGateAcquireResult>((resolve, reject) => {
       const id = ++sequence;
-      let settled = false;
-      let timeout: ReturnType<typeof setTimeout> | null = null;
-
-      const finalize = (outcome: { result?: AiGateAcquireResult; error?: Error & { code?: string; status?: number } }) => {
-        if (settled) {
-          return;
-        }
-
-        settled = true;
-
-        if (timeout) {
-          clearTimeout(timeout);
-          timeout = null;
-        }
-
-        removeQueuedItem(id);
-
-        if (outcome.error) {
-          reject(outcome.error);
-          return;
-        }
-
-        resolve(outcome.result!);
+      const item: AiGateQueueItem = {
+        id,
+        role,
+        route,
+        enqueuedAt: Date.now(),
+        finalize: (outcome) => {
+          finalizeQueuedItem(item, outcome);
+        },
+        reject,
+        resolve,
+        settled: false,
+        timeout: null,
       };
 
-      timeout = setTimeout(() => {
-        finalize({
+      item.timeout = setTimeout(() => {
+        item.finalize({
           error: createGateError(
             "AI queue wait timed out. Please retry.",
             "AI_GATE_WAIT_TIMEOUT",
@@ -232,16 +259,9 @@ export function createAiConcurrencyGate(options: CreateAiConcurrencyGateOptions)
           ),
         });
       }, queueWaitMs);
-      timeout.unref();
+      item.timeout.unref();
 
-      queue.push({
-        id,
-        role,
-        route,
-        enqueuedAt: Date.now(),
-        finalize,
-        timeout,
-      });
+      queue.push(item);
 
       drainQueue();
     });

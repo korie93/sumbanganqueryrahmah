@@ -210,7 +210,8 @@ test("AI concurrency gate clears a queued timeout when work acquires before the 
   await secondRequest;
 });
 
-test("AI concurrency gate times out queued work once and never runs it after capacity returns", async () => {
+test("AI concurrency gate times out queued work once and never runs it after capacity returns", async (t) => {
+  const timers = interceptQueueTimers(t);
   const gate = createAiConcurrencyGate({
     globalLimit: 1,
     queueLimit: 1,
@@ -236,6 +237,11 @@ test("AI concurrency gate times out queued work once and never runs it after cap
 
   await secondRequest;
 
+  assert.equal(timers.createdHandles.length, 1);
+  assert.equal(
+    timers.clearedHandles.filter((handle) => handle === timers.createdHandles[0]).length,
+    1,
+  );
   assert.equal(handlerCalls, 1);
   assert.equal(secondResponse.statusCode, 429);
   assert.deepEqual(secondResponse.body, {
@@ -258,4 +264,70 @@ test("AI concurrency gate times out queued work once and never runs it after cap
   await Promise.resolve();
 
   assert.equal(handlerCalls, 1);
+});
+
+test("AI concurrency gate clears every queued timer during shutdown under high queue pressure", async (t) => {
+  const originalSetTimeout = global.setTimeout;
+  const originalClearTimeout = global.clearTimeout;
+  const createdHandles: Array<{ id: number; unref: () => void }> = [];
+  const clearedHandles: Array<{ id: number; unref: () => void }> = [];
+
+  t.mock.method(global, "setTimeout", (((handler: TimerHandler, timeout?: number, ...args: unknown[]) => {
+    void handler;
+    void timeout;
+    void args;
+    const handle = {
+      id: createdHandles.length + 1,
+      unref: () => undefined,
+    };
+    createdHandles.push(handle);
+    return handle as unknown as ReturnType<typeof setTimeout>;
+  }) as unknown) as typeof global.setTimeout);
+
+  t.mock.method(global, "clearTimeout", ((handle: Parameters<typeof global.clearTimeout>[0]) => {
+    clearedHandles.push(handle as unknown as { id: number; unref: () => void });
+    return undefined;
+  }) as typeof global.clearTimeout);
+
+  try {
+    const gate = createAiConcurrencyGate({
+      globalLimit: 1,
+      queueLimit: 10_000,
+      queueWaitMs: 60_000,
+      roleLimits: {
+        user: 1,
+        admin: 1,
+        superuser: 1,
+      },
+    });
+    const firstRelease = createDeferred();
+    const firstResponse = new MockResponse();
+    const queuedResponses = Array.from({ length: 10_000 }, () => new MockResponse());
+    const handler = gate.withAiConcurrencyGate("chat", async () => {
+      await firstRelease.promise;
+    });
+
+    const firstRequest = handler(createRequest(), firstResponse as never, undefined as never);
+    await Promise.resolve();
+    const queuedRequests = queuedResponses.map((response) =>
+      handler(createRequest(), response as never, undefined as never),
+    );
+    await Promise.resolve();
+
+    gate.stopAiConcurrencyGate();
+    await Promise.all(queuedRequests);
+    firstRelease.resolve();
+    await firstRequest;
+
+    assert.equal(createdHandles.length, 10_000);
+    assert.equal(clearedHandles.length, 10_000);
+    assert.deepEqual(
+      new Set(clearedHandles.map((handle) => handle.id)),
+      new Set(createdHandles.map((handle) => handle.id)),
+    );
+    assert.equal(queuedResponses.every((response) => response.statusCode === 503), true);
+  } finally {
+    global.setTimeout = originalSetTimeout;
+    global.clearTimeout = originalClearTimeout;
+  }
 });

@@ -12,7 +12,12 @@ type WebVitalsTelemetryDropGuardOptions = {
   maxEventsPerWindow?: number;
   maxBuckets?: number;
   now?: () => number;
+  sweepIntervalMs?: false | number;
   windowMs?: number;
+};
+
+type WebVitalsTelemetryDropGuard = RequestHandler & {
+  stopWebVitalsTelemetryDropGuard?: () => void;
 };
 
 type WebVitalsTelemetryRequestGuardOptions = {
@@ -126,15 +131,19 @@ export function createWebVitalsTelemetryRequestGuard(
 
 export function createWebVitalsTelemetryDropGuard(
   options: WebVitalsTelemetryDropGuardOptions = {},
-): RequestHandler {
+): WebVitalsTelemetryDropGuard {
   const maxEventsPerWindow = clampPositiveInteger(
     options.maxEventsPerWindow,
     DEFAULT_WEB_VITALS_MAX_EVENTS_PER_WINDOW,
   );
   const maxBuckets = clampPositiveInteger(options.maxBuckets, DEFAULT_WEB_VITALS_MAX_BUCKETS);
   const windowMs = clampPositiveInteger(options.windowMs, DEFAULT_WEB_VITALS_WINDOW_MS);
+  const sweepIntervalMs = options.sweepIntervalMs === false
+    ? 0
+    : clampPositiveInteger(options.sweepIntervalMs, Math.min(windowMs, DEFAULT_WEB_VITALS_WINDOW_MS));
   const now = options.now ?? Date.now;
   const buckets = new Map<string, TelemetryBucket>();
+  let sweepHandle: ReturnType<typeof setInterval> | null = null;
 
   const resolveOldestBucketKey = () => {
     let oldestKey: string | null = null;
@@ -169,7 +178,14 @@ export function createWebVitalsTelemetryDropGuard(
     }
   };
 
-  return (req, res, next) => {
+  if (sweepIntervalMs > 0) {
+    sweepHandle = setInterval(() => {
+      sweepExpiredBuckets(now());
+    }, sweepIntervalMs);
+    sweepHandle.unref();
+  }
+
+  const guard: WebVitalsTelemetryDropGuard = (req, res, next) => {
     const nowMs = now();
     sweepExpiredBuckets(nowMs);
 
@@ -191,6 +207,17 @@ export function createWebVitalsTelemetryDropGuard(
 
     next();
   };
+
+  guard.stopWebVitalsTelemetryDropGuard = () => {
+    if (!sweepHandle) {
+      return;
+    }
+
+    clearInterval(sweepHandle);
+    sweepHandle = null;
+  };
+
+  return guard;
 }
 
 export function registerTelemetryRoutes(app: Express, deps: TelemetryRouteDeps) {

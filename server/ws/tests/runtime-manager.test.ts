@@ -1023,6 +1023,46 @@ test("runtime manager tolerates repeated terminal lifecycle signals without dupl
   }
 });
 
+test("runtime manager handles unexpected-response cleanup idempotently", async () => {
+  const wss = new FakeWebSocketServer();
+  const providedMap = new Map<string, WebSocket>();
+  const socket = new FakeWebSocket();
+  const activityId = "activity-unexpected-response";
+  let clearSessionCalls = 0;
+
+  createRuntimeWebSocketManager({
+    wss: wss as unknown as import("ws").WebSocketServer,
+    storage: {
+      getActivityById: async () => createActiveSession(activityId),
+      clearCollectionNicknameSessionByActivity: async () => {
+        clearSessionCalls += 1;
+      },
+    },
+    secret: TEST_SECRET,
+    connectedClients: providedMap,
+  });
+
+  try {
+    wss.emit("connection", socket as unknown as WebSocket, createConnectionRequest(createWsToken(activityId)));
+    await flushAsyncWork();
+
+    assert.equal(providedMap.get(activityId), socket as unknown as WebSocket);
+
+    socket.emit("unexpected-response");
+    socket.close();
+    await flushAsyncWork();
+
+    assert.equal(providedMap.has(activityId), false);
+    assert.equal(clearSessionCalls, 1);
+    assert.equal(socket.listenerCount("close"), 0);
+    assert.equal(socket.listenerCount("error"), 0);
+    assert.equal(socket.listenerCount("unexpected-response"), 0);
+    assert.equal(socket.listenerCount("pong"), 0);
+  } finally {
+    wss.emit("close");
+  }
+});
+
 test("runtime manager clears tracked client state when the WebSocket server closes", async () => {
   const wss = new FakeWebSocketServer();
   const providedMap = new Map<string, WebSocket>();
@@ -1056,6 +1096,48 @@ test("runtime manager clears tracked client state when the WebSocket server clos
   assert.equal(socket.listenerCount("close"), 0);
   assert.equal(socket.listenerCount("error"), 0);
   assert.equal(socket.listenerCount("pong"), 0);
+});
+
+test("runtime manager heartbeat cleans sockets removed externally from the shared client map", async () => {
+  const heartbeat = interceptHeartbeatRegistration();
+  const wss = new FakeWebSocketServer();
+  const providedMap = new Map<string, WebSocket>();
+  const socket = new FakeWebSocket();
+  const activityId = "activity-external-map-delete";
+  let clearSessionCalls = 0;
+
+  createRuntimeWebSocketManager({
+    wss: wss as unknown as import("ws").WebSocketServer,
+    storage: {
+      getActivityById: async () => createActiveSession(activityId),
+      clearCollectionNicknameSessionByActivity: async () => {
+        clearSessionCalls += 1;
+      },
+    },
+    secret: TEST_SECRET,
+    connectedClients: providedMap,
+  });
+
+  try {
+    wss.emit("connection", socket as unknown as WebSocket, createConnectionRequest(createWsToken(activityId)));
+    await flushAsyncWork();
+
+    assert.equal(providedMap.get(activityId), socket as unknown as WebSocket);
+
+    providedMap.delete(activityId);
+    heartbeat.getHeartbeatCallback()();
+    await flushAsyncWork();
+
+    assert.equal(providedMap.has(activityId), false);
+    assert.equal(socket.closeCalls, 1);
+    assert.equal(clearSessionCalls, 0);
+    assert.equal(socket.listenerCount("close"), 0);
+    assert.equal(socket.listenerCount("error"), 0);
+    assert.equal(socket.listenerCount("pong"), 0);
+  } finally {
+    heartbeat.restore();
+    wss.emit("close");
+  }
 });
 
 test("runtime manager heartbeat does not terminate sockets that are still connecting", async () => {
