@@ -73,7 +73,10 @@ export function CollectionNicknameSingleSelect({
         </PopoverTrigger>
         <PopoverContent
           align="start"
-          className={cn("w-[min(340px,calc(100vw-2rem))] p-2", popoverClassName)}
+          className={cn(
+            "w-[min(340px,calc(100vw-2rem))] border-border/70 bg-popover p-2 text-popover-foreground shadow-lg",
+            popoverClassName,
+          )}
           data-floating-ai-avoid="true"
         >
           {options.length === 0 ? (

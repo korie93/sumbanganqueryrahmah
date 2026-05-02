@@ -112,8 +112,8 @@ export function CollectionMonthlyComparisonPanel({
                 value={selectedNickname}
                 onOpenChange={setNicknameSelectOpen}
                 onSelect={onSelectedNicknameChange}
-                triggerClassName="h-10 rounded-xl bg-background/95"
-                popoverClassName="rounded-2xl border-border/70 bg-popover/98 shadow-lg"
+                triggerClassName="h-10 rounded-xl bg-background"
+                popoverClassName="rounded-2xl bg-popover"
               />
             ) : (
               <div className="space-y-1">
