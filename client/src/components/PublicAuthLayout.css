@@ -210,7 +210,7 @@
 
 .public-auth-field-error {
   font-size: var(--font-size-sm);
-  color: hsl(22 78% 38%);
+  color: hsl(42 92% 72%);
 }
 
 .public-auth-note,
@@ -237,13 +237,13 @@
 .public-auth-status-card--success {
   border-color: hsl(142 72% 34% / 0.25);
   background: hsl(142 72% 34% / 0.1);
-  color: hsl(142 72% 24%);
+  color: hsl(142 80% 88%);
 }
 
 .public-auth-status-card--error {
   border-color: hsl(0 72% 52% / 0.24);
   background: hsl(0 72% 52% / 0.1);
-  color: hsl(0 62% 38%);
+  color: hsl(0 100% 92%);
 }
 
 .public-auth-account-summary {
@@ -312,18 +312,6 @@
   -webkit-backdrop-filter: none !important;
   backdrop-filter: none !important;
   box-shadow: 0 18px 34px -24px var(--public-auth-shadow);
-}
-
-.dark .public-auth-field-error {
-  color: hsl(42 92% 72%);
-}
-
-.dark .public-auth-status-card--success {
-  color: hsl(142 80% 88%);
-}
-
-.dark .public-auth-status-card--error {
-  color: hsl(0 100% 92%);
 }
 
 @media (min-width: 768px) {
