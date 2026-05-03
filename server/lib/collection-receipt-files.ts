@@ -53,8 +53,7 @@ export function resolveCollectionReceiptStoragePath(
     relativePath,
     publicPath: `/uploads/${relativePath}`,
     storedFileName: path.basename(relativePath),
-    isManagedCollectionReceipt: relativePath === "collection-receipts"
-      || relativePath.startsWith("collection-receipts/"),
+    isManagedCollectionReceipt: relativePath.startsWith("collection-receipts/"),
   };
 }
 

@@ -1,6 +1,5 @@
-import createDOMPurify from "dompurify"
 import { sanitizeTrustedScriptURL } from "./trusted-script-url"
-import { getSqrTrustedTypesPolicy } from "./trusted-types"
+import { sanitizeTrustedHtml } from "./trusted-types"
 
 type TrustedTypesPolicyLike = {
   createHTML: (input: string) => unknown
@@ -22,27 +21,8 @@ type TrustedTypesGlobalLike = typeof globalThis & {
   __sqrTrustedTypesDefaultPolicy?: TrustedTypesPolicyLike | null
 }
 
-function sanitizeTrustedTypesHtml(input: string) {
-  if (typeof window === "undefined" || !window.document) {
-    return input
-  }
-
-  const purifier = createDOMPurify(window)
-  const trustedTypesPolicy = getSqrTrustedTypesPolicy()
-  const domPurifyTrustedTypesPolicy =
-    trustedTypesPolicy && typeof trustedTypesPolicy.createScriptURL === "function"
-      ? trustedTypesPolicy
-      : undefined
-  return purifier.sanitize(input, {
-    RETURN_TRUSTED_TYPE: false,
-    ...(domPurifyTrustedTypesPolicy
-      ? { TRUSTED_TYPES_POLICY: domPurifyTrustedTypesPolicy as never }
-      : {}),
-  })
-}
-
 export function initializeTrustedTypesRuntime(
-  sanitizeHtml: (input: string) => string = sanitizeTrustedTypesHtml
+  sanitizeHtml: (input: string) => string = sanitizeTrustedHtml
 ) {
   const trustedTypesGlobal = globalThis as TrustedTypesGlobalLike
 

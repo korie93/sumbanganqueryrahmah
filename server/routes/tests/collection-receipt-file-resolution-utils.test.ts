@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { resolveCollectionReceiptFile } from "../collection-receipt-file-resolution-utils";
+import { resolveCollectionReceiptStoragePath } from "../../lib/collection-receipt-files";
 
 test("collection receipt file resolution only resolves managed uploads and infers preview support", () => {
   const managed = resolveCollectionReceiptFile("/uploads/collection-receipts/april-receipt.webp");
@@ -10,4 +11,12 @@ test("collection receipt file resolution only resolves managed uploads and infer
   assert.equal(managed?.mimeType, "image/webp");
   assert.equal(managed?.isInlinePreviewSupported, true);
   assert.equal(unsafe, null);
+});
+
+test("managed collection receipt storage markers require a file path inside the receipt directory", () => {
+  const managedDirectory = resolveCollectionReceiptStoragePath("/uploads/collection-receipts");
+  const managedFile = resolveCollectionReceiptStoragePath("/uploads/collection-receipts/april-receipt.webp");
+
+  assert.equal(managedDirectory?.isManagedCollectionReceipt, false);
+  assert.equal(managedFile?.isManagedCollectionReceipt, true);
 });

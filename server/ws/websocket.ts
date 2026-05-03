@@ -11,14 +11,30 @@ type LegacyWebSocketOptions = {
 };
 
 const WEBSOCKET_MAX_PAYLOAD_BYTES = 100 * 1024;
-const defaultStorage = new PostgresStorage();
-const defaultSessionSecrets = getSessionJwtVerificationSecrets();
+let defaultStorage: PostgresStorage | null = null;
+let defaultSessionSecrets: string | readonly string[] | null = null;
+
+function getDefaultStorage() {
+  if (!defaultStorage) {
+    defaultStorage = new PostgresStorage();
+  }
+
+  return defaultStorage;
+}
+
+function getDefaultSessionSecrets() {
+  if (!defaultSessionSecrets) {
+    defaultSessionSecrets = getSessionJwtVerificationSecrets();
+  }
+
+  return defaultSessionSecrets;
+}
 
 export const connectedClients = new Map<string, WebSocket>();
 
 export function setupWebSocket(server: Server, options: LegacyWebSocketOptions = {}) {
-  const storage = options.storage ?? defaultStorage;
-  const sessionSecret = options.secret ?? defaultSessionSecrets;
+  const storage = options.storage ?? getDefaultStorage();
+  const sessionSecret = options.secret ?? getDefaultSessionSecrets();
   const wss = new WebSocketServer({
     server,
     path: "/ws",

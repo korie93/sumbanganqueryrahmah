@@ -112,6 +112,12 @@ export class PostgresStorageCore {
       { name: "settings-tables", run: () => this.ensureSettingsTables() },
     ];
 
+    logger.info("PostgreSQL storage bootstrap starting", {
+      productionLike: runtimeConfig.app.isProductionLike,
+      schemaCoupledRuntimeBootstrap: true,
+      stepCount: steps.length,
+    });
+
     for (const step of steps) {
       await this.runInitStep(step);
     }
@@ -130,6 +136,11 @@ export class PostgresStorageCore {
       logger.error("PostgreSQL storage bootstrap step failed", {
         bootstrapStep: step.name,
         durationMs: Number((performance.now() - startedAt).toFixed(1)),
+        ...(runtimeConfig.app.isProductionLike
+          ? {
+            hint: "If this is a schema or permissions failure, run the approved database migrations before retrying startup.",
+          }
+          : {}),
         error,
       });
       throw error;

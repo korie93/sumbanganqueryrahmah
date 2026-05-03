@@ -3,7 +3,7 @@
 import * as React from "react"
 import * as RechartsPrimitive from "recharts"
 
-import { toTrustedHTML } from "@/lib/trusted-types"
+import { toTrustedStyleHTML } from "@/lib/trusted-types"
 import { cn } from "@/lib/utils"
 import { ChartIndicator, ChartLegendSwatch } from "./chart-presentational"
 import {
@@ -57,7 +57,7 @@ const ChartStyle = ({ id, config }: { id: string; config: ChartConfig }) => {
   return (
     <style
       dangerouslySetInnerHTML={{
-        __html: toTrustedHTML(styleMarkup),
+        __html: toTrustedStyleHTML(styleMarkup),
       }}
     />
   )

@@ -1,3 +1,4 @@
+import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App";
 import { getBrowserLocalStorage, safeGetStorageItem } from "./lib/browser-storage";
@@ -27,12 +28,12 @@ const detectLowSpecMode = () => {
   return saveData || cores <= 4 || memoryGb <= 4;
 };
 
+installGlobalUnhandledRejectionHandler();
+
 if (detectLowSpecMode()) {
   document.documentElement.classList.add("low-spec");
   document.body.classList.add("low-spec");
 }
-
-installGlobalUnhandledRejectionHandler();
 
 initializeWebVitalsReporting();
 
@@ -41,7 +42,15 @@ if (!rootElement) {
   throw new Error("SQR app root element was not found.");
 }
 
-createRoot(rootElement).render(<App />);
+createRoot(rootElement).render(
+  import.meta.env.DEV ? (
+    <StrictMode>
+      <App />
+    </StrictMode>
+  ) : (
+    <App />
+  ),
+);
 
 if ((window as WindowWithBootShell).__SQR_BOOT_SHELL__) {
   window.requestAnimationFrame(() => {

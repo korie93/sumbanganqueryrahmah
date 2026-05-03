@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { z } from "zod";
 import {
   apiErrorPayloadSchema,
   apiPaginationMetaSchema,
@@ -22,6 +23,7 @@ import {
   getTabVisibility,
   updateSetting,
 } from "@/lib/api/settings";
+import { parseApiJson } from "@/lib/api/contract";
 
 function withMockFetch(mock: typeof fetch): () => void {
   const originalFetch = globalThis.fetch;
@@ -39,6 +41,39 @@ function jsonResponse(body: unknown): Response {
     },
   });
 }
+
+test("parseApiJson includes concise Zod issue details without echoing raw payload values", async () => {
+  const response = jsonResponse({
+    items: [
+      {
+        id: 123,
+        secretValue: "super-secret-token",
+      },
+    ],
+  });
+
+  await assert.rejects(
+    () =>
+      parseApiJson(
+        response,
+        z.object({
+          items: z.array(z.object({
+            id: z.string(),
+            secretValue: z.number(),
+          })),
+        }),
+        "/api/example",
+      ),
+    (error: unknown) => {
+      assert.ok(error instanceof Error);
+      assert.match(error.message, /API contract mismatch for \/api\/example/);
+      assert.match(error.message, /items\[0\]\.id: Expected string, received number/);
+      assert.match(error.message, /items\[0\]\.secretValue: Expected number, received string/);
+      assert.doesNotMatch(error.message, /super-secret-token/);
+      return true;
+    },
+  );
+});
 
 test("shared API contracts accept nullish actor fields without widening required fields", () => {
   const importRecord = importListItemSchema.safeParse({

@@ -84,5 +84,5 @@ test("client runtime keeps DOM HTML injection sinks tightly scoped", async () =>
   assert.deepEqual(contextualFragmentFiles, [])
 
   const chartSource = await readFile(ALLOWED_DANGEROUS_HTML_SINK_FILE, "utf8")
-  assert.match(chartSource, /toTrustedHTML\(/)
+  assert.match(chartSource, /toTrustedStyleHTML\(/)
 })
