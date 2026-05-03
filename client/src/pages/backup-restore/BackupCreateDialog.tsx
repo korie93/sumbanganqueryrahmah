@@ -32,7 +32,7 @@ export function BackupCreateDialog({
 }: BackupCreateDialogProps) {
   return (
     <Dialog open={showCreateDialog} onOpenChange={(open) => (open ? undefined : onCloseCreateDialog())}>
-      <DialogContent>
+      <DialogContent className="sm:max-w-[34rem]">
         <DialogHeader>
           <DialogTitle>Create New Backup</DialogTitle>
           <DialogDescription>
@@ -40,6 +40,10 @@ export function BackupCreateDialog({
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4 py-4">
+          <div className="rounded-2xl border border-border/60 bg-muted/30 p-4 text-sm text-muted-foreground">
+            Use a clear name so restore history stays easy to scan later, for example the date,
+            branch, or the reason this snapshot is being created.
+          </div>
           <div className="space-y-2">
             <Label htmlFor="backup-name">Backup Name</Label>
             <Input
@@ -54,12 +58,13 @@ export function BackupCreateDialog({
           </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={onCloseCreateDialog} data-testid="button-cancel-create">
+          <Button variant="outline" className="rounded-xl" onClick={onCloseCreateDialog} data-testid="button-cancel-create">
             Cancel
           </Button>
           <Button
             onClick={onConfirmCreate}
             disabled={backupJobBusy || createPending || !backupName.trim()}
+            className="rounded-xl"
             data-testid="button-confirm-create"
           >
             {createPending ? (

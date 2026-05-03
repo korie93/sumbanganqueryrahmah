@@ -178,21 +178,71 @@ export default function Landing({ onLoginClick }: LandingProps) {
         rightPane={(
           <div
             id="about"
-            className="landing-secondary-pane landing-secondary-pane-shell rounded-3xl p-5 shadow-2xl shadow-black/20 backdrop-blur"
+            className="landing-secondary-pane landing-secondary-pane-shell rounded-[1.75rem] p-4 sm:p-5"
           >
-            <div className="landing-about-shell landing-about-card rounded-2xl p-6">
-              <p className="landing-about-eyebrow text-xs font-semibold uppercase tracking-[0.24em]">
-                Tentang Sistem
-              </p>
-              <h2 className="landing-about-title mt-3 text-2xl font-semibold tracking-tight">
-                Ruang kerja digital untuk semakan data yang lebih teratur.
+            <div className="landing-about-shell landing-about-card rounded-[1.5rem] p-5 sm:p-6">
+              <div className="landing-preview-topbar flex items-center justify-between gap-3 rounded-2xl px-4 py-3">
+                <div>
+                  <p className="landing-about-eyebrow text-xs font-semibold uppercase tracking-[0.24em]">
+                    Paparan Kerja
+                  </p>
+                  <p className="landing-preview-topbar-copy mt-1 text-xs">
+                    Susun atur yang padat untuk kerja operasi harian.
+                  </p>
+                </div>
+                <div className="landing-preview-status rounded-full px-3 py-1 text-xs font-semibold">
+                  Akses dalaman
+                </div>
+              </div>
+              <h2 className="landing-about-title mt-5 text-2xl font-semibold tracking-tight">
+                Satu paparan, carian dan semakan yang tersusun.
               </h2>
-              <p className="landing-about-copy mt-4 text-sm leading-7">
-                Sistem ini dibangunkan untuk kegunaan operasi dalaman dengan keutamaan pada
-                kelajuan carian, kebolehbacaan data, kawalan akses, dan aliran kerja yang
-                membantu pengguna menumpukan kepada tugas sebenar tanpa gangguan yang tidak perlu.
+              <p className="landing-about-copy mt-3 text-sm leading-7">
+                Antara muka dalaman ini diatur supaya pengguna boleh terus melihat status kerja,
+                menyemak rekod, dan bergerak antara aliran tugas tanpa gangguan visual yang tidak
+                perlu.
               </p>
+
+              <div className="mt-5 grid gap-3 sm:grid-cols-3">
+                <div className="landing-preview-metric rounded-2xl px-4 py-4">
+                  <p className="landing-preview-metric-label text-[11px] font-semibold uppercase tracking-[0.18em]">
+                    Carian
+                  </p>
+                  <p className="landing-preview-metric-value mt-2 text-lg font-semibold">
+                    General Search
+                  </p>
+                  <p className="landing-preview-metric-copy mt-2 text-xs leading-5">
+                    Rujukan data utama kekal cepat dan mudah diimbas.
+                  </p>
+                </div>
+                <div className="landing-preview-metric rounded-2xl px-4 py-4">
+                  <p className="landing-preview-metric-label text-[11px] font-semibold uppercase tracking-[0.18em]">
+                    Rekod
+                  </p>
+                  <p className="landing-preview-metric-value mt-2 text-lg font-semibold">
+                    Semakan Teratur
+                  </p>
+                  <p className="landing-preview-metric-copy mt-2 text-xs leading-5">
+                    Aliran kerja dibina untuk semakan berulang dan kemas kini pantas.
+                  </p>
+                </div>
+                <div className="landing-preview-metric rounded-2xl px-4 py-4">
+                  <p className="landing-preview-metric-label text-[11px] font-semibold uppercase tracking-[0.18em]">
+                    Kawalan
+                  </p>
+                  <p className="landing-preview-metric-value mt-2 text-lg font-semibold">
+                    Akses Berperanan
+                  </p>
+                  <p className="landing-preview-metric-copy mt-2 text-xs leading-5">
+                    Setiap modul dilindungi ikut tugas dan tahap akses pengguna.
+                  </p>
+                </div>
+              </div>
+
               <div className="mt-5 space-y-3">
+                <p className="landing-about-eyebrow text-xs font-semibold uppercase tracking-[0.24em]">
+                  Prinsip Reka Bentuk
+                </p>
                 {aboutHighlights.map((item) => (
                   <div
                     key={item}
@@ -203,9 +253,10 @@ export default function Landing({ onLoginClick }: LandingProps) {
                   </div>
                 ))}
               </div>
-              <div className="landing-about-note mt-4 rounded-2xl px-4 py-3 text-sm leading-6">
-                Akses adalah terhad kepada pengguna berdaftar dan tertakluk kepada kawalan peranan
-                serta dasar keselamatan sistem.
+
+              <div className="landing-about-note mt-5 rounded-2xl px-4 py-3 text-sm leading-6">
+                Akses kekal terhad kepada pengguna berdaftar dan setiap aliran kerja direka supaya
+                mudah dibaca, mudah dijejak, dan sesuai untuk operasi dalaman yang sensitif.
               </div>
             </div>
           </div>

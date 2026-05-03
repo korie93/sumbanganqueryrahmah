@@ -34,8 +34,8 @@ export function BackupListItem({
         backup,
         formattedCreatedAt,
       })}
-      className={`space-y-3 border border-border/70 bg-card/70 shadow-sm ${
-        isMobile ? "rounded-2xl p-3.5" : "rounded-xl p-4"
+      className={`space-y-3 border border-border/65 bg-background/98 shadow-[0_18px_32px_-28px_hsl(222_47%_11%_/_0.14)] ${
+        isMobile ? "rounded-[1.4rem] p-3.5" : "rounded-[1.5rem] p-4"
       }`}
       data-testid={`backup-item-${backup.id}`}
       role="group"
@@ -98,7 +98,7 @@ export function BackupListItem({
             onClick={() => onRestoreClick(backup)}
             disabled={backupJobBusy || restoringId === backup.id}
             data-testid={`button-restore-${backup.id}`}
-            className={isMobile ? "w-full" : undefined}
+            className={isMobile ? "w-full rounded-xl" : "rounded-xl"}
           >
             <RotateCcw className={`h-4 w-4 mr-2 ${restoringId === backup.id ? "animate-spin" : ""}`} />
             Restore
@@ -109,7 +109,7 @@ export function BackupListItem({
             onClick={() => onDeleteClick(backup)}
             disabled={backupJobBusy || deletingId === backup.id}
             data-testid={`button-delete-backup-${backup.id}`}
-            className={isMobile ? "w-full" : undefined}
+            className={isMobile ? "w-full rounded-xl" : "rounded-xl"}
           >
             <Trash2 className={`h-4 w-4 mr-2 ${deletingId === backup.id ? "animate-spin" : ""}`} />
             Delete

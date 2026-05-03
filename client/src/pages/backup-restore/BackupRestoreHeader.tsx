@@ -31,7 +31,7 @@ export function BackupRestoreHeader({
   const isMobile = useIsMobile();
 
   return (
-    <div className={`flex items-center justify-between gap-4 flex-wrap ${isMobile ? "rounded-[1.5rem] border border-border/60 bg-card/60 p-3.5" : ""}`}>
+    <div className="flex flex-wrap items-center justify-between gap-4 rounded-[1.75rem] border border-border/60 bg-background/95 p-4 shadow-[0_20px_36px_-30px_hsl(222_47%_11%_/_0.18)]">
       {embedded ? (
         <div>
           <p className="text-sm text-muted-foreground">
@@ -65,7 +65,7 @@ export function BackupRestoreHeader({
         <Popover>
           <PopoverTrigger asChild>
             <Button
-              className="w-full"
+              className="w-full rounded-xl"
               variant="outline"
               disabled={loading || visibleBackupsLength === 0 || exportingPdf}
               data-testid="button-export-backups"
@@ -78,7 +78,7 @@ export function BackupRestoreHeader({
             <div className="space-y-1">
               <Button
                 variant="ghost"
-                className="w-full justify-start"
+                className="w-full justify-start rounded-xl"
                 onClick={onExportCsv}
                 disabled={exportingPdf}
                 data-testid="button-export-csv"
@@ -88,7 +88,7 @@ export function BackupRestoreHeader({
               </Button>
               <Button
                 variant="ghost"
-                className="w-full justify-start"
+                className="w-full justify-start rounded-xl"
                 onClick={onExportPdf}
                 disabled={exportingPdf}
                 data-testid="button-export-pdf"
@@ -100,7 +100,7 @@ export function BackupRestoreHeader({
           </PopoverContent>
         </Popover>
         <Button
-          className="w-full"
+          className="w-full rounded-xl"
           variant="outline"
           onClick={onRefresh}
           disabled={loading || activeBackupJobBusy}
@@ -111,7 +111,7 @@ export function BackupRestoreHeader({
         </Button>
         {canManageBackups ? (
           <Button
-            className={isMobile ? "col-span-2 w-full" : "w-full sm:w-auto"}
+            className={isMobile ? "col-span-2 w-full rounded-xl" : "w-full rounded-xl sm:w-auto"}
             onClick={onCreateBackupClick}
             disabled={activeBackupJobBusy}
             data-testid="button-create-backup"

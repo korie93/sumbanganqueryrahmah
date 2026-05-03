@@ -49,7 +49,7 @@ export function SettingsSidebar({
     <>
       {isMobile ? (
         <div className="space-y-3 lg:hidden">
-          <div className="rounded-[28px] border border-border/60 bg-background/80 p-4 shadow-sm">
+          <div className="rounded-[2rem] border border-border/60 bg-background/92 p-4 shadow-[0_20px_36px_-30px_hsl(222_47%_11%_/_0.18)]">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0 space-y-1">
                 <p className="text-[11px] font-semibold tracking-[0.22em] text-primary/80 uppercase">
@@ -132,7 +132,7 @@ export function SettingsSidebar({
           navigationLabel="Settings Navigation"
           expandedWidth={296}
           collapsedWidth={88}
-          className="border-border/60 bg-background/75"
+          className="border-border/60 bg-background/92"
         />
       ) : null}
     </>

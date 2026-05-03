@@ -192,6 +192,8 @@ export default function ResetPasswordPage({ onBackToHome, onBackToLogin }: Reset
       title="Cipta Kata Laluan Baharu"
       description="Gunakan pautan selamat yang dihantar ke emel anda untuk menetapkan kata laluan baharu dan mendapatkan semula akses ke sistem."
       contentBusy={loading || phase === "validating"}
+      visualMode="minimal"
+      showBackButton={false}
       icon={
         phase === "invalid" ? (
           <ShieldAlert className="h-7 w-7" aria-hidden="true" focusable="false" />

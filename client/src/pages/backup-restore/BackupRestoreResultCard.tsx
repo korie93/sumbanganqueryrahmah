@@ -19,7 +19,7 @@ export function BackupRestoreResultCard({
   }
 
   return (
-    <Card className="border-border/60">
+    <Card className="border-border/60 bg-background/98 shadow-[0_18px_34px_-30px_hsl(222_47%_11%_/_0.14)]">
       <CardContent className={`${isMobile ? "space-y-3 pt-4" : "space-y-3 pt-6"}`}>
         <div className="text-sm font-medium">Last Restore Result</div>
         {isMobile ? (

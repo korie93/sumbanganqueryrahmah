@@ -5,10 +5,11 @@
 }
 
 .login-bg-pattern {
+  opacity: 0.16;
   background:
     linear-gradient(90deg, var(--login-pattern-dot) 1px, transparent 1px),
     linear-gradient(0deg, var(--login-pattern-dot) 1px, transparent 1px);
-  background-size: 48px 48px;
+  background-size: 56px 56px;
 }
 
 .login-bg-orb {
@@ -62,7 +63,7 @@
 .login-card {
   position: relative;
   overflow: hidden;
-  border-radius: 1.5rem;
+  border-radius: 2rem;
   background: var(--login-card-surface);
   background-clip: padding-box;
   border: 1px solid var(--login-card-border);
@@ -93,6 +94,7 @@
 
 .login-card-grid {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .login-card-aside,
@@ -270,6 +272,19 @@
   color: var(--login-footer-text);
 }
 
+.login-shell {
+  max-width: min(32rem, 100%);
+  margin-inline: auto;
+}
+
+.login-card-form {
+  padding: 2rem 1.5rem;
+}
+
+.login-brand-mark {
+  box-shadow: 0 18px 34px -24px hsl(217 91% 44% / 0.42);
+}
+
 .low-spec .login-card {
   -webkit-backdrop-filter: none !important;
   backdrop-filter: none !important;
@@ -295,15 +310,9 @@
   }
 }
 
-@media (min-width: 768px) {
-  .login-card-grid {
-    grid-template-columns: minmax(0, 0.88fr) minmax(22rem, 1fr);
-  }
-
-  .login-card-aside {
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
+@media (min-width: 640px) {
+  .login-card-form {
+    padding: 2.25rem 2rem;
   }
 }
 
@@ -330,6 +339,14 @@
   .login-bg-effect {
     display: none;
   }
+
+  .login-shell {
+    max-width: 100%;
+  }
+
+  .login-card-form {
+    padding: 1.5rem 1.1rem;
+  }
 }
 
 @media (max-width: 767px) and (max-height: 560px) and (orientation: landscape) {
@@ -346,7 +363,7 @@
   }
 
   .login-shell {
-    max-width: 44rem;
+    max-width: 36rem;
   }
 
   .login-back-button {
@@ -413,7 +430,7 @@
   }
 
   .login-shell {
-    max-width: min(64rem, 92vw);
+    max-width: min(32rem, 92vw);
   }
 
   .login-card-form {

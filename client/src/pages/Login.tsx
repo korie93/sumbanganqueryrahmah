@@ -120,7 +120,7 @@ export default function Login({ onForgotPasswordClick, onLandingClick, onLoginSu
               </div>
             </div>
 
-            <div className="login-card-form px-5 py-7 sm:px-8 sm:py-9">
+            <div className="login-card-form">
               <div className="login-brand mb-7 flex flex-col items-center">
                 <div className="login-brand-mark mb-4 flex h-16 w-16 items-center justify-center rounded-2xl shadow-lg">
                   <BrandLogo

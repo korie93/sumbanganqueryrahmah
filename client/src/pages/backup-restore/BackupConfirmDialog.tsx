@@ -38,20 +38,20 @@ export function BackupConfirmDialog({
 }: BackupConfirmDialogProps) {
   return (
     <AlertDialog open={!!openBackup} onOpenChange={onOpenChange}>
-      <AlertDialogContent>
+      <AlertDialogContent className="sm:max-w-[32rem]">
         <AlertDialogHeader>
           <AlertDialogTitle>{title}</AlertDialogTitle>
           <AlertDialogDescription>{description}</AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel data-testid={cancelTestId}>Cancel</AlertDialogCancel>
+          <AlertDialogCancel className="rounded-xl" data-testid={cancelTestId}>Cancel</AlertDialogCancel>
           <AlertDialogAction
             onClick={() => {
               if (openBackup) {
                 onConfirm(openBackup);
               }
             }}
-            className={confirmClassName}
+            className={confirmClassName ? `${confirmClassName} rounded-xl` : "rounded-xl"}
             disabled={isPending}
             data-testid={confirmTestId}
           >

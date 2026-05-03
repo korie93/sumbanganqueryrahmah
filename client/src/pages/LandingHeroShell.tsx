@@ -19,36 +19,40 @@ export function LandingHeroShell({
   rightPane,
 }: LandingHeroShellProps) {
   return (
-    <section className="grid gap-8 lg:grid-cols-[1.15fr_0.85fr] lg:items-center">
-      <div className="space-y-7">
-        <div className="landing-badge inline-flex items-center rounded-full px-3 py-1 text-xs font-medium">
-          Untuk kegunaan operasi dalaman berdaftar
+    <section className="landing-hero-panel rounded-[2rem] px-5 py-6 shadow-2xl sm:px-7 sm:py-8 lg:px-10 lg:py-10">
+      <div className="landing-hero-grid grid gap-8 lg:grid-cols-[1.12fr_0.88fr] lg:items-center">
+        <div className="space-y-7">
+          <div className="landing-badge inline-flex items-center rounded-full px-3 py-1 text-xs font-medium">
+            Untuk kegunaan operasi dalaman berdaftar
+          </div>
+          <div className="space-y-4">
+            <h1 className="landing-title max-w-3xl text-4xl font-semibold tracking-tight sm:text-5xl">
+              Platform kerja dalaman untuk carian, semakan, dan pengurusan rekod sumbangan.
+            </h1>
+            <p className="landing-copy max-w-2xl text-base leading-7 sm:text-lg">
+              SQR menyediakan ruang kerja yang tersusun untuk menjalankan general search, menyemak
+              rekod, dan merujuk data operasi secara cepat, terkawal, serta mudah difahami oleh
+              pengguna harian.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <span className="landing-chip rounded-full px-3 py-1 text-xs">
+              General Search
+            </span>
+            <span className="landing-chip rounded-full px-3 py-1 text-xs">
+              Akses Terkawal
+            </span>
+            <span className="landing-chip rounded-full px-3 py-1 text-xs">
+              Antara Muka Ringan
+            </span>
+          </div>
+          {leftDetail}
         </div>
-        <div className="space-y-4">
-          <h1 className="landing-title max-w-3xl text-4xl font-semibold tracking-tight sm:text-5xl">
-            Platform kerja dalaman untuk carian, semakan, dan pengurusan rekod sumbangan.
-          </h1>
-          <p className="landing-copy max-w-2xl text-base leading-7 sm:text-lg">
-            SQR menyediakan ruang kerja yang tersusun untuk menjalankan general search, menyemak
-            rekod, dan merujuk data operasi secara cepat, terkawal, serta mudah difahami oleh
-            pengguna harian.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <span className="landing-chip rounded-full px-3 py-1 text-xs">
-            General Search
-          </span>
-          <span className="landing-chip rounded-full px-3 py-1 text-xs">
-            Akses Terkawal
-          </span>
-          <span className="landing-chip rounded-full px-3 py-1 text-xs">
-            Antara Muka Ringan
-          </span>
-        </div>
-        {leftDetail}
-      </div>
 
-      {rightPane}
+        <div className="landing-hero-preview">
+          {rightPane}
+        </div>
+      </div>
     </section>
   );
 }
@@ -61,8 +65,8 @@ type LandingPageShellProps = {
 export function LandingPageShell({ onLoginClick, children }: LandingPageShellProps) {
   return (
     <div className="landing-page viewport-min-height">
-      <div className="mx-auto flex viewport-min-height w-full max-w-7xl flex-col px-4 py-6 sm:px-6 lg:px-8">
-        <header className="landing-shell flex items-center justify-between gap-4 rounded-3xl px-4 py-3 backdrop-blur sm:px-5">
+      <div className="mx-auto flex viewport-min-height w-full max-w-[1340px] flex-col px-4 py-5 sm:px-6 sm:py-6 lg:px-8">
+        <header className="landing-shell flex items-center justify-between gap-4 rounded-[1.75rem] px-4 py-3 backdrop-blur sm:px-5">
           <div className="flex min-w-0 items-center gap-3">
             <div className="landing-brand-shell flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl">
               <BrandLogo decorative priority className="h-7 w-7" imageClassName="h-full w-full" />
@@ -102,7 +106,7 @@ export function LandingPageShell({ onLoginClick, children }: LandingPageShellPro
           </div>
         </header>
 
-        <main id="main-content" tabIndex={-1} className="flex flex-1 flex-col justify-center py-10 sm:py-14">
+        <main id="main-content" tabIndex={-1} className="flex flex-1 flex-col justify-center py-8 sm:py-10 lg:py-12">
           {children}
         </main>
       </div>

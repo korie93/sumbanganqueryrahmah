@@ -180,15 +180,14 @@ test("public auth primary buttons and login submit gradients keep readable white
 
   for (const selector of [":root", ".dark"]) {
     const cssBlock = extractCssRuleBlock(css, selector);
+    const tokens = parseHslTokens(cssBlock);
     const publicAuthPrimaryBackground = parseHslColorValue(
       extractCssVariableValue(cssBlock, "public-auth-primary-bg"),
     );
     const publicAuthPrimaryBackgroundHover = parseHslColorValue(
       extractCssVariableValue(cssBlock, "public-auth-primary-bg-hover"),
     );
-    const publicAuthTextStrong = parseHslColorValue(
-      extractCssVariableValue(cssBlock, "public-auth-text-strong"),
-    );
+    const publicAuthPrimaryText = tokens.get("primary-foreground");
     const loginSubmitText = parseHslColorValue(
       extractCssVariableValue(cssBlock, "login-submit-text"),
     );
@@ -198,11 +197,11 @@ test("public auth primary buttons and login submit gradients keep readable white
     ];
 
     assert.ok(
-      getContrastRatio(publicAuthPrimaryBackground, publicAuthTextStrong) >= 4.5,
+      getContrastRatio(publicAuthPrimaryBackground, publicAuthPrimaryText) >= 4.5,
       `${selector} public auth primary background must satisfy WCAG AA contrast`,
     );
     assert.ok(
-      getContrastRatio(publicAuthPrimaryBackgroundHover, publicAuthTextStrong) >= 4.5,
+      getContrastRatio(publicAuthPrimaryBackgroundHover, publicAuthPrimaryText) >= 4.5,
       `${selector} public auth primary hover background must satisfy WCAG AA contrast`,
     );
 

@@ -26,10 +26,15 @@ test("public auth recovery pages expose labels and decorative icons correctly", 
   const resetSource = readPageSource("ResetPassword.tsx");
 
   assert.match(forgotSource, /<label htmlFor="forgot-password-identifier" className="public-auth-field-label">/);
+  assert.match(forgotSource, /showBackButton=\{false\}/);
   assert.match(activateSource, /<label htmlFor="activate-account-new-password" className="public-auth-field-label">/);
   assert.match(activateSource, /<dl className="public-auth-account-summary">/);
+  assert.match(activateSource, /visualMode="minimal"/);
+  assert.match(activateSource, /showBackButton=\{false\}/);
   assert.match(resetSource, /<label htmlFor="reset-password-new-password" className="public-auth-field-label">/);
   assert.match(resetSource, /<dl className="public-auth-account-summary">/);
+  assert.match(resetSource, /visualMode="minimal"/);
+  assert.match(resetSource, /showBackButton=\{false\}/);
   assert.match(forgotSource, /aria-hidden="true" focusable="false"/);
   assert.match(activateSource, /aria-hidden="true" focusable="false"/);
   assert.match(resetSource, /aria-hidden="true" focusable="false"/);
@@ -45,13 +50,13 @@ test("maintenance page keeps timer cleanup logic while using the modern status l
   assert.match(source, /activeController\?\.abort\(\)/);
 });
 
-test("landing and public auth theme use the SQR brand palette instead of a plain white shell", () => {
+test("landing and public auth theme use a dark SQR backdrop with elevated light auth surfaces", () => {
   const landingCss = readPageSource("Landing.css");
   const tokenSource = readPageSource("../theme-tokens.css");
 
   assert.match(tokenSource, /--public-auth-layout-bg: linear-gradient\(135deg, hsl\(222 47% 9%\)/);
-  assert.match(tokenSource, /--public-auth-shell-surface-strong: hsl\(222 47% 12% \/ 0\.96\);/);
-  assert.doesNotMatch(tokenSource, /--public-auth-shell-surface-strong: hsl\(0 0% 100%/);
-  assert.match(landingCss, /color: hsl\(var\(--primary-foreground\)\);/);
-  assert.match(landingCss, /background: linear-gradient\(135deg, hsl\(210 40% 98% \/ 0\.12\), hsl\(199 89% 48% \/ 0\.08\)\);/);
+  assert.match(tokenSource, /--public-auth-shell-surface-strong: hsl\(0 0% 100% \/ 0\.98\);/);
+  assert.match(landingCss, /\.landing-hero-panel\s*{/);
+  assert.match(landingCss, /background:\s*linear-gradient\(180deg, hsl\(0 0% 100%\), hsl\(214 50% 98%\)\);/);
+  assert.match(landingCss, /\.landing-placeholder-footer-shell\s*{/);
 });

@@ -46,14 +46,14 @@ export function BackupFiltersPanel({
   const isMobile = useIsMobile();
 
   return (
-    <Card data-floating-ai-avoid="true">
+    <Card className="border-border/60 bg-background/98 shadow-[0_18px_34px_-30px_hsl(222_47%_11%_/_0.16)]" data-floating-ai-avoid="true">
       <Collapsible open={filtersOpen} onOpenChange={onFiltersOpenChange}>
         <CardHeader className={isMobile ? "pb-2.5" : "pb-3"}>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <CollapsibleTrigger asChild>
               <Button
                 variant="ghost"
-                className="h-auto w-full justify-between gap-3 rounded-xl px-0 py-0 text-left sm:w-auto sm:justify-start"
+                className="h-auto w-full justify-between gap-3 rounded-2xl px-0 py-0 text-left sm:w-auto sm:justify-start"
                 data-testid="button-toggle-backup-filters"
               >
                 <div className="flex min-w-0 items-center gap-2">
@@ -75,7 +75,7 @@ export function BackupFiltersPanel({
                 variant="ghost"
                 size="sm"
                 onClick={onClearFilters}
-                className="w-full justify-center text-muted-foreground sm:w-auto sm:justify-start"
+                className="w-full justify-center rounded-xl text-muted-foreground sm:w-auto sm:justify-start"
                 data-testid="button-clear-backup-filters"
               >
                 <X className="h-4 w-4 mr-1" />

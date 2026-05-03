@@ -2164,7 +2164,7 @@ const waitForVisible = async (locator, timeout = 1_500) => {
 
 const ensureLoginPageVisible = async (page) => {
   const loginHeading = page.getByRole("heading", {
-    name: "Log In SQR System",
+    name: /^(Log Masuk SQR|Log In SQR System)$/,
     level: 1,
   });
   const usernameInput = page.getByTestId("input-username");
@@ -2281,9 +2281,9 @@ const run = async () => {
           && response.url().includes("/api/login"),
       );
 
-      await page.getByPlaceholder("Username").fill(username);
-      await page.getByPlaceholder("Password").fill(password);
-      await page.getByRole("button", { name: "Log In" }).click();
+      await page.getByTestId("input-username").fill(username);
+      await page.getByTestId("input-password").fill(password);
+      await page.getByTestId("button-login").click();
       await page.waitForLoadState("networkidle");
       await page.waitForTimeout(250);
       const loginResponse = await loginResponsePromise;
@@ -2308,8 +2308,10 @@ const run = async () => {
         ].join("\n"),
       );
 
-      const bodyText = (await page.locator("body").innerText()).toLowerCase();
-      assert(!bodyText.includes("log in sqr system"), "login page should be replaced after successful login");
+      assert(
+        !(await page.getByTestId("input-username").isVisible().catch(() => false)),
+        "login page should be replaced after successful login",
+      );
       tracker.assertClean("login");
       tracker.clear();
 

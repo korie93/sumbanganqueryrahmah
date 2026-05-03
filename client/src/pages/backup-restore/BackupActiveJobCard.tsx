@@ -20,7 +20,7 @@ export function BackupActiveJobCard({
   }
 
   return (
-    <Card className="border-primary/30 bg-primary/5">
+    <Card className="border-primary/25 bg-primary/5 shadow-[0_18px_34px_-30px_hsl(217_91%_50%_/_0.28)]">
       <CardContent className={`flex flex-col gap-2 ${isMobile ? "pt-4" : "pt-6 sm:flex-row sm:items-center sm:justify-between"}`}>
         <div className="space-y-1">
           <div className="text-sm font-medium">

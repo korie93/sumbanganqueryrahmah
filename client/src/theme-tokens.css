@@ -80,24 +80,24 @@
   --public-auth-glow-top: hsl(217 91% 60% / 0.18);
   --public-auth-glow-bottom: hsl(188 94% 68% / 0.16);
   --public-auth-glow-center: hsl(199 89% 68% / 0.1);
-  --public-auth-shell-border: hsl(199 89% 74% / 0.22);
-  --public-auth-shell-surface: hsl(210 40% 98% / 0.1);
-  --public-auth-shell-surface-muted: hsl(217 91% 60% / 0.12);
-  --public-auth-shell-surface-strong: hsl(222 47% 12% / 0.96);
-  --public-auth-shell-surface-strong-sm: hsl(222 47% 12% / 0.82);
-  --public-auth-text-strong: hsl(210 40% 98%);
-  --public-auth-text-muted: hsl(214 95% 92% / 0.82);
-  --public-auth-text-soft: hsl(214 32% 82% / 0.9);
-  --public-auth-badge: hsl(188 94% 82%);
-  --public-auth-shadow: hsl(222 47% 4% / 0.46);
-  --public-auth-shadow-soft: hsl(222 47% 4% / 0.28);
+  --public-auth-shell-border: hsl(214 42% 86%);
+  --public-auth-shell-surface: hsl(0 0% 100% / 0.72);
+  --public-auth-shell-surface-muted: hsl(214 100% 97%);
+  --public-auth-shell-surface-strong: hsl(0 0% 100% / 0.98);
+  --public-auth-shell-surface-strong-sm: hsl(0 0% 100% / 0.92);
+  --public-auth-text-strong: hsl(224 61% 17%);
+  --public-auth-text-muted: hsl(221 28% 42%);
+  --public-auth-text-soft: hsl(219 18% 34%);
+  --public-auth-badge: hsl(217 91% 46%);
+  --public-auth-shadow: hsl(222 47% 10% / 0.18);
+  --public-auth-shadow-soft: hsl(222 47% 10% / 0.12);
   --public-auth-focus-ring: hsl(var(--ring) / 0.32);
-  --public-auth-halo: hsl(217 91% 70% / 0.12);
+  --public-auth-halo: hsl(217 91% 70% / 0.22);
   --public-auth-primary-bg: hsl(221 83% 55%);
   --public-auth-primary-bg-hover: hsl(221 83% 50%);
   --public-auth-primary-ring: hsl(var(--ring) / 0.56);
-  --public-auth-ghost-text: hsl(214 95% 92% / 0.88);
-  --public-auth-ghost-hover-bg: hsl(210 40% 98% / 0.1);
+  --public-auth-ghost-text: hsl(221 83% 42%);
+  --public-auth-ghost-hover-bg: hsl(214 100% 97%);
   --public-auth-ghost-ring: hsl(var(--ring) / 0.4);
   --public-auth-input-bg: hsl(0 0% 100% / 0.98);
   --public-auth-input-border: hsl(214 32% 82%);
@@ -110,32 +110,32 @@
   --login-glow-bottom: hsl(188 94% 42% / 0.08);
   --login-glow-center: hsl(199 89% 48% / 0.05);
   --login-back-button-border: var(--public-auth-shell-border);
-  --login-back-button-bg: var(--public-auth-shell-surface-muted);
+  --login-back-button-bg: hsl(218 100% 97% / 0.82);
   --login-back-button-text: var(--public-auth-text-muted);
-  --login-back-button-bg-hover: var(--public-auth-shell-surface);
+  --login-back-button-bg-hover: hsl(0 0% 100% / 0.94);
   --login-back-button-text-hover: var(--public-auth-text-strong);
   --login-back-button-ring: var(--public-auth-focus-ring);
-  --login-card-surface: linear-gradient(180deg, hsl(222 47% 12% / 0.95), hsl(217 47% 14% / 0.92));
-  --login-card-border: hsl(199 89% 74% / 0.2);
+  --login-card-surface: linear-gradient(180deg, hsl(0 0% 100% / 0.985), hsl(213 100% 99% / 0.975));
+  --login-card-border: hsl(214 42% 86%);
   --login-card-border-gradient: linear-gradient(
     160deg,
-    hsl(199 89% 82% / 0.32),
-    hsl(217 91% 60% / 0.16),
-    hsl(142 76% 56% / 0.18)
+    hsl(0 0% 100% / 0.88),
+    hsl(214 72% 90% / 0.52),
+    hsl(217 91% 62% / 0.2)
   );
   --login-card-overlay-gradient: linear-gradient(
     to bottom right,
-    hsl(199 89% 82% / 0.1),
-    hsl(217 91% 60% / 0.05) 42%,
-    hsl(142 76% 56% / 0.04)
+    hsl(0 0% 100% / 0.34),
+    hsl(214 95% 92% / 0.12) 42%,
+    hsl(217 91% 70% / 0.06)
   );
-  --login-card-halo: hsl(199 89% 70% / 0.14);
-  --login-mobile-card-surface: linear-gradient(180deg, hsl(222 47% 12% / 0.96), hsl(217 47% 14% / 0.94));
-  --login-mobile-card-border: hsl(199 89% 74% / 0.22);
-  --login-brand-surface: hsl(199 89% 48% / 0.14);
-  --login-brand-border: hsl(199 89% 74% / 0.24);
-  --login-title-text: var(--public-auth-text-strong);
-  --login-subtitle-text: hsl(214 95% 92% / 0.78);
+  --login-card-halo: hsl(217 91% 70% / 0.18);
+  --login-mobile-card-surface: linear-gradient(180deg, hsl(0 0% 100% / 0.985), hsl(213 100% 99% / 0.975));
+  --login-mobile-card-border: hsl(214 42% 86%);
+  --login-brand-surface: hsl(217 91% 50% / 0.08);
+  --login-brand-border: hsl(217 91% 50% / 0.18);
+  --login-title-text: hsl(224 61% 17%);
+  --login-subtitle-text: hsl(221 24% 43%);
   --login-input-bg: var(--public-auth-input-bg);
   --login-input-text: var(--public-auth-input-text);
   --login-input-placeholder: var(--public-auth-input-placeholder);
@@ -150,21 +150,21 @@
   --login-submit-ring: hsl(214 95% 93% / 0.7);
   --login-spinner-track: hsl(0 0% 100% / 0.3);
   --login-spinner-head: hsl(0 0% 100%);
-  --login-link-text: hsl(214 95% 92% / 0.86);
-  --login-link-bg-hover: hsl(210 40% 98% / 0.1);
-  --login-link-text-hover: hsl(210 40% 98%);
+  --login-link-text: hsl(221 83% 52%);
+  --login-link-bg-hover: hsl(214 100% 97%);
+  --login-link-text-hover: hsl(221 83% 44%);
   --login-link-ring: var(--public-auth-ghost-ring);
   --login-alert-warning-bg: hsl(42 92% 54% / 0.14);
   --login-alert-warning-border: hsl(42 92% 44% / 0.3);
-  --login-alert-warning-text: hsl(48 100% 94%);
-  --login-alert-warning-subtext: hsl(48 100% 88% / 0.9);
+  --login-alert-warning-text: hsl(32 95% 24%);
+  --login-alert-warning-subtext: hsl(32 72% 30%);
   --login-alert-error-bg: hsl(0 72% 52% / 0.1);
   --login-alert-error-border: hsl(0 72% 52% / 0.22);
-  --login-alert-error-text: hsl(0 100% 92%);
+  --login-alert-error-text: hsl(0 62% 38%);
   --login-alert-success-bg: hsl(152 72% 32% / 0.1);
   --login-alert-success-border: hsl(152 72% 44% / 0.22);
-  --login-alert-success-text: hsl(152 100% 92%);
-  --login-footer-text: hsl(214 32% 82% / 0.66);
+  --login-alert-success-text: hsl(152 70% 24%);
+  --login-footer-text: hsl(221 20% 42%);
   --banned-layout-bg: linear-gradient(135deg, hsl(222 47% 8%), hsl(0 58% 18% / 0.44), hsl(222 47% 8%));
   --banned-pattern-dot: hsl(0 54% 22% / 0.3);
   --banned-orb-top: hsl(0 72% 52% / 0.1);
@@ -293,8 +293,8 @@
   --z-sidebar-rail: 20;
   --z-navbar-scroll-fade: 1;
   --z-navbar-scroll-hint: 2;
-  --login-card-shadow: 0 28px 70px -34px hsl(222 47% 4% / 0.58), inset 0 1px 0 hsl(199 89% 82% / 0.18);
-  --login-card-mobile-shadow: 0 22px 46px -30px hsl(222 47% 4% / 0.55);
+  --login-card-shadow: 0 36px 80px -42px hsl(222 47% 8% / 0.34), 0 12px 24px -18px hsl(217 91% 50% / 0.18);
+  --login-card-mobile-shadow: 0 24px 50px -32px hsl(222 47% 8% / 0.28);
   --app-shell-glass-shadow: 0 14px 28px hsl(215 28% 11% / 0.07);
   --app-shell-glass-shadow-dark: 0 16px 30px hsl(0 0% 0% / 0.24);
   --app-shell-section-shadow: 0 10px 24px hsl(215 28% 11% / 0.06);

@@ -235,6 +235,8 @@ export default function ActivateAccountPage({ onBackToLogin }: ActivateAccountPa
       title={title}
       description="Lengkapkan persediaan akaun kali pertama menggunakan pautan aktivasi yang dihantar ke emel anda. Langkah ini diperlukan sebelum anda boleh mula menggunakan sistem."
       contentBusy={loading || phase === "validating"}
+      visualMode="minimal"
+      showBackButton={false}
       backLabel="Kembali ke log masuk"
       onBackClick={navigateToLogin}
       icon={
