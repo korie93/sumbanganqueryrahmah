@@ -46,12 +46,6 @@ function AppContent() {
       return;
     }
 
-    if (currentPage === "home") {
-      return scheduleIdlePreload(() => {
-        LoginPage.preload();
-      }, 700);
-    }
-
     if (currentPage === "forgot-password") {
       return scheduleIdlePreload(() => {
         LoginPage.preload();

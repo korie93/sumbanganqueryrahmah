@@ -62,7 +62,7 @@ export default function LandingDeferredSections({
           {featureHighlights.map((item) => (
             <article
               key={item.title}
-              className="landing-feature-article rounded-3xl p-5 backdrop-blur"
+              className="landing-feature-article rounded-3xl p-5"
             >
               <div className="landing-feature-icon flex h-11 w-11 items-center justify-center rounded-2xl">
                 <item.icon className="h-5 w-5" />

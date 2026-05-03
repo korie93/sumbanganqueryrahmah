@@ -1,4 +1,4 @@
-import { Suspense, useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState, type Ref } from "react";
 import { CheckCircle2, LogIn } from "lucide-react";
 import {
   LandingHeroShell,
@@ -6,7 +6,7 @@ import {
   LandingPrimaryActionRow,
   landingSecondaryButtonClassName,
 } from "@/pages/LandingHeroShell";
-import { lazyWithPreload, scheduleIdlePreload } from "@/lib/lazy-with-preload";
+import { lazyWithPreload } from "@/lib/lazy-with-preload";
 
 type LandingProps = {
   onLoginClick: () => void;
@@ -19,23 +19,26 @@ const aboutHighlights = [
 ];
 
 const LandingDeferredSections = lazyWithPreload(() => import("./LandingDeferredSections"));
-const LANDING_DEFERRED_SECTION_PRELOAD_DELAY_MS = 900;
-const LANDING_DEFERRED_SECTION_ROOT_MARGIN = "320px 0px";
-const LANDING_DEFERRED_SECTION_FALLBACK_DELAY_MS = 1_200;
+const LANDING_DEFERRED_SECTION_ROOT_MARGIN = "0px";
+const LANDING_DEFERRED_SECTION_THRESHOLD = 0.75;
+const LANDING_DEFERRED_SECTION_FALLBACK_DELAY_MS = 2_500;
 
 type LandingDeferredSectionsFallbackProps = {
   onLoginClick: () => void;
   secondaryButtonClassName: string;
+  featuresRef?: Ref<HTMLElement>;
 };
 
 function LandingDeferredSectionsFallback({
   onLoginClick,
   secondaryButtonClassName,
+  featuresRef,
 }: LandingDeferredSectionsFallbackProps) {
   return (
     <>
       <section
         id="features"
+        ref={featuresRef}
         className="landing-deferred-section landing-placeholder-section mt-12 rounded-3xl px-5 py-6"
         aria-hidden="true"
       >
@@ -85,13 +88,7 @@ function LandingDeferredSectionsFallback({
 
 export default function Landing({ onLoginClick }: LandingProps) {
   const [shouldLoadDeferredSections, setShouldLoadDeferredSections] = useState(false);
-  const deferredSectionsTriggerRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    return scheduleIdlePreload(() => {
-      LandingDeferredSections.preload();
-    }, LANDING_DEFERRED_SECTION_PRELOAD_DELAY_MS);
-  }, []);
+  const deferredSectionsTriggerRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     if (shouldLoadDeferredSections) {
@@ -121,6 +118,7 @@ export default function Landing({ onLoginClick }: LandingProps) {
         },
         {
           rootMargin: LANDING_DEFERRED_SECTION_ROOT_MARGIN,
+          threshold: LANDING_DEFERRED_SECTION_THRESHOLD,
         },
       );
       observer.observe(deferredSectionsTriggerRef.current);
@@ -263,14 +261,13 @@ export default function Landing({ onLoginClick }: LandingProps) {
         )}
       />
 
-      <div ref={deferredSectionsTriggerRef} className="h-px w-full" aria-hidden="true" />
-
       {shouldLoadDeferredSections ? (
         <Suspense
           fallback={(
             <LandingDeferredSectionsFallback
               onLoginClick={onLoginClick}
               secondaryButtonClassName={landingSecondaryButtonClassName}
+              featuresRef={deferredSectionsTriggerRef}
             />
           )}
         >
@@ -283,6 +280,7 @@ export default function Landing({ onLoginClick }: LandingProps) {
         <LandingDeferredSectionsFallback
           onLoginClick={onLoginClick}
           secondaryButtonClassName={landingSecondaryButtonClassName}
+          featuresRef={deferredSectionsTriggerRef}
         />
       )}
     </LandingPageShell>

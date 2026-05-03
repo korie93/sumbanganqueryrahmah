@@ -9,17 +9,17 @@ type LandingHeroShellProps = {
 };
 
 export const landingPrimaryButtonClassName =
-  "landing-primary-button inline-flex min-h-10 items-center justify-center gap-2 rounded-xl px-4 text-sm font-semibold transition-colors";
+  "landing-primary-button inline-flex min-h-10 shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-xl px-4 text-sm font-semibold transition-colors";
 
 export const landingSecondaryButtonClassName =
-  "landing-secondary-button inline-flex min-h-10 items-center justify-center gap-2 rounded-xl px-4 text-sm font-semibold transition-colors";
+  "landing-secondary-button inline-flex min-h-10 shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-xl px-4 text-sm font-semibold transition-colors";
 
 export function LandingHeroShell({
   leftDetail,
   rightPane,
 }: LandingHeroShellProps) {
   return (
-    <section className="landing-hero-panel rounded-[2rem] px-5 py-6 shadow-2xl sm:px-7 sm:py-8 lg:px-10 lg:py-10">
+    <section className="landing-hero-panel rounded-[2rem] px-5 py-6 sm:px-7 sm:py-8 lg:px-10 lg:py-10">
       <div className="landing-hero-grid grid gap-8 lg:grid-cols-[1.12fr_0.88fr] lg:items-center">
         <div className="space-y-7">
           <div className="landing-badge inline-flex items-center rounded-full px-3 py-1 text-xs font-medium">
@@ -66,7 +66,7 @@ export function LandingPageShell({ onLoginClick, children }: LandingPageShellPro
   return (
     <div className="landing-page viewport-min-height">
       <div className="mx-auto flex viewport-min-height w-full max-w-[1340px] flex-col px-4 py-5 sm:px-6 sm:py-6 lg:px-8">
-        <header className="landing-shell flex items-center justify-between gap-4 rounded-[1.75rem] px-4 py-3 backdrop-blur sm:px-5">
+        <header className="landing-shell flex items-center justify-between gap-4 rounded-[1.75rem] px-4 py-3 sm:px-5">
           <div className="flex min-w-0 items-center gap-3">
             <div className="landing-brand-shell flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl">
               <BrandLogo decorative priority className="h-7 w-7" imageClassName="h-full w-full" />

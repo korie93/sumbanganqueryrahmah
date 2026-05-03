@@ -39,7 +39,7 @@ export default function LandingRouteFallback({ onLoginClick }: LandingRouteFallb
         rightPane={(
           <div
             id="about"
-            className="landing-secondary-pane landing-secondary-pane-shell rounded-3xl p-5 shadow-2xl shadow-black/20 backdrop-blur"
+            className="landing-secondary-pane landing-secondary-pane-shell rounded-3xl p-5"
           >
             <div className="landing-about-shell landing-about-card space-y-3 rounded-2xl p-6" aria-hidden="true">
               <div className="landing-placeholder-line h-3 w-28 rounded-full" />

@@ -17,9 +17,14 @@ function readFirstCssRuleBlock(source: string, selector: string) {
 }
 
 test("public authentication routes do not warm the authenticated shell before login succeeds", () => {
+  const appSource = readClientSource("../App.tsx");
   const loginSource = readClientSource("../pages/Login.tsx");
   const authenticatedEntrySource = readClientSource("AuthenticatedAppEntry.tsx");
 
+  assert.doesNotMatch(
+    appSource,
+    /currentPage === "home"[\s\S]{0,180}LoginPage\.preload\s*\(/,
+  );
   assert.doesNotMatch(loginSource, /authenticated-entry-lazy/);
   assert.doesNotMatch(loginSource, /AuthenticatedAppEntry\.preload\s*\(/);
   assert.doesNotMatch(authenticatedEntrySource, /AuthenticatedAppShell\.preload\s*\(/);
