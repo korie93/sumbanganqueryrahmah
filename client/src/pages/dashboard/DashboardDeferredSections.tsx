@@ -32,7 +32,7 @@ function DashboardSectionFallback({
 
   return (
     <OperationalSectionCard
-      className={`bg-background/80 ${className ?? ""}`}
+      className={`border-border/60 bg-background shadow-sm ${className ?? ""}`}
       contentClassName="space-y-4 p-6"
     >
       <div role="status" aria-live="polite" {...statusAriaLabelProps} className="space-y-4">

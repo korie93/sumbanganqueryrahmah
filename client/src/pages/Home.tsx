@@ -18,6 +18,32 @@ function HomeImpl({ onNavigate, userRole, tabVisibility }: HomeProps) {
     () => getVisibleHomeItems(userRole, tabVisibility || null),
     [tabVisibility, userRole],
   );
+  const desktopHomeSections = useMemo(() => {
+    const primaryActionPriority = ["general-search", "collection-report", "dashboard"] as const;
+    const workspacePriority = ["import", "saved", "viewer"] as const;
+    const insightsPriority = ["activity", "analysis", "audit-logs"] as const;
+    const prioritizeEntries = (ids: readonly string[]) =>
+      ids
+        .map((id) => visibleItems.find((item) => item.id === id))
+        .filter((item): item is NavigationEntry => Boolean(item));
+
+    const primaryActions = prioritizeEntries(primaryActionPriority);
+    const workspaceItems = prioritizeEntries(workspacePriority);
+    const insightsItems = prioritizeEntries(insightsPriority);
+    const usedIds = new Set([
+      ...primaryActions.map((item) => item.id),
+      ...workspaceItems.map((item) => item.id),
+      ...insightsItems.map((item) => item.id),
+    ]);
+    const overflowItems = visibleItems.filter((item) => !usedIds.has(item.id));
+
+    return {
+      primaryActions,
+      workspaceItems,
+      insightsItems,
+      overflowItems,
+    };
+  }, [visibleItems]);
   const mobileHomeSections = useMemo(() => {
     const quickActionPriority = [
       "general-search",
@@ -190,45 +216,167 @@ function HomeImpl({ onNavigate, userRole, tabVisibility }: HomeProps) {
   return (
     <div className="app-shell-min-height bg-gradient-to-br from-slate-100 via-blue-50 to-slate-100 p-4 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 md:p-6">
       <div className="mx-auto max-w-6xl space-y-6">
-        <section className="glass-wrapper p-6 md:p-8">
-          <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Workspace</p>
-          <div className="mt-3 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-            <div>
-              <h1 className="welcome-title text-4xl font-bold text-foreground md:text-5xl">Welcome</h1>
-              <p className="mt-2 text-base text-muted-foreground md:text-lg">
-                Sumbangan Query Rahmah - Data Management System
-              </p>
+        <section className="home-desktop-hero">
+          <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
+            <div className="min-w-0 space-y-3">
+              <p className="home-section-kicker">Workspace</p>
+              <div className="flex items-start gap-4">
+                <span className="home-desktop-hero-icon" aria-hidden="true">
+                  <Sparkles className="h-5 w-5" />
+                </span>
+                <div className="min-w-0">
+                  <h1 className="welcome-title text-4xl font-bold text-foreground md:text-5xl">Welcome</h1>
+                  <p className="mt-2 text-base text-muted-foreground md:text-lg">
+                    Sumbangan Query Rahmah - Data Management System
+                  </p>
+                  <p className="mt-3 max-w-3xl text-sm leading-6 text-muted-foreground">
+                    Start with the core workflows first, then move into supporting modules only when you need them.
+                    The visible navigation stays aligned with your role and current feature visibility settings.
+                  </p>
+                </div>
+              </div>
             </div>
-            <p className="max-w-2xl text-sm text-muted-foreground">
-              Choose a module to continue. The menu is filtered by your role and current feature visibility settings.
-            </p>
+
+            <div className="grid gap-2 sm:grid-cols-3 xl:min-w-[360px]">
+              <div className="home-desktop-stat-chip">
+                <span className="home-desktop-stat-label">Modules Ready</span>
+                <span className="home-desktop-stat-value">{visibleItems.length}</span>
+              </div>
+              <div className="home-desktop-stat-chip">
+                <span className="home-desktop-stat-label">Primary Flows</span>
+                <span className="home-desktop-stat-value">{desktopHomeSections.primaryActions.length}</span>
+              </div>
+              <div className="home-desktop-stat-chip">
+                <span className="home-desktop-stat-label">Role</span>
+                <span className="home-desktop-stat-value capitalize">{userRole}</span>
+              </div>
+            </div>
           </div>
+
+          {desktopHomeSections.primaryActions.length > 0 ? (
+            <div className="mt-6 grid grid-cols-1 gap-3 lg:grid-cols-3">
+              {desktopHomeSections.primaryActions.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => onNavigate(resolveNavigationTarget(item.id))}
+                    onMouseEnter={() => prefetchTarget(item.id)}
+                    onFocus={() => prefetchTarget(item.id)}
+                    className="home-desktop-primary-card"
+                    data-testid={`card-${item.id}`}
+                  >
+                    <span className="home-desktop-primary-card-icon">
+                      <Icon className="h-5 w-5" />
+                    </span>
+                    <div className="min-w-0 space-y-2">
+                      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary/75">
+                        Primary Workflow
+                      </p>
+                      <div className="space-y-1">
+                        <h2 className="text-lg font-semibold text-foreground">{item.title}</h2>
+                        <p className="text-sm leading-6 text-muted-foreground">{item.description}</p>
+                      </div>
+                    </div>
+                    <ArrowRight className="h-4 w-4 shrink-0 text-primary" />
+                  </button>
+                );
+              })}
+            </div>
+          ) : null}
         </section>
 
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {visibleItems.map((item) => {
-            const Icon = item.icon;
-            return (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => onNavigate(resolveNavigationTarget(item.id))}
-                onMouseEnter={() => prefetchTarget(item.id)}
-                onFocus={() => prefetchTarget(item.id)}
-                className="home-card flex items-center gap-4 text-left"
-                data-testid={`card-${item.id}`}
-              >
-                <span className="home-card-icon">
-                  <Icon className="h-5 w-5" />
-                </span>
-                <div className="home-card-text">
-                  <h3 className="text-base">{item.title}</h3>
-                  <p>{item.description}</p>
-                </div>
-              </button>
-            );
-          })}
-        </div>
+        {desktopHomeSections.workspaceItems.length > 0
+          || desktopHomeSections.insightsItems.length > 0
+          || desktopHomeSections.overflowItems.length > 0 ? (
+            <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
+              {desktopHomeSections.workspaceItems.length > 0 ? (
+                <section className="home-section-shell">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="home-section-kicker">Workspace</p>
+                      <h2 className="mt-1 text-xl font-semibold text-foreground">Operational modules</h2>
+                      <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                        Import, review, and revisit the modules used most often during day-to-day operations.
+                      </p>
+                    </div>
+                    <span className="home-section-count-chip">{desktopHomeSections.workspaceItems.length}</span>
+                  </div>
+
+                  <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    {desktopHomeSections.workspaceItems.map((item) => {
+                      const Icon = item.icon;
+                      return (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => onNavigate(resolveNavigationTarget(item.id))}
+                          onMouseEnter={() => prefetchTarget(item.id)}
+                          onFocus={() => prefetchTarget(item.id)}
+                          className="home-card flex items-center gap-4 text-left"
+                          data-testid={`card-${item.id}`}
+                        >
+                          <span className="home-card-icon">
+                            <Icon className="h-5 w-5" />
+                          </span>
+                          <div className="home-card-text">
+                            <h3 className="text-base">{item.title}</h3>
+                            <p>{item.description}</p>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </section>
+              ) : null}
+
+              {desktopHomeSections.insightsItems.length > 0 || desktopHomeSections.overflowItems.length > 0 ? (
+                <section className="home-section-shell">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="home-section-kicker">Insights</p>
+                      <h2 className="mt-1 text-xl font-semibold text-foreground">Visibility and follow-up</h2>
+                      <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                        Keep analytics, activity, and audit views close without overloading the landing page.
+                      </p>
+                    </div>
+                    <span className="home-section-count-chip">
+                      {desktopHomeSections.insightsItems.length + desktopHomeSections.overflowItems.length}
+                    </span>
+                  </div>
+
+                  <div className="mt-4 space-y-3">
+                    {[...desktopHomeSections.insightsItems, ...desktopHomeSections.overflowItems].map((item) => {
+                      const Icon = item.icon;
+                      return (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => onNavigate(resolveNavigationTarget(item.id))}
+                          onMouseEnter={() => prefetchTarget(item.id)}
+                          onFocus={() => prefetchTarget(item.id)}
+                          className="home-mobile-list-card"
+                          data-testid={`card-${item.id}`}
+                        >
+                          <span className="home-mobile-list-card-icon">
+                            <Icon className="h-4 w-4" />
+                          </span>
+                          <div className="min-w-0 flex-1 text-left">
+                            <h3 className="truncate text-sm font-semibold text-foreground">{item.title}</h3>
+                            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                              {item.description}
+                            </p>
+                          </div>
+                          <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                        </button>
+                      );
+                    })}
+                  </div>
+                </section>
+              ) : null}
+            </div>
+          ) : null}
       </div>
     </div>
   );

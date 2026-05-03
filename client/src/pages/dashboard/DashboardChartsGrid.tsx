@@ -65,7 +65,7 @@ function CompactChartTooltip({
   }
 
   return (
-    <div className="min-w-[132px] max-w-[200px] rounded-xl border border-border/70 bg-card/95 px-3 py-2 shadow-lg backdrop-blur">
+    <div className="min-w-[132px] max-w-[200px] rounded-xl border border-border/70 bg-popover px-3 py-2 text-popover-foreground shadow-lg">
       <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
         {labelFormatter(label)}
       </p>
@@ -101,7 +101,11 @@ export function DashboardChartsGrid({
 
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:gap-6">
-      <Card className="glass-card" data-testid="card-login-trends" data-floating-ai-avoid="true">
+      <Card
+        className="rounded-2xl border border-border/60 bg-background shadow-sm"
+        data-testid="card-login-trends"
+        data-floating-ai-avoid="true"
+      >
         <CardHeader className="space-y-3 pb-3">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div className="space-y-1">
@@ -116,7 +120,7 @@ export function DashboardChartsGrid({
               </p>
             </div>
             <div
-              className="grid grid-cols-3 gap-1 rounded-xl border border-border/60 bg-background/60 p-1"
+              className="grid grid-cols-3 gap-1 rounded-xl border border-border/60 bg-muted/15 p-1"
               role="group"
               aria-label="Select trend period"
             >
@@ -124,9 +128,10 @@ export function DashboardChartsGrid({
                 trendDays === days ? (
                   <Button
                     key={days}
+                    type="button"
                     variant="default"
                     size="sm"
-                    className="h-8 px-2.5 text-xs sm:h-9 sm:px-3 sm:text-sm"
+                    className="h-8 rounded-lg px-2.5 text-xs sm:h-9 sm:px-3 sm:text-sm"
                     onClick={() => onTrendDaysChange(days)}
                     aria-pressed="true"
                     aria-label={`Show ${days} day trends`}
@@ -137,9 +142,10 @@ export function DashboardChartsGrid({
                 ) : (
                   <Button
                     key={days}
+                    type="button"
                     variant="ghost"
                     size="sm"
-                    className="h-8 px-2.5 text-xs sm:h-9 sm:px-3 sm:text-sm"
+                    className="h-8 rounded-lg px-2.5 text-xs sm:h-9 sm:px-3 sm:text-sm"
                     onClick={() => onTrendDaysChange(days)}
                     aria-pressed="false"
                     aria-label={`Show ${days} day trends`}
@@ -155,7 +161,7 @@ export function DashboardChartsGrid({
         <CardContent className="space-y-3" aria-live="polite">
           {trendsLoading ? (
             <div
-              className={`flex items-center justify-center rounded-xl border border-border/50 bg-background/35 ${chartHeightClassName}`}
+              className={`flex items-center justify-center rounded-xl border border-border/50 bg-muted/10 ${chartHeightClassName}`}
               role="status"
               aria-label="Loading login trends"
             >
@@ -231,7 +237,7 @@ export function DashboardChartsGrid({
                 {LOGIN_TREND_LEGEND_ITEMS.map((item) => (
                   <div
                     key={item.label}
-                    className="inline-flex items-center gap-2 rounded-full border border-border/60 bg-background/60 px-3 py-1.5 text-xs text-muted-foreground"
+                    className="inline-flex items-center gap-2 rounded-full border border-border/60 bg-muted/10 px-3 py-1.5 text-xs text-muted-foreground"
                   >
                     <span className={`h-2.5 w-2.5 rounded-full ${item.dotClassName}`} aria-hidden="true" />
                     <span>{item.label}</span>
@@ -241,7 +247,7 @@ export function DashboardChartsGrid({
             </>
           ) : (
             <div
-              className={`flex items-center justify-center rounded-xl border border-dashed border-border/60 bg-background/35 text-muted-foreground ${chartHeightClassName}`}
+              className={`flex items-center justify-center rounded-xl border border-dashed border-border/60 bg-muted/10 text-muted-foreground ${chartHeightClassName}`}
             >
               No data available
             </div>
@@ -249,7 +255,11 @@ export function DashboardChartsGrid({
         </CardContent>
       </Card>
 
-      <Card className="glass-card" data-testid="card-peak-hours" data-floating-ai-avoid="true">
+      <Card
+        className="rounded-2xl border border-border/60 bg-background shadow-sm"
+        data-testid="card-peak-hours"
+        data-floating-ai-avoid="true"
+      >
         <CardHeader className="space-y-1 pb-3">
           <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
             <Clock className="h-5 w-5" />
@@ -264,7 +274,7 @@ export function DashboardChartsGrid({
         <CardContent className="space-y-3" aria-live="polite">
           {peakHoursLoading ? (
             <div
-              className={`flex items-center justify-center rounded-xl border border-border/50 bg-background/35 ${chartHeightClassName}`}
+              className={`flex items-center justify-center rounded-xl border border-border/50 bg-muted/10 ${chartHeightClassName}`}
               role="status"
               aria-label="Loading peak hours"
             >
@@ -314,7 +324,7 @@ export function DashboardChartsGrid({
             </div>
           ) : (
             <div
-              className={`flex items-center justify-center rounded-xl border border-dashed border-border/60 bg-background/35 text-muted-foreground ${chartHeightClassName}`}
+              className={`flex items-center justify-center rounded-xl border border-dashed border-border/60 bg-muted/10 text-muted-foreground ${chartHeightClassName}`}
             >
               No data available
             </div>

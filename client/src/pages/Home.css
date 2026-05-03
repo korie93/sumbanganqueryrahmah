@@ -75,7 +75,7 @@
   padding: 1rem;
   border-radius: 1.75rem;
   border: 1px solid hsl(var(--border) / 0.72);
-  background: hsl(var(--card) / 0.92);
+  background: hsl(var(--card));
   box-shadow: var(--home-surface-shadow);
 }
 
@@ -87,7 +87,7 @@
   padding: 0.95rem;
   border-radius: 1.3rem;
   border: 1px solid hsl(var(--border) / 0.68);
-  background: linear-gradient(180deg, hsl(var(--card)), hsl(var(--accent) / 0.46));
+  background: linear-gradient(180deg, hsl(var(--card)), hsl(var(--accent) / 0.26));
   box-shadow: var(--home-quick-card-shadow);
   transition:
     transform 0.2s ease,
@@ -129,7 +129,7 @@
   padding: 0.95rem 1rem;
   border-radius: 1.2rem;
   border: 1px solid hsl(var(--border) / 0.68);
-  background: hsl(var(--background) / 0.82);
+  background: hsl(var(--background));
   box-shadow: var(--home-list-card-shadow);
   transition:
     transform 0.2s ease,
@@ -138,7 +138,7 @@
 }
 
 .dark .home-mobile-list-card {
-  background: hsl(var(--background) / 0.42);
+  background: hsl(var(--background));
   box-shadow: var(--home-list-card-shadow);
 }
 
@@ -147,7 +147,7 @@
   padding: 1rem 1.1rem;
   border-radius: 1.2rem;
   border: 1px solid hsl(var(--border) / 0.75);
-  background: hsl(var(--card) / 0.86);
+  background: hsl(var(--card));
   box-shadow: var(--home-card-shadow);
   cursor: pointer;
   transition:
@@ -161,16 +161,10 @@
     -webkit-backdrop-filter: blur(10px);
     backdrop-filter: blur(10px);
   }
-
-  .home-mobile-surface,
-  .home-card {
-    -webkit-backdrop-filter: blur(12px);
-    backdrop-filter: blur(12px);
-  }
 }
 
 .dark .home-card {
-  background: hsl(var(--card) / 0.88);
+  background: hsl(var(--card));
   border-color: hsl(var(--border) / 0.75);
   box-shadow: var(--home-card-shadow);
 }
@@ -203,6 +197,108 @@
   color: hsl(var(--muted-foreground));
 }
 
+.home-desktop-hero {
+  padding: 1.75rem;
+  border-radius: 1.85rem;
+  border: 1px solid hsl(var(--border) / 0.68);
+  background:
+    linear-gradient(135deg, hsl(var(--background)), hsl(var(--accent) / 0.22));
+  box-shadow: var(--home-surface-shadow);
+}
+
+.home-desktop-hero-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 3rem;
+  height: 3rem;
+  border-radius: 1rem;
+  border: 1px solid hsl(var(--primary) / 0.14);
+  background: hsl(var(--primary) / 0.08);
+  color: hsl(var(--primary));
+  flex-shrink: 0;
+}
+
+.home-desktop-stat-chip {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-height: 4.5rem;
+  justify-content: center;
+  padding: 0.9rem 1rem;
+  border-radius: 1.15rem;
+  border: 1px solid hsl(var(--border) / 0.64);
+  background: hsl(var(--background));
+  box-shadow: var(--home-card-shadow);
+}
+
+.home-desktop-stat-label,
+.home-section-kicker {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: hsl(var(--muted-foreground));
+}
+
+.home-desktop-stat-value {
+  font-size: 1rem;
+  font-weight: 700;
+  color: hsl(var(--foreground));
+}
+
+.home-desktop-primary-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  width: 100%;
+  padding: 1.1rem 1.15rem;
+  border-radius: 1.4rem;
+  border: 1px solid hsl(var(--border) / 0.72);
+  background: hsl(var(--background));
+  box-shadow: var(--home-card-shadow);
+  text-align: left;
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease,
+    border-color 0.2s ease;
+}
+
+.home-desktop-primary-card-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 1rem;
+  background: hsl(var(--primary) / 0.1);
+  color: hsl(var(--primary));
+  flex-shrink: 0;
+}
+
+.home-section-shell {
+  padding: 1.25rem;
+  border-radius: 1.5rem;
+  border: 1px solid hsl(var(--border) / 0.64);
+  background: hsl(var(--card));
+  box-shadow: var(--home-surface-shadow);
+}
+
+.home-section-count-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.25rem;
+  min-height: 2.25rem;
+  padding: 0.25rem 0.75rem;
+  border-radius: 999px;
+  border: 1px solid hsl(var(--border) / 0.68);
+  background: hsl(var(--background));
+  color: hsl(var(--muted-foreground));
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
 @media (hover: hover) and (pointer: fine) {
   .home-mobile-hero-action:hover {
     background: var(--home-hero-action-bg-hover);
@@ -226,7 +322,23 @@
     box-shadow: var(--home-card-shadow-hover);
   }
 
+  .home-desktop-primary-card:hover {
+    transform: translateY(-2px);
+    border-color: hsl(var(--primary) / 0.3);
+    box-shadow: var(--home-card-shadow-hover);
+  }
+
   .dark .home-card:hover {
     box-shadow: var(--home-card-shadow-hover);
+  }
+}
+
+@media (min-width: 768px) {
+  .home-desktop-hero {
+    padding: 2rem;
+  }
+
+  .home-section-shell {
+    padding: 1.35rem;
   }
 }

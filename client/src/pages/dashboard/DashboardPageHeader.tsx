@@ -28,27 +28,31 @@ export function DashboardPageHeader({
       eyebrow="Insights"
       description={
         isMobile
-          ? "System health, activity, and usage insights in one mobile-friendly view."
-          : "System overview and activity insights."
+          ? "System health, activity, and usage insights in one compact mobile-friendly view."
+          : "System overview, activity signals, and analytics in one compact workspace."
       }
       badge={
         <div className="flex flex-wrap gap-2">
-          <Badge variant="secondary" className="rounded-full px-3 py-1">
+          <Badge variant="secondary" className="rounded-full px-3 py-1.5">
             Trend {trendDays}d
           </Badge>
-          <Badge variant="outline" className="rounded-full px-3 py-1">
-            7 summary cards
+          <Badge variant="outline" className="rounded-full px-3 py-1.5">
+            7 KPI cards
+          </Badge>
+          <Badge variant="outline" className="rounded-full px-3 py-1.5">
+            Auto refresh
           </Badge>
         </div>
       }
       actions={
         <>
           <Button
+            type="button"
             onClick={onExportPdf}
             variant="outline"
             disabled={exportBlockReason !== null}
             data-testid="button-export-pdf"
-            className={isMobile ? "w-full" : "w-full sm:w-auto"}
+            className={isMobile ? "h-11 w-full rounded-xl" : "h-11 w-full rounded-xl sm:w-auto"}
           >
             {exportingPdf ? (
               <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
@@ -58,18 +62,19 @@ export function DashboardPageHeader({
             Export PDF
           </Button>
           <Button
+            type="button"
             onClick={onRefresh}
             variant="outline"
             disabled={refreshing}
             data-testid="button-refresh-dashboard"
-            className={isMobile ? "w-full" : "w-full sm:w-auto"}
+            className={isMobile ? "h-11 w-full rounded-xl" : "h-11 w-full rounded-xl sm:w-auto"}
           >
             <RefreshCw className={`w-4 h-4 mr-2${refreshing ? " animate-spin" : ""}`} />
             Refresh
           </Button>
         </>
       }
-      className={isMobile ? "rounded-[28px] border-border/60 bg-background/85" : undefined}
+      className={isMobile ? "rounded-[28px] border-border/60 bg-background shadow-sm" : "border-border/60 bg-background shadow-sm"}
     />
   );
 }

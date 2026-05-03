@@ -44,7 +44,7 @@ function CompactRoleTooltip({ active, payload }: CompactRoleTooltipProps) {
   const value = Array.isArray(item.value) ? item.value.join(" / ") : String(item.value ?? "");
 
   return (
-    <div className="min-w-[132px] rounded-xl border border-border/70 bg-card/95 px-3 py-2 shadow-lg backdrop-blur">
+    <div className="min-w-[132px] rounded-xl border border-border/70 bg-popover px-3 py-2 text-popover-foreground shadow-lg">
       <div className="flex items-center justify-between gap-3 text-xs">
         <div className="flex min-w-0 items-center gap-2">
           <span
@@ -72,7 +72,11 @@ export function DashboardUserInsightsGrid({
 
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 lg:gap-6">
-      <Card className="glass-card lg:col-span-2" data-testid="card-top-users" data-floating-ai-avoid="true">
+      <Card
+        className="rounded-2xl border border-border/60 bg-background shadow-sm lg:col-span-2"
+        data-testid="card-top-users"
+        data-floating-ai-avoid="true"
+      >
         <CardHeader className="space-y-1 pb-3">
           <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
             <Crown className="h-5 w-5" />
@@ -87,7 +91,7 @@ export function DashboardUserInsightsGrid({
         <CardContent aria-live="polite">
           {topUsersLoading ? (
             <div
-              className={`flex items-center justify-center rounded-xl border border-border/50 bg-background/35 ${chartHeightClassName}`}
+              className={`flex items-center justify-center rounded-xl border border-border/50 bg-muted/10 ${chartHeightClassName}`}
               role="status"
               aria-label="Loading top users"
             >
@@ -100,51 +104,48 @@ export function DashboardUserInsightsGrid({
                 const formattedLastLogin = formatDashboardUserLastLogin(user.lastLogin);
 
                 return (
-                <article
-                  key={user.username}
-                  role="group"
-                  aria-label={buildDashboardTopUserRowAriaLabel({
-                    formattedLastLogin,
-                    index: index + 1,
-                    user,
-                  })}
-                  className="rounded-xl border border-border/60 bg-background/55 p-3.5 shadow-sm sm:p-4"
-                  data-testid={`row-top-user-${index}`}
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex min-w-0 items-start gap-3">
-                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-bold text-primary">
-                        {index + 1}
+                  <article
+                    key={user.username}
+                    role="group"
+                    aria-label={buildDashboardTopUserRowAriaLabel({
+                      formattedLastLogin,
+                      index: index + 1,
+                      user,
+                    })}
+                    className="rounded-xl border border-border/60 bg-background p-3.5 shadow-sm sm:p-4"
+                    data-testid={`row-top-user-${index}`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex min-w-0 items-start gap-3">
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-bold text-primary">
+                          {index + 1}
+                        </div>
+                        <div className="min-w-0 space-y-2">
+                          <p className="break-words text-sm font-semibold text-foreground sm:text-base">
+                            {user.username}
+                          </p>
+                          <Badge variant="outline" className="w-fit rounded-full text-[11px] capitalize">
+                            {user.role}
+                          </Badge>
+                        </div>
                       </div>
-                      <div className="min-w-0 space-y-2">
-                        <p className="break-words text-sm font-semibold text-foreground sm:text-base">
-                          {user.username}
+                      <div className="shrink-0 rounded-xl border border-border/60 bg-muted/10 px-3 py-2 text-center">
+                        <p className="text-lg font-bold leading-none text-foreground">{user.loginCount}</p>
+                        <p className="mt-1 text-[11px] uppercase tracking-[0.12em] text-muted-foreground">
+                          logins
                         </p>
-                        <Badge variant="outline" className="w-fit rounded-full text-[11px] capitalize">
-                          {user.role}
-                        </Badge>
                       </div>
                     </div>
-                    <div className="shrink-0 rounded-xl border border-border/60 bg-background/70 px-3 py-2 text-center">
-                      <p className="text-lg font-bold leading-none text-foreground">{user.loginCount}</p>
-                      <p className="mt-1 text-[11px] uppercase tracking-[0.12em] text-muted-foreground">
-                        logins
-                      </p>
-                    </div>
-                  </div>
-                  <p className="mt-3 text-xs leading-5 text-muted-foreground">
-                    Last login:{" "}
-                    <span className="text-foreground">
-                      {formattedLastLogin}
-                    </span>
-                  </p>
-                </article>
-              );
+                    <p className="mt-3 text-xs leading-5 text-muted-foreground">
+                      Last login: <span className="text-foreground">{formattedLastLogin}</span>
+                    </p>
+                  </article>
+                );
               })}
             </div>
           ) : (
             <div
-              className={`flex items-center justify-center rounded-xl border border-dashed border-border/60 bg-background/35 text-muted-foreground ${chartHeightClassName}`}
+              className={`flex items-center justify-center rounded-xl border border-dashed border-border/60 bg-muted/10 text-muted-foreground ${chartHeightClassName}`}
             >
               No data available
             </div>
@@ -152,7 +153,11 @@ export function DashboardUserInsightsGrid({
         </CardContent>
       </Card>
 
-      <Card className="glass-card" data-testid="card-role-distribution" data-floating-ai-avoid="true">
+      <Card
+        className="rounded-2xl border border-border/60 bg-background shadow-sm"
+        data-testid="card-role-distribution"
+        data-floating-ai-avoid="true"
+      >
         <CardHeader className="space-y-1 pb-3">
           <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
             <Users className="h-5 w-5" />
@@ -167,7 +172,7 @@ export function DashboardUserInsightsGrid({
         <CardContent className="space-y-3" aria-live="polite">
           {roleLoading ? (
             <div
-              className={`flex items-center justify-center rounded-xl border border-border/50 bg-background/35 ${chartHeightClassName}`}
+              className={`flex items-center justify-center rounded-xl border border-border/50 bg-muted/10 ${chartHeightClassName}`}
               role="status"
               aria-label="Loading user roles"
             >
@@ -208,7 +213,7 @@ export function DashboardUserInsightsGrid({
                     key={item.role}
                     role="group"
                     aria-label={buildDashboardRoleDistributionRowAriaLabel({ item })}
-                    className="flex items-center justify-between rounded-xl border border-border/60 bg-background/60 px-3 py-2 text-sm"
+                    className="flex items-center justify-between rounded-xl border border-border/60 bg-muted/10 px-3 py-2 text-sm"
                   >
                     <div className="flex min-w-0 items-center gap-2">
                       <span
@@ -224,7 +229,7 @@ export function DashboardUserInsightsGrid({
             </>
           ) : (
             <div
-              className={`flex items-center justify-center rounded-xl border border-dashed border-border/60 bg-background/35 text-muted-foreground ${chartHeightClassName}`}
+              className={`flex items-center justify-center rounded-xl border border-dashed border-border/60 bg-muted/10 text-muted-foreground ${chartHeightClassName}`}
             >
               No data available
             </div>
