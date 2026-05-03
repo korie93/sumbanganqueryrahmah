@@ -1,5 +1,11 @@
 import process from "node:process";
 import { chromium } from "playwright";
+import {
+  completeTwoFactorLoginIfNeeded,
+  ensureLoginPageVisible,
+  probeAuthSession,
+  waitForAuthenticatedShell,
+} from "./ui-auth-contract-utils.mjs";
 
 const baseUrl = process.env.A11Y_BASE_URL || process.env.SMOKE_BASE_URL || "http://127.0.0.1:5000";
 const authUsername = String(process.env.A11Y_TEST_USERNAME || process.env.SMOKE_TEST_USERNAME || "").trim();
@@ -198,21 +204,51 @@ async function verifyRouteAccessibility(page, routeSpec, viewportSpec) {
 
 async function loginForAuthenticatedContracts(page) {
   await page.goto(`${baseUrl}/login`, { waitUntil: "networkidle" });
+  await ensureLoginPageVisible(page, "Accessibility contract");
   const loginResponsePromise = page.waitForResponse(
     (response) =>
       response.request().method() === "POST"
       && response.url().includes("/api/login"),
     { timeout: 15_000 },
   );
-  await page.getByPlaceholder("Username").fill(authUsername);
-  await page.getByPlaceholder("Password").fill(authPassword);
-  await page.getByRole("button", { name: "Log In" }).click();
+  await page.getByTestId("input-username").fill(authUsername);
+  await page.getByTestId("input-password").fill(authPassword);
+  await page.getByTestId("button-login").click();
   const loginResponse = await loginResponsePromise;
-  assert(
-    loginResponse.ok(),
-    `authenticated a11y login failed with HTTP ${loginResponse.status()}`,
-  );
   await page.waitForLoadState("networkidle");
+  await page.waitForTimeout(250);
+  let loginPayload = null;
+  try {
+    loginPayload = await loginResponse.json();
+  } catch {
+    loginPayload = null;
+  }
+  const twoFactorResult = await completeTwoFactorLoginIfNeeded(page, {
+    loginPayload,
+    username: authUsername,
+    contextLabel: "Accessibility contract login",
+  });
+  const finalLoginPayload = twoFactorResult?.verifyPayload ?? loginPayload;
+  const finalLoginResponse = twoFactorResult?.verifyResponse ?? loginResponse;
+  const authProbe = await probeAuthSession(page);
+  assert(
+    finalLoginResponse.ok() && authProbe.ok && authProbe.hasUser,
+    [
+      `authenticated a11y login failed with HTTP ${finalLoginResponse.status()}`,
+      `POST /api/login message: ${String(loginPayload?.message || "(none)")}`,
+      twoFactorResult
+        ? `POST /api/auth/verify-two-factor-login status: ${twoFactorResult.verifyResponse.status()}`
+        : "POST /api/auth/verify-two-factor-login status: (not required)",
+      twoFactorResult
+        ? `POST /api/auth/verify-two-factor-login message: ${String(finalLoginPayload?.message || "(none)")}`
+        : "POST /api/auth/verify-two-factor-login message: (not required)",
+      `GET /api/me status: ${authProbe.status}`,
+      `GET /api/me message: ${String(authProbe.message || "(none)")}`,
+    ].join("\n"),
+  );
+  await waitForAuthenticatedShell(page, "Accessibility contract login");
+  await page.goto(`${baseUrl}/`, { waitUntil: "networkidle" });
+  await waitForAuthenticatedShell(page, "Authenticated accessibility login reload");
   await page.locator("main#main-content").first().waitFor({ timeout: 15_000 });
 }
 

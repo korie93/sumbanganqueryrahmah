@@ -2,6 +2,12 @@ import process from "node:process";
 import path from "node:path";
 import { mkdir, writeFile } from "node:fs/promises";
 import { chromium } from "playwright";
+import {
+  completeTwoFactorLoginIfNeeded,
+  ensureLoginPageVisible,
+  probeAuthSession,
+  waitForAuthenticatedShell,
+} from "./ui-auth-contract-utils.mjs";
 
 const baseUrl = process.env.VISUAL_BASE_URL || process.env.SMOKE_BASE_URL || "http://127.0.0.1:5000";
 const rawArtifactsDir = String(process.env.VISUAL_ARTIFACTS_DIR || "").trim();
@@ -124,41 +130,6 @@ const readLayoutSummary = async (page, { contentSelector, primarySelector }) =>
     };
   }, { contentSelector, primarySelector });
 
-const waitForVisible = async (locator, timeout = 10_000) => {
-  try {
-    await locator.waitFor({ state: "visible", timeout });
-    return true;
-  } catch {
-    return false;
-  }
-};
-
-const ensureLoginPageVisible = async (page) => {
-  const loginHeading = page.getByRole("heading", {
-    name: /^(Log Masuk SQR|Log In SQR System)$/,
-    level: 1,
-  });
-  const usernameInput = page.getByTestId("input-username");
-
-  if (await waitForVisible(loginHeading) || await waitForVisible(usernameInput)) {
-    return;
-  }
-
-  const publicLoginButton = page.getByRole("button", { name: /^Log In$/ }).first();
-  if (await waitForVisible(publicLoginButton, 2_000)) {
-    await publicLoginButton.click();
-    await page.waitForLoadState("networkidle");
-    await usernameInput.waitFor({ state: "visible", timeout: 10_000 });
-    await loginHeading.waitFor({ state: "visible", timeout: 10_000 });
-    return;
-  }
-
-  const bodyText = await page.locator("body").innerText().catch(() => "(unavailable)");
-  throw new Error(
-    `Visual login page was not reachable after navigation. Visible body excerpt: ${bodyText.slice(0, 400)}`,
-  );
-};
-
 async function verifyRouteLayout(page, routeSpec, viewportSpec) {
   await page.setViewportSize({
     width: viewportSpec.width,
@@ -201,7 +172,7 @@ async function verifyRouteLayout(page, routeSpec, viewportSpec) {
 
 async function loginForAuthenticatedContracts(page) {
   await page.goto(`${baseUrl}/login`, { waitUntil: "networkidle" });
-  await ensureLoginPageVisible(page);
+  await ensureLoginPageVisible(page, "Visual contract");
   const loginResponsePromise = page.waitForResponse(
     (response) =>
       response.request().method() === "POST"
@@ -220,16 +191,37 @@ async function loginForAuthenticatedContracts(page) {
   } catch {
     loginPayload = null;
   }
+  const twoFactorResult = await completeTwoFactorLoginIfNeeded(page, {
+    loginPayload,
+    username: authUsername,
+    contextLabel: "Visual contract login",
+  });
+  const finalLoginPayload = twoFactorResult?.verifyPayload ?? loginPayload;
+  const finalLoginResponse = twoFactorResult?.verifyResponse ?? loginResponse;
+  const authProbe = await probeAuthSession(page);
 
-  assert(loginResponse.ok(), `authenticated visual login failed with HTTP ${loginResponse.status()}`);
+  assert(finalLoginResponse.ok(), `authenticated visual login failed with HTTP ${finalLoginResponse.status()}`);
   assert(
-    !(await page.getByTestId("input-username").isVisible().catch(() => false)),
+    authProbe.ok && authProbe.hasUser,
     [
-      "authenticated visual login did not leave the login screen",
+      "authenticated visual login did not establish a usable session",
       `POST /api/login status: ${loginResponse.status()}`,
       `POST /api/login message: ${String(loginPayload?.message || "(none)")}`,
+      twoFactorResult
+        ? `POST /api/auth/verify-two-factor-login status: ${twoFactorResult.verifyResponse.status()}`
+        : "POST /api/auth/verify-two-factor-login status: (not required)",
+      twoFactorResult
+        ? `POST /api/auth/verify-two-factor-login message: ${String(finalLoginPayload?.message || "(none)")}`
+        : "POST /api/auth/verify-two-factor-login message: (not required)",
+      `GET /api/me status: ${authProbe.status}`,
+      `GET /api/me message: ${String(authProbe.message || "(none)")}`,
     ].join("\n"),
   );
+
+  await waitForAuthenticatedShell(page, "Visual contract login");
+
+  await page.goto(`${baseUrl}/`, { waitUntil: "networkidle" });
+  await waitForAuthenticatedShell(page, "Authenticated visual login reload");
   await page.locator("main#main-content").first().waitFor({ timeout: 15_000 });
 }
 
