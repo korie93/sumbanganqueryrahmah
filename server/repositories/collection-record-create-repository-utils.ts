@@ -6,7 +6,7 @@ import type {
   CreateCollectionRecordInput,
 } from "../storage-postgres";
 import {
-  enqueueCollectionRecordDailyRollupSlices,
+  refreshCollectionRecordDailyRollupSlices,
 } from "./collection-record-rollup-utils";
 import {
   buildCollectionRecordPiiSearchHashes,
@@ -110,7 +110,7 @@ export async function createCollectionRecord(data: CreateCollectionRecordInput):
       )
     `);
 
-    await enqueueCollectionRecordDailyRollupSlices(tx, [{
+    await refreshCollectionRecordDailyRollupSlices(tx, [{
       paymentDate: data.paymentDate,
       createdByLogin: data.createdByLogin,
       collectionStaffNickname: data.collectionStaffNickname,

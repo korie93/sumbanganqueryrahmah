@@ -16,8 +16,8 @@ import {
   getCollectionRecordById,
 } from "./collection-record-read-utils";
 import {
-  enqueueCollectionRecordDailyRollupSlices,
   mapCollectionRecordRowToDailyRollupSlice,
+  refreshCollectionRecordDailyRollupSlices,
 } from "./collection-record-rollup-utils";
 import {
   attachCollectionReceipts,
@@ -224,7 +224,7 @@ export async function updateCollectionRecord(
 
     const syncedRecord = await syncCollectionRecordReceiptValidation(tx, id);
 
-    await enqueueCollectionRecordDailyRollupSlices(tx, [
+    await refreshCollectionRecordDailyRollupSlices(tx, [
       existingSlice,
       mapCollectionRecordRowToDailyRollupSlice((row || null) as Record<string, unknown> | null),
     ]);
@@ -275,7 +275,7 @@ export async function deleteCollectionRecord(
       WHERE collection_record_id = ${deletedId}::uuid
     `);
 
-    await enqueueCollectionRecordDailyRollupSlices(tx, [existingSlice]);
+    await refreshCollectionRecordDailyRollupSlices(tx, [existingSlice]);
     return true;
   });
 }
