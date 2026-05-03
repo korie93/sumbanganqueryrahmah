@@ -83,7 +83,7 @@
   --public-auth-shell-border: hsl(199 89% 74% / 0.22);
   --public-auth-shell-surface: hsl(210 40% 98% / 0.1);
   --public-auth-shell-surface-muted: hsl(217 91% 60% / 0.12);
-  --public-auth-shell-surface-strong: linear-gradient(180deg, hsl(222 47% 12% / 0.96), hsl(217 47% 14% / 0.94));
+  --public-auth-shell-surface-strong: hsl(222 47% 12% / 0.96);
   --public-auth-shell-surface-strong-sm: hsl(222 47% 12% / 0.82);
   --public-auth-text-strong: hsl(210 40% 98%);
   --public-auth-text-muted: hsl(214 95% 92% / 0.82);
