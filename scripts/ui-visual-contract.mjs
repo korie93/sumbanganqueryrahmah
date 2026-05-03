@@ -124,6 +124,41 @@ const readLayoutSummary = async (page, { contentSelector, primarySelector }) =>
     };
   }, { contentSelector, primarySelector });
 
+const waitForVisible = async (locator, timeout = 10_000) => {
+  try {
+    await locator.waitFor({ state: "visible", timeout });
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+const ensureLoginPageVisible = async (page) => {
+  const loginHeading = page.getByRole("heading", {
+    name: /^(Log Masuk SQR|Log In SQR System)$/,
+    level: 1,
+  });
+  const usernameInput = page.getByTestId("input-username");
+
+  if (await waitForVisible(loginHeading) || await waitForVisible(usernameInput)) {
+    return;
+  }
+
+  const publicLoginButton = page.getByRole("button", { name: /^Log In$/ }).first();
+  if (await waitForVisible(publicLoginButton, 2_000)) {
+    await publicLoginButton.click();
+    await page.waitForLoadState("networkidle");
+    await usernameInput.waitFor({ state: "visible", timeout: 10_000 });
+    await loginHeading.waitFor({ state: "visible", timeout: 10_000 });
+    return;
+  }
+
+  const bodyText = await page.locator("body").innerText().catch(() => "(unavailable)");
+  throw new Error(
+    `Visual login page was not reachable after navigation. Visible body excerpt: ${bodyText.slice(0, 400)}`,
+  );
+};
+
 async function verifyRouteLayout(page, routeSpec, viewportSpec) {
   await page.setViewportSize({
     width: viewportSpec.width,
@@ -166,18 +201,35 @@ async function verifyRouteLayout(page, routeSpec, viewportSpec) {
 
 async function loginForAuthenticatedContracts(page) {
   await page.goto(`${baseUrl}/login`, { waitUntil: "networkidle" });
+  await ensureLoginPageVisible(page);
   const loginResponsePromise = page.waitForResponse(
     (response) =>
       response.request().method() === "POST"
       && response.url().includes("/api/login"),
     { timeout: 15_000 },
   );
-  await page.getByPlaceholder("Username").fill(authUsername);
-  await page.getByPlaceholder("Password").fill(authPassword);
-  await page.getByRole("button", { name: "Log In" }).click();
-  const loginResponse = await loginResponsePromise;
-  assert(loginResponse.ok(), `authenticated visual login failed with HTTP ${loginResponse.status()}`);
+  await page.getByTestId("input-username").fill(authUsername);
+  await page.getByTestId("input-password").fill(authPassword);
+  await page.getByTestId("button-login").click();
   await page.waitForLoadState("networkidle");
+  await page.waitForTimeout(250);
+  const loginResponse = await loginResponsePromise;
+  let loginPayload = null;
+  try {
+    loginPayload = await loginResponse.json();
+  } catch {
+    loginPayload = null;
+  }
+
+  assert(loginResponse.ok(), `authenticated visual login failed with HTTP ${loginResponse.status()}`);
+  assert(
+    !(await page.getByTestId("input-username").isVisible().catch(() => false)),
+    [
+      "authenticated visual login did not leave the login screen",
+      `POST /api/login status: ${loginResponse.status()}`,
+      `POST /api/login message: ${String(loginPayload?.message || "(none)")}`,
+    ].join("\n"),
+  );
   await page.locator("main#main-content").first().waitFor({ timeout: 15_000 });
 }
 
