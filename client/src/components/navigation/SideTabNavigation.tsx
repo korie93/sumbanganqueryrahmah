@@ -78,12 +78,12 @@ export function SideTabNavigation({
 
       <aside
         className={cn(
-          "sticky top-4 hidden shrink-0 overflow-hidden rounded-xl border border-border/60 bg-background/70 p-2 shadow-sm transition-[width] duration-150 ease-out motion-reduce:transition-none lg:block",
+          "sticky top-4 hidden shrink-0 overflow-hidden rounded-xl border border-border/70 bg-background p-3 shadow-sm transition-[width] duration-150 ease-out motion-reduce:transition-none lg:block",
           widthClassName,
           className,
         )}
       >
-        <div className={cn("mb-2 flex", collapsed ? "justify-center" : "justify-end")}>
+        <div className={cn("mb-3 flex", collapsed ? "justify-center" : "justify-end")}>
           {collapsed ? (
             <Button
               type="button"
@@ -124,7 +124,7 @@ export function SideTabNavigation({
                   type="button"
                   onClick={() => handleSelect(item.key)}
                   className={cn(
-                    "relative flex min-h-11 w-full items-center rounded-lg px-2 py-2 text-sm transition-colors text-primary",
+                    "relative flex min-h-12 w-full items-center rounded-xl px-3 py-2.5 text-sm transition-colors text-primary",
                     collapsed ? "justify-center" : "justify-start gap-3",
                   )}
                   aria-label={item.label}
@@ -132,10 +132,10 @@ export function SideTabNavigation({
                   title={collapsed ? item.label : item.description || item.label}
                 >
                   <span
-                    className="absolute inset-0 rounded-lg border border-primary/35 bg-primary/10"
+                    className="absolute inset-0 rounded-xl border border-primary/35 bg-primary/10"
                   />
 
-                  <span className="relative z-10 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-background/60">
+                  <span className="relative z-10 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-background/80">
                     <Icon className="h-4 w-4" />
                   </span>
 
@@ -163,13 +163,13 @@ export function SideTabNavigation({
                   type="button"
                   onClick={() => handleSelect(item.key)}
                   className={cn(
-                    "relative flex min-h-11 w-full items-center rounded-lg px-2 py-2 text-sm transition-colors text-muted-foreground hover:bg-accent/40 hover:text-foreground",
+                    "relative flex min-h-12 w-full items-center rounded-xl px-3 py-2.5 text-sm transition-colors text-muted-foreground hover:bg-accent/40 hover:text-foreground",
                     collapsed ? "justify-center" : "justify-start gap-3",
                   )}
                   aria-label={item.label}
                   title={collapsed ? item.label : item.description || item.label}
                 >
-                  <span className="relative z-10 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-background/60">
+                  <span className="relative z-10 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-background/80">
                     <Icon className="h-4 w-4" />
                   </span>
 
@@ -206,7 +206,7 @@ export function SideTabNavigation({
             onClick={() => onMobileOpenChange(false)}
           />
           <aside
-            className="fixed inset-y-0 left-0 z-[var(--z-mobile-nav-panel)] w-[290px] border-r border-border/70 bg-background p-3 shadow-xl lg:hidden"
+            className="fixed inset-y-0 left-0 z-[var(--z-mobile-nav-panel)] w-[300px] border-r border-border/70 bg-background p-3 shadow-2xl lg:hidden"
           >
             <div className="mb-3 flex items-center justify-between">
               <p className="text-sm font-semibold">{navigationLabel}</p>
@@ -232,13 +232,13 @@ export function SideTabNavigation({
                 return (
                   active ? (
                     <button
-                      key={`mobile-${item.key}`}
-                      type="button"
-                      onClick={() => handleSelect(item.key)}
-                      className="flex min-h-11 w-full items-start gap-3 rounded-lg border border-primary/35 bg-primary/10 px-3 py-2 text-left text-sm text-primary transition-colors"
-                      aria-current="page"
-                    >
-                      <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-background/60">
+                    key={`mobile-${item.key}`}
+                    type="button"
+                    onClick={() => handleSelect(item.key)}
+                    className="flex min-h-12 w-full items-start gap-3 rounded-xl border border-primary/35 bg-primary/10 px-3 py-2.5 text-left text-sm text-primary transition-colors"
+                    aria-current="page"
+                  >
+                      <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-background/80">
                         <Icon className="h-4 w-4" />
                       </span>
                       <span className="min-w-0 flex-1 space-y-0.5">
@@ -260,9 +260,9 @@ export function SideTabNavigation({
                       key={`mobile-${item.key}`}
                       type="button"
                       onClick={() => handleSelect(item.key)}
-                      className="flex min-h-11 w-full items-start gap-3 rounded-lg px-3 py-2 text-left text-sm text-muted-foreground transition-colors hover:bg-accent/40 hover:text-foreground"
+                      className="flex min-h-12 w-full items-start gap-3 rounded-xl px-3 py-2.5 text-left text-sm text-muted-foreground transition-colors hover:bg-accent/40 hover:text-foreground"
                     >
-                      <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-background/60">
+                      <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-background/80">
                         <Icon className="h-4 w-4" />
                       </span>
                       <span className="min-w-0 flex-1 space-y-0.5">

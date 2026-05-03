@@ -37,7 +37,7 @@ export function CollectionSidebar({
   return (
     <>
       <section
-        className="rounded-[1.5rem] border border-border/70 bg-background/92 p-3 shadow-sm lg:hidden"
+        className="rounded-[1.5rem] border border-border/70 bg-background p-3 shadow-sm lg:hidden"
         data-testid="collection-mobile-launcher"
       >
         <div className="flex items-center justify-between gap-3">
@@ -114,8 +114,11 @@ export function CollectionSidebar({
           hideMobileTrigger
           collapsed={sidebarCollapsed}
           onCollapsedChange={onSidebarCollapsedChange}
-          menuLabel="Menu"
-          navigationLabel="Collection Navigation"
+          menuLabel="Browse sections"
+          navigationLabel="Collection sections"
+          expandedWidth={308}
+          collapsedWidth={88}
+          fallbackClassName="w-[19.25rem]"
         />
       ) : null}
     </>

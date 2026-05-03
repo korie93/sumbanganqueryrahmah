@@ -21,14 +21,14 @@
 .ops-section-card {
   border: 1px solid hsl(var(--border) / 0.68);
   background:
-    linear-gradient(180deg, hsl(var(--background) / 0.94), hsl(var(--card) / 0.78));
+    linear-gradient(180deg, hsl(var(--background) / 0.98), hsl(var(--card) / 0.94));
   box-shadow: var(--app-shell-section-shadow);
 }
 
 .dark .ops-header-card,
 .dark .ops-section-card {
   background:
-    linear-gradient(180deg, hsl(var(--background) / 0.96), hsl(var(--card) / 0.86));
+    linear-gradient(180deg, hsl(var(--background) / 0.98), hsl(var(--card) / 0.94));
   box-shadow: var(--app-shell-section-shadow-dark);
 }
 
@@ -42,7 +42,7 @@
 
 .ops-toolbar {
   border: 1px solid hsl(var(--border) / 0.62);
-  background: hsl(var(--muted) / 0.28);
+  background: hsl(var(--background) / 0.97);
   border-radius: 18px;
   padding: 1rem;
 }
@@ -52,7 +52,7 @@
   flex-wrap: wrap;
   gap: 0.75rem;
   border: 1px solid hsl(var(--border) / 0.6);
-  background: hsl(var(--muted) / 0.18);
+  background: hsl(var(--background) / 0.97);
   border-radius: 18px;
   padding: 0.9rem;
 }
@@ -61,7 +61,7 @@
   min-width: 160px;
   flex: 1 1 180px;
   border: 1px solid hsl(var(--border) / 0.56);
-  background: hsl(var(--background) / 0.72);
+  background: hsl(var(--background) / 0.96);
   border-radius: 16px;
   padding: 0.85rem 0.95rem;
 }
@@ -90,7 +90,7 @@
 
 .ops-inline-note {
   border: 1px solid hsl(var(--border) / 0.56);
-  background: hsl(var(--background) / 0.6);
+  background: hsl(var(--background) / 0.96);
   border-radius: 16px;
   padding: 0.85rem 1rem;
 }
@@ -104,7 +104,7 @@
   gap: 0.75rem;
   border: 1px dashed hsl(var(--border) / 0.6);
   border-radius: 18px;
-  background: hsl(var(--background) / 0.5);
+  background: hsl(var(--background) / 0.96);
   padding: 1.5rem;
   text-align: center;
 }
@@ -113,7 +113,7 @@
   overflow: hidden;
   border: 1px solid hsl(var(--border) / 0.62);
   border-radius: 18px;
-  background: hsl(var(--background) / 0.62);
+  background: hsl(var(--background) / 0.96);
 }
 
 .ops-data-table thead {

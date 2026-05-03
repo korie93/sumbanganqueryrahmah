@@ -23,8 +23,8 @@ export function CollectionRecordsPurgeSummaryCard({
   onOpenPurgeDialog,
 }: CollectionRecordsPurgeSummaryCardProps) {
   return (
-    <Card className="border-amber-500/40 bg-amber-500/5">
-      <CardContent className="flex flex-col gap-3 px-3 py-3 md:flex-row md:items-center md:justify-between">
+    <Card className="rounded-2xl border-amber-500/40 bg-amber-500/5 shadow-sm">
+      <CardContent className="flex flex-col gap-3 px-4 py-4 md:flex-row md:items-center md:justify-between">
         <div className="space-y-1">
           <p className="text-sm font-semibold text-foreground">Manual Purge Data Lama</p>
           <p className="text-xs text-muted-foreground">
@@ -43,8 +43,9 @@ export function CollectionRecordsPurgeSummaryCard({
           </p>
         </div>
         <Button
+          type="button"
           variant="destructive"
-          className="w-full sm:w-auto"
+          className="h-10 w-full rounded-xl sm:w-auto"
           onClick={onOpenPurgeDialog}
           disabled={
             loadingRecords ||

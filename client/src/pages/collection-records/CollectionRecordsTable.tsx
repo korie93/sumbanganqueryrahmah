@@ -27,7 +27,7 @@ export interface CollectionRecordsTableProps {
 
 function CollectionRecordsDesktopTableFallback() {
   return (
-    <div className="rounded-md border border-border/60 min-h-[420px] max-h-[64vh] overflow-auto px-4 py-6 text-center text-sm text-muted-foreground">
+    <div className="min-h-[420px] max-h-[64vh] overflow-auto rounded-[1.5rem] border border-border/60 bg-background px-4 py-6 text-center text-sm text-muted-foreground shadow-sm">
       Loading records table...
     </div>
   );
@@ -48,14 +48,14 @@ export function CollectionRecordsTable({
 
   if (isMobile) {
     return (
-      <div className="min-h-[320px] space-y-3 rounded-md border border-border/60 bg-background/40 p-3">
+      <div className="min-h-[320px] space-y-3 rounded-[1.5rem] border border-border/60 bg-background p-3 shadow-sm">
         {loadingRecords ? (
-          <div className="rounded-lg border border-border/60 bg-background/70 px-4 py-6 text-center text-sm text-muted-foreground">
+          <div className="rounded-2xl border border-border/60 bg-background px-4 py-6 text-center text-sm text-muted-foreground shadow-sm">
             Loading records...
           </div>
         ) : visibleRecords.length === 0 ? (
-          <div className="rounded-lg border border-border/60 bg-background/70 px-4 py-6 text-center text-sm text-muted-foreground">
-            No collection records found.
+          <div className="rounded-2xl border border-border/60 bg-background px-4 py-6 text-center text-sm text-muted-foreground shadow-sm">
+            No collection records found for the current filters.
           </div>
         ) : (
           paginatedRecords.map((record, index) => (
@@ -67,7 +67,7 @@ export function CollectionRecordsTable({
                 record,
                 recordNumber: pageOffset + index + 1,
               })}
-              className="space-y-3 rounded-xl border border-border/70 bg-background/75 p-4 shadow-sm"
+              className="space-y-3 rounded-2xl border border-border/70 bg-background p-4 shadow-sm"
               role="group"
             >
               <div className="flex items-start justify-between gap-3">
@@ -87,7 +87,7 @@ export function CollectionRecordsTable({
                 </p>
               </div>
 
-              <dl className="grid gap-2 rounded-lg border border-border/60 bg-muted/15 p-3 text-sm">
+              <dl className="grid gap-2 rounded-xl border border-border/60 bg-muted/10 p-3 text-sm sm:grid-cols-2">
                 <div className="space-y-1">
                   <dt className="text-xs uppercase tracking-[0.14em] text-muted-foreground">IC Number</dt>
                   <dd className="break-all">{record.icNumber || "-"}</dd>
@@ -115,7 +115,7 @@ export function CollectionRecordsTable({
                   <Button
                     type="button"
                     variant="outline"
-                    className="w-full justify-center"
+                    className="h-10 w-full justify-center rounded-xl"
                     onClick={() => onViewReceipt(record)}
                   >
                     <Eye className="mr-2 h-4 w-4" />
@@ -124,13 +124,25 @@ export function CollectionRecordsTable({
                 ) : null}
                 <div className="flex flex-col gap-2 sm:flex-row">
                   {canEdit ? (
-                    <Button className="w-full sm:w-auto" size="sm" variant="outline" onClick={() => onEdit(record)}>
+                    <Button
+                      type="button"
+                      className="h-10 w-full rounded-xl sm:w-auto"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => onEdit(record)}
+                    >
                       <Edit3 className="mr-2 h-3.5 w-3.5" />
                       Edit
                     </Button>
                   ) : null}
                   {canDeleteRow(record) ? (
-                    <Button className="w-full sm:w-auto" size="sm" variant="destructive" onClick={() => onDelete(record)}>
+                    <Button
+                      type="button"
+                      className="h-10 w-full rounded-xl sm:w-auto"
+                      size="sm"
+                      variant="destructive"
+                      onClick={() => onDelete(record)}
+                    >
                       <Trash2 className="mr-2 h-3.5 w-3.5" />
                       Delete
                     </Button>

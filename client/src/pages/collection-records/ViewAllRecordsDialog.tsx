@@ -99,8 +99,8 @@ export function ViewAllRecordsDialog({
           <div
             className={
               isMobile
-                ? "shrink-0 border-b bg-background/95 px-4 py-4 pr-12"
-                : "shrink-0 border-b bg-background/95 px-6 py-4"
+                ? "shrink-0 border-b bg-background px-4 py-4 pr-12"
+                : "shrink-0 border-b bg-background px-6 py-4"
             }
           >
             <div className="flex items-start justify-between gap-3">
@@ -133,7 +133,7 @@ export function ViewAllRecordsDialog({
             <div
               className={
                 isMobile
-                  ? "shrink-0 border-b border-border/60 bg-background/95 pb-[calc(env(safe-area-inset-bottom,0px)+0.25rem)] shadow-sm"
+                  ? "shrink-0 border-b border-border/60 bg-background pb-[calc(env(safe-area-inset-bottom,0px)+0.25rem)] shadow-sm"
                   : ""
               }
               data-floating-ai-avoid="true"
@@ -155,17 +155,17 @@ export function ViewAllRecordsDialog({
               className={
                 isMobile
                   ? "min-h-0 flex-1 overflow-hidden pt-3"
-                  : "min-h-0 flex-1 overflow-auto rounded-md border border-border/60"
+                  : "min-h-0 flex-1 overflow-auto rounded-[1.5rem] border border-border/60 bg-background shadow-sm"
               }
             >
               {isMobile ? (
-                <div className="min-h-0 h-full overflow-y-auto overscroll-y-contain rounded-md border border-border/60 bg-background/60 p-3 [touch-action:pan-y] [-webkit-overflow-scrolling:touch]">
+                <div className="min-h-0 h-full overflow-y-auto overscroll-y-contain rounded-[1.5rem] border border-border/60 bg-background p-3 shadow-sm [touch-action:pan-y] [-webkit-overflow-scrolling:touch]">
                   {loading ? (
-                    <div className="rounded-lg border border-border/60 bg-background/70 px-4 py-6 text-center text-sm text-muted-foreground">
+                    <div className="rounded-2xl border border-border/60 bg-background px-4 py-6 text-center text-sm text-muted-foreground">
                       Loading full records...
                     </div>
                   ) : viewAllRecords.length === 0 ? (
-                    <div className="rounded-lg border border-border/60 bg-background/70 px-4 py-6 text-center text-sm text-muted-foreground">
+                    <div className="rounded-2xl border border-border/60 bg-background px-4 py-6 text-center text-sm text-muted-foreground">
                       Tiada rekod dalam julat tarikh yang dipilih.
                     </div>
                   ) : (
@@ -182,7 +182,7 @@ export function ViewAllRecordsDialog({
                               record,
                               recordNumber: (page - 1) * pageSize + index + 1,
                             })}
-                            className="space-y-3 rounded-xl border border-border/70 bg-background/75 p-4 shadow-sm"
+                            className="space-y-3 rounded-2xl border border-border/70 bg-background p-4 shadow-sm"
                             role="group"
                           >
                             <div className="space-y-2">
@@ -225,7 +225,7 @@ export function ViewAllRecordsDialog({
                               <>
                                 <dl
                                   id={recordDetailsId}
-                                  className="grid gap-2 rounded-lg border border-border/60 bg-muted/15 p-3 text-sm"
+                                  className="grid gap-2 rounded-xl border border-border/60 bg-muted/10 p-3 text-sm"
                                 >
                                   <div className="space-y-1">
                                     <dt className="text-xs uppercase tracking-[0.14em] text-muted-foreground">IC Number</dt>

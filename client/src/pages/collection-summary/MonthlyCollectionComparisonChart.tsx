@@ -51,10 +51,10 @@ export function MonthlyCollectionComparisonChart({
   const chartRegionId = useId();
 
   return (
-    <div className="rounded-2xl border border-border/60 bg-background/65 p-3 shadow-sm">
+    <div className="rounded-2xl border border-border/60 bg-background p-3 shadow-sm">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="space-y-1">
-          <p className="text-sm font-semibold text-foreground">Monthly trend chart</p>
+          <p className="text-sm font-semibold text-foreground">Monthly bar chart</p>
           <p className="text-xs text-muted-foreground">
             Compare total collection by month for the selected nickname.
           </p>
@@ -118,7 +118,7 @@ export function MonthlyCollectionComparisonChart({
       {!collapsed ? (
         <div
           id={chartRegionId}
-          className={`mt-3 min-w-0 rounded-xl border border-border/60 bg-background/40 p-3 ${expanded ? "h-[340px]" : "h-[220px]"}`}
+          className={`mt-3 min-w-0 rounded-xl border border-border/60 bg-background p-3 ${expanded ? "h-[340px]" : "h-[220px]"}`}
         >
           <ResponsiveContainer width="100%" height="100%">
             <BarChart
@@ -154,7 +154,7 @@ export function MonthlyCollectionComparisonChart({
       ) : (
         <p
           id={chartRegionId}
-          className="mt-3 rounded-xl border border-dashed border-border/60 px-3 py-3 text-xs text-muted-foreground"
+          className="mt-3 rounded-xl border border-dashed border-border/60 bg-background px-3 py-3 text-xs text-muted-foreground"
         >
           Chart is minimized. Expand it again to review the monthly bar trend.
         </p>

@@ -1,4 +1,5 @@
-import { ChevronDown, Loader2, Save } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { ChevronDown, Loader2, Save, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -41,18 +42,37 @@ export function CollectionDailyUserFilterControl({
   onClearSelectedUsers,
 }: CollectionDailyUserFilterControlProps) {
   const isMobile = useIsMobile();
+  const [searchValue, setSearchValue] = useState("");
+
+  useEffect(() => {
+    if (!userPopoverOpen) {
+      setSearchValue("");
+    }
+  }, [userPopoverOpen]);
+
+  const filteredUsers = useMemo(() => {
+    const normalizedSearch = searchValue.trim().toLowerCase();
+    if (!normalizedSearch) {
+      return users;
+    }
+
+    return users.filter((userItem) => userItem.username.toLowerCase().includes(normalizedSearch));
+  }, [searchValue, users]);
 
   return (
     <Popover open={userPopoverOpen} onOpenChange={onUserPopoverOpenChange}>
       <PopoverTrigger asChild>
         <Button
           id={triggerId}
+          type="button"
           variant="outline"
           className={cn(
-            "w-full justify-between",
-            isMobile ? "h-12 rounded-2xl px-4 text-left" : "",
+            "w-full justify-between bg-background text-left shadow-sm",
+            isMobile ? "h-12 rounded-2xl px-4" : "h-11 rounded-xl px-4",
           )}
           disabled={loadingUsers}
+          aria-expanded={userPopoverOpen}
+          aria-haspopup="dialog"
           data-testid="collection-daily-user-trigger"
         >
           <span className="truncate text-left">{selectedUsersLabel}</span>
@@ -67,8 +87,8 @@ export function CollectionDailyUserFilterControl({
         <PopoverContent
           align="start"
           className={cn(
-            "w-[min(340px,calc(100vw-1.5rem))] p-2",
-            isMobile ? "rounded-2xl" : "",
+            "w-[min(360px,calc(100vw-1.5rem))] border border-border/70 bg-popover p-2 text-popover-foreground shadow-xl",
+            isMobile ? "rounded-2xl" : "rounded-xl",
           )}
           data-testid="collection-daily-user-popover"
         >
@@ -81,6 +101,24 @@ export function CollectionDailyUserFilterControl({
             <p className="px-2 py-3 text-sm text-muted-foreground">No staff nicknames available.</p>
           ) : (
             <div className="space-y-2">
+              <div className="relative">
+                <Search
+                  className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+                  aria-hidden="true"
+                />
+                <Input
+                  value={searchValue}
+                  onChange={(event) => setSearchValue(event.target.value)}
+                  placeholder="Cari staff..."
+                  className="h-10 rounded-xl bg-background pl-9"
+                  aria-label="Cari staff nickname"
+                  autoComplete="off"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
+                />
+              </div>
+
               <div className="flex items-center justify-between gap-2 border-b border-border/60 pb-2">
                 <div className="flex items-center gap-2">
                   <Checkbox
@@ -94,8 +132,10 @@ export function CollectionDailyUserFilterControl({
                   <span className="text-xs font-medium">Select all staff nicknames</span>
                 </div>
                 <Button
+                  type="button"
                   size="sm"
-                  variant="ghost"
+                  variant="outline"
+                  className="h-8 rounded-full px-3"
                   onClick={onClearSelectedUsers}
                   disabled={selectedUsernamesCount === 0 || loadingUsers}
                 >
@@ -103,14 +143,19 @@ export function CollectionDailyUserFilterControl({
                 </Button>
               </div>
 
-              <div className="max-h-56 space-y-1 overflow-y-auto pr-1">
-                {users.map((userItem) => {
+              {filteredUsers.length === 0 ? (
+                <p className="px-2 py-3 text-sm text-muted-foreground">
+                  Tiada staff sepadan dengan carian ini.
+                </p>
+              ) : (
+                <div className="max-h-56 space-y-1 overflow-y-auto pr-1">
+                  {filteredUsers.map((userItem) => {
                   const normalized = userItem.username.toLowerCase();
                   const checked = selectedUserSet.has(normalized);
                   return (
                     <label
                       key={userItem.id}
-                      className="flex cursor-pointer items-center gap-2 rounded px-1 py-1 hover:bg-accent/40"
+                      className="flex cursor-pointer items-center gap-2 rounded-xl px-2 py-2 hover:bg-accent/40"
                     >
                       <Checkbox
                         checked={checked}
@@ -122,8 +167,9 @@ export function CollectionDailyUserFilterControl({
                       <span className="text-sm">{userItem.username}</span>
                     </label>
                   );
-                })}
-              </div>
+                  })}
+                </div>
+              )}
             </div>
           )}
         </PopoverContent>
@@ -158,8 +204,8 @@ export function CollectionDailyTargetControls({
   return (
     <div
       className={cn(
-        "gap-3 border border-border/70 bg-background/70 p-4",
-        isMobile ? "space-y-4 rounded-2xl" : "grid rounded-xl md:grid-cols-[220px_auto] md:items-end",
+        "gap-3 border border-border/70 bg-background p-4 shadow-sm",
+        isMobile ? "space-y-4 rounded-2xl" : "grid rounded-2xl md:grid-cols-[220px_auto] md:items-end",
       )}
     >
       <div className="space-y-1">
@@ -174,7 +220,7 @@ export function CollectionDailyTargetControls({
           value={monthlyTargetInput}
           onChange={(event) => onMonthlyTargetInputChange(event.target.value)}
           disabled={!canEditTarget}
-          className={isMobile ? "h-12 rounded-2xl" : undefined}
+          className={isMobile ? "h-12 rounded-2xl bg-background" : "h-11 rounded-xl bg-background"}
         />
         {!canEditTarget ? (
           <p className="text-xs text-muted-foreground">
@@ -190,7 +236,8 @@ export function CollectionDailyTargetControls({
         data-floating-ai-avoid="true"
       >
         <Button
-          className={cn("w-full", isMobile ? "h-12 rounded-2xl" : "sm:w-auto")}
+          type="button"
+          className={cn("w-full", isMobile ? "h-12 rounded-2xl" : "h-11 rounded-xl sm:w-auto")}
           onClick={onSaveTarget}
           disabled={savingTarget || !canEditTarget}
         >
@@ -202,8 +249,9 @@ export function CollectionDailyTargetControls({
           Save Target
         </Button>
         <Button
+          type="button"
           variant="outline"
-          className={cn("w-full", isMobile ? "h-12 rounded-2xl" : "sm:w-auto")}
+          className={cn("w-full", isMobile ? "h-12 rounded-2xl" : "h-11 rounded-xl sm:w-auto")}
           onClick={onSaveCalendar}
           disabled={savingCalendar || calendarDays.length === 0}
         >

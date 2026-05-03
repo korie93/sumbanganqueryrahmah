@@ -17,7 +17,7 @@ export function CollectionDailyMobileFiltersLayout(props: CollectionDailyFilters
 
   return (
     <div className="space-y-3">
-      <div className="rounded-2xl border border-border/60 bg-background/80 px-3 py-3 shadow-sm">
+      <div className="rounded-2xl border border-border/60 bg-background px-3 py-3 shadow-sm">
         <div className="space-y-2">
           <div className="flex flex-wrap gap-2">
             <Badge variant="secondary" className="rounded-full px-3 py-1 text-[11px]">
@@ -31,12 +31,12 @@ export function CollectionDailyMobileFiltersLayout(props: CollectionDailyFilters
             </Badge>
           </div>
           <p className="text-xs leading-relaxed text-muted-foreground">
-            Adjust period and staff scope first, then save target or calendar only when changes are ready.
+            Set month and staff scope first, then save target or calendar only when changes are ready.
           </p>
         </div>
       </div>
 
-      <section className="space-y-3 rounded-2xl border border-border/60 bg-muted/10 p-3.5">
+      <section className="space-y-3 rounded-2xl border border-border/60 bg-background p-3.5 shadow-sm">
         <div className="space-y-1">
           <h3 className="text-base font-semibold text-foreground">Reporting Period</h3>
           <p className="text-xs leading-relaxed text-muted-foreground">
@@ -46,7 +46,7 @@ export function CollectionDailyMobileFiltersLayout(props: CollectionDailyFilters
         <CollectionDailyPeriodFields {...props} isMobile />
       </section>
 
-      <section className="space-y-3 rounded-2xl border border-border/60 bg-muted/10 p-3.5">
+      <section className="space-y-3 rounded-2xl border border-border/60 bg-background p-3.5 shadow-sm">
         <div className="space-y-1">
           <h3 className="text-base font-semibold text-foreground">Staff Scope</h3>
           <p className="text-xs leading-relaxed text-muted-foreground">

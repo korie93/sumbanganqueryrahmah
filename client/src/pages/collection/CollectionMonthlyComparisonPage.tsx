@@ -66,11 +66,11 @@ function CollectionMonthlyComparisonPage({
   return (
     <OperationalSectionCard
       title="Monthly Collection Comparison"
-      description="Compare one staff nickname across a bounded month range without crowding the broader collection summary workflow."
-      contentClassName="space-y-5"
+      description="Compare one staff nickname across a bounded month range without crowding the broader collection workspace."
+      contentClassName="space-y-4"
     >
-      <div className="rounded-2xl border border-border/60 bg-background/75 p-4 shadow-sm">
-        <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+      <div className="rounded-2xl border border-border/60 bg-background p-3.5 shadow-sm">
+        <div className="flex flex-col gap-2.5 xl:flex-row xl:items-center xl:justify-between">
           <div className="flex items-start gap-3">
             <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary">
               <BarChart3 className="h-5 w-5" aria-hidden="true" />
@@ -80,7 +80,7 @@ function CollectionMonthlyComparisonPage({
                 One nickname, one compact monthly view
               </h2>
               <p className="text-sm leading-6 text-muted-foreground">
-                Pick a visible nickname, compare the first and last months in your range, and keep the monthly chart close to the totals without crowding the page.
+                Pick a visible nickname, compare the first and last months in your range, and keep the monthly chart close to the totals.
               </p>
             </div>
           </div>
@@ -88,11 +88,11 @@ function CollectionMonthlyComparisonPage({
           <div className="flex flex-wrap items-center gap-2">
             <Badge variant="secondary" className="rounded-full px-3 py-1 text-[11px]">
               <CalendarRange className="mr-1 h-3.5 w-3.5" aria-hidden="true" />
-              Up to 24 months
+              24 months max
             </Badge>
             <Badge variant="outline" className="rounded-full px-3 py-1 text-[11px]">
               <TrendingUp className="mr-1 h-3.5 w-3.5" aria-hidden="true" />
-              First vs last month
+              First vs last
             </Badge>
             <Badge variant="outline" className="rounded-full px-3 py-1 text-[11px]">
               Empty months stay visible
@@ -105,7 +105,7 @@ function CollectionMonthlyComparisonPage({
         <div
           role="status"
           aria-live="polite"
-          className="rounded-2xl border border-border/60 bg-muted/10 px-4 py-3 text-sm text-muted-foreground"
+          className="rounded-2xl border border-border/60 bg-background px-4 py-3 text-sm text-muted-foreground shadow-sm"
         >
           Loading visible nickname options...
         </div>

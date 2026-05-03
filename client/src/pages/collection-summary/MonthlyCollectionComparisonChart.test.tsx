@@ -47,7 +47,7 @@ test("MonthlyCollectionComparisonChart renders compact chart controls accessibly
     }),
   );
 
-  assert.match(markup, /Monthly trend chart/);
+  assert.match(markup, /Monthly bar chart/);
   assert.match(markup, /Minimize chart/);
   assert.match(markup, /Expand chart/);
   assert.match(markup, /aria-controls=/);

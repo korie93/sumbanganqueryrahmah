@@ -113,12 +113,14 @@ export function CollectionDailyCalendarCard({
         )}
 
         {loadingOverview ? (
-          <div className="py-8 text-center text-sm text-muted-foreground">
+          <div className="rounded-2xl border border-border/60 bg-background px-4 py-8 text-center text-sm text-muted-foreground shadow-sm">
             <Loader2 className="mx-auto mb-2 h-5 w-5 animate-spin" />
             Loading monthly daily status...
           </div>
         ) : !overview ? (
-          <div className="py-8 text-center text-sm text-muted-foreground">{emptyOverviewMessage}</div>
+          <div className="rounded-2xl border border-border/60 bg-background px-4 py-8 text-center text-sm text-muted-foreground shadow-sm">
+            {emptyOverviewMessage}
+          </div>
         ) : (
           <div className="space-y-3">
             {isMobile ? (
@@ -217,48 +219,48 @@ export function CollectionDailyCalendarCard({
             )}
 
             {canManage && isMobile && selectedDay && selectedEditableDay ? (
-              <div className="space-y-3 rounded-xl border border-border/60 bg-background/70 p-4" data-floating-ai-avoid="true">
-                <div className="space-y-1">
-                  <p className="text-sm font-semibold">
-                    Edit {formatDateDDMMYYYY(selectedDay.date)}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    Collected {formatAmountRM(selectedDay.amount)} | Required {formatAmountRM(selectedDay.target)}
-                  </p>
+              <div className="space-y-3 rounded-2xl border border-border/60 bg-background p-4 shadow-sm" data-floating-ai-avoid="true">
+                  <div className="space-y-1">
+                    <p className="text-sm font-semibold">
+                      Edit {formatDateDDMMYYYY(selectedDay.date)}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Collected {formatAmountRM(selectedDay.amount)} | Required {formatAmountRM(selectedDay.target)}
+                    </p>
+                  </div>
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <label
+                      className="flex items-center gap-2 rounded-lg border border-border/60 bg-muted/15 px-3 py-2"
+                      htmlFor={workingDayCheckboxId}
+                    >
+                      <input
+                        id={workingDayCheckboxId}
+                        name={workingDayCheckboxId}
+                        type="checkbox"
+                        checked={selectedEditableDay.isWorkingDay}
+                        onChange={(event) =>
+                          onUpdateEditableDay(selectedEditableDay.day, { isWorkingDay: event.target.checked })
+                        }
+                      />
+                      <span>Working day</span>
+                    </label>
+                    <label
+                      className="flex items-center gap-2 rounded-lg border border-border/60 bg-muted/15 px-3 py-2"
+                      htmlFor={holidayCheckboxId}
+                    >
+                      <input
+                        id={holidayCheckboxId}
+                        name={holidayCheckboxId}
+                        type="checkbox"
+                        checked={selectedEditableDay.isHoliday}
+                        onChange={(event) =>
+                          onUpdateEditableDay(selectedEditableDay.day, { isHoliday: event.target.checked })
+                        }
+                      />
+                      <span>Holiday</span>
+                    </label>
+                  </div>
                 </div>
-                <div className="flex flex-col gap-2 sm:flex-row">
-                  <label
-                    className="flex items-center gap-2 rounded-lg border border-border/60 bg-muted/15 px-3 py-2"
-                    htmlFor={workingDayCheckboxId}
-                  >
-                    <input
-                      id={workingDayCheckboxId}
-                      name={workingDayCheckboxId}
-                      type="checkbox"
-                      checked={selectedEditableDay.isWorkingDay}
-                      onChange={(event) =>
-                        onUpdateEditableDay(selectedEditableDay.day, { isWorkingDay: event.target.checked })
-                      }
-                    />
-                    <span>Working day</span>
-                  </label>
-                  <label
-                    className="flex items-center gap-2 rounded-lg border border-border/60 bg-muted/15 px-3 py-2"
-                    htmlFor={holidayCheckboxId}
-                  >
-                    <input
-                      id={holidayCheckboxId}
-                      name={holidayCheckboxId}
-                      type="checkbox"
-                      checked={selectedEditableDay.isHoliday}
-                      onChange={(event) =>
-                        onUpdateEditableDay(selectedEditableDay.day, { isHoliday: event.target.checked })
-                      }
-                    />
-                    <span>Holiday</span>
-                  </label>
-                </div>
-              </div>
             ) : null}
           </div>
         )}

@@ -13,10 +13,13 @@ type CollectionNicknameSingleSelectProps = {
   loading?: boolean;
   selectedLabel: string;
   options: string[];
+  emptySelectionActive?: boolean | undefined;
+  emptySelectionLabel?: string | undefined;
   value: string;
   emptyMessage?: string | undefined;
   searchPlaceholder?: string | undefined;
   onOpenChange: (open: boolean) => void;
+  onSelectEmpty?: (() => void) | undefined;
   onSelect: (nickname: string) => void;
   triggerClassName?: string | undefined;
   popoverClassName?: string | undefined;
@@ -29,10 +32,13 @@ export function CollectionNicknameSingleSelect({
   loading = false,
   selectedLabel,
   options,
+  emptySelectionActive = false,
+  emptySelectionLabel,
   value,
   emptyMessage = "Tiada nickname tersedia untuk akaun anda.",
   searchPlaceholder = "Cari nickname...",
   onOpenChange,
+  onSelectEmpty,
   onSelect,
   triggerClassName,
   popoverClassName,
@@ -101,13 +107,33 @@ export function CollectionNicknameSingleSelect({
                 />
               </div>
 
-              {filteredOptions.length === 0 ? (
-                <p className="px-2 py-3 text-sm text-muted-foreground">
-                  Tiada nickname sepadan dengan carian ini.
-                </p>
-              ) : (
-                <div className="max-h-56 space-y-1 overflow-y-auto pr-1">
-                  {filteredOptions.map((nickname) => {
+              <div className="max-h-56 space-y-1 overflow-y-auto pr-1">
+                {emptySelectionLabel ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onSelectEmpty?.();
+                      onOpenChange(false);
+                    }}
+                    className={cn(
+                      "flex w-full items-center justify-between rounded-lg px-2 py-2 text-left text-sm transition-colors",
+                      emptySelectionActive
+                        ? "bg-primary/10 text-primary"
+                        : "text-foreground hover:bg-accent/40",
+                    )}
+                  >
+                    <span className="truncate">{emptySelectionLabel}</span>
+                    {emptySelectionActive ? (
+                      <Check className="h-4 w-4 shrink-0" aria-hidden="true" />
+                    ) : null}
+                  </button>
+                ) : null}
+                {filteredOptions.length === 0 ? (
+                  <p className="px-2 py-3 text-sm text-muted-foreground">
+                    Tiada nickname sepadan dengan carian ini.
+                  </p>
+                ) : (
+                  filteredOptions.map((nickname) => {
                     const selected = nickname.toLowerCase() === value.trim().toLowerCase();
                     return (
                       <button
@@ -128,9 +154,9 @@ export function CollectionNicknameSingleSelect({
                         {selected ? <Check className="h-4 w-4 shrink-0" aria-hidden="true" /> : null}
                       </button>
                     );
-                  })}
-                </div>
-              )}
+                  })
+                )}
+              </div>
             </div>
           )}
         </PopoverContent>

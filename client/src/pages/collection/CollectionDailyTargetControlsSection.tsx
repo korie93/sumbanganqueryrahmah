@@ -20,10 +20,10 @@ export function CollectionDailyTargetControlsSection({
 }: CollectionDailyTargetControlsSectionProps) {
   const fallback = (
     <div
-      className={`gap-3 border border-border/70 bg-background/70 p-4 ${
+      className={`gap-3 border border-border/70 bg-background p-4 shadow-sm ${
         isMobile
           ? "space-y-3 rounded-2xl"
-          : "grid rounded-xl md:grid-cols-[220px_auto] md:items-end"
+          : "grid rounded-2xl md:grid-cols-[220px_auto] md:items-end"
       }`}
     >
       <div className="space-y-1">

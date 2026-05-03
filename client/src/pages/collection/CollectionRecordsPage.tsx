@@ -179,23 +179,23 @@ function CollectionRecordsPage({ role }: CollectionRecordsPageProps) {
   };
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       {isMobile ? (
         <div
-          className="relative overflow-hidden rounded-[1.75rem] border border-border/60 bg-background/80 px-4 py-4 shadow-sm"
+          className="relative overflow-hidden rounded-[1.5rem] border border-border/60 bg-background px-4 py-4 shadow-sm"
           data-floating-ai-avoid="true"
         >
           <div className="absolute inset-x-0 top-0 h-24 bg-gradient-to-br from-primary/12 via-primary/6 to-transparent" />
-          <div className="relative space-y-4">
-            <div className="space-y-2">
+          <div className="relative space-y-3">
+            <div className="space-y-1.5">
               <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
                 Collection
               </p>
-              <h1 className="text-2xl font-bold tracking-tight text-foreground">
+              <h1 className="text-[1.7rem] font-bold tracking-tight text-foreground">
                 View Rekod Collection
               </h1>
               <p className="text-sm leading-relaxed text-muted-foreground">
-                Search records, review receipts, and handle exports from a calmer mobile workspace.
+                Cari, semak, dan urus rekod collection tanpa memenuhi skrin dengan kawalan yang tidak perlu.
               </p>
             </div>
 
@@ -225,10 +225,14 @@ function CollectionRecordsPage({ role }: CollectionRecordsPageProps) {
               </Button>
             </div>
 
-            <p className="text-xs leading-relaxed text-muted-foreground">
-              Filters stay tucked away until you need them, so the records list remains easier to scan on
-              smaller screens.
-            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant="secondary" className="rounded-full px-2.5 py-1 text-[11px]">
+                Records workspace
+              </Badge>
+              <Badge variant="secondary" className="rounded-full px-2.5 py-1 text-[11px]">
+                Quicker scan on mobile
+              </Badge>
+            </div>
           </div>
         </div>
       ) : null}
@@ -238,9 +242,9 @@ function CollectionRecordsPage({ role }: CollectionRecordsPageProps) {
         description={
           isMobile
             ? "Review records, exports, and receipt actions without leaving the current collection view."
-            : "Search, review, export, and maintain collection records from one calmer workspace."
+            : "Search, review, export, and maintain collection records from a tidier workspace."
         }
-        contentClassName="space-y-3"
+        contentClassName="space-y-4"
       >
         {!isMobile ? (
           <div className="ops-toolbar">
@@ -263,7 +267,7 @@ function CollectionRecordsPage({ role }: CollectionRecordsPageProps) {
         <Sheet open={mobileFiltersOpen} onOpenChange={setMobileFiltersOpen}>
           <SheetContent
             side="bottom"
-            className="max-h-[88dvh] rounded-t-[1.75rem] border-border/70 bg-background/98 px-4 pb-[calc(env(safe-area-inset-bottom,0px)+1rem)] pt-4"
+            className="max-h-[88dvh] rounded-t-[1.75rem] border-border/70 bg-background px-4 pb-[calc(env(safe-area-inset-bottom,0px)+1rem)] pt-4"
             data-floating-ai-avoid="true"
           >
             <SheetHeader className="pr-8 text-left">

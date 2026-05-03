@@ -20,21 +20,21 @@ export function CollectionRecordsDesktopTable({
   canDeleteRow,
 }: CollectionRecordsDesktopTableProps) {
   return (
-    <div className="rounded-md border border-border/60 min-h-[420px] max-h-[64vh] overflow-auto">
+    <div className="min-h-[420px] max-h-[64vh] overflow-auto rounded-[1.5rem] border border-border/60 bg-background shadow-sm">
       <Table className="min-w-[1280px] text-sm">
         <TableHeader>
           <TableRow>
-            <TableHead className="sticky top-0 z-[var(--z-sticky-header)] bg-background w-[72px]">No.</TableHead>
-            <TableHead className="sticky top-0 z-[var(--z-sticky-header)] bg-background">Customer Name</TableHead>
-            <TableHead className="sticky top-0 z-[var(--z-sticky-header)] bg-background">IC Number</TableHead>
-            <TableHead className="sticky top-0 z-[var(--z-sticky-header)] bg-background">Account Number</TableHead>
-            <TableHead className="sticky top-0 z-[var(--z-sticky-header)] bg-background">Customer Phone Number</TableHead>
-            <TableHead className="sticky top-0 z-[var(--z-sticky-header)] bg-background">Batch</TableHead>
-            <TableHead className="sticky top-0 z-[var(--z-sticky-header)] bg-background">Amount</TableHead>
-            <TableHead className="sticky top-0 z-[var(--z-sticky-header)] bg-background">Payment Date</TableHead>
-            <TableHead className="sticky top-0 z-[var(--z-sticky-header)] bg-background">Receipt</TableHead>
-            <TableHead className="sticky top-0 z-[var(--z-sticky-header)] bg-background">Staff Nickname</TableHead>
-            <TableHead className="sticky top-0 z-[var(--z-sticky-header)] bg-background text-right">Actions</TableHead>
+            <TableHead className="sticky top-0 z-[var(--z-sticky-header)] w-[72px] border-b border-border/70 bg-background/95 backdrop-blur">No.</TableHead>
+            <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-background/95 backdrop-blur">Customer Name</TableHead>
+            <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-background/95 backdrop-blur">IC Number</TableHead>
+            <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-background/95 backdrop-blur">Account Number</TableHead>
+            <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-background/95 backdrop-blur">Customer Phone Number</TableHead>
+            <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-background/95 backdrop-blur">Batch</TableHead>
+            <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-background/95 backdrop-blur">Amount</TableHead>
+            <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-background/95 backdrop-blur">Payment Date</TableHead>
+            <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-background/95 backdrop-blur">Receipt</TableHead>
+            <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-background/95 backdrop-blur">Staff Nickname</TableHead>
+            <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-background/95 text-right backdrop-blur">Actions</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -61,44 +61,46 @@ export function CollectionRecordsDesktopTable({
                   recordNumber: pageOffset + index + 1,
                 })}
               >
-                <TableCell className="py-1.5 text-muted-foreground">
+                <TableCell className="py-2 text-muted-foreground">
                   {pageOffset + index + 1}
                 </TableCell>
-                <TableCell className="py-1.5">{record.customerName}</TableCell>
-                <TableCell className="py-1.5 whitespace-nowrap">{record.icNumber}</TableCell>
-                <TableCell className="py-1.5 whitespace-nowrap">{record.accountNumber}</TableCell>
-                <TableCell className="py-1.5 whitespace-nowrap">{record.customerPhone}</TableCell>
-                <TableCell className="py-1.5 whitespace-nowrap">{record.batch}</TableCell>
-                <TableCell className="py-1.5 whitespace-nowrap">{formatAmountRM(record.amount)}</TableCell>
-                <TableCell className="py-1.5 whitespace-nowrap">{formatIsoDateToDDMMYYYY(record.paymentDate)}</TableCell>
-                <TableCell className="py-1.5 whitespace-nowrap">
+                <TableCell className="py-2 font-medium">{record.customerName}</TableCell>
+                <TableCell className="py-2 whitespace-nowrap">{record.icNumber}</TableCell>
+                <TableCell className="py-2 whitespace-nowrap">{record.accountNumber}</TableCell>
+                <TableCell className="py-2 whitespace-nowrap">{record.customerPhone}</TableCell>
+                <TableCell className="py-2 whitespace-nowrap">{record.batch}</TableCell>
+                <TableCell className="py-2 whitespace-nowrap font-semibold text-emerald-700 dark:text-emerald-300">
+                  {formatAmountRM(record.amount)}
+                </TableCell>
+                <TableCell className="py-2 whitespace-nowrap">{formatIsoDateToDDMMYYYY(record.paymentDate)}</TableCell>
+                <TableCell className="py-2 whitespace-nowrap">
                   {(record.receipts?.length || 0) > 0 ? (
                     <Button
                       type="button"
-                      variant="link"
+                      variant="outline"
                       size="sm"
-                      className="h-auto px-0 text-primary"
+                      className="h-8 rounded-full px-3 text-foreground"
                       onClick={() => onViewReceipt(record)}
                     >
-                      <Eye className="w-3.5 h-3.5" />
+                      <Eye className="mr-1.5 h-3.5 w-3.5" />
                       {(record.receipts?.length || 0) > 1 ? `View (${record.receipts.length})` : "View"}
                     </Button>
                   ) : (
                     <span className="text-muted-foreground">-</span>
                   )}
                 </TableCell>
-                <TableCell className="py-1.5 whitespace-nowrap">{record.collectionStaffNickname}</TableCell>
-                <TableCell className="py-1.5 text-right whitespace-nowrap">
+                <TableCell className="py-2 whitespace-nowrap">{record.collectionStaffNickname}</TableCell>
+                <TableCell className="py-2 text-right whitespace-nowrap">
                   <div className="inline-flex items-center gap-2">
                     {canEdit ? (
-                      <Button size="sm" variant="outline" onClick={() => onEdit(record)}>
-                        <Edit3 className="w-3.5 h-3.5 mr-1" />
+                      <Button type="button" size="sm" variant="outline" className="h-8 rounded-full px-3" onClick={() => onEdit(record)}>
+                        <Edit3 className="mr-1.5 h-3.5 w-3.5" />
                         Edit
                       </Button>
                     ) : null}
                     {canDeleteRow(record) ? (
-                      <Button size="sm" variant="destructive" onClick={() => onDelete(record)}>
-                        <Trash2 className="w-3.5 h-3.5 mr-1" />
+                      <Button type="button" size="sm" variant="destructive" className="h-8 rounded-full px-3" onClick={() => onDelete(record)}>
+                        <Trash2 className="mr-1.5 h-3.5 w-3.5" />
                         Delete
                       </Button>
                     ) : null}

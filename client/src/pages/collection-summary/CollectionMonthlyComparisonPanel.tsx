@@ -80,7 +80,7 @@ export function CollectionMonthlyComparisonPanel({
   return (
     <section
       aria-labelledby="collection-monthly-comparison-title"
-      className={standalone ? "space-y-5" : "space-y-5 border-t border-border/60 pt-4"}
+      className={standalone ? "space-y-4" : "space-y-4 border-t border-border/60 pt-4"}
       data-floating-ai-avoid="true"
     >
       {showHeader ? (
@@ -98,8 +98,8 @@ export function CollectionMonthlyComparisonPanel({
         </h2>
       )}
 
-      <div className="rounded-2xl border border-border/60 bg-background/75 p-3.5 shadow-sm">
-        <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_150px_150px_auto_auto] xl:items-end">
+      <div className="rounded-2xl border border-border/60 bg-background p-3 shadow-sm">
+        <div className="grid gap-2.5 xl:grid-cols-[minmax(0,1.15fr)_minmax(11rem,11rem)_minmax(11rem,11rem)_auto_auto] xl:items-end">
           <div className="space-y-1">
             {canFilterByNickname ? (
               <CollectionNicknameSingleSelect
@@ -112,8 +112,8 @@ export function CollectionMonthlyComparisonPanel({
                 value={selectedNickname}
                 onOpenChange={setNicknameSelectOpen}
                 onSelect={onSelectedNicknameChange}
-                triggerClassName="h-10 rounded-xl bg-background"
-                popoverClassName="rounded-2xl bg-popover"
+                triggerClassName="h-11 rounded-2xl bg-background"
+                popoverClassName="w-[min(360px,calc(100vw-2rem))] rounded-2xl border-border/70 bg-popover p-2 shadow-xl"
               />
             ) : (
               <div className="space-y-1">
@@ -127,7 +127,7 @@ export function CollectionMonthlyComparisonPanel({
                   id="collection-monthly-comparison-nickname"
                   value={selectedNickname}
                   readOnly
-                  className="h-10 w-full rounded-xl border border-input bg-muted/30 px-3 text-sm text-foreground"
+                  className="h-11 w-full rounded-2xl border border-input bg-background px-3 text-sm text-foreground"
                   aria-readonly="true"
                 />
               </div>
@@ -146,7 +146,7 @@ export function CollectionMonthlyComparisonPanel({
               type="month"
               value={startMonth}
               onChange={(event) => onStartMonthChange(event.target.value)}
-              className="h-10 w-full rounded-xl border border-input bg-background px-3 text-sm"
+              className="h-11 w-full rounded-2xl border border-input bg-background px-3 text-sm"
             />
           </div>
 
@@ -162,13 +162,13 @@ export function CollectionMonthlyComparisonPanel({
               type="month"
               value={endMonth}
               onChange={(event) => onEndMonthChange(event.target.value)}
-              className="h-10 w-full rounded-xl border border-input bg-background px-3 text-sm"
+              className="h-11 w-full rounded-2xl border border-input bg-background px-3 text-sm"
             />
           </div>
 
           <button
             type="button"
-            className="inline-flex h-10 items-center justify-center rounded-xl bg-primary px-4 text-sm font-medium text-primary-foreground transition hover:bg-primary/90"
+            className="inline-flex h-11 items-center justify-center rounded-2xl bg-primary px-4 text-sm font-medium text-primary-foreground transition hover:bg-primary/90"
             onClick={onApply}
             disabled={loading || !hasAvailableNickname}
           >
@@ -176,7 +176,7 @@ export function CollectionMonthlyComparisonPanel({
           </button>
           <button
             type="button"
-            className="inline-flex h-10 items-center justify-center rounded-xl border border-input bg-background px-4 text-sm font-medium text-foreground transition hover:bg-accent hover:text-accent-foreground"
+            className="inline-flex h-11 items-center justify-center rounded-2xl border border-input bg-background px-4 text-sm font-medium text-foreground transition hover:bg-accent hover:text-accent-foreground"
             onClick={onReset}
             disabled={loading}
           >
@@ -184,20 +184,20 @@ export function CollectionMonthlyComparisonPanel({
           </button>
         </div>
         <div className="mt-2.5 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-          <span className="rounded-full border border-border/60 bg-muted/10 px-2.5 py-1">
+          <span className="rounded-full border border-border/60 bg-background px-2.5 py-1">
             Single nickname only
           </span>
-          <span className="rounded-full border border-border/60 bg-muted/10 px-2.5 py-1">
+          <span className="rounded-full border border-border/60 bg-background px-2.5 py-1">
             First month = base
           </span>
-          <span className="rounded-full border border-border/60 bg-muted/10 px-2.5 py-1">
+          <span className="rounded-full border border-border/60 bg-background px-2.5 py-1">
             Last month = target
           </span>
         </div>
       </div>
 
       {!hasAvailableNickname ? (
-        <p className="rounded-md border border-dashed border-border/60 px-4 py-4 text-sm text-muted-foreground">
+        <p className="rounded-2xl border border-dashed border-border/60 bg-background px-4 py-4 text-sm text-muted-foreground">
           No visible staff nickname is available for this monthly comparison yet.
         </p>
       ) : null}
@@ -206,7 +206,7 @@ export function CollectionMonthlyComparisonPanel({
         <div
           role="status"
           aria-live="polite"
-          className="rounded-md border border-border/60 px-4 py-6 text-sm text-muted-foreground"
+          className="rounded-2xl border border-border/60 bg-background px-4 py-5 text-sm text-muted-foreground"
         >
           Loading monthly comparison...
         </div>
@@ -215,7 +215,7 @@ export function CollectionMonthlyComparisonPanel({
       {!loading && errorMessage ? (
         <p
           role="alert"
-          className="rounded-md border border-destructive/40 bg-destructive/5 px-4 py-3 text-sm text-destructive"
+          className="rounded-2xl border border-destructive/40 bg-destructive/5 px-4 py-3 text-sm text-destructive"
         >
           {errorMessage}
         </p>
@@ -255,7 +255,7 @@ export function CollectionMonthlyComparisonPanel({
             />
           </OperationalSummaryStrip>
 
-          <div className="rounded-2xl border border-border/60 bg-muted/10 px-4 py-4">
+          <div className="rounded-2xl border border-border/60 bg-background px-4 py-4 shadow-sm">
             <p className="text-sm font-medium text-foreground">Comparison summary</p>
             <p className="mt-1 text-sm leading-6 text-muted-foreground">{comparison?.summary}</p>
           </div>
@@ -283,7 +283,7 @@ export function CollectionMonthlyComparisonPanel({
                 {data.months.map((month) => (
                   <div
                     key={month.month}
-                    className="grid gap-2 rounded-xl border border-border/50 bg-background/55 px-3 py-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
+                    className="grid gap-2 rounded-2xl border border-border/50 bg-background px-3 py-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
                   >
                     <div className="space-y-1">
                       <div className="flex flex-wrap items-center justify-between gap-2">

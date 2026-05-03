@@ -33,16 +33,16 @@ export function ViewAllRecordsDesktopTable({
     <Table className="min-w-[1100px] text-sm">
       <TableHeader>
         <TableRow>
-          <TableHead className="sticky top-0 z-[var(--z-sticky-header)] bg-background">No.</TableHead>
-          <TableHead className="sticky top-0 z-[var(--z-sticky-header)] bg-background">Customer Name</TableHead>
-          <TableHead className="sticky top-0 z-[var(--z-sticky-header)] bg-background">IC Number</TableHead>
-          <TableHead className="sticky top-0 z-[var(--z-sticky-header)] bg-background">Account Number</TableHead>
-          <TableHead className="sticky top-0 z-[var(--z-sticky-header)] bg-background">Customer Phone Number</TableHead>
-          <TableHead className="sticky top-0 z-[var(--z-sticky-header)] bg-background">Batch</TableHead>
-          <TableHead className="sticky top-0 z-[var(--z-sticky-header)] bg-background">Amount</TableHead>
-          <TableHead className="sticky top-0 z-[var(--z-sticky-header)] bg-background">Payment Date</TableHead>
-          <TableHead className="sticky top-0 z-[var(--z-sticky-header)] bg-background">Receipt</TableHead>
-          <TableHead className="sticky top-0 z-[var(--z-sticky-header)] bg-background">Staff Nickname</TableHead>
+          <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-background/95 backdrop-blur">No.</TableHead>
+          <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-background/95 backdrop-blur">Customer Name</TableHead>
+          <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-background/95 backdrop-blur">IC Number</TableHead>
+          <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-background/95 backdrop-blur">Account Number</TableHead>
+          <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-background/95 backdrop-blur">Customer Phone Number</TableHead>
+          <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-background/95 backdrop-blur">Batch</TableHead>
+          <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-background/95 backdrop-blur">Amount</TableHead>
+          <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-background/95 backdrop-blur">Payment Date</TableHead>
+          <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-background/95 backdrop-blur">Receipt</TableHead>
+          <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-background/95 backdrop-blur">Staff Nickname</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -72,23 +72,23 @@ export function ViewAllRecordsDesktopTable({
               <TableCell className="py-2 text-muted-foreground">
                 {(page - 1) * pageSize + index + 1}
               </TableCell>
-              <TableCell className="py-2">{record.customerName}</TableCell>
+              <TableCell className="py-2 font-medium">{record.customerName}</TableCell>
               <TableCell className="py-2">{record.icNumber}</TableCell>
               <TableCell className="py-2">{record.accountNumber}</TableCell>
               <TableCell className="py-2">{record.customerPhone}</TableCell>
               <TableCell className="py-2">{record.batch}</TableCell>
-              <TableCell className="py-2">{formatAmountRM(record.amount)}</TableCell>
+              <TableCell className="py-2 font-semibold text-emerald-700 dark:text-emerald-300">{formatAmountRM(record.amount)}</TableCell>
               <TableCell className="py-2">{formatIsoDateToDDMMYYYY(record.paymentDate)}</TableCell>
               <TableCell className="py-2">
                 {(record.receipts?.length || 0) > 0 ? (
                   <Button
                     type="button"
-                    variant="link"
+                    variant="outline"
                     size="sm"
-                    className="h-auto px-0 text-primary"
+                    className="h-8 rounded-full px-3 text-foreground"
                     onClick={() => onViewReceipt(record)}
                   >
-                    <Eye className="h-3.5 w-3.5" />
+                    <Eye className="mr-1.5 h-3.5 w-3.5" />
                     {(record.receipts?.length || 0) > 1 ? `View (${record.receipts.length})` : "View"}
                   </Button>
                 ) : (

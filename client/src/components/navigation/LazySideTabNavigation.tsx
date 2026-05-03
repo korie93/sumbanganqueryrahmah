@@ -36,13 +36,13 @@ function SideTabNavigationFallback({
 
       <aside
         className={cn(
-          "sticky top-4 hidden w-72 shrink-0 overflow-hidden rounded-xl border border-border/60 bg-background/70 p-2 shadow-sm lg:block",
+          "sticky top-4 hidden w-72 shrink-0 overflow-hidden rounded-xl border border-border/70 bg-background p-3 shadow-sm lg:block",
           className,
           fallbackClassName,
         )}
         aria-label={`${navigationLabel || "Navigation"} loading`}
       >
-        <div className="mb-2 flex justify-end">
+        <div className="mb-3 flex justify-end">
           <div className="h-8 w-8 rounded-md bg-muted/70" aria-hidden="true" />
         </div>
         <div className="space-y-2" role="status" aria-live="polite">

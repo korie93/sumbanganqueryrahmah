@@ -21,11 +21,13 @@ export function CollectionDailyFiltersCard({
           Collection Daily
         </span>
       }
-      description="Set month, selected staff nicknames, and working-day targets from one place."
+      description="Set month, staff scope, and working-day targets from one compact workspace."
+      contentClassName="space-y-4"
       actions={
         <Button
+          type="button"
           variant="outline"
-          className={isMobile ? "w-full sm:w-auto" : undefined}
+          className={isMobile ? "h-11 w-full rounded-xl sm:w-auto" : "h-11 rounded-xl"}
           onClick={onRefresh}
           disabled={loadingOverview}
           data-testid="collection-daily-refresh"

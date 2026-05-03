@@ -85,9 +85,24 @@ export default function CollectionReport() {
         ? "Signing In..."
         : "Checking...";
   const sectionLabel = navigation.activeSidebarItem?.label || "Choose a section";
+  const staffNicknameLabel = nicknameAccess.staffNickname.trim();
+  const headerActions = isMobile ? undefined : (
+    <div className="flex flex-wrap items-center justify-end gap-2">
+      {staffNicknameLabel ? (
+        <Badge variant="secondary" className="rounded-full px-3 py-1 text-[11px]">
+          Staff Nickname: {staffNicknameLabel}
+        </Badge>
+      ) : null}
+      <Badge variant="outline" className="rounded-full px-3 py-1 text-[11px]">
+        Section: {sectionLabel}
+      </Badge>
+    </div>
+  );
   const subtitle = isMobile
-    ? `Staff Nickname: ${nicknameAccess.staffNickname || "-"}`
-    : `Staff Nickname: ${nicknameAccess.staffNickname || "-"} | Section: ${sectionLabel}`;
+    ? staffNicknameLabel
+      ? `Staff Nickname: ${staffNicknameLabel}`
+      : "Collection workspace for entry, records, summaries, and comparisons."
+    : "Collection workspace for entry, records, summaries, and comparisons.";
   const shouldRenderNicknameDialog =
     nicknameAccess.nicknameDialogOpen || (!isSuperuser && !nicknameAccess.canAccessCollection);
 
@@ -104,7 +119,8 @@ export default function CollectionReport() {
             </Badge>
           ) : undefined
         }
-        className={isMobile ? "border-border/60 bg-background/92" : undefined}
+        actions={headerActions}
+        className={isMobile ? "border-border/60 bg-background" : undefined}
       />
 
       <div className="relative flex flex-col gap-4 lg:flex-row lg:items-start">

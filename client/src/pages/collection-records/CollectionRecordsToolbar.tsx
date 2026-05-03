@@ -47,7 +47,7 @@ export interface CollectionRecordsToolbarProps {
 }
 
 function CollectionRecordsPurgeSummaryCardFallback() {
-  return <div className="h-28 animate-pulse rounded-xl border border-border/60 bg-muted/20" />;
+  return <div className="h-28 animate-pulse rounded-2xl border border-border/60 bg-muted/20" />;
 }
 
 export function CollectionRecordsToolbar({
@@ -82,20 +82,71 @@ export function CollectionRecordsToolbar({
     hasPreviousPage,
     loadingRecords,
   });
+  const visibleRangeLabel =
+    totalRecords > 0 && pagedEnd >= pagedStart ? `${pagedStart}-${pagedEnd}` : "0";
   const paginationBusyProps = paginationControls.paginationBusy
     ? { "aria-busy": "true" as const }
     : {};
 
   return (
     <>
-      <OperationalSummaryStrip className="grid gap-3 md:grid-cols-2">
-        <OperationalMetric label="Total Records" value={summary.totalRecords} />
-        <OperationalMetric
-          label="Total Collection Amount"
-          value={formatAmountRM(summary.totalAmount)}
-          tone="success"
-        />
-      </OperationalSummaryStrip>
+      <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_auto]">
+        <OperationalSummaryStrip className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          <OperationalMetric
+            label="Total Records"
+            value={summary.totalRecords}
+            supporting={summary.totalRecords === 1 ? "1 record matched" : `${summary.totalRecords} records matched`}
+          />
+          <OperationalMetric
+            label="Total Collection Amount"
+            value={formatAmountRM(summary.totalAmount)}
+            supporting={totalRecords > 0 ? "Across the filtered result set" : "No amount available yet"}
+            tone="success"
+          />
+          <OperationalMetric
+            label="Showing Now"
+            value={visibleRangeLabel}
+            supporting={`Page ${tablePage} of ${totalPages}`}
+          />
+        </OperationalSummaryStrip>
+
+        <div className="rounded-2xl border border-border/60 bg-background p-3 shadow-sm" data-floating-ai-avoid="true">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+            Actions
+          </p>
+          <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
+            <Button
+              type="button"
+              variant="secondary"
+              className="h-10 w-full rounded-xl sm:w-auto"
+              onClick={onOpenViewAll}
+              disabled={loadingRecords || viewAllLoading}
+            >
+              {viewAllLoading ? "Loading..." : "View All"}
+            </Button>
+            <Button
+              type="button"
+              className="h-10 w-full rounded-xl sm:w-auto"
+              variant="outline"
+              onClick={onExportExcel}
+              disabled={loadingRecords || exportBusy}
+            >
+              <Download className="mr-2 h-4 w-4" />
+              {exportingExcel ? "Exporting..." : "Export Excel"}
+            </Button>
+            <Button
+              type="button"
+              className="h-10 w-full rounded-xl sm:w-auto"
+              variant="outline"
+              onClick={onExportPdf}
+              disabled={loadingRecords || exportBusy}
+            >
+              <FileText className="mr-2 h-4 w-4" />
+              {exportingPdf ? "Exporting..." : "Export PDF"}
+            </Button>
+          </div>
+        </div>
+      </div>
 
       {canPurgeOldRecords ? (
         <Suspense fallback={<CollectionRecordsPurgeSummaryCardFallback />}>
@@ -109,35 +160,21 @@ export function CollectionRecordsToolbar({
         </Suspense>
       ) : null}
 
-      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end" data-floating-ai-avoid="true">
-        <Button
-          variant="secondary"
-          className="w-full sm:w-auto"
-          onClick={onOpenViewAll}
-          disabled={loadingRecords || viewAllLoading}
-        >
-          {viewAllLoading ? "Loading..." : "View All"}
-        </Button>
-        <Button className="w-full sm:w-auto" variant="outline" onClick={onExportExcel} disabled={loadingRecords || exportBusy}>
-          <Download className="w-4 h-4 mr-2" />
-          {exportingExcel ? "Exporting..." : "Export Excel"}
-        </Button>
-        <Button className="w-full sm:w-auto" variant="outline" onClick={onExportPdf} disabled={loadingRecords || exportBusy}>
-          <FileText className="w-4 h-4 mr-2" />
-          {exportingPdf ? "Exporting..." : "Export PDF"}
-        </Button>
-      </div>
-
       <div
-        className="flex flex-col gap-3 rounded-md border border-border/60 bg-background/50 px-3 py-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between"
+        className="flex flex-col gap-3 rounded-2xl border border-border/60 bg-background px-4 py-3 shadow-sm sm:flex-row sm:flex-wrap sm:items-center sm:justify-between"
         data-floating-ai-avoid="true"
         {...paginationBusyProps}
       >
-        <p className="text-xs text-muted-foreground">
+        <div className="space-y-1">
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+            Pagination
+          </p>
+          <p className="text-sm text-muted-foreground">
           {paginationControls.paginationBusy
             ? "Updating records..."
-            : `Showing ${pagedStart}-${pagedEnd} of ${totalRecords} records`}
-        </p>
+            : `Showing ${visibleRangeLabel} of ${totalRecords} records`}
+          </p>
+        </div>
         <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
           <label className="sr-only" htmlFor="collection-records-page-size">
             Records per page
@@ -148,28 +185,30 @@ export function CollectionRecordsToolbar({
             value={String(tablePageSize)}
             onChange={(event) => onTablePageSizeChange(Number(event.target.value))}
             disabled={paginationControls.pageSizeDisabled}
-            className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm sm:w-[120px]"
+            className="h-10 w-full rounded-xl border border-input bg-background px-3 text-sm shadow-sm sm:w-[132px]"
           >
             <option value="50">50 / page</option>
             <option value="100">100 / page</option>
             <option value="200">200 / page</option>
           </select>
           <Button
+            type="button"
             size="sm"
             variant="outline"
-            className="w-full sm:w-auto"
+            className="h-10 w-full rounded-xl px-4 sm:w-auto"
             disabled={paginationControls.previousDisabled}
             onClick={onPrevPage}
           >
             Prev
           </Button>
-          <span className="text-center text-xs text-muted-foreground sm:text-left">
+          <span className="text-center text-xs font-medium text-muted-foreground sm:text-left">
             Page {tablePage} / {totalPages}
           </span>
           <Button
+            type="button"
             size="sm"
             variant="outline"
-            className="w-full sm:w-auto"
+            className="h-10 w-full rounded-xl px-4 sm:w-auto"
             disabled={paginationControls.nextDisabled}
             onClick={onNextPage}
           >

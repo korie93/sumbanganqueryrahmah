@@ -64,16 +64,18 @@ export function CollectionDailyDayDetailsDialog({
         </DialogHeader>
 
         {loadingDayDetails ? (
-          <div className="flex items-center justify-center py-10 text-sm text-muted-foreground">
+          <div className="flex items-center justify-center rounded-2xl border border-border/60 bg-background px-4 py-10 text-sm text-muted-foreground shadow-sm">
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             Loading day details...
           </div>
         ) : !dayDetails ? (
-          <div className="py-8 text-center text-sm text-muted-foreground">No details available.</div>
+          <div className="rounded-2xl border border-border/60 bg-background px-4 py-8 text-center text-sm text-muted-foreground shadow-sm">
+            No details available.
+          </div>
         ) : (
           <div className={`flex flex-1 flex-col gap-3 overflow-hidden ${isMobile ? "px-3 py-3" : ""}`}>
             {isMobile ? (
-              <div className="space-y-3 rounded-2xl border border-border/60 bg-background/80 p-3.5">
+              <div className="space-y-3 rounded-2xl border border-border/60 bg-background p-3.5 shadow-sm">
                 <div className="flex flex-wrap items-center gap-2">
                   <Badge
                     variant="outline"
@@ -93,25 +95,25 @@ export function CollectionDailyDayDetailsDialog({
                 </div>
 
                 <div className="grid grid-cols-2 gap-2 text-sm">
-                  <div className="rounded-xl border border-border/60 bg-muted/15 px-3 py-2.5">
+                  <div className="rounded-xl border border-border/60 bg-muted/10 px-3 py-2.5">
                     <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                       Daily Target
                     </p>
                     <p className="mt-1 text-sm font-semibold">{formatAmountRM(dayDetails.dailyTarget)}</p>
                   </div>
-                  <div className="rounded-xl border border-border/60 bg-muted/15 px-3 py-2.5">
+                  <div className="rounded-xl border border-border/60 bg-muted/10 px-3 py-2.5">
                     <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                       Collected
                     </p>
                     <p className="mt-1 text-sm font-semibold">{formatAmountRM(dayDetails.amount)}</p>
                   </div>
-                  <div className="rounded-xl border border-border/60 bg-muted/15 px-3 py-2.5">
+                  <div className="rounded-xl border border-border/60 bg-muted/10 px-3 py-2.5">
                     <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                       Balanced
                     </p>
                     <p className="mt-1 text-sm font-semibold">{formatAmountRM(balancedAmount)}</p>
                   </div>
-                  <div className="rounded-xl border border-border/60 bg-muted/15 px-3 py-2.5">
+                  <div className="rounded-xl border border-border/60 bg-muted/10 px-3 py-2.5">
                     <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                       Records
                     </p>
@@ -127,7 +129,7 @@ export function CollectionDailyDayDetailsDialog({
                 </div>
               </div>
             ) : (
-              <div className="grid gap-2 rounded-md border border-border/60 bg-background/70 p-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
+              <div className="grid gap-2 rounded-2xl border border-border/60 bg-background p-4 text-sm shadow-sm sm:grid-cols-2 lg:grid-cols-4">
                 <div className="flex flex-col gap-2 md:col-span-2 md:flex-row md:flex-wrap md:items-center md:justify-between lg:col-span-4">
                   <div className="text-muted-foreground">
                     {dayDetails.freshness?.message || "Day details are using the latest available rollups."}
@@ -163,14 +165,14 @@ export function CollectionDailyDayDetailsDialog({
 
             <div className="flex-1 space-y-2 overflow-auto pr-1">
               {dayDetails.records.length === 0 ? (
-                <div className="rounded-md border border-dashed border-border/60 p-6 text-center text-sm text-muted-foreground">
+                <div className="rounded-2xl border border-dashed border-border/60 bg-background px-4 py-6 text-center text-sm text-muted-foreground shadow-sm">
                   No collection records for this date.
                 </div>
               ) : (
                 dayDetails.records.map((record) => (
                   <div
                     key={record.id}
-                    className={`space-y-3 border border-border/60 bg-background/70 ${
+                    className={`space-y-3 border border-border/60 bg-background shadow-sm ${
                       isMobile ? "rounded-2xl p-3.5" : "rounded-xl p-3"
                     }`}
                   >
@@ -252,9 +254,9 @@ export function CollectionDailyDayDetailsDialog({
                     )}
 
                     <div className="space-y-1">
-                      <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                        Stored Receipts
-                      </div>
+                        <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                          Stored Receipts
+                        </div>
                       {record.receipts.length === 0 ? (
                         <div className="text-xs text-muted-foreground">No stored receipt.</div>
                       ) : (
@@ -267,7 +269,7 @@ export function CollectionDailyDayDetailsDialog({
                                 type="button"
                                 size="sm"
                                 variant="outline"
-                                className="w-full justify-start break-all sm:w-auto"
+                                className="w-full justify-start rounded-xl break-all sm:w-auto"
                                 disabled={loadingReceiptKey === key}
                                 onClick={() => onViewReceipt(record, receipt.id)}
                               >
