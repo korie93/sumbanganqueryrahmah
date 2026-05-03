@@ -25,7 +25,7 @@ export function PublicAuthLayout({
   children,
   visualMode = "standard",
   showBackButton = true,
-  backLabel = "Kembali ke landing page",
+  backLabel = "Kembali ke halaman utama",
   contentBusy = false,
   onBackClick,
 }: PublicAuthLayoutProps) {

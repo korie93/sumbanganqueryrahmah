@@ -87,19 +87,22 @@ export default function ForgotPasswordPage({
       badge="Pemulihan Akses"
       title="Permintaan Tetapan Semula Kata Laluan"
       description="Masukkan username atau emel anda untuk menghantar permintaan tetapan semula. Permintaan ini akan disemak oleh superuser sebelum pautan selamat dihantar kepada akaun yang berkaitan."
-      icon={<LifeBuoy className="h-7 w-7" />}
+      icon={<LifeBuoy className="h-7 w-7" aria-hidden="true" focusable="false" />}
       visualMode="minimal"
       contentBusy={loading}
       {...layoutBackProps}
     >
       {submitted ? (
-        <div className="rounded-2xl border border-emerald-400/25 bg-emerald-500/10 p-4 text-sm leading-7 text-emerald-100" role="status" aria-live="polite">
+        <div className="public-auth-status-card public-auth-status-card--success" role="status" aria-live="polite">
           Jika akaun wujud, permintaan tetapan semula telah dihantar kepada superuser untuk semakan.
-          Email reset hanya akan dihantar selepas permintaan diluluskan.
+          Emel tetapan semula hanya akan dihantar selepas permintaan diluluskan.
         </div>
       ) : (
         <>
           <div className="space-y-2">
+            <label htmlFor="forgot-password-identifier" className="public-auth-field-label">
+              Username atau emel
+            </label>
             <PublicAuthInput
               id="forgot-password-identifier"
               name="identifier"
@@ -108,6 +111,11 @@ export default function ForgotPasswordPage({
                 setIdentifier(event.target.value);
                 setIdentifierError("");
                 setError("");
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  void handleSubmit();
+                }
               }}
               placeholder="Username atau emel"
               autoComplete="username"
@@ -118,17 +126,17 @@ export default function ForgotPasswordPage({
               {...identifierInvalidProps}
             />
             {identifierError ? (
-              <p id="forgot-password-identifier-error" className="text-sm text-amber-100" role="alert">
+              <p id="forgot-password-identifier-error" className="public-auth-field-error" role="alert">
                 {identifierError}
               </p>
             ) : null}
           </div>
-          <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm leading-6 text-white/75">
+          <div className="public-auth-note">
             Demi keselamatan, sistem hanya memaparkan status umum dan tidak mendedahkan sama ada
             sesuatu akaun benar-benar wujud.
           </div>
           {error ? (
-            <div className="rounded-2xl border border-red-400/25 bg-red-500/10 p-3 text-sm text-red-100" role="alert">
+            <div className="public-auth-status-card public-auth-status-card--error" role="alert">
               {error}
             </div>
           ) : null}
@@ -152,7 +160,7 @@ export default function ForgotPasswordPage({
           window.location.href = "/";
         }}
       >
-        <ArrowLeft className="mr-2 h-4 w-4" />
+        <ArrowLeft className="mr-2 h-4 w-4" aria-hidden="true" focusable="false" />
         Kembali ke log masuk
       </PublicAuthButton>
     </PublicAuthLayout>

@@ -6,15 +6,39 @@
 .maintenance-page__shell {
   background: var(--maintenance-shell-surface);
   border: 1px solid var(--maintenance-shell-border);
-  box-shadow: var(--error-boundary-card-shadow);
+  box-shadow: 0 24px 60px -34px hsl(215 35% 28% / 0.38);
+  overflow: hidden;
 }
 
 .maintenance-page__header {
   border-bottom: 1px solid var(--maintenance-shell-divider);
 }
 
+.maintenance-page__hero {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+.maintenance-page__hero-icon {
+  display: flex;
+  height: 3.5rem;
+  width: 3.5rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 1rem;
+  border: 1px solid var(--maintenance-badge-border);
+  background: var(--maintenance-badge-surface);
+  color: var(--maintenance-warning-text);
+}
+
 .maintenance-page__kicker {
   color: var(--maintenance-warning-text);
+  font-size: var(--font-size-xs);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .maintenance-page__badge {
@@ -24,7 +48,22 @@
 }
 
 .maintenance-page__title {
+  margin-top: 0.35rem;
   color: var(--maintenance-title-text);
+  letter-spacing: 0;
+}
+
+.maintenance-page__subtitle {
+  margin-top: 0.55rem;
+  max-width: 42rem;
+  color: var(--maintenance-muted-text);
+  font-size: var(--font-size-sm);
+  line-height: 1.65;
+}
+
+.maintenance-page__body {
+  display: grid;
+  gap: 1rem;
 }
 
 .maintenance-page__message {
@@ -38,6 +77,12 @@
   border: 1px solid var(--maintenance-panel-border);
 }
 
+.maintenance-page__status-grid {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+}
+
 .maintenance-page__panel-label {
   color: var(--maintenance-muted-text);
 }
@@ -49,6 +94,8 @@
 .maintenance-page__countdown {
   background: var(--maintenance-countdown-surface);
   border: 1px solid var(--maintenance-countdown-border);
+  display: grid;
+  gap: 0.85rem;
 }
 
 .maintenance-page__countdown-label,
@@ -74,4 +121,31 @@
 
 .maintenance-page__info-icon {
   color: var(--maintenance-warning-text);
+}
+
+@media (min-width: 640px) {
+  .maintenance-page__hero {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+  }
+
+  .maintenance-page__countdown {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+  }
+}
+
+@media (max-width: 520px) {
+  .maintenance-page__hero {
+    grid-template-columns: 1fr;
+  }
+
+  .maintenance-page__hero-icon {
+    height: 3rem;
+    width: 3rem;
+  }
+
+  .maintenance-page__badge {
+    width: fit-content;
+  }
 }

@@ -1,11 +1,11 @@
 .public-auth-button {
   display: inline-flex;
-  min-height: 2.75rem;
+  min-height: 3rem;
   width: 100%;
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
-  border-radius: 0.75rem;
+  border-radius: 0.95rem;
   padding-inline: 1rem;
   font-size: var(--font-size-sm);
   font-weight: 600;
@@ -26,7 +26,8 @@
 
 .public-auth-button-primary {
   background: var(--public-auth-primary-bg);
-  color: var(--public-auth-text-strong);
+  color: hsl(var(--primary-foreground));
+  box-shadow: 0 12px 24px -18px var(--public-auth-shadow);
 }
 
 .public-auth-button-primary:focus-visible {
@@ -35,6 +36,7 @@
 
 .public-auth-button-ghost {
   color: var(--public-auth-ghost-text);
+  border: 1px solid transparent;
 }
 
 .public-auth-button-ghost:focus-visible {
@@ -43,11 +45,13 @@
 
 .public-auth-input {
   width: 100%;
-  border-radius: 0.75rem;
+  min-height: 3rem;
+  border-radius: 0.95rem;
   border: 1px solid var(--public-auth-input-border);
   background: var(--public-auth-input-bg);
   padding: 0.75rem 1rem;
   color: var(--public-auth-input-text);
+  font-size: var(--font-size-base);
   transition: border-color 160ms ease, box-shadow 160ms ease, opacity 160ms ease;
 }
 

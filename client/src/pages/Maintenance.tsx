@@ -169,29 +169,37 @@ export default function MaintenancePage() {
       className="maintenance-page viewport-min-height flex items-center justify-center p-4 sm:p-6"
     >
       <section
-        className="maintenance-page__shell w-full max-w-3xl rounded-3xl supports-[backdrop-filter]:backdrop-blur-md"
+        className="maintenance-page__shell w-full max-w-5xl rounded-3xl"
         aria-labelledby="maintenance-page-title"
       >
-        <header className="maintenance-page__header space-y-4 px-6 pb-6 pt-6 sm:px-8">
-          <div className="flex items-center justify-between gap-3">
-            <p className="maintenance-page__kicker flex items-center gap-2">
-              <ShieldAlert className="w-5 h-5" />
-              <span className="text-xs sm:text-sm uppercase tracking-wide">Penyelenggaraan Sistem</span>
-            </p>
+        <header className="maintenance-page__header px-5 pb-5 pt-5 sm:px-7 sm:pb-6 sm:pt-6">
+          <div className="maintenance-page__hero">
+            <div className="maintenance-page__hero-icon">
+              <Wrench className="h-6 w-6" aria-hidden="true" focusable="false" />
+            </div>
+            <div className="min-w-0">
+              <p className="maintenance-page__kicker flex items-center gap-2">
+                <ShieldAlert className="h-4 w-4" aria-hidden="true" focusable="false" />
+                <span>Penyelenggaraan Sistem</span>
+              </p>
+              <h1 id="maintenance-page-title" className="maintenance-page__title text-2xl font-bold sm:text-3xl">
+                Sistem Sedang Diselenggara
+              </h1>
+              <p className="maintenance-page__subtitle">
+                Kami sedang menstabilkan perkhidmatan. Sila rujuk status dan anggaran masa di bawah.
+              </p>
+            </div>
             <div className="maintenance-page__badge rounded-full px-3 py-1 text-xs">
               {state.type === "hard" ? "Mod Penuh" : "Mod Lembut"}
             </div>
           </div>
-          <h1 id="maintenance-page-title" className="maintenance-page__title text-2xl font-bold sm:text-3xl">
-            Sistem Sedang Diselenggara
-          </h1>
         </header>
-        <div className="space-y-5 px-6 pb-6 pt-6 sm:px-8">
+        <div className="maintenance-page__body px-5 pb-5 pt-5 sm:px-7 sm:pb-7 sm:pt-6">
           <div className="maintenance-page__message rounded-lg p-4">
             <p className="leading-relaxed">{state.message}</p>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
+          <div className="maintenance-page__status-grid text-sm">
             <div className="maintenance-page__panel rounded-lg p-3">
               <p className="maintenance-page__panel-label mb-1">Status</p>
               <p className="maintenance-page__panel-value font-semibold">{state.maintenance ? "Aktif" : "Tidak Aktif"}</p>
@@ -207,21 +215,20 @@ export default function MaintenancePage() {
           </div>
 
           {countdown && (
-            <div className="maintenance-page__countdown rounded-lg p-4 flex flex-col gap-3 sm:flex-row sm:items-center">
+            <div className="maintenance-page__countdown rounded-lg p-4" role="status" aria-live="polite">
               <div className="flex items-center gap-2">
-                <Clock3 className="maintenance-page__countdown-icon w-5 h-5" />
+                <Clock3 className="maintenance-page__countdown-icon h-5 w-5" aria-hidden="true" focusable="false" />
                 <p className="maintenance-page__countdown-label text-xs">Anggaran tamat maintenance</p>
               </div>
               <div className="maintenance-page__countdown-chip inline-flex items-center gap-2 rounded-md px-3 py-1">
-                <TimerReset className="maintenance-page__countdown-chip-icon w-4 h-4" />
+                <TimerReset className="maintenance-page__countdown-chip-icon h-4 w-4" aria-hidden="true" focusable="false" />
                 <p className="maintenance-page__countdown-value text-2xl font-semibold tracking-wide font-mono">{countdown}</p>
               </div>
             </div>
           )}
 
           <div className="maintenance-page__info flex items-center gap-2 rounded-md p-3 text-xs">
-            <Wrench className="maintenance-page__info-icon w-4 h-4" />
-            <AlertTriangle className="maintenance-page__info-icon w-4 h-4" />
+            <AlertTriangle className="maintenance-page__info-icon h-4 w-4" aria-hidden="true" focusable="false" />
             Jika anda admin atau superuser, log masuk semula untuk akses yang dibenarkan semasa penyelenggaraan.
           </div>
         </div>

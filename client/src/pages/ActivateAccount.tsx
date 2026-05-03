@@ -239,84 +239,103 @@ export default function ActivateAccountPage({ onBackToLogin }: ActivateAccountPa
       onBackClick={navigateToLogin}
       icon={
         phase === "invalid" ? (
-          <ShieldAlert className="h-7 w-7" />
+          <ShieldAlert className="h-7 w-7" aria-hidden="true" focusable="false" />
         ) : phase === "success" ? (
-          <BadgeCheck className="h-7 w-7" />
+          <BadgeCheck className="h-7 w-7" aria-hidden="true" focusable="false" />
         ) : (
-          <KeyRound className="h-7 w-7" />
+          <KeyRound className="h-7 w-7" aria-hidden="true" focusable="false" />
         )
       }
     >
       {phase === "validating" ? (
-        <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-slate-200" role="status" aria-live="polite">
+        <div className="public-auth-status-card public-auth-status-card--info" role="status" aria-live="polite">
           Sedang mengesahkan pautan aktivasi anda...
         </div>
       ) : null}
 
       {phase === "invalid" ? (
-        <div className="rounded-2xl border border-red-400/25 bg-red-500/10 p-4 text-sm text-red-100" role="alert">
+        <div className="public-auth-status-card public-auth-status-card--error" role="alert">
           {error || "Pautan aktivasi tidak sah atau telah tamat tempoh."}
         </div>
       ) : null}
 
       {phase === "success" ? (
-        <div className="rounded-2xl border border-emerald-400/25 bg-emerald-500/10 p-4 text-sm leading-7 text-emerald-100" role="status" aria-live="polite">
+        <div className="public-auth-status-card public-auth-status-card--success" role="status" aria-live="polite">
           Kata laluan berjaya dicipta. Anda akan dibawa semula ke halaman log masuk sebentar lagi.
         </div>
       ) : null}
 
       {phase === "ready" && activation ? (
         <>
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm leading-7 text-slate-200">
-            <div><span className="font-semibold text-white">Nama pengguna:</span> {activation.username}</div>
-            <div><span className="font-semibold text-white">Peranan:</span> {activation.role}</div>
-            <div><span className="font-semibold text-white">Tamat Tempoh:</span> {formatPublicAuthExpiry(activation.expiresAt)}</div>
+          <dl className="public-auth-account-summary">
+            <div className="public-auth-account-summary__row">
+              <dt>Nama pengguna</dt>
+              <dd>{activation.username}</dd>
+            </div>
+            <div className="public-auth-account-summary__row">
+              <dt>Peranan</dt>
+              <dd>{activation.role}</dd>
+            </div>
+            <div className="public-auth-account-summary__row">
+              <dt>Tamat tempoh</dt>
+              <dd>{formatPublicAuthExpiry(activation.expiresAt)}</dd>
+            </div>
+          </dl>
+          <div className="space-y-2">
+            <label htmlFor="activate-account-new-password" className="public-auth-field-label">
+              Kata laluan baharu
+            </label>
+            <PublicAuthInput
+              ref={newPasswordInputRef}
+              id="activate-account-new-password"
+              name="newPassword"
+              type="password"
+              value={newPassword}
+              onChange={(event) => {
+                setNewPassword(event.target.value);
+                setNewPasswordError("");
+                setError("");
+              }}
+              onKeyDown={onPasswordKeyDown}
+              placeholder="Masukkan kata laluan baharu"
+              autoComplete="new-password"
+              disabled={loading}
+              {...newPasswordInvalidProps}
+            />
           </div>
-          <PublicAuthInput
-            ref={newPasswordInputRef}
-            id="activate-account-new-password"
-            name="newPassword"
-            type="password"
-            value={newPassword}
-            onChange={(event) => {
-              setNewPassword(event.target.value);
-              setNewPasswordError("");
-              setError("");
-            }}
-            onKeyDown={onPasswordKeyDown}
-            placeholder="Kata laluan baharu"
-            autoComplete="new-password"
-            disabled={loading}
-            {...newPasswordInvalidProps}
-          />
           {newPasswordError ? (
-            <p id="activate-password-new-error" className="text-sm text-amber-100" role="alert">
+            <p id="activate-password-new-error" className="public-auth-field-error" role="alert">
               {newPasswordError}
             </p>
           ) : null}
-          <PublicAuthInput
-            id="activate-account-confirm-password"
-            name="confirmPassword"
-            type="password"
-            value={confirmPassword}
-            onChange={(event) => {
-              setConfirmPassword(event.target.value);
-              setConfirmPasswordError("");
-              setError("");
-            }}
-            onKeyDown={onPasswordKeyDown}
-            placeholder="Sahkan kata laluan baharu"
-            autoComplete="new-password"
-            disabled={loading}
-            {...confirmPasswordInvalidProps}
-          />
+          <div className="space-y-2">
+            <label htmlFor="activate-account-confirm-password" className="public-auth-field-label">
+              Sahkan kata laluan baharu
+            </label>
+            <PublicAuthInput
+              id="activate-account-confirm-password"
+              name="confirmPassword"
+              type="password"
+              value={confirmPassword}
+              onChange={(event) => {
+                setConfirmPassword(event.target.value);
+                setConfirmPasswordError("");
+                setError("");
+              }}
+              onKeyDown={onPasswordKeyDown}
+              placeholder="Masukkan semula kata laluan"
+              autoComplete="new-password"
+              disabled={loading}
+              {...confirmPasswordInvalidProps}
+            />
+          </div>
           {confirmPasswordError ? (
-            <p id="activate-password-confirm-error" className="text-sm text-amber-100" role="alert">
+            <p id="activate-password-confirm-error" className="public-auth-field-error" role="alert">
               {confirmPasswordError}
             </p>
           ) : null}
           {error ? (
-            <div className="rounded-2xl border border-red-400/25 bg-red-500/10 p-3 text-sm text-red-100" role="alert">
+            <div className="public-auth-status-card public-auth-status-card--error" role="alert">
               {error}
             </div>
           ) : null}
@@ -347,7 +366,7 @@ export default function ActivateAccountPage({ onBackToLogin }: ActivateAccountPa
           navigateToLogin();
         }}
       >
-        <ArrowLeft className="mr-2 h-4 w-4" />
+        <ArrowLeft className="mr-2 h-4 w-4" aria-hidden="true" focusable="false" />
         Kembali ke log masuk
       </PublicAuthButton>
     </PublicAuthLayout>
