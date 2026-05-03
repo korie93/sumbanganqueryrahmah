@@ -1,0 +1,181 @@
+- generic:
+  - generic:
+    - link:
+      - /url: "#main-content"
+      - text: Langkau ke kandungan utama
+    - list
+    - generic:
+      - banner:
+        - generic:
+          - generic:
+            - generic:
+              - generic:
+                - generic:
+                  - generic:
+                    - img
+                - generic:
+                  - paragraph: SQR System
+                  - paragraph: Ruang kerja operasi
+              - button:
+                - generic:
+                  - img
+                - generic: Utama
+          - generic:
+            - navigation:
+              - button:
+                - generic:
+                  - img
+                - generic: Search
+              - button:
+                - generic:
+                  - img
+                - generic: Collection
+              - button:
+                - generic:
+                  - img
+                - generic: Workspace
+                - img
+              - button:
+                - generic:
+                  - img
+                - generic: Insights
+                - img
+              - button:
+                - generic:
+                  - img
+                - generic: Settings
+                - img
+          - generic:
+            - button [expanded]:
+              - generic:
+                - generic: superuser
+                - generic: superuser
+              - img
+      - main:
+        - generic:
+          - generic:
+            - generic:
+              - generic:
+                - generic:
+                  - paragraph: Workspace
+                  - generic:
+                    - generic:
+                      - img
+                    - generic:
+                      - heading [level=1]: Welcome
+                      - paragraph: Sumbangan Query Rahmah - Data Management System
+                      - paragraph: Start with the core workflows first, then move into supporting modules only when you need them. The visible navigation stays aligned with your role and current feature visibility settings.
+                - generic:
+                  - generic:
+                    - generic: Modules Ready
+                    - generic: "9"
+                  - generic:
+                    - generic: Primary Flows
+                    - generic: "3"
+                  - generic:
+                    - generic: Role
+                    - generic: superuser
+              - generic:
+                - button:
+                  - generic:
+                    - img
+                  - generic:
+                    - paragraph: Primary Workflow
+                    - generic:
+                      - heading [level=2]: General Search
+                      - paragraph: General data search
+                  - img
+                - button:
+                  - generic:
+                    - img
+                  - generic:
+                    - paragraph: Primary Workflow
+                    - generic:
+                      - heading [level=2]: Collection Report
+                      - paragraph: Save and review collection records
+                  - img
+                - button:
+                  - generic:
+                    - img
+                  - generic:
+                    - paragraph: Primary Workflow
+                    - generic:
+                      - heading [level=2]: Dashboard
+                      - paragraph: Analytics and system overview
+                  - img
+            - generic:
+              - generic:
+                - generic:
+                  - generic:
+                    - paragraph: Workspace
+                    - heading [level=2]: Operational modules
+                    - paragraph: Import, review, and revisit the modules used most often during day-to-day operations.
+                  - generic: "3"
+                - generic:
+                  - button:
+                    - generic:
+                      - img
+                    - generic:
+                      - heading [level=3]: Import Data
+                      - paragraph: Import data from Excel/CSV
+                  - button:
+                    - generic:
+                      - img
+                    - generic:
+                      - heading [level=3]: Saved Imports
+                      - paragraph: View all saved data
+                  - button:
+                    - generic:
+                      - img
+                    - generic:
+                      - heading [level=3]: Data Viewer
+                      - paragraph: Detailed data display
+              - generic:
+                - generic:
+                  - generic:
+                    - paragraph: Insights
+                    - heading [level=2]: Visibility and follow-up
+                    - paragraph: Keep analytics, activity, and audit views close without overloading the landing page.
+                  - generic: "3"
+                - generic:
+                  - button:
+                    - generic:
+                      - img
+                    - generic:
+                      - heading [level=3]: Activity Monitor
+                      - paragraph: Monitor user activity
+                    - img
+                  - button:
+                    - generic:
+                      - img
+                    - generic:
+                      - heading [level=3]: Analysis
+                      - paragraph: Data analysis and reports
+                    - img
+                  - button:
+                    - generic:
+                      - img
+                    - generic:
+                      - heading [level=3]: Audit Log
+                      - paragraph: View system activity logs
+                    - img
+      - button [ref=e239] [cursor=pointer]:
+        - img [ref=e236]
+  - menu "Buka menu pengguna untuk superuser" [active] [ref=e240]:
+    - generic [ref=e241]:
+      - generic [ref=e242]: superuser
+      - generic [ref=e243]: Signed in as superuser
+    - separator [ref=e244]
+    - generic [ref=e245]: Appearance
+    - group [ref=e246]:
+      - menuitemradio "Light Mode" [checked] [ref=e247]:
+        - img [ref=e250]
+        - img [ref=e252]
+        - generic [ref=e258]: Light Mode
+      - menuitemradio "Dark Mode" [ref=e259]:
+        - img [ref=e261]
+        - generic [ref=e263]: Dark Mode
+    - separator [ref=e264]
+    - menuitem "Logout" [ref=e265]:
+      - img
+      - generic [ref=e266]: Logout

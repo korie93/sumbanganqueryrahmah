@@ -183,14 +183,14 @@ export function CollectionMonthlyComparisonPanel({
             Reset
           </button>
         </div>
-        <div className="mt-2.5 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-          <span className="rounded-full border border-border/60 bg-background px-2.5 py-1">
+        <div className="mt-2.5 flex flex-wrap items-center gap-2 text-xs text-foreground/68 dark:text-foreground/74">
+          <span className="rounded-full border border-border/60 bg-background px-2.5 py-1 dark:border-white/10 dark:bg-white/[0.04]">
             Single nickname only
           </span>
-          <span className="rounded-full border border-border/60 bg-background px-2.5 py-1">
+          <span className="rounded-full border border-border/60 bg-background px-2.5 py-1 dark:border-white/10 dark:bg-white/[0.04]">
             First month = base
           </span>
-          <span className="rounded-full border border-border/60 bg-background px-2.5 py-1">
+          <span className="rounded-full border border-border/60 bg-background px-2.5 py-1 dark:border-white/10 dark:bg-white/[0.04]">
             Last month = target
           </span>
         </div>
@@ -276,7 +276,7 @@ export function CollectionMonthlyComparisonPanel({
                     Empty months stay visible as RM0 for quick trend review.
                   </p>
                 </div>
-                <p className="text-xs text-muted-foreground">{data.nickname}</p>
+                <p className="text-xs text-foreground/64 dark:text-foreground/72">{data.nickname}</p>
               </div>
 
               <div className="grid gap-2">
@@ -292,7 +292,7 @@ export function CollectionMonthlyComparisonPanel({
                           {formatAmountRM(month.totalCollection)}
                         </p>
                       </div>
-                      <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                      <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-foreground/64 dark:text-foreground/74">
                         <span>{month.recordCount} record(s)</span>
                         <span>Avg {formatAmountRM(month.averagePerRecord)}</span>
                         <span>

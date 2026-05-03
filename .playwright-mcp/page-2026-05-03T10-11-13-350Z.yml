@@ -1,0 +1,255 @@
+- generic [ref=e1]:
+  - generic [ref=e2]:
+    - link "Langkau ke kandungan utama" [ref=e3] [cursor=pointer]:
+      - /url: "#main-content"
+    - region "Notifications (F8)":
+      - list
+    - generic [ref=e6]:
+      - banner [ref=e7]:
+        - generic [ref=e9]:
+          - generic [ref=e10]:
+            - generic [ref=e11]:
+              - img [ref=e14]
+              - paragraph [ref=e16]: SQR System
+            - button "Utama" [ref=e18] [cursor=pointer]:
+              - img [ref=e20]
+              - generic [ref=e23]: Utama
+          - generic [ref=e355]:
+            - button "Buka menu navigasi" [ref=e356] [cursor=pointer]:
+              - img [ref=e357]
+            - button "Buka menu pengguna untuk superuser" [ref=e358] [cursor=pointer]:
+              - generic [ref=e359]: s
+              - img [ref=e360]
+      - main [ref=e65]:
+        - generic [ref=e67]:
+          - generic [ref=e70]:
+            - paragraph [ref=e71]: Operational Workspace
+            - generic [ref=e72]:
+              - generic [ref=e73]:
+                - generic [ref=e74]: Collection Report
+                - paragraph [ref=e75]: Collection workspace for entry, records, summaries, and comparisons.
+              - generic [ref=e363]: Monthly Comparison
+          - generic [ref=e79]:
+            - generic [ref=e364]:
+              - generic [ref=e365]:
+                - generic [ref=e366]:
+                  - paragraph [ref=e367]: Collection Section
+                  - generic [ref=e368]:
+                    - heading "Monthly Comparison" [level=2] [ref=e369]
+                    - generic [ref=e370]: Active
+                - img [ref=e372]
+              - generic [ref=e375]:
+                - generic [ref=e376]:
+                  - button "Simpan Collection Individual" [ref=e377] [cursor=pointer]:
+                    - img [ref=e378]
+                    - generic [ref=e380]: Simpan Collection Individual
+                  - button "View Rekod Collection" [ref=e381] [cursor=pointer]:
+                    - img [ref=e382]
+                    - generic [ref=e385]: View Rekod Collection
+                  - button "Collection Summary" [ref=e386] [cursor=pointer]:
+                    - img [ref=e387]
+                    - generic [ref=e392]: Collection Summary
+                  - button "Monthly Comparison" [ref=e393] [cursor=pointer]:
+                    - img [ref=e394]
+                    - generic [ref=e396]: Monthly Comparison
+                  - button "Collection Daily" [ref=e397] [cursor=pointer]:
+                    - img [ref=e398]
+                    - generic [ref=e400]: Collection Daily
+                  - button "Nickname Summary" [ref=e401] [cursor=pointer]:
+                    - img [ref=e402]
+                    - generic [ref=e407]: Nickname Summary
+                  - button "Manage Nickname" [ref=e408] [cursor=pointer]:
+                    - img [ref=e409]
+                    - generic [ref=e412]: Manage Nickname
+                - generic: Swipe sections
+              - button "Browse Sections" [active] [ref=e413] [cursor=pointer]:
+                - generic [ref=e414]:
+                  - img
+                  - text: Browse Sections
+                - generic [ref=e415]:
+                  - img
+                  - img
+            - button "Close navigation menu" [ref=e442] [cursor=pointer]
+            - complementary [ref=e443]:
+              - generic [ref=e444]:
+                - paragraph [ref=e445]: Collection sections
+                - button "Close navigation menu" [ref=e446] [cursor=pointer]:
+                  - img
+              - generic [ref=e447]:
+                - button "Simpan Collection Individual Rekod kutipan individu dan resit berkaitan." [ref=e448] [cursor=pointer]:
+                  - img [ref=e450]
+                  - generic [ref=e452]:
+                    - generic [ref=e453]: Simpan Collection Individual
+                    - generic [ref=e454]: Rekod kutipan individu dan resit berkaitan.
+                - button "View Rekod Collection Semak, tapis, dan kemas kini rekod collection." [ref=e455] [cursor=pointer]:
+                  - img [ref=e457]
+                  - generic [ref=e460]:
+                    - generic [ref=e461]: View Rekod Collection
+                    - generic [ref=e462]: Semak, tapis, dan kemas kini rekod collection.
+                - button "Collection Summary Pantau ringkasan bulanan keseluruhan mengikut tahun." [ref=e463] [cursor=pointer]:
+                  - img [ref=e465]
+                  - generic [ref=e470]:
+                    - generic [ref=e471]: Collection Summary
+                    - generic [ref=e472]: Pantau ringkasan bulanan keseluruhan mengikut tahun.
+                - button "Monthly Comparison Bandingkan trend bulanan bagi satu nickname terpilih." [ref=e473] [cursor=pointer]:
+                  - img [ref=e475]
+                  - generic [ref=e477]:
+                    - generic [ref=e478]: Monthly Comparison
+                    - generic [ref=e479]: Bandingkan trend bulanan bagi satu nickname terpilih.
+                - button "Collection Daily Jejaki prestasi harian dan kalendar collection." [ref=e480] [cursor=pointer]:
+                  - img [ref=e482]
+                  - generic [ref=e484]:
+                    - generic [ref=e485]: Collection Daily
+                    - generic [ref=e486]: Jejaki prestasi harian dan kalendar collection.
+                - button "Nickname Summary Bandingkan beberapa nickname dalam satu julat tarikh." [ref=e487] [cursor=pointer]:
+                  - img [ref=e489]
+                  - generic [ref=e494]:
+                    - generic [ref=e495]: Nickname Summary
+                    - generic [ref=e496]: Bandingkan beberapa nickname dalam satu julat tarikh.
+                - button "Manage Nickname Urus senarai nickname dan akses collection." [ref=e497] [cursor=pointer]:
+                  - img [ref=e499]
+                  - generic [ref=e502]:
+                    - generic [ref=e503]: Manage Nickname
+                    - generic [ref=e504]: Urus senarai nickname dan akses collection.
+            - generic [ref=e105]:
+              - generic [ref=e107]:
+                - generic [ref=e108]: Monthly Collection Comparison
+                - paragraph [ref=e109]: Compare one staff nickname across a bounded month range without crowding the broader collection workspace.
+              - generic [ref=e110]:
+                - generic [ref=e112]:
+                  - generic [ref=e113]:
+                    - img [ref=e115]
+                    - generic [ref=e117]:
+                      - heading "One nickname, one compact monthly view" [level=2] [ref=e118]
+                      - paragraph [ref=e119]: Pick a visible nickname, compare the first and last months in your range, and keep the monthly chart close to the totals.
+                  - generic [ref=e120]:
+                    - generic [ref=e121]:
+                      - img [ref=e122]
+                      - text: 24 months max
+                    - generic [ref=e124]:
+                      - img [ref=e125]
+                      - text: First vs last
+                    - generic [ref=e128]: Empty months stay visible
+                - region "Monthly Collection Comparison" [ref=e129]:
+                  - heading "Monthly Collection Comparison" [level=2] [ref=e130]
+                  - generic [ref=e131]:
+                    - generic [ref=e132]:
+                      - generic [ref=e134]:
+                        - text: Staff nickname
+                        - button "Staff nickname" [ref=e135] [cursor=pointer]:
+                          - generic [ref=e136]: Receipt Smoke 1774418977425
+                          - img
+                      - generic [ref=e137]:
+                        - text: Start month
+                        - textbox "Start month" [ref=e138]: 2025-12
+                      - generic [ref=e139]:
+                        - text: End month
+                        - textbox "End month" [ref=e140]: 2026-05
+                      - button "Apply" [ref=e141] [cursor=pointer]
+                      - button "Reset" [ref=e142] [cursor=pointer]
+                    - generic [ref=e143]:
+                      - generic [ref=e144]: Single nickname only
+                      - generic [ref=e145]: First month = base
+                      - generic [ref=e146]: Last month = target
+                  - generic [ref=e147]:
+                    - generic [ref=e148]:
+                      - generic [ref=e149]:
+                        - paragraph [ref=e150]: Dec 2025 Total
+                        - paragraph [ref=e151]: RM 0.00
+                        - paragraph [ref=e152]: 0 record(s)
+                      - generic [ref=e153]:
+                        - paragraph [ref=e154]: May 2026 Total
+                        - paragraph [ref=e155]: RM 0.00
+                        - paragraph [ref=e156]: 0 record(s)
+                      - generic [ref=e157]:
+                        - paragraph [ref=e158]: Difference
+                        - paragraph [ref=e159]: RM 0.00
+                      - generic [ref=e160]:
+                        - paragraph [ref=e161]: Percentage Change
+                        - paragraph [ref=e162]: 0.00%
+                    - generic [ref=e163]:
+                      - paragraph [ref=e164]: Comparison summary
+                      - paragraph [ref=e165]: No change compared to the previous month.
+                    - paragraph [ref=e166]: "No change compared to the previous month. Monthly totals: Dec 2025: RM 0.00 across 0 record(s); Jan 2026: RM 0.00 across 0 record(s); Feb 2026: RM 0.00 across 0 record(s); Mar 2026: RM 12.34 across 1 record(s); Apr 2026: RM 259.24 across 5 record(s); May 2026: RM 0.00 across 0 record(s)."
+                    - generic [ref=e167]:
+                      - generic [ref=e169]:
+                        - generic [ref=e170]:
+                          - generic [ref=e171]:
+                            - paragraph [ref=e172]: Monthly bar chart
+                            - paragraph [ref=e173]: Compare total collection by month for the selected nickname.
+                          - generic [ref=e174]:
+                            - button "Minimize chart" [expanded] [ref=e175] [cursor=pointer]:
+                              - img
+                              - text: Minimize chart
+                            - button "Expand chart" [ref=e176] [cursor=pointer]:
+                              - img
+                              - text: Expand chart
+                        - img [ref=e180]:
+                          - generic [ref=e184]:
+                            - generic [ref=e506]: Jan 2026
+                            - generic [ref=e508]: Mar 2026
+                            - generic [ref=e510]: May 2026
+                          - generic [ref=e198]:
+                            - generic [ref=e200]: RM 0.00
+                            - generic [ref=e202]: RM 65.00
+                            - generic [ref=e204]: RM 130.00
+                            - generic [ref=e206]: RM 195.00
+                            - generic [ref=e208]: RM 260.00
+                      - generic [ref=e216]:
+                        - generic [ref=e217]:
+                          - generic [ref=e218]:
+                            - heading "Monthly breakdown" [level=3] [ref=e219]
+                            - paragraph [ref=e220]: Empty months stay visible as RM0 for quick trend review.
+                          - paragraph [ref=e221]: Receipt Smoke 1774418977425
+                        - generic [ref=e222]:
+                          - generic [ref=e224]:
+                            - generic [ref=e225]:
+                              - paragraph [ref=e226]: Dec 2025
+                              - paragraph [ref=e227]: RM 0.00
+                            - generic [ref=e228]:
+                              - generic [ref=e229]: 0 record(s)
+                              - generic [ref=e230]: Avg RM 0.00
+                              - generic [ref=e231]: No collection recorded
+                          - generic [ref=e233]:
+                            - generic [ref=e234]:
+                              - paragraph [ref=e235]: Jan 2026
+                              - paragraph [ref=e236]: RM 0.00
+                            - generic [ref=e237]:
+                              - generic [ref=e238]: 0 record(s)
+                              - generic [ref=e239]: Avg RM 0.00
+                              - generic [ref=e240]: No collection recorded
+                          - generic [ref=e242]:
+                            - generic [ref=e243]:
+                              - paragraph [ref=e244]: Feb 2026
+                              - paragraph [ref=e245]: RM 0.00
+                            - generic [ref=e246]:
+                              - generic [ref=e247]: 0 record(s)
+                              - generic [ref=e248]: Avg RM 0.00
+                              - generic [ref=e249]: No collection recorded
+                          - generic [ref=e251]:
+                            - generic [ref=e252]:
+                              - paragraph [ref=e253]: Mar 2026
+                              - paragraph [ref=e254]: RM 12.34
+                            - generic [ref=e255]:
+                              - generic [ref=e256]: 1 record(s)
+                              - generic [ref=e257]: Avg RM 12.34
+                              - generic [ref=e258]: Active month
+                          - generic [ref=e260]:
+                            - generic [ref=e261]:
+                              - paragraph [ref=e262]: Apr 2026
+                              - paragraph [ref=e263]: RM 259.24
+                            - generic [ref=e264]:
+                              - generic [ref=e265]: 5 record(s)
+                              - generic [ref=e266]: Avg RM 51.85
+                              - generic [ref=e267]: Active month
+                          - generic [ref=e269]:
+                            - generic [ref=e270]:
+                              - paragraph [ref=e271]: May 2026
+                              - paragraph [ref=e272]: RM 0.00
+                            - generic [ref=e273]:
+                              - generic [ref=e274]: 0 record(s)
+                              - generic [ref=e275]: Avg RM 0.00
+                              - generic [ref=e276]: No collection recorded
+      - button "Buka panel AI SQR" [ref=e277] [cursor=pointer]:
+        - img [ref=e278]
+  - generic [ref=e281]: Apr

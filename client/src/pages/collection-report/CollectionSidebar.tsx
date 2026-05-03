@@ -37,24 +37,24 @@ export function CollectionSidebar({
   return (
     <>
       <section
-        className="rounded-[1.5rem] border border-border/70 bg-background p-3 shadow-sm lg:hidden"
+        className="rounded-[1.5rem] border border-border/70 bg-background p-3 shadow-sm dark:border-white/10 dark:bg-[hsl(224_38%_12%_/_0.96)] dark:shadow-[0_20px_36px_-28px_hsl(222_72%_5%_/_0.72)] lg:hidden"
         data-testid="collection-mobile-launcher"
       >
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-foreground/62 dark:text-foreground/72">
               Collection Section
             </p>
             <div className="mt-1 flex items-center gap-2">
               <h2 className="truncate text-base font-semibold text-foreground">
                 {selectedItem?.label || "Collection"}
               </h2>
-              <Badge variant="secondary" className="rounded-full px-2 py-0.5 text-[10px]">
+              <Badge variant="secondary" className="rounded-full border border-primary/15 bg-primary/10 px-2 py-0.5 text-[10px] text-primary dark:border-primary/20 dark:bg-primary/14 dark:text-primary-foreground/92">
                 Active
               </Badge>
             </div>
           </div>
-          <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-primary/20 bg-primary/10 text-primary">
+          <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-primary/20 bg-primary/10 text-primary dark:border-primary/25 dark:bg-primary/14 dark:text-primary-foreground/92">
             <Compass className="h-5 w-5" />
           </span>
         </div>
@@ -73,10 +73,10 @@ export function CollectionSidebar({
                 type="button"
                 onClick={() => onSelectSubPage(item.key)}
                 className={cn(
-                  "inline-flex shrink-0 items-center gap-2 rounded-full border px-3 py-2 text-left text-sm font-medium transition-colors",
+                  "inline-flex min-h-10 shrink-0 items-center gap-2 rounded-full border px-3.5 py-2 text-left text-[13px] font-semibold transition-colors",
                   active
-                    ? "border-primary/35 bg-primary/10 text-primary"
-                    : "border-border/60 bg-muted/25 text-foreground hover:border-primary/20 hover:bg-accent/35",
+                    ? "border-primary/35 bg-primary/10 text-primary shadow-[inset_0_1px_0_hsl(0_0%_100%_/_0.08)] dark:border-primary/30 dark:bg-primary/14 dark:text-primary-foreground"
+                    : "border-border/60 bg-muted/25 text-foreground/88 hover:border-primary/20 hover:bg-accent/45 hover:text-foreground dark:border-white/10 dark:bg-white/[0.03] dark:text-foreground/92 dark:hover:bg-white/[0.06]",
                 )}
               >
                 <Icon className="h-4 w-4 shrink-0" />
@@ -89,7 +89,7 @@ export function CollectionSidebar({
         <Button
           type="button"
           variant="ghost"
-          className="mt-2 h-10 w-full justify-between rounded-xl border border-dashed border-border/60 text-muted-foreground"
+          className="mt-2 h-10 w-full justify-between rounded-xl border border-dashed border-border/60 text-foreground/76 hover:text-foreground dark:border-white/10 dark:bg-white/[0.02] dark:text-foreground/82 dark:hover:bg-white/[0.05] dark:hover:text-foreground"
           onClick={() => onMobileOpenChange(true)}
           data-testid="button-open-collection-sections"
         >
@@ -97,7 +97,7 @@ export function CollectionSidebar({
             <LayoutGrid className="h-4 w-4" />
             Browse Sections
           </span>
-          <span className="inline-flex items-center gap-2 text-muted-foreground">
+          <span className="inline-flex items-center gap-2 text-foreground/56 dark:text-foreground/68">
             <Menu className="h-4 w-4" />
             <ChevronRight className="h-4 w-4" />
           </span>

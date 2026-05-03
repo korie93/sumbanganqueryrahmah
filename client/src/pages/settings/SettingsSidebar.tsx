@@ -49,17 +49,17 @@ export function SettingsSidebar({
     <>
       {isMobile ? (
         <div className="space-y-3 lg:hidden">
-          <div className="rounded-[2rem] border border-border/60 bg-background/92 p-4 shadow-[0_20px_36px_-30px_hsl(222_47%_11%_/_0.18)]">
+          <div className="rounded-[2rem] border border-border/60 bg-background/92 p-4 shadow-[0_20px_36px_-30px_hsl(222_47%_11%_/_0.18)] dark:border-white/10 dark:bg-[hsl(224_38%_12%_/_0.96)] dark:shadow-[0_20px_36px_-28px_hsl(222_72%_5%_/_0.72)]">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0 space-y-1">
-                <p className="text-[11px] font-semibold tracking-[0.22em] text-primary/80 uppercase">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-foreground/64 dark:text-foreground/76">
                   Settings Sections
                 </p>
-                <p className="truncate text-sm font-semibold text-foreground">
+                <p className="truncate text-base font-semibold text-foreground">
                   {selectedItem?.label || "Choose a section"}
                 </p>
                 {selectedItem?.description ? (
-                  <p className="text-xs leading-5 text-muted-foreground">
+                  <p className="text-xs leading-5 text-foreground/62 dark:text-foreground/74">
                     {selectedItem.description}
                   </p>
                 ) : null}
@@ -68,7 +68,7 @@ export function SettingsSidebar({
                 type="button"
                 variant="outline"
                 size="sm"
-                className="shrink-0 rounded-full"
+                className="shrink-0 rounded-full dark:border-white/10 dark:bg-white/[0.03] dark:text-foreground/88 dark:hover:bg-white/[0.06] dark:hover:text-foreground"
                 onClick={() => onMobileOpenChange(true)}
               >
                 <Menu className="h-4 w-4" />
@@ -92,16 +92,16 @@ export function SettingsSidebar({
                     type="button"
                     onClick={() => onSelectCategory(item.key)}
                     className={cn(
-                      "flex min-w-fit items-center gap-2 rounded-full border px-3 py-2 text-left text-xs transition-colors",
+                      "flex min-h-10 min-w-fit items-center gap-2 rounded-full border px-3.5 py-2 text-left text-[13px] font-semibold transition-colors",
                       active
-                        ? "border-primary/35 bg-primary/10 text-primary"
-                        : "border-border/60 bg-background/80 text-muted-foreground hover:border-primary/20 hover:text-foreground",
+                        ? "border-primary/35 bg-primary/10 text-primary shadow-[inset_0_1px_0_hsl(0_0%_100%_/_0.08)] dark:border-primary/30 dark:bg-primary/14 dark:text-primary-foreground"
+                        : "border-border/60 bg-background/80 text-foreground/78 hover:border-primary/20 hover:text-foreground dark:border-white/10 dark:bg-white/[0.03] dark:text-foreground/88 dark:hover:bg-white/[0.06] dark:hover:text-foreground",
                     )}
                   >
-                    <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-background/80">
+                    <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-background/80 dark:bg-white/[0.06]">
                       <Icon className="h-3.5 w-3.5" />
                     </span>
-                    <span className="max-w-[9rem] truncate font-medium">{item.label}</span>
+                    <span className="max-w-[9rem] truncate leading-tight">{item.label}</span>
                     {showBadge ? (
                       <Badge
                         variant={active ? "default" : "secondary"}
