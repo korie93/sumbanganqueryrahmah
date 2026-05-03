@@ -2,6 +2,7 @@ import { formatAmountRM } from "@/pages/collection/utils";
 import { fitCollectionRecordText } from "@/pages/collection-records/utils";
 import type { CollectionRecord } from "@/lib/api";
 import { formatDateTimeDDMMYYYY, formatIsoDateToDDMMYYYY } from "@/lib/date-format";
+import { loadClientSpreadsheetRuntime } from "@/lib/spreadsheet/xlsx-runtime";
 import {
   parseCollectionAmountMyrNumber,
   type CollectionAmountMyrNumber,
@@ -35,7 +36,7 @@ export async function exportCollectionRecordsToExcel({
   toDate,
   summary,
 }: CollectionRecordsExportParams) {
-  const XLSX = await import("xlsx");
+  const { module: XLSX } = await loadClientSpreadsheetRuntime();
   const reportRows = visibleRecords.map((record) => [
     record.customerName,
     record.icNumber,

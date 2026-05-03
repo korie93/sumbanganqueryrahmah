@@ -1,11 +1,11 @@
 import fs from "node:fs";
-import * as xlsx from "xlsx";
 import {
   createUploadFileAccessError,
   createUploadFileTooLargeError,
   isFileAccessError,
   validateUploadFileSize,
 } from "./import-upload-file-utils";
+import { getImportUploadSpreadsheetRuntime } from "./import-upload-xlsx-runtime";
 import type { ImportRow, ParsedImportUploadResult } from "./import-upload-types";
 
 type ParseExcelOptions = {
@@ -98,8 +98,9 @@ export function parseExcelBuffer(buffer: Buffer, options?: ParseExcelOptions): P
   }
 
   let workbook;
+  const spreadsheetRuntime = getImportUploadSpreadsheetRuntime();
   try {
-    workbook = xlsx.read(buffer, {
+    workbook = spreadsheetRuntime.readWorkbook(buffer, {
       type: "buffer",
       cellDates: true,
       cellNF: false,
@@ -115,7 +116,7 @@ export function parseExcelBuffer(buffer: Buffer, options?: ParseExcelOptions): P
   }
 
   const worksheet = workbook.Sheets[firstSheetName];
-  const jsonData = xlsx.utils.sheet_to_json(worksheet, {
+  const jsonData = spreadsheetRuntime.sheetToJson(worksheet, {
     header: 1,
     defval: "",
     raw: false,

@@ -36,6 +36,11 @@ preserving the same SheetJS build used by the application import/export flows.
 The tarball metadata has been checked locally: `package/package.json` declares
 `Apache-2.0`, and the archive includes `package/LICENSE` with the Apache
 License 2.0 text.
+Server-side import parsing now goes through
+`server/services/import-upload-xlsx-runtime.ts`, and browser import/export
+flows go through `client/src/lib/spreadsheet/xlsx-runtime.ts`. Keep new
+spreadsheet reads and writes behind those adapters so a future ExcelJS fallback
+can be introduced without touching every import/export caller.
 If the team later introduces an internal artifact registry, move the same
 tarball there and update `package.json` and `package-lock.json` in one PR.
 

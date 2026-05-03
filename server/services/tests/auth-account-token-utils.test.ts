@@ -26,20 +26,20 @@ test("createActivationTokenPayload and createPasswordResetTokenPayload set the e
 });
 
 test("assertConfirmedStrongPassword and assertStrongPasswordInput enforce shared password rules", () => {
-  assert.doesNotThrow(() => assertConfirmedStrongPassword("StrongPass123", "StrongPass123"));
-  assert.doesNotThrow(() => assertStrongPasswordInput("StrongPass123"));
+  assert.doesNotThrow(() => assertConfirmedStrongPassword("StrongPass123!", "StrongPass123!"));
+  assert.doesNotThrow(() => assertStrongPasswordInput("StrongPass123!"));
 
   assert.throws(
     () => assertConfirmedStrongPassword("weak", "weak"),
-    /Password must be between 8 and 256 characters/i,
+    /Password must be between 12 and 256 characters/i,
   );
   assert.throws(
-    () => assertConfirmedStrongPassword("StrongPass123", "StrongPass124"),
+    () => assertConfirmedStrongPassword("StrongPass123!", "StrongPass124!"),
     /Confirm password does not match/i,
   );
   assert.throws(
     () => assertStrongPasswordInput("weak"),
-    /Password must be between 8 and 256 characters/i,
+    /Password must be between 12 and 256 characters/i,
   );
 });
 

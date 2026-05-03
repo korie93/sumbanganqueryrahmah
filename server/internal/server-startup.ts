@@ -16,6 +16,7 @@ import { registerFrontendStatic } from "./frontend-static";
 import { startIdleSessionSweeper } from "./idle-session-sweeper";
 import { assertCollectionPiiRetirementStartupReady } from "./collection-pii-retirement-startup";
 import { buildRateLimiterTopologyWarning } from "../middleware/rate-limit-runtime";
+import { buildTwoFactorReplayCacheTopologyWarning } from "../auth/two-factor-replay-topology";
 
 type RuntimeSettings = {
   sessionTimeoutMinutes: number;
@@ -101,6 +102,23 @@ export async function startLocalServer(options: StartLocalServerOptions) {
     );
   } else {
     clearStartupServiceDegraded("rate-limiter-topology");
+  }
+  const twoFactorReplayCacheTopologyWarning = buildTwoFactorReplayCacheTopologyWarning(
+    runtimeConfig.cluster.maxWorkers,
+  );
+  if (twoFactorReplayCacheTopologyWarning) {
+    logger.warn("2FA replay protection requires a shared store before scaling past one worker", {
+      workerCount: runtimeConfig.cluster.maxWorkers,
+      message: twoFactorReplayCacheTopologyWarning,
+      storage: "memory",
+    });
+    markStartupServiceDegraded(
+      "two-factor-replay-topology",
+      "PROCESS_LOCAL_2FA_REPLAY_CACHE_MULTI_WORKER",
+      twoFactorReplayCacheTopologyWarning,
+    );
+  } else {
+    clearStartupServiceDegraded("two-factor-replay-topology");
   }
 
   markStartupStage("initializing-storage");

@@ -1,7 +1,8 @@
+import { loadClientSpreadsheetRuntime } from "@/lib/spreadsheet/xlsx-runtime";
+
 export type ViewerExportExtension = "csv" | "pdf" | "xlsx";
 
 let viewerJsPdfModulePromise: Promise<typeof import("jspdf")> | null = null;
-let viewerXlsxModulePromise: Promise<typeof import("xlsx")> | null = null;
 
 export function loadViewerJsPdfModule() {
   if (!viewerJsPdfModulePromise) {
@@ -12,11 +13,7 @@ export function loadViewerJsPdfModule() {
 }
 
 export function loadViewerXlsxModule() {
-  if (!viewerXlsxModulePromise) {
-    viewerXlsxModulePromise = import("xlsx");
-  }
-
-  return viewerXlsxModulePromise;
+  return loadClientSpreadsheetRuntime().then((runtime) => runtime.module);
 }
 
 export function buildViewerExportFilename(

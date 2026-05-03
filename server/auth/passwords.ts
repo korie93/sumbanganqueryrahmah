@@ -7,12 +7,25 @@ import {
 } from "./credentials";
 import { isBcryptHash } from "./account-lifecycle";
 
+const TEMP_PASSWORD_UPPERCASE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+const TEMP_PASSWORD_LOWERCASE_ALPHABET = "abcdefghijkmnopqrstuvwxyz";
+const TEMP_PASSWORD_DIGIT_ALPHABET = "23456789";
+const TEMP_PASSWORD_SYMBOL_ALPHABET = "!@#$%^&*()-_=+";
 const TEMP_PASSWORD_ALPHABET =
-  "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%^&*()-_=+";
+  `${TEMP_PASSWORD_UPPERCASE_ALPHABET}${TEMP_PASSWORD_LOWERCASE_ALPHABET}${TEMP_PASSWORD_DIGIT_ALPHABET}${TEMP_PASSWORD_SYMBOL_ALPHABET}`;
 
-function pickRandomCharacter(): string {
-  const index = randomInt(TEMP_PASSWORD_ALPHABET.length);
-  return TEMP_PASSWORD_ALPHABET[index];
+function pickRandomCharacter(alphabet = TEMP_PASSWORD_ALPHABET): string {
+  const index = randomInt(alphabet.length);
+  return alphabet[index];
+}
+
+function shuffleCharacters(characters: string[]): string[] {
+  const next = [...characters];
+  for (let index = next.length - 1; index > 0; index -= 1) {
+    const swapIndex = randomInt(index + 1);
+    [next[index], next[swapIndex]] = [next[swapIndex], next[index]];
+  }
+  return next;
 }
 
 export async function hashPassword(raw: string): Promise<string> {
@@ -52,14 +65,18 @@ export function hashOpaqueToken(raw: string): string {
 
 export function generateTemporaryPassword(length = 18): string {
   const safeLength = Math.max(16, length);
-  let next = "";
-  while (next.length < safeLength) {
-    next += pickRandomCharacter();
+  const characters: string[] = [];
+
+  while (characters.length < safeLength - 4) {
+    characters.push(pickRandomCharacter());
   }
 
-  if (!/[A-Z]/.test(next)) next = `A${next.slice(1)}`;
-  if (!/[a-z]/.test(next)) next = `${next.slice(0, 1)}a${next.slice(2)}`;
-  if (!/\d/.test(next)) next = `${next.slice(0, 2)}7${next.slice(3)}`;
-  if (!/[!@#$%^&*()\-_=+]/.test(next)) next = `${next.slice(0, 3)}!${next.slice(4)}`;
-  return next;
+  characters.push(
+    pickRandomCharacter(TEMP_PASSWORD_UPPERCASE_ALPHABET),
+    pickRandomCharacter(TEMP_PASSWORD_LOWERCASE_ALPHABET),
+    pickRandomCharacter(TEMP_PASSWORD_DIGIT_ALPHABET),
+    pickRandomCharacter(TEMP_PASSWORD_SYMBOL_ALPHABET),
+  );
+
+  return shuffleCharacters(characters).join("");
 }

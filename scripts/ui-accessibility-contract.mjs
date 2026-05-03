@@ -46,6 +46,16 @@ const authenticatedRouteSpecs = [
     path: "/viewer",
     contentSelector: "main#main-content",
   },
+  {
+    id: "dashboard",
+    path: "/dashboard",
+    contentSelector: "main#main-content",
+  },
+  {
+    id: "settings",
+    path: "/settings",
+    contentSelector: "main#main-content",
+  },
 ];
 
 const viewportSpecs = [

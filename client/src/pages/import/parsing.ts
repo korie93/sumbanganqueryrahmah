@@ -1,20 +1,12 @@
+import { loadClientSpreadsheetRuntime } from "@/lib/spreadsheet/xlsx-runtime";
 import type { ImportRow, ParsedBulkResult, ParsedPreviewResult } from "@/pages/import/types";
 
 type XlsxModule = typeof import("xlsx");
 
 export const IMPORT_PREVIEW_MAX_CSV_ROWS = 100_000;
 
-let xlsxModulePromise: Promise<XlsxModule> | null = null;
-
 function createCsvRowLimitError() {
   return `CSV import exceeds the preview row limit of ${IMPORT_PREVIEW_MAX_CSV_ROWS.toLocaleString("en-US")} rows. Split the file into smaller uploads.`;
-}
-
-async function loadXlsx(): Promise<XlsxModule> {
-  if (!xlsxModulePromise) {
-    xlsxModulePromise = import("xlsx");
-  }
-  return xlsxModulePromise;
 }
 
 function isSupportedSpreadsheet(filename: string) {
@@ -191,7 +183,7 @@ function parseExcelBuffer(
 
 async function parseExcelFile(file: File): Promise<ParsedPreviewResult> {
   const arrayBuffer = await file.arrayBuffer();
-  const xlsx = await loadXlsx();
+  const { module: xlsx } = await loadClientSpreadsheetRuntime();
   return parseExcelBuffer(xlsx, arrayBuffer);
 }
 
@@ -217,7 +209,7 @@ export async function parseImportFileForBulk(file: File): Promise<ParsedBulkResu
     }
 
     const arrayBuffer = await file.arrayBuffer();
-    const xlsx = await loadXlsx();
+    const { module: xlsx } = await loadClientSpreadsheetRuntime();
     const result = parseExcelBuffer(xlsx, arrayBuffer);
     if (result.error) {
       return { data: [], error: result.error };

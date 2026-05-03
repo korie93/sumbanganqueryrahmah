@@ -6,16 +6,28 @@ import {
   isCredentialPasswordWithinMaxLength,
   isStrongPassword,
 } from "../credentials";
-import { hashPassword, verifyPassword } from "../passwords";
+import {
+  generateTemporaryPassword,
+  hashPassword,
+  verifyPassword,
+} from "../passwords";
 
 const VALID_BCRYPT_HASH = "$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewY5NU7z6xUfIjm6";
 
 test("credential password policy accepts normal passwords and rejects oversized input", () => {
-  assert.equal(isStrongPassword("StrongPass123"), true);
-  assert.equal(isStrongPassword("short1"), false);
+  assert.equal(isStrongPassword("StrongPass123!"), true);
+  assert.equal(isStrongPassword("StrongPass123"), false);
+  assert.equal(isStrongPassword("short1!Aa"), false);
   assert.equal(isStrongPassword("a".repeat(CREDENTIAL_PASSWORD_MAX_LENGTH + 1)), false);
   assert.equal(isCredentialPasswordWithinMaxLength("a".repeat(CREDENTIAL_PASSWORD_MAX_LENGTH)), true);
   assert.equal(isCredentialPasswordWithinMaxLength("a".repeat(CREDENTIAL_PASSWORD_MAX_LENGTH + 1)), false);
+});
+
+test("generateTemporaryPassword preserves entropy while meeting the credential policy", () => {
+  const password = generateTemporaryPassword();
+
+  assert.equal(password.length >= 16, true);
+  assert.equal(isStrongPassword(password), true);
 });
 
 test("verifyPassword rejects oversized password input before bcrypt comparison", async (t) => {

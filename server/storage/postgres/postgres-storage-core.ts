@@ -30,6 +30,11 @@ type StorageBootstrapStep = {
   run: () => Promise<void>;
 };
 
+type StorageBootstrapStepGroup = {
+  name: string;
+  steps: StorageBootstrapStep[];
+};
+
 const STORAGE_BOOTSTRAP_SLOW_STEP_MS = 1_000;
 
 export class PostgresStorageCore {
@@ -84,14 +89,20 @@ export class PostgresStorageCore {
 
   private async runInit() {
     const startedAt = performance.now();
-    const steps: StorageBootstrapStep[] = [
+    const steps: Array<StorageBootstrapStep | StorageBootstrapStepGroup> = [
       { name: "users-table", run: () => this.ensureUsersTable() },
-      { name: "imports-table", run: () => this.ensureImportsTable() },
-      { name: "data-rows-table", run: () => this.ensureDataRowsTable() },
-      { name: "user-activity-table", run: () => this.ensureUserActivityTable() },
-      { name: "audit-logs-table", run: () => this.ensureAuditLogsTable() },
-      { name: "mutation-idempotency-table", run: () => this.ensureMutationIdempotencyTable() },
-      { name: "monitor-alert-history-table", run: () => this.ensureMonitorAlertHistoryTable() },
+      {
+        name: "core-schema-primitives",
+        steps: [
+          { name: "imports-table", run: () => this.ensureImportsTable() },
+          { name: "data-rows-table", run: () => this.ensureDataRowsTable() },
+          { name: "user-activity-table", run: () => this.ensureUserActivityTable() },
+          { name: "audit-logs-table", run: () => this.ensureAuditLogsTable() },
+          { name: "mutation-idempotency-table", run: () => this.ensureMutationIdempotencyTable() },
+          { name: "monitor-alert-history-table", run: () => this.ensureMonitorAlertHistoryTable() },
+          { name: "banned-sessions-table", run: () => this.ensureBannedSessionsTable() },
+        ],
+      },
       { name: "collection-records-table", run: () => this.ensureCollectionRecordsTable() },
       { name: "collection-staff-nicknames-table", run: () => this.ensureCollectionStaffNicknamesTable() },
       { name: "collection-admin-groups-tables", run: () => this.ensureCollectionAdminGroupsTables() },
@@ -102,29 +113,42 @@ export class PostgresStorageCore {
       },
       { name: "collection-daily-tables", run: () => this.ensureCollectionDailyTables() },
       { name: "default-users-seed", run: () => this.seedDefaultUsers() },
-      { name: "backups-table", run: () => this.ensureBackupsTable() },
+      {
+        name: "supporting-schema",
+        steps: [
+          { name: "backups-table", run: () => this.ensureBackupsTable() },
+          { name: "ai-tables", run: () => this.ensureAiTables() },
+          { name: "spatial-tables", run: () => this.ensureSpatialTables() },
+          { name: "category-rules-table", run: () => this.ensureCategoryRulesTable() },
+          { name: "category-stats-table", run: () => this.ensureCategoryStatsTable() },
+          { name: "settings-tables", run: () => this.ensureSettingsTables() },
+        ],
+      },
       { name: "performance-indexes", run: () => this.ensurePerformanceIndexes() },
-      { name: "banned-sessions-table", run: () => this.ensureBannedSessionsTable() },
-      { name: "ai-tables", run: () => this.ensureAiTables() },
-      { name: "spatial-tables", run: () => this.ensureSpatialTables() },
-      { name: "category-rules-table", run: () => this.ensureCategoryRulesTable() },
-      { name: "category-stats-table", run: () => this.ensureCategoryStatsTable() },
-      { name: "settings-tables", run: () => this.ensureSettingsTables() },
     ];
+    const stepCount = steps.reduce(
+      (count, step) => count + ("steps" in step ? step.steps.length : 1),
+      0,
+    );
 
     logger.info("PostgreSQL storage bootstrap starting", {
       productionLike: runtimeConfig.app.isProductionLike,
       schemaCoupledRuntimeBootstrap: true,
-      stepCount: steps.length,
+      stepCount,
     });
 
     for (const step of steps) {
+      if ("steps" in step) {
+        await Promise.all(step.steps.map((groupStep) => this.runInitStep(groupStep)));
+        continue;
+      }
+
       await this.runInitStep(step);
     }
 
     logger.info("PostgreSQL storage bootstrap completed", {
       durationMs: Number((performance.now() - startedAt).toFixed(1)),
-      stepCount: steps.length,
+      stepCount,
     });
   }
 

@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { TwoFactorReplayCache } from "../two-factor-replay-cache";
+import {
+  buildTwoFactorReplayCacheTopologyWarning,
+  requiresSingleWorkerForProcessLocalTwoFactorReplayCache,
+} from "../two-factor-replay-topology";
 
 test("TwoFactorReplayCache accepts a code once per subject and purpose during the TTL", () => {
   let now = 1_000;
@@ -47,4 +51,11 @@ test("TwoFactorReplayCache trims the earliest expiring active entry instead of r
   assert.equal(cache.size, 2);
   assert.equal(cache.consume({ purpose: "login", subjectId: "user-1", code: "111111" }), false);
   assert.equal(cache.consume({ purpose: "login", subjectId: "user-1", code: "222222" }), true);
+});
+
+test("TwoFactorReplayCache exposes the multi-worker topology constraint explicitly", () => {
+  assert.equal(requiresSingleWorkerForProcessLocalTwoFactorReplayCache(1), false);
+  assert.equal(requiresSingleWorkerForProcessLocalTwoFactorReplayCache(2), true);
+  assert.equal(buildTwoFactorReplayCacheTopologyWarning(1), null);
+  assert.match(String(buildTwoFactorReplayCacheTopologyWarning(2)), /process-local/i);
 });

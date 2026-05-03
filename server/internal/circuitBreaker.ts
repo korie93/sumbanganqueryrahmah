@@ -77,11 +77,15 @@ export class CircuitBreaker {
 
     if (this.state === "OPEN") {
       this.rejections += 1;
+      this.totalRequests += 1;
+      this.trimCounters();
       throw new CircuitOpenError(this.name);
     }
 
     if (this.state === "HALF_OPEN" && this.halfOpenInFlight >= this.halfOpenMaxInFlight) {
       this.rejections += 1;
+      this.totalRequests += 1;
+      this.trimCounters();
       throw new CircuitOpenError(this.name);
     }
 
@@ -143,6 +147,7 @@ export class CircuitBreaker {
     this.nextRetryAt = null;
     this.halfOpenInFlight = 0;
     this.failures = 0;
+    this.rejections = 0;
     this.successes = 0;
     this.totalRequests = 0;
   }
@@ -162,7 +167,8 @@ export class CircuitBreaker {
     if (this.totalRequests <= maxWindow) return;
     const keepRatio = 0.5;
     this.failures = Math.floor(this.failures * keepRatio);
+    this.rejections = Math.floor(this.rejections * keepRatio);
     this.successes = Math.floor(this.successes * keepRatio);
-    this.totalRequests = this.failures + this.successes;
+    this.totalRequests = this.failures + this.successes + this.rejections;
   }
 }
