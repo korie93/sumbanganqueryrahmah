@@ -1,9 +1,10 @@
-import createDOMPurify from "dompurify"
+import createDOMPurify, { type Config as DOMPurifyConfig } from "dompurify"
 import { SQR_TRUSTED_TYPES_POLICY_NAME } from "../../../shared/trusted-types"
 import { sanitizeTrustedScriptURL } from "./trusted-script-url"
 
 type TrustedTypesPolicyLike = {
   createHTML: (input: string) => unknown
+  createScript?: (input: string) => unknown
   createScriptURL?: (input: string) => unknown
 }
 
@@ -35,6 +36,18 @@ const TRUSTED_STYLE_MARKUP_INVALID_PATTERNS = [
 const TRUSTED_STYLE_MARKUP_ALLOWED_CHARS = /^[\s()[\]{};:,.%='"#/_\-a-zA-Z0-9]+$/
 
 let domPurifyInstance: ReturnType<typeof createDOMPurify> | null | undefined
+
+const DOM_PURIFY_TRUSTED_TYPES_BRIDGE = {
+  createHTML(input: string) {
+    return input
+  },
+  createScript(input: string) {
+    return input
+  },
+  createScriptURL(input: string) {
+    return input
+  },
+}
 
 function resolveTrustedTypesWindow() {
   if (typeof window === "undefined" || !window.document) {
@@ -72,12 +85,16 @@ export function sanitizeTrustedHtml(input: string) {
     return fallbackSanitizeTrustedHtml(normalized)
   }
 
-  return purifier.sanitize(normalized, {
+  const domPurifyConfig: DOMPurifyConfig = {
     RETURN_TRUSTED_TYPE: false,
+    TRUSTED_TYPES_POLICY:
+      DOM_PURIFY_TRUSTED_TYPES_BRIDGE as unknown as NonNullable<DOMPurifyConfig["TRUSTED_TYPES_POLICY"]>,
     USE_PROFILES: { html: true },
     FORBID_TAGS: ["script", "iframe", "object", "embed", "style"],
     FORBID_ATTR: ["style"],
-  })
+  }
+
+  return purifier.sanitize(normalized, domPurifyConfig)
 }
 
 export function sanitizeTrustedStyleMarkup(input: string) {
