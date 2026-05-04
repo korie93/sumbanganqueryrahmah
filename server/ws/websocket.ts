@@ -2,7 +2,7 @@ import type { Server } from "node:http";
 import { WebSocketServer, WebSocket } from "ws";
 import { runtimeConfig } from "../config/runtime";
 import { getSessionJwtVerificationSecrets } from "../auth/session-jwt";
-import { PostgresStorage } from "../storage-postgres";
+import type { PostgresStorage } from "../storage-postgres";
 import { createRuntimeWebSocketManager } from "./runtime-manager";
 
 type LegacyWebSocketOptions = {
@@ -11,16 +11,7 @@ type LegacyWebSocketOptions = {
 };
 
 const WEBSOCKET_MAX_PAYLOAD_BYTES = 100 * 1024;
-let defaultStorage: PostgresStorage | null = null;
 let defaultSessionSecrets: string | readonly string[] | null = null;
-
-function getDefaultStorage() {
-  if (!defaultStorage) {
-    defaultStorage = new PostgresStorage();
-  }
-
-  return defaultStorage;
-}
 
 function getDefaultSessionSecrets() {
   if (!defaultSessionSecrets) {
@@ -33,7 +24,13 @@ function getDefaultSessionSecrets() {
 export const connectedClients = new Map<string, WebSocket>();
 
 export function setupWebSocket(server: Server, options: LegacyWebSocketOptions = {}) {
-  const storage = options.storage ?? getDefaultStorage();
+  if (!options.storage) {
+    throw new Error(
+      "setupWebSocket requires an initialized storage instance. Call storage.init() at the composition root before attaching WebSocket handlers.",
+    );
+  }
+
+  const storage = options.storage;
   const sessionSecret = options.secret ?? getDefaultSessionSecrets();
   const wss = new WebSocketServer({
     server,

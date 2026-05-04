@@ -26,9 +26,20 @@ test("floating AI chat input has a formal accessible label", () => {
   assert.match(source, /aria-label="Hantar soalan AI"/);
   assert.match(source, /aria-disabled=\{!isProcessing && !isTyping\}/);
   assert.match(source, /<span>Hentikan AI<\/span>/);
+  assert.match(source, /className="ai-notice ai-notice-error" role="alert"/);
   assert.match(source, /Pembantu AI dinyahaktifkan oleh tetapan sistem\./);
   assert.doesNotMatch(source, /aria-label="Send AI query"/);
   assert.doesNotMatch(source, />Stop AI</);
+});
+
+test("AI messages render markdown through React nodes instead of raw HTML", () => {
+  const source = readComponentSource("AIMessage.tsx");
+
+  assert.match(source, /function parseAIMessageMarkdownBlocks/);
+  assert.match(source, /<pre key=\{`code:\$\{index\}`\} className="ai-markdown-code">/);
+  assert.match(source, /const ListTag = block\.ordered \? "ol" : "ul"/);
+  assert.match(source, /<br \/>/);
+  assert.doesNotMatch(source, /dangerouslySetInnerHTML/);
 });
 
 test("floating AI dialog exposes boolean disclosure state and semantic heading", () => {
@@ -66,11 +77,13 @@ test("floating AI motion and scroll styles include accessibility fallbacks", () 
   const floatingCss = readComponentSource("FloatingAI.module.css");
 
   assert.match(aiCss, /\.ai-messages::-webkit-scrollbar-thumb[\s\S]*background:\s*var\(--ai-scroll-thumb\)/);
-  assert.doesNotMatch(aiCss, /scrollbar-color:/);
+  assert.match(aiCss, /scrollbar-width:\s*thin/);
+  assert.match(aiCss, /scrollbar-color:\s*var\(--ai-scroll-thumb\) transparent/);
   assert.doesNotMatch(aiCss, /scrollbar-gutter:/);
-  assert.doesNotMatch(aiCss, /scrollbar-width:/);
   assert.match(aiCss, /@media \(prefers-reduced-motion: reduce\)/);
   assert.match(floatingCss, /@media \(prefers-reduced-motion: reduce\)/);
+  assert.match(floatingCss, /max-height:\s*calc\(100vh - 5rem\);[\s\S]*max-height:\s*calc\(100dvh - 5rem\);/);
+  assert.match(floatingCss, /height:\s*var\(--floating-ai-panel-height, 100vh\);[\s\S]*height:\s*var\(--floating-ai-panel-height, 100dvh\);/);
   assert.match(floatingCss, /\.aiThinkingRing::after[\s\S]*animation:\s*none/);
 });
 

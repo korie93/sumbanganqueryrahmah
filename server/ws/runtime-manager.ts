@@ -11,6 +11,7 @@ const MAX_CONNECTIONS_PER_USER = 5;
 const MAX_RUNTIME_WS_MESSAGE_BYTES = 64 * 1024;
 const MAX_RUNTIME_WS_BUFFERED_BYTES = 256 * 1024;
 const WS_CLOSE_POLICY_VIOLATION = 1008;
+const WS_CLOSE_TRY_AGAIN_LATER = 1013;
 
 type RuntimeManagerOptions = {
   wss: WebSocketServer;
@@ -20,6 +21,8 @@ type RuntimeManagerOptions = {
   secret: string | readonly string[];
   connectedClients?: Map<string, WebSocket>;
   trustForwardedHeaders?: boolean;
+  acceptConnections?: () => boolean;
+  heartbeatIntervalMs?: number;
 };
 
 type RuntimeWebSocketActivity = {
@@ -174,6 +177,11 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
   const { wss, storage, secret } = options;
   const connectedClients = options.connectedClients ?? new Map<string, WebSocket>();
   const trustForwardedHeaders = options.trustForwardedHeaders === true;
+  const acceptConnections = options.acceptConnections ?? (() => true);
+  const heartbeatIntervalMs = Math.max(
+    10_000,
+    Math.trunc(options.heartbeatIntervalMs ?? HEARTBEAT_INTERVAL_MS),
+  );
   const socketEntriesByActivity = new Map<string, RuntimeTrackedSocketEntry>();
   const socketEntriesByInstance = new WeakMap<WebSocket, RuntimeTrackedSocketEntry>();
   const trackedSockets = new Set<WebSocket>();
@@ -422,7 +430,7 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
       currentEntry.alive = false;
       ws.ping();
     }
-  }, HEARTBEAT_INTERVAL_MS);
+  }, heartbeatIntervalMs);
   heartbeatHandle.unref();
 
   wss.once("close", () => {
@@ -465,6 +473,20 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
   });
 
   wss.on("connection", async (ws, req) => {
+    if (!acceptConnections()) {
+      logger.warn("WebSocket connection rejected because runtime storage is not initialized yet", {
+        path: req.url || "/ws",
+      });
+      try {
+        ws.close(WS_CLOSE_TRY_AGAIN_LATER, "storage initializing");
+      } catch (error) {
+        logger.debug("WebSocket close request failed during startup readiness rejection", {
+          error: sanitizeRuntimeWebSocketError(error),
+        });
+      }
+      return;
+    }
+
     let activityId: string | null = null;
     let socketEntry: RuntimeTrackedSocketEntry | null = null;
     let cleanedUp = false;

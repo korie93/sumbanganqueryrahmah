@@ -64,6 +64,8 @@
   gap: 12px;
   min-height: 0;
   overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--ai-scroll-thumb) transparent;
 }
 
 .ai-chat-container[data-compact='true'] .ai-messages {
@@ -131,6 +133,42 @@
   background: hsl(var(--primary));
   color: hsl(var(--primary-foreground));
   border: 1px solid hsl(var(--primary) / 0.7);
+}
+
+.ai-markdown-paragraph {
+  margin: 0;
+}
+
+.ai-markdown-paragraph + .ai-markdown-paragraph,
+.ai-markdown-paragraph + .ai-markdown-list,
+.ai-markdown-list + .ai-markdown-paragraph,
+.ai-markdown-code + .ai-markdown-paragraph,
+.ai-markdown-paragraph + .ai-markdown-code,
+.ai-markdown-list + .ai-markdown-code,
+.ai-markdown-code + .ai-markdown-list {
+  margin-top: 0.6rem;
+}
+
+.ai-markdown-list {
+  margin: 0;
+  padding-inline-start: 1.1rem;
+}
+
+.ai-markdown-list li + li {
+  margin-top: 0.25rem;
+}
+
+.ai-markdown-code {
+  margin: 0;
+  max-width: 100%;
+  overflow-x: auto;
+  border-radius: 8px;
+  background: hsl(var(--muted) / 0.72);
+  padding: 0.75rem;
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  white-space: pre;
 }
 
 .ai-typing-bubble {

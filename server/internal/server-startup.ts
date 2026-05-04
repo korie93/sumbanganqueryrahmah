@@ -40,6 +40,7 @@ type StartLocalServerOptions = {
   aiPrecomputeOnStart: boolean;
   categoryStatsService: Pick<CategoryStatsService, "warmCategoryStats">;
   notifyFatalStartup: (reason: string, details?: string) => void;
+  markWebSocketConnectionsReady?: () => void;
   port?: number;
   host?: string;
 };
@@ -68,6 +69,7 @@ export async function startLocalServer(options: StartLocalServerOptions) {
     aiPrecomputeOnStart,
     categoryStatsService,
     notifyFatalStartup,
+    markWebSocketConnectionsReady,
     port = runtimeConfig.app.port,
     host = runtimeConfig.app.host,
   } = options;
@@ -123,6 +125,7 @@ export async function startLocalServer(options: StartLocalServerOptions) {
 
   markStartupStage("initializing-storage");
   await storage.init();
+  markWebSocketConnectionsReady?.();
   try {
     await assertCollectionPiiRetirementStartupReady();
   } catch (error) {

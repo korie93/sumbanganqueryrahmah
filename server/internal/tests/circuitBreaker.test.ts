@@ -15,6 +15,8 @@ test("CircuitBreaker keeps totalRequests consistent after trimming counters", as
 
   const snapshot = circuit.getSnapshot();
   assert.equal(snapshot.totalRequests, snapshot.failures + snapshot.successes + snapshot.rejections);
+  assert.equal(snapshot.totalRequests, 2_000);
+  assert.equal(snapshot.successes, 2_000);
   assert.equal(snapshot.failureRate, 0);
 });
 

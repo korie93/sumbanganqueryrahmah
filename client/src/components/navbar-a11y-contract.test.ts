@@ -20,6 +20,7 @@ test("navbar controls use Malay accessible labels and include username context",
   assert.match(navbarSource, /aria-label="Buka menu navigasi"/);
   assert.match(navbarSource, /aria-label=\{`Buka menu pengguna untuk \$\{username\}`\}/);
   assert.match(navbarSource, /\{\[\.\.\.username\]\[0\] \|\| ""\}/);
+  assert.doesNotMatch(navbarSource, /window\.location/);
   assert.match(homeButtonSource, /aria-label="Utama"/);
   assert.match(homeButtonSource, />Utama<\/span>/);
   assert.match(desktopNavigationSource, /aria-label="Navigasi utama"/);

@@ -35,6 +35,7 @@ const HTTP_SERVER_TIMEOUT_MS = 120_000;
 
 export function createLocalRuntimeEnvironment(options: CreateLocalRuntimeEnvironmentOptions = {}) {
   const storage = new PostgresStorage();
+  let webSocketConnectionsReady = false;
   const app = express();
   applyTrustedProxies(app, runtimeConfig.app.trustedProxies);
   const server = createServer(app);
@@ -106,6 +107,7 @@ export function createLocalRuntimeEnvironment(options: CreateLocalRuntimeEnviron
     ollamaEmbed,
     defaultAiTimeoutMs: runtimeConfig.runtime.defaults.aiTimeoutMs,
     lowMemoryMode: runtimeConfig.cluster.lowMemoryMode,
+    acceptWebSocketConnections: () => webSocketConnectionsReady,
   });
   server.once("close", composition.stopTabVisibilityCacheSweep);
   server.once("close", composition.stopActivityUpdateCacheSweep);
@@ -199,5 +201,8 @@ export function createLocalRuntimeEnvironment(options: CreateLocalRuntimeEnviron
     aiPrecomputeOnStart: runtimeConfig.ai.precomputeOnStart,
     port: runtimeConfig.app.port,
     host: runtimeConfig.app.host,
+    markWebSocketConnectionsReady: () => {
+      webSocketConnectionsReady = true;
+    },
   };
 }

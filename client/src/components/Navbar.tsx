@@ -78,13 +78,6 @@ function NavbarImpl({
     [mobileItems]
   )
   const activeLocation = useMemo(() => {
-    if (typeof window !== "undefined") {
-      return {
-        pathname: window.location.pathname,
-        search: window.location.search,
-      }
-    }
-
     const queryIndex = routerLocation.indexOf("?")
     return queryIndex >= 0
       ? {

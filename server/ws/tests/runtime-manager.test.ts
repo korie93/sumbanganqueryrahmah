@@ -218,6 +218,46 @@ test("createRuntimeWebSocketManager reuses the provided connected clients map", 
   }
 });
 
+test("createRuntimeWebSocketManager rejects connections before storage is ready", async () => {
+  const wss = new FakeWebSocketServer();
+  const providedMap = new Map<string, WebSocket>();
+  const socket = new FakeWebSocket();
+  let storageLookupCount = 0;
+
+  createRuntimeWebSocketManager({
+    wss: wss as unknown as import("ws").WebSocketServer,
+    storage: {
+      getActivityById: async () => {
+        storageLookupCount += 1;
+        return createActiveSession("activity-not-ready");
+      },
+      clearCollectionNicknameSessionByActivity: async () => undefined,
+    },
+    secret: TEST_SECRET,
+    connectedClients: providedMap,
+    acceptConnections: () => false,
+  });
+
+  try {
+    wss.emit(
+      "connection",
+      socket as unknown as WebSocket,
+      createConnectionRequest(createWsToken("activity-not-ready")),
+    );
+    await flushAsyncWork();
+
+    assert.equal(storageLookupCount, 0);
+    assert.equal(providedMap.size, 0);
+    assert.equal(socket.closeCalls, 1);
+    assert.deepEqual(socket.closeCodes[0], {
+      code: 1013,
+      reason: "storage initializing",
+    });
+  } finally {
+    wss.emit("close");
+  }
+});
+
 test("broadcastWsMessage removes closed sockets from the shared client map", () => {
   const wss = new FakeWebSocketServer();
   const providedMap = new Map<string, WebSocket>();

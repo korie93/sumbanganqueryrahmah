@@ -21,6 +21,8 @@ type CircuitOptions = {
   halfOpenMaxInFlight?: number;
 };
 
+type CircuitOutcome = "failure" | "success" | "rejection";
+
 export class CircuitOpenError extends Error {
   constructor(name: string) {
     super(`Circuit '${name}' is OPEN`);
@@ -34,6 +36,7 @@ export class CircuitBreaker {
   private readonly minRequests: number;
   private readonly cooldownMs: number;
   private readonly halfOpenMaxInFlight: number;
+  private readonly maxWindow = 2_000;
 
   private state: CircuitState = "CLOSED";
   private failures = 0;
@@ -42,6 +45,7 @@ export class CircuitBreaker {
   private totalRequests = 0;
   private nextRetryAt: number | null = null;
   private halfOpenInFlight = 0;
+  private readonly outcomes: CircuitOutcome[] = [];
 
   constructor(options: CircuitOptions) {
     this.name = options.name;
@@ -76,20 +80,15 @@ export class CircuitBreaker {
     this.evaluateCooldown();
 
     if (this.state === "OPEN") {
-      this.rejections += 1;
-      this.totalRequests += 1;
-      this.trimCounters();
+      this.recordOutcome("rejection");
       throw new CircuitOpenError(this.name);
     }
 
     if (this.state === "HALF_OPEN" && this.halfOpenInFlight >= this.halfOpenMaxInFlight) {
-      this.rejections += 1;
-      this.totalRequests += 1;
-      this.trimCounters();
+      this.recordOutcome("rejection");
       throw new CircuitOpenError(this.name);
     }
 
-    this.totalRequests += 1;
     if (this.state === "HALF_OPEN") {
       this.halfOpenInFlight += 1;
     }
@@ -109,16 +108,15 @@ export class CircuitBreaker {
   }
 
   private onSuccess() {
-    this.successes += 1;
     if (this.state === "HALF_OPEN") {
       this.close();
       return;
     }
-    this.trimCounters();
+    this.recordOutcome("success");
   }
 
   private onFailure() {
-    this.failures += 1;
+    this.recordOutcome("failure");
 
     if (this.state === "HALF_OPEN") {
       this.open();
@@ -132,8 +130,6 @@ export class CircuitBreaker {
         return;
       }
     }
-
-    this.trimCounters();
   }
 
   private open() {
@@ -150,6 +146,7 @@ export class CircuitBreaker {
     this.rejections = 0;
     this.successes = 0;
     this.totalRequests = 0;
+    this.outcomes.length = 0;
   }
 
   private evaluateCooldown() {
@@ -162,13 +159,37 @@ export class CircuitBreaker {
     }
   }
 
-  private trimCounters() {
-    const maxWindow = 2000;
-    if (this.totalRequests <= maxWindow) return;
-    const keepRatio = 0.5;
-    this.failures = Math.floor(this.failures * keepRatio);
-    this.rejections = Math.floor(this.rejections * keepRatio);
-    this.successes = Math.floor(this.successes * keepRatio);
+  private recordOutcome(outcome: CircuitOutcome) {
+    this.outcomes.push(outcome);
+    this.incrementOutcome(outcome);
+
+    while (this.outcomes.length > this.maxWindow) {
+      const removed = this.outcomes.shift();
+      if (removed) {
+        this.decrementOutcome(removed);
+      }
+    }
+
     this.totalRequests = this.failures + this.successes + this.rejections;
+  }
+
+  private incrementOutcome(outcome: CircuitOutcome) {
+    if (outcome === "failure") {
+      this.failures += 1;
+    } else if (outcome === "success") {
+      this.successes += 1;
+    } else {
+      this.rejections += 1;
+    }
+  }
+
+  private decrementOutcome(outcome: CircuitOutcome) {
+    if (outcome === "failure") {
+      this.failures = Math.max(0, this.failures - 1);
+    } else if (outcome === "success") {
+      this.successes = Math.max(0, this.successes - 1);
+    } else {
+      this.rejections = Math.max(0, this.rejections - 1);
+    }
   }
 }

@@ -52,6 +52,7 @@ const {
   aiPrecomputeOnStart,
   port,
   host,
+  markWebSocketConnectionsReady,
 } = createLocalRuntimeEnvironment({
   notifyFatalStartup: notifyMasterFatalReason,
 });
@@ -156,6 +157,7 @@ async function startServer() {
     aiPrecomputeOnStart,
     categoryStatsService,
     notifyFatalStartup: notifyMasterFatalReason,
+    markWebSocketConnectionsReady,
     port,
     host,
   });

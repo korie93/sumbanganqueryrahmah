@@ -29,6 +29,7 @@ export function createLocalServerComposition(
     defaultAiTimeoutMs,
     ollamaChat,
     ollamaEmbed,
+    acceptWebSocketConnections,
   } = options;
 
   const importsRepository = new ImportsRepository();
@@ -45,6 +46,7 @@ export function createLocalServerComposition(
     storage,
     secret,
     trustForwardedHeaders: runtimeConfig.app.trustedProxies.length > 0,
+    ...(acceptWebSocketConnections ? { acceptConnections: acceptWebSocketConnections } : {}),
   });
   const authGuards = createAuthGuards({ storage, secret });
   const categoryStatsService = new CategoryStatsService(storage);

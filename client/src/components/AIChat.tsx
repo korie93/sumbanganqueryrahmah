@@ -169,7 +169,7 @@ export default function AIChat({
       ) : null}
 
       {!aiEnabled ? (
-        <div className="ai-notice ai-notice-error">
+        <div className="ai-notice ai-notice-error" role="alert">
           <TriangleAlert className="h-4 w-4" aria-hidden="true" />
           <span>Pembantu AI dinyahaktifkan oleh tetapan sistem.</span>
         </div>

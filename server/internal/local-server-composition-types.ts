@@ -63,6 +63,7 @@ export type CreateLocalServerCompositionOptions = {
   defaultAiTimeoutMs: number;
   ollamaChat: typeof import("../ai-ollama").ollamaChat;
   ollamaEmbed: typeof import("../ai-ollama").ollamaEmbed;
+  acceptWebSocketConnections?: () => boolean;
 };
 
 export type LocalServerComposition = {
