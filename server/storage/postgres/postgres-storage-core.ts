@@ -100,7 +100,6 @@ export class PostgresStorageCore {
           { name: "audit-logs-table", run: () => this.ensureAuditLogsTable() },
           { name: "mutation-idempotency-table", run: () => this.ensureMutationIdempotencyTable() },
           { name: "monitor-alert-history-table", run: () => this.ensureMonitorAlertHistoryTable() },
-          { name: "banned-sessions-table", run: () => this.ensureBannedSessionsTable() },
         ],
       },
       { name: "collection-records-table", run: () => this.ensureCollectionRecordsTable() },
@@ -113,10 +112,12 @@ export class PostgresStorageCore {
       },
       { name: "collection-daily-tables", run: () => this.ensureCollectionDailyTables() },
       { name: "default-users-seed", run: () => this.seedDefaultUsers() },
+      { name: "backups-table", run: () => this.ensureBackupsTable() },
+      { name: "performance-indexes", run: () => this.ensurePerformanceIndexes() },
       {
         name: "supporting-schema",
         steps: [
-          { name: "backups-table", run: () => this.ensureBackupsTable() },
+          { name: "banned-sessions-table", run: () => this.ensureBannedSessionsTable() },
           { name: "ai-tables", run: () => this.ensureAiTables() },
           { name: "spatial-tables", run: () => this.ensureSpatialTables() },
           { name: "category-rules-table", run: () => this.ensureCategoryRulesTable() },
@@ -124,7 +125,6 @@ export class PostgresStorageCore {
           { name: "settings-tables", run: () => this.ensureSettingsTables() },
         ],
       },
-      { name: "performance-indexes", run: () => this.ensurePerformanceIndexes() },
     ];
     const stepCount = steps.reduce(
       (count, step) => count + ("steps" in step ? step.steps.length : 1),

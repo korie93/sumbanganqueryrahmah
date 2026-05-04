@@ -53,17 +53,29 @@ test("PostgresStorageCore keeps dependent bootstrap steps ordered while parallel
   const importsStartIndex = storage.events.indexOf("start:imports-table");
   const collectionDailyEndIndex = storage.events.indexOf("end:collection-daily-tables");
   const defaultSeedStartIndex = storage.events.indexOf("start:default-users-seed");
+  const backupsStartIndex = storage.events.indexOf("start:backups-table");
+  const performanceStartIndex = storage.events.indexOf("start:performance-indexes");
+  const supportingGroupStartIndex = Math.min(
+    storage.events.indexOf("start:banned-sessions-table"),
+    storage.events.indexOf("start:ai-tables"),
+    storage.events.indexOf("start:spatial-tables"),
+    storage.events.indexOf("start:category-rules-table"),
+    storage.events.indexOf("start:category-stats-table"),
+    storage.events.indexOf("start:settings-tables"),
+  );
   const supportingGroupEndIndex = Math.max(
-    storage.events.indexOf("end:backups-table"),
+    storage.events.indexOf("end:banned-sessions-table"),
     storage.events.indexOf("end:ai-tables"),
     storage.events.indexOf("end:spatial-tables"),
     storage.events.indexOf("end:category-rules-table"),
     storage.events.indexOf("end:category-stats-table"),
     storage.events.indexOf("end:settings-tables"),
   );
-  const performanceStartIndex = storage.events.indexOf("start:performance-indexes");
 
   assert.equal(usersEndIndex < importsStartIndex, true);
   assert.equal(collectionDailyEndIndex < defaultSeedStartIndex, true);
-  assert.equal(supportingGroupEndIndex < performanceStartIndex, true);
+  assert.equal(defaultSeedStartIndex < backupsStartIndex, true);
+  assert.equal(backupsStartIndex < performanceStartIndex, true);
+  assert.equal(performanceStartIndex < supportingGroupStartIndex, true);
+  assert.equal(supportingGroupStartIndex < supportingGroupEndIndex, true);
 });
