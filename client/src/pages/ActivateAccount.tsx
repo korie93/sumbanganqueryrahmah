@@ -9,6 +9,7 @@ import {
 } from "@/lib/api/auth";
 import { getApiErrorMessage } from "@/lib/api-errors";
 import { persistAuthNotice } from "@/lib/auth-session";
+import { shouldAutoFocusPublicAuthField } from "@/lib/interaction-media";
 import {
   hasPublicAuthFieldErrors,
   validatePasswordFields,
@@ -84,8 +85,7 @@ export default function ActivateAccountPage({ onBackToLogin }: ActivateAccountPa
       phase !== "ready" ||
       !activation ||
       typeof window === "undefined" ||
-      typeof window.matchMedia !== "function" ||
-      !window.matchMedia("(pointer: fine)").matches
+      !shouldAutoFocusPublicAuthField()
     ) {
       return undefined;
     }

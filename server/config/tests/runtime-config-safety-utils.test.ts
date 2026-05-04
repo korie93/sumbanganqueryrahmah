@@ -10,6 +10,7 @@ import {
   resolveCookieSecure,
   resolveCorsAllowedOrigins,
   resolvePreviousCollectionPiiSecrets,
+  resolvePreviousSessionSecrets,
   resolveTrustedProxies,
 } from "../runtime-config-safety-utils";
 
@@ -64,6 +65,17 @@ test("resolvePreviousCollectionPiiSecrets rejects the active key value", () => {
   );
 });
 
+test("resolvePreviousSessionSecrets rejects active duplicates and dedupes stale rotation entries", () => {
+  assert.throws(
+    () => resolvePreviousSessionSecrets(["current-session-secret"], "current-session-secret"),
+    /SESSION_SECRET_PREVIOUS must not include the active SESSION_SECRET value/i,
+  );
+  assert.deepEqual(
+    resolvePreviousSessionSecrets(["older-secret", "older-secret", "oldest-secret"], "current-session-secret"),
+    ["older-secret", "oldest-secret"],
+  );
+});
+
 test("assertRuntimeSafetyGuards rejects production-like backups without encryption keys", () => {
   assert.throws(
     () =>
@@ -83,6 +95,7 @@ test("assertRuntimeSafetyGuards rejects production-like backups without encrypti
         seedDefaultUsers: false,
         localSuperuserCredentialsFileEnabled: false,
         mailDevOutboxEnabled: false,
+        operationsDebugRoutesEnabled: false,
       }),
     /BACKUP_ENCRYPTION_KEY or BACKUP_ENCRYPTION_KEYS is required/i,
   );
@@ -107,6 +120,7 @@ test("assertRuntimeSafetyGuards rejects production-like startup when collection 
         seedDefaultUsers: false,
         localSuperuserCredentialsFileEnabled: false,
         mailDevOutboxEnabled: false,
+        operationsDebugRoutesEnabled: false,
       }),
     /COLLECTION_PII_ENCRYPTION_KEY is required outside strict local development/i,
   );
@@ -131,8 +145,34 @@ test("assertRuntimeSafetyGuards rejects production-like startup when the two-fac
         seedDefaultUsers: false,
         localSuperuserCredentialsFileEnabled: false,
         mailDevOutboxEnabled: false,
+        operationsDebugRoutesEnabled: false,
       }),
     /TWO_FACTOR_ENCRYPTION_KEY is required outside strict local development/i,
+  );
+});
+
+test("assertRuntimeSafetyGuards rejects production-like startup when operations debug routes are enabled", () => {
+  assert.throws(
+    () =>
+      assertRuntimeSafetyGuards({
+        isProductionLike: true,
+        isStrictLocalDevelopment: false,
+        mailConfiguration: {
+          effectiveFrom: null,
+          hasAnyInput: false,
+          isConfigured: false,
+          isIncomplete: false,
+        },
+        backupFeatureEnabled: true,
+        hasBackupEncryptionKeyConfigured: true,
+        hasCollectionPiiEncryptionKeyConfigured: true,
+        hasTwoFactorEncryptionKeyConfigured: true,
+        seedDefaultUsers: false,
+        localSuperuserCredentialsFileEnabled: false,
+        mailDevOutboxEnabled: false,
+        operationsDebugRoutesEnabled: true,
+      }),
+    /OPERATIONS_DEBUG_ROUTES_ENABLED is not allowed on production-like hosts/i,
   );
 });
 

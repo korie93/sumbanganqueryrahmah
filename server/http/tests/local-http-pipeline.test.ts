@@ -43,6 +43,7 @@ test("registerLocalHttpPipeline allows blob receipt previews in the CSP header",
     assert.match(permissionsPolicy, /microphone=\(\)/i);
     assert.match(permissionsPolicy, /payment=\(\)/i);
     assert.match(csp, /base-uri 'self'/i);
+    assert.match(csp, /connect-src 'self'/i);
     assert.match(csp, /img-src 'self' data: blob:/i);
     assert.match(csp, /frame-src 'self' blob:/i);
     assert.match(csp, /object-src 'none'/i);

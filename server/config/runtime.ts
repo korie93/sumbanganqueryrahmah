@@ -4,6 +4,7 @@ import {
   isProductionLikeEnvironment,
   isStrictLocalDevelopmentEnvironment,
 } from "./runtime-environment";
+import { resolveDatabaseSslConfig } from "./database-ssl";
 import { validateRuntimeEnvironmentSchema } from "./runtime-env-schema";
 import { resolveUploadsRootDir } from "./upload-paths";
 import { DEFAULT_IMPORT_BODY_LIMIT } from "./body-limit";
@@ -141,6 +142,9 @@ const configuredPreviousSessionSecrets = resolvePreviousSessionSecrets(
 );
 const configuredDatabaseUrl = readOptionalString("DATABASE_URL");
 const parsedDatabaseUrl = parseDatabaseUrl(configuredDatabaseUrl);
+const databaseSslConfig = resolveDatabaseSslConfig(readOptionalString("DATABASE_SSL"), {
+  isProductionLike,
+});
 const configuredCollectionNicknameTempPassword = readOptionalString("COLLECTION_NICKNAME_TEMP_PASSWORD");
 const configuredPgPassword = readOptionalString("PG_PASSWORD");
 const configuredTwoFactorEncryptionKey = readOptionalString("TWO_FACTOR_ENCRYPTION_KEY");
@@ -203,6 +207,7 @@ assertRuntimeSafetyGuards({
   seedDefaultUsers,
   localSuperuserCredentialsFileEnabled,
   mailDevOutboxEnabled,
+  operationsDebugRoutesEnabled,
 });
 
 assertProductionRateLimiterTopologySafety({
@@ -274,6 +279,7 @@ export const runtimeConfig: RuntimeConfig = Object.freeze({
     idleTimeoutMs: readInt("PG_IDLE_TIMEOUT_MS", 30_000, { min: 1_000 }),
     connectionTimeoutMs: readInt("PG_CONNECTION_TIMEOUT_MS", 5_000, { min: 1_000 }),
     searchPath: readString("PG_SEARCH_PATH", "public"),
+    ssl: databaseSslConfig,
   },
   auth: {
     sessionSecret: readSecretOrThrow("SESSION_SECRET", isProductionLike, () => buildEphemeralSecret("session")),

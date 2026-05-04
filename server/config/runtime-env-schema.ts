@@ -143,6 +143,7 @@ const runtimeEnvironmentSchema = z.object({
   HSTS_PRELOAD_ENABLED: optionalBooleanEnv("HSTS_PRELOAD_ENABLED"),
 
   DATABASE_URL: optionalEnvString("DATABASE_URL", SECRET_STRING_MAX_LENGTH),
+  DATABASE_SSL: optionalBooleanEnv("DATABASE_SSL"),
   PG_HOST: optionalEnvString("PG_HOST", 255),
   PG_PORT: optionalIntEnv("PG_PORT", { min: 1, max: 65_535 }),
   PG_USER: optionalEnvString("PG_USER", 255),

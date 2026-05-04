@@ -82,13 +82,19 @@ export function resolvePreviousSessionSecrets(
   }
 
   const normalizedCurrent = String(currentSessionSecret || "").trim();
+  const uniquePreviousSecrets: string[] = [];
+  const seenPreviousSecrets = new Set<string>();
   for (const value of rawValues) {
     if (normalizedCurrent && value === normalizedCurrent) {
       throw new Error("SESSION_SECRET_PREVIOUS must not include the active SESSION_SECRET value.");
     }
+    if (!seenPreviousSecrets.has(value)) {
+      seenPreviousSecrets.add(value);
+      uniquePreviousSecrets.push(value);
+    }
   }
 
-  return rawValues;
+  return uniquePreviousSecrets;
 }
 
 export function resolvePreviousCollectionPiiSecrets(
@@ -244,6 +250,7 @@ export function assertRuntimeSafetyGuards(params: {
   seedDefaultUsers: boolean;
   localSuperuserCredentialsFileEnabled: boolean;
   mailDevOutboxEnabled: boolean;
+  operationsDebugRoutesEnabled: boolean;
 }) {
   const { isProductionLike, isStrictLocalDevelopment, mailConfiguration } = params;
 
@@ -280,6 +287,12 @@ export function assertRuntimeSafetyGuards(params: {
   if (!isStrictLocalDevelopment && params.mailDevOutboxEnabled) {
     throw new Error(
       "MAIL_DEV_OUTBOX_ENABLED is only allowed in strict local development mode.",
+    );
+  }
+
+  if (isProductionLike && params.operationsDebugRoutesEnabled) {
+    throw new Error(
+      "OPERATIONS_DEBUG_ROUTES_ENABLED is not allowed on production-like hosts.",
     );
   }
 

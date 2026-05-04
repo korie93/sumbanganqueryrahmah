@@ -180,6 +180,27 @@ test("runtime config accepts production startup when required hardening env vars
       assert.equal(runtimeModule.runtimeConfig.auth.seedDefaultUsers, false);
       assert.equal(runtimeModule.runtimeConfig.app.debugLogs, false);
       assert.equal(runtimeModule.runtimeConfig.ai.debugLogs, false);
+      assert.deepEqual(runtimeModule.runtimeConfig.database.ssl, {
+        enabled: true,
+        rejectUnauthorized: true,
+      });
+    },
+  );
+});
+
+test("runtime config rejects production-like startup when database SSL is explicitly disabled", async () => {
+  await withEnv(
+    {
+      ...productionBaseOverrides,
+      PUBLIC_APP_URL: "https://sqr.example.com",
+      BACKUP_ENCRYPTION_KEY: "A".repeat(32),
+      DATABASE_SSL: "false",
+    },
+    async () => {
+      await assert.rejects(
+        importRuntimeFresh(),
+        /DATABASE_SSL=false is not allowed on production-like hosts/i,
+      );
     },
   );
 });
@@ -223,11 +244,38 @@ test("runtime config keeps operations debug routes disabled by default in local 
   );
 });
 
-test("runtime config allows explicit operations debug route enablement for controlled troubleshooting", async () => {
+test("runtime config rejects operations debug route enablement on production-like hosts", async () => {
   await withEnv(
     {
       ...productionBaseOverrides,
       BACKUP_ENCRYPTION_KEY: "A".repeat(32),
+      OPERATIONS_DEBUG_ROUTES_ENABLED: "1",
+    },
+    async () => {
+      await assert.rejects(
+        importRuntimeFresh(),
+        /OPERATIONS_DEBUG_ROUTES_ENABLED is not allowed on production-like hosts/i,
+      );
+    },
+  );
+});
+
+test("runtime config allows operations debug route enablement in strict local development", async () => {
+  await withEnv(
+    {
+      NODE_ENV: "development",
+      HOST: "127.0.0.1",
+      PUBLIC_APP_URL: "http://127.0.0.1:5000",
+      SESSION_SECRET: null,
+      COLLECTION_NICKNAME_TEMP_PASSWORD: null,
+      COLLECTION_PII_ENCRYPTION_KEY: null,
+      PG_PASSWORD: null,
+      BACKUP_ENCRYPTION_KEY: null,
+      BACKUP_ENCRYPTION_KEYS: null,
+      BACKUP_FEATURE_ENABLED: "1",
+      SEED_DEFAULT_USERS: "0",
+      LOCAL_SUPERUSER_CREDENTIALS_FILE_ENABLED: "0",
+      MAIL_DEV_OUTBOX_ENABLED: "0",
       OPERATIONS_DEBUG_ROUTES_ENABLED: "1",
     },
     async () => {
@@ -368,6 +416,10 @@ test("runtime config normalizes missing PG_PASSWORD to an empty string in strict
       const runtimeModule = await importRuntimeFresh();
       assert.equal(runtimeModule.runtimeConfig.app.isStrictLocalDevelopment, true);
       assert.equal(runtimeModule.runtimeConfig.database.password, "");
+      assert.deepEqual(runtimeModule.runtimeConfig.database.ssl, {
+        enabled: false,
+        rejectUnauthorized: true,
+      });
       assert.equal(runtimeModule.runtimeConfig.database.maxConnections >= 10, true);
       assert.equal(runtimeModule.runtimeConfigValidation.warningCount > 0, true);
     },

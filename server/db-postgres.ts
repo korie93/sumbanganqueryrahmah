@@ -1,6 +1,7 @@
 import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
 import { runtimeConfig } from "./config/runtime";
+import { buildPgSslPoolConfig } from "./config/database-ssl";
 import { validatePgSearchPath } from "./config/db-search-path";
 import {
   bindPgPoolHealthCheck,
@@ -8,6 +9,7 @@ import {
 } from "./db-pool-monitor";
 
 const { Pool } = pg;
+const pgSslPoolConfig = buildPgSslPoolConfig(runtimeConfig.database.ssl);
 
 export const pool = new Pool(
   runtimeConfig.database.connectionString
@@ -17,6 +19,7 @@ export const pool = new Pool(
         idleTimeoutMillis: runtimeConfig.database.idleTimeoutMs,
         connectionTimeoutMillis: runtimeConfig.database.connectionTimeoutMs,
         options: `-c search_path=${validatePgSearchPath(runtimeConfig.database.searchPath)}`,
+        ...pgSslPoolConfig,
       }
     : {
         host: runtimeConfig.database.host,
@@ -28,6 +31,7 @@ export const pool = new Pool(
         idleTimeoutMillis: runtimeConfig.database.idleTimeoutMs,
         connectionTimeoutMillis: runtimeConfig.database.connectionTimeoutMs,
         options: `-c search_path=${validatePgSearchPath(runtimeConfig.database.searchPath)}`,
+        ...pgSslPoolConfig,
       },
 );
 

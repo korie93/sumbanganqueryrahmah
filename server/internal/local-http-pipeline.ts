@@ -82,6 +82,7 @@ export function registerLocalHttpPipeline(app: Express, options: LocalHttpPipeli
       useDefaults: true,
       directives: {
         baseUri: ["'self'"],
+        connectSrc: ["'self'"],
         imgSrc: ["'self'", "data:", "blob:"],
         frameSrc: ["'self'", "blob:"],
         objectSrc: ["'none'"],

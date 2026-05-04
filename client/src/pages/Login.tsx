@@ -3,6 +3,7 @@ import { Eye, EyeOff, LogIn } from "lucide-react";
 import type { User } from "@/app/types";
 import { BrandLogo } from "@/components/BrandLogo";
 import { PublicAuthButton, PublicAuthInput } from "@/components/PublicAuthControls";
+import { shouldAutoFocusPublicAuthField } from "@/lib/interaction-media";
 import { useLoginPageState } from "@/pages/useLoginPageState";
 import "./Login.css";
 
@@ -70,11 +71,7 @@ export default function Login({ onForgotPasswordClick, onLandingClick, onLoginSu
       return;
     }
 
-    const shouldAutoFocus =
-      typeof window.matchMedia === "function"
-      && window.matchMedia("(pointer: fine)").matches;
-
-    if (!shouldAutoFocus) {
+    if (!shouldAutoFocusPublicAuthField()) {
       return;
     }
 

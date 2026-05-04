@@ -18,6 +18,7 @@
     "verify:design-token-spacing": "node scripts/verify-design-token-spacing.mjs",
     "verify:repo-hygiene": "node scripts/verify-repo-hygiene.mjs",
     "verify:db-schema-governance": "node scripts/verify-db-schema-governance.mjs",
+    "verify:xlsx-vendor-integrity": "node scripts/verify-xlsx-vendor-integrity.mjs",
     "verify:bundle-budgets": "node scripts/verify-client-bundle-budgets.mjs",
     "audit:dependencies": "node scripts/audit-dependencies.mjs",
     "typecheck": "tsc --noEmit",

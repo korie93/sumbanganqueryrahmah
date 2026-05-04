@@ -35,6 +35,9 @@ jobs:
       - name: Audit dependencies
         run: npm run audit:dependencies
 
+      - name: Verify XLSX vendor integrity
+        run: npm run verify:xlsx-vendor-integrity
+
       - name: Verify migration drift
         run: npm run db:check
 
@@ -174,6 +177,9 @@ jobs:
 
       - name: Audit dependencies
         run: npm run audit:dependencies
+
+      - name: Verify XLSX vendor integrity
+        run: npm run verify:xlsx-vendor-integrity
 
       - name: Verify migration drift
         run: npm run db:check
