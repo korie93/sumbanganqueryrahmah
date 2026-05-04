@@ -144,6 +144,8 @@ const runtimeEnvironmentSchema = z.object({
 
   DATABASE_URL: optionalEnvString("DATABASE_URL", SECRET_STRING_MAX_LENGTH),
   DATABASE_SSL: optionalBooleanEnv("DATABASE_SSL"),
+  DATABASE_SSL_CA: optionalEnvString("DATABASE_SSL_CA", SECRET_STRING_MAX_LENGTH),
+  DATABASE_SSL_CA_FILE: optionalEnvString("DATABASE_SSL_CA_FILE", 1_024),
   PG_HOST: optionalEnvString("PG_HOST", 255),
   PG_PORT: optionalIntEnv("PG_PORT", { min: 1, max: 65_535 }),
   PG_USER: optionalEnvString("PG_USER", 255),

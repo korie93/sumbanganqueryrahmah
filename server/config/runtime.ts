@@ -143,6 +143,8 @@ const configuredPreviousSessionSecrets = resolvePreviousSessionSecrets(
 const configuredDatabaseUrl = readOptionalString("DATABASE_URL");
 const parsedDatabaseUrl = parseDatabaseUrl(configuredDatabaseUrl);
 const databaseSslConfig = resolveDatabaseSslConfig(readOptionalString("DATABASE_SSL"), {
+  ca: readOptionalString("DATABASE_SSL_CA"),
+  caFile: readOptionalString("DATABASE_SSL_CA_FILE"),
   isProductionLike,
 });
 const configuredCollectionNicknameTempPassword = readOptionalString("COLLECTION_NICKNAME_TEMP_PASSWORD");

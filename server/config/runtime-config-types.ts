@@ -66,6 +66,7 @@ export type RuntimeConfig = {
     connectionTimeoutMs: number;
     searchPath: string;
     ssl: {
+      ca?: string;
       enabled: boolean;
       rejectUnauthorized: true;
     };
