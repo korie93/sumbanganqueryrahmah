@@ -440,4 +440,8 @@ test("buildRuntimeConfigWarnings reports process-local 2FA replay cache risk in 
     warnings.map((warning) => warning.code).join(","),
     /TWO_FACTOR_REPLAY_CACHE_PROCESS_LOCAL/,
   );
+  assert.match(
+    warnings.map((warning) => warning.code).join(","),
+    /WEBSOCKET_STATE_PROCESS_LOCAL/,
+  );
 });

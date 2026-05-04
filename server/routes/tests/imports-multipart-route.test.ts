@@ -259,6 +259,56 @@ test("createImportsMultipartRoute rejects multipart uploads that exceed the acti
   quotaTracker.release("admin.user", 1024);
 });
 
+test("createImportsMultipartRoute releases reserved quota when the request closes before completion", async () => {
+  const quotaTracker = createActiveImportUploadQuotaTracker(1024);
+  const handler = createImportsMultipartRoute(1024, 1024, quotaTracker);
+  const boundary = "----codex-import-multipart-boundary";
+  const req = new PassThrough() as PassThrough & {
+    complete: boolean;
+    headers: Record<string, string>;
+    is: (type: string) => boolean;
+    body?: Record<string, unknown>;
+    user?: { username?: string };
+  };
+
+  req.complete = false;
+  req.headers = {
+    "content-type": `multipart/form-data; boundary=${boundary}`,
+  };
+  req.is = (type: string) => type === "multipart/form-data";
+  req.user = { username: "admin.user" };
+
+  let nextCalled = false;
+  const res = {
+    locals: {} as Record<string, unknown>,
+    status() {
+      return {
+        json() {
+          throw new Error("The multipart close path should not send a response.");
+        },
+      };
+    },
+  };
+
+  handler(req as never, res as never, () => {
+    nextCalled = true;
+  });
+
+  assert.equal(quotaTracker.getUsage("admin.user"), 1024);
+
+  const closePromise = new Promise<void>((resolve) => {
+    req.once("close", () => resolve());
+  });
+  req.destroy();
+  await closePromise;
+
+  assert.equal(quotaTracker.getUsage("admin.user"), 0);
+  assert.equal(nextCalled, false);
+
+  req.emit("close");
+  assert.equal(quotaTracker.getUsage("admin.user"), 0);
+});
+
 test("cleanupTrackedMultipartUploadStreamsForTests destroys tracked multipart file streams defensively", () => {
   const lifecycleCalls: string[] = [];
   const stream = {

@@ -56,4 +56,5 @@ test("rotateAuthSessionCsrfCookie refreshes only the csrf cookie", () => {
   assert.equal(typeof cookies[0]?.value, "string");
   assert.equal(cookies[0]?.value.length, 64);
   assert.equal(cookies[0]?.options.httpOnly, false);
+  assert.equal(cookies[0]?.options.sameSite, "strict");
 });

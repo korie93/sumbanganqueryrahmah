@@ -96,6 +96,26 @@ test("runtime env schema preserves the existing AUTH_COOKIE_SECURE error contrac
   );
 });
 
+test("runtime env schema validates SESSION_COOKIE_SAMESITE values", () => {
+  assert.doesNotThrow(() => {
+    validateRuntimeEnvironmentSchema({
+      SESSION_COOKIE_SAMESITE: "strict",
+    });
+    validateRuntimeEnvironmentSchema({
+      SESSION_COOKIE_SAMESITE: "lax",
+    });
+  });
+
+  assert.throws(
+    () => {
+      validateRuntimeEnvironmentSchema({
+        SESSION_COOKIE_SAMESITE: "none",
+      });
+    },
+    /SESSION_COOKIE_SAMESITE must be one of: strict or lax/i,
+  );
+});
+
 test("runtime env schema validates HSTS preload tuning flags", () => {
   assert.doesNotThrow(() => {
     validateRuntimeEnvironmentSchema({

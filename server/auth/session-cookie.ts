@@ -24,7 +24,7 @@ function shouldUseSecureAuthCookie() {
 
 function getBaseAuthCookieOptions() {
   return {
-    sameSite: "lax" as const,
+    sameSite: runtimeConfig.auth.cookieSameSite,
     secure: shouldUseSecureAuthCookie(),
     path: "/",
   };

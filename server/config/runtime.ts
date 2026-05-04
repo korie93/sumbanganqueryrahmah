@@ -121,6 +121,19 @@ function resolveDefaultPgMaxConnections() {
   return Math.min(50, Math.max(10, normalizedCpuCount * 2));
 }
 
+function resolveCookieSameSite(value: string | null): "strict" | "lax" {
+  if (!value) {
+    return "strict";
+  }
+
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "strict" || normalized === "lax") {
+    return normalized;
+  }
+
+  throw new Error("SESSION_COOKIE_SAMESITE must be one of: strict or lax.");
+}
+
 const configuredSessionSecret = readOptionalString("SESSION_SECRET");
 const configuredPreviousSessionSecrets = resolvePreviousSessionSecrets(
   readCommaSeparatedList("SESSION_SECRET_PREVIOUS"),
@@ -162,6 +175,7 @@ const cookieSecure = resolveCookieSecure(configuredAuthCookieSecure, {
   isProductionLike,
   publicAppUrl,
 });
+const cookieSameSite = resolveCookieSameSite(readOptionalString("SESSION_COOKIE_SAMESITE"));
 
 const mailConfiguration = assessMailConfiguration({
   smtpService: readOptionalString("SMTP_SERVICE"),
@@ -272,6 +286,7 @@ export const runtimeConfig: RuntimeConfig = Object.freeze({
     twoFactorEncryptionSecret: configuredTwoFactorEncryptionKey,
     seedDefaultUsers,
     cookieSecure,
+    cookieSameSite,
   },
   ai: {
     host: readString("OLLAMA_HOST", "http://127.0.0.1:11434"),

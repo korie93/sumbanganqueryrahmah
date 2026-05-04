@@ -23,5 +23,5 @@ export function registerSearchRoutes(app: Express, deps: SearchRouteDeps) {
 
   app.get("/api/search", authenticateToken, searchRateLimiter, asyncHandler(searchController.searchSimple));
 
-  app.post("/api/search/advanced", authenticateToken, asyncHandler(searchController.advancedSearch));
+  app.post("/api/search/advanced", authenticateToken, searchRateLimiter, asyncHandler(searchController.advancedSearch));
 }

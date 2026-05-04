@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { sanitizeForLog } from "../logger";
+import { sanitizeErrorStackForLog, sanitizeForLog } from "../logger";
 
 test("sanitizeForLog redacts snake_case, kebab-case, and dotted PII keys", () => {
   const sanitized = sanitizeForLog({
@@ -85,4 +85,38 @@ test("sanitizeForLog keeps invalid card-like identifiers intact to avoid false p
     sanitized.details,
     "Reference 4111 1111 1111 1112 belongs to audit replay 2026-04-12.",
   );
+});
+
+test("sanitizeErrorStackForLog preserves the full sanitized stack outside production-like environments", () => {
+  const stack = [
+    "Error: boom at ops@example.com",
+    "    at first (/srv/app.js:10:2)",
+    "    at second (/srv/app.js:20:4)",
+    "    at third (/srv/app.js:30:6)",
+    "    at fourth (/srv/app.js:40:8)",
+  ].join("\n");
+
+  assert.equal(
+    sanitizeErrorStackForLog(stack, { productionLike: false }),
+    stack.replace("ops@example.com", "[REDACTED]"),
+  );
+});
+
+test("sanitizeErrorStackForLog truncates production-like stacks to a short header slice", () => {
+  const stack = [
+    "Error: boom at ops@example.com",
+    "    at first (/srv/app.js:10:2)",
+    "    at second (/srv/app.js:20:4)",
+    "    at third (/srv/app.js:30:6)",
+    "    at fourth (/srv/app.js:40:8)",
+    "    at fifth (/srv/app.js:50:10)",
+  ].join("\n");
+
+  const sanitized = sanitizeErrorStackForLog(stack, { productionLike: true });
+
+  assert.match(String(sanitized), /Error: boom at \[REDACTED\]/);
+  assert.match(String(sanitized), /at first/);
+  assert.match(String(sanitized), /at third/);
+  assert.doesNotMatch(String(sanitized), /at fifth/);
+  assert.match(String(sanitized), /\[stack truncated for production log: 2 additional line\(s\) omitted\]/);
 });

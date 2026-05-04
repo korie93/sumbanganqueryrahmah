@@ -45,6 +45,8 @@ function isSensitiveLogKey(key: string): boolean {
 const EMAIL_CANDIDATE_PATTERN = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi;
 const PHONE_CANDIDATE_PATTERN = /(?<!\d)(?:\+?60|0)(?:1(?:[ -]?\d){8,9}|[3-9](?:[ -]?\d){7,8})(?!\d)/g;
 const CREDIT_CARD_CANDIDATE_PATTERN = /\b(?:\d[ -]?){13,19}\b/g;
+const PRODUCTION_STACK_MAX_LINES = 4;
+const PRODUCTION_STACK_MAX_CHARS = 1_200;
 
 function passesLuhnCheck(rawDigits: string): boolean {
   let sum = 0;
@@ -85,6 +87,45 @@ function sanitizeLogString(value: string): string {
   });
 }
 
+export function sanitizeErrorStackForLog(
+  stack: string | undefined,
+  options: { productionLike?: boolean } = {},
+): string | undefined {
+  if (!stack) {
+    return undefined;
+  }
+
+  const sanitizedStack = sanitizeLogString(stack);
+  const productionLike = options.productionLike ?? runtimeConfig.app.isProductionLike;
+  if (!productionLike) {
+    return sanitizedStack;
+  }
+
+  const lines = sanitizedStack
+    .split(/\r?\n/)
+    .map((line) => line.trimEnd());
+  const visibleLines = lines.slice(0, PRODUCTION_STACK_MAX_LINES);
+  let truncatedStack = visibleLines.join("\n");
+  const omittedLineCount = Math.max(0, lines.length - visibleLines.length);
+
+  if (truncatedStack.length > PRODUCTION_STACK_MAX_CHARS) {
+    truncatedStack = truncatedStack.slice(0, PRODUCTION_STACK_MAX_CHARS).trimEnd();
+  }
+
+  if (
+    omittedLineCount === 0
+    && truncatedStack.length === sanitizedStack.length
+  ) {
+    return truncatedStack;
+  }
+
+  const notice = omittedLineCount > 0
+    ? `[stack truncated for production log: ${omittedLineCount} additional line(s) omitted]`
+    : "[stack truncated for production log]";
+
+  return `${truncatedStack}\n${notice}`;
+}
+
 export function sanitizeForLog(value: unknown): unknown {
   if (value instanceof Error) {
     return sanitizeForLog({
@@ -114,6 +155,10 @@ export function sanitizeForLog(value: unknown): unknown {
   for (const [key, nested] of Object.entries(value as Record<string, unknown>)) {
     if (isSensitiveLogKey(key)) {
       output[key] = "[REDACTED]";
+      continue;
+    }
+    if (key === "stack" && typeof nested === "string") {
+      output[key] = sanitizeErrorStackForLog(nested);
       continue;
     }
     output[key] = sanitizeForLog(nested);

@@ -6,6 +6,7 @@ const DEFAULT_STRING_MAX_LENGTH = 4_096;
 const SECRET_STRING_MAX_LENGTH = 8_192;
 const BOOLEAN_ENV_VALUES = new Set(["1", "0", "true", "false", "yes", "no", "on", "off"]);
 const AUTH_COOKIE_SECURE_VALUES = new Set(["auto", "true", "false", "1", "0"]);
+const SESSION_COOKIE_SAMESITE_VALUES = new Set(["strict", "lax"]);
 const COLLECTION_PII_FIELD_VALUES = new Set([
   "customerName",
   "icNumber",
@@ -58,6 +59,20 @@ function optionalAuthCookieSecureEnv() {
       .refine(
         (value) => AUTH_COOKIE_SECURE_VALUES.has(value),
         "AUTH_COOKIE_SECURE must be one of: auto, true, false, 1, or 0.",
+      )
+      .optional(),
+  );
+}
+
+function optionalSessionCookieSameSiteEnv() {
+  return z.preprocess(
+    normalizeOptionalEnvString,
+    z
+      .string({ invalid_type_error: "SESSION_COOKIE_SAMESITE must be a string." })
+      .transform((value) => value.toLowerCase())
+      .refine(
+        (value) => SESSION_COOKIE_SAMESITE_VALUES.has(value),
+        "SESSION_COOKIE_SAMESITE must be one of: strict or lax.",
       )
       .optional(),
   );
@@ -164,6 +179,7 @@ const runtimeEnvironmentSchema = z.object({
     SECRET_STRING_MAX_LENGTH,
   ),
   AUTH_COOKIE_SECURE: optionalAuthCookieSecureEnv(),
+  SESSION_COOKIE_SAMESITE: optionalSessionCookieSameSiteEnv(),
   SEED_DEFAULT_USERS: optionalBooleanEnv("SEED_DEFAULT_USERS"),
   LOCAL_SUPERUSER_CREDENTIALS_FILE_ENABLED: optionalBooleanEnv(
     "LOCAL_SUPERUSER_CREDENTIALS_FILE_ENABLED",

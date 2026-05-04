@@ -73,6 +73,7 @@ export type RuntimeConfig = {
     twoFactorEncryptionSecret: string | null;
     seedDefaultUsers: boolean;
     cookieSecure: boolean;
+    cookieSameSite: "lax" | "strict";
   };
   ai: {
     host: string;

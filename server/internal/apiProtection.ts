@@ -28,6 +28,12 @@ function isHeavyRoute(pathname: string): boolean {
     || pathname.startsWith("/api/backups");
 }
 
+function isAdaptiveRateLimitedRoute(req: Request): boolean {
+  const method = String(req.method || "GET").toUpperCase();
+  const path = req.path || "/";
+  return path.startsWith("/api/") || (method === "POST" && path === "/telemetry/web-vitals");
+}
+
 function isSessionControlRoute(req: Request): boolean {
   const method = String(req.method || "GET").toUpperCase();
   const path = req.path || "/";
@@ -136,6 +142,10 @@ export function createApiProtectionMiddleware(options: ApiProtectionOptions): {
       bucketScope = "ai";
       baseLimit = 14;
       minLimit = 4;
+    } else if (method === "POST" && path === "/telemetry/web-vitals") {
+      bucketScope = "telemetry";
+      baseLimit = 30;
+      minLimit = 6;
     } else if (path.startsWith("/api/activity/heartbeat")) {
       bucketScope = "heartbeat";
       baseLimit = 120;
@@ -162,7 +172,7 @@ export function createApiProtectionMiddleware(options: ApiProtectionOptions): {
 
   const adaptiveRateLimit: RequestHandler = (req, res, next) => {
     const controlState = options.getControlState();
-    if (!req.path.startsWith("/api/")) return next();
+    if (!isAdaptiveRateLimitedRoute(req)) return next();
     if (isSessionControlRoute(req)) return next();
 
     const now = Date.now();

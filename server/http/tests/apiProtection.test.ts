@@ -66,6 +66,9 @@ function createApiProtectionTestApp() {
   app.post("/api/collection", (_req, res) => {
     res.json({ ok: true, route: "collection" });
   });
+  app.post("/telemetry/web-vitals", (_req, res) => {
+    res.json({ ok: true, route: "telemetry" });
+  });
 
   return app;
 }
@@ -184,6 +187,39 @@ test("adaptive API protection ignores spoofed x-forwarded-for headers when trust
     assert.equal(throttled.status, 429);
     const payload = await throttled.json();
     assert.equal(payload.limit, 8);
+    assert.equal(payload.mode, "NORMAL");
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("adaptive API protection throttles telemetry flood attempts outside the /api prefix", async () => {
+  const app = createApiProtectionTestApp();
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    for (let index = 0; index < 6; index += 1) {
+      const response = await fetch(`${baseUrl}/telemetry/web-vitals`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ id: `metric-${index}` }),
+      });
+      assert.equal(response.status, 200);
+    }
+
+    const throttled = await fetch(`${baseUrl}/telemetry/web-vitals`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ id: "metric-overflow" }),
+    });
+    assert.equal(throttled.status, 429);
+    const payload = await throttled.json();
+    assert.equal(payload.message, "Too many requests under current system load.");
+    assert.equal(payload.limit, 6);
     assert.equal(payload.mode, "NORMAL");
   } finally {
     await stopTestServer(server);

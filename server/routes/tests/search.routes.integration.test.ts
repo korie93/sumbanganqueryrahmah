@@ -18,6 +18,7 @@ function createSearchRouteHarness(options?: {
   const globalSearchCalls: Array<Record<string, unknown>> = [];
   const simpleSearchCalls: string[] = [];
   const advancedSearchCalls: Array<Record<string, unknown>> = [];
+  const searchRateLimiterCalls: string[] = [];
   let getColumnsCallCount = 0;
 
   const searchRepository = {
@@ -102,7 +103,10 @@ function createSearchRouteHarness(options?: {
       role: "user",
       activityId: "activity-1",
     }),
-    searchRateLimiter: (_req, _res, next) => next(),
+    searchRateLimiter: (req, _res, next) => {
+      searchRateLimiterCalls.push(req.path);
+      next();
+    },
   });
 
   return {
@@ -110,6 +114,7 @@ function createSearchRouteHarness(options?: {
     globalSearchCalls,
     simpleSearchCalls,
     advancedSearchCalls,
+    searchRateLimiterCalls,
     getColumnsCallCount: () => getColumnsCallCount,
   };
 }
@@ -283,7 +288,7 @@ test("GET /api/search returns mapped simple search results", async () => {
 });
 
 test("POST /api/search/advanced applies runtime pagination and formats headers", async () => {
-  const { app, advancedSearchCalls } = createSearchRouteHarness({
+  const { app, advancedSearchCalls, searchRateLimiterCalls } = createSearchRouteHarness({
     searchResultLimit: 75,
   });
   const { server, baseUrl } = await startTestServer(app);
@@ -334,6 +339,7 @@ test("POST /api/search/advanced applies runtime pagination and formats headers",
       limit: 25,
       offset: 50,
     }]);
+    assert.deepEqual(searchRateLimiterCalls, ["/api/search/advanced"]);
   } finally {
     await stopTestServer(server);
   }

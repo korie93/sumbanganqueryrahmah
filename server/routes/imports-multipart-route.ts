@@ -267,8 +267,11 @@ export function createImportsMultipartRoute(
       settled = true;
     });
 
-    req.once("aborted", () => {
-      stopMultipartParsing(new Error("Multipart import request aborted."));
+    req.once("close", () => {
+      if (settled || req.complete || req.readableEnded) {
+        return;
+      }
+      stopMultipartParsing(new Error("Multipart import request closed before completion."));
       releaseQuota();
       settled = true;
     });

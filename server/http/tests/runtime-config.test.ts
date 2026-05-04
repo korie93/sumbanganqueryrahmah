@@ -586,6 +586,32 @@ test("runtime config accepts an explicit graceful shutdown timeout override", as
   );
 });
 
+test("runtime config defaults auth cookies to SameSite=strict", async () => {
+  await withEnv(
+    {
+      ...productionLikeDevelopmentBaseOverrides,
+      SESSION_COOKIE_SAMESITE: null,
+    },
+    async () => {
+      const runtimeModule = await importRuntimeFresh();
+      assert.equal(runtimeModule.runtimeConfig.auth.cookieSameSite, "strict");
+    },
+  );
+});
+
+test("runtime config accepts an explicit SESSION_COOKIE_SAMESITE=lax override", async () => {
+  await withEnv(
+    {
+      ...productionLikeDevelopmentBaseOverrides,
+      SESSION_COOKIE_SAMESITE: "lax",
+    },
+    async () => {
+      const runtimeModule = await importRuntimeFresh();
+      assert.equal(runtimeModule.runtimeConfig.auth.cookieSameSite, "lax");
+    },
+  );
+});
+
 test("runtime config rejects malformed numeric env values before fallback clamping", async () => {
   await withEnv(
     {

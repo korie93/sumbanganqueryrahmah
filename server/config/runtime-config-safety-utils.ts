@@ -1,6 +1,7 @@
 import type { MailConfigurationAssessment, RuntimeConfigDiagnostic } from "./runtime-config-types";
 import { normalizeCorsOrigin } from "./runtime-config-read-utils";
 import { buildTwoFactorReplayCacheTopologyWarning } from "../auth/two-factor-replay-topology";
+import { buildWebSocketTopologyWarning } from "../ws/websocket-topology";
 
 const AUTO_COOKIE_SECURE_VALUES = new Set(["", "auto", "1", "true", "0", "false"]);
 const PLACEHOLDER_DATABASE_PASSWORDS = new Set([
@@ -416,6 +417,16 @@ export function buildRuntimeConfigWarnings(params: {
       code: "TWO_FACTOR_REPLAY_CACHE_PROCESS_LOCAL",
       envNames: ["SQR_MAX_WORKERS"],
       message: twoFactorReplayCacheTopologyWarning,
+      severity: "warning",
+    });
+  }
+
+  const websocketTopologyWarning = buildWebSocketTopologyWarning(configuredClusterMaxWorkers);
+  if (websocketTopologyWarning) {
+    warnings.push({
+      code: "WEBSOCKET_STATE_PROCESS_LOCAL",
+      envNames: ["SQR_MAX_WORKERS"],
+      message: websocketTopologyWarning,
       severity: "warning",
     });
   }
