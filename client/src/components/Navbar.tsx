@@ -109,6 +109,9 @@ function NavbarImpl({
     () => resolveNavbarActiveMobileItemId(mobileItems, activeNavigationItemId),
     [activeNavigationItemId, mobileItems]
   )
+  const mobileNavTriggerExpandedProps = mobileNavOpen
+    ? ({ "aria-expanded": "true" } as const)
+    : ({ "aria-expanded": "false" } as const)
 
   const navigateToItem = useCallback(
     (itemId: string) => {
@@ -166,7 +169,7 @@ function NavbarImpl({
               aria-label="Buka menu navigasi"
               aria-haspopup="dialog"
               aria-controls="mobile-navigation-drawer"
-              aria-expanded={mobileNavOpen}
+              {...mobileNavTriggerExpandedProps}
               onClick={() => setMobileNavOpen(true)}
               data-testid="button-open-mobile-nav"
             >

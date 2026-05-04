@@ -53,7 +53,8 @@ test("toast close controls keep an explicit accessible name", () => {
 test("chart containers expose an accessible name by default", () => {
   const chartSource = readSource("chart.tsx");
 
-  assert.match(chartSource, /role=\{role \?\? "img"\}/);
+  assert.match(chartSource, /role="img"/);
+  assert.doesNotMatch(chartSource, /role=\{[^}]+\}/);
   assert.match(chartSource, /aria-label=\{resolvedAriaLabel\}/);
   assert.match(chartSource, /"Data chart"/);
 });

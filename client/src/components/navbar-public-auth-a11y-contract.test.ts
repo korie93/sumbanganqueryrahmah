@@ -14,7 +14,10 @@ test("navbar mobile trigger exposes the expanded state for assistive technology"
   const source = readComponentSource("Navbar.tsx");
 
   assert.match(source, /aria-controls="mobile-navigation-drawer"/);
-  assert.match(source, /aria-expanded=\{mobileNavOpen\}/);
+  assert.match(source, /"aria-expanded": "true"/);
+  assert.match(source, /"aria-expanded": "false"/);
+  assert.match(source, /\{\.\.\.mobileNavTriggerExpandedProps\}/);
+  assert.doesNotMatch(source, /aria-expanded=\{[^}]+\}/);
   assert.match(source, /aria-haspopup="dialog"/);
 });
 
