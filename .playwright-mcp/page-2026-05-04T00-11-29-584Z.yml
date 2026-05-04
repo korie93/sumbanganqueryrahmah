@@ -1,0 +1,140 @@
+- generic [ref=e2]:
+  - link "Langkau ke kandungan utama" [ref=e3] [cursor=pointer]:
+    - /url: "#main-content"
+  - region "Notifications (F8)":
+    - list
+  - generic [ref=e35]:
+    - banner [ref=e36]:
+      - generic [ref=e37]:
+        - generic [ref=e39]:
+          - generic [ref=e40]:
+            - img [ref=e43]
+            - generic [ref=e44]:
+              - paragraph [ref=e45]: SQR System
+              - paragraph [ref=e46]: Ruang kerja operasi
+          - button "Utama" [ref=e47] [cursor=pointer]:
+            - img [ref=e49]
+            - generic [ref=e52]: Utama
+        - navigation "Navigasi utama" [ref=e54]:
+          - button "Search" [ref=e55] [cursor=pointer]:
+            - img [ref=e57]
+            - generic [ref=e60]: Search
+          - button "Collection" [ref=e61] [cursor=pointer]:
+            - img [ref=e63]
+            - generic [ref=e66]: Collection
+          - button "Menu Workspace" [ref=e67] [cursor=pointer]:
+            - img [ref=e69]
+            - generic [ref=e71]: Workspace
+            - img [ref=e72]
+          - button "Menu Insights" [ref=e74] [cursor=pointer]:
+            - img [ref=e76]
+            - generic [ref=e78]: Insights
+            - img [ref=e79]
+          - button "Menu Settings" [ref=e81] [cursor=pointer]:
+            - img [ref=e83]
+            - generic [ref=e84]: Settings
+            - img [ref=e85]
+        - button "Buka menu pengguna untuk a11ydebug1777853427" [ref=e88] [cursor=pointer]:
+          - generic [ref=e89]:
+            - generic [ref=e90]: a11ydebug1777853427
+            - generic [ref=e91]: superuser
+          - img [ref=e92]
+    - main [ref=e94]:
+      - generic [ref=e96]:
+        - generic [ref=e97]:
+          - generic [ref=e98]:
+            - generic [ref=e99]:
+              - paragraph [ref=e100]: Workspace
+              - generic [ref=e101]:
+                - img [ref=e103]
+                - generic [ref=e105]:
+                  - heading "Welcome" [level=1] [ref=e106]
+                  - paragraph [ref=e107]: Sumbangan Query Rahmah - Data Management System
+                  - paragraph [ref=e108]: Start with the core workflows first, then move into supporting modules only when you need them. The visible navigation stays aligned with your role and current feature visibility settings.
+            - generic [ref=e109]:
+              - generic [ref=e110]:
+                - generic [ref=e111]: Modules Ready
+                - generic [ref=e112]: "9"
+              - generic [ref=e113]:
+                - generic [ref=e114]: Primary Flows
+                - generic [ref=e115]: "3"
+              - generic [ref=e116]:
+                - generic [ref=e117]: Role
+                - generic [ref=e118]: superuser
+          - generic [ref=e119]:
+            - button "Primary Workflow General Search General data search" [ref=e120] [cursor=pointer]:
+              - img [ref=e122]
+              - generic [ref=e125]:
+                - paragraph [ref=e126]: Primary Workflow
+                - generic [ref=e127]:
+                  - heading "General Search" [level=2] [ref=e128]
+                  - paragraph [ref=e129]: General data search
+              - img [ref=e130]
+            - button "Primary Workflow Collection Report Save and review collection records" [ref=e132] [cursor=pointer]:
+              - img [ref=e134]
+              - generic [ref=e137]:
+                - paragraph [ref=e138]: Primary Workflow
+                - generic [ref=e139]:
+                  - heading "Collection Report" [level=2] [ref=e140]
+                  - paragraph [ref=e141]: Save and review collection records
+              - img [ref=e142]
+            - button "Primary Workflow Dashboard Analytics and system overview" [ref=e144] [cursor=pointer]:
+              - img [ref=e146]
+              - generic [ref=e151]:
+                - paragraph [ref=e152]: Primary Workflow
+                - generic [ref=e153]:
+                  - heading "Dashboard" [level=2] [ref=e154]
+                  - paragraph [ref=e155]: Analytics and system overview
+              - img [ref=e156]
+        - generic [ref=e158]:
+          - generic [ref=e159]:
+            - generic [ref=e160]:
+              - generic [ref=e161]:
+                - paragraph [ref=e162]: Workspace
+                - heading "Operational modules" [level=2] [ref=e163]
+                - paragraph [ref=e164]: Import, review, and revisit the modules used most often during day-to-day operations.
+              - generic [ref=e165]: "3"
+            - generic [ref=e166]:
+              - button "Import Data Import data from Excel/CSV" [ref=e167] [cursor=pointer]:
+                - img [ref=e169]
+                - generic [ref=e172]:
+                  - heading "Import Data" [level=3] [ref=e173]
+                  - paragraph [ref=e174]: Import data from Excel/CSV
+              - button "Saved Imports View all saved data" [ref=e175] [cursor=pointer]:
+                - img [ref=e177]
+                - generic [ref=e180]:
+                  - heading "Saved Imports" [level=3] [ref=e181]
+                  - paragraph [ref=e182]: View all saved data
+              - button "Data Viewer Detailed data display" [ref=e183] [cursor=pointer]:
+                - img [ref=e185]
+                - generic [ref=e188]:
+                  - heading "Data Viewer" [level=3] [ref=e189]
+                  - paragraph [ref=e190]: Detailed data display
+          - generic [ref=e191]:
+            - generic [ref=e192]:
+              - generic [ref=e193]:
+                - paragraph [ref=e194]: Insights
+                - heading "Visibility and follow-up" [level=2] [ref=e195]
+                - paragraph [ref=e196]: Keep analytics, activity, and audit views close without overloading the landing page.
+              - generic [ref=e197]: "3"
+            - generic [ref=e198]:
+              - button "Activity Monitor Monitor user activity" [ref=e199] [cursor=pointer]:
+                - img [ref=e201]
+                - generic [ref=e203]:
+                  - heading "Activity Monitor" [level=3] [ref=e204]
+                  - paragraph [ref=e205]: Monitor user activity
+                - img [ref=e206]
+              - button "Analysis Data analysis and reports" [ref=e208] [cursor=pointer]:
+                - img [ref=e210]
+                - generic [ref=e212]:
+                  - heading "Analysis" [level=3] [ref=e213]
+                  - paragraph [ref=e214]: Data analysis and reports
+                - img [ref=e215]
+              - button "Audit Log View system activity logs" [ref=e217] [cursor=pointer]:
+                - img [ref=e219]
+                - generic [ref=e222]:
+                  - heading "Audit Log" [level=3] [ref=e223]
+                  - paragraph [ref=e224]: View system activity logs
+                - img [ref=e225]
+    - button "Buka panel AI SQR" [ref=e227] [cursor=pointer]:
+      - img [ref=e228]

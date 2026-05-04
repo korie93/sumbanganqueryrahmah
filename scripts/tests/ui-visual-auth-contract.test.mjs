@@ -56,3 +56,11 @@ test("visual and accessibility contracts verify the session through /api/me befo
   assert.match(accessibilityContractSource, /completeTwoFactorLoginIfNeeded/);
   assert.match(accessibilityContractSource, /waitForAuthenticatedShell/);
 });
+
+test("accessibility contract ignores clipped focus guards from portal libraries", () => {
+  assert.match(accessibilityContractSource, /const isVisuallyHiddenFocusableUtility = \(element, style, rect\) =>/);
+  assert.match(accessibilityContractSource, /normalizedClip === "rect\(0px,0px,0px,0px\)"/);
+  assert.match(accessibilityContractSource, /normalizedClipPath\.includes\("inset\(50%\)"\)/);
+  assert.match(accessibilityContractSource, /rect\.width <= 1/);
+  assert.match(accessibilityContractSource, /rect\.height <= 1/);
+});

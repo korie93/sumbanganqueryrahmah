@@ -41,3 +41,11 @@ test("toast notifications expose polite and assertive live-region semantics", ()
   assert.match(toastSource, /role: "status" as const/);
   assert.match(toastSource, /"aria-live": "polite" as const/);
 });
+
+test("toast close controls keep an explicit accessible name", () => {
+  const toastSource = readSource("toast.tsx");
+
+  assert.match(toastSource, /const ariaLabel = props\["aria-label"\] \?\? "Dismiss notification"/);
+  assert.match(toastSource, /aria-label=\{ariaLabel\}/);
+  assert.match(toastSource, /title=\{title\}/);
+});

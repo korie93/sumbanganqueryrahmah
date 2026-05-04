@@ -65,6 +65,23 @@ const viewportSpecs = [
 
 const readAccessibilitySummary = async (page, routeSpec) =>
   page.evaluate(({ contentSelector }) => {
+    const isVisuallyHiddenFocusableUtility = (element, style, rect) => {
+      if (!(element instanceof HTMLElement)) {
+        return false;
+      }
+
+      const normalizedClip = String(style.clip || "").replace(/\s+/g, "");
+      const normalizedClipPath = String(style.clipPath || "").replace(/\s+/g, "");
+      const isClippedAway = normalizedClip === "rect(0px,0px,0px,0px)"
+        || normalizedClipPath.includes("inset(50%)");
+      const isUtilityFocusGuard = (style.position === "fixed" || style.position === "absolute")
+        && rect.width <= 1
+        && rect.height <= 1
+        && !element.textContent?.trim();
+
+      return isClippedAway && isUtilityFocusGuard;
+    };
+
     const isElementVisible = (element) => {
       if (!(element instanceof HTMLElement)) {
         return false;
@@ -72,6 +89,10 @@ const readAccessibilitySummary = async (page, routeSpec) =>
 
       const style = window.getComputedStyle(element);
       const rect = element.getBoundingClientRect();
+      if (isVisuallyHiddenFocusableUtility(element, style, rect)) {
+        return false;
+      }
+
       return style.display !== "none"
         && style.visibility !== "hidden"
         && rect.width > 0
