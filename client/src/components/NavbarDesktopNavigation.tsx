@@ -118,6 +118,7 @@ function NavbarDesktopNavigationImpl({
                   type="button"
                   title={group.label}
                   aria-label={`Menu ${group.label}`}
+                  aria-current={active ? "page" : undefined}
                   onMouseEnter={() => group.items.forEach((item) => onPrefetch(item.id))}
                   onFocus={() => group.items.forEach((item) => onPrefetch(item.id))}
                   className={`nav-pill${active ? " nav-pill-active" : ""}`}
@@ -145,6 +146,7 @@ function NavbarDesktopNavigationImpl({
                     return (
                       <DropdownMenuItem
                         key={item.id}
+                        aria-current={activeItem ? "page" : undefined}
                         onSelect={() => onNavigate(item.id)}
                         onFocus={() => onPrefetch(item.id)}
                         className={`items-start gap-3 rounded-xl px-3 py-3 ${activeItem ? "bg-accent text-accent-foreground" : ""}`}

@@ -1,4 +1,5 @@
 import { badRequest } from "../../http/errors";
+import { buildHybridPaginationMeta } from "../../http/pagination";
 import type { AuthenticatedUser } from "../../auth/guards";
 import { resolveCurrentCollectionNicknameFromSession } from "../../routes/collection-access";
 import {
@@ -87,22 +88,7 @@ export function buildCollectionPaginationMeta(params: {
   nextCursor?: string | null;
   hasNextPage?: boolean;
 }): CollectionPaginationMeta {
-  const pageSize = Math.max(1, params.pageSize);
-  const nextCursor = params.nextCursor ?? null;
-  const totalPages = Math.max(1, Math.ceil(Math.max(0, params.total) / pageSize));
-
-  return {
-    mode: "hybrid",
-    page: Math.max(1, params.page),
-    pageSize,
-    total: Math.max(0, params.total),
-    totalPages,
-    limit: pageSize,
-    offset: Math.max(0, params.offset),
-    nextCursor,
-    hasNextPage: params.hasNextPage ?? nextCursor !== null,
-    hasPreviousPage: params.offset > 0,
-  };
+  return buildHybridPaginationMeta(params);
 }
 
 export function assertValidCollectionDateRange(params: {

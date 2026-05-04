@@ -135,7 +135,7 @@ export default function Login({ onForgotPasswordClick, onLandingClick, onLoginSu
                 </p>
               </div>
 
-              <form className="login-form space-y-4" onSubmit={handleSubmit} {...loginFormBusyProps}>
+              <form className="login-form space-y-4" onSubmit={handleSubmit} noValidate {...loginFormBusyProps}>
                 <div className="space-y-2">
                   <label htmlFor="login-username" className="login-field-label block text-left text-sm font-medium">
                     Username
@@ -218,6 +218,7 @@ export default function Login({ onForgotPasswordClick, onLandingClick, onLoginSu
                           className="login-password-toggle absolute right-1 top-1/2 inline-flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-xl transition-colors"
                           data-testid="button-toggle-password"
                           aria-label="Sembunyi kata laluan"
+                          aria-pressed="true"
                           title="Sembunyi kata laluan"
                         >
                           <EyeOff className="h-5 w-5" aria-hidden="true" focusable="false" />
@@ -230,6 +231,7 @@ export default function Login({ onForgotPasswordClick, onLandingClick, onLoginSu
                           className="login-password-toggle absolute right-1 top-1/2 inline-flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-xl transition-colors"
                           data-testid="button-toggle-password"
                           aria-label="Papar kata laluan"
+                          aria-pressed="false"
                           title="Papar kata laluan"
                         >
                           <Eye className="h-5 w-5" aria-hidden="true" focusable="false" />

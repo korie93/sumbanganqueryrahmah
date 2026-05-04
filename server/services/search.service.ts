@@ -1,4 +1,5 @@
 import type { DataRow } from "../../shared/schema-postgres";
+import { buildOffsetPaginationMeta } from "../http/pagination";
 import type { SearchRepository } from "../repositories/search.repository";
 
 type SearchGlobalRow = {
@@ -27,31 +28,6 @@ type SearchRepositoryPort = Pick<
 >;
 
 type SearchGlobalRepositoryResult = Awaited<ReturnType<SearchRepositoryPort["searchGlobalDataRows"]>>;
-
-function buildOffsetPaginationMeta(params: {
-  page: number;
-  limit: number;
-  total: number;
-  offset?: number;
-}) {
-  const page = Math.max(1, params.page);
-  const limit = Math.max(1, params.limit);
-  const total = Math.max(0, params.total);
-  const totalPages = Math.max(1, Math.ceil(total / limit));
-  const offset = Math.max(0, params.offset ?? ((page - 1) * limit));
-
-  return {
-    mode: "offset" as const,
-    page,
-    pageSize: limit,
-    limit,
-    offset,
-    total,
-    totalPages,
-    hasNextPage: page < totalPages,
-    hasPreviousPage: offset > 0,
-  };
-}
 
 function buildRowsWithSource(rows: SearchGlobalRow[]) {
   return rows.map((row) => {

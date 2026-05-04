@@ -4,13 +4,6 @@ import path from "node:path"
 import test from "node:test"
 
 const CLIENT_SRC_DIR = path.resolve(process.cwd(), "client", "src")
-const ALLOWED_DANGEROUS_HTML_SINK_FILE = path.join(
-  CLIENT_SRC_DIR,
-  "components",
-  "ui",
-  "chart.tsx"
-)
-
 async function collectRuntimeSourceFiles(dir: string): Promise<string[]> {
   const entries = await readdir(dir, { withFileTypes: true })
   const files: string[] = []
@@ -76,13 +69,10 @@ test("client runtime keeps DOM HTML injection sinks tightly scoped", async () =>
     }
   }
 
-  assert.deepEqual(dangerousHtmlFiles, [ALLOWED_DANGEROUS_HTML_SINK_FILE])
+  assert.deepEqual(dangerousHtmlFiles, [])
   assert.deepEqual(rawInnerHtmlFiles, [])
   assert.deepEqual(outerHtmlFiles, [])
   assert.deepEqual(adjacentHtmlFiles, [])
   assert.deepEqual(srcDocFiles, [])
   assert.deepEqual(contextualFragmentFiles, [])
-
-  const chartSource = await readFile(ALLOWED_DANGEROUS_HTML_SINK_FILE, "utf8")
-  assert.match(chartSource, /toTrustedStyleHTML\(/)
 })

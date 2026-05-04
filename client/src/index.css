@@ -12,6 +12,71 @@
   border-radius: inherit;
 }
 
+.scrollbar-visible {
+  -ms-overflow-style: auto;
+}
+
+.scrollbar-visible::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.scrollbar-visible::-webkit-scrollbar-track {
+  background: hsl(220 13% 18% / 0.1);
+  border-radius: 4px;
+}
+
+.scrollbar-visible::-webkit-scrollbar-thumb {
+  background: hsl(239 84% 67% / 0.5);
+  border-radius: 4px;
+}
+
+.scrollbar-visible::-webkit-scrollbar-thumb:hover {
+  background: hsl(239 84% 67% / 0.8);
+}
+
+.url-preview-dialog-footer-mobile {
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 0.75rem);
+}
+
+.analysis-skeleton-pulse {
+  animation-duration: 1.4s;
+}
+
+.analysis-skeleton-pulse[data-pulse-delay="0"] { animation-delay: 0ms; }
+.analysis-skeleton-pulse[data-pulse-delay="80"] { animation-delay: 80ms; }
+.analysis-skeleton-pulse[data-pulse-delay="160"] { animation-delay: 160ms; }
+.analysis-skeleton-pulse[data-pulse-delay="240"] { animation-delay: 240ms; }
+.analysis-skeleton-pulse[data-pulse-delay="300"] { animation-delay: 300ms; }
+.analysis-skeleton-pulse[data-pulse-delay="360"] { animation-delay: 360ms; }
+.analysis-skeleton-pulse[data-pulse-delay="420"] { animation-delay: 420ms; }
+.analysis-skeleton-pulse[data-pulse-delay="480"] { animation-delay: 480ms; }
+.analysis-skeleton-pulse[data-pulse-delay="520"] { animation-delay: 520ms; }
+.analysis-skeleton-pulse[data-pulse-delay="580"] { animation-delay: 580ms; }
+.analysis-skeleton-pulse[data-pulse-delay="620"] { animation-delay: 620ms; }
+.analysis-skeleton-pulse[data-pulse-delay="640"] { animation-delay: 640ms; }
+.analysis-skeleton-pulse[data-pulse-delay="660"] { animation-delay: 660ms; }
+.analysis-skeleton-pulse[data-pulse-delay="680"] { animation-delay: 680ms; }
+.analysis-skeleton-pulse[data-pulse-delay="700"] { animation-delay: 700ms; }
+.analysis-skeleton-pulse[data-pulse-delay="720"] { animation-delay: 720ms; }
+.analysis-skeleton-pulse[data-pulse-delay="740"] { animation-delay: 740ms; }
+.analysis-skeleton-pulse[data-pulse-delay="760"] { animation-delay: 760ms; }
+.analysis-skeleton-pulse[data-pulse-delay="780"] { animation-delay: 780ms; }
+.analysis-skeleton-pulse[data-pulse-delay="800"] { animation-delay: 800ms; }
+.analysis-skeleton-pulse[data-pulse-delay="820"] { animation-delay: 820ms; }
+.analysis-skeleton-pulse[data-pulse-delay="840"] { animation-delay: 840ms; }
+.analysis-skeleton-pulse[data-pulse-delay="860"] { animation-delay: 860ms; }
+.analysis-skeleton-pulse[data-pulse-delay="880"] { animation-delay: 880ms; }
+.analysis-skeleton-pulse[data-pulse-delay="900"] { animation-delay: 900ms; }
+.analysis-skeleton-pulse[data-pulse-delay="920"] { animation-delay: 920ms; }
+.analysis-skeleton-pulse[data-pulse-delay="940"] { animation-delay: 940ms; }
+.analysis-skeleton-pulse[data-pulse-delay="960"] { animation-delay: 960ms; }
+.analysis-skeleton-pulse[data-pulse-delay="980"] { animation-delay: 980ms; }
+.analysis-skeleton-pulse[data-pulse-delay="1000"] { animation-delay: 1000ms; }
+.analysis-skeleton-pulse[data-pulse-delay="1020"] { animation-delay: 1020ms; }
+.analysis-skeleton-pulse[data-pulse-delay="1040"] { animation-delay: 1040ms; }
+.analysis-skeleton-pulse[data-pulse-delay="1100"] { animation-delay: 1100ms; }
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

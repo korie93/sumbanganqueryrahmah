@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { PostgresStorageCore } from "../../storage/postgres/postgres-storage-core";
+import {
+  buildPostgresStorageBootstrapPlan,
+  PostgresStorageCore,
+} from "../../storage/postgres/postgres-storage-core";
 
 const EXPECTED_INIT_STEPS = [
   "users",
@@ -26,6 +29,40 @@ const EXPECTED_INIT_STEPS = [
   "categoryStats",
   "settings",
 ] as const;
+
+function createNoopBootstrapHandlers() {
+  const noop = async () => {};
+  return {
+    ensureUsersTable: noop,
+    ensureImportsTable: noop,
+    ensureDataRowsTable: noop,
+    ensureUserActivityTable: noop,
+    ensureAuditLogsTable: noop,
+    ensureMutationIdempotencyTable: noop,
+    ensureMonitorAlertHistoryTable: noop,
+    ensureCollectionRecordsTable: noop,
+    ensureCollectionStaffNicknamesTable: noop,
+    ensureCollectionAdminGroupsTables: noop,
+    ensureCollectionNicknameSessionsTable: noop,
+    ensureCollectionAdminVisibleNicknamesTable: noop,
+    ensureCollectionDailyTables: noop,
+    seedDefaultUsers: noop,
+    ensureBackupsTable: noop,
+    ensurePerformanceIndexes: noop,
+    ensureBannedSessionsTable: noop,
+    ensureAiTables: noop,
+    ensureSpatialTables: noop,
+    ensureCategoryRulesTable: noop,
+    ensureCategoryStatsTable: noop,
+    ensureSettingsTables: noop,
+  };
+}
+
+function flattenBootstrapPlanStepNames(
+  plan: ReturnType<typeof buildPostgresStorageBootstrapPlan>,
+) {
+  return plan.flatMap((step) => ("steps" in step ? step.steps.map((nested) => nested.name) : step.name));
+}
 
 class InitGuardStorage extends PostgresStorageCore {
   readonly calls: string[] = [];
@@ -175,6 +212,35 @@ class RetryableInitStorage extends PostgresStorageCore {
   protected override async ensureCategoryStatsTable() {}
   protected override async ensureSettingsTables() {}
 }
+
+test("PostgresStorageCore exposes a reusable bootstrap preflight plan", () => {
+  const plan = buildPostgresStorageBootstrapPlan(createNoopBootstrapHandlers());
+
+  assert.deepEqual(flattenBootstrapPlanStepNames(plan), [
+    "users-table",
+    "imports-table",
+    "data-rows-table",
+    "user-activity-table",
+    "audit-logs-table",
+    "mutation-idempotency-table",
+    "monitor-alert-history-table",
+    "collection-records-table",
+    "collection-staff-nicknames-table",
+    "collection-admin-groups-tables",
+    "collection-nickname-sessions-table",
+    "collection-admin-visible-nicknames-table",
+    "collection-daily-tables",
+    "default-users-seed",
+    "backups-table",
+    "performance-indexes",
+    "banned-sessions-table",
+    "ai-tables",
+    "spatial-tables",
+    "category-rules-table",
+    "category-stats-table",
+    "settings-tables",
+  ]);
+});
 
 test("PostgresStorageCore.init shares concurrent bootstrap work and skips completed work", async () => {
   const storage = new InitGuardStorage();

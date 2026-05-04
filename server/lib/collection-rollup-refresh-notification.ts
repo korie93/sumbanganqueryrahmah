@@ -1,4 +1,5 @@
 import pg from "pg";
+import { buildPgSslPoolConfig } from "../config/database-ssl";
 import { runtimeConfig } from "../config/runtime";
 import { logger } from "./logger";
 
@@ -27,10 +28,14 @@ type PgNotificationClientFactory = () => PgNotificationClientLike;
 type CollectionRollupRefreshNotificationSubscriberOptions = {
   channel?: string;
   reconnectDelayMs?: number;
+  maxReconnectDelayMs?: number;
+  reconnectJitterRatio?: number;
   clientFactory?: PgNotificationClientFactory;
 };
 
 const DEFAULT_ROLLUP_REFRESH_NOTIFICATION_RECONNECT_DELAY_MS = 5_000;
+const DEFAULT_ROLLUP_REFRESH_NOTIFICATION_MAX_RECONNECT_DELAY_MS = 60_000;
+const DEFAULT_ROLLUP_REFRESH_NOTIFICATION_RECONNECT_JITTER_RATIO = 0.2;
 
 export type CollectionRollupRefreshNotificationSubscriberLike = {
   start(onNotify: () => void): Promise<void>;
@@ -45,12 +50,15 @@ function assertSafeChannelName(channel: string): string {
 }
 
 function createDefaultClient(): PgNotificationClientLike {
+  const sslConfig = buildPgSslPoolConfig(runtimeConfig.database.ssl);
+
   return new Client(
     runtimeConfig.database.connectionString
       ? {
           connectionString: runtimeConfig.database.connectionString,
           application_name: "sqr-rollup-queue-listener",
           options: `-c search_path=${runtimeConfig.database.searchPath}`,
+          ...sslConfig,
         }
       : {
           host: runtimeConfig.database.host,
@@ -60,8 +68,33 @@ function createDefaultClient(): PgNotificationClientLike {
           database: runtimeConfig.database.database,
           application_name: "sqr-rollup-queue-listener",
           options: `-c search_path=${runtimeConfig.database.searchPath}`,
+          ...sslConfig,
         },
   );
+}
+
+export function resolveCollectionRollupRefreshReconnectDelayMs(params: {
+  attempt: number;
+  baseDelayMs: number;
+  maxDelayMs: number;
+  jitterRatio: number;
+  channel: string;
+}): number {
+  const attempt = Math.max(0, Math.floor(params.attempt));
+  const baseDelayMs = Math.max(1, Math.floor(params.baseDelayMs));
+  const maxDelayMs = Math.max(baseDelayMs, Math.floor(params.maxDelayMs));
+  const jitterRatio = Math.min(0.5, Math.max(0, params.jitterRatio));
+  const exponentialDelayMs = Math.min(maxDelayMs, baseDelayMs * 2 ** Math.min(attempt, 10));
+  const jitterWindowMs = Math.floor(exponentialDelayMs * jitterRatio);
+
+  if (jitterWindowMs <= 0) {
+    return exponentialDelayMs;
+  }
+
+  const channelSeed = Array.from(params.channel).reduce((sum, char) => sum + char.charCodeAt(0), 0);
+  const deterministicJitterMs = (channelSeed + attempt * 17) % (jitterWindowMs + 1);
+
+  return Math.min(maxDelayMs, exponentialDelayMs + deterministicJitterMs);
 }
 
 export class CollectionRollupRefreshNotificationSubscriber
@@ -69,10 +102,13 @@ export class CollectionRollupRefreshNotificationSubscriber
 {
   private readonly channel: string;
   private readonly reconnectDelayMs: number;
+  private readonly maxReconnectDelayMs: number;
+  private readonly reconnectJitterRatio: number;
   private readonly clientFactory: PgNotificationClientFactory;
   private started = false;
   private connectPromise: Promise<void> | null = null;
   private reconnectTimer: NodeJS.Timeout | null = null;
+  private reconnectAttempt = 0;
   private currentClient: PgNotificationClientLike | null = null;
   private readonly clientListenerCleanups = new WeakMap<PgNotificationClientLike, () => void>();
   private readonly closingClients = new WeakSet<PgNotificationClientLike>();
@@ -83,6 +119,17 @@ export class CollectionRollupRefreshNotificationSubscriber
       options.channel ?? COLLECTION_ROLLUP_REFRESH_NOTIFICATION_CHANNEL,
     );
     this.reconnectDelayMs = Math.max(1, options.reconnectDelayMs ?? DEFAULT_ROLLUP_REFRESH_NOTIFICATION_RECONNECT_DELAY_MS);
+    this.maxReconnectDelayMs = Math.max(
+      this.reconnectDelayMs,
+      options.maxReconnectDelayMs ?? DEFAULT_ROLLUP_REFRESH_NOTIFICATION_MAX_RECONNECT_DELAY_MS,
+    );
+    this.reconnectJitterRatio = Math.min(
+      0.5,
+      Math.max(
+        0,
+        options.reconnectJitterRatio ?? DEFAULT_ROLLUP_REFRESH_NOTIFICATION_RECONNECT_JITTER_RATIO,
+      ),
+    );
     this.clientFactory = options.clientFactory ?? createDefaultClient;
   }
 
@@ -99,6 +146,7 @@ export class CollectionRollupRefreshNotificationSubscriber
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
     }
+    this.reconnectAttempt = 0;
 
     const activeClient = this.currentClient;
     this.currentClient = null;
@@ -190,6 +238,7 @@ export class CollectionRollupRefreshNotificationSubscriber
       }
 
       this.currentClient = client;
+      this.reconnectAttempt = 0;
       logger.info("Collection rollup notification listener online", {
         channel: this.channel,
       });
@@ -237,6 +286,15 @@ export class CollectionRollupRefreshNotificationSubscriber
       return;
     }
 
+    const delayMs = resolveCollectionRollupRefreshReconnectDelayMs({
+      attempt: this.reconnectAttempt,
+      baseDelayMs: this.reconnectDelayMs,
+      maxDelayMs: this.maxReconnectDelayMs,
+      jitterRatio: this.reconnectJitterRatio,
+      channel: this.channel,
+    });
+    this.reconnectAttempt += 1;
+
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;
       void this.ensureConnected().catch((error) => {
@@ -246,7 +304,7 @@ export class CollectionRollupRefreshNotificationSubscriber
         });
         this.scheduleReconnect();
       });
-    }, this.reconnectDelayMs);
+    }, delayMs);
     this.reconnectTimer.unref?.();
   }
 

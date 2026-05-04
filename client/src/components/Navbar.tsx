@@ -184,7 +184,7 @@ function NavbarImpl({
                   aria-haspopup="menu"
                 >
                   <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold uppercase text-primary">
-                    {username.slice(0, 1)}
+                    {[...username][0] || ""}
                   </span>
                   <span className="hidden min-w-0 sm:flex sm:flex-col sm:items-start sm:leading-tight">
                     <span className="truncate text-xs font-medium text-foreground">

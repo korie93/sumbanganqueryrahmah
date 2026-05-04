@@ -50,26 +50,6 @@ export function GeneralSearchDesktopResultsTable({
       hint="Scroll columns"
       {...(onScroll ? { onScroll } : {})}
     >
-      <style>{`
-        .scrollbar-visible {
-          -ms-overflow-style: auto;
-        }
-        .scrollbar-visible::-webkit-scrollbar {
-          width: 8px;
-          height: 8px;
-        }
-        .scrollbar-visible::-webkit-scrollbar-track {
-          background: rgba(31, 41, 55, 0.1);
-          border-radius: 4px;
-        }
-        .scrollbar-visible::-webkit-scrollbar-thumb {
-          background: rgba(99, 102, 241, 0.5);
-          border-radius: 4px;
-        }
-        .scrollbar-visible::-webkit-scrollbar-thumb:hover {
-          background: rgba(99, 102, 241, 0.8);
-        }
-      `}</style>
       <table className="w-full text-sm">
         <thead className="sticky top-0 bg-muted">
           <tr>

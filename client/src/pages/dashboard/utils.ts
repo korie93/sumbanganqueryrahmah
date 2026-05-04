@@ -9,6 +9,8 @@ import type { LoginTrend } from "@/pages/dashboard/types";
 
 let html2canvasLoader: Promise<typeof import("html2canvas")["default"]> | null = null;
 let jsPdfLoader: Promise<typeof import("jspdf")["default"]> | null = null;
+const DASHBOARD_EXPORT_ROOT_ATTRIBUTE = "data-dashboard-export-root";
+const DASHBOARD_EXPORT_EXCLUDED_SELECTOR = "[hidden], [aria-hidden='true'], [data-export-sensitive='true']";
 
 export const ROLE_COLORS: Record<string, string> = {
   superuser: "hsl(var(--chart-1))",
@@ -128,7 +130,23 @@ function loadJsPdf() {
   return jsPdfLoader;
 }
 
+export function assertDashboardExportableElement(element: HTMLElement) {
+  if (element.getAttribute(DASHBOARD_EXPORT_ROOT_ATTRIBUTE) !== "true") {
+    throw new Error("Dashboard export is limited to the approved dashboard report region.");
+  }
+
+  if (element.closest(DASHBOARD_EXPORT_EXCLUDED_SELECTOR)) {
+    throw new Error("Dashboard export region must not be hidden or marked sensitive.");
+  }
+}
+
+function shouldIgnoreDashboardExportElement(node: Element) {
+  return node.tagName === "IFRAME" || node.matches(DASHBOARD_EXPORT_EXCLUDED_SELECTOR);
+}
+
 export async function exportDashboardToPdf(element: HTMLDivElement) {
+  assertDashboardExportableElement(element);
+
   const [html2canvas, jsPDF] = await Promise.all([
     loadHtml2Canvas(),
     loadJsPdf(),
@@ -147,7 +165,7 @@ export async function exportDashboardToPdf(element: HTMLDivElement) {
     height: element.scrollHeight,
     scrollX: 0,
     scrollY: -window.scrollY,
-    ignoreElements: (node) => node.tagName === "IFRAME",
+    ignoreElements: shouldIgnoreDashboardExportElement,
     onclone: (clonedDoc) => {
       const style = clonedDoc.createElement("style");
       style.textContent = `

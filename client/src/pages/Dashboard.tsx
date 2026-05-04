@@ -147,7 +147,7 @@ function DashboardContent() {
         }}
       />
 
-      <div ref={dashboardRef} className="space-y-4 sm:space-y-6">
+      <div ref={dashboardRef} className="space-y-4 sm:space-y-6" data-dashboard-export-root="true">
         <DashboardSnapshotSection summaryCards={summaryCards} summaryLoading={summaryLoading} />
         <DashboardDeferredSections
           defer={shouldDeferSecondaryMobileSections}

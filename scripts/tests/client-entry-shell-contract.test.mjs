@@ -70,12 +70,13 @@ test("client entry shell contract collector finds inline blocks and missing exte
   const result = collectClientEntryShellContractMatches({ repoRoot });
   const labels = result.matches.map((match) => match.label);
 
-  assert.equal(result.matches.length, 5);
+  assert.equal(result.matches.length, 6);
   assert.match(labels.join("\n"), /inline <style> tags/i);
   assert.match(labels.join("\n"), /inline style attributes/i);
   assert.match(labels.join("\n"), /inline <script> blocks/i);
   assert.match(labels.join("\n"), /external boot shell stylesheet/i);
   assert.match(labels.join("\n"), /external boot shell script/i);
+  assert.match(labels.join("\n"), /polite status live region/i);
 });
 
 test("client entry shell contract requires the boot shell script to be deferred", async () => {
@@ -108,6 +109,7 @@ test("client entry shell contract requires the boot shell script to be deferred"
   const result = collectClientEntryShellContractMatches({ repoRoot });
   const labels = result.matches.map((match) => match.label);
 
-  assert.equal(result.matches.length, 1);
+  assert.equal(result.matches.length, 2);
   assert.match(labels.join("\n"), /must use defer/i);
+  assert.match(labels.join("\n"), /polite status live region/i);
 });

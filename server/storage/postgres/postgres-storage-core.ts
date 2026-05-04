@@ -25,17 +25,84 @@ import { SettingsRepository } from "../../repositories/settings.repository";
 export const QUERY_PAGE_LIMIT = 1000;
 export const STORAGE_DEBUG_LOGS = runtimeConfig.app.debugLogs;
 
-type StorageBootstrapStep = {
+export type StorageBootstrapStep = {
   name: string;
   run: () => Promise<void>;
 };
 
-type StorageBootstrapStepGroup = {
+export type StorageBootstrapStepGroup = {
   name: string;
   steps: StorageBootstrapStep[];
 };
 
 const STORAGE_BOOTSTRAP_SLOW_STEP_MS = 1_000;
+
+type PostgresStorageBootstrapHandlers = {
+  ensureUsersTable: () => Promise<void>;
+  ensureImportsTable: () => Promise<void>;
+  ensureDataRowsTable: () => Promise<void>;
+  ensureUserActivityTable: () => Promise<void>;
+  ensureAuditLogsTable: () => Promise<void>;
+  ensureMutationIdempotencyTable: () => Promise<void>;
+  ensureMonitorAlertHistoryTable: () => Promise<void>;
+  ensureCollectionRecordsTable: () => Promise<void>;
+  ensureCollectionStaffNicknamesTable: () => Promise<void>;
+  ensureCollectionAdminGroupsTables: () => Promise<void>;
+  ensureCollectionNicknameSessionsTable: () => Promise<void>;
+  ensureCollectionAdminVisibleNicknamesTable: () => Promise<void>;
+  ensureCollectionDailyTables: () => Promise<void>;
+  seedDefaultUsers: () => Promise<void>;
+  ensureBackupsTable: () => Promise<void>;
+  ensurePerformanceIndexes: () => Promise<void>;
+  ensureBannedSessionsTable: () => Promise<void>;
+  ensureAiTables: () => Promise<void>;
+  ensureSpatialTables: () => Promise<void>;
+  ensureCategoryRulesTable: () => Promise<void>;
+  ensureCategoryStatsTable: () => Promise<void>;
+  ensureSettingsTables: () => Promise<void>;
+};
+
+export function buildPostgresStorageBootstrapPlan(
+  handlers: PostgresStorageBootstrapHandlers,
+): Array<StorageBootstrapStep | StorageBootstrapStepGroup> {
+  return [
+    { name: "users-table", run: handlers.ensureUsersTable },
+    {
+      name: "core-schema-primitives",
+      steps: [
+        { name: "imports-table", run: handlers.ensureImportsTable },
+        { name: "data-rows-table", run: handlers.ensureDataRowsTable },
+        { name: "user-activity-table", run: handlers.ensureUserActivityTable },
+        { name: "audit-logs-table", run: handlers.ensureAuditLogsTable },
+        { name: "mutation-idempotency-table", run: handlers.ensureMutationIdempotencyTable },
+        { name: "monitor-alert-history-table", run: handlers.ensureMonitorAlertHistoryTable },
+      ],
+    },
+    { name: "collection-records-table", run: handlers.ensureCollectionRecordsTable },
+    { name: "collection-staff-nicknames-table", run: handlers.ensureCollectionStaffNicknamesTable },
+    { name: "collection-admin-groups-tables", run: handlers.ensureCollectionAdminGroupsTables },
+    { name: "collection-nickname-sessions-table", run: handlers.ensureCollectionNicknameSessionsTable },
+    {
+      name: "collection-admin-visible-nicknames-table",
+      run: handlers.ensureCollectionAdminVisibleNicknamesTable,
+    },
+    { name: "collection-daily-tables", run: handlers.ensureCollectionDailyTables },
+    { name: "default-users-seed", run: handlers.seedDefaultUsers },
+    { name: "backups-table", run: handlers.ensureBackupsTable },
+    { name: "performance-indexes", run: handlers.ensurePerformanceIndexes },
+    {
+      name: "supporting-schema",
+      steps: [
+        { name: "banned-sessions-table", run: handlers.ensureBannedSessionsTable },
+        { name: "ai-tables", run: handlers.ensureAiTables },
+        { name: "spatial-tables", run: handlers.ensureSpatialTables },
+        { name: "category-rules-table", run: handlers.ensureCategoryRulesTable },
+        { name: "category-stats-table", run: handlers.ensureCategoryStatsTable },
+        { name: "settings-tables", run: handlers.ensureSettingsTables },
+      ],
+    },
+  ];
+}
 
 export class PostgresStorageCore {
   protected readonly authRepository = new AuthRepository();
@@ -89,43 +156,30 @@ export class PostgresStorageCore {
 
   private async runInit() {
     const startedAt = performance.now();
-    const steps: Array<StorageBootstrapStep | StorageBootstrapStepGroup> = [
-      { name: "users-table", run: () => this.ensureUsersTable() },
-      {
-        name: "core-schema-primitives",
-        steps: [
-          { name: "imports-table", run: () => this.ensureImportsTable() },
-          { name: "data-rows-table", run: () => this.ensureDataRowsTable() },
-          { name: "user-activity-table", run: () => this.ensureUserActivityTable() },
-          { name: "audit-logs-table", run: () => this.ensureAuditLogsTable() },
-          { name: "mutation-idempotency-table", run: () => this.ensureMutationIdempotencyTable() },
-          { name: "monitor-alert-history-table", run: () => this.ensureMonitorAlertHistoryTable() },
-        ],
-      },
-      { name: "collection-records-table", run: () => this.ensureCollectionRecordsTable() },
-      { name: "collection-staff-nicknames-table", run: () => this.ensureCollectionStaffNicknamesTable() },
-      { name: "collection-admin-groups-tables", run: () => this.ensureCollectionAdminGroupsTables() },
-      { name: "collection-nickname-sessions-table", run: () => this.ensureCollectionNicknameSessionsTable() },
-      {
-        name: "collection-admin-visible-nicknames-table",
-        run: () => this.ensureCollectionAdminVisibleNicknamesTable(),
-      },
-      { name: "collection-daily-tables", run: () => this.ensureCollectionDailyTables() },
-      { name: "default-users-seed", run: () => this.seedDefaultUsers() },
-      { name: "backups-table", run: () => this.ensureBackupsTable() },
-      { name: "performance-indexes", run: () => this.ensurePerformanceIndexes() },
-      {
-        name: "supporting-schema",
-        steps: [
-          { name: "banned-sessions-table", run: () => this.ensureBannedSessionsTable() },
-          { name: "ai-tables", run: () => this.ensureAiTables() },
-          { name: "spatial-tables", run: () => this.ensureSpatialTables() },
-          { name: "category-rules-table", run: () => this.ensureCategoryRulesTable() },
-          { name: "category-stats-table", run: () => this.ensureCategoryStatsTable() },
-          { name: "settings-tables", run: () => this.ensureSettingsTables() },
-        ],
-      },
-    ];
+    const steps = buildPostgresStorageBootstrapPlan({
+      ensureUsersTable: () => this.ensureUsersTable(),
+      ensureImportsTable: () => this.ensureImportsTable(),
+      ensureDataRowsTable: () => this.ensureDataRowsTable(),
+      ensureUserActivityTable: () => this.ensureUserActivityTable(),
+      ensureAuditLogsTable: () => this.ensureAuditLogsTable(),
+      ensureMutationIdempotencyTable: () => this.ensureMutationIdempotencyTable(),
+      ensureMonitorAlertHistoryTable: () => this.ensureMonitorAlertHistoryTable(),
+      ensureCollectionRecordsTable: () => this.ensureCollectionRecordsTable(),
+      ensureCollectionStaffNicknamesTable: () => this.ensureCollectionStaffNicknamesTable(),
+      ensureCollectionAdminGroupsTables: () => this.ensureCollectionAdminGroupsTables(),
+      ensureCollectionNicknameSessionsTable: () => this.ensureCollectionNicknameSessionsTable(),
+      ensureCollectionAdminVisibleNicknamesTable: () => this.ensureCollectionAdminVisibleNicknamesTable(),
+      ensureCollectionDailyTables: () => this.ensureCollectionDailyTables(),
+      seedDefaultUsers: () => this.seedDefaultUsers(),
+      ensureBackupsTable: () => this.ensureBackupsTable(),
+      ensurePerformanceIndexes: () => this.ensurePerformanceIndexes(),
+      ensureBannedSessionsTable: () => this.ensureBannedSessionsTable(),
+      ensureAiTables: () => this.ensureAiTables(),
+      ensureSpatialTables: () => this.ensureSpatialTables(),
+      ensureCategoryRulesTable: () => this.ensureCategoryRulesTable(),
+      ensureCategoryStatsTable: () => this.ensureCategoryStatsTable(),
+      ensureSettingsTables: () => this.ensureSettingsTables(),
+    });
     const stepCount = steps.reduce(
       (count, step) => count + ("steps" in step ? step.steps.length : 1),
       0,

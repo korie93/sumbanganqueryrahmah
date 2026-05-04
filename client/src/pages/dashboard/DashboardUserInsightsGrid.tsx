@@ -181,7 +181,11 @@ export function DashboardUserInsightsGrid({
             </div>
           ) : roleDistribution && roleDistribution.length > 0 ? (
             <>
-              <div className={`min-w-0 ${chartHeightClassName}`}>
+              <div
+                className={`min-w-0 ${chartHeightClassName}`}
+                role="img"
+                aria-label="User role distribution chart"
+              >
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie

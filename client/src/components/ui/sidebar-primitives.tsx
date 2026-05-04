@@ -223,8 +223,16 @@ function SidebarMenuSkeleton({
 }: React.ComponentProps<"div"> & {
   showIcon?: boolean
 }) {
-  const width = React.useMemo(() => {
-    return `${Math.floor(createClientRandomUnitInterval() * 40) + 50}%`
+  const widthClassName = React.useMemo(() => {
+    const widthClassNames = [
+      "max-w-[52%]",
+      "max-w-[60%]",
+      "max-w-[68%]",
+      "max-w-[76%]",
+      "max-w-[84%]",
+    ]
+    const index = Math.floor(createClientRandomUnitInterval() * widthClassNames.length)
+    return widthClassNames[Math.min(widthClassNames.length - 1, index)]
   }, [])
 
   return (
@@ -241,13 +249,8 @@ function SidebarMenuSkeleton({
         />
       )}
       <Skeleton
-        className="h-4 max-w-[var(--skeleton-width)] flex-1"
+        className={cn("h-4 flex-1", widthClassName)}
         data-sidebar="menu-skeleton-text"
-        style={
-          {
-            "--skeleton-width": width,
-          } as React.CSSProperties
-        }
       />
     </div>
   )

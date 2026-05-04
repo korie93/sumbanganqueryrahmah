@@ -16,8 +16,11 @@ test("login page uses the compact modern shell without animated orb layers", () 
   assert.match(source, /login-card login-card-grid/);
   assert.doesNotMatch(source, /login-bg-orb--/);
   assert.doesNotMatch(source, /floating-slow/);
+  assert.match(source, /<form className="login-form space-y-4" onSubmit=\{handleSubmit\} noValidate/);
   assert.match(source, /aria-label="Papar kata laluan"/);
   assert.match(source, /aria-label="Sembunyi kata laluan"/);
+  assert.match(source, /aria-pressed="false"/);
+  assert.match(source, /aria-pressed="true"/);
 });
 
 test("public auth recovery pages expose labels and decorative icons correctly", () => {

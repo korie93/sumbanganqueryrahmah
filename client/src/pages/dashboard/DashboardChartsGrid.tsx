@@ -170,7 +170,11 @@ export function DashboardChartsGrid({
             </div>
           ) : trends && trends.length > 0 ? (
             <>
-              <div className={`min-w-0 ${chartHeightClassName}`}>
+              <div
+                className={`min-w-0 ${chartHeightClassName}`}
+                role="img"
+                aria-label="Daily login and logout trend chart"
+              >
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart
                     data={trends}
@@ -282,7 +286,11 @@ export function DashboardChartsGrid({
               <span className="sr-only">Loading peak hours chart</span>
             </div>
           ) : peakHours && peakHours.length > 0 ? (
-            <div className={`min-w-0 ${chartHeightClassName}`}>
+            <div
+              className={`min-w-0 ${chartHeightClassName}`}
+              role="img"
+              aria-label="Peak activity hours chart"
+            >
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart
                   data={peakHours}

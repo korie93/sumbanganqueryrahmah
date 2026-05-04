@@ -1,11 +1,17 @@
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 import {
   COLLECTION_ROLLUP_REFRESH_NOTIFICATION_CHANNEL,
   CollectionRollupRefreshNotificationSubscriber,
+  resolveCollectionRollupRefreshReconnectDelayMs,
 } from "../lib/collection-rollup-refresh-notification";
 import { logger } from "../lib/logger";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 function waitFor(predicate: () => boolean, timeoutMs = 500): Promise<void> {
   const deadline = Date.now() + timeoutMs;
@@ -50,6 +56,69 @@ class FakeNotificationClient extends EventEmitter {
     }
   }
 }
+
+test("CollectionRollupRefreshNotificationSubscriber reuses runtime PostgreSQL SSL policy", () => {
+  const source = readFileSync(
+    path.resolve(__dirname, "../lib/collection-rollup-refresh-notification.ts"),
+    "utf8",
+  );
+
+  assert.match(source, /buildPgSslPoolConfig\(runtimeConfig\.database\.ssl\)/);
+  assert.match(source, /\.\.\.sslConfig/);
+});
+
+test("collection rollup reconnect delay uses bounded deterministic exponential backoff", () => {
+  assert.equal(
+    resolveCollectionRollupRefreshReconnectDelayMs({
+      attempt: 0,
+      baseDelayMs: 20,
+      maxDelayMs: 100,
+      jitterRatio: 0,
+      channel: COLLECTION_ROLLUP_REFRESH_NOTIFICATION_CHANNEL,
+    }),
+    20,
+  );
+  assert.equal(
+    resolveCollectionRollupRefreshReconnectDelayMs({
+      attempt: 2,
+      baseDelayMs: 20,
+      maxDelayMs: 100,
+      jitterRatio: 0,
+      channel: COLLECTION_ROLLUP_REFRESH_NOTIFICATION_CHANNEL,
+    }),
+    80,
+  );
+  assert.equal(
+    resolveCollectionRollupRefreshReconnectDelayMs({
+      attempt: 8,
+      baseDelayMs: 20,
+      maxDelayMs: 100,
+      jitterRatio: 0,
+      channel: COLLECTION_ROLLUP_REFRESH_NOTIFICATION_CHANNEL,
+    }),
+    100,
+  );
+
+  const jitteredDelay = resolveCollectionRollupRefreshReconnectDelayMs({
+    attempt: 1,
+    baseDelayMs: 20,
+    maxDelayMs: 100,
+    jitterRatio: 0.2,
+    channel: COLLECTION_ROLLUP_REFRESH_NOTIFICATION_CHANNEL,
+  });
+
+  assert.equal(
+    jitteredDelay,
+    resolveCollectionRollupRefreshReconnectDelayMs({
+      attempt: 1,
+      baseDelayMs: 20,
+      maxDelayMs: 100,
+      jitterRatio: 0.2,
+      channel: COLLECTION_ROLLUP_REFRESH_NOTIFICATION_CHANNEL,
+    }),
+  );
+  assert.equal(jitteredDelay >= 40 && jitteredDelay <= 48, true);
+});
 
 test("CollectionRollupRefreshNotificationSubscriber listens on the queue channel and forwards notifications", async () => {
   const client = new FakeNotificationClient();

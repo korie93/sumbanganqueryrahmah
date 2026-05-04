@@ -119,6 +119,8 @@ export function MonthlyCollectionComparisonChart({
         <div
           id={chartRegionId}
           className={`mt-3 min-w-0 rounded-xl border border-border/60 bg-background p-3 ${expanded ? "h-[340px]" : "h-[220px]"}`}
+          role="img"
+          aria-label="Monthly total collection comparison chart"
         >
           <ResponsiveContainer width="100%" height="100%">
             <BarChart

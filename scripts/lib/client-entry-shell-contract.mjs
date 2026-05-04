@@ -51,7 +51,14 @@ export function collectClientEntryShellContractMatches(params = {}) {
     });
   }
 
-  const hasBootShellMarkup = /\bid\s*=\s*["']boot-shell["']/i.test(html);
+  const bootShellMarkupMatch = html.match(/<[^>]*\bid\s*=\s*["']boot-shell["'][^>]*>/i);
+  const hasBootShellMarkup = Boolean(bootShellMarkupMatch);
+  const bootShellMarkup = bootShellMarkupMatch?.[0] || "";
+  const hasAccessibleBootShellLiveRegion = (
+    /\brole\s*=\s*["']status["']/i.test(bootShellMarkup)
+    && /\baria-live\s*=\s*["']polite["']/i.test(bootShellMarkup)
+    && /\baria-atomic\s*=\s*["']true["']/i.test(bootShellMarkup)
+  );
   const hasBootShellCssLink = new RegExp(`<link\\b[^>]*href=["']${BOOT_SHELL_CSS_PUBLIC_PATH}["'][^>]*>`, "i").test(html);
   const bootShellJsScriptMatch = html.match(
     new RegExp(`<script\\b([^>]*)\\bsrc=["']${BOOT_SHELL_JS_PUBLIC_PATH}["']([^>]*)><\\/script>`, "i"),
@@ -84,6 +91,14 @@ export function collectClientEntryShellContractMatches(params = {}) {
       filePath: CLIENT_INDEX_HTML_PATH,
       label: "boot shell script must use defer so it does not block initial rendering",
       snippet: bootShellJsScriptMatch?.[0] || BOOT_SHELL_JS_PUBLIC_PATH,
+    });
+  }
+
+  if (hasBootShellMarkup && !hasAccessibleBootShellLiveRegion) {
+    matches.push({
+      filePath: CLIENT_INDEX_HTML_PATH,
+      label: "boot shell markup must expose a polite status live region",
+      snippet: bootShellMarkup || "boot-shell",
     });
   }
 

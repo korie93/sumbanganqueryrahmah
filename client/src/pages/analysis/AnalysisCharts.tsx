@@ -28,26 +28,28 @@ export function AnalysisCharts({ categoryBarData, genderPieData }: AnalysisChart
         <CardContent>
           {genderPieData.length > 0 ? (
             <>
-              <ResponsiveContainer width="100%" height={isMobile ? 220 : 250}>
-                <PieChart>
-                  <Pie
-                    data={genderPieData}
-                    cx="50%"
-                    cy="50%"
-                    labelLine={false}
-                    label={isMobile ? false : ({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-                    outerRadius={isMobile ? 68 : 80}
-                    fill="#8884d8"
-                    dataKey="value"
-                  >
-                    {genderPieData.map((entry) => (
-                      <Cell key={`${entry.name}-${entry.color}`} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip formatter={(value: number) => value.toLocaleString()} />
-                  {!isMobile ? <Legend /> : null}
-                </PieChart>
-              </ResponsiveContainer>
+              <div role="img" aria-label="Gender distribution chart">
+                <ResponsiveContainer width="100%" height={isMobile ? 220 : 250}>
+                  <PieChart>
+                    <Pie
+                      data={genderPieData}
+                      cx="50%"
+                      cy="50%"
+                      labelLine={false}
+                      label={isMobile ? false : ({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                      outerRadius={isMobile ? 68 : 80}
+                      fill="#8884d8"
+                      dataKey="value"
+                    >
+                      {genderPieData.map((entry) => (
+                        <Cell key={`${entry.name}-${entry.color}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip formatter={(value: number) => value.toLocaleString()} />
+                    {!isMobile ? <Legend /> : null}
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
 
               {isMobile ? (
                 <div className="mt-3 grid gap-2">
@@ -82,24 +84,26 @@ export function AnalysisCharts({ categoryBarData, genderPieData }: AnalysisChart
           <CardTitle className="text-lg font-semibold text-foreground">ID Category Distribution</CardTitle>
         </CardHeader>
         <CardContent>
-          <ResponsiveContainer width="100%" height={isMobile ? 240 : 250}>
-            <BarChart
-              data={categoryBarData}
-              layout="vertical"
-              margin={isMobile ? { top: 4, right: 8, bottom: 4, left: 0 } : { top: 0, right: 0, bottom: 0, left: 20 }}
-            >
-              <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
-              <XAxis type="number" />
-              <YAxis
-                type="category"
-                dataKey="name"
-                width={isMobile ? 88 : 100}
-                tick={{ fontSize: isMobile ? 11 : 12 }}
-              />
-              <Tooltip formatter={(value: number) => value.toLocaleString()} />
-              <Bar dataKey="count" radius={[0, 4, 4, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
+          <div role="img" aria-label="ID category distribution chart">
+            <ResponsiveContainer width="100%" height={isMobile ? 240 : 250}>
+              <BarChart
+                data={categoryBarData}
+                layout="vertical"
+                margin={isMobile ? { top: 4, right: 8, bottom: 4, left: 0 } : { top: 0, right: 0, bottom: 0, left: 20 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+                <XAxis type="number" />
+                <YAxis
+                  type="category"
+                  dataKey="name"
+                  width={isMobile ? 88 : 100}
+                  tick={{ fontSize: isMobile ? 11 : 12 }}
+                />
+                <Tooltip formatter={(value: number) => value.toLocaleString()} />
+                <Bar dataKey="count" radius={[0, 4, 4, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
         </CardContent>
       </Card>
     </div>

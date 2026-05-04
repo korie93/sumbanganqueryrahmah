@@ -55,6 +55,7 @@ function NavbarMobileNavigationImpl({
               <button
                 key={item.id}
                 type="button"
+                aria-current={active ? "page" : undefined}
                 onClick={() => {
                   onNavigate(item.id)
                   onOpenChange(false)
