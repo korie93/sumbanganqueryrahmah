@@ -1,19 +1,22 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
+import zlib from "node:zlib";
 
 const assetsDir = path.resolve("dist-local", "public", "assets");
 const indexHtmlPath = path.resolve("dist-local", "public", "index.html");
 
 const rules = [
-  { label: "main-js", prefix: "index-", extension: ".js", maxKB: 260, required: true, entryAssetType: "script" },
-  { label: "main-css", prefix: "index-", extension: ".css", maxKB: 140, required: true, entryAssetType: "stylesheet" },
-  { label: "charts", prefix: "charts-", extension: ".js", maxKB: 760, required: false },
-  { label: "excel", prefix: "excel-", extension: ".js", maxKB: 525, required: false },
-  { label: "pdf", prefix: "pdf-", extension: ".js", maxKB: 420, required: false },
-  { label: "capture", prefix: "capture-", extension: ".js", maxKB: 225, required: false },
-  { label: "settings", prefix: "Settings-", extension: ".js", maxKB: 180, required: false },
-  { label: "collection-records", prefix: "CollectionRecordsPage-", extension: ".js", maxKB: 100, required: false },
+  { label: "main-js", prefix: "index-", extension: ".js", maxKB: 260, maxGzipKB: 20, required: true, entryAssetType: "script" },
+  { label: "main-css", prefix: "index-", extension: ".css", maxKB: 140, maxGzipKB: 14, required: true, entryAssetType: "stylesheet" },
+  { label: "authenticated-css", prefix: "AuthenticatedAppEntry-", extension: ".css", maxKB: 140, maxGzipKB: 24, required: false },
+  { label: "app-shell-css", prefix: "AuthenticatedAppShell-", extension: ".css", maxKB: 20, maxGzipKB: 4, required: false },
+  { label: "charts", prefix: "charts-", extension: ".js", maxKB: 760, maxGzipKB: 130, required: false },
+  { label: "excel", prefix: "excel-", extension: ".js", maxKB: 525, maxGzipKB: 170, required: false },
+  { label: "pdf", prefix: "pdf-", extension: ".js", maxKB: 420, maxGzipKB: 140, required: false },
+  { label: "capture", prefix: "capture-", extension: ".js", maxKB: 225, maxGzipKB: 55, required: false },
+  { label: "settings", prefix: "Settings-", extension: ".js", maxKB: 180, maxGzipKB: 20, required: false },
+  { label: "collection-records", prefix: "CollectionRecordsPage-", extension: ".js", maxKB: 100, maxGzipKB: 18, required: false },
 ];
 
 function toKB(bytes) {
@@ -22,6 +25,36 @@ function toKB(bytes) {
 
 function formatKB(bytes) {
   return `${toKB(bytes).toFixed(1)} KB`;
+}
+
+async function readAssetSize(fullPath) {
+  const bytes = await fs.readFile(fullPath);
+  return {
+    bytes: bytes.length,
+    gzipBytes: zlib.gzipSync(bytes, { level: 9 }).length,
+  };
+}
+
+function resolveBudgetState(rule, bytes, gzipBytes) {
+  const overRawBudget = toKB(bytes) > rule.maxKB;
+  const overGzipBudget =
+    typeof rule.maxGzipKB === "number"
+    && toKB(gzipBytes) > rule.maxGzipKB;
+  const overBudget = overRawBudget || overGzipBudget;
+  const reasons = [];
+
+  if (overRawBudget) {
+    reasons.push(`raw exceeds ${rule.maxKB} KB`);
+  }
+
+  if (overGzipBudget) {
+    reasons.push(`gzip exceeds ${rule.maxGzipKB} KB`);
+  }
+
+  return {
+    overBudget,
+    reason: overBudget ? reasons.join("; ") : "ok",
+  };
 }
 
 async function readAssets() {
@@ -82,15 +115,15 @@ async function resolveRuleResult(assetFiles, entryAssets, rule) {
       };
     }
 
-    const stat = await fs.stat(entryAsset.fullPath);
-    const overBudget = toKB(stat.size) > rule.maxKB;
+    const { bytes, gzipBytes } = await readAssetSize(entryAsset.fullPath);
+    const budgetState = resolveBudgetState(rule, bytes, gzipBytes);
     return {
       ...rule,
       matched: true,
-      bytes: stat.size,
+      bytes,
+      gzipBytes,
       name: entryAsset.name,
-      overBudget,
-      reason: overBudget ? `exceeds ${rule.maxKB} KB budget` : "ok",
+      ...budgetState,
     };
   }
 
@@ -111,18 +144,18 @@ async function resolveRuleResult(assetFiles, entryAssets, rule) {
   const sizedCandidates = await Promise.all(
     candidates.map(async (candidate) => ({
       ...candidate,
-      stat: await fs.stat(candidate.fullPath),
+      size: await readAssetSize(candidate.fullPath),
     })),
   );
-  const match = sizedCandidates.sort((left, right) => right.stat.size - left.stat.size)[0];
-  const overBudget = toKB(match.stat.size) > rule.maxKB;
+  const match = sizedCandidates.sort((left, right) => right.size.bytes - left.size.bytes)[0];
+  const budgetState = resolveBudgetState(rule, match.size.bytes, match.size.gzipBytes);
   return {
     ...rule,
     matched: true,
-    bytes: match.stat.size,
+    bytes: match.size.bytes,
+    gzipBytes: match.size.gzipBytes,
     name: match.name,
-    overBudget,
-    reason: overBudget ? `exceeds ${rule.maxKB} KB budget` : "ok",
+    ...budgetState,
   };
 }
 
@@ -147,9 +180,11 @@ async function run() {
   console.log("Client bundle budget report");
   for (const result of results) {
     const assetLabel = result.name ?? "(not present)";
-    const sizeLabel = result.matched ? formatKB(result.bytes) : "-";
+    const rawSizeLabel = result.matched ? formatKB(result.bytes) : "-";
+    const gzipSizeLabel = result.matched ? formatKB(result.gzipBytes) : "-";
+    const gzipBudgetLabel = typeof result.maxGzipKB === "number" ? `${result.maxGzipKB} KB` : "-";
     console.log(
-      `${result.label.padEnd(20)} ${assetLabel.padEnd(40)} ${sizeLabel.padStart(10)} / ${String(result.maxKB).padStart(4)} KB  ${result.reason}`,
+      `${result.label.padEnd(20)} ${assetLabel.padEnd(40)} raw ${rawSizeLabel.padStart(10)} / ${String(result.maxKB).padStart(4)} KB  gzip ${gzipSizeLabel.padStart(10)} / ${gzipBudgetLabel.padStart(6)}  ${result.reason}`,
     );
   }
 

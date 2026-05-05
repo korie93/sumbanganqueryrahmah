@@ -47,6 +47,9 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      - name: Lint frontend
+        run: npm run lint
+
       - name: Run API contract tests
         run: npm run test:contracts
 
