@@ -58,6 +58,10 @@ const documentedOverrideReasons = new Map([
     "esbuild",
     "Pins patched esbuild for dev/build tooling, including older drizzle-kit transitive @esbuild-kit packages.",
   ],
+  [
+    "ip-address",
+    "Pins patched IP address parsing helpers for express-rate-limit until the upstream dependency advances.",
+  ],
 ]);
 
 export function analyzeDependencyAuditReport(report) {

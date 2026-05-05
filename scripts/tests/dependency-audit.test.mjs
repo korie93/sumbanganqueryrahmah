@@ -121,6 +121,7 @@ test("package override audit accepts documented override set", () => {
       rollup: "^4.59.0",
       dompurify: "^3.4.1",
       esbuild: "^0.25.4",
+      "ip-address": "^10.2.0",
     },
   });
 
