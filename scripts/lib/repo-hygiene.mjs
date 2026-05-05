@@ -65,6 +65,24 @@ const UNSAFE_AUTOMATION_KILL_PATTERN_RULES = [
   },
 ];
 
+const GENERATED_OUTPUT_PATH_PREFIXES = [
+  "artifacts/",
+  "coverage/",
+  "dist-local/",
+  "output/",
+  "uploads/",
+  "var/",
+];
+
+function normalizeRepoPath(filePath) {
+  return String(filePath || "").replace(/\\/g, "/").replace(/^\.\/+/, "");
+}
+
+function getRepoPathBasename(filePath) {
+  const normalizedPath = normalizeRepoPath(filePath);
+  return normalizedPath.split("/").pop() || "";
+}
+
 function isAllowedSecretValue(rawValue) {
   const value = String(rawValue || "")
     .trim()
@@ -133,7 +151,7 @@ export function findForbiddenTypeScriptTypeSafetyPatterns(params) {
 
 export function findUnsafeAutomationKillPatterns(params) {
   const filePath = String(params?.filePath || "");
-  const normalizedFilePath = filePath.replace(/\\/g, "/");
+  const normalizedFilePath = normalizeRepoPath(filePath);
   const text = String(params?.text || "");
   const findings = [];
 
@@ -157,4 +175,28 @@ export function findUnsafeAutomationKillPatterns(params) {
   }
 
   return findings;
+}
+
+export function findTrackedGeneratedOutputs(params) {
+  const trackedFiles = Array.isArray(params?.trackedFiles) ? params.trackedFiles : [];
+
+  return trackedFiles
+    .map((filePath) => normalizeRepoPath(filePath).trim())
+    .filter(Boolean)
+    .filter((filePath) =>
+      GENERATED_OUTPUT_PATH_PREFIXES.some((prefix) => filePath.startsWith(prefix)),
+    );
+}
+
+export function findTrackedForbiddenEnvFiles(params) {
+  const trackedFiles = Array.isArray(params?.trackedFiles) ? params.trackedFiles : [];
+
+  return trackedFiles
+    .map((filePath) => normalizeRepoPath(filePath).trim())
+    .filter(Boolean)
+    .filter((filePath) => {
+      const basename = getRepoPathBasename(filePath);
+      return (basename === ".env" || basename.startsWith(".env."))
+        && basename !== ".env.example";
+    });
 }

@@ -5,6 +5,7 @@ uploads/
 server.log
 tmp-smoke-server.out
 tmp-smoke-server.err
+var/
 var/dev-mail-outbox/
 artifacts/
 coverage/

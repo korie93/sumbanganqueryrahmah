@@ -3,27 +3,22 @@ import { existsSync, readFileSync } from "node:fs";
 import {
   findForbiddenTypeScriptTypeSafetyPatterns,
   findPotentialCommittedSmtpSecrets,
+  findTrackedForbiddenEnvFiles,
+  findTrackedGeneratedOutputs,
   findUnsafeAutomationKillPatterns,
 } from "./lib/repo-hygiene.mjs";
-
-const forbiddenEnvFiles = [
-  ".env",
-  ".env.local",
-  ".env.production",
-  ".env.development",
-];
 
 const requiredGitignoreEntries = [
   ".env",
   ".env.*",
   "!.env.example",
   "artifacts/",
+  "coverage/",
+  "dist-local/",
+  "output/",
+  "uploads/",
+  "var/",
   "var/perf/",
-];
-
-const generatedOutputPaths = [
-  "artifacts",
-  "var/perf",
 ];
 
 const failures = [];
@@ -44,50 +39,6 @@ if (!existsSync(".gitignore")) {
 }
 
 const gitCommand = process.platform === "win32" ? "git.exe" : "git";
-const trackedFilesResult = spawnSync(
-  gitCommand,
-  ["ls-files", "--", ...forbiddenEnvFiles],
-  { encoding: "utf8" },
-);
-
-if (trackedFilesResult.error) {
-  failures.push(`Unable to inspect tracked files: ${trackedFilesResult.error.message}`);
-} else if (trackedFilesResult.status !== 0) {
-  failures.push(`git ls-files exited with status ${trackedFilesResult.status}.`);
-} else {
-  const trackedFiles = trackedFilesResult.stdout
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean);
-
-  if (trackedFiles.length > 0) {
-    failures.push(`Forbidden env files are tracked by git: ${trackedFiles.join(", ")}`);
-  }
-}
-
-const trackedGeneratedOutputsResult = spawnSync(
-  gitCommand,
-  ["ls-files", "--", ...generatedOutputPaths],
-  { encoding: "utf8" },
-);
-
-if (trackedGeneratedOutputsResult.error) {
-  failures.push(`Unable to inspect generated output paths: ${trackedGeneratedOutputsResult.error.message}`);
-} else if (trackedGeneratedOutputsResult.status !== 0) {
-  failures.push(`git ls-files for generated output paths exited with status ${trackedGeneratedOutputsResult.status}.`);
-} else {
-  const trackedGeneratedOutputs = trackedGeneratedOutputsResult.stdout
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean);
-
-  if (trackedGeneratedOutputs.length > 0) {
-    failures.push(
-      `Generated output should not be tracked by git: ${trackedGeneratedOutputs.join(", ")}`,
-    );
-  }
-}
-
 const allTrackedFilesResult = spawnSync(
   gitCommand,
   ["ls-files"],
@@ -107,6 +58,19 @@ if (allTrackedFilesResult.error) {
   const smtpSecretFindings = [];
   const typeSafetyFindings = [];
   const automationKillFindings = [];
+  const forbiddenEnvFiles = findTrackedForbiddenEnvFiles({ trackedFiles });
+  const trackedGeneratedOutputs = findTrackedGeneratedOutputs({ trackedFiles });
+
+  if (forbiddenEnvFiles.length > 0) {
+    failures.push(`Forbidden env files are tracked by git: ${forbiddenEnvFiles.join(", ")}`);
+  }
+
+  if (trackedGeneratedOutputs.length > 0) {
+    failures.push(
+      `Generated output should not be tracked by git: ${trackedGeneratedOutputs.join(", ")}`,
+    );
+  }
+
   for (const filePath of trackedFiles) {
     try {
       const text = readFileSync(filePath, "utf8");

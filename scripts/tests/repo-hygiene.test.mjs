@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 import {
   findForbiddenTypeScriptTypeSafetyPatterns,
   findPotentialCommittedSmtpSecrets,
+  findTrackedForbiddenEnvFiles,
+  findTrackedGeneratedOutputs,
   findUnsafeAutomationKillPatterns,
 } from "../lib/repo-hygiene.mjs";
 
@@ -130,4 +132,50 @@ if (serverPid) {
   });
 
   assert.deepEqual(findings, []);
+});
+
+test("repo hygiene flags tracked generated runtime outputs", () => {
+  const findings = findTrackedGeneratedOutputs({
+    trackedFiles: [
+      ".env.example",
+      "server/routes/example.ts",
+      "uploads/collection-receipts/receipt.pdf",
+      "var/smoke-debug.png",
+      "dist-local/server/index-local.js",
+      "output/report.json",
+      "coverage/lcov.info",
+      "artifacts/smoke-ui/report.json",
+      "client\\src\\App.tsx",
+    ],
+  });
+
+  assert.deepEqual(findings, [
+    "uploads/collection-receipts/receipt.pdf",
+    "var/smoke-debug.png",
+    "dist-local/server/index-local.js",
+    "output/report.json",
+    "coverage/lcov.info",
+    "artifacts/smoke-ui/report.json",
+  ]);
+});
+
+test("repo hygiene flags any tracked env file except the template", () => {
+  const findings = findTrackedForbiddenEnvFiles({
+    trackedFiles: [
+      ".env.example",
+      ".env",
+      ".env.local",
+      ".env.smoke.local",
+      "deploy/.env.production",
+      "docs/env.example",
+      "server/config/runtime-env-schema.ts",
+    ],
+  });
+
+  assert.deepEqual(findings, [
+    ".env",
+    ".env.local",
+    ".env.smoke.local",
+    "deploy/.env.production",
+  ]);
 });
