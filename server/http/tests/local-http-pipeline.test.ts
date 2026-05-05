@@ -51,6 +51,7 @@ test("registerLocalHttpPipeline allows blob receipt previews in the CSP header",
     assert.match(csp, /script-src-attr 'none'/i);
     assert.match(csp, /style-src 'self'/i);
     assert.match(csp, /style-src-elem 'self'/i);
+    assert.match(csp, /style-src-elem[^;]*sha256-nzTgYzXYDNe6BAHiiI7NNlfK8n\/auuOAhh2t92YvuXo=/i);
     assert.match(csp, /style-src-attr 'unsafe-inline'/i);
     assert.match(csp, /require-trusted-types-for 'script'/i);
     assert.match(csp, new RegExp(`trusted-types default ${SQR_TRUSTED_TYPES_POLICY_NAME}`, "i"));
