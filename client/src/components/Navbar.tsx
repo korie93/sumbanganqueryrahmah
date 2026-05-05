@@ -179,7 +179,7 @@ function NavbarImpl({
                   aria-label={`Buka menu pengguna untuk ${username}`}
                   aria-haspopup="menu"
                 >
-                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold uppercase text-primary">
+                  <span className="user-menu-avatar">
                     {[...username][0] || ""}
                   </span>
                   <span className="hidden min-w-0 sm:flex sm:flex-col sm:items-start sm:leading-tight">
@@ -225,6 +225,9 @@ function NavbarImpl({
                 aria-label={`Buka menu pengguna untuk ${username}`}
                 aria-haspopup="menu"
               >
+                <span className="user-menu-avatar" aria-hidden="true">
+                  {[...username][0] || ""}
+                </span>
                 <span className="user-menu-copy max-w-[10.5rem] xl:max-w-none">
                   <span className="truncate font-medium text-foreground">{username}</span>
                   <span className="user-menu-role">{userRole}</span>

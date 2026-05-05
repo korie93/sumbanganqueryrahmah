@@ -1,17 +1,17 @@
 .landing-page {
-  background: linear-gradient(180deg, hsl(202 43% 97%), hsl(150 30% 96%) 48%, hsl(210 28% 98%));
+  background: linear-gradient(180deg, hsl(210 28% 98%), hsl(214 30% 96%) 48%, hsl(210 24% 98%));
   color: hsl(var(--foreground));
 }
 
 .landing-shell {
-  border: 1px solid hsl(196 27% 84%);
-  background: hsl(0 0% 100% / 0.96);
-  box-shadow: 0 14px 28px -24px hsl(199 42% 22% / 0.24);
+  border: 1px solid hsl(215 24% 84%);
+  background: hsl(0 0% 100% / 0.97);
+  box-shadow: 0 16px 30px -26px hsl(215 34% 22% / 0.22);
 }
 
 .landing-brand-shell {
-  border: 1px solid hsl(171 44% 80%);
-  background: linear-gradient(180deg, hsl(174 68% 96%), hsl(151 48% 94%));
+  border: 1px solid hsl(214 42% 82%);
+  background: linear-gradient(180deg, hsl(214 72% 97%), hsl(210 42% 95%));
   box-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.9);
 }
 
@@ -36,21 +36,21 @@
 }
 
 .landing-nav {
-  border: 1px solid hsl(196 24% 86%);
+  border: 1px solid hsl(215 22% 86%);
   background: hsl(0 0% 100% / 0.92);
 }
 
 .landing-nav-link:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 2px hsl(172 66% 40% / 0.24);
+  box-shadow: 0 0 0 2px hsl(217 91% 50% / 0.22);
 }
 
 .landing-hero-panel {
   position: relative;
   overflow: hidden;
-  border: 1px solid hsl(196 29% 82%);
+  border: 1px solid hsl(215 24% 84%);
   background: linear-gradient(180deg, hsl(0 0% 100%), hsl(214 50% 98%));
-  box-shadow: 0 24px 44px -34px hsl(194 46% 24% / 0.28);
+  box-shadow: 0 24px 46px -36px hsl(215 34% 22% / 0.3);
 }
 
 .landing-hero-panel::after {
@@ -71,21 +71,21 @@
 }
 
 .landing-badge {
-  border: 1px solid hsl(171 48% 78%);
-  background: hsl(170 64% 95%);
-  color: hsl(177 62% 24%);
+  border: 1px solid hsl(214 50% 84%);
+  background: hsl(214 76% 97%);
+  color: hsl(217 66% 30%);
 }
 
 .landing-chip {
-  border: 1px solid hsl(196 28% 84%);
-  background: hsl(196 60% 97%);
-  color: hsl(198 45% 25%);
+  border: 1px solid hsl(215 24% 86%);
+  background: hsl(210 40% 98%);
+  color: hsl(215 30% 30%);
 }
 
 .landing-feature-card,
 .landing-action-note {
-  border: 1px solid hsl(190 25% 84%);
-  background: linear-gradient(180deg, hsl(0 0% 100%), hsl(158 45% 97%));
+  border: 1px solid hsl(215 23% 86%);
+  background: linear-gradient(180deg, hsl(0 0% 100%), hsl(214 48% 98%));
   box-shadow: inset 0 1px 0 hsl(0 0% 100%);
 }
 
@@ -94,27 +94,27 @@
 }
 
 .landing-primary-button {
-  border: 1px solid hsl(176 74% 28%);
-  background: linear-gradient(135deg, hsl(188 78% 33%), hsl(157 63% 34%));
+  border: 1px solid hsl(217 91% 42%);
+  background: linear-gradient(135deg, hsl(217 91% 50%), hsl(206 86% 42%));
   color: hsl(var(--primary-foreground));
-  box-shadow: 0 16px 30px -22px hsl(170 72% 24% / 0.58);
+  box-shadow: 0 16px 30px -22px hsl(217 91% 40% / 0.55);
 }
 
 .landing-primary-button:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 2px hsl(172 72% 36% / 0.3), 0 16px 30px -22px hsl(170 72% 24% / 0.58);
+  box-shadow: 0 0 0 2px hsl(217 91% 50% / 0.28), 0 16px 30px -22px hsl(217 91% 40% / 0.55);
 }
 
 .landing-secondary-button {
-  border: 1px solid hsl(196 26% 84%);
+  border: 1px solid hsl(215 23% 85%);
   background: hsl(0 0% 100%);
   color: hsl(207 45% 15%);
-  box-shadow: 0 12px 22px -18px hsl(199 42% 22% / 0.22);
+  box-shadow: 0 12px 22px -18px hsl(215 34% 22% / 0.22);
 }
 
 .landing-secondary-button:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 2px hsl(172 66% 40% / 0.24);
+  box-shadow: 0 0 0 2px hsl(217 91% 50% / 0.22);
 }
 
 .landing-secondary-pane-shell {
@@ -124,23 +124,23 @@
 }
 
 .landing-about-shell {
-  border: 1px solid hsl(196 28% 84%);
+  border: 1px solid hsl(215 23% 85%);
   background: linear-gradient(180deg, hsl(0 0% 100%), hsl(214 50% 98%));
-  box-shadow: 0 16px 30px -26px hsl(199 42% 22% / 0.24);
+  box-shadow: 0 16px 30px -26px hsl(215 34% 22% / 0.24);
 }
 
 .landing-preview-topbar,
 .landing-preview-metric,
 .landing-about-item,
 .landing-about-note {
-  border: 1px solid hsl(196 25% 86%);
+  border: 1px solid hsl(215 22% 87%);
   background: hsl(0 0% 100%);
 }
 
 .landing-preview-status {
-  border: 1px solid hsl(151 52% 70%);
-  background: hsl(151 56% 95%);
-  color: hsl(154 60% 27%);
+  border: 1px solid hsl(156 42% 72%);
+  background: hsl(151 48% 96%);
+  color: hsl(154 48% 28%);
 }
 
 .landing-preview-metric-label,
@@ -157,11 +157,11 @@
 
 .landing-about-item-icon,
 .landing-feature-icon {
-  color: hsl(171 69% 31%);
+  color: hsl(217 71% 42%);
 }
 
 .landing-feature-icon {
-  background: hsl(170 63% 94%);
+  background: hsl(214 76% 96%);
 }
 
 .landing-deferred-section {
@@ -172,19 +172,19 @@
 .landing-placeholder-section,
 .landing-placeholder-card,
 .landing-placeholder-box {
-  border: 1px solid hsl(196 25% 86%);
+  border: 1px solid hsl(215 22% 87%);
   background: hsl(0 0% 100% / 0.96);
-  box-shadow: 0 12px 24px -22px hsl(199 42% 22% / 0.16);
+  box-shadow: 0 12px 24px -22px hsl(215 34% 22% / 0.16);
 }
 
 .landing-security-shell {
-  border: 1px solid hsl(178 30% 82%);
-  background: linear-gradient(180deg, hsl(0 0% 100%), hsl(166 42% 97%));
-  box-shadow: 0 16px 30px -26px hsl(177 42% 22% / 0.18);
+  border: 1px solid hsl(215 23% 85%);
+  background: linear-gradient(180deg, hsl(0 0% 100%), hsl(214 48% 98%));
+  box-shadow: 0 16px 30px -26px hsl(215 34% 22% / 0.18);
 }
 
 .landing-security-heading {
-  color: hsl(171 69% 31%);
+  color: hsl(217 71% 42%);
 }
 
 .landing-security-copy,
@@ -195,31 +195,31 @@
 
 .landing-security-panel,
 .landing-security-point {
-  border: 1px solid hsl(196 25% 86%);
+  border: 1px solid hsl(215 22% 87%);
   background: hsl(0 0% 100%);
 }
 
 .landing-security-panel-eyebrow,
 .landing-security-point-icon {
-  color: hsl(154 60% 32%);
+  color: hsl(154 52% 32%);
 }
 
 .landing-footer {
-  border-top: 1px solid hsl(196 25% 86%);
+  border-top: 1px solid hsl(215 22% 87%);
 }
 
 .landing-placeholder-footer-shell {
-  border: 1px solid hsl(196 25% 84%);
+  border: 1px solid hsl(215 22% 86%);
   background: hsl(0 0% 100% / 0.96);
-  box-shadow: 0 12px 24px -22px hsl(199 42% 22% / 0.16);
+  box-shadow: 0 12px 24px -22px hsl(215 34% 22% / 0.16);
 }
 
 .landing-placeholder-line {
-  background: hsl(196 24% 88%);
+  background: hsl(215 20% 88%);
 }
 
 .landing-placeholder-line--accent {
-  background: hsl(154 54% 82%);
+  background: hsl(214 44% 84%);
 }
 
 .landing-secondary-pane {
@@ -239,15 +239,15 @@
 
 @media (hover: hover) and (pointer: fine) {
   .landing-nav-link:hover {
-    background: hsl(170 64% 95%);
-    color: hsl(177 62% 24%);
+    background: hsl(214 76% 96%);
+    color: hsl(217 66% 30%);
   }
 
   .landing-primary-button:hover {
-    background: linear-gradient(135deg, hsl(188 78% 29%), hsl(157 63% 30%));
+    background: linear-gradient(135deg, hsl(217 91% 45%), hsl(206 86% 37%));
   }
 
   .landing-secondary-button:hover {
-    background: hsl(170 64% 97%);
+    background: hsl(214 76% 97%);
   }
 }

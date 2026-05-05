@@ -29,10 +29,20 @@ export function NavbarUserMenuContent({
       align="end"
       className="w-[min(18rem,calc(100vw-1rem))] rounded-xl p-2"
     >
-      <DropdownMenuLabel className="px-2 pb-2 pt-1">
-        <div className="text-sm font-semibold">{username}</div>
-        <div className="mt-1 text-xs font-normal text-muted-foreground">
-          Signed in as {userRole}
+      <DropdownMenuLabel className="rounded-xl border border-border/60 bg-muted/20 p-3">
+        <div className="flex min-w-0 items-center gap-3">
+          <span
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-primary/20 bg-primary/10 text-sm font-semibold uppercase text-primary"
+            aria-hidden="true"
+          >
+            {[...username][0] || ""}
+          </span>
+          <span className="min-w-0">
+            <span className="block truncate text-sm font-semibold">{username}</span>
+            <span className="mt-1 inline-flex rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-primary">
+              {userRole}
+            </span>
+          </span>
         </div>
       </DropdownMenuLabel>
       <DropdownMenuSeparator />
@@ -44,11 +54,11 @@ export function NavbarUserMenuContent({
         onValueChange={(value) => setTheme(value === "dark" ? "dark" : "light")}
       >
         <DropdownMenuRadioItem value="light" className="rounded-lg px-3 py-2.5">
-          <Sun className="h-4 w-4" />
+          <Sun className="h-4 w-4" aria-hidden="true" />
           <span>Light Mode</span>
         </DropdownMenuRadioItem>
         <DropdownMenuRadioItem value="dark" className="rounded-lg px-3 py-2.5">
-          <Moon className="h-4 w-4" />
+          <Moon className="h-4 w-4" aria-hidden="true" />
           <span>Dark Mode</span>
         </DropdownMenuRadioItem>
       </DropdownMenuRadioGroup>
@@ -60,7 +70,7 @@ export function NavbarUserMenuContent({
         className="rounded-lg px-3 py-2.5 text-destructive focus:text-destructive"
         data-testid="button-logout"
       >
-        <LogOut className="h-4 w-4" />
+        <LogOut className="h-4 w-4" aria-hidden="true" />
         <span>Logout</span>
       </DropdownMenuItem>
     </DropdownMenuContent>

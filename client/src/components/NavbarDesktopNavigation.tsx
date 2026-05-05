@@ -131,8 +131,8 @@ function NavbarDesktopNavigationImpl({
                   <ChevronDown className="h-3.5 w-3.5 opacity-70" aria-hidden="true" />
                 </button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="center" className="w-80 p-2">
-                <DropdownMenuLabel className="px-2 pb-2 pt-1">
+              <DropdownMenuContent align="center" sideOffset={8} className="w-[22rem] rounded-2xl border-border/70 p-2 shadow-xl">
+                <DropdownMenuLabel className="rounded-xl bg-muted/20 px-3 py-2.5">
                   <div className="text-sm font-semibold">{group.label}</div>
                   <div className="mt-1 text-xs font-normal text-muted-foreground">
                     {group.description}
@@ -149,9 +149,9 @@ function NavbarDesktopNavigationImpl({
                         aria-current={activeItem ? "page" : undefined}
                         onSelect={() => onNavigate(item.id)}
                         onFocus={() => onPrefetch(item.id)}
-                        className={`items-start gap-3 rounded-xl px-3 py-3 ${activeItem ? "bg-accent text-accent-foreground" : ""}`}
+                        className={`items-start gap-3 rounded-xl px-3 py-3 ${activeItem ? "bg-primary/10 text-primary focus:bg-primary/10 focus:text-primary" : ""}`}
                       >
-                        <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                        <span className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${activeItem ? "bg-primary text-primary-foreground" : "bg-primary/10 text-primary"}`}>
                           <Icon className="h-4 w-4" aria-hidden="true" />
                         </span>
                         <span className="min-w-0 space-y-0.5">
