@@ -1,7 +1,7 @@
 import { memo, type ReactNode } from "react";
 
 type AIMessageProps = {
-  role: "user" | "assistant";
+  messageRole: "user" | "assistant";
   content: string;
 };
 
@@ -143,10 +143,10 @@ function renderAIMessageMarkdown(content: string): ReactNode {
   });
 }
 
-function AIMessageImpl({ role, content }: AIMessageProps) {
+function AIMessageImpl({ messageRole, content }: AIMessageProps) {
   return (
-    <div className={`ai-message-row ${role === "user" ? "ai-message-row-user" : "ai-message-row-assistant"}`}>
-      <div className={`ai-bubble ${role === "user" ? "ai-bubble-user" : "ai-bubble-assistant"}`}>
+    <div className={`ai-message-row ${messageRole === "user" ? "ai-message-row-user" : "ai-message-row-assistant"}`}>
+      <div className={`ai-bubble ${messageRole === "user" ? "ai-bubble-user" : "ai-bubble-assistant"}`}>
         {renderAIMessageMarkdown(content)}
       </div>
     </div>

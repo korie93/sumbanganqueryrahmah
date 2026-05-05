@@ -17,12 +17,11 @@ export function BrandLogo({
 
   if (decorative) {
     return (
-      <picture className={className} aria-hidden="true">
+      <picture className={className}>
         <source srcSet="/brand/sqr-logo-minimal.webp" type="image/webp" />
         <img
           src="/brand/sqr-logo-minimal.svg"
           alt={resolvedAlt}
-          aria-hidden="true"
           className={imageClassName}
           width={128}
           height={128}

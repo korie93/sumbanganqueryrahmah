@@ -58,7 +58,7 @@ function NavbarImpl({
   const { theme, setTheme } = useTheme()
   const [routerLocation] = useLocation()
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
-  const navScrollerRef = useRef<HTMLElement | null>(null)
+  const navScrollerRef = useRef<HTMLDivElement>(null)
 
   const directItems = useMemo(
     () => getVisiblePrimaryNavItems(userRole, tabVisibility ?? null, featureLockdown),

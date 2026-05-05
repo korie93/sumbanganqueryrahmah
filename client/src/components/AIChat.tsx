@@ -85,7 +85,7 @@ export default function AIChat({
         {messages.map((msg) => (
           <AIMessage
             key={msg.id}
-            role={msg.role}
+            messageRole={msg.role}
             content={msg.content}
           />
         ))}
@@ -110,7 +110,7 @@ export default function AIChat({
         ) : null}
 
         {isTyping && streamingText ? (
-          <AIMessage role="assistant" content={streamingText} />
+          <AIMessage messageRole="assistant" content={streamingText} />
         ) : null}
       </div>
 

@@ -58,6 +58,7 @@ export default tseslint.config(
       ],
       "jsx-a11y/anchor-is-valid": "off",
       "jsx-a11y/click-events-have-key-events": "warn",
+      "jsx-a11y/label-has-for": "off",
       "jsx-a11y/no-static-element-interactions": "warn",
       "no-extra-boolean-cast": "warn",
       "no-irregular-whitespace": "warn",

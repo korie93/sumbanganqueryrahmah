@@ -25,7 +25,7 @@ type NavbarDesktopNavigationProps = {
   savedCount?: number | undefined
   onNavigate: (itemId: string) => void
   onPrefetch: (itemId: string) => void
-  navScrollerRef: RefObject<HTMLElement | null>
+  navScrollerRef: RefObject<HTMLDivElement>
   desktopNavOverflow: DesktopNavOverflowState
 }
 
@@ -39,7 +39,7 @@ function NavbarDesktopNavigationImpl({
   navScrollerRef,
   desktopNavOverflow,
 }: NavbarDesktopNavigationProps) {
-  const handleNavScrollerKeyDown = (event: KeyboardEvent<HTMLElement>) => {
+  const handleNavScrollerKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     const navNode = event.currentTarget
 
     if (event.key === "Home") {
@@ -66,13 +66,15 @@ function NavbarDesktopNavigationImpl({
 
   return (
     <div className="navbar-nav-shell hidden min-w-0 flex-1 items-center justify-start overflow-hidden lg:flex">
-      <nav
-        ref={navScrollerRef as RefObject<HTMLElement>}
-        className="navbar-premium-glass w-full justify-start"
-        aria-label="Navigasi utama"
-        onKeyDown={handleNavScrollerKeyDown}
-        tabIndex={desktopNavOverflow.canScroll ? 0 : undefined}
-      >
+      <nav aria-label="Navigasi utama" className="w-full min-w-0">
+        <div
+          ref={navScrollerRef}
+          className="navbar-premium-glass w-full justify-start"
+          role="toolbar"
+          aria-label="Pintasan navigasi utama"
+          onKeyDown={handleNavScrollerKeyDown}
+          tabIndex={desktopNavOverflow.canScroll ? 0 : undefined}
+        >
         {directItems.map((item) => {
           const Icon = item.icon
           const isActive = activeNavigationItemId === item.id
@@ -170,6 +172,7 @@ function NavbarDesktopNavigationImpl({
             </DropdownMenu>
           )
         })}
+        </div>
       </nav>
       {desktopNavOverflow.canScroll ? (
         <>
