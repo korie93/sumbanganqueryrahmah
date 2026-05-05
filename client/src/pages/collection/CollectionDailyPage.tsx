@@ -3,6 +3,7 @@ import { CollectionDailyCalendarCard } from "@/pages/collection/CollectionDailyC
 import { CollectionDailyFiltersCard } from "@/pages/collection/CollectionDailyFiltersCard";
 import { CollectionDailySummaryCard } from "@/pages/collection/CollectionDailySummaryCard";
 import { useCollectionDailyPageModel } from "@/pages/collection/useCollectionDailyPageModel";
+import "./CollectionDailyPage.css";
 
 const CollectionDailyDayDetailsDialog = lazy(() =>
   import("@/pages/collection/CollectionDailyDayDetailsDialog").then((module) => ({
@@ -23,7 +24,7 @@ export default function CollectionDailyPage({ role }: CollectionDailyPageProps) 
   const model = useCollectionDailyPageModel({ role });
 
   return (
-    <div className="space-y-4" data-testid="collection-daily-page">
+    <div className="collection-daily-page space-y-4" data-testid="collection-daily-page">
       <CollectionDailyFiltersCard {...model.filtersCardProps} />
 
       {model.overview ? <CollectionDailySummaryCard overview={model.overview} /> : null}

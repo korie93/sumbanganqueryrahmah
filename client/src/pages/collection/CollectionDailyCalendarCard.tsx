@@ -61,7 +61,7 @@ export function CollectionDailyCalendarCard({
     : undefined;
 
   return (
-    <div data-testid="collection-daily-calendar">
+    <div className="collection-daily-calendar" data-testid="collection-daily-calendar">
       <OperationalSectionCard
         title="Monthly Daily Status"
         description={
@@ -69,21 +69,22 @@ export function CollectionDailyCalendarCard({
             ? "Scan the month quickly and tap a day to open its collection details."
             : "Scan the month quickly, then click a day to inspect collection details."
         }
+        className="collection-daily-calendar-card"
         contentClassName="space-y-4"
       >
         {isMobile ? (
-          <div className="space-y-2" data-testid="collection-daily-legend">
+          <div className="collection-daily-legend space-y-2" data-testid="collection-daily-legend">
             <div className="flex flex-wrap gap-2">
-              <Badge className="border-rose-300/70 bg-rose-50 text-rose-700 hover:bg-rose-50">
+              <Badge className="collection-daily-legend-badge border-rose-300/70 bg-rose-50 text-rose-700 hover:bg-rose-50">
                 Red: No collection
               </Badge>
-              <Badge className="border-amber-300/70 bg-amber-50 text-amber-700 hover:bg-amber-50">
+              <Badge className="collection-daily-legend-badge border-amber-300/70 bg-amber-50 text-amber-700 hover:bg-amber-50">
                 Yellow: Below target
               </Badge>
-              <Badge className="border-green-300/70 bg-green-50 text-green-700 hover:bg-green-50">
+              <Badge className="collection-daily-legend-badge border-green-300/70 bg-green-50 text-green-700 hover:bg-green-50">
                 Green: Target achieved
               </Badge>
-              <Badge className="border-slate-300/70 bg-slate-100 text-slate-700 hover:bg-slate-100">
+              <Badge className="collection-daily-legend-badge border-slate-300/70 bg-slate-100 text-slate-700 hover:bg-slate-100">
                 Grey: Holiday
               </Badge>
             </div>
@@ -92,20 +93,20 @@ export function CollectionDailyCalendarCard({
             </p>
           </div>
         ) : (
-          <div className="grid gap-2 text-xs md:grid-cols-2 xl:grid-cols-4" data-testid="collection-daily-legend">
-            <div className="flex items-center gap-2 rounded-xl border border-rose-300/60 bg-rose-50/70 px-3 py-2">
+          <div className="collection-daily-legend grid gap-2 text-xs md:grid-cols-2 xl:grid-cols-4" data-testid="collection-daily-legend">
+            <div className="collection-daily-legend-item flex items-center gap-2 rounded-xl border border-rose-300/60 bg-rose-50/70 px-3 py-2">
               <span className="h-2.5 w-2.5 rounded-full bg-rose-500" />
               <span>Red: No collection</span>
             </div>
-            <div className="flex items-center gap-2 rounded-xl border border-amber-300/60 bg-amber-50/70 px-3 py-2">
+            <div className="collection-daily-legend-item flex items-center gap-2 rounded-xl border border-amber-300/60 bg-amber-50/70 px-3 py-2">
               <span className="h-2.5 w-2.5 rounded-full bg-amber-500" />
               <span>Yellow: Collection recorded but daily target not achieved</span>
             </div>
-            <div className="flex items-center gap-2 rounded-xl border border-green-300/60 bg-green-50/70 px-3 py-2">
+            <div className="collection-daily-legend-item flex items-center gap-2 rounded-xl border border-green-300/60 bg-green-50/70 px-3 py-2">
               <span className="h-2.5 w-2.5 rounded-full bg-green-500" />
               <span>Green: Daily target achieved</span>
             </div>
-            <div className="flex items-center gap-2 rounded-xl border border-slate-300/60 bg-slate-100/80 px-3 py-2">
+            <div className="collection-daily-legend-item flex items-center gap-2 rounded-xl border border-slate-300/60 bg-slate-100/80 px-3 py-2">
               <span className="h-2.5 w-2.5 rounded-full bg-slate-500" />
               <span>Grey: Holiday / non-working day</span>
             </div>
@@ -113,12 +114,12 @@ export function CollectionDailyCalendarCard({
         )}
 
         {loadingOverview ? (
-          <div className="rounded-2xl border border-border/60 bg-background px-4 py-8 text-center text-sm text-muted-foreground shadow-sm">
+          <div className="collection-daily-state-card rounded-2xl border border-border/60 bg-background px-4 py-8 text-center text-sm text-muted-foreground shadow-sm">
             <Loader2 className="mx-auto mb-2 h-5 w-5 animate-spin" />
             Loading monthly daily status...
           </div>
         ) : !overview ? (
-          <div className="rounded-2xl border border-border/60 bg-background px-4 py-8 text-center text-sm text-muted-foreground shadow-sm">
+          <div className="collection-daily-state-card rounded-2xl border border-border/60 bg-background px-4 py-8 text-center text-sm text-muted-foreground shadow-sm">
             {emptyOverviewMessage}
           </div>
         ) : (
@@ -131,13 +132,13 @@ export function CollectionDailyCalendarCard({
                   return (
                     <article
                       key={day.date}
-                      className={`rounded-2xl border shadow-sm ${statusCardClass(day.status)} ${
+                      className={`collection-daily-mobile-day-card rounded-2xl border shadow-sm ${statusCardClass(day.status)} ${
                         isSelected ? "ring-2 ring-ring ring-offset-1" : ""
                       }`}
                     >
                       <button
                         type="button"
-                        className="w-full rounded-[inherit] px-3 py-3.5 text-left transition-colors hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+                        className="collection-daily-day-button w-full rounded-[inherit] px-3 py-3.5 text-left transition-colors hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
                         aria-label={`${formatDateDDMMYYYY(day.date)} - ${statusLabel(day.status)} - Collected ${formatAmountRM(day.amount)} - Target ${formatAmountRM(day.target)}${isSelected ? " - Selected" : ""}`}
                         onClick={() => onSelectDate(day.date)}
                         data-testid={`collection-daily-day-${day.day}`}
@@ -161,11 +162,11 @@ export function CollectionDailyCalendarCard({
                         </div>
 
                         <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
-                          <div className="rounded-xl border border-border/50 bg-background/70 px-3 py-2">
+                          <div className="collection-daily-day-metric rounded-xl border border-border/50 bg-background/70 px-3 py-2">
                             <p className="uppercase tracking-[0.12em] text-muted-foreground">Collected</p>
                             <p className="mt-1 text-sm font-semibold text-foreground">{formatAmountRM(day.amount)}</p>
                           </div>
-                          <div className="rounded-xl border border-border/50 bg-background/70 px-3 py-2">
+                          <div className="collection-daily-day-metric rounded-xl border border-border/50 bg-background/70 px-3 py-2">
                             <p className="uppercase tracking-[0.12em] text-muted-foreground">Target</p>
                             <p className="mt-1 text-sm font-semibold text-foreground">{formatAmountRM(day.target)}</p>
                           </div>
@@ -219,7 +220,7 @@ export function CollectionDailyCalendarCard({
             )}
 
             {canManage && isMobile && selectedDay && selectedEditableDay ? (
-              <div className="space-y-3 rounded-2xl border border-border/60 bg-background p-4 shadow-sm" data-floating-ai-avoid="true">
+              <div className="collection-daily-mobile-edit-panel space-y-3 rounded-2xl border border-border/60 bg-background p-4 shadow-sm" data-floating-ai-avoid="true">
                   <div className="space-y-1">
                     <p className="text-sm font-semibold">
                       Edit {formatDateDDMMYYYY(selectedDay.date)}

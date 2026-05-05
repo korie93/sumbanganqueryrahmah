@@ -16,18 +16,19 @@ export function CollectionDailyFiltersCard({
   return (
     <OperationalSectionCard
       title={
-        <span className="flex items-center gap-2" data-testid="collection-daily-title">
-          <CalendarDays className="h-5 w-5" />
+        <span className="collection-daily-title flex items-center gap-2" data-testid="collection-daily-title">
+          <CalendarDays className="collection-daily-title-icon h-5 w-5" />
           Collection Daily
         </span>
       }
       description="Set month, staff scope, and working-day targets from one compact workspace."
-      contentClassName="space-y-4"
+      className="collection-daily-filters-card"
+      contentClassName="collection-daily-filters-content space-y-4"
       actions={
         <Button
           type="button"
           variant="outline"
-          className={isMobile ? "h-11 w-full rounded-xl sm:w-auto" : "h-11 rounded-xl"}
+          className={isMobile ? "collection-daily-refresh-button h-11 w-full rounded-xl sm:w-auto" : "collection-daily-refresh-button h-11 rounded-xl"}
           onClick={onRefresh}
           disabled={loadingOverview}
           data-testid="collection-daily-refresh"

@@ -56,12 +56,160 @@
   background: hsl(215 16% 47%);
 }
 
+.collection-day-record-card {
+  border: 1px solid hsl(var(--border) / 0.62);
+  background:
+    linear-gradient(180deg, hsl(var(--background) / 1), hsl(var(--muted) / 0.12));
+  box-shadow: 0 10px 22px hsl(215 28% 11% / 0.06);
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.collection-day-record-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.collection-day-record-title {
+  overflow-wrap: anywhere;
+  font-weight: 700;
+  line-height: 1.3;
+  color: hsl(var(--foreground));
+}
+
+.collection-day-record-account {
+  overflow-wrap: anywhere;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  color: hsl(var(--muted-foreground));
+}
+
+.collection-day-record-amount {
+  display: inline-flex;
+  min-height: 1.875rem;
+  flex-shrink: 0;
+  align-items: center;
+  border-radius: 999px;
+  border: 1px solid hsl(var(--primary) / 0.18);
+  background: hsl(var(--primary) / 0.08);
+  padding: 0.25rem 0.7rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: hsl(var(--primary));
+}
+
+.collection-day-record-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.collection-day-record-meta-pill {
+  display: inline-flex;
+  min-height: 1.8rem;
+  max-width: 100%;
+  align-items: center;
+  gap: 0.35rem;
+  border-radius: 999px;
+  border: 1px solid hsl(var(--border) / 0.56);
+  background: hsl(var(--muted) / 0.16);
+  padding: 0.25rem 0.65rem;
+  font-size: 0.72rem;
+  color: hsl(var(--muted-foreground));
+}
+
+.collection-day-record-meta-label {
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.collection-day-record-meta-value {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+  color: hsl(var(--foreground));
+}
+
+.collection-day-receipts-panel {
+  display: grid;
+  gap: 0.5rem;
+  border-top: 1px solid hsl(var(--border) / 0.48);
+  padding-top: 0.75rem;
+}
+
+.collection-day-receipt-count {
+  display: inline-flex;
+  min-width: 1.75rem;
+  min-height: 1.4rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: hsl(var(--muted) / 0.55);
+  padding: 0.15rem 0.5rem;
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: hsl(var(--muted-foreground));
+}
+
+.collection-day-receipt-empty {
+  border-radius: 0.9rem;
+  border: 1px dashed hsl(var(--border) / 0.68);
+  background: hsl(var(--muted) / 0.1);
+  padding: 0.65rem 0.75rem;
+  font-size: 0.75rem;
+  color: hsl(var(--muted-foreground));
+}
+
+.collection-day-receipt-button {
+  height: auto;
+  min-height: 3rem;
+  width: 100%;
+  justify-content: flex-start;
+  gap: 0.7rem;
+  border-radius: 0.9rem;
+  padding: 0.6rem 0.7rem;
+  text-align: left;
+}
+
+.collection-day-receipt-icon {
+  display: inline-flex;
+  width: 2rem;
+  height: 2rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: hsl(var(--primary) / 0.1);
+  color: hsl(var(--primary));
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .collection-day-record-card:hover {
+    border-color: hsl(var(--primary) / 0.2);
+    box-shadow: 0 14px 26px hsl(215 28% 11% / 0.08);
+  }
+
+  .collection-day-receipt-button:hover .collection-day-receipt-icon {
+    background: hsl(var(--primary) / 0.16);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .collection-day-target-progress::-webkit-progress-value {
     transition: none;
   }
 
   .collection-day-target-progress::-moz-progress-bar {
+    transition: none;
+  }
+
+  .collection-day-record-card {
     transition: none;
   }
 }

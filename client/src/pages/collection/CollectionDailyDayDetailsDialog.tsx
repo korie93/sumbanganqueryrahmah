@@ -16,6 +16,7 @@ import { formatDateDDMMYYYY, formatDateTimeDDMMYYYY } from "@/lib/date-format";
 import { cn } from "@/lib/utils";
 import { statusLabel, statusTextClass } from "@/pages/collection/CollectionDailyShared";
 import { buildCollectionDailyReceiptKey } from "@/pages/collection/useCollectionDailyReceiptViewer";
+import { formatCollectionReceiptFileSize } from "@/pages/collection/useCollectionReceiptDraftPreviews";
 import { formatAmountRM } from "@/pages/collection/utils";
 import "./CollectionDailyDayDetailsDialog.css";
 
@@ -33,6 +34,9 @@ type CollectionDailyDayDetailsDialogProps = {
 
 type CollectionDayStatus = CollectionDailyDayDetailsResponse["status"];
 type CollectionDayMetricTone = "default" | "success" | "warning" | "danger";
+type CollectionDailyDayRecord = CollectionDailyDayDetailsResponse["records"][number];
+type CollectionDailyDayReceipt = CollectionDailyDayRecord["receipts"][number];
+type CollectionDailyReceiptOpenHandler = CollectionDailyDayDetailsDialogProps["onViewReceipt"];
 
 function resolveTargetProgressPercent(amount: number, target: number) {
   if (target <= 0) {
@@ -106,6 +110,131 @@ function CollectionRecordDetail({
   );
 }
 
+function CollectionRecordMetaPill({
+  label,
+  value,
+}: {
+  label: string;
+  value: string;
+}) {
+  return (
+    <span className="collection-day-record-meta-pill">
+      <span className="collection-day-record-meta-label">{label}</span>
+      <span className="collection-day-record-meta-value">{value}</span>
+    </span>
+  );
+}
+
+function CollectionRecordHeader({ record }: { record: CollectionDailyDayRecord }) {
+  return (
+    <div className="collection-day-record-header">
+      <div className="min-w-0 space-y-1">
+        <p className="collection-day-record-title">{record.customerName}</p>
+        <p className="collection-day-record-account">{record.accountNumber}</p>
+      </div>
+      <span className="collection-day-record-amount">{formatAmountRM(record.amount)}</span>
+    </div>
+  );
+}
+
+function CollectionRecordMeta({ record }: { record: CollectionDailyDayRecord }) {
+  return (
+    <div className="collection-day-record-meta">
+      <CollectionRecordMetaPill label="User" value={record.username} />
+      <CollectionRecordMetaPill label="Nickname" value={record.collectionStaffNickname} />
+      <CollectionRecordMetaPill label="Batch" value={record.batch} />
+    </div>
+  );
+}
+
+function CollectionRecordDetailsGrid({ record }: { record: CollectionDailyDayRecord }) {
+  return (
+    <div className="grid gap-2 text-sm md:grid-cols-3">
+      <CollectionRecordDetail label="Reference" value={record.paymentReference} />
+      <CollectionRecordDetail label="Payment Date" value={formatDateDDMMYYYY(record.paymentDate)} />
+      <CollectionRecordDetail label="Created" value={formatDateTimeDDMMYYYY(record.createdAt)} />
+    </div>
+  );
+}
+
+function getReceiptTypeLabel(receipt: CollectionDailyDayReceipt) {
+  const mimeType = receipt.originalMimeType.toLowerCase();
+  if (mimeType.includes("pdf") || receipt.originalFileName.toLowerCase().endsWith(".pdf")) {
+    return "PDF";
+  }
+  if (mimeType.startsWith("image/")) {
+    return "Image";
+  }
+  return "File";
+}
+
+function CollectionStoredReceipts({
+  loadingReceiptKey,
+  onViewReceipt,
+  record,
+}: {
+  loadingReceiptKey: string | null;
+  onViewReceipt: CollectionDailyReceiptOpenHandler;
+  record: CollectionDailyDayRecord;
+}) {
+  return (
+    <section className="collection-day-receipts-panel" aria-label={`Stored receipts for ${record.customerName}`}>
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          <FileText className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+          <span>Stored Receipts</span>
+        </div>
+        {record.receipts.length > 0 ? (
+          <span className="collection-day-receipt-count">
+            {record.receipts.length}
+          </span>
+        ) : null}
+      </div>
+
+      {record.receipts.length === 0 ? (
+        <div className="collection-day-receipt-empty">
+          No stored receipt for this record.
+        </div>
+      ) : (
+        <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3" data-floating-ai-avoid="true">
+          {record.receipts.map((receipt) => {
+            const key = buildCollectionDailyReceiptKey(record.id, receipt.id);
+            const isLoadingReceipt = loadingReceiptKey === key;
+            const receiptTypeLabel = getReceiptTypeLabel(receipt);
+
+            return (
+              <Button
+                key={receipt.id}
+                type="button"
+                size="sm"
+                variant="outline"
+                className="collection-day-receipt-button"
+                aria-label={`View stored receipt ${receipt.originalFileName} for ${record.customerName}`}
+                disabled={isLoadingReceipt}
+                onClick={() => onViewReceipt(record, receipt.id)}
+              >
+                <span className="collection-day-receipt-icon" aria-hidden="true">
+                  {isLoadingReceipt ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Eye className="h-3.5 w-3.5" />
+                  )}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate font-medium">{receipt.originalFileName}</span>
+                  <span className="block truncate text-[11px] font-normal text-muted-foreground">
+                    {receiptTypeLabel} · {formatCollectionReceiptFileSize(receipt.fileSize)}
+                  </span>
+                </span>
+              </Button>
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
+}
+
 export function CollectionDailyDayDetailsDialog({
   open,
   selectedDate,
@@ -123,6 +252,15 @@ export function CollectionDailyDayDetailsDialog({
   const targetProgressPercent = dayDetails
     ? resolveTargetProgressPercent(dayDetails.amount, dayDetails.dailyTarget)
     : 0;
+  const recordRangeLabel = dayDetails && dayDetails.pagination.totalRecords > 0
+    ? `Showing ${Math.min(
+      dayDetails.pagination.totalRecords,
+      (dayDetails.pagination.page - 1) * dayDetails.pagination.pageSize + 1,
+    )}-${Math.min(
+      dayDetails.pagination.totalRecords,
+      (dayDetails.pagination.page - 1) * dayDetails.pagination.pageSize + dayDetails.records.length,
+    )} of ${dayDetails.pagination.totalRecords} records`
+    : "No records";
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -236,101 +374,16 @@ export function CollectionDailyDayDetailsDialog({
                 dayDetails.records.map((record) => (
                   <div
                     key={record.id}
-                    className={`space-y-3 border border-border/60 bg-background shadow-sm ${
-                      isMobile ? "rounded-2xl p-3.5" : "rounded-xl p-3"
-                    }`}
+                    className={cn("collection-day-record-card space-y-3", isMobile ? "rounded-2xl p-3.5" : "rounded-xl p-3.5")}
                   >
-                    {isMobile ? (
-                      <>
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0 space-y-1">
-                            <p className="break-words font-semibold">{record.customerName}</p>
-                            <p className="break-words text-xs text-muted-foreground">{record.accountNumber}</p>
-                          </div>
-                          <span className="shrink-0 rounded-full border border-border/50 bg-background/80 px-2.5 py-1 text-xs font-semibold">
-                            {formatAmountRM(record.amount)}
-                          </span>
-                        </div>
-
-                        <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
-                          <span className="rounded-full border border-border/50 bg-muted/15 px-2.5 py-1">
-                            User {record.username}
-                          </span>
-                          <span className="rounded-full border border-border/50 bg-muted/15 px-2.5 py-1">
-                            Nickname {record.collectionStaffNickname}
-                          </span>
-                          <span className="rounded-full border border-border/50 bg-muted/15 px-2.5 py-1">
-                            Batch {record.batch}
-                          </span>
-                        </div>
-
-                        <div className="grid gap-2 text-sm">
-                          <CollectionRecordDetail label="Reference" value={record.paymentReference} />
-                          <CollectionRecordDetail label="Payment Date" value={formatDateDDMMYYYY(record.paymentDate)} />
-                          <CollectionRecordDetail label="Created" value={formatDateTimeDDMMYYYY(record.createdAt)} />
-                        </div>
-                      </>
-                    ) : (
-                      <div className="grid gap-2 text-sm md:grid-cols-2 xl:grid-cols-3">
-                        <CollectionRecordDetail label="Customer" value={record.customerName} />
-                        <CollectionRecordDetail label="Account" value={record.accountNumber} />
-                        <CollectionRecordDetail label="Amount" value={formatAmountRM(record.amount)} />
-                        <CollectionRecordDetail label="User" value={record.username} />
-                        <CollectionRecordDetail label="Nickname" value={record.collectionStaffNickname} />
-                        <CollectionRecordDetail label="Reference" value={record.paymentReference} />
-                        <CollectionRecordDetail label="Batch" value={record.batch} />
-                        <CollectionRecordDetail label="Date" value={formatDateDDMMYYYY(record.paymentDate)} />
-                        <CollectionRecordDetail label="Created" value={formatDateTimeDDMMYYYY(record.createdAt)} />
-                      </div>
-                    )}
-
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                          <FileText className="h-3.5 w-3.5" aria-hidden="true" />
-                          <span>Stored Receipts</span>
-                        </div>
-                        {record.receipts.length > 0 ? (
-                          <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
-                            {record.receipts.length}
-                          </span>
-                        ) : null}
-                      </div>
-                      {record.receipts.length === 0 ? (
-                        <div className="rounded-xl border border-dashed border-border/60 bg-muted/10 px-3 py-2 text-xs text-muted-foreground">
-                          No stored receipt.
-                        </div>
-                      ) : (
-                        <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3" data-floating-ai-avoid="true">
-                          {record.receipts.map((receipt) => {
-                            const key = buildCollectionDailyReceiptKey(record.id, receipt.id);
-                            return (
-                              <Button
-                                key={receipt.id}
-                                type="button"
-                                size="sm"
-                                variant="outline"
-                                className="h-auto min-h-11 w-full justify-start rounded-xl px-3 py-2 text-left"
-                                disabled={loadingReceiptKey === key}
-                                onClick={() => onViewReceipt(record, receipt.id)}
-                              >
-                                {loadingReceiptKey === key ? (
-                                  <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
-                                ) : (
-                                  <Eye className="h-3.5 w-3.5 shrink-0" />
-                                )}
-                                <span className="min-w-0">
-                                  <span className="block truncate">{receipt.originalFileName}</span>
-                                  <span className="block text-[11px] font-normal text-muted-foreground">
-                                    View stored receipt
-                                  </span>
-                                </span>
-                              </Button>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
+                    <CollectionRecordHeader record={record} />
+                    <CollectionRecordMeta record={record} />
+                    <CollectionRecordDetailsGrid record={record} />
+                    <CollectionStoredReceipts
+                      loadingReceiptKey={loadingReceiptKey}
+                      onViewReceipt={onViewReceipt}
+                      record={record}
+                    />
                   </div>
                 ))
               )}
@@ -343,8 +396,7 @@ export function CollectionDailyDayDetailsDialog({
               data-floating-ai-avoid="true"
             >
               <div className={`text-muted-foreground ${isMobile ? "text-xs" : ""}`}>
-                Page {dayDetails.pagination.page} of {dayDetails.pagination.totalPages} | Records{" "}
-                {dayDetails.pagination.totalRecords}
+                {recordRangeLabel} · Page {dayDetails.pagination.page} of {dayDetails.pagination.totalPages}
               </div>
               <div className="flex flex-col gap-2 sm:flex-row">
                 <Button
