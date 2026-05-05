@@ -12,6 +12,7 @@ import type { EditableCalendarDay } from "@/pages/collection/CollectionDailyShar
 
 type CollectionDailyUserFilterControlProps = {
   triggerId: string;
+  triggerLabelId?: string;
   userPopoverOpen: boolean;
   onUserPopoverOpenChange: (open: boolean) => void;
   loadingUsers: boolean;
@@ -28,6 +29,7 @@ type CollectionDailyUserFilterControlProps = {
 
 export function CollectionDailyUserFilterControl({
   triggerId,
+  triggerLabelId,
   userPopoverOpen,
   onUserPopoverOpenChange,
   loadingUsers,
@@ -43,6 +45,7 @@ export function CollectionDailyUserFilterControl({
 }: CollectionDailyUserFilterControlProps) {
   const isMobile = useIsMobile();
   const [searchValue, setSearchValue] = useState("");
+  const triggerValueId = `${triggerId}-value`;
 
   useEffect(() => {
     if (!userPopoverOpen) {
@@ -73,9 +76,10 @@ export function CollectionDailyUserFilterControl({
           disabled={loadingUsers}
           aria-expanded={userPopoverOpen}
           aria-haspopup="dialog"
+          aria-labelledby={triggerLabelId ? `${triggerLabelId} ${triggerValueId}` : undefined}
           data-testid="collection-daily-user-trigger"
         >
-          <span className="truncate text-left">{selectedUsersLabel}</span>
+          <span id={triggerValueId} className="truncate text-left">{selectedUsersLabel}</span>
           {loadingUsers ? (
             <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
           ) : (

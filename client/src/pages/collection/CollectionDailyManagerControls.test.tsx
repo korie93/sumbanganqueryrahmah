@@ -8,6 +8,7 @@ test("CollectionDailyUserFilterControl renders a searchable solid picker", () =>
   const markup = renderToStaticMarkup(
     createElement(CollectionDailyUserFilterControl, {
       triggerId: "collection-daily-user-trigger",
+      triggerLabelId: "collection-daily-user-label",
       userPopoverOpen: true,
       onUserPopoverOpenChange: () => undefined,
       loadingUsers: false,
@@ -28,6 +29,8 @@ test("CollectionDailyUserFilterControl renders a searchable solid picker", () =>
 
   assert.match(markup, /aria-haspopup="dialog"/);
   assert.match(markup, /aria-expanded="true"/);
+  assert.match(markup, /aria-labelledby="collection-daily-user-label collection-daily-user-trigger-value"/);
+  assert.match(markup, /id="collection-daily-user-trigger-value"/);
   assert.match(markup, /ALPHA \+1/);
   assert.match(markup, /bg-background text-left shadow-sm h-11 rounded-xl px-4/);
 });

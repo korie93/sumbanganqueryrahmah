@@ -29,43 +29,55 @@ export function CollectionDailyStaffScopeField({
   const fallbackClassName = isMobile ? "h-12 rounded-2xl" : "h-11 rounded-xl";
   const readOnlyClassName = isMobile ? "h-12 rounded-2xl bg-background" : "h-11 rounded-xl bg-background";
   const fieldId = "collection-daily-current-username";
+  const fieldLabelId = `${fieldId}-label`;
 
   return (
     <div className="space-y-2">
-      <Label htmlFor={fieldId}>Staff Nickname</Label>
       {canManage ? (
-        <Suspense
-          fallback={(
-            <div
-              className={`animate-pulse border border-border/60 bg-muted/20 ${fallbackClassName}`}
+        <>
+          <span
+            id={fieldLabelId}
+            className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+          >
+            Staff Nickname
+          </span>
+          <Suspense
+            fallback={(
+              <div
+                className={`animate-pulse border border-border/60 bg-muted/20 ${fallbackClassName}`}
+              />
+            )}
+          >
+            <CollectionDailyUserFilterControl
+              triggerId={fieldId}
+              triggerLabelId={fieldLabelId}
+              userPopoverOpen={userPopoverOpen}
+              onUserPopoverOpenChange={onUserPopoverOpenChange}
+              loadingUsers={loadingUsers}
+              selectedUsersLabel={selectedUsersLabel}
+              users={users}
+              selectedUserSet={selectedUserSet}
+              allUsersSelected={allUsersSelected}
+              partiallySelected={partiallySelected}
+              selectedUsernamesCount={selectedUsernamesCount}
+              onToggleSelectedUser={onToggleSelectedUser}
+              onSelectAllUsers={onSelectAllUsers}
+              onClearSelectedUsers={onClearSelectedUsers}
             />
-          )}
-        >
-          <CollectionDailyUserFilterControl
-            triggerId={fieldId}
-            userPopoverOpen={userPopoverOpen}
-            onUserPopoverOpenChange={onUserPopoverOpenChange}
-            loadingUsers={loadingUsers}
-            selectedUsersLabel={selectedUsersLabel}
-            users={users}
-            selectedUserSet={selectedUserSet}
-            allUsersSelected={allUsersSelected}
-            partiallySelected={partiallySelected}
-            selectedUsernamesCount={selectedUsernamesCount}
-            onToggleSelectedUser={onToggleSelectedUser}
-            onSelectAllUsers={onSelectAllUsers}
-            onClearSelectedUsers={onClearSelectedUsers}
-          />
-        </Suspense>
+          </Suspense>
+        </>
       ) : (
-        <Input
-          id={fieldId}
-          name="collectionDailyCurrentUsername"
-          value={currentUsername}
-          readOnly
-          autoComplete="username"
-          className={readOnlyClassName}
-        />
+        <>
+          <Label htmlFor={fieldId}>Staff Nickname</Label>
+          <Input
+            id={fieldId}
+            name="collectionDailyCurrentUsername"
+            value={currentUsername}
+            readOnly
+            autoComplete="username"
+            className={readOnlyClassName}
+          />
+        </>
       )}
     </div>
   );
