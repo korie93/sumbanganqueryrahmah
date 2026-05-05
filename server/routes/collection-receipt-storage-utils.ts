@@ -61,6 +61,10 @@ async function ensurePrivateUploadDirectory(directoryPath: string): Promise<void
   }
 }
 
+export async function ensureCollectionReceiptUploadDirectory(): Promise<void> {
+  await ensurePrivateUploadDirectory(COLLECTION_RECEIPT_DIR);
+}
+
 export function extractReceiptBuffer(receipt: CollectionReceiptPayload): Buffer | null {
   const rawBase64 = String(receipt.contentBase64 || "").trim();
   if (!rawBase64) return null;
@@ -200,7 +204,7 @@ export async function persistCollectionReceiptFile(params: {
   storedReceipt: ReturnType<typeof buildStoredCollectionReceiptMetadata>;
   temporaryFilePath: string;
 }> {
-  await ensurePrivateUploadDirectory(COLLECTION_RECEIPT_DIR);
+  await ensureCollectionReceiptUploadDirectory();
 
   const storedReceipt = buildStoredCollectionReceiptMetadata({
     fileName: params.fileName,
@@ -228,6 +232,8 @@ export async function finalizeStoredCollectionReceiptFile(params: {
   fileName: string;
   signatureType: CollectionReceiptFileType;
 }): Promise<ReturnType<typeof buildStoredCollectionReceiptMetadata>> {
+  await ensureCollectionReceiptUploadDirectory();
+
   const storedReceipt = buildStoredCollectionReceiptMetadata({
     fileName: params.fileName,
     signatureType: params.signatureType,

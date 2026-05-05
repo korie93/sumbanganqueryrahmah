@@ -21,6 +21,7 @@ import {
   validateCollectionReceiptDeclaredMetadata,
 } from "./collection-receipt-save-utils";
 import {
+  ensureCollectionReceiptUploadDirectory,
   finalizeStoredCollectionReceiptFile,
   logCollectionReceiptBestEffortFailure,
   quarantineRejectedCollectionReceipt,
@@ -45,6 +46,8 @@ export async function saveMultipartCollectionReceipt(
   if (fileName.includes(".") && !extensionType) {
     throw new Error("Receipt file extension is not allowed.");
   }
+
+  await ensureCollectionReceiptUploadDirectory();
 
   const storedReceipt = buildStoredCollectionReceiptMetadata({
     fileName,
