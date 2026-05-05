@@ -17,6 +17,7 @@ import { cn } from "@/lib/utils";
 import { statusLabel, statusTextClass } from "@/pages/collection/CollectionDailyShared";
 import { buildCollectionDailyReceiptKey } from "@/pages/collection/useCollectionDailyReceiptViewer";
 import { formatAmountRM } from "@/pages/collection/utils";
+import "./CollectionDailyDayDetailsDialog.css";
 
 type CollectionDailyDayDetailsDialogProps = {
   open: boolean;
@@ -55,10 +56,10 @@ function getStatusPillClass(status: CollectionDayStatus) {
 }
 
 function getProgressBarClass(status: CollectionDayStatus) {
-  if (status === "green") return "bg-emerald-500";
-  if (status === "yellow") return "bg-amber-500";
-  if (status === "red") return "bg-rose-500";
-  return "bg-slate-400";
+  if (status === "green") return "collection-day-target-progress--success";
+  if (status === "yellow") return "collection-day-target-progress--warning";
+  if (status === "red") return "collection-day-target-progress--danger";
+  return "collection-day-target-progress--neutral";
 }
 
 function getMetricToneClass(tone: CollectionDayMetricTone) {
@@ -98,10 +99,10 @@ function CollectionRecordDetail({
   value: string;
 }) {
   return (
-    <div className="min-w-0 rounded-lg border border-border/50 bg-muted/15 px-3 py-2">
+    <dl className="min-w-0 rounded-lg border border-border/50 bg-muted/15 px-3 py-2">
       <dt className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">{label}</dt>
       <dd className="mt-1 break-words font-medium text-foreground">{value}</dd>
-    </div>
+    </dl>
   );
 }
 
@@ -186,19 +187,14 @@ export function CollectionDailyDayDetailsDialog({
                     {targetProgressPercent}% of target
                   </span>
                 </div>
-                <div
-                  className="h-2 overflow-hidden rounded-full bg-muted"
-                  role="progressbar"
+                <progress
+                  className={cn("collection-day-target-progress", getProgressBarClass(dayDetails.status))}
                   aria-label="Daily target progress"
-                  aria-valuemin={0}
-                  aria-valuemax={100}
-                  aria-valuenow={targetProgressPercent}
+                  value={targetProgressPercent}
+                  max={100}
                 >
-                  <div
-                    className={cn("h-full rounded-full transition-[width]", getProgressBarClass(dayDetails.status))}
-                    style={{ width: `${targetProgressPercent}%` }}
-                  />
-                </div>
+                  {targetProgressPercent}% of target
+                </progress>
               </div>
 
               <div className="grid grid-cols-2 gap-2 text-sm lg:grid-cols-4">
@@ -268,29 +264,14 @@ export function CollectionDailyDayDetailsDialog({
                           </span>
                         </div>
 
-                        <dl className="grid gap-2 rounded-xl border border-border/50 bg-muted/15 p-3 text-sm">
-                          <div className="space-y-1">
-                            <dt className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-                              Reference
-                            </dt>
-                            <dd className="break-words">{record.paymentReference}</dd>
-                          </div>
-                          <div className="space-y-1">
-                            <dt className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-                              Payment Date
-                            </dt>
-                            <dd>{formatDateDDMMYYYY(record.paymentDate)}</dd>
-                          </div>
-                          <div className="space-y-1">
-                            <dt className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-                              Created
-                            </dt>
-                            <dd>{formatDateTimeDDMMYYYY(record.createdAt)}</dd>
-                          </div>
-                        </dl>
+                        <div className="grid gap-2 text-sm">
+                          <CollectionRecordDetail label="Reference" value={record.paymentReference} />
+                          <CollectionRecordDetail label="Payment Date" value={formatDateDDMMYYYY(record.paymentDate)} />
+                          <CollectionRecordDetail label="Created" value={formatDateTimeDDMMYYYY(record.createdAt)} />
+                        </div>
                       </>
                     ) : (
-                      <dl className="grid gap-2 text-sm md:grid-cols-2 xl:grid-cols-3">
+                      <div className="grid gap-2 text-sm md:grid-cols-2 xl:grid-cols-3">
                         <CollectionRecordDetail label="Customer" value={record.customerName} />
                         <CollectionRecordDetail label="Account" value={record.accountNumber} />
                         <CollectionRecordDetail label="Amount" value={formatAmountRM(record.amount)} />
@@ -300,7 +281,7 @@ export function CollectionDailyDayDetailsDialog({
                         <CollectionRecordDetail label="Batch" value={record.batch} />
                         <CollectionRecordDetail label="Date" value={formatDateDDMMYYYY(record.paymentDate)} />
                         <CollectionRecordDetail label="Created" value={formatDateTimeDDMMYYYY(record.createdAt)} />
-                      </dl>
+                      </div>
                     )}
 
                     <div className="space-y-2">

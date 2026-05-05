@@ -1,0 +1,67 @@
+.collection-day-target-progress {
+  display: block;
+  width: 100%;
+  height: 0.5rem;
+  overflow: hidden;
+  border: 0;
+  border-radius: 999px;
+  appearance: none;
+  background: hsl(var(--muted) / 1);
+}
+
+.collection-day-target-progress::-webkit-progress-bar {
+  border-radius: 999px;
+  background: hsl(var(--muted) / 1);
+}
+
+.collection-day-target-progress::-webkit-progress-value {
+  border-radius: 999px;
+  transition: width 160ms ease;
+}
+
+.collection-day-target-progress::-moz-progress-bar {
+  border-radius: 999px;
+  transition: width 160ms ease;
+}
+
+.collection-day-target-progress--success::-webkit-progress-value {
+  background: hsl(160 84% 39%);
+}
+
+.collection-day-target-progress--success::-moz-progress-bar {
+  background: hsl(160 84% 39%);
+}
+
+.collection-day-target-progress--warning::-webkit-progress-value {
+  background: hsl(38 92% 50%);
+}
+
+.collection-day-target-progress--warning::-moz-progress-bar {
+  background: hsl(38 92% 50%);
+}
+
+.collection-day-target-progress--danger::-webkit-progress-value {
+  background: hsl(347 77% 50%);
+}
+
+.collection-day-target-progress--danger::-moz-progress-bar {
+  background: hsl(347 77% 50%);
+}
+
+.collection-day-target-progress--neutral::-webkit-progress-value {
+  background: hsl(215 16% 47%);
+}
+
+.collection-day-target-progress--neutral::-moz-progress-bar {
+  background: hsl(215 16% 47%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .collection-day-target-progress::-webkit-progress-value {
+    transition: none;
+  }
+
+  .collection-day-target-progress::-moz-progress-bar {
+    transition: none;
+  }
+}
