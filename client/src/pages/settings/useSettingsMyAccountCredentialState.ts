@@ -74,8 +74,9 @@ export function useSettingsMyAccountCredentialState({
     } catch (error: unknown) {
       toast(buildSettingsMutationErrorToast(error, "Update Failed"));
     } finally {
-      if (!isMountedRef.current) return;
-      setUsernameSaving(false);
+      if (isMountedRef.current) {
+        setUsernameSaving(false);
+      }
     }
   }, [currentUser, isMountedRef, syncCurrentUser, toast, usernameInput, usernameSaving]);
 
@@ -132,8 +133,9 @@ export function useSettingsMyAccountCredentialState({
     } catch (error: unknown) {
       toast(buildSettingsMutationErrorToast(error, "Update Failed"));
     } finally {
-      if (!isMountedRef.current) return;
-      setPasswordSaving(false);
+      if (isMountedRef.current) {
+        setPasswordSaving(false);
+      }
     }
   }, [
     confirmPasswordInput,

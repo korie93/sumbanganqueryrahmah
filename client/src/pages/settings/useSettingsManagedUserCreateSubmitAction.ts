@@ -151,10 +151,9 @@ export function useSettingsManagedUserCreateSubmitAction({
       toast(buildSettingsMutationErrorToast(error, "Create Failed"));
     } finally {
       createManagedUserLockRef.current = false;
-      if (!isMountedRef.current) {
-        return;
+      if (isMountedRef.current) {
+        setCreatingManagedUser(false);
       }
-      setCreatingManagedUser(false);
     }
   }, [
     createDraft,

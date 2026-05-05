@@ -21,8 +21,10 @@ export function useAppShellSessionValidation({
   setUser,
   user,
 }: UseAppShellSessionValidationArgs) {
+  const userSessionKey = user ? `${user.username}:${user.role}` : "";
+
   useEffect(() => {
-    if (!user) return;
+    if (!userSessionKey) return;
     let cancelled = false;
 
     const validateSession = async () => {
@@ -65,5 +67,5 @@ export function useAppShellSessionValidation({
     return () => {
       cancelled = true;
     };
-  }, [applyLoggedOutClientState, setCurrentPage, setUser, user?.role, user?.username]);
+  }, [applyLoggedOutClientState, setCurrentPage, setUser, userSessionKey]);
 }

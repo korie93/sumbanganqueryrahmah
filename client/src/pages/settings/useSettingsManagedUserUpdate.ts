@@ -118,8 +118,9 @@ export function useSettingsManagedUserUpdate({
     } catch (error: unknown) {
       toast(buildSettingsMutationErrorToast(error, "Update Failed"));
     } finally {
-      if (!isMountedRef.current) return;
-      setManagedSaving(false);
+      if (isMountedRef.current) {
+        setManagedSaving(false);
+      }
     }
   }, [
     isMountedRef,

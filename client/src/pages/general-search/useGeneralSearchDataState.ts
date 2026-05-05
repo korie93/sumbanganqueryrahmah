@@ -131,8 +131,9 @@ export function useGeneralSearchDataState({
       if (columnsAbortControllerRef.current === controller) {
         columnsAbortControllerRef.current = null;
       }
-      if (!isMountedRef.current || requestId !== columnsRequestIdRef.current) return;
-      setLoadingColumns(false);
+      if (isMountedRef.current && requestId === columnsRequestIdRef.current) {
+        setLoadingColumns(false);
+      }
     }
   }, []);
 
@@ -184,8 +185,9 @@ export function useGeneralSearchDataState({
         if (searchAbortControllerRef.current === controller) {
           searchAbortControllerRef.current = null;
         }
-        if (!isMountedRef.current || requestId !== searchRequestIdRef.current) return;
-        setLoading(false);
+        if (isMountedRef.current && requestId === searchRequestIdRef.current) {
+          setLoading(false);
+        }
       }
     },
     [configuredSearchResultLimit, query, resultsPerPage, updateSearchResults],
@@ -244,8 +246,9 @@ export function useGeneralSearchDataState({
         if (searchAbortControllerRef.current === controller) {
           searchAbortControllerRef.current = null;
         }
-        if (!isMountedRef.current || requestId !== searchRequestIdRef.current) return;
-        setLoading(false);
+        if (isMountedRef.current && requestId === searchRequestIdRef.current) {
+          setLoading(false);
+        }
       }
     },
     [configuredSearchResultLimit, filters, logic, resultsPerPage, updateSearchResults],

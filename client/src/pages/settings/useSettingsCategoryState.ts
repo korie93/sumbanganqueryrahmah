@@ -43,8 +43,9 @@ export function useSettingsCategoryState({
         variant: "destructive",
       });
     } finally {
-      if (!isMountedRef.current) return;
-      setLoading(false);
+      if (isMountedRef.current) {
+        setLoading(false);
+      }
     }
   }, [isMountedRef, toast]);
 

@@ -139,13 +139,12 @@ export function useDevMailOutboxDataState({
         devMailOutboxAbortControllerRef.current = null;
       }
       if (
-        controller.signal.aborted
-        || !isMountedRef.current
-        || requestId !== devMailOutboxRequestIdRef.current
+        !controller.signal.aborted
+        && isMountedRef.current
+        && requestId === devMailOutboxRequestIdRef.current
       ) {
-        return;
+        setDevMailOutboxLoading(false);
       }
-      setDevMailOutboxLoading(false);
     }
   }, [abortDevMailOutboxRequest, isMountedRef, toast]);
 

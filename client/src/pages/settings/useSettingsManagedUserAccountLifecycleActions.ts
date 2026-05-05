@@ -39,7 +39,7 @@ export function useSettingsManagedUserAccountLifecycleActions({
       return;
     }
 
-    const nextIsBanned = !Boolean(user.isBanned);
+    const nextIsBanned = !user.isBanned;
 
     try {
       await updateManagedUserStatus(normalizedId, {

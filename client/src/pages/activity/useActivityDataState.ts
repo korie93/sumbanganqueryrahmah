@@ -10,10 +10,11 @@ export function useActivityDataState({ canModerateActivity }: UseActivityDataSta
     canModerateActivity,
     filtersRef,
   });
+  const { fetchActivities } = feedState;
 
   const handleApplyFilters = useCallback(() => {
-    void feedState.fetchActivities(true);
-  }, [feedState.fetchActivities]);
+    void fetchActivities(true);
+  }, [fetchActivities]);
 
   return {
     ...feedState,

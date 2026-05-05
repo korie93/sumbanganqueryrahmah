@@ -68,8 +68,9 @@ export function useGeneralSearchExportState({
       );
     } finally {
       exportInFlightRef.current = false;
-      if (!isMountedRef.current) return;
-      setExportingPdf(false);
+      if (isMountedRef.current) {
+        setExportingPdf(false);
+      }
     }
   }, [
     activeFiltersCount,

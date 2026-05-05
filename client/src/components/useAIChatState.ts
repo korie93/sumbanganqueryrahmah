@@ -105,7 +105,17 @@ export function useAIChatState({
       setIsThinking(false);
       setAiStatus("IDLE");
     }
-  }, [abortActiveRequest, clearRetryTimers, clearSlowNoticeTimer, setIsThinking, stopTyping]);
+  }, [
+    abortActiveRequest,
+    clearRequestTimeout,
+    clearRetryTimers,
+    clearSlowNoticeTimer,
+    isMountedRef,
+    processingRef,
+    sessionRef,
+    setIsThinking,
+    stopTyping,
+  ]);
 
   const updateQuery = useCallback((value: string) => {
     const normalized = normalizeAIChatQueryInput(value);
@@ -150,7 +160,7 @@ export function useAIChatState({
       }
       setSlowNotice(true);
     }, 1500);
-  }, [clearSlowNoticeTimer, isMountedRef, processingRef, sessionRef]);
+  }, [clearSlowNoticeTimer, isMountedRef, processingRef, sessionRef, slowNoticeTimerRef]);
 
   const finishAsyncCycle = useCallback((options?: {
     clearStreamingText?: boolean;
@@ -171,7 +181,13 @@ export function useAIChatState({
     }
     clearSlowNoticeTimer();
     clearRequestTimeout();
-  }, [clearRequestTimeout, clearSlowNoticeTimer, setIsThinking]);
+  }, [
+    clearRequestTimeout,
+    clearSlowNoticeTimer,
+    isMountedRef,
+    processingRef,
+    setIsThinking,
+  ]);
 
   const executeSearch = useCallback(async (text: string, sessionId: number, retryCount = 0) => {
     if (!isActiveAIChatSession(sessionId, sessionRef)) {
@@ -283,6 +299,7 @@ export function useAIChatState({
     finishAsyncCycle,
     isMountedRef,
     processingRef,
+    requestControllerRef,
     registerRetryTimer,
     requestTimeoutRef,
     sessionRef,
@@ -335,8 +352,10 @@ export function useAIChatState({
     cancelAISearch,
     executeSearch,
     isMobile,
+    processingRef,
     query,
     setIsThinking,
+    sessionRef,
     startSlowNoticeWatch,
   ]);
 

@@ -34,7 +34,7 @@ export function useCollectionRecordsActions({
         onRefreshRecords(),
         canPurgeOldRecords ? purgeAction.refreshPurgeSummary() : Promise.resolve(),
       ]),
-    [canPurgeOldRecords, onRefreshRecords, purgeAction.refreshPurgeSummary],
+    [canPurgeOldRecords, onRefreshRecords, purgeAction],
   );
   const deleteAction = useCollectionRecordsDeleteAction({
     onAfterDelete: refreshAfterDelete,

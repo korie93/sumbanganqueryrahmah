@@ -59,11 +59,13 @@ export function useCollectionSummaryMonthDialog({
   }, []);
 
   useEffect(() => {
+    const monthRecordsCache = monthRecordsCacheRef.current;
+
     return () => {
       isMountedRef.current = false;
       monthRecordsRequestIdRef.current += 1;
       abortMonthRecordsRequest();
-      monthRecordsCacheRef.current.clear();
+      monthRecordsCache.clear();
     };
   }, [abortMonthRecordsRequest]);
 
@@ -159,11 +161,12 @@ export function useCollectionSummaryMonthDialog({
           monthRecordsAbortControllerRef.current = null;
         }
         if (
-          controller.signal.aborted ||
-          !isMountedRef.current ||
-          requestId !== monthRecordsRequestIdRef.current
-        ) return;
-        setLoadingMonthRecords(false);
+          !controller.signal.aborted &&
+          isMountedRef.current &&
+          requestId === monthRecordsRequestIdRef.current
+        ) {
+          setLoadingMonthRecords(false);
+        }
       }
     },
     [abortMonthRecordsRequest, toast],

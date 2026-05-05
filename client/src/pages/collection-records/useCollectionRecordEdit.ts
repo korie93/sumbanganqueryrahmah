@@ -69,7 +69,7 @@ export function useCollectionRecordEdit({
     setEditAmount("");
     setEditStaffNickname("");
     receiptState.resetReceiptState();
-  }, [receiptState.resetReceiptState]);
+  }, [receiptState]);
 
   const saveAction = useCollectionRecordEditSaveAction({
     editingRecord,
@@ -101,7 +101,7 @@ export function useCollectionRecordEdit({
 
     resetEditState();
     saveAction.resetEditMutationIntent();
-  }, [resetEditState, saveAction.resetEditMutationIntent]);
+  }, [resetEditState, saveAction]);
 
   const openEditDialog = useCallback((record: CollectionRecord) => {
     setEditingRecord(record);
@@ -116,7 +116,7 @@ export function useCollectionRecordEdit({
     receiptState.populateReceiptStateFromRecord(record);
     saveAction.resetEditMutationIntent();
     setEditOpen(true);
-  }, [receiptState.populateReceiptStateFromRecord, saveAction.resetEditMutationIntent]);
+  }, [receiptState, saveAction]);
 
   const editDialog = useMemo(
     () => ({
@@ -175,19 +175,8 @@ export function useCollectionRecordEdit({
       maxPaymentDate,
       nicknameOptions,
       onViewReceipt,
-      receiptState.editExistingReceiptDrafts,
-      receiptState.editNewReceiptFiles,
-      receiptState.editPendingReceiptDrafts,
-      receiptState.editReceiptInputRef,
-      receiptState.editRemovedReceiptIds,
-      receiptState.handleClearPendingReceipts,
-      receiptState.handleEditReceiptChange,
-      receiptState.handleExistingReceiptDraftChange,
-      receiptState.handlePendingReceiptDraftChange,
-      receiptState.handleRemovePendingReceipt,
-      receiptState.handleToggleRemoveExistingReceipt,
-      saveAction.handleSaveEdit,
-      saveAction.savingEdit,
+      receiptState,
+      saveAction,
     ],
   );
 

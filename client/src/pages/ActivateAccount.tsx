@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, BadgeCheck, KeyRound, ShieldAlert } from "lucide-react";
 import { PublicAuthButton, PublicAuthInput } from "@/components/PublicAuthControls";
 import { PublicAuthLayout } from "@/components/PublicAuthLayout";
@@ -43,14 +43,14 @@ export default function ActivateAccountPage({ onBackToLogin }: ActivateAccountPa
   const validationAbortControllerRef = useRef<AbortController | null>(null);
   const activationAbortControllerRef = useRef<AbortController | null>(null);
 
-  const navigateToLogin = () => {
+  const navigateToLogin = useCallback(() => {
     if (onBackToLogin) {
       onBackToLogin();
       return;
     }
 
     window.location.href = "/";
-  };
+  }, [onBackToLogin]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -78,7 +78,7 @@ export default function ActivateAccountPage({ onBackToLogin }: ActivateAccountPa
     return () => {
       window.clearTimeout(timeoutId);
     };
-  }, [activation, phase, onBackToLogin]);
+  }, [activation, navigateToLogin, phase]);
 
   useEffect(() => {
     if (

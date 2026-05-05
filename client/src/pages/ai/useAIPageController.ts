@@ -70,7 +70,7 @@ export function useAIPageController({
       setAiStatus("IDLE");
       setSlowNotice(false);
     }
-  }, [setIsThinking]);
+  }, [isMountedRef, pendingSendRef, processingRef, setIsThinking]);
 
   const appendMessage = useCallback(
     (message: AIChatMessageInput) => {
@@ -90,7 +90,15 @@ export function useAIPageController({
       setGateNotice(null);
     }
     stopProcessingState();
-  }, [abortActiveRequest, clearRetryTimers, clearSlowNoticeTimer, stopProcessingState, stopTyping]);
+  }, [
+    abortActiveRequest,
+    clearRetryTimers,
+    clearSlowNoticeTimer,
+    isMountedRef,
+    sessionRef,
+    stopProcessingState,
+    stopTyping,
+  ]);
 
   const updateQuery = useCallback((value: string) => {
     const normalized = normalizeAIChatQueryInput(value);
@@ -117,7 +125,7 @@ export function useAIPageController({
       isMountedRef.current = false;
       cancelAI();
     };
-  }, [cancelAI]);
+  }, [cancelAI, isMountedRef]);
 
   useEffect(() => {
     const onReset = () => {
@@ -152,7 +160,7 @@ export function useAIPageController({
         setSlowNotice(true);
       }, 1500);
     },
-    [clearSlowNoticeTimer],
+    [clearSlowNoticeTimer, isMountedRef, processingRef, sessionRef, slowNoticeTimerRef],
   );
 
   const startTyping = useAIPageTypingAction({
@@ -308,7 +316,13 @@ export function useAIPageController({
     [
       abortActiveRequest,
       appendMessage,
+      isMountedRef,
+      pendingSendRef,
+      processingRef,
+      requestControllerRef,
+      retryTimersRef,
       setIsThinking,
+      sessionRef,
       startSlowNoticeWatch,
       startTyping,
       stopProcessingState,
@@ -326,7 +340,7 @@ export function useAIPageController({
     }
     setQuery("");
     await sendQuery(trimmed);
-  }, [aiEnabled, query, sendQuery]);
+  }, [aiEnabled, pendingSendRef, processingRef, query, sendQuery]);
 
   const statusContent = useMemo<AIPageStatusContent>(() => {
     return getAIPageStatusContent(aiStatus);

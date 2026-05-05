@@ -218,13 +218,12 @@ export function useCollectionReceiptPreview() {
           receiptPreviewAbortControllerRef.current = null;
         }
         if (
-          controller.signal.aborted ||
-          !isMountedRef.current ||
-          activeRequestId !== receiptPreviewRequestIdRef.current
+          !controller.signal.aborted &&
+          isMountedRef.current &&
+          activeRequestId === receiptPreviewRequestIdRef.current
         ) {
-          return;
+          setReceiptPreviewLoading(false);
         }
-        setReceiptPreviewLoading(false);
       }
     };
 
@@ -272,8 +271,9 @@ export function useCollectionReceiptPreview() {
       if (receiptDownloadAbortControllerRef.current === controller) {
         receiptDownloadAbortControllerRef.current = null;
       }
-      if (!isMountedRef.current) return;
-      setReceiptPreviewDownloading(false);
+      if (isMountedRef.current) {
+        setReceiptPreviewDownloading(false);
+      }
     }
   }, [
     abortReceiptDownloadRequest,

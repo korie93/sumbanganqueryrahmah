@@ -142,8 +142,8 @@ test("CollectionMonthlyComparisonPanel renders monthly totals and comparison sum
   assert.match(markup, /Collection increased by RM12,450\.00 \(\+17\.67%\) compared to Apr 2026\./);
   assert.match(markup, /Apr 2026 Total/);
   assert.match(markup, /May 2026 Total/);
-  assert.match(markup, /\+RM(?:&nbsp;| | )12,450\.00/);
+  assert.match(markup, /\+RM(?:&nbsp;|\u00a0| )12,450\.00/);
   assert.match(markup, /\+17\.67%/);
-  assert.match(markup, /Avg RM(?:&nbsp;| | )572\.76/);
+  assert.match(markup, /Avg RM(?:&nbsp;|\u00a0| )572\.76/);
   assert.match(markup, /chart slot/);
 });

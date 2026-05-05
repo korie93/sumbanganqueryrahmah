@@ -84,11 +84,12 @@ export function useSettingsBootstrap({
           bootstrapAbortControllerRef.current = null;
         }
         if (
-          controller.signal.aborted ||
-          !isMountedRef.current ||
-          requestId !== bootstrapRequestIdRef.current
-        ) return;
-        setProfileLoading(false);
+          !controller.signal.aborted &&
+          isMountedRef.current &&
+          requestId === bootstrapRequestIdRef.current
+        ) {
+          setProfileLoading(false);
+        }
       }
     };
 

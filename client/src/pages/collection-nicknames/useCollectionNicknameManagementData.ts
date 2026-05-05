@@ -163,8 +163,9 @@ export function useCollectionNicknameManagementData({
         variant: "destructive",
       });
     } finally {
-      if (!isMountedRef.current || requestId !== groupsRequestIdRef.current) return;
-      setLoadingGroups(false);
+      if (isMountedRef.current && requestId === groupsRequestIdRef.current) {
+        setLoadingGroups(false);
+      }
     }
   }, [isSuperuser, toast]);
 
@@ -184,8 +185,9 @@ export function useCollectionNicknameManagementData({
         variant: "destructive",
       });
     } finally {
-      if (!isMountedRef.current || requestId !== nicknamesRequestIdRef.current) return;
-      setLoadingNicknames(false);
+      if (isMountedRef.current && requestId === nicknamesRequestIdRef.current) {
+        setLoadingNicknames(false);
+      }
     }
   }, [isSuperuser, toast]);
 

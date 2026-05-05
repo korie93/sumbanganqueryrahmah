@@ -237,7 +237,7 @@ function parseFilenameFromContentDisposition(contentDisposition: string | null):
     }
   }
 
-  const fallbackMatch = raw.match(/filename=\"?([^\";]+)\"?/i);
+  const fallbackMatch = raw.match(/filename="?([^";]+)"?/i);
   if (!fallbackMatch?.[1]) return null;
   const normalized = fallbackMatch[1].trim();
   return normalized || null;

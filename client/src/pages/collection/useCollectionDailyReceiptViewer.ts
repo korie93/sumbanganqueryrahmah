@@ -209,14 +209,13 @@ export function useCollectionDailyReceiptViewer(): UseCollectionDailyReceiptView
           previewAbortControllerRef.current = null;
         }
         if (
-          controller.signal.aborted ||
-          !isMountedRef.current ||
-          activeRequestId !== previewRequestIdRef.current
+          !controller.signal.aborted &&
+          isMountedRef.current &&
+          activeRequestId === previewRequestIdRef.current
         ) {
-          return;
+          setReceiptPreviewLoading(false);
+          setLoadingReceiptKey(null);
         }
-        setReceiptPreviewLoading(false);
-        setLoadingReceiptKey(null);
       }
     };
 
@@ -264,8 +263,9 @@ export function useCollectionDailyReceiptViewer(): UseCollectionDailyReceiptView
       if (downloadAbortControllerRef.current === controller) {
         downloadAbortControllerRef.current = null;
       }
-      if (!isMountedRef.current) return;
-      setReceiptPreviewDownloading(false);
+      if (isMountedRef.current) {
+        setReceiptPreviewDownloading(false);
+      }
     }
   }, [
     abortDownloadRequest,

@@ -196,7 +196,7 @@ export function useViewerPageState({
         onClearSearch: () => data.handleSearchChange(""),
         onRemoveFilter: data.removeFilter,
       }),
-    [data.activeColumnFilters, data.handleSearchChange, data.removeFilter, data.search],
+    [data],
   );
 
   return {

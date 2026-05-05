@@ -173,10 +173,9 @@ export function useCollectionMonthlyComparisonData({
       if (abortControllerRef.current === controller) {
         abortControllerRef.current = null;
       }
-      if (!isMountedRef.current || requestId !== requestIdRef.current) {
-        return;
+      if (isMountedRef.current && requestId === requestIdRef.current) {
+        setLoading(false);
       }
-      setLoading(false);
     }
   }, [abortRequest]);
 

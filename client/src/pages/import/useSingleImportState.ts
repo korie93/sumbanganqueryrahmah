@@ -173,7 +173,7 @@ export function useSingleImportState({
         setLoading(false);
       }
     }
-  }, [file?.name, importName, loading, onNavigate, parsedData, resetSingleImport, toast]);
+  }, [file, importName, loading, onNavigate, parsedData, resetSingleImport, toast]);
 
   const resetSingleForInactiveTab = useCallback(() => {
     invalidateSinglePreview();

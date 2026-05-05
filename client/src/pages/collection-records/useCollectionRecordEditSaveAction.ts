@@ -231,10 +231,9 @@ export function useCollectionRecordEditSaveAction({
       });
     } finally {
       savingEditInFlightRef.current = false;
-      if (!isMountedRef.current) {
-        return;
+      if (isMountedRef.current) {
+        setSavingEdit(false);
       }
-      setSavingEdit(false);
     }
   }, [
     accountNumber,

@@ -52,6 +52,16 @@ export function BulkImportPanel({
       <div
         onDrop={onBulkDrop}
         onDragOver={onBulkDragOver}
+        onKeyDown={(event) => {
+          if (bulkProcessing || (event.key !== "Enter" && event.key !== " ")) {
+            return;
+          }
+          event.preventDefault();
+          bulkInputRef.current?.click();
+        }}
+        role="button"
+        tabIndex={bulkProcessing ? -1 : 0}
+        aria-label="Select bulk import files"
         className={`rounded-xl border-2 border-dashed border-slate-300 p-5 text-center transition-colors dark:border-slate-600 sm:p-8 ${
           bulkProcessing ? "cursor-not-allowed opacity-70" : "cursor-pointer hover:border-primary"
         }`}

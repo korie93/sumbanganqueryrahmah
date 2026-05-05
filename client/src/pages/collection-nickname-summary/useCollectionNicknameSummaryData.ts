@@ -101,11 +101,13 @@ export function useCollectionNicknameSummaryData({
   }, []);
 
   useEffect(() => {
+    const summaryCache = summaryCacheRef.current;
+
     return () => {
       isMountedRef.current = false;
       abortNicknamesRequest();
       abortSummaryRequest();
-      summaryCacheRef.current.clear();
+      summaryCache.clear();
     };
   }, [abortNicknamesRequest, abortSummaryRequest]);
 
@@ -169,8 +171,9 @@ export function useCollectionNicknameSummaryData({
       if (nicknamesAbortControllerRef.current === controller) {
         nicknamesAbortControllerRef.current = null;
       }
-      if (!isMountedRef.current || requestId !== nicknamesRequestIdRef.current) return;
-      setLoadingNicknames(false);
+      if (isMountedRef.current && requestId === nicknamesRequestIdRef.current) {
+        setLoadingNicknames(false);
+      }
     }
   }, [abortNicknamesRequest, canAccess, toast]);
 
@@ -275,8 +278,9 @@ export function useCollectionNicknameSummaryData({
         if (summaryAbortControllerRef.current === controller) {
           summaryAbortControllerRef.current = null;
         }
-        if (!isMountedRef.current || requestId !== summaryRequestIdRef.current) return;
-        setLoadingSummary(false);
+        if (isMountedRef.current && requestId === summaryRequestIdRef.current) {
+          setLoadingSummary(false);
+        }
       }
     },
     [abortSummaryRequest, toast],

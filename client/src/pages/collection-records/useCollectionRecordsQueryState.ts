@@ -114,8 +114,9 @@ export function useCollectionRecordsQueryState() {
       if (nicknamesAbortControllerRef.current === controller) {
         nicknamesAbortControllerRef.current = null;
       }
-      if (!isMountedRef.current || requestId !== nicknamesRequestIdRef.current) return;
-      setLoadingNicknames(false);
+      if (isMountedRef.current && requestId === nicknamesRequestIdRef.current) {
+        setLoadingNicknames(false);
+      }
     }
   }, [abortNicknamesRequest, toast]);
 
@@ -237,8 +238,9 @@ export function useCollectionRecordsQueryState() {
         if (recordsAbortControllerRef.current && requestId === recordsRequestIdRef.current) {
           recordsAbortControllerRef.current = null;
         }
-        if (!isMountedRef.current || requestId !== recordsRequestIdRef.current) return;
-        setLoadingRecords(false);
+        if (isMountedRef.current && requestId === recordsRequestIdRef.current) {
+          setLoadingRecords(false);
+        }
       }
     },
     [abortRecordsRequest, toast],

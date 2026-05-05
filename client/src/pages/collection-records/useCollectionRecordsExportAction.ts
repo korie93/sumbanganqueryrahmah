@@ -89,10 +89,9 @@ export function useCollectionRecordsExportAction({
       });
     } finally {
       exportMutationInFlightRef.current = null;
-      if (!isMountedRef.current) {
-        return;
+      if (isMountedRef.current) {
+        setExportingExcel(false);
       }
-      setExportingExcel(false);
     }
   }, [
     canUseNicknameFilter,
@@ -155,10 +154,9 @@ export function useCollectionRecordsExportAction({
       });
     } finally {
       exportMutationInFlightRef.current = null;
-      if (!isMountedRef.current) {
-        return;
+      if (isMountedRef.current) {
+        setExportingPdf(false);
       }
-      setExportingPdf(false);
     }
   }, [
     canUseNicknameFilter,

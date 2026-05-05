@@ -63,10 +63,9 @@ export function useCollectionRecordsPurgeAction({
         variant: "destructive",
       });
     } finally {
-      if (!isMountedRef.current || requestId !== purgeSummaryRequestIdRef.current) {
-        return;
+      if (isMountedRef.current && requestId === purgeSummaryRequestIdRef.current) {
+        setPurgeSummaryLoading(false);
       }
-      setPurgeSummaryLoading(false);
     }
   }, [canPurgeOldRecords, toast]);
 
@@ -136,10 +135,9 @@ export function useCollectionRecordsPurgeAction({
       });
     } finally {
       purgeMutationInFlightRef.current = false;
-      if (!isMountedRef.current) {
-        return;
+      if (isMountedRef.current) {
+        setPurgingOldRecords(false);
       }
-      setPurgingOldRecords(false);
     }
   }, [
     canPurgeOldRecords,

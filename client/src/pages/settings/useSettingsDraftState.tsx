@@ -152,8 +152,9 @@ export function useSettingsDraftState({
         setDraftValues({});
         await loadSettings();
       } finally {
-        if (!isMountedRef.current) return;
-        setSaving(false);
+        if (isMountedRef.current) {
+          setSaving(false);
+        }
       }
     },
     [dirtyKeys, draftValues, isMountedRef, loadSettings, settingMap, toast],

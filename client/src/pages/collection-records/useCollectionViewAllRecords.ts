@@ -93,14 +93,16 @@ export function useCollectionViewAllRecords({
     setViewAllPage(1);
     setViewAllFiltersSnapshot(buildCurrentFilters(searchInput.trim()));
     setViewAllOpen(true);
-  }, [buildCurrentFilters, searchInput, viewAllLoading, viewAllPageSize]);
+  }, [buildCurrentFilters, searchInput, viewAllLoading]);
 
   useEffect(() => {
+    const viewAllCache = viewAllCacheRef.current;
+
     return () => {
       isMountedRef.current = false;
       viewAllRequestIdRef.current += 1;
       abortViewAllRequest();
-      viewAllCacheRef.current.clear();
+      viewAllCache.clear();
     };
   }, [abortViewAllRequest]);
 
@@ -180,11 +182,12 @@ export function useCollectionViewAllRecords({
           viewAllAbortControllerRef.current = null;
         }
         if (
-          controller.signal.aborted ||
-          !isMountedRef.current ||
-          requestId !== viewAllRequestIdRef.current
-        ) return;
-        setViewAllLoading(false);
+          !controller.signal.aborted &&
+          isMountedRef.current &&
+          requestId === viewAllRequestIdRef.current
+        ) {
+          setViewAllLoading(false);
+        }
       }
     };
 

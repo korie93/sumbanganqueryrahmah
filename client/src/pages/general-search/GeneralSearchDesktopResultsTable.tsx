@@ -65,7 +65,7 @@ export function GeneralSearchDesktopResultsTable({
         <tbody>
           {enableVirtualRows && topSpacerHeight > 0 ? (
             <tr aria-hidden="true">
-              <td colSpan={headers.length + 2} height={topSpacerHeight} className="p-0" />
+              <td aria-hidden="true" colSpan={headers.length + 2} height={topSpacerHeight} className="p-0" />
             </tr>
           ) : null}
           {virtualRows.map((row, rowIndex) => {
@@ -113,7 +113,7 @@ export function GeneralSearchDesktopResultsTable({
           })}
           {enableVirtualRows && bottomSpacerHeight > 0 ? (
             <tr aria-hidden="true">
-              <td colSpan={headers.length + 2} height={bottomSpacerHeight} className="p-0" />
+              <td aria-hidden="true" colSpan={headers.length + 2} height={bottomSpacerHeight} className="p-0" />
             </tr>
           ) : null}
         </tbody>

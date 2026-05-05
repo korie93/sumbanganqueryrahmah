@@ -156,15 +156,7 @@ function CollectionRecordsPage({ role }: CollectionRecordsPageProps) {
     }
     return items;
   }, [
-    viewModel.filters.canUseNicknameFilter,
-    viewModel.filters.fromDate,
-    viewModel.filters.nicknameFilter,
-    viewModel.filters.onFromDateChange,
-    viewModel.filters.onNicknameFilterChange,
-    viewModel.filters.onSearchInputChange,
-    viewModel.filters.onToDateChange,
-    viewModel.filters.searchInput,
-    viewModel.filters.toDate,
+    viewModel.filters,
   ]);
   const hasActiveFilters = activeFilterChips.length > 0;
 

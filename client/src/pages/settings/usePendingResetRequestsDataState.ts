@@ -118,13 +118,12 @@ export function usePendingResetRequestsDataState({
           pendingResetRequestsAbortControllerRef.current = null;
         }
         if (
-          controller.signal.aborted
-          || !isMountedRef.current
-          || requestId !== pendingResetRequestsRequestIdRef.current
+          !controller.signal.aborted
+          && isMountedRef.current
+          && requestId === pendingResetRequestsRequestIdRef.current
         ) {
-          return;
+          setPendingResetRequestsLoading(false);
         }
-        setPendingResetRequestsLoading(false);
       }
     },
     [abortPendingResetRequestsRequest, isMountedRef, toast],

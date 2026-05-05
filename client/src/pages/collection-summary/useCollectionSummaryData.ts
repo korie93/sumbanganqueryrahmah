@@ -53,9 +53,11 @@ export function useCollectionSummaryData({
   const [freshness, setFreshness] = useState<CollectionReportFreshness | null>(null);
 
   useEffect(() => {
+    const summaryCache = summaryCacheRef.current;
+
     return () => {
       isMountedRef.current = false;
-      summaryCacheRef.current.clear();
+      summaryCache.clear();
     };
   }, []);
 
@@ -136,8 +138,9 @@ export function useCollectionSummaryData({
           variant: "destructive",
         });
       } finally {
-        if (!isMountedRef.current || requestId !== summaryRequestIdRef.current) return;
-        setLoading(false);
+        if (isMountedRef.current && requestId === summaryRequestIdRef.current) {
+          setLoading(false);
+        }
       }
     },
     [toast],

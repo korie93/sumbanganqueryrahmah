@@ -116,13 +116,12 @@ export function useManagedUsersDataState({
         managedUsersAbortControllerRef.current = null;
       }
       if (
-        controller.signal.aborted
-        || !isMountedRef.current
-        || requestId !== managedUsersRequestIdRef.current
+        !controller.signal.aborted
+        && isMountedRef.current
+        && requestId === managedUsersRequestIdRef.current
       ) {
-        return;
+        setManagedUsersLoading(false);
       }
-      setManagedUsersLoading(false);
     }
   }, [abortManagedUsersRequest, isMountedRef, toast]);
 

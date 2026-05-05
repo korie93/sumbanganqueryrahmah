@@ -201,11 +201,13 @@ export function useCollectionReceiptDraftPreviews(
   const resolveFileIdRef = useRef<(file: File) => string>(createCollectionReceiptDraftFileIdResolver());
 
   useEffect(() => {
+    const previewCache = previewCacheRef.current;
+
     return () => {
-      for (const preview of previewCacheRef.current.values()) {
+      for (const preview of previewCache.values()) {
         revokeCollectionReceiptDraftPreview(preview);
       }
-      previewCacheRef.current.clear();
+      previewCache.clear();
     };
   }, []);
 

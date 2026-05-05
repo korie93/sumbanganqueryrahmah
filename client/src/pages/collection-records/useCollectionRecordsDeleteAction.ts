@@ -106,10 +106,9 @@ export function useCollectionRecordsDeleteAction({
       });
     } finally {
       deleteMutationInFlightRef.current = false;
-      if (!isMountedRef.current) {
-        return;
+      if (isMountedRef.current) {
+        setDeletingId(null);
       }
-      setDeletingId(null);
     }
   }, [deletingId, onAfterDelete, pendingDeleteRecord, toast]);
 

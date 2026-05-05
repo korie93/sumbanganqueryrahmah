@@ -50,10 +50,9 @@ function CollectionMonthlyComparisonPage({
         setNicknameOptions([]);
         setNicknameOptionsError(parseApiError(error));
       } finally {
-        if (disposed) {
-          return;
+        if (!disposed) {
+          setNicknameOptionsLoading(false);
         }
-        setNicknameOptionsLoading(false);
       }
     })();
 

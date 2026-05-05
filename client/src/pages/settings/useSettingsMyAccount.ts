@@ -34,11 +34,12 @@ export function useSettingsMyAccount({
     syncCurrentUser,
     toast,
   });
+  const { setUsernameInput } = credentials;
 
   const hydrateCurrentUser = useCallback((nextUser: CurrentUser) => {
     setCurrentUser(nextUser);
-    credentials.setUsernameInput(nextUser.username);
-  }, [credentials.setUsernameInput]);
+    setUsernameInput(nextUser.username);
+  }, [setUsernameInput]);
 
   return {
     confirmPasswordInput: credentials.confirmPasswordInput,

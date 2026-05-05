@@ -84,8 +84,9 @@ export function useSettingsMyAccountTwoFactorState({
     } catch (error: unknown) {
       toast(buildSettingsMutationErrorToast(error, "2FA Setup Failed"));
     } finally {
-      if (!isMountedRef.current) return;
-      setTwoFactorLoading(false);
+      if (isMountedRef.current) {
+        setTwoFactorLoading(false);
+      }
     }
   }, [currentUser, isMountedRef, syncCurrentUser, toast, twoFactorLoading, twoFactorPasswordInput]);
 
@@ -116,8 +117,9 @@ export function useSettingsMyAccountTwoFactorState({
     } catch (error: unknown) {
       toast(buildSettingsMutationErrorToast(error, "2FA Enable Failed"));
     } finally {
-      if (!isMountedRef.current) return;
-      setTwoFactorLoading(false);
+      if (isMountedRef.current) {
+        setTwoFactorLoading(false);
+      }
     }
   }, [clearTwoFactorSetupState, currentUser, isMountedRef, syncCurrentUser, toast, twoFactorCodeInput, twoFactorLoading]);
 
@@ -160,8 +162,9 @@ export function useSettingsMyAccountTwoFactorState({
     } catch (error: unknown) {
       toast(buildSettingsMutationErrorToast(error, "2FA Disable Failed"));
     } finally {
-      if (!isMountedRef.current) return;
-      setTwoFactorLoading(false);
+      if (isMountedRef.current) {
+        setTwoFactorLoading(false);
+      }
     }
   }, [clearTwoFactorSetupState, currentUser, isMountedRef, syncCurrentUser, toast, twoFactorCodeInput, twoFactorLoading, twoFactorPasswordInput]);
 

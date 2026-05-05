@@ -22,15 +22,17 @@ export function useImportPageState({ onNavigate, importUploadLimitBytes }: Impor
     importUploadLimitBytes: resolvedImportUploadLimitBytes,
     maxUploadSizeLabel,
   });
+  const { resetSingleForInactiveTab } = singleState;
+  const { clearBulkForInactiveTab } = bulkState;
 
   useEffect(() => {
     if (activeTab === "bulk") {
-      singleState.resetSingleForInactiveTab();
+      resetSingleForInactiveTab();
       return;
     }
 
-    bulkState.clearBulkForInactiveTab();
-  }, [activeTab, bulkState.clearBulkForInactiveTab, singleState.resetSingleForInactiveTab]);
+    clearBulkForInactiveTab();
+  }, [activeTab, clearBulkForInactiveTab, resetSingleForInactiveTab]);
 
   return {
     activeTab,
