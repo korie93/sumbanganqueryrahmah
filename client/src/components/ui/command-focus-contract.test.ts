@@ -12,6 +12,7 @@ test("command palette input wrapper exposes a visible keyboard focus indicator",
   assert.match(commandSource, /focus-within:ring-2/)
   assert.match(commandSource, /focus-within:ring-ring/)
   assert.match(commandSource, /focus-within:ring-offset-2/)
+  assert.match(commandSource, /focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2/)
 })
 
 test("command palette items keep focus-visible styling distinct from selection state", () => {
