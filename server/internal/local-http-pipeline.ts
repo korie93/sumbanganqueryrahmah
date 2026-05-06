@@ -5,6 +5,7 @@ import { logger } from "../lib/logger";
 import { runWithRequestContext } from "../lib/request-context";
 import { createCsrfProtectionMiddleware } from "../http/csrf";
 import { createCorsMiddleware } from "../http/cors";
+import { createForwardedForTrustProxyWarningMiddleware } from "../http/forwarded-proxy-warning";
 import { resolveRequestId } from "../http/request-id";
 import { SQR_TRUSTED_TYPES_POLICY_NAME } from "../../shared/trusted-types";
 
@@ -205,6 +206,10 @@ export function registerLocalHttpPipeline(app: Express, options: LocalHttpPipeli
       next();
     });
   });
+
+  app.use(createForwardedForTrustProxyWarningMiddleware({
+    trustedProxies: runtimeConfig.app.trustedProxies,
+  }));
 
   app.use(createCsrfProtectionMiddleware());
   app.use(adaptiveRateLimit);
