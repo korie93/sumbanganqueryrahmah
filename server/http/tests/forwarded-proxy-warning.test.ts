@@ -10,7 +10,7 @@ function createRequest(headers: Request["headers"]): Request {
 }
 
 test("forwarded proxy warning emits once when x-forwarded-for arrives without TRUSTED_PROXIES", () => {
-  const warnings: Array<{ message: string; payload: Record<string, unknown> }> = [];
+  const warnings: Array<{ message: string; payload: unknown }> = [];
   const middleware = createForwardedForTrustProxyWarningMiddleware({
     trustedProxies: [],
     logger: {
