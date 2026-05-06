@@ -264,3 +264,17 @@ test("PostgresStorageCore.init remains retryable after a startup failure", async
 
   assert.equal(storage.usersCalls, 2);
 });
+
+test("PostgresStorageCore.init shares a failed in-flight bootstrap and retries with a fresh attempt", async () => {
+  const storage = new RetryableInitStorage();
+
+  const first = storage.init();
+  const second = storage.init();
+
+  await assert.rejects(() => Promise.all([first, second]), /transient bootstrap failure/);
+  assert.equal(storage.usersCalls, 1);
+
+  await storage.init();
+
+  assert.equal(storage.usersCalls, 2);
+});

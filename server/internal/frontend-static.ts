@@ -121,7 +121,7 @@ export function registerFrontendStatic(app: Express, options?: { cwd?: string; p
     if (!req.path.startsWith("/api") && !req.path.startsWith("/ws")) {
       res.status(404).send(`
           <html>
-            <body style="font-family: sans-serif; padding: 40px;">
+            <body>
               <h1>Frontend Not Built</h1>
               <p>Please run: <code>npm run build:local</code></p>
               <p>Then restart the server.</p>

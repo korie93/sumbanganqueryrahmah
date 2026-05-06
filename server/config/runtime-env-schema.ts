@@ -7,6 +7,7 @@ const SECRET_STRING_MAX_LENGTH = 8_192;
 const BOOLEAN_ENV_VALUES = new Set(["1", "0", "true", "false", "yes", "no", "on", "off"]);
 const AUTH_COOKIE_SECURE_VALUES = new Set(["auto", "true", "false", "1", "0"]);
 const SESSION_COOKIE_SAMESITE_VALUES = new Set(["strict", "lax"]);
+const RATE_LIMIT_STORE_VALUES = new Set(["memory", "redis"]);
 const COLLECTION_PII_FIELD_VALUES = new Set([
   "customerName",
   "icNumber",
@@ -78,6 +79,20 @@ function optionalSessionCookieSameSiteEnv() {
   );
 }
 
+function optionalRateLimitStoreEnv() {
+  return z.preprocess(
+    normalizeOptionalEnvString,
+    z
+      .string({ invalid_type_error: "SQR_RATE_LIMIT_STORE must be a string." })
+      .transform((value) => value.toLowerCase())
+      .refine(
+        (value) => RATE_LIMIT_STORE_VALUES.has(value),
+        "SQR_RATE_LIMIT_STORE must be one of: memory or redis.",
+      )
+      .optional(),
+  );
+}
+
 function optionalIntEnv(name: string, options: { min?: number; max?: number } = {}) {
   return z.preprocess(
     normalizeOptionalEnvString,
@@ -141,6 +156,8 @@ const runtimeEnvironmentSchema = z.object({
     max: 63_072_000,
   }),
   HSTS_PRELOAD_ENABLED: optionalBooleanEnv("HSTS_PRELOAD_ENABLED"),
+  SQR_RATE_LIMIT_STORE: optionalRateLimitStoreEnv(),
+  SQR_REDIS_RATE_LIMIT_URL: optionalEnvString("SQR_REDIS_RATE_LIMIT_URL", SECRET_STRING_MAX_LENGTH),
 
   DATABASE_URL: optionalEnvString("DATABASE_URL", SECRET_STRING_MAX_LENGTH),
   DATABASE_SSL: optionalBooleanEnv("DATABASE_SSL"),

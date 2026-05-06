@@ -88,14 +88,15 @@ export async function startLocalServer(options: StartLocalServerOptions) {
     });
   }
   const rateLimiterTopologyWarning = buildRateLimiterTopologyWarning({
-    distributedStoreConfigured: false,
+    distributedStoreConfigured: runtimeConfig.rateLimiting.store.distributedStoreConfigured,
     workerCount: runtimeConfig.cluster.maxWorkers,
   });
   if (rateLimiterTopologyWarning) {
-    logger.warn("Rate limiter topology requires a shared store before scaling past one worker", {
+    logger.error("Rate limiter topology requires a shared store before scaling past one worker", {
       workerCount: runtimeConfig.cluster.maxWorkers,
       message: rateLimiterTopologyWarning,
-      storage: "memory",
+      storage: runtimeConfig.rateLimiting.store.provider,
+      strictModeRefusal: runtimeConfig.app.isProductionLike,
     });
     markStartupServiceDegraded(
       "rate-limiter-topology",

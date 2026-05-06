@@ -14,6 +14,7 @@ import {
   resolvePredictivePrefetchTargets,
   type NavigationPrefetchTarget,
 } from "@/app/navigation-prefetch-utils";
+import { logClientWarning } from "@/lib/client-logger";
 import {
   getAnalyticsSummary,
   getBackups,
@@ -169,6 +170,25 @@ export async function prefetchNavigationTarget(target: string) {
 
   if (normalizedTarget === "backup") {
     await prefetchBackupData();
+  }
+}
+
+export async function prefetchNavigationTargetWithDiagnostics(
+  target: string,
+  details?: Record<string, unknown>,
+) {
+  const normalizedTarget = normalizeNavigationPrefetchTarget(target);
+  if (!normalizedTarget) {
+    return;
+  }
+
+  try {
+    await prefetchNavigationTarget(normalizedTarget);
+  } catch (error) {
+    logClientWarning("Navigation prefetch failed", error, {
+      ...details,
+      target: normalizedTarget,
+    });
   }
 }
 

@@ -97,6 +97,7 @@
 
 .home-mobile-quick-card:focus-visible,
 .home-mobile-list-card:focus-visible,
+.home-desktop-list-card:focus-visible,
 .home-card:focus-visible {
   outline: 2px solid hsl(var(--ring));
   outline-offset: 3px;
@@ -110,7 +111,8 @@
 }
 
 .home-mobile-quick-card-icon,
-.home-mobile-list-card-icon {
+.home-mobile-list-card-icon,
+.home-desktop-list-card-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -139,6 +141,28 @@
 
 .dark .home-mobile-list-card {
   background: hsl(var(--background));
+  box-shadow: var(--home-list-card-shadow);
+}
+
+.home-desktop-list-card {
+  display: flex;
+  align-items: center;
+  gap: 0.95rem;
+  width: 100%;
+  min-height: 4.8rem;
+  padding: 1rem;
+  border-radius: 0.9rem;
+  border: 1px solid hsl(var(--border) / 0.7);
+  background: hsl(var(--card));
+  box-shadow: var(--home-list-card-shadow);
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease,
+    border-color 0.2s ease;
+}
+
+.dark .home-desktop-list-card {
+  background: hsl(var(--card));
   box-shadow: var(--home-list-card-shadow);
 }
 
@@ -310,7 +334,8 @@
     box-shadow: var(--home-quick-card-shadow-hover);
   }
 
-  .home-mobile-list-card:hover {
+  .home-mobile-list-card:hover,
+  .home-desktop-list-card:hover {
     transform: translateY(-1px);
     border-color: hsl(var(--primary) / 0.22);
     box-shadow: var(--home-list-card-shadow-hover);

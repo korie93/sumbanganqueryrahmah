@@ -159,11 +159,15 @@ test("applyFloatingAiModalAccessibility traps focus within the dialog and restor
   after.parentElement = parent;
   dialog.registerFocusableElements([firstButton, secondButton]);
   documentObject.activeElement = previousFocus;
+  let escapeCalls = 0;
 
   const restore = applyFloatingAiModalAccessibility({
     rootElement: root,
     dialogElement: dialog,
     documentObject,
+    onEscapeKeyDown() {
+      escapeCalls += 1;
+    },
   });
 
   assert.equal(documentObject.activeElement, firstButton);
@@ -196,6 +200,17 @@ test("applyFloatingAiModalAccessibility traps focus within the dialog and restor
   documentObject.activeElement = previousFocus;
   documentObject.dispatch("focusin");
   assert.equal(documentObject.activeElement, firstButton);
+
+  prevented = false;
+  documentObject.dispatch("keydown", {
+    key: "Escape",
+    preventDefault() {
+      prevented = true;
+    },
+  });
+
+  assert.equal(prevented, true);
+  assert.equal(escapeCalls, 1);
 
   restore();
 

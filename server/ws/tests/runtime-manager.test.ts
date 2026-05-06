@@ -575,11 +575,15 @@ test("runtime manager rejects browser handshakes when the origin protocol mismat
   }
 });
 
-test("runtime manager ignores forwarded host and proto headers unless explicitly trusted", async () => {
+test("runtime manager ignores forwarded host and proto headers unless explicitly trusted", async (t) => {
   const wss = new FakeWebSocketServer();
   const providedMap = new Map<string, WebSocket>();
   const socket = new FakeWebSocket();
   let lookupCalls = 0;
+  const warnings: Array<{ message: string; payload: Record<string, unknown> }> = [];
+  t.mock.method(logger, "warn", (message: string, payload: Record<string, unknown>) => {
+    warnings.push({ message, payload });
+  });
 
   createRuntimeWebSocketManager({
     wss: wss as unknown as import("ws").WebSocketServer,
@@ -611,6 +615,15 @@ test("runtime manager ignores forwarded host and proto headers unless explicitly
     assert.equal(lookupCalls, 0);
     assert.equal(providedMap.size, 0);
     assert.equal(socket.closeCalls, 1);
+    assert.equal(
+      warnings.some((entry) =>
+        entry.message === "WebSocket handshake included forwarded headers without trusted proxy configuration"
+        && entry.payload.hasForwardedHost === true
+        && entry.payload.hasForwardedProto === true
+        && entry.payload.trustedProxiesConfigured === false,
+      ),
+      true,
+    );
   } finally {
     wss.emit("close");
   }

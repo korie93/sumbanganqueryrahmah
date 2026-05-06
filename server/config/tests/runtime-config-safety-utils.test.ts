@@ -202,6 +202,14 @@ test("assertProductionRateLimiterTopologySafety rejects production-like multi-wo
       distributedStoreConfigured: false,
     }),
   );
+
+  assert.doesNotThrow(() =>
+    assertProductionRateLimiterTopologySafety({
+      isProductionLike: true,
+      configuredClusterMaxWorkers: 2,
+      distributedStoreConfigured: true,
+    }),
+  );
 });
 
 test("assertNoPlaceholderSecrets rejects production-like generated placeholders", () => {

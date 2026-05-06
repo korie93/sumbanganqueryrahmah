@@ -160,6 +160,13 @@ export type RuntimeConfig = {
     encryptionKeys: string | null;
     encryptionKeyId: string | null;
   };
+  rateLimiting: {
+    store: {
+      distributedStoreConfigured: boolean;
+      provider: "memory" | "redis";
+      redisUrl: string | null;
+    };
+  };
   cluster: {
     lowMemoryMode: boolean;
     maxWorkers: number;

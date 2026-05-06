@@ -126,7 +126,7 @@ export function registerLocalHttpPipeline(app: Express, options: LocalHttpPipeli
         // inject deterministic scroll-lock CSS. Keep CSP strict by allowing
         // only those hashes instead of reopening style-src-elem unsafe-inline.
         styleSrcElem: ["'self'", ...REACT_REMOVE_SCROLL_BAR_STYLE_HASHES],
-        styleSrcAttr: ["'unsafe-inline'"],
+        styleSrcAttr: ["'none'"],
         trustedTypes: ["default", SQR_TRUSTED_TYPES_POLICY_NAME],
         "require-trusted-types-for": ["'script'"],
       },

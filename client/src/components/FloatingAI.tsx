@@ -168,8 +168,9 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
     return applyFloatingAiModalAccessibility({
       rootElement,
       dialogElement,
+      onEscapeKeyDown: handleMinimize,
     });
-  }, [floatingRootRef, isMobile, shouldShowPanel]);
+  }, [floatingRootRef, handleMinimize, isMobile, shouldShowPanel]);
 
   useEffect(() => {
     if (isMobile || !shouldShowPanel || typeof window === "undefined") {

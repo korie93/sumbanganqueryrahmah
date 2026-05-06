@@ -155,7 +155,7 @@ export function buildAppConfig(values: Map<string, string>) {
   const systemName = String(values.get("system_name") ?? "").trim() || "SQR System";
   const sessionTimeoutMinutes = asNumber("session_timeout_minutes", 30, 1, 1440);
   const wsIdleMinutes = asNumber("ws_idle_minutes", 3, 1, 1440);
-  const aiTimeoutMs = asNumber("ai_timeout_ms", 6000, 1000, 120000);
+  const aiTimeoutMs = asNumber("ai_timeout_ms", 10000, 1000, 120000);
   const searchResultLimit = asNumber("search_result_limit", 200, 10, 5000);
   const viewerRowsPerPage = asNumber("viewer_rows_per_page", 100, 10, 500);
   const aiEnabled = asBool("ai_enabled", true);

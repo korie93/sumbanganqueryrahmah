@@ -51,6 +51,7 @@ test("floating AI dialog exposes boolean disclosure state and semantic heading",
   assert.match(source, /aria-labelledby=\{panelTitleId\}/);
   assert.match(source, /Desktop floating AI remains a non-modal dialog/);
   assert.match(source, /const modalDialogA11yProps = isMobile/);
+  assert.match(source, /onEscapeKeyDown: handleMinimize/);
   assert.match(source, /<h2\s+id=\{panelTitleId\}/);
   assert.match(source, /aria-label="Tutup panel AI"/);
   assert.match(source, /aria-label="Kecilkan panel AI"/);

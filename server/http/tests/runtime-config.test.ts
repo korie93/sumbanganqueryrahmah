@@ -302,6 +302,28 @@ test("runtime config rejects production startup when multi-worker mode still use
   );
 });
 
+test("runtime config accepts staged redis rate-limit store settings for production multi-worker mode", async () => {
+  await withEnv(
+    {
+      ...productionBaseOverrides,
+      PUBLIC_APP_URL: "https://sqr.example.com",
+      BACKUP_ENCRYPTION_KEY: "A".repeat(32),
+      SQR_MAX_WORKERS: "2",
+      SQR_RATE_LIMIT_STORE: "redis",
+      SQR_REDIS_RATE_LIMIT_URL: "rediss://redis.internal:6380/0",
+    },
+    async () => {
+      const runtimeModule = await importRuntimeFresh();
+      assert.equal(runtimeModule.runtimeConfig.cluster.maxWorkers, 2);
+      assert.deepEqual(runtimeModule.runtimeConfig.rateLimiting.store, {
+        distributedStoreConfigured: true,
+        provider: "redis",
+        redisUrl: "rediss://redis.internal:6380/0",
+      });
+    },
+  );
+});
+
 test("runtime config keeps strict local development bootable when multi-worker mode is enabled for local verification", async () => {
   await withEnv(
     {

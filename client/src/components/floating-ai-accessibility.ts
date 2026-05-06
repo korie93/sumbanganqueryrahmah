@@ -40,6 +40,7 @@ type FloatingAiModalAccessibilityParams = {
   rootElement: FloatingAiIsolationRootElement;
   dialogElement: FloatingAiDialogElement;
   documentObject?: FloatingAiDocumentLike;
+  onEscapeKeyDown?: () => void;
 };
 
 type FloatingAiKeydownLike = {
@@ -139,6 +140,7 @@ export function applyFloatingAiModalIsolation(rootElement: FloatingAiIsolationRo
 export function trapFloatingAiDialogFocus(
   dialogElement: FloatingAiDialogElement,
   documentObject: FloatingAiDocumentLike = document,
+  onEscapeKeyDown?: () => void,
 ) {
   const previousActiveElement = documentObject.activeElement as { focus?: (() => void) | undefined } | null;
 
@@ -146,6 +148,12 @@ export function trapFloatingAiDialogFocus(
 
   const handleKeyDown = (eventLike: unknown) => {
     const event = eventLike as FloatingAiKeydownLike;
+    if (event.key === "Escape" && onEscapeKeyDown) {
+      event.preventDefault();
+      onEscapeKeyDown();
+      return;
+    }
+
     if (event.key !== "Tab") {
       return;
     }
@@ -205,9 +213,10 @@ export function applyFloatingAiModalAccessibility({
   rootElement,
   dialogElement,
   documentObject = document,
+  onEscapeKeyDown,
 }: FloatingAiModalAccessibilityParams) {
   const restoreIsolation = applyFloatingAiModalIsolation(rootElement);
-  const restoreFocusTrap = trapFloatingAiDialogFocus(dialogElement, documentObject);
+  const restoreFocusTrap = trapFloatingAiDialogFocus(dialogElement, documentObject, onEscapeKeyDown);
 
   return () => {
     restoreIsolation();

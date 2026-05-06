@@ -11,6 +11,7 @@ import {
   generateTwoFactorSecret,
 } from "../../auth/two-factor";
 import { writeDevMailPreview } from "../../mail/dev-mail-outbox";
+import { logger } from "../../lib/logger";
 import { registerAuthRoutes } from "../auth.routes";
 import type { PostgresStorage } from "../../storage-postgres";
 import {
@@ -850,6 +851,67 @@ test("POST /api/auth/login keeps unknown usernames generic without leaking accou
       action: "LOGIN_FAILED",
       performedBy: "missing.user",
       details: "User not found",
+    }]);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("POST /api/login remains compatible and emits a deprecation monitoring warning", async (t) => {
+  const warningLogs: Array<{ message: string; metadata: Record<string, unknown> }> = [];
+  t.mock.method(logger, "warn", (message: string, metadata: Record<string, unknown>) => {
+    warningLogs.push({ message, metadata });
+  });
+
+  const auditLogs: Array<{ action: string; performedBy?: string; details?: string }> = [];
+  const storage = {
+    getUserByUsername: async () => null,
+    isVisitorBanned: async () => false,
+    createAuditLog: async (entry: { action: string; performedBy?: string; details?: string }) => {
+      auditLogs.push(entry);
+      return { id: `audit-${auditLogs.length}`, ...entry };
+    },
+  } as unknown as PostgresStorage;
+  const app = createJsonTestApp();
+
+  registerAuthRoutes(app, {
+    storage,
+    authenticateToken: (_req, _res, next) => next(),
+    requireRole: () => (_req, _res, next) => next(),
+    connectedClients: new Map(),
+  });
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const request = {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        username: "missing.legacy",
+        password: "WrongPassword!",
+        fingerprint: "fingerprint-legacy",
+        browser: "Mozilla/5.0",
+      }),
+    };
+    const legacyResponse = await fetch(`${baseUrl}/api/login`, request);
+    const canonicalResponse = await fetch(`${baseUrl}/api/auth/login`, request);
+
+    assert.equal(legacyResponse.status, 401);
+    assert.equal(canonicalResponse.status, 401);
+    assert.equal(auditLogs.length, 2);
+
+    const deprecationWarnings = warningLogs.filter(
+      (entry) => entry.message === "Deprecated auth login route used",
+    );
+    assert.deepEqual(deprecationWarnings, [{
+      message: "Deprecated auth login route used",
+      metadata: {
+        legacyRoute: "/api/login",
+        canonicalRoute: "/api/auth/login",
+        monitorRouteGroup: "auth.login",
+      },
     }]);
   } finally {
     await stopTestServer(server);

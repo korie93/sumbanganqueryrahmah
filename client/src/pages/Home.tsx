@@ -1,7 +1,7 @@
 import { ArrowRight, ChevronRight, Sparkles } from "lucide-react";
 import { memo, useCallback, useMemo } from "react";
 import { type NavigationEntry, getVisibleHomeItems, resolveNavigationTarget } from "@/app/navigation";
-import { prefetchNavigationTarget } from "@/app/navigation-prefetch";
+import { prefetchNavigationTargetWithDiagnostics } from "@/app/navigation-prefetch";
 import { Button } from "@/components/ui/button";
 import { useIsMobile } from "@/hooks/use-mobile";
 import "./Home.css";
@@ -71,7 +71,10 @@ function HomeImpl({ onNavigate, userRole, tabVisibility }: HomeProps) {
     };
   }, [visibleItems]);
   const prefetchTarget = useCallback((itemId: string) => {
-    void prefetchNavigationTarget(resolveNavigationTarget(itemId));
+    void prefetchNavigationTargetWithDiagnostics(resolveNavigationTarget(itemId), {
+      source: "home",
+      itemId,
+    });
   }, []);
 
   if (isMobile) {
@@ -84,13 +87,13 @@ function HomeImpl({ onNavigate, userRole, tabVisibility }: HomeProps) {
                 <p className="text-[0.68rem] font-semibold uppercase tracking-[0.26em] text-white/80">
                   Operational Workspace
                 </p>
-                <h1 className="mt-3 text-3xl font-bold tracking-tight text-white">Welcome</h1>
+                <h1 className="mt-3 text-3xl font-bold tracking-tight text-white">SQR Workspace</h1>
                 <p className="mt-2 max-w-xs text-sm leading-relaxed text-white/85">
                   Move between the modules you use most without digging through the full desktop navigation.
                 </p>
               </div>
               <span className="rounded-full border border-white/18 bg-white/12 p-3 text-white shadow-sm backdrop-blur">
-                <Sparkles className="h-5 w-5" />
+                <Sparkles className="h-5 w-5" aria-hidden="true" />
               </span>
             </div>
 
@@ -113,7 +116,7 @@ function HomeImpl({ onNavigate, userRole, tabVisibility }: HomeProps) {
                     onFocus={() => prefetchTarget(item.id)}
                     className="home-mobile-hero-action"
                   >
-                    <Icon className="h-4 w-4" />
+                    <Icon className="h-4 w-4" aria-hidden="true" />
                     {item.label}
                   </Button>
                 );
@@ -148,7 +151,7 @@ function HomeImpl({ onNavigate, userRole, tabVisibility }: HomeProps) {
                     data-testid={`card-${item.id}`}
                   >
                     <span className="home-mobile-quick-card-icon">
-                      <Icon className="h-4 w-4" />
+                      <Icon className="h-4 w-4" aria-hidden="true" />
                     </span>
                     <div className="space-y-1">
                       <h3 className="text-sm font-semibold text-foreground">{item.title}</h3>
@@ -156,7 +159,7 @@ function HomeImpl({ onNavigate, userRole, tabVisibility }: HomeProps) {
                         {item.description}
                       </p>
                     </div>
-                    <ArrowRight className="h-4 w-4 text-primary" />
+                    <ArrowRight className="h-4 w-4 text-primary" aria-hidden="true" />
                   </button>
                 );
               })}
@@ -193,7 +196,7 @@ function HomeImpl({ onNavigate, userRole, tabVisibility }: HomeProps) {
                       data-testid={`card-${item.id}`}
                     >
                       <span className="home-mobile-list-card-icon">
-                        <Icon className="h-4 w-4" />
+                        <Icon className="h-4 w-4" aria-hidden="true" />
                       </span>
                       <div className="min-w-0 flex-1 text-left">
                         <h3 className="truncate text-sm font-semibold text-foreground">{item.title}</h3>
@@ -201,7 +204,7 @@ function HomeImpl({ onNavigate, userRole, tabVisibility }: HomeProps) {
                           {item.description}
                         </p>
                       </div>
-                      <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                      <ChevronRight className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
                     </button>
                   );
                 })}
@@ -222,10 +225,10 @@ function HomeImpl({ onNavigate, userRole, tabVisibility }: HomeProps) {
               <p className="home-section-kicker">Workspace</p>
               <div className="flex items-start gap-4">
                 <span className="home-desktop-hero-icon" aria-hidden="true">
-                  <Sparkles className="h-5 w-5" />
+                  <Sparkles className="h-5 w-5" aria-hidden="true" />
                 </span>
                 <div className="min-w-0">
-                  <h1 className="welcome-title text-4xl font-bold text-foreground md:text-5xl">Welcome</h1>
+                  <h1 className="welcome-title text-4xl font-bold text-foreground md:text-5xl">SQR Workspace</h1>
                   <p className="mt-2 text-base text-muted-foreground md:text-lg">
                     Sumbangan Query Rahmah - Data Management System
                   </p>
@@ -268,7 +271,7 @@ function HomeImpl({ onNavigate, userRole, tabVisibility }: HomeProps) {
                     data-testid={`card-${item.id}`}
                   >
                     <span className="home-desktop-primary-card-icon">
-                      <Icon className="h-5 w-5" />
+                      <Icon className="h-5 w-5" aria-hidden="true" />
                     </span>
                     <div className="min-w-0 space-y-2">
                       <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary/75">
@@ -279,7 +282,7 @@ function HomeImpl({ onNavigate, userRole, tabVisibility }: HomeProps) {
                         <p className="text-sm leading-6 text-muted-foreground">{item.description}</p>
                       </div>
                     </div>
-                    <ArrowRight className="h-4 w-4 shrink-0 text-primary" />
+                    <ArrowRight className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
                   </button>
                 );
               })}
@@ -318,7 +321,7 @@ function HomeImpl({ onNavigate, userRole, tabVisibility }: HomeProps) {
                           data-testid={`card-${item.id}`}
                         >
                           <span className="home-card-icon">
-                            <Icon className="h-5 w-5" />
+                            <Icon className="h-5 w-5" aria-hidden="true" />
                           </span>
                           <div className="home-card-text">
                             <h3 className="text-base">{item.title}</h3>
@@ -356,11 +359,11 @@ function HomeImpl({ onNavigate, userRole, tabVisibility }: HomeProps) {
                           onClick={() => onNavigate(resolveNavigationTarget(item.id))}
                           onMouseEnter={() => prefetchTarget(item.id)}
                           onFocus={() => prefetchTarget(item.id)}
-                          className="home-mobile-list-card"
+                          className="home-desktop-list-card"
                           data-testid={`card-${item.id}`}
                         >
-                          <span className="home-mobile-list-card-icon">
-                            <Icon className="h-4 w-4" />
+                          <span className="home-desktop-list-card-icon">
+                            <Icon className="h-4 w-4" aria-hidden="true" />
                           </span>
                           <div className="min-w-0 flex-1 text-left">
                             <h3 className="truncate text-sm font-semibold text-foreground">{item.title}</h3>
@@ -368,7 +371,7 @@ function HomeImpl({ onNavigate, userRole, tabVisibility }: HomeProps) {
                               {item.description}
                             </p>
                           </div>
-                          <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                          <ChevronRight className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
                         </button>
                       );
                     })}

@@ -65,6 +65,14 @@ function firstForwardedValue(value: string | string[] | undefined): string {
   return firstHeaderValue(value).split(",")[0]?.trim() || "";
 }
 
+function hasForwardedHeaders(headers: IncomingHttpHeaders): boolean {
+  return Boolean(
+    firstHeaderValue(headers["x-forwarded-for"])
+    || firstHeaderValue(headers["x-forwarded-host"])
+    || firstHeaderValue(headers["x-forwarded-proto"]),
+  );
+}
+
 function readWebSocketRequestHost(
   headers: IncomingHttpHeaders,
   options: { trustForwardedHeaders: boolean },
@@ -473,6 +481,15 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
   });
 
   wss.on("connection", async (ws, req) => {
+    if (!trustForwardedHeaders && hasForwardedHeaders(req.headers)) {
+      logger.warn("WebSocket handshake included forwarded headers without trusted proxy configuration", {
+        hasForwardedFor: Boolean(firstHeaderValue(req.headers["x-forwarded-for"])),
+        hasForwardedHost: Boolean(firstHeaderValue(req.headers["x-forwarded-host"])),
+        hasForwardedProto: Boolean(firstHeaderValue(req.headers["x-forwarded-proto"])),
+        trustedProxiesConfigured: false,
+      });
+    }
+
     if (!acceptConnections()) {
       logger.warn("WebSocket connection rejected because runtime storage is not initialized yet", {
         path: req.url || "/ws",

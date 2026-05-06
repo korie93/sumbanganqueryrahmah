@@ -1,6 +1,9 @@
 import { Suspense, lazy, useEffect, useState } from "react";
 import { AppPageRenderer } from "@/app/AppPageRenderer";
-import { prefetchNavigationTarget, resolvePredictivePrefetchTargets } from "@/app/navigation-prefetch";
+import {
+  prefetchNavigationTargetWithDiagnostics,
+  resolvePredictivePrefetchTargets,
+} from "@/app/navigation-prefetch";
 import { AppRouteErrorBoundary } from "@/app/AppRouteErrorBoundary";
 import { PageSpinner } from "@/app/PageSpinner";
 import { ChangePasswordPage } from "@/app/lazy-pages";
@@ -111,7 +114,10 @@ export default function AuthenticatedAppShell({
         if (cancelled) {
           return;
         }
-        await prefetchNavigationTarget(target);
+        await prefetchNavigationTargetWithDiagnostics(target, {
+          source: "predictive-prefetch",
+          currentPage,
+        });
       }
     }, NAVIGATION_PREFETCH_IDLE_DELAY_MS);
 

@@ -82,8 +82,8 @@ const BASE_SETTINGS_SEED: SettingsSeedItem[] = [
     label: "AI Timeout (ms)",
     description: "Server timeout for AI requests before fallback response.",
     type: "number",
-    value: "6000",
-    defaultValue: "6000",
+    value: "10000",
+    defaultValue: "10000",
     isCritical: false,
   },
   {

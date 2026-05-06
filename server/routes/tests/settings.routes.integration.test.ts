@@ -86,7 +86,7 @@ function createSettingsRouteHarness(options?: {
       wsIdleMinutes: 3,
       aiEnabled: true,
       semanticSearchEnabled: true,
-      aiTimeoutMs: 6000,
+      aiTimeoutMs: 10000,
       searchResultLimit: 200,
       viewerRowsPerPage: 100,
     }),

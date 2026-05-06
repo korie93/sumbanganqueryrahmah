@@ -6,6 +6,9 @@ export type ResolvedRoute = {
   normalizedPath?: string;
 };
 
+// Routing is intentionally state-driven inside the authenticated shell. This
+// module only keeps public routes and a small set of legacy/shareable aliases in
+// sync with that state model; it is not a full URL router.
 const PUBLIC_AUTH_ROUTES = new Set([
   "login",
   "forgot-password",

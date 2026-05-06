@@ -14,7 +14,7 @@ import {
   resolveNavigationTarget,
   resolveActiveNavigationItemId,
 } from "@/app/navigation"
-import { prefetchNavigationTarget } from "@/app/navigation-prefetch"
+import { prefetchNavigationTargetWithDiagnostics } from "@/app/navigation-prefetch"
 import type { MonitorSection, TabVisibility } from "@/app/types"
 import { BrandLogo } from "@/components/BrandLogo"
 import { NavbarDesktopNavigation } from "@/components/NavbarDesktopNavigation"
@@ -113,7 +113,10 @@ function NavbarImpl({
     [onNavigate]
   )
   const prefetchItem = useCallback((itemId: string) => {
-    void prefetchNavigationTarget(resolveNavigationTarget(itemId))
+    void prefetchNavigationTargetWithDiagnostics(resolveNavigationTarget(itemId), {
+      source: "navbar",
+      itemId,
+    })
   }, [])
 
   const desktopNavLayoutKey = useMemo(

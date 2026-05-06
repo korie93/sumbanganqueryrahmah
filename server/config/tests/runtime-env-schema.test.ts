@@ -143,6 +143,27 @@ test("runtime env schema validates HSTS preload tuning flags", () => {
   );
 });
 
+test("runtime env schema validates staged shared rate-limit store configuration keys", () => {
+  assert.doesNotThrow(() => {
+    validateRuntimeEnvironmentSchema({
+      SQR_RATE_LIMIT_STORE: "memory",
+    });
+    validateRuntimeEnvironmentSchema({
+      SQR_RATE_LIMIT_STORE: "redis",
+      SQR_REDIS_RATE_LIMIT_URL: "rediss://redis.internal:6380/0",
+    });
+  });
+
+  assert.throws(
+    () => {
+      validateRuntimeEnvironmentSchema({
+        SQR_RATE_LIMIT_STORE: "memcached",
+      });
+    },
+    /SQR_RATE_LIMIT_STORE must be one of: memory or redis/i,
+  );
+});
+
 test("runtime env schema accepts staged collection PII retirement field lists when encryption is configured", () => {
   assert.doesNotThrow(() => {
     validateRuntimeEnvironmentSchema({

@@ -36,6 +36,7 @@ import {
   resolvePreviousSessionSecrets,
   resolveTrustedProxies,
 } from "./runtime-config-safety-utils";
+import { resolveSharedRateLimitStoreConfig } from "../middleware/rate-limit-runtime";
 import type {
   RuntimeConfig,
   RuntimeConfigValidation as RuntimeConfigValidationType,
@@ -172,6 +173,10 @@ const resolvedMailDevOutboxDir = configuredMailDevOutboxDir
   : path.resolve(process.cwd(), "var", "dev-mail-outbox");
 const publicAppUrl = normalizeHttpUrl("PUBLIC_APP_URL", readOptionalString("PUBLIC_APP_URL"));
 const trustedProxies = resolveTrustedProxies(readCommaSeparatedList("TRUSTED_PROXIES"));
+const sharedRateLimitStore = resolveSharedRateLimitStoreConfig({
+  provider: readOptionalString("SQR_RATE_LIMIT_STORE"),
+  redisUrl: readOptionalString("SQR_REDIS_RATE_LIMIT_URL"),
+});
 const corsAllowedOrigins = resolveCorsAllowedOrigins({
   rawValue: readOptionalString("CORS_ALLOWED_ORIGINS"),
   publicAppUrl,
@@ -215,7 +220,7 @@ assertRuntimeSafetyGuards({
 assertProductionRateLimiterTopologySafety({
   isProductionLike,
   configuredClusterMaxWorkers,
-  distributedStoreConfigured: false,
+  distributedStoreConfigured: sharedRateLimitStore.distributedStoreConfigured,
 });
 
 assertNoPlaceholderSecrets({
@@ -300,7 +305,7 @@ export const runtimeConfig: RuntimeConfig = Object.freeze({
     host: readString("OLLAMA_HOST", "http://127.0.0.1:11434"),
     chatModel: readString("OLLAMA_CHAT_MODEL", "llama3:8b"),
     embedModel: readString("OLLAMA_EMBED_MODEL", "nomic-embed-text"),
-    timeoutMs: readInt("OLLAMA_TIMEOUT_MS", 6_000, { min: 1_000 }),
+    timeoutMs: readInt("OLLAMA_TIMEOUT_MS", 10_000, { min: 1_000 }),
     precomputeOnStart: readBoolean("AI_PRECOMPUTE_ON_START", false),
     lowMemoryMode,
     debugLogs,
@@ -330,7 +335,7 @@ export const runtimeConfig: RuntimeConfig = Object.freeze({
     defaults: {
       sessionTimeoutMinutes: readInt("DEFAULT_SESSION_TIMEOUT_MINUTES", 30, { min: 1 }),
       wsIdleMinutes: readInt("DEFAULT_WS_IDLE_MINUTES", 3, { min: 1 }),
-      aiTimeoutMs: readInt("DEFAULT_AI_TIMEOUT_MS", 6_000, { min: 1_000 }),
+      aiTimeoutMs: readInt("DEFAULT_AI_TIMEOUT_MS", 10_000, { min: 1_000 }),
       searchResultLimit: readInt("DEFAULT_SEARCH_RESULT_LIMIT", 200, { min: 10, max: 5000 }),
       viewerRowsPerPage: readInt("DEFAULT_VIEWER_ROWS_PER_PAGE", 100, { min: 10, max: 500 }),
     },
@@ -386,6 +391,9 @@ export const runtimeConfig: RuntimeConfig = Object.freeze({
     encryptionKey: configuredBackupEncryptionKey,
     encryptionKeys: configuredBackupEncryptionKeys,
     encryptionKeyId: readOptionalString("BACKUP_ENCRYPTION_KEY_ID"),
+  },
+  rateLimiting: {
+    store: sharedRateLimitStore,
   },
   cluster: {
     lowMemoryMode,

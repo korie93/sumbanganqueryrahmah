@@ -15,7 +15,6 @@ import {
   formatTimeSeriesTickLabel,
   formatTimeSeriesTooltipLabel,
   formatTimeSeriesTooltipValue,
-  timeSeriesTooltipStyle,
   type TimeSeriesPoint,
 } from "@/components/monitor/time-series-chart-utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -104,7 +103,6 @@ function TimeSeriesChartImpl({ title, color, unit = "", description, data }: Tim
               />
               <RechartsTooltip
                 isAnimationActive={false}
-                contentStyle={timeSeriesTooltipStyle}
                 labelFormatter={formatTimeSeriesTooltipLabel}
                 formatter={(value: number) => formatTimeSeriesTooltipValue(value, unit, title)}
               />

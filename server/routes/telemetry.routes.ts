@@ -40,6 +40,15 @@ const DEFAULT_WEB_VITALS_MAX_ANONYMOUS_EVENTS_PER_WINDOW = 10;
 const DEFAULT_WEB_VITALS_MAX_BUCKETS = 2_000;
 const DEFAULT_WEB_VITALS_WINDOW_MS = 60_000;
 const DEFAULT_WEB_VITALS_MAX_CONTENT_LENGTH_BYTES = 4 * 1024;
+const NON_BROWSER_TELEMETRY_USER_AGENT_PATTERNS = [
+  /\bcurl\//i,
+  /\bwget\//i,
+  /\bpython-requests\//i,
+  /\bhttpie\//i,
+  /\bpostmanruntime\//i,
+  /\binsomnia\//i,
+  /\bgo-http-client\//i,
+];
 
 function clampPositiveInteger(value: unknown, fallback: number) {
   const parsed = Number(value);
@@ -72,6 +81,15 @@ function hasBrowserProvenanceSignal(req: Request) {
   const referer = String(req.headers.referer || "").trim();
 
   return Boolean(fetchSite || origin || referer);
+}
+
+function hasKnownNonBrowserTelemetryUserAgent(req: Request) {
+  const userAgent = String(req.headers["user-agent"] || "").trim();
+  if (!userAgent) {
+    return false;
+  }
+
+  return NON_BROWSER_TELEMETRY_USER_AGENT_PATTERNS.some((pattern) => pattern.test(userAgent));
 }
 
 function resolveAllowedOriginSet(allowedOrigins?: string[]) {
@@ -123,6 +141,11 @@ export function createWebVitalsTelemetryRequestGuard(
   );
 
   return (req, res, next) => {
+    if (hasKnownNonBrowserTelemetryUserAgent(req)) {
+      res.status(204).end();
+      return;
+    }
+
     if (!isSameSiteTelemetryRequest(req, allowedOriginSet)) {
       res.status(204).end();
       return;
@@ -257,11 +280,14 @@ export function registerWebVitalsTelemetryDropGuardCleanup(
 export function registerTelemetryRoutes(app: Express, deps: TelemetryRouteDeps) {
   const webVitalsDropGuard = deps.webVitalsDropGuard ?? createWebVitalsTelemetryDropGuard();
 
-  // This route intentionally stays outside /api so browser sendBeacon/keepalive
-  // Web Vitals reports do not require a CSRF token. It is still guarded by
-  // same-site Origin/Referer checks, JSON content-type validation, a 4KB parser
-  // limit in the HTTP pipeline, stricter anonymous/no-provenance request caps,
-  // and bounded per-IP drop buckets. Do not send
+  // Threat model: this unauthenticated browser telemetry endpoint is
+  // internet-reachable and can receive forged beacons, oversized bodies,
+  // replay bursts, or automation-client probes. It intentionally stays outside
+  // /api so browser sendBeacon/keepalive Web Vitals reports do not require a
+  // CSRF token. It is still guarded by same-site Origin/Referer checks, JSON
+  // content-type validation, a 4KB parser limit in the HTTP pipeline, known
+  // non-browser client drops, stricter anonymous/no-provenance request caps,
+  // and bounded per-IP drop buckets. The payload schema is strict; do not send
   // PII, auth/session identifiers, cookies, tokens, or raw user input here.
   app.post(
     "/telemetry/web-vitals",

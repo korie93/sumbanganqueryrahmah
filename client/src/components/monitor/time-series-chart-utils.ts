@@ -13,13 +13,6 @@ export type TimeSeriesChartAccessibilityContent = {
   summary: string;
 };
 
-export const timeSeriesTooltipStyle = {
-  backgroundColor: "hsl(var(--card))",
-  border: "1px solid hsl(var(--border))",
-  borderRadius: "10px",
-  color: "hsl(var(--foreground))",
-};
-
 export function buildTimeSeriesChartData(data: TimeSeriesPoint[]) {
   return data.map((point) => ({
     t: point.ts,

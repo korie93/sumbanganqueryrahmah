@@ -5,7 +5,7 @@ export const DEFAULT_SYSTEM_NAME = "SQR System";
 export const DEFAULT_RUNTIME_CONFIG: AppRuntimeConfig = {
   sessionTimeoutMinutes: 30,
   heartbeatIntervalMinutes: 5,
-  aiTimeoutMs: 6000,
+  aiTimeoutMs: 10000,
   aiEnabled: true,
   searchResultLimit: 200,
   viewerRowsPerPage: 100,

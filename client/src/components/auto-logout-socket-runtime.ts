@@ -99,6 +99,9 @@ export function bindAutoLogoutSocket({
     const delayMs = resolveAutoLogoutReconnectDelayMs(attempt)
     reconnectRef.current = window.setTimeout(() => {
       reconnectRef.current = null
+      if (!mountedRef.current || !reconnectEnabledRef.current) {
+        return
+      }
       reconnectAttemptRef.current = attempt + 1
       connectWebSocket()
     }, delayMs)
@@ -157,6 +160,9 @@ export function bindAutoLogoutSocket({
           clearReconnect()
           disposeSocketInstance(activeSocket)
           void runClientLogout().finally(() => {
+            if (!mountedRef.current) {
+              return
+            }
             setBannedSessionFlag(true)
           })
         }

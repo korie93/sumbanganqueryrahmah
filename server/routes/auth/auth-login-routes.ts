@@ -2,6 +2,7 @@ import {
   readLoginBody,
   readTwoFactorChallengeBody,
 } from "./auth-request-parsers";
+import { logger } from "../../lib/logger";
 import type { AuthRouteContext } from "./auth-route-shared";
 
 export function registerAuthLoginRoutes(context: AuthRouteContext) {
@@ -80,7 +81,20 @@ export function registerAuthLoginRoutes(context: AuthRouteContext) {
     };
   });
 
-  app.post("/api/login", rateLimiters.loginIp, rateLimiters.login, handleLogin);
+  app.post(
+    "/api/login",
+    (req, _res, next) => {
+      logger.warn("Deprecated auth login route used", {
+        legacyRoute: req.path,
+        canonicalRoute: "/api/auth/login",
+        monitorRouteGroup: "auth.login",
+      });
+      next();
+    },
+    rateLimiters.loginIp,
+    rateLimiters.login,
+    handleLogin,
+  );
   app.post("/api/auth/login", rateLimiters.loginIp, rateLimiters.login, handleLogin);
 
   app.post(

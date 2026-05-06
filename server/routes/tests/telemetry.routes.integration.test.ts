@@ -482,6 +482,32 @@ test("POST /telemetry/web-vitals silently drops non-json telemetry bodies", asyn
   }
 });
 
+test("POST /telemetry/web-vitals silently drops obvious non-browser telemetry clients", async () => {
+  const { app, recordedPayloads } = createTelemetryRouteHarness({
+    webVitalsRequestGuard: createWebVitalsTelemetryRequestGuard({
+      allowedOrigins: ["https://sqr-system.test"],
+    }),
+  });
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(`${baseUrl}/telemetry/web-vitals`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Origin: "https://sqr-system.test",
+        "User-Agent": "curl/8.7.1",
+      },
+      body: JSON.stringify(createValidWebVitalsPayload()),
+    });
+
+    assert.equal(response.status, 204);
+    assert.equal(recordedPayloads.length, 0);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
 test("POST /telemetry/web-vitals silently drops oversized telemetry bodies before recording", async () => {
   const { app, recordedPayloads } = createTelemetryRouteHarness({
     webVitalsRequestGuard: createWebVitalsTelemetryRequestGuard({
@@ -502,6 +528,32 @@ test("POST /telemetry/web-vitals silently drops oversized telemetry bodies befor
     });
 
     assert.equal(response.status, 204);
+    assert.equal(recordedPayloads.length, 0);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("POST /telemetry/web-vitals rejects sensitive extra fields through strict payload validation", async () => {
+  const { app, recordedPayloads } = createTelemetryRouteHarness();
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(`${baseUrl}/telemetry/web-vitals`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(createValidWebVitalsPayload({
+        cookie: "session=sensitive",
+        sessionId: "activity-sensitive",
+        token: "secret",
+      })),
+    });
+
+    assert.equal(response.status, 400);
+    const payload = await response.json();
+    assert.equal(payload.error.code, "REQUEST_BODY_INVALID");
     assert.equal(recordedPayloads.length, 0);
   } finally {
     await stopTestServer(server);

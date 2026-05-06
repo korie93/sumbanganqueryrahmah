@@ -8,6 +8,7 @@ import { SettingsBootstrap } from "../../internal/settingsBootstrap";
 import { SpatialBootstrap } from "../../internal/spatialBootstrap";
 import { UsersBootstrap } from "../../internal/usersBootstrap";
 import { runtimeConfig } from "../../config/runtime";
+import { verifyRuntimeSchemaReady } from "../../internal/runtime-schema-verification";
 import { logger } from "../../lib/logger";
 import { ActivityRepository } from "../../repositories/activity.repository";
 import { AiCategoryRepository } from "../../repositories/ai-category.repository";
@@ -134,8 +135,6 @@ export class PostgresStorageCore {
   private initialized = false;
   private initPromise: Promise<void> | null = null;
 
-  constructor() {}
-
   public async init() {
     if (this.initialized) {
       return;
@@ -156,6 +155,18 @@ export class PostgresStorageCore {
 
   private async runInit() {
     const startedAt = performance.now();
+    if (runtimeConfig.app.isProductionLike) {
+      logger.info("PostgreSQL runtime schema verification starting", {
+        productionLike: true,
+        schemaCoupledRuntimeBootstrap: false,
+      });
+      await verifyRuntimeSchemaReady();
+      logger.info("PostgreSQL runtime schema verification completed", {
+        durationMs: Number((performance.now() - startedAt).toFixed(1)),
+      });
+      return;
+    }
+
     const steps = buildPostgresStorageBootstrapPlan({
       ensureUsersTable: () => this.ensureUsersTable(),
       ensureImportsTable: () => this.ensureImportsTable(),
@@ -239,88 +250,161 @@ export class PostgresStorageCore {
     }
   }
 
+  private async verifyProductionTablesOrBootstrap(
+    requiredTables: readonly string[],
+    bootstrap: () => Promise<void>,
+  ) {
+    if (runtimeConfig.app.isProductionLike) {
+      await verifyRuntimeSchemaReady(undefined, requiredTables);
+      return;
+    }
+
+    await bootstrap();
+  }
+
   protected async ensureUsersTable() {
-    await this.usersBootstrap.ensureTable();
+    await this.verifyProductionTablesOrBootstrap(
+      ["users", "account_activation_tokens", "password_reset_requests"],
+      () => this.usersBootstrap.ensureTable(),
+    );
   }
 
   protected async ensureImportsTable() {
-    await this.coreSchemaBootstrap.ensureImportsTable();
+    await this.verifyProductionTablesOrBootstrap(["imports"], () => this.coreSchemaBootstrap.ensureImportsTable());
   }
 
   protected async ensureDataRowsTable() {
-    await this.coreSchemaBootstrap.ensureDataRowsTable();
+    await this.verifyProductionTablesOrBootstrap(["data_rows"], () => this.coreSchemaBootstrap.ensureDataRowsTable());
   }
 
   protected async ensureUserActivityTable() {
-    await this.coreSchemaBootstrap.ensureUserActivityTable();
+    await this.verifyProductionTablesOrBootstrap(["user_activity"], () => this.coreSchemaBootstrap.ensureUserActivityTable());
   }
 
   protected async ensureAuditLogsTable() {
-    await this.coreSchemaBootstrap.ensureAuditLogsTable();
+    await this.verifyProductionTablesOrBootstrap(["audit_logs"], () => this.coreSchemaBootstrap.ensureAuditLogsTable());
   }
 
   protected async ensureMutationIdempotencyTable() {
-    await this.coreSchemaBootstrap.ensureMutationIdempotencyTable();
+    await this.verifyProductionTablesOrBootstrap(
+      ["mutation_idempotency_keys"],
+      () => this.coreSchemaBootstrap.ensureMutationIdempotencyTable(),
+    );
   }
 
   protected async ensureMonitorAlertHistoryTable() {
-    await this.coreSchemaBootstrap.ensureMonitorAlertHistoryTable();
+    await this.verifyProductionTablesOrBootstrap(
+      ["monitor_alert_incidents"],
+      () => this.coreSchemaBootstrap.ensureMonitorAlertHistoryTable(),
+    );
   }
 
   protected async ensureCollectionRecordsTable() {
-    await this.collectionBootstrap.ensureRecordsTable();
+    await this.verifyProductionTablesOrBootstrap(
+      [
+        "collection_records",
+        "collection_record_receipts",
+        "collection_record_daily_rollups",
+        "collection_record_monthly_rollups",
+        "collection_record_daily_rollup_refresh_queue",
+      ],
+      () => this.collectionBootstrap.ensureRecordsTable(),
+    );
   }
 
   protected async ensureCollectionStaffNicknamesTable() {
-    await this.collectionBootstrap.ensureStaffNicknamesTable();
+    await this.verifyProductionTablesOrBootstrap(
+      ["collection_staff_nicknames"],
+      () => this.collectionBootstrap.ensureStaffNicknamesTable(),
+    );
   }
 
   protected async ensureCollectionAdminGroupsTables() {
-    await this.collectionBootstrap.ensureAdminGroupsTables();
+    await this.verifyProductionTablesOrBootstrap(
+      ["admin_groups", "admin_group_members"],
+      () => this.collectionBootstrap.ensureAdminGroupsTables(),
+    );
   }
 
   protected async ensureCollectionNicknameSessionsTable() {
-    await this.collectionBootstrap.ensureNicknameSessionsTable();
+    await this.verifyProductionTablesOrBootstrap(
+      ["collection_nickname_sessions"],
+      () => this.collectionBootstrap.ensureNicknameSessionsTable(),
+    );
   }
 
   protected async ensureCollectionAdminVisibleNicknamesTable() {
-    await this.collectionBootstrap.ensureAdminVisibleNicknamesTable();
+    await this.verifyProductionTablesOrBootstrap(
+      ["admin_visible_nicknames"],
+      () => this.collectionBootstrap.ensureAdminVisibleNicknamesTable(),
+    );
   }
 
   protected async ensureCollectionDailyTables() {
-    await this.collectionBootstrap.ensureDailyTables();
+    await this.verifyProductionTablesOrBootstrap(
+      ["collection_daily_targets", "collection_daily_calendar"],
+      () => this.collectionBootstrap.ensureDailyTables(),
+    );
   }
 
   protected async ensurePerformanceIndexes() {
-    await this.coreSchemaBootstrap.ensurePerformanceIndexes();
+    await this.verifyProductionTablesOrBootstrap([], () => this.coreSchemaBootstrap.ensurePerformanceIndexes());
   }
 
   protected async ensureBannedSessionsTable() {
-    await this.coreSchemaBootstrap.ensureBannedSessionsTable();
+    await this.verifyProductionTablesOrBootstrap(
+      ["banned_sessions"],
+      () => this.coreSchemaBootstrap.ensureBannedSessionsTable(),
+    );
   }
 
   protected async ensureAiTables() {
-    await this.aiBootstrap.ensureAiTables();
+    await this.verifyProductionTablesOrBootstrap(
+      ["data_embeddings", "ai_conversations", "ai_messages"],
+      () => this.aiBootstrap.ensureAiTables(),
+    );
   }
 
   protected async ensureCategoryStatsTable() {
-    await this.aiBootstrap.ensureCategoryStatsTable();
+    await this.verifyProductionTablesOrBootstrap(
+      ["ai_category_stats"],
+      () => this.aiBootstrap.ensureCategoryStatsTable(),
+    );
   }
 
   protected async ensureCategoryRulesTable() {
-    await this.aiBootstrap.ensureCategoryRulesTable();
+    await this.verifyProductionTablesOrBootstrap(
+      ["ai_category_rules"],
+      () => this.aiBootstrap.ensureCategoryRulesTable(),
+    );
   }
 
   protected async ensureSettingsTables() {
-    await this.settingsBootstrap.ensureTables();
+    await this.verifyProductionTablesOrBootstrap(
+      [
+        "setting_categories",
+        "system_settings",
+        "setting_options",
+        "role_setting_permissions",
+        "setting_versions",
+        "feature_flags",
+      ],
+      () => this.settingsBootstrap.ensureTables(),
+    );
   }
 
   protected async ensureSpatialTables() {
-    await this.spatialBootstrap.ensureTables();
+    await this.verifyProductionTablesOrBootstrap(
+      ["aeon_branches", "aeon_branch_postcodes"],
+      () => this.spatialBootstrap.ensureTables(),
+    );
   }
 
   protected async ensureBackupsTable() {
-    await this.backupsBootstrap.ensureTable();
+    await this.verifyProductionTablesOrBootstrap(
+      ["backups", "backup_jobs", "backup_payload_chunks"],
+      () => this.backupsBootstrap.ensureTable(),
+    );
   }
 
   async ensureBackupsReady(): Promise<void> {

@@ -114,6 +114,7 @@ export default function AutoLogout({
     clearIdleTimeout();
 
     timeoutRef.current = window.setTimeout(() => {
+      if (!mountedRef.current) return;
       void runLogout();
     }, timeoutMs);
   }, [clearIdleTimeout, runLogout, timeoutMs]);
@@ -195,6 +196,7 @@ export default function AutoLogout({
 
   useEffect(() => {
     const unsubscribeForcedLogout = subscribeForcedLogout((payload) => {
+      if (!mountedRef.current) return;
       const message = String(payload.message || "").trim();
       if (message) {
         persistAuthNotice(message);
