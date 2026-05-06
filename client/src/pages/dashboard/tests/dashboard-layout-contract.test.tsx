@@ -1,12 +1,22 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import test from "node:test";
 import { Activity, Database, FileText, LogIn, ShieldOff, Users, AlertTriangle } from "lucide-react";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { fileURLToPath } from "node:url";
 import { DashboardPageHeader } from "@/pages/dashboard/DashboardPageHeader";
 import { DashboardSnapshotSection } from "@/pages/dashboard/DashboardSnapshotSection";
 import { DashboardSummaryCards } from "@/pages/dashboard/DashboardSummaryCards";
+import {
+  DashboardUserInsightsGrid,
+  sanitizeDashboardRoleDistributionChartSurface,
+} from "@/pages/dashboard/DashboardUserInsightsGrid";
 import type { SummaryCardItem } from "@/pages/dashboard/types";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+type DashboardRoleChartSurface = Parameters<typeof sanitizeDashboardRoleDistributionChartSurface>[0];
 
 const summaryCards: SummaryCardItem[] = [
   { title: "Total Users", value: 10, icon: Users, color: "text-blue-600 dark:text-blue-400" },
@@ -73,4 +83,89 @@ test("DashboardSnapshotSection surfaces metric count badge with compact summary 
   assert.match(markup, /Quick Snapshot/);
   assert.match(markup, /3 metrics/);
   assert.match(markup, /compact dashboard snapshot/);
+});
+
+test("DashboardUserInsightsGrid keeps chart semantics grouped and the top-users scroller keyboard reachable", () => {
+  const source = readFileSync(path.resolve(__dirname, "../DashboardUserInsightsGrid.tsx"), "utf8");
+  const markup = renderToStaticMarkup(
+    createElement(DashboardUserInsightsGrid, {
+      roleDistribution: [
+        { role: "admin", count: 2 },
+        { role: "superuser", count: 3 },
+        { role: "user", count: 5 },
+      ],
+      roleLoading: false,
+      topUsers: [
+        { username: "alpha", loginCount: 8, role: "admin", lastLogin: "2026-05-06T01:00:00Z" },
+        { username: "beta", loginCount: 5, role: "user", lastLogin: "2026-05-06T02:00:00Z" },
+      ],
+      topUsersLoading: false,
+    }),
+  );
+
+  assert.match(markup, /aria-label="Top active users list"/);
+  assert.match(markup, /tabindex="0"/);
+  assert.match(markup, /role="img"/);
+  assert.match(markup, /aria-label="User role distribution chart"/);
+  assert.match(source, /accessibilityLayer=\{false\}/);
+  assert.match(source, /tabIndex=\{-1\}/);
+  assert.match(source, /role="presentation"/);
+  assert.match(source, /const container = roleChartSurfaceRef\.current/);
+  assert.match(source, /sanitizeDashboardRoleDistributionChartSurface\(container\)/);
+  assert.match(source, /ref=\{roleChartSurfaceRef\}/);
+  assert.match(source, /new MutationObserver\(sanitizeChartSurface\)/);
+  assert.match(source, /observer\?\.disconnect\(\)/);
+});
+
+test("sanitizeDashboardRoleDistributionChartSurface hides generated pie slices from assistive tech", () => {
+  const createMockNode = (initialAttributes: Record<string, string> = {}) => {
+    const attributes = new Map(Object.entries(initialAttributes));
+
+    return {
+      getAttribute(name: string) {
+        return attributes.has(name) ? attributes.get(name) ?? null : null;
+      },
+      removeAttribute(name: string) {
+        attributes.delete(name);
+      },
+      setAttribute(name: string, value: string) {
+        attributes.set(name, value);
+      },
+    };
+  };
+
+  const layer = createMockNode();
+  const path = createMockNode({
+    focusable: "true",
+    name: "admin",
+    role: "img",
+  });
+  const label = createMockNode({
+    focusable: "true",
+    name: "admin",
+    role: "img",
+  });
+  const nodesBySelector = new Map<string, unknown[]>([
+    ["g.recharts-pie-sector", [layer]],
+    ["path.recharts-sector", [path]],
+    ["text.recharts-text", [label]],
+  ]);
+  const container = {
+    querySelectorAll(selector: string) {
+      return nodesBySelector.get(selector) ?? [];
+    },
+  } as unknown as DashboardRoleChartSurface;
+
+  sanitizeDashboardRoleDistributionChartSurface(container);
+
+  assert.equal(layer.getAttribute("aria-hidden"), "true");
+  assert.equal(layer.getAttribute("role"), "presentation");
+  assert.equal(path.getAttribute("aria-hidden"), "true");
+  assert.equal(path.getAttribute("role"), "presentation");
+  assert.equal(path.getAttribute("focusable"), "false");
+  assert.equal(path.getAttribute("name"), null);
+  assert.equal(label.getAttribute("aria-hidden"), "true");
+  assert.equal(label.getAttribute("role"), "presentation");
+  assert.equal(label.getAttribute("focusable"), "false");
+  assert.equal(label.getAttribute("name"), null);
 });

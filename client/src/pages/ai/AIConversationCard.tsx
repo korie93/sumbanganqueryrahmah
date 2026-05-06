@@ -11,6 +11,7 @@ import {
 } from "@/components/ai-chat-utils";
 
 interface AIConversationCardProps {
+  assistantLabel: string;
   aiEnabled: boolean;
   embedded: boolean;
   showResetButton: boolean;
@@ -33,6 +34,7 @@ interface AIConversationCardProps {
 }
 
 export function AIConversationCard({
+  assistantLabel,
   aiEnabled,
   embedded,
   showResetButton,
@@ -151,7 +153,7 @@ export function AIConversationCard({
 
         <div className="flex items-end gap-2">
           <label htmlFor="ai-conversation-query" className="sr-only">
-            Taip soalan kepada AI SQR
+            Taip soalan kepada {assistantLabel}
           </label>
           <Textarea
             id="ai-conversation-query"

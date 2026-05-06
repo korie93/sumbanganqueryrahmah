@@ -35,6 +35,9 @@ test("registerLocalHttpPipeline allows blob receipt previews in the CSP header",
     assert.equal(response.headers.get("x-content-type-options"), "nosniff");
     assert.equal(response.headers.get("x-powered-by"), null);
     assert.equal(response.headers.get("referrer-policy"), "no-referrer");
+    assert.equal(response.headers.get("cross-origin-opener-policy"), "same-origin");
+    assert.match(String(response.headers.get("report-to") || ""), /"group":"sqr-csp-endpoint"/i);
+    assert.match(String(response.headers.get("reporting-endpoints") || ""), /sqr-csp-endpoint="\/api\/csp-report"/i);
     assert.match(String(response.headers.get("strict-transport-security") || ""), /max-age=15552000/i);
     assert.doesNotMatch(String(response.headers.get("strict-transport-security") || ""), /preload/i);
     const permissionsPolicy = String(response.headers.get("permissions-policy") || "");
@@ -55,6 +58,8 @@ test("registerLocalHttpPipeline allows blob receipt previews in the CSP header",
     assert.match(csp, /style-src-attr 'none'/i);
     assert.match(csp, /require-trusted-types-for 'script'/i);
     assert.match(csp, new RegExp(`trusted-types default ${SQR_TRUSTED_TYPES_POLICY_NAME}`, "i"));
+    assert.match(csp, /report-uri \/api\/csp-report/i);
+    assert.match(csp, /report-to sqr-csp-endpoint/i);
     assert.doesNotMatch(csp, /script-src[^;]*unsafe-inline/i);
     assert.doesNotMatch(csp, /(?:^|;)\s*style-src\s+[^;]*unsafe-inline/i);
     assert.doesNotMatch(csp, /(?:^|;)\s*style-src-elem\s+[^;]*unsafe-inline/i);

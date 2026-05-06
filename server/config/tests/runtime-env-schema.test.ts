@@ -164,6 +164,26 @@ test("runtime env schema validates staged shared rate-limit store configuration 
   );
 });
 
+test("runtime env schema validates staged database bootstrap modes", () => {
+  assert.doesNotThrow(() => {
+    validateRuntimeEnvironmentSchema({
+      SQR_DB_BOOTSTRAP_MODE: "runtime",
+    });
+    validateRuntimeEnvironmentSchema({
+      SQR_DB_BOOTSTRAP_MODE: "migration",
+    });
+  });
+
+  assert.throws(
+    () => {
+      validateRuntimeEnvironmentSchema({
+        SQR_DB_BOOTSTRAP_MODE: "disabled",
+      });
+    },
+    /SQR_DB_BOOTSTRAP_MODE must be one of: runtime or migration/i,
+  );
+});
+
 test("runtime env schema accepts staged collection PII retirement field lists when encryption is configured", () => {
   assert.doesNotThrow(() => {
     validateRuntimeEnvironmentSchema({

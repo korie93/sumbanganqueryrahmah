@@ -49,7 +49,7 @@ export function CollectionSidebar({
               <h2 className="truncate text-base font-semibold text-foreground">
                 {selectedItem?.label || "Collection"}
               </h2>
-              <Badge variant="secondary" className="rounded-full border border-primary/15 bg-primary/10 px-2 py-0.5 text-[10px] text-primary dark:border-primary/20 dark:bg-primary/14 dark:text-primary-foreground/92">
+              <Badge className="rounded-full px-2 py-0.5 text-[10px] shadow-sm">
                 Active
               </Badge>
             </div>
@@ -72,14 +72,23 @@ export function CollectionSidebar({
                 key={`collection-mobile-${item.key}`}
                 type="button"
                 onClick={() => onSelectSubPage(item.key)}
-                className={cn(
-                  "inline-flex min-h-10 shrink-0 items-center gap-2 rounded-full border px-3.5 py-2 text-left text-[13px] font-semibold transition-colors",
-                  active
-                    ? "border-primary/35 bg-primary/10 text-primary shadow-[inset_0_1px_0_hsl(0_0%_100%_/_0.08)] dark:border-primary/30 dark:bg-primary/14 dark:text-primary-foreground"
+                  className={cn(
+                    "inline-flex min-h-10 shrink-0 items-center gap-2 rounded-full border px-3.5 py-2 text-left text-[13px] font-semibold transition-colors",
+                    active
+                    ? "border-primary bg-primary text-primary-foreground shadow-sm dark:border-primary dark:bg-primary dark:text-primary-foreground"
                     : "border-border/60 bg-muted/25 text-foreground/88 hover:border-primary/20 hover:bg-accent/45 hover:text-foreground dark:border-white/10 dark:bg-white/[0.03] dark:text-foreground/92 dark:hover:bg-white/[0.06]",
                 )}
               >
-                <Icon className="h-4 w-4 shrink-0" />
+                <span
+                  className={cn(
+                    "inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full",
+                    active
+                      ? "bg-primary-foreground text-primary"
+                      : "bg-background/80 text-foreground dark:bg-white/[0.06] dark:text-foreground/88",
+                  )}
+                >
+                  <Icon className="h-4 w-4 shrink-0" />
+                </span>
                 <span className="whitespace-nowrap leading-tight">{item.label}</span>
               </button>
             );

@@ -50,6 +50,88 @@
   padding-bottom: var(--safe-area-inset-bottom);
 }
 
+.floatingPanelSurface {
+  color: var(--floating-ai-panel-text);
+  background: var(--floating-ai-panel-bg);
+  border-color: var(--floating-ai-panel-border);
+  box-shadow: var(--floating-ai-panel-shadow);
+}
+
+.floatingPanelSheetSurface,
+.floatingPanelFullscreenSurfaceChrome {
+  border-color: var(--floating-ai-panel-border-strong);
+  box-shadow: var(--floating-ai-panel-shadow-strong);
+}
+
+.floatingPanelDockedSurface {
+  border-color: var(--floating-ai-panel-border);
+}
+
+.floatingMobileHandle {
+  background: var(--floating-ai-mobile-handle-bg);
+}
+
+.floatingPanelHeader {
+  border-color: var(--floating-ai-header-border);
+}
+
+.floatingPanelHeaderMobile {
+  color: var(--floating-ai-header-mobile-text);
+  background: var(--floating-ai-header-mobile-bg);
+}
+
+.floatingPanelHeaderDesktop {
+  color: var(--floating-ai-header-title);
+  background: var(--floating-ai-header-desktop-bg);
+}
+
+.floatingPanelTitle {
+  color: var(--floating-ai-header-title);
+}
+
+.floatingPanelHeaderMobile .floatingPanelTitle {
+  color: var(--floating-ai-header-mobile-text);
+}
+
+.floatingPanelDescription {
+  color: var(--floating-ai-header-description);
+}
+
+.floatingPanelHeaderMobile .floatingPanelDescription {
+  color: var(--floating-ai-header-mobile-description);
+}
+
+.floatingHeaderButton {
+  color: var(--floating-ai-header-button-text);
+}
+
+.floatingHeaderButton:hover {
+  color: var(--floating-ai-header-button-hover-text);
+  background: var(--floating-ai-header-button-hover-bg);
+}
+
+.floatingPanelHeaderMobile .floatingHeaderButton {
+  color: var(--floating-ai-header-mobile-button-text);
+}
+
+.floatingPanelHeaderMobile .floatingHeaderButton:hover {
+  color: var(--floating-ai-header-mobile-button-hover-text);
+  background: var(--floating-ai-header-mobile-button-hover-bg);
+}
+
+.floatingMinimizedStatus {
+  color: var(--floating-ai-minimized-status-text);
+  background: var(--floating-ai-minimized-status-bg);
+  border-color: var(--floating-ai-minimized-status-border);
+}
+
+.floatingTriggerButton {
+  color: var(--floating-ai-trigger-text);
+  background: var(--floating-ai-trigger-bg);
+  border-color: var(--floating-ai-trigger-border);
+  box-shadow: var(--floating-ai-trigger-shadow);
+}
+
 .floatingMobileBackdrop {
   position: absolute;
   inset: 0;

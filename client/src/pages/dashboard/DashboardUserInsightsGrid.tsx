@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { Crown, Users } from "lucide-react";
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -34,6 +35,39 @@ const ROLE_DOT_CLASS_BY_ROLE: Record<string, string> = {
   user: "bg-[hsl(var(--chart-3))]",
 };
 
+const DASHBOARD_ROLE_CHART_SLICE_LAYER_SELECTOR = "g.recharts-pie-sector";
+const DASHBOARD_ROLE_CHART_SLICE_PATH_SELECTOR = "path.recharts-sector";
+const DASHBOARD_ROLE_CHART_LABEL_SELECTOR = "text.recharts-text";
+
+type DashboardRoleChartSurface = Pick<ParentNode, "querySelectorAll">;
+
+export function sanitizeDashboardRoleDistributionChartSurface(
+  container: DashboardRoleChartSurface | null | undefined,
+) {
+  if (!container) {
+    return;
+  }
+
+  container.querySelectorAll<SVGGElement>(DASHBOARD_ROLE_CHART_SLICE_LAYER_SELECTOR).forEach((layer) => {
+    layer.setAttribute("aria-hidden", "true");
+    layer.setAttribute("role", "presentation");
+  });
+
+  container.querySelectorAll<SVGPathElement>(DASHBOARD_ROLE_CHART_SLICE_PATH_SELECTOR).forEach((path) => {
+    path.setAttribute("aria-hidden", "true");
+    path.setAttribute("role", "presentation");
+    path.setAttribute("focusable", "false");
+    path.removeAttribute("name");
+  });
+
+  container.querySelectorAll<SVGTextElement>(DASHBOARD_ROLE_CHART_LABEL_SELECTOR).forEach((label) => {
+    label.setAttribute("aria-hidden", "true");
+    label.setAttribute("role", "presentation");
+    label.setAttribute("focusable", "false");
+    label.removeAttribute("name");
+  });
+}
+
 function CompactRoleTooltip({ active, payload }: CompactRoleTooltipProps) {
   if (!active || !payload?.length) {
     return null;
@@ -66,9 +100,36 @@ export function DashboardUserInsightsGrid({
   topUsersLoading,
 }: DashboardUserInsightsGridProps) {
   const isMobile = useIsMobile();
+  const roleChartSurfaceRef = useRef<HTMLDivElement | null>(null);
   const chartHeightClassName = isMobile ? "h-[220px]" : "h-[300px]";
   const donutOuterRadius = isMobile ? 58 : 78;
   const donutInnerRadius = isMobile ? 36 : 50;
+
+  useEffect(() => {
+    const container = roleChartSurfaceRef.current;
+    if (!container) {
+      return;
+    }
+
+    sanitizeDashboardRoleDistributionChartSurface(container);
+
+    const sanitizeChartSurface = () => {
+      sanitizeDashboardRoleDistributionChartSurface(container);
+    };
+    const observer = typeof MutationObserver === "function"
+      ? new MutationObserver(sanitizeChartSurface)
+      : null;
+    const frameId = window.requestAnimationFrame(sanitizeChartSurface);
+    const timeoutId = window.setTimeout(sanitizeChartSurface, 0);
+
+    observer?.observe(container, { childList: true, subtree: true });
+
+    return () => {
+      observer?.disconnect();
+      window.cancelAnimationFrame(frameId);
+      window.clearTimeout(timeoutId);
+    };
+  }, [isMobile, roleDistribution, roleLoading]);
 
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 lg:gap-6">
@@ -99,7 +160,12 @@ export function DashboardUserInsightsGrid({
               <span className="sr-only">Loading top active users</span>
             </div>
           ) : topUsers && topUsers.length > 0 ? (
-            <div className="max-h-[340px] space-y-3 overflow-y-auto pr-1">
+            <div
+              className="max-h-[340px] space-y-3 overflow-y-auto pr-1"
+              role="region"
+              tabIndex={0}
+              aria-label="Top active users list"
+            >
               {topUsers.map((user, index) => {
                 const formattedLastLogin = formatDashboardUserLastLogin(user.lastLogin);
 
@@ -182,12 +248,13 @@ export function DashboardUserInsightsGrid({
           ) : roleDistribution && roleDistribution.length > 0 ? (
             <>
               <div
+                ref={roleChartSurfaceRef}
                 className={`min-w-0 ${chartHeightClassName}`}
                 role="img"
                 aria-label="User role distribution chart"
               >
                 <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
+                  <PieChart accessibilityLayer={false} tabIndex={-1} role="presentation">
                     <Pie
                       data={roleDistribution}
                       dataKey="count"

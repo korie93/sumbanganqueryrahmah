@@ -151,7 +151,7 @@
   }
 }
 
-@media (max-width: 639px) {
+@media (max-width: 640px) {
   .collection-daily-progress-panel {
     border-radius: 20px;
     padding: 0.85rem;

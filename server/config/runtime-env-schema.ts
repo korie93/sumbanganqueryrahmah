@@ -7,6 +7,7 @@ const SECRET_STRING_MAX_LENGTH = 8_192;
 const BOOLEAN_ENV_VALUES = new Set(["1", "0", "true", "false", "yes", "no", "on", "off"]);
 const AUTH_COOKIE_SECURE_VALUES = new Set(["auto", "true", "false", "1", "0"]);
 const SESSION_COOKIE_SAMESITE_VALUES = new Set(["strict", "lax"]);
+const DB_BOOTSTRAP_MODE_VALUES = new Set(["runtime", "migration"]);
 const RATE_LIMIT_STORE_VALUES = new Set(["memory", "redis"]);
 const COLLECTION_PII_FIELD_VALUES = new Set([
   "customerName",
@@ -74,6 +75,20 @@ function optionalSessionCookieSameSiteEnv() {
       .refine(
         (value) => SESSION_COOKIE_SAMESITE_VALUES.has(value),
         "SESSION_COOKIE_SAMESITE must be one of: strict or lax.",
+      )
+      .optional(),
+  );
+}
+
+function optionalDbBootstrapModeEnv() {
+  return z.preprocess(
+    normalizeOptionalEnvString,
+    z
+      .string({ invalid_type_error: "SQR_DB_BOOTSTRAP_MODE must be a string." })
+      .transform((value) => value.toLowerCase())
+      .refine(
+        (value) => DB_BOOTSTRAP_MODE_VALUES.has(value),
+        "SQR_DB_BOOTSTRAP_MODE must be one of: runtime or migration.",
       )
       .optional(),
   );
@@ -172,6 +187,7 @@ const runtimeEnvironmentSchema = z.object({
   PG_IDLE_TIMEOUT_MS: optionalIntEnv("PG_IDLE_TIMEOUT_MS", { min: 1_000 }),
   PG_CONNECTION_TIMEOUT_MS: optionalIntEnv("PG_CONNECTION_TIMEOUT_MS", { min: 1_000 }),
   PG_SEARCH_PATH: optionalEnvString("PG_SEARCH_PATH", 255),
+  SQR_DB_BOOTSTRAP_MODE: optionalDbBootstrapModeEnv(),
 
   SESSION_SECRET: optionalEnvString("SESSION_SECRET", SECRET_STRING_MAX_LENGTH),
   SESSION_SECRET_PREVIOUS: optionalEnvString("SESSION_SECRET_PREVIOUS", SECRET_STRING_MAX_LENGTH),

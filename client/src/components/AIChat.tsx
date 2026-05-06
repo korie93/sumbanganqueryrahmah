@@ -15,6 +15,7 @@ import {
 type AIChatProps = {
   timeoutMs: number;
   aiEnabled: boolean;
+  assistantLabel?: string;
   compactMode?: boolean;
   onCancelAISearchReady?: ((cancelFn: () => void) => void) | undefined;
   onStatusChange?: ((status: AIChatStatus) => void) | undefined;
@@ -25,6 +26,7 @@ export type AIChatStatus = SharedAIChatStatus;
 export default function AIChat({
   timeoutMs,
   aiEnabled,
+  assistantLabel = "AI SQR",
   compactMode = false,
   onCancelAISearchReady,
   onStatusChange,
@@ -116,7 +118,7 @@ export default function AIChat({
 
       <div className="ai-input-container">
         <label htmlFor={queryInputId} className="sr-only">
-          Taip soalan kepada AI SQR
+          Taip soalan kepada {assistantLabel}
         </label>
         <Textarea
           ref={textareaRef}

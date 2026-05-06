@@ -260,6 +260,47 @@ test("runtime config rejects operations debug route enablement on production-lik
   );
 });
 
+test("runtime config defaults database bootstrap to runtime mode and accepts migration mode", async () => {
+  const localBase = {
+    NODE_ENV: "development",
+    HOST: "127.0.0.1",
+    PUBLIC_APP_URL: "http://127.0.0.1:5000",
+    SESSION_SECRET: null,
+    COLLECTION_NICKNAME_TEMP_PASSWORD: null,
+    COLLECTION_PII_ENCRYPTION_KEY: null,
+    PG_PASSWORD: null,
+    BACKUP_ENCRYPTION_KEY: null,
+    BACKUP_ENCRYPTION_KEYS: null,
+    BACKUP_FEATURE_ENABLED: "1",
+    SEED_DEFAULT_USERS: "0",
+    LOCAL_SUPERUSER_CREDENTIALS_FILE_ENABLED: "0",
+    MAIL_DEV_OUTBOX_ENABLED: "0",
+  };
+
+  await withEnv(
+    {
+      ...localBase,
+      SQR_DB_BOOTSTRAP_MODE: null,
+    },
+    async () => {
+      const runtimeModule = await importRuntimeFresh();
+      assert.equal(runtimeModule.runtimeConfig.bootstrap.databaseMode, "runtime");
+    },
+  );
+
+  await withEnv(
+    {
+      ...localBase,
+      SQR_DB_BOOTSTRAP_MODE: "migration",
+    },
+    async () => {
+      const runtimeModule = await importRuntimeFresh();
+      assert.equal(runtimeModule.runtimeConfig.bootstrap.databaseMode, "migration");
+    },
+  );
+});
+
+
 test("runtime config allows operations debug route enablement in strict local development", async () => {
   await withEnv(
     {

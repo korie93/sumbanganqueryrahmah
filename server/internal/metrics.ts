@@ -1,4 +1,8 @@
 export type InternalMetricName =
+  | "cspReportsAcceptedTotal"
+  | "cspReportsDroppedRateLimitTotal"
+  | "cspReportsDroppedRequestGuardTotal"
+  | "cspReportsDroppedTotal"
   | "webVitalsAcceptedTotal"
   | "webVitalsDroppedRateLimitTotal"
   | "webVitalsDroppedRequestGuardTotal"
@@ -13,6 +17,10 @@ export type InternalMetricsRecorder = {
 };
 
 const INTERNAL_METRIC_NAMES: readonly InternalMetricName[] = [
+  "cspReportsAcceptedTotal",
+  "cspReportsDroppedRateLimitTotal",
+  "cspReportsDroppedRequestGuardTotal",
+  "cspReportsDroppedTotal",
   "webVitalsAcceptedTotal",
   "webVitalsDroppedRateLimitTotal",
   "webVitalsDroppedRequestGuardTotal",

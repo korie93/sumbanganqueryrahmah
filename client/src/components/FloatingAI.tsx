@@ -21,7 +21,15 @@ type FloatingAIProps = {
   timeoutMs: number;
   aiEnabled: boolean;
   activePage: string;
+  systemName?: string | undefined;
 };
+
+const DEFAULT_FLOATING_AI_SYSTEM_NAME = "SQR";
+const FLOATING_AI_PANEL_DESCRIPTION = "Panel bantuan AI untuk pertanyaan berkaitan koleksi dan rekod";
+
+function resolveFloatingAiSystemName(systemName: string | undefined) {
+  return systemName?.trim() || DEFAULT_FLOATING_AI_SYSTEM_NAME;
+}
 
 function FloatingRootContainer({
   rootRef,
@@ -73,10 +81,12 @@ function FloatingTriggerShell({
   );
 }
 
-export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: FloatingAIProps) {
+export default function FloatingAI({ timeoutMs, aiEnabled, activePage, systemName }: FloatingAIProps) {
   const isMobile = useIsMobile();
   const [location] = useLocation();
   const hiddenForAiPage = activePage === "ai" || location.toLowerCase() === "/ai";
+  const resolvedSystemName = resolveFloatingAiSystemName(systemName);
+  const assistantLabel = `AI ${resolvedSystemName}`;
   const {
     messages,
     isThinking,
@@ -250,16 +260,17 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
             ref={panelSurfaceRef}
             id={panelId}
             className={cn(
-              "flex h-full w-full flex-col overflow-hidden border bg-white/98 text-slate-900 shadow-xl ring-1 ring-slate-900/8 supports-[backdrop-filter]:backdrop-blur-sm dark:bg-slate-950/98 dark:text-card-foreground dark:ring-white/10",
+              "flex h-full w-full flex-col overflow-hidden border supports-[backdrop-filter]:backdrop-blur-sm",
+              styles.floatingPanelSurface,
               shouldShowPanel ? "pointer-events-auto" : "pointer-events-none",
               layoutState.panel.mode === "fullscreen"
                 ? styles.floatingPanelFullscreenSurface
                 : "",
               layoutState.panel.mode === "sheet"
-                ? "rounded-[24px] border-sky-400/20 shadow-2xl"
+                ? cn("rounded-[24px]", styles.floatingPanelSheetSurface)
                 : layoutState.panel.mode === "fullscreen"
-                  ? "border-sky-400/20 shadow-2xl"
-                  : "rounded-[18px] border-sky-400/15",
+                  ? styles.floatingPanelFullscreenSurfaceChrome
+                  : cn("rounded-[18px]", styles.floatingPanelDockedSurface),
             )}
             role="dialog"
             aria-labelledby={panelTitleId}
@@ -276,15 +287,16 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
                   layoutState.panel.mode === "fullscreen" ? "pt-3" : "pt-2",
                 )}
               >
-                <div className="h-1.5 w-10 rounded-full bg-slate-400/45 dark:bg-white/20" aria-hidden="true" />
+                <div className={cn("h-1.5 w-10 rounded-full", styles.floatingMobileHandle)} aria-hidden="true" />
               </div>
             ) : null}
             <header
               className={cn(
                 "flex shrink-0 items-center justify-between border-b",
+                styles.floatingPanelHeader,
                 isMobile
-                  ? "border-slate-300/70 bg-slate-950/80 text-white supports-[backdrop-filter]:backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/88"
-                  : "border-slate-200/80 bg-gradient-to-r from-sky-500/12 via-slate-100/60 to-transparent dark:border-white/10 dark:via-transparent",
+                  ? cn(styles.floatingPanelHeaderMobile, "supports-[backdrop-filter]:backdrop-blur-xl")
+                  : styles.floatingPanelHeaderDesktop,
                 isMobile && layoutState.panel.mode === "fullscreen"
                   ? "min-h-16 px-4"
                   : isMobile
@@ -297,17 +309,17 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
                   id={panelTitleId}
                   className={cn(
                     "truncate font-semibold",
-                    isMobile ? "text-white" : "text-slate-950 dark:text-slate-50",
+                    styles.floatingPanelTitle,
                     layoutState.panel.mode === "fullscreen" ? "text-base" : "text-sm",
                   )}
                 >
-                  AI SQR
+                  {assistantLabel}
                 </h2>
                 <p
                   id={panelDescriptionId}
-                  className={cn("truncate text-[11px]", isMobile ? "text-white/70" : "text-slate-600 dark:text-slate-300/90")}
+                  className={cn("truncate text-[11px]", styles.floatingPanelDescription)}
                 >
-                  Smart Query Engine
+                  {FLOATING_AI_PANEL_DESCRIPTION}
                 </p>
               </div>
               <div className="flex items-center gap-1.5">
@@ -317,9 +329,7 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
                   variant="ghost"
                   className={cn(
                     "text-xs",
-                    isMobile
-                      ? "text-white/80 hover:bg-white/10 hover:text-white"
-                      : "text-slate-600 hover:bg-slate-100 hover:text-slate-950 dark:text-slate-200 dark:hover:bg-white/10 dark:hover:text-white",
+                    styles.floatingHeaderButton,
                     isMobile && layoutState.panel.mode === "fullscreen"
                       ? "h-10 px-3"
                       : isMobile
@@ -328,7 +338,7 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
                   )}
                   onClick={handleReset}
                   disabled={messages.length === 0 && !isThinking}
-                  aria-label="Reset sesi AI SQR"
+                  aria-label={`Reset sesi ${assistantLabel}`}
                 >
                   Reset Sesi
                 </Button>
@@ -337,9 +347,7 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
                   size="icon"
                   variant="ghost"
                   className={cn(
-                    isMobile
-                      ? "text-white/80 hover:bg-white/10 hover:text-white"
-                      : "text-slate-600 hover:bg-slate-100 hover:text-slate-950 dark:text-slate-200 dark:hover:bg-white/10 dark:hover:text-white",
+                    styles.floatingHeaderButton,
                     isMobile && layoutState.panel.mode === "fullscreen"
                       ? "h-10 w-10"
                       : isMobile
@@ -347,7 +355,7 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
                         : "h-8 w-8",
                   )}
                   onClick={handlePanelMinimizeClick}
-                  aria-label="Kecilkan panel AI"
+                  aria-label={`Kecilkan panel ${assistantLabel}`}
                 >
                   <Minimize2 className="h-4 w-4" aria-hidden="true" />
                 </Button>
@@ -369,7 +377,7 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
                     <div
                       className="flex h-full items-center justify-center"
                       role="status"
-                      aria-label="Memuatkan panel AI SQR"
+                      aria-label={`Memuatkan panel ${assistantLabel}`}
                       aria-live="polite"
                     >
                       <div
@@ -383,6 +391,7 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
                     <AIChat
                       timeoutMs={timeoutMs}
                       aiEnabled={aiEnabled}
+                      assistantLabel={assistantLabel}
                       compactMode={preferCompactPanel}
                       onStatusChange={setAiStatus}
                       onCancelAISearchReady={registerCancelAISearch}
@@ -404,7 +413,7 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
         hidden={layoutState.triggerHidden}
       >
         {!isOpen && isThinking && !layoutState.rootHidden && !isMobile ? (
-          <div className="pointer-events-none max-w-[220px] rounded-lg border border-blue-500/35 bg-blue-500/10 px-3 py-1.5 text-[11px] text-blue-200 shadow-sm">
+          <div className={cn("pointer-events-none max-w-[220px] rounded-lg border px-3 py-1.5 text-[11px] shadow-sm", styles.floatingMinimizedStatus)}>
             {minimizedStatus}
           </div>
         ) : null}
@@ -412,13 +421,14 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
           ref={triggerButtonRef}
           type="button"
           onClick={handleTriggerToggleClick}
-          title="AI SQR"
+          title={assistantLabel}
           aria-controls={panelId}
           aria-haspopup="dialog"
-          aria-label={isOpen ? "Kecilkan panel AI SQR" : "Buka panel AI SQR"}
+          aria-label={isOpen ? `Kecilkan panel ${assistantLabel}` : `Buka panel ${assistantLabel}`}
           {...triggerDisclosureA11yProps}
           className={cn(
-            "pointer-events-auto relative flex items-center justify-center rounded-full border border-sky-300/30 bg-sky-500 text-white shadow-[0_18px_38px_rgba(14,165,233,0.33)] transition-transform hover:scale-[1.03]",
+            "pointer-events-auto relative flex items-center justify-center rounded-full border transition-transform hover:scale-[1.03]",
+            styles.floatingTriggerButton,
             isMobile ? "h-12 w-12" : "h-14 w-14",
             hideForFocusedEditable ? "pointer-events-none" : "",
             layoutState.triggerHidden ? "pointer-events-none scale-95 opacity-0" : "",

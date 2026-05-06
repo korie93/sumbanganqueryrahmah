@@ -29,9 +29,12 @@ test("visual contract authenticated login follows the stable login test ids", ()
 
 test("visual contract keeps the login page reachability helper aligned with the login form", () => {
   assert.match(authContractUtilsSource, /const ensureLoginPageVisible = async \(page, contextLabel = "Authenticated contract"\) =>/);
+  assert.match(visualContractSource, /contentSelector: "\.login-shell"/);
+  assert.match(visualContractSource, /if \(routeSpec\.path === "\/login"\) {\s+await ensureLoginPageVisible\(page, `\$\{routeSpec\.id\}\/\$\{viewportSpec\.id\}`\);\s+}/);
   assert.match(authContractUtilsSource, /Log Masuk SQR/);
   assert.match(authContractUtilsSource, /Log In SQR System/);
   assert.match(authContractUtilsSource, /getByTestId\("input-username"\)/);
+  assert.match(authContractUtilsSource, /await usernameInput\.waitFor\(\{ state: "visible", timeout: 10_000 \}\)/);
   assert.match(loginPageSource, /data-testid="input-username"/);
   assert.match(loginPageSource, /data-testid="input-password"/);
   assert.match(loginPageSource, /data-testid="button-login"/);

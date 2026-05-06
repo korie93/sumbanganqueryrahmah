@@ -31,6 +31,7 @@ type AppPageRendererProps = {
   tabVisibilityLoaded: boolean;
   monitorVisibility: MonitorSectionVisibility;
   featureLockdown: boolean;
+  systemName?: string | undefined;
   onNavigate: (page: string, importId?: string) => void;
   onMonitorSectionChange: (section: MonitorSection) => void;
 };
@@ -45,6 +46,7 @@ function AppPageRendererImpl({
   tabVisibilityLoaded,
   monitorVisibility,
   featureLockdown,
+  systemName,
   onNavigate,
   onMonitorSectionChange,
 }: AppPageRendererProps) {
@@ -108,7 +110,13 @@ function AppPageRendererImpl({
           />
         );
       }
-      return <AIPage timeoutMs={runtimeConfig.aiTimeoutMs} aiEnabled={runtimeConfig.aiEnabled} />;
+      return (
+        <AIPage
+          timeoutMs={runtimeConfig.aiTimeoutMs}
+          aiEnabled={runtimeConfig.aiEnabled}
+          systemName={systemName}
+        />
+      );
     case "settings":
       return <SettingsRoutePage tabVisibility={tabVisibility} />;
     case "maintenance":

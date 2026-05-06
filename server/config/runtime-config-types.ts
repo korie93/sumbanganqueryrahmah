@@ -175,6 +175,7 @@ export type RuntimeConfig = {
     forceCluster: boolean;
   };
   bootstrap: {
+    databaseMode: "runtime" | "migration";
     localSuperuserCredentialsFileEnabled: boolean;
     users: {
       superuser: SeedUserRuntimeConfig;

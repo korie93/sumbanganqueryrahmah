@@ -8,6 +8,7 @@ import { logger } from "../lib/logger";
 import { normalizeCorsOrigin, resolveAllowedCorsOrigins } from "./cors";
 
 const UNSAFE_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
+const CSRF_EXEMPT_API_PATHS = new Set(["/api/csp-report"]);
 
 type CsrfMiddlewareOptions = {
   allowedOrigins?: string[];
@@ -38,6 +39,12 @@ export function createCsrfProtectionMiddleware(options: CsrfMiddlewareOptions = 
     }
 
     if (!req.path.startsWith("/api/")) {
+      return next();
+    }
+
+    // CSP reports are append-only aggregate telemetry. They must not require a
+    // CSRF token because browsers send them automatically after policy checks.
+    if (CSRF_EXEMPT_API_PATHS.has(req.path)) {
       return next();
     }
 

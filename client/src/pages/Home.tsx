@@ -132,7 +132,7 @@ function HomeImpl({ onNavigate, userRole, tabVisibility }: HomeProps) {
                 </p>
                 <h2 className="mt-1 text-lg font-semibold text-foreground">Start the next task</h2>
               </div>
-              <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
+              <span className="home-mobile-count-chip">
                 Top {mobileHomeSections.quickActions.length}
               </span>
             </div>
@@ -274,7 +274,7 @@ function HomeImpl({ onNavigate, userRole, tabVisibility }: HomeProps) {
                       <Icon className="h-5 w-5" aria-hidden="true" />
                     </span>
                     <div className="min-w-0 space-y-2">
-                      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary/75">
+                      <p className="home-desktop-primary-kicker">
                         Primary Workflow
                       </p>
                       <div className="space-y-1">

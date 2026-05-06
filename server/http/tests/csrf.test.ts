@@ -16,6 +16,9 @@ function createCsrfTestApp() {
   app.post("/api/mutate", (_req, res) => {
     res.json({ ok: true });
   });
+  app.post("/api/csp-report", (_req, res) => {
+    res.status(204).end();
+  });
   return app;
 }
 
@@ -158,6 +161,30 @@ test("csrf middleware allows requests without auth session cookies", async () =>
 
     assert.equal(response.status, 200);
     assert.deepEqual(await response.json(), { ok: true });
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("csrf middleware exempts browser CSP reports from token checks", async () => {
+  const app = createCsrfTestApp();
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(`${baseUrl}/api/csp-report`, {
+      method: "POST",
+      headers: {
+        Cookie: "sqr_auth=token-value; sqr_csrf=csrf-token",
+        "Content-Type": "application/csp-report",
+      },
+      body: JSON.stringify({
+        "csp-report": {
+          "violated-directive": "script-src",
+        },
+      }),
+    });
+
+    assert.equal(response.status, 204);
   } finally {
     await stopTestServer(server);
   }

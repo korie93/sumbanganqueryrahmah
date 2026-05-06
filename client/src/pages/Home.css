@@ -79,6 +79,19 @@
   box-shadow: var(--home-surface-shadow);
 }
 
+.home-mobile-count-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2rem;
+  padding: 0.25rem 0.75rem;
+  border-radius: 999px;
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+  font-size: 0.75rem;
+  font-weight: 700;
+  box-shadow: 0 1px 2px hsl(var(--primary) / 0.24);
+}
+
 .home-mobile-quick-card {
   display: flex;
   min-height: 8.6rem;
@@ -217,7 +230,6 @@
 
 .home-card-text p {
   font-size: var(--font-size-sm);
-  opacity: 0.8;
   color: hsl(var(--muted-foreground));
 }
 
@@ -298,6 +310,14 @@
   background: hsl(var(--primary) / 0.1);
   color: hsl(var(--primary));
   flex-shrink: 0;
+}
+
+.home-desktop-primary-kicker {
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: hsl(var(--muted-foreground));
 }
 
 .home-section-shell {

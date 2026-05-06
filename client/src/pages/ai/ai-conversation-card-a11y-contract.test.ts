@@ -14,7 +14,8 @@ test("AI conversation card uses Malay labels and exposes a formal textarea label
   const source = readSource("AIConversationCard.tsx");
 
   assert.match(source, /<label htmlFor="ai-conversation-query" className="sr-only">/);
-  assert.match(source, /Taip soalan kepada AI SQR/);
+  assert.match(source, /assistantLabel: string/);
+  assert.match(source, /Taip soalan kepada \{assistantLabel\}/);
   assert.match(source, /Pembantu AI dinyahaktifkan oleh tetapan sistem\./);
   assert.match(source, /Hentikan AI/);
   assert.match(source, /Sembang Baharu/);

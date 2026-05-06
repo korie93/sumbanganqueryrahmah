@@ -385,7 +385,14 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
     trackedSockets.add(ws);
     socketCleanupCallbacks.set(ws, cleanupSocket);
 
-    const url = new URL(req.url!, `http://${req.headers.host}`);
+    const host = req.headers.host ?? "localhost";
+    const requestUrl = req.url ?? "/";
+    const url = new URL(requestUrl, `http://${host}`);
+    if (!req.headers.host) {
+      logger.warn("WebSocket handshake missing host header; using localhost fallback", {
+        path: url.pathname,
+      });
+    }
     if (url.searchParams.has("token")) {
       logger.warn("WebSocket rejected query-string session token", {
         origin: req.headers.origin || null,

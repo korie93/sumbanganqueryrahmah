@@ -19,7 +19,8 @@ test("floating AI chat input has a formal accessible label", () => {
   const source = readComponentSource("AIChat.tsx");
 
   assert.match(source, /<label htmlFor=\{queryInputId\} className="sr-only">/);
-  assert.match(source, /Taip soalan kepada AI SQR/);
+  assert.match(source, /assistantLabel = "AI SQR"/);
+  assert.match(source, /Taip soalan kepada \{assistantLabel\}/);
   assert.match(source, /data-floating-ai-query-input="true"/);
   assert.match(source, /maxLength=\{AI_REQUEST_MAX_CHARACTERS\}/);
   assert.match(source, /aria-describedby=\{queryLimitId\}/);
@@ -51,17 +52,34 @@ test("floating AI dialog exposes boolean disclosure state and semantic heading",
   assert.match(source, /role="dialog"/);
   assert.match(source, /aria-labelledby=\{panelTitleId\}/);
   assert.match(source, /Desktop floating AI remains a non-modal dialog/);
+  assert.match(source, /const assistantLabel = `AI \$\{resolvedSystemName\}`/);
+  assert.match(source, /Panel bantuan AI untuk pertanyaan berkaitan koleksi dan rekod/);
   assert.match(source, /const modalDialogA11yProps = isMobile/);
   assert.match(source, /onEscapeKeyDown: handleMinimize/);
   assert.match(source, /<h2\s+id=\{panelTitleId\}/);
   assert.match(source, /aria-label="Tutup panel AI"/);
-  assert.match(source, /aria-label="Kecilkan panel AI"/);
-  assert.match(source, /aria-label="Memuatkan panel AI SQR"/);
-  assert.match(source, /aria-label="Reset sesi AI SQR"/);
-  assert.match(source, /aria-label=\{isOpen \? "Kecilkan panel AI SQR" : "Buka panel AI SQR"\}/);
+  assert.match(source, /aria-label=\{`Kecilkan panel \$\{assistantLabel\}`\}/);
+  assert.match(source, /aria-label=\{`Memuatkan panel \$\{assistantLabel\}`\}/);
+  assert.match(source, /aria-label=\{`Reset sesi \$\{assistantLabel\}`\}/);
+  assert.match(source, /aria-label=\{isOpen \? `Kecilkan panel \$\{assistantLabel\}` : `Buka panel \$\{assistantLabel\}`\}/);
   assert.doesNotMatch(source, /Close AI panel/);
   assert.doesNotMatch(source, /Minimize AI panel/);
   assert.doesNotMatch(source, /Open AI SQR panel/);
+  assert.doesNotMatch(source, /Smart Query Engine/);
+});
+
+test("floating AI visual colors are sourced from design tokens", () => {
+  const source = readComponentSource("FloatingAI.tsx");
+  const floatingCss = readComponentSource("FloatingAI.module.css");
+  const tokens = readClientSource("theme-tokens.css");
+
+  assert.doesNotMatch(source, /bg-sky-500|bg-slate-950|text-slate-|border-sky-|border-blue-500|bg-blue-500|text-blue-200/);
+  assert.match(source, /styles\.floatingPanelSurface/);
+  assert.match(source, /styles\.floatingTriggerButton/);
+  assert.match(floatingCss, /var\(--floating-ai-panel-bg\)/);
+  assert.match(floatingCss, /var\(--floating-ai-trigger-bg\)/);
+  assert.match(tokens, /--floating-ai-panel-bg:/);
+  assert.match(tokens, /--floating-ai-trigger-bg:/);
 });
 
 test("floating AI desktop focus handoff is bounded and panel transition is property-specific", () => {

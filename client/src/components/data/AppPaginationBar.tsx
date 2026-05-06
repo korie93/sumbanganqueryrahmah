@@ -61,6 +61,7 @@ export function AppPaginationBar({
   const safePage = Math.min(Math.max(1, page), safeTotalPages);
   const controlsDisabled = disabled || loading;
   const busyProps = loading ? { "aria-busy": "true" as const } : {};
+  const pageSizeLabel = `Page size for ${itemLabel}`;
 
   return (
     <div
@@ -85,7 +86,7 @@ export function AppPaginationBar({
           onValueChange={(value) => onPageSizeChange(Number(value))}
           disabled={controlsDisabled}
         >
-          <SelectTrigger className="h-9 w-full sm:w-[120px]">
+          <SelectTrigger aria-label={pageSizeLabel} className="h-9 w-full sm:w-[120px]">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>

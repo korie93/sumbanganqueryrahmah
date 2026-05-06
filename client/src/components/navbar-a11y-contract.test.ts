@@ -16,6 +16,7 @@ test("navbar controls use Malay accessible labels and include username context",
   const desktopNavigationSource = readSource("NavbarDesktopNavigation.tsx");
   const mobileNavigationSource = readSource("NavbarMobileNavigation.tsx");
   const scrollHintSource = readSource("HorizontalScrollHint.tsx");
+  const navbarStyles = readSource("Navbar.css");
 
   assert.match(navbarSource, /aria-label="Buka menu navigasi"/);
   assert.match(navbarSource, /aria-label=\{`Buka menu pengguna untuk \$\{username\}`\}/);
@@ -32,8 +33,14 @@ test("navbar controls use Malay accessible labels and include username context",
   assert.match(mobileNavigationSource, /Bahagian semasa:/);
   assert.match(mobileNavigationSource, /aria-label="Navigasi mudah alih"/);
   assert.match(mobileNavigationSource, /aria-current=\{active \? "page" : undefined\}/);
+  assert.match(mobileNavigationSource, /border-primary bg-primary text-primary-foreground shadow-sm/);
+  assert.match(mobileNavigationSource, /active \? "bg-primary-foreground text-primary" : "bg-primary\/10 text-primary"/);
+  assert.match(mobileNavigationSource, /rounded-full bg-primary-foreground px-2 py-0\.5 text-\[10px\] font-semibold uppercase tracking-\[0\.08em\] text-primary/);
+  assert.match(navbarStyles, /\.nav-pill\.nav-pill-active\s*\{[\s\S]*color:\s*hsl\(var\(--primary-foreground\)\);/);
+  assert.match(navbarStyles, /\.user-menu-role\s*\{[\s\S]*color:\s*hsl\(var\(--primary-foreground\)\);/);
   assert.doesNotMatch(navbarSource, /Open user menu|Open navigation menu/);
   assert.doesNotMatch(desktopNavigationSource, /Primary navigation|Scroll for more/);
   assert.doesNotMatch(scrollHintSource, /Scroll for more/);
   assert.doesNotMatch(mobileNavigationSource, /Mobile navigation|Current section:/);
+  assert.doesNotMatch(mobileNavigationSource, /border-primary\/35 bg-primary\/10 text-primary shadow-sm/);
 });

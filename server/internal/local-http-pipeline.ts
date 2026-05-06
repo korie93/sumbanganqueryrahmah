@@ -12,6 +12,15 @@ import { SQR_TRUSTED_TYPES_POLICY_NAME } from "../../shared/trusted-types";
 const HTTP_SLOW_REQUEST_MS = runtimeConfig.runtime.httpSlowRequestMs;
 const API_VERSION_HEADER = "API-Version";
 const API_VERSION_VALUE = "1";
+const CSP_REPORT_BODY_LIMIT = "8kb";
+const CSP_REPORT_ENDPOINT_PATH = "/api/csp-report";
+const CSP_REPORT_GROUP = "sqr-csp-endpoint";
+const CSP_REPORT_TO_VALUE = JSON.stringify({
+  group: CSP_REPORT_GROUP,
+  max_age: 10_886_400,
+  endpoints: [{ url: CSP_REPORT_ENDPOINT_PATH }],
+});
+const CSP_REPORTING_ENDPOINTS_VALUE = `${CSP_REPORT_GROUP}="${CSP_REPORT_ENDPOINT_PATH}"`;
 const WEB_VITALS_BODY_LIMIT = "4kb";
 const REACT_REMOVE_SCROLL_BAR_STYLE_HASHES = [
   "'sha256-nzTgYzXYDNe6BAHiiI7NNlfK8n/auuOAhh2t92YvuXo='",
@@ -100,6 +109,9 @@ export function registerLocalHttpPipeline(app: Express, options: LocalHttpPipeli
   app.disable("x-powered-by");
 
   app.use(helmet({
+    crossOriginOpenerPolicy: {
+      policy: "same-origin",
+    },
     frameguard: {
       action: "sameorigin",
     },
@@ -130,12 +142,16 @@ export function registerLocalHttpPipeline(app: Express, options: LocalHttpPipeli
         styleSrcAttr: ["'none'"],
         trustedTypes: ["default", SQR_TRUSTED_TYPES_POLICY_NAME],
         "require-trusted-types-for": ["'script'"],
+        reportUri: [CSP_REPORT_ENDPOINT_PATH],
+        reportTo: [CSP_REPORT_GROUP],
       },
     },
   }));
 
   app.use((_req, res, next) => {
     res.setHeader("Permissions-Policy", PERMISSIONS_POLICY_HEADER);
+    res.setHeader("Report-To", CSP_REPORT_TO_VALUE);
+    res.setHeader("Reporting-Endpoints", CSP_REPORTING_ENDPOINTS_VALUE);
     next();
   });
 
@@ -144,6 +160,10 @@ export function registerLocalHttpPipeline(app: Express, options: LocalHttpPipeli
   app.use("/api/imports", express.urlencoded({ extended: true, limit: importBodyLimit }));
   app.use("/api/collection", express.json({ limit: collectionBodyLimit }));
   app.use("/api/collection", express.urlencoded({ extended: true, limit: collectionBodyLimit }));
+  app.use("/api/csp-report", express.json({
+    limit: CSP_REPORT_BODY_LIMIT,
+    type: ["application/csp-report", "application/reports+json", "application/json"],
+  }));
   app.use("/telemetry/web-vitals", express.json({ limit: WEB_VITALS_BODY_LIMIT }));
   app.use(express.json({ limit: defaultBodyLimit }));
   app.use(express.urlencoded({ extended: true, limit: defaultBodyLimit }));

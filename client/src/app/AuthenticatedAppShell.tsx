@@ -190,6 +190,7 @@ export default function AuthenticatedAppShell({
                 tabVisibilityLoaded={tabVisibilityLoaded}
                 monitorVisibility={monitorVisibility}
                 featureLockdown={featureLockdown}
+                systemName={systemName}
                 onNavigate={onNavigate}
                 onMonitorSectionChange={onMonitorSectionChange}
               />
@@ -202,6 +203,7 @@ export default function AuthenticatedAppShell({
               timeoutMs={runtimeConfig.aiTimeoutMs}
               aiEnabled={runtimeConfig.aiEnabled}
               activePage={currentPage}
+              systemName={systemName}
             />
           </Suspense>
         ) : null}

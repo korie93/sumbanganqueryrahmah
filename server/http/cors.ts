@@ -71,6 +71,16 @@ function buildDefaultCorsEnvironment(): CorsEnvironmentSource {
   };
 }
 
+function resolveSameOriginFromRequest(req: Parameters<RequestHandler>[0]): string | null {
+  const host = String(req.headers.host || "").trim();
+  if (!host) {
+    return null;
+  }
+
+  const protocol = String(req.protocol || "http").trim() || "http";
+  return normalizeCorsOrigin(`${protocol}://${host}`);
+}
+
 export function resolveAllowedCorsOrigins(env: CorsEnvironmentSource = buildDefaultCorsEnvironment()): string[] {
   const origins = new Set<string>();
   const addOrigin = (value: string | null | undefined, source: string) => {
@@ -125,6 +135,7 @@ export function createCorsMiddleware(
 
   return (req, res, next) => {
     const requestOrigin = normalizeCorsOrigin(req.headers.origin);
+    const sameOrigin = resolveSameOriginFromRequest(req);
 
     res.header("Vary", "Origin");
     res.header("Access-Control-Allow-Methods", DEFAULT_ALLOWED_METHODS);
@@ -137,7 +148,7 @@ export function createCorsMiddleware(
       return next();
     }
 
-    if (allowedOriginSet.has(requestOrigin)) {
+    if (allowedOriginSet.has(requestOrigin) || (sameOrigin && requestOrigin === sameOrigin)) {
       res.header("Access-Control-Allow-Origin", requestOrigin);
       res.header("Access-Control-Allow-Credentials", "true");
       res.header("Access-Control-Max-Age", DEFAULT_PREFLIGHT_MAX_AGE_SECONDS);

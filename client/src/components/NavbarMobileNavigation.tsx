@@ -64,11 +64,11 @@ function NavbarMobileNavigationImpl({
                 onFocus={() => onPrefetch(item.id)}
                 className={`flex w-full items-start gap-3 rounded-xl border px-3 py-3 text-left transition-colors ${
                   active
-                    ? "border-primary/35 bg-primary/10 text-primary shadow-sm"
+                    ? "border-primary bg-primary text-primary-foreground shadow-sm"
                     : "border-border/60 bg-background/70 text-foreground hover:border-border hover:bg-accent/40"
                 }`}
               >
-                <span className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${active ? "bg-primary text-primary-foreground" : "bg-primary/10 text-primary"}`}>
+                <span className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${active ? "bg-primary-foreground text-primary" : "bg-primary/10 text-primary"}`}>
                   <Icon className="h-4 w-4" aria-hidden="true" />
                 </span>
                 <span className="min-w-0 flex-1">
@@ -77,7 +77,7 @@ function NavbarMobileNavigationImpl({
                       {formatNavigationLabel(item.label, item.id, savedCount)}
                     </span>
                     {active ? (
-                      <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-primary">
+                      <span className="shrink-0 rounded-full bg-primary-foreground px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-primary">
                         Semasa
                       </span>
                     ) : null}

@@ -126,3 +126,23 @@ test("requests without an Origin header continue normally", async () => {
     await stopTestServer(server);
   }
 });
+
+test("same-origin browser requests stay allowed even when the configured CORS list is stale", async () => {
+  const app = createCorsTestApp(["https://app.example.com"]);
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(`${baseUrl}/ping`, {
+      headers: {
+        Origin: baseUrl,
+      },
+    });
+
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get("access-control-allow-origin"), baseUrl);
+    assert.equal(response.headers.get("access-control-allow-credentials"), "true");
+    assert.equal((await response.json()).ok, true);
+  } finally {
+    await stopTestServer(server);
+  }
+});

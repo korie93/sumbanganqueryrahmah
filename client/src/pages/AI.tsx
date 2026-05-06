@@ -6,6 +6,7 @@ type AIProps = {
   aiEnabled?: boolean;
   embedded?: boolean;
   showResetButton?: boolean;
+  systemName?: string | undefined;
 };
 
 export default function AI({
@@ -13,6 +14,7 @@ export default function AI({
   aiEnabled = true,
   embedded = false,
   showResetButton = true,
+  systemName,
 }: AIProps) {
   const isLowSpecMode =
     typeof document !== "undefined" &&
@@ -23,9 +25,11 @@ export default function AI({
     aiEnabled,
     typingIntervalMs,
   });
+  const assistantLabel = `AI ${systemName?.trim() || "SQR"}`;
 
   const chatPanel = (
     <AIConversationCard
+      assistantLabel={assistantLabel}
       aiEnabled={aiEnabled}
       embedded={embedded}
       showResetButton={showResetButton}

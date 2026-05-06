@@ -30,7 +30,7 @@ export function readWebSocketRequestHost(
   const trustedForwardedHost = options.trustForwardedHeaders
     ? firstForwardedValue(headers["x-forwarded-host"])
     : "";
-  return (trustedForwardedHost || firstHeaderValue(headers.host))
+  return (trustedForwardedHost || firstHeaderValue(headers.host) || "localhost")
     .trim()
     .toLowerCase();
 }

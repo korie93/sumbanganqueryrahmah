@@ -155,9 +155,11 @@ export class PostgresStorageCore {
 
   private async runInit() {
     const startedAt = performance.now();
-    if (runtimeConfig.app.isProductionLike) {
+    const databaseBootstrapMode = runtimeConfig.bootstrap.databaseMode;
+    if (runtimeConfig.app.isProductionLike || databaseBootstrapMode === "migration") {
       logger.info("PostgreSQL runtime schema verification starting", {
-        productionLike: true,
+        databaseBootstrapMode,
+        productionLike: runtimeConfig.app.isProductionLike,
         schemaCoupledRuntimeBootstrap: false,
       });
       await verifyRuntimeSchemaReady();
@@ -197,6 +199,7 @@ export class PostgresStorageCore {
     );
 
     logger.info("PostgreSQL storage bootstrap starting", {
+      databaseBootstrapMode,
       productionLike: runtimeConfig.app.isProductionLike,
       schemaCoupledRuntimeBootstrap: true,
       stepCount,
@@ -254,7 +257,7 @@ export class PostgresStorageCore {
     requiredTables: readonly string[],
     bootstrap: () => Promise<void>,
   ) {
-    if (runtimeConfig.app.isProductionLike) {
+    if (runtimeConfig.app.isProductionLike || runtimeConfig.bootstrap.databaseMode === "migration") {
       await verifyRuntimeSchemaReady(undefined, requiredTables);
       return;
     }

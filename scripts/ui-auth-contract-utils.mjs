@@ -39,7 +39,12 @@ export const ensureLoginPageVisible = async (page, contextLabel = "Authenticated
   });
   const usernameInput = page.getByTestId("input-username");
 
-  if (await waitForVisible(loginHeading) || await waitForVisible(usernameInput)) {
+  if (await waitForVisible(usernameInput)) {
+    return;
+  }
+
+  if (await waitForVisible(loginHeading)) {
+    await usernameInput.waitFor({ state: "visible", timeout: 10_000 });
     return;
   }
 

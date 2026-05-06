@@ -124,7 +124,7 @@ export function SideTabNavigation({
                   type="button"
                   onClick={() => handleSelect(item.key)}
                   className={cn(
-                    "relative flex min-h-[4.75rem] w-full items-center rounded-[1.4rem] px-3.5 py-3 text-sm text-primary transition-[transform,background-color,color,box-shadow] duration-150 hover:-translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/45 focus-visible:ring-offset-2 focus-visible:ring-offset-background dark:focus-visible:ring-primary/55 dark:focus-visible:ring-offset-[hsl(224_38%_12%)]",
+                    "relative flex min-h-[4.75rem] w-full items-center rounded-[1.4rem] px-3.5 py-3 text-sm text-foreground transition-[transform,background-color,color,box-shadow] duration-150 hover:-translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/45 focus-visible:ring-offset-2 focus-visible:ring-offset-background dark:focus-visible:ring-primary/55 dark:focus-visible:ring-offset-[hsl(224_38%_12%)]",
                     collapsed ? "justify-center" : "justify-start gap-3",
                   )}
                   aria-label={item.label}
@@ -135,7 +135,7 @@ export function SideTabNavigation({
                     className="absolute inset-0 rounded-[1.4rem] border border-primary/35 bg-primary/10 shadow-[inset_0_1px_0_hsl(0_0%_100%_/_0.6)] dark:border-primary/30 dark:bg-primary/14 dark:shadow-[inset_0_1px_0_hsl(0_0%_100%_/_0.08)]"
                   />
 
-                  <span className="relative z-10 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-background shadow-sm dark:bg-white/8 dark:text-primary-foreground">
+                  <span className="relative z-10 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-background text-primary shadow-sm dark:bg-white/8 dark:text-primary-foreground">
                     <Icon className="h-4 w-4" />
                   </span>
 
@@ -144,7 +144,7 @@ export function SideTabNavigation({
                       <span className="min-w-0 space-y-0.5 text-left">
                         <span className="block truncate font-semibold leading-tight">{item.label}</span>
                         {item.description ? (
-                          <span className="block truncate text-[12px] leading-[1.35] text-foreground/72 dark:text-foreground/78">
+                          <span className="block truncate text-[12px] leading-[1.35] text-muted-foreground">
                             {item.description}
                           </span>
                         ) : null}
@@ -178,7 +178,7 @@ export function SideTabNavigation({
                       <span className="min-w-0 space-y-0.5 text-left">
                         <span className="block truncate font-semibold leading-tight text-foreground/88 dark:text-foreground/92">{item.label}</span>
                         {item.description ? (
-                          <span className="block truncate text-[12px] leading-[1.35] text-foreground/62 dark:text-foreground/72">
+                          <span className="block truncate text-[12px] leading-[1.35] text-muted-foreground">
                             {item.description}
                           </span>
                         ) : null}

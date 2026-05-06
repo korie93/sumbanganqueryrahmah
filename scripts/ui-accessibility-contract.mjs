@@ -1,4 +1,6 @@
 import process from "node:process";
+import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { chromium } from "playwright";
 import {
   completeTwoFactorLoginIfNeeded,
@@ -10,6 +12,8 @@ import {
 const baseUrl = process.env.A11Y_BASE_URL || process.env.SMOKE_BASE_URL || "http://127.0.0.1:5000";
 const authUsername = String(process.env.A11Y_TEST_USERNAME || process.env.SMOKE_TEST_USERNAME || "").trim();
 const authPassword = String(process.env.A11Y_TEST_PASSWORD || process.env.SMOKE_TEST_PASSWORD || "").trim();
+const require = createRequire(import.meta.url);
+const axeSource = readFileSync(require.resolve("axe-core/axe.min.js"), "utf8");
 
 const assert = (condition, message) => {
   if (!condition) {
@@ -49,6 +53,11 @@ const authenticatedRouteSpecs = [
   {
     id: "dashboard",
     path: "/dashboard",
+    contentSelector: "main#main-content",
+  },
+  {
+    id: "ai",
+    path: "/ai",
     contentSelector: "main#main-content",
   },
   {
@@ -202,6 +211,70 @@ const readAccessibilitySummary = async (page, routeSpec) =>
     };
   }, routeSpec);
 
+async function verifyAxeAccessibility(page, label) {
+  await page.addScriptTag({ content: axeSource });
+  const axeResult = await page.evaluate(async () => {
+    const axe = window.axe;
+    return axe.run(document, {
+      resultTypes: ["violations"],
+    });
+  });
+  const violations = axeResult.violations
+    .filter((violation) => violation.impact === "critical" || violation.impact === "serious")
+    .map((violation) => {
+      const details = violation.nodes
+        .slice(0, 2)
+        .map((node) => {
+          const targets = node.target.join(", ");
+          const html = String(node.html || "").replace(/\s+/g, " ").trim();
+          const summary = String(node.failureSummary || "").replace(/\s+/g, " ").trim();
+          const parts = [targets, html, summary].filter(Boolean);
+          return parts.join(" | ");
+        })
+        .join(" ; ");
+      return `${violation.id} (${violation.impact})${details ? `: ${details}` : ""}`;
+    });
+
+  assert(
+    violations.length === 0,
+    `${label}: axe serious/critical accessibility violations: ${violations.join("; ")}`,
+  );
+}
+
+async function verifyKeyboardFocus(page, label) {
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    await page.keyboard.press("Tab");
+    const focused = await page.evaluate(() => {
+      const element = document.activeElement;
+      if (!(element instanceof HTMLElement)) {
+        return { label: "none", visible: false };
+      }
+
+      const style = window.getComputedStyle(element);
+      const rect = element.getBoundingClientRect();
+      const visible = style.display !== "none"
+        && style.visibility !== "hidden"
+        && rect.width > 0
+        && rect.height > 0;
+      const name = element.getAttribute("aria-label")
+        || element.textContent?.trim()
+        || element.getAttribute("name")
+        || element.id
+        || element.tagName.toLowerCase();
+      return {
+        label: name,
+        visible,
+      };
+    });
+
+    if (focused.visible) {
+      return;
+    }
+  }
+
+  throw new Error(`${label}: keyboard tab navigation did not land on a visible focus target`);
+}
+
 async function verifyRouteAccessibility(page, routeSpec, viewportSpec) {
   await page.setViewportSize({
     width: viewportSpec.width,
@@ -212,6 +285,8 @@ async function verifyRouteAccessibility(page, routeSpec, viewportSpec) {
 
   const summary = await readAccessibilitySummary(page, routeSpec);
   const label = `${routeSpec.id}/${viewportSpec.id}`;
+  await verifyAxeAccessibility(page, label);
+  await verifyKeyboardFocus(page, label);
 
   assert(!summary.missingContentSelector, `${label}: missing ${routeSpec.contentSelector}`);
   assert(summary.mainCount >= 1, `${label}: page is missing a main landmark`);
@@ -315,6 +390,7 @@ async function logoutAuthenticatedContractSession(page) {
 const run = async () => {
   const browser = await chromium.launch({ headless: true });
   const context = await browser.newContext({
+    bypassCSP: true,
     colorScheme: "light",
     locale: "en-US",
     reducedMotion: "reduce",

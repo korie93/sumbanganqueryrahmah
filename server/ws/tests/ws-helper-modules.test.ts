@@ -84,6 +84,24 @@ test("websocket auth helper only trusts forwarded host and proto when configured
   );
 });
 
+test("websocket auth helper falls back to localhost when host is missing", () => {
+  const req = {
+    headers: {
+      origin: "http://localhost",
+    },
+    socket: {},
+  } as unknown as Pick<IncomingMessage, "headers" | "socket">;
+
+  assert.equal(
+    readWebSocketRequestHost(req.headers, { trustForwardedHeaders: false }),
+    "localhost",
+  );
+  assert.equal(
+    isSameOriginWebSocketRequest(req, { trustForwardedHeaders: false }),
+    true,
+  );
+});
+
 test("websocket heartbeat interval normalization keeps runtime bounds", () => {
   assert.equal(normalizeRuntimeWsHeartbeatIntervalMs(undefined), 30_000);
   assert.equal(normalizeRuntimeWsHeartbeatIntervalMs(1_000), 10_000);

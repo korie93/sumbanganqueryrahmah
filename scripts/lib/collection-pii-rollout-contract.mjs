@@ -112,11 +112,11 @@ export const COLLECTION_PII_ROLLOUT_CONTRACT_REQUIREMENTS = Object.freeze([
       },
       {
         label: "omits plaintext for retired fields",
-        snippet: "return sql.raw(`NULL AS \"${aliasName}\"`);",
+        snippet: "return sql.raw(`NULL AS \"${safeAliasName}\"`);",
       },
       {
         label: "suppresses plaintext when encrypted shadow exists",
-        snippet: "WHEN NULLIF(trim(COALESCE(${encryptedColumnName}, '')), '') IS NOT NULL THEN NULL",
+        snippet: "WHEN NULLIF(trim(COALESCE(${safeEncryptedColumnName}, '')), '') IS NOT NULL THEN NULL",
       },
     ]),
   },

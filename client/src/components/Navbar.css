@@ -138,10 +138,10 @@
 }
 
 .nav-pill.nav-pill-active {
-  background: hsl(var(--primary) / 0.12);
-  color: hsl(var(--primary));
-  border-color: hsl(var(--primary) / 0.35);
-  box-shadow: 0 8px 20px hsl(var(--primary) / 0.14);
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+  border-color: hsl(var(--primary));
+  box-shadow: 0 8px 20px hsl(var(--primary) / 0.24);
 }
 
 .nav-pill.nav-pill-active::after {
@@ -245,8 +245,8 @@
   align-items: center;
   justify-content: center;
   border-radius: 9999px;
-  background: hsl(var(--primary) / 0.12);
-  color: hsl(var(--primary));
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
   padding: 0.2rem 0.55rem;
   font-size: var(--font-size-xs);
   font-weight: 700;

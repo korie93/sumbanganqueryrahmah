@@ -94,11 +94,18 @@ export function SettingsSidebar({
                     className={cn(
                       "flex min-h-10 min-w-fit items-center gap-2 rounded-full border px-3.5 py-2 text-left text-[13px] font-semibold transition-colors",
                       active
-                        ? "border-primary/35 bg-primary/10 text-primary shadow-[inset_0_1px_0_hsl(0_0%_100%_/_0.08)] dark:border-primary/30 dark:bg-primary/14 dark:text-primary-foreground"
+                        ? "border-primary bg-primary text-primary-foreground shadow-sm dark:border-primary dark:bg-primary dark:text-primary-foreground"
                         : "border-border/60 bg-background/80 text-foreground/78 hover:border-primary/20 hover:text-foreground dark:border-white/10 dark:bg-white/[0.03] dark:text-foreground/88 dark:hover:bg-white/[0.06] dark:hover:text-foreground",
                     )}
                   >
-                    <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-background/80 dark:bg-white/[0.06]">
+                    <span
+                      className={cn(
+                        "inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full",
+                        active
+                          ? "bg-primary-foreground text-primary"
+                          : "bg-background/80 text-foreground dark:bg-white/[0.06] dark:text-foreground/88",
+                      )}
+                    >
                       <Icon className="h-3.5 w-3.5" />
                     </span>
                     <span className="max-w-[9rem] truncate leading-tight">{item.label}</span>

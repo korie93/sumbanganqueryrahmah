@@ -478,6 +478,8 @@ test("GET /api/metrics exposes aggregate internal counters only", async () => {
     };
 
     assert.equal(typeof payload.timestamp, "string");
+    assert.equal(typeof payload.counters?.cspReportsAcceptedTotal, "number");
+    assert.equal(typeof payload.counters?.cspReportsDroppedTotal, "number");
     assert.equal(typeof payload.counters?.webVitalsAcceptedTotal, "number");
     assert.equal(typeof payload.counters?.webVitalsDroppedTotal, "number");
     assert.deepEqual(Object.keys(payload).sort(), ["counters", "timestamp"]);

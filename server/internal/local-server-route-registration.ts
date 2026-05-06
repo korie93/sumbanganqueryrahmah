@@ -30,7 +30,9 @@ import { registerSearchRoutes } from "../routes/search.routes";
 import { registerSettingsRoutes } from "../routes/settings.routes";
 import { registerSystemRoutes } from "../routes/system.routes";
 import {
+  createCspReportDropGuard,
   createWebVitalsTelemetryDropGuard,
+  registerCspReportDropGuardCleanup,
   registerTelemetryRoutes,
   registerWebVitalsTelemetryDropGuardCleanup,
 } from "../routes/telemetry.routes";
@@ -151,6 +153,8 @@ export function registerLocalServerRoutes(options: RegisterLocalServerRoutesOpti
   const webVitalsTelemetryController = createWebVitalsTelemetryController({
     webVitalsTelemetryService,
   });
+  const cspReportDropGuard = createCspReportDropGuard();
+  registerCspReportDropGuardCleanup(server, cspReportDropGuard);
   const webVitalsDropGuard = createWebVitalsTelemetryDropGuard();
   registerWebVitalsTelemetryDropGuardCleanup(server, webVitalsDropGuard);
 
@@ -200,6 +204,7 @@ export function registerLocalServerRoutes(options: RegisterLocalServerRoutesOpti
   });
 
   registerTelemetryRoutes(app, {
+    cspReportDropGuard,
     reportWebVital: webVitalsTelemetryController.report,
     webVitalsDropGuard,
   });

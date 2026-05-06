@@ -50,7 +50,7 @@ const publicRouteSpecs = [
   {
     id: "login",
     path: "/login",
-    contentSelector: ".login-card",
+    contentSelector: ".login-shell",
     primarySelector: "[data-testid='button-login']",
   },
   {
@@ -68,13 +68,29 @@ const authenticatedRouteSpecs = [
     contentSelector: "main#main-content",
   },
   {
+    id: "dashboard",
+    path: "/dashboard",
+    contentSelector: "main#main-content",
+  },
+  {
     id: "collection-records",
     path: "/collection/save",
     contentSelector: "main#main-content",
   },
   {
+    id: "ai",
+    path: "/ai",
+    contentSelector: "main#main-content",
+    primarySelector: "textarea[name='aiConversationQuery']",
+  },
+  {
     id: "viewer",
     path: "/viewer",
+    contentSelector: "main#main-content",
+  },
+  {
+    id: "settings",
+    path: "/settings",
     contentSelector: "main#main-content",
   },
 ];
@@ -136,6 +152,11 @@ async function verifyRouteLayout(page, routeSpec, viewportSpec) {
     height: viewportSpec.height,
   });
   await page.goto(`${baseUrl}${routeSpec.path}`, { waitUntil: "networkidle" });
+
+  if (routeSpec.path === "/login") {
+    await ensureLoginPageVisible(page, `${routeSpec.id}/${viewportSpec.id}`);
+  }
+
   await page.locator(routeSpec.contentSelector).first().waitFor();
 
   const layoutSummary = await readLayoutSummary(page, routeSpec);

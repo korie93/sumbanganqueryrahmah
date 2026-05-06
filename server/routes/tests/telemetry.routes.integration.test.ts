@@ -5,8 +5,11 @@ import { createWebVitalsTelemetryController } from "../../controllers/web-vitals
 import { errorHandler } from "../../middleware/error-handler";
 import { createInternalMetrics, type InternalMetricsRecorder } from "../../internal/metrics";
 import {
+  createCspReportDropGuard,
+  createCspReportRequestGuard,
   createWebVitalsTelemetryDropGuard,
   createWebVitalsTelemetryRequestGuard,
+  registerCspReportDropGuardCleanup,
   registerTelemetryRoutes,
   registerWebVitalsTelemetryDropGuardCleanup,
 } from "../telemetry.routes";
@@ -18,6 +21,8 @@ import {
 import type { Request, Response } from "express";
 
 function createTelemetryRouteHarness(options: {
+  cspReportDropGuard?: Parameters<typeof registerTelemetryRoutes>[1]["cspReportDropGuard"];
+  cspReportRequestGuard?: Parameters<typeof registerTelemetryRoutes>[1]["cspReportRequestGuard"];
   metrics?: InternalMetricsRecorder;
   webVitalsDropGuard?: Parameters<typeof registerTelemetryRoutes>[1]["webVitalsDropGuard"];
   webVitalsRequestGuard?: Parameters<typeof registerTelemetryRoutes>[1]["webVitalsRequestGuard"];
@@ -26,6 +31,9 @@ function createTelemetryRouteHarness(options: {
 
   const app = createJsonTestApp();
   registerTelemetryRoutes(app, {
+    ...(options.cspReportDropGuard ? { cspReportDropGuard: options.cspReportDropGuard } : {}),
+    ...(options.cspReportRequestGuard ? { cspReportRequestGuard: options.cspReportRequestGuard } : {}),
+    ...(options.metrics ? { metrics: options.metrics } : {}),
     ...(options.webVitalsDropGuard ? { webVitalsDropGuard: options.webVitalsDropGuard } : {}),
     ...(options.webVitalsRequestGuard ? { webVitalsRequestGuard: options.webVitalsRequestGuard } : {}),
     reportWebVital: createWebVitalsTelemetryController({
@@ -64,7 +72,7 @@ function createValidWebVitalsPayload(overrides: Record<string, unknown> = {}) {
 }
 
 function runDropGuard(
-  guard: ReturnType<typeof createWebVitalsTelemetryDropGuard>,
+  guard: ReturnType<typeof createWebVitalsTelemetryDropGuard> | ReturnType<typeof createCspReportDropGuard>,
   ip: string,
 ) {
   let statusCode = 200;
@@ -95,6 +103,131 @@ function runDropGuard(
 
   return { statusCode, ended, nextCalled };
 }
+
+test("POST /api/csp-report accepts CSP reports without echoing payload details", async () => {
+  const metrics = createInternalMetrics();
+  const { app } = createTelemetryRouteHarness({ metrics });
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(`${baseUrl}/api/csp-report`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/csp-report",
+      },
+      body: JSON.stringify({
+        "csp-report": {
+          "blocked-uri": "https://cdn.example.com/script.js",
+          "document-uri": "https://sqr.example.com/private-path",
+          "violated-directive": "script-src",
+        },
+      }),
+    });
+
+    assert.equal(response.status, 204);
+    assert.equal(await response.text(), "");
+    const snapshot = metrics.snapshot();
+    assert.equal(snapshot.counters.cspReportsAcceptedTotal, 1);
+    assert.equal(snapshot.counters.cspReportsDroppedTotal, 0);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("CSP report guards expose aggregate drop counters without logging report payloads", () => {
+  const metrics = createInternalMetrics();
+  const requestGuard = createCspReportRequestGuard({
+    allowedOrigins: ["https://sqr.example.com"],
+    metrics,
+  });
+  let ended = false;
+  const req = {
+    headers: {
+      "content-type": "text/plain",
+      origin: "https://sqr.example.com",
+    },
+    ip: "203.0.113.18",
+    socket: {
+      remoteAddress: "203.0.113.18",
+    },
+  } as Request;
+  const res = {
+    status() {
+      return this;
+    },
+    end() {
+      ended = true;
+      return this;
+    },
+  } as unknown as Response;
+
+  requestGuard(req, res, () => {
+    throw new Error("invalid CSP report request should not pass the request guard");
+  });
+
+  const snapshot = metrics.snapshot();
+  assert.equal(ended, true);
+  assert.equal(snapshot.counters.cspReportsDroppedTotal, 1);
+  assert.equal(snapshot.counters.cspReportsDroppedRequestGuardTotal, 1);
+  assert.equal(snapshot.counters.cspReportsAcceptedTotal, 0);
+});
+
+test("POST /api/csp-report silently rate limits repeated reports per client", async () => {
+  const metrics = createInternalMetrics();
+  const { app } = createTelemetryRouteHarness({
+    metrics,
+    cspReportDropGuard: createCspReportDropGuard({
+      maxReportsPerWindow: 1,
+      metrics,
+      now: () => 1_000,
+      windowMs: 10_000,
+    }),
+  });
+  const { server, baseUrl } = await startTestServer(app);
+
+  const postReport = () => fetch(`${baseUrl}/api/csp-report`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/csp-report",
+    },
+    body: JSON.stringify({
+      "csp-report": {
+        "violated-directive": "style-src",
+      },
+    }),
+  });
+
+  try {
+    const first = await postReport();
+    const second = await postReport();
+
+    assert.equal(first.status, 204);
+    assert.equal(second.status, 204);
+    const snapshot = metrics.snapshot();
+    assert.equal(snapshot.counters.cspReportsAcceptedTotal, 1);
+    assert.equal(snapshot.counters.cspReportsDroppedRateLimitTotal, 1);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("CSP report drop guard lifecycle cleanup stops the guard on server close", () => {
+  const server = new EventEmitter();
+  let stopCalls = 0;
+  const guard = createCspReportDropGuard({
+    sweepIntervalMs: false,
+  });
+  guard.stopCspReportDropGuard = () => {
+    stopCalls += 1;
+  };
+
+  registerCspReportDropGuardCleanup(server, guard);
+
+  server.emit("close");
+  server.emit("close");
+
+  assert.equal(stopCalls, 1);
+});
 
 test("POST /telemetry/web-vitals accepts a valid web vitals payload", async () => {
   const { app, recordedPayloads } = createTelemetryRouteHarness();

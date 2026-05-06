@@ -502,6 +502,50 @@ test("runtime manager rejects query-string session tokens before lookup", async 
   }
 });
 
+test("runtime manager tolerates missing host headers during handshake parsing", async (t) => {
+  const wss = new FakeWebSocketServer();
+  const providedMap = new Map<string, WebSocket>();
+  const socket = new FakeWebSocket();
+  const activityId = "activity-missing-host";
+  const warnings: Array<{ message: string; payload: unknown }> = [];
+  let lookupCalls = 0;
+
+  t.mock.method(logger, "warn", (message: string, payload: unknown) => {
+    warnings.push({ message, payload });
+  });
+
+  createRuntimeWebSocketManager({
+    wss: wss as unknown as import("ws").WebSocketServer,
+    storage: {
+      getActivityById: async (id) => {
+        lookupCalls += 1;
+        return id === activityId ? createActiveSession(activityId) : undefined;
+      },
+      clearCollectionNicknameSessionByActivity: async () => undefined,
+    },
+    secret: TEST_SECRET,
+    connectedClients: providedMap,
+  });
+
+  try {
+    const request = createConnectionRequest(createWsToken(activityId), {
+      origin: "http://localhost",
+    });
+    delete request.headers.host;
+    wss.emit("connection", socket as unknown as WebSocket, request);
+    await flushAsyncWork();
+
+    assert.equal(lookupCalls, 1);
+    assert.equal(providedMap.has(activityId), true);
+    assert.equal(socket.closeCalls, 0);
+    assert.equal(warnings.length, 1);
+    assert.equal(warnings[0].message, "WebSocket handshake missing host header; using localhost fallback");
+    assert.deepEqual(warnings[0].payload, { path: "/ws" });
+  } finally {
+    wss.emit("close");
+  }
+});
+
 test("runtime manager rejects cross-origin browser handshakes", async () => {
   const wss = new FakeWebSocketServer();
   const providedMap = new Map<string, WebSocket>();
