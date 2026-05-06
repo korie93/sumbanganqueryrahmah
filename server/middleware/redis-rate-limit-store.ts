@@ -5,7 +5,6 @@ import {
   type Options,
   type Store,
 } from "express-rate-limit";
-import { createClient } from "redis";
 import { logger as defaultLogger } from "../lib/logger";
 import type { SharedRateLimitStoreConfig } from "./rate-limit-runtime";
 
@@ -46,6 +45,15 @@ local ttl = redis.call("PTTL", KEYS[1])
 return { current, ttl }
 `;
 
+let defaultRedisClientFactoryPromise: Promise<RedisClientFactory> | null = null;
+
+async function resolveDefaultRedisClientFactory(): Promise<RedisClientFactory> {
+  defaultRedisClientFactoryPromise ??= import("redis")
+    .then((redisModule) => redisModule.createClient as unknown as RedisClientFactory);
+
+  return defaultRedisClientFactoryPromise;
+}
+
 function parseRedisInteger(value: unknown): number | null {
   const parsed = typeof value === "number"
     ? value
@@ -85,7 +93,7 @@ export class RedisRateLimitStore implements Store {
   readonly prefix: string;
 
   private readonly config: SharedRateLimitStoreConfig;
-  private readonly createRedisClient: RedisClientFactory;
+  private readonly createRedisClient: RedisClientFactory | null;
   private readonly logger: LoggerLike;
   private readonly fallbackStore = new MemoryStore();
   private clientPromise: Promise<RedisClientLike | null> | null = null;
@@ -95,7 +103,7 @@ export class RedisRateLimitStore implements Store {
 
   constructor(options: RedisRateLimitStoreOptions) {
     this.config = options.config;
-    this.createRedisClient = options.createRedisClient ?? (createClient as unknown as RedisClientFactory);
+    this.createRedisClient = options.createRedisClient ?? null;
     this.logger = options.logger ?? defaultLogger;
     this.prefix = normalizeRedisPrefix(options.prefix);
   }
@@ -220,7 +228,8 @@ export class RedisRateLimitStore implements Store {
 
   private async connect(): Promise<RedisClientLike | null> {
     try {
-      const client = this.createRedisClient({
+      const createRedisClient = this.createRedisClient ?? await resolveDefaultRedisClientFactory();
+      const client = createRedisClient({
         url: this.config.redisUrl as string,
         socket: {
           reconnectStrategy: false,
