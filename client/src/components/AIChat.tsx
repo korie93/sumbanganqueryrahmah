@@ -160,7 +160,6 @@ export default function AIChat({
             className="ai-stop-btn"
             onClick={() => cancelAISearch(true)}
             disabled={!isProcessing && !isTyping}
-            aria-disabled={!isProcessing && !isTyping}
           >
             <StopCircle className="h-4 w-4" aria-hidden="true" />
             <span>Hentikan AI</span>

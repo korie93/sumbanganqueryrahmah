@@ -3,6 +3,7 @@ import { EventEmitter } from "node:events";
 import test from "node:test";
 import { createWebVitalsTelemetryController } from "../../controllers/web-vitals-telemetry.controller";
 import { errorHandler } from "../../middleware/error-handler";
+import { createInternalMetrics, type InternalMetricsRecorder } from "../../internal/metrics";
 import {
   createWebVitalsTelemetryDropGuard,
   createWebVitalsTelemetryRequestGuard,
@@ -17,6 +18,7 @@ import {
 import type { Request, Response } from "express";
 
 function createTelemetryRouteHarness(options: {
+  metrics?: InternalMetricsRecorder;
   webVitalsDropGuard?: Parameters<typeof registerTelemetryRoutes>[1]["webVitalsDropGuard"];
   webVitalsRequestGuard?: Parameters<typeof registerTelemetryRoutes>[1]["webVitalsRequestGuard"];
 } = {}) {
@@ -27,6 +29,7 @@ function createTelemetryRouteHarness(options: {
     ...(options.webVitalsDropGuard ? { webVitalsDropGuard: options.webVitalsDropGuard } : {}),
     ...(options.webVitalsRequestGuard ? { webVitalsRequestGuard: options.webVitalsRequestGuard } : {}),
     reportWebVital: createWebVitalsTelemetryController({
+      ...(options.metrics ? { metrics: options.metrics } : {}),
       webVitalsTelemetryService: {
         record(payload) {
           recordedPayloads.push(payload as Record<string, unknown>);
@@ -117,9 +120,12 @@ test("POST /telemetry/web-vitals accepts a valid web vitals payload", async () =
 
 test("POST /telemetry/web-vitals silently drops excess samples per client window", async () => {
   let nowMs = 1_000;
+  const metrics = createInternalMetrics();
   const { app, recordedPayloads } = createTelemetryRouteHarness({
+    metrics,
     webVitalsDropGuard: createWebVitalsTelemetryDropGuard({
       maxEventsPerWindow: 2,
+      metrics,
       now: () => nowMs,
       windowMs: 1_000,
     }),
@@ -148,9 +154,50 @@ test("POST /telemetry/web-vitals silently drops excess samples per client window
     const afterWindow = await postMetric("v3-1710000000000-4");
     assert.equal(afterWindow.status, 204);
     assert.equal(recordedPayloads.length, 3);
+    assert.equal(metrics.snapshot().counters.webVitalsAcceptedTotal, 3);
+    assert.equal(metrics.snapshot().counters.webVitalsDroppedRateLimitTotal, 1);
   } finally {
     await stopTestServer(server);
   }
+});
+
+test("web vitals guards expose aggregate drop counters without logging request details", () => {
+  const metrics = createInternalMetrics();
+  const requestGuard = createWebVitalsTelemetryRequestGuard({
+    allowedOrigins: ["https://sqr.example.com"],
+    metrics,
+  });
+  let ended = false;
+  const req = {
+    headers: {
+      "content-type": "text/plain",
+      origin: "https://sqr.example.com",
+      "user-agent": "Mozilla/5.0",
+    },
+    ip: "203.0.113.8",
+    socket: {
+      remoteAddress: "203.0.113.8",
+    },
+  } as Request;
+  const res = {
+    status() {
+      return this;
+    },
+    end() {
+      ended = true;
+      return this;
+    },
+  } as unknown as Response;
+
+  requestGuard(req, res, () => {
+    throw new Error("invalid telemetry request should not pass the request guard");
+  });
+
+  const snapshot = metrics.snapshot();
+  assert.equal(ended, true);
+  assert.equal(snapshot.counters.webVitalsDroppedTotal, 1);
+  assert.equal(snapshot.counters.webVitalsDroppedRequestGuardTotal, 1);
+  assert.equal(snapshot.counters.webVitalsAcceptedTotal, 0);
 });
 
 test("web vitals drop guard evicts the oldest buckets once the configured cap is exceeded", () => {

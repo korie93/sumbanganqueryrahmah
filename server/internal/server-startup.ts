@@ -17,6 +17,7 @@ import { startIdleSessionSweeper } from "./idle-session-sweeper";
 import { assertCollectionPiiRetirementStartupReady } from "./collection-pii-retirement-startup";
 import { buildRateLimiterTopologyWarning } from "../middleware/rate-limit-runtime";
 import { buildTwoFactorReplayCacheTopologyWarning } from "../auth/two-factor-replay-topology";
+import { resolveProcessLocalSecurityWorkerCount } from "./cluster-mode";
 
 type RuntimeSettings = {
   sessionTimeoutMinutes: number;
@@ -87,13 +88,17 @@ export async function startLocalServer(options: StartLocalServerOptions) {
       warnings: runtimeConfigValidation.warnings,
     });
   }
+  const effectiveSecurityWorkerCount = resolveProcessLocalSecurityWorkerCount({
+    requestedMaxWorkers: runtimeConfig.cluster.maxWorkers,
+    sharedRuntimeStateConfigured: runtimeConfig.rateLimiting.store.distributedStoreConfigured,
+  });
   const rateLimiterTopologyWarning = buildRateLimiterTopologyWarning({
     distributedStoreConfigured: runtimeConfig.rateLimiting.store.distributedStoreConfigured,
-    workerCount: runtimeConfig.cluster.maxWorkers,
+    workerCount: effectiveSecurityWorkerCount,
   });
   if (rateLimiterTopologyWarning) {
     logger.error("Rate limiter topology requires a shared store before scaling past one worker", {
-      workerCount: runtimeConfig.cluster.maxWorkers,
+      workerCount: effectiveSecurityWorkerCount,
       message: rateLimiterTopologyWarning,
       storage: runtimeConfig.rateLimiting.store.provider,
       strictModeRefusal: runtimeConfig.app.isProductionLike,
@@ -107,11 +112,11 @@ export async function startLocalServer(options: StartLocalServerOptions) {
     clearStartupServiceDegraded("rate-limiter-topology");
   }
   const twoFactorReplayCacheTopologyWarning = buildTwoFactorReplayCacheTopologyWarning(
-    runtimeConfig.cluster.maxWorkers,
+    effectiveSecurityWorkerCount,
   );
   if (twoFactorReplayCacheTopologyWarning) {
     logger.warn("2FA replay protection requires a shared store before scaling past one worker", {
-      workerCount: runtimeConfig.cluster.maxWorkers,
+      workerCount: effectiveSecurityWorkerCount,
       message: twoFactorReplayCacheTopologyWarning,
       storage: "memory",
     });

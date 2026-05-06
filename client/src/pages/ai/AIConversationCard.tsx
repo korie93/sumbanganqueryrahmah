@@ -92,11 +92,11 @@ export function AIConversationCard({
 
         {showResetButton ? (
           <div className="flex items-center justify-end gap-2">
-            <Button type="button" variant="outline" onClick={onCancel} disabled={!canStop} aria-disabled={!canStop}>
+            <Button type="button" variant="outline" onClick={onCancel} disabled={!canStop}>
               <StopCircle className="mr-2 h-4 w-4" aria-hidden="true" />
               Hentikan AI
             </Button>
-            <Button type="button" variant="outline" onClick={onReset} disabled={!canReset} aria-disabled={!canReset}>
+            <Button type="button" variant="outline" onClick={onReset} disabled={!canReset}>
               Sembang Baharu
             </Button>
           </div>
@@ -180,7 +180,7 @@ export function AIConversationCard({
 
         {!showResetButton ? (
           <div className="flex items-center justify-end gap-2">
-            <Button type="button" variant="outline" size="sm" onClick={onCancel} disabled={!canStop} aria-disabled={!canStop}>
+            <Button type="button" variant="outline" size="sm" onClick={onCancel} disabled={!canStop}>
               <StopCircle className="mr-2 h-4 w-4" aria-hidden="true" />
               Hentikan AI
             </Button>

@@ -1,15 +1,22 @@
 import type { IncomingHttpHeaders, IncomingMessage } from "node:http";
 import { WebSocket, type WebSocketServer } from "ws";
 import { readAuthSessionTokenFromHeaders } from "../auth/session-cookie";
-import { resolveNodeEnv } from "../config/runtime-config-read-utils";
 import { logger } from "../lib/logger";
 import type { PostgresStorage } from "../storage-postgres";
 import { extractWsActivityId, isActiveWebSocketSession } from "./session-auth";
+import { getActivityUserKey } from "./ws-connection-state";
+import {
+  isTrackableSocket,
+  sanitizeRuntimeWebSocketError,
+  shouldLogRuntimeWebSocketCleanupDiagnostics,
+} from "./ws-lifecycle";
+import {
+  MAX_RUNTIME_WS_BUFFERED_BYTES,
+  serializeRuntimeWsPayload,
+} from "./ws-message-router";
 
 const HEARTBEAT_INTERVAL_MS = 30_000;
 const MAX_CONNECTIONS_PER_USER = 5;
-const MAX_RUNTIME_WS_MESSAGE_BYTES = 64 * 1024;
-const MAX_RUNTIME_WS_BUFFERED_BYTES = 256 * 1024;
 const WS_CLOSE_POLICY_VIOLATION = 1008;
 const WS_CLOSE_TRY_AGAIN_LATER = 1013;
 
@@ -25,18 +32,6 @@ type RuntimeManagerOptions = {
   heartbeatIntervalMs?: number;
 };
 
-type RuntimeWebSocketActivity = {
-  id?: string | null;
-  userId?: string | number | null;
-  username?: string | null;
-};
-
-type RuntimeWebSocketErrorLike = {
-  name?: unknown;
-  code?: unknown;
-  type?: unknown;
-};
-
 type RuntimeTrackedSocketEntry = {
   activityId: string;
   ws: WebSocket;
@@ -48,11 +43,6 @@ type RuntimeSocketCleanupOptions = {
   clearSession?: boolean;
   reason?: string;
 };
-
-function shouldLogRuntimeWebSocketCleanupDiagnostics(): boolean {
-  const nodeEnv = resolveNodeEnv();
-  return nodeEnv === "development" || nodeEnv === "test";
-}
 
 function firstHeaderValue(value: string | string[] | undefined): string {
   if (Array.isArray(value)) {
@@ -126,58 +116,6 @@ function isSameOriginWebSocketRequest(
   }
 }
 
-function getActivityUserKey(activity: RuntimeWebSocketActivity): string | null {
-  const userId = String(activity.userId ?? "").trim();
-  if (userId) {
-    return `id:${userId}`;
-  }
-
-  const username = String(activity.username || "").trim().toLowerCase();
-  return username ? `username:${username}` : null;
-}
-
-function sanitizeRuntimeWebSocketError(error: unknown): Record<string, unknown> | undefined {
-  if (typeof error === "string") {
-    return {
-      type: "string",
-    };
-  }
-
-  if (!error || typeof error !== "object") {
-    return undefined;
-  }
-
-  const errorLike = error as RuntimeWebSocketErrorLike;
-  const name = typeof errorLike.name === "string" ? errorLike.name.trim() : "";
-  const code = typeof errorLike.code === "string" ? errorLike.code.trim() : "";
-  const type = typeof errorLike.type === "string" ? errorLike.type.trim() : "";
-
-  return {
-    ...(name ? { name } : {}),
-    ...(code ? { code } : {}),
-    ...(type ? { type } : {}),
-  };
-}
-
-function serializeRuntimeWsPayload(payload: Record<string, unknown>): string | null {
-  try {
-    const message = JSON.stringify(payload);
-    if (Buffer.byteLength(message, "utf8") > MAX_RUNTIME_WS_MESSAGE_BYTES) {
-      logger.warn("WebSocket broadcast skipped because the payload is too large", {
-        maxBytes: MAX_RUNTIME_WS_MESSAGE_BYTES,
-      });
-      return null;
-    }
-
-    return message;
-  } catch (error) {
-    logger.warn("WebSocket broadcast skipped because the payload could not be serialized", {
-      error: sanitizeRuntimeWebSocketError(error),
-    });
-    return null;
-  }
-}
-
 export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
   connectedClients: Map<string, WebSocket>;
   broadcastWsMessage: (payload: Record<string, unknown>) => void;
@@ -201,8 +139,6 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
 
     logger.debug(message, metadata);
   };
-  const isTrackableSocket = (ws: WebSocket) =>
-    ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING;
   const clearNicknameSession = (activityId: string, reason: string) =>
     Promise.resolve(storage.clearCollectionNicknameSessionByActivity?.(activityId)).catch((error) => {
       logger.error("Failed to clear nickname session after WebSocket cleanup", {

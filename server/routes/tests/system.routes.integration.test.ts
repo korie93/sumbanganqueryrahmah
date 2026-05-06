@@ -465,6 +465,27 @@ test("GET /api/health/ready returns 503 when startup background services are deg
   }
 });
 
+test("GET /api/metrics exposes aggregate internal counters only", async () => {
+  const { app } = createSystemRouteHarness();
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(`${baseUrl}/api/metrics`);
+    assert.equal(response.status, 200);
+    const payload = await response.json() as {
+      counters?: Record<string, unknown>;
+      timestamp?: unknown;
+    };
+
+    assert.equal(typeof payload.timestamp, "string");
+    assert.equal(typeof payload.counters?.webVitalsAcceptedTotal, "number");
+    assert.equal(typeof payload.counters?.webVitalsDroppedTotal, "number");
+    assert.deepEqual(Object.keys(payload).sort(), ["counters", "timestamp"]);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
 test("GET /api/health preserves the aggregate health contract while exposing live readiness details", async () => {
   const { app } = createSystemRouteHarness({
     dbOk: false,

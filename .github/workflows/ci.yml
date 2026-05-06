@@ -32,6 +32,9 @@ jobs:
       - name: Verify repo hygiene
         run: npm run verify:repo-hygiene
 
+      - name: Verify CSP hashes
+        run: npm run verify:csp-hashes
+
       - name: Audit dependencies
         run: npm run audit:dependencies
 

@@ -2,6 +2,7 @@ import "dotenv/config";
 import pg from "pg";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
+import { withPostgresMigrationAdvisoryLock } from "./lib/postgres-migration-lock.mjs";
 
 function readInt(name, fallback) {
   const value = Number(process.env[name] ?? fallback);
@@ -17,13 +18,15 @@ const pool = new pg.Pool({
 });
 
 try {
-  console.log("Applying Drizzle migrations...");
+  await withPostgresMigrationAdvisoryLock(pool, async () => {
+    console.log("Applying Drizzle migrations...");
 
-  const db = drizzle(pool);
-  await migrate(db, {
-    migrationsFolder: "./drizzle",
-    migrationsTable: "__drizzle_migrations",
-    migrationsSchema: "public",
+    const db = drizzle(pool);
+    await migrate(db, {
+      migrationsFolder: "./drizzle",
+      migrationsTable: "__drizzle_migrations",
+      migrationsSchema: "public",
+    });
   });
 
   console.log("Drizzle migrations applied successfully.");

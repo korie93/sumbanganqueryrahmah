@@ -5,7 +5,11 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { runtimeConfig } from "./config/runtime";
 import { createClusterMasterOrchestrator } from "./internal/cluster-master-orchestrator";
-import { normalizeInitialWorkerCount, shouldUseSingleProcessMode } from "./internal/cluster-mode";
+import {
+  normalizeInitialWorkerCount,
+  resolveSafeClusterWorkerTopology,
+  shouldUseSingleProcessMode,
+} from "./internal/cluster-mode";
 import { logger } from "./lib/logger";
 
 const SCALE_INTERVAL_MS = 5_000;
@@ -20,7 +24,14 @@ const MAX_SPAWN_PER_CYCLE = 1;
 const MAX_WORKERS = Math.min(4, os.cpus().length);
 const requestedMaxWorkers = runtimeConfig.cluster.maxWorkers;
 const normalizedMaxWorkers = Number.isFinite(requestedMaxWorkers) ? Math.floor(requestedMaxWorkers) : 1;
-const MAX_WORKERS_HARD_CAP = Math.max(1, Math.min(MAX_WORKERS, normalizedMaxWorkers));
+const safeWorkerTopology = resolveSafeClusterWorkerTopology({
+  requestedMaxWorkers: normalizedMaxWorkers,
+  sharedRuntimeStateConfigured: runtimeConfig.rateLimiting.store.distributedStoreConfigured,
+  // Redis configuration is parsed today, but rate limiters, adaptive guards,
+  // AI concurrency, and 2FA replay protection still use process-local state.
+  sharedRuntimeStateEnabled: false,
+});
+const MAX_WORKERS_HARD_CAP = Math.max(1, Math.min(MAX_WORKERS, safeWorkerTopology.maxWorkers));
 const INITIAL_WORKERS = normalizeInitialWorkerCount({
   maxWorkers: MAX_WORKERS_HARD_CAP,
   initialWorkers: runtimeConfig.cluster.initialWorkers,
@@ -77,6 +88,15 @@ function handleClusterShutdownSignal(signal: NodeJS.Signals) {
 }
 
 if (cluster.isPrimary) {
+  if (safeWorkerTopology.downgradedToSingleWorker) {
+    logger.warn("SQR_MAX_WORKERS was reduced to one worker because shared runtime security state is not active", {
+      configuredRateLimitStore: runtimeConfig.rateLimiting.store.provider,
+      maxWorkers: MAX_WORKERS_HARD_CAP,
+      reason: safeWorkerTopology.reason,
+      requestedMaxWorkers: safeWorkerTopology.requestedMaxWorkers,
+    });
+  }
+
   if (SINGLE_PROCESS_MODE) {
     logger.info("Starting server in single-process mode", {
       maxWorkers: MAX_WORKERS_HARD_CAP,

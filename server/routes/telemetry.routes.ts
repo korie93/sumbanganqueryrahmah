@@ -1,6 +1,7 @@
 import type { Express, Request, RequestHandler } from "express";
 import { routeHandler } from "../http/async-handler";
 import { normalizeCorsOrigin, resolveAllowedCorsOrigins } from "../http/cors";
+import { internalMetrics, type InternalMetricsRecorder } from "../internal/metrics";
 
 type TelemetryRouteDeps = {
   reportWebVital: RequestHandler;
@@ -12,6 +13,7 @@ type WebVitalsTelemetryDropGuardOptions = {
   maxAnonymousEventsPerWindow?: number;
   maxEventsPerWindow?: number;
   maxBuckets?: number;
+  metrics?: InternalMetricsRecorder;
   now?: () => number;
   sweepIntervalMs?: false | number;
   windowMs?: number;
@@ -24,6 +26,7 @@ export type WebVitalsTelemetryDropGuard = RequestHandler & {
 type WebVitalsTelemetryRequestGuardOptions = {
   allowedOrigins?: string[];
   maxContentLengthBytes?: number;
+  metrics?: InternalMetricsRecorder;
 };
 
 type CloseLifecycle = {
@@ -135,30 +138,37 @@ export function createWebVitalsTelemetryRequestGuard(
   options: WebVitalsTelemetryRequestGuardOptions = {},
 ): RequestHandler {
   const allowedOriginSet = resolveAllowedOriginSet(options.allowedOrigins);
+  const metrics = options.metrics ?? internalMetrics;
   const maxContentLengthBytes = clampPositiveInteger(
     options.maxContentLengthBytes,
     DEFAULT_WEB_VITALS_MAX_CONTENT_LENGTH_BYTES,
   );
 
   return (req, res, next) => {
-    if (hasKnownNonBrowserTelemetryUserAgent(req)) {
+    const drop = () => {
+      metrics.increment("webVitalsDroppedTotal");
+      metrics.increment("webVitalsDroppedRequestGuardTotal");
       res.status(204).end();
+    };
+
+    if (hasKnownNonBrowserTelemetryUserAgent(req)) {
+      drop();
       return;
     }
 
     if (!isSameSiteTelemetryRequest(req, allowedOriginSet)) {
-      res.status(204).end();
+      drop();
       return;
     }
 
     const contentLength = parseContentLength(req.headers["content-length"]);
     if (contentLength !== null && contentLength > maxContentLengthBytes) {
-      res.status(204).end();
+      drop();
       return;
     }
 
     if (!isJsonContentType(req.headers["content-type"])) {
-      res.status(204).end();
+      drop();
       return;
     }
 
@@ -182,6 +192,7 @@ export function createWebVitalsTelemetryDropGuard(
   );
   const maxBuckets = clampPositiveInteger(options.maxBuckets, DEFAULT_WEB_VITALS_MAX_BUCKETS);
   const windowMs = clampPositiveInteger(options.windowMs, DEFAULT_WEB_VITALS_WINDOW_MS);
+  const metrics = options.metrics ?? internalMetrics;
   const sweepIntervalMs = options.sweepIntervalMs === false
     ? 0
     : clampPositiveInteger(options.sweepIntervalMs, Math.min(windowMs, DEFAULT_WEB_VITALS_WINDOW_MS));
@@ -249,6 +260,8 @@ export function createWebVitalsTelemetryDropGuard(
       : maxAnonymousEventsPerWindow;
 
     if (bucket.count > maxAllowedEvents) {
+      metrics.increment("webVitalsDroppedTotal");
+      metrics.increment("webVitalsDroppedRateLimitTotal");
       res.status(204).end();
       return;
     }

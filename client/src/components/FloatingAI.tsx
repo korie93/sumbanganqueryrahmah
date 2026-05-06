@@ -273,7 +273,7 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
               <div
                 className={cn(
                   "flex shrink-0 justify-center",
-                  layoutState.panel.mode === "fullscreen" ? "pt-2" : "pt-2",
+                  layoutState.panel.mode === "fullscreen" ? "pt-3" : "pt-2",
                 )}
               >
                 <div className="h-1.5 w-10 rounded-full bg-slate-400/45 dark:bg-white/20" aria-hidden="true" />
@@ -328,7 +328,6 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage }: Floatin
                   )}
                   onClick={handleReset}
                   disabled={messages.length === 0 && !isThinking}
-                  aria-disabled={messages.length === 0 && !isThinking}
                   aria-label="Reset sesi AI SQR"
                 >
                   Reset Sesi

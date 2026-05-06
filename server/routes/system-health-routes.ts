@@ -1,4 +1,5 @@
 import { asyncHandler, routeHandler } from "../http/async-handler";
+import { getInternalMetricsSnapshot } from "../internal/metrics";
 import type { StartupHealthSnapshot } from "../internal/startup-health";
 import type { SystemRouteContext } from "./system-route-context";
 
@@ -79,6 +80,10 @@ export function registerSystemHealthRoutes(context: SystemRouteContext) {
       ...readiness,
       live: buildLiveHealthPayload(getStartupHealthSnapshot),
     });
+  }));
+
+  app.get("/api/metrics", routeHandler((_req, res) => {
+    res.json(getInternalMetricsSnapshot());
   }));
 
   app.get("/api/maintenance-status", asyncHandler(async (_req, res) => {
