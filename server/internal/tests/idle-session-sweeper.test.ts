@@ -116,6 +116,34 @@ test("runIdleSessionSweeperPass leaves active sessions alone when batch expiry r
   assert.equal(connectedClients.has("activity-1"), true);
 });
 
+test("runIdleSessionSweeperPass clamps explicit zero timeout instead of falling through", async () => {
+  const expireCalls: Array<{ idleCutoff: Date; idleMinutes: number }> = [];
+
+  await runIdleSessionSweeperPass({
+    storage: {
+      getActiveActivities: async () => {
+        throw new Error("Batch idle sweeper should not load active activities");
+      },
+      expireIdleActivitySession: async () => {
+        throw new Error("Batch idle sweeper should not expire sessions one-by-one");
+      },
+      expireIdleActivitySessions: async (params) => {
+        expireCalls.push(params);
+        return [];
+      },
+    },
+    connectedClients: new Map<string, WebSocket>(),
+    getRuntimeSettingsCached: async () => ({
+      sessionTimeoutMinutes: 0,
+      wsIdleMinutes: 15,
+    }),
+    defaultSessionTimeoutMinutes: 30,
+  });
+
+  assert.equal(expireCalls.length, 1);
+  assert.equal(expireCalls[0].idleMinutes, 1);
+});
+
 test("runIdleSessionSweeperPass falls back to per-session expiry when batch storage is unavailable", async () => {
   const now = Date.now();
   const socketDouble = createSocketDouble();

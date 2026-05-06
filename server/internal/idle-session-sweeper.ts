@@ -88,8 +88,8 @@ export async function runIdleSessionSweeperPass(
   const idleMinutes = Math.max(
     1,
     runtimeSettings.sessionTimeoutMinutes
-      || runtimeSettings.wsIdleMinutes
-      || defaultSessionTimeoutMinutes,
+      ?? runtimeSettings.wsIdleMinutes
+      ?? defaultSessionTimeoutMinutes,
   );
   const idleMs = idleMinutes * 60 * 1000;
   const idleCutoff = new Date(now - idleMs);
