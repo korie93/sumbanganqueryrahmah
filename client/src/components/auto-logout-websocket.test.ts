@@ -63,6 +63,17 @@ test("parseAutoLogoutWebSocketMessage normalizes supported socket payloads", () 
       reason: "Session expired",
     },
   );
+
+  assert.deepEqual(
+    parseAutoLogoutWebSocketMessage(JSON.stringify({
+      type: "idle_timeout",
+      reason: "Session expired due to inactivity",
+    })),
+    {
+      type: "idle_timeout",
+      reason: "Session expired due to inactivity",
+    },
+  );
 });
 
 test("parseAutoLogoutWebSocketMessage rejects malformed or unsupported payloads", () => {

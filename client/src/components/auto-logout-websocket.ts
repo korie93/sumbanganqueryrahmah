@@ -4,7 +4,7 @@ export const WS_RECONNECT_BASE_DELAY_MS = 1_000;
 export const WS_RECONNECT_MAX_DELAY_MS = 30_000;
 
 type AutoLogoutReasonMessage = {
-  type: "logout" | "banned" | "kicked";
+  type: "logout" | "banned" | "kicked" | "idle_timeout";
   reason?: string;
 };
 
@@ -48,7 +48,12 @@ export function parseAutoLogoutWebSocketMessage(rawData: unknown): AutoLogoutWeb
     return null;
   }
 
-  if (parsed.type === "logout" || parsed.type === "banned" || parsed.type === "kicked") {
+  if (
+    parsed.type === "logout"
+    || parsed.type === "banned"
+    || parsed.type === "kicked"
+    || parsed.type === "idle_timeout"
+  ) {
     return {
       type: parsed.type,
       ...(typeof parsed.reason === "string" ? { reason: parsed.reason } : {}),

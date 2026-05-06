@@ -152,6 +152,11 @@ export function bindAutoLogoutSocket({
           void runClientLogout()
         }
 
+        if (message.type === "idle_timeout") {
+          notifyAutoLogoutNotice(message.reason, "Sesi anda telah tamat kerana tidak aktif.")
+          void runClientLogout()
+        }
+
         if (message.type === "banned") {
           setBannedSessionFlag(true)
           notifyAutoLogoutNotice(message.reason, "Akaun anda telah disekat.")

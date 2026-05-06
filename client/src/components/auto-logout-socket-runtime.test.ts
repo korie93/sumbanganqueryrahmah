@@ -187,3 +187,129 @@ test("banned websocket messages run client cleanup and preserve the banned flag"
     })
   }
 })
+
+test("idle timeout websocket messages run client cleanup without forcing the banned flow", async () => {
+  const originalWindow = globalThis.window
+  const originalSessionStorage = globalThis.sessionStorage
+  const originalWebSocket = globalThis.WebSocket
+  const sessionStore = new Map<string, string>()
+  const sockets: TestWebSocket[] = []
+  let logoutCalls = 0
+  let closeCalls = 0
+
+  class TestWebSocket {
+    static readonly CONNECTING = 0
+    static readonly OPEN = 1
+    static readonly CLOSED = 3
+
+    readyState = TestWebSocket.OPEN
+    onopen: ((this: WebSocket, event: Event) => unknown) | null = null
+    onmessage: ((this: WebSocket, event: MessageEvent) => unknown) | null = null
+    onclose: ((this: WebSocket, event: CloseEvent) => unknown) | null = null
+    onerror: ((this: WebSocket, event: Event) => unknown) | null = null
+
+    constructor(readonly url: string) {
+      sockets.push(this)
+    }
+
+    close() {
+      closeCalls += 1
+      this.readyState = TestWebSocket.CLOSED
+    }
+  }
+
+  const fakeStorage = {
+    getItem(key: string) {
+      return sessionStore.get(key) ?? null
+    },
+    setItem(key: string, value: string) {
+      sessionStore.set(key, value)
+    },
+    removeItem(key: string) {
+      sessionStore.delete(key)
+    },
+  }
+
+  Object.defineProperty(globalThis, "sessionStorage", {
+    configurable: true,
+    value: fakeStorage,
+  })
+  Object.defineProperty(globalThis, "WebSocket", {
+    configurable: true,
+    value: TestWebSocket,
+  })
+  Object.defineProperty(globalThis, "window", {
+    configurable: true,
+    value: {
+      clearTimeout,
+      dispatchEvent() {},
+      location: {
+        href: "http://127.0.0.1:5000/app",
+        host: "127.0.0.1:5000",
+        protocol: "http:",
+      },
+      localStorage: fakeStorage,
+      setTimeout,
+    },
+  })
+
+  try {
+    const mountedRef = { current: true }
+    const reconnectEnabledRef = { current: true }
+    const reconnectAttemptRef = { current: 0 }
+    const wsRef = { current: null as WebSocket | null }
+    const reconnectRef = { current: null as number | null }
+
+    const cleanup = bindAutoLogoutSocket({
+      username: "staff.user",
+      mountedRef,
+      reconnectEnabledRef,
+      reconnectAttemptRef,
+      wsRef,
+      reconnectRef,
+      clearReconnect() {
+        reconnectRef.current = null
+      },
+      cleanupSocket() {
+        disposeAutoLogoutSocket(wsRef.current, wsRef)
+      },
+      async runClientLogout() {
+        logoutCalls += 1
+      },
+    })
+
+    const socket = sockets[0]
+    assert.ok(socket)
+    socket.onmessage?.call(socket as unknown as WebSocket, {
+      data: JSON.stringify({
+        type: "idle_timeout",
+        reason: "Session expired due to inactivity",
+      }),
+    } as MessageEvent)
+
+    await Promise.resolve()
+
+    assert.equal(logoutCalls, 1)
+    assert.equal(closeCalls, 0)
+    assert.equal(reconnectEnabledRef.current, true)
+    assert.equal(wsRef.current, socket as unknown as WebSocket)
+    assert.equal(isBannedSessionFlagSet(), false)
+    assert.equal((window.location as Location).href, "http://127.0.0.1:5000/app")
+
+    cleanup?.()
+  } finally {
+    setBannedSessionFlag(false)
+    Object.defineProperty(globalThis, "window", {
+      configurable: true,
+      value: originalWindow,
+    })
+    Object.defineProperty(globalThis, "sessionStorage", {
+      configurable: true,
+      value: originalSessionStorage,
+    })
+    Object.defineProperty(globalThis, "WebSocket", {
+      configurable: true,
+      value: originalWebSocket,
+    })
+  }
+})
