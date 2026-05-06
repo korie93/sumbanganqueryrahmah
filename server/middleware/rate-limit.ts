@@ -2,6 +2,8 @@ import crypto from "node:crypto";
 import type { Request, RequestHandler } from "express";
 import rateLimit from "express-rate-limit";
 import { ERROR_CODES } from "../../shared/error-codes";
+import { runtimeConfig } from "../config/runtime";
+import { createSharedRateLimitStore } from "./redis-rate-limit-store";
 
 type RateLimitPayload = {
   ok: false;
@@ -115,10 +117,15 @@ function createJsonRateLimiter(options: JsonRateLimiterOptions): RequestHandler 
       message: options.message,
     },
   };
+  const sharedStore = createSharedRateLimitStore({
+    config: runtimeConfig.rateLimiting.store,
+    prefix: `sqr:rate-limit:${options.code}`,
+  });
 
   return rateLimit({
     windowMs: options.windowMs,
     max: options.max,
+    ...(sharedStore ? { store: sharedStore } : {}),
     standardHeaders: true,
     legacyHeaders: false,
     ...(options.keyGenerator ? { keyGenerator: options.keyGenerator } : {}),
