@@ -3,7 +3,10 @@ import test from "node:test";
 import { WebVitalsTelemetryService } from "../web-vitals-telemetry.service";
 import { sanitizeWebVitalTelemetryPath } from "../../../shared/web-vitals";
 
-test("WebVitalsTelemetryService builds page summaries with p75 ratings", () => {
+test("WebVitalsTelemetryService builds page summaries with p75 ratings", (t) => {
+  const overviewNowMs = Date.parse("2026-04-04T09:04:00.000Z");
+  t.mock.method(Date, "now", () => overviewNowMs);
+
   const service = new WebVitalsTelemetryService({
     logger: {
       info() {},
@@ -54,7 +57,7 @@ test("WebVitalsTelemetryService builds page summaries with p75 ratings", () => {
     ts: "2026-04-04T09:03:00.000Z",
   });
 
-  const overview = service.getOverview(Date.parse("2026-04-04T09:04:00.000Z"));
+  const overview = service.getOverview(overviewNowMs);
   const publicSummary = overview.pageSummaries.find((summary) => summary.pageType === "public");
   const authenticatedSummary = overview.pageSummaries.find(
     (summary) => summary.pageType === "authenticated",
@@ -76,7 +79,10 @@ test("WebVitalsTelemetryService builds page summaries with p75 ratings", () => {
   assert.equal(authenticatedInp?.p75Rating, "good");
 });
 
-test("WebVitalsTelemetryService prunes stale samples outside the retention window", () => {
+test("WebVitalsTelemetryService prunes stale samples outside the retention window", (t) => {
+  const overviewNowMs = Date.parse("2026-04-04T09:01:30.000Z");
+  t.mock.method(Date, "now", () => overviewNowMs);
+
   const service = new WebVitalsTelemetryService({
     logger: {
       info() {},
@@ -107,7 +113,7 @@ test("WebVitalsTelemetryService prunes stale samples outside the retention windo
     ts: "2026-04-04T09:01:00.000Z",
   });
 
-  const overview = service.getOverview(Date.parse("2026-04-04T09:01:30.000Z"));
+  const overview = service.getOverview(overviewNowMs);
   const publicSummary = overview.pageSummaries.find((summary) => summary.pageType === "public");
   const publicCls = publicSummary?.metrics.find((metric) => metric.name === "CLS");
 
@@ -115,6 +121,47 @@ test("WebVitalsTelemetryService prunes stale samples outside the retention windo
   assert.equal(publicSummary?.sampleCount, 1);
   assert.equal(publicCls?.sampleCount, 1);
   assert.equal(publicCls?.latestValue, 0.12);
+});
+
+test("WebVitalsTelemetryService prunes with server time instead of client timestamps", (t) => {
+  const serverNowMs = Date.parse("2026-04-04T09:01:00.000Z");
+  t.mock.method(Date, "now", () => serverNowMs);
+
+  const service = new WebVitalsTelemetryService({
+    logger: {
+      info() {},
+      warn() {},
+    },
+    maxSamples: 20,
+    maxAgeMs: 60_000,
+  });
+
+  service.record({
+    name: "LCP",
+    value: 1900,
+    delta: 20,
+    rating: "good",
+    id: "lcp-current",
+    path: "/",
+    pageType: "public",
+    ts: "2026-04-04T09:00:30.000Z",
+  });
+  service.record({
+    name: "LCP",
+    value: 2600,
+    delta: 30,
+    rating: "needs-improvement",
+    id: "lcp-future-client-clock",
+    path: "/",
+    pageType: "public",
+    ts: "2036-04-04T09:01:00.000Z",
+  });
+
+  const overview = service.getOverview(serverNowMs);
+  const publicSummary = overview.pageSummaries.find((summary) => summary.pageType === "public");
+
+  assert.equal(overview.totalSamples, 2);
+  assert.equal(publicSummary?.sampleCount, 2);
 });
 
 test("WebVitalsTelemetryService samples non-poor info logs while preserving poor warnings", () => {
@@ -177,7 +224,10 @@ test("WebVitalsTelemetryService samples non-poor info logs while preserving poor
   assert.equal(warnLogs.length, 1);
 });
 
-test("WebVitalsTelemetryService redacts identifier-like paths before storing and logging", () => {
+test("WebVitalsTelemetryService redacts identifier-like paths before storing and logging", (t) => {
+  const overviewNowMs = Date.parse("2026-04-04T09:00:02.000Z");
+  t.mock.method(Date, "now", () => overviewNowMs);
+
   const infoLogs: unknown[] = [];
   const service = new WebVitalsTelemetryService({
     logger: {
@@ -210,7 +260,7 @@ test("WebVitalsTelemetryService redacts identifier-like paths before storing and
     ts: "2026-04-04T09:00:01.000Z",
   });
 
-  const overview = service.getOverview(Date.parse("2026-04-04T09:00:02.000Z"));
+  const overview = service.getOverview(overviewNowMs);
   const authenticatedSummary = overview.pageSummaries.find(
     (summary) => summary.pageType === "authenticated",
   );

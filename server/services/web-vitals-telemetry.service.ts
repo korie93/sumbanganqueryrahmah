@@ -116,7 +116,7 @@ export class WebVitalsTelemetryService {
       ...sanitizedPayload,
       capturedAtMs,
     });
-    this.prune(capturedAtMs);
+    this.prune();
     this.recordedSampleCount += 1;
 
     const logMeta = {
