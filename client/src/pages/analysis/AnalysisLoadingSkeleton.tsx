@@ -1,9 +1,10 @@
+import type { CSSProperties } from "react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export function AnalysisLoadingSkeleton() {
   const pulseProps = (delayMs: number) => ({
-    "data-pulse-delay": String(delayMs),
+    style: { "--pulse-delay": `${delayMs}ms` } as CSSProperties,
   });
 
   return (
