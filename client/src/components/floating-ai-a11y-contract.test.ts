@@ -24,7 +24,8 @@ test("floating AI chat input has a formal accessible label", () => {
   assert.match(source, /maxLength=\{AI_REQUEST_MAX_CHARACTERS\}/);
   assert.match(source, /aria-describedby=\{queryLimitId\}/);
   assert.match(source, /aria-label="Hantar soalan AI"/);
-  assert.match(source, /aria-disabled=\{!isProcessing && !isTyping\}/);
+  assert.match(source, /disabled=\{!isProcessing && !isTyping\}/);
+  assert.doesNotMatch(source, /aria-disabled=\{!isProcessing && !isTyping\}/);
   assert.match(source, /<span>Hentikan AI<\/span>/);
   assert.match(source, /className="ai-notice ai-notice-error" role="alert"/);
   assert.match(source, /Pembantu AI dinyahaktifkan oleh tetapan sistem\./);
