@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { resolveDashboardExportBlockReason } from "@/pages/dashboard/export-guards";
-import { assertDashboardExportableElement } from "@/pages/dashboard/utils";
+import {
+  captureDashboardElementCanvas,
+  DASHBOARD_PDF_EXPORT_FAILURE_MESSAGE,
+  assertDashboardExportableElement,
+} from "@/pages/dashboard/utils";
 
 test("resolveDashboardExportBlockReason blocks exports while dashboard work is already active", () => {
   assert.equal(
@@ -57,5 +61,27 @@ test("assertDashboardExportableElement requires the whitelisted dashboard export
       } as unknown as HTMLElement);
     },
     /hidden or marked sensitive/i,
+  );
+});
+
+test("captureDashboardElementCanvas wraps html2canvas failures for UI feedback", async () => {
+  const cause = new Error("tainted canvas");
+  const failingCapture = (async () => {
+    throw cause;
+  }) as unknown as Parameters<typeof captureDashboardElementCanvas>[1];
+
+  await assert.rejects(
+    () =>
+      captureDashboardElementCanvas(
+        {} as HTMLElement,
+        failingCapture,
+        {} as Parameters<typeof captureDashboardElementCanvas>[2],
+      ),
+    (error: unknown) => {
+      assert.ok(error instanceof Error);
+      assert.equal(error.message, DASHBOARD_PDF_EXPORT_FAILURE_MESSAGE);
+      assert.equal((error as Error & { cause?: unknown }).cause, cause);
+      return true;
+    },
   );
 });

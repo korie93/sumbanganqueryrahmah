@@ -31,3 +31,15 @@ test("buildBackupsCsvContent escapes quotes safely", () => {
 
   assert.match(csvContent, /"Nightly ""Alpha"""/);
 });
+
+test("buildBackupsCsvContent flattens embedded newlines inside cells", () => {
+  const csvContent = buildBackupsCsvContent([
+    {
+      ...sampleBackups[0]!,
+      name: "Nightly\nAlpha\r\nBatch",
+    },
+  ]);
+
+  assert.match(csvContent, /"Nightly Alpha Batch"/);
+  assert.doesNotMatch(csvContent, /Nightly\nAlpha/);
+});

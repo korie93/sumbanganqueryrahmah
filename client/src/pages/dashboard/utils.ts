@@ -11,6 +11,10 @@ let html2canvasLoader: Promise<typeof import("html2canvas")["default"]> | null =
 let jsPdfLoader: Promise<typeof import("jspdf")["default"]> | null = null;
 const DASHBOARD_EXPORT_ROOT_ATTRIBUTE = "data-dashboard-export-root";
 const DASHBOARD_EXPORT_EXCLUDED_SELECTOR = "[hidden], [aria-hidden='true'], [data-export-sensitive='true']";
+export const DASHBOARD_PDF_EXPORT_FAILURE_MESSAGE = "Gagal jana PDF. Sila cuba semula.";
+
+type DashboardHtml2Canvas = typeof import("html2canvas")["default"];
+type DashboardHtml2CanvasOptions = NonNullable<Parameters<DashboardHtml2Canvas>[1]>;
 
 export const ROLE_COLORS: Record<string, string> = {
   superuser: "hsl(var(--chart-1))",
@@ -118,14 +122,24 @@ export function buildSummaryCards(summary: SummaryData | undefined): SummaryCard
 
 function loadHtml2Canvas() {
   if (!html2canvasLoader) {
-    html2canvasLoader = import("html2canvas").then((module) => module.default);
+    html2canvasLoader = import("html2canvas")
+      .then((module) => module.default)
+      .catch((error: unknown) => {
+        html2canvasLoader = null;
+        throw error;
+      });
   }
   return html2canvasLoader;
 }
 
 function loadJsPdf() {
   if (!jsPdfLoader) {
-    jsPdfLoader = import("jspdf").then((module) => module.default);
+    jsPdfLoader = import("jspdf")
+      .then((module) => module.default)
+      .catch((error: unknown) => {
+        jsPdfLoader = null;
+        throw error;
+      });
   }
   return jsPdfLoader;
 }
@@ -144,6 +158,22 @@ function shouldIgnoreDashboardExportElement(node: Element) {
   return node.tagName === "IFRAME" || node.matches(DASHBOARD_EXPORT_EXCLUDED_SELECTOR);
 }
 
+export async function captureDashboardElementCanvas(
+  element: HTMLElement,
+  html2canvas: DashboardHtml2Canvas,
+  options: DashboardHtml2CanvasOptions,
+) {
+  try {
+    return await html2canvas(element, options);
+  } catch (error) {
+    const exportError = new Error(DASHBOARD_PDF_EXPORT_FAILURE_MESSAGE) as Error & {
+      cause?: unknown;
+    };
+    exportError.cause = error;
+    throw exportError;
+  }
+}
+
 export async function exportDashboardToPdf(element: HTMLDivElement) {
   assertDashboardExportableElement(element);
 
@@ -155,7 +185,7 @@ export async function exportDashboardToPdf(element: HTMLDivElement) {
   const isDark = document.documentElement.classList.contains("dark");
   const backgroundColor = isDark ? "#1e293b" : "#ffffff";
 
-  const canvas = await html2canvas(element, {
+  const canvas = await captureDashboardElementCanvas(element, html2canvas, {
     scale: 2,
     useCORS: true,
     allowTaint: true,

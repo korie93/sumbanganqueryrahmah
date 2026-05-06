@@ -5,7 +5,9 @@ import type { BackupRecord } from "@/pages/backup-restore/types";
 let backupJsPdfModulePromise: Promise<typeof import("jspdf")> | null = null;
 
 function escapeCsvValue(value: string) {
-  return `"${(value || "").replace(/"/g, '""')}"`;
+  return `"${(value || "")
+    .replace(/"/g, '""')
+    .replace(/[\r\n]+/g, " ")}"`;
 }
 
 function formatBackupExportTime(dateStr: string) {
