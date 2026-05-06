@@ -1,9 +1,14 @@
-import type { IncomingHttpHeaders, IncomingMessage } from "node:http";
 import { WebSocket, type WebSocketServer } from "ws";
 import { readAuthSessionTokenFromHeaders } from "../auth/session-cookie";
 import { logger } from "../lib/logger";
 import type { PostgresStorage } from "../storage-postgres";
 import { extractWsActivityId, isActiveWebSocketSession } from "./session-auth";
+import {
+  firstHeaderValue,
+  hasForwardedHeaders,
+  isSameOriginWebSocketRequest,
+} from "./ws-auth";
+import { createRuntimeWsBroadcaster } from "./ws-broadcast";
 import { getActivityUserKey } from "./ws-connection-state";
 import {
   isTrackableSocket,
@@ -11,11 +16,10 @@ import {
   shouldLogRuntimeWebSocketCleanupDiagnostics,
 } from "./ws-lifecycle";
 import {
-  MAX_RUNTIME_WS_BUFFERED_BYTES,
-  serializeRuntimeWsPayload,
-} from "./ws-message-router";
+  normalizeRuntimeWsHeartbeatIntervalMs,
+  startRuntimeWsHeartbeat,
+} from "./ws-heartbeat";
 
-const HEARTBEAT_INTERVAL_MS = 30_000;
 const MAX_CONNECTIONS_PER_USER = 5;
 const WS_CLOSE_POLICY_VIOLATION = 1008;
 const WS_CLOSE_TRY_AGAIN_LATER = 1013;
@@ -44,78 +48,6 @@ type RuntimeSocketCleanupOptions = {
   reason?: string;
 };
 
-function firstHeaderValue(value: string | string[] | undefined): string {
-  if (Array.isArray(value)) {
-    return String(value[0] || "");
-  }
-  return String(value || "");
-}
-
-function firstForwardedValue(value: string | string[] | undefined): string {
-  return firstHeaderValue(value).split(",")[0]?.trim() || "";
-}
-
-function hasForwardedHeaders(headers: IncomingHttpHeaders): boolean {
-  return Boolean(
-    firstHeaderValue(headers["x-forwarded-for"])
-    || firstHeaderValue(headers["x-forwarded-host"])
-    || firstHeaderValue(headers["x-forwarded-proto"]),
-  );
-}
-
-function readWebSocketRequestHost(
-  headers: IncomingHttpHeaders,
-  options: { trustForwardedHeaders: boolean },
-): string {
-  const trustedForwardedHost = options.trustForwardedHeaders
-    ? firstForwardedValue(headers["x-forwarded-host"])
-    : "";
-  return (trustedForwardedHost || firstHeaderValue(headers.host))
-    .trim()
-    .toLowerCase();
-}
-
-function readWebSocketRequestProto(
-  req: Pick<IncomingMessage, "headers" | "socket">,
-  options: { trustForwardedHeaders: boolean },
-): string {
-  const forwardedProto = options.trustForwardedHeaders
-    ? firstForwardedValue(req.headers["x-forwarded-proto"]).toLowerCase()
-    : "";
-  if (forwardedProto === "http" || forwardedProto === "https") {
-    return forwardedProto;
-  }
-
-  return req.socket && "encrypted" in req.socket && req.socket.encrypted ? "https" : "http";
-}
-
-function isSameOriginWebSocketRequest(
-  req: Pick<IncomingMessage, "headers" | "socket">,
-  options: { trustForwardedHeaders: boolean },
-): boolean {
-  const origin = firstHeaderValue(req.headers.origin).trim();
-  if (!origin) {
-    return true;
-  }
-
-  const requestHost = readWebSocketRequestHost(req.headers, options);
-  if (!requestHost) {
-    return false;
-  }
-
-  try {
-    const originUrl = new URL(origin);
-    if (originUrl.host.toLowerCase() !== requestHost) {
-      return false;
-    }
-
-    const requestProto = readWebSocketRequestProto(req, options);
-    return originUrl.protocol === `${requestProto}:`;
-  } catch {
-    return false;
-  }
-}
-
 export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
   connectedClients: Map<string, WebSocket>;
   broadcastWsMessage: (payload: Record<string, unknown>) => void;
@@ -124,10 +56,7 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
   const connectedClients = options.connectedClients ?? new Map<string, WebSocket>();
   const trustForwardedHeaders = options.trustForwardedHeaders === true;
   const acceptConnections = options.acceptConnections ?? (() => true);
-  const heartbeatIntervalMs = Math.max(
-    10_000,
-    Math.trunc(options.heartbeatIntervalMs ?? HEARTBEAT_INTERVAL_MS),
-  );
+  const heartbeatIntervalMs = normalizeRuntimeWsHeartbeatIntervalMs(options.heartbeatIntervalMs);
   const socketEntriesByActivity = new Map<string, RuntimeTrackedSocketEntry>();
   const socketEntriesByInstance = new WeakMap<WebSocket, RuntimeTrackedSocketEntry>();
   const trackedSockets = new Set<WebSocket>();
@@ -250,18 +179,6 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
       connectedClients.delete(activityId);
     }
   };
-  const dropBackpressuredSocket = (activityId: string, ws: WebSocket) => {
-    logger.warn("WebSocket client dropped because the send buffer exceeded the runtime limit", {
-      activityId,
-      bufferedAmount: ws.bufferedAmount,
-      maxBufferedBytes: MAX_RUNTIME_WS_BUFFERED_BYTES,
-    });
-    cleanupClient(activityId, {
-      expectedWs: ws,
-      closeWith: "terminate",
-      clearSession: true,
-    });
-  };
   const countTrackedUserConnections = (userKey: string, excludedActivityId?: string) => {
     let count = 0;
     for (const entry of socketEntriesByActivity.values()) {
@@ -275,107 +192,13 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
     return count;
   };
 
-  const broadcastWsMessage = (payload: Record<string, unknown>) => {
-    const message = serializeRuntimeWsPayload(payload);
-    if (!message) {
-      return;
-    }
-    const messageBytes = Buffer.byteLength(message, "utf8");
-
-    for (const [activityId, ws] of connectedClients.entries()) {
-      if (!ws || ws.readyState !== WebSocket.OPEN) {
-        cleanupClient(activityId, {
-          expectedWs: ws,
-          clearSession: true,
-        });
-        continue;
-      }
-
-      if (
-        ws.bufferedAmount > MAX_RUNTIME_WS_BUFFERED_BYTES
-        || ws.bufferedAmount + messageBytes > MAX_RUNTIME_WS_BUFFERED_BYTES
-      ) {
-        dropBackpressuredSocket(activityId, ws);
-        continue;
-      }
-
-      try {
-        ws.send(message);
-        if (ws.bufferedAmount > MAX_RUNTIME_WS_BUFFERED_BYTES) {
-          dropBackpressuredSocket(activityId, ws);
-        }
-      } catch (error) {
-        logger.warn("WebSocket broadcast failed", {
-          activityId,
-          error: sanitizeRuntimeWebSocketError(error),
-        });
-        cleanupClient(activityId, {
-          expectedWs: ws,
-          clearSession: true,
-        });
-      }
-    }
-  };
-
-  const heartbeatHandle = setInterval(() => {
-    for (const [activityId, ws] of Array.from(connectedClients.entries())) {
-      const currentEntry = socketEntriesByActivity.get(activityId);
-      if (currentEntry?.ws === ws) {
-        continue;
-      }
-
-      cleanupClient(activityId, {
-        expectedWs: ws,
-      });
-    }
-
-    for (const entry of Array.from(socketEntriesByActivity.values())) {
-      const { activityId, ws } = entry;
-      if (!ws || (ws.readyState !== WebSocket.OPEN && ws.readyState !== WebSocket.CONNECTING)) {
-        cleanupClient(activityId, {
-          expectedWs: ws,
-          clearSession: true,
-        });
-        continue;
-      }
-
-      if (ws.readyState !== WebSocket.OPEN) {
-        continue;
-      }
-
-      const currentEntry = socketEntriesByActivity.get(activityId);
-      if (!currentEntry || currentEntry.ws !== ws) {
-        cleanupClient(activityId, {
-          expectedWs: ws,
-          reason: "heartbeat-entry-mismatch",
-        });
-        continue;
-      }
-
-      if (connectedClients.get(activityId) !== ws) {
-        cleanupClient(activityId, {
-          expectedWs: ws,
-          closeWith: "close",
-          reason: "heartbeat-client-map-desync",
-        });
-        continue;
-      }
-
-      if (!currentEntry.alive) {
-        cleanupClient(activityId, {
-          expectedWs: ws,
-          closeWith: "terminate",
-          clearSession: true,
-          reason: "heartbeat-timeout",
-        });
-        continue;
-      }
-
-      currentEntry.alive = false;
-      ws.ping();
-    }
-  }, heartbeatIntervalMs);
-  heartbeatHandle.unref();
+  const broadcastWsMessage = createRuntimeWsBroadcaster({ connectedClients, cleanupClient });
+  const heartbeatHandle = startRuntimeWsHeartbeat({
+    cleanupClient,
+    connectedClients,
+    heartbeatIntervalMs,
+    socketEntriesByActivity,
+  });
 
   wss.once("close", () => {
     clearInterval(heartbeatHandle);

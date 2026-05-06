@@ -7,6 +7,16 @@ type RuntimeWebSocketErrorLike = {
   type?: unknown;
 };
 
+export type RuntimeWsCleanupClient = (
+  activityId: string,
+  options?: {
+    expectedWs?: WebSocket;
+    closeWith?: "close" | "terminate";
+    clearSession?: boolean;
+    reason?: string;
+  },
+) => boolean;
+
 export function shouldLogRuntimeWebSocketCleanupDiagnostics(): boolean {
   const nodeEnv = resolveNodeEnv();
   return nodeEnv === "development" || nodeEnv === "test";
