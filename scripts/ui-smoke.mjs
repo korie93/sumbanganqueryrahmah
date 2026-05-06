@@ -292,7 +292,7 @@ const checkHomeEntryPoint = async (page, tracker) => {
   await page.getByTestId("nav-home").click();
   await page.waitForLoadState("networkidle");
   await page.waitForURL(/\/$/);
-  await page.getByRole("heading", { name: "Welcome" }).waitFor();
+  await page.getByRole("heading", { name: "SQR Workspace", level: 1 }).waitFor();
   await page.getByTestId("card-general-search").waitFor();
 
   tracker.assertClean("home entry point");
