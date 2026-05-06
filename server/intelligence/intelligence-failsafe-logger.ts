@@ -67,7 +67,18 @@ function startIntelligenceFailSafeLogSweep() {
   unrefInterval(sweepTimer);
 }
 
+export function stopIntelligenceFailSafeLogger() {
+  if (!sweepTimer) {
+    return;
+  }
+
+  clearInterval(sweepTimer);
+  sweepTimer = null;
+}
+
 export function logIntelligenceFailSafe(params: IntelligenceFailSafeLogParams): boolean {
+  startIntelligenceFailSafeLogSweep();
+
   const nowMs = params.nowMs ?? Date.now();
   const cooldownMs = params.cooldownMs ?? DEFAULT_INTELLIGENCE_FAILSAFE_LOG_COOLDOWN_MS;
   const key = `${params.engine}:${params.operation}`;

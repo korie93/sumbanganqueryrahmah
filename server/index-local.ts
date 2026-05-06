@@ -7,6 +7,7 @@ import {
   resolvePgPoolShutdownTimeoutMs,
   shutdownPgPoolSafely,
 } from "./internal/pg-pool-shutdown";
+import { stopIntelligenceFailSafeLogger } from "./intelligence/intelligence-failsafe-logger";
 import { registerWorkerProcessFatalHandlers } from "./internal/worker-process-fatal-handlers";
 import { markStartupFailed } from "./internal/startup-health";
 import { pool, stopPgPoolBackgroundTasks } from "./db-postgres";
@@ -69,6 +70,8 @@ async function finishShutdown() {
     clearTimeout(shutdownTimer);
     shutdownTimer = null;
   }
+
+  stopIntelligenceFailSafeLogger();
 
   await shutdownPgPoolSafely({
     logger,
@@ -175,6 +178,7 @@ startServer().catch(async (error) => {
   notifyMasterFatalReason(startupReason, message);
   markStartupFailed(startupReason, message);
   logger.error("Local server failed during startup", { error });
+  stopIntelligenceFailSafeLogger();
 
   await shutdownPgPoolSafely({
     logger,

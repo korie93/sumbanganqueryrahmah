@@ -8,6 +8,7 @@ import {
   logIntelligenceFailSafe,
   pruneIntelligenceFailSafeLogState,
   resetIntelligenceFailSafeLogStateForTests,
+  stopIntelligenceFailSafeLogger,
 } from "../intelligence-failsafe-logger";
 import { logger } from "../../lib/logger";
 
@@ -100,4 +101,17 @@ test("intelligence fail-safe logging prunes stale cooldown state", (t) => {
 
   assert.equal(pruneIntelligenceFailSafeLogState(5_000 + INTELLIGENCE_FAILSAFE_LOG_STALE_MS), 0);
   assert.equal(getIntelligenceFailSafeLogStateSizeForTests(), 0);
+});
+
+test("intelligence fail-safe logger stops its sweep timer idempotently", (t) => {
+  const clearIntervalMock = t.mock.method(
+    globalThis,
+    "clearInterval",
+    (() => undefined) as typeof clearInterval,
+  );
+
+  stopIntelligenceFailSafeLogger();
+  stopIntelligenceFailSafeLogger();
+
+  assert.equal(clearIntervalMock.mock.callCount(), 1);
 });
