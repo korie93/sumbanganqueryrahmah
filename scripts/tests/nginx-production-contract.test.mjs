@@ -54,6 +54,38 @@ function readNginxDirectiveValue(lines, directive) {
   return line.slice(directive.length).trim();
 }
 
+function extractLocationBlock(text, location) {
+  const startPattern = `location ${location} {`;
+  const startIndex = text.indexOf(startPattern);
+  if (startIndex === -1) {
+    throw new Error(`Missing Nginx location ${location}`);
+  }
+
+  const bodyStart = text.indexOf("{", startIndex);
+  let depth = 0;
+  for (let index = bodyStart; index < text.length; index += 1) {
+    const char = text[index];
+    if (char === "{") {
+      depth += 1;
+    } else if (char === "}") {
+      depth -= 1;
+      if (depth === 0) {
+        return text.slice(startIndex, index + 1);
+      }
+    }
+  }
+
+  throw new Error(`Unclosed Nginx location ${location}`);
+}
+
+function assertLoginLocationUsesAuthThrottle(text, location) {
+  const block = extractLocationBlock(text, location);
+
+  assert.match(block, /limit_req zone=sqr_auth_per_ip burst=5 nodelay;/);
+  assert.match(block, /limit_conn sqr_conn_per_ip 10;/);
+  assert.match(block, /proxy_pass http:\/\/127\.0\.0\.1:5000;/);
+}
+
 test("production Nginx import body limit stays aligned with Express import limit", () => {
   const nginxText = readText(nginxConfigPath);
   const envText = readText(envExamplePath);
@@ -93,6 +125,14 @@ test("production Nginx example gives web-vitals telemetry its own bounded edge t
   assert.match(nginxText, /Do not send personal data, auth tokens, cookies, or session identifiers/);
 });
 
+test("production Nginx example applies auth edge throttle to both login routes", () => {
+  const nginxText = readText(nginxConfigPath);
+
+  assertLoginLocationUsesAuthThrottle(nginxText, "= /api/login");
+  assertLoginLocationUsesAuthThrottle(nginxText, "= /api/auth/login");
+  assert.match(nginxText, /legacy \/api\/login path/);
+});
+
 test("Hetzner deployment guide mirrors the hardened Nginx contract", () => {
   const docText = readText(hetznerDocPath);
   const lines = activeLines(docText);
@@ -104,6 +144,9 @@ test("Hetzner deployment guide mirrors the hardened Nginx contract", () => {
   assert.match(docText, /client_max_body_size 100M;/);
   assert.match(docText, /zone=sqr_telemetry_per_ip:10m rate=60r\/m/);
   assert.match(docText, /location = \/telemetry\/web-vitals/);
+  assertLoginLocationUsesAuthThrottle(docText, "= /api/login");
+  assertLoginLocationUsesAuthThrottle(docText, "= /api/auth/login");
+  assert.match(docText, /legacy \/api\/login path/);
   assert.match(docText, /Browser security headers kekal diurus oleh Express\/Helmet/);
   assert.match(docText, /HSTS_MAX_AGE_SECONDS=31536000/i);
   assert.match(docText, /https:\/\/hstspreload\.org/i);
