@@ -1,3 +1,4 @@
+import type { IncomingMessage } from "node:http";
 import { WebSocket, type WebSocketServer } from "ws";
 import { readAuthSessionTokenFromHeaders } from "../auth/session-cookie";
 import { logger } from "../lib/logger";
@@ -47,6 +48,33 @@ type RuntimeSocketCleanupOptions = {
   clearSession?: boolean;
   reason?: string;
 };
+
+function parseRuntimeWebSocketHandshakeUrl(
+  req: Pick<IncomingMessage, "headers" | "url">,
+): URL | null {
+  const rawHost = firstHeaderValue(req.headers.host).trim();
+  const host = rawHost || "localhost";
+  const requestUrl = String(req.url || "/");
+
+  try {
+    const url = new URL(requestUrl, `http://${host}`);
+    if (!rawHost) {
+      logger.warn("WebSocket handshake missing host header; using localhost fallback", {
+        path: url.pathname,
+      });
+    }
+    return url;
+  } catch (error) {
+    logger.warn("WebSocket rejected malformed handshake URL", {
+      operation: "parseWebSocketHandshakeUrl",
+      hostPresent: Boolean(rawHost),
+      hostLength: rawHost.length,
+      requestTargetLength: requestUrl.length,
+      error: sanitizeRuntimeWebSocketError(error),
+    });
+    return null;
+  }
+}
 
 export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
   connectedClients: Map<string, WebSocket>;
@@ -385,13 +413,11 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
     trackedSockets.add(ws);
     socketCleanupCallbacks.set(ws, cleanupSocket);
 
-    const host = req.headers.host ?? "localhost";
-    const requestUrl = req.url ?? "/";
-    const url = new URL(requestUrl, `http://${host}`);
-    if (!req.headers.host) {
-      logger.warn("WebSocket handshake missing host header; using localhost fallback", {
-        path: url.pathname,
-      });
+    const url = parseRuntimeWebSocketHandshakeUrl(req);
+    if (!url) {
+      cleanupSocket();
+      closeSocketIfNeeded(WS_CLOSE_POLICY_VIOLATION, "malformed handshake URL");
+      return;
     }
     if (url.searchParams.has("token")) {
       logger.warn("WebSocket rejected query-string session token", {

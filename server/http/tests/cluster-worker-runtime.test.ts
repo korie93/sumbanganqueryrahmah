@@ -30,6 +30,7 @@ function createWorker(overrides: Partial<{
   id: number;
   connected: boolean;
   dead: boolean;
+  sendThrows: boolean;
 }> = {}) {
   const handlers = new Map<string, Function[]>();
   const sent: unknown[] = [];
@@ -38,6 +39,9 @@ function createWorker(overrides: Partial<{
     isConnected: () => overrides.connected ?? true,
     isDead: () => overrides.dead ?? false,
     send: (message: unknown) => {
+      if (overrides.sendThrows) {
+        throw new Error("IPC channel unavailable");
+      }
       sent.push(message);
       return true;
     },
@@ -114,6 +118,24 @@ test("cluster worker runtime helpers send IPC messages only to connected workers
   assert.equal(skipped, false);
   assert.equal(readyWorker.sent.length, 2);
   assert.equal(chosen?.id, 11);
+});
+
+test("cluster worker runtime logs graceful shutdown IPC failures without throwing", () => {
+  const logger = createLogger();
+  const failingWorker = createWorker({ id: 12, sendThrows: true });
+
+  const shutdownSent = sendGracefulShutdownToWorker({
+    worker: failingWorker as never,
+    reason: "rolling-restart",
+    logger,
+    createGracefulShutdownMessage: (reason) => ({ type: "graceful-shutdown", reason }),
+  });
+
+  assert.equal(shutdownSent, false);
+  assert.equal(logger.warnCalls.length, 1);
+  assert.equal(logger.warnCalls[0]?.message, "Failed to send graceful-shutdown to worker");
+  assert.equal(logger.warnCalls[0]?.metadata?.workerId, 12);
+  assert.equal(logger.warnCalls[0]?.metadata?.shutdownReason, "rolling-restart");
 });
 
 test("cluster worker runtime forks workers with lifecycle listeners and message policy classifies worker IPC safely", () => {

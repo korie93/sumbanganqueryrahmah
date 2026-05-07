@@ -6,6 +6,8 @@ const BASE32_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
 const TOTP_PERIOD_SECONDS = 30;
 const TOTP_PERIOD_MS = TOTP_PERIOD_SECONDS * 1000;
 
+const formatContractCleanupError = (error) => (error instanceof Error ? error.message : String(error));
+
 const waitForVisible = async (locator, timeout = 10_000) => {
   try {
     await locator.waitFor({ state: "visible", timeout });
@@ -225,7 +227,9 @@ async function readEncryptedTwoFactorSecret(username) {
 
     return String(row.two_factor_secret_encrypted).trim();
   } finally {
-    await client.end().catch(() => {});
+    await client.end().catch((error) => {
+      console.warn(`Authenticated contract PostgreSQL client cleanup failed: ${formatContractCleanupError(error)}`);
+    });
   }
 }
 

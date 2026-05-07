@@ -125,6 +125,7 @@ export function createClusterMasterOrchestrator({
       sendGracefulShutdownToWorker({
         worker,
         reason: `master:${reason}`,
+        logger,
         createGracefulShutdownMessage: toGracefulShutdownMessage,
       });
     }
@@ -212,6 +213,7 @@ export function createClusterMasterOrchestrator({
     sendGracefulShutdownToWorker({
       worker,
       reason,
+      logger,
       createGracefulShutdownMessage: toGracefulShutdownMessage,
     });
 

@@ -435,7 +435,10 @@ export async function main() {
 
     console.log(renderedSummary);
   } finally {
-    await pool.end().catch(() => {});
+    await pool.end().catch((error) => {
+      const message = error instanceof Error ? error.message : String(error);
+      console.warn(`PostgreSQL pool cleanup failed during collection PII reencryption: ${message}`);
+    });
   }
 }
 

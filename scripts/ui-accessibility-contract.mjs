@@ -21,6 +21,8 @@ const assert = (condition, message) => {
   }
 };
 
+const formatCleanupError = (error) => (error instanceof Error ? error.message : String(error));
+
 const publicRouteSpecs = [
   {
     id: "login",
@@ -442,8 +444,20 @@ const run = async () => {
         }
       }
     }
-    await context.close().catch(() => {});
-    await browser.close().catch(() => {});
+    await context.close().catch((error) => {
+      if (!primaryError && !cleanupError) {
+        cleanupError = error;
+        return;
+      }
+      console.warn(`Authenticated accessibility context cleanup failed: ${formatCleanupError(error)}`);
+    });
+    await browser.close().catch((error) => {
+      if (!primaryError && !cleanupError) {
+        cleanupError = error;
+        return;
+      }
+      console.warn(`Authenticated accessibility browser cleanup failed: ${formatCleanupError(error)}`);
+    });
     if (cleanupError) {
       throw cleanupError;
     }

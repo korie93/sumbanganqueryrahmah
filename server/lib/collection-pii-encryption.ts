@@ -4,6 +4,7 @@ import {
   getCollectionPiiEncryptionSecret,
   isCollectionPiiPlaintextRetiredField,
 } from "../config/security";
+import { logger } from "./logger";
 import {
   collectCustomerNameSearchTerms,
   normalizeCollectionPiiSearchHashArray,
@@ -26,6 +27,24 @@ import type {
   CollectionRecordPiiSearchHashes,
   EncryptedCollectionRecordPiiValues,
 } from "./collection-pii-encryption-types";
+
+const MAX_COLLECTION_PII_DECRYPT_WARNINGS = 5;
+let collectionPiiDecryptWarningCount = 0;
+
+function summarizeCollectionPiiDecryptError(error: unknown): Record<string, unknown> | undefined {
+  if (error instanceof Error) {
+    return {
+      name: error.name,
+      message: error.message,
+    };
+  }
+
+  if (typeof error === "string") {
+    return { type: "string" };
+  }
+
+  return undefined;
+}
 
 export function hasCollectionPiiEncryptionConfigured(): boolean {
   return Boolean(getCollectionPiiEncryptionSecret());
@@ -149,7 +168,16 @@ export function decryptCollectionPiiValueSafe(payload: unknown): string | null {
   try {
     const decrypted = decryptCollectionPiiValue(normalized);
     return normalizeCollectionPiiValue(decrypted) || null;
-  } catch {
+  } catch (error) {
+    if (collectionPiiDecryptWarningCount < MAX_COLLECTION_PII_DECRYPT_WARNINGS) {
+      collectionPiiDecryptWarningCount += 1;
+      logger.warn("Failed to decrypt collection PII shadow value", {
+        operation: "decryptCollectionPiiValueSafe",
+        payloadLength: normalized.length,
+        suppressedAfter: MAX_COLLECTION_PII_DECRYPT_WARNINGS,
+        error: summarizeCollectionPiiDecryptError(error),
+      });
+    }
     return null;
   }
 }

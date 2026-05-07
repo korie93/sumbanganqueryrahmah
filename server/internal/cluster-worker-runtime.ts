@@ -47,6 +47,7 @@ export function sendControlStateToWorker(params: {
 export function sendGracefulShutdownToWorker(params: {
   worker: Worker;
   reason: string;
+  logger?: LoggerLike | undefined;
   createGracefulShutdownMessage: (reason: string) => Serializable;
 }): boolean {
   const worker = params.worker;
@@ -58,7 +59,12 @@ export function sendGracefulShutdownToWorker(params: {
   try {
     worker.send(params.createGracefulShutdownMessage(params.reason));
     return true;
-  } catch {
+  } catch (error) {
+    params.logger?.warn("Failed to send graceful-shutdown to worker", {
+      workerId: worker.id,
+      shutdownReason: params.reason,
+      error,
+    });
     return false;
   }
 }

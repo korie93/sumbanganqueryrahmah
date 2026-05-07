@@ -157,6 +157,7 @@ export function registerLocalServerRoutes(options: RegisterLocalServerRoutesOpti
   registerCspReportDropGuardCleanup(server, cspReportDropGuard);
   const webVitalsDropGuard = createWebVitalsTelemetryDropGuard();
   registerWebVitalsTelemetryDropGuardCleanup(server, webVitalsDropGuard);
+  let lastDbConnectivityFailureLogAt = 0;
 
   registerSystemRoutes(app, {
     authenticateToken,
@@ -188,7 +189,15 @@ export function registerLocalServerRoutes(options: RegisterLocalServerRoutesOpti
         const client = await pool.connect();
         client.release();
         return true;
-      } catch {
+      } catch (error) {
+        const now = Date.now();
+        if (now - lastDbConnectivityFailureLogAt > 30_000) {
+          lastDbConnectivityFailureLogAt = now;
+          logger.warn("Database connectivity check failed", {
+            operation: "checkDbConnectivity",
+            error,
+          });
+        }
         return false;
       }
     },

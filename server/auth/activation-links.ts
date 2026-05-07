@@ -1,4 +1,20 @@
 import { readOptionalString } from "../config/runtime-config-read-utils";
+import { logger } from "../lib/logger";
+
+function summarizeActivationUrlError(error: unknown): Record<string, unknown> | undefined {
+  if (error instanceof Error) {
+    return {
+      name: error.name,
+      message: error.message,
+    };
+  }
+
+  if (typeof error === "string") {
+    return { type: "string" };
+  }
+
+  return undefined;
+}
 
 export function getPublicAppBaseUrl(): string {
   const configured = readOptionalString("PUBLIC_APP_URL");
@@ -6,8 +22,12 @@ export function getPublicAppBaseUrl(): string {
   if (configured) {
     try {
       return new URL(configured).toString().replace(/\/+$/, "");
-    } catch {
-      // Fall back to local default below when the configured value is invalid.
+    } catch (error) {
+      logger.warn("Invalid PUBLIC_APP_URL; falling back to local activation link base URL", {
+        operation: "getPublicAppBaseUrl",
+        configuredLength: configured.length,
+        error: summarizeActivationUrlError(error),
+      });
     }
   }
 

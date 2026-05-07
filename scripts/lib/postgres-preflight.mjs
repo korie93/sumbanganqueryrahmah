@@ -93,6 +93,9 @@ export async function assertPostgresConnection(
       + `Connection failed: ${message}`,
     );
   } finally {
-    await pool.end().catch(() => {});
+    await pool.end().catch((cleanupError) => {
+      const message = cleanupError instanceof Error ? cleanupError.message : String(cleanupError);
+      console.warn(`${context} PostgreSQL preflight cleanup failed: ${message}`);
+    });
   }
 }

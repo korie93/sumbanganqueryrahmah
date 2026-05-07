@@ -546,6 +546,56 @@ test("runtime manager tolerates missing host headers during handshake parsing", 
   }
 });
 
+test("runtime manager rejects malformed handshake URLs before session lookup", async (t) => {
+  const wss = new FakeWebSocketServer();
+  const providedMap = new Map<string, WebSocket>();
+  const socket = new FakeWebSocket();
+  const warnings: Array<{ message: string; payload: unknown }> = [];
+  let lookupCalls = 0;
+
+  t.mock.method(logger, "warn", (message: string, payload: unknown) => {
+    warnings.push({ message, payload });
+  });
+
+  createRuntimeWebSocketManager({
+    wss: wss as unknown as import("ws").WebSocketServer,
+    storage: {
+      getActivityById: async () => {
+        lookupCalls += 1;
+        return undefined;
+      },
+      clearCollectionNicknameSessionByActivity: async () => undefined,
+    },
+    secret: TEST_SECRET,
+    connectedClients: providedMap,
+  });
+
+  try {
+    const request = createConnectionRequest(createWsToken("activity-malformed-url"), {
+      host: "bad host",
+    });
+    wss.emit("connection", socket as unknown as WebSocket, request);
+    await flushAsyncWork();
+
+    assert.equal(lookupCalls, 0);
+    assert.equal(providedMap.size, 0);
+    assert.equal(socket.closeCalls, 1);
+    assert.deepEqual(socket.closeCodes, [
+      { code: 1008, reason: "malformed handshake URL" },
+    ]);
+    assert.equal(warnings.length, 1);
+    assert.equal(warnings[0].message, "WebSocket rejected malformed handshake URL");
+    assert.equal(
+      typeof warnings[0].payload === "object"
+        && warnings[0].payload !== null
+        && (warnings[0].payload as { operation?: unknown }).operation,
+      "parseWebSocketHandshakeUrl",
+    );
+  } finally {
+    wss.emit("close");
+  }
+});
+
 test("runtime manager rejects cross-origin browser handshakes", async () => {
   const wss = new FakeWebSocketServer();
   const providedMap = new Map<string, WebSocket>();

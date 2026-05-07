@@ -258,7 +258,10 @@ export async function main() {
       process.exitCode = 1;
     }
   } finally {
-    await pool.end().catch(() => {});
+    await pool.end().catch((error) => {
+      const message = error instanceof Error ? error.message : String(error);
+      console.warn(`PostgreSQL pool cleanup failed during sensitive PII retirement: ${message}`);
+    });
   }
 }
 

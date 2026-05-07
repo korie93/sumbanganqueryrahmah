@@ -401,7 +401,10 @@ export async function main() {
 
     console.log(renderCollectionPiiPlaintextRedactionSummary(summary));
   } finally {
-    await pool.end().catch(() => {});
+    await pool.end().catch((error) => {
+      const message = error instanceof Error ? error.message : String(error);
+      console.warn(`PostgreSQL pool cleanup failed during collection PII plaintext redaction: ${message}`);
+    });
   }
 }
 

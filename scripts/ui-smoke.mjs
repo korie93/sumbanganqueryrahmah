@@ -12,6 +12,19 @@ const errors = [];
 const BACKUP_JOB_TIMEOUT_MS = 180_000;
 const BACKUP_JOB_POLL_INTERVAL_MS = 1_500;
 
+const formatBestEffortError = (error) => {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return String(error);
+};
+
+const recordBestEffortFailure = (operation, error) => {
+  const message = `${operation} failed during smoke cleanup: ${formatBestEffortError(error)}`;
+  errors.push(message);
+  console.warn(message);
+};
+
 const assert = (condition, message) => {
   if (!condition) {
     throw new Error(message);
@@ -38,10 +51,14 @@ const captureFailureArtifacts = async ({ context, page, tracker, error }) => {
   const failureStatePath = path.join(artifactsDir, "failure-state.json");
   const failureHtmlPath = path.join(artifactsDir, "failure-page.html");
 
-  await page.screenshot({ path: failureScreenshotPath, fullPage: true }).catch(() => {});
+  await page
+    .screenshot({ path: failureScreenshotPath, fullPage: true })
+    .catch((error) => recordBestEffortFailure("capture failure screenshot", error));
   const pageHtml = await page.content().catch(() => "");
   if (pageHtml) {
-    await writeFile(failureHtmlPath, pageHtml, "utf8").catch(() => {});
+    await writeFile(failureHtmlPath, pageHtml, "utf8").catch((error) => (
+      recordBestEffortFailure("write failure HTML artifact", error)
+    ));
   }
 
   const cookies = await context.cookies(baseUrl).catch(() => []);
@@ -59,7 +76,7 @@ const captureFailureArtifacts = async ({ context, page, tracker, error }) => {
     failureStatePath,
     JSON.stringify(failureState, null, 2),
     "utf8",
-  ).catch(() => {});
+  ).catch((error) => recordBestEffortFailure("write failure state artifact", error));
 };
 
 const getVisibleUserMenuTrigger = async (page) => {
@@ -716,17 +733,26 @@ const findVisibleCollectionRecord = async (page, searchValue, timeoutMs = 20_000
   const desktopRow = page.locator("tr", { hasText: normalizedSearchValue }).first();
   const mobileCard = page.locator("article", { hasText: normalizedSearchValue }).first();
 
-  try {
-    await desktopRow.waitFor({ state: "visible", timeout: timeoutMs });
+  const waitForVisible = async (locator, surface) => {
+    try {
+      await locator.waitFor({ state: "visible", timeout: timeoutMs });
+      return true;
+    } catch (error) {
+      if (process.env.SMOKE_LOCATOR_DIAGNOSTICS === "1") {
+        const message = error instanceof Error ? error.message : String(error);
+        errors.push(`Collection ${surface} locator did not become visible: ${message}`);
+      }
+      return false;
+    }
+  };
+
+  if (await waitForVisible(desktopRow, "desktop row")) {
     return desktopRow;
   }
-  catch {}
 
-  try {
-    await mobileCard.waitFor({ state: "visible", timeout: timeoutMs });
+  if (await waitForVisible(mobileCard, "mobile card")) {
     return mobileCard;
   }
-  catch {}
 
   return null;
 };
@@ -1113,7 +1139,7 @@ const checkCollectionReceiptUiFlow = async (page, context, tracker) => {
         recordId,
         accountNumber,
         expectedUpdatedAt,
-      }).catch(() => {});
+      }).catch((error) => recordBestEffortFailure("cleanup collection receipt smoke record", error));
     }
   }
 };
@@ -1178,7 +1204,9 @@ const checkBackupRestoreUiFlow = async (page, context, tracker) => {
     tracker.clear();
   } finally {
     if (!backupDeleted) {
-      await cleanupBackupByName(context, backupName).catch(() => {});
+      await cleanupBackupByName(context, backupName).catch((error) => (
+        recordBestEffortFailure("cleanup backup restore smoke artifact", error)
+      ));
     }
   }
 };
@@ -1479,7 +1507,7 @@ const checkCollectionMutationConsistency = async (context) => {
         id: createdRecordId,
         accountNumber: createdAccountNumber,
         expectedUpdatedAt,
-      }).catch(() => {});
+      }).catch((error) => recordBestEffortFailure("cleanup stale delete conflict record", error));
     }
   }
 };
@@ -2334,15 +2362,21 @@ const run = async () => {
     }
   } catch (error) {
     shouldSaveTrace = Boolean(artifactsDir);
-    await captureFailureArtifacts({ context, page, tracker, error }).catch(() => {});
+    await captureFailureArtifacts({ context, page, tracker, error }).catch((artifactError) => (
+      recordBestEffortFailure("capture smoke failure artifacts", artifactError)
+    ));
     throw error;
   } finally {
     if (traceStarted) {
       if (shouldSaveTrace && artifactsDir) {
         const tracePath = path.join(artifactsDir, "trace.zip");
-        await context.tracing.stop({ path: tracePath }).catch(() => {});
+        await context.tracing.stop({ path: tracePath }).catch((error) => (
+          recordBestEffortFailure("save smoke trace", error)
+        ));
       } else {
-        await context.tracing.stop().catch(() => {});
+        await context.tracing.stop().catch((error) => (
+          recordBestEffortFailure("stop smoke trace", error)
+        ));
       }
     }
     await browser.close();
