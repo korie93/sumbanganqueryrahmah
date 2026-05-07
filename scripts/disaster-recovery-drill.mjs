@@ -138,7 +138,7 @@ async function run() {
     console.log(`Running DR drill against ${baseUrl}`);
     console.log(`Restore step enabled: ${runRestore ? "yes" : "no"}`);
 
-    const loginResponse = await request("/api/login", {
+    const loginResponse = await request("/api/auth/login", {
       method: "POST",
       body: JSON.stringify({
         username,

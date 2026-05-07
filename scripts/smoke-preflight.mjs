@@ -130,7 +130,7 @@ const run = async () => {
     return;
   }
 
-  const loginResponse = await request("/api/login", {
+  const loginResponse = await request("/api/auth/login", {
     method: "POST",
     headers: {
       "content-type": "application/json",
@@ -148,8 +148,8 @@ const run = async () => {
     loginResponse.ok,
     [
       "Smoke preflight login failed.",
-      `POST /api/login status: ${loginResponse.status}`,
-      `POST /api/login message: ${String(loginPayload?.message || "(none)")}`,
+      `POST /api/auth/login status: ${loginResponse.status}`,
+      `POST /api/auth/login message: ${String(loginPayload?.message || "(none)")}`,
     ].join("\n"),
   );
 

@@ -197,7 +197,7 @@ async function loginForAuthenticatedContracts(page) {
   const loginResponsePromise = page.waitForResponse(
     (response) =>
       response.request().method() === "POST"
-      && response.url().includes("/api/login"),
+      && response.url().includes("/api/auth/login"),
     { timeout: 15_000 },
   );
   await page.getByTestId("input-username").fill(authUsername);
@@ -226,8 +226,8 @@ async function loginForAuthenticatedContracts(page) {
     authProbe.ok && authProbe.hasUser,
     [
       "authenticated visual login did not establish a usable session",
-      `POST /api/login status: ${loginResponse.status()}`,
-      `POST /api/login message: ${String(loginPayload?.message || "(none)")}`,
+      `POST /api/auth/login status: ${loginResponse.status()}`,
+      `POST /api/auth/login message: ${String(loginPayload?.message || "(none)")}`,
       twoFactorResult
         ? `POST /api/auth/verify-two-factor-login status: ${twoFactorResult.verifyResponse.status()}`
         : "POST /api/auth/verify-two-factor-login status: (not required)",

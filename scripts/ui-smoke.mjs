@@ -2278,7 +2278,7 @@ const run = async () => {
       const loginResponsePromise = page.waitForResponse(
         (response) =>
           response.request().method() === "POST"
-          && response.url().includes("/api/login"),
+          && response.url().includes("/api/auth/login"),
       );
 
       await page.getByTestId("input-username").fill(username);
@@ -2300,8 +2300,8 @@ const run = async () => {
         authProbe.ok && authProbe.hasUser,
         [
           "Login should establish an authenticated session.",
-          `POST /api/login status: ${loginResponse.status()}`,
-          `POST /api/login message: ${String(loginPayload?.message || "(none)")}`,
+          `POST /api/auth/login status: ${loginResponse.status()}`,
+          `POST /api/auth/login message: ${String(loginPayload?.message || "(none)")}`,
           `GET /api/me status: ${authProbe.status}`,
           `GET /api/me message: ${String(authProbe.message || "(none)")}`,
           `Cookies seen after login: ${Array.from(cookieNames).join(", ") || "(none)"}`,

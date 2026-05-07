@@ -725,7 +725,7 @@ test("auth manual fetch wrappers forward AbortSignal", async () => {
     });
 
     const url = String(input);
-    if (url === "/api/login") {
+    if (url === "/api/auth/login") {
       return jsonResponse({
         ok: true,
         username: "alice",
@@ -753,7 +753,7 @@ test("auth manual fetch wrappers forward AbortSignal", async () => {
   assert.equal(requests.length, 2);
   assert.equal(requests[0]?.signal, controller.signal);
   assert.equal(requests[1]?.signal, controller.signal);
-  assert.equal(requests[0]?.url, "/api/login");
+  assert.equal(requests[0]?.url, "/api/auth/login");
   assert.match(requests[1]?.url || "", /\/api\/health$/);
   assert.deepEqual(JSON.parse(requests[0]?.body || "{}"), {
     username: "alice",

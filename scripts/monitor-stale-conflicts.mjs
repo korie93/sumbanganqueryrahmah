@@ -195,7 +195,7 @@ async function run() {
     };
   };
 
-  await request("/api/login", {
+  await request("/api/auth/login", {
     method: "POST",
     body: JSON.stringify({
       username,

@@ -383,8 +383,8 @@ server {
     # application-level import validation errors instead of generic Nginx 413s.
     client_max_body_size 100M;
 
-    # The app still accepts the legacy /api/login path for frontend and smoke
-    # compatibility. Keep both login paths on the stricter auth edge throttle.
+    # The app still accepts the legacy /api/login path for older clients and
+    # rollback compatibility. Keep both login paths on the stricter auth edge throttle.
     location = /api/login {
         limit_req zone=sqr_auth_per_ip burst=5 nodelay;
         limit_conn sqr_conn_per_ip 10;
