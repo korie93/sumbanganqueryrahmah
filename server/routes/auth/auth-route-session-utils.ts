@@ -7,6 +7,7 @@ import {
 } from "../../auth/session-jwt";
 import { setAuthSessionCookie } from "../../auth/session-cookie";
 import { parseBrowser } from "../../lib/browser";
+import { logger } from "../../lib/logger";
 import { ERROR_CODES } from "../../../shared/error-codes";
 import { AuthAccountError } from "../../services/auth-account.service";
 import type { PostgresStorage } from "../../storage-postgres";
@@ -55,6 +56,19 @@ function firstHeaderValue(value: string | string[] | null | undefined) {
   return Array.isArray(value) ? value[0] : value;
 }
 
+function serializeNicknameSessionCleanupError(error: unknown) {
+  if (error instanceof Error) {
+    return {
+      name: error.name,
+      message: error.message,
+    };
+  }
+
+  return {
+    message: String(error),
+  };
+}
+
 export function closeAuthActivitySockets({
   activityIds,
   reason,
@@ -69,7 +83,16 @@ export function closeAuthActivitySockets({
       socket.close();
     }
     connectedClients.delete(activityId);
-    void storage.clearCollectionNicknameSessionByActivity(activityId);
+    void Promise.resolve()
+      .then(() => storage.clearCollectionNicknameSessionByActivity(activityId))
+      .catch((error) => {
+        logger.warn("Failed to clear nickname session after auth session cleanup", {
+          activityId,
+          operation: "clearCollectionNicknameSessionByActivity",
+          reason,
+          error: serializeNicknameSessionCleanupError(error),
+        });
+      });
   }
 }
 

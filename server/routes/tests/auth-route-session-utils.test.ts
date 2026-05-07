@@ -97,6 +97,9 @@ test("auth route session utils reject invalid two-factor challenge tokens and cl
     storage: {
       clearCollectionNicknameSessionByActivity: async (activityId: string) => {
         clearedActivityIds.push(activityId);
+        if (activityId === "missing-activity") {
+          throw new Error("cleanup failed");
+        }
       },
     },
   });
