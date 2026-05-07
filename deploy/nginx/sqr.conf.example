@@ -48,6 +48,13 @@ server {
     # application-level import validation errors instead of generic Nginx 413s.
     client_max_body_size 100M;
 
+    # Login responses carry Helmet/CSP security headers plus auth cookies.
+    # Keep upstream response-header buffers above Nginx defaults so successful
+    # logins are not converted into 502 "upstream sent too big header" errors.
+    proxy_buffer_size 32k;
+    proxy_buffers 8 32k;
+    proxy_busy_buffers_size 64k;
+
     # The app still accepts the legacy /api/login path for older clients and
     # rollback compatibility. Keep both login paths on the stricter auth edge throttle.
     location = /api/login {

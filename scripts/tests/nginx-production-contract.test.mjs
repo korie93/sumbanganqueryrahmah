@@ -133,6 +133,16 @@ test("production Nginx example applies auth edge throttle to both login routes",
   assert.match(nginxText, /legacy \/api\/login path/);
 });
 
+test("production Nginx example buffers app security headers and auth cookies", () => {
+  const nginxText = readText(nginxConfigPath);
+  const lines = activeLines(nginxText);
+
+  assert.ok(parseSizeBytes(readNginxDirectiveValue(lines, "proxy_buffer_size")) >= 32 * 1024);
+  assert.match(nginxText, /proxy_buffers 8 32k;/);
+  assert.match(nginxText, /proxy_busy_buffers_size 64k;/);
+  assert.match(nginxText, /upstream sent too big header/);
+});
+
 test("Hetzner deployment guide mirrors the hardened Nginx contract", () => {
   const docText = readText(hetznerDocPath);
   const lines = activeLines(docText);
@@ -142,6 +152,10 @@ test("Hetzner deployment guide mirrors the hardened Nginx contract", () => {
 
   assert.deepEqual(conflictingHeaders, []);
   assert.match(docText, /client_max_body_size 100M;/);
+  assert.match(docText, /proxy_buffer_size 32k;/);
+  assert.match(docText, /proxy_buffers 8 32k;/);
+  assert.match(docText, /proxy_busy_buffers_size 64k;/);
+  assert.match(docText, /upstream sent too big header/);
   assert.match(docText, /zone=sqr_telemetry_per_ip:10m rate=60r\/m/);
   assert.match(docText, /location = \/telemetry\/web-vitals/);
   assertLoginLocationUsesAuthThrottle(docText, "= /api/login");
