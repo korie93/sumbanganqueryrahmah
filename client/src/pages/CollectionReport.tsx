@@ -8,6 +8,7 @@ import {
   OperationalPage,
   OperationalPageHeader,
 } from "@/components/layout/OperationalPage";
+import { useLocation } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { getBrowserLocalStorage, safeSetStorageItem } from "@/lib/browser-storage";
@@ -28,6 +29,7 @@ const CollectionNicknameDialog = lazy(() =>
 );
 
 export default function CollectionReport() {
+  const [, navigate] = useLocation();
   const isMobile = useIsMobile();
   const role = useMemo(() => getCurrentRole(), []);
   const currentUsername = useMemo(() => getCurrentUsername(), []);
@@ -51,10 +53,8 @@ export default function CollectionReport() {
     const storage = getBrowserLocalStorage();
     safeSetStorageItem(storage, "activeTab", "general-search");
     safeSetStorageItem(storage, "lastPage", "general-search");
-    if (typeof window !== "undefined") {
-      window.location.assign("/");
-    }
-  }, [nicknameAccess]);
+    navigate("/");
+  }, [navigate, nicknameAccess]);
 
   const handleDialogOpenChange = (open: boolean) => {
     if (open) {

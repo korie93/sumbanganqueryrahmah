@@ -1,12 +1,14 @@
 import { ShieldX, Ban, Lock, AlertOctagon, RefreshCw } from "lucide-react";
+import { useLocation } from "wouter";
 import { clearAuthenticatedUserStorage, setBannedSessionFlag } from "@/lib/auth-session";
 import "./Banned.css";
 
 export default function Banned() {
+  const [, navigate] = useLocation();
   const handleRetry = () => {
     setBannedSessionFlag(false);
     clearAuthenticatedUserStorage();
-    window.location.href = "/";
+    navigate("/");
   };
   return (
     <main

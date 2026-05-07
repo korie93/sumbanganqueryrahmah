@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { useLocation } from "wouter";
 import { Eye, EyeOff, LogIn } from "lucide-react";
 import type { User } from "@/app/types";
 import { BrandLogo } from "@/components/BrandLogo";
@@ -14,6 +15,7 @@ interface LoginProps {
 }
 
 export default function Login({ onForgotPasswordClick, onLandingClick, onLoginSuccess }: LoginProps) {
+  const [, navigate] = useLocation();
   const usernameInputRef = useRef<HTMLInputElement | null>(null);
   const {
     username,
@@ -39,8 +41,9 @@ export default function Login({ onForgotPasswordClick, onLandingClick, onLoginSu
     goToLandingPage,
     goToForgotPassword,
   } = useLoginPageState({
-    onForgotPasswordClick,
-    onLandingClick,
+    onBanned: () => navigate("/banned"),
+    onForgotPasswordClick: onForgotPasswordClick ?? (() => navigate("/forgot-password")),
+    onLandingClick: onLandingClick ?? (() => navigate("/")),
     onLoginSuccess,
   });
 

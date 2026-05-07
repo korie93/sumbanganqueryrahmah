@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useLocation } from "wouter";
 import { KeyRound, LogOut } from "lucide-react";
 import { PublicAuthButton, PublicAuthInput } from "@/components/PublicAuthControls";
 import { PublicAuthLayout } from "@/components/PublicAuthLayout";
@@ -26,6 +27,7 @@ export default function ChangePasswordPage({
   username,
   forced = false,
 }: ChangePasswordPageProps) {
+  const [, navigate] = useLocation();
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -64,7 +66,7 @@ export default function ChangePasswordPage({
       redirectTimeoutRef.current = null;
     }
     clearAuthenticatedUserStorage();
-    window.location.href = "/";
+    navigate("/");
   };
 
   const handleSubmit = async () => {
@@ -115,7 +117,7 @@ export default function ChangePasswordPage({
         }
         redirectTimeoutRef.current = window.setTimeout(() => {
           redirectTimeoutRef.current = null;
-          window.location.href = "/";
+          navigate("/");
         }, CHANGE_PASSWORD_FORCE_LOGOUT_REDIRECT_DELAY_MS);
         return;
       }

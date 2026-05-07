@@ -3,11 +3,12 @@ import { randomBytes, timingSafeEqual } from "node:crypto";
 import type { Response } from "express";
 import { runtimeConfig } from "../config/runtime";
 import { logger } from "../lib/logger";
+import { AUTH_SESSION_MAX_AGE_MS as AUTH_SESSION_COOKIE_MAX_AGE_MS } from "./session-lifetime";
 
 export const AUTH_SESSION_COOKIE_NAME = "sqr_auth";
 export const AUTH_SESSION_HINT_COOKIE_NAME = "sqr_auth_hint";
 export const AUTH_SESSION_CSRF_COOKIE_NAME = "sqr_csrf";
-const AUTH_SESSION_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+export { AUTH_SESSION_MAX_AGE_MS } from "./session-lifetime";
 
 type HeaderValue = string | string[] | undefined;
 
@@ -58,7 +59,7 @@ function createCsrfToken() {
 function setAuthSessionCsrfCookie(res: Response, csrfToken: string) {
   res.cookie(AUTH_SESSION_CSRF_COOKIE_NAME, csrfToken, {
     ...getAuthSessionCsrfCookieOptions(),
-    maxAge: AUTH_SESSION_MAX_AGE_MS,
+    maxAge: AUTH_SESSION_COOKIE_MAX_AGE_MS,
   });
 }
 
@@ -140,11 +141,11 @@ export function setAuthSessionCookie(res: Response, token: string) {
   const csrfToken = createCsrfToken();
   res.cookie(AUTH_SESSION_COOKIE_NAME, token, {
     ...getAuthSessionCookieOptions(),
-    maxAge: AUTH_SESSION_MAX_AGE_MS,
+    maxAge: AUTH_SESSION_COOKIE_MAX_AGE_MS,
   });
   res.cookie(AUTH_SESSION_HINT_COOKIE_NAME, "1", {
     ...getAuthSessionHintCookieOptions(),
-    maxAge: AUTH_SESSION_MAX_AGE_MS,
+    maxAge: AUTH_SESSION_COOKIE_MAX_AGE_MS,
   });
   setAuthSessionCsrfCookie(res, csrfToken);
 }

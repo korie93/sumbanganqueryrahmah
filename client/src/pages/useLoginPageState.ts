@@ -32,12 +32,14 @@ import {
 } from "@/pages/login-page-utils";
 
 type UseLoginPageStateParams = {
+  onBanned?: (() => void) | undefined;
   onForgotPasswordClick?: (() => void) | undefined;
   onLandingClick?: (() => void) | undefined;
   onLoginSuccess: (user: User) => void;
 };
 
 export function useLoginPageState({
+  onBanned,
   onForgotPasswordClick,
   onLandingClick,
   onLoginSuccess,
@@ -218,7 +220,11 @@ export function useLoginPageState({
 
       if ("banned" in response) {
         setBannedSessionFlag(true);
-        window.location.href = "/banned";
+        if (onBanned) {
+          onBanned();
+        } else {
+          window.location.href = "/banned";
+        }
         return;
       }
 

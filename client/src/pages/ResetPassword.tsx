@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useLocation } from "wouter";
 import { ArrowLeft, BadgeCheck, KeyRound, ShieldAlert } from "lucide-react";
 import { PublicAuthButton, PublicAuthInput } from "@/components/PublicAuthControls";
 import { PublicAuthLayout } from "@/components/PublicAuthLayout";
@@ -27,6 +28,7 @@ type ResetPasswordPageProps = {
 };
 
 export default function ResetPasswordPage({ onBackToHome, onBackToLogin }: ResetPasswordPageProps = {}) {
+  const [, navigate] = useLocation();
   const token = useMemo(() => getPublicAuthTokenFromLocation(), []);
   const [reset, setReset] = useState<PasswordResetTokenValidationPayload | null>(null);
   const [phase, setPhase] = useState<ResetPhase>(token ? "validating" : "invalid");
@@ -46,7 +48,7 @@ export default function ResetPasswordPage({ onBackToHome, onBackToLogin }: Reset
       return;
     }
 
-    window.location.href = "/";
+    navigate("/");
   };
 
   const layoutBackProps = onBackToHome ? { onBackClick: onBackToHome } : {};

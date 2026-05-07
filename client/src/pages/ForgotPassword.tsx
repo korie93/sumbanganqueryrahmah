@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useLocation } from "wouter";
 import { ArrowLeft, LifeBuoy } from "lucide-react";
 import { PublicAuthButton, PublicAuthInput } from "@/components/PublicAuthControls";
 import { PublicAuthLayout } from "@/components/PublicAuthLayout";
@@ -19,6 +20,7 @@ export default function ForgotPasswordPage({
   onBackToHome,
   onBackToLogin,
 }: ForgotPasswordPageProps) {
+  const [, navigate] = useLocation();
   const [identifier, setIdentifier] = useState("");
   const [identifierError, setIdentifierError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -158,7 +160,7 @@ export default function ForgotPasswordPage({
             onBackToLogin();
             return;
           }
-          window.location.href = "/";
+          navigate("/");
         }}
       >
         <ArrowLeft className="mr-2 h-4 w-4" aria-hidden="true" focusable="false" />

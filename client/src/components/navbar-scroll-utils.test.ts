@@ -3,6 +3,7 @@ import test from "node:test"
 
 import {
   getNavbarKeyboardScrollLeftDelta,
+  resolveNavbarScrollBehavior,
   resolveNavbarKeyboardScrollStep,
 } from "@/components/navbar-scroll-utils"
 
@@ -21,4 +22,9 @@ test("getNavbarKeyboardScrollLeftDelta maps arrow keys to signed scroll movement
   assert.equal(getNavbarKeyboardScrollLeftDelta("ArrowLeft", 400), -160)
   assert.equal(getNavbarKeyboardScrollLeftDelta("ArrowRight", 400), 160)
   assert.equal(getNavbarKeyboardScrollLeftDelta("Home", 400), 0)
+})
+
+test("resolveNavbarScrollBehavior respects reduced motion preferences", () => {
+  assert.equal(resolveNavbarScrollBehavior(false), "smooth")
+  assert.equal(resolveNavbarScrollBehavior(true), "auto")
 })

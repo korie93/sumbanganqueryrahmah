@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  AUTH_SESSION_MAX_AGE_MS,
   AUTH_SESSION_COOKIE_NAME,
   AUTH_SESSION_CSRF_COOKIE_NAME,
   readCookieValueFromHeader,
@@ -57,4 +58,5 @@ test("rotateAuthSessionCsrfCookie refreshes only the csrf cookie", () => {
   assert.equal(cookies[0]?.value.length, 64);
   assert.equal(cookies[0]?.options.httpOnly, false);
   assert.equal(cookies[0]?.options.sameSite, "strict");
+  assert.equal(cookies[0]?.options.maxAge, AUTH_SESSION_MAX_AGE_MS);
 });

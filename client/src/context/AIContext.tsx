@@ -1,4 +1,4 @@
-import { createContext, useContext, useMemo, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
+import { createContext, useCallback, useContext, useMemo, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
 
 export type AIChatMessage = {
   id: string;
@@ -32,10 +32,10 @@ export function AIProvider({ children }: AIProviderProps) {
   const [isThinking, setIsThinking] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
 
-  const resetSession = () => {
+  const resetSession = useCallback(() => {
     setMessages([]);
     setUnreadCount(0);
-  };
+  }, []);
 
   const value = useMemo(
     () => ({
@@ -47,7 +47,7 @@ export function AIProvider({ children }: AIProviderProps) {
       setUnreadCount,
       resetSession,
     }),
-    [isThinking, messages, unreadCount],
+    [isThinking, messages, resetSession, unreadCount],
   );
 
   return <AIContext.Provider value={value}>{children}</AIContext.Provider>;

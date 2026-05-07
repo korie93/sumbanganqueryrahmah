@@ -3,6 +3,7 @@ import test from "node:test";
 import express from "express";
 import {
   createApiProtectionMiddleware,
+  isRuntimeProtectedRoute,
   resolveAdaptiveRateEvictionKey,
 } from "../../internal/apiProtection";
 import { startTestServer, stopTestServer } from "../../routes/tests/http-test-utils";
@@ -224,6 +225,13 @@ test("adaptive API protection throttles telemetry flood attempts outside the /ap
   } finally {
     await stopTestServer(server);
   }
+});
+
+test("runtime protection route classification includes web-vitals telemetry consistently", () => {
+  assert.equal(isRuntimeProtectedRoute({ method: "GET", path: "/api/me" }), true);
+  assert.equal(isRuntimeProtectedRoute({ method: "POST", path: "/telemetry/web-vitals" }), true);
+  assert.equal(isRuntimeProtectedRoute({ method: "GET", path: "/telemetry/web-vitals" }), false);
+  assert.equal(isRuntimeProtectedRoute({ method: "GET", path: "/login" }), false);
 });
 
 test("adaptive API protection registers and clears its background sweep interval", (t) => {

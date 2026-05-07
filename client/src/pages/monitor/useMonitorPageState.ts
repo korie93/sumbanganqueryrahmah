@@ -1,4 +1,5 @@
 import { useEffect, useMemo } from "react";
+import { useLocation } from "wouter";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useSystemMetrics } from "@/hooks/useSystemMetrics";
 import { getStoredRole } from "@/lib/auth-session";
@@ -14,6 +15,7 @@ export const ALERT_HISTORY_PAGE_SIZE = 5;
 export const ACTIVE_ALERTS_PAGE_SIZE = 5;
 
 export function useMonitorPageState() {
+  const [location, navigate] = useLocation();
   const isMobile = useIsMobile();
   const {
     metricsOpen,
@@ -85,14 +87,11 @@ export function useMonitorPageState() {
     if (!accessDenied) {
       return;
     }
-    if (typeof window === "undefined") {
+    if (location === "/403") {
       return;
     }
-    if (window.location.pathname === "/403") {
-      return;
-    }
-    window.location.assign("/403");
-  }, [accessDenied]);
+    navigate("/403");
+  }, [accessDenied, location, navigate]);
 
   useEffect(() => {
     if (alertsPage > alertsPagination.totalPages) {

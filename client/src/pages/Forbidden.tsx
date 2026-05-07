@@ -1,7 +1,10 @@
 import { ArrowLeft, Home, ShieldAlert } from "lucide-react";
+import { useLocation } from "wouter";
 import "./Forbidden.css";
 
 export default function Forbidden() {
+  const [, navigate] = useLocation();
+
   return (
     <main id="main-content" tabIndex={-1} className="forbidden-page app-shell-min-height px-4 py-8 sm:px-6">
       <div className="mx-auto max-w-3xl">
@@ -49,7 +52,7 @@ export default function Forbidden() {
                     window.history.back();
                     return;
                   }
-                  window.location.href = "/";
+                  navigate("/");
                 }}
               >
                 <ArrowLeft className="mr-2 h-4 w-4" />
@@ -59,7 +62,7 @@ export default function Forbidden() {
                 type="button"
                 className="forbidden-page__primary-button inline-flex min-h-11 items-center justify-center rounded-xl px-4 text-sm font-semibold transition-colors"
                 onClick={() => {
-                  window.location.href = "/";
+                  navigate("/");
                 }}
               >
                 <Home className="mr-2 h-4 w-4" />

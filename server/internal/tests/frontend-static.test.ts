@@ -4,13 +4,13 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { createJsonTestApp, startTestServer, stopTestServer } from "../../routes/tests/http-test-utils";
-import { registerFrontendStatic } from "../frontend-static";
+import { buildRobotsTxt, registerFrontendStatic } from "../frontend-static";
 
 test("frontend static serves robots.txt and sitemap.xml while keeping SPA fallback for routes only", async () => {
   const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "sqr-frontend-static-"));
   const publicDir = path.join(tempRoot, "public");
   const assetsDir = path.join(publicDir, "assets");
-  const robotsBody = "User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /uploads/\nDisallow: /ws\nDisallow: /login\nDisallow: /forgot-password\nDisallow: /activate-account\nDisallow: /reset-password\nDisallow: /change-password\nDisallow: /maintenance\nDisallow: /403\nDisallow: /banned\nSitemap: https://sqr-system.com/sitemap.xml\n";
+  const robotsBody = buildRobotsTxt("https://example.test/app");
   const sitemapBody = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
@@ -25,7 +25,7 @@ test("frontend static serves robots.txt and sitemap.xml while keeping SPA fallba
   await fs.mkdir(publicDir, { recursive: true });
   await fs.mkdir(assetsDir, { recursive: true });
   await fs.writeFile(path.join(publicDir, "index.html"), "<!doctype html><html><body><div id=\"root\"></div></body></html>");
-  await fs.writeFile(path.join(publicDir, "robots.txt"), robotsBody, "utf8");
+  await fs.writeFile(path.join(publicDir, "robots.txt"), "User-agent: *\nDisallow: /\n", "utf8");
   await fs.writeFile(path.join(publicDir, "sitemap.xml"), sitemapBody, "utf8");
   await fs.writeFile(path.join(assetsDir, "app-ABC12345.js"), immutableAssetBody, "utf8");
 
@@ -33,6 +33,7 @@ test("frontend static serves robots.txt and sitemap.xml while keeping SPA fallba
   registerFrontendStatic(app, {
     cwd: tempRoot,
     paths: ["public"],
+    publicAppUrl: "https://example.test/app",
   });
 
   const { server, baseUrl } = await startTestServer(app);

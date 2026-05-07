@@ -6,7 +6,10 @@ import type {
   NavigationGroup,
 } from "@/app/navigation"
 import { cn } from "@/lib/utils"
-import { getNavbarKeyboardScrollLeftDelta } from "@/components/navbar-scroll-utils"
+import {
+  getNavbarKeyboardScrollLeftDelta,
+  resolveNavbarScrollBehavior,
+} from "@/components/navbar-scroll-utils"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -39,18 +42,24 @@ function NavbarDesktopNavigationImpl({
   navScrollerRef,
   desktopNavOverflow,
 }: NavbarDesktopNavigationProps) {
+  const getScrollBehavior = () => resolveNavbarScrollBehavior(
+    typeof window !== "undefined"
+      && window.matchMedia("(prefers-reduced-motion: reduce)").matches
+  )
+
   const handleNavScrollerKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     const navNode = event.currentTarget
+    const behavior = getScrollBehavior()
 
     if (event.key === "Home") {
       event.preventDefault()
-      navNode.scrollTo({ left: 0, behavior: "smooth" })
+      navNode.scrollTo({ left: 0, behavior })
       return
     }
 
     if (event.key === "End") {
       event.preventDefault()
-      navNode.scrollTo({ left: navNode.scrollWidth, behavior: "smooth" })
+      navNode.scrollTo({ left: navNode.scrollWidth, behavior })
       return
     }
 
@@ -61,7 +70,7 @@ function NavbarDesktopNavigationImpl({
     }
 
     event.preventDefault()
-    navNode.scrollBy({ left: leftDelta, behavior: "smooth" })
+    navNode.scrollBy({ left: leftDelta, behavior })
   }
 
   return (

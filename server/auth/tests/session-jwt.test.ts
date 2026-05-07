@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import jwt from "jsonwebtoken";
 import {
+  SESSION_JWT_DEFAULT_EXPIRY,
   SESSION_JWT_ALGORITHM,
   signSessionJwt,
   verifyJwtWithAnySecret,
@@ -13,7 +14,7 @@ test("signSessionJwt applies the default session expiry when omitted", () => {
 
   assert.ok(decoded?.iat);
   assert.ok(decoded?.exp);
-  assert.equal(decoded.exp - decoded.iat, 24 * 60 * 60);
+  assert.equal(decoded.exp - decoded.iat, SESSION_JWT_DEFAULT_EXPIRY);
 });
 
 test("verifyJwtWithAnySecret accepts a token signed with a previous manual rotation secret", () => {

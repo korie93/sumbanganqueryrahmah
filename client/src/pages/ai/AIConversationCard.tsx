@@ -94,7 +94,13 @@ export function AIConversationCard({
 
         {showResetButton ? (
           <div className="flex items-center justify-end gap-2">
-            <Button type="button" variant="outline" onClick={onCancel} disabled={!canStop}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={onCancel}
+              disabled={!canStop}
+              aria-label={`Hentikan ${assistantLabel}`}
+            >
               <StopCircle className="mr-2 h-4 w-4" aria-hidden="true" />
               Hentikan AI
             </Button>
@@ -104,7 +110,14 @@ export function AIConversationCard({
           </div>
         ) : null}
 
-        <div ref={messagesContainerRef} className={`${chatHeightClass} overflow-y-auto space-y-3 pr-2`}>
+        <div
+          ref={messagesContainerRef}
+          className={`${chatHeightClass} overflow-y-auto space-y-3 pr-2`}
+          role="log"
+          aria-live="polite"
+          aria-relevant="additions text"
+          aria-label={`Perbualan ${assistantLabel}`}
+        >
           {messages.length === 0 ? (
             <div className="text-sm text-muted-foreground">
               Mula dengan soalan seperti: <span className="font-semibold">IC 840703115667</span> atau{" "}
@@ -182,7 +195,14 @@ export function AIConversationCard({
 
         {!showResetButton ? (
           <div className="flex items-center justify-end gap-2">
-            <Button type="button" variant="outline" size="sm" onClick={onCancel} disabled={!canStop}>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={onCancel}
+              disabled={!canStop}
+              aria-label={`Hentikan ${assistantLabel}`}
+            >
               <StopCircle className="mr-2 h-4 w-4" aria-hidden="true" />
               Hentikan AI
             </Button>

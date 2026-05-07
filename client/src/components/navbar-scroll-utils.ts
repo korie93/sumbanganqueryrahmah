@@ -25,3 +25,7 @@ export function getNavbarKeyboardScrollLeftDelta(key: string, clientWidth: numbe
 
   return 0
 }
+
+export function resolveNavbarScrollBehavior(prefersReducedMotion: boolean): ScrollBehavior {
+  return prefersReducedMotion ? "auto" : "smooth"
+}

@@ -35,7 +35,7 @@ function DashboardContent() {
   const dashboardRef = useRef<HTMLDivElement>(null);
   const exportInFlightRef = useRef(false);
   const refreshInFlightRef = useRef(false);
-  const mountedRef = useRef(true);
+  const lifecycleAbortControllerRef = useRef<AbortController | null>(null);
 
   const { data: summary, isLoading: summaryLoading, refetch: refetchSummary } = useQuery<SummaryData>({
     queryKey: ["/api/analytics/summary"],
@@ -79,12 +79,20 @@ function DashboardContent() {
   );
 
   useEffect(() => {
-    mountedRef.current = true;
+    const controller = new AbortController();
+    lifecycleAbortControllerRef.current = controller;
     return () => {
-      mountedRef.current = false;
+      controller.abort();
+      if (lifecycleAbortControllerRef.current === controller) {
+        lifecycleAbortControllerRef.current = null;
+      }
       exportInFlightRef.current = false;
       refreshInFlightRef.current = false;
     };
+  }, []);
+
+  const isDashboardLifecycleActive = useCallback(() => {
+    return lifecycleAbortControllerRef.current?.signal.aborted === false;
   }, []);
 
   const handleRefreshAll = useCallback(async () => {
@@ -102,11 +110,11 @@ function DashboardContent() {
       ]);
     } finally {
       refreshInFlightRef.current = false;
-      if (mountedRef.current) {
+      if (isDashboardLifecycleActive()) {
         setRefreshing(false);
       }
     }
-  }, [refetchPeakHours, refetchRoles, refetchSummary, refetchTopUsers, refetchTrends]);
+  }, [isDashboardLifecycleActive, refetchPeakHours, refetchRoles, refetchSummary, refetchTopUsers, refetchTrends]);
 
   const handleExportPdf = useCallback(async () => {
     if (!dashboardRef.current || exportBlockReason || exportInFlightRef.current) return;
@@ -125,11 +133,11 @@ function DashboardContent() {
       });
     } finally {
       exportInFlightRef.current = false;
-      if (mountedRef.current) {
+      if (isDashboardLifecycleActive()) {
         setExportingPdf(false);
       }
     }
-  }, [exportBlockReason]);
+  }, [exportBlockReason, isDashboardLifecycleActive]);
 
   return (
     <OperationalPage width="content">

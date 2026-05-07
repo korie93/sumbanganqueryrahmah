@@ -2,6 +2,7 @@ import compression from "compression";
 import express, { type Express } from "express";
 import fs from "fs";
 import path from "path";
+import { runtimeConfig } from "../config/runtime";
 import { isPathInsideDirectory } from "../config/upload-paths";
 import { logger } from "../lib/logger";
 
@@ -14,6 +15,7 @@ const DEFAULT_FRONTEND_PATHS = [
 
 const IMMUTABLE_ASSET_MAX_AGE_SECONDS = 60 * 60 * 24 * 365;
 const FRONTEND_COMPRESSION_THRESHOLD_BYTES = 1024;
+const ROBOTS_CACHE_MAX_AGE_SECONDS = 5 * 60;
 
 function normalizeStaticRelativePath(staticRoot: string, absoluteFilePath: string) {
   const relativePath = path.relative(staticRoot, absoluteFilePath);
@@ -42,9 +44,40 @@ function shouldBypassSpaFallback(requestPath: string) {
   return /\.[a-z0-9]+$/i.test(path.basename(requestPath));
 }
 
-export function registerFrontendStatic(app: Express, options?: { cwd?: string; paths?: string[] }) {
+function resolveSitemapUrl(publicAppUrl: string | null | undefined) {
+  if (!publicAppUrl) {
+    return null;
+  }
+
+  try {
+    return new URL("/sitemap.xml", publicAppUrl).toString();
+  } catch (error) {
+    logger.warn("Skipping robots.txt sitemap because PUBLIC_APP_URL is invalid", { error });
+    return null;
+  }
+}
+
+export function buildRobotsTxt(publicAppUrl: string | null | undefined) {
+  const lines = [
+    "User-agent: *",
+    "Allow: /",
+    "Disallow: /api/",
+  ];
+  const sitemapUrl = resolveSitemapUrl(publicAppUrl);
+  if (sitemapUrl) {
+    lines.push(`Sitemap: ${sitemapUrl}`);
+  }
+
+  return `${lines.join("\n")}\n`;
+}
+
+export function registerFrontendStatic(
+  app: Express,
+  options?: { cwd?: string; paths?: string[]; publicAppUrl?: string | null },
+) {
   const cwd = options?.cwd || process.cwd();
   const possiblePaths = options?.paths || DEFAULT_FRONTEND_PATHS;
+  const publicAppUrl = options?.publicAppUrl ?? runtimeConfig.app.publicAppUrl;
 
   logger.info("Resolving frontend static assets", { cwd });
 
@@ -88,6 +121,12 @@ export function registerFrontendStatic(app: Express, options?: { cwd?: string; p
     app.use(compression({
       threshold: FRONTEND_COMPRESSION_THRESHOLD_BYTES,
     }));
+    app.get("/robots.txt", (_req, res) => {
+      res
+        .type("text/plain")
+        .setHeader("Cache-Control", `public, max-age=${ROBOTS_CACHE_MAX_AGE_SECONDS}`);
+      res.send(buildRobotsTxt(publicAppUrl));
+    });
     app.use(express.static(foundPath, {
       setHeaders(res, servedPath) {
         if (!isImmutableFrontendAsset(foundPath as string, servedPath)) {

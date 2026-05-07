@@ -28,10 +28,15 @@ function isHeavyRoute(pathname: string): boolean {
     || pathname.startsWith("/api/backups");
 }
 
-function isAdaptiveRateLimitedRoute(req: Request): boolean {
+function isWebVitalsTelemetryRoute(req: Pick<Request, "method" | "path">): boolean {
   const method = String(req.method || "GET").toUpperCase();
   const path = req.path || "/";
-  return path.startsWith("/api/") || (method === "POST" && path === "/telemetry/web-vitals");
+  return method === "POST" && path === "/telemetry/web-vitals";
+}
+
+export function isRuntimeProtectedRoute(req: Pick<Request, "method" | "path">): boolean {
+  const path = req.path || "/";
+  return path.startsWith("/api/") || isWebVitalsTelemetryRoute(req);
 }
 
 function isSessionControlRoute(req: Request): boolean {
@@ -172,7 +177,7 @@ export function createApiProtectionMiddleware(options: ApiProtectionOptions): {
 
   const adaptiveRateLimit: RequestHandler = (req, res, next) => {
     const controlState = options.getControlState();
-    if (!isAdaptiveRateLimitedRoute(req)) return next();
+    if (!isRuntimeProtectedRoute(req)) return next();
     if (isSessionControlRoute(req)) return next();
 
     const now = Date.now();
@@ -209,7 +214,7 @@ export function createApiProtectionMiddleware(options: ApiProtectionOptions): {
 
   const systemProtectionMiddleware: RequestHandler = (req, res, next) => {
     const controlState = options.getControlState();
-    if (!req.path.startsWith("/api/")) return next();
+    if (!isRuntimeProtectedRoute(req)) return next();
     if (req.path.startsWith("/api/health") || req.path.startsWith("/api/maintenance-status")) {
       return next();
     }

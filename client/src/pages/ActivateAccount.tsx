@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useLocation } from "wouter";
 import { ArrowLeft, BadgeCheck, KeyRound, ShieldAlert } from "lucide-react";
 import { PublicAuthButton, PublicAuthInput } from "@/components/PublicAuthControls";
 import { PublicAuthLayout } from "@/components/PublicAuthLayout";
@@ -29,6 +30,7 @@ type ActivateAccountPageProps = {
 };
 
 export default function ActivateAccountPage({ onBackToLogin }: ActivateAccountPageProps) {
+  const [, navigate] = useLocation();
   const token = useMemo(() => getPublicAuthTokenFromLocation(), []);
   const [activation, setActivation] = useState<ActivationTokenValidationPayload | null>(null);
   const [phase, setPhase] = useState<ActivationPhase>(token ? "validating" : "invalid");
@@ -49,8 +51,8 @@ export default function ActivateAccountPage({ onBackToLogin }: ActivateAccountPa
       return;
     }
 
-    window.location.href = "/";
-  }, [onBackToLogin]);
+    navigate("/");
+  }, [navigate, onBackToLogin]);
 
   useEffect(() => {
     mountedRef.current = true;

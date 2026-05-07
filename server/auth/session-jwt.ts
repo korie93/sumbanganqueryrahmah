@@ -1,8 +1,9 @@
 import jwt, { type SignOptions } from "jsonwebtoken";
 import { runtimeConfig } from "../config/runtime";
+import { SESSION_JWT_DEFAULT_EXPIRY as SESSION_JWT_DEFAULT_EXPIRY_VALUE } from "./session-lifetime";
 
 export const SESSION_JWT_ALGORITHM = "HS256" as const;
-export const SESSION_JWT_DEFAULT_EXPIRY = "24h";
+export { SESSION_JWT_DEFAULT_EXPIRY } from "./session-lifetime";
 
 function normalizeVerificationSecrets(secrets: string | readonly string[] | null | undefined): string[] {
   if (Array.isArray(secrets)) {
@@ -26,7 +27,7 @@ export function signSessionJwt<TPayload extends object>(
 ): string {
   return jwt.sign(payload, runtimeConfig.auth.sessionSecret, {
     algorithm: SESSION_JWT_ALGORITHM,
-    expiresIn: SESSION_JWT_DEFAULT_EXPIRY,
+    expiresIn: SESSION_JWT_DEFAULT_EXPIRY_VALUE,
     ...options,
   });
 }

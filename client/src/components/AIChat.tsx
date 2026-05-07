@@ -77,7 +77,14 @@ export default function AIChat({
         <div className="ai-notice">{gateNotice}</div>
       ) : null}
 
-      <div ref={messagesRef} className="ai-messages">
+      <div
+        ref={messagesRef}
+        className="ai-messages"
+        role="log"
+        aria-live="polite"
+        aria-relevant="additions text"
+        aria-label={`Perbualan ${assistantLabel}`}
+      >
         {messages.length === 0 ? (
           <div className="ai-empty-hint">
             Taip soalan seperti IC, nombor akaun, atau nama untuk bantuan pantas.
@@ -162,6 +169,7 @@ export default function AIChat({
             className="ai-stop-btn"
             onClick={() => cancelAISearch(true)}
             disabled={!isProcessing && !isTyping}
+            aria-label={`Hentikan ${assistantLabel}`}
           >
             <StopCircle className="h-4 w-4" aria-hidden="true" />
             <span>Hentikan AI</span>
