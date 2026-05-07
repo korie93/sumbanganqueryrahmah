@@ -25,6 +25,73 @@ function readRetryAfterMs(res: Response, data: unknown): number | undefined {
   return undefined;
 }
 
+type LoginError = Error & {
+  code?: string;
+  locked?: boolean;
+  retryAfterMs?: number;
+  status?: number;
+  requestId?: string | null;
+};
+
+function buildLoginError(message: string, res: Response, data?: unknown): LoginError {
+  const error = new Error(message) as LoginError;
+  const payload = data && typeof data === "object" ? data as {
+    error?: { code?: unknown };
+    locked?: unknown;
+  } : null;
+
+  if (typeof payload?.error?.code === "string") {
+    error.code = payload.error.code;
+  }
+  error.locked = payload?.locked === true;
+  if (error.code === ERROR_CODES.ACCOUNT_LOCKED) {
+    error.locked = true;
+  }
+  const retryAfterMs = readRetryAfterMs(res, data);
+  if (retryAfterMs !== undefined) {
+    error.retryAfterMs = retryAfterMs;
+  }
+  error.status = res.status;
+  error.requestId = res.headers.get("x-request-id");
+
+  return error;
+}
+
+function looksLikeHtmlDocument(value: string) {
+  return /<!doctype html|<html[\s>]|<body[\s>]|<head[\s>]/i.test(value);
+}
+
+function resolveNonJsonLoginErrorMessage(res: Response, text: string) {
+  if ((res.status === 502 || res.status === 503 || res.status === 504) && looksLikeHtmlDocument(text)) {
+    return "Server sedang tidak tersedia. Sila cuba sebentar lagi.";
+  }
+
+  if (looksLikeHtmlDocument(text)) {
+    return `Server mengembalikan halaman ralat (${res.status}). Sila cuba lagi.`;
+  }
+
+  const normalizedText = text.replace(/\s+/g, " ").trim();
+  return normalizedText
+    ? normalizedText.slice(0, 240)
+    : res.statusText || "Login failed";
+}
+
+async function readLoginResponsePayload(res: Response): Promise<Record<string, unknown>> {
+  const text = await res.text();
+  try {
+    const data = JSON.parse(text || "{}") as unknown;
+    return data && typeof data === "object" && !Array.isArray(data)
+      ? data as Record<string, unknown>
+      : {};
+  } catch {
+    if (!res.ok) {
+      throw buildLoginError(resolveNonJsonLoginErrorMessage(res, text), res);
+    }
+
+    throw buildLoginError("Server mengembalikan respons log masuk yang tidak sah.", res);
+  }
+}
+
 export async function login(
   username: string,
   password: string,
@@ -47,30 +114,23 @@ export async function login(
     signal: options?.signal ?? null,
   });
 
-  const data = await res.json();
+  const data = await readLoginResponsePayload(res);
   if (data.banned) {
     return { banned: true };
   }
   if (!res.ok) {
-    const error = new Error(data?.message || data?.error?.message || "Login failed") as Error & {
-      code?: string;
-      locked?: boolean;
-      retryAfterMs?: number;
-      status?: number;
-      requestId?: string | null;
-    };
-    error.code = typeof data?.error?.code === "string" ? data.error.code : undefined;
-    error.locked = data?.locked === true;
-    if (error.code === ERROR_CODES.ACCOUNT_LOCKED) {
-      error.locked = true;
-    }
-    const retryAfterMs = readRetryAfterMs(res, data);
-    if (retryAfterMs !== undefined) {
-      error.retryAfterMs = retryAfterMs;
-    }
-    error.status = res.status;
-    error.requestId = res.headers.get("x-request-id");
-    throw error;
+    const nestedError = data.error && typeof data.error === "object"
+      ? data.error as { message?: unknown }
+      : null;
+    throw buildLoginError(
+      typeof data.message === "string"
+        ? data.message
+        : typeof nestedError?.message === "string"
+          ? nestedError.message
+          : "Login failed",
+      res,
+      data,
+    );
   }
 
   return data as LoginResponse;
