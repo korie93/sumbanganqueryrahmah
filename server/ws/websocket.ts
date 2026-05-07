@@ -11,14 +11,9 @@ type LegacyWebSocketOptions = {
 };
 
 const WEBSOCKET_MAX_PAYLOAD_BYTES = 100 * 1024;
-let defaultSessionSecrets: string | readonly string[] | null = null;
 
 function getDefaultSessionSecrets() {
-  if (!defaultSessionSecrets) {
-    defaultSessionSecrets = getSessionJwtVerificationSecrets();
-  }
-
-  return defaultSessionSecrets;
+  return getSessionJwtVerificationSecrets();
 }
 
 export const connectedClients = new Map<string, WebSocket>();

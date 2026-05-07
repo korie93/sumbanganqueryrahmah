@@ -186,11 +186,26 @@
   color: var(--login-input-placeholder);
 }
 
-.login-input:focus,
+.login-input:focus {
+  border-color: transparent;
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+}
+
 .login-input:focus-visible {
   border-color: transparent;
-  outline: none;
-  box-shadow: 0 0 0 2px var(--login-input-focus-ring);
+  outline: 2px solid var(--login-input-focus-ring, hsl(217 91% 60%));
+  outline-offset: 2px;
+  box-shadow: 0 0 0 2px var(--login-input-focus-ring, hsl(217 91% 60%));
+}
+
+@supports not selector(:focus-visible) {
+  .login-input:focus {
+    border-color: transparent;
+    outline: 2px solid var(--login-input-focus-ring, hsl(217 91% 60%));
+    outline-offset: 2px;
+    box-shadow: 0 0 0 2px var(--login-input-focus-ring, hsl(217 91% 60%));
+  }
 }
 
 .login-input--otp {

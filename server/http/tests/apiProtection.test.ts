@@ -70,6 +70,9 @@ function createApiProtectionTestApp() {
   app.post("/telemetry/web-vitals", (_req, res) => {
     res.json({ ok: true, route: "telemetry" });
   });
+  app.post("/api/telemetry/web-vitals", (_req, res) => {
+    res.json({ ok: true, route: "telemetry-api" });
+  });
 
   return app;
 }
@@ -194,13 +197,13 @@ test("adaptive API protection ignores spoofed x-forwarded-for headers when trust
   }
 });
 
-test("adaptive API protection throttles telemetry flood attempts outside the /api prefix", async () => {
+test("adaptive API protection throttles telemetry flood attempts on the canonical API route", async () => {
   const app = createApiProtectionTestApp();
   const { server, baseUrl } = await startTestServer(app);
 
   try {
     for (let index = 0; index < 6; index += 1) {
-      const response = await fetch(`${baseUrl}/telemetry/web-vitals`, {
+      const response = await fetch(`${baseUrl}/api/telemetry/web-vitals`, {
         method: "POST",
         headers: {
           "content-type": "application/json",
@@ -210,7 +213,7 @@ test("adaptive API protection throttles telemetry flood attempts outside the /ap
       assert.equal(response.status, 200);
     }
 
-    const throttled = await fetch(`${baseUrl}/telemetry/web-vitals`, {
+    const throttled = await fetch(`${baseUrl}/api/telemetry/web-vitals`, {
       method: "POST",
       headers: {
         "content-type": "application/json",
@@ -229,6 +232,8 @@ test("adaptive API protection throttles telemetry flood attempts outside the /ap
 
 test("runtime protection route classification includes web-vitals telemetry consistently", () => {
   assert.equal(isRuntimeProtectedRoute({ method: "GET", path: "/api/me" }), true);
+  assert.equal(isRuntimeProtectedRoute({ method: "POST", path: "/api/telemetry/web-vitals" }), true);
+  assert.equal(isRuntimeProtectedRoute({ method: "GET", path: "/api/telemetry/web-vitals" }), true);
   assert.equal(isRuntimeProtectedRoute({ method: "POST", path: "/telemetry/web-vitals" }), true);
   assert.equal(isRuntimeProtectedRoute({ method: "GET", path: "/telemetry/web-vitals" }), false);
   assert.equal(isRuntimeProtectedRoute({ method: "GET", path: "/login" }), false);

@@ -70,4 +70,6 @@ test("buildRateLimiterTopologyWarning warns when multi-worker deployments still 
 
   assert.match(warning ?? "", /shared store/i);
   assert.match(warning ?? "", /in-memory/i);
+  assert.match(warning ?? "", /independent quota/i);
+  assert.match(warning ?? "", /SQR_RATE_LIMIT_STORE=redis/i);
 });

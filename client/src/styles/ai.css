@@ -64,6 +64,8 @@
   gap: 12px;
   min-height: 0;
   overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--ai-scroll-thumb) transparent;
 }
 
 .ai-chat-container[data-compact='true'] .ai-messages {

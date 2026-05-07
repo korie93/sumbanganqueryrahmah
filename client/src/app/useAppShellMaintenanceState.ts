@@ -4,6 +4,7 @@ import { getMaintenanceStatus } from "@/lib/api";
 import { getBrowserLocalStorage, safeSetStorageItem } from "@/lib/browser-storage";
 import { logClientWarning } from "@/lib/client-logger";
 import { MAINTENANCE_STATUS_POLL_INTERVAL_MS } from "@/pages/maintenance-state";
+import { buildPathForPage, replaceHistory } from "@/app/routing";
 
 type MaintenanceUpdatedDetail = {
   maintenance?: boolean;
@@ -44,8 +45,11 @@ export function useAppShellMaintenanceState({
       const custom = event as CustomEvent<MaintenanceUpdatedDetail>;
       if (custom.detail?.maintenance) {
         setCurrentPage("maintenance");
+        replaceHistory(buildPathForPage("maintenance"));
       } else if (currentPage === "maintenance") {
-        setCurrentPage(user?.role === "user" ? "general-search" : "home");
+        const restoredPage = user?.role === "user" ? "general-search" : "home";
+        setCurrentPage(restoredPage);
+        replaceHistory(buildPathForPage(restoredPage));
       }
     };
 
@@ -77,8 +81,10 @@ export function useAppShellMaintenanceState({
         if (state?.maintenance === true) {
           safeSetStorageItem(storage, "maintenanceState", JSON.stringify(state));
           setCurrentPage("maintenance");
+          replaceHistory(buildPathForPage("maintenance"));
         } else if (currentPage === "maintenance") {
           setCurrentPage("general-search");
+          replaceHistory(buildPathForPage("general-search"));
         }
       } catch (error) {
         if (isMaintenancePollingAbortError(error)) {

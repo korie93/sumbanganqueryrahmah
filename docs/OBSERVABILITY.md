@@ -43,9 +43,9 @@ Ini memberi signal operasi yang cukup berguna walaupun belum menggunakan platfor
 
 Frontend menghantar Web Vitals ke:
 
-- `POST /telemetry/web-vitals`
+- `POST /api/telemetry/web-vitals`
 
-Route ini sengaja berada di luar `/api/*` supaya `sendBeacon`/`keepalive` browser telemetry tidak bergantung pada CSRF token. Ia bukan endpoint ingestion umum: server masih menguatkuasakan same-site Origin/Referer signal, JSON content type, limit body 4KB, dan drop guard per-IP yang bounded. Lebihan sample dijatuhkan secara senyap dengan `204`, supaya ingestion sah tidak rosak tetapi spam tidak menambah log noise atau churn ring buffer. Jangan hantar data peribadi, token, cookie, session id, atau identifier auth ke payload Web Vitals. Monitor/admin flow boleh membaca ringkasan ini semula melalui route dalaman yang sesuai. Ini membantu melihat pengalaman pengguna sebenar tanpa menunggu external RUM platform.
+Route canonical berada di bawah `/api/*` untuk konsistensi middleware. Legacy `POST /telemetry/web-vitals` masih diterima sementara untuk client lama, tetapi ingestion baharu perlu guna route canonical. Endpoint ini dikecualikan daripada CSRF token kerana `sendBeacon`/`keepalive` browser telemetry tidak boleh diandaikan membawa header tersebut. Ia bukan endpoint ingestion umum: server masih menguatkuasakan same-site Origin/Referer signal, JSON content type, limit body 4KB, dan drop guard per-IP yang bounded. Lebihan sample dijatuhkan secara senyap dengan `204`, supaya ingestion sah tidak rosak tetapi spam tidak menambah log noise atau churn ring buffer. Jangan hantar data peribadi, token, cookie, session id, atau identifier auth ke payload Web Vitals. Monitor/admin flow boleh membaca ringkasan ini semula melalui route dalaman yang sesuai. Ini membantu melihat pengalaman pengguna sebenar tanpa menunggu external RUM platform.
 
 ### Runtime Monitor Signals
 
@@ -61,6 +61,10 @@ Command yang berguna:
 ```bash
 npm run monitor:stale-conflicts
 ```
+
+### Rate Limit Topology
+
+Process-local memory rate limiting is acceptable only for single-worker/single-instance deployments. Multi-worker or multi-instance production deployments must configure `SQR_RATE_LIMIT_STORE=redis` and `SQR_REDIS_RATE_LIMIT_URL`; otherwise every worker receives an independent quota and effective limits drift.
 
 ## 2. Apa Yang Belum Dianggap Siap
 

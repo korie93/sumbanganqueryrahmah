@@ -10,6 +10,10 @@ const ADAPTIVE_RATE_WINDOW_MS = 10_000;
 const ADAPTIVE_RATE_STALE_GRACE_MS = 10_000;
 const ADAPTIVE_RATE_SWEEP_INTERVAL_MS = 30_000;
 const ADAPTIVE_RATE_MAX_BUCKETS = 5_000;
+const WEB_VITALS_TELEMETRY_PATHS = new Set([
+  "/api/telemetry/web-vitals",
+  "/telemetry/web-vitals",
+]);
 
 type AdaptiveRateBucket = {
   count: number;
@@ -31,7 +35,7 @@ function isHeavyRoute(pathname: string): boolean {
 function isWebVitalsTelemetryRoute(req: Pick<Request, "method" | "path">): boolean {
   const method = String(req.method || "GET").toUpperCase();
   const path = req.path || "/";
-  return method === "POST" && path === "/telemetry/web-vitals";
+  return method === "POST" && WEB_VITALS_TELEMETRY_PATHS.has(path);
 }
 
 export function isRuntimeProtectedRoute(req: Pick<Request, "method" | "path">): boolean {
@@ -147,7 +151,7 @@ export function createApiProtectionMiddleware(options: ApiProtectionOptions): {
       bucketScope = "ai";
       baseLimit = 14;
       minLimit = 4;
-    } else if (method === "POST" && path === "/telemetry/web-vitals") {
+    } else if (method === "POST" && WEB_VITALS_TELEMETRY_PATHS.has(path)) {
       bucketScope = "telemetry";
       baseLimit = 30;
       minLimit = 6;

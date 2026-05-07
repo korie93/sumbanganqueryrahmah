@@ -900,6 +900,10 @@ test("POST /api/login remains compatible and emits a deprecation monitoring warn
 
     assert.equal(legacyResponse.status, 401);
     assert.equal(canonicalResponse.status, 401);
+    assert.equal(legacyResponse.headers.get("deprecation"), "true");
+    assert.equal(legacyResponse.headers.get("sunset"), "Thu, 31 Dec 2026 23:59:59 GMT");
+    assert.equal(legacyResponse.headers.get("link"), "</api/auth/login>; rel=\"successor-version\"");
+    assert.equal(canonicalResponse.headers.get("deprecation"), null);
     assert.equal(auditLogs.length, 2);
 
     const deprecationWarnings = warningLogs.filter(
@@ -911,6 +915,7 @@ test("POST /api/login remains compatible and emits a deprecation monitoring warn
         legacyRoute: "/api/login",
         canonicalRoute: "/api/auth/login",
         monitorRouteGroup: "auth.login",
+        sunsetAt: "Thu, 31 Dec 2026 23:59:59 GMT",
       },
     }]);
   } finally {

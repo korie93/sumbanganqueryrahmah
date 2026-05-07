@@ -148,10 +148,18 @@ export function buildCollectionRecordPiiSearchHashes(values: {
 }
 
 export function decryptCollectionPiiValue(payload: string): string {
-  for (const secret of getCollectionPiiDecryptionSecrets()) {
+  const secrets = getCollectionPiiDecryptionSecrets();
+  for (const [secretIndex, secret] of secrets.entries()) {
     try {
       return decryptCollectionPiiValueWithSecret(payload, secret);
-    } catch {
+    } catch (error) {
+      logger.debug("Collection PII decryption candidate failed", {
+        operation: "decryptCollectionPiiValue",
+        payloadLength: payload.length,
+        secretIndex,
+        secretCount: secrets.length,
+        error: summarizeCollectionPiiDecryptError(error),
+      });
       continue;
     }
   }

@@ -229,12 +229,12 @@ test("CSP report drop guard lifecycle cleanup stops the guard on server close", 
   assert.equal(stopCalls, 1);
 });
 
-test("POST /telemetry/web-vitals accepts a valid web vitals payload", async () => {
+test("POST /api/telemetry/web-vitals accepts a valid web vitals payload", async () => {
   const { app, recordedPayloads } = createTelemetryRouteHarness();
   const { server, baseUrl } = await startTestServer(app);
 
   try {
-    const response = await fetch(`${baseUrl}/telemetry/web-vitals`, {
+    const response = await fetch(`${baseUrl}/api/telemetry/web-vitals`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -251,7 +251,27 @@ test("POST /telemetry/web-vitals accepts a valid web vitals payload", async () =
   }
 });
 
-test("POST /telemetry/web-vitals silently drops excess samples per client window", async () => {
+test("POST /telemetry/web-vitals remains a guarded compatibility alias", async () => {
+  const { app, recordedPayloads } = createTelemetryRouteHarness();
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(`${baseUrl}/telemetry/web-vitals`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(createValidWebVitalsPayload({ id: "v3-legacy-1710000000000" })),
+    });
+
+    assert.equal(response.status, 204);
+    assert.equal(recordedPayloads.length, 1);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("POST /api/telemetry/web-vitals silently drops excess samples per client window", async () => {
   let nowMs = 1_000;
   const metrics = createInternalMetrics();
   const { app, recordedPayloads } = createTelemetryRouteHarness({
@@ -265,7 +285,7 @@ test("POST /telemetry/web-vitals silently drops excess samples per client window
   });
   const { server, baseUrl } = await startTestServer(app);
 
-  const postMetric = (id: string) => fetch(`${baseUrl}/telemetry/web-vitals`, {
+  const postMetric = (id: string) => fetch(`${baseUrl}/api/telemetry/web-vitals`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -564,7 +584,7 @@ test("web vitals drop guard lifecycle cleanup stops the guard on server close", 
   assert.equal(stopCalls, 1);
 });
 
-test("POST /telemetry/web-vitals silently drops cross-site browser telemetry attempts", async () => {
+test("POST /api/telemetry/web-vitals silently drops cross-site browser telemetry attempts", async () => {
   const { app, recordedPayloads } = createTelemetryRouteHarness({
     webVitalsRequestGuard: createWebVitalsTelemetryRequestGuard({
       allowedOrigins: ["https://sqr-system.test"],
@@ -573,7 +593,7 @@ test("POST /telemetry/web-vitals silently drops cross-site browser telemetry att
   const { server, baseUrl } = await startTestServer(app);
 
   try {
-    const response = await fetch(`${baseUrl}/telemetry/web-vitals`, {
+    const response = await fetch(`${baseUrl}/api/telemetry/web-vitals`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -590,7 +610,7 @@ test("POST /telemetry/web-vitals silently drops cross-site browser telemetry att
   }
 });
 
-test("POST /telemetry/web-vitals accepts same-origin browser telemetry signals", async () => {
+test("POST /api/telemetry/web-vitals accepts same-origin browser telemetry signals", async () => {
   const { app, recordedPayloads } = createTelemetryRouteHarness({
     webVitalsRequestGuard: createWebVitalsTelemetryRequestGuard({
       allowedOrigins: ["https://sqr-system.test"],
@@ -599,7 +619,7 @@ test("POST /telemetry/web-vitals accepts same-origin browser telemetry signals",
   const { server, baseUrl } = await startTestServer(app);
 
   try {
-    const response = await fetch(`${baseUrl}/telemetry/web-vitals`, {
+    const response = await fetch(`${baseUrl}/api/telemetry/web-vitals`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -616,7 +636,7 @@ test("POST /telemetry/web-vitals accepts same-origin browser telemetry signals",
   }
 });
 
-test("POST /telemetry/web-vitals silently drops malformed same-site headers", async () => {
+test("POST /api/telemetry/web-vitals silently drops malformed same-site headers", async () => {
   const { app, recordedPayloads } = createTelemetryRouteHarness({
     webVitalsRequestGuard: createWebVitalsTelemetryRequestGuard({
       allowedOrigins: ["https://sqr-system.test"],
@@ -625,7 +645,7 @@ test("POST /telemetry/web-vitals silently drops malformed same-site headers", as
   const { server, baseUrl } = await startTestServer(app);
 
   try {
-    const response = await fetch(`${baseUrl}/telemetry/web-vitals`, {
+    const response = await fetch(`${baseUrl}/api/telemetry/web-vitals`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -642,12 +662,12 @@ test("POST /telemetry/web-vitals silently drops malformed same-site headers", as
   }
 });
 
-test("POST /telemetry/web-vitals silently drops non-json telemetry bodies", async () => {
+test("POST /api/telemetry/web-vitals silently drops non-json telemetry bodies", async () => {
   const { app, recordedPayloads } = createTelemetryRouteHarness();
   const { server, baseUrl } = await startTestServer(app);
 
   try {
-    const response = await fetch(`${baseUrl}/telemetry/web-vitals`, {
+    const response = await fetch(`${baseUrl}/api/telemetry/web-vitals`, {
       method: "POST",
       headers: {
         "Content-Type": "text/plain",
@@ -662,7 +682,7 @@ test("POST /telemetry/web-vitals silently drops non-json telemetry bodies", asyn
   }
 });
 
-test("POST /telemetry/web-vitals silently drops obvious non-browser telemetry clients", async () => {
+test("POST /api/telemetry/web-vitals silently drops obvious non-browser telemetry clients", async () => {
   const { app, recordedPayloads } = createTelemetryRouteHarness({
     webVitalsRequestGuard: createWebVitalsTelemetryRequestGuard({
       allowedOrigins: ["https://sqr-system.test"],
@@ -671,7 +691,7 @@ test("POST /telemetry/web-vitals silently drops obvious non-browser telemetry cl
   const { server, baseUrl } = await startTestServer(app);
 
   try {
-    const response = await fetch(`${baseUrl}/telemetry/web-vitals`, {
+    const response = await fetch(`${baseUrl}/api/telemetry/web-vitals`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -688,7 +708,7 @@ test("POST /telemetry/web-vitals silently drops obvious non-browser telemetry cl
   }
 });
 
-test("POST /telemetry/web-vitals silently drops oversized telemetry bodies before recording", async () => {
+test("POST /api/telemetry/web-vitals silently drops oversized telemetry bodies before recording", async () => {
   const { app, recordedPayloads } = createTelemetryRouteHarness({
     webVitalsRequestGuard: createWebVitalsTelemetryRequestGuard({
       maxContentLengthBytes: 128,
@@ -697,7 +717,7 @@ test("POST /telemetry/web-vitals silently drops oversized telemetry bodies befor
   const { server, baseUrl } = await startTestServer(app);
 
   try {
-    const response = await fetch(`${baseUrl}/telemetry/web-vitals`, {
+    const response = await fetch(`${baseUrl}/api/telemetry/web-vitals`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -714,12 +734,12 @@ test("POST /telemetry/web-vitals silently drops oversized telemetry bodies befor
   }
 });
 
-test("POST /telemetry/web-vitals rejects sensitive extra fields through strict payload validation", async () => {
+test("POST /api/telemetry/web-vitals rejects sensitive extra fields through strict payload validation", async () => {
   const { app, recordedPayloads } = createTelemetryRouteHarness();
   const { server, baseUrl } = await startTestServer(app);
 
   try {
-    const response = await fetch(`${baseUrl}/telemetry/web-vitals`, {
+    const response = await fetch(`${baseUrl}/api/telemetry/web-vitals`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -740,12 +760,12 @@ test("POST /telemetry/web-vitals rejects sensitive extra fields through strict p
   }
 });
 
-test("POST /telemetry/web-vitals rejects malformed payloads with a validation error", async () => {
+test("POST /api/telemetry/web-vitals rejects malformed payloads with a validation error", async () => {
   const { app, recordedPayloads } = createTelemetryRouteHarness();
   const { server, baseUrl } = await startTestServer(app);
 
   try {
-    const response = await fetch(`${baseUrl}/telemetry/web-vitals`, {
+    const response = await fetch(`${baseUrl}/api/telemetry/web-vitals`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

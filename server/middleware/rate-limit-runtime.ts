@@ -49,5 +49,5 @@ export function buildRateLimiterTopologyWarning(
     return null;
   }
 
-  return "Rate limiters currently use process-local in-memory storage. Multi-worker or multi-instance deployments require a shared store to enforce consistent limits across workers.";
+  return "Rate limiters currently use process-local in-memory storage; each worker or instance receives an independent quota. Configure a shared store with SQR_RATE_LIMIT_STORE=redis and SQR_REDIS_RATE_LIMIT_URL before enabling multi-worker or multi-instance production deployments.";
 }

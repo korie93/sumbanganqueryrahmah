@@ -5,6 +5,10 @@ import {
 import { logger } from "../../lib/logger";
 import type { AuthRouteContext } from "./auth-route-shared";
 
+const LEGACY_LOGIN_ROUTE = "/api/login";
+const CANONICAL_LOGIN_ROUTE = "/api/auth/login";
+const LEGACY_LOGIN_ROUTE_SUNSET = "Thu, 31 Dec 2026 23:59:59 GMT";
+
 export function registerAuthLoginRoutes(context: AuthRouteContext) {
   const {
     app,
@@ -82,12 +86,16 @@ export function registerAuthLoginRoutes(context: AuthRouteContext) {
   });
 
   app.post(
-    "/api/login",
-    (req, _res, next) => {
+    LEGACY_LOGIN_ROUTE,
+    (req, res, next) => {
+      res.setHeader("Deprecation", "true");
+      res.setHeader("Sunset", LEGACY_LOGIN_ROUTE_SUNSET);
+      res.setHeader("Link", `<${CANONICAL_LOGIN_ROUTE}>; rel="successor-version"`);
       logger.warn("Deprecated auth login route used", {
         legacyRoute: req.path,
-        canonicalRoute: "/api/auth/login",
+        canonicalRoute: CANONICAL_LOGIN_ROUTE,
         monitorRouteGroup: "auth.login",
+        sunsetAt: LEGACY_LOGIN_ROUTE_SUNSET,
       });
       next();
     },
@@ -95,7 +103,7 @@ export function registerAuthLoginRoutes(context: AuthRouteContext) {
     rateLimiters.login,
     handleLogin,
   );
-  app.post("/api/auth/login", rateLimiters.loginIp, rateLimiters.login, handleLogin);
+  app.post(CANONICAL_LOGIN_ROUTE, rateLimiters.loginIp, rateLimiters.login, handleLogin);
 
   app.post(
     "/api/auth/verify-two-factor-login",

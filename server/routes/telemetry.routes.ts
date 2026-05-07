@@ -69,6 +69,10 @@ const DEFAULT_CSP_REPORT_MAX_REPORTS_PER_WINDOW = 30;
 const DEFAULT_CSP_REPORT_MAX_BUCKETS = 2_000;
 const DEFAULT_CSP_REPORT_WINDOW_MS = 60_000;
 const DEFAULT_CSP_REPORT_MAX_CONTENT_LENGTH_BYTES = 8 * 1024;
+export const WEB_VITALS_TELEMETRY_PATHS = [
+  "/api/telemetry/web-vitals",
+  "/telemetry/web-vitals",
+] as const;
 const NON_BROWSER_TELEMETRY_USER_AGENT_PATTERNS = [
   /\bcurl\//i,
   /\bwget\//i,
@@ -466,6 +470,7 @@ export function registerTelemetryRoutes(app: Express, deps: TelemetryRouteDeps) 
   const metrics = deps.metrics ?? internalMetrics;
   const cspReportDropGuard = deps.cspReportDropGuard ?? createCspReportDropGuard({ metrics });
   const webVitalsDropGuard = deps.webVitalsDropGuard ?? createWebVitalsTelemetryDropGuard();
+  const webVitalsRequestGuard = deps.webVitalsRequestGuard ?? createWebVitalsTelemetryRequestGuard();
 
   // CSP reports may contain document URLs or blocked URIs, so this endpoint
   // deliberately records only aggregate counters and returns an empty 204.
@@ -481,17 +486,20 @@ export function registerTelemetryRoutes(app: Express, deps: TelemetryRouteDeps) 
 
   // Threat model: this unauthenticated browser telemetry endpoint is
   // internet-reachable and can receive forged beacons, oversized bodies,
-  // replay bursts, or automation-client probes. It intentionally stays outside
-  // /api so browser sendBeacon/keepalive Web Vitals reports do not require a
-  // CSRF token. It is still guarded by same-site Origin/Referer checks, JSON
-  // content-type validation, a 4KB parser limit in the HTTP pipeline, known
-  // non-browser client drops, stricter anonymous/no-provenance request caps,
-  // and bounded per-IP drop buckets. The payload schema is strict; do not send
-  // PII, auth/session identifiers, cookies, tokens, or raw user input here.
-  app.post(
-    "/telemetry/web-vitals",
-    deps.webVitalsRequestGuard ?? createWebVitalsTelemetryRequestGuard(),
-    webVitalsDropGuard,
-    routeHandler(deps.reportWebVital),
-  );
+  // replay bursts, or automation-client probes. The canonical route now lives
+  // under /api for middleware consistency; the legacy path remains temporarily
+  // compatible for already-deployed clients. Both paths are guarded by
+  // same-site Origin/Referer checks, JSON content-type validation, a 4KB parser
+  // limit in the HTTP pipeline, known non-browser client drops, stricter
+  // anonymous/no-provenance request caps, and bounded per-IP drop buckets. The
+  // payload schema is strict; do not send PII, auth/session identifiers,
+  // cookies, tokens, or raw user input here.
+  for (const telemetryPath of WEB_VITALS_TELEMETRY_PATHS) {
+    app.post(
+      telemetryPath,
+      webVitalsRequestGuard,
+      webVitalsDropGuard,
+      routeHandler(deps.reportWebVital),
+    );
+  }
 }

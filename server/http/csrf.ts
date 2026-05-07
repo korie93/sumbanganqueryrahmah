@@ -8,7 +8,10 @@ import { logger } from "../lib/logger";
 import { normalizeCorsOrigin, resolveAllowedCorsOrigins } from "./cors";
 
 const UNSAFE_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
-const CSRF_EXEMPT_API_PATHS = new Set(["/api/csp-report"]);
+const CSRF_EXEMPT_API_PATHS = new Set([
+  "/api/csp-report",
+  "/api/telemetry/web-vitals",
+]);
 
 type CsrfMiddlewareOptions = {
   allowedOrigins?: string[];
@@ -42,8 +45,9 @@ export function createCsrfProtectionMiddleware(options: CsrfMiddlewareOptions = 
       return next();
     }
 
-    // CSP reports are append-only aggregate telemetry. They must not require a
-    // CSRF token because browsers send them automatically after policy checks.
+    // Browser-owned telemetry is append-only aggregate data. These endpoints
+    // rely on their own origin/content/drop guards and must remain usable from
+    // sendBeacon/keepalive contexts without a CSRF header.
     if (CSRF_EXEMPT_API_PATHS.has(req.path)) {
       return next();
     }

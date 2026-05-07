@@ -16,6 +16,7 @@ import {
   shouldRewriteCollectionPiiSearchHashesValue,
   shouldRewriteCollectionPiiShadowValue,
 } from "../../lib/collection-pii-encryption";
+import { logger } from "../../lib/logger";
 import { mapCollectionRecordRow } from "../collection-repository-mappers";
 
 function withCollectionPiiKeys<T>(params: {
@@ -332,6 +333,33 @@ test("collection PII helpers can decrypt values with a previous rotation key", (
       );
     },
   );
+});
+
+test("collection PII decrypt failures are observable without logging payload values", (t) => {
+  const debugLogs: Array<{ message: string; metadata: Record<string, unknown> }> = [];
+  t.mock.method(logger, "debug", (message: string, metadata: Record<string, unknown>) => {
+    debugLogs.push({ message, metadata });
+  });
+
+  withCollectionPiiKeys(
+    {
+      current: "new-collection-pii-key",
+      previous: "old-collection-pii-key",
+    },
+    () => {
+      assert.throws(
+        () => decryptCollectionPiiValue("invalid-encrypted-payload"),
+        /Invalid collection PII payload/i,
+      );
+    },
+  );
+
+  assert.equal(debugLogs.length, 2);
+  assert.equal(debugLogs[0]?.message, "Collection PII decryption candidate failed");
+  assert.equal(debugLogs[0]?.metadata.payloadLength, "invalid-encrypted-payload".length);
+  assert.equal(debugLogs[0]?.metadata.secretIndex, 0);
+  assert.equal(debugLogs[0]?.metadata.secretCount, 2);
+  assert.equal(Object.prototype.hasOwnProperty.call(debugLogs[0]?.metadata ?? {}, "payload"), false);
 });
 
 test("collection PII helpers mark missing or stale shadow values for rewrite under the active key", () => {

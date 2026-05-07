@@ -31,6 +31,10 @@ type PublicBootstrapState = {
   shouldRestoreSession: boolean;
 };
 
+type MaintenanceUpdatedDetail = {
+  maintenance?: boolean;
+};
+
 function resolvePublicBootstrapState(): PublicBootstrapState {
   if (typeof window === "undefined") {
     return {
@@ -177,6 +181,30 @@ export function usePublicAppState() {
       ),
     );
   }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const onMaintenanceUpdated = (event: Event) => {
+      const custom = event as CustomEvent<MaintenanceUpdatedDetail>;
+      if (custom.detail?.maintenance) {
+        setCurrentPage("maintenance");
+        replaceHistory(buildPathForPage("maintenance"));
+        return;
+      }
+
+      if (currentPage === "maintenance") {
+        const restoredPage = user?.role === "user" ? "general-search" : "home";
+        setCurrentPage(restoredPage);
+        replaceHistory(buildPathForPage(restoredPage));
+      }
+    };
+
+    window.addEventListener("maintenance-updated", onMaintenanceUpdated as EventListener);
+    return () => window.removeEventListener("maintenance-updated", onMaintenanceUpdated as EventListener);
+  }, [currentPage, user]);
 
   useEffect(() => {
     if (!bootstrap.shouldRestoreSession) {

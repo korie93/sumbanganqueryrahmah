@@ -22,6 +22,10 @@ const CSP_REPORT_TO_VALUE = JSON.stringify({
 });
 const CSP_REPORTING_ENDPOINTS_VALUE = `${CSP_REPORT_GROUP}="${CSP_REPORT_ENDPOINT_PATH}"`;
 const WEB_VITALS_BODY_LIMIT = "4kb";
+const WEB_VITALS_TELEMETRY_ENDPOINT_PATHS = [
+  "/api/telemetry/web-vitals",
+  "/telemetry/web-vitals",
+] as const;
 const REACT_REMOVE_SCROLL_BAR_STYLE_HASHES = [
   "'sha256-nzTgYzXYDNe6BAHiiI7NNlfK8n/auuOAhh2t92YvuXo='",
   "'sha256-yMyGHLLNy9ZXD5cfUANqBnMLxrInc0Xt5wSlgMO77gw='",
@@ -164,7 +168,9 @@ export function registerLocalHttpPipeline(app: Express, options: LocalHttpPipeli
     limit: CSP_REPORT_BODY_LIMIT,
     type: ["application/csp-report", "application/reports+json", "application/json"],
   }));
-  app.use("/telemetry/web-vitals", express.json({ limit: WEB_VITALS_BODY_LIMIT }));
+  for (const telemetryPath of WEB_VITALS_TELEMETRY_ENDPOINT_PATHS) {
+    app.use(telemetryPath, express.json({ limit: WEB_VITALS_BODY_LIMIT }));
+  }
   app.use(express.json({ limit: defaultBodyLimit }));
   app.use(express.urlencoded({ extended: true, limit: defaultBodyLimit }));
 

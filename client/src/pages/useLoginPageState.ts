@@ -223,7 +223,7 @@ export function useLoginPageState({
         if (onBanned) {
           onBanned();
         } else {
-          window.location.href = "/banned";
+          navigateInternalFallback("/banned");
         }
         return;
       }
@@ -371,16 +371,25 @@ export function useLoginPageState({
         onLandingClick();
         return;
       }
-      window.location.href = "/";
+      navigateInternalFallback("/");
     },
     goToForgotPassword: () => {
       if (onForgotPasswordClick) {
         onForgotPasswordClick();
         return;
       }
-      window.location.href = "/forgot-password";
+      navigateInternalFallback("/forgot-password");
     },
   };
+}
+
+function navigateInternalFallback(path: string) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.history.pushState({}, "", path);
+  window.dispatchEvent(new Event("popstate"));
 }
 
 function isTwoFactorChallengeResponse(response: LoginResponse): response is LoginTwoFactorChallengeResponse {

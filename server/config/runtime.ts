@@ -136,8 +136,16 @@ function resolveCookieSameSite(value: string | null): "strict" | "lax" {
   throw new Error("SESSION_COOKIE_SAMESITE must be one of: strict or lax.");
 }
 
-function resolveDatabaseBootstrapMode(value: string | null): "runtime" | "migration" {
-  return value?.trim().toLowerCase() === "migration" ? "migration" : "runtime";
+function resolveDatabaseBootstrapMode(
+  value: string | null,
+  options: { isStrictLocalDevelopment: boolean },
+): "runtime" | "migration" {
+  const normalized = value?.trim().toLowerCase();
+  if (normalized === "runtime" || normalized === "migration") {
+    return normalized;
+  }
+
+  return options.isStrictLocalDevelopment ? "runtime" : "migration";
 }
 
 const configuredSessionSecret = readOptionalString("SESSION_SECRET");
@@ -181,7 +189,10 @@ const sharedRateLimitStore = resolveSharedRateLimitStoreConfig({
   provider: readOptionalString("SQR_RATE_LIMIT_STORE"),
   redisUrl: readOptionalString("SQR_REDIS_RATE_LIMIT_URL"),
 });
-const databaseBootstrapMode = resolveDatabaseBootstrapMode(readOptionalString("SQR_DB_BOOTSTRAP_MODE"));
+const databaseBootstrapMode = resolveDatabaseBootstrapMode(
+  readOptionalString("SQR_DB_BOOTSTRAP_MODE"),
+  { isStrictLocalDevelopment },
+);
 const corsAllowedOrigins = resolveCorsAllowedOrigins({
   rawValue: readOptionalString("CORS_ALLOWED_ORIGINS"),
   publicAppUrl,

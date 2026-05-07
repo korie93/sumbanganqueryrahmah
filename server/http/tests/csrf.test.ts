@@ -19,6 +19,9 @@ function createCsrfTestApp() {
   app.post("/api/csp-report", (_req, res) => {
     res.status(204).end();
   });
+  app.post("/api/telemetry/web-vitals", (_req, res) => {
+    res.status(204).end();
+  });
   return app;
 }
 
@@ -181,6 +184,29 @@ test("csrf middleware exempts browser CSP reports from token checks", async () =
         "csp-report": {
           "violated-directive": "script-src",
         },
+      }),
+    });
+
+    assert.equal(response.status, 204);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("csrf middleware exempts canonical web-vitals telemetry from token checks", async () => {
+  const app = createCsrfTestApp();
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(`${baseUrl}/api/telemetry/web-vitals`, {
+      method: "POST",
+      headers: {
+        Cookie: "sqr_auth=token-value; sqr_csrf=csrf-token",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        name: "LCP",
+        value: 123,
       }),
     });
 

@@ -20,6 +20,8 @@
   min-width: 0;
   flex-wrap: nowrap;
   overflow-x: auto;
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--muted-foreground) / 0.42) transparent;
   scroll-behavior: smooth;
   border-radius: 9999px;
   background: hsl(var(--card) / 0.78);

@@ -3,7 +3,6 @@ import { WebSocket } from "ws";
 import {
   signSessionJwt,
   verifySessionJwt,
-  SESSION_JWT_DEFAULT_EXPIRY,
 } from "../../auth/session-jwt";
 import { setAuthSessionCookie } from "../../auth/session-cookie";
 import { parseBrowser } from "../../lib/browser";
@@ -97,7 +96,7 @@ export function closeAuthActivitySockets({
 }
 
 export function signAuthSessionToken(payload: SessionTokenPayload, res?: Response | null) {
-  const token = signSessionJwt(payload, { expiresIn: SESSION_JWT_DEFAULT_EXPIRY });
+  const token = signSessionJwt(payload);
   if (res) {
     setAuthSessionCookie(res, token);
   }

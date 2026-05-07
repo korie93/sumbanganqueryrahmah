@@ -25,6 +25,9 @@ test("floating AI chat input has a formal accessible label", () => {
   assert.match(source, /maxLength=\{AI_REQUEST_MAX_CHARACTERS\}/);
   assert.match(source, /aria-describedby=\{queryLimitId\}/);
   assert.match(source, /aria-label="Hantar soalan AI"/);
+  assert.match(source, /role="log"/);
+  assert.match(source, /aria-live="polite"/);
+  assert.match(source, /aria-relevant="additions text"/);
   assert.match(source, /disabled=\{!isProcessing && !isTyping\}/);
   assert.doesNotMatch(source, /aria-disabled=\{!isProcessing && !isTyping\}/);
   assert.match(source, /<span>Hentikan AI<\/span>/);
@@ -97,8 +100,8 @@ test("floating AI motion and scroll styles include accessibility fallbacks", () 
   const floatingCss = readComponentSource("FloatingAI.module.css");
 
   assert.match(aiCss, /\.ai-messages::-webkit-scrollbar-thumb[\s\S]*background:\s*var\(--ai-scroll-thumb\)/);
-  assert.doesNotMatch(aiCss, /scrollbar-width:/);
-  assert.doesNotMatch(aiCss, /scrollbar-color:/);
+  assert.match(aiCss, /\.ai-messages\s*\{[\s\S]*scrollbar-width:\s*thin/);
+  assert.match(aiCss, /\.ai-messages\s*\{[\s\S]*scrollbar-color:\s*var\(--ai-scroll-thumb\) transparent/);
   assert.doesNotMatch(aiCss, /scrollbar-gutter:/);
   assert.match(aiCss, /@media \(prefers-reduced-motion: reduce\)/);
   assert.match(floatingCss, /@media \(prefers-reduced-motion: reduce\)/);

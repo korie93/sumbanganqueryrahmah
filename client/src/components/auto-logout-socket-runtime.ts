@@ -182,9 +182,6 @@ export function bindAutoLogoutSocket({
           }
           safeSetStorageItem(storage, "maintenanceState", JSON.stringify(payload))
           window.dispatchEvent(new CustomEvent("maintenance-updated", { detail: payload }))
-          if (payload.maintenance) {
-            window.location.href = "/maintenance"
-          }
         }
 
         if (message.type === "settings_updated") {

@@ -81,6 +81,24 @@ function readApiMessage(payload: ApiErrorPayload | null): string {
   return typeof message === "string" ? message : "";
 }
 
+function notifyMaintenanceMode(payload: ApiErrorPayload) {
+  safeSetStorageItem(getBrowserLocalStorage(), "maintenanceState", JSON.stringify(payload));
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.dispatchEvent(
+    new CustomEvent("maintenance-updated", {
+      detail: payload,
+    }),
+  );
+
+  const currentPath = `${window.location.pathname}${window.location.search}`;
+  if (currentPath !== "/maintenance") {
+    window.history.replaceState({}, "", "/maintenance");
+  }
+}
+
 export async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
     const text = (await res.text()) || res.statusText;
@@ -107,15 +125,8 @@ export async function throwIfResNotOk(res: Response) {
     }
 
     if (res.status === 503) {
-      try {
-        if (parsed?.maintenance) {
-          safeSetStorageItem(getBrowserLocalStorage(), "maintenanceState", JSON.stringify(parsed));
-          if (typeof window !== "undefined") {
-            window.location.href = "/maintenance";
-          }
-        }
-      } catch {
-        // ignore JSON parse failure, keep default error path
+      if (parsed?.maintenance) {
+        notifyMaintenanceMode(parsed);
       }
     }
 
