@@ -49,7 +49,12 @@ const productionBaseOverrides: Record<string, string | null> = {
   COLLECTION_NICKNAME_TEMP_PASSWORD: "ProdTempPass12345",
   COLLECTION_PII_ENCRYPTION_KEY: "C".repeat(32),
   TWO_FACTOR_ENCRYPTION_KEY: "T".repeat(32),
+  PGHOST: null,
+  PGPORT: null,
+  PGUSER: null,
   PG_PASSWORD: "prod-db-password",
+  PGPASSWORD: null,
+  PGDATABASE: null,
   BACKUP_ENCRYPTION_KEY: null,
   BACKUP_ENCRYPTION_KEYS: null,
   BACKUP_FEATURE_ENABLED: "1",
@@ -66,7 +71,12 @@ const productionLikeDevelopmentBaseOverrides: Record<string, string | null> = {
   COLLECTION_NICKNAME_TEMP_PASSWORD: "ProdLikeTempPass12345",
   COLLECTION_PII_ENCRYPTION_KEY: "C".repeat(32),
   TWO_FACTOR_ENCRYPTION_KEY: "T".repeat(32),
+  PGHOST: null,
+  PGPORT: null,
+  PGUSER: null,
   PG_PASSWORD: "prod-like-db-password",
+  PGPASSWORD: null,
+  PGDATABASE: null,
   BACKUP_ENCRYPTION_KEY: "A".repeat(32),
   BACKUP_ENCRYPTION_KEYS: null,
   BACKUP_FEATURE_ENABLED: "1",
@@ -343,7 +353,12 @@ test("runtime config allows operations debug route enablement in strict local de
       SESSION_SECRET: null,
       COLLECTION_NICKNAME_TEMP_PASSWORD: null,
       COLLECTION_PII_ENCRYPTION_KEY: null,
+      PGHOST: null,
+      PGPORT: null,
+      PGUSER: null,
       PG_PASSWORD: null,
+      PGPASSWORD: null,
+      PGDATABASE: null,
       BACKUP_ENCRYPTION_KEY: null,
       BACKUP_ENCRYPTION_KEYS: null,
       BACKUP_FEATURE_ENABLED: "1",
@@ -511,6 +526,7 @@ test("runtime config normalizes missing PG_PASSWORD to an empty string in strict
     async () => {
       const runtimeModule = await importRuntimeFresh();
       assert.equal(runtimeModule.runtimeConfig.app.isStrictLocalDevelopment, true);
+      assert.equal(runtimeModule.runtimeConfig.database.host, "127.0.0.1");
       assert.equal(runtimeModule.runtimeConfig.database.password, "");
       assert.deepEqual(runtimeModule.runtimeConfig.database.ssl, {
         enabled: false,
@@ -530,10 +546,15 @@ test("runtime config accepts DATABASE_URL-only database configuration in strict 
       PUBLIC_APP_URL: "http://127.0.0.1:5000",
       DATABASE_URL: "postgres://db_user:db_pass@db.internal:6544/sqr_runtime",
       PG_HOST: null,
+      PGHOST: null,
       PG_PORT: null,
+      PGPORT: null,
       PG_USER: null,
+      PGUSER: null,
       PG_PASSWORD: null,
+      PGPASSWORD: null,
       PG_DATABASE: null,
+      PGDATABASE: null,
       SESSION_SECRET: null,
       COLLECTION_NICKNAME_TEMP_PASSWORD: null,
       COLLECTION_PII_ENCRYPTION_KEY: null,
@@ -553,6 +574,34 @@ test("runtime config accepts DATABASE_URL-only database configuration in strict 
       assert.equal(runtimeModule.runtimeConfig.database.user, "db_user");
       assert.equal(runtimeModule.runtimeConfig.database.password, "db_pass");
       assert.equal(runtimeModule.runtimeConfig.database.database, "sqr_runtime");
+    },
+  );
+});
+
+test("runtime config accepts standard PostgreSQL env aliases", async () => {
+  await withEnv(
+    {
+      ...productionLikeDevelopmentBaseOverrides,
+      DATABASE_URL: null,
+      PG_HOST: null,
+      PGHOST: "db.alias.internal",
+      PG_PORT: null,
+      PGPORT: "6545",
+      PG_USER: null,
+      PGUSER: "sqr_alias",
+      PG_PASSWORD: null,
+      PGPASSWORD: "alias-db-password",
+      PG_DATABASE: null,
+      PGDATABASE: "sqr_alias_db",
+    },
+    async () => {
+      const runtimeModule = await importRuntimeFresh();
+
+      assert.equal(runtimeModule.runtimeConfig.database.host, "db.alias.internal");
+      assert.equal(runtimeModule.runtimeConfig.database.port, 6545);
+      assert.equal(runtimeModule.runtimeConfig.database.user, "sqr_alias");
+      assert.equal(runtimeModule.runtimeConfig.database.password, "alias-db-password");
+      assert.equal(runtimeModule.runtimeConfig.database.database, "sqr_alias_db");
     },
   );
 });

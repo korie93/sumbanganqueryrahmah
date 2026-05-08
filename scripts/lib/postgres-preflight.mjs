@@ -34,18 +34,18 @@ function parseDatabaseUrl(rawValue) {
 export function buildPostgresPreflightConfig(env = process.env) {
   const databaseUrl = String(env.DATABASE_URL || "").trim();
   const parsedDatabaseUrl = parseDatabaseUrl(databaseUrl);
-  const explicitPortValue = String(env.PG_PORT || "").trim();
+  const explicitPortValue = String(env.PG_PORT || env.PGPORT || "").trim();
   const explicitPort = explicitPortValue
     ? Number.parseInt(explicitPortValue, 10)
     : Number.NaN;
 
   return {
     connectionString: databaseUrl || null,
-    database: String(env.PG_DATABASE || "").trim() || parsedDatabaseUrl?.database || "",
-    host: String(env.PG_HOST || "").trim() || parsedDatabaseUrl?.host || "127.0.0.1",
-    password: String(env.PG_PASSWORD || "").trim() || parsedDatabaseUrl?.password || "",
+    database: String(env.PG_DATABASE || env.PGDATABASE || "").trim() || parsedDatabaseUrl?.database || "",
+    host: String(env.PG_HOST || env.PGHOST || "").trim() || parsedDatabaseUrl?.host || "127.0.0.1",
+    password: String(env.PG_PASSWORD || env.PGPASSWORD || "").trim() || parsedDatabaseUrl?.password || "",
     port: Number.isFinite(explicitPort) ? explicitPort : (parsedDatabaseUrl?.port || 5432),
-    user: String(env.PG_USER || "").trim() || parsedDatabaseUrl?.user || "",
+    user: String(env.PG_USER || env.PGUSER || "").trim() || parsedDatabaseUrl?.user || "",
   };
 }
 

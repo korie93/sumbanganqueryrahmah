@@ -4,6 +4,7 @@ import { ControlEngine, type ControlCallbacks } from "./control/ControlEngine";
 import { CorrelationEngine } from "./correlation/CorrelationEngine";
 import { GovernanceEngine } from "./governance/GovernanceEngine";
 import { StabilityDnaEngine } from "./learning/StabilityDnaEngine";
+import { logIntelligenceFailSafe } from "./intelligence-failsafe-logger";
 import { PredictiveEngine } from "./predictive/PredictiveEngine";
 import { StatisticalEngine } from "./statistical/StatisticalEngine";
 import { StrategyEngine } from "./strategy/StrategyEngine";
@@ -93,7 +94,13 @@ class IntelligenceEcosystem {
   private activeIncident: ActiveIncident | null = null;
 
   constructor() {
-    void this.dna.ensureTable();
+    void this.dna.ensureTable().catch((error) => {
+      logIntelligenceFailSafe({
+        engine: "StabilityDnaEngine",
+        operation: "startupEnsureTable",
+        error,
+      });
+    });
   }
 
   public setControlCallbacks(callbacks: ControlCallbacks) {

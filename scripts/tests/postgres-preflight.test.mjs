@@ -41,6 +41,26 @@ test("buildPostgresPreflightConfig falls back to DATABASE_URL when PG identity f
   );
 });
 
+test("buildPostgresPreflightConfig accepts standard PostgreSQL env aliases", () => {
+  assert.deepEqual(
+    buildPostgresPreflightConfig({
+      PGDATABASE: " sqr_alias_db ",
+      PGHOST: " db.alias.local ",
+      PGPASSWORD: " alias-secret ",
+      PGPORT: "6545",
+      PGUSER: " sqr_alias ",
+    }),
+    {
+      connectionString: null,
+      database: "sqr_alias_db",
+      host: "db.alias.local",
+      password: "alias-secret",
+      port: 6545,
+      user: "sqr_alias",
+    },
+  );
+});
+
 test("assertPostgresConnection rejects missing required PG identity fields", async () => {
   await assert.rejects(
     assertPostgresConnection(

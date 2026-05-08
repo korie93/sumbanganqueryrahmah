@@ -145,6 +145,34 @@ function resolveDatabaseBootstrapMode(value: string | null): "runtime" | "migrat
   return "runtime";
 }
 
+function readOptionalStringFrom(names: readonly string[]): string | null {
+  for (const name of names) {
+    const value = readOptionalString(name);
+    if (value) {
+      return value;
+    }
+  }
+
+  return null;
+}
+
+function readStringFrom(names: readonly string[], fallback: string): string {
+  return readOptionalStringFrom(names) ?? fallback;
+}
+
+function readIntFrom(
+  names: readonly string[],
+  fallback: number,
+  options?: { min?: number; max?: number },
+): number {
+  const raw = readOptionalStringFrom(names);
+  const parsed = raw == null ? fallback : Number(raw);
+  const normalized = Number.isFinite(parsed) ? Math.floor(parsed) : fallback;
+  const min = options?.min ?? Number.NEGATIVE_INFINITY;
+  const max = options?.max ?? Number.POSITIVE_INFINITY;
+  return Math.max(min, Math.min(max, normalized));
+}
+
 const configuredSessionSecret = readOptionalString("SESSION_SECRET");
 const configuredPreviousSessionSecrets = resolvePreviousSessionSecrets(
   readCommaSeparatedList("SESSION_SECRET_PREVIOUS"),
@@ -158,7 +186,7 @@ const databaseSslConfig = resolveDatabaseSslConfig(readOptionalString("DATABASE_
   isProductionLike,
 });
 const configuredCollectionNicknameTempPassword = readOptionalString("COLLECTION_NICKNAME_TEMP_PASSWORD");
-const configuredPgPassword = readOptionalString("PG_PASSWORD");
+const configuredPgPassword = readOptionalStringFrom(["PG_PASSWORD", "PGPASSWORD"]);
 const configuredTwoFactorEncryptionKey = readOptionalString("TWO_FACTOR_ENCRYPTION_KEY");
 const configuredPreviousTwoFactorEncryptionKeys = readCommaSeparatedList(
   "TWO_FACTOR_ENCRYPTION_KEY_PREVIOUS",
@@ -273,9 +301,9 @@ export const runtimeConfig: RuntimeConfig = Object.freeze({
   },
   database: {
     connectionString: configuredDatabaseUrl,
-    host: readString("PG_HOST", parsedDatabaseUrl?.host || "localhost"),
-    port: readInt("PG_PORT", parsedDatabaseUrl?.port || 5432, { min: 1, max: 65535 }),
-    user: readString("PG_USER", parsedDatabaseUrl?.user || "postgres"),
+    host: readStringFrom(["PG_HOST", "PGHOST"], parsedDatabaseUrl?.host || "127.0.0.1"),
+    port: readIntFrom(["PG_PORT", "PGPORT"], parsedDatabaseUrl?.port || 5432, { min: 1, max: 65535 }),
+    user: readStringFrom(["PG_USER", "PGUSER"], parsedDatabaseUrl?.user || "postgres"),
     password: (() => {
       if (configuredPgPassword) {
         return configuredPgPassword;
@@ -291,7 +319,7 @@ export const runtimeConfig: RuntimeConfig = Object.freeze({
       // of throwing on undefined during SCRAM negotiation.
       return "";
     })(),
-    database: readString("PG_DATABASE", parsedDatabaseUrl?.database || "sqr_db"),
+    database: readStringFrom(["PG_DATABASE", "PGDATABASE"], parsedDatabaseUrl?.database || "sqr_db"),
     maxConnections: readInt("PG_MAX_CONNECTIONS", resolveDefaultPgMaxConnections(), { min: 1, max: 50 }),
     idleTimeoutMs: readInt("PG_IDLE_TIMEOUT_MS", 30_000, { min: 1_000 }),
     connectionTimeoutMs: readInt("PG_CONNECTION_TIMEOUT_MS", 5_000, { min: 1_000 }),
