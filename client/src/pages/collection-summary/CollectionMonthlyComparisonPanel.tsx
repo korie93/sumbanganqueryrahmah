@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { useId, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { ChevronDown, ChevronUp, CircleHelp, Download } from "lucide-react";
 import {
   OperationalMetric,
@@ -102,7 +102,6 @@ export function CollectionMonthlyComparisonPanel({
   onMonthSelect,
   chartSlot,
 }: CollectionMonthlyComparisonPanelProps) {
-  const breakdownRegionId = useId();
   const [breakdownExpanded, setBreakdownExpanded] = useState(false);
   const comparison = data?.comparison || null;
   const comparisonTone = comparison
@@ -149,6 +148,8 @@ export function CollectionMonthlyComparisonPanel({
   const targetSupportingLabel = monthlyTargetSourceLabel
     ? `Configured for ${monthlyTargetSourceLabel}`
     : "Uses the configured target for the target month";
+  const breakdownToggleButtonClassName =
+    "inline-flex h-9 items-center justify-center gap-1.5 rounded-full border border-input bg-background px-3 text-xs font-medium text-foreground transition hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
   return (
     <section
@@ -566,25 +567,29 @@ export function CollectionMonthlyComparisonPanel({
                       : "Empty months stay visible as RM0 for quick trend review."}
                   </p>
                 </div>
-                <button
-                  type="button"
-                  className="inline-flex h-9 items-center justify-center gap-1.5 rounded-full border border-input bg-background px-3 text-xs font-medium text-foreground transition hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  onClick={() => setBreakdownExpanded((previous) => !previous)}
-                  aria-expanded={breakdownExpanded ? "true" : "false"}
-                  aria-controls={breakdownRegionId}
-                >
-                  {breakdownExpanded ? (
-                    <>
-                      <ChevronUp className="h-3.5 w-3.5" aria-hidden="true" />
-                      Collapse
-                    </>
-                  ) : (
-                    <>
-                      <ChevronDown className="h-3.5 w-3.5" aria-hidden="true" />
-                      Expand
-                    </>
-                  )}
-                </button>
+                {breakdownExpanded ? (
+                  <button
+                    type="button"
+                    className={breakdownToggleButtonClassName}
+                    onClick={() => setBreakdownExpanded(false)}
+                    aria-expanded="true"
+                    aria-controls="collection-monthly-comparison-breakdown"
+                  >
+                    <ChevronUp className="h-3.5 w-3.5" aria-hidden="true" />
+                    Collapse
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className={breakdownToggleButtonClassName}
+                    onClick={() => setBreakdownExpanded(true)}
+                    aria-expanded="false"
+                    aria-controls="collection-monthly-comparison-breakdown"
+                  >
+                    <ChevronDown className="h-3.5 w-3.5" aria-hidden="true" />
+                    Expand
+                  </button>
+                )}
               </div>
 
               {insights ? (
@@ -617,7 +622,7 @@ export function CollectionMonthlyComparisonPanel({
               ) : null}
 
               <div
-                id={breakdownRegionId}
+                id="collection-monthly-comparison-breakdown"
                 className={
                   breakdownExpanded
                     ? "grid gap-2 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-top-1"
