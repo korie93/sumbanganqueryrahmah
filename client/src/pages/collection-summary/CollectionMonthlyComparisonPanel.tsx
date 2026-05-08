@@ -570,7 +570,7 @@ export function CollectionMonthlyComparisonPanel({
                   type="button"
                   className="inline-flex h-9 items-center justify-center gap-1.5 rounded-full border border-input bg-background px-3 text-xs font-medium text-foreground transition hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   onClick={() => setBreakdownExpanded((previous) => !previous)}
-                  aria-expanded={breakdownExpanded}
+                  aria-expanded={breakdownExpanded ? "true" : "false"}
                   aria-controls={breakdownRegionId}
                 >
                   {breakdownExpanded ? (
