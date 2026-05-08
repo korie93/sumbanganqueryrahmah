@@ -4,8 +4,59 @@ import { formatAmountRM } from "@/pages/collection/utils";
 export const COLLECTION_MONTHLY_COMPARISON_MAX_RANGE_MONTHS = 24;
 
 const COLLECTION_MONTH_KEY_REGEX = /^\d{4}-\d{2}$/;
+const COMPACT_AMOUNT_FORMATTER = new Intl.NumberFormat("en-MY", {
+  notation: "compact",
+  maximumFractionDigits: 1,
+});
 
-function parseCollectionMonthKey(value: string) {
+type CollectionMonthlyComparisonMonth = CollectionMonthlyComparisonResponse["months"][number];
+
+export type CollectionMonthlyComparisonMonthInsight = CollectionMonthlyComparisonMonth & {
+  previousTotal: number | null;
+  deltaFromPrevious: number | null;
+  percentageFromPrevious: number | null;
+  shareOfRangeTotal: number;
+  maxTotalRatio: number;
+  isBaseMonth: boolean;
+  isTargetMonth: boolean;
+  isPeakMonth: boolean;
+  isLowestActiveMonth: boolean;
+};
+
+export type CollectionMonthlyComparisonInsights = {
+  rangeTotal: number;
+  totalRecords: number;
+  activeMonthCount: number;
+  emptyMonthCount: number;
+  averagePerMonth: number;
+  averagePerRecord: number;
+  peakMonth: CollectionMonthlyComparisonMonth | null;
+  lowestActiveMonth: CollectionMonthlyComparisonMonth | null;
+  strongestIncreaseMonth: CollectionMonthlyComparisonMonthInsight | null;
+  strongestDecreaseMonth: CollectionMonthlyComparisonMonthInsight | null;
+  positiveMonthCount: number;
+  negativeMonthCount: number;
+  flatMonthCount: number;
+  monthInsights: CollectionMonthlyComparisonMonthInsight[];
+};
+
+export type CollectionMonthlyComparisonTargetSummary = {
+  monthlyTargetAmount: number;
+  rangeTarget: number;
+  targetGap: number;
+  targetProgress: number;
+  monthsAtOrAboveTarget: number;
+  monthsBelowTarget: number;
+};
+
+export type CollectionMonthlyComparisonPresetRange = {
+  id: "last-3" | "last-6" | "year-to-date" | "previous-year";
+  label: string;
+  startMonth: string;
+  endMonth: string;
+};
+
+export function parseCollectionMonthKey(value: string) {
   const normalized = String(value || "").trim();
   if (!COLLECTION_MONTH_KEY_REGEX.test(normalized)) {
     return null;
@@ -54,6 +105,46 @@ export function buildDefaultCollectionMonthlyComparisonRange(referenceDate = new
   };
 }
 
+export function buildCollectionMonthlyComparisonPresetRanges(
+  referenceDate = new Date(),
+): CollectionMonthlyComparisonPresetRange[] {
+  const currentMonth = formatCollectionMonthInput(referenceDate);
+  const currentYear = referenceDate.getFullYear();
+
+  return [
+    {
+      id: "last-3",
+      label: "Last 3 months",
+      startMonth: shiftCollectionMonthInput(currentMonth, -2),
+      endMonth: currentMonth,
+    },
+    {
+      id: "last-6",
+      label: "Last 6 months",
+      startMonth: shiftCollectionMonthInput(currentMonth, -5),
+      endMonth: currentMonth,
+    },
+    {
+      id: "year-to-date",
+      label: "Year to date",
+      startMonth: `${currentYear}-01`,
+      endMonth: currentMonth,
+    },
+    {
+      id: "previous-year",
+      label: "Previous year",
+      startMonth: `${currentYear - 1}-01`,
+      endMonth: `${currentYear - 1}-12`,
+    },
+  ];
+}
+
+export function formatCollectionMonthName(monthNumber: number): string {
+  const safeMonth = Math.min(12, Math.max(1, Math.floor(monthNumber)));
+  const date = new Date(2026, safeMonth - 1, 1);
+  return new Intl.DateTimeFormat("en-MY", { month: "long" }).format(date);
+}
+
 export function formatCollectionMonthlyComparisonPercentage(value: number | null): string {
   if (value === null) {
     return "No previous month total";
@@ -66,11 +157,65 @@ export function formatCollectionMonthlyComparisonPercentage(value: number | null
 
 export function formatCollectionMonthlyComparisonDifference(value: number | null): string {
   if (value === null) {
-    return "—";
+    return "N/A";
   }
   const absoluteValue = Math.abs(value);
   const formatted = formatAmountRM(absoluteValue);
   return value > 0 ? `+${formatted}` : value < 0 ? `-${formatted}` : formatted;
+}
+
+export function normalizeCollectionMonthlyTargetAmount(value: string): number | null {
+  const normalized = String(value || "")
+    .trim()
+    .replace(/,/g, "");
+  if (!normalized) {
+    return null;
+  }
+
+  const amount = Number(normalized);
+  return Number.isFinite(amount) && amount > 0 ? amount : null;
+}
+
+export function buildCollectionMonthlyComparisonTargetSummary(
+  payload: CollectionMonthlyComparisonResponse,
+  monthlyTargetAmount: number | null | undefined,
+): CollectionMonthlyComparisonTargetSummary | null {
+  const target = Number(monthlyTargetAmount || 0);
+  if (!Number.isFinite(target) || target <= 0) {
+    return null;
+  }
+
+  const insights = buildCollectionMonthlyComparisonInsights(payload);
+  const rangeTarget = target * payload.months.length;
+
+  return {
+    monthlyTargetAmount: target,
+    rangeTarget,
+    targetGap: insights.rangeTotal - rangeTarget,
+    targetProgress: rangeTarget > 0 ? insights.rangeTotal / rangeTarget : 0,
+    monthsAtOrAboveTarget: payload.months.filter((month) => month.totalCollection >= target).length,
+    monthsBelowTarget: payload.months.filter((month) => month.totalCollection < target).length,
+  };
+}
+
+export function formatCompactAmountRM(value: number): string {
+  return `RM ${COMPACT_AMOUNT_FORMATTER.format(Math.max(0, value))}`;
+}
+
+export function formatCollectionMonthlyComparisonMonthDelta(
+  difference: number | null,
+  percentage: number | null,
+): string {
+  if (difference === null) {
+    return "First month in range";
+  }
+
+  const formattedDifference = formatCollectionMonthlyComparisonDifference(difference);
+  if (percentage === null) {
+    return `${formattedDifference} from RM0 base`;
+  }
+
+  return `${formattedDifference} (${formatCollectionMonthlyComparisonPercentage(percentage)})`;
 }
 
 export function resolveCollectionMonthlyComparisonTone(
@@ -92,4 +237,188 @@ export function buildCollectionMonthlyComparisonAccessibleSummary(
     `${entry.label}: ${formatAmountRM(entry.totalCollection)} across ${entry.recordCount} record(s)`,
   );
   return `${payload.comparison.summary} Monthly totals: ${monthSummaries.join("; ")}.`;
+}
+
+export function buildCollectionMonthlyComparisonInsights(
+  payload: CollectionMonthlyComparisonResponse,
+): CollectionMonthlyComparisonInsights {
+  const rangeTotal = payload.months.reduce(
+    (total, month) => total + month.totalCollection,
+    0,
+  );
+  const totalRecords = payload.months.reduce(
+    (total, month) => total + month.recordCount,
+    0,
+  );
+  const activeMonths = payload.months.filter((month) => month.recordCount > 0);
+  const peakMonth = payload.months.reduce<CollectionMonthlyComparisonMonth | null>(
+    (currentPeak, month) => {
+      if (!currentPeak || month.totalCollection > currentPeak.totalCollection) {
+        return month;
+      }
+      return currentPeak;
+    },
+    null,
+  );
+  const lowestActiveMonth = activeMonths.reduce<CollectionMonthlyComparisonMonth | null>(
+    (currentLowest, month) => {
+      if (!currentLowest || month.totalCollection < currentLowest.totalCollection) {
+        return month;
+      }
+      return currentLowest;
+    },
+    null,
+  );
+  const maxTotal = Math.max(0, peakMonth?.totalCollection || 0);
+
+  let positiveMonthCount = 0;
+  let negativeMonthCount = 0;
+  let flatMonthCount = 0;
+
+  const monthInsights = payload.months.map((month, index) => {
+    const previousMonth = index > 0 ? payload.months[index - 1] : null;
+    const previousTotal = previousMonth?.totalCollection ?? null;
+    const deltaFromPrevious = previousTotal === null
+      ? null
+      : month.totalCollection - previousTotal;
+    let percentageFromPrevious: number | null = null;
+
+    if (previousTotal !== null && deltaFromPrevious !== null) {
+      percentageFromPrevious = previousTotal === 0
+        ? deltaFromPrevious === 0 ? 0 : null
+        : (deltaFromPrevious / previousTotal) * 100;
+    }
+
+    if (deltaFromPrevious !== null) {
+      if (deltaFromPrevious > 0) {
+        positiveMonthCount += 1;
+      } else if (deltaFromPrevious < 0) {
+        negativeMonthCount += 1;
+      } else {
+        flatMonthCount += 1;
+      }
+    }
+
+    return {
+      ...month,
+      previousTotal,
+      deltaFromPrevious,
+      percentageFromPrevious,
+      shareOfRangeTotal: rangeTotal > 0 ? month.totalCollection / rangeTotal : 0,
+      maxTotalRatio: maxTotal > 0 ? month.totalCollection / maxTotal : 0,
+      isBaseMonth: payload.comparison.baseMonth === month.month,
+      isTargetMonth: payload.comparison.targetMonth === month.month,
+      isPeakMonth: maxTotal > 0 && month.totalCollection === maxTotal,
+      isLowestActiveMonth: lowestActiveMonth?.month === month.month,
+    };
+  });
+  const strongestIncreaseMonth =
+    monthInsights.reduce<CollectionMonthlyComparisonMonthInsight | null>(
+      (strongest, month) => {
+        if ((month.deltaFromPrevious ?? 0) <= 0) {
+          return strongest;
+        }
+        if (!strongest || (month.deltaFromPrevious ?? 0) > (strongest.deltaFromPrevious ?? 0)) {
+          return month;
+        }
+        return strongest;
+      },
+      null,
+    );
+  const strongestDecreaseMonth =
+    monthInsights.reduce<CollectionMonthlyComparisonMonthInsight | null>(
+      (strongest, month) => {
+        if ((month.deltaFromPrevious ?? 0) >= 0) {
+          return strongest;
+        }
+        if (!strongest || (month.deltaFromPrevious ?? 0) < (strongest.deltaFromPrevious ?? 0)) {
+          return month;
+        }
+        return strongest;
+      },
+      null,
+    );
+
+  return {
+    rangeTotal,
+    totalRecords,
+    activeMonthCount: activeMonths.length,
+    emptyMonthCount: payload.months.length - activeMonths.length,
+    averagePerMonth: payload.months.length > 0 ? rangeTotal / payload.months.length : 0,
+    averagePerRecord: totalRecords > 0 ? rangeTotal / totalRecords : 0,
+    peakMonth,
+    lowestActiveMonth,
+    strongestIncreaseMonth,
+    strongestDecreaseMonth,
+    positiveMonthCount,
+    negativeMonthCount,
+    flatMonthCount,
+    monthInsights,
+  };
+}
+
+function escapeCollectionMonthlyComparisonCsvValue(value: string | number | null | undefined) {
+  const text = String(value ?? "");
+  return `"${text.replace(/"/g, '""')}"`;
+}
+
+export function buildCollectionMonthlyComparisonCsv(
+  payload: CollectionMonthlyComparisonResponse,
+  monthlyTargetAmount?: number | null,
+): string {
+  const insights = buildCollectionMonthlyComparisonInsights(payload);
+  const targetSummary = buildCollectionMonthlyComparisonTargetSummary(payload, monthlyTargetAmount);
+  const target = targetSummary?.monthlyTargetAmount ?? null;
+  const headers = [
+    "Nickname",
+    "Month",
+    "Month Label",
+    "Total Collection",
+    "Record Count",
+    "Average Per Record",
+    "Share Of Range",
+    "Difference From Previous",
+    "Percentage From Previous",
+    "Monthly Target",
+    "Target Difference",
+    "Target Status",
+  ];
+  const rows = insights.monthInsights.map((month) => {
+    const targetDifference = target === null ? null : month.totalCollection - target;
+    const targetStatus = target === null
+      ? ""
+      : month.totalCollection >= target ? "At or above target" : "Below target";
+
+    return [
+      payload.nickname,
+      month.month,
+      month.label,
+      month.totalCollection.toFixed(2),
+      month.recordCount,
+      month.averagePerRecord.toFixed(2),
+      (month.shareOfRangeTotal * 100).toFixed(2),
+      month.deltaFromPrevious === null ? "" : month.deltaFromPrevious.toFixed(2),
+      month.percentageFromPrevious === null ? "" : month.percentageFromPrevious.toFixed(2),
+      target === null ? "" : target.toFixed(2),
+      targetDifference === null ? "" : targetDifference.toFixed(2),
+      targetStatus,
+    ];
+  });
+
+  return [
+    headers.map(escapeCollectionMonthlyComparisonCsvValue).join(","),
+    ...rows.map((row) => row.map(escapeCollectionMonthlyComparisonCsvValue).join(",")),
+  ].join("\n");
+}
+
+export function buildCollectionMonthlyComparisonCsvFilename(
+  payload: CollectionMonthlyComparisonResponse,
+): string {
+  const safeNickname = String(payload.nickname || "staff")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    || "staff";
+  return `SQR-monthly-comparison-${safeNickname}-${payload.startMonth}-to-${payload.endMonth}.csv`;
 }

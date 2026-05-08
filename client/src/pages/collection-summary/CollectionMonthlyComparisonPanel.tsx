@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { useMemo, useState } from "react";
+import { Download } from "lucide-react";
 import {
   OperationalMetric,
   OperationalSummaryStrip,
@@ -11,9 +12,14 @@ import { CollectionNicknameSingleSelect } from "@/pages/collection-report/Collec
 import { formatAmountRM } from "@/pages/collection/utils";
 import {
   buildCollectionMonthlyComparisonAccessibleSummary,
+  buildCollectionMonthlyComparisonInsights,
+  buildCollectionMonthlyComparisonPresetRanges,
+  buildCollectionMonthlyComparisonTargetSummary,
   formatCollectionMonthlyComparisonDifference,
+  formatCollectionMonthlyComparisonMonthDelta,
   formatCollectionMonthlyComparisonPercentage,
   resolveCollectionMonthlyComparisonTone,
+  type CollectionMonthlyComparisonPresetRange,
 } from "./collection-monthly-comparison-utils";
 
 type CollectionMonthlyComparisonPanelProps = {
@@ -32,7 +38,13 @@ type CollectionMonthlyComparisonPanelProps = {
   onStartMonthChange: (value: string) => void;
   onEndMonthChange: (value: string) => void;
   onApply: () => void;
+  onRangePresetApply: (preset: CollectionMonthlyComparisonPresetRange) => void;
   onReset: () => void;
+  monthlyTargetInput?: string | undefined;
+  monthlyTargetAmount?: number | null | undefined;
+  onMonthlyTargetInputChange?: ((value: string) => void) | undefined;
+  onExportCsv?: (() => void) | undefined;
+  onMonthSelect?: ((monthKey: string) => void) | undefined;
   chartSlot?: ReactNode | undefined;
 };
 
@@ -52,7 +64,13 @@ export function CollectionMonthlyComparisonPanel({
   onStartMonthChange,
   onEndMonthChange,
   onApply,
+  onRangePresetApply,
   onReset,
+  monthlyTargetInput = "",
+  monthlyTargetAmount = null,
+  onMonthlyTargetInputChange,
+  onExportCsv,
+  onMonthSelect,
   chartSlot,
 }: CollectionMonthlyComparisonPanelProps) {
   const comparison = data?.comparison || null;
@@ -62,6 +80,14 @@ export function CollectionMonthlyComparisonPanel({
   const comparisonSummary = data
     ? buildCollectionMonthlyComparisonAccessibleSummary(data)
     : null;
+  const insights = useMemo(
+    () => (data ? buildCollectionMonthlyComparisonInsights(data) : null),
+    [data],
+  );
+  const targetSummary = useMemo(
+    () => (data ? buildCollectionMonthlyComparisonTargetSummary(data, monthlyTargetAmount) : null),
+    [data, monthlyTargetAmount],
+  );
   const [nicknameSelectOpen, setNicknameSelectOpen] = useState(false);
   const baseMonthRecordCount = comparison?.baseMonth
     ? data?.months.find((entry) => entry.month === comparison.baseMonth)?.recordCount || 0
@@ -76,6 +102,10 @@ export function CollectionMonthlyComparisonPanel({
     }
     return normalizedValue;
   }, [loading, selectedNickname]);
+  const rangePresets = useMemo(
+    () => buildCollectionMonthlyComparisonPresetRanges(),
+    [],
+  );
 
   return (
     <section
@@ -194,6 +224,56 @@ export function CollectionMonthlyComparisonPanel({
             Last month = target
           </span>
         </div>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <span className="text-xs font-medium text-muted-foreground">Quick range</span>
+          {rangePresets.map((preset) => {
+            const active = preset.startMonth === startMonth && preset.endMonth === endMonth;
+            return (
+              <button
+                key={preset.id}
+                type="button"
+                className={
+                  active
+                    ? "inline-flex h-8 items-center justify-center rounded-full border border-primary bg-primary/10 px-3 text-xs font-medium text-primary"
+                    : "inline-flex h-8 items-center justify-center rounded-full border border-border/70 bg-background px-3 text-xs font-medium text-foreground transition hover:bg-accent hover:text-accent-foreground"
+                }
+                onClick={() => onRangePresetApply(preset)}
+                disabled={loading || !hasAvailableNickname}
+              >
+                {preset.label}
+              </button>
+            );
+          })}
+        </div>
+        <div className="mt-3 grid gap-2 md:grid-cols-[minmax(12rem,16rem)_auto] md:items-end md:justify-between">
+          <div className="space-y-1">
+            <label
+              htmlFor="collection-monthly-comparison-target"
+              className="text-xs font-medium text-muted-foreground"
+            >
+              Monthly target (RM)
+            </label>
+            <input
+              id="collection-monthly-comparison-target"
+              inputMode="decimal"
+              value={monthlyTargetInput}
+              onChange={(event) => onMonthlyTargetInputChange?.(event.target.value)}
+              placeholder="Optional target"
+              className="h-10 w-full rounded-2xl border border-input bg-background px-3 text-sm text-foreground"
+            />
+          </div>
+          {onExportCsv ? (
+            <button
+              type="button"
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-2xl border border-input bg-background px-4 text-sm font-medium text-foreground transition hover:bg-accent hover:text-accent-foreground disabled:cursor-not-allowed disabled:opacity-60"
+              onClick={onExportCsv}
+              disabled={loading || !data}
+            >
+              <Download className="h-4 w-4" aria-hidden="true" />
+              Export CSV
+            </button>
+          ) : null}
+        </div>
       </div>
 
       {!hasAvailableNickname ? (
@@ -255,13 +335,114 @@ export function CollectionMonthlyComparisonPanel({
             />
           </OperationalSummaryStrip>
 
-          <div className="rounded-2xl border border-border/60 bg-background px-4 py-4 shadow-sm">
-            <p className="text-sm font-medium text-foreground">Comparison summary</p>
-            <p className="mt-1 text-sm leading-6 text-muted-foreground">{comparison?.summary}</p>
-          </div>
+          {insights ? (
+            <div className="grid gap-3 lg:grid-cols-[minmax(0,1.35fr)_minmax(18rem,0.65fr)]">
+              <div className="rounded-2xl border border-border/60 bg-background px-4 py-4 shadow-sm">
+                <p className="text-sm font-medium text-foreground">Comparison summary</p>
+                <p className="mt-1 text-sm leading-6 text-muted-foreground">{comparison?.summary}</p>
+                <div className="mt-3 flex flex-wrap gap-2 text-xs text-foreground/68 dark:text-foreground/74">
+                  <span className="rounded-full border border-border/60 bg-muted/20 px-2.5 py-1">
+                    {insights.positiveMonthCount} month(s) up
+                  </span>
+                  <span className="rounded-full border border-border/60 bg-muted/20 px-2.5 py-1">
+                    {insights.negativeMonthCount} month(s) down
+                  </span>
+                  <span className="rounded-full border border-border/60 bg-muted/20 px-2.5 py-1">
+                    {insights.emptyMonthCount} empty month(s)
+                  </span>
+                  {targetSummary ? (
+                    <span className="rounded-full border border-border/60 bg-muted/20 px-2.5 py-1">
+                      {targetSummary.monthsAtOrAboveTarget} month(s) at target
+                    </span>
+                  ) : null}
+                </div>
+              </div>
+
+              <div className="grid gap-2 sm:grid-cols-2">
+                <div className="rounded-2xl border border-border/60 bg-background px-4 py-3 shadow-sm">
+                  <p className="text-xs font-medium uppercase tracking-normal text-muted-foreground">
+                    Range total
+                  </p>
+                  <p className="mt-1 text-lg font-semibold text-foreground">
+                    {formatAmountRM(insights.rangeTotal)}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {insights.totalRecords} record(s), avg {formatAmountRM(insights.averagePerRecord)}
+                  </p>
+                </div>
+                <div className="rounded-2xl border border-border/60 bg-background px-4 py-3 shadow-sm">
+                  <p className="text-xs font-medium uppercase tracking-normal text-muted-foreground">
+                    Best month
+                  </p>
+                  <p className="mt-1 text-lg font-semibold text-foreground">
+                    {insights.peakMonth?.label || "No data"}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {insights.peakMonth ? formatAmountRM(insights.peakMonth.totalCollection) : "No collection recorded"}
+                  </p>
+                </div>
+                <div className="rounded-2xl border border-border/60 bg-background px-4 py-3 shadow-sm">
+                  <p className="text-xs font-medium uppercase tracking-normal text-muted-foreground">
+                    Weakest active
+                  </p>
+                  <p className="mt-1 text-lg font-semibold text-foreground">
+                    {insights.lowestActiveMonth?.label || "No active month"}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {insights.lowestActiveMonth ? formatAmountRM(insights.lowestActiveMonth.totalCollection) : "No collection recorded"}
+                  </p>
+                </div>
+                <div className="rounded-2xl border border-border/60 bg-background px-4 py-3 shadow-sm">
+                  <p className="text-xs font-medium uppercase tracking-normal text-muted-foreground">
+                    Biggest jump
+                  </p>
+                  <p className="mt-1 text-lg font-semibold text-foreground">
+                    {insights.strongestIncreaseMonth?.label || "No jump"}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {insights.strongestIncreaseMonth
+                      ? formatCollectionMonthlyComparisonMonthDelta(
+                        insights.strongestIncreaseMonth.deltaFromPrevious,
+                        insights.strongestIncreaseMonth.percentageFromPrevious,
+                      )
+                      : "No month increased"}
+                  </p>
+                </div>
+                <div className="rounded-2xl border border-border/60 bg-background px-4 py-3 shadow-sm">
+                  <p className="text-xs font-medium uppercase tracking-normal text-muted-foreground">
+                    Biggest drop
+                  </p>
+                  <p className="mt-1 text-lg font-semibold text-foreground">
+                    {insights.strongestDecreaseMonth?.label || "No drop"}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {insights.strongestDecreaseMonth
+                      ? formatCollectionMonthlyComparisonMonthDelta(
+                        insights.strongestDecreaseMonth.deltaFromPrevious,
+                        insights.strongestDecreaseMonth.percentageFromPrevious,
+                      )
+                      : "No month decreased"}
+                  </p>
+                </div>
+                {targetSummary ? (
+                  <div className="rounded-2xl border border-border/60 bg-background px-4 py-3 shadow-sm">
+                    <p className="text-xs font-medium uppercase tracking-normal text-muted-foreground">
+                      Target gap
+                    </p>
+                    <p className="mt-1 text-lg font-semibold text-foreground">
+                      {formatCollectionMonthlyComparisonDifference(targetSummary.targetGap)}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {(targetSummary.targetProgress * 100).toFixed(1)}% of {formatAmountRM(targetSummary.rangeTarget)}
+                    </p>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
           {comparisonSummary ? <p className="sr-only">{comparisonSummary}</p> : null}
 
-          <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px] xl:items-start">
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,1.25fr)_minmax(22rem,0.75fr)] xl:items-start">
             {chartSlot ? (
               <div className="space-y-3">
                 {chartSlot}
@@ -280,28 +461,92 @@ export function CollectionMonthlyComparisonPanel({
               </div>
 
               <div className="grid gap-2">
-                {data.months.map((month) => (
-                  <div
+                {insights ? insights.monthInsights.map((month) => (
+                  <button
                     key={month.month}
-                    className="grid gap-2 rounded-2xl border border-border/50 bg-background px-3 py-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
+                    type="button"
+                    className="grid gap-3 rounded-2xl border border-border/50 bg-background px-3 py-3 text-left transition hover:border-primary/40 hover:bg-primary/[0.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default disabled:hover:border-border/50 disabled:hover:bg-background"
+                    onClick={() => onMonthSelect?.(month.month)}
+                    disabled={!onMonthSelect}
+                    aria-label={`View collection records for ${month.label}`}
                   >
                     <div className="space-y-1">
                       <div className="flex flex-wrap items-center justify-between gap-2">
-                        <p className="text-sm font-medium text-foreground">{month.label}</p>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <p className="text-sm font-medium text-foreground">{month.label}</p>
+                          {month.isBaseMonth ? (
+                            <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary">
+                              Base
+                            </span>
+                          ) : null}
+                          {month.isTargetMonth ? (
+                            <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-300">
+                              Target
+                            </span>
+                          ) : null}
+                          {month.isPeakMonth ? (
+                            <span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:text-amber-300">
+                              Peak
+                            </span>
+                          ) : null}
+                          {targetSummary ? (
+                            <span
+                              className={
+                                month.totalCollection >= targetSummary.monthlyTargetAmount
+                                  ? "rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-300"
+                                  : "rounded-full bg-destructive/10 px-2 py-0.5 text-[11px] font-medium text-destructive"
+                              }
+                            >
+                              {month.totalCollection >= targetSummary.monthlyTargetAmount
+                                ? "Above target"
+                                : "Below target"}
+                            </span>
+                          ) : null}
+                        </div>
                         <p className="text-sm font-semibold text-foreground">
                           {formatAmountRM(month.totalCollection)}
                         </p>
                       </div>
+                      <div className="h-2 overflow-hidden rounded-full bg-muted">
+                        <div
+                          className="h-full rounded-full bg-primary"
+                          style={{
+                            width: month.maxTotalRatio > 0
+                              ? `${Math.max(5, Math.round(month.maxTotalRatio * 100))}%`
+                              : "0%",
+                          }}
+                          aria-hidden="true"
+                        />
+                      </div>
                       <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-foreground/64 dark:text-foreground/74">
                         <span>{month.recordCount} record(s)</span>
                         <span>Avg {formatAmountRM(month.averagePerRecord)}</span>
+                        <span>{(month.shareOfRangeTotal * 100).toFixed(1)}% of range</span>
+                        <span>
+                          {formatCollectionMonthlyComparisonMonthDelta(
+                            month.deltaFromPrevious,
+                            month.percentageFromPrevious,
+                          )}
+                        </span>
                         <span>
                           {month.recordCount === 0 ? "No collection recorded" : "Active month"}
                         </span>
+                        {targetSummary ? (
+                          <span>
+                            Target gap {formatCollectionMonthlyComparisonDifference(
+                              month.totalCollection - targetSummary.monthlyTargetAmount,
+                            )}
+                          </span>
+                        ) : null}
                       </div>
+                      {onMonthSelect ? (
+                        <p className="text-xs font-medium text-primary">
+                          View records
+                        </p>
+                      ) : null}
                     </div>
-                  </div>
-                ))}
+                  </button>
+                )) : null}
               </div>
             </div>
           </div>

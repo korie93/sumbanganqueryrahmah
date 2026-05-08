@@ -3,10 +3,17 @@ import test from "node:test";
 import type { CollectionMonthlyComparisonResponse } from "@/lib/api";
 import {
   buildCollectionMonthlyComparisonAccessibleSummary,
+  buildCollectionMonthlyComparisonCsv,
+  buildCollectionMonthlyComparisonCsvFilename,
+  buildCollectionMonthlyComparisonInsights,
+  buildCollectionMonthlyComparisonPresetRanges,
+  buildCollectionMonthlyComparisonTargetSummary,
   buildDefaultCollectionMonthlyComparisonRange,
   countCollectionMonthsInclusive,
   formatCollectionMonthlyComparisonDifference,
   formatCollectionMonthlyComparisonPercentage,
+  normalizeCollectionMonthlyTargetAmount,
+  parseCollectionMonthKey,
   shiftCollectionMonthInput,
 } from "@/pages/collection-summary/collection-monthly-comparison-utils";
 
@@ -55,12 +62,28 @@ test("collection monthly comparison helpers keep month ranges bounded and stable
   assert.equal(shiftCollectionMonthInput("2026-01", -1), "2025-12");
   assert.equal(countCollectionMonthsInclusive("2026-04", "2026-05"), 2);
   assert.equal(countCollectionMonthsInclusive("2026-04", "2027-03"), 12);
+  assert.deepEqual(parseCollectionMonthKey("2026-05"), { year: 2026, month: 5 });
+  assert.equal(parseCollectionMonthKey("2026-13"), null);
+
+  const presets = buildCollectionMonthlyComparisonPresetRanges(new Date("2026-05-20T00:00:00.000Z"));
+  assert.deepEqual(presets.map((preset) => preset.label), [
+    "Last 3 months",
+    "Last 6 months",
+    "Year to date",
+    "Previous year",
+  ]);
+  assert.deepEqual(presets[0], {
+    id: "last-3",
+    label: "Last 3 months",
+    startMonth: "2026-03",
+    endMonth: "2026-05",
+  });
 });
 
 test("collection monthly comparison helpers format difference, percentage, and accessible summaries clearly", () => {
   assert.match(formatCollectionMonthlyComparisonDifference(12450), /^\+RM(?:\u00A0| )12,450\.00$/);
   assert.match(formatCollectionMonthlyComparisonDifference(-5200), /^-RM(?:\u00A0| )5,200\.00$/);
-  assert.equal(formatCollectionMonthlyComparisonDifference(null), "—");
+  assert.equal(formatCollectionMonthlyComparisonDifference(null), "N/A");
   assert.equal(formatCollectionMonthlyComparisonPercentage(17.67), "+17.67%");
   assert.equal(formatCollectionMonthlyComparisonPercentage(0), "0.00%");
   assert.equal(formatCollectionMonthlyComparisonPercentage(null), "No previous month total");
@@ -71,5 +94,42 @@ test("collection monthly comparison helpers format difference, percentage, and a
   assert.match(
     buildCollectionMonthlyComparisonAccessibleSummary(comparisonPayload),
     /Apr 2026: RM(?:\u00A0| )70,450\.00 across 123 record\(s\)/,
+  );
+});
+
+test("collection monthly comparison helpers derive operational insights", () => {
+  const insights = buildCollectionMonthlyComparisonInsights(comparisonPayload);
+
+  assert.equal(insights.rangeTotal, 153350);
+  assert.equal(insights.totalRecords, 269);
+  assert.equal(insights.activeMonthCount, 2);
+  assert.equal(insights.emptyMonthCount, 0);
+  assert.equal(insights.peakMonth?.month, "2026-05");
+  assert.equal(insights.lowestActiveMonth?.month, "2026-04");
+  assert.equal(insights.strongestIncreaseMonth?.month, "2026-05");
+  assert.equal(insights.strongestDecreaseMonth, null);
+  assert.equal(insights.monthInsights[0]?.deltaFromPrevious, null);
+  assert.equal(insights.monthInsights[1]?.deltaFromPrevious, 12450);
+  assert.equal(insights.monthInsights[1]?.isTargetMonth, true);
+});
+
+test("collection monthly comparison helpers summarize targets and export CSV", () => {
+  assert.equal(normalizeCollectionMonthlyTargetAmount("80,000"), 80000);
+  assert.equal(normalizeCollectionMonthlyTargetAmount("0"), null);
+
+  const targetSummary = buildCollectionMonthlyComparisonTargetSummary(comparisonPayload, 80000);
+  assert.equal(targetSummary?.rangeTarget, 160000);
+  assert.equal(targetSummary?.targetGap, -6650);
+  assert.equal(targetSummary?.monthsAtOrAboveTarget, 1);
+  assert.equal(targetSummary?.monthsBelowTarget, 1);
+
+  const csv = buildCollectionMonthlyComparisonCsv(comparisonPayload, 80000);
+  assert.match(csv, /"Nickname","Month","Month Label"/);
+  assert.match(csv, /"Collector Alpha","2026-04","Apr 2026","70450\.00"/);
+  assert.match(csv, /"80000\.00","-9550\.00","Below target"/);
+  assert.match(csv, /"80000\.00","2900\.00","At or above target"/);
+  assert.equal(
+    buildCollectionMonthlyComparisonCsvFilename(comparisonPayload),
+    "SQR-monthly-comparison-collector-alpha-2026-04-to-2026-05.csv",
   );
 });

@@ -12,6 +12,7 @@ import {
   buildDefaultCollectionMonthlyComparisonRange,
   COLLECTION_MONTHLY_COMPARISON_MAX_RANGE_MONTHS,
   countCollectionMonthsInclusive,
+  type CollectionMonthlyComparisonPresetRange,
 } from "./collection-monthly-comparison-utils";
 
 function isAbortError(error: unknown) {
@@ -114,8 +115,16 @@ export function useCollectionMonthlyComparisonData({
     setSelectedNickname(currentNicknameValue);
   }, [availableNicknames, canFilterByNickname, currentNicknameValue, defaultNickname]);
 
-  const validateFilters = useCallback(() => {
-    const effectiveNickname = canFilterByNickname ? selectedNickname : currentNicknameValue;
+  const validateFilters = useCallback((overrides?: {
+    nickname?: string | undefined;
+    startMonth?: string | undefined;
+    endMonth?: string | undefined;
+  }) => {
+    const effectiveNickname =
+      overrides?.nickname ?? (canFilterByNickname ? selectedNickname : currentNicknameValue);
+    const nextStartMonth = overrides?.startMonth ?? startMonth;
+    const nextEndMonth = overrides?.endMonth ?? endMonth;
+
     if (!String(effectiveNickname || "").trim()) {
       return "Please choose a valid staff nickname first.";
     }
@@ -125,14 +134,14 @@ export function useCollectionMonthlyComparisonData({
         return "Please choose a nickname that is visible to your account.";
       }
     }
-    if (!startMonth || !endMonth) {
+    if (!nextStartMonth || !nextEndMonth) {
       return "Please choose both start month and end month.";
     }
-    if (startMonth > endMonth) {
+    if (nextStartMonth > nextEndMonth) {
       return "Start month cannot be later than end month.";
     }
     if (
-      countCollectionMonthsInclusive(startMonth, endMonth)
+      countCollectionMonthsInclusive(nextStartMonth, nextEndMonth)
       > COLLECTION_MONTHLY_COMPARISON_MAX_RANGE_MONTHS
     ) {
       return "Monthly comparison range cannot exceed 24 months.";
@@ -233,6 +242,32 @@ export function useCollectionMonthlyComparisonData({
     });
   }, [canFilterByNickname, currentNicknameValue, endMonth, selectedNickname, startMonth, validateFilters]);
 
+  const applyRangePreset = useCallback((preset: CollectionMonthlyComparisonPresetRange) => {
+    const nextStartMonth = preset.startMonth;
+    const nextEndMonth = preset.endMonth;
+    const effectiveNickname = (canFilterByNickname ? selectedNickname : currentNicknameValue).trim();
+
+    setStartMonth(nextStartMonth);
+    setEndMonth(nextEndMonth);
+
+    const validationMessage = validateFilters({
+      nickname: effectiveNickname,
+      startMonth: nextStartMonth,
+      endMonth: nextEndMonth,
+    });
+    if (validationMessage) {
+      setErrorMessage(validationMessage);
+      return;
+    }
+
+    setErrorMessage(null);
+    setAppliedFilters({
+      nickname: effectiveNickname,
+      startMonth: nextStartMonth,
+      endMonth: nextEndMonth,
+    });
+  }, [canFilterByNickname, currentNicknameValue, selectedNickname, validateFilters]);
+
   const reset = useCallback(() => {
     const nextNickname = defaultNickname;
     setSelectedNickname(nextNickname);
@@ -264,6 +299,7 @@ export function useCollectionMonthlyComparisonData({
     setStartMonth,
     setEndMonth,
     apply,
+    applyRangePreset,
     reset,
   };
 }

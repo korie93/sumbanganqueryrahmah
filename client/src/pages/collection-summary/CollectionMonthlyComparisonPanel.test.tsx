@@ -56,6 +56,7 @@ test("CollectionMonthlyComparisonPanel renders accessible controls and action bu
       onStartMonthChange: () => undefined,
       onEndMonthChange: () => undefined,
       onApply: () => undefined,
+      onRangePresetApply: () => undefined,
       onReset: () => undefined,
     }),
   );
@@ -69,6 +70,9 @@ test("CollectionMonthlyComparisonPanel renders accessible controls and action bu
   assert.match(markup, /type="month"/);
   assert.match(markup, />Apply</);
   assert.match(markup, />Reset</);
+  assert.match(markup, /Last 3 months/);
+  assert.match(markup, /Year to date/);
+  assert.match(markup, /Monthly target \(RM\)/);
   assert.match(markup, /type="button"/);
   assert.match(markup, /Single nickname only/);
 });
@@ -89,6 +93,7 @@ test("CollectionMonthlyComparisonPanel announces loading, errors, and empty nick
       onStartMonthChange: () => undefined,
       onEndMonthChange: () => undefined,
       onApply: () => undefined,
+      onRangePresetApply: () => undefined,
       onReset: () => undefined,
     }),
   );
@@ -110,6 +115,7 @@ test("CollectionMonthlyComparisonPanel announces loading, errors, and empty nick
       onStartMonthChange: () => undefined,
       onEndMonthChange: () => undefined,
       onApply: () => undefined,
+      onRangePresetApply: () => undefined,
       onReset: () => undefined,
     }),
   );
@@ -134,7 +140,13 @@ test("CollectionMonthlyComparisonPanel renders monthly totals and comparison sum
       onStartMonthChange: () => undefined,
       onEndMonthChange: () => undefined,
       onApply: () => undefined,
+      onRangePresetApply: () => undefined,
       onReset: () => undefined,
+      monthlyTargetInput: "80000",
+      monthlyTargetAmount: 80000,
+      onMonthlyTargetInputChange: () => undefined,
+      onExportCsv: () => undefined,
+      onMonthSelect: () => undefined,
       chartSlot: createElement("div", null, "chart slot"),
     }),
   );
@@ -144,6 +156,19 @@ test("CollectionMonthlyComparisonPanel renders monthly totals and comparison sum
   assert.match(markup, /May 2026 Total/);
   assert.match(markup, /\+RM(?:&nbsp;|\u00a0| )12,450\.00/);
   assert.match(markup, /\+17\.67%/);
+  assert.match(markup, /Range total/);
+  assert.match(markup, /Best month/);
+  assert.match(markup, /Weakest active/);
+  assert.match(markup, /Biggest jump/);
+  assert.match(markup, /Biggest drop/);
+  assert.match(markup, /Target gap/);
+  assert.match(markup, /Above target/);
+  assert.match(markup, /Below target/);
+  assert.match(markup, /Export CSV/);
+  assert.match(markup, /month\(s\) up/);
+  assert.match(markup, /Peak/);
+  assert.match(markup, /of range/);
+  assert.match(markup, /View records/);
   assert.match(markup, /Avg RM(?:&nbsp;|\u00a0| )572\.76/);
   assert.match(markup, /chart slot/);
 });

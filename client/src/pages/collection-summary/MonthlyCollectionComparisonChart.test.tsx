@@ -44,10 +44,15 @@ test("MonthlyCollectionComparisonChart renders compact chart controls accessibly
   const markup = renderToStaticMarkup(
     createElement(MonthlyCollectionComparisonChart, {
       data: chartPayload,
+      monthlyTargetAmount: 80000,
     }),
   );
 
-  assert.match(markup, /Monthly bar chart/);
+  assert.match(markup, /Monthly performance trend/);
+  assert.match(markup, /Range total/);
+  assert.match(markup, /Target progress/);
+  assert.match(markup, /Peak month/);
+  assert.match(markup, /Active months/);
   assert.match(markup, /Minimize chart/);
   assert.match(markup, /Expand chart/);
   assert.match(markup, /aria-controls=/);

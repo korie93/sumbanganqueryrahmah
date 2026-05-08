@@ -1,29 +1,48 @@
 import { ChevronDown, ChevronUp, Maximize2, Minimize2 } from "lucide-react";
-import { useId, useState } from "react";
-import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { useId, useMemo, useState } from "react";
+import {
+  Bar,
+  Cell,
+  ComposedChart,
+  CartesianGrid,
+  Legend,
+  Line,
+  ReferenceLine,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 import type { CollectionMonthlyComparisonResponse } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { formatAmountRM } from "@/pages/collection/utils";
+import {
+  buildCollectionMonthlyComparisonInsights,
+  buildCollectionMonthlyComparisonTargetSummary,
+  formatCollectionMonthlyComparisonMonthDelta,
+  formatCompactAmountRM,
+  type CollectionMonthlyComparisonMonthInsight,
+} from "./collection-monthly-comparison-utils";
 
 type MonthlyCollectionComparisonChartProps = {
   data: CollectionMonthlyComparisonResponse;
+  monthlyTargetAmount?: number | null | undefined;
 };
 
 type TooltipEntry = {
-  payload?: {
-    totalCollection?: number;
-    recordCount?: number;
-  };
+  payload?: CollectionMonthlyComparisonMonthInsight;
 };
 
 function MonthlyCollectionComparisonTooltip({
   active,
   label,
   payload,
+  monthlyTargetAmount,
 }: {
   active?: boolean | undefined;
   label?: string | number | undefined;
   payload?: TooltipEntry[] | undefined;
+  monthlyTargetAmount?: number | null | undefined;
 }) {
   if (!active || typeof label !== "string" || !payload?.length) {
     return null;
@@ -31,32 +50,68 @@ function MonthlyCollectionComparisonTooltip({
 
   const point = payload[0]?.payload;
   return (
-    <div className="rounded-lg border border-border/60 bg-background px-3 py-2 text-xs shadow-lg">
+    <div className="min-w-[220px] rounded-lg border border-border/60 bg-background px-3 py-2 text-xs shadow-lg">
       <p className="font-semibold text-foreground">{label}</p>
-      <p className="mt-1 text-muted-foreground">
-        {formatAmountRM(point?.totalCollection || 0)}
-      </p>
-      <p className="text-muted-foreground">
-        {Number(point?.recordCount || 0)} record(s)
-      </p>
+      <dl className="mt-2 grid gap-1 text-muted-foreground">
+        <div className="flex justify-between gap-3">
+          <dt>Total</dt>
+          <dd className="font-medium text-foreground">{formatAmountRM(point?.totalCollection || 0)}</dd>
+        </div>
+        <div className="flex justify-between gap-3">
+          <dt>Records</dt>
+          <dd>{Number(point?.recordCount || 0)} record(s)</dd>
+        </div>
+        <div className="flex justify-between gap-3">
+          <dt>Average</dt>
+          <dd>{formatAmountRM(point?.averagePerRecord || 0)}</dd>
+        </div>
+        <div className="flex justify-between gap-3">
+          <dt>Vs previous</dt>
+          <dd className="text-right">
+            {formatCollectionMonthlyComparisonMonthDelta(
+              point?.deltaFromPrevious ?? null,
+              point?.percentageFromPrevious ?? null,
+            )}
+          </dd>
+        </div>
+        {monthlyTargetAmount && monthlyTargetAmount > 0 ? (
+          <div className="flex justify-between gap-3">
+            <dt>Target gap</dt>
+            <dd className="text-right">
+              {formatCollectionMonthlyComparisonMonthDelta(
+                Number(point?.totalCollection || 0) - monthlyTargetAmount,
+                monthlyTargetAmount > 0
+                  ? ((Number(point?.totalCollection || 0) - monthlyTargetAmount) / monthlyTargetAmount) * 100
+                  : null,
+              )}
+            </dd>
+          </div>
+        ) : null}
+      </dl>
     </div>
   );
 }
 
 export function MonthlyCollectionComparisonChart({
   data,
+  monthlyTargetAmount,
 }: MonthlyCollectionComparisonChartProps) {
   const [expanded, setExpanded] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const chartRegionId = useId();
+  const insights = useMemo(() => buildCollectionMonthlyComparisonInsights(data), [data]);
+  const targetSummary = useMemo(
+    () => buildCollectionMonthlyComparisonTargetSummary(data, monthlyTargetAmount),
+    [data, monthlyTargetAmount],
+  );
 
   return (
     <div className="rounded-2xl border border-border/60 bg-background p-3 shadow-sm">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="space-y-1">
-          <p className="text-sm font-semibold text-foreground">Monthly bar chart</p>
+          <p className="text-sm font-semibold text-foreground">Monthly performance trend</p>
           <p className="text-xs text-muted-foreground">
-            Compare total collection by month for the selected nickname.
+            Total collection, average per record, target line, and month-to-month movement.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -115,17 +170,54 @@ export function MonthlyCollectionComparisonChart({
         </div>
       </div>
 
+      <div className={`mt-3 grid gap-2 ${targetSummary ? "sm:grid-cols-4" : "sm:grid-cols-3"}`}>
+        <div className="rounded-lg border border-border/50 bg-muted/20 px-3 py-2">
+          <p className="text-[11px] font-medium uppercase tracking-normal text-muted-foreground">
+            Range total
+          </p>
+          <p className="mt-1 text-sm font-semibold text-foreground">
+            {formatAmountRM(insights.rangeTotal)}
+          </p>
+        </div>
+        <div className="rounded-lg border border-border/50 bg-muted/20 px-3 py-2">
+          <p className="text-[11px] font-medium uppercase tracking-normal text-muted-foreground">
+            Peak month
+          </p>
+          <p className="mt-1 text-sm font-semibold text-foreground">
+            {insights.peakMonth ? `${insights.peakMonth.label} (${formatCompactAmountRM(insights.peakMonth.totalCollection)})` : "No data"}
+          </p>
+        </div>
+        <div className="rounded-lg border border-border/50 bg-muted/20 px-3 py-2">
+          <p className="text-[11px] font-medium uppercase tracking-normal text-muted-foreground">
+            Active months
+          </p>
+          <p className="mt-1 text-sm font-semibold text-foreground">
+            {insights.activeMonthCount}/{data.months.length} months
+          </p>
+        </div>
+        {targetSummary ? (
+          <div className="rounded-lg border border-border/50 bg-muted/20 px-3 py-2">
+            <p className="text-[11px] font-medium uppercase tracking-normal text-muted-foreground">
+              Target progress
+            </p>
+            <p className="mt-1 text-sm font-semibold text-foreground">
+              {(targetSummary.targetProgress * 100).toFixed(1)}%
+            </p>
+          </div>
+        ) : null}
+      </div>
+
       {!collapsed ? (
         <div
           id={chartRegionId}
-          className={`mt-3 min-w-0 rounded-xl border border-border/60 bg-background p-3 ${expanded ? "h-[340px]" : "h-[220px]"}`}
+          className={`mt-3 min-w-0 rounded-xl border border-border/60 bg-background p-3 ${expanded ? "h-[380px]" : "h-[260px]"}`}
           role="img"
-          aria-label="Monthly total collection comparison chart"
+          aria-label={`Monthly collection comparison chart for ${data.nickname}. Range total ${formatAmountRM(insights.rangeTotal)}${targetSummary ? ` with monthly target ${formatAmountRM(targetSummary.monthlyTargetAmount)}` : ""}.`}
         >
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart
-              data={data.months}
-              margin={{ top: 8, right: 16, left: -8, bottom: 0 }}
+            <ComposedChart
+              data={insights.monthInsights}
+              margin={{ top: 8, right: 8, left: -8, bottom: 0 }}
             >
               <CartesianGrid strokeDasharray="3 3" className="stroke-muted/60" vertical={false} />
               <XAxis
@@ -134,23 +226,89 @@ export function MonthlyCollectionComparisonChart({
                 tickLine={false}
                 tickMargin={10}
                 className="text-[11px] text-muted-foreground"
+                minTickGap={16}
               />
               <YAxis
+                yAxisId="total"
                 axisLine={false}
                 tickLine={false}
                 tickMargin={8}
-                tickFormatter={(value) => formatAmountRM(Number(value || 0))}
+                tickFormatter={(value) => formatCompactAmountRM(Number(value || 0))}
                 className="text-[11px] text-muted-foreground"
-                width={72}
+                width={62}
               />
-              <Tooltip content={(props) => <MonthlyCollectionComparisonTooltip {...props} />} />
+              <YAxis
+                yAxisId="average"
+                orientation="right"
+                axisLine={false}
+                tickLine={false}
+                tickMargin={8}
+                tickFormatter={(value) => formatCompactAmountRM(Number(value || 0))}
+                className="text-[11px] text-muted-foreground"
+                width={62}
+              />
+              <Tooltip
+                content={(props) => (
+                  <MonthlyCollectionComparisonTooltip
+                    {...props}
+                    monthlyTargetAmount={targetSummary?.monthlyTargetAmount ?? null}
+                  />
+                )}
+              />
+              <Legend
+                verticalAlign="top"
+                align="right"
+                wrapperStyle={{ fontSize: 12, paddingBottom: 8 }}
+              />
+              {insights.rangeTotal > 0 ? (
+                <ReferenceLine
+                  yAxisId="total"
+                  y={insights.averagePerMonth}
+                  stroke="hsl(var(--muted-foreground))"
+                  strokeDasharray="4 4"
+                  strokeOpacity={0.55}
+                />
+              ) : null}
+              {targetSummary ? (
+                <ReferenceLine
+                  yAxisId="total"
+                  y={targetSummary.monthlyTargetAmount}
+                  stroke="hsl(var(--destructive))"
+                  strokeDasharray="6 4"
+                  strokeOpacity={0.75}
+                />
+              ) : null}
               <Bar
+                yAxisId="total"
                 dataKey="totalCollection"
-                name="Total collection"
-                fill="hsl(var(--chart-3))"
+                name="Monthly total"
                 radius={[8, 8, 0, 0]}
+                maxBarSize={42}
+              >
+                {insights.monthInsights.map((entry) => (
+                  <Cell
+                    key={entry.month}
+                    fill={
+                      entry.recordCount === 0
+                        ? "hsl(var(--muted))"
+                        : entry.isPeakMonth
+                          ? "hsl(var(--primary))"
+                          : "hsl(var(--chart-3))"
+                    }
+                  />
+                ))}
+              </Bar>
+              <Line
+                yAxisId="average"
+                type="monotone"
+                dataKey="averagePerRecord"
+                name="Average per record"
+                stroke="hsl(var(--chart-4))"
+                strokeWidth={2}
+                dot={{ r: 3 }}
+                activeDot={{ r: 5 }}
               />
-            </BarChart>
+            </ComposedChart>
           </ResponsiveContainer>
         </div>
       ) : (
