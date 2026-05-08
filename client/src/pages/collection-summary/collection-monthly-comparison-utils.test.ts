@@ -2,12 +2,14 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { CollectionMonthlyComparisonResponse } from "@/lib/api";
 import {
+  COLLECTION_MONTHLY_COMPARISON_ANOMALY_THRESHOLD_PERCENT,
   buildCollectionMonthlyComparisonAccessibleSummary,
   buildCollectionMonthlyComparisonCsv,
   buildCollectionMonthlyComparisonCsvFilename,
   buildCollectionMonthlyComparisonInsights,
   buildCollectionMonthlyComparisonPresetRanges,
   buildCollectionMonthlyComparisonTargetSummary,
+  buildCollectionMonthlyComparisonTrendExplanation,
   buildDefaultCollectionMonthlyComparisonRange,
   countCollectionMonthsInclusive,
   formatCollectionMonthlyComparisonDifference,
@@ -49,6 +51,25 @@ const comparisonPayload: CollectionMonthlyComparisonResponse = {
     percentageChange: 17.67,
     direction: "increase",
     summary: "Collection increased by RM12,450.00 (+17.67%) compared to Apr 2026.",
+  },
+};
+
+const anomalyPayload: CollectionMonthlyComparisonResponse = {
+  ...comparisonPayload,
+  months: [
+    comparisonPayload.months[0]!,
+    {
+      ...comparisonPayload.months[1]!,
+      totalCollection: 95000,
+      averagePerRecord: 650.68,
+    },
+  ],
+  comparison: {
+    ...comparisonPayload.comparison,
+    targetTotal: 95000,
+    difference: 24550,
+    percentageChange: 34.85,
+    summary: "Collection increased by RM24,550.00 (+34.85%) compared to Apr 2026.",
   },
 };
 
@@ -108,9 +129,34 @@ test("collection monthly comparison helpers derive operational insights", () => 
   assert.equal(insights.lowestActiveMonth?.month, "2026-04");
   assert.equal(insights.strongestIncreaseMonth?.month, "2026-05");
   assert.equal(insights.strongestDecreaseMonth, null);
+  assert.equal(insights.anomalyMonthCount, 0);
   assert.equal(insights.monthInsights[0]?.deltaFromPrevious, null);
   assert.equal(insights.monthInsights[1]?.deltaFromPrevious, 12450);
   assert.equal(insights.monthInsights[1]?.isTargetMonth, true);
+});
+
+test("collection monthly comparison helpers flag month-to-month anomalies above threshold", () => {
+  const insights = buildCollectionMonthlyComparisonInsights(anomalyPayload);
+
+  assert.equal(COLLECTION_MONTHLY_COMPARISON_ANOMALY_THRESHOLD_PERCENT, 30);
+  assert.equal(insights.anomalyMonthCount, 1);
+  assert.equal(insights.anomalyMonths[0]?.month, "2026-05");
+  assert.equal(insights.monthInsights[1]?.isAnomaly, true);
+  assert.equal(insights.monthInsights[1]?.anomalyDirection, "increase");
+  assert.equal(insights.monthInsights[1]?.anomalyMagnitudePercent?.toFixed(2), "34.85");
+  assert.match(insights.monthInsights[1]?.anomalyLabel || "", /Unusual jump \+34\.85%/);
+
+  const csv = buildCollectionMonthlyComparisonCsv(anomalyPayload, 80000);
+  assert.match(csv, /"Anomaly Status","Anomaly Direction","Anomaly Threshold Percent"/);
+  assert.match(csv, /"Unusual jump \+34\.85% vs previous month","increase","30\.00"/);
+});
+
+test("collection monthly comparison helpers explain trend direction and average movement", () => {
+  const explanation = buildCollectionMonthlyComparisonTrendExplanation(comparisonPayload);
+
+  assert.match(explanation, /May 2026 increased 17\.67%/);
+  assert.match(explanation, /versus Apr 2026/);
+  assert.match(explanation, /but average per record dipped slightly by RM(?:\u00A0| )4\.95\./);
 });
 
 test("collection monthly comparison helpers summarize targets and export CSV", () => {

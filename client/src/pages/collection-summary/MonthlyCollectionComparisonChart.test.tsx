@@ -53,6 +53,7 @@ test("MonthlyCollectionComparisonChart renders compact chart controls accessibly
   assert.match(markup, /Target progress/);
   assert.match(markup, /Peak month/);
   assert.match(markup, /Active months/);
+  assert.match(markup, /Audit watch/);
   assert.match(markup, /Minimize chart/);
   assert.match(markup, /Expand chart/);
   assert.match(markup, /aria-controls=/);

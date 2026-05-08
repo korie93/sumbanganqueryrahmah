@@ -2,6 +2,7 @@ import type { CollectionMonthlyComparisonResponse } from "@/lib/api";
 import { formatAmountRM } from "@/pages/collection/utils";
 
 export const COLLECTION_MONTHLY_COMPARISON_MAX_RANGE_MONTHS = 24;
+export const COLLECTION_MONTHLY_COMPARISON_ANOMALY_THRESHOLD_PERCENT = 30;
 
 const COLLECTION_MONTH_KEY_REGEX = /^\d{4}-\d{2}$/;
 const COMPACT_AMOUNT_FORMATTER = new Intl.NumberFormat("en-MY", {
@@ -11,10 +12,16 @@ const COMPACT_AMOUNT_FORMATTER = new Intl.NumberFormat("en-MY", {
 
 type CollectionMonthlyComparisonMonth = CollectionMonthlyComparisonResponse["months"][number];
 
+export type CollectionMonthlyComparisonAnomalyDirection = "increase" | "decrease";
+
 export type CollectionMonthlyComparisonMonthInsight = CollectionMonthlyComparisonMonth & {
   previousTotal: number | null;
   deltaFromPrevious: number | null;
   percentageFromPrevious: number | null;
+  isAnomaly: boolean;
+  anomalyDirection: CollectionMonthlyComparisonAnomalyDirection | null;
+  anomalyMagnitudePercent: number | null;
+  anomalyLabel: string | null;
   shareOfRangeTotal: number;
   maxTotalRatio: number;
   isBaseMonth: boolean;
@@ -37,6 +44,8 @@ export type CollectionMonthlyComparisonInsights = {
   positiveMonthCount: number;
   negativeMonthCount: number;
   flatMonthCount: number;
+  anomalyMonthCount: number;
+  anomalyMonths: CollectionMonthlyComparisonMonthInsight[];
   monthInsights: CollectionMonthlyComparisonMonthInsight[];
 };
 
@@ -218,6 +227,31 @@ export function formatCollectionMonthlyComparisonMonthDelta(
   return `${formattedDifference} (${formatCollectionMonthlyComparisonPercentage(percentage)})`;
 }
 
+function resolveCollectionMonthlyComparisonAnomaly(
+  difference: number | null,
+  percentage: number | null,
+) {
+  const anomalyMagnitudePercent = percentage === null ? null : Math.abs(percentage);
+  const isAnomaly =
+    difference !== null
+    && difference !== 0
+    && anomalyMagnitudePercent !== null
+    && anomalyMagnitudePercent > COLLECTION_MONTHLY_COMPARISON_ANOMALY_THRESHOLD_PERCENT;
+  const anomalyDirection: CollectionMonthlyComparisonAnomalyDirection | null = isAnomaly
+    ? difference > 0 ? "increase" : "decrease"
+    : null;
+  const anomalyLabel = isAnomaly && anomalyDirection
+    ? `${anomalyDirection === "increase" ? "Unusual jump" : "Unusual drop"} ${formatCollectionMonthlyComparisonPercentage(percentage)} vs previous month`
+    : null;
+
+  return {
+    isAnomaly,
+    anomalyDirection,
+    anomalyMagnitudePercent,
+    anomalyLabel,
+  };
+}
+
 export function resolveCollectionMonthlyComparisonTone(
   direction: CollectionMonthlyComparisonResponse["comparison"]["direction"],
 ): "default" | "success" | "warning" {
@@ -237,6 +271,60 @@ export function buildCollectionMonthlyComparisonAccessibleSummary(
     `${entry.label}: ${formatAmountRM(entry.totalCollection)} across ${entry.recordCount} record(s)`,
   );
   return `${payload.comparison.summary} Monthly totals: ${monthSummaries.join("; ")}.`;
+}
+
+export function buildCollectionMonthlyComparisonTrendExplanation(
+  payload: CollectionMonthlyComparisonResponse,
+): string {
+  const { comparison } = payload;
+  const targetMonth = payload.months.find((month) => month.month === comparison.targetMonth)
+    || payload.months[payload.months.length - 1]
+    || null;
+  const baseMonth = comparison.baseMonth
+    ? payload.months.find((month) => month.month === comparison.baseMonth) || null
+    : null;
+
+  if (!targetMonth) {
+    return "No monthly trend is available for the selected range yet.";
+  }
+
+  if (!baseMonth || comparison.direction === "no_previous_data") {
+    return `${targetMonth.label} recorded ${formatAmountRM(targetMonth.totalCollection)} with no previous month to compare; average per record was ${formatAmountRM(targetMonth.averagePerRecord)}.`;
+  }
+
+  const absoluteDifference = Math.abs(comparison.difference ?? 0);
+  const percentageSegment = comparison.percentageChange === null
+    ? "from a zero base"
+    : `${Math.abs(comparison.percentageChange).toFixed(2)}%`;
+  let totalTrend: string;
+  if (comparison.direction === "increase") {
+    totalTrend = `${targetMonth.label} increased ${percentageSegment} (${formatAmountRM(absoluteDifference)}) versus ${baseMonth.label}`;
+  } else if (comparison.direction === "decrease") {
+    totalTrend = `${targetMonth.label} decreased ${percentageSegment} (${formatAmountRM(absoluteDifference)}) versus ${baseMonth.label}`;
+  } else {
+    totalTrend = `${targetMonth.label} stayed level with ${baseMonth.label} at ${formatAmountRM(targetMonth.totalCollection)}`;
+  }
+
+  const averageDifference = targetMonth.averagePerRecord - baseMonth.averagePerRecord;
+  const absoluteAverageDifference = Math.abs(averageDifference);
+  let averageTrend = "average per record stayed flat";
+  if (absoluteAverageDifference >= 0.005) {
+    const averagePercentage = baseMonth.averagePerRecord > 0
+      ? Math.abs((averageDifference / baseMonth.averagePerRecord) * 100)
+      : null;
+    const qualifier = averagePercentage !== null && averagePercentage < 3 ? " slightly" : "";
+    averageTrend = averageDifference > 0
+      ? `average per record improved${qualifier} by ${formatAmountRM(absoluteAverageDifference)}`
+      : `average per record dipped${qualifier} by ${formatAmountRM(absoluteAverageDifference)}`;
+  }
+
+  const contrastConnector =
+    (comparison.direction === "increase" && averageDifference < -0.005)
+    || (comparison.direction === "decrease" && averageDifference > 0.005)
+      ? "but"
+      : "and";
+
+  return `${totalTrend}, ${contrastConnector} ${averageTrend}.`;
 }
 
 export function buildCollectionMonthlyComparisonInsights(
@@ -299,11 +387,17 @@ export function buildCollectionMonthlyComparisonInsights(
       }
     }
 
+    const anomaly = resolveCollectionMonthlyComparisonAnomaly(
+      deltaFromPrevious,
+      percentageFromPrevious,
+    );
+
     return {
       ...month,
       previousTotal,
       deltaFromPrevious,
       percentageFromPrevious,
+      ...anomaly,
       shareOfRangeTotal: rangeTotal > 0 ? month.totalCollection / rangeTotal : 0,
       maxTotalRatio: maxTotal > 0 ? month.totalCollection / maxTotal : 0,
       isBaseMonth: payload.comparison.baseMonth === month.month,
@@ -338,6 +432,7 @@ export function buildCollectionMonthlyComparisonInsights(
       },
       null,
     );
+  const anomalyMonths = monthInsights.filter((month) => month.isAnomaly);
 
   return {
     rangeTotal,
@@ -353,6 +448,8 @@ export function buildCollectionMonthlyComparisonInsights(
     positiveMonthCount,
     negativeMonthCount,
     flatMonthCount,
+    anomalyMonthCount: anomalyMonths.length,
+    anomalyMonths,
     monthInsights,
   };
 }
@@ -379,6 +476,9 @@ export function buildCollectionMonthlyComparisonCsv(
     "Share Of Range",
     "Difference From Previous",
     "Percentage From Previous",
+    "Anomaly Status",
+    "Anomaly Direction",
+    "Anomaly Threshold Percent",
     "Monthly Target",
     "Target Difference",
     "Target Status",
@@ -399,6 +499,9 @@ export function buildCollectionMonthlyComparisonCsv(
       (month.shareOfRangeTotal * 100).toFixed(2),
       month.deltaFromPrevious === null ? "" : month.deltaFromPrevious.toFixed(2),
       month.percentageFromPrevious === null ? "" : month.percentageFromPrevious.toFixed(2),
+      month.anomalyLabel || "",
+      month.anomalyDirection || "",
+      COLLECTION_MONTHLY_COMPARISON_ANOMALY_THRESHOLD_PERCENT.toFixed(2),
       target === null ? "" : target.toFixed(2),
       targetDifference === null ? "" : targetDifference.toFixed(2),
       targetStatus,

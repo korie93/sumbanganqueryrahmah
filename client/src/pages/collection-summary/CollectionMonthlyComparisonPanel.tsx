@@ -15,6 +15,7 @@ import {
   buildCollectionMonthlyComparisonInsights,
   buildCollectionMonthlyComparisonPresetRanges,
   buildCollectionMonthlyComparisonTargetSummary,
+  buildCollectionMonthlyComparisonTrendExplanation,
   formatCollectionMonthlyComparisonDifference,
   formatCollectionMonthlyComparisonMonthDelta,
   formatCollectionMonthlyComparisonPercentage,
@@ -79,6 +80,9 @@ export function CollectionMonthlyComparisonPanel({
     : "default";
   const comparisonSummary = data
     ? buildCollectionMonthlyComparisonAccessibleSummary(data)
+    : null;
+  const trendExplanation = data
+    ? buildCollectionMonthlyComparisonTrendExplanation(data)
     : null;
   const insights = useMemo(
     () => (data ? buildCollectionMonthlyComparisonInsights(data) : null),
@@ -340,6 +344,16 @@ export function CollectionMonthlyComparisonPanel({
               <div className="rounded-2xl border border-border/60 bg-background px-4 py-4 shadow-sm">
                 <p className="text-sm font-medium text-foreground">Comparison summary</p>
                 <p className="mt-1 text-sm leading-6 text-muted-foreground">{comparison?.summary}</p>
+                {trendExplanation ? (
+                  <div className="mt-3 rounded-xl border border-border/60 bg-muted/20 px-3 py-3">
+                    <p className="text-xs font-medium uppercase tracking-normal text-muted-foreground">
+                      Trend explanation
+                    </p>
+                    <p className="mt-1 text-sm leading-6 text-foreground">
+                      {trendExplanation}
+                    </p>
+                  </div>
+                ) : null}
                 <div className="mt-3 flex flex-wrap gap-2 text-xs text-foreground/68 dark:text-foreground/74">
                   <span className="rounded-full border border-border/60 bg-muted/20 px-2.5 py-1">
                     {insights.positiveMonthCount} month(s) up
@@ -350,6 +364,11 @@ export function CollectionMonthlyComparisonPanel({
                   <span className="rounded-full border border-border/60 bg-muted/20 px-2.5 py-1">
                     {insights.emptyMonthCount} empty month(s)
                   </span>
+                  {insights.anomalyMonthCount > 0 ? (
+                    <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 font-medium text-amber-700 dark:text-amber-300">
+                      {insights.anomalyMonthCount} anomaly month(s)
+                    </span>
+                  ) : null}
                   {targetSummary ? (
                     <span className="rounded-full border border-border/60 bg-muted/20 px-2.5 py-1">
                       {targetSummary.monthsAtOrAboveTarget} month(s) at target
@@ -424,6 +443,19 @@ export function CollectionMonthlyComparisonPanel({
                       : "No month decreased"}
                   </p>
                 </div>
+                <div className="rounded-2xl border border-border/60 bg-background px-4 py-3 shadow-sm">
+                  <p className="text-xs font-medium uppercase tracking-normal text-muted-foreground">
+                    Audit watch
+                  </p>
+                  <p className="mt-1 text-lg font-semibold text-foreground">
+                    {insights.anomalyMonthCount > 0
+                      ? `${insights.anomalyMonthCount} month(s)`
+                      : "No anomaly"}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {insights.anomalyMonths[0]?.anomalyLabel || "No month moved more than 30%"}
+                  </p>
+                </div>
                 {targetSummary ? (
                   <div className="rounded-2xl border border-border/60 bg-background px-4 py-3 shadow-sm">
                     <p className="text-xs font-medium uppercase tracking-normal text-muted-foreground">
@@ -489,6 +521,17 @@ export function CollectionMonthlyComparisonPanel({
                               Peak
                             </span>
                           ) : null}
+                          {month.isAnomaly ? (
+                            <span
+                              className={
+                                month.anomalyDirection === "decrease"
+                                  ? "rounded-full bg-destructive/10 px-2 py-0.5 text-[11px] font-medium text-destructive"
+                                  : "rounded-full bg-amber-500/10 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:text-amber-300"
+                              }
+                            >
+                              {month.anomalyDirection === "decrease" ? "Anomaly drop" : "Anomaly jump"}
+                            </span>
+                          ) : null}
                           {targetSummary ? (
                             <span
                               className={
@@ -509,7 +552,13 @@ export function CollectionMonthlyComparisonPanel({
                       </div>
                       <div className="h-2 overflow-hidden rounded-full bg-muted">
                         <div
-                          className="h-full rounded-full bg-primary"
+                          className={
+                            month.isAnomaly
+                              ? month.anomalyDirection === "decrease"
+                                ? "h-full rounded-full bg-destructive"
+                                : "h-full rounded-full bg-amber-500"
+                              : "h-full rounded-full bg-primary"
+                          }
                           style={{
                             width: month.maxTotalRatio > 0
                               ? `${Math.max(5, Math.round(month.maxTotalRatio * 100))}%`
@@ -531,6 +580,11 @@ export function CollectionMonthlyComparisonPanel({
                         <span>
                           {month.recordCount === 0 ? "No collection recorded" : "Active month"}
                         </span>
+                        {month.anomalyLabel ? (
+                          <span className="font-medium text-amber-700 dark:text-amber-300">
+                            {month.anomalyLabel}
+                          </span>
+                        ) : null}
                         {targetSummary ? (
                           <span>
                             Target gap {formatCollectionMonthlyComparisonDifference(

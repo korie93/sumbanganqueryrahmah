@@ -40,6 +40,25 @@ const comparisonPayload: CollectionMonthlyComparisonResponse = {
   },
 };
 
+const anomalyPayload: CollectionMonthlyComparisonResponse = {
+  ...comparisonPayload,
+  months: [
+    comparisonPayload.months[0]!,
+    {
+      ...comparisonPayload.months[1]!,
+      totalCollection: 95000,
+      averagePerRecord: 650.68,
+    },
+  ],
+  comparison: {
+    ...comparisonPayload.comparison,
+    targetTotal: 95000,
+    difference: 24550,
+    percentageChange: 34.85,
+    summary: "Collection increased by RM24,550.00 (+34.85%) compared to Apr 2026.",
+  },
+};
+
 test("CollectionMonthlyComparisonPanel renders accessible controls and action buttons", () => {
   const markup = renderToStaticMarkup(
     createElement(CollectionMonthlyComparisonPanel, {
@@ -161,6 +180,10 @@ test("CollectionMonthlyComparisonPanel renders monthly totals and comparison sum
   assert.match(markup, /Weakest active/);
   assert.match(markup, /Biggest jump/);
   assert.match(markup, /Biggest drop/);
+  assert.match(markup, /Audit watch/);
+  assert.match(markup, /No anomaly/);
+  assert.match(markup, /Trend explanation/);
+  assert.match(markup, /average per record dipped slightly/);
   assert.match(markup, /Target gap/);
   assert.match(markup, /Above target/);
   assert.match(markup, /Below target/);
@@ -171,4 +194,31 @@ test("CollectionMonthlyComparisonPanel renders monthly totals and comparison sum
   assert.match(markup, /View records/);
   assert.match(markup, /Avg RM(?:&nbsp;|\u00a0| )572\.76/);
   assert.match(markup, /chart slot/);
+});
+
+test("CollectionMonthlyComparisonPanel highlights anomaly months for audit review", () => {
+  const markup = renderToStaticMarkup(
+    createElement(CollectionMonthlyComparisonPanel, {
+      canFilterByNickname: false,
+      availableNicknames: [],
+      selectedNickname: "Collector Alpha",
+      startMonth: "2026-04",
+      endMonth: "2026-05",
+      loading: false,
+      errorMessage: null,
+      data: anomalyPayload,
+      hasAvailableNickname: true,
+      onSelectedNicknameChange: () => undefined,
+      onStartMonthChange: () => undefined,
+      onEndMonthChange: () => undefined,
+      onApply: () => undefined,
+      onRangePresetApply: () => undefined,
+      onReset: () => undefined,
+      onMonthSelect: () => undefined,
+    }),
+  );
+
+  assert.match(markup, /1 anomaly month\(s\)/);
+  assert.match(markup, /Anomaly jump/);
+  assert.match(markup, /Unusual jump \+34\.85% vs previous month/);
 });

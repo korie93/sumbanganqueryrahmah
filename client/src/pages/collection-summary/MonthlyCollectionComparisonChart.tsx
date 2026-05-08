@@ -74,6 +74,12 @@ function MonthlyCollectionComparisonTooltip({
             )}
           </dd>
         </div>
+        {point?.anomalyLabel ? (
+          <div className="flex justify-between gap-3 text-amber-700 dark:text-amber-300">
+            <dt>Audit flag</dt>
+            <dd className="text-right font-medium">{point.anomalyLabel}</dd>
+          </div>
+        ) : null}
         {monthlyTargetAmount && monthlyTargetAmount > 0 ? (
           <div className="flex justify-between gap-3">
             <dt>Target gap</dt>
@@ -104,6 +110,7 @@ export function MonthlyCollectionComparisonChart({
     () => buildCollectionMonthlyComparisonTargetSummary(data, monthlyTargetAmount),
     [data, monthlyTargetAmount],
   );
+  const summaryGridClass = targetSummary ? "sm:grid-cols-5" : "sm:grid-cols-4";
 
   return (
     <div className="rounded-2xl border border-border/60 bg-background p-3 shadow-sm">
@@ -170,7 +177,7 @@ export function MonthlyCollectionComparisonChart({
         </div>
       </div>
 
-      <div className={`mt-3 grid gap-2 ${targetSummary ? "sm:grid-cols-4" : "sm:grid-cols-3"}`}>
+      <div className={`mt-3 grid gap-2 ${summaryGridClass}`}>
         <div className="rounded-lg border border-border/50 bg-muted/20 px-3 py-2">
           <p className="text-[11px] font-medium uppercase tracking-normal text-muted-foreground">
             Range total
@@ -193,6 +200,16 @@ export function MonthlyCollectionComparisonChart({
           </p>
           <p className="mt-1 text-sm font-semibold text-foreground">
             {insights.activeMonthCount}/{data.months.length} months
+          </p>
+        </div>
+        <div className="rounded-lg border border-border/50 bg-muted/20 px-3 py-2">
+          <p className="text-[11px] font-medium uppercase tracking-normal text-muted-foreground">
+            Audit watch
+          </p>
+          <p className="mt-1 text-sm font-semibold text-foreground">
+            {insights.anomalyMonthCount > 0
+              ? `${insights.anomalyMonthCount} anomaly month(s)`
+              : "No anomaly"}
           </p>
         </div>
         {targetSummary ? (
@@ -291,6 +308,10 @@ export function MonthlyCollectionComparisonChart({
                     fill={
                       entry.recordCount === 0
                         ? "hsl(var(--muted))"
+                        : entry.isAnomaly
+                          ? entry.anomalyDirection === "decrease"
+                            ? "hsl(var(--destructive))"
+                            : "hsl(var(--chart-5))"
                         : entry.isPeakMonth
                           ? "hsl(var(--primary))"
                           : "hsl(var(--chart-3))"
