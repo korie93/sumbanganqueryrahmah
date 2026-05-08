@@ -4,6 +4,7 @@ import {
   buildPostgresStorageBootstrapPlan,
   PostgresStorageCore,
 } from "../../storage/postgres/postgres-storage-core";
+import { runtimeConfig } from "../../config/runtime";
 
 const EXPECTED_INIT_STEPS = [
   "users",
@@ -72,6 +73,10 @@ class InitGuardStorage extends PostgresStorageCore {
     this.markUsersStepStarted = resolve;
   });
 
+  constructor(private readonly blockUsersStep = true) {
+    super();
+  }
+
   releaseUsersTable() {
     if (!this.releaseUsersStep) {
       throw new Error("users table step has not started");
@@ -83,7 +88,7 @@ class InitGuardStorage extends PostgresStorageCore {
 
   private async record(step: (typeof EXPECTED_INIT_STEPS)[number]) {
     this.calls.push(step);
-    if (step === "users") {
+    if (step === "users" && this.blockUsersStep) {
       this.markUsersStepStarted();
       await new Promise<void>((resolve) => {
         this.releaseUsersStep = resolve;
@@ -213,6 +218,32 @@ class RetryableInitStorage extends PostgresStorageCore {
   protected override async ensureSettingsTables() {}
 }
 
+async function withRuntimeConfigOverrides<T>(
+  overrides: {
+    databaseMode?: "runtime" | "migration";
+    isProductionLike?: boolean;
+  },
+  fn: () => Promise<T>,
+): Promise<T> {
+  const previousDatabaseMode = runtimeConfig.bootstrap.databaseMode;
+  const previousProductionLike = runtimeConfig.app.isProductionLike;
+
+  if (overrides.databaseMode !== undefined) {
+    runtimeConfig.bootstrap.databaseMode = overrides.databaseMode;
+  }
+
+  if (overrides.isProductionLike !== undefined) {
+    runtimeConfig.app.isProductionLike = overrides.isProductionLike;
+  }
+
+  try {
+    return await fn();
+  } finally {
+    runtimeConfig.bootstrap.databaseMode = previousDatabaseMode;
+    runtimeConfig.app.isProductionLike = previousProductionLike;
+  }
+}
+
 test("PostgresStorageCore exposes a reusable bootstrap preflight plan", () => {
   const plan = buildPostgresStorageBootstrapPlan(createNoopBootstrapHandlers());
 
@@ -253,6 +284,22 @@ test("PostgresStorageCore.init shares concurrent bootstrap work and skips comple
   await storage.init();
 
   assert.deepEqual(storage.calls, [...EXPECTED_INIT_STEPS]);
+});
+
+test("PostgresStorageCore.init preserves runtime bootstrap on production-like hosts", async () => {
+  await withRuntimeConfigOverrides(
+    {
+      databaseMode: "runtime",
+      isProductionLike: true,
+    },
+    async () => {
+      const storage = new InitGuardStorage(false);
+
+      await storage.init();
+
+      assert.deepEqual(storage.calls, [...EXPECTED_INIT_STEPS]);
+    },
+  );
 });
 
 test("PostgresStorageCore.init remains retryable after a startup failure", async () => {

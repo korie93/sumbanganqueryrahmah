@@ -69,7 +69,7 @@ Avoid using `db:push` as the default workflow in this repository. The current Dr
 
 `PostgresStorageCore.init()` still runs idempotent bootstrap checks during process startup for hybrid-managed/runtime-managed domains. This is intentionally preserved for compatibility while the database remains hybrid. Startup now emits per-step timing/failure context so slow or fragile bootstrap sections can be identified before changing rollout behavior.
 
-Outside strict local development, startup now defaults to migration-first behavior: `SQR_DB_BOOTSTRAP_MODE=migration` unless explicitly overridden. In that mode startup verifies the expected schema with the existing PostgreSQL advisory-lock-backed migration pathway and skips runtime mutation. Strict local development still defaults to `SQR_DB_BOOTSTRAP_MODE=runtime` so fresh installs remain bootable during development.
+Startup defaults to `SQR_DB_BOOTSTRAP_MODE=runtime` for backward compatibility and fresh installs while the database remains hybrid. Set `SQR_DB_BOOTSTRAP_MODE=migration` only after the target environment reliably runs reviewed migrations before app startup. In migration mode startup verifies the expected schema with the existing PostgreSQL advisory-lock-backed migration pathway and skips runtime mutation. Runtime bootstrap on production-like hosts remains supported as a compatibility path and emits a warning so operators can track migration-first readiness without breaking existing deployments.
 
 Do not disable runtime bootstrap in production until the affected table domain has:
 

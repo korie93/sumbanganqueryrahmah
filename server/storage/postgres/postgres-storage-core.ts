@@ -156,7 +156,7 @@ export class PostgresStorageCore {
   private async runInit() {
     const startedAt = performance.now();
     const databaseBootstrapMode = runtimeConfig.bootstrap.databaseMode;
-    if (runtimeConfig.app.isProductionLike || databaseBootstrapMode === "migration") {
+    if (databaseBootstrapMode === "migration") {
       logger.info("PostgreSQL runtime schema verification starting", {
         databaseBootstrapMode,
         productionLike: runtimeConfig.app.isProductionLike,
@@ -167,6 +167,15 @@ export class PostgresStorageCore {
         durationMs: Number((performance.now() - startedAt).toFixed(1)),
       });
       return;
+    }
+
+    if (runtimeConfig.app.isProductionLike) {
+      logger.warn("PostgreSQL runtime bootstrap is enabled on a production-like host", {
+        databaseBootstrapMode,
+        productionLike: true,
+        schemaCoupledRuntimeBootstrap: true,
+        migrationFirstRecommended: true,
+      });
     }
 
     const steps = buildPostgresStorageBootstrapPlan({
@@ -257,7 +266,7 @@ export class PostgresStorageCore {
     requiredTables: readonly string[],
     bootstrap: () => Promise<void>,
   ) {
-    if (runtimeConfig.app.isProductionLike || runtimeConfig.bootstrap.databaseMode === "migration") {
+    if (runtimeConfig.bootstrap.databaseMode === "migration") {
       await verifyRuntimeSchemaReady(undefined, requiredTables);
       return;
     }
