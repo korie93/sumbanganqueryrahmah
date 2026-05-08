@@ -48,6 +48,13 @@ export class CollectionRecordService extends CollectionServiceSupport {
     return this.readOperations.getMonthlyComparison(userInput, query);
   }
 
+  async getMonthlyTarget(
+    userInput: Parameters<CollectionServiceSupport["requireUser"]>[0],
+    query: SummaryQuery,
+  ) {
+    return this.dailyOperations.getMonthlyTarget(userInput, query);
+  }
+
   async getNicknameSummary(
     userInput: Parameters<CollectionServiceSupport["requireUser"]>[0],
     query: ListQuery,

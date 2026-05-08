@@ -6,6 +6,7 @@ import {
   apiPaginationMetaSchema,
   auditLogRecordSchema,
   collectionMonthlyComparisonResponseSchema,
+  collectionMonthlyTargetResponseSchema,
   importListItemSchema,
   normalizeApiPaginationMeta,
 } from "@shared/api-contracts";
@@ -239,6 +240,36 @@ test("collection monthly comparison contract accepts bounded monthly analytics p
   });
 
   assert.equal(parsed.success, true);
+});
+
+test("collection monthly target contract accepts configured and missing targets", () => {
+  const configured = collectionMonthlyTargetResponseSchema.safeParse({
+    ok: true,
+    nickname: "Collector Alpha",
+    month: {
+      key: "2026-05",
+      year: 2026,
+      month: 5,
+    },
+    monthlyTarget: 80000,
+    configured: true,
+    source: "configured",
+  });
+  assert.equal(configured.success, true);
+
+  const missing = collectionMonthlyTargetResponseSchema.safeParse({
+    ok: true,
+    nickname: "Collector Alpha",
+    month: {
+      key: "2026-06",
+      year: 2026,
+      month: 6,
+    },
+    monthlyTarget: 0,
+    configured: false,
+    source: "missing",
+  });
+  assert.equal(missing.success, true);
 });
 
 test("imports API wrappers accept payloads that match the shared contract", async () => {

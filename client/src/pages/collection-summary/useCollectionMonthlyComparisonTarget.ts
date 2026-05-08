@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CollectionMonthlyComparisonResponse } from "@/lib/api";
-import { getCollectionDailyOverview } from "@/lib/api";
+import { getCollectionMonthlyTarget } from "@/lib/api";
 import { parseApiError } from "@/pages/collection/utils";
 import { parseCollectionMonthKey } from "./collection-monthly-comparison-utils";
 
@@ -17,24 +17,26 @@ function isAbortError(error: unknown) {
     : error instanceof Error && error.name === "AbortError";
 }
 
-function resolveTargetRequest(data: CollectionMonthlyComparisonResponse | null) {
-  if (!data) {
+function resolveTargetRequest(params: {
+  nickname: string;
+  targetMonth: string;
+  targetLabel: string;
+}) {
+  const targetMonth = String(params.targetMonth || "").trim();
+  const nickname = String(params.nickname || "").trim();
+  if (!targetMonth || !nickname) {
     return null;
   }
 
-  const targetMonth = data.comparison.targetMonth || data.endMonth;
   const parsed = parseCollectionMonthKey(targetMonth);
-  const nickname = String(data.nickname || "").trim();
-  if (!parsed || !nickname) {
+  if (!parsed) {
     return null;
   }
 
   return {
     nickname,
     targetMonth,
-    targetLabel: data.comparison.targetLabel || targetMonth,
-    year: parsed.year,
-    month: parsed.month,
+    targetLabel: String(params.targetLabel || "").trim() || targetMonth,
   };
 }
 
@@ -47,7 +49,17 @@ export function useCollectionMonthlyComparisonTarget(
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const targetRequest = useMemo(() => resolveTargetRequest(data), [data]);
+  const dataNickname = data?.nickname || "";
+  const dataTargetMonth = data?.comparison.targetMonth || data?.endMonth || "";
+  const dataTargetLabel = data?.comparison.targetLabel || dataTargetMonth;
+  const targetRequest = useMemo(
+    () => resolveTargetRequest({
+      nickname: dataNickname,
+      targetMonth: dataTargetMonth,
+      targetLabel: dataTargetLabel,
+    }),
+    [dataNickname, dataTargetLabel, dataTargetMonth],
+  );
   const targetRequestKey = targetRequest
     ? `${targetRequest.nickname.toLowerCase()}|${targetRequest.targetMonth}`
     : "";
@@ -77,11 +89,10 @@ export function useCollectionMonthlyComparisonTarget(
     setErrorMessage(null);
 
     try {
-      const response = await getCollectionDailyOverview(
+      const response = await getCollectionMonthlyTarget(
         {
-          year: targetRequest.year,
-          month: targetRequest.month,
-          usernames: [targetRequest.nickname],
+          month: targetRequest.targetMonth,
+          nickname: targetRequest.nickname,
         },
         {
           signal: controller.signal,
@@ -92,7 +103,7 @@ export function useCollectionMonthlyComparisonTarget(
         return;
       }
 
-      const configuredTarget = Number(response.summary.monthlyTarget || 0);
+      const configuredTarget = Number(response.monthlyTarget || 0);
       setMonthlyTargetAmount(Number.isFinite(configuredTarget) && configuredTarget > 0
         ? configuredTarget
         : null);

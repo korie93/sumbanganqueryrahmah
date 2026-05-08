@@ -1,13 +1,22 @@
 import { badRequest } from "../../http/errors";
-import { parseCollectionAmountMyrNumber } from "../../../shared/collection-amount-types";
+import {
+  parseCollectionAmountMyrInput,
+  parseCollectionAmountMyrNumber,
+} from "../../../shared/collection-amount-types";
 import type { AuthenticatedUser } from "../../auth/guards";
 import { resolveCurrentCollectionNicknameFromSession } from "../../routes/collection-access";
 import {
   isValidCollectionDate,
+  isValidCollectionMonthKey,
   normalizeCollectionText,
 } from "../../routes/collection.validation";
 import { getCollectionDailyStatusMessage } from "./collection-daily-utils";
+import { getDailyTargetForOwner } from "./collection-daily-target-operations";
 import { CollectionDailyOverviewService } from "./collection-daily-overview.service";
+import {
+  parseRequestedDailyUsernames,
+  resolveDailySelectedUsers,
+} from "./collection-daily-user-operations";
 import {
   CollectionServiceSupport,
   type CollectionStoragePort,
@@ -61,6 +70,66 @@ export class CollectionDailyReadOperations extends CollectionServiceSupport {
       carryForwardRule:
         "Daily requirement is calculated from remaining target divided by remaining working days, capped by the monthly target.",
       freshness,
+    };
+  }
+
+  async getMonthlyTarget(userInput: AuthenticatedUser | undefined, query: ListQuery) {
+    const user = this.requireUserFn(userInput);
+    const monthKey = normalizeCollectionText(query.month || query.targetMonth);
+    if (!monthKey || !isValidCollectionMonthKey(monthKey)) {
+      throw badRequest("Invalid month.");
+    }
+
+    const [yearText, monthText] = monthKey.split("-");
+    const year = Number.parseInt(yearText || "", 10);
+    const month = Number.parseInt(monthText || "", 10);
+    const [availableUsers, currentNickname] = await Promise.all([
+      this.dailyOverviewService.listAvailableDailyUsers(user),
+      resolveCurrentCollectionNicknameFromSession(this.storage, user),
+    ]);
+    const selectedUsers = resolveDailySelectedUsers(
+      user,
+      parseRequestedDailyUsernames(query),
+      availableUsers,
+      currentNickname,
+    );
+
+    if (selectedUsers.length !== 1) {
+      throw badRequest("Please select exactly one staff nickname to load monthly target.");
+    }
+
+    const selectedUser = selectedUsers[0]!;
+    const currentNicknameLower = normalizeCollectionText(currentNickname).toLowerCase();
+    const currentUsernameLower = normalizeCollectionText(user.username).toLowerCase();
+    const fallbackUsernames =
+      currentNicknameLower &&
+      currentUsernameLower &&
+      selectedUser.username.toLowerCase() === currentNicknameLower &&
+      currentNicknameLower !== currentUsernameLower
+        ? [currentUsernameLower]
+        : [];
+    const target = await getDailyTargetForOwner(
+      this.storage,
+      selectedUser.username,
+      year,
+      month,
+      fallbackUsernames,
+    );
+    const monthlyTarget = parseCollectionAmountMyrInput(target?.monthlyTarget ?? 0, {
+      allowZero: true,
+    }) ?? 0;
+
+    return {
+      ok: true as const,
+      nickname: selectedUser.username,
+      month: {
+        key: monthKey,
+        year,
+        month,
+      },
+      monthlyTarget,
+      configured: Boolean(target),
+      source: target ? "configured" as const : "missing" as const,
     };
   }
 

@@ -2,11 +2,15 @@ import { apiRequest } from "../api-client";
 import { parseApiJson } from "./contract";
 import type {
   CollectionMonthlyComparisonResponse,
+  CollectionMonthlyTargetResponse,
   CollectionMonthlySummary,
   CollectionNicknameSummaryResponse,
   CollectionReportFreshness,
 } from "./collection-types";
-import { collectionMonthlyComparisonResponseSchema } from "@shared/api-contracts";
+import {
+  collectionMonthlyComparisonResponseSchema,
+  collectionMonthlyTargetResponseSchema,
+} from "@shared/api-contracts";
 
 export async function getCollectionMonthlySummary(filters: { year: number; nickname?: string | undefined; nicknames?: string[] | undefined }) {
   const params = new URLSearchParams();
@@ -59,6 +63,33 @@ export async function getCollectionMonthlyComparison(
     collectionMonthlyComparisonResponseSchema,
     "/api/collection/monthly-comparison",
   ) as Promise<CollectionMonthlyComparisonResponse>;
+}
+
+export async function getCollectionMonthlyTarget(
+  filters: {
+    nickname?: string | undefined;
+    month: string;
+  },
+  options?: CollectionReportRequestOptions,
+) {
+  const params = new URLSearchParams();
+  const nickname = String(filters.nickname || "").trim();
+  if (nickname) {
+    params.set("nickname", nickname);
+  }
+  params.set("month", String(filters.month || "").trim());
+
+  const response = await apiRequest(
+    "GET",
+    `/api/collection/monthly-target?${params.toString()}`,
+    undefined,
+    options,
+  );
+  return parseApiJson(
+    response,
+    collectionMonthlyTargetResponseSchema,
+    "/api/collection/monthly-target",
+  ) as Promise<CollectionMonthlyTargetResponse>;
 }
 
 export async function getCollectionNicknameSummary(filters: {

@@ -23,6 +23,7 @@ const OBSERVED_COLLECTION_ROUTE_PATHS = new Set([
   "/api/collection/summary",
   "/api/collection/list",
   "/api/collection/nickname-summary",
+  "/api/collection/monthly-target",
   "/api/collection/daily/overview",
   "/api/collection/daily/day-details",
 ]);

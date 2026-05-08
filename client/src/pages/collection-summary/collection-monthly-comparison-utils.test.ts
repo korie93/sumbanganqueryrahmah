@@ -7,6 +7,7 @@ import {
   buildCollectionMonthlyComparisonCsv,
   buildCollectionMonthlyComparisonCsvFilename,
   buildCollectionMonthlyComparisonInsights,
+  buildCollectionMonthlyComparisonPrintReportHtml,
   buildCollectionMonthlyComparisonPresetRanges,
   buildCollectionMonthlyComparisonTargetSummary,
   buildCollectionMonthlyComparisonTrendExplanation,
@@ -178,4 +179,21 @@ test("collection monthly comparison helpers summarize targets and export CSV", (
     buildCollectionMonthlyComparisonCsvFilename(comparisonPayload),
     "SQR-monthly-comparison-collector-alpha-2026-04-to-2026-05.csv",
   );
+});
+
+test("collection monthly comparison helpers build a print-friendly report with chart, target, and anomaly details", () => {
+  const html = buildCollectionMonthlyComparisonPrintReportHtml(anomalyPayload, {
+    monthlyTargetAmount: 80000,
+    monthlyTargetSourceLabel: "May 2026",
+    generatedAt: new Date("2026-05-08T09:30:00.000Z"),
+  });
+
+  assert.match(html, /Monthly Collection Comparison/);
+  assert.match(html, /Collector Alpha/);
+  assert.match(html, /role="img" aria-label="Monthly comparison bar chart"/);
+  assert.match(html, /Monthly target/);
+  assert.match(html, /Target source: May 2026/);
+  assert.match(html, /Unusual jump \+34\.85% vs previous month/);
+  assert.match(html, /Print or save PDF/);
+  assert.match(html, /window\.print/);
 });

@@ -293,6 +293,19 @@ export type CollectionDailyOverviewResponse = {
   freshness?: CollectionReportFreshness;
 };
 
+export type CollectionMonthlyTargetResponse = {
+  ok: boolean;
+  nickname: string;
+  month: {
+    key: string;
+    year: number;
+    month: number;
+  };
+  monthlyTarget: CollectionAmountMyrNumber;
+  configured: boolean;
+  source: "configured" | "missing";
+};
+
 export type CollectionDailyDayDetailsResponse = {
   ok: boolean;
   username: string;

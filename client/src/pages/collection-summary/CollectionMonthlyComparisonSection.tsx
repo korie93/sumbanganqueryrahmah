@@ -5,6 +5,7 @@ import { CollectionMonthlyComparisonPanel } from "./CollectionMonthlyComparisonP
 import {
   buildCollectionMonthlyComparisonCsv,
   buildCollectionMonthlyComparisonCsvFilename,
+  buildCollectionMonthlyComparisonPrintReportHtml,
 } from "./collection-monthly-comparison-utils";
 import { useCollectionMonthlyComparisonData } from "./useCollectionMonthlyComparisonData";
 import { useCollectionMonthlyComparisonMonthDialog } from "./useCollectionMonthlyComparisonMonthDialog";
@@ -57,6 +58,34 @@ function CollectionMonthlyComparisonSection({
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     downloadBlob(blob, buildCollectionMonthlyComparisonCsvFilename(comparisonData.data));
   }, [comparisonData.data, comparisonTarget.monthlyTargetAmount]);
+  const handlePrintReport = useCallback(() => {
+    if (!comparisonData.data) {
+      return;
+    }
+
+    const reportHtml = buildCollectionMonthlyComparisonPrintReportHtml(
+      comparisonData.data,
+      {
+        monthlyTargetAmount: comparisonTarget.monthlyTargetAmount,
+        monthlyTargetSourceLabel: comparisonTarget.sourceLabel,
+      },
+    );
+    const reportWindow = window.open("", "_blank", "width=1120,height=820");
+    if (!reportWindow) {
+      const blob = new Blob([reportHtml], { type: "text/html;charset=utf-8;" });
+      downloadBlob(
+        blob,
+        buildCollectionMonthlyComparisonCsvFilename(comparisonData.data).replace(/\.csv$/i, ".html"),
+      );
+      return;
+    }
+
+    reportWindow.opener = null;
+    reportWindow.document.open();
+    reportWindow.document.write(reportHtml);
+    reportWindow.document.close();
+    reportWindow.focus();
+  }, [comparisonData.data, comparisonTarget.monthlyTargetAmount, comparisonTarget.sourceLabel]);
 
   return (
     <>
@@ -83,6 +112,7 @@ function CollectionMonthlyComparisonSection({
         monthlyTargetErrorMessage={comparisonTarget.errorMessage}
         monthlyTargetSourceLabel={comparisonTarget.sourceLabel}
         onExportCsv={handleExportCsv}
+        onPrintReport={handlePrintReport}
         onMonthSelect={comparisonMonthDialog.handleSelectMonth}
         chartSlot={
           comparisonData.data ? (

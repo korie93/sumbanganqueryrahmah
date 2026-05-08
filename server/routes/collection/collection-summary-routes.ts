@@ -32,6 +32,13 @@ export function registerCollectionSummaryRoutes(context: CollectionRouteContext)
   );
 
   app.get(
+    "/api/collection/monthly-target",
+    ...reportAccess,
+    jsonRoute("Failed to load monthly collection target.", (req) =>
+      collectionService.getMonthlyTarget(req.user, req.query as Record<string, unknown>)),
+  );
+
+  app.get(
     "/api/collection/purge-summary",
     ...superuserReportAccess,
     jsonRoute("Failed to load purge summary.", (req) => collectionService.getPurgeSummary(req.user)),

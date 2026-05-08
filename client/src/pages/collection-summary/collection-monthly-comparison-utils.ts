@@ -513,3 +513,226 @@ export function buildCollectionMonthlyComparisonCsvFilename(
     || "staff";
   return `SQR-monthly-comparison-${safeNickname}-${payload.startMonth}-to-${payload.endMonth}.csv`;
 }
+
+function escapeCollectionMonthlyComparisonHtml(value: string | number | null | undefined): string {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function formatCollectionMonthlyComparisonReportDate(date: Date): string {
+  if (!Number.isFinite(date.getTime())) {
+    return "";
+  }
+  return new Intl.DateTimeFormat("en-MY", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(date);
+}
+
+function buildCollectionMonthlyComparisonReportChartSvg(
+  insights: CollectionMonthlyComparisonInsights,
+  monthlyTargetAmount: number | null,
+): string {
+  const width = 760;
+  const height = 260;
+  const padding = { top: 22, right: 22, bottom: 44, left: 56 };
+  const plotWidth = width - padding.left - padding.right;
+  const plotHeight = height - padding.top - padding.bottom;
+  const maxCollection = Math.max(0, ...insights.monthInsights.map((month) => month.totalCollection));
+  const maxValue = Math.max(maxCollection, monthlyTargetAmount || 0, 1);
+  const scaleMax = maxValue * 1.12;
+  const slotWidth = plotWidth / Math.max(1, insights.monthInsights.length);
+  const barWidth = Math.max(16, Math.min(44, slotWidth * 0.58));
+  const targetY = monthlyTargetAmount && monthlyTargetAmount > 0
+    ? padding.top + plotHeight - ((monthlyTargetAmount / scaleMax) * plotHeight)
+    : null;
+
+  const bars = insights.monthInsights.map((month, index) => {
+    const barHeight = Math.max(2, (month.totalCollection / scaleMax) * plotHeight);
+    const x = padding.left + (slotWidth * index) + ((slotWidth - barWidth) / 2);
+    const y = padding.top + plotHeight - barHeight;
+    const fill = month.isAnomaly
+      ? month.anomalyDirection === "decrease" ? "#dc2626" : "#d97706"
+      : month.isTargetMonth ? "#047857" : "#2563eb";
+    const label = escapeCollectionMonthlyComparisonHtml(month.label.replace(/\s+\d{4}$/, ""));
+    return [
+      `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barWidth.toFixed(1)}" height="${barHeight.toFixed(1)}" rx="6" fill="${fill}" />`,
+      `<text x="${(x + barWidth / 2).toFixed(1)}" y="${height - 18}" text-anchor="middle" font-size="11" fill="#475569">${label}</text>`,
+    ].join("");
+  }).join("");
+
+  const targetLine = targetY === null
+    ? ""
+    : [
+      `<line x1="${padding.left}" y1="${targetY.toFixed(1)}" x2="${width - padding.right}" y2="${targetY.toFixed(1)}" stroke="#7c3aed" stroke-width="2" stroke-dasharray="6 6" />`,
+      `<text x="${width - padding.right}" y="${(targetY - 6).toFixed(1)}" text-anchor="end" font-size="11" fill="#5b21b6">Monthly target</text>`,
+    ].join("");
+
+  return `
+    <svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Monthly comparison bar chart" class="report-chart">
+      <rect x="0" y="0" width="${width}" height="${height}" rx="18" fill="#f8fafc" />
+      <line x1="${padding.left}" y1="${padding.top + plotHeight}" x2="${width - padding.right}" y2="${padding.top + plotHeight}" stroke="#cbd5e1" />
+      <text x="${padding.left}" y="18" font-size="11" fill="#64748b">Total collection by month</text>
+      ${targetLine}
+      ${bars}
+    </svg>
+  `;
+}
+
+export function buildCollectionMonthlyComparisonPrintReportHtml(
+  payload: CollectionMonthlyComparisonResponse,
+  options: {
+    monthlyTargetAmount?: number | null | undefined;
+    monthlyTargetSourceLabel?: string | null | undefined;
+    generatedAt?: Date | undefined;
+  } = {},
+): string {
+  const insights = buildCollectionMonthlyComparisonInsights(payload);
+  const trendExplanation = buildCollectionMonthlyComparisonTrendExplanation(payload);
+  const targetSummary = buildCollectionMonthlyComparisonTargetSummary(
+    payload,
+    options.monthlyTargetAmount,
+  );
+  const monthlyTargetAmount = targetSummary?.monthlyTargetAmount ?? null;
+  const targetStatus = !targetSummary
+    ? "No configured monthly target"
+    : targetSummary.targetGap >= 0
+      ? "At or above range target"
+      : "Below range target";
+  const anomalySummary = insights.anomalyMonthCount > 0
+    ? `${insights.anomalyMonthCount} anomaly month(s) flagged`
+    : "No anomaly above threshold";
+  const generatedAt = formatCollectionMonthlyComparisonReportDate(options.generatedAt || new Date());
+  const chartSvg = buildCollectionMonthlyComparisonReportChartSvg(insights, monthlyTargetAmount);
+  const monthRows = insights.monthInsights.map((month) => {
+    const targetGap = monthlyTargetAmount === null
+      ? "N/A"
+      : formatCollectionMonthlyComparisonDifference(month.totalCollection - monthlyTargetAmount);
+    return `
+      <tr>
+        <td>${escapeCollectionMonthlyComparisonHtml(month.label)}</td>
+        <td class="numeric">${escapeCollectionMonthlyComparisonHtml(formatAmountRM(month.totalCollection))}</td>
+        <td class="numeric">${escapeCollectionMonthlyComparisonHtml(month.recordCount)}</td>
+        <td class="numeric">${escapeCollectionMonthlyComparisonHtml(formatAmountRM(month.averagePerRecord))}</td>
+        <td>${escapeCollectionMonthlyComparisonHtml(formatCollectionMonthlyComparisonMonthDelta(month.deltaFromPrevious, month.percentageFromPrevious))}</td>
+        <td>${escapeCollectionMonthlyComparisonHtml(month.anomalyLabel || "Clear")}</td>
+        <td class="numeric">${escapeCollectionMonthlyComparisonHtml(targetGap)}</td>
+      </tr>
+    `;
+  }).join("");
+  const anomalyRows = insights.anomalyMonths.length > 0
+    ? insights.anomalyMonths.map((month) => `
+      <li><strong>${escapeCollectionMonthlyComparisonHtml(month.label)}</strong>: ${escapeCollectionMonthlyComparisonHtml(month.anomalyLabel || "Anomaly flagged")}</li>
+    `).join("")
+    : "<li>No month moved more than the configured anomaly threshold.</li>";
+
+  return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SQR Monthly Comparison Report</title>
+  <style>
+    :root { color-scheme: light; font-family: Inter, Arial, sans-serif; color: #0f172a; background: #ffffff; }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 28px; background: #eef2f7; }
+    main { max-width: 980px; margin: 0 auto; background: #ffffff; border: 1px solid #dbe3ef; border-radius: 18px; padding: 28px; box-shadow: 0 18px 60px rgba(15, 23, 42, 0.10); }
+    header { display: flex; justify-content: space-between; gap: 20px; border-bottom: 1px solid #e2e8f0; padding-bottom: 18px; }
+    h1 { margin: 0; font-size: 24px; line-height: 1.2; }
+    h2 { margin: 26px 0 10px; font-size: 16px; }
+    p { margin: 0; line-height: 1.55; }
+    .muted { color: #64748b; font-size: 12px; }
+    .grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-top: 18px; }
+    .card { border: 1px solid #e2e8f0; border-radius: 14px; padding: 12px; background: #f8fafc; }
+    .label { margin-bottom: 5px; color: #64748b; font-size: 11px; font-weight: 700; letter-spacing: .02em; text-transform: uppercase; }
+    .value { font-size: 17px; font-weight: 800; color: #0f172a; }
+    .section { margin-top: 22px; }
+    .report-chart { width: 100%; height: auto; display: block; margin-top: 12px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 12px; }
+    th, td { border-bottom: 1px solid #e2e8f0; padding: 9px 8px; text-align: left; vertical-align: top; }
+    th { color: #475569; font-size: 11px; text-transform: uppercase; letter-spacing: .02em; background: #f8fafc; }
+    .numeric { text-align: right; white-space: nowrap; }
+    ul { margin: 8px 0 0; padding-left: 18px; }
+    li { margin: 5px 0; }
+    .actions { margin: 18px auto 0; max-width: 980px; text-align: right; }
+    .print-button { border: 0; border-radius: 999px; background: #2563eb; color: white; font-weight: 700; padding: 10px 16px; cursor: pointer; }
+    @media (max-width: 760px) {
+      body { padding: 12px; }
+      main { padding: 18px; }
+      header { display: block; }
+      .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      table { font-size: 11px; }
+    }
+    @media print {
+      body { padding: 0; background: #ffffff; }
+      main { max-width: none; border: 0; border-radius: 0; box-shadow: none; padding: 18mm 14mm; }
+      .actions { display: none; }
+      h2, table, .card, .report-chart { break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <h1>Monthly Collection Comparison</h1>
+        <p class="muted">${escapeCollectionMonthlyComparisonHtml(payload.nickname)} - ${escapeCollectionMonthlyComparisonHtml(payload.startMonth)} to ${escapeCollectionMonthlyComparisonHtml(payload.endMonth)}</p>
+      </div>
+      <div>
+        <p class="muted">Generated</p>
+        <p>${escapeCollectionMonthlyComparisonHtml(generatedAt)}</p>
+      </div>
+    </header>
+
+    <section class="grid" aria-label="Report summary">
+      <div class="card"><p class="label">Range total</p><p class="value">${escapeCollectionMonthlyComparisonHtml(formatAmountRM(insights.rangeTotal))}</p><p class="muted">${escapeCollectionMonthlyComparisonHtml(insights.totalRecords)} record(s)</p></div>
+      <div class="card"><p class="label">Target status</p><p class="value">${escapeCollectionMonthlyComparisonHtml(targetStatus)}</p><p class="muted">${targetSummary ? escapeCollectionMonthlyComparisonHtml(`${(targetSummary.targetProgress * 100).toFixed(1)}% of ${formatAmountRM(targetSummary.rangeTarget)}`) : "No target line used"}</p></div>
+      <div class="card"><p class="label">Best month</p><p class="value">${escapeCollectionMonthlyComparisonHtml(insights.peakMonth?.label || "No data")}</p><p class="muted">${escapeCollectionMonthlyComparisonHtml(insights.peakMonth ? formatAmountRM(insights.peakMonth.totalCollection) : "No collection recorded")}</p></div>
+      <div class="card"><p class="label">Audit watch</p><p class="value">${escapeCollectionMonthlyComparisonHtml(anomalySummary)}</p><p class="muted">Threshold ${COLLECTION_MONTHLY_COMPARISON_ANOMALY_THRESHOLD_PERCENT}%</p></div>
+    </section>
+
+    <section class="section">
+      <h2>Trend explanation</h2>
+      <p>${escapeCollectionMonthlyComparisonHtml(trendExplanation)}</p>
+      <p class="muted">${escapeCollectionMonthlyComparisonHtml(payload.comparison.summary)}</p>
+    </section>
+
+    <section class="section">
+      <h2>Chart</h2>
+      ${chartSvg}
+      <p class="muted">Target source: ${escapeCollectionMonthlyComparisonHtml(options.monthlyTargetSourceLabel || "No configured target source")}</p>
+    </section>
+
+    <section class="section">
+      <h2>Target and anomaly notes</h2>
+      <p>${targetSummary ? escapeCollectionMonthlyComparisonHtml(`Monthly target ${formatAmountRM(targetSummary.monthlyTargetAmount)}. Range target ${formatAmountRM(targetSummary.rangeTarget)}. Gap ${formatCollectionMonthlyComparisonDifference(targetSummary.targetGap)}.`) : "No configured monthly target was available for this report."}</p>
+      <ul>${anomalyRows}</ul>
+    </section>
+
+    <section class="section">
+      <h2>Monthly breakdown</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Month</th>
+            <th class="numeric">Total</th>
+            <th class="numeric">Records</th>
+            <th class="numeric">Avg / record</th>
+            <th>Vs previous</th>
+            <th>Audit</th>
+            <th class="numeric">Target gap</th>
+          </tr>
+        </thead>
+        <tbody>${monthRows}</tbody>
+      </table>
+    </section>
+  </main>
+  <div class="actions"><button class="print-button" type="button" onclick="window.print()">Print or save PDF</button></div>
+  <script>window.addEventListener("load",function(){setTimeout(function(){window.print();},150);});</script>
+</body>
+</html>`;
+}

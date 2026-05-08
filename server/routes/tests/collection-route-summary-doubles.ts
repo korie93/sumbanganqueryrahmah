@@ -8,6 +8,12 @@ export function createCollectionSummaryStorageDouble(options?: {
     totalRecords: number;
     totalAmount: number;
   }>;
+  monthlyTargetRows?: Array<{
+    username: string;
+    year: number;
+    month: number;
+    monthlyTarget: number | string;
+  }>;
 }) {
   const auditLogs: Array<{
     action: string;
@@ -17,6 +23,7 @@ export function createCollectionSummaryStorageDouble(options?: {
   }> = [];
   const monthlySummaryCalls: Array<Record<string, unknown>> = [];
   const monthlyComparisonCalls: Array<Record<string, unknown>> = [];
+  const dailyTargetCalls: Array<Record<string, unknown>> = [];
   const nicknameActiveChecks: string[] = [];
   const nicknameSummaryCalls: Array<Record<string, unknown>> = [];
   const nicknameListCalls: Array<Record<string, unknown>> = [];
@@ -68,6 +75,28 @@ export function createCollectionSummaryStorageDouble(options?: {
         { year: 2026, month: 4, totalRecords: 123, totalAmount: 70450 },
         { year: 2026, month: 5, totalRecords: 146, totalAmount: 82900 },
       ];
+    },
+    getCollectionDailyTarget: async (filters: { username: string; year: number; month: number }) => {
+      dailyTargetCalls.push(filters);
+      const matched = (options?.monthlyTargetRows || []).find((row) =>
+        row.username.toLowerCase() === String(filters.username || "").toLowerCase()
+        && row.year === filters.year
+        && row.month === filters.month);
+      if (!matched) {
+        return null;
+      }
+
+      return {
+        id: `daily-target-${matched.username}-${matched.year}-${matched.month}`,
+        username: matched.username,
+        year: matched.year,
+        month: matched.month,
+        monthlyTarget: matched.monthlyTarget,
+        createdBy: "superuser",
+        updatedBy: "superuser",
+        createdAt: new Date("2026-01-01T00:00:00.000Z"),
+        updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+      };
     },
     getCollectionStaffNicknameByName: async (nickname: string) => {
       const normalizedNickname = String(nickname || "").trim();
@@ -139,6 +168,7 @@ export function createCollectionSummaryStorageDouble(options?: {
     auditLogs,
     monthlySummaryCalls,
     monthlyComparisonCalls,
+    dailyTargetCalls,
     nicknameActiveChecks,
     nicknameSummaryCalls,
     nicknameListCalls,

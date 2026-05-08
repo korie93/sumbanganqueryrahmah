@@ -173,6 +173,7 @@ test("CollectionMonthlyComparisonPanel renders monthly totals and comparison sum
       monthlyTargetAmount: 80000,
       monthlyTargetSourceLabel: "May 2026",
       onExportCsv: () => undefined,
+      onPrintReport: () => undefined,
       onMonthSelect: () => undefined,
       chartSlot: createElement("div", null, "chart slot"),
     });
@@ -194,6 +195,7 @@ test("CollectionMonthlyComparisonPanel renders monthly totals and comparison sum
   assert.match(markup, /Target gap/);
   assert.match(markup, /Configured for May 2026/);
   assert.match(markup, /1 month\(s\) at target/);
+  assert.match(markup, /Print report/);
   assert.match(markup, /Export CSV/);
   assert.match(markup, /month\(s\) up/);
   assert.match(markup, /Monthly breakdown/);

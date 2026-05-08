@@ -30,6 +30,10 @@ export class CollectionDailyOperations {
     return this.readOperations.getDailyOverview(userInput, query);
   }
 
+  async getMonthlyTarget(userInput: AuthenticatedUser | undefined, query: ListQuery) {
+    return this.readOperations.getMonthlyTarget(userInput, query);
+  }
+
   async getDailyDayDetails(userInput: AuthenticatedUser | undefined, query: ListQuery) {
     return this.readOperations.getDailyDayDetails(userInput, query);
   }

@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { useMemo, useState } from "react";
-import { ChevronDown, ChevronUp, CircleHelp, Download } from "lucide-react";
+import { ChevronDown, ChevronUp, CircleHelp, Download, Printer } from "lucide-react";
 import {
   OperationalMetric,
   OperationalSummaryStrip,
@@ -11,6 +11,7 @@ import type {
 } from "@/lib/api";
 import { CollectionNicknameSingleSelect } from "@/pages/collection-report/CollectionNicknameSingleSelect";
 import { formatAmountRM } from "@/pages/collection/utils";
+import { CollectionMonthlyComparisonBreakdownList } from "./CollectionMonthlyComparisonBreakdownList";
 import {
   buildCollectionMonthlyComparisonAccessibleSummary,
   buildCollectionMonthlyComparisonInsights,
@@ -47,6 +48,7 @@ type CollectionMonthlyComparisonPanelProps = {
   monthlyTargetErrorMessage?: string | null | undefined;
   monthlyTargetSourceLabel?: string | null | undefined;
   onExportCsv?: (() => void) | undefined;
+  onPrintReport?: (() => void) | undefined;
   onMonthSelect?: ((monthKey: string) => void) | undefined;
   chartSlot?: ReactNode | undefined;
 };
@@ -99,6 +101,7 @@ export function CollectionMonthlyComparisonPanel({
   monthlyTargetErrorMessage = null,
   monthlyTargetSourceLabel = null,
   onExportCsv,
+  onPrintReport,
   onMonthSelect,
   chartSlot,
 }: CollectionMonthlyComparisonPanelProps) {
@@ -312,17 +315,30 @@ export function CollectionMonthlyComparisonPanel({
               </p>
             ) : null}
           </div>
-          {onExportCsv ? (
-            <button
-              type="button"
-              className="inline-flex h-10 items-center justify-center gap-2 rounded-2xl border border-input bg-background px-4 text-sm font-medium text-foreground transition hover:bg-accent hover:text-accent-foreground disabled:cursor-not-allowed disabled:opacity-60"
-              onClick={onExportCsv}
-              disabled={loading || monthlyTargetLoading || !data}
-            >
-              <Download className="h-4 w-4" aria-hidden="true" />
-              Export CSV
-            </button>
-          ) : null}
+          <div className="flex flex-wrap items-center justify-start gap-2 md:justify-end">
+            {onPrintReport ? (
+              <button
+                type="button"
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-2xl border border-input bg-background px-4 text-sm font-medium text-foreground transition hover:bg-accent hover:text-accent-foreground disabled:cursor-not-allowed disabled:opacity-60"
+                onClick={onPrintReport}
+                disabled={loading || monthlyTargetLoading || !data}
+              >
+                <Printer className="h-4 w-4" aria-hidden="true" />
+                Print report
+              </button>
+            ) : null}
+            {onExportCsv ? (
+              <button
+                type="button"
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-2xl border border-input bg-background px-4 text-sm font-medium text-foreground transition hover:bg-accent hover:text-accent-foreground disabled:cursor-not-allowed disabled:opacity-60"
+                onClick={onExportCsv}
+                disabled={loading || monthlyTargetLoading || !data}
+              >
+                <Download className="h-4 w-4" aria-hidden="true" />
+                Export CSV
+              </button>
+            ) : null}
+          </div>
         </div>
       </div>
 
@@ -629,114 +645,13 @@ export function CollectionMonthlyComparisonPanel({
                     : "hidden"
                 }
               >
-                {insights && breakdownExpanded ? insights.monthInsights.map((month) => (
-                  <button
-                    key={month.month}
-                    type="button"
-                    className="grid gap-3 rounded-2xl border border-border/50 bg-background px-3 py-3 text-left transition hover:border-primary/40 hover:bg-primary/[0.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default disabled:hover:border-border/50 disabled:hover:bg-background"
-                    onClick={() => onMonthSelect?.(month.month)}
-                    disabled={!onMonthSelect}
-                    aria-label={`View collection records for ${month.label}`}
-                  >
-                    <div className="space-y-1">
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <div className="flex flex-wrap items-center gap-1.5">
-                          <p className="text-sm font-medium text-foreground">{month.label}</p>
-                          {month.isBaseMonth ? (
-                            <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary">
-                              Base
-                            </span>
-                          ) : null}
-                          {month.isTargetMonth ? (
-                            <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-300">
-                              Target
-                            </span>
-                          ) : null}
-                          {month.isPeakMonth ? (
-                            <span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:text-amber-300">
-                              Peak
-                            </span>
-                          ) : null}
-                          {month.isAnomaly ? (
-                            <span
-                              className={
-                                month.anomalyDirection === "decrease"
-                                  ? "rounded-full bg-destructive/10 px-2 py-0.5 text-[11px] font-medium text-destructive"
-                                  : "rounded-full bg-amber-500/10 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:text-amber-300"
-                              }
-                            >
-                              {month.anomalyDirection === "decrease" ? "Anomaly drop" : "Anomaly jump"}
-                            </span>
-                          ) : null}
-                          {targetSummary ? (
-                            <span
-                              className={
-                                month.totalCollection >= targetSummary.monthlyTargetAmount
-                                  ? "rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-300"
-                                  : "rounded-full bg-destructive/10 px-2 py-0.5 text-[11px] font-medium text-destructive"
-                              }
-                            >
-                              {month.totalCollection >= targetSummary.monthlyTargetAmount
-                                ? "Above target"
-                                : "Below target"}
-                            </span>
-                          ) : null}
-                        </div>
-                        <p className="text-sm font-semibold text-foreground">
-                          {formatAmountRM(month.totalCollection)}
-                        </p>
-                      </div>
-                      <div className="h-2 overflow-hidden rounded-full bg-muted">
-                        <div
-                          className={
-                            month.isAnomaly
-                              ? month.anomalyDirection === "decrease"
-                                ? "h-full rounded-full bg-destructive"
-                                : "h-full rounded-full bg-amber-500"
-                              : "h-full rounded-full bg-primary"
-                          }
-                          style={{
-                            width: month.maxTotalRatio > 0
-                              ? `${Math.max(5, Math.round(month.maxTotalRatio * 100))}%`
-                              : "0%",
-                          }}
-                          aria-hidden="true"
-                        />
-                      </div>
-                      <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-foreground/64 dark:text-foreground/74">
-                        <span>{month.recordCount} record(s)</span>
-                        <span>Avg {formatAmountRM(month.averagePerRecord)}</span>
-                        <span>{(month.shareOfRangeTotal * 100).toFixed(1)}% of range</span>
-                        <span>
-                          {formatCollectionMonthlyComparisonMonthDelta(
-                            month.deltaFromPrevious,
-                            month.percentageFromPrevious,
-                          )}
-                        </span>
-                        <span>
-                          {month.recordCount === 0 ? "No collection recorded" : "Active month"}
-                        </span>
-                        {month.anomalyLabel ? (
-                          <span className="font-medium text-amber-700 dark:text-amber-300">
-                            {month.anomalyLabel}
-                          </span>
-                        ) : null}
-                        {targetSummary ? (
-                          <span>
-                            Target gap {formatCollectionMonthlyComparisonDifference(
-                              month.totalCollection - targetSummary.monthlyTargetAmount,
-                            )}
-                          </span>
-                        ) : null}
-                      </div>
-                      {onMonthSelect ? (
-                        <p className="text-xs font-medium text-primary">
-                          View records
-                        </p>
-                      ) : null}
-                    </div>
-                  </button>
-                )) : null}
+                {insights && breakdownExpanded ? (
+                  <CollectionMonthlyComparisonBreakdownList
+                    insights={insights}
+                    targetSummary={targetSummary}
+                    onMonthSelect={onMonthSelect}
+                  />
+                ) : null}
               </div>
             </div>
           </div>

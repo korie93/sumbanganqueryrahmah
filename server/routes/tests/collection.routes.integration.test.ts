@@ -2243,6 +2243,65 @@ test("GET /api/collection/monthly-comparison keeps percentageChange null when th
   }
 });
 
+test("GET /api/collection/monthly-target returns configured target with lightweight target lookup", async () => {
+  const { storage, dailyTargetCalls, monthlyComparisonCalls, nicknameListCalls } =
+    createCollectionSummaryStorageDouble({
+      monthlyTargetRows: [
+        {
+          username: "Collector Alpha",
+          year: 2026,
+          month: 5,
+          monthlyTarget: "80000.00",
+        },
+      ],
+    });
+  const app = createJsonTestApp();
+
+  registerCollectionRoutes(app, {
+    storage,
+    authenticateToken: createTestAuthenticateToken({
+      userId: "superuser-1",
+      username: "superuser",
+      role: "superuser",
+    }),
+    requireRole: createTestRequireRole(),
+    requireTabAccess: () => allowAllTabs(),
+  });
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const response = await fetch(
+      `${baseUrl}/api/collection/monthly-target?nickname=Collector%20Alpha&month=2026-05`,
+    );
+
+    assert.equal(response.status, 200);
+    const payload = await response.json();
+    assert.deepEqual(payload, {
+      ok: true,
+      nickname: "Collector Alpha",
+      month: {
+        key: "2026-05",
+        year: 2026,
+        month: 5,
+      },
+      monthlyTarget: 80000,
+      configured: true,
+      source: "configured",
+    });
+    assert.deepEqual(dailyTargetCalls, [
+      {
+        username: "Collector Alpha",
+        year: 2026,
+        month: 5,
+      },
+    ]);
+    assert.equal(monthlyComparisonCalls.length, 0);
+    assert.equal(nicknameListCalls.length, 0);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
 test("GET /api/collection/nickname-summary honors summaryOnly and avoids loading record rows", async () => {
   const { storage, nicknameActiveChecks, nicknameSummaryCalls, nicknameListCalls } = createCollectionSummaryStorageDouble();
   const app = createJsonTestApp();

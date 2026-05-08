@@ -238,6 +238,19 @@ export const collectionMonthlyComparisonResponseSchema = z.object({
   freshness: collectionReportFreshnessSchema.optional(),
 });
 
+export const collectionMonthlyTargetResponseSchema = z.object({
+  ok: z.literal(true),
+  nickname: nonEmptyStringSchema,
+  month: z.object({
+    key: collectionMonthKeySchema,
+    year: z.number().int().min(2000).max(2100),
+    month: z.number().int().min(1).max(12),
+  }),
+  monthlyTarget: z.number().finite(),
+  configured: z.boolean(),
+  source: z.enum(["configured", "missing"]),
+});
+
 export type ImportsListResponse = z.infer<typeof importsListResponseSchema>;
 export type ImportDataPageResponse = z.infer<typeof importDataPageResponseSchema>;
 export type SearchGlobalResponse = z.infer<typeof searchGlobalResponseSchema>;
@@ -249,6 +262,7 @@ export type SettingsUpdateResponse = z.infer<typeof settingsUpdateResponseSchema
 export type TabVisibilityResponse = z.infer<typeof tabVisibilityResponseSchema>;
 export type CollectionReportFreshnessContract = z.infer<typeof collectionReportFreshnessSchema>;
 export type CollectionMonthlyComparisonResponse = z.infer<typeof collectionMonthlyComparisonResponseSchema>;
+export type CollectionMonthlyTargetResponse = z.infer<typeof collectionMonthlyTargetResponseSchema>;
 export type ApiPaginationMeta = z.infer<typeof apiPaginationMetaSchema>;
 export type NormalizedApiPaginationMeta = {
   mode: ApiPaginationMeta["mode"];
