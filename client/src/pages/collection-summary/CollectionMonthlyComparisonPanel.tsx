@@ -1,10 +1,11 @@
 import type { ReactNode } from "react";
-import { useMemo, useState } from "react";
-import { Download } from "lucide-react";
+import { useId, useMemo, useState } from "react";
+import { ChevronDown, ChevronUp, CircleHelp, Download } from "lucide-react";
 import {
   OperationalMetric,
   OperationalSummaryStrip,
 } from "@/components/layout/OperationalPage";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type {
   CollectionMonthlyComparisonResponse,
 } from "@/lib/api";
@@ -41,13 +42,39 @@ type CollectionMonthlyComparisonPanelProps = {
   onApply: () => void;
   onRangePresetApply: (preset: CollectionMonthlyComparisonPresetRange) => void;
   onReset: () => void;
-  monthlyTargetInput?: string | undefined;
   monthlyTargetAmount?: number | null | undefined;
-  onMonthlyTargetInputChange?: ((value: string) => void) | undefined;
+  monthlyTargetLoading?: boolean | undefined;
+  monthlyTargetErrorMessage?: string | null | undefined;
+  monthlyTargetSourceLabel?: string | null | undefined;
   onExportCsv?: (() => void) | undefined;
   onMonthSelect?: ((monthKey: string) => void) | undefined;
   chartSlot?: ReactNode | undefined;
 };
+
+function MonthlyComparisonHint({
+  label,
+  text,
+}: {
+  label: string;
+  text: string;
+}) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          className="inline-flex rounded-sm text-muted-foreground transition hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          aria-label={label}
+        >
+          <CircleHelp className="h-3.5 w-3.5" aria-hidden="true" />
+        </button>
+      </TooltipTrigger>
+      <TooltipContent side="top" align="center" className="max-w-[min(20rem,calc(100vw-2rem))] text-xs leading-5">
+        {text}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
 
 export function CollectionMonthlyComparisonPanel({
   canFilterByNickname,
@@ -67,13 +94,16 @@ export function CollectionMonthlyComparisonPanel({
   onApply,
   onRangePresetApply,
   onReset,
-  monthlyTargetInput = "",
   monthlyTargetAmount = null,
-  onMonthlyTargetInputChange,
+  monthlyTargetLoading = false,
+  monthlyTargetErrorMessage = null,
+  monthlyTargetSourceLabel = null,
   onExportCsv,
   onMonthSelect,
   chartSlot,
 }: CollectionMonthlyComparisonPanelProps) {
+  const breakdownRegionId = useId();
+  const [breakdownExpanded, setBreakdownExpanded] = useState(false);
   const comparison = data?.comparison || null;
   const comparisonTone = comparison
     ? resolveCollectionMonthlyComparisonTone(comparison.direction)
@@ -110,6 +140,15 @@ export function CollectionMonthlyComparisonPanel({
     () => buildCollectionMonthlyComparisonPresetRanges(),
     [],
   );
+  const latestMonthInsight = insights?.monthInsights[insights.monthInsights.length - 1] || null;
+  const targetDisplayLabel = monthlyTargetLoading
+    ? "Loading target..."
+    : monthlyTargetAmount && monthlyTargetAmount > 0
+      ? formatAmountRM(monthlyTargetAmount)
+      : "No target configured";
+  const targetSupportingLabel = monthlyTargetSourceLabel
+    ? `Configured for ${monthlyTargetSourceLabel}`
+    : "Uses the configured target for the target month";
 
   return (
     <section
@@ -249,29 +288,35 @@ export function CollectionMonthlyComparisonPanel({
             );
           })}
         </div>
-        <div className="mt-3 grid gap-2 md:grid-cols-[minmax(12rem,16rem)_auto] md:items-end md:justify-between">
-          <div className="space-y-1">
-            <label
-              htmlFor="collection-monthly-comparison-target"
-              className="text-xs font-medium text-muted-foreground"
-            >
-              Monthly target (RM)
-            </label>
-            <input
-              id="collection-monthly-comparison-target"
-              inputMode="decimal"
-              value={monthlyTargetInput}
-              onChange={(event) => onMonthlyTargetInputChange?.(event.target.value)}
-              placeholder="Optional target"
-              className="h-10 w-full rounded-2xl border border-input bg-background px-3 text-sm text-foreground"
-            />
+        <div className="mt-3 grid gap-2 md:grid-cols-[minmax(14rem,18rem)_auto] md:items-end md:justify-between">
+          <div className="rounded-2xl border border-border/60 bg-muted/20 px-3 py-2">
+            <div className="flex items-center gap-1.5">
+              <p className="text-xs font-medium text-muted-foreground">
+                Monthly target
+              </p>
+              <MonthlyComparisonHint
+                label="Monthly target explanation"
+                text="This value is read from the superuser-configured daily target for the currently applied target month and staff nickname. No manual fallback is used."
+              />
+            </div>
+            <p className="mt-1 text-sm font-semibold text-foreground">
+              {targetDisplayLabel}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {targetSupportingLabel}
+            </p>
+            {monthlyTargetErrorMessage ? (
+              <p role="status" className="mt-1 text-xs text-destructive">
+                Target unavailable: {monthlyTargetErrorMessage}
+              </p>
+            ) : null}
           </div>
           {onExportCsv ? (
             <button
               type="button"
               className="inline-flex h-10 items-center justify-center gap-2 rounded-2xl border border-input bg-background px-4 text-sm font-medium text-foreground transition hover:bg-accent hover:text-accent-foreground disabled:cursor-not-allowed disabled:opacity-60"
               onClick={onExportCsv}
-              disabled={loading || !data}
+              disabled={loading || monthlyTargetLoading || !data}
             >
               <Download className="h-4 w-4" aria-hidden="true" />
               Export CSV
@@ -342,7 +387,13 @@ export function CollectionMonthlyComparisonPanel({
           {insights ? (
             <div className="grid gap-3 lg:grid-cols-[minmax(0,1.35fr)_minmax(18rem,0.65fr)]">
               <div className="rounded-2xl border border-border/60 bg-background px-4 py-4 shadow-sm">
-                <p className="text-sm font-medium text-foreground">Comparison summary</p>
+                <div className="flex items-center gap-1.5">
+                  <p className="text-sm font-medium text-foreground">Comparison summary</p>
+                  <MonthlyComparisonHint
+                    label="Comparison summary formula"
+                    text="The headline compares the target month total against the immediately preceding/base month in the selected range."
+                  />
+                </div>
                 <p className="mt-1 text-sm leading-6 text-muted-foreground">{comparison?.summary}</p>
                 {trendExplanation ? (
                   <div className="mt-3 rounded-xl border border-border/60 bg-muted/20 px-3 py-3">
@@ -381,6 +432,12 @@ export function CollectionMonthlyComparisonPanel({
                 <div className="rounded-2xl border border-border/60 bg-background px-4 py-3 shadow-sm">
                   <p className="text-xs font-medium uppercase tracking-normal text-muted-foreground">
                     Range total
+                    <span className="ml-1 inline-flex align-middle">
+                      <MonthlyComparisonHint
+                        label="Range total explanation"
+                        text="Sum of all monthly collection totals returned for the applied date range."
+                      />
+                    </span>
                   </p>
                   <p className="mt-1 text-lg font-semibold text-foreground">
                     {formatAmountRM(insights.rangeTotal)}
@@ -414,6 +471,12 @@ export function CollectionMonthlyComparisonPanel({
                 <div className="rounded-2xl border border-border/60 bg-background px-4 py-3 shadow-sm">
                   <p className="text-xs font-medium uppercase tracking-normal text-muted-foreground">
                     Biggest jump
+                    <span className="ml-1 inline-flex align-middle">
+                      <MonthlyComparisonHint
+                        label="Biggest jump explanation"
+                        text="Largest positive month-to-month difference in the selected range."
+                      />
+                    </span>
                   </p>
                   <p className="mt-1 text-lg font-semibold text-foreground">
                     {insights.strongestIncreaseMonth?.label || "No jump"}
@@ -446,6 +509,12 @@ export function CollectionMonthlyComparisonPanel({
                 <div className="rounded-2xl border border-border/60 bg-background px-4 py-3 shadow-sm">
                   <p className="text-xs font-medium uppercase tracking-normal text-muted-foreground">
                     Audit watch
+                    <span className="ml-1 inline-flex align-middle">
+                      <MonthlyComparisonHint
+                        label="Audit watch explanation"
+                        text="Flags any month where the percentage change versus the previous month is greater than 30%."
+                      />
+                    </span>
                   </p>
                   <p className="mt-1 text-lg font-semibold text-foreground">
                     {insights.anomalyMonthCount > 0
@@ -481,19 +550,81 @@ export function CollectionMonthlyComparisonPanel({
               </div>
             ) : null}
 
-            <div className="space-y-3">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <h3 className="text-sm font-semibold text-foreground">Monthly breakdown</h3>
+            <div className="space-y-3 rounded-2xl border border-border/60 bg-background p-3 shadow-sm">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0 space-y-1">
+                  <div className="flex items-center gap-1.5">
+                    <h3 className="text-sm font-semibold text-foreground">Monthly breakdown</h3>
+                    <MonthlyComparisonHint
+                      label="Monthly breakdown explanation"
+                      text="Collapsed by default to keep the dashboard compact. Expand to inspect each month, record count, average, share of range, target gap, and anomaly flags."
+                    />
+                  </div>
                   <p className="text-xs text-muted-foreground">
-                    Empty months stay visible as RM0 for quick trend review.
+                    {latestMonthInsight
+                      ? `${latestMonthInsight.label}: ${formatAmountRM(latestMonthInsight.totalCollection)} across ${latestMonthInsight.recordCount} record(s).`
+                      : "Empty months stay visible as RM0 for quick trend review."}
                   </p>
                 </div>
-                <p className="text-xs text-foreground/64 dark:text-foreground/72">{data.nickname}</p>
+                <button
+                  type="button"
+                  className="inline-flex h-9 items-center justify-center gap-1.5 rounded-full border border-input bg-background px-3 text-xs font-medium text-foreground transition hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  onClick={() => setBreakdownExpanded((previous) => !previous)}
+                  aria-expanded={breakdownExpanded}
+                  aria-controls={breakdownRegionId}
+                >
+                  {breakdownExpanded ? (
+                    <>
+                      <ChevronUp className="h-3.5 w-3.5" aria-hidden="true" />
+                      Collapse
+                    </>
+                  ) : (
+                    <>
+                      <ChevronDown className="h-3.5 w-3.5" aria-hidden="true" />
+                      Expand
+                    </>
+                  )}
+                </button>
               </div>
 
-              <div className="grid gap-2">
-                {insights ? insights.monthInsights.map((month) => (
+              {insights ? (
+                <div className="grid gap-2 sm:grid-cols-3">
+                  <div className="rounded-xl border border-border/50 bg-muted/20 px-3 py-2">
+                    <p className="text-[11px] font-medium uppercase tracking-normal text-muted-foreground">
+                      Months
+                    </p>
+                    <p className="mt-1 text-sm font-semibold text-foreground">
+                      {insights.activeMonthCount}/{data.months.length} active
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-border/50 bg-muted/20 px-3 py-2">
+                    <p className="text-[11px] font-medium uppercase tracking-normal text-muted-foreground">
+                      Latest
+                    </p>
+                    <p className="mt-1 truncate text-sm font-semibold text-foreground">
+                      {latestMonthInsight ? formatAmountRM(latestMonthInsight.totalCollection) : "No data"}
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-border/50 bg-muted/20 px-3 py-2">
+                    <p className="text-[11px] font-medium uppercase tracking-normal text-muted-foreground">
+                      Audit
+                    </p>
+                    <p className="mt-1 text-sm font-semibold text-foreground">
+                      {insights.anomalyMonthCount > 0 ? `${insights.anomalyMonthCount} flagged` : "Clear"}
+                    </p>
+                  </div>
+                </div>
+              ) : null}
+
+              <div
+                id={breakdownRegionId}
+                className={
+                  breakdownExpanded
+                    ? "grid gap-2 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-top-1"
+                    : "hidden"
+                }
+              >
+                {insights && breakdownExpanded ? insights.monthInsights.map((month) => (
                   <button
                     key={month.month}
                     type="button"

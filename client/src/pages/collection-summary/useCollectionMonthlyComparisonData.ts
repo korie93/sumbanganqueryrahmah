@@ -270,9 +270,10 @@ export function useCollectionMonthlyComparisonData({
 
   const reset = useCallback(() => {
     const nextNickname = defaultNickname;
+    const nextDefaultRange = buildDefaultCollectionMonthlyComparisonRange();
     setSelectedNickname(nextNickname);
-    setStartMonth(defaultRange.startMonth);
-    setEndMonth(defaultRange.endMonth);
+    setStartMonth(nextDefaultRange.startMonth);
+    setEndMonth(nextDefaultRange.endMonth);
     setErrorMessage(null);
     if (!nextNickname) {
       setData(null);
@@ -281,10 +282,10 @@ export function useCollectionMonthlyComparisonData({
     }
     setAppliedFilters({
       nickname: nextNickname,
-      startMonth: defaultRange.startMonth,
-      endMonth: defaultRange.endMonth,
+      startMonth: nextDefaultRange.startMonth,
+      endMonth: nextDefaultRange.endMonth,
     });
-  }, [defaultNickname, defaultRange.endMonth, defaultRange.startMonth]);
+  }, [defaultNickname]);
 
   return {
     availableNicknames,

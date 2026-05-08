@@ -1,14 +1,14 @@
-import { Suspense, lazy, memo, useCallback, useMemo, useState } from "react";
+import { Suspense, lazy, memo, useCallback } from "react";
 import { downloadBlob } from "@/lib/download";
 import type { CollectionStaffNickname } from "@/lib/api";
 import { CollectionMonthlyComparisonPanel } from "./CollectionMonthlyComparisonPanel";
 import {
   buildCollectionMonthlyComparisonCsv,
   buildCollectionMonthlyComparisonCsvFilename,
-  normalizeCollectionMonthlyTargetAmount,
 } from "./collection-monthly-comparison-utils";
 import { useCollectionMonthlyComparisonData } from "./useCollectionMonthlyComparisonData";
 import { useCollectionMonthlyComparisonMonthDialog } from "./useCollectionMonthlyComparisonMonthDialog";
+import { useCollectionMonthlyComparisonTarget } from "./useCollectionMonthlyComparisonTarget";
 
 const MonthlyCollectionComparisonChart = lazy(() =>
   import("./MonthlyCollectionComparisonChart").then((module) => ({
@@ -44,11 +44,7 @@ function CollectionMonthlyComparisonSection({
   const comparisonMonthDialog = useCollectionMonthlyComparisonMonthDialog({
     data: comparisonData.data,
   });
-  const [monthlyTargetInput, setMonthlyTargetInput] = useState("");
-  const monthlyTargetAmount = useMemo(
-    () => normalizeCollectionMonthlyTargetAmount(monthlyTargetInput),
-    [monthlyTargetInput],
-  );
+  const comparisonTarget = useCollectionMonthlyComparisonTarget(comparisonData.data);
   const handleExportCsv = useCallback(() => {
     if (!comparisonData.data) {
       return;
@@ -56,11 +52,11 @@ function CollectionMonthlyComparisonSection({
 
     const csvContent = buildCollectionMonthlyComparisonCsv(
       comparisonData.data,
-      monthlyTargetAmount,
+      comparisonTarget.monthlyTargetAmount,
     );
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     downloadBlob(blob, buildCollectionMonthlyComparisonCsvFilename(comparisonData.data));
-  }, [comparisonData.data, monthlyTargetAmount]);
+  }, [comparisonData.data, comparisonTarget.monthlyTargetAmount]);
 
   return (
     <>
@@ -82,9 +78,10 @@ function CollectionMonthlyComparisonSection({
         onApply={comparisonData.apply}
         onRangePresetApply={comparisonData.applyRangePreset}
         onReset={comparisonData.reset}
-        monthlyTargetInput={monthlyTargetInput}
-        monthlyTargetAmount={monthlyTargetAmount}
-        onMonthlyTargetInputChange={setMonthlyTargetInput}
+        monthlyTargetAmount={comparisonTarget.monthlyTargetAmount}
+        monthlyTargetLoading={comparisonTarget.loading}
+        monthlyTargetErrorMessage={comparisonTarget.errorMessage}
+        monthlyTargetSourceLabel={comparisonTarget.sourceLabel}
         onExportCsv={handleExportCsv}
         onMonthSelect={comparisonMonthDialog.handleSelectMonth}
         chartSlot={
@@ -98,7 +95,9 @@ function CollectionMonthlyComparisonSection({
             >
               <MonthlyCollectionComparisonChart
                 data={comparisonData.data}
-                monthlyTargetAmount={monthlyTargetAmount}
+                monthlyTargetAmount={comparisonTarget.monthlyTargetAmount}
+                monthlyTargetLoading={comparisonTarget.loading}
+                monthlyTargetSourceLabel={comparisonTarget.sourceLabel}
               />
             </Suspense>
           ) : null

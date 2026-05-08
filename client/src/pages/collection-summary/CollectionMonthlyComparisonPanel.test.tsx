@@ -1,9 +1,24 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createElement } from "react";
+import { createElement, type ComponentProps } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import type { CollectionMonthlyComparisonResponse } from "@/lib/api";
 import { CollectionMonthlyComparisonPanel } from "@/pages/collection-summary/CollectionMonthlyComparisonPanel";
+
+type PanelProps = ComponentProps<typeof CollectionMonthlyComparisonPanel>;
+
+function renderPanel(props: PanelProps) {
+  return renderToStaticMarkup(
+    createElement(
+      TooltipProvider,
+      {
+        delayDuration: 0,
+        children: createElement(CollectionMonthlyComparisonPanel, props),
+      },
+    ),
+  );
+}
 
 const comparisonPayload: CollectionMonthlyComparisonResponse = {
   ok: true,
@@ -60,8 +75,7 @@ const anomalyPayload: CollectionMonthlyComparisonResponse = {
 };
 
 test("CollectionMonthlyComparisonPanel renders accessible controls and action buttons", () => {
-  const markup = renderToStaticMarkup(
-    createElement(CollectionMonthlyComparisonPanel, {
+  const markup = renderPanel({
       canFilterByNickname: true,
       availableNicknames: ["Collector Alpha", "Collector Beta"],
       selectedNickname: "Collector Alpha",
@@ -77,8 +91,7 @@ test("CollectionMonthlyComparisonPanel renders accessible controls and action bu
       onApply: () => undefined,
       onRangePresetApply: () => undefined,
       onReset: () => undefined,
-    }),
-  );
+    });
 
   assert.match(markup, /Monthly Collection Comparison/);
   assert.match(markup, /id="collection-monthly-comparison-nickname"/);
@@ -91,14 +104,14 @@ test("CollectionMonthlyComparisonPanel renders accessible controls and action bu
   assert.match(markup, />Reset</);
   assert.match(markup, /Last 3 months/);
   assert.match(markup, /Year to date/);
-  assert.match(markup, /Monthly target \(RM\)/);
+  assert.match(markup, /Monthly target/);
+  assert.match(markup, /No target configured/);
   assert.match(markup, /type="button"/);
   assert.match(markup, /Single nickname only/);
 });
 
 test("CollectionMonthlyComparisonPanel announces loading, errors, and empty nickname availability clearly", () => {
-  const loadingMarkup = renderToStaticMarkup(
-    createElement(CollectionMonthlyComparisonPanel, {
+  const loadingMarkup = renderPanel({
       canFilterByNickname: false,
       availableNicknames: [],
       selectedNickname: "Collector Alpha",
@@ -114,13 +127,11 @@ test("CollectionMonthlyComparisonPanel announces loading, errors, and empty nick
       onApply: () => undefined,
       onRangePresetApply: () => undefined,
       onReset: () => undefined,
-    }),
-  );
+    });
   assert.match(loadingMarkup, /role="status"/);
   assert.match(loadingMarkup, /Loading monthly comparison/);
 
-  const errorMarkup = renderToStaticMarkup(
-    createElement(CollectionMonthlyComparisonPanel, {
+  const errorMarkup = renderPanel({
       canFilterByNickname: true,
       availableNicknames: [],
       selectedNickname: "",
@@ -136,16 +147,14 @@ test("CollectionMonthlyComparisonPanel announces loading, errors, and empty nick
       onApply: () => undefined,
       onRangePresetApply: () => undefined,
       onReset: () => undefined,
-    }),
-  );
+    });
   assert.match(errorMarkup, /role="alert"/);
   assert.match(errorMarkup, /Please choose a valid staff nickname first\./);
   assert.match(errorMarkup, /No visible staff nickname is available/);
 });
 
 test("CollectionMonthlyComparisonPanel renders monthly totals and comparison summary when data is present", () => {
-  const markup = renderToStaticMarkup(
-    createElement(CollectionMonthlyComparisonPanel, {
+  const markup = renderPanel({
       canFilterByNickname: false,
       availableNicknames: [],
       selectedNickname: "Collector Alpha",
@@ -161,14 +170,12 @@ test("CollectionMonthlyComparisonPanel renders monthly totals and comparison sum
       onApply: () => undefined,
       onRangePresetApply: () => undefined,
       onReset: () => undefined,
-      monthlyTargetInput: "80000",
       monthlyTargetAmount: 80000,
-      onMonthlyTargetInputChange: () => undefined,
+      monthlyTargetSourceLabel: "May 2026",
       onExportCsv: () => undefined,
       onMonthSelect: () => undefined,
       chartSlot: createElement("div", null, "chart slot"),
-    }),
-  );
+    });
 
   assert.match(markup, /Collection increased by RM12,450\.00 \(\+17\.67%\) compared to Apr 2026\./);
   assert.match(markup, /Apr 2026 Total/);
@@ -185,20 +192,19 @@ test("CollectionMonthlyComparisonPanel renders monthly totals and comparison sum
   assert.match(markup, /Trend explanation/);
   assert.match(markup, /average per record dipped slightly/);
   assert.match(markup, /Target gap/);
-  assert.match(markup, /Above target/);
-  assert.match(markup, /Below target/);
+  assert.match(markup, /Configured for May 2026/);
+  assert.match(markup, /1 month\(s\) at target/);
   assert.match(markup, /Export CSV/);
   assert.match(markup, /month\(s\) up/);
-  assert.match(markup, /Peak/);
-  assert.match(markup, /of range/);
-  assert.match(markup, /View records/);
-  assert.match(markup, /Avg RM(?:&nbsp;|\u00a0| )572\.76/);
+  assert.match(markup, /Monthly breakdown/);
+  assert.match(markup, /Expand/);
+  assert.match(markup, /2\/2 active/);
+  assert.match(markup, /Latest/);
   assert.match(markup, /chart slot/);
 });
 
 test("CollectionMonthlyComparisonPanel highlights anomaly months for audit review", () => {
-  const markup = renderToStaticMarkup(
-    createElement(CollectionMonthlyComparisonPanel, {
+  const markup = renderPanel({
       canFilterByNickname: false,
       availableNicknames: [],
       selectedNickname: "Collector Alpha",
@@ -215,10 +221,9 @@ test("CollectionMonthlyComparisonPanel highlights anomaly months for audit revie
       onRangePresetApply: () => undefined,
       onReset: () => undefined,
       onMonthSelect: () => undefined,
-    }),
-  );
+    });
 
   assert.match(markup, /1 anomaly month\(s\)/);
-  assert.match(markup, /Anomaly jump/);
   assert.match(markup, /Unusual jump \+34\.85% vs previous month/);
+  assert.match(markup, /1 flagged/);
 });

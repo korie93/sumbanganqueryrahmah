@@ -45,6 +45,7 @@ test("MonthlyCollectionComparisonChart renders compact chart controls accessibly
     createElement(MonthlyCollectionComparisonChart, {
       data: chartPayload,
       monthlyTargetAmount: 80000,
+      monthlyTargetSourceLabel: "May 2026",
     }),
   );
 
@@ -56,5 +57,7 @@ test("MonthlyCollectionComparisonChart renders compact chart controls accessibly
   assert.match(markup, /Audit watch/);
   assert.match(markup, /Minimize chart/);
   assert.match(markup, /Expand chart/);
+  assert.match(markup, /View Full/);
+  assert.match(markup, /May 2026/);
   assert.match(markup, /aria-controls=/);
 });

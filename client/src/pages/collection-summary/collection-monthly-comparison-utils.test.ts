@@ -14,7 +14,6 @@ import {
   countCollectionMonthsInclusive,
   formatCollectionMonthlyComparisonDifference,
   formatCollectionMonthlyComparisonPercentage,
-  normalizeCollectionMonthlyTargetAmount,
   parseCollectionMonthKey,
   shiftCollectionMonthInput,
 } from "@/pages/collection-summary/collection-monthly-comparison-utils";
@@ -74,10 +73,14 @@ const anomalyPayload: CollectionMonthlyComparisonResponse = {
 };
 
 test("collection monthly comparison helpers keep month ranges bounded and stable", () => {
-  const defaultRange = buildDefaultCollectionMonthlyComparisonRange(new Date("2026-05-20T00:00:00.000Z"));
+  const defaultRange = buildDefaultCollectionMonthlyComparisonRange(new Date(2026, 4, 20, 12));
   assert.deepEqual(defaultRange, {
-    startMonth: "2025-12",
+    startMonth: "2026-04",
     endMonth: "2026-05",
+  });
+  assert.deepEqual(buildDefaultCollectionMonthlyComparisonRange(new Date(2026, 0, 10, 12)), {
+    startMonth: "2025-12",
+    endMonth: "2026-01",
   });
   assert.equal(shiftCollectionMonthInput("2026-05", -1), "2026-04");
   assert.equal(shiftCollectionMonthInput("2026-01", -1), "2025-12");
@@ -160,9 +163,6 @@ test("collection monthly comparison helpers explain trend direction and average 
 });
 
 test("collection monthly comparison helpers summarize targets and export CSV", () => {
-  assert.equal(normalizeCollectionMonthlyTargetAmount("80,000"), 80000);
-  assert.equal(normalizeCollectionMonthlyTargetAmount("0"), null);
-
   const targetSummary = buildCollectionMonthlyComparisonTargetSummary(comparisonPayload, 80000);
   assert.equal(targetSummary?.rangeTarget, 160000);
   assert.equal(targetSummary?.targetGap, -6650);

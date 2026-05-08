@@ -107,7 +107,7 @@ export function countCollectionMonthsInclusive(startMonth: string, endMonth: str
 
 export function buildDefaultCollectionMonthlyComparisonRange(referenceDate = new Date()) {
   const endMonth = formatCollectionMonthInput(referenceDate);
-  const startMonth = shiftCollectionMonthInput(endMonth, -5);
+  const startMonth = shiftCollectionMonthInput(endMonth, -1);
   return {
     startMonth,
     endMonth,
@@ -171,18 +171,6 @@ export function formatCollectionMonthlyComparisonDifference(value: number | null
   const absoluteValue = Math.abs(value);
   const formatted = formatAmountRM(absoluteValue);
   return value > 0 ? `+${formatted}` : value < 0 ? `-${formatted}` : formatted;
-}
-
-export function normalizeCollectionMonthlyTargetAmount(value: string): number | null {
-  const normalized = String(value || "")
-    .trim()
-    .replace(/,/g, "");
-  if (!normalized) {
-    return null;
-  }
-
-  const amount = Number(normalized);
-  return Number.isFinite(amount) && amount > 0 ? amount : null;
 }
 
 export function buildCollectionMonthlyComparisonTargetSummary(
