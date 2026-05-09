@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Activity, BarChart3, ChevronDown, ChevronUp, CircleHelp, Download, Printer, ShieldCheck } from "lucide-react";
 import {
   OperationalMetric,
@@ -92,6 +92,90 @@ function MonthlyComparisonHint({
         {text}
       </TooltipContent>
     </Tooltip>
+  );
+}
+
+function normalizeCollectionMonthFieldValue(value: string): string | null {
+  const normalized = String(value || "").trim();
+  const match = /^(\d{4})-(\d{1,2})$/.exec(normalized);
+  if (!match) {
+    return null;
+  }
+
+  const year = Number.parseInt(match[1] || "", 10);
+  const month = Number.parseInt(match[2] || "", 10);
+  if (!Number.isInteger(year) || !Number.isInteger(month) || month < 1 || month > 12) {
+    return null;
+  }
+
+  return `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}`;
+}
+
+function CollectionMonthField({
+  id,
+  label,
+  value,
+  onChange,
+}: {
+  id: string;
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  const [draftValue, setDraftValue] = useState(value);
+  const helpId = `${id}-format`;
+
+  useEffect(() => {
+    setDraftValue(value);
+  }, [value]);
+
+  const commitDraftValue = (nextValue: string) => {
+    const normalized = normalizeCollectionMonthFieldValue(nextValue);
+    if (normalized) {
+      setDraftValue(normalized);
+      onChange(normalized);
+      return true;
+    }
+    return false;
+  };
+
+  return (
+    <div className="space-y-1">
+      <label htmlFor={id} className="text-sm font-medium text-foreground">
+        {label}
+      </label>
+      <input
+        id={id}
+        type="text"
+        inputMode="numeric"
+        pattern="[0-9]{4}-[0-9]{1,2}"
+        placeholder="YYYY-MM"
+        value={draftValue}
+        onChange={(event) => {
+          const nextValue = event.target.value;
+          setDraftValue(nextValue);
+          commitDraftValue(nextValue);
+        }}
+        onBlur={() => {
+          if (!commitDraftValue(draftValue)) {
+            setDraftValue(value);
+          }
+        }}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") {
+            if (!commitDraftValue(draftValue)) {
+              setDraftValue(value);
+            }
+          }
+        }}
+        className="h-11 w-full rounded-2xl border border-input bg-background px-3 text-sm"
+        aria-describedby={helpId}
+        title="Use YYYY-MM format, for example 2026-05"
+      />
+      <span id={helpId} className="sr-only">
+        Use year dash month format, for example 2026-05.
+      </span>
+    </div>
   );
 }
 
@@ -347,37 +431,19 @@ export function CollectionMonthlyComparisonPanel({
             )}
           </div>
 
-          <div className="space-y-1">
-            <label
-              htmlFor="collection-monthly-comparison-start-month"
-              className="text-sm font-medium text-foreground"
-            >
-              Start month
-            </label>
-            <input
-              id="collection-monthly-comparison-start-month"
-              type="month"
-              value={startMonth}
-              onChange={(event) => onStartMonthChange(event.target.value)}
-              className="h-11 w-full rounded-2xl border border-input bg-background px-3 text-sm"
-            />
-          </div>
+          <CollectionMonthField
+            id="collection-monthly-comparison-start-month"
+            label="Start month"
+            value={startMonth}
+            onChange={onStartMonthChange}
+          />
 
-          <div className="space-y-1">
-            <label
-              htmlFor="collection-monthly-comparison-end-month"
-              className="text-sm font-medium text-foreground"
-            >
-              End month
-            </label>
-            <input
-              id="collection-monthly-comparison-end-month"
-              type="month"
-              value={endMonth}
-              onChange={(event) => onEndMonthChange(event.target.value)}
-              className="h-11 w-full rounded-2xl border border-input bg-background px-3 text-sm"
-            />
-          </div>
+          <CollectionMonthField
+            id="collection-monthly-comparison-end-month"
+            label="End month"
+            value={endMonth}
+            onChange={onEndMonthChange}
+          />
 
           <button
             type="button"
