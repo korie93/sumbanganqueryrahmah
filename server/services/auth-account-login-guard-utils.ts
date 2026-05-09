@@ -8,6 +8,7 @@ import {
 } from "../auth/two-factor-replay-cache";
 import type { PostgresStorage } from "../storage-postgres";
 import { ERROR_CODES } from "../../shared/error-codes";
+import { getRequestContext } from "../lib/request-context";
 import { AuthAccountError } from "./auth-account-types";
 import type {
   AuthAccountAuthenticationStorage,
@@ -187,4 +188,38 @@ export function verifyTwoFactorSecretCode(params: {
   }
 
   return { ok: true };
+}
+
+export async function recordTwoFactorLoginFailureAudit(params: {
+  browserName: string;
+  failureReason: "invalid_code" | "secret_invalid";
+  ipAddress?: string | null | undefined;
+  pcName?: string | null | undefined;
+  retryCount?: number | null | undefined;
+  storage: Pick<AuthAccountAuthenticationStorage, "createAuditLog">;
+  user: AuthAccountUser;
+}) {
+  const requestContext = getRequestContext();
+  await params.storage.createAuditLog({
+    action: params.failureReason === "secret_invalid" ? "LOGIN_2FA_FAILED_SECRET" : "LOGIN_2FA_FAILED",
+    performedBy: params.user.username,
+    targetUser: params.user.id,
+    details: JSON.stringify({
+      event_type: "auth.two_factor.login_failed",
+      timestamp: new Date().toISOString(),
+      request_id: requestContext?.requestId ?? null,
+      ip: params.ipAddress ?? requestContext?.clientIp ?? null,
+      user_id: params.user.id,
+      username: params.user.username,
+      device: {
+        browser: params.browserName,
+        pc_name: params.pcName ?? null,
+        user_agent: requestContext?.userAgent ?? null,
+      },
+      failure_reason: params.failureReason,
+      retry_count: Number.isFinite(Number(params.retryCount))
+        ? Math.max(0, Math.trunc(Number(params.retryCount)))
+        : null,
+    }),
+  });
 }

@@ -3,6 +3,7 @@ import type { Request, RequestHandler } from "express";
 import rateLimit from "express-rate-limit";
 import { ERROR_CODES } from "../../shared/error-codes";
 import { runtimeConfig } from "../config/runtime";
+import { logger } from "../lib/logger";
 import { createSharedRateLimitStore } from "./redis-rate-limit-store";
 
 type RateLimitPayload = {
@@ -28,6 +29,7 @@ type JsonRateLimiterOptions = {
   max: number;
   code: string;
   message: string;
+  adaptiveCooldown?: boolean | undefined;
   keyGenerator?: ((req: Request) => string) | undefined;
 };
 
@@ -38,6 +40,16 @@ type AuthenticatedLikeRequest = Request & {
 };
 
 const AUTH_RATE_LIMIT_HASH_LENGTH = 24;
+const ADAPTIVE_RATE_LIMIT_MAX_BUCKETS = 4_096;
+const ADAPTIVE_RATE_LIMIT_MAX_COOLDOWN_MS = 60 * 60 * 1000;
+
+type AdaptiveRateLimitBucket = {
+  expiresAt: number;
+  lastSeenAt: number;
+  strikeCount: number;
+};
+
+const adaptiveRateLimitCooldowns = new Map<string, AdaptiveRateLimitBucket>();
 
 function normalizeKeyPart(value: unknown): string | null {
   if (typeof value !== "string") {
@@ -109,6 +121,69 @@ function buildRateLimitKey(req: Request, scope: string, ...parts: Array<unknown>
   return keyParts.join("|");
 }
 
+function pruneAdaptiveRateLimitCooldowns(nowMs: number) {
+  for (const [key, bucket] of adaptiveRateLimitCooldowns) {
+    if (bucket.expiresAt <= nowMs) {
+      adaptiveRateLimitCooldowns.delete(key);
+    }
+  }
+
+  while (adaptiveRateLimitCooldowns.size > ADAPTIVE_RATE_LIMIT_MAX_BUCKETS) {
+    let oldestKey: string | null = null;
+    let oldestSeenAt = Number.POSITIVE_INFINITY;
+    for (const [key, bucket] of adaptiveRateLimitCooldowns) {
+      if (bucket.lastSeenAt < oldestSeenAt) {
+        oldestKey = key;
+        oldestSeenAt = bucket.lastSeenAt;
+      }
+    }
+
+    if (!oldestKey) {
+      break;
+    }
+    adaptiveRateLimitCooldowns.delete(oldestKey);
+  }
+}
+
+function resolveJsonRateLimiterKey(req: Request, options: JsonRateLimiterOptions): string {
+  return options.keyGenerator?.(req) ?? buildRateLimitKey(req, options.code);
+}
+
+function getAdaptiveRateLimitCooldown(key: string, nowMs: number): AdaptiveRateLimitBucket | null {
+  const bucket = adaptiveRateLimitCooldowns.get(key);
+  if (!bucket) {
+    return null;
+  }
+  if (bucket.expiresAt <= nowMs) {
+    adaptiveRateLimitCooldowns.delete(key);
+    return null;
+  }
+  bucket.lastSeenAt = nowMs;
+  return bucket;
+}
+
+function recordAdaptiveRateLimitViolation(
+  key: string,
+  windowMs: number,
+  nowMs: number,
+): AdaptiveRateLimitBucket {
+  pruneAdaptiveRateLimitCooldowns(nowMs);
+  const previous = getAdaptiveRateLimitCooldown(key, nowMs);
+  const strikeCount = Math.min((previous?.strikeCount ?? 0) + 1, 8);
+  const cooldownMs = Math.min(
+    ADAPTIVE_RATE_LIMIT_MAX_COOLDOWN_MS,
+    Math.max(windowMs, windowMs * (2 ** (strikeCount - 1))),
+  );
+  const bucket = {
+    expiresAt: nowMs + cooldownMs,
+    lastSeenAt: nowMs,
+    strikeCount,
+  };
+  adaptiveRateLimitCooldowns.set(key, bucket);
+  pruneAdaptiveRateLimitCooldowns(nowMs);
+  return bucket;
+}
+
 function createJsonRateLimiter(options: JsonRateLimiterOptions): RequestHandler {
   const payload: RateLimitPayload = {
     ok: false,
@@ -122,7 +197,7 @@ function createJsonRateLimiter(options: JsonRateLimiterOptions): RequestHandler 
     prefix: `sqr:rate-limit:${options.code}`,
   });
 
-  return rateLimit({
+  const limiter = rateLimit({
     windowMs: options.windowMs,
     max: options.max,
     ...(sharedStore ? { store: sharedStore } : {}),
@@ -130,20 +205,65 @@ function createJsonRateLimiter(options: JsonRateLimiterOptions): RequestHandler 
     legacyHeaders: false,
     ...(options.keyGenerator ? { keyGenerator: options.keyGenerator } : {}),
     handler: (req, res, _next, optionsUsed) => {
+      const nowMs = Date.now();
+      const cooldownBucket = options.adaptiveCooldown
+        ? recordAdaptiveRateLimitViolation(resolveJsonRateLimiterKey(req, options), optionsUsed.windowMs, nowMs)
+        : null;
       const rateLimitInfo = (req as Request & { rateLimit?: { resetTime?: Date } }).rateLimit;
       const resetTimeMs = rateLimitInfo?.resetTime instanceof Date
         ? rateLimitInfo.resetTime.getTime()
         : null;
-      const retryAfterMs = resetTimeMs
+      const baseRetryAfterMs = resetTimeMs
         ? Math.max(0, resetTimeMs - Date.now())
         : optionsUsed.windowMs;
+      const retryAfterMs = Math.max(
+        baseRetryAfterMs,
+        cooldownBucket ? Math.max(0, cooldownBucket.expiresAt - nowMs) : 0,
+      );
 
+      logger.warn("Rate limit exceeded", {
+        code: options.code,
+        method: req.method,
+        path: req.path,
+        retryAfterMs,
+        ...(cooldownBucket ? { strikeCount: cooldownBucket.strikeCount } : {}),
+      });
+
+      res.setHeader("Retry-After", String(Math.max(1, Math.ceil(retryAfterMs / 1000))));
       res.status(429).json({
         ...payload,
         retryAfterMs,
       });
     },
   });
+
+  if (!options.adaptiveCooldown) {
+    return limiter;
+  }
+
+  return (req, res, next) => {
+    const nowMs = Date.now();
+    const key = resolveJsonRateLimiterKey(req, options);
+    const cooldownBucket = getAdaptiveRateLimitCooldown(key, nowMs);
+    if (!cooldownBucket) {
+      limiter(req, res, next);
+      return;
+    }
+
+    const retryAfterMs = Math.max(0, cooldownBucket.expiresAt - nowMs);
+    logger.warn("Rate limit adaptive cooldown active", {
+      code: options.code,
+      method: req.method,
+      path: req.path,
+      retryAfterMs,
+      strikeCount: cooldownBucket.strikeCount,
+    });
+    res.setHeader("Retry-After", String(Math.max(1, Math.ceil(retryAfterMs / 1000))));
+    res.status(429).json({
+      ...payload,
+      retryAfterMs,
+    });
+  };
 }
 
 export const searchRateLimiter = createJsonRateLimiter({
@@ -170,16 +290,18 @@ export function createAuthRouteRateLimiters(): AuthRouteRateLimiters {
   return {
     loginIp: createJsonRateLimiter({
       windowMs: 10 * 60 * 1000,
-      max: 50,
+      max: 30,
       code: ERROR_CODES.AUTH_RATE_LIMITED,
       message: "Too many login attempts from this network. Please try again shortly.",
+      adaptiveCooldown: true,
       keyGenerator: (req) => buildRateLimitKey(req, "auth-login-ip"),
     }),
     login: createJsonRateLimiter({
       windowMs: 10 * 60 * 1000,
-      max: 15,
+      max: 8,
       code: ERROR_CODES.AUTH_RATE_LIMITED,
       message: "Too many login attempts. Please try again shortly.",
+      adaptiveCooldown: true,
       keyGenerator: (req) => buildRateLimitKey(
         req,
         "auth-login",
@@ -191,6 +313,7 @@ export function createAuthRouteRateLimiters(): AuthRouteRateLimiters {
       max: 20,
       code: ERROR_CODES.AUTH_RECOVERY_RATE_LIMITED,
       message: "Too many activation or password reset attempts. Please try again shortly.",
+      adaptiveCooldown: true,
       keyGenerator: (req) => buildRateLimitKey(
         req,
         `auth-recovery:${req.path}`,

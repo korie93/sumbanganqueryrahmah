@@ -1,4 +1,5 @@
 import { WebSocket } from "ws";
+import { logger } from "../lib/logger";
 import type { RuntimeWsCleanupClient } from "./ws-lifecycle";
 
 export const DEFAULT_RUNTIME_WS_HEARTBEAT_INTERVAL_MS = 30_000;
@@ -30,23 +31,33 @@ export function startRuntimeWsHeartbeat({
   socketEntriesByActivity,
 }: RuntimeWsHeartbeatOptions): NodeJS.Timeout {
   const heartbeatHandle = setInterval(() => {
+    let staleClientMapEntries = 0;
+    let closedTrackedSockets = 0;
+    let mismatchedEntries = 0;
+    let desyncedEntries = 0;
+    let heartbeatTimeouts = 0;
+
     for (const [activityId, ws] of Array.from(connectedClients.entries())) {
       const currentEntry = socketEntriesByActivity.get(activityId);
       if (currentEntry?.ws === ws) {
         continue;
       }
 
+      staleClientMapEntries += 1;
       cleanupClient(activityId, {
         expectedWs: ws,
+        reason: "heartbeat-stale-client-map-entry",
       });
     }
 
     for (const entry of Array.from(socketEntriesByActivity.values())) {
       const { activityId, ws } = entry;
       if (!ws || (ws.readyState !== WebSocket.OPEN && ws.readyState !== WebSocket.CONNECTING)) {
+        closedTrackedSockets += 1;
         cleanupClient(activityId, {
           expectedWs: ws,
           clearSession: true,
+          reason: "heartbeat-closed-socket",
         });
         continue;
       }
@@ -57,6 +68,7 @@ export function startRuntimeWsHeartbeat({
 
       const currentEntry = socketEntriesByActivity.get(activityId);
       if (!currentEntry || currentEntry.ws !== ws) {
+        mismatchedEntries += 1;
         cleanupClient(activityId, {
           expectedWs: ws,
           reason: "heartbeat-entry-mismatch",
@@ -65,6 +77,7 @@ export function startRuntimeWsHeartbeat({
       }
 
       if (connectedClients.get(activityId) !== ws) {
+        desyncedEntries += 1;
         cleanupClient(activityId, {
           expectedWs: ws,
           closeWith: "close",
@@ -74,6 +87,7 @@ export function startRuntimeWsHeartbeat({
       }
 
       if (!currentEntry.alive) {
+        heartbeatTimeouts += 1;
         cleanupClient(activityId, {
           expectedWs: ws,
           closeWith: "terminate",
@@ -85,6 +99,22 @@ export function startRuntimeWsHeartbeat({
 
       currentEntry.alive = false;
       ws.ping();
+    }
+
+    const staleTotal = staleClientMapEntries
+      + closedTrackedSockets
+      + mismatchedEntries
+      + desyncedEntries
+      + heartbeatTimeouts;
+    if (staleTotal > 0) {
+      logger.warn("WebSocket heartbeat stale sweep removed clients", {
+        staleTotal,
+        staleClientMapEntries,
+        closedTrackedSockets,
+        mismatchedEntries,
+        desyncedEntries,
+        heartbeatTimeouts,
+      });
     }
   }, heartbeatIntervalMs);
   heartbeatHandle.unref();

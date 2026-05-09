@@ -116,6 +116,8 @@ test("persistAuthenticatedUser stores auth session data in sessionStorage instea
   assert.equal(session.getItem("username"), "alice");
   assert.equal(session.getItem("role"), "admin");
   assert.match(String(session.getItem("user") || ""), /Alice Admin/);
+  assert.ok(Number(session.getItem("sessionStoredAt") || 0) > 0);
+  assert.ok(Number(session.getItem("sessionExpiresAt") || 0) > Number(session.getItem("sessionStoredAt") || 0));
   assert.equal(local.getItem("username"), null);
   assert.equal(local.getItem("role"), null);
   assert.equal(local.getItem("user"), null);
@@ -164,10 +166,43 @@ test("clearAuthenticatedUserStorage clears both session auth data and legacy loc
   assert.equal(session.getItem("user"), null);
   assert.equal(session.getItem("activityId"), null);
   assert.equal(session.getItem("banned"), null);
+  assert.equal(session.getItem("sessionStoredAt"), null);
+  assert.equal(session.getItem("sessionExpiresAt"), null);
   assert.equal(local.getItem("user"), null);
   assert.equal(local.getItem("token"), null);
   assert.equal(local.getItem("activeTab"), "home");
   assert.match(documentMock.cookie, /Max-Age=0/);
+});
+
+test("stored auth session metadata expires stale cached users safely", () => {
+  const { session } = installStorageMocks();
+  session.setItem("user", JSON.stringify(sampleUser));
+  session.setItem("username", "alice");
+  session.setItem("role", "admin");
+  session.setItem("sessionStoredAt", "1");
+  session.setItem("sessionExpiresAt", "2");
+
+  assert.equal(getStoredAuthenticatedUser(), null);
+  assert.equal(session.getItem("user"), null);
+  assert.equal(session.getItem("username"), null);
+  assert.equal(session.getItem("role"), null);
+  assert.equal(session.getItem("sessionStoredAt"), null);
+  assert.equal(session.getItem("sessionExpiresAt"), null);
+});
+
+test("stored auth session recovers missing metadata without accepting corrupted users", () => {
+  const { session } = installStorageMocks();
+  session.setItem("user", JSON.stringify(sampleUser));
+  session.setItem("username", "alice");
+  session.setItem("role", "admin");
+
+  assert.equal(getStoredAuthenticatedUser()?.username, "alice");
+  assert.ok(Number(session.getItem("sessionStoredAt") || 0) > 0);
+
+  session.setItem("user", "{bad-json");
+  assert.equal(getStoredAuthenticatedUser(), null);
+  assert.equal(session.getItem("user"), null);
+  assert.equal(session.getItem("sessionStoredAt"), null);
 });
 
 test("persistAuthNotice stores a one-time login notice in sessionStorage", () => {

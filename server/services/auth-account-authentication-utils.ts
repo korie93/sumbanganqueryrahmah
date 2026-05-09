@@ -18,5 +18,6 @@ export {
   clearFailedLoginState,
   failLockedLogin,
   handleFailedPasswordAttempt,
+  recordTwoFactorLoginFailureAudit,
   verifyTwoFactorSecretCode,
 } from "./auth-account-authentication-session-utils";

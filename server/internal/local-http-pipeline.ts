@@ -6,6 +6,7 @@ import { runWithRequestContext } from "../lib/request-context";
 import { createCsrfProtectionMiddleware } from "../http/csrf";
 import { createCorsMiddleware } from "../http/cors";
 import { createForwardedForTrustProxyWarningMiddleware } from "../http/forwarded-proxy-warning";
+import { createGlobalRequestTimeoutMiddleware } from "../http/global-request-timeout";
 import { resolveRequestId } from "../http/request-id";
 import { SQR_TRUSTED_TYPES_POLICY_NAME } from "../../shared/trusted-types";
 
@@ -235,6 +236,10 @@ export function registerLocalHttpPipeline(app: Express, options: LocalHttpPipeli
 
   app.use(createForwardedForTrustProxyWarningMiddleware({
     trustedProxies: runtimeConfig.app.trustedProxies,
+  }));
+
+  app.use(createGlobalRequestTimeoutMiddleware({
+    timeoutMs: runtimeConfig.runtime.httpRequestTimeoutMs,
   }));
 
   app.use(createCsrfProtectionMiddleware());

@@ -43,13 +43,9 @@ if (!rootElement) {
 }
 
 createRoot(rootElement).render(
-  import.meta.env.DEV ? (
-    <StrictMode>
-      <App />
-    </StrictMode>
-  ) : (
+  <StrictMode>
     <App />
-  ),
+  </StrictMode>,
 );
 
 if ((window as WindowWithBootShell).__SQR_BOOT_SHELL__) {

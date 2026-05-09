@@ -9,6 +9,8 @@ import {
   createCspReportRequestGuard,
   createWebVitalsTelemetryDropGuard,
   createWebVitalsTelemetryRequestGuard,
+  CANONICAL_WEB_VITALS_TELEMETRY_PATH,
+  LEGACY_WEB_VITALS_TELEMETRY_SUNSET,
   registerCspReportDropGuardCleanup,
   registerTelemetryRoutes,
   registerWebVitalsTelemetryDropGuardCleanup,
@@ -265,6 +267,9 @@ test("POST /telemetry/web-vitals remains a guarded compatibility alias", async (
     });
 
     assert.equal(response.status, 204);
+    assert.equal(response.headers.get("Deprecation"), "true");
+    assert.equal(response.headers.get("Sunset"), LEGACY_WEB_VITALS_TELEMETRY_SUNSET);
+    assert.match(String(response.headers.get("Link") || ""), new RegExp(`<${CANONICAL_WEB_VITALS_TELEMETRY_PATH}>; rel="successor-version"`));
     assert.equal(recordedPayloads.length, 1);
   } finally {
     await stopTestServer(server);

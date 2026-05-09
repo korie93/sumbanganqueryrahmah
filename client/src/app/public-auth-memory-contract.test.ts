@@ -96,7 +96,7 @@ test("client entry fails clearly if the app root is missing", () => {
   assert.doesNotMatch(mainSource, /createRoot\(document\.getElementById\("root"\)!\)/);
 });
 
-test("client entry installs unhandled rejection logging before low-spec detection and keeps StrictMode dev-only", () => {
+test("client entry installs unhandled rejection logging before low-spec detection and keeps StrictMode always enabled", () => {
   const mainSource = readClientSource("../main.tsx");
   const unhandledIndex = mainSource.indexOf("installGlobalUnhandledRejectionHandler();");
   const lowSpecIndex = mainSource.indexOf("if (detectLowSpecMode())");
@@ -105,7 +105,8 @@ test("client entry installs unhandled rejection logging before low-spec detectio
   assert.notEqual(lowSpecIndex, -1);
   assert.ok(unhandledIndex < lowSpecIndex);
   assert.match(mainSource, /import \{ StrictMode \} from "react";/);
-  assert.match(mainSource, /import\.meta\.env\.DEV \? \(\s*<StrictMode>/);
+  assert.match(mainSource, /createRoot\(rootElement\)\.render\(\s*<StrictMode>/);
+  assert.doesNotMatch(mainSource, /import\.meta\.env\.DEV \?/);
 });
 
 test("browser color scheme metadata matches the light and dark token strategy", () => {

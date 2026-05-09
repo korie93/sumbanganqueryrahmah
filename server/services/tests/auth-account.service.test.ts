@@ -469,6 +469,7 @@ test("AuthAccountService.verifyTwoFactorLogin rejects replayed authenticator cod
     twoFactorConfiguredAt: new Date("2026-03-20T00:00:00.000Z"),
   };
   const auditActions: string[] = [];
+  let failedTwoFactorAuditDetails = "";
   let createActivityCalls = 0;
 
   const service = createAuthAccountService({
@@ -478,6 +479,9 @@ test("AuthAccountService.verifyTwoFactorLogin rejects replayed authenticator cod
     deactivateUserActivities: async () => undefined,
     createAuditLog: async (entry: AuditLogInput) => {
       auditActions.push(String(entry?.action || ""));
+      if (entry?.action === "LOGIN_2FA_FAILED") {
+        failedTwoFactorAuditDetails = String(entry.details || "");
+      }
       return buildAuditLog(entry);
     },
     createActivity: async () => {
@@ -530,6 +534,11 @@ test("AuthAccountService.verifyTwoFactorLogin rejects replayed authenticator cod
 
   assert.equal(createActivityCalls, 1);
   assert.ok(auditActions.includes("LOGIN_2FA_FAILED"));
+  assert.match(failedTwoFactorAuditDetails, /"event_type":"auth\.two_factor\.login_failed"/);
+  assert.match(failedTwoFactorAuditDetails, /"failure_reason":"invalid_code"/);
+  assert.match(failedTwoFactorAuditDetails, /"user_id":"admin-replay-1"/);
+  assert.match(failedTwoFactorAuditDetails, /"ip":"127\.0\.0\.1"/);
+  assert.doesNotMatch(failedTwoFactorAuditDetails, new RegExp(code));
 });
 
 test("AuthAccountService supports starting, confirming, and disabling 2FA for admin accounts", async () => {

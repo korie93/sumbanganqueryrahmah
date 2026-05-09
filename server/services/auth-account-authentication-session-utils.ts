@@ -9,6 +9,7 @@ export {
   clearFailedLoginState,
   failLockedLogin,
   handleFailedPasswordAttempt,
+  recordTwoFactorLoginFailureAudit,
   requiresTwoFactor,
   verifyTwoFactorSecretCode,
 } from "./auth-account-login-guard-utils";

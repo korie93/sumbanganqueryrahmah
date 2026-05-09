@@ -128,6 +128,7 @@ export type RuntimeConfig = {
     importPerUserActiveUploadBytes: number;
     importAnalysisTimeoutMs: number;
     collectionRollupListenReconnectMs: number;
+    httpRequestTimeoutMs: number;
     httpSlowRequestMs: number;
     analyticsTimeZone: string;
   };

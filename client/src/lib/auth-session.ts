@@ -1,4 +1,5 @@
 import type { User } from "@/app/types";
+import { LEGACY_AUTH_LOCAL_STORAGE_KEYS } from "@/app/constants";
 import { createClientRandomId } from "@/lib/secure-id";
 import {
   clearLegacyAuthLocalStorage,
@@ -9,17 +10,24 @@ const AUTH_SESSION_HINT_COOKIE_NAME = "sqr_auth_hint";
 const AUTH_NOTICE_STORAGE_KEY = "auth_notice";
 const FORCE_LOGOUT_EVENT_NAME = "force-logout";
 const FORCE_LOGOUT_BROADCAST_CHANNEL_NAME = "sqr-auth-force-logout";
+const AUTH_SESSION_STORED_AT_KEY = "sessionStoredAt";
+const AUTH_SESSION_EXPIRES_AT_KEY = "sessionExpiresAt";
+const AUTH_SESSION_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 const AUTH_SESSION_STORAGE_KEYS = [
   "activityId",
   "banned",
   "fingerprint",
   "forcePasswordChange",
   "role",
+  AUTH_SESSION_EXPIRES_AT_KEY,
+  AUTH_SESSION_STORED_AT_KEY,
   "user",
   "username",
 ] as const;
 
 type AuthSessionStorageKey = (typeof AUTH_SESSION_STORAGE_KEYS)[number];
+type LegacyAuthLocalStorageKey = (typeof LEGACY_AUTH_LOCAL_STORAGE_KEYS)[number];
+type LegacyCompatAuthSessionStorageKey = Extract<AuthSessionStorageKey, LegacyAuthLocalStorageKey>;
 
 type ForcedLogoutPayload = {
   message?: string;
@@ -33,6 +41,16 @@ function canUseAuthStorage() {
     && typeof sessionStorage !== "undefined";
 }
 
+function isLegacyAuthLocalStorageKey(key: AuthSessionStorageKey): key is LegacyCompatAuthSessionStorageKey {
+  return (LEGACY_AUTH_LOCAL_STORAGE_KEYS as readonly string[]).includes(key);
+}
+
+function clearLegacyAuthSessionValue(key: AuthSessionStorageKey) {
+  if (isLegacyAuthLocalStorageKey(key)) {
+    clearLegacyAuthLocalStorageValue(key);
+  }
+}
+
 function readAuthSessionValue(key: AuthSessionStorageKey): string | null {
   if (!canUseAuthStorage()) {
     return null;
@@ -44,7 +62,7 @@ function readAuthSessionValue(key: AuthSessionStorageKey): string | null {
       return sessionValue;
     }
 
-    clearLegacyAuthLocalStorageValue(key);
+    clearLegacyAuthSessionValue(key);
   } catch {
     return null;
   }
@@ -59,7 +77,7 @@ function writeAuthSessionValue(key: AuthSessionStorageKey, value: string) {
 
   try {
     sessionStorage.setItem(key, value);
-    clearLegacyAuthLocalStorageValue(key);
+    clearLegacyAuthSessionValue(key);
   } catch {
     // Ignore storage access failures and fall back to the active in-memory session.
   }
@@ -72,7 +90,7 @@ function removeAuthSessionValue(key: AuthSessionStorageKey) {
 
   try {
     sessionStorage.removeItem(key);
-    clearLegacyAuthLocalStorageValue(key);
+    clearLegacyAuthSessionValue(key);
   } catch {
     // Ignore storage access failures during best-effort cleanup.
   }
@@ -82,6 +100,46 @@ function clearAuthSessionHintCookie() {
   if (typeof document === "undefined") return;
 
   document.cookie = `${AUTH_SESSION_HINT_COOKIE_NAME}=; Max-Age=0; path=/; SameSite=Lax`;
+}
+
+function readAuthSessionTimestamp(key: typeof AUTH_SESSION_STORED_AT_KEY | typeof AUTH_SESSION_EXPIRES_AT_KEY): number | null {
+  const raw = readAuthSessionValue(key);
+  if (!raw) {
+    return null;
+  }
+
+  const value = Number(raw);
+  if (!Number.isFinite(value) || value <= 0) {
+    removeAuthSessionValue(key);
+    return null;
+  }
+
+  return value;
+}
+
+function writeAuthSessionMetadata(nowMs = Date.now()) {
+  writeAuthSessionValue(AUTH_SESSION_STORED_AT_KEY, String(nowMs));
+  writeAuthSessionValue(AUTH_SESSION_EXPIRES_AT_KEY, String(nowMs + AUTH_SESSION_MAX_AGE_MS));
+}
+
+function isStoredAuthSessionExpired(nowMs = Date.now()): boolean {
+  const expiresAt = readAuthSessionTimestamp(AUTH_SESSION_EXPIRES_AT_KEY);
+  if (expiresAt !== null) {
+    return expiresAt <= nowMs;
+  }
+
+  const storedAt = readAuthSessionTimestamp(AUTH_SESSION_STORED_AT_KEY);
+  if (storedAt === null) {
+    return false;
+  }
+
+  return storedAt + AUTH_SESSION_MAX_AGE_MS <= nowMs;
+}
+
+function clearStoredAuthSessionValues() {
+  for (const key of AUTH_SESSION_STORAGE_KEYS) {
+    removeAuthSessionValue(key);
+  }
 }
 
 function normalizeAuthNoticeMessage(message: string | null | undefined): string {
@@ -285,6 +343,11 @@ export function hasAuthSessionHintCookie() {
 }
 
 export function getStoredAuthenticatedUser(): User | null {
+  if (isStoredAuthSessionExpired()) {
+    clearStoredAuthSessionValues();
+    return null;
+  }
+
   const raw = readAuthSessionValue("user");
   if (!raw) {
     return null;
@@ -295,11 +358,12 @@ export function getStoredAuthenticatedUser(): User | null {
     if (!parsed?.username || !parsed?.role) {
       throw new Error("Invalid cached user");
     }
+    if (readAuthSessionTimestamp(AUTH_SESSION_STORED_AT_KEY) === null) {
+      writeAuthSessionMetadata();
+    }
     return parsed;
   } catch {
-    removeAuthSessionValue("user");
-    removeAuthSessionValue("username");
-    removeAuthSessionValue("role");
+    clearStoredAuthSessionValues();
     return null;
   }
 }
@@ -377,6 +441,7 @@ export function setBannedSessionFlag(isBanned: boolean) {
 }
 
 export function persistAuthenticatedUser(user: User) {
+  writeAuthSessionMetadata();
   writeAuthSessionValue("username", String(user.username || "").trim());
   writeAuthSessionValue("role", String(user.role || "").trim());
   writeAuthSessionValue("user", JSON.stringify(user));
@@ -385,9 +450,7 @@ export function persistAuthenticatedUser(user: User) {
 
 export function clearAuthenticatedUserStorage() {
   clearAuthSessionHintCookie();
-  for (const key of AUTH_SESSION_STORAGE_KEYS) {
-    removeAuthSessionValue(key);
-  }
+  clearStoredAuthSessionValues();
   clearLegacyAuthLocalStorage();
   if (typeof sessionStorage !== "undefined") {
     try {

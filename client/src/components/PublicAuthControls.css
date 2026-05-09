@@ -60,8 +60,22 @@
 }
 
 .public-auth-input:focus {
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+}
+
+.public-auth-input:focus-visible {
   border-color: var(--public-auth-primary-bg-hover);
+  outline: 2px solid transparent;
+  outline-offset: 2px;
   box-shadow: 0 0 0 2px var(--public-auth-input-focus);
+}
+
+@supports not selector(:focus-visible) {
+  .public-auth-input:focus {
+    border-color: var(--public-auth-primary-bg-hover);
+    box-shadow: 0 0 0 2px var(--public-auth-input-focus);
+  }
 }
 
 @media (hover: hover) and (pointer: fine) {

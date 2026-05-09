@@ -15,6 +15,7 @@ import {
   failLockedLogin,
   handleFailedPasswordAttempt,
   invalidateUserSessions,
+  recordTwoFactorLoginFailureAudit,
   requiresTwoFactor,
   verifyTwoFactorSecretCode,
 } from "./auth-account-authentication-utils";
@@ -202,19 +203,25 @@ export class AuthAccountAuthenticationOperations {
         error instanceof AuthAccountError
         && error.code === ERROR_CODES.TWO_FACTOR_SECRET_INVALID
       ) {
-        await this.deps.storage.createAuditLog({
-          action: "LOGIN_2FA_FAILED_SECRET",
-          performedBy: user.username,
-          targetUser: user.id,
-          details: "Stored two-factor secret could not be decrypted.",
+        await recordTwoFactorLoginFailureAudit({
+          browserName: input.browserName,
+          failureReason: "secret_invalid",
+          ipAddress: input.ipAddress,
+          pcName: input.pcName,
+          retryCount: user.failedLoginAttempts,
+          storage: this.deps.storage,
+          user,
         });
         throw error;
       }
-      await this.deps.storage.createAuditLog({
-        action: "LOGIN_2FA_FAILED",
-        performedBy: user.username,
-        targetUser: user.id,
-        details: `Invalid authenticator code from ${input.browserName}`,
+      await recordTwoFactorLoginFailureAudit({
+        browserName: input.browserName,
+        failureReason: "invalid_code",
+        ipAddress: input.ipAddress,
+        pcName: input.pcName,
+        retryCount: user.failedLoginAttempts,
+        storage: this.deps.storage,
+        user,
       });
       throw error;
     }

@@ -1,18 +1,82 @@
 import type { CollectionMonthlyComparisonResponse } from "@/lib/api";
 import { formatAmountRM } from "@/pages/collection/utils";
+import {
+  countCollectionMonthsInclusive,
+  formatCollectionMonthInput,
+  formatCollectionMonthName,
+  formatCollectionMonthlyComparisonDifference,
+  formatCollectionMonthlyComparisonMonthDelta,
+  formatCollectionMonthlyComparisonPercentage,
+  formatCollectionSameDayPaceDisplayDate,
+  formatCollectionSameDayPaceMonthLabel,
+  formatCompactAmountRM,
+  getCollectionDaysInMonth,
+  normalizeCollectionMonthInputValue,
+  parseCollectionMonthKey,
+  resolveCollectionMonthlyComparisonTone,
+  shiftCollectionMonthInput,
+} from "./collection-monthly-format-utils";
+import {
+  COLLECTION_MONTHLY_COMPARISON_ANOMALY_THRESHOLD_PERCENT,
+  resolveCollectionMonthlyComparisonAnomaly,
+  type CollectionMonthlyComparisonAnomalyDirection,
+} from "./collection-monthly-anomaly-utils";
+import {
+  buildCollectionMonthlyComparisonTargetSummary,
+  normalizeCollectionMonthlyComparisonTargetAmount,
+  resolveCollectionMonthlyComparisonTargetForMonth,
+  type CollectionMonthlyComparisonTargetInput,
+  type CollectionMonthlyComparisonTargetLookup,
+  type CollectionMonthlyComparisonTargetSummary,
+} from "./collection-monthly-target-utils";
+import {
+  normalizeCollectionSameDayAmount,
+  resolveCollectionMonthlyComparisonBenchmarkDirection,
+  resolveCollectionMonthlyComparisonPercentageChange,
+  resolveCollectionSameDayPercentageChange,
+} from "./collection-monthly-stat-utils";
+import {
+  buildCollectionMonthlyComparisonAccessibleSummary,
+  buildCollectionMonthlyComparisonTrendExplanation,
+} from "./collection-monthly-insight-utils";
 
 export const COLLECTION_MONTHLY_COMPARISON_MAX_RANGE_MONTHS = 24;
-export const COLLECTION_MONTHLY_COMPARISON_ANOMALY_THRESHOLD_PERCENT = 30;
 
-const COLLECTION_MONTH_KEY_REGEX = /^\d{4}-\d{2}$/;
-const COMPACT_AMOUNT_FORMATTER = new Intl.NumberFormat("en-MY", {
-  notation: "compact",
-  maximumFractionDigits: 1,
-});
+export {
+  COLLECTION_MONTHLY_COMPARISON_ANOMALY_THRESHOLD_PERCENT,
+  buildCollectionMonthlyComparisonAccessibleSummary,
+  buildCollectionMonthlyComparisonTargetSummary,
+  buildCollectionMonthlyComparisonTrendExplanation,
+  countCollectionMonthsInclusive,
+  formatCollectionMonthInput,
+  formatCollectionMonthName,
+  formatCollectionMonthlyComparisonDifference,
+  formatCollectionMonthlyComparisonMonthDelta,
+  formatCollectionMonthlyComparisonPercentage,
+  formatCollectionSameDayPaceDisplayDate,
+  formatCollectionSameDayPaceMonthLabel,
+  formatCompactAmountRM,
+  getCollectionDaysInMonth,
+  normalizeCollectionMonthlyComparisonTargetAmount,
+  normalizeCollectionMonthInputValue,
+  parseCollectionMonthKey,
+  resolveCollectionMonthlyComparisonAnomaly,
+  resolveCollectionMonthlyComparisonBenchmarkDirection,
+  resolveCollectionMonthlyComparisonPercentageChange,
+  resolveCollectionMonthlyComparisonTargetForMonth,
+  resolveCollectionMonthlyComparisonTone,
+  resolveCollectionSameDayPercentageChange,
+  shiftCollectionMonthInput,
+};
+
+export type {
+  CollectionMonthlyComparisonAnomalyDirection,
+  CollectionMonthlyComparisonTargetInput,
+  CollectionMonthlyComparisonTargetLookup,
+  CollectionMonthlyComparisonTargetSummary,
+};
 
 type CollectionMonthlyComparisonMonth = CollectionMonthlyComparisonResponse["months"][number];
-
-export type CollectionMonthlyComparisonAnomalyDirection = "increase" | "decrease";
 
 export type CollectionMonthlyComparisonMonthInsight = CollectionMonthlyComparisonMonth & {
   previousTotal: number | null;
@@ -48,26 +112,6 @@ export type CollectionMonthlyComparisonInsights = {
   anomalyMonths: CollectionMonthlyComparisonMonthInsight[];
   monthInsights: CollectionMonthlyComparisonMonthInsight[];
 };
-
-export type CollectionMonthlyComparisonTargetSummary = {
-  monthlyTargetAmount: number;
-  rangeTarget: number;
-  targetGap: number;
-  targetProgress: number;
-  monthsAtOrAboveTarget: number;
-  monthsBelowTarget: number;
-  configuredMonthCount: number;
-  missingMonthCount: number;
-  targetByMonth: CollectionMonthlyComparisonTargetLookup;
-};
-
-export type CollectionMonthlyComparisonTargetLookup = Record<string, number | null | undefined>;
-
-export type CollectionMonthlyComparisonTargetInput =
-  | number
-  | null
-  | undefined
-  | CollectionMonthlyComparisonTargetLookup;
 
 export type CollectionMonthlyComparisonProjection = {
   month: string;
@@ -231,62 +275,6 @@ export type CollectionMonthlyComparisonPresetRange = {
   endMonth: string;
 };
 
-export function parseCollectionMonthKey(value: string) {
-  const normalized = String(value || "").trim();
-  if (!COLLECTION_MONTH_KEY_REGEX.test(normalized)) {
-    return null;
-  }
-
-  const [yearRaw, monthRaw] = normalized.split("-");
-  const year = Number.parseInt(yearRaw || "", 10);
-  const month = Number.parseInt(monthRaw || "", 10);
-  if (!Number.isInteger(year) || !Number.isInteger(month) || month < 1 || month > 12) {
-    return null;
-  }
-
-  return { year, month };
-}
-
-export function normalizeCollectionMonthInputValue(value: string): string | null {
-  const normalized = String(value || "").trim();
-  const match = /^(\d{4})-(\d{1,2})$/.exec(normalized);
-  if (!match) {
-    return null;
-  }
-
-  const year = Number.parseInt(match[1] || "", 10);
-  const month = Number.parseInt(match[2] || "", 10);
-  if (!Number.isInteger(year) || !Number.isInteger(month) || month < 1 || month > 12) {
-    return null;
-  }
-
-  return `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}`;
-}
-
-export function formatCollectionMonthInput(date: Date): string {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
-}
-
-export function shiftCollectionMonthInput(monthKey: string, offset: number): string {
-  const parsed = parseCollectionMonthKey(monthKey);
-  if (!parsed) {
-    return monthKey;
-  }
-
-  const nextDate = new Date(parsed.year, parsed.month - 1 + offset, 1);
-  return formatCollectionMonthInput(nextDate);
-}
-
-export function countCollectionMonthsInclusive(startMonth: string, endMonth: string): number {
-  const start = parseCollectionMonthKey(startMonth);
-  const end = parseCollectionMonthKey(endMonth);
-  if (!start || !end) {
-    return 0;
-  }
-
-  return ((end.year - start.year) * 12) + (end.month - start.month) + 1;
-}
-
 export function buildDefaultCollectionMonthlyComparisonRange(referenceDate = new Date()) {
   const endMonth = formatCollectionMonthInput(referenceDate);
   const startMonth = shiftCollectionMonthInput(endMonth, -1);
@@ -328,56 +316,6 @@ export function buildCollectionMonthlyComparisonPresetRanges(
       endMonth: `${currentYear - 1}-12`,
     },
   ];
-}
-
-export function formatCollectionMonthName(monthNumber: number): string {
-  const safeMonth = Math.min(12, Math.max(1, Math.floor(monthNumber)));
-  const date = new Date(2026, safeMonth - 1, 1);
-  return new Intl.DateTimeFormat("en-MY", { month: "long" }).format(date);
-}
-
-export function formatCollectionMonthlyComparisonPercentage(value: number | null): string {
-  if (value === null) {
-    return "No previous month total";
-  }
-  if (value === 0) {
-    return "0.00%";
-  }
-  return `${value > 0 ? "+" : ""}${value.toFixed(2)}%`;
-}
-
-export function formatCollectionMonthlyComparisonDifference(value: number | null): string {
-  if (value === null) {
-    return "N/A";
-  }
-  const absoluteValue = Math.abs(value);
-  const formatted = formatAmountRM(absoluteValue);
-  return value > 0 ? `+${formatted}` : value < 0 ? `-${formatted}` : formatted;
-}
-
-function resolveCollectionMonthlyComparisonPercentageChange(
-  targetTotal: number,
-  referenceTotal: number,
-): number | null {
-  if (referenceTotal === 0) {
-    return targetTotal === 0 ? 0 : null;
-  }
-  return ((targetTotal - referenceTotal) / referenceTotal) * 100;
-}
-
-function resolveCollectionMonthlyComparisonBenchmarkDirection(
-  difference: number | null,
-): CollectionMonthlyComparisonBenchmarkSummary["direction"] {
-  if (difference === null) {
-    return "unavailable";
-  }
-  if (difference > 0) {
-    return "increase";
-  }
-  if (difference < 0) {
-    return "decrease";
-  }
-  return "no_change";
 }
 
 function buildCollectionMonthlyComparisonBenchmarkSummary(
@@ -511,128 +449,12 @@ export function buildCollectionMonthlyComparisonBenchmarks(
   ];
 }
 
-export function normalizeCollectionMonthlyComparisonTargetAmount(
-  value: number | null | undefined,
-): number | null {
-  const target = Number(value || 0);
-  return Number.isFinite(target) && target > 0 ? target : null;
-}
-
-export function resolveCollectionMonthlyComparisonTargetForMonth(
-  monthKey: string,
-  targetInput: CollectionMonthlyComparisonTargetInput,
-): number | null {
-  if (targetInput === null || targetInput === undefined) {
-    return null;
-  }
-
-  if (typeof targetInput === "number") {
-    return normalizeCollectionMonthlyComparisonTargetAmount(targetInput);
-  }
-
-  return normalizeCollectionMonthlyComparisonTargetAmount(targetInput[monthKey] ?? null);
-}
-
-function buildCollectionMonthlyComparisonTargetByMonth(
-  payload: CollectionMonthlyComparisonResponse,
-  targetInput: CollectionMonthlyComparisonTargetInput,
-): CollectionMonthlyComparisonTargetLookup {
-  return payload.months.reduce<CollectionMonthlyComparisonTargetLookup>((lookup, month) => {
-    lookup[month.month] = resolveCollectionMonthlyComparisonTargetForMonth(month.month, targetInput);
-    return lookup;
-  }, {});
-}
-
-export function buildCollectionMonthlyComparisonTargetSummary(
-  payload: CollectionMonthlyComparisonResponse,
-  monthlyTargetAmount: CollectionMonthlyComparisonTargetInput,
-): CollectionMonthlyComparisonTargetSummary | null {
-  const targetByMonth = buildCollectionMonthlyComparisonTargetByMonth(payload, monthlyTargetAmount);
-  const configuredMonths = payload.months
-    .map((month) => ({
-      ...month,
-      target: targetByMonth[month.month] ?? null,
-    }))
-    .filter((month) => month.target !== null);
-
-  if (configuredMonths.length === 0) {
-    return null;
-  }
-
-  const targetMonthKey = payload.comparison.targetMonth || payload.endMonth || payload.months[payload.months.length - 1]?.month || "";
-  const targetMonthAmount = resolveCollectionMonthlyComparisonTargetForMonth(targetMonthKey, targetByMonth)
-    ?? configuredMonths[configuredMonths.length - 1]?.target
-    ?? null;
-  if (targetMonthAmount === null) {
-    return null;
-  }
-
-  const configuredRangeTotal = configuredMonths.reduce((total, month) => (
-    total + Number(month.totalCollection || 0)
-  ), 0);
-  const rangeTarget = configuredMonths.reduce((total, month) => total + Number(month.target || 0), 0);
-
-  return {
-    monthlyTargetAmount: targetMonthAmount,
-    rangeTarget,
-    targetGap: configuredRangeTotal - rangeTarget,
-    targetProgress: rangeTarget > 0 ? configuredRangeTotal / rangeTarget : 0,
-    monthsAtOrAboveTarget: configuredMonths.filter((month) => month.totalCollection >= Number(month.target || 0)).length,
-    monthsBelowTarget: configuredMonths.filter((month) => month.totalCollection < Number(month.target || 0)).length,
-    configuredMonthCount: configuredMonths.length,
-    missingMonthCount: Math.max(0, payload.months.length - configuredMonths.length),
-    targetByMonth,
-  };
-}
-
-export function getCollectionDaysInMonth(year: number, month: number): number {
-  return new Date(year, month, 0).getDate();
-}
-
-function normalizeCollectionSameDayAmount(value: number): number {
-  return Number.isFinite(value) ? Math.max(0, value) : 0;
-}
-
-function resolveCollectionSameDayPercentageChange(
-  currentTotal: number,
-  previousTotal: number,
-): number | null {
-  if (previousTotal === 0) {
-    return currentTotal === 0 ? 0 : null;
-  }
-  return ((currentTotal - previousTotal) / previousTotal) * 100;
-}
-
-export function formatCollectionSameDayPaceMonthLabel(monthKey: string): string {
-  const parsed = parseCollectionMonthKey(monthKey);
-  if (!parsed) {
-    return monthKey;
-  }
-  return `${formatCollectionMonthName(parsed.month)} ${parsed.year}`;
-}
-
 function formatCollectionSameDayPaceDate(monthKey: string, day: number): string {
   const parsed = parseCollectionMonthKey(monthKey);
   if (!parsed) {
     return "";
   }
   return `${parsed.year}-${String(parsed.month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-}
-
-export function formatCollectionSameDayPaceDisplayDate(dateValue: string): string {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(dateValue || "").trim());
-  if (!match) {
-    return dateValue;
-  }
-
-  const year = Number.parseInt(match[1] || "", 10);
-  const month = Number.parseInt(match[2] || "", 10);
-  const day = Number.parseInt(match[3] || "", 10);
-  if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) {
-    return dateValue;
-  }
-
-  return `${day} ${formatCollectionMonthName(month)} ${year}`;
 }
 
 function formatCollectionSameDayPaceRangeLabel(monthKey: string, startDay: number, endDay: number): string {
@@ -1326,126 +1148,6 @@ export function buildCollectionMonthlyComparisonDataQualitySummary(
     warningCount,
     signals,
   };
-}
-
-export function formatCompactAmountRM(value: number): string {
-  return `RM ${COMPACT_AMOUNT_FORMATTER.format(Math.max(0, value))}`;
-}
-
-export function formatCollectionMonthlyComparisonMonthDelta(
-  difference: number | null,
-  percentage: number | null,
-): string {
-  if (difference === null) {
-    return "First month in range";
-  }
-
-  const formattedDifference = formatCollectionMonthlyComparisonDifference(difference);
-  if (percentage === null) {
-    return `${formattedDifference} from RM0 base`;
-  }
-
-  return `${formattedDifference} (${formatCollectionMonthlyComparisonPercentage(percentage)})`;
-}
-
-function resolveCollectionMonthlyComparisonAnomaly(
-  difference: number | null,
-  percentage: number | null,
-) {
-  const anomalyMagnitudePercent = percentage === null ? null : Math.abs(percentage);
-  const isAnomaly =
-    difference !== null
-    && difference !== 0
-    && anomalyMagnitudePercent !== null
-    && anomalyMagnitudePercent > COLLECTION_MONTHLY_COMPARISON_ANOMALY_THRESHOLD_PERCENT;
-  const anomalyDirection: CollectionMonthlyComparisonAnomalyDirection | null = isAnomaly
-    ? difference > 0 ? "increase" : "decrease"
-    : null;
-  const anomalyLabel = isAnomaly && anomalyDirection
-    ? `${anomalyDirection === "increase" ? "Unusual jump" : "Unusual drop"} ${formatCollectionMonthlyComparisonPercentage(percentage)} vs previous month`
-    : null;
-
-  return {
-    isAnomaly,
-    anomalyDirection,
-    anomalyMagnitudePercent,
-    anomalyLabel,
-  };
-}
-
-export function resolveCollectionMonthlyComparisonTone(
-  direction: CollectionMonthlyComparisonResponse["comparison"]["direction"],
-): "default" | "success" | "warning" {
-  if (direction === "increase") {
-    return "success";
-  }
-  if (direction === "decrease") {
-    return "warning";
-  }
-  return "default";
-}
-
-export function buildCollectionMonthlyComparisonAccessibleSummary(
-  payload: CollectionMonthlyComparisonResponse,
-): string {
-  const monthSummaries = payload.months.map((entry) =>
-    `${entry.label}: ${formatAmountRM(entry.totalCollection)} across ${entry.recordCount} record(s)`,
-  );
-  return `${payload.comparison.summary} Monthly totals: ${monthSummaries.join("; ")}.`;
-}
-
-export function buildCollectionMonthlyComparisonTrendExplanation(
-  payload: CollectionMonthlyComparisonResponse,
-): string {
-  const { comparison } = payload;
-  const targetMonth = payload.months.find((month) => month.month === comparison.targetMonth)
-    || payload.months[payload.months.length - 1]
-    || null;
-  const baseMonth = comparison.baseMonth
-    ? payload.months.find((month) => month.month === comparison.baseMonth) || null
-    : null;
-
-  if (!targetMonth) {
-    return "No monthly trend is available for the selected range yet.";
-  }
-
-  if (!baseMonth || comparison.direction === "no_previous_data") {
-    return `${targetMonth.label} recorded ${formatAmountRM(targetMonth.totalCollection)} with no previous month to compare; average per record was ${formatAmountRM(targetMonth.averagePerRecord)}.`;
-  }
-
-  const absoluteDifference = Math.abs(comparison.difference ?? 0);
-  const percentageSegment = comparison.percentageChange === null
-    ? "from a zero base"
-    : `${Math.abs(comparison.percentageChange).toFixed(2)}%`;
-  let totalTrend: string;
-  if (comparison.direction === "increase") {
-    totalTrend = `${targetMonth.label} increased ${percentageSegment} (${formatAmountRM(absoluteDifference)}) versus ${baseMonth.label}`;
-  } else if (comparison.direction === "decrease") {
-    totalTrend = `${targetMonth.label} decreased ${percentageSegment} (${formatAmountRM(absoluteDifference)}) versus ${baseMonth.label}`;
-  } else {
-    totalTrend = `${targetMonth.label} stayed level with ${baseMonth.label} at ${formatAmountRM(targetMonth.totalCollection)}`;
-  }
-
-  const averageDifference = targetMonth.averagePerRecord - baseMonth.averagePerRecord;
-  const absoluteAverageDifference = Math.abs(averageDifference);
-  let averageTrend = "average per record stayed flat";
-  if (absoluteAverageDifference >= 0.005) {
-    const averagePercentage = baseMonth.averagePerRecord > 0
-      ? Math.abs((averageDifference / baseMonth.averagePerRecord) * 100)
-      : null;
-    const qualifier = averagePercentage !== null && averagePercentage < 3 ? " slightly" : "";
-    averageTrend = averageDifference > 0
-      ? `average per record improved${qualifier} by ${formatAmountRM(absoluteAverageDifference)}`
-      : `average per record dipped${qualifier} by ${formatAmountRM(absoluteAverageDifference)}`;
-  }
-
-  const contrastConnector =
-    (comparison.direction === "increase" && averageDifference < -0.005)
-    || (comparison.direction === "decrease" && averageDifference > 0.005)
-      ? "but"
-      : "and";
-
-  return `${totalTrend}, ${contrastConnector} ${averageTrend}.`;
 }
 
 export function buildCollectionMonthlyComparisonInsights(

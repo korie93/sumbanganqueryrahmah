@@ -2,6 +2,7 @@ import type { Express, Request, RequestHandler } from "express";
 import { routeHandler } from "../http/async-handler";
 import { normalizeCorsOrigin, resolveAllowedCorsOrigins } from "../http/cors";
 import { internalMetrics, type InternalMetricsRecorder } from "../internal/metrics";
+import { logger } from "../lib/logger";
 
 type TelemetryRouteDeps = {
   cspReportDropGuard?: CspReportDropGuard;
@@ -73,6 +74,9 @@ export const WEB_VITALS_TELEMETRY_PATHS = [
   "/api/telemetry/web-vitals",
   "/telemetry/web-vitals",
 ] as const;
+export const LEGACY_WEB_VITALS_TELEMETRY_PATH = "/telemetry/web-vitals";
+export const CANONICAL_WEB_VITALS_TELEMETRY_PATH = "/api/telemetry/web-vitals";
+export const LEGACY_WEB_VITALS_TELEMETRY_SUNSET = "Wed, 01 Jul 2026 00:00:00 GMT";
 const NON_BROWSER_TELEMETRY_USER_AGENT_PATTERNS = [
   /\bcurl\//i,
   /\bwget\//i,
@@ -494,12 +498,27 @@ export function registerTelemetryRoutes(app: Express, deps: TelemetryRouteDeps) 
   // anonymous/no-provenance request caps, and bounded per-IP drop buckets. The
   // payload schema is strict; do not send PII, auth/session identifiers,
   // cookies, tokens, or raw user input here.
-  for (const telemetryPath of WEB_VITALS_TELEMETRY_PATHS) {
-    app.post(
-      telemetryPath,
-      webVitalsRequestGuard,
-      webVitalsDropGuard,
-      routeHandler(deps.reportWebVital),
-    );
-  }
+  app.post(
+    CANONICAL_WEB_VITALS_TELEMETRY_PATH,
+    webVitalsRequestGuard,
+    webVitalsDropGuard,
+    routeHandler(deps.reportWebVital),
+  );
+
+  app.post(
+    LEGACY_WEB_VITALS_TELEMETRY_PATH,
+    (_req, res, next) => {
+      res.setHeader("Deprecation", "true");
+      res.setHeader("Sunset", LEGACY_WEB_VITALS_TELEMETRY_SUNSET);
+      res.setHeader("Link", `<${CANONICAL_WEB_VITALS_TELEMETRY_PATH}>; rel="successor-version"`);
+      logger.warn("Legacy web vitals telemetry route used", {
+        canonicalPath: CANONICAL_WEB_VITALS_TELEMETRY_PATH,
+        legacyPath: LEGACY_WEB_VITALS_TELEMETRY_PATH,
+      });
+      next();
+    },
+    webVitalsRequestGuard,
+    webVitalsDropGuard,
+    routeHandler(deps.reportWebVital),
+  );
 }

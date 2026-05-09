@@ -900,9 +900,21 @@ input[type="search"]::-webkit-search-cancel-button {
 }
 
 .skip-to-main-link:focus {
+  outline: none;
+}
+
+.skip-to-main-link:focus-visible {
   transform: translateY(0);
   outline: none;
   box-shadow: 0 0 0 3px hsl(var(--ring) / 0.42), var(--nav-trigger-shadow);
+}
+
+@supports not selector(:focus-visible) {
+  .skip-to-main-link:focus {
+    transform: translateY(0);
+    outline: none;
+    box-shadow: 0 0 0 3px hsl(var(--ring) / 0.42), var(--nav-trigger-shadow);
+  }
 }
 
 #main-content {
