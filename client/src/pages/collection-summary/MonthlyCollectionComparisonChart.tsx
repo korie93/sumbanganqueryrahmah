@@ -1,5 +1,5 @@
 import { ChevronDown, ChevronUp, Maximize2, Minimize2 } from "lucide-react";
-import type { ComponentProps } from "react";
+import type { ChangeEvent, ComponentProps } from "react";
 import { useCallback, useId, useMemo, useState } from "react";
 import {
   Bar,
@@ -52,6 +52,12 @@ type TooltipEntry = {
 };
 
 type MonthlyComparisonTargetSummary = ReturnType<typeof buildCollectionMonthlyComparisonTargetSummary>;
+
+const MONTHLY_COMPARISON_CHART_MARGIN = { top: 8, right: 8, left: -8, bottom: 0 };
+const MONTHLY_COMPARISON_TOOLTIP_WRAPPER_STYLE = { outline: "none" };
+const MONTHLY_COMPARISON_LEGEND_WRAPPER_STYLE = { fontSize: 12, paddingBottom: 8 };
+const MONTHLY_AVERAGE_DOT = { r: 3 };
+const MONTHLY_AVERAGE_ACTIVE_DOT = { r: 5 };
 
 function resolveChartPayloadMonth(value: unknown): string | null {
   if (!value || typeof value !== "object") {
@@ -169,7 +175,7 @@ function MonthlyCollectionComparisonChartCanvas({
       <ResponsiveContainer width="100%" height="100%" debounce={80}>
         <ComposedChart
           data={chartData}
-          margin={{ top: 8, right: 8, left: -8, bottom: 0 }}
+          margin={MONTHLY_COMPARISON_CHART_MARGIN}
         >
           <CartesianGrid strokeDasharray="3 3" className="stroke-muted/60" vertical={false} />
           <XAxis
@@ -201,12 +207,12 @@ function MonthlyCollectionComparisonChartCanvas({
           />
           <Tooltip
             content={(props) => <MonthlyCollectionComparisonTooltip {...props} />}
-            wrapperStyle={{ outline: "none" }}
+            wrapperStyle={MONTHLY_COMPARISON_TOOLTIP_WRAPPER_STYLE}
           />
           <Legend
             verticalAlign="top"
             align="right"
-            wrapperStyle={{ fontSize: 12, paddingBottom: 8 }}
+            wrapperStyle={MONTHLY_COMPARISON_LEGEND_WRAPPER_STYLE}
           />
           {insights.rangeTotal > 0 ? (
             <ReferenceLine
@@ -250,8 +256,8 @@ function MonthlyCollectionComparisonChartCanvas({
             name="Average per record"
             stroke="hsl(var(--chart-4))"
             strokeWidth={2}
-            dot={{ r: 3 }}
-            activeDot={{ r: 5 }}
+            dot={MONTHLY_AVERAGE_DOT}
+            activeDot={MONTHLY_AVERAGE_ACTIVE_DOT}
           />
           {targetSummary ? (
             <Line
@@ -303,8 +309,17 @@ export function MonthlyCollectionComparisonChart({
     setFullViewOpen(false);
     onMonthSelect?.(monthKey);
   }, [onMonthSelect]);
+  const handleInspectMonthChange = useCallback((event: ChangeEvent<HTMLSelectElement>) => {
+    const monthKey = event.target.value;
+    if (monthKey) {
+      handleMonthSelect(monthKey);
+    }
+  }, [handleMonthSelect]);
   const summaryGridClass = targetSummary || monthlyTargetLoading ? "sm:grid-cols-5" : "sm:grid-cols-4";
-  const chartLabel = `Monthly collection comparison chart for ${data.nickname}. Range total ${formatAmountRM(insights.rangeTotal)}${targetSummary ? " with configured month-specific targets" : ""}.`;
+  const chartLabel = useMemo(
+    () => `Monthly collection comparison chart for ${data.nickname}. Range total ${formatAmountRM(insights.rangeTotal)}${targetSummary ? " with configured month-specific targets" : ""}.`,
+    [data.nickname, insights.rangeTotal, targetSummary],
+  );
 
   return (
     <div className="rounded-2xl border border-border/60 bg-background p-3 shadow-sm">
@@ -323,12 +338,7 @@ export function MonthlyCollectionComparisonChart({
                 className="max-w-[7.5rem] bg-transparent text-xs outline-none"
                 value=""
                 aria-label="Open monthly drill-down records"
-                onChange={(event) => {
-                  const monthKey = event.target.value;
-                  if (monthKey) {
-                    handleMonthSelect(monthKey);
-                  }
-                }}
+                onChange={handleInspectMonthChange}
               >
                 <option value="">month</option>
                 {insights.monthInsights.map((month) => (

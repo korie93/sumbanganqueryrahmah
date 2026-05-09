@@ -22,6 +22,7 @@ import {
   countCollectionMonthsInclusive,
   formatCollectionMonthlyComparisonDifference,
   formatCollectionMonthlyComparisonPercentage,
+  normalizeCollectionMonthInputValue,
   parseCollectionMonthKey,
   shiftCollectionMonthInput,
 } from "@/pages/collection-summary/collection-monthly-comparison-utils";
@@ -152,6 +153,9 @@ test("collection monthly comparison helpers keep month ranges bounded and stable
   assert.equal(countCollectionMonthsInclusive("2026-04", "2027-03"), 12);
   assert.deepEqual(parseCollectionMonthKey("2026-05"), { year: 2026, month: 5 });
   assert.equal(parseCollectionMonthKey("2026-13"), null);
+  assert.equal(normalizeCollectionMonthInputValue("2026-5"), "2026-05");
+  assert.equal(normalizeCollectionMonthInputValue(" 2026-12 "), "2026-12");
+  assert.equal(normalizeCollectionMonthInputValue("2026-13"), null);
 
   const presets = buildCollectionMonthlyComparisonPresetRanges(new Date("2026-05-20T00:00:00.000Z"));
   assert.deepEqual(presets.map((preset) => preset.label), [

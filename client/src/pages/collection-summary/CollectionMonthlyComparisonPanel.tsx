@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Activity, BarChart3, ChevronDown, ChevronUp, CircleHelp, Download, Printer, ShieldCheck } from "lucide-react";
 import {
   OperationalMetric,
@@ -26,6 +26,7 @@ import {
   formatCollectionMonthlyComparisonMonthDelta,
   formatCollectionMonthlyComparisonPercentage,
   formatCollectionSameDayPaceMonthLabel,
+  normalizeCollectionMonthInputValue,
   resolveCollectionMonthlyComparisonTargetForMonth,
   resolveCollectionMonthlyComparisonTone,
   type CollectionMonthlyComparisonBenchmarkId,
@@ -97,22 +98,6 @@ function MonthlyComparisonHint({
   );
 }
 
-function normalizeCollectionMonthFieldValue(value: string): string | null {
-  const normalized = String(value || "").trim();
-  const match = /^(\d{4})-(\d{1,2})$/.exec(normalized);
-  if (!match) {
-    return null;
-  }
-
-  const year = Number.parseInt(match[1] || "", 10);
-  const month = Number.parseInt(match[2] || "", 10);
-  if (!Number.isInteger(year) || !Number.isInteger(month) || month < 1 || month > 12) {
-    return null;
-  }
-
-  return `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}`;
-}
-
 function CollectionMonthField({
   id,
   label,
@@ -126,7 +111,7 @@ function CollectionMonthField({
 }) {
   const [draftValue, setDraftValue] = useState(value);
   const helpId = `${id}-format`;
-  const normalizedDraftValue = normalizeCollectionMonthFieldValue(draftValue);
+  const normalizedDraftValue = normalizeCollectionMonthInputValue(draftValue);
   const showInvalidState = draftValue.trim().length > 0 && !normalizedDraftValue;
   const invalidAriaAttributes = showInvalidState ? { "aria-invalid": "true" as const } : {};
 
@@ -135,7 +120,7 @@ function CollectionMonthField({
   }, [value]);
 
   const commitDraftValue = (nextValue: string) => {
-    const normalized = normalizeCollectionMonthFieldValue(nextValue);
+    const normalized = normalizeCollectionMonthInputValue(nextValue);
     if (normalized) {
       setDraftValue(normalized);
       onChange(normalized);
@@ -189,6 +174,47 @@ function CollectionMonthField({
       </span>
     </div>
   );
+}
+
+function buildCollectionMonthlyComparisonTargetCards(input: {
+  comparison: CollectionMonthlyComparisonResponse["comparison"] | null | undefined;
+  monthlyTargetAmount: number | null | undefined;
+  monthlyTargetsByMonth: CollectionMonthlyComparisonTargetLookup | undefined;
+}) {
+  const { comparison, monthlyTargetAmount, monthlyTargetsByMonth } = input;
+  if (!comparison) {
+    return [];
+  }
+
+  const months = [
+    {
+      month: comparison.baseMonth,
+      role: "Start month target",
+      label: comparison.baseMonth
+        ? comparison.baseLabel || formatCollectionSameDayPaceMonthLabel(comparison.baseMonth)
+        : "Start month",
+    },
+    {
+      month: comparison.targetMonth,
+      role: "End month target",
+      label: comparison.targetLabel || formatCollectionSameDayPaceMonthLabel(comparison.targetMonth),
+    },
+  ].flatMap((entry) => (entry.month ? [{ ...entry, month: entry.month }] : []))
+    .filter((entry, index, entries) => (
+      entries.findIndex((candidate) => candidate.month === entry.month) === index
+    ));
+
+  return months.map((entry) => {
+    const target = resolveCollectionMonthlyComparisonTargetForMonth(
+      entry.month,
+      monthlyTargetsByMonth ?? monthlyTargetAmount,
+    );
+    return {
+      ...entry,
+      target,
+      displayValue: target === null ? "No target configured" : formatAmountRM(target),
+    };
+  });
 }
 
 export function CollectionMonthlyComparisonPanel({
@@ -320,41 +346,13 @@ export function CollectionMonthlyComparisonPanel({
     )
     : null;
   const comparisonTargetCards = useMemo(() => {
-    if (!data?.comparison) {
-      return [];
-    }
-
-    const months = [
-      {
-        month: data.comparison.baseMonth,
-        role: "Start month target",
-        label: data.comparison.baseMonth
-          ? data.comparison.baseLabel || formatCollectionSameDayPaceMonthLabel(data.comparison.baseMonth)
-          : "Start month",
-      },
-      {
-        month: data.comparison.targetMonth,
-        role: "End month target",
-        label: data.comparison.targetLabel || formatCollectionSameDayPaceMonthLabel(data.comparison.targetMonth),
-      },
-    ].flatMap((entry) => (entry.month ? [{ ...entry, month: entry.month }] : []))
-      .filter((entry, index, entries) => (
-        entries.findIndex((candidate) => candidate.month === entry.month) === index
-      ));
-
-    return months.map((entry) => {
-      const target = resolveCollectionMonthlyComparisonTargetForMonth(
-        entry.month,
-        monthlyTargetsByMonth ?? monthlyTargetAmount,
-      );
-      return {
-        ...entry,
-        target,
-        displayValue: target === null ? "No target configured" : formatAmountRM(target),
-      };
+    return buildCollectionMonthlyComparisonTargetCards({
+      comparison: data?.comparison,
+      monthlyTargetAmount,
+      monthlyTargetsByMonth,
     });
   }, [data?.comparison, monthlyTargetAmount, monthlyTargetsByMonth]);
-  const handleSameDayStartDayChange = (value: number) => {
+  const handleSameDayStartDayChange = useCallback((value: number) => {
     if (!sameDayPaceDayRange || !sameDayPaceMaxDay || !onSameDayPaceDayRangeChange) {
       return;
     }
@@ -363,8 +361,8 @@ export function CollectionMonthlyComparisonPanel({
       startDay: nextStart,
       endDay: sameDayPaceDayRange.endDay,
     });
-  };
-  const handleSameDayEndDayChange = (value: number) => {
+  }, [onSameDayPaceDayRangeChange, sameDayPaceDayRange, sameDayPaceMaxDay]);
+  const handleSameDayEndDayChange = useCallback((value: number) => {
     if (!sameDayPaceDayRange || !sameDayPaceMaxDay || !onSameDayPaceDayRangeChange) {
       return;
     }
@@ -373,7 +371,7 @@ export function CollectionMonthlyComparisonPanel({
       startDay: sameDayPaceDayRange.startDay,
       endDay: nextEnd,
     });
-  };
+  }, [onSameDayPaceDayRangeChange, sameDayPaceDayRange, sameDayPaceMaxDay]);
   const breakdownToggleButtonClassName =
     "inline-flex h-9 items-center justify-center gap-1.5 rounded-full border border-input bg-background px-3 text-xs font-medium text-foreground transition hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
 

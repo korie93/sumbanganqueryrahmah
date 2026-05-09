@@ -1,5 +1,5 @@
 import { Maximize2 } from "lucide-react";
-import { useEffect, useId, useMemo, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useState } from "react";
 import {
   CartesianGrid,
   Legend,
@@ -41,6 +41,14 @@ type SameDayChartPoint = CollectionSameDayPacePoint & {
 type TooltipEntry = {
   payload?: SameDayChartPoint;
 };
+
+const SAME_DAY_CHART_MARGIN = { top: 10, right: 8, left: -8, bottom: 0 };
+const SAME_DAY_TOOLTIP_WRAPPER_STYLE = { outline: "none" };
+const SAME_DAY_LEGEND_WRAPPER_STYLE = { fontSize: 12, paddingBottom: 8 };
+const SAME_DAY_CURRENT_DOT = { r: 2.5 };
+const SAME_DAY_CURRENT_ACTIVE_DOT = { r: 5 };
+const SAME_DAY_PREVIOUS_DOT = { r: 2 };
+const SAME_DAY_PREVIOUS_ACTIVE_DOT = { r: 4 };
 
 function MonthlySameDayPaceTooltip({
   active,
@@ -251,6 +259,12 @@ function MonthlySameDayPaceChartCanvas({
 }) {
   const chartLabel =
     `Same-day cumulative collection comparison for ${pace.currentLabel} versus ${pace.previousLabel}. ${pace.summary}`;
+  const handleChartClick = useCallback((state: unknown) => {
+    const point = resolveSameDayChartPoint(state);
+    if (point) {
+      onPointSelect(point);
+    }
+  }, [onPointSelect]);
 
   return (
     <div
@@ -262,13 +276,8 @@ function MonthlySameDayPaceChartCanvas({
       <ResponsiveContainer width="100%" height="100%" debounce={80}>
         <LineChart
           data={chartData}
-          margin={{ top: 10, right: 8, left: -8, bottom: 0 }}
-          onClick={(state) => {
-            const point = resolveSameDayChartPoint(state);
-            if (point) {
-              onPointSelect(point);
-            }
-          }}
+          margin={SAME_DAY_CHART_MARGIN}
+          onClick={handleChartClick}
         >
           <CartesianGrid strokeDasharray="3 3" className="stroke-muted/60" vertical={false} />
           <XAxis
@@ -289,12 +298,12 @@ function MonthlySameDayPaceChartCanvas({
           />
           <Tooltip
             content={(props) => <MonthlySameDayPaceTooltip {...props} />}
-            wrapperStyle={{ outline: "none" }}
+            wrapperStyle={SAME_DAY_TOOLTIP_WRAPPER_STYLE}
           />
           <Legend
             verticalAlign="top"
             align="right"
-            wrapperStyle={{ fontSize: 12, paddingBottom: 8 }}
+            wrapperStyle={SAME_DAY_LEGEND_WRAPPER_STYLE}
           />
           <Line
             type="monotone"
@@ -302,8 +311,8 @@ function MonthlySameDayPaceChartCanvas({
             name={pace.currentLabel}
             stroke="hsl(var(--primary))"
             strokeWidth={3}
-            dot={{ r: 2.5 }}
-            activeDot={{ r: 5 }}
+            dot={SAME_DAY_CURRENT_DOT}
+            activeDot={SAME_DAY_CURRENT_ACTIVE_DOT}
             isAnimationActive={false}
           />
           <Line
@@ -313,8 +322,8 @@ function MonthlySameDayPaceChartCanvas({
             stroke="hsl(var(--chart-4))"
             strokeWidth={2.5}
             strokeDasharray="6 5"
-            dot={{ r: 2 }}
-            activeDot={{ r: 4 }}
+            dot={SAME_DAY_PREVIOUS_DOT}
+            activeDot={SAME_DAY_PREVIOUS_ACTIVE_DOT}
             isAnimationActive={false}
           />
           {pace.target ? (
@@ -358,6 +367,9 @@ export function MonthlySameDayPaceChart({ pace }: MonthlySameDayPaceChartProps) 
     || chartData[chartData.length - 1]
     || null
   ), [chartData, selectedDay]);
+  const handlePointSelect = useCallback((point: SameDayChartPoint) => {
+    setSelectedDay(point.day);
+  }, []);
 
   return (
     <div className="rounded-2xl border border-border/60 bg-background p-3 shadow-sm">
@@ -426,7 +438,7 @@ export function MonthlySameDayPaceChart({ pace }: MonthlySameDayPaceChartProps) 
         className="mt-3 h-[280px]"
         pace={pace}
         chartData={chartData}
-        onPointSelect={(point) => setSelectedDay(point.day)}
+        onPointSelect={handlePointSelect}
       />
       {selectedPoint ? (
         <div className="mt-3">
@@ -448,7 +460,7 @@ export function MonthlySameDayPaceChart({ pace }: MonthlySameDayPaceChartProps) 
             className="h-[min(60vh,560px)]"
             pace={pace}
             chartData={chartData}
-            onPointSelect={(point) => setSelectedDay(point.day)}
+            onPointSelect={handlePointSelect}
           />
           {selectedPoint ? (
             <SameDayPointDetailPanel pace={pace} point={selectedPoint} />

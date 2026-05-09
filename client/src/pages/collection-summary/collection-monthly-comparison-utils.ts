@@ -247,6 +247,22 @@ export function parseCollectionMonthKey(value: string) {
   return { year, month };
 }
 
+export function normalizeCollectionMonthInputValue(value: string): string | null {
+  const normalized = String(value || "").trim();
+  const match = /^(\d{4})-(\d{1,2})$/.exec(normalized);
+  if (!match) {
+    return null;
+  }
+
+  const year = Number.parseInt(match[1] || "", 10);
+  const month = Number.parseInt(match[2] || "", 10);
+  if (!Number.isInteger(year) || !Number.isInteger(month) || month < 1 || month > 12) {
+    return null;
+  }
+
+  return `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}`;
+}
+
 export function formatCollectionMonthInput(date: Date): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
 }
@@ -909,6 +925,36 @@ function buildCollectionSameDayPaceTarget(input: {
   };
 }
 
+function resolveCollectionSameDayComparisonRange(input: {
+  dayRange?: CollectionSameDayPaceDayRange | null | undefined;
+  maxComparisonDay: number;
+  rawComparisonDay: number;
+  totalDaysInCurrentMonth: number;
+}) {
+  const requestedStartDay = input.dayRange
+    ? Math.trunc(Number(input.dayRange.startDay || 1))
+    : 1;
+  const requestedEndDay = input.dayRange
+    ? Math.trunc(Number(input.dayRange.endDay || input.maxComparisonDay))
+    : input.rawComparisonDay;
+  const lowerRequestedDay = Math.min(requestedStartDay, requestedEndDay);
+  const upperRequestedDay = Math.max(requestedStartDay, requestedEndDay);
+  const startDay = Math.min(input.maxComparisonDay, Math.max(1, lowerRequestedDay));
+  const comparisonDay = Math.min(input.maxComparisonDay, Math.max(startDay, upperRequestedDay));
+  const endDay = comparisonDay;
+  const comparedDayCount = Math.max(1, endDay - startDay + 1);
+  const rangeCappedByPreviousMonth = upperRequestedDay > input.maxComparisonDay
+    || input.maxComparisonDay < Math.min(input.totalDaysInCurrentMonth, Math.max(1, input.rawComparisonDay));
+
+  return {
+    startDay,
+    endDay,
+    comparisonDay,
+    comparedDayCount,
+    rangeCappedByPreviousMonth,
+  };
+}
+
 export function buildCollectionSameDayPaceComparison(input: {
   currentMonthKey: string;
   previousMonthKey?: string | undefined;
@@ -946,20 +992,18 @@ export function buildCollectionSameDayPaceComparison(input: {
     totalDaysInPreviousMonth,
     Math.max(1, rawComparisonDay),
   );
-  const requestedStartDay = input.dayRange
-    ? Math.trunc(Number(input.dayRange.startDay || 1))
-    : 1;
-  const requestedEndDay = input.dayRange
-    ? Math.trunc(Number(input.dayRange.endDay || maxComparisonDay))
-    : rawComparisonDay;
-  const lowerRequestedDay = Math.min(requestedStartDay, requestedEndDay);
-  const upperRequestedDay = Math.max(requestedStartDay, requestedEndDay);
-  const startDay = Math.min(maxComparisonDay, Math.max(1, lowerRequestedDay));
-  const comparisonDay = Math.min(maxComparisonDay, Math.max(startDay, upperRequestedDay));
-  const endDay = comparisonDay;
-  const comparedDayCount = Math.max(1, endDay - startDay + 1);
-  const rangeCappedByPreviousMonth = upperRequestedDay > maxComparisonDay
-    || maxComparisonDay < Math.min(totalDaysInCurrentMonth, Math.max(1, rawComparisonDay));
+  const {
+    startDay,
+    endDay,
+    comparisonDay,
+    comparedDayCount,
+    rangeCappedByPreviousMonth,
+  } = resolveCollectionSameDayComparisonRange({
+    dayRange: input.dayRange,
+    maxComparisonDay,
+    rawComparisonDay,
+    totalDaysInCurrentMonth,
+  });
   const currentByDay = new Map<number, CollectionSameDayPaceDailyInput>();
   const previousByDay = new Map<number, CollectionSameDayPaceDailyInput>();
 
@@ -1547,14 +1591,20 @@ export type CollectionMonthlyComparisonCsvOptions = {
   sameDayPace?: CollectionSameDayPaceComparison | null | undefined;
 };
 
+function isCollectionMonthlyComparisonCsvOptions(
+  options: number | null | undefined | CollectionMonthlyComparisonCsvOptions,
+): options is CollectionMonthlyComparisonCsvOptions {
+  return Boolean(
+    options
+    && typeof options === "object"
+    && ("monthlyTargetAmount" in options || "monthlyTargetsByMonth" in options || "sameDayPace" in options),
+  );
+}
+
 function resolveCollectionMonthlyComparisonCsvTargetInput(
   options: number | null | undefined | CollectionMonthlyComparisonCsvOptions,
 ): CollectionMonthlyComparisonTargetInput {
-  if (
-    options
-    && typeof options === "object"
-    && ("monthlyTargetAmount" in options || "monthlyTargetsByMonth" in options || "sameDayPace" in options)
-  ) {
+  if (isCollectionMonthlyComparisonCsvOptions(options)) {
     return options.monthlyTargetsByMonth ?? options.monthlyTargetAmount ?? null;
   }
 
@@ -1564,11 +1614,7 @@ function resolveCollectionMonthlyComparisonCsvTargetInput(
 function resolveCollectionMonthlyComparisonCsvSameDayPace(
   options: number | null | undefined | CollectionMonthlyComparisonCsvOptions,
 ): CollectionSameDayPaceComparison | null {
-  if (
-    options
-    && typeof options === "object"
-    && ("monthlyTargetAmount" in options || "monthlyTargetsByMonth" in options || "sameDayPace" in options)
-  ) {
+  if (isCollectionMonthlyComparisonCsvOptions(options)) {
     return options.sameDayPace ?? null;
   }
 
