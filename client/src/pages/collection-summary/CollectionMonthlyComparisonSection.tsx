@@ -63,11 +63,15 @@ function CollectionMonthlyComparisonSection({
 
     const csvContent = buildCollectionMonthlyComparisonCsv(
       comparisonData.data,
-      comparisonTarget.monthlyTargetAmount,
+      {
+        monthlyTargetAmount: comparisonTarget.monthlyTargetAmount,
+        monthlyTargetsByMonth: comparisonTarget.targetsByMonth,
+        sameDayPace: sameDayPace.pace,
+      },
     );
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     downloadBlob(blob, buildCollectionMonthlyComparisonCsvFilename(comparisonData.data));
-  }, [comparisonData.data, comparisonTarget.monthlyTargetAmount]);
+  }, [comparisonData.data, comparisonTarget.monthlyTargetAmount, comparisonTarget.targetsByMonth, sameDayPace.pace]);
   const handlePrintReport = useCallback(() => {
     if (!comparisonData.data) {
       return;
@@ -77,6 +81,7 @@ function CollectionMonthlyComparisonSection({
       comparisonData.data,
       {
         monthlyTargetAmount: comparisonTarget.monthlyTargetAmount,
+        monthlyTargetsByMonth: comparisonTarget.targetsByMonth,
         monthlyTargetSourceLabel: comparisonTarget.sourceLabel,
         sameDayPace: sameDayPace.pace,
       },
@@ -99,6 +104,7 @@ function CollectionMonthlyComparisonSection({
   }, [
     comparisonData.data,
     comparisonTarget.monthlyTargetAmount,
+    comparisonTarget.targetsByMonth,
     comparisonTarget.sourceLabel,
     sameDayPace.pace,
   ]);
@@ -124,6 +130,7 @@ function CollectionMonthlyComparisonSection({
         onRangePresetApply={comparisonData.applyRangePreset}
         onReset={comparisonData.reset}
         monthlyTargetAmount={comparisonTarget.monthlyTargetAmount}
+        monthlyTargetsByMonth={comparisonTarget.targetsByMonth}
         monthlyTargetLoading={comparisonTarget.loading}
         monthlyTargetErrorMessage={comparisonTarget.errorMessage}
         monthlyTargetSourceLabel={comparisonTarget.sourceLabel}
@@ -175,6 +182,7 @@ function CollectionMonthlyComparisonSection({
                 <MonthlyCollectionComparisonChart
                   data={comparisonData.data}
                   monthlyTargetAmount={comparisonTarget.monthlyTargetAmount}
+                  monthlyTargetsByMonth={comparisonTarget.targetsByMonth}
                   monthlyTargetLoading={comparisonTarget.loading}
                   monthlyTargetSourceLabel={comparisonTarget.sourceLabel}
                   onMonthSelect={comparisonMonthDialog.handleSelectMonth}

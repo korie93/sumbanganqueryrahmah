@@ -24,9 +24,11 @@ import {
   formatCollectionMonthlyComparisonDifference,
   formatCollectionMonthlyComparisonMonthDelta,
   formatCollectionMonthlyComparisonPercentage,
+  resolveCollectionMonthlyComparisonTargetForMonth,
   resolveCollectionMonthlyComparisonTone,
   type CollectionMonthlyComparisonBenchmarkId,
   type CollectionMonthlyComparisonPresetRange,
+  type CollectionMonthlyComparisonTargetLookup,
   type CollectionSameDayPaceComparison,
 } from "./collection-monthly-comparison-utils";
 
@@ -49,6 +51,7 @@ type CollectionMonthlyComparisonPanelProps = {
   onRangePresetApply: (preset: CollectionMonthlyComparisonPresetRange) => void;
   onReset: () => void;
   monthlyTargetAmount?: number | null | undefined;
+  monthlyTargetsByMonth?: CollectionMonthlyComparisonTargetLookup | undefined;
   monthlyTargetLoading?: boolean | undefined;
   monthlyTargetErrorMessage?: string | null | undefined;
   monthlyTargetSourceLabel?: string | null | undefined;
@@ -106,6 +109,7 @@ export function CollectionMonthlyComparisonPanel({
   onRangePresetApply,
   onReset,
   monthlyTargetAmount = null,
+  monthlyTargetsByMonth,
   monthlyTargetLoading = false,
   monthlyTargetErrorMessage = null,
   monthlyTargetSourceLabel = null,
@@ -136,16 +140,16 @@ export function CollectionMonthlyComparisonPanel({
     [data],
   );
   const targetSummary = useMemo(
-    () => (data ? buildCollectionMonthlyComparisonTargetSummary(data, monthlyTargetAmount) : null),
-    [data, monthlyTargetAmount],
+    () => (data ? buildCollectionMonthlyComparisonTargetSummary(data, monthlyTargetsByMonth ?? monthlyTargetAmount) : null),
+    [data, monthlyTargetAmount, monthlyTargetsByMonth],
   );
   const projection = useMemo(
-    () => (data ? buildCollectionMonthlyComparisonProjection(data, monthlyTargetAmount) : null),
-    [data, monthlyTargetAmount],
+    () => (data ? buildCollectionMonthlyComparisonProjection(data, monthlyTargetsByMonth ?? monthlyTargetAmount) : null),
+    [data, monthlyTargetAmount, monthlyTargetsByMonth],
   );
   const dataQualitySummary = useMemo(
-    () => (data ? buildCollectionMonthlyComparisonDataQualitySummary(data, monthlyTargetAmount) : null),
-    [data, monthlyTargetAmount],
+    () => (data ? buildCollectionMonthlyComparisonDataQualitySummary(data, monthlyTargetsByMonth ?? monthlyTargetAmount) : null),
+    [data, monthlyTargetAmount, monthlyTargetsByMonth],
   );
   const benchmarks = useMemo(
     () => (data ? buildCollectionMonthlyComparisonBenchmarks(data) : []),
@@ -211,7 +215,15 @@ export function CollectionMonthlyComparisonPanel({
       : "Target missing";
   const targetSupportingLabel = monthlyTargetSourceLabel
     ? `Configured for ${monthlyTargetSourceLabel}`
-    : "Uses the configured target for the target month";
+    : targetSummary
+      ? `${targetSummary.configuredMonthCount}/${data?.months.length || 0} selected month target(s) configured`
+      : "Uses the configured target for the target month";
+  const targetMonthSpecificNote = data?.comparison.targetMonth
+    ? resolveCollectionMonthlyComparisonTargetForMonth(
+      data.comparison.targetMonth,
+      monthlyTargetsByMonth ?? monthlyTargetAmount,
+    )
+    : null;
   const breakdownToggleButtonClassName =
     "inline-flex h-9 items-center justify-center gap-1.5 rounded-full border border-input bg-background px-3 text-xs font-medium text-foreground transition hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
@@ -379,6 +391,13 @@ export function CollectionMonthlyComparisonPanel({
             <p className="text-xs text-muted-foreground">
               {targetSupportingLabel}
             </p>
+            {targetSummary ? (
+              <p className="text-xs text-muted-foreground">
+                {targetSummary.configuredMonthCount}/{data?.months.length || 0} selected month target(s) loaded
+                {targetSummary.missingMonthCount > 0 ? `, ${targetSummary.missingMonthCount} missing` : ""}
+                {targetMonthSpecificNote ? "" : ", target month missing"}
+              </p>
+            ) : null}
             {monthlyTargetErrorMessage ? (
               <p role="status" className="mt-1 text-xs text-destructive">
                 Target unavailable: {monthlyTargetErrorMessage}
@@ -1069,6 +1088,7 @@ export function CollectionMonthlyComparisonPanel({
                   <CollectionMonthlyComparisonBreakdownList
                     insights={insights}
                     targetSummary={targetSummary}
+                    monthlyTargetsByMonth={monthlyTargetsByMonth}
                     onMonthSelect={onMonthSelect}
                   />
                 ) : null}

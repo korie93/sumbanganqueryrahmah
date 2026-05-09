@@ -29,19 +29,26 @@ import {
   buildCollectionMonthlyComparisonTargetSummary,
   formatCollectionMonthlyComparisonMonthDelta,
   formatCompactAmountRM,
+  resolveCollectionMonthlyComparisonTargetForMonth,
   type CollectionMonthlyComparisonMonthInsight,
+  type CollectionMonthlyComparisonTargetLookup,
 } from "./collection-monthly-comparison-utils";
 
 type MonthlyCollectionComparisonChartProps = {
   data: CollectionMonthlyComparisonResponse;
   monthlyTargetAmount?: number | null | undefined;
+  monthlyTargetsByMonth?: CollectionMonthlyComparisonTargetLookup | undefined;
   monthlyTargetLoading?: boolean | undefined;
   monthlyTargetSourceLabel?: string | null | undefined;
   onMonthSelect?: ((monthKey: string) => void) | undefined;
 };
 
+type MonthlyCollectionComparisonChartPoint = CollectionMonthlyComparisonMonthInsight & {
+  monthlyTarget: number | null;
+};
+
 type TooltipEntry = {
-  payload?: CollectionMonthlyComparisonMonthInsight;
+  payload?: MonthlyCollectionComparisonChartPoint;
 };
 
 type MonthlyComparisonTargetSummary = ReturnType<typeof buildCollectionMonthlyComparisonTargetSummary>;
@@ -64,12 +71,10 @@ function MonthlyCollectionComparisonTooltip({
   active,
   label,
   payload,
-  monthlyTargetAmount,
 }: {
   active?: boolean | undefined;
   label?: string | number | undefined;
   payload?: TooltipEntry[] | undefined;
-  monthlyTargetAmount?: number | null | undefined;
 }) {
   if (!active || typeof label !== "string" || !payload?.length) {
     return null;
@@ -107,14 +112,14 @@ function MonthlyCollectionComparisonTooltip({
             <dd className="text-right font-medium">{point.anomalyLabel}</dd>
           </div>
         ) : null}
-        {monthlyTargetAmount && monthlyTargetAmount > 0 ? (
+        {point?.monthlyTarget && point.monthlyTarget > 0 ? (
           <div className="flex justify-between gap-3">
             <dt>Target gap</dt>
             <dd className="text-right">
               {formatCollectionMonthlyComparisonMonthDelta(
-                Number(point?.totalCollection || 0) - monthlyTargetAmount,
-                monthlyTargetAmount > 0
-                  ? ((Number(point?.totalCollection || 0) - monthlyTargetAmount) / monthlyTargetAmount) * 100
+                Number(point?.totalCollection || 0) - point.monthlyTarget,
+                point.monthlyTarget > 0
+                  ? ((Number(point?.totalCollection || 0) - point.monthlyTarget) / point.monthlyTarget) * 100
                   : null,
               )}
             </dd>
@@ -131,7 +136,7 @@ function MonthlyCollectionComparisonChartCanvas({
   data,
   insights,
   targetSummary,
-  monthlyTargetAmount,
+  chartData,
   chartLabel,
   onMonthSelect,
 }: {
@@ -140,7 +145,7 @@ function MonthlyCollectionComparisonChartCanvas({
   data: CollectionMonthlyComparisonResponse;
   insights: ReturnType<typeof buildCollectionMonthlyComparisonInsights>;
   targetSummary: MonthlyComparisonTargetSummary;
-  monthlyTargetAmount?: number | null | undefined;
+  chartData: MonthlyCollectionComparisonChartPoint[];
   chartLabel: string;
   onMonthSelect?: ((monthKey: string) => void) | undefined;
 }) {
@@ -163,7 +168,7 @@ function MonthlyCollectionComparisonChartCanvas({
     >
       <ResponsiveContainer width="100%" height="100%" debounce={80}>
         <ComposedChart
-          data={insights.monthInsights}
+          data={chartData}
           margin={{ top: 8, right: 8, left: -8, bottom: 0 }}
         >
           <CartesianGrid strokeDasharray="3 3" className="stroke-muted/60" vertical={false} />
@@ -195,12 +200,7 @@ function MonthlyCollectionComparisonChartCanvas({
             width={62}
           />
           <Tooltip
-            content={(props) => (
-              <MonthlyCollectionComparisonTooltip
-                {...props}
-                monthlyTargetAmount={monthlyTargetAmount}
-              />
-            )}
+            content={(props) => <MonthlyCollectionComparisonTooltip {...props} />}
             wrapperStyle={{ outline: "none" }}
           />
           <Legend
@@ -217,15 +217,6 @@ function MonthlyCollectionComparisonChartCanvas({
               strokeOpacity={0.55}
             />
           ) : null}
-          {targetSummary ? (
-            <ReferenceLine
-              yAxisId="total"
-              y={targetSummary.monthlyTargetAmount}
-              stroke="hsl(var(--destructive))"
-              strokeDasharray="6 4"
-              strokeOpacity={0.75}
-            />
-          ) : null}
           <Bar
             yAxisId="total"
             dataKey="totalCollection"
@@ -235,7 +226,7 @@ function MonthlyCollectionComparisonChartCanvas({
             onClick={handleBarClick}
             className={onMonthSelect ? "cursor-pointer" : ""}
           >
-            {insights.monthInsights.map((entry) => (
+            {chartData.map((entry) => (
               <Cell
                 key={entry.month}
                 fill={
@@ -262,6 +253,21 @@ function MonthlyCollectionComparisonChartCanvas({
             dot={{ r: 3 }}
             activeDot={{ r: 5 }}
           />
+          {targetSummary ? (
+            <Line
+              yAxisId="total"
+              type="monotone"
+              dataKey="monthlyTarget"
+              name="Monthly target"
+              stroke="hsl(var(--destructive))"
+              strokeWidth={2}
+              strokeDasharray="6 4"
+              dot={false}
+              activeDot={false}
+              connectNulls={false}
+              isAnimationActive={false}
+            />
+          ) : null}
         </ComposedChart>
       </ResponsiveContainer>
       <span className="sr-only">{data.comparison.summary}</span>
@@ -272,6 +278,7 @@ function MonthlyCollectionComparisonChartCanvas({
 export function MonthlyCollectionComparisonChart({
   data,
   monthlyTargetAmount,
+  monthlyTargetsByMonth,
   monthlyTargetLoading = false,
   monthlyTargetSourceLabel = null,
   onMonthSelect,
@@ -281,16 +288,23 @@ export function MonthlyCollectionComparisonChart({
   const [fullViewOpen, setFullViewOpen] = useState(false);
   const chartRegionId = useId();
   const insights = useMemo(() => buildCollectionMonthlyComparisonInsights(data), [data]);
+  const targetInput = monthlyTargetsByMonth ?? monthlyTargetAmount;
   const targetSummary = useMemo(
-    () => buildCollectionMonthlyComparisonTargetSummary(data, monthlyTargetAmount),
-    [data, monthlyTargetAmount],
+    () => buildCollectionMonthlyComparisonTargetSummary(data, targetInput),
+    [data, targetInput],
   );
+  const chartData = useMemo<MonthlyCollectionComparisonChartPoint[]>(() => (
+    insights.monthInsights.map((month) => ({
+      ...month,
+      monthlyTarget: resolveCollectionMonthlyComparisonTargetForMonth(month.month, targetInput),
+    }))
+  ), [insights.monthInsights, targetInput]);
   const handleMonthSelect = useCallback((monthKey: string) => {
     setFullViewOpen(false);
     onMonthSelect?.(monthKey);
   }, [onMonthSelect]);
   const summaryGridClass = targetSummary || monthlyTargetLoading ? "sm:grid-cols-5" : "sm:grid-cols-4";
-  const chartLabel = `Monthly collection comparison chart for ${data.nickname}. Range total ${formatAmountRM(insights.rangeTotal)}${targetSummary ? ` with monthly target ${formatAmountRM(targetSummary.monthlyTargetAmount)}` : ""}.`;
+  const chartLabel = `Monthly collection comparison chart for ${data.nickname}. Range total ${formatAmountRM(insights.rangeTotal)}${targetSummary ? " with configured month-specific targets" : ""}.`;
 
   return (
     <div className="rounded-2xl border border-border/60 bg-background p-3 shadow-sm">
@@ -459,7 +473,7 @@ export function MonthlyCollectionComparisonChart({
           data={data}
           insights={insights}
           targetSummary={targetSummary}
-          monthlyTargetAmount={targetSummary?.monthlyTargetAmount ?? null}
+          chartData={chartData}
           chartLabel={chartLabel}
           onMonthSelect={onMonthSelect ? handleMonthSelect : undefined}
         />
@@ -487,7 +501,7 @@ export function MonthlyCollectionComparisonChart({
             data={data}
             insights={insights}
             targetSummary={targetSummary}
-            monthlyTargetAmount={targetSummary?.monthlyTargetAmount ?? null}
+            chartData={chartData}
             chartLabel={chartLabel}
             onMonthSelect={onMonthSelect ? handleMonthSelect : undefined}
           />

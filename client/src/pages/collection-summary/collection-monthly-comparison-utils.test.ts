@@ -15,6 +15,9 @@ import {
   buildCollectionMonthlyComparisonProjection,
   buildCollectionMonthlyComparisonTargetSummary,
   buildCollectionMonthlyComparisonTrendExplanation,
+  buildCollectionSameDayPacePointInsights,
+  buildCollectionSameDayPacePointTrendLabel,
+  formatCollectionSameDayPaceDisplayDate,
   buildDefaultCollectionMonthlyComparisonRange,
   countCollectionMonthsInclusive,
   formatCollectionMonthlyComparisonDifference,
@@ -227,6 +230,23 @@ test("collection same-day pace compares current month only up to the same previo
   assert.match(pace.insights[0] || "", /RM(?:\u00A0| )6,000\.00 less/);
   assert.equal(pace.points[8]?.currentCumulative, 13000);
   assert.equal(pace.points[8]?.previousCumulative, 19000);
+  assert.equal(formatCollectionSameDayPaceDisplayDate(pace.points[3]?.currentDate || ""), "4 May 2026");
+  assert.equal(
+    buildCollectionSameDayPacePointTrendLabel(pace.points[3]!),
+    "Daily collection slower but cumulative behind",
+  );
+  assert.match(
+    buildCollectionSameDayPacePointInsights(pace.points[3]!, pace)[0] || "",
+    /Collection on 4 May 2026 was RM(?:\u00A0| )700\.00 lower than 4 April 2026\./,
+  );
+
+  const csv = buildCollectionMonthlyComparisonCsv(comparisonPayload, {
+    monthlyTargetAmount: 50000,
+    sameDayPace: pace,
+  });
+  assert.match(csv, /"Same-Day Pace Detail"/);
+  assert.match(csv, /"Date","Daily Collection","Cumulative Collection","Previous Month Date"/);
+  assert.match(csv, /"2026-05-04","1300\.00","5800\.00","2026-04-04","2000\.00","8300\.00","-700\.00","-2500\.00","50000\.00","11\.60","Daily collection slower but cumulative behind"/);
 });
 
 test("collection same-day pace handles January rollover and short previous months safely", () => {
@@ -290,12 +310,32 @@ test("collection monthly comparison helpers summarize targets and export CSV", (
   const csv = buildCollectionMonthlyComparisonCsv(comparisonPayload, 80000);
   assert.match(csv, /"Nickname","Month","Month Label"/);
   assert.match(csv, /"Collector Alpha","2026-04","Apr 2026","70450\.00"/);
-  assert.match(csv, /"80000\.00","-9550\.00","Below target"/);
-  assert.match(csv, /"80000\.00","2900\.00","At or above target"/);
+  assert.match(csv, /"80000\.00","-9550\.00","88\.06","Below target"/);
+  assert.match(csv, /"80000\.00","2900\.00","103\.62","At or above target"/);
   assert.equal(
     buildCollectionMonthlyComparisonCsvFilename(comparisonPayload),
     "SQR-monthly-comparison-collector-alpha-2026-04-to-2026-05.csv",
   );
+});
+
+test("collection monthly comparison helpers keep month-specific targets synchronized", () => {
+  const targetsByMonth = {
+    "2026-04": 150000,
+    "2026-05": 110000,
+  };
+  const targetSummary = buildCollectionMonthlyComparisonTargetSummary(comparisonPayload, targetsByMonth);
+
+  assert.equal(targetSummary?.monthlyTargetAmount, 110000);
+  assert.equal(targetSummary?.rangeTarget, 260000);
+  assert.equal(targetSummary?.targetGap, -106650);
+  assert.equal(targetSummary?.configuredMonthCount, 2);
+  assert.equal(targetSummary?.missingMonthCount, 0);
+
+  const csv = buildCollectionMonthlyComparisonCsv(comparisonPayload, {
+    monthlyTargetsByMonth: targetsByMonth,
+  });
+  assert.match(csv, /"2026-04","Apr 2026","70450\.00".*"150000\.00","-79550\.00","46\.97","Below target"/);
+  assert.match(csv, /"2026-05","May 2026","82900\.00".*"110000\.00","-27100\.00","75\.36","Below target"/);
 });
 
 test("collection monthly comparison helpers build benchmark lenses from available range data", () => {

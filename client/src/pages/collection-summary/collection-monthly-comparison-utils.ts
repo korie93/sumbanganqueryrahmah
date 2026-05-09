@@ -56,7 +56,18 @@ export type CollectionMonthlyComparisonTargetSummary = {
   targetProgress: number;
   monthsAtOrAboveTarget: number;
   monthsBelowTarget: number;
+  configuredMonthCount: number;
+  missingMonthCount: number;
+  targetByMonth: CollectionMonthlyComparisonTargetLookup;
 };
+
+export type CollectionMonthlyComparisonTargetLookup = Record<string, number | null | undefined>;
+
+export type CollectionMonthlyComparisonTargetInput =
+  | number
+  | null
+  | undefined
+  | CollectionMonthlyComparisonTargetLookup;
 
 export type CollectionMonthlyComparisonProjection = {
   month: string;
@@ -459,25 +470,77 @@ export function buildCollectionMonthlyComparisonBenchmarks(
   ];
 }
 
-export function buildCollectionMonthlyComparisonTargetSummary(
-  payload: CollectionMonthlyComparisonResponse,
-  monthlyTargetAmount: number | null | undefined,
-): CollectionMonthlyComparisonTargetSummary | null {
-  const target = Number(monthlyTargetAmount || 0);
-  if (!Number.isFinite(target) || target <= 0) {
+export function normalizeCollectionMonthlyComparisonTargetAmount(
+  value: number | null | undefined,
+): number | null {
+  const target = Number(value || 0);
+  return Number.isFinite(target) && target > 0 ? target : null;
+}
+
+export function resolveCollectionMonthlyComparisonTargetForMonth(
+  monthKey: string,
+  targetInput: CollectionMonthlyComparisonTargetInput,
+): number | null {
+  if (targetInput === null || targetInput === undefined) {
     return null;
   }
 
-  const insights = buildCollectionMonthlyComparisonInsights(payload);
-  const rangeTarget = target * payload.months.length;
+  if (typeof targetInput === "number") {
+    return normalizeCollectionMonthlyComparisonTargetAmount(targetInput);
+  }
+
+  return normalizeCollectionMonthlyComparisonTargetAmount(targetInput[monthKey] ?? null);
+}
+
+function buildCollectionMonthlyComparisonTargetByMonth(
+  payload: CollectionMonthlyComparisonResponse,
+  targetInput: CollectionMonthlyComparisonTargetInput,
+): CollectionMonthlyComparisonTargetLookup {
+  return payload.months.reduce<CollectionMonthlyComparisonTargetLookup>((lookup, month) => {
+    lookup[month.month] = resolveCollectionMonthlyComparisonTargetForMonth(month.month, targetInput);
+    return lookup;
+  }, {});
+}
+
+export function buildCollectionMonthlyComparisonTargetSummary(
+  payload: CollectionMonthlyComparisonResponse,
+  monthlyTargetAmount: CollectionMonthlyComparisonTargetInput,
+): CollectionMonthlyComparisonTargetSummary | null {
+  const targetByMonth = buildCollectionMonthlyComparisonTargetByMonth(payload, monthlyTargetAmount);
+  const configuredMonths = payload.months
+    .map((month) => ({
+      ...month,
+      target: targetByMonth[month.month] ?? null,
+    }))
+    .filter((month) => month.target !== null);
+
+  if (configuredMonths.length === 0) {
+    return null;
+  }
+
+  const targetMonthKey = payload.comparison.targetMonth || payload.endMonth || payload.months[payload.months.length - 1]?.month || "";
+  const targetMonthAmount = resolveCollectionMonthlyComparisonTargetForMonth(targetMonthKey, targetByMonth)
+    ?? configuredMonths[configuredMonths.length - 1]?.target
+    ?? null;
+  if (targetMonthAmount === null) {
+    return null;
+  }
+
+  const configuredRangeTotal = configuredMonths.reduce((total, month) => (
+    total + Number(month.totalCollection || 0)
+  ), 0);
+  const rangeTarget = configuredMonths.reduce((total, month) => total + Number(month.target || 0), 0);
 
   return {
-    monthlyTargetAmount: target,
+    monthlyTargetAmount: targetMonthAmount,
     rangeTarget,
-    targetGap: insights.rangeTotal - rangeTarget,
-    targetProgress: rangeTarget > 0 ? insights.rangeTotal / rangeTarget : 0,
-    monthsAtOrAboveTarget: payload.months.filter((month) => month.totalCollection >= target).length,
-    monthsBelowTarget: payload.months.filter((month) => month.totalCollection < target).length,
+    targetGap: configuredRangeTotal - rangeTarget,
+    targetProgress: rangeTarget > 0 ? configuredRangeTotal / rangeTarget : 0,
+    monthsAtOrAboveTarget: configuredMonths.filter((month) => month.totalCollection >= Number(month.target || 0)).length,
+    monthsBelowTarget: configuredMonths.filter((month) => month.totalCollection < Number(month.target || 0)).length,
+    configuredMonthCount: configuredMonths.length,
+    missingMonthCount: Math.max(0, payload.months.length - configuredMonths.length),
+    targetByMonth,
   };
 }
 
@@ -515,6 +578,22 @@ function formatCollectionSameDayPaceDate(monthKey: string, day: number): string 
   return `${parsed.year}-${String(parsed.month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
 
+export function formatCollectionSameDayPaceDisplayDate(dateValue: string): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(dateValue || "").trim());
+  if (!match) {
+    return dateValue;
+  }
+
+  const year = Number.parseInt(match[1] || "", 10);
+  const month = Number.parseInt(match[2] || "", 10);
+  const day = Number.parseInt(match[3] || "", 10);
+  if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) {
+    return dateValue;
+  }
+
+  return `${day} ${formatCollectionMonthName(month)} ${year}`;
+}
+
 function formatCollectionSameDayPaceRangeLabel(monthKey: string, throughDay: number): string {
   const parsed = parseCollectionMonthKey(monthKey);
   if (!parsed) {
@@ -529,6 +608,52 @@ function formatCollectionSameDayPacePercent(value: number | null): string {
     return "no baseline";
   }
   return `${Math.abs(value).toFixed(1)}%`;
+}
+
+export function buildCollectionSameDayPacePointTrendLabel(
+  point: CollectionSameDayPacePoint,
+): string {
+  const dailyLabel = point.dailyDifference < 0
+    ? "Daily collection slower"
+    : point.dailyDifference > 0 ? "Daily collection stronger" : "Daily collection matched";
+  const cumulativeLabel = point.cumulativeDifference < 0
+    ? "cumulative behind"
+    : point.cumulativeDifference > 0 ? "cumulative ahead" : "cumulative level";
+
+  return `${dailyLabel} but ${cumulativeLabel}`;
+}
+
+export function buildCollectionSameDayPacePointInsights(
+  point: CollectionSameDayPacePoint,
+  pace?: CollectionSameDayPaceComparison | null,
+): string[] {
+  const currentDate = formatCollectionSameDayPaceDisplayDate(point.currentDate);
+  const previousDate = formatCollectionSameDayPaceDisplayDate(point.previousDate);
+  const insights = [
+    point.dailyDifference < 0
+      ? `Collection on ${currentDate} was ${formatAmountRM(Math.abs(point.dailyDifference))} lower than ${previousDate}.`
+      : point.dailyDifference > 0
+        ? `Collection on ${currentDate} was ${formatAmountRM(Math.abs(point.dailyDifference))} higher than ${previousDate}.`
+        : `Collection on ${currentDate} matched ${previousDate}.`,
+    point.cumulativeDifference < 0
+      ? `Cumulative collection was ${formatAmountRM(Math.abs(point.cumulativeDifference))} behind by day ${point.day}.`
+      : point.cumulativeDifference > 0
+        ? `Cumulative collection was ${formatAmountRM(Math.abs(point.cumulativeDifference))} ahead by day ${point.day}.`
+        : `Cumulative collection was level by day ${point.day}.`,
+  ];
+
+  if (point.dailyDifference < 0 && point.cumulativeDifference > 0) {
+    insights.push("Despite a slower daily result, cumulative performance remained ahead.");
+  } else if (point.dailyDifference > 0 && point.cumulativeDifference < 0) {
+    insights.push("The daily result improved, but cumulative performance still needs to catch up.");
+  }
+
+  if (pace?.target) {
+    const targetProgress = point.currentCumulative / pace.target.monthlyTargetAmount;
+    insights.push(`Target progress by ${currentDate}: ${(targetProgress * 100).toFixed(1)}%.`);
+  }
+
+  return insights;
 }
 
 function buildCollectionSameDayPaceMomentum(points: CollectionSameDayPacePoint[]): CollectionSameDayPaceMomentum {
@@ -859,7 +984,7 @@ export function buildCollectionSameDayPaceComparison(input: {
 
 export function buildCollectionMonthlyComparisonProjection(
   payload: CollectionMonthlyComparisonResponse,
-  monthlyTargetAmount?: number | null,
+  monthlyTargetAmount?: CollectionMonthlyComparisonTargetInput,
   referenceDate = new Date(),
 ): CollectionMonthlyComparisonProjection | null {
   if (!Number.isFinite(referenceDate.getTime())) {
@@ -880,8 +1005,7 @@ export function buildCollectionMonthlyComparisonProjection(
   const dailyAverage = currentTotal / elapsedDays;
   const projectedTotal = dailyAverage * totalDays;
   const projectedDifference = projectedTotal - currentTotal;
-  const target = Number(monthlyTargetAmount || 0);
-  const monthlyTarget = Number.isFinite(target) && target > 0 ? target : null;
+  const monthlyTarget = resolveCollectionMonthlyComparisonTargetForMonth(currentMonth.month, monthlyTargetAmount);
   const targetGap = monthlyTarget === null ? null : projectedTotal - monthlyTarget;
   const targetProgress = monthlyTarget === null ? null : projectedTotal / monthlyTarget;
   const requiredDailyAverageToTarget = monthlyTarget === null
@@ -913,7 +1037,7 @@ export function buildCollectionMonthlyComparisonProjection(
 
 export function buildCollectionMonthlyComparisonDataQualitySummary(
   payload: CollectionMonthlyComparisonResponse,
-  monthlyTargetAmount?: number | null,
+  monthlyTargetAmount?: CollectionMonthlyComparisonTargetInput,
   referenceDate = new Date(),
 ): CollectionMonthlyComparisonDataQualitySummary {
   const insights = buildCollectionMonthlyComparisonInsights(payload);
@@ -925,7 +1049,9 @@ export function buildCollectionMonthlyComparisonDataQualitySummary(
     signals.push({
       id: "target-configured",
       label: "Target configured",
-      description: `${formatAmountRM(targetSummary.monthlyTargetAmount)} monthly target is active for this comparison.`,
+      description: targetSummary.missingMonthCount > 0
+        ? `${targetSummary.configuredMonthCount}/${payload.months.length} selected month(s) have superuser targets. Missing months are excluded from target progress.`
+        : `${formatAmountRM(targetSummary.monthlyTargetAmount)} target is active for the target month, with all selected months configured.`,
       tone: "success",
     });
   } else {
@@ -1269,13 +1395,47 @@ function escapeCollectionMonthlyComparisonCsvValue(value: string | number | null
   return `"${text.replace(/"/g, '""')}"`;
 }
 
+export type CollectionMonthlyComparisonCsvOptions = {
+  monthlyTargetAmount?: number | null | undefined;
+  monthlyTargetsByMonth?: CollectionMonthlyComparisonTargetLookup | undefined;
+  sameDayPace?: CollectionSameDayPaceComparison | null | undefined;
+};
+
+function resolveCollectionMonthlyComparisonCsvTargetInput(
+  options: number | null | undefined | CollectionMonthlyComparisonCsvOptions,
+): CollectionMonthlyComparisonTargetInput {
+  if (
+    options
+    && typeof options === "object"
+    && ("monthlyTargetAmount" in options || "monthlyTargetsByMonth" in options || "sameDayPace" in options)
+  ) {
+    return options.monthlyTargetsByMonth ?? options.monthlyTargetAmount ?? null;
+  }
+
+  return options as number | null | undefined;
+}
+
+function resolveCollectionMonthlyComparisonCsvSameDayPace(
+  options: number | null | undefined | CollectionMonthlyComparisonCsvOptions,
+): CollectionSameDayPaceComparison | null {
+  if (
+    options
+    && typeof options === "object"
+    && ("monthlyTargetAmount" in options || "monthlyTargetsByMonth" in options || "sameDayPace" in options)
+  ) {
+    return options.sameDayPace ?? null;
+  }
+
+  return null;
+}
+
 export function buildCollectionMonthlyComparisonCsv(
   payload: CollectionMonthlyComparisonResponse,
-  monthlyTargetAmount?: number | null,
+  options?: number | null | CollectionMonthlyComparisonCsvOptions,
 ): string {
   const insights = buildCollectionMonthlyComparisonInsights(payload);
-  const targetSummary = buildCollectionMonthlyComparisonTargetSummary(payload, monthlyTargetAmount);
-  const target = targetSummary?.monthlyTargetAmount ?? null;
+  const targetInput = resolveCollectionMonthlyComparisonCsvTargetInput(options);
+  const sameDayPace = resolveCollectionMonthlyComparisonCsvSameDayPace(options);
   const headers = [
     "Nickname",
     "Month",
@@ -1291,12 +1451,15 @@ export function buildCollectionMonthlyComparisonCsv(
     "Anomaly Threshold Percent",
     "Monthly Target",
     "Target Difference",
+    "Target Progress %",
     "Target Status",
   ];
   const rows = insights.monthInsights.map((month) => {
+    const target = resolveCollectionMonthlyComparisonTargetForMonth(month.month, targetInput);
     const targetDifference = target === null ? null : month.totalCollection - target;
+    const targetProgress = target === null ? null : (month.totalCollection / target) * 100;
     const targetStatus = target === null
-      ? ""
+      ? "No target configured"
       : month.totalCollection >= target ? "At or above target" : "Below target";
 
     return [
@@ -1314,13 +1477,57 @@ export function buildCollectionMonthlyComparisonCsv(
       COLLECTION_MONTHLY_COMPARISON_ANOMALY_THRESHOLD_PERCENT.toFixed(2),
       target === null ? "" : target.toFixed(2),
       targetDifference === null ? "" : targetDifference.toFixed(2),
+      targetProgress === null ? "" : targetProgress.toFixed(2),
       targetStatus,
     ];
   });
 
-  return [
+  const monthlySection = [
     headers.map(escapeCollectionMonthlyComparisonCsvValue).join(","),
     ...rows.map((row) => row.map(escapeCollectionMonthlyComparisonCsvValue).join(",")),
+  ];
+
+  if (!sameDayPace) {
+    return monthlySection.join("\n");
+  }
+
+  const sameDayHeaders = [
+    "Date",
+    "Daily Collection",
+    "Cumulative Collection",
+    "Previous Month Date",
+    "Previous Month Daily Collection",
+    "Previous Month Cumulative Collection",
+    "Daily Difference",
+    "Cumulative Difference",
+    "Monthly Target",
+    "Target Progress %",
+    "Pace Status",
+  ];
+  const sameDayRows = sameDayPace.points.map((point) => {
+    const target = sameDayPace.target?.monthlyTargetAmount ?? null;
+    const targetProgress = target === null ? null : (point.currentCumulative / target) * 100;
+    return [
+      point.currentDate,
+      point.currentAmount.toFixed(2),
+      point.currentCumulative.toFixed(2),
+      point.previousDate,
+      point.previousAmount.toFixed(2),
+      point.previousCumulative.toFixed(2),
+      point.dailyDifference.toFixed(2),
+      point.cumulativeDifference.toFixed(2),
+      target === null ? "" : target.toFixed(2),
+      targetProgress === null ? "" : targetProgress.toFixed(2),
+      buildCollectionSameDayPacePointTrendLabel(point),
+    ];
+  });
+
+  return [
+    ...monthlySection,
+    "",
+    escapeCollectionMonthlyComparisonCsvValue("Same-Day Pace Detail"),
+    sameDayHeaders.map(escapeCollectionMonthlyComparisonCsvValue).join(","),
+    ...sameDayRows.map((row) => row.map(escapeCollectionMonthlyComparisonCsvValue).join(",")),
   ].join("\n");
 }
 
@@ -1357,7 +1564,7 @@ function formatCollectionMonthlyComparisonReportDate(date: Date): string {
 
 function buildCollectionMonthlyComparisonReportChartSvg(
   insights: CollectionMonthlyComparisonInsights,
-  monthlyTargetAmount: number | null,
+  monthlyTargetInput: CollectionMonthlyComparisonTargetInput,
 ): string {
   const width = 760;
   const height = 260;
@@ -1365,13 +1572,16 @@ function buildCollectionMonthlyComparisonReportChartSvg(
   const plotWidth = width - padding.left - padding.right;
   const plotHeight = height - padding.top - padding.bottom;
   const maxCollection = Math.max(0, ...insights.monthInsights.map((month) => month.totalCollection));
-  const maxValue = Math.max(maxCollection, monthlyTargetAmount || 0, 1);
+  const maxTarget = Math.max(
+    0,
+    ...insights.monthInsights.map((month) => (
+      resolveCollectionMonthlyComparisonTargetForMonth(month.month, monthlyTargetInput) || 0
+    )),
+  );
+  const maxValue = Math.max(maxCollection, maxTarget, 1);
   const scaleMax = maxValue * 1.12;
   const slotWidth = plotWidth / Math.max(1, insights.monthInsights.length);
   const barWidth = Math.max(16, Math.min(44, slotWidth * 0.58));
-  const targetY = monthlyTargetAmount && monthlyTargetAmount > 0
-    ? padding.top + plotHeight - ((monthlyTargetAmount / scaleMax) * plotHeight)
-    : null;
 
   const bars = insights.monthInsights.map((month, index) => {
     const barHeight = Math.max(2, (month.totalCollection / scaleMax) * plotHeight);
@@ -1387,19 +1597,28 @@ function buildCollectionMonthlyComparisonReportChartSvg(
     ].join("");
   }).join("");
 
-  const targetLine = targetY === null
-    ? ""
-    : [
-      `<line x1="${padding.left}" y1="${targetY.toFixed(1)}" x2="${width - padding.right}" y2="${targetY.toFixed(1)}" stroke="#7c3aed" stroke-width="2" stroke-dasharray="6 6" />`,
-      `<text x="${width - padding.right}" y="${(targetY - 6).toFixed(1)}" text-anchor="end" font-size="11" fill="#5b21b6">Monthly target</text>`,
+  const targetMarks = insights.monthInsights.map((month, index) => {
+    const target = resolveCollectionMonthlyComparisonTargetForMonth(month.month, monthlyTargetInput);
+    if (target === null) {
+      return "";
+    }
+    const x = padding.left + (slotWidth * index) + Math.max(4, (slotWidth - barWidth) / 2);
+    const y = padding.top + plotHeight - ((target / scaleMax) * plotHeight);
+    const markWidth = Math.max(22, Math.min(slotWidth - 8, barWidth + 10));
+    return [
+      `<line x1="${x.toFixed(1)}" y1="${y.toFixed(1)}" x2="${(x + markWidth).toFixed(1)}" y2="${y.toFixed(1)}" stroke="#7c3aed" stroke-width="2" stroke-dasharray="5 4" />`,
+      index === 0
+        ? `<text x="${x.toFixed(1)}" y="${(y - 6).toFixed(1)}" font-size="11" fill="#5b21b6">Monthly target</text>`
+        : "",
     ].join("");
+  }).join("");
 
   return `
     <svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Monthly comparison bar chart" class="report-chart">
       <rect x="0" y="0" width="${width}" height="${height}" rx="18" fill="#f8fafc" />
       <line x1="${padding.left}" y1="${padding.top + plotHeight}" x2="${width - padding.right}" y2="${padding.top + plotHeight}" stroke="#cbd5e1" />
       <text x="${padding.left}" y="18" font-size="11" fill="#64748b">Total collection by month</text>
-      ${targetLine}
+      ${targetMarks}
       ${bars}
     </svg>
   `;
@@ -1409,6 +1628,7 @@ export function buildCollectionMonthlyComparisonPrintReportHtml(
   payload: CollectionMonthlyComparisonResponse,
   options: {
     monthlyTargetAmount?: number | null | undefined;
+    monthlyTargetsByMonth?: CollectionMonthlyComparisonTargetLookup | undefined;
     monthlyTargetSourceLabel?: string | null | undefined;
     sameDayPace?: CollectionSameDayPaceComparison | null | undefined;
     generatedAt?: Date | undefined;
@@ -1417,22 +1637,22 @@ export function buildCollectionMonthlyComparisonPrintReportHtml(
   const insights = buildCollectionMonthlyComparisonInsights(payload);
   const benchmarks = buildCollectionMonthlyComparisonBenchmarks(payload);
   const trendExplanation = buildCollectionMonthlyComparisonTrendExplanation(payload);
+  const targetInput = options.monthlyTargetsByMonth ?? options.monthlyTargetAmount ?? null;
   const targetSummary = buildCollectionMonthlyComparisonTargetSummary(
     payload,
-    options.monthlyTargetAmount,
+    targetInput,
   );
   const reportReferenceDate = options.generatedAt || new Date();
   const projection = buildCollectionMonthlyComparisonProjection(
     payload,
-    options.monthlyTargetAmount,
+    targetInput,
     reportReferenceDate,
   );
   const dataQuality = buildCollectionMonthlyComparisonDataQualitySummary(
     payload,
-    options.monthlyTargetAmount,
+    targetInput,
     reportReferenceDate,
   );
-  const monthlyTargetAmount = targetSummary?.monthlyTargetAmount ?? null;
   const targetStatus = !targetSummary
     ? "No configured monthly target"
     : targetSummary.targetGap >= 0
@@ -1442,11 +1662,12 @@ export function buildCollectionMonthlyComparisonPrintReportHtml(
     ? `${insights.anomalyMonthCount} anomaly month(s) flagged`
     : "No anomaly above threshold";
   const generatedAt = formatCollectionMonthlyComparisonReportDate(reportReferenceDate);
-  const chartSvg = buildCollectionMonthlyComparisonReportChartSvg(insights, monthlyTargetAmount);
+  const chartSvg = buildCollectionMonthlyComparisonReportChartSvg(insights, targetInput);
   const monthRows = insights.monthInsights.map((month) => {
-    const targetGap = monthlyTargetAmount === null
+    const monthTarget = resolveCollectionMonthlyComparisonTargetForMonth(month.month, targetInput);
+    const targetGap = monthTarget === null
       ? "N/A"
-      : formatCollectionMonthlyComparisonDifference(month.totalCollection - monthlyTargetAmount);
+      : formatCollectionMonthlyComparisonDifference(month.totalCollection - monthTarget);
     return `
       <tr>
         <td>${escapeCollectionMonthlyComparisonHtml(month.label)}</td>
@@ -1602,7 +1823,7 @@ export function buildCollectionMonthlyComparisonPrintReportHtml(
 
     <section class="section">
       <h2>Target and anomaly notes</h2>
-      <p>${targetSummary ? escapeCollectionMonthlyComparisonHtml(`Monthly target ${formatAmountRM(targetSummary.monthlyTargetAmount)}. Range target ${formatAmountRM(targetSummary.rangeTarget)}. Gap ${formatCollectionMonthlyComparisonDifference(targetSummary.targetGap)}.`) : "No configured monthly target was available for this report."}</p>
+      <p>${targetSummary ? escapeCollectionMonthlyComparisonHtml(`Target month target ${formatAmountRM(targetSummary.monthlyTargetAmount)}. Configured range target ${formatAmountRM(targetSummary.rangeTarget)} across ${targetSummary.configuredMonthCount} month(s). Gap ${formatCollectionMonthlyComparisonDifference(targetSummary.targetGap)}.`) : "No configured monthly target was available for this report."}</p>
       <ul>${anomalyRows}</ul>
     </section>
 

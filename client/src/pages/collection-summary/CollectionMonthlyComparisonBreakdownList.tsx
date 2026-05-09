@@ -3,32 +3,41 @@ import { formatAmountRM } from "@/pages/collection/utils";
 import {
   formatCollectionMonthlyComparisonDifference,
   formatCollectionMonthlyComparisonMonthDelta,
+  resolveCollectionMonthlyComparisonTargetForMonth,
   type CollectionMonthlyComparisonInsights,
   type CollectionMonthlyComparisonTargetSummary,
+  type CollectionMonthlyComparisonTargetLookup,
 } from "./collection-monthly-comparison-utils";
 
 type CollectionMonthlyComparisonBreakdownListProps = {
   insights: CollectionMonthlyComparisonInsights;
   targetSummary: CollectionMonthlyComparisonTargetSummary | null;
+  monthlyTargetsByMonth?: CollectionMonthlyComparisonTargetLookup | undefined;
   onMonthSelect?: ((monthKey: string) => void) | undefined;
 };
 
 function CollectionMonthlyComparisonBreakdownList({
   insights,
   targetSummary,
+  monthlyTargetsByMonth,
   onMonthSelect,
 }: CollectionMonthlyComparisonBreakdownListProps) {
   return (
     <>
-      {insights.monthInsights.map((month) => (
-        <button
-          key={month.month}
-          type="button"
-          className="grid gap-3 rounded-2xl border border-border/50 bg-background px-3 py-3 text-left transition hover:border-primary/40 hover:bg-primary/[0.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default disabled:hover:border-border/50 disabled:hover:bg-background"
-          onClick={() => onMonthSelect?.(month.month)}
-          disabled={!onMonthSelect}
-          aria-label={`View collection records for ${month.label}`}
-        >
+      {insights.monthInsights.map((month) => {
+        const monthTarget = resolveCollectionMonthlyComparisonTargetForMonth(
+          month.month,
+          monthlyTargetsByMonth ?? targetSummary?.targetByMonth ?? targetSummary?.monthlyTargetAmount,
+        );
+        return (
+          <button
+            key={month.month}
+            type="button"
+            className="grid gap-3 rounded-2xl border border-border/50 bg-background px-3 py-3 text-left transition hover:border-primary/40 hover:bg-primary/[0.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default disabled:hover:border-border/50 disabled:hover:bg-background"
+            onClick={() => onMonthSelect?.(month.month)}
+            disabled={!onMonthSelect}
+            aria-label={`View collection records for ${month.label}`}
+          >
           <div className="space-y-1">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex flex-wrap items-center gap-1.5">
@@ -59,15 +68,15 @@ function CollectionMonthlyComparisonBreakdownList({
                     {month.anomalyDirection === "decrease" ? "Anomaly drop" : "Anomaly jump"}
                   </span>
                 ) : null}
-                {targetSummary ? (
+                {monthTarget !== null ? (
                   <span
                     className={
-                      month.totalCollection >= targetSummary.monthlyTargetAmount
+                      month.totalCollection >= monthTarget
                         ? "rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-300"
                         : "rounded-full bg-destructive/10 px-2 py-0.5 text-[11px] font-medium text-destructive"
                     }
                   >
-                    {month.totalCollection >= targetSummary.monthlyTargetAmount
+                    {month.totalCollection >= monthTarget
                       ? "Above target"
                       : "Below target"}
                   </span>
@@ -112,10 +121,10 @@ function CollectionMonthlyComparisonBreakdownList({
                   {month.anomalyLabel}
                 </span>
               ) : null}
-              {targetSummary ? (
+              {monthTarget !== null ? (
                 <span>
                   Target gap {formatCollectionMonthlyComparisonDifference(
-                    month.totalCollection - targetSummary.monthlyTargetAmount,
+                    month.totalCollection - monthTarget,
                   )}
                 </span>
               ) : null}
@@ -126,8 +135,9 @@ function CollectionMonthlyComparisonBreakdownList({
               </p>
             ) : null}
           </div>
-        </button>
-      ))}
+          </button>
+        );
+      })}
     </>
   );
 }
