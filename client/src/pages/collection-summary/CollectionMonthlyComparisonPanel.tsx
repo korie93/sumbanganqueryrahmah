@@ -33,6 +33,7 @@ import {
   type CollectionSameDayPaceComparison,
   type CollectionSameDayPaceDayRange,
 } from "./collection-monthly-comparison-utils";
+import "./CollectionMonthlyComparisonPanel.css";
 
 type CollectionMonthlyComparisonPanelProps = {
   canFilterByNickname: boolean;
@@ -281,15 +282,6 @@ export function CollectionMonthlyComparisonPanel({
       1,
     )
     : 1;
-  const sameDayCurrentWidth = sameDayPace
-    ? `${Math.min(100, Math.round((sameDayPace.currentTotal / sameDayPaceMax) * 100))}%`
-    : "0%";
-  const sameDayPreviousWidth = sameDayPace
-    ? `${Math.min(100, Math.round((sameDayPace.previousTotal / sameDayPaceMax) * 100))}%`
-    : "0%";
-  const sameDayTargetWidth = sameDayPace?.target
-    ? `${Math.min(100, Math.round((sameDayPace.target.expectedByToday / sameDayPaceMax) * 100))}%`
-    : "0%";
   const sameDayToneClassName = sameDayPace?.direction === "faster"
     ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
     : sameDayPace?.direction === "slower"
@@ -772,21 +764,24 @@ export function CollectionMonthlyComparisonPanel({
                         <span className="font-medium text-foreground">{sameDayPace.currentLabel}</span>
                         <span className="text-muted-foreground">{formatAmountRM(sameDayPace.currentTotal)}</span>
                       </div>
-                      <div className="h-2 overflow-hidden rounded-full bg-muted">
-                        <div className="h-full rounded-full bg-primary" style={{ width: sameDayCurrentWidth }} />
-                      </div>
+                      <progress
+                        className="collection-monthly-comparison-progress collection-monthly-comparison-progress--current"
+                        max={sameDayPaceMax}
+                        value={Math.max(0, sameDayPace.currentTotal)}
+                        aria-label={`${sameDayPace.currentLabel} same-day total`}
+                      />
                     </div>
                     <div className="space-y-1">
                       <div className="flex justify-between gap-3 text-xs">
                         <span className="font-medium text-foreground">{sameDayPace.previousLabel}</span>
                         <span className="text-muted-foreground">{formatAmountRM(sameDayPace.previousTotal)}</span>
                       </div>
-                      <div className="h-2 overflow-hidden rounded-full bg-muted">
-                        <div
-                          className="h-full rounded-full"
-                          style={{ width: sameDayPreviousWidth, backgroundColor: "hsl(var(--chart-4))" }}
-                        />
-                      </div>
+                      <progress
+                        className="collection-monthly-comparison-progress collection-monthly-comparison-progress--previous"
+                        max={sameDayPaceMax}
+                        value={Math.max(0, sameDayPace.previousTotal)}
+                        aria-label={`${sameDayPace.previousLabel} same-day total`}
+                      />
                     </div>
                     {sameDayPace.target ? (
                       <div className="space-y-1">
@@ -794,9 +789,12 @@ export function CollectionMonthlyComparisonPanel({
                           <span className="font-medium text-foreground">Expected range target pace</span>
                           <span className="text-muted-foreground">{formatAmountRM(sameDayPace.target.expectedByToday)}</span>
                         </div>
-                        <div className="h-2 overflow-hidden rounded-full bg-muted">
-                          <div className="h-full rounded-full bg-destructive/70" style={{ width: sameDayTargetWidth }} />
-                        </div>
+                        <progress
+                          className="collection-monthly-comparison-progress collection-monthly-comparison-progress--target"
+                          max={sameDayPaceMax}
+                          value={Math.max(0, sameDayPace.target.expectedByToday)}
+                          aria-label="Expected same-day target pace"
+                        />
                       </div>
                     ) : null}
                   </div>
