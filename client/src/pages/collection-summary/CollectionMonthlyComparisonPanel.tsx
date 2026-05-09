@@ -128,6 +128,7 @@ function CollectionMonthField({
   const helpId = `${id}-format`;
   const normalizedDraftValue = normalizeCollectionMonthFieldValue(draftValue);
   const showInvalidState = draftValue.trim().length > 0 && !normalizedDraftValue;
+  const invalidAriaAttributes = showInvalidState ? { "aria-invalid": "true" as const } : {};
 
   useEffect(() => {
     setDraftValue(value);
@@ -173,7 +174,7 @@ function CollectionMonthField({
           }
         }}
         aria-describedby={helpId}
-        aria-invalid={showInvalidState ? "true" : undefined}
+        {...invalidAriaAttributes}
         title="Use YYYY-MM format, for example 2026-05"
         className={cn(
           "collection-monthly-comparison-control h-11 w-full rounded-2xl border border-input bg-background px-3 text-sm",
