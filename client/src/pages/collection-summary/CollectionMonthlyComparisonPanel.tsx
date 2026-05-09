@@ -846,17 +846,31 @@ export function CollectionMonthlyComparisonPanel({
                     >
                       {benchmarks.map((benchmark) => {
                         const active = benchmark.id === activeBenchmark.id;
+                        const benchmarkButtonClassName = active
+                          ? "inline-flex h-8 items-center justify-center rounded-full border border-primary bg-primary/10 px-3 text-xs font-medium text-primary"
+                          : "inline-flex h-8 items-center justify-center rounded-full border border-border/70 bg-background px-3 text-xs font-medium text-foreground transition hover:bg-accent hover:text-accent-foreground";
+                        if (active) {
+                          return (
+                            <button
+                              key={benchmark.id}
+                              type="button"
+                              className={benchmarkButtonClassName}
+                              onClick={() => setActiveBenchmarkId(benchmark.id)}
+                              aria-pressed="true"
+                              title={benchmark.available ? benchmark.formula : benchmark.summary}
+                            >
+                              {benchmark.shortLabel}
+                            </button>
+                          );
+                        }
+
                         return (
                           <button
                             key={benchmark.id}
                             type="button"
-                            className={
-                              active
-                                ? "inline-flex h-8 items-center justify-center rounded-full border border-primary bg-primary/10 px-3 text-xs font-medium text-primary"
-                                : "inline-flex h-8 items-center justify-center rounded-full border border-border/70 bg-background px-3 text-xs font-medium text-foreground transition hover:bg-accent hover:text-accent-foreground"
-                            }
+                            className={benchmarkButtonClassName}
                             onClick={() => setActiveBenchmarkId(benchmark.id)}
-                            aria-pressed={active ? "true" : "false"}
+                            aria-pressed="false"
                             title={benchmark.available ? benchmark.formula : benchmark.summary}
                           >
                             {benchmark.shortLabel}

@@ -339,57 +339,66 @@ export function MonthlyCollectionComparisonChart({
               </select>
             </label>
           ) : null}
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="h-8 gap-1 rounded-full px-3 text-xs"
-            onClick={() => {
-              setCollapsed((previous) => {
-                const nextCollapsed = !previous;
-                if (nextCollapsed) {
-                  setExpanded(false);
-                }
-                return nextCollapsed;
-              });
-            }}
-            aria-expanded={!collapsed ? "true" : "false"}
-            aria-controls={chartRegionId}
-          >
-            {collapsed ? (
-              <>
-                <ChevronDown className="h-3.5 w-3.5" aria-hidden="true" />
-                Show chart
-              </>
-            ) : (
-              <>
-                <ChevronUp className="h-3.5 w-3.5" aria-hidden="true" />
-                Minimize chart
-              </>
-            )}
-          </Button>
-          {!collapsed ? (
+          {collapsed ? (
             <Button
               type="button"
-              variant="ghost"
+              variant="outline"
               size="sm"
               className="h-8 gap-1 rounded-full px-3 text-xs"
-              onClick={() => setExpanded((previous) => !previous)}
-              aria-pressed={expanded ? "true" : "false"}
+              onClick={() => {
+                setCollapsed(false);
+              }}
+              aria-expanded="false"
               aria-controls={chartRegionId}
             >
-              {expanded ? (
-                <>
-                  <Minimize2 className="h-3.5 w-3.5" aria-hidden="true" />
-                  Compact view
-                </>
-              ) : (
-                <>
-                  <Maximize2 className="h-3.5 w-3.5" aria-hidden="true" />
-                  Expand chart
-                </>
-              )}
+              <ChevronDown className="h-3.5 w-3.5" aria-hidden="true" />
+              Show chart
             </Button>
+          ) : (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-8 gap-1 rounded-full px-3 text-xs"
+              onClick={() => {
+                setExpanded(false);
+                setCollapsed(true);
+              }}
+              aria-expanded="true"
+              aria-controls={chartRegionId}
+            >
+              <ChevronUp className="h-3.5 w-3.5" aria-hidden="true" />
+              Minimize chart
+            </Button>
+          )}
+          {!collapsed ? (
+            expanded ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-8 gap-1 rounded-full px-3 text-xs"
+                onClick={() => setExpanded(false)}
+                aria-pressed="true"
+                aria-controls={chartRegionId}
+              >
+                <Minimize2 className="h-3.5 w-3.5" aria-hidden="true" />
+                Compact view
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-8 gap-1 rounded-full px-3 text-xs"
+                onClick={() => setExpanded(true)}
+                aria-pressed="false"
+                aria-controls={chartRegionId}
+              >
+                <Maximize2 className="h-3.5 w-3.5" aria-hidden="true" />
+                Expand chart
+              </Button>
+            )
           ) : null}
           {!collapsed ? (
             <Button
