@@ -965,8 +965,7 @@ export function buildCollectionSameDayPaceComparison(input: {
   dayRange?: CollectionSameDayPaceDayRange | null | undefined;
   referenceDate?: Date | undefined;
 }): CollectionSameDayPaceComparison | null {
-  const referenceDate = input.referenceDate || new Date();
-  if (!Number.isFinite(referenceDate.getTime())) {
+  if (input.referenceDate && !Number.isFinite(input.referenceDate.getTime())) {
     return null;
   }
 
@@ -983,14 +982,10 @@ export function buildCollectionSameDayPaceComparison(input: {
 
   const totalDaysInCurrentMonth = getCollectionDaysInMonth(currentMonth.year, currentMonth.month);
   const totalDaysInPreviousMonth = getCollectionDaysInMonth(previousMonth.year, previousMonth.month);
-  const referenceMonthKey = formatCollectionMonthInput(referenceDate);
-  const rawComparisonDay = referenceMonthKey === input.currentMonthKey
-    ? referenceDate.getDate()
-    : totalDaysInCurrentMonth;
+  const rawComparisonDay = totalDaysInCurrentMonth;
   const maxComparisonDay = Math.min(
     totalDaysInCurrentMonth,
     totalDaysInPreviousMonth,
-    Math.max(1, rawComparisonDay),
   );
   const {
     startDay,

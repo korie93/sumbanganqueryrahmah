@@ -24,12 +24,12 @@ test("MonthlySameDayPaceChart renders same-day chart controls and summary access
   );
 
   assert.match(markup, /Same-day pace trend/);
-  assert.match(markup, /Cumulative collection from day 1 to day 9/);
+  assert.match(markup, /Cumulative collection from day 1 to day 30/);
   assert.match(markup, /Current range/);
   assert.match(markup, /Previous range/);
   assert.match(markup, /Same-day gap/);
   assert.match(markup, /Inspect day/);
-  assert.match(markup, /Day 9 detail/);
+  assert.match(markup, /Day 30 detail/);
   assert.match(markup, /Daily Difference/);
   assert.match(markup, /Cumulative Difference/);
   assert.match(markup, /View Full/);

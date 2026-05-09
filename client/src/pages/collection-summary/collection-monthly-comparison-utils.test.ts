@@ -206,7 +206,7 @@ test("collection monthly comparison helpers derive operational insights", () => 
   assert.equal(insights.monthInsights[1]?.isTargetMonth, true);
 });
 
-test("collection same-day pace compares current month only up to the same previous-month day range", () => {
+test("collection same-day pace compares the full comparable selected month range by default", () => {
   const pace = buildCollectionSameDayPaceComparison({
     currentMonthKey: "2026-05",
     currentDaily: [1000, 2000, 1500, 1300, 1200, 1400, 1600, 1000, 2000]
@@ -220,20 +220,24 @@ test("collection same-day pace compares current month only up to the same previo
   assert.ok(pace);
   assert.equal(pace.currentMonth, "2026-05");
   assert.equal(pace.previousMonth, "2026-04");
-  assert.equal(pace.comparisonDay, 9);
+  assert.equal(pace.comparisonDay, 30);
+  assert.equal(pace.comparedDayCount, 30);
+  assert.equal(pace.points.length, 30);
   assert.equal(pace.currentTotal, 13000);
   assert.equal(pace.previousTotal, 19000);
   assert.equal(pace.difference, -6000);
   assert.equal(pace.direction, "slower");
   assert.equal(pace.percentageChange?.toFixed(2), "-31.58");
-  assert.equal(pace.currentDailyAverage.toFixed(2), "1444.44");
-  assert.equal(pace.previousDailyAverage.toFixed(2), "2111.11");
+  assert.equal(pace.currentDailyAverage.toFixed(2), "433.33");
+  assert.equal(pace.previousDailyAverage.toFixed(2), "633.33");
   assert.equal(pace.target?.status, "behind");
-  assert.equal(pace.target?.paceGap.toFixed(2), "-1516.13");
+  assert.equal(pace.target?.paceGap.toFixed(2), "-35387.10");
   assert.match(pace.headline, /31\.6% slower than previous month/);
   assert.match(pace.insights[0] || "", /RM(?:\u00A0| )6,000\.00 less/);
   assert.equal(pace.points[8]?.currentCumulative, 13000);
   assert.equal(pace.points[8]?.previousCumulative, 19000);
+  assert.equal(pace.points[29]?.currentCumulative, 13000);
+  assert.equal(pace.points[29]?.previousCumulative, 19000);
   assert.equal(formatCollectionSameDayPaceDisplayDate(pace.points[3]?.currentDate || ""), "4 May 2026");
   assert.equal(
     buildCollectionSameDayPacePointTrendLabel(pace.points[3]!),
@@ -312,8 +316,8 @@ test("collection same-day pace handles January rollover and short previous month
 
   assert.ok(januaryPace);
   assert.equal(januaryPace.previousMonth, "2025-12");
-  assert.equal(januaryPace.comparisonDay, 8);
-  assert.match(januaryPace.previousRangeLabel, /December 1 to December 8, 2025/);
+  assert.equal(januaryPace.comparisonDay, 31);
+  assert.match(januaryPace.previousRangeLabel, /December 1 to December 31, 2025/);
 
   const cappedPace = buildCollectionSameDayPaceComparison({
     currentMonthKey: "2026-03",

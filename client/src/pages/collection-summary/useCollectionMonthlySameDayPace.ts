@@ -14,7 +14,6 @@ import {
 } from "@/pages/collection/utils";
 import {
   buildCollectionSameDayPaceComparison,
-  formatCollectionMonthInput,
   getCollectionDaysInMonth,
   parseCollectionMonthKey,
   resolveCollectionMonthlyComparisonTargetForMonth,
@@ -28,7 +27,6 @@ type SameDayPaceRequest = {
   nickname: string;
   currentMonthKey: string;
   previousMonthKey: string;
-  referenceDate: Date;
   maxDay: number;
   defaultDayRange: CollectionSameDayPaceDayRange;
 };
@@ -66,20 +64,14 @@ function buildSameDayPaceRequest(
     return null;
   }
 
-  const referenceDate = new Date();
   const totalDaysInCurrentMonth = getCollectionDaysInMonth(currentMonth.year, currentMonth.month);
   const totalDaysInPreviousMonth = getCollectionDaysInMonth(previousMonth.year, previousMonth.month);
-  const referenceMonthKey = formatCollectionMonthInput(referenceDate);
-  const cappedCurrentMonthDay = referenceMonthKey === currentMonthKey
-    ? Math.max(1, Math.min(totalDaysInCurrentMonth, referenceDate.getDate()))
-    : totalDaysInCurrentMonth;
-  const maxDay = Math.max(1, Math.min(cappedCurrentMonthDay, totalDaysInPreviousMonth));
+  const maxDay = Math.max(1, Math.min(totalDaysInCurrentMonth, totalDaysInPreviousMonth));
 
   return {
     nickname,
     currentMonthKey,
     previousMonthKey,
-    referenceDate,
     maxDay,
     defaultDayRange: {
       startDay: 1,
@@ -302,7 +294,6 @@ export function useCollectionMonthlySameDayPace({
       monthlyTargetAmount: effectiveMonthlyTarget,
       previousMonthlyTargetAmount: effectivePreviousMonthlyTarget,
       dayRange,
-      referenceDate: request.referenceDate,
     });
   }, [currentOverview, dayRange, monthlyTargetAmount, monthlyTargetsByMonth, previousOverview, request]);
 

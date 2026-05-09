@@ -18,7 +18,7 @@ const source = readFileSync(
 test("useCollectionMonthlySameDayPace keeps daily comparison loading abortable and synchronized", () => {
   assert.match(source, /getCollectionDailyOverview/);
   assert.match(source, /buildCollectionSameDayPaceComparison/);
-  assert.match(source, /formatCollectionMonthInput\(referenceDate\)/);
+  assert.match(source, /Math\.min\(totalDaysInCurrentMonth, totalDaysInPreviousMonth\)/);
   assert.match(source, /shiftCollectionMonthInput\(currentMonthKey, -1\)/);
   assert.match(source, /comparison\?\.targetMonth/);
   assert.match(source, /comparison\?\.baseMonth/);
