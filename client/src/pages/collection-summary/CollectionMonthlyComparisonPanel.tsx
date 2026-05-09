@@ -729,7 +729,7 @@ export function CollectionMonthlyComparisonPanel({
                                 : "inline-flex h-8 items-center justify-center rounded-full border border-border/70 bg-background px-3 text-xs font-medium text-foreground transition hover:bg-accent hover:text-accent-foreground"
                             }
                             onClick={() => setActiveBenchmarkId(benchmark.id)}
-                            aria-pressed={active}
+                            aria-pressed={active ? "true" : "false"}
                             title={benchmark.available ? benchmark.formula : benchmark.summary}
                           >
                             {benchmark.shortLabel}

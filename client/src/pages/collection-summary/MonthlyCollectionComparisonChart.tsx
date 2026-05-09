@@ -353,7 +353,7 @@ export function MonthlyCollectionComparisonChart({
                 return nextCollapsed;
               });
             }}
-            aria-expanded={!collapsed}
+            aria-expanded={!collapsed ? "true" : "false"}
             aria-controls={chartRegionId}
           >
             {collapsed ? (
@@ -375,7 +375,7 @@ export function MonthlyCollectionComparisonChart({
               size="sm"
               className="h-8 gap-1 rounded-full px-3 text-xs"
               onClick={() => setExpanded((previous) => !previous)}
-              aria-pressed={expanded}
+              aria-pressed={expanded ? "true" : "false"}
               aria-controls={chartRegionId}
             >
               {expanded ? (
