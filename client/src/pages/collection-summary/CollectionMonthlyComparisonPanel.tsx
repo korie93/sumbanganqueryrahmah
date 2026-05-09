@@ -24,12 +24,14 @@ import {
   formatCollectionMonthlyComparisonDifference,
   formatCollectionMonthlyComparisonMonthDelta,
   formatCollectionMonthlyComparisonPercentage,
+  formatCollectionSameDayPaceMonthLabel,
   resolveCollectionMonthlyComparisonTargetForMonth,
   resolveCollectionMonthlyComparisonTone,
   type CollectionMonthlyComparisonBenchmarkId,
   type CollectionMonthlyComparisonPresetRange,
   type CollectionMonthlyComparisonTargetLookup,
   type CollectionSameDayPaceComparison,
+  type CollectionSameDayPaceDayRange,
 } from "./collection-monthly-comparison-utils";
 
 type CollectionMonthlyComparisonPanelProps = {
@@ -59,9 +61,12 @@ type CollectionMonthlyComparisonPanelProps = {
   sameDayPaceLoading?: boolean | undefined;
   sameDayPaceErrorMessage?: string | null | undefined;
   sameDayPaceUnavailableReason?: string | null | undefined;
+  sameDayPaceDayRange?: CollectionSameDayPaceDayRange | null | undefined;
+  sameDayPaceMaxDay?: number | null | undefined;
   onExportCsv?: (() => void) | undefined;
   onPrintReport?: (() => void) | undefined;
   onMonthSelect?: ((monthKey: string) => void) | undefined;
+  onSameDayPaceDayRangeChange?: ((range: CollectionSameDayPaceDayRange) => void) | undefined;
   chartSlot?: ReactNode | undefined;
 };
 
@@ -117,9 +122,12 @@ export function CollectionMonthlyComparisonPanel({
   sameDayPaceLoading = false,
   sameDayPaceErrorMessage = null,
   sameDayPaceUnavailableReason = null,
+  sameDayPaceDayRange = null,
+  sameDayPaceMaxDay = null,
   onExportCsv,
   onPrintReport,
   onMonthSelect,
+  onSameDayPaceDayRangeChange,
   chartSlot,
 }: CollectionMonthlyComparisonPanelProps) {
   const [breakdownExpanded, setBreakdownExpanded] = useState(false);
@@ -224,6 +232,61 @@ export function CollectionMonthlyComparisonPanel({
       monthlyTargetsByMonth ?? monthlyTargetAmount,
     )
     : null;
+  const comparisonTargetCards = useMemo(() => {
+    if (!data?.comparison) {
+      return [];
+    }
+
+    const months = [
+      {
+        month: data.comparison.baseMonth,
+        role: "Start month target",
+        label: data.comparison.baseMonth
+          ? data.comparison.baseLabel || formatCollectionSameDayPaceMonthLabel(data.comparison.baseMonth)
+          : "Start month",
+      },
+      {
+        month: data.comparison.targetMonth,
+        role: "End month target",
+        label: data.comparison.targetLabel || formatCollectionSameDayPaceMonthLabel(data.comparison.targetMonth),
+      },
+    ].flatMap((entry) => (entry.month ? [{ ...entry, month: entry.month }] : []))
+      .filter((entry, index, entries) => (
+        entries.findIndex((candidate) => candidate.month === entry.month) === index
+      ));
+
+    return months.map((entry) => {
+      const target = resolveCollectionMonthlyComparisonTargetForMonth(
+        entry.month,
+        monthlyTargetsByMonth ?? monthlyTargetAmount,
+      );
+      return {
+        ...entry,
+        target,
+        displayValue: target === null ? "No target configured" : formatAmountRM(target),
+      };
+    });
+  }, [data?.comparison, monthlyTargetAmount, monthlyTargetsByMonth]);
+  const handleSameDayStartDayChange = (value: number) => {
+    if (!sameDayPaceDayRange || !sameDayPaceMaxDay || !onSameDayPaceDayRangeChange) {
+      return;
+    }
+    const nextStart = Math.max(1, Math.min(sameDayPaceDayRange.endDay, Math.trunc(value || 1)));
+    onSameDayPaceDayRangeChange({
+      startDay: nextStart,
+      endDay: sameDayPaceDayRange.endDay,
+    });
+  };
+  const handleSameDayEndDayChange = (value: number) => {
+    if (!sameDayPaceDayRange || !sameDayPaceMaxDay || !onSameDayPaceDayRangeChange) {
+      return;
+    }
+    const nextEnd = Math.max(sameDayPaceDayRange.startDay, Math.min(sameDayPaceMaxDay, Math.trunc(value || sameDayPaceMaxDay)));
+    onSameDayPaceDayRangeChange({
+      startDay: sameDayPaceDayRange.startDay,
+      endDay: nextEnd,
+    });
+  };
   const breakdownToggleButtonClassName =
     "inline-flex h-9 items-center justify-center gap-1.5 rounded-full border border-input bg-background px-3 text-xs font-medium text-foreground transition hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
@@ -398,6 +461,32 @@ export function CollectionMonthlyComparisonPanel({
                 {targetMonthSpecificNote ? "" : ", target month missing"}
               </p>
             ) : null}
+            {comparisonTargetCards.length > 0 ? (
+              <div className="mt-2 grid gap-2">
+                {comparisonTargetCards.map((entry) => (
+                  <div
+                    key={entry.month}
+                    className="rounded-xl border border-border/50 bg-background px-2.5 py-2"
+                  >
+                    <p className="text-[11px] font-medium uppercase tracking-normal text-muted-foreground">
+                      {entry.label} Target
+                    </p>
+                    <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
+                      <span className="text-sm font-semibold text-foreground">{entry.displayValue}</span>
+                      <span
+                        className={
+                          entry.target === null
+                            ? "rounded-full bg-amber-500/10 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:text-amber-300"
+                            : "rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-300"
+                        }
+                      >
+                        {entry.role}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : null}
             {monthlyTargetErrorMessage ? (
               <p role="status" className="mt-1 text-xs text-destructive">
                 Target unavailable: {monthlyTargetErrorMessage}
@@ -517,16 +606,54 @@ export function CollectionMonthlyComparisonPanel({
                     <p className="text-sm font-semibold text-foreground">Same-day collection pace</p>
                     <MonthlyComparisonHint
                       label="Same-day comparison methodology"
-                      text="Compares the current month only up to today's day number against the previous month for the same day range. Full previous-month totals are not used."
+                      text="Compares the selected end month against the selected start month for the same calendar day range. Cumulative values start from the selected start day."
                     />
                   </div>
                   <p className="text-xs text-muted-foreground">
                     {sameDayPace.currentRangeLabel} vs {sameDayPace.previousRangeLabel}
                   </p>
                 </div>
-                <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${sameDayToneClassName}`}>
-                  {sameDayPace.headline}
-                </span>
+                <div className="flex flex-wrap items-center justify-end gap-2">
+                  {sameDayPaceDayRange && sameDayPaceMaxDay && onSameDayPaceDayRangeChange ? (
+                    <fieldset
+                      className="flex flex-wrap items-center gap-2 rounded-2xl border border-border/60 bg-muted/20 px-2.5 py-2"
+                      aria-label="Same-day comparison day range"
+                    >
+                      <legend className="sr-only">Same-day comparison day range</legend>
+                      <span className="text-[11px] font-medium text-muted-foreground">Compare days</span>
+                      <label className="inline-flex items-center gap-1 text-xs text-foreground">
+                        <span>From</span>
+                        <input
+                          type="number"
+                          min={1}
+                          max={sameDayPaceDayRange.endDay}
+                          value={sameDayPaceDayRange.startDay}
+                          onChange={(event) => handleSameDayStartDayChange(Number(event.target.value))}
+                          className="h-8 w-16 rounded-xl border border-input bg-background px-2 text-xs"
+                          aria-label="Same-day comparison start day"
+                        />
+                      </label>
+                      <label className="inline-flex items-center gap-1 text-xs text-foreground">
+                        <span>To</span>
+                        <input
+                          type="number"
+                          min={sameDayPaceDayRange.startDay}
+                          max={sameDayPaceMaxDay}
+                          value={sameDayPaceDayRange.endDay}
+                          onChange={(event) => handleSameDayEndDayChange(Number(event.target.value))}
+                          className="h-8 w-16 rounded-xl border border-input bg-background px-2 text-xs"
+                          aria-label="Same-day comparison end day"
+                        />
+                      </label>
+                      <span className="text-[11px] text-muted-foreground">
+                        Max {sameDayPaceMaxDay}
+                      </span>
+                    </fieldset>
+                  ) : null}
+                  <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${sameDayToneClassName}`}>
+                    {sameDayPace.headline}
+                  </span>
+                </div>
               </div>
 
               <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1.15fr)_minmax(18rem,0.85fr)]">
@@ -564,7 +691,7 @@ export function CollectionMonthlyComparisonPanel({
                         </p>
                         <MonthlyComparisonHint
                           label="Same-day daily average formula"
-                          text="Current same-day total divided by the number of compared calendar days."
+                          text="Current selected-range total divided by the number of compared calendar days."
                         />
                       </div>
                       <p className="mt-1 text-sm font-semibold text-foreground">
@@ -598,7 +725,7 @@ export function CollectionMonthlyComparisonPanel({
                     {sameDayPace.target ? (
                       <div className="space-y-1">
                         <div className="flex justify-between gap-3 text-xs">
-                          <span className="font-medium text-foreground">Expected target pace</span>
+                          <span className="font-medium text-foreground">Expected range target pace</span>
                           <span className="text-muted-foreground">{formatAmountRM(sameDayPace.target.expectedByToday)}</span>
                         </div>
                         <div className="h-2 overflow-hidden rounded-full bg-muted">
@@ -645,7 +772,7 @@ export function CollectionMonthlyComparisonPanel({
                       </p>
                       <p className="text-xs text-muted-foreground">
                         {sameDayPace.target
-                          ? `${formatCollectionMonthlyComparisonDifference(sameDayPace.target.paceGap)} vs expected today`
+                          ? `${formatCollectionMonthlyComparisonDifference(sameDayPace.target.paceGap)} vs expected range pace`
                           : "Superuser target is needed for target pacing."}
                       </p>
                     </div>

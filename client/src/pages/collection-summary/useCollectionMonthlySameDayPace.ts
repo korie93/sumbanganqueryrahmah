@@ -15,9 +15,13 @@ import {
 import {
   buildCollectionSameDayPaceComparison,
   formatCollectionMonthInput,
+  getCollectionDaysInMonth,
   parseCollectionMonthKey,
+  resolveCollectionMonthlyComparisonTargetForMonth,
   shiftCollectionMonthInput,
+  type CollectionMonthlyComparisonTargetLookup,
   type CollectionSameDayPaceComparison,
+  type CollectionSameDayPaceDayRange,
 } from "./collection-monthly-comparison-utils";
 
 type SameDayPaceRequest = {
@@ -25,11 +29,14 @@ type SameDayPaceRequest = {
   currentMonthKey: string;
   previousMonthKey: string;
   referenceDate: Date;
+  maxDay: number;
+  defaultDayRange: CollectionSameDayPaceDayRange;
 };
 
 type UseCollectionMonthlySameDayPaceArgs = {
   data: CollectionMonthlyComparisonResponse | null;
   monthlyTargetAmount?: number | null | undefined;
+  monthlyTargetsByMonth?: CollectionMonthlyComparisonTargetLookup | undefined;
 };
 
 function isAbortError(error: unknown) {
@@ -50,42 +57,88 @@ function buildSameDayPaceRequest(
     return null;
   }
 
-  const referenceDate = new Date();
-  const currentMonthKey = formatCollectionMonthInput(referenceDate);
-  const previousMonthKey = shiftCollectionMonthInput(currentMonthKey, -1);
-  const currentMonthInRange = data.months.some((month) => month.month === currentMonthKey);
-  if (!currentMonthInRange) {
+  const comparison = data.comparison || null;
+  const currentMonthKey = comparison?.targetMonth || data.endMonth;
+  const previousMonthKey = comparison?.baseMonth || shiftCollectionMonthInput(currentMonthKey, -1);
+  const currentMonth = parseCollectionMonthKey(currentMonthKey);
+  const previousMonth = parseCollectionMonthKey(previousMonthKey);
+  if (!currentMonth || !previousMonth) {
     return null;
   }
+
+  const referenceDate = new Date();
+  const totalDaysInCurrentMonth = getCollectionDaysInMonth(currentMonth.year, currentMonth.month);
+  const totalDaysInPreviousMonth = getCollectionDaysInMonth(previousMonth.year, previousMonth.month);
+  const referenceMonthKey = formatCollectionMonthInput(referenceDate);
+  const cappedCurrentMonthDay = referenceMonthKey === currentMonthKey
+    ? Math.max(1, Math.min(totalDaysInCurrentMonth, referenceDate.getDate()))
+    : totalDaysInCurrentMonth;
+  const maxDay = Math.max(1, Math.min(cappedCurrentMonthDay, totalDaysInPreviousMonth));
 
   return {
     nickname,
     currentMonthKey,
     previousMonthKey,
     referenceDate,
+    maxDay,
+    defaultDayRange: {
+      startDay: 1,
+      endDay: maxDay,
+    },
+  };
+}
+
+function normalizeSameDayPaceDayRange(
+  range: CollectionSameDayPaceDayRange | null,
+  maxDay: number,
+): CollectionSameDayPaceDayRange {
+  if (!range) {
+    return {
+      startDay: 1,
+      endDay: maxDay,
+    };
+  }
+
+  const startDay = Math.max(1, Math.min(maxDay, Math.trunc(Number(range.startDay || 1))));
+  const endDay = Math.max(1, Math.min(maxDay, Math.trunc(Number(range.endDay || maxDay))));
+  return {
+    startDay: Math.min(startDay, endDay),
+    endDay: Math.max(startDay, endDay),
   };
 }
 
 export function useCollectionMonthlySameDayPace({
   data,
   monthlyTargetAmount,
+  monthlyTargetsByMonth,
 }: UseCollectionMonthlySameDayPaceArgs): {
   pace: CollectionSameDayPaceComparison | null;
   loading: boolean;
   errorMessage: string | null;
   unavailableReason: string | null;
+  dayRange: CollectionSameDayPaceDayRange | null;
+  maxDay: number | null;
+  setDayRange: (range: CollectionSameDayPaceDayRange) => void;
 } {
   const requestIdRef = useRef(0);
   const abortControllerRef = useRef<AbortController | null>(null);
   const overviewCacheRef = useRef(createCollectionDailyOverviewCache());
   const [currentOverview, setCurrentOverview] = useState<CollectionDailyOverviewResponse | null>(null);
   const [previousOverview, setPreviousOverview] = useState<CollectionDailyOverviewResponse | null>(null);
+  const [selectedDayRange, setSelectedDayRange] = useState<CollectionSameDayPaceDayRange | null>(null);
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const request = useMemo(() => buildSameDayPaceRequest(data), [data]);
   const requestKey = request
     ? `${request.nickname}|${request.currentMonthKey}|${request.previousMonthKey}`
     : "";
+  const dayRange = useMemo(() => (
+    request ? normalizeSameDayPaceDayRange(selectedDayRange ?? request.defaultDayRange, request.maxDay) : null
+  ), [request, selectedDayRange]);
+
+  const handleDayRangeChange = useCallback((range: CollectionSameDayPaceDayRange) => {
+    setSelectedDayRange(range);
+  }, []);
 
   const abortRequest = useCallback(() => {
     if (abortControllerRef.current) {
@@ -193,6 +246,10 @@ export function useCollectionMonthlySameDayPace({
   }, [loadSameDayPace, requestKey]);
 
   useEffect(() => {
+    setSelectedDayRange(null);
+  }, [requestKey]);
+
+  useEffect(() => {
     return () => {
       abortRequest();
       overviewCacheRef.current.clear();
@@ -219,9 +276,23 @@ export function useCollectionMonthlySameDayPace({
       return null;
     }
     const currentOverviewTarget = Number(currentOverview.summary.monthlyTarget || 0);
+    const configuredCurrentTarget = resolveCollectionMonthlyComparisonTargetForMonth(
+      request.currentMonthKey,
+      monthlyTargetsByMonth ?? monthlyTargetAmount,
+    );
+    const configuredPreviousTarget = resolveCollectionMonthlyComparisonTargetForMonth(
+      request.previousMonthKey,
+      monthlyTargetsByMonth,
+    );
+    const previousOverviewTarget = Number(previousOverview.summary.monthlyTarget || 0);
     const effectiveMonthlyTarget = Number.isFinite(currentOverviewTarget) && currentOverviewTarget > 0
       ? currentOverviewTarget
+      : configuredCurrentTarget !== null
+        ? configuredCurrentTarget
       : monthlyTargetAmount;
+    const effectivePreviousMonthlyTarget = Number.isFinite(previousOverviewTarget) && previousOverviewTarget > 0
+      ? previousOverviewTarget
+      : configuredPreviousTarget;
 
     return buildCollectionSameDayPaceComparison({
       currentMonthKey: request.currentMonthKey,
@@ -229,12 +300,14 @@ export function useCollectionMonthlySameDayPace({
       currentDaily: currentOverview.days,
       previousDaily: previousOverview.days,
       monthlyTargetAmount: effectiveMonthlyTarget,
+      previousMonthlyTargetAmount: effectivePreviousMonthlyTarget,
+      dayRange,
       referenceDate: request.referenceDate,
     });
-  }, [currentOverview, monthlyTargetAmount, previousOverview, request]);
+  }, [currentOverview, dayRange, monthlyTargetAmount, monthlyTargetsByMonth, previousOverview, request]);
 
   const unavailableReason = data && !request
-    ? "Same-day pace appears only when the selected range includes the current month."
+    ? "Same-day pace needs a valid selected target month and comparison month."
     : null;
 
   return {
@@ -242,5 +315,8 @@ export function useCollectionMonthlySameDayPace({
     loading,
     errorMessage,
     unavailableReason,
+    dayRange,
+    maxDay: request?.maxDay ?? null,
+    setDayRange: handleDayRangeChange,
   };
 }

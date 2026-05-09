@@ -55,6 +55,7 @@ function CollectionMonthlyComparisonSection({
   const sameDayPace = useCollectionMonthlySameDayPace({
     data: comparisonData.data,
     monthlyTargetAmount: comparisonTarget.monthlyTargetAmount,
+    monthlyTargetsByMonth: comparisonTarget.targetsByMonth,
   });
   const handleExportCsv = useCallback(() => {
     if (!comparisonData.data) {
@@ -138,6 +139,9 @@ function CollectionMonthlyComparisonSection({
         sameDayPaceLoading={sameDayPace.loading}
         sameDayPaceErrorMessage={sameDayPace.errorMessage}
         sameDayPaceUnavailableReason={sameDayPace.unavailableReason}
+        sameDayPaceDayRange={sameDayPace.dayRange}
+        sameDayPaceMaxDay={sameDayPace.maxDay}
+        onSameDayPaceDayRangeChange={sameDayPace.setDayRange}
         onExportCsv={handleExportCsv}
         onPrintReport={handlePrintReport}
         onMonthSelect={comparisonMonthDialog.handleSelectMonth}

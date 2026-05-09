@@ -245,8 +245,57 @@ test("collection same-day pace compares current month only up to the same previo
     sameDayPace: pace,
   });
   assert.match(csv, /"Same-Day Pace Detail"/);
-  assert.match(csv, /"Date","Daily Collection","Cumulative Collection","Previous Month Date"/);
-  assert.match(csv, /"2026-05-04","1300\.00","5800\.00","2026-04-04","2000\.00","8300\.00","-700\.00","-2500\.00","50000\.00","11\.60","Daily collection slower but cumulative behind"/);
+  assert.match(csv, /"Date","Month","Daily Collection","Cumulative Collection","Previous Month Date"/);
+  assert.match(csv, /"Workday\/Holiday Status","Previous Workday\/Holiday Status","Pace Status","Pace Insight"/);
+  assert.match(csv, /"2026-05-04","May 2026","1300\.00","5800\.00","2026-04-04","April 2026","2000\.00","8300\.00","-700\.00","-2500\.00","50000\.00","","11\.60","Calendar not configured","Calendar not configured","Daily collection slower but cumulative behind"/);
+});
+
+test("collection same-day pace supports custom selected day ranges and calendar-aware insight", () => {
+  const currentDaily = Array.from({ length: 20 }, (_, index) => ({
+    day: index + 1,
+    amount: index + 1 === 20 ? 2500 : 1000,
+    isWorkingDay: true,
+    isHoliday: false,
+    holidayName: null,
+  }));
+  const previousDaily = Array.from({ length: 20 }, (_, index) => ({
+    day: index + 1,
+    amount: index + 1 === 20 ? 0 : 800,
+    isWorkingDay: index + 1 !== 20,
+    isHoliday: index + 1 === 20,
+    holidayName: index + 1 === 20 ? "Public Holiday" : null,
+  }));
+  const pace = buildCollectionSameDayPaceComparison({
+    currentMonthKey: "2026-05",
+    previousMonthKey: "2026-04",
+    currentDaily,
+    previousDaily,
+    monthlyTargetAmount: 110000,
+    previousMonthlyTargetAmount: 100000,
+    dayRange: {
+      startDay: 5,
+      endDay: 20,
+    },
+    referenceDate: new Date(2026, 4, 31, 12),
+  });
+
+  assert.ok(pace);
+  assert.equal(pace.startDay, 5);
+  assert.equal(pace.endDay, 20);
+  assert.equal(pace.comparedDayCount, 16);
+  assert.equal(pace.points[0]?.day, 5);
+  assert.equal(pace.points[0]?.rangeIndex, 1);
+  assert.equal(pace.currentTotal, 17500);
+  assert.equal(pace.previousTotal, 12000);
+  assert.equal(pace.previousMonthlyTargetAmount, 100000);
+  assert.match(pace.currentRangeLabel, /May 5 to May 20, 2026/);
+  assert.match(pace.previousRangeLabel, /April 5 to April 20, 2026/);
+  assert.equal(pace.points[15]?.previousStatus.label, "Holiday / non-working (Public Holiday)");
+  assert.match(
+    buildCollectionSameDayPacePointInsights(pace.points[15]!, pace).join(" "),
+    /20 April 2026 was marked as holiday \/ non-working/,
+  );
+  assert.match(pace.insights.join(" "), /20 April 2026 was holiday\/non-working while 20 May 2026 was a working day/);
 });
 
 test("collection same-day pace handles January rollover and short previous months safely", () => {

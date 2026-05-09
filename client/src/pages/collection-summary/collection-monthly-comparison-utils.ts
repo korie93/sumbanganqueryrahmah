@@ -91,10 +91,28 @@ export type CollectionSameDayPaceDailyInput = {
   date?: string | undefined;
   amount: number;
   customerCount?: number | undefined;
+  isWorkingDay?: boolean | null | undefined;
+  isHoliday?: boolean | null | undefined;
+  holidayName?: string | null | undefined;
+};
+
+export type CollectionSameDayPaceDayRange = {
+  startDay: number;
+  endDay: number;
+};
+
+export type CollectionSameDayPaceCalendarStatus = {
+  label: string;
+  description: string;
+  isWorkingDay: boolean | null;
+  isHoliday: boolean;
+  holidayName: string | null;
+  tone: "working" | "non_working" | "unknown";
 };
 
 export type CollectionSameDayPacePoint = {
   day: number;
+  rangeIndex: number;
   currentDate: string;
   previousDate: string;
   currentAmount: number;
@@ -103,6 +121,8 @@ export type CollectionSameDayPacePoint = {
   previousCumulative: number;
   dailyDifference: number;
   cumulativeDifference: number;
+  currentStatus: CollectionSameDayPaceCalendarStatus;
+  previousStatus: CollectionSameDayPaceCalendarStatus;
 };
 
 export type CollectionSameDayPaceMomentum = {
@@ -139,12 +159,17 @@ export type CollectionSameDayPaceComparison = {
   previousMonth: string;
   currentLabel: string;
   previousLabel: string;
+  startDay: number;
+  endDay: number;
   comparisonDay: number;
+  comparedDayCount: number;
   currentRangeLabel: string;
   previousRangeLabel: string;
   totalDaysInCurrentMonth: number;
   totalDaysInPreviousMonth: number;
   rangeCappedByPreviousMonth: boolean;
+  currentMonthlyTargetAmount: number | null;
+  previousMonthlyTargetAmount: number | null;
   currentTotal: number;
   previousTotal: number;
   difference: number;
@@ -562,7 +587,7 @@ function resolveCollectionSameDayPercentageChange(
   return ((currentTotal - previousTotal) / previousTotal) * 100;
 }
 
-function formatCollectionSameDayPaceMonthLabel(monthKey: string): string {
+export function formatCollectionSameDayPaceMonthLabel(monthKey: string): string {
   const parsed = parseCollectionMonthKey(monthKey);
   if (!parsed) {
     return monthKey;
@@ -594,13 +619,16 @@ export function formatCollectionSameDayPaceDisplayDate(dateValue: string): strin
   return `${day} ${formatCollectionMonthName(month)} ${year}`;
 }
 
-function formatCollectionSameDayPaceRangeLabel(monthKey: string, throughDay: number): string {
+function formatCollectionSameDayPaceRangeLabel(monthKey: string, startDay: number, endDay: number): string {
   const parsed = parseCollectionMonthKey(monthKey);
   if (!parsed) {
     return monthKey;
   }
   const monthName = formatCollectionMonthName(parsed.month);
-  return `${monthName} 1 to ${monthName} ${throughDay}, ${parsed.year}`;
+  if (startDay === endDay) {
+    return `${monthName} ${startDay}, ${parsed.year}`;
+  }
+  return `${monthName} ${startDay} to ${monthName} ${endDay}, ${parsed.year}`;
 }
 
 function formatCollectionSameDayPacePercent(value: number | null): string {
@@ -608,6 +636,65 @@ function formatCollectionSameDayPacePercent(value: number | null): string {
     return "no baseline";
   }
   return `${Math.abs(value).toFixed(1)}%`;
+}
+
+function normalizeCollectionSameDayHolidayName(value: string | null | undefined): string | null {
+  const normalized = String(value || "").trim();
+  return normalized || null;
+}
+
+function buildCollectionSameDayPaceCalendarStatus(
+  day: CollectionSameDayPaceDailyInput | null | undefined,
+): CollectionSameDayPaceCalendarStatus {
+  if (!day) {
+    return {
+      label: "Calendar not configured",
+      description: "No working-day or holiday status is available for this date.",
+      isWorkingDay: null,
+      isHoliday: false,
+      holidayName: null,
+      tone: "unknown",
+    };
+  }
+
+  const holidayName = normalizeCollectionSameDayHolidayName(day.holidayName);
+  const hasWorkingDaySignal = typeof day.isWorkingDay === "boolean";
+  const hasHolidaySignal = typeof day.isHoliday === "boolean";
+  if (!hasWorkingDaySignal && !hasHolidaySignal) {
+    return {
+      label: "Calendar not configured",
+      description: "No working-day or holiday status is available for this date.",
+      isWorkingDay: null,
+      isHoliday: false,
+      holidayName,
+      tone: "unknown",
+    };
+  }
+
+  const isHoliday = day.isHoliday === true;
+  const isWorkingDay = day.isWorkingDay === true && !isHoliday;
+  if (!isWorkingDay || isHoliday) {
+    const label = holidayName ? `Holiday / non-working (${holidayName})` : "Holiday / non-working";
+    return {
+      label,
+      description: holidayName
+        ? `${holidayName} is marked as a holiday or non-working day.`
+        : "This date is marked as a holiday or non-working day.",
+      isWorkingDay: false,
+      isHoliday,
+      holidayName,
+      tone: "non_working",
+    };
+  }
+
+  return {
+    label: "Working day",
+    description: "This date is marked as an active working day.",
+    isWorkingDay: true,
+    isHoliday: false,
+    holidayName,
+    tone: "working",
+  };
 }
 
 export function buildCollectionSameDayPacePointTrendLabel(
@@ -648,6 +735,18 @@ export function buildCollectionSameDayPacePointInsights(
     insights.push("The daily result improved, but cumulative performance still needs to catch up.");
   }
 
+  if (point.previousStatus.tone === "non_working" && point.currentStatus.tone === "working") {
+    insights.push(
+      `${previousDate} was marked as ${point.previousStatus.label.toLowerCase()}, while ${currentDate} was a working day. This may make the current range look stronger.`,
+    );
+  } else if (point.currentStatus.tone === "non_working" && point.previousStatus.tone === "working") {
+    insights.push(
+      `${currentDate} was marked as ${point.currentStatus.label.toLowerCase()}, while ${previousDate} was a working day. This may explain a slower daily result.`,
+    );
+  } else if (point.currentStatus.tone === "non_working" && point.previousStatus.tone === "non_working") {
+    insights.push("Both compared dates were holiday or non-working days, so daily collection may be naturally lower.");
+  }
+
   if (pace?.target) {
     const targetProgress = point.currentCumulative / pace.target.monthlyTargetAmount;
     insights.push(`Target progress by ${currentDate}: ${(targetProgress * 100).toFixed(1)}%.`);
@@ -673,6 +772,7 @@ function buildCollectionSameDayPaceMomentum(points: CollectionSameDayPacePoint[]
   const splitDay = Math.max(2, Math.floor(comparisonDay / 2));
   const firstHalf = points.slice(0, splitDay);
   const secondHalf = points.slice(splitDay);
+  const splitCalendarDay = points[Math.max(0, splitDay - 1)]?.day ?? splitDay;
   const firstHalfAverage = firstHalf.reduce((total, point) => total + point.currentAmount, 0) / firstHalf.length;
   const secondHalfAverage = secondHalf.length > 0
     ? secondHalf.reduce((total, point) => total + point.currentAmount, 0) / secondHalf.length
@@ -699,7 +799,7 @@ function buildCollectionSameDayPaceMomentum(points: CollectionSameDayPacePoint[]
       secondHalfAverage,
       percentageChange,
       label: "Momentum weakening",
-      description: `Current month pace weakened after day ${splitDay}.`,
+      description: `Current month pace weakened after day ${splitCalendarDay}.`,
     };
   }
 
@@ -711,7 +811,7 @@ function buildCollectionSameDayPaceMomentum(points: CollectionSameDayPacePoint[]
       secondHalfAverage,
       percentageChange,
       label: "Momentum improving",
-      description: `Current month pace strengthened after day ${splitDay}.`,
+      description: `Current month pace strengthened after day ${splitCalendarDay}.`,
     };
   }
 
@@ -772,7 +872,7 @@ function buildCollectionSameDayPaceTarget(input: {
   monthlyTargetAmount?: number | null | undefined;
   currentTotal: number;
   currentDailyAverage: number;
-  comparisonDay: number;
+  comparedDayCount: number;
   totalDaysInCurrentMonth: number;
 }): CollectionSameDayPaceTarget | null {
   const monthlyTargetAmount = Number(input.monthlyTargetAmount || 0);
@@ -780,12 +880,12 @@ function buildCollectionSameDayPaceTarget(input: {
     return null;
   }
 
-  const expectedByToday = (monthlyTargetAmount * input.comparisonDay) / input.totalDaysInCurrentMonth;
+  const expectedByToday = (monthlyTargetAmount * input.comparedDayCount) / input.totalDaysInCurrentMonth;
   const expectedProgress = monthlyTargetAmount > 0 ? input.currentTotal / monthlyTargetAmount : 0;
   const paceGap = input.currentTotal - expectedByToday;
   const projectedTotal = input.currentDailyAverage * input.totalDaysInCurrentMonth;
   const projectedTargetGap = projectedTotal - monthlyTargetAmount;
-  const remainingDays = Math.max(0, input.totalDaysInCurrentMonth - input.comparisonDay);
+  const remainingDays = Math.max(0, input.totalDaysInCurrentMonth - input.comparedDayCount);
   const requiredDailyAverageToTarget = remainingDays > 0
     ? Math.max(0, monthlyTargetAmount - input.currentTotal) / remainingDays
     : Math.max(0, monthlyTargetAmount - input.currentTotal);
@@ -815,6 +915,8 @@ export function buildCollectionSameDayPaceComparison(input: {
   currentDaily: CollectionSameDayPaceDailyInput[];
   previousDaily: CollectionSameDayPaceDailyInput[];
   monthlyTargetAmount?: number | null | undefined;
+  previousMonthlyTargetAmount?: number | null | undefined;
+  dayRange?: CollectionSameDayPaceDayRange | null | undefined;
   referenceDate?: Date | undefined;
 }): CollectionSameDayPaceComparison | null {
   const referenceDate = input.referenceDate || new Date();
@@ -839,38 +941,54 @@ export function buildCollectionSameDayPaceComparison(input: {
   const rawComparisonDay = referenceMonthKey === input.currentMonthKey
     ? referenceDate.getDate()
     : totalDaysInCurrentMonth;
-  const comparisonDay = Math.min(
+  const maxComparisonDay = Math.min(
     totalDaysInCurrentMonth,
     totalDaysInPreviousMonth,
     Math.max(1, rawComparisonDay),
   );
-  const rangeCappedByPreviousMonth = comparisonDay < Math.min(totalDaysInCurrentMonth, Math.max(1, rawComparisonDay));
-  const currentByDay = new Map<number, number>();
-  const previousByDay = new Map<number, number>();
+  const requestedStartDay = input.dayRange
+    ? Math.trunc(Number(input.dayRange.startDay || 1))
+    : 1;
+  const requestedEndDay = input.dayRange
+    ? Math.trunc(Number(input.dayRange.endDay || maxComparisonDay))
+    : rawComparisonDay;
+  const lowerRequestedDay = Math.min(requestedStartDay, requestedEndDay);
+  const upperRequestedDay = Math.max(requestedStartDay, requestedEndDay);
+  const startDay = Math.min(maxComparisonDay, Math.max(1, lowerRequestedDay));
+  const comparisonDay = Math.min(maxComparisonDay, Math.max(startDay, upperRequestedDay));
+  const endDay = comparisonDay;
+  const comparedDayCount = Math.max(1, endDay - startDay + 1);
+  const rangeCappedByPreviousMonth = upperRequestedDay > maxComparisonDay
+    || maxComparisonDay < Math.min(totalDaysInCurrentMonth, Math.max(1, rawComparisonDay));
+  const currentByDay = new Map<number, CollectionSameDayPaceDailyInput>();
+  const previousByDay = new Map<number, CollectionSameDayPaceDailyInput>();
 
   for (const day of input.currentDaily) {
     const dayNumber = Math.max(1, Math.trunc(Number(day.day || 0)));
     if (dayNumber <= totalDaysInCurrentMonth) {
-      currentByDay.set(dayNumber, normalizeCollectionSameDayAmount(day.amount));
+      currentByDay.set(dayNumber, day);
     }
   }
   for (const day of input.previousDaily) {
     const dayNumber = Math.max(1, Math.trunc(Number(day.day || 0)));
     if (dayNumber <= totalDaysInPreviousMonth) {
-      previousByDay.set(dayNumber, normalizeCollectionSameDayAmount(day.amount));
+      previousByDay.set(dayNumber, day);
     }
   }
 
   let currentCumulative = 0;
   let previousCumulative = 0;
   const points: CollectionSameDayPacePoint[] = [];
-  for (let day = 1; day <= comparisonDay; day += 1) {
-    const currentAmount = currentByDay.get(day) || 0;
-    const previousAmount = previousByDay.get(day) || 0;
+  for (let day = startDay; day <= endDay; day += 1) {
+    const currentDay = currentByDay.get(day) || null;
+    const previousDay = previousByDay.get(day) || null;
+    const currentAmount = normalizeCollectionSameDayAmount(currentDay?.amount || 0);
+    const previousAmount = normalizeCollectionSameDayAmount(previousDay?.amount || 0);
     currentCumulative += currentAmount;
     previousCumulative += previousAmount;
     points.push({
       day,
+      rangeIndex: day - startDay + 1,
       currentDate: formatCollectionSameDayPaceDate(input.currentMonthKey, day),
       previousDate: formatCollectionSameDayPaceDate(previousMonthKey, day),
       currentAmount,
@@ -879,6 +997,8 @@ export function buildCollectionSameDayPaceComparison(input: {
       previousCumulative,
       dailyDifference: currentAmount - previousAmount,
       cumulativeDifference: currentCumulative - previousCumulative,
+      currentStatus: buildCollectionSameDayPaceCalendarStatus(currentDay),
+      previousStatus: buildCollectionSameDayPaceCalendarStatus(previousDay),
     });
   }
 
@@ -886,8 +1006,8 @@ export function buildCollectionSameDayPaceComparison(input: {
   const previousTotal = previousCumulative;
   const difference = currentTotal - previousTotal;
   const percentageChange = resolveCollectionSameDayPercentageChange(currentTotal, previousTotal);
-  const currentDailyAverage = currentTotal / comparisonDay;
-  const previousDailyAverage = previousTotal / comparisonDay;
+  const currentDailyAverage = currentTotal / comparedDayCount;
+  const previousDailyAverage = previousTotal / comparedDayCount;
   const dailyAverageDifference = currentDailyAverage - previousDailyAverage;
   const dailyAveragePercentageChange = resolveCollectionSameDayPercentageChange(
     currentDailyAverage,
@@ -898,17 +1018,22 @@ export function buildCollectionSameDayPaceComparison(input: {
     : difference > 0 ? "faster" : difference < 0 ? "slower" : "flat";
   const currentLabel = formatCollectionSameDayPaceMonthLabel(input.currentMonthKey);
   const previousLabel = formatCollectionSameDayPaceMonthLabel(previousMonthKey);
-  const currentRangeLabel = formatCollectionSameDayPaceRangeLabel(input.currentMonthKey, comparisonDay);
-  const previousRangeLabel = formatCollectionSameDayPaceRangeLabel(previousMonthKey, comparisonDay);
+  const currentRangeLabel = formatCollectionSameDayPaceRangeLabel(input.currentMonthKey, startDay, endDay);
+  const previousRangeLabel = formatCollectionSameDayPaceRangeLabel(previousMonthKey, startDay, endDay);
   const momentum = buildCollectionSameDayPaceMomentum(points);
   const consistency = buildCollectionSameDayPaceConsistency(points);
   const target = buildCollectionSameDayPaceTarget({
     monthlyTargetAmount: input.monthlyTargetAmount,
     currentTotal,
     currentDailyAverage,
-    comparisonDay,
+    comparedDayCount,
     totalDaysInCurrentMonth,
   });
+  const currentMonthlyTargetAmount = target?.monthlyTargetAmount ?? null;
+  const normalizedPreviousTarget = Number(input.previousMonthlyTargetAmount || 0);
+  const previousMonthlyTargetAmount = Number.isFinite(normalizedPreviousTarget) && normalizedPreviousTarget > 0
+    ? normalizedPreviousTarget
+    : null;
 
   const headline = direction === "faster"
     ? `${formatCollectionSameDayPacePercent(percentageChange)} faster than previous month`
@@ -941,11 +1066,27 @@ export function buildCollectionSameDayPaceComparison(input: {
     consistency.description,
   ];
 
+  const currentNonWorkingCount = points.filter((point) => point.currentStatus.tone === "non_working").length;
+  const previousNonWorkingCount = points.filter((point) => point.previousStatus.tone === "non_working").length;
+  const workingDayMismatch = points.find((point) => point.currentStatus.tone !== point.previousStatus.tone) || null;
+
+  if (workingDayMismatch) {
+    const currentDate = formatCollectionSameDayPaceDisplayDate(workingDayMismatch.currentDate);
+    const previousDate = formatCollectionSameDayPaceDisplayDate(workingDayMismatch.previousDate);
+    if (workingDayMismatch.previousStatus.tone === "non_working" && workingDayMismatch.currentStatus.tone === "working") {
+      insights.push(`${previousDate} was holiday/non-working while ${currentDate} was a working day. This may affect pace comparison accuracy.`);
+    } else if (workingDayMismatch.currentStatus.tone === "non_working" && workingDayMismatch.previousStatus.tone === "working") {
+      insights.push(`${currentDate} was holiday/non-working while ${previousDate} was a working day. Slower collection may be calendar-driven.`);
+    }
+  } else if (currentNonWorkingCount > 0 || previousNonWorkingCount > 0) {
+    insights.push(`${currentNonWorkingCount} current-range and ${previousNonWorkingCount} previous-range non-working day(s) are included in this comparison.`);
+  }
+
   if (target) {
     insights.push(
       target.status === "on_track"
-        ? `Current pace is ahead of target by ${formatAmountRM(Math.abs(target.paceGap))}.`
-        : `Current pace is behind target by ${formatAmountRM(Math.abs(target.paceGap))}.`,
+        ? `Selected range pace is ahead of target expectation by ${formatAmountRM(Math.abs(target.paceGap))}.`
+        : `Selected range pace is behind target expectation by ${formatAmountRM(Math.abs(target.paceGap))}.`,
     );
   }
   if (rangeCappedByPreviousMonth) {
@@ -957,12 +1098,17 @@ export function buildCollectionSameDayPaceComparison(input: {
     previousMonth: previousMonthKey,
     currentLabel,
     previousLabel,
+    startDay,
+    endDay,
     comparisonDay,
+    comparedDayCount,
     currentRangeLabel,
     previousRangeLabel,
     totalDaysInCurrentMonth,
     totalDaysInPreviousMonth,
     rangeCappedByPreviousMonth,
+    currentMonthlyTargetAmount,
+    previousMonthlyTargetAmount,
     currentTotal,
     previousTotal,
     difference,
@@ -1493,32 +1639,45 @@ export function buildCollectionMonthlyComparisonCsv(
 
   const sameDayHeaders = [
     "Date",
+    "Month",
     "Daily Collection",
     "Cumulative Collection",
     "Previous Month Date",
+    "Previous Month",
     "Previous Month Daily Collection",
     "Previous Month Cumulative Collection",
     "Daily Difference",
     "Cumulative Difference",
-    "Monthly Target",
+    "Current Monthly Target",
+    "Previous Monthly Target",
     "Target Progress %",
+    "Workday/Holiday Status",
+    "Previous Workday/Holiday Status",
     "Pace Status",
+    "Pace Insight",
   ];
   const sameDayRows = sameDayPace.points.map((point) => {
     const target = sameDayPace.target?.monthlyTargetAmount ?? null;
     const targetProgress = target === null ? null : (point.currentCumulative / target) * 100;
+    const pointInsights = buildCollectionSameDayPacePointInsights(point, sameDayPace);
     return [
       point.currentDate,
+      sameDayPace.currentLabel,
       point.currentAmount.toFixed(2),
       point.currentCumulative.toFixed(2),
       point.previousDate,
+      sameDayPace.previousLabel,
       point.previousAmount.toFixed(2),
       point.previousCumulative.toFixed(2),
       point.dailyDifference.toFixed(2),
       point.cumulativeDifference.toFixed(2),
       target === null ? "" : target.toFixed(2),
+      sameDayPace.previousMonthlyTargetAmount === null ? "" : sameDayPace.previousMonthlyTargetAmount.toFixed(2),
       targetProgress === null ? "" : targetProgress.toFixed(2),
+      point.currentStatus.label,
+      point.previousStatus.label,
       buildCollectionSameDayPacePointTrendLabel(point),
+      pointInsights[0] || "",
     ];
   });
 
@@ -1782,7 +1941,7 @@ export function buildCollectionMonthlyComparisonPrintReportHtml(
         <div class="card"><p class="label">Same-day gap</p><p class="value">${escapeCollectionMonthlyComparisonHtml(formatCollectionMonthlyComparisonDifference(sameDayPace.difference))}</p><p class="muted">${escapeCollectionMonthlyComparisonHtml(sameDayPace.headline)}</p></div>
         <div class="card"><p class="label">Target pace</p><p class="value">${escapeCollectionMonthlyComparisonHtml(sameDayPace.target?.label || "No target")}</p><p class="muted">${escapeCollectionMonthlyComparisonHtml(sameDayPace.target ? formatCollectionMonthlyComparisonDifference(sameDayPace.target.paceGap) : "No configured target")}</p></div>
       </div>
-      <p style="margin-top:10px">${escapeCollectionMonthlyComparisonHtml(sameDayPace.summary)}</p>` : `<p>Same-day pace appears when the report is generated for the current month range.</p>`}
+      <p style="margin-top:10px">${escapeCollectionMonthlyComparisonHtml(sameDayPace.summary)}</p>` : `<p>Same-day pace appears when a valid comparison month range is available.</p>`}
       <ul>${sameDayPaceRows}</ul>
     </section>
 

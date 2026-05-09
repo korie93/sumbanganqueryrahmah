@@ -1,5 +1,5 @@
 import { Maximize2 } from "lucide-react";
-import { useId, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import {
   CartesianGrid,
   Legend,
@@ -90,10 +90,18 @@ function MonthlySameDayPaceTooltip({
           <dt>Previous day</dt>
           <dd>{formatAmountRM(point.previousAmount)}</dd>
         </div>
+        <div className="flex justify-between gap-3">
+          <dt>Current status</dt>
+          <dd className="text-right">{point.currentStatus.label}</dd>
+        </div>
+        <div className="flex justify-between gap-3">
+          <dt>Previous status</dt>
+          <dd className="text-right">{point.previousStatus.label}</dd>
+        </div>
         {point.targetExpected !== null ? (
           <>
             <div className="flex justify-between gap-3">
-              <dt>Expected target pace</dt>
+              <dt>Expected range target pace</dt>
               <dd>{formatAmountRM(point.targetExpected)}</dd>
             </div>
             <div className="flex justify-between gap-3">
@@ -167,6 +175,10 @@ function SameDayPointDetailPanel({
               <dt className="text-muted-foreground">Cumulative</dt>
               <dd className="font-medium text-foreground">{formatAmountRM(point.previousCumulative)}</dd>
             </div>
+            <div className="flex justify-between gap-3">
+              <dt className="text-muted-foreground">Status</dt>
+              <dd className="text-right font-medium text-foreground">{point.previousStatus.label}</dd>
+            </div>
           </dl>
         </div>
         <div className="rounded-lg border border-border/50 bg-background px-3 py-2">
@@ -181,6 +193,10 @@ function SameDayPointDetailPanel({
             <div className="flex justify-between gap-3">
               <dt className="text-muted-foreground">Cumulative</dt>
               <dd className="font-medium text-foreground">{formatAmountRM(point.currentCumulative)}</dd>
+            </div>
+            <div className="flex justify-between gap-3">
+              <dt className="text-muted-foreground">Status</dt>
+              <dd className="text-right font-medium text-foreground">{point.currentStatus.label}</dd>
             </div>
           </dl>
         </div>
@@ -212,7 +228,7 @@ function SameDayPointDetailPanel({
       </div>
 
       <ul className="mt-3 grid gap-1.5 text-xs text-muted-foreground">
-        {pointInsights.slice(0, 3).map((insight) => (
+        {pointInsights.slice(0, 4).map((insight) => (
           <li key={insight}>{insight}</li>
         ))}
       </ul>
@@ -330,10 +346,13 @@ export function MonthlySameDayPaceChart({ pace }: MonthlySameDayPaceChartProps) 
       ...point,
       dateLabel: formatCollectionSameDayPaceDisplayDate(point.currentDate).replace(/\s+\d{4}$/u, ""),
       targetExpected: pace.target
-        ? (pace.target.monthlyTargetAmount * point.day) / pace.totalDaysInCurrentMonth
+        ? (pace.target.monthlyTargetAmount * point.rangeIndex) / pace.totalDaysInCurrentMonth
         : null,
     }))
   ), [pace]);
+  useEffect(() => {
+    setSelectedDay(pace.points[pace.points.length - 1]?.day ?? pace.comparisonDay);
+  }, [pace.comparisonDay, pace.currentMonth, pace.endDay, pace.points, pace.previousMonth, pace.startDay]);
   const selectedPoint = useMemo(() => (
     chartData.find((point) => point.day === selectedDay)
     || chartData[chartData.length - 1]
@@ -346,7 +365,7 @@ export function MonthlySameDayPaceChart({ pace }: MonthlySameDayPaceChartProps) 
         <div className="space-y-1">
           <p className="text-sm font-semibold text-foreground">Same-day pace trend</p>
           <p className="text-xs text-muted-foreground">
-            Cumulative collection from day 1 to day {pace.comparisonDay}, compared against the same day range last month.
+            Cumulative collection from day {pace.startDay} to day {pace.endDay}, compared against the same day range.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
