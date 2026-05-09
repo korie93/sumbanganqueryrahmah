@@ -12,8 +12,12 @@ function readPageSource(relativePath: string) {
 
 test("login page uses the compact modern shell without animated orb layers", () => {
   const source = readPageSource("Login.tsx");
+  const css = readPageSource("Login.css");
 
   assert.match(source, /login-card login-card-grid/);
+  assert.match(source, /className="login-shell relative w-full"/);
+  assert.doesNotMatch(source, /login-shell[^"]*max-w-5xl/);
+  assert.match(css, /\.login-shell\s*{\s*max-width: min\(32rem, 100%\);/);
   assert.doesNotMatch(source, /login-bg-orb--/);
   assert.doesNotMatch(source, /floating-slow/);
   assert.match(source, /<form className="login-form space-y-4" onSubmit=\{handleSubmit\} noValidate/);

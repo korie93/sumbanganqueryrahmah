@@ -96,7 +96,7 @@ export default function Login({ onForgotPasswordClick, onLandingClick, onLoginSu
         tabIndex={-1}
         className="relative z-[var(--z-public-auth-main)] flex viewport-min-height items-center justify-center px-4 py-6 login-content login-content--shell sm:py-8"
       >
-        <div className="login-shell relative w-full max-w-5xl">
+        <div className="login-shell relative w-full">
           <button
             type="button"
             onClick={goToLandingPage}
