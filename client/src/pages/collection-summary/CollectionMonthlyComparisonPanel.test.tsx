@@ -192,9 +192,16 @@ test("CollectionMonthlyComparisonPanel renders monthly totals and comparison sum
   assert.match(markup, /No anomaly/);
   assert.match(markup, /Trend explanation/);
   assert.match(markup, /average per record dipped slightly/);
+  assert.match(markup, /Benchmark lens/);
+  assert.match(markup, /Previous/);
+  assert.match(markup, /Last year/);
+  assert.match(markup, /3-mo avg/);
+  assert.match(markup, /Range avg/);
   assert.match(markup, /Target gap/);
   assert.match(markup, /Configured for May 2026/);
+  assert.match(markup, /Superuser target active/);
   assert.match(markup, /1 month\(s\) at target/);
+  assert.match(markup, /Data quality/);
   assert.match(markup, /Print report/);
   assert.match(markup, /Export CSV/);
   assert.match(markup, /month\(s\) up/);

@@ -128,6 +128,7 @@ function CollectionMonthlyComparisonSection({
                 monthlyTargetAmount={comparisonTarget.monthlyTargetAmount}
                 monthlyTargetLoading={comparisonTarget.loading}
                 monthlyTargetSourceLabel={comparisonTarget.sourceLabel}
+                onMonthSelect={comparisonMonthDialog.handleSelectMonth}
               />
             </Suspense>
           ) : null

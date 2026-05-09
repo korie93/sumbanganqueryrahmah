@@ -1,5 +1,6 @@
 import { ChevronDown, ChevronUp, Maximize2, Minimize2 } from "lucide-react";
-import { useId, useMemo, useState } from "react";
+import type { ComponentProps } from "react";
+import { useCallback, useId, useMemo, useState } from "react";
 import {
   Bar,
   Cell,
@@ -36,6 +37,7 @@ type MonthlyCollectionComparisonChartProps = {
   monthlyTargetAmount?: number | null | undefined;
   monthlyTargetLoading?: boolean | undefined;
   monthlyTargetSourceLabel?: string | null | undefined;
+  onMonthSelect?: ((monthKey: string) => void) | undefined;
 };
 
 type TooltipEntry = {
@@ -43,6 +45,20 @@ type TooltipEntry = {
 };
 
 type MonthlyComparisonTargetSummary = ReturnType<typeof buildCollectionMonthlyComparisonTargetSummary>;
+
+function resolveChartPayloadMonth(value: unknown): string | null {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+  const maybePayload = "payload" in value
+    ? (value as { payload?: unknown }).payload
+    : value;
+  if (!maybePayload || typeof maybePayload !== "object" || !("month" in maybePayload)) {
+    return null;
+  }
+  const month = (maybePayload as { month?: unknown }).month;
+  return typeof month === "string" && month ? month : null;
+}
 
 function MonthlyCollectionComparisonTooltip({
   active,
@@ -117,6 +133,7 @@ function MonthlyCollectionComparisonChartCanvas({
   targetSummary,
   monthlyTargetAmount,
   chartLabel,
+  onMonthSelect,
 }: {
   id: string;
   className: string;
@@ -125,7 +142,18 @@ function MonthlyCollectionComparisonChartCanvas({
   targetSummary: MonthlyComparisonTargetSummary;
   monthlyTargetAmount?: number | null | undefined;
   chartLabel: string;
+  onMonthSelect?: ((monthKey: string) => void) | undefined;
 }) {
+  const handleBarClick = useCallback<NonNullable<ComponentProps<typeof Bar>["onClick"]>>((entry) => {
+    if (!onMonthSelect) {
+      return;
+    }
+    const month = resolveChartPayloadMonth(entry);
+    if (month) {
+      onMonthSelect(month);
+    }
+  }, [onMonthSelect]);
+
   return (
     <div
       id={id}
@@ -204,6 +232,8 @@ function MonthlyCollectionComparisonChartCanvas({
             name="Monthly total"
             radius={[8, 8, 0, 0]}
             maxBarSize={42}
+            onClick={handleBarClick}
+            className={onMonthSelect ? "cursor-pointer" : ""}
           >
             {insights.monthInsights.map((entry) => (
               <Cell
@@ -244,6 +274,7 @@ export function MonthlyCollectionComparisonChart({
   monthlyTargetAmount,
   monthlyTargetLoading = false,
   monthlyTargetSourceLabel = null,
+  onMonthSelect,
 }: MonthlyCollectionComparisonChartProps) {
   const [expanded, setExpanded] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
@@ -254,6 +285,10 @@ export function MonthlyCollectionComparisonChart({
     () => buildCollectionMonthlyComparisonTargetSummary(data, monthlyTargetAmount),
     [data, monthlyTargetAmount],
   );
+  const handleMonthSelect = useCallback((monthKey: string) => {
+    setFullViewOpen(false);
+    onMonthSelect?.(monthKey);
+  }, [onMonthSelect]);
   const summaryGridClass = targetSummary || monthlyTargetLoading ? "sm:grid-cols-5" : "sm:grid-cols-4";
   const chartLabel = `Monthly collection comparison chart for ${data.nickname}. Range total ${formatAmountRM(insights.rangeTotal)}${targetSummary ? ` with monthly target ${formatAmountRM(targetSummary.monthlyTargetAmount)}` : ""}.`;
 
@@ -267,6 +302,29 @@ export function MonthlyCollectionComparisonChart({
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          {onMonthSelect ? (
+            <label className="inline-flex h-8 items-center gap-1 rounded-full border border-input bg-background px-3 text-xs font-medium text-foreground transition focus-within:ring-2 focus-within:ring-ring">
+              <span>Inspect</span>
+              <select
+                className="max-w-[7.5rem] bg-transparent text-xs outline-none"
+                value=""
+                aria-label="Open monthly drill-down records"
+                onChange={(event) => {
+                  const monthKey = event.target.value;
+                  if (monthKey) {
+                    handleMonthSelect(monthKey);
+                  }
+                }}
+              >
+                <option value="">month</option>
+                {insights.monthInsights.map((month) => (
+                  <option key={month.month} value={month.month}>
+                    {month.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
           <Button
             type="button"
             variant="outline"
@@ -403,6 +461,7 @@ export function MonthlyCollectionComparisonChart({
           targetSummary={targetSummary}
           monthlyTargetAmount={targetSummary?.monthlyTargetAmount ?? null}
           chartLabel={chartLabel}
+          onMonthSelect={onMonthSelect ? handleMonthSelect : undefined}
         />
       ) : (
         <p
@@ -430,6 +489,7 @@ export function MonthlyCollectionComparisonChart({
             targetSummary={targetSummary}
             monthlyTargetAmount={targetSummary?.monthlyTargetAmount ?? null}
             chartLabel={chartLabel}
+            onMonthSelect={onMonthSelect ? handleMonthSelect : undefined}
           />
         </DialogContent>
       </Dialog>

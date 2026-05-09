@@ -61,3 +61,19 @@ test("MonthlyCollectionComparisonChart renders compact chart controls accessibly
   assert.match(markup, /May 2026/);
   assert.match(markup, /aria-controls=/);
 });
+
+test("MonthlyCollectionComparisonChart exposes an accessible month drill-down control", () => {
+  const markup = renderToStaticMarkup(
+    createElement(MonthlyCollectionComparisonChart, {
+      data: chartPayload,
+      monthlyTargetAmount: 80000,
+      monthlyTargetSourceLabel: "May 2026",
+      onMonthSelect: () => undefined,
+    }),
+  );
+
+  assert.match(markup, /Open monthly drill-down records/);
+  assert.match(markup, />Inspect</);
+  assert.match(markup, /value="2026-04"/);
+  assert.match(markup, /value="2026-05"/);
+});

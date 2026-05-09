@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { useMemo, useState } from "react";
-import { ChevronDown, ChevronUp, CircleHelp, Download, Printer } from "lucide-react";
+import { Activity, BarChart3, ChevronDown, ChevronUp, CircleHelp, Download, Printer, ShieldCheck } from "lucide-react";
 import {
   OperationalMetric,
   OperationalSummaryStrip,
@@ -14,14 +14,18 @@ import { formatAmountRM } from "@/pages/collection/utils";
 import { CollectionMonthlyComparisonBreakdownList } from "./CollectionMonthlyComparisonBreakdownList";
 import {
   buildCollectionMonthlyComparisonAccessibleSummary,
+  buildCollectionMonthlyComparisonBenchmarks,
+  buildCollectionMonthlyComparisonDataQualitySummary,
   buildCollectionMonthlyComparisonInsights,
   buildCollectionMonthlyComparisonPresetRanges,
+  buildCollectionMonthlyComparisonProjection,
   buildCollectionMonthlyComparisonTargetSummary,
   buildCollectionMonthlyComparisonTrendExplanation,
   formatCollectionMonthlyComparisonDifference,
   formatCollectionMonthlyComparisonMonthDelta,
   formatCollectionMonthlyComparisonPercentage,
   resolveCollectionMonthlyComparisonTone,
+  type CollectionMonthlyComparisonBenchmarkId,
   type CollectionMonthlyComparisonPresetRange,
 } from "./collection-monthly-comparison-utils";
 
@@ -106,6 +110,8 @@ export function CollectionMonthlyComparisonPanel({
   chartSlot,
 }: CollectionMonthlyComparisonPanelProps) {
   const [breakdownExpanded, setBreakdownExpanded] = useState(false);
+  const [activeBenchmarkId, setActiveBenchmarkId] =
+    useState<CollectionMonthlyComparisonBenchmarkId>("previous-month");
   const comparison = data?.comparison || null;
   const comparisonTone = comparison
     ? resolveCollectionMonthlyComparisonTone(comparison.direction)
@@ -123,6 +129,25 @@ export function CollectionMonthlyComparisonPanel({
   const targetSummary = useMemo(
     () => (data ? buildCollectionMonthlyComparisonTargetSummary(data, monthlyTargetAmount) : null),
     [data, monthlyTargetAmount],
+  );
+  const projection = useMemo(
+    () => (data ? buildCollectionMonthlyComparisonProjection(data, monthlyTargetAmount) : null),
+    [data, monthlyTargetAmount],
+  );
+  const dataQualitySummary = useMemo(
+    () => (data ? buildCollectionMonthlyComparisonDataQualitySummary(data, monthlyTargetAmount) : null),
+    [data, monthlyTargetAmount],
+  );
+  const benchmarks = useMemo(
+    () => (data ? buildCollectionMonthlyComparisonBenchmarks(data) : []),
+    [data],
+  );
+  const activeBenchmark = useMemo(
+    () => benchmarks.find((benchmark) => benchmark.id === activeBenchmarkId)
+      || benchmarks.find((benchmark) => benchmark.available)
+      || benchmarks[0]
+      || null,
+    [activeBenchmarkId, benchmarks],
   );
   const [nicknameSelectOpen, setNicknameSelectOpen] = useState(false);
   const baseMonthRecordCount = comparison?.baseMonth
@@ -148,6 +173,11 @@ export function CollectionMonthlyComparisonPanel({
     : monthlyTargetAmount && monthlyTargetAmount > 0
       ? formatAmountRM(monthlyTargetAmount)
       : "No target configured";
+  const targetConfidenceLabel = monthlyTargetLoading
+    ? "Checking target"
+    : monthlyTargetAmount && monthlyTargetAmount > 0
+      ? "Superuser target active"
+      : "Target missing";
   const targetSupportingLabel = monthlyTargetSourceLabel
     ? `Configured for ${monthlyTargetSourceLabel}`
     : "Uses the configured target for the target month";
@@ -306,6 +336,15 @@ export function CollectionMonthlyComparisonPanel({
             <p className="mt-1 text-sm font-semibold text-foreground">
               {targetDisplayLabel}
             </p>
+            <span
+              className={
+                monthlyTargetAmount && monthlyTargetAmount > 0
+                  ? "mt-1 inline-flex rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-300"
+                  : "mt-1 inline-flex rounded-full bg-amber-500/10 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:text-amber-300"
+              }
+            >
+              {targetConfidenceLabel}
+            </span>
             <p className="text-xs text-muted-foreground">
               {targetSupportingLabel}
             </p>
@@ -422,6 +461,84 @@ export function CollectionMonthlyComparisonPanel({
                     </p>
                   </div>
                 ) : null}
+                {activeBenchmark ? (
+                  <div className="mt-3 rounded-xl border border-border/60 bg-background px-3 py-3">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <BarChart3 className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                          <p className="text-xs font-medium uppercase tracking-normal text-muted-foreground">
+                            Benchmark lens
+                          </p>
+                          <MonthlyComparisonHint
+                            label="Benchmark lens explanation"
+                            text="Switch how the target month is compared: previous month, same month last year, previous 3-month average, or earlier selected-range average."
+                          />
+                        </div>
+                        <p className="mt-1 text-sm leading-6 text-foreground">
+                          {activeBenchmark.summary}
+                        </p>
+                      </div>
+                      <span
+                        className={
+                          activeBenchmark.direction === "increase"
+                            ? "rounded-full bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-700 dark:text-emerald-300"
+                            : activeBenchmark.direction === "decrease"
+                              ? "rounded-full bg-destructive/10 px-2.5 py-1 text-xs font-medium text-destructive"
+                              : "rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground"
+                        }
+                      >
+                        {formatCollectionMonthlyComparisonPercentage(activeBenchmark.percentageChange)}
+                      </span>
+                    </div>
+                    <div
+                      className="mt-3 flex flex-wrap gap-2"
+                      role="group"
+                      aria-label="Monthly comparison benchmark mode"
+                    >
+                      {benchmarks.map((benchmark) => {
+                        const active = benchmark.id === activeBenchmark.id;
+                        return (
+                          <button
+                            key={benchmark.id}
+                            type="button"
+                            className={
+                              active
+                                ? "inline-flex h-8 items-center justify-center rounded-full border border-primary bg-primary/10 px-3 text-xs font-medium text-primary"
+                                : "inline-flex h-8 items-center justify-center rounded-full border border-border/70 bg-background px-3 text-xs font-medium text-foreground transition hover:bg-accent hover:text-accent-foreground"
+                            }
+                            onClick={() => setActiveBenchmarkId(benchmark.id)}
+                            aria-pressed={active}
+                            title={benchmark.available ? benchmark.formula : benchmark.summary}
+                          >
+                            {benchmark.shortLabel}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                      <div className="rounded-lg border border-border/50 bg-muted/20 px-3 py-2">
+                        <p className="text-[11px] text-muted-foreground">Reference</p>
+                        <p className="text-sm font-semibold text-foreground">
+                          {activeBenchmark.referenceTotal === null
+                            ? "Unavailable"
+                            : formatAmountRM(activeBenchmark.referenceTotal)}
+                        </p>
+                        <p className="truncate text-[11px] text-muted-foreground">{activeBenchmark.referenceLabel}</p>
+                      </div>
+                      <div className="rounded-lg border border-border/50 bg-muted/20 px-3 py-2">
+                        <p className="text-[11px] text-muted-foreground">Difference</p>
+                        <p className="text-sm font-semibold text-foreground">
+                          {formatCollectionMonthlyComparisonDifference(activeBenchmark.difference)}
+                        </p>
+                      </div>
+                      <div className="rounded-lg border border-border/50 bg-muted/20 px-3 py-2">
+                        <p className="text-[11px] text-muted-foreground">Formula</p>
+                        <p className="text-xs leading-5 text-foreground">{activeBenchmark.formula}</p>
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
                 <div className="mt-3 flex flex-wrap gap-2 text-xs text-foreground/68 dark:text-foreground/74">
                   <span className="rounded-full border border-border/60 bg-muted/20 px-2.5 py-1">
                     {insights.positiveMonthCount} month(s) up
@@ -443,6 +560,64 @@ export function CollectionMonthlyComparisonPanel({
                     </span>
                   ) : null}
                 </div>
+                {projection ? (
+                  <div className="mt-3 rounded-xl border border-primary/20 bg-primary/[0.035] px-3 py-3">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <Activity className="h-4 w-4 text-primary" aria-hidden="true" />
+                          <p className="text-xs font-medium uppercase tracking-normal text-muted-foreground">
+                            Current month projection
+                          </p>
+                          <MonthlyComparisonHint
+                            label="Current month projection explanation"
+                            text="Projection uses current month collection divided by elapsed days, multiplied by total days in the month. It appears only when the current month is in the selected range."
+                          />
+                        </div>
+                        <p className="mt-1 text-sm leading-6 text-foreground">
+                          {projection.label} is projected at{" "}
+                          <span className="font-semibold">{formatAmountRM(projection.projectedTotal)}</span>
+                          {projection.targetGap !== null ? (
+                            <>
+                              {" "}with target gap{" "}
+                              <span className={projection.targetGap >= 0 ? "font-semibold text-emerald-700 dark:text-emerald-300" : "font-semibold text-destructive"}>
+                                {formatCollectionMonthlyComparisonDifference(projection.targetGap)}
+                              </span>
+                              .
+                            </>
+                          ) : "."}
+                        </p>
+                      </div>
+                      <span
+                        className={
+                          projection.status === "on_track"
+                            ? "rounded-full bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-700 dark:text-emerald-300"
+                            : projection.status === "behind"
+                              ? "rounded-full bg-destructive/10 px-2.5 py-1 text-xs font-medium text-destructive"
+                              : "rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground"
+                        }
+                      >
+                        {projection.status === "on_track"
+                          ? "On track"
+                          : projection.status === "behind" ? "Behind target" : "No target"}
+                      </span>
+                    </div>
+                    <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                      <div className="rounded-lg border border-border/50 bg-background px-3 py-2">
+                        <p className="text-[11px] text-muted-foreground">Current total</p>
+                        <p className="text-sm font-semibold text-foreground">{formatAmountRM(projection.currentTotal)}</p>
+                      </div>
+                      <div className="rounded-lg border border-border/50 bg-background px-3 py-2">
+                        <p className="text-[11px] text-muted-foreground">Daily pace</p>
+                        <p className="text-sm font-semibold text-foreground">{formatAmountRM(projection.dailyAverage)}</p>
+                      </div>
+                      <div className="rounded-lg border border-border/50 bg-background px-3 py-2">
+                        <p className="text-[11px] text-muted-foreground">Remaining days</p>
+                        <p className="text-sm font-semibold text-foreground">{projection.remainingDays}</p>
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
               </div>
 
               <div className="grid gap-2 sm:grid-cols-2">
@@ -553,6 +728,49 @@ export function CollectionMonthlyComparisonPanel({
                     <p className="text-xs text-muted-foreground">
                       {(targetSummary.targetProgress * 100).toFixed(1)}% of {formatAmountRM(targetSummary.rangeTarget)}
                     </p>
+                  </div>
+                ) : null}
+                {dataQualitySummary ? (
+                  <div className="rounded-2xl border border-border/60 bg-background px-4 py-3 shadow-sm sm:col-span-2">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <ShieldCheck className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                          <p className="text-xs font-medium uppercase tracking-normal text-muted-foreground">
+                            Data quality
+                          </p>
+                          <MonthlyComparisonHint
+                            label="Data quality explanation"
+                            text="Checks target availability, anomaly months, empty months, unusually low record volume, and current-month projection risk."
+                          />
+                        </div>
+                        <p className="mt-1 text-lg font-semibold text-foreground">
+                          {dataQualitySummary.statusLabel}
+                        </p>
+                      </div>
+                      <span
+                        className={
+                          dataQualitySummary.statusTone === "success"
+                            ? "shrink-0 rounded-full bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-700 dark:text-emerald-300"
+                            : dataQualitySummary.statusTone === "danger"
+                              ? "shrink-0 rounded-full bg-destructive/10 px-2.5 py-1 text-xs font-medium text-destructive"
+                              : "shrink-0 rounded-full bg-amber-500/10 px-2.5 py-1 text-xs font-medium text-amber-700 dark:text-amber-300"
+                        }
+                      >
+                        {dataQualitySummary.warningCount} review
+                      </span>
+                    </div>
+                    <div className="mt-3 grid gap-2">
+                      {dataQualitySummary.signals.slice(0, 4).map((signal) => (
+                        <div
+                          key={signal.id}
+                          className="rounded-xl border border-border/50 bg-muted/20 px-3 py-2"
+                        >
+                          <p className="text-xs font-medium text-foreground">{signal.label}</p>
+                          <p className="mt-0.5 text-xs leading-5 text-muted-foreground">{signal.description}</p>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 ) : null}
               </div>

@@ -58,6 +58,59 @@ export type CollectionMonthlyComparisonTargetSummary = {
   monthsBelowTarget: number;
 };
 
+export type CollectionMonthlyComparisonProjection = {
+  month: string;
+  label: string;
+  elapsedDays: number;
+  totalDays: number;
+  remainingDays: number;
+  currentTotal: number;
+  dailyAverage: number;
+  projectedTotal: number;
+  projectedDifference: number;
+  monthlyTargetAmount: number | null;
+  targetGap: number | null;
+  targetProgress: number | null;
+  requiredDailyAverageToTarget: number | null;
+  status: "on_track" | "behind" | "no_target";
+};
+
+export type CollectionMonthlyComparisonDataQualitySignal = {
+  id: string;
+  label: string;
+  description: string;
+  tone: "success" | "warning" | "danger" | "info";
+};
+
+export type CollectionMonthlyComparisonDataQualitySummary = {
+  statusLabel: string;
+  statusTone: "success" | "warning" | "danger" | "info";
+  warningCount: number;
+  signals: CollectionMonthlyComparisonDataQualitySignal[];
+};
+
+export type CollectionMonthlyComparisonBenchmarkId =
+  | "previous-month"
+  | "same-month-last-year"
+  | "previous-3-average"
+  | "range-average";
+
+export type CollectionMonthlyComparisonBenchmarkSummary = {
+  id: CollectionMonthlyComparisonBenchmarkId;
+  label: string;
+  shortLabel: string;
+  available: boolean;
+  targetLabel: string;
+  referenceLabel: string;
+  targetTotal: number;
+  referenceTotal: number | null;
+  difference: number | null;
+  percentageChange: number | null;
+  direction: "increase" | "decrease" | "no_change" | "unavailable";
+  formula: string;
+  summary: string;
+};
+
 export type CollectionMonthlyComparisonPresetRange = {
   id: "last-3" | "last-6" | "year-to-date" | "previous-year";
   label: string;
@@ -173,6 +226,162 @@ export function formatCollectionMonthlyComparisonDifference(value: number | null
   return value > 0 ? `+${formatted}` : value < 0 ? `-${formatted}` : formatted;
 }
 
+function resolveCollectionMonthlyComparisonPercentageChange(
+  targetTotal: number,
+  referenceTotal: number,
+): number | null {
+  if (referenceTotal === 0) {
+    return targetTotal === 0 ? 0 : null;
+  }
+  return ((targetTotal - referenceTotal) / referenceTotal) * 100;
+}
+
+function resolveCollectionMonthlyComparisonBenchmarkDirection(
+  difference: number | null,
+): CollectionMonthlyComparisonBenchmarkSummary["direction"] {
+  if (difference === null) {
+    return "unavailable";
+  }
+  if (difference > 0) {
+    return "increase";
+  }
+  if (difference < 0) {
+    return "decrease";
+  }
+  return "no_change";
+}
+
+function buildCollectionMonthlyComparisonBenchmarkSummary(
+  input: {
+    id: CollectionMonthlyComparisonBenchmarkId;
+    label: string;
+    shortLabel: string;
+    targetLabel: string;
+    targetTotal: number;
+    referenceLabel: string;
+    referenceTotal: number | null;
+    formula: string;
+    unavailableSummary: string;
+  },
+): CollectionMonthlyComparisonBenchmarkSummary {
+  const difference = input.referenceTotal === null
+    ? null
+    : input.targetTotal - input.referenceTotal;
+  const percentageChange = input.referenceTotal === null
+    ? null
+    : resolveCollectionMonthlyComparisonPercentageChange(input.targetTotal, input.referenceTotal);
+  const direction = resolveCollectionMonthlyComparisonBenchmarkDirection(difference);
+  const available = input.referenceTotal !== null;
+
+  let summary = input.unavailableSummary;
+  if (available) {
+    const verb = direction === "increase"
+      ? "is above"
+      : direction === "decrease" ? "is below" : "matches";
+    const percentageSegment = percentageChange === null
+      ? "from a zero reference"
+      : `(${formatCollectionMonthlyComparisonPercentage(percentageChange)})`;
+    summary = `${input.targetLabel} ${verb} ${input.referenceLabel} by ${formatCollectionMonthlyComparisonDifference(difference)} ${percentageSegment}.`;
+  }
+
+  return {
+    id: input.id,
+    label: input.label,
+    shortLabel: input.shortLabel,
+    available,
+    targetLabel: input.targetLabel,
+    referenceLabel: input.referenceLabel,
+    targetTotal: input.targetTotal,
+    referenceTotal: input.referenceTotal,
+    difference,
+    percentageChange,
+    direction,
+    formula: input.formula,
+    summary,
+  };
+}
+
+export function buildCollectionMonthlyComparisonBenchmarks(
+  payload: CollectionMonthlyComparisonResponse,
+): CollectionMonthlyComparisonBenchmarkSummary[] {
+  const targetMonth = payload.months.find((month) => month.month === payload.comparison.targetMonth)
+    || payload.months[payload.months.length - 1]
+    || null;
+  if (!targetMonth) {
+    return [];
+  }
+
+  const targetIndex = payload.months.findIndex((month) => month.month === targetMonth.month);
+  const previousMonth = targetIndex > 0
+    ? payload.months[targetIndex - 1] || null
+    : null;
+  const sameMonthLastYearKey = shiftCollectionMonthInput(targetMonth.month, -12);
+  const sameMonthLastYear = payload.months.find((month) => month.month === sameMonthLastYearKey) || null;
+  const previousThreeMonths = targetIndex > 0
+    ? payload.months.slice(Math.max(0, targetIndex - 3), targetIndex)
+    : [];
+  const historicalMonths = targetIndex > 0
+    ? payload.months.slice(0, targetIndex)
+    : [];
+  const previousThreeAverage = previousThreeMonths.length === 3
+    ? previousThreeMonths.reduce((total, month) => total + month.totalCollection, 0) / 3
+    : null;
+  const rangeAverage = historicalMonths.length > 0
+    ? historicalMonths.reduce((total, month) => total + month.totalCollection, 0) / historicalMonths.length
+    : null;
+
+  return [
+    buildCollectionMonthlyComparisonBenchmarkSummary({
+      id: "previous-month",
+      label: "Previous month",
+      shortLabel: "Previous",
+      targetLabel: targetMonth.label,
+      targetTotal: targetMonth.totalCollection,
+      referenceLabel: previousMonth?.label || "previous month",
+      referenceTotal: previousMonth?.totalCollection ?? null,
+      formula: "Target month total - previous month total",
+      unavailableSummary: "Previous month benchmark is unavailable because the selected range has no earlier month.",
+    }),
+    buildCollectionMonthlyComparisonBenchmarkSummary({
+      id: "same-month-last-year",
+      label: "Same month last year",
+      shortLabel: "Last year",
+      targetLabel: targetMonth.label,
+      targetTotal: targetMonth.totalCollection,
+      referenceLabel: sameMonthLastYear?.label || sameMonthLastYearKey,
+      referenceTotal: sameMonthLastYear?.totalCollection ?? null,
+      formula: "Target month total - same calendar month last year",
+      unavailableSummary: `Same-month-last-year benchmark needs ${sameMonthLastYearKey} in the selected range.`,
+    }),
+    buildCollectionMonthlyComparisonBenchmarkSummary({
+      id: "previous-3-average",
+      label: "Previous 3-month average",
+      shortLabel: "3-mo avg",
+      targetLabel: targetMonth.label,
+      targetTotal: targetMonth.totalCollection,
+      referenceLabel: previousThreeMonths.length === 3
+        ? `${previousThreeMonths[0]?.label} to ${previousThreeMonths[2]?.label} average`
+        : "previous 3-month average",
+      referenceTotal: previousThreeAverage,
+      formula: "Target month total - average total of the previous 3 months",
+      unavailableSummary: "Previous 3-month average needs at least three months before the target month.",
+    }),
+    buildCollectionMonthlyComparisonBenchmarkSummary({
+      id: "range-average",
+      label: "Selected range average",
+      shortLabel: "Range avg",
+      targetLabel: targetMonth.label,
+      targetTotal: targetMonth.totalCollection,
+      referenceLabel: historicalMonths.length > 0
+        ? `${historicalMonths[0]?.label} to ${historicalMonths[historicalMonths.length - 1]?.label} average`
+        : "selected range average",
+      referenceTotal: rangeAverage,
+      formula: "Target month total - average total of all earlier months in the selected range",
+      unavailableSummary: "Selected range average needs at least one earlier month before the target month.",
+    }),
+  ];
+}
+
 export function buildCollectionMonthlyComparisonTargetSummary(
   payload: CollectionMonthlyComparisonResponse,
   monthlyTargetAmount: number | null | undefined,
@@ -192,6 +401,170 @@ export function buildCollectionMonthlyComparisonTargetSummary(
     targetProgress: rangeTarget > 0 ? insights.rangeTotal / rangeTarget : 0,
     monthsAtOrAboveTarget: payload.months.filter((month) => month.totalCollection >= target).length,
     monthsBelowTarget: payload.months.filter((month) => month.totalCollection < target).length,
+  };
+}
+
+function getCollectionDaysInMonth(year: number, month: number): number {
+  return new Date(year, month, 0).getDate();
+}
+
+export function buildCollectionMonthlyComparisonProjection(
+  payload: CollectionMonthlyComparisonResponse,
+  monthlyTargetAmount?: number | null,
+  referenceDate = new Date(),
+): CollectionMonthlyComparisonProjection | null {
+  if (!Number.isFinite(referenceDate.getTime())) {
+    return null;
+  }
+
+  const currentMonthKey = formatCollectionMonthInput(referenceDate);
+  const currentMonth = payload.months.find((month) => month.month === currentMonthKey) || null;
+  const parsed = parseCollectionMonthKey(currentMonthKey);
+  if (!currentMonth || !parsed) {
+    return null;
+  }
+
+  const totalDays = getCollectionDaysInMonth(parsed.year, parsed.month);
+  const elapsedDays = Math.min(totalDays, Math.max(1, referenceDate.getDate()));
+  const remainingDays = Math.max(0, totalDays - elapsedDays);
+  const currentTotal = Math.max(0, Number(currentMonth.totalCollection || 0));
+  const dailyAverage = currentTotal / elapsedDays;
+  const projectedTotal = dailyAverage * totalDays;
+  const projectedDifference = projectedTotal - currentTotal;
+  const target = Number(monthlyTargetAmount || 0);
+  const monthlyTarget = Number.isFinite(target) && target > 0 ? target : null;
+  const targetGap = monthlyTarget === null ? null : projectedTotal - monthlyTarget;
+  const targetProgress = monthlyTarget === null ? null : projectedTotal / monthlyTarget;
+  const requiredDailyAverageToTarget = monthlyTarget === null
+    ? null
+    : remainingDays > 0
+      ? Math.max(0, monthlyTarget - currentTotal) / remainingDays
+      : Math.max(0, monthlyTarget - currentTotal);
+  const status = monthlyTarget === null
+    ? "no_target"
+    : projectedTotal >= monthlyTarget ? "on_track" : "behind";
+
+  return {
+    month: currentMonth.month,
+    label: currentMonth.label,
+    elapsedDays,
+    totalDays,
+    remainingDays,
+    currentTotal,
+    dailyAverage,
+    projectedTotal,
+    projectedDifference,
+    monthlyTargetAmount: monthlyTarget,
+    targetGap,
+    targetProgress,
+    requiredDailyAverageToTarget,
+    status,
+  };
+}
+
+export function buildCollectionMonthlyComparisonDataQualitySummary(
+  payload: CollectionMonthlyComparisonResponse,
+  monthlyTargetAmount?: number | null,
+  referenceDate = new Date(),
+): CollectionMonthlyComparisonDataQualitySummary {
+  const insights = buildCollectionMonthlyComparisonInsights(payload);
+  const targetSummary = buildCollectionMonthlyComparisonTargetSummary(payload, monthlyTargetAmount);
+  const projection = buildCollectionMonthlyComparisonProjection(payload, monthlyTargetAmount, referenceDate);
+  const signals: CollectionMonthlyComparisonDataQualitySignal[] = [];
+
+  if (targetSummary) {
+    signals.push({
+      id: "target-configured",
+      label: "Target configured",
+      description: `${formatAmountRM(targetSummary.monthlyTargetAmount)} monthly target is active for this comparison.`,
+      tone: "success",
+    });
+  } else {
+    signals.push({
+      id: "target-missing",
+      label: "Target missing",
+      description: "No superuser monthly target is available, so target status is hidden from calculations.",
+      tone: "warning",
+    });
+  }
+
+  if (insights.anomalyMonthCount > 0) {
+    const firstAnomaly = insights.anomalyMonths[0];
+    signals.push({
+      id: "anomaly-months",
+      label: `${insights.anomalyMonthCount} anomaly month(s)`,
+      description: firstAnomaly?.anomalyLabel || "One or more months moved more than the audit threshold.",
+      tone: "warning",
+    });
+  } else {
+    signals.push({
+      id: "no-anomaly",
+      label: "Anomaly clear",
+      description: `No month moved more than ${COLLECTION_MONTHLY_COMPARISON_ANOMALY_THRESHOLD_PERCENT}% against the previous month.`,
+      tone: "success",
+    });
+  }
+
+  if (insights.emptyMonthCount > 0) {
+    const emptyLabels = insights.monthInsights
+      .filter((month) => month.recordCount === 0)
+      .slice(0, 2)
+      .map((month) => month.label)
+      .join(", ");
+    signals.push({
+      id: "empty-months",
+      label: `${insights.emptyMonthCount} empty month(s)`,
+      description: emptyLabels
+        ? `Review empty month(s): ${emptyLabels}${insights.emptyMonthCount > 2 ? ", ..." : ""}.`
+        : "Review empty months before sharing the report.",
+      tone: "warning",
+    });
+  }
+
+  if (insights.activeMonthCount >= 3) {
+    const activeRecordAverage = insights.totalRecords / insights.activeMonthCount;
+    const lowRecordMonths = insights.monthInsights.filter(
+      (month) => month.recordCount > 0 && month.recordCount < activeRecordAverage * 0.5,
+    );
+    if (lowRecordMonths.length > 0) {
+      signals.push({
+        id: "low-record-volume",
+        label: `${lowRecordMonths.length} low-volume month(s)`,
+        description: `${lowRecordMonths[0]?.label || "A month"} has less than half the active-month average record count.`,
+        tone: "info",
+      });
+    }
+  }
+
+  if (projection) {
+    if (projection.status === "behind") {
+      signals.push({
+        id: "projection-behind",
+        label: "Projection behind target",
+        description: `${projection.label} is projected at ${formatAmountRM(projection.projectedTotal)}, below the configured target.`,
+        tone: "warning",
+      });
+    } else if (projection.status === "on_track") {
+      signals.push({
+        id: "projection-on-track",
+        label: "Projection on track",
+        description: `${projection.label} is projected at ${formatAmountRM(projection.projectedTotal)}, meeting the configured target.`,
+        tone: "success",
+      });
+    }
+  }
+
+  const warningCount = signals.filter((signal) => signal.tone === "warning" || signal.tone === "danger").length;
+  const statusTone = warningCount >= 3 ? "danger" : warningCount > 0 ? "warning" : "success";
+  const statusLabel = warningCount === 0
+    ? "Quality checks clear"
+    : warningCount === 1 ? "1 item needs review" : `${warningCount} items need review`;
+
+  return {
+    statusLabel,
+    statusTone,
+    warningCount,
+    signals,
   };
 }
 
@@ -592,10 +965,22 @@ export function buildCollectionMonthlyComparisonPrintReportHtml(
   } = {},
 ): string {
   const insights = buildCollectionMonthlyComparisonInsights(payload);
+  const benchmarks = buildCollectionMonthlyComparisonBenchmarks(payload);
   const trendExplanation = buildCollectionMonthlyComparisonTrendExplanation(payload);
   const targetSummary = buildCollectionMonthlyComparisonTargetSummary(
     payload,
     options.monthlyTargetAmount,
+  );
+  const reportReferenceDate = options.generatedAt || new Date();
+  const projection = buildCollectionMonthlyComparisonProjection(
+    payload,
+    options.monthlyTargetAmount,
+    reportReferenceDate,
+  );
+  const dataQuality = buildCollectionMonthlyComparisonDataQualitySummary(
+    payload,
+    options.monthlyTargetAmount,
+    reportReferenceDate,
   );
   const monthlyTargetAmount = targetSummary?.monthlyTargetAmount ?? null;
   const targetStatus = !targetSummary
@@ -606,7 +991,7 @@ export function buildCollectionMonthlyComparisonPrintReportHtml(
   const anomalySummary = insights.anomalyMonthCount > 0
     ? `${insights.anomalyMonthCount} anomaly month(s) flagged`
     : "No anomaly above threshold";
-  const generatedAt = formatCollectionMonthlyComparisonReportDate(options.generatedAt || new Date());
+  const generatedAt = formatCollectionMonthlyComparisonReportDate(reportReferenceDate);
   const chartSvg = buildCollectionMonthlyComparisonReportChartSvg(insights, monthlyTargetAmount);
   const monthRows = insights.monthInsights.map((month) => {
     const targetGap = monthlyTargetAmount === null
@@ -629,6 +1014,22 @@ export function buildCollectionMonthlyComparisonPrintReportHtml(
       <li><strong>${escapeCollectionMonthlyComparisonHtml(month.label)}</strong>: ${escapeCollectionMonthlyComparisonHtml(month.anomalyLabel || "Anomaly flagged")}</li>
     `).join("")
     : "<li>No month moved more than the configured anomaly threshold.</li>";
+  const projectionSummary = projection
+    ? `${projection.label} current total ${formatAmountRM(projection.currentTotal)} after ${projection.elapsedDays}/${projection.totalDays} day(s), projected ${formatAmountRM(projection.projectedTotal)}${projection.targetGap === null ? "." : ` with target gap ${formatCollectionMonthlyComparisonDifference(projection.targetGap)}.`}`
+    : "Current month is outside the selected range, so no projection is shown.";
+  const qualityRows = dataQuality.signals.map((signal) => `
+      <li><strong>${escapeCollectionMonthlyComparisonHtml(signal.label)}</strong>: ${escapeCollectionMonthlyComparisonHtml(signal.description)}</li>
+    `).join("");
+  const benchmarkRows = benchmarks.map((benchmark) => `
+      <tr>
+        <td>${escapeCollectionMonthlyComparisonHtml(benchmark.label)}</td>
+        <td>${escapeCollectionMonthlyComparisonHtml(benchmark.referenceLabel)}</td>
+        <td class="numeric">${escapeCollectionMonthlyComparisonHtml(benchmark.referenceTotal === null ? "N/A" : formatAmountRM(benchmark.referenceTotal))}</td>
+        <td class="numeric">${escapeCollectionMonthlyComparisonHtml(formatCollectionMonthlyComparisonDifference(benchmark.difference))}</td>
+        <td class="numeric">${escapeCollectionMonthlyComparisonHtml(formatCollectionMonthlyComparisonPercentage(benchmark.percentageChange))}</td>
+        <td>${escapeCollectionMonthlyComparisonHtml(benchmark.summary)}</td>
+      </tr>
+    `).join("");
 
   return `<!doctype html>
 <html lang="en">
@@ -702,15 +1103,44 @@ export function buildCollectionMonthlyComparisonPrintReportHtml(
     </section>
 
     <section class="section">
+      <h2>Benchmark lens</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Benchmark</th>
+            <th>Reference</th>
+            <th class="numeric">Reference total</th>
+            <th class="numeric">Difference</th>
+            <th class="numeric">Change</th>
+            <th>Summary</th>
+          </tr>
+        </thead>
+        <tbody>${benchmarkRows}</tbody>
+      </table>
+    </section>
+
+    <section class="section">
       <h2>Chart</h2>
       ${chartSvg}
       <p class="muted">Target source: ${escapeCollectionMonthlyComparisonHtml(options.monthlyTargetSourceLabel || "No configured target source")}</p>
     </section>
 
     <section class="section">
+      <h2>Current month projection</h2>
+      <p>${escapeCollectionMonthlyComparisonHtml(projectionSummary)}</p>
+      ${projection?.requiredDailyAverageToTarget !== null && projection?.requiredDailyAverageToTarget !== undefined ? `<p class="muted">Required daily average for remaining days: ${escapeCollectionMonthlyComparisonHtml(formatAmountRM(projection.requiredDailyAverageToTarget))}</p>` : ""}
+    </section>
+
+    <section class="section">
       <h2>Target and anomaly notes</h2>
       <p>${targetSummary ? escapeCollectionMonthlyComparisonHtml(`Monthly target ${formatAmountRM(targetSummary.monthlyTargetAmount)}. Range target ${formatAmountRM(targetSummary.rangeTarget)}. Gap ${formatCollectionMonthlyComparisonDifference(targetSummary.targetGap)}.`) : "No configured monthly target was available for this report."}</p>
       <ul>${anomalyRows}</ul>
+    </section>
+
+    <section class="section">
+      <h2>Data quality checks</h2>
+      <p>${escapeCollectionMonthlyComparisonHtml(dataQuality.statusLabel)}</p>
+      <ul>${qualityRows}</ul>
     </section>
 
     <section class="section">

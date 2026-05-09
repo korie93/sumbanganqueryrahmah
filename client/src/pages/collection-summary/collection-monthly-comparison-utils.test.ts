@@ -4,11 +4,14 @@ import type { CollectionMonthlyComparisonResponse } from "@/lib/api";
 import {
   COLLECTION_MONTHLY_COMPARISON_ANOMALY_THRESHOLD_PERCENT,
   buildCollectionMonthlyComparisonAccessibleSummary,
+  buildCollectionMonthlyComparisonBenchmarks,
   buildCollectionMonthlyComparisonCsv,
   buildCollectionMonthlyComparisonCsvFilename,
+  buildCollectionMonthlyComparisonDataQualitySummary,
   buildCollectionMonthlyComparisonInsights,
   buildCollectionMonthlyComparisonPrintReportHtml,
   buildCollectionMonthlyComparisonPresetRanges,
+  buildCollectionMonthlyComparisonProjection,
   buildCollectionMonthlyComparisonTargetSummary,
   buildCollectionMonthlyComparisonTrendExplanation,
   buildDefaultCollectionMonthlyComparisonRange,
@@ -70,6 +73,62 @@ const anomalyPayload: CollectionMonthlyComparisonResponse = {
     difference: 24550,
     percentageChange: 34.85,
     summary: "Collection increased by RM24,550.00 (+34.85%) compared to Apr 2026.",
+  },
+};
+
+const benchmarkPayload: CollectionMonthlyComparisonResponse = {
+  ok: true,
+  nickname: "Collector Alpha",
+  startMonth: "2025-05",
+  endMonth: "2026-05",
+  months: [
+    {
+      month: "2025-05",
+      label: "May 2025",
+      totalCollection: 60000,
+      recordCount: 100,
+      averagePerRecord: 600,
+    },
+    {
+      month: "2026-02",
+      label: "Feb 2026",
+      totalCollection: 70000,
+      recordCount: 115,
+      averagePerRecord: 608.7,
+    },
+    {
+      month: "2026-03",
+      label: "Mar 2026",
+      totalCollection: 75000,
+      recordCount: 125,
+      averagePerRecord: 600,
+    },
+    {
+      month: "2026-04",
+      label: "Apr 2026",
+      totalCollection: 80000,
+      recordCount: 130,
+      averagePerRecord: 615.38,
+    },
+    {
+      month: "2026-05",
+      label: "May 2026",
+      totalCollection: 90000,
+      recordCount: 150,
+      averagePerRecord: 600,
+    },
+  ],
+  comparison: {
+    baseMonth: "2026-04",
+    targetMonth: "2026-05",
+    baseLabel: "Apr 2026",
+    targetLabel: "May 2026",
+    baseTotal: 80000,
+    targetTotal: 90000,
+    difference: 10000,
+    percentageChange: 12.5,
+    direction: "increase",
+    summary: "Collection increased by RM10,000.00 (+12.50%) compared to Apr 2026.",
   },
 };
 
@@ -181,11 +240,72 @@ test("collection monthly comparison helpers summarize targets and export CSV", (
   );
 });
 
+test("collection monthly comparison helpers build benchmark lenses from available range data", () => {
+  const benchmarks = buildCollectionMonthlyComparisonBenchmarks(benchmarkPayload);
+  const previousMonth = benchmarks.find((benchmark) => benchmark.id === "previous-month");
+  const lastYear = benchmarks.find((benchmark) => benchmark.id === "same-month-last-year");
+  const previousThreeAverage = benchmarks.find((benchmark) => benchmark.id === "previous-3-average");
+  const rangeAverage = benchmarks.find((benchmark) => benchmark.id === "range-average");
+
+  assert.equal(benchmarks.length, 4);
+  assert.equal(previousMonth?.available, true);
+  assert.equal(previousMonth?.difference, 10000);
+  assert.equal(previousMonth?.percentageChange, 12.5);
+  assert.equal(lastYear?.referenceLabel, "May 2025");
+  assert.equal(lastYear?.difference, 30000);
+  assert.equal(lastYear?.percentageChange, 50);
+  assert.equal(previousThreeAverage?.referenceTotal, 75000);
+  assert.equal(previousThreeAverage?.difference, 15000);
+  assert.equal(rangeAverage?.referenceTotal, 71250);
+  assert.equal(rangeAverage?.difference, 18750);
+
+  const limitedBenchmarks = buildCollectionMonthlyComparisonBenchmarks(comparisonPayload);
+  assert.equal(
+    limitedBenchmarks.find((benchmark) => benchmark.id === "same-month-last-year")?.available,
+    false,
+  );
+});
+
+test("collection monthly comparison helpers project current month pace and quality checks", () => {
+  const referenceDate = new Date(2026, 4, 9, 12);
+  const projection = buildCollectionMonthlyComparisonProjection(
+    comparisonPayload,
+    80000,
+    referenceDate,
+  );
+
+  assert.equal(projection?.month, "2026-05");
+  assert.equal(projection?.elapsedDays, 9);
+  assert.equal(projection?.totalDays, 31);
+  assert.equal(projection?.remainingDays, 22);
+  assert.equal(projection?.status, "on_track");
+  assert.equal(projection?.projectedTotal.toFixed(2), "285544.44");
+  assert.equal(projection?.targetGap?.toFixed(2), "205544.44");
+
+  const qualitySummary = buildCollectionMonthlyComparisonDataQualitySummary(
+    anomalyPayload,
+    80000,
+    referenceDate,
+  );
+  assert.equal(qualitySummary.statusLabel, "1 item needs review");
+  assert.equal(qualitySummary.statusTone, "warning");
+  assert.ok(qualitySummary.signals.some((signal) => signal.id === "target-configured"));
+  assert.ok(qualitySummary.signals.some((signal) => signal.id === "anomaly-months"));
+  assert.ok(qualitySummary.signals.some((signal) => signal.id === "projection-on-track"));
+
+  const missingTargetQuality = buildCollectionMonthlyComparisonDataQualitySummary(
+    comparisonPayload,
+    null,
+    referenceDate,
+  );
+  assert.ok(missingTargetQuality.signals.some((signal) => signal.id === "target-missing"));
+});
+
 test("collection monthly comparison helpers build a print-friendly report with chart, target, and anomaly details", () => {
   const html = buildCollectionMonthlyComparisonPrintReportHtml(anomalyPayload, {
     monthlyTargetAmount: 80000,
     monthlyTargetSourceLabel: "May 2026",
-    generatedAt: new Date("2026-05-08T09:30:00.000Z"),
+    generatedAt: new Date(2026, 4, 8, 17, 30),
   });
 
   assert.match(html, /Monthly Collection Comparison/);
@@ -193,6 +313,9 @@ test("collection monthly comparison helpers build a print-friendly report with c
   assert.match(html, /role="img" aria-label="Monthly comparison bar chart"/);
   assert.match(html, /Monthly target/);
   assert.match(html, /Target source: May 2026/);
+  assert.match(html, /Benchmark lens/);
+  assert.match(html, /Current month projection/);
+  assert.match(html, /Data quality checks/);
   assert.match(html, /Unusual jump \+34\.85% vs previous month/);
   assert.match(html, /Print or save PDF/);
   assert.match(html, /window\.print/);
