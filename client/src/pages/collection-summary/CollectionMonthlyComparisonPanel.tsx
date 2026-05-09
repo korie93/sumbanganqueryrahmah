@@ -27,6 +27,7 @@ import {
   resolveCollectionMonthlyComparisonTone,
   type CollectionMonthlyComparisonBenchmarkId,
   type CollectionMonthlyComparisonPresetRange,
+  type CollectionSameDayPaceComparison,
 } from "./collection-monthly-comparison-utils";
 
 type CollectionMonthlyComparisonPanelProps = {
@@ -51,6 +52,10 @@ type CollectionMonthlyComparisonPanelProps = {
   monthlyTargetLoading?: boolean | undefined;
   monthlyTargetErrorMessage?: string | null | undefined;
   monthlyTargetSourceLabel?: string | null | undefined;
+  sameDayPace?: CollectionSameDayPaceComparison | null | undefined;
+  sameDayPaceLoading?: boolean | undefined;
+  sameDayPaceErrorMessage?: string | null | undefined;
+  sameDayPaceUnavailableReason?: string | null | undefined;
   onExportCsv?: (() => void) | undefined;
   onPrintReport?: (() => void) | undefined;
   onMonthSelect?: ((monthKey: string) => void) | undefined;
@@ -104,6 +109,10 @@ export function CollectionMonthlyComparisonPanel({
   monthlyTargetLoading = false,
   monthlyTargetErrorMessage = null,
   monthlyTargetSourceLabel = null,
+  sameDayPace = null,
+  sameDayPaceLoading = false,
+  sameDayPaceErrorMessage = null,
+  sameDayPaceUnavailableReason = null,
   onExportCsv,
   onPrintReport,
   onMonthSelect,
@@ -168,6 +177,28 @@ export function CollectionMonthlyComparisonPanel({
     [],
   );
   const latestMonthInsight = insights?.monthInsights[insights.monthInsights.length - 1] || null;
+  const sameDayPaceMax = sameDayPace
+    ? Math.max(
+      sameDayPace.currentTotal,
+      sameDayPace.previousTotal,
+      sameDayPace.target?.expectedByToday || 0,
+      1,
+    )
+    : 1;
+  const sameDayCurrentWidth = sameDayPace
+    ? `${Math.min(100, Math.round((sameDayPace.currentTotal / sameDayPaceMax) * 100))}%`
+    : "0%";
+  const sameDayPreviousWidth = sameDayPace
+    ? `${Math.min(100, Math.round((sameDayPace.previousTotal / sameDayPaceMax) * 100))}%`
+    : "0%";
+  const sameDayTargetWidth = sameDayPace?.target
+    ? `${Math.min(100, Math.round((sameDayPace.target.expectedByToday / sameDayPaceMax) * 100))}%`
+    : "0%";
+  const sameDayToneClassName = sameDayPace?.direction === "faster"
+    ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+    : sameDayPace?.direction === "slower"
+      ? "bg-destructive/10 text-destructive"
+      : "bg-muted text-muted-foreground";
   const targetDisplayLabel = monthlyTargetLoading
     ? "Loading target..."
     : monthlyTargetAmount && monthlyTargetAmount > 0
@@ -439,6 +470,177 @@ export function CollectionMonthlyComparisonPanel({
               tone={comparisonTone}
             />
           </OperationalSummaryStrip>
+
+          {sameDayPaceLoading ? (
+            <div
+              role="status"
+              aria-live="polite"
+              className="rounded-2xl border border-border/60 bg-background px-4 py-4 text-sm text-muted-foreground shadow-sm"
+            >
+              Loading same-day pace comparison...
+            </div>
+          ) : null}
+
+          {!sameDayPaceLoading && sameDayPaceErrorMessage ? (
+            <p
+              role="alert"
+              className="rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-700 dark:text-amber-300"
+            >
+              Same-day pace unavailable: {sameDayPaceErrorMessage}
+            </p>
+          ) : null}
+
+          {!sameDayPaceLoading && !sameDayPaceErrorMessage && sameDayPace ? (
+            <div className="rounded-2xl border border-border/60 bg-background px-4 py-4 shadow-sm">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0 space-y-1">
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-sm font-semibold text-foreground">Same-day collection pace</p>
+                    <MonthlyComparisonHint
+                      label="Same-day comparison methodology"
+                      text="Compares the current month only up to today's day number against the previous month for the same day range. Full previous-month totals are not used."
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {sameDayPace.currentRangeLabel} vs {sameDayPace.previousRangeLabel}
+                  </p>
+                </div>
+                <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${sameDayToneClassName}`}>
+                  {sameDayPace.headline}
+                </span>
+              </div>
+
+              <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1.15fr)_minmax(18rem,0.85fr)]">
+                <div className="space-y-3">
+                  <p className="text-sm leading-6 text-foreground">{sameDayPace.summary}</p>
+                  <div className="grid gap-2 sm:grid-cols-4">
+                    <div className="rounded-xl border border-border/50 bg-muted/20 px-3 py-2">
+                      <p className="text-[11px] font-medium uppercase tracking-normal text-muted-foreground">
+                        Current
+                      </p>
+                      <p className="mt-1 text-sm font-semibold text-foreground">
+                        {formatAmountRM(sameDayPace.currentTotal)}
+                      </p>
+                    </div>
+                    <div className="rounded-xl border border-border/50 bg-muted/20 px-3 py-2">
+                      <p className="text-[11px] font-medium uppercase tracking-normal text-muted-foreground">
+                        Previous
+                      </p>
+                      <p className="mt-1 text-sm font-semibold text-foreground">
+                        {formatAmountRM(sameDayPace.previousTotal)}
+                      </p>
+                    </div>
+                    <div className="rounded-xl border border-border/50 bg-muted/20 px-3 py-2">
+                      <p className="text-[11px] font-medium uppercase tracking-normal text-muted-foreground">
+                        Gap
+                      </p>
+                      <p className={sameDayPace.difference < 0 ? "mt-1 text-sm font-semibold text-destructive" : "mt-1 text-sm font-semibold text-emerald-700 dark:text-emerald-300"}>
+                        {formatCollectionMonthlyComparisonDifference(sameDayPace.difference)}
+                      </p>
+                    </div>
+                    <div className="rounded-xl border border-border/50 bg-muted/20 px-3 py-2">
+                      <div className="flex items-center gap-1.5">
+                        <p className="text-[11px] font-medium uppercase tracking-normal text-muted-foreground">
+                          Avg / day
+                        </p>
+                        <MonthlyComparisonHint
+                          label="Same-day daily average formula"
+                          text="Current same-day total divided by the number of compared calendar days."
+                        />
+                      </div>
+                      <p className="mt-1 text-sm font-semibold text-foreground">
+                        {formatAmountRM(sameDayPace.currentDailyAverage)}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2 rounded-xl border border-border/50 bg-muted/20 px-3 py-3">
+                    <div className="space-y-1">
+                      <div className="flex justify-between gap-3 text-xs">
+                        <span className="font-medium text-foreground">{sameDayPace.currentLabel}</span>
+                        <span className="text-muted-foreground">{formatAmountRM(sameDayPace.currentTotal)}</span>
+                      </div>
+                      <div className="h-2 overflow-hidden rounded-full bg-muted">
+                        <div className="h-full rounded-full bg-primary" style={{ width: sameDayCurrentWidth }} />
+                      </div>
+                    </div>
+                    <div className="space-y-1">
+                      <div className="flex justify-between gap-3 text-xs">
+                        <span className="font-medium text-foreground">{sameDayPace.previousLabel}</span>
+                        <span className="text-muted-foreground">{formatAmountRM(sameDayPace.previousTotal)}</span>
+                      </div>
+                      <div className="h-2 overflow-hidden rounded-full bg-muted">
+                        <div
+                          className="h-full rounded-full"
+                          style={{ width: sameDayPreviousWidth, backgroundColor: "hsl(var(--chart-4))" }}
+                        />
+                      </div>
+                    </div>
+                    {sameDayPace.target ? (
+                      <div className="space-y-1">
+                        <div className="flex justify-between gap-3 text-xs">
+                          <span className="font-medium text-foreground">Expected target pace</span>
+                          <span className="text-muted-foreground">{formatAmountRM(sameDayPace.target.expectedByToday)}</span>
+                        </div>
+                        <div className="h-2 overflow-hidden rounded-full bg-muted">
+                          <div className="h-full rounded-full bg-destructive/70" style={{ width: sameDayTargetWidth }} />
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <div className="rounded-xl border border-border/50 bg-muted/20 px-3 py-3">
+                    <div className="flex items-center gap-1.5">
+                      <p className="text-xs font-medium uppercase tracking-normal text-muted-foreground">
+                        Smart insights
+                      </p>
+                      <MonthlyComparisonHint
+                        label="Same-day insight explanation"
+                        text="Insights combine same-day totals, daily average, target pace, momentum, and daily consistency."
+                      />
+                    </div>
+                    <div className="mt-2 grid gap-2">
+                      {sameDayPace.insights.slice(0, 5).map((insight) => (
+                        <p key={insight} className="rounded-lg border border-border/50 bg-background px-3 py-2 text-xs leading-5 text-foreground">
+                          {insight}
+                        </p>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-1">
+                    <div className="rounded-xl border border-border/50 bg-muted/20 px-3 py-2">
+                      <p className="text-[11px] font-medium uppercase tracking-normal text-muted-foreground">
+                        Momentum
+                      </p>
+                      <p className="mt-1 text-sm font-semibold text-foreground">{sameDayPace.momentum.label}</p>
+                      <p className="text-xs text-muted-foreground">{sameDayPace.momentum.description}</p>
+                    </div>
+                    <div className="rounded-xl border border-border/50 bg-muted/20 px-3 py-2">
+                      <p className="text-[11px] font-medium uppercase tracking-normal text-muted-foreground">
+                        Target pace
+                      </p>
+                      <p className="mt-1 text-sm font-semibold text-foreground">
+                        {sameDayPace.target ? sameDayPace.target.label : "No target configured"}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {sameDayPace.target
+                          ? `${formatCollectionMonthlyComparisonDifference(sameDayPace.target.paceGap)} vs expected today`
+                          : "Superuser target is needed for target pacing."}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : null}
+
+          {!sameDayPaceLoading && !sameDayPaceErrorMessage && !sameDayPace && sameDayPaceUnavailableReason ? (
+            <p className="rounded-2xl border border-dashed border-border/60 bg-background px-4 py-3 text-sm text-muted-foreground">
+              {sameDayPaceUnavailableReason}
+            </p>
+          ) : null}
 
           {insights ? (
             <div className="grid gap-3 lg:grid-cols-[minmax(0,1.35fr)_minmax(18rem,0.65fr)]">

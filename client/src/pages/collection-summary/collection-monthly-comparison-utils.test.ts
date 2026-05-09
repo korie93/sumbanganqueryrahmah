@@ -3,6 +3,7 @@ import test from "node:test";
 import type { CollectionMonthlyComparisonResponse } from "@/lib/api";
 import {
   COLLECTION_MONTHLY_COMPARISON_ANOMALY_THRESHOLD_PERCENT,
+  buildCollectionSameDayPaceComparison,
   buildCollectionMonthlyComparisonAccessibleSummary,
   buildCollectionMonthlyComparisonBenchmarks,
   buildCollectionMonthlyComparisonCsv,
@@ -198,6 +199,63 @@ test("collection monthly comparison helpers derive operational insights", () => 
   assert.equal(insights.monthInsights[1]?.isTargetMonth, true);
 });
 
+test("collection same-day pace compares current month only up to the same previous-month day range", () => {
+  const pace = buildCollectionSameDayPaceComparison({
+    currentMonthKey: "2026-05",
+    currentDaily: [1000, 2000, 1500, 1300, 1200, 1400, 1600, 1000, 2000]
+      .map((amount, index) => ({ day: index + 1, amount })),
+    previousDaily: [2000, 2200, 2100, 2000, 2300, 2200, 2100, 2000, 2100]
+      .map((amount, index) => ({ day: index + 1, amount })),
+    monthlyTargetAmount: 50000,
+    referenceDate: new Date(2026, 4, 9, 12),
+  });
+
+  assert.ok(pace);
+  assert.equal(pace.currentMonth, "2026-05");
+  assert.equal(pace.previousMonth, "2026-04");
+  assert.equal(pace.comparisonDay, 9);
+  assert.equal(pace.currentTotal, 13000);
+  assert.equal(pace.previousTotal, 19000);
+  assert.equal(pace.difference, -6000);
+  assert.equal(pace.direction, "slower");
+  assert.equal(pace.percentageChange?.toFixed(2), "-31.58");
+  assert.equal(pace.currentDailyAverage.toFixed(2), "1444.44");
+  assert.equal(pace.previousDailyAverage.toFixed(2), "2111.11");
+  assert.equal(pace.target?.status, "behind");
+  assert.equal(pace.target?.paceGap.toFixed(2), "-1516.13");
+  assert.match(pace.headline, /31\.6% slower than previous month/);
+  assert.match(pace.insights[0] || "", /RM(?:\u00A0| )6,000\.00 less/);
+  assert.equal(pace.points[8]?.currentCumulative, 13000);
+  assert.equal(pace.points[8]?.previousCumulative, 19000);
+});
+
+test("collection same-day pace handles January rollover and short previous months safely", () => {
+  const januaryPace = buildCollectionSameDayPaceComparison({
+    currentMonthKey: "2026-01",
+    currentDaily: Array.from({ length: 8 }, (_, index) => ({ day: index + 1, amount: 1000 })),
+    previousDaily: Array.from({ length: 8 }, (_, index) => ({ day: index + 1, amount: 900 })),
+    referenceDate: new Date(2026, 0, 8, 12),
+  });
+
+  assert.ok(januaryPace);
+  assert.equal(januaryPace.previousMonth, "2025-12");
+  assert.equal(januaryPace.comparisonDay, 8);
+  assert.match(januaryPace.previousRangeLabel, /December 1 to December 8, 2025/);
+
+  const cappedPace = buildCollectionSameDayPaceComparison({
+    currentMonthKey: "2026-03",
+    currentDaily: Array.from({ length: 31 }, (_, index) => ({ day: index + 1, amount: 100 })),
+    previousDaily: Array.from({ length: 28 }, (_, index) => ({ day: index + 1, amount: 100 })),
+    referenceDate: new Date(2026, 2, 31, 12),
+  });
+
+  assert.ok(cappedPace);
+  assert.equal(cappedPace.previousMonth, "2026-02");
+  assert.equal(cappedPace.comparisonDay, 28);
+  assert.equal(cappedPace.rangeCappedByPreviousMonth, true);
+  assert.match(cappedPace.insights[cappedPace.insights.length - 1] || "", /fewer calendar days/);
+});
+
 test("collection monthly comparison helpers flag month-to-month anomalies above threshold", () => {
   const insights = buildCollectionMonthlyComparisonInsights(anomalyPayload);
 
@@ -302,9 +360,19 @@ test("collection monthly comparison helpers project current month pace and quali
 });
 
 test("collection monthly comparison helpers build a print-friendly report with chart, target, and anomaly details", () => {
+  const sameDayPace = buildCollectionSameDayPaceComparison({
+    currentMonthKey: "2026-05",
+    currentDaily: [1000, 2000, 1500, 1300, 1200, 1400, 1600, 1000, 2000]
+      .map((amount, index) => ({ day: index + 1, amount })),
+    previousDaily: [2000, 2200, 2100, 2000, 2300, 2200, 2100, 2000, 2100]
+      .map((amount, index) => ({ day: index + 1, amount })),
+    monthlyTargetAmount: 50000,
+    referenceDate: new Date(2026, 4, 9, 12),
+  });
   const html = buildCollectionMonthlyComparisonPrintReportHtml(anomalyPayload, {
     monthlyTargetAmount: 80000,
     monthlyTargetSourceLabel: "May 2026",
+    sameDayPace,
     generatedAt: new Date(2026, 4, 8, 17, 30),
   });
 
@@ -314,6 +382,8 @@ test("collection monthly comparison helpers build a print-friendly report with c
   assert.match(html, /Monthly target/);
   assert.match(html, /Target source: May 2026/);
   assert.match(html, /Benchmark lens/);
+  assert.match(html, /Same-day pace/);
+  assert.match(html, /31\.6% slower than previous month/);
   assert.match(html, /Current month projection/);
   assert.match(html, /Data quality checks/);
   assert.match(html, /Unusual jump \+34\.85% vs previous month/);

@@ -5,6 +5,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import type { CollectionMonthlyComparisonResponse } from "@/lib/api";
 import { CollectionMonthlyComparisonPanel } from "@/pages/collection-summary/CollectionMonthlyComparisonPanel";
+import { buildCollectionSameDayPaceComparison } from "@/pages/collection-summary/collection-monthly-comparison-utils";
 
 type PanelProps = ComponentProps<typeof CollectionMonthlyComparisonPanel>;
 
@@ -73,6 +74,16 @@ const anomalyPayload: CollectionMonthlyComparisonResponse = {
     summary: "Collection increased by RM24,550.00 (+34.85%) compared to Apr 2026.",
   },
 };
+
+const sameDayPace = buildCollectionSameDayPaceComparison({
+  currentMonthKey: "2026-05",
+  currentDaily: [1000, 2000, 1500, 1300, 1200, 1400, 1600, 1000, 2000]
+    .map((amount, index) => ({ day: index + 1, amount })),
+  previousDaily: [2000, 2200, 2100, 2000, 2300, 2200, 2100, 2000, 2100]
+    .map((amount, index) => ({ day: index + 1, amount })),
+  monthlyTargetAmount: 50000,
+  referenceDate: new Date(2026, 4, 9, 12),
+});
 
 test("CollectionMonthlyComparisonPanel renders accessible controls and action buttons", () => {
   const markup = renderPanel({
@@ -172,6 +183,7 @@ test("CollectionMonthlyComparisonPanel renders monthly totals and comparison sum
       onReset: () => undefined,
       monthlyTargetAmount: 80000,
       monthlyTargetSourceLabel: "May 2026",
+      sameDayPace,
       onExportCsv: () => undefined,
       onPrintReport: () => undefined,
       onMonthSelect: () => undefined,
@@ -192,6 +204,11 @@ test("CollectionMonthlyComparisonPanel renders monthly totals and comparison sum
   assert.match(markup, /No anomaly/);
   assert.match(markup, /Trend explanation/);
   assert.match(markup, /average per record dipped slightly/);
+  assert.match(markup, /Same-day collection pace/);
+  assert.match(markup, /31\.6% slower than previous month/);
+  assert.match(markup, /May 1 to May 9, 2026 vs April 1 to April 9, 2026/);
+  assert.match(markup, /Smart insights/);
+  assert.match(markup, /Target pace/);
   assert.match(markup, /Benchmark lens/);
   assert.match(markup, /Previous/);
   assert.match(markup, /Last year/);

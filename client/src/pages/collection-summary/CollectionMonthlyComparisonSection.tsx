@@ -10,10 +10,16 @@ import {
 import { useCollectionMonthlyComparisonData } from "./useCollectionMonthlyComparisonData";
 import { useCollectionMonthlyComparisonMonthDialog } from "./useCollectionMonthlyComparisonMonthDialog";
 import { useCollectionMonthlyComparisonTarget } from "./useCollectionMonthlyComparisonTarget";
+import { useCollectionMonthlySameDayPace } from "./useCollectionMonthlySameDayPace";
 
 const MonthlyCollectionComparisonChart = lazy(() =>
   import("./MonthlyCollectionComparisonChart").then((module) => ({
     default: module.MonthlyCollectionComparisonChart,
+  })),
+);
+const MonthlySameDayPaceChart = lazy(() =>
+  import("./MonthlySameDayPaceChart").then((module) => ({
+    default: module.MonthlySameDayPaceChart,
   })),
 );
 const CollectionMonthDetailsDialog = lazy(() =>
@@ -46,6 +52,10 @@ function CollectionMonthlyComparisonSection({
     data: comparisonData.data,
   });
   const comparisonTarget = useCollectionMonthlyComparisonTarget(comparisonData.data);
+  const sameDayPace = useCollectionMonthlySameDayPace({
+    data: comparisonData.data,
+    monthlyTargetAmount: comparisonTarget.monthlyTargetAmount,
+  });
   const handleExportCsv = useCallback(() => {
     if (!comparisonData.data) {
       return;
@@ -68,6 +78,7 @@ function CollectionMonthlyComparisonSection({
       {
         monthlyTargetAmount: comparisonTarget.monthlyTargetAmount,
         monthlyTargetSourceLabel: comparisonTarget.sourceLabel,
+        sameDayPace: sameDayPace.pace,
       },
     );
     const reportWindow = window.open("", "_blank", "width=1120,height=820");
@@ -85,7 +96,12 @@ function CollectionMonthlyComparisonSection({
     reportWindow.document.write(reportHtml);
     reportWindow.document.close();
     reportWindow.focus();
-  }, [comparisonData.data, comparisonTarget.monthlyTargetAmount, comparisonTarget.sourceLabel]);
+  }, [
+    comparisonData.data,
+    comparisonTarget.monthlyTargetAmount,
+    comparisonTarget.sourceLabel,
+    sameDayPace.pace,
+  ]);
 
   return (
     <>
@@ -111,26 +127,60 @@ function CollectionMonthlyComparisonSection({
         monthlyTargetLoading={comparisonTarget.loading}
         monthlyTargetErrorMessage={comparisonTarget.errorMessage}
         monthlyTargetSourceLabel={comparisonTarget.sourceLabel}
+        sameDayPace={sameDayPace.pace}
+        sameDayPaceLoading={sameDayPace.loading}
+        sameDayPaceErrorMessage={sameDayPace.errorMessage}
+        sameDayPaceUnavailableReason={sameDayPace.unavailableReason}
         onExportCsv={handleExportCsv}
         onPrintReport={handlePrintReport}
         onMonthSelect={comparisonMonthDialog.handleSelectMonth}
         chartSlot={
           comparisonData.data ? (
-            <Suspense
-              fallback={(
-                <div className="rounded-2xl border border-border/60 bg-background px-4 py-6 text-sm text-muted-foreground shadow-sm">
-                  Loading monthly comparison chart...
+            <>
+              {sameDayPace.loading ? (
+                <div
+                  role="status"
+                  aria-live="polite"
+                  className="rounded-2xl border border-border/60 bg-background px-4 py-6 text-sm text-muted-foreground shadow-sm"
+                >
+                  Loading same-day pace chart...
                 </div>
-              )}
-            >
-              <MonthlyCollectionComparisonChart
-                data={comparisonData.data}
-                monthlyTargetAmount={comparisonTarget.monthlyTargetAmount}
-                monthlyTargetLoading={comparisonTarget.loading}
-                monthlyTargetSourceLabel={comparisonTarget.sourceLabel}
-                onMonthSelect={comparisonMonthDialog.handleSelectMonth}
-              />
-            </Suspense>
+              ) : null}
+              {!sameDayPace.loading && sameDayPace.errorMessage ? (
+                <p
+                  role="alert"
+                  className="rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-700 dark:text-amber-300"
+                >
+                  Same-day pace chart unavailable: {sameDayPace.errorMessage}
+                </p>
+              ) : null}
+              {!sameDayPace.loading && !sameDayPace.errorMessage && sameDayPace.pace ? (
+                <Suspense
+                  fallback={(
+                    <div className="rounded-2xl border border-border/60 bg-background px-4 py-6 text-sm text-muted-foreground shadow-sm">
+                      Loading same-day pace chart...
+                    </div>
+                  )}
+                >
+                  <MonthlySameDayPaceChart pace={sameDayPace.pace} />
+                </Suspense>
+              ) : null}
+              <Suspense
+                fallback={(
+                  <div className="rounded-2xl border border-border/60 bg-background px-4 py-6 text-sm text-muted-foreground shadow-sm">
+                    Loading monthly comparison chart...
+                  </div>
+                )}
+              >
+                <MonthlyCollectionComparisonChart
+                  data={comparisonData.data}
+                  monthlyTargetAmount={comparisonTarget.monthlyTargetAmount}
+                  monthlyTargetLoading={comparisonTarget.loading}
+                  monthlyTargetSourceLabel={comparisonTarget.sourceLabel}
+                  onMonthSelect={comparisonMonthDialog.handleSelectMonth}
+                />
+              </Suspense>
+            </>
           ) : null
         }
       />

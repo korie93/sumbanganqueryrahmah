@@ -75,6 +75,83 @@ export type CollectionMonthlyComparisonProjection = {
   status: "on_track" | "behind" | "no_target";
 };
 
+export type CollectionSameDayPaceDailyInput = {
+  day: number;
+  date?: string | undefined;
+  amount: number;
+  customerCount?: number | undefined;
+};
+
+export type CollectionSameDayPacePoint = {
+  day: number;
+  currentDate: string;
+  previousDate: string;
+  currentAmount: number;
+  previousAmount: number;
+  currentCumulative: number;
+  previousCumulative: number;
+  dailyDifference: number;
+  cumulativeDifference: number;
+};
+
+export type CollectionSameDayPaceMomentum = {
+  direction: "accelerating" | "slowing" | "steady" | "insufficient_data";
+  splitDay: number;
+  firstHalfAverage: number;
+  secondHalfAverage: number;
+  percentageChange: number | null;
+  label: string;
+  description: string;
+};
+
+export type CollectionSameDayPaceConsistency = {
+  status: "consistent" | "mixed" | "inconsistent" | "no_data";
+  coefficient: number | null;
+  label: string;
+  description: string;
+};
+
+export type CollectionSameDayPaceTarget = {
+  monthlyTargetAmount: number;
+  expectedByToday: number;
+  expectedProgress: number;
+  paceGap: number;
+  projectedTotal: number;
+  projectedTargetGap: number;
+  requiredDailyAverageToTarget: number;
+  status: "on_track" | "behind" | "needs_consistency";
+  label: string;
+};
+
+export type CollectionSameDayPaceComparison = {
+  currentMonth: string;
+  previousMonth: string;
+  currentLabel: string;
+  previousLabel: string;
+  comparisonDay: number;
+  currentRangeLabel: string;
+  previousRangeLabel: string;
+  totalDaysInCurrentMonth: number;
+  totalDaysInPreviousMonth: number;
+  rangeCappedByPreviousMonth: boolean;
+  currentTotal: number;
+  previousTotal: number;
+  difference: number;
+  percentageChange: number | null;
+  direction: "faster" | "slower" | "flat" | "no_previous_data";
+  headline: string;
+  summary: string;
+  currentDailyAverage: number;
+  previousDailyAverage: number;
+  dailyAverageDifference: number;
+  dailyAveragePercentageChange: number | null;
+  momentum: CollectionSameDayPaceMomentum;
+  consistency: CollectionSameDayPaceConsistency;
+  target: CollectionSameDayPaceTarget | null;
+  points: CollectionSameDayPacePoint[];
+  insights: string[];
+};
+
 export type CollectionMonthlyComparisonDataQualitySignal = {
   id: string;
   label: string;
@@ -404,8 +481,380 @@ export function buildCollectionMonthlyComparisonTargetSummary(
   };
 }
 
-function getCollectionDaysInMonth(year: number, month: number): number {
+export function getCollectionDaysInMonth(year: number, month: number): number {
   return new Date(year, month, 0).getDate();
+}
+
+function normalizeCollectionSameDayAmount(value: number): number {
+  return Number.isFinite(value) ? Math.max(0, value) : 0;
+}
+
+function resolveCollectionSameDayPercentageChange(
+  currentTotal: number,
+  previousTotal: number,
+): number | null {
+  if (previousTotal === 0) {
+    return currentTotal === 0 ? 0 : null;
+  }
+  return ((currentTotal - previousTotal) / previousTotal) * 100;
+}
+
+function formatCollectionSameDayPaceMonthLabel(monthKey: string): string {
+  const parsed = parseCollectionMonthKey(monthKey);
+  if (!parsed) {
+    return monthKey;
+  }
+  return `${formatCollectionMonthName(parsed.month)} ${parsed.year}`;
+}
+
+function formatCollectionSameDayPaceDate(monthKey: string, day: number): string {
+  const parsed = parseCollectionMonthKey(monthKey);
+  if (!parsed) {
+    return "";
+  }
+  return `${parsed.year}-${String(parsed.month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+function formatCollectionSameDayPaceRangeLabel(monthKey: string, throughDay: number): string {
+  const parsed = parseCollectionMonthKey(monthKey);
+  if (!parsed) {
+    return monthKey;
+  }
+  const monthName = formatCollectionMonthName(parsed.month);
+  return `${monthName} 1 to ${monthName} ${throughDay}, ${parsed.year}`;
+}
+
+function formatCollectionSameDayPacePercent(value: number | null): string {
+  if (value === null) {
+    return "no baseline";
+  }
+  return `${Math.abs(value).toFixed(1)}%`;
+}
+
+function buildCollectionSameDayPaceMomentum(points: CollectionSameDayPacePoint[]): CollectionSameDayPaceMomentum {
+  const comparisonDay = points.length;
+  if (comparisonDay < 4) {
+    return {
+      direction: "insufficient_data",
+      splitDay: Math.max(1, Math.floor(comparisonDay / 2)),
+      firstHalfAverage: 0,
+      secondHalfAverage: 0,
+      percentageChange: null,
+      label: "Momentum pending",
+      description: "At least four days are needed before momentum is meaningful.",
+    };
+  }
+
+  const splitDay = Math.max(2, Math.floor(comparisonDay / 2));
+  const firstHalf = points.slice(0, splitDay);
+  const secondHalf = points.slice(splitDay);
+  const firstHalfAverage = firstHalf.reduce((total, point) => total + point.currentAmount, 0) / firstHalf.length;
+  const secondHalfAverage = secondHalf.length > 0
+    ? secondHalf.reduce((total, point) => total + point.currentAmount, 0) / secondHalf.length
+    : firstHalfAverage;
+  const percentageChange = resolveCollectionSameDayPercentageChange(secondHalfAverage, firstHalfAverage);
+
+  if (firstHalfAverage === 0 && secondHalfAverage === 0) {
+    return {
+      direction: "steady",
+      splitDay,
+      firstHalfAverage,
+      secondHalfAverage,
+      percentageChange: 0,
+      label: "No momentum yet",
+      description: "No collection has been recorded across the compared days.",
+    };
+  }
+
+  if (percentageChange !== null && percentageChange <= -15) {
+    return {
+      direction: "slowing",
+      splitDay,
+      firstHalfAverage,
+      secondHalfAverage,
+      percentageChange,
+      label: "Momentum weakening",
+      description: `Current month pace weakened after day ${splitDay}.`,
+    };
+  }
+
+  if (percentageChange === null || percentageChange >= 15) {
+    return {
+      direction: "accelerating",
+      splitDay,
+      firstHalfAverage,
+      secondHalfAverage,
+      percentageChange,
+      label: "Momentum improving",
+      description: `Current month pace strengthened after day ${splitDay}.`,
+    };
+  }
+
+  return {
+    direction: "steady",
+    splitDay,
+    firstHalfAverage,
+    secondHalfAverage,
+    percentageChange,
+    label: "Momentum steady",
+    description: "Current month pace is broadly stable across the compared days.",
+  };
+}
+
+function buildCollectionSameDayPaceConsistency(points: CollectionSameDayPacePoint[]): CollectionSameDayPaceConsistency {
+  const values = points.map((point) => point.currentAmount);
+  const total = values.reduce((sum, value) => sum + value, 0);
+  if (values.length === 0 || total <= 0) {
+    return {
+      status: "no_data",
+      coefficient: null,
+      label: "Consistency pending",
+      description: "No current-month collection is available to measure consistency.",
+    };
+  }
+
+  const mean = total / values.length;
+  const variance = values.reduce((sum, value) => sum + ((value - mean) ** 2), 0) / values.length;
+  const coefficient = mean > 0 ? Math.sqrt(variance) / mean : 0;
+
+  if (coefficient >= 0.75) {
+    return {
+      status: "inconsistent",
+      coefficient,
+      label: "Inconsistent pace",
+      description: "Daily collection varies heavily across the compared days.",
+    };
+  }
+
+  if (coefficient >= 0.4) {
+    return {
+      status: "mixed",
+      coefficient,
+      label: "Mixed pace",
+      description: "Daily collection is moving, but the pattern is uneven.",
+    };
+  }
+
+  return {
+    status: "consistent",
+    coefficient,
+    label: "Consistent pace",
+    description: "Daily collection is relatively stable across the compared days.",
+  };
+}
+
+function buildCollectionSameDayPaceTarget(input: {
+  monthlyTargetAmount?: number | null | undefined;
+  currentTotal: number;
+  currentDailyAverage: number;
+  comparisonDay: number;
+  totalDaysInCurrentMonth: number;
+}): CollectionSameDayPaceTarget | null {
+  const monthlyTargetAmount = Number(input.monthlyTargetAmount || 0);
+  if (!Number.isFinite(monthlyTargetAmount) || monthlyTargetAmount <= 0) {
+    return null;
+  }
+
+  const expectedByToday = (monthlyTargetAmount * input.comparisonDay) / input.totalDaysInCurrentMonth;
+  const expectedProgress = monthlyTargetAmount > 0 ? input.currentTotal / monthlyTargetAmount : 0;
+  const paceGap = input.currentTotal - expectedByToday;
+  const projectedTotal = input.currentDailyAverage * input.totalDaysInCurrentMonth;
+  const projectedTargetGap = projectedTotal - monthlyTargetAmount;
+  const remainingDays = Math.max(0, input.totalDaysInCurrentMonth - input.comparisonDay);
+  const requiredDailyAverageToTarget = remainingDays > 0
+    ? Math.max(0, monthlyTargetAmount - input.currentTotal) / remainingDays
+    : Math.max(0, monthlyTargetAmount - input.currentTotal);
+  const status = paceGap >= 0
+    ? "on_track"
+    : projectedTotal >= monthlyTargetAmount ? "needs_consistency" : "behind";
+  const label = status === "on_track"
+    ? "Ahead of target pace"
+    : status === "needs_consistency" ? "Needs steady pace" : "Behind target pace";
+
+  return {
+    monthlyTargetAmount,
+    expectedByToday,
+    expectedProgress,
+    paceGap,
+    projectedTotal,
+    projectedTargetGap,
+    requiredDailyAverageToTarget,
+    status,
+    label,
+  };
+}
+
+export function buildCollectionSameDayPaceComparison(input: {
+  currentMonthKey: string;
+  previousMonthKey?: string | undefined;
+  currentDaily: CollectionSameDayPaceDailyInput[];
+  previousDaily: CollectionSameDayPaceDailyInput[];
+  monthlyTargetAmount?: number | null | undefined;
+  referenceDate?: Date | undefined;
+}): CollectionSameDayPaceComparison | null {
+  const referenceDate = input.referenceDate || new Date();
+  if (!Number.isFinite(referenceDate.getTime())) {
+    return null;
+  }
+
+  const currentMonth = parseCollectionMonthKey(input.currentMonthKey);
+  if (!currentMonth) {
+    return null;
+  }
+
+  const previousMonthKey = input.previousMonthKey || shiftCollectionMonthInput(input.currentMonthKey, -1);
+  const previousMonth = parseCollectionMonthKey(previousMonthKey);
+  if (!previousMonth) {
+    return null;
+  }
+
+  const totalDaysInCurrentMonth = getCollectionDaysInMonth(currentMonth.year, currentMonth.month);
+  const totalDaysInPreviousMonth = getCollectionDaysInMonth(previousMonth.year, previousMonth.month);
+  const referenceMonthKey = formatCollectionMonthInput(referenceDate);
+  const rawComparisonDay = referenceMonthKey === input.currentMonthKey
+    ? referenceDate.getDate()
+    : totalDaysInCurrentMonth;
+  const comparisonDay = Math.min(
+    totalDaysInCurrentMonth,
+    totalDaysInPreviousMonth,
+    Math.max(1, rawComparisonDay),
+  );
+  const rangeCappedByPreviousMonth = comparisonDay < Math.min(totalDaysInCurrentMonth, Math.max(1, rawComparisonDay));
+  const currentByDay = new Map<number, number>();
+  const previousByDay = new Map<number, number>();
+
+  for (const day of input.currentDaily) {
+    const dayNumber = Math.max(1, Math.trunc(Number(day.day || 0)));
+    if (dayNumber <= totalDaysInCurrentMonth) {
+      currentByDay.set(dayNumber, normalizeCollectionSameDayAmount(day.amount));
+    }
+  }
+  for (const day of input.previousDaily) {
+    const dayNumber = Math.max(1, Math.trunc(Number(day.day || 0)));
+    if (dayNumber <= totalDaysInPreviousMonth) {
+      previousByDay.set(dayNumber, normalizeCollectionSameDayAmount(day.amount));
+    }
+  }
+
+  let currentCumulative = 0;
+  let previousCumulative = 0;
+  const points: CollectionSameDayPacePoint[] = [];
+  for (let day = 1; day <= comparisonDay; day += 1) {
+    const currentAmount = currentByDay.get(day) || 0;
+    const previousAmount = previousByDay.get(day) || 0;
+    currentCumulative += currentAmount;
+    previousCumulative += previousAmount;
+    points.push({
+      day,
+      currentDate: formatCollectionSameDayPaceDate(input.currentMonthKey, day),
+      previousDate: formatCollectionSameDayPaceDate(previousMonthKey, day),
+      currentAmount,
+      previousAmount,
+      currentCumulative,
+      previousCumulative,
+      dailyDifference: currentAmount - previousAmount,
+      cumulativeDifference: currentCumulative - previousCumulative,
+    });
+  }
+
+  const currentTotal = currentCumulative;
+  const previousTotal = previousCumulative;
+  const difference = currentTotal - previousTotal;
+  const percentageChange = resolveCollectionSameDayPercentageChange(currentTotal, previousTotal);
+  const currentDailyAverage = currentTotal / comparisonDay;
+  const previousDailyAverage = previousTotal / comparisonDay;
+  const dailyAverageDifference = currentDailyAverage - previousDailyAverage;
+  const dailyAveragePercentageChange = resolveCollectionSameDayPercentageChange(
+    currentDailyAverage,
+    previousDailyAverage,
+  );
+  const direction: CollectionSameDayPaceComparison["direction"] = previousTotal === 0 && currentTotal > 0
+    ? "no_previous_data"
+    : difference > 0 ? "faster" : difference < 0 ? "slower" : "flat";
+  const currentLabel = formatCollectionSameDayPaceMonthLabel(input.currentMonthKey);
+  const previousLabel = formatCollectionSameDayPaceMonthLabel(previousMonthKey);
+  const currentRangeLabel = formatCollectionSameDayPaceRangeLabel(input.currentMonthKey, comparisonDay);
+  const previousRangeLabel = formatCollectionSameDayPaceRangeLabel(previousMonthKey, comparisonDay);
+  const momentum = buildCollectionSameDayPaceMomentum(points);
+  const consistency = buildCollectionSameDayPaceConsistency(points);
+  const target = buildCollectionSameDayPaceTarget({
+    monthlyTargetAmount: input.monthlyTargetAmount,
+    currentTotal,
+    currentDailyAverage,
+    comparisonDay,
+    totalDaysInCurrentMonth,
+  });
+
+  const headline = direction === "faster"
+    ? `${formatCollectionSameDayPacePercent(percentageChange)} faster than previous month`
+    : direction === "slower"
+      ? `${formatCollectionSameDayPacePercent(percentageChange)} slower than previous month`
+      : direction === "flat"
+        ? "Matching previous month pace"
+        : "No previous same-day baseline";
+  const summary = direction === "faster"
+    ? `${currentLabel} is ahead of ${previousLabel} by ${formatCollectionMonthlyComparisonDifference(difference)} for the same day range.`
+    : direction === "slower"
+      ? `${currentLabel} is behind ${previousLabel} by ${formatCollectionMonthlyComparisonDifference(difference)} for the same day range.`
+      : direction === "flat"
+        ? `${currentLabel} matches ${previousLabel} for the same day range.`
+        : `${currentLabel} has collection, but ${previousLabel} has no same-day baseline yet.`;
+  const insights = [
+    direction === "slower"
+      ? `You collected ${formatAmountRM(Math.abs(difference))} less than previous month for the same date range.`
+      : direction === "faster"
+        ? `You collected ${formatAmountRM(Math.abs(difference))} more than previous month for the same date range.`
+        : direction === "flat"
+          ? "Same-day collection is level with previous month."
+          : "Previous month has no same-day collection baseline for this range.",
+    dailyAverageDifference < 0
+      ? `Daily collection average decreased by ${formatCollectionSameDayPacePercent(dailyAveragePercentageChange)}.`
+      : dailyAverageDifference > 0
+        ? `Daily collection average increased by ${formatCollectionSameDayPacePercent(dailyAveragePercentageChange)}.`
+        : "Daily collection average is unchanged.",
+    momentum.description,
+    consistency.description,
+  ];
+
+  if (target) {
+    insights.push(
+      target.status === "on_track"
+        ? `Current pace is ahead of target by ${formatAmountRM(Math.abs(target.paceGap))}.`
+        : `Current pace is behind target by ${formatAmountRM(Math.abs(target.paceGap))}.`,
+    );
+  }
+  if (rangeCappedByPreviousMonth) {
+    insights.push(`Comparison is capped at day ${comparisonDay} because ${previousLabel} has fewer calendar days.`);
+  }
+
+  return {
+    currentMonth: input.currentMonthKey,
+    previousMonth: previousMonthKey,
+    currentLabel,
+    previousLabel,
+    comparisonDay,
+    currentRangeLabel,
+    previousRangeLabel,
+    totalDaysInCurrentMonth,
+    totalDaysInPreviousMonth,
+    rangeCappedByPreviousMonth,
+    currentTotal,
+    previousTotal,
+    difference,
+    percentageChange,
+    direction,
+    headline,
+    summary,
+    currentDailyAverage,
+    previousDailyAverage,
+    dailyAverageDifference,
+    dailyAveragePercentageChange,
+    momentum,
+    consistency,
+    target,
+    points,
+    insights,
+  };
 }
 
 export function buildCollectionMonthlyComparisonProjection(
@@ -961,6 +1410,7 @@ export function buildCollectionMonthlyComparisonPrintReportHtml(
   options: {
     monthlyTargetAmount?: number | null | undefined;
     monthlyTargetSourceLabel?: string | null | undefined;
+    sameDayPace?: CollectionSameDayPaceComparison | null | undefined;
     generatedAt?: Date | undefined;
   } = {},
 ): string {
@@ -1020,6 +1470,12 @@ export function buildCollectionMonthlyComparisonPrintReportHtml(
   const qualityRows = dataQuality.signals.map((signal) => `
       <li><strong>${escapeCollectionMonthlyComparisonHtml(signal.label)}</strong>: ${escapeCollectionMonthlyComparisonHtml(signal.description)}</li>
     `).join("");
+  const sameDayPace = options.sameDayPace || null;
+  const sameDayPaceRows = sameDayPace
+    ? sameDayPace.insights.slice(0, 5).map((insight) => `
+      <li>${escapeCollectionMonthlyComparisonHtml(insight)}</li>
+    `).join("")
+    : "<li>Same-day pace data was not available for this report.</li>";
   const benchmarkRows = benchmarks.map((benchmark) => `
       <tr>
         <td>${escapeCollectionMonthlyComparisonHtml(benchmark.label)}</td>
@@ -1094,6 +1550,19 @@ export function buildCollectionMonthlyComparisonPrintReportHtml(
       <div class="card"><p class="label">Target status</p><p class="value">${escapeCollectionMonthlyComparisonHtml(targetStatus)}</p><p class="muted">${targetSummary ? escapeCollectionMonthlyComparisonHtml(`${(targetSummary.targetProgress * 100).toFixed(1)}% of ${formatAmountRM(targetSummary.rangeTarget)}`) : "No target line used"}</p></div>
       <div class="card"><p class="label">Best month</p><p class="value">${escapeCollectionMonthlyComparisonHtml(insights.peakMonth?.label || "No data")}</p><p class="muted">${escapeCollectionMonthlyComparisonHtml(insights.peakMonth ? formatAmountRM(insights.peakMonth.totalCollection) : "No collection recorded")}</p></div>
       <div class="card"><p class="label">Audit watch</p><p class="value">${escapeCollectionMonthlyComparisonHtml(anomalySummary)}</p><p class="muted">Threshold ${COLLECTION_MONTHLY_COMPARISON_ANOMALY_THRESHOLD_PERCENT}%</p></div>
+    </section>
+
+    <section class="section">
+      <h2>Same-day pace</h2>
+      ${sameDayPace ? `
+      <div class="grid">
+        <div class="card"><p class="label">Current same-day</p><p class="value">${escapeCollectionMonthlyComparisonHtml(formatAmountRM(sameDayPace.currentTotal))}</p><p class="muted">${escapeCollectionMonthlyComparisonHtml(sameDayPace.currentRangeLabel)}</p></div>
+        <div class="card"><p class="label">Previous same-day</p><p class="value">${escapeCollectionMonthlyComparisonHtml(formatAmountRM(sameDayPace.previousTotal))}</p><p class="muted">${escapeCollectionMonthlyComparisonHtml(sameDayPace.previousRangeLabel)}</p></div>
+        <div class="card"><p class="label">Same-day gap</p><p class="value">${escapeCollectionMonthlyComparisonHtml(formatCollectionMonthlyComparisonDifference(sameDayPace.difference))}</p><p class="muted">${escapeCollectionMonthlyComparisonHtml(sameDayPace.headline)}</p></div>
+        <div class="card"><p class="label">Target pace</p><p class="value">${escapeCollectionMonthlyComparisonHtml(sameDayPace.target?.label || "No target")}</p><p class="muted">${escapeCollectionMonthlyComparisonHtml(sameDayPace.target ? formatCollectionMonthlyComparisonDifference(sameDayPace.target.paceGap) : "No configured target")}</p></div>
+      </div>
+      <p style="margin-top:10px">${escapeCollectionMonthlyComparisonHtml(sameDayPace.summary)}</p>` : `<p>Same-day pace appears when the report is generated for the current month range.</p>`}
+      <ul>${sameDayPaceRows}</ul>
     </section>
 
     <section class="section">
