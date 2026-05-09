@@ -9,6 +9,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import type {
   CollectionMonthlyComparisonResponse,
 } from "@/lib/api";
+import { cn } from "@/lib/utils";
 import { CollectionNicknameSingleSelect } from "@/pages/collection-report/CollectionNicknameSingleSelect";
 import { formatAmountRM } from "@/pages/collection/utils";
 import { CollectionMonthlyComparisonBreakdownList } from "./CollectionMonthlyComparisonBreakdownList";
@@ -125,6 +126,8 @@ function CollectionMonthField({
 }) {
   const [draftValue, setDraftValue] = useState(value);
   const helpId = `${id}-format`;
+  const normalizedDraftValue = normalizeCollectionMonthFieldValue(draftValue);
+  const showInvalidState = draftValue.trim().length > 0 && !normalizedDraftValue;
 
   useEffect(() => {
     setDraftValue(value);
@@ -169,12 +172,19 @@ function CollectionMonthField({
             }
           }
         }}
-        className="h-11 w-full rounded-2xl border border-input bg-background px-3 text-sm"
         aria-describedby={helpId}
+        aria-invalid={showInvalidState ? "true" : undefined}
         title="Use YYYY-MM format, for example 2026-05"
+        className={cn(
+          "collection-monthly-comparison-control h-11 w-full rounded-2xl border border-input bg-background px-3 text-sm",
+          showInvalidState && "border-destructive text-destructive focus-visible:ring-destructive",
+        )}
       />
-      <span id={helpId} className="sr-only">
-        Use year dash month format, for example 2026-05.
+      <span
+        id={helpId}
+        className={showInvalidState ? "text-[11px] font-medium text-destructive" : "sr-only"}
+      >
+        Use YYYY-MM format, for example 2026-05.
       </span>
     </div>
   );
@@ -369,17 +379,25 @@ export function CollectionMonthlyComparisonPanel({
   return (
     <section
       aria-labelledby="collection-monthly-comparison-title"
-      className={standalone ? "space-y-4" : "space-y-4 border-t border-border/60 pt-4"}
+      className={cn(
+        "collection-monthly-comparison-panel space-y-4",
+        !standalone && "border-t border-border/60 pt-4",
+      )}
       data-floating-ai-avoid="true"
     >
       {showHeader ? (
-        <div className="space-y-1">
-          <h2 id="collection-monthly-comparison-title" className="text-lg font-semibold text-foreground">
-            Monthly Collection Comparison
-          </h2>
-          <p className="text-sm text-muted-foreground">
-            Compare month-by-month collection totals for a single staff nickname across a bounded reporting range.
-          </p>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0 space-y-1">
+            <h2 id="collection-monthly-comparison-title" className="text-lg font-semibold text-foreground">
+              Monthly Collection Comparison
+            </h2>
+            <p className="max-w-3xl text-sm leading-6 text-muted-foreground">
+              Compare monthly totals, same-day pacing, target progress, and audit movement for one staff nickname.
+            </p>
+          </div>
+          <span className="collection-monthly-comparison-chip rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
+            Same-day pacing ready
+          </span>
         </div>
       ) : (
         <h2 id="collection-monthly-comparison-title" className="sr-only">
@@ -387,7 +405,21 @@ export function CollectionMonthlyComparisonPanel({
         </h2>
       )}
 
-      <div className="rounded-2xl border border-border/60 bg-background p-3 shadow-sm">
+      <div className="collection-monthly-comparison-filter-card rounded-2xl border border-border/60 bg-background p-3 shadow-sm">
+        <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-xs font-semibold uppercase tracking-normal text-muted-foreground">
+              Comparison setup
+            </p>
+            <p className="mt-1 text-sm text-foreground">
+              {startMonth} to {endMonth}
+              {selectedNickname ? ` • ${selectedNickname}` : ""}
+            </p>
+          </div>
+          <span className="collection-monthly-comparison-chip rounded-full border border-border/60 bg-background px-2.5 py-1 text-xs font-medium text-muted-foreground">
+            {data ? `${data.months.length} month(s) loaded` : "Ready to apply"}
+          </span>
+        </div>
         <div className="grid gap-2.5 xl:grid-cols-[minmax(0,1.15fr)_minmax(11rem,11rem)_minmax(11rem,11rem)_auto_auto] xl:items-end">
           <div className="space-y-1">
             {canFilterByNickname ? (
@@ -401,7 +433,7 @@ export function CollectionMonthlyComparisonPanel({
                 value={selectedNickname}
                 onOpenChange={setNicknameSelectOpen}
                 onSelect={onSelectedNicknameChange}
-                triggerClassName="h-11 rounded-2xl bg-background"
+                triggerClassName="collection-monthly-comparison-control h-11 rounded-2xl bg-background"
                 popoverClassName="w-[min(360px,calc(100vw-2rem))] rounded-2xl border-border/70 bg-popover p-2 shadow-xl"
               />
             ) : (
@@ -416,7 +448,7 @@ export function CollectionMonthlyComparisonPanel({
                   id="collection-monthly-comparison-nickname"
                   value={selectedNickname}
                   readOnly
-                  className="h-11 w-full rounded-2xl border border-input bg-background px-3 text-sm text-foreground"
+                  className="collection-monthly-comparison-control h-11 w-full rounded-2xl border border-input bg-background px-3 text-sm text-foreground"
                   aria-readonly="true"
                 />
               </div>
@@ -439,7 +471,7 @@ export function CollectionMonthlyComparisonPanel({
 
           <button
             type="button"
-            className="inline-flex h-11 items-center justify-center rounded-2xl bg-primary px-4 text-sm font-medium text-primary-foreground transition hover:bg-primary/90"
+            className="collection-monthly-comparison-primary-action inline-flex h-11 items-center justify-center rounded-2xl bg-primary px-4 text-sm font-medium text-primary-foreground transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
             onClick={onApply}
             disabled={loading || !hasAvailableNickname}
           >
@@ -447,7 +479,7 @@ export function CollectionMonthlyComparisonPanel({
           </button>
           <button
             type="button"
-            className="inline-flex h-11 items-center justify-center rounded-2xl border border-input bg-background px-4 text-sm font-medium text-foreground transition hover:bg-accent hover:text-accent-foreground"
+            className="collection-monthly-comparison-secondary-action inline-flex h-11 items-center justify-center rounded-2xl border border-input bg-background px-4 text-sm font-medium text-foreground transition hover:bg-accent hover:text-accent-foreground disabled:cursor-not-allowed disabled:opacity-60"
             onClick={onReset}
             disabled={loading}
           >
@@ -588,9 +620,13 @@ export function CollectionMonthlyComparisonPanel({
         <div
           role="status"
           aria-live="polite"
-          className="rounded-2xl border border-border/60 bg-background px-4 py-5 text-sm text-muted-foreground"
+          className="collection-monthly-comparison-state-card rounded-2xl border border-border/60 bg-background px-4 py-5 text-sm text-muted-foreground"
         >
-          Loading monthly comparison...
+          <div className="flex flex-col gap-2">
+            <span>Loading monthly comparison...</span>
+            <span className="collection-monthly-comparison-skeleton h-2 w-full max-w-md rounded-full" aria-hidden="true" />
+            <span className="collection-monthly-comparison-skeleton h-2 w-2/3 max-w-sm rounded-full" aria-hidden="true" />
+          </div>
         </div>
       ) : null}
 

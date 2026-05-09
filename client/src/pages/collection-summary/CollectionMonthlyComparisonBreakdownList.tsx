@@ -1,4 +1,5 @@
 import { memo } from "react";
+import { cn } from "@/lib/utils";
 import { formatAmountRM } from "@/pages/collection/utils";
 import {
   formatCollectionMonthlyComparisonDifference,
@@ -86,23 +87,20 @@ function CollectionMonthlyComparisonBreakdownList({
                 {formatAmountRM(month.totalCollection)}
               </p>
             </div>
-            <div className="h-2 overflow-hidden rounded-full bg-muted">
-              <div
-                className={
-                  month.isAnomaly
-                    ? month.anomalyDirection === "decrease"
-                      ? "h-full rounded-full bg-destructive"
-                      : "h-full rounded-full bg-amber-500"
-                    : "h-full rounded-full bg-primary"
-                }
-                style={{
-                  width: month.maxTotalRatio > 0
-                    ? `${Math.max(5, Math.round(month.maxTotalRatio * 100))}%`
-                    : "0%",
-                }}
-                aria-hidden="true"
-              />
-            </div>
+            <progress
+              className={cn(
+                "collection-monthly-comparison-progress collection-monthly-comparison-breakdown-progress",
+                month.isAnomaly && month.anomalyDirection === "decrease"
+                  ? "collection-monthly-comparison-progress--danger"
+                  : null,
+                month.isAnomaly && month.anomalyDirection !== "decrease"
+                  ? "collection-monthly-comparison-progress--warning"
+                  : null,
+              )}
+              max={100}
+              value={Math.max(0, Math.min(100, Math.round(month.maxTotalRatio * 100)))}
+              aria-label={`${month.label} collection share of highest month`}
+            />
             <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-foreground/64 dark:text-foreground/74">
               <span>{month.recordCount} record(s)</span>
               <span>Avg {formatAmountRM(month.averagePerRecord)}</span>

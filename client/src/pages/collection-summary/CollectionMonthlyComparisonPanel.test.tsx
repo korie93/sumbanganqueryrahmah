@@ -109,8 +109,13 @@ test("CollectionMonthlyComparisonPanel renders accessible controls and action bu
   assert.match(markup, /aria-haspopup="dialog"/);
   assert.match(markup, /Choose a staff nickname|Collector Alpha/);
   assert.doesNotMatch(markup, /bg-background\/75/);
-  assert.match(markup, /rounded-2xl border border-border\/60 bg-background/);
-  assert.match(markup, /type="month"/);
+  assert.match(markup, /collection-monthly-comparison-filter-card/);
+  assert.doesNotMatch(markup, /type="month"/);
+  assert.match(markup, /type="text"/);
+  assert.match(markup, /placeholder="YYYY-MM"/);
+  assert.match(markup, /Use YYYY-MM format/);
+  assert.match(markup, /Comparison setup/);
+  assert.match(markup, /Same-day pacing ready/);
   assert.match(markup, />Apply</);
   assert.match(markup, />Reset</);
   assert.match(markup, /Last 3 months/);
