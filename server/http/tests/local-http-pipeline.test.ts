@@ -77,7 +77,6 @@ test("registerLocalHttpPipeline allows blob receipt previews in the CSP header",
     assert.match(permissionsPolicy, /camera=\(\)/i);
     assert.match(permissionsPolicy, /accelerometer=\(\)/i);
     assert.match(permissionsPolicy, /display-capture=\(\)/i);
-    assert.match(permissionsPolicy, /document-domain=\(\)/i);
     assert.match(permissionsPolicy, /geolocation=\(\)/i);
     assert.match(permissionsPolicy, /gyroscope=\(\)/i);
     assert.match(permissionsPolicy, /magnetometer=\(\)/i);
@@ -85,8 +84,9 @@ test("registerLocalHttpPipeline allows blob receipt previews in the CSP header",
     assert.match(permissionsPolicy, /payment=\(\)/i);
     assert.match(permissionsPolicy, /screen-wake-lock=\(\)/i);
     assert.match(permissionsPolicy, /usb=\(\)/i);
-    assert.match(permissionsPolicy, /web-share=\(\)/i);
     assert.match(permissionsPolicy, /xr-spatial-tracking=\(\)/i);
+    assert.doesNotMatch(permissionsPolicy, /document-domain/i);
+    assert.doesNotMatch(permissionsPolicy, /web-share/i);
     assert.match(csp, /base-uri 'self'/i);
     assert.match(csp, /connect-src 'self'/i);
     assert.match(csp, /img-src 'self' data: blob:/i);

@@ -66,7 +66,6 @@ const PERMISSIONS_POLICY_HEADER = [
   "accelerometer=()",
   "camera=()",
   "display-capture=()",
-  "document-domain=()",
   "geolocation=()",
   "gyroscope=()",
   "magnetometer=()",
@@ -74,7 +73,6 @@ const PERMISSIONS_POLICY_HEADER = [
   "payment=()",
   "screen-wake-lock=()",
   "usb=()",
-  "web-share=()",
   "xr-spatial-tracking=()",
 ].join(", ");
 
