@@ -23,7 +23,7 @@ test("cleanupAIChatRuntimeRefs aborts requests and clears timers defensively", (
     const requestControllerRef = { current: controller };
     const requestTimeoutRef = { current: 10 };
     const typingIntervalRef = { current: 23 };
-    const retryTimersRef = { current: [11, 12] };
+    const retryTimersRef = { current: new Set([11, 12]) };
     const slowNoticeTimerRef = { current: 13 };
     const processingRef = { current: true };
     const isMountedRef = { current: true };
@@ -42,7 +42,7 @@ test("cleanupAIChatRuntimeRefs aborts requests and clears timers defensively", (
     assert.equal(requestControllerRef.current, null);
     assert.equal(requestTimeoutRef.current, null);
     assert.equal(typingIntervalRef.current, null);
-    assert.deepEqual(retryTimersRef.current, []);
+    assert.equal(retryTimersRef.current.size, 0);
     assert.equal(slowNoticeTimerRef.current, null);
     assert.equal(processingRef.current, false);
     assert.equal(isMountedRef.current, false);
@@ -74,7 +74,7 @@ test("cleanupAIChatRuntimeRefs stays safe when cleanup runs more than once", () 
     const requestControllerRef = { current: controller };
     const requestTimeoutRef = { current: 10 };
     const typingIntervalRef = { current: 23 };
-    const retryTimersRef = { current: [11] };
+    const retryTimersRef = { current: new Set([11]) };
     const slowNoticeTimerRef = { current: 13 };
     const processingRef = { current: true };
     const isMountedRef = { current: true };

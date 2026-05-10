@@ -61,11 +61,18 @@ const REACT_REMOVE_SCROLL_BAR_STYLE_HASHES = [
   "'sha256-gxdR88Pf6XnTPKFwHTuQk3EIoquqtZWGvJ9PhLdJg20='",
 ];
 const PERMISSIONS_POLICY_HEADER = [
+  "accelerometer=()",
   "camera=()",
+  "display-capture=()",
+  "document-domain=()",
   "geolocation=()",
+  "gyroscope=()",
+  "magnetometer=()",
   "microphone=()",
   "payment=()",
+  "screen-wake-lock=()",
   "usb=()",
+  "web-share=()",
   "xr-spatial-tracking=()",
 ].join(", ");
 

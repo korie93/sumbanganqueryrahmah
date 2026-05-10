@@ -40,13 +40,13 @@ test("resolveSafeInlineIframePreviewUrl limits inline previews to trusted same-o
 });
 
 test("getSandboxedPreviewIframeProps keeps preview frames locked down by content type", () => {
-  assert.equal(DOCUMENT_PREVIEW_IFRAME_SANDBOX, "");
+  assert.equal(DOCUMENT_PREVIEW_IFRAME_SANDBOX, "allow-downloads");
   assert.equal(PDF_PREVIEW_IFRAME_SANDBOX, "allow-downloads allow-same-origin allow-scripts");
   assert.equal(PREVIEW_IFRAME_REFERRER_POLICY, "no-referrer");
 
   assert.deepEqual(getSandboxedPreviewIframeProps("document"), {
     referrerPolicy: "no-referrer",
-    sandbox: "",
+    sandbox: "allow-downloads",
   });
   assert.deepEqual(getSandboxedPreviewIframeProps("pdf"), {
     referrerPolicy: "no-referrer",

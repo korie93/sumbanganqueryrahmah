@@ -45,7 +45,9 @@ export class CircuitBreaker {
   private totalRequests = 0;
   private nextRetryAt: number | null = null;
   private halfOpenInFlight = 0;
-  private readonly outcomes: CircuitOutcome[] = [];
+  private readonly outcomes: Array<CircuitOutcome | undefined>;
+  private outcomeWriteIndex = 0;
+  private outcomeCount = 0;
 
   constructor(options: CircuitOptions) {
     this.name = options.name;
@@ -53,6 +55,7 @@ export class CircuitBreaker {
     this.minRequests = Math.max(5, options.minRequests ?? 20);
     this.cooldownMs = Math.max(1_000, options.cooldownMs ?? 20_000);
     this.halfOpenMaxInFlight = Math.max(1, options.halfOpenMaxInFlight ?? 1);
+    this.outcomes = new Array(this.maxWindow);
   }
 
   getState(): CircuitState {
@@ -146,7 +149,9 @@ export class CircuitBreaker {
     this.rejections = 0;
     this.successes = 0;
     this.totalRequests = 0;
-    this.outcomes.length = 0;
+    this.outcomes.fill(undefined);
+    this.outcomeWriteIndex = 0;
+    this.outcomeCount = 0;
   }
 
   private evaluateCooldown() {
@@ -160,16 +165,18 @@ export class CircuitBreaker {
   }
 
   private recordOutcome(outcome: CircuitOutcome) {
-    this.outcomes.push(outcome);
-    this.incrementOutcome(outcome);
-
-    while (this.outcomes.length > this.maxWindow) {
-      const removed = this.outcomes.shift();
+    if (this.outcomeCount >= this.maxWindow) {
+      const removed = this.outcomes[this.outcomeWriteIndex];
       if (removed) {
         this.decrementOutcome(removed);
       }
+    } else {
+      this.outcomeCount += 1;
     }
 
+    this.outcomes[this.outcomeWriteIndex] = outcome;
+    this.outcomeWriteIndex = (this.outcomeWriteIndex + 1) % this.maxWindow;
+    this.incrementOutcome(outcome);
     this.totalRequests = this.failures + this.successes + this.rejections;
   }
 

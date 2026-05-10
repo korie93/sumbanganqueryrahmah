@@ -2,6 +2,7 @@ import type { IncomingHttpHeaders, IncomingMessage } from "node:http";
 
 export type RuntimeWebSocketOriginOptions = {
   trustForwardedHeaders: boolean;
+  allowMissingOrigin?: boolean;
 };
 
 export function firstHeaderValue(value: string | string[] | undefined): string {
@@ -55,7 +56,7 @@ export function isSameOriginWebSocketRequest(
 ): boolean {
   const origin = firstHeaderValue(req.headers.origin).trim();
   if (!origin) {
-    return true;
+    return Boolean(options.allowMissingOrigin);
   }
 
   const requestHost = readWebSocketRequestHost(req.headers, options);

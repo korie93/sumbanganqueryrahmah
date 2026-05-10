@@ -102,6 +102,27 @@ test("websocket auth helper falls back to localhost when host is missing", () =>
   );
 });
 
+test("websocket auth helper rejects missing origins unless explicitly allowed", () => {
+  const req = {
+    headers: {
+      host: "localhost",
+    },
+    socket: {},
+  } as unknown as Pick<IncomingMessage, "headers" | "socket">;
+
+  assert.equal(
+    isSameOriginWebSocketRequest(req, { trustForwardedHeaders: false }),
+    false,
+  );
+  assert.equal(
+    isSameOriginWebSocketRequest(req, {
+      trustForwardedHeaders: false,
+      allowMissingOrigin: true,
+    }),
+    true,
+  );
+});
+
 test("websocket heartbeat interval normalization keeps runtime bounds", () => {
   assert.equal(normalizeRuntimeWsHeartbeatIntervalMs(undefined), 30_000);
   assert.equal(normalizeRuntimeWsHeartbeatIntervalMs(1_000), 10_000);

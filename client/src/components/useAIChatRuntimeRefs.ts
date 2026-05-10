@@ -12,7 +12,7 @@ type CleanupAIChatRuntimeRefsParams = {
   requestControllerRef: RuntimeMutableRef<AbortController | null>;
   requestTimeoutRef: RuntimeMutableRef<number | null>;
   typingIntervalRef: RuntimeMutableRef<number | null>;
-  retryTimersRef: RuntimeMutableRef<number[]>;
+  retryTimersRef: RuntimeMutableRef<Set<number>>;
   slowNoticeTimerRef: RuntimeMutableRef<number | null>;
   processingRef: RuntimeMutableRef<boolean>;
   isMountedRef: RuntimeMutableRef<boolean>;
@@ -46,7 +46,7 @@ export function cleanupAIChatRuntimeRefs({
   }
 
   retryTimersRef.current.forEach((timerId) => globalThis.clearTimeout(timerId));
-  retryTimersRef.current = [];
+  retryTimersRef.current.clear();
 
   if (slowNoticeTimerRef.current !== null) {
     globalThis.clearTimeout(slowNoticeTimerRef.current);
@@ -60,7 +60,7 @@ export function useAIChatRuntimeRefs({
   const requestControllerRef = useRef<AbortController | null>(null);
   const requestTimeoutRef = useRef<number | null>(null);
   const typingIntervalRef = useRef<number | null>(null);
-  const retryTimersRef = useRef<number[]>([]);
+  const retryTimersRef = useRef<Set<number>>(new Set());
   const slowNoticeTimerRef = useRef<number | null>(null);
   const sessionRef = useRef(0);
   const processingRef = useRef(false);
@@ -90,7 +90,7 @@ export function useAIChatRuntimeRefs({
 
   const clearRetryTimers = useCallback(() => {
     retryTimersRef.current.forEach((timerId) => globalThis.clearTimeout(timerId));
-    retryTimersRef.current = [];
+    retryTimersRef.current.clear();
   }, []);
 
   const clearRequestTimeout = useCallback(() => {
@@ -108,11 +108,11 @@ export function useAIChatRuntimeRefs({
   }, []);
 
   const registerRetryTimer = useCallback((timerId: number) => {
-    retryTimersRef.current.push(timerId);
+    retryTimersRef.current.add(timerId);
   }, []);
 
   const unregisterRetryTimer = useCallback((timerId: number) => {
-    retryTimersRef.current = retryTimersRef.current.filter((existingId) => existingId !== timerId);
+    retryTimersRef.current.delete(timerId);
   }, []);
 
   const stopTyping = useCallback(() => {

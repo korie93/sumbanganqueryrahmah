@@ -429,9 +429,13 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
     }
 
     if (!isSameOriginWebSocketRequest(req, { trustForwardedHeaders })) {
-      logger.warn("WebSocket rejected cross-origin handshake", {
-        origin: req.headers.origin || null,
+      const origin = firstHeaderValue(req.headers.origin).trim();
+      logger.warn(origin
+        ? "WebSocket rejected cross-origin handshake"
+        : "WebSocket rejected missing-origin handshake", {
+        origin: origin || null,
         host: req.headers.host || null,
+        trustForwardedHeaders,
       });
       cleanupSocket();
       closeSocketIfNeeded();

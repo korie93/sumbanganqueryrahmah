@@ -631,6 +631,49 @@ test("runtime manager rejects cross-origin browser handshakes", async () => {
   }
 });
 
+test("runtime manager rejects browser handshakes without an Origin header", async (t) => {
+  const wss = new FakeWebSocketServer();
+  const providedMap = new Map<string, WebSocket>();
+  const socket = new FakeWebSocket();
+  const warnings: Array<{ message: string; payload: Record<string, unknown> }> = [];
+  let lookupCalls = 0;
+  t.mock.method(logger, "warn", (message: string, payload: Record<string, unknown>) => {
+    warnings.push({ message, payload });
+  });
+
+  createRuntimeWebSocketManager({
+    wss: wss as unknown as import("ws").WebSocketServer,
+    storage: {
+      getActivityById: async () => {
+        lookupCalls += 1;
+        return undefined;
+      },
+      clearCollectionNicknameSessionByActivity: async () => undefined,
+    },
+    secret: TEST_SECRET,
+    connectedClients: providedMap,
+  });
+
+  try {
+    wss.emit(
+      "connection",
+      socket as unknown as WebSocket,
+      createConnectionRequest(createWsToken("activity-missing-origin"), {
+        origin: "",
+      }),
+    );
+    await flushAsyncWork();
+
+    assert.equal(lookupCalls, 0);
+    assert.equal(providedMap.size, 0);
+    assert.equal(socket.closeCalls, 1);
+    assert.equal(warnings[0]?.message, "WebSocket rejected missing-origin handshake");
+    assert.equal(warnings[0]?.payload.origin, null);
+  } finally {
+    wss.emit("close");
+  }
+});
+
 test("runtime manager rejects browser handshakes when the origin protocol mismatches the request protocol", async () => {
   const wss = new FakeWebSocketServer();
   const providedMap = new Map<string, WebSocket>();

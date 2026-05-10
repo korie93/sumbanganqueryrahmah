@@ -57,3 +57,28 @@ test("CircuitBreaker counts rejections inside totalRequests without leaving stal
   assert.equal(snapshot.totalRequests, 0);
   assert.equal(snapshot.failureRate, 0);
 });
+
+test("CircuitBreaker trims a mixed outcome window without shifting large arrays", async () => {
+  const circuit = new CircuitBreaker({
+    name: "mixed-window-test",
+    threshold: 1,
+    minRequests: 2_000,
+  });
+
+  for (let index = 0; index < 2_500; index += 1) {
+    if (index % 5 === 0) {
+      await assert.rejects(() => circuit.execute(async () => {
+        throw new Error("intermittent failure");
+      }));
+    } else {
+      await circuit.execute(async () => "ok");
+    }
+  }
+
+  const snapshot = circuit.getSnapshot();
+  assert.equal(snapshot.totalRequests, 2_000);
+  assert.equal(snapshot.totalRequests, snapshot.failures + snapshot.successes + snapshot.rejections);
+  assert.equal(snapshot.failures, 400);
+  assert.equal(snapshot.successes, 1_600);
+  assert.equal(snapshot.failureRate, 0.2);
+});
