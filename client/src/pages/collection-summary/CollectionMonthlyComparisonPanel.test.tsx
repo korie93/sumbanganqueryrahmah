@@ -189,6 +189,10 @@ test("CollectionMonthlyComparisonPanel renders monthly totals and comparison sum
       monthlyTargetAmount: 80000,
       monthlyTargetSourceLabel: "May 2026",
       sameDayPace,
+      sameDayPaceDayRange: { startDay: 1, endDay: 30 },
+      sameDayPaceMaxDay: 30,
+      onSameDayPaceDayRangeChange: () => undefined,
+      onSameDayPaceComparisonModeChange: () => undefined,
       onExportCsv: () => undefined,
       onPrintReport: () => undefined,
       onMonthSelect: () => undefined,
@@ -211,7 +215,14 @@ test("CollectionMonthlyComparisonPanel renders monthly totals and comparison sum
   assert.match(markup, /average per record dipped slightly/);
   assert.match(markup, /Same-day collection pace/);
   assert.match(markup, /31\.6% slower than previous month/);
-  assert.match(markup, /May 1 to May 9, 2026 vs April 1 to April 9, 2026/);
+  assert.match(markup, /May 1 to May 30, 2026 vs April 1 to April 30, 2026/);
+  assert.match(markup, /Pilih compare day/);
+  assert.match(markup, /Banding dengan/);
+  assert.match(markup, /Hari sama bulan lepas/);
+  assert.match(markup, /Hari sama tahun lepas/);
+  assert.match(markup, /Hari terakhir ada kutipan/);
+  assert.match(markup, /Hari terbaik bulan ini/);
+  assert.match(markup, /Jumlah sampai hari dipilih/);
   assert.match(markup, /Smart insights/);
   assert.match(markup, /Target pace/);
   assert.match(markup, /Benchmark lens/);

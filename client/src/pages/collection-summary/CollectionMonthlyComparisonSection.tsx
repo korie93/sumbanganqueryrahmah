@@ -141,7 +141,9 @@ function CollectionMonthlyComparisonSection({
         sameDayPaceUnavailableReason={sameDayPace.unavailableReason}
         sameDayPaceDayRange={sameDayPace.dayRange}
         sameDayPaceMaxDay={sameDayPace.maxDay}
+        sameDayPaceComparisonMode={sameDayPace.comparisonMode}
         onSameDayPaceDayRangeChange={sameDayPace.setDayRange}
+        onSameDayPaceComparisonModeChange={sameDayPace.setComparisonMode}
         onExportCsv={handleExportCsv}
         onPrintReport={handlePrintReport}
         onMonthSelect={comparisonMonthDialog.handleSelectMonth}

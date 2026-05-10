@@ -15,6 +15,8 @@ import {
   buildCollectionMonthlyComparisonProjection,
   buildCollectionMonthlyComparisonTargetSummary,
   buildCollectionMonthlyComparisonTrendExplanation,
+  buildCollectionSameDayPaceDayOptions,
+  buildCollectionSameDayPaceQuickOptions,
   buildCollectionSameDayPacePointInsights,
   buildCollectionSameDayPacePointTrendLabel,
   formatCollectionSameDayPaceDisplayDate,
@@ -23,7 +25,12 @@ import {
   formatCollectionMonthlyComparisonDifference,
   formatCollectionMonthlyComparisonPercentage,
   normalizeCollectionMonthInputValue,
+  normalizeCollectionSameDayPaceDayRange,
   parseCollectionMonthKey,
+  resolveCollectionSameDayPaceComparisonMonthKey,
+  resolveCollectionSameDayPaceMaxDay,
+  resolveCollectionSameDayPaceRangeForSelection,
+  resolveCollectionSameDayPaceWindowMode,
   shiftCollectionMonthInput,
 } from "@/pages/collection-summary/collection-monthly-comparison-utils";
 
@@ -256,6 +263,70 @@ test("collection same-day pace compares the full comparable selected month range
   assert.match(csv, /"Date","Month","Daily Collection","Cumulative Collection","Previous Month Date"/);
   assert.match(csv, /"Workday\/Holiday Status","Previous Workday\/Holiday Status","Pace Status","Pace Insight"/);
   assert.match(csv, /"2026-05-04","May 2026","1300\.00","5800\.00","2026-04-04","April 2026","2000\.00","8300\.00","-700\.00","-2500\.00","50000\.00","","11\.60","Calendar not configured","Calendar not configured","Daily collection slower but cumulative behind"/);
+});
+
+test("collection same-day compare-day helpers normalize dropdown ranges and baselines safely", () => {
+  assert.equal(resolveCollectionSameDayPaceComparisonMonthKey({
+    currentMonthKey: "2026-05",
+    selectedBaseMonthKey: "2026-04",
+    comparisonMode: "selected-start-month",
+  }), "2026-04");
+  assert.equal(resolveCollectionSameDayPaceComparisonMonthKey({
+    currentMonthKey: "2026-01",
+    comparisonMode: "previous-month",
+  }), "2025-12");
+  assert.equal(resolveCollectionSameDayPaceComparisonMonthKey({
+    currentMonthKey: "2026-05",
+    comparisonMode: "previous-year",
+  }), "2025-05");
+  assert.equal(resolveCollectionSameDayPaceMaxDay({
+    currentMonthKey: "2026-03",
+    comparisonMonthKey: "2026-02",
+  }), 28);
+  assert.deepEqual(normalizeCollectionSameDayPaceDayRange({ startDay: 40, endDay: 2 }, 31), {
+    startDay: 2,
+    endDay: 31,
+  });
+  assert.deepEqual(resolveCollectionSameDayPaceRangeForSelection({
+    day: 9,
+    maxDay: 31,
+    windowMode: "cumulative",
+  }), {
+    startDay: 1,
+    endDay: 9,
+  });
+  assert.deepEqual(resolveCollectionSameDayPaceRangeForSelection({
+    day: 9,
+    maxDay: 31,
+    windowMode: "single-day",
+  }), {
+    startDay: 9,
+    endDay: 9,
+  });
+  assert.equal(resolveCollectionSameDayPaceWindowMode({ startDay: 4, endDay: 9 }), "custom-range");
+  assert.equal(buildCollectionSameDayPaceDayOptions(31).length, 31);
+});
+
+test("collection same-day quick presets select last, best, and weakest active days", () => {
+  const options = buildCollectionSameDayPaceQuickOptions({
+    maxDay: 31,
+    points: [
+      { day: 1, currentAmount: 0 },
+      { day: 2, currentAmount: 100 },
+      { day: 3, currentAmount: 500 },
+      { day: 4, currentAmount: 50 },
+    ],
+  });
+
+  const lastCollectionDay = options.find((option) => option.id === "last-collection-day");
+  const bestDay = options.find((option) => option.id === "best-current-day");
+  const weakestDay = options.find((option) => option.id === "weakest-current-day");
+
+  assert.deepEqual(lastCollectionDay?.range, { startDay: 1, endDay: 4 });
+  assert.deepEqual(bestDay?.range, { startDay: 3, endDay: 3 });
+  assert.deepEqual(weakestDay?.range, { startDay: 4, endDay: 4 });
+  assert.equal(bestDay?.windowMode, "single-day");
+  assert.equal(options.find((option) => option.id === "same-day-previous-year")?.comparisonMode, "previous-year");
 });
 
 test("collection same-day pace supports custom selected day ranges and calendar-aware insight", () => {

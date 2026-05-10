@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useState } from "react";
 import { Activity, BarChart3, ChevronDown, ChevronUp, CircleHelp, Download, Printer, ShieldCheck } from "lucide-react";
 import {
   OperationalMetric,
@@ -22,18 +22,26 @@ import {
   buildCollectionMonthlyComparisonProjection,
   buildCollectionMonthlyComparisonTargetSummary,
   buildCollectionMonthlyComparisonTrendExplanation,
+  buildCollectionSameDayPaceDayOptions,
+  buildCollectionSameDayPaceQuickOptions,
   formatCollectionMonthlyComparisonDifference,
   formatCollectionMonthlyComparisonMonthDelta,
   formatCollectionMonthlyComparisonPercentage,
   formatCollectionSameDayPaceMonthLabel,
   normalizeCollectionMonthInputValue,
+  resolveCollectionSameDayPaceCompareModeLabel,
+  resolveCollectionSameDayPaceRangeForSelection,
+  resolveCollectionSameDayPaceWindowMode,
   resolveCollectionMonthlyComparisonTargetForMonth,
   resolveCollectionMonthlyComparisonTone,
   type CollectionMonthlyComparisonBenchmarkId,
   type CollectionMonthlyComparisonPresetRange,
   type CollectionMonthlyComparisonTargetLookup,
   type CollectionSameDayPaceComparison,
+  type CollectionSameDayPaceComparisonMode,
   type CollectionSameDayPaceDayRange,
+  type CollectionSameDayPaceQuickOptionId,
+  type CollectionSameDayPaceWindowMode,
 } from "./collection-monthly-comparison-utils";
 import "./CollectionMonthlyComparisonPanel.css";
 
@@ -66,10 +74,12 @@ type CollectionMonthlyComparisonPanelProps = {
   sameDayPaceUnavailableReason?: string | null | undefined;
   sameDayPaceDayRange?: CollectionSameDayPaceDayRange | null | undefined;
   sameDayPaceMaxDay?: number | null | undefined;
+  sameDayPaceComparisonMode?: CollectionSameDayPaceComparisonMode | undefined;
   onExportCsv?: (() => void) | undefined;
   onPrintReport?: (() => void) | undefined;
   onMonthSelect?: ((monthKey: string) => void) | undefined;
   onSameDayPaceDayRangeChange?: ((range: CollectionSameDayPaceDayRange) => void) | undefined;
+  onSameDayPaceComparisonModeChange?: ((mode: CollectionSameDayPaceComparisonMode) => void) | undefined;
   chartSlot?: ReactNode | undefined;
 };
 
@@ -176,6 +186,175 @@ function CollectionMonthField({
   );
 }
 
+function SameDayCompareDayControls({
+  pace,
+  dayRange,
+  maxDay,
+  comparisonMode,
+  onDayRangeChange,
+  onComparisonModeChange,
+}: {
+  pace: CollectionSameDayPaceComparison;
+  dayRange: CollectionSameDayPaceDayRange;
+  maxDay: number;
+  comparisonMode: CollectionSameDayPaceComparisonMode;
+  onDayRangeChange: (range: CollectionSameDayPaceDayRange) => void;
+  onComparisonModeChange: (mode: CollectionSameDayPaceComparisonMode) => void;
+}) {
+  const controlId = useId();
+  const safeMaxDay = Math.max(1, Math.trunc(Number(maxDay || 1)));
+  const dayOptions = useMemo(() => buildCollectionSameDayPaceDayOptions(safeMaxDay), [safeMaxDay]);
+  const quickOptions = useMemo(() => buildCollectionSameDayPaceQuickOptions({
+    points: pace.points,
+    maxDay: safeMaxDay,
+  }), [pace.points, safeMaxDay]);
+  const windowMode = resolveCollectionSameDayPaceWindowMode(dayRange);
+  const selectedDay = Math.max(1, Math.min(safeMaxDay, dayRange.endDay));
+  const selectedStartDay = Math.max(1, Math.min(selectedDay, dayRange.startDay));
+
+  const applyWindowSelection = useCallback((nextWindowMode: CollectionSameDayPaceWindowMode, nextDay = selectedDay) => {
+    onDayRangeChange(resolveCollectionSameDayPaceRangeForSelection({
+      day: nextDay,
+      maxDay: safeMaxDay,
+      windowMode: nextWindowMode,
+      currentRange: dayRange,
+    }));
+  }, [dayRange, onDayRangeChange, safeMaxDay, selectedDay]);
+
+  const applyQuickOption = useCallback((optionId: CollectionSameDayPaceQuickOptionId) => {
+    const option = quickOptions.find((candidate) => candidate.id === optionId);
+    if (!option || option.disabled) {
+      return;
+    }
+
+    if (option.comparisonMode) {
+      onComparisonModeChange(option.comparisonMode);
+    }
+    if (option.range) {
+      onDayRangeChange(option.range);
+      return;
+    }
+    if (option.windowMode) {
+      applyWindowSelection(option.windowMode);
+    }
+  }, [applyWindowSelection, onComparisonModeChange, onDayRangeChange, quickOptions]);
+
+  return (
+    <div className="collection-monthly-comparison-day-picker rounded-2xl border border-border/60 bg-muted/20 p-3">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div className="min-w-0 space-y-1">
+          <p className="text-xs font-semibold uppercase tracking-normal text-muted-foreground">
+            Pilih compare day
+          </p>
+          <p className="text-xs leading-5 text-muted-foreground">
+            Ringkas untuk user biasa, masih tepat untuk audit harian.
+          </p>
+        </div>
+        <span className="rounded-full border border-border/60 bg-background px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
+          {resolveCollectionSameDayPaceCompareModeLabel(comparisonMode)}
+        </span>
+      </div>
+
+      <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+        <label className="collection-monthly-comparison-select-label" htmlFor={`${controlId}-baseline`}>
+          <span>Banding dengan</span>
+          <select
+            id={`${controlId}-baseline`}
+            className="collection-monthly-comparison-control collection-monthly-comparison-select"
+            value={comparisonMode}
+            onChange={(event) => onComparisonModeChange(event.target.value as CollectionSameDayPaceComparisonMode)}
+          >
+            <option value="selected-start-month">Bulan mula dipilih</option>
+            <option value="previous-month">Hari sama bulan lepas</option>
+            <option value="previous-year">Hari sama tahun lepas</option>
+          </select>
+        </label>
+
+        <label className="collection-monthly-comparison-select-label" htmlFor={`${controlId}-window`}>
+          <span>Jenis bacaan</span>
+          <select
+            id={`${controlId}-window`}
+            className="collection-monthly-comparison-control collection-monthly-comparison-select"
+            value={windowMode}
+            onChange={(event) => applyWindowSelection(event.target.value as CollectionSameDayPaceWindowMode)}
+          >
+            <option value="cumulative">Jumlah sampai hari dipilih</option>
+            <option value="single-day">Hari itu sahaja</option>
+            <option value="custom-range">Julat custom</option>
+          </select>
+        </label>
+
+        {windowMode === "custom-range" ? (
+          <label className="collection-monthly-comparison-select-label" htmlFor={`${controlId}-start-day`}>
+            <span>Mula hari</span>
+            <select
+              id={`${controlId}-start-day`}
+              className="collection-monthly-comparison-control collection-monthly-comparison-select"
+              value={selectedStartDay}
+              onChange={(event) => {
+                const nextStartDay = Math.max(1, Math.min(selectedDay, Number(event.target.value)));
+                onDayRangeChange({
+                  startDay: nextStartDay,
+                  endDay: selectedDay,
+                });
+              }}
+            >
+              {dayOptions.filter((option) => option.value <= selectedDay).map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
+
+        <label className="collection-monthly-comparison-select-label" htmlFor={`${controlId}-day`}>
+          <span>{windowMode === "single-day" ? "Hari fokus" : "Sampai hari"}</span>
+          <select
+            id={`${controlId}-day`}
+            className="collection-monthly-comparison-control collection-monthly-comparison-select"
+            value={selectedDay}
+            onChange={(event) => applyWindowSelection(windowMode, Number(event.target.value))}
+            aria-describedby={`${controlId}-day-help`}
+          >
+            {dayOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="collection-monthly-comparison-select-label" htmlFor={`${controlId}-quick`}>
+          <span>Quick preset</span>
+          <select
+            id={`${controlId}-quick`}
+            className="collection-monthly-comparison-control collection-monthly-comparison-select"
+            value=""
+            onChange={(event) => applyQuickOption(event.target.value as CollectionSameDayPaceQuickOptionId)}
+          >
+            <option value="">Pilih preset...</option>
+            {quickOptions.map((option) => (
+              <option key={option.id} value={option.id} disabled={option.disabled}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      <p id={`${controlId}-day-help`} className="mt-2 text-[11px] leading-5 text-muted-foreground">
+        {windowMode === "single-day"
+          ? `Sedang fokus hari ${selectedDay} sahaja.`
+          : windowMode === "custom-range"
+            ? `Sedang banding hari ${selectedStartDay} hingga ${selectedDay}.`
+            : `Sedang banding jumlah terkumpul dari hari 1 hingga hari ${selectedDay}.`}
+        {" "}Maksimum sah untuk dua bulan ini ialah hari {safeMaxDay}.
+      </p>
+    </div>
+  );
+}
+
 function buildCollectionMonthlyComparisonTargetCards(input: {
   comparison: CollectionMonthlyComparisonResponse["comparison"] | null | undefined;
   monthlyTargetAmount: number | null | undefined;
@@ -246,10 +425,12 @@ export function CollectionMonthlyComparisonPanel({
   sameDayPaceUnavailableReason = null,
   sameDayPaceDayRange = null,
   sameDayPaceMaxDay = null,
+  sameDayPaceComparisonMode = "selected-start-month",
   onExportCsv,
   onPrintReport,
   onMonthSelect,
   onSameDayPaceDayRangeChange,
+  onSameDayPaceComparisonModeChange,
   chartSlot,
 }: CollectionMonthlyComparisonPanelProps) {
   const [breakdownExpanded, setBreakdownExpanded] = useState(false);
@@ -352,26 +533,6 @@ export function CollectionMonthlyComparisonPanel({
       monthlyTargetsByMonth,
     });
   }, [data?.comparison, monthlyTargetAmount, monthlyTargetsByMonth]);
-  const handleSameDayStartDayChange = useCallback((value: number) => {
-    if (!sameDayPaceDayRange || !sameDayPaceMaxDay || !onSameDayPaceDayRangeChange) {
-      return;
-    }
-    const nextStart = Math.max(1, Math.min(sameDayPaceDayRange.endDay, Math.trunc(value || 1)));
-    onSameDayPaceDayRangeChange({
-      startDay: nextStart,
-      endDay: sameDayPaceDayRange.endDay,
-    });
-  }, [onSameDayPaceDayRangeChange, sameDayPaceDayRange, sameDayPaceMaxDay]);
-  const handleSameDayEndDayChange = useCallback((value: number) => {
-    if (!sameDayPaceDayRange || !sameDayPaceMaxDay || !onSameDayPaceDayRangeChange) {
-      return;
-    }
-    const nextEnd = Math.max(sameDayPaceDayRange.startDay, Math.min(sameDayPaceMaxDay, Math.trunc(value || sameDayPaceMaxDay)));
-    onSameDayPaceDayRangeChange({
-      startDay: sameDayPaceDayRange.startDay,
-      endDay: nextEnd,
-    });
-  }, [onSameDayPaceDayRangeChange, sameDayPaceDayRange, sameDayPaceMaxDay]);
   const breakdownToggleButtonClassName =
     "inline-flex h-9 items-center justify-center gap-1.5 rounded-full border border-input bg-background px-3 text-xs font-medium text-foreground transition hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
@@ -692,10 +853,11 @@ export function CollectionMonthlyComparisonPanel({
           ) : null}
 
           {!sameDayPaceLoading && !sameDayPaceErrorMessage && sameDayPace ? (
-            <div className="rounded-2xl border border-border/60 bg-background px-4 py-4 shadow-sm">
+            <div className="collection-monthly-comparison-section-card collection-monthly-comparison-section-card--pace rounded-2xl border border-border/60 bg-background px-4 py-4 shadow-sm">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0 space-y-1">
                   <div className="flex items-center gap-1.5">
+                    <Activity className="h-4 w-4 text-primary" aria-hidden="true" />
                     <p className="text-sm font-semibold text-foreground">Same-day collection pace</p>
                     <MonthlyComparisonHint
                       label="Same-day comparison methodology"
@@ -707,47 +869,27 @@ export function CollectionMonthlyComparisonPanel({
                   </p>
                 </div>
                 <div className="flex flex-wrap items-center justify-end gap-2">
-                  {sameDayPaceDayRange && sameDayPaceMaxDay && onSameDayPaceDayRangeChange ? (
-                    <fieldset
-                      className="flex flex-wrap items-center gap-2 rounded-2xl border border-border/60 bg-muted/20 px-2.5 py-2"
-                      aria-label="Same-day comparison day range"
-                    >
-                      <legend className="sr-only">Same-day comparison day range</legend>
-                      <span className="text-[11px] font-medium text-muted-foreground">Compare days</span>
-                      <label className="inline-flex items-center gap-1 text-xs text-foreground">
-                        <span>From</span>
-                        <input
-                          type="number"
-                          min={1}
-                          max={sameDayPaceDayRange.endDay}
-                          value={sameDayPaceDayRange.startDay}
-                          onChange={(event) => handleSameDayStartDayChange(Number(event.target.value))}
-                          className="h-8 w-16 rounded-xl border border-input bg-background px-2 text-xs"
-                          aria-label="Same-day comparison start day"
-                        />
-                      </label>
-                      <label className="inline-flex items-center gap-1 text-xs text-foreground">
-                        <span>To</span>
-                        <input
-                          type="number"
-                          min={sameDayPaceDayRange.startDay}
-                          max={sameDayPaceMaxDay}
-                          value={sameDayPaceDayRange.endDay}
-                          onChange={(event) => handleSameDayEndDayChange(Number(event.target.value))}
-                          className="h-8 w-16 rounded-xl border border-input bg-background px-2 text-xs"
-                          aria-label="Same-day comparison end day"
-                        />
-                      </label>
-                      <span className="text-[11px] text-muted-foreground">
-                        Max {sameDayPaceMaxDay}
-                      </span>
-                    </fieldset>
-                  ) : null}
                   <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${sameDayToneClassName}`}>
                     {sameDayPace.headline}
                   </span>
                 </div>
               </div>
+
+              {sameDayPaceDayRange
+              && sameDayPaceMaxDay
+              && onSameDayPaceDayRangeChange
+              && onSameDayPaceComparisonModeChange ? (
+                <div className="mt-4">
+                  <SameDayCompareDayControls
+                    pace={sameDayPace}
+                    dayRange={sameDayPaceDayRange}
+                    maxDay={sameDayPaceMaxDay}
+                    comparisonMode={sameDayPaceComparisonMode}
+                    onDayRangeChange={onSameDayPaceDayRangeChange}
+                    onComparisonModeChange={onSameDayPaceComparisonModeChange}
+                  />
+                </div>
+              ) : null}
 
               <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1.15fr)_minmax(18rem,0.85fr)]">
                 <div className="space-y-3">

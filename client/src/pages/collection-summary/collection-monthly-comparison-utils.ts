@@ -39,6 +39,21 @@ import {
   buildCollectionMonthlyComparisonAccessibleSummary,
   buildCollectionMonthlyComparisonTrendExplanation,
 } from "./collection-monthly-insight-utils";
+import {
+  buildCollectionSameDayPaceDayOptions,
+  buildCollectionSameDayPaceQuickOptions,
+  normalizeCollectionSameDayPaceDayRange,
+  resolveCollectionSameDayPaceCompareModeLabel,
+  resolveCollectionSameDayPaceComparisonMonthKey,
+  resolveCollectionSameDayPaceMaxDay,
+  resolveCollectionSameDayPaceRangeForSelection,
+  resolveCollectionSameDayPaceWindowMode,
+  type CollectionSameDayPaceComparisonMode,
+  type CollectionSameDayPaceDayOption,
+  type CollectionSameDayPaceQuickOption,
+  type CollectionSameDayPaceQuickOptionId,
+  type CollectionSameDayPaceWindowMode,
+} from "./collection-monthly-compare-day-utils";
 
 export const COLLECTION_MONTHLY_COMPARISON_MAX_RANGE_MONTHS = 24;
 
@@ -47,6 +62,8 @@ export {
   buildCollectionMonthlyComparisonAccessibleSummary,
   buildCollectionMonthlyComparisonTargetSummary,
   buildCollectionMonthlyComparisonTrendExplanation,
+  buildCollectionSameDayPaceDayOptions,
+  buildCollectionSameDayPaceQuickOptions,
   countCollectionMonthsInclusive,
   formatCollectionMonthInput,
   formatCollectionMonthName,
@@ -59,7 +76,13 @@ export {
   getCollectionDaysInMonth,
   normalizeCollectionMonthlyComparisonTargetAmount,
   normalizeCollectionMonthInputValue,
+  normalizeCollectionSameDayPaceDayRange,
   parseCollectionMonthKey,
+  resolveCollectionSameDayPaceCompareModeLabel,
+  resolveCollectionSameDayPaceComparisonMonthKey,
+  resolveCollectionSameDayPaceMaxDay,
+  resolveCollectionSameDayPaceRangeForSelection,
+  resolveCollectionSameDayPaceWindowMode,
   resolveCollectionMonthlyComparisonAnomaly,
   resolveCollectionMonthlyComparisonBenchmarkDirection,
   resolveCollectionMonthlyComparisonPercentageChange,
@@ -74,6 +97,11 @@ export type {
   CollectionMonthlyComparisonTargetInput,
   CollectionMonthlyComparisonTargetLookup,
   CollectionMonthlyComparisonTargetSummary,
+  CollectionSameDayPaceComparisonMode,
+  CollectionSameDayPaceDayOption,
+  CollectionSameDayPaceQuickOption,
+  CollectionSameDayPaceQuickOptionId,
+  CollectionSameDayPaceWindowMode,
 };
 
 type CollectionMonthlyComparisonMonth = CollectionMonthlyComparisonResponse["months"][number];

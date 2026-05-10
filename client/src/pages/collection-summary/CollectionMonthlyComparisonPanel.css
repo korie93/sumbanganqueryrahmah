@@ -27,6 +27,25 @@
   pointer-events: none;
 }
 
+.collection-monthly-comparison-section-card {
+  position: relative;
+  overflow: hidden;
+}
+
+.collection-monthly-comparison-section-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 2px;
+  background: hsl(var(--border));
+  opacity: 0.8;
+  pointer-events: none;
+}
+
+.collection-monthly-comparison-section-card--pace::before {
+  background: linear-gradient(90deg, hsl(var(--primary)), hsl(var(--chart-4)));
+}
+
 .collection-monthly-comparison-chip {
   box-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.58);
 }
@@ -41,6 +60,42 @@
 .collection-monthly-comparison-control:focus-visible {
   outline: none;
   box-shadow: 0 0 0 3px hsl(var(--ring) / 0.22);
+}
+
+.collection-monthly-comparison-day-picker {
+  background:
+    linear-gradient(180deg, hsl(var(--muted) / 0.28), hsl(var(--background) / 0.88));
+}
+
+.collection-monthly-comparison-select-label {
+  display: grid;
+  gap: 0.35rem;
+  min-width: 0;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: hsl(var(--foreground));
+}
+
+.collection-monthly-comparison-select-label > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.collection-monthly-comparison-select {
+  min-height: 2.35rem;
+  width: 100%;
+  border: 1px solid hsl(var(--input));
+  border-radius: 0.875rem;
+  padding: 0 2rem 0 0.75rem;
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-size: 0.8125rem;
+  line-height: 1.2;
+}
+
+.collection-monthly-comparison-select:hover {
+  border-color: hsl(var(--ring) / 0.48);
 }
 
 .collection-monthly-comparison-primary-action,

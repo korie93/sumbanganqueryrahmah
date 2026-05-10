@@ -14,12 +14,15 @@ import {
 } from "@/pages/collection/utils";
 import {
   buildCollectionSameDayPaceComparison,
-  getCollectionDaysInMonth,
+  normalizeCollectionSameDayPaceDayRange,
   parseCollectionMonthKey,
+  resolveCollectionSameDayPaceComparisonMonthKey,
+  resolveCollectionSameDayPaceMaxDay,
   resolveCollectionMonthlyComparisonTargetForMonth,
   shiftCollectionMonthInput,
   type CollectionMonthlyComparisonTargetLookup,
   type CollectionSameDayPaceComparison,
+  type CollectionSameDayPaceComparisonMode,
   type CollectionSameDayPaceDayRange,
 } from "./collection-monthly-comparison-utils";
 
@@ -45,6 +48,7 @@ function isAbortError(error: unknown) {
 
 function buildSameDayPaceRequest(
   data: CollectionMonthlyComparisonResponse | null,
+  comparisonMode: CollectionSameDayPaceComparisonMode,
 ): SameDayPaceRequest | null {
   if (!data) {
     return null;
@@ -57,16 +61,24 @@ function buildSameDayPaceRequest(
 
   const comparison = data.comparison || null;
   const currentMonthKey = comparison?.targetMonth || data.endMonth;
-  const previousMonthKey = comparison?.baseMonth || shiftCollectionMonthInput(currentMonthKey, -1);
+  const previousMonthKey = resolveCollectionSameDayPaceComparisonMonthKey({
+    currentMonthKey,
+    selectedBaseMonthKey: comparison?.baseMonth || shiftCollectionMonthInput(currentMonthKey, -1),
+    comparisonMode,
+  });
+  if (!previousMonthKey) {
+    return null;
+  }
   const currentMonth = parseCollectionMonthKey(currentMonthKey);
   const previousMonth = parseCollectionMonthKey(previousMonthKey);
   if (!currentMonth || !previousMonth) {
     return null;
   }
 
-  const totalDaysInCurrentMonth = getCollectionDaysInMonth(currentMonth.year, currentMonth.month);
-  const totalDaysInPreviousMonth = getCollectionDaysInMonth(previousMonth.year, previousMonth.month);
-  const maxDay = Math.max(1, Math.min(totalDaysInCurrentMonth, totalDaysInPreviousMonth));
+  const maxDay = resolveCollectionSameDayPaceMaxDay({
+    currentMonthKey,
+    comparisonMonthKey: previousMonthKey,
+  });
 
   return {
     nickname,
@@ -77,25 +89,6 @@ function buildSameDayPaceRequest(
       startDay: 1,
       endDay: maxDay,
     },
-  };
-}
-
-function normalizeSameDayPaceDayRange(
-  range: CollectionSameDayPaceDayRange | null,
-  maxDay: number,
-): CollectionSameDayPaceDayRange {
-  if (!range) {
-    return {
-      startDay: 1,
-      endDay: maxDay,
-    };
-  }
-
-  const startDay = Math.max(1, Math.min(maxDay, Math.trunc(Number(range.startDay || 1))));
-  const endDay = Math.max(1, Math.min(maxDay, Math.trunc(Number(range.endDay || maxDay))));
-  return {
-    startDay: Math.min(startDay, endDay),
-    endDay: Math.max(startDay, endDay),
   };
 }
 
@@ -110,7 +103,9 @@ export function useCollectionMonthlySameDayPace({
   unavailableReason: string | null;
   dayRange: CollectionSameDayPaceDayRange | null;
   maxDay: number | null;
+  comparisonMode: CollectionSameDayPaceComparisonMode;
   setDayRange: (range: CollectionSameDayPaceDayRange) => void;
+  setComparisonMode: (mode: CollectionSameDayPaceComparisonMode) => void;
 } {
   const requestIdRef = useRef(0);
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -118,14 +113,16 @@ export function useCollectionMonthlySameDayPace({
   const [currentOverview, setCurrentOverview] = useState<CollectionDailyOverviewResponse | null>(null);
   const [previousOverview, setPreviousOverview] = useState<CollectionDailyOverviewResponse | null>(null);
   const [selectedDayRange, setSelectedDayRange] = useState<CollectionSameDayPaceDayRange | null>(null);
+  const [comparisonMode, setComparisonMode] =
+    useState<CollectionSameDayPaceComparisonMode>("selected-start-month");
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const request = useMemo(() => buildSameDayPaceRequest(data), [data]);
+  const request = useMemo(() => buildSameDayPaceRequest(data, comparisonMode), [comparisonMode, data]);
   const requestKey = request
-    ? `${request.nickname}|${request.currentMonthKey}|${request.previousMonthKey}`
+    ? `${request.nickname}|${request.currentMonthKey}|${request.previousMonthKey}|${comparisonMode}`
     : "";
   const dayRange = useMemo(() => (
-    request ? normalizeSameDayPaceDayRange(selectedDayRange ?? request.defaultDayRange, request.maxDay) : null
+    request ? normalizeCollectionSameDayPaceDayRange(selectedDayRange ?? request.defaultDayRange, request.maxDay) : null
   ), [request, selectedDayRange]);
 
   const handleDayRangeChange = useCallback((range: CollectionSameDayPaceDayRange) => {
@@ -308,6 +305,8 @@ export function useCollectionMonthlySameDayPace({
     unavailableReason,
     dayRange,
     maxDay: request?.maxDay ?? null,
+    comparisonMode,
     setDayRange: handleDayRangeChange,
+    setComparisonMode,
   };
 }
