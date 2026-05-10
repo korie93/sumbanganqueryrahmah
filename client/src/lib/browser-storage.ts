@@ -3,11 +3,19 @@ export type BrowserStorageLike = Pick<Storage, "getItem" | "setItem" | "removeIt
 };
 
 export function getBrowserLocalStorage(): Storage | null {
-  return typeof localStorage !== "undefined" ? localStorage : null;
+  try {
+    return typeof localStorage !== "undefined" ? localStorage : null;
+  } catch {
+    return null;
+  }
 }
 
 export function getBrowserSessionStorage(): Storage | null {
-  return typeof sessionStorage !== "undefined" ? sessionStorage : null;
+  try {
+    return typeof sessionStorage !== "undefined" ? sessionStorage : null;
+  } catch {
+    return null;
+  }
 }
 
 export function isQuotaExceededStorageError(error: unknown): boolean {

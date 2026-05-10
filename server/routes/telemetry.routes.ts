@@ -505,15 +505,22 @@ export function registerTelemetryRoutes(app: Express, deps: TelemetryRouteDeps) 
     routeHandler(deps.reportWebVital),
   );
 
+  // TODO(telemetry-sunset): remove this compatibility alias after
+  // LEGACY_WEB_VITALS_TELEMETRY_SUNSET (Wed, 01 Jul 2026 00:00:00 GMT)
+  // once deployed clients have migrated fully to /api/telemetry/web-vitals.
   app.post(
     LEGACY_WEB_VITALS_TELEMETRY_PATH,
-    (_req, res, next) => {
+    (req, res, next) => {
       res.setHeader("Deprecation", "true");
       res.setHeader("Sunset", LEGACY_WEB_VITALS_TELEMETRY_SUNSET);
       res.setHeader("Link", `<${CANONICAL_WEB_VITALS_TELEMETRY_PATH}>; rel="successor-version"`);
+      metrics.increment("webVitalsLegacyRouteUsedTotal");
       logger.warn("Legacy web vitals telemetry route used", {
         canonicalPath: CANONICAL_WEB_VITALS_TELEMETRY_PATH,
         legacyPath: LEGACY_WEB_VITALS_TELEMETRY_PATH,
+        method: req.method,
+        path: req.path,
+        sunsetAt: LEGACY_WEB_VITALS_TELEMETRY_SUNSET,
       });
       next();
     },

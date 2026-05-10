@@ -4,6 +4,7 @@ import jwt from "jsonwebtoken";
 import {
   SESSION_JWT_DEFAULT_EXPIRY,
   SESSION_JWT_ALGORITHM,
+  resolveSessionJwtExpiresAt,
   signSessionJwt,
   verifyJwtWithAnySecret,
 } from "../session-jwt";
@@ -15,6 +16,7 @@ test("signSessionJwt applies the default session expiry when omitted", () => {
   assert.ok(decoded?.iat);
   assert.ok(decoded?.exp);
   assert.equal(decoded.exp - decoded.iat, SESSION_JWT_DEFAULT_EXPIRY);
+  assert.equal(resolveSessionJwtExpiresAt(token)?.getTime(), decoded.exp * 1000);
 });
 
 test("verifyJwtWithAnySecret accepts a token signed with a previous manual rotation secret", () => {

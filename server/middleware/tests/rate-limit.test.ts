@@ -7,8 +7,13 @@ import { startTestServer, stopTestServer } from "../../routes/tests/http-test-ut
 import {
   buildAuthRouteRateLimitSubject,
   buildRequestRateLimitFingerprint,
+  clearAdaptiveRateLimitCooldownsForTests,
   createImportsUploadRateLimiter,
+  getAdaptiveRateLimitCooldownStats,
   normalizeAuthRateLimitIdentifier,
+  pruneAdaptiveRateLimitCooldowns,
+  startAdaptiveRateLimitCooldownSweep,
+  stopAdaptiveRateLimitCooldownSweep,
 } from "../rate-limit";
 
 function createRequest(
@@ -139,4 +144,74 @@ test("createImportsUploadRateLimiter throttles repeated upload attempts from the
   } finally {
     await stopTestServer(server);
   }
+});
+
+test("auth adaptive cooldown sweep is unrefed and stops idempotently", (t) => {
+  stopAdaptiveRateLimitCooldownSweep();
+  clearAdaptiveRateLimitCooldownsForTests();
+
+  let capturedDelay = 0;
+  let unrefCalled = false;
+  const fakeHandle = {
+    unref() {
+      unrefCalled = true;
+      return this;
+    },
+  } as unknown as ReturnType<typeof setInterval>;
+
+  const setIntervalMock = t.mock.method(
+    globalThis,
+    "setInterval",
+    (((handler: TimerHandler, delay?: number) => {
+      assert.equal(typeof handler, "function");
+      capturedDelay = Number(delay ?? 0);
+      return fakeHandle;
+    }) as unknown) as typeof setInterval,
+  );
+  const clearIntervalMock = t.mock.method(
+    globalThis,
+    "clearInterval",
+    (((handle?: ReturnType<typeof setInterval>) => {
+      assert.equal(handle, fakeHandle);
+    }) as unknown) as typeof clearInterval,
+  );
+
+  startAdaptiveRateLimitCooldownSweep();
+
+  assert.equal(setIntervalMock.mock.callCount(), 1);
+  assert.equal(capturedDelay, 30_000);
+  assert.equal(unrefCalled, true);
+  assert.deepEqual(getAdaptiveRateLimitCooldownStats(), {
+    bucketCount: 0,
+    sweepActive: true,
+  });
+
+  stopAdaptiveRateLimitCooldownSweep();
+  stopAdaptiveRateLimitCooldownSweep();
+
+  assert.equal(clearIntervalMock.mock.callCount(), 1);
+});
+
+test("auth adaptive cooldown sweep startup is singleton and prune is safe on empty state", (t) => {
+  stopAdaptiveRateLimitCooldownSweep();
+  clearAdaptiveRateLimitCooldownsForTests();
+
+  const fakeHandle = {
+    unref() {
+      return this;
+    },
+  } as unknown as ReturnType<typeof setInterval>;
+  const setIntervalMock = t.mock.method(
+    globalThis,
+    "setInterval",
+    (((_handler: TimerHandler) => fakeHandle) as unknown) as typeof setInterval,
+  );
+
+  startAdaptiveRateLimitCooldownSweep();
+  startAdaptiveRateLimitCooldownSweep();
+
+  assert.equal(setIntervalMock.mock.callCount(), 1);
+  assert.equal(pruneAdaptiveRateLimitCooldowns(Date.now()), 0);
+
+  stopAdaptiveRateLimitCooldownSweep();
 });

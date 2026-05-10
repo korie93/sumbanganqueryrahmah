@@ -6,7 +6,8 @@ export type InternalMetricName =
   | "webVitalsAcceptedTotal"
   | "webVitalsDroppedRateLimitTotal"
   | "webVitalsDroppedRequestGuardTotal"
-  | "webVitalsDroppedTotal";
+  | "webVitalsDroppedTotal"
+  | "webVitalsLegacyRouteUsedTotal";
 
 export type InternalMetricsRecorder = {
   increment: (name: InternalMetricName, amount?: number) => void;
@@ -25,6 +26,7 @@ const INTERNAL_METRIC_NAMES: readonly InternalMetricName[] = [
   "webVitalsDroppedRateLimitTotal",
   "webVitalsDroppedRequestGuardTotal",
   "webVitalsDroppedTotal",
+  "webVitalsLegacyRouteUsedTotal",
 ];
 
 export function createInternalMetrics(): InternalMetricsRecorder {

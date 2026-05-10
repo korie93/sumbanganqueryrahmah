@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import {
+  getBrowserLocalStorage,
   safeGetStorageItem,
   safeRemoveStorageItem,
   safeSetStorageItem,
@@ -15,9 +16,10 @@ function getSystemTheme(): AppTheme {
 
 function getStoredTheme(): AppTheme | null {
   if (typeof window === "undefined") return null;
-  const saved = safeGetStorageItem(localStorage, THEME_STORAGE_KEY);
+  const storage = getBrowserLocalStorage();
+  const saved = safeGetStorageItem(storage, THEME_STORAGE_KEY);
   if (saved !== "dark" && saved !== "light" && saved !== null) {
-    safeRemoveStorageItem(localStorage, THEME_STORAGE_KEY);
+    safeRemoveStorageItem(storage, THEME_STORAGE_KEY);
     return null;
   }
   return saved === "dark" || saved === "light" ? saved : null;
@@ -38,10 +40,11 @@ export function applyTheme(theme: AppTheme, options?: { persist?: boolean }) {
   }
   root.dataset.theme = theme;
   root.style.colorScheme = theme;
-  if (options?.persist !== false && typeof localStorage !== "undefined") {
-    safeSetStorageItem(localStorage, THEME_STORAGE_KEY, theme, {
+  if (options?.persist !== false) {
+    const storage = getBrowserLocalStorage();
+    safeSetStorageItem(storage, THEME_STORAGE_KEY, theme, {
       onQuotaExceeded: () => {
-        safeRemoveStorageItem(localStorage, THEME_STORAGE_KEY);
+        safeRemoveStorageItem(storage, THEME_STORAGE_KEY);
       },
     });
   }

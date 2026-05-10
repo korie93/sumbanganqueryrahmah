@@ -5,6 +5,16 @@ import {
   clearLegacyAuthLocalStorage,
   clearLegacyAuthLocalStorageValue,
 } from "@/lib/legacy-auth-storage";
+import {
+  calculateSessionExpiry,
+  isSessionExpired,
+  normalizeSessionExpiry,
+} from "@shared/auth-session-expiry";
+export {
+  calculateSessionExpiry,
+  isSessionExpired,
+  normalizeSessionExpiry,
+} from "@shared/auth-session-expiry";
 
 const AUTH_SESSION_HINT_COOKIE_NAME = "sqr_auth_hint";
 const AUTH_NOTICE_STORAGE_KEY = "auth_notice";
@@ -12,7 +22,6 @@ const FORCE_LOGOUT_EVENT_NAME = "force-logout";
 const FORCE_LOGOUT_BROADCAST_CHANNEL_NAME = "sqr-auth-force-logout";
 const AUTH_SESSION_STORED_AT_KEY = "sessionStoredAt";
 const AUTH_SESSION_EXPIRES_AT_KEY = "sessionExpiresAt";
-const AUTH_SESSION_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 const AUTH_SESSION_STORAGE_KEYS = [
   "activityId",
   "banned",
@@ -35,6 +44,10 @@ type ForcedLogoutPayload = {
 };
 
 type ForcedLogoutListener = (payload: ForcedLogoutPayload) => void;
+
+type PersistAuthenticatedUserOptions = {
+  sessionExpiresAt?: string | number | Date | null | undefined;
+};
 
 function canUseAuthStorage() {
   return typeof window !== "undefined"
@@ -117,15 +130,39 @@ function readAuthSessionTimestamp(key: typeof AUTH_SESSION_STORED_AT_KEY | typeo
   return value;
 }
 
-function writeAuthSessionMetadata(nowMs = Date.now()) {
+function resolveAuthSessionExpiry(
+  explicitExpiry: PersistAuthenticatedUserOptions["sessionExpiresAt"],
+  nowMs = Date.now(),
+): number {
+  const normalizedExplicit = normalizeSessionExpiry(explicitExpiry, { nowMs });
+  if (normalizedExplicit) {
+    return normalizedExplicit.expiresAtMs;
+  }
+
+  const storedExpiry = normalizeSessionExpiry(
+    readAuthSessionTimestamp(AUTH_SESSION_EXPIRES_AT_KEY),
+    { nowMs },
+  );
+  if (storedExpiry) {
+    return storedExpiry.expiresAtMs;
+  }
+
+  return calculateSessionExpiry(nowMs).expiresAtMs;
+}
+
+function writeAuthSessionMetadata(
+  options: PersistAuthenticatedUserOptions = {},
+  nowMs = Date.now(),
+) {
+  const expiresAtMs = resolveAuthSessionExpiry(options.sessionExpiresAt, nowMs);
   writeAuthSessionValue(AUTH_SESSION_STORED_AT_KEY, String(nowMs));
-  writeAuthSessionValue(AUTH_SESSION_EXPIRES_AT_KEY, String(nowMs + AUTH_SESSION_MAX_AGE_MS));
+  writeAuthSessionValue(AUTH_SESSION_EXPIRES_AT_KEY, String(expiresAtMs));
 }
 
 function isStoredAuthSessionExpired(nowMs = Date.now()): boolean {
   const expiresAt = readAuthSessionTimestamp(AUTH_SESSION_EXPIRES_AT_KEY);
   if (expiresAt !== null) {
-    return expiresAt <= nowMs;
+    return isSessionExpired(expiresAt, nowMs);
   }
 
   const storedAt = readAuthSessionTimestamp(AUTH_SESSION_STORED_AT_KEY);
@@ -133,7 +170,7 @@ function isStoredAuthSessionExpired(nowMs = Date.now()): boolean {
     return false;
   }
 
-  return storedAt + AUTH_SESSION_MAX_AGE_MS <= nowMs;
+  return isSessionExpired(calculateSessionExpiry(storedAt).expiresAtMs, nowMs);
 }
 
 function clearStoredAuthSessionValues() {
@@ -440,8 +477,13 @@ export function setBannedSessionFlag(isBanned: boolean) {
   removeAuthSessionValue("banned");
 }
 
-export function persistAuthenticatedUser(user: User) {
-  writeAuthSessionMetadata();
+export function persistAuthenticatedUser(
+  user: User,
+  options: PersistAuthenticatedUserOptions = {},
+) {
+  writeAuthSessionMetadata({
+    sessionExpiresAt: options.sessionExpiresAt ?? user.sessionExpiresAt,
+  });
   writeAuthSessionValue("username", String(user.username || "").trim());
   writeAuthSessionValue("role", String(user.role || "").trim());
   writeAuthSessionValue("user", JSON.stringify(user));

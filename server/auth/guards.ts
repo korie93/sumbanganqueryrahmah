@@ -9,6 +9,7 @@ import {
   getAccountAccessBlockReason,
 } from "./account-lifecycle";
 import { clearAuthSessionCookie, readAuthSessionTokenFromHeaders } from "./session-cookie";
+import { normalizeSessionExpiry } from "./session-lifetime";
 import { logger } from "../lib/logger";
 
 export interface AuthenticatedUser {
@@ -20,6 +21,8 @@ export interface AuthenticatedUser {
   mustChangePassword?: boolean | undefined;
   passwordResetBySuperuser?: boolean | undefined;
   isBanned?: boolean | null | undefined;
+  sessionExpiresAt?: string | null | undefined;
+  exp?: number | undefined;
 }
 
 export interface AuthenticatedRequest extends Request {
@@ -311,6 +314,10 @@ export function createAuthGuards(options: CreateAuthGuardsOptions) {
 
     try {
       const decoded = verifySessionJwt<AuthenticatedUser>(token, secret) as AuthenticatedUser;
+      const sessionExpiry = normalizeSessionExpiry(
+        typeof decoded.exp === "number" ? decoded.exp * 1000 : null,
+        { allowExpired: true },
+      );
       const { activity, user, isVisitorBanned } = await loadAuthenticatedSessionSnapshot(decoded);
 
       if (!activity || activity.isActive === false || activity.logoutTime !== null) {
@@ -389,6 +396,7 @@ export function createAuthGuards(options: CreateAuthGuardsOptions) {
         mustChangePassword: user.mustChangePassword,
         passwordResetBySuperuser: user.passwordResetBySuperuser,
         isBanned: user.isBanned,
+        sessionExpiresAt: sessionExpiry?.expiresAtIso ?? null,
       };
 
       return next();

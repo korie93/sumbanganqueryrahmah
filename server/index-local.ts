@@ -13,6 +13,7 @@ import { markStartupFailed } from "./internal/startup-health";
 import { pool, stopPgPoolBackgroundTasks } from "./db-postgres";
 import { logger } from "./lib/logger";
 import { runtimeConfig } from "./config/runtime";
+import { stopAdaptiveRateLimitCooldownSweep } from "./middleware/rate-limit";
 
 let reportedWorkerFatalReason: string | null = null;
 
@@ -72,6 +73,7 @@ async function finishShutdown() {
   }
 
   stopIntelligenceFailSafeLogger();
+  stopAdaptiveRateLimitCooldownSweep();
 
   await shutdownPgPoolSafely({
     logger,
@@ -179,6 +181,7 @@ startServer().catch(async (error) => {
   markStartupFailed(startupReason, message);
   logger.error("Local server failed during startup", { error });
   stopIntelligenceFailSafeLogger();
+  stopAdaptiveRateLimitCooldownSweep();
 
   await shutdownPgPoolSafely({
     logger,

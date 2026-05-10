@@ -9,7 +9,9 @@ import {
   getStoredAuthenticatedUser,
   getStoredRole,
   getStoredUsername,
+  isSessionExpired,
   isBannedSessionFlagSet,
+  normalizeSessionExpiry,
   parseForcedLogoutStorageValue,
   persistAuthenticatedUser,
   persistAuthNotice,
@@ -121,6 +123,34 @@ test("persistAuthenticatedUser stores auth session data in sessionStorage instea
   assert.equal(local.getItem("username"), null);
   assert.equal(local.getItem("role"), null);
   assert.equal(local.getItem("user"), null);
+});
+
+test("persistAuthenticatedUser stores the server-issued session expiry when supplied", () => {
+  const { session } = installStorageMocks();
+  const sessionExpiresAt = "2099-05-11T01:02:03.000Z";
+
+  persistAuthenticatedUser({ ...sampleUser, sessionExpiresAt });
+
+  assert.equal(
+    new Date(Number(session.getItem("sessionExpiresAt"))).toISOString(),
+    sessionExpiresAt,
+  );
+  assert.equal(
+    normalizeSessionExpiry(sessionExpiresAt, { nowMs: Date.parse("2099-05-10T01:02:03.000Z") })?.expiresAtIso,
+    sessionExpiresAt,
+  );
+  assert.equal(isSessionExpired(sessionExpiresAt, Date.parse("2099-05-10T01:02:03.000Z")), false);
+});
+
+test("persistAuthenticatedUser preserves existing server expiry during profile-only refreshes", () => {
+  const { session } = installStorageMocks();
+  const sessionExpiresAt = "2099-05-11T01:02:03.000Z";
+
+  persistAuthenticatedUser(sampleUser, { sessionExpiresAt });
+  const firstExpiry = session.getItem("sessionExpiresAt");
+  persistAuthenticatedUser({ ...sampleUser, fullName: "Alice Updated" });
+
+  assert.equal(session.getItem("sessionExpiresAt"), firstExpiry);
 });
 
 test("getStoredAuthenticatedUser ignores and clears legacy localStorage auth data", () => {

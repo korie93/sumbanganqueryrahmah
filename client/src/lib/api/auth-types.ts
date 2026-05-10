@@ -11,6 +11,7 @@ export type CurrentUser = {
   twoFactorEnabled?: boolean;
   twoFactorPendingSetup?: boolean;
   twoFactorConfiguredAt?: string | null;
+  sessionExpiresAt?: string | null;
 };
 
 export type ActivationTokenValidationPayload = {
@@ -102,6 +103,7 @@ export type LoginSuccessResponse = AuthOkResponse<{
   mustChangePassword: boolean;
   status: string;
   user: CurrentUser | null;
+  sessionExpiresAt: string;
 }>;
 
 export type LoginTwoFactorChallengeResponse = AuthOkResponse<{
@@ -117,6 +119,7 @@ export type LoginTwoFactorChallengeResponse = AuthOkResponse<{
 export type LoginResponse = LoginSuccessResponse | LoginTwoFactorChallengeResponse;
 
 export type AuthUserResponse = AuthOkResponse<{
+  sessionExpiresAt: string | null;
   user: CurrentUser | null;
 }>;
 

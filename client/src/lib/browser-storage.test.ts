@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  getBrowserLocalStorage,
   getBrowserSessionStorage,
   isQuotaExceededStorageError,
   safeGetStorageItem,
@@ -67,6 +68,38 @@ test("getBrowserSessionStorage returns the browser session storage when availabl
   try {
     assert.equal(getBrowserSessionStorage(), storage);
   } finally {
+    Object.defineProperty(globalThis, "sessionStorage", {
+      configurable: true,
+      value: originalSessionStorage,
+    });
+  }
+});
+
+test("browser storage accessors tolerate unavailable browser storage getters", () => {
+  const originalLocalStorage = globalThis.localStorage;
+  const originalSessionStorage = globalThis.sessionStorage;
+
+  Object.defineProperty(globalThis, "localStorage", {
+    configurable: true,
+    get() {
+      throw new Error("local storage denied");
+    },
+  });
+  Object.defineProperty(globalThis, "sessionStorage", {
+    configurable: true,
+    get() {
+      throw new Error("session storage denied");
+    },
+  });
+
+  try {
+    assert.equal(getBrowserLocalStorage(), null);
+    assert.equal(getBrowserSessionStorage(), null);
+  } finally {
+    Object.defineProperty(globalThis, "localStorage", {
+      configurable: true,
+      value: originalLocalStorage,
+    });
     Object.defineProperty(globalThis, "sessionStorage", {
       configurable: true,
       value: originalSessionStorage,

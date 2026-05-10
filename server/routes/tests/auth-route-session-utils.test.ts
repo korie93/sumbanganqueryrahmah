@@ -7,6 +7,7 @@ import { AuthAccountError } from "../../services/auth-account.service";
 import {
   closeAuthActivitySockets,
   parseAuthBrowserName,
+  signAuthSessionTokenWithExpiry,
   signAuthTwoFactorChallengeToken,
   verifyAuthTwoFactorChallengeToken,
 } from "../auth/auth-route-session-utils";
@@ -40,6 +41,19 @@ test("auth route session utils round-trip two-factor challenge tokens and normal
     ),
     "Chrome 120",
   );
+});
+
+test("auth route session utils expose the JWT-backed session expiry timestamp", () => {
+  const session = signAuthSessionTokenWithExpiry({
+    userId: "user-1",
+    username: "alpha.user",
+    role: "admin",
+    activityId: "activity-1",
+  });
+
+  assert.match(session.token, /^[\w-]+\.[\w-]+\.[\w-]+$/);
+  assert.equal(new Date(session.expiresAt).getTime(), session.expiresAtMs);
+  assert.ok(session.expiresAtMs > Date.now());
 });
 
 test("auth route session utils reject invalid two-factor challenge tokens and close activity sockets safely", async () => {

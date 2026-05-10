@@ -21,9 +21,10 @@ import {
 import {
   closeAuthActivitySockets,
   parseAuthBrowserName,
-  signAuthSessionToken,
+  signAuthSessionTokenWithExpiry,
   signAuthTwoFactorChallengeToken,
   verifyAuthTwoFactorChallengeToken,
+  type SignedAuthSession,
 } from "./auth-route-session-utils";
 
 export type AuthRouteDeps = {
@@ -71,7 +72,7 @@ export type AuthRouteContext = {
     activation: ManagedAccountActivationDelivery | ManagedAccountPasswordResetDelivery,
   ) => Record<string, unknown>;
   buildOkPayload: <T extends Record<string, unknown>>(payload: T) => T & { ok: true };
-  signSessionToken: (payload: { userId: string; username: string; role: string; activityId: string }, res?: Response | null) => string;
+  signSessionToken: (payload: { userId: string; username: string; role: string; activityId: string }, res?: Response | null) => SignedAuthSession;
   signTwoFactorChallengeToken: (payload: {
     userId: string;
     username: string;
@@ -126,7 +127,7 @@ export function createAuthRouteContext(app: Express, deps: AuthRouteDeps): AuthR
     buildDeliveryPayload,
     buildOkPayload,
     signSessionToken(payload, res) {
-      return signAuthSessionToken(payload, res);
+      return signAuthSessionTokenWithExpiry(payload, res);
     },
     signTwoFactorChallengeToken(payload) {
       return signAuthTwoFactorChallengeToken(payload);

@@ -59,7 +59,7 @@ export function registerAuthLoginRoutes(context: AuthRouteContext) {
 
     const { user, activity, closedSessionIds } = loginResult;
 
-    signSessionToken(
+    const session = signSessionToken(
       {
         userId: user.id,
         username: user.username,
@@ -82,6 +82,7 @@ export function registerAuthLoginRoutes(context: AuthRouteContext) {
       mustChangePassword: user.mustChangePassword,
       status: user.status,
       user: buildUserPayload(user),
+      sessionExpiresAt: session.expiresAt,
     };
   });
 
@@ -121,7 +122,7 @@ export function registerAuthLoginRoutes(context: AuthRouteContext) {
         ipAddress: challenge.ipAddress,
       });
 
-      signSessionToken(
+      const session = signSessionToken(
         {
           userId: result.user.id,
           username: result.user.username,
@@ -144,6 +145,7 @@ export function registerAuthLoginRoutes(context: AuthRouteContext) {
         mustChangePassword: result.user.mustChangePassword,
         status: result.user.status,
         user: buildUserPayload(result.user),
+        sessionExpiresAt: session.expiresAt,
       };
     }),
   );

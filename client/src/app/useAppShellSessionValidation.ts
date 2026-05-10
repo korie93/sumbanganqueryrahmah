@@ -48,6 +48,7 @@ export function useAppShellSessionValidation({
           mustChangePassword: Boolean(me.mustChangePassword),
           passwordResetBySuperuser: Boolean(me.passwordResetBySuperuser),
           isBanned: me.isBanned ?? null,
+          sessionExpiresAt: me.sessionExpiresAt ?? null,
         };
 
         persistAuthenticatedUser(nextUser);

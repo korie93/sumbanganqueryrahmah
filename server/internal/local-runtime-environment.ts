@@ -11,6 +11,7 @@ import { MonitorAlertHistoryRepository } from "../repositories/monitor-alert-his
 import { PostgresStorage } from "../storage-postgres";
 import { createAiConcurrencyGate } from "./aiConcurrencyGate";
 import { createApiProtectionMiddleware } from "./apiProtection";
+import { stopAdaptiveRateLimitCooldownSweep } from "../middleware/rate-limit";
 import {
   createLocalServerComposition,
   registerLocalServerRoutes,
@@ -122,6 +123,7 @@ export function createLocalRuntimeEnvironment(options: CreateLocalRuntimeEnviron
       getDbProtection,
     });
   server.once("close", stopAdaptiveRateStateSweep);
+  server.once("close", stopAdaptiveRateLimitCooldownSweep);
 
   const { withAiConcurrencyGate, stopAiConcurrencyGate } = createAiConcurrencyGate({
     globalLimit: runtimeConfig.ai.gate.globalLimit,

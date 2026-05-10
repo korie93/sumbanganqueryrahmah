@@ -545,7 +545,11 @@ test("GET /api/me accepts the auth session cookie without a bearer token", async
     assert.equal(payload.user.username, user.username);
     assert.equal(payload.user.role, user.role);
     assert.equal(payload.user.status, user.status);
+    assert.equal(typeof payload.sessionExpiresAt, "string");
+    assert.ok(Date.parse(payload.sessionExpiresAt) > Date.now());
   } finally {
+    guards.stopActivityUpdateCacheSweep();
+    guards.stopTabVisibilityCacheSweep();
     await stopTestServer(server);
   }
 });
@@ -1075,6 +1079,8 @@ test("POST /api/auth/login sets the auth cookie without exposing the JWT in JSON
     assert.equal(payload.ok, true);
     assert.equal(payload.username, user.username);
     assert.equal(payload.activityId, activity.id);
+    assert.equal(typeof payload.sessionExpiresAt, "string");
+    assert.ok(Date.parse(payload.sessionExpiresAt) > Date.now());
     assert.equal(payload.token, undefined);
 
     const setCookie = response.headers.get("set-cookie") || "";
@@ -1365,6 +1371,8 @@ test("POST /api/auth/login returns a 2FA challenge for enabled admin accounts an
     const verifyPayload = await verifyResponse.json();
     assert.equal(verifyPayload.ok, true);
     assert.equal(verifyPayload.activityId, activity.id);
+    assert.equal(typeof verifyPayload.sessionExpiresAt, "string");
+    assert.ok(Date.parse(verifyPayload.sessionExpiresAt) > Date.now());
     const setCookie = verifyResponse.headers.get("set-cookie") || "";
     assert.match(setCookie, /sqr_auth=/);
     assert.equal(auditLogs.some((entry) => entry.action === "LOGIN_SECOND_FACTOR_REQUIRED"), true);

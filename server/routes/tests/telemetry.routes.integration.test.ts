@@ -254,7 +254,8 @@ test("POST /api/telemetry/web-vitals accepts a valid web vitals payload", async 
 });
 
 test("POST /telemetry/web-vitals remains a guarded compatibility alias", async () => {
-  const { app, recordedPayloads } = createTelemetryRouteHarness();
+  const metrics = createInternalMetrics();
+  const { app, recordedPayloads } = createTelemetryRouteHarness({ metrics });
   const { server, baseUrl } = await startTestServer(app);
 
   try {
@@ -271,6 +272,7 @@ test("POST /telemetry/web-vitals remains a guarded compatibility alias", async (
     assert.equal(response.headers.get("Sunset"), LEGACY_WEB_VITALS_TELEMETRY_SUNSET);
     assert.match(String(response.headers.get("Link") || ""), new RegExp(`<${CANONICAL_WEB_VITALS_TELEMETRY_PATH}>; rel="successor-version"`));
     assert.equal(recordedPayloads.length, 1);
+    assert.equal(metrics.snapshot().counters.webVitalsLegacyRouteUsedTotal, 1);
   } finally {
     await stopTestServer(server);
   }

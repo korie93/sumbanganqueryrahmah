@@ -42,6 +42,7 @@ type AuthenticatedLikeRequest = Request & {
 const AUTH_RATE_LIMIT_HASH_LENGTH = 24;
 const ADAPTIVE_RATE_LIMIT_MAX_BUCKETS = 4_096;
 const ADAPTIVE_RATE_LIMIT_MAX_COOLDOWN_MS = 60 * 60 * 1000;
+const ADAPTIVE_RATE_LIMIT_SWEEP_INTERVAL_MS = 30_000;
 
 type AdaptiveRateLimitBucket = {
   expiresAt: number;
@@ -50,6 +51,7 @@ type AdaptiveRateLimitBucket = {
 };
 
 const adaptiveRateLimitCooldowns = new Map<string, AdaptiveRateLimitBucket>();
+let adaptiveRateLimitCooldownSweepHandle: ReturnType<typeof setInterval> | null = null;
 
 function normalizeKeyPart(value: unknown): string | null {
   if (typeof value !== "string") {
@@ -121,10 +123,12 @@ function buildRateLimitKey(req: Request, scope: string, ...parts: Array<unknown>
   return keyParts.join("|");
 }
 
-function pruneAdaptiveRateLimitCooldowns(nowMs: number) {
+export function pruneAdaptiveRateLimitCooldowns(nowMs = Date.now()): number {
+  let removedCount = 0;
   for (const [key, bucket] of adaptiveRateLimitCooldowns) {
     if (bucket.expiresAt <= nowMs) {
       adaptiveRateLimitCooldowns.delete(key);
+      removedCount += 1;
     }
   }
 
@@ -142,7 +146,47 @@ function pruneAdaptiveRateLimitCooldowns(nowMs: number) {
       break;
     }
     adaptiveRateLimitCooldowns.delete(oldestKey);
+    removedCount += 1;
   }
+
+  return removedCount;
+}
+
+export function startAdaptiveRateLimitCooldownSweep(): () => void {
+  if (adaptiveRateLimitCooldownSweepHandle) {
+    return stopAdaptiveRateLimitCooldownSweep;
+  }
+
+  adaptiveRateLimitCooldownSweepHandle = setInterval(() => {
+    const removedCount = pruneAdaptiveRateLimitCooldowns(Date.now());
+    if (removedCount > 0) {
+      logger.debug("Pruned expired auth adaptive rate-limit cooldowns", {
+        removedCount,
+        remainingCount: adaptiveRateLimitCooldowns.size,
+      });
+    }
+  }, ADAPTIVE_RATE_LIMIT_SWEEP_INTERVAL_MS);
+  adaptiveRateLimitCooldownSweepHandle.unref?.();
+  return stopAdaptiveRateLimitCooldownSweep;
+}
+
+export function stopAdaptiveRateLimitCooldownSweep() {
+  if (!adaptiveRateLimitCooldownSweepHandle) {
+    return;
+  }
+  clearInterval(adaptiveRateLimitCooldownSweepHandle);
+  adaptiveRateLimitCooldownSweepHandle = null;
+}
+
+export function getAdaptiveRateLimitCooldownStats() {
+  return {
+    bucketCount: adaptiveRateLimitCooldowns.size,
+    sweepActive: adaptiveRateLimitCooldownSweepHandle !== null,
+  };
+}
+
+export function clearAdaptiveRateLimitCooldownsForTests() {
+  adaptiveRateLimitCooldowns.clear();
 }
 
 function resolveJsonRateLimiterKey(req: Request, options: JsonRateLimiterOptions): string {
@@ -287,6 +331,7 @@ export function createImportsUploadRateLimiter(
 export const importsUploadRateLimiter = createImportsUploadRateLimiter();
 
 export function createAuthRouteRateLimiters(): AuthRouteRateLimiters {
+  startAdaptiveRateLimitCooldownSweep();
   return {
     loginIp: createJsonRateLimiter({
       windowMs: 10 * 60 * 1000,

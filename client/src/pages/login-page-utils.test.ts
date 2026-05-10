@@ -20,6 +20,7 @@ test("buildAuthenticatedUser prefers nested user fields and normalizes username 
     activityId: "activity-1",
     mustChangePassword: false,
     status: "active",
+    sessionExpiresAt: "2099-05-11T01:02:03.000Z",
     user: {
       id: "user-1",
       username: "ADMIN.USER",
@@ -41,6 +42,7 @@ test("buildAuthenticatedUser prefers nested user fields and normalizes username 
   assert.equal(user.mustChangePassword, true);
   assert.equal(user.passwordResetBySuperuser, true);
   assert.equal(user.twoFactorEnabled, true);
+  assert.equal(user.sessionExpiresAt, "2099-05-11T01:02:03.000Z");
 });
 
 test("resolveAuthenticatedDefaultTab honors password-change and role priorities", () => {

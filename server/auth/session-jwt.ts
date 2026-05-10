@@ -32,6 +32,18 @@ export function signSessionJwt<TPayload extends object>(
   });
 }
 
+export function resolveSessionJwtExpiresAt(token: string): Date | null {
+  const decoded = jwt.decode(token) as { exp?: unknown } | null;
+  const expSeconds = Number(decoded?.exp);
+  if (!Number.isFinite(expSeconds) || expSeconds <= 0) {
+    return null;
+  }
+  const expiresAtMs = expSeconds * 1000;
+  return Number.isFinite(expiresAtMs) && expiresAtMs > 0
+    ? new Date(expiresAtMs)
+    : null;
+}
+
 export function verifyJwtWithAnySecret<TPayload>(
   token: string,
   secrets: string | readonly string[],

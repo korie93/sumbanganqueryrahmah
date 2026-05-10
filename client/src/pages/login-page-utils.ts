@@ -28,6 +28,7 @@ export function buildAuthenticatedUser(response: LoginSuccessResponse): User {
     twoFactorEnabled: Boolean(response.user?.twoFactorEnabled ?? false),
     twoFactorPendingSetup: Boolean(response.user?.twoFactorPendingSetup ?? false),
     twoFactorConfiguredAt: response.user?.twoFactorConfiguredAt ?? null,
+    sessionExpiresAt: response.sessionExpiresAt,
   };
 }
 

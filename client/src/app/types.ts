@@ -11,6 +11,7 @@ export interface User {
   twoFactorEnabled?: boolean | undefined;
   twoFactorPendingSetup?: boolean | undefined;
   twoFactorConfiguredAt?: string | null | undefined;
+  sessionExpiresAt?: string | null | undefined;
 }
 
 export type MonitorSection = "dashboard" | "activity" | "monitor" | "analysis" | "audit";

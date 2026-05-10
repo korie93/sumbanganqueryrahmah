@@ -2,8 +2,13 @@ import type { Response } from "express";
 import { WebSocket } from "ws";
 import {
   signSessionJwt,
+  resolveSessionJwtExpiresAt,
   verifySessionJwt,
 } from "../../auth/session-jwt";
+import {
+  calculateSessionExpiry,
+  normalizeSessionExpiry,
+} from "../../auth/session-lifetime";
 import { setAuthSessionCookie } from "../../auth/session-cookie";
 import { parseBrowser } from "../../lib/browser";
 import { logger } from "../../lib/logger";
@@ -18,6 +23,12 @@ type SessionTokenPayload = {
   username: string;
   role: string;
   activityId: string;
+};
+
+export type SignedAuthSession = {
+  expiresAt: string;
+  expiresAtMs: number;
+  token: string;
 };
 
 type TwoFactorChallengeTokenPayload = {
@@ -101,6 +112,22 @@ export function signAuthSessionToken(payload: SessionTokenPayload, res?: Respons
     setAuthSessionCookie(res, token);
   }
   return token;
+}
+
+export function signAuthSessionTokenWithExpiry(
+  payload: SessionTokenPayload,
+  res?: Response | null,
+): SignedAuthSession {
+  const token = signAuthSessionToken(payload, res);
+  const tokenExpiry = normalizeSessionExpiry(resolveSessionJwtExpiresAt(token), {
+    allowExpired: true,
+  }) ?? calculateSessionExpiry();
+
+  return {
+    expiresAt: tokenExpiry.expiresAtIso,
+    expiresAtMs: tokenExpiry.expiresAtMs,
+    token,
+  };
 }
 
 export function signAuthTwoFactorChallengeToken(payload: TwoFactorChallengeTokenPayload) {

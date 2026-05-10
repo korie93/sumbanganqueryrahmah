@@ -27,6 +27,7 @@ export function registerAuthSelfServiceRoutes(context: AuthRouteContext) {
     const user = await authAccountService.getCurrentUser(req.user);
     return buildOkPayload({
       user: buildUserPayload(user),
+      sessionExpiresAt: req.user?.sessionExpiresAt ?? null,
     });
   });
 

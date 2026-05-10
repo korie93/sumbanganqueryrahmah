@@ -162,5 +162,8 @@ export async function getMe(options?: RequestOptions): Promise<CurrentUser> {
   if (!payload.user) {
     throw new Error("Authenticated user payload is missing.");
   }
-  return payload.user;
+  return {
+    ...payload.user,
+    sessionExpiresAt: payload.sessionExpiresAt ?? null,
+  };
 }
