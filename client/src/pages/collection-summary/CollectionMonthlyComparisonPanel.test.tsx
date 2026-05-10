@@ -220,6 +220,10 @@ test("CollectionMonthlyComparisonPanel renders monthly totals and comparison sum
   assert.match(markup, /Banding dengan/);
   assert.match(markup, /Hari sama bulan lepas/);
   assert.match(markup, /Hari sama tahun lepas/);
+  assert.match(markup, /Today/);
+  assert.match(markup, /Yesterday/);
+  assert.match(markup, /Current day-of-month/);
+  assert.match(markup, /End-of-month simulation/);
   assert.match(markup, /Hari terakhir ada kutipan/);
   assert.match(markup, /Hari terbaik bulan ini/);
   assert.match(markup, /Jumlah sampai hari dipilih/);

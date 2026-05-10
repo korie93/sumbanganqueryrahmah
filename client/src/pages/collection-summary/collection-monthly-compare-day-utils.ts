@@ -15,6 +15,10 @@ export type CollectionSameDayPaceWindowMode =
   | "custom-range";
 
 export type CollectionSameDayPaceQuickOptionId =
+  | "today"
+  | "yesterday"
+  | "current-day-of-month"
+  | "end-of-month-simulation"
   | "same-day-previous-month"
   | "same-day-previous-year"
   | "last-collection-day"
@@ -45,6 +49,24 @@ type CollectionSameDayPaceQuickPoint = {
   day: number;
   currentAmount: number;
 };
+
+function getLocalReferenceMonthKey(referenceDate: Date): string | null {
+  if (!Number.isFinite(referenceDate.getTime())) {
+    return null;
+  }
+
+  const year = referenceDate.getFullYear();
+  const month = referenceDate.getMonth() + 1;
+  return `${year}-${String(month).padStart(2, "0")}`;
+}
+
+function getSafeReferenceDay(referenceDate: Date): number | null {
+  if (!Number.isFinite(referenceDate.getTime())) {
+    return null;
+  }
+
+  return Math.max(1, Math.trunc(referenceDate.getDate()));
+}
 
 export function resolveCollectionSameDayPaceComparisonMonthKey(input: {
   currentMonthKey: string;
@@ -184,8 +206,29 @@ export function resolveCollectionSameDayPaceCompareModeLabel(
 export function buildCollectionSameDayPaceQuickOptions(input: {
   points?: CollectionSameDayPaceQuickPoint[] | null | undefined;
   maxDay: number;
+  currentMonthKey?: string | null | undefined;
+  referenceDate?: Date | undefined;
 }): CollectionSameDayPaceQuickOption[] {
   const safeMaxDay = Math.max(1, Math.trunc(Number(input.maxDay || 1)));
+  const referenceDate = input.referenceDate ?? new Date();
+  const referenceMonthKey = getLocalReferenceMonthKey(referenceDate);
+  const referenceDay = getSafeReferenceDay(referenceDate);
+  const currentMonthKey = String(input.currentMonthKey || "").trim();
+  const selectedMonthIsCurrentMonth = Boolean(
+    currentMonthKey
+    && referenceMonthKey
+    && currentMonthKey === referenceMonthKey,
+  );
+  const currentDayOfMonth = referenceDay === null
+    ? safeMaxDay
+    : Math.max(1, Math.min(safeMaxDay, referenceDay));
+  const yesterdayDayOfMonth = referenceDay === null
+    ? null
+    : Math.max(1, Math.min(safeMaxDay, referenceDay - 1));
+  const yesterdayAvailable = selectedMonthIsCurrentMonth
+    && yesterdayDayOfMonth !== null
+    && referenceDay !== null
+    && referenceDay > 1;
   const points = (input.points || [])
     .filter((point) => point.day >= 1 && point.day <= safeMaxDay);
   const activePoints = points.filter((point) => point.currentAmount > 0);
@@ -200,6 +243,44 @@ export function buildCollectionSameDayPaceQuickOptions(input: {
   ), null);
 
   return [
+    {
+      id: "today",
+      label: "Today",
+      description: selectedMonthIsCurrentMonth
+        ? `Bandingkan jumlah terkumpul sehingga hari ${currentDayOfMonth} bulan semasa.`
+        : "Today hanya aktif apabila end month ialah bulan semasa.",
+      windowMode: "cumulative",
+      range: selectedMonthIsCurrentMonth ? { startDay: 1, endDay: currentDayOfMonth } : undefined,
+      disabled: !selectedMonthIsCurrentMonth,
+    },
+    {
+      id: "yesterday",
+      label: "Yesterday",
+      description: yesterdayAvailable
+        ? `Bandingkan jumlah terkumpul sehingga semalam, hari ${yesterdayDayOfMonth}.`
+        : "Yesterday hanya aktif untuk bulan semasa selepas hari pertama bulan.",
+      windowMode: "cumulative",
+      range: yesterdayAvailable && yesterdayDayOfMonth !== null
+        ? { startDay: 1, endDay: yesterdayDayOfMonth }
+        : undefined,
+      disabled: !yesterdayAvailable,
+    },
+    {
+      id: "current-day-of-month",
+      label: "Current day-of-month",
+      description: referenceDay !== null && referenceDay > safeMaxDay
+        ? `Hari semasa melebihi bulan dipilih, jadi comparison dikunci pada hari ${safeMaxDay}.`
+        : `Gunakan nombor hari semasa, hari ${currentDayOfMonth}, pada bulan dipilih.`,
+      windowMode: "cumulative",
+      range: { startDay: 1, endDay: currentDayOfMonth },
+    },
+    {
+      id: "end-of-month-simulation",
+      label: "End-of-month simulation",
+      description: `Simulasikan comparison penuh sehingga hari ${safeMaxDay}.`,
+      windowMode: "cumulative",
+      range: { startDay: 1, endDay: safeMaxDay },
+    },
     {
       id: "same-day-previous-month",
       label: "Hari sama bulan lepas",

@@ -207,7 +207,8 @@ function SameDayCompareDayControls({
   const quickOptions = useMemo(() => buildCollectionSameDayPaceQuickOptions({
     points: pace.points,
     maxDay: safeMaxDay,
-  }), [pace.points, safeMaxDay]);
+    currentMonthKey: pace.currentMonth,
+  }), [pace.currentMonth, pace.points, safeMaxDay]);
   const windowMode = resolveCollectionSameDayPaceWindowMode(dayRange);
   const selectedDay = Math.max(1, Math.min(safeMaxDay, dayRange.endDay));
   const selectedStartDay = Math.max(1, Math.min(selectedDay, dayRange.startDay));
@@ -247,7 +248,7 @@ function SameDayCompareDayControls({
             Pilih compare day
           </p>
           <p className="text-xs leading-5 text-muted-foreground">
-            Ringkas untuk user biasa, masih tepat untuk audit harian.
+            Pilih hari dengan cepat tanpa kira manual. Chart, insight dan CSV akan ikut pilihan ini.
           </p>
         </div>
         <span className="rounded-full border border-border/60 bg-background px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
@@ -326,14 +327,14 @@ function SameDayCompareDayControls({
         </label>
 
         <label className="collection-monthly-comparison-select-label" htmlFor={`${controlId}-quick`}>
-          <span>Quick preset</span>
+          <span>Preset cepat</span>
           <select
             id={`${controlId}-quick`}
             className="collection-monthly-comparison-control collection-monthly-comparison-select"
             value=""
             onChange={(event) => applyQuickOption(event.target.value as CollectionSameDayPaceQuickOptionId)}
           >
-            <option value="">Pilih preset...</option>
+            <option value="">Pilih preset cepat...</option>
             {quickOptions.map((option) => (
               <option key={option.id} value={option.id} disabled={option.disabled}>
                 {option.label}

@@ -310,6 +310,8 @@ test("collection same-day compare-day helpers normalize dropdown ranges and base
 test("collection same-day quick presets select last, best, and weakest active days", () => {
   const options = buildCollectionSameDayPaceQuickOptions({
     maxDay: 31,
+    currentMonthKey: "2026-05",
+    referenceDate: new Date(2026, 4, 10, 12),
     points: [
       { day: 1, currentAmount: 0 },
       { day: 2, currentAmount: 100 },
@@ -321,12 +323,36 @@ test("collection same-day quick presets select last, best, and weakest active da
   const lastCollectionDay = options.find((option) => option.id === "last-collection-day");
   const bestDay = options.find((option) => option.id === "best-current-day");
   const weakestDay = options.find((option) => option.id === "weakest-current-day");
+  const today = options.find((option) => option.id === "today");
+  const yesterday = options.find((option) => option.id === "yesterday");
+  const endOfMonth = options.find((option) => option.id === "end-of-month-simulation");
 
+  assert.deepEqual(today?.range, { startDay: 1, endDay: 10 });
+  assert.deepEqual(yesterday?.range, { startDay: 1, endDay: 9 });
+  assert.deepEqual(endOfMonth?.range, { startDay: 1, endDay: 31 });
   assert.deepEqual(lastCollectionDay?.range, { startDay: 1, endDay: 4 });
   assert.deepEqual(bestDay?.range, { startDay: 3, endDay: 3 });
   assert.deepEqual(weakestDay?.range, { startDay: 4, endDay: 4 });
   assert.equal(bestDay?.windowMode, "single-day");
   assert.equal(options.find((option) => option.id === "same-day-previous-year")?.comparisonMode, "previous-year");
+});
+
+test("collection same-day quick presets disable real today safely outside current month and cap short months", () => {
+  const options = buildCollectionSameDayPaceQuickOptions({
+    maxDay: 28,
+    currentMonthKey: "2026-02",
+    referenceDate: new Date(2026, 4, 31, 12),
+    points: [],
+  });
+
+  const today = options.find((option) => option.id === "today");
+  const yesterday = options.find((option) => option.id === "yesterday");
+  const currentDay = options.find((option) => option.id === "current-day-of-month");
+
+  assert.equal(today?.disabled, true);
+  assert.equal(yesterday?.disabled, true);
+  assert.deepEqual(currentDay?.range, { startDay: 1, endDay: 28 });
+  assert.match(currentDay?.description || "", /dikunci pada hari 28/);
 });
 
 test("collection same-day pace supports custom selected day ranges and calendar-aware insight", () => {
