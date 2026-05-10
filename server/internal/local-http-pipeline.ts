@@ -1,4 +1,5 @@
 import express, { type Express, type RequestHandler } from "express";
+import compression from "compression";
 import helmet from "helmet";
 import { runtimeConfig } from "../config/runtime";
 import { logger } from "../lib/logger";
@@ -27,6 +28,7 @@ const WEB_VITALS_TELEMETRY_ENDPOINT_PATHS = [
   "/api/telemetry/web-vitals",
   "/telemetry/web-vitals",
 ] as const;
+const API_COMPRESSION_THRESHOLD_BYTES = 1024;
 const REACT_REMOVE_SCROLL_BAR_STYLE_HASHES = [
   "'sha256-nzTgYzXYDNe6BAHiiI7NNlfK8n/auuOAhh2t92YvuXo='",
   "'sha256-yMyGHLLNy9ZXD5cfUANqBnMLxrInc0Xt5wSlgMO77gw='",
@@ -106,6 +108,18 @@ type LocalHttpPipelineOptions = {
   maintenanceGuard: RequestHandler;
 };
 
+function shouldCompressApiResponse(req: express.Request, res: express.Response) {
+  if (req.headers.upgrade) {
+    return false;
+  }
+
+  if (req.path !== "/api" && !req.path.startsWith("/api/")) {
+    return false;
+  }
+
+  return compression.filter(req, res);
+}
+
 export function registerLocalHttpPipeline(app: Express, options: LocalHttpPipelineOptions) {
   const {
     importBodyLimit,
@@ -166,6 +180,11 @@ export function registerLocalHttpPipeline(app: Express, options: LocalHttpPipeli
     res.setHeader("Reporting-Endpoints", CSP_REPORTING_ENDPOINTS_VALUE);
     next();
   });
+
+  app.use(compression({
+    threshold: API_COMPRESSION_THRESHOLD_BYTES,
+    filter: shouldCompressApiResponse,
+  }));
 
   // Keep default parser small; enable larger payload only for import endpoints.
   app.use("/api/imports", express.json({ limit: importBodyLimit }));

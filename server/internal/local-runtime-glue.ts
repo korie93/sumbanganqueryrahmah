@@ -7,7 +7,7 @@ type SearchInflightState = typeof globalThis & {
 
 type RuntimeGlueOptions = {
   server: Server;
-  aiSearchService: Pick<AiSearchService, "clearSearchCache" | "sweepCaches">;
+  aiSearchService: Pick<AiSearchService, "clearSearchCache" | "disposeDebugState" | "sweepCaches">;
   attachGcObserver: () => void;
   attachProcessMessageHandlers: (options: { onGracefulShutdown: () => void }) => void;
   startRuntimeLoops: (options: { clearSearchCache: () => void }) => void;
@@ -48,6 +48,7 @@ export function attachLocalRuntimeGlue(options: RuntimeGlueOptions) {
   cacheSweepHandle.unref();
   server.once("close", () => {
     clearInterval(cacheSweepHandle);
+    aiSearchService.disposeDebugState();
     stopRuntimeMonitor();
   });
 }

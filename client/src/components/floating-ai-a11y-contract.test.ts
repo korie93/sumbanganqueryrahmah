@@ -28,6 +28,8 @@ test("floating AI chat input has a formal accessible label", () => {
   assert.match(source, /role="log"/);
   assert.match(source, /aria-live="polite"/);
   assert.match(source, /aria-relevant="additions text"/);
+  assert.match(source, /aria-atomic="false"/);
+  assert.match(source, /aria-atomic="true"/);
   assert.match(source, /disabled=\{!isProcessing && !isTyping\}/);
   assert.doesNotMatch(source, /aria-disabled=\{!isProcessing && !isTyping\}/);
   assert.match(source, /<span>Hentikan AI<\/span>/);

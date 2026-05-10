@@ -223,3 +223,36 @@ test("summarizeObservedWebVitalsFromLog filters for desktop audits", () => {
     },
   );
 });
+
+test("summarizeObservedWebVitalsFromLog accepts canonical API telemetry logs", () => {
+  const logText = JSON.stringify({
+    httpPath: "/api/telemetry/web-vitals",
+    path: "/collection",
+    navigationType: "navigate",
+    metric: "LCP",
+    value: 1234,
+    rating: "needs-improvement",
+    userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) HeadlessChrome/146.0.0.0",
+    capturedAt: "2026-04-10T01:00:02.000Z",
+  });
+
+  assert.deepEqual(
+    summarizeObservedWebVitalsFromLog(logText, {
+      path: "/collection",
+      preset: "desktop",
+      since: "2026-04-10T01:00:00.000Z",
+    }),
+    {
+      source: "server-telemetry",
+      userAgentProfile: "desktop",
+      capturedAt: "2026-04-10T01:00:02.000Z",
+      fcp: "n/a",
+      lcp: "1.2 s",
+      ttfb: "n/a",
+      cls: "n/a",
+      ratings: {
+        lcp: "needs-improvement",
+      },
+    },
+  );
+});

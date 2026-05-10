@@ -28,10 +28,12 @@ import type {
 import { runtimeConfig } from "../config/runtime";
 import { logger } from "../lib/logger";
 
+type AiSearchDebugGlobal = typeof globalThis & {
+  __searchInflightMap?: Map<string, Promise<AiSearchResult>>;
+};
+
 export class AiSearchService {
-  private readonly debugGlobal = globalThis as typeof globalThis & {
-    __searchInflightMap?: Map<string, Promise<AiSearchResult>>;
-  };
+  private readonly debugGlobal = globalThis as AiSearchDebugGlobal;
   private readonly searchCache = new Map<string, SearchCacheEntry>();
   private readonly searchInflight = new Map<string, Promise<AiSearchResult>>();
   private readonly lastAiPerson = new Map<string, LastAiPersonEntry>();
@@ -47,7 +49,22 @@ export class AiSearchService {
     this.maxLastAiPersonEntries = runtimeConfig.ai.cache.maxLastPersonEntries;
     this.lastAiPersonTtlMs = runtimeConfig.ai.cache.lastPersonTtlMs;
     this.branchLookups = createAiSafeBranchLookups(options.storage);
-    this.debugGlobal.__searchInflightMap = this.searchInflight;
+    this.configureDebugGlobal();
+  }
+
+  private configureDebugGlobal() {
+    if (runtimeConfig.ai.debugEnabled) {
+      this.debugGlobal.__searchInflightMap = this.searchInflight;
+      return;
+    }
+
+    delete this.debugGlobal.__searchInflightMap;
+  }
+
+  disposeDebugState() {
+    if (this.debugGlobal.__searchInflightMap === this.searchInflight) {
+      delete this.debugGlobal.__searchInflightMap;
+    }
   }
 
   sweepCaches(now = Date.now()) {

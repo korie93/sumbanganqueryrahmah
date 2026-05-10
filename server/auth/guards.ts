@@ -265,7 +265,7 @@ export function createAuthGuards(options: CreateAuthGuardsOptions) {
     };
   }
 
-  function shouldUpdateActivity(activityId: string, now: number) {
+  function reserveActivityUpdate(activityId: string, now: number) {
     if (activityUpdateThrottleMs <= 0) {
       return true;
     }
@@ -284,20 +284,31 @@ export function createAuthGuards(options: CreateAuthGuardsOptions) {
       }
     }
 
+    activityUpdateCache.set(activityId, now);
     return true;
+  }
+
+  function releaseFailedActivityUpdateReservation(activityId: string, reservedAt: number) {
+    if (activityUpdateThrottleMs > 0 && activityUpdateCache.get(activityId) === reservedAt) {
+      activityUpdateCache.delete(activityId);
+    }
   }
 
   async function updateAuthenticatedActivity(activityId: string) {
     const now = Date.now();
-    if (!shouldUpdateActivity(activityId, now)) {
+    if (!reserveActivityUpdate(activityId, now)) {
       return;
     }
 
-    await storage.updateActivity(activityId, {
-      lastActivityTime: new Date(now),
-      isActive: true,
-    });
-    activityUpdateCache.set(activityId, now);
+    try {
+      await storage.updateActivity(activityId, {
+        lastActivityTime: new Date(now),
+        isActive: true,
+      });
+    } catch (error) {
+      releaseFailedActivityUpdateReservation(activityId, now);
+      throw error;
+    }
   }
 
   const authenticateToken: RequestHandler = async (

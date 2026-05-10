@@ -57,12 +57,17 @@ function isMobileUserAgent(userAgent) {
   return /android|iphone|ipad|ipod|mobile/i.test(userAgent);
 }
 
+const WEB_VITALS_HTTP_PATHS = new Set([
+  "/api/telemetry/web-vitals",
+  "/telemetry/web-vitals",
+]);
+
 function shouldIncludeObservedMetric(entry, expectedProfile, targetPath, sinceMs) {
   if (!entry || typeof entry !== "object") {
     return false;
   }
 
-  if (entry.httpPath !== "/telemetry/web-vitals" || entry.path !== targetPath) {
+  if (!WEB_VITALS_HTTP_PATHS.has(entry.httpPath) || entry.path !== targetPath) {
     return false;
   }
 

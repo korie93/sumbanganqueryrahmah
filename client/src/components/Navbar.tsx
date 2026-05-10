@@ -102,9 +102,9 @@ function NavbarImpl({
     () => resolveNavbarActiveMobileItemId(mobileItems, activeNavigationItemId),
     [activeNavigationItemId, mobileItems]
   )
-  const mobileNavTriggerExpandedProps = mobileNavOpen
-    ? ({ "aria-expanded": "true" } as const)
-    : ({ "aria-expanded": "false" } as const)
+  const mobileNavTriggerExpandedProps = {
+    "aria-expanded": mobileNavOpen,
+  } as const
 
   const navigateToItem = useCallback(
     (itemId: string) => {

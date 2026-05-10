@@ -1,13 +1,46 @@
 import assert from "node:assert/strict";
+import http from "node:http";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { gunzipSync } from "node:zlib";
 import express from "express";
 import { registerLocalHttpPipeline } from "../../internal/local-http-pipeline";
 import { logger } from "../../lib/logger";
 import { startTestServer, stopTestServer } from "../../routes/tests/http-test-utils";
 import { SQR_TRUSTED_TYPES_POLICY_NAME } from "../../../shared/trusted-types";
+
+function requestRaw(urlString: string, headers: Record<string, string> = {}) {
+  const url = new URL(urlString);
+  return new Promise<{
+    body: Buffer;
+    headers: http.IncomingHttpHeaders;
+    statusCode: number;
+  }>((resolve, reject) => {
+    const request = http.request({
+      hostname: url.hostname,
+      port: url.port,
+      path: `${url.pathname}${url.search}`,
+      method: "GET",
+      headers,
+    }, (response) => {
+      const chunks: Buffer[] = [];
+      response.on("data", (chunk: Buffer) => {
+        chunks.push(chunk);
+      });
+      response.on("end", () => {
+        resolve({
+          body: Buffer.concat(chunks),
+          headers: response.headers,
+          statusCode: response.statusCode ?? 0,
+        });
+      });
+    });
+    request.on("error", reject);
+    request.end();
+  });
+}
 
 test("registerLocalHttpPipeline allows blob receipt previews in the CSP header", async () => {
   const app = express();
@@ -105,6 +138,47 @@ test("registerLocalHttpPipeline preserves caller-provided request ids", async ()
     assert.equal(response.status, 200);
     assert.equal(response.headers.get("x-request-id"), "req-test-123");
     assert.equal(response.headers.get("api-version"), "1");
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("registerLocalHttpPipeline compresses large API responses without touching non-API responses", async () => {
+  const app = express();
+  registerLocalHttpPipeline(app, {
+    importBodyLimit: "1mb",
+    collectionBodyLimit: "1mb",
+    defaultBodyLimit: "100kb",
+    uploadsRootDir: path.resolve(process.cwd(), "uploads"),
+    recordRequestStarted: () => undefined,
+    recordRequestFinished: () => undefined,
+    adaptiveRateLimit: (_req, _res, next) => next(),
+    systemProtectionMiddleware: (_req, _res, next) => next(),
+    maintenanceGuard: (_req, _res, next) => next(),
+  });
+  const payload = { ok: true, data: "x".repeat(4096) };
+  app.get("/api/large-response", (_req, res) => {
+    res.json(payload);
+  });
+  app.get("/large-response", (_req, res) => {
+    res.json(payload);
+  });
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const apiResponse = await requestRaw(`${baseUrl}/api/large-response`, {
+      "accept-encoding": "gzip",
+    });
+    assert.equal(apiResponse.statusCode, 200);
+    assert.equal(apiResponse.headers["content-encoding"], "gzip");
+    assert.deepEqual(JSON.parse(gunzipSync(apiResponse.body).toString("utf8")), payload);
+
+    const nonApiResponse = await requestRaw(`${baseUrl}/large-response`, {
+      "accept-encoding": "gzip",
+    });
+    assert.equal(nonApiResponse.statusCode, 200);
+    assert.equal(nonApiResponse.headers["content-encoding"], undefined);
+    assert.deepEqual(JSON.parse(nonApiResponse.body.toString("utf8")), payload);
   } finally {
     await stopTestServer(server);
   }

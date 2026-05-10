@@ -64,7 +64,9 @@ export default function AIChat({
     <div className="ai-chat-container" data-compact={compactMode ? "true" : "false"}>
       <div className="ai-status-bar">
         <statusMeta.icon className="ai-status-icon" />
-        <span>{statusMeta.text}</span>
+        <span role="status" aria-live="polite" aria-atomic="true">
+          {statusMeta.text}
+        </span>
       </div>
 
       {slowNotice ? (
@@ -83,6 +85,7 @@ export default function AIChat({
         role="log"
         aria-live="polite"
         aria-relevant="additions text"
+        aria-atomic="false"
         aria-label={`Perbualan ${assistantLabel}`}
       >
         {messages.length === 0 ? (
@@ -106,6 +109,7 @@ export default function AIChat({
               role="status"
               aria-label="AI sedang berfikir"
               aria-live="polite"
+              aria-atomic="true"
             >
               <Loader2 className="ai-typing-spinner" />
               <span className="ai-typing-label">AI sedang menaip...</span>
@@ -156,6 +160,7 @@ export default function AIChat({
         id={queryLimitId}
         className={showCharacterLimit ? "ai-input-limit" : "sr-only"}
         aria-live="polite"
+        aria-atomic="true"
       >
         Had soalan AI {AI_REQUEST_MAX_CHARACTERS} aksara. {remainingCharacters} aksara berbaki.
       </p>

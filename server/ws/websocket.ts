@@ -16,6 +16,9 @@ function getDefaultSessionSecrets() {
   return getSessionJwtVerificationSecrets();
 }
 
+// Legacy setupWebSocket is process-local by design. Production startup currently
+// constrains workers until shared limiter/broadcast infrastructure exists, so
+// this Map must not be treated as distributed cluster state.
 export const connectedClients = new Map<string, WebSocket>();
 
 export function setupWebSocket(server: Server, options: LegacyWebSocketOptions = {}) {
