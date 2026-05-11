@@ -100,8 +100,13 @@ const run = async () => {
   const liveHealth = await request("/api/health/live");
   const livePayload = await readJsonSafely(liveHealth);
   assert(
-    liveHealth.ok && livePayload?.live === true,
-    `GET /api/health/live should report a live process, received ${liveHealth.status}`,
+    liveHealth.ok && livePayload?.status === "ok" && livePayload?.ready === true,
+    [
+      "GET /api/health/live should report a live process.",
+      `Status: ${liveHealth.status}`,
+      `Payload status: ${String(livePayload?.status || "(missing)")}`,
+      `Payload ready: ${String(livePayload?.ready ?? "(missing)")}`,
+    ].join("\n"),
   );
 
   const readyHealth = await request("/api/health/ready");
@@ -111,8 +116,8 @@ const run = async () => {
     [
       "GET /api/health/ready should report a ready application.",
       `Status: ${readyHealth.status}`,
-      `Startup check: ${String(readyPayload?.checks?.startup || "(missing)")}`,
-      `Database check: ${String(readyPayload?.checks?.database || "(missing)")}`,
+      `Payload status: ${String(readyPayload?.status || "(missing)")}`,
+      `Payload ready: ${String(readyPayload?.ready ?? "(missing)")}`,
     ].join("\n"),
   );
 
