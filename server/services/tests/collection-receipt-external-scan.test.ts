@@ -5,6 +5,7 @@ import path from "node:path";
 import test from "node:test";
 import { CollectionReceiptSecurityError } from "../../lib/collection-receipt-security";
 import { scanCollectionReceiptWithExternalScanner } from "../../lib/collection-receipt-external-scan";
+import { DEFAULT_COLLECTION_RECEIPT_EXTERNAL_SCAN_TIMEOUT_MS } from "../../lib/collection-receipt-external-scan-shared";
 
 const ENV_KEYS = [
   "COLLECTION_RECEIPT_EXTERNAL_SCAN_ENABLED",
@@ -42,6 +43,10 @@ async function withTemporaryReceiptFile<T>(
     await fs.rm(temporaryDirectory, { recursive: true, force: true });
   }
 }
+
+test("external receipt scanner default timeout allows cold antivirus signature loading", () => {
+  assert.equal(DEFAULT_COLLECTION_RECEIPT_EXTERNAL_SCAN_TIMEOUT_MS, 60_000);
+});
 
 test("external receipt scanner rejects shell-style command strings", async () => {
   const previousEnv = snapshotEnv();

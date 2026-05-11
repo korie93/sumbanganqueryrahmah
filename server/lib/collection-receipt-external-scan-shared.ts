@@ -1,7 +1,7 @@
 import path from "node:path";
 import { readOptionalString as readRuntimeOptionalString } from "../config/runtime-config-read-utils";
 
-export const DEFAULT_COLLECTION_RECEIPT_EXTERNAL_SCAN_TIMEOUT_MS = 15_000;
+export const DEFAULT_COLLECTION_RECEIPT_EXTERNAL_SCAN_TIMEOUT_MS = 60_000;
 export const DEFAULT_COLLECTION_RECEIPT_EXTERNAL_SCAN_REJECT_EXIT_CODES = "1";
 export const EXTERNAL_SCAN_OUTPUT_LIMIT = 2_000;
 export const BARE_COMMAND_PATTERN = /^[a-zA-Z0-9._-]+$/;
