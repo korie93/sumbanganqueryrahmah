@@ -9,6 +9,7 @@ import {
 import {
   generateTemporaryPassword,
   hashPassword,
+  resetDummyBcryptHashForTests,
   verifyPassword,
 } from "../passwords";
 
@@ -40,6 +41,20 @@ test("verifyPassword rejects oversized password input before bcrypt comparison",
     false,
   );
   assert.equal(compareMock.mock.callCount(), 0);
+});
+
+test("verifyPassword generates a process-local dummy hash for invalid stored hashes", async (t) => {
+  resetDummyBcryptHashForTests();
+  t.after(() => {
+    resetDummyBcryptHashForTests();
+  });
+  const hashMock = t.mock.method(bcrypt, "hash", async () => VALID_BCRYPT_HASH);
+  const compareMock = t.mock.method(bcrypt, "compare", async () => false);
+
+  assert.equal(await verifyPassword("Password123!", null), false);
+  assert.equal(await verifyPassword("Password123!", "not-a-bcrypt-hash"), false);
+  assert.equal(hashMock.mock.callCount(), 1);
+  assert.equal(compareMock.mock.callCount(), 2);
 });
 
 test("hashPassword rejects oversized password input before bcrypt hashing", async (t) => {

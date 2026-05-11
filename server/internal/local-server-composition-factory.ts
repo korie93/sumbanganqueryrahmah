@@ -1,4 +1,5 @@
 import { createAuthGuards } from "../auth/guards";
+import { initializeDummyBcryptHash } from "../auth/passwords";
 import { ImportsRepository } from "../repositories/imports.repository";
 import { SearchRepository } from "../repositories/search.repository";
 import { AuditRepository } from "../repositories/audit.repository";
@@ -11,6 +12,7 @@ import { AiChatService } from "../services/ai-chat.service";
 import { AiIndexService } from "../services/ai-index.service";
 import { createRuntimeWebSocketManager } from "../ws/runtime-manager";
 import { runtimeConfig } from "../config/runtime";
+import { logger } from "../lib/logger";
 import { parseBackupMetadataSafe } from "./backupMetadata";
 import type {
   CreateLocalServerCompositionOptions,
@@ -49,6 +51,11 @@ export function createLocalServerComposition(
     ...(acceptWebSocketConnections ? { acceptConnections: acceptWebSocketConnections } : {}),
   });
   const authGuards = createAuthGuards({ storage, secret });
+  void initializeDummyBcryptHash().catch((error: unknown) => {
+    logger.error("Failed to initialize dummy bcrypt hash for timing-safe password checks", {
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
+  });
   const categoryStatsService = new CategoryStatsService(storage);
   const aiSearchService = new AiSearchService({
     storage,

@@ -137,7 +137,7 @@ export function createCorsMiddleware(
     const requestOrigin = normalizeCorsOrigin(req.headers.origin);
     const sameOrigin = resolveSameOriginFromRequest(req);
 
-    res.header("Vary", "Origin");
+    res.vary("Origin");
     res.header("Access-Control-Allow-Methods", DEFAULT_ALLOWED_METHODS);
     res.header("Access-Control-Allow-Headers", DEFAULT_ALLOWED_HEADERS);
 

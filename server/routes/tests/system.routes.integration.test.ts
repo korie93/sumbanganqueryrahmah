@@ -347,7 +347,7 @@ function createSystemRouteHarness(options?: {
   return { app };
 }
 
-test("GET /api/health/live reports a live process with startup validation metadata", async () => {
+test("GET /api/health/live exposes only public-safe liveness fields", async () => {
   const { app } = createSystemRouteHarness({
     startup: {
       ready: false,
@@ -373,9 +373,8 @@ test("GET /api/health/live reports a live process with startup validation metada
 
     const payload = await response.json();
     assert.equal(payload.status, "ok");
-    assert.equal(payload.live, true);
-    assert.equal(payload.startup.stage, "booting");
-    assert.equal(payload.validation.warningCount, 1);
+    assert.equal(payload.ready, true);
+    assert.deepEqual(Object.keys(payload).sort(), ["ready", "status"]);
   } finally {
     await stopTestServer(server);
   }
@@ -398,8 +397,7 @@ test("GET /api/health/ready returns 200 only when startup and database checks ar
     const payload = await response.json();
     assert.equal(payload.status, "ok");
     assert.equal(payload.ready, true);
-    assert.equal(payload.checks.startup, "ready");
-    assert.equal(payload.checks.database, "connected");
+    assert.deepEqual(Object.keys(payload).sort(), ["ready", "status"]);
   } finally {
     await stopTestServer(server);
   }
@@ -422,8 +420,7 @@ test("GET /api/health/ready returns 503 while startup is still in progress", asy
     const payload = await response.json();
     assert.equal(payload.status, "starting");
     assert.equal(payload.ready, false);
-    assert.equal(payload.checks.startup, "starting");
-    assert.equal(payload.checks.database, "connected");
+    assert.deepEqual(Object.keys(payload).sort(), ["ready", "status"]);
   } finally {
     await stopTestServer(server);
   }
@@ -455,17 +452,45 @@ test("GET /api/health/ready returns 503 when startup background services are deg
     const payload = await response.json();
     assert.equal(payload.status, "degraded");
     assert.equal(payload.ready, false);
-    assert.equal(payload.checks.startup, "degraded");
-    assert.equal(payload.checks.database, "connected");
-    assert.equal(payload.startup.degraded, true);
-    assert.equal(payload.startup.degradedServices[0].service, "backup-job-queue");
-    assert.equal(payload.startup.degradedServices[0].reason, "BACKUP_JOB_QUEUE_START_FAILED");
+    assert.deepEqual(Object.keys(payload).sort(), ["ready", "status"]);
   } finally {
     await stopTestServer(server);
   }
 });
 
-test("GET /api/metrics exposes aggregate internal counters only", async () => {
+test("GET /api/metrics requires an authenticated admin or superuser", async () => {
+  const app = createJsonTestApp();
+  registerSystemRoutes(app, createBaseSystemRouteDeps({
+    authenticateToken: createTestAuthenticateToken(),
+  }));
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(`${baseUrl}/api/metrics`);
+    assert.equal(response.status, 401);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("GET /api/metrics rejects authenticated non-admin users", async () => {
+  const { app } = createSystemRouteHarness();
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(`${baseUrl}/api/metrics`, {
+      headers: {
+        "x-test-role": "user",
+        "x-test-username": "monitor.user",
+      },
+    });
+    assert.equal(response.status, 403);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("GET /api/metrics exposes aggregate internal counters to admins", async () => {
   const { app } = createSystemRouteHarness();
   const { server, baseUrl } = await startTestServer(app);
 
@@ -488,7 +513,7 @@ test("GET /api/metrics exposes aggregate internal counters only", async () => {
   }
 });
 
-test("GET /api/health preserves the aggregate health contract while exposing live readiness details", async () => {
+test("GET /api/health preserves the aggregate public health contract without internal details", async () => {
   const { app } = createSystemRouteHarness({
     dbOk: false,
     startup: {
@@ -504,10 +529,34 @@ test("GET /api/health preserves the aggregate health contract while exposing liv
 
     const payload = await response.json();
     assert.equal(payload.status, "degraded");
+    assert.equal(payload.ready, false);
+    assert.deepEqual(Object.keys(payload).sort(), ["ready", "status"]);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("GET /internal/health exposes startup details only to privileged users", async () => {
+  const { app } = createSystemRouteHarness({
+    dbOk: false,
+    startup: {
+      ready: true,
+      stage: "ready",
+    },
+  });
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(`${baseUrl}/internal/health`);
+    assert.equal(response.status, 503);
+
+    const payload = await response.json();
+    assert.equal(payload.status, "degraded");
     assert.equal(payload.mode, "postgresql");
     assert.equal(payload.database, "unreachable");
     assert.equal(payload.ready, false);
     assert.equal(payload.live.live, true);
+    assert.equal(payload.startup.stage, "ready");
   } finally {
     await stopTestServer(server);
   }

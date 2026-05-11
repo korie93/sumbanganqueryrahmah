@@ -45,6 +45,10 @@ test("AI messages render markdown through React nodes instead of raw HTML", () =
   assert.match(source, /function parseAIMessageMarkdownBlocks/);
   assert.match(source, /<pre key=\{`code:\$\{index\}`\} className="ai-markdown-code">/);
   assert.match(source, /const ListTag = block\.ordered \? "ol" : "ul"/);
+  assert.match(source, /key=\{`list:\$\{index\}:item:\$\{itemIndex\}`\}/);
+  assert.match(source, /key=\{`paragraph:\$\{blockIndex\}:line:\$\{index\}`\}/);
+  assert.doesNotMatch(source, /key=\{`\$\{itemIndex\}:\$\{item\}`\}/);
+  assert.doesNotMatch(source, /key=\{`\$\{index\}:\$\{line\}`\}/);
   assert.match(source, /<br \/>/);
   assert.doesNotMatch(source, /dangerouslySetInnerHTML/);
 });

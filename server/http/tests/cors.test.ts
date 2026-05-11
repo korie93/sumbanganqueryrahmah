@@ -17,6 +17,19 @@ function createCorsTestApp(allowedOrigins?: string[]) {
   return app;
 }
 
+function createCorsTestAppWithExistingVary(allowedOrigins?: string[]) {
+  const app = express();
+  app.use((_req, res, next) => {
+    res.vary("Accept-Encoding");
+    next();
+  });
+  app.use(createCorsMiddleware(allowedOrigins));
+  app.get("/ping", (_req, res) => {
+    res.json({ ok: true });
+  });
+  return app;
+}
+
 test("resolveAllowedCorsOrigins includes configured and local dev origins", () => {
   const allowed = resolveAllowedCorsOrigins({
     NODE_ENV: "development",
@@ -122,6 +135,26 @@ test("requests without an Origin header continue normally", async () => {
     assert.equal(response.status, 200);
     assert.equal(response.headers.get("access-control-allow-origin"), null);
     assert.equal((await response.json()).ok, true);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("cors middleware appends Origin to existing Vary headers instead of overwriting them", async () => {
+  const app = createCorsTestAppWithExistingVary(["https://app.example.com"]);
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(`${baseUrl}/ping`, {
+      headers: {
+        Origin: "https://app.example.com",
+      },
+    });
+
+    assert.equal(response.status, 200);
+    const vary = response.headers.get("vary") || "";
+    assert.match(vary, /Accept-Encoding/i);
+    assert.match(vary, /Origin/i);
   } finally {
     await stopTestServer(server);
   }

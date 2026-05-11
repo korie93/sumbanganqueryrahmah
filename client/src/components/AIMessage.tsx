@@ -100,9 +100,9 @@ function parseAIMessageMarkdownBlocks(content: string): AIMessageMarkdownBlock[]
   return blocks;
 }
 
-function renderParagraphLines(lines: string[]) {
+function renderParagraphLines(lines: string[], blockIndex: number) {
   return lines.map((line, index) => (
-    <span key={`${index}:${line}`}>
+    <span key={`paragraph:${blockIndex}:line:${index}`}>
       {index > 0 ? <br /> : null}
       {line}
     </span>
@@ -129,7 +129,7 @@ function renderAIMessageMarkdown(content: string): ReactNode {
       return (
         <ListTag key={`list:${index}`} className="ai-markdown-list">
           {block.items.map((item, itemIndex) => (
-            <li key={`${itemIndex}:${item}`}>{item}</li>
+            <li key={`list:${index}:item:${itemIndex}`}>{item}</li>
           ))}
         </ListTag>
       );
@@ -137,7 +137,7 @@ function renderAIMessageMarkdown(content: string): ReactNode {
 
     return (
       <p key={`paragraph:${index}`} className="ai-markdown-paragraph">
-        {renderParagraphLines(block.lines)}
+        {renderParagraphLines(block.lines, index)}
       </p>
     );
   });
