@@ -5,12 +5,17 @@ import {
   readCookieValueFromHeader,
 } from "../auth/session-cookie";
 import { logger } from "../lib/logger";
+import {
+  CANONICAL_WEB_VITALS_TELEMETRY_PATH,
+  LEGACY_WEB_VITALS_TELEMETRY_PATH,
+} from "../routes/telemetry-route-constants";
 import { normalizeCorsOrigin, resolveAllowedCorsOrigins } from "./cors";
 
 const UNSAFE_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
-const CSRF_EXEMPT_API_PATHS = new Set([
+const CSRF_TELEMETRY_EXEMPT_PATHS = new Set([
   "/api/csp-report",
-  "/api/telemetry/web-vitals",
+  CANONICAL_WEB_VITALS_TELEMETRY_PATH,
+  LEGACY_WEB_VITALS_TELEMETRY_PATH,
 ]);
 
 type CsrfMiddlewareOptions = {
@@ -41,14 +46,15 @@ export function createCsrfProtectionMiddleware(options: CsrfMiddlewareOptions = 
       return next();
     }
 
-    if (!req.path.startsWith("/api/")) {
+    const isTelemetryPath = CSRF_TELEMETRY_EXEMPT_PATHS.has(req.path);
+    if (!req.path.startsWith("/api/") && !isTelemetryPath) {
       return next();
     }
 
     // Browser-owned telemetry is append-only aggregate data. These endpoints
     // rely on their own origin/content/drop guards and must remain usable from
     // sendBeacon/keepalive contexts without a CSRF header.
-    if (CSRF_EXEMPT_API_PATHS.has(req.path)) {
+    if (isTelemetryPath) {
       return next();
     }
 

@@ -54,10 +54,15 @@ import {
   type CollectionSameDayPaceQuickOptionId,
   type CollectionSameDayPaceWindowMode,
 } from "./collection-monthly-compare-day-utils";
-
-export const COLLECTION_MONTHLY_COMPARISON_MAX_RANGE_MONTHS = 24;
+import { COLLECTION_MONTHLY_COMPARISON_MAX_RANGE_MONTHS } from "./collection-monthly-comparison-constants";
+import {
+  escapeCollectionMonthlyComparisonCsvValue,
+  escapeCollectionMonthlyComparisonHtml,
+  formatCollectionMonthlyComparisonReportDate,
+} from "./collection-monthly-export-utils";
 
 export {
+  COLLECTION_MONTHLY_COMPARISON_MAX_RANGE_MONTHS,
   COLLECTION_MONTHLY_COMPARISON_ANOMALY_THRESHOLD_PERCENT,
   buildCollectionMonthlyComparisonAccessibleSummary,
   buildCollectionMonthlyComparisonTargetSummary,
@@ -1305,11 +1310,6 @@ export function buildCollectionMonthlyComparisonInsights(
   };
 }
 
-function escapeCollectionMonthlyComparisonCsvValue(value: string | number | null | undefined) {
-  const text = String(value ?? "");
-  return `"${text.replace(/"/g, '""')}"`;
-}
-
 export type CollectionMonthlyComparisonCsvOptions = {
   monthlyTargetAmount?: number | null | undefined;
   monthlyTargetsByMonth?: CollectionMonthlyComparisonTargetLookup | undefined;
@@ -1471,25 +1471,6 @@ export function buildCollectionMonthlyComparisonCsvFilename(
     .replace(/^-+|-+$/g, "")
     || "staff";
   return `SQR-monthly-comparison-${safeNickname}-${payload.startMonth}-to-${payload.endMonth}.csv`;
-}
-
-function escapeCollectionMonthlyComparisonHtml(value: string | number | null | undefined): string {
-  return String(value ?? "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
-}
-
-function formatCollectionMonthlyComparisonReportDate(date: Date): string {
-  if (!Number.isFinite(date.getTime())) {
-    return "";
-  }
-  return new Intl.DateTimeFormat("en-MY", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(date);
 }
 
 function buildCollectionMonthlyComparisonReportChartSvg(

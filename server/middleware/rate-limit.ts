@@ -211,7 +211,6 @@ function recordAdaptiveRateLimitViolation(
   windowMs: number,
   nowMs: number,
 ): AdaptiveRateLimitBucket {
-  pruneAdaptiveRateLimitCooldowns(nowMs);
   const previous = getAdaptiveRateLimitCooldown(key, nowMs);
   const strikeCount = Math.min((previous?.strikeCount ?? 0) + 1, 8);
   const cooldownMs = Math.min(
@@ -224,6 +223,9 @@ function recordAdaptiveRateLimitViolation(
     strikeCount,
   };
   adaptiveRateLimitCooldowns.set(key, bucket);
+  // Keep the violation hot path to one bounded O(n) prune per failed request:
+  // expired-key lookup is handled above, and this post-write sweep enforces
+  // both TTL eviction and the global bucket cap after the mutation.
   pruneAdaptiveRateLimitCooldowns(nowMs);
   return bucket;
 }

@@ -15,3 +15,11 @@ test("useAIChatState clears active request timeouts when cancelling or finalizin
   assert.match(source, /requestTimeoutRef\.current = timeoutId/);
   assert.match(source, /if \(requestTimeoutRef\.current === timeoutId\) \{\s*requestTimeoutRef\.current = null;/);
 });
+
+test("useAIChatState gates retry timers against unmount and stale sessions", () => {
+  assert.match(source, /const timerId = window\.setTimeout\(\(\) => \{/);
+  assert.match(source, /unregisterRetryTimer\(timerId\);/);
+  assert.match(source, /canRetryAIChatRequest\(sessionId, sessionRef, isMountedRef, processingRef\)/);
+  assert.match(source, /registerRetryTimer\(timerId\);/);
+  assert.match(source, /clearRetryTimers\(\);/);
+});

@@ -3,11 +3,29 @@ import { routeHandler } from "../http/async-handler";
 import { normalizeCorsOrigin, resolveAllowedCorsOrigins } from "../http/cors";
 import { internalMetrics, type InternalMetricsRecorder } from "../internal/metrics";
 import { logger } from "../lib/logger";
+import {
+  CANONICAL_WEB_VITALS_TELEMETRY_PATH,
+  LEGACY_TELEMETRY_ROUTE_ENABLED,
+  LEGACY_TELEMETRY_SUNSET_DATE,
+  LEGACY_WEB_VITALS_TELEMETRY_PATH,
+  isLegacyTelemetryRouteRetired,
+} from "./telemetry-route-constants";
+
+export {
+  CANONICAL_WEB_VITALS_TELEMETRY_PATH,
+  LEGACY_TELEMETRY_ROUTE_ENABLED,
+  LEGACY_TELEMETRY_SUNSET_DATE,
+  LEGACY_WEB_VITALS_TELEMETRY_PATH,
+  LEGACY_WEB_VITALS_TELEMETRY_SUNSET,
+  WEB_VITALS_TELEMETRY_PATHS,
+  isLegacyTelemetryRouteRetired,
+} from "./telemetry-route-constants";
 
 type TelemetryRouteDeps = {
   cspReportDropGuard?: CspReportDropGuard;
   cspReportRequestGuard?: RequestHandler;
   metrics?: InternalMetricsRecorder;
+  now?: () => Date;
   reportWebVital: RequestHandler;
   webVitalsDropGuard?: WebVitalsTelemetryDropGuard;
   webVitalsRequestGuard?: RequestHandler;
@@ -70,13 +88,6 @@ const DEFAULT_CSP_REPORT_MAX_REPORTS_PER_WINDOW = 30;
 const DEFAULT_CSP_REPORT_MAX_BUCKETS = 2_000;
 const DEFAULT_CSP_REPORT_WINDOW_MS = 60_000;
 const DEFAULT_CSP_REPORT_MAX_CONTENT_LENGTH_BYTES = 8 * 1024;
-export const WEB_VITALS_TELEMETRY_PATHS = [
-  "/api/telemetry/web-vitals",
-  "/telemetry/web-vitals",
-] as const;
-export const LEGACY_WEB_VITALS_TELEMETRY_PATH = "/telemetry/web-vitals";
-export const CANONICAL_WEB_VITALS_TELEMETRY_PATH = "/api/telemetry/web-vitals";
-export const LEGACY_WEB_VITALS_TELEMETRY_SUNSET = "Wed, 01 Jul 2026 00:00:00 GMT";
 const NON_BROWSER_TELEMETRY_USER_AGENT_PATTERNS = [
   /\bcurl\//i,
   /\bwget\//i,
@@ -472,6 +483,7 @@ export function registerCspReportDropGuardCleanup(
 
 export function registerTelemetryRoutes(app: Express, deps: TelemetryRouteDeps) {
   const metrics = deps.metrics ?? internalMetrics;
+  const now = deps.now ?? (() => new Date());
   const cspReportDropGuard = deps.cspReportDropGuard ?? createCspReportDropGuard({ metrics });
   const webVitalsDropGuard = deps.webVitalsDropGuard ?? createWebVitalsTelemetryDropGuard();
   const webVitalsRequestGuard = deps.webVitalsRequestGuard ?? createWebVitalsTelemetryRequestGuard();
@@ -506,23 +518,41 @@ export function registerTelemetryRoutes(app: Express, deps: TelemetryRouteDeps) 
   );
 
   // TODO(telemetry-sunset): remove this compatibility alias after
-  // LEGACY_WEB_VITALS_TELEMETRY_SUNSET (Wed, 01 Jul 2026 00:00:00 GMT)
+  // LEGACY_TELEMETRY_SUNSET_DATE (Wed, 01 Jul 2026 00:00:00 GMT)
   // once deployed clients have migrated fully to /api/telemetry/web-vitals.
   app.post(
     LEGACY_WEB_VITALS_TELEMETRY_PATH,
     (req, res, next) => {
       res.setHeader("Deprecation", "true");
-      res.setHeader("Sunset", LEGACY_WEB_VITALS_TELEMETRY_SUNSET);
+      res.setHeader("Sunset", LEGACY_TELEMETRY_SUNSET_DATE);
       res.setHeader("Link", `<${CANONICAL_WEB_VITALS_TELEMETRY_PATH}>; rel="successor-version"`);
+
+      if (!LEGACY_TELEMETRY_ROUTE_ENABLED || isLegacyTelemetryRouteRetired(now())) {
+        metrics.increment("webVitalsLegacyRouteGoneTotal");
+        logger.warn("Legacy web vitals telemetry route rejected after sunset", {
+          canonicalPath: CANONICAL_WEB_VITALS_TELEMETRY_PATH,
+          legacyPath: LEGACY_WEB_VITALS_TELEMETRY_PATH,
+          method: req.method,
+          path: req.path,
+          sunsetAt: LEGACY_TELEMETRY_SUNSET_DATE,
+        });
+        res.status(410).json({
+          ok: false,
+          code: "LEGACY_TELEMETRY_ROUTE_RETIRED",
+          message: "Legacy telemetry route has been retired. Use /api/telemetry/web-vitals.",
+        });
+        return;
+      }
+
       metrics.increment("webVitalsLegacyRouteUsedTotal");
       logger.warn("Legacy web vitals telemetry route used", {
         canonicalPath: CANONICAL_WEB_VITALS_TELEMETRY_PATH,
         legacyPath: LEGACY_WEB_VITALS_TELEMETRY_PATH,
         method: req.method,
         path: req.path,
-        sunsetAt: LEGACY_WEB_VITALS_TELEMETRY_SUNSET,
+        sunsetAt: LEGACY_TELEMETRY_SUNSET_DATE,
       });
-      next();
+      return next();
     },
     webVitalsRequestGuard,
     webVitalsDropGuard,

@@ -1,4 +1,5 @@
 import type { Request, RequestHandler } from "express";
+import { WEB_VITALS_TELEMETRY_PATHS as WEB_VITALS_TELEMETRY_PATH_VALUES } from "../routes/telemetry-route-constants";
 import type { WorkerControlState } from "./runtime-monitor-manager";
 
 type ApiProtectionOptions = {
@@ -10,10 +11,7 @@ const ADAPTIVE_RATE_WINDOW_MS = 10_000;
 const ADAPTIVE_RATE_STALE_GRACE_MS = 10_000;
 const ADAPTIVE_RATE_SWEEP_INTERVAL_MS = 30_000;
 const ADAPTIVE_RATE_MAX_BUCKETS = 5_000;
-const WEB_VITALS_TELEMETRY_PATHS = new Set([
-  "/api/telemetry/web-vitals",
-  "/telemetry/web-vitals",
-]);
+const WEB_VITALS_TELEMETRY_PATHS: ReadonlySet<string> = new Set(WEB_VITALS_TELEMETRY_PATH_VALUES);
 
 type AdaptiveRateBucket = {
   count: number;

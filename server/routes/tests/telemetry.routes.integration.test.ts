@@ -26,6 +26,7 @@ function createTelemetryRouteHarness(options: {
   cspReportDropGuard?: Parameters<typeof registerTelemetryRoutes>[1]["cspReportDropGuard"];
   cspReportRequestGuard?: Parameters<typeof registerTelemetryRoutes>[1]["cspReportRequestGuard"];
   metrics?: InternalMetricsRecorder;
+  now?: Parameters<typeof registerTelemetryRoutes>[1]["now"];
   webVitalsDropGuard?: Parameters<typeof registerTelemetryRoutes>[1]["webVitalsDropGuard"];
   webVitalsRequestGuard?: Parameters<typeof registerTelemetryRoutes>[1]["webVitalsRequestGuard"];
 } = {}) {
@@ -36,6 +37,7 @@ function createTelemetryRouteHarness(options: {
     ...(options.cspReportDropGuard ? { cspReportDropGuard: options.cspReportDropGuard } : {}),
     ...(options.cspReportRequestGuard ? { cspReportRequestGuard: options.cspReportRequestGuard } : {}),
     ...(options.metrics ? { metrics: options.metrics } : {}),
+    ...(options.now ? { now: options.now } : {}),
     ...(options.webVitalsDropGuard ? { webVitalsDropGuard: options.webVitalsDropGuard } : {}),
     ...(options.webVitalsRequestGuard ? { webVitalsRequestGuard: options.webVitalsRequestGuard } : {}),
     reportWebVital: createWebVitalsTelemetryController({
@@ -273,6 +275,41 @@ test("POST /telemetry/web-vitals remains a guarded compatibility alias", async (
     assert.match(String(response.headers.get("Link") || ""), new RegExp(`<${CANONICAL_WEB_VITALS_TELEMETRY_PATH}>; rel="successor-version"`));
     assert.equal(recordedPayloads.length, 1);
     assert.equal(metrics.snapshot().counters.webVitalsLegacyRouteUsedTotal, 1);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("POST /telemetry/web-vitals is retired with 410 after the sunset date", async () => {
+  const metrics = createInternalMetrics();
+  const { app, recordedPayloads } = createTelemetryRouteHarness({
+    metrics,
+    now: () => new Date("2026-07-01T00:00:00.000Z"),
+  });
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(`${baseUrl}/telemetry/web-vitals`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(createValidWebVitalsPayload({ id: "v3-legacy-retired" })),
+    });
+
+    assert.equal(response.status, 410);
+    assert.equal(response.headers.get("Deprecation"), "true");
+    assert.equal(response.headers.get("Sunset"), LEGACY_WEB_VITALS_TELEMETRY_SUNSET);
+    const payload = await response.json();
+    assert.deepEqual(payload, {
+      ok: false,
+      code: "LEGACY_TELEMETRY_ROUTE_RETIRED",
+      message: "Legacy telemetry route has been retired. Use /api/telemetry/web-vitals.",
+    });
+    assert.equal(recordedPayloads.length, 0);
+    const snapshot = metrics.snapshot();
+    assert.equal(snapshot.counters.webVitalsLegacyRouteGoneTotal, 1);
+    assert.equal(snapshot.counters.webVitalsLegacyRouteUsedTotal, 0);
   } finally {
     await stopTestServer(server);
   }

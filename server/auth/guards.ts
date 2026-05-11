@@ -303,7 +303,6 @@ export function createAuthGuards(options: CreateAuthGuardsOptions) {
     try {
       await storage.updateActivity(activityId, {
         lastActivityTime: new Date(now),
-        isActive: true,
       });
     } catch (error) {
       releaseFailedActivityUpdateReservation(activityId, now);

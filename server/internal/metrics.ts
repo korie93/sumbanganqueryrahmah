@@ -7,6 +7,7 @@ export type InternalMetricName =
   | "webVitalsDroppedRateLimitTotal"
   | "webVitalsDroppedRequestGuardTotal"
   | "webVitalsDroppedTotal"
+  | "webVitalsLegacyRouteGoneTotal"
   | "webVitalsLegacyRouteUsedTotal";
 
 export type InternalMetricsRecorder = {
@@ -26,6 +27,7 @@ const INTERNAL_METRIC_NAMES: readonly InternalMetricName[] = [
   "webVitalsDroppedRateLimitTotal",
   "webVitalsDroppedRequestGuardTotal",
   "webVitalsDroppedTotal",
+  "webVitalsLegacyRouteGoneTotal",
   "webVitalsLegacyRouteUsedTotal",
 ];
 

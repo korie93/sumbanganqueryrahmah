@@ -22,6 +22,9 @@ function createCsrfTestApp() {
   app.post("/api/telemetry/web-vitals", (_req, res) => {
     res.status(204).end();
   });
+  app.post("/telemetry/web-vitals", (_req, res) => {
+    res.status(204).end();
+  });
   return app;
 }
 
@@ -199,6 +202,29 @@ test("csrf middleware exempts canonical web-vitals telemetry from token checks",
 
   try {
     const response = await fetch(`${baseUrl}/api/telemetry/web-vitals`, {
+      method: "POST",
+      headers: {
+        Cookie: "sqr_auth=token-value; sqr_csrf=csrf-token",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        name: "LCP",
+        value: 123,
+      }),
+    });
+
+    assert.equal(response.status, 204);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("csrf middleware explicitly exempts legacy web-vitals telemetry from token checks", async () => {
+  const app = createCsrfTestApp();
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(`${baseUrl}/telemetry/web-vitals`, {
       method: "POST",
       headers: {
         Cookie: "sqr_auth=token-value; sqr_csrf=csrf-token",

@@ -9,6 +9,7 @@ import { createCorsMiddleware } from "../http/cors";
 import { createForwardedForTrustProxyWarningMiddleware } from "../http/forwarded-proxy-warning";
 import { createGlobalRequestTimeoutMiddleware } from "../http/global-request-timeout";
 import { resolveRequestId } from "../http/request-id";
+import { WEB_VITALS_TELEMETRY_PATHS } from "../routes/telemetry-route-constants";
 import { SQR_TRUSTED_TYPES_POLICY_NAME } from "../../shared/trusted-types";
 
 const HTTP_SLOW_REQUEST_MS = runtimeConfig.runtime.httpSlowRequestMs;
@@ -24,10 +25,7 @@ const CSP_REPORT_TO_VALUE = JSON.stringify({
 });
 const CSP_REPORTING_ENDPOINTS_VALUE = `${CSP_REPORT_GROUP}="${CSP_REPORT_ENDPOINT_PATH}"`;
 const WEB_VITALS_BODY_LIMIT = "4kb";
-const WEB_VITALS_TELEMETRY_ENDPOINT_PATHS = [
-  "/api/telemetry/web-vitals",
-  "/telemetry/web-vitals",
-] as const;
+const WEB_VITALS_TELEMETRY_ENDPOINT_PATHS = WEB_VITALS_TELEMETRY_PATHS;
 const API_COMPRESSION_THRESHOLD_BYTES = 1024;
 const REACT_REMOVE_SCROLL_BAR_STYLE_HASHES = [
   "'sha256-nzTgYzXYDNe6BAHiiI7NNlfK8n/auuOAhh2t92YvuXo='",

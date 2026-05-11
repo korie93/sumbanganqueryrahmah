@@ -402,7 +402,7 @@ test("authenticateToken throttles healthy activity updates per session id", asyn
   let now = new Date("2026-04-29T00:00:00.000Z").getTime();
   t.mock.method(Date, "now", () => now);
 
-  const updateActivityPayloads: unknown[] = [];
+  const updateActivityPayloads: Array<Record<string, unknown>> = [];
   const guards = createAuthGuards({
     storage: {
       getAuthenticatedSessionSnapshot: async () => ({
@@ -496,6 +496,10 @@ test("authenticateToken throttles healthy activity updates per session id", asyn
 
   assert.equal(nextCalls, 3);
   assert.equal(updateActivityPayloads.length, 2);
+  for (const payload of updateActivityPayloads) {
+    assert.ok(payload.lastActivityTime instanceof Date);
+    assert.equal(Object.prototype.hasOwnProperty.call(payload, "isActive"), false);
+  }
 });
 
 test("authenticateToken reserves activity updates before awaiting storage writes", async (t) => {
