@@ -1,8 +1,48 @@
-import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto";
+import { createCipheriv, createDecipheriv, createHash, hkdfSync, randomBytes } from "node:crypto";
 import { normalizeCollectionPiiValue } from "./collection-pii-encryption-normalize";
 
+export const COLLECTION_PII_ENCRYPTION_INFO = "sqr-collection-pii-encryption-v1";
+export const COLLECTION_PII_ENCRYPTION_SALT = "sqr-collection-pii-encryption-salt-v1";
+
 export function getCollectionPiiCipherKey(secret: string) {
+  return Buffer.from(
+    hkdfSync(
+      "sha256",
+      Buffer.from(String(secret), "utf8"),
+      Buffer.from(COLLECTION_PII_ENCRYPTION_SALT, "utf8"),
+      Buffer.from(COLLECTION_PII_ENCRYPTION_INFO, "utf8"),
+      32,
+    ),
+  );
+}
+
+export function getLegacyCollectionPiiCipherKey(secret: string) {
   return createHash("sha256").update(secret).digest();
+}
+
+export function getCollectionPiiBlindIndexKey(secret: string) {
+  // Keep blind-index hashes stable for existing database rows. Encryption
+  // payloads moved to HKDF above; changing search hashes requires a separate
+  // database backfill/migration window.
+  return getLegacyCollectionPiiCipherKey(secret);
+}
+
+function decryptCollectionPiiValueWithKey(payload: string, key: Buffer): string {
+  const [ivRaw, ciphertextRaw, tagRaw] = String(payload || "").split(".");
+  if (!ivRaw || !ciphertextRaw || !tagRaw) {
+    throw new Error("Invalid collection PII payload.");
+  }
+
+  const iv = Buffer.from(ivRaw, "base64url");
+  const ciphertext = Buffer.from(ciphertextRaw, "base64url");
+  const tag = Buffer.from(tagRaw, "base64url");
+  const decipher = createDecipheriv("aes-256-gcm", key, iv);
+  decipher.setAuthTag(tag);
+  const plaintext = Buffer.concat([
+    decipher.update(ciphertext),
+    decipher.final(),
+  ]);
+  return plaintext.toString("utf8");
 }
 
 export function encryptCollectionPiiWithSecret(value: string, secret: string): string {
@@ -14,21 +54,22 @@ export function encryptCollectionPiiWithSecret(value: string, secret: string): s
 }
 
 export function decryptCollectionPiiValueWithSecret(payload: string, secret: string): string {
-  const [ivRaw, ciphertextRaw, tagRaw] = String(payload || "").split(".");
-  if (!ivRaw || !ciphertextRaw || !tagRaw) {
-    throw new Error("Invalid collection PII payload.");
+  try {
+    return decryptCollectionPiiValueWithKey(payload, getCollectionPiiCipherKey(secret));
+  } catch (hkdfError) {
+    try {
+      return decryptCollectionPiiValueWithKey(payload, getLegacyCollectionPiiCipherKey(secret));
+    } catch {
+      throw hkdfError;
+    }
   }
+}
 
-  const iv = Buffer.from(ivRaw, "base64url");
-  const ciphertext = Buffer.from(ciphertextRaw, "base64url");
-  const tag = Buffer.from(tagRaw, "base64url");
-  const decipher = createDecipheriv("aes-256-gcm", getCollectionPiiCipherKey(secret), iv);
-  decipher.setAuthTag(tag);
-  const plaintext = Buffer.concat([
-    decipher.update(ciphertext),
-    decipher.final(),
-  ]);
-  return plaintext.toString("utf8");
+export function decryptCollectionPiiValueWithCurrentDerivationOnly(
+  payload: string,
+  secret: string,
+): string {
+  return decryptCollectionPiiValueWithKey(payload, getCollectionPiiCipherKey(secret));
 }
 
 export function decryptCollectionPiiValueWithSecretSafe(payload: unknown, secret: string): string | null {

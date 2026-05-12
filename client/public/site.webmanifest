@@ -18,6 +18,12 @@
       "sizes": "512x512",
       "type": "image/webp",
       "purpose": "any"
+    },
+    {
+      "src": "/brand/sqr-logo-maskable.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
     }
   ]
 }

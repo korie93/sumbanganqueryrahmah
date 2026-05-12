@@ -8,7 +8,9 @@ import {
   assertUsablePasswordResetTokenRecord,
   createActivationTokenPayload,
   createPasswordResetTokenPayload,
+  findOpaqueTokenRecordByHashCandidates,
 } from "../auth-account-token-utils";
+import { hashLegacyOpaqueToken } from "../../auth/passwords";
 
 test("createActivationTokenPayload and createPasswordResetTokenPayload set the expected expiry windows", () => {
   const now = new Date("2026-03-15T10:00:00.000Z");
@@ -23,6 +25,23 @@ test("createActivationTokenPayload and createPasswordResetTokenPayload set the e
   assert.ok(reset.token);
   assert.ok(reset.tokenHash);
   assert.equal(reset.expiresAt.toISOString(), addHours(now, 4).toISOString());
+});
+
+test("findOpaqueTokenRecordByHashCandidates preserves legacy token lookup compatibility", async () => {
+  const rawToken = "legacy-token";
+  const legacyHash = hashLegacyOpaqueToken(rawToken);
+  const calls: string[] = [];
+
+  const result = await findOpaqueTokenRecordByHashCandidates(rawToken, async (tokenHash) => {
+    calls.push(tokenHash);
+    return tokenHash === legacyHash ? { tokenId: "legacy-record" } : undefined;
+  });
+
+  assert.deepEqual(result, {
+    record: { tokenId: "legacy-record" },
+    tokenHash: legacyHash,
+  });
+  assert.equal(calls.includes(legacyHash), true);
 });
 
 test("assertConfirmedStrongPassword and assertStrongPasswordInput enforce shared password rules", () => {

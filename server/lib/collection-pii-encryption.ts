@@ -13,9 +13,9 @@ import {
 } from "./collection-pii-encryption-normalize";
 import {
   decryptCollectionPiiValueWithSecret,
-  decryptCollectionPiiValueWithSecretSafe,
+  decryptCollectionPiiValueWithCurrentDerivationOnly,
   encryptCollectionPiiWithSecret,
-  getCollectionPiiCipherKey,
+  getCollectionPiiBlindIndexKey,
 } from "./collection-pii-encryption-crypto";
 export type {
   CollectionPiiFieldName,
@@ -95,7 +95,7 @@ export function hashCollectionPiiSearchValue(
     return null;
   }
 
-  return createHmac("sha256", getCollectionPiiCipherKey(encryptionSecret))
+  return createHmac("sha256", getCollectionPiiBlindIndexKey(encryptionSecret))
     .update(`${field}:${normalized}`)
     .digest("hex");
 }
@@ -299,7 +299,14 @@ export function shouldRewriteCollectionPiiShadowValue(params: {
     return false;
   }
 
-  return decryptCollectionPiiValueWithSecretSafe(params.encrypted, currentSecret) !== resolved;
+  try {
+    return decryptCollectionPiiValueWithCurrentDerivationOnly(
+      normalizeCollectionPiiValue(params.encrypted),
+      currentSecret,
+    ) !== resolved;
+  } catch {
+    return true;
+  }
 }
 
 export function shouldRewriteCollectionPiiSearchHashValue(params: {

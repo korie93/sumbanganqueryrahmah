@@ -4,7 +4,11 @@ import {
   getCredentialPasswordPolicyMessage,
   isStrongPassword,
 } from "../auth/credentials";
-import { generateOneTimeToken, hashOpaqueToken } from "../auth/passwords";
+import {
+  generateOneTimeToken,
+  getOpaqueTokenHashCandidates,
+  hashOpaqueToken,
+} from "../auth/passwords";
 import type {
   AccountActivationTokenSummary,
   PasswordResetTokenSummary,
@@ -20,6 +24,11 @@ export type IssuedOpaqueToken = {
   token: string;
   tokenHash: string;
   expiresAt: Date;
+};
+
+export type OpaqueTokenRecordLookupResult<TRecord> = {
+  record: TRecord;
+  tokenHash: string;
 };
 
 export type UsableActivationTokenRecord = AccountActivationTokenSummary & {
@@ -145,6 +154,20 @@ export function assertStrongPasswordInput(newPassword: string) {
       getCredentialPasswordPolicyMessage(),
     );
   }
+}
+
+export async function findOpaqueTokenRecordByHashCandidates<TRecord>(
+  rawToken: string,
+  lookup: (tokenHash: string) => Promise<TRecord | undefined>,
+): Promise<OpaqueTokenRecordLookupResult<TRecord> | null> {
+  for (const tokenHash of getOpaqueTokenHashCandidates(rawToken)) {
+    const record = await lookup(tokenHash);
+    if (record) {
+      return { record, tokenHash };
+    }
+  }
+
+  return null;
 }
 
 export function assertUsableActivationTokenRecord(

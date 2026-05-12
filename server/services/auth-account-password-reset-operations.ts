@@ -3,14 +3,12 @@ import {
   isManageableUserRole,
   normalizeAccountStatus,
 } from "../auth/account-lifecycle";
-import {
-  hashOpaqueToken,
-  hashPassword,
-} from "../auth/passwords";
+import { hashPassword } from "../auth/passwords";
 import type { PostgresStorage } from "../storage-postgres";
 import {
   assertConfirmedStrongPassword,
   assertUsablePasswordResetTokenRecord,
+  findOpaqueTokenRecordByHashCandidates,
 } from "./auth-account-token-utils";
 import { sendPasswordResetEmailOperation } from "./auth-account-authentication-utils";
 import {
@@ -75,10 +73,13 @@ export class AuthAccountPasswordResetOperations {
       throw new AuthAccountError(400, ERROR_CODES.INVALID_TOKEN, "Password reset token is invalid.");
     }
 
-    const tokenHash = hashOpaqueToken(rawToken);
     const now = new Date();
+    const lookup = await findOpaqueTokenRecordByHashCandidates(
+      rawToken,
+      (candidateHash) => this.deps.storage.getPasswordResetTokenRecordByHash(candidateHash),
+    );
     const record = assertUsablePasswordResetTokenRecord(
-      await this.deps.storage.getPasswordResetTokenRecordByHash(tokenHash),
+      lookup?.record,
       now,
     );
 
@@ -106,10 +107,13 @@ export class AuthAccountPasswordResetOperations {
 
     assertConfirmedStrongPassword(newPassword, confirmPassword);
 
-    const tokenHash = hashOpaqueToken(rawToken);
     const now = new Date();
+    const lookup = await findOpaqueTokenRecordByHashCandidates(
+      rawToken,
+      (candidateHash) => this.deps.storage.getPasswordResetTokenRecordByHash(candidateHash),
+    );
     const record = assertUsablePasswordResetTokenRecord(
-      await this.deps.storage.getPasswordResetTokenRecordByHash(tokenHash),
+      lookup?.record,
       now,
     );
     const consumed = await this.deps.storage.consumePasswordResetRequestById({
@@ -118,7 +122,9 @@ export class AuthAccountPasswordResetOperations {
     });
 
     if (!consumed) {
-      const latest = await this.deps.storage.getPasswordResetTokenRecordByHash(tokenHash);
+      const latest = lookup
+        ? await this.deps.storage.getPasswordResetTokenRecordByHash(lookup.tokenHash)
+        : undefined;
       assertUsablePasswordResetTokenRecord(latest, now);
       throw new AuthAccountError(400, ERROR_CODES.INVALID_TOKEN, "Password reset token is invalid.");
     }

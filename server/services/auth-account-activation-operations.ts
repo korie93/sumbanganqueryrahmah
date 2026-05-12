@@ -1,13 +1,11 @@
 import { normalizeAccountStatus } from "../auth/account-lifecycle";
 import { normalizeUsernameInput } from "../auth/credentials";
-import {
-  hashOpaqueToken,
-  hashPassword,
-} from "../auth/passwords";
+import { hashPassword } from "../auth/passwords";
 import type { PostgresStorage } from "../storage-postgres";
 import {
   assertConfirmedStrongPassword,
   assertUsableActivationTokenRecord,
+  findOpaqueTokenRecordByHashCandidates,
 } from "./auth-account-token-utils";
 import { sendActivationEmailOperation } from "./auth-account-authentication-utils";
 import {
@@ -60,10 +58,13 @@ export class AuthAccountActivationOperations {
       throw new AuthAccountError(400, ERROR_CODES.INVALID_TOKEN, "Activation token is invalid.");
     }
 
-    const tokenHash = hashOpaqueToken(rawToken);
     const now = new Date();
+    const lookup = await findOpaqueTokenRecordByHashCandidates(
+      rawToken,
+      (candidateHash) => this.deps.storage.getActivationTokenRecordByHash(candidateHash),
+    );
     const record = assertUsableActivationTokenRecord(
-      await this.deps.storage.getActivationTokenRecordByHash(tokenHash),
+      lookup?.record,
       now,
     );
 
@@ -92,10 +93,13 @@ export class AuthAccountActivationOperations {
 
     assertConfirmedStrongPassword(newPassword, confirmPassword);
 
-    const tokenHash = hashOpaqueToken(rawToken);
     const now = new Date();
+    const lookup = await findOpaqueTokenRecordByHashCandidates(
+      rawToken,
+      (candidateHash) => this.deps.storage.getActivationTokenRecordByHash(candidateHash),
+    );
     const record = assertUsableActivationTokenRecord(
-      await this.deps.storage.getActivationTokenRecordByHash(tokenHash),
+      lookup?.record,
       now,
     );
     const requestedUsername = normalizeUsernameInput(params.username);
@@ -108,7 +112,9 @@ export class AuthAccountActivationOperations {
       now,
     });
     if (!consumed) {
-      const latest = await this.deps.storage.getActivationTokenRecordByHash(tokenHash);
+      const latest = lookup
+        ? await this.deps.storage.getActivationTokenRecordByHash(lookup.tokenHash)
+        : undefined;
       assertUsableActivationTokenRecord(latest, now);
       throw new AuthAccountError(400, ERROR_CODES.INVALID_TOKEN, "Activation token is invalid.");
     }

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createCipheriv, createHash, createHmac } from "node:crypto";
 import test from "node:test";
 import {
   buildCollectionRecordPiiSearchHashes,
@@ -16,8 +17,23 @@ import {
   shouldRewriteCollectionPiiSearchHashesValue,
   shouldRewriteCollectionPiiShadowValue,
 } from "../../lib/collection-pii-encryption";
+import {
+  decryptCollectionPiiValueWithCurrentDerivationOnly,
+  decryptCollectionPiiValueWithSecret,
+  encryptCollectionPiiWithSecret,
+  getCollectionPiiCipherKey,
+  getLegacyCollectionPiiCipherKey,
+} from "../../lib/collection-pii-encryption-crypto";
 import { logger } from "../../lib/logger";
 import { mapCollectionRecordRow } from "../collection-repository-mappers";
+
+function encryptLegacyCollectionPiiPayload(value: string, secret: string): string {
+  const iv = Buffer.from("00112233445566778899aabb", "hex");
+  const cipher = createCipheriv("aes-256-gcm", getLegacyCollectionPiiCipherKey(secret), iv);
+  const ciphertext = Buffer.concat([cipher.update(value, "utf8"), cipher.final()]);
+  const tag = cipher.getAuthTag();
+  return `${iv.toString("base64url")}.${ciphertext.toString("base64url")}.${tag.toString("base64url")}`;
+}
 
 function withCollectionPiiKeys<T>(params: {
   current: string | null;
@@ -85,6 +101,34 @@ test("collection PII helpers encrypt and decrypt collection record shadow fields
       }),
       "900101015555",
     );
+  });
+});
+
+test("collection PII encryption uses HKDF while preserving legacy SHA-256 decrypt fallback", () => {
+  const secret = "test-collection-pii-encryption-key";
+  const value = "Alice Tan";
+  const currentPayload = encryptCollectionPiiWithSecret(value, secret);
+  const legacyPayload = encryptLegacyCollectionPiiPayload(value, secret);
+
+  assert.notDeepEqual(getCollectionPiiCipherKey(secret), getLegacyCollectionPiiCipherKey(secret));
+  assert.equal(decryptCollectionPiiValueWithSecret(currentPayload, secret), value);
+  assert.equal(decryptCollectionPiiValueWithSecret(legacyPayload, secret), value);
+  assert.throws(
+    () => decryptCollectionPiiValueWithCurrentDerivationOnly(legacyPayload, secret),
+    /Unsupported state or unable to authenticate data|Invalid collection PII payload/i,
+  );
+});
+
+test("collection PII blind indexes keep the legacy key contract until backfilled", () => {
+  withCollectionPiiKeys({ current: "search-hash-secret-key" }, () => {
+    const expected = createHmac(
+      "sha256",
+      createHash("sha256").update("search-hash-secret-key").digest(),
+    )
+      .update("icNumber:900101015555")
+      .digest("hex");
+
+    assert.equal(hashCollectionPiiSearchValue("icNumber", "900101-01-5555"), expected);
   });
 });
 

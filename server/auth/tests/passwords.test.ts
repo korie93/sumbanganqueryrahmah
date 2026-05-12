@@ -8,6 +8,9 @@ import {
 } from "../credentials";
 import {
   generateTemporaryPassword,
+  getOpaqueTokenHashCandidates,
+  hashLegacyOpaqueToken,
+  hashOpaqueToken,
   hashPassword,
   resetDummyBcryptHashForTests,
   verifyPassword,
@@ -29,6 +32,26 @@ test("generateTemporaryPassword preserves entropy while meeting the credential p
 
   assert.equal(password.length >= 16, true);
   assert.equal(isStrongPassword(password), true);
+});
+
+test("opaque token hashing uses keyed HMAC while retaining legacy lookup candidates", () => {
+  const rawToken = "reset-token-value";
+  const hmacHash = hashOpaqueToken(rawToken);
+  const legacyHash = hashLegacyOpaqueToken(rawToken);
+  const candidates = getOpaqueTokenHashCandidates(rawToken);
+
+  assert.match(hmacHash, /^hmac-sha256:[a-f0-9]{64}$/);
+  assert.match(legacyHash, /^[a-f0-9]{64}$/);
+  assert.notEqual(hmacHash, legacyHash);
+  assert.equal(hashOpaqueToken(rawToken), hmacHash);
+  assert.deepEqual(Array.from(new Set(candidates)), candidates);
+  assert.equal(candidates.includes(hmacHash), true);
+  assert.equal(candidates.includes(legacyHash), true);
+});
+
+test("opaque token hashes are context-bound", () => {
+  assert.notEqual(hashOpaqueToken("token-a"), hashOpaqueToken("token-b"));
+  assert.notEqual(hashLegacyOpaqueToken("token-a"), hashOpaqueToken("token-a"));
 });
 
 test("verifyPassword rejects oversized password input before bcrypt comparison", async (t) => {
