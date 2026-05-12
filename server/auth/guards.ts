@@ -8,9 +8,25 @@ import {
   canUserBypassForcedPasswordChange,
   getAccountAccessBlockReason,
 } from "./account-lifecycle";
+import { canAccessDuringForcedPasswordChange } from "./guard-forced-password-change";
+import { getInvalidatedSessionMessage } from "./guard-session-messages";
 import { clearAuthSessionCookie, readAuthSessionTokenFromHeaders } from "./session-cookie";
 import { normalizeSessionExpiry } from "./session-lifetime";
 import { logger } from "../lib/logger";
+import {
+  ACTIVITY_UPDATE_CACHE_MAX_SIZE,
+  ACTIVITY_UPDATE_CACHE_SWEEP_INTERVAL_MS,
+  ACTIVITY_UPDATE_THROTTLE_MS,
+  TAB_VISIBILITY_CACHE_MAX_SIZE,
+  TAB_VISIBILITY_CACHE_SWEEP_INTERVAL_MS,
+  TAB_VISIBILITY_CACHE_TTL_MS,
+  evictOldestActivityUpdateCacheEntry,
+  evictOldestTabVisibilityCacheEntry,
+  sweepExpiredActivityUpdateCacheEntries,
+  sweepExpiredTabVisibilityCacheEntries,
+  type TabVisibilityCacheEntry,
+} from "./guard-cache";
+export { getInvalidatedSessionMessage } from "./guard-session-messages";
 
 export interface AuthenticatedUser {
   userId?: string | undefined;
@@ -48,115 +64,6 @@ type CreateAuthGuardsOptions = {
   secret?: string;
   activityUpdateThrottleMs?: number;
 };
-
-type TabVisibilityCacheEntry = {
-  tabs: Record<string, boolean>;
-  cachedAt: number;
-};
-
-const TAB_VISIBILITY_CACHE_TTL_MS = 5 * 60 * 1000;
-const TAB_VISIBILITY_CACHE_SWEEP_INTERVAL_MS = TAB_VISIBILITY_CACHE_TTL_MS;
-const TAB_VISIBILITY_CACHE_MAX_SIZE = 100;
-const ACTIVITY_UPDATE_THROTTLE_MS = 30 * 1000;
-const ACTIVITY_UPDATE_CACHE_TTL_MS = 2 * 60 * 1000;
-const ACTIVITY_UPDATE_CACHE_SWEEP_INTERVAL_MS = ACTIVITY_UPDATE_CACHE_TTL_MS;
-const ACTIVITY_UPDATE_CACHE_MAX_SIZE = 5_000;
-const FORCED_PASSWORD_CHANGE_ALLOWLIST = new Set([
-  "GET:/api/auth/me",
-  "GET:/api/me",
-  "POST:/api/auth/change-password",
-  "PATCH:/api/me/credentials",
-  "POST:/api/activity/logout",
-  "POST:/api/activity/heartbeat",
-]);
-
-function canAccessDuringForcedPasswordChange(method: string, path: string) {
-  return FORCED_PASSWORD_CHANGE_ALLOWLIST.has(`${method.toUpperCase()}:${path}`);
-}
-
-export function getInvalidatedSessionMessage(logoutReason?: string | null): string {
-  const normalized = String(logoutReason || "").trim().toUpperCase();
-
-  if (normalized === "NEW_SESSION") {
-    return "Your account was opened in another browser or device. Please login again.";
-  }
-
-  if (normalized === "PASSWORD_RESET_BY_SUPERUSER" || normalized === "PASSWORD_RESET_COMPLETED") {
-    return "Password was reset. Please login again.";
-  }
-
-  if (normalized === "PASSWORD_CHANGED") {
-    return "Password changed. Please login again.";
-  }
-
-  return "Session expired. Please login again.";
-}
-
-function evictOldestTabVisibilityCacheEntry(
-  cache: Map<string, TabVisibilityCacheEntry>,
-): string | null {
-  let oldestKey: string | null = null;
-  let oldestCachedAt = Number.POSITIVE_INFINITY;
-
-  for (const [key, entry] of cache.entries()) {
-    if (entry.cachedAt < oldestCachedAt) {
-      oldestCachedAt = entry.cachedAt;
-      oldestKey = key;
-    }
-  }
-
-  if (oldestKey) {
-    cache.delete(oldestKey);
-  }
-
-  return oldestKey;
-}
-
-function sweepExpiredTabVisibilityCacheEntries(
-  cache: Map<string, TabVisibilityCacheEntry>,
-  now = Date.now(),
-): number {
-  let removed = 0;
-  for (const [key, entry] of cache.entries()) {
-    if (now - entry.cachedAt >= TAB_VISIBILITY_CACHE_TTL_MS) {
-      cache.delete(key);
-      removed += 1;
-    }
-  }
-  return removed;
-}
-
-function evictOldestActivityUpdateCacheEntry(cache: Map<string, number>): string | null {
-  let oldestKey: string | null = null;
-  let oldestUpdatedAt = Number.POSITIVE_INFINITY;
-
-  for (const [key, updatedAt] of cache.entries()) {
-    if (updatedAt < oldestUpdatedAt) {
-      oldestUpdatedAt = updatedAt;
-      oldestKey = key;
-    }
-  }
-
-  if (oldestKey) {
-    cache.delete(oldestKey);
-  }
-
-  return oldestKey;
-}
-
-function sweepExpiredActivityUpdateCacheEntries(
-  cache: Map<string, number>,
-  now = Date.now(),
-): number {
-  let removed = 0;
-  for (const [key, updatedAt] of cache.entries()) {
-    if (now - updatedAt >= ACTIVITY_UPDATE_CACHE_TTL_MS) {
-      cache.delete(key);
-      removed += 1;
-    }
-  }
-  return removed;
-}
 
 export function createAuthGuards(options: CreateAuthGuardsOptions) {
   const storage = options.storage;
@@ -517,21 +424,7 @@ export function createAuthGuards(options: CreateAuthGuardsOptions) {
 export function evictOldestTabVisibilityCacheEntryForTests(
   cache: Map<string, TabVisibilityCacheEntry>,
 ): string | null {
-  let oldestKey: string | null = null;
-  let oldestCachedAt = Number.POSITIVE_INFINITY;
-
-  for (const [key, entry] of cache.entries()) {
-    if (entry.cachedAt < oldestCachedAt) {
-      oldestCachedAt = entry.cachedAt;
-      oldestKey = key;
-    }
-  }
-
-  if (oldestKey) {
-    cache.delete(oldestKey);
-  }
-
-  return oldestKey;
+  return evictOldestTabVisibilityCacheEntry(cache);
 }
 
 export function sweepExpiredTabVisibilityCacheEntriesForTests(

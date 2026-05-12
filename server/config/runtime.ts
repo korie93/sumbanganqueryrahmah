@@ -1,4 +1,3 @@
-import os from "node:os";
 import path from "node:path";
 import {
   isProductionLikeEnvironment,
@@ -20,6 +19,17 @@ import {
   readString,
   resolveNodeEnv,
 } from "./runtime-config-read-utils";
+import {
+  readIntFrom,
+  readOptionalStringFrom,
+  readStringFrom,
+} from "./runtime-config-read-alias-utils";
+import {
+  parseDatabaseUrl,
+  resolveCookieSameSite,
+  resolveDatabaseBootstrapMode,
+  resolveDefaultPgMaxConnections,
+} from "./runtime-config-resolvers";
 import {
   assessMailConfiguration,
   assertNoPlaceholderSecrets,
@@ -78,100 +88,6 @@ const resolvedDefaultImportUploadLimitBytes = parseBodyLimitToBytes(
   readString("IMPORT_BODY_LIMIT", DEFAULT_IMPORT_BODY_LIMIT),
   DEFAULT_IMPORT_UPLOAD_LIMIT_BYTES,
 );
-
-type ParsedDatabaseUrl = {
-  database: string;
-  host: string;
-  password: string;
-  port: number;
-  user: string;
-};
-
-function parseDatabaseUrl(rawValue: string | null): ParsedDatabaseUrl | null {
-  if (!rawValue) {
-    return null;
-  }
-
-  let url: URL;
-  try {
-    url = new URL(rawValue);
-  } catch {
-    throw new Error("DATABASE_URL must be a valid PostgreSQL connection URL.");
-  }
-
-  if (url.protocol !== "postgres:" && url.protocol !== "postgresql:") {
-    throw new Error("DATABASE_URL must start with postgres:// or postgresql://.");
-  }
-
-  const pathname = url.pathname.replace(/^\/+/, "");
-  const port = Number.parseInt(url.port || "5432", 10);
-
-  return {
-    database: decodeURIComponent(pathname),
-    host: url.hostname,
-    password: decodeURIComponent(url.password || ""),
-    port: Number.isFinite(port) ? port : 5432,
-    user: decodeURIComponent(url.username || ""),
-  };
-}
-
-function resolveDefaultPgMaxConnections() {
-  const cpuCount = typeof os.availableParallelism === "function"
-    ? os.availableParallelism()
-    : os.cpus().length;
-  const normalizedCpuCount = Math.max(1, Number.isFinite(cpuCount) ? Math.trunc(cpuCount) : 1);
-  return Math.min(50, Math.max(10, normalizedCpuCount * 2));
-}
-
-function resolveCookieSameSite(value: string | null): "strict" | "lax" {
-  if (!value) {
-    return "strict";
-  }
-
-  const normalized = value.trim().toLowerCase();
-  if (normalized === "strict" || normalized === "lax") {
-    return normalized;
-  }
-
-  throw new Error("SESSION_COOKIE_SAMESITE must be one of: strict or lax.");
-}
-
-function resolveDatabaseBootstrapMode(value: string | null): "runtime" | "migration" {
-  const normalized = value?.trim().toLowerCase();
-  if (normalized === "runtime" || normalized === "migration") {
-    return normalized;
-  }
-
-  return "runtime";
-}
-
-function readOptionalStringFrom(names: readonly string[]): string | null {
-  for (const name of names) {
-    const value = readOptionalString(name);
-    if (value) {
-      return value;
-    }
-  }
-
-  return null;
-}
-
-function readStringFrom(names: readonly string[], fallback: string): string {
-  return readOptionalStringFrom(names) ?? fallback;
-}
-
-function readIntFrom(
-  names: readonly string[],
-  fallback: number,
-  options?: { min?: number; max?: number },
-): number {
-  const raw = readOptionalStringFrom(names);
-  const parsed = raw == null ? fallback : Number(raw);
-  const normalized = Number.isFinite(parsed) ? Math.floor(parsed) : fallback;
-  const min = options?.min ?? Number.NEGATIVE_INFINITY;
-  const max = options?.max ?? Number.POSITIVE_INFINITY;
-  return Math.max(min, Math.min(max, normalized));
-}
 
 const configuredSessionSecret = readOptionalString("SESSION_SECRET");
 const configuredPreviousSessionSecrets = resolvePreviousSessionSecrets(

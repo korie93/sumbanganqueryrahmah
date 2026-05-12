@@ -1,8 +1,6 @@
-import type { IncomingMessage } from "node:http";
-import { WebSocket, type WebSocketServer } from "ws";
+import { WebSocket } from "ws";
 import { readAuthSessionTokenFromHeaders } from "../auth/session-cookie";
 import { logger } from "../lib/logger";
-import type { PostgresStorage } from "../storage-postgres";
 import { extractWsActivityId, isActiveWebSocketSession } from "./session-auth";
 import {
   firstHeaderValue,
@@ -11,6 +9,16 @@ import {
 } from "./ws-auth";
 import { createRuntimeWsBroadcaster } from "./ws-broadcast";
 import { getActivityUserKey } from "./ws-connection-state";
+import { countTrackedUserConnections } from "./runtime-connection-limits";
+import { parseRuntimeWebSocketHandshakeUrl } from "./runtime-handshake";
+import {
+  MAX_RUNTIME_WS_CONNECTIONS_PER_USER,
+  RUNTIME_WS_CLOSE_POLICY_VIOLATION,
+  RUNTIME_WS_CLOSE_TRY_AGAIN_LATER,
+  type RuntimeManagerOptions,
+  type RuntimeSocketCleanupOptions,
+  type RuntimeTrackedSocketEntry,
+} from "./runtime-manager-types";
 import {
   isTrackableSocket,
   sanitizeRuntimeWebSocketError,
@@ -20,61 +28,7 @@ import {
   normalizeRuntimeWsHeartbeatIntervalMs,
   startRuntimeWsHeartbeat,
 } from "./ws-heartbeat";
-
-const MAX_CONNECTIONS_PER_USER = 5;
-const WS_CLOSE_POLICY_VIOLATION = 1008;
-const WS_CLOSE_TRY_AGAIN_LATER = 1013;
-
-type RuntimeManagerOptions = {
-  wss: WebSocketServer;
-  storage: Pick<PostgresStorage, "getActivityById"> & {
-    clearCollectionNicknameSessionByActivity?: (activityId: string) => Promise<unknown> | unknown;
-  };
-  secret: string | readonly string[];
-  connectedClients?: Map<string, WebSocket>;
-  trustForwardedHeaders?: boolean;
-  acceptConnections?: () => boolean;
-  heartbeatIntervalMs?: number;
-};
-
-type RuntimeTrackedSocketEntry = {
-  activityId: string;
-  ws: WebSocket;
-  userKey: string | null;
-  alive: boolean;
-};
-
-type RuntimeSocketCleanupOptions = {
-  clearSession?: boolean;
-  reason?: string;
-};
-
-function parseRuntimeWebSocketHandshakeUrl(
-  req: Pick<IncomingMessage, "headers" | "url">,
-): URL | null {
-  const rawHost = firstHeaderValue(req.headers.host).trim();
-  const host = rawHost || "localhost";
-  const requestUrl = String(req.url || "/");
-
-  try {
-    const url = new URL(requestUrl, `http://${host}`);
-    if (!rawHost) {
-      logger.warn("WebSocket handshake missing host header; using localhost fallback", {
-        path: url.pathname,
-      });
-    }
-    return url;
-  } catch (error) {
-    logger.warn("WebSocket rejected malformed handshake URL", {
-      operation: "parseWebSocketHandshakeUrl",
-      hostPresent: Boolean(rawHost),
-      hostLength: rawHost.length,
-      requestTargetLength: requestUrl.length,
-      error: sanitizeRuntimeWebSocketError(error),
-    });
-    return null;
-  }
-}
+import { closeRuntimeWebSocketServerState } from "./runtime-server-close";
 
 export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
   connectedClients: Map<string, WebSocket>;
@@ -207,19 +161,6 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
       connectedClients.delete(activityId);
     }
   };
-  const countTrackedUserConnections = (userKey: string, excludedActivityId?: string) => {
-    let count = 0;
-    for (const entry of socketEntriesByActivity.values()) {
-      if (entry.activityId === excludedActivityId || entry.userKey !== userKey) {
-        continue;
-      }
-      if (entry.ws.readyState === WebSocket.OPEN || entry.ws.readyState === WebSocket.CONNECTING) {
-        count += 1;
-      }
-    }
-    return count;
-  };
-
   const broadcastWsMessage = createRuntimeWsBroadcaster({ connectedClients, cleanupClient });
   const heartbeatHandle = startRuntimeWsHeartbeat({
     cleanupClient,
@@ -228,44 +169,14 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
     socketEntriesByActivity,
   });
 
-  wss.once("close", () => {
-    clearInterval(heartbeatHandle);
-    for (const entry of Array.from(socketEntriesByActivity.values())) {
-      cleanupClient(entry.activityId, {
-        expectedWs: entry.ws,
-        closeWith: "close",
-        clearSession: true,
-        reason: "server-close",
-      });
-    }
-    for (const [activityId, ws] of Array.from(connectedClients.entries())) {
-      cleanupClient(activityId, {
-        expectedWs: ws,
-        closeWith: "close",
-        clearSession: true,
-        reason: "server-close",
-      });
-    }
-    for (const ws of Array.from(trackedSockets)) {
-      socketCleanupCallbacks.get(ws)?.({
-        reason: "server-close-unregistered",
-      });
-      if (!isTrackableSocket(ws)) {
-        continue;
-      }
-
-      try {
-        ws.close();
-      } catch (error) {
-        logger.debug("WebSocket close request failed during server shutdown cleanup", {
-          error: sanitizeRuntimeWebSocketError(error),
-        });
-      }
-    }
-    connectedClients.clear();
-    socketEntriesByActivity.clear();
-    trackedSockets.clear();
-  });
+  wss.once("close", () => closeRuntimeWebSocketServerState({
+    cleanupClient,
+    connectedClients,
+    heartbeatHandle,
+    socketCleanupCallbacks,
+    socketEntriesByActivity,
+    trackedSockets,
+  }));
 
   wss.on("connection", async (ws, req) => {
     if (!trustForwardedHeaders && hasForwardedHeaders(req.headers)) {
@@ -282,7 +193,7 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
         path: req.url || "/ws",
       });
       try {
-        ws.close(WS_CLOSE_TRY_AGAIN_LATER, "storage initializing");
+      ws.close(RUNTIME_WS_CLOSE_TRY_AGAIN_LATER, "storage initializing");
       } catch (error) {
         logger.debug("WebSocket close request failed during startup readiness rejection", {
           error: sanitizeRuntimeWebSocketError(error),
@@ -416,7 +327,7 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
     const url = parseRuntimeWebSocketHandshakeUrl(req);
     if (!url) {
       cleanupSocket();
-      closeSocketIfNeeded(WS_CLOSE_POLICY_VIOLATION, "malformed handshake URL");
+      closeSocketIfNeeded(RUNTIME_WS_CLOSE_POLICY_VIOLATION, "malformed handshake URL");
       return;
     }
     if (url.searchParams.has("token")) {
@@ -474,14 +385,18 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
       }
 
       const userKey = getActivityUserKey(activity);
-      if (userKey && countTrackedUserConnections(userKey, activityId) >= MAX_CONNECTIONS_PER_USER) {
+      if (
+        userKey
+        && countTrackedUserConnections(socketEntriesByActivity, userKey, activityId)
+          >= MAX_RUNTIME_WS_CONNECTIONS_PER_USER
+      ) {
         logger.warn("WebSocket rejected because the user connection limit was reached", {
           activityId,
           userKey,
-          maxConnectionsPerUser: MAX_CONNECTIONS_PER_USER,
+          maxConnectionsPerUser: MAX_RUNTIME_WS_CONNECTIONS_PER_USER,
         });
         cleanupSocket();
-        closeSocketIfNeeded(WS_CLOSE_POLICY_VIOLATION, "connection limit reached");
+        closeSocketIfNeeded(RUNTIME_WS_CLOSE_POLICY_VIOLATION, "connection limit reached");
         return;
       }
 

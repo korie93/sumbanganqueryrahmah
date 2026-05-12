@@ -28,3 +28,13 @@ test("login fallback navigation uses history instead of full document reloads", 
   assert.match(source, /window\.dispatchEvent\(new Event\("popstate"\)\)/);
   assert.doesNotMatch(source, /window\.location\.href/);
 });
+
+test("login request lifecycle aborts pending auth work and ignores stale responses", () => {
+  const source = readSource("useLoginRequestLifecycle.ts");
+
+  assert.match(source, /loginAbortControllerRef\.current\?\.abort\(\)/);
+  assert.match(source, /mountedRef\.current = false/);
+  assert.match(source, /loginInFlightRef\.current = false/);
+  assert.match(source, /controller\?\.signal\.aborted/);
+  assert.match(source, /setLoading\(false\)/);
+});

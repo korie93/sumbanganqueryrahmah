@@ -11,7 +11,11 @@ function readPageSource(fileName: string) {
 }
 
 test("Home keeps primary workflows and grouped desktop sections in the landing layout", () => {
-  const homeSource = readPageSource("Home.tsx");
+  const homeSource = [
+    readPageSource("Home.tsx"),
+    readPageSource("HomeSections.tsx"),
+    readPageSource("HomeNavigationCards.tsx"),
+  ].join("\n");
   const homeStyles = readPageSource("Home.css");
 
   assert.match(homeSource, /Primary Workflow/);

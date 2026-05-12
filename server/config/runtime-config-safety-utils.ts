@@ -2,56 +2,16 @@ import type { MailConfigurationAssessment, RuntimeConfigDiagnostic } from "./run
 import { normalizeCorsOrigin } from "./runtime-config-read-utils";
 import { buildTwoFactorReplayCacheTopologyWarning } from "../auth/two-factor-replay-topology";
 import { buildWebSocketTopologyWarning } from "../ws/websocket-topology";
+export {
+  assertNoPlaceholderSecrets,
+  assertStrongRuntimeSecret,
+} from "./runtime-config-secret-safety-utils";
 
 const AUTO_COOKIE_SECURE_VALUES = new Set(["", "auto", "1", "true", "0", "false"]);
-const PLACEHOLDER_DATABASE_PASSWORDS = new Set([
-  "change-this-db-password",
-  "GENERATE_ME_DB_PASSWORD_DO_NOT_USE_IN_PRODUCTION",
-]);
-const PLACEHOLDER_BACKUP_ENCRYPTION_KEYS = new Set([
-  "GENERATE_ME_BACKUP_KEY_AND_STORE_OFFLINE",
-]);
-const RUNTIME_SECRET_MIN_LENGTH = 32;
-const TEMPLATE_SECRET_PATTERNS = [
-  /^ganti-dengan-/i,
-  /^change-this-/i,
-  /^replace-me/i,
-  /^changeme$/i,
-  /^generate_me/i,
-  /do_not_use/i,
-  /placeholder/i,
-  /example/i,
-];
 const UNSAFE_TRUST_PROXY_VALUES = new Set(["*", "all", "true", "1"]);
 
 export const HSTS_PRELOAD_MIN_MAX_AGE_SECONDS = 31_536_000;
 export const HSTS_PRODUCTION_MIN_MAX_AGE_SECONDS = 15_552_000;
-
-export function assertStrongRuntimeSecret(name: string, value: string): void {
-  const normalized = String(value || "").trim();
-
-  if (!normalized) {
-    throw new Error(`${name} must be configured with a unique random secret.`);
-  }
-
-  if (normalized.length < RUNTIME_SECRET_MIN_LENGTH) {
-    throw new Error(
-      `${name} must be a unique random secret of at least ${RUNTIME_SECRET_MIN_LENGTH} characters.`,
-    );
-  }
-
-  if (TEMPLATE_SECRET_PATTERNS.some((pattern) => pattern.test(normalized))) {
-    throw new Error(`${name} must not use an example, placeholder, or template value.`);
-  }
-}
-
-function assertOptionalStrongRuntimeSecret(name: string, value: string | null | undefined): void {
-  if (!value) {
-    return;
-  }
-
-  assertStrongRuntimeSecret(name, value);
-}
 
 export function resolveTrustedProxies(rawValues: string[]): string[] {
   if (rawValues.length === 0) {
@@ -445,65 +405,4 @@ export function buildRuntimeConfigWarnings(params: {
   }
 
   return warnings;
-}
-
-export function assertNoPlaceholderSecrets(params: {
-  isProductionLike: boolean;
-  configuredSessionSecret: string | null;
-  configuredPreviousSessionSecrets: readonly string[];
-  configuredPgPassword: string | null;
-  configuredTwoFactorEncryptionKey: string | null;
-  configuredPreviousTwoFactorEncryptionKeys: readonly string[];
-  configuredCollectionPiiEncryptionKey: string | null;
-  configuredPreviousCollectionPiiEncryptionKeys: readonly string[];
-  configuredBackupEncryptionKey: string | null;
-  configuredBackupEncryptionKeys: string | null;
-}) {
-  if (!params.isProductionLike) {
-    return;
-  }
-
-  assertOptionalStrongRuntimeSecret("SESSION_SECRET", params.configuredSessionSecret);
-
-  for (const previousSecret of params.configuredPreviousSessionSecrets) {
-    assertStrongRuntimeSecret("SESSION_SECRET_PREVIOUS", previousSecret);
-  }
-
-  if (params.configuredPgPassword && PLACEHOLDER_DATABASE_PASSWORDS.has(params.configuredPgPassword)) {
-    throw new Error("PG_PASSWORD is using the default placeholder value and must be replaced before non-local startup.");
-  }
-
-  assertOptionalStrongRuntimeSecret(
-    "TWO_FACTOR_ENCRYPTION_KEY",
-    params.configuredTwoFactorEncryptionKey,
-  );
-
-  for (const previousTwoFactorKey of params.configuredPreviousTwoFactorEncryptionKeys) {
-    assertStrongRuntimeSecret("TWO_FACTOR_ENCRYPTION_KEY_PREVIOUS", previousTwoFactorKey);
-  }
-
-  assertOptionalStrongRuntimeSecret(
-    "COLLECTION_PII_ENCRYPTION_KEY",
-    params.configuredCollectionPiiEncryptionKey,
-  );
-
-  for (const previousCollectionPiiKey of params.configuredPreviousCollectionPiiEncryptionKeys) {
-    assertStrongRuntimeSecret("COLLECTION_PII_ENCRYPTION_KEY_PREVIOUS", previousCollectionPiiKey);
-  }
-
-  const configuredBackupKeys = [
-    params.configuredBackupEncryptionKey,
-    ...String(params.configuredBackupEncryptionKeys || "")
-      .split(",")
-      .map((entry) => entry.trim())
-      .filter(Boolean),
-  ].filter((entry): entry is string => Boolean(entry));
-
-  for (const backupKey of configuredBackupKeys) {
-    if (PLACEHOLDER_BACKUP_ENCRYPTION_KEYS.has(backupKey)) {
-      throw new Error(
-        "BACKUP_ENCRYPTION_KEY or BACKUP_ENCRYPTION_KEYS contains a placeholder value and must be replaced before non-local startup.",
-      );
-    }
-  }
 }

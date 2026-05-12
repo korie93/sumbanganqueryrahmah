@@ -30,6 +30,7 @@ import {
   validatePasswordLoginFields,
   validateTwoFactorCodeField,
 } from "@/pages/login-page-utils";
+import { useLoginRequestLifecycle } from "@/pages/useLoginRequestLifecycle";
 
 type UseLoginPageStateParams = {
   onBanned?: (() => void) | undefined;
@@ -53,15 +54,18 @@ export function useLoginPageState({
   const [twoFactorCodeError, setTwoFactorCodeError] = useState("");
   const [lockedAccountMessage, setLockedAccountMessage] = useState("");
   const [lockedUsername, setLockedUsername] = useState("");
-  const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [twoFactorChallengeToken, setTwoFactorChallengeToken] = useState("");
   const [twoFactorCode, setTwoFactorCode] = useState("");
-  const mountedRef = useRef(true);
   const storedNoticeConsumedRef = useRef(false);
-  const loginInFlightRef = useRef(false);
-  const loginAbortControllerRef = useRef<AbortController | null>(null);
-  const loginRequestIdRef = useRef(0);
+  const {
+    loading,
+    beginRequest: beginLoginRequest,
+    finalizeRequest,
+    isRequestInFlight,
+    setActiveController,
+    shouldIgnoreRequest,
+  } = useLoginRequestLifecycle();
   const lockedFlow = isLockedAccountFlow({
     lockedUsername,
     currentUsername: username,
@@ -80,50 +84,19 @@ export function useLoginPageState({
     }
   }, []);
 
-  useEffect(() => {
-    mountedRef.current = true;
-
-    return () => {
-      mountedRef.current = false;
-      loginAbortControllerRef.current?.abort();
-      loginAbortControllerRef.current = null;
-      loginInFlightRef.current = false;
-    };
-  }, []);
-
-  const shouldIgnoreRequest = (requestId: number, controller?: AbortController | null) =>
-    !mountedRef.current
-    || loginRequestIdRef.current !== requestId
-    || Boolean(controller?.signal.aborted);
-
-  const finalizeRequest = (requestId: number, controller: AbortController | null) => {
-    if (loginAbortControllerRef.current === controller) {
-      loginAbortControllerRef.current = null;
-    }
-    if (loginRequestIdRef.current === requestId) {
-      loginInFlightRef.current = false;
-    }
-    if (mountedRef.current && loginRequestIdRef.current === requestId) {
-      setLoading(false);
-    }
-  };
-
   const clearLockedAccountState = () => {
     setLockedUsername("");
     setLockedAccountMessage("");
   };
 
   const beginRequest = () => {
-    loginInFlightRef.current = true;
-    const requestId = loginRequestIdRef.current + 1;
-    loginRequestIdRef.current = requestId;
+    const requestId = beginLoginRequest();
     setError("");
     setNotice("");
     setUsernameError("");
     setPasswordError("");
     setTwoFactorCodeError("");
     setLockedAccountMessage("");
-    setLoading(true);
     return requestId;
   };
 
@@ -187,7 +160,7 @@ export function useLoginPageState({
   };
 
   const handleLogin = async () => {
-    if (loginInFlightRef.current || lockedFlow) {
+    if (isRequestInFlight() || lockedFlow) {
       return;
     }
 
@@ -205,7 +178,7 @@ export function useLoginPageState({
       }
 
       controller = new AbortController();
-      loginAbortControllerRef.current = controller;
+      setActiveController(controller);
       const fingerprint = await generateFingerprint();
       if (shouldIgnoreRequest(requestId, controller)) {
         return;
@@ -258,7 +231,7 @@ export function useLoginPageState({
   };
 
   const handleVerifyTwoFactor = async () => {
-    if (loginInFlightRef.current) {
+    if (isRequestInFlight()) {
       return;
     }
 
@@ -278,7 +251,7 @@ export function useLoginPageState({
       const normalizedCode = normalizeTwoFactorCode(twoFactorCode);
 
       controller = new AbortController();
-      loginAbortControllerRef.current = controller;
+      setActiveController(controller);
       const response = await verifyTwoFactorLogin(
         {
           challengeToken: twoFactorChallengeToken,

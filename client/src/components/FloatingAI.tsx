@@ -1,8 +1,13 @@
-import { Suspense, lazy, useCallback, useEffect, useId, useRef, type MouseEvent, type ReactNode, type Ref } from "react";
+import { Suspense, lazy, useCallback, useEffect, useId, useRef, type MouseEvent } from "react";
 import { Bot, Minimize2 } from "lucide-react";
 import { useLocation } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  FloatingPanelShell,
+  FloatingRootContainer,
+  FloatingTriggerShell,
+} from "@/components/FloatingAIShell";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { resolveFloatingAIMinimizedStatus } from "@/components/floating-ai-status";
 import {
@@ -29,56 +34,6 @@ const FLOATING_AI_PANEL_DESCRIPTION = "Panel bantuan AI untuk pertanyaan berkait
 
 function resolveFloatingAiSystemName(systemName: string | undefined) {
   return systemName?.trim() || DEFAULT_FLOATING_AI_SYSTEM_NAME;
-}
-
-function FloatingRootContainer({
-  rootRef,
-  className,
-  hidden,
-  children,
-}: {
-  rootRef: Ref<HTMLDivElement>;
-  className: string;
-  hidden: boolean;
-  children: ReactNode;
-}) {
-  return (
-    <div ref={rootRef} className={className} hidden={hidden}>
-      {children}
-    </div>
-  );
-}
-
-function FloatingPanelShell({
-  className,
-  hidden,
-  children,
-}: {
-  className: string;
-  hidden: boolean;
-  children: ReactNode;
-}) {
-  return (
-    <div hidden={hidden} className={className}>
-      {children}
-    </div>
-  );
-}
-
-function FloatingTriggerShell({
-  className,
-  hidden,
-  children,
-}: {
-  className: string;
-  hidden: boolean;
-  children: ReactNode;
-}) {
-  return (
-    <div className={className} hidden={hidden}>
-      {children}
-    </div>
-  );
 }
 
 export default function FloatingAI({ timeoutMs, aiEnabled, activePage, systemName }: FloatingAIProps) {

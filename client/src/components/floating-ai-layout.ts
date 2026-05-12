@@ -1,47 +1,22 @@
-export type RectLike = {
-  left: number;
-  top: number;
-  right: number;
-  bottom: number;
-  width?: number;
-  height?: number;
-};
+import {
+  buildOffsetCandidates,
+  buildRect,
+  chooseBestCandidate,
+  clamp,
+  normalizeRect,
+  overlapScore,
+  resolveBottomClearance,
+} from "@/components/floating-ai-layout-geometry";
+import type {
+  FloatingAiLayout,
+  FloatingAiLayoutInput,
+} from "@/components/floating-ai-layout-types";
 
-export type FloatingAiLayoutInput = {
-  viewportWidth: number;
-  viewportHeight: number;
-  viewportBottomInset: number;
-  isMobile: boolean;
-  isOpen: boolean;
-  hasBlockingDialog: boolean;
-  keyboardOpen: boolean;
-  hasFocusedEditable: boolean;
-  hasDensePage: boolean;
-  preferCompactPanel: boolean;
-  avoidRects: ReadonlyArray<RectLike>;
-};
-
-export type FloatingAiLayout = {
-  rootHidden: boolean;
-  triggerHidden: boolean;
-  shouldAutoMinimize: boolean;
-  trigger: {
-    bottom: number;
-    left: number | null;
-    right: number | null;
-    anchor: "left" | "right";
-    size: number;
-  };
-  panel: {
-    bottom: number;
-    left: number | null;
-    right: number | null;
-    width: number;
-    height: number;
-    mode: "dock" | "sheet" | "fullscreen";
-    alignment: "left" | "right" | "center";
-  };
-};
+export type {
+  FloatingAiLayout,
+  FloatingAiLayoutInput,
+  RectLike,
+} from "@/components/floating-ai-layout-types";
 
 export function areFloatingAiLayoutsEqual(left: FloatingAiLayout, right: FloatingAiLayout) {
   return (
@@ -63,15 +38,6 @@ export function areFloatingAiLayoutsEqual(left: FloatingAiLayout, right: Floatin
   );
 }
 
-type Rect = {
-  left: number;
-  top: number;
-  right: number;
-  bottom: number;
-  width: number;
-  height: number;
-};
-
 type TriggerCandidate = {
   anchor: "left" | "right";
   bottom: number;
@@ -79,100 +45,6 @@ type TriggerCandidate = {
   right: number | null;
   score: number;
 };
-
-function clamp(value: number, min: number, max: number) {
-  return Math.min(Math.max(value, min), max);
-}
-
-function normalizeRect(rect: RectLike): Rect {
-  const width = rect.width ?? Math.max(0, rect.right - rect.left);
-  const height = rect.height ?? Math.max(0, rect.bottom - rect.top);
-  return {
-    left: rect.left,
-    top: rect.top,
-    right: rect.right,
-    bottom: rect.bottom,
-    width,
-    height,
-  };
-}
-
-function buildRect(left: number, top: number, width: number, height: number): Rect {
-  return {
-    left,
-    top,
-    right: left + width,
-    bottom: top + height,
-    width,
-    height,
-  };
-}
-
-function inflateRect(rect: Rect, padding: number): Rect {
-  return {
-    left: rect.left - padding,
-    top: rect.top - padding,
-    right: rect.right + padding,
-    bottom: rect.bottom + padding,
-    width: rect.width + padding * 2,
-    height: rect.height + padding * 2,
-  };
-}
-
-function overlapArea(a: Rect, b: Rect) {
-  const horizontal = Math.max(0, Math.min(a.right, b.right) - Math.max(a.left, b.left));
-  const vertical = Math.max(0, Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top));
-  return horizontal * vertical;
-}
-
-function overlapScore(rect: Rect, avoidRects: ReadonlyArray<Rect>, viewportHeight: number) {
-  const paddedRect = inflateRect(rect, 8);
-
-  return avoidRects.reduce((score, avoidRect) => {
-    const area = overlapArea(paddedRect, avoidRect);
-    if (area === 0) return score;
-
-    const nearBottomWeight = avoidRect.top >= viewportHeight * 0.5 ? 1.8 : 1.15;
-    const wideSurfaceWeight = avoidRect.width >= rect.width * 0.7 ? 1.15 : 1;
-    return score + area * nearBottomWeight * wideSurfaceWeight;
-  }, 0);
-}
-
-function resolveBottomClearance(
-  horizontalRect: Pick<Rect, "left" | "right">,
-  viewportHeight: number,
-  baseBottom: number,
-  avoidRects: ReadonlyArray<Rect>,
-) {
-  let clearance = baseBottom;
-
-  for (const avoidRect of avoidRects) {
-    const overlapsHorizontally =
-      Math.min(horizontalRect.right, avoidRect.right) > Math.max(horizontalRect.left, avoidRect.left);
-    if (!overlapsHorizontally) continue;
-
-    const isShortBottomSurface = avoidRect.height <= 220 && avoidRect.bottom >= viewportHeight - 32;
-    const startsInBottomBand = avoidRect.top >= viewportHeight * 0.62;
-    const isBottomWeighted = startsInBottomBand || isShortBottomSurface;
-    if (!isBottomWeighted) continue;
-
-    clearance = Math.max(clearance, viewportHeight - avoidRect.top + 12);
-  }
-
-  return clearance;
-}
-
-function chooseBestCandidate<T extends { score: number }>(candidates: readonly T[]) {
-  return candidates.reduce((best, candidate) => (candidate.score < best.score ? candidate : best));
-}
-
-function buildOffsetCandidates(baseOffset: number, maxOffset: number, stepOffsets: readonly number[]) {
-  return Array.from(
-    new Set(
-      stepOffsets.map((step) => clamp(baseOffset + step, baseOffset, maxOffset)),
-    ),
-  );
-}
 
 function resolveDesktopPanelWidth(viewportWidth: number) {
   if (viewportWidth >= 1536) return 420;
