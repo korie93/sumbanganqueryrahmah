@@ -1,7 +1,4 @@
-﻿import { Loader2, Target, TrendingUp, Users } from "lucide-react";
-import { CollectionReportFreshnessBadge } from "@/components/collection-report/CollectionReportFreshnessBadge";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Loader2 } from "lucide-react";
 import { mobileFullscreenDialogViewportClassName } from "@/components/ui/dialog-viewport";
 import {
   Dialog,
@@ -13,16 +10,9 @@ import {
 import { useIsMobile } from "@/hooks/use-mobile";
 import type { CollectionDailyDayDetailsResponse, CollectionDailyOverviewDay } from "@/lib/api";
 import { formatDateDDMMYYYY } from "@/lib/date-format";
-import { cn } from "@/lib/utils";
-import { statusLabel, statusTextClass } from "@/pages/collection/CollectionDailyShared";
-import {
-  CollectionDailyRecordCard,
-  CollectionDayMetric,
-  getProgressBarClass,
-  getStatusPillClass,
-  resolveTargetProgressPercent,
-} from "@/pages/collection/CollectionDailyDayDetailsDialogParts";
-import { formatAmountRM } from "@/pages/collection/utils";
+import { CollectionDailyRecordCard, resolveTargetProgressPercent } from "@/pages/collection/CollectionDailyDayDetailsDialogParts";
+import { CollectionDailyDayDetailsFooter } from "@/pages/collection/CollectionDailyDayDetailsFooter";
+import { CollectionDailyDayDetailsSummary } from "@/pages/collection/CollectionDailyDayDetailsSummary";
 import "./CollectionDailyDayDetailsDialog.css";
 
 type CollectionDailyDayDetailsDialogProps = {
@@ -36,6 +26,23 @@ type CollectionDailyDayDetailsDialogProps = {
   onViewReceipt: (record: CollectionDailyDayDetailsResponse["records"][number], receiptId?: string) => void;
   onChangePage: (page: number) => void;
 };
+
+function buildDailyRecordRangeLabel(dayDetails: CollectionDailyDayDetailsResponse | null): string {
+  if (!dayDetails || dayDetails.pagination.totalRecords <= 0) {
+    return "No records";
+  }
+
+  const firstRecord = Math.min(
+    dayDetails.pagination.totalRecords,
+    (dayDetails.pagination.page - 1) * dayDetails.pagination.pageSize + 1,
+  );
+  const lastRecord = Math.min(
+    dayDetails.pagination.totalRecords,
+    (dayDetails.pagination.page - 1) * dayDetails.pagination.pageSize + dayDetails.records.length,
+  );
+
+  return `Showing ${firstRecord}-${lastRecord} of ${dayDetails.pagination.totalRecords} records`;
+}
 
 export function CollectionDailyDayDetailsDialog({
   open,
@@ -54,15 +61,7 @@ export function CollectionDailyDayDetailsDialog({
   const targetProgressPercent = dayDetails
     ? resolveTargetProgressPercent(dayDetails.amount, dayDetails.dailyTarget)
     : 0;
-  const recordRangeLabel = dayDetails && dayDetails.pagination.totalRecords > 0
-    ? `Showing ${Math.min(
-      dayDetails.pagination.totalRecords,
-      (dayDetails.pagination.page - 1) * dayDetails.pagination.pageSize + 1,
-    )}-${Math.min(
-      dayDetails.pagination.totalRecords,
-      (dayDetails.pagination.page - 1) * dayDetails.pagination.pageSize + dayDetails.records.length,
-    )} of ${dayDetails.pagination.totalRecords} records`
-    : "No records";
+  const recordRangeLabel = buildDailyRecordRangeLabel(dayDetails);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -94,78 +93,13 @@ export function CollectionDailyDayDetailsDialog({
           </div>
         ) : (
           <div className={`flex flex-1 flex-col gap-3 overflow-hidden ${isMobile ? "px-3 py-3" : ""}`}>
-            <section className="space-y-4 rounded-2xl border border-border/60 bg-background p-4 shadow-sm">
-              <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                <div className="min-w-0 space-y-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Badge
-                      variant="outline"
-                      className={cn("rounded-full px-3 py-1 text-[11px] font-semibold", getStatusPillClass(dayDetails.status))}
-                    >
-                      {statusLabel(dayDetails.status)}
-                    </Badge>
-                    <Badge variant="secondary" className="rounded-full px-3 py-1 text-[11px]">
-                      {customerCount} customers
-                    </Badge>
-                    {selectedOverviewDay?.isHoliday && selectedOverviewDay.holidayName ? (
-                      <Badge variant="outline" className="max-w-full rounded-full px-3 py-1 text-[11px]">
-                        <span className="truncate">Holiday: {selectedOverviewDay.holidayName}</span>
-                      </Badge>
-                    ) : null}
-                  </div>
-                  <p className="text-xs leading-relaxed text-muted-foreground">
-                    {dayDetails.freshness?.message || "Day details are using the latest available rollups."}
-                  </p>
-                </div>
-                <CollectionReportFreshnessBadge freshness={dayDetails.freshness} />
-              </div>
-
-              <div className="space-y-2">
-                <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
-                  <span className="font-medium text-muted-foreground">Daily target progress</span>
-                  <span className={cn("font-semibold", statusTextClass(dayDetails.status))}>
-                    {targetProgressPercent}% of target
-                  </span>
-                </div>
-                <progress
-                  className={cn("collection-day-target-progress", getProgressBarClass(dayDetails.status))}
-                  aria-label="Daily target progress"
-                  value={targetProgressPercent}
-                  max={100}
-                >
-                  {targetProgressPercent}% of target
-                </progress>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2 text-sm lg:grid-cols-4">
-                <CollectionDayMetric
-                  icon={Target}
-                  label="Daily Target"
-                  value={formatAmountRM(dayDetails.dailyTarget)}
-                />
-                <CollectionDayMetric
-                  icon={TrendingUp}
-                  label="Collected"
-                  tone={dayDetails.status === "green" ? "success" : "default"}
-                  value={formatAmountRM(dayDetails.amount)}
-                />
-                <CollectionDayMetric
-                  icon={Target}
-                  label="Balanced"
-                  tone={balancedAmount > 0 ? "warning" : "success"}
-                  value={formatAmountRM(balancedAmount)}
-                />
-                <CollectionDayMetric
-                  icon={Users}
-                  label="Records"
-                  value={dayDetails.pagination.totalRecords}
-                />
-              </div>
-
-              <p className="rounded-xl border border-border/50 bg-muted/10 px-3 py-2.5 text-xs leading-relaxed text-muted-foreground">
-                {dayDetails.message}
-              </p>
-            </section>
+            <CollectionDailyDayDetailsSummary
+              balancedAmount={balancedAmount}
+              customerCount={customerCount}
+              dayDetails={dayDetails}
+              selectedOverviewDay={selectedOverviewDay}
+              targetProgressPercent={targetProgressPercent}
+            />
 
             <div className="flex-1 space-y-2 overflow-auto pr-1">
               {dayDetails.records.length === 0 ? (
@@ -185,38 +119,14 @@ export function CollectionDailyDayDetailsDialog({
               )}
             </div>
 
-            <div
-              className={`sticky bottom-0 z-[var(--z-sticky-content)] flex flex-col gap-3 border-t border-border/60 bg-background/95 pb-[calc(env(safe-area-inset-bottom,0px)+0.75rem)] pt-3 text-sm shadow-lg backdrop-blur supports-[backdrop-filter]:bg-background/85 ${
-                isMobile ? "-mx-3 px-3" : "-mx-4 px-4 sm:-mx-6 sm:px-6"
-              } sm:flex-row sm:items-center sm:justify-between`}
-              data-floating-ai-avoid="true"
-            >
-              <div className={`text-muted-foreground ${isMobile ? "text-xs" : ""}`}>
-                {recordRangeLabel} · Page {dayDetails.pagination.page} of {dayDetails.pagination.totalPages}
-              </div>
-              <div className="flex flex-col gap-2 sm:flex-row">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="w-full sm:w-auto"
-                  disabled={!dayDetails.pagination.hasPreviousPage || loadingDayDetails || !selectedDate}
-                  onClick={() => onChangePage(dayDetails.pagination.page - 1)}
-                >
-                  Previous
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="w-full sm:w-auto"
-                  disabled={!dayDetails.pagination.hasNextPage || loadingDayDetails || !selectedDate}
-                  onClick={() => onChangePage(dayDetails.pagination.page + 1)}
-                >
-                  Next
-                </Button>
-              </div>
-            </div>
+            <CollectionDailyDayDetailsFooter
+              dayDetails={dayDetails}
+              isMobile={isMobile}
+              loadingDayDetails={loadingDayDetails}
+              onChangePage={onChangePage}
+              recordRangeLabel={recordRangeLabel}
+              selectedDate={selectedDate}
+            />
           </div>
         )}
       </DialogContent>

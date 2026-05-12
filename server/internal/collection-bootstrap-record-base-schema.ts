@@ -1,0 +1,255 @@
+import { sql } from "drizzle-orm";
+import {
+  executeBootstrapStatements,
+  type BootstrapSqlExecutor,
+} from "./collection-bootstrap-records-shared";
+import {
+  backfillCollectionRecordEncryptedPii,
+  backfillCollectionRecordPiiSearchHashes,
+} from "./collection-bootstrap-record-schema-pii";
+
+export async function ensureCollectionRecordBaseSchema(database: BootstrapSqlExecutor): Promise<void> {
+  await executeBootstrapStatements(database, [
+    sql`
+      CREATE TABLE IF NOT EXISTS public.collection_records (
+        id uuid PRIMARY KEY,
+        customer_name text,
+        customer_name_encrypted text,
+        customer_name_search_hash text,
+        customer_name_search_hashes text[],
+        ic_number text,
+        ic_number_encrypted text,
+        ic_number_search_hash text,
+        customer_phone text,
+        customer_phone_encrypted text,
+        customer_phone_search_hash text,
+        account_number text,
+        account_number_encrypted text,
+        account_number_search_hash text,
+        batch text NOT NULL,
+        payment_date date NOT NULL,
+        amount numeric(14,2) NOT NULL,
+        receipt_file text,
+        receipt_total_amount bigint NOT NULL DEFAULT 0,
+        receipt_validation_status text NOT NULL DEFAULT 'needs_review',
+        receipt_validation_message text,
+        receipt_count integer NOT NULL DEFAULT 0,
+        duplicate_receipt_flag boolean NOT NULL DEFAULT false,
+        created_by_login text NOT NULL,
+        collection_staff_nickname text NOT NULL,
+        staff_username text NOT NULL,
+        created_at timestamp with time zone DEFAULT now() NOT NULL,
+        updated_at timestamp with time zone DEFAULT now() NOT NULL
+      )
+    `,
+    sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS customer_name text`,
+    sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS customer_name_encrypted text`,
+    sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS customer_name_search_hash text`,
+    sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS customer_name_search_hashes text[]`,
+    sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS ic_number text`,
+    sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS ic_number_encrypted text`,
+    sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS ic_number_search_hash text`,
+    sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS customer_phone text`,
+    sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS customer_phone_encrypted text`,
+    sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS customer_phone_search_hash text`,
+    sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS account_number text`,
+    sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS account_number_encrypted text`,
+    sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS account_number_search_hash text`,
+    sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS batch text`,
+    sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS payment_date date`,
+    sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS amount numeric(14,2)`,
+    sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS receipt_file text`,
+    sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS receipt_total_amount bigint DEFAULT 0`,
+    sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS receipt_validation_status text DEFAULT 'needs_review'`,
+    sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS receipt_validation_message text`,
+    sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS receipt_count integer DEFAULT 0`,
+    sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS duplicate_receipt_flag boolean DEFAULT false`,
+    sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS created_by_login text`,
+    sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS collection_staff_nickname text`,
+    sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS staff_username text`,
+    sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS created_at timestamp with time zone DEFAULT now()`,
+    sql`ALTER TABLE public.collection_records ADD COLUMN IF NOT EXISTS updated_at timestamp with time zone DEFAULT now()`,
+    sql`ALTER TABLE public.collection_records ALTER COLUMN customer_name DROP NOT NULL`,
+    sql`ALTER TABLE public.collection_records ALTER COLUMN ic_number DROP NOT NULL`,
+    sql`ALTER TABLE public.collection_records ALTER COLUMN customer_phone DROP NOT NULL`,
+    sql`ALTER TABLE public.collection_records ALTER COLUMN account_number DROP NOT NULL`,
+    sql`
+      UPDATE public.collection_records
+      SET
+        customer_name = NULLIF(trim(COALESCE(customer_name, '')), ''),
+        ic_number = NULLIF(trim(COALESCE(ic_number, '')), ''),
+        customer_phone = CASE
+          WHEN trim(COALESCE(customer_phone, '')) IN ('', '-') THEN NULL
+          ELSE trim(customer_phone)
+        END,
+        account_number = NULLIF(trim(COALESCE(account_number, '')), '')
+    `,
+    sql`
+      UPDATE public.collection_records
+      SET created_by_login = COALESCE(
+        NULLIF(trim(COALESCE(created_by_login, '')), ''),
+        NULLIF(trim(COALESCE(staff_username, '')), ''),
+        'unknown'
+      )
+    `,
+    sql`
+      UPDATE public.collection_records
+      SET collection_staff_nickname = COALESCE(
+        NULLIF(trim(COALESCE(collection_staff_nickname, '')), ''),
+        NULLIF(trim(COALESCE(staff_username, '')), ''),
+        NULLIF(trim(COALESCE(created_by_login, '')), ''),
+        'unknown'
+      )
+    `,
+    sql`
+      UPDATE public.collection_records
+      SET staff_username = COALESCE(
+        NULLIF(trim(COALESCE(staff_username, '')), ''),
+        NULLIF(trim(COALESCE(collection_staff_nickname, '')), ''),
+        NULLIF(trim(COALESCE(created_by_login, '')), ''),
+        'unknown'
+      )
+    `,
+    sql`
+      DO $$
+      BEGIN
+        IF to_regclass('public.users') IS NOT NULL THEN
+          EXECUTE $canonicalize_created_by_login$
+            UPDATE public.collection_records record
+            SET created_by_login = usr.username
+            FROM public.users usr
+            WHERE lower(usr.username) = lower(trim(COALESCE(record.created_by_login, '')))
+          $canonicalize_created_by_login$;
+
+          IF EXISTS (
+            SELECT 1
+            FROM public.users
+            WHERE username = 'system'
+          ) THEN
+            EXECUTE $fallback_created_by_login$
+              UPDATE public.collection_records record
+              SET created_by_login = 'system'
+              WHERE NOT EXISTS (
+                SELECT 1
+                FROM public.users usr
+                WHERE usr.username = record.created_by_login
+              )
+            $fallback_created_by_login$;
+
+            IF NOT EXISTS (
+              SELECT 1
+              FROM pg_constraint
+              WHERE conname = 'fk_collection_records_created_by_login_username'
+            ) THEN
+              ALTER TABLE public.collection_records
+              ADD CONSTRAINT fk_collection_records_created_by_login_username
+              FOREIGN KEY (created_by_login)
+              REFERENCES public.users(username)
+              ON DELETE RESTRICT
+              ON UPDATE CASCADE;
+            ELSIF EXISTS (
+              SELECT 1
+              FROM information_schema.referential_constraints rc
+              WHERE rc.constraint_schema = 'public'
+                AND rc.constraint_name = 'fk_collection_records_created_by_login_username'
+                AND (
+                  rc.delete_rule <> 'RESTRICT'
+                  OR rc.update_rule <> 'CASCADE'
+                )
+            ) THEN
+              ALTER TABLE public.collection_records
+              DROP CONSTRAINT fk_collection_records_created_by_login_username;
+
+              ALTER TABLE public.collection_records
+              ADD CONSTRAINT fk_collection_records_created_by_login_username
+              FOREIGN KEY (created_by_login)
+              REFERENCES public.users(username)
+              ON DELETE RESTRICT
+              ON UPDATE CASCADE;
+            END IF;
+          END IF;
+        END IF;
+      END $$;
+    `,
+    sql`
+      UPDATE public.collection_records
+      SET
+        collection_staff_nickname = trim(COALESCE(collection_staff_nickname, '')),
+        staff_username = trim(COALESCE(staff_username, ''))
+    `,
+    sql`
+      UPDATE public.collection_records
+      SET
+        collection_staff_nickname = COALESCE(NULLIF(collection_staff_nickname, ''), 'unknown'),
+        staff_username = COALESCE(NULLIF(collection_staff_nickname, ''), 'unknown')
+    `,
+    sql`UPDATE public.collection_records SET updated_at = COALESCE(updated_at, created_at, now())`,
+    sql`
+      UPDATE public.collection_records
+      SET
+        receipt_total_amount = COALESCE(receipt_total_amount, 0),
+        receipt_validation_status = COALESCE(NULLIF(trim(COALESCE(receipt_validation_status, '')), ''), 'needs_review'),
+        receipt_count = COALESCE(receipt_count, 0),
+        duplicate_receipt_flag = COALESCE(duplicate_receipt_flag, false)
+    `,
+    sql`CREATE INDEX IF NOT EXISTS idx_collection_records_payment_date ON public.collection_records(payment_date)`,
+    sql`CREATE INDEX IF NOT EXISTS idx_collection_records_created_at ON public.collection_records(created_at DESC)`,
+    sql`CREATE INDEX IF NOT EXISTS idx_collection_records_staff_username ON public.collection_records(staff_username)`,
+    sql`CREATE INDEX IF NOT EXISTS idx_collection_records_created_by_login ON public.collection_records(created_by_login)`,
+    sql`CREATE INDEX IF NOT EXISTS idx_collection_records_staff_nickname ON public.collection_records(collection_staff_nickname)`,
+    sql`CREATE INDEX IF NOT EXISTS idx_collection_records_customer_phone ON public.collection_records(customer_phone)`,
+    sql`CREATE INDEX IF NOT EXISTS idx_collection_records_customer_name_search_hash ON public.collection_records(customer_name_search_hash)`,
+    sql`
+      CREATE INDEX IF NOT EXISTS idx_collection_records_customer_name_search_hashes
+      ON public.collection_records USING gin (customer_name_search_hashes)
+    `,
+    sql`CREATE INDEX IF NOT EXISTS idx_collection_records_ic_number_search_hash ON public.collection_records(ic_number_search_hash)`,
+    sql`CREATE INDEX IF NOT EXISTS idx_collection_records_customer_phone_search_hash ON public.collection_records(customer_phone_search_hash)`,
+    sql`CREATE INDEX IF NOT EXISTS idx_collection_records_account_number_search_hash ON public.collection_records(account_number_search_hash)`,
+    sql`
+      CREATE INDEX IF NOT EXISTS idx_collection_records_receipt_validation_status
+      ON public.collection_records(receipt_validation_status)
+    `,
+    sql`
+      CREATE INDEX IF NOT EXISTS idx_collection_records_payment_created_id
+      ON public.collection_records(payment_date, created_at, id)
+    `,
+    sql`
+      CREATE INDEX IF NOT EXISTS idx_collection_records_created_by_payment_created_id
+      ON public.collection_records(created_by_login, payment_date, created_at, id)
+    `,
+    sql`
+      CREATE INDEX IF NOT EXISTS idx_collection_records_lower_staff_nickname_payment_created_id
+      ON public.collection_records ((lower(collection_staff_nickname)), payment_date, created_at, id)
+    `,
+    sql`
+      CREATE INDEX IF NOT EXISTS idx_collection_records_lower_created_by_payment_created_id
+      ON public.collection_records ((lower(created_by_login)), payment_date, created_at, id)
+    `,
+    sql`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1
+          FROM pg_constraint
+          WHERE conname = 'chk_collection_records_staff_username_matches_nickname'
+        ) THEN
+          ALTER TABLE public.collection_records
+          ADD CONSTRAINT chk_collection_records_staff_username_matches_nickname
+          CHECK (lower(staff_username) = lower(collection_staff_nickname));
+        END IF;
+      END $$;
+    `,
+    sql`
+      COMMENT ON COLUMN public.collection_records.amount
+      IS 'Stored in MYR as numeric(14,2).'
+    `,
+    sql`
+      COMMENT ON COLUMN public.collection_records.receipt_total_amount
+      IS 'Stored in sen/cents as a bigint integer. Divide by 100 to render MYR.'
+    `,
+  ]);
+
+  await backfillCollectionRecordEncryptedPii(database);
+  await backfillCollectionRecordPiiSearchHashes(database);
+}

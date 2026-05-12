@@ -14,18 +14,14 @@ import { clearAuthSessionCookie, readAuthSessionTokenFromHeaders } from "./sessi
 import { normalizeSessionExpiry } from "./session-lifetime";
 import { logger } from "../lib/logger";
 import {
-  ACTIVITY_UPDATE_CACHE_MAX_SIZE,
-  ACTIVITY_UPDATE_CACHE_SWEEP_INTERVAL_MS,
-  ACTIVITY_UPDATE_THROTTLE_MS,
-  TAB_VISIBILITY_CACHE_MAX_SIZE,
-  TAB_VISIBILITY_CACHE_SWEEP_INTERVAL_MS,
-  TAB_VISIBILITY_CACHE_TTL_MS,
-  evictOldestActivityUpdateCacheEntry,
   evictOldestTabVisibilityCacheEntry,
   sweepExpiredActivityUpdateCacheEntries,
   sweepExpiredTabVisibilityCacheEntries,
   type TabVisibilityCacheEntry,
 } from "./guard-cache";
+import { createActivityUpdateThrottler } from "./guard-activity-update";
+import { createRoleTabVisibilityCache } from "./guard-tab-visibility";
+import { loadAuthenticatedSessionSnapshot } from "./guard-session-snapshot";
 export { getInvalidatedSessionMessage } from "./guard-session-messages";
 
 export interface AuthenticatedUser {
@@ -68,154 +64,11 @@ type CreateAuthGuardsOptions = {
 export function createAuthGuards(options: CreateAuthGuardsOptions) {
   const storage = options.storage;
   const secret = options.secret || getSessionSecret();
-  const activityUpdateThrottleMs = Math.max(0, options.activityUpdateThrottleMs ?? ACTIVITY_UPDATE_THROTTLE_MS);
-  const activityUpdateCache = new Map<string, number>();
-  const tabVisibilityCache = new Map<string, TabVisibilityCacheEntry>();
-  let tabVisibilitySweepStopped = false;
-  let activityUpdateSweepStopped = false;
-  const tabVisibilitySweepHandle = setInterval(() => {
-    sweepExpiredTabVisibilityCacheEntries(tabVisibilityCache);
-  }, TAB_VISIBILITY_CACHE_SWEEP_INTERVAL_MS);
-  tabVisibilitySweepHandle.unref?.();
-  const activityUpdateSweepHandle = setInterval(() => {
-    sweepExpiredActivityUpdateCacheEntries(activityUpdateCache);
-  }, ACTIVITY_UPDATE_CACHE_SWEEP_INTERVAL_MS);
-  activityUpdateSweepHandle.unref?.();
-
-  function setRoleTabVisibilityCache(role: string, tabs: Record<string, boolean>, cachedAt: number) {
-    sweepExpiredTabVisibilityCacheEntries(tabVisibilityCache, cachedAt);
-
-    if (!tabVisibilityCache.has(role)) {
-      while (tabVisibilityCache.size >= TAB_VISIBILITY_CACHE_MAX_SIZE) {
-        if (!evictOldestTabVisibilityCacheEntry(tabVisibilityCache)) {
-          break;
-        }
-      }
-    }
-
-    tabVisibilityCache.set(role, { tabs, cachedAt });
-  }
-
-  async function getRoleTabVisibilityCached(role: string): Promise<Record<string, boolean>> {
-    if (role === "superuser") return {};
-    const now = Date.now();
-    const cached = tabVisibilityCache.get(role);
-    if (cached) {
-      if (now - cached.cachedAt < TAB_VISIBILITY_CACHE_TTL_MS) {
-        return cached.tabs;
-      }
-
-      tabVisibilityCache.delete(role);
-    }
-
-    const tabs = await storage.getRoleTabVisibility(role);
-    setRoleTabVisibilityCache(role, tabs, now);
-    return tabs;
-  }
-
-  function stopTabVisibilityCacheSweep() {
-    if (tabVisibilitySweepStopped) {
-      return;
-    }
-    tabVisibilitySweepStopped = true;
-    clearInterval(tabVisibilitySweepHandle);
-  }
-
-  function stopActivityUpdateCacheSweep() {
-    if (activityUpdateSweepStopped) {
-      return;
-    }
-    activityUpdateSweepStopped = true;
-    clearInterval(activityUpdateSweepHandle);
-  }
-
-  async function loadAuthenticatedSessionSnapshot(decoded: AuthenticatedUser): Promise<{
-    activity: UserActivity | undefined;
-    user?: User | undefined;
-    isVisitorBanned: boolean;
-  }> {
-    if (storage.getAuthenticatedSessionSnapshot) {
-      const snapshot = await storage.getAuthenticatedSessionSnapshot(decoded.activityId);
-      if (snapshot) {
-        return {
-          activity: snapshot.activity,
-          user: snapshot.user,
-          isVisitorBanned: snapshot.isVisitorBanned,
-        };
-      }
-    }
-
-    const activity = await storage.getActivityById(decoded.activityId);
-    if (!activity) {
-      return {
-        activity: undefined,
-        user: undefined,
-        isVisitorBanned: false,
-      };
-    }
-
-    const [isVisitorBanned, user] = await Promise.all([
-      storage.isVisitorBanned(
-        activity.fingerprint ?? null,
-        activity.ipAddress ?? null,
-        activity.username || decoded.username,
-      ),
-      activity.userId
-        ? storage.getUser(activity.userId)
-        : storage.getUserByUsername(activity.username || decoded.username),
-    ]);
-
-    return {
-      activity,
-      user,
-      isVisitorBanned,
-    };
-  }
-
-  function reserveActivityUpdate(activityId: string, now: number) {
-    if (activityUpdateThrottleMs <= 0) {
-      return true;
-    }
-
-    sweepExpiredActivityUpdateCacheEntries(activityUpdateCache, now);
-    const lastUpdatedAt = activityUpdateCache.get(activityId);
-    if (lastUpdatedAt !== undefined && now - lastUpdatedAt < activityUpdateThrottleMs) {
-      return false;
-    }
-
-    if (!activityUpdateCache.has(activityId)) {
-      while (activityUpdateCache.size >= ACTIVITY_UPDATE_CACHE_MAX_SIZE) {
-        if (!evictOldestActivityUpdateCacheEntry(activityUpdateCache)) {
-          break;
-        }
-      }
-    }
-
-    activityUpdateCache.set(activityId, now);
-    return true;
-  }
-
-  function releaseFailedActivityUpdateReservation(activityId: string, reservedAt: number) {
-    if (activityUpdateThrottleMs > 0 && activityUpdateCache.get(activityId) === reservedAt) {
-      activityUpdateCache.delete(activityId);
-    }
-  }
-
-  async function updateAuthenticatedActivity(activityId: string) {
-    const now = Date.now();
-    if (!reserveActivityUpdate(activityId, now)) {
-      return;
-    }
-
-    try {
-      await storage.updateActivity(activityId, {
-        lastActivityTime: new Date(now),
-      });
-    } catch (error) {
-      releaseFailedActivityUpdateReservation(activityId, now);
-      throw error;
-    }
-  }
+  const tabVisibility = createRoleTabVisibilityCache({ storage });
+  const activityUpdates = createActivityUpdateThrottler({
+    activityUpdateThrottleMs: options.activityUpdateThrottleMs,
+    storage,
+  });
 
   const authenticateToken: RequestHandler = async (
     req: AuthenticatedRequest,
@@ -235,7 +88,7 @@ export function createAuthGuards(options: CreateAuthGuardsOptions) {
         typeof decoded.exp === "number" ? decoded.exp * 1000 : null,
         { allowExpired: true },
       );
-      const { activity, user, isVisitorBanned } = await loadAuthenticatedSessionSnapshot(decoded);
+      const { activity, user, isVisitorBanned } = await loadAuthenticatedSessionSnapshot(storage, decoded);
 
       if (!activity || activity.isActive === false || activity.logoutTime !== null) {
         clearAuthSessionCookie(res);
@@ -302,7 +155,7 @@ export function createAuthGuards(options: CreateAuthGuardsOptions) {
         });
       }
 
-      await updateAuthenticatedActivity(decoded.activityId);
+      await activityUpdates.updateAuthenticatedActivity(decoded.activityId);
 
       req.user = {
         userId: user.id || activity.userId || decoded.userId,
@@ -355,7 +208,7 @@ export function createAuthGuards(options: CreateAuthGuardsOptions) {
           return res.status(403).json({ message: "Insufficient permissions" });
         }
 
-        const tabs = await getRoleTabVisibilityCached(role);
+        const tabs = await tabVisibility.getRoleTabVisibilityCached(role);
         const hasExplicit = Object.prototype.hasOwnProperty.call(tabs, tabId);
         const enabled = hasExplicit ? tabs[tabId] !== false : false;
 
@@ -391,7 +244,7 @@ export function createAuthGuards(options: CreateAuthGuardsOptions) {
         return res.status(403).json({ message: "Insufficient permissions" });
       }
 
-      const tabs = await getRoleTabVisibilityCached(role);
+      const tabs = await tabVisibility.getRoleTabVisibilityCached(role);
       if (tabs.monitor !== true) {
         return res.status(403).json({ message: "System Monitor access is disabled for this role." });
       }
@@ -411,13 +264,13 @@ export function createAuthGuards(options: CreateAuthGuardsOptions) {
     requireTabAccess,
     requireMonitorAccess,
     clearTabVisibilityCache() {
-      tabVisibilityCache.clear();
+      tabVisibility.clear();
     },
     clearActivityUpdateCache() {
-      activityUpdateCache.clear();
+      activityUpdates.clear();
     },
-    stopActivityUpdateCacheSweep,
-    stopTabVisibilityCacheSweep,
+    stopActivityUpdateCacheSweep: activityUpdates.stop,
+    stopTabVisibilityCacheSweep: tabVisibility.stop,
   };
 }
 
