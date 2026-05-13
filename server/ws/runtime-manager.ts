@@ -1,4 +1,4 @@
-import { WebSocket } from "ws";
+import type { WebSocket } from "ws";
 import { readAuthSessionTokenFromHeaders } from "../auth/session-cookie";
 import { logger } from "../lib/logger";
 import { extractWsActivityId, isActiveWebSocketSession } from "./session-auth";
@@ -29,6 +29,7 @@ import {
   startRuntimeWsHeartbeat,
 } from "./ws-heartbeat";
 import { closeRuntimeWebSocketServerState } from "./runtime-server-close";
+import { createRuntimeClientRegistry } from "./runtime-client-registry";
 
 export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
   connectedClients: Map<string, WebSocket>;
@@ -59,108 +60,19 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
         error: sanitizeRuntimeWebSocketError(error),
       });
     });
-  const registerTrackedSocketEntry = (
-    activityId: string,
-    ws: WebSocket,
-    userKey: string | null,
-  ): RuntimeTrackedSocketEntry => {
-    const entry: RuntimeTrackedSocketEntry = {
-      activityId,
-      ws,
-      userKey,
-      alive: true,
-    };
-    socketEntriesByActivity.set(activityId, entry);
-    socketEntriesByInstance.set(ws, entry);
-    connectedClients.set(activityId, ws);
-    return entry;
-  };
-  const cleanupClient = (
-    activityId: string,
-    options: {
-      expectedWs?: WebSocket;
-      closeWith?: "close" | "terminate";
-      clearSession?: boolean;
-      reason?: string;
-    } = {},
-  ) => {
-    const currentEntry = socketEntriesByActivity.get(activityId);
-    const currentClient = connectedClients.get(activityId);
-    const expectedWs = options.expectedWs;
-    const targetWs = expectedWs ?? currentEntry?.ws ?? currentClient;
-    const cleanupReason = options.reason ?? (options.closeWith ? `client-${options.closeWith}` : "client-cleanup");
-
-    if (!currentEntry && !currentClient && !expectedWs) {
-      return false;
-    }
-
-    let cleanupCallbackHandled = false;
-    if (targetWs) {
-      const cleanupCallback = socketCleanupCallbacks.get(targetWs);
-      if (cleanupCallback) {
-        cleanupCallback({
-          clearSession: options.clearSession === true,
-          reason: cleanupReason,
-        });
-        cleanupCallbackHandled = true;
-      }
-      socketCleanupCallbacks.delete(targetWs);
-      socketEntriesByInstance.delete(targetWs);
-      trackedSockets.delete(targetWs);
-
-      const latestEntry = socketEntriesByActivity.get(activityId);
-      if (latestEntry?.ws === targetWs) {
-        socketEntriesByActivity.delete(activityId);
-      }
-
-      if (connectedClients.get(activityId) === targetWs) {
-        connectedClients.delete(activityId);
-      }
-
-      if (options.closeWith === "close" && isTrackableSocket(targetWs)) {
-        try {
-          targetWs.close();
-        } catch (error) {
-          logger.debug("WebSocket close request failed during runtime cleanup", {
-            activityId,
-            error: sanitizeRuntimeWebSocketError(error),
-          });
-        }
-      }
-
-      if (options.closeWith === "terminate" && targetWs.readyState === WebSocket.OPEN) {
-        targetWs.terminate();
-      }
-    } else {
-      socketEntriesByActivity.delete(activityId);
-      connectedClients.delete(activityId);
-    }
-
-    if (options.clearSession && !cleanupCallbackHandled) {
-      void clearNicknameSession(activityId, cleanupReason);
-    }
-
-    logCleanupDiagnostic("WebSocket runtime client cleanup completed", {
-      activityId,
-      reason: cleanupReason,
-      clearSession: options.clearSession === true,
-    });
-
-    return true;
-  };
-  const removeTrackedSocket = (activityId: string, ws?: WebSocket) => {
-    const currentEntry = socketEntriesByActivity.get(activityId);
-    if (currentEntry && (!ws || currentEntry.ws === ws)) {
-      socketEntriesByActivity.delete(activityId);
-      socketEntriesByInstance.delete(currentEntry.ws);
-      connectedClients.delete(activityId);
-      return;
-    }
-
-    if (!currentEntry && (!ws || connectedClients.get(activityId) === ws)) {
-      connectedClients.delete(activityId);
-    }
-  };
+  const {
+    cleanupClient,
+    registerTrackedSocketEntry,
+    removeTrackedSocket,
+  } = createRuntimeClientRegistry({
+    clearNicknameSession,
+    connectedClients,
+    logCleanupDiagnostic,
+    socketCleanupCallbacks,
+    socketEntriesByActivity,
+    socketEntriesByInstance,
+    trackedSockets,
+  });
   const broadcastWsMessage = createRuntimeWsBroadcaster({ connectedClients, cleanupClient });
   const heartbeatHandle = startRuntimeWsHeartbeat({
     cleanupClient,
@@ -193,7 +105,7 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
         path: req.url || "/ws",
       });
       try {
-      ws.close(RUNTIME_WS_CLOSE_TRY_AGAIN_LATER, "storage initializing");
+        ws.close(RUNTIME_WS_CLOSE_TRY_AGAIN_LATER, "storage initializing");
       } catch (error) {
         logger.debug("WebSocket close request failed during startup readiness rejection", {
           error: sanitizeRuntimeWebSocketError(error),

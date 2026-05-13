@@ -25,3 +25,12 @@ export function canRetryAIChatRequest(
 ): boolean {
   return canApplyAIChatUiUpdate(sessionId, sessionRef, isMountedRef) && processingRef.current;
 }
+
+export function isAIChatAbortError(error: unknown): boolean {
+  return (
+    typeof error === "object"
+    && error !== null
+    && "name" in error
+    && error.name === "AbortError"
+  );
+}

@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   canApplyAIChatUiUpdate,
   canRetryAIChatRequest,
+  isAIChatAbortError,
   isActiveAIChatSession,
 } from "@/components/ai-chat-session-guards";
 
@@ -34,4 +35,11 @@ test("canRetryAIChatRequest also requires the request to still be processing", (
 
   processingRef.current = false;
   assert.equal(canRetryAIChatRequest(2, sessionRef, isMountedRef, processingRef), false);
+});
+
+test("isAIChatAbortError detects abort-like errors without unsafe casting", () => {
+  assert.equal(isAIChatAbortError({ name: "AbortError" }), true);
+  assert.equal(isAIChatAbortError(new Error("AbortError")), false);
+  assert.equal(isAIChatAbortError({ name: "NetworkError" }), false);
+  assert.equal(isAIChatAbortError(null), false);
 });
