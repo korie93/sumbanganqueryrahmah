@@ -30,6 +30,7 @@ import {
   resolveDatabaseBootstrapMode,
   resolveDefaultPgMaxConnections,
 } from "./runtime-config-resolvers";
+import { isAllowedCollectionPiiRetiredField } from "./collection-pii-field-config";
 import {
   assessMailConfiguration,
   assertNoPlaceholderSecrets,
@@ -55,13 +56,6 @@ import type {
 export type { RuntimeConfigDiagnostic, RuntimeConfigValidation } from "./runtime-config-types";
 
 validateRuntimeEnvironmentSchema();
-
-const COLLECTION_PII_FIELD_NAMES = new Set([
-  "customerName",
-  "icNumber",
-  "customerPhone",
-  "accountNumber",
-]);
 
 const nodeEnv = resolveNodeEnv();
 const isProduction = nodeEnv === "production";
@@ -113,7 +107,7 @@ const configuredPreviousCollectionPiiEncryptionKeys = resolvePreviousCollectionP
   configuredCollectionPiiEncryptionKey,
 );
 const configuredCollectionPiiRetiredFields = readCommaSeparatedList("COLLECTION_PII_RETIRED_FIELDS")
-  .filter((field) => COLLECTION_PII_FIELD_NAMES.has(field));
+  .filter(isAllowedCollectionPiiRetiredField);
 const configuredBackupEncryptionKey = readOptionalString("BACKUP_ENCRYPTION_KEY");
 const configuredBackupEncryptionKeys = readOptionalString("BACKUP_ENCRYPTION_KEYS");
 const configuredCollectionReceiptQuarantineDir = readOptionalString("COLLECTION_RECEIPT_QUARANTINE_DIR");

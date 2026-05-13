@@ -1,4 +1,8 @@
 import { z } from "zod";
+import {
+  COLLECTION_PII_RETIRED_FIELD_LIST_LABEL,
+  isAllowedCollectionPiiRetiredField,
+} from "./collection-pii-field-config";
 
 type RuntimeEnvironmentSource = Record<string, string | undefined>;
 
@@ -9,12 +13,6 @@ const AUTH_COOKIE_SECURE_VALUES = new Set(["auto", "true", "false", "1", "0"]);
 const SESSION_COOKIE_SAMESITE_VALUES = new Set(["strict", "lax"]);
 const DB_BOOTSTRAP_MODE_VALUES = new Set(["runtime", "migration"]);
 const RATE_LIMIT_STORE_VALUES = new Set(["memory", "redis"]);
-const COLLECTION_PII_FIELD_VALUES = new Set([
-  "customerName",
-  "icNumber",
-  "customerPhone",
-  "accountNumber",
-]);
 
 function normalizeOptionalEnvString(value: unknown) {
   if (value == null) {
@@ -141,8 +139,8 @@ function optionalCollectionPiiRetiredFieldsEnv(name: string) {
           .split(",")
           .map((entry) => entry.trim())
           .filter(Boolean);
-        return fields.every((field) => COLLECTION_PII_FIELD_VALUES.has(field));
-      }, `${name} must contain only: customerName, icNumber, customerPhone, accountNumber.`)
+        return fields.every(isAllowedCollectionPiiRetiredField);
+      }, `${name} must contain only: ${COLLECTION_PII_RETIRED_FIELD_LIST_LABEL}.`)
       .optional(),
   );
 }

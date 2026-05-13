@@ -1,13 +1,7 @@
 import { readCommaSeparatedList, readOptionalString } from "./runtime-config-read-utils";
 import { isProductionLikeEnvironment } from "./runtime-environment";
 import { runtimeConfig } from "./runtime";
-
-const ALLOWED_COLLECTION_PII_RETIRED_FIELDS = new Set([
-  "customerName",
-  "icNumber",
-  "customerPhone",
-  "accountNumber",
-]);
+import { isAllowedCollectionPiiRetiredField } from "./collection-pii-field-config";
 
 export function getSessionSecret(): string {
   return runtimeConfig.auth.sessionSecret;
@@ -60,7 +54,7 @@ export function getCollectionPiiDecryptionSecrets(): string[] {
 export function getCollectionPiiRetiredFields(): Set<string> {
   return new Set(
     readCommaSeparatedList("COLLECTION_PII_RETIRED_FIELDS").filter((field) =>
-      ALLOWED_COLLECTION_PII_RETIRED_FIELDS.has(field),
+      isAllowedCollectionPiiRetiredField(field),
     ),
   );
 }
