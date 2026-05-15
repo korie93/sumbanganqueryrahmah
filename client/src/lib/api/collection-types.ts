@@ -3,6 +3,10 @@ import type {
   CollectionAmountMyrNumber,
   CollectionAmountMyrString,
 } from "@shared/collection-amount-types";
+import type {
+  CollectionDailyCalendarStatus,
+  CollectionDailyLeaveType,
+} from "@shared/collection-daily-status";
 
 export type CollectionBatch = "P10" | "P25" | "MDD02" | "MDD10" | "MDD18" | "MDD25";
 
@@ -247,6 +251,9 @@ export type CollectionDailyOverviewDay = {
   date: string;
   amount: CollectionAmountMyrNumber;
   target: CollectionAmountMyrNumber;
+  calendarStatus: CollectionDailyCalendarStatus;
+  leaveType: CollectionDailyLeaveType | null;
+  note: string | null;
   isWorkingDay: boolean;
   isHoliday: boolean;
   holidayName: string | null;

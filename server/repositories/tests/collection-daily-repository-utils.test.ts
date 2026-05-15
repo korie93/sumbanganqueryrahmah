@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  deleteCollectionDailyCalendarDay,
   listCollectionDailyCalendar,
   listCollectionDailyPaidCustomers,
   upsertCollectionDailyCalendarDays,
@@ -13,12 +14,17 @@ test("upsertCollectionDailyCalendarDays batches multiple days into one upsert qu
     { rows: [] },
     {
       rows: [
-        {
-          id: "calendar-1",
-          year: 2026,
-          month: 3,
-          day: 1,
-          is_working_day: true,
+          {
+            id: "calendar-1",
+            username: "alpha.user",
+            calendar_date: "2026-03-01",
+            year: 2026,
+            month: 3,
+            day: 1,
+            status: "WORKING",
+            leave_type: null,
+            note: null,
+            is_working_day: true,
           is_holiday: false,
           holiday_name: null,
           created_by: "admin.user",
@@ -26,12 +32,17 @@ test("upsertCollectionDailyCalendarDays batches multiple days into one upsert qu
           created_at: "2026-03-01T00:00:00.000Z",
           updated_at: "2026-03-01T00:00:00.000Z",
         },
-        {
-          id: "calendar-2",
-          year: 2026,
-          month: 3,
-          day: 2,
-          is_working_day: false,
+          {
+            id: "calendar-2",
+            username: "alpha.user",
+            calendar_date: "2026-03-02",
+            year: 2026,
+            month: 3,
+            day: 2,
+            status: "HOLIDAY",
+            leave_type: "AL",
+            note: "Special Day",
+            is_working_day: false,
           is_holiday: true,
           holiday_name: "Special Day",
           created_by: "admin.user",
@@ -45,12 +56,13 @@ test("upsertCollectionDailyCalendarDays batches multiple days into one upsert qu
 
   const calendar = await upsertCollectionDailyCalendarDays(
     {
+      username: "alpha.user",
       year: 2026,
       month: 3,
       actor: "admin.user",
       days: [
-        { day: 1, isWorkingDay: true, isHoliday: false, holidayName: null },
-        { day: 2, isWorkingDay: false, isHoliday: true, holidayName: "Special Day" },
+        { day: 1, status: "WORKING", isWorkingDay: true, isHoliday: false, holidayName: null },
+        { day: 2, status: "HOLIDAY", leaveType: "AL", note: "Special Day", isWorkingDay: false, isHoliday: true, holidayName: "AL" },
       ],
     },
     executor,
@@ -61,17 +73,20 @@ test("upsertCollectionDailyCalendarDays batches multiple days into one upsert qu
 
   const upsertSql = collectSqlText(queries[0]);
   assert.match(upsertSql, /INSERT INTO public\.collection_daily_calendar/i);
-  assert.match(upsertSql, /ON CONFLICT \(year, month, day\)/i);
+  assert.match(upsertSql, /ON CONFLICT \(\(lower\(username\)\), calendar_date\)/i);
   assert.match(upsertSql, /\)\s*,\s*\(/i);
 
   const boundValues = collectBoundValues(queries[0]);
+  assert.ok(boundValues.includes("alpha.user"));
   assert.ok(boundValues.includes(1));
   assert.ok(boundValues.includes(2));
+  assert.ok(boundValues.includes("AL"));
   assert.ok(boundValues.includes("Special Day"));
   assert.equal(boundValues.filter((value) => value === "admin.user").length >= 4, true);
 
   const listSql = collectSqlText(queries[1]);
-  assert.match(listSql, /SELECT\s+id,\s+year,\s+month,\s+day/i);
+  assert.match(listSql, /SELECT\s+id,\s+username,\s+calendar_date/i);
+  assert.match(listSql, /lower\(username\) = lower/i);
   assert.match(listSql, /ORDER BY day ASC/i);
 });
 
@@ -81,9 +96,14 @@ test("listCollectionDailyCalendar maps rows using the provided executor", async 
       rows: [
         {
           id: "calendar-7",
+          username: "alpha.user",
+          calendar_date: "2026-04-07",
           year: 2026,
           month: 4,
           day: 7,
+          status: "WORKING",
+          leave_type: null,
+          note: null,
           is_working_day: true,
           is_holiday: false,
           holiday_name: null,
@@ -98,6 +118,7 @@ test("listCollectionDailyCalendar maps rows using the provided executor", async 
 
   const rows = await listCollectionDailyCalendar(
     {
+      username: "alpha.user",
       year: 2026,
       month: 4,
     },
@@ -108,6 +129,30 @@ test("listCollectionDailyCalendar maps rows using the provided executor", async 
   assert.equal(rows[0]?.day, 7);
   assert.equal(queries.length, 1);
   assert.match(collectSqlText(queries[0]), /FROM public\.collection_daily_calendar/i);
+});
+
+test("deleteCollectionDailyCalendarDay scopes deletion to nickname and date", async () => {
+  const { executor, queries } = createSequenceExecutor([{ rows: [{ id: "calendar-7" }] }]);
+
+  const deleted = await deleteCollectionDailyCalendarDay(
+    {
+      username: "alpha.user",
+      year: 2026,
+      month: 4,
+      day: 7,
+    },
+    executor,
+  );
+
+  assert.equal(deleted, true);
+  assert.equal(queries.length, 1);
+  const queryText = collectSqlText(queries[0]);
+  assert.match(queryText, /DELETE FROM public\.collection_daily_calendar/i);
+  assert.match(queryText, /lower\(username\) = lower/i);
+  assert.match(queryText, /calendar_date/i);
+  const boundValues = collectBoundValues(queries[0]);
+  assert.ok(boundValues.includes("alpha.user"));
+  assert.ok(boundValues.includes("2026-04-07"));
 });
 
 test("listCollectionDailyPaidCustomers falls back to encrypted PII when plaintext has been redacted", async () => {

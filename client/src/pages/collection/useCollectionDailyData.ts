@@ -31,6 +31,7 @@ type UseCollectionDailyDataOptions = {
   selectedUsernames: string[];
   selectedQueryUsers?: string[] | undefined;
   canEditTarget: boolean;
+  canEditCalendar: boolean;
 };
 
 type CollectionDailyDayRecord = CollectionDailyDayDetailsResponse["records"][number];
@@ -43,6 +44,7 @@ export function useCollectionDailyData({
   selectedUsernames,
   selectedQueryUsers,
   canEditTarget,
+  canEditCalendar,
 }: UseCollectionDailyDataOptions) {
   const { toast } = useToast();
   const {
@@ -120,6 +122,7 @@ export function useCollectionDailyData({
   const mutationState = useCollectionDailyMutationState({
     canManage,
     canEditTarget,
+    canEditCalendar,
     year,
     month,
     selectedUsernames,

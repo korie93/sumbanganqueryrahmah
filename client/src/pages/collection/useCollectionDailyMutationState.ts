@@ -14,6 +14,7 @@ type ToastFn = (options: {
 type UseCollectionDailyMutationStateOptions = {
   canManage: boolean;
   canEditTarget: boolean;
+  canEditCalendar: boolean;
   year: number;
   month: number;
   selectedUsernames: string[];
@@ -26,6 +27,7 @@ type UseCollectionDailyMutationStateOptions = {
 export function useCollectionDailyMutationState({
   canManage,
   canEditTarget,
+  canEditCalendar,
   year,
   month,
   selectedUsernames,
@@ -38,8 +40,8 @@ export function useCollectionDailyMutationState({
   const [savingCalendar, setSavingCalendar] = useState(false);
 
   const saveMonthlyTarget = useCallback(async () => {
-    if (!canManage) return;
-    if (!canEditTarget) {
+    const selectedUsername = selectedUsernames[0];
+    if (!canManage || !canEditTarget || !selectedUsername) {
       toast({
         title: "Select One Staff Nickname",
         description: "Please select exactly one staff nickname to update monthly target.",
@@ -61,7 +63,7 @@ export function useCollectionDailyMutationState({
     setSavingTarget(true);
     try {
       await setCollectionDailyTarget({
-        username: selectedUsernames[0],
+        username: selectedUsername,
         year,
         month,
         monthlyTarget,
@@ -93,10 +95,40 @@ export function useCollectionDailyMutationState({
 
   const saveCalendar = useCallback(async () => {
     if (!calendarDays.length) return;
+    const selectedUsername = selectedUsernames[0];
+    if (!canManage || !canEditCalendar) {
+      toast({
+        title: "Superuser Required",
+        description: "Only superuser can update daily Working or Holiday/Leave status.",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (selectedUsernames.length !== 1 || !selectedUsername) {
+      toast({
+        title: "Select One Staff Nickname",
+        description: "Please select exactly one staff nickname before saving daily status.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const missingLeaveTypeDay = calendarDays.find((day) =>
+      day.status === "HOLIDAY" && !day.leaveType
+    );
+    if (missingLeaveTypeDay) {
+      toast({
+        title: "Leave Type Required",
+        description: `Please choose a leave type for day ${missingLeaveTypeDay.day}.`,
+        variant: "destructive",
+      });
+      return;
+    }
 
     setSavingCalendar(true);
     try {
       await setCollectionDailyCalendar({
+        username: selectedUsername,
         year,
         month,
         days: buildCollectionDailyCalendarPayloadDays(calendarDays),
@@ -115,7 +147,7 @@ export function useCollectionDailyMutationState({
     } finally {
       setSavingCalendar(false);
     }
-  }, [calendarDays, month, onRefresh, toast, year]);
+  }, [calendarDays, canEditCalendar, canManage, month, onRefresh, selectedUsernames, toast, year]);
 
   return {
     savingTarget,

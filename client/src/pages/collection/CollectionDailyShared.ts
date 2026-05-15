@@ -1,5 +1,13 @@
+import type {
+  CollectionDailyCalendarStatus,
+  CollectionDailyLeaveType,
+} from "@shared/collection-daily-status";
+
 export type EditableCalendarDay = {
   day: number;
+  status: CollectionDailyCalendarStatus;
+  leaveType: CollectionDailyLeaveType | null;
+  note: string;
   isWorkingDay: boolean;
   isHoliday: boolean;
   holidayName: string;

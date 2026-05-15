@@ -1,6 +1,12 @@
 import { randomUUID } from "crypto";
 import { sql } from "drizzle-orm";
 import type { CollectionAmountMyrNumber } from "../../shared/collection-amount-types";
+import {
+  isCollectionDailyCalendarStatus,
+  isCollectionDailyLeaveType,
+  type CollectionDailyCalendarStatus,
+  type CollectionDailyLeaveType,
+} from "../../shared/collection-daily-status";
 import { db } from "../db-postgres";
 import type {
   CollectionDailyCalendarDay,
@@ -119,15 +125,21 @@ export async function upsertCollectionDailyTarget(params: {
 }
 
 export async function listCollectionDailyCalendar(params: {
+  username: string;
   year: number;
   month: number;
 }, executor: CollectionDailyExecutor = db): Promise<CollectionDailyCalendarDay[]> {
   const result = await executor.execute(sql`
     SELECT
       id,
+      username,
+      calendar_date,
       year,
       month,
       day,
+      status,
+      leave_type,
+      note,
       is_working_day,
       is_holiday,
       holiday_name,
@@ -136,19 +148,49 @@ export async function listCollectionDailyCalendar(params: {
       created_at,
       updated_at
     FROM public.collection_daily_calendar
-    WHERE year = ${params.year}
+    WHERE lower(username) = lower(${params.username})
+      AND year = ${params.year}
       AND month = ${params.month}
     ORDER BY day ASC
   `);
   return readCollectionDailyRows(result).map((row) => mapCollectionDailyCalendarRow(row));
 }
 
+function buildCalendarDateKey(year: number, month: number, day: number) {
+  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+function resolveCalendarDayStatus(day: {
+  status?: CollectionDailyCalendarStatus | undefined;
+  isWorkingDay: boolean;
+  isHoliday: boolean;
+}) {
+  if (isCollectionDailyCalendarStatus(day.status)) {
+    return day.status;
+  }
+  return day.isHoliday || !day.isWorkingDay ? "HOLIDAY" : "WORKING";
+}
+
+function resolveCalendarDayLeaveType(
+  status: CollectionDailyCalendarStatus,
+  leaveType: CollectionDailyLeaveType | null | undefined,
+) {
+  if (status !== "HOLIDAY") {
+    return null;
+  }
+  return isCollectionDailyLeaveType(leaveType) ? leaveType : null;
+}
+
 export async function upsertCollectionDailyCalendarDays(params: {
+  username: string;
   year: number;
   month: number;
   actor: string;
   days: Array<{
     day: number;
+    status?: CollectionDailyCalendarStatus | undefined;
+    leaveType?: CollectionDailyLeaveType | null | undefined;
+    note?: string | null | undefined;
     isWorkingDay: boolean;
     isHoliday: boolean;
     holidayName?: string | null;
@@ -159,28 +201,45 @@ export async function upsertCollectionDailyCalendarDays(params: {
   }
 
   const valuesSql = sql.join(
-    params.days.map((day) => sql`(
-      ${randomUUID()}::uuid,
-      ${params.year},
-      ${params.month},
-      ${day.day},
-      ${day.isWorkingDay},
-      ${day.isHoliday},
-      ${day.holidayName ?? null},
-      ${params.actor},
-      ${params.actor},
-      now(),
-      now()
-    )`),
+    params.days.map((day) => {
+      const status = resolveCalendarDayStatus(day);
+      const leaveType = resolveCalendarDayLeaveType(status, day.leaveType);
+      const note = status === "HOLIDAY" ? (day.note ?? day.holidayName ?? null) : null;
+      const isHoliday = status === "HOLIDAY";
+      const holidayName = isHoliday ? (leaveType ?? note) : null;
+      return sql`(
+        ${randomUUID()}::uuid,
+        lower(${params.username}),
+        ${buildCalendarDateKey(params.year, params.month, day.day)}::date,
+        ${params.year},
+        ${params.month},
+        ${day.day},
+        ${status},
+        ${leaveType},
+        ${note},
+        ${!isHoliday},
+        ${isHoliday},
+        ${holidayName},
+        ${params.actor},
+        ${params.actor},
+        now(),
+        now()
+      )`;
+    }),
     sql`, `,
   );
 
   await executor.execute(sql`
     INSERT INTO public.collection_daily_calendar (
       id,
+      username,
+      calendar_date,
       year,
       month,
       day,
+      status,
+      leave_type,
+      note,
       is_working_day,
       is_holiday,
       holiday_name,
@@ -190,8 +249,11 @@ export async function upsertCollectionDailyCalendarDays(params: {
       updated_at
     )
     VALUES ${valuesSql}
-    ON CONFLICT (year, month, day)
+    ON CONFLICT ((lower(username)), calendar_date)
     DO UPDATE SET
+      status = EXCLUDED.status,
+      leave_type = EXCLUDED.leave_type,
+      note = EXCLUDED.note,
       is_working_day = EXCLUDED.is_working_day,
       is_holiday = EXCLUDED.is_holiday,
       holiday_name = EXCLUDED.holiday_name,
@@ -200,9 +262,25 @@ export async function upsertCollectionDailyCalendarDays(params: {
   `);
 
   return listCollectionDailyCalendar({
+    username: params.username,
     year: params.year,
     month: params.month,
   }, executor);
+}
+
+export async function deleteCollectionDailyCalendarDay(params: {
+  username: string;
+  year: number;
+  month: number;
+  day: number;
+}, executor: CollectionDailyExecutor = db): Promise<boolean> {
+  const result = await executor.execute(sql`
+    DELETE FROM public.collection_daily_calendar
+    WHERE lower(username) = lower(${params.username})
+      AND calendar_date = ${buildCalendarDateKey(params.year, params.month, params.day)}::date
+    RETURNING id
+  `);
+  return (result.rows?.length ?? 0) > 0;
 }
 
 export async function listCollectionDailyPaidCustomers(params: {

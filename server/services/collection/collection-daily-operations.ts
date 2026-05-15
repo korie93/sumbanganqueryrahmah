@@ -26,6 +26,10 @@ export class CollectionDailyOperations {
     return this.managementOperations.upsertDailyCalendar(userInput, bodyRaw);
   }
 
+  async deleteDailyCalendar(userInput: AuthenticatedUser | undefined, inputRaw: unknown) {
+    return this.managementOperations.deleteDailyCalendar(userInput, inputRaw);
+  }
+
   async getDailyOverview(userInput: AuthenticatedUser | undefined, query: ListQuery) {
     return this.readOperations.getDailyOverview(userInput, query);
   }

@@ -19,6 +19,7 @@ export type CollectionStoragePort = Pick<
   | "deleteCollectionAdminGroup"
   | "deleteCollectionRecord"
   | "deleteCollectionRecordReceipts"
+  | "deleteCollectionDailyCalendarDay"
   | "deleteCollectionStaffNickname"
   | "getCollectionAdminAssignedNicknameIds"
   | "getCollectionAdminGroupVisibleNicknameValuesByLeader"

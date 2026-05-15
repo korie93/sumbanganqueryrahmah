@@ -3,6 +3,10 @@ import {
   parseCollectionAmountMyrNumber,
   type CollectionAmountMyrNumber,
 } from "@shared/collection-amount-types";
+import {
+  isCollectionDailyCalendarStatus,
+  isCollectionDailyLeaveType,
+} from "@shared/collection-daily-status";
 import type {
   CollectionDailyDayDetailsResponse,
   CollectionDailyOverviewResponse,
@@ -75,6 +79,16 @@ function normalizeCollectionDailyStatus(
     return value;
   }
   return "neutral";
+}
+
+function normalizeCollectionDailyCalendarStatus(value: unknown) {
+  const normalized = readString(value).toUpperCase();
+  return isCollectionDailyCalendarStatus(normalized) ? normalized : "WORKING";
+}
+
+function normalizeCollectionDailyLeaveType(value: unknown) {
+  const normalized = readString(value).toUpperCase();
+  return isCollectionDailyLeaveType(normalized) ? normalized : null;
 }
 
 function normalizeFreshness(value: unknown): CollectionReportFreshness | undefined {
@@ -169,6 +183,7 @@ function normalizeCollectionDailyOverviewResponse(
       ? record.days.map((entry, index) => {
           const dayRecord = asRecord(entry);
           const day = Math.max(1, readPositiveInteger(dayRecord?.day, index + 1));
+          const isHoliday = readBoolean(dayRecord?.isHoliday);
           return {
             day,
             date:
@@ -176,8 +191,15 @@ function normalizeCollectionDailyOverviewResponse(
               || `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`,
             amount: readAmount(dayRecord?.amount),
             target: readAmount(dayRecord?.target),
+            calendarStatus: dayRecord?.calendarStatus || dayRecord?.calendar_status
+              ? normalizeCollectionDailyCalendarStatus(dayRecord?.calendarStatus ?? dayRecord?.calendar_status)
+              : isHoliday
+                ? "HOLIDAY"
+                : "WORKING",
+            leaveType: normalizeCollectionDailyLeaveType(dayRecord?.leaveType ?? dayRecord?.leave_type),
+            note: readNullableString(dayRecord?.note),
             isWorkingDay: readBoolean(dayRecord?.isWorkingDay),
-            isHoliday: readBoolean(dayRecord?.isHoliday),
+            isHoliday,
             holidayName: readNullableString(dayRecord?.holidayName),
             customerCount: readPositiveInteger(dayRecord?.customerCount),
             status: normalizeCollectionDailyStatus(dayRecord?.status),
@@ -315,10 +337,14 @@ export async function setCollectionDailyTarget(payload: {
 }
 
 export async function setCollectionDailyCalendar(payload: {
+  username: string;
   year: number;
   month: number;
   days: Array<{
     day: number;
+    status?: "WORKING" | "HOLIDAY";
+    leaveType?: "AL" | "MC" | "EL" | "UL" | "RL" | null;
+    note?: string | null;
     isWorkingDay: boolean;
     isHoliday: boolean;
     holidayName?: string | null;
@@ -326,6 +352,24 @@ export async function setCollectionDailyCalendar(payload: {
 }) {
   const response = await apiRequest("PUT", "/api/collection/daily/calendar", payload);
   return response.json() as Promise<{ ok: boolean; calendar: Array<Record<string, unknown>> }>;
+}
+
+export async function deleteCollectionDailyCalendarStatus(payload: {
+  username: string;
+  year: number;
+  month: number;
+  day: number;
+}) {
+  const params = new URLSearchParams();
+  params.set("username", payload.username);
+  params.set("year", String(payload.year));
+  params.set("month", String(payload.month));
+  params.set("day", String(payload.day));
+  const response = await apiRequest(
+    "DELETE",
+    `/api/collection/daily/calendar?${params.toString()}`,
+  );
+  return response.json() as Promise<{ ok: boolean; deleted: boolean }>;
 }
 
 export async function getCollectionDailyOverview(filters: {

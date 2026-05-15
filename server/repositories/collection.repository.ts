@@ -12,6 +12,7 @@ import {
   updateCollectionAdminGroupRepository,
 } from "./collection-repository-admin-operations";
 import {
+  deleteCollectionDailyCalendarDayRepository,
   getCollectionDailyTargetRepository,
   listCollectionDailyCalendarRepository,
   listCollectionDailyPaidCustomersRepository,
@@ -70,6 +71,7 @@ export class CollectionRepository {
   readonly deleteCollectionRecord = deleteCollectionRecordRepository;
   readonly deleteCollectionRecordReceipts = deleteCollectionRecordReceiptsRepository;
   readonly deleteCollectionStaffNickname = deleteCollectionStaffNicknameRepository;
+  readonly deleteCollectionDailyCalendarDay = deleteCollectionDailyCalendarDayRepository;
   readonly findCollectionReceiptDuplicateSummaries = findCollectionReceiptDuplicateSummariesRepository;
   readonly getCollectionAdminAssignedNicknameIds = getCollectionAdminAssignedNicknameIdsRepository;
   readonly getCollectionAdminGroupById = getCollectionAdminGroupByIdRepository;

@@ -3,7 +3,12 @@ import type {
   CollectionDailyTarget,
   CollectionDailyUser,
 } from "../storage-postgres";
+import type {
+  CollectionDailyCalendarStatus,
+  CollectionDailyLeaveType,
+} from "../../shared/collection-daily-status";
 import {
+  deleteCollectionDailyCalendarDay,
   getCollectionDailyTarget,
   listCollectionDailyCalendar,
   listCollectionDailyPaidCustomers,
@@ -35,6 +40,7 @@ export async function upsertCollectionDailyTargetRepository(params: {
 }
 
 export async function listCollectionDailyCalendarRepository(params: {
+  username: string;
   year: number;
   month: number;
 }) {
@@ -42,17 +48,30 @@ export async function listCollectionDailyCalendarRepository(params: {
 }
 
 export async function upsertCollectionDailyCalendarDaysRepository(params: {
+  username: string;
   year: number;
   month: number;
   actor: string;
   days: Array<{
     day: number;
+    status?: CollectionDailyCalendarStatus | undefined;
+    leaveType?: CollectionDailyLeaveType | null | undefined;
+    note?: string | null | undefined;
     isWorkingDay: boolean;
     isHoliday: boolean;
     holidayName?: string | null;
   }>;
 }) {
   return upsertCollectionDailyCalendarDays(params);
+}
+
+export async function deleteCollectionDailyCalendarDayRepository(params: {
+  username: string;
+  year: number;
+  month: number;
+  day: number;
+}): Promise<boolean> {
+  return deleteCollectionDailyCalendarDay(params);
 }
 
 export async function listCollectionDailyPaidCustomersRepository(params: {

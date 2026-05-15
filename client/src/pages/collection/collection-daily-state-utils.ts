@@ -34,6 +34,9 @@ export function mapCollectionDailyEditableCalendarDays(
 ): EditableCalendarDay[] {
   return response.days.map((day) => ({
     day: day.day,
+    status: day.calendarStatus,
+    leaveType: day.leaveType,
+    note: day.note || "",
     isWorkingDay: day.isWorkingDay,
     isHoliday: day.isHoliday,
     holidayName: day.holidayName || "",
@@ -43,6 +46,9 @@ export function mapCollectionDailyEditableCalendarDays(
 export function buildCollectionDailyCalendarPayloadDays(calendarDays: EditableCalendarDay[]) {
   return calendarDays.map((day) => ({
     day: day.day,
+    status: day.status,
+    leaveType: day.status === "HOLIDAY" ? day.leaveType : null,
+    note: day.status === "HOLIDAY" ? day.note || null : null,
     isWorkingDay: day.isWorkingDay,
     isHoliday: day.isHoliday,
     holidayName: day.holidayName || null,

@@ -123,6 +123,10 @@ export class CollectionService {
     return this.recordService.upsertDailyCalendar(user, bodyRaw);
   }
 
+  deleteDailyCalendar(user: AuthenticatedUser | undefined, inputRaw: unknown) {
+    return this.recordService.deleteDailyCalendar(user, inputRaw);
+  }
+
   getDailyOverview(user: AuthenticatedUser | undefined, query: ListQuery) {
     return this.recordService.getDailyOverview(user, query);
   }

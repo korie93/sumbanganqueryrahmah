@@ -1,6 +1,7 @@
 import { AlertTriangle, CheckCircle2, CircleSlash } from "lucide-react";
 import type { CollectionDailyOverviewDay } from "@/lib/api";
 import { formatDateDDMMYYYY } from "@/lib/date-format";
+import { DailyStatusForm } from "@/pages/collection/DailyStatusForm";
 import {
   statusCardClass,
   statusLabel,
@@ -49,8 +50,6 @@ export function CollectionDailyDesktopCalendarGrid({
       {days.map((day) => {
         const editable = editableCalendarByDay.get(day.day);
         const isSelected = selectedDate === day.date;
-        const workingDayCheckboxId = `collection-daily-working-day-desktop-${day.day}`;
-        const holidayCheckboxId = `collection-daily-holiday-desktop-${day.day}`;
         const progressPercent = getDailyProgressPercent(day);
 
         return (
@@ -88,31 +87,13 @@ export function CollectionDailyDesktopCalendarGrid({
               ) : null}
             </button>
             {canManage && editable ? (
-              <div className="collection-daily-day-edit space-y-1 border-t border-border/40 px-2 pb-2 pt-1.5">
-                <label className="flex items-center gap-1" htmlFor={workingDayCheckboxId}>
-                  <input
-                    id={workingDayCheckboxId}
-                    name={workingDayCheckboxId}
-                    type="checkbox"
-                    checked={editable.isWorkingDay}
-                    onChange={(event) =>
-                      onUpdateEditableDay(editable.day, { isWorkingDay: event.target.checked })
-                    }
-                  />
-                  Working
-                </label>
-                <label className="flex items-center gap-1" htmlFor={holidayCheckboxId}>
-                  <input
-                    id={holidayCheckboxId}
-                    name={holidayCheckboxId}
-                    type="checkbox"
-                    checked={editable.isHoliday}
-                    onChange={(event) =>
-                      onUpdateEditableDay(editable.day, { isHoliday: event.target.checked })
-                    }
-                  />
-                  Holiday
-                </label>
+              <div className="collection-daily-day-edit border-t border-border/40 px-2 pb-2 pt-1.5">
+                <DailyStatusForm
+                  day={editable}
+                  label={`Status day ${editable.day}`}
+                  onChange={(patch) => onUpdateEditableDay(editable.day, patch)}
+                  compact
+                />
               </div>
             ) : null}
           </div>

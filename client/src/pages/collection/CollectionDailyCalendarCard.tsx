@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { useIsMobile } from "@/hooks/use-mobile";
 import type { CollectionDailyOverviewDay, CollectionDailyOverviewResponse } from "@/lib/api";
 import { formatDateDDMMYYYY } from "@/lib/date-format";
+import { DailyStatusForm } from "@/pages/collection/DailyStatusForm";
 import {
   statusCardClass,
   statusLabel,
@@ -13,7 +14,7 @@ import {
 } from "@/pages/collection/CollectionDailyShared";
 import { formatAmountRM } from "@/pages/collection/utils";
 
-type CollectionDailyCalendarCardProps = {
+export type CollectionDailyCalendarCardProps = {
   loadingOverview: boolean;
   overview: CollectionDailyOverviewResponse | null;
   emptyOverviewMessage: string;
@@ -53,12 +54,6 @@ export function CollectionDailyCalendarCard({
   const selectedDay = overview?.days.find((day) => day.date === selectedDate) || null;
   const selectedEditableDay =
     selectedDay ? editableCalendarByDay.get(selectedDay.day) || null : null;
-  const workingDayCheckboxId = selectedEditableDay
-    ? `collection-daily-working-day-${selectedEditableDay.day}`
-    : undefined;
-  const holidayCheckboxId = selectedEditableDay
-    ? `collection-daily-holiday-${selectedEditableDay.day}`
-    : undefined;
 
   return (
     <div className="collection-daily-calendar" data-testid="collection-daily-calendar">
@@ -229,38 +224,11 @@ export function CollectionDailyCalendarCard({
                       Collected {formatAmountRM(selectedDay.amount)} | Required {formatAmountRM(selectedDay.target)}
                     </p>
                   </div>
-                  <div className="flex flex-col gap-2 sm:flex-row">
-                    <label
-                      className="flex items-center gap-2 rounded-lg border border-border/60 bg-muted/15 px-3 py-2"
-                      htmlFor={workingDayCheckboxId}
-                    >
-                      <input
-                        id={workingDayCheckboxId}
-                        name={workingDayCheckboxId}
-                        type="checkbox"
-                        checked={selectedEditableDay.isWorkingDay}
-                        onChange={(event) =>
-                          onUpdateEditableDay(selectedEditableDay.day, { isWorkingDay: event.target.checked })
-                        }
-                      />
-                      <span>Working day</span>
-                    </label>
-                    <label
-                      className="flex items-center gap-2 rounded-lg border border-border/60 bg-muted/15 px-3 py-2"
-                      htmlFor={holidayCheckboxId}
-                    >
-                      <input
-                        id={holidayCheckboxId}
-                        name={holidayCheckboxId}
-                        type="checkbox"
-                        checked={selectedEditableDay.isHoliday}
-                        onChange={(event) =>
-                          onUpdateEditableDay(selectedEditableDay.day, { isHoliday: event.target.checked })
-                        }
-                      />
-                      <span>Holiday</span>
-                    </label>
-                  </div>
+                  <DailyStatusForm
+                    day={selectedEditableDay}
+                    label="Daily status"
+                    onChange={(patch) => onUpdateEditableDay(selectedEditableDay.day, patch)}
+                  />
                 </div>
             ) : null}
           </div>

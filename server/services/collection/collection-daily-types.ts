@@ -1,9 +1,16 @@
 import type { CollectionAmountMyrNumber } from "../../../shared/collection-amount-types";
+import type {
+  CollectionDailyCalendarStatus,
+  CollectionDailyLeaveType,
+} from "../../../shared/collection-daily-status";
 
 export type CollectionDailyStatus = "green" | "yellow" | "red" | "neutral";
 
 export type CollectionDailyCalendarInput = {
   day: number;
+  status?: CollectionDailyCalendarStatus | undefined;
+  leaveType?: CollectionDailyLeaveType | null | undefined;
+  note?: string | null | undefined;
   isWorkingDay: boolean;
   isHoliday: boolean;
   holidayName?: string | null;
@@ -16,9 +23,12 @@ export type CollectionDailyTimelineDay = {
   target: CollectionAmountMyrNumber;
   carryIn: CollectionAmountMyrNumber;
   carryOut: CollectionAmountMyrNumber;
+  calendarStatus: CollectionDailyCalendarStatus;
   isWorkingDay: boolean;
   isHoliday: boolean;
   holidayName: string | null;
+  leaveType: CollectionDailyLeaveType | null;
+  note: string | null;
   customerCount: number;
   status: CollectionDailyStatus;
 };

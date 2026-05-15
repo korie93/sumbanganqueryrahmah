@@ -198,6 +198,9 @@ test("mapCollectionDailyEditableCalendarDays normalizes nullable holiday names",
         date: "2026-03-01",
         amount: 0,
         target: 50,
+        calendarStatus: "WORKING" as const,
+        leaveType: null,
+        note: null,
         isWorkingDay: true,
         isHoliday: false,
         holidayName: null,
@@ -209,6 +212,9 @@ test("mapCollectionDailyEditableCalendarDays normalizes nullable holiday names",
         date: "2026-03-02",
         amount: 100,
         target: 50,
+        calendarStatus: "HOLIDAY" as const,
+        leaveType: "AL" as const,
+        note: "Public Holiday",
         isWorkingDay: false,
         isHoliday: true,
         holidayName: "Public Holiday",
@@ -218,34 +224,34 @@ test("mapCollectionDailyEditableCalendarDays normalizes nullable holiday names",
     ],
   };
   assert.deepEqual(mapCollectionDailyEditableCalendarDays(response), [
-    { day: 1, isWorkingDay: true, isHoliday: false, holidayName: "" },
-    { day: 2, isWorkingDay: false, isHoliday: true, holidayName: "Public Holiday" },
+    { day: 1, status: "WORKING", leaveType: null, note: "", isWorkingDay: true, isHoliday: false, holidayName: "" },
+    { day: 2, status: "HOLIDAY", leaveType: "AL", note: "Public Holiday", isWorkingDay: false, isHoliday: true, holidayName: "Public Holiday" },
   ]);
 });
 
 test("buildCollectionDailyCalendarPayloadDays converts blank holiday names to null", () => {
   assert.deepEqual(
     buildCollectionDailyCalendarPayloadDays([
-      { day: 1, isWorkingDay: true, isHoliday: false, holidayName: "" },
-      { day: 2, isWorkingDay: false, isHoliday: true, holidayName: "Public Holiday" },
+      { day: 1, status: "WORKING", leaveType: null, note: "", isWorkingDay: true, isHoliday: false, holidayName: "" },
+      { day: 2, status: "HOLIDAY", leaveType: "AL", note: "Public Holiday", isWorkingDay: false, isHoliday: true, holidayName: "AL" },
     ]),
     [
-      { day: 1, isWorkingDay: true, isHoliday: false, holidayName: null },
-      { day: 2, isWorkingDay: false, isHoliday: true, holidayName: "Public Holiday" },
+      { day: 1, status: "WORKING", leaveType: null, note: null, isWorkingDay: true, isHoliday: false, holidayName: null },
+      { day: 2, status: "HOLIDAY", leaveType: "AL", note: "Public Holiday", isWorkingDay: false, isHoliday: true, holidayName: "AL" },
     ],
   );
 });
 
 test("updateCollectionDailyEditableCalendarDay updates only the targeted day", () => {
   const previous = [
-    { day: 1, isWorkingDay: true, isHoliday: false, holidayName: "" },
-    { day: 2, isWorkingDay: true, isHoliday: false, holidayName: "" },
+    { day: 1, status: "WORKING" as const, leaveType: null, note: "", isWorkingDay: true, isHoliday: false, holidayName: "" },
+    { day: 2, status: "WORKING" as const, leaveType: null, note: "", isWorkingDay: true, isHoliday: false, holidayName: "" },
   ];
   assert.deepEqual(
-    updateCollectionDailyEditableCalendarDay(previous, 2, { isHoliday: true, holidayName: "Holiday" }),
+    updateCollectionDailyEditableCalendarDay(previous, 2, { status: "HOLIDAY", isHoliday: true, holidayName: "AL", leaveType: "AL" }),
     [
-      { day: 1, isWorkingDay: true, isHoliday: false, holidayName: "" },
-      { day: 2, isWorkingDay: true, isHoliday: true, holidayName: "Holiday" },
+      { day: 1, status: "WORKING", leaveType: null, note: "", isWorkingDay: true, isHoliday: false, holidayName: "" },
+      { day: 2, status: "HOLIDAY", leaveType: "AL", note: "", isWorkingDay: true, isHoliday: true, holidayName: "AL" },
     ],
   );
 });

@@ -11,6 +11,7 @@ export function CollectionDailyTargetControlsSection({
   monthlyTargetInput,
   onMonthlyTargetInputChange,
   canEditTarget,
+  canEditCalendar,
   savingTarget,
   onSaveTarget,
   savingCalendar,
@@ -55,6 +56,7 @@ export function CollectionDailyTargetControlsSection({
         monthlyTargetInput={monthlyTargetInput}
         onMonthlyTargetInputChange={onMonthlyTargetInputChange}
         canEditTarget={canEditTarget}
+        canEditCalendar={canEditCalendar}
         savingTarget={savingTarget}
         onSaveTarget={onSaveTarget}
         savingCalendar={savingCalendar}

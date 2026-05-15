@@ -144,6 +144,7 @@ export class PostgresCollectionStorage extends PostgresSettingsStorage {
   }
 
   async listCollectionDailyCalendar(params: {
+    username: string;
     year: number;
     month: number;
   }): Promise<CollectionDailyCalendarDay[]> {
@@ -151,17 +152,30 @@ export class PostgresCollectionStorage extends PostgresSettingsStorage {
   }
 
   async upsertCollectionDailyCalendarDays(params: {
+    username: string;
     year: number;
     month: number;
     actor: string;
     days: Array<{
       day: number;
+      status?: CollectionDailyCalendarDay["status"] | undefined;
+      leaveType?: CollectionDailyCalendarDay["leaveType"] | undefined;
+      note?: string | null | undefined;
       isWorkingDay: boolean;
       isHoliday: boolean;
       holidayName?: string | null;
     }>;
   }): Promise<CollectionDailyCalendarDay[]> {
     return this.collectionRepository.upsertCollectionDailyCalendarDays(params);
+  }
+
+  async deleteCollectionDailyCalendarDay(params: {
+    username: string;
+    year: number;
+    month: number;
+    day: number;
+  }): Promise<boolean> {
+    return this.collectionRepository.deleteCollectionDailyCalendarDay(params);
   }
 
   async listCollectionDailyPaidCustomers(params: {

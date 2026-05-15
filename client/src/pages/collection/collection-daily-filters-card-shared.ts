@@ -29,6 +29,7 @@ export type CollectionDailyFiltersCardProps = {
   monthlyTargetInput: string;
   onMonthlyTargetInputChange: (value: string) => void;
   canEditTarget: boolean;
+  canEditCalendar: boolean;
   savingTarget: boolean;
   onSaveTarget: () => void;
   savingCalendar: boolean;
@@ -76,6 +77,7 @@ export type CollectionDailyTargetControlsSectionProps = Pick<
   | "monthlyTargetInput"
   | "onMonthlyTargetInputChange"
   | "canEditTarget"
+  | "canEditCalendar"
   | "savingTarget"
   | "onSaveTarget"
   | "savingCalendar"

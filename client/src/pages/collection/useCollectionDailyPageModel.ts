@@ -45,6 +45,7 @@ export function useCollectionDailyPageModel({ role }: UseCollectionDailyPageMode
     currentUsername,
     users: usersData.users,
   });
+  const canEditCalendar = role === "superuser" && userSelection.canEditTarget;
 
   const data = useCollectionDailyData({
     canManage,
@@ -54,6 +55,7 @@ export function useCollectionDailyPageModel({ role }: UseCollectionDailyPageMode
     selectedUsernames: userSelection.selectedUsernames,
     selectedQueryUsers: userSelection.selectedQueryUsers,
     canEditTarget: userSelection.canEditTarget,
+    canEditCalendar,
   });
 
   const handleRefresh = useCallback(() => {
@@ -125,6 +127,7 @@ export function useCollectionDailyPageModel({ role }: UseCollectionDailyPageMode
       savingCalendar: data.savingCalendar,
       onSaveCalendar: handleSaveCalendar,
       calendarDays: data.calendarDays,
+      canEditCalendar,
     },
     calendarCardProps: {
       loadingOverview: data.loadingOverview,
@@ -132,7 +135,7 @@ export function useCollectionDailyPageModel({ role }: UseCollectionDailyPageMode
       emptyOverviewMessage: data.emptyOverviewMessage,
       firstWeekday: data.firstWeekday,
       selectedDate: data.selectedDate,
-      canManage,
+      canManage: canEditCalendar,
       editableCalendarByDay: data.editableCalendarByDay,
       onSelectDate: handleDaySelect,
       onUpdateEditableDay: data.updateEditableDay,

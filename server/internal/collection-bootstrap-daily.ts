@@ -111,9 +111,14 @@ export async function ensureCollectionDailyTables(): Promise<void> {
   await db.execute(sql`
     CREATE TABLE IF NOT EXISTS public.collection_daily_calendar (
       id uuid PRIMARY KEY,
+      username text NOT NULL DEFAULT '',
+      calendar_date date,
       year integer NOT NULL,
       month integer NOT NULL,
       day integer NOT NULL,
+      status text NOT NULL DEFAULT 'WORKING',
+      leave_type text,
+      note text,
       is_working_day boolean NOT NULL DEFAULT true,
       is_holiday boolean NOT NULL DEFAULT false,
       holiday_name text,
@@ -123,9 +128,14 @@ export async function ensureCollectionDailyTables(): Promise<void> {
       updated_at timestamp with time zone NOT NULL DEFAULT now()
     )
   `);
+  await db.execute(sql`ALTER TABLE public.collection_daily_calendar ADD COLUMN IF NOT EXISTS username text DEFAULT ''`);
+  await db.execute(sql`ALTER TABLE public.collection_daily_calendar ADD COLUMN IF NOT EXISTS calendar_date date`);
   await db.execute(sql`ALTER TABLE public.collection_daily_calendar ADD COLUMN IF NOT EXISTS year integer`);
   await db.execute(sql`ALTER TABLE public.collection_daily_calendar ADD COLUMN IF NOT EXISTS month integer`);
   await db.execute(sql`ALTER TABLE public.collection_daily_calendar ADD COLUMN IF NOT EXISTS day integer`);
+  await db.execute(sql`ALTER TABLE public.collection_daily_calendar ADD COLUMN IF NOT EXISTS status text DEFAULT 'WORKING'`);
+  await db.execute(sql`ALTER TABLE public.collection_daily_calendar ADD COLUMN IF NOT EXISTS leave_type text`);
+  await db.execute(sql`ALTER TABLE public.collection_daily_calendar ADD COLUMN IF NOT EXISTS note text`);
   await db.execute(sql`ALTER TABLE public.collection_daily_calendar ADD COLUMN IF NOT EXISTS is_working_day boolean DEFAULT true`);
   await db.execute(sql`ALTER TABLE public.collection_daily_calendar ADD COLUMN IF NOT EXISTS is_holiday boolean DEFAULT false`);
   await db.execute(sql`ALTER TABLE public.collection_daily_calendar ADD COLUMN IF NOT EXISTS holiday_name text`);
@@ -136,6 +146,18 @@ export async function ensureCollectionDailyTables(): Promise<void> {
   await db.execute(sql`
     UPDATE public.collection_daily_calendar
     SET
+      username = lower(trim(COALESCE(username, ''))),
+      calendar_date = COALESCE(calendar_date, make_date(year, month, day)),
+      status = CASE
+        WHEN upper(trim(COALESCE(status, ''))) = 'HOLIDAY' OR COALESCE(is_holiday, false) THEN 'HOLIDAY'
+        ELSE 'WORKING'
+      END,
+      leave_type = CASE
+        WHEN upper(trim(COALESCE(leave_type, ''))) IN ('AL', 'MC', 'EL', 'UL', 'RL')
+          THEN upper(trim(leave_type))
+        ELSE NULL
+      END,
+      note = NULLIF(trim(COALESCE(note, holiday_name, '')), ''),
       is_working_day = COALESCE(is_working_day, true),
       is_holiday = COALESCE(is_holiday, false),
       created_by = NULLIF(trim(COALESCE(created_by, '')), ''),
@@ -143,6 +165,23 @@ export async function ensureCollectionDailyTables(): Promise<void> {
       created_at = COALESCE(created_at, now()),
       updated_at = COALESCE(updated_at, now())
   `);
+  await db.execute(sql`
+    UPDATE public.collection_daily_calendar
+    SET
+      is_holiday = (status = 'HOLIDAY'),
+      is_working_day = (status = 'WORKING'),
+      holiday_name = CASE
+        WHEN status = 'HOLIDAY' THEN COALESCE(leave_type, NULLIF(trim(COALESCE(note, '')), ''))
+        ELSE NULL
+      END,
+      leave_type = CASE WHEN status = 'HOLIDAY' THEN leave_type ELSE NULL END,
+      note = CASE WHEN status = 'HOLIDAY' THEN note ELSE NULL END
+  `);
+  await db.execute(sql`ALTER TABLE public.collection_daily_calendar ALTER COLUMN username SET DEFAULT ''`);
+  await db.execute(sql`ALTER TABLE public.collection_daily_calendar ALTER COLUMN username SET NOT NULL`);
+  await db.execute(sql`ALTER TABLE public.collection_daily_calendar ALTER COLUMN calendar_date SET NOT NULL`);
+  await db.execute(sql`ALTER TABLE public.collection_daily_calendar ALTER COLUMN status SET DEFAULT 'WORKING'`);
+  await db.execute(sql`ALTER TABLE public.collection_daily_calendar ALTER COLUMN status SET NOT NULL`);
   await db.execute(sql`
     UPDATE public.collection_daily_calendar calendar
     SET created_by = usr.username
@@ -177,17 +216,42 @@ export async function ensureCollectionDailyTables(): Promise<void> {
         WHERE usr.username = public.collection_daily_calendar.updated_by
       )
   `);
+  await db.execute(sql`DROP INDEX IF EXISTS public.idx_collection_daily_calendar_unique`);
   await db.execute(sql`
-    CREATE UNIQUE INDEX IF NOT EXISTS idx_collection_daily_calendar_unique
-    ON public.collection_daily_calendar (year, month, day)
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_collection_daily_calendar_username_date_unique
+    ON public.collection_daily_calendar (lower(username), calendar_date)
   `);
   await db.execute(sql`
     CREATE INDEX IF NOT EXISTS idx_collection_daily_calendar_year_month
     ON public.collection_daily_calendar (year, month)
   `);
   await db.execute(sql`
+    CREATE INDEX IF NOT EXISTS idx_collection_daily_calendar_username_year_month
+    ON public.collection_daily_calendar (lower(username), year, month)
+  `);
+  await db.execute(sql`
     DO $$
     BEGIN
+      IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'chk_collection_daily_calendar_status'
+      ) THEN
+        ALTER TABLE public.collection_daily_calendar
+        ADD CONSTRAINT chk_collection_daily_calendar_status
+        CHECK (status IN ('WORKING', 'HOLIDAY'));
+      END IF;
+
+      IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'chk_collection_daily_calendar_leave_type'
+      ) THEN
+        ALTER TABLE public.collection_daily_calendar
+        ADD CONSTRAINT chk_collection_daily_calendar_leave_type
+        CHECK (leave_type IS NULL OR leave_type IN ('AL', 'MC', 'EL', 'UL', 'RL'));
+      END IF;
+
       IF NOT EXISTS (
         SELECT 1
         FROM pg_constraint

@@ -186,6 +186,7 @@ type CollectionDailyTargetControlsProps = {
   monthlyTargetInput: string;
   onMonthlyTargetInputChange: (value: string) => void;
   canEditTarget: boolean;
+  canEditCalendar: boolean;
   savingTarget: boolean;
   onSaveTarget: () => void;
   savingCalendar: boolean;
@@ -197,6 +198,7 @@ export function CollectionDailyTargetControls({
   monthlyTargetInput,
   onMonthlyTargetInputChange,
   canEditTarget,
+  canEditCalendar,
   savingTarget,
   onSaveTarget,
   savingCalendar,
@@ -257,7 +259,7 @@ export function CollectionDailyTargetControls({
           variant="outline"
           className={cn("w-full", isMobile ? "h-12 rounded-2xl" : "h-11 rounded-xl sm:w-auto")}
           onClick={onSaveCalendar}
-          disabled={savingCalendar || calendarDays.length === 0}
+          disabled={savingCalendar || !canEditCalendar || calendarDays.length === 0}
         >
           {savingCalendar ? (
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -267,6 +269,11 @@ export function CollectionDailyTargetControls({
           Save Calendar
         </Button>
       </div>
+      {!canEditCalendar ? (
+        <p className={cn("text-xs text-muted-foreground", isMobile ? "sm:col-span-2" : "md:col-span-2")}>
+          Superuser mesti pilih tepat satu staff nickname untuk simpan status Working atau Holiday/Leave.
+        </p>
+      ) : null}
     </div>
   );
 }

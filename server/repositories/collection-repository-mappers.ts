@@ -8,6 +8,10 @@ import {
   formatCollectionAmountMyrString,
   parseCollectionAmountMyrNumber,
 } from "../../shared/collection-amount-types";
+import {
+  isCollectionDailyCalendarStatus,
+  isCollectionDailyLeaveType,
+} from "../../shared/collection-daily-status";
 import { resolveCollectionPiiFieldValue } from "../lib/collection-pii-encryption";
 
 type CollectionBatch = CollectionRecord["batch"];
@@ -75,9 +79,16 @@ type CollectionDailyTargetDbRow = {
 
 type CollectionDailyCalendarDbRow = {
   id?: unknown;
+  username?: unknown;
+  calendar_date?: unknown;
+  calendarDate?: unknown;
   year?: unknown;
   month?: unknown;
   day?: unknown;
+  status?: unknown;
+  leave_type?: unknown;
+  leaveType?: unknown;
+  note?: unknown;
   is_working_day?: unknown;
   isWorkingDay?: unknown;
   is_holiday?: unknown;
@@ -208,11 +219,31 @@ export function mapCollectionDailyTargetRow(row: unknown): CollectionDailyTarget
 
 export function mapCollectionDailyCalendarRow(row: unknown): CollectionDailyCalendarDay {
   const normalizedRow = normalizeCollectionDbRow<CollectionDailyCalendarDbRow>(row);
+  const year = Number(normalizedRow.year ?? 0);
+  const month = Number(normalizedRow.month ?? 0);
+  const day = Number(normalizedRow.day ?? 0);
+  const statusRaw = String(normalizedRow.status ?? "").toUpperCase();
+  const status = isCollectionDailyCalendarStatus(statusRaw) ? statusRaw : "WORKING";
+  const leaveTypeRaw = String(normalizedRow.leave_type ?? normalizedRow.leaveType ?? "").toUpperCase();
+  const leaveType = isCollectionDailyLeaveType(leaveTypeRaw) ? leaveTypeRaw : null;
+  const dateRaw = normalizedRow.calendar_date ?? normalizedRow.calendarDate;
+  const date = typeof dateRaw === "string"
+    ? dateRaw.slice(0, 10)
+    : dateRaw instanceof Date
+      ? dateRaw.toISOString().slice(0, 10)
+      : year > 0 && month > 0 && day > 0
+        ? `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`
+        : "";
   return {
     id: String(normalizedRow.id ?? ""),
-    year: Number(normalizedRow.year ?? 0),
-    month: Number(normalizedRow.month ?? 0),
-    day: Number(normalizedRow.day ?? 0),
+    username: String(normalizedRow.username ?? ""),
+    date,
+    year,
+    month,
+    day,
+    status,
+    leaveType,
+    note: (normalizedRow.note ?? null) as string | null,
     isWorkingDay: Boolean(normalizedRow.is_working_day ?? normalizedRow.isWorkingDay),
     isHoliday: Boolean(normalizedRow.is_holiday ?? normalizedRow.isHoliday),
     holidayName: (normalizedRow.holiday_name ?? normalizedRow.holidayName ?? null) as string | null,

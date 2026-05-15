@@ -355,9 +355,14 @@ export const collectionDailyTargets = pgTable("collection_daily_targets", {
 
 export const collectionDailyCalendar = pgTable("collection_daily_calendar", {
   id: uuid("id").primaryKey(),
+  username: text("username").notNull().default(""),
+  calendarDate: date("calendar_date", { mode: "string" }).notNull(),
   year: integer("year").notNull(),
   month: integer("month").notNull(),
   day: integer("day").notNull(),
+  status: text("status").notNull().default("WORKING"),
+  leaveType: text("leave_type"),
+  note: text("note"),
   isWorkingDay: boolean("is_working_day").notNull().default(true),
   isHoliday: boolean("is_holiday").notNull().default(false),
   holidayName: text("holiday_name"),
@@ -372,10 +377,24 @@ export const collectionDailyCalendar = pgTable("collection_daily_calendar", {
   createdAt: utcTimestamp("created_at").defaultNow().notNull(),
   updatedAt: utcTimestamp("updated_at").defaultNow().notNull(),
 }, (table) => ({
-  yearMonthDayUnique: uniqueIndex("idx_collection_daily_calendar_unique").on(
-    table.year,
-    table.month,
-    table.day,
+  usernameDateUnique: uniqueIndex("idx_collection_daily_calendar_username_date_unique").using(
+    "btree",
+    sql`lower(${table.username})`,
+    table.calendarDate,
   ),
   yearMonthIdx: index("idx_collection_daily_calendar_year_month").on(table.year, table.month),
+  usernameYearMonthIdx: index("idx_collection_daily_calendar_username_year_month").using(
+    "btree",
+    sql`lower(${table.username})`,
+    table.year,
+    table.month,
+  ),
+  statusCheck: check(
+    "chk_collection_daily_calendar_status",
+    sql`${table.status} IN ('WORKING', 'HOLIDAY')`,
+  ),
+  leaveTypeCheck: check(
+    "chk_collection_daily_calendar_leave_type",
+    sql`${table.leaveType} IS NULL OR ${table.leaveType} IN ('AL', 'MC', 'EL', 'UL', 'RL')`,
+  ),
 }));

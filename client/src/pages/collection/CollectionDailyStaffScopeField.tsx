@@ -3,9 +3,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { CollectionDailyStaffScopeFieldProps } from "@/pages/collection/collection-daily-filters-card-shared";
 
-const CollectionDailyUserFilterControl = lazy(() =>
-  import("@/pages/collection/CollectionDailyManagerControls").then((module) => ({
-    default: module.CollectionDailyUserFilterControl,
+const NicknameSelector = lazy(() =>
+  import("@/pages/collection/NicknameSelector").then((module) => ({
+    default: module.NicknameSelector,
   })),
 );
 
@@ -48,7 +48,7 @@ export function CollectionDailyStaffScopeField({
               />
             )}
           >
-            <CollectionDailyUserFilterControl
+            <NicknameSelector
               triggerId={fieldId}
               triggerLabelId={fieldLabelId}
               userPopoverOpen={userPopoverOpen}

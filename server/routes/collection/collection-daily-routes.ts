@@ -30,6 +30,16 @@ export function registerCollectionDailyRoutes(context: CollectionRouteContext) {
       collectionService.upsertDailyCalendar(req.user, req.body)),
   );
 
+  app.delete(
+    "/api/collection/daily/calendar",
+    ...adminSummaryAccess,
+    jsonRoute("Failed to delete collection daily calendar status.", (req) =>
+      collectionService.deleteDailyCalendar(req.user, {
+        ...(req.query as Record<string, unknown>),
+        ...(req.body && typeof req.body === "object" ? req.body as Record<string, unknown> : {}),
+      })),
+  );
+
   app.get(
     "/api/collection/daily/overview",
     ...reportAccess,

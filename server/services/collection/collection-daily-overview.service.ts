@@ -51,17 +51,19 @@ export class CollectionDailyOverviewService {
     const monthEnd = `${year}-${String(month).padStart(2, "0")}-${String(daysInMonth).padStart(2, "0")}`;
     const currentNicknameLower = normalizeCollectionText(currentNickname).toLowerCase();
     const currentUsernameLower = normalizeCollectionText(user.username).toLowerCase();
-    const [calendarRows, summariesByUsername] = await Promise.all([
-      this.storage.listCollectionDailyCalendar({ year, month }),
-      buildDailySummaryMapsByUsername(this.storage, {
-        from: monthStart,
-        to: monthEnd,
-        usernames: selectedUsers.map((item) => item.username),
-      }),
-    ]);
+    const summariesByUsername = await buildDailySummaryMapsByUsername(this.storage, {
+      from: monthStart,
+      to: monthEnd,
+      usernames: selectedUsers.map((item) => item.username),
+    });
 
     const bundles: DailyOverviewBundle[] = await Promise.all(
       selectedUsers.map(async (selectedUser) => {
+        const calendarRows = await this.storage.listCollectionDailyCalendar({
+          username: selectedUser.username,
+          year,
+          month,
+        });
         const fallbackUsernames =
           currentNicknameLower &&
           currentUsernameLower &&

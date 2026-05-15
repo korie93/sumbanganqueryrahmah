@@ -29,6 +29,10 @@ import type {
   UpdateCollectionStaffNicknameInput,
 } from "./storage-postgres-collection-types";
 import type { CollectionAmountMyrNumber } from "../shared/collection-amount-types";
+import type {
+  CollectionDailyCalendarStatus,
+  CollectionDailyLeaveType,
+} from "../shared/collection-daily-status";
 
 export interface CollectionStorageContract {
   createCollectionRecord(data: CreateCollectionRecordInput): Promise<CollectionRecord>;
@@ -110,20 +114,31 @@ export interface CollectionStorageContract {
     actor: string;
   }): Promise<CollectionDailyTarget>;
   listCollectionDailyCalendar(params: {
+    username: string;
     year: number;
     month: number;
   }): Promise<CollectionDailyCalendarDay[]>;
   upsertCollectionDailyCalendarDays(params: {
+    username: string;
     year: number;
     month: number;
     actor: string;
     days: Array<{
       day: number;
+      status?: CollectionDailyCalendarStatus | undefined;
+      leaveType?: CollectionDailyLeaveType | null | undefined;
+      note?: string | null | undefined;
       isWorkingDay: boolean;
       isHoliday: boolean;
       holidayName?: string | null;
     }>;
   }): Promise<CollectionDailyCalendarDay[]>;
+  deleteCollectionDailyCalendarDay(params: {
+    username: string;
+    year: number;
+    month: number;
+    day: number;
+  }): Promise<boolean>;
   listCollectionDailyPaidCustomers(params: {
     username: string;
     date: string;

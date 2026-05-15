@@ -1,5 +1,5 @@
 import { Suspense, lazy } from "react";
-import { CollectionDailyCalendarCard } from "@/pages/collection/CollectionDailyCalendarCard";
+import { CalendarDailyView } from "@/pages/collection/CalendarDailyView";
 import { CollectionDailyFiltersCard } from "@/pages/collection/CollectionDailyFiltersCard";
 import { CollectionDailySummaryCard } from "@/pages/collection/CollectionDailySummaryCard";
 import { useCollectionDailyPageModel } from "@/pages/collection/useCollectionDailyPageModel";
@@ -29,7 +29,7 @@ export default function CollectionDailyPage({ role }: CollectionDailyPageProps) 
 
       {model.overview ? <CollectionDailySummaryCard overview={model.overview} /> : null}
 
-      <CollectionDailyCalendarCard {...model.calendarCardProps} />
+      <CalendarDailyView {...model.calendarCardProps} />
 
       {model.dayDetailsDialogProps.open ? (
         <Suspense fallback={null}>

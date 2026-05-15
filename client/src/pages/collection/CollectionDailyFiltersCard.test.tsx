@@ -34,6 +34,7 @@ test("CollectionDailyFiltersCard renders compact desktop filter sections", () =>
       monthlyTargetInput: "10000.00",
       onMonthlyTargetInputChange: () => undefined,
       canEditTarget: true,
+      canEditCalendar: true,
       savingTarget: false,
       onSaveTarget: () => undefined,
       savingCalendar: false,

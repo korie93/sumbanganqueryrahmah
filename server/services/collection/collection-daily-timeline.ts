@@ -33,7 +33,7 @@ export function aggregateCollectionDailyTimelines(
   let noCollectionDays = 0;
   let neutralDays = 0;
 
-  const days = Array.from({ length: daysInMonth }, (_, index) => {
+  const days: CollectionDailyTimelineDay[] = Array.from({ length: daysInMonth }, (_, index) => {
     const dayEntries = timelines
       .map((timeline) => timeline.days[index])
       .filter((entry): entry is CollectionDailyTimelineDay => Boolean(entry));
@@ -44,10 +44,30 @@ export function aggregateCollectionDailyTimelines(
     const carryOut = roundMoney(dayEntries.reduce((sum, entry) => sum + entry.carryOut, 0));
     const customerCount = dayEntries.reduce((sum, entry) => sum + entry.customerCount, 0);
     const status = getCollectionDailyStatus({
-      isWorkingDay: sample?.isWorkingDay ?? false,
+      isWorkingDay: dayEntries.some((entry) => entry.isWorkingDay),
       amount,
       target,
     });
+    const allHoliday = dayEntries.length > 0 && dayEntries.every((entry) => entry.isHoliday);
+    const leaveTypes = Array.from(
+      new Set(
+        dayEntries
+          .map((entry) => entry.leaveType)
+          .filter((entry): entry is NonNullable<CollectionDailyTimelineDay["leaveType"]> =>
+            Boolean(entry),
+          ),
+      ),
+    );
+    const notes = Array.from(
+      new Set(
+        dayEntries
+          .map((entry) => entry.note)
+          .filter((entry): entry is string => Boolean(entry)),
+      ),
+    );
+    const calendarStatus: CollectionDailyTimelineDay["calendarStatus"] = allHoliday
+      ? "HOLIDAY"
+      : "WORKING";
 
     if (status === "green") completedDays += 1;
     else if (status === "yellow") incompleteDays += 1;
@@ -63,9 +83,16 @@ export function aggregateCollectionDailyTimelines(
       target,
       carryIn,
       carryOut,
-      isWorkingDay: sample?.isWorkingDay ?? false,
-      isHoliday: sample?.isHoliday ?? false,
-      holidayName: sample?.holidayName ?? null,
+      calendarStatus,
+      isWorkingDay: dayEntries.some((entry) => entry.isWorkingDay),
+      isHoliday: allHoliday,
+      holidayName: allHoliday
+        ? leaveTypes.join(", ") || notes.join(", ") || sample?.holidayName || null
+        : dayEntries.some((entry) => entry.isHoliday)
+          ? "Mixed working / leave"
+          : null,
+      leaveType: leaveTypes.length === 1 ? leaveTypes[0] ?? null : null,
+      note: notes.length === 1 ? notes[0] ?? null : null,
       customerCount,
       status,
     };
@@ -213,9 +240,12 @@ export function computeCollectionDailyTimeline({
       target,
       carryIn,
       carryOut,
+      calendarStatus: override?.status || (isWorkingDay ? "WORKING" : "HOLIDAY"),
       isWorkingDay,
       isHoliday: Boolean(override?.isHoliday),
       holidayName: override?.holidayName || null,
+      leaveType: override?.leaveType || null,
+      note: override?.note || null,
       customerCount: Number(customerCountByDate.get(date) || 0),
       status,
     });
