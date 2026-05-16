@@ -56,6 +56,112 @@
   background: hsl(215 16% 47%);
 }
 
+.collection-day-status-notice {
+  display: grid;
+  gap: 0.75rem;
+  border-radius: 1rem;
+  border: 1px solid hsl(var(--border) / 0.62);
+  padding: 0.85rem;
+}
+
+.collection-day-status-notice--holiday {
+  border-color: hsl(38 92% 50% / 0.36);
+  background:
+    linear-gradient(135deg, hsl(38 92% 50% / 0.12), transparent 48%),
+    hsl(var(--background) / 0.92);
+}
+
+.collection-day-status-notice--working {
+  border-color: hsl(160 84% 39% / 0.28);
+  background:
+    linear-gradient(135deg, hsl(160 84% 39% / 0.1), transparent 48%),
+    hsl(var(--background) / 0.92);
+}
+
+.collection-day-status-notice-header {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  gap: 0.7rem;
+}
+
+.collection-day-status-notice-icon {
+  display: inline-flex;
+  height: 2rem;
+  width: 2rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: hsl(var(--background) / 0.84);
+  color: hsl(var(--primary));
+  box-shadow: inset 0 0 0 1px hsl(var(--border) / 0.54);
+}
+
+.collection-day-status-notice-eyebrow,
+.collection-day-status-notice-scope,
+.collection-day-status-notice-field span {
+  color: hsl(var(--muted-foreground));
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.collection-day-status-notice-title {
+  margin-top: 0.12rem;
+  color: hsl(var(--foreground));
+  font-size: 0.98rem;
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+.collection-day-status-notice-scope {
+  margin-top: 0.22rem;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.collection-day-status-notice-grid {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.collection-day-status-notice-field {
+  min-width: 0;
+  border-radius: 0.85rem;
+  border: 1px solid hsl(var(--border) / 0.5);
+  background: hsl(var(--background) / 0.72);
+  padding: 0.65rem 0.7rem;
+}
+
+.collection-day-status-notice-field strong {
+  display: block;
+  margin-top: 0.18rem;
+  overflow-wrap: anywhere;
+  color: hsl(var(--foreground));
+  font-size: 0.82rem;
+  line-height: 1.35;
+}
+
+.collection-day-status-remark {
+  display: grid;
+  gap: 0.35rem;
+  border-radius: 0.85rem;
+  border: 1px solid hsl(var(--border) / 0.5);
+  background: hsl(var(--background) / 0.8);
+  padding: 0.75rem;
+}
+
+.collection-day-status-remark p {
+  overflow-wrap: anywhere;
+  color: hsl(var(--foreground));
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
 .collection-day-record-card {
   border: 1px solid hsl(var(--border) / 0.62);
   background:
@@ -197,6 +303,12 @@
 
   .collection-day-receipt-button:hover .collection-day-receipt-icon {
     background: hsl(var(--primary) / 0.16);
+  }
+}
+
+@media (min-width: 640px) {
+  .collection-day-status-notice-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 

@@ -3,6 +3,7 @@ import { CollectionReportFreshnessBadge } from "@/components/collection-report/C
 import { Badge } from "@/components/ui/badge";
 import type { CollectionDailyDayDetailsResponse, CollectionDailyOverviewDay } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { CollectionDailyDayStatusNotice } from "@/pages/collection/CollectionDailyDayStatusNotice";
 import { statusLabel, statusTextClass } from "@/pages/collection/CollectionDailyShared";
 import {
   CollectionDayMetric,
@@ -40,11 +41,6 @@ export function CollectionDailyDayDetailsSummary({
             <Badge variant="secondary" className="rounded-full px-3 py-1 text-[11px]">
               {customerCount} customers
             </Badge>
-            {selectedOverviewDay?.isHoliday && selectedOverviewDay.holidayName ? (
-              <Badge variant="outline" className="max-w-full rounded-full px-3 py-1 text-[11px]">
-                <span className="truncate">Holiday: {selectedOverviewDay.holidayName}</span>
-              </Badge>
-            ) : null}
           </div>
           <p className="text-xs leading-relaxed text-muted-foreground">
             {dayDetails.freshness?.message || "Day details are using the latest available rollups."}
@@ -52,6 +48,8 @@ export function CollectionDailyDayDetailsSummary({
         </div>
         <CollectionReportFreshnessBadge freshness={dayDetails.freshness} />
       </div>
+
+      <CollectionDailyDayStatusNotice day={selectedOverviewDay} dayDetails={dayDetails} />
 
       <div className="space-y-2">
         <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
