@@ -1,8 +1,8 @@
-import { Suspense, lazy, useEffect, useMemo, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react";
 import { OperationalSectionCard } from "@/components/layout/OperationalPage";
 import { useIsMobile } from "@/hooks/use-mobile";
 import type { CollectionDailyOverviewResponse } from "@/lib/api";
-import { CollectionDailyCalendarEditPanel } from "@/pages/collection/CollectionDailyCalendarEditPanel";
+import { CollectionDailyCalendarEditDialog } from "@/pages/collection/CollectionDailyCalendarEditDialog";
 import { CollectionDailyCalendarLegend } from "@/pages/collection/CollectionDailyCalendarLegend";
 import { CollectionDailyCalendarState } from "@/pages/collection/CollectionDailyCalendarState";
 import { CollectionDailyMobileDayList } from "@/pages/collection/CollectionDailyMobileDayList";
@@ -50,6 +50,7 @@ export function CollectionDailyCalendarCard({
     return overview.days.find((day) => day.day === editingDayNumber) || null;
   }, [editingDayNumber, overview?.days]);
   const editingEditableDay = editingDay ? editableCalendarByDay.get(editingDay.day) || null : null;
+  const editDialogOpen = canManage && editingDay !== null && editingEditableDay !== null;
 
   useEffect(() => {
     if (!canManage || !overview?.days.length) {
@@ -62,10 +63,16 @@ export function CollectionDailyCalendarCard({
     const stillAvailable =
       editingDayNumber != null && overview.days.some((day) => day.day === editingDayNumber);
 
-    if (!stillAvailable) {
-      setEditingDayNumber(overview.days[0]?.day ?? null);
+    if (editingDayNumber != null && !stillAvailable) {
+      setEditingDayNumber(null);
     }
   }, [canManage, editingDayNumber, overview?.days]);
+
+  const handleEditDialogOpenChange = useCallback((open: boolean) => {
+    if (!open) {
+      setEditingDayNumber(null);
+    }
+  }, []);
 
   return (
     <div className="collection-daily-calendar" data-testid="collection-daily-calendar">
@@ -87,6 +94,16 @@ export function CollectionDailyCalendarCard({
           <CollectionDailyCalendarState loading={false} message={emptyOverviewMessage} />
         ) : (
           <div className="space-y-3">
+            {canManage ? (
+              <div className="collection-daily-edit-helper" aria-live="polite" aria-atomic="true">
+                <span className="collection-daily-edit-helper-dot" aria-hidden="true" />
+                <span>
+                  Klik <strong>Edit status</strong> pada mana-mana tarikh untuk buka popup editor.
+                  Perubahan hanya update tarikh dan nickname yang dipilih.
+                </span>
+              </div>
+            ) : null}
+
             {isMobile ? (
               <CollectionDailyMobileDayList
                 days={overview.days}
@@ -98,59 +115,44 @@ export function CollectionDailyCalendarCard({
                 onEditDay={setEditingDayNumber}
               />
             ) : (
-              <div className={canManage ? "collection-daily-calendar-workspace" : "space-y-3"}>
-                <div className="min-w-0 space-y-3">
-                  <div className="grid grid-cols-7 gap-2 text-center text-xs font-medium text-muted-foreground">
-                    <div>Sun</div>
-                    <div>Mon</div>
-                    <div>Tue</div>
-                    <div>Wed</div>
-                    <div>Thu</div>
-                    <div>Fri</div>
-                    <div>Sat</div>
-                  </div>
-                  <Suspense
-                    fallback={<div className="grid grid-cols-7 gap-2" data-testid="collection-daily-calendar-grid" />}
-                  >
-                    <CollectionDailyDesktopCalendarGrid
-                      days={overview.days}
-                      firstWeekday={firstWeekday}
-                      selectedDate={selectedDate}
-                      editingDayNumber={editingDayNumber}
-                      canManage={canManage}
-                      editableCalendarByDay={editableCalendarByDay}
-                      dirtyCalendarDayNumbers={dirtyCalendarDayNumbers}
-                      onEditDay={setEditingDayNumber}
-                      onSelectDate={onSelectDate}
-                    />
-                  </Suspense>
+              <div className="min-w-0 space-y-3">
+                <div className="grid grid-cols-7 gap-2 text-center text-xs font-medium text-muted-foreground">
+                  <div>Sun</div>
+                  <div>Mon</div>
+                  <div>Tue</div>
+                  <div>Wed</div>
+                  <div>Thu</div>
+                  <div>Fri</div>
+                  <div>Sat</div>
                 </div>
-                <CollectionDailyCalendarEditPanel
-                  day={editingDay}
-                  editableDay={editingEditableDay}
-                  canManage={canManage}
-                  isDirty={
-                    editingEditableDay ? dirtyCalendarDayNumbers.has(editingEditableDay.day) : false
-                  }
-                  savingCalendar={savingCalendar}
-                  onSaveCalendar={onSaveCalendar}
-                  onChange={(patch) => {
-                    if (editingEditableDay) onUpdateEditableDay(editingEditableDay.day, patch);
-                  }}
-                  onViewDetails={onSelectDate}
-                />
+                <Suspense
+                  fallback={<div className="grid grid-cols-7 gap-2" data-testid="collection-daily-calendar-grid" />}
+                >
+                  <CollectionDailyDesktopCalendarGrid
+                    days={overview.days}
+                    firstWeekday={firstWeekday}
+                    selectedDate={selectedDate}
+                    editingDayNumber={editingDayNumber}
+                    canManage={canManage}
+                    editableCalendarByDay={editableCalendarByDay}
+                    dirtyCalendarDayNumbers={dirtyCalendarDayNumbers}
+                    onEditDay={setEditingDayNumber}
+                    onSelectDate={onSelectDate}
+                  />
+                </Suspense>
               </div>
             )}
 
-            {canManage && isMobile ? (
-              <CollectionDailyCalendarEditPanel
+            {canManage ? (
+              <CollectionDailyCalendarEditDialog
+                open={editDialogOpen}
                 day={editingDay}
                 editableDay={editingEditableDay}
-                canManage={canManage}
                 isDirty={
                   editingEditableDay ? dirtyCalendarDayNumbers.has(editingEditableDay.day) : false
                 }
                 savingCalendar={savingCalendar}
+                onOpenChange={handleEditDialogOpenChange}
                 onSaveCalendar={onSaveCalendar}
                 onChange={(patch) => {
                   if (editingEditableDay) onUpdateEditableDay(editingEditableDay.day, patch);

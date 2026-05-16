@@ -20,6 +20,7 @@ type CollectionDailyCalendarEditPanelProps = {
   onSaveCalendar: () => void;
   onChange: (patch: Partial<EditableCalendarDay>) => void;
   onViewDetails: (date: string) => void;
+  variant?: "panel" | "dialog";
 };
 
 function getCalendarStatusText(day: CollectionDailyOverviewDay) {
@@ -43,6 +44,7 @@ export function CollectionDailyCalendarEditPanel({
   onSaveCalendar,
   onChange,
   onViewDetails,
+  variant = "panel",
 }: CollectionDailyCalendarEditPanelProps) {
   if (!canManage) {
     return null;
@@ -51,7 +53,7 @@ export function CollectionDailyCalendarEditPanel({
   if (!day || !editableDay) {
     return (
       <aside
-        className="collection-daily-edit-panel collection-daily-state-card"
+        className={`collection-daily-edit-panel collection-daily-state-card collection-daily-edit-panel-${variant}`}
         aria-label="Daily calendar status editor"
       >
         <div className="space-y-2">
@@ -77,7 +79,7 @@ export function CollectionDailyCalendarEditPanel({
 
   return (
     <aside
-      className="collection-daily-edit-panel collection-daily-state-card"
+      className={`collection-daily-edit-panel collection-daily-state-card collection-daily-edit-panel-${variant}`}
       aria-label={`Edit daily calendar status for ${formatDateDDMMYYYY(day.date)}`}
       data-testid="collection-daily-edit-panel"
     >
