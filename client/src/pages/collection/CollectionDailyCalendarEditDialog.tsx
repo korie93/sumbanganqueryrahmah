@@ -51,7 +51,7 @@ export function CollectionDailyCalendarEditDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="px-4 pb-4 sm:px-5 sm:pb-5">
+        <div className="collection-daily-edit-dialog-body px-4 pb-4 sm:px-5 sm:pb-5">
           <CollectionDailyCalendarEditPanel
             day={day}
             editableDay={editableDay}

@@ -116,8 +116,17 @@
 }
 
 .collection-daily-edit-dialog {
+  grid-template-rows: auto minmax(0, 1fr);
+  max-height: calc(var(--viewport-min-height-value) - 1rem);
   overflow: hidden;
   border-radius: 22px;
+}
+
+.collection-daily-edit-dialog-body {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
 }
 
 .collection-daily-edit-dialog .collection-daily-save-state {
