@@ -2,7 +2,7 @@ export const COLLECTION_DAILY_CALENDAR_STATUSES = ["WORKING", "HOLIDAY"] as cons
 
 export type CollectionDailyCalendarStatus = typeof COLLECTION_DAILY_CALENDAR_STATUSES[number];
 
-export const COLLECTION_DAILY_LEAVE_TYPES = ["AL", "MC", "EL", "UL", "RL"] as const;
+export const COLLECTION_DAILY_LEAVE_TYPES = ["AL", "MC", "EL", "UL", "RL", "OFF"] as const;
 
 export type CollectionDailyLeaveType = typeof COLLECTION_DAILY_LEAVE_TYPES[number];
 
@@ -12,6 +12,7 @@ export const COLLECTION_DAILY_LEAVE_TYPE_LABELS: Record<CollectionDailyLeaveType
   EL: "Emergency Leave",
   UL: "Unpaid Leave",
   RL: "Replacement Leave",
+  OFF: "Company Closed",
 };
 
 export function isCollectionDailyCalendarStatus(
@@ -21,5 +22,12 @@ export function isCollectionDailyCalendarStatus(
 }
 
 export function isCollectionDailyLeaveType(value: unknown): value is CollectionDailyLeaveType {
-  return value === "AL" || value === "MC" || value === "EL" || value === "UL" || value === "RL";
+  return (
+    value === "AL"
+    || value === "MC"
+    || value === "EL"
+    || value === "UL"
+    || value === "RL"
+    || value === "OFF"
+  );
 }

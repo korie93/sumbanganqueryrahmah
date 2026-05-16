@@ -6,6 +6,8 @@ import {
 import {
   isCollectionDailyCalendarStatus,
   isCollectionDailyLeaveType,
+  type CollectionDailyCalendarStatus,
+  type CollectionDailyLeaveType,
 } from "@shared/collection-daily-status";
 import type {
   CollectionDailyDayDetailsResponse,
@@ -342,8 +344,8 @@ export async function setCollectionDailyCalendar(payload: {
   month: number;
   days: Array<{
     day: number;
-    status?: "WORKING" | "HOLIDAY";
-    leaveType?: "AL" | "MC" | "EL" | "UL" | "RL" | null;
+    status?: CollectionDailyCalendarStatus;
+    leaveType?: CollectionDailyLeaveType | null;
     note?: string | null;
     isWorkingDay: boolean;
     isHoliday: boolean;

@@ -395,6 +395,6 @@ export const collectionDailyCalendar = pgTable("collection_daily_calendar", {
   ),
   leaveTypeCheck: check(
     "chk_collection_daily_calendar_leave_type",
-    sql`${table.leaveType} IS NULL OR ${table.leaveType} IN ('AL', 'MC', 'EL', 'UL', 'RL')`,
+    sql`${table.leaveType} IS NULL OR ${table.leaveType} IN ('AL', 'MC', 'EL', 'UL', 'RL', 'OFF')`,
   ),
 }));

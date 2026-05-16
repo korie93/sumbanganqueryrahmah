@@ -28,11 +28,11 @@ const overviewDays: CollectionDailyOverviewDay[] = [
     amount: 0,
     target: 1000,
     calendarStatus: "HOLIDAY",
-    leaveType: "AL",
-    note: "Annual leave",
+    leaveType: "OFF",
+    note: "Company closed",
     isWorkingDay: false,
     isHoliday: true,
-    holidayName: "AL",
+    holidayName: "OFF",
     customerCount: 0,
     status: "neutral",
   },
@@ -56,11 +56,11 @@ const editableDays = new Map<number, EditableCalendarDay>([
     {
       day: 2,
       status: "HOLIDAY",
-      leaveType: "AL",
-      note: "Annual leave",
+      leaveType: "OFF",
+      note: "Company closed",
       isWorkingDay: false,
       isHoliday: true,
-      holidayName: "AL",
+      holidayName: "OFF",
     },
   ],
 ]);
@@ -98,7 +98,7 @@ test("CollectionDailyCalendarEditPanel renders the selected day status form and 
 
   assert.match(markup, /Selected Day/);
   assert.match(markup, /02\/05\/2026/);
-  assert.match(markup, /AL - Annual Leave/);
+  assert.match(markup, /OFF - Company Closed/);
   assert.match(markup, /Status untuk nickname dipilih/);
   assert.match(markup, /Save Calendar/);
 });

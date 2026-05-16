@@ -198,6 +198,52 @@ test("upsertDailyCalendar stores holiday leave type per selected nickname only",
   assert.equal(captured[1]?.days[0]?.note, "Medical leave");
 });
 
+test("upsertDailyCalendar accepts OFF as a per-nickname company closed status", async () => {
+  let capturedDay: {
+    username: string;
+    status?: string | undefined;
+    leaveType?: string | null | undefined;
+    note?: string | null | undefined;
+    holidayName?: string | null | undefined;
+  } | null = null;
+
+  const operations = createOperations({
+    async getCollectionStaffNicknames() {
+      return [buildNicknameWithName("Ali"), buildNicknameWithName("Abu")];
+    },
+    async upsertCollectionDailyCalendarDays(params) {
+      capturedDay = {
+        username: params.username,
+        status: params.days[0]?.status,
+        leaveType: params.days[0]?.leaveType,
+        note: params.days[0]?.note,
+        holidayName: params.days[0]?.holidayName,
+      };
+      return [];
+    },
+  });
+
+  await operations.upsertDailyCalendar(adminUser, {
+    username: "Ali",
+    year: "2026",
+    month: "5",
+    days: [{
+      day: "16",
+      status: "HOLIDAY",
+      leaveType: "OFF",
+      note: "Company closed",
+    }],
+  });
+
+  assert.deepEqual(capturedDay, {
+    username: "ali",
+    status: "HOLIDAY",
+    leaveType: "OFF",
+    note: "Company closed",
+    holidayName: "OFF",
+  });
+});
+
 test("upsertDailyCalendar requires superuser and holiday leave type", async () => {
   let called = false;
   const operations = createOperations({

@@ -14,7 +14,7 @@ SET
     ELSE 'WORKING'
   END,
   leave_type = CASE
-    WHEN upper(trim(COALESCE(leave_type, ''))) IN ('AL', 'MC', 'EL', 'UL', 'RL') THEN upper(trim(leave_type))
+    WHEN upper(trim(COALESCE(leave_type, ''))) IN ('AL', 'MC', 'EL', 'UL', 'RL', 'OFF') THEN upper(trim(leave_type))
     ELSE NULL
   END,
   note = NULLIF(trim(COALESCE(note, holiday_name, '')), ''),
@@ -122,13 +122,25 @@ BEGIN
       CHECK (status IN ('WORKING', 'HOLIDAY'));
   END IF;
 
+  IF EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'chk_collection_daily_calendar_leave_type'
+      AND conrelid = 'public.collection_daily_calendar'::regclass
+      AND pg_get_constraintdef(oid) NOT LIKE '%OFF%'
+  ) THEN
+    ALTER TABLE public.collection_daily_calendar
+      DROP CONSTRAINT chk_collection_daily_calendar_leave_type;
+  END IF;
+
   IF NOT EXISTS (
     SELECT 1
     FROM pg_constraint
     WHERE conname = 'chk_collection_daily_calendar_leave_type'
+      AND conrelid = 'public.collection_daily_calendar'::regclass
   ) THEN
     ALTER TABLE public.collection_daily_calendar
       ADD CONSTRAINT chk_collection_daily_calendar_leave_type
-      CHECK (leave_type IS NULL OR leave_type IN ('AL', 'MC', 'EL', 'UL', 'RL'));
+      CHECK (leave_type IS NULL OR leave_type IN ('AL', 'MC', 'EL', 'UL', 'RL', 'OFF'));
   END IF;
 END $$;
