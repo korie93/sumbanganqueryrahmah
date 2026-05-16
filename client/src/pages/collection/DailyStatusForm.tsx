@@ -64,7 +64,7 @@ export function DailyStatusForm({
   return (
     <fieldset
       className={cn(
-        "space-y-2 rounded-xl border border-border/60 bg-background/80 p-3",
+        "collection-daily-status-fieldset space-y-3 rounded-xl border border-border/60 bg-background/80 p-3",
         compact ? "text-xs" : "text-sm",
       )}
       disabled={disabled}
@@ -124,12 +124,12 @@ export function DailyStatusForm({
             </Label>
             <Input
               id={noteId}
-      value={day.note ?? ""}
-      onChange={(event) =>
-        onChange({
-          note: event.target.value,
-        })
-      }
+              value={day.note ?? ""}
+              onChange={(event) =>
+                onChange({
+                  note: event.target.value,
+                })
+              }
               placeholder="Contoh: Annual leave"
               className="h-9 rounded-lg text-xs"
               maxLength={240}

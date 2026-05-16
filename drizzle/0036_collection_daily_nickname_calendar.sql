@@ -34,10 +34,25 @@ SET
   leave_type = CASE WHEN status = 'HOLIDAY' THEN leave_type ELSE NULL END,
   note = CASE WHEN status = 'HOLIDAY' THEN note ELSE NULL END;
 
+DROP INDEX IF EXISTS public.idx_collection_daily_calendar_unique;
+
 -- Preserve legacy global calendar rows for the new per-nickname model.
 -- Old rows used username='' and applied to everyone. The new UI/API reads by
 -- nickname, so copy those rows to each existing staff nickname once, without
 -- overwriting nickname-specific rows that may already exist.
+WITH legacy_calendar AS (
+  SELECT DISTINCT ON (calendar_date)
+    *
+  FROM public.collection_daily_calendar
+  WHERE lower(trim(COALESCE(username, ''))) = ''
+    AND calendar_date IS NOT NULL
+  ORDER BY calendar_date, updated_at DESC, created_at DESC, id DESC
+),
+staff_nicknames AS (
+  SELECT DISTINCT lower(trim(nickname)) AS username
+  FROM public.collection_staff_nicknames
+  WHERE lower(trim(COALESCE(nickname, ''))) <> ''
+)
 INSERT INTO public.collection_daily_calendar (
   id,
   username,
@@ -58,7 +73,7 @@ INSERT INTO public.collection_daily_calendar (
 )
 SELECT
   gen_random_uuid(),
-  lower(trim(nickname.nickname)),
+  nickname.username,
   calendar.calendar_date,
   calendar.year,
   calendar.month,
@@ -73,14 +88,12 @@ SELECT
   calendar.updated_by,
   calendar.created_at,
   calendar.updated_at
-FROM public.collection_daily_calendar calendar
-CROSS JOIN public.collection_staff_nicknames nickname
-WHERE lower(trim(COALESCE(calendar.username, ''))) = ''
-  AND lower(trim(COALESCE(nickname.nickname, ''))) <> ''
-  AND NOT EXISTS (
+FROM legacy_calendar calendar
+CROSS JOIN staff_nicknames nickname
+WHERE NOT EXISTS (
     SELECT 1
     FROM public.collection_daily_calendar existing
-    WHERE lower(existing.username) = lower(trim(nickname.nickname))
+    WHERE lower(existing.username) = nickname.username
       AND existing.calendar_date = calendar.calendar_date
   );
 
@@ -90,8 +103,6 @@ ALTER TABLE public.collection_daily_calendar
   ALTER COLUMN calendar_date SET NOT NULL,
   ALTER COLUMN status SET DEFAULT 'WORKING',
   ALTER COLUMN status SET NOT NULL;
-
-DROP INDEX IF EXISTS public.idx_collection_daily_calendar_unique;
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_collection_daily_calendar_username_date_unique
   ON public.collection_daily_calendar (lower(username), calendar_date);

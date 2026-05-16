@@ -16,6 +16,13 @@
   overflow: hidden;
 }
 
+.collection-daily-calendar-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 340px);
+  gap: 1rem;
+  align-items: start;
+}
+
 .collection-daily-progress-panel,
 .collection-daily-supporting-panel,
 .collection-daily-state-card,
@@ -24,6 +31,55 @@
   background:
     linear-gradient(180deg, hsl(var(--background) / 0.99), hsl(var(--card) / 0.96));
   box-shadow: var(--collection-daily-shadow);
+}
+
+.collection-daily-edit-panel {
+  position: sticky;
+  top: 1rem;
+  border-radius: 22px;
+  padding: 1rem;
+}
+
+.collection-daily-edit-panel-icon {
+  display: inline-flex;
+  height: 2rem;
+  width: 2rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: hsl(var(--primary) / 0.12);
+  color: hsl(var(--primary));
+}
+
+.collection-daily-edit-panel-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+.collection-daily-edit-panel-summary div {
+  min-width: 0;
+  border-radius: 14px;
+  border: 1px solid hsl(var(--border) / 0.58);
+  background: hsl(var(--background) / 0.72);
+  padding: 0.65rem 0.7rem;
+}
+
+.collection-daily-edit-panel-summary span,
+.collection-daily-edit-panel-summary strong {
+  display: block;
+}
+
+.collection-daily-edit-panel-summary span {
+  color: hsl(var(--muted-foreground));
+  font-size: var(--font-size-xs);
+}
+
+.collection-daily-edit-panel-summary strong {
+  margin-top: 0.2rem;
+  overflow-wrap: anywhere;
+  color: hsl(var(--foreground));
+  font-size: var(--font-size-sm);
 }
 
 .collection-daily-progress-panel {
@@ -99,6 +155,13 @@
     border-color 160ms ease;
 }
 
+.collection-daily-day-card-editing {
+  border-color: hsl(var(--primary) / 0.7);
+  box-shadow:
+    0 0 0 1px hsl(var(--primary) / 0.35),
+    var(--collection-daily-shadow);
+}
+
 .collection-daily-day-button {
   min-height: 100%;
 }
@@ -123,17 +186,22 @@
 }
 
 .collection-daily-desktop-day {
-  min-height: 9.75rem;
+  min-height: 11.5rem;
 }
 
 .collection-daily-desktop-day .collection-daily-day-button {
   display: flex;
-  min-height: 7.1rem;
+  min-height: 8.65rem;
   flex-direction: column;
 }
 
 .collection-daily-day-edit {
   color: hsl(var(--muted-foreground));
+}
+
+.collection-daily-status-fieldset label:focus-within {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
 }
 
 .dark .collection-daily-page {
@@ -159,6 +227,26 @@
 
   .collection-daily-progress-facts span {
     padding: 0.55rem 0.7rem;
+  }
+
+  .collection-daily-edit-panel {
+    position: static;
+    border-radius: 20px;
+    padding: 0.9rem;
+  }
+
+  .collection-daily-edit-panel-summary {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 1180px) {
+  .collection-daily-calendar-workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .collection-daily-edit-panel {
+    position: static;
   }
 }
 

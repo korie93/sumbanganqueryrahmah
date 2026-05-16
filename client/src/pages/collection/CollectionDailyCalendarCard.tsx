@@ -1,11 +1,12 @@
-import { Suspense, lazy } from "react";
-import { AlertTriangle, CheckCircle2, CircleSlash, Loader2 } from "lucide-react";
+import { Suspense, lazy, useEffect, useMemo, useState } from "react";
+import { AlertTriangle, CheckCircle2, CircleSlash, Edit3, Eye, Loader2 } from "lucide-react";
 import { OperationalSectionCard } from "@/components/layout/OperationalPage";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { useIsMobile } from "@/hooks/use-mobile";
 import type { CollectionDailyOverviewDay, CollectionDailyOverviewResponse } from "@/lib/api";
 import { formatDateDDMMYYYY } from "@/lib/date-format";
-import { DailyStatusForm } from "@/pages/collection/DailyStatusForm";
+import { CollectionDailyCalendarEditPanel } from "@/pages/collection/CollectionDailyCalendarEditPanel";
 import {
   statusCardClass,
   statusLabel,
@@ -51,9 +52,28 @@ export function CollectionDailyCalendarCard({
   onUpdateEditableDay,
 }: CollectionDailyCalendarCardProps) {
   const isMobile = useIsMobile();
-  const selectedDay = overview?.days.find((day) => day.date === selectedDate) || null;
-  const selectedEditableDay =
-    selectedDay ? editableCalendarByDay.get(selectedDay.day) || null : null;
+  const [editingDayNumber, setEditingDayNumber] = useState<number | null>(null);
+  const editingDay = useMemo(() => {
+    if (!overview?.days.length || editingDayNumber == null) return null;
+    return overview.days.find((day) => day.day === editingDayNumber) || null;
+  }, [editingDayNumber, overview?.days]);
+  const editingEditableDay = editingDay ? editableCalendarByDay.get(editingDay.day) || null : null;
+
+  useEffect(() => {
+    if (!canManage || !overview?.days.length) {
+      if (editingDayNumber !== null) {
+        setEditingDayNumber(null);
+      }
+      return;
+    }
+
+    const stillAvailable =
+      editingDayNumber != null && overview.days.some((day) => day.day === editingDayNumber);
+
+    if (!stillAvailable) {
+      setEditingDayNumber(overview.days[0]?.day ?? null);
+    }
+  }, [canManage, editingDayNumber, overview?.days]);
 
   return (
     <div className="collection-daily-calendar" data-testid="collection-daily-calendar">
@@ -123,21 +143,16 @@ export function CollectionDailyCalendarCard({
               <div className="space-y-3" data-testid="collection-daily-calendar-mobile-list">
                 {overview.days.map((day) => {
                   const isSelected = selectedDate === day.date;
+                  const isEditing = editingDayNumber === day.day;
 
                   return (
                     <article
                       key={day.date}
                       className={`collection-daily-mobile-day-card rounded-2xl border shadow-sm ${statusCardClass(day.status)} ${
                         isSelected ? "ring-2 ring-ring ring-offset-1" : ""
-                      }`}
+                      } ${isEditing ? "collection-daily-day-card-editing" : ""}`}
                     >
-                      <button
-                        type="button"
-                        className="collection-daily-day-button w-full rounded-[inherit] px-3 py-3.5 text-left transition-colors hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
-                        aria-label={`${formatDateDDMMYYYY(day.date)} - ${statusLabel(day.status)} - Collected ${formatAmountRM(day.amount)} - Target ${formatAmountRM(day.target)}${isSelected ? " - Selected" : ""}`}
-                        onClick={() => onSelectDate(day.date)}
-                        data-testid={`collection-daily-day-${day.day}`}
-                      >
+                      <div className="px-3 py-3.5">
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0 space-y-1">
                             <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
@@ -147,13 +162,10 @@ export function CollectionDailyCalendarCard({
                               {formatDateDDMMYYYY(day.date)}
                             </p>
                           </div>
-                          <div className="flex shrink-0 flex-col items-end gap-2">
-                            <span className="inline-flex items-center gap-1.5 rounded-full border border-border/50 bg-background/80 px-2.5 py-1 text-[11px] font-medium text-foreground">
-                              <DayStatusIcon status={day.status} />
-                              {statusLabel(day.status)}
-                            </span>
-                            <span className="text-[11px] text-muted-foreground">Tap for details</span>
-                          </div>
+                          <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-border/50 bg-background/80 px-2.5 py-1 text-[11px] font-medium text-foreground">
+                            <DayStatusIcon status={day.status} />
+                            {statusLabel(day.status)}
+                          </span>
                         </div>
 
                         <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
@@ -182,54 +194,86 @@ export function CollectionDailyCalendarCard({
                             </span>
                           ) : null}
                         </div>
-                      </button>
+                        <div className="mt-3 grid gap-2 sm:grid-cols-2" data-floating-ai-avoid="true">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="h-10 rounded-xl bg-background/80"
+                            aria-label={`View collection details for ${formatDateDDMMYYYY(day.date)}`}
+                            onClick={() => onSelectDate(day.date)}
+                            data-testid={`collection-daily-day-${day.day}`}
+                          >
+                            <Eye className="mr-2 h-4 w-4" aria-hidden="true" />
+                            View details
+                          </Button>
+                          {canManage ? (
+                            <Button
+                              type="button"
+                              variant={isEditing ? "default" : "outline"}
+                              className="h-10 rounded-xl"
+                              aria-pressed={isEditing}
+                              aria-label={`Edit calendar status for ${formatDateDDMMYYYY(day.date)}`}
+                              onClick={() => setEditingDayNumber(day.day)}
+                            >
+                              <Edit3 className="mr-2 h-4 w-4" aria-hidden="true" />
+                              Edit status
+                            </Button>
+                          ) : null}
+                        </div>
+                      </div>
                     </article>
                   );
                 })}
               </div>
             ) : (
-              <>
-                <div className="grid grid-cols-7 gap-2 text-center text-xs font-medium text-muted-foreground">
-                  <div>Sun</div>
-                  <div>Mon</div>
-                  <div>Tue</div>
-                  <div>Wed</div>
-                  <div>Thu</div>
-                  <div>Fri</div>
-                  <div>Sat</div>
+              <div className={canManage ? "collection-daily-calendar-workspace" : "space-y-3"}>
+                <div className="min-w-0 space-y-3">
+                  <div className="grid grid-cols-7 gap-2 text-center text-xs font-medium text-muted-foreground">
+                    <div>Sun</div>
+                    <div>Mon</div>
+                    <div>Tue</div>
+                    <div>Wed</div>
+                    <div>Thu</div>
+                    <div>Fri</div>
+                    <div>Sat</div>
+                  </div>
+                  <Suspense
+                    fallback={<div className="grid grid-cols-7 gap-2" data-testid="collection-daily-calendar-grid" />}
+                  >
+                    <CollectionDailyDesktopCalendarGrid
+                      days={overview.days}
+                      firstWeekday={firstWeekday}
+                      selectedDate={selectedDate}
+                      editingDayNumber={editingDayNumber}
+                      canManage={canManage}
+                      editableCalendarByDay={editableCalendarByDay}
+                      onEditDay={setEditingDayNumber}
+                      onSelectDate={onSelectDate}
+                    />
+                  </Suspense>
                 </div>
-                <Suspense
-                  fallback={<div className="grid grid-cols-7 gap-2" data-testid="collection-daily-calendar-grid" />}
-                >
-                  <CollectionDailyDesktopCalendarGrid
-                    days={overview.days}
-                    firstWeekday={firstWeekday}
-                    selectedDate={selectedDate}
-                    canManage={canManage}
-                    editableCalendarByDay={editableCalendarByDay}
-                    onSelectDate={onSelectDate}
-                    onUpdateEditableDay={onUpdateEditableDay}
-                  />
-                </Suspense>
-              </>
+                <CollectionDailyCalendarEditPanel
+                  day={editingDay}
+                  editableDay={editingEditableDay}
+                  canManage={canManage}
+                  onChange={(patch) => {
+                    if (editingEditableDay) onUpdateEditableDay(editingEditableDay.day, patch);
+                  }}
+                  onViewDetails={onSelectDate}
+                />
+              </div>
             )}
 
-            {canManage && isMobile && selectedDay && selectedEditableDay ? (
-              <div className="collection-daily-mobile-edit-panel space-y-3 rounded-2xl border border-border/60 bg-background p-4 shadow-sm" data-floating-ai-avoid="true">
-                  <div className="space-y-1">
-                    <p className="text-sm font-semibold">
-                      Edit {formatDateDDMMYYYY(selectedDay.date)}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      Collected {formatAmountRM(selectedDay.amount)} | Required {formatAmountRM(selectedDay.target)}
-                    </p>
-                  </div>
-                  <DailyStatusForm
-                    day={selectedEditableDay}
-                    label="Daily status"
-                    onChange={(patch) => onUpdateEditableDay(selectedEditableDay.day, patch)}
-                  />
-                </div>
+            {canManage && isMobile ? (
+              <CollectionDailyCalendarEditPanel
+                day={editingDay}
+                editableDay={editingEditableDay}
+                canManage={canManage}
+                onChange={(patch) => {
+                  if (editingEditableDay) onUpdateEditableDay(editingEditableDay.day, patch);
+                }}
+                onViewDetails={onSelectDate}
+              />
             ) : null}
           </div>
         )}

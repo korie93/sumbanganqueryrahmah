@@ -1,7 +1,7 @@
-import { AlertTriangle, CheckCircle2, CircleSlash } from "lucide-react";
+import { AlertTriangle, CheckCircle2, CircleSlash, Edit3 } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import type { CollectionDailyOverviewDay } from "@/lib/api";
 import { formatDateDDMMYYYY } from "@/lib/date-format";
-import { DailyStatusForm } from "@/pages/collection/DailyStatusForm";
 import {
   statusCardClass,
   statusLabel,
@@ -14,10 +14,11 @@ type CollectionDailyDesktopCalendarGridProps = {
   days: CollectionDailyOverviewDay[];
   firstWeekday: number;
   selectedDate: string | null;
+  editingDayNumber: number | null;
   canManage: boolean;
   editableCalendarByDay: Map<number, EditableCalendarDay>;
+  onEditDay: (day: number) => void;
   onSelectDate: (date: string) => void;
-  onUpdateEditableDay: (day: number, patch: Partial<EditableCalendarDay>) => void;
 };
 
 function DayStatusIcon({ status }: { status: CollectionDailyOverviewDay["status"] }) {
@@ -37,10 +38,11 @@ export function CollectionDailyDesktopCalendarGrid({
   days,
   firstWeekday,
   selectedDate,
+  editingDayNumber,
   canManage,
   editableCalendarByDay,
+  onEditDay,
   onSelectDate,
-  onUpdateEditableDay,
 }: CollectionDailyDesktopCalendarGridProps) {
   return (
     <div className="collection-daily-desktop-grid grid grid-cols-7 gap-2" data-testid="collection-daily-calendar-grid">
@@ -50,12 +52,13 @@ export function CollectionDailyDesktopCalendarGrid({
       {days.map((day) => {
         const editable = editableCalendarByDay.get(day.day);
         const isSelected = selectedDate === day.date;
+        const isEditing = editingDayNumber === day.day;
         const progressPercent = getDailyProgressPercent(day);
 
         return (
           <div
             key={day.date}
-            className={`collection-daily-desktop-day rounded-xl border text-xs shadow-sm ${isSelected ? "ring-2 ring-ring ring-offset-1" : ""} ${statusCardClass(day.status)}`}
+            className={`collection-daily-desktop-day rounded-xl border text-xs shadow-sm ${isSelected ? "ring-2 ring-ring ring-offset-1" : ""} ${isEditing ? "collection-daily-day-card-editing" : ""} ${statusCardClass(day.status)}`}
           >
             <button
               type="button"
@@ -87,13 +90,19 @@ export function CollectionDailyDesktopCalendarGrid({
               ) : null}
             </button>
             {canManage && editable ? (
-              <div className="collection-daily-day-edit border-t border-border/40 px-2 pb-2 pt-1.5">
-                <DailyStatusForm
-                  day={editable}
-                  label={`Status day ${editable.day}`}
-                  onChange={(patch) => onUpdateEditableDay(editable.day, patch)}
-                  compact
-                />
+              <div className="collection-daily-day-edit border-t border-border/40 p-2" data-floating-ai-avoid="true">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={isEditing ? "default" : "outline"}
+                  className="h-8 w-full rounded-lg text-[11px]"
+                  aria-pressed={isEditing}
+                  aria-label={`Edit calendar status for ${formatDateDDMMYYYY(day.date)}`}
+                  onClick={() => onEditDay(day.day)}
+                >
+                  <Edit3 className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
+                  Edit status
+                </Button>
               </div>
             ) : null}
           </div>
