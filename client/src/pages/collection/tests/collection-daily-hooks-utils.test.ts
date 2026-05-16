@@ -20,6 +20,7 @@ import {
   getCollectionDailyEmptyOverviewMessage,
   getCollectionDailyFirstWeekday,
   mapCollectionDailyEditableCalendarDays,
+  selectCollectionDailyDirtyCalendarDays,
   shouldLoadCollectionDailyOverview,
   updateCollectionDailyEditableCalendarDay,
 } from "@/pages/collection/useCollectionDailyData";
@@ -240,6 +241,43 @@ test("buildCollectionDailyCalendarPayloadDays converts blank holiday names to nu
       { day: 2, status: "HOLIDAY", leaveType: "AL", note: "Public Holiday", isWorkingDay: false, isHoliday: true, holidayName: "AL" },
     ],
   );
+});
+
+test("selectCollectionDailyDirtyCalendarDays returns only changed dates", () => {
+  const calendarDays = [
+    {
+      day: 1,
+      status: "WORKING" as const,
+      leaveType: null,
+      note: "",
+      isWorkingDay: true,
+      isHoliday: false,
+      holidayName: "",
+    },
+    {
+      day: 2,
+      status: "HOLIDAY" as const,
+      leaveType: "AL" as const,
+      note: "Annual leave",
+      isWorkingDay: false,
+      isHoliday: true,
+      holidayName: "AL",
+    },
+    {
+      day: 3,
+      status: "WORKING" as const,
+      leaveType: null,
+      note: "",
+      isWorkingDay: true,
+      isHoliday: false,
+      holidayName: "",
+    },
+  ];
+
+  assert.deepEqual(selectCollectionDailyDirtyCalendarDays(calendarDays, new Set([2])), [
+    calendarDays[1],
+  ]);
+  assert.deepEqual(selectCollectionDailyDirtyCalendarDays(calendarDays, new Set()), []);
 });
 
 test("updateCollectionDailyEditableCalendarDay updates only the targeted day", () => {

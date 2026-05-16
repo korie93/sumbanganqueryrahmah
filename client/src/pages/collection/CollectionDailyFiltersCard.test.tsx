@@ -40,6 +40,7 @@ test("CollectionDailyFiltersCard renders compact desktop filter sections", () =>
       savingCalendar: false,
       onSaveCalendar: () => undefined,
       calendarDays: [],
+      dirtyCalendarDaysCount: 0,
     }),
   );
 

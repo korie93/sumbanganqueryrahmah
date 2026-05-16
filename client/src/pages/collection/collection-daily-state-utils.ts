@@ -55,6 +55,17 @@ export function buildCollectionDailyCalendarPayloadDays(calendarDays: EditableCa
   }));
 }
 
+export function selectCollectionDailyDirtyCalendarDays(
+  calendarDays: EditableCalendarDay[],
+  dirtyDayNumbers: ReadonlySet<number>,
+) {
+  if (dirtyDayNumbers.size === 0) {
+    return [];
+  }
+
+  return calendarDays.filter((day) => dirtyDayNumbers.has(day.day));
+}
+
 export function updateCollectionDailyEditableCalendarDay(
   previous: EditableCalendarDay[],
   dayNumber: number,

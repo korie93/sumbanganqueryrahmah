@@ -19,8 +19,9 @@ type UseCollectionDailyMutationStateOptions = {
   month: number;
   selectedUsernames: string[];
   monthlyTargetInput: string;
-  calendarDays: EditableCalendarDay[];
+  calendarDaysToSave: EditableCalendarDay[];
   onRefresh: () => Promise<void>;
+  onCalendarSaved: () => void;
   toast: ToastFn;
 };
 
@@ -32,8 +33,9 @@ export function useCollectionDailyMutationState({
   month,
   selectedUsernames,
   monthlyTargetInput,
-  calendarDays,
+  calendarDaysToSave,
   onRefresh,
+  onCalendarSaved,
   toast,
 }: UseCollectionDailyMutationStateOptions) {
   const [savingTarget, setSavingTarget] = useState(false);
@@ -94,7 +96,6 @@ export function useCollectionDailyMutationState({
   ]);
 
   const saveCalendar = useCallback(async () => {
-    if (!calendarDays.length) return;
     const selectedUsername = selectedUsernames[0];
     if (!canManage || !canEditCalendar) {
       toast({
@@ -113,7 +114,15 @@ export function useCollectionDailyMutationState({
       return;
     }
 
-    const missingLeaveTypeDay = calendarDays.find((day) =>
+    if (!calendarDaysToSave.length) {
+      toast({
+        title: "No Calendar Changes",
+        description: "Choose Edit status on a date, change the status, then save the changed day.",
+      });
+      return;
+    }
+
+    const missingLeaveTypeDay = calendarDaysToSave.find((day) =>
       day.status === "HOLIDAY" && !day.leaveType
     );
     if (missingLeaveTypeDay) {
@@ -131,12 +140,16 @@ export function useCollectionDailyMutationState({
         username: selectedUsername,
         year,
         month,
-        days: buildCollectionDailyCalendarPayloadDays(calendarDays),
+        days: buildCollectionDailyCalendarPayloadDays(calendarDaysToSave),
       });
       toast({
-        title: "Calendar Saved",
-        description: "Working days and holiday settings have been updated.",
+        title: "Daily Status Saved",
+        description:
+          calendarDaysToSave.length === 1
+            ? `Updated day ${calendarDaysToSave[0]?.day} for ${selectedUsername}.`
+            : `Updated ${calendarDaysToSave.length} changed days for ${selectedUsername}.`,
       });
+      onCalendarSaved();
       await onRefresh();
     } catch (error: unknown) {
       toast({
@@ -147,7 +160,17 @@ export function useCollectionDailyMutationState({
     } finally {
       setSavingCalendar(false);
     }
-  }, [calendarDays, canEditCalendar, canManage, month, onRefresh, selectedUsernames, toast, year]);
+  }, [
+    calendarDaysToSave,
+    canEditCalendar,
+    canManage,
+    month,
+    onCalendarSaved,
+    onRefresh,
+    selectedUsernames,
+    toast,
+    year,
+  ]);
 
   return {
     savingTarget,

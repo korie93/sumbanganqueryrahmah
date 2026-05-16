@@ -273,7 +273,7 @@ test("upsertDailyCalendar requires superuser and holiday leave type", async () =
       month: "5",
       days: [{ day: "15", status: "HOLIDAY" }],
     }),
-    /Leave type is required when status is Holiday\/Leave\./,
+    /Leave type is required when status is Holiday\/Leave for day 15\./,
   );
 
   assert.equal(called, false);

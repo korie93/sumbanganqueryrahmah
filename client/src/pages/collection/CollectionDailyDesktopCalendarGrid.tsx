@@ -17,6 +17,7 @@ type CollectionDailyDesktopCalendarGridProps = {
   editingDayNumber: number | null;
   canManage: boolean;
   editableCalendarByDay: Map<number, EditableCalendarDay>;
+  dirtyCalendarDayNumbers: ReadonlySet<number>;
   onEditDay: (day: number) => void;
   onSelectDate: (date: string) => void;
 };
@@ -41,6 +42,7 @@ export function CollectionDailyDesktopCalendarGrid({
   editingDayNumber,
   canManage,
   editableCalendarByDay,
+  dirtyCalendarDayNumbers,
   onEditDay,
   onSelectDate,
 }: CollectionDailyDesktopCalendarGridProps) {
@@ -53,6 +55,7 @@ export function CollectionDailyDesktopCalendarGrid({
         const editable = editableCalendarByDay.get(day.day);
         const isSelected = selectedDate === day.date;
         const isEditing = editingDayNumber === day.day;
+        const isDirty = dirtyCalendarDayNumbers.has(day.day);
         const progressPercent = getDailyProgressPercent(day);
 
         return (
@@ -69,7 +72,16 @@ export function CollectionDailyDesktopCalendarGrid({
             >
               <div className="collection-daily-day-header mb-1 flex items-center justify-between">
                 <div className="font-semibold">{day.day}</div>
-                <DayStatusIcon status={day.status} />
+                <div className="flex items-center gap-1.5">
+                  {isDirty ? (
+                    <span
+                      className="collection-daily-unsaved-dot"
+                      role="img"
+                      aria-label="Unsaved calendar change"
+                    />
+                  ) : null}
+                  <DayStatusIcon status={day.status} />
+                </div>
               </div>
               <div className={`collection-daily-day-status ${statusTextClass(day.status)}`}>
                 {statusLabel(day.status)}
@@ -101,7 +113,7 @@ export function CollectionDailyDesktopCalendarGrid({
                   onClick={() => onEditDay(day.day)}
                 >
                   <Edit3 className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
-                  Edit status
+                  {isDirty ? "Unsaved change" : "Edit status"}
                 </Button>
               </div>
             ) : null}

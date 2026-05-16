@@ -17,6 +17,7 @@ export function CollectionDailyTargetControlsSection({
   savingCalendar,
   onSaveCalendar,
   calendarDays,
+  dirtyCalendarDaysCount,
   isMobile,
 }: CollectionDailyTargetControlsSectionProps) {
   const fallback = (
@@ -62,6 +63,7 @@ export function CollectionDailyTargetControlsSection({
         savingCalendar={savingCalendar}
         onSaveCalendar={onSaveCalendar}
         calendarDays={calendarDays}
+        dirtyCalendarDaysCount={dirtyCalendarDaysCount}
       />
     </Suspense>
   );

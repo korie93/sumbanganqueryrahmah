@@ -35,6 +35,7 @@ export type CollectionDailyFiltersCardProps = {
   savingCalendar: boolean;
   onSaveCalendar: () => void;
   calendarDays: EditableCalendarDay[];
+  dirtyCalendarDaysCount: number;
 };
 
 export type CollectionDailyPeriodFieldsProps = Pick<
@@ -83,6 +84,7 @@ export type CollectionDailyTargetControlsSectionProps = Pick<
   | "savingCalendar"
   | "onSaveCalendar"
   | "calendarDays"
+  | "dirtyCalendarDaysCount"
 > & {
   isMobile: boolean;
 };

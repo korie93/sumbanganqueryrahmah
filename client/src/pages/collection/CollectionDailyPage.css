@@ -127,6 +127,28 @@
   font-size: var(--font-size-sm);
 }
 
+.collection-daily-save-state {
+  border-radius: 16px;
+  border: 1px solid hsl(var(--border) / 0.6);
+  background: hsl(var(--background) / 0.72);
+  padding: 0.75rem;
+}
+
+.collection-daily-save-state-dirty {
+  border-color: hsl(var(--primary) / 0.45);
+  background: hsl(var(--primary) / 0.08);
+}
+
+.collection-daily-unsaved-dot {
+  display: inline-flex;
+  height: 0.5rem;
+  width: 0.5rem;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: hsl(var(--primary));
+  box-shadow: 0 0 0 3px hsl(var(--primary) / 0.16);
+}
+
 .collection-daily-progress-panel {
   border-radius: 24px;
   padding: 1rem;

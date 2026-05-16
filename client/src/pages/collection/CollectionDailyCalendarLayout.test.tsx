@@ -74,12 +74,14 @@ test("CollectionDailyDesktopCalendarGrid keeps day cards compact with a separate
       editingDayNumber: 2,
       canManage: true,
       editableCalendarByDay: editableDays,
+      dirtyCalendarDayNumbers: new Set([2]),
       onEditDay: () => undefined,
       onSelectDate: () => undefined,
     }),
   );
 
   assert.match(markup, /Edit status/);
+  assert.match(markup, /Unsaved change/);
   assert.match(markup, /aria-pressed="true"/);
   assert.doesNotMatch(markup, /Status day 1/);
   assert.doesNotMatch(markup, /Status day 2/);
@@ -91,6 +93,9 @@ test("CollectionDailyCalendarEditPanel renders the selected day status form and 
       day: overviewDays[1],
       editableDay: editableDays.get(2) ?? null,
       canManage: true,
+      isDirty: true,
+      savingCalendar: false,
+      onSaveCalendar: () => undefined,
       onChange: () => undefined,
       onViewDetails: () => undefined,
     }),
@@ -100,5 +105,6 @@ test("CollectionDailyCalendarEditPanel renders the selected day status form and 
   assert.match(markup, /02\/05\/2026/);
   assert.match(markup, /OFF - Company Closed/);
   assert.match(markup, /Status untuk nickname dipilih/);
-  assert.match(markup, /Save Calendar/);
+  assert.match(markup, /Perubahan belum disimpan/);
+  assert.match(markup, /Save changed status/);
 });

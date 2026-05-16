@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { CollectionDailyDayDetailsResponse } from "@/lib/api";
 import type { EditableCalendarDay } from "@/pages/collection/CollectionDailyShared";
 import { useToast } from "@/hooks/use-toast";
 import {
   getCollectionDailyEmptyOverviewMessage,
   getCollectionDailyFirstWeekday,
+  selectCollectionDailyDirtyCalendarDays,
   shouldLoadCollectionDailyOverview,
   updateCollectionDailyEditableCalendarDay,
 } from "@/pages/collection/collection-daily-state-utils";
@@ -19,6 +20,7 @@ export {
   getCollectionDailyEmptyOverviewMessage,
   getCollectionDailyFirstWeekday,
   mapCollectionDailyEditableCalendarDays,
+  selectCollectionDailyDirtyCalendarDays,
   shouldLoadCollectionDailyOverview,
   updateCollectionDailyEditableCalendarDay,
 } from "@/pages/collection/collection-daily-state-utils";
@@ -47,6 +49,9 @@ export function useCollectionDailyData({
   canEditCalendar,
 }: UseCollectionDailyDataOptions) {
   const { toast } = useToast();
+  const [dirtyCalendarDayNumbers, setDirtyCalendarDayNumbers] = useState<Set<number>>(
+    () => new Set(),
+  );
   const {
     loadingReceiptKey,
     openReceiptViewer,
@@ -93,6 +98,16 @@ export function useCollectionDailyData({
     clearDayDetailsCache();
   }, [clearDayDetailsCache, clearOverviewCache]);
 
+  const selectedUsernamesKey = useMemo(() => selectedUsernames.join("\u001f"), [selectedUsernames]);
+
+  const clearDirtyCalendarDays = useCallback(() => {
+    setDirtyCalendarDayNumbers((previous) => (previous.size > 0 ? new Set() : previous));
+  }, []);
+
+  useEffect(() => {
+    clearDirtyCalendarDays();
+  }, [clearDirtyCalendarDays, month, selectedUsernamesKey, year]);
+
   useEffect(() => {
     if (!shouldLoadCollectionDailyOverview({ canManage, currentUsername, selectedUsernames })) {
       return;
@@ -113,11 +128,26 @@ export function useCollectionDailyData({
     const didLoadOverview = await loadOverview({
       preserveSelection: Boolean(activeDate),
     });
+    if (didLoadOverview) {
+      clearDirtyCalendarDays();
+    }
 
     if (didLoadOverview && activeDate) {
       await loadDayDetails(activeDate, activePage);
     }
-  }, [clearCachedDailyViews, dayDetails, loadDayDetails, loadOverview, selectedDate]);
+  }, [
+    clearCachedDailyViews,
+    clearDirtyCalendarDays,
+    dayDetails,
+    loadDayDetails,
+    loadOverview,
+    selectedDate,
+  ]);
+
+  const dirtyCalendarDays = useMemo(
+    () => selectCollectionDailyDirtyCalendarDays(calendarDays, dirtyCalendarDayNumbers),
+    [calendarDays, dirtyCalendarDayNumbers],
+  );
 
   const mutationState = useCollectionDailyMutationState({
     canManage,
@@ -127,8 +157,9 @@ export function useCollectionDailyData({
     month,
     selectedUsernames,
     monthlyTargetInput,
-    calendarDays,
+    calendarDaysToSave: dirtyCalendarDays,
     onRefresh: refreshCurrentView,
+    onCalendarSaved: clearDirtyCalendarDays,
     toast,
   });
 
@@ -160,6 +191,14 @@ export function useCollectionDailyData({
     setCalendarDays((previous) =>
       updateCollectionDailyEditableCalendarDay(previous, dayNumber, patch),
     );
+    setDirtyCalendarDayNumbers((previous) => {
+      if (previous.has(dayNumber)) {
+        return previous;
+      }
+      const next = new Set(previous);
+      next.add(dayNumber);
+      return next;
+    });
   }, [setCalendarDays]);
 
   const closeDayDetails = useCallback(() => {
@@ -206,6 +245,8 @@ export function useCollectionDailyData({
     loadingReceiptKey,
     receiptPreviewDialogProps,
     editableCalendarByDay,
+    dirtyCalendarDayNumbers,
+    dirtyCalendarDaysCount: dirtyCalendarDayNumbers.size,
     selectedOverviewDay,
     emptyOverviewMessage,
     firstWeekday,

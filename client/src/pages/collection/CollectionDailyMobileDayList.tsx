@@ -15,6 +15,7 @@ type CollectionDailyMobileDayListProps = {
   selectedDate: string | null;
   editingDayNumber: number | null;
   canManage: boolean;
+  dirtyCalendarDayNumbers: ReadonlySet<number>;
   onSelectDate: (date: string) => void;
   onEditDay: (day: number) => void;
 };
@@ -24,6 +25,7 @@ export function CollectionDailyMobileDayList({
   selectedDate,
   editingDayNumber,
   canManage,
+  dirtyCalendarDayNumbers,
   onSelectDate,
   onEditDay,
 }: CollectionDailyMobileDayListProps) {
@@ -32,6 +34,7 @@ export function CollectionDailyMobileDayList({
       {days.map((day) => {
         const isSelected = selectedDate === day.date;
         const isEditing = editingDayNumber === day.day;
+        const isDirty = dirtyCalendarDayNumbers.has(day.day);
 
         return (
           <article
@@ -49,6 +52,13 @@ export function CollectionDailyMobileDayList({
                   <p className="font-semibold text-foreground">{formatDateDDMMYYYY(day.date)}</p>
                 </div>
                 <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-border/50 bg-background/80 px-2.5 py-1 text-[11px] font-medium text-foreground">
+                  {isDirty ? (
+                    <span
+                      className="collection-daily-unsaved-dot"
+                      role="img"
+                      aria-label="Unsaved calendar change"
+                    />
+                  ) : null}
                   <CollectionDailyDayStatusIcon status={day.status} />
                   {statusLabel(day.status)}
                 </span>
@@ -107,7 +117,7 @@ export function CollectionDailyMobileDayList({
                     onClick={() => onEditDay(day.day)}
                   >
                     <Edit3 className="mr-2 h-4 w-4" aria-hidden="true" />
-                    Edit status
+                    {isDirty ? "Unsaved change" : "Edit status"}
                   </Button>
                 ) : null}
               </div>

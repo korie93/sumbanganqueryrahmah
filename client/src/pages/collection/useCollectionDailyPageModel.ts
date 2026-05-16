@@ -133,6 +133,7 @@ export function useCollectionDailyPageModel({ role }: UseCollectionDailyPageMode
       savingCalendar: data.savingCalendar,
       onSaveCalendar: handleSaveCalendar,
       calendarDays: data.calendarDays,
+      dirtyCalendarDaysCount: data.dirtyCalendarDaysCount,
       canEditCalendar,
     },
     calendarCardProps: {
@@ -143,6 +144,9 @@ export function useCollectionDailyPageModel({ role }: UseCollectionDailyPageMode
       selectedDate: data.selectedDate,
       canManage: canEditCalendar,
       editableCalendarByDay: data.editableCalendarByDay,
+      dirtyCalendarDayNumbers: data.dirtyCalendarDayNumbers,
+      savingCalendar: data.savingCalendar,
+      onSaveCalendar: handleSaveCalendar,
       onSelectDate: handleDaySelect,
       onUpdateEditableDay: data.updateEditableDay,
     },

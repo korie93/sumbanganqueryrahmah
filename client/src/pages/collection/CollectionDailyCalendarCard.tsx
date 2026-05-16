@@ -16,6 +16,9 @@ export type CollectionDailyCalendarCardProps = {
   selectedDate: string | null;
   canManage: boolean;
   editableCalendarByDay: Map<number, EditableCalendarDay>;
+  dirtyCalendarDayNumbers: ReadonlySet<number>;
+  savingCalendar: boolean;
+  onSaveCalendar: () => void;
   onSelectDate: (date: string) => void;
   onUpdateEditableDay: (day: number, patch: Partial<EditableCalendarDay>) => void;
 };
@@ -34,6 +37,9 @@ export function CollectionDailyCalendarCard({
   selectedDate,
   canManage,
   editableCalendarByDay,
+  dirtyCalendarDayNumbers,
+  savingCalendar,
+  onSaveCalendar,
   onSelectDate,
   onUpdateEditableDay,
 }: CollectionDailyCalendarCardProps) {
@@ -87,6 +93,7 @@ export function CollectionDailyCalendarCard({
                 selectedDate={selectedDate}
                 editingDayNumber={editingDayNumber}
                 canManage={canManage}
+                dirtyCalendarDayNumbers={dirtyCalendarDayNumbers}
                 onSelectDate={onSelectDate}
                 onEditDay={setEditingDayNumber}
               />
@@ -112,6 +119,7 @@ export function CollectionDailyCalendarCard({
                       editingDayNumber={editingDayNumber}
                       canManage={canManage}
                       editableCalendarByDay={editableCalendarByDay}
+                      dirtyCalendarDayNumbers={dirtyCalendarDayNumbers}
                       onEditDay={setEditingDayNumber}
                       onSelectDate={onSelectDate}
                     />
@@ -121,6 +129,11 @@ export function CollectionDailyCalendarCard({
                   day={editingDay}
                   editableDay={editingEditableDay}
                   canManage={canManage}
+                  isDirty={
+                    editingEditableDay ? dirtyCalendarDayNumbers.has(editingEditableDay.day) : false
+                  }
+                  savingCalendar={savingCalendar}
+                  onSaveCalendar={onSaveCalendar}
                   onChange={(patch) => {
                     if (editingEditableDay) onUpdateEditableDay(editingEditableDay.day, patch);
                   }}
@@ -134,6 +147,11 @@ export function CollectionDailyCalendarCard({
                 day={editingDay}
                 editableDay={editingEditableDay}
                 canManage={canManage}
+                isDirty={
+                  editingEditableDay ? dirtyCalendarDayNumbers.has(editingEditableDay.day) : false
+                }
+                savingCalendar={savingCalendar}
+                onSaveCalendar={onSaveCalendar}
                 onChange={(patch) => {
                   if (editingEditableDay) onUpdateEditableDay(editingEditableDay.day, patch);
                 }}

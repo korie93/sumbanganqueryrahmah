@@ -136,7 +136,9 @@ export class CollectionDailyManagementOperations {
       item.status === "HOLIDAY" && !item.leaveType
     );
     if (missingLeaveTypeDay) {
-      throw badRequest("Leave type is required when status is Holiday/Leave.");
+      throw badRequest(
+        `Leave type is required when status is Holiday/Leave for day ${missingLeaveTypeDay.day}.`,
+      );
     }
 
     const uniqueByDay = new Map<number, (typeof parsedDays)[number]>();

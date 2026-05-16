@@ -46,12 +46,24 @@ test("CollectionDailyTargetControls keeps target actions compact and explicit", 
       onSaveTarget: () => undefined,
       savingCalendar: false,
       onSaveCalendar: () => undefined,
-      calendarDays: [],
+      calendarDays: [
+        {
+          day: 1,
+          status: "WORKING",
+          leaveType: null,
+          note: "",
+          isWorkingDay: true,
+          isHoliday: false,
+          holidayName: "",
+        },
+      ],
+      dirtyCalendarDaysCount: 1,
     }),
   );
 
   assert.match(markup, /Monthly Target \(RM\)/);
   assert.match(markup, /Save Target/);
-  assert.match(markup, /Save Calendar/);
+  assert.match(markup, /Save Changed Days/);
+  assert.match(markup, /1 changed day ready to save/);
   assert.match(markup, /border border-border\/70 bg-background p-4 shadow-sm grid rounded-2xl/);
 });

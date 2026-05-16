@@ -1,4 +1,4 @@
-import { CalendarCheck2, Eye } from "lucide-react";
+import { CalendarCheck2, Eye, Loader2, Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { CollectionDailyOverviewDay } from "@/lib/api";
 import { formatDateDDMMYYYY } from "@/lib/date-format";
@@ -15,6 +15,9 @@ type CollectionDailyCalendarEditPanelProps = {
   day: CollectionDailyOverviewDay | null;
   editableDay: EditableCalendarDay | null;
   canManage: boolean;
+  isDirty: boolean;
+  savingCalendar: boolean;
+  onSaveCalendar: () => void;
   onChange: (patch: Partial<EditableCalendarDay>) => void;
   onViewDetails: (date: string) => void;
 };
@@ -35,6 +38,9 @@ export function CollectionDailyCalendarEditPanel({
   day,
   editableDay,
   canManage,
+  isDirty,
+  savingCalendar,
+  onSaveCalendar,
   onChange,
   onViewDetails,
 }: CollectionDailyCalendarEditPanelProps) {
@@ -60,6 +66,14 @@ export function CollectionDailyCalendarEditPanel({
       </aside>
     );
   }
+
+  const missingLeaveType = editableDay.status === "HOLIDAY" && !editableDay.leaveType;
+  const editableStatusText =
+    editableDay.status === "WORKING"
+      ? "Working day"
+      : editableDay.leaveType
+        ? `${editableDay.leaveType} - ${COLLECTION_DAILY_LEAVE_TYPE_LABELS[editableDay.leaveType]}`
+        : "Holiday / Leave";
 
   return (
     <aside
@@ -100,7 +114,10 @@ export function CollectionDailyCalendarEditPanel({
         </div>
 
         <div className="rounded-xl border border-border/60 bg-background/70 p-3">
-          <p className="text-xs font-semibold text-foreground">{getCalendarStatusText(day)}</p>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+            Status tersimpan
+          </p>
+          <p className="mt-1 text-xs font-semibold text-foreground">{getCalendarStatusText(day)}</p>
           {day.note ? (
             <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{day.note}</p>
           ) : (
@@ -108,6 +125,21 @@ export function CollectionDailyCalendarEditPanel({
               Tiada nota status untuk hari ini.
             </p>
           )}
+        </div>
+
+        <div
+          className={`collection-daily-save-state ${isDirty ? "collection-daily-save-state-dirty" : ""}`}
+          aria-live="polite"
+          aria-atomic="true"
+        >
+          <p className="text-xs font-semibold text-foreground">
+            {isDirty ? "Perubahan belum disimpan" : "Tiada perubahan belum disimpan"}
+          </p>
+          <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+            {isDirty
+              ? `Preview status baru: ${editableStatusText}. Save hanya akan update tarikh ini untuk nickname dipilih.`
+              : "Klik Working atau Holiday/Leave untuk ubah status tarikh ini."}
+          </p>
         </div>
 
         <DailyStatusForm
@@ -119,6 +151,19 @@ export function CollectionDailyCalendarEditPanel({
         <div className="grid gap-2">
           <Button
             type="button"
+            className="h-10 rounded-xl"
+            onClick={onSaveCalendar}
+            disabled={!isDirty || savingCalendar || missingLeaveType}
+          >
+            {savingCalendar ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
+            ) : (
+              <Save className="mr-2 h-4 w-4" aria-hidden="true" />
+            )}
+            Save changed status
+          </Button>
+          <Button
+            type="button"
             variant="outline"
             className="h-10 rounded-xl"
             onClick={() => onViewDetails(day.date)}
@@ -127,7 +172,9 @@ export function CollectionDailyCalendarEditPanel({
             View collection details
           </Button>
           <p className="text-xs leading-relaxed text-muted-foreground">
-            Perubahan status hanya disimpan selepas klik Save Calendar. Nickname lain tidak akan berubah.
+            {missingLeaveType
+              ? "Pilih leave type dahulu sebelum simpan Holiday/Leave."
+              : "Nickname lain pada tarikh sama tidak akan berubah."}
           </p>
         </div>
       </div>

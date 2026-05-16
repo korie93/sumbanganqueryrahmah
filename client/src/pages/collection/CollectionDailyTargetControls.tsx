@@ -16,6 +16,7 @@ export type CollectionDailyTargetControlsProps = {
   savingCalendar: boolean;
   onSaveCalendar: () => void;
   calendarDays: EditableCalendarDay[];
+  dirtyCalendarDaysCount: number;
 };
 
 export function CollectionDailyTargetControls({
@@ -28,8 +29,16 @@ export function CollectionDailyTargetControls({
   savingCalendar,
   onSaveCalendar,
   calendarDays,
+  dirtyCalendarDaysCount,
 }: CollectionDailyTargetControlsProps) {
   const isMobile = useIsMobile();
+  const canSaveCalendarChanges =
+    canEditCalendar && calendarDays.length > 0 && dirtyCalendarDaysCount > 0;
+  const calendarSaveHelpText = !canEditCalendar
+    ? "Superuser mesti pilih tepat satu staff nickname untuk simpan status Working, Holiday/Leave atau OFF."
+    : dirtyCalendarDaysCount > 0
+      ? `${dirtyCalendarDaysCount} changed day${dirtyCalendarDaysCount === 1 ? "" : "s"} ready to save. Hanya tarikh yang diubah untuk nickname dipilih akan disimpan.`
+      : "Klik Edit status pada tarikh pilihan. Butang save akan aktif selepas ada perubahan.";
 
   return (
     <div
@@ -83,21 +92,23 @@ export function CollectionDailyTargetControls({
           variant="outline"
           className={cn("w-full", isMobile ? "h-12 rounded-2xl" : "h-11 rounded-xl sm:w-auto")}
           onClick={onSaveCalendar}
-          disabled={savingCalendar || !canEditCalendar || calendarDays.length === 0}
+          disabled={savingCalendar || !canSaveCalendarChanges}
         >
           {savingCalendar ? (
             <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
           ) : (
             <Save className="mr-2 h-4 w-4" aria-hidden="true" />
           )}
-          Save Calendar
+          Save Changed Days
         </Button>
       </div>
-      {!canEditCalendar ? (
-        <p className={cn("text-xs text-muted-foreground", isMobile ? "sm:col-span-2" : "md:col-span-2")}>
-          Superuser mesti pilih tepat satu staff nickname untuk simpan status Working, Holiday/Leave atau OFF.
-        </p>
-      ) : null}
+      <p
+        className={cn("text-xs text-muted-foreground", isMobile ? "sm:col-span-2" : "md:col-span-2")}
+        aria-live="polite"
+        aria-atomic="true"
+      >
+        {calendarSaveHelpText}
+      </p>
     </div>
   );
 }
