@@ -94,6 +94,12 @@ export function useCollectionDailyPageModel({ role }: UseCollectionDailyPageMode
     canManage,
     currentUsername,
     overview: data.overview,
+    roleGuideProps: {
+      role,
+      selectedUsersLabel: userSelection.selectedUsersLabel,
+      canManage,
+      canEditCalendar,
+    },
     filtersCardProps: {
       canManage,
       currentUsername,

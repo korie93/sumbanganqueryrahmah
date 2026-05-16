@@ -11,6 +11,51 @@
   color: hsl(var(--primary));
 }
 
+.collection-daily-role-guide {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 1rem;
+  align-items: center;
+  overflow: hidden;
+  border: 1px solid var(--collection-daily-border);
+  border-radius: 24px;
+  background:
+    linear-gradient(135deg, hsl(var(--primary) / 0.1), transparent 42%),
+    linear-gradient(180deg, hsl(var(--background) / 0.99), hsl(var(--card) / 0.96));
+  box-shadow: var(--collection-daily-shadow);
+  padding: 1rem;
+}
+
+.collection-daily-role-guide-icon {
+  display: inline-flex;
+  height: 2.75rem;
+  width: 2.75rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 18px;
+  background: hsl(var(--primary) / 0.13);
+  color: hsl(var(--primary));
+}
+
+.collection-daily-role-guide-facts {
+  display: flex;
+  max-width: 24rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.collection-daily-role-guide-facts span {
+  border: 1px solid hsl(var(--border) / 0.58);
+  border-radius: 999px;
+  background: hsl(var(--background) / 0.72);
+  color: hsl(var(--foreground));
+  font-size: var(--font-size-xs);
+  font-weight: 700;
+  padding: 0.45rem 0.65rem;
+  white-space: nowrap;
+}
+
 .collection-daily-filters-card,
 .collection-daily-calendar-card {
   overflow: hidden;
@@ -220,6 +265,21 @@
 }
 
 @media (max-width: 640px) {
+  .collection-daily-role-guide {
+    grid-template-columns: 1fr;
+    border-radius: 20px;
+    padding: 0.9rem;
+  }
+
+  .collection-daily-role-guide-icon {
+    height: 2.4rem;
+    width: 2.4rem;
+  }
+
+  .collection-daily-role-guide-facts {
+    justify-content: flex-start;
+  }
+
   .collection-daily-progress-panel {
     border-radius: 20px;
     padding: 0.85rem;
@@ -240,7 +300,17 @@
   }
 }
 
-@media (max-width: 1180px) {
+@media (max-width: 1180px) and (min-width: 641px) {
+  .collection-daily-role-guide {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .collection-daily-role-guide-facts {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+    max-width: none;
+  }
+
   .collection-daily-calendar-workspace {
     grid-template-columns: 1fr;
   }

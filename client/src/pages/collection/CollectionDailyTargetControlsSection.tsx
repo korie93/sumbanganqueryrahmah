@@ -2,7 +2,7 @@ import { Suspense, lazy } from "react";
 import type { CollectionDailyTargetControlsSectionProps } from "@/pages/collection/collection-daily-filters-card-shared";
 
 const CollectionDailyTargetControls = lazy(() =>
-  import("@/pages/collection/CollectionDailyManagerControls").then((module) => ({
+  import("@/pages/collection/CollectionDailyTargetControls").then((module) => ({
     default: module.CollectionDailyTargetControls,
   })),
 );

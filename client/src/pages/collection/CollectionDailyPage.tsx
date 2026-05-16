@@ -1,6 +1,7 @@
 import { Suspense, lazy } from "react";
 import { CalendarDailyView } from "@/pages/collection/CalendarDailyView";
 import { CollectionDailyFiltersCard } from "@/pages/collection/CollectionDailyFiltersCard";
+import { CollectionDailyRoleGuide } from "@/pages/collection/CollectionDailyRoleGuide";
 import { CollectionDailySummaryCard } from "@/pages/collection/CollectionDailySummaryCard";
 import { useCollectionDailyPageModel } from "@/pages/collection/useCollectionDailyPageModel";
 import "./CollectionDailyPage.css";
@@ -25,6 +26,8 @@ export default function CollectionDailyPage({ role }: CollectionDailyPageProps) 
 
   return (
     <div className="collection-daily-page space-y-4" data-testid="collection-daily-page">
+      <CollectionDailyRoleGuide {...model.roleGuideProps} />
+
       <CollectionDailyFiltersCard {...model.filtersCardProps} />
 
       {model.overview ? <CollectionDailySummaryCard overview={model.overview} /> : null}
