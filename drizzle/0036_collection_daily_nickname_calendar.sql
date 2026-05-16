@@ -34,6 +34,56 @@ SET
   leave_type = CASE WHEN status = 'HOLIDAY' THEN leave_type ELSE NULL END,
   note = CASE WHEN status = 'HOLIDAY' THEN note ELSE NULL END;
 
+-- Preserve legacy global calendar rows for the new per-nickname model.
+-- Old rows used username='' and applied to everyone. The new UI/API reads by
+-- nickname, so copy those rows to each existing staff nickname once, without
+-- overwriting nickname-specific rows that may already exist.
+INSERT INTO public.collection_daily_calendar (
+  id,
+  username,
+  calendar_date,
+  year,
+  month,
+  day,
+  status,
+  leave_type,
+  note,
+  is_working_day,
+  is_holiday,
+  holiday_name,
+  created_by,
+  updated_by,
+  created_at,
+  updated_at
+)
+SELECT
+  gen_random_uuid(),
+  lower(trim(nickname.nickname)),
+  calendar.calendar_date,
+  calendar.year,
+  calendar.month,
+  calendar.day,
+  calendar.status,
+  calendar.leave_type,
+  calendar.note,
+  calendar.is_working_day,
+  calendar.is_holiday,
+  calendar.holiday_name,
+  calendar.created_by,
+  calendar.updated_by,
+  calendar.created_at,
+  calendar.updated_at
+FROM public.collection_daily_calendar calendar
+CROSS JOIN public.collection_staff_nicknames nickname
+WHERE lower(trim(COALESCE(calendar.username, ''))) = ''
+  AND lower(trim(COALESCE(nickname.nickname, ''))) <> ''
+  AND NOT EXISTS (
+    SELECT 1
+    FROM public.collection_daily_calendar existing
+    WHERE lower(existing.username) = lower(trim(nickname.nickname))
+      AND existing.calendar_date = calendar.calendar_date
+  );
+
 ALTER TABLE public.collection_daily_calendar
   ALTER COLUMN username SET DEFAULT '',
   ALTER COLUMN username SET NOT NULL,
