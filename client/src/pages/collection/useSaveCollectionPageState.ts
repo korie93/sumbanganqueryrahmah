@@ -1,7 +1,8 @@
-import { useCallback } from "react";
+import { type ChangeEvent, useCallback } from "react";
 import { useMutationFeedback } from "@/hooks/useMutationFeedback";
 import { useSaveCollectionDraftState } from "@/pages/collection/useSaveCollectionDraftState";
 import { useSaveCollectionFormState } from "@/pages/collection/useSaveCollectionFormState";
+import type { CollectionReceiptPendingStatus } from "@/pages/collection/collection-receipt-pending-status";
 import { useSaveCollectionReceiptState } from "@/pages/collection/useSaveCollectionReceiptState";
 import { useSaveCollectionSubmitState } from "@/pages/collection/useSaveCollectionSubmitState";
 
@@ -44,11 +45,53 @@ export function useSaveCollectionPageState({
     mutationFeedback,
     clearPageState,
   });
+  const {
+    clearSubmitFailure,
+    handleSubmit,
+    resetSubmitMutationIntent,
+    submitFailure,
+    submitPhase,
+    submitting,
+  } = submitState;
+  const {
+    clearReceiptState,
+    handlePendingDraftChange,
+    handleReceiptChange: applyReceiptChange,
+    handleRemoveReceipt: applyRemoveReceipt,
+  } = receiptState;
+  const receiptPendingStatus: CollectionReceiptPendingStatus =
+    submitting
+      ? "saving"
+      : submitFailure?.kind === "request" && receiptState.receiptFiles.length > 0
+        ? "failed"
+        : "pending";
+
+  const handleReceiptChange = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => {
+      clearSubmitFailure();
+      applyReceiptChange(event);
+    },
+    [applyReceiptChange, clearSubmitFailure],
+  );
+
+  const handleRemoveReceipt = useCallback(
+    (index: number) => {
+      clearSubmitFailure();
+      applyRemoveReceipt(index);
+    },
+    [applyRemoveReceipt, clearSubmitFailure],
+  );
+
+  const handleClearPendingReceipts = useCallback(() => {
+    clearSubmitFailure();
+    clearReceiptState();
+  }, [clearReceiptState, clearSubmitFailure]);
 
   const clearForm = useCallback(() => {
-    submitState.resetSubmitMutationIntent();
+    clearSubmitFailure();
+    resetSubmitMutationIntent();
     clearPageState();
-  }, [clearPageState, submitState]);
+  }, [clearPageState, clearSubmitFailure, resetSubmitMutationIntent]);
 
   return {
     fileInputRef: receiptState.fileInputRef,
@@ -61,7 +104,10 @@ export function useSaveCollectionPageState({
     amount: formState.amount,
     receiptFiles: receiptState.receiptFiles,
     receiptDrafts: receiptState.receiptDrafts,
-    submitting: submitState.submitting,
+    submitting,
+    submitFailure,
+    submitPhase,
+    receiptPendingStatus,
     maxPaymentDate: formState.maxPaymentDate,
     isPaymentDateInFuture: formState.isPaymentDateInFuture,
     draftRestoreNotice: draftState.draftRestoreNotice,
@@ -74,10 +120,11 @@ export function useSaveCollectionPageState({
     setPaymentDate: formState.setPaymentDate,
     setAmount: formState.setAmount,
     clearForm,
-    handleReceiptChange: receiptState.handleReceiptChange,
-    handleRemoveReceipt: receiptState.handleRemoveReceipt,
-    handleClearPendingReceipts: receiptState.clearReceiptState,
-    handlePendingDraftChange: receiptState.handlePendingDraftChange,
-    handleSubmit: submitState.handleSubmit,
+    clearSubmitFailure: submitState.clearSubmitFailure,
+    handleReceiptChange,
+    handleRemoveReceipt,
+    handleClearPendingReceipts,
+    handlePendingDraftChange,
+    handleSubmit,
   };
 }

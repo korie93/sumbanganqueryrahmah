@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useMutationFeedback } from "@/hooks/useMutationFeedback";
 import {
   buildCollectionMutationFingerprint,
@@ -12,6 +12,12 @@ import {
   type SaveCollectionFormValues,
   validateSaveCollectionForm,
 } from "@/pages/collection/save-collection-page-utils";
+import {
+  buildSaveCollectionRequestFailure,
+  buildSaveCollectionValidationFailure,
+  type SaveCollectionSubmitFailure,
+} from "@/pages/collection/save-collection-submit-feedback";
+import type { SaveCollectionSubmitPhase } from "@/pages/collection/save-collection-submit-progress";
 import { emitCollectionDataChanged } from "@/pages/collection/utils";
 
 type MutationFeedbackApi = {
@@ -36,12 +42,29 @@ export function useSaveCollectionSubmitState({
   mutationFeedback,
   clearPageState,
 }: UseSaveCollectionSubmitStateOptions) {
+  const mountedRef = useRef(true);
   const submitInFlightRef = useRef(false);
   const submitMutationIntentRef = useRef<{ fingerprint: string; key: string } | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [submitFailure, setSubmitFailure] = useState<SaveCollectionSubmitFailure | null>(null);
+  const [submitPhase, setSubmitPhase] = useState<SaveCollectionSubmitPhase>("idle");
+
+  useEffect(() => {
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   const resetSubmitMutationIntent = useCallback(() => {
     submitMutationIntentRef.current = null;
+  }, []);
+
+  const clearSubmitFailure = useCallback(() => {
+    if (!mountedRef.current) {
+      return;
+    }
+    setSubmitFailure(null);
+    setSubmitPhase((current) => (current === "processing" ? current : "idle"));
   }, []);
 
   const handleSubmit = useCallback(async () => {
@@ -51,6 +74,15 @@ export function useSaveCollectionSubmitState({
 
     const validationError = validateSaveCollectionForm(values);
     if (validationError) {
+      if (mountedRef.current) {
+        setSubmitPhase("failed");
+        setSubmitFailure(
+          buildSaveCollectionValidationFailure({
+            message: validationError,
+            receiptCount: receiptFiles.length,
+          }),
+        );
+      }
       mutationFeedback.notifyMutationError({
         title: "Validation Error",
         description: validationError,
@@ -59,7 +91,11 @@ export function useSaveCollectionSubmitState({
     }
 
     submitInFlightRef.current = true;
-    setSubmitting(true);
+    if (mountedRef.current) {
+      setSubmitting(true);
+      setSubmitFailure(null);
+      setSubmitPhase("processing");
+    }
 
     try {
       const mutationPayload = buildSaveCollectionMutationPayload({
@@ -93,9 +129,23 @@ export function useSaveCollectionSubmitState({
       });
       emitCollectionDataChanged();
       resetSubmitMutationIntent();
+      if (mountedRef.current) {
+        setSubmitFailure(null);
+        setSubmitPhase("saved");
+      }
       clearPageState();
       onSaved?.();
     } catch (error: unknown) {
+      if (mountedRef.current) {
+        setSubmitPhase("failed");
+        setSubmitFailure(
+          buildSaveCollectionRequestFailure({
+            error,
+            receiptCount: receiptFiles.length,
+            fallbackMessage: "Failed to save collection.",
+          }),
+        );
+      }
       mutationFeedback.notifyMutationError({
         title: "Failed to Save Collection",
         error,
@@ -103,7 +153,9 @@ export function useSaveCollectionSubmitState({
       });
     } finally {
       submitInFlightRef.current = false;
-      setSubmitting(false);
+      if (mountedRef.current) {
+        setSubmitting(false);
+      }
     }
   }, [
     clearPageState,
@@ -118,6 +170,9 @@ export function useSaveCollectionSubmitState({
 
   return {
     submitting,
+    submitFailure,
+    submitPhase,
+    clearSubmitFailure,
     handleSubmit,
     resetSubmitMutationIntent,
   };

@@ -10,6 +10,8 @@ import { useMutationFeedback } from "@/hooks/useMutationFeedback";
 import { usePageShortcuts } from "@/hooks/usePageShortcuts";
 import { cn } from "@/lib/utils";
 import { CollectionReceiptPanel } from "@/pages/collection/CollectionReceiptPanel";
+import { SaveCollectionProgress } from "@/pages/collection/SaveCollectionProgress";
+import { SaveCollectionSubmitAlert } from "@/pages/collection/SaveCollectionSubmitAlert";
 import { COLLECTION_BATCH_OPTIONS } from "./utils";
 import { useSaveCollectionPageState } from "./useSaveCollectionPageState";
 import type { CollectionBatch } from "@/lib/api";
@@ -162,6 +164,7 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
       pendingReceiptDrafts={state.receiptDrafts}
       inputRef={state.fileInputRef}
       disabled={state.submitting}
+      pendingStatus={state.receiptPendingStatus}
       onFileChange={state.handleReceiptChange}
       onPendingDraftChange={state.handlePendingDraftChange}
       onRemovePending={state.handleRemoveReceipt}
@@ -208,6 +211,20 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
         ) : null}
       </CardHeader>
       <CardContent className="space-y-4">
+        <SaveCollectionSubmitAlert
+          failure={state.submitFailure}
+          disabled={state.submitting}
+          onDismiss={state.clearSubmitFailure}
+          onRetry={() => {
+            void state.handleSubmit();
+          }}
+        />
+        <SaveCollectionProgress
+          phase={state.submitPhase}
+          receiptCount={state.receiptFiles.length}
+          failure={state.submitFailure}
+          visible={state.submitting || Boolean(state.submitFailure) || state.receiptFiles.length > 0}
+        />
         {isMobile ? (
           <div className="space-y-4">
             <section className="space-y-4 rounded-2xl border border-border/60 bg-muted/10 p-4">

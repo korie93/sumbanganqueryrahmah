@@ -5,6 +5,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { CollectionRecordReceipt } from "@/lib/api";
 import { resolveSafePreviewSourceUrl } from "@/lib/safe-url";
+import { CollectionReceiptDuplicateWarning } from "@/pages/collection/CollectionReceiptDuplicateWarning";
+import {
+  resolveCollectionReceiptPendingStatusCopy,
+  type CollectionReceiptPendingStatus,
+} from "@/pages/collection/collection-receipt-pending-status";
 import { buildCollectionReceiptPanelSummary } from "@/pages/collection/collection-receipt-panel-utils";
 import type { CollectionReceiptDraftInput } from "@/pages/collection/receipt-validation";
 import {
@@ -21,6 +26,7 @@ interface CollectionReceiptPanelProps {
   existingReceiptDrafts?: CollectionReceiptDraftInput[];
   removedReceiptIds?: string[];
   pendingReceiptDrafts?: CollectionReceiptDraftInput[];
+  pendingStatus?: CollectionReceiptPendingStatus;
   onFileChange: (event: ChangeEvent<HTMLInputElement>) => void;
   onRemovePending: (index: number) => void;
   onClearPending?: () => void;
@@ -41,6 +47,7 @@ export function CollectionReceiptPanel({
   existingReceiptDrafts = [],
   removedReceiptIds = [],
   pendingReceiptDrafts = [],
+  pendingStatus = "pending",
   onFileChange,
   onRemovePending,
   onClearPending,
@@ -54,6 +61,7 @@ export function CollectionReceiptPanel({
   const inputId = useId();
   const helperTextId = `${inputId}-help`;
   const draftPreviews = useCollectionReceiptDraftPreviews(pendingFiles);
+  const pendingStatusCopy = resolveCollectionReceiptPendingStatusCopy(pendingStatus);
   const removedSet = new Set(removedReceiptIds);
   const existingDraftMap = new Map(
     existingReceiptDrafts
@@ -108,6 +116,7 @@ export function CollectionReceiptPanel({
       <p id={helperTextId} className="text-xs text-muted-foreground">
         {helperText}
       </p>
+      <CollectionReceiptDuplicateWarning pendingFiles={pendingFiles} />
       <div className="rounded-md border border-border/60 bg-muted/20 px-3 py-2">
         <div className="flex flex-wrap items-center gap-2">
           {summary.existingCount > 0 ? (
@@ -117,13 +126,17 @@ export function CollectionReceiptPanel({
             <Badge variant="destructive">Will Remove {summary.removedExistingCount}</Badge>
           ) : null}
           {summary.pendingCount > 0 ? (
-            <Badge variant="outline">Pending Upload {summary.pendingCount}</Badge>
+            <Badge variant={pendingStatusCopy.badgeVariant}>
+              {pendingStatusCopy.badgeLabel} {summary.pendingCount}
+            </Badge>
           ) : null}
           {summary.willReplace ? (
             <Badge variant="secondary">Replacement Pending</Badge>
           ) : null}
         </div>
-        <p className="mt-2 text-xs text-muted-foreground">{summary.message}</p>
+        <p className="mt-2 text-xs text-muted-foreground">
+          {pendingStatus === "pending" ? summary.message : pendingStatusCopy.helperText}
+        </p>
       </div>
 
       {existingReceipts.length > 0 ? (
@@ -274,7 +287,9 @@ export function CollectionReceiptPanel({
                     <div className="space-y-1">
                       <div className="flex flex-wrap items-center gap-2">
                         <p className="truncate text-sm font-medium">{preview.file.name}</p>
-                        <Badge variant="outline">Pending Upload</Badge>
+                        <Badge variant={pendingStatusCopy.badgeVariant}>
+                          {pendingStatusCopy.badgeLabel}
+                        </Badge>
                         {summary.willReplace ? (
                           <Badge variant="secondary">Replacement</Badge>
                         ) : null}
@@ -283,6 +298,9 @@ export function CollectionReceiptPanel({
                         {preview.file.type || "application/octet-stream"} |{" "}
                         {formatCollectionReceiptFileSize(preview.file.size)}
                       </p>
+                      {pendingStatus !== "pending" ? (
+                        <p className="text-xs text-muted-foreground">{pendingStatusCopy.helperText}</p>
+                      ) : null}
                     </div>
                     {pendingReceiptDrafts[index] ? (
                       <div className="grid gap-2">
