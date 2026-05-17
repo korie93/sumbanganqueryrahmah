@@ -1,6 +1,7 @@
 import { BriefcaseBusiness, CalendarOff, StickyNote } from "lucide-react";
 import type { CollectionDailyDayDetailsResponse, CollectionDailyOverviewDay } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { CollectionDailyCalendarAuditMeta } from "@/pages/collection/CollectionDailyCalendarAuditMeta";
 import { COLLECTION_DAILY_LEAVE_TYPE_LABELS } from "@shared/collection-daily-status";
 
 type CollectionDailyDayStatusNoticeProps = {
@@ -87,6 +88,9 @@ export function CollectionDailyDayStatusNotice({
           <span>Remark Superuser</span>
         </div>
         <p>{note || "Tiada remark daripada superuser untuk tarikh ini."}</p>
+        <div className="mt-2">
+          <CollectionDailyCalendarAuditMeta day={day} />
+        </div>
       </div>
     </section>
   );

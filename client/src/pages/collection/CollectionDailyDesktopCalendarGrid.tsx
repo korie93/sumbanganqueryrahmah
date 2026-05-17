@@ -8,6 +8,14 @@ import {
   statusTextClass,
   type EditableCalendarDay,
 } from "@/pages/collection/CollectionDailyShared";
+import {
+  CollectionDailyCalendarDayBadge,
+  getCollectionDailyCalendarDayBadgeLabel,
+} from "@/pages/collection/CollectionDailyCalendarDayBadge";
+import {
+  matchesCollectionDailyCalendarFilter,
+  type CollectionDailyCalendarFilter,
+} from "@/pages/collection/collection-daily-calendar-filter-utils";
 import { formatAmountRM } from "@/pages/collection/utils";
 
 type CollectionDailyDesktopCalendarGridProps = {
@@ -15,6 +23,7 @@ type CollectionDailyDesktopCalendarGridProps = {
   firstWeekday: number;
   selectedDate: string | null;
   editingDayNumber: number | null;
+  activeFilter: CollectionDailyCalendarFilter;
   canManage: boolean;
   editableCalendarByDay: Map<number, EditableCalendarDay>;
   dirtyCalendarDayNumbers: ReadonlySet<number>;
@@ -40,6 +49,7 @@ export function CollectionDailyDesktopCalendarGrid({
   firstWeekday,
   selectedDate,
   editingDayNumber,
+  activeFilter,
   canManage,
   editableCalendarByDay,
   dirtyCalendarDayNumbers,
@@ -57,16 +67,26 @@ export function CollectionDailyDesktopCalendarGrid({
         const isEditing = editingDayNumber === day.day;
         const isDirty = dirtyCalendarDayNumbers.has(day.day);
         const progressPercent = getDailyProgressPercent(day);
+        const calendarBadgeLabel = getCollectionDailyCalendarDayBadgeLabel(day);
+        const matchesActiveFilter = matchesCollectionDailyCalendarFilter(
+          day,
+          activeFilter,
+          dirtyCalendarDayNumbers,
+        );
 
         return (
           <div
             key={day.date}
-            className={`collection-daily-desktop-day rounded-xl border text-xs shadow-sm ${isSelected ? "ring-2 ring-ring ring-offset-1" : ""} ${isEditing ? "collection-daily-day-card-editing" : ""} ${statusCardClass(day.status)}`}
+            className={`collection-daily-desktop-day rounded-xl border text-xs shadow-sm ${
+              isSelected ? "ring-2 ring-ring ring-offset-1" : ""
+            } ${isEditing ? "collection-daily-day-card-editing" : ""} ${
+              matchesActiveFilter ? "" : "collection-daily-day-card-filter-muted"
+            } ${statusCardClass(day.status)}`}
           >
             <button
               type="button"
               className="collection-daily-day-button w-full rounded-md p-2 text-left transition-colors hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
-              aria-label={`${formatDateDDMMYYYY(day.date)} - ${statusLabel(day.status)} - Collected ${formatAmountRM(day.amount)} - Target ${formatAmountRM(day.target)}${isSelected ? " - Selected" : ""}`}
+              aria-label={`${formatDateDDMMYYYY(day.date)} - ${statusLabel(day.status)} - Collected ${formatAmountRM(day.amount)} - Target ${formatAmountRM(day.target)}${calendarBadgeLabel ? ` - ${calendarBadgeLabel}` : ""}${matchesActiveFilter ? "" : " - Not matching current quick filter"}${isSelected ? " - Selected" : ""}`}
               onClick={() => onSelectDate(day.date)}
               data-testid={`collection-daily-day-${day.day}`}
             >
@@ -95,11 +115,7 @@ export function CollectionDailyDesktopCalendarGrid({
                 value={progressPercent}
                 aria-hidden="true"
               />
-              {day.isHoliday && day.holidayName ? (
-                <div className="truncate text-[10px] text-muted-foreground" title={day.holidayName}>
-                  {day.holidayName}
-                </div>
-              ) : null}
+              <CollectionDailyCalendarDayBadge day={day} compact />
             </button>
             {canManage && editable ? (
               <div className="collection-daily-day-edit border-t border-border/40 p-2" data-floating-ai-avoid="true">

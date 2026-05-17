@@ -3,10 +3,17 @@ import { OperationalSectionCard } from "@/components/layout/OperationalPage";
 import { useIsMobile } from "@/hooks/use-mobile";
 import type { CollectionDailyOverviewResponse } from "@/lib/api";
 import { CollectionDailyCalendarEditDialog } from "@/pages/collection/CollectionDailyCalendarEditDialog";
+import { CollectionDailyCalendarChangeReview } from "@/pages/collection/CollectionDailyCalendarChangeReview";
 import { CollectionDailyCalendarLegend } from "@/pages/collection/CollectionDailyCalendarLegend";
+import { CollectionDailyCalendarQuickFilter } from "@/pages/collection/CollectionDailyCalendarQuickFilter";
 import { CollectionDailyCalendarState } from "@/pages/collection/CollectionDailyCalendarState";
+import { CollectionDailyCalendarStatusSummary } from "@/pages/collection/CollectionDailyCalendarStatusSummary";
 import { CollectionDailyMobileDayList } from "@/pages/collection/CollectionDailyMobileDayList";
 import type { EditableCalendarDay } from "@/pages/collection/CollectionDailyShared";
+import {
+  filterCollectionDailyCalendarDays,
+  type CollectionDailyCalendarFilter,
+} from "@/pages/collection/collection-daily-calendar-filter-utils";
 
 export type CollectionDailyCalendarCardProps = {
   loadingOverview: boolean;
@@ -45,6 +52,7 @@ export function CollectionDailyCalendarCard({
 }: CollectionDailyCalendarCardProps) {
   const isMobile = useIsMobile();
   const [editingDayNumber, setEditingDayNumber] = useState<number | null>(null);
+  const [activeFilter, setActiveFilter] = useState<CollectionDailyCalendarFilter>("all");
   const editingDay = useMemo(() => {
     if (!overview?.days.length || editingDayNumber == null) return null;
     return overview.days.find((day) => day.day === editingDayNumber) || null;
@@ -74,6 +82,20 @@ export function CollectionDailyCalendarCard({
     }
   }, []);
 
+  const handleFilterChange = useCallback((filter: CollectionDailyCalendarFilter) => {
+    setActiveFilter(filter);
+    setEditingDayNumber(null);
+  }, []);
+
+  const filteredMobileDays = useMemo(() => {
+    if (!overview?.days.length) return [];
+    return filterCollectionDailyCalendarDays(
+      overview.days,
+      activeFilter,
+      dirtyCalendarDayNumbers,
+    );
+  }, [activeFilter, dirtyCalendarDayNumbers, overview?.days]);
+
   return (
     <div className="collection-daily-calendar" data-testid="collection-daily-calendar">
       <OperationalSectionCard
@@ -94,6 +116,20 @@ export function CollectionDailyCalendarCard({
           <CollectionDailyCalendarState loading={false} message={emptyOverviewMessage} />
         ) : (
           <div className="space-y-3">
+            <CollectionDailyCalendarStatusSummary
+              days={overview.days}
+              dirtyCalendarDayNumbers={dirtyCalendarDayNumbers}
+              canManage={canManage}
+            />
+
+            <CollectionDailyCalendarQuickFilter
+              days={overview.days}
+              dirtyCalendarDayNumbers={dirtyCalendarDayNumbers}
+              activeFilter={activeFilter}
+              canManage={canManage}
+              onFilterChange={handleFilterChange}
+            />
+
             {canManage ? (
               <div className="collection-daily-edit-helper" aria-live="polite" aria-atomic="true">
                 <span className="collection-daily-edit-helper-dot" aria-hidden="true" />
@@ -104,16 +140,32 @@ export function CollectionDailyCalendarCard({
               </div>
             ) : null}
 
-            {isMobile ? (
-              <CollectionDailyMobileDayList
+            {canManage ? (
+              <CollectionDailyCalendarChangeReview
                 days={overview.days}
-                selectedDate={selectedDate}
-                editingDayNumber={editingDayNumber}
-                canManage={canManage}
+                editableCalendarByDay={editableCalendarByDay}
                 dirtyCalendarDayNumbers={dirtyCalendarDayNumbers}
-                onSelectDate={onSelectDate}
-                onEditDay={setEditingDayNumber}
+                savingCalendar={savingCalendar}
+                onSaveCalendar={onSaveCalendar}
               />
+            ) : null}
+
+            {isMobile ? (
+              filteredMobileDays.length ? (
+                <CollectionDailyMobileDayList
+                  days={filteredMobileDays}
+                  selectedDate={selectedDate}
+                  editingDayNumber={editingDayNumber}
+                  canManage={canManage}
+                  dirtyCalendarDayNumbers={dirtyCalendarDayNumbers}
+                  onSelectDate={onSelectDate}
+                  onEditDay={setEditingDayNumber}
+                />
+              ) : (
+                <div className="collection-daily-calendar-filter-empty" role="status">
+                  Tiada tarikh yang sepadan dengan filter ini.
+                </div>
+              )
             ) : (
               <div className="min-w-0 space-y-3">
                 <div className="grid grid-cols-7 gap-2 text-center text-xs font-medium text-muted-foreground">
@@ -133,6 +185,7 @@ export function CollectionDailyCalendarCard({
                     firstWeekday={firstWeekday}
                     selectedDate={selectedDate}
                     editingDayNumber={editingDayNumber}
+                    activeFilter={activeFilter}
                     canManage={canManage}
                     editableCalendarByDay={editableCalendarByDay}
                     dirtyCalendarDayNumbers={dirtyCalendarDayNumbers}

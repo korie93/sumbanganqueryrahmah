@@ -121,6 +121,8 @@ test("getCollectionDailyOverview normalizes malformed payloads into a safe shape
             amount: "11.1",
             target: "30",
             customerCount: "3",
+            updatedBy: "superuser",
+            updatedAt: "2026-03-02T09:00:00.000Z",
             status: "broken",
           },
         ],
@@ -141,6 +143,8 @@ test("getCollectionDailyOverview normalizes malformed payloads into a safe shape
     assert.equal(response.summary.monthlyTarget, 123.45);
     assert.equal(response.days[0]?.date, "2026-03-02");
     assert.equal(response.days[0]?.customerCount, 3);
+    assert.equal(response.days[0]?.updatedBy, "superuser");
+    assert.equal(response.days[0]?.updatedAt, "2026-03-02T09:00:00.000Z");
     assert.equal(response.days[0]?.status, "neutral");
   } finally {
     globalThis.fetch = originalFetch;

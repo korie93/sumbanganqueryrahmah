@@ -1,0 +1,24 @@
+.collection-daily-calendar-conflict-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  border: 1px solid hsl(var(--destructive) / 0.25);
+  border-radius: 0.85rem;
+  background: hsl(var(--destructive) / 0.08);
+  color: hsl(var(--destructive));
+  padding: 0.65rem 0.75rem;
+  font-size: 0.76rem;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.collection-daily-calendar-conflict-notice svg {
+  margin-top: 0.08rem;
+  flex-shrink: 0;
+}
+
+.collection-daily-calendar-conflict-notice-compact {
+  padding: 0.48rem 0.6rem;
+  font-size: 0.7rem;
+}
+

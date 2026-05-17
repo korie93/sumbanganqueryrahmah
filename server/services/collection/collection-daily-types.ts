@@ -14,6 +14,10 @@ export type CollectionDailyCalendarInput = {
   isWorkingDay: boolean;
   isHoliday: boolean;
   holidayName?: string | null;
+  createdBy?: string | null | undefined;
+  updatedBy?: string | null | undefined;
+  createdAt?: Date | null | undefined;
+  updatedAt?: Date | null | undefined;
 };
 
 export type CollectionDailyTimelineDay = {
@@ -29,6 +33,10 @@ export type CollectionDailyTimelineDay = {
   holidayName: string | null;
   leaveType: CollectionDailyLeaveType | null;
   note: string | null;
+  createdBy: string | null;
+  updatedBy: string | null;
+  createdAt: Date | null;
+  updatedAt: Date | null;
   customerCount: number;
   status: CollectionDailyStatus;
 };

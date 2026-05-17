@@ -1,0 +1,134 @@
+.collection-daily-calendar-change-review {
+  display: grid;
+  gap: 0.75rem;
+  border: 1px solid hsl(var(--primary) / 0.22);
+  border-radius: 1rem;
+  background:
+    linear-gradient(135deg, hsl(var(--primary) / 0.1), hsl(var(--background) / 0.86)),
+    hsl(var(--background));
+  padding: 0.85rem;
+}
+
+.collection-daily-calendar-change-review-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.85rem;
+}
+
+.collection-daily-calendar-change-review-kicker {
+  color: hsl(var(--primary));
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  line-height: 1.25;
+  text-transform: uppercase;
+}
+
+.collection-daily-calendar-change-review-title {
+  margin-top: 0.12rem;
+  color: hsl(var(--foreground));
+  font-size: 0.9rem;
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+.collection-daily-calendar-change-review-description {
+  margin-top: 0.2rem;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.75rem;
+  line-height: 1.35;
+}
+
+.collection-daily-calendar-change-review-save {
+  min-height: 2.35rem;
+  flex-shrink: 0;
+  border-radius: 0.8rem;
+}
+
+.collection-daily-calendar-change-review-list {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.collection-daily-calendar-change-review-item {
+  display: grid;
+  grid-template-columns: minmax(5.6rem, 0.8fr) minmax(0, 1.35fr) minmax(0, 1fr);
+  gap: 0.55rem;
+  align-items: center;
+  border: 1px solid hsl(var(--border) / 0.55);
+  border-radius: 0.85rem;
+  background: hsl(var(--background) / 0.76);
+  padding: 0.55rem 0.65rem;
+}
+
+.collection-daily-calendar-change-review-date {
+  color: hsl(var(--foreground));
+  font-size: 0.76rem;
+  font-weight: 800;
+}
+
+.collection-daily-calendar-change-review-status {
+  display: grid;
+  min-width: 0;
+  gap: 0.05rem;
+  color: hsl(var(--foreground));
+  font-size: 0.75rem;
+}
+
+.collection-daily-calendar-change-review-status small,
+.collection-daily-calendar-change-review-note,
+.collection-daily-calendar-change-review-more {
+  color: hsl(var(--muted-foreground));
+  font-size: 0.7rem;
+  line-height: 1.35;
+}
+
+.collection-daily-calendar-change-review-note {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.collection-daily-calendar-change-review-conflict {
+  border-radius: 999px;
+  background: hsl(var(--destructive) / 0.08);
+  color: hsl(var(--destructive));
+  padding: 0.2rem 0.45rem;
+  font-size: 0.68rem;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.collection-daily-calendar-change-review-more {
+  padding-inline: 0.2rem;
+  font-weight: 700;
+}
+
+.collection-daily-calendar-change-review-warning {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: hsl(var(--destructive));
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+@media (max-width: 640px) {
+  .collection-daily-calendar-change-review-header,
+  .collection-daily-calendar-change-review-item {
+    grid-template-columns: 1fr;
+  }
+
+  .collection-daily-calendar-change-review-header {
+    display: grid;
+  }
+
+  .collection-daily-calendar-change-review-save {
+    width: 100%;
+  }
+
+  .collection-daily-calendar-change-review-note {
+    white-space: normal;
+  }
+}

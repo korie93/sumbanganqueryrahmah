@@ -1,0 +1,73 @@
+.collection-daily-calendar-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr));
+  gap: 0.5rem;
+}
+
+.collection-daily-calendar-summary-pill {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  min-width: 0;
+  border: 1px solid hsl(var(--border) / 0.68);
+  border-radius: 0.875rem;
+  background: hsl(var(--background) / 0.76);
+  padding: 0.65rem 0.75rem;
+}
+
+.collection-daily-calendar-summary-value {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.collection-daily-calendar-summary-text {
+  display: grid;
+  gap: 0.12rem;
+  min-width: 0;
+}
+
+.collection-daily-calendar-summary-text span {
+  overflow: hidden;
+  color: hsl(var(--foreground));
+  font-size: 0.8rem;
+  font-weight: 700;
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.collection-daily-calendar-summary-text small {
+  overflow: hidden;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.68rem;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.collection-daily-calendar-summary-pill-working .collection-daily-calendar-summary-value {
+  background: hsl(142 69% 91%);
+  color: hsl(150 84% 24%);
+}
+
+.collection-daily-calendar-summary-pill-holiday .collection-daily-calendar-summary-value {
+  background: hsl(253 91% 95%);
+  color: hsl(262 83% 42%);
+}
+
+.collection-daily-calendar-summary-pill-off .collection-daily-calendar-summary-value {
+  background: hsl(215 16% 90%);
+  color: hsl(215 25% 27%);
+}
+
+.collection-daily-calendar-summary-pill-dirty .collection-daily-calendar-summary-value {
+  background: hsl(43 96% 89%);
+  color: hsl(32 95% 32%);
+}

@@ -254,6 +254,10 @@ export type CollectionDailyOverviewDay = {
   calendarStatus: CollectionDailyCalendarStatus;
   leaveType: CollectionDailyLeaveType | null;
   note: string | null;
+  createdBy?: string | null;
+  updatedBy?: string | null;
+  createdAt?: string | null;
+  updatedAt?: string | null;
   isWorkingDay: boolean;
   isHoliday: boolean;
   holidayName: string | null;

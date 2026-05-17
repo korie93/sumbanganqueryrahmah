@@ -1,0 +1,73 @@
+.collection-daily-calendar-day-badge {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.55rem;
+  border: 1px solid hsl(var(--border) / 0.58);
+  border-radius: 14px;
+  background: hsl(var(--background) / 0.76);
+  color: hsl(var(--foreground));
+  padding: 0.45rem 0.55rem;
+  line-height: 1.2;
+}
+
+.collection-daily-calendar-day-badge-code {
+  display: inline-flex;
+  min-width: 2rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: hsl(var(--muted) / 0.5);
+  color: hsl(var(--foreground));
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  padding: 0.22rem 0.35rem;
+}
+
+.collection-daily-calendar-day-badge-text {
+  min-width: 0;
+  display: grid;
+  gap: 0.1rem;
+}
+
+.collection-daily-calendar-day-badge-text span,
+.collection-daily-calendar-day-badge-text small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.collection-daily-calendar-day-badge-text span {
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.collection-daily-calendar-day-badge-text small {
+  color: hsl(var(--muted-foreground));
+  font-size: 0.68rem;
+}
+
+.collection-daily-calendar-day-badge-holiday {
+  border-color: hsl(38 92% 50% / 0.32);
+  background:
+    linear-gradient(135deg, hsl(38 92% 50% / 0.12), hsl(var(--background) / 0.72));
+}
+
+.collection-daily-calendar-day-badge-holiday .collection-daily-calendar-day-badge-code {
+  background: hsl(38 92% 50% / 0.2);
+  color: hsl(31 78% 28%);
+}
+
+.collection-daily-calendar-day-badge-working .collection-daily-calendar-day-badge-code {
+  background: hsl(160 84% 39% / 0.14);
+  color: hsl(158 64% 24%);
+}
+
+.collection-daily-calendar-day-badge-compact {
+  padding: 0.35rem 0.45rem;
+}
+
+.collection-daily-calendar-day-badge-compact .collection-daily-calendar-day-badge-code {
+  min-width: 1.8rem;
+}

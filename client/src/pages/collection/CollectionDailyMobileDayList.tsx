@@ -7,6 +7,10 @@ import {
   statusLabel,
   statusTextClass,
 } from "@/pages/collection/CollectionDailyShared";
+import {
+  CollectionDailyCalendarDayBadge,
+  getCollectionDailyCalendarDayBadgeLabel,
+} from "@/pages/collection/CollectionDailyCalendarDayBadge";
 import { CollectionDailyDayStatusIcon } from "@/pages/collection/CollectionDailyDayStatusIcon";
 import { formatAmountRM } from "@/pages/collection/utils";
 
@@ -35,6 +39,7 @@ export function CollectionDailyMobileDayList({
         const isSelected = selectedDate === day.date;
         const isEditing = editingDayNumber === day.day;
         const isDirty = dirtyCalendarDayNumbers.has(day.day);
+        const calendarBadgeLabel = getCollectionDailyCalendarDayBadgeLabel(day);
 
         return (
           <article
@@ -88,19 +93,16 @@ export function CollectionDailyMobileDayList({
                 >
                   {statusLabel(day.status)}
                 </span>
-                {day.isHoliday && day.holidayName ? (
-                  <span className="rounded-full border border-border/50 bg-background/70 px-2.5 py-1 text-foreground">
-                    Holiday: {day.holidayName}
-                  </span>
-                ) : null}
               </div>
+
+              <CollectionDailyCalendarDayBadge day={day} />
 
               <div className="mt-3 grid gap-2 sm:grid-cols-2" data-floating-ai-avoid="true">
                 <Button
                   type="button"
                   variant="outline"
                   className="h-10 rounded-xl bg-background/80"
-                  aria-label={`View collection details for ${formatDateDDMMYYYY(day.date)}`}
+                  aria-label={`View collection details for ${formatDateDDMMYYYY(day.date)}${calendarBadgeLabel ? ` - ${calendarBadgeLabel}` : ""}`}
                   onClick={() => onSelectDate(day.date)}
                   data-testid={`collection-daily-day-${day.day}`}
                 >

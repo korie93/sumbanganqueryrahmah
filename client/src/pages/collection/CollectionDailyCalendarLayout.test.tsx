@@ -72,6 +72,7 @@ test("CollectionDailyDesktopCalendarGrid keeps day cards compact with a separate
       firstWeekday: 0,
       selectedDate: null,
       editingDayNumber: 2,
+      activeFilter: "unsaved",
       canManage: true,
       editableCalendarByDay: editableDays,
       dirtyCalendarDayNumbers: new Set([2]),
@@ -82,7 +83,11 @@ test("CollectionDailyDesktopCalendarGrid keeps day cards compact with a separate
 
   assert.match(markup, /Edit status/);
   assert.match(markup, /Unsaved change/);
+  assert.match(markup, /OFF/);
+  assert.match(markup, /Company Closed/);
+  assert.match(markup, /Company closed/);
   assert.match(markup, /aria-pressed="true"/);
+  assert.match(markup, /collection-daily-day-card-filter-muted/);
   assert.doesNotMatch(markup, /Status day 1/);
   assert.doesNotMatch(markup, /Status day 2/);
 });

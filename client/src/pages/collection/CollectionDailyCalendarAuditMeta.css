@@ -1,0 +1,21 @@
+.collection-daily-calendar-audit-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.72rem;
+  line-height: 1.35;
+}
+
+.collection-daily-calendar-audit-meta-compact {
+  display: flex;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.collection-daily-calendar-audit-meta-muted {
+  display: block;
+  font-size: 0.72rem;
+}
+

@@ -2,6 +2,8 @@ import { CalendarCheck2, Eye, Loader2, Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { CollectionDailyOverviewDay } from "@/lib/api";
 import { formatDateDDMMYYYY } from "@/lib/date-format";
+import { CollectionDailyCalendarAuditMeta } from "@/pages/collection/CollectionDailyCalendarAuditMeta";
+import { CollectionDailyCalendarConflictNotice } from "@/pages/collection/CollectionDailyCalendarConflictNotice";
 import { DailyStatusForm } from "@/pages/collection/DailyStatusForm";
 import {
   statusLabel,
@@ -127,6 +129,9 @@ export function CollectionDailyCalendarEditPanel({
               Tiada nota status untuk hari ini.
             </p>
           )}
+          <div className="mt-2">
+            <CollectionDailyCalendarAuditMeta day={day} />
+          </div>
         </div>
 
         <div
@@ -149,6 +154,8 @@ export function CollectionDailyCalendarEditPanel({
           label="Status untuk nickname dipilih"
           onChange={onChange}
         />
+
+        <CollectionDailyCalendarConflictNotice day={day} editableDay={editableDay} />
 
         <div className="grid gap-2">
           <Button

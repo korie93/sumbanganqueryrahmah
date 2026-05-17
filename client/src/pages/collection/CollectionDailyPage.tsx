@@ -4,6 +4,12 @@ import { CollectionDailyFiltersCard } from "@/pages/collection/CollectionDailyFi
 import { CollectionDailyRoleGuide } from "@/pages/collection/CollectionDailyRoleGuide";
 import { CollectionDailySummaryCard } from "@/pages/collection/CollectionDailySummaryCard";
 import { useCollectionDailyPageModel } from "@/pages/collection/useCollectionDailyPageModel";
+import "./CollectionDailyCalendarAuditMeta.css";
+import "./CollectionDailyCalendarChangeReview.css";
+import "./CollectionDailyCalendarConflictNotice.css";
+import "./CollectionDailyCalendarDayBadge.css";
+import "./CollectionDailyCalendarQuickFilter.css";
+import "./CollectionDailyCalendarStatusSummary.css";
 import "./CollectionDailyPage.css";
 
 const CollectionDailyDayDetailsDialog = lazy(() =>

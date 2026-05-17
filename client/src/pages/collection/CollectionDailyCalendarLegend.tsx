@@ -1,71 +1,86 @@
 import { Badge } from "@/components/ui/badge";
+import {
+  COLLECTION_DAILY_RESULT_LEGEND_ITEMS,
+  COLLECTION_DAILY_STATUS_CODE_LEGEND_ITEMS,
+  type CollectionDailyCalendarLegendItem,
+} from "@/pages/collection/collection-daily-calendar-legend-utils";
 
 type CollectionDailyCalendarLegendProps = {
   isMobile: boolean;
 };
 
-const legendItems = [
-  {
-    label: "Red: No collection",
-    detail: "No collection",
-    className: "border-rose-300/60 bg-rose-50/70 text-rose-700 dark:bg-rose-950/25 dark:text-rose-200",
-    dotClassName: "bg-rose-500",
-  },
-  {
-    label: "Yellow: Below target",
-    detail: "Collection recorded but daily target not achieved",
-    className: "border-amber-300/60 bg-amber-50/70 text-amber-700 dark:bg-amber-950/25 dark:text-amber-200",
-    dotClassName: "bg-amber-500",
-  },
-  {
-    label: "Green: Target achieved",
-    detail: "Daily target achieved",
-    className: "border-green-300/60 bg-green-50/70 text-green-700 dark:bg-green-950/25 dark:text-green-200",
-    dotClassName: "bg-green-500",
-  },
-  {
-    label: "Grey: Holiday",
-    detail: "Holiday / Leave / OFF",
-    className: "border-slate-300/60 bg-slate-100/80 text-slate-700 dark:bg-slate-900/55 dark:text-slate-200",
-    dotClassName: "bg-slate-500",
-  },
-] as const;
+function StatusCodeBadge({ item }: { item: CollectionDailyCalendarLegendItem }) {
+  return (
+    <Badge
+      className={`collection-daily-legend-badge inline-flex items-center gap-1.5 ${item.className} hover:bg-current/0`}
+      title={`${item.code ? `${item.code} - ` : ""}${item.detail}`}
+    >
+      {item.code ? <span className="font-semibold">{item.code}</span> : null}
+      <span>{item.label}</span>
+    </Badge>
+  );
+}
 
 export function CollectionDailyCalendarLegend({ isMobile }: CollectionDailyCalendarLegendProps) {
   if (isMobile) {
     return (
-      <div className="collection-daily-legend space-y-2" data-testid="collection-daily-legend">
+      <div
+        className="collection-daily-legend space-y-3"
+        data-testid="collection-daily-legend"
+        aria-label="Collection daily calendar legend"
+      >
         <div className="flex flex-wrap gap-2">
-          {legendItems.map((item) => (
+          {COLLECTION_DAILY_RESULT_LEGEND_ITEMS.map((item) => (
             <Badge
               key={item.label}
               className={`collection-daily-legend-badge ${item.className} hover:bg-current/0`}
+              title={item.detail}
             >
               {item.label}
             </Badge>
           ))}
         </div>
+        <div className="flex flex-wrap gap-2" aria-label="Daily status and leave type codes">
+          {COLLECTION_DAILY_STATUS_CODE_LEGEND_ITEMS.map((item) => (
+            <StatusCodeBadge key={item.code ?? item.label} item={item} />
+          ))}
+        </div>
         <p className="text-xs text-muted-foreground">
-          Kad harian tunjuk angka penting dahulu. Tap View details untuk semak transaksi.
+          Kad harian tunjuk angka penting dahulu. Kod seperti AL, MC, atau OFF ikut status
+          nickname yang dipilih sahaja.
         </p>
       </div>
     );
   }
 
   return (
-    <div
-      className="collection-daily-legend grid gap-2 text-xs md:grid-cols-2 xl:grid-cols-4"
+    <section
+      className="collection-daily-legend space-y-3 text-xs"
       data-testid="collection-daily-legend"
+      aria-label="Collection daily calendar legend"
     >
-      {legendItems.map((item) => (
-        <div
-          key={item.label}
-          className={`collection-daily-legend-item flex items-center gap-2 rounded-xl border px-3 py-2 ${item.className}`}
-        >
-          <span className={`h-2.5 w-2.5 rounded-full ${item.dotClassName}`} />
-          <span>{item.detail}</span>
+      <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
+        {COLLECTION_DAILY_RESULT_LEGEND_ITEMS.map((item) => (
+          <div
+            key={item.label}
+            className={`collection-daily-legend-item flex items-center gap-2 rounded-xl border px-3 py-2 ${item.className}`}
+            title={item.detail}
+          >
+            <span className={`h-2.5 w-2.5 rounded-full ${item.dotClassName}`} aria-hidden="true" />
+            <span>{item.detail}</span>
+          </div>
+        ))}
+      </div>
+      <div className="rounded-2xl border border-border/60 bg-background/70 p-3">
+        <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+          Daily status codes
+        </p>
+        <div className="flex flex-wrap gap-2" aria-label="Daily status and leave type codes">
+          {COLLECTION_DAILY_STATUS_CODE_LEGEND_ITEMS.map((item) => (
+            <StatusCodeBadge key={item.code ?? item.label} item={item} />
+          ))}
         </div>
-      ))}
-    </div>
+      </div>
+    </section>
   );
 }

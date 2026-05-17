@@ -111,6 +111,37 @@ test("computeCollectionDailyTimeline keeps non-working days neutral", () => {
   assert.equal(timeline.summary.neutralDays, timeline.daysInMonth);
 });
 
+test("computeCollectionDailyTimeline preserves calendar audit metadata", () => {
+  const updatedAt = new Date("2026-04-01T09:30:00.000Z");
+  const timeline = computeCollectionDailyTimeline({
+    year: 2026,
+    month: 4,
+    monthlyTarget: 1000,
+    calendarRows: [
+      {
+        day: 1,
+        status: "HOLIDAY",
+        leaveType: "OFF",
+        note: "Company closed",
+        isWorkingDay: false,
+        isHoliday: true,
+        holidayName: "OFF",
+        createdBy: "superuser",
+        updatedBy: "superuser",
+        createdAt: updatedAt,
+        updatedAt,
+      },
+    ],
+    amountByDate: new Map<string, number>(),
+    referenceDate: new Date("2026-04-10T12:00:00.000Z"),
+  });
+
+  const day1 = timeline.days.find((day) => day.date === "2026-04-01");
+  assert.ok(day1);
+  assert.equal(day1.updatedBy, "superuser");
+  assert.equal(day1.updatedAt, updatedAt);
+});
+
 test("computeCollectionDailyTimeline aligns expected progress with working days and monthly ceiling", () => {
   const timeline = computeCollectionDailyTimeline({
     year: 2026,

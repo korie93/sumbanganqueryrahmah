@@ -2,6 +2,7 @@ import { useCallback, useState } from "react";
 import { setCollectionDailyCalendar, setCollectionDailyTarget } from "@/lib/api";
 import { parseCollectionAmountMyrInput } from "@shared/collection-amount-types";
 import type { EditableCalendarDay } from "@/pages/collection/CollectionDailyShared";
+import { buildCollectionDailyCalendarSavedDescription } from "@/pages/collection/collection-daily-calendar-save-feedback";
 import { buildCollectionDailyCalendarPayloadDays } from "@/pages/collection/collection-daily-state-utils";
 import { parseApiError } from "@/pages/collection/utils";
 
@@ -144,10 +145,12 @@ export function useCollectionDailyMutationState({
       });
       toast({
         title: "Daily Status Saved",
-        description:
-          calendarDaysToSave.length === 1
-            ? `Updated day ${calendarDaysToSave[0]?.day} for ${selectedUsername}.`
-            : `Updated ${calendarDaysToSave.length} changed days for ${selectedUsername}.`,
+        description: buildCollectionDailyCalendarSavedDescription({
+          username: selectedUsername,
+          year,
+          month,
+          days: calendarDaysToSave,
+        }),
       });
       onCalendarSaved();
       await onRefresh();

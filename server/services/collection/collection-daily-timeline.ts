@@ -16,6 +16,17 @@ import type {
   ComputeCollectionDailyTimelineParams,
 } from "./collection-daily-types";
 
+function getTimeValue(value: Date | null | undefined) {
+  return value instanceof Date && Number.isFinite(value.getTime()) ? value.getTime() : 0;
+}
+
+function resolveLatestCalendarMetadata(entries: CollectionDailyTimelineDay[]) {
+  return entries.reduce<CollectionDailyTimelineDay | null>((latest, entry) => {
+    if (!latest) return entry;
+    return getTimeValue(entry.updatedAt) > getTimeValue(latest.updatedAt) ? entry : latest;
+  }, null);
+}
+
 export function aggregateCollectionDailyTimelines(
   timelines: CollectionDailyTimeline[],
 ): CollectionDailyTimelineAggregate {
@@ -68,6 +79,7 @@ export function aggregateCollectionDailyTimelines(
     const calendarStatus: CollectionDailyTimelineDay["calendarStatus"] = allHoliday
       ? "HOLIDAY"
       : "WORKING";
+    const latestMetadata = resolveLatestCalendarMetadata(dayEntries);
 
     if (status === "green") completedDays += 1;
     else if (status === "yellow") incompleteDays += 1;
@@ -93,6 +105,10 @@ export function aggregateCollectionDailyTimelines(
           : null,
       leaveType: leaveTypes.length === 1 ? leaveTypes[0] ?? null : null,
       note: notes.length === 1 ? notes[0] ?? null : null,
+      createdBy: latestMetadata?.createdBy ?? null,
+      updatedBy: latestMetadata?.updatedBy ?? null,
+      createdAt: latestMetadata?.createdAt ?? null,
+      updatedAt: latestMetadata?.updatedAt ?? null,
       customerCount,
       status,
     };
@@ -246,6 +262,10 @@ export function computeCollectionDailyTimeline({
       holidayName: override?.holidayName || null,
       leaveType: override?.leaveType || null,
       note: override?.note || null,
+      createdBy: override?.createdBy || null,
+      updatedBy: override?.updatedBy || null,
+      createdAt: override?.createdAt || null,
+      updatedAt: override?.updatedAt || null,
       customerCount: Number(customerCountByDate.get(date) || 0),
       status,
     });
