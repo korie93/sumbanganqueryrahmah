@@ -121,6 +121,30 @@ test("CollectionDailyDesktopCalendarGrid supports compact icon calendar view", (
   assert.doesNotMatch(markup, /Collected:/);
 });
 
+test("CollectionDailyDesktopCalendarGrid supports heatmap calendar view", () => {
+  const markup = renderToStaticMarkup(
+    createElement(CollectionDailyDesktopCalendarGrid, {
+      days: overviewDays,
+      viewMode: "heatmap",
+      firstWeekday: 0,
+      selectedDate: null,
+      editingDayNumber: null,
+      activeFilter: "all",
+      canManage: false,
+      editableCalendarByDay: editableDays,
+      dirtyCalendarDayNumbers: new Set<number>(),
+      bulkSelectedDayNumbers: new Set<number>(),
+      onEditDay: () => undefined,
+      onSelectDate: () => undefined,
+      onToggleBulkDay: () => undefined,
+    }),
+  );
+
+  assert.match(markup, /collection-daily-desktop-grid-mode-heatmap/);
+  assert.match(markup, /collection-daily-day-view-heatmap/);
+  assert.match(markup, /RM/);
+});
+
 test("CollectionDailyCalendarEditPanel renders the selected day status form and save guidance", () => {
   const markup = renderToStaticMarkup(
     createElement(CollectionDailyCalendarEditPanel, {

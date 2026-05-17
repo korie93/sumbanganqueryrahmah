@@ -4,6 +4,7 @@ import { CollectionDailyFiltersCard } from "@/pages/collection/CollectionDailyFi
 import { CollectionDailyRoleGuide } from "@/pages/collection/CollectionDailyRoleGuide";
 import { CollectionDailySummaryCard } from "@/pages/collection/CollectionDailySummaryCard";
 import { useCollectionDailyPageModel } from "@/pages/collection/useCollectionDailyPageModel";
+import "./CollectionDailyCalendarAttentionSummary.css";
 import "./CollectionDailyCalendarAuditMeta.css";
 import "./CollectionDailyCalendarAuditHistoryDialog.css";
 import "./CollectionDailyCalendarBulkToolbar.css";

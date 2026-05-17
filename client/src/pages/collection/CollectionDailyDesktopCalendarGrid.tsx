@@ -69,6 +69,7 @@ export function CollectionDailyDesktopCalendarGrid({
   const iconMode = isCollectionDailyCalendarIconViewMode(viewMode);
   const showFullContent = viewMode === "content" || viewMode === "list";
   const showTileContent = viewMode === "tiles";
+  const showHeatmapContent = viewMode === "heatmap";
   const showLargeIconContent = viewMode === "icon-lg";
   const showMediumIconContent = viewMode === "icon-md" || showLargeIconContent;
 
@@ -126,13 +127,13 @@ export function CollectionDailyDesktopCalendarGrid({
               <div className={`collection-daily-day-status ${statusTextClass(day.status)}`}>
                 {statusLabel(day.status)}
               </div>
-              {showFullContent || showTileContent || showLargeIconContent ? (
+              {showFullContent || showTileContent || showHeatmapContent || showLargeIconContent ? (
                 <div className="collection-daily-day-amount">
                   {showFullContent ? "Collected: " : ""}
                   {formatAmountRM(day.amount)}
                 </div>
               ) : null}
-              {showFullContent || showTileContent ? (
+              {showFullContent || showTileContent || showHeatmapContent ? (
                 <div className="text-[10px] text-muted-foreground">
                   Customers: {day.customerCount}
                 </div>
@@ -150,8 +151,11 @@ export function CollectionDailyDesktopCalendarGrid({
                   />
                 </>
               ) : null}
-              {showFullContent || showTileContent || showMediumIconContent ? (
-                <CollectionDailyCalendarDayBadge day={day} compact={iconMode || showTileContent} />
+              {showFullContent || showTileContent || showHeatmapContent || showMediumIconContent ? (
+                <CollectionDailyCalendarDayBadge
+                  day={day}
+                  compact={iconMode || showTileContent || showHeatmapContent}
+                />
               ) : null}
             </button>
             {canManage && editable ? (

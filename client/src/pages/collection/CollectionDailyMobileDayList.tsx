@@ -46,6 +46,7 @@ export function CollectionDailyMobileDayList({
   const iconMode = isCollectionDailyCalendarIconViewMode(viewMode);
   const showFullContent = viewMode === "content" || viewMode === "list";
   const showTileContent = viewMode === "tiles";
+  const showHeatmapContent = viewMode === "heatmap";
   const showLargeIconContent = viewMode === "icon-lg";
   const showMediumIconContent = viewMode === "icon-md" || showLargeIconContent;
 
@@ -89,7 +90,7 @@ export function CollectionDailyMobileDayList({
                 </span>
               </div>
 
-              {showFullContent || showTileContent || showLargeIconContent ? (
+              {showFullContent || showTileContent || showHeatmapContent || showLargeIconContent ? (
                 <div className="collection-daily-mobile-day-metrics mt-3 grid grid-cols-2 gap-2 text-xs">
                   <div className="collection-daily-day-metric rounded-xl border border-border/50 bg-background/70 px-3 py-2">
                     <p className="uppercase tracking-[0.12em] text-muted-foreground">Collected</p>
@@ -97,7 +98,7 @@ export function CollectionDailyMobileDayList({
                       {formatAmountRM(day.amount)}
                     </p>
                   </div>
-                  {showFullContent || showTileContent ? (
+                  {showFullContent || showTileContent || showHeatmapContent ? (
                     <div className="collection-daily-day-metric rounded-xl border border-border/50 bg-background/70 px-3 py-2">
                       <p className="uppercase tracking-[0.12em] text-muted-foreground">Target</p>
                       <p className="mt-1 text-sm font-semibold text-foreground">
@@ -108,7 +109,7 @@ export function CollectionDailyMobileDayList({
                 </div>
               ) : null}
 
-              {showFullContent || showTileContent ? (
+              {showFullContent || showTileContent || showHeatmapContent ? (
                 <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                 <span className="rounded-full border border-border/50 bg-background/70 px-2.5 py-1">
                   Customers {day.customerCount}
@@ -121,8 +122,11 @@ export function CollectionDailyMobileDayList({
                 </div>
               ) : null}
 
-              {showFullContent || showTileContent || showMediumIconContent ? (
-                <CollectionDailyCalendarDayBadge day={day} compact={iconMode || showTileContent} />
+              {showFullContent || showTileContent || showHeatmapContent || showMediumIconContent ? (
+                <CollectionDailyCalendarDayBadge
+                  day={day}
+                  compact={iconMode || showTileContent || showHeatmapContent}
+                />
               ) : null}
 
               {canManage ? (

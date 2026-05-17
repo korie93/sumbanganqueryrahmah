@@ -5,6 +5,7 @@ import {
   Maximize2,
   Minimize2,
   Rows3,
+  SquareActivity,
   type LucideIcon,
 } from "lucide-react";
 import {
@@ -24,6 +25,7 @@ const VIEW_MODE_ICONS: Record<CollectionDailyCalendarViewMode, LucideIcon> = {
   "icon-md": Rows3,
   "icon-lg": Maximize2,
   tiles: LayoutGrid,
+  heatmap: SquareActivity,
   content: LayoutPanelTop,
 };
 

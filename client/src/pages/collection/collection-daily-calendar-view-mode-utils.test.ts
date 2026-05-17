@@ -13,6 +13,7 @@ test("normalizeCollectionDailyCalendarViewMode accepts supported modes only", ()
   assert.equal(normalizeCollectionDailyCalendarViewMode("icon-md"), "icon-md");
   assert.equal(normalizeCollectionDailyCalendarViewMode("icon-lg"), "icon-lg");
   assert.equal(normalizeCollectionDailyCalendarViewMode("tiles"), "tiles");
+  assert.equal(normalizeCollectionDailyCalendarViewMode("heatmap"), "heatmap");
   assert.equal(normalizeCollectionDailyCalendarViewMode("content"), "content");
   assert.equal(
     normalizeCollectionDailyCalendarViewMode("broken"),

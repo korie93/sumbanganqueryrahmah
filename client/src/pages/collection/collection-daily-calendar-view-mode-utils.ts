@@ -13,6 +13,7 @@ export const COLLECTION_DAILY_CALENDAR_VIEW_MODES = [
   "icon-md",
   "icon-lg",
   "tiles",
+  "heatmap",
   "content",
 ] as const;
 
@@ -60,6 +61,12 @@ export const COLLECTION_DAILY_CALENDAR_VIEW_MODE_OPTIONS: readonly CollectionDai
       label: "Tiles",
       shortLabel: "Tiles",
       description: "Paparan tile seimbang dengan jumlah kutipan dan status ringkas.",
+    },
+    {
+      id: "heatmap",
+      label: "Heatmap",
+      shortLabel: "Map",
+      description: "Paparan warna prestasi untuk nampak pattern kutipan sebulan dengan cepat.",
     },
     {
       id: "content",

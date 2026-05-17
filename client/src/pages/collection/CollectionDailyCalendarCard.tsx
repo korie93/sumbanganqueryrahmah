@@ -2,6 +2,7 @@ import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react
 import { OperationalSectionCard } from "@/components/layout/OperationalPage";
 import { useIsMobile } from "@/hooks/use-mobile";
 import type { CollectionDailyOverviewResponse } from "@/lib/api";
+import { CollectionDailyCalendarAttentionSummary } from "@/pages/collection/CollectionDailyCalendarAttentionSummary";
 import { CollectionDailyCalendarBulkToolbar } from "@/pages/collection/CollectionDailyCalendarBulkToolbar";
 import { CollectionDailyCalendarEditDialog } from "@/pages/collection/CollectionDailyCalendarEditDialog";
 import { CollectionDailyCalendarChangeReview } from "@/pages/collection/CollectionDailyCalendarChangeReview";
@@ -172,6 +173,12 @@ export function CollectionDailyCalendarCard({
               days={overview.days}
               dirtyCalendarDayNumbers={dirtyCalendarDayNumbers}
               canManage={canManage}
+            />
+
+            <CollectionDailyCalendarAttentionSummary
+              days={overview.days}
+              editableCalendarByDay={editableCalendarByDay}
+              dirtyCalendarDayNumbers={dirtyCalendarDayNumbers}
             />
 
             <CollectionDailyCalendarMonthlyBreakdown days={overview.days} />
