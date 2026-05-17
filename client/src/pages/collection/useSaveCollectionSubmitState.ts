@@ -12,6 +12,10 @@ import {
   type SaveCollectionFormValues,
   validateSaveCollectionForm,
 } from "@/pages/collection/save-collection-page-utils";
+import {
+  buildSaveCollectionLastSavedSummary,
+  type SaveCollectionLastSavedSummary,
+} from "@/pages/collection/save-collection-post-save";
 import { buildSaveCollectionSuccessDescription } from "@/pages/collection/save-collection-ready-summary";
 import {
   buildSaveCollectionRequestFailure,
@@ -47,6 +51,7 @@ export function useSaveCollectionSubmitState({
   const submitInFlightRef = useRef(false);
   const submitMutationIntentRef = useRef<{ fingerprint: string; key: string } | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [lastSavedSummary, setLastSavedSummary] = useState<SaveCollectionLastSavedSummary | null>(null);
   const [submitFailure, setSubmitFailure] = useState<SaveCollectionSubmitFailure | null>(null);
   const [submitPhase, setSubmitPhase] = useState<SaveCollectionSubmitPhase>("idle");
 
@@ -68,6 +73,13 @@ export function useSaveCollectionSubmitState({
     setSubmitPhase((current) => (current === "processing" ? current : "idle"));
   }, []);
 
+  const clearLastSavedSummary = useCallback(() => {
+    if (!mountedRef.current) {
+      return;
+    }
+    setLastSavedSummary(null);
+  }, []);
+
   const handleSubmit = useCallback(async () => {
     if (submitting || submitInFlightRef.current) {
       return;
@@ -75,6 +87,7 @@ export function useSaveCollectionSubmitState({
 
     const validationError = validateSaveCollectionForm(values);
     if (validationError) {
+      clearLastSavedSummary();
       if (mountedRef.current) {
         setSubmitPhase("failed");
         setSubmitFailure(
@@ -93,6 +106,7 @@ export function useSaveCollectionSubmitState({
 
     submitInFlightRef.current = true;
     if (mountedRef.current) {
+      setLastSavedSummary(null);
       setSubmitting(true);
       setSubmitFailure(null);
       setSubmitPhase("processing");
@@ -134,6 +148,12 @@ export function useSaveCollectionSubmitState({
       emitCollectionDataChanged();
       resetSubmitMutationIntent();
       if (mountedRef.current) {
+        setLastSavedSummary(
+          buildSaveCollectionLastSavedSummary({
+            values,
+            receiptCount: receiptFiles.length,
+          }),
+        );
         setSubmitFailure(null);
         setSubmitPhase("saved");
       }
@@ -163,6 +183,7 @@ export function useSaveCollectionSubmitState({
     }
   }, [
     clearPageState,
+    clearLastSavedSummary,
     mutationFeedback,
     onSaved,
     receiptDrafts,
@@ -174,8 +195,10 @@ export function useSaveCollectionSubmitState({
 
   return {
     submitting,
+    lastSavedSummary,
     submitFailure,
     submitPhase,
+    clearLastSavedSummary,
     clearSubmitFailure,
     handleSubmit,
     resetSubmitMutationIntent,

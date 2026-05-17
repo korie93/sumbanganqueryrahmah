@@ -46,8 +46,10 @@ export function useSaveCollectionPageState({
     clearPageState,
   });
   const {
+    clearLastSavedSummary,
     clearSubmitFailure,
     handleSubmit,
+    lastSavedSummary,
     resetSubmitMutationIntent,
     submitFailure,
     submitPhase,
@@ -88,10 +90,11 @@ export function useSaveCollectionPageState({
   }, [clearReceiptState, clearSubmitFailure]);
 
   const clearForm = useCallback(() => {
+    clearLastSavedSummary();
     clearSubmitFailure();
     resetSubmitMutationIntent();
     clearPageState();
-  }, [clearPageState, clearSubmitFailure, resetSubmitMutationIntent]);
+  }, [clearLastSavedSummary, clearPageState, clearSubmitFailure, resetSubmitMutationIntent]);
 
   return {
     fileInputRef: receiptState.fileInputRef,
@@ -108,6 +111,7 @@ export function useSaveCollectionPageState({
     submitFailure,
     submitPhase,
     receiptPendingStatus,
+    lastSavedSummary,
     maxPaymentDate: formState.maxPaymentDate,
     isPaymentDateInFuture: formState.isPaymentDateInFuture,
     draftRestoreNotice: draftState.draftRestoreNotice,
@@ -120,6 +124,7 @@ export function useSaveCollectionPageState({
     setPaymentDate: formState.setPaymentDate,
     setAmount: formState.setAmount,
     clearForm,
+    clearLastSavedSummary,
     clearSubmitFailure: submitState.clearSubmitFailure,
     handleReceiptChange,
     handleRemoveReceipt,

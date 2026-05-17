@@ -10,6 +10,8 @@ import { useMutationFeedback } from "@/hooks/useMutationFeedback";
 import { usePageShortcuts } from "@/hooks/usePageShortcuts";
 import { cn } from "@/lib/utils";
 import { CollectionReceiptPanel } from "@/pages/collection/CollectionReceiptPanel";
+import { SaveCollectionFormSection } from "@/pages/collection/SaveCollectionFormSection";
+import { SaveCollectionPostSaveActions } from "@/pages/collection/SaveCollectionPostSaveActions";
 import { SaveCollectionProgress } from "@/pages/collection/SaveCollectionProgress";
 import { SaveCollectionReadySummary } from "@/pages/collection/SaveCollectionReadySummary";
 import { SaveCollectionSubmitAlert } from "@/pages/collection/SaveCollectionSubmitAlert";
@@ -174,6 +176,30 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
       helperText="Tambah satu receipt pada satu masa. Status Existing, Pending Upload, dan perubahan simpan/buang akan ditunjukkan di bawah sebelum anda klik Save Collection."
     />
   );
+  const customerSection = (
+    <SaveCollectionFormSection
+      title="Customer Details"
+      description="Isi maklumat customer dahulu supaya rekod mudah disemak semula."
+    >
+      {customerFields}
+    </SaveCollectionFormSection>
+  );
+  const paymentSection = (
+    <SaveCollectionFormSection
+      title="Payment Details"
+      description="Semak account, batch, payment date, dan amount sebelum upload receipt."
+    >
+      {paymentFields}
+    </SaveCollectionFormSection>
+  );
+  const receiptSection = (
+    <SaveCollectionFormSection
+      title="Receipt Upload"
+      description="Tambah receipt satu demi satu dan semak pending upload sebelum save."
+    >
+      {receiptPanel}
+    </SaveCollectionFormSection>
+  );
   const readySummaryValues = {
     staffNickname,
     customerName: state.customerName,
@@ -222,6 +248,10 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
         ) : null}
       </CardHeader>
       <CardContent className="space-y-4">
+        <SaveCollectionPostSaveActions
+          summary={state.lastSavedSummary}
+          onDismiss={state.clearLastSavedSummary}
+        />
         <SaveCollectionSubmitAlert
           failure={state.submitFailure}
           disabled={state.submitting}
@@ -236,48 +266,11 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
           failure={state.submitFailure}
           visible={state.submitting || Boolean(state.submitFailure) || state.receiptFiles.length > 0}
         />
-        {isMobile ? (
-          <div className="space-y-4">
-            <section className="space-y-4 rounded-2xl border border-border/60 bg-muted/10 p-4">
-              <div className="space-y-1">
-                <h3 className="text-base font-semibold text-foreground">Customer Details</h3>
-                <p className="text-sm leading-relaxed text-muted-foreground">
-                  Start with the payer identity so the record stays easy to verify later.
-                </p>
-              </div>
-              <div className="grid gap-4">{customerFields}</div>
-            </section>
-
-            <section className="space-y-4 rounded-2xl border border-border/60 bg-muted/10 p-4">
-              <div className="space-y-1">
-                <h3 className="text-base font-semibold text-foreground">Payment Details</h3>
-                <p className="text-sm leading-relaxed text-muted-foreground">
-                  Capture the account, batch, payment date, and amount before attaching receipts.
-                </p>
-              </div>
-              <div className="grid gap-4">{paymentFields}</div>
-            </section>
-
-            <section className="space-y-4 rounded-2xl border border-border/60 bg-muted/10 p-4">
-              <div className="space-y-1">
-                <h3 className="text-base font-semibold text-foreground">Receipt Upload</h3>
-                <p className="text-sm leading-relaxed text-muted-foreground">
-                  Add receipts one by one, review pending uploads, then save when everything looks right.
-                </p>
-              </div>
-              {receiptPanel}
-            </section>
-          </div>
-        ) : (
-          <div className="grid gap-4 md:grid-cols-3">
-            {customerFields}
-            {paymentFields}
-            <div className="space-y-2 md:col-span-3">
-              <p className="text-sm font-medium leading-none text-foreground">Receipt Upload</p>
-              {receiptPanel}
-            </div>
-          </div>
-        )}
+        <div className={cn("grid gap-4", isMobile ? "" : "xl:grid-cols-3")}>
+          {customerSection}
+          {paymentSection}
+          {receiptSection}
+        </div>
 
         <SaveCollectionReadySummary
           values={readySummaryValues}

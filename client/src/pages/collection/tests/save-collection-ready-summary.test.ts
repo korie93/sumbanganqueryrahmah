@@ -7,6 +7,10 @@ import {
   buildSaveCollectionReceiptReviewHints,
   buildSaveCollectionSuccessDescription,
 } from "../save-collection-ready-summary";
+import {
+  buildSaveCollectionLastSavedSummary,
+  buildSaveCollectionReceiptLabel,
+} from "../save-collection-post-save";
 
 const baseValues: SaveCollectionFormValues = {
   staffNickname: "Korie",
@@ -69,4 +73,25 @@ test("buildSaveCollectionSuccessDescription includes amount, nickname, batch, an
   assert.match(description, /Korie/);
   assert.match(description, /batch P10/);
   assert.match(description, /1 receipt/);
+});
+
+test("buildSaveCollectionLastSavedSummary keeps post-save action copy non-sensitive", () => {
+  const summary = buildSaveCollectionLastSavedSummary({
+    values: baseValues,
+    receiptCount: 2,
+    savedAt: new Date("2026-05-18T09:30:00.000Z"),
+  });
+
+  assert.equal(summary.customerName, "Test Customer");
+  assert.equal(summary.staffNickname, "Korie");
+  assert.equal(summary.batch, "P10");
+  assert.match(summary.amountLabel, /1,650\.00/);
+  assert.equal(summary.receiptLabel, "2 receipts");
+  assert.doesNotMatch(JSON.stringify(summary), /900101010101|1234567890/);
+});
+
+test("buildSaveCollectionReceiptLabel normalizes invalid counts", () => {
+  assert.equal(buildSaveCollectionReceiptLabel(1), "1 receipt");
+  assert.equal(buildSaveCollectionReceiptLabel(Number.NaN), "0 receipts");
+  assert.equal(buildSaveCollectionReceiptLabel(-5), "0 receipts");
 });
