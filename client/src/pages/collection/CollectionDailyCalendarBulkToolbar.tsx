@@ -81,6 +81,8 @@ export function CollectionDailyCalendarBulkToolbar({
           </Label>
           <select
             id="collection-daily-bulk-status"
+            aria-label="Bulk daily status"
+            title="Bulk daily status"
             value={draft.status}
             onChange={(event) => {
               const status = event.target.value === "WORKING" ? "WORKING" : "HOLIDAY";
