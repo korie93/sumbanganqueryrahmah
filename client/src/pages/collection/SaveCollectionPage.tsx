@@ -11,6 +11,7 @@ import { usePageShortcuts } from "@/hooks/usePageShortcuts";
 import { cn } from "@/lib/utils";
 import { CollectionReceiptPanel } from "@/pages/collection/CollectionReceiptPanel";
 import { SaveCollectionProgress } from "@/pages/collection/SaveCollectionProgress";
+import { SaveCollectionReadySummary } from "@/pages/collection/SaveCollectionReadySummary";
 import { SaveCollectionSubmitAlert } from "@/pages/collection/SaveCollectionSubmitAlert";
 import { COLLECTION_BATCH_OPTIONS } from "./utils";
 import { useSaveCollectionPageState } from "./useSaveCollectionPageState";
@@ -173,6 +174,16 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
       helperText="Tambah satu receipt pada satu masa. Status Existing, Pending Upload, dan perubahan simpan/buang akan ditunjukkan di bawah sebelum anda klik Save Collection."
     />
   );
+  const readySummaryValues = {
+    staffNickname,
+    customerName: state.customerName,
+    icNumber: state.icNumber,
+    customerPhone: state.customerPhone,
+    accountNumber: state.accountNumber,
+    batch: state.batch,
+    paymentDate: state.paymentDate,
+    amount: state.amount,
+  };
 
   return (
     <Card className={cn("border-border/60 bg-background/70", isMobile ? "overflow-hidden" : "")}>
@@ -267,6 +278,12 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
             </div>
           </div>
         )}
+
+        <SaveCollectionReadySummary
+          values={readySummaryValues}
+          receiptCount={state.receiptFiles.length}
+          receiptDrafts={state.receiptDrafts}
+        />
 
         <div
           className={cn(

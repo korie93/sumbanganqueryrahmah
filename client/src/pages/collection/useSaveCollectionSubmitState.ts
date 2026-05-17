@@ -12,6 +12,7 @@ import {
   type SaveCollectionFormValues,
   validateSaveCollectionForm,
 } from "@/pages/collection/save-collection-page-utils";
+import { buildSaveCollectionSuccessDescription } from "@/pages/collection/save-collection-ready-summary";
 import {
   buildSaveCollectionRequestFailure,
   buildSaveCollectionValidationFailure,
@@ -125,7 +126,10 @@ export function useSaveCollectionSubmitState({
 
       mutationFeedback.notifyMutationSuccess({
         title: "Collection Saved",
-        description: "Rekod collection berjaya disimpan.",
+        description: buildSaveCollectionSuccessDescription({
+          values,
+          receiptCount: receiptFiles.length,
+        }),
       });
       emitCollectionDataChanged();
       resetSubmitMutationIntent();
