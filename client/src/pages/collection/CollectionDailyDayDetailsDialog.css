@@ -1,3 +1,23 @@
+.collection-daily-day-details-dialog {
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.collection-daily-day-details-header,
+.collection-daily-day-details-body,
+.collection-daily-day-details-state {
+  min-width: 0;
+}
+
+.collection-daily-day-details-body {
+  min-height: 0;
+}
+
+.collection-daily-day-details-scroll {
+  scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+}
+
 .collection-day-target-progress {
   display: block;
   width: 100%;

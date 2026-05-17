@@ -68,12 +68,16 @@ export function CollectionDailyDayDetailsDialog({
       <DialogContent
         className={
           isMobile
-            ? `${mobileFullscreenDialogViewportClassName} flex w-screen max-w-none flex-col overflow-hidden rounded-none border-0 p-0`
-            : "flex max-h-[92vh] max-w-5xl flex-col overflow-hidden"
+            ? `collection-daily-day-details-dialog ${mobileFullscreenDialogViewportClassName} flex w-screen max-w-none flex-col overflow-hidden rounded-none border-0 p-0`
+            : "collection-daily-day-details-dialog flex h-[calc(var(--viewport-min-height-value)-2rem)] max-w-5xl flex-col overflow-hidden"
         }
         data-testid="collection-daily-day-dialog"
       >
-        <DialogHeader className={isMobile ? "border-b border-border/60 px-4 py-4 pr-12 text-left" : ""}>
+        <DialogHeader
+          className={`collection-daily-day-details-header shrink-0 ${
+            isMobile ? "border-b border-border/60 px-4 py-4 pr-12 text-left" : ""
+          }`}
+        >
           <DialogTitle>
             Collection Day Details - {selectedDate ? formatDateDDMMYYYY(selectedDate) : "-"}
           </DialogTitle>
@@ -83,40 +87,46 @@ export function CollectionDailyDayDetailsDialog({
         </DialogHeader>
 
         {loadingDayDetails ? (
-          <div className="flex items-center justify-center rounded-2xl border border-border/60 bg-background px-4 py-10 text-sm text-muted-foreground shadow-sm">
+          <div className="collection-daily-day-details-state flex min-h-0 flex-1 items-center justify-center rounded-2xl border border-border/60 bg-background px-4 py-10 text-sm text-muted-foreground shadow-sm">
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             Loading day details...
           </div>
         ) : !dayDetails ? (
-          <div className="rounded-2xl border border-border/60 bg-background px-4 py-8 text-center text-sm text-muted-foreground shadow-sm">
+          <div className="collection-daily-day-details-state flex min-h-0 flex-1 items-center justify-center rounded-2xl border border-border/60 bg-background px-4 py-8 text-center text-sm text-muted-foreground shadow-sm">
             No details available.
           </div>
         ) : (
-          <div className={`flex flex-1 flex-col gap-3 overflow-hidden ${isMobile ? "px-3 py-3" : ""}`}>
-            <CollectionDailyDayDetailsSummary
-              balancedAmount={balancedAmount}
-              customerCount={customerCount}
-              dayDetails={dayDetails}
-              selectedOverviewDay={selectedOverviewDay}
-              targetProgressPercent={targetProgressPercent}
-            />
+          <div
+            className={`collection-daily-day-details-body flex min-h-0 flex-1 flex-col gap-3 overflow-hidden ${
+              isMobile ? "px-3 py-3" : ""
+            }`}
+          >
+            <div className="collection-daily-day-details-scroll min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-y-contain pr-1">
+              <CollectionDailyDayDetailsSummary
+                balancedAmount={balancedAmount}
+                customerCount={customerCount}
+                dayDetails={dayDetails}
+                selectedOverviewDay={selectedOverviewDay}
+                targetProgressPercent={targetProgressPercent}
+              />
 
-            <div className="flex-1 space-y-2 overflow-auto pr-1">
-              {dayDetails.records.length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-border/60 bg-background px-4 py-6 text-center text-sm text-muted-foreground shadow-sm">
-                  No collection records for this date.
-                </div>
-              ) : (
-                dayDetails.records.map((record) => (
-                  <CollectionDailyRecordCard
-                    key={record.id}
-                    isMobile={isMobile}
-                    loadingReceiptKey={loadingReceiptKey}
-                    onViewReceipt={onViewReceipt}
-                    record={record}
-                  />
-                ))
-              )}
+              <div className="space-y-2">
+                {dayDetails.records.length === 0 ? (
+                  <div className="rounded-2xl border border-dashed border-border/60 bg-background px-4 py-6 text-center text-sm text-muted-foreground shadow-sm">
+                    No collection records for this date.
+                  </div>
+                ) : (
+                  dayDetails.records.map((record) => (
+                    <CollectionDailyRecordCard
+                      key={record.id}
+                      isMobile={isMobile}
+                      loadingReceiptKey={loadingReceiptKey}
+                      onViewReceipt={onViewReceipt}
+                      record={record}
+                    />
+                  ))
+                )}
+              </div>
             </div>
 
             <CollectionDailyDayDetailsFooter
