@@ -30,20 +30,12 @@
 
 .collection-daily-desktop-day,
 .collection-daily-mobile-day-card {
-  border-color: color-mix(
-    in srgb,
-    var(--collection-daily-day-accent-border, hsl(var(--border))) 64%,
-    hsl(var(--border))
-  );
+  border-color: var(--collection-daily-day-accent-border, hsl(var(--border)));
   background:
     linear-gradient(
       180deg,
       hsl(var(--background) / 0.92),
-      color-mix(
-        in srgb,
-        var(--collection-daily-day-accent-soft, hsl(var(--muted))) 55%,
-        hsl(var(--background))
-      )
+      var(--collection-daily-day-accent-soft, hsl(var(--muted) / 0.16))
     );
 }
 
@@ -309,14 +301,6 @@
 .dark .collection-daily-day-progress-band-complete {
   --collection-daily-day-accent-soft: hsl(145 42% 17%);
   --collection-daily-day-accent-border: hsl(145 36% 36%);
-}
-
-@supports not (color: color-mix(in srgb, white, black)) {
-  .collection-daily-desktop-day,
-  .collection-daily-mobile-day-card {
-    border-color: var(--collection-daily-day-accent-border, hsl(var(--border)));
-    background: var(--collection-daily-day-accent-soft, hsl(var(--background)));
-  }
 }
 
 @media (max-width: 900px) {
