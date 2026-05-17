@@ -1,0 +1,332 @@
+.collection-daily-day-progress-band-empty {
+  --collection-daily-day-accent: hsl(215 16% 47%);
+  --collection-daily-day-accent-soft: hsl(215 20% 96%);
+  --collection-daily-day-accent-border: hsl(215 18% 78%);
+}
+
+.collection-daily-day-progress-band-low {
+  --collection-daily-day-accent: hsl(346 77% 45%);
+  --collection-daily-day-accent-soft: hsl(346 92% 96%);
+  --collection-daily-day-accent-border: hsl(346 70% 76%);
+}
+
+.collection-daily-day-progress-band-medium {
+  --collection-daily-day-accent: hsl(35 92% 38%);
+  --collection-daily-day-accent-soft: hsl(35 100% 95%);
+  --collection-daily-day-accent-border: hsl(35 86% 72%);
+}
+
+.collection-daily-day-progress-band-high {
+  --collection-daily-day-accent: hsl(195 82% 34%);
+  --collection-daily-day-accent-soft: hsl(195 90% 94%);
+  --collection-daily-day-accent-border: hsl(195 72% 70%);
+}
+
+.collection-daily-day-progress-band-complete {
+  --collection-daily-day-accent: hsl(145 67% 30%);
+  --collection-daily-day-accent-soft: hsl(145 72% 94%);
+  --collection-daily-day-accent-border: hsl(145 54% 68%);
+}
+
+.collection-daily-desktop-day,
+.collection-daily-mobile-day-card {
+  border-color: color-mix(
+    in srgb,
+    var(--collection-daily-day-accent-border, hsl(var(--border))) 64%,
+    hsl(var(--border))
+  );
+  background:
+    linear-gradient(
+      180deg,
+      hsl(var(--background) / 0.92),
+      color-mix(
+        in srgb,
+        var(--collection-daily-day-accent-soft, hsl(var(--muted))) 55%,
+        hsl(var(--background))
+      )
+    );
+}
+
+.collection-daily-day-button {
+  position: relative;
+  gap: 0.32rem;
+}
+
+.collection-daily-day-button::before {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background:
+    linear-gradient(135deg, var(--collection-daily-day-accent-soft, transparent), transparent 58%);
+  content: "";
+  opacity: 0.52;
+  pointer-events: none;
+}
+
+.collection-daily-day-button > * {
+  position: relative;
+}
+
+.collection-daily-day-number {
+  display: inline-flex;
+  min-width: 1.9rem;
+  height: 1.9rem;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid hsl(var(--border) / 0.55);
+  border-radius: 0.8rem;
+  background: hsl(var(--background) / 0.76);
+  color: hsl(var(--foreground));
+  line-height: 1;
+}
+
+.collection-daily-day-icon-stack {
+  min-height: 1.9rem;
+}
+
+.collection-daily-day-status-chip {
+  display: inline-flex;
+  width: fit-content;
+  max-width: 100%;
+  align-items: center;
+  border: 1px solid hsl(var(--border) / 0.5);
+  border-radius: 999px;
+  background: hsl(var(--background) / 0.62);
+  padding: 0.22rem 0.5rem;
+  line-height: 1.2;
+}
+
+.collection-daily-day-amount {
+  font-size: 0.9rem;
+  letter-spacing: 0;
+}
+
+.collection-daily-day-supporting-text {
+  line-height: 1.35;
+}
+
+.collection-daily-day-progress {
+  border: 1px solid hsl(var(--border) / 0.34);
+  background: hsl(var(--background) / 0.72);
+}
+
+.collection-daily-day-progress::-webkit-progress-value {
+  background: var(--collection-daily-day-accent, hsl(var(--primary)));
+}
+
+.collection-daily-day-progress::-moz-progress-bar {
+  background: var(--collection-daily-day-accent, hsl(var(--primary)));
+}
+
+.collection-daily-day-view-list {
+  min-height: 0;
+  border-radius: 1rem;
+}
+
+.collection-daily-day-view-list .collection-daily-day-button {
+  grid-template-columns: auto minmax(10rem, 1fr) minmax(8rem, 0.8fr) auto;
+  min-height: 4.25rem;
+  padding: 0.75rem 0.85rem;
+}
+
+.collection-daily-day-view-list .collection-daily-day-header {
+  display: contents;
+}
+
+.collection-daily-day-view-list .collection-daily-day-icon-stack {
+  justify-self: end;
+}
+
+.collection-daily-day-view-list .collection-daily-day-status-chip {
+  justify-self: start;
+}
+
+.collection-daily-day-view-list .collection-daily-calendar-day-badge {
+  grid-column: 2 / -1;
+  max-width: 32rem;
+}
+
+.collection-daily-day-view-list .collection-daily-day-progress {
+  grid-column: 2 / -1;
+  max-width: 32rem;
+}
+
+.collection-daily-day-view-tiles,
+.collection-daily-day-view-content {
+  border-radius: 1.1rem;
+}
+
+.collection-daily-day-view-tiles .collection-daily-day-button,
+.collection-daily-day-view-content .collection-daily-day-button {
+  padding: 0.8rem;
+}
+
+.collection-daily-day-view-tiles .collection-daily-day-number,
+.collection-daily-day-view-content .collection-daily-day-number {
+  border-color: var(--collection-daily-day-accent-border, hsl(var(--border)));
+  background: var(--collection-daily-day-accent-soft, hsl(var(--background)));
+  color: var(--collection-daily-day-accent, hsl(var(--foreground)));
+}
+
+.collection-daily-day-view-tiles .collection-daily-day-amount,
+.collection-daily-day-view-content .collection-daily-day-amount {
+  margin-top: 0.5rem;
+  font-size: 0.98rem;
+}
+
+.collection-daily-day-view-icon-sm .collection-daily-day-number,
+.collection-daily-day-view-icon-md .collection-daily-day-number,
+.collection-daily-day-view-icon-lg .collection-daily-day-number {
+  border-color: var(--collection-daily-day-accent-border, hsl(var(--border)));
+  background: var(--collection-daily-day-accent-soft, hsl(var(--background)));
+  color: var(--collection-daily-day-accent, hsl(var(--foreground)));
+  font-weight: 900;
+}
+
+.collection-daily-day-view-icon-sm .collection-daily-day-number {
+  min-width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 0.85rem;
+  font-size: 0.9rem;
+}
+
+.collection-daily-day-view-icon-md .collection-daily-day-number {
+  min-width: 2.7rem;
+  height: 2.7rem;
+  border-radius: 1rem;
+  font-size: 1rem;
+}
+
+.collection-daily-day-view-icon-lg .collection-daily-day-number {
+  min-width: 3.2rem;
+  height: 3.2rem;
+  border-radius: 1.15rem;
+  font-size: 1.15rem;
+}
+
+.collection-daily-day-view-icon-md .collection-daily-day-status-chip,
+.collection-daily-day-view-icon-lg .collection-daily-day-status-chip {
+  justify-content: center;
+  text-align: center;
+}
+
+.collection-daily-day-view-icon-lg .collection-daily-day-amount {
+  font-size: 0.86rem;
+}
+
+.collection-daily-day-view-heatmap {
+  border-color: var(--collection-daily-day-accent-border, hsl(var(--border)));
+  background: var(--collection-daily-day-accent-soft, hsl(var(--background)));
+}
+
+.collection-daily-day-view-heatmap .collection-daily-day-button {
+  min-height: 5.7rem;
+}
+
+.collection-daily-day-view-heatmap .collection-daily-day-number {
+  min-width: 1.65rem;
+  height: 1.65rem;
+  border-radius: 0.65rem;
+}
+
+.collection-daily-day-view-heatmap .collection-daily-day-status-chip {
+  padding-inline: 0.42rem;
+}
+
+.collection-daily-day-view-heatmap .collection-daily-calendar-day-badge {
+  margin-top: auto;
+}
+
+.collection-daily-mobile-day-card > div {
+  position: relative;
+}
+
+.collection-daily-mobile-day-kicker,
+.collection-daily-mobile-day-date,
+.collection-daily-mobile-status-pill,
+.collection-daily-day-metric {
+  position: relative;
+}
+
+.collection-daily-mobile-status-pill {
+  box-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.52);
+}
+
+.collection-daily-day-metric-primary {
+  border-color: var(--collection-daily-day-accent-border, hsl(var(--border)));
+  background: var(--collection-daily-day-accent-soft, hsl(var(--background)));
+}
+
+.collection-daily-mobile-day-list-mode-list .collection-daily-mobile-day-card {
+  border-radius: 1rem;
+}
+
+.collection-daily-mobile-day-list-mode-list .collection-daily-mobile-day-card > div {
+  padding: 0.8rem 0.9rem;
+}
+
+.collection-daily-mobile-day-list-mode-tiles .collection-daily-mobile-day-card,
+.collection-daily-mobile-day-list-mode-content .collection-daily-mobile-day-card {
+  border-radius: 1.25rem;
+}
+
+.collection-daily-mobile-day-list-mode-icon-sm .collection-daily-mobile-day-card,
+.collection-daily-mobile-day-list-mode-icon-md .collection-daily-mobile-day-card,
+.collection-daily-mobile-day-list-mode-icon-lg .collection-daily-mobile-day-card {
+  text-align: center;
+}
+
+.collection-daily-mobile-day-list-mode-icon-sm .collection-daily-mobile-status-pill,
+.collection-daily-mobile-day-list-mode-icon-md .collection-daily-mobile-status-pill {
+  justify-content: center;
+  width: 100%;
+}
+
+.collection-daily-mobile-day-list-mode-icon-lg .collection-daily-mobile-day-metrics {
+  grid-template-columns: 1fr;
+}
+
+.dark .collection-daily-day-progress-band-empty {
+  --collection-daily-day-accent-soft: hsl(215 24% 18%);
+  --collection-daily-day-accent-border: hsl(215 18% 34%);
+}
+
+.dark .collection-daily-day-progress-band-low {
+  --collection-daily-day-accent-soft: hsl(346 46% 18%);
+  --collection-daily-day-accent-border: hsl(346 42% 38%);
+}
+
+.dark .collection-daily-day-progress-band-medium {
+  --collection-daily-day-accent-soft: hsl(35 52% 18%);
+  --collection-daily-day-accent-border: hsl(35 45% 40%);
+}
+
+.dark .collection-daily-day-progress-band-high {
+  --collection-daily-day-accent-soft: hsl(195 46% 18%);
+  --collection-daily-day-accent-border: hsl(195 44% 38%);
+}
+
+.dark .collection-daily-day-progress-band-complete {
+  --collection-daily-day-accent-soft: hsl(145 42% 17%);
+  --collection-daily-day-accent-border: hsl(145 36% 36%);
+}
+
+@supports not (color: color-mix(in srgb, white, black)) {
+  .collection-daily-desktop-day,
+  .collection-daily-mobile-day-card {
+    border-color: var(--collection-daily-day-accent-border, hsl(var(--border)));
+    background: var(--collection-daily-day-accent-soft, hsl(var(--background)));
+  }
+}
+
+@media (max-width: 900px) {
+  .collection-daily-day-view-list .collection-daily-day-button {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+
+  .collection-daily-day-view-list .collection-daily-day-status-chip,
+  .collection-daily-day-view-list .collection-daily-day-progress,
+  .collection-daily-day-view-list .collection-daily-calendar-day-badge {
+    grid-column: 1 / -1;
+  }
+}

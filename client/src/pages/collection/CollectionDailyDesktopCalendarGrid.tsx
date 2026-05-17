@@ -20,6 +20,10 @@ import {
   isCollectionDailyCalendarIconViewMode,
   type CollectionDailyCalendarViewMode,
 } from "@/pages/collection/collection-daily-calendar-view-mode-utils";
+import {
+  getCollectionDailyCalendarProgressBand,
+  getCollectionDailyCalendarProgressPercent,
+} from "@/pages/collection/collection-daily-calendar-progress-utils";
 import { formatAmountRM } from "@/pages/collection/utils";
 
 type CollectionDailyDesktopCalendarGridProps = {
@@ -39,16 +43,10 @@ type CollectionDailyDesktopCalendarGridProps = {
 };
 
 function DayStatusIcon({ status }: { status: CollectionDailyOverviewDay["status"] }) {
-  if (status === "green") return <CheckCircle2 className="h-3.5 w-3.5 text-green-700" />;
-  if (status === "yellow") return <AlertTriangle className="h-3.5 w-3.5 text-amber-700" />;
-  if (status === "red") return <CircleSlash className="h-3.5 w-3.5 text-rose-700" />;
+  if (status === "green") return <CheckCircle2 aria-hidden="true" className="h-3.5 w-3.5 text-green-700" />;
+  if (status === "yellow") return <AlertTriangle aria-hidden="true" className="h-3.5 w-3.5 text-amber-700" />;
+  if (status === "red") return <CircleSlash aria-hidden="true" className="h-3.5 w-3.5 text-rose-700" />;
   return null;
-}
-
-function getDailyProgressPercent(day: CollectionDailyOverviewDay) {
-  if (!Number.isFinite(day.amount) || !Number.isFinite(day.target)) return 0;
-  if (day.target <= 0) return day.amount > 0 ? 100 : 0;
-  return Math.max(0, Math.min(100, (day.amount / day.target) * 100));
 }
 
 export function CollectionDailyDesktopCalendarGrid({
@@ -87,7 +85,8 @@ export function CollectionDailyDesktopCalendarGrid({
         const isEditing = editingDayNumber === day.day;
         const isDirty = dirtyCalendarDayNumbers.has(day.day);
         const isBulkSelected = bulkSelectedDayNumbers.has(day.day);
-        const progressPercent = getDailyProgressPercent(day);
+        const progressPercent = getCollectionDailyCalendarProgressPercent(day);
+        const progressBand = getCollectionDailyCalendarProgressBand(day);
         const calendarBadgeLabel = getCollectionDailyCalendarDayBadgeLabel(day);
         const matchesActiveFilter = matchesCollectionDailyCalendarFilter(
           day,
@@ -98,7 +97,7 @@ export function CollectionDailyDesktopCalendarGrid({
         return (
           <div
             key={day.date}
-            className={`collection-daily-desktop-day collection-daily-day-view-${viewMode} rounded-xl border text-xs shadow-sm ${
+            className={`collection-daily-desktop-day collection-daily-day-view-${viewMode} collection-daily-day-progress-band-${progressBand} rounded-xl border text-xs shadow-sm ${
               isSelected ? "ring-2 ring-ring ring-offset-1" : ""
             } ${isEditing ? "collection-daily-day-card-editing" : ""} ${
               matchesActiveFilter ? "" : "collection-daily-day-card-filter-muted"
@@ -112,8 +111,8 @@ export function CollectionDailyDesktopCalendarGrid({
               data-testid={`collection-daily-day-${day.day}`}
             >
               <div className="collection-daily-day-header mb-1 flex items-center justify-between">
-                <div className="font-semibold">{day.day}</div>
-                <div className="flex items-center gap-1.5">
+                <div className="collection-daily-day-number font-semibold">{day.day}</div>
+                <div className="collection-daily-day-icon-stack flex items-center gap-1.5">
                   {isDirty ? (
                     <span
                       className="collection-daily-unsaved-dot"
@@ -124,7 +123,7 @@ export function CollectionDailyDesktopCalendarGrid({
                   <DayStatusIcon status={day.status} />
                 </div>
               </div>
-              <div className={`collection-daily-day-status ${statusTextClass(day.status)}`}>
+              <div className={`collection-daily-day-status collection-daily-day-status-chip ${statusTextClass(day.status)}`}>
                 {statusLabel(day.status)}
               </div>
               {showFullContent || showTileContent || showHeatmapContent || showLargeIconContent ? (
@@ -134,20 +133,20 @@ export function CollectionDailyDesktopCalendarGrid({
                 </div>
               ) : null}
               {showFullContent || showTileContent || showHeatmapContent ? (
-                <div className="text-[10px] text-muted-foreground">
+                <div className="collection-daily-day-supporting-text text-[10px] text-muted-foreground">
                   Customers: {day.customerCount}
                 </div>
               ) : null}
               {showFullContent ? (
                 <>
-                  <div className="text-[10px] text-muted-foreground">
+                  <div className="collection-daily-day-supporting-text text-[10px] text-muted-foreground">
                     Required Today: {formatAmountRM(day.target)}
                   </div>
                   <progress
                     className="collection-daily-day-progress mt-2"
                     max={100}
                     value={progressPercent}
-                    aria-hidden="true"
+                    aria-label={`Progress for day ${day.day}: ${Math.round(progressPercent)} percent of daily target`}
                   />
                 </>
               ) : null}
@@ -174,7 +173,7 @@ export function CollectionDailyDesktopCalendarGrid({
                   size="sm"
                   variant={isEditing ? "default" : "outline"}
                   className="h-8 w-full rounded-lg text-[11px]"
-                  aria-pressed={isEditing}
+                  aria-pressed={isEditing ? "true" : "false"}
                   aria-label={`Edit calendar status for ${formatDateDDMMYYYY(day.date)}`}
                   onClick={() => onEditDay(day.day)}
                 >

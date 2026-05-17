@@ -118,6 +118,7 @@ test("CollectionDailyDesktopCalendarGrid supports compact icon calendar view", (
 
   assert.match(markup, /collection-daily-desktop-grid-mode-icon-sm/);
   assert.match(markup, /collection-daily-day-view-icon-sm/);
+  assert.match(markup, /collection-daily-day-progress-band-complete/);
   assert.doesNotMatch(markup, /Collected:/);
 });
 

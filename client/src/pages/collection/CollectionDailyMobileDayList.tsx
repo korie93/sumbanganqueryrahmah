@@ -16,6 +16,7 @@ import {
   isCollectionDailyCalendarIconViewMode,
   type CollectionDailyCalendarViewMode,
 } from "@/pages/collection/collection-daily-calendar-view-mode-utils";
+import { getCollectionDailyCalendarProgressBand } from "@/pages/collection/collection-daily-calendar-progress-utils";
 import { formatAmountRM } from "@/pages/collection/utils";
 
 type CollectionDailyMobileDayListProps = {
@@ -60,24 +61,27 @@ export function CollectionDailyMobileDayList({
         const isEditing = editingDayNumber === day.day;
         const isDirty = dirtyCalendarDayNumbers.has(day.day);
         const isBulkSelected = bulkSelectedDayNumbers.has(day.day);
+        const progressBand = getCollectionDailyCalendarProgressBand(day);
         const calendarBadgeLabel = getCollectionDailyCalendarDayBadgeLabel(day);
 
         return (
           <article
             key={day.date}
-            className={`collection-daily-mobile-day-card rounded-2xl border shadow-sm ${statusCardClass(day.status)} ${
+            className={`collection-daily-mobile-day-card collection-daily-day-progress-band-${progressBand} rounded-2xl border shadow-sm ${statusCardClass(day.status)} ${
               isSelected ? "ring-2 ring-ring ring-offset-1" : ""
             } ${isEditing ? "collection-daily-day-card-editing" : ""}`}
           >
             <div className="px-3 py-3.5">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0 space-y-1">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                  <p className="collection-daily-mobile-day-kicker text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
                     Day {day.day}
                   </p>
-                  <p className="font-semibold text-foreground">{formatDateDDMMYYYY(day.date)}</p>
+                  <p className="collection-daily-mobile-day-date font-semibold text-foreground">
+                    {formatDateDDMMYYYY(day.date)}
+                  </p>
                 </div>
-                <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-border/50 bg-background/80 px-2.5 py-1 text-[11px] font-medium text-foreground">
+                <span className="collection-daily-mobile-status-pill inline-flex shrink-0 items-center gap-1.5 rounded-full border border-border/50 bg-background/80 px-2.5 py-1 text-[11px] font-medium text-foreground">
                   {isDirty ? (
                     <span
                       className="collection-daily-unsaved-dot"
@@ -92,10 +96,10 @@ export function CollectionDailyMobileDayList({
 
               {showFullContent || showTileContent || showHeatmapContent || showLargeIconContent ? (
                 <div className="collection-daily-mobile-day-metrics mt-3 grid grid-cols-2 gap-2 text-xs">
-                  <div className="collection-daily-day-metric rounded-xl border border-border/50 bg-background/70 px-3 py-2">
-                    <p className="uppercase tracking-[0.12em] text-muted-foreground">Collected</p>
-                    <p className="mt-1 text-sm font-semibold text-foreground">
-                      {formatAmountRM(day.amount)}
+                    <div className="collection-daily-day-metric collection-daily-day-metric-primary rounded-xl border border-border/50 bg-background/70 px-3 py-2">
+                      <p className="uppercase tracking-[0.12em] text-muted-foreground">Collected</p>
+                      <p className="mt-1 text-sm font-semibold text-foreground">
+                        {formatAmountRM(day.amount)}
                     </p>
                   </div>
                   {showFullContent || showTileContent || showHeatmapContent ? (
@@ -111,9 +115,9 @@ export function CollectionDailyMobileDayList({
 
               {showFullContent || showTileContent || showHeatmapContent ? (
                 <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                <span className="rounded-full border border-border/50 bg-background/70 px-2.5 py-1">
-                  Customers {day.customerCount}
-                </span>
+                  <span className="rounded-full border border-border/50 bg-background/70 px-2.5 py-1">
+                    Customers {day.customerCount}
+                  </span>
                   <span
                     className={`rounded-full border border-border/50 bg-background/70 px-2.5 py-1 ${statusTextClass(day.status)}`}
                   >
@@ -158,7 +162,7 @@ export function CollectionDailyMobileDayList({
                     type="button"
                     variant={isEditing ? "default" : "outline"}
                     className="h-10 rounded-xl"
-                    aria-pressed={isEditing}
+                    aria-pressed={isEditing ? "true" : "false"}
                     aria-label={`Edit calendar status for ${formatDateDDMMYYYY(day.date)}`}
                     onClick={() => onEditDay(day.day)}
                   >

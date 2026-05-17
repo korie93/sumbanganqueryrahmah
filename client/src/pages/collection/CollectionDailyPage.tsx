@@ -18,6 +18,7 @@ import "./CollectionDailyCalendarRoleModeNotice.css";
 import "./CollectionDailyCalendarStatusSummary.css";
 import "./CollectionDailyCalendarViewModeControl.css";
 import "./CollectionDailyPage.css";
+import "./CollectionDailyCalendarViewModes.css";
 
 const CollectionDailyDayDetailsDialog = lazy(() =>
   import("@/pages/collection/CollectionDailyDayDetailsDialog").then((module) => ({
