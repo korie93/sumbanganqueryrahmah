@@ -159,7 +159,7 @@ export function ViewAllRecordsDialog({
               }
             >
               {isMobile ? (
-                <div className="min-h-0 h-full overflow-y-auto overscroll-y-contain rounded-[1.5rem] border border-border/60 bg-background p-3 shadow-sm [touch-action:pan-y] [-webkit-overflow-scrolling:touch]">
+                <div className="min-h-0 h-full overflow-y-auto overscroll-y-contain rounded-[1.5rem] border border-border/60 bg-background p-3 shadow-sm [touch-action:pan-y]">
                   {loading ? (
                     <div className="rounded-2xl border border-border/60 bg-background px-4 py-6 text-center text-sm text-muted-foreground">
                       Loading full records...

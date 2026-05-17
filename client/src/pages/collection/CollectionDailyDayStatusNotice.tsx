@@ -1,41 +1,19 @@
 import { BriefcaseBusiness, CalendarOff, StickyNote } from "lucide-react";
 import type { CollectionDailyDayDetailsResponse, CollectionDailyOverviewDay } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import {
+  getCollectionDailyLeaveTypeLabel,
+  getCollectionDailyOperationalStatusLabel,
+  getCollectionDailyStatusScopeLabel,
+  getCollectionDailySuperuserRemark,
+  getCollectionDailyWorkingDayLabel,
+} from "@/pages/collection/collection-daily-day-status-text";
 import { CollectionDailyCalendarAuditMeta } from "@/pages/collection/CollectionDailyCalendarAuditMeta";
-import { COLLECTION_DAILY_LEAVE_TYPE_LABELS } from "@shared/collection-daily-status";
 
 type CollectionDailyDayStatusNoticeProps = {
   day: CollectionDailyOverviewDay | null;
   dayDetails: CollectionDailyDayDetailsResponse;
 };
-
-function getStatusLabel(day: CollectionDailyOverviewDay) {
-  return day.calendarStatus === "HOLIDAY" ? "Holiday / Leave" : "Working";
-}
-
-function getLeaveTypeLabel(day: CollectionDailyOverviewDay) {
-  if (day.calendarStatus !== "HOLIDAY") {
-    return "Not applicable";
-  }
-
-  if (!day.leaveType) {
-    return "Leave type not set";
-  }
-
-  return `${day.leaveType} - ${COLLECTION_DAILY_LEAVE_TYPE_LABELS[day.leaveType]}`;
-}
-
-function getScopeLabel(dayDetails: CollectionDailyDayDetailsResponse) {
-  if (dayDetails.usernames.length === 1) {
-    return `Nickname: ${dayDetails.usernames[0]}`;
-  }
-
-  if (dayDetails.usernames.length > 1) {
-    return `${dayDetails.usernames.length} selected nicknames`;
-  }
-
-  return "Selected staff scope";
-}
 
 export function CollectionDailyDayStatusNotice({
   day,
@@ -46,7 +24,6 @@ export function CollectionDailyDayStatusNotice({
   }
 
   const isHoliday = day.calendarStatus === "HOLIDAY";
-  const note = day.note?.trim();
 
   return (
     <section
@@ -66,19 +43,19 @@ export function CollectionDailyDayStatusNotice({
         </span>
         <div className="min-w-0">
           <p className="collection-day-status-notice-eyebrow">Daily Calendar Status</p>
-          <h3 className="collection-day-status-notice-title">{getStatusLabel(day)}</h3>
-          <p className="collection-day-status-notice-scope">{getScopeLabel(dayDetails)}</p>
+          <h3 className="collection-day-status-notice-title">{getCollectionDailyOperationalStatusLabel(day)}</h3>
+          <p className="collection-day-status-notice-scope">{getCollectionDailyStatusScopeLabel(dayDetails)}</p>
         </div>
       </div>
 
       <div className="collection-day-status-notice-grid">
         <div className="collection-day-status-notice-field">
           <span>Jenis cuti</span>
-          <strong>{getLeaveTypeLabel(day)}</strong>
+          <strong>{getCollectionDailyLeaveTypeLabel(day)}</strong>
         </div>
         <div className="collection-day-status-notice-field">
           <span>Status operasi</span>
-          <strong>{isHoliday ? "Tidak dikira sebagai working day" : "Dikira sebagai working day"}</strong>
+          <strong>{getCollectionDailyWorkingDayLabel(day)}</strong>
         </div>
       </div>
 
@@ -87,7 +64,7 @@ export function CollectionDailyDayStatusNotice({
           <StickyNote className="h-3.5 w-3.5" aria-hidden="true" />
           <span>Remark Superuser</span>
         </div>
-        <p>{note || "Tiada remark daripada superuser untuk tarikh ini."}</p>
+        <p>{getCollectionDailySuperuserRemark(day)}</p>
         <div className="mt-2">
           <CollectionDailyCalendarAuditMeta day={day} />
         </div>

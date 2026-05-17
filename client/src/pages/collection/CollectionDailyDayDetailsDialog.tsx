@@ -11,7 +11,9 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import type { CollectionDailyDayDetailsResponse, CollectionDailyOverviewDay } from "@/lib/api";
 import { formatDateDDMMYYYY } from "@/lib/date-format";
 import { CollectionDailyRecordCard, resolveTargetProgressPercent } from "@/pages/collection/CollectionDailyDayDetailsDialogParts";
+import { CollectionDailyDayDetailsEmptyState } from "@/pages/collection/CollectionDailyDayDetailsEmptyState";
 import { CollectionDailyDayDetailsFooter } from "@/pages/collection/CollectionDailyDayDetailsFooter";
+import { CollectionDailyDayDetailsStickySummary } from "@/pages/collection/CollectionDailyDayDetailsStickySummary";
 import { CollectionDailyDayDetailsSummary } from "@/pages/collection/CollectionDailyDayDetailsSummary";
 import "./CollectionDailyDayDetailsDialog.css";
 
@@ -29,7 +31,7 @@ type CollectionDailyDayDetailsDialogProps = {
 
 function buildDailyRecordRangeLabel(dayDetails: CollectionDailyDayDetailsResponse | null): string {
   if (!dayDetails || dayDetails.pagination.totalRecords <= 0) {
-    return "No records";
+    return "Tiada rekod";
   }
 
   const firstRecord = Math.min(
@@ -41,7 +43,7 @@ function buildDailyRecordRangeLabel(dayDetails: CollectionDailyDayDetailsRespons
     (dayDetails.pagination.page - 1) * dayDetails.pagination.pageSize + dayDetails.records.length,
   );
 
-  return `Showing ${firstRecord}-${lastRecord} of ${dayDetails.pagination.totalRecords} records`;
+  return `Paparan ${firstRecord}-${lastRecord} daripada ${dayDetails.pagination.totalRecords} rekod`;
 }
 
 export function CollectionDailyDayDetailsDialog({
@@ -79,21 +81,25 @@ export function CollectionDailyDayDetailsDialog({
           }`}
         >
           <DialogTitle>
-            Collection Day Details - {selectedDate ? formatDateDDMMYYYY(selectedDate) : "-"}
+            Maklumat Kutipan Harian - {selectedDate ? formatDateDDMMYYYY(selectedDate) : "-"}
           </DialogTitle>
           <DialogDescription>
-            View collection records, stored receipts, and daily target status for the selected date.
+            Semak rekod kutipan, receipt tersimpan, status harian, dan pencapaian target untuk tarikh dipilih.
           </DialogDescription>
         </DialogHeader>
 
         {loadingDayDetails ? (
-          <div className="collection-daily-day-details-state flex min-h-0 flex-1 items-center justify-center rounded-2xl border border-border/60 bg-background px-4 py-10 text-sm text-muted-foreground shadow-sm">
+          <div
+            className="collection-daily-day-details-state flex min-h-0 flex-1 items-center justify-center rounded-2xl border border-border/60 bg-background px-4 py-10 text-sm text-muted-foreground shadow-sm"
+            aria-live="polite"
+            aria-atomic="true"
+          >
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            Loading day details...
+            Memuatkan maklumat harian...
           </div>
         ) : !dayDetails ? (
           <div className="collection-daily-day-details-state flex min-h-0 flex-1 items-center justify-center rounded-2xl border border-border/60 bg-background px-4 py-8 text-center text-sm text-muted-foreground shadow-sm">
-            No details available.
+            Maklumat harian belum tersedia.
           </div>
         ) : (
           <div
@@ -101,7 +107,18 @@ export function CollectionDailyDayDetailsDialog({
               isMobile ? "px-3 py-3" : ""
             }`}
           >
-            <div className="collection-daily-day-details-scroll min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-y-contain pr-1">
+            <div
+              aria-label="Collection day details scroll area"
+              className="collection-daily-day-details-scroll min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-y-contain pr-1"
+              role="region"
+              tabIndex={0}
+            >
+              <CollectionDailyDayDetailsStickySummary
+                customerCount={customerCount}
+                dayDetails={dayDetails}
+                selectedOverviewDay={selectedOverviewDay}
+              />
+
               <CollectionDailyDayDetailsSummary
                 balancedAmount={balancedAmount}
                 customerCount={customerCount}
@@ -112,9 +129,10 @@ export function CollectionDailyDayDetailsDialog({
 
               <div className="space-y-2">
                 {dayDetails.records.length === 0 ? (
-                  <div className="rounded-2xl border border-dashed border-border/60 bg-background px-4 py-6 text-center text-sm text-muted-foreground shadow-sm">
-                    No collection records for this date.
-                  </div>
+                  <CollectionDailyDayDetailsEmptyState
+                    dayDetails={dayDetails}
+                    selectedOverviewDay={selectedOverviewDay}
+                  />
                 ) : (
                   dayDetails.records.map((record) => (
                     <CollectionDailyRecordCard

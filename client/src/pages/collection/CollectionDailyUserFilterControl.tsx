@@ -60,30 +60,55 @@ export function CollectionDailyUserFilterControl({
     return users.filter((userItem) => userItem.username.toLowerCase().includes(normalizedSearch));
   }, [searchValue, users]);
 
+  const triggerContent = (
+    <>
+      <span id={triggerValueId} className="truncate text-left">{selectedUsersLabel}</span>
+      {loadingUsers ? (
+        <Loader2 className="h-4 w-4 shrink-0 animate-spin" aria-hidden="true" />
+      ) : (
+        <ChevronDown className="h-4 w-4 shrink-0" aria-hidden="true" />
+      )}
+    </>
+  );
+
   return (
     <Popover open={userPopoverOpen} onOpenChange={onUserPopoverOpenChange}>
       <PopoverTrigger asChild>
-        <Button
-          id={triggerId}
-          type="button"
-          variant="outline"
-          className={cn(
-            "w-full justify-between bg-background text-left shadow-sm",
-            isMobile ? "h-12 rounded-2xl px-4" : "h-11 rounded-xl px-4",
-          )}
-          disabled={loadingUsers}
-          aria-expanded={userPopoverOpen}
-          aria-haspopup="dialog"
-          aria-labelledby={triggerLabelId ? `${triggerLabelId} ${triggerValueId}` : undefined}
-          data-testid="collection-daily-user-trigger"
-        >
-          <span id={triggerValueId} className="truncate text-left">{selectedUsersLabel}</span>
-          {loadingUsers ? (
-            <Loader2 className="h-4 w-4 shrink-0 animate-spin" aria-hidden="true" />
-          ) : (
-            <ChevronDown className="h-4 w-4 shrink-0" aria-hidden="true" />
-          )}
-        </Button>
+        {userPopoverOpen ? (
+          <Button
+            id={triggerId}
+            type="button"
+            variant="outline"
+            className={cn(
+              "w-full justify-between bg-background text-left shadow-sm",
+              isMobile ? "h-12 rounded-2xl px-4" : "h-11 rounded-xl px-4",
+            )}
+            disabled={loadingUsers}
+            aria-expanded="true"
+            aria-haspopup="dialog"
+            aria-labelledby={triggerLabelId ? `${triggerLabelId} ${triggerValueId}` : undefined}
+            data-testid="collection-daily-user-trigger"
+          >
+            {triggerContent}
+          </Button>
+        ) : (
+          <Button
+            id={triggerId}
+            type="button"
+            variant="outline"
+            className={cn(
+              "w-full justify-between bg-background text-left shadow-sm",
+              isMobile ? "h-12 rounded-2xl px-4" : "h-11 rounded-xl px-4",
+            )}
+            disabled={loadingUsers}
+            aria-expanded="false"
+            aria-haspopup="dialog"
+            aria-labelledby={triggerLabelId ? `${triggerLabelId} ${triggerValueId}` : undefined}
+            data-testid="collection-daily-user-trigger"
+          >
+            {triggerContent}
+          </Button>
+        )}
       </PopoverTrigger>
       {userPopoverOpen ? (
         <PopoverContent

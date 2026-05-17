@@ -57,7 +57,7 @@ test("CollectionDailyDayStatusNotice highlights leave type and superuser remark"
   );
 
   assert.match(markup, /Daily Calendar Status/);
-  assert.match(markup, /Holiday \/ Leave/);
+  assert.match(markup, /AL - Annual Leave/);
   assert.match(markup, /AL - Annual Leave/);
   assert.match(markup, /Remark Superuser/);
   assert.match(markup, /Annual leave approved by superuser/);
@@ -82,7 +82,7 @@ test("CollectionDailyDayStatusNotice keeps working days clear without fake leave
   );
 
   assert.match(markup, /Working/);
-  assert.match(markup, /Not applicable/);
+  assert.match(markup, /Tidak berkaitan/);
   assert.match(markup, /Dikira sebagai working day/);
   assert.match(markup, /Tiada remark daripada superuser untuk tarikh ini/);
 });

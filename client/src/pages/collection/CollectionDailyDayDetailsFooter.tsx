@@ -23,10 +23,11 @@ export function CollectionDailyDayDetailsFooter({
       className={`sticky bottom-0 z-[var(--z-sticky-content)] flex flex-col gap-3 border-t border-border/60 bg-background/95 pb-[calc(env(safe-area-inset-bottom,0px)+0.75rem)] pt-3 text-sm shadow-lg backdrop-blur supports-[backdrop-filter]:bg-background/85 ${
         isMobile ? "-mx-3 px-3" : "-mx-4 px-4 sm:-mx-6 sm:px-6"
       } sm:flex-row sm:items-center sm:justify-between`}
+      aria-label="Navigasi halaman rekod kutipan harian"
       data-floating-ai-avoid="true"
     >
       <div className={`text-muted-foreground ${isMobile ? "text-xs" : ""}`}>
-        {recordRangeLabel} · Page {dayDetails.pagination.page} of {dayDetails.pagination.totalPages}
+        {recordRangeLabel} - Halaman {dayDetails.pagination.page} daripada {dayDetails.pagination.totalPages}
       </div>
       <div className="flex flex-col gap-2 sm:flex-row">
         <Button
@@ -37,7 +38,7 @@ export function CollectionDailyDayDetailsFooter({
           disabled={!dayDetails.pagination.hasPreviousPage || loadingDayDetails || !selectedDate}
           onClick={() => onChangePage(dayDetails.pagination.page - 1)}
         >
-          Previous
+          Sebelumnya
         </Button>
         <Button
           type="button"
@@ -47,7 +48,7 @@ export function CollectionDailyDayDetailsFooter({
           disabled={!dayDetails.pagination.hasNextPage || loadingDayDetails || !selectedDate}
           onClick={() => onChangePage(dayDetails.pagination.page + 1)}
         >
-          Next
+          Seterusnya
         </Button>
       </div>
     </div>

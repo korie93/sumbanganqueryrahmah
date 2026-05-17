@@ -157,12 +157,25 @@ export function CollectionDailyMobileDayList({
                   <Eye className="mr-2 h-4 w-4" aria-hidden="true" />
                   View details
                 </Button>
-                {canManage ? (
+                {canManage && isEditing ? (
                   <Button
                     type="button"
-                    variant={isEditing ? "default" : "outline"}
+                    variant="default"
                     className="h-10 rounded-xl"
-                    aria-pressed={isEditing ? "true" : "false"}
+                    aria-pressed="true"
+                    aria-label={`Edit calendar status for ${formatDateDDMMYYYY(day.date)}`}
+                    onClick={() => onEditDay(day.day)}
+                  >
+                    <Edit3 className="mr-2 h-4 w-4" aria-hidden="true" />
+                    {isDirty ? "Unsaved change" : "Edit status"}
+                  </Button>
+                ) : null}
+                {canManage && !isEditing ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-10 rounded-xl"
+                    aria-pressed="false"
                     aria-label={`Edit calendar status for ${formatDateDDMMYYYY(day.date)}`}
                     onClick={() => onEditDay(day.day)}
                   >

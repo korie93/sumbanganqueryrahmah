@@ -168,18 +168,33 @@ export function CollectionDailyDesktopCalendarGrid({
                   />
                   <span>Bulk select</span>
                 </label>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant={isEditing ? "default" : "outline"}
-                  className="h-8 w-full rounded-lg text-[11px]"
-                  aria-pressed={isEditing ? "true" : "false"}
-                  aria-label={`Edit calendar status for ${formatDateDDMMYYYY(day.date)}`}
-                  onClick={() => onEditDay(day.day)}
-                >
-                  <Edit3 className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
-                  {isDirty ? "Unsaved change" : "Edit status"}
-                </Button>
+                {isEditing ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="default"
+                    className="h-8 w-full rounded-lg text-[11px]"
+                    aria-pressed="true"
+                    aria-label={`Edit calendar status for ${formatDateDDMMYYYY(day.date)}`}
+                    onClick={() => onEditDay(day.day)}
+                  >
+                    <Edit3 className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
+                    {isDirty ? "Unsaved change" : "Edit status"}
+                  </Button>
+                ) : (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="h-8 w-full rounded-lg text-[11px]"
+                    aria-pressed="false"
+                    aria-label={`Edit calendar status for ${formatDateDDMMYYYY(day.date)}`}
+                    onClick={() => onEditDay(day.day)}
+                  >
+                    <Edit3 className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
+                    {isDirty ? "Unsaved change" : "Edit status"}
+                  </Button>
+                )}
               </div>
             ) : null}
           </div>
