@@ -48,21 +48,42 @@ export function CollectionDailyCalendarQuickFilter({
         </p>
       </div>
       <div className="collection-daily-calendar-filter-options" role="group" aria-label="Calendar day filters">
-        {options.map((option) => (
-          <button
-            key={option.id}
-            type="button"
-            className={`collection-daily-calendar-filter-option ${
-              activeFilter === option.id ? "collection-daily-calendar-filter-option-active" : ""
-            }`}
-            aria-pressed={activeFilter === option.id}
-            title={option.description}
-            onClick={() => onFilterChange(option.id)}
-          >
-            <span>{option.label}</span>
-            <strong>{option.count}</strong>
-          </button>
-        ))}
+        {options.map((option) => {
+          const active = activeFilter === option.id;
+          const className = `collection-daily-calendar-filter-option ${
+            active ? "collection-daily-calendar-filter-option-active" : ""
+          }`;
+          const buttonContent = (
+            <>
+              <span>{option.label}</span>
+              <strong>{option.count}</strong>
+            </>
+          );
+
+          return active ? (
+            <button
+              key={option.id}
+              type="button"
+              className={className}
+              aria-pressed="true"
+              title={option.description}
+              onClick={() => onFilterChange(option.id)}
+            >
+              {buttonContent}
+            </button>
+          ) : (
+            <button
+              key={option.id}
+              type="button"
+              className={className}
+              aria-pressed="false"
+              title={option.description}
+              onClick={() => onFilterChange(option.id)}
+            >
+              {buttonContent}
+            </button>
+          );
+        })}
       </div>
     </section>
   );

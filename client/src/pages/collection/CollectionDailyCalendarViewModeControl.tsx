@@ -62,21 +62,39 @@ export function CollectionDailyCalendarViewModeControl({
         {COLLECTION_DAILY_CALENDAR_VIEW_MODE_OPTIONS.map((option) => {
           const Icon = VIEW_MODE_ICONS[option.id];
           const active = value === option.id;
+          const className = `collection-daily-calendar-view-mode-option ${
+            active ? "collection-daily-calendar-view-mode-option-active" : ""
+          }`;
+          const buttonContent = (
+            <>
+              <Icon aria-hidden="true" className="h-4 w-4" />
+              <span>{option.label}</span>
+            </>
+          );
 
-          return (
+          return active ? (
             <button
               key={option.id}
               type="button"
-              className={`collection-daily-calendar-view-mode-option ${
-                active ? "collection-daily-calendar-view-mode-option-active" : ""
-              }`}
-              aria-pressed={active}
+              className={className}
+              aria-pressed="true"
               aria-label={`${option.label}. ${option.description}`}
               title={option.description}
               onClick={() => onChange(option.id)}
             >
-              <Icon aria-hidden="true" className="h-4 w-4" />
-              <span>{option.label}</span>
+              {buttonContent}
+            </button>
+          ) : (
+            <button
+              key={option.id}
+              type="button"
+              className={className}
+              aria-pressed="false"
+              aria-label={`${option.label}. ${option.description}`}
+              title={option.description}
+              onClick={() => onChange(option.id)}
+            >
+              {buttonContent}
             </button>
           );
         })}
