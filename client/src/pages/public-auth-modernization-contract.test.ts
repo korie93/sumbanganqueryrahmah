@@ -64,6 +64,9 @@ test("landing and public auth theme use a dark SQR backdrop with elevated light 
   assert.match(tokenSource, /--public-auth-layout-bg: linear-gradient\(135deg, hsl\(222 47% 9%\)/);
   assert.match(tokenSource, /--public-auth-shell-surface-strong: hsl\(0 0% 100% \/ 0\.98\);/);
   assert.match(landingCss, /\.landing-hero-panel\s*{/);
-  assert.match(landingCss, /background:\s*linear-gradient\(180deg, hsl\(0 0% 100%\), hsl\(214 50% 98%\)\);/);
+  assert.match(landingCss, /--landing-primary:\s*hsl\(221 83% 53%\);/);
+  assert.match(landingCss, /--landing-trust:\s*hsl\(154 58% 32%\);/);
+  assert.match(landingCss, /--landing-amber:\s*hsl\(36 84% 39%\);/);
+  assert.match(landingCss, /background:\s*linear-gradient\(180deg, var\(--landing-surface\), var\(--landing-surface-muted\)\);/);
   assert.match(landingCss, /\.landing-placeholder-footer-shell\s*{/);
 });
