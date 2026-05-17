@@ -126,7 +126,6 @@
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
-  scrollbar-gutter: stable;
 }
 
 .collection-daily-edit-dialog .collection-daily-save-state {
@@ -340,7 +339,7 @@
 }
 
 .collection-daily-day-view-list {
-  min-height: auto;
+  min-height: 0;
 }
 
 .collection-daily-day-view-list .collection-daily-day-button {
