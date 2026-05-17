@@ -69,6 +69,7 @@ test("CollectionDailyDesktopCalendarGrid keeps day cards compact with a separate
   const markup = renderToStaticMarkup(
     createElement(CollectionDailyDesktopCalendarGrid, {
       days: overviewDays,
+      viewMode: "content",
       firstWeekday: 0,
       selectedDate: null,
       editingDayNumber: 2,
@@ -76,11 +77,14 @@ test("CollectionDailyDesktopCalendarGrid keeps day cards compact with a separate
       canManage: true,
       editableCalendarByDay: editableDays,
       dirtyCalendarDayNumbers: new Set([2]),
+      bulkSelectedDayNumbers: new Set([2]),
       onEditDay: () => undefined,
       onSelectDate: () => undefined,
+      onToggleBulkDay: () => undefined,
     }),
   );
 
+  assert.match(markup, /Bulk select/);
   assert.match(markup, /Edit status/);
   assert.match(markup, /Unsaved change/);
   assert.match(markup, /OFF/);
@@ -88,8 +92,33 @@ test("CollectionDailyDesktopCalendarGrid keeps day cards compact with a separate
   assert.match(markup, /Company closed/);
   assert.match(markup, /aria-pressed="true"/);
   assert.match(markup, /collection-daily-day-card-filter-muted/);
+  assert.match(markup, /collection-daily-desktop-grid-mode-content/);
   assert.doesNotMatch(markup, /Status day 1/);
   assert.doesNotMatch(markup, /Status day 2/);
+});
+
+test("CollectionDailyDesktopCalendarGrid supports compact icon calendar view", () => {
+  const markup = renderToStaticMarkup(
+    createElement(CollectionDailyDesktopCalendarGrid, {
+      days: overviewDays,
+      viewMode: "icon-sm",
+      firstWeekday: 0,
+      selectedDate: null,
+      editingDayNumber: null,
+      activeFilter: "all",
+      canManage: false,
+      editableCalendarByDay: editableDays,
+      dirtyCalendarDayNumbers: new Set<number>(),
+      bulkSelectedDayNumbers: new Set<number>(),
+      onEditDay: () => undefined,
+      onSelectDate: () => undefined,
+      onToggleBulkDay: () => undefined,
+    }),
+  );
+
+  assert.match(markup, /collection-daily-desktop-grid-mode-icon-sm/);
+  assert.match(markup, /collection-daily-day-view-icon-sm/);
+  assert.doesNotMatch(markup, /Collected:/);
 });
 
 test("CollectionDailyCalendarEditPanel renders the selected day status form and save guidance", () => {
@@ -100,6 +129,9 @@ test("CollectionDailyCalendarEditPanel renders the selected day status form and 
       canManage: true,
       isDirty: true,
       savingCalendar: false,
+      username: "alice",
+      year: 2026,
+      month: 5,
       onSaveCalendar: () => undefined,
       onChange: () => undefined,
       onViewDetails: () => undefined,

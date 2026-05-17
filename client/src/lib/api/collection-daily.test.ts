@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  getCollectionDailyCalendarAudit,
   getCollectionDailyDayDetails,
   getCollectionDailyOverview,
   getCollectionDailyUsers,
@@ -185,6 +186,71 @@ test("getCollectionDailyDayDetails forwards paging params and AbortSignal", asyn
   assert.match(
     requests[0]?.input || "",
     /\/api\/collection\/daily\/day-details\?date=2026-03-24&usernames=Collector\+Alpha&page=2&pageSize=10$/,
+  );
+  assert.equal(requests[0]?.signal, controller.signal);
+});
+
+test("getCollectionDailyCalendarAudit forwards query params and normalizes rows", async () => {
+  const requests: Array<{ input: string; signal: AbortSignal | null }> = [];
+  const originalFetch = globalThis.fetch;
+  const controller = new AbortController();
+
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    requests.push({
+      input: String(input),
+      signal: init?.signal || null,
+    });
+    return new Response(
+      JSON.stringify({
+        ok: true,
+        username: "ali",
+        year: 2026,
+        month: 5,
+        day: 15,
+        audit: [
+          {
+            id: "audit-1",
+            calendar_id: "calendar-1",
+            calendar_date: "2026-05-15",
+            action: "UPDATE",
+            old_status: "WORKING",
+            new_status: "HOLIDAY",
+            new_leave_type: "OFF",
+            new_note: "Company closed",
+            actor: "superuser",
+            created_at: "2026-05-15T08:00:00.000Z",
+          },
+        ],
+      }),
+      {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      },
+    );
+  }) as typeof fetch;
+
+  try {
+    const response = await getCollectionDailyCalendarAudit(
+      {
+        username: "ali",
+        year: 2026,
+        month: 5,
+        day: 15,
+        limit: 25,
+      },
+      { signal: controller.signal },
+    );
+    assert.equal(response.audit[0]?.calendarId, "calendar-1");
+    assert.equal(response.audit[0]?.newLeaveType, "OFF");
+    assert.equal(response.audit[0]?.actor, "superuser");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+
+  assert.equal(requests.length, 1);
+  assert.match(
+    requests[0]?.input || "",
+    /\/api\/collection\/daily\/calendar\/audit\?username=ali&year=2026&month=5&day=15&limit=25$/,
   );
   assert.equal(requests[0]?.signal, controller.signal);
 });

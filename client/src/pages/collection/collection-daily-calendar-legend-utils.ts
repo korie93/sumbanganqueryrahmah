@@ -37,6 +37,12 @@ export const COLLECTION_DAILY_RESULT_LEGEND_ITEMS: readonly CollectionDailyCalen
     className: "border-slate-300/60 bg-slate-100/80 text-slate-700 dark:bg-slate-900/55 dark:text-slate-200",
     dotClassName: "bg-slate-500",
   },
+  {
+    label: "Conflict",
+    detail: "Holiday/OFF day still has collection activity",
+    className: "border-orange-300/70 bg-orange-50 text-orange-800 dark:bg-orange-950/30 dark:text-orange-100",
+    dotClassName: "bg-orange-500",
+  },
 ] as const;
 
 function getLeaveLegendClassName(leaveType: CollectionDailyLeaveType) {

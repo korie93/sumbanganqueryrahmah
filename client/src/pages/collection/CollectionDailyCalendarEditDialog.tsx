@@ -16,6 +16,9 @@ type CollectionDailyCalendarEditDialogProps = {
   editableDay: EditableCalendarDay | null;
   isDirty: boolean;
   savingCalendar: boolean;
+  username: string;
+  year: number;
+  month: number;
   onOpenChange: (open: boolean) => void;
   onSaveCalendar: () => void;
   onChange: (patch: Partial<EditableCalendarDay>) => void;
@@ -28,6 +31,9 @@ export function CollectionDailyCalendarEditDialog({
   editableDay,
   isDirty,
   savingCalendar,
+  username,
+  year,
+  month,
   onOpenChange,
   onSaveCalendar,
   onChange,
@@ -58,6 +64,9 @@ export function CollectionDailyCalendarEditDialog({
             canManage={open}
             isDirty={isDirty}
             savingCalendar={savingCalendar}
+            username={username}
+            year={year}
+            month={month}
             variant="dialog"
             onSaveCalendar={onSaveCalendar}
             onChange={onChange}

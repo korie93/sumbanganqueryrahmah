@@ -10,11 +10,13 @@ import {
 import { db } from "../db-postgres";
 import type {
   CollectionDailyCalendarDay,
+  CollectionDailyCalendarAuditEntry,
   CollectionDailyPaidCustomer,
   CollectionDailyTarget,
   CollectionDailyUser,
 } from "../storage-postgres";
 import {
+  mapCollectionDailyCalendarAuditRow,
   mapCollectionDailyCalendarRow,
   mapCollectionDailyTargetRow,
 } from "./collection-repository-mappers";
@@ -220,17 +222,39 @@ export async function upsertCollectionDailyCalendarDays(params: {
         ${!isHoliday},
         ${isHoliday},
         ${holidayName},
-        ${params.actor},
-        ${params.actor},
-        now(),
-        now()
+        ${params.actor}
       )`;
     }),
     sql`, `,
   );
 
   await executor.execute(sql`
-    INSERT INTO public.collection_daily_calendar (
+    WITH incoming (
+      id,
+      username,
+      calendar_date,
+      year,
+      month,
+      day,
+      status,
+      leave_type,
+      note,
+      is_working_day,
+      is_holiday,
+      holiday_name,
+      actor
+    ) AS (
+      VALUES ${valuesSql}
+    ),
+    old_rows AS (
+      SELECT calendar.*
+      FROM public.collection_daily_calendar calendar
+      INNER JOIN incoming
+        ON lower(calendar.username) = incoming.username
+       AND calendar.calendar_date = incoming.calendar_date
+    ),
+    upserted AS (
+      INSERT INTO public.collection_daily_calendar (
       id,
       username,
       calendar_date,
@@ -248,17 +272,99 @@ export async function upsertCollectionDailyCalendarDays(params: {
       created_at,
       updated_at
     )
-    VALUES ${valuesSql}
-    ON CONFLICT ((lower(username)), calendar_date)
-    DO UPDATE SET
-      status = EXCLUDED.status,
-      leave_type = EXCLUDED.leave_type,
-      note = EXCLUDED.note,
-      is_working_day = EXCLUDED.is_working_day,
-      is_holiday = EXCLUDED.is_holiday,
-      holiday_name = EXCLUDED.holiday_name,
-      updated_by = EXCLUDED.updated_by,
-      updated_at = now()
+      SELECT
+        incoming.id,
+        incoming.username,
+        incoming.calendar_date,
+        incoming.year,
+        incoming.month,
+        incoming.day,
+        incoming.status,
+        incoming.leave_type,
+        incoming.note,
+        incoming.is_working_day,
+        incoming.is_holiday,
+        incoming.holiday_name,
+        incoming.actor,
+        incoming.actor,
+        now(),
+        now()
+      FROM incoming
+      ON CONFLICT ((lower(username)), calendar_date)
+      DO UPDATE SET
+        status = EXCLUDED.status,
+        leave_type = EXCLUDED.leave_type,
+        note = EXCLUDED.note,
+        is_working_day = EXCLUDED.is_working_day,
+        is_holiday = EXCLUDED.is_holiday,
+        holiday_name = EXCLUDED.holiday_name,
+        updated_by = EXCLUDED.updated_by,
+        updated_at = now()
+      RETURNING
+        id,
+        username,
+        calendar_date,
+        year,
+        month,
+        day,
+        status,
+        leave_type,
+        note,
+        holiday_name,
+        updated_by
+    ),
+    audit_insert AS (
+      INSERT INTO public.collection_daily_calendar_audit (
+        id,
+        calendar_id,
+        username,
+        calendar_date,
+        year,
+        month,
+        day,
+        action,
+        old_status,
+        new_status,
+        old_leave_type,
+        new_leave_type,
+        old_note,
+        new_note,
+        old_holiday_name,
+        new_holiday_name,
+        actor,
+        created_at
+      )
+      SELECT
+        gen_random_uuid(),
+        upserted.id,
+        upserted.username,
+        upserted.calendar_date,
+        upserted.year,
+        upserted.month,
+        upserted.day,
+        CASE WHEN old_rows.id IS NULL THEN 'CREATE' ELSE 'UPDATE' END,
+        old_rows.status,
+        upserted.status,
+        old_rows.leave_type,
+        upserted.leave_type,
+        old_rows.note,
+        upserted.note,
+        old_rows.holiday_name,
+        upserted.holiday_name,
+        upserted.updated_by,
+        now()
+      FROM upserted
+      LEFT JOIN old_rows
+        ON lower(old_rows.username) = lower(upserted.username)
+       AND old_rows.calendar_date = upserted.calendar_date
+      WHERE old_rows.id IS NULL
+         OR old_rows.status IS DISTINCT FROM upserted.status
+         OR old_rows.leave_type IS DISTINCT FROM upserted.leave_type
+         OR old_rows.note IS DISTINCT FROM upserted.note
+         OR old_rows.holiday_name IS DISTINCT FROM upserted.holiday_name
+      RETURNING id
+    )
+    SELECT count(*) AS audit_count FROM audit_insert
   `);
 
   return listCollectionDailyCalendar({
@@ -273,14 +379,109 @@ export async function deleteCollectionDailyCalendarDay(params: {
   year: number;
   month: number;
   day: number;
+  actor?: string | undefined;
 }, executor: CollectionDailyExecutor = db): Promise<boolean> {
   const result = await executor.execute(sql`
-    DELETE FROM public.collection_daily_calendar
+    WITH deleted AS (
+      DELETE FROM public.collection_daily_calendar
+      WHERE lower(username) = lower(${params.username})
+        AND calendar_date = ${buildCalendarDateKey(params.year, params.month, params.day)}::date
+      RETURNING
+        id,
+        username,
+        calendar_date,
+        year,
+        month,
+        day,
+        status,
+        leave_type,
+        note,
+        holiday_name
+    ),
+    audit_insert AS (
+      INSERT INTO public.collection_daily_calendar_audit (
+        id,
+        calendar_id,
+        username,
+        calendar_date,
+        year,
+        month,
+        day,
+        action,
+        old_status,
+        new_status,
+        old_leave_type,
+        new_leave_type,
+        old_note,
+        new_note,
+        old_holiday_name,
+        new_holiday_name,
+        actor,
+        created_at
+      )
+      SELECT
+        gen_random_uuid(),
+        deleted.id,
+        deleted.username,
+        deleted.calendar_date,
+        deleted.year,
+        deleted.month,
+        deleted.day,
+        'DELETE',
+        deleted.status,
+        NULL,
+        deleted.leave_type,
+        NULL,
+        deleted.note,
+        NULL,
+        deleted.holiday_name,
+        NULL,
+        ${params.actor ?? null},
+        now()
+      FROM deleted
+      RETURNING id
+    )
+    SELECT count(*)::integer AS deleted_count FROM audit_insert
+  `);
+  const row = result.rows?.[0] as { deleted_count?: unknown } | undefined;
+  return Number(row?.deleted_count ?? 0) > 0;
+}
+
+export async function listCollectionDailyCalendarAudit(params: {
+  username: string;
+  year: number;
+  month: number;
+  day: number;
+  limit?: number | undefined;
+}, executor: CollectionDailyExecutor = db): Promise<CollectionDailyCalendarAuditEntry[]> {
+  const limit = Math.min(100, Math.max(1, Math.trunc(params.limit ?? 50)));
+  const result = await executor.execute(sql`
+    SELECT
+      id,
+      calendar_id,
+      username,
+      calendar_date,
+      year,
+      month,
+      day,
+      action,
+      old_status,
+      new_status,
+      old_leave_type,
+      new_leave_type,
+      old_note,
+      new_note,
+      old_holiday_name,
+      new_holiday_name,
+      actor,
+      created_at
+    FROM public.collection_daily_calendar_audit
     WHERE lower(username) = lower(${params.username})
       AND calendar_date = ${buildCalendarDateKey(params.year, params.month, params.day)}::date
-    RETURNING id
+    ORDER BY created_at DESC, id DESC
+    LIMIT ${limit}
   `);
-  return (result.rows?.length ?? 0) > 0;
+  return readCollectionDailyRows(result).map((row) => mapCollectionDailyCalendarAuditRow(row));
 }
 
 export async function listCollectionDailyPaidCustomers(params: {

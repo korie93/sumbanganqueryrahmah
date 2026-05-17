@@ -5,6 +5,7 @@ export type {
   AccountActivationTokenSummary,
   CollectionAdminGroup,
   CollectionAdminUser,
+  CollectionDailyCalendarAuditEntry,
   CollectionDailyCalendarDay,
   CollectionDailyPaidCustomer,
   CollectionDailyTarget,

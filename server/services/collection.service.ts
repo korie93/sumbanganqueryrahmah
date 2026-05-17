@@ -127,6 +127,10 @@ export class CollectionService {
     return this.recordService.deleteDailyCalendar(user, inputRaw);
   }
 
+  listDailyCalendarAudit(user: AuthenticatedUser | undefined, query: ListQuery) {
+    return this.recordService.listDailyCalendarAudit(user, query);
+  }
+
   getDailyOverview(user: AuthenticatedUser | undefined, query: ListQuery) {
     return this.recordService.getDailyOverview(user, query);
   }

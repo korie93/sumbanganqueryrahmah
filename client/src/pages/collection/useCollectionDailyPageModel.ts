@@ -149,6 +149,7 @@ export function useCollectionDailyPageModel({ role }: UseCollectionDailyPageMode
       onSaveCalendar: handleSaveCalendar,
       onSelectDate: handleDaySelect,
       onUpdateEditableDay: data.updateEditableDay,
+      onUpdateEditableDays: data.updateEditableDays,
     },
     dayDetailsDialogProps: {
       open: Boolean(data.selectedDate),

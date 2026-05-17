@@ -30,6 +30,7 @@ export type CollectionStoragePort = Pick<
   | "getCollectionMonthlySummary"
   | "getCollectionDailyTarget"
   | "listCollectionDailyCalendar"
+  | "listCollectionDailyCalendarAudit"
   | "listCollectionDailyPaidCustomers"
   | "listCollectionDailyUsers"
   | "getCollectionNicknameAuthProfileByName"

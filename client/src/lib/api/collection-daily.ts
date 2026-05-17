@@ -11,6 +11,8 @@ import {
 } from "@shared/collection-daily-status";
 import type {
   CollectionDailyDayDetailsResponse,
+  CollectionDailyCalendarAuditEntry,
+  CollectionDailyCalendarAuditResponse,
   CollectionDailyOverviewResponse,
   CollectionDailyUser,
   CollectionReportFreshness,
@@ -129,6 +131,70 @@ function normalizeCollectionDailyUser(value: unknown, index: number): Collection
     id: readString(record.id) || `${username.toLowerCase()}-${index + 1}`,
     username,
     role: readString(record.role) || "user",
+  };
+}
+
+function normalizeCollectionDailyAuditAction(
+  value: unknown,
+): CollectionDailyCalendarAuditEntry["action"] {
+  return value === "CREATE" || value === "UPDATE" || value === "DELETE" ? value : "UPDATE";
+}
+
+function normalizeCollectionDailyCalendarAuditEntry(
+  value: unknown,
+  index: number,
+  filters: { username: string; year: number; month: number; day: number },
+): CollectionDailyCalendarAuditEntry | null {
+  const record = asRecord(value);
+  if (!record) return null;
+  const day = Math.max(1, readPositiveInteger(record.day, filters.day));
+  const date =
+    readString(record.date)
+    || readString(record.calendarDate ?? record.calendar_date)
+    || `${filters.year}-${String(filters.month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+
+  return {
+    id: readString(record.id) || `${date}-${index + 1}`,
+    calendarId: readNullableString(record.calendarId ?? record.calendar_id),
+    username: readString(record.username) || filters.username,
+    date,
+    year: readPositiveInteger(record.year, filters.year) || filters.year,
+    month: Math.min(12, Math.max(1, readPositiveInteger(record.month, filters.month) || filters.month)),
+    day,
+    action: normalizeCollectionDailyAuditAction(record.action),
+    oldStatus: record.oldStatus || record.old_status
+      ? normalizeCollectionDailyCalendarStatus(record.oldStatus ?? record.old_status)
+      : null,
+    newStatus: record.newStatus || record.new_status
+      ? normalizeCollectionDailyCalendarStatus(record.newStatus ?? record.new_status)
+      : null,
+    oldLeaveType: normalizeCollectionDailyLeaveType(record.oldLeaveType ?? record.old_leave_type),
+    newLeaveType: normalizeCollectionDailyLeaveType(record.newLeaveType ?? record.new_leave_type),
+    oldNote: readNullableString(record.oldNote ?? record.old_note),
+    newNote: readNullableString(record.newNote ?? record.new_note),
+    oldHolidayName: readNullableString(record.oldHolidayName ?? record.old_holiday_name),
+    newHolidayName: readNullableString(record.newHolidayName ?? record.new_holiday_name),
+    actor: readNullableString(record.actor),
+    createdAt: readString(record.createdAt ?? record.created_at),
+  };
+}
+
+function normalizeCollectionDailyCalendarAuditResponse(
+  value: unknown,
+  filters: { username: string; year: number; month: number; day: number },
+): CollectionDailyCalendarAuditResponse {
+  const record = asRecord(value);
+  return {
+    ok: readBoolean(record?.ok, true),
+    username: readString(record?.username) || filters.username,
+    year: readPositiveInteger(record?.year, filters.year) || filters.year,
+    month: Math.min(12, Math.max(1, readPositiveInteger(record?.month, filters.month) || filters.month)),
+    day: Math.max(1, readPositiveInteger(record?.day, filters.day)),
+    audit: Array.isArray(record?.audit)
+      ? record.audit
+          .map((entry, index) => normalizeCollectionDailyCalendarAuditEntry(entry, index, filters))
+          .filter((entry): entry is CollectionDailyCalendarAuditEntry => Boolean(entry))
+      : [],
   };
 }
 
@@ -376,6 +442,30 @@ export async function deleteCollectionDailyCalendarStatus(payload: {
     `/api/collection/daily/calendar?${params.toString()}`,
   );
   return response.json() as Promise<{ ok: boolean; deleted: boolean }>;
+}
+
+export async function getCollectionDailyCalendarAudit(filters: {
+  username: string;
+  year: number;
+  month: number;
+  day: number;
+  limit?: number | undefined;
+}, options?: CollectionDailyRequestOptions) {
+  const params = new URLSearchParams();
+  params.set("username", filters.username);
+  params.set("year", String(filters.year));
+  params.set("month", String(filters.month));
+  params.set("day", String(filters.day));
+  if (typeof filters.limit === "number" && Number.isFinite(filters.limit)) {
+    params.set("limit", String(Math.trunc(filters.limit)));
+  }
+  const response = await apiRequest(
+    "GET",
+    `/api/collection/daily/calendar/audit?${params.toString()}`,
+    undefined,
+    options,
+  );
+  return normalizeCollectionDailyCalendarAuditResponse(await response.json(), filters);
 }
 
 export async function getCollectionDailyOverview(filters: {

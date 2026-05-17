@@ -1,5 +1,6 @@
 import type {
   CollectionDailyCalendarDay,
+  CollectionDailyCalendarAuditEntry,
   CollectionDailyTarget,
   CollectionRecord,
 } from "../storage-postgres";
@@ -101,6 +102,38 @@ type CollectionDailyCalendarDbRow = {
   updatedBy?: unknown;
   created_at?: unknown;
   updated_at?: unknown;
+};
+
+type CollectionDailyCalendarAuditDbRow = {
+  id?: unknown;
+  calendar_id?: unknown;
+  calendarId?: unknown;
+  username?: unknown;
+  calendar_date?: unknown;
+  calendarDate?: unknown;
+  year?: unknown;
+  month?: unknown;
+  day?: unknown;
+  action?: unknown;
+  old_status?: unknown;
+  oldStatus?: unknown;
+  new_status?: unknown;
+  newStatus?: unknown;
+  old_leave_type?: unknown;
+  oldLeaveType?: unknown;
+  new_leave_type?: unknown;
+  newLeaveType?: unknown;
+  old_note?: unknown;
+  oldNote?: unknown;
+  new_note?: unknown;
+  newNote?: unknown;
+  old_holiday_name?: unknown;
+  oldHolidayName?: unknown;
+  new_holiday_name?: unknown;
+  newHolidayName?: unknown;
+  actor?: unknown;
+  created_at?: unknown;
+  createdAt?: unknown;
 };
 
 function isCollectionRow(value: unknown): value is Record<string, unknown> {
@@ -251,5 +284,81 @@ export function mapCollectionDailyCalendarRow(row: unknown): CollectionDailyCale
     updatedBy: (normalizedRow.updated_by ?? normalizedRow.updatedBy ?? null) as string | null,
     createdAt: normalizeCollectionDate(normalizedRow.created_at),
     updatedAt: normalizeCollectionDate(normalizedRow.updated_at),
+  };
+}
+
+function normalizeCollectionCalendarDateKey(
+  value: unknown,
+  year: number,
+  month: number,
+  day: number,
+) {
+  if (typeof value === "string") return value.slice(0, 10);
+  if (value instanceof Date) return value.toISOString().slice(0, 10);
+  return year > 0 && month > 0 && day > 0
+    ? `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`
+    : "";
+}
+
+function normalizeCollectionDailyAuditAction(
+  value: unknown,
+): CollectionDailyCalendarAuditEntry["action"] {
+  return value === "CREATE" || value === "UPDATE" || value === "DELETE" ? value : "UPDATE";
+}
+
+function normalizeCollectionDailyAuditStatus(value: unknown) {
+  const normalized = String(value ?? "").toUpperCase();
+  return isCollectionDailyCalendarStatus(normalized) ? normalized : null;
+}
+
+function normalizeCollectionDailyAuditLeaveType(value: unknown) {
+  const normalized = String(value ?? "").toUpperCase();
+  return isCollectionDailyLeaveType(normalized) ? normalized : null;
+}
+
+export function mapCollectionDailyCalendarAuditRow(
+  row: unknown,
+): CollectionDailyCalendarAuditEntry {
+  const normalizedRow = normalizeCollectionDbRow<CollectionDailyCalendarAuditDbRow>(row);
+  const year = Number(normalizedRow.year ?? 0);
+  const month = Number(normalizedRow.month ?? 0);
+  const day = Number(normalizedRow.day ?? 0);
+  const dateRaw = normalizedRow.calendar_date ?? normalizedRow.calendarDate;
+
+  return {
+    id: String(normalizedRow.id ?? ""),
+    calendarId: (normalizedRow.calendar_id ?? normalizedRow.calendarId ?? null) as string | null,
+    username: String(normalizedRow.username ?? "").toLowerCase(),
+    date: normalizeCollectionCalendarDateKey(dateRaw, year, month, day),
+    year,
+    month,
+    day,
+    action: normalizeCollectionDailyAuditAction(normalizedRow.action),
+    oldStatus: normalizeCollectionDailyAuditStatus(
+      normalizedRow.old_status ?? normalizedRow.oldStatus,
+    ),
+    newStatus: normalizeCollectionDailyAuditStatus(
+      normalizedRow.new_status ?? normalizedRow.newStatus,
+    ),
+    oldLeaveType: normalizeCollectionDailyAuditLeaveType(
+      normalizedRow.old_leave_type ?? normalizedRow.oldLeaveType,
+    ),
+    newLeaveType: normalizeCollectionDailyAuditLeaveType(
+      normalizedRow.new_leave_type ?? normalizedRow.newLeaveType,
+    ),
+    oldNote: (normalizedRow.old_note ?? normalizedRow.oldNote ?? null) as string | null,
+    newNote: (normalizedRow.new_note ?? normalizedRow.newNote ?? null) as string | null,
+    oldHolidayName: (
+      normalizedRow.old_holiday_name
+      ?? normalizedRow.oldHolidayName
+      ?? null
+    ) as string | null,
+    newHolidayName: (
+      normalizedRow.new_holiday_name
+      ?? normalizedRow.newHolidayName
+      ?? null
+    ) as string | null,
+    actor: (normalizedRow.actor ?? null) as string | null,
+    createdAt: normalizeCollectionDate(normalizedRow.created_at ?? normalizedRow.createdAt),
   };
 }

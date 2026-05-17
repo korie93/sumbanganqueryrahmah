@@ -14,6 +14,7 @@ import {
 import {
   deleteCollectionDailyCalendarDayRepository,
   getCollectionDailyTargetRepository,
+  listCollectionDailyCalendarAuditRepository,
   listCollectionDailyCalendarRepository,
   listCollectionDailyPaidCustomersRepository,
   listCollectionDailyUsersRepository,
@@ -94,6 +95,7 @@ export class CollectionRepository {
   readonly getCollectionStaffNicknames = getCollectionStaffNicknamesRepository;
   readonly isCollectionStaffNicknameActive = isCollectionStaffNicknameActiveRepository;
   readonly listCollectionDailyCalendar = listCollectionDailyCalendarRepository;
+  readonly listCollectionDailyCalendarAudit = listCollectionDailyCalendarAuditRepository;
   readonly listCollectionDailyPaidCustomers = listCollectionDailyPaidCustomersRepository;
   readonly listCollectionDailyUsers = listCollectionDailyUsersRepository;
   readonly listCollectionRecordReceipts = listCollectionRecordReceiptsRepository;

@@ -2,18 +2,24 @@ import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react
 import { OperationalSectionCard } from "@/components/layout/OperationalPage";
 import { useIsMobile } from "@/hooks/use-mobile";
 import type { CollectionDailyOverviewResponse } from "@/lib/api";
+import { CollectionDailyCalendarBulkToolbar } from "@/pages/collection/CollectionDailyCalendarBulkToolbar";
 import { CollectionDailyCalendarEditDialog } from "@/pages/collection/CollectionDailyCalendarEditDialog";
 import { CollectionDailyCalendarChangeReview } from "@/pages/collection/CollectionDailyCalendarChangeReview";
+import { CollectionDailyCalendarConflictReport } from "@/pages/collection/CollectionDailyCalendarConflictReport";
 import { CollectionDailyCalendarLegend } from "@/pages/collection/CollectionDailyCalendarLegend";
+import { CollectionDailyCalendarMonthlyBreakdown } from "@/pages/collection/CollectionDailyCalendarMonthlyBreakdown";
 import { CollectionDailyCalendarQuickFilter } from "@/pages/collection/CollectionDailyCalendarQuickFilter";
+import { CollectionDailyCalendarRoleModeNotice } from "@/pages/collection/CollectionDailyCalendarRoleModeNotice";
 import { CollectionDailyCalendarState } from "@/pages/collection/CollectionDailyCalendarState";
 import { CollectionDailyCalendarStatusSummary } from "@/pages/collection/CollectionDailyCalendarStatusSummary";
+import { CollectionDailyCalendarViewModeControl } from "@/pages/collection/CollectionDailyCalendarViewModeControl";
 import { CollectionDailyMobileDayList } from "@/pages/collection/CollectionDailyMobileDayList";
 import type { EditableCalendarDay } from "@/pages/collection/CollectionDailyShared";
 import {
   filterCollectionDailyCalendarDays,
   type CollectionDailyCalendarFilter,
 } from "@/pages/collection/collection-daily-calendar-filter-utils";
+import { useCollectionDailyCalendarViewMode } from "@/pages/collection/useCollectionDailyCalendarViewMode";
 
 export type CollectionDailyCalendarCardProps = {
   loadingOverview: boolean;
@@ -28,6 +34,7 @@ export type CollectionDailyCalendarCardProps = {
   onSaveCalendar: () => void;
   onSelectDate: (date: string) => void;
   onUpdateEditableDay: (day: number, patch: Partial<EditableCalendarDay>) => void;
+  onUpdateEditableDays: (dayNumbers: readonly number[], patch: Partial<EditableCalendarDay>) => void;
 };
 
 const CollectionDailyDesktopCalendarGrid = lazy(() =>
@@ -49,10 +56,15 @@ export function CollectionDailyCalendarCard({
   onSaveCalendar,
   onSelectDate,
   onUpdateEditableDay,
+  onUpdateEditableDays,
 }: CollectionDailyCalendarCardProps) {
   const isMobile = useIsMobile();
+  const { viewMode, setViewMode } = useCollectionDailyCalendarViewMode();
   const [editingDayNumber, setEditingDayNumber] = useState<number | null>(null);
   const [activeFilter, setActiveFilter] = useState<CollectionDailyCalendarFilter>("all");
+  const [bulkSelectedDayNumbers, setBulkSelectedDayNumbers] = useState<Set<number>>(
+    () => new Set(),
+  );
   const editingDay = useMemo(() => {
     if (!overview?.days.length || editingDayNumber == null) return null;
     return overview.days.find((day) => day.day === editingDayNumber) || null;
@@ -65,6 +77,9 @@ export function CollectionDailyCalendarCard({
       if (editingDayNumber !== null) {
         setEditingDayNumber(null);
       }
+      if (bulkSelectedDayNumbers.size > 0) {
+        setBulkSelectedDayNumbers(new Set());
+      }
       return;
     }
 
@@ -74,7 +89,17 @@ export function CollectionDailyCalendarCard({
     if (editingDayNumber != null && !stillAvailable) {
       setEditingDayNumber(null);
     }
-  }, [canManage, editingDayNumber, overview?.days]);
+
+    if (bulkSelectedDayNumbers.size > 0) {
+      const availableDayNumbers = new Set(overview.days.map((day) => day.day));
+      const nextBulkSelectedDayNumbers = new Set(
+        Array.from(bulkSelectedDayNumbers).filter((day) => availableDayNumbers.has(day)),
+      );
+      if (nextBulkSelectedDayNumbers.size !== bulkSelectedDayNumbers.size) {
+        setBulkSelectedDayNumbers(nextBulkSelectedDayNumbers);
+      }
+    }
+  }, [bulkSelectedDayNumbers, canManage, editingDayNumber, overview?.days]);
 
   const handleEditDialogOpenChange = useCallback((open: boolean) => {
     if (!open) {
@@ -86,6 +111,33 @@ export function CollectionDailyCalendarCard({
     setActiveFilter(filter);
     setEditingDayNumber(null);
   }, []);
+
+  const handleBulkToggleDay = useCallback((dayNumber: number) => {
+    setBulkSelectedDayNumbers((previous) => {
+      const next = new Set(previous);
+      if (next.has(dayNumber)) {
+        next.delete(dayNumber);
+      } else {
+        next.add(dayNumber);
+      }
+      return next;
+    });
+  }, []);
+
+  const handleBulkSelectDays = useCallback((dayNumbers: number[]) => {
+    setBulkSelectedDayNumbers(new Set(dayNumbers));
+  }, []);
+
+  const handleBulkClearSelection = useCallback(() => {
+    setBulkSelectedDayNumbers((previous) => (previous.size > 0 ? new Set() : previous));
+  }, []);
+
+  const handleBulkApply = useCallback((
+    dayNumbers: number[],
+    patch: Partial<EditableCalendarDay>,
+  ) => {
+    onUpdateEditableDays(dayNumbers, patch);
+  }, [onUpdateEditableDays]);
 
   const filteredMobileDays = useMemo(() => {
     if (!overview?.days.length) return [];
@@ -122,12 +174,37 @@ export function CollectionDailyCalendarCard({
               canManage={canManage}
             />
 
+            <CollectionDailyCalendarMonthlyBreakdown days={overview.days} />
+
+            <CollectionDailyCalendarRoleModeNotice canEditCalendar={canManage} />
+
             <CollectionDailyCalendarQuickFilter
               days={overview.days}
               dirtyCalendarDayNumbers={dirtyCalendarDayNumbers}
               activeFilter={activeFilter}
               canManage={canManage}
               onFilterChange={handleFilterChange}
+            />
+
+            <CollectionDailyCalendarViewModeControl
+              value={viewMode}
+              onChange={setViewMode}
+            />
+
+            {canManage ? (
+              <CollectionDailyCalendarBulkToolbar
+                days={overview.days}
+                selectedDayNumbers={bulkSelectedDayNumbers}
+                onSelectDays={handleBulkSelectDays}
+                onClearSelection={handleBulkClearSelection}
+                onApply={handleBulkApply}
+              />
+            ) : null}
+
+            <CollectionDailyCalendarConflictReport
+              days={overview.days}
+              editableCalendarByDay={editableCalendarByDay}
+              dirtyCalendarDayNumbers={dirtyCalendarDayNumbers}
             />
 
             {canManage ? (
@@ -154,12 +231,15 @@ export function CollectionDailyCalendarCard({
               filteredMobileDays.length ? (
                 <CollectionDailyMobileDayList
                   days={filteredMobileDays}
+                  viewMode={viewMode}
                   selectedDate={selectedDate}
                   editingDayNumber={editingDayNumber}
                   canManage={canManage}
                   dirtyCalendarDayNumbers={dirtyCalendarDayNumbers}
+                  bulkSelectedDayNumbers={bulkSelectedDayNumbers}
                   onSelectDate={onSelectDate}
                   onEditDay={setEditingDayNumber}
+                  onToggleBulkDay={handleBulkToggleDay}
                 />
               ) : (
                 <div className="collection-daily-calendar-filter-empty" role="status">
@@ -182,6 +262,7 @@ export function CollectionDailyCalendarCard({
                 >
                   <CollectionDailyDesktopCalendarGrid
                     days={overview.days}
+                    viewMode={viewMode}
                     firstWeekday={firstWeekday}
                     selectedDate={selectedDate}
                     editingDayNumber={editingDayNumber}
@@ -189,8 +270,10 @@ export function CollectionDailyCalendarCard({
                     canManage={canManage}
                     editableCalendarByDay={editableCalendarByDay}
                     dirtyCalendarDayNumbers={dirtyCalendarDayNumbers}
+                    bulkSelectedDayNumbers={bulkSelectedDayNumbers}
                     onEditDay={setEditingDayNumber}
                     onSelectDate={onSelectDate}
+                    onToggleBulkDay={handleBulkToggleDay}
                   />
                 </Suspense>
               </div>
@@ -205,6 +288,9 @@ export function CollectionDailyCalendarCard({
                   editingEditableDay ? dirtyCalendarDayNumbers.has(editingEditableDay.day) : false
                 }
                 savingCalendar={savingCalendar}
+                username={overview.username}
+                year={overview.month.year}
+                month={overview.month.month}
                 onOpenChange={handleEditDialogOpenChange}
                 onSaveCalendar={onSaveCalendar}
                 onChange={(patch) => {

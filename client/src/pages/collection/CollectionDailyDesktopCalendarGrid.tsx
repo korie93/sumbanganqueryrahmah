@@ -16,10 +16,15 @@ import {
   matchesCollectionDailyCalendarFilter,
   type CollectionDailyCalendarFilter,
 } from "@/pages/collection/collection-daily-calendar-filter-utils";
+import {
+  isCollectionDailyCalendarIconViewMode,
+  type CollectionDailyCalendarViewMode,
+} from "@/pages/collection/collection-daily-calendar-view-mode-utils";
 import { formatAmountRM } from "@/pages/collection/utils";
 
 type CollectionDailyDesktopCalendarGridProps = {
   days: CollectionDailyOverviewDay[];
+  viewMode: CollectionDailyCalendarViewMode;
   firstWeekday: number;
   selectedDate: string | null;
   editingDayNumber: number | null;
@@ -27,8 +32,10 @@ type CollectionDailyDesktopCalendarGridProps = {
   canManage: boolean;
   editableCalendarByDay: Map<number, EditableCalendarDay>;
   dirtyCalendarDayNumbers: ReadonlySet<number>;
+  bulkSelectedDayNumbers: ReadonlySet<number>;
   onEditDay: (day: number) => void;
   onSelectDate: (date: string) => void;
+  onToggleBulkDay: (day: number) => void;
 };
 
 function DayStatusIcon({ status }: { status: CollectionDailyOverviewDay["status"] }) {
@@ -46,6 +53,7 @@ function getDailyProgressPercent(day: CollectionDailyOverviewDay) {
 
 export function CollectionDailyDesktopCalendarGrid({
   days,
+  viewMode,
   firstWeekday,
   selectedDate,
   editingDayNumber,
@@ -53,11 +61,22 @@ export function CollectionDailyDesktopCalendarGrid({
   canManage,
   editableCalendarByDay,
   dirtyCalendarDayNumbers,
+  bulkSelectedDayNumbers,
   onEditDay,
   onSelectDate,
+  onToggleBulkDay,
 }: CollectionDailyDesktopCalendarGridProps) {
+  const iconMode = isCollectionDailyCalendarIconViewMode(viewMode);
+  const showFullContent = viewMode === "content" || viewMode === "list";
+  const showTileContent = viewMode === "tiles";
+  const showLargeIconContent = viewMode === "icon-lg";
+  const showMediumIconContent = viewMode === "icon-md" || showLargeIconContent;
+
   return (
-    <div className="collection-daily-desktop-grid grid grid-cols-7 gap-2" data-testid="collection-daily-calendar-grid">
+    <div
+      className={`collection-daily-desktop-grid collection-daily-desktop-grid-mode-${viewMode} grid gap-2`}
+      data-testid="collection-daily-calendar-grid"
+    >
       {Array.from({ length: firstWeekday }).map((_, index) => (
         <div className="collection-daily-calendar-blank" key={`blank-${index}`} />
       ))}
@@ -66,6 +85,7 @@ export function CollectionDailyDesktopCalendarGrid({
         const isSelected = selectedDate === day.date;
         const isEditing = editingDayNumber === day.day;
         const isDirty = dirtyCalendarDayNumbers.has(day.day);
+        const isBulkSelected = bulkSelectedDayNumbers.has(day.day);
         const progressPercent = getDailyProgressPercent(day);
         const calendarBadgeLabel = getCollectionDailyCalendarDayBadgeLabel(day);
         const matchesActiveFilter = matchesCollectionDailyCalendarFilter(
@@ -77,7 +97,7 @@ export function CollectionDailyDesktopCalendarGrid({
         return (
           <div
             key={day.date}
-            className={`collection-daily-desktop-day rounded-xl border text-xs shadow-sm ${
+            className={`collection-daily-desktop-day collection-daily-day-view-${viewMode} rounded-xl border text-xs shadow-sm ${
               isSelected ? "ring-2 ring-ring ring-offset-1" : ""
             } ${isEditing ? "collection-daily-day-card-editing" : ""} ${
               matchesActiveFilter ? "" : "collection-daily-day-card-filter-muted"
@@ -106,19 +126,45 @@ export function CollectionDailyDesktopCalendarGrid({
               <div className={`collection-daily-day-status ${statusTextClass(day.status)}`}>
                 {statusLabel(day.status)}
               </div>
-              <div className="collection-daily-day-amount">Collected: {formatAmountRM(day.amount)}</div>
-              <div className="text-[10px] text-muted-foreground">Customers: {day.customerCount}</div>
-              <div className="text-[10px] text-muted-foreground">Required Today: {formatAmountRM(day.target)}</div>
-              <progress
-                className="collection-daily-day-progress mt-2"
-                max={100}
-                value={progressPercent}
-                aria-hidden="true"
-              />
-              <CollectionDailyCalendarDayBadge day={day} compact />
+              {showFullContent || showTileContent || showLargeIconContent ? (
+                <div className="collection-daily-day-amount">
+                  {showFullContent ? "Collected: " : ""}
+                  {formatAmountRM(day.amount)}
+                </div>
+              ) : null}
+              {showFullContent || showTileContent ? (
+                <div className="text-[10px] text-muted-foreground">
+                  Customers: {day.customerCount}
+                </div>
+              ) : null}
+              {showFullContent ? (
+                <>
+                  <div className="text-[10px] text-muted-foreground">
+                    Required Today: {formatAmountRM(day.target)}
+                  </div>
+                  <progress
+                    className="collection-daily-day-progress mt-2"
+                    max={100}
+                    value={progressPercent}
+                    aria-hidden="true"
+                  />
+                </>
+              ) : null}
+              {showFullContent || showTileContent || showMediumIconContent ? (
+                <CollectionDailyCalendarDayBadge day={day} compact={iconMode || showTileContent} />
+              ) : null}
             </button>
             {canManage && editable ? (
               <div className="collection-daily-day-edit border-t border-border/40 p-2" data-floating-ai-avoid="true">
+                <label className="collection-daily-bulk-day-toggle">
+                  <input
+                    type="checkbox"
+                    checked={isBulkSelected}
+                    onChange={() => onToggleBulkDay(day.day)}
+                    aria-label={`Select ${formatDateDDMMYYYY(day.date)} for bulk status update`}
+                  />
+                  <span>Bulk select</span>
+                </label>
                 <Button
                   type="button"
                   size="sm"

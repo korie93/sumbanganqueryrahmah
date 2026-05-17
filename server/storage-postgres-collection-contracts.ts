@@ -1,6 +1,7 @@
 import type {
   CollectionAdminGroup,
   CollectionAdminUser,
+  CollectionDailyCalendarAuditEntry,
   CollectionDailyCalendarDay,
   CollectionDailyPaidCustomer,
   CollectionDailyTarget,
@@ -118,6 +119,13 @@ export interface CollectionStorageContract {
     year: number;
     month: number;
   }): Promise<CollectionDailyCalendarDay[]>;
+  listCollectionDailyCalendarAudit(params: {
+    username: string;
+    year: number;
+    month: number;
+    day: number;
+    limit?: number | undefined;
+  }): Promise<CollectionDailyCalendarAuditEntry[]>;
   upsertCollectionDailyCalendarDays(params: {
     username: string;
     year: number;
@@ -138,6 +146,7 @@ export interface CollectionStorageContract {
     year: number;
     month: number;
     day: number;
+    actor?: string | undefined;
   }): Promise<boolean>;
   listCollectionDailyPaidCustomers(params: {
     username: string;

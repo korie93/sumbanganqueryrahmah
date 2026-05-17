@@ -151,6 +151,16 @@ export class PostgresCollectionStorage extends PostgresSettingsStorage {
     return this.collectionRepository.listCollectionDailyCalendar(params);
   }
 
+  async listCollectionDailyCalendarAudit(params: {
+    username: string;
+    year: number;
+    month: number;
+    day: number;
+    limit?: number | undefined;
+  }) {
+    return this.collectionRepository.listCollectionDailyCalendarAudit(params);
+  }
+
   async upsertCollectionDailyCalendarDays(params: {
     username: string;
     year: number;
@@ -174,6 +184,7 @@ export class PostgresCollectionStorage extends PostgresSettingsStorage {
     year: number;
     month: number;
     day: number;
+    actor?: string | undefined;
   }): Promise<boolean> {
     return this.collectionRepository.deleteCollectionDailyCalendarDay(params);
   }

@@ -1,0 +1,23 @@
+.collection-daily-calendar-role-mode {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  border: 1px solid hsl(var(--border) / 0.66);
+  border-radius: 1rem;
+  background: hsl(var(--muted) / 0.2);
+  padding: 0.75rem;
+}
+
+.collection-daily-calendar-role-mode p {
+  font-size: 0.82rem;
+  font-weight: 800;
+  color: hsl(var(--foreground));
+}
+
+.collection-daily-calendar-role-mode span {
+  display: block;
+  margin-top: 0.15rem;
+  font-size: 0.75rem;
+  line-height: 1.45;
+  color: hsl(var(--muted-foreground));
+}

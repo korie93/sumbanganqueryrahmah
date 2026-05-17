@@ -265,6 +265,36 @@ export type CollectionDailyOverviewDay = {
   status: "green" | "yellow" | "red" | "neutral";
 };
 
+export type CollectionDailyCalendarAuditEntry = {
+  id: string;
+  calendarId: string | null;
+  username: string;
+  date: string;
+  year: number;
+  month: number;
+  day: number;
+  action: "CREATE" | "UPDATE" | "DELETE";
+  oldStatus: CollectionDailyCalendarStatus | null;
+  newStatus: CollectionDailyCalendarStatus | null;
+  oldLeaveType: CollectionDailyLeaveType | null;
+  newLeaveType: CollectionDailyLeaveType | null;
+  oldNote: string | null;
+  newNote: string | null;
+  oldHolidayName: string | null;
+  newHolidayName: string | null;
+  actor: string | null;
+  createdAt: string;
+};
+
+export type CollectionDailyCalendarAuditResponse = {
+  ok: boolean;
+  username: string;
+  year: number;
+  month: number;
+  day: number;
+  audit: CollectionDailyCalendarAuditEntry[];
+};
+
 export type CollectionDailyOverviewResponse = {
   ok: boolean;
   username: string;

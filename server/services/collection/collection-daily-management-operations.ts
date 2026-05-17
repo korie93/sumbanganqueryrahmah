@@ -190,11 +190,57 @@ export class CollectionDailyManagementOperations {
       year,
       month,
       day,
+      actor: user.username,
     });
 
     return {
       ok: true as const,
       deleted,
+    };
+  }
+
+  async listDailyCalendarAudit(userInput: AuthenticatedUser | undefined, queryRaw: unknown) {
+    const user = this.requireUser(userInput);
+    if (user.role !== "superuser") {
+      throw forbidden("Daily calendar audit hanya untuk superuser.");
+    }
+
+    const query = ensureLooseObject(queryRaw) || {};
+    const username = normalizeCollectionText(query.nickname ?? query.username);
+    const normalizedUsername = username.toLowerCase();
+    const year = Number.parseInt(normalizeCollectionText(query.year), 10);
+    const month = Number.parseInt(normalizeCollectionText(query.month), 10);
+    const day = Number.parseInt(normalizeCollectionText(query.day), 10);
+    const limitRaw = Number.parseInt(normalizeCollectionText(query.limit), 10);
+    const limit = Number.isInteger(limitRaw) ? Math.min(100, Math.max(1, limitRaw)) : 50;
+
+    if (!normalizedUsername) throw badRequest("Staff nickname is required.");
+    if (!Number.isInteger(year) || year < 2000 || year > 2100) throw badRequest("Invalid year.");
+    if (!Number.isInteger(month) || month < 1 || month > 12) throw badRequest("Invalid month.");
+    const maxDay = new Date(year, month, 0).getDate();
+    if (!Number.isInteger(day) || day < 1 || day > maxDay) throw badRequest("Invalid day.");
+
+    const users = await this.dailyOverviewService.listAvailableDailyUsers(user);
+    const foundUser = users.some((item) => item.username.toLowerCase() === normalizedUsername);
+    if (!foundUser) {
+      throw badRequest("Staff nickname not found.");
+    }
+
+    const audit = await this.storage.listCollectionDailyCalendarAudit({
+      username: normalizedUsername,
+      year,
+      month,
+      day,
+      limit,
+    });
+
+    return {
+      ok: true as const,
+      username: normalizedUsername,
+      year,
+      month,
+      day,
+      audit,
     };
   }
 }

@@ -2,6 +2,7 @@ import type {
   CollectionDailyPaidCustomer,
   CollectionDailyTarget,
   CollectionDailyUser,
+  CollectionDailyCalendarAuditEntry,
 } from "../storage-postgres";
 import type {
   CollectionDailyCalendarStatus,
@@ -10,6 +11,7 @@ import type {
 import {
   deleteCollectionDailyCalendarDay,
   getCollectionDailyTarget,
+  listCollectionDailyCalendarAudit,
   listCollectionDailyCalendar,
   listCollectionDailyPaidCustomers,
   listCollectionDailyUsers,
@@ -70,8 +72,19 @@ export async function deleteCollectionDailyCalendarDayRepository(params: {
   year: number;
   month: number;
   day: number;
+  actor?: string | undefined;
 }): Promise<boolean> {
   return deleteCollectionDailyCalendarDay(params);
+}
+
+export async function listCollectionDailyCalendarAuditRepository(params: {
+  username: string;
+  year: number;
+  month: number;
+  day: number;
+  limit?: number | undefined;
+}): Promise<CollectionDailyCalendarAuditEntry[]> {
+  return listCollectionDailyCalendarAudit(params);
 }
 
 export async function listCollectionDailyPaidCustomersRepository(params: {

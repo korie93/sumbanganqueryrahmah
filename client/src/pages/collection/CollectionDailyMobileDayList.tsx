@@ -12,33 +12,53 @@ import {
   getCollectionDailyCalendarDayBadgeLabel,
 } from "@/pages/collection/CollectionDailyCalendarDayBadge";
 import { CollectionDailyDayStatusIcon } from "@/pages/collection/CollectionDailyDayStatusIcon";
+import {
+  isCollectionDailyCalendarIconViewMode,
+  type CollectionDailyCalendarViewMode,
+} from "@/pages/collection/collection-daily-calendar-view-mode-utils";
 import { formatAmountRM } from "@/pages/collection/utils";
 
 type CollectionDailyMobileDayListProps = {
   days: CollectionDailyOverviewDay[];
+  viewMode: CollectionDailyCalendarViewMode;
   selectedDate: string | null;
   editingDayNumber: number | null;
   canManage: boolean;
   dirtyCalendarDayNumbers: ReadonlySet<number>;
+  bulkSelectedDayNumbers: ReadonlySet<number>;
   onSelectDate: (date: string) => void;
   onEditDay: (day: number) => void;
+  onToggleBulkDay: (day: number) => void;
 };
 
 export function CollectionDailyMobileDayList({
   days,
+  viewMode,
   selectedDate,
   editingDayNumber,
   canManage,
   dirtyCalendarDayNumbers,
+  bulkSelectedDayNumbers,
   onSelectDate,
   onEditDay,
+  onToggleBulkDay,
 }: CollectionDailyMobileDayListProps) {
+  const iconMode = isCollectionDailyCalendarIconViewMode(viewMode);
+  const showFullContent = viewMode === "content" || viewMode === "list";
+  const showTileContent = viewMode === "tiles";
+  const showLargeIconContent = viewMode === "icon-lg";
+  const showMediumIconContent = viewMode === "icon-md" || showLargeIconContent;
+
   return (
-    <div className="space-y-3" data-testid="collection-daily-calendar-mobile-list">
+    <div
+      className={`collection-daily-mobile-day-list collection-daily-mobile-day-list-mode-${viewMode} space-y-3`}
+      data-testid="collection-daily-calendar-mobile-list"
+    >
       {days.map((day) => {
         const isSelected = selectedDate === day.date;
         const isEditing = editingDayNumber === day.day;
         const isDirty = dirtyCalendarDayNumbers.has(day.day);
+        const isBulkSelected = bulkSelectedDayNumbers.has(day.day);
         const calendarBadgeLabel = getCollectionDailyCalendarDayBadgeLabel(day);
 
         return (
@@ -69,33 +89,53 @@ export function CollectionDailyMobileDayList({
                 </span>
               </div>
 
-              <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
-                <div className="collection-daily-day-metric rounded-xl border border-border/50 bg-background/70 px-3 py-2">
-                  <p className="uppercase tracking-[0.12em] text-muted-foreground">Collected</p>
-                  <p className="mt-1 text-sm font-semibold text-foreground">
-                    {formatAmountRM(day.amount)}
-                  </p>
+              {showFullContent || showTileContent || showLargeIconContent ? (
+                <div className="collection-daily-mobile-day-metrics mt-3 grid grid-cols-2 gap-2 text-xs">
+                  <div className="collection-daily-day-metric rounded-xl border border-border/50 bg-background/70 px-3 py-2">
+                    <p className="uppercase tracking-[0.12em] text-muted-foreground">Collected</p>
+                    <p className="mt-1 text-sm font-semibold text-foreground">
+                      {formatAmountRM(day.amount)}
+                    </p>
+                  </div>
+                  {showFullContent || showTileContent ? (
+                    <div className="collection-daily-day-metric rounded-xl border border-border/50 bg-background/70 px-3 py-2">
+                      <p className="uppercase tracking-[0.12em] text-muted-foreground">Target</p>
+                      <p className="mt-1 text-sm font-semibold text-foreground">
+                        {formatAmountRM(day.target)}
+                      </p>
+                    </div>
+                  ) : null}
                 </div>
-                <div className="collection-daily-day-metric rounded-xl border border-border/50 bg-background/70 px-3 py-2">
-                  <p className="uppercase tracking-[0.12em] text-muted-foreground">Target</p>
-                  <p className="mt-1 text-sm font-semibold text-foreground">
-                    {formatAmountRM(day.target)}
-                  </p>
-                </div>
-              </div>
+              ) : null}
 
-              <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+              {showFullContent || showTileContent ? (
+                <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                 <span className="rounded-full border border-border/50 bg-background/70 px-2.5 py-1">
                   Customers {day.customerCount}
                 </span>
-                <span
-                  className={`rounded-full border border-border/50 bg-background/70 px-2.5 py-1 ${statusTextClass(day.status)}`}
-                >
-                  {statusLabel(day.status)}
-                </span>
-              </div>
+                  <span
+                    className={`rounded-full border border-border/50 bg-background/70 px-2.5 py-1 ${statusTextClass(day.status)}`}
+                  >
+                    {statusLabel(day.status)}
+                  </span>
+                </div>
+              ) : null}
 
-              <CollectionDailyCalendarDayBadge day={day} />
+              {showFullContent || showTileContent || showMediumIconContent ? (
+                <CollectionDailyCalendarDayBadge day={day} compact={iconMode || showTileContent} />
+              ) : null}
+
+              {canManage ? (
+                <label className="collection-daily-bulk-day-toggle collection-daily-bulk-day-toggle-mobile">
+                  <input
+                    type="checkbox"
+                    checked={isBulkSelected}
+                    onChange={() => onToggleBulkDay(day.day)}
+                    aria-label={`Select ${formatDateDDMMYYYY(day.date)} for bulk status update`}
+                  />
+                  <span>Pilih untuk bulk update</span>
+                </label>
+              ) : null}
 
               <div className="mt-3 grid gap-2 sm:grid-cols-2" data-floating-ai-avoid="true">
                 <Button

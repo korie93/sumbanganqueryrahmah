@@ -5,6 +5,7 @@ export function registerCollectionDailyRoutes(context: CollectionRouteContext) {
     app,
     collectionService,
     reportAccess,
+    superuserReportAccess,
     adminSummaryAccess,
     jsonRoute,
   } = context;
@@ -38,6 +39,13 @@ export function registerCollectionDailyRoutes(context: CollectionRouteContext) {
         ...(req.query as Record<string, unknown>),
         ...(req.body && typeof req.body === "object" ? req.body as Record<string, unknown> : {}),
       })),
+  );
+
+  app.get(
+    "/api/collection/daily/calendar/audit",
+    ...superuserReportAccess,
+    jsonRoute("Failed to load collection daily calendar audit.", (req) =>
+      collectionService.listDailyCalendarAudit(req.user, req.query as Record<string, unknown>)),
   );
 
   app.get(

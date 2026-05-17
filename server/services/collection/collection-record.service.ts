@@ -87,6 +87,13 @@ export class CollectionRecordService extends CollectionServiceSupport {
     return this.dailyOperations.deleteDailyCalendar(userInput, inputRaw);
   }
 
+  async listDailyCalendarAudit(
+    userInput: Parameters<CollectionServiceSupport["requireUser"]>[0],
+    query: ListQuery,
+  ) {
+    return this.dailyOperations.listDailyCalendarAudit(userInput, query);
+  }
+
   async getDailyOverview(
     userInput: Parameters<CollectionServiceSupport["requireUser"]>[0],
     query: ListQuery,

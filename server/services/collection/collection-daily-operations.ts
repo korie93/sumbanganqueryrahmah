@@ -30,6 +30,10 @@ export class CollectionDailyOperations {
     return this.managementOperations.deleteDailyCalendar(userInput, inputRaw);
   }
 
+  async listDailyCalendarAudit(userInput: AuthenticatedUser | undefined, query: ListQuery) {
+    return this.managementOperations.listDailyCalendarAudit(userInput, query);
+  }
+
   async getDailyOverview(userInput: AuthenticatedUser | undefined, query: ListQuery) {
     return this.readOperations.getDailyOverview(userInput, query);
   }

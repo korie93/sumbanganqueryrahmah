@@ -8,6 +8,7 @@ import {
   selectCollectionDailyDirtyCalendarDays,
   shouldLoadCollectionDailyOverview,
   updateCollectionDailyEditableCalendarDay,
+  updateCollectionDailyEditableCalendarDays,
 } from "@/pages/collection/collection-daily-state-utils";
 import { useCollectionDailyDayDetailsState } from "@/pages/collection/useCollectionDailyDayDetailsState";
 import { useCollectionDailyMutationState } from "@/pages/collection/useCollectionDailyMutationState";
@@ -23,6 +24,7 @@ export {
   selectCollectionDailyDirtyCalendarDays,
   shouldLoadCollectionDailyOverview,
   updateCollectionDailyEditableCalendarDay,
+  updateCollectionDailyEditableCalendarDays,
 } from "@/pages/collection/collection-daily-state-utils";
 
 type UseCollectionDailyDataOptions = {
@@ -201,6 +203,20 @@ export function useCollectionDailyData({
     });
   }, [setCalendarDays]);
 
+  const updateEditableDays = useCallback((dayNumbers: readonly number[], patch: Partial<EditableCalendarDay>) => {
+    if (dayNumbers.length === 0) return;
+    setCalendarDays((previous) =>
+      updateCollectionDailyEditableCalendarDays(previous, dayNumbers, patch),
+    );
+    setDirtyCalendarDayNumbers((previous) => {
+      const next = new Set(previous);
+      for (const dayNumber of dayNumbers) {
+        next.add(dayNumber);
+      }
+      return next.size === previous.size ? previous : next;
+    });
+  }, [setCalendarDays]);
+
   const closeDayDetails = useCallback(() => {
     clearSelection();
   }, [clearSelection]);
@@ -255,6 +271,7 @@ export function useCollectionDailyData({
     saveMonthlyTarget: mutationState.saveMonthlyTarget,
     saveCalendar: mutationState.saveCalendar,
     updateEditableDay,
+    updateEditableDays,
     closeDayDetails,
     viewReceipt,
   };

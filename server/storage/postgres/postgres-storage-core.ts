@@ -354,7 +354,7 @@ export class PostgresStorageCore {
 
   protected async ensureCollectionDailyTables() {
     await this.verifyProductionTablesOrBootstrap(
-      ["collection_daily_targets", "collection_daily_calendar"],
+      ["collection_daily_targets", "collection_daily_calendar", "collection_daily_calendar_audit"],
       () => this.collectionBootstrap.ensureDailyTables(),
     );
   }

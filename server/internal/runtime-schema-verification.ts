@@ -18,6 +18,7 @@ export const RUNTIME_REQUIRED_SCHEMA_TABLES = [
   "backups",
   "banned_sessions",
   "collection_daily_calendar",
+  "collection_daily_calendar_audit",
   "collection_daily_targets",
   "collection_nickname_sessions",
   "collection_record_daily_rollup_refresh_queue",

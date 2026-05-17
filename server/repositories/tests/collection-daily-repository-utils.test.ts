@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   deleteCollectionDailyCalendarDay,
+  listCollectionDailyCalendarAudit,
   listCollectionDailyCalendar,
   listCollectionDailyPaidCustomers,
   upsertCollectionDailyCalendarDays,
@@ -73,6 +74,7 @@ test("upsertCollectionDailyCalendarDays batches multiple days into one upsert qu
 
   const upsertSql = collectSqlText(queries[0]);
   assert.match(upsertSql, /INSERT INTO public\.collection_daily_calendar/i);
+  assert.match(upsertSql, /collection_daily_calendar_audit/i);
   assert.match(upsertSql, /ON CONFLICT \(\(lower\(username\)\), calendar_date\)/i);
   assert.match(upsertSql, /\)\s*,\s*\(/i);
 
@@ -82,7 +84,7 @@ test("upsertCollectionDailyCalendarDays batches multiple days into one upsert qu
   assert.ok(boundValues.includes(2));
   assert.ok(boundValues.includes("AL"));
   assert.ok(boundValues.includes("Special Day"));
-  assert.equal(boundValues.filter((value) => value === "admin.user").length >= 4, true);
+  assert.equal(boundValues.filter((value) => value === "admin.user").length >= 2, true);
 
   const listSql = collectSqlText(queries[1]);
   assert.match(listSql, /SELECT\s+id,\s+username,\s+calendar_date/i);
@@ -132,9 +134,61 @@ test("listCollectionDailyCalendar maps rows using the provided executor", async 
 });
 
 test("deleteCollectionDailyCalendarDay scopes deletion to nickname and date", async () => {
-  const { executor, queries } = createSequenceExecutor([{ rows: [{ id: "calendar-7" }] }]);
+  const { executor, queries } = createSequenceExecutor([{ rows: [{ deleted_count: 1 }] }]);
 
   const deleted = await deleteCollectionDailyCalendarDay(
+    {
+      username: "alpha.user",
+      year: 2026,
+      month: 4,
+      day: 7,
+      actor: "superuser",
+    },
+    executor,
+  );
+
+  assert.equal(deleted, true);
+  assert.equal(queries.length, 1);
+  const queryText = collectSqlText(queries[0]);
+  assert.match(queryText, /DELETE FROM public\.collection_daily_calendar/i);
+  assert.match(queryText, /collection_daily_calendar_audit/i);
+  assert.match(queryText, /lower\(username\) = lower/i);
+  assert.match(queryText, /calendar_date/i);
+  const boundValues = collectBoundValues(queries[0]);
+  assert.ok(boundValues.includes("alpha.user"));
+  assert.ok(boundValues.includes("2026-04-07"));
+  assert.ok(boundValues.includes("superuser"));
+});
+
+test("listCollectionDailyCalendarAudit maps audit rows for one nickname date", async () => {
+  const { executor, queries } = createSequenceExecutor([
+    {
+      rows: [
+        {
+          id: "audit-1",
+          calendar_id: "calendar-7",
+          username: "alpha.user",
+          calendar_date: "2026-04-07",
+          year: 2026,
+          month: 4,
+          day: 7,
+          action: "UPDATE",
+          old_status: "WORKING",
+          new_status: "HOLIDAY",
+          old_leave_type: null,
+          new_leave_type: "AL",
+          old_note: null,
+          new_note: "Annual leave",
+          old_holiday_name: null,
+          new_holiday_name: "AL",
+          actor: "superuser",
+          created_at: "2026-04-07T08:00:00.000Z",
+        },
+      ],
+    },
+  ]);
+
+  const audit = await listCollectionDailyCalendarAudit(
     {
       username: "alpha.user",
       year: 2026,
@@ -144,15 +198,13 @@ test("deleteCollectionDailyCalendarDay scopes deletion to nickname and date", as
     executor,
   );
 
-  assert.equal(deleted, true);
+  assert.equal(audit.length, 1);
+  assert.equal(audit[0]?.newLeaveType, "AL");
+  assert.equal(audit[0]?.actor, "superuser");
   assert.equal(queries.length, 1);
   const queryText = collectSqlText(queries[0]);
-  assert.match(queryText, /DELETE FROM public\.collection_daily_calendar/i);
-  assert.match(queryText, /lower\(username\) = lower/i);
-  assert.match(queryText, /calendar_date/i);
-  const boundValues = collectBoundValues(queries[0]);
-  assert.ok(boundValues.includes("alpha.user"));
-  assert.ok(boundValues.includes("2026-04-07"));
+  assert.match(queryText, /FROM public\.collection_daily_calendar_audit/i);
+  assert.match(queryText, /ORDER BY created_at DESC, id DESC/i);
 });
 
 test("listCollectionDailyPaidCustomers falls back to encrypted PII when plaintext has been redacted", async () => {

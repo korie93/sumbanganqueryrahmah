@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import type { CollectionDailyOverviewDay } from "@/lib/api";
 import { formatDateDDMMYYYY } from "@/lib/date-format";
 import { CollectionDailyCalendarAuditMeta } from "@/pages/collection/CollectionDailyCalendarAuditMeta";
+import { CollectionDailyCalendarAuditHistoryDialog } from "@/pages/collection/CollectionDailyCalendarAuditHistoryDialog";
 import { CollectionDailyCalendarConflictNotice } from "@/pages/collection/CollectionDailyCalendarConflictNotice";
 import { DailyStatusForm } from "@/pages/collection/DailyStatusForm";
 import {
@@ -19,6 +20,9 @@ type CollectionDailyCalendarEditPanelProps = {
   canManage: boolean;
   isDirty: boolean;
   savingCalendar: boolean;
+  username: string;
+  year: number;
+  month: number;
   onSaveCalendar: () => void;
   onChange: (patch: Partial<EditableCalendarDay>) => void;
   onViewDetails: (date: string) => void;
@@ -43,6 +47,9 @@ export function CollectionDailyCalendarEditPanel({
   canManage,
   isDirty,
   savingCalendar,
+  username,
+  year,
+  month,
   onSaveCalendar,
   onChange,
   onViewDetails,
@@ -131,6 +138,14 @@ export function CollectionDailyCalendarEditPanel({
           )}
           <div className="mt-2">
             <CollectionDailyCalendarAuditMeta day={day} />
+          </div>
+          <div className="mt-3">
+            <CollectionDailyCalendarAuditHistoryDialog
+              day={day}
+              username={username}
+              year={year}
+              month={month}
+            />
           </div>
         </div>
 

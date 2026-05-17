@@ -398,3 +398,61 @@ export const collectionDailyCalendar = pgTable("collection_daily_calendar", {
     sql`${table.leaveType} IS NULL OR ${table.leaveType} IN ('AL', 'MC', 'EL', 'UL', 'RL', 'OFF')`,
   ),
 }));
+
+export const collectionDailyCalendarAudit = pgTable("collection_daily_calendar_audit", {
+  id: uuid("id").primaryKey(),
+  calendarId: uuid("calendar_id"),
+  username: text("username").notNull(),
+  calendarDate: date("calendar_date", { mode: "string" }).notNull(),
+  year: integer("year").notNull(),
+  month: integer("month").notNull(),
+  day: integer("day").notNull(),
+  action: text("action").notNull(),
+  oldStatus: text("old_status"),
+  newStatus: text("new_status"),
+  oldLeaveType: text("old_leave_type"),
+  newLeaveType: text("new_leave_type"),
+  oldNote: text("old_note"),
+  newNote: text("new_note"),
+  oldHolidayName: text("old_holiday_name"),
+  newHolidayName: text("new_holiday_name"),
+  actor: text("actor").references(() => users.username, {
+    onDelete: "set null",
+    onUpdate: "cascade",
+  }),
+  createdAt: utcTimestamp("created_at").defaultNow().notNull(),
+}, (table) => ({
+  lookupIdx: index("idx_collection_daily_calendar_audit_lookup").using(
+    "btree",
+    sql`lower(${table.username})`,
+    table.calendarDate,
+    table.createdAt.desc(),
+  ),
+  monthIdx: index("idx_collection_daily_calendar_audit_month").using(
+    "btree",
+    sql`lower(${table.username})`,
+    table.year,
+    table.month,
+    table.day,
+  ),
+  actionCheck: check(
+    "chk_collection_daily_calendar_audit_action",
+    sql`${table.action} IN ('CREATE', 'UPDATE', 'DELETE')`,
+  ),
+  oldStatusCheck: check(
+    "chk_collection_daily_calendar_audit_old_status",
+    sql`${table.oldStatus} IS NULL OR ${table.oldStatus} IN ('WORKING', 'HOLIDAY')`,
+  ),
+  newStatusCheck: check(
+    "chk_collection_daily_calendar_audit_new_status",
+    sql`${table.newStatus} IS NULL OR ${table.newStatus} IN ('WORKING', 'HOLIDAY')`,
+  ),
+  oldLeaveTypeCheck: check(
+    "chk_collection_daily_calendar_audit_old_leave_type",
+    sql`${table.oldLeaveType} IS NULL OR ${table.oldLeaveType} IN ('AL', 'MC', 'EL', 'UL', 'RL', 'OFF')`,
+  ),
+  newLeaveTypeCheck: check(
+    "chk_collection_daily_calendar_audit_new_leave_type",
+    sql`${table.newLeaveType} IS NULL OR ${table.newLeaveType} IN ('AL', 'MC', 'EL', 'UL', 'RL', 'OFF')`,
+  ),
+}));

@@ -280,7 +280,13 @@ test("upsertDailyCalendar requires superuser and holiday leave type", async () =
 });
 
 test("deleteDailyCalendar removes only the selected nickname date override", async () => {
-  let captured: { username: string; year: number; month: number; day: number } | null = null;
+  let captured: {
+    username: string;
+    year: number;
+    month: number;
+    day: number;
+    actor?: string | undefined;
+  } | null = null;
   const operations = createOperations({
     async getCollectionStaffNicknames() {
       return [buildNicknameWithName("Ali"), buildNicknameWithName("Abu")];
@@ -303,6 +309,53 @@ test("deleteDailyCalendar removes only the selected nickname date override", asy
     year: 2026,
     month: 5,
     day: 15,
+    actor: "super.user",
   });
   assert.deepEqual(response, { ok: true, deleted: true });
+});
+
+test("listDailyCalendarAudit is superuser-only and scoped to selected nickname date", async () => {
+  let captured: {
+    username: string;
+    year: number;
+    month: number;
+    day: number;
+    limit?: number | undefined;
+  } | null = null;
+  const operations = createOperations({
+    async getCollectionStaffNicknames() {
+      return [buildNicknameWithName("Ali")];
+    },
+    async listCollectionDailyCalendarAudit(params) {
+      captured = params;
+      return [];
+    },
+  });
+
+  await assert.rejects(
+    async () => operations.listDailyCalendarAudit({ ...adminUser, role: "admin" }, {
+      username: "Ali",
+      year: "2026",
+      month: "5",
+      day: "15",
+    }),
+    /Daily calendar audit hanya untuk superuser\./,
+  );
+
+  const response = await operations.listDailyCalendarAudit(adminUser, {
+    username: "Ali",
+    year: "2026",
+    month: "5",
+    day: "15",
+    limit: "200",
+  });
+
+  assert.deepEqual(captured, {
+    username: "ali",
+    year: 2026,
+    month: 5,
+    day: 15,
+    limit: 100,
+  });
+  assert.deepEqual(response.audit, []);
 });

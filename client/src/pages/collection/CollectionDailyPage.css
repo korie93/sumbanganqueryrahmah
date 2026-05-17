@@ -271,6 +271,34 @@
     border-color 160ms ease;
 }
 
+.collection-daily-desktop-grid {
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+}
+
+.collection-daily-desktop-grid-mode-list {
+  grid-template-columns: 1fr;
+}
+
+.collection-daily-desktop-grid-mode-list .collection-daily-calendar-blank {
+  display: none;
+}
+
+.collection-daily-desktop-grid-mode-tiles {
+  grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr));
+}
+
+.collection-daily-desktop-grid-mode-icon-sm {
+  grid-template-columns: repeat(auto-fit, minmax(4.8rem, 1fr));
+}
+
+.collection-daily-desktop-grid-mode-icon-md {
+  grid-template-columns: repeat(auto-fit, minmax(6.4rem, 1fr));
+}
+
+.collection-daily-desktop-grid-mode-icon-lg {
+  grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
+}
+
 .collection-daily-day-card-editing {
   border-color: hsl(var(--primary) / 0.7);
   box-shadow:
@@ -311,8 +339,204 @@
   flex-direction: column;
 }
 
+.collection-daily-day-view-list {
+  min-height: auto;
+}
+
+.collection-daily-day-view-list .collection-daily-day-button {
+  display: grid;
+  min-height: 0;
+  grid-template-columns: 5rem minmax(0, 1.3fr) minmax(0, 1fr);
+  gap: 0.45rem 0.85rem;
+  align-items: center;
+}
+
+.collection-daily-day-view-list .collection-daily-day-header,
+.collection-daily-day-view-list .collection-daily-day-status,
+.collection-daily-day-view-list .collection-daily-day-amount {
+  margin: 0;
+}
+
+.collection-daily-day-view-list .collection-daily-day-progress {
+  grid-column: 1 / -1;
+}
+
+.collection-daily-day-view-tiles {
+  min-height: 8.6rem;
+}
+
+.collection-daily-day-view-tiles .collection-daily-day-button {
+  min-height: 6.2rem;
+}
+
+.collection-daily-day-view-icon-sm,
+.collection-daily-day-view-icon-md,
+.collection-daily-day-view-icon-lg {
+  text-align: center;
+}
+
+.collection-daily-day-view-icon-sm {
+  min-height: 5.6rem;
+}
+
+.collection-daily-day-view-icon-md {
+  min-height: 7rem;
+}
+
+.collection-daily-day-view-icon-lg {
+  min-height: 8.25rem;
+}
+
+.collection-daily-day-view-icon-sm .collection-daily-day-button,
+.collection-daily-day-view-icon-md .collection-daily-day-button,
+.collection-daily-day-view-icon-lg .collection-daily-day-button {
+  align-items: center;
+  justify-content: center;
+  min-height: 4.2rem;
+}
+
+.collection-daily-day-view-icon-sm .collection-daily-day-header,
+.collection-daily-day-view-icon-md .collection-daily-day-header,
+.collection-daily-day-view-icon-lg .collection-daily-day-header {
+  width: 100%;
+}
+
+.collection-daily-day-view-icon-sm .collection-daily-day-header {
+  justify-content: center;
+}
+
+.collection-daily-day-view-icon-md .collection-daily-day-status,
+.collection-daily-day-view-icon-lg .collection-daily-day-status {
+  font-size: 0.66rem;
+  line-height: 1.2;
+}
+
+.collection-daily-day-view-icon-sm .collection-daily-day-status {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
+
+.collection-daily-day-view-icon-sm .collection-daily-day-edit,
+.collection-daily-day-view-icon-md .collection-daily-day-edit,
+.collection-daily-day-view-icon-lg .collection-daily-day-edit {
+  padding: 0.45rem;
+}
+
+.collection-daily-day-view-icon-sm .collection-daily-bulk-day-toggle span,
+.collection-daily-day-view-icon-md .collection-daily-bulk-day-toggle span {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
+
+.collection-daily-day-view-icon-sm .collection-daily-day-edit .lucide,
+.collection-daily-day-view-icon-md .collection-daily-day-edit .lucide,
+.collection-daily-day-view-icon-lg .collection-daily-day-edit .lucide {
+  margin-right: 0;
+}
+
+.collection-daily-day-view-icon-sm .collection-daily-day-edit button,
+.collection-daily-day-view-icon-md .collection-daily-day-edit button {
+  padding-inline: 0.45rem;
+}
+
+.collection-daily-day-view-icon-sm .collection-daily-day-edit button,
+.collection-daily-day-view-icon-md .collection-daily-day-edit button {
+  font-size: 0;
+}
+
+.collection-daily-day-view-icon-sm .collection-daily-day-edit button .lucide,
+.collection-daily-day-view-icon-md .collection-daily-day-edit button .lucide {
+  height: 0.9rem;
+  width: 0.9rem;
+}
+
 .collection-daily-day-edit {
   color: hsl(var(--muted-foreground));
+}
+
+.collection-daily-mobile-day-list-mode-tiles,
+.collection-daily-mobile-day-list-mode-icon-sm,
+.collection-daily-mobile-day-list-mode-icon-md,
+.collection-daily-mobile-day-list-mode-icon-lg {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.collection-daily-mobile-day-list-mode-tiles {
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+}
+
+.collection-daily-mobile-day-list-mode-icon-sm {
+  grid-template-columns: repeat(auto-fit, minmax(5.25rem, 1fr));
+}
+
+.collection-daily-mobile-day-list-mode-icon-md {
+  grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr));
+}
+
+.collection-daily-mobile-day-list-mode-icon-lg {
+  grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr));
+}
+
+.collection-daily-mobile-day-list-mode-icon-sm.collection-daily-mobile-day-list,
+.collection-daily-mobile-day-list-mode-icon-md.collection-daily-mobile-day-list,
+.collection-daily-mobile-day-list-mode-icon-lg.collection-daily-mobile-day-list,
+.collection-daily-mobile-day-list-mode-tiles.collection-daily-mobile-day-list {
+  row-gap: 0.7rem;
+}
+
+.collection-daily-mobile-day-list-mode-icon-sm .collection-daily-mobile-day-card,
+.collection-daily-mobile-day-list-mode-icon-md .collection-daily-mobile-day-card,
+.collection-daily-mobile-day-list-mode-icon-lg .collection-daily-mobile-day-card {
+  border-radius: 1rem;
+}
+
+.collection-daily-mobile-day-list-mode-icon-sm .collection-daily-mobile-day-card > div,
+.collection-daily-mobile-day-list-mode-icon-md .collection-daily-mobile-day-card > div {
+  padding: 0.65rem;
+}
+
+.collection-daily-mobile-day-list-mode-icon-sm .collection-daily-mobile-day-card p,
+.collection-daily-mobile-day-list-mode-icon-md .collection-daily-mobile-day-card p {
+  font-size: 0.68rem;
+}
+
+.collection-daily-mobile-day-list-mode-icon-sm .collection-daily-mobile-day-metrics {
+  display: none;
+}
+
+.collection-daily-mobile-day-list-mode-icon-sm .collection-daily-bulk-day-toggle span,
+.collection-daily-mobile-day-list-mode-icon-md .collection-daily-bulk-day-toggle span {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
+
+.collection-daily-mobile-day-list-mode-icon-sm [data-floating-ai-avoid],
+.collection-daily-mobile-day-list-mode-icon-md [data-floating-ai-avoid] {
+  grid-template-columns: 1fr;
+}
+
+.collection-daily-mobile-day-list-mode-icon-sm [data-floating-ai-avoid] button,
+.collection-daily-mobile-day-list-mode-icon-md [data-floating-ai-avoid] button {
+  min-height: 2.25rem;
+  font-size: 0;
+}
+
+.collection-daily-mobile-day-list-mode-icon-sm [data-floating-ai-avoid] button .lucide,
+.collection-daily-mobile-day-list-mode-icon-md [data-floating-ai-avoid] button .lucide {
+  margin-right: 0;
 }
 
 .collection-daily-status-fieldset label:focus-within {

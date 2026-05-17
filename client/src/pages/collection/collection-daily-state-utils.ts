@@ -74,6 +74,16 @@ export function updateCollectionDailyEditableCalendarDay(
   return previous.map((item) => (item.day === dayNumber ? { ...item, ...patch } : item));
 }
 
+export function updateCollectionDailyEditableCalendarDays(
+  previous: EditableCalendarDay[],
+  dayNumbers: readonly number[],
+  patch: Partial<EditableCalendarDay>,
+) {
+  if (dayNumbers.length === 0) return previous;
+  const selectedDayNumbers = new Set(dayNumbers);
+  return previous.map((item) => (selectedDayNumbers.has(item.day) ? { ...item, ...patch } : item));
+}
+
 export function getCollectionDailyFirstWeekday(year: number, month: number) {
   return new Date(year, month - 1, 1).getDay();
 }
