@@ -1,4 +1,9 @@
 import { formatIsoDateToDDMMYYYY, formatOperationalDateTime } from "@/lib/date-format";
+import {
+  auditDetailGroupLabelMap,
+  auditDetailLabelMap,
+  priorityDetailKeys,
+} from "@/pages/audit-logs/audit-log-readable-detail-labels";
 
 export interface AuditReadableDetailItem {
   key: string;
@@ -14,49 +19,12 @@ export interface AuditReadableDetails {
 
 type JsonRecord = Record<string, unknown>;
 
-const auditDetailLabelMap: Record<string, string> = {
-  action: "Tindakan",
-  amount: "Jumlah",
-  batch: "Batch",
-  customerName: "Nama pelanggan",
-  date: "Tarikh",
-  from: "Tarikh mula",
-  leaveType: "Jenis cuti",
-  nickname: "Nickname",
-  nicknameCount: "Bilangan nickname",
-  note: "Nota",
-  page: "Halaman",
-  pageSize: "Rekod setiap halaman",
-  receiptCount: "Bilangan resit",
-  recordCount: "Rekod dipaparkan",
-  role: "Peranan",
-  searchPresent: "Carian digunakan",
-  status: "Status",
-  targetUser: "Pengguna sasaran",
-  to: "Tarikh akhir",
-  totalRecords: "Jumlah rekod",
-  username: "Username",
-};
-
-const priorityDetailKeys = [
-  "role",
-  "recordCount",
-  "totalRecords",
-  "page",
-  "pageSize",
-  "from",
-  "to",
-  "date",
-  "nickname",
-  "username",
-  "nicknameCount",
-  "searchPresent",
-  "status",
-  "leaveType",
-  "note",
-];
-
 const numberFormatter = new Intl.NumberFormat("en-MY");
+const currencyFormatter = new Intl.NumberFormat("en-MY", {
+  currency: "MYR",
+  minimumFractionDigits: 2,
+  style: "currency",
+});
 
 function isJsonRecord(value: unknown): value is JsonRecord {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -85,6 +53,29 @@ function humanizeAuditDetailKey(key: string) {
     .replace(/^./, (first) => first.toUpperCase());
 }
 
+function getAuditDetailGroupLabel(groupKey: string) {
+  return auditDetailGroupLabelMap[groupKey] ?? humanizeAuditDetailKey(groupKey);
+}
+
+function buildNestedAuditDetailLabel(path: string[]) {
+  const key = path[path.length - 1] ?? "";
+  const parentKey = path[path.length - 2] ?? "";
+  if (path[0] === "changes" && key === "from") {
+    return [...path.slice(0, -1).map(getAuditDetailGroupLabel).filter(Boolean), "Sebelum"].join(" - ");
+  }
+  if (path[0] === "changes" && key === "to") {
+    return [...path.slice(0, -1).map(getAuditDetailGroupLabel).filter(Boolean), "Selepas"].join(" - ");
+  }
+  if ((parentKey === "before" || parentKey === "after") && key === "from") {
+    return [...path.slice(0, -1).map(getAuditDetailGroupLabel).filter(Boolean), "Tarikh mula"].join(" - ");
+  }
+  const parentPath = path.slice(0, -1)
+    .map(getAuditDetailGroupLabel)
+    .filter(Boolean);
+  const label = humanizeAuditDetailKey(key);
+  return [...parentPath, label].join(" - ");
+}
+
 function normalizeRoleValue(value: string) {
   const normalized = value.trim().toLowerCase();
   if (normalized === "superuser") return "Superuser";
@@ -93,18 +84,75 @@ function normalizeRoleValue(value: string) {
   return value;
 }
 
+function humanizeEnumValue(value: string) {
+  return value
+    .trim()
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .toLowerCase()
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
 function shouldFormatAsDate(key: string, value: string) {
   return (
-    ["date", "from", "to", "paymentDate", "calendarDate"].includes(key) &&
-    /^\d{4}-\d{2}-\d{2}$/.test(value)
+    ["date", "from", "to", "paymentDate", "calendarDate"].includes(key)
+    && /^\d{4}-\d{2}-\d{2}$/.test(value)
   );
 }
 
 function shouldFormatAsDateTime(key: string, value: string) {
   return (
-    /(?:At|Timestamp|Time)$/i.test(key) &&
-    /^\d{4}-\d{2}-\d{2}(?:[T\s]\d{2}:\d{2})/.test(value)
+    (
+      /(?:At|Timestamp|Time)$/i.test(key)
+      || ["timestamp", "expires_at", "enabled_at"].includes(key)
+    )
+    && /^\d{4}-\d{2}-\d{2}(?:[T\s]\d{2}:\d{2})/.test(value)
   );
+}
+
+function shouldHumanizeEnumKey(key: string) {
+  return [
+    "event",
+    "event_type",
+    "failure_reason",
+    "reset_type",
+    "delivery",
+    "delivery_mode",
+    "activeReceiptSource",
+    "beforeSource",
+    "afterSource",
+  ].includes(key);
+}
+
+function shouldFormatAsCurrency(key: string) {
+  return ["amount"].includes(key);
+}
+
+function formatDurationMs(value: number) {
+  if (!Number.isFinite(value)) return "-";
+  if (value < 1000) return `${numberFormatter.format(Math.max(0, Math.round(value)))} ms`;
+  return `${numberFormatter.format(Math.round(value / 100) / 10)}s`;
+}
+
+function formatBytes(value: number) {
+  if (!Number.isFinite(value) || value < 0) return "-";
+  if (value < 1024) return `${numberFormatter.format(Math.round(value))} B`;
+  if (value < 1024 * 1024) return `${numberFormatter.format(Math.round(value / 102.4) / 10)} KB`;
+  return `${numberFormatter.format(Math.round(value / (1024 * 102.4)) / 10)} MB`;
+}
+
+function shouldSkipTechnicalEmptyValue(value: unknown) {
+  if (value === null || value === undefined || value === "") {
+    return true;
+  }
+  if (Array.isArray(value) && value.length === 0) {
+    return true;
+  }
+  return false;
+}
+
+function shouldFormatAsDateOnly(value: string) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value);
 }
 
 function formatAuditDetailValue(key: string, value: unknown): string {
@@ -117,15 +165,20 @@ function formatAuditDetailValue(key: string, value: unknown): string {
   }
 
   if (typeof value === "number") {
+    if (key === "durationMs") return formatDurationMs(value);
+    if (key === "payloadBytes") return formatBytes(value);
+    if (shouldFormatAsCurrency(key)) return currencyFormatter.format(value);
     return Number.isFinite(value) ? numberFormatter.format(value) : "-";
   }
 
   if (typeof value === "string") {
     if (key === "role") return normalizeRoleValue(value);
+    if (shouldHumanizeEnumKey(key)) return humanizeEnumValue(value);
     if (shouldFormatAsDate(key, value)) return formatIsoDateToDDMMYYYY(value, value);
     if (shouldFormatAsDateTime(key, value)) {
       return formatOperationalDateTime(value, { fallback: value });
     }
+    if (shouldFormatAsDateOnly(value)) return formatIsoDateToDDMMYYYY(value, value);
     return value;
   }
 
@@ -138,10 +191,21 @@ function formatAuditDetailValue(key: string, value: unknown): string {
   return JSON.stringify(value);
 }
 
-function sortAuditDetailKeys(keys: string[]) {
-  return [...keys].sort((left, right) => {
-    const leftIndex = priorityDetailKeys.indexOf(left);
-    const rightIndex = priorityDetailKeys.indexOf(right);
+function getPriorityIndex(keyPath: string) {
+  const parts = keyPath.split(".");
+  const leafKey = parts[parts.length - 1] ?? keyPath;
+  const directIndex = priorityDetailKeys.indexOf(keyPath);
+  if (directIndex !== -1) return directIndex;
+  const leafIndex = priorityDetailKeys.indexOf(leafKey);
+  return leafIndex;
+}
+
+function sortAuditDetailItems(items: AuditReadableDetailItem[]) {
+  return [...items].sort((leftItem, rightItem) => {
+    const left = leftItem.key;
+    const right = rightItem.key;
+    const leftIndex = getPriorityIndex(left);
+    const rightIndex = getPriorityIndex(right);
     if (leftIndex !== -1 || rightIndex !== -1) {
       if (leftIndex === -1) return 1;
       if (rightIndex === -1) return -1;
@@ -149,6 +213,35 @@ function sortAuditDetailKeys(keys: string[]) {
     }
     return left.localeCompare(right);
   });
+}
+
+function collectReadableAuditDetailItems(
+  record: JsonRecord,
+  parentPath: string[] = [],
+  depth = 0,
+): AuditReadableDetailItem[] {
+  const items: AuditReadableDetailItem[] = [];
+
+  for (const key of Object.keys(record)) {
+    const value = record[key];
+    if (shouldSkipTechnicalEmptyValue(value)) {
+      continue;
+    }
+
+    const path = [...parentPath, key];
+    if (isJsonRecord(value) && depth < 3) {
+      items.push(...collectReadableAuditDetailItems(value, path, depth + 1));
+      continue;
+    }
+
+    items.push({
+      key: path.join("."),
+      label: buildNestedAuditDetailLabel(path),
+      value: formatAuditDetailValue(key, value),
+    });
+  }
+
+  return items;
 }
 
 function normalizeText(details: string) {
@@ -166,12 +259,7 @@ export function buildReadableAuditDetails(details: string): AuditReadableDetails
     return { isJson: false, items: [], text: normalized };
   }
 
-  const items = sortAuditDetailKeys(Object.keys(parsed))
-    .map((key) => ({
-      key,
-      label: humanizeAuditDetailKey(key),
-      value: formatAuditDetailValue(key, parsed[key]),
-    }))
+  const items = sortAuditDetailItems(collectReadableAuditDetailItems(parsed))
     .filter((item) => item.value !== "-");
 
   return {

@@ -43,3 +43,64 @@ test("getReadableAuditDetailsPreview truncates readable JSON details safely", ()
     "Rekod dipaparkan: 17; Jumlah...",
   );
 });
+
+test("buildReadableAuditDetails flattens metadata audit payloads", () => {
+  const details = buildReadableAuditDetails(JSON.stringify({
+    metadata: {
+      previous_role: "user",
+      next_role: "admin",
+      lock_cleared: true,
+      expires_at: "2026-05-19T02:30:00.000Z",
+    },
+  }));
+
+  assert.match(details.text, /Peranan sebelum: user/);
+  assert.match(details.text, /Peranan selepas: admin/);
+  assert.match(details.text, /Tamat tempoh: 19\/05\/2026, 10:30 AM/);
+  assert.match(details.text, /Lock akaun dibersihkan: Ya/);
+});
+
+test("buildReadableAuditDetails formats collection record and receipt payloads", () => {
+  const details = buildReadableAuditDetails(JSON.stringify({
+    event: "collection_record_updated",
+    recordId: "record-1",
+    before: {
+      amount: 100,
+      paymentDate: "2026-05-01",
+    },
+    after: {
+      amount: 120,
+      paymentDate: "2026-05-02",
+    },
+    receipts: {
+      beforeCount: 1,
+      afterCount: 2,
+      addedCount: 1,
+      replaced: true,
+    },
+  }));
+
+  assert.match(details.text, /Event: Collection Record Updated/);
+  assert.match(details.text, /ID rekod: record-1/);
+  assert.match(details.text, /Sebelum - Tarikh bayaran: 01\/05\/2026/);
+  assert.match(details.text, /Selepas - Tarikh bayaran: 02\/05\/2026/);
+  assert.match(details.text, /Sebelum - Jumlah: (?:RM|MYR)\s?100\.00/);
+  assert.match(details.text, /Resit - Resit diganti: Ya/);
+});
+
+test("buildReadableAuditDetails formats backup metrics and durations", () => {
+  const details = buildReadableAuditDetails(JSON.stringify({
+    backupId: "backup-1",
+    totalProcessed: 1400,
+    totalInserted: 1390,
+    totalSkipped: 10,
+    integrityVerified: true,
+    durationMs: 1250,
+    payloadBytes: 2048,
+  }));
+
+  assert.match(details.text, /ID backup: backup-1/);
+  assert.match(details.text, /Jumlah diproses: 1,400/);
+  assert.match(details.text, /Tempoh proses: 1\.3s/);
+  assert.match(details.text, /Saiz payload: 2 KB/);
+});
