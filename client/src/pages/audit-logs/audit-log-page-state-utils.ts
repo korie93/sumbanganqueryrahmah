@@ -9,6 +9,18 @@ export type AuditLogsPaginationState = {
   totalPages: number;
 };
 
+export const DEFAULT_AUDIT_LOG_FILTERS: AuditLogFilters = {
+  actionFilter: "all",
+  categoryFilter: "all",
+  dateFrom: "",
+  datePreset: "all",
+  dateTo: "",
+  performedByFilter: "",
+  riskFilter: "all",
+  searchText: "",
+  targetUserFilter: "",
+};
+
 export function resolveInitialAuditLogsLayoutState(width?: number) {
   const isMobileViewport = isMobileViewportWidth(width);
 

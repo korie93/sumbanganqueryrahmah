@@ -4,7 +4,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { AuditLogsSavedViewsPanel } from "@/pages/audit-logs/AuditLogsSavedViewsPanel";
 import type { AuditLogsFilterFieldsProps } from "@/pages/audit-logs/AuditLogsFilterFields";
+import type { AuditLogFilters } from "@/pages/audit-logs/types";
 
 const AuditLogsFilterFields = lazy(() =>
   import("@/pages/audit-logs/AuditLogsFilterFields").then((module) => ({
@@ -15,7 +17,9 @@ const AuditLogsFilterFields = lazy(() =>
 interface AuditLogsFiltersPanelProps extends AuditLogsFilterFieldsProps {
   actionFilter: string;
   filtersOpen: boolean;
+  filters: AuditLogFilters;
   hasActiveFilters: boolean;
+  onApplyFilters: (filters: AuditLogFilters) => void;
   onClearFilters: () => void;
   onFiltersOpenChange: (open: boolean) => void;
 }
@@ -53,8 +57,10 @@ export function AuditLogsFiltersPanel({
   datePreset,
   dateTo,
   filtersOpen,
+  filters,
   hasActiveFilters,
   onActionFilterChange,
+  onApplyFilters,
   onCategoryFilterChange,
   onClearFilters,
   onDateFromChange,
@@ -108,6 +114,11 @@ export function AuditLogsFiltersPanel({
           </div>
         </CardHeader>
         <CollapsibleContent>
+          <AuditLogsSavedViewsPanel
+            filters={filters}
+            hasActiveFilters={hasActiveFilters}
+            onApplyFilters={onApplyFilters}
+          />
           <Suspense fallback={<AuditLogsFilterFieldsFallback />}>
             <AuditLogsFilterFields
               actionFilter={actionFilter}

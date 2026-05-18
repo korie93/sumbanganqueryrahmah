@@ -3,22 +3,11 @@ import { getAuditLogs, getAuditLogStats } from "@/lib/api";
 import { logClientError } from "@/lib/client-logger";
 import {
   buildAuditLogsRequestParams,
+  DEFAULT_AUDIT_LOG_FILTERS,
   hasActiveAuditLogFilters,
   normalizeAuditLogsPagination,
 } from "@/pages/audit-logs/audit-log-page-state-utils";
 import type { AuditLogFilters, AuditLogRecord, AuditLogsResponse, AuditLogStats } from "@/pages/audit-logs/types";
-
-const initialFilters: AuditLogFilters = {
-  actionFilter: "all",
-  categoryFilter: "all",
-  dateFrom: "",
-  datePreset: "all",
-  dateTo: "",
-  performedByFilter: "",
-  riskFilter: "all",
-  searchText: "",
-  targetUserFilter: "",
-};
 
 const initialPagination = {
   page: 1,
@@ -31,7 +20,7 @@ export function useAuditLogsDataState() {
   const [logs, setLogs] = useState<AuditLogRecord[]>([]);
   const [stats, setStats] = useState<AuditLogStats | null>(null);
   const [loading, setLoading] = useState(true);
-  const [filters, setFilters] = useState<AuditLogFilters>(initialFilters);
+  const [filters, setFilters] = useState<AuditLogFilters>(DEFAULT_AUDIT_LOG_FILTERS);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [pagination, setPagination] = useState(initialPagination);
@@ -107,7 +96,12 @@ export function useAuditLogsDataState() {
   }, [page, pagination.totalPages]);
 
   const clearAllFilters = useCallback(() => {
-    setFilters(initialFilters);
+    setFilters(DEFAULT_AUDIT_LOG_FILTERS);
+    setPage(1);
+  }, []);
+
+  const applyFilters = useCallback((nextFilters: AuditLogFilters) => {
+    setFilters(nextFilters);
     setPage(1);
   }, []);
 
@@ -188,7 +182,9 @@ export function useAuditLogsDataState() {
     datePreset: filters.datePreset,
     dateFrom: filters.dateFrom,
     dateTo: filters.dateTo,
+    filters,
     hasActiveFilters,
+    applyFilters,
     clearAllFilters,
     refreshNow,
     fetchStats,

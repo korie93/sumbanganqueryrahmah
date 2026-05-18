@@ -1,10 +1,12 @@
-import { Suspense, lazy, useCallback } from "react";
+import { Suspense, lazy, useCallback, useMemo, useState } from "react";
 import { Download, FileText, Loader2, RefreshCw } from "lucide-react";
 import { AppPaginationBar } from "@/components/data/AppPaginationBar";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { AuditLogsFiltersPanel } from "@/pages/audit-logs/AuditLogsFiltersPanel";
+import { AuditLogsRequestTimeline } from "@/pages/audit-logs/AuditLogsRequestTimeline";
 import { AuditLogsSummaryStrip } from "@/pages/audit-logs/AuditLogsSummaryStrip";
+import type { AuditLogFilters } from "@/pages/audit-logs/types";
 import { useAuditLogsPageState } from "@/pages/audit-logs/useAuditLogsPageState";
 
 const AuditLogsCleanupPanel = lazy(() =>
@@ -49,6 +51,7 @@ export default function AuditLogs() {
     loading,
     setPage,
     pagination,
+    filters,
     searchText,
     performedByFilter,
     targetUserFilter,
@@ -59,6 +62,7 @@ export default function AuditLogs() {
     dateFrom,
     dateTo,
     hasActiveFilters,
+    applyFilters,
     clearAllFilters,
     refreshNow,
     setSearchText,
@@ -83,11 +87,32 @@ export default function AuditLogs() {
     handleExportPdf,
     handleExportCsv,
   } = useAuditLogsPageState();
+  const [tracedRequestId, setTracedRequestId] = useState("");
+  const activeRequestId = useMemo(() => {
+    const normalizedSearch = searchText.trim();
+    return tracedRequestId && normalizedSearch === tracedRequestId ? tracedRequestId : null;
+  }, [searchText, tracedRequestId]);
   const handleTraceRequestId = useCallback((requestId: string) => {
+    setTracedRequestId(requestId);
     setSearchText(requestId);
     setFiltersOpen(true);
     setRecordsOpen(true);
   }, [setFiltersOpen, setRecordsOpen, setSearchText]);
+  const handleSearchTextChange = useCallback((value: string) => {
+    if (tracedRequestId && value.trim() !== tracedRequestId) {
+      setTracedRequestId("");
+    }
+    setSearchText(value);
+  }, [setSearchText, tracedRequestId]);
+  const handleApplyFilters = useCallback((nextFilters: AuditLogFilters) => {
+    setTracedRequestId("");
+    applyFilters(nextFilters);
+    setFiltersOpen(true);
+  }, [applyFilters, setFiltersOpen]);
+  const handleClearFilters = useCallback(() => {
+    setTracedRequestId("");
+    clearAllFilters();
+  }, [clearAllFilters]);
 
   return (
     <div className="space-y-6 p-4 sm:p-6">
@@ -176,16 +201,18 @@ export default function AuditLogs() {
         datePreset={datePreset}
         dateTo={dateTo}
         filtersOpen={filtersOpen}
+        filters={filters}
         hasActiveFilters={hasActiveFilters}
+        onApplyFilters={handleApplyFilters}
         onActionFilterChange={setActionFilter}
         onCategoryFilterChange={setCategoryFilter}
-        onClearFilters={clearAllFilters}
+        onClearFilters={handleClearFilters}
         onDateFromChange={setDateFrom}
         onDatePresetChange={setDatePreset}
         onDateToChange={setDateTo}
         onFiltersOpenChange={setFiltersOpen}
         onPerformedByFilterChange={setPerformedByFilter}
-        onSearchTextChange={setSearchText}
+        onSearchTextChange={handleSearchTextChange}
         onTargetUserFilterChange={setTargetUserFilter}
         onRiskFilterChange={setRiskFilter}
         performedByFilter={performedByFilter}
@@ -215,11 +242,18 @@ export default function AuditLogs() {
 
       <AuditLogsSummaryStrip loading={loading} logs={logs} total={pagination.total} />
 
+      <AuditLogsRequestTimeline
+        loading={loading}
+        logs={logs}
+        requestId={activeRequestId}
+        total={pagination.total}
+      />
+
       <Suspense fallback={<AuditLogsRecordsFallback />}>
         <AuditLogsRecordsList
           filteredLogs={logs}
           loading={loading}
-          onClearFilters={clearAllFilters}
+          onClearFilters={handleClearFilters}
           onRecordsOpenChange={setRecordsOpen}
           onTraceRequestId={handleTraceRequestId}
           recordsOpen={recordsOpen}
