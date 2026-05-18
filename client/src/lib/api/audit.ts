@@ -9,6 +9,8 @@ export async function getAuditLogs(params?: {
   performedBy?: string | undefined;
   targetUser?: string | undefined;
   search?: string | undefined;
+  risk?: string | undefined;
+  category?: string | undefined;
   dateFrom?: string | undefined;
   dateTo?: string | undefined;
   sortBy?: string | undefined;
@@ -20,6 +22,8 @@ export async function getAuditLogs(params?: {
   if (params?.performedBy) query.set("performedBy", params.performedBy);
   if (params?.targetUser) query.set("targetUser", params.targetUser);
   if (params?.search) query.set("search", params.search);
+  if (params?.risk) query.set("risk", params.risk);
+  if (params?.category) query.set("category", params.category);
   if (params?.dateFrom) query.set("dateFrom", params.dateFrom);
   if (params?.dateTo) query.set("dateTo", params.dateTo);
   if (params?.sortBy) query.set("sortBy", params.sortBy);

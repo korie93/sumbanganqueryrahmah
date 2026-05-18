@@ -1,6 +1,7 @@
 import { readDate, readInteger, readOptionalString } from "../http/validation";
 import type { AuditRepository } from "../repositories/audit.repository";
 import type { PostgresStorage } from "../storage-postgres";
+import { isAuditCategory, isAuditRiskLevel } from "../../shared/audit-log-classification";
 
 type AuditLogOperationsStorage = Pick<PostgresStorage, "createAuditLog">;
 type AuditLogOperationsRepository = Pick<
@@ -24,6 +25,8 @@ export class AuditLogOperationsService {
       performedBy: readOptionalString(query.performedBy),
       targetUser: readOptionalString(query.targetUser),
       search: readOptionalString(query.search),
+      risk: normalizeAuditRiskFilter(query.risk),
+      category: normalizeAuditCategoryFilter(query.category),
       dateFrom: readDate(query.dateFrom),
       dateTo: readDate(query.dateTo),
       sortBy: String(readOptionalString(query.sortBy) || "newest").toLowerCase() === "oldest"
@@ -71,4 +74,14 @@ export class AuditLogOperationsService {
       message: "Cleanup completed",
     };
   }
+}
+
+function normalizeAuditRiskFilter(value: unknown) {
+  const normalized = String(readOptionalString(value) || "").toLowerCase();
+  return isAuditRiskLevel(normalized) ? normalized : undefined;
+}
+
+function normalizeAuditCategoryFilter(value: unknown) {
+  const normalized = String(readOptionalString(value) || "").trim();
+  return isAuditCategory(normalized) ? normalized : undefined;
 }

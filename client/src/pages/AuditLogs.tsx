@@ -4,6 +4,7 @@ import { AppPaginationBar } from "@/components/data/AppPaginationBar";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { AuditLogsFiltersPanel } from "@/pages/audit-logs/AuditLogsFiltersPanel";
+import { AuditLogsSummaryStrip } from "@/pages/audit-logs/AuditLogsSummaryStrip";
 import { useAuditLogsPageState } from "@/pages/audit-logs/useAuditLogsPageState";
 
 const AuditLogsCleanupPanel = lazy(() =>
@@ -52,6 +53,8 @@ export default function AuditLogs() {
     performedByFilter,
     targetUserFilter,
     actionFilter,
+    riskFilter,
+    categoryFilter,
     datePreset,
     dateFrom,
     dateTo,
@@ -62,6 +65,8 @@ export default function AuditLogs() {
     setPerformedByFilter,
     setTargetUserFilter,
     setActionFilter,
+    setRiskFilter,
+    setCategoryFilter,
     setDatePreset,
     setDateFrom,
     setDateTo,
@@ -161,12 +166,14 @@ export default function AuditLogs() {
 
       <AuditLogsFiltersPanel
         actionFilter={actionFilter}
+        categoryFilter={categoryFilter}
         dateFrom={dateFrom}
         datePreset={datePreset}
         dateTo={dateTo}
         filtersOpen={filtersOpen}
         hasActiveFilters={hasActiveFilters}
         onActionFilterChange={setActionFilter}
+        onCategoryFilterChange={setCategoryFilter}
         onClearFilters={clearAllFilters}
         onDateFromChange={setDateFrom}
         onDatePresetChange={setDatePreset}
@@ -175,7 +182,9 @@ export default function AuditLogs() {
         onPerformedByFilterChange={setPerformedByFilter}
         onSearchTextChange={setSearchText}
         onTargetUserFilterChange={setTargetUserFilter}
+        onRiskFilterChange={setRiskFilter}
         performedByFilter={performedByFilter}
+        riskFilter={riskFilter}
         searchText={searchText}
         targetUserFilter={targetUserFilter}
       />
@@ -198,6 +207,8 @@ export default function AuditLogs() {
           />
         </Suspense>
       ) : null}
+
+      <AuditLogsSummaryStrip loading={loading} logs={logs} total={pagination.total} />
 
       <Suspense fallback={<AuditLogsRecordsFallback />}>
         <AuditLogsRecordsList

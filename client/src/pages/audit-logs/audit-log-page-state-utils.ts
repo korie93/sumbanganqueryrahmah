@@ -40,6 +40,8 @@ export function hasActiveAuditLogFilters(filters: AuditLogFilters) {
     || Boolean(filters.performedByFilter)
     || Boolean(filters.targetUserFilter)
     || filters.actionFilter !== "all"
+    || filters.riskFilter !== "all"
+    || filters.categoryFilter !== "all"
     || filters.datePreset !== "all";
 }
 
@@ -55,6 +57,8 @@ export function buildAuditLogsRequestParams(
     page,
     pageSize,
     action: filters.actionFilter === "all" ? undefined : filters.actionFilter,
+    risk: filters.riskFilter === "all" ? undefined : filters.riskFilter,
+    category: filters.categoryFilter === "all" ? undefined : filters.categoryFilter,
     performedBy: filters.performedByFilter.trim() || undefined,
     targetUser: filters.targetUserFilter.trim() || undefined,
     search: deferredSearchText || undefined,

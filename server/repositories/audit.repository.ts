@@ -1,5 +1,11 @@
 import crypto from "crypto";
 import { gte, sql, type SQL } from "drizzle-orm";
+import {
+  AUDIT_CATEGORY_PATTERNS,
+  AUDIT_RISK_PATTERNS,
+  type AuditCategory,
+  type AuditRiskLevel,
+} from "../../shared/audit-log-classification";
 import type { AuditLog, InsertAuditLog } from "../../shared/schema-postgres";
 import { auditLogs } from "../../shared/schema-postgres";
 import { db } from "../db-postgres";
@@ -19,6 +25,8 @@ type AuditLogPageParams = {
   performedBy?: string | undefined;
   targetUser?: string | undefined;
   search?: string | undefined;
+  risk?: AuditRiskLevel | undefined;
+  category?: AuditCategory | undefined;
   dateFrom?: Date | undefined;
   dateTo?: Date | undefined;
   sortBy?: AuditLogSort | undefined;
@@ -31,6 +39,39 @@ type AuditLogPageResult = {
   total: number;
   totalPages: number;
 };
+
+function buildActionPatternClause(patterns: readonly string[]) {
+  return sql`(${sql.join(
+    patterns.map((pattern) => sql`upper(action) LIKE ${buildLikePattern(pattern, "contains")} ESCAPE '\'`),
+    sql` OR `,
+  )})`;
+}
+
+function buildAuditRiskWhereClause(risk: AuditRiskLevel): SQL {
+  const critical = buildActionPatternClause(AUDIT_RISK_PATTERNS.critical);
+  const high = buildActionPatternClause(AUDIT_RISK_PATTERNS.high);
+  const medium = buildActionPatternClause(AUDIT_RISK_PATTERNS.medium);
+
+  switch (risk) {
+    case "critical":
+      return critical;
+    case "high":
+      return sql`${high} AND NOT ${critical}`;
+    case "medium":
+      return sql`${medium} AND NOT ${high} AND NOT ${critical}`;
+    case "low":
+      return sql`NOT ${medium} AND NOT ${high} AND NOT ${critical}`;
+  }
+}
+
+function buildAuditCategoryWhereClause(category: AuditCategory): SQL {
+  if (category === "System") {
+    const knownCategoryClauses = Object.values(AUDIT_CATEGORY_PATTERNS).map(buildActionPatternClause);
+    return sql`${sql.join(knownCategoryClauses.map((clause) => sql`NOT ${clause}`), sql` AND `)}`;
+  }
+
+  return buildActionPatternClause(AUDIT_CATEGORY_PATTERNS[category]);
+}
 
 export class AuditRepository {
   async createAuditLog(data: InsertAuditLog): Promise<AuditLog> {
@@ -99,6 +140,14 @@ export class AuditRepository {
     const targetUser = String(params.targetUser || "").trim();
     if (targetUser) {
       whereClauses.push(sql`target_user ILIKE ${buildLikePattern(targetUser, "contains")} ESCAPE '\'`);
+    }
+
+    if (params.risk) {
+      whereClauses.push(buildAuditRiskWhereClause(params.risk));
+    }
+
+    if (params.category) {
+      whereClauses.push(buildAuditCategoryWhereClause(params.category));
     }
 
     const search = String(params.search || "").trim();

@@ -1,6 +1,7 @@
-import { Clock, Database, FileText, Fingerprint, ShieldCheck, User } from "lucide-react";
-import type { ReactNode } from "react";
+import { Clipboard, Clock, Database, FileText, Fingerprint, ShieldCheck, User } from "lucide-react";
+import { useCallback, type ReactNode } from "react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Sheet,
   SheetContent,
@@ -12,6 +13,7 @@ import { AuditLogRiskBadge } from "@/pages/audit-logs/AuditLogRiskBadge";
 import { buildAuditLogSummary } from "@/pages/audit-logs/audit-log-classification";
 import type { AuditLogRecord } from "@/pages/audit-logs/types";
 import { formatAuditTime, getAuditActionInfo } from "@/pages/audit-logs/utils";
+import { useToast } from "@/hooks/use-toast";
 
 type AuditLogDetailSheetProps = {
   log: AuditLogRecord | null;
@@ -39,9 +41,35 @@ function DetailBlock({
 }
 
 export function AuditLogDetailSheet({ log, onOpenChange }: AuditLogDetailSheetProps) {
+  const { toast } = useToast();
   const open = Boolean(log);
   const actionInfo = log ? getAuditActionInfo(log.action) : null;
   const summary = log ? buildAuditLogSummary(log) : null;
+  const handleCopyRequestId = useCallback(async () => {
+    if (!log?.requestId) return;
+    if (!navigator.clipboard?.writeText) {
+      toast({
+        title: "Copy not available",
+        description: "Clipboard access is not available in this browser context.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(log.requestId);
+      toast({
+        title: "Request ID copied",
+        description: "Use this ID to match audit records with server logs.",
+      });
+    } catch {
+      toast({
+        title: "Failed to copy",
+        description: "Please copy the request ID manually.",
+        variant: "destructive",
+      });
+    }
+  }, [log?.requestId, toast]);
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -88,7 +116,21 @@ export function AuditLogDetailSheet({ log, onOpenChange }: AuditLogDetailSheetPr
             </div>
 
             <DetailBlock icon={<Fingerprint className="h-3.5 w-3.5" aria-hidden="true" />} label="Request ID">
-              <p className="break-all font-mono text-xs">{log.requestId || "-"}</p>
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <p className="break-all font-mono text-xs">{log.requestId || "-"}</p>
+                {log.requestId ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => void handleCopyRequestId()}
+                    data-testid="button-copy-audit-request-id"
+                  >
+                    <Clipboard className="mr-2 h-4 w-4" />
+                    Copy
+                  </Button>
+                ) : null}
+              </div>
             </DetailBlock>
 
             {summary.changes.length > 0 ? (

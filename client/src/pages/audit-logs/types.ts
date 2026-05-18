@@ -34,10 +34,12 @@ export interface AuditLogsResponse {
 
 export interface AuditLogFilters {
   actionFilter: string;
+  categoryFilter: string;
   dateFrom: string;
   datePreset: string;
   dateTo: string;
   performedByFilter: string;
+  riskFilter: string;
   searchText: string;
   targetUserFilter: string;
 }

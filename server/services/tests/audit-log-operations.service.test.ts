@@ -86,6 +86,7 @@ test("AuditLogOperationsService cleanup clamps the cutoff and writes an audit lo
 
 test("AuditLogOperationsService proxies audit log reads through the repository", async () => {
   const logs = [createAuditRow()];
+  const listCalls: Array<Parameters<AuditLogOperationsRepository["listAuditLogsPage"]>[0]> = [];
   const stats = {
     totalLogs: 12,
     todayLogs: 3,
@@ -100,19 +101,25 @@ test("AuditLogOperationsService proxies audit log reads through the repository",
     },
     {
       getAuditLogs: async () => logs,
-      listAuditLogsPage: async () => ({
-        logs,
-        page: 1,
-        pageSize: 50,
-        total: logs.length,
-        totalPages: 1,
-      }),
+      listAuditLogsPage: async (params) => {
+        listCalls.push(params);
+        return {
+          logs,
+          page: 1,
+          pageSize: 50,
+          total: logs.length,
+          totalPages: 1,
+        };
+      },
       getAuditLogStats: async () => stats,
       cleanupAuditLogsOlderThan: async () => 0,
     },
   );
 
-  assert.deepEqual(await service.listAuditLogs({}), {
+  assert.deepEqual(await service.listAuditLogs({
+    category: "Backup",
+    risk: "critical",
+  }), {
     logs,
     pagination: {
       mode: "offset",
@@ -126,5 +133,7 @@ test("AuditLogOperationsService proxies audit log reads through the repository",
       hasPreviousPage: false,
     },
   });
+  assert.equal(listCalls[0]?.category, "Backup");
+  assert.equal(listCalls[0]?.risk, "critical");
   assert.deepEqual(await service.getAuditLogStats(), stats);
 });

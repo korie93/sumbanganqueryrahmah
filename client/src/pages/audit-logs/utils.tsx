@@ -7,6 +7,7 @@ import type {
   AuditLogRecord,
   AuditLogStats,
 } from "@/pages/audit-logs/types";
+import { AUDIT_CATEGORIES, AUDIT_RISK_LEVELS } from "@shared/audit-log-classification";
 
 type AuditBadgeVariant = "default" | "secondary" | "destructive" | "outline";
 
@@ -52,6 +53,22 @@ export const auditActionOptions: AuditActionOption[] = [
   { value: "DELETE_BACKUP_FAILED", label: "Delete Backup Failed" },
   { value: "CLEANUP_AUDIT_LOGS", label: "Cleanup Logs" },
   { value: "RENAME_IMPORT", label: "Rename Import" },
+];
+
+export const auditRiskOptions = [
+  { value: "all", label: "All Risk Levels" },
+  ...AUDIT_RISK_LEVELS.map((level) => ({
+    value: level,
+    label: level.charAt(0).toUpperCase() + level.slice(1),
+  })),
+];
+
+export const auditCategoryOptions = [
+  { value: "all", label: "All Categories" },
+  ...AUDIT_CATEGORIES.map((category) => ({
+    value: category,
+    label: category,
+  })),
 ];
 
 export const auditDatePresets: AuditDatePresetOption[] = [

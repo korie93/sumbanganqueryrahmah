@@ -10,10 +10,12 @@ import type { AuditLogFilters } from "@/pages/audit-logs/types";
 
 const baseFilters: AuditLogFilters = {
   actionFilter: "all",
+  categoryFilter: "all",
   dateFrom: "",
   datePreset: "all",
   dateTo: "",
   performedByFilter: "",
+  riskFilter: "all",
   searchText: "",
   targetUserFilter: "",
 };
@@ -56,6 +58,8 @@ test("hasActiveAuditLogFilters only turns on when a real audit filter is applied
   assert.equal(hasActiveAuditLogFilters(baseFilters), false);
   assert.equal(hasActiveAuditLogFilters({ ...baseFilters, searchText: "restore" }), true);
   assert.equal(hasActiveAuditLogFilters({ ...baseFilters, actionFilter: "RESTORE_BACKUP" }), true);
+  assert.equal(hasActiveAuditLogFilters({ ...baseFilters, riskFilter: "critical" }), true);
+  assert.equal(hasActiveAuditLogFilters({ ...baseFilters, categoryFilter: "Backup" }), true);
 });
 
 test("buildAuditLogsRequestParams normalizes all-active and custom date filters safely", () => {
@@ -65,6 +69,8 @@ test("buildAuditLogsRequestParams normalizes all-active and custom date filters 
       page: 3,
       pageSize: 50,
       action: undefined,
+      risk: undefined,
+      category: undefined,
       performedBy: undefined,
       targetUser: undefined,
       search: undefined,
@@ -77,6 +83,8 @@ test("buildAuditLogsRequestParams normalizes all-active and custom date filters 
   const customFilters: AuditLogFilters = {
     ...baseFilters,
     actionFilter: "RESTORE_BACKUP",
+    riskFilter: "critical",
+    categoryFilter: "Backup",
     performedByFilter: " admin ",
     targetUserFilter: "operator",
     searchText: "error",
@@ -87,6 +95,8 @@ test("buildAuditLogsRequestParams normalizes all-active and custom date filters 
 
   const result = buildAuditLogsRequestParams(customFilters, 1, 20, "error");
   assert.equal(result.action, "RESTORE_BACKUP");
+  assert.equal(result.risk, "critical");
+  assert.equal(result.category, "Backup");
   assert.equal(result.performedBy, "admin");
   assert.equal(result.targetUser, "operator");
   assert.equal(result.search, "error");

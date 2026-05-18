@@ -10,10 +10,12 @@ import type { AuditLogFilters, AuditLogRecord, AuditLogsResponse, AuditLogStats 
 
 const initialFilters: AuditLogFilters = {
   actionFilter: "all",
+  categoryFilter: "all",
   dateFrom: "",
   datePreset: "all",
   dateTo: "",
   performedByFilter: "",
+  riskFilter: "all",
   searchText: "",
   targetUserFilter: "",
 };
@@ -134,6 +136,14 @@ export function useAuditLogsDataState() {
     updateFilters((current) => ({ ...current, actionFilter: value }));
   }, [updateFilters]);
 
+  const setRiskFilter = useCallback((value: string) => {
+    updateFilters((current) => ({ ...current, riskFilter: value }));
+  }, [updateFilters]);
+
+  const setCategoryFilter = useCallback((value: string) => {
+    updateFilters((current) => ({ ...current, categoryFilter: value }));
+  }, [updateFilters]);
+
   const setDatePreset = useCallback((value: string) => {
     updateFilters((current) => ({
       ...current,
@@ -173,6 +183,8 @@ export function useAuditLogsDataState() {
     performedByFilter: filters.performedByFilter,
     targetUserFilter: filters.targetUserFilter,
     actionFilter: filters.actionFilter,
+    riskFilter: filters.riskFilter,
+    categoryFilter: filters.categoryFilter,
     datePreset: filters.datePreset,
     dateFrom: filters.dateFrom,
     dateTo: filters.dateTo,
@@ -184,6 +196,8 @@ export function useAuditLogsDataState() {
     setPerformedByFilter,
     setTargetUserFilter,
     setActionFilter,
+    setRiskFilter,
+    setCategoryFilter,
     setDatePreset,
     setDateFrom,
     setDateTo,

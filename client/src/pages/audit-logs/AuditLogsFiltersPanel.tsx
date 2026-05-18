@@ -22,6 +22,8 @@ interface AuditLogsFiltersPanelProps extends AuditLogsFilterFieldsProps {
 
 const AUDIT_LOG_FILTER_FALLBACK_KEYS = [
   "action",
+  "risk",
+  "category",
   "performed-by",
   "target-user",
   "search",
@@ -46,21 +48,25 @@ function AuditLogsFilterFieldsFallback() {
 
 export function AuditLogsFiltersPanel({
   actionFilter,
+  categoryFilter,
   dateFrom,
   datePreset,
   dateTo,
   filtersOpen,
   hasActiveFilters,
   onActionFilterChange,
+  onCategoryFilterChange,
   onClearFilters,
   onDateFromChange,
   onDatePresetChange,
   onDateToChange,
   onFiltersOpenChange,
   onPerformedByFilterChange,
+  onRiskFilterChange,
   onSearchTextChange,
   onTargetUserFilterChange,
   performedByFilter,
+  riskFilter,
   searchText,
   targetUserFilter,
 }: AuditLogsFiltersPanelProps) {
@@ -105,18 +111,22 @@ export function AuditLogsFiltersPanel({
           <Suspense fallback={<AuditLogsFilterFieldsFallback />}>
             <AuditLogsFilterFields
               actionFilter={actionFilter}
+              categoryFilter={categoryFilter}
               dateFrom={dateFrom}
               datePreset={datePreset}
               dateTo={dateTo}
               hasActiveFilters={hasActiveFilters}
               onActionFilterChange={onActionFilterChange}
+              onCategoryFilterChange={onCategoryFilterChange}
               onDateFromChange={onDateFromChange}
               onDatePresetChange={onDatePresetChange}
               onDateToChange={onDateToChange}
               onPerformedByFilterChange={onPerformedByFilterChange}
+              onRiskFilterChange={onRiskFilterChange}
               onSearchTextChange={onSearchTextChange}
               onTargetUserFilterChange={onTargetUserFilterChange}
               performedByFilter={performedByFilter}
+              riskFilter={riskFilter}
               searchText={searchText}
               targetUserFilter={targetUserFilter}
             />

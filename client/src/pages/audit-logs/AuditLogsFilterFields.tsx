@@ -7,44 +7,54 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { formatIsoDateRangeDDMMYYYY } from "@/lib/date-format";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { auditActionOptions, auditDatePresets } from "@/pages/audit-logs/utils";
+import { auditActionOptions, auditCategoryOptions, auditDatePresets, auditRiskOptions } from "@/pages/audit-logs/utils";
 
 export interface AuditLogsFilterFieldsProps {
   actionFilter: string;
+  categoryFilter: string;
   dateFrom: string;
   datePreset: string;
   dateTo: string;
   hasActiveFilters: boolean;
   onActionFilterChange: (value: string) => void;
+  onCategoryFilterChange: (value: string) => void;
   onDateFromChange: (value: string) => void;
   onDatePresetChange: (value: string) => void;
   onDateToChange: (value: string) => void;
   onPerformedByFilterChange: (value: string) => void;
+  onRiskFilterChange: (value: string) => void;
   onSearchTextChange: (value: string) => void;
   onTargetUserFilterChange: (value: string) => void;
   performedByFilter: string;
+  riskFilter: string;
   searchText: string;
   targetUserFilter: string;
 }
 
 export function AuditLogsFilterFields({
   actionFilter,
+  categoryFilter,
   dateFrom,
   datePreset,
   dateTo,
   hasActiveFilters,
   onActionFilterChange,
+  onCategoryFilterChange,
   onDateFromChange,
   onDatePresetChange,
   onDateToChange,
   onPerformedByFilterChange,
+  onRiskFilterChange,
   onSearchTextChange,
   onTargetUserFilterChange,
   performedByFilter,
+  riskFilter,
   searchText,
   targetUserFilter,
 }: AuditLogsFilterFieldsProps) {
   const actionTypeTriggerId = "audit-logs-action-type";
+  const riskTriggerId = "audit-logs-risk";
+  const categoryTriggerId = "audit-logs-category";
   const datePresetTriggerId = "audit-logs-date-preset";
   const dateFromButtonId = "audit-logs-date-from";
   const dateToButtonId = "audit-logs-date-to";
@@ -125,6 +135,44 @@ export function AuditLogsFilterFields({
         </div>
 
         <div className="space-y-2">
+          <Label htmlFor={riskTriggerId} className="text-sm font-medium flex items-center gap-1">
+            <Info className="h-3.5 w-3.5" />
+            Risk Level
+          </Label>
+          <Select value={riskFilter} onValueChange={onRiskFilterChange}>
+            <SelectTrigger id={riskTriggerId} data-testid="select-risk-level">
+              <SelectValue placeholder="Select risk level" />
+            </SelectTrigger>
+            <SelectContent>
+              {auditRiskOptions.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor={categoryTriggerId} className="text-sm font-medium flex items-center gap-1">
+            <Info className="h-3.5 w-3.5" />
+            Category
+          </Label>
+          <Select value={categoryFilter} onValueChange={onCategoryFilterChange}>
+            <SelectTrigger id={categoryTriggerId} data-testid="select-audit-category">
+              <SelectValue placeholder="Select category" />
+            </SelectTrigger>
+            <SelectContent>
+              {auditCategoryOptions.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="space-y-2">
           <Label htmlFor={datePresetTriggerId} className="text-sm font-medium flex items-center gap-1">
             <Calendar className="h-3.5 w-3.5" />
             Time Period
@@ -194,6 +242,38 @@ export function AuditLogsFilterFields({
                   aria-label="Clear action filter"
                   title="Clear action filter"
                   data-testid="button-clear-action-filter"
+                >
+                  <X className="h-3 w-3" />
+                </Button>
+              </Badge>
+            ) : null}
+            {riskFilter !== "all" ? (
+              <Badge variant="secondary" className="max-w-full gap-1 whitespace-normal break-words py-1.5 pr-1">
+                Risk: {auditRiskOptions.find((option) => option.value === riskFilter)?.label}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-4 w-4 p-0 ml-1"
+                  onClick={() => onRiskFilterChange("all")}
+                  aria-label="Clear risk filter"
+                  title="Clear risk filter"
+                  data-testid="button-clear-risk-filter"
+                >
+                  <X className="h-3 w-3" />
+                </Button>
+              </Badge>
+            ) : null}
+            {categoryFilter !== "all" ? (
+              <Badge variant="secondary" className="max-w-full gap-1 whitespace-normal break-words py-1.5 pr-1">
+                Category: {auditCategoryOptions.find((option) => option.value === categoryFilter)?.label}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-4 w-4 p-0 ml-1"
+                  onClick={() => onCategoryFilterChange("all")}
+                  aria-label="Clear category filter"
+                  title="Clear category filter"
+                  data-testid="button-clear-category-filter"
                 >
                   <X className="h-3 w-3" />
                 </Button>
