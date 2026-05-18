@@ -31,6 +31,130 @@ import type {
   CollectionDailyPaidCustomerRow,
   CollectionDailyUserRow,
 } from "./collection-daily-repository-types";
+import { logger } from "../lib/logger";
+
+const COLLECTION_DAILY_AUDIT_LEAVE_TYPE_CONSTRAINTS = new Set([
+  "chk_collection_daily_calendar_audit_old_leave_type",
+  "chk_collection_daily_calendar_audit_new_leave_type",
+]);
+
+let collectionDailyAuditLeaveTypeConstraintRepair: Promise<void> | null = null;
+
+function getErrorField(error: unknown, field: string): string {
+  if (!error || typeof error !== "object") {
+    return "";
+  }
+  const value = (error as Record<string, unknown>)[field];
+  return typeof value === "string" ? value : "";
+}
+
+function isCollectionDailyAuditLeaveTypeConstraintError(error: unknown): boolean {
+  const code = getErrorField(error, "code");
+  const constraint = getErrorField(error, "constraint");
+  const message = getErrorField(error, "message");
+  return code === "23514"
+    && (
+      COLLECTION_DAILY_AUDIT_LEAVE_TYPE_CONSTRAINTS.has(constraint)
+      || /collection_daily_calendar_audit_(?:old|new)_leave_type/i.test(message)
+    );
+}
+
+async function runCollectionDailyAuditLeaveTypeConstraintRepair(): Promise<void> {
+  await db.execute(sql`
+    UPDATE public.collection_daily_calendar_audit
+    SET
+      old_leave_type = CASE
+        WHEN upper(trim(COALESCE(old_leave_type, ''))) IN ('AL', 'MC', 'EL', 'UL', 'RL', 'OFF')
+          THEN upper(trim(old_leave_type))
+        ELSE NULL
+      END,
+      new_leave_type = CASE
+        WHEN upper(trim(COALESCE(new_leave_type, ''))) IN ('AL', 'MC', 'EL', 'UL', 'RL', 'OFF')
+          THEN upper(trim(new_leave_type))
+        ELSE NULL
+      END
+    WHERE (
+        old_leave_type IS NOT NULL
+        AND (
+          old_leave_type <> upper(trim(old_leave_type))
+          OR upper(trim(old_leave_type)) NOT IN ('AL', 'MC', 'EL', 'UL', 'RL', 'OFF')
+        )
+      )
+      OR (
+        new_leave_type IS NOT NULL
+        AND (
+          new_leave_type <> upper(trim(new_leave_type))
+          OR upper(trim(new_leave_type)) NOT IN ('AL', 'MC', 'EL', 'UL', 'RL', 'OFF')
+        )
+      )
+  `);
+
+  await db.execute(sql`
+    DO $$
+    BEGIN
+      IF EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'chk_collection_daily_calendar_audit_old_leave_type'
+          AND conrelid = 'public.collection_daily_calendar_audit'::regclass
+          AND (
+            pg_get_constraintdef(oid) NOT LIKE '%RL%'
+            OR pg_get_constraintdef(oid) NOT LIKE '%OFF%'
+          )
+      ) THEN
+        ALTER TABLE public.collection_daily_calendar_audit
+        DROP CONSTRAINT chk_collection_daily_calendar_audit_old_leave_type;
+      END IF;
+
+      IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'chk_collection_daily_calendar_audit_old_leave_type'
+          AND conrelid = 'public.collection_daily_calendar_audit'::regclass
+      ) THEN
+        ALTER TABLE public.collection_daily_calendar_audit
+        ADD CONSTRAINT chk_collection_daily_calendar_audit_old_leave_type
+        CHECK (old_leave_type IS NULL OR old_leave_type IN ('AL', 'MC', 'EL', 'UL', 'RL', 'OFF'));
+      END IF;
+
+      IF EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'chk_collection_daily_calendar_audit_new_leave_type'
+          AND conrelid = 'public.collection_daily_calendar_audit'::regclass
+          AND (
+            pg_get_constraintdef(oid) NOT LIKE '%RL%'
+            OR pg_get_constraintdef(oid) NOT LIKE '%OFF%'
+          )
+      ) THEN
+        ALTER TABLE public.collection_daily_calendar_audit
+        DROP CONSTRAINT chk_collection_daily_calendar_audit_new_leave_type;
+      END IF;
+
+      IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'chk_collection_daily_calendar_audit_new_leave_type'
+          AND conrelid = 'public.collection_daily_calendar_audit'::regclass
+      ) THEN
+        ALTER TABLE public.collection_daily_calendar_audit
+        ADD CONSTRAINT chk_collection_daily_calendar_audit_new_leave_type
+        CHECK (new_leave_type IS NULL OR new_leave_type IN ('AL', 'MC', 'EL', 'UL', 'RL', 'OFF'));
+      END IF;
+    END $$;
+  `);
+}
+
+async function repairCollectionDailyAuditLeaveTypeConstraints(): Promise<void> {
+  if (!collectionDailyAuditLeaveTypeConstraintRepair) {
+    collectionDailyAuditLeaveTypeConstraintRepair = runCollectionDailyAuditLeaveTypeConstraintRepair()
+      .finally(() => {
+        collectionDailyAuditLeaveTypeConstraintRepair = null;
+      });
+  }
+
+  await collectionDailyAuditLeaveTypeConstraintRepair;
+}
 
 export async function listCollectionDailyUsers(): Promise<CollectionDailyUser[]> {
   const result = await db.execute(sql`
@@ -228,7 +352,7 @@ export async function upsertCollectionDailyCalendarDays(params: {
     sql`, `,
   );
 
-  await executor.execute(sql`
+  const upsertQuery = sql`
     WITH incoming (
       id,
       username,
@@ -365,7 +489,23 @@ export async function upsertCollectionDailyCalendarDays(params: {
       RETURNING id
     )
     SELECT count(*) AS audit_count FROM audit_insert
-  `);
+  `;
+
+  try {
+    await executor.execute(upsertQuery);
+  } catch (error) {
+    if (executor !== db || !isCollectionDailyAuditLeaveTypeConstraintError(error)) {
+      throw error;
+    }
+
+    logger.warn("Repairing stale collection daily calendar audit leave-type constraints", {
+      code: getErrorField(error, "code"),
+      constraint: getErrorField(error, "constraint") || null,
+    });
+
+    await repairCollectionDailyAuditLeaveTypeConstraints();
+    await executor.execute(upsertQuery);
+  }
 
   return listCollectionDailyCalendar({
     username: params.username,
