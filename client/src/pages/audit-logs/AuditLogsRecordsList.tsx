@@ -14,6 +14,7 @@ interface AuditLogsRecordsListProps {
   totalLogs: number;
   onClearFilters: () => void;
   onRecordsOpenChange: (open: boolean) => void;
+  onTraceRequestId: (requestId: string) => void;
   recordsOpen: boolean;
 }
 
@@ -23,6 +24,7 @@ export function AuditLogsRecordsList({
   totalLogs,
   onClearFilters,
   onRecordsOpenChange,
+  onTraceRequestId,
   recordsOpen,
 }: AuditLogsRecordsListProps) {
   const isMobile = useIsMobile();
@@ -100,7 +102,11 @@ export function AuditLogsRecordsList({
           </CollapsibleContent>
         </Card>
       </Collapsible>
-      <AuditLogDetailSheet log={selectedLog} onOpenChange={handleDetailOpenChange} />
+      <AuditLogDetailSheet
+        log={selectedLog}
+        onOpenChange={handleDetailOpenChange}
+        onTraceRequestId={onTraceRequestId}
+      />
     </>
   );
 }

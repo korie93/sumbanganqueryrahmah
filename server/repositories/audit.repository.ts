@@ -155,6 +155,7 @@ export class AuditRepository {
       const searchPattern = buildLikePattern(search, "contains");
       whereClauses.push(sql`(
         action ILIKE ${searchPattern} ESCAPE '\'
+        OR COALESCE(request_id, '') ILIKE ${searchPattern} ESCAPE '\'
         OR COALESCE(details, '') ILIKE ${searchPattern} ESCAPE '\'
         OR COALESCE(target_resource, '') ILIKE ${searchPattern} ESCAPE '\'
       )`);

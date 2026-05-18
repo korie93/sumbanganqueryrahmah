@@ -1,4 +1,4 @@
-import { Clipboard, Clock, Database, FileText, Fingerprint, ShieldCheck, User } from "lucide-react";
+import { Clipboard, Clock, Database, FileText, Fingerprint, Search, ShieldCheck, User } from "lucide-react";
 import { useCallback, type ReactNode } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,8 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import { AuditLogChangeDiffViewer } from "@/pages/audit-logs/AuditLogChangeDiffViewer";
+import { AuditLogReviewSignals } from "@/pages/audit-logs/AuditLogReviewSignals";
 import { AuditLogRiskBadge } from "@/pages/audit-logs/AuditLogRiskBadge";
 import { buildAuditLogSummary } from "@/pages/audit-logs/audit-log-classification";
 import type { AuditLogRecord } from "@/pages/audit-logs/types";
@@ -18,6 +20,7 @@ import { useToast } from "@/hooks/use-toast";
 type AuditLogDetailSheetProps = {
   log: AuditLogRecord | null;
   onOpenChange: (open: boolean) => void;
+  onTraceRequestId?: (requestId: string) => void;
 };
 
 function DetailBlock({
@@ -40,7 +43,7 @@ function DetailBlock({
   );
 }
 
-export function AuditLogDetailSheet({ log, onOpenChange }: AuditLogDetailSheetProps) {
+export function AuditLogDetailSheet({ log, onOpenChange, onTraceRequestId }: AuditLogDetailSheetProps) {
   const { toast } = useToast();
   const open = Boolean(log);
   const actionInfo = log ? getAuditActionInfo(log.action) : null;
@@ -70,6 +73,15 @@ export function AuditLogDetailSheet({ log, onOpenChange }: AuditLogDetailSheetPr
       });
     }
   }, [log?.requestId, toast]);
+  const handleTraceRequestId = useCallback(() => {
+    if (!log?.requestId || !onTraceRequestId) return;
+    onTraceRequestId(log.requestId);
+    onOpenChange(false);
+    toast({
+      title: "Request trace applied",
+      description: "Audit list now filters records linked to the selected request ID.",
+    });
+  }, [log?.requestId, onOpenChange, onTraceRequestId, toast]);
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -97,6 +109,8 @@ export function AuditLogDetailSheet({ log, onOpenChange }: AuditLogDetailSheetPr
               </Badge>
             </div>
 
+            <AuditLogReviewSignals log={log} />
+
             <div className="grid gap-3 sm:grid-cols-2">
               <DetailBlock icon={<User className="h-3.5 w-3.5" aria-hidden="true" />} label="Performed By">
                 <p className="break-words font-medium">{log.performedBy}</p>
@@ -119,50 +133,35 @@ export function AuditLogDetailSheet({ log, onOpenChange }: AuditLogDetailSheetPr
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <p className="break-all font-mono text-xs">{log.requestId || "-"}</p>
                 {log.requestId ? (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => void handleCopyRequestId()}
-                    data-testid="button-copy-audit-request-id"
-                  >
-                    <Clipboard className="mr-2 h-4 w-4" />
-                    Copy
-                  </Button>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => void handleCopyRequestId()}
+                      data-testid="button-copy-audit-request-id"
+                    >
+                      <Clipboard className="mr-2 h-4 w-4" />
+                      Copy
+                    </Button>
+                    {onTraceRequestId ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={handleTraceRequestId}
+                        data-testid="button-trace-audit-request-id"
+                      >
+                        <Search className="mr-2 h-4 w-4" />
+                        Trace
+                      </Button>
+                    ) : null}
+                  </div>
                 ) : null}
               </div>
             </DetailBlock>
 
-            {summary.changes.length > 0 ? (
-              <section className="rounded-xl border border-border/70 bg-muted/20 p-3" aria-labelledby="audit-change-summary-title">
-                <h3
-                  id="audit-change-summary-title"
-                  className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground"
-                >
-                  Before / After
-                </h3>
-                <div className="mt-3 space-y-2">
-                  {summary.changes.map((change) => (
-                    <div
-                      key={`${change.field}:${change.before}:${change.after}`}
-                      className="grid gap-2 rounded-lg border border-border/60 bg-background/70 p-3 text-sm sm:grid-cols-[1fr_1fr_1fr]"
-                    >
-                      <p className="font-medium">{change.field}</p>
-                      <p className="break-words text-muted-foreground">
-                        <span className="text-[11px] uppercase tracking-[0.14em]">Before</span>
-                        <br />
-                        {change.before}
-                      </p>
-                      <p className="break-words text-foreground">
-                        <span className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">After</span>
-                        <br />
-                        {change.after}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              </section>
-            ) : null}
+            <AuditLogChangeDiffViewer changes={summary.changes} />
 
             <section className="rounded-xl border border-border/70 bg-muted/20 p-3" aria-labelledby="audit-raw-details-title">
               <h3

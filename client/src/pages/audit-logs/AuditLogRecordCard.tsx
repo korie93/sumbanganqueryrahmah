@@ -1,6 +1,7 @@
 import { Clock, Eye, FileText, ShieldCheck, User } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { AuditLogReviewSignals } from "@/pages/audit-logs/AuditLogReviewSignals";
 import { AuditLogRiskBadge } from "@/pages/audit-logs/AuditLogRiskBadge";
 import { buildAuditLogSummary } from "@/pages/audit-logs/audit-log-classification";
 import { buildAuditLogRowAriaLabel } from "@/pages/audit-logs/audit-log-row-aria";
@@ -52,6 +53,7 @@ export function AuditLogRecordCard({ isMobile, log, onViewDetails }: AuditLogRec
             <Badge variant="secondary" className="max-w-full whitespace-normal py-1">
               {summary.category.label}
             </Badge>
+            <AuditLogReviewSignals compact log={log} />
           </div>
           <p
             className="break-all font-mono text-[11px] text-muted-foreground/80"

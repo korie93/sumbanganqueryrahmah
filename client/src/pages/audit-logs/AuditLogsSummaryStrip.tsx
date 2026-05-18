@@ -2,6 +2,7 @@ import { AlertTriangle, Layers, ShieldCheck } from "lucide-react";
 import { useMemo } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { buildAuditLogSummary, type AuditRiskLevel } from "@/pages/audit-logs/audit-log-classification";
+import { getAuditReviewSignals } from "@/pages/audit-logs/audit-log-review-signals";
 import type { AuditLogRecord } from "@/pages/audit-logs/types";
 
 type AuditLogsSummaryStripProps = {
@@ -30,9 +31,10 @@ export function AuditLogsSummaryStrip({ loading, logs, total }: AuditLogsSummary
       { critical: 0, high: 0, medium: 0, low: 0 },
     );
     const categories = new Set(logs.map((log) => buildAuditLogSummary(log).category.label));
-    return { categories, riskCounts };
+    const reviewCount = logs.filter((log) => getAuditReviewSignals(log).length > 0).length;
+    return { categories, reviewCount, riskCounts };
   }, [logs]);
-  const { categories, riskCounts } = summary;
+  const { categories, reviewCount, riskCounts } = summary;
   const visibleRiskCount = riskCounts.critical + riskCounts.high;
 
   return (
@@ -54,6 +56,9 @@ export function AuditLogsSummaryStrip({ loading, logs, total }: AuditLogsSummary
           </p>
           <p className="mt-2 text-sm font-medium">
             {visibleRiskCount > 0 ? `${visibleRiskCount} high attention item${visibleRiskCount === 1 ? "" : "s"}` : "No high attention items shown"}
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {reviewCount > 0 ? `${reviewCount} item${reviewCount === 1 ? "" : "s"} flagged for review` : "No review signals on this page"}
           </p>
           <div className="mt-2 flex flex-wrap gap-1.5 text-xs text-muted-foreground">
             {riskOrder.map((risk) => (

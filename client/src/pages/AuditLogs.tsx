@@ -1,4 +1,4 @@
-import { Suspense, lazy } from "react";
+import { Suspense, lazy, useCallback } from "react";
 import { Download, FileText, Loader2, RefreshCw } from "lucide-react";
 import { AppPaginationBar } from "@/components/data/AppPaginationBar";
 import { Button } from "@/components/ui/button";
@@ -83,6 +83,11 @@ export default function AuditLogs() {
     handleExportPdf,
     handleExportCsv,
   } = useAuditLogsPageState();
+  const handleTraceRequestId = useCallback((requestId: string) => {
+    setSearchText(requestId);
+    setFiltersOpen(true);
+    setRecordsOpen(true);
+  }, [setFiltersOpen, setRecordsOpen, setSearchText]);
 
   return (
     <div className="space-y-6 p-4 sm:p-6">
@@ -216,6 +221,7 @@ export default function AuditLogs() {
           loading={loading}
           onClearFilters={clearAllFilters}
           onRecordsOpenChange={setRecordsOpen}
+          onTraceRequestId={handleTraceRequestId}
           recordsOpen={recordsOpen}
           totalLogs={pagination.total}
         />
