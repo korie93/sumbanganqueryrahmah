@@ -76,6 +76,7 @@ test("landing hero uses compact modular preview sections", () => {
   const heroShellSource = readPageSource("LandingHeroShell.tsx");
   const insightSource = readPageSource("LandingHeroInsightStrip.tsx");
   const previewSource = readPageSource("LandingProductPreview.tsx");
+  const smokeSource = readPageSource("../../../scripts/ui-smoke.mjs");
 
   assert.match(landingSource, /<LandingHeroInsightStrip \/>/);
   assert.match(landingSource, /rightPane=\{<LandingProductPreview \/>\}/);
@@ -84,4 +85,5 @@ test("landing hero uses compact modular preview sections", () => {
   assert.match(insightSource, /role="list"/);
   assert.match(previewSource, /landing-workspace-preview/);
   assert.match(previewSource, /role="group"/);
+  assert.match(smokeSource, /\^\(Log In\|Log Masuk\)\$/);
 });

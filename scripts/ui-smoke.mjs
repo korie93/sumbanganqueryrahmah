@@ -2201,7 +2201,7 @@ const ensureLoginPageVisible = async (page) => {
     return;
   }
 
-  const publicLoginButton = page.getByRole("button", { name: /^Log In$/ }).first();
+  const publicLoginButton = page.getByRole("button", { name: /^(Log In|Log Masuk)$/ }).first();
   if (await waitForVisible(publicLoginButton, 2_000)) {
     await publicLoginButton.click();
     await page.waitForLoadState("networkidle");
