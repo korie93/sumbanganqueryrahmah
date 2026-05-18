@@ -39,6 +39,42 @@ const OBSERVED_COLLECTION_ROUTE_PATHS = new Set([
 const idempotencyFingerprintValidationCacheController =
   createIdempotencyFingerprintValidationCacheController();
 
+function getErrorRecord(error: unknown): Record<string, unknown> | null {
+  return error && typeof error === "object" ? error as Record<string, unknown> : null;
+}
+
+function getNestedErrorField(error: unknown, field: string): string | undefined {
+  let current: unknown = error;
+  for (let depth = 0; depth < 3; depth += 1) {
+    const record = getErrorRecord(current);
+    if (!record) {
+      return undefined;
+    }
+
+    const value = record[field];
+    if (typeof value === "string" && value.trim()) {
+      return value;
+    }
+
+    current = record.cause;
+  }
+
+  return undefined;
+}
+
+function getSafeErrorMessage(error: unknown): string | undefined {
+  const message = getNestedErrorField(error, "message");
+  if (!message) {
+    return undefined;
+  }
+
+  if (/^Failed query:/i.test(message) || message.includes("\nparams:")) {
+    return "Database query failed.";
+  }
+
+  return message.slice(0, 300);
+}
+
 function sendCollectionError(res: Response, err: unknown, fallbackMessage: string) {
   if (err instanceof HttpError) {
     const message = err.expose ? err.message : fallbackMessage;
@@ -50,7 +86,13 @@ function sendCollectionError(res: Response, err: unknown, fallbackMessage: strin
   }
 
   logger.error("Unhandled collection route error", {
-    message: (err as { message?: string })?.message,
+    message: getSafeErrorMessage(err),
+    errorName: getNestedErrorField(err, "name"),
+    errorCode: getNestedErrorField(err, "code"),
+    dbConstraint: getNestedErrorField(err, "constraint"),
+    dbTable: getNestedErrorField(err, "table"),
+    dbColumn: getNestedErrorField(err, "column"),
+    dbDetail: getNestedErrorField(err, "detail"),
   });
   return res.status(500).json({ ok: false, message: fallbackMessage });
 }
