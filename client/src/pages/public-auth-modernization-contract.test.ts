@@ -70,3 +70,18 @@ test("landing and public auth theme use a dark SQR backdrop with elevated light 
   assert.match(landingCss, /background:\s*linear-gradient\(180deg, var\(--landing-surface\), var\(--landing-surface-muted\)\);/);
   assert.match(landingCss, /\.landing-placeholder-footer-shell\s*{/);
 });
+
+test("landing hero uses compact modular preview sections", () => {
+  const landingSource = readPageSource("Landing.tsx");
+  const heroShellSource = readPageSource("LandingHeroShell.tsx");
+  const insightSource = readPageSource("LandingHeroInsightStrip.tsx");
+  const previewSource = readPageSource("LandingProductPreview.tsx");
+
+  assert.match(landingSource, /<LandingHeroInsightStrip \/>/);
+  assert.match(landingSource, /rightPane=\{<LandingProductPreview \/>\}/);
+  assert.doesNotMatch(landingSource, /landing-feature-card/);
+  assert.match(heroShellSource, /Log Masuk ke Sistem/);
+  assert.match(insightSource, /role="list"/);
+  assert.match(previewSource, /landing-workspace-preview/);
+  assert.match(previewSource, /role="group"/);
+});

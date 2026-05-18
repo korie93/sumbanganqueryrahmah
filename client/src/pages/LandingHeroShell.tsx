@@ -19,17 +19,17 @@ export function LandingHeroShell({
   rightPane,
 }: LandingHeroShellProps) {
   return (
-    <section className="landing-hero-panel rounded-[2rem] px-5 py-6 sm:px-7 sm:py-8 lg:px-10 lg:py-10">
-      <div className="landing-hero-grid grid gap-8 lg:grid-cols-[1.12fr_0.88fr] lg:items-center">
-        <div className="space-y-7">
+    <section className="landing-hero-panel rounded-[2rem] px-5 py-6 sm:px-7 sm:py-7 lg:px-9 lg:py-8">
+      <div className="landing-hero-grid grid gap-6 lg:grid-cols-[1.06fr_0.94fr] lg:items-center">
+        <div className="space-y-5">
           <div className="landing-badge inline-flex items-center rounded-full px-3 py-1 text-xs font-medium">
             Untuk kegunaan operasi dalaman berdaftar
           </div>
-          <div className="space-y-4">
+          <div className="space-y-3">
             <h1 className="landing-title max-w-3xl text-4xl font-semibold tracking-tight sm:text-5xl">
               Platform kerja dalaman untuk carian, semakan, dan pengurusan rekod sumbangan.
             </h1>
-            <p className="landing-copy max-w-2xl text-base leading-7 sm:text-lg">
+            <p className="landing-copy max-w-2xl text-base leading-7">
               SQR menyediakan ruang kerja yang tersusun untuk menjalankan general search, menyemak
               rekod, dan merujuk data operasi secara cepat, terkawal, serta mudah difahami oleh
               pengguna harian.
@@ -101,12 +101,12 @@ export function LandingPageShell({ onLoginClick, children }: LandingPageShellPro
             </nav>
             <button type="button" onClick={onLoginClick} className={landingPrimaryButtonClassName}>
               <LogIn className="h-4 w-4" />
-              Log In
+              Log Masuk
             </button>
           </div>
         </header>
 
-        <main id="main-content" tabIndex={-1} className="flex flex-1 flex-col justify-center py-8 sm:py-10 lg:py-12">
+        <main id="main-content" tabIndex={-1} className="flex flex-1 flex-col justify-center py-6 sm:py-8 lg:py-10">
           {children}
         </main>
       </div>
@@ -122,7 +122,7 @@ export function LandingPrimaryActionRow({ onLoginClick }: { onLoginClick: () => 
         onClick={onLoginClick}
         className={`${landingPrimaryButtonClassName} min-h-11 px-5`}
       >
-        Log In ke Sistem
+        Log Masuk ke Sistem
         <ArrowRight className="ml-2 h-4 w-4" />
       </button>
       <div className="landing-action-note rounded-xl px-4 py-3 text-sm">

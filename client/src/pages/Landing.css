@@ -64,6 +64,8 @@
 .landing-about-copy,
 .landing-about-item-copy,
 .landing-preview-topbar-copy,
+.landing-preview-toolbar-copy,
+.landing-preview-record-meta,
 .landing-preview-metric-copy,
 .landing-footer-copy {
   color: var(--landing-text-muted);
@@ -128,11 +130,46 @@
   color: var(--landing-amber);
 }
 
-.landing-feature-card,
+.landing-insight-item,
 .landing-action-note {
   border: 1px solid var(--landing-border);
   background: linear-gradient(180deg, var(--landing-surface), var(--landing-surface-soft));
   box-shadow: inset 0 1px 0 hsl(0 0% 100%);
+}
+
+.landing-insight-item:nth-child(2) {
+  border-color: var(--landing-teal-border);
+  background: linear-gradient(180deg, var(--landing-surface), var(--landing-teal-soft));
+}
+
+.landing-insight-item:nth-child(3) {
+  border-color: var(--landing-amber-border);
+  background: linear-gradient(180deg, var(--landing-surface), var(--landing-amber-soft));
+}
+
+.landing-insight-icon {
+  background: var(--landing-primary-soft);
+  color: var(--landing-primary);
+}
+
+.landing-insight-item:nth-child(2) .landing-insight-icon {
+  background: var(--landing-teal-soft);
+  color: var(--landing-teal);
+}
+
+.landing-insight-item:nth-child(3) .landing-insight-icon {
+  background: var(--landing-amber-soft);
+  color: var(--landing-amber);
+}
+
+.landing-insight-title,
+.landing-preview-toolbar-title,
+.landing-preview-record-title {
+  color: var(--landing-text);
+}
+
+.landing-insight-copy {
+  color: var(--landing-text-soft);
 }
 
 .landing-action-note {
@@ -177,10 +214,41 @@
 
 .landing-preview-topbar,
 .landing-preview-metric,
-.landing-about-item,
-.landing-about-note {
+.landing-about-item {
   border: 1px solid var(--landing-border);
   background: var(--landing-surface);
+}
+
+.landing-workspace-preview {
+  border: 1px solid var(--landing-border-strong);
+  background: linear-gradient(180deg, var(--landing-surface), var(--landing-surface-muted));
+  box-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.82);
+}
+
+.landing-preview-search {
+  border: 1px solid var(--landing-teal-border);
+  background: var(--landing-teal-soft);
+  color: var(--landing-teal);
+}
+
+.landing-preview-record-row {
+  border: 1px solid var(--landing-border);
+  background: hsl(0 0% 100% / 0.78);
+}
+
+.landing-preview-status-pill--ok {
+  background: var(--landing-trust-soft);
+  color: var(--landing-trust);
+}
+
+.landing-preview-status-pill--info {
+  background: var(--landing-primary-soft);
+  color: var(--landing-primary-text);
+}
+
+.landing-preview-status-pill--warn {
+  background: var(--landing-amber-soft);
+  color: var(--landing-amber);
 }
 
 .landing-preview-status {
@@ -279,11 +347,11 @@
 }
 
 .landing-secondary-pane {
-  min-height: 31rem;
+  min-height: 0;
 }
 
 .landing-about-card {
-  min-height: 29rem;
+  min-height: 0;
 }
 
 @media (max-width: 1023px) {
