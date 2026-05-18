@@ -125,6 +125,14 @@ const collectionRecordCreatedByDeleteRuleMigrationSql = readFileSync(
   path.join(repoRoot, "drizzle", collectionRecordCreatedByDeleteRuleMigrationFileName),
   "utf8",
 );
+const collectionDailyCalendarAuditMigrationFileName = migrationSqlFileNames.find((name) => /^0038_.*\.sql$/.test(name));
+if (!collectionDailyCalendarAuditMigrationFileName) {
+  throw new Error("Expected a 0038 collection daily calendar audit migration file in drizzle/");
+}
+const collectionDailyCalendarAuditMigrationSql = readFileSync(
+  path.join(repoRoot, "drizzle", collectionDailyCalendarAuditMigrationFileName),
+  "utf8",
+);
 const preTimezoneMigrationSqlTexts = migrationSqlFileNames
   .filter((name) => name.localeCompare(timezoneMigrationFileName) < 0)
   .sort((left, right) => left.localeCompare(right))
@@ -223,6 +231,19 @@ async function constraintExists(pool: pg.Pool, name: string): Promise<boolean> {
     [name],
   );
   return Boolean(result.rows[0]?.present);
+}
+
+async function constraintDefinition(pool: pg.Pool, name: string): Promise<string> {
+  const result = await pool.query<{ definition: string }>(
+    `
+      SELECT pg_get_constraintdef(oid) AS definition
+      FROM pg_constraint
+      WHERE conname = $1
+      LIMIT 1
+    `,
+    [name],
+  );
+  return result.rows[0]?.definition ?? "";
 }
 
 async function indexExists(pool: pg.Pool, name: string): Promise<boolean> {
@@ -567,6 +588,109 @@ test(
       assert.equal(staffNicknameRules[0]?.update_rule, "CASCADE");
       assert.equal(bannedSessionRules[0]?.delete_rule, "CASCADE");
       assert.equal(bannedSessionRules[0]?.update_rule, "CASCADE");
+    });
+  },
+);
+
+test(
+  "collection daily calendar audit migration refreshes stale leave type constraints for RL and OFF",
+  { skip: skipReason || false },
+  async () => {
+    await withTempDatabase(async ({ pool }) => {
+      await pool.query(`
+        CREATE TABLE public.users (
+          id text PRIMARY KEY,
+          username text NOT NULL UNIQUE
+        );
+
+        CREATE TABLE public.collection_daily_calendar_audit (
+          id uuid PRIMARY KEY,
+          calendar_id uuid,
+          username text NOT NULL,
+          calendar_date date NOT NULL,
+          year integer NOT NULL,
+          month integer NOT NULL,
+          day integer NOT NULL,
+          action text NOT NULL,
+          old_status text,
+          new_status text,
+          old_leave_type text,
+          new_leave_type text,
+          old_note text,
+          new_note text,
+          old_holiday_name text,
+          new_holiday_name text,
+          actor text,
+          created_at timestamp with time zone NOT NULL DEFAULT now()
+        );
+
+        ALTER TABLE public.collection_daily_calendar_audit
+          ADD CONSTRAINT chk_collection_daily_calendar_audit_old_leave_type
+          CHECK (old_leave_type IS NULL OR old_leave_type IN ('AL', 'MC', 'EL', 'UL'));
+
+        ALTER TABLE public.collection_daily_calendar_audit
+          ADD CONSTRAINT chk_collection_daily_calendar_audit_new_leave_type
+          CHECK (new_leave_type IS NULL OR new_leave_type IN ('AL', 'MC', 'EL', 'UL'));
+      `);
+
+      await applySql(pool, collectionDailyCalendarAuditMigrationSql);
+
+      const oldLeaveTypeDefinition = await constraintDefinition(
+        pool,
+        "chk_collection_daily_calendar_audit_old_leave_type",
+      );
+      const newLeaveTypeDefinition = await constraintDefinition(
+        pool,
+        "chk_collection_daily_calendar_audit_new_leave_type",
+      );
+
+      assert.match(oldLeaveTypeDefinition, /'RL'/);
+      assert.match(oldLeaveTypeDefinition, /'OFF'/);
+      assert.match(newLeaveTypeDefinition, /'RL'/);
+      assert.match(newLeaveTypeDefinition, /'OFF'/);
+
+      await pool.query(`
+        INSERT INTO public.collection_daily_calendar_audit (
+          id,
+          username,
+          calendar_date,
+          year,
+          month,
+          day,
+          action,
+          old_status,
+          new_status,
+          old_leave_type,
+          new_leave_type
+        )
+        VALUES
+          (
+            '77777777-7777-7777-7777-777777777771'::uuid,
+            'collector.alpha',
+            DATE '2026-05-29',
+            2026,
+            5,
+            29,
+            'UPDATE',
+            'HOLIDAY',
+            'HOLIDAY',
+            'AL',
+            'RL'
+          ),
+          (
+            '77777777-7777-7777-7777-777777777772'::uuid,
+            'collector.alpha',
+            DATE '2026-05-30',
+            2026,
+            5,
+            30,
+            'UPDATE',
+            'HOLIDAY',
+            'HOLIDAY',
+            'OFF',
+            'AL'
+          );
+      `);
     });
   },
 );
