@@ -16,7 +16,8 @@ test("buildAuditLogRowAriaLabel summarizes actor and target details", () => {
         targetUser: "operator.one",
         timestamp: "2026-04-14T12:30:00.000Z",
       },
+      riskLabel: "High",
     }),
-    "Audit log Delete User, performed by superuser, recorded 14/04/2026, 08:30 PM, target user operator.one, resource user:42",
+    "Audit log Delete User, performed by superuser, recorded 14/04/2026, 08:30 PM, target user operator.one, resource user:42, risk High",
   );
 });

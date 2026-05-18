@@ -1,5 +1,6 @@
 import { downloadBlob } from "@/lib/download";
 import { formatDateTimeMalaysia } from "@/lib/date-format";
+import { buildAuditLogSummary } from "@/pages/audit-logs/audit-log-classification";
 import type { AuditLogRecord } from "@/pages/audit-logs/types";
 import { getAuditActionLabel } from "@/pages/audit-logs/utils";
 
@@ -14,19 +15,23 @@ function formatAuditExportTime(value: string) {
 }
 
 export function buildAuditLogsCsvContent(logs: AuditLogRecord[]) {
-  const headers = ["Action", "Performed By", "Target User", "Resource", "Details", "Timestamp"];
+  const headers = ["Action", "Category", "Risk", "Performed By", "Target User", "Resource", "Request ID", "Details", "Timestamp"];
   return [
     headers.map(escapeCsvValue).join(","),
-    ...logs.map((log) =>
-      [
+    ...logs.map((log) => {
+      const summary = buildAuditLogSummary(log);
+      return [
         escapeCsvValue(getAuditActionLabel(log.action)),
+        escapeCsvValue(summary.category.label),
+        escapeCsvValue(summary.risk.label),
         escapeCsvValue(log.performedBy),
         escapeCsvValue(log.targetUser || ""),
         escapeCsvValue(log.targetResource || ""),
+        escapeCsvValue(log.requestId || ""),
         escapeCsvValue(log.details || ""),
         escapeCsvValue(formatAuditExportTime(log.timestamp)),
-      ].join(","),
-    ),
+      ].join(",");
+    }),
   ].join("\n");
 }
 
@@ -87,8 +92,8 @@ export async function exportAuditLogsToPdf(logs: AuditLogRecord[]) {
   pdf.line(margin, yPos, pageWidth - margin, yPos);
   yPos += 6;
 
-  const headers = ["Action", "Performed By", "Target User", "Resource", "Details", "Timestamp"];
-  const colWidths = [35, 30, 30, 40, 70, 45];
+  const headers = ["Action", "Category", "Risk", "Performed By", "Target", "Details", "Timestamp"];
+  const colWidths = [32, 28, 18, 28, 28, 70, 46];
   const rowHeight = 7;
   const maxRowsPerPage = Math.floor((pageHeight - yPos - 20) / rowHeight);
 
@@ -139,11 +144,13 @@ export async function exportAuditLogsToPdf(logs: AuditLogRecord[]) {
 
     pdf.setTextColor(isDark ? 220 : 50);
     let xPos = margin;
+    const summary = buildAuditLogSummary(log);
     const rowData = [
       getAuditActionLabel(log.action),
+      summary.category.label,
+      summary.risk.label,
       log.performedBy,
       log.targetUser || "-",
-      log.targetResource || "-",
       log.details || "-",
       formatAuditExportTime(log.timestamp),
     ];

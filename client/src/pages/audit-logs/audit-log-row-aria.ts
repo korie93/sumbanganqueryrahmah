@@ -4,12 +4,14 @@ type AuditLogRowAriaOptions = {
   actionLabel: string;
   formattedTimestamp: string;
   log: AuditLogRecord;
+  riskLabel?: string | undefined;
 };
 
 export function buildAuditLogRowAriaLabel({
   actionLabel,
   formattedTimestamp,
   log,
+  riskLabel,
 }: AuditLogRowAriaOptions) {
   const details = [
     `Audit log ${actionLabel}`,
@@ -22,6 +24,9 @@ export function buildAuditLogRowAriaLabel({
   }
   if (log.targetResource) {
     details.push(`resource ${log.targetResource}`);
+  }
+  if (riskLabel) {
+    details.push(`risk ${riskLabel}`);
   }
 
   return details.join(", ");

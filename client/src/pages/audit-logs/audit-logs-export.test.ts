@@ -18,8 +18,9 @@ const sampleLogs: AuditLogRecord[] = [
 test("buildAuditLogsCsvContent includes headers and localized timestamps", () => {
   const csvContent = buildAuditLogsCsvContent(sampleLogs);
 
-  assert.match(csvContent, /^"Action","Performed By","Target User","Resource","Details","Timestamp"/);
+  assert.match(csvContent, /^"Action","Category","Risk","Performed By","Target User","Resource","Request ID","Details","Timestamp"/);
   assert.match(csvContent, /"Login Success"/);
+  assert.match(csvContent, /"Security","Low"/);
   assert.match(csvContent, /"30\/03\/2026, 12:30:00 AM"/);
 });
 

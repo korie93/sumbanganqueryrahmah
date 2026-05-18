@@ -2,6 +2,7 @@ export interface AuditLogRecord {
   id: string;
   action: string;
   performedBy: string;
+  requestId?: string | null;
   targetUser?: string;
   targetResource?: string;
   details?: string;
