@@ -77,6 +77,11 @@ test("upsertCollectionDailyCalendarDays batches multiple days into one upsert qu
   assert.match(upsertSql, /collection_daily_calendar_audit/i);
   assert.match(upsertSql, /ON CONFLICT \(\(lower\(username\)\), calendar_date\)/i);
   assert.match(upsertSql, /\)\s*,\s*\(/i);
+  assert.match(upsertSql, /::uuid/i);
+  assert.match(upsertSql, /::date/i);
+  assert.match(upsertSql, /::integer/i);
+  assert.match(upsertSql, /::text/i);
+  assert.match(upsertSql, /::boolean/i);
 
   const boundValues = collectBoundValues(queries[0]);
   assert.ok(boundValues.includes("alpha.user"));

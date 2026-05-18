@@ -97,8 +97,8 @@ export const schemaGovernanceManifest = {
       "Daily collection calendar now has a reviewed Drizzle migration while runtime bootstrap remains additive for compatibility.",
     ),
     collection_daily_calendar_audit: drizzleReviewed(
-      ["drizzle-schema", "drizzle-migration", "runtime-ddl"],
-      "Daily collection calendar audit history now has a reviewed Drizzle migration while runtime bootstrap remains additive for compatibility and older installs.",
+      ["drizzle-schema", "drizzle-migration", "runtime-ddl", "maintenance-script"],
+      "Daily collection calendar audit history now has a reviewed Drizzle migration while runtime bootstrap and the reviewed repair script remain additive for compatibility and older installs.",
     ),
     collection_daily_targets: drizzleReviewed(
       ["drizzle-schema", "drizzle-migration", "runtime-ddl"],

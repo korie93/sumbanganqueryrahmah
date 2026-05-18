@@ -335,18 +335,18 @@ export async function upsertCollectionDailyCalendarDays(params: {
       const holidayName = isHoliday ? (leaveType ?? note) : null;
       return sql`(
         ${randomUUID()}::uuid,
-        lower(${params.username}),
+        lower(${params.username})::text,
         ${buildCalendarDateKey(params.year, params.month, day.day)}::date,
-        ${params.year},
-        ${params.month},
-        ${day.day},
-        ${status},
-        ${leaveType},
-        ${note},
-        ${!isHoliday},
-        ${isHoliday},
-        ${holidayName},
-        ${params.actor}
+        ${params.year}::integer,
+        ${params.month}::integer,
+        ${day.day}::integer,
+        ${status}::text,
+        ${leaveType}::text,
+        ${note}::text,
+        ${!isHoliday}::boolean,
+        ${isHoliday}::boolean,
+        ${holidayName}::text,
+        ${params.actor}::text
       )`;
     }),
     sql`, `,
