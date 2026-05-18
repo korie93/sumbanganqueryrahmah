@@ -1,6 +1,7 @@
 import { Clock, Eye, FileText, ShieldCheck, User } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { AuditLogReadableDetails } from "@/pages/audit-logs/AuditLogReadableDetails";
 import { AuditLogReviewSignals } from "@/pages/audit-logs/AuditLogReviewSignals";
 import { AuditLogRiskBadge } from "@/pages/audit-logs/AuditLogRiskBadge";
 import { buildAuditLogSummary } from "@/pages/audit-logs/audit-log-classification";
@@ -180,20 +181,14 @@ export function AuditLogRecordCard({ isMobile, log, onViewDetails }: AuditLogRec
                   Show full details
                 </span>
               </summary>
-              <pre
-                className="mt-3 overflow-x-auto whitespace-pre-wrap break-words rounded-md border border-border/60 bg-muted/40 p-3 text-xs leading-relaxed text-muted-foreground"
-                data-testid={`text-details-${log.id}`}
-              >
-                {details}
-              </pre>
+              <div data-testid={`text-details-${log.id}`}>
+                <AuditLogReadableDetails details={details} showRaw />
+              </div>
             </details>
           ) : (
-            <p
-              className="mt-2 break-words text-sm leading-relaxed text-muted-foreground"
-              data-testid={`text-details-${log.id}`}
-            >
-              {details}
-            </p>
+            <div data-testid={`text-details-${log.id}`}>
+              <AuditLogReadableDetails details={details} />
+            </div>
           )}
         </div>
       ) : null}

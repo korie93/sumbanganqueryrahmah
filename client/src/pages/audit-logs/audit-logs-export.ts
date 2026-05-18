@@ -1,6 +1,7 @@
 import { downloadBlob } from "@/lib/download";
 import { formatDateTimeMalaysia } from "@/lib/date-format";
 import { buildAuditLogSummary } from "@/pages/audit-logs/audit-log-classification";
+import { buildReadableAuditDetails } from "@/pages/audit-logs/audit-log-readable-details";
 import type { AuditLogRecord } from "@/pages/audit-logs/types";
 import { getAuditActionLabel } from "@/pages/audit-logs/utils";
 
@@ -12,6 +13,10 @@ function escapeCsvValue(value: string) {
 
 function formatAuditExportTime(value: string) {
   return formatDateTimeMalaysia(value, { includeSeconds: true, fallback: value });
+}
+
+function formatAuditExportDetails(details: string | undefined) {
+  return buildReadableAuditDetails(details || "").text || "";
 }
 
 export function buildAuditLogsCsvContent(logs: AuditLogRecord[]) {
@@ -28,7 +33,7 @@ export function buildAuditLogsCsvContent(logs: AuditLogRecord[]) {
         escapeCsvValue(log.targetUser || ""),
         escapeCsvValue(log.targetResource || ""),
         escapeCsvValue(log.requestId || ""),
-        escapeCsvValue(log.details || ""),
+        escapeCsvValue(formatAuditExportDetails(log.details)),
         escapeCsvValue(formatAuditExportTime(log.timestamp)),
       ].join(",");
     }),
@@ -151,7 +156,7 @@ export async function exportAuditLogsToPdf(logs: AuditLogRecord[]) {
       summary.risk.label,
       log.performedBy,
       log.targetUser || "-",
-      log.details || "-",
+      formatAuditExportDetails(log.details) || "-",
       formatAuditExportTime(log.timestamp),
     ];
 

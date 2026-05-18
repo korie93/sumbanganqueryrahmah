@@ -27,7 +27,7 @@ test("getAuditActionInfo preserves raw action codes while using a safe fallback 
 
 test("getAuditDetailsPreview collapses dense audit payloads into a mobile-friendly summary", () => {
   const preview = getAuditDetailsPreview('{"query":"931010115115","branch":"Kuala Terengganu","decision":null}', 30);
-  assert.equal(preview, '{"query":"931010115115","bran…');
+  assert.equal(preview, "Branch: Kuala Terengganu; Q...");
 });
 
 test("shouldCollapseAuditDetails only collapses long detail payloads", () => {

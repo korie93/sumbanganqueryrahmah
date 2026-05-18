@@ -29,3 +29,22 @@ test("buildAuditLogsCsvContent escapes quotes safely", () => {
 
   assert.match(csvContent, /"User clicked ""Login"""/);
 });
+
+test("buildAuditLogsCsvContent exports readable JSON detail payloads", () => {
+  const csvContent = buildAuditLogsCsvContent([
+    {
+      ...sampleLogs[0],
+      details: JSON.stringify({
+        role: "user",
+        recordCount: 17,
+        from: "2026-05-01",
+        searchPresent: false,
+      }),
+    },
+  ]);
+
+  assert.match(
+    csvContent,
+    /"Peranan: User; Rekod dipaparkan: 17; Tarikh mula: 01\/05\/2026; Carian digunakan: Tidak"/,
+  );
+});

@@ -1,5 +1,6 @@
 import { Badge } from "@/components/ui/badge";
 import { formatOperationalDateTime } from "@/lib/date-format";
+import { getReadableAuditDetailsPreview } from "@/pages/audit-logs/audit-log-readable-details";
 import type {
   AuditActionOption,
   AuditDatePresetOption,
@@ -184,21 +185,17 @@ export function getAuditActionInfo(action: string) {
   };
 }
 
-function normalizeAuditDetails(details: string) {
-  return details.replace(/\s+/g, " ").trim();
-}
-
 export function shouldCollapseAuditDetails(details: string, maxLength = 180) {
-  return normalizeAuditDetails(details).length > maxLength;
+  return getReadableAuditDetailsPreview(details, Number.MAX_SAFE_INTEGER).length > maxLength;
 }
 
 export function getAuditDetailsPreview(details: string, maxLength = 180) {
-  const normalized = normalizeAuditDetails(details);
+  const normalized = getReadableAuditDetailsPreview(details, maxLength);
   if (normalized.length <= maxLength) {
     return normalized;
   }
 
-  return `${normalized.slice(0, Math.max(0, maxLength - 1)).trimEnd()}…`;
+  return `${normalized.slice(0, Math.max(0, maxLength - 3)).trimEnd()}...`;
 }
 
 export function getAuditActionBadge(action: string, className?: string) {

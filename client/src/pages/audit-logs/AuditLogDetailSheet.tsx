@@ -10,6 +10,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { AuditLogChangeDiffViewer } from "@/pages/audit-logs/AuditLogChangeDiffViewer";
+import { AuditLogReadableDetails } from "@/pages/audit-logs/AuditLogReadableDetails";
 import { AuditLogReviewSignals } from "@/pages/audit-logs/AuditLogReviewSignals";
 import { AuditLogRiskBadge } from "@/pages/audit-logs/AuditLogRiskBadge";
 import { buildAuditLogSummary } from "@/pages/audit-logs/audit-log-classification";
@@ -171,9 +172,7 @@ export function AuditLogDetailSheet({ log, onOpenChange, onTraceRequestId }: Aud
                 <FileText className="h-3.5 w-3.5" aria-hidden="true" />
                 Details
               </h3>
-              <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-relaxed text-muted-foreground">
-                {log.details || "No extra details recorded."}
-              </p>
+              <AuditLogReadableDetails details={log.details || ""} showRaw />
             </section>
           </div>
         ) : null}
