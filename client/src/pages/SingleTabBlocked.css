@@ -1,0 +1,97 @@
+.single-tab-blocked__notice {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--spacing-3);
+  border: 1px solid hsl(36 84% 39% / 0.26);
+  border-radius: 1.25rem;
+  background: linear-gradient(180deg, hsl(42 100% 97%), hsl(42 100% 94%));
+  padding: var(--spacing-4);
+  color: hsl(31 72% 22%);
+}
+
+.single-tab-blocked__notice-icon {
+  display: inline-flex;
+  height: 2.25rem;
+  width: 2.25rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.85rem;
+  background: hsl(36 84% 39% / 0.12);
+  color: hsl(31 72% 28%);
+}
+
+.single-tab-blocked__notice-title,
+.single-tab-blocked__step-title {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  font-weight: 800;
+  color: var(--public-auth-text-strong);
+}
+
+.single-tab-blocked__notice-copy,
+.single-tab-blocked__step-copy,
+.single-tab-blocked__helper {
+  margin: var(--spacing-1) 0 0;
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-loose);
+  color: var(--public-auth-text-soft);
+}
+
+.single-tab-blocked__steps {
+  display: grid;
+  gap: var(--spacing-3);
+}
+
+.single-tab-blocked__step {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--spacing-3);
+  align-items: start;
+  border: 1px solid var(--public-auth-shell-border);
+  border-radius: 1rem;
+  background: var(--public-auth-shell-surface-muted);
+  padding: var(--spacing-4);
+}
+
+.single-tab-blocked__step > svg {
+  margin-top: 0.1rem;
+  color: var(--public-auth-primary-bg);
+}
+
+.single-tab-blocked__actions {
+  display: grid;
+  gap: var(--spacing-3);
+}
+
+.single-tab-blocked__action {
+  min-width: 0;
+}
+
+.single-tab-blocked__close-action {
+  border-color: var(--public-auth-shell-border);
+  background: var(--public-auth-shell-surface);
+}
+
+.single-tab-blocked__helper {
+  text-align: center;
+  font-size: var(--font-size-xs);
+}
+
+@media (min-width: 640px) {
+  .single-tab-blocked__actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  .single-tab-blocked__notice {
+    border-color: hsl(42 92% 72% / 0.24);
+    background: hsl(42 92% 72% / 0.1);
+    color: var(--public-auth-text-soft);
+  }
+
+  .single-tab-blocked__notice-icon {
+    background: hsl(42 92% 72% / 0.14);
+    color: hsl(42 92% 72%);
+  }
+}

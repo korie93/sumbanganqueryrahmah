@@ -57,6 +57,20 @@ test("maintenance page keeps timer cleanup logic while using the modern status l
   assert.match(source, /activeController\?\.abort\(\)/);
 });
 
+test("single-tab blocked page uses readable token-based copy and accessible guidance", () => {
+  const source = readPageSource("SingleTabBlocked.tsx");
+  const css = readPageSource("SingleTabBlocked.css");
+
+  assert.match(source, /import "\.\/SingleTabBlocked\.css";/);
+  assert.match(source, /role="status" aria-live="polite"/);
+  assert.match(source, /role="list" aria-label="Pilihan untuk meneruskan penggunaan sistem"/);
+  assert.match(source, /aria-hidden="true" focusable="false"/);
+  assert.doesNotMatch(source, /text-white/);
+  assert.match(css, /\.single-tab-blocked__notice\s*{/);
+  assert.match(css, /color:\s*var\(--public-auth-text-soft\);/);
+  assert.match(css, /\.single-tab-blocked__actions\s*{/);
+});
+
 test("landing and public auth theme use a dark SQR backdrop with elevated light auth surfaces", () => {
   const landingCss = readPageSource("Landing.css");
   const tokenSource = readPageSource("../theme-tokens.css");

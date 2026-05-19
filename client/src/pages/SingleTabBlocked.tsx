@@ -1,50 +1,82 @@
-import { AlertTriangle, RefreshCcw } from "lucide-react";
+import { AlertTriangle, Clock3, MonitorCheck, RefreshCcw, ShieldCheck, XCircle } from "lucide-react";
 import { PublicAuthButton } from "@/components/PublicAuthControls";
 import { PublicAuthLayout } from "@/components/PublicAuthLayout";
+import "./SingleTabBlocked.css";
 
 interface SingleTabBlockedProps {
   onRetry?: () => void;
 }
 
 export default function SingleTabBlocked({ onRetry }: SingleTabBlockedProps) {
+  const handleCloseTab = () => {
+    window.close();
+  };
+
   return (
     <PublicAuthLayout
-      badge="Satu Tab Aktif"
+      badge="Satu Sesi Aktif"
       title="Tab tambahan tidak dibenarkan"
-      description="Untuk elak konflik data dan kekeliruan semasa operasi, setiap akaun hanya dibenarkan menggunakan satu halaman sistem yang aktif pada satu masa."
-      icon={<AlertTriangle className="h-7 w-7 text-amber-200" />}
+      description="SQR mengehadkan satu tab aktif bagi setiap akaun supaya rekod, kutipan, dan perubahan status tidak bercanggah antara halaman."
+      icon={<AlertTriangle className="h-7 w-7" aria-hidden="true" focusable="false" />}
       showBackButton={false}
     >
-      <div className="rounded-2xl border border-amber-300/20 bg-amber-400/10 px-5 py-4 text-sm leading-7 text-white/85">
-        Akaun ini sedang aktif dalam tab lain. Kembali ke tab utama anda, atau tutup tab tersebut dahulu sebelum meneruskan di sini.
+      <section className="single-tab-blocked__notice" aria-labelledby="single-tab-active-title" role="status" aria-live="polite">
+        <span className="single-tab-blocked__notice-icon" aria-hidden="true">
+          <ShieldCheck className="h-5 w-5" aria-hidden="true" focusable="false" />
+        </span>
+        <div>
+          <h2 id="single-tab-active-title" className="single-tab-blocked__notice-title">
+            Akaun ini sedang aktif dalam tab lain
+          </h2>
+          <p className="single-tab-blocked__notice-copy">
+            Kembali ke tab utama untuk terus bekerja. Jika tab utama sudah ditutup, klik Semak Semula
+            selepas beberapa saat.
+          </p>
+        </div>
+      </section>
+
+      <div className="single-tab-blocked__steps" role="list" aria-label="Pilihan untuk meneruskan penggunaan sistem">
+        <div className="single-tab-blocked__step" role="listitem">
+          <MonitorCheck className="h-5 w-5" aria-hidden="true" focusable="false" />
+          <div>
+            <p className="single-tab-blocked__step-title">Guna tab utama</p>
+            <p className="single-tab-blocked__step-copy">Semua kerja aktif kekal di tab yang mula-mula dibuka.</p>
+          </div>
+        </div>
+        <div className="single-tab-blocked__step" role="listitem">
+          <Clock3 className="h-5 w-5" aria-hidden="true" focusable="false" />
+          <div>
+            <p className="single-tab-blocked__step-title">Tunggu lock dilepaskan</p>
+            <p className="single-tab-blocked__step-copy">Sistem akan benarkan tab ini selepas sesi lama tidak lagi aktif.</p>
+          </div>
+        </div>
       </div>
 
-      <div className="flex flex-col gap-3 sm:flex-row">
+      <div className="single-tab-blocked__actions">
         <PublicAuthButton
           type="button"
-          className="flex-1"
+          className="single-tab-blocked__action"
           onClick={() => {
             onRetry?.();
           }}
         >
-          <RefreshCcw className="h-4 w-4" />
+          <RefreshCcw className="h-4 w-4" aria-hidden="true" focusable="false" />
           Semak Semula
         </PublicAuthButton>
         <PublicAuthButton
           type="button"
           variant="ghost"
-          className="flex-1 border border-white/15 bg-white/5 text-white/85 hover:bg-white/10 hover:text-white"
-          onClick={() => {
-            window.close();
-          }}
+          className="single-tab-blocked__action single-tab-blocked__close-action"
+          onClick={handleCloseTab}
         >
+          <XCircle className="h-4 w-4" aria-hidden="true" focusable="false" />
           Tutup Tab Ini
         </PublicAuthButton>
       </div>
 
-      <p className="text-center text-xs leading-6 text-white/60">
-        Jika tab utama sudah ditutup, klik <span className="font-semibold text-white/80">Semak Semula</span>.
-        Sistem akan aktif semula secara automatik apabila lock tab lama dilepaskan.
+      <p className="single-tab-blocked__helper">
+        Jika browser tidak membenarkan tab ditutup secara automatik, tutup tab ini secara manual.
+        Halaman utama tidak akan terjejas.
       </p>
     </PublicAuthLayout>
   );
