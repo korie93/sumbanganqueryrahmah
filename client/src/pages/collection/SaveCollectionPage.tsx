@@ -195,7 +195,8 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
   const receiptSection = (
     <SaveCollectionFormSection
       title="Receipt Upload"
-      description="Tambah receipt satu demi satu dan semak pending upload sebelum save."
+      description="Tambah receipt satu demi satu. Preview resit, jumlah, tarikh dan reference dipaparkan dengan lebih jelas sebelum save."
+      className="lg:col-span-2"
     >
       {receiptPanel}
     </SaveCollectionFormSection>
@@ -266,7 +267,7 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
           failure={state.submitFailure}
           visible={state.submitting || Boolean(state.submitFailure) || state.receiptFiles.length > 0}
         />
-        <div className={cn("grid gap-4", isMobile ? "" : "xl:grid-cols-3")}>
+        <div className={cn("grid gap-4", isMobile ? "" : "lg:grid-cols-2")}>
           {customerSection}
           {paymentSection}
           {receiptSection}

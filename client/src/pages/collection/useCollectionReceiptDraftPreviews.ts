@@ -9,7 +9,7 @@ export type CollectionReceiptDraftPreview = {
   kind: ReceiptPreviewKind;
 };
 
-const MAX_COLLECTION_RECEIPT_PREVIEW_EDGE = 320;
+const MAX_COLLECTION_RECEIPT_PREVIEW_EDGE = 640;
 
 function createCollectionReceiptDraftFileIdResolver() {
   const fileIds = new WeakMap<File, string>();
