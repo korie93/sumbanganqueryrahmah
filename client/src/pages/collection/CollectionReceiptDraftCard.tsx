@@ -110,7 +110,7 @@ export function CollectionReceiptDraftCard({
                     value={draft.receiptAmount || ""}
                     onChange={(event) =>
                       onDraftChange?.(index, { receiptAmount: event.target.value })}
-                    placeholder="Contoh 1650.00"
+                    placeholder="Receipt Amount (RM)"
                     disabled={disabled}
                     inputMode="decimal"
                     autoComplete="off"
@@ -141,7 +141,7 @@ export function CollectionReceiptDraftCard({
                     value={draft.receiptReference || ""}
                     onChange={(event) =>
                       onDraftChange?.(index, { receiptReference: event.target.value })}
-                    placeholder="Contoh ref bank / transaksi"
+                    placeholder="Receipt Reference"
                     disabled={disabled}
                     autoComplete="off"
                   />
