@@ -30,7 +30,10 @@ export class LoadPredictor {
   private readonly longWindowSec: number;
   private readonly trendThreshold: number;
   private readonly sustainedMs: number;
-  private samples: LoadSample[] = [];
+  private readonly samples: Array<LoadSample | undefined>;
+  private sampleCursor = 0;
+  private sampleCount = 0;
+  private lastSample: LoadSample | null = null;
   private sustainedSince: number | null = null;
 
   constructor(options?: LoadPredictorOptions) {
@@ -39,13 +42,14 @@ export class LoadPredictor {
     this.longWindowSec = Math.max(this.shortWindowSec + 10, options?.longWindowSec ?? 90);
     this.trendThreshold = Math.max(0.05, options?.trendThreshold ?? 0.2);
     this.sustainedMs = Math.max(5_000, options?.sustainedMs ?? 30_000);
+    this.samples = new Array<LoadSample | undefined>(this.maxSamples);
   }
 
   update(sample: LoadSample): LoadTrendSnapshot {
-    this.samples.push(sample);
-    if (this.samples.length > this.maxSamples) {
-      this.samples = this.samples.slice(this.samples.length - this.maxSamples);
-    }
+    this.samples[this.sampleCursor] = sample;
+    this.sampleCursor = (this.sampleCursor + 1) % this.maxSamples;
+    this.sampleCount = Math.min(this.sampleCount + 1, this.maxSamples);
+    this.lastSample = sample;
 
     const snapshot = this.getSnapshot();
     const isUpward =
@@ -74,9 +78,10 @@ export class LoadPredictor {
     const now = Date.now();
     const shortWindowStart = now - this.shortWindowSec * 1000;
     const longWindowStart = now - this.longWindowSec * 1000;
+    const samples = this.getSamplesInOrder();
 
-    const shortSamples = this.samples.filter((s) => s.ts >= shortWindowStart);
-    const longSamples = this.samples.filter((s) => s.ts >= longWindowStart);
+    const shortSamples = samples.filter((s) => s.ts >= shortWindowStart);
+    const longSamples = samples.filter((s) => s.ts >= longWindowStart);
 
     const requestRateMA = average(shortSamples.map((s) => s.requestRate));
     const latencyMA = average(shortSamples.map((s) => s.latencyP95Ms));
@@ -102,8 +107,28 @@ export class LoadPredictor {
       latencyTrend,
       cpuTrend,
       sustainedUpward,
-      lastUpdatedAt: this.samples.length > 0 ? this.samples[this.samples.length - 1].ts : null,
+      lastUpdatedAt: this.lastSample?.ts ?? null,
     };
+  }
+
+  private getSamplesInOrder(): LoadSample[] {
+    if (this.sampleCount === 0) {
+      return [];
+    }
+
+    const samples: LoadSample[] = [];
+    const oldestIndex =
+      this.sampleCount === this.maxSamples
+        ? this.sampleCursor
+        : 0;
+
+    for (let offset = 0; offset < this.sampleCount; offset += 1) {
+      const sample = this.samples[(oldestIndex + offset) % this.maxSamples];
+      if (sample) {
+        samples.push(sample);
+      }
+    }
+    return samples;
   }
 }
 

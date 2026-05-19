@@ -60,6 +60,17 @@ test("disposeAutoLogoutSocket stays safe for sockets that are already closed", (
   assert.equal(socket.onerror, null)
 })
 
+test("disposeAutoLogoutSocket clears stale refs when cleanup runs without a socket", () => {
+  const wsRef = {
+    current: { readyState: WebSocket.CLOSED } as WebSocket | null,
+  }
+
+  const disposed = disposeAutoLogoutSocket(null, wsRef)
+
+  assert.equal(disposed, false)
+  assert.equal(wsRef.current, null)
+})
+
 test("banned websocket messages run client cleanup and preserve the banned flag", async () => {
   const originalWindow = globalThis.window
   const originalSessionStorage = globalThis.sessionStorage

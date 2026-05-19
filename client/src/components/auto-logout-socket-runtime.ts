@@ -35,6 +35,9 @@ export function disposeAutoLogoutSocket(
   wsRef?: MutableRefObject<WebSocket | null>,
 ) {
   if (!socket) {
+    if (wsRef) {
+      wsRef.current = null
+    }
     return false
   }
 
@@ -221,5 +224,6 @@ export function bindAutoLogoutSocket({
     reconnectEnabledRef.current = false
     reconnectAttemptRef.current = 0
     cleanupSocket()
+    wsRef.current = null
   }
 }

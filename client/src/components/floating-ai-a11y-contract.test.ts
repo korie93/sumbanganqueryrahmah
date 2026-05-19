@@ -120,8 +120,8 @@ test("floating AI motion and scroll styles include accessibility fallbacks", () 
   assert.doesNotMatch(aiCss, /scrollbar-gutter:/);
   assert.match(aiCss, /@media \(prefers-reduced-motion: reduce\)/);
   assert.match(floatingCss, /@media \(prefers-reduced-motion: reduce\)/);
-  assert.match(floatingCss, /max-height:\s*calc\(100vh - 5rem\);[\s\S]*max-height:\s*calc\(100dvh - 5rem\);/);
-  assert.match(floatingCss, /height:\s*var\(--floating-ai-panel-height, 100vh\);[\s\S]*height:\s*var\(--floating-ai-panel-height, 100dvh\);/);
+  assert.match(floatingCss, /max-height:\s*calc\(100vh - 5rem\);[\s\S]*max-height:\s*calc\(100svh - 5rem\);[\s\S]*max-height:\s*calc\(100dvh - 5rem\);/);
+  assert.match(floatingCss, /height:\s*var\(--floating-ai-panel-height, 100vh\);[\s\S]*height:\s*var\(--floating-ai-panel-height, 100svh\);[\s\S]*height:\s*var\(--floating-ai-panel-height, 100dvh\);/);
   assert.match(floatingCss, /\.aiThinkingRing::after[\s\S]*animation:\s*none/);
 });
 

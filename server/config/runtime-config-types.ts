@@ -82,6 +82,7 @@ export type RuntimeConfig = {
   };
   ai: {
     host: string;
+    authToken: string | null;
     chatModel: string;
     embedModel: string;
     timeoutMs: number;

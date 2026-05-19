@@ -30,7 +30,9 @@ export function PublicAuthLayout({
   onBackClick,
 }: PublicAuthLayoutProps) {
   const [, navigate] = useLocation();
-  const contentBusyProps = contentBusy ? { "aria-busy": "true" as const } : {};
+  const contentBusyProps = contentBusy
+    ? { "aria-atomic": "true" as const, "aria-busy": "true" as const, "aria-live": "polite" as const }
+    : {};
   const layoutClassName = visualMode === "minimal"
     ? "public-auth-layout public-auth-layout--minimal viewport-min-height"
     : "public-auth-layout viewport-min-height";

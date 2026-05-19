@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import bcrypt from "bcrypt";
 import {
+  CREDENTIAL_BCRYPT_COST,
   CREDENTIAL_PASSWORD_MAX_LENGTH,
   isCredentialPasswordWithinMaxLength,
   isStrongPassword,
@@ -90,4 +91,14 @@ test("hashPassword rejects oversized password input before bcrypt hashing", asyn
     /maximum supported length/i,
   );
   assert.equal(hashMock.mock.callCount(), 0);
+});
+
+test("hashPassword uses an explicit bcrypt cost of at least 12", async (t) => {
+  const hashMock = t.mock.method(bcrypt, "hash", async () => VALID_BCRYPT_HASH);
+
+  await hashPassword("Password123!");
+
+  assert.equal(hashMock.mock.callCount(), 1);
+  assert.equal(hashMock.mock.calls[0]?.arguments[1], CREDENTIAL_BCRYPT_COST);
+  assert.equal(CREDENTIAL_BCRYPT_COST >= 12, true);
 });

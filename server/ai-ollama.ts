@@ -26,6 +26,28 @@ function resolveOllamaTimeoutMs(value: number | undefined) {
     : runtimeConfig.ai.timeoutMs;
 }
 
+function createOllamaHeaders(): Record<string, string> {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+  if (runtimeConfig.ai.authToken) {
+    headers.Authorization = `Bearer ${runtimeConfig.ai.authToken}`;
+  }
+  return headers;
+}
+
+async function throwSanitizedOllamaHttpError(
+  response: Response,
+  operation: "chat" | "embeddings",
+): Promise<never> {
+  try {
+    await response.text();
+  } catch {
+    // Drain best-effort only; raw provider bodies must never reach clients.
+  }
+  throw new Error(`Ollama ${operation} failed with HTTP ${response.status}.`);
+}
+
 function createOllamaAbortContext(timeoutMs: number, callerSignal?: AbortSignal) {
   const controller = new AbortController();
   let timeoutTriggered = false;
@@ -90,7 +112,7 @@ export async function ollamaEmbed(input: string, options: OllamaRequestOptions =
   try {
     res = await fetch(`${OLLAMA_HOST}/api/embeddings`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: createOllamaHeaders(),
       signal: abortContext.signal,
       body: JSON.stringify({
         model: OLLAMA_EMBED_MODEL,
@@ -104,8 +126,7 @@ export async function ollamaEmbed(input: string, options: OllamaRequestOptions =
   }
 
   if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Ollama embeddings failed: ${res.status} ${text}`);
+    await throwSanitizedOllamaHttpError(res, "embeddings");
   }
 
   const data = await res.json();
@@ -125,7 +146,7 @@ export async function ollamaChat(
   try {
     res = await fetch(`${OLLAMA_HOST}/api/chat`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: createOllamaHeaders(),
       signal: abortContext.signal,
       body: JSON.stringify({
         model: OLLAMA_CHAT_MODEL,
@@ -145,8 +166,7 @@ export async function ollamaChat(
   }
 
   if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Ollama chat failed: ${res.status} ${text}`);
+    await throwSanitizedOllamaHttpError(res, "chat");
   }
 
   const data = await res.json();

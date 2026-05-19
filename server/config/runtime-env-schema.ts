@@ -258,6 +258,7 @@ const runtimeEnvironmentSchema = z.object({
   MAIL_FROM: optionalEnvString("MAIL_FROM", 255),
 
   OLLAMA_HOST: optionalEnvString("OLLAMA_HOST"),
+  OLLAMA_AUTH_TOKEN: optionalEnvString("OLLAMA_AUTH_TOKEN", SECRET_STRING_MAX_LENGTH),
   OLLAMA_CHAT_MODEL: optionalEnvString("OLLAMA_CHAT_MODEL", 255),
   OLLAMA_EMBED_MODEL: optionalEnvString("OLLAMA_EMBED_MODEL", 255),
   OLLAMA_TIMEOUT_MS: optionalIntEnv("OLLAMA_TIMEOUT_MS", { min: 1_000 }),

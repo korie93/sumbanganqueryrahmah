@@ -22,6 +22,7 @@ import {
 import {
   AuthAccountError,
 } from "./auth-account-types";
+import { getDeviceFingerprintLookupCandidates } from "../auth/device-fingerprint";
 import type {
   LoginInput,
   TwoFactorLoginInput,
@@ -30,6 +31,25 @@ import type {
 type AuthAccountAuthenticationDeps = {
   storage: AuthAccountAuthenticationStorage;
 };
+
+async function isVisitorBannedByDeviceFingerprint(params: {
+  fingerprint?: string | null | undefined;
+  ipAddress?: string | null | undefined;
+  storage: AuthAccountAuthenticationStorage;
+  username: string;
+}) {
+  const lookupCandidates = getDeviceFingerprintLookupCandidates(params.fingerprint);
+  if (lookupCandidates.length === 0) {
+    return params.storage.isVisitorBanned(null, params.ipAddress ?? null, params.username);
+  }
+
+  for (const fingerprint of lookupCandidates) {
+    if (await params.storage.isVisitorBanned(fingerprint, params.ipAddress ?? null, params.username)) {
+      return true;
+    }
+  }
+  return false;
+}
 
 export class AuthAccountAuthenticationOperations {
   private static readonly MAX_ALLOWED_FAILED_PASSWORD_ATTEMPTS = 3;
@@ -57,11 +77,12 @@ export class AuthAccountAuthenticationOperations {
       throw new AuthAccountError(401, ERROR_CODES.INVALID_CREDENTIALS, "Invalid credentials");
     }
 
-    const visitorBanned = await this.deps.storage.isVisitorBanned(
-      input.fingerprint ?? null,
-      input.ipAddress ?? null,
-      user.username,
-    );
+    const visitorBanned = await isVisitorBannedByDeviceFingerprint({
+      fingerprint: input.fingerprint,
+      ipAddress: input.ipAddress,
+      storage: this.deps.storage,
+      username: user.username,
+    });
 
     if (visitorBanned || user.isBanned) {
       await this.deps.storage.createAuditLog({
@@ -147,11 +168,12 @@ export class AuthAccountAuthenticationOperations {
       throw new AuthAccountError(404, ERROR_CODES.USER_NOT_FOUND, "User not found.");
     }
 
-    const visitorBanned = await this.deps.storage.isVisitorBanned(
-      input.fingerprint ?? null,
-      input.ipAddress ?? null,
-      user.username,
-    );
+    const visitorBanned = await isVisitorBannedByDeviceFingerprint({
+      fingerprint: input.fingerprint,
+      ipAddress: input.ipAddress,
+      storage: this.deps.storage,
+      username: user.username,
+    });
 
     if (visitorBanned || user.isBanned) {
       await this.deps.storage.createAuditLog({

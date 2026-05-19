@@ -6,6 +6,7 @@ import type {
 } from "./auth-account-authentication-shared";
 import { resolveTimestampMs } from "../lib/timestamp";
 import { ERROR_CODES } from "../../shared/error-codes";
+import { hashDeviceFingerprint } from "../auth/device-fingerprint";
 
 export async function getSuperuserSessionIdleWindowMs(
   storage: Pick<AuthAccountAuthenticationStorage, "getAppConfig">,
@@ -153,7 +154,7 @@ export async function createAuthenticatedSession(params: {
     role: params.user.role,
     pcName: params.input.pcName ?? null,
     browser: params.input.browserName,
-    fingerprint: params.input.fingerprint ?? null,
+    fingerprint: hashDeviceFingerprint(params.input.fingerprint),
     ipAddress: params.input.ipAddress ?? null,
   });
 

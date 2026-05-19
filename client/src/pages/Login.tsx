@@ -47,7 +47,9 @@ export default function Login({ onForgotPasswordClick, onLandingClick, onLoginSu
     onLoginSuccess,
   });
 
-  const loginFormBusyProps = loading ? { "aria-busy": "true" as const } : {};
+  const loginFormBusyProps = loading
+    ? { "aria-atomic": "true" as const, "aria-busy": "true" as const, "aria-live": "polite" as const }
+    : {};
   const usernameInvalidProps = usernameError
     ? {
       "aria-invalid": "true" as const,

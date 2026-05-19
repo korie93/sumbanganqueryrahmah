@@ -18,6 +18,40 @@ import { scheduleIdlePreload } from "@/lib/lazy-with-preload";
 import LandingRouteFallback from "@/pages/LandingRouteFallback";
 import { usePublicAppState } from "@/app/usePublicAppState";
 
+const AUTHENTICATED_ROLE_HOME_PAGE: Record<string, string> = {
+  user: "general-search",
+  admin: "home",
+  superuser: "home",
+};
+
+function markAppReadyAndRemoveBootShell() {
+  document.documentElement.classList.add("app-ready");
+  document.body.classList.add("app-ready");
+  document.getElementById("boot-shell")?.remove();
+}
+
+function focusMainContent(event: React.MouseEvent<HTMLAnchorElement>) {
+  event.preventDefault();
+  const mainContent = document.getElementById("main-content");
+  if (!mainContent) {
+    return;
+  }
+  mainContent.focus({ preventScroll: true });
+  mainContent.scrollIntoView({ block: "start" });
+  window.history.replaceState(null, "", "#main-content");
+}
+
+function AppReadySignal() {
+  useEffect(() => {
+    const frameId = window.requestAnimationFrame(markAppReadyAndRemoveBootShell);
+    return () => {
+      window.cancelAnimationFrame(frameId);
+    };
+  }, []);
+
+  return null;
+}
+
 function AppContent() {
   const {
     currentPage,
@@ -74,7 +108,7 @@ function AppContent() {
   );
 
   const handleAuthenticatedNavigateHome = () => {
-    handlePublicNavigate(user?.role === "user" ? "general-search" : "home");
+    handlePublicNavigate(AUTHENTICATED_ROLE_HOME_PAGE[user?.role ?? ""] ?? "home");
   };
 
   if (!isInitialized) {
@@ -176,7 +210,8 @@ function AppContent() {
 function App() {
   return (
     <>
-      <a className="skip-to-main-link" href="#main-content">
+      <AppReadySignal />
+      <a className="skip-to-main-link" href="#main-content" onClick={focusMainContent}>
         Langkau ke kandungan utama
       </a>
       <AppContent />

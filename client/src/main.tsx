@@ -7,10 +7,6 @@ import { initializeWebVitalsReporting } from "./lib/web-vitals";
 import "./public-shell.css";
 import "./theme-tokens.css";
 
-type WindowWithBootShell = Window & {
-  __SQR_BOOT_SHELL__?: unknown;
-};
-
 const detectLowSpecMode = () => {
   const perfOverride = safeGetStorageItem(getBrowserLocalStorage(), "perf_mode");
   if (perfOverride === "low") return true;
@@ -47,13 +43,3 @@ createRoot(rootElement).render(
     <App />
   </StrictMode>,
 );
-
-if ((window as WindowWithBootShell).__SQR_BOOT_SHELL__) {
-  window.requestAnimationFrame(() => {
-    window.requestAnimationFrame(() => {
-      document.documentElement.classList.add("app-ready");
-      document.body.classList.add("app-ready");
-      document.getElementById("boot-shell")?.remove();
-    });
-  });
-}

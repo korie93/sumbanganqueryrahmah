@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { ollamaEmbed } from "../../ai-ollama";
+import { runtimeConfig } from "../../config/runtime";
+import { ollamaChat, ollamaEmbed } from "../../ai-ollama";
 
 test("ollamaEmbed sends embeddings requests with a cancellable signal", async (t) => {
   let requestSignal: AbortSignal | undefined;
@@ -84,4 +85,41 @@ test("ollamaEmbed supports caller-owned cancellation", async (t) => {
   controller.abort();
 
   await assert.rejects(request, /Ollama embeddings request cancelled\./);
+});
+
+test("ollamaEmbed sends the configured Ollama bearer token without exposing it in config output", async (t) => {
+  const previousToken = runtimeConfig.ai.authToken;
+  runtimeConfig.ai.authToken = "test-ollama-token";
+  t.after(() => {
+    runtimeConfig.ai.authToken = previousToken;
+  });
+
+  let authorizationHeader: string | null = null;
+  t.mock.method(globalThis, "fetch", (async (_url: string | URL | Request, init?: RequestInit) => {
+    const headers = new Headers(init?.headers);
+    authorizationHeader = headers.get("authorization");
+    return new Response(JSON.stringify({ embedding: [0.4] }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  }) as typeof fetch);
+
+  await ollamaEmbed("hello");
+
+  assert.equal(authorizationHeader, "Bearer test-ollama-token");
+});
+
+test("ollamaChat sanitizes non-ok provider bodies before throwing", async (t) => {
+  const providerBody = "internal-provider-secret api-key=abc123 raw stack trace";
+  t.mock.method(globalThis, "fetch", (async () => new Response(providerBody, { status: 502 })) as typeof fetch);
+
+  await assert.rejects(
+    ollamaChat([{ role: "user", content: "hello" }]),
+    (error) => {
+      assert.equal(error instanceof Error, true);
+      assert.match((error as Error).message, /Ollama chat failed with HTTP 502\./);
+      assert.doesNotMatch((error as Error).message, /abc123|raw stack trace|internal-provider-secret/);
+      return true;
+    },
+  );
 });

@@ -27,6 +27,7 @@
   min-height: 200px;
   max-width: calc(100% - (var(--floating-ai-edge-gap) * 2));
   max-height: calc(100vh - 5rem);
+  max-height: calc(100svh - 5rem);
   max-height: calc(100dvh - 5rem);
 }
 
@@ -36,6 +37,7 @@
   bottom: var(--floating-ai-panel-bottom, 0px);
   width: auto;
   height: var(--floating-ai-panel-height, 100vh);
+  height: var(--floating-ai-panel-height, 100svh);
   height: var(--floating-ai-panel-height, 100dvh);
   max-width: none;
   max-height: none;
@@ -176,6 +178,7 @@
     min-height: 452px;
     max-width: min(420px, calc(100% - (var(--floating-ai-edge-gap) * 2)));
     max-height: calc(100vh - 6rem);
+    max-height: calc(100svh - 6rem);
     max-height: calc(100dvh - 6rem);
   }
 }
