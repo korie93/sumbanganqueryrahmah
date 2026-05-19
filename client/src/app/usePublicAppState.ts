@@ -21,6 +21,7 @@ import {
   hasAuthSessionHintCookie,
   isBannedSessionFlagSet,
   persistAuthenticatedUser,
+  setBannedSessionFlag,
 } from "@/lib/auth-session";
 
 type PublicBootstrapState = {
@@ -139,10 +140,29 @@ export function usePublicAppState() {
   }, []);
 
   const handleAuthenticatedLogout = useCallback(() => {
+    const isBannedSession = isBannedSessionFlagSet();
+    setUser(null);
+    setCurrentPage(isBannedSession ? "banned" : "home");
+    setMonitorSection("monitor");
+    replaceHistory(buildPathForPage(isBannedSession ? "banned" : "home"));
+  }, []);
+
+  const handleBannedSessionDetected = useCallback(() => {
+    clearAuthenticatedUserStorage();
+    setBannedSessionFlag(true);
+    setUser(null);
+    setCurrentPage("banned");
+    setMonitorSection("monitor");
+    replaceHistory(buildPathForPage("banned"));
+  }, []);
+
+  const handleBannedRetryLogin = useCallback(() => {
+    clearAuthenticatedUserStorage();
+    setBannedSessionFlag(false);
     setUser(null);
     setCurrentPage("home");
     setMonitorSection("monitor");
-    replaceHistory("/");
+    replaceHistory(buildPathForPage("home"));
   }, []);
 
   const handleLoginSuccess = useCallback((loggedInUser: User) => {
@@ -289,6 +309,8 @@ export function usePublicAppState() {
   return {
     currentPage,
     handleAuthenticatedLogout,
+    handleBannedRetryLogin,
+    handleBannedSessionDetected,
     handleLoginSuccess,
     handlePublicNavigate,
     isInitialized,

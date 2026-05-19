@@ -11,6 +11,7 @@ export type ResolvedRoute = {
 // sync with that state model; it is not a full URL router.
 const PUBLIC_AUTH_ROUTES = new Set([
   "login",
+  "banned",
   "forgot-password",
   "activate-account",
   "reset-password",
@@ -78,6 +79,9 @@ export function resolveRouteFromLocation(pathname: string, search: string): Reso
   if (normalizedPath === "/login") {
     return { page: "login" };
   }
+  if (normalizedPath === "/banned") {
+    return { page: "banned" };
+  }
   if (normalizedPath === "/maintenance") {
     return { page: "maintenance" };
   }
@@ -132,6 +136,7 @@ export function isPublicAuthRoutePage(page: string) {
 export function buildPathForPage(page: string, monitorSection: MonitorSection = "monitor") {
   if (page === "home") return "/";
   if (page === "login") return "/login";
+  if (page === "banned") return "/banned";
   if (page === "settings") return "/settings";
   if (page === "backup") return "/settings?section=backup-restore";
   if (page === "collection-report") return "/collection/save";

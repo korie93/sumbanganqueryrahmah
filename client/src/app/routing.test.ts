@@ -9,6 +9,7 @@ import {
 test("resolveRouteFromLocation supports landing and login routes", () => {
   assert.deepEqual(resolveRouteFromLocation("/", ""), { page: "home" });
   assert.deepEqual(resolveRouteFromLocation("/login", ""), { page: "login" });
+  assert.deepEqual(resolveRouteFromLocation("/banned", ""), { page: "banned" });
   assert.deepEqual(resolveRouteFromLocation("/404", ""), { page: "not-found" });
   assert.equal(resolveRouteFromLocation("/missing-page", ""), null);
 });
@@ -24,11 +25,13 @@ test("resolveRouteFromLocation supports direct app route aliases inside the auth
 test("buildPathForPage returns stable public paths", () => {
   assert.equal(buildPathForPage("home"), "/");
   assert.equal(buildPathForPage("login"), "/login");
+  assert.equal(buildPathForPage("banned"), "/banned");
   assert.equal(buildPathForPage("not-found"), "/404");
 });
 
 test("isPublicAuthRoutePage identifies logged-out auth routes only", () => {
   assert.equal(isPublicAuthRoutePage("login"), true);
+  assert.equal(isPublicAuthRoutePage("banned"), true);
   assert.equal(isPublicAuthRoutePage("forgot-password"), true);
   assert.equal(isPublicAuthRoutePage("home"), false);
   assert.equal(isPublicAuthRoutePage("monitor"), false);

@@ -56,6 +56,8 @@ test("public auth recovery routes receive SPA navigation callbacks", () => {
   const activateSource = readClientSource("../pages/ActivateAccount.tsx");
   const resetPasswordSource = readClientSource("../pages/ResetPassword.tsx");
 
+  assert.match(appSource, /<BannedPage onRetryLogin=\{handleBannedRetryLogin\}/);
+  assert.match(appSource, /onBanned=\{handleBannedSessionDetected\}/);
   assert.match(appSource, /<ResetPasswordPage[\s\S]*onBackToHome=\{\(\) => handlePublicNavigate\("home"\)\}/);
   assert.match(appSource, /onBackToLogin=\{\(\) => handlePublicNavigate\("login"\)\}/);
   assert.match(activateSource, /onBackClick=\{navigateToLogin\}/);

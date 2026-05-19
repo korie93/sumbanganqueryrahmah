@@ -10,11 +10,12 @@ import "./Login.css";
 
 interface LoginProps {
   onLoginSuccess: (user: User) => void;
+  onBanned?: () => void;
   onForgotPasswordClick?: () => void;
   onLandingClick?: () => void;
 }
 
-export default function Login({ onForgotPasswordClick, onLandingClick, onLoginSuccess }: LoginProps) {
+export default function Login({ onBanned, onForgotPasswordClick, onLandingClick, onLoginSuccess }: LoginProps) {
   const [, navigate] = useLocation();
   const usernameInputRef = useRef<HTMLInputElement | null>(null);
   const {
@@ -41,7 +42,7 @@ export default function Login({ onForgotPasswordClick, onLandingClick, onLoginSu
     goToLandingPage,
     goToForgotPassword,
   } = useLoginPageState({
-    onBanned: () => navigate("/banned"),
+    onBanned: onBanned ?? (() => navigate("/banned")),
     onForgotPasswordClick: onForgotPasswordClick ?? (() => navigate("/forgot-password")),
     onLandingClick: onLandingClick ?? (() => navigate("/")),
     onLoginSuccess,

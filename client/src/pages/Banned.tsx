@@ -3,9 +3,18 @@ import { useLocation } from "wouter";
 import { clearAuthenticatedUserStorage, setBannedSessionFlag } from "@/lib/auth-session";
 import "./Banned.css";
 
-export default function Banned() {
+interface BannedProps {
+  onRetryLogin?: () => void;
+}
+
+export default function Banned({ onRetryLogin }: BannedProps) {
   const [, navigate] = useLocation();
   const handleRetry = () => {
+    if (onRetryLogin) {
+      onRetryLogin();
+      return;
+    }
+
     setBannedSessionFlag(false);
     clearAuthenticatedUserStorage();
     navigate("/");

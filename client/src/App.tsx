@@ -56,6 +56,8 @@ function AppContent() {
   const {
     currentPage,
     handleAuthenticatedLogout,
+    handleBannedRetryLogin,
+    handleBannedSessionDetected,
     handleLoginSuccess,
     isInitialized,
     monitorSection,
@@ -116,7 +118,7 @@ function AppContent() {
   }
 
   if (isBannedSessionFlagSet()) {
-    return renderRoutePage("banned", <BannedPage />);
+    return renderRoutePage("banned", <BannedPage onRetryLogin={handleBannedRetryLogin} />);
   }
 
   if (!user) {
@@ -180,6 +182,7 @@ function AppContent() {
       "login",
       (
         <LoginPage
+          onBanned={handleBannedSessionDetected}
           onForgotPasswordClick={() => handlePublicNavigate("forgot-password")}
           onLandingClick={() => handlePublicNavigate("home")}
           onLoginSuccess={handleLoginSuccess}
