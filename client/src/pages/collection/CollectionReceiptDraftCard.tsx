@@ -17,6 +17,7 @@ import type { CollectionReceiptDraftInput } from "@/pages/collection/receipt-val
 interface CollectionReceiptDraftCardProps {
   preview: CollectionReceiptDraftPreview;
   index: number;
+  totalCount: number;
   draft: CollectionReceiptDraftInput | undefined;
   disabled: boolean;
   pendingStatus: CollectionReceiptPendingStatus;
@@ -29,6 +30,7 @@ interface CollectionReceiptDraftCardProps {
 export function CollectionReceiptDraftCard({
   preview,
   index,
+  totalCount,
   draft,
   disabled,
   pendingStatus,
@@ -41,17 +43,18 @@ export function CollectionReceiptDraftCard({
   const amountInputId = `pending-receipt-amount-${index}`;
   const dateInputId = `pending-receipt-date-${index}`;
   const referenceInputId = `pending-receipt-reference-${index}`;
+  const receiptPositionLabel = `Receipt ${index + 1} of ${Math.max(1, totalCount)}`;
 
   return (
-    <article className="overflow-hidden rounded-xl border border-border/70 bg-background shadow-sm">
-      <div className="grid gap-0 lg:grid-cols-[minmax(220px,0.85fr)_minmax(300px,1.15fr)]">
-        <div className="flex min-h-56 items-center justify-center border-b border-border/60 bg-muted/20 p-3 lg:border-b-0 lg:border-r">
+    <article className="rounded-xl border border-border/70 bg-background shadow-sm">
+      <div className="grid gap-0 overflow-hidden rounded-xl lg:grid-cols-[minmax(280px,0.85fr)_minmax(0,1.15fr)]">
+        <div className="flex min-h-72 items-center justify-center border-b border-border/60 bg-muted/20 p-4 lg:border-b-0 lg:border-r">
           {preview.kind === "image" ? (
             safePreviewUrl ? (
               <img
                 src={safePreviewUrl}
                 alt={`Preview receipt ${index + 1}: ${preview.file.name}`}
-                className="max-h-[18rem] w-full rounded-lg object-contain"
+                className="max-h-[30rem] w-full rounded-lg object-contain"
                 loading="lazy"
                 decoding="async"
               />
@@ -74,9 +77,10 @@ export function CollectionReceiptDraftCard({
           )}
         </div>
 
-        <div className="space-y-4 p-4">
+        <div className="min-w-0 space-y-4 p-4">
           <div className="space-y-1">
             <div className="flex flex-wrap items-center gap-2">
+              <Badge variant="secondary">{receiptPositionLabel}</Badge>
               <p className="min-w-0 flex-1 break-words text-sm font-semibold text-foreground">
                 {preview.file.name}
               </p>
@@ -99,8 +103,8 @@ export function CollectionReceiptDraftCard({
               <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 Receipt details
               </p>
-              <div className="grid gap-3 md:grid-cols-[minmax(8rem,0.8fr)_minmax(9rem,0.8fr)_minmax(14rem,1.4fr)]">
-                <div className="space-y-1.5">
+              <div className="grid min-w-0 gap-3 sm:grid-cols-2 2xl:grid-cols-[minmax(9rem,0.8fr)_minmax(10rem,0.8fr)_minmax(16rem,1.4fr)]">
+                <div className="min-w-0 space-y-1.5">
                   <Label htmlFor={amountInputId} className="text-xs">
                     Jumlah resit (RM)
                   </Label>
@@ -116,7 +120,7 @@ export function CollectionReceiptDraftCard({
                     autoComplete="off"
                   />
                 </div>
-                <div className="space-y-1.5">
+                <div className="min-w-0 space-y-1.5">
                   <Label htmlFor={dateInputId} className="text-xs">
                     Tarikh resit
                   </Label>
@@ -131,7 +135,7 @@ export function CollectionReceiptDraftCard({
                     autoComplete="off"
                   />
                 </div>
-                <div className="space-y-1.5">
+                <div className="min-w-0 space-y-1.5 sm:col-span-2 2xl:col-span-1">
                   <Label htmlFor={referenceInputId} className="text-xs">
                     Reference / no. transaksi
                   </Label>

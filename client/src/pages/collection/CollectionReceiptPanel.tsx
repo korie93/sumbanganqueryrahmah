@@ -237,22 +237,37 @@ export function CollectionReceiptPanel({
         </div>
       ) : null}
 
-      <div className="space-y-2">
-        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-          Pending Receipts
-        </p>
+      <div className="space-y-3">
+        <div className="flex flex-wrap items-end justify-between gap-2">
+          <div className="space-y-1">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              Pending Receipts
+            </p>
+            {draftPreviews.length > 0 ? (
+              <p className="text-xs text-muted-foreground">
+                Semak setiap resit satu persatu. Setiap kad menunjukkan preview, jumlah, tarikh dan reference.
+              </p>
+            ) : null}
+          </div>
+          {draftPreviews.length > 0 ? (
+            <Badge variant="secondary">
+              {draftPreviews.length} pending
+            </Badge>
+          ) : null}
+        </div>
         {draftPreviews.length === 0 ? (
           <div className="rounded-md border border-dashed border-border/60 px-4 py-6 text-center text-sm text-muted-foreground">
             No pending receipt selected yet.
           </div>
         ) : (
-          <div className="grid gap-3 xl:grid-cols-2">
+          <div className="space-y-3">
             {draftPreviews.map((preview, index) => {
               return (
                 <CollectionReceiptDraftCard
                   key={preview.key}
                   preview={preview}
                   index={index}
+                  totalCount={draftPreviews.length}
                   draft={pendingReceiptDrafts[index]}
                   disabled={disabled}
                   pendingStatus={pendingStatus}
