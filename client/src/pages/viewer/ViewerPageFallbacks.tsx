@@ -1,6 +1,7 @@
 export function ViewerPageHeaderFallback() {
   return (
     <div className="mb-6 space-y-3 rounded-3xl border border-border/70 bg-card/95 px-5 py-5 shadow-sm">
+      <h1 className="sr-only">Data Viewer</h1>
       <div className="flex items-center gap-3">
         <div className="h-10 w-10 animate-pulse rounded-full border border-border/60 bg-muted/30" />
         <div className="min-w-0 flex-1 space-y-2">

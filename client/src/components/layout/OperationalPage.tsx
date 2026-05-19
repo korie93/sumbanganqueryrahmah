@@ -80,7 +80,11 @@ export function OperationalPageHeader({
           ) : null}
           <div className="flex flex-wrap items-start gap-3">
             <div className="min-w-0 space-y-1">
-              <CardTitle className="text-2xl leading-tight tracking-tight sm:text-[1.75rem]">
+              <CardTitle
+                role="heading"
+                aria-level={1}
+                className="text-2xl leading-tight tracking-tight sm:text-[1.75rem]"
+              >
                 {title}
               </CardTitle>
               {description ? (
@@ -124,7 +128,11 @@ export function OperationalSectionCard({
           )}
         >
           <div className="min-w-0 space-y-1">
-            {title ? <CardTitle className="text-xl leading-tight">{title}</CardTitle> : null}
+            {title ? (
+              <CardTitle role="heading" aria-level={2} className="text-xl leading-tight">
+                {title}
+              </CardTitle>
+            ) : null}
             {description ? <p className="text-sm leading-6 text-muted-foreground">{description}</p> : null}
           </div>
           {(badge || actions) ? (
