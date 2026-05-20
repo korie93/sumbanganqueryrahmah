@@ -225,6 +225,55 @@
       "when": 1775923200000,
       "tag": "0031_backup_payload_chunk_primary_key",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1775923300000,
+      "tag": "0032_reviewed_collection_audit_foreign_keys",
+      "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1775923400000,
+      "tag": "0033_reviewed_collection_record_actor_integrity",
+      "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1775923500000,
+      "tag": "0034_reviewed_collection_record_created_by_foreign_key",
+      "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1775923600000,
+      "tag": "0035_reviewed_collection_record_created_by_delete_restrict",
+      "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1775923700000,
+      "tag": "0036_collection_daily_nickname_calendar",
+      "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1775923800000,
+      "tag": "0037_collection_daily_calendar_off_leave_type",
+      "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1775923900000,
+      "tag": "0038_collection_daily_calendar_audit",
+      "breakpoints": true
     }
   ]
 }
