@@ -1092,6 +1092,60 @@ test("POST /api/auth/login sets the auth cookie without exposing the JWT in JSON
   }
 });
 
+test("POST /api/auth/login returns maintenance payload for standard users during hard maintenance", async () => {
+  const { storage, user, auditLogs } = await createLoginStorageDouble();
+  const app = createJsonTestApp();
+
+  registerAuthRoutes(app, {
+    storage,
+    authenticateToken: (_req, _res, next) => next(),
+    requireRole: () => (_req, _res, next) => next(),
+    connectedClients: new Map(),
+    getMaintenanceStateCached: async () => ({
+      maintenance: true,
+      message: "Sistem sedang diselenggara untuk naik taraf.",
+      type: "hard",
+      startTime: "2026-03-20T00:00:00.000Z",
+      endTime: null,
+    }),
+  });
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const response = await fetch(`${baseUrl}/api/auth/login`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        username: user.username,
+        password: "StrongPass123!",
+        fingerprint: "fingerprint-login",
+        browser: "Mozilla/5.0",
+      }),
+    });
+
+    assert.equal(response.status, 503);
+    assert.equal((response.headers.get("set-cookie") || "").includes("sqr_auth="), false);
+    assert.deepEqual(await response.json(), {
+      ok: false,
+      message: "Sistem sedang diselenggara untuk naik taraf.",
+      error: {
+        code: ERROR_CODES.MAINTENANCE_ACTIVE,
+        message: "Sistem sedang diselenggara untuk naik taraf.",
+      },
+      maintenance: true,
+      type: "hard",
+      startTime: "2026-03-20T00:00:00.000Z",
+      endTime: null,
+    });
+    assert.equal(auditLogs.some((entry) => entry.action === "LOGIN_BLOCKED_MAINTENANCE"), true);
+    assert.equal(auditLogs.some((entry) => entry.action === "LOGIN_SUCCESS"), false);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
 test("POST /api/auth/login deactivates and closes older sessions for the same account", async () => {
   const {
     storage,

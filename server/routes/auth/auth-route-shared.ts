@@ -9,6 +9,7 @@ import {
   createAuthRouteRateLimiters,
   type AuthRouteRateLimiters,
 } from "../../middleware/rate-limit";
+import type { MaintenanceState } from "../../config/system-settings";
 import type { PostgresStorage } from "../../storage-postgres";
 import {
   buildDeliveryPayload,
@@ -33,6 +34,7 @@ export type AuthRouteDeps = {
   requireRole: (...roles: string[]) => RequestHandler;
   connectedClients: Map<string, WebSocket>;
   rateLimiters?: Partial<AuthRouteRateLimiters>;
+  getMaintenanceStateCached?: ((force?: boolean) => Promise<MaintenanceState>) | undefined;
 };
 
 type JsonHandler = AuthRouteJsonHandler;
@@ -99,7 +101,13 @@ export type AuthRouteContext = {
 
 export function createAuthRouteContext(app: Express, deps: AuthRouteDeps): AuthRouteContext {
   const { storage, authenticateToken, requireRole, connectedClients } = deps;
-  const authAccountService = new AuthAccountService(storage);
+  const getMaintenanceState = deps.getMaintenanceStateCached;
+  const authAccountService = new AuthAccountService(
+    storage,
+    getMaintenanceState
+      ? { getMaintenanceState: () => getMaintenanceState() }
+      : {},
+  );
   const rateLimiters: AuthRouteRateLimiters = {
     ...createAuthRouteRateLimiters(),
     ...deps.rateLimiters,

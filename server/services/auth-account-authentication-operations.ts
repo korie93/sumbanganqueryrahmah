@@ -22,6 +22,10 @@ import {
 import {
   AuthAccountError,
 } from "./auth-account-types";
+import {
+  assertLoginAllowedDuringMaintenance,
+  type AuthMaintenanceStateLoader,
+} from "./auth-account-maintenance-policy";
 import { getDeviceFingerprintLookupCandidates } from "../auth/device-fingerprint";
 import type {
   LoginInput,
@@ -30,6 +34,7 @@ import type {
 
 type AuthAccountAuthenticationDeps = {
   storage: AuthAccountAuthenticationStorage;
+  getMaintenanceState?: AuthMaintenanceStateLoader | undefined;
 };
 
 async function isVisitorBannedByDeviceFingerprint(params: {
@@ -133,6 +138,17 @@ export class AuthAccountAuthenticationOperations {
 
     const unlockedUser = await clearFailedLoginState(this.deps.storage, user);
 
+    await assertLoginAllowedDuringMaintenance({
+      getMaintenanceState: this.deps.getMaintenanceState,
+      role: unlockedUser.role,
+      createAuditLog: () => this.deps.storage.createAuditLog({
+        action: "LOGIN_BLOCKED_MAINTENANCE",
+        performedBy: unlockedUser.username,
+        targetUser: unlockedUser.id,
+        details: "Login blocked because hard maintenance mode is active.",
+      }).then(() => undefined),
+    });
+
     if (requiresTwoFactor(unlockedUser)) {
       await this.deps.storage.createAuditLog({
         action: "LOGIN_SECOND_FACTOR_REQUIRED",
@@ -205,6 +221,17 @@ export class AuthAccountAuthenticationOperations {
       });
       throw new AuthAccountError(401, ERROR_CODES.INVALID_CREDENTIALS, "Invalid credentials");
     }
+
+    await assertLoginAllowedDuringMaintenance({
+      getMaintenanceState: this.deps.getMaintenanceState,
+      role: user.role,
+      createAuditLog: () => this.deps.storage.createAuditLog({
+        action: "LOGIN_2FA_BLOCKED_MAINTENANCE",
+        performedBy: user.username,
+        targetUser: user.id,
+        details: "Second-factor login blocked because hard maintenance mode is active.",
+      }).then(() => undefined),
+    });
 
     if (!requiresTwoFactor(user)) {
       throw new AuthAccountError(409, ERROR_CODES.TWO_FACTOR_NOT_ENABLED, "Two-factor authentication is not enabled.");

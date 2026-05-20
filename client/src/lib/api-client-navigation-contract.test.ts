@@ -12,9 +12,12 @@ function readSource(fileName: string) {
 
 test("maintenance API failures route through app state without forcing a hard reload", () => {
   const source = readSource("api-client.ts");
+  const navigationSource = readSource("api/maintenance-navigation.ts");
 
-  assert.match(source, /function notifyMaintenanceMode/);
-  assert.match(source, /new CustomEvent\("maintenance-updated"/);
-  assert.match(source, /window\.history\.replaceState\(\{\}, "", "\/maintenance"\)/);
+  assert.match(source, /notifyMaintenanceMode\(parsed\)/);
+  assert.match(navigationSource, /function notifyMaintenanceMode/);
+  assert.match(navigationSource, /new CustomEvent\("maintenance-updated"/);
+  assert.match(navigationSource, /window\.history\.replaceState\(\{\}, "", "\/maintenance"\)/);
   assert.doesNotMatch(source, /window\.location\.href/);
+  assert.doesNotMatch(navigationSource, /window\.location\.href/);
 });

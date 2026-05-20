@@ -1,6 +1,7 @@
 import { ERROR_CODES } from "@shared/error-codes";
 
 import { apiRequest, createApiHeaders } from "../api-client";
+import { notifyMaintenanceMode } from "./maintenance-navigation";
 import type {
   CurrentUser,
   LoginResponse,
@@ -117,6 +118,9 @@ export async function login(
   const data = await readLoginResponsePayload(res);
   if (data.banned) {
     return { banned: true };
+  }
+  if (res.status === 503 && data.maintenance === true) {
+    notifyMaintenanceMode(data);
   }
   if (!res.ok) {
     const nestedError = data.error && typeof data.error === "object"

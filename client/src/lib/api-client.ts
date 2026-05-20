@@ -1,11 +1,11 @@
 import { getCsrfHeader } from "./api/shared";
 import { apiErrorPayloadSchema } from "@shared/api-contracts";
+import { notifyMaintenanceMode } from "./api/maintenance-navigation";
 import {
   broadcastForcedLogout,
   setBannedSessionFlag,
   setStoredForcePasswordChange,
 } from "./auth-session";
-import { getBrowserLocalStorage, safeSetStorageItem } from "./browser-storage";
 import { createClientRandomId } from "./secure-id";
 
 const DEFAULT_API_REQUEST_TIMEOUT_MS = 60_000;
@@ -79,24 +79,6 @@ function readApiMessage(payload: ApiErrorPayload | null): string {
 
   const message = payload?.message;
   return typeof message === "string" ? message : "";
-}
-
-function notifyMaintenanceMode(payload: ApiErrorPayload) {
-  safeSetStorageItem(getBrowserLocalStorage(), "maintenanceState", JSON.stringify(payload));
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  window.dispatchEvent(
-    new CustomEvent("maintenance-updated", {
-      detail: payload,
-    }),
-  );
-
-  const currentPath = `${window.location.pathname}${window.location.search}`;
-  if (currentPath !== "/maintenance") {
-    window.history.replaceState({}, "", "/maintenance");
-  }
 }
 
 export async function throwIfResNotOk(res: Response) {

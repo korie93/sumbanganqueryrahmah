@@ -210,6 +210,7 @@ export function registerLocalServerRoutes(options: RegisterLocalServerRoutesOpti
     requireRole,
     connectedClients,
     rateLimiters: authRouteRateLimiters,
+    getMaintenanceStateCached,
   });
 
   registerTelemetryRoutes(app, {

@@ -10,6 +10,27 @@ function withMockFetch(mock: typeof fetch): () => void {
   };
 }
 
+function createStorageMock() {
+  const store = new Map<string, string>();
+  return {
+    get length() {
+      return store.size;
+    },
+    getItem(key: string) {
+      return store.get(key) ?? null;
+    },
+    setItem(key: string, value: string) {
+      store.set(key, value);
+    },
+    removeItem(key: string) {
+      store.delete(key);
+    },
+    key(index: number) {
+      return Array.from(store.keys())[index] ?? null;
+    },
+  } as Storage;
+}
+
 test("login reports a friendly message when the proxy returns an HTML 502 page", async () => {
   const restoreFetch = withMockFetch((async () => new Response(
     "<html><body><h1>502 Bad Gateway</h1></body></html>",
@@ -36,5 +57,104 @@ test("login reports a friendly message when the proxy returns an HTML 502 page",
     );
   } finally {
     restoreFetch();
+  }
+});
+
+test("login stores maintenance state and routes to maintenance page on 503 payload", async () => {
+  const restoreFetch = withMockFetch((async () => new Response(
+    JSON.stringify({
+      ok: false,
+      message: "Maintenance window active.",
+      maintenance: true,
+      type: "hard",
+      startTime: null,
+      endTime: null,
+    }),
+    {
+      status: 503,
+      statusText: "Service Unavailable",
+      headers: {
+        "Content-Type": "application/json",
+        "x-request-id": "maintenance-login",
+      },
+    },
+  )) as typeof fetch);
+
+  const originalWindow = globalThis.window;
+  const originalLocalStorage = globalThis.localStorage;
+  const originalCustomEvent = globalThis.CustomEvent;
+  const storage = createStorageMock();
+  const events: Event[] = [];
+  const replacedUrls: string[] = [];
+
+  class TestCustomEvent<T = unknown> extends Event {
+    detail: T;
+
+    constructor(type: string, init?: CustomEventInit<T>) {
+      super(type);
+      this.detail = init?.detail as T;
+    }
+  }
+
+  Object.defineProperty(globalThis, "CustomEvent", {
+    configurable: true,
+    value: TestCustomEvent,
+  });
+  Object.defineProperty(globalThis, "localStorage", {
+    configurable: true,
+    value: storage,
+  });
+  Object.defineProperty(globalThis, "window", {
+    configurable: true,
+    value: {
+      dispatchEvent(event: Event) {
+        events.push(event);
+        return true;
+      },
+      history: {
+        replaceState(_state: unknown, _title: string, url?: string | URL | null) {
+          replacedUrls.push(String(url));
+        },
+      },
+      location: {
+        pathname: "/login",
+        search: "",
+      },
+    } as unknown as Window & typeof globalThis,
+  });
+
+  try {
+    await assert.rejects(
+      () => login("korie", "secret"),
+      (error: unknown) => {
+        assert.ok(error instanceof Error);
+        assert.equal(error.message, "Maintenance window active.");
+        assert.equal((error as { status?: number }).status, 503);
+        return true;
+      },
+    );
+
+    assert.equal(replacedUrls[0], "/maintenance");
+    assert.equal(events[0]?.type, "maintenance-updated");
+    const storedState = JSON.parse(String(storage.getItem("maintenanceState") || "{}")) as {
+      maintenance?: unknown;
+      type?: unknown;
+    };
+    assert.equal(storedState.maintenance, true);
+    assert.equal(storedState.type, "hard");
+  } finally {
+    restoreFetch();
+    Object.defineProperty(globalThis, "window", {
+      configurable: true,
+      value: originalWindow,
+    });
+    Object.defineProperty(globalThis, "localStorage", {
+      configurable: true,
+      value: originalLocalStorage,
+    });
+    Object.defineProperty(globalThis, "CustomEvent", {
+      configurable: true,
+      value: originalCustomEvent,
+    });
   }
 });

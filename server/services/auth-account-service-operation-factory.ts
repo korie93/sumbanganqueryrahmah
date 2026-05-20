@@ -5,11 +5,20 @@ import { AuthAccountRecoveryOperations } from "./auth-account-recovery-operation
 import { AuthAccountSelfOperations } from "./auth-account-self-operations";
 import { createAuthAccountServicePolicies } from "./auth-account-service-policies";
 import type { AuthAccountStorage } from "./auth-account-service-shared";
+import type { AuthMaintenanceStateLoader } from "./auth-account-maintenance-policy";
 
-export function createAuthAccountServiceOperations(storage: AuthAccountStorage) {
+export type AuthAccountServiceOperationOptions = {
+  getMaintenanceState?: AuthMaintenanceStateLoader | undefined;
+};
+
+export function createAuthAccountServiceOperations(
+  storage: AuthAccountStorage,
+  options: AuthAccountServiceOperationOptions = {},
+) {
   const policyHelpers = createAuthAccountServicePolicies(storage);
   const authenticationOperations = new AuthAccountAuthenticationOperations({
     storage,
+    getMaintenanceState: options.getMaintenanceState,
   });
   const invalidateUserSessions = (username: string, reason: string) =>
     authenticationOperations.invalidateUserSessions(username, reason);

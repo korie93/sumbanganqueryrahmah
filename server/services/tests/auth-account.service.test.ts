@@ -3,12 +3,14 @@ import test from "node:test";
 import { hashPassword } from "../../auth/passwords";
 import { encryptTwoFactorSecret, generateCurrentTwoFactorCode } from "../../auth/two-factor";
 import { resetTwoFactorReplayCacheForTests } from "../../auth/two-factor-replay-cache";
+import type { MaintenanceState } from "../../config/system-settings";
 import { AuthAccountService, AuthAccountError } from "../auth-account.service";
 
 const previousTwoFactorEncryptionKey = process.env.TWO_FACTOR_ENCRYPTION_KEY;
 process.env.TWO_FACTOR_ENCRYPTION_KEY = "test-two-factor-encryption-key";
 
 type AuthAccountStorage = ConstructorParameters<typeof AuthAccountService>[0];
+type AuthAccountServiceOptions = ConstructorParameters<typeof AuthAccountService>[1];
 type AuditLogInput = Parameters<AuthAccountStorage["createAuditLog"]>[0];
 type AuditLogRecord = Awaited<ReturnType<AuthAccountStorage["createAuditLog"]>>;
 type FailedLoginAttemptInput = Parameters<AuthAccountStorage["recordFailedLoginAttempt"]>[0];
@@ -26,8 +28,11 @@ test.beforeEach(() => {
   resetTwoFactorReplayCacheForTests();
 });
 
-function createAuthAccountService(storage: object): AuthAccountService {
-  return new AuthAccountService(storage as AuthAccountStorage);
+function createAuthAccountService(
+  storage: object,
+  options?: AuthAccountServiceOptions,
+): AuthAccountService {
+  return new AuthAccountService(storage as AuthAccountStorage, options);
 }
 
 function buildAuditLog(entry: AuditLogInput): AuditLogRecord {
@@ -81,6 +86,16 @@ function buildManagedUser(passwordHash: string, overrides?: Record<string, unkno
     email: "managed.user@example.com",
     role: "user",
     ...overrides,
+  };
+}
+
+function buildHardMaintenanceState(): MaintenanceState {
+  return {
+    maintenance: true,
+    message: "Sistem sedang diselenggara untuk naik taraf.",
+    type: "hard",
+    startTime: "2026-03-20T00:00:00.000Z",
+    endTime: null,
   };
 }
 
@@ -276,6 +291,169 @@ test("AuthAccountService.login blocks superuser when another recent session is s
       && error.statusCode === 409
       && error.code === "SUPERUSER_SINGLE_SESSION_ENFORCED",
   );
+});
+
+test("AuthAccountService.login blocks standard users during hard maintenance before issuing a session", async () => {
+  const passwordHash = await hashPassword("Password123!");
+  const user = buildManagedUser(passwordHash);
+  const auditActions: string[] = [];
+  let createActivityCalls = 0;
+  let touchLastLoginCalls = 0;
+
+  const service = createAuthAccountService(
+    {
+      getUserByUsername: async () => user,
+      isVisitorBanned: async () => false,
+      createAuditLog: async (entry: AuditLogInput) => {
+        auditActions.push(String(entry?.action || ""));
+        return buildAuditLog(entry);
+      },
+      getActiveActivitiesByUsername: async () => [],
+      deactivateUserActivities: async () => undefined,
+      createActivity: async () => {
+        createActivityCalls += 1;
+        return {
+          id: "activity-blocked-1",
+          userId: user.id,
+          username: user.username,
+          role: user.role,
+          loginTime: new Date("2026-03-20T00:00:00.000Z"),
+          lastActivityTime: new Date("2026-03-20T00:00:00.000Z"),
+          logoutTime: null,
+          isActive: true,
+          logoutReason: null,
+        };
+      },
+      touchLastLogin: async () => {
+        touchLastLoginCalls += 1;
+      },
+      updateUserAccount: async (params: UpdateUserAccountInput) => {
+        Object.assign(user, {
+          failedLoginAttempts:
+            params.failedLoginAttempts === undefined ? user.failedLoginAttempts : params.failedLoginAttempts,
+          lockedAt: params.lockedAt === undefined ? user.lockedAt : params.lockedAt,
+          lockedReason: params.lockedReason === undefined ? user.lockedReason : params.lockedReason,
+          lockedBySystem: params.lockedBySystem === undefined ? user.lockedBySystem : params.lockedBySystem,
+        });
+        return user;
+      },
+    },
+    {
+      getMaintenanceState: async () => buildHardMaintenanceState(),
+    },
+  );
+
+  await assert.rejects(
+    service.login({
+      username: user.username,
+      password: "Password123!",
+      browserName: "chrome",
+      fingerprint: "fp-user",
+      ipAddress: "127.0.0.1",
+      pcName: "pc",
+    }),
+    (error: unknown) =>
+      error instanceof AuthAccountError
+      && error.statusCode === 503
+      && error.code === "MAINTENANCE_ACTIVE"
+      && error.extra?.maintenance === true,
+  );
+
+  assert.deepEqual(auditActions, ["LOGIN_BLOCKED_MAINTENANCE"]);
+  assert.equal(createActivityCalls, 0);
+  assert.equal(touchLastLoginCalls, 0);
+});
+
+test("AuthAccountService.verifyTwoFactorLogin keeps standard users blocked if hard maintenance starts mid-login", async () => {
+  const passwordHash = await hashPassword("Password123!");
+  const user = buildManagedUser(passwordHash);
+  const auditActions: string[] = [];
+
+  const service = createAuthAccountService(
+    {
+      getUser: async () => user,
+      isVisitorBanned: async () => false,
+      createAuditLog: async (entry: AuditLogInput) => {
+        auditActions.push(String(entry?.action || ""));
+        return buildAuditLog(entry);
+      },
+    },
+    {
+      getMaintenanceState: async () => buildHardMaintenanceState(),
+    },
+  );
+
+  await assert.rejects(
+    service.verifyTwoFactorLogin({
+      userId: user.id,
+      code: "123456",
+      browserName: "chrome",
+      fingerprint: "fp-user",
+      ipAddress: "127.0.0.1",
+      pcName: "pc",
+    }),
+    (error: unknown) =>
+      error instanceof AuthAccountError
+      && error.statusCode === 503
+      && error.code === "MAINTENANCE_ACTIVE"
+      && error.extra?.maintenance === true,
+  );
+
+  assert.deepEqual(auditActions, ["LOGIN_2FA_BLOCKED_MAINTENANCE"]);
+});
+
+test("AuthAccountService.login allows admin recovery access during hard maintenance", async () => {
+  const passwordHash = await hashPassword("Password123!");
+  const user = buildManagedUser(passwordHash, { role: "admin" });
+  const auditActions: string[] = [];
+  let maintenanceStateCalls = 0;
+
+  const service = createAuthAccountService(
+    {
+      getUserByUsername: async () => user,
+      isVisitorBanned: async () => false,
+      createAuditLog: async (entry: AuditLogInput) => {
+        auditActions.push(String(entry?.action || ""));
+        return buildAuditLog(entry);
+      },
+      getBooleanSystemSetting: async () => false,
+      getActiveActivitiesByUsername: async () => [],
+      deactivateUserActivities: async () => undefined,
+      createActivity: async () => ({
+        id: "activity-admin-1",
+        userId: user.id,
+        username: user.username,
+        role: user.role,
+        loginTime: new Date("2026-03-20T00:00:00.000Z"),
+        lastActivityTime: new Date("2026-03-20T00:00:00.000Z"),
+        logoutTime: null,
+        isActive: true,
+        logoutReason: null,
+      }),
+      touchLastLogin: async () => undefined,
+    },
+    {
+      getMaintenanceState: async () => {
+        maintenanceStateCalls += 1;
+        return buildHardMaintenanceState();
+      },
+    },
+  );
+
+  const result = await service.login({
+    username: user.username,
+    password: "Password123!",
+    browserName: "chrome",
+    fingerprint: "fp-admin",
+    ipAddress: "127.0.0.1",
+    pcName: "pc",
+  });
+
+  assert.equal(result.kind, "authenticated");
+  assert.equal(result.user.role, "admin");
+  assert.ok(auditActions.includes("LOGIN_SUCCESS"));
+  assert.equal(auditActions.includes("LOGIN_BLOCKED_MAINTENANCE"), false);
+  assert.equal(maintenanceStateCalls, 0);
 });
 
 test("AuthAccountService.login replaces existing user sessions so only the latest login stays active", async () => {

@@ -20,7 +20,10 @@ import {
   type StartTwoFactorSetupInput,
   type UpdateOwnCredentialsInput,
 } from "./auth-account-self-operations";
-import { createAuthAccountServiceOperations } from "./auth-account-service-operation-factory";
+import {
+  createAuthAccountServiceOperations,
+  type AuthAccountServiceOperationOptions,
+} from "./auth-account-service-operation-factory";
 import type {
   ActivateAccountInput,
   AuthAccountStorage,
@@ -43,8 +46,8 @@ export class AuthAccountService {
   private readonly recoveryOperations: AuthAccountRecoveryOperations;
   private readonly selfOperations: AuthAccountSelfOperations;
 
-  constructor(storage: AuthAccountStorage) {
-    const operations = createAuthAccountServiceOperations(storage);
+  constructor(storage: AuthAccountStorage, options: AuthAccountServiceOperationOptions = {}) {
+    const operations = createAuthAccountServiceOperations(storage, options);
     this.authenticationOperations = operations.authenticationOperations;
     this.devMailOperations = operations.devMailOperations;
     this.managedOperations = operations.managedOperations;
