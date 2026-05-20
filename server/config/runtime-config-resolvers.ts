@@ -57,11 +57,14 @@ export function resolveCookieSameSite(value: string | null): "strict" | "lax" {
   throw new Error("SESSION_COOKIE_SAMESITE must be one of: strict or lax.");
 }
 
-export function resolveDatabaseBootstrapMode(value: string | null): "runtime" | "migration" {
+export function resolveDatabaseBootstrapMode(
+  value: string | null,
+  options: { isProductionLike?: boolean } = {},
+): "runtime" | "migration" {
   const normalized = value?.trim().toLowerCase();
   if (normalized === "runtime" || normalized === "migration") {
     return normalized;
   }
 
-  return "runtime";
+  return options.isProductionLike ? "migration" : "runtime";
 }

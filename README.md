@@ -93,7 +93,7 @@ Untuk manual penggunaan client yang lengkap (split ikut role `superuser`, `admin
 
 ## Troubleshooting
 
-- `502 Bad Gateway` selepas `git pull`, `npm run build`, atau `pm2 restart`: semak `pm2 logs sqr --lines 100` dahulu. Jika log menunjukkan package hilang seperti `ERR_MODULE_NOT_FOUND`, jalankan `npm ci` atau `npm install` sebelum build kerana dependency baru mungkin belum dipasang. Flow deploy ringkas: `git pull`, `npm ci`, `npm run build`, kemudian `pm2 restart sqr --update-env`.
+- `502 Bad Gateway` selepas `git pull`, `npm run build`, atau `pm2 restart`: semak `pm2 logs sqr --lines 100` dahulu. Jika log menunjukkan package hilang seperti `ERR_MODULE_NOT_FOUND`, jalankan `npm ci` atau `npm install` sebelum build kerana dependency baru mungkin belum dipasang. Flow deploy ringkas: `git pull`, `npm ci`, `npm run db:migrate`, `npm run build`, kemudian `pm2 restart sqr --update-env`.
 - `BACKUP_ENCRYPTION_KEY_ID 'primary' is configured but no matching key exists`: pastikan konfigurasi `.env` konsisten. Jika anda guna `BACKUP_ENCRYPTION_KEY_ID=primary`, tetapkan sama ada `BACKUP_ENCRYPTION_KEY=...` untuk satu kunci aktif atau `BACKUP_ENCRYPTION_KEYS=primary:...` untuk format key rotation.
 - App crash semasa startup kerana `TWO_FACTOR_ENCRYPTION_KEY` atau `COLLECTION_PII_ENCRYPTION_KEY` kosong: itu kini tingkah laku yang disengajakan dalam production-like mode. Isi kedua-dua secret tersebut dengan nilai rawak yang berbeza, kemudian restart dengan `pm2 restart sqr --update-env`.
 - Perubahan `.env` tidak berkesan dalam PM2 atau Termux: edit `.env`, kemudian jalankan `pm2 restart sqr --update-env`. Untuk setup yang kekal selepas reboot, ikut [docs/TERMUX_PM2_DEPLOYMENT.md](./docs/TERMUX_PM2_DEPLOYMENT.md).

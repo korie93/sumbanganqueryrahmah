@@ -1,6 +1,64 @@
+import fs from "node:fs";
+import path from "node:path";
 import pg from "pg";
 
 const { Pool } = pg;
+const TRUE_VALUES = new Set(["1", "true", "yes", "on"]);
+const FALSE_VALUES = new Set(["0", "false", "no", "off"]);
+
+function readOptionalEnvString(env, name) {
+  return String(env[name] || "").trim();
+}
+
+function isLoopbackHostname(value) {
+  const normalized = String(value || "").trim().toLowerCase();
+  return normalized === "127.0.0.1" || normalized === "localhost" || normalized === "::1";
+}
+
+function resolvePublicAppHost(env) {
+  const publicBaseUrl =
+    readOptionalEnvString(env, "PUBLIC_APP_URL")
+    || readOptionalEnvString(env, "APP_BASE_URL")
+    || readOptionalEnvString(env, "CLIENT_APP_URL");
+  if (!publicBaseUrl) {
+    return null;
+  }
+
+  try {
+    return new URL(publicBaseUrl).hostname || null;
+  } catch {
+    return null;
+  }
+}
+
+function isStrictLocalDevelopmentEnvironment(env) {
+  if (String(env.NODE_ENV || "development").trim().toLowerCase() !== "development") {
+    return false;
+  }
+
+  const host = readOptionalEnvString(env, "HOST");
+  if (host && !isLoopbackHostname(host)) {
+    return false;
+  }
+
+  const publicAppHost = resolvePublicAppHost(env);
+  if (!publicAppHost) {
+    return true;
+  }
+
+  return isLoopbackHostname(publicAppHost);
+}
+
+function isProductionLikeEnvironment(env) {
+  const nodeEnv = String(env.NODE_ENV || "development").trim().toLowerCase();
+  if (nodeEnv === "test") {
+    return false;
+  }
+  if (nodeEnv === "production" || (nodeEnv && nodeEnv !== "development")) {
+    return true;
+  }
+  return !isStrictLocalDevelopmentEnvironment(env);
+}
 
 function parseDatabaseUrl(rawValue) {
   const normalized = String(rawValue || "").trim();
@@ -49,6 +107,85 @@ export function buildPostgresPreflightConfig(env = process.env) {
   };
 }
 
+function resolvePostgresSslConfig(env = process.env) {
+  const rawSslFlag = readOptionalEnvString(env, "DATABASE_SSL").toLowerCase();
+  const productionLike = isProductionLikeEnvironment(env);
+
+  if (!rawSslFlag && !productionLike) {
+    return {};
+  }
+
+  if (FALSE_VALUES.has(rawSslFlag)) {
+    if (productionLike) {
+      throw new Error("DATABASE_SSL=false is not allowed on production-like hosts.");
+    }
+
+    return {};
+  }
+
+  if (rawSslFlag && !TRUE_VALUES.has(rawSslFlag)) {
+    throw new Error("DATABASE_SSL must be a boolean flag (1/0, true/false, yes/no, on/off).");
+  }
+
+  const ssl = { rejectUnauthorized: true };
+  const inlineCa = readOptionalEnvString(env, "DATABASE_SSL_CA");
+  if (inlineCa) {
+    return { ssl: { ...ssl, ca: inlineCa } };
+  }
+
+  const caFile = readOptionalEnvString(env, "DATABASE_SSL_CA_FILE");
+  if (!caFile) {
+    return { ssl };
+  }
+
+  const resolvedCaFile = path.resolve(process.cwd(), caFile);
+  const ca = fs.readFileSync(resolvedCaFile, "utf8").trim();
+  if (!ca) {
+    throw new Error("DATABASE_SSL_CA_FILE could not be read as a non-empty PEM certificate.");
+  }
+
+  return { ssl: { ...ssl, ca } };
+}
+
+function resolvePgSearchPathOption(env = process.env) {
+  const searchPath = readOptionalEnvString(env, "PG_SEARCH_PATH") || "public";
+  if (!/^[A-Za-z_][A-Za-z0-9_]*(,[A-Za-z_][A-Za-z0-9_]*)*$/.test(searchPath)) {
+    throw new Error("PG_SEARCH_PATH must be a comma-separated list of PostgreSQL identifiers.");
+  }
+
+  return `-c search_path=${searchPath}`;
+}
+
+export function buildPostgresPoolConfig(
+  env = process.env,
+  {
+    connectionTimeoutMillis = 5_000,
+    max = 1,
+  } = {},
+) {
+  const config = buildPostgresPreflightConfig(env);
+  const commonConfig = {
+    connectionTimeoutMillis,
+    max,
+    options: resolvePgSearchPathOption(env),
+    ...resolvePostgresSslConfig(env),
+  };
+
+  return config.connectionString
+    ? {
+        connectionString: config.connectionString,
+        ...commonConfig,
+      }
+    : {
+        database: config.database,
+        host: config.host,
+        password: config.password,
+        port: config.port,
+        user: config.user,
+        ...commonConfig,
+      };
+}
+
 export async function assertPostgresConnection(
   env = process.env,
   {
@@ -65,21 +202,10 @@ export async function assertPostgresConnection(
     );
   }
 
-  const poolConfig = config.connectionString
-    ? {
-        connectionString: config.connectionString,
-        connectionTimeoutMillis,
-        max: 1,
-      }
-    : {
-        database: config.database,
-        host: config.host,
-        password: config.password,
-        port: config.port,
-        user: config.user,
-        connectionTimeoutMillis,
-        max: 1,
-      };
+  const poolConfig = buildPostgresPoolConfig(env, {
+    connectionTimeoutMillis,
+    max: 1,
+  });
 
   const pool = new PoolImpl(poolConfig);
 

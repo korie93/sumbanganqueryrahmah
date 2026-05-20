@@ -124,7 +124,9 @@ const sharedRateLimitStore = resolveSharedRateLimitStoreConfig({
   provider: readOptionalString("SQR_RATE_LIMIT_STORE"),
   redisUrl: readOptionalString("SQR_REDIS_RATE_LIMIT_URL"),
 });
-const databaseBootstrapMode = resolveDatabaseBootstrapMode(readOptionalString("SQR_DB_BOOTSTRAP_MODE"));
+const databaseBootstrapMode = resolveDatabaseBootstrapMode(readOptionalString("SQR_DB_BOOTSTRAP_MODE"), {
+  isProductionLike,
+});
 const corsAllowedOrigins = resolveCorsAllowedOrigins({
   rawValue: readOptionalString("CORS_ALLOWED_ORIGINS"),
   publicAppUrl,

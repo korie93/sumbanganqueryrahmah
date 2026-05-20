@@ -3,19 +3,9 @@ import pg from "pg";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
 import { withPostgresMigrationAdvisoryLock } from "./lib/postgres-migration-lock.mjs";
+import { buildPostgresPoolConfig } from "./lib/postgres-preflight.mjs";
 
-function readInt(name, fallback) {
-  const value = Number(process.env[name] ?? fallback);
-  return Number.isFinite(value) ? value : fallback;
-}
-
-const pool = new pg.Pool({
-  host: process.env.PG_HOST ?? "localhost",
-  port: readInt("PG_PORT", 5432),
-  user: process.env.PG_USER ?? "postgres",
-  password: process.env.PG_PASSWORD,
-  database: process.env.PG_DATABASE ?? "sqr_db",
-});
+const pool = new pg.Pool(buildPostgresPoolConfig(process.env, { max: 1 }));
 
 try {
   await withPostgresMigrationAdvisoryLock(pool, async () => {

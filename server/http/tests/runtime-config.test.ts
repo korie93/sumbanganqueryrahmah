@@ -270,7 +270,7 @@ test("runtime config rejects operations debug route enablement on production-lik
   );
 });
 
-test("runtime config defaults database bootstrap to runtime and accepts migration opt-in", async () => {
+test("runtime config defaults database bootstrap to migration on production-like hosts", async () => {
   const localBase = {
     NODE_ENV: "development",
     HOST: "127.0.0.1",
@@ -316,7 +316,7 @@ test("runtime config defaults database bootstrap to runtime and accepts migratio
     },
     async () => {
       const runtimeModule = await importRuntimeFresh();
-      assert.equal(runtimeModule.runtimeConfig.bootstrap.databaseMode, "runtime");
+      assert.equal(runtimeModule.runtimeConfig.bootstrap.databaseMode, "migration");
     },
   );
 

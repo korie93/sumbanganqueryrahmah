@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   assertPostgresConnection,
+  buildPostgresPoolConfig,
   buildPostgresPreflightConfig,
 } from "../lib/postgres-preflight.mjs";
 
@@ -58,6 +59,67 @@ test("buildPostgresPreflightConfig accepts standard PostgreSQL env aliases", () 
       port: 6545,
       user: "sqr_alias",
     },
+  );
+});
+
+test("buildPostgresPoolConfig carries SSL and search_path into script connections", () => {
+  const poolConfig = buildPostgresPoolConfig(
+    {
+      DATABASE_URL: "postgres://db_user:db_pass@db.internal:6544/sqr_prod",
+      DATABASE_SSL: "1",
+      DATABASE_SSL_CA: "-----BEGIN CERTIFICATE-----\nexample\n-----END CERTIFICATE-----",
+      PG_SEARCH_PATH: "public",
+    },
+    {
+      connectionTimeoutMillis: 2_500,
+      max: 2,
+    },
+  );
+
+  assert.deepEqual(poolConfig, {
+    connectionString: "postgres://db_user:db_pass@db.internal:6544/sqr_prod",
+    connectionTimeoutMillis: 2_500,
+    max: 2,
+    options: "-c search_path=public",
+    ssl: {
+      ca: "-----BEGIN CERTIFICATE-----\nexample\n-----END CERTIFICATE-----",
+      rejectUnauthorized: true,
+    },
+  });
+});
+
+test("buildPostgresPoolConfig rejects unsafe search_path input", () => {
+  assert.throws(
+    () => buildPostgresPoolConfig({
+      PG_DATABASE: "sqr_db",
+      PG_SEARCH_PATH: "public;drop schema public",
+      PG_USER: "postgres",
+    }),
+    /PG_SEARCH_PATH must be a comma-separated list/i,
+  );
+});
+
+test("buildPostgresPoolConfig defaults to SSL on production-like script runs", () => {
+  const poolConfig = buildPostgresPoolConfig({
+    NODE_ENV: "production",
+    PG_DATABASE: "sqr_db",
+    PG_HOST: "db.internal",
+    PG_USER: "sqr_user",
+  });
+
+  assert.deepEqual(poolConfig.ssl, { rejectUnauthorized: true });
+});
+
+test("buildPostgresPoolConfig rejects explicit SSL disablement on production-like script runs", () => {
+  assert.throws(
+    () => buildPostgresPoolConfig({
+      DATABASE_SSL: "0",
+      NODE_ENV: "production",
+      PG_DATABASE: "sqr_db",
+      PG_HOST: "db.internal",
+      PG_USER: "sqr_user",
+    }),
+    /DATABASE_SSL=false is not allowed on production-like hosts/i,
   );
 });
 
