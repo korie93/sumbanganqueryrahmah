@@ -5,7 +5,7 @@ import { migrate } from "drizzle-orm/node-postgres/migrator";
 import { withPostgresMigrationAdvisoryLock } from "./lib/postgres-migration-lock.mjs";
 import { buildPostgresPoolConfig } from "./lib/postgres-preflight.mjs";
 
-const pool = new pg.Pool(buildPostgresPoolConfig(process.env, { max: 1 }));
+const pool = new pg.Pool(buildPostgresPoolConfig(process.env, { max: 2 }));
 
 try {
   await withPostgresMigrationAdvisoryLock(pool, async () => {
