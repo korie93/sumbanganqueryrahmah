@@ -105,6 +105,9 @@ test("floating AI desktop focus handoff is bounded and panel transition is prope
 
   assert.match(focusSource, /requestAnimationFrame/);
   assert.match(focusSource, /cancelAnimationFrame/);
+  assert.match(focusSource, /document\.addEventListener\("keydown", handleKeyDown\)/);
+  assert.match(focusSource, /event\.key !== "Escape"/);
+  assert.match(focusSource, /handleMinimize\(\)/);
   assert.match(focusSource, /triggerButtonRef\.current\?\.focus\(\)/);
   assert.match(panelSource, /transition-\[opacity,transform\]/);
   assert.doesNotMatch(`${source}\n${panelSource}`, /floatingPanelShell,[\s\S]*transition-all/);

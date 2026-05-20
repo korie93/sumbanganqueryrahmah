@@ -4,6 +4,7 @@ import {
   getCollectionPiiEncryptionSecret,
   isCollectionPiiPlaintextRetiredField,
 } from "../config/security";
+import { internalMetrics } from "../internal/metrics";
 import { logger } from "./logger";
 import {
   collectCustomerNameSearchTerms,
@@ -177,6 +178,7 @@ export function decryptCollectionPiiValueSafe(payload: unknown): string | null {
     const decrypted = decryptCollectionPiiValue(normalized);
     return normalizeCollectionPiiValue(decrypted) || null;
   } catch (error) {
+    internalMetrics.increment("collectionPiiDecryptFallbackTotal");
     if (collectionPiiDecryptWarningCount < MAX_COLLECTION_PII_DECRYPT_WARNINGS) {
       collectionPiiDecryptWarningCount += 1;
       logger.warn("Failed to decrypt collection PII shadow value", {

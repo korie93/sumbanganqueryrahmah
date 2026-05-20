@@ -279,3 +279,21 @@ export function assertProductionRateLimiterTopologySafety(params: {
     "SQR_MAX_WORKERS greater than 1 is not allowed outside strict local development until a shared rate-limit/replay store is configured. Login/auth route limiters, adaptive API protection, telemetry drop guards, and 2FA replay protection are still process-local. Set SQR_MAX_WORKERS=1 or add shared limiter infrastructure before scaling horizontally.",
   );
 }
+
+export function assertProductionDatabaseBootstrapModeSafety(params: {
+  isProductionLike: boolean;
+  databaseBootstrapMode: "runtime" | "migration";
+  allowRuntimeBootstrapInProduction: boolean;
+}) {
+  if (
+    !params.isProductionLike
+    || params.databaseBootstrapMode !== "runtime"
+    || params.allowRuntimeBootstrapInProduction
+  ) {
+    return;
+  }
+
+  throw new Error(
+    "SQR_DB_BOOTSTRAP_MODE=runtime is not allowed on production-like hosts without SQR_ALLOW_RUNTIME_DB_BOOTSTRAP_IN_PRODUCTION=1. Run npm run db:migrate before startup and use SQR_DB_BOOTSTRAP_MODE=migration; reserve runtime bootstrap only for a deliberate legacy recovery window.",
+  );
+}

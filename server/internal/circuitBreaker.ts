@@ -21,7 +21,7 @@ type CircuitOptions = {
   halfOpenMaxInFlight?: number;
 };
 
-type CircuitOutcome = "failure" | "success" | "rejection";
+type CircuitOutcome = "failure" | "success";
 
 export class CircuitOpenError extends Error {
   constructor(name: string) {
@@ -72,7 +72,7 @@ export class CircuitBreaker {
       successes: this.successes,
       rejections: this.rejections,
       totalRequests: this.totalRequests,
-      failureRate: this.totalRequests > 0 ? this.failures / this.totalRequests : 0,
+      failureRate: this.getFailureRate(),
       nextRetryAt: this.nextRetryAt,
       cooldownMs: this.cooldownMs,
       threshold: this.threshold,
@@ -83,12 +83,12 @@ export class CircuitBreaker {
     this.evaluateCooldown();
 
     if (this.state === "OPEN") {
-      this.recordOutcome("rejection");
+      this.recordRejection();
       throw new CircuitOpenError(this.name);
     }
 
     if (this.state === "HALF_OPEN" && this.halfOpenInFlight >= this.halfOpenMaxInFlight) {
-      this.recordOutcome("rejection");
+      this.recordRejection();
       throw new CircuitOpenError(this.name);
     }
 
@@ -127,8 +127,7 @@ export class CircuitBreaker {
     }
 
     if (this.totalRequests >= this.minRequests) {
-      const failureRate = this.failures / this.totalRequests;
-      if (failureRate >= this.threshold) {
+      if (this.getFailureRate() >= this.threshold) {
         this.open();
         return;
       }
@@ -177,26 +176,31 @@ export class CircuitBreaker {
     this.outcomes[this.outcomeWriteIndex] = outcome;
     this.outcomeWriteIndex = (this.outcomeWriteIndex + 1) % this.maxWindow;
     this.incrementOutcome(outcome);
-    this.totalRequests = this.failures + this.successes + this.rejections;
+    this.totalRequests = this.failures + this.successes;
+  }
+
+  private recordRejection() {
+    this.rejections += 1;
   }
 
   private incrementOutcome(outcome: CircuitOutcome) {
     if (outcome === "failure") {
       this.failures += 1;
-    } else if (outcome === "success") {
-      this.successes += 1;
     } else {
-      this.rejections += 1;
+      this.successes += 1;
     }
   }
 
   private decrementOutcome(outcome: CircuitOutcome) {
     if (outcome === "failure") {
       this.failures = Math.max(0, this.failures - 1);
-    } else if (outcome === "success") {
-      this.successes = Math.max(0, this.successes - 1);
     } else {
-      this.rejections = Math.max(0, this.rejections - 1);
+      this.successes = Math.max(0, this.successes - 1);
     }
+  }
+
+  private getFailureRate() {
+    const downstreamRequests = this.failures + this.successes;
+    return downstreamRequests > 0 ? this.failures / downstreamRequests : 0;
   }
 }

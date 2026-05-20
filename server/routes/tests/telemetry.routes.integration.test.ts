@@ -280,6 +280,26 @@ test("POST /telemetry/web-vitals remains a guarded compatibility alias", async (
   }
 });
 
+test("POST /telemetry is not a compatibility alias", async () => {
+  const { app, recordedPayloads } = createTelemetryRouteHarness();
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(`${baseUrl}/telemetry`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(createValidWebVitalsPayload({ id: "v3-unregistered-telemetry" })),
+    });
+
+    assert.equal(response.status, 404);
+    assert.equal(recordedPayloads.length, 0);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
 test("POST /telemetry/web-vitals is retired with 410 after the sunset date", async () => {
   const metrics = createInternalMetrics();
   const { app, recordedPayloads } = createTelemetryRouteHarness({

@@ -147,13 +147,81 @@ export function readStringList(value: unknown): string[] {
     .filter(Boolean);
 }
 
+const ISO_DATE_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
+const ISO_DATETIME_PATTERN =
+  /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,3}))?)?(?:Z|[+-]\d{2}:\d{2})?$/;
+
+function isValidIsoDateParts(year: number, month: number, day: number): boolean {
+  const timestamp = Date.UTC(year, month - 1, day);
+  if (!Number.isFinite(timestamp)) {
+    return false;
+  }
+
+  const date = new Date(timestamp);
+  return (
+    date.getUTCFullYear() === year
+    && date.getUTCMonth() === month - 1
+    && date.getUTCDate() === day
+  );
+}
+
+function isStrictIsoDateOrDateTime(value: string): boolean {
+  const dateMatch = ISO_DATE_PATTERN.exec(value);
+  const dateTimeMatch = dateMatch ? null : ISO_DATETIME_PATTERN.exec(value);
+  const match = dateMatch || dateTimeMatch;
+  if (!match) {
+    return false;
+  }
+
+  const [, yearRaw, monthRaw, dayRaw, hourRaw, minuteRaw, secondRaw] = match;
+  const year = Number(yearRaw);
+  const month = Number(monthRaw);
+  const day = Number(dayRaw);
+  if (!isValidIsoDateParts(year, month, day)) {
+    return false;
+  }
+
+  if (!dateTimeMatch) {
+    return true;
+  }
+
+  const hour = Number(hourRaw);
+  const minute = Number(minuteRaw);
+  const second = secondRaw == null ? 0 : Number(secondRaw);
+  return (
+    Number.isInteger(hour)
+    && hour >= 0
+    && hour <= 23
+    && Number.isInteger(minute)
+    && minute >= 0
+    && minute <= 59
+    && Number.isInteger(second)
+    && second >= 0
+    && second <= 59
+  );
+}
+
 export function readDate(value: unknown): Date | undefined {
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? undefined : new Date(value.getTime());
+  }
+
   const normalized = readNonEmptyString(value);
   if (!normalized) return undefined;
 
+  if (!isStrictIsoDateOrDateTime(normalized)) {
+    throw badRequest(
+      "Date value must be an ISO 8601 date or datetime, for example 2026-01-01 or 2026-01-01T00:00:00.000Z.",
+      ERROR_CODES.REQUEST_BODY_INVALID,
+    );
+  }
+
   const parsed = new Date(normalized);
   if (Number.isNaN(parsed.getTime())) {
-    return undefined;
+    throw badRequest(
+      "Date value must be a valid ISO 8601 date or datetime.",
+      ERROR_CODES.REQUEST_BODY_INVALID,
+    );
   }
 
   return parsed;

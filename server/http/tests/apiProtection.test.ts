@@ -236,6 +236,7 @@ test("runtime protection route classification includes web-vitals telemetry cons
   assert.equal(isRuntimeProtectedRoute({ method: "GET", path: "/api/telemetry/web-vitals" }), true);
   assert.equal(isRuntimeProtectedRoute({ method: "POST", path: "/telemetry/web-vitals" }), true);
   assert.equal(isRuntimeProtectedRoute({ method: "GET", path: "/telemetry/web-vitals" }), false);
+  assert.equal(isRuntimeProtectedRoute({ method: "POST", path: "/telemetry" }), false);
   assert.equal(isRuntimeProtectedRoute({ method: "GET", path: "/login" }), false);
 });
 

@@ -184,6 +184,26 @@ test("runtime env schema validates staged database bootstrap modes", () => {
   );
 });
 
+test("runtime env schema validates production runtime bootstrap override flag", () => {
+  assert.doesNotThrow(() => {
+    validateRuntimeEnvironmentSchema({
+      SQR_ALLOW_RUNTIME_DB_BOOTSTRAP_IN_PRODUCTION: "0",
+    });
+    validateRuntimeEnvironmentSchema({
+      SQR_ALLOW_RUNTIME_DB_BOOTSTRAP_IN_PRODUCTION: "1",
+    });
+  });
+
+  assert.throws(
+    () => {
+      validateRuntimeEnvironmentSchema({
+        SQR_ALLOW_RUNTIME_DB_BOOTSTRAP_IN_PRODUCTION: "sometimes",
+      });
+    },
+    /SQR_ALLOW_RUNTIME_DB_BOOTSTRAP_IN_PRODUCTION.*boolean flag/i,
+  );
+});
+
 test("runtime env schema accepts staged collection PII retirement field lists when encryption is configured", () => {
   assert.doesNotThrow(() => {
     validateRuntimeEnvironmentSchema({

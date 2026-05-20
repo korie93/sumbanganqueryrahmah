@@ -143,6 +143,41 @@ test("registerLocalHttpPipeline preserves caller-provided request ids", async ()
   }
 });
 
+test("registerLocalHttpPipeline applies the 4KB web-vitals body limit to canonical and legacy telemetry paths", async () => {
+  const app = express();
+  registerLocalHttpPipeline(app, {
+    importBodyLimit: "1mb",
+    collectionBodyLimit: "1mb",
+    defaultBodyLimit: "100kb",
+    uploadsRootDir: path.resolve(process.cwd(), "uploads"),
+    recordRequestStarted: () => undefined,
+    recordRequestFinished: () => undefined,
+    adaptiveRateLimit: (_req, _res, next) => next(),
+    systemProtectionMiddleware: (_req, _res, next) => next(),
+    maintenanceGuard: (_req, _res, next) => next(),
+  });
+  app.post(["/api/telemetry/web-vitals", "/telemetry/web-vitals"], (req, res) => {
+    res.json({ ok: true, bytes: JSON.stringify(req.body).length });
+  });
+
+  const { server, baseUrl } = await startTestServer(app);
+  const oversizedPayload = JSON.stringify({ id: "metric", padding: "x".repeat(4_500) });
+  try {
+    for (const pathName of ["/api/telemetry/web-vitals", "/telemetry/web-vitals"]) {
+      const response = await fetch(`${baseUrl}${pathName}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: oversizedPayload,
+      });
+      assert.equal(response.status, 413);
+    }
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
 test("registerLocalHttpPipeline compresses large API responses without touching non-API responses", async () => {
   const app = express();
   registerLocalHttpPipeline(app, {

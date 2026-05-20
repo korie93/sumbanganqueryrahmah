@@ -4,8 +4,8 @@ import App from "./App";
 import { getBrowserLocalStorage, safeGetStorageItem } from "./lib/browser-storage";
 import { installGlobalUnhandledRejectionHandler } from "./lib/global-unhandled-rejection";
 import { initializeWebVitalsReporting } from "./lib/web-vitals";
-import "./public-shell.css";
 import "./theme-tokens.css";
+import "./public-shell.css";
 
 const detectLowSpecMode = () => {
   const perfOverride = safeGetStorageItem(getBrowserLocalStorage(), "perf_mode");

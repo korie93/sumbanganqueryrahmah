@@ -5,6 +5,7 @@ import {
   buildCollectionRecordPiiSearchHashes,
   buildEncryptedCollectionRecordPiiValues,
   decryptCollectionPiiValue,
+  decryptCollectionPiiValueSafe,
   hashCollectionCustomerNameSearchTerms,
   hashCollectionPiiSearchValue,
   hasCollectionPiiEncryptionConfigured,
@@ -17,6 +18,7 @@ import {
   shouldRewriteCollectionPiiSearchHashesValue,
   shouldRewriteCollectionPiiShadowValue,
 } from "../../lib/collection-pii-encryption";
+import { getInternalMetricsSnapshot } from "../../internal/metrics";
 import {
   decryptCollectionPiiValueWithCurrentDerivationOnly,
   decryptCollectionPiiValueWithSecret,
@@ -404,6 +406,17 @@ test("collection PII decrypt failures are observable without logging payload val
   assert.equal(debugLogs[0]?.metadata.secretIndex, 0);
   assert.equal(debugLogs[0]?.metadata.secretCount, 2);
   assert.equal(Object.prototype.hasOwnProperty.call(debugLogs[0]?.metadata ?? {}, "payload"), false);
+});
+
+test("collection PII safe decrypt increments fallback metric on failure", () => {
+  const before = getInternalMetricsSnapshot().counters.collectionPiiDecryptFallbackTotal;
+
+  withCollectionPiiKeys({ current: "test-collection-pii-encryption-key" }, () => {
+    assert.equal(decryptCollectionPiiValueSafe("invalid-encrypted-payload"), null);
+  });
+
+  const after = getInternalMetricsSnapshot().counters.collectionPiiDecryptFallbackTotal;
+  assert.equal(after, before + 1);
 });
 
 test("collection PII helpers mark missing or stale shadow values for rewrite under the active key", () => {

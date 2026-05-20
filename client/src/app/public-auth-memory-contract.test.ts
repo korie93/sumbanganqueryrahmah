@@ -102,10 +102,15 @@ test("client entry installs unhandled rejection logging before low-spec detectio
   const mainSource = readClientSource("../main.tsx");
   const unhandledIndex = mainSource.indexOf("installGlobalUnhandledRejectionHandler();");
   const lowSpecIndex = mainSource.indexOf("if (detectLowSpecMode())");
+  const tokensImportIndex = mainSource.indexOf('import "./theme-tokens.css";');
+  const publicShellImportIndex = mainSource.indexOf('import "./public-shell.css";');
 
   assert.notEqual(unhandledIndex, -1);
   assert.notEqual(lowSpecIndex, -1);
+  assert.notEqual(tokensImportIndex, -1);
+  assert.notEqual(publicShellImportIndex, -1);
   assert.ok(unhandledIndex < lowSpecIndex);
+  assert.ok(tokensImportIndex < publicShellImportIndex);
   assert.match(mainSource, /import \{ StrictMode \} from "react";/);
   assert.match(mainSource, /createRoot\(rootElement\)\.render\(\s*<StrictMode>/);
   assert.doesNotMatch(mainSource, /import\.meta\.env\.DEV \?/);
@@ -115,4 +120,5 @@ test("browser color scheme metadata matches the light and dark token strategy", 
   const indexSource = readClientSource("../../index.html");
 
   assert.match(indexSource, /<meta name="color-scheme" content="light dark" \/>/);
+  assert.doesNotMatch(indexSource, /<meta\s+name=["']mobile-web-app-capable["']/i);
 });

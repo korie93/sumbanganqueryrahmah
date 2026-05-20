@@ -65,6 +65,40 @@ export function useFloatingAIFocusManagement({
   }, [isMobile, panelSurfaceRef, shouldShowPanel]);
 
   useEffect(() => {
+    if (isMobile || !shouldShowPanel || typeof document === "undefined") {
+      return;
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") {
+        return;
+      }
+
+      const activeElement = document.activeElement;
+      const panelElement = panelSurfaceRef.current;
+      const rootElement = floatingRootRef.current;
+      const focusWithinFloatingAi = Boolean(
+        activeElement
+        && (
+          panelElement?.contains(activeElement)
+          || rootElement?.contains(activeElement)
+        ),
+      );
+      if (!focusWithinFloatingAi) {
+        return;
+      }
+
+      event.preventDefault();
+      handleMinimize();
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [floatingRootRef, handleMinimize, isMobile, panelSurfaceRef, shouldShowPanel]);
+
+  useEffect(() => {
     if (isMobile) {
       wasDesktopPanelVisibleRef.current = false;
       return;

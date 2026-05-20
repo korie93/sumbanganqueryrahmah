@@ -48,6 +48,11 @@ const authenticatedRouteSpecs = [
     contentSelector: "main#main-content",
   },
   {
+    id: "import",
+    path: "/import",
+    contentSelector: "main#main-content",
+  },
+  {
     id: "viewer",
     path: "/viewer",
     contentSelector: "main#main-content",

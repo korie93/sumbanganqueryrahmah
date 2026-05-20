@@ -246,6 +246,8 @@ BACKUP_ENCRYPTION_KEY_ID=primary
 `TWO_FACTOR_ENCRYPTION_KEY` dan `COLLECTION_PII_ENCRYPTION_KEY` kini dianggap secret wajib di luar strict local development. Jika salah satu kosong, runtime akan fail fast semasa startup supaya server tidak berjalan dalam keadaan tidak selamat.
 
 Jika anda deploy di belakang Nginx sahaja pada server yang sama, `TRUSTED_PROXIES=loopback` biasanya memadai.
+Untuk production HTTPS di belakang Nginx, biarkan `AUTH_COOKIE_SECURE=auto` atau set `AUTH_COOKIE_SECURE=true`; jangan paksa `false`.
+Jika anda naikkan `SQR_MAX_WORKERS` melebihi `1`, pastikan rate limit menggunakan shared store dan WebSocket mempunyai sticky sessions atau pub/sub kerana `connectedClients` adalah process-local.
 
 ## 9. Build dan Migrate
 

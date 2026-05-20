@@ -34,6 +34,7 @@ import { isAllowedCollectionPiiRetiredField } from "./collection-pii-field-confi
 import {
   assessMailConfiguration,
   assertNoPlaceholderSecrets,
+  assertProductionDatabaseBootstrapModeSafety,
   assertProductionRateLimiterTopologySafety,
   assertRuntimeSafetyGuards,
   buildRuntimeConfigWarnings,
@@ -127,6 +128,10 @@ const sharedRateLimitStore = resolveSharedRateLimitStoreConfig({
 const databaseBootstrapMode = resolveDatabaseBootstrapMode(readOptionalString("SQR_DB_BOOTSTRAP_MODE"), {
   isProductionLike,
 });
+const allowRuntimeBootstrapInProduction = readBoolean(
+  "SQR_ALLOW_RUNTIME_DB_BOOTSTRAP_IN_PRODUCTION",
+  false,
+);
 const corsAllowedOrigins = resolveCorsAllowedOrigins({
   rawValue: readOptionalString("CORS_ALLOWED_ORIGINS"),
   publicAppUrl,
@@ -171,6 +176,12 @@ assertProductionRateLimiterTopologySafety({
   isProductionLike,
   configuredClusterMaxWorkers,
   distributedStoreConfigured: sharedRateLimitStore.distributedStoreConfigured,
+});
+
+assertProductionDatabaseBootstrapModeSafety({
+  isProductionLike,
+  databaseBootstrapMode,
+  allowRuntimeBootstrapInProduction,
 });
 
 assertNoPlaceholderSecrets({

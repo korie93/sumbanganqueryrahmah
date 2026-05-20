@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   assertNoPlaceholderSecrets,
+  assertProductionDatabaseBootstrapModeSafety,
   assertProductionRateLimiterTopologySafety,
   assertRuntimeSafetyGuards,
   assertStrongRuntimeSecret,
@@ -208,6 +209,42 @@ test("assertProductionRateLimiterTopologySafety rejects production-like multi-wo
       isProductionLike: true,
       configuredClusterMaxWorkers: 2,
       distributedStoreConfigured: true,
+    }),
+  );
+});
+
+test("assertProductionDatabaseBootstrapModeSafety rejects production runtime bootstrap without explicit override", () => {
+  assert.throws(
+    () =>
+      assertProductionDatabaseBootstrapModeSafety({
+        isProductionLike: true,
+        databaseBootstrapMode: "runtime",
+        allowRuntimeBootstrapInProduction: false,
+      }),
+    /SQR_DB_BOOTSTRAP_MODE=runtime is not allowed on production-like hosts/i,
+  );
+
+  assert.doesNotThrow(() =>
+    assertProductionDatabaseBootstrapModeSafety({
+      isProductionLike: true,
+      databaseBootstrapMode: "runtime",
+      allowRuntimeBootstrapInProduction: true,
+    }),
+  );
+
+  assert.doesNotThrow(() =>
+    assertProductionDatabaseBootstrapModeSafety({
+      isProductionLike: true,
+      databaseBootstrapMode: "migration",
+      allowRuntimeBootstrapInProduction: false,
+    }),
+  );
+
+  assert.doesNotThrow(() =>
+    assertProductionDatabaseBootstrapModeSafety({
+      isProductionLike: false,
+      databaseBootstrapMode: "runtime",
+      allowRuntimeBootstrapInProduction: false,
     }),
   );
 });

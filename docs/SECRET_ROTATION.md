@@ -37,6 +37,11 @@ environment file only.
 active `SESSION_SECRET`. Existing sessions can remain valid during a planned
 rotation window through `SESSION_SECRET_PREVIOUS`.
 
+Device and tab session fingerprints are tied to the verified session token. A
+rotation without `SESSION_SECRET_PREVIOUS` invalidates existing sessions, so
+users must log in again and their browser/device association is rebuilt during
+the next authenticated request.
+
 ### Planned Rotation
 
 1. Generate a new `SESSION_SECRET`.
@@ -214,6 +219,10 @@ Minimum planned rotation:
 4. Send a password-reset or activation test email.
 5. Revoke the old SMTP credential.
 6. Confirm mail delivery still works.
+
+The SMTP transporter is cached in-process. Restart every app worker after SMTP
+host, username, password, TLS, or sender changes; these values are not hot
+reloaded from the environment.
 
 If SMTP credentials were ever committed, treat them as compromised even if later
 removed from the working tree.

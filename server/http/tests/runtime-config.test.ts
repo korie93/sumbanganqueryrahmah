@@ -61,6 +61,7 @@ const productionBaseOverrides: Record<string, string | null> = {
   SEED_DEFAULT_USERS: "0",
   LOCAL_SUPERUSER_CREDENTIALS_FILE_ENABLED: "0",
   MAIL_DEV_OUTBOX_ENABLED: "0",
+  SQR_ALLOW_RUNTIME_DB_BOOTSTRAP_IN_PRODUCTION: null,
 };
 
 const productionLikeDevelopmentBaseOverrides: Record<string, string | null> = {
@@ -83,6 +84,7 @@ const productionLikeDevelopmentBaseOverrides: Record<string, string | null> = {
   SEED_DEFAULT_USERS: "0",
   LOCAL_SUPERUSER_CREDENTIALS_FILE_ENABLED: "0",
   MAIL_DEV_OUTBOX_ENABLED: "0",
+  SQR_ALLOW_RUNTIME_DB_BOOTSTRAP_IN_PRODUCTION: null,
 };
 
 test("runtime config rejects production startup when backup encryption keys are missing", async () => {
@@ -285,6 +287,7 @@ test("runtime config defaults database bootstrap to migration on production-like
     SEED_DEFAULT_USERS: "0",
     LOCAL_SUPERUSER_CREDENTIALS_FILE_ENABLED: "0",
     MAIL_DEV_OUTBOX_ENABLED: "0",
+    SQR_ALLOW_RUNTIME_DB_BOOTSTRAP_IN_PRODUCTION: null,
   };
 
   await withEnv(
@@ -335,6 +338,20 @@ test("runtime config defaults database bootstrap to migration on production-like
     {
       ...productionLikeDevelopmentBaseOverrides,
       SQR_DB_BOOTSTRAP_MODE: "runtime",
+    },
+    async () => {
+      await assert.rejects(
+        importRuntimeFresh(),
+        /SQR_DB_BOOTSTRAP_MODE=runtime is not allowed on production-like hosts/i,
+      );
+    },
+  );
+
+  await withEnv(
+    {
+      ...productionLikeDevelopmentBaseOverrides,
+      SQR_DB_BOOTSTRAP_MODE: "runtime",
+      SQR_ALLOW_RUNTIME_DB_BOOTSTRAP_IN_PRODUCTION: "1",
     },
     async () => {
       const runtimeModule = await importRuntimeFresh();
