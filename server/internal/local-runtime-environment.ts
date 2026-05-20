@@ -33,6 +33,7 @@ type CreateLocalRuntimeEnvironmentOptions = {
 const DB_METHOD_WRAP_EXCLUDE = new Set<string>(["constructor"]);
 const WEBSOCKET_MAX_PAYLOAD_BYTES = 100 * 1024;
 const HTTP_SERVER_TIMEOUT_MS = 120_000;
+const HTTP_SERVER_LIFECYCLE_LISTENER_LIMIT = 32;
 
 export function createLocalRuntimeEnvironment(options: CreateLocalRuntimeEnvironmentOptions = {}) {
   const storage = new PostgresStorage();
@@ -41,6 +42,11 @@ export function createLocalRuntimeEnvironment(options: CreateLocalRuntimeEnviron
   applyTrustedProxies(app, runtimeConfig.app.trustedProxies);
   const server = createServer(app);
   server.setTimeout(HTTP_SERVER_TIMEOUT_MS);
+  // The server owns several one-shot shutdown cleanup hooks (WebSocket,
+  // cache sweepers, rate limit sweeps, telemetry guards, queue listeners).
+  // Raise the per-server listener cap so Node does not report those expected
+  // lifecycle hooks as a possible leak.
+  server.setMaxListeners(Math.max(server.getMaxListeners(), HTTP_SERVER_LIFECYCLE_LISTENER_LIMIT));
   const wss = new WebSocketServer({
     server,
     path: "/ws",
