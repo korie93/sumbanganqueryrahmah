@@ -1,4 +1,5 @@
 import { getBrowserLocalStorage, safeSetStorageItem } from "@/lib/browser-storage";
+import { shouldRedirectForMaintenance } from "@/app/maintenance-client-policy";
 
 export type MaintenanceNavigationPayload = Record<string, unknown> & {
   maintenance?: unknown;
@@ -17,7 +18,7 @@ export function notifyMaintenanceMode(payload: MaintenanceNavigationPayload) {
   );
 
   const currentPath = `${window.location.pathname}${window.location.search}`;
-  if (currentPath !== "/maintenance") {
+  if (shouldRedirectForMaintenance(payload, "user") && currentPath !== "/maintenance") {
     window.history.replaceState({}, "", "/maintenance");
   }
 }

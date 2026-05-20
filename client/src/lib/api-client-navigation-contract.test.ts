@@ -16,6 +16,7 @@ test("maintenance API failures route through app state without forcing a hard re
 
   assert.match(source, /notifyMaintenanceMode\(parsed\)/);
   assert.match(navigationSource, /function notifyMaintenanceMode/);
+  assert.match(navigationSource, /shouldRedirectForMaintenance\(payload, "user"\)/);
   assert.match(navigationSource, /new CustomEvent\("maintenance-updated"/);
   assert.match(navigationSource, /window\.history\.replaceState\(\{\}, "", "\/maintenance"\)/);
   assert.doesNotMatch(source, /window\.location\.href/);

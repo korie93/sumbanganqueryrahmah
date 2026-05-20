@@ -5,9 +5,11 @@ import { getBrowserLocalStorage, safeSetStorageItem } from "@/lib/browser-storag
 import { logClientWarning } from "@/lib/client-logger";
 import { MAINTENANCE_STATUS_POLL_INTERVAL_MS } from "@/pages/maintenance-state";
 import { buildPathForPage, replaceHistory } from "@/app/routing";
+import { shouldRedirectForMaintenance } from "@/app/maintenance-client-policy";
 
 type MaintenanceUpdatedDetail = {
   maintenance?: boolean;
+  type?: unknown;
 };
 
 type UseAppShellMaintenanceStateArgs = {
@@ -43,7 +45,7 @@ export function useAppShellMaintenanceState({
   useEffect(() => {
     const onMaintenanceUpdated = (event: Event) => {
       const custom = event as CustomEvent<MaintenanceUpdatedDetail>;
-      if (custom.detail?.maintenance) {
+      if (shouldRedirectForMaintenance(custom.detail, user?.role)) {
         setCurrentPage("maintenance");
         replaceHistory(buildPathForPage("maintenance"));
       } else if (currentPage === "maintenance") {
@@ -78,13 +80,18 @@ export function useAppShellMaintenanceState({
         const state = await getMaintenanceStatus({ signal: controller.signal });
         if (cancelled) return;
 
-        if (state?.maintenance === true) {
+        if (shouldRedirectForMaintenance(state, user.role)) {
           safeSetStorageItem(storage, "maintenanceState", JSON.stringify(state));
           setCurrentPage("maintenance");
           replaceHistory(buildPathForPage("maintenance"));
-        } else if (currentPage === "maintenance") {
-          setCurrentPage("general-search");
-          replaceHistory(buildPathForPage("general-search"));
+        } else {
+          if (state?.maintenance === true) {
+            safeSetStorageItem(storage, "maintenanceState", JSON.stringify(state));
+          }
+          if (currentPage === "maintenance") {
+            setCurrentPage("general-search");
+            replaceHistory(buildPathForPage("general-search"));
+          }
         }
       } catch (error) {
         if (isMaintenancePollingAbortError(error)) {

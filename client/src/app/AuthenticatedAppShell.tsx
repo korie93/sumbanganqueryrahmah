@@ -5,6 +5,7 @@ import {
   resolvePredictivePrefetchTargets,
 } from "@/app/navigation-prefetch";
 import { AppRouteErrorBoundary } from "@/app/AppRouteErrorBoundary";
+import MaintenanceModeBanner from "@/app/MaintenanceModeBanner";
 import { PageSpinner } from "@/app/PageSpinner";
 import { ChangePasswordPage } from "@/app/lazy-pages";
 import type {
@@ -173,6 +174,7 @@ export default function AuthenticatedAppShell({
           tabVisibility={tabVisibility}
           featureLockdown={featureLockdown}
         />
+        <MaintenanceModeBanner userRole={user.role} />
         <AppRouteErrorBoundary
           routeKey={`${currentPage}:${monitorSection}:${selectedImportId || ""}`}
           routeLabel={currentPage}

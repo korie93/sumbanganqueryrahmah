@@ -1,0 +1,107 @@
+.app-maintenance-banner {
+  padding:
+    0 max(var(--spacing-4), var(--safe-area-inset-right))
+    var(--spacing-3)
+    max(var(--spacing-4), var(--safe-area-inset-left));
+  background: hsl(var(--background));
+}
+
+.app-maintenance-banner__inner {
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 0.8rem;
+  align-items: center;
+  max-width: min(100%, 1440px);
+  border: 1px solid hsl(38 92% 50% / 0.38);
+  border-radius: 16px;
+  background:
+    linear-gradient(135deg, hsl(43 96% 91% / 0.94), hsl(var(--background) / 0.98));
+  color: hsl(32 62% 18%);
+  padding: 0.8rem 1rem;
+  box-shadow: 0 16px 34px -28px hsl(32 82% 24% / 0.45);
+}
+
+.dark .app-maintenance-banner__inner {
+  border-color: hsl(38 92% 58% / 0.34);
+  background:
+    linear-gradient(135deg, hsl(38 55% 18% / 0.9), hsl(var(--card) / 0.96));
+  color: hsl(43 96% 88%);
+}
+
+.app-maintenance-banner__icon {
+  display: inline-flex;
+  width: 2.1rem;
+  height: 2.1rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  background: hsl(38 92% 50% / 0.16);
+  color: hsl(32 86% 36%);
+}
+
+.dark .app-maintenance-banner__icon {
+  color: hsl(43 96% 76%);
+}
+
+.app-maintenance-banner__content {
+  min-width: 0;
+}
+
+.app-maintenance-banner__heading {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: var(--font-size-sm);
+  font-weight: 800;
+}
+
+.app-maintenance-banner__content p {
+  margin-top: 0.18rem;
+  color: hsl(33 36% 28%);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-normal);
+}
+
+.dark .app-maintenance-banner__content p {
+  color: hsl(43 58% 82% / 0.88);
+}
+
+.app-maintenance-banner__scope {
+  justify-self: end;
+  white-space: nowrap;
+  border: 1px solid hsl(38 82% 42% / 0.24);
+  border-radius: 999px;
+  background: hsl(0 0% 100% / 0.58);
+  padding: 0.35rem 0.65rem;
+  color: hsl(32 58% 24%);
+  font-size: var(--font-size-xs);
+  font-weight: 800;
+}
+
+.dark .app-maintenance-banner__scope {
+  background: hsl(0 0% 100% / 0.08);
+  color: hsl(43 96% 86%);
+}
+
+@media (max-width: 767px) {
+  .app-maintenance-banner {
+    padding:
+      0 max(var(--spacing-3), var(--safe-area-inset-right))
+      var(--spacing-3)
+      max(var(--spacing-3), var(--safe-area-inset-left));
+  }
+
+  .app-maintenance-banner__inner {
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: start;
+    border-radius: 14px;
+    padding: 0.75rem;
+  }
+
+  .app-maintenance-banner__scope {
+    grid-column: 2;
+    justify-self: start;
+    white-space: normal;
+  }
+}

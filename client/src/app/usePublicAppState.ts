@@ -23,6 +23,7 @@ import {
   persistAuthenticatedUser,
   setBannedSessionFlag,
 } from "@/lib/auth-session";
+import { shouldRedirectForMaintenance } from "@/app/maintenance-client-policy";
 
 type PublicBootstrapState = {
   currentPage: string;
@@ -34,6 +35,7 @@ type PublicBootstrapState = {
 
 type MaintenanceUpdatedDetail = {
   maintenance?: boolean;
+  type?: unknown;
 };
 
 function resolvePublicBootstrapState(): PublicBootstrapState {
@@ -209,7 +211,7 @@ export function usePublicAppState() {
 
     const onMaintenanceUpdated = (event: Event) => {
       const custom = event as CustomEvent<MaintenanceUpdatedDetail>;
-      if (custom.detail?.maintenance) {
+      if (shouldRedirectForMaintenance(custom.detail, user?.role ?? "user")) {
         setCurrentPage("maintenance");
         replaceHistory(buildPathForPage("maintenance"));
         return;
