@@ -120,5 +120,6 @@ test("browser color scheme metadata matches the light and dark token strategy", 
   const indexSource = readClientSource("../../index.html");
 
   assert.match(indexSource, /<meta name="color-scheme" content="light dark" \/>/);
-  assert.doesNotMatch(indexSource, /<meta\s+name=["']mobile-web-app-capable["']/i);
+  assert.match(indexSource, /<meta name="mobile-web-app-capable" content="yes" \/>/);
+  assert.match(indexSource, /<meta name="apple-mobile-web-app-capable" content="yes" \/>/);
 });
