@@ -14,6 +14,8 @@
 
 .scrollbar-visible {
   -ms-overflow-style: auto;
+  scrollbar-color: hsl(239 84% 67% / 0.5) hsl(220 13% 18% / 0.1);
+  scrollbar-width: thin;
 }
 
 .scrollbar-visible::-webkit-scrollbar {

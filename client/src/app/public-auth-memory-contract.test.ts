@@ -112,6 +112,7 @@ test("client entry installs unhandled rejection logging before low-spec detectio
   assert.ok(unhandledIndex < lowSpecIndex);
   assert.ok(tokensImportIndex < publicShellImportIndex);
   assert.match(mainSource, /import \{ StrictMode \} from "react";/);
+  assert.match(mainSource, /import \{ detectLowSpecMode \} from "\.\/lib\/low-spec-mode";/);
   assert.match(mainSource, /createRoot\(rootElement\)\.render\(\s*<StrictMode>/);
   assert.doesNotMatch(mainSource, /import\.meta\.env\.DEV \?/);
 });
@@ -121,5 +122,16 @@ test("browser color scheme metadata matches the light and dark token strategy", 
 
   assert.match(indexSource, /<meta name="color-scheme" content="light dark" \/>/);
   assert.match(indexSource, /<meta name="mobile-web-app-capable" content="yes" \/>/);
-  assert.match(indexSource, /<meta name="apple-mobile-web-app-capable" content="yes" \/>/);
+  assert.doesNotMatch(indexSource, /apple-mobile-web-app-capable/);
+  assert.match(indexSource, /<link rel="canonical" href="https:\/\/sqr-system\.com\/" \/>/);
+  assert.match(indexSource, /<meta property="og:url" content="https:\/\/sqr-system\.com\/" \/>/);
+  assert.match(indexSource, /<meta name="twitter:image" content="https:\/\/sqr-system\.com\/brand\/sqr-logo-minimal\.webp" \/>/);
+});
+
+test("global visible scrollbars include Firefox styling", () => {
+  const indexCss = readClientSource("../index.css");
+  const scrollbarBlock = readFirstCssRuleBlock(indexCss, ".scrollbar-visible");
+
+  assert.match(scrollbarBlock, /scrollbar-color:\s*hsl\(239 84% 67% \/ 0\.5\) hsl\(220 13% 18% \/ 0\.1\);/);
+  assert.match(scrollbarBlock, /scrollbar-width:\s*thin;/);
 });

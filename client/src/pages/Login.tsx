@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { Eye, EyeOff, LogIn } from "lucide-react";
 import type { User } from "@/app/types";
@@ -32,6 +32,7 @@ export default function Login({ onBanned, onForgotPasswordClick, onLandingClick,
     twoFactorChallengeToken,
     twoFactorCode,
     lockedFlow,
+    lockedRetryUntilMs,
     setPassword,
     setTwoFactorCode,
     handleUsernameChange,
@@ -71,6 +72,7 @@ export default function Login({ onBanned, onForgotPasswordClick, onLandingClick,
     : {
       "aria-describedby": "login-two-factor-help",
     };
+  const [lockedCountdownMs, setLockedCountdownMs] = useState(0);
 
   useEffect(() => {
     if (typeof window === "undefined" || !usernameInputRef.current) {
@@ -89,6 +91,25 @@ export default function Login({ onBanned, onForgotPasswordClick, onLandingClick,
       window.cancelAnimationFrame(frameId);
     };
   }, []);
+
+  useEffect(() => {
+    if (!lockedFlow || !lockedRetryUntilMs) {
+      setLockedCountdownMs(0);
+      return;
+    }
+
+    const refreshCountdown = () => {
+      setLockedCountdownMs(Math.max(0, lockedRetryUntilMs - Date.now()));
+    };
+    refreshCountdown();
+    const intervalId = window.setInterval(refreshCountdown, 1000);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [lockedFlow, lockedRetryUntilMs]);
+
+  const lockedCountdownSeconds = Math.ceil(lockedCountdownMs / 1000);
 
   return (
     <div className="login-page relative w-full viewport-min-height overflow-hidden">
@@ -278,7 +299,9 @@ export default function Login({ onBanned, onForgotPasswordClick, onLandingClick,
                     {lockedAccountMessage || "Akaun anda telah dikunci kerana terlalu banyak percubaan log masuk yang tidak sah."}
                   </div>
                   <div className="login-alert--warning-subtext mt-1 text-xs">
-                    Sila hubungi pentadbir sistem untuk pengaktifan semula akaun.
+                    {lockedCountdownSeconds > 0
+                      ? `Sila cuba semula dalam ${lockedCountdownSeconds} saat.`
+                      : "Sila hubungi pentadbir sistem untuk pengaktifan semula akaun."}
                   </div>
                 </div>
               ) : null}

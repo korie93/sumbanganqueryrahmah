@@ -17,12 +17,7 @@ import { isBannedSessionFlagSet } from "@/lib/auth-session";
 import { scheduleIdlePreload } from "@/lib/lazy-with-preload";
 import LandingRouteFallback from "@/pages/LandingRouteFallback";
 import { usePublicAppState } from "@/app/usePublicAppState";
-
-const AUTHENTICATED_ROLE_HOME_PAGE: Record<string, string> = {
-  user: "general-search",
-  admin: "home",
-  superuser: "home",
-};
+import { resolveAuthenticatedRoleHomePage } from "@/app/role-home-page";
 
 function markAppReadyAndRemoveBootShell() {
   document.documentElement.classList.add("app-ready");
@@ -78,17 +73,14 @@ function AppContent() {
   }, [currentPage, monitorSection, systemName, user]);
 
   useEffect(() => {
-    if (!isInitialized || user) {
-      return;
-    }
-
-    if (currentPage === "forgot-password") {
-      return scheduleIdlePreload(() => {
+    let cancelIdlePreload: (() => void) | undefined;
+    if (isInitialized && !user && currentPage === "forgot-password") {
+      cancelIdlePreload = scheduleIdlePreload(() => {
         LoginPage.preload();
       }, 700);
     }
 
-    return;
+    return cancelIdlePreload;
   }, [currentPage, isInitialized, user]);
 
   const renderRoutePage = (
@@ -110,7 +102,7 @@ function AppContent() {
   );
 
   const handleAuthenticatedNavigateHome = () => {
-    handlePublicNavigate(AUTHENTICATED_ROLE_HOME_PAGE[user?.role ?? ""] ?? "home");
+    handlePublicNavigate(resolveAuthenticatedRoleHomePage(user?.role));
   };
 
   if (!isInitialized) {

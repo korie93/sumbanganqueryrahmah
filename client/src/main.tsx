@@ -1,28 +1,11 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App";
-import { getBrowserLocalStorage, safeGetStorageItem } from "./lib/browser-storage";
 import { installGlobalUnhandledRejectionHandler } from "./lib/global-unhandled-rejection";
+import { detectLowSpecMode } from "./lib/low-spec-mode";
 import { initializeWebVitalsReporting } from "./lib/web-vitals";
 import "./theme-tokens.css";
 import "./public-shell.css";
-
-const detectLowSpecMode = () => {
-  const perfOverride = safeGetStorageItem(getBrowserLocalStorage(), "perf_mode");
-  if (perfOverride === "low") return true;
-  if (perfOverride === "high") return false;
-
-  const navAny = navigator as Navigator & {
-    deviceMemory?: number;
-    connection?: { saveData?: boolean };
-  };
-
-  const cores = navigator.hardwareConcurrency || 4;
-  const memoryGb = navAny.deviceMemory || 4;
-  const saveData = Boolean(navAny.connection?.saveData);
-
-  return saveData || cores <= 4 || memoryGb <= 4;
-};
 
 installGlobalUnhandledRejectionHandler();
 

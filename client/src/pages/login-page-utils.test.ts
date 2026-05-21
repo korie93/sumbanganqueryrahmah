@@ -6,6 +6,8 @@ import {
   isAbortRequestError,
   isLockedAccountError,
   normalizeLoginErrorMessage,
+  formatRetryAfterMessage,
+  readRetryAfterMs,
   readErrorMessage,
   resolveAuthenticatedDefaultTab,
   validatePasswordLoginFields,
@@ -76,6 +78,8 @@ test("login error helpers read safe fields from unknown errors", () => {
     readErrorMessage({ status: 429, retryAfterMs: 1_250, message: "Too many requests" }, "Fallback"),
     "Terlalu banyak percubaan. Sila cuba semula dalam 2 saat.",
   );
+  assert.equal(readRetryAfterMs({ retryAfterMs: 1_250 }), 1_250);
+  assert.equal(formatRetryAfterMessage(2_050), "Terlalu banyak percubaan. Sila cuba semula dalam 3 saat.");
   assert.equal(
     readErrorMessage(new Error('429: {"message":"Too many requests","retryAfterMs":2500}'), "Fallback"),
     "Terlalu banyak percubaan. Sila cuba semula dalam 3 saat.",

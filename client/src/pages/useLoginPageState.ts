@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import type { User } from "@/app/types";
 import { getBrowserLocalStorage, safeSetStorageItem } from "@/lib/browser-storage";
 import {
@@ -25,6 +25,7 @@ import {
   isAbortRequestError,
   isLockedAccountError,
   normalizeLoginErrorMessage,
+  readRetryAfterMs,
   readErrorMessage,
   resolveAuthenticatedDefaultTab,
   validatePasswordLoginFields,
@@ -53,6 +54,7 @@ export function useLoginPageState({
   const [passwordError, setPasswordError] = useState("");
   const [twoFactorCodeError, setTwoFactorCodeError] = useState("");
   const [lockedAccountMessage, setLockedAccountMessage] = useState("");
+  const [lockedRetryUntilMs, setLockedRetryUntilMs] = useState<number | null>(null);
   const [lockedUsername, setLockedUsername] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [twoFactorChallengeToken, setTwoFactorChallengeToken] = useState("");
@@ -84,10 +86,28 @@ export function useLoginPageState({
     }
   }, []);
 
-  const clearLockedAccountState = () => {
+  const clearLockedAccountState = useCallback(() => {
     setLockedUsername("");
     setLockedAccountMessage("");
-  };
+    setLockedRetryUntilMs(null);
+  }, []);
+
+  useEffect(() => {
+    if (!lockedUsername || !lockedRetryUntilMs) {
+      return;
+    }
+
+    const remainingMs = lockedRetryUntilMs - Date.now();
+    if (remainingMs <= 0) {
+      clearLockedAccountState();
+      return;
+    }
+
+    const timeoutId = window.setTimeout(clearLockedAccountState, remainingMs);
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [clearLockedAccountState, lockedRetryUntilMs, lockedUsername]);
 
   const beginRequest = () => {
     const requestId = beginLoginRequest();
@@ -219,6 +239,8 @@ export function useLoginPageState({
       logClientError("Login failed:", err);
       if (isLockedAccountError(err)) {
         setLockedUsername(normalizeLoginIdentity(username));
+        const retryAfterMs = readRetryAfterMs(err);
+        setLockedRetryUntilMs(retryAfterMs === null ? null : Date.now() + retryAfterMs);
         setLockedAccountMessage(readErrorMessage(err, "Akaun anda telah dikunci kerana terlalu banyak percubaan log masuk yang tidak sah."));
         setError("");
         return;
@@ -274,6 +296,8 @@ export function useLoginPageState({
         setTwoFactorChallengeToken("");
         setTwoFactorCode("");
         setLockedUsername(normalizeLoginIdentity(username));
+        const retryAfterMs = readRetryAfterMs(err);
+        setLockedRetryUntilMs(retryAfterMs === null ? null : Date.now() + retryAfterMs);
         setLockedAccountMessage(readErrorMessage(err, "Akaun anda telah dikunci kerana terlalu banyak percubaan log masuk yang tidak sah."));
         setError("");
         return;
@@ -327,6 +351,7 @@ export function useLoginPageState({
     passwordError,
     twoFactorCodeError,
     lockedAccountMessage,
+    lockedRetryUntilMs,
     loading,
     showPassword,
     twoFactorChallengeToken,

@@ -81,7 +81,7 @@ function parseStructuredErrorMessage(message: string): Record<string, unknown> |
   }
 }
 
-function readRetryAfterMs(error: unknown): number | null {
+export function readRetryAfterMs(error: unknown): number | null {
   if (!error || typeof error !== "object") {
     return null;
   }
@@ -124,7 +124,7 @@ function readErrorStatus(error: unknown): number | null {
   return match ? Number(match[1]) : null;
 }
 
-function formatRetryAfterMessage(retryAfterMs: number): string {
+export function formatRetryAfterMessage(retryAfterMs: number): string {
   const seconds = Math.max(1, Math.ceil(retryAfterMs / 1000));
   return `Terlalu banyak percubaan. Sila cuba semula dalam ${seconds} saat.`;
 }
