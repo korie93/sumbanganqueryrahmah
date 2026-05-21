@@ -12,6 +12,8 @@ export function buildRuntimeConfigWarnings(params: {
   configuredPgPassword: string | null;
   configuredAuthCookieSecure: string | null;
   configuredClusterMaxWorkers: number;
+  hstsMaxAgeSeconds?: number;
+  hstsPreloadEnabled?: boolean;
   mailConfiguration: MailConfigurationAssessment;
 }): RuntimeConfigDiagnostic[] {
   const warnings: RuntimeConfigDiagnostic[] = [];
@@ -25,6 +27,8 @@ export function buildRuntimeConfigWarnings(params: {
     configuredPgPassword,
     configuredAuthCookieSecure,
     configuredClusterMaxWorkers,
+    hstsMaxAgeSeconds,
+    hstsPreloadEnabled,
     mailConfiguration,
   } = params;
 
@@ -99,6 +103,34 @@ export function buildRuntimeConfigWarnings(params: {
       code: "AUTH_COOKIE_SECURE_FORCED_ON_PRODUCTION",
       envNames: ["AUTH_COOKIE_SECURE"],
       message: "AUTH_COOKIE_SECURE=false was ignored because secure auth cookies are mandatory on production-like hosts.",
+      severity: "warning",
+    });
+  }
+
+  if (
+    isProductionLike
+    && String(publicAppUrl || "").toLowerCase().startsWith("https://")
+    && !hstsPreloadEnabled
+  ) {
+    warnings.push({
+      code: "HSTS_PRELOAD_DISABLED_PRODUCTION_HTTPS",
+      envNames: ["HSTS_PRELOAD_ENABLED", "HSTS_MAX_AGE_SECONDS"],
+      message:
+        "HSTS preload is disabled on a production HTTPS deployment. Enable it only after every production subdomain is HTTPS-only and HSTS_MAX_AGE_SECONDS is at least 31536000.",
+      severity: "warning",
+    });
+  }
+
+  if (
+    isProductionLike
+    && hstsPreloadEnabled
+    && typeof hstsMaxAgeSeconds === "number"
+    && hstsMaxAgeSeconds < 31_536_000
+  ) {
+    warnings.push({
+      code: "HSTS_PRELOAD_MAX_AGE_TOO_LOW",
+      envNames: ["HSTS_MAX_AGE_SECONDS"],
+      message: "HSTS preload requires HSTS_MAX_AGE_SECONDS to be at least 31536000.",
       severity: "warning",
     });
   }

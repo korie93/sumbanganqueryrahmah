@@ -4,6 +4,7 @@ import {
   assertNoPlaceholderSecrets,
   assertProductionDatabaseBootstrapModeSafety,
   assertProductionRateLimiterTopologySafety,
+  assertProductionTwoFactorReplayTopologySafety,
   assertRuntimeSafetyGuards,
   assertStrongRuntimeSecret,
   buildRuntimeConfigWarnings,
@@ -209,6 +210,34 @@ test("assertProductionRateLimiterTopologySafety rejects production-like multi-wo
       isProductionLike: true,
       configuredClusterMaxWorkers: 2,
       distributedStoreConfigured: true,
+    }),
+  );
+});
+
+test("assertProductionTwoFactorReplayTopologySafety rejects production multi-worker even with shared rate limits", () => {
+  assert.throws(
+    () =>
+      assertProductionTwoFactorReplayTopologySafety({
+        isProductionLike: true,
+        configuredClusterMaxWorkers: 2,
+        sharedReplayStoreConfigured: false,
+      }),
+    /2FA TOTP replay protection is process-local/i,
+  );
+
+  assert.doesNotThrow(() =>
+    assertProductionTwoFactorReplayTopologySafety({
+      isProductionLike: true,
+      configuredClusterMaxWorkers: 1,
+      sharedReplayStoreConfigured: false,
+    }),
+  );
+
+  assert.doesNotThrow(() =>
+    assertProductionTwoFactorReplayTopologySafety({
+      isProductionLike: false,
+      configuredClusterMaxWorkers: 2,
+      sharedReplayStoreConfigured: false,
     }),
   );
 });
@@ -474,6 +503,33 @@ test("resolveHstsHeaderConfig rejects production max-age below the hardened base
       includeSubDomains: true,
       preload: false,
     },
+  );
+});
+
+test("buildRuntimeConfigWarnings reports disabled HSTS preload on production HTTPS", () => {
+  const warnings = buildRuntimeConfigWarnings({
+    isStrictLocalDevelopment: false,
+    isProductionLike: true,
+    publicAppUrl: "https://sqr.example.com",
+    configuredSessionSecret: "prod-session-secret",
+    configuredCollectionNicknameTempPassword: "TempPassword12345",
+    configuredCollectionPiiEncryptionKey: "collection-pii-secret",
+    configuredPgPassword: "prod-db-password",
+    configuredAuthCookieSecure: null,
+    configuredClusterMaxWorkers: 1,
+    hstsMaxAgeSeconds: 15_552_000,
+    hstsPreloadEnabled: false,
+    mailConfiguration: {
+      effectiveFrom: "noreply@sqr.example.com",
+      hasAnyInput: true,
+      isConfigured: true,
+      isIncomplete: false,
+    },
+  });
+
+  assert.match(
+    warnings.map((warning) => warning.code).join(","),
+    /HSTS_PRELOAD_DISABLED_PRODUCTION_HTTPS/,
   );
 });
 

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { TwoFactorReplayCache } from "../two-factor-replay-cache";
 import {
+  assertProductionTwoFactorReplayCacheTopologySafety,
   buildTwoFactorReplayCacheTopologyWarning,
   requiresSingleWorkerForProcessLocalTwoFactorReplayCache,
 } from "../two-factor-replay-topology";
@@ -58,4 +59,40 @@ test("TwoFactorReplayCache exposes the multi-worker topology constraint explicit
   assert.equal(requiresSingleWorkerForProcessLocalTwoFactorReplayCache(2), true);
   assert.equal(buildTwoFactorReplayCacheTopologyWarning(1), null);
   assert.match(String(buildTwoFactorReplayCacheTopologyWarning(2)), /process-local/i);
+});
+
+test("TwoFactorReplayCache topology fails fast for production multi-worker without shared replay state", () => {
+  assert.throws(
+    () =>
+      assertProductionTwoFactorReplayCacheTopologySafety({
+        isProductionLike: true,
+        sharedReplayStoreConfigured: false,
+        workerCount: 2,
+      }),
+    /SQR_MAX_WORKERS greater than 1 is not allowed/i,
+  );
+
+  assert.doesNotThrow(() =>
+    assertProductionTwoFactorReplayCacheTopologySafety({
+      isProductionLike: false,
+      sharedReplayStoreConfigured: false,
+      workerCount: 2,
+    }),
+  );
+
+  assert.doesNotThrow(() =>
+    assertProductionTwoFactorReplayCacheTopologySafety({
+      isProductionLike: true,
+      sharedReplayStoreConfigured: false,
+      workerCount: 1,
+    }),
+  );
+
+  assert.doesNotThrow(() =>
+    assertProductionTwoFactorReplayCacheTopologySafety({
+      isProductionLike: true,
+      sharedReplayStoreConfigured: true,
+      workerCount: 2,
+    }),
+  );
 });

@@ -64,7 +64,7 @@ npm run monitor:stale-conflicts
 
 ### Rate Limit Topology
 
-Process-local memory rate limiting is acceptable only for single-worker/single-instance deployments. Multi-worker or multi-instance production deployments must configure `SQR_RATE_LIMIT_STORE=redis` and `SQR_REDIS_RATE_LIMIT_URL`; otherwise every worker receives an independent quota and effective limits drift.
+Process-local memory rate limiting is acceptable only for single-worker/single-instance deployments. Redis (`SQR_RATE_LIMIT_STORE=redis` and `SQR_REDIS_RATE_LIMIT_URL`) can share rate-limit counters across app processes, but production multi-worker mode remains blocked until 2FA replay protection and WebSocket presence also have shared state.
 
 ## 2. Apa Yang Belum Dianggap Siap
 

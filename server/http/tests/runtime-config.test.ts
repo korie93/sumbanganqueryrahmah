@@ -408,7 +408,7 @@ test("runtime config rejects production startup when multi-worker mode still use
   );
 });
 
-test("runtime config accepts staged redis rate-limit store settings for production multi-worker mode", async () => {
+test("runtime config still rejects production multi-worker with redis until shared 2FA replay exists", async () => {
   await withEnv(
     {
       ...productionBaseOverrides,
@@ -419,13 +419,10 @@ test("runtime config accepts staged redis rate-limit store settings for producti
       SQR_REDIS_RATE_LIMIT_URL: "rediss://redis.internal:6380/0",
     },
     async () => {
-      const runtimeModule = await importRuntimeFresh();
-      assert.equal(runtimeModule.runtimeConfig.cluster.maxWorkers, 2);
-      assert.deepEqual(runtimeModule.runtimeConfig.rateLimiting.store, {
-        distributedStoreConfigured: true,
-        provider: "redis",
-        redisUrl: "rediss://redis.internal:6380/0",
-      });
+      await assert.rejects(
+        importRuntimeFresh(),
+        /2FA TOTP replay protection is process-local/i,
+      );
     },
   );
 });

@@ -36,6 +36,7 @@ import {
   assertNoPlaceholderSecrets,
   assertProductionDatabaseBootstrapModeSafety,
   assertProductionRateLimiterTopologySafety,
+  assertProductionTwoFactorReplayTopologySafety,
   assertRuntimeSafetyGuards,
   buildRuntimeConfigWarnings,
   hasBackupEncryptionKeyConfigured,
@@ -176,6 +177,12 @@ assertProductionRateLimiterTopologySafety({
   isProductionLike,
   configuredClusterMaxWorkers,
   distributedStoreConfigured: sharedRateLimitStore.distributedStoreConfigured,
+});
+
+assertProductionTwoFactorReplayTopologySafety({
+  isProductionLike,
+  configuredClusterMaxWorkers,
+  sharedReplayStoreConfigured: false,
 });
 
 assertProductionDatabaseBootstrapModeSafety({
@@ -403,6 +410,8 @@ const runtimeWarnings = buildRuntimeConfigWarnings({
   configuredPgPassword,
   configuredAuthCookieSecure,
   configuredClusterMaxWorkers,
+  hstsMaxAgeSeconds: hstsHeaderConfig.maxAge,
+  hstsPreloadEnabled: hstsHeaderConfig.preload,
   mailConfiguration,
 });
 

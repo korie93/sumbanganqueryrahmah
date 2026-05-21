@@ -1,4 +1,5 @@
 import type { MailConfigurationAssessment } from "./runtime-config-types";
+import { assertProductionTwoFactorReplayCacheTopologySafety } from "../auth/two-factor-replay-topology";
 import { normalizeCorsOrigin } from "./runtime-config-read-utils";
 export {
   assertNoPlaceholderSecrets,
@@ -278,6 +279,18 @@ export function assertProductionRateLimiterTopologySafety(params: {
   throw new Error(
     "SQR_MAX_WORKERS greater than 1 is not allowed outside strict local development until a shared rate-limit/replay store is configured. Login/auth route limiters, adaptive API protection, telemetry drop guards, and 2FA replay protection are still process-local. Set SQR_MAX_WORKERS=1 or add shared limiter infrastructure before scaling horizontally.",
   );
+}
+
+export function assertProductionTwoFactorReplayTopologySafety(params: {
+  isProductionLike: boolean;
+  configuredClusterMaxWorkers: number;
+  sharedReplayStoreConfigured: boolean;
+}) {
+  assertProductionTwoFactorReplayCacheTopologySafety({
+    isProductionLike: params.isProductionLike,
+    sharedReplayStoreConfigured: params.sharedReplayStoreConfigured,
+    workerCount: params.configuredClusterMaxWorkers,
+  });
 }
 
 export function assertProductionDatabaseBootstrapModeSafety(params: {
