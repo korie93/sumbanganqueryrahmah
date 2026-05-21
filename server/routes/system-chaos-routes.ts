@@ -22,7 +22,7 @@ export function registerSystemChaosRoutes(context: SystemRouteContext) {
   } = context;
 
   app.post(
-    "/internal/chaos/inject",
+    "/api/internal/chaos/inject",
     authenticateToken,
     requireRole("admin", "superuser"),
     asyncHandler(async (req: AuthenticatedRequest, res: Response) => {

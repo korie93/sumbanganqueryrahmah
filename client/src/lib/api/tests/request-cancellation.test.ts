@@ -544,7 +544,7 @@ test("monitor API wrappers forward AbortSignal", async () => {
         decisionReason: "No evaluation yet.",
       });
     }
-    if (url === "/internal/chaos/inject") {
+    if (url === "/api/internal/chaos/inject") {
       return jsonResponse({
         success: true,
         injected: {
@@ -607,7 +607,7 @@ test("monitor API wrappers forward AbortSignal", async () => {
   assert.equal(requests[4]?.url, "/internal/alerts/history?page=2&pageSize=5");
   assert.equal(requests[5]?.url, "/internal/web-vitals");
   assert.equal(requests[6]?.url, "/internal/intelligence/explain");
-  assert.equal(requests[7]?.url, "/internal/chaos/inject");
+  assert.equal(requests[7]?.url, "/api/internal/chaos/inject");
   assert.equal(requests[8]?.url, "/internal/rollup-refresh/drain");
   assert.equal(requests[9]?.url, "/internal/rollup-refresh/retry-failures");
   assert.equal(requests[10]?.url, "/internal/rollup-refresh/auto-heal");

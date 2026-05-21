@@ -942,3 +942,51 @@ test("rollup refresh control routes remain superuser-only and return snapshots",
     await stopTestServer(server);
   }
 });
+
+test("POST /api/internal/chaos/inject is the only registered chaos injection route", async () => {
+  let chaosCalls = 0;
+  const auditActions: string[] = [];
+  const app = createJsonTestApp();
+  registerSystemRoutes(app, createBaseSystemRouteDeps({
+    injectChaos: () => {
+      chaosCalls += 1;
+      return createChaosInjectionResult();
+    },
+    createAuditLog: async (data) => {
+      auditActions.push(data.action);
+      return createAuditLogRow(data);
+    },
+  }));
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const legacyResponse = await fetch(`${baseUrl}/internal/chaos/inject`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-test-role": "admin",
+        "x-test-username": "admin.user",
+      },
+      body: JSON.stringify({ type: "cpu_spike" }),
+    });
+    assert.equal(legacyResponse.status, 404);
+
+    const canonicalResponse = await fetch(`${baseUrl}/api/internal/chaos/inject`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-test-role": "admin",
+        "x-test-username": "admin.user",
+      },
+      body: JSON.stringify({ type: "cpu_spike" }),
+    });
+    assert.equal(canonicalResponse.status, 200);
+
+    const payload = await canonicalResponse.json();
+    assert.equal(payload.success, true);
+    assert.equal(chaosCalls, 1);
+    assert.deepEqual(auditActions, ["CHAOS_INJECTED"]);
+  } finally {
+    await stopTestServer(server);
+  }
+});

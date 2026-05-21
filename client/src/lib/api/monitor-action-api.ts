@@ -19,7 +19,7 @@ export async function deleteOldAlertHistory(
 }
 
 export async function injectChaos(payload: ChaosInjectPayload, options?: MonitorRequestOptions) {
-  return postMonitorEndpoint<ChaosInjectResponse>("/internal/chaos/inject", payload, options);
+  return postMonitorEndpoint<ChaosInjectResponse>("/api/internal/chaos/inject", payload, options);
 }
 
 export async function drainRollupQueue(options?: MonitorRequestOptions) {

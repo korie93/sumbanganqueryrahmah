@@ -1146,7 +1146,7 @@ test("system monitor routes enforce monitor-access and chaos role boundaries con
       baseUrl,
       {
         method: "POST",
-        path: "/internal/chaos/inject",
+        path: "/api/internal/chaos/inject",
         body: { type: "cpu_spike", magnitude: 1.2, durationMs: 5000 },
       },
       { anonymous: 401, user: 403, admin: 200, superuser: 200 },
