@@ -251,6 +251,7 @@ Untuk production HTTPS di belakang Nginx, biarkan `AUTH_COOKIE_SECURE=auto` atau
 Jika SMTP config berubah, restart semua PM2 worker selepas update env kerana transporter SMTP dicache dalam proses.
 Jika anda rotate `SESSION_SECRET`, device fingerprint HMAC turut berubah; guna `SESSION_SECRET_PREVIOUS` untuk compatibility window yang dirancang, atau paksa login semula jika rotation kecemasan.
 Kekalkan `SQR_MAX_WORKERS=1` untuk production buat masa ini. Redis boleh berkongsi rate-limit counters, tetapi 2FA replay cache dan WebSocket `connectedClients` masih process-local; runtime production akan fail fast jika multi-worker diaktifkan sebelum shared 2FA replay store dan WebSocket pub/sub disediakan.
+Biarkan `TWO_FACTOR_TOTP_ALGORITHM=SHA1` untuk akaun 2FA sedia ada. `SHA256` hanya sesuai selepas jadual re-enrollment TOTP dibuat kerana aplikasi pengesah menyimpan algorithm semasa enrollment.
 
 ## 9. Build dan Migrate
 

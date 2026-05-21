@@ -9,6 +9,7 @@ import {
   sweepExpiredTabVisibilityCacheEntriesForTests,
 } from "../guards";
 import { logger } from "../../lib/logger";
+import { getInternalMetricsSnapshot } from "../../internal/metrics";
 
 test("getInvalidatedSessionMessage returns reset-specific messaging for password reset invalidation", () => {
   assert.equal(
@@ -398,9 +399,10 @@ test("authenticateToken prefers the composite session snapshot when storage expo
   assert.equal((request as { user?: { username?: string } }).user?.username, "guard.user");
 });
 
-test("authenticateToken uses nullish identity fallback and logs missing database identity fields", async () => {
+test("authenticateToken invalidates sessions with missing database identity fields", async () => {
   const secret = "guard-test-secret";
   const snapshot = createAuthenticatedSessionSnapshot();
+  const beforeMetric = getInternalMetricsSnapshot().counters.authIdentityFallbackTotal;
   const originalLoggerWarn = logger.warn;
   const warnings: Array<{ message: string; payload: Record<string, unknown> }> = [];
   logger.warn = ((message: string, payload: Record<string, unknown>) => {
@@ -421,7 +423,11 @@ test("authenticateToken uses nullish identity fallback and logs missing database
       getUser: async () => undefined,
       getUserByUsername: async () => undefined,
       isVisitorBanned: async () => false,
-      updateActivity: async () => undefined,
+      updateActivity: async (_activityId, payload) => {
+        updateCalls += 1;
+        assert.equal(payload.logoutReason, "USER_IDENTITY_INCOMPLETE");
+        return undefined;
+      },
       getRoleTabVisibility: async () => ({}),
     },
     secret,
@@ -446,20 +452,26 @@ test("authenticateToken uses nullish identity fallback and logs missing database
   };
   const response = createMockResponse();
   let nextCalls = 0;
+  let updateCalls = 0;
 
   try {
     await guards.authenticateToken(request as never, response as never, () => {
       nextCalls += 1;
     });
 
-    assert.equal(nextCalls, 1);
-    assert.equal((request as { user?: { userId?: string } }).user?.userId, "user-1");
-    assert.equal((request as { user?: { username?: string } }).user?.username, "guard.user");
-    assert.equal((request as { user?: { role?: string } }).user?.role, "admin");
+    assert.equal(nextCalls, 0);
+    assert.equal(response.statusCode, 401);
+    assert.deepEqual(response.body, {
+      message: "Session expired. Please login again.",
+      forceLogout: true,
+      code: "ACCOUNT_UNAVAILABLE",
+    });
+    assert.equal(updateCalls, 1);
     assert.equal(warnings.length, 1);
-    assert.equal(warnings[0].message, "Authenticated session used fallback identity fields after database lookup");
-    assert.deepEqual(warnings[0].payload.fallbackFields, ["userId", "username"]);
+    assert.equal(warnings[0].message, "Authenticated session invalidated because database identity fields are missing");
+    assert.deepEqual(warnings[0].payload.missingIdentityFields, ["userId", "username"]);
     assert.doesNotMatch(JSON.stringify(warnings[0].payload), /guard\.user|token\.user|user-1|token-user/);
+    assert.equal(getInternalMetricsSnapshot().counters.authIdentityFallbackTotal, beforeMetric + 1);
   } finally {
     logger.warn = originalLoggerWarn;
     guards.stopTabVisibilityCacheSweep();

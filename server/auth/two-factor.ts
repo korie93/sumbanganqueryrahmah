@@ -11,6 +11,7 @@ import { getTwoFactorDecryptionSecrets, getTwoFactorEncryptionSecret } from "../
 const BASE32_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
 const TOTP_PERIOD_SECONDS = 30;
 const TOTP_DIGITS = 6;
+type TotpAlgorithm = "sha1" | "sha256";
 
 function base32Encode(buffer: Buffer) {
   let bits = 0;
@@ -78,12 +79,16 @@ function getTwoFactorDecryptionCipherKeys() {
   return getTwoFactorDecryptionSecrets().map((secret) => getTwoFactorCipherKey(secret));
 }
 
-function generateTotpAt(secret: string, timestampMs: number) {
+export function resolveTotpAlgorithm(value = process.env.TWO_FACTOR_TOTP_ALGORITHM): TotpAlgorithm {
+  return String(value || "").trim().toUpperCase() === "SHA256" ? "sha256" : "sha1";
+}
+
+function generateTotpAt(secret: string, timestampMs: number, algorithm = resolveTotpAlgorithm()) {
   const key = base32Decode(secret);
   const counter = Math.floor(timestampMs / 1000 / TOTP_PERIOD_SECONDS);
   const counterBuffer = Buffer.alloc(8);
   counterBuffer.writeBigUInt64BE(BigInt(counter));
-  const digest = createHmac("sha1", key).update(counterBuffer).digest();
+  const digest = createHmac(algorithm, key).update(counterBuffer).digest();
   const offset = digest[digest.length - 1] & 0x0f;
   const binary = (
     ((digest[offset] & 0x7f) << 24)
@@ -119,8 +124,9 @@ export function verifyTwoFactorCode(secret: string, rawCode: string, window = 1)
   }
 
   const now = Date.now();
+  const algorithm = resolveTotpAlgorithm();
   for (let step = -window; step <= window; step += 1) {
-    const candidate = generateTotpAt(secret, now + step * TOTP_PERIOD_SECONDS * 1000);
+    const candidate = generateTotpAt(secret, now + step * TOTP_PERIOD_SECONDS * 1000, algorithm);
     if (isTotpCodeMatch(candidate, code)) {
       return true;
     }
@@ -178,5 +184,6 @@ export function buildTwoFactorOtpAuthUrl(params: {
   const label = encodeURIComponent(`${issuer}:${username}`);
   const encodedIssuer = encodeURIComponent(issuer);
   const secret = encodeURIComponent(params.secret);
-  return `otpauth://totp/${label}?secret=${secret}&issuer=${encodedIssuer}&algorithm=SHA1&digits=${TOTP_DIGITS}&period=${TOTP_PERIOD_SECONDS}`;
+  const algorithm = resolveTotpAlgorithm().toUpperCase();
+  return `otpauth://totp/${label}?secret=${secret}&issuer=${encodedIssuer}&algorithm=${algorithm}&digits=${TOTP_DIGITS}&period=${TOTP_PERIOD_SECONDS}`;
 }

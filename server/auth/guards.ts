@@ -22,6 +22,7 @@ import {
 import { createActivityUpdateThrottler } from "./guard-activity-update";
 import { createRoleTabVisibilityCache } from "./guard-tab-visibility";
 import { loadAuthenticatedSessionSnapshot } from "./guard-session-snapshot";
+import { internalMetrics } from "../internal/metrics";
 export { getInvalidatedSessionMessage } from "./guard-session-messages";
 
 export interface AuthenticatedUser {
@@ -155,20 +156,16 @@ export function createAuthGuards(options: CreateAuthGuardsOptions) {
         });
       }
 
-      await activityUpdates.updateAuthenticatedActivity(decoded.activityId);
-
-      const resolvedUserId = user.id ?? activity.userId ?? decoded.userId;
-      const resolvedUsername = user.username ?? activity.username ?? decoded.username;
-      const resolvedRole = user.role ?? activity.role ?? decoded.role;
-      const fallbackFields = [
+      const missingIdentityFields = [
         user.id == null ? "userId" : null,
         user.username == null ? "username" : null,
         user.role == null ? "role" : null,
       ].filter((field): field is string => field !== null);
 
-      if (fallbackFields.length > 0) {
-        logger.warn("Authenticated session used fallback identity fields after database lookup", {
-          fallbackFields,
+      if (missingIdentityFields.length > 0) {
+        internalMetrics.increment("authIdentityFallbackTotal");
+        logger.warn("Authenticated session invalidated because database identity fields are missing", {
+          missingIdentityFields,
           activityFallbackAvailable: {
             userId: activity.userId != null,
             username: activity.username != null,
@@ -180,12 +177,25 @@ export function createAuthGuards(options: CreateAuthGuardsOptions) {
             role: decoded.role != null,
           },
         });
+        await storage.updateActivity(decoded.activityId, {
+          isActive: false,
+          logoutTime: new Date(),
+          logoutReason: "USER_IDENTITY_INCOMPLETE",
+        });
+        clearAuthSessionCookie(res);
+        return res.status(401).json({
+          message: "Session expired. Please login again.",
+          forceLogout: true,
+          code: ERROR_CODES.ACCOUNT_UNAVAILABLE,
+        });
       }
 
+      await activityUpdates.updateAuthenticatedActivity(decoded.activityId);
+
       req.user = {
-        userId: resolvedUserId,
-        username: resolvedUsername,
-        role: resolvedRole,
+        userId: user.id,
+        username: user.username,
+        role: user.role,
         activityId: decoded.activityId,
         status: user.status,
         mustChangePassword: user.mustChangePassword,

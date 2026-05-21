@@ -1,4 +1,5 @@
 export type InternalMetricName =
+  | "authIdentityFallbackTotal"
   | "collectionPiiDecryptFallbackTotal"
   | "cspReportsAcceptedTotal"
   | "cspReportsDroppedRateLimitTotal"
@@ -20,6 +21,7 @@ export type InternalMetricsRecorder = {
 };
 
 const INTERNAL_METRIC_NAMES: readonly InternalMetricName[] = [
+  "authIdentityFallbackTotal",
   "collectionPiiDecryptFallbackTotal",
   "cspReportsAcceptedTotal",
   "cspReportsDroppedRateLimitTotal",
