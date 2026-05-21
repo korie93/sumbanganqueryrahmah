@@ -99,7 +99,7 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage, systemNam
     event.currentTarget.blur();
     handleMinimize();
   }, [handleMinimize]);
-  const handleBackdropClick = useCallback((event: MouseEvent<HTMLButtonElement>) => {
+  const handleBackdropClick = useCallback((event: MouseEvent<HTMLDivElement>) => {
     event.currentTarget.blur();
     handleMinimize();
   }, [handleMinimize]);
@@ -130,13 +130,13 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage, systemNam
       hidden={layoutState.rootHidden}
     >
       {isMobile && shouldShowPanel ? (
-        <button
-          type="button"
+        <div
           className={cn(
             "pointer-events-auto border-0 bg-transparent p-0",
             styles.floatingMobileBackdrop,
           )}
-          aria-label="Tutup panel AI"
+          aria-hidden="true"
+          role="presentation"
           onClick={handleBackdropClick}
         />
       ) : null}

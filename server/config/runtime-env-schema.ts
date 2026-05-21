@@ -13,6 +13,7 @@ const AUTH_COOKIE_SECURE_VALUES = new Set(["auto", "true", "false", "1", "0"]);
 const SESSION_COOKIE_SAMESITE_VALUES = new Set(["strict", "lax"]);
 const DB_BOOTSTRAP_MODE_VALUES = new Set(["runtime", "migration"]);
 const RATE_LIMIT_STORE_VALUES = new Set(["memory", "redis"]);
+const TWO_FACTOR_TOTP_ALGORITHM_VALUES = new Set(["sha1", "sha256"]);
 
 function normalizeOptionalEnvString(value: unknown) {
   if (value == null) {
@@ -101,6 +102,20 @@ function optionalRateLimitStoreEnv() {
       .refine(
         (value) => RATE_LIMIT_STORE_VALUES.has(value),
         "SQR_RATE_LIMIT_STORE must be one of: memory or redis.",
+      )
+      .optional(),
+  );
+}
+
+function optionalTwoFactorTotpAlgorithmEnv() {
+  return z.preprocess(
+    normalizeOptionalEnvString,
+    z
+      .string({ invalid_type_error: "TWO_FACTOR_TOTP_ALGORITHM must be a string." })
+      .transform((value) => value.toLowerCase())
+      .refine(
+        (value) => TWO_FACTOR_TOTP_ALGORITHM_VALUES.has(value),
+        "TWO_FACTOR_TOTP_ALGORITHM must be one of: SHA1 or SHA256.",
       )
       .optional(),
   );
@@ -202,6 +217,7 @@ const runtimeEnvironmentSchema = z.object({
     "TWO_FACTOR_ENCRYPTION_KEY_PREVIOUS",
     SECRET_STRING_MAX_LENGTH,
   ),
+  TWO_FACTOR_TOTP_ALGORITHM: optionalTwoFactorTotpAlgorithmEnv(),
   COLLECTION_PII_ENCRYPTION_KEY: optionalEnvString("COLLECTION_PII_ENCRYPTION_KEY", SECRET_STRING_MAX_LENGTH),
   COLLECTION_PII_ENCRYPTION_KEY_PREVIOUS: optionalEnvString(
     "COLLECTION_PII_ENCRYPTION_KEY_PREVIOUS",

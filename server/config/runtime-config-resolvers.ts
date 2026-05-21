@@ -68,3 +68,7 @@ export function resolveDatabaseBootstrapMode(
 
   return options.isProductionLike ? "migration" : "runtime";
 }
+
+export function resolveTwoFactorTotpAlgorithm(value: string | null): "sha1" | "sha256" {
+  return String(value || "").trim().toUpperCase() === "SHA256" ? "sha256" : "sha1";
+}

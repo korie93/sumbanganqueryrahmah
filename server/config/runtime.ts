@@ -29,6 +29,7 @@ import {
   resolveCookieSameSite,
   resolveDatabaseBootstrapMode,
   resolveDefaultPgMaxConnections,
+  resolveTwoFactorTotpAlgorithm,
 } from "./runtime-config-resolvers";
 import { isAllowedCollectionPiiRetiredField } from "./collection-pii-field-config";
 import {
@@ -103,6 +104,7 @@ const configuredTwoFactorEncryptionKey = readOptionalString("TWO_FACTOR_ENCRYPTI
 const configuredPreviousTwoFactorEncryptionKeys = readCommaSeparatedList(
   "TWO_FACTOR_ENCRYPTION_KEY_PREVIOUS",
 );
+const configuredTwoFactorTotpAlgorithm = readOptionalString("TWO_FACTOR_TOTP_ALGORITHM");
 const configuredCollectionPiiEncryptionKey = readOptionalString("COLLECTION_PII_ENCRYPTION_KEY");
 const configuredPreviousCollectionPiiEncryptionKeys = resolvePreviousCollectionPiiSecrets(
   readCommaSeparatedList("COLLECTION_PII_ENCRYPTION_KEY_PREVIOUS"),
@@ -264,6 +266,7 @@ export const runtimeConfig: RuntimeConfig = Object.freeze({
       isProductionLike,
       () => buildEphemeralSecret("collection-temp").slice(0, 16),
     ),
+    twoFactorAlgorithm: resolveTwoFactorTotpAlgorithm(configuredTwoFactorTotpAlgorithm),
     twoFactorEncryptionSecret: configuredTwoFactorEncryptionKey,
     seedDefaultUsers,
     cookieSecure,

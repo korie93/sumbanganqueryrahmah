@@ -5,7 +5,7 @@ export const WEB_VITALS_TELEMETRY_PATHS = [
 
 export const LEGACY_WEB_VITALS_TELEMETRY_PATH = "/telemetry/web-vitals";
 export const CANONICAL_WEB_VITALS_TELEMETRY_PATH = "/api/telemetry/web-vitals";
-export const LEGACY_TELEMETRY_SUNSET_DATE = "Wed, 01 Jul 2026 00:00:00 GMT";
+export const LEGACY_TELEMETRY_SUNSET_DATE = "Mon, 15 Jun 2026 00:00:00 GMT";
 export const LEGACY_WEB_VITALS_TELEMETRY_SUNSET = LEGACY_TELEMETRY_SUNSET_DATE;
 export const LEGACY_TELEMETRY_ROUTE_ENABLED = true;
 

@@ -10,6 +10,8 @@ type TwoFactorReplayCacheEntry = {
 type TwoFactorReplayCacheOptions = {
   maxEntries?: number;
   now?: () => number;
+  sweepMinIntervalMs?: number;
+  sweepThresholdEntries?: number;
   ttlMs?: number;
 };
 
@@ -21,6 +23,8 @@ type ConsumeTwoFactorReplayCodeParams = {
 
 const DEFAULT_TWO_FACTOR_REPLAY_TTL_MS = 120_000;
 const DEFAULT_TWO_FACTOR_REPLAY_MAX_ENTRIES = 10_000;
+const DEFAULT_TWO_FACTOR_REPLAY_SWEEP_INTERVAL_MS = 30_000;
+const DEFAULT_TWO_FACTOR_REPLAY_SWEEP_THRESHOLD_ENTRIES = 1_000;
 
 function buildReplayKey(params: ConsumeTwoFactorReplayCodeParams) {
   const subjectId = String(params.subjectId || "").trim();
@@ -44,12 +48,23 @@ function buildReplayKey(params: ConsumeTwoFactorReplayCodeParams) {
 export class TwoFactorReplayCache {
   private readonly maxEntries: number;
   private readonly now: () => number;
+  private readonly sweepMinIntervalMs: number;
+  private readonly sweepThresholdEntries: number;
   private readonly ttlMs: number;
   private readonly entries = new Map<string, TwoFactorReplayCacheEntry>();
+  private nextSweepAtMs = 0;
 
   constructor(options: TwoFactorReplayCacheOptions = {}) {
     this.maxEntries = Math.max(1, Math.floor(Number(options.maxEntries || DEFAULT_TWO_FACTOR_REPLAY_MAX_ENTRIES)));
     this.now = options.now ?? Date.now;
+    this.sweepMinIntervalMs = Math.max(
+      1_000,
+      Math.floor(Number(options.sweepMinIntervalMs || DEFAULT_TWO_FACTOR_REPLAY_SWEEP_INTERVAL_MS)),
+    );
+    this.sweepThresholdEntries = Math.max(
+      1,
+      Math.floor(Number(options.sweepThresholdEntries || DEFAULT_TWO_FACTOR_REPLAY_SWEEP_THRESHOLD_ENTRIES)),
+    );
     this.ttlMs = Math.max(1_000, Math.floor(Number(options.ttlMs || DEFAULT_TWO_FACTOR_REPLAY_TTL_MS)));
   }
 
@@ -59,6 +74,7 @@ export class TwoFactorReplayCache {
 
   clear() {
     this.entries.clear();
+    this.nextSweepAtMs = 0;
   }
 
   sweep(nowMs = this.now()) {
@@ -67,6 +83,7 @@ export class TwoFactorReplayCache {
         this.entries.delete(key);
       }
     }
+    this.nextSweepAtMs = nowMs + this.sweepMinIntervalMs;
   }
 
   consume(params: ConsumeTwoFactorReplayCodeParams) {
@@ -76,7 +93,7 @@ export class TwoFactorReplayCache {
     }
 
     const nowMs = this.now();
-    this.sweep(nowMs);
+    this.sweepExpiredWhenDue(nowMs);
 
     const existing = this.entries.get(key);
     if (existing && existing.expiresAtMs > nowMs) {
@@ -84,12 +101,24 @@ export class TwoFactorReplayCache {
     }
 
     this.entries.set(key, { expiresAtMs: nowMs + this.ttlMs });
-    this.trimToMaxEntries();
+    this.trimToMaxEntries(nowMs);
     return true;
   }
 
-  private trimToMaxEntries() {
-    this.sweep(this.now());
+  private sweepExpiredWhenDue(nowMs: number) {
+    if (this.entries.size < this.sweepThresholdEntries && nowMs < this.nextSweepAtMs) {
+      return;
+    }
+
+    this.sweep(nowMs);
+  }
+
+  private trimToMaxEntries(nowMs = this.now()) {
+    if (this.entries.size <= this.maxEntries) {
+      return;
+    }
+
+    this.sweep(nowMs);
 
     while (this.entries.size > this.maxEntries) {
       const earliestExpiryKey = this.resolveEarliestExpiryKey();

@@ -60,8 +60,7 @@ function resolveSitemapUrl(publicAppUrl: string | null | undefined) {
 export function buildRobotsTxt(publicAppUrl: string | null | undefined) {
   const lines = [
     "User-agent: *",
-    "Allow: /",
-    "Disallow: /api/",
+    "Disallow: /",
   ];
   const sitemapUrl = resolveSitemapUrl(publicAppUrl);
   if (sitemapUrl) {

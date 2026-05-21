@@ -91,7 +91,7 @@ export function registerTelemetryRoutes(app: Express, deps: TelemetryRouteDeps) 
   );
 
   // TODO(telemetry-sunset): remove this compatibility alias after
-  // LEGACY_TELEMETRY_SUNSET_DATE (Wed, 01 Jul 2026 00:00:00 GMT)
+  // LEGACY_TELEMETRY_SUNSET_DATE (Mon, 15 Jun 2026 00:00:00 GMT)
   // once deployed clients have migrated fully to /api/telemetry/web-vitals.
   app.post(
     LEGACY_WEB_VITALS_TELEMETRY_PATH,

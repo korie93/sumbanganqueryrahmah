@@ -75,6 +75,7 @@ export type RuntimeConfig = {
     sessionSecret: string;
     previousSessionSecrets: string[];
     collectionNicknameTempPassword: string;
+    twoFactorAlgorithm: "sha1" | "sha256";
     twoFactorEncryptionSecret: string | null;
     seedDefaultUsers: boolean;
     cookieSecure: boolean;

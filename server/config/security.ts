@@ -15,6 +15,10 @@ export function getTwoFactorEncryptionSecret(): string | null {
   return readOptionalString("TWO_FACTOR_ENCRYPTION_KEY");
 }
 
+export function getTwoFactorTotpAlgorithm(): "sha1" | "sha256" {
+  return runtimeConfig.auth.twoFactorAlgorithm;
+}
+
 function getTwoFactorPreviousSecrets(): string[] {
   return readCommaSeparatedList("TWO_FACTOR_ENCRYPTION_KEY_PREVIOUS");
 }
@@ -51,12 +55,24 @@ export function getCollectionPiiDecryptionSecrets(): string[] {
   return Array.from(secrets);
 }
 
-export function getCollectionPiiRetiredFields(): Set<string> {
-  return new Set(
-    readCommaSeparatedList("COLLECTION_PII_RETIRED_FIELDS").filter((field) =>
-      isAllowedCollectionPiiRetiredField(field),
-    ),
-  );
+let cachedCollectionPiiRetiredFieldsRaw: string | null = null;
+let cachedCollectionPiiRetiredFields: ReadonlySet<string> = new Set(
+  runtimeConfig.collection.piiRetiredFields.filter((field) =>
+    isAllowedCollectionPiiRetiredField(field),
+  ),
+);
+
+export function getCollectionPiiRetiredFields(): ReadonlySet<string> {
+  const rawValue = readOptionalString("COLLECTION_PII_RETIRED_FIELDS") ?? "";
+  if (rawValue !== cachedCollectionPiiRetiredFieldsRaw) {
+    cachedCollectionPiiRetiredFieldsRaw = rawValue;
+    cachedCollectionPiiRetiredFields = new Set(
+      readCommaSeparatedList("COLLECTION_PII_RETIRED_FIELDS").filter(
+        isAllowedCollectionPiiRetiredField,
+      ),
+    );
+  }
+  return cachedCollectionPiiRetiredFields;
 }
 
 export function isCollectionPiiPlaintextRetiredField(field: string): boolean {

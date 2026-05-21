@@ -6,6 +6,22 @@
   "display": "standalone",
   "background_color": "#020617",
   "theme_color": "#020617",
+  "shortcuts": [
+    {
+      "name": "Carian Rekod",
+      "short_name": "Carian",
+      "description": "Buka ruang carian rekod SQR.",
+      "url": "/general-search",
+      "icons": [
+        {
+          "src": "/brand/sqr-logo-minimal.svg",
+          "sizes": "any",
+          "type": "image/svg+xml",
+          "purpose": "any"
+        }
+      ]
+    }
+  ],
   "icons": [
     {
       "src": "/brand/sqr-logo-minimal.svg",

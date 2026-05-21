@@ -449,7 +449,7 @@ server {
     # Canonical Web Vitals telemetry route. The app validates same-site
     # Origin/Referer signals, JSON content type, a 4KB body limit, and bounded
     # per-IP drop buckets. Keep the legacy /telemetry/web-vitals block only
-    # while older deployed clients are still expected.
+    # until the accelerated 2026-06-15 sunset for older deployed clients.
     # Do not send personal data, auth tokens, cookies, or session identifiers.
     location = /api/telemetry/web-vitals {
         limit_req zone=sqr_telemetry_per_ip burst=20 nodelay;

@@ -56,7 +56,7 @@ export function useDesktopNavOverflowState(
 
     scheduleOverflowUpdate();
     navNode.addEventListener("scroll", scheduleOverflowUpdate, { passive: true });
-    window.addEventListener("resize", scheduleOverflowUpdate);
+    window.addEventListener("resize", scheduleOverflowUpdate, { passive: true });
 
     if (typeof ResizeObserver === "function") {
       resizeObserver = new ResizeObserver(() => {

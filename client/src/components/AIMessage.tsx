@@ -144,8 +144,14 @@ function renderAIMessageMarkdown(content: string): ReactNode {
 }
 
 function AIMessageImpl({ messageRole, content }: AIMessageProps) {
+  const messageLabel = messageRole === "user" ? "Mesej pengguna" : "Mesej pembantu AI";
+
   return (
-    <div className={`ai-message-row ${messageRole === "user" ? "ai-message-row-user" : "ai-message-row-assistant"}`}>
+    <div
+      className={`ai-message-row ${messageRole === "user" ? "ai-message-row-user" : "ai-message-row-assistant"}`}
+      role="article"
+      aria-label={messageLabel}
+    >
       <div className={`ai-bubble ${messageRole === "user" ? "ai-bubble-user" : "ai-bubble-assistant"}`}>
         {renderAIMessageMarkdown(content)}
       </div>

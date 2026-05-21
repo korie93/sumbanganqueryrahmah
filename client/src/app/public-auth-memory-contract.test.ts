@@ -126,6 +126,30 @@ test("browser color scheme metadata matches the light and dark token strategy", 
   assert.match(indexSource, /<link rel="canonical" href="https:\/\/sqr-system\.com\/" \/>/);
   assert.match(indexSource, /<meta property="og:url" content="https:\/\/sqr-system\.com\/" \/>/);
   assert.match(indexSource, /<meta name="twitter:image" content="https:\/\/sqr-system\.com\/brand\/sqr-logo-minimal\.webp" \/>/);
+  assert.doesNotMatch(indexSource, /<link rel="icon" type="image\/webp"/);
+});
+
+test("web app manifest exposes a lightweight internal shortcut", () => {
+  const manifestSource = readClientSource("../../public/site.webmanifest");
+  const manifest = JSON.parse(manifestSource) as {
+    shortcuts?: Array<{ name?: string; url?: string }>;
+  };
+
+  assert.ok(Array.isArray(manifest.shortcuts));
+  assert.deepEqual(manifest.shortcuts?.[0], {
+    name: "Carian Rekod",
+    short_name: "Carian",
+    description: "Buka ruang carian rekod SQR.",
+    url: "/general-search",
+    icons: [
+      {
+        src: "/brand/sqr-logo-minimal.svg",
+        sizes: "any",
+        type: "image/svg+xml",
+        purpose: "any",
+      },
+    ],
+  });
 });
 
 test("global visible scrollbars include Firefox styling", () => {

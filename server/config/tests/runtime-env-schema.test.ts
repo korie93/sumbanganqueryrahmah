@@ -164,6 +164,26 @@ test("runtime env schema validates staged shared rate-limit store configuration 
   );
 });
 
+test("runtime env schema validates optional TOTP algorithm values", () => {
+  assert.doesNotThrow(() => {
+    validateRuntimeEnvironmentSchema({
+      TWO_FACTOR_TOTP_ALGORITHM: "SHA1",
+    });
+    validateRuntimeEnvironmentSchema({
+      TWO_FACTOR_TOTP_ALGORITHM: "sha256",
+    });
+  });
+
+  assert.throws(
+    () => {
+      validateRuntimeEnvironmentSchema({
+        TWO_FACTOR_TOTP_ALGORITHM: "md5",
+      });
+    },
+    /TWO_FACTOR_TOTP_ALGORITHM must be one of: SHA1 or SHA256/i,
+  );
+});
+
 test("runtime env schema validates staged database bootstrap modes", () => {
   assert.doesNotThrow(() => {
     validateRuntimeEnvironmentSchema({

@@ -164,31 +164,19 @@ test("verifyTwoFactorCode keeps existing normalization for pasted spaced codes",
 });
 
 test("two-factor TOTP defaults to SHA1 and supports SHA256 as an opt-in algorithm", (t) => {
-  const previousAlgorithm = process.env.TWO_FACTOR_TOTP_ALGORITHM;
   const secret = "JBSWY3DPEHPK3PXP";
   t.mock.method(Date, "now", () => new Date("2026-04-29T00:00:00.000Z").getTime());
 
-  try {
-    delete process.env.TWO_FACTOR_TOTP_ALGORITHM;
-    assert.equal(resolveTotpAlgorithm(), "sha1");
-    const sha1Code = generateCurrentTwoFactorCode(secret);
+  assert.equal(resolveTotpAlgorithm(), "sha1");
+  assert.equal(resolveTotpAlgorithm("SHA256"), "sha256");
+  const sha1Code = generateCurrentTwoFactorCode(secret, "sha1");
+  const sha256Code = generateCurrentTwoFactorCode(secret, "sha256");
 
-    process.env.TWO_FACTOR_TOTP_ALGORITHM = "SHA256";
-    assert.equal(resolveTotpAlgorithm(), "sha256");
-    const sha256Code = generateCurrentTwoFactorCode(secret);
-
-    assert.notEqual(sha256Code, sha1Code);
-    assert.equal(verifyTwoFactorCode(secret, sha256Code), true);
-    assert.equal(verifyTwoFactorCode(secret, sha1Code), false);
-    assert.match(
-      buildTwoFactorOtpAuthUrl({ issuer: "SQR", username: "admin", secret }),
-      /algorithm=SHA256/,
-    );
-  } finally {
-    if (previousAlgorithm === undefined) {
-      delete process.env.TWO_FACTOR_TOTP_ALGORITHM;
-    } else {
-      process.env.TWO_FACTOR_TOTP_ALGORITHM = previousAlgorithm;
-    }
-  }
+  assert.notEqual(sha256Code, sha1Code);
+  assert.equal(verifyTwoFactorCode(secret, sha256Code, 1, "sha256"), true);
+  assert.equal(verifyTwoFactorCode(secret, sha1Code, 1, "sha256"), false);
+  assert.match(
+    buildTwoFactorOtpAuthUrl({ issuer: "SQR", username: "admin", secret }),
+    /algorithm=SHA1/,
+  );
 });

@@ -6,7 +6,11 @@ import {
   randomBytes,
   timingSafeEqual,
 } from "node:crypto";
-import { getTwoFactorDecryptionSecrets, getTwoFactorEncryptionSecret } from "../config/security";
+import {
+  getTwoFactorDecryptionSecrets,
+  getTwoFactorEncryptionSecret,
+  getTwoFactorTotpAlgorithm,
+} from "../config/security";
 
 const BASE32_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
 const TOTP_PERIOD_SECONDS = 30;
@@ -79,11 +83,11 @@ function getTwoFactorDecryptionCipherKeys() {
   return getTwoFactorDecryptionSecrets().map((secret) => getTwoFactorCipherKey(secret));
 }
 
-export function resolveTotpAlgorithm(value = process.env.TWO_FACTOR_TOTP_ALGORITHM): TotpAlgorithm {
+export function resolveTotpAlgorithm(value?: string | null): TotpAlgorithm {
   return String(value || "").trim().toUpperCase() === "SHA256" ? "sha256" : "sha1";
 }
 
-function generateTotpAt(secret: string, timestampMs: number, algorithm = resolveTotpAlgorithm()) {
+function generateTotpAt(secret: string, timestampMs: number, algorithm = getTwoFactorTotpAlgorithm()) {
   const key = base32Decode(secret);
   const counter = Math.floor(timestampMs / 1000 / TOTP_PERIOD_SECONDS);
   const counterBuffer = Buffer.alloc(8);
@@ -117,14 +121,18 @@ export function normalizeTwoFactorCode(value: string) {
   return String(value || "").replace(/\D/g, "").slice(0, TOTP_DIGITS);
 }
 
-export function verifyTwoFactorCode(secret: string, rawCode: string, window = 1) {
+export function verifyTwoFactorCode(
+  secret: string,
+  rawCode: string,
+  window = 1,
+  algorithm = getTwoFactorTotpAlgorithm(),
+) {
   const code = normalizeTwoFactorCode(rawCode);
   if (code.length !== TOTP_DIGITS) {
     return false;
   }
 
   const now = Date.now();
-  const algorithm = resolveTotpAlgorithm();
   for (let step = -window; step <= window; step += 1) {
     const candidate = generateTotpAt(secret, now + step * TOTP_PERIOD_SECONDS * 1000, algorithm);
     if (isTotpCodeMatch(candidate, code)) {
@@ -135,8 +143,8 @@ export function verifyTwoFactorCode(secret: string, rawCode: string, window = 1)
   return false;
 }
 
-export function generateCurrentTwoFactorCode(secret: string) {
-  return generateTotpAt(secret, Date.now());
+export function generateCurrentTwoFactorCode(secret: string, algorithm = getTwoFactorTotpAlgorithm()) {
+  return generateTotpAt(secret, Date.now(), algorithm);
 }
 
 export function encryptTwoFactorSecret(secret: string) {
@@ -184,6 +192,6 @@ export function buildTwoFactorOtpAuthUrl(params: {
   const label = encodeURIComponent(`${issuer}:${username}`);
   const encodedIssuer = encodeURIComponent(issuer);
   const secret = encodeURIComponent(params.secret);
-  const algorithm = resolveTotpAlgorithm().toUpperCase();
+  const algorithm = getTwoFactorTotpAlgorithm().toUpperCase();
   return `otpauth://totp/${label}?secret=${secret}&issuer=${encodedIssuer}&algorithm=${algorithm}&digits=${TOTP_DIGITS}&period=${TOTP_PERIOD_SECONDS}`;
 }
