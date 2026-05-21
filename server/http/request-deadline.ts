@@ -21,17 +21,20 @@ export async function runWithRequestDeadline<T>(
     ? Math.max(1, Math.trunc(options.timeoutMs))
     : 0;
 
-  if (timeoutMs <= 0) {
-    const controller = new AbortController();
-    return {
-      timedOut: false,
-      value: await operation(controller.signal),
-    };
-  }
-
   const controller = new AbortController();
+  const upstreamSignal = res.locals?.requestAbortSignal as AbortSignal | undefined;
+  let upstreamAborted = Boolean(upstreamSignal?.aborted);
   let settled = false;
   let timer: NodeJS.Timeout | null = null;
+  const handleUpstreamAbort = () => {
+    upstreamAborted = true;
+    controller.abort();
+  };
+  if (upstreamSignal?.aborted) {
+    handleUpstreamAbort();
+  } else {
+    upstreamSignal?.addEventListener("abort", handleUpstreamAbort, { once: true });
+  }
 
   const finalize = () => {
     settled = true;
@@ -39,12 +42,28 @@ export async function runWithRequestDeadline<T>(
       clearTimeout(timer);
       timer = null;
     }
+    upstreamSignal?.removeEventListener("abort", handleUpstreamAbort);
   };
+
+  if (timeoutMs <= 0) {
+    try {
+      const value = await operation(controller.signal);
+      if (upstreamAborted) {
+        return { timedOut: true };
+      }
+      return {
+        timedOut: false,
+        value,
+      };
+    } finally {
+      finalize();
+    }
+  }
 
   const operationPromise = Promise.resolve()
     .then(() => operation(controller.signal))
     .then<RequestDeadlineResult<T>>((value) => {
-      if (settled) {
+      if (settled || upstreamAborted) {
         return { timedOut: true };
       }
       finalize();
@@ -54,6 +73,10 @@ export async function runWithRequestDeadline<T>(
       };
     })
     .catch<RequestDeadlineResult<T>>((error: unknown) => {
+      if (upstreamAborted) {
+        finalize();
+        return { timedOut: true };
+      }
       if (settled) {
         logger.warn("Request operation settled after timeout response", {
           operationName: options.operationName,
