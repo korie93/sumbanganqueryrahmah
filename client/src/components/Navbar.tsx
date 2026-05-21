@@ -59,6 +59,8 @@ function NavbarImpl({
   const [routerLocation] = useLocation()
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const navScrollerRef = useRef<HTMLDivElement>(null)
+  const desktopUserMenuTriggerRef = useRef<HTMLButtonElement>(null)
+  const mobileUserMenuTriggerRef = useRef<HTMLButtonElement>(null)
 
   const directItems = useMemo(
     () => getVisiblePrimaryNavItems(userRole, tabVisibility ?? null, featureLockdown),
@@ -105,6 +107,16 @@ function NavbarImpl({
   const mobileNavTriggerExpandedProps = {
     "aria-expanded": mobileNavOpen,
   } as const
+
+  const restoreDesktopUserMenuFocus = useCallback((event: Event) => {
+    event.preventDefault()
+    desktopUserMenuTriggerRef.current?.focus({ preventScroll: true })
+  }, [])
+
+  const restoreMobileUserMenuFocus = useCallback((event: Event) => {
+    event.preventDefault()
+    mobileUserMenuTriggerRef.current?.focus({ preventScroll: true })
+  }, [])
 
   const navigateToItem = useCallback(
     (itemId: string) => {
@@ -176,6 +188,7 @@ function NavbarImpl({
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button
+                  ref={mobileUserMenuTriggerRef}
                   type="button"
                   className="user-menu-trigger px-2.5 sm:px-3"
                   data-testid="button-user-menu-mobile"
@@ -202,6 +215,7 @@ function NavbarImpl({
                 theme={theme}
                 setTheme={setTheme}
                 onLogout={onLogout}
+                onCloseAutoFocus={restoreMobileUserMenuFocus}
               />
             </DropdownMenu>
           </div>
@@ -222,6 +236,7 @@ function NavbarImpl({
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
+                ref={desktopUserMenuTriggerRef}
                 type="button"
                 className="user-menu-trigger max-w-[15rem] xl:max-w-none"
                 data-testid="button-user-menu"
@@ -244,6 +259,7 @@ function NavbarImpl({
               theme={theme}
               setTheme={setTheme}
               onLogout={onLogout}
+              onCloseAutoFocus={restoreDesktopUserMenuFocus}
             />
           </DropdownMenu>
         </div>

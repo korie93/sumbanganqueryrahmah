@@ -1,4 +1,4 @@
-import { memo, type KeyboardEvent, type RefObject } from "react"
+import { memo, type KeyboardEvent, type RefObject, useRef } from "react"
 import { ChevronDown } from "lucide-react"
 
 import type {
@@ -42,6 +42,8 @@ function NavbarDesktopNavigationImpl({
   navScrollerRef,
   desktopNavOverflow,
 }: NavbarDesktopNavigationProps) {
+  const groupTriggerRefs = useRef(new Map<string, HTMLButtonElement>())
+
   const getScrollBehavior = () => resolveNavbarScrollBehavior(
     typeof window !== "undefined"
       && window.matchMedia("(prefers-reduced-motion: reduce)").matches
@@ -126,6 +128,13 @@ function NavbarDesktopNavigationImpl({
             <DropdownMenu key={group.id}>
               <DropdownMenuTrigger asChild>
                 <button
+                  ref={(node) => {
+                    if (node) {
+                      groupTriggerRefs.current.set(group.id, node)
+                    } else {
+                      groupTriggerRefs.current.delete(group.id)
+                    }
+                  }}
                   type="button"
                   title={group.label}
                   aria-label={`Menu ${group.label}`}
@@ -142,7 +151,15 @@ function NavbarDesktopNavigationImpl({
                   <ChevronDown className="h-3.5 w-3.5 opacity-70" aria-hidden="true" />
                 </button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="center" sideOffset={8} className="w-[22rem] rounded-2xl border-border/70 p-2 shadow-xl">
+              <DropdownMenuContent
+                align="center"
+                sideOffset={8}
+                className="w-[22rem] rounded-2xl border-border/70 p-2 shadow-xl"
+                onCloseAutoFocus={(event) => {
+                  event.preventDefault()
+                  groupTriggerRefs.current.get(group.id)?.focus({ preventScroll: true })
+                }}
+              >
                 <DropdownMenuLabel className="rounded-xl bg-muted/20 px-3 py-2.5">
                   <div className="text-sm font-semibold">{group.label}</div>
                   <div className="mt-1 text-xs font-normal text-muted-foreground">

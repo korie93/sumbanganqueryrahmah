@@ -20,6 +20,9 @@ test("navbar controls use Malay accessible labels and include username context",
 
   assert.match(navbarSource, /aria-label="Buka menu navigasi"/);
   assert.match(navbarSource, /aria-label=\{`Buka menu pengguna untuk \$\{username\}`\}/);
+  assert.match(navbarSource, /onCloseAutoFocus=\{restoreDesktopUserMenuFocus\}/);
+  assert.match(navbarSource, /onCloseAutoFocus=\{restoreMobileUserMenuFocus\}/);
+  assert.match(navbarSource, /desktopUserMenuTriggerRef\.current\?\.focus\(\{ preventScroll: true \}\)/);
   assert.match(navbarSource, /\{\[\.\.\.username\]\[0\] \|\| ""\}/);
   assert.doesNotMatch(navbarSource, /window\.location/);
   assert.match(homeButtonSource, /aria-label="Utama"/);
@@ -28,6 +31,8 @@ test("navbar controls use Malay accessible labels and include username context",
   assert.match(desktopNavigationSource, /aria-current=\{isActive \? "page" : undefined\}/);
   assert.match(desktopNavigationSource, /aria-current=\{active \? "page" : undefined\}/);
   assert.match(desktopNavigationSource, /aria-current=\{activeItem \? "page" : undefined\}/);
+  assert.match(desktopNavigationSource, /onCloseAutoFocus=\{\(event\) => \{/);
+  assert.match(desktopNavigationSource, /groupTriggerRefs\.current\.get\(group\.id\)\?\.focus\(\{ preventScroll: true \}\)/);
   assert.match(scrollHintSource, /hint = "Tatal untuk lagi"/);
   assert.match(navbarStyles, /\.navbar-scroll-hint/);
   assert.match(navbarStyles, /\.navbar-premium-glass\s*\{[\s\S]*scrollbar-width:\s*thin/);
