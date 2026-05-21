@@ -13,6 +13,13 @@ export type SaveCollectionSubmitFailure = {
 };
 
 const MALWARE_SCAN_TIMEOUT_PATTERN = /malware scan failed|timed out|external malware scan/i;
+const RECEIPT_SCAN_ADMIN_CODES = new Set([
+  "COLLECTION_RECEIPT_EXTERNAL_SCAN_CONFIG_INVALID",
+  "COLLECTION_RECEIPT_EXTERNAL_SCAN_COMMAND_MISSING",
+  "COLLECTION_RECEIPT_EXTERNAL_SCAN_COMMAND_INVALID",
+  "COLLECTION_RECEIPT_EXTERNAL_SCAN_SPAWN_FAILED",
+  "COLLECTION_RECEIPT_EXTERNAL_SCAN_UNEXPECTED_EXIT",
+]);
 
 function normalizeReceiptCount(value: number): number {
   return Math.max(0, Number.isFinite(value) ? Math.trunc(value) : 0);
@@ -41,19 +48,26 @@ export function buildSaveCollectionRequestFailure(params: {
   const details = parseCollectionApiErrorDetails(params.error);
   const parsedMessage = details.message.trim();
   const message = parsedMessage || params.fallbackMessage || "Collection gagal disimpan.";
+  const isReceiptScannerAdminIssue = details.code ? RECEIPT_SCAN_ADMIN_CODES.has(details.code) : false;
   const isReceiptScanTimeout = MALWARE_SCAN_TIMEOUT_PATTERN.test(message);
 
   return {
     kind: "request",
-    title: isReceiptScanTimeout ? "Receipt belum berjaya diimbas" : "Collection gagal disimpan",
-    message: isReceiptScanTimeout
+    title: isReceiptScannerAdminIssue || isReceiptScanTimeout
+      ? "Receipt belum berjaya diimbas"
+      : "Collection gagal disimpan",
+    message: isReceiptScannerAdminIssue
+      ? message
+      : isReceiptScanTimeout
       ? "Imbasan keselamatan receipt mengambil masa terlalu lama. Rekod belum disimpan."
       : message,
-    helperText: isReceiptScanTimeout
+    helperText: isReceiptScannerAdminIssue
+      ? "Hubungi admin untuk semak konfigurasi scanner receipt sebelum cuba simpan semula."
+      : isReceiptScanTimeout
       ? "Klik Save Collection semula untuk cuba lagi. Jika masih gagal, cuba kecilkan saiz fail receipt atau hubungi admin."
       : "Semak mesej ini, pastikan sambungan stabil, kemudian cuba Save Collection semula.",
     requestId: details.requestId,
     receiptCount: normalizeReceiptCount(params.receiptCount),
-    canRetry: true,
+    canRetry: !isReceiptScannerAdminIssue,
   };
 }

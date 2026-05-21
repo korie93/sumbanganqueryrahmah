@@ -6,6 +6,7 @@ import {
   appendCollectionMultipartField,
   isCollectionReceiptMultipartField,
 } from "./collection-multipart-body-utils";
+import { buildCollectionReceiptSecurityErrorResponse } from "../collection-receipt-error-response";
 
 const MULTIPART_FILENAME_UNSAFE_CHAR_PATTERN = /[^a-zA-Z0-9._()-]+/g;
 
@@ -77,6 +78,15 @@ export function createCollectionReceiptMultipartRoute<
             originalError: error,
           });
         }
+      }
+
+      const receiptSecurityResponse = buildCollectionReceiptSecurityErrorResponse(error);
+      if (receiptSecurityResponse) {
+        logger.warn("Multipart collection receipt security check failed", {
+          reasonCode: receiptSecurityResponse.body.error.code,
+        });
+        res.status(receiptSecurityResponse.statusCode).json(receiptSecurityResponse.body);
+        return;
       }
 
       const message =

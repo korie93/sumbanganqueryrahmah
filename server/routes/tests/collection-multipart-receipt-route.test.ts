@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { PassThrough } from "node:stream";
 import test from "node:test";
+import { CollectionReceiptSecurityError } from "../../lib/collection-receipt-security";
 import { createCollectionReceiptMultipartRoute } from "../collection/collection-multipart-receipt-route";
 
 type MultipartPart =
@@ -191,6 +192,49 @@ test("createCollectionReceiptMultipartRoute cleans up completed uploads when a l
     },
     statusCode: 400,
   });
+});
+
+test("createCollectionReceiptMultipartRoute hides external scanner config internals from responses", async () => {
+  const handler = createCollectionReceiptMultipartRoute<
+    { filename: string },
+    Record<string, unknown>
+  >({
+    attachKey: "uploadedReceipts",
+    handleReceipt: async ({ stream }) => {
+      for await (const _chunk of stream) {
+        // Drain stream.
+      }
+
+      throw new CollectionReceiptSecurityError(
+        "Receipt external malware scan failed for receipt.upload (COLLECTION_RECEIPT_EXTERNAL_SCAN_ARGS_JSON No number after minus sign in JSON at position 2).",
+        "external-scan-config-invalid",
+      );
+    },
+  });
+
+  const result = await runMultipartHandler(
+    [
+      {
+        kind: "file",
+        name: "receipt",
+        filename: "receipt.jpg",
+        contentType: "image/jpeg",
+        content: "receipt body",
+      },
+    ],
+    handler,
+  );
+
+  assert.equal(result.kind, "response");
+  assert.equal(result.statusCode, 400);
+  const payload = result.payload as {
+    message?: string;
+    error?: { code?: string };
+  };
+  assert.equal(payload.error?.code, "COLLECTION_RECEIPT_EXTERNAL_SCAN_CONFIG_INVALID");
+  assert.match(String(payload.message), /hubungi admin/i);
+  assert.doesNotMatch(String(payload.message), /COLLECTION_RECEIPT_EXTERNAL_SCAN_ARGS_JSON/i);
+  assert.doesNotMatch(String(payload.message), /No number after minus sign/i);
 });
 
 test("createCollectionReceiptMultipartRoute sanitizes multipart file names before handing them to receipt storage", async () => {

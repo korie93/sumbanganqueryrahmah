@@ -41,6 +41,31 @@ export function parseExitCodeSet(rawValue: string, fallbackRawValue: string): Se
   return new Set(source.length ? source : [0]);
 }
 
+function parseShellStrippedScannerArgsJson(raw: string): string[] | null {
+  const trimmed = raw.trim();
+  if (!trimmed.startsWith("[") || !trimmed.endsWith("]")) {
+    return null;
+  }
+
+  const body = trimmed.slice(1, -1).trim();
+  if (!body) {
+    return [];
+  }
+
+  const entries = body.split(",").map((entry) => entry.trim());
+  if (
+    entries.some((entry) =>
+      !entry
+      || UNSAFE_ENV_VALUE_PATTERN.test(entry)
+      || entry.includes("[")
+      || entry.includes("]"))
+  ) {
+    return null;
+  }
+
+  return entries;
+}
+
 export function parseScannerArgsJson(): string[] {
   const raw = readOptionalString("COLLECTION_RECEIPT_EXTERNAL_SCAN_ARGS_JSON");
   if (!raw) {
@@ -59,8 +84,15 @@ export function parseScannerArgsJson(): string[] {
     }
     return parsed as string[];
   } catch (error) {
+    const shellStrippedArgs = parseShellStrippedScannerArgsJson(raw);
+    if (shellStrippedArgs) {
+      return shellStrippedArgs;
+    }
+
     throw new Error(
-      `COLLECTION_RECEIPT_EXTERNAL_SCAN_ARGS_JSON ${error instanceof Error ? error.message : "is invalid"}.`,
+      `COLLECTION_RECEIPT_EXTERNAL_SCAN_ARGS_JSON ${error instanceof Error ? error.message : "is invalid"}. `
+      + "Use a JSON array of strings, for example '[\"--no-summary\",\"--infected\",\"{file}\"]' "
+      + "when the .env file is sourced by a shell.",
     );
   }
 }

@@ -142,3 +142,41 @@ test("external receipt scanner accepts an existing receipt file with a validated
     restoreEnv(previousEnv);
   }
 });
+
+test("external receipt scanner accepts shell-sourced JSON args with stripped quotes", async () => {
+  const previousEnv = snapshotEnv();
+  process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_ENABLED = "1";
+  process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_COMMAND = process.execPath;
+  process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_ARGS_JSON = "[-e,process.exit(0),{file}]";
+  process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_FAIL_CLOSED = "1";
+  process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_TIMEOUT_MS = "1000";
+
+  try {
+    await withTemporaryReceiptFile(async (filePath) => {
+      await assert.doesNotReject(() => scanCollectionReceiptWithExternalScanner(filePath));
+    });
+  } finally {
+    restoreEnv(previousEnv);
+  }
+});
+
+test("external receipt scanner explains invalid args JSON without exposing parser internals only", async () => {
+  const previousEnv = snapshotEnv();
+  process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_ENABLED = "1";
+  process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_COMMAND = process.execPath;
+  process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_ARGS_JSON = "--no-summary --infected {file}";
+  process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_FAIL_CLOSED = "1";
+
+  try {
+    await assert.rejects(
+      () => scanCollectionReceiptWithExternalScanner("receipt.pdf"),
+      (error: unknown) =>
+        error instanceof CollectionReceiptSecurityError
+        && error.reasonCode === "external-scan-config-invalid"
+        && /JSON array of strings/i.test(error.message)
+        && /sourced by a shell/i.test(error.message),
+    );
+  } finally {
+    restoreEnv(previousEnv);
+  }
+});

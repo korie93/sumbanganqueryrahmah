@@ -9,6 +9,7 @@ import type {
 import {
   createIdempotencyFingerprintValidationCacheController,
 } from "./collection-idempotency-cache";
+import { buildCollectionReceiptSecurityErrorResponse } from "../collection-receipt-error-response";
 export {
   createIdempotencyFingerprintValidationCacheController,
   pruneExpiredIdempotencyFingerprintValidationCache,
@@ -76,6 +77,14 @@ function getSafeErrorMessage(error: unknown): string | undefined {
 }
 
 function sendCollectionError(res: Response, err: unknown, fallbackMessage: string) {
+  const receiptSecurityResponse = buildCollectionReceiptSecurityErrorResponse(err);
+  if (receiptSecurityResponse) {
+    logger.warn("Collection receipt security check failed", {
+      reasonCode: receiptSecurityResponse.body.error.code,
+    });
+    return res.status(receiptSecurityResponse.statusCode).json(receiptSecurityResponse.body);
+  }
+
   if (err instanceof HttpError) {
     const message = err.expose ? err.message : fallbackMessage;
     return res.status(err.statusCode).json({

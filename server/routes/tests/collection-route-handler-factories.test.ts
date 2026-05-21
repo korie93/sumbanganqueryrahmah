@@ -8,6 +8,7 @@ import {
   pruneExpiredIdempotencyFingerprintValidationCache,
   pruneIdempotencyFingerprintValidationCache,
 } from "../collection/collection-route-handler-factories";
+import { CollectionReceiptSecurityError } from "../../lib/collection-receipt-security";
 import {
   createJsonTestApp,
   createTestAuthenticateToken,
@@ -131,6 +132,65 @@ test("collection mutation handler releases idempotency reservations when the mut
     assert.equal(payload.ok, false);
     assert.equal(payload.message, "Mutation failed.");
     assert.equal(completeCalls, 0);
+    assert.equal(releaseCalls, 1);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("collection mutation handler returns safe receipt scanner errors", async () => {
+  let releaseCalls = 0;
+
+  const storage: CollectionMutationHandlerStorage = {
+    acquireMutationIdempotency: async () => ({ status: "acquired" as const }),
+    completeMutationIdempotency: async () => {},
+    releaseMutationIdempotency: async () => {
+      releaseCalls += 1;
+    },
+  };
+
+  const app = createJsonTestApp();
+  app.post(
+    "/api/test-collection-mutation",
+    createTestAuthenticateToken({
+      userId: "user-1",
+      username: "staff.user",
+      role: "user",
+    }),
+    createCollectionJsonMutationRouteHandler({
+      fallbackMessage: "Mutation failed.",
+      handler: async () => {
+        throw new CollectionReceiptSecurityError(
+          "Receipt external malware scan failed for receipt.upload (COLLECTION_RECEIPT_EXTERNAL_SCAN_ARGS_JSON No number after minus sign in JSON at position 2).",
+          "external-scan-config-invalid",
+        );
+      },
+      scopeResolver: () => "collection:test:receipt-scan",
+      storage,
+    }),
+  );
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const response = await fetch(`${baseUrl}/api/test-collection-mutation`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-idempotency-key": "collection-test-key",
+      },
+      body: JSON.stringify({ recordId: "record-1" }),
+    });
+
+    assert.equal(response.status, 400);
+    const payload = await response.json() as {
+      ok?: boolean;
+      message?: string;
+      error?: { code?: string };
+    };
+    assert.equal(payload.ok, false);
+    assert.equal(payload.error?.code, "COLLECTION_RECEIPT_EXTERNAL_SCAN_CONFIG_INVALID");
+    assert.match(String(payload.message), /hubungi admin/i);
+    assert.doesNotMatch(String(payload.message), /COLLECTION_RECEIPT_EXTERNAL_SCAN_ARGS_JSON/i);
     assert.equal(releaseCalls, 1);
   } finally {
     await stopTestServer(server);
