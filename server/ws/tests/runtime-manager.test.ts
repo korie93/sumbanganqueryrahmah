@@ -7,6 +7,7 @@ import { WebSocket } from "ws";
 import type { UserActivity } from "../../../shared/schema-postgres";
 import { logger } from "../../lib/logger";
 import { createRuntimeWebSocketManager } from "../runtime-manager";
+import { createRuntimeWsUpgradeRateLimiter } from "../upgrade-rate-limit";
 
 class FakeWebSocketServer extends EventEmitter {}
 class FakeWebSocket extends EventEmitter {
@@ -69,9 +70,11 @@ function createConnectionRequest(
   options?: {
     host?: string;
     origin?: string;
+    forwardedFor?: string;
     forwardedHost?: string;
     forwardedProto?: string;
     encrypted?: boolean;
+    remoteAddress?: string;
   },
 ): RuntimeConnectionRequest {
   const headers: Record<string, string> = {
@@ -80,6 +83,9 @@ function createConnectionRequest(
   };
   if (options?.forwardedHost) {
     headers["x-forwarded-host"] = options.forwardedHost;
+  }
+  if (options?.forwardedFor) {
+    headers["x-forwarded-for"] = options.forwardedFor;
   }
   if (options?.forwardedProto) {
     headers["x-forwarded-proto"] = options.forwardedProto;
@@ -93,6 +99,7 @@ function createConnectionRequest(
     headers,
     socket: ({
       encrypted: options?.encrypted ?? false,
+      remoteAddress: options?.remoteAddress ?? "203.0.113.10",
     } as unknown) as IncomingMessage["socket"],
   };
 }
@@ -252,6 +259,96 @@ test("createRuntimeWebSocketManager rejects connections before storage is ready"
     assert.deepEqual(socket.closeCodes[0], {
       code: 1013,
       reason: "storage initializing",
+    });
+  } finally {
+    wss.emit("close");
+  }
+});
+
+test("createRuntimeWebSocketManager rate limits repeated upgrade attempts per IP", async () => {
+  const wss = new FakeWebSocketServer();
+  const providedMap = new Map<string, WebSocket>();
+  const sockets = [new FakeWebSocket(), new FakeWebSocket(), new FakeWebSocket()];
+  let storageLookupCount = 0;
+
+  createRuntimeWebSocketManager({
+    wss: wss as unknown as import("ws").WebSocketServer,
+    storage: {
+      getActivityById: async () => {
+        storageLookupCount += 1;
+        return undefined;
+      },
+      clearCollectionNicknameSessionByActivity: async () => undefined,
+    },
+    secret: TEST_SECRET,
+    connectedClients: providedMap,
+    upgradeRateLimiter: createRuntimeWsUpgradeRateLimiter({
+      maxAttempts: 2,
+      windowMs: 60_000,
+    }),
+  });
+
+  try {
+    for (const socket of sockets) {
+      wss.emit(
+        "connection",
+        socket as unknown as WebSocket,
+        createConnectionRequest(undefined, { remoteAddress: "203.0.113.42" }),
+      );
+      await flushAsyncWork();
+    }
+
+    assert.equal(storageLookupCount, 0);
+    assert.equal(providedMap.size, 0);
+    assert.equal(sockets[0].closeCalls, 1);
+    assert.equal(sockets[1].closeCalls, 1);
+    assert.deepEqual(sockets[2].closeCodes[0], {
+      code: 1013,
+      reason: "rate limited",
+    });
+  } finally {
+    wss.emit("close");
+  }
+});
+
+test("createRuntimeWebSocketManager trusts forwarded IP only when trusted proxies are enabled", async () => {
+  const wss = new FakeWebSocketServer();
+  const providedMap = new Map<string, WebSocket>();
+  const sockets = [new FakeWebSocket(), new FakeWebSocket()];
+
+  createRuntimeWebSocketManager({
+    wss: wss as unknown as import("ws").WebSocketServer,
+    storage: {
+      getActivityById: async () => undefined,
+      clearCollectionNicknameSessionByActivity: async () => undefined,
+    },
+    secret: TEST_SECRET,
+    connectedClients: providedMap,
+    trustForwardedHeaders: true,
+    upgradeRateLimiter: createRuntimeWsUpgradeRateLimiter({
+      maxAttempts: 1,
+      windowMs: 60_000,
+    }),
+  });
+
+  try {
+    for (const socket of sockets) {
+      wss.emit(
+        "connection",
+        socket as unknown as WebSocket,
+        createConnectionRequest(undefined, {
+          forwardedFor: "198.51.100.20, 10.0.0.1",
+          forwardedHost: "example.test",
+          forwardedProto: "http",
+          remoteAddress: socket === sockets[0] ? "10.0.0.7" : "10.0.0.8",
+        }),
+      );
+      await flushAsyncWork();
+    }
+
+    assert.deepEqual(sockets[1].closeCodes[0], {
+      code: 1013,
+      reason: "rate limited",
     });
   } finally {
     wss.emit("close");

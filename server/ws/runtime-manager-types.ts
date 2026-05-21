@@ -1,5 +1,6 @@
 import type { WebSocket, WebSocketServer } from "ws";
 import type { PostgresStorage } from "../storage-postgres";
+import type { RuntimeWsUpgradeRateLimiter } from "./upgrade-rate-limit";
 
 export const MAX_RUNTIME_WS_CONNECTIONS_PER_USER = 5;
 export const RUNTIME_WS_CLOSE_POLICY_VIOLATION = 1008;
@@ -15,6 +16,7 @@ export type RuntimeManagerOptions = {
   trustForwardedHeaders?: boolean;
   acceptConnections?: () => boolean;
   heartbeatIntervalMs?: number;
+  upgradeRateLimiter?: RuntimeWsUpgradeRateLimiter;
 };
 
 export type RuntimeTrackedSocketEntry = {

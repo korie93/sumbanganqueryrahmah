@@ -296,3 +296,128 @@ test("SearchRepository.advancedSearchDataRows skips deep offset scans and still 
     restore();
   }
 });
+
+test("SearchRepository.advancedSearchDataRows caches allowed columns and filters unsafe fields", async (t) => {
+  t.mock.method(Date, "now", () => 1_000_000);
+
+  const repository = new SearchRepository();
+  const rawQueries: unknown[] = [];
+  const originalExecute = db.execute;
+  let schemaLookupCount = 0;
+
+  (db as unknown as {
+    execute: typeof db.execute;
+  }).execute = (async (query) => {
+    rawQueries.push(query);
+    const queryText = collectSqlText(query);
+
+    if (/jsonb_object_keys/i.test(queryText)) {
+      schemaLookupCount += 1;
+      return { rows: [{ column_name: "name" }] };
+    }
+
+    if (/COUNT\(\*\)::int AS total/i.test(queryText)) {
+      return { rows: [{ total: 1 }] };
+    }
+
+    return {
+      rows: [
+        {
+          id: "row-1",
+          importId: "import-1",
+          jsonDataJsonb: { name: "Alice" },
+          importName: "Import Alpha",
+          importFilename: "alpha.csv",
+        },
+      ],
+    };
+  }) as typeof db.execute;
+
+  try {
+    await repository.advancedSearchDataRows(
+      [
+        { field: "name", operator: "contains", value: "Alice" },
+        { field: "DROP TABLE users", operator: "contains", value: "blocked-value" },
+      ],
+      "AND",
+      50,
+      0,
+    );
+    await repository.advancedSearchDataRows(
+      [{ field: "name", operator: "contains", value: "Alice" }],
+      "AND",
+      50,
+      0,
+    );
+
+    assert.equal(schemaLookupCount, 1);
+    assert.equal(rawQueries.length, 5);
+
+    const boundValues = rawQueries.flatMap((query) => collectBoundValues(query));
+    assert.ok(boundValues.includes("name"));
+    assert.ok(!boundValues.includes("DROP TABLE users"));
+    assert.ok(!boundValues.includes("blocked-value"));
+  } finally {
+    (db as unknown as {
+      execute: typeof db.execute;
+    }).execute = originalExecute;
+  }
+});
+
+test("SearchRepository.advancedSearchDataRows refreshes allowed columns after TTL expiry", async (t) => {
+  let now = 1_000_000;
+  t.mock.method(Date, "now", () => now);
+
+  const repository = new SearchRepository();
+  const originalExecute = db.execute;
+  let schemaLookupCount = 0;
+
+  (db as unknown as {
+    execute: typeof db.execute;
+  }).execute = (async (query) => {
+    const queryText = collectSqlText(query);
+
+    if (/jsonb_object_keys/i.test(queryText)) {
+      schemaLookupCount += 1;
+      return { rows: [{ column_name: "name" }] };
+    }
+
+    if (/COUNT\(\*\)::int AS total/i.test(queryText)) {
+      return { rows: [{ total: 1 }] };
+    }
+
+    return {
+      rows: [
+        {
+          id: "row-1",
+          importId: "import-1",
+          jsonDataJsonb: { name: "Alice" },
+          importName: "Import Alpha",
+          importFilename: "alpha.csv",
+        },
+      ],
+    };
+  }) as typeof db.execute;
+
+  try {
+    await repository.advancedSearchDataRows(
+      [{ field: "name", operator: "contains", value: "Alice" }],
+      "AND",
+      50,
+      0,
+    );
+    now += 60_001;
+    await repository.advancedSearchDataRows(
+      [{ field: "name", operator: "contains", value: "Alice" }],
+      "AND",
+      50,
+      0,
+    );
+
+    assert.equal(schemaLookupCount, 2);
+  } finally {
+    (db as unknown as {
+      execute: typeof db.execute;
+    }).execute = originalExecute;
+  }
+});

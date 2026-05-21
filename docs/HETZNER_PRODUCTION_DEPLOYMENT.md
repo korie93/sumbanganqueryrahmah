@@ -247,7 +247,10 @@ BACKUP_ENCRYPTION_KEY_ID=primary
 
 Jika anda deploy di belakang Nginx sahaja pada server yang sama, `TRUSTED_PROXIES=loopback` biasanya memadai.
 Untuk production HTTPS di belakang Nginx, biarkan `AUTH_COOKIE_SECURE=auto` atau set `AUTH_COOKIE_SECURE=true`; jangan paksa `false`.
-Jika anda naikkan `SQR_MAX_WORKERS` melebihi `1`, pastikan rate limit menggunakan shared store dan WebSocket mempunyai sticky sessions atau pub/sub kerana `connectedClients` adalah process-local.
+`CORS_ALLOWED_ORIGINS` bukan mekanisme auth. Browser origin yang dibenarkan tetap perlu cookie/token sah, dan request server-to-server tanpa `Origin` masih bergantung pada auth, CSRF guard yang sesuai, rate limit, dan route permission.
+Jika SMTP config berubah, restart semua PM2 worker selepas update env kerana transporter SMTP dicache dalam proses.
+Jika anda rotate `SESSION_SECRET`, device fingerprint HMAC turut berubah; guna `SESSION_SECRET_PREVIOUS` untuk compatibility window yang dirancang, atau paksa login semula jika rotation kecemasan.
+Jika anda naikkan `SQR_MAX_WORKERS` melebihi `1`, pastikan rate limit menggunakan shared store dan WebSocket mempunyai sticky sessions atau pub/sub kerana `connectedClients`, adaptive rate state, dan 2FA replay cache adalah process-local. Runtime production akan block konfigurasi multi-worker tanpa shared store sehingga topology ini diselesaikan.
 
 ## 9. Build dan Migrate
 

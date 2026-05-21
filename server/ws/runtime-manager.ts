@@ -30,6 +30,10 @@ import {
 } from "./ws-heartbeat";
 import { closeRuntimeWebSocketServerState } from "./runtime-server-close";
 import { createRuntimeClientRegistry } from "./runtime-client-registry";
+import {
+  createRuntimeWsUpgradeRateLimiter,
+  readRuntimeWsUpgradeRateLimitKey,
+} from "./upgrade-rate-limit";
 
 export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
   connectedClients: Map<string, WebSocket>;
@@ -40,6 +44,7 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
   const trustForwardedHeaders = options.trustForwardedHeaders === true;
   const acceptConnections = options.acceptConnections ?? (() => true);
   const heartbeatIntervalMs = normalizeRuntimeWsHeartbeatIntervalMs(options.heartbeatIntervalMs);
+  const upgradeRateLimiter = options.upgradeRateLimiter ?? createRuntimeWsUpgradeRateLimiter();
   const socketEntriesByActivity = new Map<string, RuntimeTrackedSocketEntry>();
   const socketEntriesByInstance = new WeakMap<WebSocket, RuntimeTrackedSocketEntry>();
   const trackedSockets = new Set<WebSocket>();
@@ -81,14 +86,17 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
     socketEntriesByActivity,
   });
 
-  wss.once("close", () => closeRuntimeWebSocketServerState({
-    cleanupClient,
-    connectedClients,
-    heartbeatHandle,
-    socketCleanupCallbacks,
-    socketEntriesByActivity,
-    trackedSockets,
-  }));
+  wss.once("close", () => {
+    upgradeRateLimiter.clear();
+    closeRuntimeWebSocketServerState({
+      cleanupClient,
+      connectedClients,
+      heartbeatHandle,
+      socketCleanupCallbacks,
+      socketEntriesByActivity,
+      trackedSockets,
+    });
+  });
 
   wss.on("connection", async (ws, req) => {
     if (!trustForwardedHeaders && hasForwardedHeaders(req.headers)) {
@@ -98,6 +106,21 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
         hasForwardedProto: Boolean(firstHeaderValue(req.headers["x-forwarded-proto"])),
         trustedProxiesConfigured: false,
       });
+    }
+
+    const upgradeRateLimitKey = readRuntimeWsUpgradeRateLimitKey(req, { trustForwardedHeaders });
+    if (!upgradeRateLimiter.consume(upgradeRateLimitKey)) {
+      logger.warn("WebSocket upgrade rejected by per-IP rate limit", {
+        trustedProxiesConfigured: trustForwardedHeaders,
+      });
+      try {
+        ws.close(RUNTIME_WS_CLOSE_TRY_AGAIN_LATER, "rate limited");
+      } catch (error) {
+        logger.debug("WebSocket close request failed during rate-limit rejection", {
+          error: sanitizeRuntimeWebSocketError(error),
+        });
+      }
+      return;
     }
 
     if (!acceptConnections()) {

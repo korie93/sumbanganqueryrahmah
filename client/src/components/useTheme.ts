@@ -53,6 +53,23 @@ export function applyTheme(theme: AppTheme, options?: { persist?: boolean }) {
   }
 }
 
+export function subscribeSystemThemeChange(
+  systemThemeMedia: MediaQueryList,
+  onSystemThemeChange: () => void,
+): () => void {
+  if (typeof systemThemeMedia.addEventListener === "function") {
+    systemThemeMedia.addEventListener("change", onSystemThemeChange);
+    return () => {
+      systemThemeMedia.removeEventListener("change", onSystemThemeChange);
+    };
+  }
+
+  systemThemeMedia.addListener(onSystemThemeChange);
+  return () => {
+    systemThemeMedia.removeListener(onSystemThemeChange);
+  };
+}
+
 export function useTheme() {
   const [theme, setThemeState] = useState<AppTheme>(resolveInitialTheme);
   const [hasExplicitThemePreference, setHasExplicitThemePreference] = useState(
@@ -113,20 +130,15 @@ export function useTheme() {
 
     window.addEventListener("storage", onStorage);
     window.addEventListener("app-theme-change", onThemeChange as EventListener);
-    if (typeof systemThemeMedia.addEventListener === "function") {
-      systemThemeMedia.addEventListener("change", onSystemThemeChange);
-    } else {
-      systemThemeMedia.addListener(onSystemThemeChange);
-    }
+    const unsubscribeSystemThemeChange = subscribeSystemThemeChange(
+      systemThemeMedia,
+      onSystemThemeChange,
+    );
     syncStoredThemeOrSystemTheme();
     return () => {
       window.removeEventListener("storage", onStorage);
       window.removeEventListener("app-theme-change", onThemeChange as EventListener);
-      if (typeof systemThemeMedia.removeEventListener === "function") {
-        systemThemeMedia.removeEventListener("change", onSystemThemeChange);
-      } else {
-        systemThemeMedia.removeListener(onSystemThemeChange);
-      }
+      unsubscribeSystemThemeChange();
     };
   }, []);
 

@@ -157,10 +157,35 @@ export function createAuthGuards(options: CreateAuthGuardsOptions) {
 
       await activityUpdates.updateAuthenticatedActivity(decoded.activityId);
 
+      const resolvedUserId = user.id ?? activity.userId ?? decoded.userId;
+      const resolvedUsername = user.username ?? activity.username ?? decoded.username;
+      const resolvedRole = user.role ?? activity.role ?? decoded.role;
+      const fallbackFields = [
+        user.id == null ? "userId" : null,
+        user.username == null ? "username" : null,
+        user.role == null ? "role" : null,
+      ].filter((field): field is string => field !== null);
+
+      if (fallbackFields.length > 0) {
+        logger.warn("Authenticated session used fallback identity fields after database lookup", {
+          fallbackFields,
+          activityFallbackAvailable: {
+            userId: activity.userId != null,
+            username: activity.username != null,
+            role: activity.role != null,
+          },
+          tokenFallbackAvailable: {
+            userId: decoded.userId != null,
+            username: decoded.username != null,
+            role: decoded.role != null,
+          },
+        });
+      }
+
       req.user = {
-        userId: user.id || activity.userId || decoded.userId,
-        username: user.username || activity.username || decoded.username,
-        role: user.role || activity.role || decoded.role,
+        userId: resolvedUserId,
+        username: resolvedUsername,
+        role: resolvedRole,
         activityId: decoded.activityId,
         status: user.status,
         mustChangePassword: user.mustChangePassword,

@@ -28,7 +28,16 @@ export type {
   SearchGlobalDataRow,
 } from "./search-repository-types";
 
+const ADVANCED_SEARCH_COLUMN_CACHE_TTL_MS = 60_000;
+
+type ColumnNameCacheEntry = {
+  columns: string[];
+  expiresAt: number;
+};
+
 export class SearchRepository {
+  private allColumnNamesCache: ColumnNameCacheEntry | null = null;
+
   private async getGlobalSearchTotal(search: string): Promise<number> {
     const jsonSearchCondition = buildJsonTextContainsCondition(search);
     const totalResult = await db.execute(sql`
@@ -235,7 +244,7 @@ export class SearchRepository {
     limit: number,
     offset: number,
   ): Promise<{ rows: AdvancedSearchDataRow[]; total: number }> {
-    const allowedColumns = new Set(await this.getAllColumnNames());
+    const allowedColumns = new Set(await this.getAllColumnNamesCached());
 
     const safeFilters = filters.filter((filter) =>
       allowedColumns.has(filter.field) && SEARCH_ALLOWED_OPERATORS.has(filter.operator),
@@ -310,5 +319,19 @@ export class SearchRepository {
     return (result.rows || [])
       .map((row) => String((row as Record<string, unknown>).column_name || "").trim())
       .filter(Boolean);
+  }
+
+  private async getAllColumnNamesCached(): Promise<string[]> {
+    const now = Date.now();
+    if (this.allColumnNamesCache && this.allColumnNamesCache.expiresAt > now) {
+      return this.allColumnNamesCache.columns;
+    }
+
+    const columns = await this.getAllColumnNames();
+    this.allColumnNamesCache = {
+      columns,
+      expiresAt: now + ADVANCED_SEARCH_COLUMN_CACHE_TTL_MS,
+    };
+    return columns;
   }
 }

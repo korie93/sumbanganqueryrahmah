@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   applyTheme,
   resolveInitialTheme,
+  subscribeSystemThemeChange,
 } from "./useTheme";
 import type { BrowserStorageLike } from "@/lib/browser-storage";
 
@@ -95,4 +96,52 @@ test("applyTheme updates the document without throwing when storage writes fail"
   assert.equal(root.dataset.theme, "dark");
   assert.equal(root.style.colorScheme, "dark");
   assert.deepEqual(events, ["app-theme-change"]);
+});
+
+test("subscribeSystemThemeChange prefers modern MediaQueryList listeners", () => {
+  const calls: string[] = [];
+  const listener = () => undefined;
+  const media = {
+    addEventListener(event: string, handler: () => void) {
+      calls.push(`addEventListener:${event}:${handler === listener}`);
+    },
+    removeEventListener(event: string, handler: () => void) {
+      calls.push(`removeEventListener:${event}:${handler === listener}`);
+    },
+    addListener() {
+      calls.push("addListener");
+    },
+    removeListener() {
+      calls.push("removeListener");
+    },
+  } as unknown as MediaQueryList;
+
+  const unsubscribe = subscribeSystemThemeChange(media, listener);
+  unsubscribe();
+
+  assert.deepEqual(calls, [
+    "addEventListener:change:true",
+    "removeEventListener:change:true",
+  ]);
+});
+
+test("subscribeSystemThemeChange keeps legacy MediaQueryList fallback isolated", () => {
+  const calls: string[] = [];
+  const listener = () => undefined;
+  const media = {
+    addListener(handler: () => void) {
+      calls.push(`addListener:${handler === listener}`);
+    },
+    removeListener(handler: () => void) {
+      calls.push(`removeListener:${handler === listener}`);
+    },
+  } as unknown as MediaQueryList;
+
+  const unsubscribe = subscribeSystemThemeChange(media, listener);
+  unsubscribe();
+
+  assert.deepEqual(calls, [
+    "addListener:true",
+    "removeListener:true",
+  ]);
 });

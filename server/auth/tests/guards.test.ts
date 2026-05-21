@@ -8,6 +8,7 @@ import {
   sweepExpiredActivityUpdateCacheEntriesForTests,
   sweepExpiredTabVisibilityCacheEntriesForTests,
 } from "../guards";
+import { logger } from "../../lib/logger";
 
 test("getInvalidatedSessionMessage returns reset-specific messaging for password reset invalidation", () => {
   assert.equal(
@@ -395,6 +396,75 @@ test("authenticateToken prefers the composite session snapshot when storage expo
   assert.equal(updateCalls, 1);
   assert.equal(nextCalls, 1);
   assert.equal((request as { user?: { username?: string } }).user?.username, "guard.user");
+});
+
+test("authenticateToken uses nullish identity fallback and logs missing database identity fields", async () => {
+  const secret = "guard-test-secret";
+  const snapshot = createAuthenticatedSessionSnapshot();
+  const originalLoggerWarn = logger.warn;
+  const warnings: Array<{ message: string; payload: Record<string, unknown> }> = [];
+  logger.warn = ((message: string, payload: Record<string, unknown>) => {
+    warnings.push({ message, payload });
+  }) as typeof logger.warn;
+
+  const guards = createAuthGuards({
+    storage: {
+      getAuthenticatedSessionSnapshot: async () => ({
+        ...snapshot,
+        user: {
+          ...snapshot.user,
+          id: undefined,
+          username: undefined,
+        } as never,
+      }),
+      getActivityById: async () => undefined,
+      getUser: async () => undefined,
+      getUserByUsername: async () => undefined,
+      isVisitorBanned: async () => false,
+      updateActivity: async () => undefined,
+      getRoleTabVisibility: async () => ({}),
+    },
+    secret,
+  });
+
+  const token = jwt.sign(
+    {
+      userId: "token-user",
+      username: "token.user",
+      role: "user",
+      activityId: "activity-1",
+    },
+    secret,
+    { expiresIn: "24h" },
+  );
+  const request = {
+    headers: {
+      cookie: `sqr_auth=${encodeURIComponent(token)}`,
+    },
+    method: "GET",
+    path: "/api/me",
+  };
+  const response = createMockResponse();
+  let nextCalls = 0;
+
+  try {
+    await guards.authenticateToken(request as never, response as never, () => {
+      nextCalls += 1;
+    });
+
+    assert.equal(nextCalls, 1);
+    assert.equal((request as { user?: { userId?: string } }).user?.userId, "user-1");
+    assert.equal((request as { user?: { username?: string } }).user?.username, "guard.user");
+    assert.equal((request as { user?: { role?: string } }).user?.role, "admin");
+    assert.equal(warnings.length, 1);
+    assert.equal(warnings[0].message, "Authenticated session used fallback identity fields after database lookup");
+    assert.deepEqual(warnings[0].payload.fallbackFields, ["userId", "username"]);
+    assert.doesNotMatch(JSON.stringify(warnings[0].payload), /guard\.user|token\.user|user-1|token-user/);
+  } finally {
+    logger.warn = originalLoggerWarn;
+    guards.stopTabVisibilityCacheSweep();
+    guards.stopActivityUpdateCacheSweep();
+  }
 });
 
 test("authenticateToken throttles healthy activity updates per session id", async (t) => {
