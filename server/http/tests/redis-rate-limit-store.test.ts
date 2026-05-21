@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { Options } from "express-rate-limit";
 import {
+  createRedisReconnectStrategy,
   createSharedRateLimitStore,
   RedisRateLimitStore,
 } from "../../middleware/redis-rate-limit-store";
@@ -139,6 +140,57 @@ test("RedisRateLimitStore falls back to memory when Redis cannot connect", async
   assert.equal((await store.increment("client-1")).totalHits, 2);
   assert.equal((await store.get("client-1"))?.totalHits, 2);
   assert.equal(warnings.length, 1);
+});
+
+test("RedisRateLimitStore retries Redis after a failed connection instead of permanently disabling it", async () => {
+  const entries = new Map<string, FakeRedisEntry>();
+  let factoryCalls = 0;
+  const store = new RedisRateLimitStore({
+    config: redisConfig,
+    createRedisClient: () => {
+      factoryCalls += 1;
+      if (factoryCalls === 1) {
+        return {
+          connect: async () => {
+            throw new Error("first redis connect failed");
+          },
+          decr: async () => 0,
+          del: async () => 0,
+          eval: async () => [1, 60_000],
+          get: async () => null,
+          pTTL: async () => -2,
+        };
+      }
+
+      return new FakeRedisClient(entries);
+    },
+    logger: {
+      warn() {},
+    },
+    prefix: "sqr:test:reconnect",
+  });
+  initStore(store);
+
+  assert.equal((await store.increment("client-1")).totalHits, 1);
+  assert.equal(factoryCalls, 1);
+
+  assert.equal((await store.increment("client-1")).totalHits, 1);
+  assert.equal(factoryCalls, 2);
+  assert.equal((await store.increment("client-1")).totalHits, 2);
+});
+
+test("createRedisReconnectStrategy uses bounded exponential backoff and structured warnings", () => {
+  const warnings: unknown[] = [];
+  const strategy = createRedisReconnectStrategy({
+    warn(message, payload) {
+      warnings.push({ message, payload });
+    },
+  });
+
+  assert.equal(strategy(0, new Error("redis down")), 500);
+  assert.equal(strategy(3, new Error("redis down")), 4_000);
+  assert.equal(strategy(20, new Error("redis down")), 30_000);
+  assert.equal(warnings.length, 3);
 });
 
 test("createSharedRateLimitStore only builds Redis stores for redis configuration", () => {
