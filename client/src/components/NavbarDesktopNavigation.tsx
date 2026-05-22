@@ -51,6 +51,12 @@ function NavbarDesktopNavigationImpl({
     }, 0)
   }
 
+  const scheduleGroupTriggerFocus = (groupId: string) => {
+    globalThis.setTimeout(() => {
+      groupTriggerRefs.current.get(groupId)?.focus({ preventScroll: true })
+    }, 0)
+  }
+
   const getScrollBehavior = () => resolveNavbarScrollBehavior(
     typeof window !== "undefined"
       && window.matchMedia("(prefers-reduced-motion: reduce)").matches
@@ -161,9 +167,9 @@ function NavbarDesktopNavigationImpl({
               <DropdownMenuContent
                 align="center"
                 sideOffset={8}
-                className="w-[22rem] rounded-2xl border-border/70 p-2 shadow-xl"
+                className="navbar-dropdown-content w-[22rem] rounded-2xl border-border/70 p-2 shadow-xl"
                 onEscapeKeyDown={() => {
-                  restoreGroupTriggerFocus(group.id)
+                  scheduleGroupTriggerFocus(group.id)
                 }}
                 onCloseAutoFocus={(event) => {
                   event.preventDefault()

@@ -31,7 +31,7 @@ export function NavbarUserMenuContent({
   return (
     <DropdownMenuContent
       align="end"
-      className="w-[min(18rem,calc(100vw-1rem))] rounded-xl p-2"
+      className="navbar-dropdown-content w-[min(18rem,calc(100vw-1rem))] rounded-xl p-2"
       onCloseAutoFocus={onCloseAutoFocus}
       onEscapeKeyDown={onEscapeKeyDown}
     >

@@ -67,6 +67,9 @@ function createApiProtectionTestApp() {
   app.post("/api/collection", (_req, res) => {
     res.json({ ok: true, route: "collection" });
   });
+  app.get("/api/analytics/summary", (_req, res) => {
+    res.json({ ok: true, route: "analytics-summary" });
+  });
   app.post("/telemetry/web-vitals", (_req, res) => {
     res.json({ ok: true, route: "telemetry" });
   });
@@ -163,6 +166,33 @@ test("adaptive API protection isolates collection writes from generic API bursts
       ok: true,
       route: "collection",
     });
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("adaptive API protection gives dashboard analytics its own read bucket", async () => {
+  const app = createApiProtectionTestApp();
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    for (let index = 0; index < 8; index += 1) {
+      const response = await fetch(`${baseUrl}/api/noisy`);
+      assert.equal(response.status, 200);
+    }
+
+    const noisyOverflow = await fetch(`${baseUrl}/api/noisy`);
+    assert.equal(noisyOverflow.status, 429);
+
+    for (let index = 0; index < 24; index += 1) {
+      const analyticsResponse = await fetch(`${baseUrl}/api/analytics/summary`);
+      assert.equal(analyticsResponse.status, 200);
+    }
+
+    const throttledAnalytics = await fetch(`${baseUrl}/api/analytics/summary`);
+    assert.equal(throttledAnalytics.status, 429);
+    const payload = await throttledAnalytics.json();
+    assert.equal(payload.limit, 24);
   } finally {
     await stopTestServer(server);
   }

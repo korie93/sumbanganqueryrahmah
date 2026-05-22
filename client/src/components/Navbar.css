@@ -85,6 +85,10 @@
   z-index: var(--z-navbar-scroll-hint);
 }
 
+.navbar-dropdown-content[data-state="closed"] {
+  animation: none;
+}
+
 .navbar-premium-glass::-webkit-scrollbar {
   height: 0.35rem;
 }

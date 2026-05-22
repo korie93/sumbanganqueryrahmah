@@ -164,6 +164,10 @@ export function createApiProtectionMiddleware(options: ApiProtectionOptions): {
       bucketScope = "collection-meta";
       baseLimit = 120;
       minLimit = 24;
+    } else if (method === "GET" && path.startsWith("/api/analytics/")) {
+      bucketScope = "analytics";
+      baseLimit = 120;
+      minLimit = 24;
     } else if (path.startsWith("/api/collection")) {
       bucketScope = "collection";
       baseLimit = 80;

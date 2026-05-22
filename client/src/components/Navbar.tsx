@@ -122,6 +122,18 @@ function NavbarImpl({
     }, 0)
   }, [])
 
+  const scheduleDesktopUserMenuTriggerFocus = useCallback(() => {
+    globalThis.setTimeout(() => {
+      desktopUserMenuTriggerRef.current?.focus({ preventScroll: true })
+    }, 0)
+  }, [])
+
+  const scheduleMobileUserMenuTriggerFocus = useCallback(() => {
+    globalThis.setTimeout(() => {
+      mobileUserMenuTriggerRef.current?.focus({ preventScroll: true })
+    }, 0)
+  }, [])
+
   const restoreDesktopUserMenuFocus = useCallback((event: Event) => {
     event.preventDefault()
     focusDesktopUserMenuTrigger()
@@ -230,7 +242,7 @@ function NavbarImpl({
                 setTheme={setTheme}
                 onLogout={onLogout}
                 onCloseAutoFocus={restoreMobileUserMenuFocus}
-                onEscapeKeyDown={focusMobileUserMenuTrigger}
+                onEscapeKeyDown={scheduleMobileUserMenuTriggerFocus}
               />
             </DropdownMenu>
           </div>
@@ -275,7 +287,7 @@ function NavbarImpl({
               setTheme={setTheme}
               onLogout={onLogout}
               onCloseAutoFocus={restoreDesktopUserMenuFocus}
-              onEscapeKeyDown={focusDesktopUserMenuTrigger}
+              onEscapeKeyDown={scheduleDesktopUserMenuTriggerFocus}
             />
           </DropdownMenu>
         </div>

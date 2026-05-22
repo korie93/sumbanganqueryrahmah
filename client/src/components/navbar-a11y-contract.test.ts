@@ -14,6 +14,7 @@ test("navbar controls use Malay accessible labels and include username context",
   const navbarSource = readSource("Navbar.tsx");
   const homeButtonSource = readSource("NavbarHomeButton.tsx");
   const desktopNavigationSource = readSource("NavbarDesktopNavigation.tsx");
+  const userMenuSource = readSource("NavbarUserMenuContent.tsx");
   const mobileNavigationSource = readSource("NavbarMobileNavigation.tsx");
   const scrollHintSource = readSource("HorizontalScrollHint.tsx");
   const navbarStyles = readSource("Navbar.css");
@@ -22,8 +23,8 @@ test("navbar controls use Malay accessible labels and include username context",
   assert.match(navbarSource, /aria-label=\{`Buka menu pengguna untuk \$\{username\}`\}/);
   assert.match(navbarSource, /onCloseAutoFocus=\{restoreDesktopUserMenuFocus\}/);
   assert.match(navbarSource, /onCloseAutoFocus=\{restoreMobileUserMenuFocus\}/);
-  assert.match(navbarSource, /onEscapeKeyDown=\{focusDesktopUserMenuTrigger\}/);
-  assert.match(navbarSource, /onEscapeKeyDown=\{focusMobileUserMenuTrigger\}/);
+  assert.match(navbarSource, /onEscapeKeyDown=\{scheduleDesktopUserMenuTriggerFocus\}/);
+  assert.match(navbarSource, /onEscapeKeyDown=\{scheduleMobileUserMenuTriggerFocus\}/);
   assert.match(navbarSource, /desktopUserMenuTriggerRef\.current\?\.focus\(\{ preventScroll: true \}\)/);
   assert.match(navbarSource, /\{\[\.\.\.username\]\[0\] \|\| ""\}/);
   assert.doesNotMatch(navbarSource, /window\.location/);
@@ -36,6 +37,9 @@ test("navbar controls use Malay accessible labels and include username context",
   assert.match(desktopNavigationSource, /onEscapeKeyDown=\{\(\) => \{/);
   assert.match(desktopNavigationSource, /onCloseAutoFocus=\{\(event\) => \{/);
   assert.match(desktopNavigationSource, /groupTriggerRefs\.current\.get\(groupId\)\?\.focus\(\{ preventScroll: true \}\)/);
+  assert.match(desktopNavigationSource, /scheduleGroupTriggerFocus\(group\.id\)/);
+  assert.match(userMenuSource, /navbar-dropdown-content/);
+  assert.match(navbarStyles, /\.navbar-dropdown-content\[data-state="closed"\]\s*\{[\s\S]*animation:\s*none/);
   assert.match(scrollHintSource, /hint = "Tatal untuk lagi"/);
   assert.match(navbarStyles, /\.navbar-scroll-hint/);
   assert.match(navbarStyles, /\.navbar-premium-glass\s*\{[\s\S]*scrollbar-width:\s*thin/);
