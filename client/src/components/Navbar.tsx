@@ -108,15 +108,29 @@ function NavbarImpl({
     "aria-expanded": mobileNavOpen,
   } as const
 
+  const focusDesktopUserMenuTrigger = useCallback(() => {
+    desktopUserMenuTriggerRef.current?.focus({ preventScroll: true })
+    globalThis.setTimeout(() => {
+      desktopUserMenuTriggerRef.current?.focus({ preventScroll: true })
+    }, 0)
+  }, [])
+
+  const focusMobileUserMenuTrigger = useCallback(() => {
+    mobileUserMenuTriggerRef.current?.focus({ preventScroll: true })
+    globalThis.setTimeout(() => {
+      mobileUserMenuTriggerRef.current?.focus({ preventScroll: true })
+    }, 0)
+  }, [])
+
   const restoreDesktopUserMenuFocus = useCallback((event: Event) => {
     event.preventDefault()
-    desktopUserMenuTriggerRef.current?.focus({ preventScroll: true })
-  }, [])
+    focusDesktopUserMenuTrigger()
+  }, [focusDesktopUserMenuTrigger])
 
   const restoreMobileUserMenuFocus = useCallback((event: Event) => {
     event.preventDefault()
-    mobileUserMenuTriggerRef.current?.focus({ preventScroll: true })
-  }, [])
+    focusMobileUserMenuTrigger()
+  }, [focusMobileUserMenuTrigger])
 
   const navigateToItem = useCallback(
     (itemId: string) => {
@@ -216,6 +230,7 @@ function NavbarImpl({
                 setTheme={setTheme}
                 onLogout={onLogout}
                 onCloseAutoFocus={restoreMobileUserMenuFocus}
+                onEscapeKeyDown={focusMobileUserMenuTrigger}
               />
             </DropdownMenu>
           </div>
@@ -260,6 +275,7 @@ function NavbarImpl({
               setTheme={setTheme}
               onLogout={onLogout}
               onCloseAutoFocus={restoreDesktopUserMenuFocus}
+              onEscapeKeyDown={focusDesktopUserMenuTrigger}
             />
           </DropdownMenu>
         </div>

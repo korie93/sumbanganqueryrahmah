@@ -16,6 +16,7 @@ type NavbarUserMenuContentProps = {
   setTheme: (theme: "light" | "dark") => void
   onLogout: () => void | Promise<void>
   onCloseAutoFocus?: (event: Event) => void
+  onEscapeKeyDown?: (event: KeyboardEvent) => void
 }
 
 export function NavbarUserMenuContent({
@@ -25,12 +26,14 @@ export function NavbarUserMenuContent({
   setTheme,
   onLogout,
   onCloseAutoFocus,
+  onEscapeKeyDown,
 }: NavbarUserMenuContentProps) {
   return (
     <DropdownMenuContent
       align="end"
       className="w-[min(18rem,calc(100vw-1rem))] rounded-xl p-2"
       onCloseAutoFocus={onCloseAutoFocus}
+      onEscapeKeyDown={onEscapeKeyDown}
     >
       <DropdownMenuLabel className="rounded-xl border border-border/60 bg-muted/20 p-3">
         <div className="flex min-w-0 items-center gap-3">

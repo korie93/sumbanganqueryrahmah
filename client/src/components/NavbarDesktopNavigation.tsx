@@ -44,6 +44,13 @@ function NavbarDesktopNavigationImpl({
 }: NavbarDesktopNavigationProps) {
   const groupTriggerRefs = useRef(new Map<string, HTMLButtonElement>())
 
+  const restoreGroupTriggerFocus = (groupId: string) => {
+    groupTriggerRefs.current.get(groupId)?.focus({ preventScroll: true })
+    globalThis.setTimeout(() => {
+      groupTriggerRefs.current.get(groupId)?.focus({ preventScroll: true })
+    }, 0)
+  }
+
   const getScrollBehavior = () => resolveNavbarScrollBehavior(
     typeof window !== "undefined"
       && window.matchMedia("(prefers-reduced-motion: reduce)").matches
@@ -155,9 +162,12 @@ function NavbarDesktopNavigationImpl({
                 align="center"
                 sideOffset={8}
                 className="w-[22rem] rounded-2xl border-border/70 p-2 shadow-xl"
+                onEscapeKeyDown={() => {
+                  restoreGroupTriggerFocus(group.id)
+                }}
                 onCloseAutoFocus={(event) => {
                   event.preventDefault()
-                  groupTriggerRefs.current.get(group.id)?.focus({ preventScroll: true })
+                  restoreGroupTriggerFocus(group.id)
                 }}
               >
                 <DropdownMenuLabel className="rounded-xl bg-muted/20 px-3 py-2.5">
