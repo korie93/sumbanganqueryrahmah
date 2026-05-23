@@ -1,4 +1,5 @@
 import type { User } from "@/app/types";
+import { z } from "zod";
 import { LEGACY_AUTH_LOCAL_STORAGE_KEYS } from "@/app/constants";
 import {
   clearLegacyAuthLocalStorage,
@@ -42,6 +43,22 @@ const AUTH_SESSION_STORAGE_KEYS = [
   "user",
   "username",
 ] as const;
+
+const authSessionUserSchema = z.object({
+  id: z.string().optional(),
+  username: z.string().trim().min(1),
+  role: z.string().trim().min(1),
+  fullName: z.string().nullable().optional(),
+  email: z.string().nullable().optional(),
+  status: z.string().optional(),
+  mustChangePassword: z.boolean().optional(),
+  passwordResetBySuperuser: z.boolean().optional(),
+  isBanned: z.boolean().nullable().optional(),
+  twoFactorEnabled: z.boolean().optional(),
+  twoFactorPendingSetup: z.boolean().optional(),
+  twoFactorConfiguredAt: z.string().nullable().optional(),
+  sessionExpiresAt: z.string().nullable().optional(),
+}).strict();
 
 type AuthSessionStorageKey = (typeof AUTH_SESSION_STORAGE_KEYS)[number];
 type LegacyAuthLocalStorageKey = (typeof LEGACY_AUTH_LOCAL_STORAGE_KEYS)[number];
@@ -237,14 +254,14 @@ export function getStoredAuthenticatedUser(): User | null {
   }
 
   try {
-    const parsed = JSON.parse(raw) as User;
-    if (!parsed?.username || !parsed?.role) {
+    const parsed = authSessionUserSchema.safeParse(JSON.parse(raw) as unknown);
+    if (!parsed.success) {
       throw new Error("Invalid cached user");
     }
     if (readAuthSessionTimestamp(AUTH_SESSION_STORED_AT_KEY) === null) {
       writeAuthSessionMetadata();
     }
-    return parsed;
+    return parsed.data;
   } catch {
     clearStoredAuthSessionValues();
     return null;

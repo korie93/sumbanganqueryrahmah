@@ -65,7 +65,9 @@ function parseJsonObject(text: string): ApiErrorPayload | null {
     }
 
     const normalized = apiErrorPayloadSchema.safeParse(parsed);
-    return normalized.success && isObjectRecord(normalized.data) ? normalized.data : parsed;
+    return normalized.success && isObjectRecord(normalized.data)
+      ? normalized.data
+      : { message: "Request failed" };
   } catch {
     return null;
   }

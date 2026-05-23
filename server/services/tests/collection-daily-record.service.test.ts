@@ -604,7 +604,7 @@ function createFallbackPagedDailyOverviewService() {
       listCalls.push({
         from: filters?.from,
         to: filters?.to,
-        nicknames: Array.isArray(filters?.nicknames) ? [...filters?.nicknames] : [],
+        nicknames: Array.isArray(filters?.nicknames) ? [...filters.nicknames] : [],
         limit: filters?.limit,
         offset: filters?.offset,
       });

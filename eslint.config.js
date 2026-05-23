@@ -5,6 +5,7 @@ import reactHooks from "eslint-plugin-react-hooks";
 import tseslint from "typescript-eslint";
 
 const clientFiles = ["client/src/**/*.{ts,tsx}"];
+const serverFiles = ["server/**/*.ts", "shared/**/*.ts"];
 const jsxA11yRecommendedWarnings = Object.fromEntries(
   Object.keys(jsxA11y.flatConfigs.recommended.rules).map((ruleName) => [
     ruleName,
@@ -66,6 +67,37 @@ export default tseslint.config(
       "no-unused-vars": "off",
       "no-useless-escape": "warn",
       "react-hooks/exhaustive-deps": "warn",
+    },
+  },
+  {
+    files: serverFiles,
+    extends: [
+      js.configs.recommended,
+      ...tseslint.configs.recommended,
+    ],
+    languageOptions: {
+      ecmaVersion: "latest",
+      sourceType: "module",
+      globals: {
+        ...globals.node,
+        ...globals.es2024,
+      },
+    },
+    rules: {
+      "@typescript-eslint/no-unused-vars": [
+        "warn",
+        {
+          argsIgnorePattern: "^_",
+          caughtErrorsIgnorePattern: "^_",
+          ignoreRestSiblings: true,
+          varsIgnorePattern: "^_",
+        },
+      ],
+      "no-extra-boolean-cast": "warn",
+      "no-irregular-whitespace": "warn",
+      "no-unsafe-finally": "warn",
+      "no-unused-vars": "off",
+      "no-useless-escape": "warn",
     },
   },
 );

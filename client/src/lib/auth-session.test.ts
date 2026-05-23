@@ -235,6 +235,30 @@ test("stored auth session recovers missing metadata without accepting corrupted 
   assert.equal(session.getItem("sessionStoredAt"), null);
 });
 
+test("stored auth session validates cached user JSON against the session schema", () => {
+  const { session } = installStorageMocks();
+  session.setItem("user", JSON.stringify({
+    username: "alice",
+    role: "admin",
+    permissions: ["unexpected"],
+  }));
+  session.setItem("username", "alice");
+  session.setItem("role", "admin");
+
+  assert.equal(getStoredAuthenticatedUser(), null);
+  assert.equal(session.getItem("user"), null);
+
+  session.setItem("user", JSON.stringify({
+    username: "alice",
+    role: 42,
+  }));
+  session.setItem("username", "alice");
+  session.setItem("role", "admin");
+
+  assert.equal(getStoredAuthenticatedUser(), null);
+  assert.equal(session.getItem("user"), null);
+});
+
 test("persistAuthNotice stores a one-time login notice in sessionStorage", () => {
   const { session } = installStorageMocks();
 

@@ -118,6 +118,55 @@ test("apiRequest preserves structured backend error codes alongside request ids"
   }
 });
 
+test("apiRequest ignores unvalidated JSON error flags instead of acting on them", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalWindowDescriptor = Object.getOwnPropertyDescriptor(globalThis, "window");
+  const dispatchedEvents: string[] = [];
+  const eventTarget = new EventTarget();
+
+  Object.defineProperty(globalThis, "window", {
+    configurable: true,
+    value: {
+      addEventListener: eventTarget.addEventListener.bind(eventTarget),
+      removeEventListener: eventTarget.removeEventListener.bind(eventTarget),
+      dispatchEvent(event: Event) {
+        dispatchedEvents.push(event.type);
+        return eventTarget.dispatchEvent(event);
+      },
+    },
+  });
+
+  globalThis.fetch = (async () => new Response(JSON.stringify({
+    forceLogout: true,
+  }), {
+    status: 403,
+    statusText: "Forbidden",
+    headers: {
+      "Content-Type": "application/json",
+    },
+  })) as typeof fetch;
+
+  try {
+    await assert.rejects(
+      () => apiRequest("GET", "/api/test-invalid-error-payload"),
+      (error: unknown) => {
+        assert.ok(error instanceof Error);
+        assert.match(error.message, /Request failed/);
+        assert.doesNotMatch(error.message, /forceLogout/);
+        return true;
+      },
+    );
+    assert.deepEqual(dispatchedEvents, []);
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (originalWindowDescriptor) {
+      Object.defineProperty(globalThis, "window", originalWindowDescriptor);
+    } else {
+      Reflect.deleteProperty(globalThis, "window");
+    }
+  }
+});
+
 test("apiRequest normalizes oversized HTML error pages into a friendly message", async () => {
   const originalFetch = globalThis.fetch;
 

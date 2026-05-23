@@ -4,6 +4,7 @@ import express from "express";
 import {
   createApiProtectionMiddleware,
   isRuntimeProtectedRoute,
+  resolveAdaptiveRateLruEvictionKey,
   resolveAdaptiveRateEvictionKey,
 } from "../../internal/apiProtection";
 import { startTestServer, stopTestServer } from "../../routes/tests/http-test-utils";
@@ -320,4 +321,22 @@ test("resolveAdaptiveRateEvictionKey evicts the least recently touched bucket in
   ]);
 
   assert.equal(resolveAdaptiveRateEvictionKey(buckets), "legit-old");
+});
+
+test("resolveAdaptiveRateLruEvictionKey uses Map touch order for constant-time production eviction", () => {
+  const buckets = new Map<string, { count: number; lastSeenAt: number; resetAt: number }>([
+    ["legit-old", { count: 1, lastSeenAt: 1_000, resetAt: 11_000 }],
+    ["attacker-hot", { count: 9, lastSeenAt: 2_000, resetAt: 12_000 }],
+    ["attacker-new", { count: 2, lastSeenAt: 3_000, resetAt: 13_000 }],
+  ]);
+
+  const hotBucket = buckets.get("legit-old");
+  assert.ok(hotBucket);
+  buckets.delete("legit-old");
+  buckets.set("legit-old", {
+    ...hotBucket,
+    lastSeenAt: 4_000,
+  });
+
+  assert.equal(resolveAdaptiveRateLruEvictionKey(buckets), "attacker-hot");
 });

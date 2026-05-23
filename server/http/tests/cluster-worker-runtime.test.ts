@@ -9,6 +9,8 @@ import {
 import { parseClusterWorkerMessage } from "../../internal/cluster-worker-message-policy";
 import type { WorkerControlState, WorkerMetricsPayload } from "../../internal/worker-ipc";
 
+type TestHandler = (...args: unknown[]) => unknown;
+
 function createLogger() {
   return {
     infoCalls: [] as Array<{ message: string; metadata?: Record<string, unknown> | undefined }>,
@@ -32,7 +34,7 @@ function createWorker(overrides: Partial<{
   dead: boolean;
   sendThrows: boolean;
 }> = {}) {
-  const handlers = new Map<string, Function[]>();
+  const handlers = new Map<string, TestHandler[]>();
   const sent: unknown[] = [];
   const worker = {
     id: overrides.id ?? 1,
@@ -45,7 +47,7 @@ function createWorker(overrides: Partial<{
       sent.push(message);
       return true;
     },
-    on: (event: string, handler: Function) => {
+    on: (event: string, handler: TestHandler) => {
       const list = handlers.get(event) ?? [];
       list.push(handler);
       handlers.set(event, list);

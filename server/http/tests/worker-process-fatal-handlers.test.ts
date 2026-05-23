@@ -6,6 +6,8 @@ import {
   registerWorkerProcessFatalHandlers,
 } from "../../internal/worker-process-fatal-handlers";
 
+type TestHandler = (...args: unknown[]) => unknown;
+
 function createLogger() {
   return {
     errorCalls: [] as Array<{ message: string; metadata?: Record<string, unknown> | undefined }>,
@@ -73,15 +75,15 @@ test("worker fatal handlers notify master and request shutdown for unhandled rej
 });
 
 test("worker fatal handler registration wires and unwires process listeners safely", () => {
-  const processHandlers = new Map<string, Function[]>();
+  const processHandlers = new Map<string, TestHandler[]>();
   const processRef = {
-    on(event: string, handler: Function) {
+    on(event: string, handler: TestHandler) {
       const handlers = processHandlers.get(event) ?? [];
       handlers.push(handler);
       processHandlers.set(event, handlers);
       return processRef;
     },
-    off(event: string, handler: Function) {
+    off(event: string, handler: TestHandler) {
       const handlers = processHandlers.get(event) ?? [];
       processHandlers.set(event, handlers.filter((candidate) => candidate !== handler));
       return processRef;

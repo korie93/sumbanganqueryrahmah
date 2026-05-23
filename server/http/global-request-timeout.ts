@@ -30,7 +30,6 @@ export function createGlobalRequestTimeoutMiddleware(
     }
 
     let settled = false;
-    let timer: ReturnType<typeof setTimeout>;
     const controller = new AbortController();
     res.locals.requestAbortSignal = controller.signal;
     const requestId = String(res.getHeader("x-request-id") || req.headers["x-request-id"] || "").trim();
@@ -45,7 +44,7 @@ export function createGlobalRequestTimeoutMiddleware(
       res.off("close", clear);
     };
 
-    timer = setTimeout(() => {
+    const timer = setTimeout(() => {
       if (settled) {
         return;
       }

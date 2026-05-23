@@ -74,6 +74,13 @@ export function resolveAdaptiveRateEvictionKey(
   return oldestBucketKey;
 }
 
+export function resolveAdaptiveRateLruEvictionKey(
+  buckets: ReadonlyMap<string, AdaptiveRateBucket>,
+): string | null {
+  const oldestEntry = buckets.keys().next();
+  return oldestEntry.done ? null : oldestEntry.value;
+}
+
 export function createApiProtectionMiddleware(options: ApiProtectionOptions): {
   adaptiveRateLimit: RequestHandler;
   systemProtectionMiddleware: RequestHandler;
@@ -85,10 +92,13 @@ export function createApiProtectionMiddleware(options: ApiProtectionOptions): {
   let adaptiveRateSweepStopped = false;
 
   function setAdaptiveRateBucket(bucketKey: string, bucket: AdaptiveRateBucket) {
+    if (adaptiveRateState.has(bucketKey)) {
+      adaptiveRateState.delete(bucketKey);
+    }
     adaptiveRateState.set(bucketKey, bucket);
 
     while (adaptiveRateState.size > ADAPTIVE_RATE_MAX_BUCKETS) {
-      const oldestBucketKey = resolveAdaptiveRateEvictionKey(adaptiveRateState);
+      const oldestBucketKey = resolveAdaptiveRateLruEvictionKey(adaptiveRateState);
       if (!oldestBucketKey) {
         break;
       }

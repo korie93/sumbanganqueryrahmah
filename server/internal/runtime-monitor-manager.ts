@@ -51,7 +51,7 @@ export function createRuntimeMonitorManager(options: RuntimeMonitorManagerOption
   let lastCpuUsage = process.cpuUsage();
   let lastCpuTs = Date.now();
   let cpuPercent = 0;
-  let rollupRefreshSnapshot = createEmptyRuntimeRollupRefreshSnapshot();
+  const rollupRefreshSnapshot = createEmptyRuntimeRollupRefreshSnapshot();
   const rollupRefreshSnapshotIntervalMs = resolveRuntimeMonitorTaskIntervalMs("rollupRefreshSnapshot", {
     lowMemoryMode: options.lowMemoryMode,
   });

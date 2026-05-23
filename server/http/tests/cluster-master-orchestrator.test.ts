@@ -4,6 +4,8 @@ import test from "node:test";
 
 import { createClusterMasterOrchestrator } from "../../internal/cluster-master-orchestrator";
 
+type TestHandler = (...args: unknown[]) => unknown;
+
 function createLogger() {
   return {
     infoCalls: [] as Array<{ message: string; metadata?: Record<string, unknown> | undefined }>,
@@ -22,7 +24,7 @@ function createLogger() {
 }
 
 function createWorker(workerId = 1) {
-  const handlers = new Map<string, Function[]>();
+  const handlers = new Map<string, TestHandler[]>();
   const worker = {
     id: workerId,
     process: { pid: 10_000 + workerId },
@@ -30,13 +32,13 @@ function createWorker(workerId = 1) {
     isDead: () => false,
     send: () => true,
     kill: () => undefined,
-    on(event: string, handler: Function) {
+    on(event: string, handler: TestHandler) {
       const list = handlers.get(event) ?? [];
       list.push(handler);
       handlers.set(event, list);
       return worker;
     },
-    once(event: string, handler: Function) {
+    once(event: string, handler: TestHandler) {
       const list = handlers.get(event) ?? [];
       list.push(handler);
       handlers.set(event, list);
@@ -54,7 +56,7 @@ test("cluster master orchestrator boots primary workers and registers lifecycle 
   const logger = createLogger();
   const { worker } = createWorker(1);
   const workers: Record<number, unknown> = {};
-  const clusterHandlers = new Map<string, Function>();
+  const clusterHandlers = new Map<string, TestHandler>();
   let setupPrimaryOptions: { exec?: string } | undefined;
 
   const clusterModule = {
@@ -66,7 +68,7 @@ test("cluster master orchestrator boots primary workers and registers lifecycle 
       workers[worker.id] = worker;
       return worker;
     },
-    on(event: string, handler: Function) {
+    on(event: string, handler: TestHandler) {
       clusterHandlers.set(event, handler);
       return clusterModule;
     },
