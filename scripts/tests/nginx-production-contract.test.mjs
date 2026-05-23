@@ -6,6 +6,7 @@ import test from "node:test";
 const repoRoot = process.cwd();
 const nginxConfigPath = path.join(repoRoot, "deploy", "nginx", "sqr.conf.example");
 const envExamplePath = path.join(repoRoot, ".env.example");
+const productionEnvTemplatePath = path.join(repoRoot, "deploy", "examples", "sqr.production.env.template");
 const hetznerDocPath = path.join(repoRoot, "docs", "HETZNER_PRODUCTION_DEPLOYMENT.md");
 
 function readText(filePath) {
@@ -42,6 +43,14 @@ function readEnvValue(text, name) {
   const match = text.match(new RegExp(`^${name}=(.+)$`, "m"));
   if (!match) {
     throw new Error(`Missing ${name} in .env.example`);
+  }
+  return match[1].trim();
+}
+
+function readAnyEnvValue(text, name, sourceName = "environment template") {
+  const match = text.match(new RegExp(`^${name}=(.*)$`, "m"));
+  if (!match) {
+    throw new Error(`Missing ${name} in ${sourceName}`);
   }
   return match[1].trim();
 }
@@ -123,6 +132,40 @@ test("production Nginx example gives web-vitals telemetry its own bounded edge t
   assert.match(nginxText, /location = \/telemetry\/web-vitals/);
   assert.match(nginxText, /limit_req zone=sqr_telemetry_per_ip burst=20 nodelay/);
   assert.match(nginxText, /Do not send personal data, auth tokens, cookies, or session identifiers/);
+});
+
+test("production environment templates keep upload scanning and runtime topology fail-safe", () => {
+  const envText = readText(envExamplePath);
+  const productionEnvText = readText(productionEnvTemplatePath);
+  const docText = readText(hetznerDocPath);
+
+  for (const [sourceName, text] of [
+    [".env.example", envText],
+    ["deploy/examples/sqr.production.env.template", productionEnvText],
+  ]) {
+    assert.equal(readAnyEnvValue(text, "COLLECTION_RECEIPT_EXTERNAL_SCAN_ENABLED", sourceName), "1");
+    assert.equal(readAnyEnvValue(text, "COLLECTION_RECEIPT_EXTERNAL_SCAN_COMMAND", sourceName), "clamdscan");
+    assert.match(readAnyEnvValue(text, "COLLECTION_RECEIPT_EXTERNAL_SCAN_ARGS_JSON", sourceName), /--fdpass/);
+    assert.equal(readAnyEnvValue(text, "COLLECTION_RECEIPT_EXTERNAL_SCAN_FAIL_CLOSED", sourceName), "1");
+    assert.equal(readAnyEnvValue(text, "PG_MAX_CONNECTIONS", sourceName), "10");
+    assert.equal(readAnyEnvValue(text, "SQR_MAX_WORKERS", sourceName), "1");
+  }
+
+  assert.equal(readAnyEnvValue(envText, "HSTS_MAX_AGE_SECONDS", ".env.example"), "31536000");
+  assert.equal(
+    readAnyEnvValue(productionEnvText, "HSTS_MAX_AGE_SECONDS", "deploy/examples/sqr.production.env.template"),
+    "31536000",
+  );
+  assert.equal(
+    readAnyEnvValue(productionEnvText, "HSTS_PRELOAD_ENABLED", "deploy/examples/sqr.production.env.template"),
+    "0",
+  );
+  assert.equal(
+    readAnyEnvValue(productionEnvText, "SQR_RATE_LIMIT_STORE", "deploy/examples/sqr.production.env.template"),
+    "memory",
+  );
+  assert.match(docText, /clamdscan --fdpass/i);
+  assert.match(docText, /Redis pub\/sub untuk WebSocket/i);
 });
 
 test("production Nginx example applies auth edge throttle to both login routes", () => {

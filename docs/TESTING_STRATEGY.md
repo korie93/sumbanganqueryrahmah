@@ -139,6 +139,7 @@ Beberapa item audit masih wajar dianggap terbuka atau separa terbuka:
 - accessibility contract semasa ialah invariant guard ringan dengan subset authenticated apabila kredensial wujud, bukan axe/Lighthouse audit penuh untuk semua route authenticated
 - device QA sebenar masih diperlukan untuk route padat, touch target ergonomics, dan polish di peranti sebenar
 - belum ada read replica/reporting topology test kerana seni bina production semasa masih single-primary
+- belum ada k6/Artillery load suite dalam CI; buat masa ini load/chaos testing perlu dijalankan sebagai drill staging berjadual kerana endpoint chaos sengaja mengganggu runtime
 - observability penuh seperti OpenTelemetry belum diaktifkan
 
 Maksudnya:
@@ -149,7 +150,18 @@ Maksudnya:
 - tetapi kita **belum** patut mendakwa sudah ada visual regression suite pixel-baseline penuh
 - kita **belum** patut mendakwa accessibility suite penuh merentas semua route authenticated
 
-## 7. Release Gate Yang Disyorkan
+## 7. Load dan Chaos Testing Roadmap
+
+Load testing production tidak patut dijalankan terus terhadap domain pengguna sebenar. Gunakan staging yang mempunyai PostgreSQL dan Redis terasing, data sintetik, serta `OPERATIONS_DEBUG_ROUTES_ENABLED=0` kecuali ketika drill terkawal.
+
+Cadangan urutan sebelum integrasi k6/Artillery dalam CI:
+
+1. Rate-limit drill: hantar traffic terkawal ke `/api/auth/login`, `/api/search/global`, dan `/api/collection/daily/overview`; sahkan status 429 muncul tanpa pool pressure berpanjangan.
+2. WebSocket drill: buka sambungan bertahap dan sahkan heartbeat/idle close membersihkan `connectedClients`.
+3. Chaos drill: aktifkan route chaos hanya di staging, inject DB latency/memory pressure secara pendek, dan sahkan circuit breaker/degrade mode pulih selepas window tamat.
+4. CI gate: selepas angka baseline stabil, tambah skrip k6/Artillery sebagai job manual/approval-gated supaya PR biasa tidak lambat atau flaky.
+
+## 8. Release Gate Yang Disyorkan
 
 Untuk local/staging sebelum promotion:
 

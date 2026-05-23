@@ -143,6 +143,28 @@ test("external receipt scanner accepts an existing receipt file with a validated
   }
 });
 
+test("external receipt scanner rejects files when the scanner reports infection", async () => {
+  const previousEnv = snapshotEnv();
+  process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_ENABLED = "1";
+  process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_COMMAND = process.execPath;
+  process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_ARGS_JSON = "[\"-e\",\"process.exit(1)\",\"{file}\"]";
+  process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_FAIL_CLOSED = "1";
+  process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_TIMEOUT_MS = "1000";
+
+  try {
+    await withTemporaryReceiptFile(async (filePath) => {
+      await assert.rejects(
+        () => scanCollectionReceiptWithExternalScanner(filePath),
+        (error: unknown) =>
+          error instanceof CollectionReceiptSecurityError
+          && error.reasonCode === "external-scan-rejected",
+      );
+    });
+  } finally {
+    restoreEnv(previousEnv);
+  }
+});
+
 test("external receipt scanner accepts shell-sourced JSON args with stripped quotes", async () => {
   const previousEnv = snapshotEnv();
   process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_ENABLED = "1";

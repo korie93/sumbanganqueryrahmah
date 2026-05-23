@@ -1,4 +1,4 @@
-import { useCallback, useId, useRef, type MouseEvent } from "react";
+import { memo, useCallback, useId, useRef, type MouseEvent } from "react";
 import { useLocation } from "wouter";
 import {
   FloatingRootContainer,
@@ -29,7 +29,7 @@ function resolveFloatingAiSystemName(systemName: string | undefined) {
   return systemName?.trim() || DEFAULT_FLOATING_AI_SYSTEM_NAME;
 }
 
-export default function FloatingAI({ timeoutMs, aiEnabled, activePage, systemName }: FloatingAIProps) {
+function FloatingAI({ timeoutMs, aiEnabled, activePage, systemName }: FloatingAIProps) {
   const isMobile = useIsMobile();
   const [location] = useLocation();
   const hiddenForAiPage = activePage === "ai" || location.toLowerCase() === "/ai";
@@ -179,3 +179,5 @@ export default function FloatingAI({ timeoutMs, aiEnabled, activePage, systemNam
     </FloatingRootContainer>
   );
 }
+
+export default memo(FloatingAI);

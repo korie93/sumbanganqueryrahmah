@@ -8,5 +8,5 @@ export function buildWebSocketTopologyWarning(workerCount: number) {
     return null;
   }
 
-  return "WebSocket connection state is process-local. Multi-worker deployments should use one worker, sticky routing, or a shared fan-out/presence layer before enabling more than one worker.";
+  return "WebSocket connection state is process-local. Keep SQR_MAX_WORKERS=1 until Redis pub/sub or another shared fan-out/presence layer can propagate broadcast, force-logout, idle-close, and presence invalidation events across workers.";
 }

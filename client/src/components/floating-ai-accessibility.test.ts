@@ -234,3 +234,10 @@ test("FloatingAI mobile backdrop stays presentation-only while Escape closes thr
   assert.doesNotMatch(floatingAiSource, /<button[\s\S]*styles\.floatingMobileBackdrop/);
   assert.match(focusManagementSource, /onEscapeKeyDown:\s*handleMinimize/);
 });
+
+test("FloatingAI export remains memoized to avoid unrelated shell rerenders", () => {
+  const source = readComponentSource("FloatingAI.tsx");
+
+  assert.match(source, /import\s+\{\s*memo,/);
+  assert.match(source, /export\s+default\s+memo\(FloatingAI\)/);
+});

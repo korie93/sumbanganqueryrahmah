@@ -14,6 +14,6 @@ test("websocket topology warning reports process-local state for multi-worker de
   assert.equal(requiresSingleWorkerForProcessLocalWebSocketState(2), true);
   assert.match(
     String(buildWebSocketTopologyWarning(2)),
-    /WebSocket connection state is process-local/i,
+    /Redis pub\/sub.*force-logout.*idle-close/i,
   );
 });

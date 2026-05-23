@@ -210,12 +210,20 @@ SESSION_SECRET_PREVIOUS=
 TWO_FACTOR_ENCRYPTION_KEY=ganti-dengan-secret-2fa-yang-kuat-dan-berbeza
 COLLECTION_PII_ENCRYPTION_KEY=ganti-dengan-secret-pii-yang-kuat-dan-berbeza
 AUTH_COOKIE_SECURE=auto
+HSTS_MAX_AGE_SECONDS=31536000
+HSTS_PRELOAD_ENABLED=0
 
 PG_HOST=127.0.0.1
 PG_PORT=5432
 PG_USER=sqr_app
 PG_PASSWORD=ganti-dengan-password-db-yang-kuat
 PG_DATABASE=sqr_db
+PG_MAX_CONNECTIONS=10
+
+COLLECTION_RECEIPT_EXTERNAL_SCAN_ENABLED=1
+COLLECTION_RECEIPT_EXTERNAL_SCAN_COMMAND=clamdscan
+COLLECTION_RECEIPT_EXTERNAL_SCAN_ARGS_JSON=["--fdpass","--no-summary","--infected","{file}"]
+COLLECTION_RECEIPT_EXTERNAL_SCAN_FAIL_CLOSED=1
 
 SEED_DEFAULT_USERS=0
 MAIL_DEV_OUTBOX_ENABLED=0
@@ -254,10 +262,13 @@ BACKUP_ENCRYPTION_KEY_ID=primary
 
 Jika anda deploy di belakang Nginx sahaja pada server yang sama, `TRUSTED_PROXIES=loopback` biasanya memadai.
 Untuk production HTTPS di belakang Nginx, biarkan `AUTH_COOKIE_SECURE=auto` atau set `AUTH_COOKIE_SECURE=true`; jangan paksa `false`.
+`HSTS_MAX_AGE_SECONDS=31536000` menyediakan tempoh preload-ready. Kekalkan `HSTS_PRELOAD_ENABLED=0` sehingga semua subdomain production benar-benar HTTPS-only; selepas disahkan, set `HSTS_PRELOAD_ENABLED=1`, deploy, dan submit domain ke `https://hstspreload.org`.
+Receipt upload production perlu melalui ClamAV. Gunakan `clamdscan --fdpass` jika `clamav-daemon` aktif; jika hanya `clamscan` tersedia, tukar command dan args kepada fallback yang dinyatakan dalam `.env.example`.
+Mulakan `PG_MAX_CONNECTIONS=10` untuk production kecil dan naikkan ke 20 hanya selepas semak `max_connections`, RAM PostgreSQL, dan log `PostgreSQL pool pressure detected`.
 `CORS_ALLOWED_ORIGINS` bukan mekanisme auth. Browser origin yang dibenarkan tetap perlu cookie/token sah, dan request server-to-server tanpa `Origin` masih bergantung pada auth, CSRF guard yang sesuai, rate limit, dan route permission.
 Jika SMTP config berubah, restart semua PM2 worker selepas update env kerana transporter SMTP dicache dalam proses.
 Jika anda rotate `SESSION_SECRET`, device fingerprint HMAC turut berubah; guna `SESSION_SECRET_PREVIOUS` untuk compatibility window yang dirancang, atau paksa login semula jika rotation kecemasan.
-Kekalkan `SQR_MAX_WORKERS=1` untuk production buat masa ini. Redis boleh berkongsi rate-limit counters, tetapi 2FA replay cache dan WebSocket `connectedClients` masih process-local; runtime production akan fail fast jika multi-worker diaktifkan sebelum shared 2FA replay store dan WebSocket pub/sub disediakan.
+Kekalkan `SQR_MAX_WORKERS=1` untuk production buat masa ini. Redis boleh berkongsi rate-limit counters, tetapi 2FA replay cache dan WebSocket `connectedClients` masih process-local; runtime production akan fail fast jika multi-worker diaktifkan sebelum shared 2FA replay store dan WebSocket pub/sub disediakan. Redis pub/sub untuk WebSocket perlu membawa mesej broadcast, force-logout, idle-session close, dan presence invalidation merentas proses sebelum multi-worker dibuka.
 Biarkan `TWO_FACTOR_TOTP_ALGORITHM=SHA1` untuk akaun 2FA sedia ada. `SHA256` hanya sesuai selepas jadual re-enrollment TOTP dibuat kerana aplikasi pengesah menyimpan algorithm semasa enrollment.
 
 ## 9. Build dan Migrate
