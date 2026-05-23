@@ -41,11 +41,15 @@ test("floating AI chat input has a formal accessible label", () => {
 
 test("AI messages render markdown through React nodes instead of raw HTML", () => {
   const source = readComponentSource("AIMessage.tsx");
+  const sanitizerSource = readComponentSource("ai-message-sanitizer.ts");
 
   assert.match(source, /role="article"/);
   assert.match(source, /aria-label=\{messageLabel\}/);
   assert.match(source, /Mesej pengguna/);
   assert.match(source, /Mesej pembantu AI/);
+  assert.match(source, /sanitizeAIMessageContentForDisplay\(content\)/);
+  assert.match(sanitizerSource, /DANGEROUS_AI_HTML_TAG_PATTERN/);
+  assert.match(sanitizerSource, /removeUnsafeAIControlCharacters/);
   assert.match(source, /function parseAIMessageMarkdownBlocks/);
   assert.match(source, /<pre key=\{`code:\$\{index\}`\} className="ai-markdown-code">/);
   assert.match(source, /const ListTag = block\.ordered \? "ol" : "ul"/);

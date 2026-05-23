@@ -1,4 +1,5 @@
 import { memo, type ReactNode } from "react";
+import { sanitizeAIMessageContentForDisplay } from "@/components/ai-message-sanitizer";
 
 type AIMessageProps = {
   messageRole: "user" | "assistant";
@@ -145,6 +146,7 @@ function renderAIMessageMarkdown(content: string): ReactNode {
 
 function AIMessageImpl({ messageRole, content }: AIMessageProps) {
   const messageLabel = messageRole === "user" ? "Mesej pengguna" : "Mesej pembantu AI";
+  const safeContent = sanitizeAIMessageContentForDisplay(content);
 
   return (
     <div
@@ -153,7 +155,7 @@ function AIMessageImpl({ messageRole, content }: AIMessageProps) {
       aria-label={messageLabel}
     >
       <div className={`ai-bubble ${messageRole === "user" ? "ai-bubble-user" : "ai-bubble-assistant"}`}>
-        {renderAIMessageMarkdown(content)}
+        {renderAIMessageMarkdown(safeContent)}
       </div>
     </div>
   );

@@ -27,6 +27,8 @@ test("navbar controls use Malay accessible labels and include username context",
   assert.match(navbarSource, /onCloseAutoFocus=\{restoreMobileUserMenuFocus\}/);
   assert.match(navbarSource, /onEscapeKeyDown=\{scheduleDesktopUserMenuTriggerFocus\}/);
   assert.match(navbarSource, /onEscapeKeyDown=\{scheduleMobileUserMenuTriggerFocus\}/);
+  assert.match(navbarSource, /pendingFocusTimeoutsRef/);
+  assert.match(navbarSource, /globalThis\.clearTimeout\(timeoutHandle\)/);
   assert.match(navbarSource, /desktopUserMenuTriggerRef\.current\?\.focus\(\{ preventScroll: true \}\)/);
   assert.match(navbarSource, /\{\[\.\.\.username\]\[0\] \|\| ""\}/);
   assert.doesNotMatch(navbarSource, /window\.location/);

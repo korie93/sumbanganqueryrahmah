@@ -14,9 +14,11 @@ type FakeRedisEntry = {
 };
 
 class FakeRedisClient {
+  quitCalls = 0;
+
   constructor(private readonly entries: Map<string, FakeRedisEntry>) {}
 
-  async connect() {
+  async connect(): Promise<void> {
     return undefined;
   }
 
@@ -24,7 +26,7 @@ class FakeRedisClient {
     return this;
   }
 
-  async eval(_script: string, options: { arguments: string[]; keys: string[] }) {
+  async eval(_script: string, options: { arguments: string[]; keys: string[] }): Promise<unknown> {
     const key = options.keys[0];
     const windowMs = Number.parseInt(options.arguments[0], 10);
     const nowMs = Date.now();
@@ -43,7 +45,7 @@ class FakeRedisClient {
     return [nextEntry.hits, Math.max(0, nextEntry.expiresAt - nowMs)];
   }
 
-  async get(key: string) {
+  async get(key: string): Promise<unknown> {
     const entry = this.entries.get(key);
     if (!entry || entry.expiresAt <= Date.now()) {
       return null;
@@ -52,12 +54,12 @@ class FakeRedisClient {
     return String(entry.hits);
   }
 
-  async pTTL(key: string) {
+  async pTTL(key: string): Promise<unknown> {
     const entry = this.entries.get(key);
     return entry ? Math.max(-1, entry.expiresAt - Date.now()) : -2;
   }
 
-  async decr(key: string) {
+  async decr(key: string): Promise<unknown> {
     const entry = this.entries.get(key);
     if (!entry) {
       return 0;
@@ -67,12 +69,13 @@ class FakeRedisClient {
     return entry.hits;
   }
 
-  async del(key: string) {
+  async del(key: string): Promise<unknown> {
     this.entries.delete(key);
     return 1;
   }
 
-  async quit() {
+  async quit(): Promise<void> {
+    this.quitCalls += 1;
     return undefined;
   }
 }
@@ -177,6 +180,86 @@ test("RedisRateLimitStore retries Redis after a failed connection instead of per
   assert.equal((await store.increment("client-1")).totalHits, 1);
   assert.equal(factoryCalls, 2);
   assert.equal((await store.increment("client-1")).totalHits, 2);
+});
+
+test("RedisRateLimitStore shutdown waits for pending connect and blocks new Redis clients", async () => {
+  const entries = new Map<string, FakeRedisEntry>();
+  let factoryCalls = 0;
+  let resolveConnect: () => void = () => {
+    throw new Error("Slow Redis connect was not initialized.");
+  };
+  const createdClients: FakeRedisClient[] = [];
+
+  class SlowFakeRedisClient extends FakeRedisClient {
+    async connect(): Promise<void> {
+      await new Promise<void>((resolve) => {
+        resolveConnect = resolve;
+      });
+    }
+  }
+
+  const store = new RedisRateLimitStore({
+    config: redisConfig,
+    createRedisClient: () => {
+      factoryCalls += 1;
+      const client = new SlowFakeRedisClient(entries);
+      createdClients.push(client);
+      return client;
+    },
+    logger: {
+      warn() {},
+    },
+    prefix: "sqr:test:shutdown-race",
+  });
+  initStore(store);
+
+  const incrementPromise = store.increment("client-1");
+  await new Promise((resolve) => setImmediate(resolve));
+  const shutdownPromise = store.shutdown();
+  resolveConnect();
+
+  assert.equal((await incrementPromise).totalHits, 1);
+  await shutdownPromise;
+
+  assert.equal(factoryCalls, 1);
+  assert.equal(createdClients[0]?.quitCalls, 1);
+  assert.equal((await store.increment("client-2")).totalHits, 1);
+  assert.equal(factoryCalls, 1);
+});
+
+test("RedisRateLimitStore closes a failed command client before retrying", async () => {
+  const entries = new Map<string, FakeRedisEntry>();
+  let factoryCalls = 0;
+  const createdClients: FakeRedisClient[] = [];
+
+  class FailingEvalRedisClient extends FakeRedisClient {
+    async eval(_script: string, _options: { arguments: string[]; keys: string[] }): Promise<unknown> {
+      throw new Error("redis command failed");
+    }
+  }
+
+  const store = new RedisRateLimitStore({
+    config: redisConfig,
+    createRedisClient: () => {
+      factoryCalls += 1;
+      const client = factoryCalls === 1
+        ? new FailingEvalRedisClient(entries)
+        : new FakeRedisClient(entries);
+      createdClients.push(client);
+      return client;
+    },
+    logger: {
+      warn() {},
+    },
+    prefix: "sqr:test:command-failure",
+  });
+  initStore(store);
+
+  assert.equal((await store.increment("client-1")).totalHits, 1);
+  assert.equal(createdClients[0]?.quitCalls, 1);
+
+  assert.equal((await store.increment("client-1")).totalHits, 1);
+  assert.equal(factoryCalls, 2);
 });
 
 test("createRedisReconnectStrategy uses bounded exponential backoff and structured warnings", () => {

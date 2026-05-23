@@ -169,6 +169,53 @@ test("bindPgPoolMonitoring logs pool client errors with the current snapshot", (
   assert.equal((errors[0]?.error as Error)?.message, "socket lost");
 });
 
+test("bindPgPoolMonitoring cleanup removes all pool listeners across restarts", () => {
+  const pool = new FakePool();
+
+  for (let index = 0; index < 12; index += 1) {
+    const stopMonitoring = bindPgPoolMonitoring(pool, {
+      logger: {
+        warn: () => undefined,
+        error: () => undefined,
+      },
+    });
+
+    assert.equal(pool.listenerCount("connect"), 1);
+    assert.equal(pool.listenerCount("acquire"), 1);
+    assert.equal(pool.listenerCount("remove"), 1);
+    assert.equal(pool.listenerCount("error"), 1);
+
+    stopMonitoring();
+
+    assert.equal(pool.listenerCount("connect"), 0);
+    assert.equal(pool.listenerCount("acquire"), 0);
+    assert.equal(pool.listenerCount("remove"), 0);
+    assert.equal(pool.listenerCount("error"), 0);
+  }
+});
+
+test("bindPgPoolMonitoring cleanup supports EventEmitter removeListener fallback", () => {
+  const pool = new FakePool();
+  Object.defineProperty(pool, "off", {
+    configurable: true,
+    value: undefined,
+  });
+
+  const stopMonitoring = bindPgPoolMonitoring(pool, {
+    logger: {
+      warn: () => undefined,
+      error: () => undefined,
+    },
+  });
+
+  assert.equal(pool.listenerCount("acquire"), 1);
+  stopMonitoring();
+  assert.equal(pool.listenerCount("connect"), 0);
+  assert.equal(pool.listenerCount("acquire"), 0);
+  assert.equal(pool.listenerCount("remove"), 0);
+  assert.equal(pool.listenerCount("error"), 0);
+});
+
 test("bindPgPoolHealthCheck logs failures from a periodic SELECT 1 probe", async () => {
   const pool = new FakePool();
   const warnings: Array<Record<string, unknown>> = [];

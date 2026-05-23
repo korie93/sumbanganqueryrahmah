@@ -1,4 +1,4 @@
-import { memo, useCallback, useMemo, useRef, useState } from "react"
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { ChevronDown, Menu } from "lucide-react"
 import { useLocation } from "wouter"
 
@@ -61,6 +61,7 @@ function NavbarImpl({
   const navScrollerRef = useRef<HTMLDivElement>(null)
   const desktopUserMenuTriggerRef = useRef<HTMLButtonElement>(null)
   const mobileUserMenuTriggerRef = useRef<HTMLButtonElement>(null)
+  const pendingFocusTimeoutsRef = useRef<Array<ReturnType<typeof globalThis.setTimeout>>>([])
 
   const directItems = useMemo(
     () => getVisiblePrimaryNavItems(userRole, tabVisibility ?? null, featureLockdown),
@@ -108,31 +109,48 @@ function NavbarImpl({
     "aria-expanded": mobileNavOpen,
   } as const
 
+  useEffect(() => () => {
+    for (const timeoutHandle of pendingFocusTimeoutsRef.current) {
+      globalThis.clearTimeout(timeoutHandle)
+    }
+    pendingFocusTimeoutsRef.current = []
+  }, [])
+
+  const scheduleUserMenuTriggerFocus = useCallback((focusTrigger: () => void) => {
+    const timeoutHandle = globalThis.setTimeout(() => {
+      pendingFocusTimeoutsRef.current = pendingFocusTimeoutsRef.current.filter(
+        (pendingTimeoutHandle) => pendingTimeoutHandle !== timeoutHandle
+      )
+      focusTrigger()
+    }, 0)
+    pendingFocusTimeoutsRef.current.push(timeoutHandle)
+  }, [])
+
   const focusDesktopUserMenuTrigger = useCallback(() => {
     desktopUserMenuTriggerRef.current?.focus({ preventScroll: true })
-    globalThis.setTimeout(() => {
+    scheduleUserMenuTriggerFocus(() => {
       desktopUserMenuTriggerRef.current?.focus({ preventScroll: true })
-    }, 0)
-  }, [])
+    })
+  }, [scheduleUserMenuTriggerFocus])
 
   const focusMobileUserMenuTrigger = useCallback(() => {
     mobileUserMenuTriggerRef.current?.focus({ preventScroll: true })
-    globalThis.setTimeout(() => {
+    scheduleUserMenuTriggerFocus(() => {
       mobileUserMenuTriggerRef.current?.focus({ preventScroll: true })
-    }, 0)
-  }, [])
+    })
+  }, [scheduleUserMenuTriggerFocus])
 
   const scheduleDesktopUserMenuTriggerFocus = useCallback(() => {
-    globalThis.setTimeout(() => {
+    scheduleUserMenuTriggerFocus(() => {
       desktopUserMenuTriggerRef.current?.focus({ preventScroll: true })
-    }, 0)
-  }, [])
+    })
+  }, [scheduleUserMenuTriggerFocus])
 
   const scheduleMobileUserMenuTriggerFocus = useCallback(() => {
-    globalThis.setTimeout(() => {
+    scheduleUserMenuTriggerFocus(() => {
       mobileUserMenuTriggerRef.current?.focus({ preventScroll: true })
-    }, 0)
-  }, [])
+    })
+  }, [scheduleUserMenuTriggerFocus])
 
   const restoreDesktopUserMenuFocus = useCallback((event: Event) => {
     event.preventDefault()

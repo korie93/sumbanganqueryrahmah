@@ -117,7 +117,9 @@ export class RedisRateLimitStore implements Store {
   private readonly createRedisClient: RedisClientFactory | null;
   private readonly logger: LoggerLike;
   private readonly fallbackStore = new MemoryStore();
+  private client: RedisClientLike | null = null;
   private clientPromise: Promise<RedisClientLike | null> | null = null;
+  private shuttingDown = false;
   private warningEmitted = false;
   private windowMs = 60_000;
 
@@ -223,12 +225,15 @@ export class RedisRateLimitStore implements Store {
   }
 
   async shutdown(): Promise<void> {
+    this.shuttingDown = true;
     this.fallbackStore.shutdown();
-    const client = await this.clientPromise?.catch(() => null);
+    const pendingClient = await this.clientPromise?.catch(() => null);
+    const client = this.client ?? pendingClient;
+    this.client = null;
     this.clientPromise = null;
     if (client?.quit) {
       await client.quit().catch((error) => {
-        this.handleRedisFailure(error);
+        this.logRedisFailure(error);
       });
     }
   }
@@ -239,36 +244,73 @@ export class RedisRateLimitStore implements Store {
   }
 
   private async getClient() {
-    if (this.config.provider !== "redis" || !this.config.redisUrl) {
+    if (this.config.provider !== "redis" || !this.config.redisUrl || this.shuttingDown) {
       return null;
     }
 
-    this.clientPromise ??= this.connect();
+    if (this.client) {
+      return this.client;
+    }
+
+    if (!this.clientPromise) {
+      const clientPromise = this.connect();
+      this.clientPromise = clientPromise;
+      void clientPromise
+        .finally(() => {
+          if (this.clientPromise === clientPromise) {
+            this.clientPromise = null;
+          }
+        })
+        .catch(() => undefined);
+    }
+
     return this.clientPromise;
   }
 
   private async connect(): Promise<RedisClientLike | null> {
+    let client: RedisClientLike | null = null;
+
     try {
       const createRedisClient = this.createRedisClient ?? await resolveDefaultRedisClientFactory();
-      const client = createRedisClient({
+      client = createRedisClient({
         url: this.config.redisUrl as string,
         socket: {
           reconnectStrategy: createRedisReconnectStrategy(this.logger),
         },
       });
       client.on?.("error", (error) => {
-        this.handleRedisFailure(error);
+        this.logRedisFailure(error);
       });
       await client.connect();
+
+      if (this.shuttingDown) {
+        await this.closeClient(client);
+        return null;
+      }
+
+      this.client = client;
+      this.warningEmitted = false;
       return client;
     } catch (error) {
-      this.handleRedisFailure(error);
+      await this.closeClient(client);
+      this.logRedisFailure(error);
       return null;
     }
   }
 
   private handleRedisFailure(error: unknown) {
-    this.clientPromise = null;
+    const client = this.client;
+    this.client = null;
+    if (this.warningEmitted) {
+      void this.closeClient(client);
+      return;
+    }
+
+    void this.closeClient(client);
+    this.logRedisFailure(error);
+  }
+
+  private logRedisFailure(error: unknown) {
     if (this.warningEmitted) {
       return;
     }
@@ -278,6 +320,14 @@ export class RedisRateLimitStore implements Store {
       provider: this.config.provider,
       error: error instanceof Error ? error.message : "Unknown Redis failure",
     });
+  }
+
+  private async closeClient(client: RedisClientLike | null) {
+    if (!client?.quit) {
+      return;
+    }
+
+    await client.quit().catch(() => undefined);
   }
 }
 

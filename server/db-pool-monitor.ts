@@ -10,6 +10,7 @@ type PgPoolLike = {
   query?(text: string): Promise<unknown>;
   on(event: string, listener: (...args: unknown[]) => void): unknown;
   off?(event: string, listener: (...args: unknown[]) => void): unknown;
+  removeListener?(event: string, listener: (...args: unknown[]) => void): unknown;
 };
 
 type LoggerLike = Pick<typeof logger, "warn" | "error">;
@@ -46,6 +47,19 @@ export function getPgPoolSnapshot(pool: PgPoolLike): PgPoolSnapshot {
 
 export function hasPgPoolPressure(snapshot: PgPoolSnapshot): boolean {
   return snapshot.max > 0 && snapshot.waiting > 0 && snapshot.idle <= 0 && snapshot.total >= snapshot.max;
+}
+
+function removePoolListener(
+  pool: PgPoolLike,
+  event: string,
+  listener: (...args: unknown[]) => void,
+) {
+  if (typeof pool.off === "function") {
+    pool.off(event, listener);
+    return;
+  }
+
+  pool.removeListener?.(event, listener);
 }
 
 export function bindPgPoolMonitoring(pool: PgPoolLike, options: BindPgPoolMonitoringOptions = {}) {
@@ -102,10 +116,10 @@ export function bindPgPoolMonitoring(pool: PgPoolLike, options: BindPgPoolMonito
   pool.on("error", handleError);
 
   return () => {
-    pool.off?.("connect", handleConnect);
-    pool.off?.("acquire", handleAcquire);
-    pool.off?.("remove", handleRemove);
-    pool.off?.("error", handleError);
+    removePoolListener(pool, "connect", handleConnect);
+    removePoolListener(pool, "acquire", handleAcquire);
+    removePoolListener(pool, "remove", handleRemove);
+    removePoolListener(pool, "error", handleError);
   };
 }
 
