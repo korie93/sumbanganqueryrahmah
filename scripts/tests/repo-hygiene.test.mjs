@@ -2,9 +2,11 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   findForbiddenTypeScriptTypeSafetyPatterns,
+  findHighConfidenceSecretTokens,
   findPotentialCommittedSmtpSecrets,
   findTrackedForbiddenEnvFiles,
   findTrackedGeneratedOutputs,
+  findUnpinnedGithubActions,
   findUnsafeAutomationKillPatterns,
 } from "../lib/repo-hygiene.mjs";
 
@@ -78,6 +80,34 @@ test("repo hygiene flags hardcoded nodemailer auth passwords", () => {
   assert.match(findings[0], /hardcoded nodemailer auth\.pass literal/i);
 });
 
+test("repo hygiene flags high-confidence committed provider tokens", () => {
+  const openAiPrefix = "sk-proj-";
+  const awsPrefix = "AKIA";
+  const findings = findHighConfidenceSecretTokens({
+    filePath: "docs/example.md",
+    text: `
+OPENAI_API_KEY=${openAiPrefix}abcdefghijklmnopqrstuvwxyz0123456789
+AWS_ACCESS_KEY_ID=${awsPrefix}IOSFODNN7EXAMPLE
+`,
+  });
+
+  assert.equal(findings.length, 2);
+  assert.match(findings[0], /OpenAI API key/i);
+  assert.match(findings[1], /AWS access key id/i);
+});
+
+test("repo hygiene allows generated CI placeholders during secret scanning", () => {
+  const findings = findHighConfidenceSecretTokens({
+    filePath: ".github/workflows/ci.yml",
+    text: `
+SESSION_SECRET: sqr-ci-session-\${{ github.run_id }}-\${{ github.run_attempt }}-generate-per-run-secret-48chars
+PG_PASSWORD: sqr-ci-postgres-\${{ github.run_id }}-\${{ github.run_attempt }}-password-32chars
+`,
+  });
+
+  assert.deepEqual(findings, []);
+});
+
 test("repo hygiene allows narrative uses of the word any in TypeScript strings and comments", () => {
   const findings = findForbiddenTypeScriptTypeSafetyPatterns({
     filePath: "client/src/example.ts",
@@ -132,6 +162,21 @@ if (serverPid) {
   });
 
   assert.deepEqual(findings, []);
+});
+
+test("repo hygiene flags GitHub Actions that are not pinned to full SHAs", () => {
+  const findings = findUnpinnedGithubActions({
+    filePath: ".github/workflows/ci.yml",
+    text: `
+steps:
+  - uses: actions/checkout@v5
+  - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444
+`,
+  });
+
+  assert.deepEqual(findings, [
+    ".github/workflows/ci.yml:3 GitHub Action actions/checkout is not pinned to a full commit SHA",
+  ]);
 });
 
 test("repo hygiene flags tracked generated runtime outputs", () => {

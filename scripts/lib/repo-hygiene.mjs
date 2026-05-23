@@ -65,6 +65,39 @@ const UNSAFE_AUTOMATION_KILL_PATTERN_RULES = [
   },
 ];
 
+const HIGH_CONFIDENCE_SECRET_TOKEN_RULES = [
+  {
+    label: "AWS access key id",
+    regex: /\b(?:A3T[A-Z0-9]|AKIA|ASIA)[A-Z0-9]{16}\b/g,
+  },
+  {
+    label: "GitHub token",
+    regex: /\bgh[pousr]_[A-Za-z0-9_]{36,255}\b/g,
+  },
+  {
+    label: "OpenAI API key",
+    regex: /\bsk-(?:proj-)?[A-Za-z0-9_-]{20,}\b/g,
+  },
+  {
+    label: "Google API key",
+    regex: /\bAIza[0-9A-Za-z_-]{35}\b/g,
+  },
+  {
+    label: "Slack token",
+    regex: /\bxox[abprs]-[0-9A-Za-z-]{20,}\b/g,
+  },
+  {
+    label: "Stripe live secret key",
+    regex: /\bsk_live_[0-9A-Za-z]{20,}\b/g,
+  },
+  {
+    label: "private key block",
+    regex: /-----BEGIN [A-Z ]*PRIVATE KEY-----/g,
+  },
+];
+
+const PINNED_GITHUB_ACTION_REF_PATTERN = /^[a-f0-9]{40}$/;
+
 const GENERATED_OUTPUT_PATH_PREFIXES = [
   "artifacts/",
   "coverage/",
@@ -171,6 +204,51 @@ export function findUnsafeAutomationKillPatterns(params) {
       if (rule.regex.test(line)) {
         findings.push(`${filePath}:${index + 1} ${rule.label}`);
       }
+    }
+  }
+
+  return findings;
+}
+
+export function findHighConfidenceSecretTokens(params) {
+  const filePath = String(params?.filePath || "");
+  const text = String(params?.text || "");
+  const findings = [];
+  const lines = text.split(/\r?\n/);
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+    for (const rule of HIGH_CONFIDENCE_SECRET_TOKEN_RULES) {
+      rule.regex.lastIndex = 0;
+      if (rule.regex.test(line)) {
+        findings.push(`${filePath}:${index + 1} potential committed ${rule.label}`);
+      }
+    }
+  }
+
+  return findings;
+}
+
+export function findUnpinnedGithubActions(params) {
+  const filePath = normalizeRepoPath(params?.filePath || "");
+  const text = String(params?.text || "");
+  if (!/^\.github\/workflows\/.+\.ya?ml$/i.test(filePath)) {
+    return [];
+  }
+
+  const findings = [];
+  const lines = text.split(/\r?\n/);
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+    const match = line.match(/\buses:\s*([^@\s]+)@([^\s#]+)/);
+    if (!match) {
+      continue;
+    }
+
+    const actionRef = String(match[2] || "").trim();
+    if (!PINNED_GITHUB_ACTION_REF_PATTERN.test(actionRef)) {
+      findings.push(`${filePath}:${index + 1} GitHub Action ${match[1]} is not pinned to a full commit SHA`);
     }
   }
 

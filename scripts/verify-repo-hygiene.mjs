@@ -2,9 +2,11 @@ import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import {
   findForbiddenTypeScriptTypeSafetyPatterns,
+  findHighConfidenceSecretTokens,
   findPotentialCommittedSmtpSecrets,
   findTrackedForbiddenEnvFiles,
   findTrackedGeneratedOutputs,
+  findUnpinnedGithubActions,
   findUnsafeAutomationKillPatterns,
 } from "./lib/repo-hygiene.mjs";
 
@@ -56,8 +58,10 @@ if (allTrackedFilesResult.error) {
     .filter(Boolean);
 
   const smtpSecretFindings = [];
+  const highConfidenceSecretFindings = [];
   const typeSafetyFindings = [];
   const automationKillFindings = [];
+  const unpinnedGithubActionFindings = [];
   const forbiddenEnvFiles = findTrackedForbiddenEnvFiles({ trackedFiles });
   const trackedGeneratedOutputs = findTrackedGeneratedOutputs({ trackedFiles });
 
@@ -77,8 +81,14 @@ if (allTrackedFilesResult.error) {
       smtpSecretFindings.push(
         ...findPotentialCommittedSmtpSecrets({ filePath, text }),
       );
+      highConfidenceSecretFindings.push(
+        ...findHighConfidenceSecretTokens({ filePath, text }),
+      );
       automationKillFindings.push(
         ...findUnsafeAutomationKillPatterns({ filePath, text }),
+      );
+      unpinnedGithubActionFindings.push(
+        ...findUnpinnedGithubActions({ filePath, text }),
       );
       if (/\.(?:ts|tsx)$/i.test(filePath)) {
         typeSafetyFindings.push(
@@ -93,6 +103,18 @@ if (allTrackedFilesResult.error) {
   if (smtpSecretFindings.length > 0) {
     failures.push(
       `Potential committed SMTP secrets detected: ${smtpSecretFindings.join("; ")}`,
+    );
+  }
+
+  if (highConfidenceSecretFindings.length > 0) {
+    failures.push(
+      `High-confidence committed secrets detected: ${highConfidenceSecretFindings.join("; ")}`,
+    );
+  }
+
+  if (unpinnedGithubActionFindings.length > 0) {
+    failures.push(
+      `GitHub Actions must be pinned to full commit SHAs: ${unpinnedGithubActionFindings.join("; ")}`,
     );
   }
 
