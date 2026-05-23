@@ -1,9 +1,18 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 import {
   applyFloatingAiModalAccessibility,
   applyFloatingAiModalIsolation,
 } from "@/components/floating-ai-accessibility";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+function readComponentSource(fileName: string) {
+  return readFileSync(path.resolve(__dirname, fileName), "utf8");
+}
 
 class FakeElement {
   readonly attributes = new Map<string, string>();
@@ -215,4 +224,13 @@ test("applyFloatingAiModalAccessibility traps focus within the dialog and restor
   restore();
 
   assert.equal(documentObject.activeElement, previousFocus);
+});
+
+test("FloatingAI mobile backdrop stays presentation-only while Escape closes through the focus trap", () => {
+  const floatingAiSource = readComponentSource("FloatingAI.tsx");
+  const focusManagementSource = readComponentSource("useFloatingAIFocusManagement.ts");
+
+  assert.match(floatingAiSource, /<div[\s\S]*styles\.floatingMobileBackdrop[\s\S]*aria-hidden="true"[\s\S]*role="presentation"[\s\S]*onClick=\{handleBackdropClick\}/);
+  assert.doesNotMatch(floatingAiSource, /<button[\s\S]*styles\.floatingMobileBackdrop/);
+  assert.match(focusManagementSource, /onEscapeKeyDown:\s*handleMinimize/);
 });

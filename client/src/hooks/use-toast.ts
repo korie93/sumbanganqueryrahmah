@@ -6,6 +6,7 @@ import type {
 } from "@/components/ui/toast"
 
 const TOAST_LIMIT = 1
+export const TOAST_TIMEOUT_LIMIT = TOAST_LIMIT
 export const TOAST_REMOVE_DELAY_MS = 5000
 
 type ToasterToast = ToastProps & {
@@ -62,10 +63,22 @@ const clearToastTimeout = (toastId: string) => {
   toastTimeouts.delete(toastId)
 }
 
+const pruneToastTimeoutsForToastIds = (activeToastIds: ReadonlySet<string>) => {
+  for (const toastId of Array.from(toastTimeouts.keys())) {
+    const belongsToVisibleToast = activeToastIds.has(toastId)
+    if (belongsToVisibleToast && toastTimeouts.size <= TOAST_TIMEOUT_LIMIT) {
+      continue
+    }
+    clearToastTimeout(toastId)
+  }
+}
+
 const addToRemoveQueue = (toastId: string) => {
   if (toastTimeouts.has(toastId)) {
     return
   }
+
+  pruneToastTimeoutsForToastIds(new Set(memoryState.toasts.map((toast) => toast.id)))
 
   const timeout = setTimeout(() => {
     toastTimeouts.delete(toastId)
@@ -76,6 +89,7 @@ const addToRemoveQueue = (toastId: string) => {
   }, TOAST_REMOVE_DELAY_MS)
 
   toastTimeouts.set(toastId, timeout)
+  pruneToastTimeoutsForToastIds(new Set(memoryState.toasts.map((toast) => toast.id)))
 }
 
 export const reducer = (state: State, action: Action): State => {
@@ -143,6 +157,21 @@ let memoryState: State = { toasts: [] }
 
 function dispatch(action: Action) {
   memoryState = reducer(memoryState, action)
+  pruneToastTimeoutsForToastIds(new Set(memoryState.toasts.map((toast) => toast.id)))
+  listeners.forEach((listener) => {
+    listener(memoryState)
+  })
+}
+
+export function getToastTimeoutCountForTests() {
+  return toastTimeouts.size
+}
+
+export function resetToastStateForTests() {
+  for (const toastId of Array.from(toastTimeouts.keys())) {
+    clearToastTimeout(toastId)
+  }
+  memoryState = { toasts: [] }
   listeners.forEach((listener) => {
     listener(memoryState)
   })

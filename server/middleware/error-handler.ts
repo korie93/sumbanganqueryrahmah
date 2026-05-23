@@ -1,5 +1,6 @@
 import type { NextFunction, Request, Response } from "express";
 import { ERROR_CODES } from "../../shared/error-codes";
+import { sanitizeHttpErrorDetails } from "../http/error-details";
 import { HttpError } from "../http/errors";
 import { sanitizeRequestId } from "../http/request-id";
 import { wasRouteErrorLogged } from "../http/route-observability";
@@ -45,7 +46,10 @@ function buildApiErrorResponse(
     requestId?: string | undefined;
   },
 ): ApiErrorResponse {
-  const includeError = options?.includeError || Boolean(options?.code || options?.details !== undefined);
+  const sanitizedDetails = options?.details !== undefined
+    ? sanitizeHttpErrorDetails(options.details)
+    : undefined;
+  const includeError = options?.includeError || Boolean(options?.code || sanitizedDetails !== undefined);
 
   return {
     ok: false,
@@ -56,7 +60,7 @@ function buildApiErrorResponse(
           error: {
             ...(options?.code ? { code: options.code } : {}),
             message,
-            ...(options?.details !== undefined ? { details: options.details } : {}),
+            ...(sanitizedDetails !== undefined ? { details: sanitizedDetails } : {}),
           },
         }
       : {}),

@@ -13,6 +13,7 @@ import {
 } from "@/lib/auth-session";
 import {
   getBrowserLocalStorage,
+  getBrowserSessionStorage,
   safeRemoveStorageItem,
   safeSetStorageItem,
 } from "@/lib/browser-storage";
@@ -50,8 +51,9 @@ export function useAppShellAuthActions({
     for (const key of LOCAL_STORAGE_KEYS_TO_CLEAR) {
       safeRemoveStorageItem(storage, key);
     }
+    const sessionStorage = getBrowserSessionStorage();
     for (const key of SESSION_STORAGE_KEYS_TO_CLEAR) {
-      sessionStorage.removeItem(key);
+      safeRemoveStorageItem(sessionStorage, key);
     }
     clearAppQueryCache();
   }, []);

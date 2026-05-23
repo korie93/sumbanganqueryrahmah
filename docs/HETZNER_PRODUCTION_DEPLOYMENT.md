@@ -222,6 +222,13 @@ MAIL_DEV_OUTBOX_ENABLED=0
 LOCAL_SUPERUSER_CREDENTIALS_FILE_ENABLED=0
 ```
 
+Simpan `PG_PASSWORD` dan secret lain melalui secret manager, fail environment
+private yang permission-nya ketat, atau mekanisme `pm2/systemd` yang tidak
+menulis nilai ke shell history. Elakkan command seperti
+`PG_PASSWORD=... npm run db:migrate` atau paste nilai sebenar dalam tiket/log,
+kerana ia boleh tertinggal dalam history terminal, process listing, CI output,
+atau scrollback.
+
 Jika anda gunakan email production:
 
 ```dotenv

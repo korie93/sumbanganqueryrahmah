@@ -35,6 +35,41 @@ test("errorHandler returns structured details for exposed HttpError instances", 
   }
 });
 
+test("errorHandler redacts sensitive exposed HttpError detail fields", async () => {
+  const app = express();
+  app.get("/bad-request-sensitive-details", () => {
+    throw badRequest("Invalid request.", "INVALID_REQUEST", {
+      field: "receipt",
+      PG_PASSWORD: "sqr-secret-password",
+      nested: {
+        stack: "Error: leaked stack\n    at /srv/app/server.ts:1:1",
+        connectionString: "postgresql://sqr:sqr-secret@db.internal/sqr_db",
+        retryable: true,
+      },
+    });
+  });
+  app.use(errorHandler);
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const response = await fetch(`${baseUrl}/bad-request-sensitive-details`);
+    const payload = await response.json();
+
+    assert.equal(response.status, 400);
+    assert.deepEqual(payload.error.details, {
+      field: "receipt",
+      PG_PASSWORD: "[redacted]",
+      nested: {
+        stack: "[redacted]",
+        connectionString: "[redacted]",
+        retryable: true,
+      },
+    });
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
 test("errorHandler does not expose hidden HttpError details", async () => {
   const app = express();
   app.get("/hidden-error", () => {

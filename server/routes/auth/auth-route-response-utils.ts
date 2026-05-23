@@ -1,5 +1,6 @@
 import type { RequestHandler, Response } from "express";
 import type { AuthenticatedRequest } from "../../auth/guards";
+import { sanitizeHttpErrorDetails } from "../../http/error-details";
 import { HttpError } from "../../http/errors";
 import { logRouteHandlerError } from "../../http/route-observability";
 import {
@@ -88,15 +89,19 @@ export function buildAuthRouteErrorPayload(error: {
   details?: unknown;
   extra?: Record<string, unknown> | undefined;
 }) {
+  const sanitizedDetails = error.details !== undefined
+    ? sanitizeHttpErrorDetails(error.details)
+    : undefined;
+
   return {
     ok: false,
     message: error.message,
-    ...((error.code || error.details)
+    ...((error.code || sanitizedDetails !== undefined)
       ? {
           error: {
             ...(error.code ? { code: error.code } : {}),
             message: error.message,
-            ...(error.details !== undefined ? { details: error.details } : {}),
+            ...(sanitizedDetails !== undefined ? { details: sanitizedDetails } : {}),
           },
         }
       : {}),

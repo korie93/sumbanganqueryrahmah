@@ -5,6 +5,12 @@ import {
   clearLegacyAuthLocalStorageValue,
 } from "@/lib/legacy-auth-storage";
 import {
+  getBrowserSessionStorage,
+  safeGetStorageItem,
+  safeRemoveStorageItem,
+  safeSetStorageItem,
+} from "@/lib/browser-storage";
+import {
   calculateSessionExpiry,
   isSessionExpired,
   normalizeSessionExpiry,
@@ -47,7 +53,7 @@ type PersistAuthenticatedUserOptions = {
 
 function canUseAuthStorage() {
   return typeof window !== "undefined"
-    && typeof sessionStorage !== "undefined";
+    && getBrowserSessionStorage() !== null;
 }
 
 function isLegacyAuthLocalStorageKey(key: AuthSessionStorageKey): key is LegacyCompatAuthSessionStorageKey {
@@ -65,17 +71,12 @@ function readAuthSessionValue(key: AuthSessionStorageKey): string | null {
     return null;
   }
 
-  try {
-    const sessionValue = sessionStorage.getItem(key);
-    if (sessionValue !== null) {
-      return sessionValue;
-    }
-
-    clearLegacyAuthSessionValue(key);
-  } catch {
-    return null;
+  const sessionValue = safeGetStorageItem(getBrowserSessionStorage(), key);
+  if (sessionValue !== null) {
+    return sessionValue;
   }
 
+  clearLegacyAuthSessionValue(key);
   return null;
 }
 
@@ -84,11 +85,8 @@ function writeAuthSessionValue(key: AuthSessionStorageKey, value: string) {
     return;
   }
 
-  try {
-    sessionStorage.setItem(key, value);
+  if (safeSetStorageItem(getBrowserSessionStorage(), key, value)) {
     clearLegacyAuthSessionValue(key);
-  } catch {
-    // Ignore storage access failures and fall back to the active in-memory session.
   }
 }
 
@@ -97,12 +95,8 @@ function removeAuthSessionValue(key: AuthSessionStorageKey) {
     return;
   }
 
-  try {
-    sessionStorage.removeItem(key);
-    clearLegacyAuthSessionValue(key);
-  } catch {
-    // Ignore storage access failures during best-effort cleanup.
-  }
+  safeRemoveStorageItem(getBrowserSessionStorage(), key);
+  clearLegacyAuthSessionValue(key);
 }
 
 function clearAuthSessionHintCookie() {
@@ -200,24 +194,17 @@ export function persistAuthNotice(message: string | null | undefined) {
 
   const normalized = normalizeAuthNoticeMessage(message);
   if (!normalized) {
-    try {
-      sessionStorage.removeItem(AUTH_NOTICE_STORAGE_KEY);
-    } catch {
-      // Ignore storage cleanup failures.
-    }
+    safeRemoveStorageItem(getBrowserSessionStorage(), AUTH_NOTICE_STORAGE_KEY);
     return;
   }
 
-  try {
-    sessionStorage.setItem(
-      AUTH_NOTICE_STORAGE_KEY,
-      JSON.stringify({
-        message: normalized,
-      }),
-    );
-  } catch {
-    // Ignore storage write failures during best-effort notice persistence.
-  }
+  safeSetStorageItem(
+    getBrowserSessionStorage(),
+    AUTH_NOTICE_STORAGE_KEY,
+    JSON.stringify({
+      message: normalized,
+    }),
+  );
 }
 
 export function consumeStoredAuthNotice(): string {
@@ -225,13 +212,10 @@ export function consumeStoredAuthNotice(): string {
     return "";
   }
 
-  try {
-    const raw = sessionStorage.getItem(AUTH_NOTICE_STORAGE_KEY);
-    sessionStorage.removeItem(AUTH_NOTICE_STORAGE_KEY);
-    return parseAuthNoticePayload(raw);
-  } catch {
-    return "";
-  }
+  const storage = getBrowserSessionStorage();
+  const raw = safeGetStorageItem(storage, AUTH_NOTICE_STORAGE_KEY);
+  safeRemoveStorageItem(storage, AUTH_NOTICE_STORAGE_KEY);
+  return parseAuthNoticePayload(raw);
 }
 
 export function hasAuthSessionHintCookie() {
@@ -356,12 +340,7 @@ export function clearAuthenticatedUserStorage() {
   clearAuthSessionHintCookie();
   clearStoredAuthSessionValues();
   clearLegacyAuthLocalStorage();
-  if (typeof sessionStorage !== "undefined") {
-    try {
-      sessionStorage.removeItem("collection_staff_nickname");
-      sessionStorage.removeItem("collection_staff_nickname_auth");
-    } catch {
-      // Ignore storage cleanup failures.
-    }
-  }
+  const storage = getBrowserSessionStorage();
+  safeRemoveStorageItem(storage, "collection_staff_nickname");
+  safeRemoveStorageItem(storage, "collection_staff_nickname_auth");
 }

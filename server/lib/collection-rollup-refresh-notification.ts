@@ -111,6 +111,7 @@ export class CollectionRollupRefreshNotificationSubscriber
   private reconnectAttempt = 0;
   private currentClient: PgNotificationClientLike | null = null;
   private readonly clientListenerCleanups = new WeakMap<PgNotificationClientLike, () => void>();
+  private activeClientListenerCleanupCount = 0;
   private readonly closingClients = new WeakSet<PgNotificationClientLike>();
   private notifyCallback: (() => unknown) | null = null;
 
@@ -154,6 +155,14 @@ export class CollectionRollupRefreshNotificationSubscriber
       this.removeClientListeners(activeClient);
       await this.safeCloseClient(activeClient, "stop");
     }
+  }
+
+  getDiagnostics(): { activeClient: boolean; pendingListenerCleanups: number; reconnectPending: boolean } {
+    return {
+      activeClient: Boolean(this.currentClient),
+      pendingListenerCleanups: this.activeClientListenerCleanupCount,
+      reconnectPending: Boolean(this.reconnectTimer),
+    };
   }
 
   private async ensureConnected(): Promise<void> {
@@ -227,6 +236,7 @@ export class CollectionRollupRefreshNotificationSubscriber
       client.off?.("error", handleError);
       client.off?.("end", handleEnd);
     });
+    this.activeClientListenerCleanupCount += 1;
 
     try {
       await client.connect();
@@ -279,6 +289,7 @@ export class CollectionRollupRefreshNotificationSubscriber
 
     cleanup();
     this.clientListenerCleanups.delete(client);
+    this.activeClientListenerCleanupCount = Math.max(0, this.activeClientListenerCleanupCount - 1);
   }
 
   private scheduleReconnect(): void {
@@ -312,6 +323,8 @@ export class CollectionRollupRefreshNotificationSubscriber
     client: PgNotificationClientLike,
     reason: "stop" | "start-aborted" | "connect-failure" | "disconnect",
   ): Promise<void> {
+    this.removeClientListeners(client);
+
     try {
       await client.end();
     } catch (error) {

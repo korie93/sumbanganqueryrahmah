@@ -20,6 +20,8 @@ test("navbar controls use Malay accessible labels and include username context",
   const navbarStyles = readSource("Navbar.css");
 
   assert.match(navbarSource, /aria-label="Buka menu navigasi"/);
+  assert.match(navbarSource, /<button[\s\S]*data-testid="button-open-mobile-nav"/);
+  assert.doesNotMatch(navbarSource, /<div[^>]*data-testid="button-open-mobile-nav"/);
   assert.match(navbarSource, /aria-label=\{`Buka menu pengguna untuk \$\{username\}`\}/);
   assert.match(navbarSource, /onCloseAutoFocus=\{restoreDesktopUserMenuFocus\}/);
   assert.match(navbarSource, /onCloseAutoFocus=\{restoreMobileUserMenuFocus\}/);

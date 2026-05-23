@@ -245,6 +245,44 @@ test("persistAuthNotice stores a one-time login notice in sessionStorage", () =>
   assert.equal(session.getItem("auth_notice"), null);
 });
 
+test("auth session helpers tolerate sessionStorage read and write failures", () => {
+  const { local } = installStorageMocks();
+  const throwingSessionStorage = {
+    get length() {
+      return 0;
+    },
+    key() {
+      return null;
+    },
+    getItem() {
+      throw new DOMException("private browsing read blocked", "SecurityError");
+    },
+    setItem() {
+      throw new DOMException("quota exceeded", "QuotaExceededError");
+    },
+    removeItem() {
+      throw new DOMException("private browsing remove blocked", "SecurityError");
+    },
+    clear() {
+      throw new DOMException("private browsing clear blocked", "SecurityError");
+    },
+  };
+
+  Object.defineProperty(globalThis, "sessionStorage", {
+    configurable: true,
+    value: throwingSessionStorage,
+  });
+
+  assert.doesNotThrow(() => persistAuthenticatedUser(sampleUser));
+  assert.doesNotThrow(() => persistAuthNotice("Session expired."));
+  assert.equal(consumeStoredAuthNotice(), "");
+  assert.equal(getStoredAuthenticatedUser(), null);
+  assert.equal(getStoredUsername(), "");
+  assert.equal(getStoredRole(), "");
+  assert.doesNotThrow(() => clearAuthenticatedUserStorage());
+  assert.equal(local.getItem("activeTab"), null);
+});
+
 test("parseForcedLogoutStorageValue supports both legacy and structured payloads", () => {
   assert.deepEqual(parseForcedLogoutStorageValue("true"), {});
   assert.deepEqual(

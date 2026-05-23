@@ -53,6 +53,30 @@ test("auth route response utils build stable success and error payloads", () => 
       },
     },
   );
+  assert.deepEqual(
+    buildAuthRouteErrorPayload({
+      code: "BAD_REQUEST",
+      details: {
+        field: "password",
+        password: "super-secret",
+        databaseUrl: "postgresql://sqr:sqr-secret@localhost/sqr",
+      },
+      message: "Invalid profile",
+    }),
+    {
+      ok: false,
+      message: "Invalid profile",
+      error: {
+        code: "BAD_REQUEST",
+        message: "Invalid profile",
+        details: {
+          field: "password",
+          password: "[redacted]",
+          databaseUrl: "[redacted]",
+        },
+      },
+    },
+  );
 });
 
 test("createAuthJsonRoute forwards unknown errors to the global error handler", async () => {
