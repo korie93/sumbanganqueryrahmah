@@ -24,16 +24,15 @@ const MAX_SPAWN_PER_CYCLE = 1;
 const MAX_WORKERS = Math.min(4, os.cpus().length);
 const requestedMaxWorkers = runtimeConfig.cluster.maxWorkers;
 const normalizedMaxWorkers = Number.isFinite(requestedMaxWorkers) ? Math.floor(requestedMaxWorkers) : 1;
+const sharedRuntimeStateConfigured =
+  runtimeConfig.rateLimiting.store.distributedStoreConfigured
+  && runtimeConfig.websocket.sharedBus.distributedBusConfigured;
 const safeWorkerTopology = resolveSafeClusterWorkerTopology({
   requestedMaxWorkers: normalizedMaxWorkers,
-  sharedRuntimeStateConfigured:
-    runtimeConfig.rateLimiting.store.distributedStoreConfigured
-    && runtimeConfig.websocket.sharedBus.distributedBusConfigured,
-  // Redis adapters may share route rate-limit counters and WebSocket fan-out,
-  // but adaptive guards, AI concurrency, and 2FA replay protection still keep
-  // process-local state. Keep the final enable switch off until every runtime
-  // security state has a shared implementation and tests.
-  sharedRuntimeStateEnabled: false,
+  sharedRuntimeStateConfigured,
+  // Redis-backed rate limits now cover route counters, adaptive protection,
+  // and 2FA replay checks. WebSocket fan-out requires its Redis bus too.
+  sharedRuntimeStateEnabled: sharedRuntimeStateConfigured,
 });
 const MAX_WORKERS_HARD_CAP = Math.max(1, Math.min(MAX_WORKERS, safeWorkerTopology.maxWorkers));
 const INITIAL_WORKERS = normalizeInitialWorkerCount({

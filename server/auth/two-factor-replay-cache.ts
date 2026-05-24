@@ -15,10 +15,15 @@ type TwoFactorReplayCacheOptions = {
   ttlMs?: number;
 };
 
-type ConsumeTwoFactorReplayCodeParams = {
+export type ConsumeTwoFactorReplayCodeParams = {
   code: string;
   purpose: TwoFactorReplayPurpose;
   subjectId: string;
+};
+
+export type TwoFactorReplayStore = {
+  close?: () => Promise<void> | void;
+  consume: (params: ConsumeTwoFactorReplayCodeParams) => Promise<boolean> | boolean;
 };
 
 const DEFAULT_TWO_FACTOR_REPLAY_TTL_MS = 120_000;
@@ -26,7 +31,7 @@ const DEFAULT_TWO_FACTOR_REPLAY_MAX_ENTRIES = 10_000;
 const DEFAULT_TWO_FACTOR_REPLAY_SWEEP_INTERVAL_MS = 30_000;
 const DEFAULT_TWO_FACTOR_REPLAY_SWEEP_THRESHOLD_ENTRIES = 1_000;
 
-function buildReplayKey(params: ConsumeTwoFactorReplayCodeParams) {
+export function buildTwoFactorReplayKey(params: ConsumeTwoFactorReplayCodeParams) {
   const subjectId = String(params.subjectId || "").trim();
   const purpose = params.purpose;
   const code = normalizeTwoFactorCode(params.code);
@@ -87,7 +92,7 @@ export class TwoFactorReplayCache {
   }
 
   consume(params: ConsumeTwoFactorReplayCodeParams) {
-    const key = buildReplayKey(params);
+    const key = buildTwoFactorReplayKey(params);
     if (!key) {
       return false;
     }
@@ -145,11 +150,23 @@ export class TwoFactorReplayCache {
 }
 
 const defaultTwoFactorReplayCache = new TwoFactorReplayCache();
+let activeTwoFactorReplayStore: TwoFactorReplayStore = defaultTwoFactorReplayCache;
 
-export function consumeTwoFactorReplayCode(params: ConsumeTwoFactorReplayCodeParams) {
-  return defaultTwoFactorReplayCache.consume(params);
+export function configureTwoFactorReplayStoreForRuntime(store: TwoFactorReplayStore | null) {
+  activeTwoFactorReplayStore = store ?? defaultTwoFactorReplayCache;
+  return () => {
+    if (activeTwoFactorReplayStore === store) {
+      activeTwoFactorReplayStore = defaultTwoFactorReplayCache;
+    }
+    void Promise.resolve(store?.close?.()).catch(() => undefined);
+  };
+}
+
+export async function consumeTwoFactorReplayCode(params: ConsumeTwoFactorReplayCodeParams) {
+  return activeTwoFactorReplayStore.consume(params);
 }
 
 export function resetTwoFactorReplayCacheForTests() {
+  activeTwoFactorReplayStore = defaultTwoFactorReplayCache;
   defaultTwoFactorReplayCache.clear();
 }

@@ -132,7 +132,7 @@ export class AuthAccountSelfTwoFactorOperations {
       throw new AuthAccountError(400, ERROR_CODES.TWO_FACTOR_INVALID_CODE, "Authenticator code is invalid.");
     }
 
-    if (!consumeTwoFactorReplayCode({ code: input.code, purpose: "setup", subjectId: actor.id })) {
+    if (!(await consumeTwoFactorReplayCode({ code: input.code, purpose: "setup", subjectId: actor.id }))) {
       throw new AuthAccountError(400, ERROR_CODES.TWO_FACTOR_INVALID_CODE, "Authenticator code is invalid.");
     }
 
@@ -186,7 +186,7 @@ export class AuthAccountSelfTwoFactorOperations {
       throw new AuthAccountError(400, ERROR_CODES.TWO_FACTOR_INVALID_CODE, "Authenticator code is invalid.");
     }
 
-    if (!consumeTwoFactorReplayCode({ code: input.code, purpose: "disable", subjectId: actor.id })) {
+    if (!(await consumeTwoFactorReplayCode({ code: input.code, purpose: "disable", subjectId: actor.id }))) {
       throw new AuthAccountError(400, ERROR_CODES.TWO_FACTOR_INVALID_CODE, "Authenticator code is invalid.");
     }
 

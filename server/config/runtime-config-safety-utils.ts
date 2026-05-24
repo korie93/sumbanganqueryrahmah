@@ -278,7 +278,7 @@ export function assertProductionRateLimiterTopologySafety(params: {
   }
 
   throw new Error(
-    "SQR_MAX_WORKERS greater than 1 is not allowed outside strict local development until a shared rate-limit/replay store is configured. Login/auth route limiters, adaptive API protection, telemetry drop guards, and 2FA replay protection are still process-local. Set SQR_MAX_WORKERS=1 or add shared limiter infrastructure before scaling horizontally.",
+    "SQR_MAX_WORKERS greater than 1 is not allowed outside strict local development until a shared Redis rate-limit/replay store is configured. Set SQR_MAX_WORKERS=1 or configure SQR_RATE_LIMIT_STORE=redis with SQR_REDIS_RATE_LIMIT_URL before scaling horizontally.",
   );
 }
 

@@ -17,7 +17,6 @@ import { startIdleSessionSweeper } from "./idle-session-sweeper";
 import { assertCollectionPiiRetirementStartupReady } from "./collection-pii-retirement-startup";
 import { buildRateLimiterTopologyWarning } from "../middleware/rate-limit-runtime";
 import { buildTwoFactorReplayCacheTopologyWarning } from "../auth/two-factor-replay-topology";
-import { resolveProcessLocalSecurityWorkerCount } from "./cluster-mode";
 
 type RuntimeSettings = {
   sessionTimeoutMinutes: number;
@@ -88,17 +87,14 @@ export async function startLocalServer(options: StartLocalServerOptions) {
       warnings: runtimeConfigValidation.warnings,
     });
   }
-  const effectiveSecurityWorkerCount = resolveProcessLocalSecurityWorkerCount({
-    requestedMaxWorkers: runtimeConfig.cluster.maxWorkers,
-    sharedRuntimeStateConfigured: runtimeConfig.rateLimiting.store.distributedStoreConfigured,
-  });
+  const configuredSecurityWorkerCount = runtimeConfig.cluster.maxWorkers;
   const rateLimiterTopologyWarning = buildRateLimiterTopologyWarning({
     distributedStoreConfigured: runtimeConfig.rateLimiting.store.distributedStoreConfigured,
-    workerCount: effectiveSecurityWorkerCount,
+    workerCount: configuredSecurityWorkerCount,
   });
   if (rateLimiterTopologyWarning) {
     logger.error("Rate limiter topology requires a shared store before scaling past one worker", {
-      workerCount: effectiveSecurityWorkerCount,
+      workerCount: configuredSecurityWorkerCount,
       message: rateLimiterTopologyWarning,
       storage: runtimeConfig.rateLimiting.store.provider,
       strictModeRefusal: runtimeConfig.app.isProductionLike,
@@ -112,13 +108,14 @@ export async function startLocalServer(options: StartLocalServerOptions) {
     clearStartupServiceDegraded("rate-limiter-topology");
   }
   const twoFactorReplayCacheTopologyWarning = buildTwoFactorReplayCacheTopologyWarning(
-    effectiveSecurityWorkerCount,
+    configuredSecurityWorkerCount,
+    runtimeConfig.rateLimiting.store.distributedStoreConfigured,
   );
   if (twoFactorReplayCacheTopologyWarning) {
     logger.warn("2FA replay protection requires a shared store before scaling past one worker", {
-      workerCount: effectiveSecurityWorkerCount,
+      workerCount: configuredSecurityWorkerCount,
       message: twoFactorReplayCacheTopologyWarning,
-      storage: "memory",
+      storage: runtimeConfig.rateLimiting.store.provider,
     });
     markStartupServiceDegraded(
       "two-factor-replay-topology",

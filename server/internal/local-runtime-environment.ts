@@ -12,6 +12,8 @@ import { PostgresStorage } from "../storage-postgres";
 import { createAiConcurrencyGate } from "./aiConcurrencyGate";
 import { createApiProtectionMiddleware } from "./apiProtection";
 import { createAdaptiveRateStateStore } from "./redis-adaptive-rate-store";
+import { configureTwoFactorReplayStoreForRuntime } from "../auth/two-factor-replay-cache";
+import { createTwoFactorReplayStore } from "../auth/redis-two-factor-replay-store";
 import { stopAdaptiveRateLimitCooldownSweep } from "../middleware/rate-limit";
 import {
   createLocalServerComposition,
@@ -125,6 +127,10 @@ export function createLocalRuntimeEnvironment(options: CreateLocalRuntimeEnviron
     connectedClients,
   } = composition;
   const adaptiveRateStore = createAdaptiveRateStateStore(runtimeConfig.rateLimiting.store);
+  const stopTwoFactorReplayStore = configureTwoFactorReplayStoreForRuntime(
+    createTwoFactorReplayStore(runtimeConfig.rateLimiting.store),
+  );
+  server.once("close", stopTwoFactorReplayStore);
   const { adaptiveRateLimit, systemProtectionMiddleware, stopAdaptiveRateStateSweep } =
     createApiProtectionMiddleware({
       ...(adaptiveRateStore ? { adaptiveRateStore } : {}),

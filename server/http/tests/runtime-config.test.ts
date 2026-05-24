@@ -408,7 +408,7 @@ test("runtime config rejects production startup when multi-worker mode still use
   );
 });
 
-test("runtime config still rejects production multi-worker with redis until shared 2FA replay exists", async () => {
+test("runtime config rejects production multi-worker with redis replay but no WebSocket shared bus", async () => {
   await withEnv(
     {
       ...productionBaseOverrides,
@@ -421,8 +421,28 @@ test("runtime config still rejects production multi-worker with redis until shar
     async () => {
       await assert.rejects(
         importRuntimeFresh(),
-        /2FA TOTP replay protection is process-local/i,
+        /WebSocket fan-out is process-local/i,
       );
+    },
+  );
+});
+
+test("runtime config accepts production multi-worker when Redis shared runtime state is configured", async () => {
+  await withEnv(
+    {
+      ...productionBaseOverrides,
+      PUBLIC_APP_URL: "https://sqr.example.com",
+      BACKUP_ENCRYPTION_KEY: "A".repeat(32),
+      SQR_MAX_WORKERS: "2",
+      SQR_RATE_LIMIT_STORE: "redis",
+      SQR_REDIS_RATE_LIMIT_URL: "rediss://redis.internal:6380/0",
+      SQR_WS_SHARED_BUS: "redis",
+    },
+    async () => {
+      const runtimeModule = await importRuntimeFresh();
+      assert.equal(runtimeModule.runtimeConfig.cluster.maxWorkers, 2);
+      assert.equal(runtimeModule.runtimeConfig.rateLimiting.store.provider, "redis");
+      assert.equal(runtimeModule.runtimeConfig.websocket.sharedBus.provider, "redis");
     },
   );
 });

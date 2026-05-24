@@ -84,6 +84,7 @@ test("TwoFactorReplayCache exposes the multi-worker topology constraint explicit
   assert.equal(requiresSingleWorkerForProcessLocalTwoFactorReplayCache(2), true);
   assert.equal(buildTwoFactorReplayCacheTopologyWarning(1), null);
   assert.match(String(buildTwoFactorReplayCacheTopologyWarning(2)), /process-local/i);
+  assert.equal(buildTwoFactorReplayCacheTopologyWarning(2, true), null);
 });
 
 test("TwoFactorReplayCache topology fails fast for production multi-worker without shared replay state", () => {

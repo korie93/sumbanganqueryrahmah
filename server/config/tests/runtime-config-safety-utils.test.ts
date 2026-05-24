@@ -215,7 +215,7 @@ test("assertProductionRateLimiterTopologySafety rejects production-like multi-wo
   );
 });
 
-test("assertProductionTwoFactorReplayTopologySafety rejects production multi-worker even with shared rate limits", () => {
+test("assertProductionTwoFactorReplayTopologySafety rejects production multi-worker without shared replay state", () => {
   assert.throws(
     () =>
       assertProductionTwoFactorReplayTopologySafety({
@@ -239,6 +239,14 @@ test("assertProductionTwoFactorReplayTopologySafety rejects production multi-wor
       isProductionLike: false,
       configuredClusterMaxWorkers: 2,
       sharedReplayStoreConfigured: false,
+    }),
+  );
+
+  assert.doesNotThrow(() =>
+    assertProductionTwoFactorReplayTopologySafety({
+      isProductionLike: true,
+      configuredClusterMaxWorkers: 2,
+      sharedReplayStoreConfigured: true,
     }),
   );
 });
@@ -603,6 +611,37 @@ test("buildRuntimeConfigWarnings reports process-local 2FA replay cache risk in 
     /TWO_FACTOR_REPLAY_CACHE_PROCESS_LOCAL/,
   );
   assert.match(
+    warnings.map((warning) => warning.code).join(","),
+    /WEBSOCKET_STATE_PROCESS_LOCAL/,
+  );
+});
+
+test("buildRuntimeConfigWarnings suppresses 2FA replay warning when a shared replay store is configured", () => {
+  const warnings = buildRuntimeConfigWarnings({
+    isStrictLocalDevelopment: false,
+    isProductionLike: true,
+    publicAppUrl: "https://sqr.example.com",
+    configuredSessionSecret: "prod-session-secret",
+    configuredCollectionNicknameTempPassword: "TempPassword12345",
+    configuredCollectionPiiEncryptionKey: "collection-pii-secret",
+    configuredPgPassword: "prod-db-password",
+    configuredAuthCookieSecure: null,
+    configuredClusterMaxWorkers: 2,
+    twoFactorReplayStoreConfigured: true,
+    websocketSharedBusConfigured: true,
+    mailConfiguration: {
+      effectiveFrom: "noreply@sqr.example.com",
+      hasAnyInput: true,
+      isConfigured: true,
+      isIncomplete: false,
+    },
+  });
+
+  assert.doesNotMatch(
+    warnings.map((warning) => warning.code).join(","),
+    /TWO_FACTOR_REPLAY_CACHE_PROCESS_LOCAL/,
+  );
+  assert.doesNotMatch(
     warnings.map((warning) => warning.code).join(","),
     /WEBSOCKET_STATE_PROCESS_LOCAL/,
   );

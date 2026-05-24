@@ -197,7 +197,7 @@ assertProductionRateLimiterTopologySafety({
 assertProductionTwoFactorReplayTopologySafety({
   isProductionLike,
   configuredClusterMaxWorkers,
-  sharedReplayStoreConfigured: false,
+  sharedReplayStoreConfigured: sharedRateLimitStore.distributedStoreConfigured,
 });
 
 assertProductionWebSocketRuntimeTopologySafety({
@@ -436,6 +436,7 @@ const runtimeWarnings = buildRuntimeConfigWarnings({
   configuredPgPassword,
   configuredAuthCookieSecure,
   configuredClusterMaxWorkers,
+  twoFactorReplayStoreConfigured: sharedRateLimitStore.distributedStoreConfigured,
   websocketSharedBusConfigured: websocketSharedBus.distributedBusConfigured,
   hstsMaxAgeSeconds: hstsHeaderConfig.maxAge,
   hstsPreloadEnabled: hstsHeaderConfig.preload,

@@ -143,16 +143,16 @@ export async function handleFailedPasswordAttempt(params: {
   throw new AuthAccountError(401, ERROR_CODES.INVALID_CREDENTIALS, "Invalid credentials");
 }
 
-export function verifyTwoFactorSecretCode(params: {
+export async function verifyTwoFactorSecretCode(params: {
   code: string;
   encryptedSecret: string;
   replay?: {
     purpose: TwoFactorReplayPurpose;
     subjectId: string;
   };
-}): {
+}): Promise<{
   ok: true;
-} {
+}> {
   let secret = "";
   try {
     secret = decryptTwoFactorSecret(params.encryptedSecret);
@@ -174,11 +174,11 @@ export function verifyTwoFactorSecretCode(params: {
 
   if (
     params.replay
-    && !consumeTwoFactorReplayCode({
+    && !(await consumeTwoFactorReplayCode({
       code: params.code,
       purpose: params.replay.purpose,
       subjectId: params.replay.subjectId,
-    })
+    }))
   ) {
     throw new AuthAccountError(
       401,

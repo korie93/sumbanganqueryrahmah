@@ -12,6 +12,7 @@ export function buildRuntimeConfigWarnings(params: {
   configuredPgPassword: string | null;
   configuredAuthCookieSecure: string | null;
   configuredClusterMaxWorkers: number;
+  twoFactorReplayStoreConfigured?: boolean;
   websocketSharedBusConfigured?: boolean;
   hstsMaxAgeSeconds?: number;
   hstsPreloadEnabled?: boolean;
@@ -28,6 +29,7 @@ export function buildRuntimeConfigWarnings(params: {
     configuredPgPassword,
     configuredAuthCookieSecure,
     configuredClusterMaxWorkers,
+    twoFactorReplayStoreConfigured = false,
     websocketSharedBusConfigured = false,
     hstsMaxAgeSeconds,
     hstsPreloadEnabled,
@@ -139,6 +141,7 @@ export function buildRuntimeConfigWarnings(params: {
 
   const twoFactorReplayCacheTopologyWarning = buildTwoFactorReplayCacheTopologyWarning(
     configuredClusterMaxWorkers,
+    twoFactorReplayStoreConfigured,
   );
   if (twoFactorReplayCacheTopologyWarning) {
     warnings.push({

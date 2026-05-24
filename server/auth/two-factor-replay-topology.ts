@@ -3,12 +3,18 @@ export function requiresSingleWorkerForProcessLocalTwoFactorReplayCache(workerCo
   return normalizedWorkerCount > 1;
 }
 
-export function buildTwoFactorReplayCacheTopologyWarning(workerCount: number) {
-  if (!requiresSingleWorkerForProcessLocalTwoFactorReplayCache(workerCount)) {
+export function buildTwoFactorReplayCacheTopologyWarning(
+  workerCount: number,
+  sharedReplayStoreConfigured = false,
+) {
+  if (
+    sharedReplayStoreConfigured
+    || !requiresSingleWorkerForProcessLocalTwoFactorReplayCache(workerCount)
+  ) {
     return null;
   }
 
-  return "2FA TOTP replay protection is process-local. Multi-worker deployments must use one worker until a shared replay store is implemented and configured.";
+  return "2FA TOTP replay protection is process-local. Multi-worker deployments must use one worker unless Redis-backed shared replay protection is configured.";
 }
 
 export function assertProductionTwoFactorReplayCacheTopologySafety(params: {
@@ -25,6 +31,6 @@ export function assertProductionTwoFactorReplayCacheTopologySafety(params: {
   }
 
   throw new Error(
-    "SQR_MAX_WORKERS greater than 1 is not allowed on production-like hosts while 2FA TOTP replay protection is process-local. Set SQR_MAX_WORKERS=1 until a shared 2FA replay store is implemented and configured.",
+    "SQR_MAX_WORKERS greater than 1 is not allowed on production-like hosts while 2FA TOTP replay protection is process-local. Set SQR_MAX_WORKERS=1 or configure SQR_RATE_LIMIT_STORE=redis with SQR_REDIS_RATE_LIMIT_URL so replay protection is shared.",
   );
 }

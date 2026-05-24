@@ -239,7 +239,7 @@ export class AuthAccountAuthenticationOperations {
 
     const encryptedSecret = String(user.twoFactorSecretEncrypted || "").trim();
     try {
-      verifyTwoFactorSecretCode({
+      await verifyTwoFactorSecretCode({
         code: input.code,
         encryptedSecret,
         replay: {
