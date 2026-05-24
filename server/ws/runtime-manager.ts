@@ -34,6 +34,7 @@ import {
   createRuntimeWsUpgradeRateLimiter,
   readRuntimeWsUpgradeRateLimitKey,
 } from "./upgrade-rate-limit";
+import { createRuntimeWsMessageRateLimiter } from "./message-rate-limit";
 
 export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
   connectedClients: Map<string, WebSocket>;
@@ -45,6 +46,8 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
   const acceptConnections = options.acceptConnections ?? (() => true);
   const heartbeatIntervalMs = normalizeRuntimeWsHeartbeatIntervalMs(options.heartbeatIntervalMs);
   const upgradeRateLimiter = options.upgradeRateLimiter ?? createRuntimeWsUpgradeRateLimiter();
+  const messageRateLimiterFactory =
+    options.messageRateLimiterFactory ?? (() => createRuntimeWsMessageRateLimiter());
   const socketEntriesByActivity = new Map<string, RuntimeTrackedSocketEntry>();
   const socketEntriesByInstance = new WeakMap<WebSocket, RuntimeTrackedSocketEntry>();
   const trackedSockets = new Set<WebSocket>();
@@ -142,6 +145,7 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
     let cleanedUp = false;
     let closeRequested = false;
     let nicknameSessionClearQueued = false;
+    const messageRateLimiter = messageRateLimiterFactory();
 
     const markSocketAlive = () => {
       if (cleanedUp) {
@@ -155,6 +159,7 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
     };
 
     const detachSocketLifecycleHandlers = () => {
+      ws.removeListener("message", handleSocketMessage);
       ws.removeListener("pong", markSocketAlive);
       ws.removeListener("close", handleSocketClose);
       ws.removeListener("error", handleSocketError);
@@ -252,6 +257,27 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
       }
     };
 
+    const handleSocketMessage = () => {
+      if (cleanedUp) {
+        return;
+      }
+
+      if (messageRateLimiter.consume()) {
+        return;
+      }
+
+      const limitedActivityId = activityId;
+      logger.warn("WebSocket message rate limit exceeded", {
+        activityId: limitedActivityId,
+      });
+      cleanupSocket({
+        clearSession: socketEntry !== null,
+        reason: "message-rate-limit",
+      });
+      closeSocketIfNeeded(RUNTIME_WS_CLOSE_POLICY_VIOLATION, "message rate limited");
+    };
+
+    ws.on("message", handleSocketMessage);
     ws.on("pong", markSocketAlive);
     ws.once("close", handleSocketClose);
     ws.once("error", handleSocketError);

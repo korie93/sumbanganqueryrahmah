@@ -130,6 +130,51 @@ test("shared API error payload contract accepts shared and domain-specific upper
   assert.equal(malformedCodePayload.success, false);
 });
 
+test("shared API error payload contract allows known control fields and rejects unexpected extras", () => {
+  const knownControlPayload = apiErrorPayloadSchema.safeParse({
+    ok: false,
+    message: "Maintenance mode is active.",
+    requestId: "req-123",
+    code: ERROR_CODES.MAINTENANCE_ACTIVE,
+    status: 503,
+    limit: 8,
+    maintenance: true,
+    type: "hard",
+    mode: "PROTECTION",
+    protection: true,
+    reason: "db_latency_high",
+    startTime: null,
+    endTime: "2026-05-24T10:00:00.000Z",
+    retryAfterMs: 1_000,
+    forceLogout: true,
+    forcePasswordChange: true,
+    banned: false,
+    locked: false,
+    requiresConfirmation: true,
+    fieldErrors: {
+      password: "Password is required.",
+    },
+  });
+  assert.equal(knownControlPayload.success, true);
+
+  const unexpectedTopLevelPayload = apiErrorPayloadSchema.safeParse({
+    ok: false,
+    message: "Bad request",
+    stack: "internal stack",
+  });
+  assert.equal(unexpectedTopLevelPayload.success, false);
+
+  const unexpectedNestedPayload = apiErrorPayloadSchema.safeParse({
+    ok: false,
+    message: "Bad request",
+    error: {
+      message: "Bad request",
+      stack: "internal stack",
+    },
+  });
+  assert.equal(unexpectedNestedPayload.success, false);
+});
+
 test("shared pagination metadata can be normalized without changing wire contracts", () => {
   assert.equal(apiPaginationMetaSchema.safeParse({
     mode: "offset",

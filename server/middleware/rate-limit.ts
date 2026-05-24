@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import type { Request, RequestHandler } from "express";
+import type { Request, RequestHandler, Response } from "express";
 import rateLimit from "express-rate-limit";
 import { ERROR_CODES } from "../../shared/error-codes";
 import { runtimeConfig } from "../config/runtime";
@@ -31,6 +31,12 @@ type JsonRateLimiterOptions = {
   message: string;
   adaptiveCooldown?: boolean | undefined;
   keyGenerator?: ((req: Request) => string) | undefined;
+};
+
+type StandardRateLimitHeaderOptions = {
+  limit: number;
+  remaining: number;
+  retryAfterMs: number;
 };
 
 type AuthenticatedLikeRequest = Request & {
@@ -193,6 +199,14 @@ function resolveJsonRateLimiterKey(req: Request, options: JsonRateLimiterOptions
   return options.keyGenerator?.(req) ?? buildRateLimitKey(req, options.code);
 }
 
+function setStandardRateLimitHeaders(res: Response, options: StandardRateLimitHeaderOptions) {
+  const resetSeconds = Math.max(1, Math.ceil(options.retryAfterMs / 1000));
+  res.setHeader("RateLimit-Limit", String(Math.max(0, Math.trunc(options.limit))));
+  res.setHeader("RateLimit-Remaining", String(Math.max(0, Math.trunc(options.remaining))));
+  res.setHeader("RateLimit-Reset", String(resetSeconds));
+  res.setHeader("Retry-After", String(resetSeconds));
+}
+
 function getAdaptiveRateLimitCooldown(key: string, nowMs: number): AdaptiveRateLimitBucket | null {
   const bucket = adaptiveRateLimitCooldowns.get(key);
   if (!bucket) {
@@ -275,7 +289,11 @@ function createJsonRateLimiter(options: JsonRateLimiterOptions): RequestHandler 
         ...(cooldownBucket ? { strikeCount: cooldownBucket.strikeCount } : {}),
       });
 
-      res.setHeader("Retry-After", String(Math.max(1, Math.ceil(retryAfterMs / 1000))));
+      setStandardRateLimitHeaders(res, {
+        limit: options.max,
+        remaining: 0,
+        retryAfterMs,
+      });
       res.status(429).json({
         ...payload,
         retryAfterMs,
@@ -304,7 +322,11 @@ function createJsonRateLimiter(options: JsonRateLimiterOptions): RequestHandler 
       retryAfterMs,
       strikeCount: cooldownBucket.strikeCount,
     });
-    res.setHeader("Retry-After", String(Math.max(1, Math.ceil(retryAfterMs / 1000))));
+    setStandardRateLimitHeaders(res, {
+      limit: options.max,
+      remaining: 0,
+      retryAfterMs,
+    });
     res.status(429).json({
       ...payload,
       retryAfterMs,

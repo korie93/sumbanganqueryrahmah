@@ -1,9 +1,17 @@
+import DOMPurify from "dompurify";
+
 const DANGEROUS_AI_HTML_TAG_PATTERN =
   /<\/?(?:script|style|iframe|object|embed|link|meta|base|form|input|button|svg|math)\b[^>]*>/gi;
 const DANGEROUS_AI_HTML_EVENT_ATTR_PATTERN =
   /\s+on[a-z][\w:-]*\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]*)/gi;
 const DANGEROUS_AI_HTML_URL_ATTR_PATTERN =
   /\s+(?:href|src|xlink:href)\s*=\s*(?:"\s*(?:javascript|data):[^"]*"|'\s*(?:javascript|data):[^']*'|(?:javascript|data):[^\s>]*)/gi;
+const AI_MESSAGE_DOMPURIFY_CONFIG = {
+  ALLOWED_ATTR: [],
+  ALLOWED_TAGS: [],
+  KEEP_CONTENT: true,
+};
+
 function isUnsafeAIControlCharacter(codePoint: number) {
   return (codePoint >= 0x00 && codePoint <= 0x08)
     || codePoint === 0x0B
@@ -26,11 +34,23 @@ function removeUnsafeAIControlCharacters(content: string) {
   return safeContent;
 }
 
-export function sanitizeAIMessageContentForDisplay(content: string): string {
-  const sanitizedContent = content
-    .replace(/\r\n?/g, "\n")
+function fallbackStripUnsafeAIHtml(content: string) {
+  return content
     .replace(DANGEROUS_AI_HTML_TAG_PATTERN, "")
     .replace(DANGEROUS_AI_HTML_EVENT_ATTR_PATTERN, "")
     .replace(DANGEROUS_AI_HTML_URL_ATTR_PATTERN, "");
+}
+
+function sanitizeAIHtml(content: string) {
+  if (DOMPurify.isSupported && typeof DOMPurify.sanitize === "function") {
+    const sanitized = DOMPurify.sanitize(content, AI_MESSAGE_DOMPURIFY_CONFIG);
+    return typeof sanitized === "string" ? sanitized : String(sanitized);
+  }
+
+  return fallbackStripUnsafeAIHtml(content);
+}
+
+export function sanitizeAIMessageContentForDisplay(content: string): string {
+  const sanitizedContent = sanitizeAIHtml(content.replace(/\r\n?/g, "\n"));
   return removeUnsafeAIControlCharacters(sanitizedContent);
 }

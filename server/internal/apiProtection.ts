@@ -74,6 +74,20 @@ export function resolveAdaptiveRateEvictionKey(
   return oldestBucketKey;
 }
 
+function setAdaptiveRateLimitHeaders(
+  res: Parameters<RequestHandler>[1],
+  options: {
+    limit: number;
+    retryAfterMs: number;
+  },
+) {
+  const resetSeconds = Math.max(1, Math.ceil(options.retryAfterMs / 1000));
+  res.setHeader("RateLimit-Limit", String(Math.max(0, Math.trunc(options.limit))));
+  res.setHeader("RateLimit-Remaining", "0");
+  res.setHeader("RateLimit-Reset", String(resetSeconds));
+  res.setHeader("Retry-After", String(resetSeconds));
+}
+
 export function resolveAdaptiveRateLruEvictionKey(
   buckets: ReadonlyMap<string, AdaptiveRateBucket>,
 ): string | null {
@@ -217,10 +231,15 @@ export function createApiProtectionMiddleware(options: ApiProtectionOptions): {
     };
     setAdaptiveRateBucket(bucketKey, nextBucket);
     if (nextBucket.count > dynamicLimit) {
+      const retryAfterMs = Math.max(0, nextBucket.resetAt - now);
+      setAdaptiveRateLimitHeaders(res, {
+        limit: dynamicLimit,
+        retryAfterMs,
+      });
       return res.status(429).json({
         message: "Too many requests under current system load.",
         limit: dynamicLimit,
-        retryAfterMs: Math.max(0, nextBucket.resetAt - now),
+        retryAfterMs,
         mode: controlState.mode,
       });
     }

@@ -8,6 +8,7 @@ import type { UserActivity } from "../../../shared/schema-postgres";
 import { logger } from "../../lib/logger";
 import { createRuntimeWebSocketManager } from "../runtime-manager";
 import { createRuntimeWsUpgradeRateLimiter } from "../upgrade-rate-limit";
+import { createRuntimeWsMessageRateLimiter } from "../message-rate-limit";
 
 class FakeWebSocketServer extends EventEmitter {}
 class FakeWebSocket extends EventEmitter {
@@ -1267,6 +1268,56 @@ test("runtime manager enforces a per-user connection limit", async () => {
     );
   } finally {
     logger.warn = originalLoggerWarn;
+    wss.emit("close");
+  }
+});
+
+test("runtime manager closes clients that exceed the inbound message rate limit", async () => {
+  const wss = new FakeWebSocketServer();
+  const providedMap = new Map<string, WebSocket>();
+  const socket = new FakeWebSocket();
+  const activityId = "activity-message-rate-limit";
+  let clearSessionCalls = 0;
+
+  createRuntimeWebSocketManager({
+    wss: wss as unknown as import("ws").WebSocketServer,
+    storage: {
+      getActivityById: async () => createActiveSession(activityId),
+      clearCollectionNicknameSessionByActivity: async () => {
+        clearSessionCalls += 1;
+      },
+    },
+    secret: TEST_SECRET,
+    connectedClients: providedMap,
+    messageRateLimiterFactory: () =>
+      createRuntimeWsMessageRateLimiter({
+        maxMessages: 2,
+        windowMs: 60_000,
+      }),
+  });
+
+  try {
+    wss.emit("connection", socket as unknown as WebSocket, createConnectionRequest(createWsToken(activityId)));
+    await flushAsyncWork();
+
+    assert.equal(providedMap.get(activityId), socket as unknown as WebSocket);
+
+    socket.emit("message", "one");
+    socket.emit("message", "two");
+    socket.emit("message", "three");
+    await flushAsyncWork();
+
+    assert.equal(providedMap.has(activityId), false);
+    assert.equal(clearSessionCalls, 1);
+    assert.deepEqual(socket.closeCodes[0], {
+      code: 1008,
+      reason: "message rate limited",
+    });
+    assert.equal(socket.listenerCount("message"), 0);
+    assert.equal(socket.listenerCount("close"), 0);
+    assert.equal(socket.listenerCount("error"), 0);
+    assert.equal(socket.listenerCount("pong"), 0);
+  } finally {
     wss.emit("close");
   }
 });

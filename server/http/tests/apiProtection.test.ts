@@ -93,6 +93,10 @@ test("adaptive API protection still throttles generic API bursts", async () => {
 
     const throttled = await fetch(`${baseUrl}/api/noisy`);
     assert.equal(throttled.status, 429);
+    assert.equal(throttled.headers.get("ratelimit-limit"), "8");
+    assert.equal(throttled.headers.get("ratelimit-remaining"), "0");
+    assert.match(throttled.headers.get("ratelimit-reset") ?? "", /^[1-9]\d*$/);
+    assert.match(throttled.headers.get("retry-after") ?? "", /^[1-9]\d*$/);
     const payload = await throttled.json();
     assert.equal(payload.message, "Too many requests under current system load.");
     assert.equal(payload.limit, 8);

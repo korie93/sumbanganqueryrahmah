@@ -4,6 +4,7 @@ import {
   AUTH_SESSION_MAX_AGE_MS,
   AUTH_SESSION_COOKIE_NAME,
   AUTH_SESSION_CSRF_COOKIE_NAME,
+  AUTH_SESSION_CSRF_HEADER_NAME,
   readCookieValueFromHeader,
   rotateAuthSessionCsrfCookie,
 } from "../session-cookie";
@@ -44,7 +45,11 @@ test("readCookieValueFromHeader rejects malformed percent-encoded cookies and lo
 
 test("rotateAuthSessionCsrfCookie refreshes only the csrf cookie", () => {
   const cookies: Array<{ name: string; value: string; options: Record<string, unknown> }> = [];
+  const headers = new Map<string, unknown>();
   const res = {
+    setHeader: (name: string, value: unknown) => {
+      headers.set(name, value);
+    },
     cookie: (name: string, value: string, options: Record<string, unknown>) => {
       cookies.push({ name, value, options });
     },
@@ -56,6 +61,7 @@ test("rotateAuthSessionCsrfCookie refreshes only the csrf cookie", () => {
   assert.equal(cookies[0]?.name, AUTH_SESSION_CSRF_COOKIE_NAME);
   assert.equal(typeof cookies[0]?.value, "string");
   assert.equal(cookies[0]?.value.length, 64);
+  assert.equal(headers.get(AUTH_SESSION_CSRF_HEADER_NAME), cookies[0]?.value);
   assert.equal(cookies[0]?.options.httpOnly, false);
   assert.equal(cookies[0]?.options.sameSite, "strict");
   assert.equal(cookies[0]?.options.maxAge, AUTH_SESSION_MAX_AGE_MS);

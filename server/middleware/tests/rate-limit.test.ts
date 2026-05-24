@@ -134,6 +134,10 @@ test("createImportsUploadRateLimiter throttles repeated upload attempts from the
 
     assert.equal(firstResponse.status, 204);
     assert.equal(secondResponse.status, 429);
+    assert.equal(secondResponse.headers.get("ratelimit-limit"), "1");
+    assert.equal(secondResponse.headers.get("ratelimit-remaining"), "0");
+    assert.match(secondResponse.headers.get("ratelimit-reset") ?? "", /^[1-9]\d*$/);
+    assert.match(secondResponse.headers.get("retry-after") ?? "", /^[1-9]\d*$/);
     const payload = await secondResponse.json();
     assert.equal(typeof payload.retryAfterMs, "number");
     assert.ok(payload.retryAfterMs >= 0);

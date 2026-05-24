@@ -136,7 +136,7 @@ export const apiErrorDetailsSchema = z.object({
   message: z.string(),
   details: jsonValueSchema.optional(),
   requestId: z.string().optional(),
-}).passthrough();
+}).strict();
 
 export const apiErrorPayloadSchema = z.object({
   ok: z.literal(false).optional(),
@@ -144,7 +144,23 @@ export const apiErrorPayloadSchema = z.object({
   requestId: z.string().optional(),
   code: apiErrorCodeSchema.optional(),
   error: apiErrorDetailsSchema.optional(),
-}).passthrough();
+  status: z.number().int().min(100).max(599).optional(),
+  limit: nonNegativeIntSchema.optional(),
+  retryAfterMs: nonNegativeIntSchema.optional(),
+  mode: z.string().trim().min(1).optional(),
+  protection: z.boolean().optional(),
+  reason: z.string().trim().min(1).optional(),
+  banned: z.boolean().optional(),
+  locked: z.boolean().optional(),
+  forcePasswordChange: z.boolean().optional(),
+  forceLogout: z.boolean().optional(),
+  maintenance: z.boolean().optional(),
+  type: z.enum(["soft", "hard"]).optional(),
+  startTime: nullishStringSchema,
+  endTime: nullishStringSchema,
+  requiresConfirmation: z.boolean().optional(),
+  fieldErrors: z.record(jsonValueSchema).optional(),
+}).strict();
 
 export const deleteImportResponseSchema = z.object({
   ok: z.literal(true).optional(),

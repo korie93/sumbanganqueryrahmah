@@ -4,6 +4,7 @@ import { logger } from "../lib/logger";
 
 const DEFAULT_ALLOWED_METHODS = "GET, POST, PUT, PATCH, DELETE, OPTIONS";
 const DEFAULT_ALLOWED_HEADERS = "Origin, X-Requested-With, Content-Type, Accept, Authorization, X-CSRF-Token, X-Request-Id";
+const DEFAULT_EXPOSED_HEADERS = "API-Version, RateLimit-Limit, RateLimit-Remaining, RateLimit-Reset, Retry-After, X-CSRF-Token, X-Request-Id";
 const DEFAULT_PREFLIGHT_MAX_AGE_SECONDS = "600";
 const LOCAL_DEV_ORIGINS = [
   "http://localhost:5000",
@@ -140,6 +141,7 @@ export function createCorsMiddleware(
     res.vary("Origin");
     res.header("Access-Control-Allow-Methods", DEFAULT_ALLOWED_METHODS);
     res.header("Access-Control-Allow-Headers", DEFAULT_ALLOWED_HEADERS);
+    res.header("Access-Control-Expose-Headers", DEFAULT_EXPOSED_HEADERS);
 
     if (!requestOrigin) {
       if (req.method === "OPTIONS") {
