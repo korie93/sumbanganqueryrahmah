@@ -732,6 +732,77 @@ test("authenticateToken rejects a JWT that was revoked during logout", async () 
   }
 });
 
+test("authenticateToken rejects a session invalidated between snapshot load and activity touch", async () => {
+  const secret = "guard-test-secret";
+  let snapshotCalls = 0;
+  let touchCalls = 0;
+  let updateCalls = 0;
+  const guards = createAuthGuards({
+    storage: {
+      getAuthenticatedSessionSnapshot: async () => {
+        snapshotCalls += 1;
+        return createAuthenticatedSessionSnapshot();
+      },
+      getActivityById: async () => undefined,
+      getUser: async () => undefined,
+      getUserByUsername: async () => undefined,
+      isVisitorBanned: async () => false,
+      touchAuthenticatedActivity: async () => {
+        touchCalls += 1;
+        return undefined;
+      },
+      updateActivity: async () => {
+        updateCalls += 1;
+        return undefined;
+      },
+      getRoleTabVisibility: async () => ({}),
+    },
+    secret,
+    activityUpdateThrottleMs: 0,
+  });
+
+  const token = jwt.sign(
+    {
+      userId: "user-1",
+      username: "guard.user",
+      role: "admin",
+      activityId: "activity-1",
+    },
+    secret,
+    { expiresIn: "24h" },
+  );
+
+  const response = createMockResponse();
+  let nextCalls = 0;
+
+  await guards.authenticateToken(
+    {
+      headers: {
+        cookie: `sqr_auth=${encodeURIComponent(token)}`,
+      },
+      method: "GET",
+      path: "/api/me",
+    } as never,
+    response as never,
+    () => {
+      nextCalls += 1;
+    },
+  );
+
+  guards.stopTabVisibilityCacheSweep();
+  guards.stopActivityUpdateCacheSweep();
+
+  assert.equal(response.statusCode, 401);
+  assert.deepEqual(response.body, {
+    message: "Session expired. Please login again.",
+    forceLogout: true,
+  });
+  assert.equal(snapshotCalls, 1);
+  assert.equal(touchCalls, 1);
+  assert.equal(updateCalls, 0);
+  assert.equal(nextCalls, 0);
+});
+
 test("authenticateToken returns 401 for invalid and expired JWTs", async () => {
   const secret = "guard-test-secret";
   const guards = createAuthGuards({

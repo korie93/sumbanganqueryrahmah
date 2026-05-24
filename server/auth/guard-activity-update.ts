@@ -1,4 +1,5 @@
 import type { IStorage } from "../storage-postgres";
+import type { UserActivity } from "../../shared/schema-postgres";
 import {
   ACTIVITY_UPDATE_CACHE_MAX_SIZE,
   ACTIVITY_UPDATE_CACHE_SWEEP_INTERVAL_MS,
@@ -7,7 +8,11 @@ import {
   sweepExpiredActivityUpdateCacheEntries,
 } from "./guard-cache";
 
-type ActivityUpdateStorage = Pick<IStorage, "updateActivity">;
+type ActivityUpdateResult = "updated" | "skipped" | "stale";
+
+type ActivityUpdateStorage = Pick<IStorage, "updateActivity"> & {
+  touchAuthenticatedActivity?: ((activityId: string) => Promise<UserActivity | undefined>) | undefined;
+};
 
 export function createActivityUpdateThrottler(options: {
   activityUpdateThrottleMs?: number | undefined;
@@ -55,16 +60,22 @@ export function createActivityUpdateThrottler(options: {
     clear() {
       activityUpdateCache.clear();
     },
-    async updateAuthenticatedActivity(activityId: string) {
+    async updateAuthenticatedActivity(activityId: string): Promise<ActivityUpdateResult> {
       const now = Date.now();
       if (!reserveActivityUpdate(activityId, now)) {
-        return;
+        return "skipped";
       }
 
       try {
+        if (typeof storage.touchAuthenticatedActivity === "function") {
+          const activity = await storage.touchAuthenticatedActivity(activityId);
+          return activity ? "updated" : "stale";
+        }
+
         await storage.updateActivity(activityId, {
           lastActivityTime: new Date(now),
         });
+        return "updated";
       } catch (error) {
         releaseFailedActivityUpdateReservation(activityId, now);
         throw error;

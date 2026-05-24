@@ -19,6 +19,10 @@ export class PostgresActivityStorage extends PostgresImportsSearchStorage {
     return this.activityRepository.touchActivity(activityId);
   }
 
+  async touchAuthenticatedActivity(activityId: string): Promise<UserActivity | undefined> {
+    return this.activityRepository.touchAuthenticatedActivity(activityId);
+  }
+
   async getActiveActivitiesByUsername(username: string): Promise<UserActivity[]> {
     return this.activityRepository.getActiveActivitiesByUsername(username);
   }

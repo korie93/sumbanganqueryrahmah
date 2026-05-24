@@ -59,6 +59,7 @@ type CreateAuthGuardsOptions = {
       user?: User | undefined;
       isVisitorBanned: boolean;
     } | undefined>;
+    touchAuthenticatedActivity?: ((activityId: string) => Promise<UserActivity | undefined>) | undefined;
   };
   secret?: string;
   activityUpdateThrottleMs?: number;
@@ -198,7 +199,14 @@ export function createAuthGuards(options: CreateAuthGuardsOptions) {
         });
       }
 
-      await activityUpdates.updateAuthenticatedActivity(decoded.activityId);
+      const activityUpdateResult = await activityUpdates.updateAuthenticatedActivity(decoded.activityId);
+      if (activityUpdateResult === "stale") {
+        clearAuthSessionCookie(res);
+        return res.status(401).json({
+          message: "Session expired. Please login again.",
+          forceLogout: true,
+        });
+      }
 
       req.user = {
         userId: user.id,

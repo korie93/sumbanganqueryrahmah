@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, inArray, lte, type SQL } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNull, lte, type SQL } from "drizzle-orm";
 import type { InsertUserActivity, UserActivity } from "../../shared/schema-postgres";
 import { auditLogs, collectionNicknameSessions, userActivity } from "../../shared/schema-postgres";
 import { db } from "../db-postgres";
@@ -49,6 +49,22 @@ export async function touchActivity(activityId: string): Promise<void> {
     .update(userActivity)
     .set({ lastActivityTime: createCurrentTimestampSql() })
     .where(eq(userActivity.id, activityId));
+}
+
+export async function touchAuthenticatedActivity(activityId: string): Promise<UserActivity | undefined> {
+  const updatedRows = await db
+    .update(userActivity)
+    .set({ lastActivityTime: createCurrentTimestampSql() })
+    .where(
+      and(
+        eq(userActivity.id, activityId),
+        eq(userActivity.isActive, true),
+        isNull(userActivity.logoutTime),
+      ),
+    )
+    .returning();
+
+  return updatedRows[0];
 }
 
 export async function getActiveActivitiesByUsername(username: string): Promise<UserActivity[]> {

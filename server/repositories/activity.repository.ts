@@ -20,6 +20,7 @@ import {
   getAllActivities,
   getFilteredActivities,
   touchActivity,
+  touchAuthenticatedActivity,
   updateActivity,
 } from "./activity-repository-session-operations";
 import type {
@@ -34,6 +35,7 @@ export class ActivityRepository {
 
   readonly createActivity = createActivity;
   readonly touchActivity = touchActivity;
+  readonly touchAuthenticatedActivity = touchAuthenticatedActivity;
   readonly getActiveActivitiesByUsername = getActiveActivitiesByUsername;
   readonly updateActivity = updateActivity;
   readonly expireIdleActivitySession = expireIdleActivitySession;

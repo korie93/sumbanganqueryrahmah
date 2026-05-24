@@ -8,6 +8,7 @@ import type {
 export interface ActivitySettingsStorageContract {
   createActivity(data: InsertUserActivity): Promise<UserActivity>;
   getActiveActivitiesByUsername(username: string): Promise<UserActivity[]>;
+  touchAuthenticatedActivity(activityId: string): Promise<UserActivity | undefined>;
   updateActivity(
     id: string,
     data: Partial<UserActivity>,
