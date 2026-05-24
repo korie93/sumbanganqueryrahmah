@@ -108,8 +108,7 @@ export function registerAuthLoginRoutes(context: AuthRouteContext) {
 
   app.post(
     "/api/auth/verify-two-factor-login",
-    rateLimiters.loginIp,
-    rateLimiters.login,
+    rateLimiters.twoFactorLogin,
     jsonRoute(async (req, res) => {
       const body = readTwoFactorChallengeBody(req.body);
       const challenge = verifyTwoFactorChallengeToken(body.challengeToken);

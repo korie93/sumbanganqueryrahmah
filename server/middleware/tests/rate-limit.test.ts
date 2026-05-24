@@ -235,7 +235,7 @@ test("auth adaptive cooldown records violations through one bounded post-write p
   const { baseUrl, server } = await startTestServer(app);
 
   try {
-    for (let index = 0; index < 8; index += 1) {
+    for (let index = 0; index < 5; index += 1) {
       const response = await fetch(`${baseUrl}/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -252,8 +252,47 @@ test("auth adaptive cooldown records violations through one bounded post-write p
 
     assert.equal(throttled.status, 429);
     assert.equal(getAdaptiveRateLimitCooldownStats().bucketCount, 1);
-    assert.equal(pruneAdaptiveRateLimitCooldowns(Date.now() + (10 * 60 * 1000) + 1), 1);
+    assert.equal(pruneAdaptiveRateLimitCooldowns(Date.now() + (15 * 60 * 1000) + 1), 1);
     assert.equal(getAdaptiveRateLimitCooldownStats().bucketCount, 0);
+  } finally {
+    stopAdaptiveRateLimitCooldownSweep();
+    clearAdaptiveRateLimitCooldownsForTests();
+    await stopTestServer(server);
+  }
+});
+
+test("auth two-factor login limiter throttles repeated authenticator attempts independently", async () => {
+  stopAdaptiveRateLimitCooldownSweep();
+  clearAdaptiveRateLimitCooldownsForTests();
+
+  const app = express();
+  app.use(express.json());
+  const limiters = createAuthRouteRateLimiters();
+  app.post("/verify-two-factor-login", limiters.twoFactorLogin, (_req, res) => {
+    res.status(204).end();
+  });
+
+  const { baseUrl, server } = await startTestServer(app);
+
+  try {
+    for (let index = 0; index < 5; index += 1) {
+      const response = await fetch(`${baseUrl}/verify-two-factor-login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ challengeToken: "redacted", code: "123456" }),
+      });
+      assert.equal(response.status, 204);
+    }
+
+    const throttled = await fetch(`${baseUrl}/verify-two-factor-login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ challengeToken: "redacted", code: "123456" }),
+    });
+
+    assert.equal(throttled.status, 429);
+    assert.equal(throttled.headers.get("ratelimit-limit"), "5");
+    assert.equal(getAdaptiveRateLimitCooldownStats().bucketCount, 1);
   } finally {
     stopAdaptiveRateLimitCooldownSweep();
     clearAdaptiveRateLimitCooldownsForTests();

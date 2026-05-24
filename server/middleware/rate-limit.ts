@@ -18,6 +18,7 @@ type RateLimitPayload = {
 export type AuthRouteRateLimiters = {
   loginIp: RequestHandler;
   login: RequestHandler;
+  twoFactorLogin: RequestHandler;
   publicRecovery: RequestHandler;
   authenticatedAuth: RequestHandler;
   adminAction: RequestHandler;
@@ -358,16 +359,16 @@ export function createAuthRouteRateLimiters(): AuthRouteRateLimiters {
   startAdaptiveRateLimitCooldownSweep();
   return {
     loginIp: createJsonRateLimiter({
-      windowMs: 10 * 60 * 1000,
-      max: 30,
+      windowMs: 15 * 60 * 1000,
+      max: 15,
       code: ERROR_CODES.AUTH_RATE_LIMITED,
       message: "Too many login attempts from this network. Please try again shortly.",
       adaptiveCooldown: true,
       keyGenerator: (req) => buildRateLimitKey(req, "auth-login-ip"),
     }),
     login: createJsonRateLimiter({
-      windowMs: 10 * 60 * 1000,
-      max: 8,
+      windowMs: 15 * 60 * 1000,
+      max: 5,
       code: ERROR_CODES.AUTH_RATE_LIMITED,
       message: "Too many login attempts. Please try again shortly.",
       adaptiveCooldown: true,
@@ -376,6 +377,14 @@ export function createAuthRouteRateLimiters(): AuthRouteRateLimiters {
         "auth-login",
         buildAuthRouteRateLimitSubject(req, "auth-login"),
       ),
+    }),
+    twoFactorLogin: createJsonRateLimiter({
+      windowMs: 15 * 60 * 1000,
+      max: 5,
+      code: ERROR_CODES.AUTH_RATE_LIMITED,
+      message: "Too many authenticator code attempts. Please try again shortly.",
+      adaptiveCooldown: true,
+      keyGenerator: (req) => buildRateLimitKey(req, "auth-login-2fa"),
     }),
     publicRecovery: createJsonRateLimiter({
       windowMs: 10 * 60 * 1000,
