@@ -164,6 +164,27 @@ test("runtime env schema validates staged shared rate-limit store configuration 
   );
 });
 
+test("runtime env schema validates staged WebSocket shared bus configuration keys", () => {
+  assert.doesNotThrow(() => {
+    validateRuntimeEnvironmentSchema({
+      SQR_WS_SHARED_BUS: "memory",
+    });
+    validateRuntimeEnvironmentSchema({
+      SQR_REDIS_WS_URL: "rediss://redis.internal:6380/0",
+      SQR_WS_SHARED_BUS: "redis",
+    });
+  });
+
+  assert.throws(
+    () => {
+      validateRuntimeEnvironmentSchema({
+        SQR_WS_SHARED_BUS: "nats",
+      });
+    },
+    /SQR_WS_SHARED_BUS must be one of: memory or redis/i,
+  );
+});
+
 test("runtime env schema validates optional TOTP algorithm values", () => {
   assert.doesNotThrow(() => {
     validateRuntimeEnvironmentSchema({

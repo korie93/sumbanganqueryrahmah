@@ -303,7 +303,7 @@
   --collection-daily-day-accent-border: hsl(145 36% 36%);
 }
 
-@media (max-width: 900px) {
+@media (max-width: 1023px) {
   .collection-daily-day-view-list .collection-daily-day-button {
     grid-template-columns: auto minmax(0, 1fr) auto;
   }

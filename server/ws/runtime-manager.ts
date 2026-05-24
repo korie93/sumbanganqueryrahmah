@@ -36,14 +36,54 @@ import {
 } from "./upgrade-rate-limit";
 import { createRuntimeWsMessageRateLimiter } from "./message-rate-limit";
 
+class RuntimeSharedConnectedClientsMap extends Map<string, WebSocket> {
+  constructor(private readonly onDeleteActivity: (activityId: string) => void) {
+    super();
+  }
+
+  delete(activityId: string) {
+    const deleted = super.delete(activityId);
+    if (deleted) {
+      this.onDeleteActivity(activityId);
+    }
+    return deleted;
+  }
+
+  clear() {
+    const activityIds = Array.from(this.keys());
+    super.clear();
+    for (const activityId of activityIds) {
+      this.onDeleteActivity(activityId);
+    }
+  }
+}
+
 export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
   connectedClients: Map<string, WebSocket>;
   broadcastWsMessage: (payload: Record<string, unknown>) => void;
 } {
   const { wss, storage, secret } = options;
-  const connectedClients = options.connectedClients ?? new Map<string, WebSocket>();
   const trustForwardedHeaders = options.trustForwardedHeaders === true;
   const acceptConnections = options.acceptConnections ?? (() => true);
+  const sharedBus = options.sharedBus ?? null;
+  let suppressSharedClosePublish = false;
+  const publishSharedCloseActivity = (activityId: string, reason: string) => {
+    if (!sharedBus || suppressSharedClosePublish) {
+      return;
+    }
+
+    sharedBus.publish({
+      activityId,
+      reason,
+      type: "closeActivity",
+    });
+  };
+  const connectedClients = options.connectedClients ?? (
+    sharedBus
+      ? new RuntimeSharedConnectedClientsMap((activityId) =>
+        publishSharedCloseActivity(activityId, "client-map-delete"))
+      : new Map<string, WebSocket>()
+  );
   const heartbeatIntervalMs = normalizeRuntimeWsHeartbeatIntervalMs(options.heartbeatIntervalMs);
   const upgradeRateLimiter = options.upgradeRateLimiter ?? createRuntimeWsUpgradeRateLimiter();
   const messageRateLimiterFactory =
@@ -81,24 +121,57 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
     socketEntriesByInstance,
     trackedSockets,
   });
-  const broadcastWsMessage = createRuntimeWsBroadcaster({ connectedClients, cleanupClient });
+  const broadcastLocalWsMessage = createRuntimeWsBroadcaster({ connectedClients, cleanupClient });
+  const broadcastWsMessage = (payload: Record<string, unknown>) => {
+    broadcastLocalWsMessage(payload);
+    sharedBus?.publish({
+      payload,
+      type: "broadcast",
+    });
+  };
   const heartbeatHandle = startRuntimeWsHeartbeat({
     cleanupClient,
     connectedClients,
     heartbeatIntervalMs,
     socketEntriesByActivity,
   });
+  const unsubscribeSharedBus = sharedBus?.subscribe((event) => {
+    if (event.type === "broadcast") {
+      broadcastLocalWsMessage(event.payload);
+      return;
+    }
+
+    const targetWs = connectedClients.get(event.activityId);
+    suppressSharedClosePublish = true;
+    try {
+      cleanupClient(event.activityId, {
+        ...(targetWs ? { expectedWs: targetWs } : {}),
+        clearSession: false,
+        closeWith: "close",
+        reason: event.reason ?? "shared-bus-close",
+      });
+    } finally {
+      suppressSharedClosePublish = false;
+    }
+  });
 
   wss.once("close", () => {
+    unsubscribeSharedBus?.();
+    void sharedBus?.close();
     upgradeRateLimiter.clear();
-    closeRuntimeWebSocketServerState({
-      cleanupClient,
-      connectedClients,
-      heartbeatHandle,
-      socketCleanupCallbacks,
-      socketEntriesByActivity,
-      trackedSockets,
-    });
+    suppressSharedClosePublish = true;
+    try {
+      closeRuntimeWebSocketServerState({
+        cleanupClient,
+        connectedClients,
+        heartbeatHandle,
+        socketCleanupCallbacks,
+        socketEntriesByActivity,
+        trackedSockets,
+      });
+    } finally {
+      suppressSharedClosePublish = false;
+    }
   });
 
   wss.on("connection", async (ws, req) => {

@@ -26,9 +26,13 @@ const requestedMaxWorkers = runtimeConfig.cluster.maxWorkers;
 const normalizedMaxWorkers = Number.isFinite(requestedMaxWorkers) ? Math.floor(requestedMaxWorkers) : 1;
 const safeWorkerTopology = resolveSafeClusterWorkerTopology({
   requestedMaxWorkers: normalizedMaxWorkers,
-  sharedRuntimeStateConfigured: runtimeConfig.rateLimiting.store.distributedStoreConfigured,
-  // Redis configuration is parsed today, but rate limiters, adaptive guards,
-  // AI concurrency, and 2FA replay protection still use process-local state.
+  sharedRuntimeStateConfigured:
+    runtimeConfig.rateLimiting.store.distributedStoreConfigured
+    && runtimeConfig.websocket.sharedBus.distributedBusConfigured,
+  // Redis adapters may share route rate-limit counters and WebSocket fan-out,
+  // but adaptive guards, AI concurrency, and 2FA replay protection still keep
+  // process-local state. Keep the final enable switch off until every runtime
+  // security state has a shared implementation and tests.
   sharedRuntimeStateEnabled: false,
 });
 const MAX_WORKERS_HARD_CAP = Math.max(1, Math.min(MAX_WORKERS, safeWorkerTopology.maxWorkers));
@@ -91,6 +95,7 @@ if (cluster.isPrimary) {
   if (safeWorkerTopology.downgradedToSingleWorker) {
     logger.warn("SQR_MAX_WORKERS was reduced to one worker because shared runtime security state is not active", {
       configuredRateLimitStore: runtimeConfig.rateLimiting.store.provider,
+      configuredWebSocketBus: runtimeConfig.websocket.sharedBus.provider,
       maxWorkers: MAX_WORKERS_HARD_CAP,
       reason: safeWorkerTopology.reason,
       requestedMaxWorkers: safeWorkerTopology.requestedMaxWorkers,

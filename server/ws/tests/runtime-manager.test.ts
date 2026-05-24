@@ -9,6 +9,11 @@ import { logger } from "../../lib/logger";
 import { createRuntimeWebSocketManager } from "../runtime-manager";
 import { createRuntimeWsUpgradeRateLimiter } from "../upgrade-rate-limit";
 import { createRuntimeWsMessageRateLimiter } from "../message-rate-limit";
+import type {
+  RuntimeWsSharedBus,
+  RuntimeWsSharedBusEvent,
+  RuntimeWsSharedBusPublishEvent,
+} from "../runtime-shared-bus";
 
 class FakeWebSocketServer extends EventEmitter {}
 class FakeWebSocket extends EventEmitter {
@@ -103,6 +108,41 @@ function createConnectionRequest(
       remoteAddress: options?.remoteAddress ?? "203.0.113.10",
     } as unknown) as IncomingMessage["socket"],
   };
+}
+
+class FakeRuntimeWsSharedBus implements RuntimeWsSharedBus {
+  readonly instanceId = "local-test-instance";
+  readonly published: RuntimeWsSharedBusPublishEvent[] = [];
+  private readonly handlers = new Set<(event: RuntimeWsSharedBusEvent) => void>();
+
+  closeCalls = 0;
+
+  close() {
+    this.closeCalls += 1;
+    this.handlers.clear();
+  }
+
+  publish(event: RuntimeWsSharedBusPublishEvent) {
+    this.published.push(event);
+  }
+
+  subscribe(handler: (event: RuntimeWsSharedBusEvent) => void) {
+    this.handlers.add(handler);
+    return () => {
+      this.handlers.delete(handler);
+    };
+  }
+
+  emitRemote(event: RuntimeWsSharedBusPublishEvent) {
+    const fullEvent = {
+      ...event,
+      id: `event-${this.published.length + 1}`,
+      originId: "remote-test-instance",
+    } as RuntimeWsSharedBusEvent;
+    for (const handler of this.handlers) {
+      handler(fullEvent);
+    }
+  }
 }
 
 function createQueryTokenConnectionRequest(token: string): RuntimeConnectionRequest {
@@ -422,6 +462,121 @@ test("broadcastWsMessage logs send failures before removing the socket", () => {
     assert.equal(warnings[0].message, "WebSocket broadcast failed");
   } finally {
     logger.warn = originalLoggerWarn;
+    wss.emit("close");
+  }
+});
+
+test("broadcastWsMessage publishes local payloads and consumes remote bus broadcasts", () => {
+  const wss = new FakeWebSocketServer();
+  const providedMap = new Map<string, WebSocket>();
+  const socket = new FakeWebSocket();
+  const sharedBus = new FakeRuntimeWsSharedBus();
+
+  providedMap.set("activity-shared-broadcast", socket as unknown as WebSocket);
+  const manager = createRuntimeWebSocketManager({
+    wss: wss as unknown as import("ws").WebSocketServer,
+    storage: {
+      getActivityById: async () => undefined,
+      clearCollectionNicknameSessionByActivity: async () => undefined,
+    },
+    secret: "test-secret",
+    connectedClients: providedMap,
+    sharedBus,
+  });
+
+  try {
+    manager.broadcastWsMessage({ type: "local-ping" });
+    sharedBus.emitRemote({
+      payload: { type: "remote-ping" },
+      type: "broadcast",
+    });
+
+    assert.equal(sharedBus.published.length, 1);
+    assert.deepEqual(sharedBus.published[0], {
+      payload: { type: "local-ping" },
+      type: "broadcast",
+    });
+    assert.deepEqual(socket.sentMessages.map((message) => JSON.parse(message)), [
+      { type: "local-ping" },
+      { type: "remote-ping" },
+    ]);
+  } finally {
+    wss.emit("close");
+  }
+});
+
+test("runtime WebSocket shared bus closes matching local sockets from remote workers", async () => {
+  const wss = new FakeWebSocketServer();
+  const providedMap = new Map<string, WebSocket>();
+  const socket = new FakeWebSocket();
+  const sharedBus = new FakeRuntimeWsSharedBus();
+  let clearSessionCalls = 0;
+  const activityId = "activity-shared-close";
+
+  createRuntimeWebSocketManager({
+    wss: wss as unknown as import("ws").WebSocketServer,
+    storage: {
+      getActivityById: async () => createActiveSession(activityId),
+      clearCollectionNicknameSessionByActivity: async () => {
+        clearSessionCalls += 1;
+      },
+    },
+    secret: TEST_SECRET,
+    connectedClients: providedMap,
+    sharedBus,
+  });
+
+  try {
+    wss.emit("connection", socket as unknown as WebSocket, createConnectionRequest(createWsToken(activityId)));
+    await flushAsyncWork();
+    assert.equal(providedMap.get(activityId), socket as unknown as WebSocket);
+
+    sharedBus.emitRemote({
+      activityId,
+      reason: "remote-logout",
+      type: "closeActivity",
+    });
+
+    assert.equal(providedMap.has(activityId), false);
+    assert.equal(socket.closeCalls, 1);
+    assert.equal(clearSessionCalls, 0);
+    assert.equal(sharedBus.published.filter((event) => event.type === "closeActivity").length, 0);
+  } finally {
+    wss.emit("close");
+  }
+});
+
+test("runtime WebSocket shared bus publishes local client map removals", async () => {
+  const wss = new FakeWebSocketServer();
+  const socket = new FakeWebSocket();
+  const sharedBus = new FakeRuntimeWsSharedBus();
+  const activityId = "activity-local-close-publish";
+
+  const manager = createRuntimeWebSocketManager({
+    wss: wss as unknown as import("ws").WebSocketServer,
+    storage: {
+      getActivityById: async () => createActiveSession(activityId),
+      clearCollectionNicknameSessionByActivity: async () => undefined,
+    },
+    secret: TEST_SECRET,
+    sharedBus,
+  });
+
+  try {
+    wss.emit("connection", socket as unknown as WebSocket, createConnectionRequest(createWsToken(activityId)));
+    await flushAsyncWork();
+    assert.equal(manager.connectedClients.has(activityId), true);
+
+    manager.connectedClients.delete(activityId);
+
+    assert.deepEqual(sharedBus.published.filter((event) => event.type === "closeActivity"), [
+      {
+        activityId,
+        reason: "client-map-delete",
+        type: "closeActivity",
+      },
+    ]);
+  } finally {
     wss.emit("close");
   }
 });

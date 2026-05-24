@@ -12,6 +12,7 @@ export function buildRuntimeConfigWarnings(params: {
   configuredPgPassword: string | null;
   configuredAuthCookieSecure: string | null;
   configuredClusterMaxWorkers: number;
+  websocketSharedBusConfigured?: boolean;
   hstsMaxAgeSeconds?: number;
   hstsPreloadEnabled?: boolean;
   mailConfiguration: MailConfigurationAssessment;
@@ -27,6 +28,7 @@ export function buildRuntimeConfigWarnings(params: {
     configuredPgPassword,
     configuredAuthCookieSecure,
     configuredClusterMaxWorkers,
+    websocketSharedBusConfigured = false,
     hstsMaxAgeSeconds,
     hstsPreloadEnabled,
     mailConfiguration,
@@ -147,7 +149,10 @@ export function buildRuntimeConfigWarnings(params: {
     });
   }
 
-  const websocketTopologyWarning = buildWebSocketTopologyWarning(configuredClusterMaxWorkers);
+  const websocketTopologyWarning = buildWebSocketTopologyWarning(
+    configuredClusterMaxWorkers,
+    websocketSharedBusConfigured,
+  );
   if (websocketTopologyWarning) {
     warnings.push({
       code: "WEBSOCKET_STATE_PROCESS_LOCAL",

@@ -11,6 +11,7 @@ import { AiSearchService } from "../services/ai-search.service";
 import { AiChatService } from "../services/ai-chat.service";
 import { AiIndexService } from "../services/ai-index.service";
 import { createRuntimeWebSocketManager } from "../ws/runtime-manager";
+import { createConfiguredRuntimeWsSharedBus } from "../ws/runtime-shared-bus-factory";
 import { runtimeConfig } from "../config/runtime";
 import { logger } from "../lib/logger";
 import { parseBackupMetadataSafe } from "./backupMetadata";
@@ -43,11 +44,13 @@ export function createLocalServerComposition(
     parseBackupMetadataSafe,
   });
   const importAnalysisService = new ImportAnalysisService(importsRepository);
+  const runtimeWsSharedBus = createConfiguredRuntimeWsSharedBus();
   const websocketManager = createRuntimeWebSocketManager({
     wss,
     storage,
     secret,
     trustForwardedHeaders: runtimeConfig.app.trustedProxies.length > 0,
+    ...(runtimeWsSharedBus ? { sharedBus: runtimeWsSharedBus } : {}),
     ...(acceptWebSocketConnections ? { acceptConnections: acceptWebSocketConnections } : {}),
   });
   const authGuards = createAuthGuards({ storage, secret });

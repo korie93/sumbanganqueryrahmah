@@ -64,7 +64,7 @@ npm run monitor:stale-conflicts
 
 ### Rate Limit Topology
 
-Process-local memory rate limiting is acceptable only for single-worker/single-instance deployments. Redis (`SQR_RATE_LIMIT_STORE=redis` and `SQR_REDIS_RATE_LIMIT_URL`) can share rate-limit counters across app processes, but production multi-worker mode remains blocked until 2FA replay protection and WebSocket presence also have shared state.
+Process-local memory rate limiting is acceptable only for single-worker/single-instance deployments. Redis (`SQR_RATE_LIMIT_STORE=redis` and `SQR_REDIS_RATE_LIMIT_URL`) can share rate-limit counters across app processes. WebSocket fan-out can also use Redis (`SQR_WS_SHARED_BUS=redis`, optionally `SQR_REDIS_WS_URL`) for settings broadcasts and cross-worker activity close propagation, but production multi-worker mode remains blocked until 2FA replay protection and adaptive runtime protection also have shared state.
 
 HTTP throttling responses expose `Retry-After`, `RateLimit-Limit`, `RateLimit-Remaining`, and `RateLimit-Reset` so browser clients and operational probes can back off without parsing log output. CSRF rotation also returns the fresh token in `X-CSRF-Token` alongside the readable `sqr_csrf` cookie for clients that prefer header-based refresh handling after sensitive mutations.
 

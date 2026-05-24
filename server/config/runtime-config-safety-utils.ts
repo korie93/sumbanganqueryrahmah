@@ -1,5 +1,6 @@
 import type { MailConfigurationAssessment } from "./runtime-config-types";
 import { assertProductionTwoFactorReplayCacheTopologySafety } from "../auth/two-factor-replay-topology";
+import { assertProductionWebSocketTopologySafety } from "../ws/websocket-topology";
 import { normalizeCorsOrigin } from "./runtime-config-read-utils";
 export {
   assertNoPlaceholderSecrets,
@@ -289,6 +290,18 @@ export function assertProductionTwoFactorReplayTopologySafety(params: {
   assertProductionTwoFactorReplayCacheTopologySafety({
     isProductionLike: params.isProductionLike,
     sharedReplayStoreConfigured: params.sharedReplayStoreConfigured,
+    workerCount: params.configuredClusterMaxWorkers,
+  });
+}
+
+export function assertProductionWebSocketRuntimeTopologySafety(params: {
+  isProductionLike: boolean;
+  configuredClusterMaxWorkers: number;
+  sharedBusConfigured: boolean;
+}) {
+  assertProductionWebSocketTopologySafety({
+    isProductionLike: params.isProductionLike,
+    sharedBusConfigured: params.sharedBusConfigured,
     workerCount: params.configuredClusterMaxWorkers,
   });
 }

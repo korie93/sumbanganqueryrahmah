@@ -65,7 +65,7 @@ export const COLLECTION_AMOUNT_CONTRACT_REQUIREMENTS = Object.freeze([
     ]),
   },
   {
-    filePath: "server/internal/collection-bootstrap-record-schema.ts",
+    filePath: "server/internal/collection-bootstrap-record-base-schema.ts",
     checks: Object.freeze([
       {
         label: "bootstrap keeps collection_records.amount as numeric(14,2)",
@@ -76,20 +76,25 @@ export const COLLECTION_AMOUNT_CONTRACT_REQUIREMENTS = Object.freeze([
         snippet: "receipt_total_amount bigint NOT NULL DEFAULT 0,",
       },
       {
-        label: "bootstrap keeps collection_record_receipts.receipt_amount as bigint",
-        snippet: "receipt_amount bigint,",
-      },
-      {
-        label: "bootstrap keeps collection_record_receipts.extracted_amount as bigint",
-        snippet: "extracted_amount bigint,",
-      },
-      {
         label: "bootstrap comments describe MYR numeric storage",
         snippet: "IS 'Stored in MYR as numeric(14,2).'",
       },
       {
         label: "bootstrap comments describe cents aggregate storage",
         snippet: "IS 'Stored in sen/cents as a bigint integer. Divide by 100 to render MYR.'",
+      },
+    ]),
+  },
+  {
+    filePath: "server/internal/collection-bootstrap-receipt-schema.ts",
+    checks: Object.freeze([
+      {
+        label: "bootstrap keeps collection_record_receipts.receipt_amount as bigint",
+        snippet: "receipt_amount bigint,",
+      },
+      {
+        label: "bootstrap keeps collection_record_receipts.extracted_amount as bigint",
+        snippet: "extracted_amount bigint,",
       },
       {
         label: "bootstrap comments describe cents receipt amount storage",

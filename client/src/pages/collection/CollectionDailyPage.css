@@ -632,7 +632,7 @@
   }
 }
 
-@media (max-width: 1180px) and (min-width: 641px) {
+@media (max-width: 1024px) and (min-width: 640px) {
   .collection-daily-role-guide {
     grid-template-columns: auto minmax(0, 1fr);
   }

@@ -170,6 +170,13 @@ export type RuntimeConfig = {
       redisUrl: string | null;
     };
   };
+  websocket: {
+    sharedBus: {
+      distributedBusConfigured: boolean;
+      provider: "memory" | "redis";
+      redisUrl: string | null;
+    };
+  };
   cluster: {
     lowMemoryMode: boolean;
     maxWorkers: number;

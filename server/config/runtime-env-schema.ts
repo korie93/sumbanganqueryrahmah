@@ -13,6 +13,7 @@ const AUTH_COOKIE_SECURE_VALUES = new Set(["auto", "true", "false", "1", "0"]);
 const SESSION_COOKIE_SAMESITE_VALUES = new Set(["strict", "lax"]);
 const DB_BOOTSTRAP_MODE_VALUES = new Set(["runtime", "migration"]);
 const RATE_LIMIT_STORE_VALUES = new Set(["memory", "redis"]);
+const WS_SHARED_BUS_VALUES = new Set(["memory", "redis"]);
 const TWO_FACTOR_TOTP_ALGORITHM_VALUES = new Set(["sha1", "sha256"]);
 
 function normalizeOptionalEnvString(value: unknown) {
@@ -107,6 +108,20 @@ function optionalRateLimitStoreEnv() {
   );
 }
 
+function optionalWsSharedBusEnv() {
+  return z.preprocess(
+    normalizeOptionalEnvString,
+    z
+      .string({ invalid_type_error: "SQR_WS_SHARED_BUS must be a string." })
+      .transform((value) => value.toLowerCase())
+      .refine(
+        (value) => WS_SHARED_BUS_VALUES.has(value),
+        "SQR_WS_SHARED_BUS must be one of: memory or redis.",
+      )
+      .optional(),
+  );
+}
+
 function optionalTwoFactorTotpAlgorithmEnv() {
   return z.preprocess(
     normalizeOptionalEnvString,
@@ -186,6 +201,8 @@ const runtimeEnvironmentSchema = z.object({
   HSTS_PRELOAD_ENABLED: optionalBooleanEnv("HSTS_PRELOAD_ENABLED"),
   SQR_RATE_LIMIT_STORE: optionalRateLimitStoreEnv(),
   SQR_REDIS_RATE_LIMIT_URL: optionalEnvString("SQR_REDIS_RATE_LIMIT_URL", SECRET_STRING_MAX_LENGTH),
+  SQR_WS_SHARED_BUS: optionalWsSharedBusEnv(),
+  SQR_REDIS_WS_URL: optionalEnvString("SQR_REDIS_WS_URL", SECRET_STRING_MAX_LENGTH),
 
   DATABASE_URL: optionalEnvString("DATABASE_URL", SECRET_STRING_MAX_LENGTH),
   DATABASE_SSL: optionalBooleanEnv("DATABASE_SSL"),

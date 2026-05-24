@@ -38,6 +38,7 @@ import {
   assertProductionDatabaseBootstrapModeSafety,
   assertProductionRateLimiterTopologySafety,
   assertProductionTwoFactorReplayTopologySafety,
+  assertProductionWebSocketRuntimeTopologySafety,
   assertRuntimeSafetyGuards,
   buildRuntimeConfigWarnings,
   hasBackupEncryptionKeyConfigured,
@@ -51,6 +52,7 @@ import {
   resolveTrustedProxies,
 } from "./runtime-config-safety-utils";
 import { resolveSharedRateLimitStoreConfig } from "../middleware/rate-limit-runtime";
+import { resolveRuntimeWsSharedBusConfig } from "../ws/runtime-shared-bus-config";
 import type {
   RuntimeConfig,
   RuntimeConfigValidation as RuntimeConfigValidationType,
@@ -128,6 +130,11 @@ const sharedRateLimitStore = resolveSharedRateLimitStoreConfig({
   provider: readOptionalString("SQR_RATE_LIMIT_STORE"),
   redisUrl: readOptionalString("SQR_REDIS_RATE_LIMIT_URL"),
 });
+const websocketSharedBus = resolveRuntimeWsSharedBusConfig({
+  provider: readOptionalString("SQR_WS_SHARED_BUS"),
+  redisUrl: readOptionalString("SQR_REDIS_WS_URL"),
+  sharedRedisUrl: sharedRateLimitStore.redisUrl,
+});
 const databaseBootstrapMode = resolveDatabaseBootstrapMode(readOptionalString("SQR_DB_BOOTSTRAP_MODE"), {
   isProductionLike,
 });
@@ -185,6 +192,12 @@ assertProductionTwoFactorReplayTopologySafety({
   isProductionLike,
   configuredClusterMaxWorkers,
   sharedReplayStoreConfigured: false,
+});
+
+assertProductionWebSocketRuntimeTopologySafety({
+  isProductionLike,
+  configuredClusterMaxWorkers,
+  sharedBusConfigured: websocketSharedBus.distributedBusConfigured,
 });
 
 assertProductionDatabaseBootstrapModeSafety({
@@ -368,6 +381,9 @@ export const runtimeConfig: RuntimeConfig = Object.freeze({
   rateLimiting: {
     store: sharedRateLimitStore,
   },
+  websocket: {
+    sharedBus: websocketSharedBus,
+  },
   cluster: {
     lowMemoryMode,
     maxWorkers: configuredClusterMaxWorkers,
@@ -413,6 +429,7 @@ const runtimeWarnings = buildRuntimeConfigWarnings({
   configuredPgPassword,
   configuredAuthCookieSecure,
   configuredClusterMaxWorkers,
+  websocketSharedBusConfigured: websocketSharedBus.distributedBusConfigured,
   hstsMaxAgeSeconds: hstsHeaderConfig.maxAge,
   hstsPreloadEnabled: hstsHeaderConfig.preload,
   mailConfiguration,

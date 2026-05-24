@@ -72,7 +72,7 @@
   white-space: nowrap;
 }
 
-@media (max-width: 760px) {
+@media (max-width: 767px) {
   .collection-daily-attention-summary {
     grid-template-columns: auto minmax(0, 1fr);
   }

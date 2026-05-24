@@ -5,6 +5,7 @@ import {
   assertProductionDatabaseBootstrapModeSafety,
   assertProductionRateLimiterTopologySafety,
   assertProductionTwoFactorReplayTopologySafety,
+  assertProductionWebSocketRuntimeTopologySafety,
   assertRuntimeSafetyGuards,
   assertStrongRuntimeSecret,
   buildRuntimeConfigWarnings,
@@ -238,6 +239,26 @@ test("assertProductionTwoFactorReplayTopologySafety rejects production multi-wor
       isProductionLike: false,
       configuredClusterMaxWorkers: 2,
       sharedReplayStoreConfigured: false,
+    }),
+  );
+});
+
+test("assertProductionWebSocketRuntimeTopologySafety rejects production multi-worker without shared bus", () => {
+  assert.throws(
+    () =>
+      assertProductionWebSocketRuntimeTopologySafety({
+        isProductionLike: true,
+        configuredClusterMaxWorkers: 2,
+        sharedBusConfigured: false,
+      }),
+    /WebSocket fan-out is process-local/i,
+  );
+
+  assert.doesNotThrow(() =>
+    assertProductionWebSocketRuntimeTopologySafety({
+      isProductionLike: true,
+      configuredClusterMaxWorkers: 2,
+      sharedBusConfigured: true,
     }),
   );
 });
