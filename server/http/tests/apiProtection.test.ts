@@ -267,7 +267,7 @@ test("adaptive API protection throttles telemetry flood attempts on the canonica
   }
 });
 
-test("adaptive API protection can use a persistent state store before falling back to memory", async () => {
+test("adaptive API protection can use a persistent state store", async () => {
   const increments: Array<{
     bucketKey: string;
     staleGraceMs: number;
@@ -302,6 +302,29 @@ test("adaptive API protection can use a persistent state store before falling ba
     assert.equal(increments[0].bucketKey.endsWith(":api"), true);
     assert.equal(increments[0].windowMs, 10_000);
     assert.equal(increments[0].staleGraceMs, 10_000);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("adaptive API protection rejects protected requests when shared state is unavailable", async () => {
+  const store: AdaptiveRateStateStore = {
+    async increment() {
+      return null;
+    },
+  };
+  const app = createApiProtectionTestApp({ adaptiveRateStore: store });
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(`${baseUrl}/api/noisy`);
+    assert.equal(response.status, 503);
+    assert.equal(response.headers.get("retry-after"), "5");
+    assert.deepEqual(await response.json(), {
+      message: "Request protection state is temporarily unavailable.",
+      protection: true,
+      reason: "adaptive_rate_state_unavailable",
+    });
   } finally {
     await stopTestServer(server);
   }

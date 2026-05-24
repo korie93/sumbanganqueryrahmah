@@ -1,6 +1,14 @@
 import type { Response } from "express";
 import type { AuthenticatedRequest } from "../auth/guards";
-import { clearAuthSessionCookie } from "../auth/session-cookie";
+import {
+  clearAuthSessionCookie,
+  readAuthSessionTokenFromHeaders,
+} from "../auth/session-cookie";
+import {
+  resolveSessionJwtExpiresAt,
+  resolveSessionJwtId,
+} from "../auth/session-jwt";
+import { revokeSessionJwt } from "../auth/session-revocation-store";
 import { asyncHandler } from "../http/async-handler";
 import {
   buildActivityErrorPayload,
@@ -28,7 +36,15 @@ export function registerActivityReadRoutes(context: ActivityRouteContext) {
         return res.status(401).json(buildActivityErrorPayload());
       }
 
+      const token = readAuthSessionTokenFromHeaders(req.headers);
+      const jwtId = token ? resolveSessionJwtId(token) : null;
       await activityService.logout(req.user.activityId, req.user.username);
+      if (token && jwtId) {
+        await revokeSessionJwt({
+          jwtId,
+          expiresAtMs: resolveSessionJwtExpiresAt(token)?.getTime() ?? 0,
+        });
+      }
       clearAuthSessionCookie(res);
       return res.json(buildActivitySuccessPayload());
     }),

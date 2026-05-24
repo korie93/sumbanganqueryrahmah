@@ -126,6 +126,40 @@ test("errorHandler normalizes body parser payload-too-large errors", async () =>
   }
 });
 
+test("errorHandler includes request ids on payload-too-large errors", async () => {
+  const app = express();
+  app.use((_req, res, next) => {
+    res.setHeader("x-request-id", "req-large-payload-1");
+    next();
+  });
+  app.get("/too-large-with-request-id", () => {
+    throw Object.assign(new Error("request entity too large"), {
+      status: 413,
+      type: "entity.too.large",
+    });
+  });
+  app.use(errorHandler);
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const response = await fetch(`${baseUrl}/too-large-with-request-id`);
+    const payload = await response.json();
+
+    assert.equal(response.status, 413);
+    assert.deepEqual(payload, {
+      ok: false,
+      message: "The request payload is too large to process.",
+      requestId: "req-large-payload-1",
+      error: {
+        code: ERROR_CODES.PAYLOAD_TOO_LARGE,
+        message: "The request payload is too large to process.",
+      },
+    });
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
 test("errorHandler includes the active request id when the pipeline already assigned one", async () => {
   const app = express();
   app.use((_req, res, next) => {

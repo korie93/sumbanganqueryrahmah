@@ -172,6 +172,25 @@ test("csrf middleware allows requests without auth session cookies", async () =>
   }
 });
 
+test("csrf middleware allows bearer-only API mutations because cookies are not ambient credentials", async () => {
+  const app = createCsrfTestApp();
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(`${baseUrl}/api/mutate`, {
+      method: "POST",
+      headers: {
+        Authorization: "Bearer api-token",
+      },
+    });
+
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), { ok: true });
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
 test("csrf middleware exempts browser CSP reports from token checks", async () => {
   const app = createCsrfTestApp();
   const { server, baseUrl } = await startTestServer(app);

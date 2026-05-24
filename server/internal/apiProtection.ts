@@ -21,6 +21,13 @@ type AdaptiveRateBucket = {
   resetAt: number;
 };
 
+class AdaptiveRateStateUnavailableError extends Error {
+  constructor(message = "Adaptive rate state store is unavailable.") {
+    super(message);
+    this.name = "AdaptiveRateStateUnavailableError";
+  }
+}
+
 export type AdaptiveRateStateStore = {
   close?: () => Promise<void> | void;
   increment: (options: {
@@ -117,7 +124,7 @@ export function createApiProtectionMiddleware(options: ApiProtectionOptions): {
   const adaptiveRateState = new Map<string, AdaptiveRateBucket>();
   let lastAdaptiveSweepAt = 0;
   let adaptiveRateSweepStopped = false;
-  let adaptiveRateStoreWarningEmitted = false;
+  let adaptiveRateStoreFailureEmitted = false;
 
   function setAdaptiveRateBucket(bucketKey: string, bucket: AdaptiveRateBucket) {
     if (adaptiveRateState.has(bucketKey)) {
@@ -184,16 +191,24 @@ export function createApiProtectionMiddleware(options: ApiProtectionOptions): {
           windowMs: ADAPTIVE_RATE_WINDOW_MS,
         });
         if (storedBucket) {
+          adaptiveRateStoreFailureEmitted = false;
           return storedBucket;
         }
       } catch (error) {
-        if (!adaptiveRateStoreWarningEmitted) {
-          adaptiveRateStoreWarningEmitted = true;
-          defaultLogger.warn("Adaptive rate Redis state unavailable; falling back to process-local memory", {
+        if (!adaptiveRateStoreFailureEmitted) {
+          adaptiveRateStoreFailureEmitted = true;
+          defaultLogger.error("Adaptive rate shared state unavailable; rejecting protected requests closed", {
             error: error instanceof Error ? error.message : "Unknown adaptive rate store failure",
           });
         }
+        throw new AdaptiveRateStateUnavailableError();
       }
+
+      if (!adaptiveRateStoreFailureEmitted) {
+        adaptiveRateStoreFailureEmitted = true;
+        defaultLogger.error("Adaptive rate shared state returned no bucket; rejecting protected requests closed");
+      }
+      throw new AdaptiveRateStateUnavailableError();
     }
 
     return incrementLocalAdaptiveRateBucket(bucketKey, now);
@@ -280,7 +295,20 @@ export function createApiProtectionMiddleware(options: ApiProtectionOptions): {
       const now = Date.now();
       maybeSweepAdaptiveRateState(now);
       const { bucketKey, dynamicLimit } = resolveAdaptiveRateBucket(req);
-      const nextBucket = await incrementAdaptiveRateBucket(bucketKey, now);
+      let nextBucket: AdaptiveRateBucket;
+      try {
+        nextBucket = await incrementAdaptiveRateBucket(bucketKey, now);
+      } catch (error) {
+        if (error instanceof AdaptiveRateStateUnavailableError) {
+          res.setHeader("Retry-After", "5");
+          return res.status(503).json({
+            message: "Request protection state is temporarily unavailable.",
+            protection: true,
+            reason: "adaptive_rate_state_unavailable",
+          });
+        }
+        throw error;
+      }
       if (nextBucket.count > dynamicLimit) {
         const retryAfterMs = Math.max(0, nextBucket.resetAt - now);
         setAdaptiveRateLimitHeaders(res, {

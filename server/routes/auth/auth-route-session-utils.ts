@@ -119,11 +119,7 @@ export function signAuthSessionTokenWithExpiry(
   res?: Response | null,
 ): SignedAuthSession {
   const token = signAuthSessionToken(payload, res);
-  // signSessionJwt has just minted the token, so allowExpired is only a
-  // defensive normalization fallback if clock precision or parsing is unusual.
-  const tokenExpiry = normalizeSessionExpiry(resolveSessionJwtExpiresAt(token), {
-    allowExpired: true,
-  }) ?? calculateSessionExpiry();
+  const tokenExpiry = normalizeSessionExpiry(resolveSessionJwtExpiresAt(token)) ?? calculateSessionExpiry();
 
   return {
     expiresAt: tokenExpiry.expiresAtIso,

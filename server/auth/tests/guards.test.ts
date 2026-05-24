@@ -10,6 +10,10 @@ import {
 } from "../guards";
 import { logger } from "../../lib/logger";
 import { getInternalMetricsSnapshot } from "../../internal/metrics";
+import {
+  resetSessionRevocationStoreForTests,
+  revokeSessionJwt,
+} from "../session-revocation-store";
 
 test("getInvalidatedSessionMessage returns reset-specific messaging for password reset invalidation", () => {
   assert.equal(
@@ -651,6 +655,81 @@ test("authenticateToken reserves activity updates before awaiting storage writes
 
   assert.equal(nextCalls, 2);
   assert.equal(updateCalls, 1);
+});
+
+test("authenticateToken rejects a JWT that was revoked during logout", async () => {
+  resetSessionRevocationStoreForTests();
+  const secret = "guard-test-secret";
+  let snapshotCalls = 0;
+  let updateCalls = 0;
+  const guards = createAuthGuards({
+    storage: {
+      getAuthenticatedSessionSnapshot: async () => {
+        snapshotCalls += 1;
+        return createAuthenticatedSessionSnapshot();
+      },
+      getActivityById: async () => undefined,
+      getUser: async () => undefined,
+      getUserByUsername: async () => undefined,
+      isVisitorBanned: async () => false,
+      updateActivity: async () => {
+        updateCalls += 1;
+        return undefined;
+      },
+      getRoleTabVisibility: async () => ({}),
+    },
+    secret,
+  });
+
+  const token = jwt.sign(
+    {
+      userId: "user-1",
+      username: "guard.user",
+      role: "admin",
+      activityId: "activity-1",
+    },
+    secret,
+    {
+      expiresIn: "24h",
+      jwtid: "revoked-jti",
+    },
+  );
+  await revokeSessionJwt({
+    jwtId: "revoked-jti",
+    expiresAtMs: Date.now() + 60_000,
+  });
+
+  const response = createMockResponse();
+  let nextCalls = 0;
+
+  try {
+    await guards.authenticateToken(
+      {
+        headers: {
+          cookie: `sqr_auth=${encodeURIComponent(token)}`,
+        },
+        method: "GET",
+        path: "/api/me",
+      } as never,
+      response as never,
+      () => {
+        nextCalls += 1;
+      },
+    );
+
+    assert.equal(response.statusCode, 401);
+    assert.deepEqual(response.body, {
+      message: "Session expired. Please login again.",
+      forceLogout: true,
+    });
+    assert.equal(nextCalls, 0);
+    assert.equal(snapshotCalls, 0);
+    assert.equal(updateCalls, 0);
+  } finally {
+    guards.stopTabVisibilityCacheSweep();
+    guards.stopActivityUpdateCacheSweep();
+    resetSessionRevocationStoreForTests();
+  }
 });
 
 test("authenticateToken returns 401 for invalid and expired JWTs", async () => {

@@ -48,7 +48,7 @@ test("RedisAdaptiveRateStateStore increments adaptive buckets through Redis with
   assert.equal(quitCalls, 1);
 });
 
-test("RedisAdaptiveRateStateStore returns null after Redis failures so middleware can fall back", async () => {
+test("RedisAdaptiveRateStateStore returns null after Redis failures so middleware can fail closed", async () => {
   const warnings: Array<{ message: string; payload: unknown }> = [];
   const store = new RedisAdaptiveRateStateStore({
     config: {
@@ -83,7 +83,10 @@ test("RedisAdaptiveRateStateStore returns null after Redis failures so middlewar
 
   assert.equal(bucket, null);
   assert.equal(warnings.length, 1);
-  assert.equal(warnings[0].message, "Redis adaptive rate state unavailable; falling back to process-local memory");
+  assert.equal(
+    warnings[0].message,
+    "Redis adaptive rate state unavailable; protected requests will fail closed",
+  );
 });
 
 test("RedisAdaptiveRateStateStore retries Redis after a failed adaptive connection", async () => {

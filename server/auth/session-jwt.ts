@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import jwt, { type SignOptions } from "jsonwebtoken";
 import { runtimeConfig } from "../config/runtime";
 import { SESSION_JWT_DEFAULT_EXPIRY as SESSION_JWT_DEFAULT_EXPIRY_VALUE } from "./session-lifetime";
@@ -25,11 +26,17 @@ export function signSessionJwt<TPayload extends object>(
   payload: TPayload,
   options?: Omit<SignOptions, "algorithm">,
 ): string {
-  return jwt.sign(payload, runtimeConfig.auth.sessionSecret, {
+  const payloadJwtId = String((payload as { jti?: unknown }).jti || "").trim();
+  const jwtid = options?.jwtid || (payloadJwtId ? undefined : randomUUID());
+  const signOptions: SignOptions = {
     algorithm: SESSION_JWT_ALGORITHM,
     expiresIn: SESSION_JWT_DEFAULT_EXPIRY_VALUE,
     ...options,
-  });
+  };
+  if (jwtid) {
+    signOptions.jwtid = jwtid;
+  }
+  return jwt.sign(payload, runtimeConfig.auth.sessionSecret, signOptions);
 }
 
 export function resolveSessionJwtExpiresAt(token: string): Date | null {
@@ -42,6 +49,12 @@ export function resolveSessionJwtExpiresAt(token: string): Date | null {
   return Number.isFinite(expiresAtMs) && expiresAtMs > 0
     ? new Date(expiresAtMs)
     : null;
+}
+
+export function resolveSessionJwtId(token: string): string | null {
+  const decoded = jwt.decode(token) as { jti?: unknown } | null;
+  const jwtId = String(decoded?.jti || "").trim();
+  return jwtId || null;
 }
 
 export function verifyJwtWithAnySecret<TPayload>(

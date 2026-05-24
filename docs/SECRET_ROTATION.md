@@ -42,6 +42,12 @@ rotation without `SESSION_SECRET_PREVIOUS` invalidates existing sessions, so
 users must log in again and their browser/device association is rebuilt during
 the next authenticated request.
 
+Logout now also records the JWT id (`jti`) in the session revocation store for
+the remaining token lifetime. Single-worker deployments keep that state in
+process memory. Multi-worker or multi-instance deployments must use
+`SQR_RATE_LIMIT_STORE=redis` with `SQR_REDIS_RATE_LIMIT_URL` so revocation checks
+are shared across workers and survive worker replacement.
+
 ### Planned Rotation
 
 1. Generate a new `SESSION_SECRET`.

@@ -14,6 +14,8 @@ import { createApiProtectionMiddleware } from "./apiProtection";
 import { createAdaptiveRateStateStore } from "./redis-adaptive-rate-store";
 import { configureTwoFactorReplayStoreForRuntime } from "../auth/two-factor-replay-cache";
 import { createTwoFactorReplayStore } from "../auth/redis-two-factor-replay-store";
+import { configureSessionRevocationStoreForRuntime } from "../auth/session-revocation-store";
+import { createSessionRevocationStore } from "../auth/redis-session-revocation-store";
 import { stopAdaptiveRateLimitCooldownSweep } from "../middleware/rate-limit";
 import {
   createLocalServerComposition,
@@ -131,6 +133,10 @@ export function createLocalRuntimeEnvironment(options: CreateLocalRuntimeEnviron
     createTwoFactorReplayStore(runtimeConfig.rateLimiting.store),
   );
   server.once("close", stopTwoFactorReplayStore);
+  const stopSessionRevocationStore = configureSessionRevocationStoreForRuntime(
+    createSessionRevocationStore(runtimeConfig.rateLimiting.store),
+  );
+  server.once("close", stopSessionRevocationStore);
   const { adaptiveRateLimit, systemProtectionMiddleware, stopAdaptiveRateStateSweep } =
     createApiProtectionMiddleware({
       ...(adaptiveRateStore ? { adaptiveRateStore } : {}),

@@ -227,7 +227,7 @@ export class RedisAdaptiveRateStateStore implements AdaptiveRateStateStore {
       return;
     }
     this.warningEmitted = true;
-    this.logger.warn("Redis adaptive rate state unavailable; falling back to process-local memory", {
+    this.logger.warn("Redis adaptive rate state unavailable; protected requests will fail closed", {
       provider: this.config.provider,
       error: error instanceof Error ? error.message : "Unknown Redis failure",
     });

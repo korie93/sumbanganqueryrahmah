@@ -4,6 +4,7 @@ import { ERROR_CODES } from "../../shared/error-codes";
 import type { IStorage } from "../storage-postgres";
 import { getSessionSecret } from "../config/security";
 import { verifySessionJwt } from "./session-jwt";
+import { isSessionJwtRevoked } from "./session-revocation-store";
 import {
   canUserBypassForcedPasswordChange,
   getAccountAccessBlockReason,
@@ -30,6 +31,7 @@ export interface AuthenticatedUser {
   username: string;
   role: string;
   activityId: string;
+  jti?: string | undefined;
   status?: string | undefined;
   mustChangePassword?: boolean | undefined;
   passwordResetBySuperuser?: boolean | undefined;
@@ -85,12 +87,16 @@ export function createAuthGuards(options: CreateAuthGuardsOptions) {
 
     try {
       const decoded = verifySessionJwt<AuthenticatedUser>(token, secret) as AuthenticatedUser;
-      // The JWT verifier already rejects expired tokens. allowExpired here only
-      // normalizes edge-case timestamps for session metadata after verification.
       const sessionExpiry = normalizeSessionExpiry(
         typeof decoded.exp === "number" ? decoded.exp * 1000 : null,
-        { allowExpired: true },
       );
+      if (await isSessionJwtRevoked(decoded.jti)) {
+        clearAuthSessionCookie(res);
+        return res.status(401).json({
+          message: "Session expired. Please login again.",
+          forceLogout: true,
+        });
+      }
       const { activity, user, isVisitorBanned } = await loadAuthenticatedSessionSnapshot(storage, decoded);
 
       if (!activity || activity.isActive === false || activity.logoutTime !== null) {

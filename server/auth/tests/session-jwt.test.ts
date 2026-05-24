@@ -5,18 +5,21 @@ import {
   SESSION_JWT_DEFAULT_EXPIRY,
   SESSION_JWT_ALGORITHM,
   resolveSessionJwtExpiresAt,
+  resolveSessionJwtId,
   signSessionJwt,
   verifyJwtWithAnySecret,
 } from "../session-jwt";
 
 test("signSessionJwt applies the default session expiry when omitted", () => {
   const token = signSessionJwt({ username: "alice", role: "admin" });
-  const decoded = jwt.decode(token) as { iat?: number; exp?: number } | null;
+  const decoded = jwt.decode(token) as { iat?: number; exp?: number; jti?: string } | null;
 
   assert.ok(decoded?.iat);
   assert.ok(decoded?.exp);
+  assert.match(decoded?.jti ?? "", /^[0-9a-f-]{36}$/i);
   assert.equal(decoded.exp - decoded.iat, SESSION_JWT_DEFAULT_EXPIRY);
   assert.equal(resolveSessionJwtExpiresAt(token)?.getTime(), decoded.exp * 1000);
+  assert.equal(resolveSessionJwtId(token), decoded.jti);
 });
 
 test("verifyJwtWithAnySecret accepts a token signed with a previous manual rotation secret", () => {
