@@ -168,6 +168,7 @@ test("runtime env schema validates staged WebSocket shared bus configuration key
   assert.doesNotThrow(() => {
     validateRuntimeEnvironmentSchema({
       SQR_WS_SHARED_BUS: "memory",
+      SQR_WS_MAX_CONNECTIONS: "1000",
     });
     validateRuntimeEnvironmentSchema({
       SQR_REDIS_WS_URL: "rediss://redis.internal:6380/0",
@@ -182,6 +183,15 @@ test("runtime env schema validates staged WebSocket shared bus configuration key
       });
     },
     /SQR_WS_SHARED_BUS must be one of: memory or redis/i,
+  );
+
+  assert.throws(
+    () => {
+      validateRuntimeEnvironmentSchema({
+        SQR_WS_MAX_CONNECTIONS: "0",
+      });
+    },
+    /SQR_WS_MAX_CONNECTIONS must be at least 1/i,
   );
 });
 

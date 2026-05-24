@@ -9,10 +9,14 @@ import {
 } from "./ws-auth";
 import { createRuntimeWsBroadcaster } from "./ws-broadcast";
 import { getActivityUserKey } from "./ws-connection-state";
-import { countTrackedUserConnections } from "./runtime-connection-limits";
+import {
+  countRuntimeWebSocketConnections,
+  countTrackedUserConnections,
+} from "./runtime-connection-limits";
 import { parseRuntimeWebSocketHandshakeUrl } from "./runtime-handshake";
 import {
   MAX_RUNTIME_WS_CONNECTIONS_PER_USER,
+  DEFAULT_RUNTIME_WS_MAX_CONNECTIONS,
   RUNTIME_WS_CLOSE_POLICY_VIOLATION,
   RUNTIME_WS_CLOSE_TRY_AGAIN_LATER,
   type RuntimeManagerOptions,
@@ -88,6 +92,10 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
   const upgradeRateLimiter = options.upgradeRateLimiter ?? createRuntimeWsUpgradeRateLimiter();
   const messageRateLimiterFactory =
     options.messageRateLimiterFactory ?? (() => createRuntimeWsMessageRateLimiter());
+  const maxConnections = Math.max(
+    1,
+    Math.trunc(Number(options.maxConnections ?? DEFAULT_RUNTIME_WS_MAX_CONNECTIONS) || DEFAULT_RUNTIME_WS_MAX_CONNECTIONS),
+  );
   const socketEntriesByActivity = new Map<string, RuntimeTrackedSocketEntry>();
   const socketEntriesByInstance = new WeakMap<WebSocket, RuntimeTrackedSocketEntry>();
   const trackedSockets = new Set<WebSocket>();
@@ -207,6 +215,20 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
         ws.close(RUNTIME_WS_CLOSE_TRY_AGAIN_LATER, "storage initializing");
       } catch (error) {
         logger.debug("WebSocket close request failed during startup readiness rejection", {
+          error: sanitizeRuntimeWebSocketError(error),
+        });
+      }
+      return;
+    }
+
+    if (countRuntimeWebSocketConnections({ connectedClients, trackedSockets }) >= maxConnections) {
+      logger.warn("WebSocket connection rejected because the global connection limit was reached", {
+        maxConnections,
+      });
+      try {
+        ws.close(RUNTIME_WS_CLOSE_TRY_AGAIN_LATER, "server connection limit reached");
+      } catch (error) {
+        logger.debug("WebSocket close request failed during global connection limit rejection", {
           error: sanitizeRuntimeWebSocketError(error),
         });
       }

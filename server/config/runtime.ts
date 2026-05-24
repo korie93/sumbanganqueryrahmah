@@ -53,6 +53,7 @@ import {
 } from "./runtime-config-safety-utils";
 import { resolveSharedRateLimitStoreConfig } from "../middleware/rate-limit-runtime";
 import { resolveRuntimeWsSharedBusConfig } from "../ws/runtime-shared-bus-config";
+import { DEFAULT_RUNTIME_WS_MAX_CONNECTIONS } from "../ws/runtime-manager-types";
 import type {
   RuntimeConfig,
   RuntimeConfigValidation as RuntimeConfigValidationType,
@@ -135,6 +136,11 @@ const websocketSharedBus = resolveRuntimeWsSharedBusConfig({
   redisUrl: readOptionalString("SQR_REDIS_WS_URL"),
   sharedRedisUrl: sharedRateLimitStore.redisUrl,
 });
+const configuredWebSocketMaxConnections = readInt(
+  "SQR_WS_MAX_CONNECTIONS",
+  DEFAULT_RUNTIME_WS_MAX_CONNECTIONS,
+  { min: 1, max: 100_000 },
+);
 const databaseBootstrapMode = resolveDatabaseBootstrapMode(readOptionalString("SQR_DB_BOOTSTRAP_MODE"), {
   isProductionLike,
 });
@@ -382,6 +388,7 @@ export const runtimeConfig: RuntimeConfig = Object.freeze({
     store: sharedRateLimitStore,
   },
   websocket: {
+    maxConnections: configuredWebSocketMaxConnections,
     sharedBus: websocketSharedBus,
   },
   cluster: {

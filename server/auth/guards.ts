@@ -85,6 +85,8 @@ export function createAuthGuards(options: CreateAuthGuardsOptions) {
 
     try {
       const decoded = verifySessionJwt<AuthenticatedUser>(token, secret) as AuthenticatedUser;
+      // The JWT verifier already rejects expired tokens. allowExpired here only
+      // normalizes edge-case timestamps for session metadata after verification.
       const sessionExpiry = normalizeSessionExpiry(
         typeof decoded.exp === "number" ? decoded.exp * 1000 : null,
         { allowExpired: true },

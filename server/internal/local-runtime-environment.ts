@@ -11,6 +11,7 @@ import { MonitorAlertHistoryRepository } from "../repositories/monitor-alert-his
 import { PostgresStorage } from "../storage-postgres";
 import { createAiConcurrencyGate } from "./aiConcurrencyGate";
 import { createApiProtectionMiddleware } from "./apiProtection";
+import { createAdaptiveRateStateStore } from "./redis-adaptive-rate-store";
 import { stopAdaptiveRateLimitCooldownSweep } from "../middleware/rate-limit";
 import {
   createLocalServerComposition,
@@ -123,8 +124,10 @@ export function createLocalRuntimeEnvironment(options: CreateLocalRuntimeEnviron
     categoryStatsService,
     connectedClients,
   } = composition;
+  const adaptiveRateStore = createAdaptiveRateStateStore(runtimeConfig.rateLimiting.store);
   const { adaptiveRateLimit, systemProtectionMiddleware, stopAdaptiveRateStateSweep } =
     createApiProtectionMiddleware({
+      ...(adaptiveRateStore ? { adaptiveRateStore } : {}),
       getControlState,
       getDbProtection,
     });

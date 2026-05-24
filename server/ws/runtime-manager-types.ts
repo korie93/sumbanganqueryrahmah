@@ -5,6 +5,7 @@ import type { RuntimeWsMessageRateLimiter } from "./message-rate-limit";
 import type { RuntimeWsSharedBus } from "./runtime-shared-bus";
 
 export const MAX_RUNTIME_WS_CONNECTIONS_PER_USER = 5;
+export const DEFAULT_RUNTIME_WS_MAX_CONNECTIONS = 1_000;
 export const RUNTIME_WS_CLOSE_POLICY_VIOLATION = 1008;
 export const RUNTIME_WS_CLOSE_TRY_AGAIN_LATER = 1013;
 
@@ -18,6 +19,7 @@ export type RuntimeManagerOptions = {
   trustForwardedHeaders?: boolean;
   acceptConnections?: () => boolean;
   heartbeatIntervalMs?: number;
+  maxConnections?: number;
   messageRateLimiterFactory?: () => RuntimeWsMessageRateLimiter;
   sharedBus?: RuntimeWsSharedBus;
   upgradeRateLimiter?: RuntimeWsUpgradeRateLimiter;

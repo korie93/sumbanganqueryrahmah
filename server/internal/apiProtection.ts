@@ -1,8 +1,10 @@
 import type { Request, RequestHandler } from "express";
 import { WEB_VITALS_TELEMETRY_PATHS as WEB_VITALS_TELEMETRY_PATH_VALUES } from "../routes/telemetry-route-constants";
 import type { WorkerControlState } from "./runtime-monitor-manager";
+import { logger as defaultLogger } from "../lib/logger";
 
 type ApiProtectionOptions = {
+  adaptiveRateStore?: AdaptiveRateStateStore | null;
   getControlState: () => WorkerControlState;
   getDbProtection: () => boolean;
 };
@@ -17,6 +19,16 @@ type AdaptiveRateBucket = {
   count: number;
   lastSeenAt: number;
   resetAt: number;
+};
+
+export type AdaptiveRateStateStore = {
+  close?: () => Promise<void> | void;
+  increment: (options: {
+    bucketKey: string;
+    now: number;
+    staleGraceMs: number;
+    windowMs: number;
+  }) => Promise<AdaptiveRateBucket | null>;
 };
 
 function clamp(value: number, min: number, max: number): number {
@@ -101,9 +113,11 @@ export function createApiProtectionMiddleware(options: ApiProtectionOptions): {
   sweepAdaptiveRateState: (now?: number) => void;
   stopAdaptiveRateStateSweep: () => void;
 } {
+  const adaptiveRateStore = options.adaptiveRateStore ?? null;
   const adaptiveRateState = new Map<string, AdaptiveRateBucket>();
   let lastAdaptiveSweepAt = 0;
   let adaptiveRateSweepStopped = false;
+  let adaptiveRateStoreWarningEmitted = false;
 
   function setAdaptiveRateBucket(bucketKey: string, bucket: AdaptiveRateBucket) {
     if (adaptiveRateState.has(bucketKey)) {
@@ -138,6 +152,53 @@ export function createApiProtectionMiddleware(options: ApiProtectionOptions): {
     }
   }
 
+  function incrementLocalAdaptiveRateBucket(bucketKey: string, now: number): AdaptiveRateBucket {
+    const bucket = adaptiveRateState.get(bucketKey);
+
+    if (!bucket || now >= bucket.resetAt) {
+      const nextBucket = {
+        count: 1,
+        lastSeenAt: now,
+        resetAt: now + ADAPTIVE_RATE_WINDOW_MS,
+      };
+      setAdaptiveRateBucket(bucketKey, nextBucket);
+      return nextBucket;
+    }
+
+    const nextBucket = {
+      count: bucket.count + 1,
+      lastSeenAt: now,
+      resetAt: bucket.resetAt,
+    };
+    setAdaptiveRateBucket(bucketKey, nextBucket);
+    return nextBucket;
+  }
+
+  async function incrementAdaptiveRateBucket(bucketKey: string, now: number): Promise<AdaptiveRateBucket> {
+    if (adaptiveRateStore) {
+      try {
+        const storedBucket = await adaptiveRateStore.increment({
+          bucketKey,
+          now,
+          staleGraceMs: ADAPTIVE_RATE_STALE_GRACE_MS,
+          windowMs: ADAPTIVE_RATE_WINDOW_MS,
+        });
+        if (storedBucket) {
+          return storedBucket;
+        }
+      } catch (error) {
+        if (!adaptiveRateStoreWarningEmitted) {
+          adaptiveRateStoreWarningEmitted = true;
+          defaultLogger.warn("Adaptive rate Redis state unavailable; falling back to process-local memory", {
+            error: error instanceof Error ? error.message : "Unknown adaptive rate store failure",
+          });
+        }
+      }
+    }
+
+    return incrementLocalAdaptiveRateBucket(bucketKey, now);
+  }
+
   const adaptiveRateSweepHandle = setInterval(() => {
     sweepAdaptiveRateState(Date.now());
   }, ADAPTIVE_RATE_SWEEP_INTERVAL_MS);
@@ -149,6 +210,11 @@ export function createApiProtectionMiddleware(options: ApiProtectionOptions): {
     }
     adaptiveRateSweepStopped = true;
     clearInterval(adaptiveRateSweepHandle);
+    void Promise.resolve(adaptiveRateStore?.close?.()).catch((error) => {
+      defaultLogger.warn("Failed to close adaptive rate state store during shutdown", {
+        error: error instanceof Error ? error.message : "Unknown adaptive rate store close failure",
+      });
+    });
   }
 
   function resolveRateLimitClientIp(req: Request): string {
@@ -206,45 +272,31 @@ export function createApiProtectionMiddleware(options: ApiProtectionOptions): {
   }
 
   const adaptiveRateLimit: RequestHandler = (req, res, next) => {
-    const controlState = options.getControlState();
-    if (!isRuntimeProtectedRoute(req)) return next();
-    if (isSessionControlRoute(req)) return next();
+    void (async () => {
+      const controlState = options.getControlState();
+      if (!isRuntimeProtectedRoute(req)) return next();
+      if (isSessionControlRoute(req)) return next();
 
-    const now = Date.now();
-    maybeSweepAdaptiveRateState(now);
-    const { bucketKey, dynamicLimit } = resolveAdaptiveRateBucket(req);
-    const bucket = adaptiveRateState.get(bucketKey);
+      const now = Date.now();
+      maybeSweepAdaptiveRateState(now);
+      const { bucketKey, dynamicLimit } = resolveAdaptiveRateBucket(req);
+      const nextBucket = await incrementAdaptiveRateBucket(bucketKey, now);
+      if (nextBucket.count > dynamicLimit) {
+        const retryAfterMs = Math.max(0, nextBucket.resetAt - now);
+        setAdaptiveRateLimitHeaders(res, {
+          limit: dynamicLimit,
+          retryAfterMs,
+        });
+        return res.status(429).json({
+          message: "Too many requests under current system load.",
+          limit: dynamicLimit,
+          retryAfterMs,
+          mode: controlState.mode,
+        });
+      }
 
-    if (!bucket || now >= bucket.resetAt) {
-      setAdaptiveRateBucket(bucketKey, {
-        count: 1,
-        lastSeenAt: now,
-        resetAt: now + ADAPTIVE_RATE_WINDOW_MS,
-      });
       return next();
-    }
-
-    const nextBucket = {
-      count: bucket.count + 1,
-      lastSeenAt: now,
-      resetAt: bucket.resetAt,
-    };
-    setAdaptiveRateBucket(bucketKey, nextBucket);
-    if (nextBucket.count > dynamicLimit) {
-      const retryAfterMs = Math.max(0, nextBucket.resetAt - now);
-      setAdaptiveRateLimitHeaders(res, {
-        limit: dynamicLimit,
-        retryAfterMs,
-      });
-      return res.status(429).json({
-        message: "Too many requests under current system load.",
-        limit: dynamicLimit,
-        retryAfterMs,
-        mode: controlState.mode,
-      });
-    }
-
-    return next();
+    })().catch(next);
   };
 
   const systemProtectionMiddleware: RequestHandler = (req, res, next) => {

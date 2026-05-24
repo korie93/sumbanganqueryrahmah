@@ -41,6 +41,7 @@ export function setupWebSocket(server: Server, options: LegacyWebSocketOptions =
     storage,
     secret: sessionSecret,
     connectedClients,
+    maxConnections: runtimeConfig.websocket.maxConnections,
     trustForwardedHeaders: runtimeConfig.app.trustedProxies.length > 0,
   });
 

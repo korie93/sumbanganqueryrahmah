@@ -49,6 +49,7 @@ export function createLocalServerComposition(
     wss,
     storage,
     secret,
+    maxConnections: runtimeConfig.websocket.maxConnections,
     trustForwardedHeaders: runtimeConfig.app.trustedProxies.length > 0,
     ...(runtimeWsSharedBus ? { sharedBus: runtimeWsSharedBus } : {}),
     ...(acceptWebSocketConnections ? { acceptConnections: acceptWebSocketConnections } : {}),

@@ -171,6 +171,7 @@ export type RuntimeConfig = {
     };
   };
   websocket: {
+    maxConnections: number;
     sharedBus: {
       distributedBusConfigured: boolean;
       provider: "memory" | "redis";

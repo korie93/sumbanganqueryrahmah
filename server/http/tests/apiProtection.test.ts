@@ -6,6 +6,7 @@ import {
   isRuntimeProtectedRoute,
   resolveAdaptiveRateLruEvictionKey,
   resolveAdaptiveRateEvictionKey,
+  type AdaptiveRateStateStore,
 } from "../../internal/apiProtection";
 import { startTestServer, stopTestServer } from "../../routes/tests/http-test-utils";
 import type { WorkerControlState } from "../../internal/runtime-monitor-manager";
@@ -42,9 +43,10 @@ function createControlState(overrides?: Partial<WorkerControlState>): WorkerCont
   };
 }
 
-function createApiProtectionTestApp() {
+function createApiProtectionTestApp(options: { adaptiveRateStore?: AdaptiveRateStateStore } = {}) {
   const app = express();
   const { adaptiveRateLimit, systemProtectionMiddleware } = createApiProtectionMiddleware({
+    ...(options.adaptiveRateStore ? { adaptiveRateStore: options.adaptiveRateStore } : {}),
     getControlState: () => createControlState(),
     getDbProtection: () => false,
   });
@@ -263,6 +265,70 @@ test("adaptive API protection throttles telemetry flood attempts on the canonica
   } finally {
     await stopTestServer(server);
   }
+});
+
+test("adaptive API protection can use a persistent state store before falling back to memory", async () => {
+  const increments: Array<{
+    bucketKey: string;
+    staleGraceMs: number;
+    windowMs: number;
+  }> = [];
+  const store: AdaptiveRateStateStore = {
+    async increment(options) {
+      increments.push({
+        bucketKey: options.bucketKey,
+        staleGraceMs: options.staleGraceMs,
+        windowMs: options.windowMs,
+      });
+      return {
+        count: increments.length,
+        lastSeenAt: options.now,
+        resetAt: options.now + options.windowMs,
+      };
+    },
+  };
+  const app = createApiProtectionTestApp({ adaptiveRateStore: store });
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    for (let index = 0; index < 8; index += 1) {
+      const response = await fetch(`${baseUrl}/api/noisy`);
+      assert.equal(response.status, 200);
+    }
+
+    const throttled = await fetch(`${baseUrl}/api/noisy`);
+    assert.equal(throttled.status, 429);
+    assert.equal(increments.length, 9);
+    assert.equal(increments[0].bucketKey.endsWith(":api"), true);
+    assert.equal(increments[0].windowMs, 10_000);
+    assert.equal(increments[0].staleGraceMs, 10_000);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("adaptive API protection closes a persistent state store with the sweep cleanup", async () => {
+  let closeCalls = 0;
+  const store: AdaptiveRateStateStore = {
+    async increment() {
+      return null;
+    },
+    close() {
+      closeCalls += 1;
+    },
+  };
+
+  const { stopAdaptiveRateStateSweep } = createApiProtectionMiddleware({
+    adaptiveRateStore: store,
+    getControlState: () => createControlState(),
+    getDbProtection: () => false,
+  });
+
+  stopAdaptiveRateStateSweep();
+  stopAdaptiveRateStateSweep();
+  await Promise.resolve();
+
+  assert.equal(closeCalls, 1);
 });
 
 test("runtime protection route classification includes web-vitals telemetry consistently", () => {

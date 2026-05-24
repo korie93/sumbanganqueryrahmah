@@ -1427,6 +1427,64 @@ test("runtime manager enforces a per-user connection limit", async () => {
   }
 });
 
+test("runtime manager enforces the global connection limit across in-flight handshakes", async () => {
+  const wss = new FakeWebSocketServer();
+  const providedMap = new Map<string, WebSocket>();
+  const firstSocket = new FakeWebSocket();
+  const secondSocket = new FakeWebSocket();
+  const firstActivityId = "activity-global-limit-first";
+  const secondActivityId = "activity-global-limit-second";
+  const firstSession = createDeferred<UserActivity>();
+
+  createRuntimeWebSocketManager({
+    wss: wss as unknown as import("ws").WebSocketServer,
+    storage: {
+      getActivityById: async (activityId: string) => {
+        if (activityId === firstActivityId) {
+          return firstSession.promise;
+        }
+        return createActiveSession(activityId);
+      },
+      clearCollectionNicknameSessionByActivity: async () => undefined,
+    },
+    secret: TEST_SECRET,
+    connectedClients: providedMap,
+    maxConnections: 1,
+  });
+
+  try {
+    wss.emit(
+      "connection",
+      firstSocket as unknown as WebSocket,
+      createConnectionRequest(createWsToken(firstActivityId)),
+    );
+    await flushAsyncWork();
+
+    assert.equal(firstSocket.closeCalls, 0);
+    assert.equal(providedMap.size, 0);
+
+    wss.emit(
+      "connection",
+      secondSocket as unknown as WebSocket,
+      createConnectionRequest(createWsToken(secondActivityId)),
+    );
+    await flushAsyncWork();
+
+    assert.equal(providedMap.has(secondActivityId), false);
+    assert.deepEqual(secondSocket.closeCodes, [
+      { code: 1013, reason: "server connection limit reached" },
+    ]);
+
+    firstSession.resolve(createActiveSession(firstActivityId));
+    await flushAsyncWork();
+
+    assert.equal(providedMap.get(firstActivityId), firstSocket as unknown as WebSocket);
+  } finally {
+    firstSession.resolve(createActiveSession(firstActivityId));
+    wss.emit("close");
+  }
+});
+
 test("runtime manager closes clients that exceed the inbound message rate limit", async () => {
   const wss = new FakeWebSocketServer();
   const providedMap = new Map<string, WebSocket>();
