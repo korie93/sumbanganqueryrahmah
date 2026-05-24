@@ -9,6 +9,16 @@ import {
 import { buildCollectionReceiptSecurityErrorResponse } from "../collection-receipt-error-response";
 
 const MULTIPART_FILENAME_UNSAFE_CHAR_PATTERN = /[^a-zA-Z0-9._()-]+/g;
+const DEFAULT_MULTIPART_RECEIPT_UPLOAD_TIMEOUT_MS = 120_000;
+
+class MultipartReceiptUploadTimeoutError extends Error {
+  readonly statusCode = 408;
+
+  constructor() {
+    super("Receipt upload timed out. Please retry with a stable connection.");
+    this.name = "MultipartReceiptUploadTimeoutError";
+  }
+}
 
 function sanitizeMultipartUploadFilename(rawFileName: string): string | null {
   const baseName = path.posix.basename(String(rawFileName || "").replace(/\\/g, "/")).trim();
@@ -37,6 +47,7 @@ export function createCollectionReceiptMultipartRoute<
     stream: NodeJS.ReadableStream;
   }) => Promise<TReceipt>;
   cleanupReceipts?: (receipts: TReceipt[]) => Promise<void>;
+  uploadTimeoutMs?: number;
 }): RequestHandler {
   return (req, res, next) => {
     if (!req.is("multipart/form-data")) {
@@ -53,25 +64,32 @@ export function createCollectionReceiptMultipartRoute<
     });
 
     const body = {} as TBody;
+    const completedReceipts: TReceipt[] = [];
     const uploadTasks: Array<Promise<TReceipt>> = [];
     let settled = false;
+    let timeoutHandle: ReturnType<typeof setTimeout> | null = null;
 
-    const fail = async (error: unknown) => {
+    const clearUploadTimeout = () => {
+      if (!timeoutHandle) {
+        return;
+      }
+      clearTimeout(timeoutHandle);
+      timeoutHandle = null;
+    };
+
+    const fail = async (error: unknown, options: { waitForUploads?: boolean } = {}) => {
       if (settled) {
         return;
       }
       settled = true;
+      clearUploadTimeout();
 
       if (params.cleanupReceipts) {
         try {
-          const completedUploads = await Promise.allSettled(uploadTasks);
-          const completedReceipts: TReceipt[] = [];
-          for (const result of completedUploads) {
-            if (result.status === "fulfilled") {
-              completedReceipts.push(result.value);
-            }
+          if (options.waitForUploads !== false) {
+            await Promise.allSettled(uploadTasks);
           }
-          await params.cleanupReceipts(completedReceipts);
+          await params.cleanupReceipts([...completedReceipts]);
         } catch (cleanupError) {
           logger.error("Multipart cleanup failed", {
             cleanupError,
@@ -86,6 +104,14 @@ export function createCollectionReceiptMultipartRoute<
           reasonCode: receiptSecurityResponse.body.error.code,
         });
         res.status(receiptSecurityResponse.statusCode).json(receiptSecurityResponse.body);
+        return;
+      }
+
+      if (error instanceof MultipartReceiptUploadTimeoutError) {
+        res.status(error.statusCode).json({
+          ok: false,
+          message: error.message,
+        });
         return;
       }
 
@@ -115,13 +141,17 @@ export function createCollectionReceiptMultipartRoute<
         return;
       }
 
-      uploadTasks.push(
-        params.handleReceipt({
+      const uploadTask = params.handleReceipt({
           fileName: safeFileName,
           mimeType: info.mimeType,
           stream: file,
-        }),
-      );
+        })
+        .then((receipt) => {
+          completedReceipts.push(receipt);
+          return receipt;
+        });
+      uploadTasks.push(uploadTask);
+      void uploadTask.catch(() => undefined);
     });
 
     parser.once("error", (error) => {
@@ -150,12 +180,26 @@ export function createCollectionReceiptMultipartRoute<
       try {
         body[params.attachKey] = await Promise.all(uploadTasks) as TBody[keyof TBody];
         settled = true;
+        clearUploadTimeout();
         req.body = body;
         next();
       } catch (error) {
         await fail(error);
       }
     });
+
+    const uploadTimeoutMs = Math.max(
+      1,
+      Math.trunc(Number(params.uploadTimeoutMs || DEFAULT_MULTIPART_RECEIPT_UPLOAD_TIMEOUT_MS)),
+    );
+    timeoutHandle = setTimeout(() => {
+      const timeoutError = new MultipartReceiptUploadTimeoutError();
+      req.unpipe(parser);
+      parser.destroy(timeoutError);
+      req.resume();
+      void fail(timeoutError, { waitForUploads: false });
+    }, uploadTimeoutMs);
+    timeoutHandle.unref?.();
 
     req.pipe(parser);
   };

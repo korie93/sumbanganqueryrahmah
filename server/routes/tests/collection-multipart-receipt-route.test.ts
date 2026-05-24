@@ -274,3 +274,61 @@ test("createCollectionReceiptMultipartRoute sanitizes multipart file names befor
     },
   ]);
 });
+
+test("createCollectionReceiptMultipartRoute fails slow multipart uploads closed with a timeout", async () => {
+  const boundary = "----codex-slow-receipt-boundary";
+  const req = new PassThrough() as PassThrough & {
+    headers: Record<string, string>;
+    is: (type: string) => boolean;
+    body?: Record<string, unknown>;
+  };
+  let receiptHandlerStarted = false;
+  const handler = createCollectionReceiptMultipartRoute<
+    { filename: string },
+    Record<string, unknown>
+  >({
+    attachKey: "uploadedReceipts",
+    uploadTimeoutMs: 5,
+    handleReceipt: async ({ stream }) => {
+      receiptHandlerStarted = true;
+      for await (const _chunk of stream) {
+        // The timeout path should destroy the stream before the request ends.
+      }
+      return { filename: "slow.txt" };
+    },
+  });
+
+  req.headers = {
+    "content-type": `multipart/form-data; boundary=${boundary}`,
+  };
+  req.is = (type: string) => type === "multipart/form-data";
+
+  const result = await new Promise<{ statusCode: number; payload: unknown }>((resolve) => {
+    const res = {
+      status(statusCode: number) {
+        return {
+          json(payload: unknown) {
+            resolve({ payload, statusCode });
+          },
+        };
+      },
+    };
+
+    handler(req as never, res as never, () => {
+      throw new Error("Timed out multipart upload should not reach next().");
+    });
+    req.write(Buffer.from(
+      `--${boundary}\r\nContent-Disposition: form-data; name="receipt"; filename="slow.txt"\r\nContent-Type: text/plain\r\n\r\npartial`,
+      "utf8",
+    ));
+  });
+
+  assert.equal(receiptHandlerStarted, true);
+  assert.deepEqual(result, {
+    payload: {
+      ok: false,
+      message: "Receipt upload timed out. Please retry with a stable connection.",
+    },
+    statusCode: 408,
+  });
+});
