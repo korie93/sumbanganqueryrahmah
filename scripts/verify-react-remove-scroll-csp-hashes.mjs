@@ -5,7 +5,7 @@ import {
   generateReactRemoveScrollBarStyleHashes,
 } from "./lib/react-remove-scroll-csp-hashes.mjs";
 
-const sourcePath = path.resolve(process.cwd(), "server", "internal", "local-http-pipeline.ts");
+const sourcePath = path.resolve(process.cwd(), "server", "internal", "local-http-security.ts");
 const writeMode = process.argv.includes("--write");
 const arrayPattern =
   /const REACT_REMOVE_SCROLL_BAR_STYLE_HASHES = \[\n(?<body>[\s\S]*?)\n\];/;
@@ -13,7 +13,7 @@ const arrayPattern =
 function extractExistingHashes(source) {
   const match = source.match(arrayPattern);
   if (!match?.groups?.body) {
-    throw new Error("Unable to find REACT_REMOVE_SCROLL_BAR_STYLE_HASHES in local-http-pipeline.ts.");
+    throw new Error("Unable to find REACT_REMOVE_SCROLL_BAR_STYLE_HASHES in local-http-security.ts.");
   }
 
   return {

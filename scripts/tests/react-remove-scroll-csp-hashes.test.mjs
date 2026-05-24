@@ -7,7 +7,7 @@ import { generateReactRemoveScrollBarStyleHashes } from "../lib/react-remove-scr
 test("react-remove-scroll CSP hash generator matches the checked-in Helmet allowlist", () => {
   const { hashes } = generateReactRemoveScrollBarStyleHashes();
   const source = readFileSync(
-    path.join(process.cwd(), "server", "internal", "local-http-pipeline.ts"),
+    path.join(process.cwd(), "server", "internal", "local-http-security.ts"),
     "utf8",
   );
 
