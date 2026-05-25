@@ -11,6 +11,41 @@ The gate intentionally fails on new moderate-or-higher advisories and on new
 external tarball sources. Any allowlist entry must include a reason in
 `scripts/lib/dependency-audit.mjs`.
 
+## Review Cadence
+
+Run the dependency audit gate on every CI build and perform a scheduled
+dependency review at least monthly. Review high-impact runtime packages
+(`express`, `helmet`, `jsonwebtoken`, `pg`, `redis`) and heavy browser packages
+(`recharts`, `framer-motion`, `jspdf`, `html2canvas`, `xlsx`) separately so
+security updates and bundle-size changes are both visible.
+
+Upgrade dependency majors through dependency-only PRs. Each major upgrade should
+include the relevant targeted tests, `npm run audit:dependencies`,
+`npm run verify:bundle-budgets`, and a rollback note.
+
+## Express 5 Migration Plan
+
+The current Express 4 stack is protected by explicit async wrappers and HTTP
+contract tests. Express 5 should be handled as a planned migration, not a drive-by
+audit fix:
+
+1. Create a dependency-only branch that updates Express and its middleware
+   peers.
+2. Run all route integration tests and verify async errors still reach the
+   centralized error handler.
+3. Re-check body-parser, query parsing, rate-limit, CSRF, and upload middleware
+   behavior against the existing HTTP contract tests.
+4. Promote only after smoke UI and authenticated accessibility checks pass in
+   staging.
+
+## Capture/PDF Libraries
+
+`html2canvas` and `jspdf` remain isolated behind lazy import paths and bundle
+budget checks. Do not import either package from the main application entry or
+shared UI shells. If replacing `html2canvas`, validate the candidate against
+receipt/report capture, CSP/Trusted Types behavior, mobile viewport rendering,
+and the existing PDF export tests before removing the current adapter.
+
 ## SheetJS `xlsx`
 
 `xlsx@0.20.2` is vendored locally at:
