@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   assertNoPlaceholderSecrets,
+  assertRuntimeSessionSecretMinBytes,
   assertProductionDatabaseBootstrapModeSafety,
   assertProductionRateLimiterTopologySafety,
   assertProductionTwoFactorReplayTopologySafety,
@@ -532,6 +533,25 @@ test("resolveHstsHeaderConfig rejects production max-age below the hardened base
       includeSubDomains: true,
       preload: false,
     },
+  );
+});
+
+test("assertRuntimeSessionSecretMinBytes rejects short non-test session secrets", () => {
+  assert.throws(
+    () => assertRuntimeSessionSecretMinBytes("short-secret", { nodeEnv: "development" }),
+    /SESSION_SECRET must be at least 32 bytes in non-test runtime environments/i,
+  );
+
+  assert.throws(
+    () => assertRuntimeSessionSecretMinBytes("short-secret", { nodeEnv: "production" }),
+    /SESSION_SECRET must be at least 32 bytes in non-test runtime environments/i,
+  );
+
+  assert.doesNotThrow(() =>
+    assertRuntimeSessionSecretMinBytes("short-secret", { nodeEnv: "test" }),
+  );
+  assert.doesNotThrow(() =>
+    assertRuntimeSessionSecretMinBytes(STRONG_SESSION_SECRET, { nodeEnv: "development" }),
   );
 });
 

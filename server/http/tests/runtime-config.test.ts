@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
@@ -501,6 +502,70 @@ test("runtime config rejects production-like development startup when session se
         importRuntimeFresh(),
         /SESSION_SECRET is required outside strict local development/i,
       );
+    },
+  );
+});
+
+test("runtime config rejects short configured session secrets outside test mode", () => {
+  const result = spawnSync(
+    process.execPath,
+    [
+      "--import",
+      "tsx",
+      "-e",
+      "import('./server/config/runtime.ts').then(() => process.exit(0)).catch((error) => { console.error(error.message); process.exit(1); })",
+    ],
+    {
+      cwd: process.cwd(),
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        NODE_ENV: "development",
+        HOST: "127.0.0.1",
+        PUBLIC_APP_URL: "http://127.0.0.1:5000",
+        SESSION_SECRET: "short-secret",
+        COLLECTION_NICKNAME_TEMP_PASSWORD: "",
+        COLLECTION_PII_ENCRYPTION_KEY: "",
+        TWO_FACTOR_ENCRYPTION_KEY: "",
+        PG_PASSWORD: "",
+        BACKUP_ENCRYPTION_KEY: "",
+        BACKUP_ENCRYPTION_KEYS: "",
+        BACKUP_FEATURE_ENABLED: "1",
+        SEED_DEFAULT_USERS: "0",
+        LOCAL_SUPERUSER_CREDENTIALS_FILE_ENABLED: "0",
+        MAIL_DEV_OUTBOX_ENABLED: "0",
+      },
+    },
+  );
+
+  assert.notEqual(result.status, 0);
+  assert.match(
+    `${result.stdout}\n${result.stderr}`,
+    /SESSION_SECRET must be at least 32 bytes in non-test runtime environments/i,
+  );
+});
+
+test("runtime config still generates a strong local session secret when none is configured", async () => {
+  await withEnv(
+    {
+      NODE_ENV: "development",
+      HOST: "127.0.0.1",
+      PUBLIC_APP_URL: "http://127.0.0.1:5000",
+      SESSION_SECRET: null,
+      COLLECTION_NICKNAME_TEMP_PASSWORD: null,
+      COLLECTION_PII_ENCRYPTION_KEY: null,
+      TWO_FACTOR_ENCRYPTION_KEY: null,
+      PG_PASSWORD: null,
+      BACKUP_ENCRYPTION_KEY: null,
+      BACKUP_ENCRYPTION_KEYS: null,
+      BACKUP_FEATURE_ENABLED: "1",
+      SEED_DEFAULT_USERS: "0",
+      LOCAL_SUPERUSER_CREDENTIALS_FILE_ENABLED: "0",
+      MAIL_DEV_OUTBOX_ENABLED: "0",
+    },
+    async () => {
+      const runtimeModule = await importRuntimeFresh();
+      assert.equal(Buffer.byteLength(runtimeModule.runtimeConfig.auth.sessionSecret, "utf8") >= 32, true);
     },
   );
 });

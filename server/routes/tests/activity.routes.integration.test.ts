@@ -1,8 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import jwt from "jsonwebtoken";
 import { WebSocket } from "ws";
 import type { RequestHandler } from "express";
 import { ERROR_CODES } from "../../../shared/error-codes";
+import {
+  isSessionJwtRevoked,
+  resetSessionRevocationStoreForTests,
+} from "../../auth/session-revocation-store";
 import { registerActivityRoutes } from "../activity.routes";
 import type { PostgresStorage } from "../../storage-postgres";
 import {
@@ -510,6 +515,46 @@ test("POST /api/activity/logout logs out the session, closes the socket, and aud
     assert.match(setCookie, /Max-Age=0/i);
   } finally {
     await stopTestServer(server);
+  }
+});
+
+test("POST /api/activity/logout revokes the current JWT id for the remaining token lifetime", async () => {
+  resetSessionRevocationStoreForTests();
+  const token = jwt.sign(
+    {
+      activityId: "activity-1",
+      username: "user.one",
+    },
+    "activity-route-test-secret",
+    {
+      algorithm: "HS256",
+      expiresIn: "1h",
+      jwtid: "logout-route-jti",
+    },
+  );
+  const { app } = createActivityRouteHarness({
+    authenticateToken: createTestAuthenticateToken({
+      userId: "user-1",
+      username: "user.one",
+      role: "user",
+      activityId: "activity-1",
+    }),
+  });
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(`${baseUrl}/api/activity/logout`, {
+      method: "POST",
+      headers: {
+        Cookie: `sqr_auth=${encodeURIComponent(token)}; sqr_auth_hint=1`,
+      },
+    });
+
+    assert.equal(response.status, 200);
+    assert.equal(await isSessionJwtRevoked("logout-route-jti"), true);
+  } finally {
+    await stopTestServer(server);
+    resetSessionRevocationStoreForTests();
   }
 });
 

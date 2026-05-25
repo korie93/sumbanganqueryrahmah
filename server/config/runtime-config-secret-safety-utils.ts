@@ -6,6 +6,7 @@ const PLACEHOLDER_BACKUP_ENCRYPTION_KEYS = new Set([
   "GENERATE_ME_BACKUP_KEY_AND_STORE_OFFLINE",
 ]);
 const RUNTIME_SECRET_MIN_LENGTH = 32;
+const SESSION_SECRET_MIN_BYTES = 32;
 const TEMPLATE_SECRET_PATTERNS = [
   /^ganti-dengan-/i,
   /^change-this-/i,
@@ -32,6 +33,22 @@ export function assertStrongRuntimeSecret(name: string, value: string): void {
 
   if (TEMPLATE_SECRET_PATTERNS.some((pattern) => pattern.test(normalized))) {
     throw new Error(`${name} must not use an example, placeholder, or template value.`);
+  }
+}
+
+export function assertRuntimeSessionSecretMinBytes(
+  value: string,
+  options: { nodeEnv: string },
+): void {
+  if (options.nodeEnv === "test") {
+    return;
+  }
+
+  const normalized = String(value || "").trim();
+  if (Buffer.byteLength(normalized, "utf8") < SESSION_SECRET_MIN_BYTES) {
+    throw new Error(
+      `SESSION_SECRET must be at least ${SESSION_SECRET_MIN_BYTES} bytes in non-test runtime environments.`,
+    );
   }
 }
 

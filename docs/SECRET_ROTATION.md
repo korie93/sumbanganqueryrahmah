@@ -37,6 +37,10 @@ environment file only.
 active `SESSION_SECRET`. Existing sessions can remain valid during a planned
 rotation window through `SESSION_SECRET_PREVIOUS`.
 
+Runtime startup rejects non-test `SESSION_SECRET` values shorter than 32 bytes.
+Generate at least 32 random bytes per environment; the examples above produce
+values with enough entropy for the JWT signing key.
+
 Device and tab session fingerprints are tied to the verified session token. A
 rotation without `SESSION_SECRET_PREVIOUS` invalidates existing sessions, so
 users must log in again and their browser/device association is rebuilt during

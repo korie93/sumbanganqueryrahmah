@@ -63,7 +63,7 @@ const run = async () => {
     HOST: host,
     PUBLIC_APP_URL: baseUrl,
     CORS_ALLOWED_ORIGINS: baseUrl,
-    SESSION_SECRET: process.env.SESSION_SECRET || "ci-session-secret",
+    SESSION_SECRET: process.env.SESSION_SECRET || "sqr-ci-smoke-session-secret-32-bytes-minimum",
     PG_HOST: process.env.PG_HOST || "127.0.0.1",
     PG_PORT: process.env.PG_PORT || "5432",
     PG_USER: process.env.PG_USER || "postgres",

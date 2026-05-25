@@ -4,6 +4,7 @@ import { assertProductionWebSocketTopologySafety } from "../ws/websocket-topolog
 import { normalizeCorsOrigin } from "./runtime-config-read-utils";
 export {
   assertNoPlaceholderSecrets,
+  assertRuntimeSessionSecretMinBytes,
   assertStrongRuntimeSecret,
 } from "./runtime-config-secret-safety-utils";
 export { buildRuntimeConfigWarnings } from "./runtime-config-warning-utils";

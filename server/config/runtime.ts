@@ -39,6 +39,7 @@ import {
   assertProductionRateLimiterTopologySafety,
   assertProductionTwoFactorReplayTopologySafety,
   assertProductionWebSocketRuntimeTopologySafety,
+  assertRuntimeSessionSecretMinBytes,
   assertRuntimeSafetyGuards,
   buildRuntimeConfigWarnings,
   hasBackupEncryptionKeyConfigured,
@@ -158,6 +159,13 @@ const cookieSecure = resolveCookieSecure(configuredAuthCookieSecure, {
   publicAppUrl,
 });
 const cookieSameSite = resolveCookieSameSite(readOptionalString("SESSION_COOKIE_SAMESITE"));
+const resolvedSessionSecret = readSecretOrThrow(
+  "SESSION_SECRET",
+  isProductionLike,
+  () => buildEphemeralSecret("session"),
+);
+
+assertRuntimeSessionSecretMinBytes(resolvedSessionSecret, { nodeEnv });
 
 const mailConfiguration = assessMailConfiguration({
   smtpService: readOptionalString("SMTP_SERVICE"),
@@ -278,7 +286,7 @@ export const runtimeConfig: RuntimeConfig = Object.freeze({
     ssl: databaseSslConfig,
   },
   auth: {
-    sessionSecret: readSecretOrThrow("SESSION_SECRET", isProductionLike, () => buildEphemeralSecret("session")),
+    sessionSecret: resolvedSessionSecret,
     previousSessionSecrets: configuredPreviousSessionSecrets,
     collectionNicknameTempPassword: readSecretOrThrow(
       "COLLECTION_NICKNAME_TEMP_PASSWORD",

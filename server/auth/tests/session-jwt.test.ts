@@ -50,3 +50,16 @@ test("verifyJwtWithAnySecret rejects when none of the configured secrets can ver
     /invalid signature/i,
   );
 });
+
+test("verifyJwtWithAnySecret rejects tokens signed with non-session algorithms", () => {
+  const token = jwt.sign(
+    { username: "alice" },
+    "current-secret",
+    { algorithm: "HS384" },
+  );
+
+  assert.throws(
+    () => verifyJwtWithAnySecret(token, ["current-secret"]),
+    /invalid algorithm/i,
+  );
+});

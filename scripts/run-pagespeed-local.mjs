@@ -375,7 +375,7 @@ async function run() {
     PORT: String(resolvedServer.port),
     PUBLIC_APP_URL: process.env.PUBLIC_APP_URL || baseUrl,
     CORS_ALLOWED_ORIGINS: process.env.CORS_ALLOWED_ORIGINS || baseUrl,
-    SESSION_SECRET: process.env.SESSION_SECRET || "ci-session-secret",
+    SESSION_SECRET: process.env.SESSION_SECRET || "sqr-pagespeed-session-secret-32-bytes-minimum",
     PG_HOST: process.env.PG_HOST || "127.0.0.1",
     PG_PORT: process.env.PG_PORT || "5432",
     PG_USER: String(process.env.PG_USER || "").trim(),
