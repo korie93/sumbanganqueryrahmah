@@ -42,6 +42,17 @@ const runNpm = (args, options = {}) =>
     options,
   );
 
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+function readNonNegativeIntEnv(name, fallback) {
+  const rawValue = String(process.env[name] || "").trim();
+  if (!rawValue) {
+    return fallback;
+  }
+  const parsed = Number(rawValue);
+  return Number.isFinite(parsed) && parsed >= 0 ? Math.trunc(parsed) : fallback;
+}
+
 const run = async () => {
   await mkdir(artifactsDir, { recursive: true });
 
@@ -131,6 +142,13 @@ const run = async () => {
         A11Y_BASE_URL: baseUrl,
       },
     });
+    const adaptiveRateCooldownMs = readNonNegativeIntEnv("SMOKE_ADAPTIVE_RATE_COOLDOWN_MS", 12_000);
+    if (adaptiveRateCooldownMs > 0) {
+      console.log(
+        `Smoke CI local: waiting ${adaptiveRateCooldownMs}ms for adaptive API buckets before smoke-ui.`,
+      );
+      await wait(adaptiveRateCooldownMs);
+    }
     await runNpm(["run", "smoke:ui"], { env });
   } finally {
     await stopManagedServerProcess(serverProcess, { runCommand });

@@ -219,6 +219,7 @@ PG_USER=sqr_app
 PG_PASSWORD=ganti-dengan-password-db-yang-kuat
 PG_DATABASE=sqr_db
 PG_MAX_CONNECTIONS=10
+PG_STATEMENT_TIMEOUT_MS=30000
 
 COLLECTION_RECEIPT_EXTERNAL_SCAN_ENABLED=1
 COLLECTION_RECEIPT_EXTERNAL_SCAN_COMMAND=clamdscan
@@ -265,6 +266,7 @@ Untuk production HTTPS di belakang Nginx, biarkan `AUTH_COOKIE_SECURE=auto` atau
 `HSTS_MAX_AGE_SECONDS=31536000` menyediakan tempoh preload-ready. Kekalkan `HSTS_PRELOAD_ENABLED=0` sehingga semua subdomain production benar-benar HTTPS-only; selepas disahkan, set `HSTS_PRELOAD_ENABLED=1`, deploy, dan submit domain ke `https://hstspreload.org`.
 Receipt upload production perlu melalui ClamAV. Gunakan `clamdscan --fdpass` jika `clamav-daemon` aktif; jika hanya `clamscan` tersedia, tukar command dan args kepada fallback yang dinyatakan dalam `.env.example`.
 Mulakan `PG_MAX_CONNECTIONS=10` untuk production kecil dan naikkan ke 20 hanya selepas semak `max_connections`, RAM PostgreSQL, dan log `PostgreSQL pool pressure detected`.
+Kekalkan `PG_STATEMENT_TIMEOUT_MS=30000` sebagai guard query runaway PostgreSQL. Jika backup/report production sah memerlukan statement lebih lama, naikkan nilai ini secara deliberate dan pastikan ia masih lebih rendah daripada `HTTP_REQUEST_TIMEOUT_MS` atau selari dengan runbook backup yang dipantau.
 `CORS_ALLOWED_ORIGINS` bukan mekanisme auth. Browser origin yang dibenarkan tetap perlu cookie/token sah, dan request server-to-server tanpa `Origin` masih bergantung pada auth, CSRF guard yang sesuai, rate limit, dan route permission.
 Jika SMTP config berubah, restart semua PM2 worker selepas update env kerana transporter SMTP dicache dalam proses.
 Jika anda rotate `SESSION_SECRET`, device fingerprint HMAC turut berubah; guna `SESSION_SECRET_PREVIOUS` untuk compatibility window yang dirancang, atau paksa login semula jika rotation kecemasan.

@@ -705,6 +705,34 @@ test("runtime config accepts standard PostgreSQL env aliases", async () => {
   );
 });
 
+test("runtime config defaults PostgreSQL statement timeout to 30 seconds", async () => {
+  await withEnv(
+    {
+      ...productionLikeDevelopmentBaseOverrides,
+      PG_STATEMENT_TIMEOUT_MS: null,
+    },
+    async () => {
+      const runtimeModule = await importRuntimeFresh();
+
+      assert.equal(runtimeModule.runtimeConfig.database.statementTimeoutMs, 30_000);
+    },
+  );
+});
+
+test("runtime config accepts an explicit PostgreSQL statement timeout override", async () => {
+  await withEnv(
+    {
+      ...productionLikeDevelopmentBaseOverrides,
+      PG_STATEMENT_TIMEOUT_MS: "120000",
+    },
+    async () => {
+      const runtimeModule = await importRuntimeFresh();
+
+      assert.equal(runtimeModule.runtimeConfig.database.statementTimeoutMs, 120_000);
+    },
+  );
+});
+
 test("runtime config accepts an explicit backup payload size override", async () => {
   await withEnv(
     {

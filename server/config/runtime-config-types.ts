@@ -64,6 +64,7 @@ export type RuntimeConfig = {
     maxConnections: number;
     idleTimeoutMs: number;
     connectionTimeoutMs: number;
+    statementTimeoutMs: number;
     searchPath: string;
     ssl: {
       ca?: string;

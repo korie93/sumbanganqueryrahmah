@@ -57,6 +57,23 @@ test("runtime env schema rejects integer values outside configured bounds", () =
   );
 });
 
+test("runtime env schema validates PostgreSQL statement timeout bounds", () => {
+  assert.doesNotThrow(() => {
+    validateRuntimeEnvironmentSchema({
+      PG_STATEMENT_TIMEOUT_MS: "30000",
+    });
+  });
+
+  assert.throws(
+    () => {
+      validateRuntimeEnvironmentSchema({
+        PG_STATEMENT_TIMEOUT_MS: "999",
+      });
+    },
+    /PG_STATEMENT_TIMEOUT_MS.*at least 1000/i,
+  );
+});
+
 test("runtime env schema validates CSV import row limits", () => {
   assert.doesNotThrow(() => {
     validateRuntimeEnvironmentSchema({

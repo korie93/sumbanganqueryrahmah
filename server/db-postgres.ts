@@ -2,14 +2,18 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
 import { runtimeConfig } from "./config/runtime";
 import { buildPgSslPoolConfig } from "./config/database-ssl";
-import { validatePgSearchPath } from "./config/db-search-path";
 import {
   bindPgPoolHealthCheck,
   bindPgPoolMonitoring,
 } from "./db-pool-monitor";
+import { buildPgRuntimePoolOptions } from "./db-postgres-options";
 
 const { Pool } = pg;
 const pgSslPoolConfig = buildPgSslPoolConfig(runtimeConfig.database.ssl);
+const pgRuntimePoolOptions = buildPgRuntimePoolOptions({
+  searchPath: runtimeConfig.database.searchPath,
+  statementTimeoutMs: runtimeConfig.database.statementTimeoutMs,
+});
 
 export const pool = new Pool(
   runtimeConfig.database.connectionString
@@ -18,7 +22,7 @@ export const pool = new Pool(
         max: runtimeConfig.database.maxConnections,
         idleTimeoutMillis: runtimeConfig.database.idleTimeoutMs,
         connectionTimeoutMillis: runtimeConfig.database.connectionTimeoutMs,
-        options: `-c search_path=${validatePgSearchPath(runtimeConfig.database.searchPath)}`,
+        options: pgRuntimePoolOptions,
         ...pgSslPoolConfig,
       }
     : {
@@ -30,7 +34,7 @@ export const pool = new Pool(
         max: runtimeConfig.database.maxConnections,
         idleTimeoutMillis: runtimeConfig.database.idleTimeoutMs,
         connectionTimeoutMillis: runtimeConfig.database.connectionTimeoutMs,
-        options: `-c search_path=${validatePgSearchPath(runtimeConfig.database.searchPath)}`,
+        options: pgRuntimePoolOptions,
         ...pgSslPoolConfig,
       },
 );

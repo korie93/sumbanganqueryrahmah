@@ -222,6 +222,7 @@ const runtimeEnvironmentSchema = z.object({
   PG_MAX_CONNECTIONS: optionalIntEnv("PG_MAX_CONNECTIONS", { min: 1, max: 50 }),
   PG_IDLE_TIMEOUT_MS: optionalIntEnv("PG_IDLE_TIMEOUT_MS", { min: 1_000 }),
   PG_CONNECTION_TIMEOUT_MS: optionalIntEnv("PG_CONNECTION_TIMEOUT_MS", { min: 1_000 }),
+  PG_STATEMENT_TIMEOUT_MS: optionalIntEnv("PG_STATEMENT_TIMEOUT_MS", { min: 1_000, max: 3_600_000 }),
   PG_SEARCH_PATH: optionalEnvString("PG_SEARCH_PATH", 255),
   SQR_DB_BOOTSTRAP_MODE: optionalDbBootstrapModeEnv(),
   SQR_ALLOW_RUNTIME_DB_BOOTSTRAP_IN_PRODUCTION: optionalBooleanEnv(
