@@ -122,9 +122,19 @@ export function createApiProtectionMiddleware(options: ApiProtectionOptions): {
 } {
   const adaptiveRateStore = options.adaptiveRateStore ?? null;
   const adaptiveRateState = new Map<string, AdaptiveRateBucket>();
+  let adaptiveRateStateQueue: Promise<void> = Promise.resolve();
   let lastAdaptiveSweepAt = 0;
   let adaptiveRateSweepStopped = false;
   let adaptiveRateStoreFailureEmitted = false;
+
+  function runAdaptiveRateStateExclusive<T>(operation: () => T | Promise<T>): Promise<T> {
+    const run = adaptiveRateStateQueue.then(operation, operation);
+    adaptiveRateStateQueue = run.then(
+      () => undefined,
+      () => undefined,
+    );
+    return run;
+  }
 
   function setAdaptiveRateBucket(bucketKey: string, bucket: AdaptiveRateBucket) {
     if (adaptiveRateState.has(bucketKey)) {
@@ -141,25 +151,34 @@ export function createApiProtectionMiddleware(options: ApiProtectionOptions): {
     }
   }
 
-  const sweepAdaptiveRateState = (now = Date.now()) => {
+  function sweepAdaptiveRateStateSync(now = Date.now()) {
     for (const [bucketKey, bucket] of adaptiveRateState.entries()) {
       if (now >= bucket.resetAt + ADAPTIVE_RATE_STALE_GRACE_MS) {
         adaptiveRateState.delete(bucketKey);
       }
     }
     lastAdaptiveSweepAt = now;
+  }
+
+  const sweepAdaptiveRateState = (now = Date.now()) => {
+    void runAdaptiveRateStateExclusive(() => sweepAdaptiveRateStateSync(now)).catch((error) => {
+      defaultLogger.warn("Adaptive rate local state sweep failed", {
+        error: error instanceof Error ? error.message : "Unknown adaptive rate sweep failure",
+      });
+    });
   };
 
-  function maybeSweepAdaptiveRateState(now: number) {
+  function maybeSweepAdaptiveRateStateSync(now: number) {
     if (
       adaptiveRateState.size >= ADAPTIVE_RATE_MAX_BUCKETS
       || now - lastAdaptiveSweepAt >= ADAPTIVE_RATE_SWEEP_INTERVAL_MS
     ) {
-      sweepAdaptiveRateState(now);
+      sweepAdaptiveRateStateSync(now);
     }
   }
 
-  function incrementLocalAdaptiveRateBucket(bucketKey: string, now: number): AdaptiveRateBucket {
+  function incrementLocalAdaptiveRateBucketSync(bucketKey: string, now: number): AdaptiveRateBucket {
+    maybeSweepAdaptiveRateStateSync(now);
     const bucket = adaptiveRateState.get(bucketKey);
 
     if (!bucket || now >= bucket.resetAt) {
@@ -179,6 +198,10 @@ export function createApiProtectionMiddleware(options: ApiProtectionOptions): {
     };
     setAdaptiveRateBucket(bucketKey, nextBucket);
     return nextBucket;
+  }
+
+  function incrementLocalAdaptiveRateBucket(bucketKey: string, now: number): Promise<AdaptiveRateBucket> {
+    return runAdaptiveRateStateExclusive(() => incrementLocalAdaptiveRateBucketSync(bucketKey, now));
   }
 
   async function incrementAdaptiveRateBucket(bucketKey: string, now: number): Promise<AdaptiveRateBucket> {
@@ -287,44 +310,51 @@ export function createApiProtectionMiddleware(options: ApiProtectionOptions): {
   }
 
   const adaptiveRateLimit: RequestHandler = (req, res, next) => {
-    void (async () => {
-      const controlState = options.getControlState();
-      if (!isRuntimeProtectedRoute(req)) return next();
-      if (isSessionControlRoute(req)) return next();
+    let operation: Promise<unknown>;
+    try {
+      operation = (async () => {
+        const controlState = options.getControlState();
+        if (!isRuntimeProtectedRoute(req)) return next();
+        if (isSessionControlRoute(req)) return next();
 
-      const now = Date.now();
-      maybeSweepAdaptiveRateState(now);
-      const { bucketKey, dynamicLimit } = resolveAdaptiveRateBucket(req);
-      let nextBucket: AdaptiveRateBucket;
-      try {
-        nextBucket = await incrementAdaptiveRateBucket(bucketKey, now);
-      } catch (error) {
-        if (error instanceof AdaptiveRateStateUnavailableError) {
-          res.setHeader("Retry-After", "5");
-          return res.status(503).json({
-            message: "Request protection state is temporarily unavailable.",
-            protection: true,
-            reason: "adaptive_rate_state_unavailable",
+        const now = Date.now();
+        const { bucketKey, dynamicLimit } = resolveAdaptiveRateBucket(req);
+        let nextBucket: AdaptiveRateBucket;
+        try {
+          nextBucket = await incrementAdaptiveRateBucket(bucketKey, now);
+        } catch (error) {
+          if (error instanceof AdaptiveRateStateUnavailableError) {
+            res.setHeader("Retry-After", "5");
+            return res.status(503).json({
+              message: "Request protection state is temporarily unavailable.",
+              protection: true,
+              reason: "adaptive_rate_state_unavailable",
+            });
+          }
+          throw error;
+        }
+        if (nextBucket.count > dynamicLimit) {
+          const retryAfterMs = Math.max(0, nextBucket.resetAt - now);
+          setAdaptiveRateLimitHeaders(res, {
+            limit: dynamicLimit,
+            retryAfterMs,
+          });
+          return res.status(429).json({
+            message: "Too many requests under current system load.",
+            limit: dynamicLimit,
+            retryAfterMs,
+            mode: controlState.mode,
           });
         }
-        throw error;
-      }
-      if (nextBucket.count > dynamicLimit) {
-        const retryAfterMs = Math.max(0, nextBucket.resetAt - now);
-        setAdaptiveRateLimitHeaders(res, {
-          limit: dynamicLimit,
-          retryAfterMs,
-        });
-        return res.status(429).json({
-          message: "Too many requests under current system load.",
-          limit: dynamicLimit,
-          retryAfterMs,
-          mode: controlState.mode,
-        });
-      }
 
-      return next();
-    })().catch(next);
+        return next();
+      })();
+    } catch (error) {
+      next(error);
+      return;
+    }
+
+    void operation.catch(next);
   };
 
   const systemProtectionMiddleware: RequestHandler = (req, res, next) => {

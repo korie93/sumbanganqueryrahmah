@@ -5,6 +5,7 @@ import {
   AUTH_SESSION_COOKIE_NAME,
   AUTH_SESSION_CSRF_COOKIE_NAME,
   AUTH_SESSION_CSRF_HEADER_NAME,
+  readAuthSessionCsrfTokenFromHeaders,
   readCookieValueFromHeader,
   rotateAuthSessionCsrfCookie,
 } from "../session-cookie";
@@ -65,4 +66,36 @@ test("rotateAuthSessionCsrfCookie refreshes only the csrf cookie", () => {
   assert.equal(cookies[0]?.options.httpOnly, false);
   assert.equal(cookies[0]?.options.sameSite, "strict");
   assert.equal(cookies[0]?.options.maxAge, AUTH_SESSION_MAX_AGE_MS);
+});
+
+test("readAuthSessionCsrfTokenFromHeaders accepts matching fixed-length csrf tokens", () => {
+  const csrfToken = "a".repeat(64);
+
+  assert.equal(
+    readAuthSessionCsrfTokenFromHeaders({
+      cookie: `${AUTH_SESSION_CSRF_COOKIE_NAME}=${csrfToken}`,
+      "x-csrf-token": csrfToken,
+    }),
+    csrfToken,
+  );
+});
+
+test("readAuthSessionCsrfTokenFromHeaders rejects unequal or non-standard csrf token lengths safely", () => {
+  const csrfToken = "a".repeat(64);
+
+  assert.equal(
+    readAuthSessionCsrfTokenFromHeaders({
+      cookie: `${AUTH_SESSION_CSRF_COOKIE_NAME}=${csrfToken}`,
+      "x-csrf-token": "a".repeat(63),
+    }),
+    null,
+  );
+
+  assert.equal(
+    readAuthSessionCsrfTokenFromHeaders({
+      cookie: `${AUTH_SESSION_CSRF_COOKIE_NAME}=short`,
+      "x-csrf-token": "short",
+    }),
+    null,
+  );
 });

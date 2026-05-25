@@ -5,6 +5,8 @@ import { createCsrfProtectionMiddleware } from "../csrf";
 import { logger } from "../../lib/logger";
 import { startTestServer, stopTestServer } from "../../routes/tests/http-test-utils";
 
+const VALID_CSRF_TOKEN = "a".repeat(64);
+
 function createCsrfTestApp() {
   const app = express();
   app.use(express.json());
@@ -41,7 +43,7 @@ test("csrf middleware rejects cross-site mutation requests when session cookie i
     const response = await fetch(`${baseUrl}/api/mutate`, {
       method: "POST",
       headers: {
-        Cookie: "sqr_auth=token-value; sqr_csrf=csrf-token",
+        Cookie: `sqr_auth=token-value; sqr_csrf=${VALID_CSRF_TOKEN}`,
         "sec-fetch-site": "cross-site",
       },
     });
@@ -65,8 +67,8 @@ test("csrf middleware accepts session mutations with a valid double-submit token
     const response = await fetch(`${baseUrl}/api/mutate`, {
       method: "POST",
       headers: {
-        Cookie: "sqr_auth=token-value; sqr_csrf=csrf-token",
-        "X-CSRF-Token": "csrf-token",
+        Cookie: `sqr_auth=token-value; sqr_csrf=${VALID_CSRF_TOKEN}`,
+        "X-CSRF-Token": VALID_CSRF_TOKEN,
       },
     });
 
@@ -90,7 +92,7 @@ test("csrf middleware rejects cookie-authenticated mutations that omit all CSRF 
     const response = await fetch(`${baseUrl}/api/mutate`, {
       method: "POST",
       headers: {
-        Cookie: "sqr_auth=token-value; sqr_csrf=csrf-token",
+        Cookie: `sqr_auth=token-value; sqr_csrf=${VALID_CSRF_TOKEN}`,
       },
     });
 
@@ -118,7 +120,7 @@ test("csrf middleware logs invalid origin rejections with the normalized origin"
     const response = await fetch(`${baseUrl}/api/mutate`, {
       method: "POST",
       headers: {
-        Cookie: "sqr_auth=token-value; sqr_csrf=csrf-token",
+        Cookie: `sqr_auth=token-value; sqr_csrf=${VALID_CSRF_TOKEN}`,
         Origin: "https://evil.example",
       },
     });
@@ -144,7 +146,7 @@ test("csrf middleware accepts cookie-authenticated mutations with a same-origin 
     const response = await fetch(`${baseUrl}/api/mutate`, {
       method: "POST",
       headers: {
-        Cookie: "sqr_auth=token-value; sqr_csrf=csrf-token",
+        Cookie: `sqr_auth=token-value; sqr_csrf=${VALID_CSRF_TOKEN}`,
         "sec-fetch-site": "same-origin",
       },
     });
@@ -199,7 +201,7 @@ test("csrf middleware exempts browser CSP reports from token checks", async () =
     const response = await fetch(`${baseUrl}/api/csp-report`, {
       method: "POST",
       headers: {
-        Cookie: "sqr_auth=token-value; sqr_csrf=csrf-token",
+        Cookie: `sqr_auth=token-value; sqr_csrf=${VALID_CSRF_TOKEN}`,
         "Content-Type": "application/csp-report",
       },
       body: JSON.stringify({
@@ -223,7 +225,7 @@ test("csrf middleware exempts canonical web-vitals telemetry from token checks",
     const response = await fetch(`${baseUrl}/api/telemetry/web-vitals`, {
       method: "POST",
       headers: {
-        Cookie: "sqr_auth=token-value; sqr_csrf=csrf-token",
+        Cookie: `sqr_auth=token-value; sqr_csrf=${VALID_CSRF_TOKEN}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
@@ -246,7 +248,7 @@ test("csrf middleware explicitly exempts legacy web-vitals telemetry from token 
     const response = await fetch(`${baseUrl}/telemetry/web-vitals`, {
       method: "POST",
       headers: {
-        Cookie: "sqr_auth=token-value; sqr_csrf=csrf-token",
+        Cookie: `sqr_auth=token-value; sqr_csrf=${VALID_CSRF_TOKEN}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({

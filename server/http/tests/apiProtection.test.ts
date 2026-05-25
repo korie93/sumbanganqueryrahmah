@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import express from "express";
+import type { NextFunction, Request, Response } from "express";
 import {
   createApiProtectionMiddleware,
   isRuntimeProtectedRoute,
@@ -263,6 +264,59 @@ test("adaptive API protection throttles telemetry flood attempts on the canonica
     assert.equal(payload.limit, 6);
     assert.equal(payload.mode, "NORMAL");
   } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("adaptive API protection serializes local state under concurrent bursts", async () => {
+  const app = createApiProtectionTestApp();
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const responses = await Promise.all(
+      Array.from({ length: 20 }, () => fetch(`${baseUrl}/api/noisy`)),
+    );
+    const statusCounts = responses.reduce<Record<number, number>>((counts, response) => {
+      counts[response.status] = (counts[response.status] ?? 0) + 1;
+      return counts;
+    }, {});
+
+    assert.equal(statusCounts[200], 8);
+    assert.equal(statusCounts[429], 12);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("adaptive API protection forwards synchronous setup errors to Express error handling", async () => {
+  const app = express();
+  const { adaptiveRateLimit, stopAdaptiveRateStateSweep } = createApiProtectionMiddleware({
+    getControlState: () => {
+      throw new Error("control-state-unavailable");
+    },
+    getDbProtection: () => false,
+  });
+
+  app.use(adaptiveRateLimit);
+  app.get("/api/noisy", (_req, res) => {
+    res.json({ ok: true });
+  });
+  app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
+    res.status(599).json({
+      message: error instanceof Error ? error.message : "unknown",
+    });
+  });
+
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(`${baseUrl}/api/noisy`);
+    assert.equal(response.status, 599);
+    assert.deepEqual(await response.json(), {
+      message: "control-state-unavailable",
+    });
+  } finally {
+    stopAdaptiveRateStateSweep();
     await stopTestServer(server);
   }
 });

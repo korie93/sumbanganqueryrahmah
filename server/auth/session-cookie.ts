@@ -12,6 +12,7 @@ export const AUTH_SESSION_CSRF_HEADER_NAME = "X-CSRF-Token";
 export { AUTH_SESSION_MAX_AGE_MS } from "./session-lifetime";
 
 type HeaderValue = string | string[] | undefined;
+const CSRF_TOKEN_COMPARE_BYTES = 64;
 
 function firstHeaderValue(value: HeaderValue): string {
   if (Array.isArray(value)) {
@@ -66,13 +67,18 @@ function setAuthSessionCsrfCookie(res: Response, csrfToken: string) {
 }
 
 function equalSafeToken(left: string, right: string): boolean {
-  const leftBuffer = Buffer.from(String(left || ""), "utf8");
-  const rightBuffer = Buffer.from(String(right || ""), "utf8");
-  if (leftBuffer.length === 0 || leftBuffer.length !== rightBuffer.length) {
-    return false;
-  }
+  const leftRawBuffer = Buffer.from(String(left || ""), "utf8");
+  const rightRawBuffer = Buffer.from(String(right || ""), "utf8");
+  const leftBuffer = Buffer.alloc(CSRF_TOKEN_COMPARE_BYTES);
+  const rightBuffer = Buffer.alloc(CSRF_TOKEN_COMPARE_BYTES);
+  leftRawBuffer.copy(leftBuffer, 0, 0, Math.min(leftRawBuffer.length, CSRF_TOKEN_COMPARE_BYTES));
+  rightRawBuffer.copy(rightBuffer, 0, 0, Math.min(rightRawBuffer.length, CSRF_TOKEN_COMPARE_BYTES));
+
   try {
-    return timingSafeEqual(leftBuffer, rightBuffer);
+    const equal = timingSafeEqual(leftBuffer, rightBuffer);
+    return leftRawBuffer.length === CSRF_TOKEN_COMPARE_BYTES
+      && rightRawBuffer.length === CSRF_TOKEN_COMPARE_BYTES
+      && equal;
   } catch {
     return false;
   }
