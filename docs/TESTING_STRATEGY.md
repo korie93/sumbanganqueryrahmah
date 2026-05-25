@@ -154,6 +154,18 @@ Maksudnya:
 
 Load testing production tidak patut dijalankan terus terhadap domain pengguna sebenar. Gunakan staging yang mempunyai PostgreSQL dan Redis terasing, data sintetik, serta `OPERATIONS_DEBUG_ROUTES_ENABLED=0` kecuali ketika drill terkawal.
 
+Repo ini menyediakan smoke load runner ringan tanpa dependency tambahan untuk baseline awal:
+
+```bash
+LOAD_SMOKE_BASE_URL=https://staging.example.test \
+LOAD_SMOKE_PATH=/api/health/live \
+LOAD_SMOKE_REQUESTS=200 \
+LOAD_SMOKE_CONCURRENCY=10 \
+npm run perf:load-smoke
+```
+
+Runner ini sesuai untuk health/readiness dan endpoint read-only staging. Ia bukan pengganti k6/Artillery, tetapi memberi JSON summary status code dan latency percentile untuk gate manual sebelum suite load penuh.
+
 Cadangan urutan sebelum integrasi k6/Artillery dalam CI:
 
 1. Rate-limit drill: hantar traffic terkawal ke `/api/auth/login`, `/api/search/global`, dan `/api/collection/daily/overview`; sahkan status 429 muncul tanpa pool pressure berpanjangan.
