@@ -119,6 +119,7 @@ test("client entry installs unhandled rejection logging before low-spec detectio
 
 test("browser color scheme metadata matches the light and dark token strategy", () => {
   const indexSource = readClientSource("../../index.html");
+  const tokenSource = readClientSource("../theme-tokens.css");
 
   assert.match(indexSource, /<meta name="color-scheme" content="light dark" \/>/);
   assert.match(indexSource, /<meta name="mobile-web-app-capable" content="yes" \/>/);
@@ -127,6 +128,11 @@ test("browser color scheme metadata matches the light and dark token strategy", 
   assert.match(indexSource, /<meta property="og:url" content="https:\/\/sqr-system\.com\/" \/>/);
   assert.match(indexSource, /<meta name="twitter:image" content="https:\/\/sqr-system\.com\/brand\/sqr-logo-minimal\.webp" \/>/);
   assert.doesNotMatch(indexSource, /<link rel="icon" type="image\/webp"/);
+  assert.match(tokenSource, /\.dark\s*{[\s\S]*color-scheme:\s*dark;[\s\S]*--background:/);
+  assert.doesNotMatch(
+    tokenSource,
+    /@media\s*\(prefers-color-scheme:\s*dark\)[\s\S]*color-scheme:\s*dark;/,
+  );
 });
 
 test("web app manifest exposes a lightweight internal shortcut", () => {

@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  getToastListenerCountForTests,
   getToastTimeoutCountForTests,
   resetToastStateForTests,
   subscribeToastState,
   toast,
+  TOAST_LISTENER_LIMIT,
   TOAST_REMOVE_DELAY_MS,
   TOAST_TIMEOUT_LIMIT,
 } from "@/hooks/use-toast";
@@ -75,4 +77,28 @@ test("toast timeout cleanup stays bounded when many dismissed toasts are created
 
   assert.ok(getToastTimeoutCountForTests() <= TOAST_TIMEOUT_LIMIT);
   resetToastStateForTests();
+});
+
+test("toast subscriptions are deduplicated, capped, and removed on cleanup", () => {
+  resetToastStateForTests();
+  const listener = () => undefined;
+
+  const unsubscribeFirst = subscribeToastState(listener);
+  const unsubscribeDuplicate = subscribeToastState(listener);
+  assert.equal(getToastListenerCountForTests(), 1);
+
+  unsubscribeDuplicate();
+  assert.equal(getToastListenerCountForTests(), 0);
+  unsubscribeFirst();
+  assert.equal(getToastListenerCountForTests(), 0);
+
+  const unsubscribers = Array.from({ length: TOAST_LISTENER_LIMIT + 5 }, () =>
+    subscribeToastState(() => undefined),
+  );
+  assert.equal(getToastListenerCountForTests(), TOAST_LISTENER_LIMIT);
+
+  for (const unsubscribe of unsubscribers) {
+    unsubscribe();
+  }
+  assert.equal(getToastListenerCountForTests(), 0);
 });

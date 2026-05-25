@@ -8,6 +8,7 @@ import type {
 const TOAST_LIMIT = 1
 export const TOAST_TIMEOUT_LIMIT = TOAST_LIMIT
 export const TOAST_REMOVE_DELAY_MS = 5000
+export const TOAST_LISTENER_LIMIT = 50
 
 type ToasterToast = ToastProps & {
   id: string
@@ -65,11 +66,17 @@ const clearToastTimeout = (toastId: string) => {
 
 const pruneToastTimeoutsForToastIds = (activeToastIds: ReadonlySet<string>) => {
   for (const toastId of Array.from(toastTimeouts.keys())) {
-    const belongsToVisibleToast = activeToastIds.has(toastId)
-    if (belongsToVisibleToast && toastTimeouts.size <= TOAST_TIMEOUT_LIMIT) {
-      continue
+    if (!activeToastIds.has(toastId)) {
+      clearToastTimeout(toastId)
     }
-    clearToastTimeout(toastId)
+  }
+
+  while (toastTimeouts.size > TOAST_TIMEOUT_LIMIT) {
+    const oldestToastId = toastTimeouts.keys().next().value
+    if (!oldestToastId) {
+      return
+    }
+    clearToastTimeout(oldestToastId)
   }
 }
 
@@ -151,14 +158,14 @@ export const reducer = (state: State, action: Action): State => {
   }
 }
 
-const listeners: Array<(state: State) => void> = []
+const listeners = new Set<(state: State) => void>()
 
 let memoryState: State = { toasts: [] }
 
 function dispatch(action: Action) {
   memoryState = reducer(memoryState, action)
   pruneToastTimeoutsForToastIds(new Set(memoryState.toasts.map((toast) => toast.id)))
-  listeners.forEach((listener) => {
+  Array.from(listeners).forEach((listener) => {
     listener(memoryState)
   })
 }
@@ -167,24 +174,33 @@ export function getToastTimeoutCountForTests() {
   return toastTimeouts.size
 }
 
+export function getToastListenerCountForTests() {
+  return listeners.size
+}
+
 export function resetToastStateForTests() {
   for (const toastId of Array.from(toastTimeouts.keys())) {
     clearToastTimeout(toastId)
   }
   memoryState = { toasts: [] }
-  listeners.forEach((listener) => {
+  Array.from(listeners).forEach((listener) => {
     listener(memoryState)
   })
 }
 
 export function subscribeToastState(listener: (state: State) => void) {
-  listeners.push(listener)
+  listeners.add(listener)
+
+  while (listeners.size > TOAST_LISTENER_LIMIT) {
+    const oldestListener = listeners.values().next().value
+    if (!oldestListener) {
+      break
+    }
+    listeners.delete(oldestListener)
+  }
 
   return () => {
-    const index = listeners.indexOf(listener)
-    if (index > -1) {
-      listeners.splice(index, 1)
-    }
+    listeners.delete(listener)
   }
 }
 
