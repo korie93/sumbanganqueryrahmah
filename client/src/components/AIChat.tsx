@@ -70,13 +70,15 @@ export default function AIChat({
       </div>
 
       {slowNotice ? (
-        <div className="ai-notice">
+        <div className="ai-notice" role="status" aria-live="polite" aria-atomic="true">
           <p className="ai-notice-title">Sistem sedang memproses data.</p>
           <p>Ini mungkin mengambil masa sedikit pada komputer spesifikasi rendah.</p>
         </div>
       ) : null}
       {gateNotice ? (
-        <div className="ai-notice">{gateNotice}</div>
+        <div className="ai-notice" role="status" aria-live="polite" aria-atomic="true">
+          {gateNotice}
+        </div>
       ) : null}
 
       <div

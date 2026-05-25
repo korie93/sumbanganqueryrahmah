@@ -43,6 +43,15 @@ test("toast notifications expose polite and assertive live-region semantics", ()
   assert.match(toastSource, /"aria-live": "polite" as const/);
 });
 
+test("AI chat dynamic status and message regions are announced politely", () => {
+  const aiChatSource = readSource("../AIChat.tsx");
+
+  assert.match(aiChatSource, /<span role="status" aria-live="polite" aria-atomic="true">/);
+  assert.match(aiChatSource, /role="log"/);
+  assert.match(aiChatSource, /aria-relevant="additions text"/);
+  assert.match(aiChatSource, /className="ai-notice" role="status" aria-live="polite" aria-atomic="true"/);
+});
+
 test("toast close controls keep an explicit accessible name", () => {
   const toastSource = readSource("toast.tsx");
 

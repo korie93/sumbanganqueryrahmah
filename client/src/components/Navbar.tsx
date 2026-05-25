@@ -61,6 +61,7 @@ function NavbarImpl({
   const navScrollerRef = useRef<HTMLDivElement>(null)
   const desktopUserMenuTriggerRef = useRef<HTMLButtonElement>(null)
   const mobileUserMenuTriggerRef = useRef<HTMLButtonElement>(null)
+  const navbarMountedRef = useRef(true)
   const pendingFocusTimeoutsRef = useRef<Array<ReturnType<typeof globalThis.setTimeout>>>([])
 
   const directItems = useMemo(
@@ -109,22 +110,35 @@ function NavbarImpl({
     "aria-expanded": mobileNavOpen,
   } as const
 
-  useEffect(() => () => {
+  const clearPendingUserMenuFocusTimeouts = useCallback(() => {
     for (const timeoutHandle of pendingFocusTimeoutsRef.current) {
       globalThis.clearTimeout(timeoutHandle)
     }
     pendingFocusTimeoutsRef.current = []
   }, [])
 
+  useEffect(() => {
+    navbarMountedRef.current = true
+
+    return () => {
+      navbarMountedRef.current = false
+      clearPendingUserMenuFocusTimeouts()
+    }
+  }, [clearPendingUserMenuFocusTimeouts])
+
   const scheduleUserMenuTriggerFocus = useCallback((focusTrigger: () => void) => {
+    clearPendingUserMenuFocusTimeouts()
     const timeoutHandle = globalThis.setTimeout(() => {
       pendingFocusTimeoutsRef.current = pendingFocusTimeoutsRef.current.filter(
         (pendingTimeoutHandle) => pendingTimeoutHandle !== timeoutHandle
       )
+      if (!navbarMountedRef.current) {
+        return
+      }
       focusTrigger()
     }, 0)
     pendingFocusTimeoutsRef.current.push(timeoutHandle)
-  }, [])
+  }, [clearPendingUserMenuFocusTimeouts])
 
   const focusDesktopUserMenuTrigger = useCallback(() => {
     desktopUserMenuTriggerRef.current?.focus({ preventScroll: true })
