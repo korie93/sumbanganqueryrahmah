@@ -35,6 +35,15 @@ export async function resolveCollectionReceiptRequestContext(
     };
   }
 
+  if (Array.isArray(req.params.id)) {
+    return {
+      ok: false,
+      statusCode: 400,
+      message: "Collection id must be a single path segment.",
+      reason: "invalid_collection_id",
+    };
+  }
+
   const id = normalizeCollectionText(req.params.id);
   if (!id) {
     return {
@@ -70,11 +79,20 @@ export async function resolveCollectionReceiptRequestContext(
     };
   }
 
+  const rawReceiptId = receiptIdRaw ?? req.params.receiptId ?? null;
+  if (Array.isArray(rawReceiptId)) {
+    return {
+      ok: false,
+      statusCode: 400,
+      message: "Receipt id must be a single path segment.",
+      reason: "invalid_receipt_id",
+      meta: { recordId: record.id },
+    };
+  }
+
   return {
     ok: true,
     record,
-    requestedReceiptId: normalizeCollectionText(
-      receiptIdRaw ?? req.params.receiptId ?? null,
-    ),
+    requestedReceiptId: normalizeCollectionText(rawReceiptId),
   };
 }

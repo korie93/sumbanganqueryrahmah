@@ -56,6 +56,25 @@ export function readNonEmptyString(
   return normalized;
 }
 
+export function readRouteParam(
+  value: unknown,
+  name = "Route parameter",
+  maxLength = DEFAULT_READ_STRING_MAX_LENGTH,
+): string {
+  if (Array.isArray(value)) {
+    throw badRequest(
+      `${name} must be a single path segment.`,
+      ERROR_CODES.INVALID_IDENTIFIER,
+    );
+  }
+
+  const normalized = readNonEmptyString(value, maxLength);
+  if (!normalized) {
+    throw badRequest(`${name} is required.`, ERROR_CODES.INVALID_IDENTIFIER);
+  }
+  return normalized;
+}
+
 export function readOptionalString(
   value: unknown,
   maxLength = DEFAULT_READ_STRING_MAX_LENGTH,

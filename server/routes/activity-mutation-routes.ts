@@ -1,7 +1,7 @@
 import type { Response } from "express";
 import type { AuthenticatedRequest } from "../auth/guards";
 import { asyncHandler } from "../http/async-handler";
-import { readNonEmptyString } from "../http/validation";
+import { readNonEmptyString, readRouteParam } from "../http/validation";
 import {
   buildActivityErrorPayload,
   buildActivitySuccessPayload,
@@ -27,11 +27,7 @@ export function registerActivityMutationRoutes(context: ActivityRouteContext) {
     requireRole("admin", "superuser"),
     requireTabAccess("activity"),
     asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
-      const activityId = readNonEmptyString(req.params.id);
-      if (!activityId) {
-        return res.status(400).json(buildActivityErrorPayload("Invalid activityId"));
-      }
-
+      const activityId = readRouteParam(req.params.id, "activity id");
       await activityService.deleteActivityLog(activityId);
       return res.json(buildActivitySuccessPayload());
     }),

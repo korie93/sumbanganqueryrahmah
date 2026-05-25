@@ -1,6 +1,6 @@
 import type { Response } from "express";
 import type { AuthenticatedRequest } from "../auth/guards";
-import { ensureObject } from "../http/validation";
+import { ensureObject, readRouteParam } from "../http/validation";
 import type { AiIndexOperationsService } from "../services/ai-index-operations.service";
 import type { AiInteractionService } from "../services/ai-interaction.service";
 
@@ -30,8 +30,9 @@ export function createAiController(deps: CreateAiControllerDeps) {
 
   const indexImport = async (req: AuthenticatedRequest, res: Response) => {
     const body = ensureObject(req.body) || {};
+    const importId = readRouteParam(req.params.id, "import id");
     const result = await aiIndexOperationsService.indexImport({
-      importId: req.params.id,
+      importId,
       username: req.user!.username,
       batchSize: body.batchSize,
       maxRows: body.maxRows,
@@ -42,8 +43,9 @@ export function createAiController(deps: CreateAiControllerDeps) {
 
   const importBranches = async (req: AuthenticatedRequest, res: Response) => {
     const body = ensureObject(req.body) || {};
+    const importId = readRouteParam(req.params.id, "import id");
     const result = await aiIndexOperationsService.importBranches({
-      importId: req.params.id,
+      importId,
       username: req.user!.username,
       nameKey: body.nameKey,
       latKey: body.latKey,

@@ -23,20 +23,19 @@ Upgrade dependency majors through dependency-only PRs. Each major upgrade should
 include the relevant targeted tests, `npm run audit:dependencies`,
 `npm run verify:bundle-budgets`, and a rollback note.
 
-## Express 5 Migration Plan
+## Express 5 Runtime
 
-The current Express 4 stack is protected by explicit async wrappers and HTTP
-contract tests. Express 5 should be handled as a planned migration, not a drive-by
-audit fix:
+The backend now runs on Express 5. Keep explicit async wrappers in place until a
+separate route-by-route cleanup proves that native async rejection handling gives
+the same sanitized error responses and request logging.
 
-1. Create a dependency-only branch that updates Express and its middleware
-   peers.
-2. Run all route integration tests and verify async errors still reach the
-   centralized error handler.
-3. Re-check body-parser, query parsing, rate-limit, CSRF, and upload middleware
-   behavior against the existing HTTP contract tests.
-4. Promote only after smoke UI and authenticated accessibility checks pass in
-   staging.
+Express 5 route parameters can be typed as repeated values for wildcard-style
+matches. Production routes that consume identifiers should normalize path
+segments with `readRouteParam(...)` so repeated or missing route parameters are
+rejected before they reach controllers or repositories.
+
+For future Express upgrades, run the dependency audit gate, HTTP and route
+integration tests, bundle checks, and the local smoke/a11y flow before promotion.
 
 ## Capture/PDF Libraries
 

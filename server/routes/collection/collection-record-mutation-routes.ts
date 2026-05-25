@@ -1,5 +1,6 @@
 import { createCollectionMultipartRoute } from "./collection-multipart-routes";
 import type { CollectionRouteContext } from "./collection-route-shared";
+import { readRouteParam } from "../../http/validation";
 
 export function registerCollectionRecordMutationRoutes(context: CollectionRouteContext) {
   const {
@@ -25,8 +26,14 @@ export function registerCollectionRecordMutationRoutes(context: CollectionRouteC
 
   const handleUpdateCollectionRecord = jsonMutationRoute(
     "Failed to update collection record.",
-    (req) => `collection-record:update:${String(req.params.id || "").trim()}`,
-    (req) => collectionService.updateRecord(req.user, req.params.id, req.body),
+    (req) => {
+      const recordId = readRouteParam(req.params.id, "collection record id");
+      return `collection-record:update:${recordId}`;
+    },
+    (req) => {
+      const recordId = readRouteParam(req.params.id, "collection record id");
+      return collectionService.updateRecord(req.user, recordId, req.body);
+    },
   );
 
   app.patch(
@@ -55,8 +62,14 @@ export function registerCollectionRecordMutationRoutes(context: CollectionRouteC
     ...reportAccess,
     jsonMutationRoute(
       "Failed to delete collection record.",
-      (req) => `collection-record:delete:${String(req.params.id || "").trim()}`,
-      (req) => collectionService.deleteRecord(req.user, req.params.id, req.body),
+      (req) => {
+        const recordId = readRouteParam(req.params.id, "collection record id");
+        return `collection-record:delete:${recordId}`;
+      },
+      (req) => {
+        const recordId = readRouteParam(req.params.id, "collection record id");
+        return collectionService.deleteRecord(req.user, recordId, req.body);
+      },
     ),
   );
 }

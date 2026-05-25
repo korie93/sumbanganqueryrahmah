@@ -2,7 +2,7 @@ import type { Response } from "express";
 import type { WebSocket } from "ws";
 import { runWithRequestDeadline } from "../http/request-deadline";
 import type { AuthenticatedRequest } from "../auth/guards";
-import { ensureObject } from "../http/validation";
+import { ensureObject, readRouteParam } from "../http/validation";
 import type { AuditLogOperationsService } from "../services/audit-log-operations.service";
 import type { BackupJobQueueService } from "../services/backup-job-queue.service";
 import type { BackupOperationsService } from "../services/backup-operations.service";
@@ -136,12 +136,14 @@ export function createOperationsController(deps: CreateOperationsControllerDeps)
   };
 
   const getBackup = async (req: AuthenticatedRequest, res: Response) => {
-    const result = await backupOperationsService.getBackupMetadata(req.params.id, req.user!.username);
+    const backupId = readRouteParam(req.params.id, "backup id");
+    const result = await backupOperationsService.getBackupMetadata(backupId, req.user!.username);
     return res.status(result.statusCode).json(result.body);
   };
 
   const getBackupJob = async (req: AuthenticatedRequest, res: Response) => {
-    const job = await backupJobQueueService.getJob(req.params.jobId);
+    const jobId = readRouteParam(req.params.jobId, "backup job id");
+    const job = await backupJobQueueService.getJob(jobId);
     if (!job) {
       return res.status(404).json({ message: "Backup job not found" });
     }
@@ -149,6 +151,7 @@ export function createOperationsController(deps: CreateOperationsControllerDeps)
   };
 
   const exportBackup = async (req: AuthenticatedRequest, res: Response) => {
+    const backupId = readRouteParam(req.params.id, "backup id");
     const outcome = await runWithRequestDeadline(
       res,
       {
@@ -157,7 +160,7 @@ export function createOperationsController(deps: CreateOperationsControllerDeps)
         timeoutMessage:
           "Backup export is taking longer than expected. Please retry in a moment.",
       },
-      () => backupOperationsService.exportBackup(req.params.id, req.user!.username),
+      () => backupOperationsService.exportBackup(backupId, req.user!.username),
     );
     if (outcome.timedOut) {
       return;
@@ -189,11 +192,12 @@ export function createOperationsController(deps: CreateOperationsControllerDeps)
   };
 
   const restoreBackup = async (req: AuthenticatedRequest, res: Response) => {
+    const backupId = readRouteParam(req.params.id, "backup id");
     if (isAsyncJobRequested(req.query.async)) {
       const job = await backupJobQueueService.enqueue({
         type: "restore",
         requestedBy: req.user!.username,
-        backupId: req.params.id,
+        backupId,
       });
       return res.status(202).json({
         message: "Backup restore queued.",
@@ -211,7 +215,7 @@ export function createOperationsController(deps: CreateOperationsControllerDeps)
       },
       () =>
         backupOperationsService.restoreBackup({
-          backupId: req.params.id,
+          backupId,
           username: req.user!.username,
         }),
     );
@@ -224,8 +228,9 @@ export function createOperationsController(deps: CreateOperationsControllerDeps)
   };
 
   const deleteBackup = async (req: AuthenticatedRequest, res: Response) => {
+    const backupId = readRouteParam(req.params.id, "backup id");
     const result = await backupOperationsService.deleteBackup({
-      backupId: req.params.id,
+      backupId,
       username: req.user!.username,
     });
     return res.status(result.statusCode).json(result.body);

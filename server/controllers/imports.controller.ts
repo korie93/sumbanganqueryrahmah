@@ -3,7 +3,7 @@ import { z } from "zod";
 import type { AuthenticatedRequest } from "../auth/guards";
 import { badRequest, notFound } from "../http/errors";
 import { runWithRequestDeadline } from "../http/request-deadline";
-import { readInteger, readNonEmptyString } from "../http/validation";
+import { readInteger, readNonEmptyString, readRouteParam } from "../http/validation";
 import {
   cleanupPreparedMultipartImportUpload,
   type PreparedMultipartImportUpload,
@@ -166,11 +166,7 @@ export function createImportsController(deps: CreateImportsControllerDeps) {
   };
 
   const getImport = async (req: AuthenticatedRequest, res: Response) => {
-    const importId = readNonEmptyString(req.params.id);
-    if (!importId) {
-      throw notFound("Import not found");
-    }
-
+    const importId = readRouteParam(req.params.id, "import id");
     const details = await importsService.getImportDetails(importId);
     if (!details) {
       throw notFound("Import not found");
@@ -181,7 +177,7 @@ export function createImportsController(deps: CreateImportsControllerDeps) {
 
   const getImportDataPage = async (req: AuthenticatedRequest, res: Response) => {
     const runtimeSettings = await getRuntimeSettingsCached();
-    const importId = readNonEmptyString(req.params.id);
+    const importId = readRouteParam(req.params.id, "import id");
     const page = Math.max(1, readInteger(req.query.page, 1));
     const cursor = readNonEmptyString(req.query.cursor);
     const requestedPageSize = readInteger(
@@ -190,10 +186,6 @@ export function createImportsController(deps: CreateImportsControllerDeps) {
     );
     const search = String(req.query.search || "").trim();
     const columnFilters = parseViewerColumnFiltersQuery(req.query.columnFilters);
-
-    if (!importId) {
-      throw badRequest("importId is required");
-    }
 
     try {
       const result = await importsService.getImportDataPage({
@@ -217,6 +209,7 @@ export function createImportsController(deps: CreateImportsControllerDeps) {
   };
 
   const analyzeImport = async (req: AuthenticatedRequest, res: Response) => {
+    const importId = readRouteParam(req.params.id, "import id");
     const outcome = await runWithRequestDeadline(
       res,
       {
@@ -225,7 +218,7 @@ export function createImportsController(deps: CreateImportsControllerDeps) {
         timeoutMessage:
           "Import analysis is taking longer than expected. Please retry in a moment.",
       },
-      (signal) => importsService.analyzeImport(req.params.id, signal),
+      (signal) => importsService.analyzeImport(importId, signal),
     );
     if (outcome.timedOut) {
       return;
@@ -258,8 +251,9 @@ export function createImportsController(deps: CreateImportsControllerDeps) {
   };
 
   const renameImport = async (req: AuthenticatedRequest, res: Response) => {
+    const importId = readRouteParam(req.params.id, "import id");
     const { name } = importsService.parseRenameBody(req.body);
-    const updated = await importsService.renameImport(req.params.id, name, req.user?.username);
+    const updated = await importsService.renameImport(importId, name, req.user?.username);
     if (!updated) {
       throw notFound("Import not found");
     }
@@ -268,7 +262,8 @@ export function createImportsController(deps: CreateImportsControllerDeps) {
   };
 
   const deleteImport = async (req: AuthenticatedRequest, res: Response) => {
-    const deleted = await importsService.deleteImport(req.params.id, req.user?.username);
+    const importId = readRouteParam(req.params.id, "import id");
+    const deleted = await importsService.deleteImport(importId, req.user?.username);
     if (!deleted) {
       throw notFound("Import not found");
     }

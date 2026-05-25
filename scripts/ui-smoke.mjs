@@ -1719,24 +1719,40 @@ const readCollectionRecordVersionBySearch = async (
 ) => {
   const normalizedRecordId = String(recordId || "").trim();
   const normalizedAccountNumber = String(accountNumber || "").trim();
-  if (!normalizedRecordId || !normalizedAccountNumber) {
+  if (!normalizedRecordId) {
     return "";
   }
 
-  const apiPath = `/api/collection/list?search=${encodeURIComponent(normalizedAccountNumber)}&limit=100&offset=0`;
+  const apiPaths = [];
+  if (normalizedAccountNumber) {
+    apiPaths.push(`/api/collection/list?search=${encodeURIComponent(normalizedAccountNumber)}&limit=100&offset=0`);
+  }
+  apiPaths.push("/api/collection/list?limit=100&offset=0");
+
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-    const response = await apiJsonRequest(context, "GET", apiPath, undefined, [200, 429]);
-    if (response.status === 429) {
-      if (attempt === maxAttempts) {
-        break;
+    for (const apiPath of apiPaths) {
+      const response = await apiJsonRequest(context, "GET", apiPath, undefined, [200, 429]);
+      if (response.status === 429) {
+        if (attempt === maxAttempts) {
+          break;
+        }
+        await waitForRateLimitRecovery(response.payload, 800);
+        continue;
       }
-      await waitForRateLimitRecovery(response.payload, 800);
-      continue;
+
+      const rows = Array.isArray(response.payload?.records) ? response.payload.records : [];
+      const matched = rows.find((row) => String(row?.id || "").trim() === normalizedRecordId);
+      const version = String(matched?.updatedAt || matched?.createdAt || "").trim();
+      if (version) {
+        return version;
+      }
     }
 
-    const rows = Array.isArray(response.payload?.records) ? response.payload.records : [];
-    const matched = rows.find((row) => String(row?.id || "").trim() === normalizedRecordId);
-    return String(matched?.updatedAt || matched?.createdAt || "").trim();
+    if (attempt < maxAttempts) {
+      await new Promise((resolve) => {
+        setTimeout(resolve, 250);
+      });
+    }
   }
 
   return "";

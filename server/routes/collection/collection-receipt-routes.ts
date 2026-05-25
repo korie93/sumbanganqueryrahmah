@@ -1,4 +1,5 @@
 import type { AuthenticatedRequest } from "../../auth/guards";
+import { readRouteParam } from "../../http/validation";
 import { serveCollectionReceipt } from "../collection-receipt.service";
 import type { CollectionRouteContext } from "./collection-route-shared";
 
@@ -29,12 +30,12 @@ export function registerCollectionReceiptRoutes(context: CollectionRouteContext)
   const viewSpecificReceipt = createCollectionReceiptRouteHandler({
     context,
     mode: "view",
-    resolveReceiptId: (req) => req.params.receiptId,
+    resolveReceiptId: (req) => readRouteParam(req.params.receiptId, "receipt id"),
   });
   const downloadSpecificReceipt = createCollectionReceiptRouteHandler({
     context,
     mode: "download",
-    resolveReceiptId: (req) => req.params.receiptId,
+    resolveReceiptId: (req) => readRouteParam(req.params.receiptId, "receipt id"),
   });
 
   context.app.get(

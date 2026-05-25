@@ -1,5 +1,6 @@
 import { asyncHandler } from "../../http/async-handler";
 import { isStrictLocalDevelopmentEnvironment } from "../../config/runtime-environment";
+import { readRouteParam } from "../../http/validation";
 import type { AuthRouteContext } from "./auth-route-shared";
 
 function isLoopbackHost(hostname: string): boolean {
@@ -39,7 +40,8 @@ export function registerAuthDevMailRoutes(context: AuthRouteContext) {
         return res.status(404).type("text/plain").send("Not found.");
       }
 
-      const html = await authAccountService.getDevMailPreviewHtml(req.params.previewId);
+      const previewId = readRouteParam(req.params.previewId, "mail preview id");
+      const html = await authAccountService.getDevMailPreviewHtml(previewId);
       if (!html) {
         return res.status(404).type("text/plain").send("Not found.");
       }
@@ -74,7 +76,8 @@ export function registerAuthDevMailRoutes(context: AuthRouteContext) {
     requireRole("superuser"),
     adminDestructiveActionRateLimiter,
     jsonRoute(async (req) => {
-      const result = await authAccountService.deleteDevMailPreview(req.user, req.params.previewId);
+      const previewId = readRouteParam(req.params.previewId, "mail preview id");
+      const result = await authAccountService.deleteDevMailPreview(req.user, previewId);
       return {
         ok: true,
         deleted: result.deleted,

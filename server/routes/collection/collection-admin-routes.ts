@@ -1,4 +1,5 @@
 import type { CollectionRouteContext } from "./collection-route-shared";
+import { readRouteParam } from "../../http/validation";
 
 export function registerCollectionAdminRoutes(context: CollectionRouteContext) {
   const {
@@ -30,27 +31,27 @@ export function registerCollectionAdminRoutes(context: CollectionRouteContext) {
     "/api/collection/admin-groups/:groupId",
     ...superuserReportAccess,
     jsonRoute("Failed to update admin group.", (req) =>
-      collectionService.updateAdminGroup(req.user, req.params.groupId, req.body)),
+      collectionService.updateAdminGroup(req.user, readRouteParam(req.params.groupId, "admin group id"), req.body)),
   );
 
   app.delete(
     "/api/collection/admin-groups/:groupId",
     ...superuserReportAccess,
     jsonRoute("Failed to delete admin group.", (req) =>
-      collectionService.deleteAdminGroup(req.user, req.params.groupId)),
+      collectionService.deleteAdminGroup(req.user, readRouteParam(req.params.groupId, "admin group id"))),
   );
 
   app.get(
     "/api/collection/nickname-assignments/:adminId",
     ...superuserReportAccess,
     jsonRoute("Failed to load nickname assignments.", (req) =>
-      collectionService.getNicknameAssignments(req.params.adminId)),
+      collectionService.getNicknameAssignments(readRouteParam(req.params.adminId, "admin id"))),
   );
 
   app.put(
     "/api/collection/nickname-assignments/:adminId",
     ...superuserReportAccess,
     jsonRoute("Failed to save nickname assignments.", (req) =>
-      collectionService.setNicknameAssignments(req.user, req.params.adminId, req.body)),
+      collectionService.setNicknameAssignments(req.user, readRouteParam(req.params.adminId, "admin id"), req.body)),
   );
 }

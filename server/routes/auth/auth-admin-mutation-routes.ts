@@ -7,6 +7,7 @@ import {
   readManagedUserRoleBody,
   readManagedUserStatusBody,
 } from "./auth-request-parsers";
+import { readRouteParam } from "../../http/validation";
 import type { AuthRouteContext } from "./auth-route-shared";
 
 export function registerAuthAdminMutationRoutes(context: AuthRouteContext) {
@@ -48,9 +49,10 @@ export function registerAuthAdminMutationRoutes(context: AuthRouteContext) {
     requireRole("superuser"),
     rateLimiters.adminAction,
     jsonRoute(async (req) => {
+      const userId = readRouteParam(req.params.id, "user id");
       const user = await authAccountService.updateManagedUser(
         req.user,
-        req.params.id,
+        userId,
         readManagedUserPatchBody(req.body),
       );
 
@@ -67,7 +69,8 @@ export function registerAuthAdminMutationRoutes(context: AuthRouteContext) {
     requireRole("superuser"),
     adminDestructiveActionRateLimiter,
     jsonRoute(async (req) => {
-      const result = await authAccountService.deleteManagedUser(req.user, req.params.id);
+      const userId = readRouteParam(req.params.id, "user id");
+      const result = await authAccountService.deleteManagedUser(req.user, userId);
       closeActivitySockets(
         result.closedSessionIds,
         "Account deleted by superuser.",
@@ -88,9 +91,10 @@ export function registerAuthAdminMutationRoutes(context: AuthRouteContext) {
     rateLimiters.adminAction,
     jsonRoute(async (req) => {
       const body = readManagedUserRoleBody(req.body);
+      const userId = readRouteParam(req.params.id, "user id");
       const result = await authAccountService.updateManagedUserRole(
         req.user,
-        req.params.id,
+        userId,
         body.role,
       );
       closeActivitySockets(
@@ -113,7 +117,8 @@ export function registerAuthAdminMutationRoutes(context: AuthRouteContext) {
     rateLimiters.adminAction,
     jsonRoute(async (req) => {
       const body = readManagedUserStatusBody(req.body);
-      const result = await authAccountService.updateManagedUserStatus(req.user, req.params.id, body);
+      const userId = readRouteParam(req.params.id, "user id");
+      const result = await authAccountService.updateManagedUserStatus(req.user, userId, body);
 
       closeActivitySockets(
         result.closedSessionIds,
@@ -135,7 +140,8 @@ export function registerAuthAdminMutationRoutes(context: AuthRouteContext) {
     requireRole("superuser"),
     rateLimiters.adminAction,
     jsonRoute(async (req) => {
-      const result = await authAccountService.resetManagedUserPassword(req.user, req.params.id);
+      const userId = readRouteParam(req.params.id, "user id");
+      const result = await authAccountService.resetManagedUserPassword(req.user, userId);
       closeActivitySockets(
         result.closedSessionIds,
         "Password reset by superuser. Please login again.",
@@ -156,7 +162,8 @@ export function registerAuthAdminMutationRoutes(context: AuthRouteContext) {
     requireRole("superuser"),
     rateLimiters.adminAction,
     jsonRoute(async (req) => {
-      const result = await authAccountService.resendActivation(req.user, req.params.id);
+      const userId = readRouteParam(req.params.id, "user id");
+      const result = await authAccountService.resendActivation(req.user, userId);
       return {
         ok: true,
         user: buildUserPayload(result.user),
@@ -180,7 +187,8 @@ export function registerAuthAdminMutationRoutes(context: AuthRouteContext) {
         );
       }
 
-      const user = await authAccountService.updateManagedUser(req.user, req.params.id, {
+      const userId = readRouteParam(req.params.id, "user id");
+      const user = await authAccountService.updateManagedUser(req.user, userId, {
         username: body.newUsername,
       });
 

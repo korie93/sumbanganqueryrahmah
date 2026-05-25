@@ -205,15 +205,18 @@ pool.on('remove', () => metrics.increment('db.connections.removed'));
 
 #### Low Priority
 
-**L1. Consider moving from Express to Fastify**
+**L1. Revisit Fastify only as a future architecture migration**
 
-Express 4.x lacks native async/await support (hence your `asyncHandler` wrapper). Fastify offers:
+The application now runs on Express 5. Keep the existing `asyncHandler` wrapper
+until route contracts prove native async rejection handling preserves the same
+sanitized responses. Fastify may still be evaluated in a future architecture
+cycle for:
 - Native async route handlers
 - Built-in schema validation (JSON Schema)
 - 2-3x better throughput for JSON-heavy workloads
 - Built-in Pino integration
 
-This is a significant migration, so only consider it if you're doing a major version bump.
+This is a significant framework migration, not a hardening patch.
 
 **L2. Add health check depth levels**
 

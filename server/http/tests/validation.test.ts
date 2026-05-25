@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { HttpError } from "../../http/errors";
-import { readBooleanFlag, readDate, readStringList } from "../../http/validation";
+import { readBooleanFlag, readDate, readRouteParam, readStringList } from "../../http/validation";
 
 test("readBooleanFlag accepts explicit truthy and falsy literals", () => {
   assert.equal(readBooleanFlag(true), true);
@@ -36,6 +36,28 @@ test("readStringList trims blank values after parsing escaped segments", () => {
   assert.deepEqual(
     readStringList(" first \\, value , ,second,,\\,,  "),
     ["first , value", "second", ","],
+  );
+});
+
+test("readRouteParam rejects missing and repeated path params", () => {
+  assert.equal(readRouteParam(" record-1 ", "record id"), "record-1");
+
+  assert.throws(
+    () => readRouteParam(["one", "two"], "record id"),
+    (error) =>
+      error instanceof HttpError
+      && error.statusCode === 400
+      && error.code === "INVALID_IDENTIFIER"
+      && /single path segment/i.test(error.message),
+  );
+
+  assert.throws(
+    () => readRouteParam("", "record id"),
+    (error) =>
+      error instanceof HttpError
+      && error.statusCode === 400
+      && error.code === "INVALID_IDENTIFIER"
+      && /required/i.test(error.message),
   );
 });
 
