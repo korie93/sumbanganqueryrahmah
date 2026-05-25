@@ -11,8 +11,10 @@ import {
   createImportsUploadRateLimiter,
   createAuthRouteRateLimiters,
   getAdaptiveRateLimitCooldownStats,
+  getAdaptiveRateLimitCooldownKeysForTests,
   normalizeAuthRateLimitIdentifier,
   pruneAdaptiveRateLimitCooldowns,
+  recordAdaptiveRateLimitViolationForTests,
   startAdaptiveRateLimitCooldownSweep,
   stopAdaptiveRateLimitCooldownSweep,
 } from "../rate-limit";
@@ -258,6 +260,28 @@ test("auth adaptive cooldown records violations through one bounded post-write p
     stopAdaptiveRateLimitCooldownSweep();
     clearAdaptiveRateLimitCooldownsForTests();
     await stopTestServer(server);
+  }
+});
+
+test("auth adaptive cooldown cap evicts least recently used buckets without scanning for oldest timestamps", () => {
+  stopAdaptiveRateLimitCooldownSweep();
+  clearAdaptiveRateLimitCooldownsForTests();
+
+  try {
+    const startedAt = Date.now();
+    for (let index = 0; index < 4_096; index += 1) {
+      recordAdaptiveRateLimitViolationForTests(`client-${index}`, 60_000, startedAt + index);
+    }
+    recordAdaptiveRateLimitViolationForTests("client-0", 60_000, startedAt + 4_096);
+    recordAdaptiveRateLimitViolationForTests("client-new", 60_000, startedAt + 4_097);
+
+    const keys = getAdaptiveRateLimitCooldownKeysForTests();
+    assert.equal(keys.length, 4_096);
+    assert.equal(keys.includes("client-0"), true);
+    assert.equal(keys.includes("client-1"), false);
+    assert.equal(keys[keys.length - 1], "client-new");
+  } finally {
+    clearAdaptiveRateLimitCooldownsForTests();
   }
 });
 

@@ -140,19 +140,11 @@ export function pruneAdaptiveRateLimitCooldowns(nowMs = Date.now()): number {
   }
 
   while (adaptiveRateLimitCooldowns.size > ADAPTIVE_RATE_LIMIT_MAX_BUCKETS) {
-    let oldestKey: string | null = null;
-    let oldestSeenAt = Number.POSITIVE_INFINITY;
-    for (const [key, bucket] of adaptiveRateLimitCooldowns) {
-      if (bucket.lastSeenAt < oldestSeenAt) {
-        oldestKey = key;
-        oldestSeenAt = bucket.lastSeenAt;
-      }
-    }
-
-    if (!oldestKey) {
+    const oldest = adaptiveRateLimitCooldowns.keys().next();
+    if (oldest.done) {
       break;
     }
-    adaptiveRateLimitCooldowns.delete(oldestKey);
+    adaptiveRateLimitCooldowns.delete(oldest.value);
     removedCount += 1;
   }
 
@@ -196,6 +188,10 @@ export function clearAdaptiveRateLimitCooldownsForTests() {
   adaptiveRateLimitCooldowns.clear();
 }
 
+export function getAdaptiveRateLimitCooldownKeysForTests(): string[] {
+  return Array.from(adaptiveRateLimitCooldowns.keys());
+}
+
 function resolveJsonRateLimiterKey(req: Request, options: JsonRateLimiterOptions): string {
   return options.keyGenerator?.(req) ?? buildRateLimitKey(req, options.code);
 }
@@ -218,6 +214,8 @@ function getAdaptiveRateLimitCooldown(key: string, nowMs: number): AdaptiveRateL
     return null;
   }
   bucket.lastSeenAt = nowMs;
+  adaptiveRateLimitCooldowns.delete(key);
+  adaptiveRateLimitCooldowns.set(key, bucket);
   return bucket;
 }
 
@@ -237,12 +235,20 @@ function recordAdaptiveRateLimitViolation(
     lastSeenAt: nowMs,
     strikeCount,
   };
+  adaptiveRateLimitCooldowns.delete(key);
   adaptiveRateLimitCooldowns.set(key, bucket);
-  // Keep the violation hot path to one bounded O(n) prune per failed request:
-  // expired-key lookup is handled above, and this post-write sweep enforces
-  // both TTL eviction and the global bucket cap after the mutation.
+  // Keep the violation hot path bounded: expired-key lookup is handled above,
+  // and Map insertion order provides O(1) LRU eviction for the global cap.
   pruneAdaptiveRateLimitCooldowns(nowMs);
   return bucket;
+}
+
+export function recordAdaptiveRateLimitViolationForTests(
+  key: string,
+  windowMs: number,
+  nowMs: number,
+): AdaptiveRateLimitBucket {
+  return recordAdaptiveRateLimitViolation(key, windowMs, nowMs);
 }
 
 function createJsonRateLimiter(options: JsonRateLimiterOptions): RequestHandler {
