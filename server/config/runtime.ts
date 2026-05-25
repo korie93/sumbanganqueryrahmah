@@ -345,6 +345,7 @@ export const runtimeConfig: RuntimeConfig = Object.freeze({
     maintenanceCacheTtlMs: readInt("MAINTENANCE_CACHE_TTL_MS", 3_000, { min: 500 }),
     runtimeSettingsCacheTtlMs: readInt("RUNTIME_SETTINGS_CACHE_TTL_MS", 3_000, { min: 500 }),
     pgPoolWarnCooldownMs: readInt("PG_POOL_WARN_COOLDOWN_MS", 60_000, { min: 1_000 }),
+    redisHealthCheckIntervalMs: readInt("SQR_REDIS_HEALTH_CHECK_INTERVAL_MS", 60_000, { min: 5_000 }),
     gracefulShutdownTimeoutMs: readInt("GRACEFUL_SHUTDOWN_TIMEOUT_MS", 25_000, { min: 1_000 }),
     backupOperationTimeoutMs: readInt("BACKUP_OPERATION_TIMEOUT_MS", 120_000, { min: 5_000 }),
     backupMaxPayloadBytes: readInt(

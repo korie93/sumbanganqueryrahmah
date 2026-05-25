@@ -12,6 +12,7 @@ import { PostgresStorage } from "../storage-postgres";
 import { createAiConcurrencyGate } from "./aiConcurrencyGate";
 import { createApiProtectionMiddleware } from "./apiProtection";
 import { createAdaptiveRateStateStore } from "./redis-adaptive-rate-store";
+import { startRedisHealthMonitor } from "./redis-health-monitor";
 import { configureTwoFactorReplayStoreForRuntime } from "../auth/two-factor-replay-cache";
 import { createTwoFactorReplayStore } from "../auth/redis-two-factor-replay-store";
 import { configureSessionRevocationStoreForRuntime } from "../auth/session-revocation-store";
@@ -129,6 +130,24 @@ export function createLocalRuntimeEnvironment(options: CreateLocalRuntimeEnviron
     connectedClients,
   } = composition;
   const adaptiveRateStore = createAdaptiveRateStateStore(runtimeConfig.rateLimiting.store);
+  const stopRedisHealthMonitor = startRedisHealthMonitor({
+    intervalMs: runtimeConfig.runtime.redisHealthCheckIntervalMs,
+    targets: [
+      {
+        label: "rate-limit/adaptive/2fa/revocation",
+        redisUrl: runtimeConfig.rateLimiting.store.provider === "redis"
+          ? runtimeConfig.rateLimiting.store.redisUrl
+          : null,
+      },
+      {
+        label: "websocket-shared-bus",
+        redisUrl: runtimeConfig.websocket.sharedBus.provider === "redis"
+          ? runtimeConfig.websocket.sharedBus.redisUrl
+          : null,
+      },
+    ],
+  });
+  server.once("close", stopRedisHealthMonitor);
   const stopTwoFactorReplayStore = configureTwoFactorReplayStoreForRuntime(
     createTwoFactorReplayStore(runtimeConfig.rateLimiting.store),
   );

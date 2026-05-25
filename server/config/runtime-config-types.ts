@@ -124,6 +124,7 @@ export type RuntimeConfig = {
     maintenanceCacheTtlMs: number;
     runtimeSettingsCacheTtlMs: number;
     pgPoolWarnCooldownMs: number;
+    redisHealthCheckIntervalMs: number;
     gracefulShutdownTimeoutMs: number;
     backupOperationTimeoutMs: number;
     backupMaxPayloadBytes: number;

@@ -66,6 +66,12 @@ npm run monitor:stale-conflicts
 
 Process-local memory rate limiting is acceptable only for single-worker/single-instance deployments. Redis (`SQR_RATE_LIMIT_STORE=redis` and `SQR_REDIS_RATE_LIMIT_URL`) shares fixed-window counters, adaptive runtime-protection buckets, 2FA replay protection, and JWT logout revocation checks across app processes. WebSocket fan-out can also use Redis (`SQR_WS_SHARED_BUS=redis`, optionally `SQR_REDIS_WS_URL`) for settings broadcasts and cross-worker activity close propagation. Production multi-worker mode is allowed only when both the Redis rate-limit/replay store and WebSocket shared bus are configured. When Redis is explicitly configured for adaptive protection or session revocation, the system fails closed instead of silently falling back to process-local memory; operators should treat repeated `adaptive_rate_state_unavailable` responses or revocation-store warnings as an infrastructure incident.
 
+When any Redis-backed runtime component is configured, the local server also runs
+a lightweight Redis health monitor. It pings each unique Redis endpoint every
+`SQR_REDIS_HEALTH_CHECK_INTERVAL_MS` milliseconds, logs a warning while an
+endpoint remains unavailable, and logs recovery once pings succeed again. The
+monitor sanitizes Redis URLs before logging so credentials are never emitted.
+
 The Redis integrations use long-lived multiplexed clients rather than a large
 application-side connection pool. Keep Redis `maxclients` sized for every app
 process plus publisher/subscriber duplicates, and watch reconnect warnings:
