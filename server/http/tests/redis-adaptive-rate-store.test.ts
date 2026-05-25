@@ -50,6 +50,7 @@ test("RedisAdaptiveRateStateStore increments adaptive buckets through Redis with
 
 test("RedisAdaptiveRateStateStore returns null after Redis failures so middleware can fail closed", async () => {
   const warnings: Array<{ message: string; payload: unknown }> = [];
+  let now = 1_000;
   const store = new RedisAdaptiveRateStateStore({
     config: {
       distributedStoreConfigured: true,
@@ -72,6 +73,8 @@ test("RedisAdaptiveRateStateStore returns null after Redis failures so middlewar
         warnings.push({ message, payload });
       },
     },
+    now: () => now,
+    warningRepeatMs: 5_000,
   });
 
   const bucket = await store.increment({
@@ -87,6 +90,23 @@ test("RedisAdaptiveRateStateStore returns null after Redis failures so middlewar
     warnings[0].message,
     "Redis adaptive rate state unavailable; protected requests will fail closed",
   );
+
+  assert.equal(await store.increment({
+    bucketKey: "203.0.113.10:api",
+    now: 2_000,
+    staleGraceMs: 10_000,
+    windowMs: 10_000,
+  }), null);
+  assert.equal(warnings.length, 1);
+
+  now += 5_000;
+  assert.equal(await store.increment({
+    bucketKey: "203.0.113.10:api",
+    now: 3_000,
+    staleGraceMs: 10_000,
+    windowMs: 10_000,
+  }), null);
+  assert.equal(warnings.length, 2);
 });
 
 test("RedisAdaptiveRateStateStore retries Redis after a failed adaptive connection", async () => {

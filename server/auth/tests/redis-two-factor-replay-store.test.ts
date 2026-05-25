@@ -36,6 +36,7 @@ test("RedisTwoFactorReplayStore consumes a TOTP code once using SET NX with a bo
 
 test("RedisTwoFactorReplayStore rejects replay checks closed when Redis is unavailable", async () => {
   const warnings: Array<{ message: string; payload: unknown }> = [];
+  let now = 1_000;
   const store = new RedisTwoFactorReplayStore({
     config: {
       distributedStoreConfigured: true,
@@ -58,11 +59,20 @@ test("RedisTwoFactorReplayStore rejects replay checks closed when Redis is unava
         warnings.push({ message, payload });
       },
     },
+    now: () => now,
+    warningRepeatMs: 5_000,
   });
 
   assert.equal(await store.consume({ code: "123456", purpose: "login", subjectId: "user-1" }), false);
   assert.equal(warnings.length, 1);
   assert.equal(warnings[0].message, "Redis 2FA replay store unavailable; rejecting TOTP replay checks closed");
+
+  assert.equal(await store.consume({ code: "123456", purpose: "login", subjectId: "user-1" }), false);
+  assert.equal(warnings.length, 1);
+
+  now += 5_000;
+  assert.equal(await store.consume({ code: "123456", purpose: "login", subjectId: "user-1" }), false);
+  assert.equal(warnings.length, 2);
 });
 
 test("RedisTwoFactorReplayStore retries after a failed Redis connection", async () => {

@@ -1,7 +1,10 @@
 import crypto from "node:crypto";
 import { logger as defaultLogger } from "../lib/logger";
 import type { SharedRateLimitStoreConfig } from "../middleware/rate-limit-runtime";
-import { createRedisReconnectStrategy } from "../middleware/redis-rate-limit-store";
+import {
+  createRedisReconnectStrategy,
+  REDIS_UNAVAILABLE_WARNING_REPEAT_MS,
+} from "../middleware/redis-rate-limit-store";
 import type { SessionRevocationRecord, SessionRevocationStore } from "./session-revocation-store";
 
 type LoggerLike = Pick<typeof defaultLogger, "warn">;
@@ -23,7 +26,9 @@ type RedisSessionRevocationStoreOptions = {
   config: SharedRateLimitStoreConfig;
   createRedisClient?: RedisSessionRevocationClientFactory;
   logger?: LoggerLike;
+  now?: () => number;
   prefix?: string;
+  warningRepeatMs?: number;
 };
 
 const MIN_REVOCATION_TTL_MS = 1_000;
@@ -58,17 +63,22 @@ export class RedisSessionRevocationStore implements SessionRevocationStore {
   private readonly config: SharedRateLimitStoreConfig;
   private readonly createRedisClient: RedisSessionRevocationClientFactory | null;
   private readonly logger: LoggerLike;
+  private readonly now: () => number;
   private readonly prefix: string;
   private client: RedisSessionRevocationClientLike | null = null;
   private clientPromise: Promise<RedisSessionRevocationClientLike | null> | null = null;
+  private lastWarningAt = 0;
   private shuttingDown = false;
   private warningEmitted = false;
+  private readonly warningRepeatMs: number;
 
   constructor(options: RedisSessionRevocationStoreOptions) {
     this.config = options.config;
     this.createRedisClient = options.createRedisClient ?? null;
     this.logger = options.logger ?? defaultLogger;
+    this.now = options.now ?? Date.now;
     this.prefix = normalizeRedisPrefix(options.prefix);
+    this.warningRepeatMs = Math.max(1, Math.trunc(Number(options.warningRepeatMs ?? REDIS_UNAVAILABLE_WARNING_REPEAT_MS)));
   }
 
   async isRevoked(jwtId: string): Promise<boolean> {
@@ -81,6 +91,7 @@ export class RedisSessionRevocationStore implements SessionRevocationStore {
     try {
       const value = await client.get(this.buildRedisKey(jwtId));
       this.warningEmitted = false;
+      this.lastWarningAt = 0;
       return value != null;
     } catch (error) {
       this.handleRedisFailure(error);
@@ -102,6 +113,7 @@ export class RedisSessionRevocationStore implements SessionRevocationStore {
         { PX: resolveTtlMs(record.expiresAtMs) },
       );
       this.warningEmitted = false;
+      this.lastWarningAt = 0;
     } catch (error) {
       this.handleRedisFailure(error);
     }
@@ -162,6 +174,7 @@ export class RedisSessionRevocationStore implements SessionRevocationStore {
       }
       this.client = client;
       this.warningEmitted = false;
+      this.lastWarningAt = 0;
       return client;
     } catch (error) {
       await this.closeClient(client);
@@ -178,10 +191,12 @@ export class RedisSessionRevocationStore implements SessionRevocationStore {
   }
 
   private logRedisFailure(error: unknown) {
-    if (this.warningEmitted) {
+    const now = this.now();
+    if (this.warningEmitted && now - this.lastWarningAt < this.warningRepeatMs) {
       return;
     }
     this.warningEmitted = true;
+    this.lastWarningAt = now;
     this.logger.warn("Redis session revocation store unavailable; rejecting session checks closed", {
       provider: this.config.provider,
       error: error instanceof Error ? error.message : "Unknown Redis failure",

@@ -118,6 +118,7 @@ test("RedisRateLimitStore shares counters across store instances", async () => {
 
 test("RedisRateLimitStore falls back to memory when Redis cannot connect", async () => {
   const warnings: unknown[] = [];
+  let now = 1_000;
   const store = new RedisRateLimitStore({
     config: redisConfig,
     createRedisClient: () => ({
@@ -135,7 +136,9 @@ test("RedisRateLimitStore falls back to memory when Redis cannot connect", async
         warnings.push({ message, payload });
       },
     },
+    now: () => now,
     prefix: "sqr:test:fallback",
+    warningRepeatMs: 5_000,
   });
   initStore(store);
 
@@ -143,6 +146,10 @@ test("RedisRateLimitStore falls back to memory when Redis cannot connect", async
   assert.equal((await store.increment("client-1")).totalHits, 2);
   assert.equal((await store.get("client-1"))?.totalHits, 2);
   assert.equal(warnings.length, 1);
+
+  now += 5_000;
+  assert.equal((await store.increment("client-1")).totalHits, 3);
+  assert.equal(warnings.length, 2);
 });
 
 test("RedisRateLimitStore retries Redis after a failed connection instead of permanently disabling it", async () => {

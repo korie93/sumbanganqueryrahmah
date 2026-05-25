@@ -45,6 +45,7 @@ test("RedisSessionRevocationStore persists revoked JWT ids with a bounded TTL", 
 
 test("RedisSessionRevocationStore rejects session checks closed when Redis is unavailable", async () => {
   const warnings: Array<{ message: string; payload: unknown }> = [];
+  let now = 1_000;
   const store = new RedisSessionRevocationStore({
     config: {
       distributedStoreConfigured: true,
@@ -70,11 +71,20 @@ test("RedisSessionRevocationStore rejects session checks closed when Redis is un
         warnings.push({ message, payload });
       },
     },
+    now: () => now,
+    warningRepeatMs: 5_000,
   });
 
   assert.equal(await store.isRevoked("jwt-1"), true);
   assert.equal(warnings.length, 1);
   assert.equal(warnings[0].message, "Redis session revocation store unavailable; rejecting session checks closed");
+
+  assert.equal(await store.isRevoked("jwt-1"), true);
+  assert.equal(warnings.length, 1);
+
+  now += 5_000;
+  assert.equal(await store.isRevoked("jwt-1"), true);
+  assert.equal(warnings.length, 2);
 });
 
 test("RedisSessionRevocationStore retries after a failed Redis connection", async () => {

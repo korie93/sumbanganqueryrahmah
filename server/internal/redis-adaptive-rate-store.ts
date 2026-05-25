@@ -2,7 +2,10 @@ import crypto from "node:crypto";
 import { logger as defaultLogger } from "../lib/logger";
 import type { AdaptiveRateStateStore } from "./apiProtection";
 import type { SharedRateLimitStoreConfig } from "../middleware/rate-limit-runtime";
-import { createRedisReconnectStrategy } from "../middleware/redis-rate-limit-store";
+import {
+  createRedisReconnectStrategy,
+  REDIS_UNAVAILABLE_WARNING_REPEAT_MS,
+} from "../middleware/redis-rate-limit-store";
 
 type LoggerLike = Pick<typeof defaultLogger, "warn">;
 
@@ -25,7 +28,9 @@ type RedisAdaptiveRateStateStoreOptions = {
   config: SharedRateLimitStoreConfig;
   createRedisClient?: RedisAdaptiveRateClientFactory;
   logger?: LoggerLike;
+  now?: () => number;
   prefix?: string;
+  warningRepeatMs?: number;
 };
 
 const ADAPTIVE_RATE_INCREMENT_SCRIPT = `
@@ -106,17 +111,22 @@ export class RedisAdaptiveRateStateStore implements AdaptiveRateStateStore {
   private readonly config: SharedRateLimitStoreConfig;
   private readonly createRedisClient: RedisAdaptiveRateClientFactory | null;
   private readonly logger: LoggerLike;
+  private readonly now: () => number;
   private readonly prefix: string;
   private client: RedisAdaptiveRateClientLike | null = null;
   private clientPromise: Promise<RedisAdaptiveRateClientLike | null> | null = null;
+  private lastWarningAt = 0;
   private shuttingDown = false;
   private warningEmitted = false;
+  private readonly warningRepeatMs: number;
 
   constructor(options: RedisAdaptiveRateStateStoreOptions) {
     this.config = options.config;
     this.createRedisClient = options.createRedisClient ?? null;
     this.logger = options.logger ?? defaultLogger;
+    this.now = options.now ?? Date.now;
     this.prefix = normalizeRedisPrefix(options.prefix);
+    this.warningRepeatMs = Math.max(1, Math.trunc(Number(options.warningRepeatMs ?? REDIS_UNAVAILABLE_WARNING_REPEAT_MS)));
   }
 
   async increment(options: {
@@ -145,6 +155,7 @@ export class RedisAdaptiveRateStateStore implements AdaptiveRateStateStore {
         throw new Error("Redis adaptive rate increment returned an invalid response.");
       }
       this.warningEmitted = false;
+      this.lastWarningAt = 0;
       return result;
     } catch (error) {
       this.handleRedisFailure(error);
@@ -207,6 +218,7 @@ export class RedisAdaptiveRateStateStore implements AdaptiveRateStateStore {
       }
       this.client = client;
       this.warningEmitted = false;
+      this.lastWarningAt = 0;
       return client;
     } catch (error) {
       await this.closeClient(client);
@@ -223,10 +235,12 @@ export class RedisAdaptiveRateStateStore implements AdaptiveRateStateStore {
   }
 
   private logRedisFailure(error: unknown) {
-    if (this.warningEmitted) {
+    const now = this.now();
+    if (this.warningEmitted && now - this.lastWarningAt < this.warningRepeatMs) {
       return;
     }
     this.warningEmitted = true;
+    this.lastWarningAt = now;
     this.logger.warn("Redis adaptive rate state unavailable; protected requests will fail closed", {
       provider: this.config.provider,
       error: error instanceof Error ? error.message : "Unknown Redis failure",

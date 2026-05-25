@@ -33,7 +33,9 @@ type RedisRateLimitStoreOptions = {
   config: SharedRateLimitStoreConfig;
   createRedisClient?: RedisClientFactory;
   logger?: LoggerLike;
+  now?: () => number;
   prefix: string;
+  warningRepeatMs?: number;
 };
 
 const REDIS_INCREMENT_SCRIPT = `
@@ -49,6 +51,7 @@ let defaultRedisClientFactoryPromise: Promise<RedisClientFactory> | null = null;
 
 const REDIS_RECONNECT_BASE_DELAY_MS = 500;
 const REDIS_RECONNECT_MAX_DELAY_MS = 30_000;
+export const REDIS_UNAVAILABLE_WARNING_REPEAT_MS = 60_000;
 
 async function resolveDefaultRedisClientFactory(): Promise<RedisClientFactory> {
   defaultRedisClientFactoryPromise ??= import("redis")
@@ -116,18 +119,23 @@ export class RedisRateLimitStore implements Store {
   private readonly config: SharedRateLimitStoreConfig;
   private readonly createRedisClient: RedisClientFactory | null;
   private readonly logger: LoggerLike;
+  private readonly now: () => number;
   private readonly fallbackStore = new MemoryStore();
   private client: RedisClientLike | null = null;
   private clientPromise: Promise<RedisClientLike | null> | null = null;
+  private lastWarningAt = 0;
   private shuttingDown = false;
   private warningEmitted = false;
+  private readonly warningRepeatMs: number;
   private windowMs = 60_000;
 
   constructor(options: RedisRateLimitStoreOptions) {
     this.config = options.config;
     this.createRedisClient = options.createRedisClient ?? null;
     this.logger = options.logger ?? defaultLogger;
+    this.now = options.now ?? Date.now;
     this.prefix = normalizeRedisPrefix(options.prefix);
+    this.warningRepeatMs = Math.max(1, Math.trunc(Number(options.warningRepeatMs ?? REDIS_UNAVAILABLE_WARNING_REPEAT_MS)));
   }
 
   init(options: Options) {
@@ -290,6 +298,7 @@ export class RedisRateLimitStore implements Store {
 
       this.client = client;
       this.warningEmitted = false;
+      this.lastWarningAt = 0;
       return client;
     } catch (error) {
       await this.closeClient(client);
@@ -311,11 +320,13 @@ export class RedisRateLimitStore implements Store {
   }
 
   private logRedisFailure(error: unknown) {
-    if (this.warningEmitted) {
+    const now = this.now();
+    if (this.warningEmitted && now - this.lastWarningAt < this.warningRepeatMs) {
       return;
     }
 
     this.warningEmitted = true;
+    this.lastWarningAt = now;
     this.logger.warn("Redis rate-limit store unavailable; falling back to process-local memory", {
       provider: this.config.provider,
       error: error instanceof Error ? error.message : "Unknown Redis failure",
