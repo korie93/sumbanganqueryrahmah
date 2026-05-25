@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, type QueryKey } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
 import {
   createBackupAsync,
@@ -12,8 +12,10 @@ import { useMutationFeedback } from "@/hooks/useMutationFeedback";
 import type {
   BackupJobRecord,
   BackupRecord,
+  BackupsResponse,
   RestoreResponse,
 } from "@/pages/backup-restore/types";
+import { removeBackupFromBackupsResponse } from "@/pages/backup-restore/backup-optimistic-updates";
 import { resolveBackupMutationResponse } from "@/pages/backup-restore/backup-mutation-response";
 import {
   buildRestoreSuccessSummary,
@@ -24,6 +26,10 @@ import {
 type BackupMutationStateOptions = {
   clearAllFilters: () => void;
   refetchBackups: () => Promise<unknown>;
+};
+
+type DeleteBackupMutationContext = {
+  previousBackupQueries: Array<[QueryKey, BackupsResponse | undefined]>;
 };
 
 export function useBackupMutationState({
@@ -145,25 +151,43 @@ export function useBackupMutationState({
     },
   });
 
-  const deleteBackupMutation = useMutation({
+  const deleteBackupMutation = useMutation<unknown, Error, string, DeleteBackupMutationContext>({
     mutationFn: (backupId: string) => deleteBackup(backupId),
-    onSuccess: async () => {
+    onMutate: async (backupId) => {
+      await queryClient.cancelQueries({ queryKey: ["/api/backups"] });
+      const previousBackupQueries = queryClient.getQueriesData<BackupsResponse>({
+        queryKey: ["/api/backups"],
+      });
+
+      queryClient.setQueriesData<BackupsResponse>({ queryKey: ["/api/backups"] }, (previous) =>
+        removeBackupFromBackupsResponse(previous, backupId),
+      );
+
+      return { previousBackupQueries };
+    },
+    onSuccess: () => {
       notifyMutationSuccess({
         title: "Success",
         description: "Backup has been successfully deleted.",
       });
       setShowDeleteDialog(null);
       setDeletingId(null);
-      await queryClient.invalidateQueries({ queryKey: ["/api/backups"] });
     },
-    onError: (error) => {
-      logClientError("Failed to delete backup:", error);
+    onError: (error, backupId, context) => {
+      for (const [queryKey, previousData] of context?.previousBackupQueries ?? []) {
+        queryClient.setQueryData(queryKey, previousData);
+      }
+
+      logClientError("Failed to delete backup:", error, { backupId });
       notifyMutationError({
         title: "Delete Failed",
         error,
         fallbackDescription: "Failed to delete backup.",
       });
       setDeletingId(null);
+    },
+    onSettled: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["/api/backups"] });
     },
   });
 
