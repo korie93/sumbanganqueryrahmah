@@ -1,5 +1,7 @@
 import type { Express } from "express";
+import { ERROR_CODES } from "../../shared/error-codes";
 import { runtimeConfig } from "../config/runtime";
+import { HttpError } from "../http/errors";
 import { logger } from "../lib/logger";
 import { runWithRequestContext } from "../lib/request-context";
 import { resolveRequestId } from "../http/request-id";
@@ -7,6 +9,7 @@ import { resolveRequestId } from "../http/request-id";
 const HTTP_SLOW_REQUEST_MS = runtimeConfig.runtime.httpSlowRequestMs;
 const API_VERSION_HEADER = "API-Version";
 const API_VERSION_VALUE = "1";
+const SUPPORTED_API_VERSIONS = new Set([API_VERSION_VALUE]);
 
 type NormalizedRequestUserAgent = {
   truncated: boolean;
@@ -31,6 +34,25 @@ function normalizeRequestUserAgent(rawUserAgent: unknown): NormalizedRequestUser
   };
 }
 
+function readApiVersionHeader(rawHeader: unknown): string | null {
+  if (rawHeader === undefined || rawHeader === null) {
+    return null;
+  }
+
+  if (Array.isArray(rawHeader)) {
+    if (rawHeader.length !== 1) {
+      return "<multiple>";
+    }
+    return String(rawHeader[0] || "").trim();
+  }
+
+  return String(rawHeader || "").trim();
+}
+
+function isVersionedApiRequest(path: string): boolean {
+  return path === "/api" || path.startsWith("/api/");
+}
+
 export function registerLocalHttpObservability(app: Express, options: LocalHttpObservabilityOptions) {
   app.use((req, res, next) => {
     const requestId = resolveRequestId(req.headers["x-request-id"]);
@@ -39,6 +61,21 @@ export function registerLocalHttpObservability(app: Express, options: LocalHttpO
     const userAgent = normalizedUserAgent.userAgent;
     res.setHeader("x-request-id", requestId);
     res.setHeader(API_VERSION_HEADER, API_VERSION_VALUE);
+    const requestedApiVersion = readApiVersionHeader(req.headers["api-version"]);
+
+    if (
+      isVersionedApiRequest(req.path)
+      && requestedApiVersion
+      && !SUPPORTED_API_VERSIONS.has(requestedApiVersion)
+    ) {
+      return next(new HttpError(406, "Unsupported API version.", {
+        code: ERROR_CODES.UNSUPPORTED_API_VERSION,
+        details: {
+          requestedVersion: requestedApiVersion,
+          supportedVersions: Array.from(SUPPORTED_API_VERSIONS),
+        },
+      }));
+    }
 
     runWithRequestContext({
       requestId,

@@ -8,6 +8,7 @@ import { gunzipSync } from "node:zlib";
 import express from "express";
 import { registerLocalHttpPipeline } from "../../internal/local-http-pipeline";
 import { logger } from "../../lib/logger";
+import { errorHandler } from "../../middleware/error-handler";
 import { startTestServer, stopTestServer } from "../../routes/tests/http-test-utils";
 import { SQR_TRUSTED_TYPES_POLICY_NAME } from "../../../shared/trusted-types";
 
@@ -138,6 +139,79 @@ test("registerLocalHttpPipeline preserves caller-provided request ids", async ()
     assert.equal(response.status, 200);
     assert.equal(response.headers.get("x-request-id"), "req-test-123");
     assert.equal(response.headers.get("api-version"), "1");
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("registerLocalHttpPipeline rejects unsupported API versions while preserving version 1 compatibility", async () => {
+  const app = express();
+  registerLocalHttpPipeline(app, {
+    importBodyLimit: "1mb",
+    collectionBodyLimit: "1mb",
+    defaultBodyLimit: "100kb",
+    uploadsRootDir: path.resolve(process.cwd(), "uploads"),
+    recordRequestStarted: () => undefined,
+    recordRequestFinished: () => undefined,
+    adaptiveRateLimit: (_req, _res, next) => next(),
+    systemProtectionMiddleware: (_req, _res, next) => next(),
+    maintenanceGuard: (_req, _res, next) => next(),
+  });
+  app.get("/api/versioned", (_req, res) => {
+    res.json({ ok: true });
+  });
+  app.use(errorHandler);
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const defaultVersionResponse = await fetch(`${baseUrl}/api/versioned`);
+    assert.equal(defaultVersionResponse.status, 200);
+    assert.equal(defaultVersionResponse.headers.get("api-version"), "1");
+
+    const explicitVersionOneResponse = await fetch(`${baseUrl}/api/versioned`, {
+      headers: {
+        "API-Version": "1",
+      },
+    });
+    assert.equal(explicitVersionOneResponse.status, 200);
+
+    const unsupportedVersionResponse = await fetch(`${baseUrl}/api/versioned`, {
+      headers: {
+        "API-Version": "2",
+      },
+    });
+    assert.equal(unsupportedVersionResponse.status, 406);
+    const unsupportedVersionPayload = await unsupportedVersionResponse.json() as {
+      ok: boolean;
+      message: string;
+      requestId?: string;
+      error?: {
+        code?: string;
+        message?: string;
+        details?: {
+          requestedVersion?: string;
+          supportedVersions?: string[];
+        };
+      };
+    };
+    assert.equal(unsupportedVersionPayload.ok, false);
+    assert.equal(unsupportedVersionPayload.message, "Unsupported API version.");
+    assert.equal(typeof unsupportedVersionPayload.requestId, "string");
+    assert.deepEqual(unsupportedVersionPayload.error, {
+      code: "UNSUPPORTED_API_VERSION",
+      message: "Unsupported API version.",
+      details: {
+        requestedVersion: "2",
+        supportedVersions: ["1"],
+      },
+    });
+
+    const nonApiResponse = await fetch(`${baseUrl}/versioned`, {
+      headers: {
+        "API-Version": "2",
+      },
+    });
+    assert.equal(nonApiResponse.status, 404);
   } finally {
     await stopTestServer(server);
   }

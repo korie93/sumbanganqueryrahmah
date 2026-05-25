@@ -2,10 +2,13 @@
 
 ## Current API Version Signal
 
-SQR currently exposes `API-Version: 1` on HTTP responses. Treat this as an
-observability and compatibility signal, not a full version-negotiation layer.
-Existing clients should continue using the current `/api/...` routes until a
-formal versioned contract is introduced.
+SQR currently exposes `API-Version: 1` on HTTP responses. API requests may omit
+the request header or send `API-Version: 1`; any other request version on
+`/api/...` is rejected with `UNSUPPORTED_API_VERSION`.
+
+Treat this as a compatibility guard and early migration hook, not a complete
+multi-version serializer layer. Existing clients should continue using the
+current `/api/...` routes until a formal versioned contract is introduced.
 
 ## Header-Based Versioning Plan
 
