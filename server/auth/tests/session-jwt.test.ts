@@ -9,6 +9,10 @@ import {
   signSessionJwt,
   verifyJwtWithAnySecret,
 } from "../session-jwt";
+import {
+  parseAuthenticatedSessionJwtPayload,
+  parseWebSocketSessionJwtPayload,
+} from "../session-jwt-payload";
 
 test("signSessionJwt applies the default session expiry when omitted", () => {
   const token = signSessionJwt({ username: "alice", role: "admin" });
@@ -61,5 +65,89 @@ test("verifyJwtWithAnySecret rejects tokens signed with non-session algorithms",
   assert.throws(
     () => verifyJwtWithAnySecret(token, ["current-secret"]),
     /invalid algorithm/i,
+  );
+});
+
+test("parseAuthenticatedSessionJwtPayload accepts only complete authenticated session claims", () => {
+  assert.deepEqual(
+    parseAuthenticatedSessionJwtPayload({
+      userId: "user-1",
+      username: "alice",
+      role: "admin",
+      activityId: "activity-1",
+      exp: 1_800_000_000,
+      iat: 1_799_999_000,
+      jti: "jwt-1",
+    }),
+    {
+      userId: "user-1",
+      username: "alice",
+      role: "admin",
+      activityId: "activity-1",
+      exp: 1_800_000_000,
+      iat: 1_799_999_000,
+      jti: "jwt-1",
+    },
+  );
+
+  assert.throws(
+    () => parseAuthenticatedSessionJwtPayload({
+      username: "alice",
+      role: "admin",
+      activityId: "activity-1",
+    }),
+    /Invalid session JWT payload/,
+  );
+  assert.throws(
+    () => parseAuthenticatedSessionJwtPayload({
+      userId: "user-1",
+      username: "alice",
+      role: "admin",
+      activityId: "",
+    }),
+    /Invalid session JWT payload/,
+  );
+  assert.throws(
+    () => parseAuthenticatedSessionJwtPayload({
+      userId: "user-1",
+      username: "alice",
+      role: "admin",
+      activityId: "activity-1",
+      injected: "do-not-accept",
+    }),
+    /Invalid session JWT payload/,
+  );
+});
+
+test("parseWebSocketSessionJwtPayload validates activity id while tolerating session identity claims", () => {
+  assert.deepEqual(
+    parseWebSocketSessionJwtPayload({
+      userId: "user-1",
+      username: "alice",
+      role: "admin",
+      activityId: "activity-1",
+    }),
+    {
+      userId: "user-1",
+      username: "alice",
+      role: "admin",
+      activityId: "activity-1",
+    },
+  );
+
+  assert.deepEqual(
+    parseWebSocketSessionJwtPayload({
+      activityId: "activity-1",
+    }),
+    {
+      activityId: "activity-1",
+    },
+  );
+
+  assert.throws(
+    () => parseWebSocketSessionJwtPayload({
+      activityId: " ",
+    }),
+    /Invalid session JWT payload/,
   );
 });

@@ -14,9 +14,13 @@ test("extractWsActivityId returns activity id for a valid token", () => {
 
 test("extractWsActivityId rejects invalid or missing activity ids", () => {
   const missingActivityIdToken = jwt.sign({ userId: "user-1" }, SECRET);
+  const malformedActivityIdToken = jwt.sign({ activityId: "" }, SECRET);
+  const tokenWithUnexpectedClaims = jwt.sign({ activityId: "activity-123", injected: true }, SECRET);
 
   assert.equal(extractWsActivityId("not-a-token", SECRET), null);
   assert.equal(extractWsActivityId(missingActivityIdToken, SECRET), null);
+  assert.equal(extractWsActivityId(malformedActivityIdToken, SECRET), null);
+  assert.equal(extractWsActivityId(tokenWithUnexpectedClaims, SECRET), null);
   assert.equal(extractWsActivityId("", SECRET), null);
 });
 

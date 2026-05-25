@@ -4,6 +4,7 @@ import { ERROR_CODES } from "../../shared/error-codes";
 import type { IStorage } from "../storage-postgres";
 import { getSessionSecret } from "../config/security";
 import { verifySessionJwt } from "./session-jwt";
+import { parseAuthenticatedSessionJwtPayload } from "./session-jwt-payload";
 import { isSessionJwtRevoked } from "./session-revocation-store";
 import {
   canUserBypassForcedPasswordChange,
@@ -87,7 +88,7 @@ export function createAuthGuards(options: CreateAuthGuardsOptions) {
     }
 
     try {
-      const decoded = verifySessionJwt<AuthenticatedUser>(token, secret) as AuthenticatedUser;
+      const decoded = parseAuthenticatedSessionJwtPayload(verifySessionJwt<unknown>(token, secret));
       const sessionExpiry = normalizeSessionExpiry(
         typeof decoded.exp === "number" ? decoded.exp * 1000 : null,
       );

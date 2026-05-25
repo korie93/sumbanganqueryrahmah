@@ -1,4 +1,5 @@
 import { verifySessionJwt } from "../auth/session-jwt";
+import { parseWebSocketSessionJwtPayload } from "../auth/session-jwt-payload";
 import { logger } from "../lib/logger";
 
 type ActivitySessionLike = {
@@ -7,17 +8,12 @@ type ActivitySessionLike = {
   logoutTime?: string | Date | null;
 } | null | undefined;
 
-type WsTokenPayload = {
-  activityId?: string | null;
-};
-
 export function extractWsActivityId(token: string, secret: string | readonly string[]): string | null {
   if (!token || !secret) return null;
 
   try {
-    const decoded = verifySessionJwt<WsTokenPayload>(token, secret);
-    const activityId = String(decoded?.activityId || "").trim();
-    return activityId || null;
+    const decoded = parseWebSocketSessionJwtPayload(verifySessionJwt<unknown>(token, secret));
+    return decoded.activityId;
   } catch (error) {
     const authError = error as Error;
     logger.warn("WebSocket session token verification failed", {

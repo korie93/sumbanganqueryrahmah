@@ -483,6 +483,72 @@ test("authenticateToken invalidates sessions with missing database identity fiel
   }
 });
 
+test("authenticateToken rejects structurally invalid JWT payloads before storage lookups", async () => {
+  const secret = "guard-test-secret";
+  let storageLookupCount = 0;
+  const guards = createAuthGuards({
+    storage: {
+      getActivityById: async () => {
+        storageLookupCount += 1;
+        return undefined;
+      },
+      getUser: async () => {
+        storageLookupCount += 1;
+        return undefined;
+      },
+      getUserByUsername: async () => {
+        storageLookupCount += 1;
+        return undefined;
+      },
+      isVisitorBanned: async () => {
+        storageLookupCount += 1;
+        return false;
+      },
+      updateActivity: async () => {
+        storageLookupCount += 1;
+        return undefined;
+      },
+      getRoleTabVisibility: async () => ({}),
+    },
+    secret,
+  });
+  const token = jwt.sign(
+    {
+      username: "guard.user",
+      role: "admin",
+      activityId: "activity-1",
+    },
+    secret,
+    { expiresIn: "24h" },
+  );
+  const response = createMockResponse();
+  let nextCalls = 0;
+
+  try {
+    await guards.authenticateToken(
+      {
+        headers: {
+          cookie: `sqr_auth=${encodeURIComponent(token)}`,
+        },
+        method: "GET",
+        path: "/api/me",
+      } as never,
+      response as never,
+      () => {
+        nextCalls += 1;
+      },
+    );
+
+    assert.equal(nextCalls, 0);
+    assert.equal(storageLookupCount, 0);
+    assert.equal(response.statusCode, 401);
+    assert.deepEqual(response.body, { message: "Invalid token" });
+  } finally {
+    guards.stopTabVisibilityCacheSweep();
+    guards.stopActivityUpdateCacheSweep();
+  }
+});
+
 test("authenticateToken throttles healthy activity updates per session id", async (t) => {
   const secret = "guard-test-secret";
   let now = new Date("2026-04-29T00:00:00.000Z").getTime();
