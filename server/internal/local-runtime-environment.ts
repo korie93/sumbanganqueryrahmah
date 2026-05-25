@@ -67,7 +67,7 @@ export function createLocalRuntimeEnvironment(options: CreateLocalRuntimeEnviron
       logger.error("WebSocket startup failed because the port is already in use", {
         path: "/ws",
       });
-      setTimeout(() => process.exit(98), 10).unref();
+      server.emit("error", err);
       return;
     }
     logger.error("WebSocket server error", { error: err, path: "/ws" });

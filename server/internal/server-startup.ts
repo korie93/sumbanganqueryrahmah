@@ -58,6 +58,14 @@ function getServerStartupErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+function createServerStartupError(reason: string, message: string) {
+  const error = new Error(message);
+  Object.assign(error, {
+    startupReason: reason,
+  });
+  return error;
+}
+
 export async function startLocalServer(options: StartLocalServerOptions) {
   const {
     app,
@@ -128,7 +136,6 @@ export async function startLocalServer(options: StartLocalServerOptions) {
 
   markStartupStage("initializing-storage");
   await storage.init();
-  markWebSocketConnectionsReady?.();
   try {
     await assertCollectionPiiRetirementStartupReady();
   } catch (error) {
@@ -147,6 +154,40 @@ export async function startLocalServer(options: StartLocalServerOptions) {
 
   markStartupStage("registering-runtime");
   registerFrontendStatic(app);
+
+  await new Promise<void>((resolve, reject) => {
+    const handleStartupError = (err: unknown) => {
+      const errorCode = getServerStartupErrorCode(err);
+      if (errorCode === "EADDRINUSE") {
+        const message = `Port ${port} is already in use`;
+        notifyFatalStartup("EADDRINUSE", message);
+        markStartupFailed("EADDRINUSE", message);
+        logger.error("Server startup failed because the port is already in use", {
+          port,
+          hint: `Wait a few seconds and retry, or inspect the port with lsof -i :${port} or netstat -ano | findstr :${port} on Windows.`,
+        });
+        reject(createServerStartupError("EADDRINUSE", message));
+        return;
+      }
+
+      const message = getServerStartupErrorMessage(err);
+      notifyFatalStartup("SERVER_STARTUP_ERROR", message);
+      markStartupFailed("SERVER_STARTUP_ERROR", message);
+      logger.error("Server startup failed", { error: err, port, host });
+      reject(createServerStartupError("SERVER_STARTUP_ERROR", message));
+    };
+
+    server.once("error", handleStartupError);
+    server.listen(port, host, () => {
+      server.off("error", handleStartupError);
+      resolve();
+    });
+  });
+
+  server.on("error", (err: unknown) => {
+    logger.error("HTTP server emitted an error after startup", { error: err, port, host });
+  });
+
   const idleSweeperHandle = startIdleSessionSweeper({
     storage,
     connectedClients,
@@ -157,33 +198,13 @@ export async function startLocalServer(options: StartLocalServerOptions) {
     clearInterval(idleSweeperHandle);
   });
 
-  server.on("error", (err: unknown) => {
-    if (getServerStartupErrorCode(err) === "EADDRINUSE") {
-      notifyFatalStartup("EADDRINUSE", `Port ${port} is already in use`);
-      markStartupFailed("EADDRINUSE", `Port ${port} is already in use`);
-      logger.error("Server startup failed because the port is already in use", {
-        port,
-        hint: `Wait a few seconds and retry, or inspect the port with lsof -i :${port} or netstat -ano | findstr :${port} on Windows.`,
-      });
-      setTimeout(() => process.exit(98), 10).unref();
-      return;
-    }
-
-    const message = getServerStartupErrorMessage(err);
-    notifyFatalStartup("SERVER_STARTUP_ERROR", message);
-    markStartupFailed("SERVER_STARTUP_ERROR", message);
-    logger.error("Server startup failed", { error: err, port, host });
-    setTimeout(() => process.exit(1), 10).unref();
-  });
-
-  server.listen(port, host, () => {
-    markStartupReady();
-    logger.info("Local server is listening", {
-      port,
-      host,
-      localUrl: `http://localhost:${port}`,
-      lanUrl: `http://[IP-KOMPUTER]:${port}`,
-    });
+  markStartupReady();
+  markWebSocketConnectionsReady?.();
+  logger.info("Local server is listening", {
+    port,
+    host,
+    localUrl: `http://localhost:${port}`,
+    lanUrl: `http://[IP-KOMPUTER]:${port}`,
   });
 
   if (!aiPrecomputeOnStart) {

@@ -65,6 +65,19 @@ const PG_POOL_SHUTDOWN_TIMEOUT_MS = resolvePgPoolShutdownTimeoutMs(GRACEFUL_SHUT
 let shuttingDown = false;
 let shutdownExitCode = 0;
 let shutdownTimer: ReturnType<typeof setTimeout> | null = null;
+let serverCloseCleanupTriggered = false;
+
+server.once("close", () => {
+  serverCloseCleanupTriggered = true;
+});
+
+function triggerServerCloseCleanupForUnstartedServer() {
+  if (serverCloseCleanupTriggered) {
+    return;
+  }
+  serverCloseCleanupTriggered = true;
+  server.emit("close");
+}
 
 async function finishShutdown() {
   if (shutdownTimer) {
@@ -125,6 +138,7 @@ function shutdownProcess(reason: string, exitCode: number, details?: string) {
   shutdownTimer.unref();
 
   if (!server.listening) {
+    triggerServerCloseCleanupForUnstartedServer();
     finishShutdownSafely();
     return;
   }
@@ -180,16 +194,5 @@ startServer().catch(async (error) => {
   notifyMasterFatalReason(startupReason, message);
   markStartupFailed(startupReason, message);
   logger.error("Local server failed during startup", { error });
-  stopIntelligenceFailSafeLogger();
-  stopAdaptiveRateLimitCooldownSweep();
-
-  await shutdownPgPoolSafely({
-    logger,
-    phase: "startup-failure",
-    poolRef: pool,
-    stopBackgroundTasks: stopPgPoolBackgroundTasks,
-    timeoutMs: PG_POOL_SHUTDOWN_TIMEOUT_MS,
-  });
-
-  process.exit(1);
+  shutdownProcess(startupReason, startupReason === "EADDRINUSE" ? 98 : 1, message);
 });
