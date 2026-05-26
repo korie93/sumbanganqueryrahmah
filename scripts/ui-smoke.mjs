@@ -11,6 +11,8 @@ const artifactsDir = rawArtifactsDir ? path.resolve(process.cwd(), rawArtifactsD
 const errors = [];
 const BACKUP_JOB_TIMEOUT_MS = 180_000;
 const BACKUP_JOB_POLL_INTERVAL_MS = 1_500;
+const SMOKE_NAVIGATION_TIMEOUT_MS = 30_000;
+const SMOKE_LOAD_STATE_TIMEOUT_MS = 10_000;
 
 const formatBestEffortError = (error) => {
   if (error instanceof Error) {
@@ -32,6 +34,31 @@ const assert = (condition, message) => {
 };
 
 const waitMs = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
+
+const waitForSmokeDocumentReady = async (page) => {
+  await page.waitForLoadState("load", {
+    timeout: SMOKE_LOAD_STATE_TIMEOUT_MS,
+  }).catch(() => undefined);
+};
+
+const navigateForSmoke = async (page, routeOrUrl) => {
+  const targetUrl = String(routeOrUrl).startsWith("http")
+    ? String(routeOrUrl)
+    : `${baseUrl}${routeOrUrl}`;
+  await page.goto(targetUrl, {
+    timeout: SMOKE_NAVIGATION_TIMEOUT_MS,
+    waitUntil: "domcontentloaded",
+  });
+  await waitForSmokeDocumentReady(page);
+};
+
+const reloadForSmoke = async (page) => {
+  await page.reload({
+    timeout: SMOKE_NAVIGATION_TIMEOUT_MS,
+    waitUntil: "domcontentloaded",
+  });
+  await waitForSmokeDocumentReady(page);
+};
 
 const ensureArtifactsDir = async () => {
   if (!artifactsDir) {
@@ -177,7 +204,7 @@ const createTracker = () => {
 };
 
 const checkRoute = async (page, tracker, path, expectedText, contextLabel) => {
-  await page.goto(`${baseUrl}${path}`, { waitUntil: "networkidle" });
+  await navigateForSmoke(page, path);
   await page.getByText(expectedText).first().waitFor();
   tracker.assertClean(contextLabel);
   tracker.clear();
@@ -185,7 +212,7 @@ const checkRoute = async (page, tracker, path, expectedText, contextLabel) => {
 
 const checkDesktopNavbar = async (page, tracker) => {
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page.waitForLoadState("networkidle");
+  await waitForSmokeDocumentReady(page);
 
   await page.getByTestId("nav-home").waitFor();
   await page.getByRole("navigation").waitFor();
@@ -203,7 +230,7 @@ const checkDesktopNavbar = async (page, tracker) => {
   await getNavGroupTrigger(page, "settings").click();
   await page.getByRole("menuitem", { name: /Backup & Restore/i }).waitFor();
   await page.getByRole("menuitem", { name: /Backup & Restore/i }).click();
-  await page.waitForLoadState("networkidle");
+  await waitForSmokeDocumentReady(page);
   await page.waitForURL(/\/settings\?section=backup-restore/);
   await page.getByText("Backup & Restore").first().waitFor();
 
@@ -213,7 +240,7 @@ const checkDesktopNavbar = async (page, tracker) => {
 
 const checkKeyboardMenuAccess = async (page, tracker) => {
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page.waitForLoadState("networkidle");
+  await waitForSmokeDocumentReady(page);
 
   const settingsTrigger = getNavGroupTrigger(page, "settings");
   await settingsTrigger.focus();
@@ -285,7 +312,7 @@ const checkUserMenuThemeMode = async (page, tracker) => {
 
 const checkMobileNavbar = async (page, tracker) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.waitForLoadState("networkidle");
+  await waitForSmokeDocumentReady(page);
 
   const mobileNavTrigger = page.getByTestId("button-open-mobile-nav");
   await mobileNavTrigger.waitFor();
@@ -304,10 +331,10 @@ const checkMobileNavbar = async (page, tracker) => {
 
 const checkHomeEntryPoint = async (page, tracker) => {
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page.goto(`${baseUrl}/settings`, { waitUntil: "networkidle" });
+  await navigateForSmoke(page, "/settings");
   await page.getByRole("navigation", { name: "Settings Navigation" }).waitFor();
   await page.getByTestId("nav-home").click();
-  await page.waitForLoadState("networkidle");
+  await waitForSmokeDocumentReady(page);
   await page.waitForURL(/\/$/);
   await page.getByRole("heading", { name: "SQR Workspace", level: 1 }).waitFor();
   await page.getByTestId("card-general-search").waitFor();
@@ -318,7 +345,7 @@ const checkHomeEntryPoint = async (page, tracker) => {
 
 const checkCollectionDailyPage = async (page, tracker) => {
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page.goto(`${baseUrl}/collection/daily`, { waitUntil: "networkidle" });
+  await navigateForSmoke(page, "/collection/daily");
   await page.getByTestId("collection-daily-page").waitFor();
   await page.getByTestId("collection-daily-title").waitFor();
   await page.getByTestId("collection-daily-legend").waitFor();
@@ -1005,7 +1032,7 @@ const checkCollectionReceiptUiFlow = async (page, context, tracker) => {
 
   try {
     await applySmokeCollectionNicknameSession(page, nickname);
-    await page.goto(`${baseUrl}/collection/save`, { waitUntil: "networkidle" });
+    await navigateForSmoke(page, "/collection/save");
     await page.getByText("Simpan Collection Individual").first().waitFor();
 
     await getInputByLabel(page, "Customer Name").fill(customerName);
@@ -1046,7 +1073,7 @@ const checkCollectionReceiptUiFlow = async (page, context, tracker) => {
     assert(expectedUpdatedAt, "collection receipt UI smoke should capture the created record version");
     await page.waitForTimeout(250);
 
-    await page.goto(`${baseUrl}/collection/records`, { waitUntil: "networkidle" });
+    await navigateForSmoke(page, "/collection/records");
     await page.getByText("View Rekod Collection").first().waitFor();
     let targetRow = await filterCollectionRecordsBySearch(page, accountNumber);
 
@@ -1146,7 +1173,7 @@ const checkCollectionReceiptUiFlow = async (page, context, tracker) => {
 
 const checkBackupRestoreUiFlow = async (page, context, tracker) => {
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page.goto(`${baseUrl}/settings?section=backup-restore`, { waitUntil: "networkidle" });
+  await navigateForSmoke(page, "/settings?section=backup-restore");
   await page.getByText("Backup & Restore").first().waitFor();
 
   if (await page.getByTestId("button-create-backup").count() === 0) {
@@ -1188,7 +1215,7 @@ const checkBackupRestoreUiFlow = async (page, context, tracker) => {
       .filter({ hasText: backupName })
       .first();
     await createdBackupItem.waitFor({ state: "visible", timeout: 20_000 }).catch(async () => {
-      await page.goto(`${baseUrl}/settings?section=backup-restore`, { waitUntil: "networkidle" });
+      await navigateForSmoke(page, "/settings?section=backup-restore");
       await page.getByText("Backup & Restore").first().waitFor();
       await createdBackupItem.waitFor({ state: "visible", timeout: 30_000 });
     });
@@ -1518,7 +1545,7 @@ const checkCollectionRecordsStaleDeleteConflict = async (page, context, tracker)
 
   try {
     await page.setViewportSize({ width: 1440, height: 900 });
-    await page.goto(`${baseUrl}/collection/records`, { waitUntil: "networkidle" });
+    await navigateForSmoke(page, "/collection/records");
     await page.getByText("View Rekod Collection").first().waitFor();
 
     const targetRow = await filterCollectionRecordsBySearch(page, smokeRecord.accountNumber);
@@ -2220,7 +2247,7 @@ const ensureLoginPageVisible = async (page) => {
   const publicLoginButton = page.getByRole("button", { name: /^(Log In|Log Masuk)$/ }).first();
   if (await waitForVisible(publicLoginButton, 2_000)) {
     await publicLoginButton.click();
-    await page.waitForLoadState("networkidle");
+    await waitForSmokeDocumentReady(page);
     await usernameInput.waitFor({ state: "visible", timeout: 10_000 });
     await loginHeading.waitFor({ state: "visible", timeout: 10_000 });
     return;
@@ -2236,12 +2263,12 @@ const checkLogoutFlow = async (page, context, tracker) => {
   // Ignore stale request noise from prior smoke sections; this assertion scopes logout only.
   tracker.clear();
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page.goto(baseUrl, { waitUntil: "networkidle" });
+  await navigateForSmoke(page, baseUrl);
   await (await getVisibleUserMenuTrigger(page)).waitFor();
-  await page.waitForLoadState("networkidle");
+  await waitForSmokeDocumentReady(page);
   await openUserMenu(page);
   await page.getByTestId("button-logout").click();
-  await page.waitForLoadState("networkidle");
+  await waitForSmokeDocumentReady(page);
   await ensureLoginPageVisible(page);
 
   const cookieNames = await waitForClearedAuthCookies(context);
@@ -2289,7 +2316,7 @@ const run = async () => {
   }
 
   try {
-    await page.goto(baseUrl, { waitUntil: "networkidle" });
+    await navigateForSmoke(page, baseUrl);
     await ensureLoginPageVisible(page);
 
     await context.clearCookies();
@@ -2311,7 +2338,7 @@ const run = async () => {
       );
       localStorage.setItem("activeTab", "home");
     });
-    await page.reload({ waitUntil: "networkidle" });
+    await reloadForSmoke(page);
     const staleUserValue = await page.evaluate(() => localStorage.getItem("user"));
     assert(staleUserValue === null, "stale localStorage user should be cleared when no auth cookie exists");
     await ensureLoginPageVisible(page);
@@ -2328,7 +2355,7 @@ const run = async () => {
       await page.getByTestId("input-username").fill(username);
       await page.getByTestId("input-password").fill(password);
       await page.getByTestId("button-login").click();
-      await page.waitForLoadState("networkidle");
+      await waitForSmokeDocumentReady(page);
       await page.waitForTimeout(250);
       const loginResponse = await loginResponsePromise;
       let loginPayload = null;
