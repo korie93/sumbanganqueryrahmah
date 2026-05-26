@@ -6,6 +6,7 @@ import {
   completeTwoFactorLoginIfNeeded,
   ensureLoginPageVisible,
   probeAuthSession,
+  submitPasswordLoginWithRetry,
   waitForAuthenticatedShell,
 } from "./ui-auth-contract-utils.mjs";
 
@@ -212,23 +213,11 @@ async function verifyRouteLayout(page, routeSpec, viewportSpec) {
 async function loginForAuthenticatedContracts(page) {
   await navigateForVisualContract(page, "/login");
   await ensureLoginPageVisible(page, "Visual contract");
-  const loginResponsePromise = page.waitForResponse(
-    (response) =>
-      response.request().method() === "POST"
-      && response.url().includes("/api/auth/login"),
-    { timeout: 15_000 },
-  );
-  await page.getByTestId("input-username").fill(authUsername);
-  await page.getByTestId("input-password").fill(authPassword);
-  await page.getByTestId("button-login").click();
-  await page.waitForTimeout(250);
-  const loginResponse = await loginResponsePromise;
-  let loginPayload = null;
-  try {
-    loginPayload = await loginResponse.json();
-  } catch {
-    loginPayload = null;
-  }
+  const { loginPayload, loginResponse } = await submitPasswordLoginWithRetry(page, {
+    contextLabel: "Visual contract login",
+    password: authPassword,
+    username: authUsername,
+  });
   const twoFactorResult = await completeTwoFactorLoginIfNeeded(page, {
     loginPayload,
     username: authUsername,

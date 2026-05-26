@@ -22,9 +22,12 @@ const loginPageSource = readFileSync(
 );
 
 test("visual contract authenticated login follows the stable login test ids", () => {
-  assert.match(visualContractSource, /getByTestId\("input-username"\)\.fill\(authUsername\)/);
-  assert.match(visualContractSource, /getByTestId\("input-password"\)\.fill\(authPassword\)/);
-  assert.match(visualContractSource, /getByTestId\("button-login"\)\.click\(\)/);
+  assert.match(visualContractSource, /submitPasswordLoginWithRetry/);
+  assert.match(authContractUtilsSource, /export const submitPasswordLoginWithRetry = async \(page,/);
+  assert.match(authContractUtilsSource, /getByTestId\("input-username"\)\.fill\(username\)/);
+  assert.match(authContractUtilsSource, /getByTestId\("input-password"\)\.fill\(password\)/);
+  assert.match(authContractUtilsSource, /getByTestId\("button-login"\)\.click\(\)/);
+  assert.match(authContractUtilsSource, /lastLoginResponse\.status\(\) !== 429/);
 });
 
 test("visual contract keeps the login page reachability helper aligned with the login form", () => {
@@ -55,9 +58,7 @@ test("visual and accessibility contracts verify the session through /api/me befo
   assert.match(authContractUtilsSource, /Sahkan Kod/i);
 
   assert.match(accessibilityContractSource, /probeAuthSession/);
-  assert.match(accessibilityContractSource, /getByTestId\("input-username"\)\.fill\(authUsername\)/);
-  assert.match(accessibilityContractSource, /getByTestId\("input-password"\)\.fill\(authPassword\)/);
-  assert.match(accessibilityContractSource, /getByTestId\("button-login"\)\.click\(\)/);
+  assert.match(accessibilityContractSource, /submitPasswordLoginWithRetry/);
   assert.match(accessibilityContractSource, /completeTwoFactorLoginIfNeeded/);
   assert.match(accessibilityContractSource, /waitForAuthenticatedShell/);
   assert.match(accessibilityContractSource, /const navigateForAccessibilityContract = async \(page, routePath\) =>/);

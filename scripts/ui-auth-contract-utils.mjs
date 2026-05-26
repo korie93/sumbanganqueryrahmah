@@ -5,6 +5,9 @@ import { Client } from "pg";
 const BASE32_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
 const TOTP_PERIOD_SECONDS = 30;
 const TOTP_PERIOD_MS = TOTP_PERIOD_SECONDS * 1000;
+const CONTRACT_LOGIN_MAX_ATTEMPTS = 4;
+const CONTRACT_LOGIN_RATE_LIMIT_FALLBACK_MS = 1_000;
+const CONTRACT_LOGIN_RATE_LIMIT_MAX_WAIT_MS = 15_000;
 
 const formatContractCleanupError = (error) => (error instanceof Error ? error.message : String(error));
 
@@ -33,6 +36,80 @@ export const probeAuthSession = async (page) =>
       message: payload?.message || null,
     };
   });
+
+const readResponseJson = async (response) => {
+  try {
+    return await response.json();
+  } catch {
+    return null;
+  }
+};
+
+const resolveRateLimitRecoveryMs = (response, payload) => {
+  const headerSeconds = Number.parseFloat(response.headers()["retry-after"] || "");
+  if (Number.isFinite(headerSeconds) && headerSeconds > 0) {
+    return Math.min(
+      CONTRACT_LOGIN_RATE_LIMIT_MAX_WAIT_MS,
+      Math.max(CONTRACT_LOGIN_RATE_LIMIT_FALLBACK_MS, Math.ceil(headerSeconds * 1000)),
+    );
+  }
+
+  const payloadRetryMs = Number(payload?.retryAfterMs);
+  if (Number.isFinite(payloadRetryMs) && payloadRetryMs > 0) {
+    return Math.min(
+      CONTRACT_LOGIN_RATE_LIMIT_MAX_WAIT_MS,
+      Math.max(CONTRACT_LOGIN_RATE_LIMIT_FALLBACK_MS, Math.ceil(payloadRetryMs)),
+    );
+  }
+
+  return CONTRACT_LOGIN_RATE_LIMIT_FALLBACK_MS;
+};
+
+export const submitPasswordLoginWithRetry = async (page, {
+  contextLabel,
+  password,
+  username,
+  maxAttempts = CONTRACT_LOGIN_MAX_ATTEMPTS,
+}) => {
+  let lastLoginPayload = null;
+  let lastLoginResponse = null;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    const loginResponsePromise = page.waitForResponse(
+      (response) =>
+        response.request().method() === "POST"
+        && response.url().includes("/api/auth/login"),
+      { timeout: 15_000 },
+    );
+
+    await page.getByTestId("input-username").fill(username);
+    await page.getByTestId("input-password").fill(password);
+    await page.getByTestId("button-login").click();
+    lastLoginResponse = await loginResponsePromise;
+    await page.waitForTimeout(250);
+    lastLoginPayload = await readResponseJson(lastLoginResponse);
+
+    if (lastLoginResponse.status() !== 429 || attempt >= maxAttempts) {
+      break;
+    }
+
+    const waitMs = resolveRateLimitRecoveryMs(lastLoginResponse, lastLoginPayload);
+    console.warn(
+      `${contextLabel} login was rate limited; retrying after ${waitMs}ms `
+      + `(attempt ${attempt}/${maxAttempts}).`,
+    );
+    await page.waitForTimeout(waitMs);
+  }
+
+  if (!lastLoginResponse) {
+    throw new Error(`${contextLabel} could not observe the login response.`);
+  }
+
+  return {
+    loginPayload: lastLoginPayload,
+    loginResponse: lastLoginResponse,
+  };
+};
 
 export const ensureLoginPageVisible = async (page, contextLabel = "Authenticated contract") => {
   const loginHeading = page.getByRole("heading", {
