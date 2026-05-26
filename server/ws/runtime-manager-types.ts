@@ -8,6 +8,7 @@ export const MAX_RUNTIME_WS_CONNECTIONS_PER_USER = 5;
 export const DEFAULT_RUNTIME_WS_MAX_CONNECTIONS = 1_000;
 export const RUNTIME_WS_CLOSE_POLICY_VIOLATION = 1008;
 export const RUNTIME_WS_CLOSE_TRY_AGAIN_LATER = 1013;
+export const DEFAULT_RUNTIME_WS_LARGE_MESSAGE_WARN_BYTES = 75 * 1024;
 
 export type RuntimeManagerOptions = {
   wss: WebSocketServer;
@@ -19,6 +20,7 @@ export type RuntimeManagerOptions = {
   trustForwardedHeaders?: boolean;
   acceptConnections?: () => boolean;
   heartbeatIntervalMs?: number;
+  largeMessageWarnBytes?: number;
   maxConnections?: number;
   messageRateLimiterFactory?: () => RuntimeWsMessageRateLimiter;
   sharedBus?: RuntimeWsSharedBus;

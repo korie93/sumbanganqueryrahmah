@@ -1,4 +1,4 @@
-import type { WebSocket } from "ws";
+import type { RawData, WebSocket } from "ws";
 import { readAuthSessionTokenFromHeaders } from "../auth/session-cookie";
 import { logger } from "../lib/logger";
 import { extractWsActivityId, isActiveWebSocketSession } from "./session-auth";
@@ -17,6 +17,7 @@ import { parseRuntimeWebSocketHandshakeUrl } from "./runtime-handshake";
 import {
   MAX_RUNTIME_WS_CONNECTIONS_PER_USER,
   DEFAULT_RUNTIME_WS_MAX_CONNECTIONS,
+  DEFAULT_RUNTIME_WS_LARGE_MESSAGE_WARN_BYTES,
   RUNTIME_WS_CLOSE_POLICY_VIOLATION,
   RUNTIME_WS_CLOSE_TRY_AGAIN_LATER,
   type RuntimeManagerOptions,
@@ -62,6 +63,22 @@ class RuntimeSharedConnectedClientsMap extends Map<string, WebSocket> {
   }
 }
 
+function resolveRawMessageByteLength(message: RawData): number {
+  if (typeof message === "string") {
+    return Buffer.byteLength(message, "utf8");
+  }
+  if (Buffer.isBuffer(message)) {
+    return message.byteLength;
+  }
+  if (Array.isArray(message)) {
+    return message.reduce((total, chunk) => total + chunk.byteLength, 0);
+  }
+  if (message instanceof ArrayBuffer) {
+    return message.byteLength;
+  }
+  return Buffer.byteLength(String(message), "utf8");
+}
+
 export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
   connectedClients: Map<string, WebSocket>;
   broadcastWsMessage: (payload: Record<string, unknown>) => void;
@@ -95,6 +112,13 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
   const maxConnections = Math.max(
     1,
     Math.trunc(Number(options.maxConnections ?? DEFAULT_RUNTIME_WS_MAX_CONNECTIONS) || DEFAULT_RUNTIME_WS_MAX_CONNECTIONS),
+  );
+  const largeMessageWarnBytes = Math.max(
+    1,
+    Math.trunc(
+      Number(options.largeMessageWarnBytes ?? DEFAULT_RUNTIME_WS_LARGE_MESSAGE_WARN_BYTES)
+        || DEFAULT_RUNTIME_WS_LARGE_MESSAGE_WARN_BYTES,
+    ),
   );
   const socketEntriesByActivity = new Map<string, RuntimeTrackedSocketEntry>();
   const socketEntriesByInstance = new WeakMap<WebSocket, RuntimeTrackedSocketEntry>();
@@ -258,7 +282,6 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
       ws.removeListener("pong", markSocketAlive);
       ws.removeListener("close", handleSocketClose);
       ws.removeListener("error", handleSocketError);
-      ws.removeListener("unexpected-response", handleSocketUnexpectedResponse);
     };
 
     const queueNicknameSessionClear = (sessionActivityId: string, reason: string) => {
@@ -319,19 +342,6 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
       }
     };
 
-    const handleSocketUnexpectedResponse = () => {
-      const responseActivityId = activityId;
-      cleanupSocket({
-        clearSession: socketEntry !== null,
-        reason: "socket-unexpected-response",
-      });
-      if (responseActivityId) {
-        logCleanupDiagnostic("WebSocket unexpected response cleanup completed", {
-          activityId: responseActivityId,
-        });
-      }
-    };
-
     const closeSocketIfNeeded = (code?: number, reason?: string) => {
       if (closeRequested || !isTrackableSocket(ws)) {
         return;
@@ -352,9 +362,18 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
       }
     };
 
-    const handleSocketMessage = () => {
+    const handleSocketMessage = (message: RawData) => {
       if (cleanedUp) {
         return;
+      }
+
+      const messageBytes = resolveRawMessageByteLength(message);
+      if (messageBytes >= largeMessageWarnBytes) {
+        logger.warn("Large WebSocket inbound frame observed", {
+          activityId,
+          messageBytes,
+          thresholdBytes: largeMessageWarnBytes,
+        });
       }
 
       if (messageRateLimiter.consume()) {
@@ -376,7 +395,6 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
     ws.on("pong", markSocketAlive);
     ws.once("close", handleSocketClose);
     ws.once("error", handleSocketError);
-    ws.once("unexpected-response", handleSocketUnexpectedResponse);
     trackedSockets.add(ws);
     socketCleanupCallbacks.set(ws, cleanupSocket);
 
