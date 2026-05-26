@@ -63,6 +63,12 @@ export function registerLocalHttpPipeline(app: Express, options: LocalHttpPipeli
     timeoutMs: runtimeConfig.runtime.httpRequestTimeoutMs,
   }));
 
+  app.use("/api", (_req, res, next) => {
+    res.setHeader("Cache-Control", "no-store");
+    res.setHeader("Pragma", "no-cache");
+    next();
+  });
+
   app.use(createCsrfProtectionMiddleware());
   app.use(adaptiveRateLimit);
   app.use(systemProtectionMiddleware);

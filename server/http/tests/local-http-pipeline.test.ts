@@ -217,6 +217,42 @@ test("registerLocalHttpPipeline rejects unsupported API versions while preservin
   }
 });
 
+test("registerLocalHttpPipeline marks API responses as non-cacheable by default", async () => {
+  const app = express();
+  registerLocalHttpPipeline(app, {
+    importBodyLimit: "1mb",
+    collectionBodyLimit: "1mb",
+    defaultBodyLimit: "100kb",
+    uploadsRootDir: path.resolve(process.cwd(), "uploads"),
+    recordRequestStarted: () => undefined,
+    recordRequestFinished: () => undefined,
+    adaptiveRateLimit: (_req, _res, next) => next(),
+    systemProtectionMiddleware: (_req, _res, next) => next(),
+    maintenanceGuard: (_req, _res, next) => next(),
+  });
+  app.get("/api/cache-test", (_req, res) => {
+    res.json({ ok: true });
+  });
+  app.get("/cache-test", (_req, res) => {
+    res.json({ ok: true });
+  });
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const apiResponse = await fetch(`${baseUrl}/api/cache-test`);
+    assert.equal(apiResponse.status, 200);
+    assert.equal(apiResponse.headers.get("cache-control"), "no-store");
+    assert.equal(apiResponse.headers.get("pragma"), "no-cache");
+
+    const nonApiResponse = await fetch(`${baseUrl}/cache-test`);
+    assert.equal(nonApiResponse.status, 200);
+    assert.equal(nonApiResponse.headers.get("cache-control"), null);
+    assert.equal(nonApiResponse.headers.get("pragma"), null);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
 test("registerLocalHttpPipeline applies the 4KB web-vitals body limit to canonical and legacy telemetry paths", async () => {
   const app = express();
   registerLocalHttpPipeline(app, {
