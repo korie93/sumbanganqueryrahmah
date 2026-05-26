@@ -43,7 +43,9 @@ test("visual contract keeps the login page reachability helper aligned with the 
 test("visual and accessibility contracts verify the session through /api/me before authenticated route checks", () => {
   assert.match(visualContractSource, /probeAuthSession/);
   assert.match(visualContractSource, /waitForAuthenticatedShell/);
-  assert.match(visualContractSource, /await page\.goto\(`\$\{baseUrl\}\/`, \{ waitUntil: "networkidle" \}\)/);
+  assert.match(visualContractSource, /const navigateForVisualContract = async \(page, routePath\) =>/);
+  assert.match(visualContractSource, /waitUntil: "domcontentloaded"/);
+  assert.match(visualContractSource, /await navigateForVisualContract\(page, "\/"\)/);
   assert.match(visualContractSource, /completeTwoFactorLoginIfNeeded/);
   assert.match(authContractUtilsSource, /getByTestId\("input-two-factor-code"\)/);
   assert.match(authContractUtilsSource, /\/api\/auth\/verify-two-factor-login/);
@@ -58,6 +60,9 @@ test("visual and accessibility contracts verify the session through /api/me befo
   assert.match(accessibilityContractSource, /getByTestId\("button-login"\)\.click\(\)/);
   assert.match(accessibilityContractSource, /completeTwoFactorLoginIfNeeded/);
   assert.match(accessibilityContractSource, /waitForAuthenticatedShell/);
+  assert.match(accessibilityContractSource, /const navigateForAccessibilityContract = async \(page, routePath\) =>/);
+  assert.match(accessibilityContractSource, /waitUntil: "domcontentloaded"/);
+  assert.match(accessibilityContractSource, /await navigateForAccessibilityContract\(page, "\/"\)/);
 });
 
 test("accessibility contract covers core authenticated work surfaces", () => {

@@ -14,6 +14,8 @@ const authUsername = String(process.env.A11Y_TEST_USERNAME || process.env.SMOKE_
 const authPassword = String(process.env.A11Y_TEST_PASSWORD || process.env.SMOKE_TEST_PASSWORD || "").trim();
 const require = createRequire(import.meta.url);
 const axeSource = readFileSync(require.resolve("axe-core/axe.min.js"), "utf8");
+const A11Y_NAVIGATION_TIMEOUT_MS = 30_000;
+const A11Y_LOAD_STATE_TIMEOUT_MS = 10_000;
 
 const assert = (condition, message) => {
   if (!condition) {
@@ -78,6 +80,19 @@ const viewportSpecs = [
   { id: "desktop", width: 1280, height: 900 },
   { id: "mobile", width: 390, height: 844 },
 ];
+
+const navigateForAccessibilityContract = async (page, routePath) => {
+  await page.goto(`${baseUrl}${routePath}`, {
+    timeout: A11Y_NAVIGATION_TIMEOUT_MS,
+    waitUntil: "domcontentloaded",
+  });
+
+  // Authenticated pages keep background polling, telemetry, and WebSockets alive.
+  // Accessibility checks need rendered DOM readiness, not a fragile networkidle state.
+  await page.waitForLoadState("load", {
+    timeout: A11Y_LOAD_STATE_TIMEOUT_MS,
+  }).catch(() => undefined);
+};
 
 const readAccessibilitySummary = async (page, routeSpec) =>
   page.evaluate(({ contentSelector }) => {
@@ -287,7 +302,7 @@ async function verifyRouteAccessibility(page, routeSpec, viewportSpec) {
     width: viewportSpec.width,
     height: viewportSpec.height,
   });
-  await page.goto(`${baseUrl}${routeSpec.path}`, { waitUntil: "networkidle" });
+  await navigateForAccessibilityContract(page, routeSpec.path);
   await page.locator(routeSpec.contentSelector).first().waitFor();
 
   const summary = await readAccessibilitySummary(page, routeSpec);
@@ -316,7 +331,7 @@ async function verifyRouteAccessibility(page, routeSpec, viewportSpec) {
 }
 
 async function loginForAuthenticatedContracts(page) {
-  await page.goto(`${baseUrl}/login`, { waitUntil: "networkidle" });
+  await navigateForAccessibilityContract(page, "/login");
   await ensureLoginPageVisible(page, "Accessibility contract");
   const loginResponsePromise = page.waitForResponse(
     (response) =>
@@ -328,7 +343,6 @@ async function loginForAuthenticatedContracts(page) {
   await page.getByTestId("input-password").fill(authPassword);
   await page.getByTestId("button-login").click();
   const loginResponse = await loginResponsePromise;
-  await page.waitForLoadState("networkidle");
   await page.waitForTimeout(250);
   let loginPayload = null;
   try {
@@ -360,7 +374,7 @@ async function loginForAuthenticatedContracts(page) {
     ].join("\n"),
   );
   await waitForAuthenticatedShell(page, "Accessibility contract login");
-  await page.goto(`${baseUrl}/`, { waitUntil: "networkidle" });
+  await navigateForAccessibilityContract(page, "/");
   await waitForAuthenticatedShell(page, "Authenticated accessibility login reload");
   await page.locator("main#main-content").first().waitFor({ timeout: 15_000 });
 }

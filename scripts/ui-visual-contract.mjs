@@ -14,6 +14,8 @@ const rawArtifactsDir = String(process.env.VISUAL_ARTIFACTS_DIR || "").trim();
 const artifactsDir = rawArtifactsDir ? path.resolve(process.cwd(), rawArtifactsDir) : "";
 const authUsername = String(process.env.VISUAL_TEST_USERNAME || process.env.SMOKE_TEST_USERNAME || "").trim();
 const authPassword = String(process.env.VISUAL_TEST_PASSWORD || process.env.SMOKE_TEST_PASSWORD || "").trim();
+const VISUAL_NAVIGATION_TIMEOUT_MS = 30_000;
+const VISUAL_LOAD_STATE_TIMEOUT_MS = 10_000;
 
 const assert = (condition, message) => {
   if (!condition) {
@@ -46,6 +48,20 @@ const captureRouteArtifacts = async (page, routeId, viewportId, layoutSummary) =
     JSON.stringify(layoutSummary, null, 2),
     "utf8",
   );
+};
+
+const navigateForVisualContract = async (page, routePath) => {
+  await page.goto(`${baseUrl}${routePath}`, {
+    timeout: VISUAL_NAVIGATION_TIMEOUT_MS,
+    waitUntil: "domcontentloaded",
+  });
+
+  // The authenticated app keeps polling, telemetry, and WebSocket activity alive.
+  // Visual contracts assert rendered layout, so waiting for DOM + selectors is
+  // more deterministic than Playwright's networkidle heuristic.
+  await page.waitForLoadState("load", {
+    timeout: VISUAL_LOAD_STATE_TIMEOUT_MS,
+  }).catch(() => undefined);
 };
 
 const publicRouteSpecs = [
@@ -153,7 +169,7 @@ async function verifyRouteLayout(page, routeSpec, viewportSpec) {
     width: viewportSpec.width,
     height: viewportSpec.height,
   });
-  await page.goto(`${baseUrl}${routeSpec.path}`, { waitUntil: "networkidle" });
+  await navigateForVisualContract(page, routeSpec.path);
 
   if (routeSpec.path === "/login") {
     await ensureLoginPageVisible(page, `${routeSpec.id}/${viewportSpec.id}`);
@@ -194,7 +210,7 @@ async function verifyRouteLayout(page, routeSpec, viewportSpec) {
 }
 
 async function loginForAuthenticatedContracts(page) {
-  await page.goto(`${baseUrl}/login`, { waitUntil: "networkidle" });
+  await navigateForVisualContract(page, "/login");
   await ensureLoginPageVisible(page, "Visual contract");
   const loginResponsePromise = page.waitForResponse(
     (response) =>
@@ -205,7 +221,6 @@ async function loginForAuthenticatedContracts(page) {
   await page.getByTestId("input-username").fill(authUsername);
   await page.getByTestId("input-password").fill(authPassword);
   await page.getByTestId("button-login").click();
-  await page.waitForLoadState("networkidle");
   await page.waitForTimeout(250);
   const loginResponse = await loginResponsePromise;
   let loginPayload = null;
@@ -243,7 +258,7 @@ async function loginForAuthenticatedContracts(page) {
 
   await waitForAuthenticatedShell(page, "Visual contract login");
 
-  await page.goto(`${baseUrl}/`, { waitUntil: "networkidle" });
+  await navigateForVisualContract(page, "/");
   await waitForAuthenticatedShell(page, "Authenticated visual login reload");
   await page.locator("main#main-content").first().waitFor({ timeout: 15_000 });
 }
