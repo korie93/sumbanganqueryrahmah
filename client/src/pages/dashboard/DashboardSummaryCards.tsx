@@ -32,7 +32,7 @@ export function DashboardSummaryCards({ items, summaryLoading }: DashboardSummar
                   <div aria-live="polite" className="min-w-0 space-y-1">
                     {summaryLoading ? (
                       <div className="space-y-1">
-                        <div className="h-7 w-12 rounded bg-muted/50 animate-pulse" aria-label="Loading value" />
+                        <div className="h-7 w-12 rounded bg-muted/50 animate-pulse" aria-hidden="true" />
                         <p className="text-xs leading-5 text-muted-foreground">{card.title}</p>
                       </div>
                     ) : (
@@ -87,7 +87,7 @@ export function DashboardSummaryCards({ items, summaryLoading }: DashboardSummar
                       <div aria-live="polite" className="min-w-0 space-y-1">
                         {summaryLoading ? (
                           <div className="space-y-1">
-                            <div className="h-7 w-12 rounded bg-muted/50 animate-pulse" aria-label="Loading value" />
+                            <div className="h-7 w-12 rounded bg-muted/50 animate-pulse" aria-hidden="true" />
                             <p className="text-xs leading-5 text-muted-foreground">{card.title}</p>
                           </div>
                         ) : (

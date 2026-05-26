@@ -72,6 +72,18 @@ test("DashboardSummaryCards separates primary and supporting metrics into compac
   assert.match(markup, /rounded-2xl border border-border\/60 bg-muted\/10 shadow-none/);
 });
 
+test("DashboardSummaryCards hides loading skeletons from assistive technology", () => {
+  const markup = renderToStaticMarkup(
+    createElement(DashboardSummaryCards, {
+      items: summaryCards,
+      summaryLoading: true,
+    }),
+  );
+
+  assert.doesNotMatch(markup, /aria-label="Loading value"/);
+  assert.match(markup, /animate-pulse" aria-hidden="true"/);
+});
+
 test("DashboardSnapshotSection surfaces metric count badge with compact summary copy", () => {
   const markup = renderToStaticMarkup(
     createElement(DashboardSnapshotSection, {
