@@ -5,6 +5,7 @@ import { WebSocket } from "ws";
 import type { RequestHandler } from "express";
 import { ERROR_CODES } from "../../../shared/error-codes";
 import {
+  configureSessionRevocationStoreForRuntime,
   isSessionJwtRevoked,
   resetSessionRevocationStoreForTests,
 } from "../../auth/session-revocation-store";
@@ -554,6 +555,54 @@ test("POST /api/activity/logout revokes the current JWT id for the remaining tok
     assert.equal(await isSessionJwtRevoked("logout-route-jti"), true);
   } finally {
     await stopTestServer(server);
+    resetSessionRevocationStoreForTests();
+  }
+});
+
+test("POST /api/activity/logout fails closed when JWT revocation cannot be guaranteed", async () => {
+  const token = jwt.sign(
+    {
+      activityId: "activity-1",
+      username: "user.one",
+    },
+    "activity-route-test-secret",
+    {
+      algorithm: "HS256",
+      expiresIn: "1h",
+      jwtid: "logout-route-jti-fail",
+    },
+  );
+  const stopRevocationStore = configureSessionRevocationStoreForRuntime({
+    isRevoked: async () => false,
+    revoke: async () => {
+      throw new Error("revocation unavailable");
+    },
+  });
+  const { app } = createActivityRouteHarness({
+    authenticateToken: createTestAuthenticateToken({
+      userId: "user-1",
+      username: "user.one",
+      role: "user",
+      activityId: "activity-1",
+    }),
+  });
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(`${baseUrl}/api/activity/logout`, {
+      method: "POST",
+      headers: {
+        Cookie: `sqr_auth=${encodeURIComponent(token)}; sqr_auth_hint=1`,
+      },
+    });
+
+    assert.equal(response.status, 503);
+    const payload = await response.json();
+    assert.equal(payload.error.code, "SESSION_REVOCATION_UNAVAILABLE");
+    assert.match(response.headers.get("set-cookie") || "", /sqr_auth=/);
+  } finally {
+    await stopTestServer(server);
+    stopRevocationStore();
     resetSessionRevocationStoreForTests();
   }
 });

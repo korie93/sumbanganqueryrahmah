@@ -36,6 +36,13 @@ const DEFAULT_REVOCATION_TTL_MS = 24 * 60 * 60 * 1000;
 
 let defaultRedisClientFactoryPromise: Promise<RedisSessionRevocationClientFactory> | null = null;
 
+export class RedisSessionRevocationUnavailableError extends Error {
+  constructor(message = "Redis session revocation store is unavailable.") {
+    super(message);
+    this.name = "RedisSessionRevocationUnavailableError";
+  }
+}
+
 async function resolveDefaultRedisClientFactory(): Promise<RedisSessionRevocationClientFactory> {
   defaultRedisClientFactoryPromise ??= import("redis")
     .then((redisModule) => redisModule.createClient as unknown as RedisSessionRevocationClientFactory);
@@ -102,8 +109,9 @@ export class RedisSessionRevocationStore implements SessionRevocationStore {
   async revoke(record: SessionRevocationRecord): Promise<void> {
     const client = await this.getClient();
     if (!client) {
-      this.logRedisFailure(new Error("Redis session revocation store is unavailable."));
-      return;
+      const error = new RedisSessionRevocationUnavailableError();
+      this.logRedisFailure(error);
+      throw error;
     }
 
     try {
@@ -116,6 +124,9 @@ export class RedisSessionRevocationStore implements SessionRevocationStore {
       this.lastWarningAt = 0;
     } catch (error) {
       this.handleRedisFailure(error);
+      throw new RedisSessionRevocationUnavailableError(
+        "Redis session revocation write failed.",
+      );
     }
   }
 

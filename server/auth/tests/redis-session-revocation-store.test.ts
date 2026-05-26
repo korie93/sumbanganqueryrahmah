@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { RedisSessionRevocationStore } from "../redis-session-revocation-store";
+import {
+  RedisSessionRevocationStore,
+  RedisSessionRevocationUnavailableError,
+} from "../redis-session-revocation-store";
 
 test("RedisSessionRevocationStore persists revoked JWT ids with a bounded TTL", async () => {
   const values = new Map<string, string>();
@@ -128,4 +131,41 @@ test("RedisSessionRevocationStore retries after a failed Redis connection", asyn
   assert.equal(await store.isRevoked("jwt-1"), false);
   assert.equal(factoryCalls, 2);
   assert.equal(getCalls, 1);
+});
+
+test("RedisSessionRevocationStore rejects revocation writes when Redis is unavailable", async () => {
+  const store = new RedisSessionRevocationStore({
+    config: {
+      distributedStoreConfigured: true,
+      provider: "redis",
+      redisUrl: "redis://localhost:6379/0",
+    },
+    createRedisClient: () => ({
+      async connect() {
+        throw new Error("redis offline");
+      },
+      async get() {
+        return null;
+      },
+      async set() {
+        return "OK";
+      },
+      async quit() {
+        return undefined;
+      },
+    }),
+    logger: {
+      warn() {
+        return undefined;
+      },
+    },
+  });
+
+  await assert.rejects(
+    store.revoke({
+      expiresAtMs: Date.now() + 120_000,
+      jwtId: "jwt-1",
+    }),
+    RedisSessionRevocationUnavailableError,
+  );
 });

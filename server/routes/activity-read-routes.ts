@@ -40,10 +40,24 @@ export function registerActivityReadRoutes(context: ActivityRouteContext) {
       const jwtId = token ? resolveSessionJwtId(token) : null;
       await activityService.logout(req.user.activityId, req.user.username);
       if (token && jwtId) {
-        await revokeSessionJwt({
-          jwtId,
-          expiresAtMs: resolveSessionJwtExpiresAt(token)?.getTime() ?? 0,
-        });
+        try {
+          await revokeSessionJwt({
+            jwtId,
+            expiresAtMs: resolveSessionJwtExpiresAt(token)?.getTime() ?? 0,
+          });
+        } catch {
+          clearAuthSessionCookie(res);
+          const message = "Logout is temporarily unavailable while session revocation is degraded.";
+          return res.status(503).json(
+            buildActivityErrorPayload(message, {
+              error: {
+                code: "SESSION_REVOCATION_UNAVAILABLE",
+                message,
+              },
+            },
+            ),
+          );
+        }
       }
       clearAuthSessionCookie(res);
       return res.json(buildActivitySuccessPayload());
