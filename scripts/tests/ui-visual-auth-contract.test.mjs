@@ -28,6 +28,8 @@ test("visual contract authenticated login follows the stable login test ids", ()
   assert.match(authContractUtilsSource, /getByTestId\("input-password"\)\.fill\(password\)/);
   assert.match(authContractUtilsSource, /getByTestId\("button-login"\)\.click\(\)/);
   assert.match(authContractUtilsSource, /lastLoginResponse\.status\(\) !== 429/);
+  assert.match(authContractUtilsSource, /const retryLabel = \/\\blogin\\b\/i\.test\(contextLabel\)/);
+  assert.doesNotMatch(authContractUtilsSource, /\$\{contextLabel\} login was rate limited/);
 });
 
 test("visual contract keeps the login page reachability helper aligned with the login form", () => {

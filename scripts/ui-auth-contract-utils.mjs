@@ -94,8 +94,9 @@ export const submitPasswordLoginWithRetry = async (page, {
     }
 
     const waitMs = resolveRateLimitRecoveryMs(lastLoginResponse, lastLoginPayload);
+    const retryLabel = /\blogin\b/i.test(contextLabel) ? contextLabel : `${contextLabel} login`;
     console.warn(
-      `${contextLabel} login was rate limited; retrying after ${waitMs}ms `
+      `${retryLabel} was rate limited; retrying after ${waitMs}ms `
       + `(attempt ${attempt}/${maxAttempts}).`,
     );
     await page.waitForTimeout(waitMs);
