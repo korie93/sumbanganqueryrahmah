@@ -3,7 +3,7 @@ import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import test from "node:test";
 import express from "express";
-import { startLocalServer } from "../server-startup";
+import { startLocalServer } from "../../internal/server-startup";
 
 function listen(server: ReturnType<typeof createServer>, port = 0) {
   return new Promise<number>((resolve) => {

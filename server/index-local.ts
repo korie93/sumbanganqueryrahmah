@@ -1,5 +1,4 @@
 import "dotenv/config";
-import cluster from "node:cluster";
 import type { WorkerFatalMessage } from "./internal/worker-ipc";
 import { startLocalServer } from "./internal/server-startup";
 import { createLocalRuntimeEnvironment } from "./internal/local-runtime-environment";
@@ -8,7 +7,7 @@ import {
   shutdownPgPoolSafely,
 } from "./internal/pg-pool-shutdown";
 import { stopIntelligenceFailSafeLogger } from "./intelligence/intelligence-failsafe-logger";
-import { registerWorkerProcessFatalHandlers } from "./internal/worker-process-fatal-handlers";
+import { registerLocalProcessFatalHandlers } from "./internal/local-process-fatal-handlers";
 import { markStartupFailed } from "./internal/startup-health";
 import { pool, stopPgPoolBackgroundTasks } from "./db-postgres";
 import { logger } from "./lib/logger";
@@ -118,7 +117,7 @@ function shutdownProcess(reason: string, exitCode: number, details?: string) {
   if (exitCode === 0) {
     logger.info("Received shutdown signal, closing gracefully", { signal: reason });
   } else {
-    logger.error("Fatal worker error triggered shutdown", {
+    logger.error("Fatal process error triggered shutdown", {
       reason,
       details,
     });
@@ -155,15 +154,13 @@ function gracefulShutdown(signal: string) {
 process.once("SIGTERM", () => gracefulShutdown("SIGTERM"));
 process.once("SIGINT", () => gracefulShutdown("SIGINT"));
 
-if (cluster.isWorker) {
-  registerWorkerProcessFatalHandlers({
-    logger,
-    notifyMasterFatal: notifyMasterFatalReason,
-    shutdown: ({ reason, details, exitCode }) => {
-      shutdownProcess(reason, exitCode, details);
-    },
-  });
-}
+registerLocalProcessFatalHandlers({
+  logger,
+  notifyFatal: notifyMasterFatalReason,
+  shutdown: ({ reason, details, exitCode }) => {
+    shutdownProcess(reason, exitCode, details);
+  },
+});
 
 async function startServer() {
   await startLocalServer({
