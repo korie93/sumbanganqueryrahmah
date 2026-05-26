@@ -63,7 +63,7 @@ const authenticatedRouteSpecs = [
   {
     id: "dashboard",
     path: "/dashboard",
-    contentSelector: "main#main-content",
+    contentSelector: '[data-testid="text-dashboard-title"]',
   },
   {
     id: "ai",

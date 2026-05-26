@@ -70,6 +70,7 @@ test("visual and accessibility contracts verify the session through /api/me befo
 
 test("accessibility contract covers core authenticated work surfaces", () => {
   assert.match(accessibilityContractSource, /id: "dashboard"[\s\S]*path: "\/dashboard"/);
+  assert.match(accessibilityContractSource, /id: "dashboard"[\s\S]*contentSelector: '\[data-testid="text-dashboard-title"\]'/);
   assert.match(accessibilityContractSource, /id: "settings"[\s\S]*path: "\/settings"/);
   assert.match(accessibilityContractSource, /id: "import"[\s\S]*path: "\/import"/);
 });
