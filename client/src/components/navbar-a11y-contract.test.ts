@@ -45,6 +45,10 @@ test("navbar controls use Malay accessible labels and include username context",
   assert.match(desktopNavigationSource, /onCloseAutoFocus=\{\(event\) => \{/);
   assert.match(desktopNavigationSource, /groupTriggerRefs\.current\.get\(groupId\)\?\.focus\(\{ preventScroll: true \}\)/);
   assert.match(desktopNavigationSource, /scheduleGroupTriggerFocus\(group\.id\)/);
+  assert.match(desktopNavigationSource, /pendingGroupFocusTimeoutsRef/);
+  assert.match(desktopNavigationSource, /clearPendingGroupTriggerFocusTimeouts\(\)/);
+  assert.match(desktopNavigationSource, /globalThis\.clearTimeout\(timeoutHandle\)/);
+  assert.match(desktopNavigationSource, /if \(!navMountedRef\.current\) \{/);
   assert.match(userMenuSource, /navbar-dropdown-content/);
   assert.match(navbarStyles, /\.navbar-dropdown-content\[data-state="closed"\]\s*\{[\s\S]*animation:\s*none/);
   assert.match(scrollHintSource, /hint = "Tatal untuk lagi"/);

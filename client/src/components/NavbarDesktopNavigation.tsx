@@ -1,4 +1,4 @@
-import { memo, type KeyboardEvent, type RefObject, useRef } from "react"
+import { memo, type KeyboardEvent, type RefObject, useCallback, useEffect, useRef } from "react"
 import { ChevronDown } from "lucide-react"
 
 import type {
@@ -43,19 +43,43 @@ function NavbarDesktopNavigationImpl({
   desktopNavOverflow,
 }: NavbarDesktopNavigationProps) {
   const groupTriggerRefs = useRef(new Map<string, HTMLButtonElement>())
+  const navMountedRef = useRef(true)
+  const pendingGroupFocusTimeoutsRef = useRef<Array<ReturnType<typeof globalThis.setTimeout>>>([])
 
-  const restoreGroupTriggerFocus = (groupId: string) => {
+  const clearPendingGroupTriggerFocusTimeouts = useCallback(() => {
+    for (const timeoutHandle of pendingGroupFocusTimeoutsRef.current) {
+      globalThis.clearTimeout(timeoutHandle)
+    }
+    pendingGroupFocusTimeoutsRef.current = []
+  }, [])
+
+  useEffect(() => {
+    navMountedRef.current = true
+
+    return () => {
+      navMountedRef.current = false
+      clearPendingGroupTriggerFocusTimeouts()
+    }
+  }, [clearPendingGroupTriggerFocusTimeouts])
+
+  const scheduleGroupTriggerFocus = useCallback((groupId: string) => {
+    clearPendingGroupTriggerFocusTimeouts()
+    const timeoutHandle = globalThis.setTimeout(() => {
+      pendingGroupFocusTimeoutsRef.current = pendingGroupFocusTimeoutsRef.current.filter(
+        (pendingTimeoutHandle) => pendingTimeoutHandle !== timeoutHandle
+      )
+      if (!navMountedRef.current) {
+        return
+      }
+      groupTriggerRefs.current.get(groupId)?.focus({ preventScroll: true })
+    }, 0)
+    pendingGroupFocusTimeoutsRef.current.push(timeoutHandle)
+  }, [clearPendingGroupTriggerFocusTimeouts])
+
+  const restoreGroupTriggerFocus = useCallback((groupId: string) => {
     groupTriggerRefs.current.get(groupId)?.focus({ preventScroll: true })
-    globalThis.setTimeout(() => {
-      groupTriggerRefs.current.get(groupId)?.focus({ preventScroll: true })
-    }, 0)
-  }
-
-  const scheduleGroupTriggerFocus = (groupId: string) => {
-    globalThis.setTimeout(() => {
-      groupTriggerRefs.current.get(groupId)?.focus({ preventScroll: true })
-    }, 0)
-  }
+    scheduleGroupTriggerFocus(groupId)
+  }, [scheduleGroupTriggerFocus])
 
   const getScrollBehavior = () => resolveNavbarScrollBehavior(
     typeof window !== "undefined"
