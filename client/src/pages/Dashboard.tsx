@@ -16,6 +16,7 @@ import { isMobileViewportWidth } from "@/lib/responsive";
 import { DashboardDeferredSections } from "@/pages/dashboard/DashboardDeferredSections";
 import { DashboardPageHeader } from "@/pages/dashboard/DashboardPageHeader";
 import { DashboardSnapshotSection } from "@/pages/dashboard/DashboardSnapshotSection";
+import { buildDashboardQueryErrorMessages } from "@/pages/dashboard/dashboard-query-errors";
 import { resolveDashboardExportBlockReason } from "@/pages/dashboard/export-guards";
 import {
   DASHBOARD_PRIMARY_REFETCH_INTERVAL_MS,
@@ -37,35 +38,65 @@ function DashboardContent() {
   const refreshInFlightRef = useRef(false);
   const lifecycleAbortControllerRef = useRef<AbortController | null>(null);
 
-  const { data: summary, isLoading: summaryLoading, refetch: refetchSummary } = useQuery<SummaryData>({
+  const {
+    data: summary,
+    error: summaryError,
+    isError: summaryIsError,
+    isLoading: summaryLoading,
+    refetch: refetchSummary,
+  } = useQuery<SummaryData>({
     queryKey: ["/api/analytics/summary"],
     queryFn: ({ signal }) => getAnalyticsSummary({ signal }),
     refetchInterval: () => resolveVisibleDashboardRefetchInterval(DASHBOARD_PRIMARY_REFETCH_INTERVAL_MS),
     refetchIntervalInBackground: false,
   });
 
-  const { data: trends, isLoading: trendsLoading, refetch: refetchTrends } = useQuery<LoginTrend[]>({
+  const {
+    data: trends,
+    error: trendsError,
+    isError: trendsIsError,
+    isLoading: trendsLoading,
+    refetch: refetchTrends,
+  } = useQuery<LoginTrend[]>({
     queryKey: ["/api/analytics/login-trends", trendDays],
     queryFn: ({ signal }) => getLoginTrends(trendDays, { signal }),
     refetchInterval: () => resolveVisibleDashboardRefetchInterval(DASHBOARD_PRIMARY_REFETCH_INTERVAL_MS),
     refetchIntervalInBackground: false,
   });
 
-  const { data: topUsers, isLoading: topUsersLoading, refetch: refetchTopUsers } = useQuery<TopUser[]>({
+  const {
+    data: topUsers,
+    error: topUsersError,
+    isError: topUsersIsError,
+    isLoading: topUsersLoading,
+    refetch: refetchTopUsers,
+  } = useQuery<TopUser[]>({
     queryKey: ["/api/analytics/top-users"],
     queryFn: ({ signal }) => getTopActiveUsers(10, { signal }),
     refetchInterval: () => resolveVisibleDashboardRefetchInterval(DASHBOARD_PRIMARY_REFETCH_INTERVAL_MS),
     refetchIntervalInBackground: false,
   });
 
-  const { data: peakHours, isLoading: peakHoursLoading, refetch: refetchPeakHours } = useQuery<PeakHour[]>({
+  const {
+    data: peakHours,
+    error: peakHoursError,
+    isError: peakHoursIsError,
+    isLoading: peakHoursLoading,
+    refetch: refetchPeakHours,
+  } = useQuery<PeakHour[]>({
     queryKey: ["/api/analytics/peak-hours"],
     queryFn: ({ signal }) => getPeakHours({ signal }),
     refetchInterval: () => resolveVisibleDashboardRefetchInterval(DASHBOARD_SECONDARY_REFETCH_INTERVAL_MS),
     refetchIntervalInBackground: false,
   });
 
-  const { data: roleDistribution, isLoading: roleLoading, refetch: refetchRoles } = useQuery<RoleData[]>({
+  const {
+    data: roleDistribution,
+    error: roleDistributionError,
+    isError: roleDistributionIsError,
+    isLoading: roleLoading,
+    refetch: refetchRoles,
+  } = useQuery<RoleData[]>({
     queryKey: ["/api/analytics/role-distribution"],
     queryFn: ({ signal }) => getRoleDistribution({ signal }),
     refetchInterval: () => resolveVisibleDashboardRefetchInterval(DASHBOARD_SECONDARY_REFETCH_INTERVAL_MS),
@@ -76,6 +107,28 @@ function DashboardContent() {
   const exportBlockReason = useMemo(
     () => resolveDashboardExportBlockReason({ exportingPdf, refreshing }),
     [exportingPdf, refreshing],
+  );
+  const dashboardErrorMessages = useMemo(
+    () =>
+      buildDashboardQueryErrorMessages([
+        { error: summaryError, failed: summaryIsError, label: "Ringkasan" },
+        { error: trendsError, failed: trendsIsError, label: "Trend login" },
+        { error: topUsersError, failed: topUsersIsError, label: "Pengguna aktif" },
+        { error: peakHoursError, failed: peakHoursIsError, label: "Waktu puncak" },
+        { error: roleDistributionError, failed: roleDistributionIsError, label: "Taburan peranan" },
+      ]),
+    [
+      peakHoursError,
+      peakHoursIsError,
+      roleDistributionError,
+      roleDistributionIsError,
+      summaryError,
+      summaryIsError,
+      topUsersError,
+      topUsersIsError,
+      trendsError,
+      trendsIsError,
+    ],
   );
 
   useEffect(() => {
@@ -156,18 +209,33 @@ function DashboardContent() {
       />
 
       <div ref={dashboardRef} className="space-y-4 sm:space-y-6" data-dashboard-export-root="true">
+        {dashboardErrorMessages.length > 0 ? (
+          <section
+            className="rounded-2xl border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive"
+            role="alert"
+            aria-live="polite"
+            data-testid="dashboard-error-state"
+          >
+            <p className="font-semibold">Sebahagian data dashboard gagal dimuat.</p>
+            <ul className="mt-2 list-disc space-y-1 pl-5">
+              {dashboardErrorMessages.map((message) => (
+                <li key={message}>{message}</li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
         <DashboardSnapshotSection summaryCards={summaryCards} summaryLoading={summaryLoading} />
         <DashboardDeferredSections
           defer={shouldDeferSecondaryMobileSections}
           trendDays={trendDays}
           onTrendDaysChange={setTrendDays}
-          trends={trends}
+          trends={trends ?? []}
           trendsLoading={trendsLoading}
-          peakHours={peakHours}
+          peakHours={peakHours ?? []}
           peakHoursLoading={peakHoursLoading}
-          roleDistribution={roleDistribution}
+          roleDistribution={roleDistribution ?? []}
           roleLoading={roleLoading}
-          topUsers={topUsers}
+          topUsers={topUsers ?? []}
           topUsersLoading={topUsersLoading}
         />
       </div>
