@@ -61,6 +61,21 @@ test("Floating AI trigger exposes dialog relationship and expanded state", () =>
   assert.match(triggerSource, /aria-expanded=\{isOpen\}/);
 });
 
+test("modal shells use Radix focus-managed primitives and labelled close controls", () => {
+  const dialogSource = readSource("dialog.tsx");
+  const sheetSource = readSource("sheet.tsx");
+  const alertDialogSource = readSource("alert-dialog.tsx");
+
+  assert.match(dialogSource, /import \* as DialogPrimitive from "@radix-ui\/react-dialog"/);
+  assert.match(dialogSource, /<DialogPrimitive\.Content/);
+  assert.match(dialogSource, /<DialogPrimitive\.Close aria-label="Close"/);
+  assert.match(sheetSource, /import \* as SheetPrimitive from "@radix-ui\/react-dialog"/);
+  assert.match(sheetSource, /<SheetPrimitive\.Content/);
+  assert.match(sheetSource, /<SheetPrimitive\.Close aria-label="Close"/);
+  assert.match(alertDialogSource, /import \* as AlertDialogPrimitive from "@radix-ui\/react-alert-dialog"/);
+  assert.match(alertDialogSource, /<AlertDialogPrimitive\.Content/);
+});
+
 test("AI chat dynamic status and message regions are announced politely", () => {
   const aiChatSource = readSource("../AIChat.tsx");
 
