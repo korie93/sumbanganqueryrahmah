@@ -93,6 +93,11 @@ function NavbarImpl({
         search: "",
       }
   }, [routerLocation])
+
+  useEffect(() => {
+    setMobileNavOpen(false)
+  }, [activeLocation.pathname])
+
   const activeNavigationItemId = useMemo(
     () =>
       resolveActiveNavigationItemId(currentPage, {

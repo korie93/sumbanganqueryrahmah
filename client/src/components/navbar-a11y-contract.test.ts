@@ -32,6 +32,7 @@ test("navbar controls use Malay accessible labels and include username context",
   assert.match(navbarSource, /clearPendingUserMenuFocusTimeouts\(\)/);
   assert.match(navbarSource, /globalThis\.clearTimeout\(timeoutHandle\)/);
   assert.match(navbarSource, /if \(!navbarMountedRef\.current\) \{/);
+  assert.match(navbarSource, /useEffect\(\(\) => \{\s*setMobileNavOpen\(false\)\s*\}, \[activeLocation\.pathname\]\)/);
   assert.match(navbarSource, /desktopUserMenuTriggerRef\.current\?\.focus\(\{ preventScroll: true \}\)/);
   assert.match(navbarSource, /\{\[\.\.\.username\]\[0\] \|\| ""\}/);
   assert.doesNotMatch(navbarSource, /window\.location/);
