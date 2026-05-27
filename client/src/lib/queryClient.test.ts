@@ -1,7 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { ERROR_CODES } from "@shared/error-codes";
-import { apiRequest, createApiHeaders, createApiRequestId } from "./api-client";
+import {
+  apiRequest,
+  createApiHeaders,
+  createApiRequestId,
+  getApiErrorRetryCount,
+  getApiResponseRetryCount,
+  resetApiRetryStateForTests,
+} from "./api-client";
 import { getQueryFn, resolveDefaultQueryStaleTime } from "./queryClient";
 
 async function withNavigatorOnlineState(
@@ -75,7 +82,7 @@ test("apiRequest injects x-request-id headers and preserves backend request ids 
 
   try {
     await assert.rejects(
-      () => apiRequest("GET", "/api/test-observability"),
+      () => apiRequest("GET", "/api/test-observability", undefined, { retry: false }),
       /server-request-123/,
     );
     assert.ok(observedRequestId.length > 8);
@@ -115,6 +122,184 @@ test("apiRequest preserves structured backend error codes alongside request ids"
     );
   } finally {
     globalThis.fetch = originalFetch;
+  }
+});
+
+test("apiRequest retries transient gateway failures before returning success", async () => {
+  const originalFetch = globalThis.fetch;
+  resetApiRetryStateForTests();
+  let callCount = 0;
+
+  globalThis.fetch = (async () => {
+    callCount += 1;
+    if (callCount === 1) {
+      return new Response(JSON.stringify({ message: "temporary outage" }), {
+        status: 502,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    return new Response(JSON.stringify({ ok: true }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  }) as typeof fetch;
+
+  try {
+    const response = await apiRequest("GET", "/api/test-retry-success", undefined, {
+      retry: {
+        baseDelayMs: 1,
+        jitterRatio: 0,
+        maxRetries: 3,
+      },
+    });
+
+    assert.equal(callCount, 2);
+    assert.equal(response.status, 200);
+    assert.equal(getApiResponseRetryCount(response), 1);
+  } finally {
+    globalThis.fetch = originalFetch;
+    resetApiRetryStateForTests();
+  }
+});
+
+test("apiRequest exposes retry count after exhausting retryable responses", async () => {
+  const originalFetch = globalThis.fetch;
+  resetApiRetryStateForTests();
+  let callCount = 0;
+
+  globalThis.fetch = (async () => {
+    callCount += 1;
+    return new Response(JSON.stringify({ message: "temporarily unavailable" }), {
+      status: 503,
+      headers: { "Content-Type": "application/json" },
+    });
+  }) as typeof fetch;
+
+  try {
+    await assert.rejects(
+      () => apiRequest("GET", "/api/test-retry-failure", undefined, {
+        retry: {
+          baseDelayMs: 1,
+          jitterRatio: 0,
+          maxRetries: 3,
+        },
+      }),
+      (error: unknown) => {
+        assert.ok(error instanceof Error);
+        assert.match(error.message, /temporarily unavailable/);
+        assert.equal(getApiErrorRetryCount(error), 3);
+        return true;
+      },
+    );
+    assert.equal(callCount, 4);
+  } finally {
+    globalThis.fetch = originalFetch;
+    resetApiRetryStateForTests();
+  }
+});
+
+test("apiRequest does not retry authentication failures", async () => {
+  const originalFetch = globalThis.fetch;
+  resetApiRetryStateForTests();
+  let callCount = 0;
+
+  globalThis.fetch = (async () => {
+    callCount += 1;
+    return new Response(JSON.stringify({ message: "Token required" }), {
+      status: 401,
+      headers: { "Content-Type": "application/json" },
+    });
+  }) as typeof fetch;
+
+  try {
+    await assert.rejects(
+      () => apiRequest("GET", "/api/test-auth-failure", undefined, {
+        retry: {
+          baseDelayMs: 1,
+          jitterRatio: 0,
+          maxRetries: 3,
+        },
+      }),
+      /Token required/,
+    );
+    assert.equal(callCount, 1);
+  } finally {
+    globalThis.fetch = originalFetch;
+    resetApiRetryStateForTests();
+  }
+});
+
+test("apiRequest aborts the retry chain when the caller signal aborts during backoff", async () => {
+  const originalFetch = globalThis.fetch;
+  const controller = new AbortController();
+  resetApiRetryStateForTests();
+  let callCount = 0;
+
+  globalThis.fetch = (async () => {
+    callCount += 1;
+    setTimeout(() => controller.abort(), 0);
+    return new Response(JSON.stringify({ message: "temporarily unavailable" }), {
+      status: 503,
+      headers: { "Content-Type": "application/json" },
+    });
+  }) as typeof fetch;
+
+  try {
+    await assert.rejects(
+      () => apiRequest("GET", "/api/test-retry-abort", undefined, {
+        retry: {
+          baseDelayMs: 50,
+          jitterRatio: 0,
+          maxRetries: 3,
+        },
+        signal: controller.signal,
+      }),
+      (error: unknown) => error instanceof Error && error.name === "AbortError",
+    );
+    assert.equal(callCount, 1);
+  } finally {
+    globalThis.fetch = originalFetch;
+    resetApiRetryStateForTests();
+  }
+});
+
+test("apiRequest retry circuit suppresses retries after repeated transient failures", async () => {
+  const originalFetch = globalThis.fetch;
+  resetApiRetryStateForTests();
+  let callCount = 0;
+
+  globalThis.fetch = (async () => {
+    callCount += 1;
+    return new Response(JSON.stringify({ message: "temporarily unavailable" }), {
+      status: 503,
+      headers: { "Content-Type": "application/json" },
+    });
+  }) as typeof fetch;
+
+  try {
+    for (let index = 0; index < 10; index += 1) {
+      await assert.rejects(
+        () => apiRequest("GET", `/api/test-circuit-${index}`, undefined, { retry: false }),
+        /temporarily unavailable/,
+      );
+    }
+
+    const beforeCircuitAttempt = callCount;
+    await assert.rejects(
+      () => apiRequest("GET", "/api/test-circuit-open", undefined, {
+        retry: {
+          baseDelayMs: 1,
+          jitterRatio: 0,
+          maxRetries: 3,
+        },
+      }),
+      /temporarily unavailable/,
+    );
+    assert.equal(callCount - beforeCircuitAttempt, 1);
+  } finally {
+    globalThis.fetch = originalFetch;
+    resetApiRetryStateForTests();
   }
 });
 

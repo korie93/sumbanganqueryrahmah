@@ -1,5 +1,5 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
-import { createApiHeaders, throwIfResNotOk } from "./api-client";
+import { createApiHeaders, fetchApiWithRetry, throwIfResNotOk } from "./api-client";
 import { detectLowSpecMode } from "./low-spec-mode";
 
 const isLowSpecClient = (() => {
@@ -65,10 +65,11 @@ export const getQueryFn: <T>(options: {
   on401: UnauthorizedBehavior;
 }) => QueryFunction<T> =
   ({ on401: unauthorizedBehavior }) =>
-  async ({ queryKey }) => {
-    const res = await fetch(queryKey.join("/") as string, {
+  async ({ queryKey, signal }) => {
+    const res = await fetchApiWithRetry(queryKey.join("/") as string, {
       credentials: "include",
       headers: createApiHeaders(),
+      signal,
     });
 
     if (unauthorizedBehavior === "returnNull" && res.status === 401) {
