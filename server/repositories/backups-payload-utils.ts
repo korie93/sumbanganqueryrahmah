@@ -243,7 +243,7 @@ export async function prepareBackupPayloadFileForCreate(
       cleanup,
     };
   } catch (error) {
-    state.writer.destroy();
+    state.writer.destroy(error instanceof Error ? error : undefined);
     await cleanup();
     throw error;
   }

@@ -1,5 +1,4 @@
 import crypto from "crypto";
-import { once } from "node:events";
 import { createReadStream, createWriteStream, promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -28,8 +27,28 @@ export async function writeBackupStreamChunk(
     ? writer.write(chunk, "utf8")
     : writer.write(chunk);
   if (!wrote) {
-    await once(writer, "drain");
+    await waitForBackupWriterDrain(writer);
   }
+}
+
+async function waitForBackupWriterDrain(writer: ReturnType<typeof createWriteStream>) {
+  await new Promise<void>((resolve, reject) => {
+    const cleanup = () => {
+      writer.off("drain", handleDrain);
+      writer.off("error", handleError);
+    };
+    const handleDrain = () => {
+      cleanup();
+      resolve();
+    };
+    const handleError = (error: Error) => {
+      cleanup();
+      reject(error);
+    };
+
+    writer.once("drain", handleDrain);
+    writer.once("error", handleError);
+  });
 }
 
 export async function writeBackupChunk(
@@ -50,8 +69,19 @@ export async function writeBackupChunk(
 
 export async function closeBackupWriter(writer: ReturnType<typeof createWriteStream>) {
   await new Promise<void>((resolve, reject) => {
-    writer.once("error", reject);
-    writer.end(() => resolve());
+    const cleanup = () => {
+      writer.off("error", handleError);
+    };
+    const handleError = (error: Error) => {
+      cleanup();
+      reject(error);
+    };
+
+    writer.once("error", handleError);
+    writer.end(() => {
+      cleanup();
+      resolve();
+    });
   });
 }
 

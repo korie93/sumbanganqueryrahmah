@@ -9,6 +9,7 @@ import {
   cleanupPreparedMultipartImportUpload,
   normalizeImportName,
   parseMultipartImportUpload,
+  prepareMultipartImportUpload,
   resolveImportMultipartFailure,
 } from "../imports-multipart-utils";
 import { DEFAULT_IMPORT_CSV_MAX_MATERIALIZED_ROWS } from "../../services/import-upload-csv-utils";
@@ -91,6 +92,50 @@ test("parseMultipartImportUpload rejects files that exceed the configured size l
     () => parsingPromise,
     new RegExp(IMPORT_TOO_LARGE_MESSAGE.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")),
   );
+});
+
+test("parseMultipartImportUpload removes limit listeners after stream failures", async () => {
+  class LimitReadable extends Readable {
+    private hasSentData = false;
+
+    override _read() {
+      if (this.hasSentData) {
+        this.push(null);
+        return;
+      }
+
+      this.hasSentData = true;
+      this.emit("limit");
+      this.push("name,amount\nAlice,12\n");
+    }
+  }
+
+  const file = new LimitReadable();
+  await assert.rejects(
+    () =>
+      parseMultipartImportUpload({
+        file,
+        filename: "multipart-import.csv",
+      }),
+    new RegExp(IMPORT_TOO_LARGE_MESSAGE.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")),
+  );
+
+  assert.equal(file.listenerCount("limit"), 0);
+});
+
+test("prepareMultipartImportUpload removes limit listeners after successful staging", async () => {
+  const file = Readable.from("name,amount\nAlice,12\n");
+  const upload = await prepareMultipartImportUpload({
+    file,
+    filename: "multipart-import.csv",
+  });
+
+  try {
+    assert.equal(file.listenerCount("limit"), 0);
+    assert.equal(upload.kind, "csv-file");
+  } finally {
+    await cleanupPreparedMultipartImportUpload(upload);
+  }
 });
 
 test("parseMultipartImportUpload rejects CSV files that exceed the in-memory materialization safety limit", async () => {

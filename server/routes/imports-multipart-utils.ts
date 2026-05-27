@@ -32,6 +32,20 @@ export type PreparedMultipartImportUpload =
 
 export const IMPORT_TOO_LARGE_MESSAGE = IMPORT_UPLOAD_TOO_LARGE_MESSAGE;
 
+type LimitAwareReadableStream = NodeJS.ReadableStream & {
+  off?: (event: "limit", listener: () => void) => unknown;
+  removeListener?: (event: "limit", listener: () => void) => unknown;
+};
+
+function removeLimitListener(file: NodeJS.ReadableStream, listener: () => void) {
+  const limitAwareFile = file as LimitAwareReadableStream;
+  if (typeof limitAwareFile.off === "function") {
+    limitAwareFile.off("limit", listener);
+    return;
+  }
+  limitAwareFile.removeListener?.("limit", listener);
+}
+
 async function cleanupImportUploadPath(
   targetPath: string,
   options: { recursive?: boolean; force?: boolean },
@@ -79,9 +93,10 @@ export async function parseMultipartImportUpload(params: {
   const tempFilePath = path.join(tempDir, `${Date.now()}-${randomUUID()}.upload`);
   let exceededSizeLimit = false;
 
-  file.once("limit", () => {
+  const handleLimit = () => {
     exceededSizeLimit = true;
-  });
+  };
+  file.once("limit", handleLimit);
 
   try {
     await pipeline(
@@ -103,6 +118,7 @@ export async function parseMultipartImportUpload(params: {
       filename,
     };
   } finally {
+    removeLimitListener(file, handleLimit);
     await cleanupImportUploadPath(tempFilePath, { force: true }, "file");
     await cleanupImportUploadPath(tempDir, { recursive: true, force: true }, "directory");
   }
@@ -118,9 +134,10 @@ export async function prepareMultipartImportUpload(params: {
   let exceededSizeLimit = false;
   let keepStagedFile = false;
 
-  file.once("limit", () => {
+  const handleLimit = () => {
     exceededSizeLimit = true;
-  });
+  };
+  file.once("limit", handleLimit);
 
   try {
     await pipeline(
@@ -153,6 +170,7 @@ export async function prepareMultipartImportUpload(params: {
       dataRows: parsed.rows,
     };
   } finally {
+    removeLimitListener(file, handleLimit);
     if (!keepStagedFile) {
       await cleanupImportUploadPath(tempFilePath, { force: true }, "file");
       await cleanupImportUploadPath(tempDir, { recursive: true, force: true }, "directory");

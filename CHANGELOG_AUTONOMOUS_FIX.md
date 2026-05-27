@@ -44,3 +44,4 @@
 - ISSUE-05: Added Husky/lint-staged git hooks that block staged environment files, private key material, high-confidence secrets, and non-conventional commit messages before history is written.
 - BE-01: Clamped auth one-time token generation to a 32-byte minimum so future callers cannot accidentally issue low-entropy recovery/session-adjacent tokens.
 - BE-02: Raised the production HSTS baseline/default to one year while keeping preload as a validated opt-in after HTTPS coverage is confirmed for every subdomain.
+- BE-03: Hardened import and backup stream lifecycles by removing upload limit listeners, propagating writer errors during backpressure waits, and destroying failed backup writers with error context.
