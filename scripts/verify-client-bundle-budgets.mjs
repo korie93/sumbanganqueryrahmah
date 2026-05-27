@@ -27,6 +27,42 @@ function formatKB(bytes) {
   return `${toKB(bytes).toFixed(1)} KB`;
 }
 
+function buildReportResult(result) {
+  return {
+    budget: {
+      gzipKB: result.maxGzipKB ?? null,
+      rawKB: result.maxKB,
+    },
+    gzipBytes: result.gzipBytes ?? 0,
+    gzipKB: result.matched ? Number(toKB(result.gzipBytes).toFixed(1)) : null,
+    label: result.label,
+    matched: result.matched,
+    name: result.name,
+    overBudget: result.overBudget,
+    rawBytes: result.bytes ?? 0,
+    rawKB: result.matched ? Number(toKB(result.bytes).toFixed(1)) : null,
+    reason: result.reason,
+  };
+}
+
+async function writeBudgetReportIfRequested(results) {
+  const reportPath = String(process.env.BUNDLE_BUDGET_REPORT_PATH || "").trim();
+  if (!reportPath) {
+    return;
+  }
+
+  const resolvedReportPath = path.resolve(reportPath);
+  await fs.mkdir(path.dirname(resolvedReportPath), { recursive: true });
+  await fs.writeFile(
+    resolvedReportPath,
+    `${JSON.stringify({
+      generatedAt: new Date().toISOString(),
+      results: results.map(buildReportResult),
+    }, null, 2)}\n`,
+    "utf8",
+  );
+}
+
 async function readAssetSize(fullPath) {
   const bytes = await fs.readFile(fullPath);
   return {
@@ -189,6 +225,7 @@ async function run() {
   }
 
   const failures = results.filter((result) => result.overBudget);
+  await writeBudgetReportIfRequested(results);
   if (failures.length > 0) {
     const summary = failures
       .map((result) => `${result.label}: ${result.reason}`)

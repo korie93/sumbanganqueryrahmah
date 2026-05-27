@@ -87,7 +87,15 @@ jobs:
         run: npm run build
 
       - name: Verify client bundle budgets
-        run: npm run verify:bundle-budgets
+        run: BUNDLE_BUDGET_REPORT_PATH=artifacts/bundle/bundle-budget-report.json npm run verify:bundle-budgets
+
+      - name: Upload bundle budget artifact
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: bundle-budget-${{ github.run_id }}-${{ github.run_attempt }}
+          if-no-files-found: warn
+          path: artifacts/bundle
 
   coverage-gate:
     needs: build-and-test
