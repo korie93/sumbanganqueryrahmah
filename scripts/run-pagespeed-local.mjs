@@ -1,6 +1,6 @@
 import process from "node:process";
 import path from "node:path";
-import { copyFileSync, createWriteStream, existsSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import { accessSync, copyFileSync, createWriteStream, existsSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import dotenv from "dotenv";
@@ -47,7 +47,7 @@ const softFailRetryableFailures = String(
 ).trim().toLowerCase() === "true";
 const defaultChromeFlags = process.platform === "win32"
   ? "--headless --disable-gpu --disable-dev-shm-usage"
-  : "--headless=new --disable-gpu --disable-dev-shm-usage";
+  : "--headless=new --disable-gpu --disable-dev-shm-usage --no-sandbox";
 const chromeFlags = String(process.env.PAGESPEED_CHROME_FLAGS || defaultChromeFlags).trim();
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -57,6 +57,39 @@ const assert = (condition, message) => {
     throw new Error(message);
   }
 };
+
+function assertChromeExecutablePath(chromePath, source) {
+  try {
+    accessSync(chromePath);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`PageSpeed Chrome executable from ${source} is not accessible: ${chromePath}. ${message}`);
+  }
+}
+
+async function resolveChromeExecutablePath(env = process.env) {
+  const explicitChromePath = String(env.PAGESPEED_CHROME_PATH || env.CHROME_PATH || "").trim();
+  if (explicitChromePath) {
+    assertChromeExecutablePath(explicitChromePath, env.PAGESPEED_CHROME_PATH ? "PAGESPEED_CHROME_PATH" : "CHROME_PATH");
+    return explicitChromePath;
+  }
+
+  try {
+    const { chromium } = await import("playwright");
+    const playwrightChromePath = chromium.executablePath();
+    if (playwrightChromePath) {
+      assertChromeExecutablePath(playwrightChromePath, "Playwright Chromium");
+      return playwrightChromePath;
+    }
+  } catch (error) {
+    if (String(env.PAGESPEED_DEBUG_CHROME_DISCOVERY || "").trim().toLowerCase() === "true") {
+      const message = error instanceof Error ? error.message : String(error);
+      console.warn(`[pagespeed] Playwright Chromium discovery failed; falling back to Lighthouse discovery: ${message}`);
+    }
+  }
+
+  return "";
+}
 
 const runCommand = (command, args, options = {}) =>
   new Promise((resolve, reject) => {
@@ -282,12 +315,16 @@ async function runAudit(audit, env) {
       TMPDIR: attemptTempDir,
     };
 
-    await runNpm(buildLighthouseArgs(audit.url, attemptPath, audit.preset), {
+    const lighthouseExitCode = await runNpm(buildLighthouseArgs(audit.url, attemptPath, audit.preset), {
       env: lighthouseEnv,
       allowFailure: true,
     });
 
-    assert(existsSync(attemptPath), `Lighthouse did not produce an output file for ${audit.slug} attempt ${attempt}.`);
+    assert(
+      existsSync(attemptPath),
+      `Lighthouse did not produce an output file for ${audit.slug} attempt ${attempt}. ` +
+        `Exit code: ${lighthouseExitCode}. Chrome path: ${lighthouseEnv.CHROME_PATH || "(auto-discovery)"}.`,
+    );
 
     const report = readLighthouseReport(attemptPath);
     const runtimeErrorCode = getLighthouseRuntimeErrorCode(report);
@@ -385,8 +422,19 @@ async function run() {
     allowPortFallback: !shouldReuseServer,
   });
   const baseUrl = resolvedServer.baseUrl;
+  const chromePath = await resolveChromeExecutablePath(process.env);
+  if (chromePath) {
+    console.log(`[pagespeed] using Chrome executable: ${chromePath}`);
+  }
+
   const env = {
     ...process.env,
+    ...(chromePath
+      ? {
+          CHROME_PATH: chromePath,
+          PAGESPEED_CHROME_PATH: chromePath,
+        }
+      : {}),
     NODE_ENV: process.env.NODE_ENV || "development",
     HOST: host,
     PORT: String(resolvedServer.port),

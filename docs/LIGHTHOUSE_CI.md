@@ -11,9 +11,11 @@ The `smoke-ui` job in `.github/workflows/ci.yml`:
 1. Builds the app.
 2. Starts `dist-local/server/cluster-local.js`.
 3. Runs visual and accessibility contracts.
-4. Runs `npm run perf:pagespeed:local:strict` against the already-running local
+4. Resolves the Playwright Chromium executable and passes it to Lighthouse via
+   `PAGESPEED_CHROME_PATH`, avoiding runner-specific Chrome discovery failures.
+5. Runs `npm run perf:pagespeed:local:strict` against the already-running local
    server with `PAGESPEED_REUSE_SERVER=true`.
-5. Uploads `artifacts/pagespeed` as a GitHub Actions artifact.
+6. Uploads `artifacts/pagespeed` as a GitHub Actions artifact.
 
 ## Score Thresholds
 
@@ -43,6 +45,14 @@ Create `.env.smoke.local` or export the same PostgreSQL variables used by smoke
 tests, then run:
 
 ```bash
+npm run perf:pagespeed:local:strict
+```
+
+The runner automatically uses `PAGESPEED_CHROME_PATH`, `CHROME_PATH`, or the
+Chromium executable installed by Playwright. To force a specific browser:
+
+```bash
+PAGESPEED_CHROME_PATH="$(node -e 'console.log(require("playwright").chromium.executablePath())')" \
 npm run perf:pagespeed:local:strict
 ```
 

@@ -123,12 +123,19 @@ test("evaluateLighthouseThresholds reports low or missing scores", () => {
 });
 
 test("strict PageSpeed runner and CI enforce Lighthouse thresholds", () => {
+  const runnerSource = readFileSync("scripts/run-pagespeed-local.mjs", "utf8");
   const strictRunnerSource = readFileSync("scripts/run-pagespeed-local-strict.mjs", "utf8");
   const ciSource = readFileSync(".github/workflows/ci.yml", "utf8");
   const docsSource = readFileSync("docs/LIGHTHOUSE_CI.md", "utf8");
 
+  assert.match(runnerSource, /PAGESPEED_CHROME_PATH/);
+  assert.match(runnerSource, /CHROME_PATH/);
+  assert.match(runnerSource, /chromium\.executablePath\(\)/);
+  assert.match(runnerSource, /--no-sandbox/);
   assert.match(strictRunnerSource, /PAGESPEED_ENFORCE_THRESHOLDS:\s*"true"/);
   assert.match(ciSource, /Run PageSpeed Lighthouse budgets/);
+  assert.match(ciSource, /require\("playwright"\)\.chromium\.executablePath\(\)/);
+  assert.match(ciSource, /PAGESPEED_CHROME_PATH=/);
   assert.match(ciSource, /PAGESPEED_REUSE_SERVER=true/);
   assert.match(ciSource, /artifacts\/pagespeed/);
   assert.match(docsSource, /Performance \| 85/);

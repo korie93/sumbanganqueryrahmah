@@ -257,6 +257,7 @@ jobs:
 
       - name: Run PageSpeed Lighthouse budgets
         run: |
+          PAGESPEED_CHROME_PATH="$(node -e 'console.log(require("playwright").chromium.executablePath())')" \
           PAGESPEED_REUSE_SERVER=true \
           PAGESPEED_SKIP_BUILD=true \
           PAGESPEED_BASE_URL=http://127.0.0.1:5000 \
