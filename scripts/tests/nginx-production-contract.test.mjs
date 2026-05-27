@@ -162,10 +162,14 @@ test("production environment templates keep upload scanning and runtime topology
   );
   assert.equal(
     readAnyEnvValue(productionEnvText, "SQR_RATE_LIMIT_STORE", "deploy/examples/sqr.production.env.template"),
-    "memory",
+    "redis",
+  );
+  assert.match(
+    readAnyEnvValue(productionEnvText, "SQR_REDIS_RATE_LIMIT_URL", "deploy/examples/sqr.production.env.template"),
+    /^rediss?:\/\//,
   );
   assert.match(docText, /clamdscan --fdpass/i);
-  assert.match(docText, /Redis pub\/sub untuk WebSocket/i);
+  assert.match(docText, /Redis pub\/sub WebSocket/i);
 });
 
 test("production Nginx example applies auth edge throttle to both login routes", () => {

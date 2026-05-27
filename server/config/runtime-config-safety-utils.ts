@@ -270,16 +270,12 @@ export function assertProductionRateLimiterTopologySafety(params: {
   configuredClusterMaxWorkers: number;
   distributedStoreConfigured: boolean;
 }) {
-  if (
-    !params.isProductionLike
-    || params.distributedStoreConfigured
-    || params.configuredClusterMaxWorkers <= 1
-  ) {
+  if (!params.isProductionLike || params.distributedStoreConfigured) {
     return;
   }
 
   throw new Error(
-    "SQR_MAX_WORKERS greater than 1 is not allowed outside strict local development until a shared Redis rate-limit/replay store is configured. Set SQR_MAX_WORKERS=1 or configure SQR_RATE_LIMIT_STORE=redis with SQR_REDIS_RATE_LIMIT_URL before scaling horizontally.",
+    "SQR_RATE_LIMIT_STORE=redis with SQR_REDIS_RATE_LIMIT_URL is required outside strict local development so fixed-window rate limits, adaptive protection, 2FA replay protection, and session revocation share state safely. Use SQR_RATE_LIMIT_STORE=memory only on strict local or test hosts.",
   );
 }
 

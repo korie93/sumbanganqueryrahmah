@@ -180,7 +180,7 @@ test("assertRuntimeSafetyGuards rejects production-like startup when operations 
   );
 });
 
-test("assertProductionRateLimiterTopologySafety rejects production-like multi-worker startup without a shared store", () => {
+test("assertProductionRateLimiterTopologySafety rejects production-like startup without a shared store", () => {
   assert.throws(
     () =>
       assertProductionRateLimiterTopologySafety({
@@ -188,21 +188,23 @@ test("assertProductionRateLimiterTopologySafety rejects production-like multi-wo
         configuredClusterMaxWorkers: 2,
         distributedStoreConfigured: false,
       }),
-    /SQR_MAX_WORKERS greater than 1 is not allowed outside strict local development/i,
+    /SQR_RATE_LIMIT_STORE=redis with SQR_REDIS_RATE_LIMIT_URL is required outside strict local development/i,
+  );
+
+  assert.throws(
+    () =>
+      assertProductionRateLimiterTopologySafety({
+        isProductionLike: true,
+        configuredClusterMaxWorkers: 1,
+        distributedStoreConfigured: false,
+      }),
+    /SQR_RATE_LIMIT_STORE=redis with SQR_REDIS_RATE_LIMIT_URL is required outside strict local development/i,
   );
 
   assert.doesNotThrow(() =>
     assertProductionRateLimiterTopologySafety({
       isProductionLike: false,
       configuredClusterMaxWorkers: 2,
-      distributedStoreConfigured: false,
-    }),
-  );
-
-  assert.doesNotThrow(() =>
-    assertProductionRateLimiterTopologySafety({
-      isProductionLike: true,
-      configuredClusterMaxWorkers: 1,
       distributedStoreConfigured: false,
     }),
   );

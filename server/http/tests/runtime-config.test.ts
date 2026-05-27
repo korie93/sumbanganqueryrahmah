@@ -63,6 +63,10 @@ const productionBaseOverrides: Record<string, string | null> = {
   LOCAL_SUPERUSER_CREDENTIALS_FILE_ENABLED: "0",
   MAIL_DEV_OUTBOX_ENABLED: "0",
   SQR_ALLOW_RUNTIME_DB_BOOTSTRAP_IN_PRODUCTION: null,
+  SQR_RATE_LIMIT_STORE: "redis",
+  SQR_REDIS_RATE_LIMIT_URL: "rediss://redis.internal:6380/0",
+  SQR_WS_SHARED_BUS: null,
+  SQR_REDIS_WS_URL: null,
 };
 
 const productionLikeDevelopmentBaseOverrides: Record<string, string | null> = {
@@ -86,6 +90,10 @@ const productionLikeDevelopmentBaseOverrides: Record<string, string | null> = {
   LOCAL_SUPERUSER_CREDENTIALS_FILE_ENABLED: "0",
   MAIL_DEV_OUTBOX_ENABLED: "0",
   SQR_ALLOW_RUNTIME_DB_BOOTSTRAP_IN_PRODUCTION: null,
+  SQR_RATE_LIMIT_STORE: "redis",
+  SQR_REDIS_RATE_LIMIT_URL: "rediss://redis.internal:6380/0",
+  SQR_WS_SHARED_BUS: null,
+  SQR_REDIS_WS_URL: null,
 };
 
 test("runtime config rejects production startup when backup encryption keys are missing", async () => {
@@ -392,18 +400,20 @@ test("runtime config allows operations debug route enablement in strict local de
   );
 });
 
-test("runtime config rejects production startup when multi-worker mode still uses process-local rate limiting and replay state", async () => {
+test("runtime config rejects production startup when rate limiting still uses process-local memory", async () => {
   await withEnv(
     {
       ...productionBaseOverrides,
       PUBLIC_APP_URL: "https://sqr.example.com",
       BACKUP_ENCRYPTION_KEY: "A".repeat(32),
-      SQR_MAX_WORKERS: "2",
+      SQR_MAX_WORKERS: "1",
+      SQR_RATE_LIMIT_STORE: "memory",
+      SQR_REDIS_RATE_LIMIT_URL: null,
     },
     async () => {
       await assert.rejects(
         importRuntimeFresh(),
-        /SQR_MAX_WORKERS greater than 1 is not allowed outside strict local development/i,
+        /SQR_RATE_LIMIT_STORE=redis with SQR_REDIS_RATE_LIMIT_URL is required outside strict local development/i,
       );
     },
   );
