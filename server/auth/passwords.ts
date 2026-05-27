@@ -16,6 +16,7 @@ const TEMP_PASSWORD_ALPHABET =
   `${TEMP_PASSWORD_UPPERCASE_ALPHABET}${TEMP_PASSWORD_LOWERCASE_ALPHABET}${TEMP_PASSWORD_DIGIT_ALPHABET}${TEMP_PASSWORD_SYMBOL_ALPHABET}`;
 const OPAQUE_TOKEN_HASH_PREFIX = "hmac-sha256:";
 const OPAQUE_TOKEN_HASH_INFO = "sqr-auth-opaque-token-hash-v1";
+const MIN_ONE_TIME_TOKEN_BYTES = 32;
 
 function pickRandomCharacter(alphabet = TEMP_PASSWORD_ALPHABET): string {
   const index = randomInt(alphabet.length);
@@ -71,8 +72,9 @@ export async function verifyPassword(raw: string, hash: string | null | undefine
   return bcrypt.compare(raw, normalizedHash);
 }
 
-export function generateOneTimeToken(bytes = 32): string {
-  return randomBytes(bytes).toString("hex");
+export function generateOneTimeToken(bytes = MIN_ONE_TIME_TOKEN_BYTES): string {
+  const entropyBytes = Math.max(MIN_ONE_TIME_TOKEN_BYTES, Math.floor(bytes));
+  return randomBytes(entropyBytes).toString("hex");
 }
 
 export function hashLegacyOpaqueToken(raw: string): string {

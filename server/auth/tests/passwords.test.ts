@@ -8,6 +8,7 @@ import {
   isStrongPassword,
 } from "../credentials";
 import {
+  generateOneTimeToken,
   generateTemporaryPassword,
   getOpaqueTokenHashCandidates,
   hashLegacyOpaqueToken,
@@ -33,6 +34,12 @@ test("generateTemporaryPassword preserves entropy while meeting the credential p
 
   assert.equal(password.length >= 16, true);
   assert.equal(isStrongPassword(password), true);
+});
+
+test("generateOneTimeToken never drops below 32 bytes of entropy", () => {
+  assert.match(generateOneTimeToken(), /^[a-f0-9]{64}$/);
+  assert.match(generateOneTimeToken(8), /^[a-f0-9]{64}$/);
+  assert.match(generateOneTimeToken(48), /^[a-f0-9]{96}$/);
 });
 
 test("opaque token hashing uses keyed HMAC while retaining legacy lookup candidates", () => {
