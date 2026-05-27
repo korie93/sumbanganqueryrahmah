@@ -72,6 +72,9 @@ jobs:
       - name: Audit dependencies
         run: npm run audit:dependencies
 
+      - name: Verify XLSX vendor integrity
+        run: npm run verify:xlsx-vendor-integrity
+
       - name: Generate SBOM
         run: SBOM_ARTIFACTS_DIR=artifacts/sbom npm run supply-chain:sbom
 
