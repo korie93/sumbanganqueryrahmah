@@ -9,6 +9,7 @@ export const AUTH_SESSION_COOKIE_NAME = "sqr_auth";
 export const AUTH_SESSION_HINT_COOKIE_NAME = "sqr_auth_hint";
 export const AUTH_SESSION_CSRF_COOKIE_NAME = "sqr_csrf";
 export const AUTH_SESSION_CSRF_HEADER_NAME = "X-CSRF-Token";
+export const AUTH_SESSION_REFRESH_HEADER_NAME = "X-Auth-Token-Refresh";
 export { AUTH_SESSION_MAX_AGE_MS } from "./session-lifetime";
 
 type HeaderValue = string | string[] | undefined;
@@ -145,8 +146,7 @@ export function readAuthSessionCsrfTokenFromHeaders(
   return equalSafeToken(cookieToken, headerValue) ? headerValue : null;
 }
 
-export function setAuthSessionCookie(res: Response, token: string) {
-  const csrfToken = createCsrfToken();
+function setAuthSessionTokenCookies(res: Response, token: string) {
   res.cookie(AUTH_SESSION_COOKIE_NAME, token, {
     ...getAuthSessionCookieOptions(),
     maxAge: AUTH_SESSION_COOKIE_MAX_AGE_MS,
@@ -155,7 +155,16 @@ export function setAuthSessionCookie(res: Response, token: string) {
     ...getAuthSessionHintCookieOptions(),
     maxAge: AUTH_SESSION_COOKIE_MAX_AGE_MS,
   });
+}
+
+export function setAuthSessionCookie(res: Response, token: string) {
+  const csrfToken = createCsrfToken();
+  setAuthSessionTokenCookies(res, token);
   setAuthSessionCsrfCookie(res, csrfToken);
+}
+
+export function refreshAuthSessionCookie(res: Response, token: string) {
+  setAuthSessionTokenCookies(res, token);
 }
 
 export function rotateAuthSessionCsrfCookie(res: Response) {

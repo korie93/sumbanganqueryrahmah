@@ -6,7 +6,9 @@ import {
   SESSION_JWT_ALGORITHM,
   resolveSessionJwtExpiresAt,
   resolveSessionJwtId,
+  shouldRefreshSessionJwt,
   signSessionJwt,
+  signSessionJwtWithSecret,
   verifyJwtWithAnySecret,
 } from "../session-jwt";
 import {
@@ -24,6 +26,45 @@ test("signSessionJwt applies the default session expiry when omitted", () => {
   assert.equal(decoded.exp - decoded.iat, SESSION_JWT_DEFAULT_EXPIRY);
   assert.equal(resolveSessionJwtExpiresAt(token)?.getTime(), decoded.exp * 1000);
   assert.equal(resolveSessionJwtId(token), decoded.jti);
+});
+
+test("signSessionJwtWithSecret signs with an explicit secret for scoped guard instances", () => {
+  const token = signSessionJwtWithSecret({ username: "alice", role: "admin" }, "scoped-secret");
+  const payload = verifyJwtWithAnySecret<{ username: string; role: string }>(token, "scoped-secret");
+
+  assert.equal(payload.username, "alice");
+  assert.equal(payload.role, "admin");
+});
+
+test("shouldRefreshSessionJwt refreshes only inside the final 20 percent of token lifetime", () => {
+  const nowMs = 1_800_000_000_000;
+  const issuedAt = Math.floor(nowMs / 1000) - 20;
+
+  assert.equal(
+    shouldRefreshSessionJwt({
+      iat: issuedAt,
+      exp: Math.floor(nowMs / 1000) + 80,
+      jti: "jwt-fresh",
+    }, nowMs),
+    false,
+  );
+
+  assert.equal(
+    shouldRefreshSessionJwt({
+      iat: Math.floor(nowMs / 1000) - 81,
+      exp: Math.floor(nowMs / 1000) + 19,
+      jti: "jwt-near-expiry",
+    }, nowMs),
+    true,
+  );
+
+  assert.equal(
+    shouldRefreshSessionJwt({
+      iat: Math.floor(nowMs / 1000) - 81,
+      exp: Math.floor(nowMs / 1000) + 19,
+    }, nowMs),
+    false,
+  );
 });
 
 test("verifyJwtWithAnySecret accepts a token signed with a previous manual rotation secret", () => {

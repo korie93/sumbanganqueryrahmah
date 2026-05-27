@@ -12,8 +12,10 @@ import { logger } from "../../lib/logger";
 import { getInternalMetricsSnapshot } from "../../internal/metrics";
 import {
   resetSessionRevocationStoreForTests,
+  isSessionJwtRevoked,
   revokeSessionJwt,
 } from "../session-revocation-store";
+import { AUTH_SESSION_REFRESH_HEADER_NAME } from "../session-cookie";
 
 test("getInvalidatedSessionMessage returns reset-specific messaging for password reset invalidation", () => {
   assert.equal(
@@ -56,9 +58,17 @@ function createMockResponse() {
     statusCode: 200,
     body: undefined as unknown,
     cookies: [] as Array<{ name: string; value: string }>,
+    headers: new Map<string, string>(),
     cookie(name: string, value: string) {
       this.cookies.push({ name, value });
       return this;
+    },
+    setHeader(name: string, value: string) {
+      this.headers.set(name.toLowerCase(), String(value));
+      return this;
+    },
+    getHeader(name: string) {
+      return this.headers.get(name.toLowerCase());
     },
     status(code: number) {
       this.statusCode = code;
@@ -791,6 +801,225 @@ test("authenticateToken rejects a JWT that was revoked during logout", async () 
     assert.equal(nextCalls, 0);
     assert.equal(snapshotCalls, 0);
     assert.equal(updateCalls, 0);
+  } finally {
+    guards.stopTabVisibilityCacheSweep();
+    guards.stopActivityUpdateCacheSweep();
+    resetSessionRevocationStoreForTests();
+  }
+});
+
+test("authenticateToken does not refresh a bearer JWT with 80 percent of its TTL remaining", async (t) => {
+  resetSessionRevocationStoreForTests();
+  const secret = "guard-test-secret";
+  const nowMs = Date.parse("2026-05-27T00:00:00.000Z");
+  const nowSeconds = Math.floor(nowMs / 1000);
+  t.mock.method(Date, "now", () => nowMs);
+  const guards = createAuthGuards({
+    storage: {
+      getAuthenticatedSessionSnapshot: async () => createAuthenticatedSessionSnapshot(),
+      getActivityById: async () => undefined,
+      getUser: async () => undefined,
+      getUserByUsername: async () => undefined,
+      isVisitorBanned: async () => false,
+      updateActivity: async () => undefined,
+      getRoleTabVisibility: async () => ({}),
+    },
+    secret,
+  });
+
+  const token = jwt.sign(
+    {
+      userId: "user-1",
+      username: "guard.user",
+      role: "admin",
+      activityId: "activity-1",
+      iat: nowSeconds - 20,
+      exp: nowSeconds + 80,
+    },
+    secret,
+    { jwtid: "fresh-refresh-jti" },
+  );
+  const response = createMockResponse();
+  let nextCalls = 0;
+
+  try {
+    await guards.authenticateToken(
+      {
+        headers: {
+          authorization: `Bearer ${token}`,
+        },
+        method: "GET",
+        path: "/api/me",
+      } as never,
+      response as never,
+      () => {
+        nextCalls += 1;
+      },
+    );
+
+    assert.equal(nextCalls, 1);
+    assert.equal(response.getHeader(AUTH_SESSION_REFRESH_HEADER_NAME), undefined);
+    assert.equal(await isSessionJwtRevoked("fresh-refresh-jti"), false);
+  } finally {
+    guards.stopTabVisibilityCacheSweep();
+    guards.stopActivityUpdateCacheSweep();
+    resetSessionRevocationStoreForTests();
+  }
+});
+
+test("authenticateToken refreshes a bearer JWT inside the final 20 percent of TTL and revokes the old token", async (t) => {
+  resetSessionRevocationStoreForTests();
+  const secret = "guard-test-secret";
+  const nowMs = Date.parse("2026-05-27T00:00:00.000Z");
+  const nowSeconds = Math.floor(nowMs / 1000);
+  t.mock.method(Date, "now", () => nowMs);
+  const guards = createAuthGuards({
+    storage: {
+      getAuthenticatedSessionSnapshot: async () => createAuthenticatedSessionSnapshot(),
+      getActivityById: async () => undefined,
+      getUser: async () => undefined,
+      getUserByUsername: async () => undefined,
+      isVisitorBanned: async () => false,
+      updateActivity: async () => undefined,
+      getRoleTabVisibility: async () => ({}),
+    },
+    secret,
+  });
+
+  const oldToken = jwt.sign(
+    {
+      userId: "user-1",
+      username: "guard.user",
+      role: "admin",
+      activityId: "activity-1",
+      iat: nowSeconds - 81,
+      exp: nowSeconds + 19,
+    },
+    secret,
+    { jwtid: "near-expiry-refresh-jti" },
+  );
+  const response = createMockResponse();
+  let nextCalls = 0;
+
+  try {
+    await guards.authenticateToken(
+      {
+        headers: {
+          authorization: `Bearer ${oldToken}`,
+        },
+        method: "GET",
+        path: "/api/me",
+      } as never,
+      response as never,
+      () => {
+        nextCalls += 1;
+      },
+    );
+
+    const refreshedToken = String(response.getHeader(AUTH_SESSION_REFRESH_HEADER_NAME) || "");
+    const refreshedPayload = jwt.verify(refreshedToken, secret) as {
+      activityId?: string;
+      exp?: number;
+      jti?: string;
+      userId?: string;
+    };
+
+    assert.equal(nextCalls, 1);
+    assert.notEqual(refreshedToken, "");
+    assert.notEqual(refreshedToken, oldToken);
+    assert.equal(refreshedPayload.activityId, "activity-1");
+    assert.equal(refreshedPayload.userId, "user-1");
+    assert.notEqual(refreshedPayload.jti, "near-expiry-refresh-jti");
+    assert.ok(Number(refreshedPayload.exp) > nowSeconds + 19);
+    assert.equal(await isSessionJwtRevoked("near-expiry-refresh-jti"), true);
+
+    const rejectedResponse = createMockResponse();
+    let rejectedNextCalls = 0;
+    await guards.authenticateToken(
+      {
+        headers: {
+          authorization: `Bearer ${oldToken}`,
+        },
+        method: "GET",
+        path: "/api/me",
+      } as never,
+      rejectedResponse as never,
+      () => {
+        rejectedNextCalls += 1;
+      },
+    );
+
+    assert.equal(rejectedNextCalls, 0);
+    assert.equal(rejectedResponse.statusCode, 401);
+    assert.deepEqual(rejectedResponse.body, {
+      message: "Session expired. Please login again.",
+      forceLogout: true,
+    });
+  } finally {
+    guards.stopTabVisibilityCacheSweep();
+    guards.stopActivityUpdateCacheSweep();
+    resetSessionRevocationStoreForTests();
+  }
+});
+
+test("authenticateToken refreshes cookie sessions without exposing the replacement JWT in a response header", async (t) => {
+  resetSessionRevocationStoreForTests();
+  const secret = "guard-test-secret";
+  const nowMs = Date.parse("2026-05-27T00:00:00.000Z");
+  const nowSeconds = Math.floor(nowMs / 1000);
+  t.mock.method(Date, "now", () => nowMs);
+  const guards = createAuthGuards({
+    storage: {
+      getAuthenticatedSessionSnapshot: async () => createAuthenticatedSessionSnapshot(),
+      getActivityById: async () => undefined,
+      getUser: async () => undefined,
+      getUserByUsername: async () => undefined,
+      isVisitorBanned: async () => false,
+      updateActivity: async () => undefined,
+      getRoleTabVisibility: async () => ({}),
+    },
+    secret,
+  });
+
+  const oldToken = jwt.sign(
+    {
+      userId: "user-1",
+      username: "guard.user",
+      role: "admin",
+      activityId: "activity-1",
+      iat: nowSeconds - 81,
+      exp: nowSeconds + 19,
+    },
+    secret,
+    { jwtid: "near-expiry-cookie-refresh-jti" },
+  );
+  const response = createMockResponse();
+  let nextCalls = 0;
+
+  try {
+    await guards.authenticateToken(
+      {
+        headers: {
+          cookie: `sqr_auth=${encodeURIComponent(oldToken)}`,
+        },
+        method: "GET",
+        path: "/api/me",
+      } as never,
+      response as never,
+      () => {
+        nextCalls += 1;
+      },
+    );
+
+    const authCookie = response.cookies.find((cookie) => cookie.name === "sqr_auth");
+    const csrfCookie = response.cookies.find((cookie) => cookie.name === "sqr_csrf");
+
+    assert.equal(nextCalls, 1);
+    assert.equal(response.getHeader(AUTH_SESSION_REFRESH_HEADER_NAME), undefined);
+    assert.ok(authCookie);
+    assert.notEqual(authCookie?.value, oldToken);
+    assert.equal(csrfCookie, undefined);
+    assert.equal(await isSessionJwtRevoked("near-expiry-cookie-refresh-jti"), true);
   } finally {
     guards.stopTabVisibilityCacheSweep();
     guards.stopActivityUpdateCacheSweep();

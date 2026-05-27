@@ -3,16 +3,28 @@ import type { User, UserActivity } from "../../shared/schema-postgres";
 import { ERROR_CODES } from "../../shared/error-codes";
 import type { IStorage } from "../storage-postgres";
 import { getSessionSecret } from "../config/security";
-import { verifySessionJwt } from "./session-jwt";
+import {
+  resolveSessionJwtExpiresAt,
+  resolveSessionJwtId,
+  shouldRefreshSessionJwt,
+  signSessionJwtWithSecret,
+  verifySessionJwt,
+} from "./session-jwt";
 import { parseAuthenticatedSessionJwtPayload } from "./session-jwt-payload";
-import { isSessionJwtRevoked } from "./session-revocation-store";
+import { isSessionJwtRevoked, revokeSessionJwt } from "./session-revocation-store";
 import {
   canUserBypassForcedPasswordChange,
   getAccountAccessBlockReason,
 } from "./account-lifecycle";
 import { canAccessDuringForcedPasswordChange } from "./guard-forced-password-change";
 import { getInvalidatedSessionMessage } from "./guard-session-messages";
-import { clearAuthSessionCookie, readAuthSessionTokenFromHeaders } from "./session-cookie";
+import {
+  AUTH_SESSION_COOKIE_NAME,
+  AUTH_SESSION_REFRESH_HEADER_NAME,
+  clearAuthSessionCookie,
+  readCookieValueFromHeader,
+  refreshAuthSessionCookie,
+} from "./session-cookie";
 import { normalizeSessionExpiry } from "./session-lifetime";
 import { logger } from "../lib/logger";
 import {
@@ -66,6 +78,43 @@ type CreateAuthGuardsOptions = {
   activityUpdateThrottleMs?: number;
 };
 
+type AuthSessionTokenSource = "bearer" | "cookie";
+
+type AuthSessionTokenReadResult = {
+  source: AuthSessionTokenSource | null;
+  token: string | null;
+};
+
+type RefreshedSessionToken = {
+  exp?: number | undefined;
+  jwtId?: string | undefined;
+  sessionExpiresAtIso?: string | null | undefined;
+};
+
+function firstHeaderValue(value: string | string[] | undefined): string {
+  if (Array.isArray(value)) {
+    return String(value[0] || "");
+  }
+  return String(value || "");
+}
+
+function readAuthSessionToken(req: Request): AuthSessionTokenReadResult {
+  const rawAuthorization = firstHeaderValue(req.headers.authorization).trim();
+  if (rawAuthorization.toLowerCase().startsWith("bearer ")) {
+    const bearerToken = rawAuthorization.slice(7).trim();
+    if (bearerToken) {
+      return { source: "bearer", token: bearerToken };
+    }
+  }
+
+  const cookieToken = readCookieValueFromHeader(req.headers.cookie, AUTH_SESSION_COOKIE_NAME);
+  if (cookieToken) {
+    return { source: "cookie", token: cookieToken };
+  }
+
+  return { source: null, token: null };
+}
+
 export function createAuthGuards(options: CreateAuthGuardsOptions) {
   const storage = options.storage;
   const secret = options.secret || getSessionSecret();
@@ -80,7 +129,7 @@ export function createAuthGuards(options: CreateAuthGuardsOptions) {
     res: Response,
     next: NextFunction,
   ) => {
-    const token = readAuthSessionTokenFromHeaders(req.headers);
+    const { source: tokenSource, token } = readAuthSessionToken(req);
 
     if (!token) {
       clearAuthSessionCookie(res);
@@ -209,16 +258,63 @@ export function createAuthGuards(options: CreateAuthGuardsOptions) {
         });
       }
 
+      let refreshedSessionToken: RefreshedSessionToken | null = null;
+      if (tokenSource && shouldRefreshSessionJwt(decoded)) {
+        const refreshedToken = signSessionJwtWithSecret(
+          {
+            userId: user.id,
+            username: user.username,
+            role: user.role,
+            activityId: decoded.activityId,
+          },
+          secret,
+        );
+        const refreshedExpiry = normalizeSessionExpiry(resolveSessionJwtExpiresAt(refreshedToken));
+        const refreshedJwtId = resolveSessionJwtId(refreshedToken) ?? undefined;
+
+        try {
+          await revokeSessionJwt({
+            jwtId: decoded.jti || "",
+            expiresAtMs: sessionExpiry?.expiresAtMs ?? 0,
+          });
+        } catch (error) {
+          logger.error("Failed to revoke previous JWT during authenticated session refresh", {
+            path: req.path,
+            method: req.method,
+            error: error instanceof Error ? error.message : "Unknown session refresh revocation failure",
+          });
+          clearAuthSessionCookie(res);
+          return res.status(503).json({
+            message: "Session refresh is temporarily unavailable. Please try again.",
+            code: "SESSION_REFRESH_UNAVAILABLE",
+          });
+        }
+
+        if (tokenSource === "cookie") {
+          refreshAuthSessionCookie(res, refreshedToken);
+        } else {
+          res.setHeader(AUTH_SESSION_REFRESH_HEADER_NAME, refreshedToken);
+        }
+
+        refreshedSessionToken = {
+          exp: refreshedExpiry ? Math.floor(refreshedExpiry.expiresAtMs / 1000) : undefined,
+          jwtId: refreshedJwtId,
+          sessionExpiresAtIso: refreshedExpiry?.expiresAtIso ?? sessionExpiry?.expiresAtIso ?? null,
+        };
+      }
+
       req.user = {
         userId: user.id,
         username: user.username,
         role: user.role,
         activityId: decoded.activityId,
+        jti: refreshedSessionToken?.jwtId ?? decoded.jti,
+        exp: refreshedSessionToken?.exp ?? decoded.exp,
         status: user.status,
         mustChangePassword: user.mustChangePassword,
         passwordResetBySuperuser: user.passwordResetBySuperuser,
         isBanned: user.isBanned,
-        sessionExpiresAt: sessionExpiry?.expiresAtIso ?? null,
+        sessionExpiresAt: refreshedSessionToken?.sessionExpiresAtIso ?? sessionExpiry?.expiresAtIso ?? null,
       };
 
       return next();

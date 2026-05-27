@@ -4,7 +4,14 @@ import { runtimeConfig } from "../config/runtime";
 import { SESSION_JWT_DEFAULT_EXPIRY as SESSION_JWT_DEFAULT_EXPIRY_VALUE } from "./session-lifetime";
 
 export const SESSION_JWT_ALGORITHM = "HS256" as const;
+export const SESSION_JWT_REFRESH_REMAINING_TTL_RATIO = 0.2;
 export { SESSION_JWT_DEFAULT_EXPIRY } from "./session-lifetime";
+
+type RefreshableSessionClaims = {
+  exp?: number | undefined;
+  iat?: number | undefined;
+  jti?: string | undefined;
+};
 
 function normalizeVerificationSecrets(secrets: string | readonly string[] | null | undefined): string[] {
   if (Array.isArray(secrets)) {
@@ -26,6 +33,14 @@ export function signSessionJwt<TPayload extends object>(
   payload: TPayload,
   options?: Omit<SignOptions, "algorithm">,
 ): string {
+  return signSessionJwtWithSecret(payload, runtimeConfig.auth.sessionSecret, options);
+}
+
+export function signSessionJwtWithSecret<TPayload extends object>(
+  payload: TPayload,
+  secret: string,
+  options?: Omit<SignOptions, "algorithm">,
+): string {
   const payloadJwtId = String((payload as { jti?: unknown }).jti || "").trim();
   const jwtid = options?.jwtid || (payloadJwtId ? undefined : randomUUID());
   const signOptions: SignOptions = {
@@ -36,7 +51,32 @@ export function signSessionJwt<TPayload extends object>(
   if (jwtid) {
     signOptions.jwtid = jwtid;
   }
-  return jwt.sign(payload, runtimeConfig.auth.sessionSecret, signOptions);
+  return jwt.sign(payload, secret, signOptions);
+}
+
+export function shouldRefreshSessionJwt(
+  claims: RefreshableSessionClaims,
+  nowMs = Date.now(),
+): boolean {
+  const issuedAtSeconds = Number(claims.iat);
+  const expiresAtSeconds = Number(claims.exp);
+  const jwtId = String(claims.jti || "").trim();
+
+  if (!jwtId || !Number.isFinite(issuedAtSeconds) || !Number.isFinite(expiresAtSeconds)) {
+    return false;
+  }
+
+  const totalTtlMs = (expiresAtSeconds - issuedAtSeconds) * 1000;
+  const remainingTtlMs = (expiresAtSeconds * 1000) - nowMs;
+  if (!Number.isFinite(totalTtlMs) || !Number.isFinite(remainingTtlMs) || totalTtlMs <= 0) {
+    return false;
+  }
+
+  if (remainingTtlMs <= 0) {
+    return false;
+  }
+
+  return remainingTtlMs / totalTtlMs <= SESSION_JWT_REFRESH_REMAINING_TTL_RATIO;
 }
 
 export function resolveSessionJwtExpiresAt(token: string): Date | null {
