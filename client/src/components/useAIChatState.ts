@@ -1,4 +1,10 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useMemo,
+  useReducer,
+  useRef,
+  type SetStateAction,
+} from "react";
 
 import { type AIChatMessageInput, useAIContext } from "@/context/AIContext";
 import { type AIChatStatus } from "@/lib/ai-chat";
@@ -24,6 +30,65 @@ type UseAIChatStateOptions = {
   onStatusChange?: ((status: AIChatStatus) => void) | undefined;
 };
 
+type AIChatLocalState = {
+  aiStatus: AIChatStatus;
+  gateNotice: string | null;
+  isProcessing: boolean;
+  isTyping: boolean;
+  query: string;
+  slowNotice: boolean;
+  streamingText: string;
+};
+
+type AIChatLocalStateAction =
+  | { type: "setAiStatus"; value: SetStateAction<AIChatStatus> }
+  | { type: "setGateNotice"; value: SetStateAction<string | null> }
+  | { type: "setIsProcessing"; value: SetStateAction<boolean> }
+  | { type: "setIsTyping"; value: SetStateAction<boolean> }
+  | { type: "setQuery"; value: SetStateAction<string> }
+  | { type: "setSlowNotice"; value: SetStateAction<boolean> }
+  | { type: "setStreamingText"; value: SetStateAction<string> };
+
+const AI_CHAT_INITIAL_LOCAL_STATE: AIChatLocalState = {
+  aiStatus: "IDLE",
+  gateNotice: null,
+  isProcessing: false,
+  isTyping: false,
+  query: "",
+  slowNotice: false,
+  streamingText: "",
+};
+
+function resolveStateActionValue<T>(previous: T, value: SetStateAction<T>): T {
+  return typeof value === "function"
+    ? (value as (current: T) => T)(previous)
+    : value;
+}
+
+function aiChatLocalStateReducer(
+  state: AIChatLocalState,
+  action: AIChatLocalStateAction,
+): AIChatLocalState {
+  switch (action.type) {
+    case "setAiStatus":
+      return { ...state, aiStatus: resolveStateActionValue(state.aiStatus, action.value) };
+    case "setGateNotice":
+      return { ...state, gateNotice: resolveStateActionValue(state.gateNotice, action.value) };
+    case "setIsProcessing":
+      return { ...state, isProcessing: resolveStateActionValue(state.isProcessing, action.value) };
+    case "setIsTyping":
+      return { ...state, isTyping: resolveStateActionValue(state.isTyping, action.value) };
+    case "setQuery":
+      return { ...state, query: resolveStateActionValue(state.query, action.value) };
+    case "setSlowNotice":
+      return { ...state, slowNotice: resolveStateActionValue(state.slowNotice, action.value) };
+    case "setStreamingText":
+      return { ...state, streamingText: resolveStateActionValue(state.streamingText, action.value) };
+    default:
+      return state;
+  }
+}
+
 export function useAIChatState({
   aiEnabled,
   isMobile,
@@ -38,13 +103,40 @@ export function useAIChatState({
     && document.documentElement.classList.contains("low-spec");
   const typingDelayMs = getAIChatTypingDelayMs(isLowSpecMode);
 
-  const [query, setQuery] = useState("");
-  const [aiStatus, setAiStatus] = useState<AIChatStatus>("IDLE");
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [isTyping, setIsTyping] = useState(false);
-  const [streamingText, setStreamingText] = useState("");
-  const [slowNotice, setSlowNotice] = useState(false);
-  const [gateNotice, setGateNotice] = useState<string | null>(null);
+  const [localState, dispatchLocalState] = useReducer(
+    aiChatLocalStateReducer,
+    AI_CHAT_INITIAL_LOCAL_STATE,
+  );
+  const {
+    aiStatus,
+    gateNotice,
+    isProcessing,
+    isTyping,
+    query,
+    slowNotice,
+    streamingText,
+  } = localState;
+  const setAiStatus = useCallback((value: SetStateAction<AIChatStatus>) => {
+    dispatchLocalState({ type: "setAiStatus", value });
+  }, []);
+  const setGateNotice = useCallback((value: SetStateAction<string | null>) => {
+    dispatchLocalState({ type: "setGateNotice", value });
+  }, []);
+  const setIsProcessing = useCallback((value: SetStateAction<boolean>) => {
+    dispatchLocalState({ type: "setIsProcessing", value });
+  }, []);
+  const setIsTyping = useCallback((value: SetStateAction<boolean>) => {
+    dispatchLocalState({ type: "setIsTyping", value });
+  }, []);
+  const setQuery = useCallback((value: SetStateAction<string>) => {
+    dispatchLocalState({ type: "setQuery", value });
+  }, []);
+  const setSlowNotice = useCallback((value: SetStateAction<boolean>) => {
+    dispatchLocalState({ type: "setSlowNotice", value });
+  }, []);
+  const setStreamingText = useCallback((value: SetStateAction<string>) => {
+    dispatchLocalState({ type: "setStreamingText", value });
+  }, []);
 
   const messagesRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);

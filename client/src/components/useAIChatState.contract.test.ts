@@ -13,6 +13,9 @@ const executorSource = readFileSync(
 );
 
 test("useAIChatState clears active request timeouts when cancelling or finalizing a request", () => {
+  assert.match(stateSource, /useReducer\(\s*aiChatLocalStateReducer,\s*AI_CHAT_INITIAL_LOCAL_STATE,/);
+  assert.match(stateSource, /type AIChatLocalStateAction =/);
+  assert.doesNotMatch(stateSource, /useState\(/);
   assert.match(stateSource, /useAIChatRequestExecutor\(\{/);
   assert.match(executorSource, /clearRequestTimeout,/);
   assert.match(executorSource, /clearSlowNoticeTimer\(\);\s*clearRequestTimeout\(\);/);

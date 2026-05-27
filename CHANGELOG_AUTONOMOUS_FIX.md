@@ -47,3 +47,4 @@
 - BE-03: Hardened import and backup stream lifecycles by removing upload limit listeners, propagating writer errors during backpressure waits, and destroying failed backup writers with error context.
 - BE-04: Extracted high-impact runtime configuration bounds for ports, workers, timeouts, HSTS, and payload byte limits into named constants.
 - BE-05: Added CSV streaming backpressure regression coverage proving async row handlers are awaited one at a time before the reader advances.
+- FE-01: Migrated AI chat local UI flags to a typed reducer while preserving stable setter contracts for request/typing side-effect hooks.
