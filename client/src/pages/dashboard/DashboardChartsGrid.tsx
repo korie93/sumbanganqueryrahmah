@@ -73,7 +73,13 @@ const CompactChartTooltip = memo(function CompactChartTooltip({
                 className={`h-2.5 w-2.5 shrink-0 rounded-full ${TOOLTIP_DOT_CLASS_BY_NAME[String(item.name || "")] || "bg-[hsl(var(--chart-3))]"}`}
                 aria-hidden="true"
               />
-              <span className="truncate text-muted-foreground">{String(item.name ?? "")}</span>
+              <span
+                className="truncate text-muted-foreground"
+                title={String(item.name ?? "")}
+                aria-label={String(item.name ?? "")}
+              >
+                {String(item.name ?? "")}
+              </span>
             </div>
             <span className="shrink-0 font-semibold text-foreground">{formatTooltipValue(item.value)}</span>
           </div>

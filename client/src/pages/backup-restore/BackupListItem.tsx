@@ -44,11 +44,20 @@ export function BackupListItem({
         <div className="flex min-w-0 flex-col gap-2">
           <div className="flex min-w-0 flex-wrap items-center gap-2">
             <Badge variant="secondary" className="max-w-full">
-              <span className="truncate">{backup.name}</span>
+              <span className="truncate" title={backup.name} aria-label={backup.name}>
+                {backup.name}
+              </span>
             </Badge>
             <div className="flex min-w-0 items-center gap-1 text-sm text-muted-foreground">
               <User className="h-4 w-4 shrink-0" />
-              <span className="truncate" data-testid={`text-backup-created-by-${backup.id}`}>{backup.createdBy}</span>
+              <span
+                className="truncate"
+                data-testid={`text-backup-created-by-${backup.id}`}
+                title={backup.createdBy}
+                aria-label={backup.createdBy}
+              >
+                {backup.createdBy}
+              </span>
             </div>
           </div>
           {isMobile ? (

@@ -157,7 +157,13 @@ export function CollectionReceiptPanel({
                 >
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <p className="truncate text-sm font-medium">{receipt.originalFileName}</p>
+                      <p
+                        className="truncate text-sm font-medium"
+                        title={receipt.originalFileName}
+                        aria-label={receipt.originalFileName}
+                      >
+                        {receipt.originalFileName}
+                      </p>
                       <Badge variant={markedForRemoval ? "destructive" : "secondary"}>
                         {markedForRemoval ? "Will Remove" : "Existing"}
                       </Badge>

@@ -183,7 +183,13 @@ export function BulkImportPanel({
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                       <div className="min-w-0">
-                        <p className="truncate text-sm font-medium text-foreground">{result.filename}</p>
+                        <p
+                          className="truncate text-sm font-medium text-foreground"
+                          title={result.filename}
+                          aria-label={result.filename}
+                        >
+                          {result.filename}
+                        </p>
                         {result.status === "success" && result.rowCount ? (
                           <p className="text-xs text-green-600 dark:text-green-400">{result.rowCount} rows imported</p>
                         ) : null}

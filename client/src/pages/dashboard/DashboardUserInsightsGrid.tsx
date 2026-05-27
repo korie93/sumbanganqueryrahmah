@@ -85,7 +85,9 @@ function CompactRoleTooltip({ active, payload }: CompactRoleTooltipProps) {
             className={`h-2.5 w-2.5 shrink-0 rounded-full ${ROLE_DOT_CLASS_BY_ROLE[role] || "bg-muted-foreground"}`}
             aria-hidden="true"
           />
-          <span className="truncate text-muted-foreground">{role}</span>
+          <span className="truncate text-muted-foreground" title={role} aria-label={role}>
+            {role}
+          </span>
         </div>
         <span className="shrink-0 font-semibold text-foreground">{value}</span>
       </div>
@@ -291,7 +293,9 @@ export function DashboardUserInsightsGrid({
                         className={`h-2.5 w-2.5 shrink-0 rounded-full ${ROLE_DOT_CLASS_BY_ROLE[item.role] || "bg-muted-foreground"}`}
                         aria-hidden="true"
                       />
-                      <span className="truncate capitalize text-foreground">{item.role}</span>
+                      <span className="truncate capitalize text-foreground" title={item.role} aria-label={item.role}>
+                        {item.role}
+                      </span>
                     </div>
                     <span className="shrink-0 font-semibold text-foreground">{item.count}</span>
                   </div>

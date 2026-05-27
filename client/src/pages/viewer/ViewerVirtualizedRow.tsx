@@ -29,15 +29,20 @@ export function ViewerVirtualizedRow({
           />
         </div>
         <div className="px-3 text-muted-foreground">{row.__rowId + 1}</div>
-        {data.visibleHeaders.map((header) => (
-          <div
-            key={`${row.__rowId}-${header}`}
-            className="truncate whitespace-nowrap px-3 text-foreground"
-            title={String(row[header] ?? "-")}
-          >
-            {String(row[header] ?? "-")}
-          </div>
-        ))}
+        {data.visibleHeaders.map((header) => {
+          const cellText = String(row[header] ?? "-");
+
+          return (
+            <div
+              key={`${row.__rowId}-${header}`}
+              className="truncate whitespace-nowrap px-3 text-foreground"
+              title={cellText}
+              aria-label={cellText}
+            >
+              {cellText}
+            </div>
+          );
+        })}
       </ViewerGridShell>
     </PositionedRowShell>
   );

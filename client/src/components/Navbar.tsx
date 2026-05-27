@@ -215,7 +215,11 @@ function NavbarImpl({
                 />
               </div>
               <div className="min-w-0">
-                <p className="truncate text-sm font-semibold text-foreground">
+                <p
+                  className="truncate text-sm font-semibold text-foreground"
+                  title={systemName || "SQR System"}
+                  aria-label={systemName || "SQR System"}
+                >
                   {systemName || "SQR System"}
                 </p>
                 <p className="hidden text-[11px] text-muted-foreground sm:block">
@@ -262,10 +266,10 @@ function NavbarImpl({
                     {[...username][0] || ""}
                   </span>
                   <span className="hidden min-w-0 sm:flex sm:flex-col sm:items-start sm:leading-tight">
-                    <span className="truncate text-xs font-medium text-foreground">
+                    <span className="truncate text-xs font-medium text-foreground" title={username} aria-label={username}>
                       {username}
                     </span>
-                    <span className="truncate text-[11px] text-muted-foreground">
+                    <span className="truncate text-[11px] text-muted-foreground" title={userRole} aria-label={userRole}>
                       {userRole}
                     </span>
                   </span>
@@ -311,7 +315,9 @@ function NavbarImpl({
                   {[...username][0] || ""}
                 </span>
                 <span className="user-menu-copy max-w-[10.5rem] xl:max-w-none">
-                  <span className="truncate font-medium text-foreground">{username}</span>
+                  <span className="truncate font-medium text-foreground" title={username} aria-label={username}>
+                    {username}
+                  </span>
                   <span className="user-menu-role">{userRole}</span>
                 </span>
                 <ChevronDown className="h-4 w-4 text-muted-foreground" aria-hidden="true" />

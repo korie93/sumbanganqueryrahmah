@@ -91,12 +91,26 @@ export function AuditLogRecordCard({ isMobile, log, onViewDetails }: AuditLogRec
         <div className="flex flex-wrap gap-2 text-xs">
           <span className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-border/60 bg-background/80 px-2.5 py-1">
             <User className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-            <span className="truncate" data-testid={`text-performed-by-${log.id}`}>{log.performedBy}</span>
+            <span
+              className="truncate"
+              data-testid={`text-performed-by-${log.id}`}
+              title={log.performedBy}
+              aria-label={log.performedBy}
+            >
+              {log.performedBy}
+            </span>
           </span>
           {log.targetUser ? (
             <span className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-border/60 bg-background/80 px-2.5 py-1">
               <ShieldCheck className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-              <span className="truncate" data-testid={`text-target-user-${log.id}`}>{log.targetUser}</span>
+              <span
+                className="truncate"
+                data-testid={`text-target-user-${log.id}`}
+                title={log.targetUser}
+                aria-label={log.targetUser}
+              >
+                {log.targetUser}
+              </span>
             </span>
           ) : null}
         </div>

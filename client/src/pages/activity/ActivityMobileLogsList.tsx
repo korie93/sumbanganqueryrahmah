@@ -160,7 +160,13 @@ function ActivityMobileVirtualRow({
                 />
               ) : null}
               <div className="min-w-0">
-                <p className="truncate text-sm font-semibold text-foreground">{activity.username}</p>
+                <p
+                  className="truncate text-sm font-semibold text-foreground"
+                  title={activity.username}
+                  aria-label={activity.username}
+                >
+                  {activity.username}
+                </p>
                 <div className="mt-1 flex flex-wrap gap-2">
                   <Badge variant="outline" className="text-[11px]">
                     {activity.role}

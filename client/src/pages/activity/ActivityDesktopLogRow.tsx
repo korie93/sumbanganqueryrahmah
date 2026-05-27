@@ -47,7 +47,13 @@ export function ActivityDesktopLogRow({
       ) : null}
       <div className="min-w-0">
         <div className="flex items-center gap-2">
-          <span className="truncate font-medium text-foreground">{activity.username}</span>
+          <span
+            className="truncate font-medium text-foreground"
+            title={activity.username}
+            aria-label={activity.username}
+          >
+            {activity.username}
+          </span>
           <Badge variant="outline" className="text-xs">
             {activity.role}
           </Badge>

@@ -44,7 +44,12 @@ export function ViewerVirtualizedTable({
           </div>
           <div className="px-3 font-medium text-muted-foreground">#</div>
           {visibleHeaders.map((header) => (
-            <div key={header} className="truncate whitespace-nowrap px-3 font-medium text-muted-foreground">
+            <div
+              key={header}
+              className="truncate whitespace-nowrap px-3 font-medium text-muted-foreground"
+              title={header}
+              aria-label={header}
+            >
               {header}
             </div>
           ))}
