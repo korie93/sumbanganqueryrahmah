@@ -1,11 +1,16 @@
 import { useId } from "react";
-import { Loader2, StopCircle, SendHorizonal, TriangleAlert } from "lucide-react";
+import { StopCircle, SendHorizonal, TriangleAlert } from "lucide-react";
+import {
+  AI_PROCESSING_INDICATOR_DELAY_MS,
+  AILoadingSkeleton,
+} from "@/components/AILoadingSkeleton";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useIsMobile } from "@/hooks/use-mobile";
 import AIMessage from "@/components/AIMessage";
 import { type AIChatStatus as SharedAIChatStatus } from "@/lib/ai-chat";
 import "@/styles/ai.css";
+import { useDelayedVisibleFlag } from "@/components/useDelayedVisibleFlag";
 import { useAIChatState } from "@/components/useAIChatState";
 import {
   AI_REQUEST_MAX_CHARACTERS,
@@ -59,6 +64,12 @@ export default function AIChat({
   });
   const remainingCharacters = getAIChatRemainingCharacterCount(query);
   const showCharacterLimit = remainingCharacters <= 200;
+  const awaitingFirstToken =
+    (aiStatus === "SEARCHING" || aiStatus === "PROCESSING") && streamingText.length === 0;
+  const showProcessingIndicator = useDelayedVisibleFlag(
+    awaitingFirstToken,
+    AI_PROCESSING_INDICATOR_DELAY_MS,
+  );
 
   return (
     <div className="ai-chat-container" data-compact={compactMode ? "true" : "false"}>
@@ -104,24 +115,8 @@ export default function AIChat({
           />
         ))}
 
-        {(aiStatus === "SEARCHING" || aiStatus === "PROCESSING") ? (
-          <div className="ai-message-row ai-message-row-assistant">
-            <div
-              className="ai-bubble ai-bubble-assistant ai-typing-bubble"
-              role="status"
-              aria-label="AI sedang berfikir"
-              aria-live="polite"
-              aria-atomic="true"
-            >
-              <Loader2 className="ai-typing-spinner" />
-              <span className="ai-typing-label">AI sedang menaip...</span>
-              <span className="ai-typing-dots" aria-hidden="true">
-                <span />
-                <span />
-                <span />
-              </span>
-            </div>
-          </div>
+        {showProcessingIndicator ? (
+          <AILoadingSkeleton label={`${assistantLabel} sedang menyediakan jawapan...`} />
         ) : null}
 
         {isTyping && streamingText ? (

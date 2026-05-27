@@ -1,5 +1,6 @@
 import { AIConversationCard } from "@/pages/ai/AIConversationCard";
 import { useAIPageController } from "@/pages/ai/useAIPageController";
+import "@/styles/ai.css";
 
 type AIProps = {
   timeoutMs?: number;

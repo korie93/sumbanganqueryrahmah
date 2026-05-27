@@ -211,6 +211,43 @@
   animation-delay: 0.32s;
 }
 
+.ai-loading-skeleton {
+  display: block;
+  min-width: min(280px, 82%);
+}
+
+.ai-loading-skeleton-lines {
+  display: grid;
+  gap: 8px;
+}
+
+.ai-loading-skeleton-line {
+  display: block;
+  height: 8px;
+  border-radius: 9999px;
+  background:
+    linear-gradient(
+      90deg,
+      hsl(var(--muted-foreground) / 0.14) 0%,
+      hsl(var(--muted-foreground) / 0.28) 45%,
+      hsl(var(--muted-foreground) / 0.14) 100%
+    );
+  background-size: 220% 100%;
+  animation: aiLoadingShimmer 1.15s ease-in-out infinite;
+}
+
+.ai-loading-skeleton-line--wide {
+  width: 100%;
+}
+
+.ai-loading-skeleton-line--medium {
+  width: 76%;
+}
+
+.ai-loading-skeleton-line--short {
+  width: 52%;
+}
+
 @keyframes aiSpin {
   from {
     transform: rotate(0deg);
@@ -233,9 +270,19 @@
   }
 }
 
+@keyframes aiLoadingShimmer {
+  0% {
+    background-position: 120% 0;
+  }
+  100% {
+    background-position: -120% 0;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .ai-typing-spinner,
-  .ai-typing-dots span {
+  .ai-typing-dots span,
+  .ai-loading-skeleton-line {
     animation: none;
   }
 

@@ -53,3 +53,4 @@
 - FE-04/FE-05: Verified the client unhandled-rejection installer and added a timer-cleanup contract covering debounce and deferred-section fallback timers.
 - A11Y-01/02: Added `aria-atomic` to toast live regions and source contracts proving icon button accessible-name fallback plus Floating AI dialog trigger semantics.
 - A11Y-03/04: Added regression contracts proving modal shells stay on Radix focus-managed primitives and the app root keeps the Malay `lang` attribute.
+- UX-01/02: Added a shared AI first-token loading skeleton with a 300ms delayed display hook, cleanup-safe timer handling, and reduced-motion-safe shimmer styles across Floating AI and the full AI page.

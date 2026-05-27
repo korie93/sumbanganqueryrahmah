@@ -1,9 +1,14 @@
 import type { RefObject } from "react";
 import { StopCircle, TriangleAlert } from "lucide-react";
+import {
+  AI_PROCESSING_INDICATOR_DELAY_MS,
+  AILoadingSkeleton,
+} from "@/components/AILoadingSkeleton";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import type { AIChatMessage } from "@/context/AIContext";
 import type { AIChatStatus } from "@/lib/ai-chat";
+import { useDelayedVisibleFlag } from "@/components/useDelayedVisibleFlag";
 import type { AIPageStatusContent } from "@/pages/ai/ai-page-controller-utils";
 import {
   AI_REQUEST_MAX_CHARACTERS,
@@ -60,6 +65,11 @@ export function AIConversationCard({
   const canReset = messages.length > 0 || isProcessing || isTyping;
   const remainingCharacters = getAIChatRemainingCharacterCount(query);
   const showCharacterLimit = remainingCharacters <= 200;
+  const awaitingFirstToken = isThinking && streamingText.length === 0;
+  const showProcessingIndicator = useDelayedVisibleFlag(
+    awaitingFirstToken,
+    AI_PROCESSING_INDICATOR_DELAY_MS,
+  );
 
   return (
     <div className="rounded-2xl border border-border bg-background/70 p-4 backdrop-blur">
@@ -147,20 +157,8 @@ export function AIConversationCard({
             </div>
           ) : null}
 
-          {isThinking && !streamingText ? (
-            <div
-              className="mr-auto max-w-[70%] rounded-2xl bg-muted px-4 py-3 text-sm text-foreground"
-              role="status"
-              aria-label="AI sedang berfikir"
-              aria-live="polite"
-            >
-              <span className="inline-flex items-center gap-2">
-                <span className="h-2 w-2 animate-bounce rounded-full bg-foreground/70" />
-                <span className="h-2 w-2 animate-bounce rounded-full bg-foreground/70 [animation-delay:150ms]" />
-                <span className="h-2 w-2 animate-bounce rounded-full bg-foreground/70 [animation-delay:300ms]" />
-                <span className="ml-2">AI sedang menaip...</span>
-              </span>
-            </div>
+          {showProcessingIndicator ? (
+            <AILoadingSkeleton label={`${assistantLabel} sedang menyediakan jawapan...`} />
           ) : null}
         </div>
 
