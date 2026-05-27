@@ -1,5 +1,5 @@
 import {
-  decryptTwoFactorSecret,
+  decryptTwoFactorSecretPayload,
   verifyTwoFactorCode,
 } from "../auth/two-factor";
 import {
@@ -153,9 +153,9 @@ export async function verifyTwoFactorSecretCode(params: {
 }): Promise<{
   ok: true;
 }> {
-  let secret = "";
+  let secretPayload: ReturnType<typeof decryptTwoFactorSecretPayload>;
   try {
-    secret = decryptTwoFactorSecret(params.encryptedSecret);
+    secretPayload = decryptTwoFactorSecretPayload(params.encryptedSecret);
   } catch {
     throw new AuthAccountError(
       500,
@@ -164,7 +164,7 @@ export async function verifyTwoFactorSecretCode(params: {
     );
   }
 
-  if (!verifyTwoFactorCode(secret, params.code)) {
+  if (!verifyTwoFactorCode(secretPayload.secret, params.code, 1, secretPayload.algorithm)) {
     throw new AuthAccountError(
       401,
       ERROR_CODES.TWO_FACTOR_INVALID_CODE,

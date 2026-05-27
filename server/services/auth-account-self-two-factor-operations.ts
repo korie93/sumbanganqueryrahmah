@@ -1,6 +1,6 @@
 import {
   buildTwoFactorOtpAuthUrl,
-  decryptTwoFactorSecret,
+  decryptTwoFactorSecretPayload,
   encryptTwoFactorSecret,
   generateTwoFactorSecret,
   verifyTwoFactorCode,
@@ -117,9 +117,9 @@ export class AuthAccountSelfTwoFactorOperations {
       );
     }
 
-    let secret = "";
+    let secretPayload: ReturnType<typeof decryptTwoFactorSecretPayload>;
     try {
-      secret = decryptTwoFactorSecret(encryptedSecret);
+      secretPayload = decryptTwoFactorSecretPayload(encryptedSecret);
     } catch {
       throw new AuthAccountError(
         500,
@@ -128,7 +128,7 @@ export class AuthAccountSelfTwoFactorOperations {
       );
     }
 
-    if (!verifyTwoFactorCode(secret, input.code)) {
+    if (!verifyTwoFactorCode(secretPayload.secret, input.code, 1, secretPayload.algorithm)) {
       throw new AuthAccountError(400, ERROR_CODES.TWO_FACTOR_INVALID_CODE, "Authenticator code is invalid.");
     }
 
@@ -171,9 +171,9 @@ export class AuthAccountSelfTwoFactorOperations {
       );
     }
 
-    let secret = "";
+    let secretPayload: ReturnType<typeof decryptTwoFactorSecretPayload>;
     try {
-      secret = decryptTwoFactorSecret(encryptedSecret);
+      secretPayload = decryptTwoFactorSecretPayload(encryptedSecret);
     } catch {
       throw new AuthAccountError(
         500,
@@ -182,7 +182,7 @@ export class AuthAccountSelfTwoFactorOperations {
       );
     }
 
-    if (!verifyTwoFactorCode(secret, input.code)) {
+    if (!verifyTwoFactorCode(secretPayload.secret, input.code, 1, secretPayload.algorithm)) {
       throw new AuthAccountError(400, ERROR_CODES.TWO_FACTOR_INVALID_CODE, "Authenticator code is invalid.");
     }
 

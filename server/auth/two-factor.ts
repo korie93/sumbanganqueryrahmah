@@ -15,7 +15,12 @@ import {
 const BASE32_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
 const TOTP_PERIOD_SECONDS = 30;
 const TOTP_DIGITS = 6;
-type TotpAlgorithm = "sha1" | "sha256";
+export type TotpAlgorithm = "sha1" | "sha256";
+
+export type DecryptedTwoFactorSecretPayload = {
+  algorithm: TotpAlgorithm;
+  secret: string;
+};
 
 function base32Encode(buffer: Buffer) {
   let bits = 0;
@@ -147,16 +152,52 @@ export function generateCurrentTwoFactorCode(secret: string, algorithm = getTwoF
   return generateTotpAt(secret, Date.now(), algorithm);
 }
 
-export function encryptTwoFactorSecret(secret: string) {
+function parseEncryptedTwoFactorSecretPayload(payload: string): {
+  algorithm: TotpAlgorithm;
+  ciphertextRaw: string;
+  ivRaw: string;
+  tagRaw: string;
+} {
+  const parts = String(payload || "").split(".");
+  if (parts.length === 5 && parts[0] === "v2") {
+    const algorithm = resolveTotpAlgorithm(parts[1]);
+    const [, , ivRaw, ciphertextRaw, tagRaw] = parts;
+    return {
+      algorithm,
+      ciphertextRaw,
+      ivRaw,
+      tagRaw,
+    };
+  }
+
+  const [ivRaw, ciphertextRaw, tagRaw] = parts;
+  return {
+    algorithm: "sha1",
+    ciphertextRaw,
+    ivRaw,
+    tagRaw,
+  };
+}
+
+export function encryptTwoFactorSecret(
+  secret: string,
+  algorithm = getTwoFactorTotpAlgorithm(),
+) {
+  const resolvedAlgorithm = resolveTotpAlgorithm(algorithm);
   const iv = randomBytes(12);
   const cipher = createCipheriv("aes-256-gcm", getTwoFactorEncryptionCipherKey(), iv);
   const ciphertext = Buffer.concat([cipher.update(secret, "utf8"), cipher.final()]);
   const tag = cipher.getAuthTag();
-  return `${iv.toString("base64url")}.${ciphertext.toString("base64url")}.${tag.toString("base64url")}`;
+  return `v2.${resolvedAlgorithm}.${iv.toString("base64url")}.${ciphertext.toString("base64url")}.${tag.toString("base64url")}`;
 }
 
-export function decryptTwoFactorSecret(payload: string) {
-  const [ivRaw, ciphertextRaw, tagRaw] = String(payload || "").split(".");
+export function decryptTwoFactorSecretPayload(payload: string): DecryptedTwoFactorSecretPayload {
+  const {
+    algorithm,
+    ciphertextRaw,
+    ivRaw,
+    tagRaw,
+  } = parseEncryptedTwoFactorSecretPayload(payload);
   if (!ivRaw || !ciphertextRaw || !tagRaw) {
     throw new Error("Invalid 2FA secret payload.");
   }
@@ -173,7 +214,10 @@ export function decryptTwoFactorSecret(payload: string) {
         decipher.update(ciphertext),
         decipher.final(),
       ]);
-      return plaintext.toString("utf8");
+      return {
+        algorithm,
+        secret: plaintext.toString("utf8"),
+      };
     } catch {
       continue;
     }
@@ -182,7 +226,12 @@ export function decryptTwoFactorSecret(payload: string) {
   throw new Error("Invalid 2FA secret payload.");
 }
 
+export function decryptTwoFactorSecret(payload: string) {
+  return decryptTwoFactorSecretPayload(payload).secret;
+}
+
 export function buildTwoFactorOtpAuthUrl(params: {
+  algorithm?: string | null | undefined;
   issuer: string;
   username: string;
   secret: string;
@@ -192,6 +241,6 @@ export function buildTwoFactorOtpAuthUrl(params: {
   const label = encodeURIComponent(`${issuer}:${username}`);
   const encodedIssuer = encodeURIComponent(issuer);
   const secret = encodeURIComponent(params.secret);
-  const algorithm = getTwoFactorTotpAlgorithm().toUpperCase();
+  const algorithm = resolveTotpAlgorithm(params.algorithm ?? getTwoFactorTotpAlgorithm()).toUpperCase();
   return `otpauth://totp/${label}?secret=${secret}&issuer=${encodedIssuer}&algorithm=${algorithm}&digits=${TOTP_DIGITS}&period=${TOTP_PERIOD_SECONDS}`;
 }

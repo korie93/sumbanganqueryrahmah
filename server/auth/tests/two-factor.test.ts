@@ -5,6 +5,7 @@ import { getSessionSecret, getTwoFactorDecryptionSecrets } from "../../config/se
 import {
   buildTwoFactorOtpAuthUrl,
   decryptTwoFactorSecret,
+  decryptTwoFactorSecretPayload,
   encryptTwoFactorSecret,
   generateCurrentTwoFactorCode,
   generateTwoFactorSecret,
@@ -82,6 +83,29 @@ test("decryptTwoFactorSecret supports payloads encrypted with the dedicated key"
   withTwoFactorEncryptionEnv({ current: "test-two-factor-encryption-key", previous: null }, () => {
     const encrypted = encryptTwoFactorSecret("JBSWY3DPEHPK3PXP");
     assert.equal(decryptTwoFactorSecret(encrypted), "JBSWY3DPEHPK3PXP");
+  });
+});
+
+test("new two-factor secret payloads preserve the enrollment TOTP algorithm", () => {
+  withTwoFactorEncryptionEnv({ current: "test-two-factor-encryption-key", previous: null }, () => {
+    const encrypted = encryptTwoFactorSecret("JBSWY3DPEHPK3PXP", "sha256");
+    const decrypted = decryptTwoFactorSecretPayload(encrypted);
+
+    assert.equal(decrypted.secret, "JBSWY3DPEHPK3PXP");
+    assert.equal(decrypted.algorithm, "sha256");
+  });
+});
+
+test("legacy two-factor secret payloads are treated as SHA1 enrollments", () => {
+  withTwoFactorEncryptionEnv({ current: "test-two-factor-encryption-key", previous: null }, () => {
+    const encrypted = encryptTwoFactorSecretWithRawKey(
+      "JBSWY3DPEHPK3PXP",
+      "test-two-factor-encryption-key",
+    );
+    const decrypted = decryptTwoFactorSecretPayload(encrypted);
+
+    assert.equal(decrypted.secret, "JBSWY3DPEHPK3PXP");
+    assert.equal(decrypted.algorithm, "sha1");
   });
 });
 
@@ -176,7 +200,7 @@ test("two-factor TOTP defaults to SHA1 and supports SHA256 as an opt-in algorith
   assert.equal(verifyTwoFactorCode(secret, sha256Code, 1, "sha256"), true);
   assert.equal(verifyTwoFactorCode(secret, sha1Code, 1, "sha256"), false);
   assert.match(
-    buildTwoFactorOtpAuthUrl({ issuer: "SQR", username: "admin", secret }),
-    /algorithm=SHA1/,
+    buildTwoFactorOtpAuthUrl({ issuer: "SQR", username: "admin", secret, algorithm: "SHA256" }),
+    /algorithm=SHA256/,
   );
 });
