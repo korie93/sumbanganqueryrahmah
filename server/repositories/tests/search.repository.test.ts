@@ -119,6 +119,35 @@ test("SearchRepository.searchGlobalDataRows avoids exact counts on normal result
   }
 });
 
+test("SearchRepository.searchSimpleDataRows parameterizes LIKE injection attempts with an ESCAPE clause", async () => {
+  const repository = new SearchRepository();
+  const rawQueries: unknown[] = [];
+  const originalExecute = db.execute;
+
+  (db as unknown as {
+    execute: typeof db.execute;
+  }).execute = (async (query: unknown) => {
+    rawQueries.push(query);
+    return { rows: [] };
+  }) as unknown as typeof db.execute;
+
+  try {
+    await repository.searchSimpleDataRows("'; DROP TABLE users; --");
+
+    assert.equal(rawQueries.length, 1);
+    const sqlText = collectSqlText(rawQueries[0]);
+    const boundValues = collectBoundValues(rawQueries[0]);
+
+    assert.match(sqlText, /lower\(dr\.json_data::text\)\s+LIKE/i);
+    assert.match(sqlText, /\bESCAPE\b/i);
+    assert.ok(boundValues.includes("%'; drop table users; --%"));
+  } finally {
+    (db as unknown as {
+      execute: typeof db.execute;
+    }).execute = originalExecute;
+  }
+});
+
 test("SearchRepository.searchDataRows skips deep offset data queries without using cursor pagination", async () => {
   const repository = new SearchRepository();
   const queries: string[] = [];
