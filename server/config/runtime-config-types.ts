@@ -129,6 +129,8 @@ export type RuntimeConfig = {
     backupOperationTimeoutMs: number;
     backupMaxPayloadBytes: number;
     importCsvMaxRows: number;
+    importInsertBatchSize: number;
+    importMaxRowBytes: number;
     importPerUserActiveUploadBytes: number;
     importAnalysisTimeoutMs: number;
     collectionRollupListenReconnectMs: number;

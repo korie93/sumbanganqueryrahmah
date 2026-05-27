@@ -5,6 +5,7 @@ import test from "node:test";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { ImportsServiceMutationOperations } from "../imports-service-mutation-operations";
 import type { ImportsServiceStorage } from "../imports-service-types";
+import { runtimeConfig } from "../../config/runtime";
 
 function createStorageStub(overrides?: Partial<ImportsServiceStorage>): ImportsServiceStorage {
   const auditLogs: Array<Record<string, unknown>> = [];
@@ -127,6 +128,99 @@ test("createImportFromCsvFile streams rows and records the inspected row count i
   }
 });
 
+test("createImportFromCsvFile flushes streamed rows in configurable bounded batches", async () => {
+  const originalBatchSize = runtimeConfig.runtime.importInsertBatchSize;
+  runtimeConfig.runtime.importInsertBatchSize = 3;
+  const tempDir = await mkdtemp(path.join(os.tmpdir(), "sqr-import-mutation-"));
+  const filePath = path.join(tempDir, "batched.csv");
+  let inFlightWrites = 0;
+  let maxInFlightWrites = 0;
+  let createdRowCount = 0;
+
+  try {
+    await writeFile(
+      filePath,
+      [
+        "name,amount",
+        "A,1",
+        "B,2",
+        "C,3",
+        "D,4",
+        "E,5",
+        "F,6",
+        "G,7",
+      ].join("\n"),
+      "utf8",
+    );
+
+    const operations = new ImportsServiceMutationOperations(createStorageStub({
+      createDataRow: async (data) => {
+        inFlightWrites += 1;
+        maxInFlightWrites = Math.max(maxInFlightWrites, inFlightWrites);
+        await new Promise((resolve) => setImmediate(resolve));
+        inFlightWrites -= 1;
+        createdRowCount += 1;
+        return {
+          id: `row-${createdRowCount}`,
+          importId: data.importId,
+          jsonDataJsonb: data.jsonDataJsonb,
+        };
+      },
+    }));
+
+    await operations.createImportFromCsvFile({
+      name: "Batched Import",
+      filename: "batched.csv",
+      filePath,
+      createdBy: "superuser",
+    });
+
+    assert.equal(createdRowCount, 7);
+    assert.equal(maxInFlightWrites <= 3, true);
+  } finally {
+    runtimeConfig.runtime.importInsertBatchSize = originalBatchSize;
+    await rm(tempDir, { recursive: true, force: true });
+  }
+});
+
+test("createImportFromCsvFile rejects oversized streamed rows and rolls back the staged import", async () => {
+  const tempDir = await mkdtemp(path.join(os.tmpdir(), "sqr-import-mutation-"));
+  const filePath = path.join(tempDir, "oversized-row.csv");
+  const deletedImportIds: string[] = [];
+  const deletedRowImportIds: string[] = [];
+
+  try {
+    await writeFile(filePath, `name,notes\nAlice,${"x".repeat(70 * 1024)}\n`, "utf8");
+    const operations = new ImportsServiceMutationOperations(createStorageStub({
+      deleteDataRowsByImport: async (importId) => {
+        deletedRowImportIds.push(importId);
+        return 0;
+      },
+      deleteImport: async (importId) => {
+        deletedImportIds.push(importId);
+        return true;
+      },
+    }));
+
+    await assert.rejects(
+      () =>
+        operations.createImportFromCsvFile({
+          name: "Oversized Row Import",
+          filename: "oversized-row.csv",
+          filePath,
+          createdBy: "superuser",
+        }),
+      /Import row exceeds the configured/i,
+    );
+
+    assert.equal(deletedRowImportIds.length, 1);
+    assert.equal(deletedImportIds.length, 1);
+    assert.equal(deletedRowImportIds[0], deletedImportIds[0]);
+  } finally {
+    await rm(tempDir, { recursive: true, force: true });
+  }
+});
+
 test("createImportFromCsvFile cleans up staged imports when row insertion fails mid-stream", async () => {
   const tempDir = await mkdtemp(path.join(os.tmpdir(), "sqr-import-mutation-"));
   const filePath = path.join(tempDir, "broken.csv");
@@ -215,4 +309,34 @@ test("createImportFromCsvFile cleans up empty staged CSV imports", async () => {
   } finally {
     await rm(tempDir, { recursive: true, force: true });
   }
+});
+
+test("createImport rolls back legacy JSON imports when a row exceeds the byte budget", async () => {
+  const deletedImportIds: string[] = [];
+  const deletedRowImportIds: string[] = [];
+  const operations = new ImportsServiceMutationOperations(createStorageStub({
+    deleteDataRowsByImport: async (importId) => {
+      deletedRowImportIds.push(importId);
+      return 0;
+    },
+    deleteImport: async (importId) => {
+      deletedImportIds.push(importId);
+      return true;
+    },
+  }));
+
+  await assert.rejects(
+    () =>
+      operations.createImport({
+        name: "Legacy JSON Import",
+        filename: "legacy.json",
+        dataRows: [{ name: "Alice", notes: "x".repeat(70 * 1024) }],
+        createdBy: "superuser",
+      }),
+    /Import row exceeds the configured/i,
+  );
+
+  assert.equal(deletedRowImportIds.length, 1);
+  assert.equal(deletedImportIds.length, 1);
+  assert.equal(deletedRowImportIds[0], deletedImportIds[0]);
 });

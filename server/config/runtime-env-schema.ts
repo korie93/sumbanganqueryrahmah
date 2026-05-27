@@ -189,6 +189,8 @@ const runtimeEnvironmentSchema = z.object({
     min: 1,
     max: 1_000_000,
   }),
+  IMPORT_INSERT_BATCH_SIZE: optionalIntEnv("IMPORT_INSERT_BATCH_SIZE", { min: 1, max: 5_000 }),
+  IMPORT_MAX_ROW_BYTES: optionalIntEnv("IMPORT_MAX_ROW_BYTES", { min: 1_024, max: 1024 * 1024 }),
   COLLECTION_BODY_LIMIT: optionalEnvString("COLLECTION_BODY_LIMIT", 64),
   CORS_ALLOWED_ORIGINS: optionalEnvString("CORS_ALLOWED_ORIGINS"),
   TRUSTED_PROXIES: optionalEnvString("TRUSTED_PROXIES"),

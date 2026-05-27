@@ -8,27 +8,73 @@ import { forEachCsvFileRow } from "./import-upload-csv-utils";
 import { normalizeImportRow } from "./imports-service-parsers";
 
 const IMPORT_INSERT_CHUNK_SIZE = 20;
+const DEFAULT_IMPORT_ROW_BYTE_BUDGET = 64 * 1024;
+
+function resolveImportInsertChunkSize() {
+  return Math.max(
+    1,
+    Math.trunc(Number(runtimeConfig.runtime.importInsertBatchSize) || IMPORT_INSERT_CHUNK_SIZE),
+  );
+}
+
+function resolveImportRowByteBudget() {
+  return Math.max(
+    1,
+    Math.trunc(Number(runtimeConfig.runtime.importMaxRowBytes) || DEFAULT_IMPORT_ROW_BYTE_BUDGET),
+  );
+}
+
+function assertImportRowByteBudget(row: unknown, maxBytes: number) {
+  let serialized: string;
+  try {
+    serialized = JSON.stringify(row ?? {});
+  } catch {
+    throw new Error("Import row contains unsupported data.");
+  }
+
+  const rowBytes = Buffer.byteLength(serialized, "utf8");
+  if (rowBytes > maxBytes) {
+    throw new Error(
+      `Import row exceeds the configured ${maxBytes.toLocaleString("en-US")} byte safety limit. Split or trim oversized cells before uploading.`,
+    );
+  }
+}
+
+function normalizeBoundedImportRow(row: unknown, maxBytes: number) {
+  assertImportRowByteBudget(row, maxBytes);
+  const normalized = normalizeImportRow(row);
+  assertImportRowByteBudget(normalized, maxBytes);
+  return normalized;
+}
 
 export class ImportsServiceMutationOperations {
   constructor(private readonly storage: ImportsServiceStorage) {}
 
   async createImport(params: CreateImportInput) {
+    const insertChunkSize = resolveImportInsertChunkSize();
+    const rowByteBudget = resolveImportRowByteBudget();
     const importRecord = await this.storage.createImport({
       name: params.name,
       filename: params.filename,
       ...(params.createdBy ? { createdBy: params.createdBy } : {}),
     });
 
-    for (let index = 0; index < params.dataRows.length; index += IMPORT_INSERT_CHUNK_SIZE) {
-      const chunk = params.dataRows.slice(index, index + IMPORT_INSERT_CHUNK_SIZE);
-      await Promise.all(
-        chunk.map((row) =>
-          this.storage.createDataRow({
-            importId: importRecord.id,
-            jsonDataJsonb: normalizeImportRow(row),
-          }),
-        ),
-      );
+    try {
+      for (let index = 0; index < params.dataRows.length; index += insertChunkSize) {
+        const chunk = params.dataRows.slice(index, index + insertChunkSize);
+        await Promise.all(
+          chunk.map((row) =>
+            this.storage.createDataRow({
+              importId: importRecord.id,
+              jsonDataJsonb: normalizeBoundedImportRow(row, rowByteBudget),
+            }),
+          ),
+        );
+      }
+    } catch (error) {
+      await this.storage.deleteDataRowsByImport(importRecord.id);
+      await this.storage.deleteImport(importRecord.id);
+      throw error;
     }
 
     if (params.createdBy) {
@@ -44,6 +90,8 @@ export class ImportsServiceMutationOperations {
   }
 
   async createImportFromCsvFile(params: CreateImportFromCsvFileInput) {
+    const insertChunkSize = resolveImportInsertChunkSize();
+    const rowByteBudget = resolveImportRowByteBudget();
     const importRecord = await this.storage.createImport({
       name: params.name,
       filename: params.filename,
@@ -62,7 +110,7 @@ export class ImportsServiceMutationOperations {
         chunk.map((row) =>
           this.storage.createDataRow({
             importId: importRecord.id,
-            jsonDataJsonb: normalizeImportRow(row),
+            jsonDataJsonb: normalizeBoundedImportRow(row, rowByteBudget),
           }),
         ),
       );
@@ -73,8 +121,9 @@ export class ImportsServiceMutationOperations {
       parsed = await forEachCsvFileRow(
         params.filePath,
         async (row) => {
+          assertImportRowByteBudget(row, rowByteBudget);
           pendingRows.push(row);
-          if (pendingRows.length >= IMPORT_INSERT_CHUNK_SIZE) {
+          if (pendingRows.length >= insertChunkSize) {
             await flushPendingRows();
           }
         },

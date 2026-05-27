@@ -378,6 +378,14 @@ export const runtimeConfig: RuntimeConfig = Object.freeze({
       min: 1,
       max: 1_000_000,
     }),
+    importInsertBatchSize: readInt("IMPORT_INSERT_BATCH_SIZE", 1_000, {
+      min: 1,
+      max: 5_000,
+    }),
+    importMaxRowBytes: readInt("IMPORT_MAX_ROW_BYTES", 64 * 1024, {
+      min: 1_024,
+      max: 1024 * 1024,
+    }),
     importPerUserActiveUploadBytes: readInt(
       "IMPORT_PER_USER_ACTIVE_UPLOAD_BYTES",
       resolvedDefaultImportUploadLimitBytes,
