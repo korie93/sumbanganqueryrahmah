@@ -16,6 +16,8 @@ import {
 } from "@/components/floating-ai-dom-utils";
 import type { AIChatStatus } from "@/components/AIChat";
 
+const FLOATING_AI_LAYOUT_RESIZE_DEBOUNCE_MS = 80;
+
 type UseFloatingAILayoutStateParams = {
   activePage: string;
   location: string;
@@ -198,10 +200,13 @@ export function useFloatingAILayoutState({
 
   useEffect(() => {
     if (hiddenForAiPage || typeof document === "undefined" || typeof window === "undefined") return;
+    const observedRoot = floatingRootRef.current;
+    if (!observedRoot) return;
 
-    let frame = 0;
+    let frame: number | null = null;
     let resizeDebounceHandle: number | null = null;
     let scheduled = false;
+    let mounted = true;
     let resizeObserver: ResizeObserver | null = null;
     const observedElements = new Set<Element>();
 
@@ -224,10 +229,13 @@ export function useFloatingAILayoutState({
     };
 
     const scheduleSync = () => {
+      if (!mounted || !observedRoot.isConnected) return;
       if (scheduled) return;
       scheduled = true;
       frame = window.requestAnimationFrame(() => {
+        frame = null;
         scheduled = false;
+        if (!mounted || !observedRoot.isConnected) return;
         const obstacleQuery = shouldTrackObstacleLayout ? queryFloatingAiObstacleElements() : null;
         syncObservedElements(obstacleQuery);
         syncLayout(obstacleQuery);
@@ -242,7 +250,7 @@ export function useFloatingAILayoutState({
       resizeDebounceHandle = window.setTimeout(() => {
         resizeDebounceHandle = null;
         scheduleSync();
-      }, 80);
+      }, FLOATING_AI_LAYOUT_RESIZE_DEBOUNCE_MS);
     };
 
     scheduleSync();
@@ -253,9 +261,8 @@ export function useFloatingAILayoutState({
         scheduleSync();
       });
       observer = new MutationObserver(scheduleSync);
-      observer.observe(document.body, {
+      observer.observe(observedRoot, {
         childList: true,
-        subtree: true,
         attributes: true,
         attributeFilter: ["class", "data-state", "hidden", "open"],
       });
@@ -267,6 +274,7 @@ export function useFloatingAILayoutState({
     }
 
     return () => {
+      mounted = false;
       observer?.disconnect();
       resizeObserver?.disconnect();
       window.removeEventListener("resize", scheduleResizeSync);
@@ -276,7 +284,7 @@ export function useFloatingAILayoutState({
       if (resizeDebounceHandle !== null) {
         window.clearTimeout(resizeDebounceHandle);
       }
-      if (frame) {
+      if (frame !== null) {
         window.cancelAnimationFrame(frame);
       }
     };

@@ -15,9 +15,25 @@ test("useFloatingAILayoutState cleans up resize debounce, observers, listeners, 
   assert.match(source, /window\.cancelAnimationFrame\(frame\)/);
   assert.match(source, /resizeObserver\?\.disconnect\(\)/);
   assert.match(source, /observer\?\.disconnect\(\)/);
+  assert.match(source, /mounted = false;/);
 });
 
 test("useFloatingAILayoutState keeps obstacle scroll tracking opt-in and removable", () => {
   assert.match(source, /if \(shouldTrackObstacleLayout\) \{\s*window\.addEventListener\("scroll", scheduleSync, \{ passive: true \}\);/);
   assert.match(source, /if \(shouldTrackObstacleLayout\) \{\s*window\.removeEventListener\("scroll", scheduleSync\);/);
+});
+
+test("useFloatingAILayoutState scopes mutation observation to the floating AI root", () => {
+  assert.match(source, /const observedRoot = floatingRootRef\.current;/);
+  assert.match(source, /if \(!observedRoot\) return;/);
+  assert.match(source, /observer\.observe\(observedRoot, \{/);
+  assert.doesNotMatch(source, /observer\.observe\(document\.body/);
+  assert.doesNotMatch(source, /subtree:\s*true/);
+});
+
+test("useFloatingAILayoutState coalesces observer work and guards stale refs", () => {
+  assert.match(source, /const FLOATING_AI_LAYOUT_RESIZE_DEBOUNCE_MS = 80;/);
+  assert.match(source, /if \(!mounted \|\| !observedRoot\.isConnected\) return;/);
+  assert.match(source, /if \(scheduled\) return;/);
+  assert.match(source, /frame = null;/);
 });

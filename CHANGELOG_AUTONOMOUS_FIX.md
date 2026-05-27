@@ -37,3 +37,4 @@
 - LOW-10: Added shared pagination limit validation so `limit`/`pageSize` must be at least 1 across API contracts and server readers, with route/service regressions proving `0` and negative values are rejected consistently.
 - VERIFY: Updated local smoke/release readiness runners to provide a deterministic clean receipt-scanner shim when ClamAV env is not configured, keeping readiness checks aligned with the fail-closed scanner startup contract.
 - VERIFY: Stabilized authenticated a11y/smoke contracts by giving Settings fallback states a semantic heading/live status and restoring Floating AI trigger focus immediately after Escape closes the panel.
+- ISSUE-01: Scoped Floating AI layout mutation observation to the mounted root container, removed document-wide subtree observation, and added stale-ref/timer cleanup contracts for observer stability.
