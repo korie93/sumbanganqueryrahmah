@@ -91,7 +91,7 @@ export function SavedImportsList({
           </Button>
         </CollapsibleTrigger>
         <CollapsibleContent>
-          <div className="mt-4 max-h-[400px] overflow-y-auto pr-2 space-y-3">
+          <div className="mt-4 max-h-[400px] overflow-y-auto pr-2 space-y-3 scroll-fade-y">
             {isSuperuser ? (
               <div className="flex items-center gap-3 rounded-md border border-border/70 bg-background/70 px-3 py-2">
                 <Checkbox

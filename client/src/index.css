@@ -37,6 +37,50 @@
   background: hsl(239 84% 67% / 0.8);
 }
 
+.scroll-fade-y {
+  --scroll-fade-size: 1.25rem;
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    #000 var(--scroll-fade-size),
+    #000 calc(100% - var(--scroll-fade-size)),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    #000 var(--scroll-fade-size),
+    #000 calc(100% - var(--scroll-fade-size)),
+    transparent 100%
+  );
+}
+
+.scroll-fade-x {
+  --scroll-fade-size: 1.25rem;
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    #000 var(--scroll-fade-size),
+    #000 calc(100% - var(--scroll-fade-size)),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    #000 var(--scroll-fade-size),
+    #000 calc(100% - var(--scroll-fade-size)),
+    transparent 100%
+  );
+}
+
+@media (forced-colors: active) {
+  .scroll-fade-y,
+  .scroll-fade-x {
+    -webkit-mask-image: none;
+    mask-image: none;
+  }
+}
+
 .url-preview-dialog-footer-mobile {
   padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 0.75rem);
 }

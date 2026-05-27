@@ -57,3 +57,4 @@
 - UX-03: Verified small-handset handling through shared responsive helpers and viewport-constrained 360px overlay widths for 320/360/375px screens.
 - UX-04: Added a tooltip accessibility contract proving Radix keyboard/Escape semantics and button-backed labelled triggers remain in place.
 - UX-05: Added mobile-landscape overflow contracts proving authenticated/public shells compact vertical spacing, honor safe-area padding, and suppress decorative layers on short landscape handsets.
+- CSS-01: Added forced-colors-safe scroll fade utilities and opted long scrollable lists into vertical fade indicators without changing their layout structure.

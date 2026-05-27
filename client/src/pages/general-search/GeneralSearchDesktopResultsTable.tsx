@@ -46,7 +46,7 @@ export function GeneralSearchDesktopResultsTable({
   return (
     <HorizontalScrollHint
       className="rounded-lg border border-border"
-      viewportClassName="max-h-[600px] overflow-y-auto scrollbar-visible"
+      viewportClassName="max-h-[600px] overflow-y-auto scrollbar-visible scroll-fade-y"
       hint="Scroll columns"
       {...(onScroll ? { onScroll } : {})}
     >

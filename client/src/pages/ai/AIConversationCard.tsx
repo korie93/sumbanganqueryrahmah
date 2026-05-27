@@ -122,7 +122,7 @@ export function AIConversationCard({
 
         <div
           ref={messagesContainerRef}
-          className={`${chatHeightClass} overflow-y-auto space-y-3 pr-2`}
+          className={`${chatHeightClass} overflow-y-auto space-y-3 pr-2 scroll-fade-y`}
           role="log"
           aria-live="polite"
           aria-relevant="additions text"

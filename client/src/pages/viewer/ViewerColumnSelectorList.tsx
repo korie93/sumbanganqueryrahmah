@@ -13,7 +13,7 @@ export function ViewerColumnSelectorList({
   onToggleColumn,
 }: ViewerColumnSelectorListProps) {
   return (
-    <div className="max-h-48 space-y-2 overflow-y-auto">
+    <div className="max-h-48 space-y-2 overflow-y-auto scroll-fade-y">
       {headers.map((header) => (
         <div key={header} className="flex items-center gap-2">
           <Checkbox

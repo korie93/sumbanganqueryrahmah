@@ -151,7 +151,7 @@ export function BulkImportPanel({
             </div>
           ) : null}
 
-          <div className="max-h-[400px] space-y-2 overflow-y-auto">
+          <div className="max-h-[400px] space-y-2 overflow-y-auto scroll-fade-y">
             {bulkResults.map((result, index) => (
               <div
                 key={result.id}

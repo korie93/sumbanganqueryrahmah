@@ -87,7 +87,7 @@ export function AuditLogsRecordsList({
                   )}
                 </div>
               ) : (
-                <div className="max-h-[min(70vh,38rem)] space-y-3 overflow-y-auto pr-1 sm:pr-2">
+                <div className="max-h-[min(70vh,38rem)] space-y-3 overflow-y-auto pr-1 sm:pr-2 scroll-fade-y">
                   {filteredLogs.map((log) => (
                     <AuditLogRecordCard
                       key={log.id}
