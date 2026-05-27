@@ -1,5 +1,10 @@
 import { getCsrfHeader } from "./api/shared";
 import { apiErrorPayloadSchema } from "@shared/api-contracts";
+import {
+  getHttpStatusErrorMessage,
+  isGenericApiErrorMessage,
+  UNKNOWN_API_ERROR_MESSAGE,
+} from "@/constants/errorMessages";
 import { notifyMaintenanceMode } from "./api/maintenance-navigation";
 import {
   broadcastForcedLogout,
@@ -74,7 +79,11 @@ function normalizePlainTextErrorMessage(res: Response, text: string) {
   }
 
   if (!normalizedText) {
-    return res.statusText || "Request failed";
+    return getHttpStatusErrorMessage(res.status);
+  }
+
+  if (isGenericApiErrorMessage(normalizedText)) {
+    return getHttpStatusErrorMessage(res.status);
   }
 
   return normalizedText.length > 240
@@ -101,7 +110,7 @@ function parseJsonObject(text: string): ApiErrorPayload | null {
     const normalized = apiErrorPayloadSchema.safeParse(parsed);
     return normalized.success && isObjectRecord(normalized.data)
       ? normalized.data
-      : { message: "Request failed" };
+      : { message: UNKNOWN_API_ERROR_MESSAGE };
   } catch {
     return null;
   }

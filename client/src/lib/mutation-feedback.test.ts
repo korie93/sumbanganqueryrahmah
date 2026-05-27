@@ -26,6 +26,15 @@ test("buildMutationErrorToast keeps destructive styling and derived request refe
   assert.match(String(toast.description), /req-restore-500/);
 });
 
+test("resolveMutationErrorMessage replaces generic failures with status guidance", () => {
+  const message = resolveMutationErrorMessage(
+    new Error('429: {"message":"Request failed","retryAfterMs":2500}'),
+  );
+
+  assert.match(message, /Terlalu banyak percubaan/);
+  assert.doesNotMatch(message, /^Request failed/);
+});
+
 test("buildMutationSuccessToast preserves success metadata", () => {
   const toast = buildMutationSuccessToast({
     title: "Saved",

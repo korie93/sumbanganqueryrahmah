@@ -336,7 +336,7 @@ test("apiRequest ignores unvalidated JSON error flags instead of acting on them"
       () => apiRequest("GET", "/api/test-invalid-error-payload"),
       (error: unknown) => {
         assert.ok(error instanceof Error);
-        assert.match(error.message, /Request failed/);
+        assert.match(error.message, /Permintaan tidak dapat diselesaikan/);
         assert.doesNotMatch(error.message, /forceLogout/);
         return true;
       },

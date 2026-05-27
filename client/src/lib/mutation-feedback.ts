@@ -1,4 +1,5 @@
 import { parseCollectionApiErrorDetails } from "@/pages/collection/utils";
+import { getHttpStatusErrorMessage, isGenericApiErrorMessage, UNKNOWN_API_ERROR_MESSAGE } from "@/constants/errorMessages";
 
 export type MutationToastPayload = {
   title: string;
@@ -23,11 +24,13 @@ type BuildMutationErrorToastInput = {
 
 export function resolveMutationErrorMessage(
   error: unknown,
-  fallbackDescription = "Request failed. Please try again.",
+  fallbackDescription = UNKNOWN_API_ERROR_MESSAGE,
 ): string {
   const details = parseCollectionApiErrorDetails(error);
   const parsedMessage = details.message.trim();
-  const baseMessage = parsedMessage || fallbackDescription;
+  const baseMessage = parsedMessage && !isGenericApiErrorMessage(parsedMessage)
+    ? parsedMessage
+    : getHttpStatusErrorMessage(details.status) || fallbackDescription;
   const requestId = String(details.requestId || "").trim();
   if (!requestId || baseMessage.includes(requestId)) {
     return baseMessage;
