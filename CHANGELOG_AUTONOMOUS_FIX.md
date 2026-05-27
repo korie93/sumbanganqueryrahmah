@@ -22,3 +22,4 @@
 - MED-UI-3: Added an accessible password strength meter with deterministic scoring, common-pattern/repetition/sequence penalties, reduced-motion-safe progress bars, and integration across activation, reset-password, and change-password flows.
 - MED-UI-4: Added shared focus-visible design tokens, global keyboard-focus defaults with legacy and forced-colors fallbacks, and documented the repo-wide focus styling contract.
 - MED-UI-5: Extended automated design-token contrast coverage to verify the shared focus ring meets WCAG non-text contrast in light and dark themes.
+- MED-CFG-1: Documented app-owned security header responsibilities, expanded the Nginx contract to reject conflicting proxy-level security headers, and added a deploy runbook for header validation.

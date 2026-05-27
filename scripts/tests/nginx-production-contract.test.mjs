@@ -8,6 +8,7 @@ const nginxConfigPath = path.join(repoRoot, "deploy", "nginx", "sqr.conf.example
 const envExamplePath = path.join(repoRoot, ".env.example");
 const productionEnvTemplatePath = path.join(repoRoot, "deploy", "examples", "sqr.production.env.template");
 const hetznerDocPath = path.join(repoRoot, "docs", "HETZNER_PRODUCTION_DEPLOYMENT.md");
+const securityHeadersDocPath = path.join(repoRoot, "deploy", "SECURITY_HEADERS.md");
 
 function readText(filePath) {
   return readFileSync(filePath, "utf8");
@@ -114,15 +115,43 @@ test("production Nginx example does not emit conflicting Helmet-owned headers", 
   const nginxText = readText(nginxConfigPath);
   const lines = activeLines(nginxText);
   const conflictingHeaders = lines.filter((line) =>
-    /^add_header\s+(Strict-Transport-Security|X-Frame-Options)\b/i.test(line),
+    /^add_header\s+(Strict-Transport-Security|X-Frame-Options|X-Content-Type-Options|X-Permitted-Cross-Domain-Policies|Referrer-Policy|Permissions-Policy)\b/i.test(line),
   );
 
   assert.deepEqual(conflictingHeaders, []);
   assert.match(nginxText, /Browser security headers are owned by the Express\/Helmet app layer/);
-  assert.match(nginxText, /X-Frame-Options at\s+# SAMEORIGIN/i);
+  assert.match(nginxText, /X-Content-Type-Options/);
+  assert.match(nginxText, /X-Permitted-Cross-Domain-Policies/);
+  assert.match(nginxText, /Referrer-Policy/);
+  assert.match(nginxText, /Permissions-Policy/);
+  assert.match(nginxText, /deploy\/SECURITY_HEADERS\.md/);
+  assert.match(nginxText, /X-Frame-Options at SAMEORIGIN/i);
   assert.match(nginxText, /HSTS preload off/i);
   assert.match(nginxText, /HSTS_MAX_AGE_SECONDS=31536000/i);
   assert.match(nginxText, /https:\/\/hstspreload\.org/i);
+});
+
+test("security header runbook documents app-owned header values and validation", () => {
+  const docText = readText(securityHeadersDocPath);
+
+  for (const header of [
+    "Content-Security-Policy",
+    "X-Content-Type-Options",
+    "X-Frame-Options",
+    "Strict-Transport-Security",
+    "Referrer-Policy",
+    "Permissions-Policy",
+    "X-Permitted-Cross-Domain-Policies",
+    "Cross-Origin-Opener-Policy",
+    "Cross-Origin-Resource-Policy",
+  ]) {
+    assert.match(docText, new RegExp(header));
+  }
+
+  assert.match(docText, /Referrer-Policy: no-referrer/);
+  assert.match(docText, /curl -I https:\/\/sqr-system\.com\//);
+  assert.match(docText, /npm run test:http/);
+  assert.match(docText, /can produce conflicting values/i);
 });
 
 test("production Nginx example gives web-vitals telemetry its own bounded edge throttle", () => {

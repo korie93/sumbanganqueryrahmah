@@ -35,10 +35,16 @@ server {
     server_tokens off;
 
     # Browser security headers are owned by the Express/Helmet app layer.
-    # Do not duplicate HSTS/X-Frame-Options here unless Helmet is disabled or
-    # both layers are aligned. Helmet currently keeps X-Frame-Options at
-    # SAMEORIGIN for same-origin/blob preview flows and keeps HSTS preload off
-    # until every production subdomain is HTTPS-ready.
+    # Do not duplicate HSTS/X-Frame-Options/X-Content-Type-Options/
+    # X-Permitted-Cross-Domain-Policies/Referrer-Policy/Permissions-Policy
+    # here unless Helmet is disabled or both layers are aligned. Duplicate
+    # reverse-proxy headers can emit conflicting values, especially for
+    # Referrer-Policy and HSTS preload readiness.
+    #
+    # Expected app-owned values are documented in deploy/SECURITY_HEADERS.md.
+    # Helmet currently keeps X-Frame-Options at SAMEORIGIN for same-origin/blob
+    # preview flows and keeps HSTS preload off until every production subdomain
+    # is HTTPS-ready.
     # HSTS preload is an explicit app env opt-in: use HSTS_MAX_AGE_SECONDS=31536000
     # or higher and HSTS_PRELOAD_ENABLED=1 only after every production subdomain
     # is HTTPS-only, includeSubDomains is acceptable for the whole domain tree,
