@@ -56,3 +56,4 @@
 - UX-01/02: Added a shared AI first-token loading skeleton with a 300ms delayed display hook, cleanup-safe timer handling, and reduced-motion-safe shimmer styles across Floating AI and the full AI page.
 - UX-03: Verified small-handset handling through shared responsive helpers and viewport-constrained 360px overlay widths for 320/360/375px screens.
 - UX-04: Added a tooltip accessibility contract proving Radix keyboard/Escape semantics and button-backed labelled triggers remain in place.
+- UX-05: Added mobile-landscape overflow contracts proving authenticated/public shells compact vertical spacing, honor safe-area padding, and suppress decorative layers on short landscape handsets.
