@@ -121,6 +121,14 @@ const run = async () => {
     DRILL_BASE_URL: baseUrl,
     DRILL_SUPERUSER_USERNAME: smokeUser,
     DRILL_SUPERUSER_PASSWORD: smokePassword,
+    // Release readiness can run on developer/CI hosts without ClamAV. Keep the
+    // startup fail-closed path exercised with a deterministic clean scanner shim
+    // unless the caller provides the production scanner environment.
+    COLLECTION_RECEIPT_EXTERNAL_SCAN_ENABLED: process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_ENABLED || "1",
+    COLLECTION_RECEIPT_EXTERNAL_SCAN_COMMAND: process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_COMMAND || process.execPath,
+    COLLECTION_RECEIPT_EXTERNAL_SCAN_ARGS_JSON: process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_ARGS_JSON || "[\"-e\",\"process.exit(0)\",\"{file}\"]",
+    COLLECTION_RECEIPT_EXTERNAL_SCAN_FAIL_CLOSED: process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_FAIL_CLOSED || "1",
+    COLLECTION_RECEIPT_EXTERNAL_SCAN_TIMEOUT_MS: process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_TIMEOUT_MS || "5000",
   };
   const releaseBuildEnv = {
     ...env,

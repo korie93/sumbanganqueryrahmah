@@ -1,4 +1,4 @@
-import { useEffect, useRef, type RefObject } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, type RefObject } from "react";
 import { applyFloatingAiModalAccessibility } from "@/components/floating-ai-accessibility";
 import type { FloatingAiLayout } from "@/components/floating-ai-layout-types";
 
@@ -21,7 +21,31 @@ export function useFloatingAIFocusManagement({
   shouldShowPanel,
   triggerButtonRef,
 }: UseFloatingAIFocusManagementParams): void {
-  const wasDesktopPanelVisibleRef = useRef(false);
+  const wasPanelVisibleRef = useRef(false);
+  const restoreFocusTimeoutRef = useRef<number | null>(null);
+
+  const restoreTriggerFocusSoon = useCallback(() => {
+    if (typeof window === "undefined") {
+      triggerButtonRef.current?.focus();
+      return;
+    }
+
+    if (restoreFocusTimeoutRef.current !== null) {
+      window.clearTimeout(restoreFocusTimeoutRef.current);
+    }
+
+    restoreFocusTimeoutRef.current = window.setTimeout(() => {
+      restoreFocusTimeoutRef.current = null;
+      triggerButtonRef.current?.focus();
+    }, 0);
+  }, [triggerButtonRef]);
+
+  useEffect(() => () => {
+    if (restoreFocusTimeoutRef.current !== null && typeof window !== "undefined") {
+      window.clearTimeout(restoreFocusTimeoutRef.current);
+      restoreFocusTimeoutRef.current = null;
+    }
+  }, []);
 
   useEffect(() => {
     if (!isMobile || !shouldShowPanel) {
@@ -90,30 +114,28 @@ export function useFloatingAIFocusManagement({
 
       event.preventDefault();
       handleMinimize();
+      restoreTriggerFocusSoon();
     };
 
     document.addEventListener("keydown", handleKeyDown);
     return () => {
       document.removeEventListener("keydown", handleKeyDown);
     };
-  }, [floatingRootRef, handleMinimize, isMobile, panelSurfaceRef, shouldShowPanel]);
+  }, [floatingRootRef, handleMinimize, isMobile, panelSurfaceRef, restoreTriggerFocusSoon, shouldShowPanel]);
 
-  useEffect(() => {
-    if (isMobile) {
-      wasDesktopPanelVisibleRef.current = false;
+  useLayoutEffect(() => {
+    const wasVisible = wasPanelVisibleRef.current;
+    wasPanelVisibleRef.current = shouldShowPanel;
+
+    if (
+      !wasVisible
+      || shouldShowPanel
+      || layoutState.rootHidden
+      || layoutState.triggerHidden
+    ) {
       return;
     }
 
-    const wasVisible = wasDesktopPanelVisibleRef.current;
-    wasDesktopPanelVisibleRef.current = shouldShowPanel;
-
-    if (
-      wasVisible
-      && !shouldShowPanel
-      && !layoutState.rootHidden
-      && !layoutState.triggerHidden
-    ) {
-      triggerButtonRef.current?.focus();
-    }
-  }, [isMobile, layoutState.rootHidden, layoutState.triggerHidden, shouldShowPanel, triggerButtonRef]);
+    triggerButtonRef.current?.focus();
+  }, [layoutState.rootHidden, layoutState.triggerHidden, shouldShowPanel, triggerButtonRef]);
 }

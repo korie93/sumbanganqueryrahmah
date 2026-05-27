@@ -88,6 +88,14 @@ const run = async () => {
     SMOKE_TEST_PASSWORD: smokePassword,
     SMOKE_BASE_URL: baseUrl,
     SMOKE_ARTIFACTS_DIR: artifactsDir,
+    // Local smoke runs do not upload receipts, but startup readiness is fail-closed
+    // when the receipt scanner is explicitly unavailable. Use a deterministic clean
+    // scanner shim unless the caller configured a real ClamAV command.
+    COLLECTION_RECEIPT_EXTERNAL_SCAN_ENABLED: process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_ENABLED || "1",
+    COLLECTION_RECEIPT_EXTERNAL_SCAN_COMMAND: process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_COMMAND || process.execPath,
+    COLLECTION_RECEIPT_EXTERNAL_SCAN_ARGS_JSON: process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_ARGS_JSON || "[\"-e\",\"process.exit(0)\",\"{file}\"]",
+    COLLECTION_RECEIPT_EXTERNAL_SCAN_FAIL_CLOSED: process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_FAIL_CLOSED || "1",
+    COLLECTION_RECEIPT_EXTERNAL_SCAN_TIMEOUT_MS: process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_TIMEOUT_MS || "5000",
   };
 
   console.log("Smoke CI local: checking PostgreSQL connectivity...");

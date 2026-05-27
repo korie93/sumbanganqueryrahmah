@@ -49,6 +49,19 @@ function SettingsSectionFallback({ label }: { label: string }) {
   );
 }
 
+function SettingsPageStatus({ message }: { message: string }) {
+  return (
+    <OperationalPage width="content">
+      <h1 className="sr-only">System Settings</h1>
+      <OperationalSectionCard contentClassName="p-10 text-center text-muted-foreground">
+        <div role="status" aria-live="polite">
+          {message}
+        </div>
+      </OperationalSectionCard>
+    </OperationalPage>
+  );
+}
+
 export default function SettingsPage({
   tabVisibility,
   initialSectionId,
@@ -83,32 +96,31 @@ export default function SettingsPage({
     ((controller.canEditSystemSettings || controller.canAccessBackupSection) && controller.loadingState.loading)
   ) {
     return (
-      <OperationalPage width="content">
-        <OperationalSectionCard contentClassName="p-10 text-center text-muted-foreground">
-              {controller.loadingState.profileLoading
-                ? "Loading account profile..."
-                : "Loading system settings..."}
-        </OperationalSectionCard>
-      </OperationalPage>
+      <SettingsPageStatus
+        message={
+          controller.loadingState.profileLoading
+            ? "Loading account profile..."
+            : "Loading system settings..."
+        }
+      />
     );
   }
 
   if (!controller.currentUser) {
     return (
-      <OperationalPage width="content">
-        <OperationalSectionCard contentClassName="p-10 text-center text-muted-foreground">
-              Unable to load account profile.
-        </OperationalSectionCard>
-      </OperationalPage>
+      <SettingsPageStatus message="Unable to load account profile." />
     );
   }
 
   return (
     <OperationalPage width="wide">
         {!controller.canEditSystemSettings && !controller.canAccessBackupSection ? (
-          <OperationalSectionCard contentClassName="p-10 text-center text-muted-foreground">
+          <>
+            <h1 className="sr-only">System Settings</h1>
+            <OperationalSectionCard contentClassName="p-10 text-center text-muted-foreground">
               No settings or backup tools are available for this account.
-          </OperationalSectionCard>
+            </OperationalSectionCard>
+          </>
         ) : (
           <>
             <OperationalPageHeader

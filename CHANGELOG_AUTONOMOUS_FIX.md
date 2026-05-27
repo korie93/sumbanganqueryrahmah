@@ -35,3 +35,5 @@
 - LOW-8: Extended bundle budget monitoring with a JSON report artifact in CI and documented the current chunk-size baseline and review rules.
 - LOW-9: Added an explicit modern browser support matrix, package browserslist targets, and a contract test covering CI coverage, fallbacks, and unsupported browsers.
 - LOW-10: Added shared pagination limit validation so `limit`/`pageSize` must be at least 1 across API contracts and server readers, with route/service regressions proving `0` and negative values are rejected consistently.
+- VERIFY: Updated local smoke/release readiness runners to provide a deterministic clean receipt-scanner shim when ClamAV env is not configured, keeping readiness checks aligned with the fail-closed scanner startup contract.
+- VERIFY: Stabilized authenticated a11y/smoke contracts by giving Settings fallback states a semantic heading/live status and restoring Floating AI trigger focus immediately after Escape closes the panel.
