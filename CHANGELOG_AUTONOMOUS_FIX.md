@@ -39,3 +39,4 @@
 - VERIFY: Stabilized authenticated a11y/smoke contracts by giving Settings fallback states a semantic heading/live status and restoring Floating AI trigger focus immediately after Escape closes the panel.
 - ISSUE-01: Scoped Floating AI layout mutation observation to the mounted root container, removed document-wide subtree observation, and added stale-ref/timer cleanup contracts for observer stability.
 - ISSUE-02: Reset the mobile navigation drawer on route pathname changes without timers or browser globals, preventing stale open drawer state after navigation/back-forward flows.
+- ISSUE-03: Hardened AI chat request cancellation with explicit abort reasons, ref-before-timeout ordering contracts, and unmount cleanup assertions for active request controllers.

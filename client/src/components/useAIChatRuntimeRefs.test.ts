@@ -39,6 +39,7 @@ test("cleanupAIChatRuntimeRefs aborts requests and clears timers defensively", (
     });
 
     assert.equal(controller.signal.aborted, true);
+    assert.equal(controller.signal.reason, "unmount");
     assert.equal(requestControllerRef.current, null);
     assert.equal(requestTimeoutRef.current, null);
     assert.equal(typingIntervalRef.current, null);
@@ -99,6 +100,7 @@ test("cleanupAIChatRuntimeRefs stays safe when cleanup runs more than once", () 
     });
 
     assert.equal(controller.signal.aborted, true);
+    assert.equal(controller.signal.reason, "unmount");
     assert.deepEqual(clearedIntervals, [23]);
     assert.deepEqual(clearedTimeouts, [10, 11, 13]);
   } finally {

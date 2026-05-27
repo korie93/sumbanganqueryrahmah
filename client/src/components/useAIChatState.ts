@@ -74,7 +74,7 @@ export function useAIChatState({
       sessionRef.current += 1;
     }
 
-    abortActiveRequest();
+    abortActiveRequest("cancelled");
     clearRetryTimers();
     clearRequestTimeout();
     clearSlowNoticeTimer();

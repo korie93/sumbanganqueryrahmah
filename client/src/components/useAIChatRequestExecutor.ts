@@ -22,7 +22,7 @@ import {
 } from "./ai-chat-session-guards";
 
 type UseAIChatRequestExecutorOptions = {
-  abortActiveRequest: () => void;
+  abortActiveRequest: (reason?: string) => void;
   appendMessage: (message: AIChatMessageInput) => void;
   clearRequestTimeout: () => void;
   clearSlowNoticeTimer: () => void;
@@ -101,13 +101,13 @@ export function useAIChatRequestExecutor({
       return;
     }
 
-    abortActiveRequest();
+    abortActiveRequest("superseded");
     clearRequestTimeout();
     const controller = new AbortController();
     requestControllerRef.current = controller;
     let waitingRetry = false;
     let startedTyping = false;
-    const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
+    const timeoutId = window.setTimeout(() => controller.abort("timeout"), timeoutMs);
     requestTimeoutRef.current = timeoutId;
 
     try {

@@ -31,7 +31,7 @@ export function cleanupAIChatRuntimeRefs({
   processingRef.current = false;
 
   if (requestControllerRef.current) {
-    requestControllerRef.current.abort();
+    requestControllerRef.current.abort("unmount");
     requestControllerRef.current = null;
   }
 
@@ -81,9 +81,9 @@ export function useAIChatRuntimeRefs({
     };
   }, []);
 
-  const abortActiveRequest = useCallback(() => {
+  const abortActiveRequest = useCallback((reason: string = "cancelled") => {
     if (requestControllerRef.current) {
-      requestControllerRef.current.abort();
+      requestControllerRef.current.abort(reason);
       requestControllerRef.current = null;
     }
   }, []);

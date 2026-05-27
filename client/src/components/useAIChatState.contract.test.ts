@@ -16,9 +16,12 @@ test("useAIChatState clears active request timeouts when cancelling or finalizin
   assert.match(stateSource, /useAIChatRequestExecutor\(\{/);
   assert.match(executorSource, /clearRequestTimeout,/);
   assert.match(executorSource, /clearSlowNoticeTimer\(\);\s*clearRequestTimeout\(\);/);
-  assert.match(executorSource, /abortActiveRequest\(\);\s*clearRequestTimeout\(\);/);
+  assert.match(executorSource, /abortActiveRequest\("superseded"\);\s*clearRequestTimeout\(\);/);
+  assert.match(executorSource, /const controller = new AbortController\(\);\s*requestControllerRef\.current = controller;\s*let waitingRetry = false;/);
+  assert.match(executorSource, /window\.setTimeout\(\(\) => controller\.abort\("timeout"\), timeoutMs\)/);
   assert.match(executorSource, /requestTimeoutRef\.current = timeoutId/);
   assert.match(executorSource, /if \(requestTimeoutRef\.current === timeoutId\) \{\s*requestTimeoutRef\.current = null;/);
+  assert.match(stateSource, /abortActiveRequest\("cancelled"\);/);
 });
 
 test("useAIChatState gates retry timers against unmount and stale sessions", () => {
