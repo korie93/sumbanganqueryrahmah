@@ -263,6 +263,45 @@ test("auth adaptive cooldown records violations through one bounded post-write p
   }
 });
 
+test("auth login IP limiter throttles after five attempts even when identifiers rotate", async () => {
+  stopAdaptiveRateLimitCooldownSweep();
+  clearAdaptiveRateLimitCooldownsForTests();
+
+  const app = express();
+  app.use(express.json());
+  const limiters = createAuthRouteRateLimiters();
+  app.post("/login", limiters.loginIp, (_req, res) => {
+    res.status(204).end();
+  });
+
+  const { baseUrl, server } = await startTestServer(app);
+
+  try {
+    for (let index = 0; index < 5; index += 1) {
+      const response = await fetch(`${baseUrl}/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username: `rotating-user-${index}` }),
+      });
+      assert.equal(response.status, 204);
+    }
+
+    const throttled = await fetch(`${baseUrl}/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username: "fresh-identifier" }),
+    });
+
+    assert.equal(throttled.status, 429);
+    assert.equal(throttled.headers.get("ratelimit-limit"), "5");
+    assert.equal(getAdaptiveRateLimitCooldownStats().bucketCount, 1);
+  } finally {
+    stopAdaptiveRateLimitCooldownSweep();
+    clearAdaptiveRateLimitCooldownsForTests();
+    await stopTestServer(server);
+  }
+});
+
 test("auth adaptive cooldown cap evicts least recently used buckets without scanning for oldest timestamps", () => {
   stopAdaptiveRateLimitCooldownSweep();
   clearAdaptiveRateLimitCooldownsForTests();
