@@ -22,24 +22,34 @@ export function useFloatingAIFocusManagement({
   triggerButtonRef,
 }: UseFloatingAIFocusManagementParams): void {
   const wasPanelVisibleRef = useRef(false);
+  const pendingTriggerFocusRestoreRef = useRef(false);
   const restoreFocusFrameRef = useRef<number | null>(null);
 
   const focusTriggerButton = useCallback(() => {
-    if (layoutState.rootHidden || layoutState.triggerHidden) {
-      return;
+    if (layoutState.rootHidden) {
+      return false;
     }
 
     const triggerButton = triggerButtonRef.current;
     if (!triggerButton?.isConnected) {
-      return;
+      return false;
+    }
+
+    if (triggerButton.closest("[hidden]")) {
+      return false;
     }
 
     triggerButton.focus({ preventScroll: true });
-  }, [layoutState.rootHidden, layoutState.triggerHidden, triggerButtonRef]);
+    return true;
+  }, [layoutState.rootHidden, triggerButtonRef]);
 
   const restoreTriggerFocusSoon = useCallback(() => {
+    pendingTriggerFocusRestoreRef.current = true;
+
     if (typeof window === "undefined") {
-      focusTriggerButton();
+      if (focusTriggerButton()) {
+        pendingTriggerFocusRestoreRef.current = false;
+      }
       return;
     }
 
@@ -49,7 +59,9 @@ export function useFloatingAIFocusManagement({
 
     restoreFocusFrameRef.current = window.requestAnimationFrame(() => {
       restoreFocusFrameRef.current = null;
-      focusTriggerButton();
+      if (focusTriggerButton()) {
+        pendingTriggerFocusRestoreRef.current = false;
+      }
     });
   }, [focusTriggerButton]);
 
@@ -114,11 +126,17 @@ export function useFloatingAIFocusManagement({
       const activeElement = document.activeElement;
       const panelElement = panelSurfaceRef.current;
       const rootElement = floatingRootRef.current;
+      const focusHasNoInteractiveOwner =
+        activeElement === document.body
+        || activeElement === document.documentElement;
       const focusWithinFloatingAi = Boolean(
-        activeElement
-        && (
-          panelElement?.contains(activeElement)
-          || rootElement?.contains(activeElement)
+        focusHasNoInteractiveOwner
+        || (
+          activeElement
+          && (
+            panelElement?.contains(activeElement)
+            || rootElement?.contains(activeElement)
+          )
         ),
       );
       if (!focusWithinFloatingAi) {
@@ -144,11 +162,25 @@ export function useFloatingAIFocusManagement({
       !wasVisible
       || shouldShowPanel
       || layoutState.rootHidden
-      || layoutState.triggerHidden
     ) {
       return;
     }
 
+    pendingTriggerFocusRestoreRef.current = false;
     focusTriggerButton();
-  }, [focusTriggerButton, layoutState.rootHidden, layoutState.triggerHidden, shouldShowPanel]);
+  }, [focusTriggerButton, layoutState.rootHidden, shouldShowPanel]);
+
+  useLayoutEffect(() => {
+    if (
+      !pendingTriggerFocusRestoreRef.current
+      || shouldShowPanel
+      || layoutState.rootHidden
+    ) {
+      return;
+    }
+
+    if (focusTriggerButton()) {
+      pendingTriggerFocusRestoreRef.current = false;
+    }
+  }, [focusTriggerButton, layoutState.rootHidden, shouldShowPanel]);
 }

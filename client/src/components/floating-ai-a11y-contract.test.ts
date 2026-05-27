@@ -114,14 +114,19 @@ test("floating AI visual colors are sourced from design tokens", () => {
 test("floating AI desktop focus handoff is bounded and panel transition is property-specific", () => {
   const source = readComponentSource("FloatingAI.tsx");
   const panelSource = readComponentSource("FloatingAIPanel.tsx");
+  const triggerSource = readComponentSource("FloatingAITrigger.tsx");
   const focusSource = readComponentSource("useFloatingAIFocusManagement.ts");
 
   assert.match(focusSource, /requestAnimationFrame/);
   assert.match(focusSource, /cancelAnimationFrame/);
   assert.doesNotMatch(focusSource, /setTimeout/);
+  assert.match(focusSource, /pendingTriggerFocusRestoreRef/);
   assert.match(focusSource, /triggerButton\.focus\(\{ preventScroll: true \}\)/);
   assert.match(focusSource, /triggerButton\?\.isConnected/);
+  assert.match(focusSource, /triggerButton\.closest\("\[hidden\]"\)/);
   assert.match(focusSource, /document\.addEventListener\("keydown", handleKeyDown\)/);
+  assert.match(focusSource, /activeElement === document\.body/);
+  assert.match(triggerSource, /layoutState\.shouldAutoMinimize/);
   assert.match(focusSource, /event\.key !== "Escape"/);
   assert.match(focusSource, /handleMinimize\(\)/);
   assert.match(focusSource, /focusTriggerButton\(\);/);

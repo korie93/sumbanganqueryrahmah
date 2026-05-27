@@ -33,15 +33,19 @@ export function FloatingAITrigger({
   triggerButtonRef,
   unreadCount,
 }: FloatingAITriggerProps) {
+  const triggerHidden =
+    layoutState.triggerHidden
+    && (isOpen || layoutState.shouldAutoMinimize);
+
   return (
     <FloatingTriggerShell
       className={cn(
         "absolute flex flex-col gap-2 pointer-events-none",
         styles.floatingTriggerShell,
         layoutState.trigger.anchor === "left" ? "items-start" : "items-end",
-        layoutState.triggerHidden ? "translate-y-2 opacity-0" : "opacity-100",
+        triggerHidden ? "translate-y-2 opacity-0" : "opacity-100",
       )}
-      hidden={layoutState.triggerHidden}
+      hidden={triggerHidden}
     >
       {!isOpen && isThinking && !layoutState.rootHidden && !isMobile ? (
         <div className={cn("pointer-events-none max-w-[220px] rounded-lg border px-3 py-1.5 text-[11px] shadow-sm", styles.floatingMinimizedStatus)}>
@@ -62,7 +66,7 @@ export function FloatingAITrigger({
           styles.floatingTriggerButton,
           isMobile ? "h-12 w-12" : "h-14 w-14",
           hideForFocusedEditable ? "pointer-events-none" : "",
-          layoutState.triggerHidden ? "pointer-events-none scale-95 opacity-0" : "",
+          triggerHidden ? "pointer-events-none scale-95 opacity-0" : "",
           !isOpen && isThinking ? styles.aiThinkingRing : "",
         )}
         data-testid="floating-ai-toggle"
