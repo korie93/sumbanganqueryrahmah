@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { ArrowLeft, BadgeCheck, KeyRound, ShieldAlert } from "lucide-react";
+import { PasswordStrengthMeter } from "@/components/PasswordStrengthMeter";
 import { PublicAuthButton, PublicAuthInput } from "@/components/PublicAuthControls";
 import { PublicAuthLayout } from "@/components/PublicAuthLayout";
 import {
@@ -175,12 +176,14 @@ export default function ResetPasswordPage({ onBackToHome, onBackToLogin }: Reset
     }
   };
 
-  const newPasswordInvalidProps = newPasswordError
-    ? {
-      "aria-invalid": "true" as const,
-      "aria-describedby": "reset-password-new-error",
-    }
-    : {};
+  const newPasswordDescribedBy = [
+    "reset-password-strength",
+    newPasswordError ? "reset-password-new-error" : null,
+  ].filter(Boolean).join(" ");
+  const newPasswordInvalidProps = {
+    "aria-describedby": newPasswordDescribedBy,
+    ...(newPasswordError ? { "aria-invalid": "true" as const } : {}),
+  };
   const confirmPasswordInvalidProps = confirmPasswordError
     ? {
       "aria-invalid": "true" as const,
@@ -263,6 +266,10 @@ export default function ResetPasswordPage({ onBackToHome, onBackToLogin }: Reset
               {...newPasswordInvalidProps}
             />
           </div>
+          <PasswordStrengthMeter
+            id="reset-password-strength"
+            password={newPassword}
+          />
           {newPasswordError ? (
             <p id="reset-password-new-error" className="public-auth-field-error" role="alert">
               {newPasswordError}

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { ArrowLeft, BadgeCheck, KeyRound, ShieldAlert } from "lucide-react";
+import { PasswordStrengthMeter } from "@/components/PasswordStrengthMeter";
 import { PublicAuthButton, PublicAuthInput } from "@/components/PublicAuthControls";
 import { PublicAuthLayout } from "@/components/PublicAuthLayout";
 import {
@@ -211,12 +212,14 @@ export default function ActivateAccountPage({ onBackToLogin }: ActivateAccountPa
     }
   };
 
-  const newPasswordInvalidProps = newPasswordError
-    ? {
-      "aria-invalid": "true" as const,
-      "aria-describedby": "activate-password-new-error",
-    }
-    : {};
+  const newPasswordDescribedBy = [
+    "activate-password-strength",
+    newPasswordError ? "activate-password-new-error" : null,
+  ].filter(Boolean).join(" ");
+  const newPasswordInvalidProps = {
+    "aria-describedby": newPasswordDescribedBy,
+    ...(newPasswordError ? { "aria-invalid": "true" as const } : {}),
+  };
   const confirmPasswordInvalidProps = confirmPasswordError
     ? {
       "aria-invalid": "true" as const,
@@ -307,6 +310,10 @@ export default function ActivateAccountPage({ onBackToLogin }: ActivateAccountPa
               {...newPasswordInvalidProps}
             />
           </div>
+          <PasswordStrengthMeter
+            id="activate-password-strength"
+            password={newPassword}
+          />
           {newPasswordError ? (
             <p id="activate-password-new-error" className="public-auth-field-error" role="alert">
               {newPasswordError}

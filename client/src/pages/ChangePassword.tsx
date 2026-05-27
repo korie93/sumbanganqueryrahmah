@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { KeyRound, LogOut } from "lucide-react";
+import { PasswordStrengthMeter } from "@/components/PasswordStrengthMeter";
 import { PublicAuthButton, PublicAuthInput } from "@/components/PublicAuthControls";
 import { PublicAuthLayout } from "@/components/PublicAuthLayout";
 import { changeMyPassword } from "@/lib/api/auth";
@@ -147,12 +148,14 @@ export default function ChangePasswordPage({
       "aria-describedby": "change-password-current-error",
     }
     : {};
-  const newPasswordInvalidProps = newPasswordError
-    ? {
-      "aria-invalid": "true" as const,
-      "aria-describedby": "change-password-new-error",
-    }
-    : {};
+  const newPasswordDescribedBy = [
+    "change-password-strength",
+    newPasswordError ? "change-password-new-error" : null,
+  ].filter(Boolean).join(" ");
+  const newPasswordInvalidProps = {
+    "aria-describedby": newPasswordDescribedBy,
+    ...(newPasswordError ? { "aria-invalid": "true" as const } : {}),
+  };
   const confirmPasswordInvalidProps = confirmPasswordError
     ? {
       "aria-invalid": "true" as const,
@@ -212,6 +215,10 @@ export default function ChangePasswordPage({
         autoComplete="new-password"
         disabled={loading}
         {...newPasswordInvalidProps}
+      />
+      <PasswordStrengthMeter
+        id="change-password-strength"
+        password={newPassword}
       />
       {newPasswordError ? (
         <p id="change-password-new-error" className="text-sm text-amber-100" role="alert">
