@@ -16,6 +16,7 @@ import type {
   User,
 } from "@/app/types";
 import AutoLogout from "@/components/AutoLogout";
+import { LazySuspenseFallback } from "@/components/LazySuspenseFallback";
 import Navbar from "@/components/Navbar";
 import { AIProvider } from "@/context/AIContext";
 import { scheduleIdlePreload } from "@/lib/lazy-with-preload";
@@ -200,7 +201,7 @@ export default function AuthenticatedAppShell({
           </Suspense>
         </AppRouteErrorBoundary>
         {runtimeConfig.aiEnabled && currentPage !== "ai" && floatingAiReady ? (
-          <Suspense fallback={null}>
+          <Suspense fallback={<LazySuspenseFallback label="Loading AI assistant..." />}>
             <FloatingAI
               timeoutMs={runtimeConfig.aiTimeoutMs}
               aiEnabled={runtimeConfig.aiEnabled}

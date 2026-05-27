@@ -1,6 +1,7 @@
 import { Suspense, lazy, memo, useMemo, useState } from "react";
 import { CalendarRange, Filter, RotateCcw } from "lucide-react";
 import { CollectionReportFreshnessBadge } from "@/components/collection-report/CollectionReportFreshnessBadge";
+import { LazyDialogFallback } from "@/components/LazySuspenseFallback";
 import { OperationalSectionCard } from "@/components/layout/OperationalPage";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -198,7 +199,7 @@ function CollectionSummaryPage({ role }: CollectionSummaryPageProps) {
       <CollectionSummaryTotals {...viewModels.totals} />
 
       {viewModels.monthDialog?.open ? (
-        <Suspense fallback={null}>
+        <Suspense fallback={<LazyDialogFallback label="Loading collection month details dialog..." />}>
           <CollectionMonthDetailsDialog {...viewModels.monthDialog} />
         </Suspense>
       ) : null}

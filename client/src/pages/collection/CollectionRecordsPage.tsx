@@ -2,6 +2,7 @@ import { Suspense, lazy, memo, useMemo, useState } from "react";
 import { Filter, RotateCcw } from "lucide-react";
 import { ActiveFilterChips, type ActiveFilterChip } from "@/components/data/ActiveFilterChips";
 import { OperationalSectionCard } from "@/components/layout/OperationalPage";
+import { LazyDialogFallback } from "@/components/LazySuspenseFallback";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -284,31 +285,31 @@ function CollectionRecordsPage({ role }: CollectionRecordsPageProps) {
       ) : null}
 
       {viewModel.receiptPreview.open ? (
-        <Suspense fallback={null}>
+        <Suspense fallback={<LazyDialogFallback label="Loading receipt preview dialog..." />}>
           <ReceiptPreviewDialog {...viewModel.receiptPreview} />
         </Suspense>
       ) : null}
 
       {viewModel.editDialog.open ? (
-        <Suspense fallback={null}>
+        <Suspense fallback={<LazyDialogFallback label="Loading edit collection record dialog..." />}>
           <EditCollectionRecordDialog {...viewModel.editDialog} />
         </Suspense>
       ) : null}
 
       {viewModel.deleteDialog.open ? (
-        <Suspense fallback={null}>
+        <Suspense fallback={<LazyDialogFallback label="Loading delete collection record dialog..." />}>
           <DeleteCollectionRecordDialog {...viewModel.deleteDialog} />
         </Suspense>
       ) : null}
 
       {viewModel.purgeDialog.open ? (
-        <Suspense fallback={null}>
+        <Suspense fallback={<LazyDialogFallback label="Loading purge collection records dialog..." />}>
           <PurgeCollectionRecordsDialog {...viewModel.purgeDialog} />
         </Suspense>
       ) : null}
 
       {viewModel.viewAll.open ? (
-        <Suspense fallback={null}>
+        <Suspense fallback={<LazyDialogFallback label="Loading all collection records dialog..." />}>
           <ViewAllRecordsDialog {...viewModel.viewAll} />
         </Suspense>
       ) : null}

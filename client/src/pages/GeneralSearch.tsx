@@ -1,5 +1,6 @@
 import { Suspense, lazy } from "react";
 import { Search } from "lucide-react";
+import { LazyDialogFallback } from "@/components/LazySuspenseFallback";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { GeneralSearchControls } from "@/pages/general-search/GeneralSearchControls";
 import { useGeneralSearchController } from "@/pages/general-search/useGeneralSearchController";
@@ -129,7 +130,7 @@ export default function GeneralSearch({
       </div>
 
       {shouldShowRecordDialog ? (
-        <Suspense fallback={null}>
+        <Suspense fallback={<LazyDialogFallback label="Loading search result details dialog..." />}>
           <GeneralSearchRecordDialog
             canSeeSourceFile={canSeeSourceFile}
             onOpenChange={(open) => {

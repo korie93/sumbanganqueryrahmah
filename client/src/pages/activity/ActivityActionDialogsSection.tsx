@@ -1,4 +1,5 @@
 import { Suspense, lazy } from "react";
+import { LazyDialogFallback } from "@/components/LazySuspenseFallback";
 import type { ActivityRecord, BannedUser } from "@/pages/activity/types";
 
 const ActivityActionDialogs = lazy(() =>
@@ -55,7 +56,7 @@ export function ActivityActionDialogsSection({
   }
 
   return (
-    <Suspense fallback={null}>
+    <Suspense fallback={<LazyDialogFallback label="Loading activity action dialog..." />}>
       <ActivityActionDialogs
         banDialogOpen={banDialogOpen}
         bulkDeleteDialogOpen={bulkDeleteDialogOpen}

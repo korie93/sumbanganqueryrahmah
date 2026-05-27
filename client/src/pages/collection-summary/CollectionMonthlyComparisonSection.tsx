@@ -1,4 +1,5 @@
 import { Suspense, lazy, memo, useCallback } from "react";
+import { LazyDialogFallback } from "@/components/LazySuspenseFallback";
 import { downloadBlob } from "@/lib/download";
 import type { CollectionStaffNickname } from "@/lib/api";
 import { CollectionMonthlyComparisonPanel } from "./CollectionMonthlyComparisonPanel";
@@ -201,7 +202,7 @@ function CollectionMonthlyComparisonSection({
       {comparisonMonthDialog.monthDialog.open &&
       comparisonMonthDialog.monthDialog.selectedMonthSummary &&
       comparisonMonthDialog.monthDialog.selectedMonthRange ? (
-        <Suspense fallback={null}>
+        <Suspense fallback={<LazyDialogFallback label="Loading monthly collection details dialog..." />}>
           <CollectionMonthDetailsDialog {...comparisonMonthDialog.monthDialog} />
         </Suspense>
       ) : null}

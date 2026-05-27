@@ -8,6 +8,7 @@ import {
   OperationalPage,
   OperationalPageHeader,
 } from "@/components/layout/OperationalPage";
+import { LazyDialogFallback } from "@/components/LazySuspenseFallback";
 import { useLocation } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -146,7 +147,7 @@ export default function CollectionReport() {
       </div>
 
       {shouldRenderNicknameDialog ? (
-        <Suspense fallback={null}>
+        <Suspense fallback={<LazyDialogFallback label="Loading collection nickname dialog..." />}>
           <CollectionNicknameDialog
             confirmNicknamePassword={nicknameAccess.confirmNicknamePassword}
             dialogStep={nicknameAccess.dialogStep}

@@ -1,4 +1,5 @@
 import { Suspense, lazy } from "react";
+import { LazyDialogFallback } from "@/components/LazySuspenseFallback";
 import { CalendarDailyView } from "@/pages/collection/CalendarDailyView";
 import { CollectionDailyFiltersCard } from "@/pages/collection/CollectionDailyFiltersCard";
 import { CollectionDailyRoleGuide } from "@/pages/collection/CollectionDailyRoleGuide";
@@ -49,13 +50,13 @@ export default function CollectionDailyPage({ role }: CollectionDailyPageProps) 
       <CalendarDailyView {...model.calendarCardProps} />
 
       {model.dayDetailsDialogProps.open ? (
-        <Suspense fallback={null}>
+        <Suspense fallback={<LazyDialogFallback label="Loading collection day details dialog..." />}>
           <CollectionDailyDayDetailsDialog {...model.dayDetailsDialogProps} />
         </Suspense>
       ) : null}
 
       {model.receiptPreviewDialogProps.open ? (
-        <Suspense fallback={null}>
+        <Suspense fallback={<LazyDialogFallback label="Loading receipt preview dialog..." />}>
           <ReceiptPreviewDialog {...model.receiptPreviewDialogProps} />
         </Suspense>
       ) : null}

@@ -1,5 +1,6 @@
 import { Suspense, lazy, memo, useMemo } from "react";
 import { ShieldCheck } from "lucide-react";
+import { LazyDialogFallback } from "@/components/LazySuspenseFallback";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -141,7 +142,7 @@ function ManageCollectionNicknamesPage({
       </Card>
 
       {hasOpenDialogs ? (
-        <Suspense fallback={null}>
+        <Suspense fallback={<LazyDialogFallback label="Loading collection nickname management dialog..." />}>
           <CollectionNicknameDialogs {...viewModels.dialogs} />
         </Suspense>
       ) : null}

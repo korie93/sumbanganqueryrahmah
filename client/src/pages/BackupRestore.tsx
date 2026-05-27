@@ -1,6 +1,7 @@
 import { Suspense, lazy, useMemo } from "react";
 import { AppQueryProvider } from "@/app/AppQueryProvider";
 import { AppPaginationBar } from "@/components/data/AppPaginationBar";
+import { LazyDialogFallback } from "@/components/LazySuspenseFallback";
 import { OperationalMetric, OperationalSummaryStrip } from "@/components/layout/OperationalPage";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -204,7 +205,7 @@ function BackupRestoreContent({ userRole, embedded = false }: BackupRestoreProps
       />
 
       {hasBackupDialogs ? (
-        <Suspense fallback={null}>
+        <Suspense fallback={<LazyDialogFallback label="Loading backup dialog..." />}>
           <LazyBackupDialogs
             backupName={mutationState.backupName}
             backupJobBusy={mutationState.activeBackupJobBusy}
