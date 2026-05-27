@@ -172,6 +172,14 @@ jobs:
       SMOKE_TEST_USERNAME: superuser${{ github.run_id }}${{ github.run_attempt }}
       SMOKE_TEST_PASSWORD: sqr-ci-superuser-${{ github.run_id }}-${{ github.run_attempt }}-password-32chars
       SMOKE_BASE_URL: http://127.0.0.1:5000
+      # The smoke job does not upload receipts, but app readiness is fail-closed
+      # when receipt scanning is unavailable. Use a deterministic clean scanner
+      # shim in CI; production templates still require clamdscan fail-closed.
+      COLLECTION_RECEIPT_EXTERNAL_SCAN_ENABLED: 1
+      COLLECTION_RECEIPT_EXTERNAL_SCAN_COMMAND: node
+      COLLECTION_RECEIPT_EXTERNAL_SCAN_ARGS_JSON: '["-e","process.exit(0)","{file}"]'
+      COLLECTION_RECEIPT_EXTERNAL_SCAN_FAIL_CLOSED: 1
+      COLLECTION_RECEIPT_EXTERNAL_SCAN_TIMEOUT_MS: 5000
 
     steps:
       - name: Checkout
