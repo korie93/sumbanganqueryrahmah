@@ -90,10 +90,19 @@ export type WorkerFatalMessage = {
   };
 };
 
+export type WorkerReadyMessage = {
+  type: "worker-ready";
+  payload: {
+    pid: number;
+    readyAt: number;
+  };
+};
+
 export type WorkerToMasterMessage =
   | WorkerMetricsMessage
   | WorkerEventMessage
-  | WorkerFatalMessage;
+  | WorkerFatalMessage
+  | WorkerReadyMessage;
 
 export type ControlStateMessage = {
   type: "control-state";
@@ -141,4 +150,12 @@ export function isWorkerMemoryPressureMessage(message: unknown): message is Work
     && message.type === "worker-event"
     && isMessageRecord(message.payload)
     && message.payload.kind === "memory-pressure";
+}
+
+export function isWorkerReadyMessage(message: unknown): message is WorkerReadyMessage {
+  return isMessageRecord(message)
+    && message.type === "worker-ready"
+    && isMessageRecord(message.payload)
+    && typeof message.payload.pid === "number"
+    && typeof message.payload.readyAt === "number";
 }

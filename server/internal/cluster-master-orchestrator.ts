@@ -16,6 +16,7 @@ import {
   sendGracefulShutdownToWorker,
 } from "./cluster-worker-runtime";
 import { LoadPredictor } from "./loadPredictor";
+import { createSupervisorReadyGate } from "./process-supervisor-readiness";
 import type { WorkerControlState, WorkerMetricsPayload } from "./worker-ipc";
 
 type CreateClusterMasterOrchestratorOptions = {
@@ -58,6 +59,11 @@ export function createClusterMasterOrchestrator({
   };
   let scaleIntervalHandle: ReturnType<typeof setInterval> | null = null;
   let gracefulShutdownScheduled = false;
+  const supervisorReadyGate = createSupervisorReadyGate({
+    expectedReadyCount: Math.max(1, Math.min(config.initialWorkers, config.maxWorkers)),
+    logger,
+    processRef: process,
+  });
 
   function getWorkers(): Worker[] {
     return Object.values(clusterModule.workers ?? {}).filter((worker): worker is Worker => Boolean(worker));
@@ -117,7 +123,7 @@ export function createClusterMasterOrchestrator({
 
     const forceExitTimer = setTimeout(() => {
       process.exit(0);
-    }, 25_000);
+    }, config.gracefulShutdownTimeoutMs);
     forceExitTimer.unref();
 
     for (const worker of workers) {
@@ -355,6 +361,7 @@ export function createClusterMasterOrchestrator({
           restartBlockMs: config.restartBlockMs,
           state,
           controls: {
+            markWorkerReady: supervisorReadyGate.markWorkerReady,
             rollingRestartOne,
           },
         });
@@ -368,6 +375,7 @@ export function createClusterMasterOrchestrator({
       state,
       controls: {
         getWorkers,
+        markWorkerReady: supervisorReadyGate.markWorkerReady,
         rollingRestartOne,
         safeFork,
         shutdownMasterDueToFatalError,

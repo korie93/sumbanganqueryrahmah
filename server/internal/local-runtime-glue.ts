@@ -10,6 +10,7 @@ type RuntimeGlueOptions = {
   aiSearchService: Pick<AiSearchService, "clearSearchCache" | "disposeDebugState" | "sweepCaches">;
   attachGcObserver: () => void;
   attachProcessMessageHandlers: (options: { onGracefulShutdown: () => void }) => void;
+  onGracefulShutdownMessage?: ((reason: string) => void) | undefined;
   startRuntimeLoops: (options: { clearSearchCache: () => void }) => void;
   stopRuntimeMonitor: () => void;
 };
@@ -25,6 +26,7 @@ export function attachLocalRuntimeGlue(options: RuntimeGlueOptions) {
     attachGcObserver,
     attachProcessMessageHandlers,
     startRuntimeLoops,
+    onGracefulShutdownMessage,
     stopRuntimeMonitor,
   } = options;
 
@@ -32,6 +34,10 @@ export function attachLocalRuntimeGlue(options: RuntimeGlueOptions) {
 
   attachProcessMessageHandlers({
     onGracefulShutdown: () => {
+      if (onGracefulShutdownMessage) {
+        onGracefulShutdownMessage("IPC_GRACEFUL_SHUTDOWN");
+        return;
+      }
       server.close(() => process.exit(0));
       setTimeout(() => process.exit(0), 25_000).unref();
     },

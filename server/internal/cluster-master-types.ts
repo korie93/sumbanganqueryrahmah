@@ -20,4 +20,5 @@ export type ClusterMasterOrchestratorConfig = {
   maxRestartAttempts: number;
   restartFailureWindowMs: number;
   restartBlockMs: number;
+  gracefulShutdownTimeoutMs: number;
 };

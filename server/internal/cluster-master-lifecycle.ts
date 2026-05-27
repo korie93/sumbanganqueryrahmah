@@ -31,6 +31,7 @@ type ClusterMasterMutableState = {
 
 type ClusterMasterLifecycleControls = {
   getWorkers: () => Worker[];
+  markWorkerReady: (workerId: number) => void;
   safeFork: (reason: string) => Worker | null;
   rollingRestartOne: (reason: string) => Promise<void>;
   shutdownMasterDueToFatalError: (reason: string, metadata?: Record<string, unknown>) => void;
@@ -48,7 +49,7 @@ export function wireClusterMasterWorker(options: {
   logger: ClusterMasterLogger;
   restartBlockMs: number;
   state: ClusterMasterMutableState;
-  controls: Pick<ClusterMasterLifecycleControls, "rollingRestartOne">;
+  controls: Pick<ClusterMasterLifecycleControls, "markWorkerReady" | "rollingRestartOne">;
   worker: Worker;
 }) {
   const { controls, logger, state, worker } = options;
@@ -91,6 +92,11 @@ export function wireClusterMasterWorker(options: {
 
     if (outcome.kind === "memory-pressure") {
       void controls.rollingRestartOne("worker-memory-pressure");
+      return;
+    }
+
+    if (outcome.kind === "ready") {
+      controls.markWorkerReady(worker.id);
     }
   });
 }

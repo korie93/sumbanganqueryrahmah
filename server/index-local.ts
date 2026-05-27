@@ -1,7 +1,9 @@
 import "dotenv/config";
-import type { WorkerFatalMessage } from "./internal/worker-ipc";
+import cluster from "node:cluster";
+import type { WorkerFatalMessage, WorkerReadyMessage } from "./internal/worker-ipc";
 import { startLocalServer } from "./internal/server-startup";
 import { createLocalRuntimeEnvironment } from "./internal/local-runtime-environment";
+import { notifySupervisorReady } from "./internal/process-supervisor-readiness";
 import {
   resolvePgPoolShutdownTimeoutMs,
   shutdownPgPoolSafely,
@@ -17,7 +19,7 @@ import { stopAdaptiveRateLimitCooldownSweep } from "./middleware/rate-limit";
 let reportedWorkerFatalReason: string | null = null;
 
 type WorkerIpcProcess = NodeJS.Process & {
-  send?: (message: WorkerFatalMessage) => void;
+  send?: (message: "ready" | WorkerFatalMessage | WorkerReadyMessage) => void;
 };
 
 type StartupReasonError = Error & {
@@ -42,6 +44,26 @@ function notifyMasterFatalReason(reason: string, details?: string) {
   }
 }
 
+function notifyRuntimeReady() {
+  if (cluster.isWorker) {
+    if (typeof workerIpcProcess.send !== "function") {
+      return;
+    }
+
+    try {
+      workerIpcProcess.send({
+        type: "worker-ready",
+        payload: { pid: process.pid, readyAt: Date.now() },
+      });
+    } catch {
+      // PM2 readiness is best-effort; fatal startup reporting remains separate.
+    }
+    return;
+  }
+
+  notifySupervisorReady(workerIpcProcess, logger);
+}
+
 const {
   app,
   server,
@@ -55,6 +77,9 @@ const {
   host,
   markWebSocketConnectionsReady,
 } = createLocalRuntimeEnvironment({
+  onGracefulShutdownMessage: (reason) => {
+    shutdownProcess(reason, 0);
+  },
   notifyFatalStartup: notifyMasterFatalReason,
 });
 
@@ -151,8 +176,18 @@ function gracefulShutdown(signal: string) {
   shutdownProcess(signal, 0);
 }
 
+function handleSupervisorShutdownMessage(message: unknown) {
+  if (message !== "shutdown") {
+    return;
+  }
+
+  process.off("message", handleSupervisorShutdownMessage);
+  gracefulShutdown("PM2_SHUTDOWN_MESSAGE");
+}
+
 process.once("SIGTERM", () => gracefulShutdown("SIGTERM"));
 process.once("SIGINT", () => gracefulShutdown("SIGINT"));
+process.on("message", handleSupervisorShutdownMessage);
 
 registerLocalProcessFatalHandlers({
   logger,
@@ -177,6 +212,7 @@ async function startServer() {
     port,
     host,
   });
+  notifyRuntimeReady();
 }
 
 startServer().catch(async (error) => {

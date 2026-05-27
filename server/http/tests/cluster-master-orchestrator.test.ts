@@ -117,6 +117,7 @@ test("cluster master orchestrator boots primary workers and registers lifecycle 
         maxRestartAttempts: 5,
         restartFailureWindowMs: 60_000,
         restartBlockMs: 60_000,
+        gracefulShutdownTimeoutMs: 10_000,
       },
     });
 

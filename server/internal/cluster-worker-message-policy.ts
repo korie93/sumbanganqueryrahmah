@@ -2,6 +2,7 @@ import {
   isWorkerFatalMessage,
   isWorkerMemoryPressureMessage,
   isWorkerMetricsMessage,
+  isWorkerReadyMessage,
   type WorkerMetricsPayload,
 } from "./worker-ipc";
 
@@ -9,6 +10,7 @@ export type ClusterWorkerMessageOutcome =
   | { kind: "fatal"; reason: string; shouldLockAutomaticRestart: boolean }
   | { kind: "metrics"; payload: WorkerMetricsPayload }
   | { kind: "memory-pressure" }
+  | { kind: "ready"; pid: number; readyAt: number }
   | { kind: "ignored" };
 
 export function parseClusterWorkerMessage(message: unknown): ClusterWorkerMessageOutcome {
@@ -30,6 +32,14 @@ export function parseClusterWorkerMessage(message: unknown): ClusterWorkerMessag
 
   if (isWorkerMemoryPressureMessage(message)) {
     return { kind: "memory-pressure" };
+  }
+
+  if (isWorkerReadyMessage(message)) {
+    return {
+      kind: "ready",
+      pid: message.payload.pid,
+      readyAt: message.payload.readyAt,
+    };
   }
 
   return { kind: "ignored" };

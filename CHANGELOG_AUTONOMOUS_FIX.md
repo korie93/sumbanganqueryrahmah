@@ -26,3 +26,4 @@
 - MED-CFG-2: Added shared module boundary documentation, target `shared/common|server|client` directories, and a contract test preventing browser code from importing server-only Drizzle schema modules.
 - MED-CFG-3: Added native npm SBOM generation for CycloneDX and SPDX JSON, release workflow artifact upload, SBOM validation tests, and supply-chain documentation.
 - MED-CFG-4: Added SheetJS SHA512 checksum verification via `CHECKSUMS.sha512`, refactored the vendor integrity checker, covered it with tests, and wired the release workflow to verify the vendored tarball.
+- MED-CFG-5: Switched the PM2 example to the direct Node entrypoint with `wait_ready`, `shutdown_with_message`, 10s graceful drain windows, runtime readiness signalling after bootstrap, and PM2 shutdown-message handling for single-process and cluster modes.

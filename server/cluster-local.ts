@@ -74,6 +74,7 @@ const clusterMaster = createClusterMasterOrchestrator({
     maxRestartAttempts: MAX_RESTART_ATTEMPTS,
     restartFailureWindowMs: RESTART_FAILURE_WINDOW_MS,
     restartBlockMs: RESTART_BLOCK_MS,
+    gracefulShutdownTimeoutMs: runtimeConfig.runtime.gracefulShutdownTimeoutMs,
   },
 });
 
@@ -88,6 +89,15 @@ process.on("unhandledRejection", (reason) => {
 
 function handleClusterShutdownSignal(signal: NodeJS.Signals) {
   clusterMaster.shutdownGracefully(signal);
+}
+
+function handleSupervisorShutdownMessage(message: unknown) {
+  if (message !== "shutdown") {
+    return;
+  }
+
+  process.off("message", handleSupervisorShutdownMessage);
+  handleClusterShutdownSignal("SIGTERM");
 }
 
 if (cluster.isPrimary) {
@@ -108,6 +118,7 @@ if (cluster.isPrimary) {
     });
     await import("./index-local.js");
   } else {
+    process.on("message", handleSupervisorShutdownMessage);
     process.once("SIGINT", handleClusterShutdownSignal);
     process.once("SIGTERM", handleClusterShutdownSignal);
     clusterMaster.bootCluster();

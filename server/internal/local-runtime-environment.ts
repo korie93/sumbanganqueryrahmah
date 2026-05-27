@@ -33,6 +33,7 @@ import { wrapAsyncPrototypeMethods } from "./wrapAsyncPrototypeMethods";
 import { applyTrustedProxies } from "../http/trust-proxy";
 
 type CreateLocalRuntimeEnvironmentOptions = {
+  onGracefulShutdownMessage?: (reason: string) => void;
   notifyFatalStartup?: (reason: string, details?: string) => void;
 };
 
@@ -194,6 +195,7 @@ export function createLocalRuntimeEnvironment(options: CreateLocalRuntimeEnviron
     aiSearchService,
     attachGcObserver,
     attachProcessMessageHandlers,
+    onGracefulShutdownMessage: options.onGracefulShutdownMessage,
     startRuntimeLoops,
     stopRuntimeMonitor: stop,
   });

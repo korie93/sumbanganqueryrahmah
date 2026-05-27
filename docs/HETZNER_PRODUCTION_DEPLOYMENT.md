@@ -318,12 +318,17 @@ module.exports = {
   apps: [
     {
       name: "sqr",
-      script: "npm",
-      args: "start",
+      script: "dist-local/server/cluster-local.js",
+      interpreter: "node",
       cwd: "/var/www/sumbanganqueryrahmah",
+      wait_ready: true,
+      shutdown_with_message: true,
       env: {
-        NODE_ENV: "production"
-      }
+        NODE_ENV: "production",
+        GRACEFUL_SHUTDOWN_TIMEOUT_MS: "10000"
+      },
+      kill_timeout: 10000,
+      listen_timeout: 5000
     }
   ]
 };
@@ -335,9 +340,9 @@ Lebih selamat lagi, bermula daripada:
 
 Nota penting untuk `wait_ready`:
 
-- contoh PM2 semasa masih menggunakan `npm start` sebagai wrapper
-- sebab itu `wait_ready` tidak dihidupkan secara default dalam contoh
-- aktifkan `wait_ready` hanya jika anda tukar `script` kepada entrypoint Node terus dan app memang menghantar `process.send("ready")`
+- gunakan entrypoint Node terbina terus (`dist-local/server/cluster-local.js`), bukan wrapper `npm start`
+- jalankan `npm run build` sebelum `pm2 start` atau `pm2 restart`
+- app menghantar `process.send("ready")` hanya selepas bootstrap runtime dan binding HTTP siap
 
 Jika anda lebih suka `systemd` berbanding PM2, gunakan contoh:
 

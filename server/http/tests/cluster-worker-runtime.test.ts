@@ -196,4 +196,11 @@ test("cluster worker runtime forks workers with lifecycle listeners and message 
     }),
     { kind: "fatal", reason: "EADDRINUSE", shouldLockAutomaticRestart: true },
   );
+  assert.deepEqual(
+    parseClusterWorkerMessage({
+      type: "worker-ready",
+      payload: { pid: 7007, readyAt: 123 },
+    }),
+    { kind: "ready", pid: 7007, readyAt: 123 },
+  );
 });
