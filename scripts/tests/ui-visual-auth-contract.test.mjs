@@ -75,6 +75,16 @@ test("accessibility contract covers core authenticated work surfaces", () => {
   assert.match(accessibilityContractSource, /id: "import"[\s\S]*path: "\/import"/);
 });
 
+test("accessibility contract includes screen-reader interaction scenarios", () => {
+  assert.match(accessibilityContractSource, /verifyLoginFormErrorAnnouncement/);
+  assert.match(accessibilityContractSource, /#login-username-error\[role='alert'\]/);
+  assert.match(accessibilityContractSource, /aria-describedby/);
+  assert.match(accessibilityContractSource, /verifyFloatingAiScreenReaderScenario/);
+  assert.match(accessibilityContractSource, /data-floating-ai-dialog="true"\]\[role="dialog"\]/);
+  assert.match(accessibilityContractSource, /\[role="log"\]\[aria-live="polite"\]/);
+  assert.match(accessibilityContractSource, /floating AI Escape should return focus to the trigger/);
+});
+
 test("accessibility contract ignores clipped focus guards from portal libraries", () => {
   assert.match(accessibilityContractSource, /const isVisuallyHiddenFocusableUtility = \(element, style, rect\) =>/);
   assert.match(accessibilityContractSource, /normalizedClip === "rect\(0px,0px,0px,0px\)"/);

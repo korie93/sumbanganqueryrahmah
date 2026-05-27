@@ -99,7 +99,7 @@ Jika `VISUAL_TEST_USERNAME` / `VISUAL_TEST_PASSWORD` atau `SMOKE_TEST_USERNAME` 
 
 ## 4. Accessibility Contract
 
-Repo ini juga mempunyai Playwright accessibility contract yang ringan untuk route awam stabil, dan route authenticated kritikal apabila kredensial smoke disediakan.
+Repo ini juga mempunyai Playwright accessibility contract yang ringan untuk route awam stabil, route authenticated kritikal apabila kredensial smoke disediakan, dan beberapa scenario screen-reader praktikal seperti pengumuman ralat borang login serta focus return untuk panel Floating AI.
 
 Perintah:
 
@@ -136,7 +136,7 @@ Beberapa item audit masih wajar dianggap terbuka atau separa terbuka:
 
 - belum ada visual regression baseline pixel-diff penuh dengan golden screenshot merentas semua route
 - visual contract semasa lebih fokus pada layout invariants untuk route kritikal, bukan diff piksel menyeluruh
-- accessibility contract semasa ialah invariant guard ringan dengan subset authenticated apabila kredensial wujud, bukan axe/Lighthouse audit penuh untuk semua route authenticated
+- accessibility contract semasa ialah invariant guard ringan dengan subset authenticated apabila kredensial wujud dan beberapa scenario screen-reader utama, bukan axe/Lighthouse audit penuh untuk semua route authenticated
 - device QA sebenar masih diperlukan untuk route padat, touch target ergonomics, dan polish di peranti sebenar
 - belum ada read replica/reporting topology test kerana seni bina production semasa masih single-primary
 - belum ada k6/Artillery load suite dalam CI; buat masa ini load/chaos testing perlu dijalankan sebagai drill staging berjadual kerana endpoint chaos sengaja mengganggu runtime
@@ -146,7 +146,7 @@ Maksudnya:
 
 - kita **sudah ada** browser E2E/smoke framework yang nyata
 - kita **sudah ada** visual layout contract ringan untuk route awam
-- kita **sudah ada** accessibility contract ringan untuk route awam dan subset authenticated utama apabila kredensial smoke tersedia
+- kita **sudah ada** accessibility contract ringan untuk route awam, subset authenticated utama apabila kredensial smoke tersedia, dan scenario screen-reader untuk ralat borang serta panel Floating AI
 - tetapi kita **belum** patut mendakwa sudah ada visual regression suite pixel-baseline penuh
 - kita **belum** patut mendakwa accessibility suite penuh merentas semua route authenticated
 

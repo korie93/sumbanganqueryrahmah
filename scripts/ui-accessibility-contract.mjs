@@ -298,6 +298,82 @@ async function verifyKeyboardFocus(page, label) {
   throw new Error(`${label}: keyboard tab navigation did not land on a visible focus target`);
 }
 
+async function verifyLoginFormErrorAnnouncement(page) {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await navigateForAccessibilityContract(page, "/login");
+  await ensureLoginPageVisible(page, "Accessibility screen reader login validation");
+  await page.getByTestId("button-login").click();
+  await page.locator("#login-username-error[role='alert']").waitFor({ timeout: 10_000 });
+  await page.locator("#login-password-error[role='alert']").waitFor({ timeout: 10_000 });
+
+  const summary = await page.evaluate(() => {
+    const username = document.getElementById("login-username");
+    const password = document.getElementById("login-password");
+    return {
+      usernameDescribedBy: username?.getAttribute("aria-describedby") || "",
+      usernameInvalid: username?.getAttribute("aria-invalid") || "",
+      usernameErrorText: document.getElementById("login-username-error")?.textContent?.trim() || "",
+      passwordDescribedBy: password?.getAttribute("aria-describedby") || "",
+      passwordInvalid: password?.getAttribute("aria-invalid") || "",
+      passwordErrorText: document.getElementById("login-password-error")?.textContent?.trim() || "",
+    };
+  });
+
+  assert(summary.usernameInvalid === "true", "login validation should mark username invalid");
+  assert(summary.passwordInvalid === "true", "login validation should mark password invalid");
+  assert(
+    summary.usernameDescribedBy.split(/\s+/).includes("login-username-error"),
+    "username input should describe the alert message",
+  );
+  assert(
+    summary.passwordDescribedBy.split(/\s+/).includes("login-password-error"),
+    "password input should describe the alert message",
+  );
+  assert(summary.usernameErrorText.length > 0, "username alert should contain readable text");
+  assert(summary.passwordErrorText.length > 0, "password alert should contain readable text");
+}
+
+async function verifyFloatingAiScreenReaderScenario(page) {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await navigateForAccessibilityContract(page, "/settings");
+  await page.locator("main#main-content").first().waitFor({ timeout: 15_000 });
+
+  const trigger = page.getByTestId("floating-ai-toggle");
+  await trigger.waitFor({ state: "visible", timeout: 15_000 });
+  await trigger.click();
+
+  const dialog = page.locator('[data-floating-ai-dialog="true"][role="dialog"]').first();
+  await dialog.waitFor({ state: "visible", timeout: 15_000 });
+  await page.locator('[role="log"][aria-live="polite"]').first().waitFor({ timeout: 15_000 });
+
+  const dialogSummary = await page.evaluate(() => {
+    const dialogElement = document.querySelector('[data-floating-ai-dialog="true"][role="dialog"]');
+    const logElement = document.querySelector('[role="log"][aria-live="polite"]');
+    const titleId = dialogElement?.getAttribute("aria-labelledby") || "";
+    const descriptionId = dialogElement?.getAttribute("aria-describedby") || "";
+    return {
+      ariaExpanded: document.querySelector('[data-testid="floating-ai-toggle"]')?.getAttribute("aria-expanded"),
+      descriptionText: descriptionId ? document.getElementById(descriptionId)?.textContent?.trim() || "" : "",
+      hasLog: Boolean(logElement),
+      logLabel: logElement?.getAttribute("aria-label") || "",
+      titleText: titleId ? document.getElementById(titleId)?.textContent?.trim() || "" : "",
+    };
+  });
+
+  assert(dialogSummary.ariaExpanded === "true", "floating AI trigger should expose expanded state");
+  assert(dialogSummary.titleText.length > 0, "floating AI dialog should have a labelled title");
+  assert(dialogSummary.descriptionText.length > 0, "floating AI dialog should have a description");
+  assert(dialogSummary.hasLog, "floating AI chat should expose a polite log region");
+  assert(dialogSummary.logLabel.length > 0, "floating AI log region should have an accessible label");
+
+  await page.keyboard.press("Escape");
+  await dialog.waitFor({ state: "hidden", timeout: 10_000 });
+
+  const focusReturned = await page.evaluate(() =>
+    document.activeElement?.getAttribute("data-testid") === "floating-ai-toggle");
+  assert(focusReturned, "floating AI Escape should return focus to the trigger");
+}
+
 async function verifyRouteAccessibility(page, routeSpec, viewportSpec) {
   await page.setViewportSize({
     width: viewportSpec.width,
@@ -417,6 +493,7 @@ const run = async () => {
         await verifyRouteAccessibility(page, routeSpec, viewportSpec);
       }
     }
+    await verifyLoginFormErrorAnnouncement(page);
 
     if (!authUsername || !authPassword) {
       console.log(
@@ -432,6 +509,7 @@ const run = async () => {
         await verifyRouteAccessibility(page, routeSpec, viewportSpec);
       }
     }
+    await verifyFloatingAiScreenReaderScenario(page);
   } catch (error) {
     primaryError = error;
     throw error;
