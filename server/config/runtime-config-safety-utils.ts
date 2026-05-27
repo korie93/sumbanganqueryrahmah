@@ -13,7 +13,7 @@ const AUTO_COOKIE_SECURE_VALUES = new Set(["", "auto", "1", "true", "0", "false"
 const UNSAFE_TRUST_PROXY_VALUES = new Set(["*", "all", "true", "1"]);
 
 export const HSTS_PRELOAD_MIN_MAX_AGE_SECONDS = 31_536_000;
-export const HSTS_PRODUCTION_MIN_MAX_AGE_SECONDS = 15_552_000;
+export const HSTS_PRODUCTION_MIN_MAX_AGE_SECONDS = HSTS_PRELOAD_MIN_MAX_AGE_SECONDS;
 
 export function resolveTrustedProxies(rawValues: string[]): string[] {
   if (rawValues.length === 0) {

@@ -46,6 +46,7 @@ import {
   hasBackupEncryptionKeyConfigured,
   hasCollectionPiiEncryptionKeyConfigured,
   hasTwoFactorEncryptionKeyConfigured,
+  HSTS_PRODUCTION_MIN_MAX_AGE_SECONDS,
   resolveHstsHeaderConfig,
   resolveCookieSecure,
   resolveCorsAllowedOrigins,
@@ -83,7 +84,7 @@ const localSuperuserCredentialsFileEnabled = readBoolean("LOCAL_SUPERUSER_CREDEN
 const mailDevOutboxEnabled = readBoolean("MAIL_DEV_OUTBOX_ENABLED", false);
 const hstsHeaderConfig = resolveHstsHeaderConfig({
   isProductionLike,
-  maxAgeSeconds: readInt("HSTS_MAX_AGE_SECONDS", 15_552_000, {
+  maxAgeSeconds: readInt("HSTS_MAX_AGE_SECONDS", HSTS_PRODUCTION_MIN_MAX_AGE_SECONDS, {
     min: 0,
     max: 63_072_000,
   }),

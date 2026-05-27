@@ -563,11 +563,11 @@ test("resolveHstsHeaderConfig keeps preload opt-in and enforces preload max-age"
   assert.deepEqual(
     resolveHstsHeaderConfig({
       isProductionLike: true,
-      maxAgeSeconds: 15_552_000,
+      maxAgeSeconds: 31_536_000,
       preloadEnabled: false,
     }),
     {
-      maxAge: 15_552_000,
+      maxAge: 31_536_000,
       includeSubDomains: true,
       preload: false,
     },
@@ -576,7 +576,7 @@ test("resolveHstsHeaderConfig keeps preload opt-in and enforces preload max-age"
   assert.throws(
     () =>
       resolveHstsHeaderConfig({
-        isProductionLike: true,
+        isProductionLike: false,
         maxAgeSeconds: 15_552_000,
         preloadEnabled: true,
       }),
@@ -592,7 +592,7 @@ test("resolveHstsHeaderConfig rejects production max-age below the hardened base
         maxAgeSeconds: 0,
         preloadEnabled: false,
       }),
-    /Production HSTS_MAX_AGE_SECONDS must be at least 15552000/i,
+    /Production HSTS_MAX_AGE_SECONDS must be at least 31536000/i,
   );
 
   assert.deepEqual(
