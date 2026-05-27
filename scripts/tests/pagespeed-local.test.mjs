@@ -130,8 +130,13 @@ test("strict PageSpeed runner and CI enforce Lighthouse thresholds", () => {
 
   assert.match(runnerSource, /PAGESPEED_CHROME_PATH/);
   assert.match(runnerSource, /CHROME_PATH/);
+  assert.match(runnerSource, /PAGESPEED_PRELAUNCH_CHROME/);
+  assert.match(runnerSource, /pagespeed-chrome\.log/);
   assert.match(runnerSource, /chromium\.executablePath\(\)/);
   assert.match(runnerSource, /--no-sandbox/);
+  assert.match(runnerSource, /--disable-setuid-sandbox/);
+  assert.match(runnerSource, /--remote-debugging-port/);
+  assert.match(runnerSource, /--port=\$\{chromeDebugPort\}/);
   assert.match(strictRunnerSource, /PAGESPEED_ENFORCE_THRESHOLDS:\s*"true"/);
   assert.match(ciSource, /Run PageSpeed Lighthouse budgets/);
   assert.match(ciSource, /require\("playwright"\)\.chromium\.executablePath\(\)/);
@@ -140,6 +145,7 @@ test("strict PageSpeed runner and CI enforce Lighthouse thresholds", () => {
   assert.match(ciSource, /artifacts\/pagespeed/);
   assert.match(docsSource, /Performance \| 85/);
   assert.match(docsSource, /Accessibility \| 95/);
+  assert.match(docsSource, /PAGESPEED_PRELAUNCH_CHROME=false/);
 });
 
 test("isUsableLighthouseReport only accepts reports without runtime errors", () => {

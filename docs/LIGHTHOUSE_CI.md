@@ -49,12 +49,18 @@ npm run perf:pagespeed:local:strict
 ```
 
 The runner automatically uses `PAGESPEED_CHROME_PATH`, `CHROME_PATH`, or the
-Chromium executable installed by Playwright. To force a specific browser:
+Chromium executable installed by Playwright. When a Chrome path is available it
+pre-launches Chrome on a local debugging port and runs Lighthouse with `--port`;
+this avoids runner-specific Chrome launcher discovery and startup races. To
+force a specific browser:
 
 ```bash
 PAGESPEED_CHROME_PATH="$(node -e 'console.log(require("playwright").chromium.executablePath())')" \
 npm run perf:pagespeed:local:strict
 ```
+
+Set `PAGESPEED_PRELAUNCH_CHROME=false` only when diagnosing Lighthouse's own
+Chrome launcher. Chrome startup logs are written to `artifacts/pagespeed/pagespeed-chrome.log`.
 
 For diagnostics that should write artifacts without enforcing score thresholds:
 
