@@ -46,10 +46,29 @@ test("responsive contract exposes the shared breakpoint tiers and derived querie
 
 test("responsive helpers treat the md breakpoint as the mobile cutoff", () => {
   assert.equal(isMobileViewportWidth(undefined), false);
+  assert.equal(isMobileViewportWidth(320), true);
+  assert.equal(isMobileViewportWidth(360), true);
+  assert.equal(isMobileViewportWidth(375), true);
   assert.equal(isMobileViewportWidth(767), true);
   assert.equal(isMobileViewportWidth(768), false);
   assert.equal(isTabletOrSmallerViewportWidth(1023), true);
   assert.equal(isTabletOrSmallerViewportWidth(1024), false);
+});
+
+test("small-handset overlays keep viewport-constrained widths", () => {
+  const guardedSources = [
+    "../pages/collection-summary/CollectionSummaryFilters.tsx",
+    "../pages/collection-summary/CollectionMonthlyComparisonSetupCard.tsx",
+    "../pages/collection-records/CollectionRecordsFilters.tsx",
+    "../pages/collection/CollectionNicknameSummaryMobileFilters.tsx",
+    "../pages/collection/CollectionDailyUserFilterControl.tsx",
+  ];
+
+  for (const relativePath of guardedSources) {
+    const source = readFileSync(path.resolve(__dirname, relativePath), "utf8");
+
+    assert.match(source, /w-\[min\(360px,calc\(100vw-[^)]+\)\)\]/, `${relativePath} must fit <=375px handsets`);
+  }
 });
 
 test("custom CSS media queries use approved responsive breakpoints", () => {
