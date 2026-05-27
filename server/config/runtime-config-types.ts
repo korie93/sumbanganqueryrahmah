@@ -171,6 +171,11 @@ export type RuntimeConfig = {
       provider: "memory" | "redis";
       redisUrl: string | null;
     };
+    userLimitsPerMinute: {
+      reads: number;
+      uploads: number;
+      writes: number;
+    };
   };
   websocket: {
     maxConnections: number;

@@ -181,6 +181,25 @@ test("runtime env schema validates staged shared rate-limit store configuration 
   );
 });
 
+test("runtime env schema validates per-user rate-limit tuning", () => {
+  assert.doesNotThrow(() => {
+    validateRuntimeEnvironmentSchema({
+      SQR_RATE_LIMIT_USER_READS_PER_MINUTE: "500",
+      SQR_RATE_LIMIT_USER_WRITES_PER_MINUTE: "100",
+      SQR_RATE_LIMIT_USER_UPLOADS_PER_MINUTE: "10",
+    });
+  });
+
+  assert.throws(
+    () => {
+      validateRuntimeEnvironmentSchema({
+        SQR_RATE_LIMIT_USER_UPLOADS_PER_MINUTE: "0",
+      });
+    },
+    /SQR_RATE_LIMIT_USER_UPLOADS_PER_MINUTE.*at least 1/i,
+  );
+});
+
 test("runtime env schema validates staged WebSocket shared bus configuration keys", () => {
   assert.doesNotThrow(() => {
     validateRuntimeEnvironmentSchema({

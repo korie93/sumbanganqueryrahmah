@@ -53,6 +53,25 @@ function createApiProtectionTestApp(options: { adaptiveRateStore?: AdaptiveRateS
   });
 
   app.use(express.json());
+  app.use((req, _res, next) => {
+    const userId = String(req.headers["x-test-userid"] || "").trim();
+    if (userId) {
+      (req as Request & {
+        user?: {
+          role: string;
+          sessionId: string;
+          userId: string;
+          username: string;
+        };
+      }).user = {
+        userId,
+        username: userId,
+        role: "user",
+        sessionId: "test-session",
+      };
+    }
+    next();
+  });
   app.use(adaptiveRateLimit);
   app.use(systemProtectionMiddleware);
 
@@ -106,6 +125,24 @@ test("adaptive API protection still throttles generic API bursts", async () => {
     assert.equal(payload.mode, "NORMAL");
     assert.equal(typeof payload.retryAfterMs, "number");
     assert.ok(payload.retryAfterMs >= 0);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("adaptive API protection returns RateLimit headers on successful protected responses", async () => {
+  const app = createApiProtectionTestApp();
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(`${baseUrl}/api/noisy`);
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get("ratelimit-limit"), "8");
+    assert.equal(response.headers.get("ratelimit-remaining"), "7");
+    assert.match(response.headers.get("ratelimit-reset") ?? "", /^[1-9]\d*$/);
+    assert.equal(response.headers.get("x-ratelimit-limit"), "8");
+    assert.equal(response.headers.get("x-ratelimit-remaining"), "7");
+    assert.match(response.headers.get("x-ratelimit-reset") ?? "", /^[1-9]\d*$/);
   } finally {
     await stopTestServer(server);
   }
@@ -356,6 +393,101 @@ test("adaptive API protection can use a persistent state store", async () => {
     assert.equal(increments[0].bucketKey.endsWith(":api"), true);
     assert.equal(increments[0].windowMs, 10_000);
     assert.equal(increments[0].staleGraceMs, 10_000);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("adaptive API protection increments per-IP and per-user buckets for authenticated requests", async () => {
+  const increments: string[] = [];
+  const store: AdaptiveRateStateStore = {
+    async increment(options) {
+      increments.push(options.bucketKey);
+      return {
+        count: 1,
+        lastSeenAt: options.now,
+        resetAt: options.now + options.windowMs,
+      };
+    },
+  };
+  const app = createApiProtectionTestApp({ adaptiveRateStore: store });
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(`${baseUrl}/api/noisy`, {
+      headers: {
+        "x-test-userid": "user-1",
+      },
+    });
+
+    assert.equal(response.status, 200);
+    assert.equal(increments.length, 2);
+    assert.equal(increments.some((bucketKey) => bucketKey.startsWith("ip:") && bucketKey.endsWith(":api")), true);
+    assert.ok(increments.includes("user:user-1:api"));
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("adaptive API protection throttles an authenticated user bucket even when the IP bucket is still below limit", async () => {
+  const store: AdaptiveRateStateStore = {
+    async increment(options) {
+      return {
+        count: options.bucketKey.startsWith("user:user-1:api") ? 85 : 1,
+        lastSeenAt: options.now,
+        resetAt: options.now + options.windowMs,
+      };
+    },
+  };
+  const app = createApiProtectionTestApp({ adaptiveRateStore: store });
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(`${baseUrl}/api/noisy`, {
+      headers: {
+        "x-test-userid": "user-1",
+      },
+    });
+
+    assert.equal(response.status, 429);
+    assert.equal(response.headers.get("ratelimit-limit"), "84");
+    assert.equal(response.headers.get("ratelimit-remaining"), "0");
+    const payload = await response.json();
+    assert.equal(payload.message, "Too many requests under current system load.");
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("adaptive API protection keeps different authenticated user buckets independent", async () => {
+  const store: AdaptiveRateStateStore = {
+    async increment(options) {
+      return {
+        count: options.bucketKey.startsWith("user:user-1:api") ? 85 : 1,
+        lastSeenAt: options.now,
+        resetAt: options.now + options.windowMs,
+      };
+    },
+  };
+  const app = createApiProtectionTestApp({ adaptiveRateStore: store });
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const blockedUser = await fetch(`${baseUrl}/api/noisy`, {
+      headers: {
+        "x-test-userid": "user-1",
+      },
+    });
+    assert.equal(blockedUser.status, 429);
+
+    const independentUser = await fetch(`${baseUrl}/api/noisy`, {
+      headers: {
+        "x-test-userid": "user-2",
+      },
+    });
+    assert.equal(independentUser.status, 200);
+    assert.equal(independentUser.headers.get("ratelimit-limit"), "8");
+    assert.equal(independentUser.headers.get("x-ratelimit-limit"), "8");
   } finally {
     await stopTestServer(server);
   }

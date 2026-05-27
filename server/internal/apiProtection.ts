@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type { Request, RequestHandler } from "express";
 import { WEB_VITALS_TELEMETRY_PATHS as WEB_VITALS_TELEMETRY_PATH_VALUES } from "../routes/telemetry-route-constants";
 import type { WorkerControlState } from "./runtime-monitor-manager";
@@ -7,18 +8,43 @@ type ApiProtectionOptions = {
   adaptiveRateStore?: AdaptiveRateStateStore | null;
   getControlState: () => WorkerControlState;
   getDbProtection: () => boolean;
+  userLimitsPerMinute?: Partial<AdaptiveRateUserLimitsPerMinute>;
 };
 
 const ADAPTIVE_RATE_WINDOW_MS = 10_000;
 const ADAPTIVE_RATE_STALE_GRACE_MS = 10_000;
 const ADAPTIVE_RATE_SWEEP_INTERVAL_MS = 30_000;
 const ADAPTIVE_RATE_MAX_BUCKETS = 5_000;
+const ADAPTIVE_RATE_MINUTE_MS = 60_000;
+const DEFAULT_USER_LIMITS_PER_MINUTE: AdaptiveRateUserLimitsPerMinute = {
+  reads: 500,
+  uploads: 10,
+  writes: 100,
+};
 const WEB_VITALS_TELEMETRY_PATHS: ReadonlySet<string> = new Set(WEB_VITALS_TELEMETRY_PATH_VALUES);
 
 type AdaptiveRateBucket = {
   count: number;
   lastSeenAt: number;
   resetAt: number;
+};
+
+type AdaptiveRateBucketTarget = {
+  bucketKey: string;
+  dynamicLimit: number;
+  subjectHash?: string;
+  subjectType: "ip" | "user";
+};
+
+type AdaptiveRateUserLimitsPerMinute = {
+  reads: number;
+  uploads: number;
+  writes: number;
+};
+
+type AuthenticatedRequestUser = {
+  id?: unknown;
+  userId?: unknown;
 };
 
 class AdaptiveRateStateUnavailableError extends Error {
@@ -104,7 +130,40 @@ function setAdaptiveRateLimitHeaders(
   res.setHeader("RateLimit-Limit", String(Math.max(0, Math.trunc(options.limit))));
   res.setHeader("RateLimit-Remaining", "0");
   res.setHeader("RateLimit-Reset", String(resetSeconds));
+  res.setHeader("X-RateLimit-Limit", String(Math.max(0, Math.trunc(options.limit))));
+  res.setHeader("X-RateLimit-Remaining", "0");
+  res.setHeader("X-RateLimit-Reset", String(resetSeconds));
   res.setHeader("Retry-After", String(resetSeconds));
+}
+
+function setAdaptiveRateSuccessHeaders(
+  res: Parameters<RequestHandler>[1],
+  observations: Array<{
+    bucket: AdaptiveRateBucket;
+    limit: number;
+    now: number;
+  }>,
+) {
+  if (observations.length === 0 || res.headersSent) {
+    return;
+  }
+
+  const limit = Math.min(...observations.map((observation) => observation.limit));
+  const remaining = Math.max(
+    0,
+    Math.min(...observations.map((observation) => observation.limit - observation.bucket.count)),
+  );
+  const retryAfterMs = Math.max(
+    0,
+    Math.max(...observations.map((observation) => observation.bucket.resetAt - observation.now)),
+  );
+  const resetSeconds = Math.max(1, Math.ceil(retryAfterMs / 1000));
+  res.setHeader("RateLimit-Limit", String(limit));
+  res.setHeader("RateLimit-Remaining", String(remaining));
+  res.setHeader("RateLimit-Reset", String(resetSeconds));
+  res.setHeader("X-RateLimit-Limit", String(limit));
+  res.setHeader("X-RateLimit-Remaining", String(remaining));
+  res.setHeader("X-RateLimit-Reset", String(resetSeconds));
 }
 
 export function resolveAdaptiveRateLruEvictionKey(
@@ -121,6 +180,11 @@ export function createApiProtectionMiddleware(options: ApiProtectionOptions): {
   stopAdaptiveRateStateSweep: () => void;
 } {
   const adaptiveRateStore = options.adaptiveRateStore ?? null;
+  const userLimitsPerMinute: AdaptiveRateUserLimitsPerMinute = {
+    reads: Math.max(1, Math.trunc(options.userLimitsPerMinute?.reads ?? DEFAULT_USER_LIMITS_PER_MINUTE.reads)),
+    uploads: Math.max(1, Math.trunc(options.userLimitsPerMinute?.uploads ?? DEFAULT_USER_LIMITS_PER_MINUTE.uploads)),
+    writes: Math.max(1, Math.trunc(options.userLimitsPerMinute?.writes ?? DEFAULT_USER_LIMITS_PER_MINUTE.writes)),
+  };
   const adaptiveRateState = new Map<string, AdaptiveRateBucket>();
   let adaptiveRateStateQueue: Promise<void> = Promise.resolve();
   let lastAdaptiveSweepAt = 0;
@@ -260,12 +324,47 @@ export function createApiProtectionMiddleware(options: ApiProtectionOptions): {
     return ip || "unknown";
   }
 
-  function resolveAdaptiveRateBucket(req: Request): {
-    bucketKey: string;
-    dynamicLimit: number;
-  } {
+  function resolveRateLimitUserId(req: Request): string | null {
+    const user = (req as Request & { user?: AuthenticatedRequestUser | null }).user;
+    const rawUserId = user?.userId ?? user?.id;
+    const userId = String(rawUserId ?? "").trim();
+    if (!userId) {
+      return null;
+    }
+    return encodeURIComponent(userId).slice(0, 128);
+  }
+
+  function hashRateLimitSubject(subject: string): string {
+    return createHash("sha256").update(subject).digest("hex").slice(0, 16);
+  }
+
+  function perMinuteLimitToWindowLimit(limitPerMinute: number): number {
+    return Math.max(1, Math.ceil((limitPerMinute * ADAPTIVE_RATE_WINDOW_MS) / ADAPTIVE_RATE_MINUTE_MS));
+  }
+
+  function resolvePerUserLimit(req: Request): number {
+    const method = String(req.method || "GET").toUpperCase();
+    const path = req.path || "/";
+
+    if (
+      path.startsWith("/api/imports")
+      || path.includes("/receipt")
+      || path.includes("/receipts")
+    ) {
+      return perMinuteLimitToWindowLimit(userLimitsPerMinute.uploads);
+    }
+
+    if (method === "GET" || method === "HEAD" || method === "OPTIONS") {
+      return perMinuteLimitToWindowLimit(userLimitsPerMinute.reads);
+    }
+
+    return perMinuteLimitToWindowLimit(userLimitsPerMinute.writes);
+  }
+
+  function resolveAdaptiveRateBuckets(req: Request): AdaptiveRateBucketTarget[] {
     const controlState = options.getControlState();
     const ip = resolveRateLimitClientIp(req);
+    const userId = resolveRateLimitUserId(req);
     const method = String(req.method || "GET").toUpperCase();
     const path = req.path || "/";
 
@@ -306,7 +405,18 @@ export function createApiProtectionMiddleware(options: ApiProtectionOptions): {
     const throttle = clamp(controlState.throttleFactor || 1, 0.2, 1.2);
     const dynamicLimit = Math.max(minLimit, Math.floor(baseLimit * modePenalty * throttle));
 
-    return { bucketKey: `${ip}:${bucketScope}`, dynamicLimit };
+    const buckets: AdaptiveRateBucketTarget[] = [
+      { bucketKey: `ip:${ip}:${bucketScope}`, dynamicLimit, subjectType: "ip" },
+    ];
+    if (userId) {
+      buckets.push({
+        bucketKey: `user:${userId}:${bucketScope}`,
+        dynamicLimit: resolvePerUserLimit(req),
+        subjectHash: hashRateLimitSubject(userId),
+        subjectType: "user",
+      });
+    }
+    return buckets;
   }
 
   const adaptiveRateLimit: RequestHandler = (req, res, next) => {
@@ -318,35 +428,50 @@ export function createApiProtectionMiddleware(options: ApiProtectionOptions): {
         if (isSessionControlRoute(req)) return next();
 
         const now = Date.now();
-        const { bucketKey, dynamicLimit } = resolveAdaptiveRateBucket(req);
-        let nextBucket: AdaptiveRateBucket;
-        try {
-          nextBucket = await incrementAdaptiveRateBucket(bucketKey, now);
-        } catch (error) {
-          if (error instanceof AdaptiveRateStateUnavailableError) {
-            res.setHeader("Retry-After", "5");
-            return res.status(503).json({
-              message: "Request protection state is temporarily unavailable.",
-              protection: true,
-              reason: "adaptive_rate_state_unavailable",
+        const bucketTargets = resolveAdaptiveRateBuckets(req);
+        const observations: Array<{ bucket: AdaptiveRateBucket; limit: number; now: number }> = [];
+        for (const target of bucketTargets) {
+          const { bucketKey, dynamicLimit } = target;
+          let nextBucket: AdaptiveRateBucket;
+          try {
+            nextBucket = await incrementAdaptiveRateBucket(bucketKey, now);
+          } catch (error) {
+            if (error instanceof AdaptiveRateStateUnavailableError) {
+              res.setHeader("Retry-After", "5");
+              return res.status(503).json({
+                message: "Request protection state is temporarily unavailable.",
+                protection: true,
+                reason: "adaptive_rate_state_unavailable",
+              });
+            }
+            throw error;
+          }
+          observations.push({ bucket: nextBucket, limit: dynamicLimit, now });
+          if (nextBucket.count > dynamicLimit) {
+            const retryAfterMs = Math.max(0, nextBucket.resetAt - now);
+            setAdaptiveRateLimitHeaders(res, {
+              limit: dynamicLimit,
+              retryAfterMs,
+            });
+            if (target.subjectType === "user") {
+              defaultLogger.warn("Adaptive per-user rate limit exceeded", {
+                count: nextBucket.count,
+                limit: dynamicLimit,
+                method: req.method,
+                path: req.path,
+                userHash: target.subjectHash,
+              });
+            }
+            return res.status(429).json({
+              message: "Too many requests under current system load.",
+              limit: dynamicLimit,
+              retryAfterMs,
+              mode: controlState.mode,
             });
           }
-          throw error;
-        }
-        if (nextBucket.count > dynamicLimit) {
-          const retryAfterMs = Math.max(0, nextBucket.resetAt - now);
-          setAdaptiveRateLimitHeaders(res, {
-            limit: dynamicLimit,
-            retryAfterMs,
-          });
-          return res.status(429).json({
-            message: "Too many requests under current system load.",
-            limit: dynamicLimit,
-            retryAfterMs,
-            mode: controlState.mode,
-          });
         }
 
+        setAdaptiveRateSuccessHeaders(res, observations);
         return next();
       })();
     } catch (error) {

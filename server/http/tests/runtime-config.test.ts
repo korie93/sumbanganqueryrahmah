@@ -1004,6 +1004,37 @@ test("runtime config accepts an explicit Redis health check interval", async () 
   );
 });
 
+test("runtime config accepts explicit per-user rate-limit tuning", async () => {
+  await withEnv(
+    {
+      NODE_ENV: "development",
+      HOST: "127.0.0.1",
+      PUBLIC_APP_URL: "http://127.0.0.1:5000",
+      SESSION_SECRET: null,
+      COLLECTION_NICKNAME_TEMP_PASSWORD: null,
+      COLLECTION_PII_ENCRYPTION_KEY: null,
+      PG_PASSWORD: null,
+      BACKUP_ENCRYPTION_KEY: null,
+      BACKUP_ENCRYPTION_KEYS: null,
+      BACKUP_FEATURE_ENABLED: "1",
+      SQR_RATE_LIMIT_USER_READS_PER_MINUTE: "600",
+      SQR_RATE_LIMIT_USER_WRITES_PER_MINUTE: "120",
+      SQR_RATE_LIMIT_USER_UPLOADS_PER_MINUTE: "12",
+      SEED_DEFAULT_USERS: "0",
+      LOCAL_SUPERUSER_CREDENTIALS_FILE_ENABLED: "0",
+      MAIL_DEV_OUTBOX_ENABLED: "0",
+    },
+    async () => {
+      const runtimeModule = await importRuntimeFresh();
+      assert.deepEqual(runtimeModule.runtimeConfig.rateLimiting.userLimitsPerMinute, {
+        reads: 600,
+        uploads: 12,
+        writes: 120,
+      });
+    },
+  );
+});
+
 test("runtime config accepts an explicit WebSocket global connection cap", async () => {
   await withEnv(
     {

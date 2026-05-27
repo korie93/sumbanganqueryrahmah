@@ -201,6 +201,18 @@ const runtimeEnvironmentSchema = z.object({
   HSTS_PRELOAD_ENABLED: optionalBooleanEnv("HSTS_PRELOAD_ENABLED"),
   SQR_RATE_LIMIT_STORE: optionalRateLimitStoreEnv(),
   SQR_REDIS_RATE_LIMIT_URL: optionalEnvString("SQR_REDIS_RATE_LIMIT_URL", SECRET_STRING_MAX_LENGTH),
+  SQR_RATE_LIMIT_USER_READS_PER_MINUTE: optionalIntEnv(
+    "SQR_RATE_LIMIT_USER_READS_PER_MINUTE",
+    { min: 1, max: 100_000 },
+  ),
+  SQR_RATE_LIMIT_USER_WRITES_PER_MINUTE: optionalIntEnv(
+    "SQR_RATE_LIMIT_USER_WRITES_PER_MINUTE",
+    { min: 1, max: 100_000 },
+  ),
+  SQR_RATE_LIMIT_USER_UPLOADS_PER_MINUTE: optionalIntEnv(
+    "SQR_RATE_LIMIT_USER_UPLOADS_PER_MINUTE",
+    { min: 1, max: 10_000 },
+  ),
   SQR_WS_SHARED_BUS: optionalWsSharedBusEnv(),
   SQR_REDIS_WS_URL: optionalEnvString("SQR_REDIS_WS_URL", SECRET_STRING_MAX_LENGTH),
   SQR_WS_MAX_CONNECTIONS: optionalIntEnv("SQR_WS_MAX_CONNECTIONS", { min: 1, max: 100_000 }),

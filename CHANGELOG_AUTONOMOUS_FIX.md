@@ -7,3 +7,4 @@
 - CRIT-3: Added versioned encrypted 2FA secret payloads that preserve each enrollment's TOTP algorithm, keeping legacy SHA1 payloads valid while allowing new SHA256 enrollments without a database rewrite.
 - CRIT-4: Added production-like startup guardrails requiring receipt external malware scanning to be enabled, fail-closed, and configured with a file placeholder before collection receipt uploads are accepted; startup now validates scanner reachability with a clean test scan and logs scanner version when available.
 - CRIT-5: Hardened SQL LIKE pattern construction with trim, Unicode normalization, null-byte rejection, and a 200-character cap while preserving parameterized Drizzle bindings and explicit ESCAPE clauses.
+- MED-BE-1: Added authenticated per-user adaptive rate buckets alongside per-IP buckets, configurable per-user read/write/upload limits, `RateLimit-*`/`X-RateLimit-*` response headers, and structured per-user throttle logging.

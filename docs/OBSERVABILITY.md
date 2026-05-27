@@ -80,7 +80,7 @@ unavailable`, `Redis session revocation store unavailable`, and `Redis
 WebSocket shared bus unavailable`. These indicate shared runtime state is at
 risk and should page the operator for production deployments.
 
-HTTP throttling responses expose `Retry-After`, `RateLimit-Limit`, `RateLimit-Remaining`, and `RateLimit-Reset` so browser clients and operational probes can back off without parsing log output. CSRF rotation also returns the fresh token in `X-CSRF-Token` alongside the readable `sqr_csrf` cookie for clients that prefer header-based refresh handling after sensitive mutations.
+HTTP throttling responses expose `Retry-After`, `RateLimit-Limit`, `RateLimit-Remaining`, and `RateLimit-Reset` plus the legacy-compatible `X-RateLimit-*` variants so browser clients and operational probes can back off without parsing log output. Authenticated requests are counted against both an IP bucket and a per-user bucket (`SQR_RATE_LIMIT_USER_READS_PER_MINUTE`, `SQR_RATE_LIMIT_USER_WRITES_PER_MINUTE`, `SQR_RATE_LIMIT_USER_UPLOADS_PER_MINUTE`). CSRF rotation also returns the fresh token in `X-CSRF-Token` alongside the readable `sqr_csrf` cookie for clients that prefer header-based refresh handling after sensitive mutations.
 
 Runtime WebSocket upgrades are rate limited by IP. Accepted sockets are also bounded by `SQR_WS_MAX_CONNECTIONS` and each socket has a lightweight inbound message cap. The current client protocol does not require high-frequency inbound messages, so repeated client messages over the limit are treated as abuse and closed with a policy-violation code.
 

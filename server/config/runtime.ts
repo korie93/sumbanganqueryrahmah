@@ -412,6 +412,11 @@ export const runtimeConfig: RuntimeConfig = Object.freeze({
   },
   rateLimiting: {
     store: sharedRateLimitStore,
+    userLimitsPerMinute: {
+      reads: readInt("SQR_RATE_LIMIT_USER_READS_PER_MINUTE", 500, { min: 1, max: 100_000 }),
+      uploads: readInt("SQR_RATE_LIMIT_USER_UPLOADS_PER_MINUTE", 10, { min: 1, max: 10_000 }),
+      writes: readInt("SQR_RATE_LIMIT_USER_WRITES_PER_MINUTE", 100, { min: 1, max: 100_000 }),
+    },
   },
   websocket: {
     maxConnections: configuredWebSocketMaxConnections,
