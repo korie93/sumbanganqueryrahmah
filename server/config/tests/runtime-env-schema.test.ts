@@ -311,3 +311,35 @@ test("runtime env schema accepts collection PII retirement fields when the activ
     });
   });
 });
+
+test("runtime env schema validates receipt external malware scanner settings", () => {
+  assert.doesNotThrow(() => {
+    validateRuntimeEnvironmentSchema({
+      COLLECTION_RECEIPT_EXTERNAL_SCAN_ENABLED: "1",
+      COLLECTION_RECEIPT_EXTERNAL_SCAN_COMMAND: "clamdscan",
+      COLLECTION_RECEIPT_EXTERNAL_SCAN_ARGS_JSON: "[\"--fdpass\",\"--no-summary\",\"{file}\"]",
+      COLLECTION_RECEIPT_EXTERNAL_SCAN_TIMEOUT_MS: "60000",
+      COLLECTION_RECEIPT_EXTERNAL_SCAN_FAIL_CLOSED: "1",
+      COLLECTION_RECEIPT_EXTERNAL_SCAN_CLEAN_EXIT_CODES: "0",
+      COLLECTION_RECEIPT_EXTERNAL_SCAN_REJECT_EXIT_CODES: "1",
+    });
+  });
+
+  assert.throws(
+    () => {
+      validateRuntimeEnvironmentSchema({
+        COLLECTION_RECEIPT_EXTERNAL_SCAN_ENABLED: "maybe",
+      });
+    },
+    /COLLECTION_RECEIPT_EXTERNAL_SCAN_ENABLED.*boolean flag/i,
+  );
+
+  assert.throws(
+    () => {
+      validateRuntimeEnvironmentSchema({
+        COLLECTION_RECEIPT_EXTERNAL_SCAN_TIMEOUT_MS: "999",
+      });
+    },
+    /COLLECTION_RECEIPT_EXTERNAL_SCAN_TIMEOUT_MS.*at least 1000/i,
+  );
+});

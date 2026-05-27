@@ -37,6 +37,7 @@ import {
   assertNoPlaceholderSecrets,
   assertProductionDatabaseBootstrapModeSafety,
   assertProductionRateLimiterTopologySafety,
+  assertProductionReceiptExternalScanSafety,
   assertProductionTwoFactorReplayTopologySafety,
   assertProductionWebSocketRuntimeTopologySafety,
   assertRuntimeSessionSecretMinBytes,
@@ -122,6 +123,10 @@ const configuredCollectionReceiptQuarantineDir = readOptionalString("COLLECTION_
 const resolvedCollectionReceiptQuarantineDir = configuredCollectionReceiptQuarantineDir
   ? path.resolve(process.cwd(), configuredCollectionReceiptQuarantineDir)
   : path.resolve(process.cwd(), "var", "collection-receipt-quarantine");
+const collectionReceiptExternalScanEnabled = readBoolean("COLLECTION_RECEIPT_EXTERNAL_SCAN_ENABLED", false);
+const collectionReceiptExternalScanCommand = readOptionalString("COLLECTION_RECEIPT_EXTERNAL_SCAN_COMMAND");
+const collectionReceiptExternalScanArgsJson = readOptionalString("COLLECTION_RECEIPT_EXTERNAL_SCAN_ARGS_JSON");
+const collectionReceiptExternalScanFailClosed = readBoolean("COLLECTION_RECEIPT_EXTERNAL_SCAN_FAIL_CLOSED", true);
 const configuredMailDevOutboxDir = readOptionalString("MAIL_DEV_OUTBOX_DIR");
 const resolvedMailDevOutboxDir = configuredMailDevOutboxDir
   ? path.resolve(configuredMailDevOutboxDir)
@@ -200,6 +205,14 @@ assertProductionRateLimiterTopologySafety({
   isProductionLike,
   configuredClusterMaxWorkers,
   distributedStoreConfigured: sharedRateLimitStore.distributedStoreConfigured,
+});
+
+assertProductionReceiptExternalScanSafety({
+  isProductionLike,
+  externalScanEnabled: collectionReceiptExternalScanEnabled,
+  externalScanFailClosed: collectionReceiptExternalScanFailClosed,
+  externalScanCommand: collectionReceiptExternalScanCommand,
+  externalScanArgsJson: collectionReceiptExternalScanArgsJson,
 });
 
 assertProductionTwoFactorReplayTopologySafety({

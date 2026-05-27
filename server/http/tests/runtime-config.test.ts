@@ -67,6 +67,10 @@ const productionBaseOverrides: Record<string, string | null> = {
   SQR_REDIS_RATE_LIMIT_URL: "rediss://redis.internal:6380/0",
   SQR_WS_SHARED_BUS: null,
   SQR_REDIS_WS_URL: null,
+  COLLECTION_RECEIPT_EXTERNAL_SCAN_ENABLED: "1",
+  COLLECTION_RECEIPT_EXTERNAL_SCAN_COMMAND: "clamdscan",
+  COLLECTION_RECEIPT_EXTERNAL_SCAN_ARGS_JSON: "[\"--fdpass\",\"--no-summary\",\"--infected\",\"{file}\"]",
+  COLLECTION_RECEIPT_EXTERNAL_SCAN_FAIL_CLOSED: "1",
 };
 
 const productionLikeDevelopmentBaseOverrides: Record<string, string | null> = {
@@ -94,6 +98,10 @@ const productionLikeDevelopmentBaseOverrides: Record<string, string | null> = {
   SQR_REDIS_RATE_LIMIT_URL: "rediss://redis.internal:6380/0",
   SQR_WS_SHARED_BUS: null,
   SQR_REDIS_WS_URL: null,
+  COLLECTION_RECEIPT_EXTERNAL_SCAN_ENABLED: "1",
+  COLLECTION_RECEIPT_EXTERNAL_SCAN_COMMAND: "clamdscan",
+  COLLECTION_RECEIPT_EXTERNAL_SCAN_ARGS_JSON: "[\"--fdpass\",\"--no-summary\",\"--infected\",\"{file}\"]",
+  COLLECTION_RECEIPT_EXTERNAL_SCAN_FAIL_CLOSED: "1",
 };
 
 test("runtime config rejects production startup when backup encryption keys are missing", async () => {
@@ -414,6 +422,57 @@ test("runtime config rejects production startup when rate limiting still uses pr
       await assert.rejects(
         importRuntimeFresh(),
         /SQR_RATE_LIMIT_STORE=redis with SQR_REDIS_RATE_LIMIT_URL is required outside strict local development/i,
+      );
+    },
+  );
+});
+
+test("runtime config rejects production startup when receipt malware scanning is disabled", async () => {
+  await withEnv(
+    {
+      ...productionBaseOverrides,
+      PUBLIC_APP_URL: "https://sqr.example.com",
+      BACKUP_ENCRYPTION_KEY: "A".repeat(32),
+      COLLECTION_RECEIPT_EXTERNAL_SCAN_ENABLED: "0",
+    },
+    async () => {
+      await assert.rejects(
+        importRuntimeFresh(),
+        /COLLECTION_RECEIPT_EXTERNAL_SCAN_ENABLED=1 is required on production-like hosts/i,
+      );
+    },
+  );
+});
+
+test("runtime config rejects production startup when receipt malware scanner is fail-open", async () => {
+  await withEnv(
+    {
+      ...productionBaseOverrides,
+      PUBLIC_APP_URL: "https://sqr.example.com",
+      BACKUP_ENCRYPTION_KEY: "A".repeat(32),
+      COLLECTION_RECEIPT_EXTERNAL_SCAN_FAIL_CLOSED: "0",
+    },
+    async () => {
+      await assert.rejects(
+        importRuntimeFresh(),
+        /COLLECTION_RECEIPT_EXTERNAL_SCAN_FAIL_CLOSED=1 is required on production-like hosts/i,
+      );
+    },
+  );
+});
+
+test("runtime config rejects production startup when receipt malware scanner args omit the file placeholder", async () => {
+  await withEnv(
+    {
+      ...productionBaseOverrides,
+      PUBLIC_APP_URL: "https://sqr.example.com",
+      BACKUP_ENCRYPTION_KEY: "A".repeat(32),
+      COLLECTION_RECEIPT_EXTERNAL_SCAN_ARGS_JSON: "[\"--fdpass\",\"--no-summary\"]",
+    },
+    async () => {
+      await assert.rejects(
+        importRuntimeFresh(),
+        /COLLECTION_RECEIPT_EXTERNAL_SCAN_ARGS_JSON must include a \{file\} or \{filename\} placeholder/i,
       );
     },
   );

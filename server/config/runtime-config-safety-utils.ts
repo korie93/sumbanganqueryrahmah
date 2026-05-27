@@ -279,6 +279,43 @@ export function assertProductionRateLimiterTopologySafety(params: {
   );
 }
 
+export function assertProductionReceiptExternalScanSafety(params: {
+  isProductionLike: boolean;
+  externalScanEnabled: boolean;
+  externalScanFailClosed: boolean;
+  externalScanCommand: string | null;
+  externalScanArgsJson: string | null;
+}) {
+  if (!params.isProductionLike) {
+    return;
+  }
+
+  if (!params.externalScanEnabled) {
+    throw new Error(
+      "COLLECTION_RECEIPT_EXTERNAL_SCAN_ENABLED=1 is required on production-like hosts so receipt uploads are malware scanned before persistence.",
+    );
+  }
+
+  if (!params.externalScanFailClosed) {
+    throw new Error(
+      "COLLECTION_RECEIPT_EXTERNAL_SCAN_FAIL_CLOSED=1 is required on production-like hosts so receipt uploads are rejected when malware scanning is unavailable.",
+    );
+  }
+
+  if (!params.externalScanCommand) {
+    throw new Error(
+      "COLLECTION_RECEIPT_EXTERNAL_SCAN_COMMAND is required on production-like hosts. Configure clamdscan, clamscan, or another approved scanner executable.",
+    );
+  }
+
+  const rawArgs = params.externalScanArgsJson ?? "";
+  if (!rawArgs.includes("{file}") && !rawArgs.includes("{filename}")) {
+    throw new Error(
+      "COLLECTION_RECEIPT_EXTERNAL_SCAN_ARGS_JSON must include a {file} or {filename} placeholder on production-like hosts.",
+    );
+  }
+}
+
 export function assertProductionTwoFactorReplayTopologySafety(params: {
   isProductionLike: boolean;
   configuredClusterMaxWorkers: number;

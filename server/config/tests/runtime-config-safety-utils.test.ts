@@ -5,6 +5,7 @@ import {
   assertRuntimeSessionSecretMinBytes,
   assertProductionDatabaseBootstrapModeSafety,
   assertProductionRateLimiterTopologySafety,
+  assertProductionReceiptExternalScanSafety,
   assertProductionTwoFactorReplayTopologySafety,
   assertProductionWebSocketRuntimeTopologySafety,
   assertRuntimeSafetyGuards,
@@ -214,6 +215,76 @@ test("assertProductionRateLimiterTopologySafety rejects production-like startup 
       isProductionLike: true,
       configuredClusterMaxWorkers: 2,
       distributedStoreConfigured: true,
+    }),
+  );
+});
+
+test("assertProductionReceiptExternalScanSafety rejects production-like startup without fail-closed malware scanning", () => {
+  assert.throws(
+    () =>
+      assertProductionReceiptExternalScanSafety({
+        isProductionLike: true,
+        externalScanEnabled: false,
+        externalScanFailClosed: true,
+        externalScanCommand: "clamdscan",
+        externalScanArgsJson: "[\"--fdpass\",\"--no-summary\",\"{file}\"]",
+      }),
+    /COLLECTION_RECEIPT_EXTERNAL_SCAN_ENABLED=1 is required/i,
+  );
+
+  assert.throws(
+    () =>
+      assertProductionReceiptExternalScanSafety({
+        isProductionLike: true,
+        externalScanEnabled: true,
+        externalScanFailClosed: false,
+        externalScanCommand: "clamdscan",
+        externalScanArgsJson: "[\"--fdpass\",\"--no-summary\",\"{file}\"]",
+      }),
+    /COLLECTION_RECEIPT_EXTERNAL_SCAN_FAIL_CLOSED=1 is required/i,
+  );
+
+  assert.throws(
+    () =>
+      assertProductionReceiptExternalScanSafety({
+        isProductionLike: true,
+        externalScanEnabled: true,
+        externalScanFailClosed: true,
+        externalScanCommand: null,
+        externalScanArgsJson: "[\"--fdpass\",\"--no-summary\",\"{file}\"]",
+      }),
+    /COLLECTION_RECEIPT_EXTERNAL_SCAN_COMMAND is required/i,
+  );
+
+  assert.throws(
+    () =>
+      assertProductionReceiptExternalScanSafety({
+        isProductionLike: true,
+        externalScanEnabled: true,
+        externalScanFailClosed: true,
+        externalScanCommand: "clamdscan",
+        externalScanArgsJson: "[\"--fdpass\",\"--no-summary\"]",
+      }),
+    /COLLECTION_RECEIPT_EXTERNAL_SCAN_ARGS_JSON must include a \{file\} or \{filename\} placeholder/i,
+  );
+
+  assert.doesNotThrow(() =>
+    assertProductionReceiptExternalScanSafety({
+      isProductionLike: true,
+      externalScanEnabled: true,
+      externalScanFailClosed: true,
+      externalScanCommand: "clamdscan",
+      externalScanArgsJson: "[\"--fdpass\",\"--no-summary\",\"{file}\"]",
+    }),
+  );
+
+  assert.doesNotThrow(() =>
+    assertProductionReceiptExternalScanSafety({
+      isProductionLike: false,
+      externalScanEnabled: false,
+      externalScanFailClosed: false,
+      externalScanCommand: null,
+      externalScanArgsJson: null,
     }),
   );
 });
