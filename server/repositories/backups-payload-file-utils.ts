@@ -85,6 +85,29 @@ export async function closeBackupWriter(writer: ReturnType<typeof createWriteStr
   });
 }
 
+export function destroyBackupWriterAfterFailure(
+  writer: ReturnType<typeof createWriteStream>,
+  error: unknown,
+) {
+  if (writer.destroyed) {
+    return;
+  }
+
+  const handleError = (writerError: Error) => {
+    logger.warn("Backup payload writer emitted an error during cleanup", {
+      error: writerError,
+    });
+  };
+  const cleanup = () => {
+    writer.off("error", handleError);
+    writer.off("close", cleanup);
+  };
+
+  writer.once("error", handleError);
+  writer.once("close", cleanup);
+  writer.destroy(error instanceof Error ? error : undefined);
+}
+
 export async function createBackupTempFile() {
   const tempDirPath = await fs.mkdtemp(path.join(os.tmpdir(), "sqr-backup-export-"));
   await fs.chmod(tempDirPath, 0o700).catch((error) => {

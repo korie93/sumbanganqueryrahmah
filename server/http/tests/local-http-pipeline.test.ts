@@ -72,7 +72,7 @@ test("registerLocalHttpPipeline allows blob receipt previews in the CSP header",
     assert.equal(response.headers.get("cross-origin-opener-policy"), "same-origin");
     assert.match(String(response.headers.get("report-to") || ""), /"group":"sqr-csp-endpoint"/i);
     assert.match(String(response.headers.get("reporting-endpoints") || ""), /sqr-csp-endpoint="\/api\/csp-report"/i);
-    assert.match(String(response.headers.get("strict-transport-security") || ""), /max-age=15552000/i);
+    assert.match(String(response.headers.get("strict-transport-security") || ""), /max-age=31536000/i);
     assert.doesNotMatch(String(response.headers.get("strict-transport-security") || ""), /preload/i);
     const permissionsPolicy = String(response.headers.get("permissions-policy") || "");
     assert.match(permissionsPolicy, /camera=\(\)/i);

@@ -925,8 +925,16 @@ test("BackupsRepository rejects retired collection PII plaintext rows without en
       });
 
       try {
-        await assert.rejects(
-          () => repository.prepareBackupPayloadFileForCreate(),
+        let thrownError: unknown;
+        try {
+          await repository.prepareBackupPayloadFileForCreate();
+        } catch (error) {
+          thrownError = error;
+        }
+
+        assert.ok(thrownError instanceof Error);
+        assert.match(
+          thrownError.message,
           /Cannot persist retired collection PII field customerName without an encrypted shadow value/i,
         );
       } finally {
@@ -965,12 +973,19 @@ test("BackupsRepository rejects backup export rows that exceed the serialization
         return { rows: [] };
       });
 
-      await assert.rejects(
-        () => repository.prepareBackupPayloadFileForCreate(),
-        /exceeds the .* serialization limit/i,
-      );
+      try {
+        let thrownError: unknown;
+        try {
+          await repository.prepareBackupPayloadFileForCreate();
+        } catch (error) {
+          thrownError = error;
+        }
 
-      dbHarness.execute = originalExecute;
+        assert.ok(thrownError instanceof Error);
+        assert.match(thrownError.message, /exceeds the .* serialization limit/i);
+      } finally {
+        dbHarness.execute = originalExecute;
+      }
     },
   );
 });

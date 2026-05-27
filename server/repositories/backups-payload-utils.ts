@@ -18,6 +18,7 @@ import { buildProtectedCollectionPiiSelect } from "./collection-pii-select-utils
 import {
   closeBackupWriter,
   createBackupTempFile,
+  destroyBackupWriterAfterFailure,
   type PreparedBackupWriteState,
   writeBackupChunk,
   writeBackupStreamChunk,
@@ -243,7 +244,7 @@ export async function prepareBackupPayloadFileForCreate(
       cleanup,
     };
   } catch (error) {
-    state.writer.destroy(error instanceof Error ? error : undefined);
+    destroyBackupWriterAfterFailure(state.writer, error);
     await cleanup();
     throw error;
   }

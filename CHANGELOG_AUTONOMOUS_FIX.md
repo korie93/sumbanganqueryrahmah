@@ -60,3 +60,4 @@
 - CSS-01: Added forced-colors-safe scroll fade utilities and opted long scrollable lists into vertical fade indicators without changing their layout structure.
 - CSS-02: Centralized all client safe-area inset consumers on shared CSS tokens so only `theme-tokens.css` calls `env(safe-area-*)` directly.
 - CSS-03: Added `title` and `aria-label` coverage to dynamic truncated data labels across activity, viewer, dashboard, audit, backup, import, receipt, and navbar surfaces.
+- VERIFY: Aligned backend regression tests with the one-year HSTS baseline and Node 24 async rejection semantics for backup export guards.
