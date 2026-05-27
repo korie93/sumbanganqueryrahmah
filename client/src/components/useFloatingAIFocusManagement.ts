@@ -22,28 +22,41 @@ export function useFloatingAIFocusManagement({
   triggerButtonRef,
 }: UseFloatingAIFocusManagementParams): void {
   const wasPanelVisibleRef = useRef(false);
-  const restoreFocusTimeoutRef = useRef<number | null>(null);
+  const restoreFocusFrameRef = useRef<number | null>(null);
 
-  const restoreTriggerFocusSoon = useCallback(() => {
-    if (typeof window === "undefined") {
-      triggerButtonRef.current?.focus();
+  const focusTriggerButton = useCallback(() => {
+    if (layoutState.rootHidden || layoutState.triggerHidden) {
       return;
     }
 
-    if (restoreFocusTimeoutRef.current !== null) {
-      window.clearTimeout(restoreFocusTimeoutRef.current);
+    const triggerButton = triggerButtonRef.current;
+    if (!triggerButton?.isConnected) {
+      return;
     }
 
-    restoreFocusTimeoutRef.current = window.setTimeout(() => {
-      restoreFocusTimeoutRef.current = null;
-      triggerButtonRef.current?.focus();
-    }, 0);
-  }, [triggerButtonRef]);
+    triggerButton.focus({ preventScroll: true });
+  }, [layoutState.rootHidden, layoutState.triggerHidden, triggerButtonRef]);
+
+  const restoreTriggerFocusSoon = useCallback(() => {
+    if (typeof window === "undefined") {
+      focusTriggerButton();
+      return;
+    }
+
+    if (restoreFocusFrameRef.current !== null) {
+      window.cancelAnimationFrame(restoreFocusFrameRef.current);
+    }
+
+    restoreFocusFrameRef.current = window.requestAnimationFrame(() => {
+      restoreFocusFrameRef.current = null;
+      focusTriggerButton();
+    });
+  }, [focusTriggerButton]);
 
   useEffect(() => () => {
-    if (restoreFocusTimeoutRef.current !== null && typeof window !== "undefined") {
-      window.clearTimeout(restoreFocusTimeoutRef.current);
-      restoreFocusTimeoutRef.current = null;
+    if (restoreFocusFrameRef.current !== null && typeof window !== "undefined") {
+      window.cancelAnimationFrame(restoreFocusFrameRef.current);
+      restoreFocusFrameRef.current = null;
     }
   }, []);
 
@@ -136,6 +149,6 @@ export function useFloatingAIFocusManagement({
       return;
     }
 
-    triggerButtonRef.current?.focus();
-  }, [layoutState.rootHidden, layoutState.triggerHidden, shouldShowPanel, triggerButtonRef]);
+    focusTriggerButton();
+  }, [focusTriggerButton, layoutState.rootHidden, layoutState.triggerHidden, shouldShowPanel]);
 }
