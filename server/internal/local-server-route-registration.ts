@@ -119,7 +119,7 @@ export function registerLocalServerRoutes(options: RegisterLocalServerRoutesOpti
     executeRestore: (params) => backupOperationsService.restoreBackup(params),
     ensureReady: () => storage.ensureBackupsReady(),
   });
-  startBackgroundServiceWithHealthSignal({
+  const backupJobQueueHealthSignal = startBackgroundServiceWithHealthSignal({
     service: "backup-job-queue",
     failureReason: "BACKUP_JOB_QUEUE_START_FAILED",
     failureDetails: "Backup background job queue failed to start; see server logs.",
@@ -132,7 +132,7 @@ export function registerLocalServerRoutes(options: RegisterLocalServerRoutesOpti
       reconnectDelayMs: environmentRuntimeConfig.runtime.collectionRollupListenReconnectMs,
     }),
   });
-  startBackgroundServiceWithHealthSignal({
+  const collectionRollupRefreshQueueHealthSignal = startBackgroundServiceWithHealthSignal({
     service: "collection-rollup-refresh-queue",
     failureReason: "COLLECTION_ROLLUP_REFRESH_QUEUE_START_FAILED",
     failureDetails: "Collection rollup refresh queue failed to start; see server logs.",
@@ -140,6 +140,8 @@ export function registerLocalServerRoutes(options: RegisterLocalServerRoutesOpti
     start: () => collectionRollupRefreshQueueService.start(),
   });
   server.once("close", () => {
+    backupJobQueueHealthSignal.stop();
+    collectionRollupRefreshQueueHealthSignal.stop();
     void collectionRollupRefreshQueueService.stop().catch((error) => {
       logger.warn("Failed to stop collection rollup refresh queue cleanly", { error });
     });

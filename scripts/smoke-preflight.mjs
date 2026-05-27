@@ -3,7 +3,31 @@ import process from "node:process";
 const baseUrl = process.env.SMOKE_BASE_URL || "http://127.0.0.1:5000";
 const username = String(process.env.SMOKE_TEST_USERNAME || "").trim();
 const password = String(process.env.SMOKE_TEST_PASSWORD || "").trim();
-const requestTimeoutMs = Number(process.env.SMOKE_PREFLIGHT_REQUEST_TIMEOUT_MS || 10_000);
+const DEFAULT_REQUEST_TIMEOUT_MS = 10_000;
+const DEFAULT_READY_TIMEOUT_MS = 30_000;
+const DEFAULT_READY_RETRY_MS = 1_000;
+
+const parsePositiveIntegerEnv = (name, fallback) => {
+  const rawValue = process.env[name];
+  if (!rawValue) {
+    return fallback;
+  }
+  const parsed = Number(rawValue);
+  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : fallback;
+};
+
+const requestTimeoutMs = parsePositiveIntegerEnv(
+  "SMOKE_PREFLIGHT_REQUEST_TIMEOUT_MS",
+  DEFAULT_REQUEST_TIMEOUT_MS,
+);
+const readyTimeoutMs = parsePositiveIntegerEnv(
+  "SMOKE_PREFLIGHT_READY_TIMEOUT_MS",
+  DEFAULT_READY_TIMEOUT_MS,
+);
+const readyRetryMs = parsePositiveIntegerEnv(
+  "SMOKE_PREFLIGHT_READY_RETRY_MS",
+  DEFAULT_READY_RETRY_MS,
+);
 
 const assert = (condition, message) => {
   if (!condition) {
@@ -27,6 +51,12 @@ const readJsonSafely = async (response) => {
     return null;
   }
 };
+
+const describeHealthPayload = (response, payload) => [
+  `Status: ${response?.status ?? "(missing)"}`,
+  `Payload status: ${String(payload?.status || "(missing)")}`,
+  `Payload ready: ${String(payload?.ready ?? "(missing)")}`,
+].join("\n");
 
 const parseCookieValues = (headers) => {
   if (typeof headers.getSetCookie === "function") {
@@ -109,15 +139,46 @@ const run = async () => {
     ].join("\n"),
   );
 
-  const readyHealth = await request("/api/health/ready");
-  const readyPayload = await readJsonSafely(readyHealth);
+  const waitForReadyHealth = async () => {
+    const deadline = Date.now() + readyTimeoutMs;
+    let lastHealth = null;
+    let lastPayload = null;
+    let attempt = 0;
+
+    while (Date.now() <= deadline) {
+      attempt += 1;
+      lastHealth = await request("/api/health/ready");
+      lastPayload = await readJsonSafely(lastHealth);
+      if (lastHealth.ok && lastPayload?.ready === true) {
+        return { readyHealth: lastHealth, readyPayload: lastPayload };
+      }
+
+      const remainingMs = deadline - Date.now();
+      if (remainingMs <= 0) {
+        break;
+      }
+
+      process.stderr.write(
+        [
+          `Smoke preflight: readiness returned ${lastHealth.status}; retrying in ${Math.min(readyRetryMs, remainingMs)}ms`,
+          `attempt ${attempt}`,
+          `payload status ${String(lastPayload?.status || "(missing)")}`,
+          `payload ready ${String(lastPayload?.ready ?? "(missing)")}`,
+        ].join(" | ")
+        + "\n",
+      );
+      await sleep(Math.min(readyRetryMs, remainingMs));
+    }
+
+    return { readyHealth: lastHealth, readyPayload: lastPayload };
+  };
+
+  const { readyHealth, readyPayload } = await waitForReadyHealth();
   assert(
-    readyHealth.ok && readyPayload?.ready === true,
+    readyHealth?.ok && readyPayload?.ready === true,
     [
       "GET /api/health/ready should report a ready application.",
-      `Status: ${readyHealth.status}`,
-      `Payload status: ${String(readyPayload?.status || "(missing)")}`,
-      `Payload ready: ${String(readyPayload?.ready ?? "(missing)")}`,
+      describeHealthPayload(readyHealth, readyPayload),
     ].join("\n"),
   );
 
