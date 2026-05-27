@@ -1,0 +1,17 @@
+{
+  "http.400": "The request is incomplete or invalid. {action}",
+  "http.401": "Your session expired or the token is invalid. Please sign in again.",
+  "http.403": "You do not have permission for this action. Contact your administrator if access is required.",
+  "http.404": "The requested record or page was not found. Check your selection and try again.",
+  "http.409": "The data changed or requires additional confirmation. {action}",
+  "http.413": "The selected file or data is too large. Reduce the file size or ask an administrator about the upload limit.",
+  "http.422": "The input could not be processed. {action}",
+  "http.429": "Too many attempts. {retryAfter}",
+  "http.500": "A server error occurred. The operations team has been notified; try again in a moment.",
+  "http.502": "The gateway server is unstable. Try again in a moment.",
+  "http.503": "The service is busy or under maintenance. Try again in a moment.",
+  "http.504": "The request took too long. Try again or narrow the search scope.",
+  "network": "Connection lost. Check your internet connection and retry.",
+  "retryAfter": "Please wait {seconds} seconds before trying again.",
+  "unknown": "The request could not be completed. Please try again in a moment."
+}

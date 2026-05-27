@@ -1,0 +1,17 @@
+{
+  "http.400": "Permintaan tidak lengkap atau tidak sah. {action}",
+  "http.401": "Sesi anda telah tamat atau token tidak sah. Sila log masuk semula.",
+  "http.403": "Anda tiada kebenaran untuk tindakan ini. Hubungi pentadbir jika akses diperlukan.",
+  "http.404": "Rekod atau halaman yang diminta tidak ditemui. Semak pilihan anda dan cuba lagi.",
+  "http.409": "Data berubah atau memerlukan pengesahan tambahan. {action}",
+  "http.413": "Fail atau data yang dipilih terlalu besar. Kurangkan saiz fail atau hubungi pentadbir untuk had muat naik.",
+  "http.422": "Input tidak dapat diproses. {action}",
+  "http.429": "Terlalu banyak percubaan. {retryAfter}",
+  "http.500": "Ralat server berlaku. Pasukan operasi telah dimaklumkan; cuba lagi sebentar lagi.",
+  "http.502": "Gateway server tidak stabil. Cuba lagi sebentar lagi.",
+  "http.503": "Servis sedang sibuk atau dalam penyelenggaraan. Cuba lagi sebentar lagi.",
+  "http.504": "Permintaan mengambil masa terlalu lama. Cuba lagi atau kecilkan skop carian.",
+  "network": "Sambungan terputus. Semak internet anda dan cuba semula.",
+  "retryAfter": "Sila tunggu {seconds} saat sebelum cuba lagi.",
+  "unknown": "Permintaan tidak dapat diselesaikan. Sila cuba semula sebentar lagi."
+}
