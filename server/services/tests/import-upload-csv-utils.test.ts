@@ -190,6 +190,29 @@ test("forEachCsvFileRow streams CSV rows to the caller one by one", async () => 
   }
 });
 
+test("forEachCsvFileRow awaits async row handlers to preserve backpressure", async () => {
+  const tempDir = await mkdtemp(path.join(os.tmpdir(), "sqr-import-csv-utils-"));
+  const filePath = path.join(tempDir, "customers.csv");
+  let inFlightHandlers = 0;
+  let maxInFlightHandlers = 0;
+
+  try {
+    await writeFile(filePath, "name,amount\nAlice,10\nBob,20\nCik,30\n", "utf8");
+
+    const result = await forEachCsvFileRow(filePath, async () => {
+      inFlightHandlers += 1;
+      maxInFlightHandlers = Math.max(maxInFlightHandlers, inFlightHandlers);
+      await new Promise((resolve) => setImmediate(resolve));
+      inFlightHandlers -= 1;
+    });
+
+    assert.equal(result.rowCount, 3);
+    assert.equal(maxInFlightHandlers, 1);
+  } finally {
+    await rm(tempDir, { recursive: true, force: true });
+  }
+});
+
 test("parseCsvFile rejects oversized CSV files before opening the stream", async () => {
   const tempDir = await mkdtemp(path.join(os.tmpdir(), "sqr-import-csv-utils-"));
   const filePath = path.join(tempDir, "customers.csv");

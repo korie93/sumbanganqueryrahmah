@@ -46,3 +46,4 @@
 - BE-02: Raised the production HSTS baseline/default to one year while keeping preload as a validated opt-in after HTTPS coverage is confirmed for every subdomain.
 - BE-03: Hardened import and backup stream lifecycles by removing upload limit listeners, propagating writer errors during backpressure waits, and destroying failed backup writers with error context.
 - BE-04: Extracted high-impact runtime configuration bounds for ports, workers, timeouts, HSTS, and payload byte limits into named constants.
+- BE-05: Added CSV streaming backpressure regression coverage proving async row handlers are awaited one at a time before the reader advances.
