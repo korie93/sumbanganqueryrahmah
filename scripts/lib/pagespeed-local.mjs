@@ -53,6 +53,86 @@ export function summarizeLighthouseReport(report) {
   };
 }
 
+export const DEFAULT_LIGHTHOUSE_SCORE_THRESHOLDS = Object.freeze({
+  performance: 85,
+  accessibility: 95,
+  bestPractices: 90,
+  seo: 80,
+});
+
+function parseScoreThreshold(rawValue, fallback, label) {
+  if (rawValue === undefined || rawValue === null || String(rawValue).trim() === "") {
+    return fallback;
+  }
+
+  const parsed = Number.parseInt(String(rawValue), 10);
+  if (!Number.isFinite(parsed) || parsed < 0 || parsed > 100) {
+    throw new Error(`${label} must be an integer from 0 to 100.`);
+  }
+
+  return parsed;
+}
+
+export function resolveLighthouseScoreThresholds(env = process.env) {
+  return {
+    performance: parseScoreThreshold(
+      env.PAGESPEED_MIN_PERFORMANCE_SCORE,
+      DEFAULT_LIGHTHOUSE_SCORE_THRESHOLDS.performance,
+      "PAGESPEED_MIN_PERFORMANCE_SCORE",
+    ),
+    accessibility: parseScoreThreshold(
+      env.PAGESPEED_MIN_ACCESSIBILITY_SCORE,
+      DEFAULT_LIGHTHOUSE_SCORE_THRESHOLDS.accessibility,
+      "PAGESPEED_MIN_ACCESSIBILITY_SCORE",
+    ),
+    bestPractices: parseScoreThreshold(
+      env.PAGESPEED_MIN_BEST_PRACTICES_SCORE,
+      DEFAULT_LIGHTHOUSE_SCORE_THRESHOLDS.bestPractices,
+      "PAGESPEED_MIN_BEST_PRACTICES_SCORE",
+    ),
+    seo: parseScoreThreshold(
+      env.PAGESPEED_MIN_SEO_SCORE,
+      DEFAULT_LIGHTHOUSE_SCORE_THRESHOLDS.seo,
+      "PAGESPEED_MIN_SEO_SCORE",
+    ),
+  };
+}
+
+export function evaluateLighthouseThresholds(summary, thresholds) {
+  const checks = [
+    ["performance", "Performance"],
+    ["accessibility", "Accessibility"],
+    ["bestPractices", "Best Practices"],
+    ["seo", "SEO"],
+  ];
+
+  return checks.flatMap(([key, label]) => {
+    const actual = summary?.[key];
+    const minimum = thresholds[key];
+    if (typeof actual !== "number" || !Number.isFinite(actual)) {
+      return [{
+        key,
+        label,
+        actual: null,
+        minimum,
+        message: `${label} score is missing; expected at least ${minimum}.`,
+      }];
+    }
+
+    if (actual < minimum) {
+      return [{
+        key,
+        label,
+        actual,
+        minimum,
+        message: `${label} score ${actual} is below required ${minimum}.`,
+      }];
+    }
+
+    return [];
+  });
+}
+
 function isMobileUserAgent(userAgent) {
   return /android|iphone|ipad|ipod|mobile/i.test(userAgent);
 }

@@ -1,9 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import {
+  DEFAULT_LIGHTHOUSE_SCORE_THRESHOLDS,
+  evaluateLighthouseThresholds,
   getLighthouseRuntimeErrorCode,
   isRetryableLighthouseRuntimeError,
   isUsableLighthouseReport,
+  resolveLighthouseScoreThresholds,
   summarizeObservedWebVitalsFromLog,
   summarizeLighthouseReport,
 } from "../lib/pagespeed-local.mjs";
@@ -66,6 +70,69 @@ test("summarizeLighthouseReport formats scores and key metrics", () => {
     tbt: "20 ms",
     cls: "0",
   });
+});
+
+test("resolveLighthouseScoreThresholds uses audit baseline defaults and env overrides", () => {
+  assert.deepEqual(
+    resolveLighthouseScoreThresholds({}),
+    DEFAULT_LIGHTHOUSE_SCORE_THRESHOLDS,
+  );
+  assert.deepEqual(
+    resolveLighthouseScoreThresholds({
+      PAGESPEED_MIN_PERFORMANCE_SCORE: "90",
+      PAGESPEED_MIN_ACCESSIBILITY_SCORE: "96",
+      PAGESPEED_MIN_BEST_PRACTICES_SCORE: "91",
+      PAGESPEED_MIN_SEO_SCORE: "81",
+    }),
+    {
+      performance: 90,
+      accessibility: 96,
+      bestPractices: 91,
+      seo: 81,
+    },
+  );
+  assert.throws(
+    () => resolveLighthouseScoreThresholds({ PAGESPEED_MIN_SEO_SCORE: "101" }),
+    /PAGESPEED_MIN_SEO_SCORE/,
+  );
+});
+
+test("evaluateLighthouseThresholds reports low or missing scores", () => {
+  assert.deepEqual(
+    evaluateLighthouseThresholds(
+      { performance: 84, accessibility: 95, bestPractices: null, seo: 80 },
+      DEFAULT_LIGHTHOUSE_SCORE_THRESHOLDS,
+    ),
+    [
+      {
+        key: "performance",
+        label: "Performance",
+        actual: 84,
+        minimum: 85,
+        message: "Performance score 84 is below required 85.",
+      },
+      {
+        key: "bestPractices",
+        label: "Best Practices",
+        actual: null,
+        minimum: 90,
+        message: "Best Practices score is missing; expected at least 90.",
+      },
+    ],
+  );
+});
+
+test("strict PageSpeed runner and CI enforce Lighthouse thresholds", () => {
+  const strictRunnerSource = readFileSync("scripts/run-pagespeed-local-strict.mjs", "utf8");
+  const ciSource = readFileSync(".github/workflows/ci.yml", "utf8");
+  const docsSource = readFileSync("docs/LIGHTHOUSE_CI.md", "utf8");
+
+  assert.match(strictRunnerSource, /PAGESPEED_ENFORCE_THRESHOLDS:\s*"true"/);
+  assert.match(ciSource, /Run PageSpeed Lighthouse budgets/);
+  assert.match(ciSource, /PAGESPEED_REUSE_SERVER=true/);
+  assert.match(ciSource, /artifacts\/pagespeed/);
+  assert.match(docsSource, /Performance \| 85/);
+  assert.match(docsSource, /Accessibility \| 95/);
 });
 
 test("isUsableLighthouseReport only accepts reports without runtime errors", () => {

@@ -7,6 +7,7 @@ const run = () =>
       cwd: process.cwd(),
       env: {
         ...process.env,
+        PAGESPEED_ENFORCE_THRESHOLDS: "true",
         PAGESPEED_SOFT_FAIL_RETRYABLE: "false",
       },
       stdio: "inherit",

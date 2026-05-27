@@ -28,3 +28,4 @@
 - MED-CFG-4: Added SheetJS SHA512 checksum verification via `CHECKSUMS.sha512`, refactored the vendor integrity checker, covered it with tests, and wired the release workflow to verify the vendored tarball.
 - MED-CFG-5: Switched the PM2 example to the direct Node entrypoint with `wait_ready`, `shutdown_with_message`, 10s graceful drain windows, runtime readiness signalling after bootstrap, and PM2 shutdown-message handling for single-process and cluster modes.
 - LOW-1/2/3: Added CSP, secret-leak incident response, and data-retention runbooks with a docs contract test to keep the required operational sections present.
+- LOW-4: Added Lighthouse/PageSpeed score threshold enforcement to the strict runner, wired it into the smoke CI job with artifact upload, and documented the no-new-dependency CI budget process.

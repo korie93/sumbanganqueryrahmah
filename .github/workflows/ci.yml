@@ -239,6 +239,23 @@ jobs:
       - name: Run accessibility contracts
         run: A11Y_BASE_URL=http://127.0.0.1:5000 npm run test:e2e:a11y
 
+      - name: Run PageSpeed Lighthouse budgets
+        run: |
+          PAGESPEED_REUSE_SERVER=true \
+          PAGESPEED_SKIP_BUILD=true \
+          PAGESPEED_BASE_URL=http://127.0.0.1:5000 \
+          PAGESPEED_ARTIFACTS_DIR=artifacts/pagespeed \
+          PAGESPEED_INCLUDE_LOGIN_DESKTOP=false \
+          npm run perf:pagespeed:local:strict
+
+      - name: Upload PageSpeed artifacts
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: pagespeed-${{ github.run_id }}-${{ github.run_attempt }}
+          if-no-files-found: warn
+          path: artifacts/pagespeed
+
       - name: Run UI smoke
         run: |
           echo "Running smoke-ui on commit: $GITHUB_SHA"

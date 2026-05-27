@@ -8,6 +8,8 @@ import {
   getLighthouseRuntimeErrorCode,
   isRetryableLighthouseRuntimeError,
   isUsableLighthouseReport,
+  evaluateLighthouseThresholds,
+  resolveLighthouseScoreThresholds,
   summarizeObservedWebVitalsFromLog,
   summarizeLighthouseReport,
 } from "./lib/pagespeed-local.mjs";
@@ -38,6 +40,8 @@ const retryDelayMs = Math.max(0, Number.parseInt(String(process.env.PAGESPEED_RE
 const shouldReuseServer = String(process.env.PAGESPEED_REUSE_SERVER || "").trim().toLowerCase() === "true";
 const shouldSkipBuild = String(process.env.PAGESPEED_SKIP_BUILD || "").trim().toLowerCase() === "true";
 const includeLoginDesktop = String(process.env.PAGESPEED_INCLUDE_LOGIN_DESKTOP || "true").trim().toLowerCase() !== "false";
+const enforceThresholds = String(process.env.PAGESPEED_ENFORCE_THRESHOLDS || "").trim().toLowerCase() === "true";
+const scoreThresholds = resolveLighthouseScoreThresholds(process.env);
 const softFailRetryableFailures = String(
   process.env.PAGESPEED_SOFT_FAIL_RETRYABLE || (process.platform === "win32" ? "true" : "false"),
 ).trim().toLowerCase() === "true";
@@ -156,7 +160,7 @@ function findLatestUsableReport(slugBase, excludedPaths = []) {
   return null;
 }
 
-function writeSummary(results) {
+function writeSummary(results, thresholdFailures = []) {
   const summaryPath = path.join(artifactsDir, "pagespeed-local-summary.json");
   const markdownPath = path.join(artifactsDir, "pagespeed-local-summary.md");
   const overallStatus = results.some((result) => result.status === "failed")
@@ -173,6 +177,9 @@ function writeSummary(results) {
     settleDelayMs,
     softFailRetryableFailures,
     chromeFlags,
+    enforceThresholds,
+    scoreThresholds,
+    thresholdFailures,
     results: results.map((result) => ({
       slug: result.slug,
       url: result.url,
@@ -197,9 +204,19 @@ function writeSummary(results) {
     `- Generated at: ${payload.generatedAt}`,
     `- Max attempts: ${maxAttempts}`,
     `- Soft-fail retryable failures: ${softFailRetryableFailures ? "yes" : "no"}`,
+    `- Score thresholds enforced: ${enforceThresholds ? "yes" : "no"}`,
+    `- Score thresholds: performance ${scoreThresholds.performance}, accessibility ${scoreThresholds.accessibility}, best practices ${scoreThresholds.bestPractices}, SEO ${scoreThresholds.seo}`,
     `- Chrome flags: \`${chromeFlags}\``,
     ``,
   ];
+
+  if (thresholdFailures.length > 0) {
+    lines.push(`## Score Threshold Failures`);
+    for (const failure of thresholdFailures) {
+      lines.push(`- ${failure.slug}: ${failure.message}`);
+    }
+    lines.push("");
+  }
 
   for (const result of results) {
     lines.push(`## ${result.slug}`);
@@ -453,13 +470,30 @@ async function run() {
       results.push(await runAudit(audit, env));
     }
 
-    const summaryArtifacts = writeSummary(results);
+    const thresholdFailures = results.flatMap((result) => {
+      if (result.status !== "success") {
+        return [];
+      }
+
+      return evaluateLighthouseThresholds(result.summary, scoreThresholds).map((failure) => ({
+        ...failure,
+        slug: result.slug,
+        url: result.url,
+      }));
+    });
+    const summaryArtifacts = writeSummary(results, thresholdFailures);
     console.log(`[pagespeed] complete. Reports saved in ${artifactsDir}`);
     console.log(`[pagespeed] summary: ${summaryArtifacts.summaryPath}`);
 
     if (summaryArtifacts.overallStatus === "failed") {
       throw new Error(
         `Local PageSpeed completed with hard failures. See ${summaryArtifacts.summaryPath} for details.`,
+      );
+    }
+
+    if (enforceThresholds && thresholdFailures.length > 0) {
+      throw new Error(
+        `Local PageSpeed score thresholds failed. See ${summaryArtifacts.summaryPath} for details.`,
       );
     }
   } finally {
