@@ -69,6 +69,25 @@ export type { RuntimeConfigDiagnostic, RuntimeConfigValidation } from "./runtime
 
 validateRuntimeEnvironmentSchema();
 
+const MIN_COUNT = 1;
+const MIN_ZERO_COUNT = 0;
+const DEFAULT_LOW_MEMORY_WORKERS = 1;
+const DEFAULT_STANDARD_WORKERS = 4;
+const DEFAULT_HTTP_PORT = 5_000;
+const DEFAULT_POSTGRES_PORT = 5_432;
+const DEFAULT_SMTP_PORT = 587;
+const SMTPS_PORT = 465;
+const MAX_TCP_PORT = 65_535;
+const MAX_HSTS_MAX_AGE_SECONDS = HSTS_PRODUCTION_MIN_MAX_AGE_SECONDS * 2;
+const MIN_TIMEOUT_MS = 1_000;
+const ONE_KIB_BYTES = 1_024;
+const ONE_MIB_BYTES = ONE_KIB_BYTES * ONE_KIB_BYTES;
+const LOW_MEMORY_BACKUP_MAX_PAYLOAD_BYTES = 32 * ONE_MIB_BYTES;
+const STANDARD_BACKUP_MAX_PAYLOAD_BYTES = 128 * ONE_MIB_BYTES;
+const MAX_CONFIGURED_PAYLOAD_BYTES = 512 * ONE_MIB_BYTES;
+const DEFAULT_IMPORT_MAX_ROW_BYTES = 64 * ONE_KIB_BYTES;
+const MAX_IMPORT_MAX_ROW_BYTES = ONE_MIB_BYTES;
+
 const nodeEnv = resolveNodeEnv();
 const isProduction = nodeEnv === "production";
 const isStrictLocalDevelopment = isStrictLocalDevelopmentEnvironment();
@@ -77,7 +96,11 @@ const debugLogs = readBoolean("DEBUG_LOGS", false) && !isProductionLike;
 const operationsDebugRoutesEnabled = readBoolean("OPERATIONS_DEBUG_ROUTES_ENABLED", false);
 const logLevel = readString("LOG_LEVEL", debugLogs ? "debug" : "info");
 const lowMemoryMode = readBoolean("SQR_LOW_MEMORY_MODE", true);
-const configuredClusterMaxWorkers = readInt("SQR_MAX_WORKERS", lowMemoryMode ? 1 : 4, { min: 1 });
+const configuredClusterMaxWorkers = readInt(
+  "SQR_MAX_WORKERS",
+  lowMemoryMode ? DEFAULT_LOW_MEMORY_WORKERS : DEFAULT_STANDARD_WORKERS,
+  { min: MIN_COUNT },
+);
 const seedDefaultUsers = readBoolean("SEED_DEFAULT_USERS", false);
 const backupFeatureEnabled = readBoolean("BACKUP_FEATURE_ENABLED", true);
 const localSuperuserCredentialsFileEnabled = readBoolean("LOCAL_SUPERUSER_CREDENTIALS_FILE_ENABLED", false);
@@ -85,8 +108,8 @@ const mailDevOutboxEnabled = readBoolean("MAIL_DEV_OUTBOX_ENABLED", false);
 const hstsHeaderConfig = resolveHstsHeaderConfig({
   isProductionLike,
   maxAgeSeconds: readInt("HSTS_MAX_AGE_SECONDS", HSTS_PRODUCTION_MIN_MAX_AGE_SECONDS, {
-    min: 0,
-    max: 63_072_000,
+    min: MIN_ZERO_COUNT,
+    max: MAX_HSTS_MAX_AGE_SECONDS,
   }),
   preloadEnabled: readBoolean("HSTS_PRELOAD_ENABLED", false),
 });
@@ -261,7 +284,7 @@ export const runtimeConfig: RuntimeConfig = Object.freeze({
     isProduction,
     isProductionLike,
     isStrictLocalDevelopment,
-    port: readInt("PORT", 5000, { min: 1, max: 65535 }),
+    port: readInt("PORT", DEFAULT_HTTP_PORT, { min: MIN_COUNT, max: MAX_TCP_PORT }),
     host: readString("HOST", "0.0.0.0"),
     publicAppUrl,
     debugLogs,
@@ -283,7 +306,11 @@ export const runtimeConfig: RuntimeConfig = Object.freeze({
   database: {
     connectionString: configuredDatabaseUrl,
     host: readStringFrom(["PG_HOST", "PGHOST"], parsedDatabaseUrl?.host || "127.0.0.1"),
-    port: readIntFrom(["PG_PORT", "PGPORT"], parsedDatabaseUrl?.port || 5432, { min: 1, max: 65535 }),
+    port: readIntFrom(
+      ["PG_PORT", "PGPORT"],
+      parsedDatabaseUrl?.port || DEFAULT_POSTGRES_PORT,
+      { min: MIN_COUNT, max: MAX_TCP_PORT },
+    ),
     user: readStringFrom(["PG_USER", "PGUSER"], parsedDatabaseUrl?.user || "postgres"),
     password: (() => {
       if (configuredPgPassword) {
@@ -301,11 +328,11 @@ export const runtimeConfig: RuntimeConfig = Object.freeze({
       return "";
     })(),
     database: readStringFrom(["PG_DATABASE", "PGDATABASE"], parsedDatabaseUrl?.database || "sqr_db"),
-    maxConnections: readInt("PG_MAX_CONNECTIONS", resolveDefaultPgMaxConnections(), { min: 1, max: 50 }),
-    idleTimeoutMs: readInt("PG_IDLE_TIMEOUT_MS", 30_000, { min: 1_000 }),
-    connectionTimeoutMs: readInt("PG_CONNECTION_TIMEOUT_MS", 5_000, { min: 1_000 }),
+    maxConnections: readInt("PG_MAX_CONNECTIONS", resolveDefaultPgMaxConnections(), { min: MIN_COUNT, max: 50 }),
+    idleTimeoutMs: readInt("PG_IDLE_TIMEOUT_MS", 30_000, { min: MIN_TIMEOUT_MS }),
+    connectionTimeoutMs: readInt("PG_CONNECTION_TIMEOUT_MS", 5_000, { min: MIN_TIMEOUT_MS }),
     statementTimeoutMs: readInt("PG_STATEMENT_TIMEOUT_MS", 30_000, {
-      min: 1_000,
+      min: MIN_TIMEOUT_MS,
       max: 3_600_000,
     }),
     searchPath: readString("PG_SEARCH_PATH", "public"),
@@ -330,20 +357,20 @@ export const runtimeConfig: RuntimeConfig = Object.freeze({
     authToken: readOptionalString("OLLAMA_AUTH_TOKEN"),
     chatModel: readString("OLLAMA_CHAT_MODEL", "llama3:8b"),
     embedModel: readString("OLLAMA_EMBED_MODEL", "nomic-embed-text"),
-    timeoutMs: readInt("OLLAMA_TIMEOUT_MS", 10_000, { min: 1_000 }),
+    timeoutMs: readInt("OLLAMA_TIMEOUT_MS", 10_000, { min: MIN_TIMEOUT_MS }),
     precomputeOnStart: readBoolean("AI_PRECOMPUTE_ON_START", false),
     lowMemoryMode,
     debugLogs,
     debugEnabled: readBoolean("AI_DEBUG", false),
     intentMode: readOptionalString("AI_INTENT_MODE"),
     gate: {
-      globalLimit: readInt("AI_GATE_GLOBAL_LIMIT", 4, { min: 1 }),
-      queueLimit: readInt("AI_GATE_QUEUE_LIMIT", 20, { min: 0 }),
-      queueWaitMs: readInt("AI_GATE_QUEUE_WAIT_MS", 12_000, { min: 1_000 }),
+      globalLimit: readInt("AI_GATE_GLOBAL_LIMIT", 4, { min: MIN_COUNT }),
+      queueLimit: readInt("AI_GATE_QUEUE_LIMIT", 20, { min: MIN_ZERO_COUNT }),
+      queueWaitMs: readInt("AI_GATE_QUEUE_WAIT_MS", 12_000, { min: MIN_TIMEOUT_MS }),
       roleLimits: {
-        user: readInt("AI_GATE_USER_LIMIT", 2, { min: 1 }),
-        admin: readInt("AI_GATE_ADMIN_LIMIT", 1, { min: 1 }),
-        superuser: readInt("AI_GATE_SUPERUSER_LIMIT", 1, { min: 1 }),
+        user: readInt("AI_GATE_USER_LIMIT", 2, { min: MIN_COUNT }),
+        admin: readInt("AI_GATE_ADMIN_LIMIT", 1, { min: MIN_COUNT }),
+        superuser: readInt("AI_GATE_SUPERUSER_LIMIT", 1, { min: MIN_COUNT }),
       },
     },
     latency: {
@@ -358,22 +385,22 @@ export const runtimeConfig: RuntimeConfig = Object.freeze({
   },
   runtime: {
     defaults: {
-      sessionTimeoutMinutes: readInt("DEFAULT_SESSION_TIMEOUT_MINUTES", 30, { min: 1 }),
-      wsIdleMinutes: readInt("DEFAULT_WS_IDLE_MINUTES", 3, { min: 1 }),
-      aiTimeoutMs: readInt("DEFAULT_AI_TIMEOUT_MS", 10_000, { min: 1_000 }),
+      sessionTimeoutMinutes: readInt("DEFAULT_SESSION_TIMEOUT_MINUTES", 30, { min: MIN_COUNT }),
+      wsIdleMinutes: readInt("DEFAULT_WS_IDLE_MINUTES", 3, { min: MIN_COUNT }),
+      aiTimeoutMs: readInt("DEFAULT_AI_TIMEOUT_MS", 10_000, { min: MIN_TIMEOUT_MS }),
       searchResultLimit: readInt("DEFAULT_SEARCH_RESULT_LIMIT", 200, { min: 10, max: 5000 }),
       viewerRowsPerPage: readInt("DEFAULT_VIEWER_ROWS_PER_PAGE", 100, { min: 10, max: 500 }),
     },
     maintenanceCacheTtlMs: readInt("MAINTENANCE_CACHE_TTL_MS", 3_000, { min: 500 }),
     runtimeSettingsCacheTtlMs: readInt("RUNTIME_SETTINGS_CACHE_TTL_MS", 3_000, { min: 500 }),
-    pgPoolWarnCooldownMs: readInt("PG_POOL_WARN_COOLDOWN_MS", 60_000, { min: 1_000 }),
+    pgPoolWarnCooldownMs: readInt("PG_POOL_WARN_COOLDOWN_MS", 60_000, { min: MIN_TIMEOUT_MS }),
     redisHealthCheckIntervalMs: readInt("SQR_REDIS_HEALTH_CHECK_INTERVAL_MS", 60_000, { min: 5_000 }),
     gracefulShutdownTimeoutMs: readInt("GRACEFUL_SHUTDOWN_TIMEOUT_MS", 25_000, { min: 1_000 }),
     backupOperationTimeoutMs: readInt("BACKUP_OPERATION_TIMEOUT_MS", 120_000, { min: 5_000 }),
     backupMaxPayloadBytes: readInt(
       "BACKUP_MAX_PAYLOAD_BYTES",
-      lowMemoryMode ? 32 * 1024 * 1024 : 128 * 1024 * 1024,
-      { min: 1_048_576, max: 536_870_912 },
+      lowMemoryMode ? LOW_MEMORY_BACKUP_MAX_PAYLOAD_BYTES : STANDARD_BACKUP_MAX_PAYLOAD_BYTES,
+      { min: ONE_MIB_BYTES, max: MAX_CONFIGURED_PAYLOAD_BYTES },
     ),
     importCsvMaxRows: readInt("IMPORT_CSV_MAX_ROWS", lowMemoryMode ? 100_000 : 250_000, {
       min: 1,
@@ -383,14 +410,14 @@ export const runtimeConfig: RuntimeConfig = Object.freeze({
       min: 1,
       max: 5_000,
     }),
-    importMaxRowBytes: readInt("IMPORT_MAX_ROW_BYTES", 64 * 1024, {
-      min: 1_024,
-      max: 1024 * 1024,
+    importMaxRowBytes: readInt("IMPORT_MAX_ROW_BYTES", DEFAULT_IMPORT_MAX_ROW_BYTES, {
+      min: ONE_KIB_BYTES,
+      max: MAX_IMPORT_MAX_ROW_BYTES,
     }),
     importPerUserActiveUploadBytes: readInt(
       "IMPORT_PER_USER_ACTIVE_UPLOAD_BYTES",
       resolvedDefaultImportUploadLimitBytes,
-      { min: 1_048_576, max: 536_870_912 },
+      { min: ONE_MIB_BYTES, max: MAX_CONFIGURED_PAYLOAD_BYTES },
     ),
     importAnalysisTimeoutMs: readInt("IMPORT_ANALYSIS_TIMEOUT_MS", 45_000, { min: 5_000 }),
     collectionRollupListenReconnectMs: readInt("COLLECTION_ROLLUP_LISTEN_RECONNECT_MS", 5_000, { min: 1_000 }),
@@ -414,10 +441,13 @@ export const runtimeConfig: RuntimeConfig = Object.freeze({
       from: mailConfiguration.effectiveFrom,
       service: readOptionalString("SMTP_SERVICE"),
       host: readOptionalString("SMTP_HOST"),
-      port: readInt("SMTP_PORT", 587, { min: 1, max: 65_535 }),
+      port: readInt("SMTP_PORT", DEFAULT_SMTP_PORT, { min: MIN_COUNT, max: MAX_TCP_PORT }),
       user: readOptionalString("SMTP_USER"),
       password: readOptionalString("SMTP_PASSWORD"),
-      secure: readBoolean("SMTP_SECURE", readInt("SMTP_PORT", 587, { min: 1, max: 65_535 }) === 465),
+      secure: readBoolean(
+        "SMTP_SECURE",
+        readInt("SMTP_PORT", DEFAULT_SMTP_PORT, { min: MIN_COUNT, max: MAX_TCP_PORT }) === SMTPS_PORT,
+      ),
       requireTls: readBoolean("SMTP_REQUIRE_TLS", false),
     },
   },
