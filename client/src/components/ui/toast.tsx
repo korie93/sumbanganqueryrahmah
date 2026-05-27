@@ -45,8 +45,8 @@ const Toast = React.forwardRef<
     VariantProps<typeof toastVariants>
 >(({ className, variant, ...props }, ref) => {
   const liveRegionProps = variant === "destructive"
-    ? { role: "alert" as const, "aria-live": "assertive" as const }
-    : { role: "status" as const, "aria-live": "polite" as const }
+    ? { role: "alert" as const, "aria-live": "assertive" as const, "aria-atomic": "true" as const }
+    : { role: "status" as const, "aria-live": "polite" as const, "aria-atomic": "true" as const }
 
   return (
     <ToastPrimitives.Root

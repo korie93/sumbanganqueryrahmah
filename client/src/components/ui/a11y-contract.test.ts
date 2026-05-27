@@ -39,8 +39,26 @@ test("toast notifications expose polite and assertive live-region semantics", ()
   assert.match(toastSource, /role="presentation"/);
   assert.match(toastSource, /role: "alert" as const/);
   assert.match(toastSource, /"aria-live": "assertive" as const/);
+  assert.match(toastSource, /"aria-atomic": "true" as const/);
   assert.match(toastSource, /role: "status" as const/);
   assert.match(toastSource, /"aria-live": "polite" as const/);
+});
+
+test("icon buttons derive an accessible name from an explicit title fallback", () => {
+  const buttonSource = readSource("button.tsx");
+
+  assert.match(buttonSource, /"aria-label": ariaLabel/);
+  assert.match(buttonSource, /size === "icon" && typeof title === "string" \? title : undefined/);
+  assert.match(buttonSource, /\{\.\.\.ariaLabelProps\}/);
+});
+
+test("Floating AI trigger exposes dialog relationship and expanded state", () => {
+  const triggerSource = readSource("../FloatingAITrigger.tsx");
+
+  assert.match(triggerSource, /aria-controls=\{panelId\}/);
+  assert.match(triggerSource, /aria-haspopup="dialog"/);
+  assert.match(triggerSource, /aria-label=\{isOpen \? `Kecilkan panel/);
+  assert.match(triggerSource, /aria-expanded=\{isOpen\}/);
 });
 
 test("AI chat dynamic status and message regions are announced politely", () => {

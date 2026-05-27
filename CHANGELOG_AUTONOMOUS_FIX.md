@@ -51,3 +51,4 @@
 - FE-02: Replaced Floating AI restore-focus timers with cancellable animation-frame focus handoff guarded by connected trigger refs and hidden layout state.
 - FE-03: Replaced null lazy Suspense fallbacks for dialogs, notifications, and Floating AI with non-visual live-status fallbacks plus a source contract preventing null lazy boundaries from returning.
 - FE-04/FE-05: Verified the client unhandled-rejection installer and added a timer-cleanup contract covering debounce and deferred-section fallback timers.
+- A11Y-01/02: Added `aria-atomic` to toast live regions and source contracts proving icon button accessible-name fallback plus Floating AI dialog trigger semantics.
