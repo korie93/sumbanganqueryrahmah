@@ -244,3 +244,26 @@ test("audit contrast pairs keep muted and destructive tokens readable on their p
     [],
   );
 });
+
+test("focus ring token meets WCAG UI contrast in light and dark themes", () => {
+  const css = readFileSync(
+    path.resolve(process.cwd(), "client/src/theme-tokens.css"),
+    "utf8",
+  );
+
+  for (const selector of [":root", ".dark"]) {
+    const tokens = parseHslTokens(extractCssRuleBlock(css, selector));
+    assert.deepEqual(
+      validateThemeContrast(tokens, {
+        minRatio: 3,
+        tokenPairs: [
+          ["background", "color-focus"],
+          ["card", "color-focus"],
+          ["popover", "color-focus"],
+        ],
+      }),
+      [],
+      `${selector} focus ring must satisfy WCAG non-text contrast`,
+    );
+  }
+});
