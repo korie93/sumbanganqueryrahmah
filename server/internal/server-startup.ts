@@ -17,6 +17,7 @@ import { startIdleSessionSweeper } from "./idle-session-sweeper";
 import { assertCollectionPiiRetirementStartupReady } from "./collection-pii-retirement-startup";
 import { buildRateLimiterTopologyWarning } from "../middleware/rate-limit-runtime";
 import { buildTwoFactorReplayCacheTopologyWarning } from "../auth/two-factor-replay-topology";
+import { verifyCollectionReceiptExternalScanStartup } from "../lib/collection-receipt-external-scan-startup";
 
 type RuntimeSettings = {
   sessionTimeoutMinutes: number;
@@ -132,6 +133,35 @@ export async function startLocalServer(options: StartLocalServerOptions) {
     );
   } else {
     clearStartupServiceDegraded("two-factor-replay-topology");
+  }
+
+  markStartupStage("verifying-receipt-scanner");
+  try {
+    const receiptScanner = await verifyCollectionReceiptExternalScanStartup({
+      isProductionLike: runtimeConfig.app.isProductionLike,
+      logger,
+    });
+    if (receiptScanner.ready) {
+      clearStartupServiceDegraded("receipt-external-scan");
+    } else {
+      markStartupServiceDegraded(
+        "receipt-external-scan",
+        "COLLECTION_RECEIPT_EXTERNAL_SCAN_UNAVAILABLE",
+        receiptScanner.message,
+      );
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    const startupError = error instanceof Error ? error : new Error(message);
+    Object.assign(startupError, {
+      startupReason: "COLLECTION_RECEIPT_EXTERNAL_SCAN_UNAVAILABLE",
+    });
+    notifyFatalStartup("COLLECTION_RECEIPT_EXTERNAL_SCAN_UNAVAILABLE", message);
+    markStartupFailed("COLLECTION_RECEIPT_EXTERNAL_SCAN_UNAVAILABLE", message);
+    logger.error("Local server startup blocked by receipt external malware scanner policy", {
+      error,
+    });
+    throw startupError;
   }
 
   markStartupStage("initializing-storage");
