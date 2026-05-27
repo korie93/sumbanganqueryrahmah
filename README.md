@@ -31,6 +31,11 @@ Untuk manual penggunaan client yang lengkap (split ikut role `superuser`, `admin
    cd sumbanganqueryrahmah
    npm install
    ```
+   `npm install` also installs Husky git hooks. The pre-commit hook blocks
+   staged `.env` files, private-key material, and high-confidence secret
+   patterns before they can enter history. Emergency bypass is possible with
+   `git commit --no-verify`, but use it only for documented recovery work and
+   run `npm run verify:secrets` immediately afterwards.
 
 2. **Set up environment variables:**
    ```bash

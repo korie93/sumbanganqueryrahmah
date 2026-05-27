@@ -13,7 +13,12 @@ import {
 const requiredGitignoreEntries = [
   ".env",
   ".env.*",
+  ".env.local",
+  ".env.*.local",
   "!.env.example",
+  "*.pem",
+  "*.key",
+  "secrets/",
   "artifacts/",
   "coverage/",
   "dist-local/",

@@ -12,6 +12,8 @@ coverage/
 var/perf/
 .env
 .env.*
+.env.local
+.env.*.local
 !.env.example
 ecosystem.config.cjs
 ecosystem.config.js
@@ -33,6 +35,7 @@ Thumbs.db
 *.pem
 *.key
 *.crt
+secrets/
 
 # Old database artifacts
 *.db

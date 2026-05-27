@@ -41,3 +41,4 @@
 - ISSUE-02: Reset the mobile navigation drawer on route pathname changes without timers or browser globals, preventing stale open drawer state after navigation/back-forward flows.
 - ISSUE-03: Hardened AI chat request cancellation with explicit abort reasons, ref-before-timeout ordering contracts, and unmount cleanup assertions for active request controllers.
 - ISSUE-04: Raised dark navbar active-pill contrast and password-strength segment contrast to WCAG AA/non-text thresholds with numeric regression coverage.
+- ISSUE-05: Added Husky/lint-staged git hooks that block staged environment files, private key material, high-confidence secrets, and non-conventional commit messages before history is written.

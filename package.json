@@ -34,6 +34,8 @@
     "verify:design-token-spacing": "node scripts/verify-design-token-spacing.mjs",
     "verify:repo-hygiene": "node scripts/verify-repo-hygiene.mjs",
     "verify:secrets": "node scripts/verify-secret-scan.mjs",
+    "guard:staged-secrets": "node scripts/precommit-secret-guard.mjs --staged",
+    "guard:commit-msg": "node scripts/commit-msg-guard.mjs",
     "verify:db-schema-governance": "node scripts/verify-db-schema-governance.mjs",
     "verify:csp-hashes": "node scripts/verify-react-remove-scroll-csp-hashes.mjs",
     "verify:xlsx-vendor-integrity": "node scripts/verify-xlsx-vendor-integrity.mjs",
@@ -102,8 +104,12 @@
     "build": "npm run verify:csp-hashes && node scripts/run-client-build.mjs && npx esbuild server/index-local.ts --bundle --platform=node --packages=external --outfile=dist-local/server/index-local.js --format=esm && npx esbuild server/cluster-local.ts --bundle --platform=node --packages=external --outfile=dist-local/server/cluster-local.js --format=esm",
     "start": "npm run start:built",
     "prestart": "node scripts/ensure-build.mjs",
+    "prepare": "husky",
     "start:built": "node dist-local/server/cluster-local.js",
     "import:aeon-branches": "node scripts/import-aeon-branches.mjs"
+  },
+  "lint-staged": {
+    "*": "node scripts/precommit-secret-guard.mjs --files"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
@@ -202,6 +208,8 @@
     "eslint-plugin-jsx-a11y": "^6.10.2",
     "eslint-plugin-react-hooks": "^6.1.1",
     "globals": "^16.5.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.0.5",
     "playwright": "^1.59.1",
     "postcss": "^8.5.10",
     "tailwindcss": "^3.4.17",
