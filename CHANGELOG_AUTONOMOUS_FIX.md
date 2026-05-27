@@ -20,3 +20,4 @@
 - MED-UI-1: Introduced a container-query responsive pattern for the login shell/card spacing with a `@supports` media-query fallback and documented when component-width responsiveness should use container queries.
 - MED-UI-2: Standardized responsive guidance around Tailwind-first layout, approved route-level CSS breakpoint exceptions, and added a responsive contract test that rejects unapproved custom CSS breakpoint widths.
 - MED-UI-3: Added an accessible password strength meter with deterministic scoring, common-pattern/repetition/sequence penalties, reduced-motion-safe progress bars, and integration across activation, reset-password, and change-password flows.
+- MED-UI-4: Added shared focus-visible design tokens, global keyboard-focus defaults with legacy and forced-colors fallbacks, and documented the repo-wide focus styling contract.

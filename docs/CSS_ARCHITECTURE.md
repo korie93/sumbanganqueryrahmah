@@ -88,7 +88,9 @@ Gunakan CSS modules apabila:
 
 ## Accessibility and Performance Rules
 
-- Setiap interactive surface perlu ada `:focus-visible` yang jelas.
+- Setiap interactive surface perlu ada `:focus-visible` yang jelas. Token global `--focus-ring`, `--focus-ring-offset`, dan `--focus-ring-radius` di `theme-tokens.css` ialah default untuk kawalan baharu; override komponen hanya dibenarkan jika perlu mengekalkan visual system sedia ada.
+- Elakkan visible `:focus` ring yang luas kerana ia muncul pada klik tetikus. Gunakan `:focus-visible` untuk ring keyboard dan `:focus:not(:focus-visible)` hanya untuk menyenyapkan outline default yang tidak disengajakan. Untuk browser lama, sediakan fallback di dalam `@supports not selector(:focus-visible)`.
+- Semak `@media (forced-colors: active)` apabila menambah focus style tersuai supaya ring kekal kelihatan dalam Windows High Contrast.
 - Hormati `prefers-reduced-motion`; jangan jadikan animasi penting untuk kefahaman asas.
 - Jika effect berat seperti `backdrop-filter` digunakan, sediakan fallback atau simplification untuk `.low-spec`.
 - Gunakan `transform` dan `opacity` untuk animasi utama apabila boleh; elakkan animation yang berat pada `box-shadow` atau layout properties.
