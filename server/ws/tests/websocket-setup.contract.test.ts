@@ -19,4 +19,6 @@ test("websocket setup requires composition-root storage and keeps session secret
   assert.doesNotMatch(websocketSource, /options\.storage \?\? getDefaultStorage\(\)/);
   assert.match(websocketSource, /const storage = options\.storage/);
   assert.match(websocketSource, /options\.secret \?\? getDefaultSessionSecrets\(\)/);
+  assert.match(websocketSource, /maxPayload: runtimeConfig\.websocket\.maxMessageBytes/);
+  assert.match(websocketSource, /maxMessageBytes: runtimeConfig\.websocket\.maxMessageBytes/);
 });

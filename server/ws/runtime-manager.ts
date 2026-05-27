@@ -17,7 +17,9 @@ import { parseRuntimeWebSocketHandshakeUrl } from "./runtime-handshake";
 import {
   MAX_RUNTIME_WS_CONNECTIONS_PER_USER,
   DEFAULT_RUNTIME_WS_MAX_CONNECTIONS,
+  DEFAULT_RUNTIME_WS_MAX_MESSAGE_BYTES,
   DEFAULT_RUNTIME_WS_LARGE_MESSAGE_WARN_BYTES,
+  RUNTIME_WS_CLOSE_MESSAGE_TOO_BIG,
   RUNTIME_WS_CLOSE_POLICY_VIOLATION,
   RUNTIME_WS_CLOSE_TRY_AGAIN_LATER,
   type RuntimeManagerOptions,
@@ -118,6 +120,13 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
     Math.trunc(
       Number(options.largeMessageWarnBytes ?? DEFAULT_RUNTIME_WS_LARGE_MESSAGE_WARN_BYTES)
         || DEFAULT_RUNTIME_WS_LARGE_MESSAGE_WARN_BYTES,
+    ),
+  );
+  const maxMessageBytes = Math.max(
+    1,
+    Math.trunc(
+      Number(options.maxMessageBytes ?? DEFAULT_RUNTIME_WS_MAX_MESSAGE_BYTES)
+        || DEFAULT_RUNTIME_WS_MAX_MESSAGE_BYTES,
     ),
   );
   const socketEntriesByActivity = new Map<string, RuntimeTrackedSocketEntry>();
@@ -368,6 +377,21 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
       }
 
       const messageBytes = resolveRawMessageByteLength(message);
+      if (messageBytes > maxMessageBytes) {
+        logger.warn("WebSocket inbound message exceeded size limit", {
+          activityId,
+          clientIp: upgradeRateLimitKey,
+          maxBytes: maxMessageBytes,
+          messageBytes,
+        });
+        cleanupSocket({
+          clearSession: socketEntry !== null,
+          reason: "message-too-big",
+        });
+        closeSocketIfNeeded(RUNTIME_WS_CLOSE_MESSAGE_TOO_BIG, "message too big");
+        return;
+      }
+
       if (messageBytes >= largeMessageWarnBytes) {
         logger.warn("Large WebSocket inbound frame observed", {
           activityId,

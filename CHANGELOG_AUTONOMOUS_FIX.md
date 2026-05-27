@@ -10,3 +10,4 @@
 - MED-BE-1: Added authenticated per-user adaptive rate buckets alongside per-IP buckets, configurable per-user read/write/upload limits, `RateLimit-*`/`X-RateLimit-*` response headers, and structured per-user throttle logging.
 - MED-BE-2: Added shared JSON schema depth enforcement with a 10-level cap, explicit `SchemaDepthError`, and cyclic-payload rejection before recursive Zod validation.
 - MED-BE-3: Added sliding JWT session refresh in the auth guard. Bearer clients receive a replacement token through `X-Auth-Token-Refresh`, cookie sessions refresh the httpOnly auth cookie without rotating CSRF, and the previous JWT id is revoked before the request proceeds.
+- MED-BE-4: Added configurable inbound WebSocket message limits (`SQR_WS_MAX_MESSAGE_BYTES`, default 1MB), 64KB large-frame warning telemetry, 1009 close handling for oversized messages, and 300s Nginx WebSocket proxy timeouts.

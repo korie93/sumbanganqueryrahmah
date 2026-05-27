@@ -10,8 +10,6 @@ type LegacyWebSocketOptions = {
   secret?: string | readonly string[];
 };
 
-const WEBSOCKET_MAX_PAYLOAD_BYTES = 100 * 1024;
-
 function getDefaultSessionSecrets() {
   return getSessionJwtVerificationSecrets();
 }
@@ -33,7 +31,7 @@ export function setupWebSocket(server: Server, options: LegacyWebSocketOptions =
   const wss = new WebSocketServer({
     server,
     path: "/ws",
-    maxPayload: WEBSOCKET_MAX_PAYLOAD_BYTES,
+    maxPayload: runtimeConfig.websocket.maxMessageBytes,
   });
 
   createRuntimeWebSocketManager({
@@ -41,6 +39,7 @@ export function setupWebSocket(server: Server, options: LegacyWebSocketOptions =
     storage,
     secret: sessionSecret,
     connectedClients,
+    maxMessageBytes: runtimeConfig.websocket.maxMessageBytes,
     maxConnections: runtimeConfig.websocket.maxConnections,
     trustForwardedHeaders: runtimeConfig.app.trustedProxies.length > 0,
   });

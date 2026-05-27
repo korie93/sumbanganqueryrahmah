@@ -149,6 +149,8 @@ test("production environment templates keep upload scanning and runtime topology
     assert.equal(readAnyEnvValue(text, "COLLECTION_RECEIPT_EXTERNAL_SCAN_FAIL_CLOSED", sourceName), "1");
     assert.equal(readAnyEnvValue(text, "PG_MAX_CONNECTIONS", sourceName), "10");
     assert.equal(readAnyEnvValue(text, "SQR_MAX_WORKERS", sourceName), "1");
+    assert.equal(readAnyEnvValue(text, "SQR_WS_MAX_CONNECTIONS", sourceName), "1000");
+    assert.equal(readAnyEnvValue(text, "SQR_WS_MAX_MESSAGE_BYTES", sourceName), "1048576");
   }
 
   assert.equal(readAnyEnvValue(envText, "HSTS_MAX_AGE_SECONDS", ".env.example"), "31536000");
@@ -170,6 +172,18 @@ test("production environment templates keep upload scanning and runtime topology
   );
   assert.match(docText, /clamdscan --fdpass/i);
   assert.match(docText, /Redis pub\/sub WebSocket/i);
+});
+
+test("production Nginx example bounds WebSocket proxy timeouts for runtime sockets", () => {
+  const nginxText = readText(nginxConfigPath);
+  const docText = readText(hetznerDocPath);
+
+  for (const sourceText of [nginxText, docText]) {
+    const block = extractLocationBlock(sourceText, "/ws");
+    assert.match(block, /proxy_buffering off;/);
+    assert.match(block, /proxy_read_timeout 300s;/);
+    assert.match(block, /proxy_send_timeout 300s;/);
+  }
 });
 
 test("production Nginx example applies auth edge throttle to both login routes", () => {

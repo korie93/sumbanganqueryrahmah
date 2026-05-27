@@ -202,10 +202,11 @@ test("runtime env schema validates per-user rate-limit tuning", () => {
 
 test("runtime env schema validates staged WebSocket shared bus configuration keys", () => {
   assert.doesNotThrow(() => {
-    validateRuntimeEnvironmentSchema({
-      SQR_WS_SHARED_BUS: "memory",
-      SQR_WS_MAX_CONNECTIONS: "1000",
-    });
+      validateRuntimeEnvironmentSchema({
+        SQR_WS_SHARED_BUS: "memory",
+        SQR_WS_MAX_CONNECTIONS: "1000",
+        SQR_WS_MAX_MESSAGE_BYTES: "1048576",
+      });
     validateRuntimeEnvironmentSchema({
       SQR_REDIS_WS_URL: "rediss://redis.internal:6380/0",
       SQR_WS_SHARED_BUS: "redis",
@@ -228,6 +229,15 @@ test("runtime env schema validates staged WebSocket shared bus configuration key
       });
     },
     /SQR_WS_MAX_CONNECTIONS must be at least 1/i,
+  );
+
+  assert.throws(
+    () => {
+      validateRuntimeEnvironmentSchema({
+        SQR_WS_MAX_MESSAGE_BYTES: "512",
+      });
+    },
+    /SQR_WS_MAX_MESSAGE_BYTES must be at least 1024/i,
   );
 });
 

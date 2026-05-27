@@ -55,7 +55,10 @@ import {
 } from "./runtime-config-safety-utils";
 import { resolveSharedRateLimitStoreConfig } from "../middleware/rate-limit-runtime";
 import { resolveRuntimeWsSharedBusConfig } from "../ws/runtime-shared-bus-config";
-import { DEFAULT_RUNTIME_WS_MAX_CONNECTIONS } from "../ws/runtime-manager-types";
+import {
+  DEFAULT_RUNTIME_WS_MAX_CONNECTIONS,
+  DEFAULT_RUNTIME_WS_MAX_MESSAGE_BYTES,
+} from "../ws/runtime-manager-types";
 import type {
   RuntimeConfig,
   RuntimeConfigValidation as RuntimeConfigValidationType,
@@ -146,6 +149,11 @@ const configuredWebSocketMaxConnections = readInt(
   "SQR_WS_MAX_CONNECTIONS",
   DEFAULT_RUNTIME_WS_MAX_CONNECTIONS,
   { min: 1, max: 100_000 },
+);
+const configuredWebSocketMaxMessageBytes = readInt(
+  "SQR_WS_MAX_MESSAGE_BYTES",
+  DEFAULT_RUNTIME_WS_MAX_MESSAGE_BYTES,
+  { min: 1024, max: 10 * 1024 * 1024 },
 );
 const databaseBootstrapMode = resolveDatabaseBootstrapMode(readOptionalString("SQR_DB_BOOTSTRAP_MODE"), {
   isProductionLike,
@@ -420,6 +428,7 @@ export const runtimeConfig: RuntimeConfig = Object.freeze({
   },
   websocket: {
     maxConnections: configuredWebSocketMaxConnections,
+    maxMessageBytes: configuredWebSocketMaxMessageBytes,
     sharedBus: websocketSharedBus,
   },
   cluster: {

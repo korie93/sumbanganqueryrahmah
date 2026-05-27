@@ -1049,6 +1049,7 @@ test("runtime config accepts an explicit WebSocket global connection cap", async
       BACKUP_ENCRYPTION_KEYS: null,
       BACKUP_FEATURE_ENABLED: "1",
       SQR_WS_MAX_CONNECTIONS: "64",
+      SQR_WS_MAX_MESSAGE_BYTES: "65536",
       SEED_DEFAULT_USERS: "0",
       LOCAL_SUPERUSER_CREDENTIALS_FILE_ENABLED: "0",
       MAIL_DEV_OUTBOX_ENABLED: "0",
@@ -1056,6 +1057,7 @@ test("runtime config accepts an explicit WebSocket global connection cap", async
     async () => {
       const runtimeModule = await importRuntimeFresh();
       assert.equal(runtimeModule.runtimeConfig.websocket.maxConnections, 64);
+      assert.equal(runtimeModule.runtimeConfig.websocket.maxMessageBytes, 65_536);
     },
   );
 });

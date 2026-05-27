@@ -6,9 +6,11 @@ import type { RuntimeWsSharedBus } from "./runtime-shared-bus";
 
 export const MAX_RUNTIME_WS_CONNECTIONS_PER_USER = 5;
 export const DEFAULT_RUNTIME_WS_MAX_CONNECTIONS = 1_000;
+export const DEFAULT_RUNTIME_WS_MAX_MESSAGE_BYTES = 1024 * 1024;
 export const RUNTIME_WS_CLOSE_POLICY_VIOLATION = 1008;
+export const RUNTIME_WS_CLOSE_MESSAGE_TOO_BIG = 1009;
 export const RUNTIME_WS_CLOSE_TRY_AGAIN_LATER = 1013;
-export const DEFAULT_RUNTIME_WS_LARGE_MESSAGE_WARN_BYTES = 75 * 1024;
+export const DEFAULT_RUNTIME_WS_LARGE_MESSAGE_WARN_BYTES = 64 * 1024;
 
 export type RuntimeManagerOptions = {
   wss: WebSocketServer;
@@ -21,6 +23,7 @@ export type RuntimeManagerOptions = {
   acceptConnections?: () => boolean;
   heartbeatIntervalMs?: number;
   largeMessageWarnBytes?: number;
+  maxMessageBytes?: number;
   maxConnections?: number;
   messageRateLimiterFactory?: () => RuntimeWsMessageRateLimiter;
   sharedBus?: RuntimeWsSharedBus;

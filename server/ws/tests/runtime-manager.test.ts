@@ -1580,6 +1580,61 @@ test("runtime manager logs large inbound WebSocket frames without payload conten
   }
 });
 
+test("runtime manager closes clients that exceed the inbound WebSocket message size limit", async (t) => {
+  const wss = new FakeWebSocketServer();
+  const providedMap = new Map<string, WebSocket>();
+  const socket = new FakeWebSocket();
+  const activityId = "activity-message-too-big";
+  const warnings: Array<{ message: string; payload: Record<string, unknown> }> = [];
+  let clearSessionCalls = 0;
+  t.mock.method(logger, "warn", (message: string, payload: Record<string, unknown>) => {
+    warnings.push({ message, payload });
+  });
+
+  createRuntimeWebSocketManager({
+    wss: wss as unknown as import("ws").WebSocketServer,
+    storage: {
+      getActivityById: async () => createActiveSession(activityId),
+      clearCollectionNicknameSessionByActivity: async () => {
+        clearSessionCalls += 1;
+      },
+    },
+    secret: TEST_SECRET,
+    connectedClients: providedMap,
+    maxMessageBytes: 4,
+    messageRateLimiterFactory: () =>
+      createRuntimeWsMessageRateLimiter({
+        maxMessages: 10,
+        windowMs: 60_000,
+      }),
+  });
+
+  try {
+    wss.emit("connection", socket as unknown as WebSocket, createConnectionRequest(createWsToken(activityId)));
+    await flushAsyncWork();
+
+    socket.emit("message", Buffer.from("12345"));
+    await flushAsyncWork();
+
+    assert.equal(providedMap.has(activityId), false);
+    assert.equal(clearSessionCalls, 1);
+    assert.deepEqual(socket.closeCodes[0], {
+      code: 1009,
+      reason: "message too big",
+    });
+    assert.equal(socket.listenerCount("message"), 0);
+    assert.equal(warnings[0]?.message, "WebSocket inbound message exceeded size limit");
+    assert.deepEqual(warnings[0]?.payload, {
+      activityId,
+      clientIp: "203.0.113.10",
+      maxBytes: 4,
+      messageBytes: 5,
+    });
+  } finally {
+    wss.emit("close");
+  }
+});
+
 test("runtime manager tolerates repeated terminal lifecycle signals without duplicate tracked state", async () => {
   const wss = new FakeWebSocketServer();
   const providedMap = new Map<string, WebSocket>();
