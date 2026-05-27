@@ -67,7 +67,7 @@ export function GeneralSearchRecordDialog({
             <div
               className={
                 isMobile
-                  ? "min-h-0 flex-1 overflow-y-auto px-4 pb-[calc(env(safe-area-inset-bottom,0px)+1rem)] pt-4"
+                  ? "min-h-0 flex-1 overflow-y-auto px-4 pb-[calc(var(--safe-area-inset-bottom)+1rem)] pt-4"
                   : "space-y-4"
               }
             >

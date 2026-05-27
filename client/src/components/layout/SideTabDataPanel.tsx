@@ -59,7 +59,7 @@ export function SideTabDataPanel({
                 </SheetTrigger>
                 <SheetContent
                   side="bottom"
-                  className="max-h-[82dvh] rounded-t-[24px] pb-[calc(env(safe-area-inset-bottom,0px)+1rem)]"
+                  className="max-h-[82dvh] rounded-t-[24px] pb-[calc(var(--safe-area-inset-bottom)+1rem)]"
                 >
                   <SheetHeader className="pr-8 text-left">
                     <SheetTitle>{title} Filters</SheetTitle>
@@ -82,7 +82,7 @@ export function SideTabDataPanel({
               </SheetTrigger>
               <SheetContent
                 side="bottom"
-                className="max-h-[82dvh] rounded-t-[24px] pb-[calc(env(safe-area-inset-bottom,0px)+1rem)]"
+                className="max-h-[82dvh] rounded-t-[24px] pb-[calc(var(--safe-area-inset-bottom)+1rem)]"
               >
                 <SheetHeader className="pr-8 text-left">
                   <SheetTitle>{title} Filters</SheetTitle>

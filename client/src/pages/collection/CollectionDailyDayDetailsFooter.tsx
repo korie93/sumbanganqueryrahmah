@@ -20,7 +20,7 @@ export function CollectionDailyDayDetailsFooter({
 }: CollectionDailyDayDetailsFooterProps) {
   return (
     <div
-      className={`sticky bottom-0 z-[var(--z-sticky-content)] flex flex-col gap-3 border-t border-border/60 bg-background/95 pb-[calc(env(safe-area-inset-bottom,0px)+0.75rem)] pt-3 text-sm shadow-lg backdrop-blur supports-[backdrop-filter]:bg-background/85 ${
+      className={`sticky bottom-0 z-[var(--z-sticky-content)] flex flex-col gap-3 border-t border-border/60 bg-background/95 pb-[calc(var(--safe-area-inset-bottom)+0.75rem)] pt-3 text-sm shadow-lg backdrop-blur supports-[backdrop-filter]:bg-background/85 ${
         isMobile ? "-mx-3 px-3" : "-mx-4 px-4 sm:-mx-6 sm:px-6"
       } sm:flex-row sm:items-center sm:justify-between`}
       aria-label="Navigasi halaman rekod kutipan harian"

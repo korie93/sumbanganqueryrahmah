@@ -174,7 +174,7 @@ export function GeneralSearchAdvancedControls({
       </div>
 
       <div
-        className={`gap-3 rounded-xl ${isMobile ? "sticky bottom-0 -mx-4 border-t border-border/60 bg-background/95 px-4 pb-[calc(env(safe-area-inset-bottom,0px)+1rem)] pt-3 shadow-[0_-8px_24px_rgba(15,23,42,0.08)]" : "flex flex-wrap items-center"}`}
+        className={`gap-3 rounded-xl ${isMobile ? "sticky bottom-0 -mx-4 border-t border-border/60 bg-background/95 px-4 pb-[calc(var(--safe-area-inset-bottom)+1rem)] pt-3 shadow-[0_-8px_24px_rgba(15,23,42,0.08)]" : "flex flex-wrap items-center"}`}
         data-floating-ai-avoid="true"
       >
         <Button

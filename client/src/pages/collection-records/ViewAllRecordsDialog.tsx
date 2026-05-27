@@ -133,7 +133,7 @@ export function ViewAllRecordsDialog({
             <div
               className={
                 isMobile
-                  ? "shrink-0 border-b border-border/60 bg-background pb-[calc(env(safe-area-inset-bottom,0px)+0.25rem)] shadow-sm"
+                  ? "shrink-0 border-b border-border/60 bg-background pb-[calc(var(--safe-area-inset-bottom)+0.25rem)] shadow-sm"
                   : ""
               }
               data-floating-ai-avoid="true"
