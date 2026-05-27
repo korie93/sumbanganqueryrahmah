@@ -33,3 +33,4 @@
 - LOW-6: Preserved full API/login error messages and added an accessible expandable disclosure for long toast and login alerts instead of silently cutting messages at 240 characters.
 - LOW-7: Upgraded the client API retry guard into an explicit CLOSED/OPEN/HALF_OPEN circuit breaker with immediate retry-enabled rejection, recovery probes, and state transition tests.
 - LOW-8: Extended bundle budget monitoring with a JSON report artifact in CI and documented the current chunk-size baseline and review rules.
+- LOW-9: Added an explicit modern browser support matrix, package browserslist targets, and a contract test covering CI coverage, fallbacks, and unsupported browsers.

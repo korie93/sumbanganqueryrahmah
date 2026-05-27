@@ -5,6 +5,22 @@
   "engines": {
     "node": ">=24"
   },
+  "browserslist": {
+    "production": [
+      "Chrome >= 120",
+      "Edge >= 120",
+      "Firefox >= 121",
+      "Safari >= 17.4",
+      "ios_saf >= 17.4",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 Chrome version",
+      "last 1 Firefox version",
+      "last 1 Safari version"
+    ]
+  },
   "scripts": {
     "verify:node-version": "node scripts/verify-node-version.mjs",
     "verify:collection-amount-contract": "node scripts/verify-collection-amount-contract.mjs",
