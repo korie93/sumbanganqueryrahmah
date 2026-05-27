@@ -1,4 +1,4 @@
-import { readInteger, readOptionalString } from "../http/validation";
+import { readInteger, readOptionalString, readPageLimit } from "../http/validation";
 
 export type PaginatedListMeta = {
   page: number;
@@ -12,10 +12,7 @@ export function readPaginationMeta(
   defaults: { pageSize: number; maxPageSize: number },
 ): { page: number; pageSize: number } {
   const page = Math.max(1, readInteger(query?.page, 1));
-  const pageSize = Math.max(
-    1,
-    Math.min(defaults.maxPageSize, readInteger(query?.pageSize, defaults.pageSize)),
-  );
+  const pageSize = readPageLimit(query?.pageSize, defaults.pageSize, defaults.maxPageSize);
   return { page, pageSize };
 }
 

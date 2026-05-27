@@ -5,6 +5,7 @@ import path from "node:path";
 import test from "node:test";
 import type { WebSocket } from "ws";
 import { createOperationsController } from "../../controllers/operations.controller";
+import { errorHandler } from "../../middleware/error-handler";
 import { AuditLogOperationsService } from "../../services/audit-log-operations.service";
 import { BackupJobQueueService } from "../../services/backup-job-queue.service";
 import { BackupOperationsService } from "../../services/backup-operations.service";
@@ -348,6 +349,7 @@ function createOperationsRouteHarness(options?: {
     requireTabAccess: () => allowAllTabs(),
     operationsDebugRoutesEnabled: true,
   });
+  app.use(errorHandler);
 
   return {
     app,
@@ -457,12 +459,29 @@ test("GET /api/analytics/summary includes stale-record conflict frequency for mo
   }
 });
 
-test("GET /api/analytics/top-users accepts pageSize and clamps it to at least one", async () => {
+test("GET /api/analytics/top-users rejects page-size values below one", async () => {
   const { app, topUserCalls } = createOperationsRouteHarness();
   const { server, baseUrl } = await startTestServer(app);
 
   try {
-    const response = await fetch(`${baseUrl}/api/analytics/top-users?pageSize=0`);
+    for (const pageSize of ["0", "-1"]) {
+      const response = await fetch(`${baseUrl}/api/analytics/top-users?pageSize=${pageSize}`);
+      assert.equal(response.status, 400);
+      assert.equal((await response.json()).message, "Page limit must be at least 1");
+    }
+
+    assert.deepEqual(topUserCalls, []);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("GET /api/analytics/top-users accepts pageSize value one", async () => {
+  const { app, topUserCalls } = createOperationsRouteHarness();
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(`${baseUrl}/api/analytics/top-users?pageSize=1`);
     assert.equal(response.status, 200);
     assert.deepEqual(topUserCalls, [1]);
   } finally {

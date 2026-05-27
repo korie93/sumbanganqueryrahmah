@@ -1,4 +1,4 @@
-import { readInteger } from "../http/validation";
+import { readInteger, readPageLimit } from "../http/validation";
 import type { AnalyticsRepository } from "../repositories/analytics.repository";
 
 type OperationsAnalyticsRepository = Pick<
@@ -22,7 +22,7 @@ export class OperationsAnalyticsService {
   }
 
   async getTopActiveUsers(limit?: unknown) {
-    return this.analyticsRepository.getTopActiveUsers(Math.max(1, readInteger(limit, 10)));
+    return this.analyticsRepository.getTopActiveUsers(readPageLimit(limit, 10, 100));
   }
 
   async getPeakHours() {

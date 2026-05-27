@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createSearchController } from "../../controllers/search.controller";
+import { errorHandler } from "../../middleware/error-handler";
 import type { SearchRepository } from "../../repositories/search.repository";
 import { SearchService } from "../../services/search.service";
 import { registerSearchRoutes } from "../search.routes";
@@ -108,6 +109,7 @@ function createSearchRouteHarness(options?: {
       next();
     },
   });
+  app.use(errorHandler);
 
   return {
     app,
@@ -227,6 +229,35 @@ test("GET /api/search/global applies the protected limit cap and formats rows wi
   }
 });
 
+test("GET /api/search/global rejects page-size values below one", async () => {
+  const { app, globalSearchCalls } = createSearchRouteHarness();
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    for (const pageSize of ["0", "-1"]) {
+      const response = await fetch(`${baseUrl}/api/search/global?q=Alice&page=1&pageSize=${pageSize}`);
+      assert.equal(response.status, 400);
+      assert.equal((await response.json()).message, "Page limit must be at least 1");
+    }
+
+    assert.equal(globalSearchCalls.length, 0);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("GET /api/search/global accepts page-size value one", async () => {
+  const { app } = createSearchRouteHarness();
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(`${baseUrl}/api/search/global?q=Alice&page=1&pageSize=1`);
+    assert.equal(response.status, 200);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
 test("GET /api/search/global returns an empty page when the offset exceeds the runtime max", async () => {
   const { app, globalSearchCalls } = createSearchRouteHarness({
     searchResultLimit: 60,
@@ -340,6 +371,33 @@ test("POST /api/search/advanced applies runtime pagination and formats headers",
       offset: 50,
     }]);
     assert.deepEqual(searchRateLimiterCalls, ["/api/search/advanced"]);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("POST /api/search/advanced rejects body limits below one", async () => {
+  const { app, advancedSearchCalls } = createSearchRouteHarness();
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    for (const pageSize of [0, -1]) {
+      const response = await fetch(`${baseUrl}/api/search/advanced`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          filters: [{ field: "name", operator: "contains", value: "Bob" }],
+          page: 1,
+          pageSize,
+        }),
+      });
+      assert.equal(response.status, 400);
+      assert.equal((await response.json()).message, "Page limit must be at least 1");
+    }
+
+    assert.equal(advancedSearchCalls.length, 0);
   } finally {
     await stopTestServer(server);
   }

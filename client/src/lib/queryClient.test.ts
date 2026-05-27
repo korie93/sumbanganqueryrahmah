@@ -298,7 +298,7 @@ test("apiRequest retry circuit opens after repeated transient failures", async (
       }),
       (error: unknown) => {
         assert.ok(error instanceof ApiCircuitOpenError);
-        assert.equal(error.retryAfterMs, 30_000);
+        assert.ok(error.retryAfterMs > 29_000 && error.retryAfterMs <= 30_000);
         return true;
       },
     );

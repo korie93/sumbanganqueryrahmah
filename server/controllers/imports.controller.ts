@@ -3,7 +3,7 @@ import { z } from "zod";
 import type { AuthenticatedRequest } from "../auth/guards";
 import { badRequest, notFound } from "../http/errors";
 import { runWithRequestDeadline } from "../http/request-deadline";
-import { readInteger, readNonEmptyString, readRouteParam } from "../http/validation";
+import { readInteger, readNonEmptyString, readPageLimit, readRouteParam } from "../http/validation";
 import {
   cleanupPreparedMultipartImportUpload,
   type PreparedMultipartImportUpload,
@@ -70,7 +70,7 @@ export function createImportsController(deps: CreateImportsControllerDeps) {
 
   const listDataRows = async (req: AuthenticatedRequest, res: Response) => {
     const importId = readNonEmptyString(req.query.importId);
-    const pageSize = readInteger(req.query.pageSize ?? req.query.limit, 10);
+    const pageSize = readPageLimit(req.query.pageSize ?? req.query.limit, 10, 1_000);
     const page = Math.max(1, readInteger(req.query.page, 1));
     const offsetQuery = readNonEmptyString(req.query.offset);
     const offset = offsetQuery ? readInteger(req.query.offset, 0) : (page - 1) * pageSize;
@@ -92,7 +92,7 @@ export function createImportsController(deps: CreateImportsControllerDeps) {
 
   const listImports = async (_req: AuthenticatedRequest, res: Response) => {
     const cursor = readNonEmptyString(_req.query.cursor);
-    const pageSize = readInteger(_req.query.pageSize ?? _req.query.limit, 100);
+    const pageSize = readPageLimit(_req.query.pageSize ?? _req.query.limit, 100, 200);
     const search = readNonEmptyString(_req.query.search);
     const createdOn = readNonEmptyString(_req.query.createdOn);
 
@@ -180,8 +180,9 @@ export function createImportsController(deps: CreateImportsControllerDeps) {
     const importId = readRouteParam(req.params.id, "import id");
     const page = Math.max(1, readInteger(req.query.page, 1));
     const cursor = readNonEmptyString(req.query.cursor);
-    const requestedPageSize = readInteger(
+    const requestedPageSize = readPageLimit(
       req.query.pageSize ?? req.query.limit,
+      runtimeSettings.viewerRowsPerPage,
       runtimeSettings.viewerRowsPerPage,
     );
     const search = String(req.query.search || "").trim();

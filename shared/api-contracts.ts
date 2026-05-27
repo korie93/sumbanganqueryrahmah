@@ -1,13 +1,14 @@
 import { z } from "zod";
 import { jsonObjectSchema, jsonValueSchema } from "./json-schema";
 import { sharedErrorCodeSchema } from "./error-codes";
+import { PAGE_LIMIT_MIN_ERROR_MESSAGE } from "./pagination-contracts";
 
 const nonEmptyStringSchema = z.string().trim().min(1);
 const nullableStringSchema = z.string().nullable();
 const nullishStringSchema = z.string().nullish();
 const nonNegativeIntSchema = z.number().int().nonnegative();
 const positiveIntSchema = z.number().int().positive();
-const paginationLimitSchema = z.number().int().positive().max(1000);
+const paginationLimitSchema = z.number().int().min(1, PAGE_LIMIT_MIN_ERROR_MESSAGE).max(1000);
 export const apiErrorCodeSchema = z.union([
   sharedErrorCodeSchema,
   z.string().trim().regex(/^[A-Z][A-Z0-9_]*$/),

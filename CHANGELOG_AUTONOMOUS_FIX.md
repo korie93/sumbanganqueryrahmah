@@ -34,3 +34,4 @@
 - LOW-7: Upgraded the client API retry guard into an explicit CLOSED/OPEN/HALF_OPEN circuit breaker with immediate retry-enabled rejection, recovery probes, and state transition tests.
 - LOW-8: Extended bundle budget monitoring with a JSON report artifact in CI and documented the current chunk-size baseline and review rules.
 - LOW-9: Added an explicit modern browser support matrix, package browserslist targets, and a contract test covering CI coverage, fallbacks, and unsupported browsers.
+- LOW-10: Added shared pagination limit validation so `limit`/`pageSize` must be at least 1 across API contracts and server readers, with route/service regressions proving `0` and negative values are rejected consistently.

@@ -478,6 +478,23 @@ test("GET /api/imports forwards cursor search and date filters", async () => {
   }
 });
 
+test("GET /api/imports rejects page-size values below one", async () => {
+  const { app, listImportsPageCalls } = createImportsRouteHarness();
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    for (const pageSize of ["0", "-1"]) {
+      const response = await fetch(`${baseUrl}/api/imports?pageSize=${pageSize}`);
+      assert.equal(response.status, 400);
+      assert.equal((await response.json()).message, "Page limit must be at least 1");
+    }
+
+    assert.equal(listImportsPageCalls.length, 0);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
 test("GET /api/imports rejects malformed cursor tokens", async () => {
   const { app } = createImportsRouteHarness();
   const { server, baseUrl } = await startTestServer(app);
@@ -505,6 +522,23 @@ test("GET /api/data-rows requires an importId", async () => {
       ok: false,
       message: "importId is required",
     });
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("GET /api/data-rows rejects page-size values below one", async () => {
+  const { app, searchCalls } = createImportsRouteHarness();
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    for (const pageSize of ["0", "-1"]) {
+      const response = await fetch(`${baseUrl}/api/data-rows?importId=import-1&pageSize=${pageSize}`);
+      assert.equal(response.status, 400);
+      assert.equal((await response.json()).message, "Page limit must be at least 1");
+    }
+
+    assert.equal(searchCalls.length, 0);
   } finally {
     await stopTestServer(server);
   }
@@ -747,6 +781,23 @@ test("GET /api/imports/:id/data applies the protected page-size cap and forwards
       columnFilters: [],
       cursor: null,
     });
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("GET /api/imports/:id/data rejects page-size values below one", async () => {
+  const { app, searchCalls } = createImportsRouteHarness();
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    for (const pageSize of ["0", "-1"]) {
+      const response = await fetch(`${baseUrl}/api/imports/import-1/data?page=1&pageSize=${pageSize}`);
+      assert.equal(response.status, 400);
+      assert.equal((await response.json()).message, "Page limit must be at least 1");
+    }
+
+    assert.equal(searchCalls.length, 0);
   } finally {
     await stopTestServer(server);
   }

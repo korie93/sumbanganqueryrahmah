@@ -24,6 +24,7 @@ const COMMON_SHARED_MODULES = new Set([
   "collection-daily-status",
   "error-codes",
   "json-schema",
+  "pagination-contracts",
   "password-policy",
   "trusted-types",
   "web-vitals",

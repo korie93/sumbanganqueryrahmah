@@ -1,4 +1,5 @@
 import { badRequest } from "../../http/errors";
+import { readPageLimit } from "../../http/validation";
 import {
   parseCollectionAmountMyrInput,
   parseCollectionAmountMyrNumber,
@@ -142,8 +143,7 @@ export class CollectionDailyReadOperations extends CollectionServiceSupport {
     const year = Number.parseInt(yearText, 10);
     const month = Number.parseInt(monthText, 10);
     const pageRaw = Number.parseInt(normalizeCollectionText(query.page), 10);
-    const pageSizeRaw = Number.parseInt(normalizeCollectionText(query.pageSize), 10);
-    const pageSize = Number.isInteger(pageSizeRaw) ? Math.min(100, Math.max(1, pageSizeRaw)) : 10;
+    const pageSize = readPageLimit(query.pageSize, 10, 100);
     const requestedPage = Number.isInteger(pageRaw) ? Math.max(1, pageRaw) : 1;
 
     const computation = await this.dailyOverviewService.buildDailyOverviewComputation(user, year, month, query);

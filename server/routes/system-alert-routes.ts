@@ -1,5 +1,6 @@
 import type { AuthenticatedRequest } from "../auth/guards";
 import { asyncHandler, routeHandler } from "../http/async-handler";
+import { readPageLimit } from "../http/validation";
 import type { SystemRouteContext } from "./system-route-context";
 
 function readPositivePage(value: unknown, fallback: number) {
@@ -8,10 +9,7 @@ function readPositivePage(value: unknown, fallback: number) {
 }
 
 function readPageSize(value: unknown, fallback: number) {
-  const parsed = Number(value);
-  return Number.isFinite(parsed)
-    ? Math.min(100, Math.max(1, Math.floor(parsed)))
-    : fallback;
+  return readPageLimit(value, fallback, 100);
 }
 
 function readCleanupDays(value: unknown, fallback: number) {

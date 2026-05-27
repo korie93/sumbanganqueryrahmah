@@ -11,6 +11,7 @@ import {
   normalizeApiPaginationMeta,
 } from "@shared/api-contracts";
 import { ERROR_CODES } from "@shared/error-codes";
+import { PAGE_LIMIT_MIN_ERROR_MESSAGE } from "@shared/pagination-contracts";
 import {
   getImportData,
   getImports,
@@ -238,6 +239,39 @@ test("shared pagination metadata can be normalized without changing wire contrac
       hasMore: true,
     },
   );
+});
+
+test("shared pagination metadata rejects page limits below one consistently", () => {
+  const valid = apiPaginationMetaSchema.safeParse({
+    mode: "offset",
+    page: 1,
+    pageSize: 1,
+    limit: 1,
+    offset: 0,
+    total: 1,
+    totalPages: 1,
+    hasNextPage: false,
+    hasPreviousPage: false,
+  });
+  assert.equal(valid.success, true);
+
+  for (const limit of [0, -1]) {
+    const parsed = apiPaginationMetaSchema.safeParse({
+      mode: "offset",
+      page: 1,
+      pageSize: limit,
+      limit,
+      offset: 0,
+      total: 1,
+      totalPages: 1,
+      hasNextPage: false,
+      hasPreviousPage: false,
+    });
+    assert.equal(parsed.success, false);
+    if (!parsed.success) {
+      assert.equal(parsed.error.issues[0]?.message, PAGE_LIMIT_MIN_ERROR_MESSAGE);
+    }
+  }
 });
 
 test("collection monthly comparison contract accepts bounded monthly analytics payloads", () => {

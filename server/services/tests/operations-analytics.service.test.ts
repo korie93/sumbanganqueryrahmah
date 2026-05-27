@@ -33,7 +33,7 @@ test("OperationsAnalyticsService proxies summary and distribution reads", async 
   assert.deepEqual(await service.getRoleDistribution(), roleDistribution);
 });
 
-test("OperationsAnalyticsService clamps login-trend days and active-user limits", async () => {
+test("OperationsAnalyticsService clamps login-trend days and validates active-user limits", async () => {
   const loginTrendCalls: number[] = [];
   const topUserCalls: number[] = [];
   const analyticsRepository: OperationsAnalyticsRepository = {
@@ -62,10 +62,15 @@ test("OperationsAnalyticsService clamps login-trend days and active-user limits"
   const service = new OperationsAnalyticsService(analyticsRepository);
 
   const loginTrends = await service.getLoginTrends(0);
-  const topUsers = await service.getTopActiveUsers(0);
+  const topUsers = await service.getTopActiveUsers(1);
 
   assert.deepEqual(loginTrendCalls, [1]);
   assert.deepEqual(topUserCalls, [1]);
   assert.equal(loginTrends[0].logins, 1);
   assert.equal(topUsers[0].loginCount, 1);
+
+  await assert.rejects(
+    () => service.getTopActiveUsers(0),
+    /Page limit must be at least 1/,
+  );
 });

@@ -1,4 +1,5 @@
 import { badRequest, forbidden } from "../../http/errors";
+import { readPageLimit } from "../../http/validation";
 import type { AuthenticatedUser } from "../../auth/guards";
 import { parseCollectionAmountMyrInput } from "../../../shared/collection-amount-types";
 import {
@@ -211,8 +212,7 @@ export class CollectionDailyManagementOperations {
     const year = Number.parseInt(normalizeCollectionText(query.year), 10);
     const month = Number.parseInt(normalizeCollectionText(query.month), 10);
     const day = Number.parseInt(normalizeCollectionText(query.day), 10);
-    const limitRaw = Number.parseInt(normalizeCollectionText(query.limit), 10);
-    const limit = Number.isInteger(limitRaw) ? Math.min(100, Math.max(1, limitRaw)) : 50;
+    const limit = readPageLimit(query.limit, 50, 100);
 
     if (!normalizedUsername) throw badRequest("Staff nickname is required.");
     if (!Number.isInteger(year) || year < 2000 || year > 2100) throw badRequest("Invalid year.");

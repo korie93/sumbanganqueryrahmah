@@ -1,4 +1,4 @@
-import { readDate, readInteger, readOptionalString } from "../http/validation";
+import { readDate, readInteger, readOptionalString, readPageLimit } from "../http/validation";
 import type { AuditRepository } from "../repositories/audit.repository";
 import type { PostgresStorage } from "../storage-postgres";
 import { isAuditCategory, isAuditRiskLevel } from "../../shared/audit-log-classification";
@@ -17,7 +17,7 @@ export class AuditLogOperationsService {
 
   async listAuditLogs(query: Record<string, unknown>) {
     const page = Math.max(1, readInteger(query.page, 1));
-    const pageSize = Math.max(1, Math.min(100, readInteger(query.pageSize, 50)));
+    const pageSize = readPageLimit(query.pageSize, 50, 100);
     const result = await this.auditRepository.listAuditLogsPage({
       page,
       pageSize,

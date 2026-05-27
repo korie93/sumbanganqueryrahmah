@@ -1,4 +1,4 @@
-import { readDate, readInteger, readOptionalString } from "../http/validation";
+import { readDate, readInteger, readOptionalString, readPageLimit } from "../http/validation";
 import { logger } from "../lib/logger";
 import {
   buildBackupExportEnvelope,
@@ -39,7 +39,7 @@ export class BackupOperationsReadOperations {
 
   async listBackups(query: ListBackupsInput): Promise<BackupListResponse> {
     const page = Math.max(1, readInteger(query.page, 1));
-    const pageSize = Math.max(1, Math.min(100, readInteger(query.pageSize, 25)));
+    const pageSize = readPageLimit(query.pageSize, 25, 100);
     const searchName = readOptionalString(query.searchName ?? query.search);
     const createdBy = readOptionalString(query.createdBy);
     const dateFrom = readDate(query.dateFrom);

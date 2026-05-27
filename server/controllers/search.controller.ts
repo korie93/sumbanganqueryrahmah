@@ -1,6 +1,6 @@
 import type { Response } from "express";
 import type { AuthenticatedRequest } from "../auth/guards";
-import { ensureObject, readInteger } from "../http/validation";
+import { ensureObject, readInteger, readPageLimit } from "../http/validation";
 import type { SearchService } from "../services/search.service";
 
 type RuntimeSettings = {
@@ -30,7 +30,11 @@ export function createSearchController(deps: CreateSearchControllerDeps) {
     const search = String(req.query.q || "").trim();
     const runtimeSettings = await getRuntimeSettingsCached();
     const page = Math.max(1, readInteger(req.query.page, 1));
-    const requestedLimit = readInteger(req.query.pageSize ?? req.query.limit, 50);
+    const requestedLimit = readPageLimit(
+      req.query.pageSize ?? req.query.limit,
+      50,
+      runtimeSettings.searchResultLimit,
+    );
 
     return res.json(await searchService.searchGlobal({
       search,
@@ -51,7 +55,11 @@ export function createSearchController(deps: CreateSearchControllerDeps) {
     const logic = body.logic === "OR" ? "OR" : "AND";
     const runtimeSettings = await getRuntimeSettingsCached();
     const page = Math.max(1, readInteger(body.page, 1));
-    const requestedLimit = readInteger(body.pageSize ?? body.limit, 50);
+    const requestedLimit = readPageLimit(
+      body.pageSize ?? body.limit,
+      50,
+      runtimeSettings.searchResultLimit,
+    );
 
     return res.json(await searchService.advancedSearch({
       filters,

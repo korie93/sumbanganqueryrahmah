@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { ERROR_CODES } from "../../shared/error-codes";
+import { PAGE_LIMIT_MIN_ERROR_MESSAGE } from "../../shared/pagination-contracts";
 import { badRequest } from "./errors";
 
 export function ensureObject(value: unknown): Record<string, unknown> | null {
@@ -91,6 +92,38 @@ export function readInteger(value: unknown, fallback: number): number {
 
 export function clampInteger(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, Math.trunc(value)));
+}
+
+export function readPageLimit(
+  value: unknown,
+  fallback: number,
+  max = Number.POSITIVE_INFINITY,
+): number {
+  const candidate = Array.isArray(value) ? value[0] : value;
+  const normalized = typeof candidate === "string" ? candidate.trim() : candidate;
+  const safeMax = Number.isFinite(max)
+    ? Math.max(1, Math.trunc(max))
+    : Number.POSITIVE_INFINITY;
+  const safeFallback = Math.min(
+    safeMax,
+    Math.max(1, Number.isFinite(fallback) ? Math.trunc(fallback) : 1),
+  );
+
+  if (normalized == null || normalized === "") {
+    return safeFallback;
+  }
+
+  const parsed = Number(normalized);
+  if (!Number.isFinite(parsed)) {
+    return safeFallback;
+  }
+
+  const limit = Math.trunc(parsed);
+  if (limit < 1) {
+    throw badRequest(PAGE_LIMIT_MIN_ERROR_MESSAGE, ERROR_CODES.REQUEST_BODY_INVALID);
+  }
+
+  return Math.min(safeMax, limit);
 }
 
 const TRUTHY_BOOLEAN_LITERALS = new Set(["1", "true", "yes", "on"]);

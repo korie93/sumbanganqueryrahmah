@@ -1,4 +1,5 @@
 import { badRequest } from "../../http/errors";
+import { readPageLimit } from "../../http/validation";
 import {
   getAdminVisibleNicknameValues,
   hasNicknameValue,
@@ -29,12 +30,9 @@ export class CollectionRecordListReadOperations extends CollectionServiceSupport
     const receiptValidationStatus = parseCollectionReceiptValidationFilter(query.receiptValidationStatus);
     const duplicateOnly = parseCollectionBooleanQueryValue(query.duplicateOnly);
     const requestedNicknameFilters = readNicknameFiltersFromQuery(query);
-    const limitRaw = Number.parseInt(normalizeCollectionText(query.pageSize ?? query.limit), 10);
     const pageRaw = Number.parseInt(normalizeCollectionText(query.page), 10);
     const offsetRaw = Number.parseInt(normalizeCollectionText(query.offset), 10);
-    const limit = Number.isInteger(limitRaw)
-      ? Math.min(5000, Math.max(1, limitRaw))
-      : 1000;
+    const limit = readPageLimit(query.pageSize ?? query.limit, 1000, 5000);
     const page = Number.isInteger(pageRaw)
       ? Math.max(1, pageRaw)
       : 1;

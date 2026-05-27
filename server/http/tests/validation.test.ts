@@ -1,7 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { PAGE_LIMIT_MIN_ERROR_MESSAGE } from "../../../shared/pagination-contracts";
 import { HttpError } from "../../http/errors";
-import { readBooleanFlag, readDate, readRouteParam, readStringList } from "../../http/validation";
+import {
+  readBooleanFlag,
+  readDate,
+  readPageLimit,
+  readRouteParam,
+  readStringList,
+} from "../../http/validation";
 
 test("readBooleanFlag accepts explicit truthy and falsy literals", () => {
   assert.equal(readBooleanFlag(true), true);
@@ -77,6 +84,24 @@ test("readDate rejects ambiguous or invalid date strings", () => {
         && error.statusCode === 400
         && error.code === "REQUEST_BODY_INVALID"
         && /ISO 8601 date or datetime/i.test(error.message),
+    );
+  }
+});
+
+test("readPageLimit rejects numeric values below one with the shared pagination message", () => {
+  assert.equal(readPageLimit(undefined, 25, 100), 25);
+  assert.equal(readPageLimit("", 25, 100), 25);
+  assert.equal(readPageLimit("1", 25, 100), 1);
+  assert.equal(readPageLimit("250", 25, 100), 100);
+
+  for (const value of ["0", 0, "-1", -1]) {
+    assert.throws(
+      () => readPageLimit(value, 25, 100),
+      (error) =>
+        error instanceof HttpError
+        && error.statusCode === 400
+        && error.code === "REQUEST_BODY_INVALID"
+        && error.message === PAGE_LIMIT_MIN_ERROR_MESSAGE,
     );
   }
 });
