@@ -7,11 +7,11 @@ type PasswordStrengthMeterProps = {
 };
 
 const SEGMENT_ACTIVE_CLASSES = [
-  "bg-red-500",
-  "bg-orange-500",
-  "bg-yellow-500",
-  "bg-lime-500",
-  "bg-green-500",
+  "bg-red-700 dark:bg-red-400",
+  "bg-orange-700 dark:bg-orange-400",
+  "bg-yellow-700 dark:bg-yellow-400",
+  "bg-lime-700 dark:bg-lime-400",
+  "bg-green-700 dark:bg-green-400",
 ] as const;
 
 const LABEL_CLASSES = [

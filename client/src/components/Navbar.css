@@ -275,9 +275,9 @@
 }
 
 .dark .nav-pill.nav-pill-active {
-  background: hsl(var(--primary) / 0.18);
-  color: hsl(var(--primary));
-  border-color: hsl(var(--primary) / 0.42);
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+  border-color: hsl(var(--primary));
 }
 
 .dark .nav-pill-active .nav-pill-icon svg {

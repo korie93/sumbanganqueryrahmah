@@ -267,3 +267,23 @@ test("focus ring token meets WCAG UI contrast in light and dark themes", () => {
     );
   }
 });
+
+test("dark navbar active pill keeps WCAG AA text contrast", () => {
+  const tokenCss = readFileSync(
+    path.resolve(process.cwd(), "client/src/theme-tokens.css"),
+    "utf8",
+  );
+  const navbarCss = readFileSync(
+    path.resolve(process.cwd(), "client/src/components/Navbar.css"),
+    "utf8",
+  );
+  const darkTokens = parseHslTokens(extractCssRuleBlock(tokenCss, ".dark"));
+  const darkActivePillBlock = extractCssRuleBlock(navbarCss, ".dark .nav-pill.nav-pill-active");
+
+  assert.match(darkActivePillBlock, /background:\s*hsl\(var\(--primary\)\);/);
+  assert.match(darkActivePillBlock, /color:\s*hsl\(var\(--primary-foreground\)\);/);
+  assert.ok(
+    getContrastRatio(darkTokens.get("primary"), darkTokens.get("primary-foreground")) >= 4.5,
+    "dark navbar active pill text must satisfy WCAG AA contrast",
+  );
+});
