@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 import {
   LARGE_UP_MEDIA_QUERY,
   MEDIUM_UP_MEDIA_QUERY,
@@ -12,6 +15,16 @@ import {
   isMobileViewportWidth,
   isTabletOrSmallerViewportWidth,
 } from "./responsive";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const APPROVED_CSS_BREAKPOINT_WIDTHS = new Set([640, 767, 768, 1023, 1024]);
+const RESPONSIVE_CSS_CONTRACT_FILES = [
+  "../pages/Login.css",
+  "../components/PublicAuthLayout.css",
+  "../components/Navbar.css",
+  "../index.css",
+  "../theme-tokens.css",
+];
 
 test("responsive contract exposes the shared breakpoint tiers and derived queries", () => {
   assert.deepEqual(RESPONSIVE_BREAKPOINTS, {
@@ -37,4 +50,19 @@ test("responsive helpers treat the md breakpoint as the mobile cutoff", () => {
   assert.equal(isMobileViewportWidth(768), false);
   assert.equal(isTabletOrSmallerViewportWidth(1023), true);
   assert.equal(isTabletOrSmallerViewportWidth(1024), false);
+});
+
+test("custom CSS media queries use approved responsive breakpoints", () => {
+  for (const relativePath of RESPONSIVE_CSS_CONTRACT_FILES) {
+    const source = readFileSync(path.resolve(__dirname, relativePath), "utf8");
+    const widthMatches = source.matchAll(/@media[^{]*(?:min|max)-width:\s*(\d+)px/g);
+    for (const match of widthMatches) {
+      const width = Number(match[1]);
+      assert.equal(
+        APPROVED_CSS_BREAKPOINT_WIDTHS.has(width),
+        true,
+        `${relativePath} uses unapproved breakpoint width ${width}px`,
+      );
+    }
+  }
 });

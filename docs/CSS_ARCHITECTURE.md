@@ -61,6 +61,7 @@ Gunakan route-level CSS apabila:
 - Halaman mempunyai visual language tersendiri seperti `Home`, `Landing`, `Login`, `Banned`, atau `Forbidden`.
 - Terdapat state visual kompleks yang lebih sukar dibaca jika dipaksa sepenuhnya dalam utility classes.
 - Gaya itu milik satu experience tertentu dan tidak sesuai dipromosikan ke shared shell.
+- Route-level CSS masih perlu guna breakpoint repo yang diluluskan (`640`, `767`, `768`, `1023`, `1024`) atau container query tempatan. Jika perlu nilai lain, tambah justifikasi dan test kontrak supaya ia tidak menjadi breakpoint ad hoc.
 
 Gunakan CSS modules apabila:
 
@@ -79,6 +80,7 @@ Gunakan CSS modules apabila:
 ## Responsive and Viewport Rules
 
 - Breakpoint utama repo diseragamkan kepada kontrak bersama yang dipakai oleh CSS dan JS. Rujuk helper responsive jika perlu menambah logic viewport dalam TypeScript.
+- Tailwind utilities adalah pilihan utama untuk responsive component layout di TSX. Custom CSS breakpoint hanya dibenarkan untuk route-level visual systems, safe-area/landscape quirks, hover/reduced-motion media, atau fallback `@supports`.
 - Gunakan container queries apabila susun atur bergantung pada ruang komponen, bukan viewport keseluruhan. Wrapper perlu menetapkan `container-type: inline-size` dan `container-name` yang jelas, kemudian sediakan fallback `@supports not (container-type: inline-size)` jika behavior itu penting untuk browser lama.
 - Untuk full-height mobile layouts, ikut corak `100svh` dengan fallback atau upgrade `100dvh` menggunakan `@supports`, seperti yang digunakan dalam shell dan bootstrap CSS.
 - Jika komponen melekat pada tepi skrin atau bawah skrin, gunakan `--safe-area-inset-*` supaya peranti bertakuk dan gesture bar tidak memotong UI.

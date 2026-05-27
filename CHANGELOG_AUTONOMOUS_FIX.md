@@ -18,3 +18,4 @@
 - MED-FE-4: Added a centralized frontend error-message registry with contextual Malay guidance for common HTTP/network failures, wired it into shared API and mutation feedback helpers, and replaced generic fallback messages in those common paths with status-aware recovery copy.
 - MED-FE-5: Added a dependency-free i18n foundation with `en`/`ms` locale resources, typed namespace lookup/interpolation helpers, an accessible language switcher component, and tests proving locale fallback and missing-key behavior.
 - MED-UI-1: Introduced a container-query responsive pattern for the login shell/card spacing with a `@supports` media-query fallback and documented when component-width responsiveness should use container queries.
+- MED-UI-2: Standardized responsive guidance around Tailwind-first layout, approved route-level CSS breakpoint exceptions, and added a responsive contract test that rejects unapproved custom CSS breakpoint widths.
