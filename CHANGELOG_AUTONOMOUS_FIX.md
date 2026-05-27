@@ -31,3 +31,4 @@
 - LOW-4: Added Lighthouse/PageSpeed score threshold enforcement to the strict runner, wired it into the smoke CI job with artifact upload, and documented the no-new-dependency CI budget process.
 - LOW-5: Expanded the Playwright accessibility contract with screen-reader scenarios for login validation alerts and Floating AI dialog/live-log focus management, plus a source contract and testing strategy notes.
 - LOW-6: Preserved full API/login error messages and added an accessible expandable disclosure for long toast and login alerts instead of silently cutting messages at 240 characters.
+- LOW-7: Upgraded the client API retry guard into an explicit CLOSED/OPEN/HALF_OPEN circuit breaker with immediate retry-enabled rejection, recovery probes, and state transition tests.

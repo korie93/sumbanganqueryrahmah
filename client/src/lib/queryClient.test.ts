@@ -2,10 +2,12 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { ERROR_CODES } from "@shared/error-codes";
 import {
+  ApiCircuitOpenError,
   apiRequest,
   createApiHeaders,
   createApiRequestId,
   getApiErrorRetryCount,
+  getApiRetryCircuitSnapshotForTests,
   getApiResponseRetryCount,
   resetApiRetryStateForTests,
 } from "./api-client";
@@ -264,7 +266,7 @@ test("apiRequest aborts the retry chain when the caller signal aborts during bac
   }
 });
 
-test("apiRequest retry circuit suppresses retries after repeated transient failures", async () => {
+test("apiRequest retry circuit opens after repeated transient failures", async () => {
   const originalFetch = globalThis.fetch;
   resetApiRetryStateForTests();
   let callCount = 0;
@@ -278,7 +280,7 @@ test("apiRequest retry circuit suppresses retries after repeated transient failu
   }) as typeof fetch;
 
   try {
-    for (let index = 0; index < 10; index += 1) {
+    for (let index = 0; index < 5; index += 1) {
       await assert.rejects(
         () => apiRequest("GET", `/api/test-circuit-${index}`, undefined, { retry: false }),
         /temporarily unavailable/,
@@ -294,9 +296,99 @@ test("apiRequest retry circuit suppresses retries after repeated transient failu
           maxRetries: 3,
         },
       }),
+      (error: unknown) => {
+        assert.ok(error instanceof ApiCircuitOpenError);
+        assert.equal(error.retryAfterMs, 30_000);
+        return true;
+      },
+    );
+    assert.equal(callCount - beforeCircuitAttempt, 0);
+    assert.equal(getApiRetryCircuitSnapshotForTests().phase, "OPEN");
+  } finally {
+    globalThis.fetch = originalFetch;
+    resetApiRetryStateForTests();
+  }
+});
+
+test("apiRequest retry circuit recovers through half-open probes", async (t) => {
+  const originalFetch = globalThis.fetch;
+  const originalDateNow = Date.now;
+  let nowMs = 1_000;
+  t.mock.method(Date, "now", () => nowMs);
+  resetApiRetryStateForTests();
+
+  globalThis.fetch = (async () => new Response(JSON.stringify({ message: "temporarily unavailable" }), {
+    status: 503,
+    headers: { "Content-Type": "application/json" },
+  })) as typeof fetch;
+
+  try {
+    for (let index = 0; index < 5; index += 1) {
+      await assert.rejects(
+        () => apiRequest("GET", `/api/test-half-open-failure-${index}`, undefined, { retry: false }),
+        /temporarily unavailable/,
+      );
+    }
+    assert.equal(getApiRetryCircuitSnapshotForTests().phase, "OPEN");
+
+    nowMs += 31_000;
+    globalThis.fetch = (async () => new Response(JSON.stringify({ ok: true }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    })) as typeof fetch;
+
+    await apiRequest("GET", "/api/test-half-open-success-1", undefined, {
+      retry: { baseDelayMs: 1, jitterRatio: 0, maxRetries: 3 },
+    });
+    assert.deepEqual(
+      {
+        halfOpenSuccesses: getApiRetryCircuitSnapshotForTests().halfOpenSuccesses,
+        phase: getApiRetryCircuitSnapshotForTests().phase,
+      },
+      { halfOpenSuccesses: 1, phase: "HALF_OPEN" },
+    );
+
+    await apiRequest("GET", "/api/test-half-open-success-2", undefined, {
+      retry: { baseDelayMs: 1, jitterRatio: 0, maxRetries: 3 },
+    });
+    assert.equal(getApiRetryCircuitSnapshotForTests().phase, "CLOSED");
+  } finally {
+    globalThis.fetch = originalFetch;
+    Date.now = originalDateNow;
+    resetApiRetryStateForTests();
+  }
+});
+
+test("apiRequest retry circuit reopens when a half-open probe fails", async (t) => {
+  const originalFetch = globalThis.fetch;
+  let nowMs = 1_000;
+  t.mock.method(Date, "now", () => nowMs);
+  resetApiRetryStateForTests();
+
+  globalThis.fetch = (async () => new Response(JSON.stringify({ message: "temporarily unavailable" }), {
+    status: 503,
+    headers: { "Content-Type": "application/json" },
+  })) as typeof fetch;
+
+  try {
+    for (let index = 0; index < 5; index += 1) {
+      await assert.rejects(
+        () => apiRequest("GET", `/api/test-half-open-reopen-${index}`, undefined, { retry: false }),
+        /temporarily unavailable/,
+      );
+    }
+
+    nowMs += 31_000;
+    await assert.rejects(
+      () => apiRequest("GET", "/api/test-half-open-reopen-probe", undefined, {
+        retry: { baseDelayMs: 1, jitterRatio: 0, maxRetries: 3 },
+      }),
       /temporarily unavailable/,
     );
-    assert.equal(callCount - beforeCircuitAttempt, 1);
+
+    const snapshot = getApiRetryCircuitSnapshotForTests();
+    assert.equal(snapshot.phase, "OPEN");
+    assert.equal(snapshot.halfOpenSuccesses, 0);
   } finally {
     globalThis.fetch = originalFetch;
     resetApiRetryStateForTests();

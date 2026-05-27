@@ -18,8 +18,9 @@ const DEFAULT_API_MAX_RETRIES = 3;
 const DEFAULT_API_RETRY_BASE_DELAY_MS = 1_000;
 const DEFAULT_API_RETRY_JITTER_RATIO = 0.1;
 const DEFAULT_API_RETRY_MAX_DELAY_MS = 30_000;
-const API_RETRY_CIRCUIT_FAILURE_THRESHOLD = 10;
-const API_RETRY_CIRCUIT_WINDOW_MS = 60_000;
+const API_RETRY_CIRCUIT_FAILURE_THRESHOLD = 5;
+const API_RETRY_CIRCUIT_SUCCESS_THRESHOLD = 2;
+const API_RETRY_CIRCUIT_WINDOW_MS = 30_000;
 const API_RETRY_CIRCUIT_COOLDOWN_MS = 30_000;
 
 const RETRYABLE_API_STATUS_CODES = new Set([429, 502, 503, 504]);
@@ -40,14 +41,35 @@ type ResolvedApiRetryOptions = {
 };
 
 type ApiRetryCircuitState = {
+  halfOpenSuccesses: number;
   failureTimestamps: number[];
   openedUntilMs: number;
+  phase: "CLOSED" | "OPEN" | "HALF_OPEN";
+};
+
+export type ApiRetryCircuitSnapshot = {
+  failureCount: number;
+  halfOpenSuccesses: number;
+  openedUntilMs: number;
+  phase: ApiRetryCircuitState["phase"];
 };
 
 const apiRetryCircuitState: ApiRetryCircuitState = {
+  halfOpenSuccesses: 0,
   failureTimestamps: [],
   openedUntilMs: 0,
+  phase: "CLOSED",
 };
+
+export class ApiCircuitOpenError extends Error {
+  readonly retryAfterMs: number;
+
+  constructor(retryAfterMs: number) {
+    super(`API retry circuit is open. Try again in ${Math.ceil(retryAfterMs / 1000)} seconds.`);
+    this.name = "ApiCircuitOpenError";
+    this.retryAfterMs = Math.max(0, Math.trunc(retryAfterMs));
+  }
+}
 
 export function createApiRequestId() {
   return createClientRandomId("api");
@@ -259,31 +281,73 @@ function pruneApiRetryCircuitFailures(nowMs: number) {
   }
 }
 
-function shouldSuppressApiRetries(nowMs = Date.now()) {
-  if (apiRetryCircuitState.openedUntilMs <= 0) {
-    return false;
-  }
+function openApiRetryCircuit(nowMs: number) {
+  apiRetryCircuitState.phase = "OPEN";
+  apiRetryCircuitState.openedUntilMs = nowMs + API_RETRY_CIRCUIT_COOLDOWN_MS;
+  apiRetryCircuitState.halfOpenSuccesses = 0;
+}
 
-  if (apiRetryCircuitState.openedUntilMs > nowMs) {
-    return true;
-  }
-
+function closeApiRetryCircuit() {
+  apiRetryCircuitState.phase = "CLOSED";
   apiRetryCircuitState.openedUntilMs = 0;
+  apiRetryCircuitState.halfOpenSuccesses = 0;
   apiRetryCircuitState.failureTimestamps = [];
-  return false;
+}
+
+function refreshApiRetryCircuitPhase(nowMs = Date.now()) {
+  if (
+    apiRetryCircuitState.phase === "OPEN"
+    && apiRetryCircuitState.openedUntilMs > 0
+    && apiRetryCircuitState.openedUntilMs <= nowMs
+  ) {
+    apiRetryCircuitState.phase = "HALF_OPEN";
+    apiRetryCircuitState.openedUntilMs = 0;
+    apiRetryCircuitState.halfOpenSuccesses = 0;
+    apiRetryCircuitState.failureTimestamps = [];
+  }
+
+  return apiRetryCircuitState.phase;
 }
 
 function recordApiRetrySuccess() {
-  apiRetryCircuitState.openedUntilMs = 0;
-  apiRetryCircuitState.failureTimestamps = [];
+  const phase = refreshApiRetryCircuitPhase();
+  if (phase === "HALF_OPEN") {
+    apiRetryCircuitState.halfOpenSuccesses += 1;
+    if (apiRetryCircuitState.halfOpenSuccesses >= API_RETRY_CIRCUIT_SUCCESS_THRESHOLD) {
+      closeApiRetryCircuit();
+    }
+    return;
+  }
+
+  if (phase === "CLOSED") {
+    apiRetryCircuitState.failureTimestamps = [];
+  }
 }
 
 function recordApiRetryFailure(nowMs = Date.now()) {
+  const phase = refreshApiRetryCircuitPhase(nowMs);
+  if (phase === "HALF_OPEN") {
+    openApiRetryCircuit(nowMs);
+    return;
+  }
+
   pruneApiRetryCircuitFailures(nowMs);
   apiRetryCircuitState.failureTimestamps.push(nowMs);
   if (apiRetryCircuitState.failureTimestamps.length >= API_RETRY_CIRCUIT_FAILURE_THRESHOLD) {
-    apiRetryCircuitState.openedUntilMs = nowMs + API_RETRY_CIRCUIT_COOLDOWN_MS;
+    openApiRetryCircuit(nowMs);
   }
+}
+
+function resolveApiRetryCircuitAccess(retryOptions: ResolvedApiRetryOptions, nowMs = Date.now()) {
+  const phase = refreshApiRetryCircuitPhase(nowMs);
+  if (phase === "OPEN" && retryOptions.maxRetries > 0) {
+    throw new ApiCircuitOpenError(apiRetryCircuitState.openedUntilMs - nowMs);
+  }
+
+  return {
+    maxRetries: phase === "HALF_OPEN" ? 0 : retryOptions.maxRetries,
+    phase,
+  };
 }
 
 function attachApiRetryCount<T extends Error>(error: T, retryCount: number): T {
@@ -311,7 +375,23 @@ export function getApiResponseRetryCount(response: Response) {
 
 export function resetApiRetryStateForTests() {
   apiRetryCircuitState.failureTimestamps = [];
+  apiRetryCircuitState.halfOpenSuccesses = 0;
   apiRetryCircuitState.openedUntilMs = 0;
+  apiRetryCircuitState.phase = "CLOSED";
+}
+
+export function getApiRetryCircuitSnapshot(): ApiRetryCircuitSnapshot {
+  refreshApiRetryCircuitPhase();
+  return {
+    failureCount: apiRetryCircuitState.failureTimestamps.length,
+    halfOpenSuccesses: apiRetryCircuitState.halfOpenSuccesses,
+    openedUntilMs: apiRetryCircuitState.openedUntilMs,
+    phase: apiRetryCircuitState.phase,
+  };
+}
+
+export function getApiRetryCircuitSnapshotForTests() {
+  return getApiRetryCircuitSnapshot();
 }
 
 export async function throwIfResNotOk(res: Response) {
@@ -463,7 +543,8 @@ export async function fetchApiWithRetry(
   options?: ApiFetchWithRetryOptions | undefined,
 ): Promise<Response> {
   const retryOptions = resolveApiRetryOptions(options?.retry);
-  const maxRetries = shouldSuppressApiRetries() ? 0 : retryOptions.maxRetries;
+  const circuitAccess = resolveApiRetryCircuitAccess(retryOptions);
+  const maxRetries = circuitAccess.maxRetries;
   const signal = init?.signal as AbortSignal | undefined;
   let retryCount = 0;
 
