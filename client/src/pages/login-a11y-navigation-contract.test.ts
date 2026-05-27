@@ -21,12 +21,31 @@ test("login inputs preserve keyboard-visible focus without mouse focus noise", (
 });
 
 test("login fallback navigation uses history instead of full document reloads", () => {
-  const source = readSource("useLoginPageState.ts");
+  const source = readSource("useLoginRedirect.ts");
 
   assert.match(source, /function navigateInternalFallback\(path: string\)/);
   assert.match(source, /window\.history\.pushState\(\{\}, "", path\)/);
   assert.match(source, /window\.dispatchEvent\(new Event\("popstate"\)\)/);
   assert.doesNotMatch(source, /window\.location\.href/);
+});
+
+test("login page state is composed from focused documented hooks", () => {
+  const orchestrator = readSource("useLoginPageState.ts");
+  assert.match(orchestrator, /useLoginFormState\(\)/);
+  assert.match(orchestrator, /useLoginSecurity\(\{/);
+  assert.match(orchestrator, /useLoginRedirect\(\{/);
+  assert.match(orchestrator, /useLoginSubmission\(\{/);
+
+  for (const fileName of [
+    "useLoginFormState.ts",
+    "useLoginSecurity.ts",
+    "useLoginRedirect.ts",
+    "useLoginSubmission.ts",
+  ]) {
+    const source = readSource(fileName);
+    assert.match(source, /\/\*\*[\s\S]*@returns[\s\S]*\*\//);
+    assert.match(source, /export function useLogin/);
+  }
 });
 
 test("login request lifecycle aborts pending auth work and ignores stale responses", () => {
