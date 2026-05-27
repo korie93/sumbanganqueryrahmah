@@ -290,6 +290,8 @@
 .login-shell {
   max-width: min(32rem, 100%);
   margin-inline: auto;
+  container-name: login-shell;
+  container-type: inline-size;
 }
 
 .login-card-form {
@@ -325,9 +327,17 @@
   }
 }
 
-@media (min-width: 640px) {
+@container login-shell (min-width: 32rem) {
   .login-card-form {
     padding: 2.25rem 2rem;
+  }
+}
+
+@supports not (container-type: inline-size) {
+  @media (min-width: 640px) {
+    .login-card-form {
+      padding: 2.25rem 2rem;
+    }
   }
 }
 

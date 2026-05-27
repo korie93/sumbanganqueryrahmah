@@ -79,6 +79,7 @@ Gunakan CSS modules apabila:
 ## Responsive and Viewport Rules
 
 - Breakpoint utama repo diseragamkan kepada kontrak bersama yang dipakai oleh CSS dan JS. Rujuk helper responsive jika perlu menambah logic viewport dalam TypeScript.
+- Gunakan container queries apabila susun atur bergantung pada ruang komponen, bukan viewport keseluruhan. Wrapper perlu menetapkan `container-type: inline-size` dan `container-name` yang jelas, kemudian sediakan fallback `@supports not (container-type: inline-size)` jika behavior itu penting untuk browser lama.
 - Untuk full-height mobile layouts, ikut corak `100svh` dengan fallback atau upgrade `100dvh` menggunakan `@supports`, seperti yang digunakan dalam shell dan bootstrap CSS.
 - Jika komponen melekat pada tepi skrin atau bawah skrin, gunakan `--safe-area-inset-*` supaya peranti bertakuk dan gesture bar tidak memotong UI.
 - Untuk landscape mobile yang padat, semak sama ada komponen perlukan variant khusus seperti corak yang sudah wujud dalam `AuthenticatedAppShell.css`.

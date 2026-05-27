@@ -20,6 +20,15 @@ test("login inputs preserve keyboard-visible focus without mouse focus noise", (
   assert.doesNotMatch(source, /\.login-input:focus\s*\{[^}]*outline:\s*none/);
 });
 
+test("login card spacing uses container queries with a media-query fallback", () => {
+  const source = readSource("Login.css");
+
+  assert.match(source, /container-name:\s*login-shell/);
+  assert.match(source, /container-type:\s*inline-size/);
+  assert.match(source, /@container login-shell \(min-width:\s*32rem\)/);
+  assert.match(source, /@supports not \(container-type:\s*inline-size\)/);
+});
+
 test("login fallback navigation uses history instead of full document reloads", () => {
   const source = readSource("useLoginRedirect.ts");
 
