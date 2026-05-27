@@ -31,10 +31,15 @@ export default function Login({ onBanned, onForgotPasswordClick, onLandingClick,
     showPassword,
     twoFactorChallengeToken,
     twoFactorCode,
+    captchaRequired,
+    captchaChallenge,
+    captchaResponse,
+    captchaResponseError,
     lockedFlow,
     lockedRetryUntilMs,
     setPassword,
     setTwoFactorCode,
+    setCaptchaResponse,
     handleUsernameChange,
     handleSubmit,
     handleInputKeyDown,
@@ -71,6 +76,14 @@ export default function Login({ onBanned, onForgotPasswordClick, onLandingClick,
     }
     : {
       "aria-describedby": "login-two-factor-help",
+    };
+  const captchaInvalidProps = captchaResponseError
+    ? {
+      "aria-invalid": "true" as const,
+      "aria-describedby": "login-captcha-help login-captcha-error",
+    }
+    : {
+      "aria-describedby": "login-captcha-help",
     };
   const [lockedCountdownMs, setLockedCountdownMs] = useState(0);
 
@@ -269,6 +282,34 @@ export default function Login({ onBanned, onForgotPasswordClick, onLandingClick,
                       <p id="login-password-error" className="login-field-error text-sm" role="alert">
                         {passwordError}
                       </p>
+                    ) : null}
+                    {captchaRequired ? (
+                      <div className="mt-4 space-y-2">
+                        <label htmlFor="login-captcha-response" className="login-field-label block text-left text-sm font-medium">
+                          Pengesahan keselamatan
+                        </label>
+                        <PublicAuthInput
+                          id="login-captcha-response"
+                          name="captchaResponse"
+                          className="login-input w-full rounded-xl px-4 py-3 transition-all"
+                          placeholder="Masukkan jawapan"
+                          value={captchaResponse}
+                          onChange={(e) => setCaptchaResponse(e.target.value)}
+                          onKeyDown={handleInputKeyDown}
+                          autoComplete="off"
+                          data-testid="input-captcha-response"
+                          disabled={loading}
+                          {...captchaInvalidProps}
+                        />
+                        <p id="login-captcha-help" className="login-subtitle text-xs">
+                          {captchaChallenge || "Server memerlukan pengesahan tambahan sebelum percubaan log masuk seterusnya."}
+                        </p>
+                        {captchaResponseError ? (
+                          <p id="login-captcha-error" className="login-field-error text-sm" role="alert">
+                            {captchaResponseError}
+                          </p>
+                        ) : null}
+                      </div>
                     ) : null}
                   </div>
                 )}

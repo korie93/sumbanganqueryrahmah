@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import { normalizeTwoFactorCode } from "@/pages/auth-field-utils";
 import { isLockedAccountFlow, normalizeLoginIdentity } from "@/pages/login-lock-state";
-import { readErrorMessage, readRetryAfterMs } from "@/pages/login-page-utils";
+import { readCaptchaChallenge, readErrorMessage, readRetryAfterMs } from "@/pages/login-page-utils";
 
 type UseLoginSecurityParams = {
   username: string;
@@ -23,6 +23,10 @@ export function useLoginSecurity({ username }: UseLoginSecurityParams) {
   const [lockedUsername, setLockedUsername] = useState("");
   const [twoFactorChallengeToken, setTwoFactorChallengeToken] = useState("");
   const [twoFactorCode, setTwoFactorCodeValue] = useState("");
+  const [captchaRequired, setCaptchaRequired] = useState(false);
+  const [captchaChallenge, setCaptchaChallenge] = useState("");
+  const [captchaResponse, setCaptchaResponseValue] = useState("");
+  const [captchaResponseError, setCaptchaResponseError] = useState("");
 
   const lockedFlow = isLockedAccountFlow({
     lockedUsername,
@@ -75,6 +79,25 @@ export function useLoginSecurity({ username }: UseLoginSecurityParams) {
     setTwoFactorCodeError("");
   }, []);
 
+  const setCaptchaResponse = useCallback((value: string) => {
+    setCaptchaResponseValue(value);
+    setCaptchaResponseError("");
+  }, []);
+
+  const clearCaptchaChallenge = useCallback(() => {
+    setCaptchaRequired(false);
+    setCaptchaChallenge("");
+    setCaptchaResponseValue("");
+    setCaptchaResponseError("");
+  }, []);
+
+  const applyCaptchaRequiredError = useCallback((error: unknown) => {
+    setCaptchaRequired(true);
+    setCaptchaChallenge(readCaptchaChallenge(error));
+    setCaptchaResponseValue("");
+    setCaptchaResponseError("");
+  }, []);
+
   const applyLockedAccountError = useCallback((error: unknown, currentUsername: string, fallbackMessage: string) => {
     setTwoFactorChallengeToken("");
     setTwoFactorCodeValue("");
@@ -92,13 +115,21 @@ export function useLoginSecurity({ username }: UseLoginSecurityParams) {
     lockedUsername,
     twoFactorChallengeToken,
     twoFactorCode,
+    captchaRequired,
+    captchaChallenge,
+    captchaResponse,
+    captchaResponseError,
     lockedFlow,
     setTwoFactorCode,
     setTwoFactorCodeError,
+    setCaptchaResponse,
+    setCaptchaResponseError,
     startTwoFactorChallenge,
     clearTwoFactorChallenge,
+    clearCaptchaChallenge,
     clearLockedAccountState,
     clearLockedAccountMessage,
     applyLockedAccountError,
+    applyCaptchaRequiredError,
   };
 }

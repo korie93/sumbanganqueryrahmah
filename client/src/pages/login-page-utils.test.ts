@@ -4,9 +4,11 @@ import {
   buildAuthenticatedUser,
   hasLoginFieldErrors,
   isAbortRequestError,
+  isCaptchaRequiredLoginError,
   isLockedAccountError,
   normalizeLoginErrorMessage,
   formatRetryAfterMessage,
+  readCaptchaChallenge,
   readRetryAfterMs,
   readErrorMessage,
   resolveAuthenticatedDefaultTab,
@@ -70,6 +72,11 @@ test("login error helpers read safe fields from unknown errors", () => {
   assert.equal(isLockedAccountError({ code: "ACCOUNT_LOCKED" }), true);
   assert.equal(isLockedAccountError({ locked: true }), true);
   assert.equal(isLockedAccountError({ code: "OTHER" }), false);
+  assert.equal(isCaptchaRequiredLoginError({ captchaRequired: true }), true);
+  assert.equal(isCaptchaRequiredLoginError({ captcha_required: true }), true);
+  assert.equal(isCaptchaRequiredLoginError({ captchaRequired: false }), false);
+  assert.equal(readCaptchaChallenge({ captchaChallenge: "3 + 4" }), "3 + 4");
+  assert.equal(readCaptchaChallenge({ captcha_challenge: "7 + 1" }), "7 + 1");
 
   assert.equal(readErrorMessage(new Error("Boom"), "Fallback"), "Boom");
   assert.equal(readErrorMessage({ message: "Plain object error" }, "Fallback"), "Plain object error");

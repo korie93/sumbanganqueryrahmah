@@ -60,6 +60,66 @@ test("login reports a friendly message when the proxy returns an HTML 502 page",
   }
 });
 
+test("login sends captcha responses only when provided", async () => {
+  const requestBodies: Array<Record<string, unknown>> = [];
+  const restoreFetch = withMockFetch((async (_url: string | URL | Request, init?: RequestInit) => {
+    requestBodies.push(JSON.parse(String(init?.body || "{}")) as Record<string, unknown>);
+    return new Response(JSON.stringify({
+      ok: true,
+      username: "korie",
+      role: "admin",
+      activityId: "activity-1",
+      mustChangePassword: false,
+      status: "active",
+      sessionExpiresAt: "2099-01-01T00:00:00.000Z",
+      user: null,
+    }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  }) as typeof fetch);
+
+  try {
+    await login("korie", "secret", "fingerprint-1");
+    await login("korie", "secret", "fingerprint-1", { captchaResponse: "  a7x9  " });
+
+    assert.equal(requestBodies[0].captchaResponse, undefined);
+    assert.equal(requestBodies[1].captchaResponse, "a7x9");
+  } finally {
+    restoreFetch();
+  }
+});
+
+test("login exposes captcha-required payloads on rejected attempts", async () => {
+  const restoreFetch = withMockFetch((async () => new Response(JSON.stringify({
+    ok: false,
+    message: "Pengesahan keselamatan diperlukan.",
+    captcha_required: true,
+    captcha_challenge: "3 + 4",
+  }), {
+    status: 401,
+    headers: {
+      "Content-Type": "application/json",
+      "x-request-id": "captcha-request",
+    },
+  })) as typeof fetch);
+
+  try {
+    await assert.rejects(
+      () => login("korie", "secret"),
+      (error: unknown) => {
+        assert.ok(error instanceof Error);
+        assert.equal((error as { captchaRequired?: boolean }).captchaRequired, true);
+        assert.equal((error as { captchaChallenge?: string | null }).captchaChallenge, "3 + 4");
+        assert.equal((error as { requestId?: string | null }).requestId, "captcha-request");
+        return true;
+      },
+    );
+  } finally {
+    restoreFetch();
+  }
+});
+
 test("login stores maintenance state and routes to maintenance page on 503 payload", async () => {
   const restoreFetch = withMockFetch((async () => new Response(
     JSON.stringify({

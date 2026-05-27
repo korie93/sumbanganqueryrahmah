@@ -65,6 +65,30 @@ export function isLockedAccountError(error: unknown): boolean {
   return errorRecord.code === "ACCOUNT_LOCKED" || errorRecord.locked === true;
 }
 
+export function isCaptchaRequiredLoginError(error: unknown): boolean {
+  if (!error || typeof error !== "object") {
+    return false;
+  }
+
+  const errorRecord = error as { captcha_required?: unknown; captchaRequired?: unknown };
+  return errorRecord.captchaRequired === true || errorRecord.captcha_required === true;
+}
+
+export function readCaptchaChallenge(error: unknown): string {
+  if (!error || typeof error !== "object") {
+    return "";
+  }
+
+  const errorRecord = error as { captcha_challenge?: unknown; captchaChallenge?: unknown };
+  if (typeof errorRecord.captchaChallenge === "string") {
+    return errorRecord.captchaChallenge;
+  }
+  if (typeof errorRecord.captcha_challenge === "string") {
+    return errorRecord.captcha_challenge;
+  }
+  return "";
+}
+
 function parseStructuredErrorMessage(message: string): Record<string, unknown> | null {
   const match = message.match(/^\d+:\s*(\{.*\})$/s);
   if (!match) {

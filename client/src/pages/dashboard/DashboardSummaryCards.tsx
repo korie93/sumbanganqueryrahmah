@@ -1,3 +1,4 @@
+import { memo, useMemo } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { useIsMobile } from "@/hooks/use-mobile";
 import type { SummaryCardItem } from "@/pages/dashboard/types";
@@ -7,10 +8,10 @@ interface DashboardSummaryCardsProps {
   summaryLoading: boolean;
 }
 
-export function DashboardSummaryCards({ items, summaryLoading }: DashboardSummaryCardsProps) {
+function DashboardSummaryCardsImpl({ items, summaryLoading }: DashboardSummaryCardsProps) {
   const isMobile = useIsMobile();
-  const primaryItems = items.slice(0, 4);
-  const supportingItems = items.slice(4);
+  const primaryItems = useMemo(() => items.slice(0, 4), [items]);
+  const supportingItems = useMemo(() => items.slice(4), [items]);
 
   return (
     <div className="space-y-4">
@@ -114,3 +115,6 @@ export function DashboardSummaryCards({ items, summaryLoading }: DashboardSummar
     </div>
   );
 }
+
+export const DashboardSummaryCards = memo(DashboardSummaryCardsImpl);
+DashboardSummaryCards.displayName = "DashboardSummaryCards";

@@ -14,6 +14,7 @@ import { normalizeTwoFactorCode } from "@/pages/auth-field-utils";
 import {
   hasLoginFieldErrors,
   isAbortRequestError,
+  isCaptchaRequiredLoginError,
   isLockedAccountError,
   normalizeLoginErrorMessage,
   readErrorMessage,
@@ -24,6 +25,10 @@ import { useLoginRequestLifecycle } from "@/pages/useLoginRequestLifecycle";
 
 type UseLoginSubmissionParams = {
   applyLockedAccountError: (error: unknown, currentUsername: string, fallbackMessage: string) => void;
+  applyCaptchaRequiredError: (error: unknown) => void;
+  captchaRequired: boolean;
+  captchaResponse: string;
+  clearCaptchaChallenge: () => void;
   clearLockedAccountMessage: () => void;
   clearLockedAccountState: () => void;
   completeAuthenticatedSession: (
@@ -36,6 +41,7 @@ type UseLoginSubmissionParams = {
   setError: (value: string) => void;
   setNotice: (value: string) => void;
   setPasswordError: (value: string) => void;
+  setCaptchaResponseError: (value: string) => void;
   setTwoFactorCodeError: (value: string) => void;
   setUsernameError: (value: string) => void;
   startTwoFactorChallenge: (challengeToken: string) => void;
@@ -56,7 +62,11 @@ const LOCKED_ACCOUNT_FALLBACK_MESSAGE =
  * @returns Loading state plus submit and keyboard handlers consumed by Login.
  */
 export function useLoginSubmission({
+  applyCaptchaRequiredError,
   applyLockedAccountError,
+  captchaRequired,
+  captchaResponse,
+  clearCaptchaChallenge,
   clearLockedAccountMessage,
   clearLockedAccountState,
   completeAuthenticatedSession,
@@ -66,6 +76,7 @@ export function useLoginSubmission({
   setError,
   setNotice,
   setPasswordError,
+  setCaptchaResponseError,
   setTwoFactorCodeError,
   setUsernameError,
   startTwoFactorChallenge,
@@ -88,6 +99,7 @@ export function useLoginSubmission({
     setNotice("");
     setUsernameError("");
     setPasswordError("");
+    setCaptchaResponseError("");
     setTwoFactorCodeError("");
     clearLockedAccountMessage();
     return requestId;
@@ -97,6 +109,7 @@ export function useLoginSubmission({
     setError,
     setNotice,
     setPasswordError,
+    setCaptchaResponseError,
     setTwoFactorCodeError,
     setUsernameError,
   ]);
@@ -118,6 +131,10 @@ export function useLoginSubmission({
         }
         return;
       }
+      if (captchaRequired && !captchaResponse.trim()) {
+        setCaptchaResponseError("Sila masukkan jawapan pengesahan keselamatan.");
+        return;
+      }
 
       controller = new AbortController();
       setActiveController(controller);
@@ -127,6 +144,7 @@ export function useLoginSubmission({
       }
 
       const response = await login(username, password, fingerprint, {
+        captchaResponse: captchaRequired ? captchaResponse : undefined,
         signal: controller.signal,
       });
       if (shouldIgnoreRequest(requestId, controller)) {
@@ -146,11 +164,13 @@ export function useLoginSubmission({
       if (isTwoFactorChallengeResponse(response)) {
         setStoredFingerprint(fingerprint);
         clearLockedAccountState();
+        clearCaptchaChallenge();
         startTwoFactorChallenge(String(response.challengeToken || ""));
         setNotice("Masukkan kod pengesah 6 digit untuk melengkapkan log masuk.");
         return;
       }
 
+      clearCaptchaChallenge();
       completeAuthenticatedSession(response, { fingerprint });
     } catch (err: unknown) {
       if (isAbortRequestError(err) || shouldIgnoreRequest(requestId)) {
@@ -163,6 +183,11 @@ export function useLoginSubmission({
         setError("");
         return;
       }
+      if (isCaptchaRequiredLoginError(err)) {
+        applyCaptchaRequiredError(err);
+        setError(readErrorMessage(err, "Sila lengkapkan pengesahan keselamatan sebelum cuba semula."));
+        return;
+      }
 
       setError(normalizeLoginErrorMessage(readErrorMessage(err, "Login failed. Please try again.")));
     } finally {
@@ -170,7 +195,11 @@ export function useLoginSubmission({
     }
   }, [
     applyLockedAccountError,
+    applyCaptchaRequiredError,
     beginRequest,
+    captchaRequired,
+    captchaResponse,
+    clearCaptchaChallenge,
     clearLockedAccountState,
     completeAuthenticatedSession,
     finalizeRequest,
@@ -179,6 +208,7 @@ export function useLoginSubmission({
     onBanned,
     password,
     setActiveController,
+    setCaptchaResponseError,
     setError,
     setNotice,
     setPasswordError,

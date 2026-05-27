@@ -27,11 +27,17 @@ function readRetryAfterMs(res: Response, data: unknown): number | undefined {
 }
 
 type LoginError = Error & {
+  captchaChallenge?: string | null;
+  captchaRequired?: boolean;
   code?: string;
   locked?: boolean;
   retryAfterMs?: number;
   status?: number;
   requestId?: string | null;
+};
+
+type LoginRequestOptions = RequestOptions & {
+  captchaResponse?: string | undefined;
 };
 
 function buildLoginError(message: string, res: Response, data?: unknown): LoginError {
@@ -47,6 +53,16 @@ function buildLoginError(message: string, res: Response, data?: unknown): LoginE
   error.locked = payload?.locked === true;
   if (error.code === ERROR_CODES.ACCOUNT_LOCKED) {
     error.locked = true;
+  }
+  const captchaRequired = (payload as { captcha_required?: unknown; captchaRequired?: unknown } | null);
+  if (captchaRequired?.captcha_required === true || captchaRequired?.captchaRequired === true) {
+    error.captchaRequired = true;
+  }
+  const captchaChallenge = (payload as { captcha_challenge?: unknown; captchaChallenge?: unknown } | null);
+  if (typeof captchaChallenge?.captcha_challenge === "string") {
+    error.captchaChallenge = captchaChallenge.captcha_challenge;
+  } else if (typeof captchaChallenge?.captchaChallenge === "string") {
+    error.captchaChallenge = captchaChallenge.captchaChallenge;
   }
   const retryAfterMs = readRetryAfterMs(res, data);
   if (retryAfterMs !== undefined) {
@@ -97,8 +113,9 @@ export async function login(
   username: string,
   password: string,
   fingerprint?: string,
-  options?: RequestOptions,
+  options?: LoginRequestOptions,
 ): Promise<LoginResponse | { banned: true }> {
+  const captchaResponse = String(options?.captchaResponse || "").trim();
   const res = await fetch("/api/auth/login", {
     method: "POST",
     headers: createApiHeaders({
@@ -110,6 +127,7 @@ export async function login(
       password,
       fingerprint,
       browser: navigator.userAgent,
+      ...(captchaResponse ? { captchaResponse } : {}),
     }),
     credentials: "include",
     signal: options?.signal ?? null,

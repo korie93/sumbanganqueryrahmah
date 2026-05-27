@@ -1,5 +1,7 @@
+import { memo, useCallback, useMemo } from "react";
 import { Clock, TrendingUp } from "lucide-react";
-import { Area, AreaChart, Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Area, AreaChart, Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis, type TooltipProps } from "recharts";
+import type { NameType, ValueType } from "recharts/types/component/DefaultTooltipContent";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -20,30 +22,24 @@ interface DashboardChartsGridProps {
   trendsLoading: boolean;
 }
 
-type DashboardTooltipPayloadItem = {
-  color?: string | undefined;
-  name?: string | number | undefined;
-  value?: string | number | readonly (string | number)[] | undefined;
-};
+type DashboardTooltipProps = TooltipProps<ValueType, NameType>;
 
-type CompactChartTooltipProps = {
-  active?: boolean | undefined;
-  payload?: DashboardTooltipPayloadItem[] | undefined;
-  label?: string | number | undefined;
-  labelFormatter: (label: string | number) => string;
+type CompactChartTooltipProps = Pick<DashboardTooltipProps, "active" | "label" | "payload"> & {
+  formatLabel: (label: string | number) => string;
 };
 
 const LOGIN_TREND_LEGEND_ITEMS = [
   { label: "Logins", dotClassName: "bg-[hsl(var(--chart-1))]" },
   { label: "Logouts", dotClassName: "bg-[hsl(var(--chart-2))]" },
 ];
+const TREND_DAY_OPTIONS = [7, 14, 30] as const;
 
 const TOOLTIP_DOT_CLASS_BY_NAME: Record<string, string> = {
   Logins: "bg-[hsl(var(--chart-1))]",
   Logouts: "bg-[hsl(var(--chart-2))]",
 };
 
-function formatTooltipValue(value: DashboardTooltipPayloadItem["value"]) {
+function formatTooltipValue(value: ValueType | undefined) {
   if (Array.isArray(value)) {
     return value.join(" / ");
   }
@@ -54,11 +50,11 @@ function formatDashboardHourCompact(hour: number) {
   return formatDashboardHour(hour).replace(" AM", "a").replace(" PM", "p").replace(" ", "");
 }
 
-function CompactChartTooltip({
+const CompactChartTooltip = memo(function CompactChartTooltip({
   active,
   payload,
   label,
-  labelFormatter,
+  formatLabel,
 }: CompactChartTooltipProps) {
   if (!active || !payload?.length || label === undefined) {
     return null;
@@ -67,7 +63,7 @@ function CompactChartTooltip({
   return (
     <div className="min-w-[132px] max-w-[200px] rounded-xl border border-border/70 bg-popover px-3 py-2 text-popover-foreground shadow-lg">
       <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-        {labelFormatter(label)}
+        {formatLabel(label)}
       </p>
       <div className="mt-2 space-y-1.5">
         {payload.map((item) => (
@@ -85,9 +81,10 @@ function CompactChartTooltip({
       </div>
     </div>
   );
-}
+});
+CompactChartTooltip.displayName = "CompactChartTooltip";
 
-export function DashboardChartsGrid({
+function DashboardChartsGridImpl({
   onTrendDaysChange,
   peakHours,
   peakHoursLoading,
@@ -97,7 +94,22 @@ export function DashboardChartsGrid({
 }: DashboardChartsGridProps) {
   const isMobile = useIsMobile();
   const chartHeightClassName = isMobile ? "h-[220px]" : "h-[250px]";
-  const loginTrendTickDates = buildDashboardTrendTickDates(trends, isMobile ? 4 : trendDays >= 30 ? 6 : 7);
+  const loginTrendTickDates = useMemo(
+    () => buildDashboardTrendTickDates(trends, isMobile ? 4 : trendDays >= 30 ? 6 : 7),
+    [isMobile, trendDays, trends],
+  );
+  const renderLoginTrendTooltip = useCallback((props: DashboardTooltipProps) => (
+    <CompactChartTooltip
+      {...props}
+      formatLabel={(value) => formatDashboardDate(String(value))}
+    />
+  ), []);
+  const renderPeakHoursTooltip = useCallback((props: DashboardTooltipProps) => (
+    <CompactChartTooltip
+      {...props}
+      formatLabel={(value) => formatDashboardHour(Number(value))}
+    />
+  ), []);
 
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:gap-6">
@@ -124,7 +136,7 @@ export function DashboardChartsGrid({
               role="group"
               aria-label="Select trend period"
             >
-              {[7, 14, 30].map((days) => (
+              {TREND_DAY_OPTIONS.map((days) => (
                 trendDays === days ? (
                   <Button
                     key={days}
@@ -210,14 +222,7 @@ export function DashboardChartsGrid({
                       width={isMobile ? 28 : 36}
                       className="text-[11px] text-muted-foreground"
                     />
-                    <Tooltip
-                      content={(props) => (
-                        <CompactChartTooltip
-                          {...props}
-                          labelFormatter={(value) => formatDashboardDate(String(value))}
-                        />
-                      )}
-                    />
+                    <Tooltip content={renderLoginTrendTooltip} />
                     <Area
                       type="monotone"
                       dataKey="logins"
@@ -318,14 +323,7 @@ export function DashboardChartsGrid({
                     width={isMobile ? 28 : 36}
                     className="text-[11px] text-muted-foreground"
                   />
-                  <Tooltip
-                    content={(props) => (
-                      <CompactChartTooltip
-                        {...props}
-                        labelFormatter={(value) => formatDashboardHour(Number(value))}
-                      />
-                    )}
-                  />
+                  <Tooltip content={renderPeakHoursTooltip} />
                   <Bar dataKey="count" fill="hsl(var(--chart-3))" radius={[8, 8, 0, 0]} name="Logins" />
                 </BarChart>
               </ResponsiveContainer>
@@ -342,3 +340,6 @@ export function DashboardChartsGrid({
     </div>
   );
 }
+
+export const DashboardChartsGrid = memo(DashboardChartsGridImpl);
+DashboardChartsGrid.displayName = "DashboardChartsGrid";

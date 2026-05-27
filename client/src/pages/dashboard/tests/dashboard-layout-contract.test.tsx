@@ -57,6 +57,7 @@ test("DashboardPageHeader keeps compact solid actions and status badges", () => 
 });
 
 test("DashboardSummaryCards separates primary and supporting metrics into compact sections", () => {
+  const source = readFileSync(path.resolve(__dirname, "../DashboardSummaryCards.tsx"), "utf8");
   const markup = renderToStaticMarkup(
     createElement(DashboardSummaryCards, {
       items: summaryCards,
@@ -70,6 +71,9 @@ test("DashboardSummaryCards separates primary and supporting metrics into compac
   assert.match(markup, /Operational context/);
   assert.match(markup, /rounded-2xl border border-border\/60 bg-background shadow-sm/);
   assert.match(markup, /rounded-2xl border border-border\/60 bg-muted\/10 shadow-none/);
+  assert.match(source, /export const DashboardSummaryCards = memo\(DashboardSummaryCardsImpl\)/);
+  assert.match(source, /items\.slice\(0, 4\), \[items\]/);
+  assert.match(source, /items\.slice\(4\), \[items\]/);
 });
 
 test("DashboardSummaryCards hides loading skeletons from assistive technology", () => {
@@ -95,6 +99,16 @@ test("DashboardSnapshotSection surfaces metric count badge with compact summary 
   assert.match(markup, /Quick Snapshot/);
   assert.match(markup, /3 metrics/);
   assert.match(markup, /compact dashboard snapshot/);
+});
+
+test("DashboardChartsGrid memoizes heavy chart rendering helpers", () => {
+  const source = readFileSync(path.resolve(__dirname, "../DashboardChartsGrid.tsx"), "utf8");
+
+  assert.match(source, /const CompactChartTooltip = memo\(function CompactChartTooltip/);
+  assert.match(source, /const loginTrendTickDates = useMemo\(/);
+  assert.match(source, /const renderLoginTrendTooltip = useCallback\(/);
+  assert.match(source, /const renderPeakHoursTooltip = useCallback\(/);
+  assert.match(source, /export const DashboardChartsGrid = memo\(DashboardChartsGridImpl\)/);
 });
 
 test("DashboardUserInsightsGrid keeps chart semantics grouped and the top-users scroller keyboard reachable", () => {
