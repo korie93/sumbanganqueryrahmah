@@ -76,6 +76,24 @@ test("modal shells use Radix focus-managed primitives and labelled close control
   assert.match(alertDialogSource, /<AlertDialogPrimitive\.Content/);
 });
 
+test("tooltips stay keyboard accessible through Radix trigger/content primitives", () => {
+  const tooltipSource = readSource("tooltip.tsx");
+  const infoHintSource = readSource("../monitor/InfoHint.tsx");
+  const metricPanelSource = readSource("../monitor/MetricPanel.tsx");
+  const monthlyHintSource = readSource("../../pages/collection-summary/MonthlyComparisonHint.tsx");
+
+  assert.match(tooltipSource, /import \* as TooltipPrimitive from "@radix-ui\/react-tooltip"/);
+  assert.match(tooltipSource, /const Tooltip = TooltipPrimitive\.Root/);
+  assert.match(tooltipSource, /const TooltipTrigger = TooltipPrimitive\.Trigger/);
+  assert.match(tooltipSource, /<TooltipPrimitive\.Content/);
+  assert.match(infoHintSource, /<TooltipTrigger asChild>/);
+  assert.match(infoHintSource, /<button[\s\S]*type="button"[\s\S]*aria-label="Maklumat bantuan"/);
+  assert.match(metricPanelSource, /<TooltipTrigger asChild>/);
+  assert.match(metricPanelSource, /aria-label=\{`\$\{label\} description`\}/);
+  assert.match(monthlyHintSource, /<TooltipTrigger asChild>/);
+  assert.match(monthlyHintSource, /aria-label=\{label\}/);
+});
+
 test("AI chat dynamic status and message regions are announced politely", () => {
   const aiChatSource = readSource("../AIChat.tsx");
 
