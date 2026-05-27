@@ -24,3 +24,4 @@
 - MED-UI-5: Extended automated design-token contrast coverage to verify the shared focus ring meets WCAG non-text contrast in light and dark themes.
 - MED-CFG-1: Documented app-owned security header responsibilities, expanded the Nginx contract to reject conflicting proxy-level security headers, and added a deploy runbook for header validation.
 - MED-CFG-2: Added shared module boundary documentation, target `shared/common|server|client` directories, and a contract test preventing browser code from importing server-only Drizzle schema modules.
+- MED-CFG-3: Added native npm SBOM generation for CycloneDX and SPDX JSON, release workflow artifact upload, SBOM validation tests, and supply-chain documentation.

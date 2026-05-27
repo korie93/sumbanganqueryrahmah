@@ -72,6 +72,9 @@ jobs:
       - name: Audit dependencies
         run: npm run audit:dependencies
 
+      - name: Generate SBOM
+        run: SBOM_ARTIFACTS_DIR=artifacts/sbom npm run supply-chain:sbom
+
       - name: Verify migration drift
         run: npm run db:check
 
@@ -92,4 +95,5 @@ jobs:
           if-no-files-found: warn
           path: |
             artifacts/release-verification
+            artifacts/sbom
             var/perf
