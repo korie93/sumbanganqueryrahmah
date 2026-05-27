@@ -2,7 +2,7 @@ import { basename } from "node:path/posix";
 import { findHighConfidenceSecretTokens } from "./repo-hygiene.mjs";
 
 const GENERIC_SECRET_ASSIGNMENT_PATTERN =
-  /^\s*([A-Z0-9_.-]*(?:API[_-]?KEY|PASSWORD|PRIVATE[_-]?KEY|SECRET|TOKEN)[A-Z0-9_.-]*)\s*[:=]\s*(.*?)\s*$/i;
+  /^\s*([A-Z0-9_.-]*(?:API[_-]?KEY|PASSWORD|PRIVATE[_-]?KEY|SECRET|TOKEN)[A-Z0-9_.-]*)\s*=\s*(.*?)\s*$/i;
 
 const ALLOWED_HOOK_SECRET_VALUES = [
   /^$/,
@@ -44,6 +44,11 @@ function isAllowedHookSecretValue(rawValue) {
   return ALLOWED_HOOK_SECRET_VALUES.some((pattern) => pattern.test(value));
 }
 
+function isEnvStyleSecretKey(rawKey) {
+  const key = String(rawKey || "").trim();
+  return /^[A-Z0-9_.-]+$/u.test(key) || /^[a-z0-9_.-]+$/u.test(key);
+}
+
 export function isForbiddenEnvFilePath(filePath) {
   const fileName = basename(normalizeRepoPath(filePath));
   return (fileName === ".env" || fileName.startsWith(".env."))
@@ -70,6 +75,9 @@ export function findGenericSecretAssignments({ filePath, text }) {
 
     const key = match[1];
     const value = match[2];
+    if (!isEnvStyleSecretKey(key)) {
+      continue;
+    }
     if (isAllowedHookSecretValue(value)) {
       continue;
     }

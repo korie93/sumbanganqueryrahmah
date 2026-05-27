@@ -28,7 +28,11 @@ test("pre-commit guard allows normal source files without secrets", () => {
     files: [
       {
         filePath: "client/src/example.ts",
-        text: "export const label = 'Selamat datang';\n",
+        text: [
+          "export const label = 'Selamat datang';",
+          "const configuredSessionSecret = runtimeConfig.auth.sessionSecret;",
+          "const params = { password: readDatabasePassword() };",
+        ].join("\n"),
       },
     ],
   });
