@@ -1,4 +1,5 @@
 import { useToast } from "@/hooks/use-toast"
+import { ExpandableMessage } from "@/components/ExpandableMessage"
 import {
   Toast,
   ToastClose,
@@ -19,7 +20,9 @@ export function Toaster() {
             <div className="grid gap-1">
               {title && <ToastTitle>{title}</ToastTitle>}
               {description && (
-                <ToastDescription>{description}</ToastDescription>
+                <ToastDescription>
+                  <ExpandableMessage>{description}</ExpandableMessage>
+                </ToastDescription>
               )}
             </div>
             {action}

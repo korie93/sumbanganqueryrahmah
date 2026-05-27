@@ -86,9 +86,7 @@ function normalizePlainTextErrorMessage(res: Response, text: string) {
     return getHttpStatusErrorMessage(res.status);
   }
 
-  return normalizedText.length > 240
-    ? `${normalizedText.slice(0, 237)}...`
-    : normalizedText;
+  return normalizedText;
 }
 
 type ApiErrorPayload = Record<string, unknown> & {

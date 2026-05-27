@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import { Eye, EyeOff, LogIn } from "lucide-react";
 import type { User } from "@/app/types";
 import { BrandLogo } from "@/components/BrandLogo";
+import { ExpandableMessage } from "@/components/ExpandableMessage";
 import { PublicAuthButton, PublicAuthInput } from "@/components/PublicAuthControls";
 import { shouldAutoFocusPublicAuthField } from "@/lib/interaction-media";
 import { useLoginPageState } from "@/pages/useLoginPageState";
@@ -337,7 +338,9 @@ export default function Login({ onBanned, onForgotPasswordClick, onLandingClick,
               {lockedFlow ? (
                 <div className="login-alert login-alert--warning mt-4 text-sm" role="alert">
                   <div className="font-medium">
-                    {lockedAccountMessage || "Akaun anda telah dikunci kerana terlalu banyak percubaan log masuk yang tidak sah."}
+                    <ExpandableMessage>
+                      {lockedAccountMessage || "Akaun anda telah dikunci kerana terlalu banyak percubaan log masuk yang tidak sah."}
+                    </ExpandableMessage>
                   </div>
                   <div className="login-alert--warning-subtext mt-1 text-xs">
                     {lockedCountdownSeconds > 0
@@ -367,7 +370,7 @@ export default function Login({ onBanned, onForgotPasswordClick, onLandingClick,
 
               {error && !lockedFlow && (
                 <div className="login-alert login-alert--error mt-4 text-sm" role="alert">
-                  {error}
+                  <ExpandableMessage>{error}</ExpandableMessage>
                 </div>
               )}
 

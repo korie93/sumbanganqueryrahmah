@@ -89,7 +89,7 @@ function resolveNonJsonLoginErrorMessage(res: Response, text: string) {
 
   const normalizedText = text.replace(/\s+/g, " ").trim();
   return normalizedText
-    ? normalizedText.slice(0, 240)
+    ? normalizedText
     : res.statusText || "Login failed";
 }
 
