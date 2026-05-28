@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
+import { randomBytes } from "node:crypto";
 import test from "node:test";
 import {
   AUTH_SESSION_MAX_AGE_MS,
   AUTH_SESSION_COOKIE_NAME,
   AUTH_SESSION_CSRF_COOKIE_NAME,
   AUTH_SESSION_CSRF_HEADER_NAME,
+  compareAuthSessionCsrfTokens,
   readAuthSessionCsrfTokenFromHeaders,
   readCookieValueFromHeader,
   rotateAuthSessionCsrfCookie,
@@ -98,4 +100,64 @@ test("readAuthSessionCsrfTokenFromHeaders rejects unequal or non-standard csrf t
     }),
     null,
   );
+});
+
+test("compareAuthSessionCsrfTokens rejects malformed values without throwing", () => {
+  const csrfToken = "b".repeat(64);
+
+  assert.equal(compareAuthSessionCsrfTokens(null, csrfToken), false);
+  assert.equal(compareAuthSessionCsrfTokens(undefined, csrfToken), false);
+  assert.equal(compareAuthSessionCsrfTokens({ token: csrfToken }, csrfToken), false);
+  assert.equal(compareAuthSessionCsrfTokens("", csrfToken), false);
+  assert.equal(compareAuthSessionCsrfTokens(csrfToken, null), false);
+});
+
+test("compareAuthSessionCsrfTokens handles random token fuzz cases safely", () => {
+  for (let index = 0; index < 250; index += 1) {
+    const csrfToken = randomBytes(32).toString("hex");
+    const otherToken = randomBytes(32).toString("hex");
+    const shortToken = csrfToken.slice(0, 12);
+    const longToken = `${csrfToken}${otherToken}`;
+
+    assert.equal(compareAuthSessionCsrfTokens(csrfToken, csrfToken), true);
+    assert.equal(compareAuthSessionCsrfTokens(csrfToken, otherToken), false);
+    assert.equal(compareAuthSessionCsrfTokens(shortToken, csrfToken), false);
+    assert.equal(compareAuthSessionCsrfTokens(longToken, csrfToken), false);
+  }
+});
+
+function measureAverageComparisonNs(callback: () => void, iterations: number): number {
+  for (let index = 0; index < 1_000; index += 1) {
+    callback();
+  }
+
+  const startedAt = process.hrtime.bigint();
+  for (let index = 0; index < iterations; index += 1) {
+    callback();
+  }
+  const elapsedNs = Number(process.hrtime.bigint() - startedAt);
+  return elapsedNs / iterations;
+}
+
+test("constant-time csrf comparisons keep invalid token timing within 5 microseconds per comparison", () => {
+  const csrfToken = randomBytes(32).toString("hex");
+  const wrongToken = randomBytes(32).toString("hex");
+  const iterations = 20_000;
+
+  const validAverageNs = measureAverageComparisonNs(() => {
+    compareAuthSessionCsrfTokens(csrfToken, csrfToken);
+  }, iterations);
+  const wrongAverageNs = measureAverageComparisonNs(() => {
+    compareAuthSessionCsrfTokens(wrongToken, csrfToken);
+  }, iterations);
+  const shortAverageNs = measureAverageComparisonNs(() => {
+    compareAuthSessionCsrfTokens("short", csrfToken);
+  }, iterations);
+  const malformedAverageNs = measureAverageComparisonNs(() => {
+    compareAuthSessionCsrfTokens(null, csrfToken);
+  }, iterations);
+
+  assert.ok(Math.abs(validAverageNs - wrongAverageNs) < 5_000);
+  assert.ok(Math.abs(validAverageNs - shortAverageNs) < 5_000);
+  assert.ok(Math.abs(validAverageNs - malformedAverageNs) < 5_000);
 });

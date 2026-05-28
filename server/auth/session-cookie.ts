@@ -1,5 +1,5 @@
 import type { IncomingHttpHeaders } from "node:http";
-import { randomBytes, timingSafeEqual } from "node:crypto";
+import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import type { Response } from "express";
 import { runtimeConfig } from "../config/runtime";
 import { logger } from "../lib/logger";
@@ -14,6 +14,8 @@ export { AUTH_SESSION_MAX_AGE_MS } from "./session-lifetime";
 
 type HeaderValue = string | string[] | undefined;
 const CSRF_TOKEN_COMPARE_BYTES = 64;
+const CSRF_TOKEN_HEX_LENGTH = 64;
+const CSRF_TOKEN_INVALID_SENTINEL = "__sqr_invalid_csrf_token__";
 
 function firstHeaderValue(value: HeaderValue): string {
   if (Array.isArray(value)) {
@@ -67,22 +69,34 @@ function setAuthSessionCsrfCookie(res: Response, csrfToken: string) {
   });
 }
 
-function equalSafeToken(left: string, right: string): boolean {
-  const leftRawBuffer = Buffer.from(String(left || ""), "utf8");
-  const rightRawBuffer = Buffer.from(String(right || ""), "utf8");
-  const leftBuffer = Buffer.alloc(CSRF_TOKEN_COMPARE_BYTES);
-  const rightBuffer = Buffer.alloc(CSRF_TOKEN_COMPARE_BYTES);
-  leftRawBuffer.copy(leftBuffer, 0, 0, Math.min(leftRawBuffer.length, CSRF_TOKEN_COMPARE_BYTES));
-  rightRawBuffer.copy(rightBuffer, 0, 0, Math.min(rightRawBuffer.length, CSRF_TOKEN_COMPARE_BYTES));
-
-  try {
-    const equal = timingSafeEqual(leftBuffer, rightBuffer);
-    return leftRawBuffer.length === CSRF_TOKEN_COMPARE_BYTES
-      && rightRawBuffer.length === CSRF_TOKEN_COMPARE_BYTES
-      && equal;
-  } catch {
-    return false;
+function normalizeTokenToFixedBuffer(value: string): Buffer {
+  const buffer = Buffer.alloc(CSRF_TOKEN_COMPARE_BYTES);
+  for (let index = 0; index < CSRF_TOKEN_COMPARE_BYTES; index += 1) {
+    const characterCode = value.charCodeAt(index);
+    buffer[index] = Number.isFinite(characterCode) ? characterCode & 0xff : 0;
   }
+  return buffer;
+}
+
+function hashTokenForConstantTimeCompare(value: string): Buffer {
+  return createHash("sha256").update(normalizeTokenToFixedBuffer(value)).digest();
+}
+
+export function compareAuthSessionCsrfTokens(received: unknown, expected: unknown): boolean {
+  const receivedIsString = typeof received === "string";
+  const expectedIsString = typeof expected === "string";
+  const receivedValue = receivedIsString ? received : CSRF_TOKEN_INVALID_SENTINEL;
+  const expectedValue = expectedIsString ? expected : CSRF_TOKEN_INVALID_SENTINEL;
+
+  const receivedHash = hashTokenForConstantTimeCompare(receivedValue);
+  const expectedHash = hashTokenForConstantTimeCompare(expectedValue);
+  const tokensEqual = timingSafeEqual(receivedHash, expectedHash);
+
+  return receivedIsString
+    && expectedIsString
+    && receivedValue.length === CSRF_TOKEN_HEX_LENGTH
+    && expectedValue.length === CSRF_TOKEN_HEX_LENGTH
+    && tokensEqual;
 }
 
 export function readCookieValueFromHeader(cookieHeader: HeaderValue, cookieName: string): string | null {
@@ -140,10 +154,7 @@ export function readAuthSessionCsrfTokenFromHeaders(
 ): string | null {
   const cookieToken = readCookieValueFromHeader(headers.cookie, AUTH_SESSION_CSRF_COOKIE_NAME);
   const headerValue = firstHeaderValue(headers["x-csrf-token"]).trim();
-  if (!cookieToken || !headerValue) {
-    return null;
-  }
-  return equalSafeToken(cookieToken, headerValue) ? headerValue : null;
+  return compareAuthSessionCsrfTokens(headerValue, cookieToken) ? headerValue : null;
 }
 
 function setAuthSessionTokenCookies(res: Response, token: string) {
