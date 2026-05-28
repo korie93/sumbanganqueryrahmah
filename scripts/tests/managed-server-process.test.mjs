@@ -35,6 +35,7 @@ test("buildManagedServerSpawnOptions detaches managed server processes on POSIX 
   assert.equal(buildManagedServerSpawnOptions({ platform: "linux" }).detached, true);
   assert.equal(buildManagedServerSpawnOptions({ platform: "darwin" }).detached, true);
   assert.equal(buildManagedServerSpawnOptions({ platform: "win32" }).detached, false);
+  assert.equal(buildManagedServerSpawnOptions({ platform: "linux" }).shell, false);
 });
 
 test("hasManagedProcessExited ignores the misleading killed flag until an exit is observed", () => {

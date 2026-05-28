@@ -18,6 +18,7 @@ export function buildManagedServerSpawnOptions({
     cwd,
     detached: platform !== "win32",
     env,
+    shell: false,
     stdio,
   };
 }

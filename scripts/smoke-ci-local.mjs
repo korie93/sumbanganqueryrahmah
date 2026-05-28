@@ -11,6 +11,13 @@ import {
   startManagedServerProcess,
   stopManagedServerProcess,
 } from "./lib/managed-server-process.mjs";
+import {
+  buildSafeChildEnv,
+  buildSafeSpawnOptions,
+  normalizeScannerArgsJson,
+  validateConfiguredScannerCommand,
+  validateSafeSpawnSpec,
+} from "./lib/safe-child-process.mjs";
 
 const npmCliPath = String(process.env.npm_execpath || "").trim();
 const npmCommand = npmCliPath ? process.execPath : (process.platform === "win32" ? "npm.cmd" : "npm");
@@ -19,11 +26,16 @@ const serverLogPath = path.join(artifactsDir, "server.log");
 
 const runCommand = (command, args, options = {}) =>
   new Promise((resolve, reject) => {
-    const child = spawn(command, args, {
-      stdio: options.stdio || "inherit",
-      cwd: options.cwd || process.cwd(),
-      env: options.env || process.env,
-    });
+    const spawnSpec = validateSafeSpawnSpec(command, args);
+    const child = spawn(
+      spawnSpec.command,
+      spawnSpec.args,
+      buildSafeSpawnOptions({
+        stdio: options.stdio || "inherit",
+        cwd: options.cwd || process.cwd(),
+        env: options.env || buildSafeChildEnv(process.env),
+      }),
+    );
 
     child.on("error", reject);
     child.on("exit", (code) => {
@@ -67,8 +79,14 @@ const run = async () => {
     preferredPort: defaultPort,
   });
   const baseUrl = resolvedServer.baseUrl;
-  const env = {
-    ...process.env,
+  const scannerCommand = validateConfiguredScannerCommand(
+    process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_COMMAND || process.execPath,
+  );
+  const scannerArgsJson = normalizeScannerArgsJson(
+    process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_ARGS_JSON || "[\"-e\",\"process.exit(0)\",\"{file}\"]",
+    "COLLECTION_RECEIPT_EXTERNAL_SCAN_ARGS_JSON",
+  );
+  const env = buildSafeChildEnv(process.env, {
     NODE_ENV: process.env.NODE_ENV || "development",
     PORT: String(resolvedServer.port),
     HOST: host,
@@ -92,11 +110,11 @@ const run = async () => {
     // when the receipt scanner is explicitly unavailable. Use a deterministic clean
     // scanner shim unless the caller configured a real ClamAV command.
     COLLECTION_RECEIPT_EXTERNAL_SCAN_ENABLED: process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_ENABLED || "1",
-    COLLECTION_RECEIPT_EXTERNAL_SCAN_COMMAND: process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_COMMAND || process.execPath,
-    COLLECTION_RECEIPT_EXTERNAL_SCAN_ARGS_JSON: process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_ARGS_JSON || "[\"-e\",\"process.exit(0)\",\"{file}\"]",
+    COLLECTION_RECEIPT_EXTERNAL_SCAN_COMMAND: scannerCommand,
+    COLLECTION_RECEIPT_EXTERNAL_SCAN_ARGS_JSON: scannerArgsJson,
     COLLECTION_RECEIPT_EXTERNAL_SCAN_FAIL_CLOSED: process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_FAIL_CLOSED || "1",
     COLLECTION_RECEIPT_EXTERNAL_SCAN_TIMEOUT_MS: process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_TIMEOUT_MS || "5000",
-  };
+  });
 
   console.log("Smoke CI local: checking PostgreSQL connectivity...");
   await assertPostgresConnection(env, { context: "Smoke CI local" });
@@ -117,13 +135,17 @@ const run = async () => {
   await runNpm(["run", "test:db-integration"], { env });
   await runNpm(["run", "build"], { env });
 
-  const serverProcess = startManagedServerProcess(
+  const serverSpawnSpec = validateSafeSpawnSpec(
     npmCommand,
     npmCliPath ? [npmCliPath, "run", "start:built"] : ["run", "start:built"],
+  );
+  const serverProcess = startManagedServerProcess(
+    serverSpawnSpec.command,
+    serverSpawnSpec.args,
     {
-    cwd: process.cwd(),
-    env,
-    stdio: ["ignore", "pipe", "pipe"],
+      cwd: process.cwd(),
+      env,
+      stdio: ["ignore", "pipe", "pipe"],
     },
   );
 
