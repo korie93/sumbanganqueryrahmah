@@ -3,6 +3,7 @@ import type { Request, RequestHandler } from "express";
 import { WEB_VITALS_TELEMETRY_PATHS as WEB_VITALS_TELEMETRY_PATH_VALUES } from "../routes/telemetry-route-constants";
 import type { WorkerControlState } from "./runtime-monitor-manager";
 import { logger as defaultLogger } from "../lib/logger";
+import { createBackgroundSweepJob } from "./background-sweep-job";
 
 type ApiProtectionOptions = {
   adaptiveRateStore?: AdaptiveRateStateStore | null;
@@ -176,7 +177,7 @@ export function resolveAdaptiveRateLruEvictionKey(
 export function createApiProtectionMiddleware(options: ApiProtectionOptions): {
   adaptiveRateLimit: RequestHandler;
   systemProtectionMiddleware: RequestHandler;
-  sweepAdaptiveRateState: (now?: number) => void;
+  sweepAdaptiveRateState: (now?: number) => Promise<void>;
   stopAdaptiveRateStateSweep: () => void;
 } {
   const adaptiveRateStore = options.adaptiveRateStore ?? null;
@@ -188,7 +189,6 @@ export function createApiProtectionMiddleware(options: ApiProtectionOptions): {
   const adaptiveRateState = new Map<string, AdaptiveRateBucket>();
   let adaptiveRateStateQueue: Promise<void> = Promise.resolve();
   let lastAdaptiveSweepAt = 0;
-  let adaptiveRateSweepStopped = false;
   let adaptiveRateStoreFailureEmitted = false;
 
   function runAdaptiveRateStateExclusive<T>(operation: () => T | Promise<T>): Promise<T> {
@@ -224,13 +224,14 @@ export function createApiProtectionMiddleware(options: ApiProtectionOptions): {
     lastAdaptiveSweepAt = now;
   }
 
-  const sweepAdaptiveRateState = (now = Date.now()) => {
-    void runAdaptiveRateStateExclusive(() => sweepAdaptiveRateStateSync(now)).catch((error) => {
-      defaultLogger.warn("Adaptive rate local state sweep failed", {
-        error: error instanceof Error ? error.message : "Unknown adaptive rate sweep failure",
-      });
-    });
-  };
+  const adaptiveRateSweepJob = createBackgroundSweepJob({
+    failureMessage: "Adaptive rate local state sweep failed",
+    intervalMs: ADAPTIVE_RATE_SWEEP_INTERVAL_MS,
+    logger: defaultLogger,
+    run: (now) => runAdaptiveRateStateExclusive(() => sweepAdaptiveRateStateSync(now)),
+  });
+
+  const sweepAdaptiveRateState = (now = Date.now()) => adaptiveRateSweepJob.trigger(now);
 
   function maybeSweepAdaptiveRateStateSync(now: number) {
     if (
@@ -301,17 +302,11 @@ export function createApiProtectionMiddleware(options: ApiProtectionOptions): {
     return incrementLocalAdaptiveRateBucket(bucketKey, now);
   }
 
-  const adaptiveRateSweepHandle = setInterval(() => {
-    sweepAdaptiveRateState(Date.now());
-  }, ADAPTIVE_RATE_SWEEP_INTERVAL_MS);
-  adaptiveRateSweepHandle.unref();
-
   function stopAdaptiveRateStateSweep() {
-    if (adaptiveRateSweepStopped) {
+    if (!adaptiveRateSweepJob.isActive()) {
       return;
     }
-    adaptiveRateSweepStopped = true;
-    clearInterval(adaptiveRateSweepHandle);
+    adaptiveRateSweepJob.stop();
     void Promise.resolve(adaptiveRateStore?.close?.()).catch((error) => {
       defaultLogger.warn("Failed to close adaptive rate state store during shutdown", {
         error: error instanceof Error ? error.message : "Unknown adaptive rate store close failure",

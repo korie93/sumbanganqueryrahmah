@@ -3,6 +3,7 @@ import type { Request, RequestHandler, Response } from "express";
 import rateLimit from "express-rate-limit";
 import { ERROR_CODES } from "../../shared/error-codes";
 import { runtimeConfig } from "../config/runtime";
+import { createBackgroundSweepJob, type BackgroundSweepJob } from "../internal/background-sweep-job";
 import { logger } from "../lib/logger";
 import { createSharedRateLimitStore } from "./redis-rate-limit-store";
 
@@ -58,7 +59,7 @@ type AdaptiveRateLimitBucket = {
 };
 
 const adaptiveRateLimitCooldowns = new Map<string, AdaptiveRateLimitBucket>();
-let adaptiveRateLimitCooldownSweepHandle: ReturnType<typeof setInterval> | null = null;
+let adaptiveRateLimitCooldownSweepJob: BackgroundSweepJob | null = null;
 
 function normalizeKeyPart(value: unknown): string | null {
   if (typeof value !== "string") {
@@ -152,35 +153,39 @@ export function pruneAdaptiveRateLimitCooldowns(nowMs = Date.now()): number {
 }
 
 export function startAdaptiveRateLimitCooldownSweep(): () => void {
-  if (adaptiveRateLimitCooldownSweepHandle) {
+  if (adaptiveRateLimitCooldownSweepJob) {
     return stopAdaptiveRateLimitCooldownSweep;
   }
 
-  adaptiveRateLimitCooldownSweepHandle = setInterval(() => {
-    const removedCount = pruneAdaptiveRateLimitCooldowns(Date.now());
-    if (removedCount > 0) {
-      logger.debug("Pruned expired auth adaptive rate-limit cooldowns", {
-        removedCount,
-        remainingCount: adaptiveRateLimitCooldowns.size,
-      });
-    }
-  }, ADAPTIVE_RATE_LIMIT_SWEEP_INTERVAL_MS);
-  adaptiveRateLimitCooldownSweepHandle.unref?.();
+  adaptiveRateLimitCooldownSweepJob = createBackgroundSweepJob({
+    failureMessage: "Auth adaptive rate-limit cooldown sweep failed",
+    intervalMs: ADAPTIVE_RATE_LIMIT_SWEEP_INTERVAL_MS,
+    logger,
+    run: (nowMs) => {
+      const removedCount = pruneAdaptiveRateLimitCooldowns(nowMs);
+      if (removedCount > 0) {
+        logger.debug("Pruned expired auth adaptive rate-limit cooldowns", {
+          removedCount,
+          remainingCount: adaptiveRateLimitCooldowns.size,
+        });
+      }
+    },
+  });
   return stopAdaptiveRateLimitCooldownSweep;
 }
 
 export function stopAdaptiveRateLimitCooldownSweep() {
-  if (!adaptiveRateLimitCooldownSweepHandle) {
+  if (!adaptiveRateLimitCooldownSweepJob) {
     return;
   }
-  clearInterval(adaptiveRateLimitCooldownSweepHandle);
-  adaptiveRateLimitCooldownSweepHandle = null;
+  adaptiveRateLimitCooldownSweepJob.stop();
+  adaptiveRateLimitCooldownSweepJob = null;
 }
 
 export function getAdaptiveRateLimitCooldownStats() {
   return {
     bucketCount: adaptiveRateLimitCooldowns.size,
-    sweepActive: adaptiveRateLimitCooldownSweepHandle !== null,
+    sweepActive: adaptiveRateLimitCooldownSweepJob !== null,
   };
 }
 
