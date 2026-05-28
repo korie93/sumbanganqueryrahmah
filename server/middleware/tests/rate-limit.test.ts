@@ -3,6 +3,8 @@ import test from "node:test";
 import express from "express";
 import type { Request } from "express";
 import { ERROR_CODES } from "../../../shared/error-codes";
+import { getInternalMetricsSnapshot } from "../../internal/metrics";
+import { logger } from "../../lib/logger";
 import { startTestServer, stopTestServer } from "../../routes/tests/http-test-utils";
 import {
   buildAuthRouteRateLimitSubject,
@@ -223,7 +225,7 @@ test("auth adaptive cooldown sweep startup is singleton and prune is safe on emp
   stopAdaptiveRateLimitCooldownSweep();
 });
 
-test("auth adaptive cooldown records violations through one bounded post-write prune path", async () => {
+test("auth adaptive cooldown records violations without hot-path full pruning", async () => {
   stopAdaptiveRateLimitCooldownSweep();
   clearAdaptiveRateLimitCooldownsForTests();
 
@@ -302,9 +304,10 @@ test("auth login IP limiter throttles after five attempts even when identifiers 
   }
 });
 
-test("auth adaptive cooldown cap evicts least recently used buckets without scanning for oldest timestamps", () => {
+test("auth adaptive cooldown cap evicts least recently used buckets without scanning for oldest timestamps", (t) => {
   stopAdaptiveRateLimitCooldownSweep();
   clearAdaptiveRateLimitCooldownsForTests();
+  t.mock.method(logger, "warn", () => undefined);
 
   try {
     const startedAt = Date.now();
@@ -318,7 +321,64 @@ test("auth adaptive cooldown cap evicts least recently used buckets without scan
     assert.equal(keys.length, 4_096);
     assert.equal(keys.includes("client-0"), true);
     assert.equal(keys.includes("client-1"), false);
-    assert.equal(keys[keys.length - 1], "client-new");
+    assert.equal(keys.includes("client-new"), true);
+  } finally {
+    clearAdaptiveRateLimitCooldownsForTests();
+  }
+});
+
+test("auth adaptive cooldown hard cap stays bounded across sustained inserts", (t) => {
+  stopAdaptiveRateLimitCooldownSweep();
+  clearAdaptiveRateLimitCooldownsForTests();
+  t.mock.method(logger, "warn", () => undefined);
+
+  try {
+    const startedAt = Date.now();
+    for (let index = 0; index < 50_001; index += 1) {
+      recordAdaptiveRateLimitViolationForTests(`sustained-client-${index}`, 60_000, startedAt + index);
+    }
+
+    const keys = getAdaptiveRateLimitCooldownKeysForTests();
+    assert.equal(getAdaptiveRateLimitCooldownStats().bucketCount, 4_096);
+    assert.equal(keys.length, 4_096);
+    assert.equal(keys.includes("sustained-client-0"), false);
+    assert.equal(keys.includes("sustained-client-50000"), true);
+  } finally {
+    clearAdaptiveRateLimitCooldownsForTests();
+  }
+});
+
+test("auth adaptive cooldown cache pressure emits bounded observability", (t) => {
+  stopAdaptiveRateLimitCooldownSweep();
+  clearAdaptiveRateLimitCooldownsForTests();
+
+  const warningLogs: Array<{ message: string; payload: Record<string, unknown> | undefined }> = [];
+  const metricBefore = getInternalMetricsSnapshot()
+    .counters.authAdaptiveRateLimitCooldownCachePressureTotal;
+  t.mock.method(logger, "warn", (message: string, payload?: Record<string, unknown>) => {
+    warningLogs.push({ message, payload });
+  });
+
+  try {
+    const nowMs = Date.parse("2026-05-28T00:00:00.000Z");
+    const pressureThresholdEntries = Math.ceil(4_096 * 0.85);
+    for (let index = 0; index < pressureThresholdEntries; index += 1) {
+      recordAdaptiveRateLimitViolationForTests(`pressure-client-${index}`, 60_000, nowMs);
+    }
+
+    const metricAfter = getInternalMetricsSnapshot()
+      .counters.authAdaptiveRateLimitCooldownCachePressureTotal;
+    assert.equal(metricAfter - metricBefore, 1);
+    assert.equal(warningLogs.length, 1);
+    assert.deepEqual(warningLogs[0], {
+      message: "Auth adaptive rate-limit cooldown cache pressure detected",
+      payload: {
+        bucketCount: pressureThresholdEntries,
+        maxBuckets: 4_096,
+        thresholdPercent: 85,
+        utilizationPercent: 85,
+      },
+    });
   } finally {
     clearAdaptiveRateLimitCooldownsForTests();
   }

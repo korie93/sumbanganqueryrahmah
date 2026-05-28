@@ -1,9 +1,11 @@
 import crypto from "node:crypto";
 import type { Request, RequestHandler, Response } from "express";
 import rateLimit from "express-rate-limit";
+import { LRUCache } from "lru-cache";
 import { ERROR_CODES } from "../../shared/error-codes";
 import { runtimeConfig } from "../config/runtime";
 import { createBackgroundSweepJob, type BackgroundSweepJob } from "../internal/background-sweep-job";
+import { internalMetrics } from "../internal/metrics";
 import { logger } from "../lib/logger";
 import { createSharedRateLimitStore } from "./redis-rate-limit-store";
 
@@ -51,6 +53,8 @@ const AUTH_RATE_LIMIT_HASH_LENGTH = 24;
 const ADAPTIVE_RATE_LIMIT_MAX_BUCKETS = 4_096;
 const ADAPTIVE_RATE_LIMIT_MAX_COOLDOWN_MS = 60 * 60 * 1000;
 const ADAPTIVE_RATE_LIMIT_SWEEP_INTERVAL_MS = 30_000;
+const ADAPTIVE_RATE_LIMIT_CACHE_PRESSURE_THRESHOLD_RATIO = 0.85;
+const ADAPTIVE_RATE_LIMIT_CACHE_PRESSURE_LOG_INTERVAL_MS = 60_000;
 
 type AdaptiveRateLimitBucket = {
   expiresAt: number;
@@ -58,8 +62,15 @@ type AdaptiveRateLimitBucket = {
   strikeCount: number;
 };
 
-const adaptiveRateLimitCooldowns = new Map<string, AdaptiveRateLimitBucket>();
+const adaptiveRateLimitCooldowns = new LRUCache<string, AdaptiveRateLimitBucket>({
+  allowStale: false,
+  max: ADAPTIVE_RATE_LIMIT_MAX_BUCKETS,
+  ttl: ADAPTIVE_RATE_LIMIT_MAX_COOLDOWN_MS,
+  ttlAutopurge: false,
+  updateAgeOnGet: false,
+});
 let adaptiveRateLimitCooldownSweepJob: BackgroundSweepJob | null = null;
+let adaptiveRateLimitCachePressureLastLoggedAt = 0;
 
 function normalizeKeyPart(value: unknown): string | null {
   if (typeof value !== "string") {
@@ -133,23 +144,71 @@ function buildRateLimitKey(req: Request, scope: string, ...parts: Array<unknown>
 
 export function pruneAdaptiveRateLimitCooldowns(nowMs = Date.now()): number {
   let removedCount = 0;
-  for (const [key, bucket] of adaptiveRateLimitCooldowns) {
-    if (bucket.expiresAt <= nowMs) {
-      adaptiveRateLimitCooldowns.delete(key);
-      removedCount += 1;
-    }
-  }
 
-  while (adaptiveRateLimitCooldowns.size > ADAPTIVE_RATE_LIMIT_MAX_BUCKETS) {
-    const oldest = adaptiveRateLimitCooldowns.keys().next();
-    if (oldest.done) {
-      break;
+  for (const key of Array.from(adaptiveRateLimitCooldowns.keys())) {
+    const bucket = adaptiveRateLimitCooldowns.peek(key);
+    if (!bucket || bucket.expiresAt <= nowMs) {
+      if (adaptiveRateLimitCooldowns.delete(key)) {
+        removedCount += 1;
+      }
     }
-    adaptiveRateLimitCooldowns.delete(oldest.value);
-    removedCount += 1;
   }
 
   return removedCount;
+}
+
+function maybeReportAdaptiveRateLimitCachePressure(nowMs: number) {
+  const bucketCount = adaptiveRateLimitCooldowns.size;
+  const pressureThreshold = Math.ceil(
+    ADAPTIVE_RATE_LIMIT_MAX_BUCKETS * ADAPTIVE_RATE_LIMIT_CACHE_PRESSURE_THRESHOLD_RATIO,
+  );
+  if (bucketCount < pressureThreshold) {
+    return;
+  }
+
+  if (
+    adaptiveRateLimitCachePressureLastLoggedAt > 0
+    && nowMs - adaptiveRateLimitCachePressureLastLoggedAt
+      < ADAPTIVE_RATE_LIMIT_CACHE_PRESSURE_LOG_INTERVAL_MS
+  ) {
+    return;
+  }
+
+  adaptiveRateLimitCachePressureLastLoggedAt = nowMs;
+  internalMetrics.increment("authAdaptiveRateLimitCooldownCachePressureTotal");
+  logger.warn("Auth adaptive rate-limit cooldown cache pressure detected", {
+    bucketCount,
+    maxBuckets: ADAPTIVE_RATE_LIMIT_MAX_BUCKETS,
+    thresholdPercent: Math.round(ADAPTIVE_RATE_LIMIT_CACHE_PRESSURE_THRESHOLD_RATIO * 100),
+    utilizationPercent: Math.round((bucketCount / ADAPTIVE_RATE_LIMIT_MAX_BUCKETS) * 100),
+  });
+}
+
+function setAdaptiveRateLimitCooldown(
+  key: string,
+  bucket: AdaptiveRateLimitBucket,
+  nowMs: number,
+) {
+  const ttlMs = Math.max(1, bucket.expiresAt - nowMs);
+  adaptiveRateLimitCooldowns.set(key, bucket, { ttl: ttlMs });
+  maybeReportAdaptiveRateLimitCachePressure(nowMs);
+}
+
+function deleteAdaptiveRateLimitCooldown(key: string): boolean {
+  return adaptiveRateLimitCooldowns.delete(key);
+}
+
+function clearAdaptiveRateLimitCooldownState() {
+  adaptiveRateLimitCooldowns.clear();
+  adaptiveRateLimitCachePressureLastLoggedAt = 0;
+}
+
+function getAdaptiveRateLimitCooldownKeys(): string[] {
+  return Array.from(adaptiveRateLimitCooldowns.keys());
+}
+
+function getAdaptiveRateLimitCooldownBucket(key: string): AdaptiveRateLimitBucket | null {
+  return adaptiveRateLimitCooldowns.get(key) ?? null;
 }
 
 export function startAdaptiveRateLimitCooldownSweep(): () => void {
@@ -190,11 +249,11 @@ export function getAdaptiveRateLimitCooldownStats() {
 }
 
 export function clearAdaptiveRateLimitCooldownsForTests() {
-  adaptiveRateLimitCooldowns.clear();
+  clearAdaptiveRateLimitCooldownState();
 }
 
 export function getAdaptiveRateLimitCooldownKeysForTests(): string[] {
-  return Array.from(adaptiveRateLimitCooldowns.keys());
+  return getAdaptiveRateLimitCooldownKeys();
 }
 
 function resolveJsonRateLimiterKey(req: Request, options: JsonRateLimiterOptions): string {
@@ -210,17 +269,15 @@ function setStandardRateLimitHeaders(res: Response, options: StandardRateLimitHe
 }
 
 function getAdaptiveRateLimitCooldown(key: string, nowMs: number): AdaptiveRateLimitBucket | null {
-  const bucket = adaptiveRateLimitCooldowns.get(key);
+  const bucket = getAdaptiveRateLimitCooldownBucket(key);
   if (!bucket) {
     return null;
   }
   if (bucket.expiresAt <= nowMs) {
-    adaptiveRateLimitCooldowns.delete(key);
+    deleteAdaptiveRateLimitCooldown(key);
     return null;
   }
   bucket.lastSeenAt = nowMs;
-  adaptiveRateLimitCooldowns.delete(key);
-  adaptiveRateLimitCooldowns.set(key, bucket);
   return bucket;
 }
 
@@ -240,11 +297,7 @@ function recordAdaptiveRateLimitViolation(
     lastSeenAt: nowMs,
     strikeCount,
   };
-  adaptiveRateLimitCooldowns.delete(key);
-  adaptiveRateLimitCooldowns.set(key, bucket);
-  // Keep the violation hot path bounded: expired-key lookup is handled above,
-  // and Map insertion order provides O(1) LRU eviction for the global cap.
-  pruneAdaptiveRateLimitCooldowns(nowMs);
+  setAdaptiveRateLimitCooldown(key, bucket, nowMs);
   return bucket;
 }
 
