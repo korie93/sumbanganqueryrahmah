@@ -1,5 +1,9 @@
 import { logger as defaultLogger } from "../lib/logger";
 import { REDIS_UNAVAILABLE_WARNING_REPEAT_MS } from "../middleware/redis-rate-limit-store";
+import {
+  clearStartupServiceDegraded,
+  markStartupServiceDegraded,
+} from "./startup-health";
 
 type LoggerLike = Pick<typeof defaultLogger, "info" | "warn">;
 
@@ -34,6 +38,7 @@ type MonitoredRedisEndpoint = {
   client: RedisHealthClientLike | null;
   clientPromise: Promise<RedisHealthClientLike | null> | null;
   endpoint: string;
+  healthService: string;
   labels: string[];
   lastWarningAt: number;
   redisUrl: string;
@@ -67,6 +72,18 @@ function describeRedisEndpoint(redisUrl: string) {
   }
 }
 
+function buildRedisHealthServiceName(labels: string[]) {
+  const normalizedLabels = labels
+    .join("+")
+    .trim()
+    .replace(/[^a-zA-Z0-9:_/-]+/g, "-")
+    .replace(/-{2,}/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 120);
+
+  return `redis-health:${normalizedLabels || "redis"}`;
+}
+
 function buildTargets(targets: RedisHealthMonitorTarget[]): MonitoredRedisEndpoint[] {
   const byUrl = new Map<string, MonitoredRedisEndpoint>();
 
@@ -90,6 +107,7 @@ function buildTargets(targets: RedisHealthMonitorTarget[]): MonitoredRedisEndpoi
       client: null,
       clientPromise: null,
       endpoint: describeRedisEndpoint(redisUrl),
+      healthService: "",
       labels: [label],
       lastWarningAt: 0,
       redisUrl,
@@ -97,10 +115,14 @@ function buildTargets(targets: RedisHealthMonitorTarget[]): MonitoredRedisEndpoi
     });
   }
 
-  return [...byUrl.values()].map((target) => ({
-    ...target,
-    labels: target.labels.sort(),
-  }));
+  return [...byUrl.values()].map((target) => {
+    const labels = target.labels.sort();
+    return {
+      ...target,
+      healthService: buildRedisHealthServiceName(labels),
+      labels,
+    };
+  });
 }
 
 export function createRedisHealthReconnectStrategy(logger: LoggerLike = defaultLogger) {
@@ -214,6 +236,7 @@ export class RedisHealthMonitor {
       }
       target.unavailable = false;
       target.lastWarningAt = 0;
+      clearStartupServiceDegraded(target.healthService);
     } catch (error) {
       const clientToClose = target.client;
       target.client = null;
@@ -279,6 +302,11 @@ export class RedisHealthMonitor {
 
     target.unavailable = true;
     target.lastWarningAt = now;
+    markStartupServiceDegraded(
+      target.healthService,
+      "REDIS_HEALTH_TARGET_UNAVAILABLE",
+      `${target.labels.join(",")}:${target.endpoint}`,
+    );
     this.logger.warn("Redis health monitor target unavailable", {
       endpoint: target.endpoint,
       error: error instanceof Error ? error.message : "Unknown Redis failure",

@@ -4,6 +4,18 @@ import {
   createRedisHealthReconnectStrategy,
   RedisHealthMonitor,
 } from "../redis-health-monitor";
+import {
+  clearStartupServiceDegraded,
+  getStartupHealthSnapshot,
+} from "../startup-health";
+
+const REDIS_RATE_LIMIT_HEALTH_SERVICE = "redis-health:rate-limit";
+const REDIS_SHARED_ENDPOINT_HEALTH_SERVICE = "redis-health:rate-limit+websocket";
+
+test.afterEach(() => {
+  clearStartupServiceDegraded(REDIS_RATE_LIMIT_HEALTH_SERVICE);
+  clearStartupServiceDegraded(REDIS_SHARED_ENDPOINT_HEALTH_SERVICE);
+});
 
 class FakeRedisHealthClient {
   connectCalls = 0;
@@ -112,6 +124,12 @@ test("Redis health monitor repeats outage warnings on cadence without logging cr
   assert.equal(warnings[0].message, "Redis health monitor target unavailable");
   assert.equal(warnings[0].metadata.endpoint, "redis://redis.internal:6379/0");
   assert.doesNotMatch(JSON.stringify(warnings[0].metadata), /secret/);
+  const degradedService = getStartupHealthSnapshot().degradedServices.find(
+    (service) => service.service === REDIS_RATE_LIMIT_HEALTH_SERVICE,
+  );
+  assert.equal(degradedService?.reason, "REDIS_HEALTH_TARGET_UNAVAILABLE");
+  assert.equal(degradedService?.details, "rate-limit:redis://redis.internal:6379/0");
+  assert.equal(JSON.stringify(degradedService).includes("secret"), false);
   await monitor.stop();
 });
 
@@ -133,11 +151,24 @@ test("Redis health monitor logs recovery after a failed heartbeat", async () => 
   });
 
   await monitor.checkOnce();
+  assert.equal(warnings.length, 1);
+  assert.equal(
+    getStartupHealthSnapshot().degradedServices.some(
+      (service) => service.service === REDIS_RATE_LIMIT_HEALTH_SERVICE,
+    ),
+    true,
+  );
+
   await monitor.checkOnce();
 
-  assert.equal(warnings.length, 1);
   assert.equal(infos.length, 1);
   assert.equal(infos[0].message, "Redis health monitor target recovered");
+  assert.equal(
+    getStartupHealthSnapshot().degradedServices.some(
+      (service) => service.service === REDIS_RATE_LIMIT_HEALTH_SERVICE,
+    ),
+    false,
+  );
   await monitor.stop();
 });
 
