@@ -78,6 +78,32 @@ test("runtime env schema rejects integer values outside configured bounds", () =
   );
 });
 
+test("runtime env schema validates session timeout minute bounds", () => {
+  assert.doesNotThrow(() => {
+    validateRuntimeEnvironmentSchema({
+      DEFAULT_SESSION_TIMEOUT_MINUTES: "1440",
+    });
+  });
+
+  assert.throws(
+    () => {
+      validateRuntimeEnvironmentSchema({
+        DEFAULT_SESSION_TIMEOUT_MINUTES: "0",
+      });
+    },
+    /DEFAULT_SESSION_TIMEOUT_MINUTES.*at least 1/i,
+  );
+
+  assert.throws(
+    () => {
+      validateRuntimeEnvironmentSchema({
+        DEFAULT_SESSION_TIMEOUT_MINUTES: "1441",
+      });
+    },
+    /DEFAULT_SESSION_TIMEOUT_MINUTES.*at most 1440/i,
+  );
+});
+
 test("runtime env schema validates PostgreSQL statement timeout bounds", () => {
   assert.doesNotThrow(() => {
     validateRuntimeEnvironmentSchema({

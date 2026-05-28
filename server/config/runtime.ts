@@ -4,7 +4,11 @@ import {
   isStrictLocalDevelopmentEnvironment,
 } from "./runtime-environment";
 import { resolveDatabaseSslConfig } from "./database-ssl";
-import { validateRuntimeEnvironmentSchema } from "./runtime-env-schema";
+import {
+  MAX_SESSION_TIMEOUT_MINUTES,
+  MIN_SESSION_TIMEOUT_MINUTES,
+  validateRuntimeEnvironmentSchema,
+} from "./runtime-env-schema";
 import { resolveUploadsRootDir } from "./upload-paths";
 import { DEFAULT_IMPORT_BODY_LIMIT } from "./body-limit";
 import { parseBodyLimitToBytes, DEFAULT_IMPORT_UPLOAD_LIMIT_BYTES } from "./body-limit";
@@ -404,7 +408,10 @@ export const runtimeConfig: RuntimeConfig = Object.freeze({
   },
   runtime: {
     defaults: {
-      sessionTimeoutMinutes: readInt("DEFAULT_SESSION_TIMEOUT_MINUTES", 30, { min: MIN_COUNT }),
+      sessionTimeoutMinutes: readInt("DEFAULT_SESSION_TIMEOUT_MINUTES", 30, {
+        min: MIN_SESSION_TIMEOUT_MINUTES,
+        max: MAX_SESSION_TIMEOUT_MINUTES,
+      }),
       wsIdleMinutes: readInt("DEFAULT_WS_IDLE_MINUTES", 3, { min: MIN_COUNT }),
       aiTimeoutMs: readInt("DEFAULT_AI_TIMEOUT_MS", 10_000, { min: MIN_TIMEOUT_MS }),
       searchResultLimit: readInt("DEFAULT_SEARCH_RESULT_LIMIT", 200, { min: 10, max: 5000 }),

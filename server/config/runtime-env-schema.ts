@@ -15,6 +15,8 @@ const DB_BOOTSTRAP_MODE_VALUES = new Set(["runtime", "migration"]);
 const RATE_LIMIT_STORE_VALUES = new Set(["memory", "redis"]);
 const WS_SHARED_BUS_VALUES = new Set(["memory", "redis"]);
 const TWO_FACTOR_TOTP_ALGORITHM_VALUES = new Set(["sha1", "sha256"]);
+export const MIN_SESSION_TIMEOUT_MINUTES = 1;
+export const MAX_SESSION_TIMEOUT_MINUTES = 24 * 60;
 
 function normalizeOptionalEnvString(value: unknown) {
   if (value == null) {
@@ -363,7 +365,10 @@ const runtimeEnvironmentShape = {
   SQR_AI_LAST_PERSON_TTL_MS: optionalIntEnv("SQR_AI_LAST_PERSON_TTL_MS", { min: 60_000 }),
   SQR_LOW_MEMORY_MODE: optionalBooleanEnv("SQR_LOW_MEMORY_MODE"),
 
-  DEFAULT_SESSION_TIMEOUT_MINUTES: optionalIntEnv("DEFAULT_SESSION_TIMEOUT_MINUTES", { min: 1 }),
+  DEFAULT_SESSION_TIMEOUT_MINUTES: optionalIntEnv("DEFAULT_SESSION_TIMEOUT_MINUTES", {
+    min: MIN_SESSION_TIMEOUT_MINUTES,
+    max: MAX_SESSION_TIMEOUT_MINUTES,
+  }),
   DEFAULT_WS_IDLE_MINUTES: optionalIntEnv("DEFAULT_WS_IDLE_MINUTES", { min: 1 }),
   DEFAULT_AI_TIMEOUT_MS: optionalIntEnv("DEFAULT_AI_TIMEOUT_MS", { min: 1_000 }),
   DEFAULT_SEARCH_RESULT_LIMIT: optionalIntEnv("DEFAULT_SEARCH_RESULT_LIMIT", { min: 10, max: 5_000 }),
