@@ -1,5 +1,10 @@
 import crypto from "node:crypto";
 import { logger as defaultLogger } from "../lib/logger";
+import { internalMetrics } from "../internal/metrics";
+import {
+  clearStartupServiceDegraded,
+  markStartupServiceDegraded,
+} from "../internal/startup-health";
 import type { SharedRateLimitStoreConfig } from "../middleware/rate-limit-runtime";
 import {
   createRedisReconnectStrategy,
@@ -7,7 +12,7 @@ import {
 } from "../middleware/redis-rate-limit-store";
 import type { SessionRevocationRecord, SessionRevocationStore } from "./session-revocation-store";
 
-type LoggerLike = Pick<typeof defaultLogger, "warn">;
+type LoggerLike = Pick<typeof defaultLogger, "warn"> & Partial<Pick<typeof defaultLogger, "error">>;
 
 type RedisSessionRevocationClientLike = {
   connect: () => Promise<unknown>;
@@ -33,14 +38,92 @@ type RedisSessionRevocationStoreOptions = {
 
 const MIN_REVOCATION_TTL_MS = 1_000;
 const DEFAULT_REVOCATION_TTL_MS = 24 * 60 * 60 * 1000;
+const SESSION_REVOCATION_HEALTH_SERVICE = "session-revocation-store";
+const SESSION_REVOCATION_DEGRADED_REASON = "SESSION_REVOCATION_REDIS_UNAVAILABLE";
 
 let defaultRedisClientFactoryPromise: Promise<RedisSessionRevocationClientFactory> | null = null;
+
+export enum RedisSessionRevocationErrorClass {
+  NON_RETRYABLE = "NON_RETRYABLE",
+  RETRYABLE = "RETRYABLE",
+  UNKNOWN = "UNKNOWN",
+}
 
 export class RedisSessionRevocationUnavailableError extends Error {
   constructor(message = "Redis session revocation store is unavailable.") {
     super(message);
     this.name = "RedisSessionRevocationUnavailableError";
   }
+}
+
+type RedisSessionRevocationErrorLike = {
+  code?: unknown;
+  name?: unknown;
+};
+
+const RETRYABLE_REDIS_ERROR_CODES = new Set([
+  "ECONNREFUSED",
+  "ECONNRESET",
+  "EHOSTUNREACH",
+  "ENOTFOUND",
+  "EPIPE",
+  "ETIMEDOUT",
+  "EAI_AGAIN",
+  "NR_CLOSED",
+  "SOCKET_CLOSED",
+]);
+
+const NON_RETRYABLE_REDIS_ERROR_CODES = new Set([
+  "NOAUTH",
+  "NOPERM",
+  "WRONGPASS",
+  "WRONGTYPE",
+]);
+
+function readRedisErrorCode(error: unknown): string {
+  if (!error || typeof error !== "object") {
+    return "";
+  }
+
+  const errorLike = error as RedisSessionRevocationErrorLike;
+  return typeof errorLike.code === "string" ? errorLike.code.trim().toUpperCase() : "";
+}
+
+function readRedisErrorName(error: unknown): string {
+  if (!error || typeof error !== "object") {
+    return "";
+  }
+
+  const errorLike = error as RedisSessionRevocationErrorLike;
+  return typeof errorLike.name === "string" ? errorLike.name.trim() : "";
+}
+
+export function classifyRedisSessionRevocationError(error: unknown): RedisSessionRevocationErrorClass {
+  const code = readRedisErrorCode(error);
+  if (RETRYABLE_REDIS_ERROR_CODES.has(code)) {
+    return RedisSessionRevocationErrorClass.RETRYABLE;
+  }
+  if (NON_RETRYABLE_REDIS_ERROR_CODES.has(code)) {
+    return RedisSessionRevocationErrorClass.NON_RETRYABLE;
+  }
+
+  const name = readRedisErrorName(error).toLowerCase();
+  if (name.includes("timeout") || name.includes("socket") || name.includes("connection")) {
+    return RedisSessionRevocationErrorClass.RETRYABLE;
+  }
+  if (name.includes("auth") || name.includes("permission")) {
+    return RedisSessionRevocationErrorClass.NON_RETRYABLE;
+  }
+  return RedisSessionRevocationErrorClass.UNKNOWN;
+}
+
+function sanitizeRedisSessionRevocationError(error: unknown): Record<string, string> | undefined {
+  const code = readRedisErrorCode(error);
+  const name = readRedisErrorName(error);
+  return {
+    ...(code ? { code } : {}),
+    ...(name ? { name } : {}),
+  };
 }
 
 async function resolveDefaultRedisClientFactory(): Promise<RedisSessionRevocationClientFactory> {
@@ -97,11 +180,10 @@ export class RedisSessionRevocationStore implements SessionRevocationStore {
 
     try {
       const value = await client.get(this.buildRedisKey(jwtId));
-      this.warningEmitted = false;
-      this.lastWarningAt = 0;
+      this.recordRedisRecovery();
       return value != null;
     } catch (error) {
-      this.handleRedisFailure(error);
+      this.handleRedisFailure(error, "isRevoked");
       return true;
     }
   }
@@ -120,10 +202,9 @@ export class RedisSessionRevocationStore implements SessionRevocationStore {
         "1",
         { PX: resolveTtlMs(record.expiresAtMs) },
       );
-      this.warningEmitted = false;
-      this.lastWarningAt = 0;
+      this.recordRedisRecovery();
     } catch (error) {
-      this.handleRedisFailure(error);
+      this.handleRedisFailure(error, "revoke");
       throw new RedisSessionRevocationUnavailableError(
         "Redis session revocation write failed.",
       );
@@ -161,7 +242,9 @@ export class RedisSessionRevocationStore implements SessionRevocationStore {
             this.clientPromise = null;
           }
         })
-        .catch(() => undefined);
+        .catch((error) => {
+          this.logRedisFailure(error, "connect-finalize");
+        });
     }
 
     return this.clientPromise;
@@ -184,38 +267,69 @@ export class RedisSessionRevocationStore implements SessionRevocationStore {
         return null;
       }
       this.client = client;
-      this.warningEmitted = false;
-      this.lastWarningAt = 0;
+      this.recordRedisRecovery();
       return client;
     } catch (error) {
       await this.closeClient(client);
-      this.logRedisFailure(error);
+      this.logRedisFailure(error, "connect");
       return null;
     }
   }
 
-  private handleRedisFailure(error: unknown) {
+  private handleRedisFailure(error: unknown, operation: string) {
     const client = this.client;
     this.client = null;
     void this.closeClient(client);
-    this.logRedisFailure(error);
+    this.logRedisFailure(error, operation);
   }
 
-  private logRedisFailure(error: unknown) {
+  private logRedisFailure(error: unknown, operation = "unknown") {
+    const classification = classifyRedisSessionRevocationError(error);
+    internalMetrics.increment("sessionRevocationRedisErrorsTotal");
+
     const now = this.now();
     if (this.warningEmitted && now - this.lastWarningAt < this.warningRepeatMs) {
       return;
     }
+    markStartupServiceDegraded(
+      SESSION_REVOCATION_HEALTH_SERVICE,
+      SESSION_REVOCATION_DEGRADED_REASON,
+      classification,
+    );
     this.warningEmitted = true;
     this.lastWarningAt = now;
-    this.logger.warn("Redis session revocation store unavailable; rejecting session checks closed", {
+    const logPayload = {
+      classification,
+      error: sanitizeRedisSessionRevocationError(error),
+      event: "session_revocation_redis_failure",
+      operation,
       provider: this.config.provider,
-      error: error instanceof Error ? error.message : "Unknown Redis failure",
-    });
+      retryable: classification === RedisSessionRevocationErrorClass.RETRYABLE,
+    };
+    const log = this.logger.error ?? this.logger.warn;
+    log.call(
+      this.logger,
+      "Redis session revocation store unavailable; rejecting session checks closed",
+      logPayload,
+    );
+  }
+
+  private recordRedisRecovery() {
+    clearStartupServiceDegraded(SESSION_REVOCATION_HEALTH_SERVICE);
+    this.warningEmitted = false;
+    this.lastWarningAt = 0;
   }
 
   private async closeClient(client: RedisSessionRevocationClientLike | null) {
-    await client?.quit?.().catch(() => undefined);
+    if (!client?.quit) {
+      return;
+    }
+
+    try {
+      await client.quit();
+    } catch (error) {
+      this.logRedisFailure(error, "close");
+    }
   }
 }
 

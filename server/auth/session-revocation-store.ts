@@ -86,6 +86,18 @@ class MemorySessionRevocationStore implements SessionRevocationStore {
 
 let activeStore: SessionRevocationStore = new MemorySessionRevocationStore();
 
+function logSessionRevocationStoreCloseFailure(
+  sink: LoggerLike,
+  message: string,
+  error: unknown,
+) {
+  sink.warn(message, {
+    error: error instanceof Error
+      ? { name: error.name }
+      : { type: typeof error },
+  });
+}
+
 function normalizeJwtId(jwtId: string): string {
   return String(jwtId || "").trim();
 }
@@ -107,9 +119,11 @@ export function configureSessionRevocationStoreForRuntime(
   const sink = options.logger ?? defaultLogger;
   if (previousStore !== activeStore) {
     void Promise.resolve(previousStore.close?.()).catch((error) => {
-      sink.warn("Failed to close previous session revocation store", {
-        error: error instanceof Error ? error.message : "Unknown session revocation store close failure",
-      });
+      logSessionRevocationStoreCloseFailure(
+        sink,
+        "Failed to close previous session revocation store",
+        error,
+      );
     });
   }
 
@@ -117,9 +131,11 @@ export function configureSessionRevocationStoreForRuntime(
     const storeToClose = activeStore;
     activeStore = new MemorySessionRevocationStore();
     void Promise.resolve(storeToClose.close?.()).catch((error) => {
-      sink.warn("Failed to close session revocation store during shutdown", {
-        error: error instanceof Error ? error.message : "Unknown session revocation store close failure",
-      });
+      logSessionRevocationStoreCloseFailure(
+        sink,
+        "Failed to close session revocation store during shutdown",
+        error,
+      );
     });
   };
 }
@@ -139,5 +155,11 @@ export async function revokeSessionJwt(record: SessionRevocationRecord): Promise
 export function resetSessionRevocationStoreForTests() {
   const storeToClose = activeStore;
   activeStore = new MemorySessionRevocationStore();
-  void Promise.resolve(storeToClose.close?.()).catch(() => undefined);
+  void Promise.resolve(storeToClose.close?.()).catch((error) => {
+    logSessionRevocationStoreCloseFailure(
+      defaultLogger,
+      "Failed to close session revocation store during test reset",
+      error,
+    );
+  });
 }

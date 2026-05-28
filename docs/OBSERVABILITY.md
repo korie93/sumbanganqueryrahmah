@@ -78,7 +78,12 @@ process plus publisher/subscriber duplicates, and watch reconnect warnings:
 `Redis rate-limit store reconnect scheduled`, `Redis 2FA replay store
 unavailable`, `Redis session revocation store unavailable`, and `Redis
 WebSocket shared bus unavailable`. These indicate shared runtime state is at
-risk and should page the operator for production deployments.
+risk and should page the operator for production deployments. Session
+revocation Redis failures emit the structured event
+`session_revocation_redis_failure`, increment
+`sessionRevocationRedisErrorsTotal`, and mark readiness degraded until Redis
+recovers; the payload is limited to provider, operation, classification, and
+sanitized error name/code so JWT ids and user identifiers are not logged.
 
 HTTP throttling responses expose `Retry-After`, `RateLimit-Limit`, `RateLimit-Remaining`, and `RateLimit-Reset` plus the legacy-compatible `X-RateLimit-*` variants so browser clients and operational probes can back off without parsing log output. Authenticated requests are counted against both an IP bucket and a per-user bucket (`SQR_RATE_LIMIT_USER_READS_PER_MINUTE`, `SQR_RATE_LIMIT_USER_WRITES_PER_MINUTE`, `SQR_RATE_LIMIT_USER_UPLOADS_PER_MINUTE`). CSRF rotation also returns the fresh token in `X-CSRF-Token` alongside the readable `sqr_csrf` cookie for clients that prefer header-based refresh handling after sensitive mutations.
 
