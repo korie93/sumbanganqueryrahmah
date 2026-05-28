@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { sanitizeErrorStackForLog, sanitizeForLog } from "../logger";
+import { sanitizeErrorStackForLog, sanitizeForLog, sanitizeForLogAllowList } from "../logger";
 
 test("sanitizeForLog redacts snake_case, kebab-case, and dotted PII keys", () => {
   const sanitized = sanitizeForLog({
@@ -56,6 +56,46 @@ test("sanitizeForLog keeps ordinary operational metadata intact", () => {
     nested: {
       scope: "collection:list",
     },
+  });
+});
+
+test("sanitizeForLogAllowList redacts fields that are not explicitly allowlisted", () => {
+  const sanitized = sanitizeForLogAllowList({
+    requestId: "req-1",
+    statusCode: 200,
+    rawBody: { nested: "secret-shaped payload" },
+    nested: {
+      scope: "collection:list",
+    },
+  }) as Record<string, unknown>;
+
+  assert.equal(sanitized.requestId, "req-1");
+  assert.equal(sanitized.statusCode, 200);
+  assert.equal(sanitized.rawBody, "[REDACTED]");
+  assert.equal(sanitized.nested, "[REDACTED]");
+});
+
+test("sanitizeForLogAllowList still auto-redacts sensitive keys and freeform values", () => {
+  const sanitized = sanitizeForLogAllowList({
+    event: "auth_failure",
+    userId: "user-1",
+    username: "superuser",
+    message: "Send follow-up to ops@example.com",
+    error: {
+      name: "Error",
+      message: "Bearer abcdefghijklmnopqrstuvwxyz should not leak",
+      query: "select * from users",
+    },
+  }) as Record<string, unknown>;
+
+  assert.equal(sanitized.event, "auth_failure");
+  assert.equal(sanitized.userId, "[REDACTED]");
+  assert.equal(sanitized.username, "[REDACTED]");
+  assert.equal(sanitized.message, "Send follow-up to [REDACTED]");
+  assert.deepEqual(sanitized.error, {
+    name: "Error",
+    message: "[REDACTED] should not leak",
+    query: "[REDACTED]",
   });
 });
 

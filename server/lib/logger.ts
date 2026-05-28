@@ -31,7 +31,97 @@ const REDACT_KEYS = [
   "apikey",
   "accesstoken",
   "refreshtoken",
+  "userid",
+  "username",
+  "login",
 ];
+
+const ALLOWED_LOG_KEYS = new Set([
+  "action",
+  "app",
+  "attempt",
+  "attemptcount",
+  "capturedat",
+  "category",
+  "channel",
+  "classification",
+  "clientip",
+  "code",
+  "contentlength",
+  "count",
+  "cwd",
+  "database",
+  "delta",
+  "details",
+  "diagnostics",
+  "durationms",
+  "effectiveconnectiontype",
+  "elapsedms",
+  "enabled",
+  "envnames",
+  "error",
+  "event",
+  "expected",
+  "feature",
+  "foundpath",
+  "fullpath",
+  "host",
+  "httpmethod",
+  "httppath",
+  "idle",
+  "inflight",
+  "infologsamplerate",
+  "label",
+  "lanurl",
+  "limit",
+  "localurl",
+  "max",
+  "maxworkers",
+  "message",
+  "metadata",
+  "method",
+  "metric",
+  "metricid",
+  "mode",
+  "name",
+  "navigationtype",
+  "operation",
+  "page",
+  "pagetype",
+  "path",
+  "phase",
+  "pid",
+  "port",
+  "provider",
+  "rating",
+  "ready",
+  "reason",
+  "recordedsamplecount",
+  "remaining",
+  "requestid",
+  "responsesize",
+  "retryable",
+  "savedata",
+  "severity",
+  "signal",
+  "source",
+  "stack",
+  "status",
+  "statuscode",
+  "step",
+  "summary",
+  "total",
+  "trustedproxies",
+  "type",
+  "useragent",
+  "value",
+  "visibilitystate",
+  "waiting",
+  "warningcount",
+  "warnings",
+  "workerid",
+  "workerpid",
+]);
 
 function normalizeSensitiveLogKey(key: string): string {
   return key.toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -42,9 +132,14 @@ function isSensitiveLogKey(key: string): boolean {
   return REDACT_KEYS.some((sensitive) => normalizedKey.includes(sensitive));
 }
 
+function isAllowedLogKey(key: string): boolean {
+  return ALLOWED_LOG_KEYS.has(normalizeSensitiveLogKey(key));
+}
+
 const EMAIL_CANDIDATE_PATTERN = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi;
 const PHONE_CANDIDATE_PATTERN = /(?<!\d)(?:\+?60|0)(?:1(?:[ -]?\d){8,9}|[3-9](?:[ -]?\d){7,8})(?!\d)/g;
 const CREDIT_CARD_CANDIDATE_PATTERN = /\b(?:\d[ -]?){13,19}\b/g;
+const BEARER_TOKEN_PATTERN = /\bBearer\s+[A-Za-z0-9._~+/=-]{12,}/gi;
 const PRODUCTION_STACK_MAX_LINES = 4;
 const PRODUCTION_STACK_MAX_CHARS = 1_200;
 
@@ -74,7 +169,8 @@ function passesLuhnCheck(rawDigits: string): boolean {
 }
 
 function sanitizeLogString(value: string): string {
-  const withEmailAddressesRedacted = value.replace(EMAIL_CANDIDATE_PATTERN, "[REDACTED]");
+  const withBearerTokensRedacted = value.replace(BEARER_TOKEN_PATTERN, "[REDACTED]");
+  const withEmailAddressesRedacted = withBearerTokensRedacted.replace(EMAIL_CANDIDATE_PATTERN, "[REDACTED]");
   const withPhoneNumbersRedacted = withEmailAddressesRedacted.replace(PHONE_CANDIDATE_PATTERN, "[REDACTED]");
 
   return withPhoneNumbersRedacted.replace(CREDIT_CARD_CANDIDATE_PATTERN, (candidate) => {
@@ -166,6 +262,51 @@ export function sanitizeForLog(value: unknown): unknown {
   return output;
 }
 
+export function sanitizeForLogAllowList(value: unknown): unknown {
+  if (value instanceof Error) {
+    return sanitizeForLogAllowList({
+      code: "code" in value ? (value as Error & { code?: unknown }).code : undefined,
+      message: value.message,
+      name: value.name,
+      stack: value.stack,
+    });
+  }
+
+  if (value instanceof Date) {
+    return value.toISOString();
+  }
+
+  if (typeof value === "string") {
+    return sanitizeLogString(value);
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((item) => sanitizeForLogAllowList(item));
+  }
+
+  if (!value || typeof value !== "object") {
+    return value;
+  }
+
+  const output: Record<string, unknown> = {};
+  for (const [key, nested] of Object.entries(value as Record<string, unknown>)) {
+    if (isSensitiveLogKey(key)) {
+      output[key] = "[REDACTED]";
+      continue;
+    }
+    if (!isAllowedLogKey(key)) {
+      output[key] = "[REDACTED]";
+      continue;
+    }
+    if (key === "stack" && typeof nested === "string") {
+      output[key] = sanitizeErrorStackForLog(nested);
+      continue;
+    }
+    output[key] = sanitizeForLogAllowList(nested);
+  }
+  return output;
+}
+
 const rootLogger = pino({
   level: runtimeConfig.app.logLevel,
   base: null,
@@ -181,14 +322,14 @@ type LogLevel = "info" | "warn" | "error" | "debug";
 
 function write(level: LogLevel, message: string, meta?: Record<string, unknown>) {
   const requestContext = getRequestContext();
-  const payload = meta ? sanitizeForLog(meta) : undefined;
+  const payload = meta ? sanitizeForLogAllowList(meta) : undefined;
   const hasPayload =
     payload &&
     typeof payload === "object" &&
     !Array.isArray(payload) &&
     Object.keys(payload as Record<string, unknown>).length > 0;
   const contextPayload = requestContext
-    ? sanitizeForLog({
+    ? sanitizeForLogAllowList({
       requestId: requestContext.requestId,
       ...(requestContext.httpMethod ? { httpMethod: requestContext.httpMethod } : {}),
       ...(requestContext.httpPath ? { httpPath: requestContext.httpPath } : {}),
