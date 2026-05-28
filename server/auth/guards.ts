@@ -76,6 +76,7 @@ type CreateAuthGuardsOptions = {
   };
   secret?: string;
   activityUpdateThrottleMs?: number;
+  sessionRefreshRevocationRetry?: Partial<SessionRefreshRevocationRetryConfig>;
 };
 
 type AuthSessionTokenSource = "bearer" | "cookie";
@@ -90,6 +91,123 @@ type RefreshedSessionToken = {
   jwtId?: string | undefined;
   sessionExpiresAtIso?: string | null | undefined;
 };
+
+type SessionRefreshRevocationRetryConfig = {
+  attempts: number;
+  baseDelayMs: number;
+  maxDelayMs: number;
+};
+
+type SessionRefreshRevocationLogContext = {
+  method: string;
+  path: string;
+};
+
+const MIN_SESSION_REFRESH_REVOCATION_RETRY_ATTEMPTS = 1;
+const MAX_SESSION_REFRESH_REVOCATION_RETRY_ATTEMPTS = 5;
+const DEFAULT_SESSION_REFRESH_REVOCATION_RETRY_ATTEMPTS = 3;
+const DEFAULT_SESSION_REFRESH_REVOCATION_RETRY_BASE_DELAY_MS = 25;
+const DEFAULT_SESSION_REFRESH_REVOCATION_RETRY_MAX_DELAY_MS = 250;
+const SESSION_REFRESH_REVOCATION_BACKOFF_FACTOR = 2;
+
+function normalizeRetryAttempts(value: number | undefined): number {
+  if (!Number.isFinite(value)) {
+    return DEFAULT_SESSION_REFRESH_REVOCATION_RETRY_ATTEMPTS;
+  }
+
+  const normalizedValue = Math.trunc(Number(value));
+  return Math.min(
+    MAX_SESSION_REFRESH_REVOCATION_RETRY_ATTEMPTS,
+    Math.max(MIN_SESSION_REFRESH_REVOCATION_RETRY_ATTEMPTS, normalizedValue),
+  );
+}
+
+function normalizeRetryDelayMs(value: number | undefined, fallback: number): number {
+  if (!Number.isFinite(value)) {
+    return fallback;
+  }
+  return Math.max(0, Math.trunc(Number(value)));
+}
+
+function resolveSessionRefreshRevocationRetryConfig(
+  options: Partial<SessionRefreshRevocationRetryConfig> | undefined,
+): SessionRefreshRevocationRetryConfig {
+  const baseDelayMs = normalizeRetryDelayMs(
+    options?.baseDelayMs,
+    DEFAULT_SESSION_REFRESH_REVOCATION_RETRY_BASE_DELAY_MS,
+  );
+  const maxDelayMs = normalizeRetryDelayMs(
+    options?.maxDelayMs,
+    DEFAULT_SESSION_REFRESH_REVOCATION_RETRY_MAX_DELAY_MS,
+  );
+
+  return {
+    attempts: normalizeRetryAttempts(options?.attempts),
+    baseDelayMs,
+    maxDelayMs: Math.max(baseDelayMs, maxDelayMs),
+  };
+}
+
+function resolveSessionRefreshRevocationRetryDelayMs(
+  failedAttemptIndex: number,
+  config: SessionRefreshRevocationRetryConfig,
+): number {
+  const exponentialDelayMs =
+    config.baseDelayMs * (SESSION_REFRESH_REVOCATION_BACKOFF_FACTOR ** failedAttemptIndex);
+  return Math.min(config.maxDelayMs, exponentialDelayMs);
+}
+
+async function sleepSessionRefreshRevocationRetry(delayMs: number): Promise<void> {
+  if (delayMs <= 0) {
+    return;
+  }
+  await new Promise<void>((resolve) => {
+    setTimeout(resolve, delayMs);
+  });
+}
+
+function describeSessionRefreshRevocationError(error: unknown): string {
+  return error instanceof Error ? error.message : "Unknown session refresh revocation failure";
+}
+
+async function revokeSessionJwtForRefresh(
+  record: Parameters<typeof revokeSessionJwt>[0],
+  context: SessionRefreshRevocationLogContext,
+  config: SessionRefreshRevocationRetryConfig,
+): Promise<void> {
+  let lastError: unknown;
+
+  for (let attempt = 1; attempt <= config.attempts; attempt += 1) {
+    try {
+      await revokeSessionJwt(record);
+      return;
+    } catch (error) {
+      lastError = error;
+      internalMetrics.increment("sessionRevocationRedisErrorsTotal");
+
+      if (attempt >= config.attempts) {
+        break;
+      }
+
+      const retryAfterMs = resolveSessionRefreshRevocationRetryDelayMs(attempt - 1, config);
+      logger.warn("Retrying JWT refresh revocation after failure", {
+        event: "session_refresh_revocation_retry",
+        operation: "revoke",
+        path: context.path,
+        method: context.method,
+        attempt,
+        max: config.attempts,
+        retryAfterMs,
+        error: describeSessionRefreshRevocationError(error),
+      });
+      await sleepSessionRefreshRevocationRetry(retryAfterMs);
+    }
+  }
+
+  throw lastError instanceof Error
+    ? lastError
+    : new Error("Session refresh revocation failed");
+}
 
 function firstHeaderValue(value: string | string[] | undefined): string {
   if (Array.isArray(value)) {
@@ -118,6 +236,9 @@ function readAuthSessionToken(req: Request): AuthSessionTokenReadResult {
 export function createAuthGuards(options: CreateAuthGuardsOptions) {
   const storage = options.storage;
   const secret = options.secret || getSessionSecret();
+  const sessionRefreshRevocationRetry = resolveSessionRefreshRevocationRetryConfig(
+    options.sessionRefreshRevocationRetry,
+  );
   const tabVisibility = createRoleTabVisibilityCache({ storage });
   const activityUpdates = createActivityUpdateThrottler({
     activityUpdateThrottleMs: options.activityUpdateThrottleMs,
@@ -273,15 +394,22 @@ export function createAuthGuards(options: CreateAuthGuardsOptions) {
         const refreshedJwtId = resolveSessionJwtId(refreshedToken) ?? undefined;
 
         try {
-          await revokeSessionJwt({
-            jwtId: decoded.jti || "",
-            expiresAtMs: sessionExpiry?.expiresAtMs ?? 0,
-          });
+          await revokeSessionJwtForRefresh(
+            {
+              jwtId: decoded.jti || "",
+              expiresAtMs: sessionExpiry?.expiresAtMs ?? 0,
+            },
+            {
+              path: req.path,
+              method: req.method,
+            },
+            sessionRefreshRevocationRetry,
+          );
         } catch (error) {
           logger.error("Failed to revoke previous JWT during authenticated session refresh", {
             path: req.path,
             method: req.method,
-            error: error instanceof Error ? error.message : "Unknown session refresh revocation failure",
+            error: describeSessionRefreshRevocationError(error),
           });
           clearAuthSessionCookie(res);
           return res.status(503).json({

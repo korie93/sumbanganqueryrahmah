@@ -11,9 +11,11 @@ import {
 import { logger } from "../../lib/logger";
 import { getInternalMetricsSnapshot } from "../../internal/metrics";
 import {
+  configureSessionRevocationStoreForRuntime,
   resetSessionRevocationStoreForTests,
   isSessionJwtRevoked,
   revokeSessionJwt,
+  type SessionRevocationRecord,
 } from "../session-revocation-store";
 import { AUTH_SESSION_REFRESH_HEADER_NAME } from "../session-cookie";
 
@@ -958,6 +960,192 @@ test("authenticateToken refreshes a bearer JWT inside the final 20 percent of TT
   } finally {
     guards.stopTabVisibilityCacheSweep();
     guards.stopActivityUpdateCacheSweep();
+    resetSessionRevocationStoreForTests();
+  }
+});
+
+test("authenticateToken retries transient JWT refresh revocation failures", async (t) => {
+  resetSessionRevocationStoreForTests();
+  const secret = "guard-test-secret";
+  const nowMs = Date.parse("2026-05-27T00:00:00.000Z");
+  const nowSeconds = Math.floor(nowMs / 1000);
+  const revokedJwtIds = new Set<string>();
+  const warnings: Array<{ message: string; payload: Record<string, unknown> | undefined }> = [];
+  let revokeAttempts = 0;
+  t.mock.method(Date, "now", () => nowMs);
+  t.mock.method(logger, "warn", (message: string, payload?: Record<string, unknown>) => {
+    warnings.push({ message, payload });
+  });
+  const restoreRevocationStore = configureSessionRevocationStoreForRuntime({
+    isRevoked: async (jwtId: string) => revokedJwtIds.has(jwtId),
+    revoke: async (record: SessionRevocationRecord) => {
+      revokeAttempts += 1;
+      if (revokeAttempts < 3) {
+        throw new Error("temporary revocation store outage");
+      }
+      revokedJwtIds.add(record.jwtId);
+    },
+    close: () => {
+      revokedJwtIds.clear();
+    },
+  });
+  const guards = createAuthGuards({
+    storage: {
+      getAuthenticatedSessionSnapshot: async () => createAuthenticatedSessionSnapshot(),
+      getActivityById: async () => undefined,
+      getUser: async () => undefined,
+      getUserByUsername: async () => undefined,
+      isVisitorBanned: async () => false,
+      updateActivity: async () => undefined,
+      getRoleTabVisibility: async () => ({}),
+    },
+    secret,
+    sessionRefreshRevocationRetry: {
+      attempts: 3,
+      baseDelayMs: 0,
+      maxDelayMs: 0,
+    },
+  });
+
+  const oldToken = jwt.sign(
+    {
+      userId: "user-1",
+      username: "guard.user",
+      role: "admin",
+      activityId: "activity-1",
+      iat: nowSeconds - 81,
+      exp: nowSeconds + 19,
+    },
+    secret,
+    { jwtid: "near-expiry-retry-jti" },
+  );
+  const response = createMockResponse();
+  let nextCalls = 0;
+
+  try {
+    await guards.authenticateToken(
+      {
+        headers: {
+          authorization: `Bearer ${oldToken}`,
+        },
+        method: "GET",
+        path: "/api/me",
+      } as never,
+      response as never,
+      () => {
+        nextCalls += 1;
+      },
+    );
+
+    const refreshedToken = String(response.getHeader(AUTH_SESSION_REFRESH_HEADER_NAME) || "");
+    assert.equal(nextCalls, 1);
+    assert.notEqual(refreshedToken, "");
+    assert.equal(revokeAttempts, 3);
+    assert.equal(revokedJwtIds.has("near-expiry-retry-jti"), true);
+    assert.equal(warnings.length, 2);
+    assert.equal(warnings[0]?.message, "Retrying JWT refresh revocation after failure");
+    assert.equal(warnings[0]?.payload?.event, "session_refresh_revocation_retry");
+    assert.equal(warnings[0]?.payload?.attempt, 1);
+    assert.equal(warnings[1]?.payload?.attempt, 2);
+    assert.doesNotMatch(JSON.stringify(warnings), /near-expiry-retry-jti|guard\.user|user-1/);
+  } finally {
+    guards.stopTabVisibilityCacheSweep();
+    guards.stopActivityUpdateCacheSweep();
+    restoreRevocationStore();
+    resetSessionRevocationStoreForTests();
+  }
+});
+
+test("authenticateToken fails closed when JWT refresh revocation retries are exhausted", async (t) => {
+  resetSessionRevocationStoreForTests();
+  const secret = "guard-test-secret";
+  const nowMs = Date.parse("2026-05-27T00:00:00.000Z");
+  const nowSeconds = Math.floor(nowMs / 1000);
+  const errors: Array<{ message: string; payload: Record<string, unknown> | undefined }> = [];
+  const warnings: Array<{ message: string; payload: Record<string, unknown> | undefined }> = [];
+  let revokeAttempts = 0;
+  t.mock.method(Date, "now", () => nowMs);
+  t.mock.method(logger, "warn", (message: string, payload?: Record<string, unknown>) => {
+    warnings.push({ message, payload });
+  });
+  t.mock.method(logger, "error", (message: string, payload?: Record<string, unknown>) => {
+    errors.push({ message, payload });
+  });
+  const restoreRevocationStore = configureSessionRevocationStoreForRuntime({
+    isRevoked: async () => false,
+    revoke: async () => {
+      revokeAttempts += 1;
+      throw new Error("revocation store unavailable");
+    },
+  });
+  const guards = createAuthGuards({
+    storage: {
+      getAuthenticatedSessionSnapshot: async () => createAuthenticatedSessionSnapshot(),
+      getActivityById: async () => undefined,
+      getUser: async () => undefined,
+      getUserByUsername: async () => undefined,
+      isVisitorBanned: async () => false,
+      updateActivity: async () => undefined,
+      getRoleTabVisibility: async () => ({}),
+    },
+    secret,
+    sessionRefreshRevocationRetry: {
+      attempts: 2,
+      baseDelayMs: 0,
+      maxDelayMs: 0,
+    },
+  });
+
+  const oldToken = jwt.sign(
+    {
+      userId: "user-1",
+      username: "guard.user",
+      role: "admin",
+      activityId: "activity-1",
+      iat: nowSeconds - 81,
+      exp: nowSeconds + 19,
+    },
+    secret,
+    { jwtid: "near-expiry-fail-closed-jti" },
+  );
+  const response = createMockResponse();
+  let nextCalls = 0;
+
+  try {
+    await guards.authenticateToken(
+      {
+        headers: {
+          authorization: `Bearer ${oldToken}`,
+        },
+        method: "GET",
+        path: "/api/me",
+      } as never,
+      response as never,
+      () => {
+        nextCalls += 1;
+      },
+    );
+
+    assert.equal(nextCalls, 0);
+    assert.equal(revokeAttempts, 2);
+    assert.equal(response.getHeader(AUTH_SESSION_REFRESH_HEADER_NAME), undefined);
+    assert.equal(response.statusCode, 503);
+    assert.deepEqual(response.body, {
+      message: "Session refresh is temporarily unavailable. Please try again.",
+      code: "SESSION_REFRESH_UNAVAILABLE",
+    });
+    assert.equal(warnings.length, 1);
+    assert.equal(warnings[0]?.payload?.attempt, 1);
+    assert.equal(errors.length, 1);
+    assert.equal(
+      errors[0]?.message,
+      "Failed to revoke previous JWT during authenticated session refresh",
+    );
+    assert.doesNotMatch(JSON.stringify(errors), /near-expiry-fail-closed-jti|guard\.user|user-1/);
+  } finally {
+    guards.stopTabVisibilityCacheSweep();
+    guards.stopActivityUpdateCacheSweep();
+    restoreRevocationStore();
     resetSessionRevocationStoreForTests();
   }
 });
