@@ -1,16 +1,17 @@
 import { Suspense, memo, useEffect, useMemo, useRef, useState } from "react";
 import { BarChart3, ClipboardList, FileText, Server } from "lucide-react";
 import { AppRouteErrorBoundary } from "@/app/AppRouteErrorBoundary";
+import {
+  ActivityMonitorSectionPage,
+  AnalysisMonitorSectionPage,
+  AuditLogsMonitorSectionPage,
+  DashboardMonitorSectionPage,
+  preloadSystemMonitorSection,
+  SystemPerformanceMonitorSectionPage,
+} from "@/app/system-monitor-lazy-sections";
 import { LazySideTabNavigation } from "@/components/navigation/LazySideTabNavigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { lazyWithPreload } from "@/lib/lazy-with-preload";
-
-const DashboardPage = lazyWithPreload(() => import("@/pages/Dashboard"));
-const ActivityPage = lazyWithPreload(() => import("@/pages/Activity"));
-const SystemPerformancePage = lazyWithPreload(() => import("@/pages/Monitor"));
-const AnalysisPage = lazyWithPreload(() => import("@/pages/Analysis"));
-const AuditLogsPage = lazyWithPreload(() => import("@/pages/AuditLogs"));
 
 type MonitorSection = "dashboard" | "activity" | "monitor" | "analysis" | "audit";
 
@@ -29,41 +30,26 @@ type AnalysisSectionProps = {
   onNavigate?: ((page: string) => void) | undefined;
 };
 
-export function preloadSystemMonitorSection(
-  section: "dashboard" | "activity" | "monitor" | "analysis" | "audit",
-) {
-  switch (section) {
-    case "dashboard":
-      return DashboardPage.preload();
-    case "activity":
-      return ActivityPage.preload();
-    case "analysis":
-      return AnalysisPage.preload();
-    case "audit":
-      return AuditLogsPage.preload();
-    default:
-      return SystemPerformancePage.preload();
-  }
-}
+export { preloadSystemMonitorSection };
 
 const DashboardSection = memo(function DashboardSection() {
-  return <DashboardPage />;
+  return <DashboardMonitorSectionPage />;
 });
 
 const ActivitySection = memo(function ActivitySection() {
-  return <ActivityPage />;
+  return <ActivityMonitorSectionPage />;
 });
 
 const SystemPerformanceSection = memo(function SystemPerformanceSection() {
-  return <SystemPerformancePage />;
+  return <SystemPerformanceMonitorSectionPage />;
 });
 
 const AnalysisSection = memo(function AnalysisSection({ onNavigate }: AnalysisSectionProps) {
-  return <AnalysisPage onNavigate={onNavigate || (() => undefined)} />;
+  return <AnalysisMonitorSectionPage onNavigate={onNavigate || (() => undefined)} />;
 });
 
 const AuditLogsSection = memo(function AuditLogsSection() {
-  return <AuditLogsPage />;
+  return <AuditLogsMonitorSectionPage />;
 });
 
 const sectionMeta: Record<

@@ -25,7 +25,7 @@ import {
 } from "@/lib/api";
 import { queryClient } from "@/lib/queryClient";
 import { buildBackupQueryParams } from "@/pages/backup-restore/backup-state-utils";
-import { preloadSystemMonitorSection } from "@/pages/SystemMonitorLayout";
+import { preloadSystemMonitorSection } from "@/app/system-monitor-lazy-sections";
 const DEFAULT_DASHBOARD_TREND_DAYS = 7;
 const DEFAULT_BACKUP_QUERY_PARAMS = buildBackupQueryParams({
   page: 1,
