@@ -37,6 +37,26 @@ Security updates for these packages should be dependency-only PRs that update
 both `package.json` and `package-lock.json`, run `npm run audit:dependencies`,
 and include the focused auth/HTTP/database tests for the touched package family.
 
+## Runtime Import Cycle Guard
+
+The production TypeScript source graph must remain acyclic across `server/`,
+`client/src/`, and `shared/`. Runtime cycles make startup order, singleton
+initialization, and cleanup ownership harder to reason about, especially in the
+auth, WebSocket, rate-limit, and database paths.
+
+Run this guard before merging architecture or module-boundary refactors:
+
+```bash
+node --test scripts/tests/import-cycle-contract.test.mjs
+```
+
+The guard uses the local TypeScript compiler API and adds no package dependency.
+It resolves relative imports plus the configured `@/` and `@shared/` aliases,
+ignores type-only imports, excludes test fixtures, and fails on runtime
+`import`/`export from` cycles. If a future refactor needs shared types across
+two modules, move those types to a lower-level shared contract instead of adding
+a reverse runtime import.
+
 ## Express 5 Runtime
 
 The backend now runs on Express 5. Keep explicit async wrappers in place until a

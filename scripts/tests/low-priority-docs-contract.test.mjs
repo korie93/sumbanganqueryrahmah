@@ -87,6 +87,22 @@ test("secret rotation runbook documents collection PII key rotation cadence and 
   }
 });
 
+test("dependency documentation describes the runtime import cycle guard", async () => {
+  const content = await readDoc("docs/DEPENDENCY_SUPPLY_CHAIN.md");
+
+  for (const marker of [
+    "Runtime Import Cycle Guard",
+    "server/",
+    "client/src/",
+    "shared/",
+    "node --test scripts/tests/import-cycle-contract.test.mjs",
+    "ignores type-only imports",
+    "`@/` and `@shared/` aliases",
+  ]) {
+    assert.match(content, new RegExp(marker.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  }
+});
+
 test("data retention policy covers operational categories and deletion procedures", async () => {
   const content = await readDoc("docs/DATA_RETENTION_POLICY.md");
 
