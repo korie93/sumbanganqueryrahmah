@@ -18,6 +18,7 @@ import {
   bindAutoLogoutSocket,
   disposeAutoLogoutSocket,
 } from "@/components/auto-logout-socket-runtime";
+import { useAutoLogoutLifecycleController } from "@/components/auto-logout-lifecycle-state";
 
 interface AutoLogoutProps {
   onClientLogout: () => void | Promise<void>;
@@ -40,13 +41,18 @@ export default function AutoLogout({
   const reconnectRef = useRef<number | null>(null);
   const lastActivityRef = useRef<number>(Date.now());
   const lastResetByEventRef = useRef<number>(0);
-  const reconnectAttemptRef = useRef(0);
   const wsRef = useRef<WebSocket | null>(null);
-  const mountedRef = useRef(true);
-  const reconnectEnabledRef = useRef(true);
-  const logoutStartedRef = useRef(false);
-  const lastHeartbeatSyncAtRef = useRef(0);
-  const activityListenersAttachedRef = useRef(false);
+  const {
+    activityListenersAttachedRef,
+    lastHeartbeatSyncAtRef,
+    logoutStartedRef,
+    markLogoutStarted,
+    markUnmountedLifecycle,
+    mountedRef,
+    reconnectAttemptRef,
+    reconnectEnabledRef,
+    startSessionLifecycle,
+  } = useAutoLogoutLifecycleController();
   const onClientLogoutRef = useLatestRef(onClientLogout);
   const onLogoutRef = useLatestRef(onLogout);
   const {
@@ -95,27 +101,39 @@ export default function AutoLogout({
 
   const runLogout = useCallback(async () => {
     if (logoutStartedRef.current) return;
-    logoutStartedRef.current = true;
-    reconnectEnabledRef.current = false;
-    reconnectAttemptRef.current = 0;
+    markLogoutStarted();
     clearIdleTimeout();
     clearHeartbeat();
     clearHeartbeatRequest();
     cleanupSocket();
     await onLogoutRef.current();
-  }, [cleanupSocket, clearHeartbeat, clearHeartbeatRequest, clearIdleTimeout, onLogoutRef]);
+  }, [
+    cleanupSocket,
+    clearHeartbeat,
+    clearHeartbeatRequest,
+    clearIdleTimeout,
+    logoutStartedRef,
+    markLogoutStarted,
+    onLogoutRef,
+  ]);
 
   const runClientLogout = useCallback(async () => {
     if (logoutStartedRef.current) return;
-    logoutStartedRef.current = true;
-    reconnectEnabledRef.current = false;
-    reconnectAttemptRef.current = 0;
+    markLogoutStarted();
     clearIdleTimeout();
     clearHeartbeat();
     clearHeartbeatRequest();
     cleanupSocket();
     await onClientLogoutRef.current();
-  }, [cleanupSocket, clearHeartbeat, clearHeartbeatRequest, clearIdleTimeout, onClientLogoutRef]);
+  }, [
+    cleanupSocket,
+    clearHeartbeat,
+    clearHeartbeatRequest,
+    clearIdleTimeout,
+    logoutStartedRef,
+    markLogoutStarted,
+    onClientLogoutRef,
+  ]);
 
   const resetTimeout = useCallback(() => {
     lastActivityRef.current = Date.now();
@@ -152,23 +170,25 @@ export default function AutoLogout({
   const syncHeartbeatIfNeededRef = useLatestRef(syncHeartbeatIfNeeded);
 
   useEffect(() => {
-    mountedRef.current = true;
-    reconnectEnabledRef.current = true;
-    logoutStartedRef.current = false;
-    reconnectAttemptRef.current = 0;
-    lastHeartbeatSyncAtRef.current = 0;
+    startSessionLifecycle();
 
     return () => {
-      mountedRef.current = false;
-      reconnectEnabledRef.current = false;
-      reconnectAttemptRef.current = 0;
+      markUnmountedLifecycle();
       clearIdleTimeout();
       clearHeartbeat();
       clearHeartbeatRequest();
       cleanupSocket();
       clearAllTimers();
     };
-  }, [cleanupSocket, clearAllTimers, clearHeartbeat, clearHeartbeatRequest, clearIdleTimeout]);
+  }, [
+    cleanupSocket,
+    clearAllTimers,
+    clearHeartbeat,
+    clearHeartbeatRequest,
+    clearIdleTimeout,
+    markUnmountedLifecycle,
+    startSessionLifecycle,
+  ]);
 
   useEffect(() => {
     return bindAutoLogoutActivityListeners({
