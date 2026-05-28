@@ -202,6 +202,8 @@ test("runtime config accepts production startup when required hardening env vars
       BACKUP_ENCRYPTION_KEY: "A".repeat(32),
       BACKUP_FEATURE_ENABLED: "1",
       DEBUG_LOGS: "1",
+      AI_DEBUG: "1",
+      LOG_LEVEL: "debug",
     },
     async () => {
       const runtimeModule = await importRuntimeFresh();
@@ -209,10 +211,32 @@ test("runtime config accepts production startup when required hardening env vars
       assert.equal(runtimeModule.runtimeConfig.auth.seedDefaultUsers, false);
       assert.equal(runtimeModule.runtimeConfig.app.debugLogs, false);
       assert.equal(runtimeModule.runtimeConfig.ai.debugLogs, false);
+      assert.equal(runtimeModule.runtimeConfig.ai.debugEnabled, false);
+      assert.equal(runtimeModule.runtimeConfig.app.logLevel, "info");
       assert.deepEqual(runtimeModule.runtimeConfig.database.ssl, {
         enabled: true,
         rejectUnauthorized: true,
       });
+    },
+  );
+});
+
+test("runtime config preserves explicit debug logging only in strict local development", async () => {
+  await withEnv(
+    {
+      NODE_ENV: "development",
+      HOST: "127.0.0.1",
+      PUBLIC_APP_URL: "http://127.0.0.1:5000",
+      DEBUG_LOGS: "1",
+      AI_DEBUG: "1",
+      LOG_LEVEL: "debug",
+    },
+    async () => {
+      const runtimeModule = await importRuntimeFresh();
+      assert.equal(runtimeModule.runtimeConfig.app.debugLogs, true);
+      assert.equal(runtimeModule.runtimeConfig.ai.debugLogs, true);
+      assert.equal(runtimeModule.runtimeConfig.ai.debugEnabled, true);
+      assert.equal(runtimeModule.runtimeConfig.app.logLevel, "debug");
     },
   );
 });

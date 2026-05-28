@@ -92,6 +92,16 @@ const STANDARD_BACKUP_MAX_PAYLOAD_BYTES = 128 * ONE_MIB_BYTES;
 const MAX_CONFIGURED_PAYLOAD_BYTES = 512 * ONE_MIB_BYTES;
 const DEFAULT_IMPORT_MAX_ROW_BYTES = 64 * ONE_KIB_BYTES;
 const MAX_IMPORT_MAX_ROW_BYTES = ONE_MIB_BYTES;
+const DEBUG_LOG_LEVELS = new Set(["debug", "trace"]);
+
+function resolveRuntimeLogLevel(configuredLogLevel: string, productionLike: boolean): string {
+  const normalizedLogLevel = configuredLogLevel.trim().toLowerCase();
+  if (productionLike && DEBUG_LOG_LEVELS.has(normalizedLogLevel)) {
+    return "info";
+  }
+
+  return configuredLogLevel;
+}
 
 const nodeEnv = resolveNodeEnv();
 const isProduction = nodeEnv === "production";
@@ -99,7 +109,10 @@ const isStrictLocalDevelopment = isStrictLocalDevelopmentEnvironment();
 const isProductionLike = isProductionLikeEnvironment();
 const debugLogs = readBoolean("DEBUG_LOGS", false) && !isProductionLike;
 const operationsDebugRoutesEnabled = readBoolean("OPERATIONS_DEBUG_ROUTES_ENABLED", false);
-const logLevel = readString("LOG_LEVEL", debugLogs ? "debug" : "info");
+const logLevel = resolveRuntimeLogLevel(
+  readString("LOG_LEVEL", debugLogs ? "debug" : "info"),
+  isProductionLike,
+);
 const lowMemoryMode = readBoolean("SQR_LOW_MEMORY_MODE", true);
 const configuredClusterMaxWorkers = readInt(
   "SQR_MAX_WORKERS",
@@ -384,7 +397,7 @@ export const runtimeConfig: RuntimeConfig = Object.freeze({
     precomputeOnStart: readBoolean("AI_PRECOMPUTE_ON_START", false),
     lowMemoryMode,
     debugLogs,
-    debugEnabled: readBoolean("AI_DEBUG", false),
+    debugEnabled: readBoolean("AI_DEBUG", false) && !isProductionLike,
     intentMode: readOptionalString("AI_INTENT_MODE"),
     gate: {
       globalLimit: readInt("AI_GATE_GLOBAL_LIMIT", 4, { min: MIN_COUNT }),
