@@ -16,7 +16,10 @@ import { isMobileViewportWidth } from "@/lib/responsive";
 import { DashboardDeferredSections } from "@/pages/dashboard/DashboardDeferredSections";
 import { DashboardPageHeader } from "@/pages/dashboard/DashboardPageHeader";
 import { DashboardSnapshotSection } from "@/pages/dashboard/DashboardSnapshotSection";
-import { buildDashboardQueryErrorMessages } from "@/pages/dashboard/dashboard-query-errors";
+import {
+  buildDashboardQueryErrorMessages,
+  getDashboardQueryErrorDetail,
+} from "@/pages/dashboard/dashboard-query-errors";
 import { resolveDashboardExportBlockReason } from "@/pages/dashboard/export-guards";
 import {
   DASHBOARD_PRIMARY_REFETCH_INTERVAL_MS,
@@ -42,6 +45,7 @@ function DashboardContent() {
     data: summary,
     error: summaryError,
     isError: summaryIsError,
+    isFetching: summaryFetching,
     isLoading: summaryLoading,
     refetch: refetchSummary,
   } = useQuery<SummaryData>({
@@ -55,6 +59,7 @@ function DashboardContent() {
     data: trends,
     error: trendsError,
     isError: trendsIsError,
+    isFetching: trendsFetching,
     isLoading: trendsLoading,
     refetch: refetchTrends,
   } = useQuery<LoginTrend[]>({
@@ -68,6 +73,7 @@ function DashboardContent() {
     data: topUsers,
     error: topUsersError,
     isError: topUsersIsError,
+    isFetching: topUsersFetching,
     isLoading: topUsersLoading,
     refetch: refetchTopUsers,
   } = useQuery<TopUser[]>({
@@ -81,6 +87,7 @@ function DashboardContent() {
     data: peakHours,
     error: peakHoursError,
     isError: peakHoursIsError,
+    isFetching: peakHoursFetching,
     isLoading: peakHoursLoading,
     refetch: refetchPeakHours,
   } = useQuery<PeakHour[]>({
@@ -94,6 +101,7 @@ function DashboardContent() {
     data: roleDistribution,
     error: roleDistributionError,
     isError: roleDistributionIsError,
+    isFetching: roleDistributionFetching,
     isLoading: roleLoading,
     refetch: refetchRoles,
   } = useQuery<RoleData[]>({
@@ -104,6 +112,26 @@ function DashboardContent() {
   });
 
   const summaryCards = useMemo(() => buildSummaryCards(summary), [summary]);
+  const summaryErrorMessage = useMemo(
+    () => (summaryIsError ? getDashboardQueryErrorDetail(summaryError) : null),
+    [summaryError, summaryIsError],
+  );
+  const trendsErrorMessage = useMemo(
+    () => (trendsIsError ? getDashboardQueryErrorDetail(trendsError) : null),
+    [trendsError, trendsIsError],
+  );
+  const topUsersErrorMessage = useMemo(
+    () => (topUsersIsError ? getDashboardQueryErrorDetail(topUsersError) : null),
+    [topUsersError, topUsersIsError],
+  );
+  const peakHoursErrorMessage = useMemo(
+    () => (peakHoursIsError ? getDashboardQueryErrorDetail(peakHoursError) : null),
+    [peakHoursError, peakHoursIsError],
+  );
+  const roleDistributionErrorMessage = useMemo(
+    () => (roleDistributionIsError ? getDashboardQueryErrorDetail(roleDistributionError) : null),
+    [roleDistributionError, roleDistributionIsError],
+  );
   const exportBlockReason = useMemo(
     () => resolveDashboardExportBlockReason({ exportingPdf, refreshing }),
     [exportingPdf, refreshing],
@@ -130,6 +158,21 @@ function DashboardContent() {
       trendsIsError,
     ],
   );
+  const handleRetrySummary = useCallback(() => {
+    void refetchSummary();
+  }, [refetchSummary]);
+  const handleRetryTrends = useCallback(() => {
+    void refetchTrends();
+  }, [refetchTrends]);
+  const handleRetryTopUsers = useCallback(() => {
+    void refetchTopUsers();
+  }, [refetchTopUsers]);
+  const handleRetryPeakHours = useCallback(() => {
+    void refetchPeakHours();
+  }, [refetchPeakHours]);
+  const handleRetryRoles = useCallback(() => {
+    void refetchRoles();
+  }, [refetchRoles]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -224,19 +267,37 @@ function DashboardContent() {
             </ul>
           </section>
         ) : null}
-        <DashboardSnapshotSection summaryCards={summaryCards} summaryLoading={summaryLoading} />
+        <DashboardSnapshotSection
+          summaryCards={summaryCards}
+          summaryErrorMessage={summaryErrorMessage}
+          summaryLoading={summaryLoading}
+          summaryRetrying={summaryFetching}
+          onRetrySummary={handleRetrySummary}
+        />
         <DashboardDeferredSections
           defer={shouldDeferSecondaryMobileSections}
           trendDays={trendDays}
           onTrendDaysChange={setTrendDays}
+          onRetryPeakHours={handleRetryPeakHours}
+          onRetryRoleDistribution={handleRetryRoles}
+          onRetryTopUsers={handleRetryTopUsers}
+          onRetryTrends={handleRetryTrends}
           trends={trends ?? []}
+          trendsErrorMessage={trendsErrorMessage}
           trendsLoading={trendsLoading}
+          trendsRetrying={trendsFetching}
           peakHours={peakHours ?? []}
+          peakHoursErrorMessage={peakHoursErrorMessage}
           peakHoursLoading={peakHoursLoading}
+          peakHoursRetrying={peakHoursFetching}
           roleDistribution={roleDistribution ?? []}
+          roleErrorMessage={roleDistributionErrorMessage}
           roleLoading={roleLoading}
+          roleRetrying={roleDistributionFetching}
           topUsers={topUsers ?? []}
+          topUsersErrorMessage={topUsersErrorMessage}
           topUsersLoading={topUsersLoading}
+          topUsersRetrying={topUsersFetching}
         />
       </div>
     </OperationalPage>

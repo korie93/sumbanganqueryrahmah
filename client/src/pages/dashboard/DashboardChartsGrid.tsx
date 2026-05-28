@@ -5,6 +5,7 @@ import type { NameType, ValueType } from "recharts/types/component/DefaultToolti
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { DashboardSectionError } from "@/pages/dashboard/DashboardSectionError";
 import type { LoginTrend, PeakHour } from "@/pages/dashboard/types";
 import {
   buildDashboardTrendTickDates,
@@ -15,11 +16,17 @@ import {
 
 interface DashboardChartsGridProps {
   onTrendDaysChange: (days: number) => void;
+  onRetryPeakHours: () => void;
+  onRetryTrends: () => void;
+  peakHoursErrorMessage: string | null;
   peakHours: PeakHour[] | undefined;
   peakHoursLoading: boolean;
+  peakHoursRetrying: boolean;
   trendDays: number;
+  trendsErrorMessage: string | null;
   trends: LoginTrend[] | undefined;
   trendsLoading: boolean;
+  trendsRetrying: boolean;
 }
 
 type DashboardTooltipProps = TooltipProps<ValueType, NameType>;
@@ -92,11 +99,17 @@ CompactChartTooltip.displayName = "CompactChartTooltip";
 
 function DashboardChartsGridImpl({
   onTrendDaysChange,
+  onRetryPeakHours,
+  onRetryTrends,
+  peakHoursErrorMessage,
   peakHours,
   peakHoursLoading,
+  peakHoursRetrying,
   trendDays,
+  trendsErrorMessage,
   trends,
   trendsLoading,
+  trendsRetrying,
 }: DashboardChartsGridProps) {
   const isMobile = useIsMobile();
   const chartHeightClassName = isMobile ? "h-[220px]" : "h-[250px]";
@@ -177,7 +190,15 @@ function DashboardChartsGridImpl({
           </div>
         </CardHeader>
         <CardContent className="space-y-3" aria-live="polite">
-          {trendsLoading ? (
+          {trendsErrorMessage ? (
+            <DashboardSectionError
+              title="Trend login gagal dimuat"
+              description={trendsErrorMessage}
+              onRetry={onRetryTrends}
+              retrying={trendsRetrying}
+              minHeightClassName={chartHeightClassName}
+            />
+          ) : trendsLoading ? (
             <div
               className={`flex items-center justify-center rounded-xl border border-border/50 bg-muted/10 ${chartHeightClassName}`}
               role="status"
@@ -287,7 +308,15 @@ function DashboardChartsGridImpl({
           </p>
         </CardHeader>
         <CardContent className="space-y-3" aria-live="polite">
-          {peakHoursLoading ? (
+          {peakHoursErrorMessage ? (
+            <DashboardSectionError
+              title="Waktu puncak gagal dimuat"
+              description={peakHoursErrorMessage}
+              onRetry={onRetryPeakHours}
+              retrying={peakHoursRetrying}
+              minHeightClassName={chartHeightClassName}
+            />
+          ) : peakHoursLoading ? (
             <div
               className={`flex items-center justify-center rounded-xl border border-border/50 bg-muted/10 ${chartHeightClassName}`}
               role="status"

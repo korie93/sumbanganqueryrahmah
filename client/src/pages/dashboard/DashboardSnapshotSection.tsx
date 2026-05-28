@@ -1,16 +1,23 @@
 import { OperationalSectionCard } from "@/components/layout/OperationalPage";
 import { Badge } from "@/components/ui/badge";
+import { DashboardSectionError } from "@/pages/dashboard/DashboardSectionError";
 import { DashboardSummaryCards } from "@/pages/dashboard/DashboardSummaryCards";
 import type { SummaryCardItem } from "@/pages/dashboard/types";
 
 type DashboardSnapshotSectionProps = {
   summaryCards: SummaryCardItem[];
+  summaryErrorMessage: string | null;
   summaryLoading: boolean;
+  summaryRetrying: boolean;
+  onRetrySummary: () => void;
 };
 
 export function DashboardSnapshotSection({
   summaryCards,
+  summaryErrorMessage,
   summaryLoading,
+  summaryRetrying,
+  onRetrySummary,
 }: DashboardSnapshotSectionProps) {
   return (
     <OperationalSectionCard
@@ -23,7 +30,17 @@ export function DashboardSnapshotSection({
       }
       contentClassName="space-y-0"
     >
-      <DashboardSummaryCards items={summaryCards} summaryLoading={summaryLoading} />
+      {summaryErrorMessage ? (
+        <DashboardSectionError
+          title="Ringkasan dashboard gagal dimuat"
+          description={summaryErrorMessage}
+          onRetry={onRetrySummary}
+          retrying={summaryRetrying}
+          minHeightClassName="min-h-[220px]"
+        />
+      ) : (
+        <DashboardSummaryCards items={summaryCards} summaryLoading={summaryLoading} />
+      )}
     </OperationalSectionCard>
   );
 }

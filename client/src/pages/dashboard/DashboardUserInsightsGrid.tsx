@@ -4,6 +4,7 @@ import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { DashboardSectionError } from "@/pages/dashboard/DashboardSectionError";
 import {
   buildDashboardRoleDistributionRowAriaLabel,
   buildDashboardTopUserRowAriaLabel,
@@ -12,10 +13,16 @@ import type { RoleData, TopUser } from "@/pages/dashboard/types";
 import { formatDashboardUserLastLogin, ROLE_COLORS } from "@/pages/dashboard/utils";
 
 interface DashboardUserInsightsGridProps {
+  onRetryRoleDistribution: () => void;
+  onRetryTopUsers: () => void;
+  roleErrorMessage: string | null;
   roleDistribution: RoleData[] | undefined;
   roleLoading: boolean;
+  roleRetrying: boolean;
+  topUsersErrorMessage: string | null;
   topUsers: TopUser[] | undefined;
   topUsersLoading: boolean;
+  topUsersRetrying: boolean;
 }
 
 type PieTooltipPayloadItem = {
@@ -96,10 +103,16 @@ function CompactRoleTooltip({ active, payload }: CompactRoleTooltipProps) {
 }
 
 export function DashboardUserInsightsGrid({
+  onRetryRoleDistribution,
+  onRetryTopUsers,
+  roleErrorMessage,
   roleDistribution,
   roleLoading,
+  roleRetrying,
+  topUsersErrorMessage,
   topUsers,
   topUsersLoading,
+  topUsersRetrying,
 }: DashboardUserInsightsGridProps) {
   const isMobile = useIsMobile();
   const roleChartSurfaceRef = useRef<HTMLDivElement | null>(null);
@@ -171,7 +184,15 @@ export function DashboardUserInsightsGrid({
           </p>
         </CardHeader>
         <CardContent aria-live="polite">
-          {topUsersLoading ? (
+          {topUsersErrorMessage ? (
+            <DashboardSectionError
+              title="Pengguna aktif gagal dimuat"
+              description={topUsersErrorMessage}
+              onRetry={onRetryTopUsers}
+              retrying={topUsersRetrying}
+              minHeightClassName={chartHeightClassName}
+            />
+          ) : topUsersLoading ? (
             <div
               className={`flex items-center justify-center rounded-xl border border-border/50 bg-muted/10 ${chartHeightClassName}`}
               role="status"
@@ -257,7 +278,15 @@ export function DashboardUserInsightsGrid({
           </p>
         </CardHeader>
         <CardContent className="space-y-3" aria-live="polite">
-          {roleLoading ? (
+          {roleErrorMessage ? (
+            <DashboardSectionError
+              title="Taburan peranan gagal dimuat"
+              description={roleErrorMessage}
+              onRetry={onRetryRoleDistribution}
+              retrying={roleRetrying}
+              minHeightClassName={chartHeightClassName}
+            />
+          ) : roleLoading ? (
             <div
               className={`flex items-center justify-center rounded-xl border border-border/50 bg-muted/10 ${chartHeightClassName}`}
               role="status"

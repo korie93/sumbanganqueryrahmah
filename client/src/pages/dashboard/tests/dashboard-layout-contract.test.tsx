@@ -6,6 +6,7 @@ import { Activity, Database, FileText, LogIn, ShieldOff, Users, AlertTriangle } 
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { fileURLToPath } from "node:url";
+import { DashboardChartsGrid } from "@/pages/dashboard/DashboardChartsGrid";
 import { DashboardPageHeader } from "@/pages/dashboard/DashboardPageHeader";
 import { DashboardSnapshotSection } from "@/pages/dashboard/DashboardSnapshotSection";
 import { DashboardSummaryCards } from "@/pages/dashboard/DashboardSummaryCards";
@@ -92,13 +93,34 @@ test("DashboardSnapshotSection surfaces metric count badge with compact summary 
   const markup = renderToStaticMarkup(
     createElement(DashboardSnapshotSection, {
       summaryCards: summaryCards.slice(0, 3),
+      summaryErrorMessage: null,
       summaryLoading: false,
+      summaryRetrying: false,
+      onRetrySummary: () => undefined,
     }),
   );
 
   assert.match(markup, /Quick Snapshot/);
   assert.match(markup, /3 metrics/);
   assert.match(markup, /compact dashboard snapshot/);
+});
+
+test("DashboardSnapshotSection renders a retryable local error state", () => {
+  const markup = renderToStaticMarkup(
+    createElement(DashboardSnapshotSection, {
+      summaryCards,
+      summaryErrorMessage: "Ringkasan tidak dapat dicapai.",
+      summaryLoading: false,
+      summaryRetrying: false,
+      onRetrySummary: () => undefined,
+    }),
+  );
+
+  assert.match(markup, /Ringkasan dashboard gagal dimuat/);
+  assert.match(markup, /Ringkasan tidak dapat dicapai\./);
+  assert.match(markup, /role="alert"/);
+  assert.match(markup, /Cuba lagi/);
+  assert.doesNotMatch(markup, /Total Users/);
 });
 
 test("DashboardChartsGrid memoizes heavy chart rendering helpers", () => {
@@ -111,21 +133,53 @@ test("DashboardChartsGrid memoizes heavy chart rendering helpers", () => {
   assert.match(source, /export const DashboardChartsGrid = memo\(DashboardChartsGridImpl\)/);
 });
 
+test("DashboardChartsGrid renders independent retryable error states", () => {
+  const markup = renderToStaticMarkup(
+    createElement(DashboardChartsGrid, {
+      onTrendDaysChange: () => undefined,
+      onRetryPeakHours: () => undefined,
+      onRetryTrends: () => undefined,
+      peakHoursErrorMessage: "Waktu puncak timeout.",
+      peakHours: [],
+      peakHoursLoading: false,
+      peakHoursRetrying: false,
+      trendDays: 7,
+      trendsErrorMessage: "Trend login timeout.",
+      trends: [],
+      trendsLoading: false,
+      trendsRetrying: false,
+    }),
+  );
+
+  assert.match(markup, /Trend login gagal dimuat/);
+  assert.match(markup, /Trend login timeout\./);
+  assert.match(markup, /Waktu puncak gagal dimuat/);
+  assert.match(markup, /Waktu puncak timeout\./);
+  assert.match(markup, /Cuba lagi/);
+  assert.doesNotMatch(markup, /No data available/);
+});
+
 test("DashboardUserInsightsGrid keeps chart semantics grouped and the top-users scroller keyboard reachable", () => {
   const source = readFileSync(path.resolve(__dirname, "../DashboardUserInsightsGrid.tsx"), "utf8");
   const markup = renderToStaticMarkup(
     createElement(DashboardUserInsightsGrid, {
+      onRetryRoleDistribution: () => undefined,
+      onRetryTopUsers: () => undefined,
+      roleErrorMessage: null,
       roleDistribution: [
         { role: "admin", count: 2 },
         { role: "superuser", count: 3 },
         { role: "user", count: 5 },
       ],
       roleLoading: false,
+      roleRetrying: false,
+      topUsersErrorMessage: null,
       topUsers: [
         { username: "alpha", loginCount: 8, role: "admin", lastLogin: "2026-05-06T01:00:00Z" },
         { username: "beta", loginCount: 5, role: "user", lastLogin: "2026-05-06T02:00:00Z" },
       ],
       topUsersLoading: false,
+      topUsersRetrying: false,
     }),
   );
 
@@ -145,6 +199,30 @@ test("DashboardUserInsightsGrid keeps chart semantics grouped and the top-users 
   assert.match(source, /window\.cancelAnimationFrame\(followUpFrameId\)/);
   assert.doesNotMatch(source, /window\.setTimeout\(sanitizeChartSurface,\s*0\)/);
   assert.match(source, /observer\?\.disconnect\(\)/);
+});
+
+test("DashboardUserInsightsGrid renders per-card retryable error states", () => {
+  const markup = renderToStaticMarkup(
+    createElement(DashboardUserInsightsGrid, {
+      onRetryRoleDistribution: () => undefined,
+      onRetryTopUsers: () => undefined,
+      roleErrorMessage: "Role API gagal.",
+      roleDistribution: [],
+      roleLoading: false,
+      roleRetrying: false,
+      topUsersErrorMessage: "Top users API gagal.",
+      topUsers: [],
+      topUsersLoading: false,
+      topUsersRetrying: false,
+    }),
+  );
+
+  assert.match(markup, /Pengguna aktif gagal dimuat/);
+  assert.match(markup, /Top users API gagal\./);
+  assert.match(markup, /Taburan peranan gagal dimuat/);
+  assert.match(markup, /Role API gagal\./);
+  assert.match(markup, /Cuba lagi/);
+  assert.doesNotMatch(markup, /No data available/);
 });
 
 test("sanitizeDashboardRoleDistributionChartSurface hides generated pie slices from assistive tech", () => {

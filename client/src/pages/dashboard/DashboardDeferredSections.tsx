@@ -143,28 +143,52 @@ type DashboardDeferredSectionsProps = {
   defer: boolean;
   trendDays: number;
   onTrendDaysChange: (days: number) => void;
+  onRetryPeakHours: () => void;
+  onRetryRoleDistribution: () => void;
+  onRetryTopUsers: () => void;
+  onRetryTrends: () => void;
+  peakHoursErrorMessage: string | null;
   trends: LoginTrend[] | undefined;
+  trendsErrorMessage: string | null;
   trendsLoading: boolean;
+  trendsRetrying: boolean;
   peakHours: PeakHour[] | undefined;
   peakHoursLoading: boolean;
+  peakHoursRetrying: boolean;
   roleDistribution: RoleData[] | undefined;
+  roleErrorMessage: string | null;
   roleLoading: boolean;
+  roleRetrying: boolean;
   topUsers: TopUser[] | undefined;
+  topUsersErrorMessage: string | null;
   topUsersLoading: boolean;
+  topUsersRetrying: boolean;
 };
 
 export function DashboardDeferredSections({
   defer,
   trendDays,
   onTrendDaysChange,
+  onRetryPeakHours,
+  onRetryRoleDistribution,
+  onRetryTopUsers,
+  onRetryTrends,
+  peakHoursErrorMessage,
   trends,
+  trendsErrorMessage,
   trendsLoading,
+  trendsRetrying,
   peakHours,
   peakHoursLoading,
+  peakHoursRetrying,
   roleDistribution,
+  roleErrorMessage,
   roleLoading,
+  roleRetrying,
   topUsers,
+  topUsersErrorMessage,
   topUsersLoading,
+  topUsersRetrying,
 }: DashboardDeferredSectionsProps) {
   const chartsSection = useDeferredDashboardSectionMount({
     enabled: defer,
@@ -184,11 +208,17 @@ export function DashboardDeferredSections({
           <Suspense fallback={<DashboardChartsFallback labelPrefix="Loading dashboard charts" />}>
             <DashboardChartsGrid
               onTrendDaysChange={onTrendDaysChange}
+              onRetryPeakHours={onRetryPeakHours}
+              onRetryTrends={onRetryTrends}
+              peakHoursErrorMessage={peakHoursErrorMessage}
               peakHours={peakHours}
               peakHoursLoading={peakHoursLoading}
+              peakHoursRetrying={peakHoursRetrying}
               trendDays={trendDays}
+              trendsErrorMessage={trendsErrorMessage}
               trends={trends}
               trendsLoading={trendsLoading}
+              trendsRetrying={trendsRetrying}
             />
           </Suspense>
         ) : (
@@ -199,10 +229,16 @@ export function DashboardDeferredSections({
         {userInsightsSection.shouldRender ? (
           <Suspense fallback={<DashboardUserInsightsFallback labelPrefix="Loading dashboard user insights" />}>
             <DashboardUserInsightsGrid
+              onRetryRoleDistribution={onRetryRoleDistribution}
+              onRetryTopUsers={onRetryTopUsers}
+              roleErrorMessage={roleErrorMessage}
               roleDistribution={roleDistribution}
               roleLoading={roleLoading}
+              roleRetrying={roleRetrying}
+              topUsersErrorMessage={topUsersErrorMessage}
               topUsers={topUsers}
               topUsersLoading={topUsersLoading}
+              topUsersRetrying={topUsersRetrying}
             />
           </Suspense>
         ) : (
