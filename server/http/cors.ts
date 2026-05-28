@@ -6,6 +6,7 @@ const DEFAULT_ALLOWED_METHODS = "GET, POST, PUT, PATCH, DELETE, OPTIONS";
 const DEFAULT_ALLOWED_HEADERS = "Origin, X-Requested-With, Content-Type, Accept, Authorization, X-CSRF-Token, X-Request-Id";
 const DEFAULT_EXPOSED_HEADERS = "API-Version, RateLimit-Limit, RateLimit-Remaining, RateLimit-Reset, Retry-After, X-CSRF-Token, X-Request-Id";
 const DEFAULT_PREFLIGHT_MAX_AGE_SECONDS = "600";
+const UNSAFE_CORS_ORIGINS = new Set(["*", "null"]);
 const LOCAL_DEV_ORIGINS = [
   "http://localhost:5000",
   "http://127.0.0.1:5000",
@@ -45,6 +46,16 @@ export function normalizeCorsOrigin(
 
   const normalizedValue = value.trim();
   if (!normalizedValue) {
+    return null;
+  }
+  if (UNSAFE_CORS_ORIGINS.has(normalizedValue.toLowerCase())) {
+    if (options?.logInvalid) {
+      logger.warn("Ignoring invalid configured CORS origin", {
+        source: options.source ?? "unknown",
+        origin: normalizedValue,
+        error: "Wildcard CORS origins are not allowed",
+      });
+    }
     return null;
   }
 

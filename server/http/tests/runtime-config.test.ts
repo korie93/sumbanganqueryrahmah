@@ -1053,6 +1053,23 @@ test("runtime config rejects invalid CORS_ALLOWED_ORIGINS entries with paths", a
   );
 });
 
+test("runtime config rejects wildcard CORS_ALLOWED_ORIGINS entries", async () => {
+  await withEnv(
+    {
+      ...productionBaseOverrides,
+      PUBLIC_APP_URL: "https://sqr.example.com",
+      CORS_ALLOWED_ORIGINS: "*",
+      BACKUP_ENCRYPTION_KEY: "A".repeat(32),
+    },
+    async () => {
+      await assert.rejects(
+        importRuntimeFresh(),
+        /CORS_ALLOWED_ORIGINS entries must be explicit http:\/\/ or https:\/\/ origins and cannot use wildcards/i,
+      );
+    },
+  );
+});
+
 test("runtime config rejects invalid AUTH_COOKIE_SECURE flags", async () => {
   await withEnv(
     {

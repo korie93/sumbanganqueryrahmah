@@ -6,6 +6,7 @@ import {
 } from "./runtime-environment";
 
 const HTTP_PROTOCOLS = new Set(["http:", "https:"]);
+const UNSAFE_CORS_ORIGIN_VALUES = new Set(["*", "null"]);
 
 export function readOptionalString(name: string): string | null {
   const value = process.env[name];
@@ -70,6 +71,11 @@ export function normalizeHttpUrl(name: string, rawValue: string | null): string 
 }
 
 export function normalizeCorsOrigin(name: string, rawValue: string): string {
+  const normalizedRawValue = rawValue.trim().toLowerCase();
+  if (UNSAFE_CORS_ORIGIN_VALUES.has(normalizedRawValue)) {
+    throw new Error(`${name} entries must be explicit http:// or https:// origins and cannot use wildcards.`);
+  }
+
   let parsed: URL;
   try {
     parsed = new URL(rawValue);

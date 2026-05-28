@@ -79,6 +79,28 @@ test("resolveAllowedCorsOrigins logs invalid configured origins instead of dropp
   }
 });
 
+test("resolveAllowedCorsOrigins rejects wildcard-style configured origins", () => {
+  const originalWarn = logger.warn;
+  const warnings: Array<{ message: string; payload: Record<string, unknown> | undefined }> = [];
+  logger.warn = ((message: string, payload?: Record<string, unknown>) => {
+    warnings.push({ message, payload });
+  }) as typeof logger.warn;
+
+  try {
+    const allowed = resolveAllowedCorsOrigins({
+      NODE_ENV: "production",
+      PUBLIC_APP_URL: "https://app.example.com",
+      CORS_ALLOWED_ORIGINS: "*",
+    });
+
+    assert.deepEqual(allowed, ["https://app.example.com"]);
+    assert.equal(warnings.length, 1);
+    assert.equal(warnings[0].message, "Ignoring invalid configured CORS origin");
+  } finally {
+    logger.warn = originalWarn;
+  }
+});
+
 test("allowed origins receive an exact Access-Control-Allow-Origin header", async () => {
   const app = createCorsTestApp(["https://app.example.com"]);
   const { server, baseUrl } = await startTestServer(app);
@@ -95,6 +117,24 @@ test("allowed origins receive an exact Access-Control-Allow-Origin header", asyn
     assert.equal(response.headers.get("access-control-allow-credentials"), "true");
     assert.equal(response.headers.get("access-control-max-age"), "600");
     assert.equal((await response.json()).ok, true);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("wildcard allowed origin input is never reflected", async () => {
+  const app = createCorsTestApp(["*"]);
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(`${baseUrl}/ping`, {
+      headers: {
+        Origin: "https://evil.example.com",
+      },
+    });
+
+    assert.equal(response.status, 403);
+    assert.equal(response.headers.get("access-control-allow-origin"), null);
   } finally {
     await stopTestServer(server);
   }
