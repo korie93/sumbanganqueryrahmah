@@ -96,6 +96,7 @@ type SessionRefreshRevocationRetryConfig = {
   attempts: number;
   baseDelayMs: number;
   maxDelayMs: number;
+  random: () => number;
 };
 
 type SessionRefreshRevocationLogContext = {
@@ -109,6 +110,25 @@ const DEFAULT_SESSION_REFRESH_REVOCATION_RETRY_ATTEMPTS = 3;
 const DEFAULT_SESSION_REFRESH_REVOCATION_RETRY_BASE_DELAY_MS = 25;
 const DEFAULT_SESSION_REFRESH_REVOCATION_RETRY_MAX_DELAY_MS = 250;
 const SESSION_REFRESH_REVOCATION_BACKOFF_FACTOR = 2;
+const RETRYABLE_SESSION_REVOCATION_ERROR_CODES = new Set([
+  "CLUSTERDOWN",
+  "ECONNREFUSED",
+  "ECONNRESET",
+  "EHOSTUNREACH",
+  "ENOTFOUND",
+  "EPIPE",
+  "ETIMEDOUT",
+  "LOADING",
+  "NR_CLOSED",
+  "SOCKET_CLOSED",
+]);
+const NON_RETRYABLE_SESSION_REVOCATION_ERROR_CODES = new Set([
+  "NOAUTH",
+  "NOPERM",
+  "READONLY",
+  "WRONGPASS",
+  "WRONGTYPE",
+]);
 
 function normalizeRetryAttempts(value: number | undefined): number {
   if (!Number.isFinite(value)) {
@@ -129,6 +149,20 @@ function normalizeRetryDelayMs(value: number | undefined, fallback: number): num
   return Math.max(0, Math.trunc(Number(value)));
 }
 
+function normalizeRetryRandom(value: (() => number) | undefined): () => number {
+  if (typeof value !== "function") {
+    return Math.random;
+  }
+
+  return () => {
+    const randomValue = Number(value());
+    if (!Number.isFinite(randomValue)) {
+      return Math.random();
+    }
+    return Math.min(1, Math.max(0, randomValue));
+  };
+}
+
 function resolveSessionRefreshRevocationRetryConfig(
   options: Partial<SessionRefreshRevocationRetryConfig> | undefined,
 ): SessionRefreshRevocationRetryConfig {
@@ -145,6 +179,7 @@ function resolveSessionRefreshRevocationRetryConfig(
     attempts: normalizeRetryAttempts(options?.attempts),
     baseDelayMs,
     maxDelayMs: Math.max(baseDelayMs, maxDelayMs),
+    random: normalizeRetryRandom(options?.random),
   };
 }
 
@@ -154,7 +189,8 @@ function resolveSessionRefreshRevocationRetryDelayMs(
 ): number {
   const exponentialDelayMs =
     config.baseDelayMs * (SESSION_REFRESH_REVOCATION_BACKOFF_FACTOR ** failedAttemptIndex);
-  return Math.min(config.maxDelayMs, exponentialDelayMs);
+  const cappedDelayMs = Math.min(config.maxDelayMs, exponentialDelayMs);
+  return Math.floor(config.random() * cappedDelayMs);
 }
 
 async function sleepSessionRefreshRevocationRetry(delayMs: number): Promise<void> {
@@ -166,8 +202,51 @@ async function sleepSessionRefreshRevocationRetry(delayMs: number): Promise<void
   });
 }
 
-function describeSessionRefreshRevocationError(error: unknown): string {
-  return error instanceof Error ? error.message : "Unknown session refresh revocation failure";
+type SessionRefreshRevocationErrorLike = {
+  code?: unknown;
+  name?: unknown;
+};
+
+function readSessionRefreshRevocationErrorCode(error: unknown): string {
+  if (!error || typeof error !== "object") {
+    return "";
+  }
+  const errorLike = error as SessionRefreshRevocationErrorLike;
+  return typeof errorLike.code === "string" ? errorLike.code.trim().toUpperCase() : "";
+}
+
+function readSessionRefreshRevocationErrorName(error: unknown): string {
+  if (!error || typeof error !== "object") {
+    return "";
+  }
+  const errorLike = error as SessionRefreshRevocationErrorLike;
+  return typeof errorLike.name === "string" ? errorLike.name.trim() : "";
+}
+
+function isSessionRefreshRevocationRetryableError(error: unknown): boolean {
+  const code = readSessionRefreshRevocationErrorCode(error);
+  if (NON_RETRYABLE_SESSION_REVOCATION_ERROR_CODES.has(code)) {
+    return false;
+  }
+  if (RETRYABLE_SESSION_REVOCATION_ERROR_CODES.has(code)) {
+    return true;
+  }
+
+  const name = readSessionRefreshRevocationErrorName(error).toLowerCase();
+  return name.includes("connection")
+    || name.includes("socket")
+    || name.includes("timeout")
+    || name.includes("unavailable");
+}
+
+function sanitizeSessionRefreshRevocationError(error: unknown) {
+  const code = readSessionRefreshRevocationErrorCode(error);
+  const name = readSessionRefreshRevocationErrorName(error);
+  return {
+    ...(code ? { code } : {}),
+    ...(name ? { name } : {}),
+    retryable: isSessionRefreshRevocationRetryableError(error),
+  };
 }
 
 async function revokeSessionJwtForRefresh(
@@ -184,12 +263,17 @@ async function revokeSessionJwtForRefresh(
     } catch (error) {
       lastError = error;
       internalMetrics.increment("sessionRevocationRedisErrorsTotal");
+      const retryable = isSessionRefreshRevocationRetryableError(error);
 
-      if (attempt >= config.attempts) {
+      if (!retryable || attempt >= config.attempts) {
+        if (retryable) {
+          internalMetrics.increment("sessionRefreshRevocationRetryExhaustedTotal");
+        }
         break;
       }
 
       const retryAfterMs = resolveSessionRefreshRevocationRetryDelayMs(attempt - 1, config);
+      internalMetrics.increment("sessionRefreshRevocationRetryAttemptsTotal");
       logger.warn("Retrying JWT refresh revocation after failure", {
         event: "session_refresh_revocation_retry",
         operation: "revoke",
@@ -198,7 +282,7 @@ async function revokeSessionJwtForRefresh(
         attempt,
         max: config.attempts,
         retryAfterMs,
-        error: describeSessionRefreshRevocationError(error),
+        error: sanitizeSessionRefreshRevocationError(error),
       });
       await sleepSessionRefreshRevocationRetry(retryAfterMs);
     }
@@ -409,7 +493,7 @@ export function createAuthGuards(options: CreateAuthGuardsOptions) {
           logger.error("Failed to revoke previous JWT during authenticated session refresh", {
             path: req.path,
             method: req.method,
-            error: describeSessionRefreshRevocationError(error),
+            error: sanitizeSessionRefreshRevocationError(error),
           });
           clearAuthSessionCookie(res);
           return res.status(503).json({

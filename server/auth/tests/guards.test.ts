@@ -83,6 +83,12 @@ function createMockResponse() {
   };
 }
 
+function createRedisRevocationError(code: string, message = "Redis revocation command failed") {
+  const error = new Error(message) as Error & { code: string };
+  error.code = code;
+  return error;
+}
+
 function createAuthenticatedSessionSnapshot() {
   return {
     activity: {
@@ -981,7 +987,7 @@ test("authenticateToken retries transient JWT refresh revocation failures", asyn
     revoke: async (record: SessionRevocationRecord) => {
       revokeAttempts += 1;
       if (revokeAttempts < 3) {
-        throw new Error("temporary revocation store outage");
+        throw createRedisRevocationError("ECONNRESET");
       }
       revokedJwtIds.add(record.jwtId);
     },
@@ -1047,7 +1053,215 @@ test("authenticateToken retries transient JWT refresh revocation failures", asyn
     assert.equal(warnings[0]?.payload?.event, "session_refresh_revocation_retry");
     assert.equal(warnings[0]?.payload?.attempt, 1);
     assert.equal(warnings[1]?.payload?.attempt, 2);
+    assert.deepEqual(warnings[0]?.payload?.error, {
+      code: "ECONNRESET",
+      name: "Error",
+      retryable: true,
+    });
     assert.doesNotMatch(JSON.stringify(warnings), /near-expiry-retry-jti|guard\.user|user-1/);
+  } finally {
+    guards.stopTabVisibilityCacheSweep();
+    guards.stopActivityUpdateCacheSweep();
+    restoreRevocationStore();
+    resetSessionRevocationStoreForTests();
+  }
+});
+
+test("authenticateToken spreads JWT refresh revocation retries with full jitter", async (t) => {
+  resetSessionRevocationStoreForTests();
+  const secret = "guard-test-secret";
+  const nowMs = Date.parse("2026-05-27T00:00:00.000Z");
+  const nowSeconds = Math.floor(nowMs / 1000);
+  const revokedJwtIds = new Set<string>();
+  const retryDelaysMs: number[] = [];
+  const warnings: Array<{ message: string; payload: Record<string, unknown> | undefined }> = [];
+  const randomValues = [0.25, 0.75];
+  let randomCalls = 0;
+  let revokeAttempts = 0;
+  const metricBefore = getInternalMetricsSnapshot()
+    .counters.sessionRefreshRevocationRetryAttemptsTotal;
+  const timeoutHandle = {
+    unref() {
+      return this;
+    },
+  } as unknown as ReturnType<typeof setTimeout>;
+
+  t.mock.method(Date, "now", () => nowMs);
+  t.mock.method(logger, "warn", (message: string, payload?: Record<string, unknown>) => {
+    warnings.push({ message, payload });
+  });
+  const setTimeoutMock = t.mock.method(
+    globalThis,
+    "setTimeout",
+    (((handler: TimerHandler, delay?: number, ...args: unknown[]) => {
+      retryDelaysMs.push(Number(delay ?? 0));
+      if (typeof handler === "function") {
+        queueMicrotask(() => {
+          (handler as (...timerArgs: unknown[]) => void)(...args);
+        });
+      }
+      return timeoutHandle;
+    }) as unknown) as typeof setTimeout,
+  );
+  const restoreRevocationStore = configureSessionRevocationStoreForRuntime({
+    isRevoked: async (jwtId: string) => revokedJwtIds.has(jwtId),
+    revoke: async (record: SessionRevocationRecord) => {
+      revokeAttempts += 1;
+      if (revokeAttempts < 3) {
+        throw createRedisRevocationError("ETIMEDOUT");
+      }
+      revokedJwtIds.add(record.jwtId);
+    },
+  });
+  const guards = createAuthGuards({
+    storage: {
+      getAuthenticatedSessionSnapshot: async () => createAuthenticatedSessionSnapshot(),
+      getActivityById: async () => undefined,
+      getUser: async () => undefined,
+      getUserByUsername: async () => undefined,
+      isVisitorBanned: async () => false,
+      updateActivity: async () => undefined,
+      getRoleTabVisibility: async () => ({}),
+    },
+    secret,
+    sessionRefreshRevocationRetry: {
+      attempts: 3,
+      baseDelayMs: 100,
+      maxDelayMs: 1_000,
+      random: () => randomValues[randomCalls++] ?? 0,
+    },
+  });
+
+  const oldToken = jwt.sign(
+    {
+      userId: "user-1",
+      username: "guard.user",
+      role: "admin",
+      activityId: "activity-1",
+      iat: nowSeconds - 81,
+      exp: nowSeconds + 19,
+    },
+    secret,
+    { jwtid: "near-expiry-jitter-jti" },
+  );
+  const response = createMockResponse();
+  let nextCalls = 0;
+
+  try {
+    await guards.authenticateToken(
+      {
+        headers: {
+          authorization: `Bearer ${oldToken}`,
+        },
+        method: "GET",
+        path: "/api/me",
+      } as never,
+      response as never,
+      () => {
+        nextCalls += 1;
+      },
+    );
+
+    const metricAfter = getInternalMetricsSnapshot()
+      .counters.sessionRefreshRevocationRetryAttemptsTotal;
+    assert.equal(nextCalls, 1);
+    assert.equal(revokeAttempts, 3);
+    assert.deepEqual(retryDelaysMs, [25, 150]);
+    assert.equal(setTimeoutMock.mock.callCount(), 2);
+    assert.equal(randomCalls, 2);
+    assert.equal(metricAfter - metricBefore, 2);
+    assert.equal(revokedJwtIds.has("near-expiry-jitter-jti"), true);
+    assert.equal(warnings.length, 2);
+    assert.doesNotMatch(JSON.stringify(warnings), /near-expiry-jitter-jti|guard\.user|user-1/);
+  } finally {
+    guards.stopTabVisibilityCacheSweep();
+    guards.stopActivityUpdateCacheSweep();
+    restoreRevocationStore();
+    resetSessionRevocationStoreForTests();
+  }
+});
+
+test("authenticateToken does not retry non-retryable JWT refresh revocation failures", async (t) => {
+  resetSessionRevocationStoreForTests();
+  const secret = "guard-test-secret";
+  const nowMs = Date.parse("2026-05-27T00:00:00.000Z");
+  const nowSeconds = Math.floor(nowMs / 1000);
+  const errors: Array<{ message: string; payload: Record<string, unknown> | undefined }> = [];
+  const warnings: Array<{ message: string; payload: Record<string, unknown> | undefined }> = [];
+  let revokeAttempts = 0;
+  t.mock.method(Date, "now", () => nowMs);
+  t.mock.method(logger, "warn", (message: string, payload?: Record<string, unknown>) => {
+    warnings.push({ message, payload });
+  });
+  t.mock.method(logger, "error", (message: string, payload?: Record<string, unknown>) => {
+    errors.push({ message, payload });
+  });
+  const restoreRevocationStore = configureSessionRevocationStoreForRuntime({
+    isRevoked: async () => false,
+    revoke: async () => {
+      revokeAttempts += 1;
+      throw createRedisRevocationError("WRONGTYPE");
+    },
+  });
+  const guards = createAuthGuards({
+    storage: {
+      getAuthenticatedSessionSnapshot: async () => createAuthenticatedSessionSnapshot(),
+      getActivityById: async () => undefined,
+      getUser: async () => undefined,
+      getUserByUsername: async () => undefined,
+      isVisitorBanned: async () => false,
+      updateActivity: async () => undefined,
+      getRoleTabVisibility: async () => ({}),
+    },
+    secret,
+    sessionRefreshRevocationRetry: {
+      attempts: 5,
+      baseDelayMs: 100,
+      maxDelayMs: 1_000,
+    },
+  });
+
+  const oldToken = jwt.sign(
+    {
+      userId: "user-1",
+      username: "guard.user",
+      role: "admin",
+      activityId: "activity-1",
+      iat: nowSeconds - 81,
+      exp: nowSeconds + 19,
+    },
+    secret,
+    { jwtid: "near-expiry-wrongtype-jti" },
+  );
+  const response = createMockResponse();
+  let nextCalls = 0;
+
+  try {
+    await guards.authenticateToken(
+      {
+        headers: {
+          authorization: `Bearer ${oldToken}`,
+        },
+        method: "GET",
+        path: "/api/me",
+      } as never,
+      response as never,
+      () => {
+        nextCalls += 1;
+      },
+    );
+
+    assert.equal(nextCalls, 0);
+    assert.equal(revokeAttempts, 1);
+    assert.equal(response.statusCode, 503);
+    assert.equal(warnings.length, 0);
+    assert.equal(errors.length, 1);
+    assert.deepEqual(errors[0]?.payload?.error, {
+      code: "WRONGTYPE",
+      name: "Error",
+      retryable: false,
+    });
+    assert.doesNotMatch(JSON.stringify(errors), /near-expiry-wrongtype-jti|guard\.user|user-1/);
   } finally {
     guards.stopTabVisibilityCacheSweep();
     guards.stopActivityUpdateCacheSweep();
@@ -1075,7 +1289,7 @@ test("authenticateToken fails closed when JWT refresh revocation retries are exh
     isRevoked: async () => false,
     revoke: async () => {
       revokeAttempts += 1;
-      throw new Error("revocation store unavailable");
+      throw createRedisRevocationError("ETIMEDOUT");
     },
   });
   const guards = createAuthGuards({
@@ -1136,6 +1350,11 @@ test("authenticateToken fails closed when JWT refresh revocation retries are exh
     });
     assert.equal(warnings.length, 1);
     assert.equal(warnings[0]?.payload?.attempt, 1);
+    assert.deepEqual(warnings[0]?.payload?.error, {
+      code: "ETIMEDOUT",
+      name: "Error",
+      retryable: true,
+    });
     assert.equal(errors.length, 1);
     assert.equal(
       errors[0]?.message,
