@@ -44,17 +44,17 @@ function CollectionMonthlyComparisonBreakdownList({
               <div className="flex flex-wrap items-center gap-1.5">
                 <p className="text-sm font-medium text-foreground">{month.label}</p>
                 {month.isBaseMonth ? (
-                  <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary">
+                  <span className="rounded-full bg-primary/10 px-2 py-0.5 text-2xs font-medium text-primary">
                     Base
                   </span>
                 ) : null}
                 {month.isTargetMonth ? (
-                  <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-300">
+                  <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-2xs font-medium text-emerald-700 dark:text-emerald-300">
                     Target
                   </span>
                 ) : null}
                 {month.isPeakMonth ? (
-                  <span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:text-amber-300">
+                  <span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-2xs font-medium text-amber-700 dark:text-amber-300">
                     Peak
                   </span>
                 ) : null}
@@ -62,8 +62,8 @@ function CollectionMonthlyComparisonBreakdownList({
                   <span
                     className={
                       month.anomalyDirection === "decrease"
-                        ? "rounded-full bg-destructive/10 px-2 py-0.5 text-[11px] font-medium text-destructive"
-                        : "rounded-full bg-amber-500/10 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:text-amber-300"
+                        ? "rounded-full bg-destructive/10 px-2 py-0.5 text-2xs font-medium text-destructive"
+                        : "rounded-full bg-amber-500/10 px-2 py-0.5 text-2xs font-medium text-amber-700 dark:text-amber-300"
                     }
                   >
                     {month.anomalyDirection === "decrease" ? "Anomaly drop" : "Anomaly jump"}
@@ -73,8 +73,8 @@ function CollectionMonthlyComparisonBreakdownList({
                   <span
                     className={
                       month.totalCollection >= monthTarget
-                        ? "rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-300"
-                        : "rounded-full bg-destructive/10 px-2 py-0.5 text-[11px] font-medium text-destructive"
+                        ? "rounded-full bg-emerald-500/10 px-2 py-0.5 text-2xs font-medium text-emerald-700 dark:text-emerald-300"
+                        : "rounded-full bg-destructive/10 px-2 py-0.5 text-2xs font-medium text-destructive"
                     }
                   >
                     {month.totalCollection >= monthTarget

@@ -197,7 +197,7 @@ export function AuditLogsFilterFields({
             <p className="text-sm font-medium text-foreground">Custom Date Range</p>
             <div className="grid gap-2 sm:grid-cols-2">
               <div className="space-y-2">
-                <Label htmlFor={dateFromButtonId} className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                <Label htmlFor={dateFromButtonId} className="text-xs font-medium uppercase tracking-label-md text-muted-foreground">
                   From Date
                 </Label>
                 <DatePickerField
@@ -210,7 +210,7 @@ export function AuditLogsFilterFields({
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor={dateToButtonId} className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                <Label htmlFor={dateToButtonId} className="text-xs font-medium uppercase tracking-label-md text-muted-foreground">
                   To Date
                 </Label>
                 <DatePickerField

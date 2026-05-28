@@ -47,7 +47,7 @@ export function AuditLogReviewSignals({ compact = false, log }: AuditLogReviewSi
     >
       <h3
         id="audit-review-signals-title"
-        className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.18em]"
+        className="flex items-center gap-1.5 text-2xs font-semibold uppercase tracking-label-xl"
       >
         <AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" />
         Review Signals

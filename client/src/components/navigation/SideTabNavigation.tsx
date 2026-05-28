@@ -144,7 +144,7 @@ export function SideTabNavigation({
                       <span className="min-w-0 space-y-0.5 text-left">
                         <span className="block truncate font-semibold leading-tight">{item.label}</span>
                         {item.description ? (
-                          <span className="block truncate text-[12px] leading-[1.35] text-muted-foreground">
+                          <span className="block truncate text-xs leading-[1.35] text-muted-foreground">
                             {item.description}
                           </span>
                         ) : null}
@@ -178,7 +178,7 @@ export function SideTabNavigation({
                       <span className="min-w-0 space-y-0.5 text-left">
                         <span className="block truncate font-semibold leading-tight text-foreground/88 dark:text-foreground/92">{item.label}</span>
                         {item.description ? (
-                          <span className="block truncate text-[12px] leading-[1.35] text-muted-foreground">
+                          <span className="block truncate text-xs leading-[1.35] text-muted-foreground">
                             {item.description}
                           </span>
                         ) : null}
@@ -244,7 +244,7 @@ export function SideTabNavigation({
                       <span className="min-w-0 flex-1 space-y-0.5">
                         <span className="block truncate font-semibold leading-tight">{item.label}</span>
                         {item.description ? (
-                          <span className="block text-[12px] leading-[1.35] text-foreground/74 dark:text-foreground/80">
+                          <span className="block text-xs leading-[1.35] text-foreground/74 dark:text-foreground/80">
                             {item.description}
                           </span>
                         ) : null}
@@ -268,7 +268,7 @@ export function SideTabNavigation({
                       <span className="min-w-0 flex-1 space-y-0.5">
                         <span className="block truncate font-semibold leading-tight text-foreground/90 dark:text-foreground/94">{item.label}</span>
                         {item.description ? (
-                          <span className="block text-[12px] leading-[1.35] text-foreground/66 dark:text-foreground/74">
+                          <span className="block text-xs leading-[1.35] text-foreground/66 dark:text-foreground/74">
                             {item.description}
                           </span>
                         ) : null}

@@ -181,10 +181,10 @@ function CollectionRecordsPage({ role }: CollectionRecordsPageProps) {
           <div className="absolute inset-x-0 top-0 h-24 bg-gradient-to-br from-primary/12 via-primary/6 to-transparent" />
           <div className="relative space-y-3">
             <div className="space-y-1.5">
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+              <p className="text-xs font-semibold uppercase tracking-label-lg text-muted-foreground">
                 Collection
               </p>
-              <h1 className="text-[1.7rem] font-bold tracking-tight text-foreground">
+              <h1 className="text-collection-title font-bold tracking-tight text-foreground">
                 View Rekod Collection
               </h1>
               <p className="text-sm leading-relaxed text-muted-foreground">
@@ -201,7 +201,7 @@ function CollectionRecordsPage({ role }: CollectionRecordsPageProps) {
                 <Filter className="mr-2 h-4 w-4" />
                 Search & Filters
                 {hasActiveFilters ? (
-                  <Badge variant="secondary" className="ml-2 rounded-full px-2 py-0.5 text-[11px]">
+                  <Badge variant="secondary" className="ml-2 rounded-full px-2 py-0.5 text-2xs">
                     {activeFilterChips.length}
                   </Badge>
                 ) : null}
@@ -219,10 +219,10 @@ function CollectionRecordsPage({ role }: CollectionRecordsPageProps) {
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
-              <Badge variant="secondary" className="rounded-full px-2.5 py-1 text-[11px]">
+              <Badge variant="secondary" className="rounded-full px-2.5 py-1 text-2xs">
                 Records workspace
               </Badge>
-              <Badge variant="secondary" className="rounded-full px-2.5 py-1 text-[11px]">
+              <Badge variant="secondary" className="rounded-full px-2.5 py-1 text-2xs">
                 Quicker scan on mobile
               </Badge>
             </div>

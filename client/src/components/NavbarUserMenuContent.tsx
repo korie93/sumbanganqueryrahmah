@@ -45,14 +45,14 @@ export function NavbarUserMenuContent({
           </span>
           <span className="min-w-0">
             <span className="block truncate text-sm font-semibold">{username}</span>
-            <span className="mt-1 inline-flex rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-primary">
+            <span className="mt-1 inline-flex rounded-full bg-primary/10 px-2 py-0.5 text-2xs font-semibold uppercase tracking-label-xs text-primary">
               {userRole}
             </span>
           </span>
         </div>
       </DropdownMenuLabel>
       <DropdownMenuSeparator />
-      <DropdownMenuLabel className="px-2 pb-1 pt-2 text-xs uppercase tracking-[0.16em] text-muted-foreground">
+      <DropdownMenuLabel className="px-2 pb-1 pt-2 text-xs uppercase tracking-label-lg text-muted-foreground">
         Appearance
       </DropdownMenuLabel>
       <DropdownMenuRadioGroup

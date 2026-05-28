@@ -48,7 +48,7 @@ export function FloatingAITrigger({
       hidden={triggerHidden}
     >
       {!isOpen && isThinking && !layoutState.rootHidden && !isMobile ? (
-        <div className={cn("pointer-events-none max-w-[220px] rounded-lg border px-3 py-1.5 text-[11px] shadow-sm", styles.floatingMinimizedStatus)}>
+        <div className={cn("pointer-events-none max-w-[220px] rounded-lg border px-3 py-1.5 text-2xs shadow-sm", styles.floatingMinimizedStatus)}>
           {minimizedStatus}
         </div>
       ) : null}
@@ -74,7 +74,7 @@ export function FloatingAITrigger({
         <Bot className="h-6 w-6" aria-hidden="true" />
         {!isOpen && unreadCount > 0 ? (
           <Badge
-            className="absolute -right-1 -top-1 h-5 min-w-5 justify-center rounded-full bg-destructive px-1 text-[10px] text-destructive-foreground"
+            className="absolute -right-1 -top-1 h-5 min-w-5 justify-center rounded-full bg-destructive px-1 text-xxs text-destructive-foreground"
             data-testid="floating-ai-unread-badge"
           >
             {unreadCount > 99 ? "99+" : unreadCount}

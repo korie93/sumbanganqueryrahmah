@@ -86,7 +86,7 @@ export function CollectionMonthlyComparisonBreakdownSection({
         {insights ? (
           <div className="grid gap-2 sm:grid-cols-3">
             <div className="rounded-xl border border-border/50 bg-muted/20 px-3 py-2">
-              <p className="text-[11px] font-medium uppercase tracking-normal text-muted-foreground">
+              <p className="text-2xs font-medium uppercase tracking-normal text-muted-foreground">
                 Months
               </p>
               <p className="mt-1 text-sm font-semibold text-foreground">
@@ -94,7 +94,7 @@ export function CollectionMonthlyComparisonBreakdownSection({
               </p>
             </div>
             <div className="rounded-xl border border-border/50 bg-muted/20 px-3 py-2">
-              <p className="text-[11px] font-medium uppercase tracking-normal text-muted-foreground">
+              <p className="text-2xs font-medium uppercase tracking-normal text-muted-foreground">
                 Latest
               </p>
               <p className="mt-1 truncate text-sm font-semibold text-foreground">
@@ -102,7 +102,7 @@ export function CollectionMonthlyComparisonBreakdownSection({
               </p>
             </div>
             <div className="rounded-xl border border-border/50 bg-muted/20 px-3 py-2">
-              <p className="text-[11px] font-medium uppercase tracking-normal text-muted-foreground">
+              <p className="text-2xs font-medium uppercase tracking-normal text-muted-foreground">
                 Audit
               </p>
               <p className="mt-1 text-sm font-semibold text-foreground">

@@ -77,7 +77,7 @@ function NavbarMobileNavigationImpl({
                       {formatNavigationLabel(item.label, item.id, savedCount)}
                     </span>
                     {active ? (
-                      <span className="shrink-0 rounded-full bg-primary-foreground px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-primary">
+                      <span className="shrink-0 rounded-full bg-primary-foreground px-2 py-0.5 text-xxs font-semibold uppercase tracking-label-xs text-primary">
                         Semasa
                       </span>
                     ) : null}

@@ -114,7 +114,7 @@ export function GeneralSearchMobileControls({
             </Button>
           </div>
           {(advancedMode || activeFiltersCount > 0) ? (
-            <Badge variant="secondary" className="shrink-0 rounded-full px-2 py-1 text-[10px]">
+            <Badge variant="secondary" className="shrink-0 rounded-full px-2 py-1 text-xxs">
               {advancedMode ? `${activeFiltersCount} filters` : "Quick"}
             </Badge>
           ) : null}
@@ -125,16 +125,16 @@ export function GeneralSearchMobileControls({
             viewportClassName="-mx-1 flex gap-1.5 px-1 pb-1"
             hint="Swipe filters"
           >
-            <Badge variant="secondary" className="shrink-0 rounded-full px-2 py-1 text-[10px]">
+            <Badge variant="secondary" className="shrink-0 rounded-full px-2 py-1 text-xxs">
               {logic}
             </Badge>
             {activeFilterSummaries.slice(0, 2).map((summary) => (
-              <Badge key={summary} variant="outline" className="shrink-0 rounded-full px-2 py-1 text-[10px]">
+              <Badge key={summary} variant="outline" className="shrink-0 rounded-full px-2 py-1 text-xxs">
                 {summary}
               </Badge>
             ))}
             {activeFilterSummaries.length > 2 ? (
-              <Badge variant="secondary" className="shrink-0 rounded-full px-2 py-1 text-[10px]">
+              <Badge variant="secondary" className="shrink-0 rounded-full px-2 py-1 text-xxs">
                 +{activeFilterSummaries.length - 2}
               </Badge>
             ) : null}
@@ -198,7 +198,7 @@ export function GeneralSearchMobileControls({
             <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="text-xs font-semibold text-foreground">Advanced filters ready</p>
-                <p className="mt-0.5 text-[11px] leading-relaxed text-muted-foreground">
+                <p className="mt-0.5 text-2xs leading-relaxed text-muted-foreground">
                   {buildGeneralSearchAdvancedStatusText(activeFiltersCount, logic)}
                 </p>
               </div>

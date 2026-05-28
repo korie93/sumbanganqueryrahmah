@@ -74,7 +74,7 @@ export function CollectionMonthField({
       />
       <span
         id={helpId}
-        className={showInvalidState ? "text-[11px] font-medium text-destructive" : "sr-only"}
+        className={showInvalidState ? "text-2xs font-medium text-destructive" : "sr-only"}
       >
         Use YYYY-MM format, for example 2026-05.
       </span>

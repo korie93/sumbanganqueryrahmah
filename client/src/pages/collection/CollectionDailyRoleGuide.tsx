@@ -58,10 +58,10 @@ export function CollectionDailyRoleGuide({
 
       <div className="min-w-0 flex-1 space-y-2">
         <div className="flex flex-wrap items-center gap-2">
-          <Badge variant="secondary" className="rounded-full px-3 py-1 text-[11px]">
+          <Badge variant="secondary" className="rounded-full px-3 py-1 text-2xs">
             {content.label}
           </Badge>
-          <Badge variant="outline" className="max-w-full rounded-full px-3 py-1 text-[11px]">
+          <Badge variant="outline" className="max-w-full rounded-full px-3 py-1 text-2xs">
             <CalendarCheck2 className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
             <span className="truncate">{selectedUsersLabel}</span>
           </Badge>

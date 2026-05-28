@@ -28,7 +28,7 @@ export function MonitorPageWebVitalsSection() {
     <section className="glass-wrapper p-4 sm:p-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="space-y-2">
-          <div className="inline-flex items-center rounded-full border border-sky-500/20 bg-sky-500/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.24em] text-sky-700 dark:text-sky-300">
+          <div className="inline-flex items-center rounded-full border border-sky-500/20 bg-sky-500/10 px-3 py-1 text-2xs font-semibold uppercase tracking-label-4xl text-sky-700 dark:text-sky-300">
             Real User Experience
           </div>
           <div className="flex flex-wrap items-center gap-2">

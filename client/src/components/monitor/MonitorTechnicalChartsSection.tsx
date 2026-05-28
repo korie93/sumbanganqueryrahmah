@@ -52,7 +52,7 @@ function MonitorChartCategoryToggle({
       <div className="min-w-0 space-y-2">
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-sm font-semibold text-foreground">{group.title}</span>
-          <Badge variant="outline" className="rounded-full px-2.5 py-0.5 text-[10px]">
+          <Badge variant="outline" className="rounded-full px-2.5 py-0.5 text-xxs">
             {group.charts.length} charts
           </Badge>
         </div>

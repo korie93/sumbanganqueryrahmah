@@ -60,7 +60,7 @@ export function CollectionDailyDayStatusNotice({
       </div>
 
       <div className="collection-day-status-remark">
-        <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+        <div className="flex items-center gap-2 text-2xs font-semibold uppercase tracking-label-sm text-muted-foreground">
           <StickyNote className="h-3.5 w-3.5" aria-hidden="true" />
           <span>Remark Superuser</span>
         </div>

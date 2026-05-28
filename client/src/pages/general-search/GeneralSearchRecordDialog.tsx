@@ -78,7 +78,7 @@ export function GeneralSearchRecordDialog({
                       key={`summary-${entry.header}`}
                       className="rounded-xl border border-primary/20 bg-primary/5 px-3 py-2"
                     >
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                      <p className="text-2xs font-semibold uppercase tracking-label-md text-muted-foreground">
                         {entry.header}
                       </p>
                       <p className="mt-1 break-words text-sm font-semibold text-foreground">
@@ -101,7 +101,7 @@ export function GeneralSearchRecordDialog({
                         priorityRank <= 1 ? "sm:col-span-2" : ""
                       }`}
                     >
-                      <div className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
+                      <div className="text-xs font-medium uppercase tracking-label-sm text-muted-foreground">
                         {key}
                       </div>
                       <div

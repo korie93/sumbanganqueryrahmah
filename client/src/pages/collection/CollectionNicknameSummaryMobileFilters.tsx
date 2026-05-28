@@ -46,7 +46,7 @@ export function CollectionNicknameSummaryMobileFilters({
         <div className="absolute inset-x-0 top-0 h-24 bg-gradient-to-br from-primary/12 via-primary/6 to-transparent" />
         <div className="relative space-y-4">
           <div className="space-y-2">
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+            <p className="text-xs font-semibold uppercase tracking-label-lg text-muted-foreground">
               Collection
             </p>
             <h1 className="text-2xl font-bold tracking-tight text-foreground">
@@ -66,7 +66,7 @@ export function CollectionNicknameSummaryMobileFilters({
               <Filter className="mr-2 h-4 w-4" />
               Summary Filters
               {activeControlCount > 0 ? (
-                <Badge variant="secondary" className="ml-2 rounded-full px-2 py-0.5 text-[11px]">
+                <Badge variant="secondary" className="ml-2 rounded-full px-2 py-0.5 text-2xs">
                   {activeControlCount}
                 </Badge>
               ) : null}
@@ -86,7 +86,7 @@ export function CollectionNicknameSummaryMobileFilters({
           <div className="space-y-3 rounded-2xl border border-border/60 bg-muted/10 p-4">
             <div className="flex items-start justify-between gap-3">
               <div className="space-y-1">
-                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                <p className="text-xs font-semibold uppercase tracking-label-md text-muted-foreground">
                   Current Selection
                 </p>
                 <p className="text-sm font-medium text-foreground">
@@ -102,7 +102,7 @@ export function CollectionNicknameSummaryMobileFilters({
 
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1 rounded-2xl border border-border/60 bg-background/70 p-3">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                <p className="text-2xs font-semibold uppercase tracking-label-md text-muted-foreground">
                   Staff Nickname
                 </p>
                 <p className="text-sm leading-relaxed text-foreground">
@@ -112,7 +112,7 @@ export function CollectionNicknameSummaryMobileFilters({
                 </p>
               </div>
               <div className="space-y-1 rounded-2xl border border-border/60 bg-background/70 p-3">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                <p className="text-2xs font-semibold uppercase tracking-label-md text-muted-foreground">
                   Date Range
                 </p>
                 <p className="text-sm leading-relaxed text-foreground">{mobileDateRangeLabel}</p>

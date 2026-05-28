@@ -32,7 +32,7 @@ function MonitorMetricGroupToggle({
         <div className="flex flex-wrap items-center gap-2">
           <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">{group.title}</h3>
           <InfoHint text={group.description} />
-          <Badge variant="outline" className="rounded-full px-2.5 py-0.5 text-[10px]">
+          <Badge variant="outline" className="rounded-full px-2.5 py-0.5 text-xxs">
             {group.items.length} metrics
           </Badge>
         </div>

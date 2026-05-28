@@ -72,7 +72,7 @@ export function CollectionRecordsTable({
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0 space-y-1">
-                  <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">
+                  <p className="text-xs uppercase tracking-label-md text-muted-foreground">
                     Record #{pageOffset + index + 1}
                   </p>
                   <h3 className="break-words text-base font-semibold text-foreground">
@@ -89,23 +89,23 @@ export function CollectionRecordsTable({
 
               <dl className="grid gap-2 rounded-xl border border-border/60 bg-muted/10 p-3 text-sm sm:grid-cols-2">
                 <div className="space-y-1">
-                  <dt className="text-xs uppercase tracking-[0.14em] text-muted-foreground">IC Number</dt>
+                  <dt className="text-xs uppercase tracking-label-md text-muted-foreground">IC Number</dt>
                   <dd className="break-all">{record.icNumber || "-"}</dd>
                 </div>
                 <div className="space-y-1">
-                  <dt className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Account Number</dt>
+                  <dt className="text-xs uppercase tracking-label-md text-muted-foreground">Account Number</dt>
                   <dd className="break-all">{record.accountNumber || "-"}</dd>
                 </div>
                 <div className="space-y-1">
-                  <dt className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Customer Phone</dt>
+                  <dt className="text-xs uppercase tracking-label-md text-muted-foreground">Customer Phone</dt>
                   <dd>{record.customerPhone || "-"}</dd>
                 </div>
                 <div className="space-y-1">
-                  <dt className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Batch</dt>
+                  <dt className="text-xs uppercase tracking-label-md text-muted-foreground">Batch</dt>
                   <dd>{record.batch || "-"}</dd>
                 </div>
                 <div className="space-y-1">
-                  <dt className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Staff Nickname</dt>
+                  <dt className="text-xs uppercase tracking-label-md text-muted-foreground">Staff Nickname</dt>
                   <dd>{record.collectionStaffNickname || "-"}</dd>
                 </div>
               </dl>

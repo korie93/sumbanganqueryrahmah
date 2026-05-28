@@ -74,14 +74,14 @@ export function CollectionDailyMobileDayList({
             <div className="px-3 py-3.5">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0 space-y-1">
-                  <p className="collection-daily-mobile-day-kicker text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                  <p className="collection-daily-mobile-day-kicker text-2xs font-semibold uppercase tracking-label-md text-muted-foreground">
                     Day {day.day}
                   </p>
                   <p className="collection-daily-mobile-day-date font-semibold text-foreground">
                     {formatDateDDMMYYYY(day.date)}
                   </p>
                 </div>
-                <span className="collection-daily-mobile-status-pill inline-flex shrink-0 items-center gap-1.5 rounded-full border border-border/50 bg-background/80 px-2.5 py-1 text-[11px] font-medium text-foreground">
+                <span className="collection-daily-mobile-status-pill inline-flex shrink-0 items-center gap-1.5 rounded-full border border-border/50 bg-background/80 px-2.5 py-1 text-2xs font-medium text-foreground">
                   {isDirty ? (
                     <span
                       className="collection-daily-unsaved-dot"
@@ -97,14 +97,14 @@ export function CollectionDailyMobileDayList({
               {showFullContent || showTileContent || showHeatmapContent || showLargeIconContent ? (
                 <div className="collection-daily-mobile-day-metrics mt-3 grid grid-cols-2 gap-2 text-xs">
                     <div className="collection-daily-day-metric collection-daily-day-metric-primary rounded-xl border border-border/50 bg-background/70 px-3 py-2">
-                      <p className="uppercase tracking-[0.12em] text-muted-foreground">Collected</p>
+                      <p className="uppercase tracking-label-sm text-muted-foreground">Collected</p>
                       <p className="mt-1 text-sm font-semibold text-foreground">
                         {formatAmountRM(day.amount)}
                     </p>
                   </div>
                   {showFullContent || showTileContent || showHeatmapContent ? (
                     <div className="collection-daily-day-metric rounded-xl border border-border/50 bg-background/70 px-3 py-2">
-                      <p className="uppercase tracking-[0.12em] text-muted-foreground">Target</p>
+                      <p className="uppercase tracking-label-sm text-muted-foreground">Target</p>
                       <p className="mt-1 text-sm font-semibold text-foreground">
                         {formatAmountRM(day.target)}
                       </p>

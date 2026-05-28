@@ -161,7 +161,7 @@ export function MonthlyCollectionComparisonChartCanvas({
             axisLine={false}
             tickLine={false}
             tickMargin={10}
-            className="text-[11px] text-muted-foreground"
+            className="text-2xs text-muted-foreground"
             minTickGap={16}
           />
           <YAxis
@@ -170,7 +170,7 @@ export function MonthlyCollectionComparisonChartCanvas({
             tickLine={false}
             tickMargin={8}
             tickFormatter={(value) => formatCompactAmountRM(Number(value || 0))}
-            className="text-[11px] text-muted-foreground"
+            className="text-2xs text-muted-foreground"
             width={62}
           />
           <YAxis
@@ -180,7 +180,7 @@ export function MonthlyCollectionComparisonChartCanvas({
             tickLine={false}
             tickMargin={8}
             tickFormatter={(value) => formatCompactAmountRM(Number(value || 0))}
-            className="text-[11px] text-muted-foreground"
+            className="text-2xs text-muted-foreground"
             width={62}
           />
           <Tooltip

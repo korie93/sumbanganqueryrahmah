@@ -90,11 +90,11 @@ export default function CollectionReport() {
   const headerActions = isMobile ? undefined : (
     <div className="flex flex-wrap items-center justify-end gap-2">
       {staffNicknameLabel ? (
-        <Badge variant="secondary" className="rounded-full px-3 py-1 text-[11px]">
+        <Badge variant="secondary" className="rounded-full px-3 py-1 text-2xs">
           Staff Nickname: {staffNicknameLabel}
         </Badge>
       ) : null}
-      <Badge variant="outline" className="rounded-full px-3 py-1 text-[11px]">
+      <Badge variant="outline" className="rounded-full px-3 py-1 text-2xs">
         Section: {sectionLabel}
       </Badge>
     </div>
@@ -115,7 +115,7 @@ export default function CollectionReport() {
         description={subtitle}
         badge={
           isMobile ? (
-            <Badge variant="secondary" className="rounded-full px-3 py-1 text-[11px]">
+            <Badge variant="secondary" className="rounded-full px-3 py-1 text-2xs">
               {sectionLabel}
             </Badge>
           ) : undefined

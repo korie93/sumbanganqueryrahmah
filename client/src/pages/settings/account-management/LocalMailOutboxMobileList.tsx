@@ -73,7 +73,7 @@ export function LocalMailOutboxMobileList({
 
           <dl className="grid gap-2 rounded-lg border border-border/60 bg-muted/15 p-3 text-sm">
             <div className="space-y-1">
-              <dt className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Created</dt>
+              <dt className="text-xs uppercase tracking-label-md text-muted-foreground">Created</dt>
               <dd>{formatDateTime(entry.createdAt)}</dd>
             </div>
           </dl>

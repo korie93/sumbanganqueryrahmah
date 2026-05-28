@@ -61,7 +61,7 @@ export function MobileActionMenu({
       >
         {contentLabel ? (
           <>
-            <DropdownMenuLabel className="px-2 pb-2 pt-1 text-xs uppercase tracking-[0.16em] text-muted-foreground">
+            <DropdownMenuLabel className="px-2 pb-2 pt-1 text-xs uppercase tracking-label-lg text-muted-foreground">
               {contentLabel}
             </DropdownMenuLabel>
             <DropdownMenuSeparator />

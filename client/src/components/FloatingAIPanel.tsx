@@ -136,7 +136,7 @@ export function FloatingAIPanel({
             </h2>
             <p
               id={panelDescriptionId}
-              className={cn("truncate text-[11px]", styles.floatingPanelDescription)}
+              className={cn("truncate text-2xs", styles.floatingPanelDescription)}
             >
               {FLOATING_AI_PANEL_DESCRIPTION}
             </p>

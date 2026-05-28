@@ -214,7 +214,7 @@ function MonitorAlertsSectionImpl({
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <Badge
                 variant="outline"
-                className={`rounded-full px-2.5 py-0.5 text-[10px] ${getMonitorAlertSummaryToneClass(alertsCompactSummary.tone)}`}
+                className={`rounded-full px-2.5 py-0.5 text-xxs ${getMonitorAlertSummaryToneClass(alertsCompactSummary.tone)}`}
               >
                 {alertsCompactSummary.badge}
               </Badge>
@@ -222,7 +222,7 @@ function MonitorAlertsSectionImpl({
                 <Badge
                   key={fact.label}
                   variant="outline"
-                  className={`rounded-full px-2.5 py-0.5 text-[10px] ${getMonitorAlertSummaryToneClass(fact.tone)}`}
+                  className={`rounded-full px-2.5 py-0.5 text-xxs ${getMonitorAlertSummaryToneClass(fact.tone)}`}
                 >
                   {fact.label} {fact.value}
                 </Badge>
@@ -247,7 +247,7 @@ function MonitorAlertsSectionImpl({
                   open={liveAlertsOpen}
                   onToggle={() => setLiveAlertsOpen((previous) => !previous)}
                   badges={(
-                    <Badge variant="secondary" className="rounded-full px-2.5 py-0.5 text-[10px]">
+                    <Badge variant="secondary" className="rounded-full px-2.5 py-0.5 text-xxs">
                       {alertsPagination.totalItems} live
                     </Badge>
                   )}
@@ -274,11 +274,11 @@ function MonitorAlertsSectionImpl({
                   onToggle={() => onAlertHistoryOpenChange(!alertHistoryOpen)}
                   badges={(
                     <>
-                      <Badge variant="outline" className="rounded-full px-2.5 py-0.5 text-[10px]">
+                      <Badge variant="outline" className="rounded-full px-2.5 py-0.5 text-xxs">
                         {alertHistoryPagination.totalItems} total
                       </Badge>
                       {alertHistoryOpen ? (
-                        <Badge variant="secondary" className="rounded-full px-2.5 py-0.5 text-[10px]">
+                        <Badge variant="secondary" className="rounded-full px-2.5 py-0.5 text-xxs">
                           {resolvedHistoryCount} resolved on this page
                         </Badge>
                       ) : null}
@@ -321,7 +321,7 @@ function MonitorAlertsSectionImpl({
                             {deleteHistoryBusy ? "Deleting..." : "Delete old resolved"}
                           </Button>
                         </div>
-                        <p className="text-[11px] text-muted-foreground">
+                        <p className="text-2xs text-muted-foreground">
                           Only resolved incidents older than the selected age are removed.
                         </p>
                       </div>

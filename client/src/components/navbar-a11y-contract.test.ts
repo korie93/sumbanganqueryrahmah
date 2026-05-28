@@ -66,7 +66,7 @@ test("navbar controls use Malay accessible labels and include username context",
   assert.match(mobileNavigationSource, /aria-current=\{active \? "page" : undefined\}/);
   assert.match(mobileNavigationSource, /border-primary bg-primary text-primary-foreground shadow-sm/);
   assert.match(mobileNavigationSource, /active \? "bg-primary-foreground text-primary" : "bg-primary\/10 text-primary"/);
-  assert.match(mobileNavigationSource, /rounded-full bg-primary-foreground px-2 py-0\.5 text-\[10px\] font-semibold uppercase tracking-\[0\.08em\] text-primary/);
+  assert.match(mobileNavigationSource, /rounded-full bg-primary-foreground px-2 py-0\.5 text-xxs font-semibold uppercase tracking-label-xs text-primary/);
   assert.match(navbarStyles, /\.nav-pill\.nav-pill-active\s*\{[\s\S]*color:\s*hsl\(var\(--primary-foreground\)\);/);
   assert.match(navbarStyles, /\.user-menu-role\s*\{[\s\S]*color:\s*hsl\(var\(--primary-foreground\)\);/);
   assert.doesNotMatch(navbarSource, /Open user menu|Open navigation menu/);

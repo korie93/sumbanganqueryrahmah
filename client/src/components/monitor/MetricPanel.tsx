@@ -66,13 +66,13 @@ function MetricPanelImpl({
               <span className="text-3xl font-semibold leading-none text-foreground">{formatted}</span>
               {unit ? <span className="mb-0.5 text-xs text-muted-foreground">{unit}</span> : null}
             </div>
-            {description ? <p className="mt-1 text-[11px] text-muted-foreground">{description}</p> : null}
+            {description ? <p className="mt-1 text-2xs text-muted-foreground">{description}</p> : null}
           </div>
           <span className={`mt-1 inline-flex h-2.5 w-2.5 rounded-full ${metricStatusClasses[status]}`} />
         </div>
 
         <div className="mt-4 flex items-center justify-between">
-          <Badge variant="outline" className="text-[10px] uppercase tracking-wide">
+          <Badge variant="outline" className="text-xxs uppercase tracking-wide">
             <TrendIcon className={`mr-1 h-3.5 w-3.5 ${trendMeta.className}`} />
             {trendMeta.label}
           </Badge>

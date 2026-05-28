@@ -51,7 +51,7 @@ function MonitorInsightsSubsectionToggle({
             <Badge
               key={`${title}-${badge.label}`}
               variant="outline"
-              className="rounded-full px-3 py-1 text-[11px]"
+              className="rounded-full px-3 py-1 text-2xs"
             >
               {badge.label} {badge.value}
             </Badge>

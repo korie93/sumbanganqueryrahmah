@@ -49,11 +49,11 @@ export function PendingPasswordResetMobileList({
           </div>
           <dl className="grid gap-2 rounded-lg border border-border/60 bg-muted/15 p-3 text-sm">
             <div className="space-y-1">
-              <dt className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Requested By</dt>
+              <dt className="text-xs uppercase tracking-label-md text-muted-foreground">Requested By</dt>
               <dd className="break-words">{request.requestedByUser || "-"}</dd>
             </div>
             <div className="space-y-1">
-              <dt className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Created At</dt>
+              <dt className="text-xs uppercase tracking-label-md text-muted-foreground">Created At</dt>
               <dd>{formatDateTime(request.createdAt)}</dd>
             </div>
           </dl>

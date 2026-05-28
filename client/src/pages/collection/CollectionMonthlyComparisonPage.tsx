@@ -85,15 +85,15 @@ function CollectionMonthlyComparisonPage({
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <Badge variant="secondary" className="rounded-full px-3 py-1 text-[11px]">
+            <Badge variant="secondary" className="rounded-full px-3 py-1 text-2xs">
               <CalendarRange className="mr-1 h-3.5 w-3.5" aria-hidden="true" />
               24 months max
             </Badge>
-            <Badge variant="outline" className="rounded-full px-3 py-1 text-[11px]">
+            <Badge variant="outline" className="rounded-full px-3 py-1 text-2xs">
               <TrendingUp className="mr-1 h-3.5 w-3.5" aria-hidden="true" />
               First vs last
             </Badge>
-            <Badge variant="outline" className="rounded-full px-3 py-1 text-[11px]">
+            <Badge variant="outline" className="rounded-full px-3 py-1 text-2xs">
               Empty months stay visible
             </Badge>
           </div>

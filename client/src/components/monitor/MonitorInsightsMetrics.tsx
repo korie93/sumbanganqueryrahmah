@@ -92,7 +92,7 @@ function MonitorInsightsMetricsImpl({
             <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
               {slopeRows.map((row) => (
                 <div key={row.key} className="rounded-lg border border-border/60 bg-background/45 p-2.5">
-                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{row.label}</p>
+                  <p className="text-2xs uppercase tracking-wide text-muted-foreground">{row.label}</p>
                   <p className="mt-1 text-sm font-semibold text-foreground">{row.value.toFixed(4)}</p>
                 </div>
               ))}

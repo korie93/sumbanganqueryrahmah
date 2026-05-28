@@ -133,13 +133,13 @@ export function CollectionDailyDesktopCalendarGrid({
                 </div>
               ) : null}
               {showFullContent || showTileContent || showHeatmapContent ? (
-                <div className="collection-daily-day-supporting-text text-[10px] text-muted-foreground">
+                <div className="collection-daily-day-supporting-text text-xxs text-muted-foreground">
                   Customers: {day.customerCount}
                 </div>
               ) : null}
               {showFullContent ? (
                 <>
-                  <div className="collection-daily-day-supporting-text text-[10px] text-muted-foreground">
+                  <div className="collection-daily-day-supporting-text text-xxs text-muted-foreground">
                     Required Today: {formatAmountRM(day.target)}
                   </div>
                   <progress
@@ -173,7 +173,7 @@ export function CollectionDailyDesktopCalendarGrid({
                     type="button"
                     size="sm"
                     variant="default"
-                    className="h-8 w-full rounded-lg text-[11px]"
+                    className="h-8 w-full rounded-lg text-2xs"
                     aria-pressed="true"
                     aria-label={`Edit calendar status for ${formatDateDDMMYYYY(day.date)}`}
                     onClick={() => onEditDay(day.day)}
@@ -186,7 +186,7 @@ export function CollectionDailyDesktopCalendarGrid({
                     type="button"
                     size="sm"
                     variant="outline"
-                    className="h-8 w-full rounded-lg text-[11px]"
+                    className="h-8 w-full rounded-lg text-2xs"
                     aria-pressed="false"
                     aria-label={`Edit calendar status for ${formatDateDDMMYYYY(day.date)}`}
                     onClick={() => onEditDay(day.day)}

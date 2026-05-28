@@ -20,13 +20,13 @@ export function CollectionDailyMobileFiltersLayout(props: CollectionDailyFilters
       <div className="rounded-2xl border border-border/60 bg-background px-3 py-3 shadow-sm">
         <div className="space-y-2">
           <div className="flex flex-wrap gap-2">
-            <Badge variant="secondary" className="rounded-full px-3 py-1 text-[11px]">
+            <Badge variant="secondary" className="rounded-full px-3 py-1 text-2xs">
               Year {props.yearInput || "-"}
             </Badge>
-            <Badge variant="secondary" className="rounded-full px-3 py-1 text-[11px]">
+            <Badge variant="secondary" className="rounded-full px-3 py-1 text-2xs">
               Month {props.monthInput || "-"}
             </Badge>
-            <Badge variant="outline" className="max-w-full rounded-full px-3 py-1 text-[11px]">
+            <Badge variant="outline" className="max-w-full rounded-full px-3 py-1 text-2xs">
               <span className="truncate">{scopeLabel}</span>
             </Badge>
           </div>

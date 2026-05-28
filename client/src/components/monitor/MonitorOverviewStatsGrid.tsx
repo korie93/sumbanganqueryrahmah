@@ -59,13 +59,13 @@ function MonitorOverviewStatsGridImpl({
           <p className="mt-1 text-xs text-muted-foreground">{rollupFreshnessSummary}</p>
           {isMobile ? (
             <div className="mt-2 flex flex-wrap gap-2">
-              <Badge variant="secondary" className="rounded-full px-2.5 py-0.5 text-[10px]">
+              <Badge variant="secondary" className="rounded-full px-2.5 py-0.5 text-xxs">
                 {snapshot.rollupRefreshRunningCount} running
               </Badge>
-              <Badge variant="outline" className="rounded-full px-2.5 py-0.5 text-[10px]">
+              <Badge variant="outline" className="rounded-full px-2.5 py-0.5 text-xxs">
                 {snapshot.rollupRefreshRetryCount} retry
               </Badge>
-              <Badge variant="outline" className="rounded-full px-2.5 py-0.5 text-[10px]">
+              <Badge variant="outline" className="rounded-full px-2.5 py-0.5 text-xxs">
                 Oldest {rollupFreshnessAgeLabel}
               </Badge>
             </div>

@@ -58,7 +58,7 @@ export function GeneralSearchExportMenu({
 
   const exportOptions = (
     <div className="space-y-1">
-      <p className="px-2 pb-1 text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
+      <p className="px-2 pb-1 text-xs font-medium uppercase tracking-label-md text-muted-foreground">
         Available Exports
       </p>
       <Button

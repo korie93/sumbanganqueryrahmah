@@ -40,7 +40,7 @@ export default function Import({ onNavigate, importUploadLimitBytes }: ImportPro
     <div className="app-shell-min-height bg-gradient-to-br from-slate-100 via-blue-50 to-slate-100 p-4 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 sm:p-6">
       <div className="mx-auto max-w-5xl">
         <div className="mb-6 rounded-2xl border border-border/70 bg-background/80 p-4 shadow-sm sm:mb-8 sm:p-6">
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">
+          <p className="text-xs font-semibold uppercase tracking-label-2xl text-primary">
             Workspace Import
           </p>
           <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">

@@ -226,8 +226,8 @@ export function CollectionMonthlyComparisonSetupCard({
           <span
             className={
               monthlyTargetAmount && monthlyTargetAmount > 0
-                ? "mt-1 inline-flex rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-300"
-                : "mt-1 inline-flex rounded-full bg-amber-500/10 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:text-amber-300"
+                ? "mt-1 inline-flex rounded-full bg-emerald-500/10 px-2 py-0.5 text-2xs font-medium text-emerald-700 dark:text-emerald-300"
+                : "mt-1 inline-flex rounded-full bg-amber-500/10 px-2 py-0.5 text-2xs font-medium text-amber-700 dark:text-amber-300"
             }
           >
             {targetConfidenceLabel}

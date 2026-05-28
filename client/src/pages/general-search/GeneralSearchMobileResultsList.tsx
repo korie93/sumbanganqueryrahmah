@@ -47,7 +47,7 @@ export function GeneralSearchMobileResultsList({
           >
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0 space-y-1">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                <p className="text-2xs font-semibold uppercase tracking-label-md text-muted-foreground">
                   Result {resultNumber}
                 </p>
                 <div className="break-words text-base font-semibold text-foreground">
@@ -82,7 +82,7 @@ export function GeneralSearchMobileResultsList({
                       key={`${resultNumber}-${header}`}
                       className="rounded-xl border border-border/50 bg-muted/30 px-3 py-2"
                     >
-                      <dt className="text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
+                      <dt className="text-2xs font-medium uppercase tracking-label-sm text-muted-foreground">
                         {header}
                       </dt>
                       <dd
@@ -111,7 +111,7 @@ export function GeneralSearchMobileResultsList({
                         key={`${resultNumber}-${header}-extra`}
                         className="rounded-lg border border-border/40 bg-muted/20 px-3 py-2"
                       >
-                        <dt className="text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
+                        <dt className="text-2xs font-medium uppercase tracking-label-sm text-muted-foreground">
                           {header}
                         </dt>
                         <dd className="mt-1 break-words text-sm text-foreground">

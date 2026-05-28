@@ -38,7 +38,7 @@ function DashboardSummaryCardsImpl({ items, summaryLoading }: DashboardSummaryCa
                       </div>
                     ) : (
                       <>
-                        <p className="break-words text-xl font-bold leading-none text-foreground sm:text-[1.85rem]">
+                        <p className="break-words text-xl font-bold leading-none text-foreground sm:text-dashboard-metric">
                           {card.value.toLocaleString()}
                         </p>
                         <p className="text-xs leading-5 text-muted-foreground">
@@ -60,7 +60,7 @@ function DashboardSummaryCardsImpl({ items, summaryLoading }: DashboardSummaryCa
         <section className="rounded-2xl border border-border/60 bg-background p-4 shadow-sm">
           <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+              <p className="text-xs font-semibold uppercase tracking-label-md text-muted-foreground">
                 Supporting Signals
               </p>
               <h3 className="mt-1 text-base font-semibold text-foreground">Operational context</h3>

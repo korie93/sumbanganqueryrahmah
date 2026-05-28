@@ -242,7 +242,7 @@ export function MonitorDeferredSectionToggle({
               {statusBadgeLabel ? (
                 <Badge
                   variant="outline"
-                  className={`rounded-full px-2.5 py-0.5 text-[10px] ${getMonitorSummaryToneClass(
+                  className={`rounded-full px-2.5 py-0.5 text-xxs ${getMonitorSummaryToneClass(
                     statusTone ?? "stable",
                   )}`}
                 >
@@ -273,7 +273,7 @@ export function MonitorDeferredSectionToggle({
               {statusBadgeLabel ? (
                 <Badge
                   variant="outline"
-                  className={`rounded-full px-2.5 py-0.5 text-[10px] ${getMonitorSummaryToneClass(
+                  className={`rounded-full px-2.5 py-0.5 text-xxs ${getMonitorSummaryToneClass(
                     statusTone ?? "stable",
                   )}`}
                 >

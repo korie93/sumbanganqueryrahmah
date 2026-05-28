@@ -133,7 +133,7 @@ export function SavedDialogs({
           </DialogHeader>
           <div className="space-y-4">
             <div className="rounded-xl border border-border/70 bg-muted/30 p-3">
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+              <p className="text-xs font-semibold uppercase tracking-label-lg text-muted-foreground">
                 Current Import
               </p>
               <p className="mt-2 break-words text-sm font-medium text-foreground">

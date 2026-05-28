@@ -81,10 +81,10 @@ function CollectionSummaryPage({ role }: CollectionSummaryPageProps) {
             <div className="space-y-3">
               <div className="space-y-2">
                 <div className="flex flex-wrap gap-2">
-                  <Badge variant="secondary" className="rounded-full px-3 py-1 text-[11px]">
+                  <Badge variant="secondary" className="rounded-full px-3 py-1 text-2xs">
                     Year {summaryData.selectedYear}
                   </Badge>
-                  <Badge variant="outline" className="rounded-full px-3 py-1 text-[11px]">
+                  <Badge variant="outline" className="rounded-full px-3 py-1 text-2xs">
                     {summaryData.selectedNicknames.length > 0
                       ? summaryData.selectedNicknameLabel
                       : "All staff nicknames"}
@@ -104,7 +104,7 @@ function CollectionSummaryPage({ role }: CollectionSummaryPageProps) {
                   <Filter className="mr-2 h-4 w-4" />
                   Summary Filters
                   {activeFilterCount > 0 ? (
-                    <Badge variant="secondary" className="ml-2 rounded-full px-2 py-0.5 text-[11px]">
+                    <Badge variant="secondary" className="ml-2 rounded-full px-2 py-0.5 text-2xs">
                       {activeFilterCount}
                     </Badge>
                   ) : null}

@@ -42,14 +42,14 @@ export function CollectionSidebar({
       >
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-foreground/62 dark:text-foreground/72">
+            <p className="text-2xs font-semibold uppercase tracking-label-lg text-foreground/62 dark:text-foreground/72">
               Collection Section
             </p>
             <div className="mt-1 flex items-center gap-2">
               <h2 className="truncate text-base font-semibold text-foreground">
                 {selectedItem?.label || "Collection"}
               </h2>
-              <Badge className="rounded-full px-2 py-0.5 text-[10px] shadow-sm">
+              <Badge className="rounded-full px-2 py-0.5 text-xxs shadow-sm">
                 Active
               </Badge>
             </div>
@@ -73,7 +73,7 @@ export function CollectionSidebar({
                 type="button"
                 onClick={() => onSelectSubPage(item.key)}
                   className={cn(
-                    "inline-flex min-h-10 shrink-0 items-center gap-2 rounded-full border px-3.5 py-2 text-left text-[13px] font-semibold transition-colors",
+                    "inline-flex min-h-10 shrink-0 items-center gap-2 rounded-full border px-3.5 py-2 text-left text-nav-sm font-semibold transition-colors",
                     active
                     ? "border-primary bg-primary text-primary-foreground shadow-sm dark:border-primary dark:bg-primary dark:text-primary-foreground"
                     : "border-border/60 bg-muted/25 text-foreground/88 hover:border-primary/20 hover:bg-accent/45 hover:text-foreground dark:border-white/10 dark:bg-white/[0.03] dark:text-foreground/92 dark:hover:bg-white/[0.06]",

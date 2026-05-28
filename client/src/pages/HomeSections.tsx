@@ -33,7 +33,7 @@ export function HomeMobileLayout({
         <section className="home-mobile-hero">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <p className="text-[0.68rem] font-semibold uppercase tracking-[0.26em] text-white/80">
+              <p className="text-home-eyebrow font-semibold uppercase tracking-label-5xl text-white/80">
                 Operational Workspace
               </p>
               <h1 className="mt-3 text-3xl font-bold tracking-tight text-white">SQR Workspace</h1>
@@ -76,7 +76,7 @@ export function HomeMobileLayout({
         <section className="home-mobile-surface">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+              <p className="text-xs font-semibold uppercase tracking-label-xl text-muted-foreground">
                 Quick Actions
               </p>
               <h2 className="mt-1 text-lg font-semibold text-foreground">Start the next task</h2>
@@ -119,7 +119,7 @@ export function HomeMobileLayout({
           <section className="home-mobile-surface">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                <p className="text-xs font-semibold uppercase tracking-label-xl text-muted-foreground">
                   More Modules
                 </p>
                 <h2 className="mt-1 text-lg font-semibold text-foreground">

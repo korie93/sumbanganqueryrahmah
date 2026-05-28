@@ -29,7 +29,7 @@ function MonitorOverviewHeroImpl({
     <div className="flex flex-col gap-4 sm:gap-6 lg:flex-row lg:items-end lg:justify-between">
       <div>
         <div className="flex items-center gap-2">
-          <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Executive View</p>
+          <p className="text-xs uppercase tracking-label-lg text-muted-foreground">Executive View</p>
           {!compact ? (
             <span className="hidden sm:inline-flex">
               <InfoHint text="High-level health summary for fast executive review." />
@@ -96,8 +96,8 @@ function MonitorOverviewHeroImpl({
         <p
           className={
             compact
-              ? "text-[38px] font-semibold leading-none text-foreground sm:text-[48px]"
-              : "text-[44px] font-semibold leading-none text-foreground sm:text-[56px]"
+              ? "text-monitor-hero-sm font-semibold leading-none text-foreground sm:text-monitor-hero-sm-expanded"
+              : "text-monitor-hero font-semibold leading-none text-foreground sm:text-monitor-hero-expanded"
           }
         >
           {snapshot.score.toFixed(0)}

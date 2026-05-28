@@ -51,7 +51,7 @@ export function SingleImportPanel({
           <div className="mb-2 flex flex-wrap items-center gap-2">
             <label htmlFor="single-import-name" className="block text-sm font-medium text-foreground">Import Name</label>
             {parsedData.length > 0 ? (
-              <Badge variant="secondary" className="rounded-full px-2 py-0.5 text-[11px]">
+              <Badge variant="secondary" className="rounded-full px-2 py-0.5 text-2xs">
                 {parsedData.length.toLocaleString()} rows ready
               </Badge>
             ) : null}

@@ -179,7 +179,7 @@ export function MonthlyCollectionComparisonChart({
 
       <div className={`mt-3 grid gap-2 ${summaryGridClass}`}>
         <div className="rounded-lg border border-border/50 bg-muted/20 px-3 py-2">
-          <p className="text-[11px] font-medium uppercase tracking-normal text-muted-foreground">
+          <p className="text-2xs font-medium uppercase tracking-normal text-muted-foreground">
             Range total
           </p>
           <p className="mt-1 text-sm font-semibold text-foreground">
@@ -187,7 +187,7 @@ export function MonthlyCollectionComparisonChart({
           </p>
         </div>
         <div className="rounded-lg border border-border/50 bg-muted/20 px-3 py-2">
-          <p className="text-[11px] font-medium uppercase tracking-normal text-muted-foreground">
+          <p className="text-2xs font-medium uppercase tracking-normal text-muted-foreground">
             Peak month
           </p>
           <p className="mt-1 text-sm font-semibold text-foreground">
@@ -195,7 +195,7 @@ export function MonthlyCollectionComparisonChart({
           </p>
         </div>
         <div className="rounded-lg border border-border/50 bg-muted/20 px-3 py-2">
-          <p className="text-[11px] font-medium uppercase tracking-normal text-muted-foreground">
+          <p className="text-2xs font-medium uppercase tracking-normal text-muted-foreground">
             Active months
           </p>
           <p className="mt-1 text-sm font-semibold text-foreground">
@@ -203,7 +203,7 @@ export function MonthlyCollectionComparisonChart({
           </p>
         </div>
         <div className="rounded-lg border border-border/50 bg-muted/20 px-3 py-2">
-          <p className="text-[11px] font-medium uppercase tracking-normal text-muted-foreground">
+          <p className="text-2xs font-medium uppercase tracking-normal text-muted-foreground">
             Audit watch
           </p>
           <p className="mt-1 text-sm font-semibold text-foreground">
@@ -214,19 +214,19 @@ export function MonthlyCollectionComparisonChart({
         </div>
         {targetSummary ? (
           <div className="rounded-lg border border-border/50 bg-muted/20 px-3 py-2">
-            <p className="text-[11px] font-medium uppercase tracking-normal text-muted-foreground">
+            <p className="text-2xs font-medium uppercase tracking-normal text-muted-foreground">
               Target progress
             </p>
             <p className="mt-1 text-sm font-semibold text-foreground">
               {(targetSummary.targetProgress * 100).toFixed(1)}%
             </p>
-            <p className="text-[11px] text-muted-foreground">
+            <p className="text-2xs text-muted-foreground">
               {monthlyTargetSourceLabel || "Configured target"}
             </p>
           </div>
         ) : monthlyTargetLoading ? (
           <div className="rounded-lg border border-border/50 bg-muted/20 px-3 py-2">
-            <p className="text-[11px] font-medium uppercase tracking-normal text-muted-foreground">
+            <p className="text-2xs font-medium uppercase tracking-normal text-muted-foreground">
               Target progress
             </p>
             <p className="mt-1 text-sm font-semibold text-muted-foreground">

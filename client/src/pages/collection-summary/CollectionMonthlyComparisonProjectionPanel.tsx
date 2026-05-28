@@ -61,15 +61,15 @@ export function CollectionMonthlyComparisonProjectionPanel({
       </div>
       <div className="mt-3 grid gap-2 sm:grid-cols-3">
         <div className="rounded-lg border border-border/50 bg-background px-3 py-2">
-          <p className="text-[11px] text-muted-foreground">Current total</p>
+          <p className="text-2xs text-muted-foreground">Current total</p>
           <p className="text-sm font-semibold text-foreground">{formatAmountRM(projection.currentTotal)}</p>
         </div>
         <div className="rounded-lg border border-border/50 bg-background px-3 py-2">
-          <p className="text-[11px] text-muted-foreground">Daily pace</p>
+          <p className="text-2xs text-muted-foreground">Daily pace</p>
           <p className="text-sm font-semibold text-foreground">{formatAmountRM(projection.dailyAverage)}</p>
         </div>
         <div className="rounded-lg border border-border/50 bg-background px-3 py-2">
-          <p className="text-[11px] text-muted-foreground">Remaining days</p>
+          <p className="text-2xs text-muted-foreground">Remaining days</p>
           <p className="text-sm font-semibold text-foreground">{projection.remainingDays}</p>
         </div>
       </div>

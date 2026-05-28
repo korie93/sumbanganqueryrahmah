@@ -220,7 +220,7 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
         ) : null}
         <div className="relative space-y-2">
           {isMobile ? (
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+            <p className="text-xs font-semibold uppercase tracking-label-lg text-muted-foreground">
               Collection
             </p>
           ) : null}

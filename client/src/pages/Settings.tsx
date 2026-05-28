@@ -134,7 +134,7 @@ export default function SettingsPage({
               }
               badge={
                 isMobile ? (
-                  <Badge variant="secondary" className="rounded-full px-3 py-1 text-[11px]">
+                  <Badge variant="secondary" className="rounded-full px-3 py-1 text-2xs">
                     {controller.categories.length} sections
                   </Badge>
                 ) : null

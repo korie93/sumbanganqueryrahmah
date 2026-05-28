@@ -67,6 +67,17 @@ export default tseslint.config(
       "jsx-a11y/no-static-element-interactions": "error",
       "no-extra-boolean-cast": "warn",
       "no-irregular-whitespace": "warn",
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector: "Literal[value=/\\b(?:text|tracking)-\\[/]",
+          message: "Use Tailwind typography tokens instead of arbitrary typography classes.",
+        },
+        {
+          selector: "TemplateElement[value.raw=/\\b(?:text|tracking)-\\[/]",
+          message: "Use Tailwind typography tokens instead of arbitrary typography classes.",
+        },
+      ],
       "no-unsafe-finally": "warn",
       "no-unused-vars": "off",
       "no-useless-escape": "warn",

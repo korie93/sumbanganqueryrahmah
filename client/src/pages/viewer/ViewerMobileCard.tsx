@@ -31,7 +31,7 @@ export function ViewerMobileCard({
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 space-y-1">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+          <p className="text-2xs font-semibold uppercase tracking-label-md text-muted-foreground">
             Row {row.__rowId + 1}
           </p>
           <p className="text-sm text-muted-foreground">

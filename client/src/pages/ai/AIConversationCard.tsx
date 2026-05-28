@@ -185,7 +185,7 @@ export function AIConversationCard({
         </div>
         <p
           id="ai-conversation-query-limit"
-          className={showCharacterLimit ? "text-right text-[11px] leading-snug text-muted-foreground" : "sr-only"}
+          className={showCharacterLimit ? "text-right text-2xs leading-snug text-muted-foreground" : "sr-only"}
           aria-live="polite"
         >
           Had soalan AI {AI_REQUEST_MAX_CHARACTERS} aksara. {remainingCharacters} aksara berbaki.

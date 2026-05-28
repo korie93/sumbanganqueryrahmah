@@ -40,7 +40,7 @@ export function LandingProductPreview() {
       <div className="landing-about-shell landing-about-card rounded-[1.5rem] p-4 sm:p-5">
         <div className="landing-preview-topbar flex items-center justify-between gap-3 rounded-2xl px-4 py-3">
           <div>
-            <p className="landing-about-eyebrow text-xs font-semibold uppercase tracking-[0.24em]">
+            <p className="landing-about-eyebrow text-xs font-semibold uppercase tracking-label-4xl">
               Paparan Kerja
             </p>
             <p className="landing-preview-topbar-copy mt-1 text-xs">
@@ -71,7 +71,7 @@ export function LandingProductPreview() {
           <div className="landing-preview-metric-grid mt-4 grid gap-2 sm:grid-cols-3">
             {previewMetrics.map((item) => (
               <div key={item.label} className="landing-preview-metric rounded-2xl px-3 py-3">
-                <p className="landing-preview-metric-label text-[10px] font-semibold uppercase tracking-[0.18em]">
+                <p className="landing-preview-metric-label text-xxs font-semibold uppercase tracking-label-xl">
                   {item.label}
                 </p>
                 <p className="landing-preview-metric-value mt-2 text-sm font-semibold">{item.value}</p>

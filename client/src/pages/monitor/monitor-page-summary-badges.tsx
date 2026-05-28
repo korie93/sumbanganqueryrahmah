@@ -9,7 +9,7 @@ export type MonitorSummaryFact = {
 
 export function renderMonitorSummaryBadges(
   facts: MonitorSummaryFact[],
-  className = "rounded-full px-2.5 py-0.5 text-[10px]",
+  className = "rounded-full px-2.5 py-0.5 text-xxs",
 ) {
   return facts.map((fact) => (
     <Badge

@@ -123,7 +123,7 @@ export function CollectionSameDayPaceSection({
           <p className="text-sm leading-6 text-foreground">{pace.summary}</p>
           <div className="grid gap-2 sm:grid-cols-4">
             <div className="rounded-xl border border-border/50 bg-muted/20 px-3 py-2">
-              <p className="text-[11px] font-medium uppercase tracking-normal text-muted-foreground">
+              <p className="text-2xs font-medium uppercase tracking-normal text-muted-foreground">
                 Current
               </p>
               <p className="mt-1 text-sm font-semibold text-foreground">
@@ -131,7 +131,7 @@ export function CollectionSameDayPaceSection({
               </p>
             </div>
             <div className="rounded-xl border border-border/50 bg-muted/20 px-3 py-2">
-              <p className="text-[11px] font-medium uppercase tracking-normal text-muted-foreground">
+              <p className="text-2xs font-medium uppercase tracking-normal text-muted-foreground">
                 Previous
               </p>
               <p className="mt-1 text-sm font-semibold text-foreground">
@@ -139,7 +139,7 @@ export function CollectionSameDayPaceSection({
               </p>
             </div>
             <div className="rounded-xl border border-border/50 bg-muted/20 px-3 py-2">
-              <p className="text-[11px] font-medium uppercase tracking-normal text-muted-foreground">
+              <p className="text-2xs font-medium uppercase tracking-normal text-muted-foreground">
                 Gap
               </p>
               <p className={pace.difference < 0 ? "mt-1 text-sm font-semibold text-destructive" : "mt-1 text-sm font-semibold text-emerald-700 dark:text-emerald-300"}>
@@ -148,7 +148,7 @@ export function CollectionSameDayPaceSection({
             </div>
             <div className="rounded-xl border border-border/50 bg-muted/20 px-3 py-2">
               <div className="flex items-center gap-1.5">
-                <p className="text-[11px] font-medium uppercase tracking-normal text-muted-foreground">
+                <p className="text-2xs font-medium uppercase tracking-normal text-muted-foreground">
                   Avg / day
                 </p>
                 <MonthlyComparisonHint
@@ -225,14 +225,14 @@ export function CollectionSameDayPaceSection({
           </div>
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-1">
             <div className="rounded-xl border border-border/50 bg-muted/20 px-3 py-2">
-              <p className="text-[11px] font-medium uppercase tracking-normal text-muted-foreground">
+              <p className="text-2xs font-medium uppercase tracking-normal text-muted-foreground">
                 Momentum
               </p>
               <p className="mt-1 text-sm font-semibold text-foreground">{pace.momentum.label}</p>
               <p className="text-xs text-muted-foreground">{pace.momentum.description}</p>
             </div>
             <div className="rounded-xl border border-border/50 bg-muted/20 px-3 py-2">
-              <p className="text-[11px] font-medium uppercase tracking-normal text-muted-foreground">
+              <p className="text-2xs font-medium uppercase tracking-normal text-muted-foreground">
                 Target pace
               </p>
               <p className="mt-1 text-sm font-semibold text-foreground">

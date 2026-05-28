@@ -130,7 +130,7 @@ export function AnalysisFilesList({
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0 space-y-1">
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                        <p className="text-2xs font-semibold uppercase tracking-label-md text-muted-foreground">
                           File {filesPaged.start + index + 1}
                         </p>
                         <p className="break-words font-medium text-foreground">{item.name}</p>
@@ -142,7 +142,7 @@ export function AnalysisFilesList({
 
                     <dl className="mt-3 rounded-xl border border-border/60 bg-muted/20 p-3">
                       <div className="space-y-1">
-                        <dt className="text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
+                        <dt className="text-2xs font-medium uppercase tracking-label-sm text-muted-foreground">
                           Filename
                         </dt>
                         <dd className="break-all text-sm text-foreground">{item.filename}</dd>
@@ -266,7 +266,7 @@ export function AnalysisDuplicatesPanel({
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0 space-y-1">
-                          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                          <p className="text-2xs font-semibold uppercase tracking-label-md text-muted-foreground">
                             Duplicate {duplicatesPaged.start + index + 1}
                           </p>
                           <div className="rounded-xl border border-border/60 bg-muted/20 px-3 py-2">

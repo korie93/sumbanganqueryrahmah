@@ -168,7 +168,7 @@ function ActivityMobileVirtualRow({
                   {activity.username}
                 </p>
                 <div className="mt-1 flex flex-wrap gap-2">
-                  <Badge variant="outline" className="text-[11px]">
+                  <Badge variant="outline" className="text-2xs">
                     {activity.role}
                   </Badge>
                   {getStatusBadge(activity.status)}
@@ -176,36 +176,36 @@ function ActivityMobileVirtualRow({
               </div>
             </div>
           </div>
-          <div className="shrink-0 rounded-full border border-border/60 bg-background/75 px-2.5 py-1 text-[11px] text-muted-foreground">
+          <div className="shrink-0 rounded-full border border-border/60 bg-background/75 px-2.5 py-1 text-2xs text-muted-foreground">
             {getSessionDuration(activity.loginTime, activity.logoutTime)}
           </div>
         </div>
 
         <div className="grid flex-1 grid-cols-1 gap-3 rounded-lg border border-border/60 bg-muted/20 p-3 text-sm">
           <div className="space-y-1">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">IP Address</p>
+            <p className="text-2xs font-semibold uppercase tracking-label-lg text-muted-foreground">IP Address</p>
             <p className="truncate text-foreground/90" title={activity.ipAddress || "-"}>
               {activity.ipAddress || "-"}
             </p>
           </div>
           <div className="space-y-1">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">Browser</p>
+            <p className="text-2xs font-semibold uppercase tracking-label-lg text-muted-foreground">Browser</p>
             <p className="truncate text-foreground/90" title={browserLabel}>
               {browserLabel}
             </p>
           </div>
           <div className="space-y-1">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">Login</p>
+            <p className="text-2xs font-semibold uppercase tracking-label-lg text-muted-foreground">Login</p>
             <p className="text-foreground/90">{formatActivityTime(activity.loginTime)}</p>
           </div>
           <div className="space-y-1">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">Logout</p>
+            <p className="text-2xs font-semibold uppercase tracking-label-lg text-muted-foreground">Logout</p>
             <p className="text-foreground/90">
               {activity.logoutTime ? formatActivityTime(activity.logoutTime) : "-"}
             </p>
           </div>
           <div className="space-y-1">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">Session Duration</p>
+            <p className="text-2xs font-semibold uppercase tracking-label-lg text-muted-foreground">Session Duration</p>
             <p className="text-foreground/90">{getSessionDuration(activity.loginTime, activity.logoutTime)}</p>
           </div>
         </div>

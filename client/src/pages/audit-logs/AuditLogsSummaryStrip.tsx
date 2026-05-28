@@ -41,7 +41,7 @@ export function AuditLogsSummaryStrip({ loading, logs, total }: AuditLogsSummary
     <Card data-floating-ai-avoid="true">
       <CardContent className="grid gap-3 p-4 sm:grid-cols-3">
         <div className="rounded-xl border border-border/60 bg-muted/25 p-3">
-          <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+          <p className="flex items-center gap-1.5 text-2xs font-semibold uppercase tracking-label-xl text-muted-foreground">
             <ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" />
             Audit Scope
           </p>
@@ -50,7 +50,7 @@ export function AuditLogsSummaryStrip({ loading, logs, total }: AuditLogsSummary
           </p>
         </div>
         <div className="rounded-xl border border-border/60 bg-muted/25 p-3">
-          <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+          <p className="flex items-center gap-1.5 text-2xs font-semibold uppercase tracking-label-xl text-muted-foreground">
             <AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" />
             Risk Snapshot
           </p>
@@ -69,7 +69,7 @@ export function AuditLogsSummaryStrip({ loading, logs, total }: AuditLogsSummary
           </div>
         </div>
         <div className="rounded-xl border border-border/60 bg-muted/25 p-3">
-          <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+          <p className="flex items-center gap-1.5 text-2xs font-semibold uppercase tracking-label-xl text-muted-foreground">
             <Layers className="h-3.5 w-3.5" aria-hidden="true" />
             Categories
           </p>

@@ -12,7 +12,7 @@ export default function Forbidden() {
             <div className="forbidden-page__icon-shell mx-auto flex h-16 w-16 items-center justify-center rounded-full">
               <ShieldAlert className="forbidden-page__icon h-8 w-8" />
             </div>
-            <p className="forbidden-page__kicker mt-5 text-xs font-semibold uppercase tracking-[0.24em]">
+            <p className="forbidden-page__kicker mt-5 text-xs font-semibold uppercase tracking-label-4xl">
               Akses Ditolak
             </p>
             <h1 className="forbidden-page__title mt-3 text-3xl font-semibold">403 Forbidden</h1>
@@ -24,7 +24,7 @@ export default function Forbidden() {
 
             <div className="mt-6 grid gap-3 sm:grid-cols-2">
               <div className="forbidden-page__panel rounded-2xl px-4 py-4 text-left">
-                <p className="forbidden-page__panel-eyebrow text-xs font-semibold uppercase tracking-[0.2em]">
+                <p className="forbidden-page__panel-eyebrow text-xs font-semibold uppercase tracking-label-2xl">
                   Sebab Lazim
                 </p>
                 <p className="forbidden-page__panel-copy mt-2 text-sm leading-6">
@@ -33,7 +33,7 @@ export default function Forbidden() {
                 </p>
               </div>
               <div className="forbidden-page__panel rounded-2xl px-4 py-4 text-left">
-                <p className="forbidden-page__panel-eyebrow text-xs font-semibold uppercase tracking-[0.2em]">
+                <p className="forbidden-page__panel-eyebrow text-xs font-semibold uppercase tracking-label-2xl">
                   Tindakan Disyorkan
                 </p>
                 <p className="forbidden-page__panel-copy mt-2 text-sm leading-6">

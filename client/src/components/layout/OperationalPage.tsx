@@ -83,7 +83,7 @@ export function OperationalPageHeader({
               <CardTitle
                 role="heading"
                 aria-level={1}
-                className="text-2xl leading-tight tracking-tight sm:text-[1.75rem]"
+                className="text-2xl leading-tight tracking-tight sm:text-section-title"
               >
                 {title}
               </CardTitle>

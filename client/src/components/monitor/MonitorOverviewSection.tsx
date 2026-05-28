@@ -57,7 +57,7 @@ function MonitorOverviewSectionImpl({
       <div className="mt-5 space-y-3">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="space-y-2">
-            <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
+            <p className="text-xs uppercase tracking-label-xl text-muted-foreground">
               {detailsOpen ? "Overview Details" : "Quick Snapshot"}
             </p>
             <p className="text-sm text-muted-foreground">

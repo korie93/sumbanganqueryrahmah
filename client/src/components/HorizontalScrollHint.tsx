@@ -113,7 +113,7 @@ export function HorizontalScrollHint({
           />
           {overflowState.canScrollRight ? (
             <div
-              className="pointer-events-none absolute right-1 top-1/2 z-[var(--z-inline-overlay)] -translate-y-1/2 rounded-full border border-border/70 bg-background/92 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground shadow-sm"
+              className="pointer-events-none absolute right-1 top-1/2 z-[var(--z-inline-overlay)] -translate-y-1/2 rounded-full border border-border/70 bg-background/92 px-2 py-1 text-xxs font-semibold uppercase tracking-label-md text-muted-foreground shadow-sm"
               aria-hidden="true"
             >
               {hint}

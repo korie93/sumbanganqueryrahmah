@@ -231,7 +231,7 @@ function NavbarImpl({
                 >
                   {systemName || "SQR System"}
                 </p>
-                <p className="hidden text-[11px] text-muted-foreground sm:block">
+                <p className="hidden text-2xs text-muted-foreground sm:block">
                   Ruang kerja operasi
                 </p>
               </div>
@@ -278,7 +278,7 @@ function NavbarImpl({
                     <span className="truncate text-xs font-medium text-foreground" title={username} aria-label={username}>
                       {username}
                     </span>
-                    <span className="truncate text-[11px] text-muted-foreground" title={userRole} aria-label={userRole}>
+                    <span className="truncate text-2xs text-muted-foreground" title={userRole} aria-label={userRole}>
                       {userRole}
                     </span>
                   </span>

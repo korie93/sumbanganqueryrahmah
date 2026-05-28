@@ -36,7 +36,7 @@ export default function GeneralSearch({
       <div className="mx-auto max-w-6xl">
         {isMobile ? (
           <div className="mb-2 px-1" data-floating-ai-avoid="true">
-            <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+            <div className="flex items-center gap-2 text-2xs font-semibold uppercase tracking-label-md text-muted-foreground">
               <Search className="h-3.5 w-3.5" />
               <span>General Search</span>
             </div>
@@ -47,7 +47,7 @@ export default function GeneralSearch({
             className="relative mb-8 rounded-2xl border border-border/60 bg-background/70 px-6 py-6 text-center shadow-sm"
             data-floating-ai-avoid="true"
           >
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+            <p className="text-xs font-semibold uppercase tracking-label-lg text-muted-foreground">
               General Search
             </p>
             <h1 className="relative mt-2 text-3xl font-bold text-foreground">Data Search</h1>

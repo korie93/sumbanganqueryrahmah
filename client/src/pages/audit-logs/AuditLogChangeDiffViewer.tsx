@@ -12,7 +12,7 @@ export function AuditLogChangeDiffViewer({ changes }: AuditLogChangeDiffViewerPr
     <section className="rounded-xl border border-border/70 bg-muted/20 p-3" aria-labelledby="audit-change-summary-title">
       <h3
         id="audit-change-summary-title"
-        className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground"
+        className="flex items-center gap-1.5 text-2xs font-semibold uppercase tracking-label-xl text-muted-foreground"
       >
         <GitCompare className="h-3.5 w-3.5" aria-hidden="true" />
         Before / After
@@ -26,7 +26,7 @@ export function AuditLogChangeDiffViewer({ changes }: AuditLogChangeDiffViewerPr
             <p className="text-sm font-semibold text-foreground">{change.field}</p>
             <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_auto_1fr] sm:items-stretch">
               <div className="rounded-lg border border-border/60 bg-muted/30 p-3">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                <p className="text-2xs font-semibold uppercase tracking-label-md text-muted-foreground">
                   Before
                 </p>
                 <p className="mt-1.5 break-words text-sm leading-relaxed text-muted-foreground">
@@ -37,7 +37,7 @@ export function AuditLogChangeDiffViewer({ changes }: AuditLogChangeDiffViewerPr
                 <ArrowRight className="h-4 w-4 rotate-90 sm:rotate-0" />
               </div>
               <div className="rounded-lg border border-emerald-200 bg-emerald-50/70 p-3 text-emerald-950 dark:border-emerald-900/70 dark:bg-emerald-950/25 dark:text-emerald-100">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.14em]">
+                <p className="text-2xs font-semibold uppercase tracking-label-md">
                   After
                 </p>
                 <p className="mt-1.5 break-words text-sm leading-relaxed">

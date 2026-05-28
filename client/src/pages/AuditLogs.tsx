@@ -129,7 +129,7 @@ export default function AuditLogs() {
             <FileText className="h-6 w-6 text-primary" />
           </div>
           <div className="min-w-0">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+            <p className="text-2xs font-semibold uppercase tracking-label-xl text-muted-foreground">
               Insights
             </p>
             <h1 className={`${isMobile ? "mt-1 text-lg" : "text-xl sm:text-2xl"} font-bold`} data-testid="text-audit-logs-title">

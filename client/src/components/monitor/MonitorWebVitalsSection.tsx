@@ -96,7 +96,7 @@ function MonitorWebVitalsSectionImpl({
     <section className={cn(embedded ? "space-y-0" : "glass-wrapper p-4 sm:p-6")}>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="space-y-2">
-          <div className="inline-flex items-center rounded-full border border-sky-500/20 bg-sky-500/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.24em] text-sky-700 dark:text-sky-300">
+          <div className="inline-flex items-center rounded-full border border-sky-500/20 bg-sky-500/10 px-3 py-1 text-2xs font-semibold uppercase tracking-label-4xl text-sky-700 dark:text-sky-300">
             Real User Experience
           </div>
           <div className="space-y-1">
@@ -151,7 +151,7 @@ function MonitorWebVitalsSectionImpl({
                           <CardTitle className="text-base font-semibold text-foreground">
                             {getPageSummaryLabel(summary.pageType)}
                           </CardTitle>
-                          <Badge variant="outline" className="rounded-full px-3 py-1 text-[11px] uppercase tracking-wide">
+                          <Badge variant="outline" className="rounded-full px-3 py-1 text-2xs uppercase tracking-wide">
                             {summary.sampleCount} samples
                           </Badge>
                         </div>
@@ -190,7 +190,7 @@ function MonitorWebVitalsSectionImpl({
                           <CardTitle className="text-base font-semibold text-foreground">
                             {getPageSummaryLabel(summary.pageType)}
                           </CardTitle>
-                          <Badge variant="outline" className="rounded-full px-3 py-1 text-[11px] uppercase tracking-wide">
+                          <Badge variant="outline" className="rounded-full px-3 py-1 text-2xs uppercase tracking-wide">
                             {summary.sampleCount} samples
                           </Badge>
                         </div>
@@ -224,12 +224,12 @@ function MonitorWebVitalsSectionImpl({
                             className="rounded-2xl border border-border/60 bg-background/55 p-3"
                           >
                             <div className="flex items-center justify-between gap-2">
-                              <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                              <p className="text-2xs font-semibold uppercase tracking-label-3xl text-muted-foreground">
                                 {metricName}
                               </p>
                               <Badge
                                 variant="outline"
-                                className={`rounded-full px-2 py-0.5 text-[10px] ${getRatingBadgeClass(metric?.p75Rating ?? null)}`}
+                                className={`rounded-full px-2 py-0.5 text-xxs ${getRatingBadgeClass(metric?.p75Rating ?? null)}`}
                               >
                                 {metric?.p75Rating ?? "pending"}
                               </Badge>

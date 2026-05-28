@@ -72,7 +72,7 @@ export function CollectionDailyCalendarLegend({ isMobile }: CollectionDailyCalen
         ))}
       </div>
       <div className="rounded-2xl border border-border/60 bg-background/70 p-3">
-        <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+        <p className="mb-2 text-2xs font-semibold uppercase tracking-label-lg text-muted-foreground">
           Daily status codes
         </p>
         <div className="flex flex-wrap gap-2" aria-label="Daily status and leave type codes">

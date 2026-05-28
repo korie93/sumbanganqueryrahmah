@@ -80,7 +80,7 @@ export function SameDayCompareDayControls({
             Pilih hari dengan cepat tanpa kira manual. Chart, insight dan CSV akan ikut pilihan ini.
           </p>
         </div>
-        <span className="rounded-full border border-border/60 bg-background px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
+        <span className="rounded-full border border-border/60 bg-background px-2.5 py-1 text-2xs font-medium text-muted-foreground">
           {resolveCollectionSameDayPaceCompareModeLabel(comparisonMode)}
         </span>
       </div>
@@ -173,7 +173,7 @@ export function SameDayCompareDayControls({
         </label>
       </div>
 
-      <p id={`${controlId}-day-help`} className="mt-2 text-[11px] leading-5 text-muted-foreground">
+      <p id={`${controlId}-day-help`} className="mt-2 text-2xs leading-5 text-muted-foreground">
         {windowMode === "single-day"
           ? `Sedang fokus hari ${selectedDay} sahaja.`
           : windowMode === "custom-range"

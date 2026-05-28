@@ -97,13 +97,13 @@ export function AuditLogsCleanupPanel({
             <CardContent className="space-y-5">
               {isMobile ? (
                 <div className="flex flex-wrap gap-2">
-                  <Badge variant="secondary" className="rounded-full px-3 py-1 text-[11px]" data-testid="text-total-logs">
+                  <Badge variant="secondary" className="rounded-full px-3 py-1 text-2xs" data-testid="text-total-logs">
                     Total {stats?.total ?? logs.length}
                   </Badge>
-                  <Badge variant="secondary" className="rounded-full px-3 py-1 text-[11px]" data-testid="text-old-30-days">
+                  <Badge variant="secondary" className="rounded-full px-3 py-1 text-2xs" data-testid="text-old-30-days">
                     30+ days {stats?.olderThan30Days ?? 0}
                   </Badge>
-                  <Badge variant="outline" className="rounded-full px-3 py-1 text-[11px]" data-testid="text-old-90-days">
+                  <Badge variant="outline" className="rounded-full px-3 py-1 text-2xs" data-testid="text-old-90-days">
                     90+ days {stats?.olderThan90Days ?? 0}
                   </Badge>
                 </div>

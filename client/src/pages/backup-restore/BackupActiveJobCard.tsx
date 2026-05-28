@@ -27,7 +27,7 @@ export function BackupActiveJobCard({
             {activeBackupJob.type === "restore" ? "Restore job in progress" : "Backup job in progress"}
           </div>
           {isMobile ? (
-            <div className="flex flex-wrap gap-2 text-[11px]">
+            <div className="flex flex-wrap gap-2 text-2xs">
               <Badge variant="secondary" className="rounded-full px-2.5 py-1">
                 Status {activeBackupJob.status}
               </Badge>

@@ -13,10 +13,10 @@ function readSource(relativePath: string) {
 test("collection mobile launcher keeps active chips and buttons on high-contrast primary tokens", () => {
   const source = readSource("../collection-report/CollectionSidebar.tsx");
 
-  assert.match(source, /<Badge className="rounded-full px-2 py-0\.5 text-\[10px\] shadow-sm">/);
+  assert.match(source, /<Badge className="rounded-full px-2 py-0\.5 text-xxs shadow-sm">/);
   assert.match(source, /border-primary bg-primary text-primary-foreground shadow-sm/);
   assert.match(source, /active\s*\?\s*"bg-primary-foreground text-primary"/);
-  assert.doesNotMatch(source, /border-primary\/15 bg-primary\/10 px-2 py-0\.5 text-\[10px\] text-primary/);
+  assert.doesNotMatch(source, /border-primary\/15 bg-primary\/10 px-2 py-0\.5 text-xxs text-primary/);
   assert.doesNotMatch(source, /border-primary\/35 bg-primary\/10 text-primary/);
 });
 

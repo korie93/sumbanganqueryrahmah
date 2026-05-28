@@ -62,7 +62,7 @@ const CompactChartTooltip = memo(function CompactChartTooltip({
 
   return (
     <div className="min-w-[132px] max-w-[200px] rounded-xl border border-border/70 bg-popover px-3 py-2 text-popover-foreground shadow-lg">
-      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+      <p className="text-2xs font-semibold uppercase tracking-label-md text-muted-foreground">
         {formatLabel(label)}
       </p>
       <div className="mt-2 space-y-1.5">
@@ -219,14 +219,14 @@ function DashboardChartsGridImpl({
                       minTickGap={isMobile ? 20 : 24}
                       interval={0}
                       tickFormatter={(value) => formatDashboardAxisDate(String(value))}
-                      className="text-[11px] text-muted-foreground"
+                      className="text-2xs text-muted-foreground"
                     />
                     <YAxis
                       axisLine={false}
                       tickLine={false}
                       tickMargin={8}
                       width={isMobile ? 28 : 36}
-                      className="text-[11px] text-muted-foreground"
+                      className="text-2xs text-muted-foreground"
                     />
                     <Tooltip content={renderLoginTrendTooltip} />
                     <Area
@@ -320,14 +320,14 @@ function DashboardChartsGridImpl({
                         ? formatDashboardHourCompact(Number(hour))
                         : formatDashboardHour(Number(hour))
                     }
-                    className="text-[11px] text-muted-foreground"
+                    className="text-2xs text-muted-foreground"
                   />
                   <YAxis
                     axisLine={false}
                     tickLine={false}
                     tickMargin={8}
                     width={isMobile ? 28 : 36}
-                    className="text-[11px] text-muted-foreground"
+                    className="text-2xs text-muted-foreground"
                   />
                   <Tooltip content={renderPeakHoursTooltip} />
                   <Bar dataKey="count" fill="hsl(var(--chart-3))" radius={[8, 8, 0, 0]} name="Logins" />

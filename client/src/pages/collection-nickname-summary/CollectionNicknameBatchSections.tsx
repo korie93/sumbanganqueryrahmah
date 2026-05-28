@@ -102,18 +102,18 @@ export function CollectionNicknameBatchSections({
                 className="space-y-3 rounded-xl border border-border/70 bg-background/75 p-4 shadow-sm"
               >
                 <div className="space-y-1">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                  <p className="text-2xs font-semibold uppercase tracking-label-md text-muted-foreground">
                     Nickname {index + 1}
                   </p>
                   <p className="break-words font-medium text-foreground">{item.nickname}</p>
                 </div>
                 <dl className="grid gap-2 rounded-lg border border-border/60 bg-muted/15 p-3 text-sm">
                   <div className="space-y-1">
-                    <dt className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Total Records</dt>
+                    <dt className="text-xs uppercase tracking-label-md text-muted-foreground">Total Records</dt>
                     <dd>{item.totalRecords}</dd>
                   </div>
                   <div className="space-y-1">
-                    <dt className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Total Collection</dt>
+                    <dt className="text-xs uppercase tracking-label-md text-muted-foreground">Total Collection</dt>
                     <dd className="font-medium">{formatAmountRM(item.totalAmount)}</dd>
                   </div>
                 </dl>
@@ -123,7 +123,7 @@ export function CollectionNicknameBatchSections({
 
           {nicknameTotals.length > 0 ? (
             <div className="rounded-xl border border-amber-300/60 bg-amber-50/80 px-4 py-3 dark:border-amber-900/60 dark:bg-amber-950/35">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+              <p className="text-2xs font-semibold uppercase tracking-label-md text-muted-foreground">
                 Total
               </p>
               <p className="mt-1 text-lg font-semibold text-foreground">{formatAmountRM(totalAmount)}</p>

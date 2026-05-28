@@ -47,7 +47,7 @@ export default function LandingDeferredSections({
     <>
       <section id="features" className="landing-deferred-section mt-12 space-y-5">
         <div className="space-y-2">
-          <p className="landing-section-eyebrow text-xs font-semibold uppercase tracking-[0.24em]">
+          <p className="landing-section-eyebrow text-xs font-semibold uppercase tracking-label-4xl">
             Fungsi Teras
           </p>
           <h2 className="landing-section-title text-2xl font-semibold tracking-tight">
@@ -91,7 +91,7 @@ export default function LandingDeferredSections({
             </p>
           </div>
           <div className="landing-security-panel rounded-2xl p-4">
-            <p className="landing-security-panel-eyebrow text-xs font-semibold uppercase tracking-[0.2em]">
+            <p className="landing-security-panel-eyebrow text-xs font-semibold uppercase tracking-label-2xl">
               Akses Sistem
             </p>
             <p className="landing-security-panel-copy mt-2 text-sm leading-6">

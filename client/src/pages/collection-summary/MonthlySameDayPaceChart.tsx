@@ -92,19 +92,19 @@ export function MonthlySameDayPaceChart({ pace }: MonthlySameDayPaceChartProps) 
 
       <div className="mt-3 grid gap-2 sm:grid-cols-3">
         <div className="rounded-lg border border-border/50 bg-muted/20 px-3 py-2">
-          <p className="text-[11px] font-medium uppercase tracking-normal text-muted-foreground">
+          <p className="text-2xs font-medium uppercase tracking-normal text-muted-foreground">
             Current range
           </p>
           <p className="mt-1 text-sm font-semibold text-foreground">{formatAmountRM(pace.currentTotal)}</p>
         </div>
         <div className="rounded-lg border border-border/50 bg-muted/20 px-3 py-2">
-          <p className="text-[11px] font-medium uppercase tracking-normal text-muted-foreground">
+          <p className="text-2xs font-medium uppercase tracking-normal text-muted-foreground">
             Previous range
           </p>
           <p className="mt-1 text-sm font-semibold text-foreground">{formatAmountRM(pace.previousTotal)}</p>
         </div>
         <div className="rounded-lg border border-border/50 bg-muted/20 px-3 py-2">
-          <p className="text-[11px] font-medium uppercase tracking-normal text-muted-foreground">
+          <p className="text-2xs font-medium uppercase tracking-normal text-muted-foreground">
             Same-day gap
           </p>
           <p className={pace.difference < 0 ? "mt-1 text-sm font-semibold text-destructive" : "mt-1 text-sm font-semibold text-emerald-700 dark:text-emerald-300"}>

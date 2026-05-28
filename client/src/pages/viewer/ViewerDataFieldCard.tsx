@@ -21,7 +21,7 @@ export function ViewerDataFieldCard({
           : "rounded-xl border border-border/50 bg-muted/30 px-3 py-2"
       }
     >
-      <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
+      <p className="text-2xs font-medium uppercase tracking-label-sm text-muted-foreground">
         {header}
       </p>
       <p className="mt-1 break-words text-sm text-foreground">{String(value ?? "-")}</p>

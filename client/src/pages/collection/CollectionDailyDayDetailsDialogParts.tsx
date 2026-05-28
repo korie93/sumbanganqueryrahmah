@@ -64,7 +64,7 @@ export function CollectionDayMetric({
 }) {
   return (
     <div className={cn("min-w-0 rounded-xl border px-3 py-2.5", getMetricToneClass(tone))}>
-      <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+      <div className="flex items-center gap-2 text-2xs font-semibold uppercase tracking-label-sm text-muted-foreground">
         <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
         <span className="truncate" title={label} aria-label={label}>
           {label}
@@ -86,7 +86,7 @@ function CollectionRecordDetail({
 }) {
   return (
     <dl className="min-w-0 rounded-lg border border-border/50 bg-muted/15 px-3 py-2">
-      <dt className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">{label}</dt>
+      <dt className="text-2xs font-semibold uppercase tracking-label-sm text-muted-foreground">{label}</dt>
       <dd className="mt-1 break-words font-medium text-foreground">{value}</dd>
     </dl>
   );
@@ -210,7 +210,7 @@ function CollectionStoredReceipts({
                   >
                     {receipt.originalFileName}
                   </span>
-                  <span className="block truncate text-[11px] font-normal text-muted-foreground">
+                  <span className="block truncate text-2xs font-normal text-muted-foreground">
                     {receiptTypeLabel} · {formatCollectionReceiptFileSize(receipt.fileSize)}
                   </span>
                 </span>

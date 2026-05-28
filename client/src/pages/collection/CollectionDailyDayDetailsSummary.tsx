@@ -34,11 +34,11 @@ export function CollectionDailyDayDetailsSummary({
           <div className="flex flex-wrap items-center gap-2">
             <Badge
               variant="outline"
-              className={cn("rounded-full px-3 py-1 text-[11px] font-semibold", getStatusPillClass(dayDetails.status))}
+              className={cn("rounded-full px-3 py-1 text-2xs font-semibold", getStatusPillClass(dayDetails.status))}
             >
               {statusLabel(dayDetails.status)}
             </Badge>
-            <Badge variant="secondary" className="rounded-full px-3 py-1 text-[11px]">
+            <Badge variant="secondary" className="rounded-full px-3 py-1 text-2xs">
               {customerCount} customers
             </Badge>
           </div>

@@ -56,7 +56,7 @@ function MonthlySameDayPaceTooltip({
   return (
     <div className="min-w-[230px] rounded-lg border border-border/60 bg-background px-3 py-2 text-xs shadow-lg">
       <p className="font-semibold text-foreground">Day {point.day}</p>
-      <p className="mt-0.5 text-[11px] text-muted-foreground">
+      <p className="mt-0.5 text-2xs text-muted-foreground">
         {formatCollectionSameDayPaceDisplayDate(point.currentDate)} vs{" "}
         {formatCollectionSameDayPaceDisplayDate(point.previousDate)}
       </p>
@@ -158,7 +158,7 @@ export function SameDayPointDetailPanel({
 
       <div className="mt-3 grid gap-2 md:grid-cols-3">
         <div className="rounded-lg border border-border/50 bg-background px-3 py-2">
-          <p className="text-[11px] font-medium uppercase tracking-normal text-muted-foreground">
+          <p className="text-2xs font-medium uppercase tracking-normal text-muted-foreground">
             {formatCollectionSameDayPaceDisplayDate(point.previousDate)}
           </p>
           <dl className="mt-1 grid gap-1 text-xs">
@@ -177,7 +177,7 @@ export function SameDayPointDetailPanel({
           </dl>
         </div>
         <div className="rounded-lg border border-border/50 bg-background px-3 py-2">
-          <p className="text-[11px] font-medium uppercase tracking-normal text-muted-foreground">
+          <p className="text-2xs font-medium uppercase tracking-normal text-muted-foreground">
             {formatCollectionSameDayPaceDisplayDate(point.currentDate)}
           </p>
           <dl className="mt-1 grid gap-1 text-xs">
@@ -196,7 +196,7 @@ export function SameDayPointDetailPanel({
           </dl>
         </div>
         <div className="rounded-lg border border-border/50 bg-background px-3 py-2">
-          <p className="text-[11px] font-medium uppercase tracking-normal text-muted-foreground">
+          <p className="text-2xs font-medium uppercase tracking-normal text-muted-foreground">
             Difference
           </p>
           <dl className="mt-1 grid gap-1 text-xs">
@@ -273,14 +273,14 @@ export function MonthlySameDayPaceChartCanvas({
             tickLine={false}
             tickMargin={10}
             interval="preserveStartEnd"
-            className="text-[11px] text-muted-foreground"
+            className="text-2xs text-muted-foreground"
           />
           <YAxis
             axisLine={false}
             tickLine={false}
             tickMargin={8}
             tickFormatter={(value) => formatCompactAmountRM(Number(value || 0))}
-            className="text-[11px] text-muted-foreground"
+            className="text-2xs text-muted-foreground"
             width={64}
           />
           <Tooltip

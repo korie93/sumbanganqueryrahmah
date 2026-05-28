@@ -38,7 +38,7 @@ export function ActiveFilterChips({
 
   return (
     <div className={cn("flex flex-wrap items-center gap-2", className)}>
-      <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+      <span className="text-2xs font-semibold uppercase tracking-label-md text-muted-foreground">
         {label}
       </span>
       {items.map((item) => (

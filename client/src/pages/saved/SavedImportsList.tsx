@@ -146,11 +146,11 @@ export function SavedImportsList({
                         </p>
                       </div>
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className="rounded-full border border-border/70 bg-muted/50 px-2 py-1 text-[11px] font-medium text-foreground/80">
+                        <span className="rounded-full border border-border/70 bg-muted/50 px-2 py-1 text-2xs font-medium text-foreground/80">
                           Imported {formatDate(item.createdAt)}
                         </span>
                         {typeof item.rowCount === "number" ? (
-                          <span className="rounded-full border border-border/70 bg-background px-2 py-1 text-[11px] font-medium text-muted-foreground">
+                          <span className="rounded-full border border-border/70 bg-background px-2 py-1 text-2xs font-medium text-muted-foreground">
                             {item.rowCount.toLocaleString()} rows
                           </span>
                         ) : null}

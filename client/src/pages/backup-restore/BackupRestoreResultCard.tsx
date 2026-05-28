@@ -23,7 +23,7 @@ export function BackupRestoreResultCard({
       <CardContent className={`${isMobile ? "space-y-3 pt-4" : "space-y-3 pt-6"}`}>
         <div className="text-sm font-medium">Last Restore Result</div>
         {isMobile ? (
-          <div className="flex flex-wrap gap-2 text-[11px]">
+          <div className="flex flex-wrap gap-2 text-2xs">
             <Badge variant="secondary" className="rounded-full px-3 py-1">
               {lastRestoreResult.backupName || lastRestoreResult.backupId || "-"}
             </Badge>

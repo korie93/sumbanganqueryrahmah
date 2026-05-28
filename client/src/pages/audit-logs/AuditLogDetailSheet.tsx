@@ -35,7 +35,7 @@ function DetailBlock({
 }) {
   return (
     <div className="rounded-xl border border-border/70 bg-card/70 p-3">
-      <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+      <p className="flex items-center gap-1.5 text-2xs font-semibold uppercase tracking-label-xl text-muted-foreground">
         {icon}
         {label}
       </p>
@@ -167,7 +167,7 @@ export function AuditLogDetailSheet({ log, onOpenChange, onTraceRequestId }: Aud
             <section className="rounded-xl border border-border/70 bg-muted/20 p-3" aria-labelledby="audit-raw-details-title">
               <h3
                 id="audit-raw-details-title"
-                className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground"
+                className="flex items-center gap-1.5 text-2xs font-semibold uppercase tracking-label-xl text-muted-foreground"
               >
                 <FileText className="h-3.5 w-3.5" aria-hidden="true" />
                 Details

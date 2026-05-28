@@ -45,7 +45,7 @@ export function CollectionDailyDayDetailsStickySummary({
         </div>
         <Badge
           variant="outline"
-          className={cn("rounded-full px-3 py-1 text-[11px] font-semibold", getStatusPillClass(dayDetails.status))}
+          className={cn("rounded-full px-3 py-1 text-2xs font-semibold", getStatusPillClass(dayDetails.status))}
         >
           {getCollectionDailyOperationalStatusLabel(selectedOverviewDay)}
         </Badge>

@@ -211,14 +211,14 @@ export function DashboardUserInsightsGrid({
                           <p className="break-words text-sm font-semibold text-foreground sm:text-base">
                             {user.username}
                           </p>
-                          <Badge variant="outline" className="w-fit rounded-full text-[11px] capitalize">
+                          <Badge variant="outline" className="w-fit rounded-full text-2xs capitalize">
                             {user.role}
                           </Badge>
                         </div>
                       </div>
                       <div className="shrink-0 rounded-xl border border-border/60 bg-muted/10 px-3 py-2 text-center">
                         <p className="text-lg font-bold leading-none text-foreground">{user.loginCount}</p>
-                        <p className="mt-1 text-[11px] uppercase tracking-[0.12em] text-muted-foreground">
+                        <p className="mt-1 text-2xs uppercase tracking-label-sm text-muted-foreground">
                           logins
                         </p>
                       </div>

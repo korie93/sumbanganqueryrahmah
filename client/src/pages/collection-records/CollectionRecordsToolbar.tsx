@@ -111,7 +111,7 @@ export function CollectionRecordsToolbar({
         </OperationalSummaryStrip>
 
         <div className="rounded-2xl border border-border/60 bg-background p-3 shadow-sm" data-floating-ai-avoid="true">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+          <p className="text-2xs font-semibold uppercase tracking-label-lg text-muted-foreground">
             Actions
           </p>
           <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
@@ -166,7 +166,7 @@ export function CollectionRecordsToolbar({
         {...paginationBusyProps}
       >
         <div className="space-y-1">
-          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+          <p className="text-xs font-semibold uppercase tracking-label-md text-muted-foreground">
             Pagination
           </p>
           <p className="text-sm text-muted-foreground">

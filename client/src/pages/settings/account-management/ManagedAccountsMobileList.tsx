@@ -98,12 +98,12 @@ export function ManagedAccountsMobileList({
 
           <dl className="grid gap-2 rounded-lg border border-border/60 bg-muted/15 p-3 text-sm sm:grid-cols-2">
             <div className="space-y-1">
-              <dt className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Last Login</dt>
+              <dt className="text-xs uppercase tracking-label-md text-muted-foreground">Last Login</dt>
               <dd>{formatDateTime(user.lastLoginAt)}</dd>
             </div>
             {user.lockedAt ? (
               <div className="space-y-1">
-                <dt className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Locked At</dt>
+                <dt className="text-xs uppercase tracking-label-md text-muted-foreground">Locked At</dt>
                 <dd>{formatDateTime(user.lockedAt)}</dd>
               </div>
             ) : null}

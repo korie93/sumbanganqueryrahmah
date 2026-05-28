@@ -186,7 +186,7 @@ export function ViewAllRecordsDialog({
                             role="group"
                           >
                             <div className="space-y-2">
-                              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                              <p className="text-2xs font-semibold uppercase tracking-label-md text-muted-foreground">
                                 Record {(page - 1) * pageSize + index + 1}
                               </p>
                               <div className="space-y-1">
@@ -228,27 +228,27 @@ export function ViewAllRecordsDialog({
                                   className="grid gap-2 rounded-xl border border-border/60 bg-muted/10 p-3 text-sm"
                                 >
                                   <div className="space-y-1">
-                                    <dt className="text-xs uppercase tracking-[0.14em] text-muted-foreground">IC Number</dt>
+                                    <dt className="text-xs uppercase tracking-label-md text-muted-foreground">IC Number</dt>
                                     <dd className="break-words">{record.icNumber}</dd>
                                   </div>
                                   <div className="space-y-1">
-                                    <dt className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Account Number</dt>
+                                    <dt className="text-xs uppercase tracking-label-md text-muted-foreground">Account Number</dt>
                                     <dd className="break-words">{record.accountNumber}</dd>
                                   </div>
                                   <div className="space-y-1">
-                                    <dt className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Customer Phone</dt>
+                                    <dt className="text-xs uppercase tracking-label-md text-muted-foreground">Customer Phone</dt>
                                     <dd className="break-words">{record.customerPhone}</dd>
                                   </div>
                                   <div className="space-y-1">
-                                    <dt className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Batch</dt>
+                                    <dt className="text-xs uppercase tracking-label-md text-muted-foreground">Batch</dt>
                                     <dd>{record.batch}</dd>
                                   </div>
                                   <div className="space-y-1">
-                                    <dt className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Payment Date</dt>
+                                    <dt className="text-xs uppercase tracking-label-md text-muted-foreground">Payment Date</dt>
                                     <dd>{formatIsoDateToDDMMYYYY(record.paymentDate)}</dd>
                                   </div>
                                   <div className="space-y-1">
-                                    <dt className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Staff Nickname</dt>
+                                    <dt className="text-xs uppercase tracking-label-md text-muted-foreground">Staff Nickname</dt>
                                     <dd className="break-words">{record.collectionStaffNickname}</dd>
                                   </div>
                                 </dl>

@@ -79,14 +79,14 @@ export function CollectionMonthDetailsDialog({
           {selectedMonthSummary ? (
             isMobile ? (
               <div className="flex flex-wrap gap-2 pt-2">
-                <Badge variant="secondary" className="rounded-full px-3 py-1 text-[11px]">
+                <Badge variant="secondary" className="rounded-full px-3 py-1 text-2xs">
                   {selectedMonthSummary.totalRecords} records
                 </Badge>
-                <Badge variant="secondary" className="rounded-full px-3 py-1 text-[11px]">
+                <Badge variant="secondary" className="rounded-full px-3 py-1 text-2xs">
                   {formatAmountRM(selectedMonthSummary.totalAmount)}
                 </Badge>
                 {selectedMonthRange?.label ? (
-                  <Badge variant="outline" className="rounded-full px-3 py-1 text-[11px]">
+                  <Badge variant="outline" className="rounded-full px-3 py-1 text-2xs">
                     {selectedMonthRange.label}
                   </Badge>
                 ) : null}
@@ -163,7 +163,7 @@ export function CollectionMonthDetailsDialog({
                       className="space-y-3 rounded-2xl border border-border/70 bg-background/80 p-3.5 shadow-sm"
                     >
                       <div className="space-y-1.5">
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                        <p className="text-2xs font-semibold uppercase tracking-label-md text-muted-foreground">
                           Record {recordIndex}
                         </p>
                         <div className="flex items-start justify-between gap-3">
@@ -176,23 +176,23 @@ export function CollectionMonthDetailsDialog({
                       </div>
                       <dl className="grid gap-2 rounded-xl border border-border/60 bg-muted/15 p-3 text-sm sm:grid-cols-2">
                         <div className="space-y-1">
-                          <dt className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Account Number</dt>
+                          <dt className="text-xs uppercase tracking-label-md text-muted-foreground">Account Number</dt>
                           <dd className="break-words">{row.accountNumber}</dd>
                         </div>
                         <div className="space-y-1">
-                          <dt className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Batch</dt>
+                          <dt className="text-xs uppercase tracking-label-md text-muted-foreground">Batch</dt>
                           <dd>{row.batch}</dd>
                         </div>
                         <div className="space-y-1">
-                          <dt className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Staff Nickname</dt>
+                          <dt className="text-xs uppercase tracking-label-md text-muted-foreground">Staff Nickname</dt>
                           <dd className="break-words">{row.collectionStaffNickname}</dd>
                         </div>
                         <div className="space-y-1">
-                          <dt className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Customer Phone</dt>
+                          <dt className="text-xs uppercase tracking-label-md text-muted-foreground">Customer Phone</dt>
                           <dd className="break-words">{row.customerPhone}</dd>
                         </div>
                         <div className="space-y-1">
-                          <dt className="text-xs uppercase tracking-[0.14em] text-muted-foreground">IC Number</dt>
+                          <dt className="text-xs uppercase tracking-label-md text-muted-foreground">IC Number</dt>
                           <dd className="break-words">{row.icNumber}</dd>
                         </div>
                       </dl>

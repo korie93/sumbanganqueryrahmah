@@ -26,7 +26,7 @@ export default function NotFound({ onNavigateHome, onLoginClick }: NotFoundProps
           </div>
 
           <div className="mx-auto mt-6 max-w-2xl text-center">
-            <p className="not-found-page__kicker text-xs font-semibold uppercase tracking-[0.28em]">
+            <p className="not-found-page__kicker text-xs font-semibold uppercase tracking-label-6xl">
               404
             </p>
             <h1 id="not-found-title" className="not-found-page__title mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">
