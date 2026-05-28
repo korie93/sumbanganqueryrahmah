@@ -76,6 +76,7 @@ Gunakan CSS modules apabila:
 - Jika nilai baru benar-benar perlu dikongsi, daftarkan di `client/src/theme-tokens.css` mengikut keluarga yang jelas.
 - Kekalkan pasangan light/dark dalam keluarga token yang sama. Jika menambah `--example-*` di `:root`, sediakan override yang sepadan di `.dark` jika komponen itu muncul dalam kedua-dua tema.
 - Spacing baharu perlu berpunca daripada scale `--spacing-*` dan bukannya nilai raw yang sukar diseragamkan.
+- Scrollbar global perlu guna token `--scrollbar-*` daripada `theme-tokens.css`; elakkan warna atau saiz scrollbar hardcoded dalam CSS feature.
 
 ## Responsive and Viewport Rules
 

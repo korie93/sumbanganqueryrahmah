@@ -161,8 +161,12 @@ test("web app manifest exposes a lightweight internal shortcut", () => {
 
 test("global visible scrollbars include Firefox styling", () => {
   const indexCss = readClientSource("../index.css");
+  const themeTokensCss = readClientSource("../theme-tokens.css");
   const scrollbarBlock = readFirstCssRuleBlock(indexCss, ".scrollbar-visible");
 
-  assert.match(scrollbarBlock, /scrollbar-color:\s*hsl\(239 84% 67% \/ 0\.5\) hsl\(220 13% 18% \/ 0\.1\);/);
+  assert.match(themeTokensCss, /--scrollbar-size:\s*var\(--spacing-2\);/);
+  assert.match(themeTokensCss, /--scrollbar-track:\s*hsl\(var\(--muted\) \/ 0\.45\);/);
+  assert.match(themeTokensCss, /--scrollbar-thumb:\s*hsl\(var\(--primary\) \/ 0\.45\);/);
+  assert.match(scrollbarBlock, /scrollbar-color:\s*var\(--scrollbar-thumb\) var\(--scrollbar-track\);/);
   assert.match(scrollbarBlock, /scrollbar-width:\s*thin;/);
 });

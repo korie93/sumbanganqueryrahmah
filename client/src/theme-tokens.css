@@ -43,6 +43,11 @@
   --focus-ring: 2px solid hsl(var(--color-focus) / 0.86);
   --focus-ring-offset: 2px;
   --focus-ring-radius: var(--radius-sm);
+  --scrollbar-size: var(--spacing-2);
+  --scrollbar-radius: var(--radius);
+  --scrollbar-track: hsl(var(--muted) / 0.45);
+  --scrollbar-thumb: hsl(var(--primary) / 0.45);
+  --scrollbar-thumb-hover: hsl(var(--primary) / 0.72);
   --chart-1: 217 91% 45%;
   --chart-2: 271 91% 50%;
   --chart-3: 142 76% 36%;
