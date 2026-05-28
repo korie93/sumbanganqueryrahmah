@@ -160,6 +160,7 @@ test("banned websocket messages run client cleanup and preserve the banned flag"
         logoutCalls += 1
         setBannedSessionFlag(false)
       },
+      setReconnectTimeout: window.setTimeout,
     })
 
     const socket = sockets[0]
@@ -287,6 +288,7 @@ test("idle timeout websocket messages run client cleanup without forcing the ban
       async runClientLogout() {
         logoutCalls += 1
       },
+      setReconnectTimeout: window.setTimeout,
     })
 
     const socket = sockets[0]

@@ -69,6 +69,7 @@ test("bindAutoLogoutActivityListeners binds listeners, starts heartbeat interval
       sendHeartbeat: async () => {
         heartbeatCalls += 1
       },
+      setHeartbeatInterval: () => 321,
       syncHeartbeatIfNeeded: () => {
         syncCalls += 1
       },
@@ -187,6 +188,7 @@ test("bindAutoLogoutActivityListeners detaches events so later activity does not
       sendHeartbeat: async () => {
         heartbeatCalls += 1
       },
+      setHeartbeatInterval: () => 654,
       syncHeartbeatIfNeeded: () => {
         syncCalls += 1
       },

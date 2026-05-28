@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef } from "react";
 import { useLatestRef } from "@/hooks/use-latest-ref";
+import { useTimers } from "@/hooks/useTimers";
 import {
   resolveActivityHeartbeatSyncWindowMs,
   shouldSyncActivityHeartbeat,
@@ -48,31 +49,38 @@ export default function AutoLogout({
   const activityListenersAttachedRef = useRef(false);
   const onClientLogoutRef = useLatestRef(onClientLogout);
   const onLogoutRef = useLatestRef(onLogout);
+  const {
+    clearAllTimers,
+    clearManagedInterval,
+    clearManagedTimeout,
+    setManagedInterval,
+    setManagedTimeout,
+  } = useTimers();
 
   const timeoutMs = timeoutMinutes * 60 * 1000;
   const heartbeatMs = heartbeatIntervalMinutes * 60 * 1000;
   const heartbeatSyncWindowMs = resolveActivityHeartbeatSyncWindowMs(heartbeatMs);
 
   const clearIdleTimeout = useCallback(() => {
-    if (timeoutRef.current) {
-      window.clearTimeout(timeoutRef.current);
+    if (timeoutRef.current !== null) {
+      clearManagedTimeout(timeoutRef.current);
       timeoutRef.current = null;
     }
-  }, []);
+  }, [clearManagedTimeout]);
 
   const clearHeartbeat = useCallback(() => {
-    if (heartbeatRef.current) {
-      window.clearInterval(heartbeatRef.current);
+    if (heartbeatRef.current !== null) {
+      clearManagedInterval(heartbeatRef.current);
       heartbeatRef.current = null;
     }
-  }, []);
+  }, [clearManagedInterval]);
 
   const clearReconnect = useCallback(() => {
-    if (reconnectRef.current) {
-      window.clearTimeout(reconnectRef.current);
+    if (reconnectRef.current !== null) {
+      clearManagedTimeout(reconnectRef.current);
       reconnectRef.current = null;
     }
-  }, []);
+  }, [clearManagedTimeout]);
 
   const clearHeartbeatRequest = useCallback(() => {
     heartbeatAbortControllerRef.current?.abort();
@@ -113,11 +121,11 @@ export default function AutoLogout({
     lastActivityRef.current = Date.now();
     clearIdleTimeout();
 
-    timeoutRef.current = window.setTimeout(() => {
+    timeoutRef.current = setManagedTimeout(() => {
       if (!mountedRef.current) return;
       void runLogout();
     }, timeoutMs);
-  }, [clearIdleTimeout, runLogout, timeoutMs]);
+  }, [clearIdleTimeout, runLogout, setManagedTimeout, timeoutMs]);
 
   const sendHeartbeat = useCallback(async () => {
     await sendAutoLogoutHeartbeat({
@@ -158,8 +166,9 @@ export default function AutoLogout({
       clearHeartbeat();
       clearHeartbeatRequest();
       cleanupSocket();
+      clearAllTimers();
     };
-  }, [cleanupSocket, clearHeartbeat, clearHeartbeatRequest, clearIdleTimeout]);
+  }, [cleanupSocket, clearAllTimers, clearHeartbeat, clearHeartbeatRequest, clearIdleTimeout]);
 
   useEffect(() => {
     return bindAutoLogoutActivityListeners({
@@ -169,6 +178,7 @@ export default function AutoLogout({
       lastResetByEventRef,
       resetTimeout: () => resetTimeoutRef.current(),
       sendHeartbeat: () => sendHeartbeatRef.current(),
+      setHeartbeatInterval: setManagedInterval,
       syncHeartbeatIfNeeded: (nowMs) => syncHeartbeatIfNeededRef.current(nowMs),
       clearIdleTimeout,
       clearHeartbeat,
@@ -181,6 +191,7 @@ export default function AutoLogout({
     heartbeatMs,
     resetTimeoutRef,
     sendHeartbeatRef,
+    setManagedInterval,
     syncHeartbeatIfNeededRef,
   ]);
 
@@ -220,8 +231,9 @@ export default function AutoLogout({
       clearReconnect,
       cleanupSocket,
       runClientLogout,
+      setReconnectTimeout: setManagedTimeout,
     });
-  }, [cleanupSocket, clearReconnect, runClientLogout, username]);
+  }, [cleanupSocket, clearReconnect, runClientLogout, setManagedTimeout, username]);
 
   return null;
 }

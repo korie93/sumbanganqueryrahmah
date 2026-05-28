@@ -28,6 +28,7 @@ type BindAutoLogoutSocketArgs = {
   clearReconnect: () => void
   cleanupSocket: () => void
   runClientLogout: () => Promise<void>
+  setReconnectTimeout: (callback: () => void, delayMs: number) => number
 }
 
 export function disposeAutoLogoutSocket(
@@ -71,6 +72,7 @@ export function bindAutoLogoutSocket({
   clearReconnect,
   cleanupSocket,
   runClientLogout,
+  setReconnectTimeout,
 }: BindAutoLogoutSocketArgs) {
   const currentUsername = username || getStoredUsername()
   if (!currentUsername) {
@@ -100,7 +102,7 @@ export function bindAutoLogoutSocket({
     clearReconnect()
     const attempt = reconnectAttemptRef.current
     const delayMs = resolveAutoLogoutReconnectDelayMs(attempt)
-    reconnectRef.current = window.setTimeout(() => {
+    reconnectRef.current = setReconnectTimeout(() => {
       reconnectRef.current = null
       if (!mountedRef.current || !reconnectEnabledRef.current) {
         return

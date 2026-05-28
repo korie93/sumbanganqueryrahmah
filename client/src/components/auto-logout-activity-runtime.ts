@@ -14,6 +14,7 @@ type BindAutoLogoutActivityListenersArgs = {
   lastResetByEventRef: MutableRefObject<number>
   resetTimeout: () => void
   sendHeartbeat: () => Promise<void>
+  setHeartbeatInterval: (callback: () => void, delayMs: number) => number
   syncHeartbeatIfNeeded: (nowMs: number) => void
   clearIdleTimeout: () => void
   clearHeartbeat: () => void
@@ -27,6 +28,7 @@ export function bindAutoLogoutActivityListeners({
   lastResetByEventRef,
   resetTimeout,
   sendHeartbeat,
+  setHeartbeatInterval,
   syncHeartbeatIfNeeded,
   clearIdleTimeout,
   clearHeartbeat,
@@ -52,7 +54,7 @@ export function bindAutoLogoutActivityListeners({
 
   resetTimeout()
   void sendHeartbeat()
-  heartbeatRef.current = window.setInterval(() => {
+  heartbeatRef.current = setHeartbeatInterval(() => {
     void sendHeartbeat()
   }, heartbeatMs)
 
