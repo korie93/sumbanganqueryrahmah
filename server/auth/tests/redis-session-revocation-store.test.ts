@@ -34,7 +34,7 @@ test("classifyRedisSessionRevocationError separates retryable and non-retryable 
 
 test("RedisSessionRevocationStore persists revoked JWT ids with a bounded TTL", async () => {
   const values = new Map<string, string>();
-  const setCalls: Array<{ key: string; options: { PX: number }; value: string }> = [];
+  const setCalls: Array<{ key: string; options: { NX?: boolean; PX: number }; value: string }> = [];
   const store = new RedisSessionRevocationStore({
     config: {
       distributedStoreConfigured: true,
@@ -68,9 +68,156 @@ test("RedisSessionRevocationStore persists revoked JWT ids with a bounded TTL", 
   assert.equal(setCalls.length, 1);
   assert.match(setCalls[0].key, /^sqr:test-session-revoked:[a-f0-9]{64}$/);
   assert.equal(setCalls[0].value, "1");
+  assert.equal(setCalls[0].options.NX, true);
   assert.ok(setCalls[0].options.PX > 0);
   assert.equal(await store.isRevoked("jwt-1"), true);
   assert.equal(await store.isRevoked("jwt-2"), false);
+});
+
+test("RedisSessionRevocationStore uses an atomic Lua revoke when eval is available", async () => {
+  const values = new Map<string, string>();
+  const evalCalls: Array<{ arguments: string[]; keys: string[]; script: string }> = [];
+  const store = new RedisSessionRevocationStore({
+    config: {
+      distributedStoreConfigured: true,
+      provider: "redis",
+      redisUrl: "redis://localhost:6379/0",
+    },
+    createRedisClient: () => ({
+      async connect() {
+        return undefined;
+      },
+      async eval(script, options) {
+        evalCalls.push({ arguments: options.arguments, keys: options.keys, script });
+        if (values.has(options.keys[0])) {
+          return 0;
+        }
+        values.set(options.keys[0], options.arguments[0]);
+        return 1;
+      },
+      async get(key) {
+        return values.get(key) ?? null;
+      },
+      async set() {
+        throw new Error("SET fallback should not be used when EVAL is available.");
+      },
+      async quit() {
+        return undefined;
+      },
+    }),
+    prefix: "sqr:test-session-revoked",
+  });
+
+  await store.revoke({
+    jwtId: "jwt-1",
+    expiresAtMs: Date.now() + 120_000,
+  });
+
+  assert.equal(evalCalls.length, 1);
+  assert.match(evalCalls[0].script, /redis\.call\('SET'/);
+  assert.equal(evalCalls[0].arguments[0], "1");
+  assert.equal(await store.isRevoked("jwt-1"), true);
+});
+
+test("RedisSessionRevocationStore keeps concurrent revokes idempotent", async () => {
+  const values = new Map<string, string>();
+  let committedWrites = 0;
+  const store = new RedisSessionRevocationStore({
+    config: {
+      distributedStoreConfigured: true,
+      provider: "redis",
+      redisUrl: "redis://localhost:6379/0",
+    },
+    createRedisClient: () => ({
+      async connect() {
+        return undefined;
+      },
+      async eval(_script, options) {
+        if (values.has(options.keys[0])) {
+          return 0;
+        }
+        values.set(options.keys[0], options.arguments[0]);
+        committedWrites += 1;
+        return 1;
+      },
+      async get(key) {
+        return values.get(key) ?? null;
+      },
+      async set() {
+        throw new Error("SET fallback should not be used when EVAL is available.");
+      },
+      async quit() {
+        return undefined;
+      },
+    }),
+    prefix: "sqr:test-session-revoked",
+  });
+
+  await Promise.all(
+    Array.from({ length: 100 }, () => store.revoke({
+      jwtId: "jwt-concurrent",
+      expiresAtMs: Date.now() + 120_000,
+    })),
+  );
+
+  assert.equal(committedWrites, 1);
+  assert.equal(await store.isRevoked("jwt-concurrent"), true);
+});
+
+test("RedisSessionRevocationStore treats in-flight local revocations as revoked", async () => {
+  const values = new Map<string, string>();
+  let releaseEval: () => void = () => {
+    throw new Error("Eval release callback was not initialized.");
+  };
+  let evalStarted: () => void = () => {
+    throw new Error("Eval started callback was not initialized.");
+  };
+  const evalStartedPromise = new Promise<void>((resolve) => {
+    evalStarted = resolve;
+  });
+  const releaseEvalPromise = new Promise<void>((resolve) => {
+    releaseEval = resolve;
+  });
+  const store = new RedisSessionRevocationStore({
+    config: {
+      distributedStoreConfigured: true,
+      provider: "redis",
+      redisUrl: "redis://localhost:6379/0",
+    },
+    createRedisClient: () => ({
+      async connect() {
+        return undefined;
+      },
+      async eval(_script, options) {
+        evalStarted();
+        await releaseEvalPromise;
+        values.set(options.keys[0], options.arguments[0]);
+        return 1;
+      },
+      async get(key) {
+        return values.get(key) ?? null;
+      },
+      async set() {
+        throw new Error("SET fallback should not be used when EVAL is available.");
+      },
+      async quit() {
+        return undefined;
+      },
+    }),
+    prefix: "sqr:test-session-revoked",
+  });
+
+  const revokePromise = store.revoke({
+    jwtId: "jwt-race",
+    expiresAtMs: Date.now() + 120_000,
+  });
+  await evalStartedPromise;
+
+  assert.equal(await store.isRevoked("jwt-race"), true);
+
+  releaseEval();
+  await revokePromise;
+  assert.equal(await store.isRevoked("jwt-race"), true);
 });
 
 test("RedisSessionRevocationStore rejects session checks closed when Redis is unavailable", async () => {

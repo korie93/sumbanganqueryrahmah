@@ -16,10 +16,14 @@ type LoggerLike = Pick<typeof defaultLogger, "warn"> & Partial<Pick<typeof defau
 
 type RedisSessionRevocationClientLike = {
   connect: () => Promise<unknown>;
+  eval?: (
+    script: string,
+    options: { arguments: string[]; keys: string[] },
+  ) => Promise<unknown>;
   get: (key: string) => Promise<unknown>;
   on?: (event: string, listener: (error: unknown) => void) => unknown;
   quit?: () => Promise<unknown>;
-  set: (key: string, value: string, options: { PX: number }) => Promise<unknown>;
+  set: (key: string, value: string, options: { NX?: boolean; PX: number }) => Promise<unknown>;
 };
 
 type RedisSessionRevocationClientFactory = (options: {
@@ -40,6 +44,15 @@ const MIN_REVOCATION_TTL_MS = 1_000;
 const DEFAULT_REVOCATION_TTL_MS = 24 * 60 * 60 * 1000;
 const SESSION_REVOCATION_HEALTH_SERVICE = "session-revocation-store";
 const SESSION_REVOCATION_DEGRADED_REASON = "SESSION_REVOCATION_REDIS_UNAVAILABLE";
+const SESSION_REVOCATION_VALUE = "1";
+const ATOMIC_REVOKE_SCRIPT = `
+local existing = redis.call('GET', KEYS[1])
+if existing then
+  return 0
+end
+redis.call('SET', KEYS[1], ARGV[1], 'PX', ARGV[2], 'NX')
+return 1
+`;
 
 let defaultRedisClientFactoryPromise: Promise<RedisSessionRevocationClientFactory> | null = null;
 
@@ -158,6 +171,7 @@ export class RedisSessionRevocationStore implements SessionRevocationStore {
   private client: RedisSessionRevocationClientLike | null = null;
   private clientPromise: Promise<RedisSessionRevocationClientLike | null> | null = null;
   private lastWarningAt = 0;
+  private readonly pendingRevocationKeys = new Set<string>();
   private shuttingDown = false;
   private warningEmitted = false;
   private readonly warningRepeatMs: number;
@@ -172,6 +186,11 @@ export class RedisSessionRevocationStore implements SessionRevocationStore {
   }
 
   async isRevoked(jwtId: string): Promise<boolean> {
+    const redisKey = this.buildRedisKey(jwtId);
+    if (this.pendingRevocationKeys.has(redisKey)) {
+      return true;
+    }
+
     const client = await this.getClient();
     if (!client) {
       this.logRedisFailure(new Error("Redis session revocation store is unavailable."));
@@ -179,7 +198,7 @@ export class RedisSessionRevocationStore implements SessionRevocationStore {
     }
 
     try {
-      const value = await client.get(this.buildRedisKey(jwtId));
+      const value = await client.get(redisKey);
       this.recordRedisRecovery();
       return value != null;
     } catch (error) {
@@ -196,18 +215,18 @@ export class RedisSessionRevocationStore implements SessionRevocationStore {
       throw error;
     }
 
+    const redisKey = this.buildRedisKey(record.jwtId);
+    this.pendingRevocationKeys.add(redisKey);
     try {
-      await client.set(
-        this.buildRedisKey(record.jwtId),
-        "1",
-        { PX: resolveTtlMs(record.expiresAtMs) },
-      );
+      await this.writeRevocationAtomically(client, redisKey, resolveTtlMs(record.expiresAtMs));
       this.recordRedisRecovery();
     } catch (error) {
       this.handleRedisFailure(error, "revoke");
       throw new RedisSessionRevocationUnavailableError(
         "Redis session revocation write failed.",
       );
+    } finally {
+      this.pendingRevocationKeys.delete(redisKey);
     }
   }
 
@@ -217,6 +236,7 @@ export class RedisSessionRevocationStore implements SessionRevocationStore {
     const client = this.client ?? pendingClient;
     this.client = null;
     this.clientPromise = null;
+    this.pendingRevocationKeys.clear();
     await this.closeClient(client);
   }
 
@@ -274,6 +294,22 @@ export class RedisSessionRevocationStore implements SessionRevocationStore {
       this.logRedisFailure(error, "connect");
       return null;
     }
+  }
+
+  private async writeRevocationAtomically(
+    client: RedisSessionRevocationClientLike,
+    redisKey: string,
+    ttlMs: number,
+  ) {
+    if (client.eval) {
+      await client.eval(ATOMIC_REVOKE_SCRIPT, {
+        arguments: [SESSION_REVOCATION_VALUE, String(ttlMs)],
+        keys: [redisKey],
+      });
+      return;
+    }
+
+    await client.set(redisKey, SESSION_REVOCATION_VALUE, { NX: true, PX: ttlMs });
   }
 
   private handleRedisFailure(error: unknown, operation: string) {
