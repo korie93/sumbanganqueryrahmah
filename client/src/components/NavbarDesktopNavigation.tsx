@@ -44,13 +44,15 @@ function NavbarDesktopNavigationImpl({
 }: NavbarDesktopNavigationProps) {
   const groupTriggerRefs = useRef(new Map<string, HTMLButtonElement>())
   const navMountedRef = useRef(true)
-  const pendingGroupFocusTimeoutsRef = useRef<Array<ReturnType<typeof globalThis.setTimeout>>>([])
+  const pendingGroupFocusFramesRef = useRef<number[]>([])
 
-  const clearPendingGroupTriggerFocusTimeouts = useCallback(() => {
-    for (const timeoutHandle of pendingGroupFocusTimeoutsRef.current) {
-      globalThis.clearTimeout(timeoutHandle)
+  const clearPendingGroupTriggerFocusFrames = useCallback(() => {
+    if (typeof window !== "undefined") {
+      for (const frameHandle of pendingGroupFocusFramesRef.current) {
+        window.cancelAnimationFrame(frameHandle)
+      }
     }
-    pendingGroupFocusTimeoutsRef.current = []
+    pendingGroupFocusFramesRef.current = []
   }, [])
 
   useEffect(() => {
@@ -58,23 +60,30 @@ function NavbarDesktopNavigationImpl({
 
     return () => {
       navMountedRef.current = false
-      clearPendingGroupTriggerFocusTimeouts()
+      clearPendingGroupTriggerFocusFrames()
     }
-  }, [clearPendingGroupTriggerFocusTimeouts])
+  }, [clearPendingGroupTriggerFocusFrames])
 
   const scheduleGroupTriggerFocus = useCallback((groupId: string) => {
-    clearPendingGroupTriggerFocusTimeouts()
-    const timeoutHandle = globalThis.setTimeout(() => {
-      pendingGroupFocusTimeoutsRef.current = pendingGroupFocusTimeoutsRef.current.filter(
-        (pendingTimeoutHandle) => pendingTimeoutHandle !== timeoutHandle
+    clearPendingGroupTriggerFocusFrames()
+    if (typeof window === "undefined") {
+      if (navMountedRef.current) {
+        groupTriggerRefs.current.get(groupId)?.focus({ preventScroll: true })
+      }
+      return
+    }
+
+    const frameHandle = window.requestAnimationFrame(() => {
+      pendingGroupFocusFramesRef.current = pendingGroupFocusFramesRef.current.filter(
+        (pendingFrameHandle) => pendingFrameHandle !== frameHandle
       )
       if (!navMountedRef.current) {
         return
       }
       groupTriggerRefs.current.get(groupId)?.focus({ preventScroll: true })
-    }, 0)
-    pendingGroupFocusTimeoutsRef.current.push(timeoutHandle)
-  }, [clearPendingGroupTriggerFocusTimeouts])
+    })
+    pendingGroupFocusFramesRef.current.push(frameHandle)
+  }, [clearPendingGroupTriggerFocusFrames])
 
   const restoreGroupTriggerFocus = useCallback((groupId: string) => {
     groupTriggerRefs.current.get(groupId)?.focus({ preventScroll: true })

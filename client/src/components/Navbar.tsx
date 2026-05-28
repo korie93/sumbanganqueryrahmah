@@ -62,7 +62,7 @@ function NavbarImpl({
   const desktopUserMenuTriggerRef = useRef<HTMLButtonElement>(null)
   const mobileUserMenuTriggerRef = useRef<HTMLButtonElement>(null)
   const navbarMountedRef = useRef(true)
-  const pendingFocusTimeoutsRef = useRef<Array<ReturnType<typeof globalThis.setTimeout>>>([])
+  const pendingFocusFramesRef = useRef<number[]>([])
 
   const directItems = useMemo(
     () => getVisiblePrimaryNavItems(userRole, tabVisibility ?? null, featureLockdown),
@@ -115,11 +115,13 @@ function NavbarImpl({
     "aria-expanded": mobileNavOpen,
   } as const
 
-  const clearPendingUserMenuFocusTimeouts = useCallback(() => {
-    for (const timeoutHandle of pendingFocusTimeoutsRef.current) {
-      globalThis.clearTimeout(timeoutHandle)
+  const clearPendingUserMenuFocusFrames = useCallback(() => {
+    if (typeof window !== "undefined") {
+      for (const frameHandle of pendingFocusFramesRef.current) {
+        window.cancelAnimationFrame(frameHandle)
+      }
     }
-    pendingFocusTimeoutsRef.current = []
+    pendingFocusFramesRef.current = []
   }, [])
 
   useEffect(() => {
@@ -127,23 +129,30 @@ function NavbarImpl({
 
     return () => {
       navbarMountedRef.current = false
-      clearPendingUserMenuFocusTimeouts()
+      clearPendingUserMenuFocusFrames()
     }
-  }, [clearPendingUserMenuFocusTimeouts])
+  }, [clearPendingUserMenuFocusFrames])
 
   const scheduleUserMenuTriggerFocus = useCallback((focusTrigger: () => void) => {
-    clearPendingUserMenuFocusTimeouts()
-    const timeoutHandle = globalThis.setTimeout(() => {
-      pendingFocusTimeoutsRef.current = pendingFocusTimeoutsRef.current.filter(
-        (pendingTimeoutHandle) => pendingTimeoutHandle !== timeoutHandle
+    clearPendingUserMenuFocusFrames()
+    if (typeof window === "undefined") {
+      if (navbarMountedRef.current) {
+        focusTrigger()
+      }
+      return
+    }
+
+    const frameHandle = window.requestAnimationFrame(() => {
+      pendingFocusFramesRef.current = pendingFocusFramesRef.current.filter(
+        (pendingFrameHandle) => pendingFrameHandle !== frameHandle
       )
       if (!navbarMountedRef.current) {
         return
       }
       focusTrigger()
-    }, 0)
-    pendingFocusTimeoutsRef.current.push(timeoutHandle)
-  }, [clearPendingUserMenuFocusTimeouts])
+    })
+    pendingFocusFramesRef.current.push(frameHandle)
+  }, [clearPendingUserMenuFocusFrames])
 
   const focusDesktopUserMenuTrigger = useCallback(() => {
     desktopUserMenuTriggerRef.current?.focus({ preventScroll: true })

@@ -8,6 +8,7 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../
 const clientSrcRoot = path.join(repoRoot, "client", "src");
 const anonymousListenerPattern =
   /addEventListener\s*\([^,\n]+,\s*(?:\([^)]*\)\s*=>|function\s*(?:\(|$))/g;
+const setTimeoutFocusPattern = /setTimeout\s*\([\s\S]{0,240}\.focus\s*\(/g;
 
 function listClientSourceFiles(directory) {
   const entries = fs.readdirSync(directory, { withFileTypes: true });
@@ -55,4 +56,19 @@ test("collection records nickname abort listener is removed after request settle
   assert.match(source, /callerSignal\.addEventListener\("abort", handleCallerAbort, \{ once: true \}\)/);
   assert.match(source, /callerSignal\.removeEventListener\("abort", handleCallerAbort\)/);
   assert.match(source, /removeCallerAbortListener\?\.\(\);/);
+});
+
+test("frontend focus restoration does not rely on setTimeout ordering", () => {
+  const violations = [];
+
+  for (const filePath of listClientSourceFiles(clientSrcRoot)) {
+    const source = fs.readFileSync(filePath, "utf8");
+    const matches = source.matchAll(setTimeoutFocusPattern);
+    for (const match of matches) {
+      const line = source.slice(0, match.index).split(/\r?\n/).length;
+      violations.push(`${path.relative(repoRoot, filePath)}:${line}: ${match[0]}`);
+    }
+  }
+
+  assert.deepEqual(violations, []);
 });
