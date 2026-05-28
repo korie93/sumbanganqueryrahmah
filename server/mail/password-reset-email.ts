@@ -1,4 +1,4 @@
-import { escapeEmailHtml } from "./email-html-utils";
+import { escapeEmailHtmlContent, escapeEmailUrl, normalizeEmailUrl } from "./email-html-utils";
 
 type BuildPasswordResetEmailInput = {
   expiresAt: Date;
@@ -18,10 +18,12 @@ export function buildPasswordResetEmail(input: BuildPasswordResetEmailInput) {
   const intro = `A password reset has been approved for your ${systemName} account.`;
   const usernameLine = `Username: ${input.username}`;
   const expiryLine = `This reset link expires on ${expiresAtText}.`;
-  const safeExpiryLine = escapeEmailHtml(expiryLine);
-  const safeIntro = escapeEmailHtml(intro);
-  const safeResetUrl = escapeEmailHtml(input.resetUrl);
-  const safeUsernameLine = escapeEmailHtml(usernameLine);
+  const resetUrl = normalizeEmailUrl(input.resetUrl);
+  const resetUrlText = resetUrl ?? "Reset link unavailable. Contact the system administrator.";
+  const safeExpiryLine = escapeEmailHtmlContent(expiryLine);
+  const safeIntro = escapeEmailHtmlContent(intro);
+  const safeResetUrl = escapeEmailUrl(input.resetUrl);
+  const safeUsernameLine = escapeEmailHtmlContent(usernameLine);
 
   const text = [
     intro,
@@ -29,7 +31,7 @@ export function buildPasswordResetEmail(input: BuildPasswordResetEmailInput) {
     usernameLine,
     "",
     "Create your new password by opening the link below:",
-    input.resetUrl,
+    resetUrlText,
     "",
     expiryLine,
     "",

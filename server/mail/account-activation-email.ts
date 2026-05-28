@@ -1,4 +1,4 @@
-import { escapeEmailHtml } from "./email-html-utils";
+import { escapeEmailHtmlContent, escapeEmailUrl, normalizeEmailUrl } from "./email-html-utils";
 
 type BuildAccountActivationEmailInput = {
   activationUrl: string;
@@ -18,10 +18,12 @@ export function buildAccountActivationEmail(input: BuildAccountActivationEmailIn
   const intro = `A new account has been created for you in ${systemName}.`;
   const usernameLine = `Username: ${input.username}`;
   const expiryLine = `This activation link expires on ${expiresAtText}.`;
-  const safeActivationUrl = escapeEmailHtml(input.activationUrl);
-  const safeExpiryLine = escapeEmailHtml(expiryLine);
-  const safeIntro = escapeEmailHtml(intro);
-  const safeUsernameLine = escapeEmailHtml(usernameLine);
+  const activationUrl = normalizeEmailUrl(input.activationUrl);
+  const activationUrlText = activationUrl ?? "Activation link unavailable. Contact the system administrator.";
+  const safeActivationUrl = escapeEmailUrl(input.activationUrl);
+  const safeExpiryLine = escapeEmailHtmlContent(expiryLine);
+  const safeIntro = escapeEmailHtmlContent(intro);
+  const safeUsernameLine = escapeEmailHtmlContent(usernameLine);
 
   const text = [
     intro,
@@ -29,7 +31,7 @@ export function buildAccountActivationEmail(input: BuildAccountActivationEmailIn
     usernameLine,
     "",
     "Activate your account by opening the link below and creating your password:",
-    input.activationUrl,
+    activationUrlText,
     "",
     expiryLine,
     "",
