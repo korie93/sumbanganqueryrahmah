@@ -17,6 +17,13 @@ type RequestDeadlineErrorLike = {
   name?: unknown;
 };
 
+// Canonical operation deadline:
+// - Use this inside controllers for expensive operations that need a shorter
+//   or more specific timeout than the global HTTP request deadline.
+// - The upstream res.locals.requestAbortSignal remains authoritative for the
+//   whole request. If it aborts first, this helper aborts the operation and
+//   returns { timedOut: true } without writing another response.
+// - If this operation deadline fires first, it owns the tailored 504 response.
 function sanitizeRequestDeadlineError(error: unknown) {
   if (!error || typeof error !== "object") {
     return { name: "UnknownError" };

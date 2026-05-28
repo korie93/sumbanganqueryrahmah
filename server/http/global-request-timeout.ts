@@ -14,6 +14,12 @@ function isStreamingLikeRequest(path: string) {
   return path.startsWith("/ws");
 }
 
+// Canonical whole-request deadline:
+// - This middleware bounds every non-streaming HTTP request.
+// - It owns the client-facing 504 response when the whole request exceeds
+//   runtimeConfig.runtime.httpRequestTimeoutMs.
+// - Operation-specific helpers must observe res.locals.requestAbortSignal and
+//   stop work without writing a second response when this signal aborts.
 export function createGlobalRequestTimeoutMiddleware(
   options: GlobalRequestTimeoutOptions,
 ): RequestHandler {
