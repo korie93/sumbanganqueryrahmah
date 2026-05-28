@@ -191,11 +191,16 @@ const runtimeEnvironmentShape = {
   }),
   IMPORT_INSERT_BATCH_SIZE: optionalIntEnv("IMPORT_INSERT_BATCH_SIZE", { min: 1, max: 5_000 }),
   IMPORT_MAX_ROW_BYTES: optionalIntEnv("IMPORT_MAX_ROW_BYTES", { min: 1_024, max: 1024 * 1024 }),
+  IMPORT_PER_USER_ACTIVE_UPLOAD_BYTES: optionalIntEnv("IMPORT_PER_USER_ACTIVE_UPLOAD_BYTES", {
+    min: 1_048_576,
+    max: 536_870_912,
+  }),
   COLLECTION_BODY_LIMIT: optionalEnvString("COLLECTION_BODY_LIMIT", 64),
   CORS_ALLOWED_ORIGINS: optionalEnvString("CORS_ALLOWED_ORIGINS"),
   TRUSTED_PROXIES: optionalEnvString("TRUSTED_PROXIES"),
   ALLOW_LOCAL_DEV_CORS: optionalBooleanEnv("ALLOW_LOCAL_DEV_CORS"),
   HTTP_SLOW_REQUEST_MS: optionalIntEnv("HTTP_SLOW_REQUEST_MS", { min: 250 }),
+  HTTP_REQUEST_TIMEOUT_MS: optionalIntEnv("HTTP_REQUEST_TIMEOUT_MS", { min: 1_000 }),
   HSTS_MAX_AGE_SECONDS: optionalIntEnv("HSTS_MAX_AGE_SECONDS", {
     min: 0,
     max: 63_072_000,
@@ -203,6 +208,7 @@ const runtimeEnvironmentShape = {
   HSTS_PRELOAD_ENABLED: optionalBooleanEnv("HSTS_PRELOAD_ENABLED"),
   SQR_RATE_LIMIT_STORE: optionalRateLimitStoreEnv(),
   SQR_REDIS_RATE_LIMIT_URL: optionalEnvString("SQR_REDIS_RATE_LIMIT_URL", SECRET_STRING_MAX_LENGTH),
+  SQR_REDIS_HEALTH_CHECK_INTERVAL_MS: optionalIntEnv("SQR_REDIS_HEALTH_CHECK_INTERVAL_MS", { min: 5_000 }),
   SQR_RATE_LIMIT_USER_READS_PER_MINUTE: optionalIntEnv(
     "SQR_RATE_LIMIT_USER_READS_PER_MINUTE",
     { min: 1, max: 100_000 },

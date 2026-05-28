@@ -25,6 +25,7 @@ import {
   readStringFrom,
 } from "./runtime-config-read-alias-utils";
 import {
+  assertPostgresRuntimeCredentialFormat,
   parseDatabaseUrl,
   resolveCookieSameSite,
   resolveDatabaseBootstrapMode,
@@ -204,6 +205,42 @@ const resolvedSessionSecret = readSecretOrThrow(
 
 assertRuntimeSessionSecretMinBytes(resolvedSessionSecret, { nodeEnv });
 
+const resolvedDatabaseHost = readStringFrom(["PG_HOST", "PGHOST"], parsedDatabaseUrl?.host || "127.0.0.1");
+const resolvedDatabasePort = readIntFrom(
+  ["PG_PORT", "PGPORT"],
+  parsedDatabaseUrl?.port || DEFAULT_POSTGRES_PORT,
+  { min: MIN_COUNT, max: MAX_TCP_PORT },
+);
+const resolvedDatabaseUser = readStringFrom(["PG_USER", "PGUSER"], parsedDatabaseUrl?.user || "postgres");
+const resolvedDatabasePassword = (() => {
+  if (configuredPgPassword) {
+    return configuredPgPassword;
+  }
+  if (parsedDatabaseUrl?.password) {
+    return parsedDatabaseUrl.password;
+  }
+  if (isProductionLike) {
+    throw new Error("PG_PASSWORD or DATABASE_URL password is required outside strict local development.");
+  }
+  // Keep the local-development path passwordless-friendly while ensuring pg
+  // always receives a string and can surface a normal auth failure instead
+  // of throwing on undefined during SCRAM negotiation.
+  return "";
+})();
+const resolvedDatabaseName = readStringFrom(
+  ["PG_DATABASE", "PGDATABASE"],
+  parsedDatabaseUrl?.database || "sqr_db",
+);
+
+assertPostgresRuntimeCredentialFormat({
+  connectionString: configuredDatabaseUrl,
+  database: resolvedDatabaseName,
+  host: resolvedDatabaseHost,
+  isProductionLike,
+  password: resolvedDatabasePassword,
+  user: resolvedDatabaseUser,
+});
+
 const mailConfiguration = assessMailConfiguration({
   smtpService: readOptionalString("SMTP_SERVICE"),
   smtpHost: readOptionalString("SMTP_HOST"),
@@ -305,29 +342,11 @@ export const runtimeConfig: RuntimeConfig = Object.freeze({
   },
   database: {
     connectionString: configuredDatabaseUrl,
-    host: readStringFrom(["PG_HOST", "PGHOST"], parsedDatabaseUrl?.host || "127.0.0.1"),
-    port: readIntFrom(
-      ["PG_PORT", "PGPORT"],
-      parsedDatabaseUrl?.port || DEFAULT_POSTGRES_PORT,
-      { min: MIN_COUNT, max: MAX_TCP_PORT },
-    ),
-    user: readStringFrom(["PG_USER", "PGUSER"], parsedDatabaseUrl?.user || "postgres"),
-    password: (() => {
-      if (configuredPgPassword) {
-        return configuredPgPassword;
-      }
-      if (parsedDatabaseUrl?.password) {
-        return parsedDatabaseUrl.password;
-      }
-      if (isProductionLike) {
-        throw new Error("PG_PASSWORD or DATABASE_URL password is required outside strict local development.");
-      }
-      // Keep the local-development path passwordless-friendly while ensuring pg
-      // always receives a string and can surface a normal auth failure instead
-      // of throwing on undefined during SCRAM negotiation.
-      return "";
-    })(),
-    database: readStringFrom(["PG_DATABASE", "PGDATABASE"], parsedDatabaseUrl?.database || "sqr_db"),
+    host: resolvedDatabaseHost,
+    port: resolvedDatabasePort,
+    user: resolvedDatabaseUser,
+    password: resolvedDatabasePassword,
+    database: resolvedDatabaseName,
     maxConnections: readInt("PG_MAX_CONNECTIONS", resolveDefaultPgMaxConnections(), { min: MIN_COUNT, max: 50 }),
     idleTimeoutMs: readInt("PG_IDLE_TIMEOUT_MS", 30_000, { min: MIN_TIMEOUT_MS }),
     connectionTimeoutMs: readInt("PG_CONNECTION_TIMEOUT_MS", 5_000, { min: MIN_TIMEOUT_MS }),

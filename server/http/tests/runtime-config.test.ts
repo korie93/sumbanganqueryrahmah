@@ -746,6 +746,90 @@ test("runtime config accepts DATABASE_URL-only database configuration in strict 
   );
 });
 
+test("runtime config rejects DATABASE_URL values that omit the username", async () => {
+  await withEnv(
+    {
+      NODE_ENV: "development",
+      HOST: "127.0.0.1",
+      PUBLIC_APP_URL: "http://127.0.0.1:5000",
+      DATABASE_URL: "postgres://db.internal:6544/sqr_runtime",
+      PG_HOST: null,
+      PGHOST: null,
+      PG_PORT: null,
+      PGPORT: null,
+      PG_USER: null,
+      PGUSER: null,
+      PG_PASSWORD: null,
+      PGPASSWORD: null,
+      PG_DATABASE: null,
+      PGDATABASE: null,
+      SESSION_SECRET: null,
+      COLLECTION_NICKNAME_TEMP_PASSWORD: null,
+      COLLECTION_PII_ENCRYPTION_KEY: null,
+      BACKUP_ENCRYPTION_KEY: null,
+      BACKUP_ENCRYPTION_KEYS: null,
+      BACKUP_FEATURE_ENABLED: "1",
+      SEED_DEFAULT_USERS: "0",
+      LOCAL_SUPERUSER_CREDENTIALS_FILE_ENABLED: "0",
+      MAIL_DEV_OUTBOX_ENABLED: "0",
+    },
+    async () => {
+      await assert.rejects(
+        importRuntimeFresh(),
+        /DATABASE_URL must include a PostgreSQL username/i,
+      );
+    },
+  );
+});
+
+test("runtime config rejects URL-shaped PG_HOST values before creating the pool", async () => {
+  await withEnv(
+    {
+      NODE_ENV: "development",
+      HOST: "127.0.0.1",
+      PUBLIC_APP_URL: "http://127.0.0.1:5000",
+      DATABASE_URL: null,
+      PG_HOST: "postgres://db.internal:5432",
+      PG_USER: "postgres",
+      PG_PASSWORD: null,
+      PG_DATABASE: "sqr_db",
+      SESSION_SECRET: null,
+      COLLECTION_NICKNAME_TEMP_PASSWORD: null,
+      COLLECTION_PII_ENCRYPTION_KEY: null,
+      BACKUP_ENCRYPTION_KEY: null,
+      BACKUP_ENCRYPTION_KEYS: null,
+      BACKUP_FEATURE_ENABLED: "1",
+      SEED_DEFAULT_USERS: "0",
+      LOCAL_SUPERUSER_CREDENTIALS_FILE_ENABLED: "0",
+      MAIL_DEV_OUTBOX_ENABLED: "0",
+    },
+    async () => {
+      await assert.rejects(
+        importRuntimeFresh(),
+        /PG_HOST must be a hostname, IP address, or Unix socket path, not a connection URL/i,
+      );
+    },
+  );
+});
+
+test("runtime config rejects production DATABASE_URL without an embedded password", async () => {
+  await withEnv(
+    {
+      ...productionBaseOverrides,
+      PUBLIC_APP_URL: "https://sqr.example.com",
+      DATABASE_URL: "postgres://db_user@db.internal:6544/sqr_prod",
+      PG_PASSWORD: "fallback-password-is-ignored-by-connection-string",
+      BACKUP_ENCRYPTION_KEY: "A".repeat(32),
+    },
+    async () => {
+      await assert.rejects(
+        importRuntimeFresh(),
+        /DATABASE_URL must include a password on production-like hosts/i,
+      );
+    },
+  );
+});
+
 test("runtime config accepts standard PostgreSQL env aliases", async () => {
   await withEnv(
     {
