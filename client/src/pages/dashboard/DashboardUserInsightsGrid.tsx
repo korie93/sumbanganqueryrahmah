@@ -118,18 +118,37 @@ export function DashboardUserInsightsGrid({
     const sanitizeChartSurface = () => {
       sanitizeDashboardRoleDistributionChartSurface(container);
     };
+    let sanitizeFrameId = 0;
+    let followUpFrameId = 0;
+    const scheduleChartSurfaceSanitization = () => {
+      if (sanitizeFrameId !== 0 || followUpFrameId !== 0) {
+        return;
+      }
+
+      sanitizeFrameId = window.requestAnimationFrame(() => {
+        sanitizeFrameId = 0;
+        sanitizeChartSurface();
+        followUpFrameId = window.requestAnimationFrame(() => {
+          followUpFrameId = 0;
+          sanitizeChartSurface();
+        });
+      });
+    };
     const observer = typeof MutationObserver === "function"
-      ? new MutationObserver(sanitizeChartSurface)
+      ? new MutationObserver(scheduleChartSurfaceSanitization)
       : null;
-    const frameId = window.requestAnimationFrame(sanitizeChartSurface);
-    const timeoutId = window.setTimeout(sanitizeChartSurface, 0);
 
     observer?.observe(container, { childList: true, subtree: true });
+    scheduleChartSurfaceSanitization();
 
     return () => {
       observer?.disconnect();
-      window.cancelAnimationFrame(frameId);
-      window.clearTimeout(timeoutId);
+      if (sanitizeFrameId !== 0) {
+        window.cancelAnimationFrame(sanitizeFrameId);
+      }
+      if (followUpFrameId !== 0) {
+        window.cancelAnimationFrame(followUpFrameId);
+      }
     };
   }, [isMobile, roleDistribution, roleLoading]);
 

@@ -139,7 +139,11 @@ test("DashboardUserInsightsGrid keeps chart semantics grouped and the top-users 
   assert.match(source, /const container = roleChartSurfaceRef\.current/);
   assert.match(source, /sanitizeDashboardRoleDistributionChartSurface\(container\)/);
   assert.match(source, /ref=\{roleChartSurfaceRef\}/);
-  assert.match(source, /new MutationObserver\(sanitizeChartSurface\)/);
+  assert.match(source, /new MutationObserver\(scheduleChartSurfaceSanitization\)/);
+  assert.match(source, /window\.requestAnimationFrame\(\(\) => \{/);
+  assert.match(source, /window\.cancelAnimationFrame\(sanitizeFrameId\)/);
+  assert.match(source, /window\.cancelAnimationFrame\(followUpFrameId\)/);
+  assert.doesNotMatch(source, /window\.setTimeout\(sanitizeChartSurface,\s*0\)/);
   assert.match(source, /observer\?\.disconnect\(\)/);
 });
 
