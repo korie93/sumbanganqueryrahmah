@@ -121,6 +121,7 @@ const ALLOWED_LOG_KEYS = new Set([
   "total",
   "trustedproxies",
   "type",
+  "utilizationpercent",
   "useragent",
   "value",
   "visibilitystate",

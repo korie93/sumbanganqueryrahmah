@@ -28,6 +28,9 @@ type BindPgPoolHealthCheckOptions = {
 
 const MIN_PG_POOL_HEALTH_CHECK_INTERVAL_MS = 1_000;
 const MIN_PG_POOL_HEALTH_CHECK_TIMEOUT_MS = 250;
+const PG_POOL_HIGH_UTILIZATION_THRESHOLD = 0.85;
+const PERCENT_MULTIPLIER = 100;
+const PERCENT_PRECISION_MULTIPLIER = 10;
 
 export type PgPoolSnapshot = {
   total: number;
@@ -45,8 +48,39 @@ export function getPgPoolSnapshot(pool: PgPoolLike): PgPoolSnapshot {
   };
 }
 
+export function getPgPoolUtilization(snapshot: PgPoolSnapshot): number {
+  if (snapshot.max <= 0) {
+    return 0;
+  }
+
+  const activeClients = Math.max(0, snapshot.total - snapshot.idle);
+  return Math.min(1, activeClients / snapshot.max);
+}
+
+export function getPgPoolUtilizationPercent(snapshot: PgPoolSnapshot): number {
+  return Math.round(
+    getPgPoolUtilization(snapshot) * PERCENT_MULTIPLIER * PERCENT_PRECISION_MULTIPLIER,
+  ) / PERCENT_PRECISION_MULTIPLIER;
+}
+
+export function resolvePgPoolPressureReason(snapshot: PgPoolSnapshot): string | null {
+  if (snapshot.max <= 0) {
+    return null;
+  }
+
+  if (snapshot.waiting > 0 && snapshot.idle <= 0 && snapshot.total >= snapshot.max) {
+    return "waiting_queue";
+  }
+
+  if (getPgPoolUtilization(snapshot) >= PG_POOL_HIGH_UTILIZATION_THRESHOLD) {
+    return "high_utilization";
+  }
+
+  return null;
+}
+
 export function hasPgPoolPressure(snapshot: PgPoolSnapshot): boolean {
-  return snapshot.max > 0 && snapshot.waiting > 0 && snapshot.idle <= 0 && snapshot.total >= snapshot.max;
+  return resolvePgPoolPressureReason(snapshot) !== null;
 }
 
 function removePoolListener(
@@ -70,13 +104,15 @@ export function bindPgPoolMonitoring(pool: PgPoolLike, options: BindPgPoolMonito
 
   const maybeWarnPressure = (source: string) => {
     const snapshot = getPgPoolSnapshot(pool);
+    const pressureReason = resolvePgPoolPressureReason(snapshot);
 
-    if (!hasPgPoolPressure(snapshot)) {
+    if (!pressureReason) {
       lastWarningSignature = "";
       return;
     }
 
-    const signature = `${snapshot.total}:${snapshot.idle}:${snapshot.waiting}:${snapshot.max}`;
+    const utilizationPercent = getPgPoolUtilizationPercent(snapshot);
+    const signature = `${snapshot.total}:${snapshot.idle}:${snapshot.waiting}:${snapshot.max}:${pressureReason}`;
     const now = Date.now();
     if (signature === lastWarningSignature && now - lastWarningAt < warnCooldownMs) {
       return;
@@ -86,7 +122,9 @@ export function bindPgPoolMonitoring(pool: PgPoolLike, options: BindPgPoolMonito
     lastWarningSignature = signature;
     sink.warn("PostgreSQL pool pressure detected", {
       ...snapshot,
+      reason: pressureReason,
       source,
+      utilizationPercent,
     });
   };
 

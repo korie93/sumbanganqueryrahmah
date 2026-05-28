@@ -5,7 +5,9 @@ import {
   bindPgPoolHealthCheck,
   bindPgPoolMonitoring,
   getPgPoolSnapshot,
+  getPgPoolUtilizationPercent,
   hasPgPoolPressure,
+  resolvePgPoolPressureReason,
 } from "../db-pool-monitor";
 
 class FakePool extends EventEmitter {
@@ -64,6 +66,7 @@ test("bindPgPoolMonitoring deduplicates repeated pressure warnings within the co
 
   assert.equal(warnings.length, 1);
   assert.equal(warnings[0]?.source, "pool-acquire");
+  assert.equal(warnings[0]?.reason, "waiting_queue");
 });
 
 test("bindPgPoolMonitoring does not warn when the pool is only momentarily fully acquired without queueing", () => {
@@ -89,10 +92,10 @@ test("bindPgPoolMonitoring does not warn when the pool is only momentarily fully
   assert.equal(warnings.length, 0);
 });
 
-test("hasPgPoolPressure only reports pressure when clients are queueing", () => {
+test("hasPgPoolPressure reports queueing or high utilization pressure", () => {
   assert.equal(
     hasPgPoolPressure({
-      total: 3,
+      total: 2,
       idle: 0,
       waiting: 0,
       max: 3,
@@ -110,18 +113,52 @@ test("hasPgPoolPressure only reports pressure when clients are queueing", () => 
     false,
   );
 
-  assert.equal(
-    hasPgPoolPressure({
-      total: 3,
-      idle: 0,
-      waiting: 1,
-      max: 3,
-    }),
-    true,
-  );
+  const queuedSnapshot = {
+    total: 3,
+    idle: 0,
+    waiting: 1,
+    max: 3,
+  };
+  assert.equal(hasPgPoolPressure(queuedSnapshot), true);
+  assert.equal(resolvePgPoolPressureReason(queuedSnapshot), "waiting_queue");
+
+  const highUtilizationSnapshot = {
+    total: 9,
+    idle: 0,
+    waiting: 0,
+    max: 10,
+  };
+  assert.equal(hasPgPoolPressure(highUtilizationSnapshot), true);
+  assert.equal(resolvePgPoolPressureReason(highUtilizationSnapshot), "high_utilization");
+  assert.equal(getPgPoolUtilizationPercent(highUtilizationSnapshot), 90);
 });
 
-test("bindPgPoolMonitoring does not warn while the pool can still create more clients", () => {
+test("bindPgPoolMonitoring warns before queueing when utilization crosses the high threshold", () => {
+  const pool = new FakePool();
+  pool.totalCount = 9;
+  pool.idleCount = 0;
+  pool.waitingCount = 0;
+  pool.options.max = 10;
+
+  const warnings: Array<Record<string, unknown>> = [];
+
+  bindPgPoolMonitoring(pool, {
+    logger: {
+      warn: (_message, meta) => {
+        warnings.push(meta || {});
+      },
+      error: () => undefined,
+    },
+  });
+
+  pool.emit("acquire");
+
+  assert.equal(warnings.length, 1);
+  assert.equal(warnings[0]?.reason, "high_utilization");
+  assert.equal(warnings[0]?.utilizationPercent, 90);
+});
+
+test("bindPgPoolMonitoring does not warn below high utilization while the pool can still create more clients", () => {
   const pool = new FakePool();
   pool.totalCount = 1;
   pool.idleCount = 0;
