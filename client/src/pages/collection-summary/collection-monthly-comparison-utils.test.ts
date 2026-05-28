@@ -33,6 +33,7 @@ import {
   resolveCollectionSameDayPaceWindowMode,
   shiftCollectionMonthInput,
 } from "@/pages/collection-summary/collection-monthly-comparison-utils";
+import { COLLECTION_MONTHLY_REPORT_PRINT_BUTTON_ID } from "@/pages/collection-summary/collection-monthly-report-window";
 
 const comparisonPayload: CollectionMonthlyComparisonResponse = {
   ok: true,
@@ -582,5 +583,7 @@ test("collection monthly comparison helpers build a print-friendly report with c
   assert.match(html, /Data quality checks/);
   assert.match(html, /Unusual jump \+34\.85% vs previous month/);
   assert.match(html, /Print or save PDF/);
-  assert.match(html, /window\.print/);
+  assert.match(html, new RegExp(`id="${COLLECTION_MONTHLY_REPORT_PRINT_BUTTON_ID}"`));
+  assert.doesNotMatch(html, /<script\b/i);
+  assert.doesNotMatch(html, /\son[a-z]+\s*=/i);
 });

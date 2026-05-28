@@ -17,6 +17,7 @@ import {
   escapeCollectionMonthlyComparisonHtml,
   formatCollectionMonthlyComparisonReportDate,
 } from "./collection-monthly-export-utils";
+import { COLLECTION_MONTHLY_REPORT_PRINT_BUTTON_ID } from "./collection-monthly-report-window";
 import {
   type CollectionSameDayPaceComparison,
 } from "./collection-monthly-same-day-utils";
@@ -323,8 +324,7 @@ export function buildCollectionMonthlyComparisonPrintReportHtml(
       </table>
     </section>
   </main>
-  <div class="actions"><button class="print-button" type="button" onclick="window.print()">Print or save PDF</button></div>
-  <script>(function(){function autoPrintCollectionReport(){setTimeout(function(){window.print();},150);}window.addEventListener("load",autoPrintCollectionReport,{once:true});})();</script>
+  <div class="actions"><button id="${COLLECTION_MONTHLY_REPORT_PRINT_BUTTON_ID}" class="print-button" type="button">Print or save PDF</button></div>
 </body>
 </html>`;
 }

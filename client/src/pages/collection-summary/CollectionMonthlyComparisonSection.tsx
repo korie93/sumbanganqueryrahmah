@@ -8,6 +8,7 @@ import {
   buildCollectionMonthlyComparisonCsvFilename,
   buildCollectionMonthlyComparisonPrintReportHtml,
 } from "./collection-monthly-comparison-utils";
+import { openCollectionMonthlyComparisonReportWindow } from "./collection-monthly-report-window";
 import { useCollectionMonthlyComparisonData } from "./useCollectionMonthlyComparisonData";
 import { useCollectionMonthlyComparisonMonthDialog } from "./useCollectionMonthlyComparisonMonthDialog";
 import { useCollectionMonthlyComparisonTarget } from "./useCollectionMonthlyComparisonTarget";
@@ -75,12 +76,13 @@ function CollectionMonthlyComparisonSection({
     downloadBlob(blob, buildCollectionMonthlyComparisonCsvFilename(comparisonData.data));
   }, [comparisonData.data, comparisonTarget.monthlyTargetAmount, comparisonTarget.targetsByMonth, sameDayPace.pace]);
   const handlePrintReport = useCallback(() => {
-    if (!comparisonData.data) {
+    const data = comparisonData.data;
+    if (!data) {
       return;
     }
 
     const reportHtml = buildCollectionMonthlyComparisonPrintReportHtml(
-      comparisonData.data,
+      data,
       {
         monthlyTargetAmount: comparisonTarget.monthlyTargetAmount,
         monthlyTargetsByMonth: comparisonTarget.targetsByMonth,
@@ -88,21 +90,15 @@ function CollectionMonthlyComparisonSection({
         sameDayPace: sameDayPace.pace,
       },
     );
-    const reportWindow = window.open("", "_blank", "width=1120,height=820");
-    if (!reportWindow) {
-      const blob = new Blob([reportHtml], { type: "text/html;charset=utf-8;" });
-      downloadBlob(
-        blob,
-        buildCollectionMonthlyComparisonCsvFilename(comparisonData.data).replace(/\.csv$/i, ".html"),
-      );
-      return;
-    }
-
-    reportWindow.opener = null;
-    reportWindow.document.open();
-    reportWindow.document.write(reportHtml);
-    reportWindow.document.close();
-    reportWindow.focus();
+    openCollectionMonthlyComparisonReportWindow(reportHtml, {
+      onPopupBlocked: (sanitizedHtml) => {
+        const blob = new Blob([sanitizedHtml], { type: "text/html;charset=utf-8;" });
+        downloadBlob(
+          blob,
+          buildCollectionMonthlyComparisonCsvFilename(data).replace(/\.csv$/i, ".html"),
+        );
+      },
+    });
   }, [
     comparisonData.data,
     comparisonTarget.monthlyTargetAmount,
