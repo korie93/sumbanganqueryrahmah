@@ -15,6 +15,7 @@ import { pool, stopPgPoolBackgroundTasks } from "./db-postgres";
 import { logger } from "./lib/logger";
 import { runtimeConfig } from "./config/runtime";
 import { stopAdaptiveRateLimitCooldownSweep } from "./middleware/rate-limit";
+import { closeHttpServerForShutdown } from "./internal/http-server-shutdown";
 
 let reportedWorkerFatalReason: string | null = null;
 
@@ -167,7 +168,13 @@ function shutdownProcess(reason: string, exitCode: number, details?: string) {
     return;
   }
 
-  server.close(() => {
+  void closeHttpServerForShutdown({
+    logger,
+    server,
+  }).then(() => {
+    finishShutdownSafely();
+  }).catch((error) => {
+    logger.error("HTTP server shutdown drain failed", { error });
     finishShutdownSafely();
   });
 }
