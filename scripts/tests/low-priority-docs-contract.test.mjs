@@ -38,6 +38,22 @@ test("secret leak playbook links rotation runbook and covers containment plus es
   }
 });
 
+test("secret rotation runbook documents TOTP SHA256 migration without breaking legacy SHA1 enrollments", async () => {
+  const content = await readDoc("docs/SECRET_ROTATION.md");
+  const normalizedContent = content.replace(/\s+/g, " ");
+
+  for (const marker of [
+    "TOTP Algorithm Migration",
+    "TWO_FACTOR_TOTP_ALGORITHM=SHA256",
+    "new enrollments only",
+    "legacy encrypted 2FA payloads as `SHA1`",
+    "disable and re-enable 2FA",
+    "Existing `v2.sha256` enrollments remain verifiable",
+  ]) {
+    assert.match(normalizedContent, new RegExp(marker.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  }
+});
+
 test("data retention policy covers operational categories and deletion procedures", async () => {
   const content = await readDoc("docs/DATA_RETENTION_POLICY.md");
 
