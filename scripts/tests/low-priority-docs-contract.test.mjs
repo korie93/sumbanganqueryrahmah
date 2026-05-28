@@ -54,6 +54,21 @@ test("secret rotation runbook documents TOTP SHA256 migration without breaking l
   }
 });
 
+test("secret rotation runbook documents collection PII key rotation cadence and verification", async () => {
+  const content = await readDoc("docs/SECRET_ROTATION.md");
+
+  for (const marker of [
+    "Rotate `COLLECTION_PII_ENCRYPTION_KEY` at least annually",
+    "within 24 hours",
+    "rotation owner",
+    "restore test",
+    "collection:pii-status",
+    "re-encryption checks are green",
+  ]) {
+    assert.match(content, new RegExp(marker.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  }
+});
+
 test("data retention policy covers operational categories and deletion procedures", async () => {
   const content = await readDoc("docs/DATA_RETENTION_POLICY.md");
 

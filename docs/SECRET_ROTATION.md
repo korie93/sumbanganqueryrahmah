@@ -146,6 +146,20 @@ correct environment.
 for at-rest protection. The runtime now supports a manual compatibility window
 through `COLLECTION_PII_ENCRYPTION_KEY_PREVIOUS` for decryption only.
 
+### Rotation Schedule
+
+- Rotate `COLLECTION_PII_ENCRYPTION_KEY` at least annually, and within 24 hours
+  after any suspected exposure of application secrets, database exports, server
+  images, or CI logs.
+- Assign one operator as rotation owner and one reviewer. The reviewer must
+  verify the generated key is unique, not reused from `SESSION_SECRET`,
+  `TWO_FACTOR_ENCRYPTION_KEY`, or backup encryption keys.
+- Before removing `COLLECTION_PII_ENCRYPTION_KEY_PREVIOUS`, run a restore test
+  against staging with a backup created before the rotation window.
+- Automation may generate and stage the new key in the secret manager, but the
+  apply step stays manual until restore testing, `collection:pii-status`, and
+  the relevant re-encryption checks are green.
+
 ### Planned Rotation
 
 1. Generate a new `COLLECTION_PII_ENCRYPTION_KEY`.
