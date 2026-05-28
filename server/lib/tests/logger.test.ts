@@ -120,6 +120,16 @@ test("sanitizeForLog redacts phone numbers and valid credit cards inside freefor
   ]);
 });
 
+test("sanitizeForLog redacts PostgreSQL connection URLs inside freeform strings", () => {
+  const sanitized = sanitizeForLog({
+    message: "connect ECONNREFUSED postgresql://sqr_user:sqr-secret@db.internal:5432/sqr_db",
+    stack: "Error: failed for postgres://postgres:secret@127.0.0.1:5432/sqr_db\n    at connect",
+  }) as Record<string, unknown>;
+
+  assert.equal(sanitized.message, "connect ECONNREFUSED [REDACTED]");
+  assert.equal(sanitized.stack, "Error: failed for [REDACTED]\n    at connect");
+});
+
 test("sanitizeForLog keeps invalid card-like identifiers intact to avoid false positives", () => {
   const sanitized = sanitizeForLog({
     details: "Reference 4111 1111 1111 1112 belongs to audit replay 2026-04-12.",

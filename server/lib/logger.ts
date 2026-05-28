@@ -148,6 +148,7 @@ const EMAIL_CANDIDATE_PATTERN = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi;
 const PHONE_CANDIDATE_PATTERN = /(?<!\d)(?:\+?60|0)(?:1(?:[ -]?\d){8,9}|[3-9](?:[ -]?\d){7,8})(?!\d)/g;
 const CREDIT_CARD_CANDIDATE_PATTERN = /\b(?:\d[ -]?){13,19}\b/g;
 const BEARER_TOKEN_PATTERN = /\bBearer\s+[A-Za-z0-9._~+/=-]{12,}/gi;
+const POSTGRES_CONNECTION_URL_PATTERN = /\bpostgres(?:ql)?:\/\/[^\s"'<>]+/gi;
 const PRODUCTION_STACK_MAX_LINES = 4;
 const PRODUCTION_STACK_MAX_CHARS = 1_200;
 
@@ -177,7 +178,8 @@ function passesLuhnCheck(rawDigits: string): boolean {
 }
 
 function sanitizeLogString(value: string): string {
-  const withBearerTokensRedacted = value.replace(BEARER_TOKEN_PATTERN, "[REDACTED]");
+  const withPostgresUrlsRedacted = value.replace(POSTGRES_CONNECTION_URL_PATTERN, "[REDACTED]");
+  const withBearerTokensRedacted = withPostgresUrlsRedacted.replace(BEARER_TOKEN_PATTERN, "[REDACTED]");
   const withEmailAddressesRedacted = withBearerTokensRedacted.replace(EMAIL_CANDIDATE_PATTERN, "[REDACTED]");
   const withPhoneNumbersRedacted = withEmailAddressesRedacted.replace(PHONE_CANDIDATE_PATTERN, "[REDACTED]");
 
