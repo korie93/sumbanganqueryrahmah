@@ -1,9 +1,7 @@
 import { createCollectionMultipartRoute } from "./collection-multipart-routes";
 import type { CollectionRouteContext } from "./collection-route-shared";
+import { createAuthorizeCollectionRecordAccess } from "../collection-access";
 import { readRouteParam } from "../../http/validation";
-import type { AuthenticatedRequest } from "../../auth/guards";
-import { forbidden } from "../../http/errors";
-import { getAccessibleCollectionRecordOrThrow } from "../../services/collection/collection-record-write-shared";
 
 export function registerCollectionRecordMutationRoutes(context: CollectionRouteContext) {
   const {
@@ -17,14 +15,7 @@ export function registerCollectionRecordMutationRoutes(context: CollectionRouteC
   } = context;
   const collectionMultipartRoute = createCollectionMultipartRoute();
   const updateCollectionMultipartRoute = createCollectionMultipartRoute({
-    authorizeRequest: async (req) => {
-      const authenticatedReq = req as AuthenticatedRequest;
-      if (!authenticatedReq.user) {
-        throw forbidden("Forbidden");
-      }
-      const recordId = readRouteParam(authenticatedReq.params.id, "collection record id");
-      await getAccessibleCollectionRecordOrThrow(storage, authenticatedReq.user, recordId);
-    },
+    authorizeRequest: createAuthorizeCollectionRecordAccess({ storage }),
   });
 
   app.post(

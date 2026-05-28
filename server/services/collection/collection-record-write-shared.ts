@@ -1,8 +1,8 @@
-import { badRequest, conflict, forbidden, notFound } from "../../http/errors";
+import { badRequest, conflict, forbidden } from "../../http/errors";
 import type { AuthenticatedUser } from "../../auth/guards";
 import {
-  canUserAccessCollectionRecord,
   getAdminVisibleNicknameValues,
+  getAccessibleCollectionRecordOrThrow,
   hasNicknameValue,
 } from "../../routes/collection-access";
 import {
@@ -22,27 +22,14 @@ export type ExistingCollectionRecord = NonNullable<
   Awaited<ReturnType<CollectionStoragePort["getCollectionRecordById"]>>
 >;
 
+export { getAccessibleCollectionRecordOrThrow };
+
 export function requireCollectionRecordId(idRaw: unknown): string {
   const id = normalizeCollectionText(idRaw);
   if (!id) {
     throw badRequest("Collection id is required.");
   }
   return id;
-}
-
-export async function getAccessibleCollectionRecordOrThrow(
-  storage: CollectionStoragePort,
-  user: AuthenticatedUser,
-  id: string,
-): Promise<ExistingCollectionRecord> {
-  const existing = await storage.getCollectionRecordById(id);
-  if (!existing) {
-    throw notFound("Collection record not found.");
-  }
-  if (!(await canUserAccessCollectionRecord(storage, user, existing))) {
-    throw forbidden("Forbidden");
-  }
-  return existing;
 }
 
 export async function assertCollectionStaffNicknameWriteAccess(

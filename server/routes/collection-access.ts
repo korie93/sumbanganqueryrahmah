@@ -1,6 +1,10 @@
 import type { AuthenticatedUser } from "../auth/guards";
+import type { AuthenticatedRequest } from "../auth/guards";
+import type { NextFunction, RequestHandler, Response } from "express";
 import type { CollectionNicknameAuthProfile } from "../storage-postgres";
 import type { CollectionStoragePort } from "../services/collection/collection-service-support";
+import { forbidden, notFound } from "../http/errors";
+import { readRouteParam } from "../http/validation";
 import {
   COLLECTION_STAFF_NICKNAME_MIN_LENGTH,
   isNicknameScopeAllowedForRole,
@@ -15,6 +19,10 @@ export type CollectionNicknameAccessResolution =
 export type CollectionAccessUser = Pick<AuthenticatedUser, "role" | "username"> & {
   activityId?: string | null;
 };
+
+export type ExistingCollectionAccessRecord = NonNullable<
+  Awaited<ReturnType<CollectionStoragePort["getCollectionRecordById"]>>
+>;
 
 export async function resolveCurrentCollectionNicknameFromSession(
   storage: CollectionStoragePort,
@@ -100,6 +108,58 @@ export async function canUserAccessCollectionRecord(
   }
 
   return false;
+}
+
+export async function getAccessibleCollectionRecordOrThrow(
+  storage: CollectionStoragePort,
+  user: AuthenticatedUser,
+  id: string,
+): Promise<ExistingCollectionAccessRecord> {
+  const existing = await storage.getCollectionRecordById(id);
+  if (!existing) {
+    throw notFound("Collection record not found.");
+  }
+  if (!(await canUserAccessCollectionRecord(storage, user, existing))) {
+    throw forbidden("Forbidden");
+  }
+  return existing;
+}
+
+type RequireCollectionRecordAccessOptions = {
+  storage: CollectionStoragePort;
+  resolveRecordId?: ((req: AuthenticatedRequest) => string) | undefined;
+};
+
+export type CollectionRecordAccessRequestAuthorizer = (req: Parameters<RequestHandler>[0]) => Promise<void>;
+
+export function createAuthorizeCollectionRecordAccess(
+  options: RequireCollectionRecordAccessOptions,
+): CollectionRecordAccessRequestAuthorizer {
+  return async (req): Promise<void> => {
+    const authenticatedReq = req as AuthenticatedRequest;
+    if (!authenticatedReq.user) {
+      throw forbidden("Forbidden");
+    }
+
+    const recordId = options.resolveRecordId
+      ? options.resolveRecordId(authenticatedReq)
+      : readRouteParam(authenticatedReq.params.id, "collection record id");
+    await getAccessibleCollectionRecordOrThrow(options.storage, authenticatedReq.user, recordId);
+  };
+}
+
+export function createRequireCollectionRecordAccess(
+  options: RequireCollectionRecordAccessOptions,
+): RequestHandler {
+  const authorize = createAuthorizeCollectionRecordAccess(options);
+  return async (req, _res: Response, next: NextFunction): Promise<void> => {
+    try {
+      await authorize(req as AuthenticatedRequest);
+      next();
+    } catch (error) {
+      next(error);
+    }
+  };
 }
 
 export function readNicknameFiltersFromQuery(query: Record<string, unknown>): string[] {
