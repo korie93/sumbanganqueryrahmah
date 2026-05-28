@@ -83,13 +83,19 @@ export function useCollectionRecordsQueryState() {
     abortNicknamesRequest();
     const controller = new AbortController();
     nicknamesAbortControllerRef.current = controller;
+    let removeCallerAbortListener: (() => void) | null = null;
     if (options?.signal) {
-      if (options.signal.aborted) {
-        controller.abort(options.signal.reason);
+      const callerSignal = options.signal;
+      if (callerSignal.aborted) {
+        controller.abort(callerSignal.reason);
       } else {
-        options.signal.addEventListener("abort", () => {
-          controller.abort(options.signal?.reason);
-        }, { once: true });
+        const handleCallerAbort = () => {
+          controller.abort(callerSignal.reason);
+        };
+        callerSignal.addEventListener("abort", handleCallerAbort, { once: true });
+        removeCallerAbortListener = () => {
+          callerSignal.removeEventListener("abort", handleCallerAbort);
+        };
       }
     }
     setLoadingNicknames(true);
@@ -111,6 +117,7 @@ export function useCollectionRecordsQueryState() {
       });
       return undefined;
     } finally {
+      removeCallerAbortListener?.();
       if (nicknamesAbortControllerRef.current === controller) {
         nicknamesAbortControllerRef.current = null;
       }

@@ -324,7 +324,7 @@ export function buildCollectionMonthlyComparisonPrintReportHtml(
     </section>
   </main>
   <div class="actions"><button class="print-button" type="button" onclick="window.print()">Print or save PDF</button></div>
-  <script>window.addEventListener("load",function(){setTimeout(function(){window.print();},150);});</script>
+  <script>(function(){function autoPrintCollectionReport(){setTimeout(function(){window.print();},150);}window.addEventListener("load",autoPrintCollectionReport,{once:true});})();</script>
 </body>
 </html>`;
 }
