@@ -63,6 +63,8 @@ test("sanitizeForLogAllowList redacts fields that are not explicitly allowlisted
   const sanitized = sanitizeForLogAllowList({
     requestId: "req-1",
     statusCode: 200,
+    retryAfterMs: 1500,
+    strikeCount: 2,
     rawBody: { nested: "secret-shaped payload" },
     nested: {
       scope: "collection:list",
@@ -71,6 +73,8 @@ test("sanitizeForLogAllowList redacts fields that are not explicitly allowlisted
 
   assert.equal(sanitized.requestId, "req-1");
   assert.equal(sanitized.statusCode, 200);
+  assert.equal(sanitized.retryAfterMs, 1500);
+  assert.equal(sanitized.strikeCount, 2);
   assert.equal(sanitized.rawBody, "[REDACTED]");
   assert.equal(sanitized.nested, "[REDACTED]");
 });
