@@ -1,8 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import {
   classifySourceType,
+  discoverForeignKeyDeleteActionViolations,
   extractTableNames,
+  formatForeignKeyDeleteActionReport,
   formatSchemaGovernanceReport,
   validateSchemaGovernance,
 } from "../lib/db-schema-governance.mjs";
@@ -145,4 +150,49 @@ test("formatSchemaGovernanceReport summarizes successful checks", () => {
   assert.equal(validation.failures.length, 0);
   assert.match(report, /runtime-managed: 1/);
   assert.match(report, /All discovered tables are classified/);
+});
+
+test("foreign key delete governance rejects implicit delete actions", () => {
+  const cwd = mkdtempSync(path.join(tmpdir(), "sqr-fk-governance-"));
+  try {
+    mkdirSync(path.join(cwd, "shared"), { recursive: true });
+    mkdirSync(path.join(cwd, "server", "internal"), { recursive: true });
+
+    writeFileSync(
+      path.join(cwd, "shared", "schema-postgres.ts"),
+      `
+        export const good = pgTable("good", {
+          userId: text("user_id").references(() => users.id, { onDelete: "cascade", onUpdate: "cascade" }),
+        });
+        export const bad = pgTable("bad", {
+          userId: text("user_id").references(() => users.id),
+        });
+      `,
+    );
+    writeFileSync(
+      path.join(cwd, "server", "internal", "bootstrap.ts"),
+      `
+        await client.query(\`
+          CREATE TABLE public.good_sql (
+            user_id text REFERENCES public.users(id) ON DELETE RESTRICT
+          );
+          CREATE TABLE public.bad_sql (
+            user_id text REFERENCES public.users(id)
+          );
+        \`);
+      `,
+    );
+
+    const violations = discoverForeignKeyDeleteActionViolations({
+      cwd,
+      roots: ["shared", "server"],
+    });
+    const report = formatForeignKeyDeleteActionReport(violations);
+
+    assert.equal(violations.length, 2);
+    assert.match(report, /Drizzle \.references\(\) must declare an explicit onDelete action/);
+    assert.match(report, /SQL foreign key reference must declare an explicit ON DELETE action/);
+  } finally {
+    rmSync(cwd, { recursive: true, force: true });
+  }
 });
