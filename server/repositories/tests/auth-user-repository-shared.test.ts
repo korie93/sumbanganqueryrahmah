@@ -13,7 +13,7 @@ test("auth user repository shared normalizes managed account inserts", () => {
     id: "user-1",
     now,
     account: {
-      username: "  Test.User  ",
+      username: "  Ｔｅｓｔ.User  ",
       fullName: "  Test User  ",
       email: " TEST@EXAMPLE.COM ",
       role: "user",

@@ -1,5 +1,7 @@
+import { normalizeCredentialUsername } from "../auth/username-normalization";
+
 export function normalizeAuthUsername(value: string): string {
-  return value.trim().toLowerCase();
+  return normalizeCredentialUsername(value);
 }
 
 export function normalizeOptionalAuthFullName(value: unknown): string | null {

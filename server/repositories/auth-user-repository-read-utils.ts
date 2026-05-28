@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import type { User } from "../../shared/schema-postgres";
 import { users } from "../../shared/schema-postgres";
 import { db } from "../db-postgres";
+import { normalizeAuthUsername } from "./auth-user-repository-normalize";
 
 export async function getAuthUser(id: string): Promise<User | undefined> {
   const result = await db
@@ -14,7 +15,7 @@ export async function getAuthUser(id: string): Promise<User | undefined> {
 }
 
 export async function getAuthUserByUsername(username: string): Promise<User | undefined> {
-  const normalized = String(username || "").trim();
+  const normalized = normalizeAuthUsername(username);
   if (!normalized) return undefined;
 
   const result = await db
