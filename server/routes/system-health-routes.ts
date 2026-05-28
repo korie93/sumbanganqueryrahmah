@@ -68,6 +68,7 @@ export function registerSystemHealthRoutes(context: SystemRouteContext) {
     getMaintenanceStateCached,
     checkDbConnectivity,
     getStartupHealthSnapshot,
+    getTabVisibilityCacheStats,
   } = context;
 
   app.get("/api/health/live", routeHandler((_req, res) => {
@@ -102,6 +103,9 @@ export function registerSystemHealthRoutes(context: SystemRouteContext) {
       const readiness = buildReadinessPayload({ dbOk, startup });
       res.status(readiness.ready ? 200 : 503).json({
         ...readiness,
+        caches: {
+          tabVisibility: getTabVisibilityCacheStats(),
+        },
         live: buildLiveHealthPayload(getStartupHealthSnapshot),
       });
     }),

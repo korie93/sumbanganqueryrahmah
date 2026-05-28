@@ -330,6 +330,13 @@ function createBaseSystemRouteDeps(
     createAuditLog: async (data) => createAuditLogRow(data),
     checkDbConnectivity: async () => true,
     getStartupHealthSnapshot: () => createStartupSnapshot(),
+    getTabVisibilityCacheStats: () => ({
+      maxSize: 100,
+      size: 2,
+      sweepIntervalMs: 300_000,
+      ttlMs: 300_000,
+      utilization: 0.02,
+    }),
     ...overrides,
   };
 }
@@ -499,6 +506,7 @@ test("GET /api/metrics exposes aggregate internal counters to admins", async () 
     assert.equal(response.status, 200);
     const payload = await response.json() as {
       counters?: Record<string, unknown>;
+      gauges?: Record<string, unknown>;
       timestamp?: unknown;
     };
 
@@ -507,7 +515,9 @@ test("GET /api/metrics exposes aggregate internal counters to admins", async () 
     assert.equal(typeof payload.counters?.cspReportsDroppedTotal, "number");
     assert.equal(typeof payload.counters?.webVitalsAcceptedTotal, "number");
     assert.equal(typeof payload.counters?.webVitalsDroppedTotal, "number");
-    assert.deepEqual(Object.keys(payload).sort(), ["counters", "timestamp"]);
+    assert.equal(typeof payload.gauges?.authTabVisibilityCacheSize, "number");
+    assert.equal(typeof payload.gauges?.authTabVisibilityCacheUtilization, "number");
+    assert.deepEqual(Object.keys(payload).sort(), ["counters", "gauges", "timestamp"]);
   } finally {
     await stopTestServer(server);
   }
@@ -555,6 +565,8 @@ test("GET /internal/health exposes startup details only to privileged users", as
     assert.equal(payload.mode, "postgresql");
     assert.equal(payload.database, "unreachable");
     assert.equal(payload.ready, false);
+    assert.equal(payload.caches.tabVisibility.size, 2);
+    assert.equal(payload.caches.tabVisibility.maxSize, 100);
     assert.equal(payload.live.live, true);
     assert.equal(payload.startup.stage, "ready");
   } finally {

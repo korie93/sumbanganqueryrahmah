@@ -92,6 +92,7 @@ export function createLocalServerComposition(
     requireTabAccess: authGuards.requireTabAccess,
     requireMonitorAccess: authGuards.requireMonitorAccess,
     clearTabVisibilityCache: authGuards.clearTabVisibilityCache,
+    getTabVisibilityCacheStats: authGuards.getTabVisibilityCacheStats,
     stopActivityUpdateCacheSweep: authGuards.stopActivityUpdateCacheSweep,
     stopTabVisibilityCacheSweep: authGuards.stopTabVisibilityCacheSweep,
   };

@@ -744,6 +744,13 @@ function createSystemPermissionHarness() {
         warnings: [],
       },
     }),
+    getTabVisibilityCacheStats: () => ({
+      maxSize: 100,
+      size: 0,
+      sweepIntervalMs: 300_000,
+      ttlMs: 300_000,
+      utilization: 0,
+    }),
   });
 
   return {

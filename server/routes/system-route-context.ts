@@ -12,6 +12,7 @@ import type { StartupHealthSnapshot } from "../internal/startup-health";
 import type { MonitorAlertIncidentPage } from "../repositories/monitor-alert-history.repository";
 import type { AuditLog, InsertAuditLog } from "../../shared/schema-postgres";
 import type { WebVitalOverviewPayload } from "../../shared/web-vitals";
+import type { TabVisibilityCacheStats } from "../auth/guard-tab-visibility";
 
 export type LocalCircuitSnapshots = {
   ai: CircuitSnapshot;
@@ -54,6 +55,7 @@ export type SystemRouteDeps = {
   createAuditLog: (data: InsertAuditLog) => Promise<AuditLog>;
   checkDbConnectivity: () => Promise<boolean>;
   getStartupHealthSnapshot: () => StartupHealthSnapshot;
+  getTabVisibilityCacheStats: () => TabVisibilityCacheStats;
 };
 
 export type SystemRouteContext = {

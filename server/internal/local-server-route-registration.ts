@@ -83,6 +83,7 @@ export function registerLocalServerRoutes(options: RegisterLocalServerRoutesOpti
     requireTabAccess,
     requireMonitorAccess,
     clearTabVisibilityCache,
+    getTabVisibilityCacheStats,
   } = composition;
   const {
     getRuntimeSettingsCached,
@@ -204,6 +205,7 @@ export function registerLocalServerRoutes(options: RegisterLocalServerRoutesOpti
       }
     },
     getStartupHealthSnapshot,
+    getTabVisibilityCacheStats,
   });
 
   registerAuthRoutes(app, {

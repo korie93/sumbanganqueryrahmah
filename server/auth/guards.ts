@@ -626,6 +626,7 @@ export function createAuthGuards(options: CreateAuthGuardsOptions) {
     clearTabVisibilityCache() {
       tabVisibility.clear();
     },
+    getTabVisibilityCacheStats: tabVisibility.getStats,
     clearActivityUpdateCache() {
       activityUpdates.clear();
     },
