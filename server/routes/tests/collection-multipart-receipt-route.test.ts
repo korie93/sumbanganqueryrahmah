@@ -55,12 +55,14 @@ async function runMultipartHandler(
   };
   const result = await new Promise<
     | { kind: "next"; body: Record<string, unknown> | undefined }
+    | { kind: "next-error"; error: unknown }
     | { kind: "response"; statusCode: number; payload: unknown }
   >((resolve) => {
     let resolved = false;
     const complete = (
       value:
         | { kind: "next"; body: Record<string, unknown> | undefined }
+        | { kind: "next-error"; error: unknown }
         | { kind: "response"; statusCode: number; payload: unknown },
     ) => {
       if (resolved) {
@@ -85,7 +87,11 @@ async function runMultipartHandler(
       },
     };
 
-    handler(req as never, res as never, () => {
+    handler(req as never, res as never, (error?: unknown) => {
+      if (error) {
+        complete({ kind: "next-error", error });
+        return;
+      }
       complete({ kind: "next", body: req.body });
     });
     req.end(body);
@@ -137,6 +143,46 @@ test("createCollectionReceiptMultipartRoute attaches parsed fields and uploaded 
       filename: "receipt.txt",
     },
   ]);
+});
+
+test("createCollectionReceiptMultipartRoute authorizes before processing receipt streams", async () => {
+  let receiptHandlerCalled = false;
+  const authorizationError = new Error("Forbidden");
+  const handler = createCollectionReceiptMultipartRoute<
+    { filename: string },
+    Record<string, unknown>
+  >({
+    attachKey: "uploadedReceipts",
+    authorizeRequest: async () => {
+      throw authorizationError;
+    },
+    handleReceipt: async ({ stream }) => {
+      receiptHandlerCalled = true;
+      for await (const _chunk of stream) {
+        // Should never run when request authorization fails.
+      }
+      return { filename: "receipt.txt" };
+    },
+  });
+
+  const result = await runMultipartHandler(
+    [
+      {
+        kind: "file",
+        name: "receipt",
+        filename: "receipt.txt",
+        contentType: "text/plain",
+        content: "receipt body",
+      },
+    ],
+    handler,
+  );
+
+  assert.equal(receiptHandlerCalled, false);
+  assert.deepEqual(result, {
+    kind: "next-error",
+    error: authorizationError,
+  });
 });
 
 test("createCollectionReceiptMultipartRoute cleans up completed uploads when a later upload fails", async () => {

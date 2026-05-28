@@ -41,6 +41,7 @@ export function createCollectionReceiptMultipartRoute<
   TBody extends Record<string, unknown>,
 >(params: {
   attachKey: keyof TBody;
+  authorizeRequest?: ((req: Parameters<RequestHandler>[0]) => Promise<void>) | undefined;
   handleReceipt: (input: {
     fileName?: string | null;
     mimeType?: string | null;
@@ -55,6 +56,7 @@ export function createCollectionReceiptMultipartRoute<
       return;
     }
 
+    const startMultipartParsing = () => {
     const parser = Busboy({
       headers: req.headers,
       limits: {
@@ -202,5 +204,15 @@ export function createCollectionReceiptMultipartRoute<
     timeoutHandle.unref?.();
 
     req.pipe(parser);
+    };
+
+    if (!params.authorizeRequest) {
+      startMultipartParsing();
+      return;
+    }
+
+    params.authorizeRequest(req)
+      .then(startMultipartParsing)
+      .catch(next);
   };
 }

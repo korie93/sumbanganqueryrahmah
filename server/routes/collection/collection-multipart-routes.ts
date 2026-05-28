@@ -11,9 +11,12 @@ type CollectionMultipartRouteBody = MultipartCollectionBody & {
 };
 type StoredCollectionReceiptFile = Awaited<ReturnType<typeof saveMultipartCollectionReceipt>>;
 
-export function createCollectionMultipartRoute(): RequestHandler {
+export function createCollectionMultipartRoute(options: {
+  authorizeRequest?: Parameters<typeof createCollectionReceiptMultipartRoute>[0]["authorizeRequest"];
+} = {}): RequestHandler {
   return createCollectionReceiptMultipartRoute<StoredCollectionReceiptFile, CollectionMultipartRouteBody>({
     attachKey: "uploadedReceipts",
+    authorizeRequest: options.authorizeRequest,
     handleReceipt: saveMultipartCollectionReceipt,
     cleanupReceipts: async (receipts) => {
       await Promise.allSettled(

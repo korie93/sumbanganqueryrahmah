@@ -55,11 +55,11 @@ export class CollectionRecordUpdateOperations {
   ) {
     const user = this.requireUser(userInput);
     const id = requireCollectionRecordId(idRaw);
-    const existing = await getAccessibleCollectionRecordOrThrow(this.storage, user, id);
-
     const uploadedReceipts: StoredCollectionMutationReceipt[] = [];
     try {
       const body = (ensureLooseObject(bodyRaw) || {}) as CollectionUpdatePayload & MultipartCollectionPayload;
+      uploadedReceipts.push(...(await collectStoredCollectionReceipts(body)));
+      const existing = await getAccessibleCollectionRecordOrThrow(this.storage, user, id);
       const expectedUpdatedAt = parseRecordVersionTimestamp(body.expectedUpdatedAt);
       await assertCollectionRecordVersionMatch({
         storage: this.storage,
@@ -83,7 +83,6 @@ export class CollectionRecordUpdateOperations {
       const removeReceiptIds = Array.isArray(body.removeReceiptIds)
         ? normalizeCollectionStringList(body.removeReceiptIds)
         : [];
-      uploadedReceipts.push(...(await collectStoredCollectionReceipts(body)));
       const existingReceiptMetadata = readCollectionReceiptMetadataOrThrow(body.existingReceiptMetadata)
         .map((item) => normalizeCollectionReceiptMetadata(item));
       const newReceiptMetadata = readCollectionReceiptMetadataOrThrow(body.newReceiptMetadata)

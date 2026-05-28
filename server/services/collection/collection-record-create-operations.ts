@@ -44,11 +44,11 @@ export class CollectionRecordCreateOperations {
 
     try {
       const body = (ensureLooseObject(bodyRaw) || {}) as CollectionCreatePayload & MultipartCollectionPayload;
+      uploadedReceipts.push(...(await collectStoredCollectionReceipts(body)));
       const fields = normalizeCollectionRecordFields(body);
       assertValidCollectionCreateFields(fields);
       await assertCollectionStaffNicknameWriteAccess(this.storage, user, fields.collectionStaffNickname);
 
-      uploadedReceipts.push(...(await collectStoredCollectionReceipts(body)));
       const newReceiptMetadata = readCollectionReceiptMetadataOrThrow(body.newReceiptMetadata)
         .map((item) => normalizeCollectionReceiptMetadata(item));
       const newReceiptInputs = buildCollectionNewReceiptInputs(uploadedReceipts, newReceiptMetadata);
