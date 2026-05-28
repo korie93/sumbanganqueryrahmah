@@ -342,7 +342,12 @@ export default function Login({ onBanned, onForgotPasswordClick, onLandingClick,
                       {lockedAccountMessage || "Akaun anda telah dikunci kerana terlalu banyak percubaan log masuk yang tidak sah."}
                     </ExpandableMessage>
                   </div>
-                  <div className="login-alert--warning-subtext mt-1 text-xs">
+                  <div
+                    className="login-alert--warning-subtext mt-1 text-xs"
+                    role="status"
+                    aria-live="polite"
+                    aria-atomic="true"
+                  >
                     {lockedCountdownSeconds > 0
                       ? `Sila cuba semula dalam ${lockedCountdownSeconds} saat.`
                       : "Sila hubungi pentadbir sistem untuk pengaktifan semula akaun."}

@@ -25,6 +25,7 @@ test("login page uses the compact modern shell without animated orb layers", () 
   assert.match(source, /aria-label="Sembunyi kata laluan"/);
   assert.match(source, /aria-pressed="false"/);
   assert.match(source, /aria-pressed="true"/);
+  assert.match(source, /className="login-alert--warning-subtext mt-1 text-xs"[\s\S]*role="status"[\s\S]*aria-live="polite"[\s\S]*aria-atomic="true"/);
 });
 
 test("public auth recovery pages expose labels and decorative icons correctly", () => {
