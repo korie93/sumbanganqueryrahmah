@@ -15,6 +15,7 @@ import {
   hashOpaqueToken,
   hashPassword,
   resetDummyBcryptHashForTests,
+  verifyBcryptRuntimeStartup,
   verifyPassword,
 } from "../passwords";
 
@@ -108,4 +109,35 @@ test("hashPassword uses an explicit bcrypt cost of at least 12", async (t) => {
   assert.equal(hashMock.mock.callCount(), 1);
   assert.equal(hashMock.mock.calls[0]?.arguments[1], CREDENTIAL_BCRYPT_COST);
   assert.equal(CREDENTIAL_BCRYPT_COST >= 12, true);
+});
+
+test("verifyBcryptRuntimeStartup validates bcrypt hash and compare before serving traffic", async (t) => {
+  resetDummyBcryptHashForTests();
+  t.after(() => {
+    resetDummyBcryptHashForTests();
+  });
+
+  const hashMock = t.mock.method(bcrypt, "hash", async () => VALID_BCRYPT_HASH);
+  const compareMock = t.mock.method(bcrypt, "compare", async (raw: string) => !raw.endsWith(":mismatch"));
+
+  await verifyBcryptRuntimeStartup();
+
+  assert.equal(hashMock.mock.callCount(), 1);
+  assert.equal(compareMock.mock.callCount(), 2);
+
+  assert.equal(await verifyPassword("Password123!", null), false);
+  assert.equal(hashMock.mock.callCount(), 1);
+  assert.equal(compareMock.mock.callCount(), 3);
+});
+
+test("verifyBcryptRuntimeStartup fails fast when bcrypt comparison is inconsistent", async (t) => {
+  resetDummyBcryptHashForTests();
+  t.after(() => {
+    resetDummyBcryptHashForTests();
+  });
+
+  t.mock.method(bcrypt, "hash", async () => VALID_BCRYPT_HASH);
+  t.mock.method(bcrypt, "compare", async () => false);
+
+  await assert.rejects(() => verifyBcryptRuntimeStartup(), /bcrypt runtime self-check failed/i);
 });

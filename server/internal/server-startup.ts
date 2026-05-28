@@ -18,6 +18,7 @@ import { assertCollectionPiiRetirementStartupReady } from "./collection-pii-reti
 import { buildRateLimiterTopologyWarning } from "../middleware/rate-limit-runtime";
 import { buildTwoFactorReplayCacheTopologyWarning } from "../auth/two-factor-replay-topology";
 import { verifyCollectionReceiptExternalScanStartup } from "../lib/collection-receipt-external-scan-startup";
+import { verifyBcryptRuntimeStartup } from "../auth/passwords";
 
 type RuntimeSettings = {
   sessionTimeoutMinutes: number;
@@ -133,6 +134,24 @@ export async function startLocalServer(options: StartLocalServerOptions) {
     );
   } else {
     clearStartupServiceDegraded("two-factor-replay-topology");
+  }
+
+  markStartupStage("verifying-bcrypt");
+  try {
+    await verifyBcryptRuntimeStartup();
+    clearStartupServiceDegraded("bcrypt-runtime");
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    const startupError = error instanceof Error ? error : new Error(message);
+    Object.assign(startupError, {
+      startupReason: "BCRYPT_RUNTIME_UNAVAILABLE",
+    });
+    notifyFatalStartup("BCRYPT_RUNTIME_UNAVAILABLE", message);
+    markStartupFailed("BCRYPT_RUNTIME_UNAVAILABLE", message);
+    logger.error("Local server startup blocked by bcrypt runtime self-check failure", {
+      error,
+    });
+    throw startupError;
   }
 
   markStartupStage("verifying-receipt-scanner");

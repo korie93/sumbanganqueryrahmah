@@ -2,8 +2,10 @@ import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import test from "node:test";
+import bcrypt from "bcrypt";
 import express from "express";
 import { startLocalServer } from "../../internal/server-startup";
+import { resetDummyBcryptHashForTests } from "../../auth/passwords";
 
 function listen(server: ReturnType<typeof createServer>, port = 0) {
   return new Promise<number>((resolve) => {
@@ -28,7 +30,70 @@ function close(server: ReturnType<typeof createServer>) {
   });
 }
 
+test("startLocalServer fails startup before listening when bcrypt runtime self-check fails", async (t) => {
+  resetDummyBcryptHashForTests();
+  t.after(() => {
+    resetDummyBcryptHashForTests();
+  });
+
+  t.mock.method(bcrypt, "hash", async () => "$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewY5NU7z6xUfIjm6");
+  t.mock.method(bcrypt, "compare", async () => false);
+
+  const app = express();
+  const server = createServer(app);
+  const fatalReports: Array<{ reason: string; details?: string }> = [];
+  let storageInitCalls = 0;
+
+  await assert.rejects(
+    startLocalServer({
+      app,
+      server,
+      storage: {
+        init: async () => {
+          storageInitCalls += 1;
+        },
+        getActiveActivities: async () => [],
+        expireIdleActivitySession: async () => undefined,
+      },
+      connectedClients: new Map(),
+      getRuntimeSettingsCached: async () => ({
+        sessionTimeoutMinutes: 30,
+        wsIdleMinutes: 30,
+      }),
+      defaultSessionTimeoutMinutes: 30,
+      aiPrecomputeOnStart: false,
+      categoryStatsService: {
+        warmCategoryStats: async () => ({ skipped: true, computeKeys: 0 }),
+      },
+      notifyFatalStartup: (reason, details) => {
+        fatalReports.push(details === undefined ? { reason } : { reason, details });
+      },
+      port: 0,
+      host: "127.0.0.1",
+    }),
+    (error: unknown) => {
+      assert.equal((error as { startupReason?: string }).startupReason, "BCRYPT_RUNTIME_UNAVAILABLE");
+      assert.match(error instanceof Error ? error.message : String(error), /bcrypt runtime self-check failed/i);
+      return true;
+    },
+  );
+
+  assert.equal(server.listening, false);
+  assert.equal(storageInitCalls, 0);
+  assert.deepEqual(fatalReports, [
+    {
+      reason: "BCRYPT_RUNTIME_UNAVAILABLE",
+      details: "bcrypt runtime self-check failed",
+    },
+  ]);
+});
+
 test("startLocalServer rejects EADDRINUSE through startup shutdown flow instead of exiting immediately", async (t) => {
+  resetDummyBcryptHashForTests();
+  t.after(() => {
+    resetDummyBcryptHashForTests();
+  });
+
   const blocker = createServer((_req, res) => {
     res.end("busy");
   });

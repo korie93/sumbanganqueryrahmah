@@ -2,6 +2,7 @@ import { runtimeConfigValidation, type RuntimeConfigDiagnostic } from "../config
 
 export type StartupStage =
   | "booting"
+  | "verifying-bcrypt"
   | "verifying-receipt-scanner"
   | "initializing-storage"
   | "registering-runtime"

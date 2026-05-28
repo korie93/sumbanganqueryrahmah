@@ -41,6 +41,7 @@ export async function hashPassword(raw: string): Promise<string> {
 }
 
 let dummyBcryptHashPromise: Promise<string> | null = null;
+let bcryptStartupValidationPromise: Promise<void> | null = null;
 
 export function initializeDummyBcryptHash(): Promise<string> {
   if (!dummyBcryptHashPromise) {
@@ -54,8 +55,35 @@ export function initializeDummyBcryptHash(): Promise<string> {
   return dummyBcryptHashPromise;
 }
 
+async function runBcryptStartupValidation(): Promise<void> {
+  const probePassword = randomBytes(32).toString("base64url");
+  const probeHash = await bcrypt.hash(probePassword, CREDENTIAL_BCRYPT_COST);
+  const matched = await bcrypt.compare(probePassword, probeHash);
+  const mismatched = await bcrypt.compare(`${probePassword}:mismatch`, probeHash);
+
+  if (!matched || mismatched) {
+    throw new Error("bcrypt runtime self-check failed");
+  }
+
+  if (!dummyBcryptHashPromise) {
+    dummyBcryptHashPromise = Promise.resolve(probeHash);
+  }
+}
+
+export function verifyBcryptRuntimeStartup(): Promise<void> {
+  if (!bcryptStartupValidationPromise) {
+    bcryptStartupValidationPromise = runBcryptStartupValidation().catch((error: unknown) => {
+      bcryptStartupValidationPromise = null;
+      throw error;
+    });
+  }
+
+  return bcryptStartupValidationPromise;
+}
+
 export function resetDummyBcryptHashForTests() {
   dummyBcryptHashPromise = null;
+  bcryptStartupValidationPromise = null;
 }
 
 export async function verifyPassword(raw: string, hash: string | null | undefined): Promise<boolean> {
