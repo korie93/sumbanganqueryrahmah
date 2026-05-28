@@ -4,6 +4,7 @@ import {
   analyzeDependencyAuditReport,
   analyzePackageLockSources,
   analyzePackageOverrides,
+  analyzeSecurityCriticalDependencyPins,
 } from "../lib/dependency-audit.mjs";
 
 test("dependency audit fails the old drizzle-kit dev-only moderate chain after esbuild override", () => {
@@ -119,10 +120,64 @@ test("package override audit accepts documented override set", () => {
       qs: "^6.15.0",
       lodash: "^4.17.23",
       rollup: "^4.59.0",
-      dompurify: "^3.4.1",
+      dompurify: "3.4.1",
       esbuild: "^0.25.4",
       "ip-address": "^10.2.0",
     },
+  });
+
+  assert.deepEqual(result.failures, []);
+});
+
+test("security-critical dependency audit requires exact direct pins", () => {
+  const result = analyzeSecurityCriticalDependencyPins({
+    dependencies: {
+      bcrypt: "6.0.0",
+      busboy: "^1.6.0",
+      compression: "1.8.1",
+      dompurify: "3.4.1",
+      dotenv: "16.6.1",
+      "drizzle-orm": "0.45.2",
+      "drizzle-zod": "0.7.1",
+      express: "5.2.1",
+      "express-rate-limit": "8.4.1",
+      helmet: "8.1.0",
+      jsonwebtoken: "9.0.3",
+      nodemailer: "8.0.6",
+      pg: "8.20.0",
+      pino: "10.3.1",
+      redis: "5.12.1",
+      ws: "8.20.1",
+      zod: "3.25.76",
+    },
+  });
+
+  assert.match(result.failures.join("\n"), /busboy must be pinned to an exact version/);
+  assert.match(result.failures.join("\n"), /zod-validation-error is missing from direct dependencies/);
+});
+
+test("security-critical dependency audit accepts exact direct pins", () => {
+  const result = analyzeSecurityCriticalDependencyPins({
+    dependencies: Object.fromEntries([
+      "bcrypt",
+      "busboy",
+      "compression",
+      "dompurify",
+      "dotenv",
+      "drizzle-orm",
+      "drizzle-zod",
+      "express",
+      "express-rate-limit",
+      "helmet",
+      "jsonwebtoken",
+      "nodemailer",
+      "pg",
+      "pino",
+      "redis",
+      "ws",
+      "zod",
+      "zod-validation-error",
+    ].map((packageName) => [packageName, "1.2.3"])),
   });
 
   assert.deepEqual(result.failures, []);

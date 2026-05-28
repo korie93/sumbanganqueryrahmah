@@ -4,6 +4,7 @@ import {
   analyzeDependencyAuditReport,
   analyzePackageLockSources,
   analyzePackageOverrides,
+  analyzeSecurityCriticalDependencyPins,
 } from "./lib/dependency-audit.mjs";
 
 const npmCommand = process.platform === "win32" ? "npm.cmd" : "npm";
@@ -36,10 +37,12 @@ try {
 const { allowed, failures } = analyzeDependencyAuditReport(auditReport);
 let packageSourceResult = { allowed: [], failures: [] };
 let packageOverridesResult = { failures: [] };
+let securityCriticalPinResult = { failures: [] };
 
 try {
   const packageJson = JSON.parse(readFileSync("package.json", "utf8"));
   packageOverridesResult = analyzePackageOverrides(packageJson);
+  securityCriticalPinResult = analyzeSecurityCriticalDependencyPins(packageJson);
   const packageLock = JSON.parse(readFileSync("package-lock.json", "utf8"));
   packageSourceResult = analyzePackageLockSources(packageLock);
 } catch (error) {
@@ -48,7 +51,12 @@ try {
   process.exit(1);
 }
 
-if (failures.length > 0 || packageSourceResult.failures.length > 0 || packageOverridesResult.failures.length > 0) {
+if (
+  failures.length > 0
+  || packageSourceResult.failures.length > 0
+  || packageOverridesResult.failures.length > 0
+  || securityCriticalPinResult.failures.length > 0
+) {
   console.error("Dependency audit failed:");
   for (const failure of failures) {
     console.error(`- ${failure}`);
@@ -57,6 +65,9 @@ if (failures.length > 0 || packageSourceResult.failures.length > 0 || packageOve
     console.error(`- ${failure}`);
   }
   for (const failure of packageOverridesResult.failures) {
+    console.error(`- ${failure}`);
+  }
+  for (const failure of securityCriticalPinResult.failures) {
     console.error(`- ${failure}`);
   }
   process.exit(1);

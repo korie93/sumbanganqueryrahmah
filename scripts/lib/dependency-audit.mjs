@@ -64,6 +64,31 @@ const documentedOverrideReasons = new Map([
   ],
 ]);
 
+const securityCriticalDirectDependencies = Object.freeze([
+  "bcrypt",
+  "busboy",
+  "compression",
+  "dompurify",
+  "dotenv",
+  "drizzle-orm",
+  "drizzle-zod",
+  "express",
+  "express-rate-limit",
+  "helmet",
+  "jsonwebtoken",
+  "nodemailer",
+  "pg",
+  "pino",
+  "redis",
+  "ws",
+  "zod",
+  "zod-validation-error",
+]);
+
+function isExactSemverSpecifier(value) {
+  return /^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/.test(String(value || ""));
+}
+
 export function analyzeDependencyAuditReport(report) {
   const vulnerabilities = Object.values(report?.vulnerabilities ?? {});
   const failures = [];
@@ -92,6 +117,29 @@ export function analyzePackageOverrides(packageJson) {
   return {
     documented: Object.fromEntries(documentedOverrideReasons.entries()),
     failures,
+  };
+}
+
+export function analyzeSecurityCriticalDependencyPins(packageJson) {
+  const dependencies = packageJson?.dependencies && typeof packageJson.dependencies === "object"
+    ? packageJson.dependencies
+    : {};
+  const failures = [];
+
+  for (const packageName of securityCriticalDirectDependencies) {
+    const specifier = dependencies[packageName];
+    if (typeof specifier !== "string") {
+      failures.push(`${packageName} is missing from direct dependencies`);
+      continue;
+    }
+    if (!isExactSemverSpecifier(specifier)) {
+      failures.push(`${packageName} must be pinned to an exact version, found "${specifier}"`);
+    }
+  }
+
+  return {
+    failures,
+    packages: securityCriticalDirectDependencies,
   };
 }
 

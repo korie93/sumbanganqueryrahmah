@@ -23,6 +23,20 @@ Upgrade dependency majors through dependency-only PRs. Each major upgrade should
 include the relevant targeted tests, `npm run audit:dependencies`,
 `npm run verify:bundle-budgets`, and a rollback note.
 
+## Security-Critical Runtime Pins
+
+Direct dependencies that sit on the request/auth/database/upload/sanitization
+trust boundary are pinned to exact versions in `package.json`. The dependency
+audit gate fails if any of these packages are moved back to caret/range
+specifiers: `bcrypt`, `busboy`, `compression`, `dompurify`, `dotenv`,
+`drizzle-orm`, `drizzle-zod`, `express`, `express-rate-limit`, `helmet`,
+`jsonwebtoken`, `nodemailer`, `pg`, `pino`, `redis`, `ws`, `zod`, and
+`zod-validation-error`.
+
+Security updates for these packages should be dependency-only PRs that update
+both `package.json` and `package-lock.json`, run `npm run audit:dependencies`,
+and include the focused auth/HTTP/database tests for the touched package family.
+
 ## Express 5 Runtime
 
 The backend now runs on Express 5. Keep explicit async wrappers in place until a
@@ -94,7 +108,7 @@ Current overrides:
 | `qs` | Pins patched query-string parsing behavior for transitive Express middleware until all upstream packages converge. |
 | `lodash` | Pins patched lodash template handling for transitive consumers and keeps npm audit clean across nested packages. |
 | `rollup` | Pins Rollup to a patched release used by the Vite toolchain and prevents vulnerable nested Rollup versions. |
-| `dompurify` | Pins DOMPurify sanitizer fixes for transitive HTML sanitization consumers. |
+| `dompurify` | Pins DOMPurify sanitizer fixes for transitive HTML sanitization consumers; must match the exact direct dependency spec. |
 | `esbuild` | Pins patched esbuild for dev/build tooling, including older `drizzle-kit` transitive `@esbuild-kit` packages. |
 
 When removing an override, remove its entry from this table and from the audit
