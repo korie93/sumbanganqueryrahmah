@@ -22,6 +22,24 @@ test("CSP runbook documents directives, reporting, testing, and CSRF relationshi
   }
 });
 
+test("HTTP middleware pipeline documentation preserves security-critical ordering", async () => {
+  const content = await readDoc("docs/HTTP_MIDDLEWARE_PIPELINE.md");
+
+  for (const marker of [
+    "registerLocalHttpSecurityHeaders",
+    "registerLocalHttpCompression",
+    "registerLocalHttpBodyParsers",
+    "createCorsMiddleware",
+    "createCsrfProtectionMiddleware",
+    "adaptiveRateLimit",
+    "systemProtectionMiddleware",
+    "maintenanceGuard",
+    "Do not move CSRF after route registration",
+  ]) {
+    assert.match(content, new RegExp(marker.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  }
+});
+
 test("secret leak playbook links rotation runbook and covers containment plus escalation", async () => {
   const content = await readDoc("docs/INCIDENT_RESPONSE_SECRET_LEAK.md");
 
