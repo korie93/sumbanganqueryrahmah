@@ -42,8 +42,10 @@ test("frontend static serves robots.txt and sitemap.xml while keeping SPA fallba
     assert.equal(robotsResponse.status, 200);
     assert.match(String(robotsResponse.headers.get("content-type") || ""), /^text\/plain\b/i);
     assert.equal(await robotsResponse.text(), robotsBody);
-    assert.match(robotsBody, /User-agent: \*\nDisallow: \/\n/);
-    assert.doesNotMatch(robotsBody, /Allow: \//);
+    assert.match(robotsBody, /User-agent: \*\nAllow: \/\n/);
+    assert.match(robotsBody, /Disallow: \/login\n/);
+    assert.match(robotsBody, /Disallow: \/api\/\n/);
+    assert.doesNotMatch(robotsBody, /^Disallow: \/$/m);
 
     const sitemapResponse = await fetch(`${baseUrl}/sitemap.xml`);
     assert.equal(sitemapResponse.status, 200);

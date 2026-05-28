@@ -16,6 +16,30 @@ const DEFAULT_FRONTEND_PATHS = [
 const IMMUTABLE_ASSET_MAX_AGE_SECONDS = 60 * 60 * 24 * 365;
 const FRONTEND_COMPRESSION_THRESHOLD_BYTES = 1024;
 const ROBOTS_CACHE_MAX_AGE_SECONDS = 5 * 60;
+const ROBOTS_DISALLOWED_PATHS = [
+  "/api/",
+  "/ws",
+  "/login",
+  "/forgot-password",
+  "/reset-password",
+  "/activate-account",
+  "/change-password",
+  "/banned",
+  "/maintenance",
+  "/monitor",
+  "/dashboard",
+  "/activity",
+  "/analysis",
+  "/audit",
+  "/audit-logs",
+  "/general-search",
+  "/viewer",
+  "/saved",
+  "/import",
+  "/backup",
+  "/collection",
+  "/settings",
+] as const;
 
 function normalizeStaticRelativePath(staticRoot: string, absoluteFilePath: string) {
   const relativePath = path.relative(staticRoot, absoluteFilePath);
@@ -60,7 +84,8 @@ function resolveSitemapUrl(publicAppUrl: string | null | undefined) {
 export function buildRobotsTxt(publicAppUrl: string | null | undefined) {
   const lines = [
     "User-agent: *",
-    "Disallow: /",
+    "Allow: /",
+    ...ROBOTS_DISALLOWED_PATHS.map((requestPath) => `Disallow: ${requestPath}`),
   ];
   const sitemapUrl = resolveSitemapUrl(publicAppUrl);
   if (sitemapUrl) {

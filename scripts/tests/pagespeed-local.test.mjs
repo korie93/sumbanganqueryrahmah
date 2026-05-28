@@ -122,6 +122,17 @@ test("evaluateLighthouseThresholds reports low or missing scores", () => {
   );
 });
 
+test("evaluateLighthouseThresholds can scope categories for noindex routes", () => {
+  assert.deepEqual(
+    evaluateLighthouseThresholds(
+      { performance: 98, accessibility: 100, bestPractices: 100, seo: 69 },
+      DEFAULT_LIGHTHOUSE_SCORE_THRESHOLDS,
+      { keys: ["performance", "accessibility", "bestPractices"] },
+    ),
+    [],
+  );
+});
+
 test("strict PageSpeed runner and CI enforce Lighthouse thresholds", () => {
   const runnerSource = readFileSync("scripts/run-pagespeed-local.mjs", "utf8");
   const strictRunnerSource = readFileSync("scripts/run-pagespeed-local-strict.mjs", "utf8");
@@ -131,6 +142,7 @@ test("strict PageSpeed runner and CI enforce Lighthouse thresholds", () => {
   assert.match(runnerSource, /PAGESPEED_CHROME_PATH/);
   assert.match(runnerSource, /CHROME_PATH/);
   assert.match(runnerSource, /PAGESPEED_PRELAUNCH_CHROME/);
+  assert.match(runnerSource, /thresholdKeys/);
   assert.match(runnerSource, /pagespeed-chrome\.log/);
   assert.match(runnerSource, /chromium\.executablePath\(\)/);
   assert.match(runnerSource, /--no-sandbox/);

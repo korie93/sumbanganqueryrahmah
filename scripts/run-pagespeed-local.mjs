@@ -461,6 +461,7 @@ function writeSummary(results, thresholdFailures = [], runtimeOptions = {}) {
       attemptsUsed: result.attemptsUsed,
       reportPath: result.reportPath,
       runtimeErrorCode: result.runtimeErrorCode,
+      thresholdKeys: result.thresholdKeys || [],
       summary: result.summary,
       fallbackReportPath: result.fallbackReportPath || null,
       fallbackSummary: result.fallbackSummary || null,
@@ -500,6 +501,7 @@ function writeSummary(results, thresholdFailures = [], runtimeOptions = {}) {
     lines.push(`- URL: ${result.url}`);
     lines.push(`- Attempts used: ${result.attemptsUsed}`);
     lines.push(`- Report: ${result.reportPath}`);
+    lines.push(`- Enforced score categories: ${(result.thresholdKeys || []).join(", ") || "none"}`);
     if (result.runtimeErrorCode) {
       lines.push(`- Runtime error: ${result.runtimeErrorCode}`);
     }
@@ -580,6 +582,7 @@ async function runAudit(audit, env, { chromeDebugPort = null } = {}) {
         slug: audit.slug,
         url: audit.url,
         preset: audit.preset,
+        thresholdKeys: audit.thresholdKeys || [],
         status: "success",
         attemptsUsed: attempt,
         reportPath: latestPath,
@@ -603,6 +606,7 @@ async function runAudit(audit, env, { chromeDebugPort = null } = {}) {
       slug: audit.slug,
       url: audit.url,
       preset: audit.preset,
+      thresholdKeys: audit.thresholdKeys || [],
       status: "failed",
       attemptsUsed: attempt,
       reportPath: latestPath,
@@ -644,6 +648,7 @@ async function runAudit(audit, env, { chromeDebugPort = null } = {}) {
     slug: audit.slug,
     url: audit.url,
     preset: audit.preset,
+    thresholdKeys: audit.thresholdKeys || [],
     status: "failed",
     attemptsUsed: maxAttempts,
     reportPath: latestPath,
@@ -745,11 +750,13 @@ async function run() {
         slug: "local-home-mobile-latest",
         url: `${baseUrl}/`,
         preset: "perf",
+        thresholdKeys: ["performance", "accessibility", "bestPractices", "seo"],
       },
       {
         slug: "local-login-mobile-latest",
         url: `${baseUrl}/login`,
         preset: "perf",
+        thresholdKeys: ["performance", "accessibility", "bestPractices"],
       },
       ...(includeLoginDesktop
         ? [
@@ -757,6 +764,7 @@ async function run() {
             slug: "local-login-desktop-latest",
             url: `${baseUrl}/login`,
             preset: "desktop",
+            thresholdKeys: ["performance", "accessibility", "bestPractices"],
           },
         ]
         : []),
@@ -775,7 +783,9 @@ async function run() {
         return [];
       }
 
-      return evaluateLighthouseThresholds(result.summary, scoreThresholds).map((failure) => ({
+      return evaluateLighthouseThresholds(result.summary, scoreThresholds, {
+        keys: result.thresholdKeys,
+      }).map((failure) => ({
         ...failure,
         slug: result.slug,
         url: result.url,

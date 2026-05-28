@@ -60,6 +60,13 @@ export const DEFAULT_LIGHTHOUSE_SCORE_THRESHOLDS = Object.freeze({
   seo: 80,
 });
 
+const LIGHTHOUSE_THRESHOLD_CHECKS = Object.freeze([
+  ["performance", "Performance"],
+  ["accessibility", "Accessibility"],
+  ["bestPractices", "Best Practices"],
+  ["seo", "SEO"],
+]);
+
 function parseScoreThreshold(rawValue, fallback, label) {
   if (rawValue === undefined || rawValue === null || String(rawValue).trim() === "") {
     return fallback;
@@ -98,39 +105,38 @@ export function resolveLighthouseScoreThresholds(env = process.env) {
   };
 }
 
-export function evaluateLighthouseThresholds(summary, thresholds) {
-  const checks = [
-    ["performance", "Performance"],
-    ["accessibility", "Accessibility"],
-    ["bestPractices", "Best Practices"],
-    ["seo", "SEO"],
-  ];
+export function evaluateLighthouseThresholds(summary, thresholds, options = {}) {
+  const enabledKeys = Array.isArray(options.keys)
+    ? new Set(options.keys.map((key) => String(key)))
+    : null;
 
-  return checks.flatMap(([key, label]) => {
-    const actual = summary?.[key];
-    const minimum = thresholds[key];
-    if (typeof actual !== "number" || !Number.isFinite(actual)) {
-      return [{
-        key,
-        label,
-        actual: null,
-        minimum,
-        message: `${label} score is missing; expected at least ${minimum}.`,
-      }];
-    }
+  return LIGHTHOUSE_THRESHOLD_CHECKS
+    .filter(([key]) => !enabledKeys || enabledKeys.has(key))
+    .flatMap(([key, label]) => {
+      const actual = summary?.[key];
+      const minimum = thresholds[key];
+      if (typeof actual !== "number" || !Number.isFinite(actual)) {
+        return [{
+          key,
+          label,
+          actual: null,
+          minimum,
+          message: `${label} score is missing; expected at least ${minimum}.`,
+        }];
+      }
 
-    if (actual < minimum) {
-      return [{
-        key,
-        label,
-        actual,
-        minimum,
-        message: `${label} score ${actual} is below required ${minimum}.`,
-      }];
-    }
+      if (actual < minimum) {
+        return [{
+          key,
+          label,
+          actual,
+          minimum,
+          message: `${label} score ${actual} is below required ${minimum}.`,
+        }];
+      }
 
-    return [];
-  });
+      return [];
+    });
 }
 
 function isMobileUserAgent(userAgent) {

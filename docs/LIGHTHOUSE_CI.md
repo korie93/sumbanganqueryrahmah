@@ -29,6 +29,10 @@ Lighthouse report is below:
 | Best Practices | 90 |
 | SEO | 80 |
 
+SEO is enforced for the public, indexable home route. Login and other noindex
+work surfaces still produce SEO reports for visibility, but strict mode does not
+fail them for intentional crawler directives.
+
 Override only for a deliberate baseline update:
 
 ```bash
