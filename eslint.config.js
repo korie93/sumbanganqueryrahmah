@@ -58,6 +58,10 @@ export default tseslint.config(
         },
       ],
       "jsx-a11y/anchor-is-valid": "error",
+      "jsx-a11y/alt-text": ["error", {
+        elements: ["img"],
+        img: ["Image", "Img"],
+      }],
       "jsx-a11y/click-events-have-key-events": "error",
       "jsx-a11y/label-has-for": "off",
       "jsx-a11y/no-static-element-interactions": "error",
