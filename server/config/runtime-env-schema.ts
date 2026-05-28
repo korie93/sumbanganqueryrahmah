@@ -175,7 +175,7 @@ function optionalCollectionPiiRetiredFieldsEnv(name: string) {
   );
 }
 
-const runtimeEnvironmentSchema = z.object({
+const runtimeEnvironmentShape = {
   NODE_ENV: optionalEnvString("NODE_ENV", 64),
   DEBUG_LOGS: optionalBooleanEnv("DEBUG_LOGS"),
   OPERATIONS_DEBUG_ROUTES_ENABLED: optionalBooleanEnv("OPERATIONS_DEBUG_ROUTES_ENABLED"),
@@ -379,7 +379,9 @@ const runtimeEnvironmentSchema = z.object({
   SQR_MAX_WORKERS: optionalIntEnv("SQR_MAX_WORKERS", { min: 1 }),
   SQR_INITIAL_WORKERS: optionalIntEnv("SQR_INITIAL_WORKERS", { min: 1 }),
   SQR_PREALLOCATE_MB: optionalIntEnv("SQR_PREALLOCATE_MB", { min: 0 }),
-}).passthrough().superRefine((env, ctx) => {
+} satisfies z.ZodRawShape;
+
+const runtimeEnvironmentSchema = z.object(runtimeEnvironmentShape).strict().superRefine((env, ctx) => {
   if (env.COLLECTION_PII_RETIRED_FIELDS && !env.COLLECTION_PII_ENCRYPTION_KEY) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
@@ -389,13 +391,37 @@ const runtimeEnvironmentSchema = z.object({
   }
 });
 
+const KNOWN_RUNTIME_ENV_KEYS = new Set(Object.keys(runtimeEnvironmentShape));
+const APPLICATION_ENV_KEY_PATTERNS = [
+  /^(?:ALLOW|AUTH|BACKUP|COLLECTION|CORS|DATABASE|DEBUG|DEFAULT|GRACEFUL|HOST|HSTS|HTTP|IMPORT|LOCAL|LOG|MAIL|MAINTENANCE|OLLAMA|OPERATIONS|PG|PUBLIC|RUNTIME|SEED|SESSION|SMTP|SQR|TRUSTED|TWO_FACTOR|AI)_/,
+  /^(?:ANALYTICS_TZ|PORT|PGHOST|PGPORT|PGUSER|PGPASSWORD|PGDATABASE)$/,
+] as const;
+
+function shouldValidateRuntimeEnvKey(key: string) {
+  if (KNOWN_RUNTIME_ENV_KEYS.has(key)) {
+    return true;
+  }
+
+  return APPLICATION_ENV_KEY_PATTERNS.some((pattern) => pattern.test(key));
+}
+
+function selectRuntimeEnvironmentForValidation(env: RuntimeEnvironmentSource) {
+  const selected: RuntimeEnvironmentSource = {};
+  for (const [key, value] of Object.entries(env)) {
+    if (shouldValidateRuntimeEnvKey(key)) {
+      selected[key] = value;
+    }
+  }
+  return selected;
+}
+
 function formatRuntimeEnvIssue(issue: z.ZodIssue) {
   const envName = issue.path.join(".") || "runtime environment";
   return `${envName}: ${issue.message}`;
 }
 
 export function validateRuntimeEnvironmentSchema(env: RuntimeEnvironmentSource = process.env) {
-  const result = runtimeEnvironmentSchema.safeParse(env);
+  const result = runtimeEnvironmentSchema.safeParse(selectRuntimeEnvironmentForValidation(env));
   if (result.success) {
     return;
   }

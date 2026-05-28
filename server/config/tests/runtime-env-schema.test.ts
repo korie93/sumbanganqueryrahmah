@@ -24,6 +24,27 @@ test("runtime env schema accepts DATABASE_URL-only database configuration", () =
   });
 });
 
+test("runtime env schema ignores unrelated host environment keys", () => {
+  assert.doesNotThrow(() => {
+    validateRuntimeEnvironmentSchema({
+      NODE_OPTIONS: "--max-old-space-size=4096",
+      PATH: "/usr/bin",
+      RUNNER_OS: "Linux",
+    });
+  });
+});
+
+test("runtime env schema rejects unknown SQR-owned configuration keys", () => {
+  assert.throws(
+    () => {
+      validateRuntimeEnvironmentSchema({
+        SQR_RATE_LIMIT_STROE: "redis",
+      });
+    },
+    /Unrecognized key\(s\).*SQR_RATE_LIMIT_STROE/i,
+  );
+});
+
 test("runtime env schema rejects malformed boolean flags", () => {
   assert.throws(
     () => {
