@@ -62,7 +62,22 @@ test("vite config never enables source maps for production builds even when trou
   );
 });
 
-test("vite config still allows source maps for explicit staging-style non-production builds", async () => {
+test("vite config disables source maps for staging-marked non-production builds", async () => {
+  await withEnv(
+    {
+      NODE_ENV: "development",
+      VITE_ENABLE_SOURCEMAPS: "1",
+      DEPLOY_ENV: "staging",
+      APP_ENV: null,
+    },
+    async () => {
+      const config = await importViteConfigFresh();
+      assert.equal(config.build?.sourcemap, false);
+    },
+  );
+});
+
+test("vite config allows source maps only for explicit local development troubleshooting", async () => {
   await withEnv(
     {
       NODE_ENV: "development",

@@ -35,6 +35,11 @@ Artifacts are written to:
 
 ## 3. Staging Soak (30-60 minutes)
 
+Staging client builds must run with `DEPLOY_ENV=staging` or `APP_ENV=staging`.
+Those markers intentionally disable Vite source maps, matching production
+information-disclosure posture; use `VITE_ENABLE_SOURCEMAPS=1` only for local
+development troubleshooting.
+
 Use two tabs/sessions with the same month/staff scope and execute:
 
 1. create record with and without receipt
