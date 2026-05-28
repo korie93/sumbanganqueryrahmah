@@ -12,9 +12,11 @@ import {
   clearAdaptiveRateLimitCooldownsForTests,
   createImportsUploadRateLimiter,
   createAuthRouteRateLimiters,
+  getAdaptiveRateLimitCachePressureTier,
   getAdaptiveRateLimitCooldownStats,
   getAdaptiveRateLimitCooldownKeysForTests,
   normalizeAuthRateLimitIdentifier,
+  performAdaptiveRateLimitCachePressureEvictionForTests,
   pruneAdaptiveRateLimitCooldowns,
   recordAdaptiveRateLimitViolationForTests,
   startAdaptiveRateLimitCooldownSweep,
@@ -304,24 +306,84 @@ test("auth login IP limiter throttles after five attempts even when identifiers 
   }
 });
 
-test("auth adaptive cooldown cap evicts least recently used buckets without scanning for oldest timestamps", (t) => {
+test("auth adaptive cooldown pressure tiers match cache utilization thresholds", () => {
+  assert.equal(getAdaptiveRateLimitCachePressureTier(0, 100), "NORMAL");
+  assert.equal(getAdaptiveRateLimitCachePressureTier(70, 100), "NORMAL");
+  assert.equal(getAdaptiveRateLimitCachePressureTier(86, 100), "WARNING");
+  assert.equal(getAdaptiveRateLimitCachePressureTier(96, 100), "CRITICAL");
+  assert.equal(getAdaptiveRateLimitCachePressureTier(100, 100), "EMERGENCY");
+  assert.equal(getAdaptiveRateLimitCachePressureTier(1, 0), "EMERGENCY");
+});
+
+test("auth adaptive cooldown warning eviction removes expired entries only", (t) => {
+  stopAdaptiveRateLimitCooldownSweep();
+  clearAdaptiveRateLimitCooldownsForTests();
+  t.mock.method(logger, "warn", () => undefined);
+
+  try {
+    recordAdaptiveRateLimitViolationForTests("expired-client", 1, 1_000);
+    recordAdaptiveRateLimitViolationForTests("active-client", 60_000, 1_000);
+
+    const result = performAdaptiveRateLimitCachePressureEvictionForTests("WARNING", 1_010);
+    const keys = getAdaptiveRateLimitCooldownKeysForTests();
+
+    assert.equal(result.tier, "WARNING");
+    assert.equal(result.evictedCount, 1);
+    assert.equal(keys.includes("expired-client"), false);
+    assert.equal(keys.includes("active-client"), true);
+  } finally {
+    clearAdaptiveRateLimitCooldownsForTests();
+  }
+});
+
+test("auth adaptive cooldown critical eviction removes oldest bounded slice", (t) => {
   stopAdaptiveRateLimitCooldownSweep();
   clearAdaptiveRateLimitCooldownsForTests();
   t.mock.method(logger, "warn", () => undefined);
 
   try {
     const startedAt = Date.now();
-    for (let index = 0; index < 4_096; index += 1) {
+    for (let index = 0; index < 10; index += 1) {
       recordAdaptiveRateLimitViolationForTests(`client-${index}`, 60_000, startedAt + index);
     }
-    recordAdaptiveRateLimitViolationForTests("client-0", 60_000, startedAt + 4_096);
-    recordAdaptiveRateLimitViolationForTests("client-new", 60_000, startedAt + 4_097);
+
+    const result = performAdaptiveRateLimitCachePressureEvictionForTests("CRITICAL", startedAt + 10);
 
     const keys = getAdaptiveRateLimitCooldownKeysForTests();
-    assert.equal(keys.length, 4_096);
-    assert.equal(keys.includes("client-0"), true);
+    assert.equal(result.evictedCount, 2);
+    assert.equal(keys.length, 8);
+    assert.equal(keys.includes("client-0"), false);
     assert.equal(keys.includes("client-1"), false);
-    assert.equal(keys.includes("client-new"), true);
+    assert.equal(keys.includes("client-9"), true);
+  } finally {
+    clearAdaptiveRateLimitCooldownsForTests();
+  }
+});
+
+test("auth adaptive cooldown emergency eviction records metrics and accepts new entries", (t) => {
+  stopAdaptiveRateLimitCooldownSweep();
+  clearAdaptiveRateLimitCooldownsForTests();
+  t.mock.method(logger, "error", () => undefined);
+  t.mock.method(logger, "warn", () => undefined);
+
+  try {
+    const startedAt = Date.now();
+    const metricBefore = getInternalMetricsSnapshot()
+      .counters.authAdaptiveRateLimitCooldownEvictionsTotal;
+    for (let index = 0; index < 10; index += 1) {
+      recordAdaptiveRateLimitViolationForTests(`emergency-client-${index}`, 60_000, startedAt + index);
+    }
+
+    const result = performAdaptiveRateLimitCachePressureEvictionForTests("EMERGENCY", startedAt + 10);
+    recordAdaptiveRateLimitViolationForTests("emergency-client-new", 60_000, startedAt + 11);
+    const metricAfter = getInternalMetricsSnapshot()
+      .counters.authAdaptiveRateLimitCooldownEvictionsTotal;
+    const keys = getAdaptiveRateLimitCooldownKeysForTests();
+
+    assert.equal(result.evictedCount, 5);
+    assert.equal(metricAfter - metricBefore, 5);
+    assert.equal(keys.length, 6);
+    assert.equal(keys.includes("emergency-client-new"), true);
   } finally {
     clearAdaptiveRateLimitCooldownsForTests();
   }
@@ -339,8 +401,8 @@ test("auth adaptive cooldown hard cap stays bounded across sustained inserts", (
     }
 
     const keys = getAdaptiveRateLimitCooldownKeysForTests();
-    assert.equal(getAdaptiveRateLimitCooldownStats().bucketCount, 4_096);
-    assert.equal(keys.length, 4_096);
+    assert.ok(getAdaptiveRateLimitCooldownStats().bucketCount <= 4_096);
+    assert.equal(keys.length, getAdaptiveRateLimitCooldownStats().bucketCount);
     assert.equal(keys.includes("sustained-client-0"), false);
     assert.equal(keys.includes("sustained-client-50000"), true);
   } finally {

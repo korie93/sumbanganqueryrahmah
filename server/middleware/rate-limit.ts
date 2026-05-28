@@ -55,6 +55,23 @@ const ADAPTIVE_RATE_LIMIT_MAX_COOLDOWN_MS = 60 * 60 * 1000;
 const ADAPTIVE_RATE_LIMIT_SWEEP_INTERVAL_MS = 30_000;
 const ADAPTIVE_RATE_LIMIT_CACHE_PRESSURE_THRESHOLD_RATIO = 0.85;
 const ADAPTIVE_RATE_LIMIT_CACHE_PRESSURE_LOG_INTERVAL_MS = 60_000;
+const ADAPTIVE_RATE_LIMIT_WARNING_EVICTION_BATCH_SIZE = 512;
+
+const ADAPTIVE_RATE_LIMIT_CACHE_PRESSURE_TIERS = {
+  NORMAL: { threshold: 0, severity: 0 },
+  WARNING: { threshold: 0.85, severity: 1 },
+  CRITICAL: { threshold: 0.95, severity: 2 },
+  EMERGENCY: { threshold: 1, severity: 3 },
+} as const;
+
+export type AdaptiveRateLimitCachePressureTier =
+  keyof typeof ADAPTIVE_RATE_LIMIT_CACHE_PRESSURE_TIERS;
+
+type AdaptiveRateLimitEvictionResult = {
+  evictedCount: number;
+  tier: AdaptiveRateLimitCachePressureTier;
+  timestamp: number;
+};
 
 type AdaptiveRateLimitBucket = {
   expiresAt: number;
@@ -71,6 +88,7 @@ const adaptiveRateLimitCooldowns = new LRUCache<string, AdaptiveRateLimitBucket>
 });
 let adaptiveRateLimitCooldownSweepJob: BackgroundSweepJob | null = null;
 let adaptiveRateLimitCachePressureLastLoggedAt = 0;
+let adaptiveRateLimitWarningEvictionLastRanAt = 0;
 
 function normalizeKeyPart(value: unknown): string | null {
   if (typeof value !== "string") {
@@ -157,6 +175,127 @@ export function pruneAdaptiveRateLimitCooldowns(nowMs = Date.now()): number {
   return removedCount;
 }
 
+export function getAdaptiveRateLimitCachePressureTier(
+  currentSize: number,
+  maxSize = ADAPTIVE_RATE_LIMIT_MAX_BUCKETS,
+): AdaptiveRateLimitCachePressureTier {
+  if (maxSize <= 0) {
+    return "EMERGENCY";
+  }
+
+  const utilization = currentSize / maxSize;
+  if (utilization >= ADAPTIVE_RATE_LIMIT_CACHE_PRESSURE_TIERS.EMERGENCY.threshold) {
+    return "EMERGENCY";
+  }
+  if (utilization >= ADAPTIVE_RATE_LIMIT_CACHE_PRESSURE_TIERS.CRITICAL.threshold) {
+    return "CRITICAL";
+  }
+  if (utilization >= ADAPTIVE_RATE_LIMIT_CACHE_PRESSURE_TIERS.WARNING.threshold) {
+    return "WARNING";
+  }
+  return "NORMAL";
+}
+
+function deleteOldestAdaptiveRateLimitCooldowns(targetEvictCount: number): number {
+  let evictedCount = 0;
+  for (const key of adaptiveRateLimitCooldowns.rkeys()) {
+    if (evictedCount >= targetEvictCount) {
+      break;
+    }
+    if (adaptiveRateLimitCooldowns.delete(key)) {
+      evictedCount += 1;
+    }
+  }
+  return evictedCount;
+}
+
+function performAdaptiveRateLimitCachePressureEviction(
+  tier: AdaptiveRateLimitCachePressureTier,
+  nowMs: number,
+): AdaptiveRateLimitEvictionResult {
+  let evictedCount = 0;
+
+  if (tier === "WARNING") {
+    for (const key of adaptiveRateLimitCooldowns.rkeys()) {
+      if (evictedCount >= ADAPTIVE_RATE_LIMIT_WARNING_EVICTION_BATCH_SIZE) {
+        break;
+      }
+
+      const bucket = adaptiveRateLimitCooldowns.peek(key);
+      if (!bucket || bucket.expiresAt <= nowMs) {
+        if (adaptiveRateLimitCooldowns.delete(key)) {
+          evictedCount += 1;
+        }
+      }
+    }
+  } else if (tier === "CRITICAL") {
+    evictedCount = deleteOldestAdaptiveRateLimitCooldowns(
+      Math.max(1, Math.floor(adaptiveRateLimitCooldowns.size * 0.2)),
+    );
+  } else if (tier === "EMERGENCY") {
+    evictedCount = deleteOldestAdaptiveRateLimitCooldowns(
+      Math.max(1, Math.floor(adaptiveRateLimitCooldowns.size * 0.5)),
+    );
+  }
+
+  if (evictedCount > 0) {
+    internalMetrics.increment("authAdaptiveRateLimitCooldownEvictionsTotal", evictedCount);
+  }
+
+  return {
+    evictedCount,
+    tier,
+    timestamp: nowMs,
+  };
+}
+
+export function performAdaptiveRateLimitCachePressureEvictionForTests(
+  tier: AdaptiveRateLimitCachePressureTier,
+  nowMs: number,
+): AdaptiveRateLimitEvictionResult {
+  return performAdaptiveRateLimitCachePressureEviction(tier, nowMs);
+}
+
+function maybeEvictAdaptiveRateLimitCooldownsForPressure(nowMs: number): void {
+  const tier = getAdaptiveRateLimitCachePressureTier(adaptiveRateLimitCooldowns.size);
+  if (tier === "NORMAL") {
+    return;
+  }
+
+  if (
+    tier === "WARNING"
+    && adaptiveRateLimitWarningEvictionLastRanAt > 0
+    && nowMs - adaptiveRateLimitWarningEvictionLastRanAt
+      < ADAPTIVE_RATE_LIMIT_CACHE_PRESSURE_LOG_INTERVAL_MS
+  ) {
+    return;
+  }
+
+  const sizeBefore = adaptiveRateLimitCooldowns.size;
+  const result = performAdaptiveRateLimitCachePressureEviction(tier, nowMs);
+  if (tier === "WARNING") {
+    adaptiveRateLimitWarningEvictionLastRanAt = nowMs;
+  }
+
+  if (result.evictedCount === 0 && tier === "WARNING") {
+    return;
+  }
+
+  const logPayload = {
+    evictedCount: result.evictedCount,
+    maxBuckets: ADAPTIVE_RATE_LIMIT_MAX_BUCKETS,
+    sizeAfter: adaptiveRateLimitCooldowns.size,
+    sizeBefore,
+    tier,
+  };
+  if (tier === "EMERGENCY") {
+    logger.error("Auth adaptive rate-limit cooldown cache emergency eviction activated", logPayload);
+    return;
+  }
+
+  logger.warn("Auth adaptive rate-limit cooldown cache pressure eviction performed", logPayload);
+}
+
 function maybeReportAdaptiveRateLimitCachePressure(nowMs: number) {
   const bucketCount = adaptiveRateLimitCooldowns.size;
   const pressureThreshold = Math.ceil(
@@ -189,6 +328,7 @@ function setAdaptiveRateLimitCooldown(
   bucket: AdaptiveRateLimitBucket,
   nowMs: number,
 ) {
+  maybeEvictAdaptiveRateLimitCooldownsForPressure(nowMs);
   const ttlMs = Math.max(1, bucket.expiresAt - nowMs);
   adaptiveRateLimitCooldowns.set(key, bucket, { ttl: ttlMs });
   maybeReportAdaptiveRateLimitCachePressure(nowMs);
@@ -201,6 +341,7 @@ function deleteAdaptiveRateLimitCooldown(key: string): boolean {
 function clearAdaptiveRateLimitCooldownState() {
   adaptiveRateLimitCooldowns.clear();
   adaptiveRateLimitCachePressureLastLoggedAt = 0;
+  adaptiveRateLimitWarningEvictionLastRanAt = 0;
 }
 
 function getAdaptiveRateLimitCooldownKeys(): string[] {
