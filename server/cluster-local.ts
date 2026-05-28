@@ -5,6 +5,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { runtimeConfig } from "./config/runtime";
 import { createClusterMasterOrchestrator } from "./internal/cluster-master-orchestrator";
+import { createClusterMasterFatalHandlers } from "./internal/cluster-master-fatal-handlers";
 import {
   normalizeInitialWorkerCount,
   resolveSafeClusterWorkerTopology,
@@ -77,14 +78,18 @@ const clusterMaster = createClusterMasterOrchestrator({
     gracefulShutdownTimeoutMs: runtimeConfig.runtime.gracefulShutdownTimeoutMs,
   },
 });
+const clusterMasterFatalHandlers = createClusterMasterFatalHandlers({
+  clusterMaster,
+  logger,
+});
 
 // Fatal master-level errors should fail fast so the process supervisor can restart cleanly.
 process.on("uncaughtException", (err) => {
-  clusterMaster.handleUncaughtException(err);
+  clusterMasterFatalHandlers.handleUncaughtException(err);
 });
 
 process.on("unhandledRejection", (reason) => {
-  clusterMaster.handleUnhandledRejection(reason);
+  clusterMasterFatalHandlers.handleUnhandledRejection(reason);
 });
 
 function handleClusterShutdownSignal(signal: NodeJS.Signals) {

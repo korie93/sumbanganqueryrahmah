@@ -93,6 +93,8 @@ Runtime WebSocket socket ownership is centralized through the lifecycle registry
 
 The collection rollup PostgreSQL `LISTEN` subscriber owns notification, error, and end handlers through an explicit listener registry. Reconnect paths unsubscribe the old client before attaching a new one, and `getDiagnostics().pendingListenerCleanups` should remain `1` while connected and `0` after stop. Run `npx tsx --test server/tests/collection-rollup-refresh-notification.test.ts server/http/tests/collection-rollup-refresh-notification.test.ts` after changes to the rollup notification lifecycle.
 
+Cluster master fatal handlers are wrapped at the `process.on("uncaughtException")` and `process.on("unhandledRejection")` boundary. If structured logging or the graceful fatal shutdown path throws, the wrapper writes a final stderr line and exits with code `1` so the process supervisor can restart instead of leaving a half-shutdown master alive.
+
 ## 2. Apa Yang Belum Dianggap Siap
 
 Perkara berikut masih patut dianggap future work:
