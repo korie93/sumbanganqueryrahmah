@@ -1173,7 +1173,7 @@ test("runtime manager removes registered sockets cleanly on close", async () => 
   const activityId = "activity-registered-close";
   let clearSessionCalls = 0;
 
-  createRuntimeWebSocketManager({
+  const manager = createRuntimeWebSocketManager({
     wss: wss as unknown as import("ws").WebSocketServer,
     storage: {
       getActivityById: async () => createActiveSession(activityId),
@@ -1199,6 +1199,113 @@ test("runtime manager removes registered sockets cleanly on close", async () => 
     assert.equal(socket.listenerCount("close"), 0);
     assert.equal(socket.listenerCount("error"), 0);
     assert.equal(socket.listenerCount("pong"), 0);
+    assert.deepEqual(manager.getLifecycleSnapshot(), {
+      cleanupCallbacks: 0,
+      connectedClients: 0,
+      socketEntriesByActivity: 0,
+      socketEntriesByInstance: 0,
+      trackedSockets: 0,
+    });
+  } finally {
+    wss.emit("close");
+  }
+});
+
+test("runtime manager clears lifecycle registry even when listener cleanup throws", async (t) => {
+  const wss = new FakeWebSocketServer();
+  const providedMap = new Map<string, WebSocket>();
+  const socket = new FakeWebSocket();
+  const activityId = "activity-cleanup-detach-failure";
+  const debugLogs: string[] = [];
+  let clearSessionCalls = 0;
+  t.mock.method(logger, "debug", (message: string) => {
+    debugLogs.push(message);
+  });
+
+  socket.removeAllListeners = (() => {
+    throw new Error("listener cleanup failed");
+  }) as typeof socket.removeAllListeners;
+
+  const manager = createRuntimeWebSocketManager({
+    wss: wss as unknown as import("ws").WebSocketServer,
+    storage: {
+      getActivityById: async () => createActiveSession(activityId),
+      clearCollectionNicknameSessionByActivity: async () => {
+        clearSessionCalls += 1;
+      },
+    },
+    secret: TEST_SECRET,
+    connectedClients: providedMap,
+  });
+
+  try {
+    wss.emit("connection", socket as unknown as WebSocket, createConnectionRequest(createWsToken(activityId)));
+    await flushAsyncWork();
+
+    assert.equal(providedMap.get(activityId), socket as unknown as WebSocket);
+
+    socket.fail(new Error("socket failed during cleanup"));
+    await flushAsyncWork();
+
+    assert.equal(providedMap.has(activityId), false);
+    assert.equal(clearSessionCalls, 1);
+    assert.equal(
+      debugLogs.includes("WebSocket lifecycle handler detach failed during cleanup"),
+      true,
+    );
+    assert.deepEqual(manager.getLifecycleSnapshot(), {
+      cleanupCallbacks: 0,
+      connectedClients: 0,
+      socketEntriesByActivity: 0,
+      socketEntriesByInstance: 0,
+      trackedSockets: 0,
+    });
+  } finally {
+    wss.emit("close");
+  }
+});
+
+test("runtime manager does not retain socket state across rapid reconnect cycles", async () => {
+  const wss = new FakeWebSocketServer();
+  const providedMap = new Map<string, WebSocket>();
+  const activityCount = 100;
+  let clearSessionCalls = 0;
+
+  const manager = createRuntimeWebSocketManager({
+    wss: wss as unknown as import("ws").WebSocketServer,
+    storage: {
+      getActivityById: async (activityId: string) => createActiveSession(activityId),
+      clearCollectionNicknameSessionByActivity: async () => {
+        clearSessionCalls += 1;
+      },
+    },
+    secret: TEST_SECRET,
+    connectedClients: providedMap,
+    maxConnections: activityCount,
+    upgradeRateLimiter: createRuntimeWsUpgradeRateLimiter({
+      maxAttempts: activityCount,
+      windowMs: 60_000,
+    }),
+  });
+
+  try {
+    for (let index = 0; index < activityCount; index += 1) {
+      const activityId = `activity-reconnect-loop-${index}`;
+      const socket = new FakeWebSocket();
+      wss.emit("connection", socket as unknown as WebSocket, createConnectionRequest(createWsToken(activityId)));
+      await flushAsyncWork();
+      socket.close();
+      await flushAsyncWork();
+    }
+
+    assert.equal(clearSessionCalls, activityCount);
+    assert.deepEqual(manager.getLifecycleSnapshot(), {
+      cleanupCallbacks: 0,
+      connectedClients: 0,
+      socketEntriesByActivity: 0,
+      socketEntriesByInstance: 0,
+      trackedSockets: 0,
+    });
   } finally {
     wss.emit("close");
   }
@@ -1642,7 +1749,7 @@ test("runtime manager tolerates repeated terminal lifecycle signals without dupl
   const activityId = "activity-repeat-cleanup";
   let clearSessionCalls = 0;
 
-  createRuntimeWebSocketManager({
+  const manager = createRuntimeWebSocketManager({
     wss: wss as unknown as import("ws").WebSocketServer,
     storage: {
       getActivityById: async () => createActiveSession(activityId),
@@ -1669,6 +1776,13 @@ test("runtime manager tolerates repeated terminal lifecycle signals without dupl
     assert.equal(socket.listenerCount("close"), 0);
     assert.equal(socket.listenerCount("error"), 0);
     assert.equal(socket.listenerCount("pong"), 0);
+    assert.deepEqual(manager.getLifecycleSnapshot(), {
+      cleanupCallbacks: 0,
+      connectedClients: 0,
+      socketEntriesByActivity: 0,
+      socketEntriesByInstance: 0,
+      trackedSockets: 0,
+    });
   } finally {
     wss.emit("close");
   }
@@ -1681,7 +1795,7 @@ test("runtime manager clears tracked client state when the WebSocket server clos
   const activityId = "activity-server-close";
   let clearSessionCalls = 0;
 
-  createRuntimeWebSocketManager({
+  const manager = createRuntimeWebSocketManager({
     wss: wss as unknown as import("ws").WebSocketServer,
     storage: {
       getActivityById: async () => createActiveSession(activityId),
@@ -1707,6 +1821,13 @@ test("runtime manager clears tracked client state when the WebSocket server clos
   assert.equal(socket.listenerCount("close"), 0);
   assert.equal(socket.listenerCount("error"), 0);
   assert.equal(socket.listenerCount("pong"), 0);
+  assert.deepEqual(manager.getLifecycleSnapshot(), {
+    cleanupCallbacks: 0,
+    connectedClients: 0,
+    socketEntriesByActivity: 0,
+    socketEntriesByInstance: 0,
+    trackedSockets: 0,
+  });
 });
 
 test("runtime manager heartbeat cleans sockets removed externally from the shared client map", async () => {

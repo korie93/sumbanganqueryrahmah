@@ -1,35 +1,23 @@
 import { WebSocket } from "ws";
 import { logger } from "../lib/logger";
-import type {
-  RuntimeSocketCleanupOptions,
-  RuntimeTrackedSocketEntry,
-} from "./runtime-manager-types";
+import type { RuntimeTrackedSocketEntry } from "./runtime-manager-types";
+import type { RuntimeSocketLifecycleRegistry } from "./runtime-socket-lifecycle-registry";
 import {
   isTrackableSocket,
   sanitizeRuntimeWebSocketError,
   type RuntimeWsCleanupClient,
 } from "./ws-lifecycle";
 
-type RuntimeSocketCleanupCallback = (options?: RuntimeSocketCleanupOptions) => void;
-
 type RuntimeClientRegistryOptions = {
   clearNicknameSession: (activityId: string, reason: string) => void;
-  connectedClients: Map<string, WebSocket>;
+  lifecycleRegistry: RuntimeSocketLifecycleRegistry;
   logCleanupDiagnostic: (message: string, metadata: Record<string, unknown>) => void;
-  socketCleanupCallbacks: WeakMap<WebSocket, RuntimeSocketCleanupCallback>;
-  socketEntriesByActivity: Map<string, RuntimeTrackedSocketEntry>;
-  socketEntriesByInstance: WeakMap<WebSocket, RuntimeTrackedSocketEntry>;
-  trackedSockets: Set<WebSocket>;
 };
 
 export function createRuntimeClientRegistry({
   clearNicknameSession,
-  connectedClients,
+  lifecycleRegistry,
   logCleanupDiagnostic,
-  socketCleanupCallbacks,
-  socketEntriesByActivity,
-  socketEntriesByInstance,
-  trackedSockets,
 }: RuntimeClientRegistryOptions): {
   cleanupClient: RuntimeWsCleanupClient;
   registerTrackedSocketEntry: (
@@ -44,24 +32,15 @@ export function createRuntimeClientRegistry({
     ws: WebSocket,
     userKey: string | null,
   ): RuntimeTrackedSocketEntry => {
-    const entry: RuntimeTrackedSocketEntry = {
-      activityId,
-      ws,
-      userKey,
-      alive: true,
-    };
-    socketEntriesByActivity.set(activityId, entry);
-    socketEntriesByInstance.set(ws, entry);
-    connectedClients.set(activityId, ws);
-    return entry;
+    return lifecycleRegistry.registerTrackedSocketEntry(activityId, ws, userKey);
   };
 
   const cleanupClient: RuntimeWsCleanupClient = (
     activityId,
     options = {},
   ) => {
-    const currentEntry = socketEntriesByActivity.get(activityId);
-    const currentClient = connectedClients.get(activityId);
+    const currentEntry = lifecycleRegistry.getEntryByActivity(activityId);
+    const currentClient = lifecycleRegistry.connectedClientMap.get(activityId);
     const expectedWs = options.expectedWs;
     const targetWs = expectedWs ?? currentEntry?.ws ?? currentClient;
     const cleanupReason = options.reason ?? (options.closeWith ? `client-${options.closeWith}` : "client-cleanup");
@@ -72,7 +51,7 @@ export function createRuntimeClientRegistry({
 
     let cleanupCallbackHandled = false;
     if (targetWs) {
-      const cleanupCallback = socketCleanupCallbacks.get(targetWs);
+      const cleanupCallback = lifecycleRegistry.getCleanupCallback(targetWs);
       if (cleanupCallback) {
         cleanupCallback({
           clearSession: options.clearSession === true,
@@ -80,18 +59,7 @@ export function createRuntimeClientRegistry({
         });
         cleanupCallbackHandled = true;
       }
-      socketCleanupCallbacks.delete(targetWs);
-      socketEntriesByInstance.delete(targetWs);
-      trackedSockets.delete(targetWs);
-
-      const latestEntry = socketEntriesByActivity.get(activityId);
-      if (latestEntry?.ws === targetWs) {
-        socketEntriesByActivity.delete(activityId);
-      }
-
-      if (connectedClients.get(activityId) === targetWs) {
-        connectedClients.delete(activityId);
-      }
+      lifecycleRegistry.deregisterActivity(activityId, targetWs);
 
       if (options.closeWith === "close" && isTrackableSocket(targetWs)) {
         try {
@@ -108,8 +76,7 @@ export function createRuntimeClientRegistry({
         targetWs.terminate();
       }
     } else {
-      socketEntriesByActivity.delete(activityId);
-      connectedClients.delete(activityId);
+      lifecycleRegistry.deregisterActivity(activityId);
     }
 
     if (options.clearSession && !cleanupCallbackHandled) {
@@ -126,16 +93,14 @@ export function createRuntimeClientRegistry({
   };
 
   const removeTrackedSocket = (activityId: string, ws?: WebSocket) => {
-    const currentEntry = socketEntriesByActivity.get(activityId);
+    const currentEntry = lifecycleRegistry.getEntryByActivity(activityId);
     if (currentEntry && (!ws || currentEntry.ws === ws)) {
-      socketEntriesByActivity.delete(activityId);
-      socketEntriesByInstance.delete(currentEntry.ws);
-      connectedClients.delete(activityId);
+      lifecycleRegistry.deregisterActivity(activityId, currentEntry.ws);
       return;
     }
 
-    if (!currentEntry && (!ws || connectedClients.get(activityId) === ws)) {
-      connectedClients.delete(activityId);
+    if (!currentEntry && (!ws || lifecycleRegistry.connectedClientMap.get(activityId) === ws)) {
+      lifecycleRegistry.deregisterActivity(activityId, ws);
     }
   };
 

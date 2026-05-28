@@ -1,9 +1,6 @@
 import { WebSocket } from "ws";
 import { logger } from "../lib/logger";
-import type {
-  RuntimeSocketCleanupOptions,
-  RuntimeTrackedSocketEntry,
-} from "./runtime-manager-types";
+import type { RuntimeSocketLifecycleRegistry } from "./runtime-socket-lifecycle-registry";
 import {
   isTrackableSocket,
   sanitizeRuntimeWebSocketError,
@@ -21,23 +18,17 @@ type RuntimeCleanupClient = (
 
 export function closeRuntimeWebSocketServerState(options: {
   cleanupClient: RuntimeCleanupClient;
-  connectedClients: Map<string, WebSocket>;
   heartbeatHandle: ReturnType<typeof setInterval>;
-  socketCleanupCallbacks: WeakMap<WebSocket, (options?: RuntimeSocketCleanupOptions) => void>;
-  socketEntriesByActivity: Map<string, RuntimeTrackedSocketEntry>;
-  trackedSockets: Set<WebSocket>;
+  lifecycleRegistry: RuntimeSocketLifecycleRegistry;
 }): void {
   const {
     cleanupClient,
-    connectedClients,
     heartbeatHandle,
-    socketCleanupCallbacks,
-    socketEntriesByActivity,
-    trackedSockets,
+    lifecycleRegistry,
   } = options;
 
   clearInterval(heartbeatHandle);
-  for (const entry of Array.from(socketEntriesByActivity.values())) {
+  for (const entry of Array.from(lifecycleRegistry.socketEntriesByActivity.values())) {
     cleanupClient(entry.activityId, {
       expectedWs: entry.ws,
       closeWith: "close",
@@ -45,7 +36,7 @@ export function closeRuntimeWebSocketServerState(options: {
       reason: "server-close",
     });
   }
-  for (const [activityId, ws] of Array.from(connectedClients.entries())) {
+  for (const [activityId, ws] of Array.from(lifecycleRegistry.connectedClientMap.entries())) {
     cleanupClient(activityId, {
       expectedWs: ws,
       closeWith: "close",
@@ -53,11 +44,12 @@ export function closeRuntimeWebSocketServerState(options: {
       reason: "server-close",
     });
   }
-  for (const ws of Array.from(trackedSockets)) {
-    socketCleanupCallbacks.get(ws)?.({
+  for (const ws of Array.from(lifecycleRegistry.trackedSockets)) {
+    lifecycleRegistry.getCleanupCallback(ws)?.({
       reason: "server-close-unregistered",
     });
     if (!isTrackableSocket(ws)) {
+      lifecycleRegistry.deregisterSocket(ws);
       continue;
     }
 
@@ -67,9 +59,9 @@ export function closeRuntimeWebSocketServerState(options: {
       logger.debug("WebSocket close request failed during server shutdown cleanup", {
         error: sanitizeRuntimeWebSocketError(error),
       });
+    } finally {
+      lifecycleRegistry.deregisterSocket(ws);
     }
   }
-  connectedClients.clear();
-  socketEntriesByActivity.clear();
-  trackedSockets.clear();
+  lifecycleRegistry.clearAll();
 }

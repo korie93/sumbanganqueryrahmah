@@ -38,6 +38,10 @@ import {
 import { closeRuntimeWebSocketServerState } from "./runtime-server-close";
 import { createRuntimeClientRegistry } from "./runtime-client-registry";
 import {
+  RuntimeSocketLifecycleRegistry,
+  type RuntimeSocketLifecycleSnapshot,
+} from "./runtime-socket-lifecycle-registry";
+import {
   createRuntimeWsUpgradeRateLimiter,
   readRuntimeWsUpgradeRateLimitKey,
 } from "./upgrade-rate-limit";
@@ -84,6 +88,7 @@ function resolveRawMessageByteLength(message: RawData): number {
 export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
   connectedClients: Map<string, WebSocket>;
   broadcastWsMessage: (payload: Record<string, unknown>) => void;
+  getLifecycleSnapshot: () => RuntimeSocketLifecycleSnapshot;
 } {
   const { wss, storage, secret } = options;
   const trustForwardedHeaders = options.trustForwardedHeaders === true;
@@ -129,10 +134,8 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
         || DEFAULT_RUNTIME_WS_MAX_MESSAGE_BYTES,
     ),
   );
-  const socketEntriesByActivity = new Map<string, RuntimeTrackedSocketEntry>();
-  const socketEntriesByInstance = new WeakMap<WebSocket, RuntimeTrackedSocketEntry>();
-  const trackedSockets = new Set<WebSocket>();
-  const socketCleanupCallbacks = new WeakMap<WebSocket, (options?: RuntimeSocketCleanupOptions) => void>();
+  const lifecycleRegistry = new RuntimeSocketLifecycleRegistry(connectedClients);
+  const { socketEntriesByActivity, trackedSockets } = lifecycleRegistry;
   const logCleanupDiagnostic = (message: string, metadata: Record<string, unknown>) => {
     if (!shouldLogRuntimeWebSocketCleanupDiagnostics()) {
       return;
@@ -155,12 +158,8 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
     removeTrackedSocket,
   } = createRuntimeClientRegistry({
     clearNicknameSession,
-    connectedClients,
+    lifecycleRegistry,
     logCleanupDiagnostic,
-    socketCleanupCallbacks,
-    socketEntriesByActivity,
-    socketEntriesByInstance,
-    trackedSockets,
   });
   const broadcastLocalWsMessage = createRuntimeWsBroadcaster({ connectedClients, cleanupClient });
   const broadcastWsMessage = (payload: Record<string, unknown>) => {
@@ -204,11 +203,8 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
     try {
       closeRuntimeWebSocketServerState({
         cleanupClient,
-        connectedClients,
         heartbeatHandle,
-        socketCleanupCallbacks,
-        socketEntriesByActivity,
-        trackedSockets,
+        lifecycleRegistry,
       });
     } finally {
       suppressSharedClosePublish = false;
@@ -280,7 +276,7 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
         return;
       }
 
-      const currentEntry = socketEntriesByInstance.get(ws) ?? socketEntry;
+      const currentEntry = lifecycleRegistry.getEntryBySocket(ws) ?? socketEntry;
       if (currentEntry?.ws === ws) {
         currentEntry.alive = true;
       }
@@ -291,6 +287,7 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
       ws.removeListener("pong", markSocketAlive);
       ws.removeListener("close", handleSocketClose);
       ws.removeListener("error", handleSocketError);
+      ws.removeAllListeners();
     };
 
     const queueNicknameSessionClear = (sessionActivityId: string, reason: string) => {
@@ -307,18 +304,24 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
         return;
       }
 
-      cleanedUp = true;
-      socketCleanupCallbacks.delete(ws);
-      trackedSockets.delete(ws);
-      socketEntriesByInstance.delete(ws);
-      detachSocketLifecycleHandlers();
-
       const sessionActivityId = socketEntry?.activityId ?? activityId;
-      if (socketEntry) {
-        removeTrackedSocket(socketEntry.activityId, ws);
+      cleanedUp = true;
+
+      try {
+        detachSocketLifecycleHandlers();
+        if (socketEntry) {
+          removeTrackedSocket(socketEntry.activityId, ws);
+        } else if (activityId && connectedClients.get(activityId) === ws) {
+          removeTrackedSocket(activityId, ws);
+        }
+      } catch (error) {
+        logger.debug("WebSocket lifecycle handler detach failed during cleanup", {
+          activityId,
+          error: sanitizeRuntimeWebSocketError(error),
+        });
+      } finally {
+        lifecycleRegistry.deregisterSocket(ws);
         socketEntry = null;
-      } else if (activityId && connectedClients.get(activityId) === ws) {
-        removeTrackedSocket(activityId, ws);
       }
 
       if (options.clearSession && sessionActivityId) {
@@ -419,8 +422,7 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
     ws.on("pong", markSocketAlive);
     ws.once("close", handleSocketClose);
     ws.once("error", handleSocketError);
-    trackedSockets.add(ws);
-    socketCleanupCallbacks.set(ws, cleanupSocket);
+    lifecycleRegistry.trackSocket(ws, cleanupSocket);
 
     const url = parseRuntimeWebSocketHandshakeUrl(req);
     if (!url) {
@@ -528,5 +530,6 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
   return {
     connectedClients,
     broadcastWsMessage,
+    getLifecycleSnapshot: () => lifecycleRegistry.getSnapshot(),
   };
 }
