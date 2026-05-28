@@ -17,16 +17,87 @@ const DEFAULT_REVOCATION_TTL_MS = 24 * 60 * 60 * 1000;
 const MAX_REVOCATION_RECORDS = 25_000;
 const SWEEP_INTERVAL_MS = 5 * 60 * 1000;
 
+type SweepableSessionRevocationStore = {
+  sweepExpired: (now: number) => void;
+};
+
+class MemorySessionRevocationSweepOrchestrator {
+  private readonly stores = new Set<SweepableSessionRevocationStore>();
+  private intervalHandle: NodeJS.Timeout | null = null;
+  private sweepInProgress = false;
+
+  register(store: SweepableSessionRevocationStore) {
+    this.stores.add(store);
+    this.start();
+  }
+
+  unregister(store: SweepableSessionRevocationStore) {
+    this.stores.delete(store);
+    if (this.stores.size === 0) {
+      this.stop();
+    }
+  }
+
+  trigger(now = Date.now()) {
+    if (this.sweepInProgress) {
+      return;
+    }
+
+    this.sweepInProgress = true;
+    try {
+      for (const store of Array.from(this.stores)) {
+        try {
+          store.sweepExpired(now);
+        } catch (error) {
+          logSessionRevocationStoreCloseFailure(
+            defaultLogger,
+            "Session revocation memory sweep failed",
+            error,
+          );
+        }
+      }
+    } finally {
+      this.sweepInProgress = false;
+    }
+  }
+
+  getDiagnostics() {
+    return {
+      activeMemoryStores: this.stores.size,
+      sweepActive: this.intervalHandle !== null,
+      sweepInProgress: this.sweepInProgress,
+    };
+  }
+
+  private start() {
+    if (this.intervalHandle || this.stores.size === 0) {
+      return;
+    }
+
+    this.intervalHandle = setInterval(() => {
+      this.trigger(Date.now());
+    }, SWEEP_INTERVAL_MS);
+    this.intervalHandle.unref?.();
+  }
+
+  private stop() {
+    if (!this.intervalHandle) {
+      return;
+    }
+
+    clearInterval(this.intervalHandle);
+    this.intervalHandle = null;
+  }
+}
+
+const memorySweepOrchestrator = new MemorySessionRevocationSweepOrchestrator();
+
 class MemorySessionRevocationStore implements SessionRevocationStore {
   private readonly revoked = new Map<string, number>();
-  private sweepStopped = false;
-  private readonly sweepHandle: NodeJS.Timeout;
+  private closed = false;
 
   constructor() {
-    this.sweepHandle = setInterval(() => {
-      this.sweep(Date.now());
-    }, SWEEP_INTERVAL_MS);
-    this.sweepHandle.unref?.();
+    memorySweepOrchestrator.register(this);
   }
 
   async isRevoked(jwtId: string): Promise<boolean> {
@@ -67,15 +138,19 @@ class MemorySessionRevocationStore implements SessionRevocationStore {
   }
 
   close() {
-    if (this.sweepStopped) {
+    if (this.closed) {
       return;
     }
-    this.sweepStopped = true;
-    clearInterval(this.sweepHandle);
+    this.closed = true;
+    memorySweepOrchestrator.unregister(this);
     this.revoked.clear();
   }
 
-  private sweep(now: number) {
+  sweepExpired(now: number) {
+    if (this.closed) {
+      return;
+    }
+
     for (const [jwtId, expiresAtMs] of this.revoked.entries()) {
       if (now >= expiresAtMs) {
         this.revoked.delete(jwtId);
@@ -98,6 +173,20 @@ function logSessionRevocationStoreCloseFailure(
   });
 }
 
+function closeSessionRevocationStoreSafely(
+  store: SessionRevocationStore,
+  sink: LoggerLike,
+  message: string,
+) {
+  try {
+    void Promise.resolve(store.close?.()).catch((error) => {
+      logSessionRevocationStoreCloseFailure(sink, message, error);
+    });
+  } catch (error) {
+    logSessionRevocationStoreCloseFailure(sink, message, error);
+  }
+}
+
 function normalizeJwtId(jwtId: string): string {
   return String(jwtId || "").trim();
 }
@@ -118,25 +207,21 @@ export function configureSessionRevocationStoreForRuntime(
   activeStore = store ?? new MemorySessionRevocationStore();
   const sink = options.logger ?? defaultLogger;
   if (previousStore !== activeStore) {
-    void Promise.resolve(previousStore.close?.()).catch((error) => {
-      logSessionRevocationStoreCloseFailure(
-        sink,
-        "Failed to close previous session revocation store",
-        error,
-      );
-    });
+    closeSessionRevocationStoreSafely(
+      previousStore,
+      sink,
+      "Failed to close previous session revocation store",
+    );
   }
 
   return () => {
     const storeToClose = activeStore;
     activeStore = new MemorySessionRevocationStore();
-    void Promise.resolve(storeToClose.close?.()).catch((error) => {
-      logSessionRevocationStoreCloseFailure(
-        sink,
-        "Failed to close session revocation store during shutdown",
-        error,
-      );
-    });
+    closeSessionRevocationStoreSafely(
+      storeToClose,
+      sink,
+      "Failed to close session revocation store during shutdown",
+    );
   };
 }
 
@@ -155,11 +240,17 @@ export async function revokeSessionJwt(record: SessionRevocationRecord): Promise
 export function resetSessionRevocationStoreForTests() {
   const storeToClose = activeStore;
   activeStore = new MemorySessionRevocationStore();
-  void Promise.resolve(storeToClose.close?.()).catch((error) => {
-    logSessionRevocationStoreCloseFailure(
-      defaultLogger,
-      "Failed to close session revocation store during test reset",
-      error,
-    );
-  });
+  closeSessionRevocationStoreSafely(
+    storeToClose,
+    defaultLogger,
+    "Failed to close session revocation store during test reset",
+  );
+}
+
+export function getSessionRevocationStoreDiagnosticsForTests() {
+  return memorySweepOrchestrator.getDiagnostics();
+}
+
+export function sweepSessionRevocationStoreForTests(now = Date.now()) {
+  memorySweepOrchestrator.trigger(now);
 }
