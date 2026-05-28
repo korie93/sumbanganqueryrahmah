@@ -22,6 +22,7 @@ That means Drizzle is ready to manage new schema work, but it is not yet the com
 - `npm run db:migrate`
 - `npm run db:migrate:cli`
 - `npm run verify:db-schema-governance`
+- `npm run verify:db-migration-rollback`
 - `npm run db:studio`
 - `npm run db:introspect`
 
@@ -64,6 +65,20 @@ For schema work that still touches legacy bootstrap-managed areas:
 Avoid using `db:push` as the default workflow in this repository. The current Drizzle schema does not yet represent the full database, so a push-style sync would be a riskier fit than reviewed SQL migrations.
 
 `npm run db:migrate` intentionally uses the repo's Node wrapper around Drizzle's runtime migrator instead of the raw Drizzle CLI. This has been more reliable in the current local environment and surfaces normal Node errors if a migration fails. `npm run db:migrate:cli` is still available for upstream debugging when needed.
+
+## Rollback Governance
+
+Migration rollback coverage is enforced by
+`npm run verify:db-migration-rollback`. The check ensures every reviewed SQL
+migration under [drizzle/](../drizzle/) has an explicit rollback manifest entry
+in [scripts/db-migration-rollback.manifest.mjs](../scripts/db-migration-rollback.manifest.mjs).
+
+Historical SQR migrations create and reshape production tables, so the safe
+rollback strategy is to restore the verified pre-migration PostgreSQL backup
+and restart the previous stable application artifact. Do not add destructive
+automated down SQL for an existing migration unless the rollout plan includes a
+verified backup and data restoration validation. The operational procedure is
+documented in [DATABASE_MIGRATION_ROLLBACK.md](./DATABASE_MIGRATION_ROLLBACK.md).
 
 ## Runtime Bootstrap Boundary
 
