@@ -1,4 +1,4 @@
-import { inspect } from "node:util";
+import { formatProcessFatalDetails } from "./process-fatal-error-format";
 
 type WorkerProcessLogger = {
   error: (message: string, metadata?: Record<string, unknown>) => void;
@@ -31,30 +31,13 @@ type RegisterWorkerProcessFatalHandlersOptions =
     processRef?: WorkerProcessLike;
   };
 
-function formatFatalDetails(value: unknown) {
-  if (value instanceof Error) {
-    return {
-      details: value.stack ?? value.message,
-      metadata: { error: value },
-    };
-  }
-
-  return {
-    details: inspect(value, {
-      depth: 4,
-      breakLength: Infinity,
-    }),
-    metadata: { reason: value },
-  };
-}
-
 export function createWorkerProcessFatalHandlers({
   logger,
   notifyMasterFatal,
   shutdown,
 }: CreateWorkerProcessFatalHandlersOptions) {
   function handleUncaughtException(error: unknown) {
-    const { details, metadata } = formatFatalDetails(error);
+    const { details, metadata } = formatProcessFatalDetails(error);
     notifyMasterFatal("WORKER_UNCAUGHT_EXCEPTION", details);
     logger.error("Uncaught exception in worker process", metadata);
     shutdown({
@@ -65,7 +48,7 @@ export function createWorkerProcessFatalHandlers({
   }
 
   function handleUnhandledRejection(reason: unknown) {
-    const { details, metadata } = formatFatalDetails(reason);
+    const { details, metadata } = formatProcessFatalDetails(reason);
     notifyMasterFatal("WORKER_UNHANDLED_REJECTION", details);
     logger.error("Unhandled rejection in worker process", metadata);
     shutdown({

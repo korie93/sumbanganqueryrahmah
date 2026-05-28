@@ -1,4 +1,4 @@
-import { inspect } from "node:util";
+import { formatProcessFatalDetails } from "./process-fatal-error-format";
 
 type LocalProcessFatalLogger = {
   error: (message: string, metadata?: Record<string, unknown>) => void;
@@ -31,30 +31,13 @@ type RegisterLocalProcessFatalHandlersOptions =
     processRef?: LocalProcessLike;
   };
 
-function formatFatalDetails(value: unknown) {
-  if (value instanceof Error) {
-    return {
-      details: value.stack ?? value.message,
-      metadata: { error: value },
-    };
-  }
-
-  return {
-    details: inspect(value, {
-      breakLength: Infinity,
-      depth: 4,
-    }),
-    metadata: { reason: value },
-  };
-}
-
 export function createLocalProcessFatalHandlers({
   logger,
   notifyFatal,
   shutdown,
 }: CreateLocalProcessFatalHandlersOptions) {
   function handleUncaughtException(error: unknown) {
-    const { details, metadata } = formatFatalDetails(error);
+    const { details, metadata } = formatProcessFatalDetails(error);
     notifyFatal("PROCESS_UNCAUGHT_EXCEPTION", details);
     logger.error("Uncaught exception in local server process", metadata);
     shutdown({
@@ -65,7 +48,7 @@ export function createLocalProcessFatalHandlers({
   }
 
   function handleUnhandledRejection(reason: unknown) {
-    const { details, metadata } = formatFatalDetails(reason);
+    const { details, metadata } = formatProcessFatalDetails(reason);
     notifyFatal("PROCESS_UNHANDLED_REJECTION", details);
     logger.error("Unhandled rejection in local server process", metadata);
     shutdown({

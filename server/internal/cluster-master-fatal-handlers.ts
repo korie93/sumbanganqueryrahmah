@@ -1,3 +1,5 @@
+import { sanitizeFatalString } from "./process-fatal-error-format";
+
 type ClusterMasterFatalLogger = {
   error: (message: string, metadata?: Record<string, unknown>) => void;
 };
@@ -22,9 +24,9 @@ type CreateClusterMasterFatalHandlersOptions = {
 
 function formatFatalHandlerFailure(error: unknown): string {
   if (error instanceof Error) {
-    return error.message || error.name;
+    return sanitizeFatalString(error.message || error.name);
   }
-  return String(error);
+  return sanitizeFatalString(String(error));
 }
 
 export function createClusterMasterFatalHandlers({
