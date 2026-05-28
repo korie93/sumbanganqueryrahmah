@@ -243,6 +243,53 @@ test("CollectionRollupRefreshNotificationSubscriber cleans old listeners before 
   assert.equal(secondClient.listenerCount("end"), 0);
 });
 
+test("CollectionRollupRefreshNotificationSubscriber keeps listener count stable across reconnect loops", async (t) => {
+  const reconnectCycles = 12;
+  const createdClients: FakeNotificationClient[] = [];
+  t.mock.method(logger, "warn", (() => undefined) as typeof logger.warn);
+
+  const subscriber = new CollectionRollupRefreshNotificationSubscriber({
+    reconnectDelayMs: 1,
+    clientFactory: () => {
+      const client = new FakeNotificationClient();
+      createdClients.push(client);
+      return client;
+    },
+  });
+
+  await subscriber.start(() => undefined);
+  assert.equal(createdClients.length, 1);
+  assert.equal(subscriber.getDiagnostics().pendingListenerCleanups, 1);
+
+  for (let index = 0; index < reconnectCycles; index += 1) {
+    const previousClient = createdClients[index];
+    previousClient.emit("error", new Error(`disconnect-${index}`));
+    await waitFor(() => (
+      createdClients.length >= index + 2
+      && createdClients[index + 1].listenQueries.length === 1
+    ));
+
+    assert.equal(previousClient.listenerCount("notification"), 0);
+    assert.equal(previousClient.listenerCount("error"), 0);
+    assert.equal(previousClient.listenerCount("end"), 0);
+    assert.equal(previousClient.endCalls, 1);
+    assert.equal(subscriber.getDiagnostics().pendingListenerCleanups, 1);
+  }
+
+  await subscriber.stop();
+
+  for (const client of createdClients) {
+    assert.equal(client.listenerCount("notification"), 0);
+    assert.equal(client.listenerCount("error"), 0);
+    assert.equal(client.listenerCount("end"), 0);
+  }
+  assert.deepEqual(subscriber.getDiagnostics(), {
+    activeClient: false,
+    pendingListenerCleanups: 0,
+    reconnectPending: false,
+  });
+});
+
 test("CollectionRollupRefreshNotificationSubscriber contains notification callback failures", async (t) => {
   const client = new FakeNotificationClient();
   const warnings: string[] = [];

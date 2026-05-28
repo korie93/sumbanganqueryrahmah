@@ -91,6 +91,8 @@ Runtime WebSocket upgrades are rate limited by IP. Accepted sockets are also bou
 
 Runtime WebSocket socket ownership is centralized through the lifecycle registry in `server/ws/runtime-socket-lifecycle-registry.ts`. Cleanup paths for close, error, heartbeat timeout, shared-bus close, broadcast failure, and server shutdown must deregister the socket from the same registry so `connectedClients`, activity entries, instance entries, cleanup callbacks, and tracked sockets return to zero together. The focused WebSocket test suite includes rapid reconnect and cleanup-failure drills; run `npm run test:ws` after any runtime socket lifecycle change.
 
+The collection rollup PostgreSQL `LISTEN` subscriber owns notification, error, and end handlers through an explicit listener registry. Reconnect paths unsubscribe the old client before attaching a new one, and `getDiagnostics().pendingListenerCleanups` should remain `1` while connected and `0` after stop. Run `npx tsx --test server/tests/collection-rollup-refresh-notification.test.ts server/http/tests/collection-rollup-refresh-notification.test.ts` after changes to the rollup notification lifecycle.
+
 ## 2. Apa Yang Belum Dianggap Siap
 
 Perkara berikut masih patut dianggap future work:

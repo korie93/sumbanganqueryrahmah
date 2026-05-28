@@ -14,6 +14,7 @@ type PgNotification = {
 type PgNotificationClientLike = {
   connect(): Promise<unknown>;
   end(): Promise<void>;
+  getMaxListeners?(): number;
   on(event: "notification", listener: (message: PgNotification) => void): unknown;
   on(event: "error", listener: (error: unknown) => void): unknown;
   on(event: "end", listener: () => void): unknown;
@@ -21,6 +22,10 @@ type PgNotificationClientLike = {
   off?(event: "error", listener: (error: unknown) => void): unknown;
   off?(event: "end", listener: () => void): unknown;
   query(sqlText: string): Promise<unknown>;
+  removeListener?(event: "notification", listener: (message: PgNotification) => void): unknown;
+  removeListener?(event: "error", listener: (error: unknown) => void): unknown;
+  removeListener?(event: "end", listener: () => void): unknown;
+  setMaxListeners?(n: number): unknown;
 };
 
 type PgNotificationClientFactory = () => PgNotificationClientLike;
@@ -36,6 +41,8 @@ type CollectionRollupRefreshNotificationSubscriberOptions = {
 const DEFAULT_ROLLUP_REFRESH_NOTIFICATION_RECONNECT_DELAY_MS = 5_000;
 const DEFAULT_ROLLUP_REFRESH_NOTIFICATION_MAX_RECONNECT_DELAY_MS = 60_000;
 const DEFAULT_ROLLUP_REFRESH_NOTIFICATION_RECONNECT_JITTER_RATIO = 0.2;
+const PG_NOTIFICATION_EXPECTED_LISTENER_COUNT = 3;
+const PG_NOTIFICATION_LISTENER_LIMIT_BUFFER = 4;
 
 export type CollectionRollupRefreshNotificationSubscriberLike = {
   start(onNotify: () => void): Promise<void>;
@@ -71,6 +78,100 @@ function createDefaultClient(): PgNotificationClientLike {
           ...sslConfig,
         },
   );
+}
+
+type PgNotificationListenerEntry = {
+  handleEnd: () => void;
+  handleError: (error: unknown) => void;
+  handleNotification: (message: PgNotification) => void;
+};
+
+class PgNotificationListenerRegistry {
+  private readonly listeners = new Map<PgNotificationClientLike, PgNotificationListenerEntry>();
+
+  get size(): number {
+    return this.listeners.size;
+  }
+
+  has(client: PgNotificationClientLike): boolean {
+    return this.listeners.has(client);
+  }
+
+  subscribe(client: PgNotificationClientLike, entry: PgNotificationListenerEntry): void {
+    this.unsubscribe(client);
+    this.raiseMaxListenersIfNeeded(client);
+
+    client.on("notification", entry.handleNotification);
+    client.on("error", entry.handleError);
+    client.on("end", entry.handleEnd);
+    this.listeners.set(client, entry);
+  }
+
+  unsubscribe(client: PgNotificationClientLike): void {
+    const entry = this.listeners.get(client);
+    if (!entry) {
+      return;
+    }
+
+    try {
+      this.removeListener(client, "notification", entry.handleNotification);
+      this.removeListener(client, "error", entry.handleError);
+      this.removeListener(client, "end", entry.handleEnd);
+    } finally {
+      this.listeners.delete(client);
+    }
+  }
+
+  teardown(): void {
+    for (const client of Array.from(this.listeners.keys())) {
+      this.unsubscribe(client);
+    }
+  }
+
+  private raiseMaxListenersIfNeeded(client: PgNotificationClientLike): void {
+    const getMaxListeners = client.getMaxListeners;
+    const setMaxListeners = client.setMaxListeners;
+    if (!getMaxListeners || !setMaxListeners) {
+      return;
+    }
+
+    const requiredLimit = PG_NOTIFICATION_EXPECTED_LISTENER_COUNT + PG_NOTIFICATION_LISTENER_LIMIT_BUFFER;
+    const currentLimit = getMaxListeners.call(client);
+    if (currentLimit < requiredLimit) {
+      setMaxListeners.call(client, requiredLimit);
+    }
+  }
+
+  private removeListener(
+    client: PgNotificationClientLike,
+    event: "end" | "error" | "notification",
+    listener: ((message: PgNotification) => void) | ((error: unknown) => void) | (() => void),
+  ): void {
+    if (event === "notification") {
+      const notificationListener = listener as (message: PgNotification) => void;
+      if (client.off) {
+        client.off(event, notificationListener);
+      } else {
+        client.removeListener?.(event, notificationListener);
+      }
+      return;
+    }
+    if (event === "error") {
+      const errorListener = listener as (error: unknown) => void;
+      if (client.off) {
+        client.off(event, errorListener);
+      } else {
+        client.removeListener?.(event, errorListener);
+      }
+      return;
+    }
+    const endListener = listener as () => void;
+    if (client.off) {
+      client.off(event, endListener);
+    } else {
+      client.removeListener?.(event, endListener);
+    }
+  }
 }
 
 export function resolveCollectionRollupRefreshReconnectDelayMs(params: {
@@ -110,9 +211,8 @@ export class CollectionRollupRefreshNotificationSubscriber
   private reconnectTimer: NodeJS.Timeout | null = null;
   private reconnectAttempt = 0;
   private currentClient: PgNotificationClientLike | null = null;
-  private readonly clientListenerCleanups = new WeakMap<PgNotificationClientLike, () => void>();
-  private activeClientListenerCleanupCount = 0;
-  private readonly closingClients = new WeakSet<PgNotificationClientLike>();
+  private readonly listenerRegistry = new PgNotificationListenerRegistry();
+  private readonly closingClients = new Set<PgNotificationClientLike>();
   private notifyCallback: (() => unknown) | null = null;
 
   constructor(options: CollectionRollupRefreshNotificationSubscriberOptions = {}) {
@@ -155,12 +255,13 @@ export class CollectionRollupRefreshNotificationSubscriber
       this.removeClientListeners(activeClient);
       await this.safeCloseClient(activeClient, "stop");
     }
+    this.listenerRegistry.teardown();
   }
 
   getDiagnostics(): { activeClient: boolean; pendingListenerCleanups: number; reconnectPending: boolean } {
     return {
       activeClient: Boolean(this.currentClient),
-      pendingListenerCleanups: this.activeClientListenerCleanupCount,
+      pendingListenerCleanups: this.listenerRegistry.size,
       reconnectPending: Boolean(this.reconnectTimer),
     };
   }
@@ -228,15 +329,11 @@ export class CollectionRollupRefreshNotificationSubscriber
       disconnectSafely();
     };
 
-    client.on("notification", handleNotification);
-    client.on("error", handleError);
-    client.on("end", handleEnd);
-    this.clientListenerCleanups.set(client, () => {
-      client.off?.("notification", handleNotification);
-      client.off?.("error", handleError);
-      client.off?.("end", handleEnd);
+    this.listenerRegistry.subscribe(client, {
+      handleEnd,
+      handleError,
+      handleNotification,
     });
-    this.activeClientListenerCleanupCount += 1;
 
     try {
       await client.connect();
@@ -282,14 +379,7 @@ export class CollectionRollupRefreshNotificationSubscriber
   }
 
   private removeClientListeners(client: PgNotificationClientLike): void {
-    const cleanup = this.clientListenerCleanups.get(client);
-    if (!cleanup) {
-      return;
-    }
-
-    cleanup();
-    this.clientListenerCleanups.delete(client);
-    this.activeClientListenerCleanupCount = Math.max(0, this.activeClientListenerCleanupCount - 1);
+    this.listenerRegistry.unsubscribe(client);
   }
 
   private scheduleReconnect(): void {
