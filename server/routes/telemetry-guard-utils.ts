@@ -101,3 +101,7 @@ export function isSameSiteTelemetryRequest(req: Request, allowedOriginSet: Set<s
 
   return true;
 }
+
+export function isBrowserProvenanceSameSiteTelemetryRequest(req: Request, allowedOriginSet: Set<string>) {
+  return hasBrowserProvenanceSignal(req) && isSameSiteTelemetryRequest(req, allowedOriginSet);
+}

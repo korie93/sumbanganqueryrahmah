@@ -9,6 +9,7 @@ import {
   CANONICAL_WEB_VITALS_TELEMETRY_PATH,
   LEGACY_WEB_VITALS_TELEMETRY_PATH,
 } from "../routes/telemetry-route-constants";
+import { isBrowserProvenanceSameSiteTelemetryRequest } from "../routes/telemetry-guard-utils";
 import { normalizeCorsOrigin, resolveAllowedCorsOrigins } from "./cors";
 
 const UNSAFE_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
@@ -34,6 +35,17 @@ function logCsrfRejection(req: Parameters<RequestHandler>[0], code: string, deta
   });
 }
 
+function logCsrfTelemetryRejection(req: Parameters<RequestHandler>[0], code: string) {
+  logger.warn("CSRF telemetry request rejected", {
+    code,
+    method: req.method,
+    path: req.path,
+    fetchSite: req.headers["sec-fetch-site"] || null,
+    hasOrigin: Boolean(req.headers.origin),
+    hasReferer: Boolean(req.headers.referer),
+  });
+}
+
 export function createCsrfProtectionMiddleware(options: CsrfMiddlewareOptions = {}): RequestHandler {
   const allowedOrigins = new Set(
     (options.allowedOrigins || resolveAllowedCorsOrigins())
@@ -51,15 +63,32 @@ export function createCsrfProtectionMiddleware(options: CsrfMiddlewareOptions = 
       return next();
     }
 
-    // Browser-owned telemetry is append-only aggregate data. These endpoints
-    // rely on their own origin/content/drop guards and must remain usable from
-    // sendBeacon/keepalive contexts without a CSRF header.
-    if (isTelemetryPath) {
-      return next();
-    }
-
     // Protect cookie-authenticated API mutations; token-only/Bearer calls can bypass.
     const authCookie = readCookieValueFromHeader(req.headers.cookie, AUTH_SESSION_COOKIE_NAME);
+
+    // Browser-owned telemetry is append-only aggregate data. These endpoints
+    // rely on their own origin/content/drop guards and must remain usable from
+    // sendBeacon/keepalive contexts without a CSRF header. When ambient auth
+    // cookies are present, keep a CSRF-layer same-site safety net so local/test
+    // routes cannot accidentally expose an unguarded telemetry sink.
+    if (isTelemetryPath) {
+      if (
+        !authCookie
+        || readAuthSessionCsrfTokenFromHeaders(req.headers)
+        || isBrowserProvenanceSameSiteTelemetryRequest(req, allowedOrigins)
+      ) {
+        return next();
+      }
+
+      const code = "CSRF_TELEMETRY_ORIGIN_REJECTED";
+      logCsrfTelemetryRejection(req, code);
+      return res.status(403).json({
+        ok: false,
+        message: "CSRF protection blocked a telemetry request without a trusted browser origin signal.",
+        code,
+      });
+    }
+
     if (!authCookie) {
       return next();
     }

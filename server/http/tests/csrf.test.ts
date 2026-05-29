@@ -6,13 +6,14 @@ import { logger } from "../../lib/logger";
 import { startTestServer, stopTestServer } from "../../routes/tests/http-test-utils";
 
 const VALID_CSRF_TOKEN = "a".repeat(64);
+const ALLOWED_ORIGIN = "http://127.0.0.1:5000";
 
 function createCsrfTestApp() {
   const app = express();
   app.use(express.json());
   app.use(
     createCsrfProtectionMiddleware({
-      allowedOrigins: ["http://127.0.0.1:5000"],
+      allowedOrigins: [ALLOWED_ORIGIN],
     }),
   );
   app.post("/api/mutate", (_req, res) => {
@@ -203,6 +204,7 @@ test("csrf middleware exempts browser CSP reports from token checks", async () =
       headers: {
         Cookie: `sqr_auth=token-value; sqr_csrf=${VALID_CSRF_TOKEN}`,
         "Content-Type": "application/csp-report",
+        Origin: ALLOWED_ORIGIN,
       },
       body: JSON.stringify({
         "csp-report": {
@@ -227,6 +229,7 @@ test("csrf middleware exempts canonical web-vitals telemetry from token checks",
       headers: {
         Cookie: `sqr_auth=token-value; sqr_csrf=${VALID_CSRF_TOKEN}`,
         "Content-Type": "application/json",
+        Origin: ALLOWED_ORIGIN,
       },
       body: JSON.stringify({
         name: "LCP",
@@ -249,6 +252,92 @@ test("csrf middleware explicitly exempts legacy web-vitals telemetry from token 
       method: "POST",
       headers: {
         Cookie: `sqr_auth=token-value; sqr_csrf=${VALID_CSRF_TOKEN}`,
+        "Content-Type": "application/json",
+        Origin: ALLOWED_ORIGIN,
+      },
+      body: JSON.stringify({
+        name: "LCP",
+        value: 123,
+      }),
+    });
+
+    assert.equal(response.status, 204);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("csrf middleware rejects cookie-authenticated telemetry without browser provenance", async () => {
+  const app = createCsrfTestApp();
+  const { server, baseUrl } = await startTestServer(app);
+  const originalWarn = logger.warn;
+  const warnings: Array<{ message: string; payload: Record<string, unknown> }> = [];
+  logger.warn = ((message: string, payload: Record<string, unknown>) => {
+    warnings.push({ message, payload });
+  }) as typeof logger.warn;
+
+  try {
+    const response = await fetch(`${baseUrl}/api/csp-report`, {
+      method: "POST",
+      headers: {
+        Cookie: `sqr_auth=token-value; sqr_csrf=${VALID_CSRF_TOKEN}`,
+        "Content-Type": "application/csp-report",
+      },
+      body: JSON.stringify({
+        "csp-report": {
+          "violated-directive": "script-src",
+        },
+      }),
+    });
+
+    assert.equal(response.status, 403);
+    const payload = await response.json();
+    assert.equal(payload.code, "CSRF_TELEMETRY_ORIGIN_REJECTED");
+    assert.equal(warnings.length, 1);
+    assert.equal(warnings[0]?.message, "CSRF telemetry request rejected");
+    assert.equal(warnings[0]?.payload.hasOrigin, false);
+    assert.equal(warnings[0]?.payload.hasReferer, false);
+  } finally {
+    logger.warn = originalWarn;
+    await stopTestServer(server);
+  }
+});
+
+test("csrf middleware rejects cookie-authenticated cross-site telemetry", async () => {
+  const app = createCsrfTestApp();
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(`${baseUrl}/api/telemetry/web-vitals`, {
+      method: "POST",
+      headers: {
+        Cookie: `sqr_auth=token-value; sqr_csrf=${VALID_CSRF_TOKEN}`,
+        "Content-Type": "application/json",
+        Origin: "https://attacker.example",
+        "Sec-Fetch-Site": "cross-site",
+      },
+      body: JSON.stringify({
+        name: "LCP",
+        value: 123,
+      }),
+    });
+
+    assert.equal(response.status, 403);
+    const payload = await response.json();
+    assert.equal(payload.code, "CSRF_TELEMETRY_ORIGIN_REJECTED");
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("csrf middleware still lets unauthenticated telemetry reach route guards without provenance", async () => {
+  const app = createCsrfTestApp();
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(`${baseUrl}/api/telemetry/web-vitals`, {
+      method: "POST",
+      headers: {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
