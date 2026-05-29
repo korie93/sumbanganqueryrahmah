@@ -25,7 +25,9 @@ export type InternalMetricName =
   | "webVitalsDroppedRequestGuardTotal"
   | "webVitalsDroppedTotal"
   | "webVitalsLegacyRouteGoneTotal"
-  | "webVitalsLegacyRouteUsedTotal";
+  | "webVitalsLegacyRouteUsedTotal"
+  | "webSocketOversizedMessagesTotal"
+  | "webSocketPayloadWindowExceededTotal";
 
 export type InternalGaugeName =
   | "authAdaptiveRateLimitCooldownCacheSize"
@@ -71,6 +73,8 @@ const INTERNAL_METRIC_NAMES: readonly InternalMetricName[] = [
   "webVitalsDroppedTotal",
   "webVitalsLegacyRouteGoneTotal",
   "webVitalsLegacyRouteUsedTotal",
+  "webSocketOversizedMessagesTotal",
+  "webSocketPayloadWindowExceededTotal",
 ];
 
 const INTERNAL_GAUGE_NAMES: readonly InternalGaugeName[] = [

@@ -226,7 +226,7 @@ const runtimeEnvironmentShape = {
   SQR_WS_SHARED_BUS: optionalWsSharedBusEnv(),
   SQR_REDIS_WS_URL: optionalEnvString("SQR_REDIS_WS_URL", SECRET_STRING_MAX_LENGTH),
   SQR_WS_MAX_CONNECTIONS: optionalIntEnv("SQR_WS_MAX_CONNECTIONS", { min: 1, max: 100_000 }),
-  SQR_WS_MAX_MESSAGE_BYTES: optionalIntEnv("SQR_WS_MAX_MESSAGE_BYTES", { min: 1024, max: 10 * 1024 * 1024 }),
+  SQR_WS_MAX_MESSAGE_BYTES: optionalIntEnv("SQR_WS_MAX_MESSAGE_BYTES", { min: 1024, max: 64 * 1024 }),
 
   DATABASE_URL: optionalEnvString("DATABASE_URL", SECRET_STRING_MAX_LENGTH),
   DATABASE_SSL: optionalBooleanEnv("DATABASE_SSL"),

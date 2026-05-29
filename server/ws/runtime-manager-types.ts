@@ -1,12 +1,15 @@
 import type { WebSocket, WebSocketServer } from "ws";
 import type { PostgresStorage } from "../storage-postgres";
+import type { InternalMetricsRecorder } from "../internal/metrics";
 import type { RuntimeWsUpgradeRateLimiter } from "./upgrade-rate-limit";
 import type { RuntimeWsMessageRateLimiter } from "./message-rate-limit";
 import type { RuntimeWsSharedBus } from "./runtime-shared-bus";
 
 export const MAX_RUNTIME_WS_CONNECTIONS_PER_USER = 5;
 export const DEFAULT_RUNTIME_WS_MAX_CONNECTIONS = 1_000;
-export const DEFAULT_RUNTIME_WS_MAX_MESSAGE_BYTES = 1024 * 1024;
+export const DEFAULT_RUNTIME_WS_MAX_MESSAGE_BYTES = 64 * 1024;
+export const DEFAULT_RUNTIME_WS_PAYLOAD_WINDOW_BYTES = 512 * 1024;
+export const DEFAULT_RUNTIME_WS_PAYLOAD_WINDOW_MS = 10_000;
 export const RUNTIME_WS_CLOSE_POLICY_VIOLATION = 1008;
 export const RUNTIME_WS_CLOSE_MESSAGE_TOO_BIG = 1009;
 export const RUNTIME_WS_CLOSE_TRY_AGAIN_LATER = 1013;
@@ -24,8 +27,12 @@ export type RuntimeManagerOptions = {
   heartbeatIntervalMs?: number;
   largeMessageWarnBytes?: number;
   maxMessageBytes?: number;
+  maxPayloadWindowBytes?: number;
+  payloadWindowMs?: number;
   maxConnections?: number;
+  metrics?: Pick<InternalMetricsRecorder, "increment">;
   messageRateLimiterFactory?: () => RuntimeWsMessageRateLimiter;
+  now?: () => number;
   sharedBus?: RuntimeWsSharedBus;
   upgradeRateLimiter?: RuntimeWsUpgradeRateLimiter;
 };

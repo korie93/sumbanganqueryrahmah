@@ -179,7 +179,7 @@ test("production environment templates keep upload scanning and runtime topology
     assert.equal(readAnyEnvValue(text, "PG_MAX_CONNECTIONS", sourceName), "10");
     assert.equal(readAnyEnvValue(text, "SQR_MAX_WORKERS", sourceName), "1");
     assert.equal(readAnyEnvValue(text, "SQR_WS_MAX_CONNECTIONS", sourceName), "1000");
-    assert.equal(readAnyEnvValue(text, "SQR_WS_MAX_MESSAGE_BYTES", sourceName), "1048576");
+    assert.equal(readAnyEnvValue(text, "SQR_WS_MAX_MESSAGE_BYTES", sourceName), "65536");
   }
 
   assert.equal(readAnyEnvValue(envText, "HSTS_MAX_AGE_SECONDS", ".env.example"), "31536000");

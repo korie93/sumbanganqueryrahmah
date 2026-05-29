@@ -1,6 +1,7 @@
 import type { RawData, WebSocket } from "ws";
 import { readAuthSessionTokenFromHeaders } from "../auth/session-cookie";
 import { logger } from "../lib/logger";
+import { internalMetrics } from "../internal/metrics";
 import { extractWsActivityId, isActiveWebSocketSession } from "./session-auth";
 import {
   firstHeaderValue,
@@ -18,6 +19,8 @@ import {
   MAX_RUNTIME_WS_CONNECTIONS_PER_USER,
   DEFAULT_RUNTIME_WS_MAX_CONNECTIONS,
   DEFAULT_RUNTIME_WS_MAX_MESSAGE_BYTES,
+  DEFAULT_RUNTIME_WS_PAYLOAD_WINDOW_BYTES,
+  DEFAULT_RUNTIME_WS_PAYLOAD_WINDOW_MS,
   DEFAULT_RUNTIME_WS_LARGE_MESSAGE_WARN_BYTES,
   RUNTIME_WS_CLOSE_MESSAGE_TOO_BIG,
   RUNTIME_WS_CLOSE_POLICY_VIOLATION,
@@ -85,6 +88,13 @@ function resolveRawMessageByteLength(message: RawData): number {
   return Buffer.byteLength(String(message), "utf8");
 }
 
+function normalizePositiveInteger(value: unknown, fallback: number): number {
+  const numericValue = Number(value);
+  return Number.isFinite(numericValue) && numericValue > 0
+    ? Math.trunc(numericValue)
+    : fallback;
+}
+
 export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
   connectedClients: Map<string, WebSocket>;
   broadcastWsMessage: (payload: Record<string, unknown>) => void;
@@ -94,6 +104,8 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
   const trustForwardedHeaders = options.trustForwardedHeaders === true;
   const acceptConnections = options.acceptConnections ?? (() => true);
   const sharedBus = options.sharedBus ?? null;
+  const metrics = options.metrics ?? internalMetrics;
+  const now = options.now ?? Date.now;
   let suppressSharedClosePublish = false;
   const publishSharedCloseActivity = (activityId: string, reason: string) => {
     if (!sharedBus || suppressSharedClosePublish) {
@@ -116,24 +128,17 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
   const upgradeRateLimiter = options.upgradeRateLimiter ?? createRuntimeWsUpgradeRateLimiter();
   const messageRateLimiterFactory =
     options.messageRateLimiterFactory ?? (() => createRuntimeWsMessageRateLimiter());
-  const maxConnections = Math.max(
-    1,
-    Math.trunc(Number(options.maxConnections ?? DEFAULT_RUNTIME_WS_MAX_CONNECTIONS) || DEFAULT_RUNTIME_WS_MAX_CONNECTIONS),
+  const maxConnections = normalizePositiveInteger(options.maxConnections, DEFAULT_RUNTIME_WS_MAX_CONNECTIONS);
+  const largeMessageWarnBytes = normalizePositiveInteger(
+    options.largeMessageWarnBytes,
+    DEFAULT_RUNTIME_WS_LARGE_MESSAGE_WARN_BYTES,
   );
-  const largeMessageWarnBytes = Math.max(
-    1,
-    Math.trunc(
-      Number(options.largeMessageWarnBytes ?? DEFAULT_RUNTIME_WS_LARGE_MESSAGE_WARN_BYTES)
-        || DEFAULT_RUNTIME_WS_LARGE_MESSAGE_WARN_BYTES,
-    ),
+  const maxMessageBytes = normalizePositiveInteger(options.maxMessageBytes, DEFAULT_RUNTIME_WS_MAX_MESSAGE_BYTES);
+  const maxPayloadWindowBytes = normalizePositiveInteger(
+    options.maxPayloadWindowBytes,
+    DEFAULT_RUNTIME_WS_PAYLOAD_WINDOW_BYTES,
   );
-  const maxMessageBytes = Math.max(
-    1,
-    Math.trunc(
-      Number(options.maxMessageBytes ?? DEFAULT_RUNTIME_WS_MAX_MESSAGE_BYTES)
-        || DEFAULT_RUNTIME_WS_MAX_MESSAGE_BYTES,
-    ),
-  );
+  const payloadWindowMs = normalizePositiveInteger(options.payloadWindowMs, DEFAULT_RUNTIME_WS_PAYLOAD_WINDOW_MS);
   const lifecycleRegistry = new RuntimeSocketLifecycleRegistry(connectedClients);
   const { socketEntriesByActivity, trackedSockets } = lifecycleRegistry;
   const logCleanupDiagnostic = (message: string, metadata: Record<string, unknown>) => {
@@ -269,6 +274,8 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
     let cleanedUp = false;
     let closeRequested = false;
     let nicknameSessionClearQueued = false;
+    let payloadWindowStartedAt = now();
+    let payloadWindowBytes = 0;
     const messageRateLimiter = messageRateLimiterFactory();
 
     const markSocketAlive = () => {
@@ -322,6 +329,8 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
       } finally {
         lifecycleRegistry.deregisterSocket(ws);
         socketEntry = null;
+        payloadWindowBytes = 0;
+        payloadWindowStartedAt = now();
       }
 
       if (options.clearSession && sessionActivityId) {
@@ -371,7 +380,26 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
           activityId,
           error: sanitizeRuntimeWebSocketError(error),
         });
+        try {
+          ws.terminate();
+        } catch (terminateError) {
+          logger.debug("WebSocket terminate fallback failed during cleanup", {
+            activityId,
+            error: sanitizeRuntimeWebSocketError(terminateError),
+          });
+        }
       }
+    };
+
+    const consumePayloadWindow = (messageBytes: number): boolean => {
+      const currentTime = now();
+      if (currentTime - payloadWindowStartedAt >= payloadWindowMs) {
+        payloadWindowStartedAt = currentTime;
+        payloadWindowBytes = 0;
+      }
+
+      payloadWindowBytes += messageBytes;
+      return payloadWindowBytes <= maxPayloadWindowBytes;
     };
 
     const handleSocketMessage = (message: RawData) => {
@@ -381,6 +409,7 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
 
       const messageBytes = resolveRawMessageByteLength(message);
       if (messageBytes > maxMessageBytes) {
+        metrics.increment("webSocketOversizedMessagesTotal");
         logger.warn("WebSocket inbound message exceeded size limit", {
           activityId,
           clientIp: upgradeRateLimitKey,
@@ -401,6 +430,23 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
           messageBytes,
           thresholdBytes: largeMessageWarnBytes,
         });
+      }
+
+      if (!consumePayloadWindow(messageBytes)) {
+        metrics.increment("webSocketPayloadWindowExceededTotal");
+        logger.warn("WebSocket inbound payload window exceeded size limit", {
+          activityId,
+          clientIp: upgradeRateLimitKey,
+          maxBytes: maxPayloadWindowBytes,
+          messageBytes,
+          windowMs: payloadWindowMs,
+        });
+        cleanupSocket({
+          clearSession: socketEntry !== null,
+          reason: "payload-window-exceeded",
+        });
+        closeSocketIfNeeded(RUNTIME_WS_CLOSE_MESSAGE_TOO_BIG, "payload window exceeded");
+        return;
       }
 
       if (messageRateLimiter.consume()) {

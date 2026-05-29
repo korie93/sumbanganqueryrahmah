@@ -9,6 +9,10 @@ import { logger } from "../../lib/logger";
 import { createRuntimeWebSocketManager } from "../runtime-manager";
 import { createRuntimeWsUpgradeRateLimiter } from "../upgrade-rate-limit";
 import { createRuntimeWsMessageRateLimiter } from "../message-rate-limit";
+import {
+  DEFAULT_RUNTIME_WS_MAX_MESSAGE_BYTES,
+  RUNTIME_WS_CLOSE_MESSAGE_TOO_BIG,
+} from "../runtime-manager-types";
 import type {
   RuntimeWsSharedBus,
   RuntimeWsSharedBusEvent,
@@ -1737,6 +1741,230 @@ test("runtime manager closes clients that exceed the inbound WebSocket message s
       maxBytes: 4,
       messageBytes: 5,
     });
+  } finally {
+    wss.emit("close");
+  }
+});
+
+test("runtime manager accepts exactly the default WebSocket message limit and closes one byte over", async () => {
+  const wss = new FakeWebSocketServer();
+  const providedMap = new Map<string, WebSocket>();
+  const socket = new FakeWebSocket();
+  const activityId = "activity-default-message-limit";
+  let clearSessionCalls = 0;
+
+  createRuntimeWebSocketManager({
+    wss: wss as unknown as import("ws").WebSocketServer,
+    storage: {
+      getActivityById: async () => createActiveSession(activityId),
+      clearCollectionNicknameSessionByActivity: async () => {
+        clearSessionCalls += 1;
+      },
+    },
+    secret: TEST_SECRET,
+    connectedClients: providedMap,
+    maxPayloadWindowBytes: DEFAULT_RUNTIME_WS_MAX_MESSAGE_BYTES * 3,
+    messageRateLimiterFactory: () =>
+      createRuntimeWsMessageRateLimiter({
+        maxMessages: 10,
+        windowMs: 60_000,
+      }),
+  });
+
+  try {
+    wss.emit("connection", socket as unknown as WebSocket, createConnectionRequest(createWsToken(activityId)));
+    await flushAsyncWork();
+
+    socket.emit("message", Buffer.alloc(DEFAULT_RUNTIME_WS_MAX_MESSAGE_BYTES));
+    await flushAsyncWork();
+
+    assert.equal(providedMap.get(activityId), socket as unknown as WebSocket);
+    assert.equal(socket.closeCalls, 0);
+
+    socket.emit("message", Buffer.alloc(DEFAULT_RUNTIME_WS_MAX_MESSAGE_BYTES + 1));
+    await flushAsyncWork();
+
+    assert.equal(providedMap.has(activityId), false);
+    assert.equal(clearSessionCalls, 1);
+    assert.deepEqual(socket.closeCodes[0], {
+      code: RUNTIME_WS_CLOSE_MESSAGE_TOO_BIG,
+      reason: "message too big",
+    });
+  } finally {
+    wss.emit("close");
+  }
+});
+
+test("runtime manager closes clients that exceed the inbound payload byte window", async (t) => {
+  const wss = new FakeWebSocketServer();
+  const providedMap = new Map<string, WebSocket>();
+  const socket = new FakeWebSocket();
+  const activityId = "activity-payload-window";
+  const warnings: Array<{ message: string; payload: Record<string, unknown> }> = [];
+  const metricCalls: string[] = [];
+  let clearSessionCalls = 0;
+  t.mock.method(logger, "warn", (message: string, payload: Record<string, unknown>) => {
+    warnings.push({ message, payload });
+  });
+
+  createRuntimeWebSocketManager({
+    wss: wss as unknown as import("ws").WebSocketServer,
+    storage: {
+      getActivityById: async () => createActiveSession(activityId),
+      clearCollectionNicknameSessionByActivity: async () => {
+        clearSessionCalls += 1;
+      },
+    },
+    secret: TEST_SECRET,
+    connectedClients: providedMap,
+    maxMessageBytes: 10,
+    maxPayloadWindowBytes: 20,
+    payloadWindowMs: 60_000,
+    metrics: {
+      increment(name) {
+        metricCalls.push(name);
+      },
+    },
+    messageRateLimiterFactory: () =>
+      createRuntimeWsMessageRateLimiter({
+        maxMessages: 100,
+        windowMs: 60_000,
+      }),
+  });
+
+  try {
+    wss.emit("connection", socket as unknown as WebSocket, createConnectionRequest(createWsToken(activityId)));
+    await flushAsyncWork();
+
+    socket.emit("message", Buffer.from("123456"));
+    socket.emit("message", Buffer.from("123456"));
+    socket.emit("message", Buffer.from("123456"));
+    socket.emit("message", Buffer.from("123456"));
+    await flushAsyncWork();
+
+    assert.equal(providedMap.has(activityId), false);
+    assert.equal(clearSessionCalls, 1);
+    assert.deepEqual(socket.closeCodes[0], {
+      code: RUNTIME_WS_CLOSE_MESSAGE_TOO_BIG,
+      reason: "payload window exceeded",
+    });
+    assert.deepEqual(metricCalls, ["webSocketPayloadWindowExceededTotal"]);
+    assert.equal(warnings[0]?.message, "WebSocket inbound payload window exceeded size limit");
+    assert.deepEqual(warnings[0]?.payload, {
+      activityId,
+      clientIp: "203.0.113.10",
+      maxBytes: 20,
+      messageBytes: 6,
+      windowMs: 60_000,
+    });
+    assert.equal(socket.listenerCount("message"), 0);
+    assert.equal(socket.listenerCount("close"), 0);
+    assert.equal(socket.listenerCount("error"), 0);
+    assert.equal(socket.listenerCount("pong"), 0);
+  } finally {
+    wss.emit("close");
+  }
+});
+
+test("runtime manager uses terminate fallback when oversized close frame fails", async () => {
+  const wss = new FakeWebSocketServer();
+  const providedMap = new Map<string, WebSocket>();
+  const socket = new FakeWebSocket();
+  const activityId = "activity-close-throws";
+
+  socket.close = ((code?: number, reason?: string) => {
+    socket.closeCalls += 1;
+    const closeInfo: { code?: number; reason?: string } = {};
+    if (code !== undefined) {
+      closeInfo.code = code;
+    }
+    if (reason !== undefined) {
+      closeInfo.reason = reason;
+    }
+    socket.closeCodes.push(closeInfo);
+    throw new Error("close failed");
+  }) as FakeWebSocket["close"];
+
+  createRuntimeWebSocketManager({
+    wss: wss as unknown as import("ws").WebSocketServer,
+    storage: {
+      getActivityById: async () => createActiveSession(activityId),
+      clearCollectionNicknameSessionByActivity: async () => undefined,
+    },
+    secret: TEST_SECRET,
+    connectedClients: providedMap,
+    maxMessageBytes: 4,
+    messageRateLimiterFactory: () =>
+      createRuntimeWsMessageRateLimiter({
+        maxMessages: 10,
+        windowMs: 60_000,
+      }),
+  });
+
+  try {
+    wss.emit("connection", socket as unknown as WebSocket, createConnectionRequest(createWsToken(activityId)));
+    await flushAsyncWork();
+
+    socket.emit("message", Buffer.from("12345"));
+    await flushAsyncWork();
+
+    assert.equal(providedMap.has(activityId), false);
+    assert.equal(socket.closeCalls, 1);
+    assert.equal(socket.terminateCalls, 1);
+    assert.deepEqual(socket.closeCodes[0], {
+      code: RUNTIME_WS_CLOSE_MESSAGE_TOO_BIG,
+      reason: "message too big",
+    });
+  } finally {
+    wss.emit("close");
+  }
+});
+
+test("runtime manager resets payload byte tracking when a socket disconnects", async () => {
+  const wss = new FakeWebSocketServer();
+  const providedMap = new Map<string, WebSocket>();
+  const firstSocket = new FakeWebSocket();
+  const secondSocket = new FakeWebSocket();
+  const activityId = "activity-payload-window-reset";
+
+  createRuntimeWebSocketManager({
+    wss: wss as unknown as import("ws").WebSocketServer,
+    storage: {
+      getActivityById: async () => createActiveSession(activityId),
+      clearCollectionNicknameSessionByActivity: async () => undefined,
+    },
+    secret: TEST_SECRET,
+    connectedClients: providedMap,
+    maxMessageBytes: 16,
+    maxPayloadWindowBytes: 20,
+    payloadWindowMs: 60_000,
+    messageRateLimiterFactory: () =>
+      createRuntimeWsMessageRateLimiter({
+        maxMessages: 10,
+        windowMs: 60_000,
+      }),
+  });
+
+  try {
+    wss.emit("connection", firstSocket as unknown as WebSocket, createConnectionRequest(createWsToken(activityId)));
+    await flushAsyncWork();
+
+    firstSocket.emit("message", Buffer.from("123456789012345"));
+    await flushAsyncWork();
+    assert.equal(providedMap.get(activityId), firstSocket as unknown as WebSocket);
+
+    firstSocket.close();
+    await flushAsyncWork();
+    assert.equal(providedMap.has(activityId), false);
+
+    wss.emit("connection", secondSocket as unknown as WebSocket, createConnectionRequest(createWsToken(activityId)));
+    await flushAsyncWork();
+
+    secondSocket.emit("message", Buffer.from("123456789012345"));
+    await flushAsyncWork();
+
+    assert.equal(providedMap.get(activityId), secondSocket as unknown as WebSocket);
+    assert.equal(secondSocket.closeCalls, 0);
   } finally {
     wss.emit("close");
   }
