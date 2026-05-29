@@ -1,3 +1,4 @@
+import { safeJsonParseResult } from "@/lib/utils/safe-json";
 import type { AuditLogRecord } from "@/pages/audit-logs/types";
 import { getAuditCategoryInfo, getAuditRiskInfo } from "@shared/audit-log-classification";
 
@@ -28,12 +29,8 @@ function parseDetailsJson(details: string): JsonRecord | null {
     return null;
   }
 
-  try {
-    const parsed: unknown = JSON.parse(trimmed);
-    return isJsonRecord(parsed) ? parsed : null;
-  } catch {
-    return null;
-  }
+  const parsed = safeJsonParseResult<unknown>(trimmed);
+  return parsed.ok && isJsonRecord(parsed.data) ? parsed.data : null;
 }
 
 function formatChangeValue(value: unknown) {

@@ -1,4 +1,5 @@
 import { formatIsoDateToDDMMYYYY, formatOperationalDateTime } from "@/lib/date-format";
+import { safeJsonParseResult } from "@/lib/utils/safe-json";
 import {
   auditDetailGroupLabelMap,
   auditDetailLabelMap,
@@ -36,12 +37,8 @@ function parseAuditDetailsJson(details: string): JsonRecord | null {
     return null;
   }
 
-  try {
-    const parsed: unknown = JSON.parse(trimmed);
-    return isJsonRecord(parsed) ? parsed : null;
-  } catch {
-    return null;
-  }
+  const parsed = safeJsonParseResult<unknown>(trimmed);
+  return parsed.ok && isJsonRecord(parsed.data) ? parsed.data : null;
 }
 
 function humanizeAuditDetailKey(key: string) {

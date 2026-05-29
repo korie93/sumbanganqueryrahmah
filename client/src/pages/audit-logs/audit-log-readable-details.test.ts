@@ -37,6 +37,14 @@ test("getReadableAuditDetailsPreview keeps normal text details unchanged", () =>
   );
 });
 
+test("buildReadableAuditDetails treats malformed JSON as plain text", () => {
+  const details = buildReadableAuditDetails("{bad-json");
+
+  assert.equal(details.isJson, false);
+  assert.deepEqual(details.items, []);
+  assert.equal(details.text, "{bad-json");
+});
+
 test("getReadableAuditDetailsPreview truncates readable JSON details safely", () => {
   assert.equal(
     getReadableAuditDetailsPreview(JSON.stringify({ recordCount: 17, totalRecords: 80 }), 32),

@@ -41,6 +41,10 @@ test("getAuditChangeSummary extracts old/new field pairs", () => {
   );
 });
 
+test("getAuditChangeSummary ignores malformed JSON details", () => {
+  assert.deepEqual(getAuditChangeSummary("{bad-json"), []);
+});
+
 test("buildAuditLogSummary keeps derived metadata side-effect free", () => {
   const summary = buildAuditLogSummary({
     action: "DELETE_BACKUP",

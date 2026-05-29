@@ -5,6 +5,7 @@ import {
   safeSetStorageItem,
   type BrowserStorageLike,
 } from "@/lib/browser-storage";
+import { safeJsonParseResult } from "@/lib/utils/safe-json";
 import { DEFAULT_AUDIT_LOG_FILTERS } from "@/pages/audit-logs/audit-log-page-state-utils";
 import type { AuditLogFilters } from "@/pages/audit-logs/types";
 
@@ -113,20 +114,19 @@ export function readCustomAuditLogSavedViews(storage?: BrowserStorageLike | null
     return [];
   }
 
-  try {
-    const parsed: unknown = JSON.parse(raw);
-    if (!Array.isArray(parsed)) {
-      return [];
-    }
-
-    return parsed
-      .map((item: unknown) => normalizeStoredView(item))
-      .filter((item): item is AuditLogSavedView => Boolean(item))
-      .slice(0, MAX_CUSTOM_AUDIT_LOG_SAVED_VIEWS);
-  } catch {
+  const parsed = safeJsonParseResult<unknown>(raw);
+  if (!parsed.ok) {
     safeRemoveStorageItem(getStorage(storage), AUDIT_LOG_SAVED_VIEWS_STORAGE_KEY);
     return [];
   }
+  if (!Array.isArray(parsed.data)) {
+    return [];
+  }
+
+  return parsed.data
+    .map((item: unknown) => normalizeStoredView(item))
+    .filter((item): item is AuditLogSavedView => Boolean(item))
+    .slice(0, MAX_CUSTOM_AUDIT_LOG_SAVED_VIEWS);
 }
 
 export function writeCustomAuditLogSavedViews(

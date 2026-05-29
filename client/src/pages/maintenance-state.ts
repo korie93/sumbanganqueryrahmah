@@ -1,3 +1,5 @@
+import { safeJsonParse } from "@/lib/utils/safe-json";
+
 export type MaintenancePayload = {
   maintenance: boolean;
   message: string;
@@ -51,14 +53,13 @@ export function parseStoredMaintenanceState(
   rawValue: string | null | undefined,
   fallback: MaintenancePayload,
 ): MaintenancePayload {
-  if (!rawValue) {
+  const parsed = safeJsonParse<Partial<MaintenancePayload> | null>(
+    rawValue,
+    null,
+    "maintenance_state",
+  );
+  if (!parsed) {
     return fallback;
   }
-
-  try {
-    const parsed = JSON.parse(rawValue) as Partial<MaintenancePayload>;
-    return mergeMaintenancePayload(fallback, parsed);
-  } catch {
-    return fallback;
-  }
+  return mergeMaintenancePayload(fallback, parsed);
 }
