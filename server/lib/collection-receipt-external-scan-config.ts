@@ -1,4 +1,4 @@
-import { readBooleanEnvFlag } from "../config/runtime-environment";
+import { isProductionLikeEnvironment, readBooleanEnvFlag } from "../config/runtime-environment";
 import {
   DEFAULT_COLLECTION_RECEIPT_EXTERNAL_SCAN_REJECT_EXIT_CODES,
   DEFAULT_COLLECTION_RECEIPT_EXTERNAL_SCAN_TIMEOUT_MS,
@@ -11,6 +11,13 @@ import {
   validateScannerArgs,
 } from "./collection-receipt-external-scan-shared";
 
+function resolveExternalScanFailClosed(): boolean {
+  if (isProductionLikeEnvironment()) {
+    return true;
+  }
+  return readBooleanEnvFlag("COLLECTION_RECEIPT_EXTERNAL_SCAN_FAIL_CLOSED", true);
+}
+
 export function readExternalScanConfig(): ExternalScanConfig {
   return {
     enabled: readBooleanEnvFlag("COLLECTION_RECEIPT_EXTERNAL_SCAN_ENABLED", false),
@@ -21,7 +28,7 @@ export function readExternalScanConfig(): ExternalScanConfig {
       DEFAULT_COLLECTION_RECEIPT_EXTERNAL_SCAN_TIMEOUT_MS,
       1_000,
     ),
-    failClosed: readBooleanEnvFlag("COLLECTION_RECEIPT_EXTERNAL_SCAN_FAIL_CLOSED", true),
+    failClosed: resolveExternalScanFailClosed(),
     cleanExitCodes: parseExitCodeSet(
       readOptionalString("COLLECTION_RECEIPT_EXTERNAL_SCAN_CLEAN_EXIT_CODES") || "0",
       "0",
@@ -40,7 +47,7 @@ export function createFallbackExternalScanConfig(): ExternalScanConfig {
     command: null,
     args: [EXTERNAL_SCAN_FILE_PLACEHOLDER],
     timeoutMs: DEFAULT_COLLECTION_RECEIPT_EXTERNAL_SCAN_TIMEOUT_MS,
-    failClosed: readBooleanEnvFlag("COLLECTION_RECEIPT_EXTERNAL_SCAN_FAIL_CLOSED", true),
+    failClosed: resolveExternalScanFailClosed(),
     cleanExitCodes: new Set([0]),
     rejectExitCodes: new Set([1]),
   };

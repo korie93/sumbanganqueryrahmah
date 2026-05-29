@@ -5,10 +5,18 @@ import path from "node:path";
 import test from "node:test";
 import { CollectionReceiptSecurityError } from "../../lib/collection-receipt-security";
 import { scanCollectionReceiptWithExternalScanner } from "../../lib/collection-receipt-external-scan";
+import { readExternalScanConfig } from "../../lib/collection-receipt-external-scan-config";
 import { validateExternalScanCommand } from "../../lib/collection-receipt-external-scan-paths";
+import { runExternalReceiptScan } from "../../lib/collection-receipt-external-scan-runner";
 import { DEFAULT_COLLECTION_RECEIPT_EXTERNAL_SCAN_TIMEOUT_MS } from "../../lib/collection-receipt-external-scan-shared";
+import { getInternalMetricsSnapshot } from "../../internal/metrics";
 
 const ENV_KEYS = [
+  "NODE_ENV",
+  "HOST",
+  "PUBLIC_APP_URL",
+  "APP_BASE_URL",
+  "CLIENT_APP_URL",
   "COLLECTION_RECEIPT_EXTERNAL_SCAN_ENABLED",
   "COLLECTION_RECEIPT_EXTERNAL_SCAN_COMMAND",
   "COLLECTION_RECEIPT_EXTERNAL_SCAN_ARGS_JSON",
@@ -65,6 +73,83 @@ async function withTemporaryExecutable<T>(
 
 test("external receipt scanner default timeout allows cold antivirus signature loading", () => {
   assert.equal(DEFAULT_COLLECTION_RECEIPT_EXTERNAL_SCAN_TIMEOUT_MS, 60_000);
+});
+
+test("external receipt scanner forces fail-closed mode in production-like runtimes", () => {
+  const previousEnv = snapshotEnv();
+  process.env.NODE_ENV = "production";
+  process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_ENABLED = "1";
+  process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_COMMAND = "clamscan";
+  process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_ARGS_JSON = "[\"{file}\"]";
+  process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_FAIL_CLOSED = "0";
+
+  try {
+    assert.equal(readExternalScanConfig().failClosed, true);
+  } finally {
+    restoreEnv(previousEnv);
+  }
+});
+
+test("external receipt scanner can fail open only in local development", async () => {
+  const previousEnv = snapshotEnv();
+  process.env.NODE_ENV = "development";
+  process.env.HOST = "localhost";
+  delete process.env.PUBLIC_APP_URL;
+  delete process.env.APP_BASE_URL;
+  delete process.env.CLIENT_APP_URL;
+  process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_ENABLED = "1";
+  process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_COMMAND = process.execPath;
+  process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_ARGS_JSON = "[\"-e\",\"process.exit(2)\",\"{file}\"]";
+  process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_FAIL_CLOSED = "0";
+  process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_TIMEOUT_MS = "1000";
+
+  try {
+    const before = getInternalMetricsSnapshot().counters;
+    await withTemporaryReceiptFile(async (filePath) => {
+      await assert.doesNotReject(() => scanCollectionReceiptWithExternalScanner(filePath));
+    });
+    const after = getInternalMetricsSnapshot().counters;
+    assert.equal(
+      after.collectionReceiptExternalScanFailuresTotal,
+      before.collectionReceiptExternalScanFailuresTotal + 1,
+    );
+    assert.equal(
+      after.collectionReceiptExternalScanFailOpenBypassTotal,
+      before.collectionReceiptExternalScanFailOpenBypassTotal + 1,
+    );
+  } finally {
+    restoreEnv(previousEnv);
+  }
+});
+
+test("external receipt scanner rejects scanner crashes in production even when env requests fail-open", async () => {
+  const previousEnv = snapshotEnv();
+  process.env.NODE_ENV = "production";
+  process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_ENABLED = "1";
+  process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_COMMAND = "clamscan";
+  process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_ARGS_JSON = "[\"{file}\"]";
+  process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_FAIL_CLOSED = "0";
+  process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_TIMEOUT_MS = "1000";
+
+  try {
+    await withTemporaryReceiptFile(async (filePath) => {
+      const config = readExternalScanConfig();
+      await assert.rejects(
+        () =>
+          runExternalReceiptScan({
+            config,
+            filePath,
+            scannerCommand: process.execPath,
+            args: ["-e", "process.exit(2)", filePath],
+          }),
+        (error: unknown) =>
+          error instanceof CollectionReceiptSecurityError
+          && error.reasonCode === "external-scan-unexpected-exit",
+      );
+    });
+  } finally {
+    restoreEnv(previousEnv);
+  }
 });
 
 test("external receipt scanner rejects scanner executables outside approved directories", async () => {

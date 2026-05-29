@@ -1,5 +1,6 @@
 import path from "node:path";
 import { spawn } from "node:child_process";
+import { internalMetrics } from "../internal/metrics";
 import { logger } from "./logger";
 import { CollectionReceiptSecurityError } from "./collection-receipt-security";
 import {
@@ -17,11 +18,21 @@ export function createOperationalScanError(
   const suffix = detail ? ` (${detail})` : "";
   const fileName = path.basename(filePath);
   const message = `Receipt external malware scan failed for ${fileName}${suffix}.`;
+  const failMode = config.failClosed ? "fail-closed" : "fail-open";
+
+  internalMetrics.increment("collectionReceiptExternalScanFailuresTotal");
+  logger.warn("Collection receipt external malware scan operational failure", {
+    fileName,
+    reasonCode,
+    detail: detail || null,
+    failMode,
+  });
 
   if (config.failClosed) {
     return new CollectionReceiptSecurityError(message, reasonCode);
   }
 
+  internalMetrics.increment("collectionReceiptExternalScanFailOpenBypassTotal");
   logger.warn("Collection receipt external malware scan skipped after operational failure", {
     fileName,
     reasonCode,
