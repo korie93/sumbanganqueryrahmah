@@ -1,4 +1,5 @@
 import { logger } from "./lib/logger";
+import { internalMetrics, type InternalMetricsRecorder } from "./internal/metrics";
 
 type PgPoolLike = {
   totalCount?: number;
@@ -18,6 +19,7 @@ type LoggerLike = Pick<typeof logger, "warn" | "error">;
 type BindPgPoolMonitoringOptions = {
   warnCooldownMs?: number;
   logger?: LoggerLike;
+  metrics?: Pick<InternalMetricsRecorder, "increment">;
 };
 
 type BindPgPoolHealthCheckOptions = {
@@ -29,6 +31,7 @@ type BindPgPoolHealthCheckOptions = {
 const MIN_PG_POOL_HEALTH_CHECK_INTERVAL_MS = 1_000;
 const MIN_PG_POOL_HEALTH_CHECK_TIMEOUT_MS = 250;
 const PG_POOL_HIGH_UTILIZATION_THRESHOLD = 0.85;
+const POSTGRES_DEADLOCK_SQLSTATE = "40P01";
 const PERCENT_MULTIPLIER = 100;
 const PERCENT_PRECISION_MULTIPLIER = 10;
 
@@ -83,6 +86,15 @@ export function hasPgPoolPressure(snapshot: PgPoolSnapshot): boolean {
   return resolvePgPoolPressureReason(snapshot) !== null;
 }
 
+export function isPgDeadlockError(error: unknown): boolean {
+  return (
+    typeof error === "object"
+    && error !== null
+    && "code" in error
+    && (error as { code?: unknown }).code === POSTGRES_DEADLOCK_SQLSTATE
+  );
+}
+
 function removePoolListener(
   pool: PgPoolLike,
   event: string,
@@ -99,6 +111,7 @@ function removePoolListener(
 export function bindPgPoolMonitoring(pool: PgPoolLike, options: BindPgPoolMonitoringOptions = {}) {
   const warnCooldownMs = Math.max(1_000, Number(options.warnCooldownMs || 60_000));
   const sink = options.logger ?? logger;
+  const metrics = options.metrics ?? internalMetrics;
   let lastWarningAt = 0;
   let lastWarningSignature = "";
 
@@ -141,6 +154,15 @@ export function bindPgPoolMonitoring(pool: PgPoolLike, options: BindPgPoolMonito
   };
 
   const handleError = (error: unknown) => {
+    if (isPgDeadlockError(error)) {
+      metrics.increment("dbDeadlocksTotal");
+      sink.error("PostgreSQL deadlock detected", {
+        ...getPgPoolSnapshot(pool),
+        event: "db_deadlock_detected",
+        code: POSTGRES_DEADLOCK_SQLSTATE,
+      });
+    }
+
     sink.error("PostgreSQL pool client error", {
       ...getPgPoolSnapshot(pool),
       error,

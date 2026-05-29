@@ -7,8 +7,10 @@ import {
   getPgPoolSnapshot,
   getPgPoolUtilizationPercent,
   hasPgPoolPressure,
+  isPgDeadlockError,
   resolvePgPoolPressureReason,
 } from "../db-pool-monitor";
+import { createInternalMetrics } from "../internal/metrics";
 
 class FakePool extends EventEmitter {
   totalCount = 0;
@@ -204,6 +206,45 @@ test("bindPgPoolMonitoring logs pool client errors with the current snapshot", (
   assert.equal(errors.length, 1);
   assert.equal(errors[0]?.total, 3);
   assert.equal((errors[0]?.error as Error)?.message, "socket lost");
+});
+
+test("isPgDeadlockError classifies PostgreSQL deadlock SQLSTATE only", () => {
+  assert.equal(isPgDeadlockError(Object.assign(new Error("deadlock"), { code: "40P01" })), true);
+  assert.equal(isPgDeadlockError(Object.assign(new Error("serialization"), { code: "40001" })), false);
+  assert.equal(isPgDeadlockError(new Error("deadlock")), false);
+});
+
+test("bindPgPoolMonitoring records deadlocks with a sanitized metric event", () => {
+  const pool = new FakePool();
+  pool.totalCount = 4;
+  pool.idleCount = 0;
+  pool.waitingCount = 1;
+  pool.options.max = 4;
+
+  const metrics = createInternalMetrics();
+  const errors: Array<{ message: string; meta: Record<string, unknown> }> = [];
+
+  bindPgPoolMonitoring(pool, {
+    metrics,
+    logger: {
+      warn: () => undefined,
+      error: (message, meta) => {
+        errors.push({ message, meta: meta || {} });
+      },
+    },
+  });
+
+  pool.emit("error", Object.assign(new Error("deadlock detected"), {
+    code: "40P01",
+    query: "SELECT secret FROM users",
+  }));
+
+  assert.equal(metrics.snapshot().counters.dbDeadlocksTotal, 1);
+  assert.equal(errors[0]?.message, "PostgreSQL deadlock detected");
+  assert.equal(errors[0]?.meta.event, "db_deadlock_detected");
+  assert.equal(errors[0]?.meta.code, "40P01");
+  assert.equal("query" in (errors[0]?.meta || {}), false);
+  assert.equal(errors[1]?.message, "PostgreSQL pool client error");
 });
 
 test("bindPgPoolMonitoring cleanup removes all pool listeners across restarts", () => {
