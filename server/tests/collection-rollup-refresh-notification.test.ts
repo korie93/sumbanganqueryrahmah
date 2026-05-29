@@ -7,6 +7,8 @@ import { fileURLToPath } from "node:url";
 import {
   COLLECTION_ROLLUP_REFRESH_NOTIFICATION_CHANNEL,
   CollectionRollupRefreshNotificationSubscriber,
+  assertSafeChannelName,
+  escapePostgresNotificationChannel,
   resolveCollectionRollupRefreshReconnectDelayMs,
 } from "../lib/collection-rollup-refresh-notification";
 import { logger } from "../lib/logger";
@@ -120,6 +122,31 @@ test("collection rollup reconnect delay uses bounded deterministic exponential b
   assert.equal(jitteredDelay >= 40 && jitteredDelay <= 48, true);
 });
 
+test("assertSafeChannelName accepts only bounded PostgreSQL notification channel identifiers", () => {
+  assert.equal(assertSafeChannelName("collection_updates"), "collection_updates");
+  assert.equal(assertSafeChannelName("collection-updates"), "collection-updates");
+  assert.equal(assertSafeChannelName("_collection_updates_01"), "_collection_updates_01");
+
+  assert.throws(() => assertSafeChannelName("legit; DROP TABLE users; --"), /Invalid PostgreSQL/);
+  assert.throws(() => assertSafeChannelName("collection updates"), /Invalid PostgreSQL/);
+  assert.throws(() => assertSafeChannelName("collection'updates"), /Invalid PostgreSQL/);
+  assert.throws(() => assertSafeChannelName("collection\"updates"), /Invalid PostgreSQL/);
+  assert.throws(() => assertSafeChannelName("collection\0updates"), /Invalid PostgreSQL/);
+  assert.throws(() => assertSafeChannelName("1_collection_updates"), /Invalid PostgreSQL/);
+  assert.throws(() => assertSafeChannelName("a".repeat(64)), /Invalid PostgreSQL/);
+  assert.throws(() => assertSafeChannelName("select_all"), /Invalid PostgreSQL/);
+  assert.throws(() => assertSafeChannelName(null), /must be a string/);
+});
+
+test("escapePostgresNotificationChannel quotes safe channel identifiers for LISTEN interpolation", () => {
+  assert.equal(
+    escapePostgresNotificationChannel(COLLECTION_ROLLUP_REFRESH_NOTIFICATION_CHANNEL),
+    `"${COLLECTION_ROLLUP_REFRESH_NOTIFICATION_CHANNEL}"`,
+  );
+  assert.equal(escapePostgresNotificationChannel("collection-updates"), "\"collection-updates\"");
+  assert.throws(() => escapePostgresNotificationChannel("legit; DROP TABLE users; --"), /Invalid PostgreSQL/);
+});
+
 test("CollectionRollupRefreshNotificationSubscriber listens on the queue channel and forwards notifications", async () => {
   const client = new FakeNotificationClient();
   let wakeCount = 0;
@@ -134,7 +161,7 @@ test("CollectionRollupRefreshNotificationSubscriber listens on the queue channel
   });
 
   assert.deepEqual(client.listenQueries, [
-    `LISTEN ${COLLECTION_ROLLUP_REFRESH_NOTIFICATION_CHANNEL}`,
+    `LISTEN "${COLLECTION_ROLLUP_REFRESH_NOTIFICATION_CHANNEL}"`,
   ]);
 
   client.emit("notification", {
@@ -200,7 +227,7 @@ test("CollectionRollupRefreshNotificationSubscriber retries after the initial co
 
   assert.equal(createdClients.length >= 2, true);
   assert.deepEqual(secondClient.listenQueries, [
-    `LISTEN ${COLLECTION_ROLLUP_REFRESH_NOTIFICATION_CHANNEL}`,
+    `LISTEN "${COLLECTION_ROLLUP_REFRESH_NOTIFICATION_CHANNEL}"`,
   ]);
   assert.equal(firstClient.listenerCount("notification"), 0);
   assert.equal(firstClient.listenerCount("error"), 0);

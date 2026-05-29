@@ -43,17 +43,43 @@ const DEFAULT_ROLLUP_REFRESH_NOTIFICATION_MAX_RECONNECT_DELAY_MS = 60_000;
 const DEFAULT_ROLLUP_REFRESH_NOTIFICATION_RECONNECT_JITTER_RATIO = 0.2;
 const PG_NOTIFICATION_EXPECTED_LISTENER_COUNT = 3;
 const PG_NOTIFICATION_LISTENER_LIMIT_BUFFER = 4;
+const SAFE_PG_CHANNEL_PATTERN = /^[a-z_][a-z0-9_-]{0,62}$/i;
+const FORBIDDEN_PG_CHANNEL_KEYWORDS = [
+  "alter",
+  "create",
+  "delete",
+  "drop",
+  "exec",
+  "execute",
+  "insert",
+  "select",
+  "truncate",
+  "update",
+] as const;
 
 export type CollectionRollupRefreshNotificationSubscriberLike = {
   start(onNotify: () => void): Promise<void>;
   stop?(): Promise<void> | void;
 };
 
-function assertSafeChannelName(channel: string): string {
-  if (!/^[a-z_][a-z0-9_]*$/i.test(channel)) {
-    throw new Error(`Invalid PostgreSQL LISTEN/NOTIFY channel: "${channel}"`);
+export function assertSafeChannelName(channel: unknown): string {
+  if (typeof channel !== "string") {
+    throw new TypeError("PostgreSQL LISTEN/NOTIFY channel name must be a string.");
   }
+  if (!SAFE_PG_CHANNEL_PATTERN.test(channel)) {
+    throw new Error("Invalid PostgreSQL LISTEN/NOTIFY channel name.");
+  }
+
+  const channelSegments = channel.toLowerCase().split(/[_-]+/);
+  if (FORBIDDEN_PG_CHANNEL_KEYWORDS.some((keyword) => channelSegments.includes(keyword))) {
+    throw new Error("Invalid PostgreSQL LISTEN/NOTIFY channel name.");
+  }
+
   return channel;
+}
+
+export function escapePostgresNotificationChannel(channel: unknown): string {
+  return pg.escapeIdentifier(assertSafeChannelName(channel));
 }
 
 function createDefaultClient(): PgNotificationClientLike {
@@ -202,6 +228,7 @@ export class CollectionRollupRefreshNotificationSubscriber
   implements CollectionRollupRefreshNotificationSubscriberLike
 {
   private readonly channel: string;
+  private readonly escapedChannelIdentifier: string;
   private readonly reconnectDelayMs: number;
   private readonly maxReconnectDelayMs: number;
   private readonly reconnectJitterRatio: number;
@@ -219,6 +246,7 @@ export class CollectionRollupRefreshNotificationSubscriber
     this.channel = assertSafeChannelName(
       options.channel ?? COLLECTION_ROLLUP_REFRESH_NOTIFICATION_CHANNEL,
     );
+    this.escapedChannelIdentifier = escapePostgresNotificationChannel(this.channel);
     this.reconnectDelayMs = Math.max(1, options.reconnectDelayMs ?? DEFAULT_ROLLUP_REFRESH_NOTIFICATION_RECONNECT_DELAY_MS);
     this.maxReconnectDelayMs = Math.max(
       this.reconnectDelayMs,
@@ -337,7 +365,7 @@ export class CollectionRollupRefreshNotificationSubscriber
 
     try {
       await client.connect();
-      await client.query(`LISTEN ${this.channel}`);
+      await client.query(`LISTEN ${this.escapedChannelIdentifier}`);
 
       if (!this.started) {
         await this.safeCloseClient(client, "start-aborted");

@@ -147,10 +147,6 @@ const pgBaseConfig = {
 
 const maintenanceDatabase = process.env.PG_MAINTENANCE_DATABASE || "postgres";
 
-function quoteIdentifier(value: string): string {
-  return `"${String(value).replace(/"/g, "\"\"")}"`;
-}
-
 async function detectPostgresAvailability(): Promise<string | null> {
   const pool = new pg.Pool({
     ...pgBaseConfig,
@@ -184,7 +180,7 @@ async function withTempDatabase(
     idleTimeoutMillis: 5_000,
   });
   const databaseName = `sqr_bootstrap_${Date.now()}_${randomUUID().replace(/-/g, "").slice(0, 12)}`;
-  const quotedDatabaseName = quoteIdentifier(databaseName);
+  const quotedDatabaseName = pg.escapeIdentifier(databaseName);
 
   try {
     await adminPool.query(`CREATE DATABASE ${quotedDatabaseName}`);
