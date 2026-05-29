@@ -1,4 +1,5 @@
 import { useCallback, type FormEvent, type KeyboardEvent } from "react";
+import { useLocation } from "wouter";
 
 import {
   login,
@@ -84,6 +85,7 @@ export function useLoginSubmission({
   twoFactorCode,
   username,
 }: UseLoginSubmissionParams) {
+  const [, navigate] = useLocation();
   const {
     loading,
     beginRequest: beginLoginRequest,
@@ -156,7 +158,7 @@ export function useLoginSubmission({
         if (onBanned) {
           onBanned();
         } else {
-          navigateInternalFallback("/banned");
+          navigate("/banned");
         }
         return;
       }
@@ -205,6 +207,7 @@ export function useLoginSubmission({
     finalizeRequest,
     isRequestInFlight,
     lockedFlow,
+    navigate,
     onBanned,
     password,
     setActiveController,
@@ -310,15 +313,6 @@ export function useLoginSubmission({
     handleSubmit,
     handleInputKeyDown,
   };
-}
-
-function navigateInternalFallback(path: string) {
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  window.history.pushState({}, "", path);
-  window.dispatchEvent(new Event("popstate"));
 }
 
 function isTwoFactorChallengeResponse(response: LoginResponse): response is LoginTwoFactorChallengeResponse {

@@ -29,13 +29,22 @@ test("login card spacing uses container queries with a media-query fallback", ()
   assert.match(source, /@supports not \(container-type:\s*inline-size\)/);
 });
 
-test("login fallback navigation uses history instead of full document reloads", () => {
-  const source = readSource("useLoginRedirect.ts");
+test("login fallback navigation uses router navigation instead of manual history events", () => {
+  const redirectSource = readSource("useLoginRedirect.ts");
+  const submissionSource = readSource("useLoginSubmission.ts");
 
-  assert.match(source, /function navigateInternalFallback\(path: string\)/);
-  assert.match(source, /window\.history\.pushState\(\{\}, "", path\)/);
-  assert.match(source, /window\.dispatchEvent\(new Event\("popstate"\)\)/);
-  assert.doesNotMatch(source, /window\.location\.href/);
+  assert.match(redirectSource, /import \{ useLocation \} from "wouter"/);
+  assert.match(redirectSource, /const \[, navigate\] = useLocation\(\)/);
+  assert.match(redirectSource, /navigate\("\/"\)/);
+  assert.match(redirectSource, /navigate\("\/forgot-password"\)/);
+  assert.match(submissionSource, /const \[, navigate\] = useLocation\(\)/);
+  assert.match(submissionSource, /navigate\("\/banned"\)/);
+  assert.doesNotMatch(redirectSource, /window\.history\.pushState/);
+  assert.doesNotMatch(redirectSource, /dispatchEvent\(new Event\("popstate"\)\)/);
+  assert.doesNotMatch(submissionSource, /window\.history\.pushState/);
+  assert.doesNotMatch(submissionSource, /dispatchEvent\(new Event\("popstate"\)\)/);
+  assert.doesNotMatch(redirectSource, /window\.location\.href/);
+  assert.doesNotMatch(submissionSource, /window\.location\.href/);
 });
 
 test("login page state is composed from focused documented hooks", () => {

@@ -1,4 +1,5 @@
 import { useCallback } from "react";
+import { useLocation } from "wouter";
 
 import type { User } from "@/app/types";
 import { getBrowserLocalStorage, safeSetStorageItem } from "@/lib/browser-storage";
@@ -38,6 +39,8 @@ export function useLoginRedirect({
   onLandingClick,
   onLoginSuccess,
 }: UseLoginRedirectParams) {
+  const [, navigate] = useLocation();
+
   const completeAuthenticatedSession = useCallback((
     response: LoginSuccessResponse,
     options?: CompleteAuthenticatedSessionOptions,
@@ -72,29 +75,20 @@ export function useLoginRedirect({
       onLandingClick();
       return;
     }
-    navigateInternalFallback("/");
-  }, [onLandingClick]);
+    navigate("/");
+  }, [navigate, onLandingClick]);
 
   const goToForgotPassword = useCallback(() => {
     if (onForgotPasswordClick) {
       onForgotPasswordClick();
       return;
     }
-    navigateInternalFallback("/forgot-password");
-  }, [onForgotPasswordClick]);
+    navigate("/forgot-password");
+  }, [navigate, onForgotPasswordClick]);
 
   return {
     completeAuthenticatedSession,
     goToLandingPage,
     goToForgotPassword,
   };
-}
-
-function navigateInternalFallback(path: string) {
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  window.history.pushState({}, "", path);
-  window.dispatchEvent(new Event("popstate"));
 }
