@@ -341,10 +341,7 @@ export class CollectionRollupRefreshNotificationSubscriber
   async stop(): Promise<void> {
     this.started = false;
     this.notifyCallback = null;
-    if (this.reconnectTimer) {
-      clearTimeout(this.reconnectTimer);
-      this.reconnectTimer = null;
-    }
+    this.cancelPendingReconnect();
     this.reconnectAttempt = 0;
 
     const activeClient = this.currentClient;
@@ -519,6 +516,16 @@ export class CollectionRollupRefreshNotificationSubscriber
 
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;
+      if (!this.started) {
+        logger.debug("Collection rollup reconnect skipped after stop", {
+          event: "collection_rollup_reconnect_cancelled_after_stop",
+          operation: "reconnect",
+          source: "collection_rollup_notification",
+          status: "cancelled",
+        });
+        return;
+      }
+
       void this.ensureConnected().catch((error) => {
         this.recordAsyncFailure({
           critical: true,
@@ -529,6 +536,15 @@ export class CollectionRollupRefreshNotificationSubscriber
       });
     }, delayMs);
     this.reconnectTimer.unref?.();
+  }
+
+  private cancelPendingReconnect(): void {
+    if (!this.reconnectTimer) {
+      return;
+    }
+
+    clearTimeout(this.reconnectTimer);
+    this.reconnectTimer = null;
   }
 
   private async safeCloseClient(

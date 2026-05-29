@@ -318,6 +318,47 @@ test("CollectionRollupRefreshNotificationSubscriber retries after the initial co
   await subscriber.stop();
 });
 
+test("CollectionRollupRefreshNotificationSubscriber cancels pending reconnects on stop", async () => {
+  const firstClient = new FakeNotificationClient({
+    connectError: new Error("connect failed"),
+  });
+  const createdClients: FakeNotificationClient[] = [];
+
+  const subscriber = new CollectionRollupRefreshNotificationSubscriber({
+    reconnectDelayMs: 25,
+    clientFactory: () => {
+      const client = createdClients.length === 0
+        ? firstClient
+        : new FakeNotificationClient();
+      createdClients.push(client);
+      return client;
+    },
+  });
+
+  await subscriber.start(() => undefined);
+
+  assert.equal(createdClients.length, 1);
+  assert.equal(subscriber.getDiagnostics().reconnectPending, true);
+
+  await subscriber.stop();
+
+  assert.deepEqual(subscriber.getDiagnostics(), {
+    activeClient: false,
+    pendingListenerCleanups: 0,
+    reconnectPending: false,
+  });
+
+  await new Promise((resolve) => {
+    setTimeout(resolve, 75);
+  });
+
+  assert.equal(createdClients.length, 1);
+  assert.equal(firstClient.listenerCount("notification"), 0);
+  assert.equal(firstClient.listenerCount("error"), 0);
+  assert.equal(firstClient.listenerCount("end"), 0);
+  assert.equal(firstClient.endCalls, 1);
+});
+
 test("CollectionRollupRefreshNotificationSubscriber cleans old listeners before reconnecting after disconnect", async (t) => {
   const firstClient = new FakeNotificationClient();
   const secondClient = new FakeNotificationClient();
