@@ -3,7 +3,13 @@ import { StringDecoder } from "node:string_decoder";
 import { sql } from "drizzle-orm";
 import { db } from "../db-postgres";
 import {
+  BACKUP_DATA_ENCRYPTION_PREFIX_V1,
+  BACKUP_DATA_ENCRYPTION_PREFIX_V2,
+  BACKUP_DATA_ENCRYPTION_PREFIX_V3,
+  BackupPayloadIntegrityError,
+  buildBackupPayloadAad,
   decodeBackupDataFromStorage,
+  recordBackupIntegrityFailure,
   type BackupEncryptionConfig,
 } from "./backups-encryption";
 import { BACKUP_STORAGE_DB_READ_PAGE_SIZE } from "./backups-repository-types";
@@ -17,8 +23,7 @@ type BackupRawDataQueryRow = {
   backupData?: unknown;
 };
 
-const BACKUP_DATA_ENCRYPTION_PREFIX_V1 = "enc:v1:";
-const BACKUP_DATA_ENCRYPTION_PREFIX_V2 = "enc:v2:";
+type GcmBackupPayloadVersion = "v2" | "v3";
 
 function normalizeBackupChunkIndex(raw: unknown): number | null {
   const numericValue = typeof raw === "number" ? raw : Number(raw);
@@ -84,7 +89,16 @@ function normalizeBackupEncryptionKeyId(raw: string): string | null {
   return /^[a-z0-9_-]{1,64}$/.test(normalized) ? normalized : null;
 }
 
-function parseEncryptedBackupDataV2Header(rawPayload: string):
+function getGcmBackupPayloadPrefix(version: GcmBackupPayloadVersion): string {
+  return version === "v3"
+    ? BACKUP_DATA_ENCRYPTION_PREFIX_V3
+    : BACKUP_DATA_ENCRYPTION_PREFIX_V2;
+}
+
+function parseEncryptedBackupDataGcmHeader(
+  rawPayload: string,
+  version: GcmBackupPayloadVersion,
+):
   | {
       keyId: string;
       ivBase64: string;
@@ -92,11 +106,12 @@ function parseEncryptedBackupDataV2Header(rawPayload: string):
       ciphertextBase64Remainder: string;
     }
   | null {
-  if (!rawPayload.startsWith(BACKUP_DATA_ENCRYPTION_PREFIX_V2)) {
+  const prefix = getGcmBackupPayloadPrefix(version);
+  if (!rawPayload.startsWith(prefix)) {
     return null;
   }
 
-  const token = rawPayload.slice(BACKUP_DATA_ENCRYPTION_PREFIX_V2.length);
+  const token = rawPayload.slice(prefix.length);
   const firstDot = token.indexOf(".");
   if (firstDot < 0) {
     return null;
@@ -120,7 +135,7 @@ function parseEncryptedBackupDataV2Header(rawPayload: string):
 
 function detectStoredBackupPayloadFormat(
   probe: string,
-): "need-more" | "plaintext" | "encrypted-v1" | "encrypted-v2" | "invalid" {
+): "need-more" | "plaintext" | "encrypted-v1" | "encrypted-v2" | "encrypted-v3" | "invalid" {
   const normalized = probe.trimStart();
   if (!normalized) {
     return "need-more";
@@ -138,9 +153,14 @@ function detectStoredBackupPayloadFormat(
     return "encrypted-v2";
   }
 
+  if (normalized.startsWith(BACKUP_DATA_ENCRYPTION_PREFIX_V3)) {
+    return "encrypted-v3";
+  }
+
   if (
     BACKUP_DATA_ENCRYPTION_PREFIX_V1.startsWith(normalized)
     || BACKUP_DATA_ENCRYPTION_PREFIX_V2.startsWith(normalized)
+    || BACKUP_DATA_ENCRYPTION_PREFIX_V3.startsWith(normalized)
   ) {
     return "need-more";
   }
@@ -208,14 +228,15 @@ export async function* iterateDecodedBackupDataJsonChunksFromStorageChunks(
     return;
   }
 
-  let parsedHeader = parseEncryptedBackupDataV2Header(encryptedPayload);
+  const encryptedVersion: GcmBackupPayloadVersion = format === "encrypted-v3" ? "v3" : "v2";
+  let parsedHeader = parseEncryptedBackupDataGcmHeader(encryptedPayload, encryptedVersion);
   while (!parsedHeader) {
     const nextChunk = await readNextNonEmptyChunk();
     if (nextChunk === null) {
       throw new Error("Stored backup payload has an invalid encrypted format.");
     }
     encryptedPayload += nextChunk;
-    parsedHeader = parseEncryptedBackupDataV2Header(encryptedPayload);
+    parsedHeader = parseEncryptedBackupDataGcmHeader(encryptedPayload, encryptedVersion);
   }
 
   const normalizedKeyId = normalizeBackupEncryptionKeyId(parsedHeader.keyId);
@@ -230,10 +251,28 @@ export async function* iterateDecodedBackupDataJsonChunksFromStorageChunks(
     );
   }
 
-  const iv = Buffer.from(parsedHeader.ivBase64, "base64");
-  const authTag = Buffer.from(parsedHeader.authTagBase64, "base64");
-  const decipher = crypto.createDecipheriv("aes-256-gcm", key, iv);
-  decipher.setAuthTag(authTag);
+  let decipher: crypto.DecipherGCM;
+  try {
+    const iv = Buffer.from(parsedHeader.ivBase64, "base64");
+    const authTag = Buffer.from(parsedHeader.authTagBase64, "base64");
+    if (iv.length !== 12 || authTag.length !== 16) {
+      throw new BackupPayloadIntegrityError("Stored backup payload has an invalid AES-GCM envelope.");
+    }
+    decipher = crypto.createDecipheriv("aes-256-gcm", key, iv);
+    decipher.setAuthTag(authTag);
+    if (encryptedVersion === "v3") {
+      decipher.setAAD(buildBackupPayloadAad(normalizedKeyId));
+    }
+  } catch (error) {
+    recordBackupIntegrityFailure({
+      keyId: normalizedKeyId,
+      version: encryptedVersion,
+      error,
+    });
+    throw error instanceof BackupPayloadIntegrityError
+      ? error
+      : new BackupPayloadIntegrityError();
+  }
   const utf8Decoder = new StringDecoder("utf8");
 
   let base64Remainder = "";
@@ -275,7 +314,19 @@ export async function* iterateDecodedBackupDataJsonChunksFromStorageChunks(
     }
   }
 
-  const finalChunk = utf8Decoder.end(decipher.final());
+  let finalBuffer: Buffer;
+  try {
+    finalBuffer = decipher.final();
+  } catch (error) {
+    recordBackupIntegrityFailure({
+      keyId: normalizedKeyId,
+      version: encryptedVersion,
+      error,
+    });
+    throw new BackupPayloadIntegrityError();
+  }
+
+  const finalChunk = utf8Decoder.end(finalBuffer);
   if (finalChunk) {
     yield finalChunk;
   }

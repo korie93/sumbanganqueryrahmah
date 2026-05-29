@@ -1,8 +1,13 @@
 import crypto from "crypto";
+import { internalMetrics } from "../internal/metrics";
+import { logger } from "../lib/logger";
 
-const BACKUP_DATA_ENCRYPTION_PREFIX_V1 = "enc:v1:";
-const BACKUP_DATA_ENCRYPTION_PREFIX_V2 = "enc:v2:";
+export const BACKUP_DATA_ENCRYPTION_PREFIX_V1 = "enc:v1:";
+export const BACKUP_DATA_ENCRYPTION_PREFIX_V2 = "enc:v2:";
+export const BACKUP_DATA_ENCRYPTION_PREFIX_V3 = "enc:v3:";
 const BACKUP_DATA_DEFAULT_KEY_ID = "default";
+const BACKUP_DATA_GCM_IV_BYTES = 12;
+const BACKUP_DATA_GCM_AUTH_TAG_BYTES = 16;
 
 export type BackupEncryptionConfig = {
   requireEncryption: boolean;
@@ -10,10 +15,18 @@ export type BackupEncryptionConfig = {
   keysById: Map<string, Buffer>;
 };
 
+export class BackupPayloadIntegrityError extends Error {
+  constructor(message = "Backup payload failed integrity verification.") {
+    super(message);
+    this.name = "BackupPayloadIntegrityError";
+  }
+}
+
 export function isEncodedBackupDataForStorage(rawPayload: string): boolean {
   const normalized = String(rawPayload || "");
   return normalized.startsWith(BACKUP_DATA_ENCRYPTION_PREFIX_V1)
-    || normalized.startsWith(BACKUP_DATA_ENCRYPTION_PREFIX_V2);
+    || normalized.startsWith(BACKUP_DATA_ENCRYPTION_PREFIX_V2)
+    || normalized.startsWith(BACKUP_DATA_ENCRYPTION_PREFIX_V3);
 }
 
 function parseEncryptionKey(raw: string): Buffer | null {
@@ -59,22 +72,93 @@ function parseEncryptionKeyMap(raw: string): Map<string, Buffer> {
   return keysById;
 }
 
-function decryptBackupPayloadWithKey(
-  ivBase64: string,
-  authTagBase64: string,
-  ciphertextBase64: string,
+export function buildBackupPayloadAad(keyId: string): Buffer {
+  return Buffer.from(`sqr-backup-payload:v3:${keyId}`, "utf8");
+}
+
+export function createBackupPayloadCipher(
+  keyId: string,
   key: Buffer,
+  iv: Buffer,
+): crypto.CipherGCM {
+  const cipher = crypto.createCipheriv("aes-256-gcm", key, iv);
+  cipher.setAAD(buildBackupPayloadAad(keyId));
+  return cipher;
+}
+
+export function createBackupPayloadStoragePrefix(
+  keyId: string,
+  iv: Buffer,
+  authTag: Buffer,
 ): string {
-  const iv = Buffer.from(ivBase64, "base64");
-  const authTag = Buffer.from(authTagBase64, "base64");
-  const ciphertext = Buffer.from(ciphertextBase64, "base64");
-  const decipher = crypto.createDecipheriv("aes-256-gcm", key, iv);
-  decipher.setAuthTag(authTag);
-  const decrypted = Buffer.concat([
-    decipher.update(ciphertext),
-    decipher.final(),
-  ]);
-  return decrypted.toString("utf8");
+  return `${BACKUP_DATA_ENCRYPTION_PREFIX_V3}${keyId}.${iv.toString("base64")}.${authTag.toString("base64")}.`;
+}
+
+export function recordBackupIntegrityFailure(params: {
+  keyId: string;
+  version: "v2" | "v3";
+  error: unknown;
+}) {
+  internalMetrics.increment("backupPayloadIntegrityFailuresTotal");
+  logger.error("Backup payload failed authenticated decryption", {
+    event: "backup_payload_integrity_check_failed",
+    keyId: params.keyId,
+    version: params.version,
+    errorName: params.error instanceof Error ? params.error.name : "UnknownError",
+  });
+}
+
+function assertGcmEnvelope(iv: Buffer, authTag: Buffer) {
+  if (iv.length !== BACKUP_DATA_GCM_IV_BYTES) {
+    throw new BackupPayloadIntegrityError("Stored backup payload has an invalid AES-GCM IV length.");
+  }
+  if (authTag.length !== BACKUP_DATA_GCM_AUTH_TAG_BYTES) {
+    throw new BackupPayloadIntegrityError("Stored backup payload has an invalid AES-GCM authentication tag length.");
+  }
+}
+
+function decryptBackupPayloadWithKey(params: {
+  ivBase64: string;
+  authTagBase64: string;
+  ciphertextBase64: string;
+  key: Buffer;
+  keyId: string;
+  recordIntegrityFailure?: boolean;
+  version: "v1" | "v2" | "v3";
+}): string {
+  const {
+    authTagBase64,
+    ciphertextBase64,
+    ivBase64,
+    key,
+    keyId,
+    recordIntegrityFailure = true,
+    version,
+  } = params;
+
+  try {
+    const iv = Buffer.from(ivBase64, "base64");
+    const authTag = Buffer.from(authTagBase64, "base64");
+    const ciphertext = Buffer.from(ciphertextBase64, "base64");
+    assertGcmEnvelope(iv, authTag);
+    const decipher = crypto.createDecipheriv("aes-256-gcm", key, iv);
+    decipher.setAuthTag(authTag);
+    if (version === "v3") {
+      decipher.setAAD(buildBackupPayloadAad(keyId));
+    }
+    const decrypted = Buffer.concat([
+      decipher.update(ciphertext),
+      decipher.final(),
+    ]);
+    return decrypted.toString("utf8");
+  } catch (error) {
+    if (recordIntegrityFailure && version !== "v1") {
+      recordBackupIntegrityFailure({ keyId, version, error });
+    }
+    throw error instanceof BackupPayloadIntegrityError
+      ? error
+      : new BackupPayloadIntegrityError();
+  }
 }
 
 function getPrimaryBackupEncryptionKey(config: BackupEncryptionConfig): { keyId: string; key: Buffer } | null {
@@ -146,19 +230,24 @@ export function encodeBackupDataForStorage(rawPayload: string, config: BackupEnc
   }
 
   const iv = crypto.randomBytes(12);
-  const cipher = crypto.createCipheriv("aes-256-gcm", primaryKey.key, iv);
+  const cipher = createBackupPayloadCipher(primaryKey.keyId, primaryKey.key, iv);
   const ciphertext = Buffer.concat([
     cipher.update(rawPayload, "utf8"),
     cipher.final(),
   ]);
   const authTag = cipher.getAuthTag();
-  return `${BACKUP_DATA_ENCRYPTION_PREFIX_V2}${primaryKey.keyId}.${iv.toString("base64")}.${authTag.toString("base64")}.${ciphertext.toString("base64")}`;
+  return `${createBackupPayloadStoragePrefix(primaryKey.keyId, iv, authTag)}${ciphertext.toString("base64")}`;
 }
 
 export function decodeBackupDataFromStorage(rawPayload: string, config: BackupEncryptionConfig): string {
   const normalized = String(rawPayload || "");
-  if (normalized.startsWith(BACKUP_DATA_ENCRYPTION_PREFIX_V2)) {
-    const token = normalized.slice(BACKUP_DATA_ENCRYPTION_PREFIX_V2.length);
+  if (
+    normalized.startsWith(BACKUP_DATA_ENCRYPTION_PREFIX_V3)
+    || normalized.startsWith(BACKUP_DATA_ENCRYPTION_PREFIX_V2)
+  ) {
+    const version = normalized.startsWith(BACKUP_DATA_ENCRYPTION_PREFIX_V3) ? "v3" : "v2";
+    const prefix = version === "v3" ? BACKUP_DATA_ENCRYPTION_PREFIX_V3 : BACKUP_DATA_ENCRYPTION_PREFIX_V2;
+    const token = normalized.slice(prefix.length);
     const [keyIdRaw, ivBase64, authTagBase64, ciphertextBase64] = token.split(".");
     const keyId = normalizeEncryptionKeyId(keyIdRaw || "");
     if (!keyId || !ivBase64 || !authTagBase64 || !ciphertextBase64) {
@@ -172,7 +261,14 @@ export function decodeBackupDataFromStorage(rawPayload: string, config: BackupEn
       );
     }
 
-    return decryptBackupPayloadWithKey(ivBase64, authTagBase64, ciphertextBase64, key);
+    return decryptBackupPayloadWithKey({
+      authTagBase64,
+      ciphertextBase64,
+      ivBase64,
+      key,
+      keyId,
+      version,
+    });
   }
 
   if (!normalized.startsWith(BACKUP_DATA_ENCRYPTION_PREFIX_V1)) {
@@ -191,7 +287,15 @@ export function decodeBackupDataFromStorage(rawPayload: string, config: BackupEn
 
   for (const key of config.keysById.values()) {
     try {
-      return decryptBackupPayloadWithKey(ivBase64, authTagBase64, ciphertextBase64, key);
+      return decryptBackupPayloadWithKey({
+        authTagBase64,
+        ciphertextBase64,
+        ivBase64,
+        key,
+        keyId: BACKUP_DATA_DEFAULT_KEY_ID,
+        recordIntegrityFailure: false,
+        version: "v1",
+      });
     } catch {
       // Try the next key to support rotation of legacy v1 payloads without key id.
     }

@@ -4,7 +4,12 @@ import { promises as fs } from "node:fs";
 import test from "node:test";
 import { BackupsRepository } from "../backups.repository";
 import { db } from "../../db-postgres";
-import { decodeBackupDataFromStorage } from "../backups-encryption";
+import {
+  BackupPayloadIntegrityError,
+  decodeBackupDataFromStorage,
+  encodeBackupDataForStorage,
+} from "../backups-encryption";
+import { getInternalMetricsSnapshot } from "../../internal/metrics";
 import { restoreFromBackup } from "../backups-restore-utils";
 import { BackupPayloadTooLargeError } from "../../lib/backup-payload-limit";
 import {
@@ -173,6 +178,58 @@ function encryptBackupPayloadV2(params: {
   return `enc:v2:${params.keyId}.${iv.toString("base64")}.${authTag.toString("base64")}.${ciphertext.toString("base64")}`;
 }
 
+function tamperEncryptedBackupToken(rawPayload: string, partIndex: number): string {
+  const prefix = "enc:v3:";
+  assert.equal(rawPayload.startsWith(prefix), true);
+  const parts = rawPayload.slice(prefix.length).split(".");
+  const original = Buffer.from(parts[partIndex] ?? "", "base64");
+  assert.ok(original.length > 0);
+  const tampered = Buffer.from(original);
+  tampered[0] = (tampered[0] ?? 0) ^ 0xff;
+  parts[partIndex] = tampered.toString("base64");
+  return `${prefix}${parts.join(".")}`;
+}
+
+test("decodeBackupDataFromStorage rejects tampered v3 AEAD backup payloads", () => {
+  const key = Buffer.from("A".repeat(32), "utf8");
+  const payloadJson = JSON.stringify({
+    imports: [{ id: "import-1" }],
+    dataRows: [],
+    users: [],
+    auditLogs: [],
+  });
+  const config = {
+    requireEncryption: true,
+    primaryKeyId: "primary",
+    keysById: new Map([
+      ["primary", key],
+      ["secondary", key],
+    ]),
+  };
+  const encryptedPayload = encodeBackupDataForStorage(payloadJson, config);
+  assert.match(encryptedPayload, /^enc:v3:primary\./);
+  assert.equal(decodeBackupDataFromStorage(encryptedPayload, config), payloadJson);
+
+  const metadataTamperedPayload = encryptedPayload.replace(/^enc:v3:primary\./, "enc:v3:secondary.");
+  const tamperedPayloads = [
+    metadataTamperedPayload,
+    tamperEncryptedBackupToken(encryptedPayload, 1),
+    tamperEncryptedBackupToken(encryptedPayload, 2),
+    tamperEncryptedBackupToken(encryptedPayload, 3),
+  ];
+  const beforeFailures = getInternalMetricsSnapshot().counters.backupPayloadIntegrityFailuresTotal;
+
+  for (const tamperedPayload of tamperedPayloads) {
+    assert.throws(
+      () => decodeBackupDataFromStorage(tamperedPayload, config),
+      BackupPayloadIntegrityError,
+    );
+  }
+
+  const afterFailures = getInternalMetricsSnapshot().counters.backupPayloadIntegrityFailuresTotal;
+  assert.equal(afterFailures, beforeFailures + tamperedPayloads.length);
+});
+
 test("BackupsRepository decodes encrypted v2 payloads when reading backup data", async () => {
   await withEnv(
     {
@@ -318,11 +375,12 @@ test("BackupsRepository streams chunked encrypted payloads as plaintext JSON chu
         users: [],
         auditLogs: [],
       });
-      const encryptedPayload = encryptBackupPayloadV2({
-        keyId: "primary",
-        key: Buffer.from("A".repeat(32), "utf8"),
-        payloadJson,
+      const encryptedPayload = encodeBackupDataForStorage(payloadJson, {
+        requireEncryption: true,
+        primaryKeyId: "primary",
+        keysById: new Map([["primary", Buffer.from("A".repeat(32), "utf8")]]),
       });
+      assert.match(encryptedPayload, /^enc:v3:primary\./);
       const chunkedPayload = [
         encryptedPayload.slice(0, 18),
         encryptedPayload.slice(18, 54),
@@ -381,11 +439,12 @@ test("BackupsRepository paginates chunked payload reads while streaming encrypte
         users: [],
         auditLogs: [],
       });
-      const encryptedPayload = encryptBackupPayloadV2({
-        keyId: "primary",
-        key: Buffer.from("A".repeat(32), "utf8"),
-        payloadJson,
+      const encryptedPayload = encodeBackupDataForStorage(payloadJson, {
+        requireEncryption: true,
+        primaryKeyId: "primary",
+        keysById: new Map([["primary", Buffer.from("A".repeat(32), "utf8")]]),
       });
+      assert.match(encryptedPayload, /^enc:v3:primary\./);
       const chunkWidth = 2;
       const chunkedPayload = Array.from(
         { length: Math.ceil(encryptedPayload.length / chunkWidth) },
@@ -461,7 +520,7 @@ test("BackupsRepository prepares encrypted temp backup payload files when an enc
         prepared = await repository.prepareBackupPayloadFileForCreate();
         assert.equal(prepared.tempPayloadEncrypted, true);
         assert.equal(typeof prepared.tempPayloadStoragePrefix, "string");
-        assert.match(String(prepared.tempPayloadStoragePrefix || ""), /^enc:v2:primary\./);
+        assert.match(String(prepared.tempPayloadStoragePrefix || ""), /^enc:v3:primary\./);
         assert.ok(prepared.payloadBytes > 0);
 
         const storagePayload = await readPreparedBackupPayloadForStorage(prepared);

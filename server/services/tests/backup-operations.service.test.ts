@@ -234,7 +234,7 @@ function createBackupOperationsHarness(options?: {
         ...(options?.preparedPayloadEncrypted
           ? {
             tempPayloadStoragePrefix:
-              "enc:v2:primary.iv-base64.auth-tag-base64.",
+              "enc:v3:primary.iv-base64.auth-tag-base64.",
           }
           : {}),
         cleanup: async () => {
@@ -486,7 +486,7 @@ test("BackupOperationsService createBackup stores encrypted temp payloads withou
 
   assert.equal(result.statusCode, 200);
   assert.equal(createBackupCalls.length, 1);
-  assert.match(String(createBackupCalls[0].backupData || ""), /^enc:v2:primary\./);
+  assert.match(String(createBackupCalls[0].backupData || ""), /^enc:v3:primary\./);
   assert.equal(
     String(createBackupCalls[0].backupData || "").includes("\"imports\""),
     false,

@@ -13,7 +13,11 @@ import {
   type BackupUserRecord,
   type PreparedBackupPayloadFile,
 } from "./backups-repository-types";
-import type { BackupEncryptionConfig } from "./backups-encryption";
+import {
+  createBackupPayloadCipher,
+  createBackupPayloadStoragePrefix,
+  type BackupEncryptionConfig,
+} from "./backups-encryption";
 import { buildProtectedCollectionPiiSelect } from "./collection-pii-select-utils";
 import {
   closeBackupWriter,
@@ -53,8 +57,8 @@ export async function prepareBackupPayloadFileForCreate(
     : null;
   const tempPayloadEncrypted = Boolean(primaryEncryptionKeyId && primaryEncryptionKey);
   const iv = tempPayloadEncrypted ? crypto.randomBytes(12) : null;
-  const cipher = tempPayloadEncrypted
-    ? crypto.createCipheriv("aes-256-gcm", primaryEncryptionKey as Buffer, iv as Buffer)
+  const cipher = tempPayloadEncrypted && primaryEncryptionKeyId && primaryEncryptionKey && iv
+    ? createBackupPayloadCipher(primaryEncryptionKeyId, primaryEncryptionKey, iv)
     : undefined;
   const writer = createWriteStream(tempFilePath, {
     flags: "wx",
@@ -227,8 +231,8 @@ export async function prepareBackupPayloadFileForCreate(
     await closeBackupWriter(state.writer);
     const tempFileStats = await fs.stat(tempFilePath);
     const memoryUsage = process.memoryUsage();
-    const tempPayloadStoragePrefix = tempPayloadEncrypted
-      ? `enc:v2:${primaryEncryptionKeyId}.${(iv as Buffer).toString("base64")}.${(state.cipher as crypto.CipherGCM).getAuthTag().toString("base64")}.`
+    const tempPayloadStoragePrefix = tempPayloadEncrypted && primaryEncryptionKeyId && iv && state.cipher
+      ? createBackupPayloadStoragePrefix(primaryEncryptionKeyId, iv, state.cipher.getAuthTag())
       : undefined;
 
     return {
