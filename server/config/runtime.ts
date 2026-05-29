@@ -45,6 +45,7 @@ import {
   assertProductionReceiptExternalScanSafety,
   assertProductionTwoFactorReplayTopologySafety,
   assertProductionWebSocketRuntimeTopologySafety,
+  assertRateLimiterMultiWorkerTopologySafety,
   assertRuntimeSessionSecretMinBytes,
   assertRuntimeSafetyGuards,
   buildRuntimeConfigWarnings,
@@ -285,6 +286,11 @@ assertRuntimeSafetyGuards({
   localSuperuserCredentialsFileEnabled,
   mailDevOutboxEnabled,
   operationsDebugRoutesEnabled,
+});
+
+assertRateLimiterMultiWorkerTopologySafety({
+  configuredClusterMaxWorkers,
+  distributedStoreConfigured: sharedRateLimitStore.distributedStoreConfigured,
 });
 
 assertProductionRateLimiterTopologySafety({

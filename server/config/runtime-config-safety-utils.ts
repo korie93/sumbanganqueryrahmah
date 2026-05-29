@@ -279,6 +279,19 @@ export function assertProductionRateLimiterTopologySafety(params: {
   );
 }
 
+export function assertRateLimiterMultiWorkerTopologySafety(params: {
+  configuredClusterMaxWorkers: number;
+  distributedStoreConfigured: boolean;
+}) {
+  if (params.configuredClusterMaxWorkers <= 1 || params.distributedStoreConfigured) {
+    return;
+  }
+
+  throw new Error(
+    "SQR_MAX_WORKERS > 1 requires SQR_RATE_LIMIT_STORE=redis and SQR_REDIS_RATE_LIMIT_URL. Memory-based rate limiting is process-local and cannot safely enforce shared quotas across workers.",
+  );
+}
+
 export function assertProductionReceiptExternalScanSafety(params: {
   isProductionLike: boolean;
   externalScanEnabled: boolean;

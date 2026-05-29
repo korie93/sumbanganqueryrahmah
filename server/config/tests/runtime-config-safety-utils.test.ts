@@ -8,6 +8,7 @@ import {
   assertProductionReceiptExternalScanSafety,
   assertProductionTwoFactorReplayTopologySafety,
   assertProductionWebSocketRuntimeTopologySafety,
+  assertRateLimiterMultiWorkerTopologySafety,
   assertRuntimeSafetyGuards,
   assertStrongRuntimeSecret,
   buildRuntimeConfigWarnings,
@@ -213,6 +214,31 @@ test("assertProductionRateLimiterTopologySafety rejects production-like startup 
   assert.doesNotThrow(() =>
     assertProductionRateLimiterTopologySafety({
       isProductionLike: true,
+      configuredClusterMaxWorkers: 2,
+      distributedStoreConfigured: true,
+    }),
+  );
+});
+
+test("assertRateLimiterMultiWorkerTopologySafety rejects multi-worker memory stores in every environment", () => {
+  assert.throws(
+    () =>
+      assertRateLimiterMultiWorkerTopologySafety({
+        configuredClusterMaxWorkers: 2,
+        distributedStoreConfigured: false,
+      }),
+    /SQR_MAX_WORKERS > 1 requires SQR_RATE_LIMIT_STORE=redis/i,
+  );
+
+  assert.doesNotThrow(() =>
+    assertRateLimiterMultiWorkerTopologySafety({
+      configuredClusterMaxWorkers: 1,
+      distributedStoreConfigured: false,
+    }),
+  );
+
+  assert.doesNotThrow(() =>
+    assertRateLimiterMultiWorkerTopologySafety({
       configuredClusterMaxWorkers: 2,
       distributedStoreConfigured: true,
     }),

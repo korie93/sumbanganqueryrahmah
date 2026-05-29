@@ -541,7 +541,7 @@ test("runtime config accepts production multi-worker when Redis shared runtime s
   );
 });
 
-test("runtime config keeps strict local development bootable when multi-worker mode is enabled for local verification", async () => {
+test("runtime config rejects strict local multi-worker mode without Redis rate-limit state", async () => {
   await withEnv(
     {
       NODE_ENV: "development",
@@ -558,10 +558,42 @@ test("runtime config keeps strict local development bootable when multi-worker m
       LOCAL_SUPERUSER_CREDENTIALS_FILE_ENABLED: "0",
       MAIL_DEV_OUTBOX_ENABLED: "0",
       SQR_MAX_WORKERS: "2",
+      SQR_RATE_LIMIT_STORE: "memory",
+      SQR_REDIS_RATE_LIMIT_URL: null,
+    },
+    async () => {
+      await assert.rejects(
+        importRuntimeFresh(),
+        /SQR_MAX_WORKERS > 1 requires SQR_RATE_LIMIT_STORE=redis/i,
+      );
+    },
+  );
+});
+
+test("runtime config accepts strict local multi-worker mode with Redis rate-limit state", async () => {
+  await withEnv(
+    {
+      NODE_ENV: "development",
+      HOST: "127.0.0.1",
+      PUBLIC_APP_URL: "http://127.0.0.1:5000",
+      SESSION_SECRET: null,
+      COLLECTION_NICKNAME_TEMP_PASSWORD: null,
+      COLLECTION_PII_ENCRYPTION_KEY: null,
+      PG_PASSWORD: null,
+      BACKUP_ENCRYPTION_KEY: null,
+      BACKUP_ENCRYPTION_KEYS: null,
+      BACKUP_FEATURE_ENABLED: "1",
+      SEED_DEFAULT_USERS: "0",
+      LOCAL_SUPERUSER_CREDENTIALS_FILE_ENABLED: "0",
+      MAIL_DEV_OUTBOX_ENABLED: "0",
+      SQR_MAX_WORKERS: "2",
+      SQR_RATE_LIMIT_STORE: "redis",
+      SQR_REDIS_RATE_LIMIT_URL: "redis://127.0.0.1:6379/0",
     },
     async () => {
       const runtimeModule = await importRuntimeFresh();
       assert.equal(runtimeModule.runtimeConfig.cluster.maxWorkers, 2);
+      assert.equal(runtimeModule.runtimeConfig.rateLimiting.store.provider, "redis");
       assert.equal(runtimeModule.runtimeConfig.app.isStrictLocalDevelopment, true);
     },
   );
