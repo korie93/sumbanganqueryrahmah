@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { z } from "zod";
 import { getPublicAppBaseUrl } from "../auth/activation-links";
 import {
   readBoolean,
@@ -8,6 +9,7 @@ import {
   readOptionalString,
 } from "../config/runtime-config-read-utils";
 import { isStrictLocalDevelopmentEnvironment } from "../config/runtime-environment";
+import { safeJsonParse } from "../lib/safe-json";
 
 const DEFAULT_OUTBOX_MAX_FILES = 50;
 const DEV_OUTBOX_LIST_DEFAULT_PAGE_SIZE = 25;
@@ -23,6 +25,15 @@ type DevMailOutboxRecord = {
   text: string;
   to: string;
 };
+
+const devMailOutboxRecordSchema = z.object({
+  createdAt: z.string(),
+  html: z.string(),
+  id: z.string(),
+  subject: z.string(),
+  text: z.string(),
+  to: z.string(),
+});
 
 export type DevMailOutboxPreview = {
   createdAt: string;
@@ -145,14 +156,19 @@ export async function readDevMailPreview(previewId: string): Promise<DevMailOutb
 
   try {
     const raw = await readFile(buildPreviewFilePath(normalizedId), "utf8");
-    const parsed = JSON.parse(raw) as Partial<DevMailOutboxRecord>;
+    const parseResult = safeJsonParse<unknown>(raw, "dev_mail_outbox_preview");
+    if (!parseResult.success) {
+      return null;
+    }
+
+    const validated = devMailOutboxRecordSchema.safeParse(parseResult.data);
+    if (!validated.success) {
+      return null;
+    }
+
+    const parsed = validated.data;
     if (
       parsed.id !== normalizedId
-      || typeof parsed.to !== "string"
-      || typeof parsed.subject !== "string"
-      || typeof parsed.text !== "string"
-      || typeof parsed.html !== "string"
-      || typeof parsed.createdAt !== "string"
     ) {
       return null;
     }

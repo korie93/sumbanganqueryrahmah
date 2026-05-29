@@ -1,5 +1,7 @@
 import path from "node:path";
+import { z } from "zod";
 import { readOptionalString as readRuntimeOptionalString } from "../config/runtime-config-read-utils";
+import { safeJsonParse } from "./safe-json";
 
 export const DEFAULT_COLLECTION_RECEIPT_EXTERNAL_SCAN_TIMEOUT_MS = 60_000;
 export const DEFAULT_COLLECTION_RECEIPT_EXTERNAL_SCAN_REJECT_EXIT_CODES = "1";
@@ -9,6 +11,7 @@ export const UNSAFE_ENV_VALUE_PATTERN = /[\0\r\n]/;
 export const EXTERNAL_SCAN_TEMPLATE_PATTERN = /\{[^}]+\}/g;
 export const EXTERNAL_SCAN_FILE_PLACEHOLDER = "{file}";
 export const EXTERNAL_SCAN_FILENAME_PLACEHOLDER = "{filename}";
+const scannerArgsJsonSchema = z.array(z.string());
 
 export type ExternalScanConfig = {
   enabled: boolean;
@@ -66,6 +69,29 @@ function parseShellStrippedScannerArgsJson(raw: string): string[] | null {
   return entries;
 }
 
+function parseScannerArgsJsonPayload(raw: string): string[] {
+  const parseResult = safeJsonParse<unknown>(
+    raw,
+    "collection_receipt_external_scan_args",
+  );
+  if (!parseResult.success) {
+    throw new Error(parseResult.error);
+  }
+
+  const result = scannerArgsJsonSchema.safeParse(parseResult.data);
+  if (!result.success) {
+    throw new Error("must be a JSON array of strings");
+  }
+
+  for (const entry of result.data) {
+    if (UNSAFE_ENV_VALUE_PATTERN.test(entry)) {
+      throw new Error("must not contain control characters");
+    }
+  }
+
+  return result.data;
+}
+
 export function parseScannerArgsJson(): string[] {
   const raw = readOptionalString("COLLECTION_RECEIPT_EXTERNAL_SCAN_ARGS_JSON");
   if (!raw) {
@@ -73,16 +99,7 @@ export function parseScannerArgsJson(): string[] {
   }
 
   try {
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed) || parsed.some((entry) => typeof entry !== "string")) {
-      throw new Error("must be a JSON array of strings");
-    }
-    for (const entry of parsed) {
-      if (UNSAFE_ENV_VALUE_PATTERN.test(entry)) {
-        throw new Error("must not contain control characters");
-      }
-    }
-    return parsed as string[];
+    return parseScannerArgsJsonPayload(raw);
   } catch (error) {
     const shellStrippedArgs = parseShellStrippedScannerArgsJson(raw);
     if (shellStrippedArgs) {
