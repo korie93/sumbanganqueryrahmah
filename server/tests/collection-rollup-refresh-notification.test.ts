@@ -12,6 +12,7 @@ import {
   resolveCollectionRollupRefreshReconnectDelayMs,
 } from "../lib/collection-rollup-refresh-notification";
 import { logger } from "../lib/logger";
+import { getInternalMetricsSnapshot } from "../internal/metrics";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -319,12 +320,14 @@ test("CollectionRollupRefreshNotificationSubscriber keeps listener count stable 
 
 test("CollectionRollupRefreshNotificationSubscriber contains notification callback failures", async (t) => {
   const client = new FakeNotificationClient();
-  const warnings: string[] = [];
+  const warnings: Array<{ message: string; meta?: Record<string, unknown> }> = [];
+  const beforeFailures = getInternalMetricsSnapshot()
+    .counters.collectionRollupNotificationCallbackFailuresTotal;
   t.mock.method(
     logger,
     "warn",
-    ((message: string) => {
-      warnings.push(message);
+    ((message: string, meta?: Record<string, unknown>) => {
+      warnings.push(meta ? { message, meta } : { message });
     }) as typeof logger.warn,
   );
 
@@ -343,8 +346,61 @@ test("CollectionRollupRefreshNotificationSubscriber contains notification callba
     });
   });
   assert.equal(
-    warnings.includes("Collection rollup notification callback failed; polling fallback remains active"),
+    warnings.some(({ message, meta }) => (
+      message === "Collection rollup notification callback failed; polling fallback remains active"
+      && meta?.event === "collection_rollup_notification_async_failure"
+      && meta.operation === "notify_callback"
+      && !("error" in meta)
+    )),
     true,
+  );
+  assert.equal(
+    getInternalMetricsSnapshot().counters.collectionRollupNotificationCallbackFailuresTotal,
+    beforeFailures + 1,
+  );
+
+  await subscriber.stop();
+});
+
+test("CollectionRollupRefreshNotificationSubscriber observes rejected async notification callbacks", async (t) => {
+  const client = new FakeNotificationClient();
+  const warnings: Array<{ message: string; meta?: Record<string, unknown> }> = [];
+  const beforeFailures = getInternalMetricsSnapshot()
+    .counters.collectionRollupNotificationCallbackFailuresTotal;
+  t.mock.method(
+    logger,
+    "warn",
+    ((message: string, meta?: Record<string, unknown>) => {
+      warnings.push(meta ? { message, meta } : { message });
+    }) as typeof logger.warn,
+  );
+
+  const subscriber = new CollectionRollupRefreshNotificationSubscriber({
+    clientFactory: () => client,
+    reconnectDelayMs: 20,
+  });
+
+  await subscriber.start(async () => {
+    throw new Error("callback failed");
+  });
+
+  client.emit("notification", {
+    channel: COLLECTION_ROLLUP_REFRESH_NOTIFICATION_CHANNEL,
+  });
+
+  await waitFor(() => warnings.length > 0);
+  assert.equal(
+    warnings.some(({ message, meta }) => (
+      message === "Collection rollup notification callback failed; polling fallback remains active"
+      && meta?.event === "collection_rollup_notification_async_failure"
+      && meta.operation === "notify_callback"
+      && meta.critical === false
+    )),
+    true,
+  );
+  assert.equal(
+    getInternalMetricsSnapshot().counters.collectionRollupNotificationCallbackFailuresTotal,
+    beforeFailures + 1,
   );
 
   await subscriber.stop();

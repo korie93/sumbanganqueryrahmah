@@ -1,6 +1,7 @@
 import pg from "pg";
 import { buildPgSslPoolConfig } from "../config/database-ssl";
 import { runtimeConfig } from "../config/runtime";
+import { internalMetrics, type InternalMetricName } from "../internal/metrics";
 import { logger } from "./logger";
 
 const { Client } = pg;
@@ -57,6 +58,23 @@ const FORBIDDEN_PG_CHANNEL_KEYWORDS = [
   "update",
 ] as const;
 
+type RollupNotificationAsyncOperation =
+  | "notify_callback"
+  | "disconnect_cleanup"
+  | "reconnect";
+
+const ROLLUP_NOTIFICATION_FAILURE_MESSAGES = {
+  notify_callback: "Collection rollup notification callback failed; polling fallback remains active",
+  disconnect_cleanup: "Collection rollup notification disconnect cleanup failed; polling fallback remains active",
+  reconnect: "Collection rollup notification reconnect failed; polling fallback remains active",
+} as const satisfies Record<RollupNotificationAsyncOperation, string>;
+
+const ROLLUP_NOTIFICATION_FAILURE_METRICS = {
+  notify_callback: "collectionRollupNotificationCallbackFailuresTotal",
+  disconnect_cleanup: "collectionRollupNotificationDisconnectFailuresTotal",
+  reconnect: "collectionRollupNotificationReconnectFailuresTotal",
+} as const satisfies Record<RollupNotificationAsyncOperation, InternalMetricName>;
+
 export type CollectionRollupRefreshNotificationSubscriberLike = {
   start(onNotify: () => void): Promise<void>;
   stop?(): Promise<void> | void;
@@ -80,6 +98,25 @@ export function assertSafeChannelName(channel: unknown): string {
 
 export function escapePostgresNotificationChannel(channel: unknown): string {
   return pg.escapeIdentifier(assertSafeChannelName(channel));
+}
+
+function readErrorCode(error: unknown): string | undefined {
+  if (!error || typeof error !== "object" || !("code" in error)) {
+    return undefined;
+  }
+
+  const code = (error as { code?: unknown }).code;
+  return typeof code === "string" && code.trim() ? code : undefined;
+}
+
+function readErrorName(error: unknown): string {
+  if (error instanceof Error && error.name.trim()) {
+    return error.name;
+  }
+  if (error === null) {
+    return "NullError";
+  }
+  return `${typeof error}Error`;
 }
 
 function createDefaultClient(): PgNotificationClientLike {
@@ -321,24 +358,27 @@ export class CollectionRollupRefreshNotificationSubscriber
         const notifyResult = this.notifyCallback?.();
         if (notifyResult && typeof (notifyResult as Promise<unknown>).then === "function") {
           void Promise.resolve(notifyResult).catch((error) => {
-            logger.warn("Collection rollup notification callback failed; polling fallback remains active", {
-              channel: this.channel,
+            this.recordAsyncFailure({
+              critical: false,
               error,
+              operation: "notify_callback",
             });
           });
         }
       } catch (error) {
-        logger.warn("Collection rollup notification callback failed; polling fallback remains active", {
-          channel: this.channel,
+        this.recordAsyncFailure({
+          critical: false,
           error,
+          operation: "notify_callback",
         });
       }
     };
     const disconnectSafely = () => {
       void this.handleDisconnect(client).catch((error) => {
-        logger.warn("Collection rollup notification disconnect cleanup failed; polling fallback remains active", {
-          channel: this.channel,
+        this.recordAsyncFailure({
+          critical: true,
           error,
+          operation: "disconnect_cleanup",
         });
         this.scheduleReconnect();
       });
@@ -410,6 +450,26 @@ export class CollectionRollupRefreshNotificationSubscriber
     this.listenerRegistry.unsubscribe(client);
   }
 
+  private recordAsyncFailure(params: {
+    critical: boolean;
+    error: unknown;
+    operation: RollupNotificationAsyncOperation;
+  }): void {
+    internalMetrics.increment(ROLLUP_NOTIFICATION_FAILURE_METRICS[params.operation]);
+    if (params.critical) {
+      internalMetrics.increment("collectionRollupNotificationCriticalFailuresTotal");
+    }
+
+    logger.warn(ROLLUP_NOTIFICATION_FAILURE_MESSAGES[params.operation], {
+      channel: this.channel,
+      critical: params.critical,
+      errorCode: readErrorCode(params.error),
+      errorName: readErrorName(params.error),
+      event: "collection_rollup_notification_async_failure",
+      operation: params.operation,
+    });
+  }
+
   private scheduleReconnect(): void {
     if (!this.started || this.reconnectTimer) {
       return;
@@ -427,9 +487,10 @@ export class CollectionRollupRefreshNotificationSubscriber
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;
       void this.ensureConnected().catch((error) => {
-        logger.warn("Collection rollup notification reconnect failed; polling fallback remains active", {
-          channel: this.channel,
+        this.recordAsyncFailure({
+          critical: true,
           error,
+          operation: "reconnect",
         });
         this.scheduleReconnect();
       });
