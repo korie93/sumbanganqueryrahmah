@@ -14,6 +14,7 @@ export type InternalMetricName =
   | "cspReportsDroppedRateLimitTotal"
   | "cspReportsDroppedRequestGuardTotal"
   | "cspReportsDroppedTotal"
+  | "idempotencyFingerprintSweepErrorsTotal"
   | "jsonParseFailuresTotal"
   | "redisRateLimitEvalTypeErrorsTotal"
   | "sessionRefreshRevocationRetryAttemptsTotal"
@@ -56,6 +57,7 @@ const INTERNAL_METRIC_NAMES: readonly InternalMetricName[] = [
   "cspReportsDroppedRateLimitTotal",
   "cspReportsDroppedRequestGuardTotal",
   "cspReportsDroppedTotal",
+  "idempotencyFingerprintSweepErrorsTotal",
   "jsonParseFailuresTotal",
   "redisRateLimitEvalTypeErrorsTotal",
   "sessionRefreshRevocationRetryAttemptsTotal",

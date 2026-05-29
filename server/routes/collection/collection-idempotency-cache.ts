@@ -1,3 +1,6 @@
+import { internalMetrics } from "../../internal/metrics";
+import { logger } from "../../lib/logger";
+
 const IDEMPOTENCY_FINGERPRINT_PARSE_CACHE_LIMIT = 256;
 const IDEMPOTENCY_FINGERPRINT_PARSE_CACHE_TTL_MS = 5 * 60 * 1000;
 const IDEMPOTENCY_FINGERPRINT_PARSE_CACHE_SWEEP_INTERVAL_MS = 60 * 1000;
@@ -9,8 +12,10 @@ export type IdempotencyFingerprintValidationCacheEntry = {
 type IdempotencyFingerprintValidationCacheController = {
   cache: Map<string, IdempotencyFingerprintValidationCacheEntry>;
   clear: () => void;
+  destroy: () => void;
   get: (key: string) => IdempotencyFingerprintValidationCacheEntry | undefined;
   set: (key: string, entry: IdempotencyFingerprintValidationCacheEntry) => void;
+  sweepNow: () => number;
 };
 
 type CreateIdempotencyFingerprintValidationCacheControllerOptions = {
@@ -67,6 +72,16 @@ export function pruneExpiredIdempotencyFingerprintValidationCache(
   return removed;
 }
 
+function readSweepErrorName(error: unknown): string {
+  if (error instanceof Error && error.name.trim()) {
+    return error.name;
+  }
+  if (error === null) {
+    return "NullError";
+  }
+  return `${typeof error}Error`;
+}
+
 export function createIdempotencyFingerprintValidationCacheController(
   options: CreateIdempotencyFingerprintValidationCacheControllerOptions = {},
 ): IdempotencyFingerprintValidationCacheController {
@@ -78,6 +93,8 @@ export function createIdempotencyFingerprintValidationCacheController(
   const setIntervalFn = options.setIntervalFn ?? setInterval;
   const clearIntervalFn = options.clearIntervalFn ?? clearInterval;
   let sweepHandle: ReturnType<typeof setInterval> | null = null;
+  let destroyed = false;
+  let sweepActive = false;
 
   function stopSweepTimer() {
     if (!sweepHandle) {
@@ -88,19 +105,40 @@ export function createIdempotencyFingerprintValidationCacheController(
     sweepHandle = null;
   }
 
-  function sweepExpiredEntries() {
-    pruneExpiredIdempotencyFingerprintValidationCache(cache, {
-      now: now(),
-      ttlMs,
-    });
+  function sweepExpiredEntries(): number {
+    if (sweepActive) {
+      return 0;
+    }
 
-    if (cache.size === 0) {
-      stopSweepTimer();
+    sweepActive = true;
+    try {
+      const removedCount = pruneExpiredIdempotencyFingerprintValidationCache(cache, {
+        now: now(),
+        ttlMs,
+      });
+
+      if (cache.size === 0) {
+        stopSweepTimer();
+      }
+
+      return removedCount;
+    } catch (error) {
+      internalMetrics.increment("idempotencyFingerprintSweepErrorsTotal");
+      logger.error("Idempotency fingerprint cache sweep failed", {
+        event: "idempotency_fingerprint_sweep_error",
+        name: readSweepErrorName(error),
+        operation: "sweep",
+        source: "collection_idempotency_cache",
+        status: "failed",
+      });
+      return 0;
+    } finally {
+      sweepActive = false;
     }
   }
 
   function ensureSweepTimer() {
-    if (sweepHandle || cache.size === 0) {
+    if (destroyed || sweepHandle || cache.size === 0) {
       return;
     }
 
@@ -113,7 +151,16 @@ export function createIdempotencyFingerprintValidationCacheController(
     stopSweepTimer();
   }
 
+  function destroy() {
+    destroyed = true;
+    clear();
+  }
+
   function get(key: string) {
+    if (destroyed) {
+      return undefined;
+    }
+
     const entry = cache.get(key);
     if (!entry) {
       return undefined;
@@ -134,6 +181,16 @@ export function createIdempotencyFingerprintValidationCacheController(
   }
 
   function set(key: string, entry: IdempotencyFingerprintValidationCacheEntry) {
+    if (destroyed) {
+      logger.warn("Ignored idempotency fingerprint cache write after destroy", {
+        event: "idempotency_fingerprint_cache_write_after_destroy",
+        operation: "set",
+        source: "collection_idempotency_cache",
+        status: "ignored",
+      });
+      return;
+    }
+
     pruneExpiredIdempotencyFingerprintValidationCache(cache, {
       now: now(),
       ttlMs,
@@ -148,7 +205,9 @@ export function createIdempotencyFingerprintValidationCacheController(
   return {
     cache,
     clear,
+    destroy,
     get,
     set,
+    sweepNow: sweepExpiredEntries,
   };
 }

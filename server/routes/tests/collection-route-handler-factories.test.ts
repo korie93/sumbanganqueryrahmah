@@ -15,6 +15,8 @@ import {
   startTestServer,
   stopTestServer,
 } from "./http-test-utils";
+import { getInternalMetricsSnapshot } from "../../internal/metrics";
+import { logger } from "../../lib/logger";
 
 type CollectionMutationHandlerStorage =
   Parameters<typeof createCollectionJsonMutationRouteHandler>[0]["storage"];
@@ -418,4 +420,168 @@ test("idempotency fingerprint cache controller auto-evicts expired entries and s
 
   assert.equal(controller.cache.size, 0);
   assert.equal(clearCalls, 1);
+});
+
+test("idempotency fingerprint cache controller keeps a singleton sweep timer per controller", () => {
+  let now = 1_000;
+  let setCalls = 0;
+  let clearCalls = 0;
+  const sweepHandle = {
+    unref() {
+      return sweepHandle;
+    },
+  } as ReturnType<typeof setInterval>;
+
+  const controller = createIdempotencyFingerprintValidationCacheController({
+    limit: 4,
+    ttlMs: 50,
+    sweepIntervalMs: 10,
+    now: () => now,
+    setIntervalFn: (() => {
+      setCalls += 1;
+      return sweepHandle;
+    }) as unknown as typeof setInterval,
+    clearIntervalFn: ((handle?: Parameters<typeof clearInterval>[0]) => {
+      if (handle === sweepHandle) {
+        clearCalls += 1;
+      }
+    }) as typeof clearInterval,
+  });
+
+  controller.set("fingerprint-1", { lastValidatedAt: now });
+  now += 1;
+  controller.set("fingerprint-2", { lastValidatedAt: now });
+  controller.set("fingerprint-3", { lastValidatedAt: now });
+
+  assert.equal(setCalls, 1);
+  assert.equal(controller.cache.size, 3);
+
+  controller.clear();
+  controller.clear();
+
+  assert.equal(clearCalls, 1);
+});
+
+test("idempotency fingerprint cache controller observes sweep errors without dropping the timer", (t) => {
+  let now = 1_000;
+  let throwFromClock = false;
+  let sweep: (() => void) | null = null;
+  let clearCalls = 0;
+  const errors: Array<{ message: string; meta?: Record<string, unknown> }> = [];
+  const beforeFailures = getInternalMetricsSnapshot()
+    .counters.idempotencyFingerprintSweepErrorsTotal;
+  const sweepHandle = {
+    unref() {
+      return sweepHandle;
+    },
+  } as ReturnType<typeof setInterval>;
+
+  t.mock.method(
+    logger,
+    "error",
+    ((message: string, meta?: Record<string, unknown>) => {
+      errors.push(meta ? { message, meta } : { message });
+    }) as typeof logger.error,
+  );
+
+  const controller = createIdempotencyFingerprintValidationCacheController({
+    limit: 4,
+    ttlMs: 50,
+    sweepIntervalMs: 10,
+    now: () => {
+      if (throwFromClock) {
+        throw new Error("clock failed");
+      }
+      return now;
+    },
+    setIntervalFn: ((handler: TimerHandler) => {
+      sweep = () => {
+        if (typeof handler === "function") {
+          handler();
+        }
+      };
+      return sweepHandle;
+    }) as unknown as typeof setInterval,
+    clearIntervalFn: ((handle?: Parameters<typeof clearInterval>[0]) => {
+      if (handle === sweepHandle) {
+        clearCalls += 1;
+      }
+    }) as typeof clearInterval,
+  });
+
+  controller.set("fingerprint-1", { lastValidatedAt: now });
+  throwFromClock = true;
+
+  assert.doesNotThrow(() => {
+    assert.ok(sweep);
+    sweep();
+  });
+
+  assert.equal(controller.cache.size, 1);
+  assert.equal(clearCalls, 0);
+  assert.equal(
+    getInternalMetricsSnapshot().counters.idempotencyFingerprintSweepErrorsTotal,
+    beforeFailures + 1,
+  );
+  assert.equal(
+    errors.some(({ message, meta }) => (
+      message === "Idempotency fingerprint cache sweep failed"
+      && meta?.event === "idempotency_fingerprint_sweep_error"
+      && meta.status === "failed"
+    )),
+    true,
+  );
+
+  throwFromClock = false;
+  now = 1_100;
+  assert.equal(controller.sweepNow(), 1);
+  assert.equal(clearCalls, 1);
+});
+
+test("idempotency fingerprint cache controller destroy clears its timer and prevents restart", (t) => {
+  let setCalls = 0;
+  let clearCalls = 0;
+  const warnings: Array<{ message: string; meta?: Record<string, unknown> }> = [];
+  const sweepHandle = {
+    unref() {
+      return sweepHandle;
+    },
+  } as ReturnType<typeof setInterval>;
+
+  t.mock.method(
+    logger,
+    "warn",
+    ((message: string, meta?: Record<string, unknown>) => {
+      warnings.push(meta ? { message, meta } : { message });
+    }) as typeof logger.warn,
+  );
+
+  const controller = createIdempotencyFingerprintValidationCacheController({
+    setIntervalFn: (() => {
+      setCalls += 1;
+      return sweepHandle;
+    }) as unknown as typeof setInterval,
+    clearIntervalFn: ((handle?: Parameters<typeof clearInterval>[0]) => {
+      if (handle === sweepHandle) {
+        clearCalls += 1;
+      }
+    }) as typeof clearInterval,
+  });
+
+  controller.set("fingerprint-1", { lastValidatedAt: 1_000 });
+  controller.destroy();
+  controller.destroy();
+  controller.set("fingerprint-2", { lastValidatedAt: 1_001 });
+
+  assert.equal(setCalls, 1);
+  assert.equal(clearCalls, 1);
+  assert.equal(controller.cache.size, 0);
+  assert.equal(controller.get("fingerprint-2"), undefined);
+  assert.equal(
+    warnings.some(({ message, meta }) => (
+      message === "Ignored idempotency fingerprint cache write after destroy"
+      && meta?.event === "idempotency_fingerprint_cache_write_after_destroy"
+    )),
+    true,
+  );
 });
