@@ -9,6 +9,7 @@ import {
   assertConfirmedStrongPassword,
   assertUsablePasswordResetTokenRecord,
   findOpaqueTokenRecordByHashCandidates,
+  type UsablePasswordResetTokenRecord,
 } from "./auth-account-token-utils";
 import { sendPasswordResetEmailOperation } from "./auth-account-authentication-utils";
 import {
@@ -18,6 +19,26 @@ import {
 } from "./auth-account-types";
 import type { AuthAccountRecoveryDeps } from "./auth-account-recovery-shared";
 import { ERROR_CODES } from "../../shared/error-codes";
+
+async function consumePasswordResetTokenForMutation(params: {
+  storage: AuthAccountRecoveryDeps["storage"];
+  record: UsablePasswordResetTokenRecord;
+  tokenHash: string;
+  now: Date;
+}): Promise<void> {
+  const consumed = await params.storage.consumePasswordResetRequestById({
+    requestId: params.record.requestId,
+    now: params.now,
+  });
+
+  if (consumed) {
+    return;
+  }
+
+  const latest = await params.storage.getPasswordResetTokenRecordByHash(params.tokenHash);
+  assertUsablePasswordResetTokenRecord(latest, params.now);
+  throw new AuthAccountError(400, ERROR_CODES.INVALID_TOKEN, "Password reset token is invalid.");
+}
 
 export class AuthAccountPasswordResetOperations {
   constructor(private readonly deps: AuthAccountRecoveryDeps) {}
@@ -116,18 +137,16 @@ export class AuthAccountPasswordResetOperations {
       lookup?.record,
       now,
     );
-    const consumed = await this.deps.storage.consumePasswordResetRequestById({
-      requestId: record.requestId,
-      now,
-    });
-
-    if (!consumed) {
-      const latest = lookup
-        ? await this.deps.storage.getPasswordResetTokenRecordByHash(lookup.tokenHash)
-        : undefined;
-      assertUsablePasswordResetTokenRecord(latest, now);
+    const tokenHash = lookup?.tokenHash;
+    if (!tokenHash) {
       throw new AuthAccountError(400, ERROR_CODES.INVALID_TOKEN, "Password reset token is invalid.");
     }
+    await consumePasswordResetTokenForMutation({
+      storage: this.deps.storage,
+      record,
+      tokenHash,
+      now,
+    });
 
     const target = await this.deps.storage.getUser(record.userId);
     if (!target) {
