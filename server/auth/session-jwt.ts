@@ -5,6 +5,11 @@ import { SESSION_JWT_DEFAULT_EXPIRY as SESSION_JWT_DEFAULT_EXPIRY_VALUE } from "
 
 export const SESSION_JWT_ALGORITHM = "HS256" as const;
 export const SESSION_JWT_REFRESH_REMAINING_TTL_RATIO = 0.2;
+export const SESSION_JWT_DEFAULT_EXPIRY_JITTER_SECONDS = 15 * 60;
+export const SESSION_JWT_MIN_DEFAULT_EXPIRY_SECONDS = Math.max(
+  60,
+  SESSION_JWT_DEFAULT_EXPIRY_VALUE - SESSION_JWT_DEFAULT_EXPIRY_JITTER_SECONDS,
+);
 export { SESSION_JWT_DEFAULT_EXPIRY } from "./session-lifetime";
 
 type RefreshableSessionClaims = {
@@ -29,6 +34,20 @@ export function getSessionJwtVerificationSecrets(): readonly string[] {
   ];
 }
 
+export function resolveSessionJwtDefaultExpiresInSeconds(
+  randomSource: () => number = Math.random,
+): number {
+  const randomValue = randomSource();
+  const boundedRandom = Number.isFinite(randomValue)
+    ? Math.min(1, Math.max(0, randomValue))
+    : 0;
+  const jitterSeconds = Math.floor(boundedRandom * SESSION_JWT_DEFAULT_EXPIRY_JITTER_SECONDS);
+  return Math.max(
+    SESSION_JWT_MIN_DEFAULT_EXPIRY_SECONDS,
+    SESSION_JWT_DEFAULT_EXPIRY_VALUE - jitterSeconds,
+  );
+}
+
 export function signSessionJwt<TPayload extends object>(
   payload: TPayload,
   options?: Omit<SignOptions, "algorithm">,
@@ -45,9 +64,11 @@ export function signSessionJwtWithSecret<TPayload extends object>(
   const jwtid = options?.jwtid || (payloadJwtId ? undefined : randomUUID());
   const signOptions: SignOptions = {
     algorithm: SESSION_JWT_ALGORITHM,
-    expiresIn: SESSION_JWT_DEFAULT_EXPIRY_VALUE,
     ...options,
   };
+  if (signOptions.expiresIn === undefined) {
+    signOptions.expiresIn = resolveSessionJwtDefaultExpiresInSeconds();
+  }
   if (jwtid) {
     signOptions.jwtid = jwtid;
   }

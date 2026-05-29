@@ -3,9 +3,12 @@ import test from "node:test";
 import jwt from "jsonwebtoken";
 import {
   SESSION_JWT_DEFAULT_EXPIRY,
+  SESSION_JWT_DEFAULT_EXPIRY_JITTER_SECONDS,
   SESSION_JWT_ALGORITHM,
+  SESSION_JWT_MIN_DEFAULT_EXPIRY_SECONDS,
   resolveSessionJwtExpiresAt,
   resolveSessionJwtId,
+  resolveSessionJwtDefaultExpiresInSeconds,
   shouldRefreshSessionJwt,
   signSessionJwt,
   signSessionJwtWithSecret,
@@ -23,9 +26,56 @@ test("signSessionJwt applies the default session expiry when omitted", () => {
   assert.ok(decoded?.iat);
   assert.ok(decoded?.exp);
   assert.match(decoded?.jti ?? "", /^[0-9a-f-]{36}$/i);
-  assert.equal(decoded.exp - decoded.iat, SESSION_JWT_DEFAULT_EXPIRY);
+  assert.ok(decoded.exp - decoded.iat <= SESSION_JWT_DEFAULT_EXPIRY);
+  assert.ok(decoded.exp - decoded.iat >= SESSION_JWT_MIN_DEFAULT_EXPIRY_SECONDS);
   assert.equal(resolveSessionJwtExpiresAt(token)?.getTime(), decoded.exp * 1000);
   assert.equal(resolveSessionJwtId(token), decoded.jti);
+});
+
+test("default session expiry jitter keeps the maximum TTL unchanged and enforces a floor", () => {
+  assert.equal(resolveSessionJwtDefaultExpiresInSeconds(() => 0), SESSION_JWT_DEFAULT_EXPIRY);
+  assert.equal(
+    resolveSessionJwtDefaultExpiresInSeconds(() => 0.5),
+    SESSION_JWT_DEFAULT_EXPIRY - Math.floor(SESSION_JWT_DEFAULT_EXPIRY_JITTER_SECONDS / 2),
+  );
+  assert.equal(
+    resolveSessionJwtDefaultExpiresInSeconds(() => 1),
+    SESSION_JWT_MIN_DEFAULT_EXPIRY_SECONDS,
+  );
+  assert.equal(resolveSessionJwtDefaultExpiresInSeconds(() => Number.NaN), SESSION_JWT_DEFAULT_EXPIRY);
+});
+
+test("signSessionJwt applies bounded non-identical jitter only to default expiry", (t) => {
+  const originalRandom = Math.random;
+  const randomValues = [0, 0.5, 1, 1];
+  Math.random = () => randomValues.shift() ?? 0;
+  t.after(() => {
+    Math.random = originalRandom;
+  });
+
+  const defaultTtls = [0, 1, 2].map(() => {
+    const token = signSessionJwt({ username: "alice", role: "admin" });
+    const decoded = jwt.decode(token) as { iat?: number; exp?: number } | null;
+    assert.ok(decoded?.iat);
+    assert.ok(decoded?.exp);
+    return decoded.exp - decoded.iat;
+  });
+
+  assert.deepEqual(defaultTtls, [
+    SESSION_JWT_DEFAULT_EXPIRY,
+    SESSION_JWT_DEFAULT_EXPIRY - Math.floor(SESSION_JWT_DEFAULT_EXPIRY_JITTER_SECONDS / 2),
+    SESSION_JWT_MIN_DEFAULT_EXPIRY_SECONDS,
+  ]);
+  assert.equal(new Set(defaultTtls).size, 3);
+
+  const twoFactorToken = signSessionJwt(
+    { username: "alice", role: "admin", purpose: "two_factor_login" },
+    { expiresIn: "5m" },
+  );
+  const twoFactorDecoded = jwt.decode(twoFactorToken) as { iat?: number; exp?: number } | null;
+  assert.ok(twoFactorDecoded?.iat);
+  assert.ok(twoFactorDecoded?.exp);
+  assert.equal(twoFactorDecoded.exp - twoFactorDecoded.iat, 5 * 60);
 });
 
 test("signSessionJwtWithSecret signs with an explicit secret for scoped guard instances", () => {
