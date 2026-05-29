@@ -13,7 +13,7 @@ import {
   isCollectionDailyCalendarStatus,
   isCollectionDailyLeaveType,
 } from "../../shared/collection-daily-status";
-import { resolveCollectionPiiFieldValue } from "../lib/collection-pii-encryption";
+import { resolveCollectionRecordPiiValuesFailClosed } from "../lib/collection-pii-encryption";
 
 type CollectionBatch = CollectionRecord["batch"];
 
@@ -171,29 +171,31 @@ export function mapCollectionRecordRow(row: unknown): CollectionRecord {
   const createdAt = normalizeCollectionDate(createdAtRaw);
   const updatedAtRaw = normalizedRow.updated_at ?? normalizedRow.updatedAt ?? createdAt;
   const updatedAt = normalizeCollectionDate(updatedAtRaw, createdAt);
+  const piiValues = resolveCollectionRecordPiiValuesFailClosed({
+    customerName: {
+      plaintext: normalizedRow.customer_name ?? normalizedRow.customerName,
+      encrypted: normalizedRow.customer_name_encrypted ?? normalizedRow.customerNameEncrypted,
+    },
+    icNumber: {
+      plaintext: normalizedRow.ic_number ?? normalizedRow.icNumber,
+      encrypted: normalizedRow.ic_number_encrypted ?? normalizedRow.icNumberEncrypted,
+    },
+    customerPhone: {
+      plaintext: normalizedRow.customer_phone ?? normalizedRow.customerPhone,
+      encrypted: normalizedRow.customer_phone_encrypted ?? normalizedRow.customerPhoneEncrypted,
+    },
+    accountNumber: {
+      plaintext: normalizedRow.account_number ?? normalizedRow.accountNumber,
+      encrypted: normalizedRow.account_number_encrypted ?? normalizedRow.accountNumberEncrypted,
+    },
+  });
 
   return {
     id: String(normalizedRow.id ?? ""),
-    customerName: resolveCollectionPiiFieldValue({
-      field: "customerName",
-      plaintext: normalizedRow.customer_name ?? normalizedRow.customerName,
-      encrypted: normalizedRow.customer_name_encrypted ?? normalizedRow.customerNameEncrypted,
-    }),
-    icNumber: resolveCollectionPiiFieldValue({
-      field: "icNumber",
-      plaintext: normalizedRow.ic_number ?? normalizedRow.icNumber,
-      encrypted: normalizedRow.ic_number_encrypted ?? normalizedRow.icNumberEncrypted,
-    }),
-    customerPhone: resolveCollectionPiiFieldValue({
-      field: "customerPhone",
-      plaintext: normalizedRow.customer_phone ?? normalizedRow.customerPhone,
-      encrypted: normalizedRow.customer_phone_encrypted ?? normalizedRow.customerPhoneEncrypted,
-    }),
-    accountNumber: resolveCollectionPiiFieldValue({
-      field: "accountNumber",
-      plaintext: normalizedRow.account_number ?? normalizedRow.accountNumber,
-      encrypted: normalizedRow.account_number_encrypted ?? normalizedRow.accountNumberEncrypted,
-    }),
+    customerName: piiValues.customerName,
+    icNumber: piiValues.icNumber,
+    customerPhone: piiValues.customerPhone,
+    accountNumber: piiValues.accountNumber,
     batch: String(normalizedRow.batch ?? "") as CollectionBatch,
     paymentDate,
     amount: formatCollectionAmountMyrString(normalizedRow.amount ?? 0),

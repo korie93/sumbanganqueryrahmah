@@ -5,6 +5,7 @@ export type InternalMetricName =
   | "authTabVisibilityCacheEvictionsTotal"
   | "authTabVisibilityCacheExpiredEntriesTotal"
   | "collectionPiiDecryptFallbackTotal"
+  | "collectionPiiDecryptFailClosedTotal"
   | "collectionRollupNotificationCallbackFailuresTotal"
   | "collectionRollupNotificationCriticalFailuresTotal"
   | "collectionRollupNotificationDisconnectFailuresTotal"
@@ -52,6 +53,7 @@ const INTERNAL_METRIC_NAMES: readonly InternalMetricName[] = [
   "authTabVisibilityCacheEvictionsTotal",
   "authTabVisibilityCacheExpiredEntriesTotal",
   "collectionPiiDecryptFallbackTotal",
+  "collectionPiiDecryptFailClosedTotal",
   "collectionRollupNotificationCallbackFailuresTotal",
   "collectionRollupNotificationCriticalFailuresTotal",
   "collectionRollupNotificationDisconnectFailuresTotal",

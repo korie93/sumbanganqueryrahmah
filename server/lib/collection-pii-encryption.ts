@@ -32,6 +32,39 @@ import type {
 const MAX_COLLECTION_PII_DECRYPT_WARNINGS = 5;
 let collectionPiiDecryptWarningCount = 0;
 
+export type CollectionPiiDecryptionFailureReason =
+  | "EMPTY_PAYLOAD"
+  | "KEY_NOT_CONFIGURED"
+  | "DECRYPTION_FAILED";
+
+export type CollectionPiiDecryptResult =
+  | { success: true; data: string }
+  | { success: false; reason: CollectionPiiDecryptionFailureReason };
+
+export type CollectionRecordPiiFieldValues = {
+  customerName: string;
+  icNumber: string;
+  customerPhone: string;
+  accountNumber: string;
+};
+
+export class CollectionPiiDecryptionError extends Error {
+  readonly reason: CollectionPiiDecryptionFailureReason;
+  readonly field?: CollectionPiiFieldName;
+
+  constructor(
+    reason: CollectionPiiDecryptionFailureReason,
+    field?: CollectionPiiFieldName,
+  ) {
+    super("Collection PII field cannot be decrypted.");
+    this.name = "CollectionPiiDecryptionError";
+    this.reason = reason;
+    if (field !== undefined) {
+      this.field = field;
+    }
+  }
+}
+
 function summarizeCollectionPiiDecryptError(error: unknown): Record<string, unknown> | undefined {
   if (error instanceof Error) {
     return {
@@ -45,6 +78,27 @@ function summarizeCollectionPiiDecryptError(error: unknown): Record<string, unkn
   }
 
   return undefined;
+}
+
+function recordCollectionPiiDecryptFailure(params: {
+  operation: string;
+  payloadLength: number;
+  reason: CollectionPiiDecryptionFailureReason;
+  error?: unknown;
+}): void {
+  internalMetrics.increment("collectionPiiDecryptFallbackTotal");
+  if (collectionPiiDecryptWarningCount >= MAX_COLLECTION_PII_DECRYPT_WARNINGS) {
+    return;
+  }
+
+  collectionPiiDecryptWarningCount += 1;
+  logger.warn("Failed to decrypt collection PII shadow value", {
+    operation: params.operation,
+    payloadLength: params.payloadLength,
+    reason: params.reason,
+    suppressedAfter: MAX_COLLECTION_PII_DECRYPT_WARNINGS,
+    error: summarizeCollectionPiiDecryptError(params.error),
+  });
 }
 
 export function hasCollectionPiiEncryptionConfigured(): boolean {
@@ -168,28 +222,55 @@ export function decryptCollectionPiiValue(payload: string): string {
   throw new Error("Invalid collection PII payload.");
 }
 
-export function decryptCollectionPiiValueSafe(payload: unknown): string | null {
+export function decryptCollectionPiiValueResult(
+  payload: unknown,
+  params: {
+    operation?: string;
+    logFailure?: boolean;
+  } = {},
+): CollectionPiiDecryptResult {
   const normalized = normalizeCollectionPiiValue(payload);
   if (!normalized) {
-    return null;
+    return { success: false, reason: "EMPTY_PAYLOAD" };
+  }
+
+  const secrets = getCollectionPiiDecryptionSecrets();
+  if (secrets.length === 0) {
+    if (params.logFailure !== false) {
+      recordCollectionPiiDecryptFailure({
+        operation: params.operation ?? "decryptCollectionPiiValueResult",
+        payloadLength: normalized.length,
+        reason: "KEY_NOT_CONFIGURED",
+      });
+    }
+    return { success: false, reason: "KEY_NOT_CONFIGURED" };
   }
 
   try {
     const decrypted = decryptCollectionPiiValue(normalized);
-    return normalizeCollectionPiiValue(decrypted) || null;
+    return { success: true, data: normalizeCollectionPiiValue(decrypted) };
   } catch (error) {
-    internalMetrics.increment("collectionPiiDecryptFallbackTotal");
-    if (collectionPiiDecryptWarningCount < MAX_COLLECTION_PII_DECRYPT_WARNINGS) {
-      collectionPiiDecryptWarningCount += 1;
-      logger.warn("Failed to decrypt collection PII shadow value", {
-        operation: "decryptCollectionPiiValueSafe",
+    if (params.logFailure !== false) {
+      recordCollectionPiiDecryptFailure({
+        operation: params.operation ?? "decryptCollectionPiiValueResult",
         payloadLength: normalized.length,
-        suppressedAfter: MAX_COLLECTION_PII_DECRYPT_WARNINGS,
-        error: summarizeCollectionPiiDecryptError(error),
+        reason: "DECRYPTION_FAILED",
+        error,
       });
     }
+    return { success: false, reason: "DECRYPTION_FAILED" };
+  }
+}
+
+export function decryptCollectionPiiValueSafe(payload: unknown): string | null {
+  const result = decryptCollectionPiiValueResult(payload, {
+    operation: "decryptCollectionPiiValueSafe",
+  });
+  if (!result.success) {
     return null;
   }
+
+  return result.data || null;
 }
 
 export function resolveCollectionPiiFieldValue(params: {
@@ -213,6 +294,74 @@ export function resolveCollectionPiiFieldValue(params: {
   }
 
   return params.fallback ?? "";
+}
+
+export function resolveCollectionPiiFieldValueFailClosed(params: {
+  field?: CollectionPiiFieldName;
+  plaintext: unknown;
+  encrypted: unknown;
+  fallback?: string;
+}): string {
+  const encrypted = normalizeCollectionPiiValue(params.encrypted);
+  if (encrypted) {
+    const result = decryptCollectionPiiValueResult(encrypted, {
+      operation: "resolveCollectionPiiFieldValueFailClosed",
+      logFailure: false,
+    });
+    if (result.success) {
+      return result.data;
+    }
+
+    internalMetrics.increment("collectionPiiDecryptFailClosedTotal");
+    logger.error("Collection PII decryption failed closed", {
+      operation: "resolveCollectionPiiFieldValueFailClosed",
+      source: params.field ?? "unknown",
+      payloadLength: encrypted.length,
+      reason: result.reason,
+    });
+    throw new CollectionPiiDecryptionError(result.reason, params.field);
+  }
+
+  if (params.field && isCollectionPiiPlaintextRetiredField(params.field)) {
+    return params.fallback ?? "";
+  }
+
+  const plaintext = normalizeCollectionPiiValue(params.plaintext);
+  if (plaintext) {
+    return plaintext;
+  }
+
+  return params.fallback ?? "";
+}
+
+export function resolveCollectionRecordPiiValuesFailClosed(params: {
+  customerName: { plaintext: unknown; encrypted: unknown };
+  icNumber: { plaintext: unknown; encrypted: unknown };
+  customerPhone: { plaintext: unknown; encrypted: unknown };
+  accountNumber: { plaintext: unknown; encrypted: unknown };
+}): CollectionRecordPiiFieldValues {
+  return {
+    customerName: resolveCollectionPiiFieldValueFailClosed({
+      field: "customerName",
+      plaintext: params.customerName.plaintext,
+      encrypted: params.customerName.encrypted,
+    }),
+    icNumber: resolveCollectionPiiFieldValueFailClosed({
+      field: "icNumber",
+      plaintext: params.icNumber.plaintext,
+      encrypted: params.icNumber.encrypted,
+    }),
+    customerPhone: resolveCollectionPiiFieldValueFailClosed({
+      field: "customerPhone",
+      plaintext: params.customerPhone.plaintext,
+      encrypted: params.customerPhone.encrypted,
+    }),
+    accountNumber: resolveCollectionPiiFieldValueFailClosed({
+      field: "accountNumber",
+      plaintext: params.accountNumber.plaintext,
+      encrypted: params.accountNumber.encrypted,
+    }),
+  };
 }
 
 export function resolveCollectionCustomerNameSearchHashesValue(params: {

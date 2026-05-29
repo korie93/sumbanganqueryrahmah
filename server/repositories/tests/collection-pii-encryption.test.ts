@@ -4,7 +4,9 @@ import test from "node:test";
 import {
   buildCollectionRecordPiiSearchHashes,
   buildEncryptedCollectionRecordPiiValues,
+  CollectionPiiDecryptionError,
   decryptCollectionPiiValue,
+  decryptCollectionPiiValueResult,
   decryptCollectionPiiValueSafe,
   hashCollectionCustomerNameSearchTerms,
   hashCollectionPiiSearchValue,
@@ -12,6 +14,7 @@ import {
   hasUnreadableCollectionPiiShadowValue,
   resolveCollectionCustomerNameSearchHashesValue,
   resolveCollectionPiiFieldValue,
+  resolveCollectionPiiFieldValueFailClosed,
   resolveStoredCollectionPiiPlaintextValue,
   shouldRedactCollectionPiiPlaintextValue,
   shouldRewriteCollectionPiiSearchHashValue,
@@ -27,6 +30,7 @@ import {
   getLegacyCollectionPiiCipherKey,
 } from "../../lib/collection-pii-encryption-crypto";
 import { logger } from "../../lib/logger";
+import { mapCollectionDailyPaidCustomerRow } from "../collection-daily-repository-row-utils";
 import { mapCollectionRecordRow } from "../collection-repository-mappers";
 
 function encryptLegacyCollectionPiiPayload(value: string, secret: string): string {
@@ -417,6 +421,103 @@ test("collection PII safe decrypt increments fallback metric on failure", () => 
 
   const after = getInternalMetricsSnapshot().counters.collectionPiiDecryptFallbackTotal;
   assert.equal(after, before + 1);
+});
+
+test("collection PII decrypt result exposes typed failure reasons", () => {
+  withCollectionPiiKeys({ current: null }, () => {
+    assert.deepEqual(
+      decryptCollectionPiiValueResult("invalid-encrypted-payload", { logFailure: false }),
+      { success: false, reason: "KEY_NOT_CONFIGURED" },
+    );
+    assert.deepEqual(
+      decryptCollectionPiiValueResult("", { logFailure: false }),
+      { success: false, reason: "EMPTY_PAYLOAD" },
+    );
+  });
+
+  withCollectionPiiKeys({ current: "test-collection-pii-encryption-key" }, () => {
+    assert.deepEqual(
+      decryptCollectionPiiValueResult("invalid-encrypted-payload", { logFailure: false }),
+      { success: false, reason: "DECRYPTION_FAILED" },
+    );
+  });
+});
+
+test("collection PII fail-closed resolver rejects unreadable encrypted shadows", (t) => {
+  const errorLogs: Array<{ message: string; metadata: Record<string, unknown> }> = [];
+  t.mock.method(logger, "error", (message: string, metadata: Record<string, unknown>) => {
+    errorLogs.push({ message, metadata });
+  });
+  const before = getInternalMetricsSnapshot().counters.collectionPiiDecryptFailClosedTotal;
+
+  withCollectionPiiKeys({ current: "test-collection-pii-encryption-key" }, () => {
+    assert.throws(
+      () =>
+        resolveCollectionPiiFieldValueFailClosed({
+          field: "icNumber",
+          plaintext: "900101015555",
+          encrypted: "invalid-encrypted-payload",
+        }),
+      CollectionPiiDecryptionError,
+    );
+  });
+
+  const after = getInternalMetricsSnapshot().counters.collectionPiiDecryptFailClosedTotal;
+  assert.equal(after, before + 1);
+  assert.equal(errorLogs.length, 1);
+  assert.equal(errorLogs[0]?.message, "Collection PII decryption failed closed");
+  assert.equal(errorLogs[0]?.metadata.operation, "resolveCollectionPiiFieldValueFailClosed");
+  assert.equal(errorLogs[0]?.metadata.source, "icNumber");
+  assert.equal(errorLogs[0]?.metadata.reason, "DECRYPTION_FAILED");
+  assert.equal(errorLogs[0]?.metadata.payloadLength, "invalid-encrypted-payload".length);
+  assert.equal(Object.prototype.hasOwnProperty.call(errorLogs[0]?.metadata ?? {}, "payload"), false);
+  assert.equal(Object.prototype.hasOwnProperty.call(errorLogs[0]?.metadata ?? {}, "plaintext"), false);
+  assert.equal(Object.prototype.hasOwnProperty.call(errorLogs[0]?.metadata ?? {}, "encrypted"), false);
+});
+
+test("collection PII response mappers fail closed instead of returning partial rows", () => {
+  withCollectionPiiKeys({ current: "test-collection-pii-encryption-key" }, () => {
+    assert.throws(
+      () =>
+        mapCollectionRecordRow({
+          id: "11111111-1111-1111-1111-111111111111",
+          customer_name: "Legacy Alice",
+          customer_name_encrypted: "invalid-encrypted-payload",
+          ic_number: "900101015555",
+          customer_phone: "0123000001",
+          account_number: "ACC-1001",
+          batch: "P10",
+          payment_date: "2026-04-08",
+          amount: "10.00",
+          receipt_file: null,
+          receipt_total_amount: 0,
+          receipt_validation_status: "needs_review",
+          receipt_validation_message: null,
+          receipt_count: 0,
+          duplicate_receipt_flag: false,
+          created_by_login: "system",
+          collection_staff_nickname: "Collector Alpha",
+          staff_username: "Collector Alpha",
+          created_at: new Date("2026-04-08T00:00:00.000Z"),
+          updated_at: new Date("2026-04-08T00:00:00.000Z"),
+        }),
+      CollectionPiiDecryptionError,
+    );
+
+    assert.throws(
+      () =>
+        mapCollectionDailyPaidCustomerRow({
+          id: "22222222-2222-2222-2222-222222222222",
+          customer_name: "Legacy Alice",
+          customer_name_encrypted: "invalid-encrypted-payload",
+          account_number: "ACC-1001",
+          account_number_encrypted: null,
+          amount: "10.00",
+          collection_staff_nickname: "Collector Alpha",
+        }),
+      CollectionPiiDecryptionError,
+    );
+  });
 });
 
 test("collection PII helpers mark missing or stale shadow values for rewrite under the active key", () => {

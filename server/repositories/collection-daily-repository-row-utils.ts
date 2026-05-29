@@ -1,7 +1,7 @@
 import type { CollectionAmountMyrNumber } from "../../shared/collection-amount-types";
 import { parseCollectionAmountMyrNumber } from "../../shared/collection-amount-types";
 import type { CollectionDailyPaidCustomer, CollectionDailyUser } from "../storage-postgres";
-import { resolveCollectionPiiFieldValue } from "../lib/collection-pii-encryption";
+import { resolveCollectionPiiFieldValueFailClosed } from "../lib/collection-pii-encryption";
 import type {
   CollectionDailyPaidCustomerRow,
   CollectionDailyQueryResult,
@@ -25,12 +25,12 @@ export function mapCollectionDailyPaidCustomerRow(
 ): CollectionDailyPaidCustomer {
   return {
     id: String(row.id ?? ""),
-    customerName: resolveCollectionPiiFieldValue({
+    customerName: resolveCollectionPiiFieldValueFailClosed({
       field: "customerName",
       plaintext: row.customer_name,
       encrypted: row.customer_name_encrypted,
     }),
-    accountNumber: resolveCollectionPiiFieldValue({
+    accountNumber: resolveCollectionPiiFieldValueFailClosed({
       field: "accountNumber",
       plaintext: row.account_number,
       encrypted: row.account_number_encrypted,

@@ -92,6 +92,14 @@ HTTP throttling responses expose `Retry-After`, `RateLimit-Limit`, `RateLimit-Re
 
 Runtime WebSocket upgrades are rate limited by IP. Accepted sockets are also bounded by `SQR_WS_MAX_CONNECTIONS`, inbound messages larger than `SQR_WS_MAX_MESSAGE_BYTES` close with code `1009`, and messages at or above 64KB emit a structured warning without payload contents. Each socket is also capped at 512KB of inbound payload per 10-second window; exceeding that cumulative byte budget closes the socket with code `1009`. The current client protocol does not require high-frequency inbound messages, so repeated client messages over the rate cap are treated as abuse and closed with a policy-violation code.
 
+Collection PII decryption failures emit `collectionPiiDecryptFallbackTotal`
+when tolerant repair/backfill helpers cannot read an encrypted shadow. User
+response mappers use a stricter path: when an encrypted shadow exists but fails
+AEAD verification, they increment `collectionPiiDecryptFailClosedTotal` and
+reject the entire row instead of returning partial PII fields. The structured
+logs include operation, field label, payload length, and reason only; plaintext
+and encrypted values are never logged.
+
 Runtime WebSocket socket ownership is centralized through the lifecycle registry in `server/ws/runtime-socket-lifecycle-registry.ts`. Cleanup paths for close, error, heartbeat timeout, shared-bus close, broadcast failure, and server shutdown must deregister the socket from the same registry so `connectedClients`, activity entries, instance entries, cleanup callbacks, and tracked sockets return to zero together. The focused WebSocket test suite includes rapid reconnect and cleanup-failure drills; run `npm run test:ws` after any runtime socket lifecycle change.
 
 The collection rollup PostgreSQL `LISTEN` subscriber owns notification, error, and end handlers through an explicit listener registry. Reconnect paths unsubscribe the old client before attaching a new one, and `getDiagnostics().pendingListenerCleanups` should remain `1` while connected and `0` after stop. Run `npx tsx --test server/tests/collection-rollup-refresh-notification.test.ts server/http/tests/collection-rollup-refresh-notification.test.ts` after changes to the rollup notification lifecycle.
