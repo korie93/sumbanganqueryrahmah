@@ -45,7 +45,13 @@ test("routeHandler forwards delayed async rejections to the global error handler
       assert.deepEqual(await response.json(), {
         ok: false,
         message: "Internal server error",
+        code: "INTERNAL_ERROR",
         requestId: "req-async-route-1",
+        error: {
+          code: "INTERNAL_ERROR",
+          message: "Internal server error",
+          requestId: "req-async-route-1",
+        },
       });
     });
   } finally {

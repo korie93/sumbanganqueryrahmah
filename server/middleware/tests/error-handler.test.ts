@@ -7,6 +7,24 @@ import { HttpError, badRequest } from "../../http/errors";
 import { errorHandler } from "../error-handler";
 import { startTestServer, stopTestServer } from "../../routes/tests/http-test-utils";
 
+function expectApiError(message: string, code: string, options?: {
+  details?: unknown;
+  requestId?: string;
+}) {
+  return {
+    ok: false,
+    message,
+    code,
+    ...(options?.requestId ? { requestId: options.requestId } : {}),
+    error: {
+      code,
+      message,
+      ...(options?.details !== undefined ? { details: options.details } : {}),
+      ...(options?.requestId ? { requestId: options.requestId } : {}),
+    },
+  };
+}
+
 test("errorHandler returns structured details for exposed HttpError instances", async () => {
   const app = express();
   app.get("/bad-request", () => {
@@ -21,15 +39,9 @@ test("errorHandler returns structured details for exposed HttpError instances", 
 
     assert.equal(response.status, 400);
     assert.doesNotThrow(() => apiErrorPayloadSchema.parse(payload));
-    assert.deepEqual(payload, {
-      ok: false,
-      message: "Invalid receipt payload.",
-      error: {
-        code: "INVALID_RECEIPT",
-        message: "Invalid receipt payload.",
-        details: { field: "receipt" },
-      },
-    });
+    assert.deepEqual(payload, expectApiError("Invalid receipt payload.", "INVALID_RECEIPT", {
+      details: { field: "receipt" },
+    }));
   } finally {
     await stopTestServer(server);
   }
@@ -87,10 +99,7 @@ test("errorHandler does not expose hidden HttpError details", async () => {
 
     assert.equal(response.status, 503);
     assert.doesNotThrow(() => apiErrorPayloadSchema.parse(payload));
-    assert.deepEqual(payload, {
-      ok: false,
-      message: "Internal server error",
-    });
+    assert.deepEqual(payload, expectApiError("Internal server error", "SERVICE_UNAVAILABLE"));
   } finally {
     await stopTestServer(server);
   }
@@ -113,14 +122,10 @@ test("errorHandler normalizes body parser payload-too-large errors", async () =>
 
     assert.equal(response.status, 413);
     assert.doesNotThrow(() => apiErrorPayloadSchema.parse(payload));
-    assert.deepEqual(payload, {
-      ok: false,
-      message: "The request payload is too large to process.",
-      error: {
-        code: ERROR_CODES.PAYLOAD_TOO_LARGE,
-        message: "The request payload is too large to process.",
-      },
-    });
+    assert.deepEqual(payload, expectApiError(
+      "The request payload is too large to process.",
+      ERROR_CODES.PAYLOAD_TOO_LARGE,
+    ));
   } finally {
     await stopTestServer(server);
   }
@@ -146,15 +151,11 @@ test("errorHandler includes request ids on payload-too-large errors", async () =
     const payload = await response.json();
 
     assert.equal(response.status, 413);
-    assert.deepEqual(payload, {
-      ok: false,
-      message: "The request payload is too large to process.",
-      requestId: "req-large-payload-1",
-      error: {
-        code: ERROR_CODES.PAYLOAD_TOO_LARGE,
-        message: "The request payload is too large to process.",
-      },
-    });
+    assert.deepEqual(payload, expectApiError(
+      "The request payload is too large to process.",
+      ERROR_CODES.PAYLOAD_TOO_LARGE,
+      { requestId: "req-large-payload-1" },
+    ));
   } finally {
     await stopTestServer(server);
   }
@@ -181,11 +182,9 @@ test("errorHandler includes the active request id when the pipeline already assi
 
     assert.equal(response.status, 500);
     assert.doesNotThrow(() => apiErrorPayloadSchema.parse(payload));
-    assert.deepEqual(payload, {
-      ok: false,
-      message: "Internal server error",
+    assert.deepEqual(payload, expectApiError("Internal server error", "INTERNAL_ERROR", {
       requestId: "req-correlation-123",
-    });
+    }));
   } finally {
     await stopTestServer(server);
   }

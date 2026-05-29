@@ -265,6 +265,7 @@ test("PATCH /api/settings validates the key before service work begins", async (
     assert.deepEqual(await response.json(), {
       ok: false,
       message: "Invalid setting key",
+      code: ERROR_CODES.REQUEST_BODY_INVALID,
       error: {
         code: ERROR_CODES.REQUEST_BODY_INVALID,
         message: "Invalid setting key",

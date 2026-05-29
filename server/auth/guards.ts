@@ -37,6 +37,7 @@ import { createActivityUpdateThrottler } from "./guard-activity-update";
 import { createRoleTabVisibilityCache } from "./guard-tab-visibility";
 import { loadAuthenticatedSessionSnapshot } from "./guard-session-snapshot";
 import { internalMetrics } from "../internal/metrics";
+import { buildApiErrorResponse } from "../http/api-error-response";
 export { getInvalidatedSessionMessage } from "./guard-session-messages";
 
 export interface AuthenticatedUser {
@@ -103,6 +104,18 @@ type SessionRefreshRevocationLogContext = {
   method: string;
   path: string;
 };
+
+function buildAuthGuardErrorResponse(
+  statusCode: number,
+  message: string,
+  options?: { code?: string | undefined; extra?: Record<string, unknown> | undefined },
+) {
+  return buildApiErrorResponse(message, {
+    statusCode,
+    ...(options?.code ? { code: options.code } : {}),
+    ...(options?.extra ? { extra: options.extra } : {}),
+  });
+}
 
 const MIN_SESSION_REFRESH_REVOCATION_RETRY_ATTEMPTS = 1;
 const MAX_SESSION_REFRESH_REVOCATION_RETRY_ATTEMPTS = 5;
@@ -338,7 +351,9 @@ export function createAuthGuards(options: CreateAuthGuardsOptions) {
 
     if (!token) {
       clearAuthSessionCookie(res);
-      return res.status(401).json({ message: "Token required" });
+      return res.status(401).json(buildAuthGuardErrorResponse(401, "Token required", {
+        code: "TOKEN_REQUIRED",
+      }));
     }
 
     try {
@@ -348,27 +363,27 @@ export function createAuthGuards(options: CreateAuthGuardsOptions) {
       );
       if (await isSessionJwtRevoked(decoded.jti)) {
         clearAuthSessionCookie(res);
-        return res.status(401).json({
-          message: "Session expired. Please login again.",
-          forceLogout: true,
-        });
+        return res.status(401).json(buildAuthGuardErrorResponse(401, "Session expired. Please login again.", {
+          code: ERROR_CODES.TOKEN_EXPIRED,
+          extra: { forceLogout: true },
+        }));
       }
       const { activity, user, isVisitorBanned } = await loadAuthenticatedSessionSnapshot(storage, decoded);
 
       if (!activity || activity.isActive === false || activity.logoutTime !== null) {
         clearAuthSessionCookie(res);
-        return res.status(401).json({
-          message: getInvalidatedSessionMessage(activity?.logoutReason),
-          forceLogout: true,
-        });
+        return res.status(401).json(buildAuthGuardErrorResponse(401, getInvalidatedSessionMessage(activity?.logoutReason), {
+          code: ERROR_CODES.TOKEN_EXPIRED,
+          extra: { forceLogout: true },
+        }));
       }
 
       if (isVisitorBanned) {
         clearAuthSessionCookie(res);
-        return res.status(401).json({
-          message: "Session banned. Please login again.",
-          forceLogout: true,
-        });
+        return res.status(401).json(buildAuthGuardErrorResponse(401, "Session banned. Please login again.", {
+          code: ERROR_CODES.ACCOUNT_BANNED,
+          extra: { forceLogout: true },
+        }));
       }
 
       if (!user) {
@@ -378,10 +393,10 @@ export function createAuthGuards(options: CreateAuthGuardsOptions) {
           logoutReason: "USER_NOT_FOUND",
         });
         clearAuthSessionCookie(res);
-        return res.status(401).json({
-          message: "Session expired. Please login again.",
-          forceLogout: true,
-        });
+        return res.status(401).json(buildAuthGuardErrorResponse(401, "Session expired. Please login again.", {
+          code: ERROR_CODES.USER_NOT_FOUND,
+          extra: { forceLogout: true },
+        }));
       }
 
       const blockReason = getAccountAccessBlockReason(user);
@@ -392,32 +407,34 @@ export function createAuthGuards(options: CreateAuthGuardsOptions) {
           logoutReason: blockReason.toUpperCase(),
         });
         clearAuthSessionCookie(res);
-        return res.status(blockReason === "banned" ? 403 : blockReason === "locked" ? 423 : 401).json({
-          message: blockReason === "banned"
-            ? "Account is banned"
-            : blockReason === "locked"
-              ? "Your account has been locked due to too many incorrect login attempts. Please contact the system administrator."
-              : "Session expired. Please login again.",
-          banned: blockReason === "banned",
-          locked: blockReason === "locked",
-          forceLogout: true,
-          code:
-            blockReason === "banned"
-              ? ERROR_CODES.ACCOUNT_BANNED
-              : blockReason === "locked"
-                ? ERROR_CODES.ACCOUNT_LOCKED
-                : ERROR_CODES.ACCOUNT_UNAVAILABLE,
-        });
+        const statusCode = blockReason === "banned" ? 403 : blockReason === "locked" ? 423 : 401;
+        const message = blockReason === "banned"
+          ? "Account is banned"
+          : blockReason === "locked"
+            ? "Your account has been locked due to too many incorrect login attempts. Please contact the system administrator."
+            : "Session expired. Please login again.";
+        const code = blockReason === "banned"
+          ? ERROR_CODES.ACCOUNT_BANNED
+          : blockReason === "locked"
+            ? ERROR_CODES.ACCOUNT_LOCKED
+            : ERROR_CODES.ACCOUNT_UNAVAILABLE;
+        return res.status(statusCode).json(buildAuthGuardErrorResponse(statusCode, message, {
+          code,
+          extra: {
+            banned: blockReason === "banned",
+            locked: blockReason === "locked",
+            forceLogout: true,
+          },
+        }));
       }
 
       const forcePasswordChange =
         user.mustChangePassword === true && !canUserBypassForcedPasswordChange(user.role);
       if (forcePasswordChange && !canAccessDuringForcedPasswordChange(req.method, req.path)) {
-        return res.status(403).json({
-          message: "Password change required before accessing the application.",
+        return res.status(403).json(buildAuthGuardErrorResponse(403, "Password change required before accessing the application.", {
           code: ERROR_CODES.PASSWORD_CHANGE_REQUIRED,
-          forcePasswordChange: true,
-        });
+          extra: { forcePasswordChange: true },
+        }));
       }
 
       const missingIdentityFields = [
@@ -447,20 +464,19 @@ export function createAuthGuards(options: CreateAuthGuardsOptions) {
           logoutReason: "USER_IDENTITY_INCOMPLETE",
         });
         clearAuthSessionCookie(res);
-        return res.status(401).json({
-          message: "Session expired. Please login again.",
-          forceLogout: true,
+        return res.status(401).json(buildAuthGuardErrorResponse(401, "Session expired. Please login again.", {
           code: ERROR_CODES.ACCOUNT_UNAVAILABLE,
-        });
+          extra: { forceLogout: true },
+        }));
       }
 
       const activityUpdateResult = await activityUpdates.updateAuthenticatedActivity(decoded.activityId);
       if (activityUpdateResult === "stale") {
         clearAuthSessionCookie(res);
-        return res.status(401).json({
-          message: "Session expired. Please login again.",
-          forceLogout: true,
-        });
+        return res.status(401).json(buildAuthGuardErrorResponse(401, "Session expired. Please login again.", {
+          code: ERROR_CODES.TOKEN_EXPIRED,
+          extra: { forceLogout: true },
+        }));
       }
 
       let refreshedSessionToken: RefreshedSessionToken | null = null;
@@ -496,10 +512,9 @@ export function createAuthGuards(options: CreateAuthGuardsOptions) {
             error: sanitizeSessionRefreshRevocationError(error),
           });
           clearAuthSessionCookie(res);
-          return res.status(503).json({
-            message: "Session refresh is temporarily unavailable. Please try again.",
+          return res.status(503).json(buildAuthGuardErrorResponse(503, "Session refresh is temporarily unavailable. Please try again.", {
             code: "SESSION_REFRESH_UNAVAILABLE",
-          });
+          }));
         }
 
         if (tokenSource === "cookie") {
@@ -537,18 +552,20 @@ export function createAuthGuards(options: CreateAuthGuardsOptions) {
         error: (error as Error)?.message,
       });
       clearAuthSessionCookie(res);
-      return res.status(401).json({ message: "Invalid token" });
+      return res.status(401).json(buildAuthGuardErrorResponse(401, "Invalid token", {
+        code: ERROR_CODES.INVALID_TOKEN,
+      }));
     }
   };
 
   const requireRole = (...roles: string[]): RequestHandler => {
     return (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
       if (!req.user) {
-        return res.status(401).json({ message: "Unauthenticated" });
+        return res.status(401).json(buildAuthGuardErrorResponse(401, "Unauthenticated"));
       }
 
       if (!roles.includes(req.user.role)) {
-        return res.status(403).json({ message: "Insufficient permissions" });
+        return res.status(403).json(buildAuthGuardErrorResponse(403, "Insufficient permissions"));
       }
       return next();
     };
@@ -559,13 +576,13 @@ export function createAuthGuards(options: CreateAuthGuardsOptions) {
       try {
         const role = req.user?.role;
         if (!role) {
-          return res.status(401).json({ message: "Unauthenticated" });
+          return res.status(401).json(buildAuthGuardErrorResponse(401, "Unauthenticated"));
         }
         if (role === "superuser") {
           return next();
         }
         if (role !== "admin" && role !== "user") {
-          return res.status(403).json({ message: "Insufficient permissions" });
+          return res.status(403).json(buildAuthGuardErrorResponse(403, "Insufficient permissions"));
         }
 
         const tabs = await tabVisibility.getRoleTabVisibilityCached(role);
@@ -573,7 +590,9 @@ export function createAuthGuards(options: CreateAuthGuardsOptions) {
         const enabled = hasExplicit ? tabs[tabId] !== false : false;
 
         if (!enabled) {
-          return res.status(403).json({ message: `Tab '${tabId}' is disabled for role '${role}'` });
+          return res.status(403).json(buildAuthGuardErrorResponse(403, `Tab '${tabId}' is disabled for role '${role}'`, {
+            code: "TAB_ACCESS_DISABLED",
+          }));
         }
 
         return next();
@@ -582,7 +601,7 @@ export function createAuthGuards(options: CreateAuthGuardsOptions) {
           tabId,
           message: (error as Error)?.message,
         });
-        return res.status(500).json({ message: "Failed to validate tab access" });
+        return res.status(500).json(buildAuthGuardErrorResponse(500, "Failed to validate tab access"));
       }
     };
   };
@@ -595,18 +614,20 @@ export function createAuthGuards(options: CreateAuthGuardsOptions) {
     try {
       const role = req.user?.role;
       if (!role) {
-        return res.status(401).json({ message: "Unauthenticated" });
+        return res.status(401).json(buildAuthGuardErrorResponse(401, "Unauthenticated"));
       }
       if (role === "superuser") {
         return next();
       }
       if (role !== "admin" && role !== "user") {
-        return res.status(403).json({ message: "Insufficient permissions" });
+        return res.status(403).json(buildAuthGuardErrorResponse(403, "Insufficient permissions"));
       }
 
       const tabs = await tabVisibility.getRoleTabVisibilityCached(role);
       if (tabs.monitor !== true) {
-        return res.status(403).json({ message: "System Monitor access is disabled for this role." });
+        return res.status(403).json(buildAuthGuardErrorResponse(403, "System Monitor access is disabled for this role.", {
+          code: "MONITOR_ACCESS_DISABLED",
+        }));
       }
 
       return next();
@@ -614,7 +635,7 @@ export function createAuthGuards(options: CreateAuthGuardsOptions) {
       logger.error("Monitor access guard error", {
         message: (error as Error)?.message,
       });
-      return res.status(500).json({ message: "Failed to validate monitor access" });
+      return res.status(500).json(buildAuthGuardErrorResponse(500, "Failed to validate monitor access"));
     }
   };
 

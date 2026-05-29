@@ -183,6 +183,7 @@ test("registerLocalHttpPipeline rejects unsupported API versions while preservin
     assert.equal(unsupportedVersionResponse.status, 406);
     const unsupportedVersionPayload = await unsupportedVersionResponse.json() as {
       ok: boolean;
+      code?: string;
       message: string;
       requestId?: string;
       error?: {
@@ -196,6 +197,7 @@ test("registerLocalHttpPipeline rejects unsupported API versions while preservin
     };
     assert.equal(unsupportedVersionPayload.ok, false);
     assert.equal(unsupportedVersionPayload.message, "Unsupported API version.");
+    assert.equal(unsupportedVersionPayload.code, "UNSUPPORTED_API_VERSION");
     assert.equal(typeof unsupportedVersionPayload.requestId, "string");
     assert.deepEqual(unsupportedVersionPayload.error, {
       code: "UNSUPPORTED_API_VERSION",
@@ -204,6 +206,7 @@ test("registerLocalHttpPipeline rejects unsupported API versions while preservin
         requestedVersion: "2",
         supportedVersions: ["1"],
       },
+      requestId: unsupportedVersionPayload.requestId,
     });
 
     const nonApiResponse = await fetch(`${baseUrl}/versioned`, {

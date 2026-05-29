@@ -8,6 +8,7 @@ import {
   importRecordSchema,
   importsListResponseSchema,
 } from "../../../shared/api-contracts";
+import { ERROR_CODES } from "../../../shared/error-codes";
 import { createImportsController } from "../../controllers/imports.controller";
 import { errorHandler } from "../../middleware/error-handler";
 import type { ImportWithRowCount, ImportsRepository } from "../../repositories/imports.repository";
@@ -30,6 +31,18 @@ type AuditEntry = {
   targetResource?: string;
   details?: string;
 };
+
+function expectApiError(message: string, code: string) {
+  return {
+    ok: false,
+    message,
+    code,
+    error: {
+      code,
+      message,
+    },
+  };
+}
 
 function createAnalysisPayload(importRecord: { id: string; name: string; filename: string }, totalRows = 2) {
   return {
@@ -502,10 +515,10 @@ test("GET /api/imports rejects malformed cursor tokens", async () => {
   try {
     const response = await fetch(`${baseUrl}/api/imports?cursor=bad-cursor`);
     assert.equal(response.status, 400);
-    assert.deepEqual(await response.json(), {
-      ok: false,
-      message: "Invalid imports cursor.",
-    });
+    assert.deepEqual(
+      await response.json(),
+      expectApiError("Invalid imports cursor.", ERROR_CODES.REQUEST_BODY_INVALID),
+    );
   } finally {
     await stopTestServer(server);
   }
@@ -518,10 +531,10 @@ test("GET /api/data-rows requires an importId", async () => {
   try {
     const response = await fetch(`${baseUrl}/api/data-rows`);
     assert.equal(response.status, 400);
-    assert.deepEqual(await response.json(), {
-      ok: false,
-      message: "importId is required",
-    });
+    assert.deepEqual(
+      await response.json(),
+      expectApiError("importId is required", ERROR_CODES.REQUEST_BODY_INVALID),
+    );
   } finally {
     await stopTestServer(server);
   }
@@ -589,10 +602,10 @@ test("POST /api/imports rejects requests without data rows", async () => {
     });
 
     assert.equal(response.status, 400);
-    assert.deepEqual(await response.json(), {
-      ok: false,
-      message: "No data rows provided",
-    });
+    assert.deepEqual(
+      await response.json(),
+      expectApiError("No data rows provided", ERROR_CODES.REQUEST_BODY_INVALID),
+    );
     assert.equal(createImportCalls.length, 0);
     assert.equal(createDataRowCalls.length, 0);
     assert.equal(auditLogs.length, 0);
@@ -841,10 +854,7 @@ test("GET /api/imports/:id/analyze returns a 404 for missing imports", async () 
   try {
     const response = await fetch(`${baseUrl}/api/imports/missing-import/analyze`);
     assert.equal(response.status, 404);
-    assert.deepEqual(await response.json(), {
-      ok: false,
-      message: "Import not found",
-    });
+    assert.deepEqual(await response.json(), expectApiError("Import not found", "NOT_FOUND"));
     assert.equal(analyzeImportCalls.length, 0);
   } finally {
     await stopTestServer(server);
@@ -1018,10 +1028,10 @@ test("GET /api/imports/:id/data rejects malformed cursor tokens", async () => {
   try {
     const response = await fetch(`${baseUrl}/api/imports/import-1/data?page=2&cursor=bad-cursor`);
     assert.equal(response.status, 400);
-    assert.deepEqual(await response.json(), {
-      ok: false,
-      message: "Invalid import data cursor.",
-    });
+    assert.deepEqual(
+      await response.json(),
+      expectApiError("Invalid import data cursor.", ERROR_CODES.REQUEST_BODY_INVALID),
+    );
   } finally {
     await stopTestServer(server);
   }
@@ -1034,10 +1044,10 @@ test("GET /api/imports/:id/data rejects malformed column filters", async () => {
   try {
     const response = await fetch(`${baseUrl}/api/imports/import-1/data?page=1&columnFilters=%7Bbad-json`);
     assert.equal(response.status, 400);
-    assert.deepEqual(await response.json(), {
-      ok: false,
-      message: "Invalid viewer column filters.",
-    });
+    assert.deepEqual(
+      await response.json(),
+      expectApiError("Invalid viewer column filters.", ERROR_CODES.REQUEST_BODY_INVALID),
+    );
   } finally {
     await stopTestServer(server);
   }
@@ -1090,10 +1100,7 @@ test("PATCH /api/imports/:id/rename returns 404 when the import is missing", asy
     });
 
     assert.equal(response.status, 404);
-    assert.deepEqual(await response.json(), {
-      ok: false,
-      message: "Import not found",
-    });
+    assert.deepEqual(await response.json(), expectApiError("Import not found", "NOT_FOUND"));
   } finally {
     await stopTestServer(server);
   }
@@ -1134,10 +1141,7 @@ test("DELETE /api/imports/:id returns 404 when the import is missing", async () 
     });
 
     assert.equal(response.status, 404);
-    assert.deepEqual(await response.json(), {
-      ok: false,
-      message: "Import not found",
-    });
+    assert.deepEqual(await response.json(), expectApiError("Import not found", "NOT_FOUND"));
   } finally {
     await stopTestServer(server);
   }

@@ -83,6 +83,19 @@ function createMockResponse() {
   };
 }
 
+function expectApiError(message: string, code: string, extra?: Record<string, unknown>) {
+  return {
+    ok: false,
+    message,
+    ...(extra ?? {}),
+    code,
+    error: {
+      code,
+      message,
+    },
+  };
+}
+
 function createRedisRevocationError(code: string, message = "Redis revocation command failed") {
   const error = new Error(message) as Error & { code: string };
   error.code = code;
@@ -483,11 +496,11 @@ test("authenticateToken invalidates sessions with missing database identity fiel
 
     assert.equal(nextCalls, 0);
     assert.equal(response.statusCode, 401);
-    assert.deepEqual(response.body, {
-      message: "Session expired. Please login again.",
-      forceLogout: true,
-      code: "ACCOUNT_UNAVAILABLE",
-    });
+    assert.deepEqual(response.body, expectApiError(
+      "Session expired. Please login again.",
+      "ACCOUNT_UNAVAILABLE",
+      { forceLogout: true },
+    ));
     assert.equal(updateCalls, 1);
     assert.equal(warnings.length, 1);
     assert.equal(warnings[0].message, "Authenticated session invalidated because database identity fields are missing");
@@ -560,7 +573,7 @@ test("authenticateToken rejects structurally invalid JWT payloads before storage
     assert.equal(nextCalls, 0);
     assert.equal(storageLookupCount, 0);
     assert.equal(response.statusCode, 401);
-    assert.deepEqual(response.body, { message: "Invalid token" });
+    assert.deepEqual(response.body, expectApiError("Invalid token", "INVALID_TOKEN"));
   } finally {
     guards.stopTabVisibilityCacheSweep();
     guards.stopActivityUpdateCacheSweep();
@@ -802,10 +815,11 @@ test("authenticateToken rejects a JWT that was revoked during logout", async () 
     );
 
     assert.equal(response.statusCode, 401);
-    assert.deepEqual(response.body, {
-      message: "Session expired. Please login again.",
-      forceLogout: true,
-    });
+    assert.deepEqual(response.body, expectApiError(
+      "Session expired. Please login again.",
+      "TOKEN_EXPIRED",
+      { forceLogout: true },
+    ));
     assert.equal(nextCalls, 0);
     assert.equal(snapshotCalls, 0);
     assert.equal(updateCalls, 0);
@@ -959,10 +973,11 @@ test("authenticateToken refreshes a bearer JWT inside the final 20 percent of TT
 
     assert.equal(rejectedNextCalls, 0);
     assert.equal(rejectedResponse.statusCode, 401);
-    assert.deepEqual(rejectedResponse.body, {
-      message: "Session expired. Please login again.",
-      forceLogout: true,
-    });
+    assert.deepEqual(rejectedResponse.body, expectApiError(
+      "Session expired. Please login again.",
+      "TOKEN_EXPIRED",
+      { forceLogout: true },
+    ));
   } finally {
     guards.stopTabVisibilityCacheSweep();
     guards.stopActivityUpdateCacheSweep();
@@ -1344,10 +1359,10 @@ test("authenticateToken fails closed when JWT refresh revocation retries are exh
     assert.equal(revokeAttempts, 2);
     assert.equal(response.getHeader(AUTH_SESSION_REFRESH_HEADER_NAME), undefined);
     assert.equal(response.statusCode, 503);
-    assert.deepEqual(response.body, {
-      message: "Session refresh is temporarily unavailable. Please try again.",
-      code: "SESSION_REFRESH_UNAVAILABLE",
-    });
+    assert.deepEqual(response.body, expectApiError(
+      "Session refresh is temporarily unavailable. Please try again.",
+      "SESSION_REFRESH_UNAVAILABLE",
+    ));
     assert.equal(warnings.length, 1);
     assert.equal(warnings[0]?.payload?.attempt, 1);
     assert.deepEqual(warnings[0]?.payload?.error, {
@@ -1495,10 +1510,11 @@ test("authenticateToken rejects a session invalidated between snapshot load and 
   guards.stopActivityUpdateCacheSweep();
 
   assert.equal(response.statusCode, 401);
-  assert.deepEqual(response.body, {
-    message: "Session expired. Please login again.",
-    forceLogout: true,
-  });
+  assert.deepEqual(response.body, expectApiError(
+    "Session expired. Please login again.",
+    "TOKEN_EXPIRED",
+    { forceLogout: true },
+  ));
   assert.equal(snapshotCalls, 1);
   assert.equal(touchCalls, 1);
   assert.equal(updateCalls, 0);
@@ -1549,7 +1565,7 @@ test("authenticateToken returns 401 for invalid and expired JWTs", async () => {
     );
 
     assert.equal(response.statusCode, 401);
-    assert.deepEqual(response.body, { message: "Invalid token" });
+    assert.deepEqual(response.body, expectApiError("Invalid token", "INVALID_TOKEN"));
     assert.equal(nextCalls, 0);
   }
 
@@ -1578,7 +1594,7 @@ test("requireRole returns 401 when there is no authenticated user", () => {
   guards.stopTabVisibilityCacheSweep();
 
   assert.equal(response.statusCode, 401);
-  assert.deepEqual(response.body, { message: "Unauthenticated" });
+  assert.deepEqual(response.body, expectApiError("Unauthenticated", "UNAUTHORIZED"));
   assert.equal(nextCalls, 0);
 });
 
@@ -1608,6 +1624,6 @@ test("requireRole returns 403 when the authenticated user lacks the required rol
   guards.stopTabVisibilityCacheSweep();
 
   assert.equal(response.statusCode, 403);
-  assert.deepEqual(response.body, { message: "Insufficient permissions" });
+  assert.deepEqual(response.body, expectApiError("Insufficient permissions", "PERMISSION_DENIED"));
   assert.equal(nextCalls, 0);
 });

@@ -1,6 +1,6 @@
 import type { NextFunction, Request, Response } from "express";
 import { ERROR_CODES } from "../../shared/error-codes";
-import { sanitizeHttpErrorDetails } from "../http/error-details";
+import { buildApiErrorResponse } from "../http/api-error-response";
 import { HttpError } from "../http/errors";
 import { sanitizeRequestId } from "../http/request-id";
 import { wasRouteErrorLogged } from "../http/route-observability";
@@ -12,17 +12,6 @@ type ErrorLike = {
   type?: string;
   status?: number;
   statusCode?: number;
-};
-
-type ApiErrorResponse = {
-  ok: false;
-  message: string;
-  requestId?: string;
-  error?: {
-    code?: string;
-    message: string;
-    details?: unknown;
-  };
 };
 
 function readCorrelationRequestId(req: Request, res: Response): string | undefined {
@@ -37,36 +26,6 @@ function readCorrelationRequestId(req: Request, res: Response): string | undefin
   return requestHeader || undefined;
 }
 
-function buildApiErrorResponse(
-  message: string,
-  options?: {
-    code?: string | undefined;
-    details?: unknown;
-    includeError?: boolean | undefined;
-    requestId?: string | undefined;
-  },
-): ApiErrorResponse {
-  const sanitizedDetails = options?.details !== undefined
-    ? sanitizeHttpErrorDetails(options.details)
-    : undefined;
-  const includeError = options?.includeError || Boolean(options?.code || sanitizedDetails !== undefined);
-
-  return {
-    ok: false,
-    message,
-    ...(options?.requestId ? { requestId: options.requestId } : {}),
-    ...(includeError
-      ? {
-          error: {
-            ...(options?.code ? { code: options.code } : {}),
-            message,
-            ...(sanitizedDetails !== undefined ? { details: sanitizedDetails } : {}),
-          },
-        }
-      : {}),
-  };
-}
-
 export function errorHandler(err: unknown, req: Request, res: Response, next: NextFunction) {
   if (res.headersSent) {
     return next(err);
@@ -78,8 +37,8 @@ export function errorHandler(err: unknown, req: Request, res: Response, next: Ne
   if (error?.type === "entity.too.large" || error?.status === 413 || error?.statusCode === 413) {
     return res.status(413).json(buildApiErrorResponse("The request payload is too large to process.", {
       code: ERROR_CODES.PAYLOAD_TOO_LARGE,
-      includeError: true,
       requestId,
+      statusCode: 413,
     }));
   }
 
@@ -98,11 +57,13 @@ export function errorHandler(err: unknown, req: Request, res: Response, next: Ne
 
       return res.status(err.statusCode).json(buildApiErrorResponse("Internal server error", {
         requestId,
+        statusCode: err.statusCode,
       }));
     }
 
     return res.status(err.statusCode).json(buildApiErrorResponse(err.message, {
       requestId,
+      statusCode: err.statusCode,
       ...(err.code ? { code: err.code } : {}),
       ...(err.details !== undefined ? { details: err.details } : {}),
     }));
@@ -120,5 +81,6 @@ export function errorHandler(err: unknown, req: Request, res: Response, next: Ne
 
   return res.status(500).json(buildApiErrorResponse("Internal server error", {
     requestId,
+    statusCode: 500,
   }));
 }
