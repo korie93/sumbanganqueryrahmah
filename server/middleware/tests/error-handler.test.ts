@@ -4,7 +4,7 @@ import express from "express";
 import { apiErrorPayloadSchema } from "../../../shared/api-contracts";
 import { ERROR_CODES } from "../../../shared/error-codes";
 import { HttpError, badRequest } from "../../http/errors";
-import { errorHandler } from "../error-handler";
+import { createErrorHandler, errorHandler } from "../error-handler";
 import { startTestServer, stopTestServer } from "../../routes/tests/http-test-utils";
 
 function expectApiError(message: string, code: string, options?: {
@@ -212,6 +212,73 @@ test("errorHandler sanitizes request ids before returning error payloads", async
     assert.equal(response.status, 500);
     assert.doesNotThrow(() => apiErrorPayloadSchema.parse(payload));
     assert.equal(payload.requestId, "api-scriptbadid123");
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("errorHandler replaces production exposed SQL errors with a generic response", async () => {
+  const app = express();
+  app.get("/bad-query", () => {
+    throw badRequest("SELECT password FROM users WHERE id = 1", "QUERY_REJECTED");
+  });
+  app.use(createErrorHandler({ productionLike: true }));
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const response = await fetch(`${baseUrl}/bad-query`);
+    const payload = await response.json();
+
+    assert.equal(response.status, 400);
+    assert.doesNotThrow(() => apiErrorPayloadSchema.parse(payload));
+    assert.deepEqual(payload, expectApiError("Invalid request.", "QUERY_REJECTED"));
+    assert.equal(JSON.stringify(payload).includes("SELECT password"), false);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("errorHandler strips production exposed stack and file path details", async () => {
+  const app = express();
+  app.get("/bad-stack", () => {
+    throw badRequest("Invalid request.", "STACK_REJECTED", {
+      stack: "Error: leaked\n    at handler (C:\\srv\\app\\server\\routes\\secret.ts:12:4)",
+      filePath: "/var/www/sqr/server/routes/secret.ts",
+      retryable: false,
+    });
+  });
+  app.use(createErrorHandler({ productionLike: true }));
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const response = await fetch(`${baseUrl}/bad-stack`);
+    const payload = await response.json();
+    const serialized = JSON.stringify(payload);
+
+    assert.equal(response.status, 400);
+    assert.doesNotThrow(() => apiErrorPayloadSchema.parse(payload));
+    assert.deepEqual(payload, expectApiError("Invalid request.", "STACK_REJECTED"));
+    assert.equal(serialized.includes("secret.ts"), false);
+    assert.equal(serialized.includes("/var/www"), false);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("errorHandler keeps detailed exposed messages outside production-like mode", async () => {
+  const app = express();
+  app.get("/dev-query", () => {
+    throw badRequest("SELECT name FROM users WHERE id = 1", "QUERY_REJECTED");
+  });
+  app.use(createErrorHandler({ productionLike: false }));
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const response = await fetch(`${baseUrl}/dev-query`);
+    const payload = await response.json();
+
+    assert.equal(response.status, 400);
+    assert.deepEqual(payload, expectApiError("SELECT name FROM users WHERE id = 1", "QUERY_REJECTED"));
   } finally {
     await stopTestServer(server);
   }
