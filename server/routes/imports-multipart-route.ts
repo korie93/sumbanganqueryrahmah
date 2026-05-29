@@ -29,12 +29,59 @@ type MultipartTrackedStreamCleanupObserver = (
   error: Error | undefined,
 ) => void;
 
+type MultipartResponseLocals = Record<string, unknown> & {
+  multipartImportUpload?: PreparedMultipartImportUpload;
+};
+
+type MultipartResponseLifecycle = {
+  once(event: "finish" | "close", listener: () => void): unknown;
+};
+
 function toMultipartCleanupError(error: unknown): Error | undefined {
   if (error instanceof Error) {
     return error;
   }
 
   return error == null ? undefined : new Error(String(error));
+}
+
+function attachPreparedUploadResponseCleanup(params: {
+  res: MultipartResponseLifecycle;
+  responseLocals: MultipartResponseLocals;
+  upload: PreparedMultipartImportUpload;
+  onCleanupFailure: (
+    step: string,
+    cleanupFailure: unknown,
+    details?: Record<string, unknown>,
+  ) => void;
+}) {
+  const { res, responseLocals, upload, onCleanupFailure } = params;
+  if (upload.kind !== "csv-file") {
+    return;
+  }
+
+  let cleanupStarted = false;
+  const cleanupOnce = (reason: "response-finish" | "response-close") => {
+    if (cleanupStarted || responseLocals.multipartImportUpload !== upload) {
+      return;
+    }
+
+    cleanupStarted = true;
+    void (async () => {
+      try {
+        await cleanupPreparedMultipartImportUpload(upload);
+      } catch (cleanupFailure) {
+        onCleanupFailure("prepared-upload-response", cleanupFailure, { reason });
+      } finally {
+        if (responseLocals.multipartImportUpload === upload) {
+          delete responseLocals.multipartImportUpload;
+        }
+      }
+    })();
+  };
+
+  res.once("finish", () => cleanupOnce("response-finish"));
+  res.once("close", () => cleanupOnce("response-close"));
 }
 
 export function cleanupTrackedMultipartUploadStreamsForTests(
@@ -88,8 +135,8 @@ export function createImportsMultipartRoute(
       return;
     }
 
-    const responseLocals = ((res as unknown as { locals?: Record<string, unknown> }).locals
-      ?? {}) as Record<string, unknown>;
+    const responseLocals = ((res as unknown as { locals?: MultipartResponseLocals }).locals
+      ?? {}) as MultipartResponseLocals;
     (res as unknown as { locals?: Record<string, unknown> }).locals = responseLocals;
     const quotaSubject = String(req.user?.username || "").trim().toLowerCase();
     const reservedQuotaBytes = quotaSubject ? safeMaxFileSizeBytes : 0;
@@ -243,6 +290,12 @@ export function createImportsMultipartRoute(
           body.data = upload.dataRows;
         } else {
           responseLocals.multipartImportUpload = upload;
+          attachPreparedUploadResponseCleanup({
+            res: res as unknown as MultipartResponseLifecycle,
+            responseLocals,
+            upload,
+            onCleanupFailure: logMultipartCleanupFailure,
+          });
         }
         releaseQuota();
         settled = true;

@@ -176,4 +176,5 @@ test("cleanupPreparedMultipartImportUpload logs cleanup failures before removing
   assert.equal(warnings.length, 1);
   assert.equal(warnings[0]?.message, "Failed to cleanup staged import upload path");
   assert.equal(warnings[0]?.meta?.targetType, "file");
+  assert.equal("targetPath" in (warnings[0]?.meta ?? {}), false);
 });

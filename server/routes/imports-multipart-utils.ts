@@ -55,7 +55,6 @@ async function cleanupImportUploadPath(
     await rm(targetPath, options);
   } catch (error) {
     logger.warn("Failed to cleanup staged import upload path", {
-      targetPath,
       targetType,
       error: error instanceof Error ? error.message : "Unknown cleanup failure",
     });

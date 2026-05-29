@@ -1,11 +1,15 @@
 import assert from "node:assert/strict";
+import { EventEmitter } from "node:events";
+import { access } from "node:fs/promises";
 import { PassThrough } from "node:stream";
+import { setTimeout as delay } from "node:timers/promises";
 import test from "node:test";
 import {
   cleanupTrackedMultipartUploadStreamsForTests,
   createImportsMultipartRoute,
 } from "../imports-multipart-route";
 import { createActiveImportUploadQuotaTracker } from "../imports-upload-quota";
+import type { PreparedMultipartImportUpload } from "../imports-multipart-utils";
 
 type MultipartPart =
   | { kind: "field"; name: string; value: string }
@@ -43,6 +47,26 @@ function buildMultipartBody(boundary: string, parts: MultipartPart[]) {
 
   chunks.push(Buffer.from(`--${boundary}--\r\n`, "utf8"));
   return Buffer.concat(chunks);
+}
+
+async function pathExists(filePath: string) {
+  try {
+    await access(filePath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function waitForPathRemoval(filePath: string) {
+  for (let attempt = 0; attempt < 30; attempt += 1) {
+    if (!(await pathExists(filePath))) {
+      return;
+    }
+    await delay(10);
+  }
+
+  assert.fail(`Expected path to be removed: ${filePath}`);
 }
 
 async function runMultipartHandler(
@@ -86,7 +110,7 @@ async function runMultipartHandler(
       req.user = { username: options.username };
     }
 
-    const res = {
+    const res = Object.assign(new EventEmitter(), {
       locals: {} as Record<string, unknown>,
       status(statusCode: number) {
         return {
@@ -95,7 +119,7 @@ async function runMultipartHandler(
           },
         };
       },
-    };
+    });
 
     handler(req as never, res as never, () => {
       complete({ kind: "next", body: req.body, locals: res.locals });
@@ -156,6 +180,64 @@ test("createImportsMultipartRoute parses multipart uploads and normalizes the im
     name: "March Batch",
   });
   assert.equal(result.locals?.multipartImportUpload !== undefined, true);
+});
+
+test("createImportsMultipartRoute cleans staged CSV uploads if downstream leaves ownership unclaimed", async () => {
+  const handler = createImportsMultipartRoute(0);
+  const boundary = "----codex-import-multipart-boundary";
+  const body = buildMultipartBody(boundary, [
+    {
+      kind: "file",
+      name: "file",
+      filename: "customers.csv",
+      contentType: "text/csv",
+      content: "name,amount\nAlice,12\n",
+    },
+  ]);
+  const req = new PassThrough() as PassThrough & {
+    headers: Record<string, string>;
+    is: (type: string) => boolean;
+    body?: Record<string, unknown>;
+  };
+  const res = Object.assign(new EventEmitter(), {
+    locals: {} as Record<string, unknown>,
+    status() {
+      return {
+        json() {
+          throw new Error("The successful multipart path should call next().");
+        },
+      };
+    },
+  });
+
+  req.headers = {
+    "content-type": `multipart/form-data; boundary=${boundary}`,
+  };
+  req.is = (type: string) => type === "multipart/form-data";
+
+  const upload = await new Promise<PreparedMultipartImportUpload>((resolve) => {
+    handler(req as never, res as never, () => {
+      const stagedUpload = res.locals.multipartImportUpload as PreparedMultipartImportUpload;
+      resolve(stagedUpload);
+    });
+    req.end(body);
+  });
+
+  assert.equal(upload.kind, "csv-file");
+  if (upload.kind !== "csv-file") {
+    return;
+  }
+
+  assert.equal(await pathExists(upload.filePath), true);
+  assert.equal(await pathExists(upload.tempDir), true);
+
+  res.emit("finish");
+  await waitForPathRemoval(upload.filePath);
+  await waitForPathRemoval(upload.tempDir);
+  assert.equal(res.locals.multipartImportUpload, undefined);
+
+  res.emit("close");
+  assert.equal(res.locals.multipartImportUpload, undefined);
 });
 
 test("createImportsMultipartRoute rejects multipart requests without a file", async () => {
