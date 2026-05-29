@@ -1,4 +1,5 @@
 import { createFallbackExternalScanConfig, readExternalScanConfig } from "./collection-receipt-external-scan-config";
+import { isProductionLikeEnvironment } from "../config/runtime-environment";
 import { validateExternalScanCommand, validateExternalScanFilePath } from "./collection-receipt-external-scan-paths";
 import { createOperationalScanError, runExternalReceiptScan } from "./collection-receipt-external-scan-runner";
 import { buildScanArgs } from "./collection-receipt-external-scan-shared";
@@ -33,7 +34,9 @@ export async function scanCollectionReceiptWithExternalScanner(filePath: string)
 
   let scannerCommand: string;
   try {
-    scannerCommand = await validateExternalScanCommand(config.command);
+    scannerCommand = await validateExternalScanCommand(config.command, {
+      allowDevelopmentScannerShim: !isProductionLikeEnvironment(),
+    });
   } catch (error) {
     const operational = createOperationalScanError(
       config,

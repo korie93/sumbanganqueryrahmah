@@ -118,7 +118,9 @@ export async function verifyCollectionReceiptExternalScanStartup(params: {
 
   let scannerCommand: string;
   try {
-    scannerCommand = await validateExternalScanCommand(config.command);
+    scannerCommand = await validateExternalScanCommand(config.command, {
+      allowDevelopmentScannerShim: !params.isProductionLike,
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     if (params.isProductionLike) {

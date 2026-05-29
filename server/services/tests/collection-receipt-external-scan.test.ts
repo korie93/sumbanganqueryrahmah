@@ -5,6 +5,7 @@ import path from "node:path";
 import test from "node:test";
 import { CollectionReceiptSecurityError } from "../../lib/collection-receipt-security";
 import { scanCollectionReceiptWithExternalScanner } from "../../lib/collection-receipt-external-scan";
+import { validateExternalScanCommand } from "../../lib/collection-receipt-external-scan-paths";
 import { DEFAULT_COLLECTION_RECEIPT_EXTERNAL_SCAN_TIMEOUT_MS } from "../../lib/collection-receipt-external-scan-shared";
 
 const ENV_KEYS = [
@@ -44,8 +45,49 @@ async function withTemporaryReceiptFile<T>(
   }
 }
 
+async function withTemporaryExecutable<T>(
+  executableName: string,
+  run: (filePath: string) => Promise<T> | T,
+): Promise<T> {
+  const temporaryDirectory = await fs.mkdtemp(path.join(os.tmpdir(), "receipt-external-scanner-command-"));
+  const filePath = path.join(temporaryDirectory, executableName);
+  await fs.writeFile(filePath, "#!/bin/sh\nexit 0\n", "utf8");
+  if (process.platform !== "win32") {
+    await fs.chmod(filePath, 0o755);
+  }
+
+  try {
+    return await run(filePath);
+  } finally {
+    await fs.rm(temporaryDirectory, { recursive: true, force: true });
+  }
+}
+
 test("external receipt scanner default timeout allows cold antivirus signature loading", () => {
   assert.equal(DEFAULT_COLLECTION_RECEIPT_EXTERNAL_SCAN_TIMEOUT_MS, 60_000);
+});
+
+test("external receipt scanner rejects scanner executables outside approved directories", async () => {
+  const executableName = process.platform === "win32" ? "clamdscan.exe" : "clamdscan";
+  await withTemporaryExecutable(executableName, async (scannerPath) => {
+    await assert.rejects(
+      () => validateExternalScanCommand(scannerPath, { allowDevelopmentScannerShim: false }),
+      /approved scanner directory/i,
+    );
+  });
+});
+
+test("external receipt scanner rejects the development node shim in production-like validation", async () => {
+  await assert.rejects(
+    () => validateExternalScanCommand(process.execPath, { allowDevelopmentScannerShim: false }),
+    /approved scanner executable/i,
+  );
+});
+
+test("external receipt scanner allows the current node executable only as an explicit development shim", async () => {
+  await assert.doesNotReject(
+    () => validateExternalScanCommand(process.execPath, { allowDevelopmentScannerShim: true }),
+  );
 });
 
 test("external receipt scanner rejects shell-style command strings", async () => {

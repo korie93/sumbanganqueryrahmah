@@ -99,7 +99,7 @@ test("receipt external scanner startup check fails production when disabled", as
   );
 });
 
-test("receipt external scanner startup check validates command, version, and clean scan path", async () => {
+test("receipt external scanner startup check validates the development shim command and clean scan path", async () => {
   await withScannerEnv(
     {
       COLLECTION_RECEIPT_EXTERNAL_SCAN_ENABLED: "1",
@@ -111,7 +111,7 @@ test("receipt external scanner startup check validates command, version, and cle
     async () => {
       const { logger, messages } = createTestLogger();
       const result = await verifyCollectionReceiptExternalScanStartup({
-        isProductionLike: true,
+        isProductionLike: false,
         logger,
       });
 
@@ -128,12 +128,12 @@ test("receipt external scanner startup check validates command, version, and cle
   );
 });
 
-test("receipt external scanner startup check fails production when scanner exits unexpectedly", async () => {
+test("receipt external scanner startup check rejects the development shim in production", async () => {
   await withScannerEnv(
     {
       COLLECTION_RECEIPT_EXTERNAL_SCAN_ENABLED: "1",
       COLLECTION_RECEIPT_EXTERNAL_SCAN_COMMAND: process.execPath,
-      COLLECTION_RECEIPT_EXTERNAL_SCAN_ARGS_JSON: "[\"-e\",\"process.exit(2)\",\"{file}\"]",
+      COLLECTION_RECEIPT_EXTERNAL_SCAN_ARGS_JSON: "[\"-e\",\"process.exit(0)\",\"{file}\"]",
       COLLECTION_RECEIPT_EXTERNAL_SCAN_FAIL_CLOSED: "1",
       COLLECTION_RECEIPT_EXTERNAL_SCAN_TIMEOUT_MS: "1000",
     },
@@ -143,8 +143,36 @@ test("receipt external scanner startup check fails production when scanner exits
           verifyCollectionReceiptExternalScanStartup({
             isProductionLike: true,
           }),
-        /Receipt external malware scanner startup check failed/i,
+        /approved scanner executable/i,
       );
+    },
+  );
+});
+
+test("receipt external scanner startup check marks non-production degraded when scanner exits unexpectedly", async () => {
+  await withScannerEnv(
+    {
+      COLLECTION_RECEIPT_EXTERNAL_SCAN_ENABLED: "1",
+      COLLECTION_RECEIPT_EXTERNAL_SCAN_COMMAND: process.execPath,
+      COLLECTION_RECEIPT_EXTERNAL_SCAN_ARGS_JSON: "[\"-e\",\"process.exit(2)\",\"{file}\"]",
+      COLLECTION_RECEIPT_EXTERNAL_SCAN_FAIL_CLOSED: "1",
+      COLLECTION_RECEIPT_EXTERNAL_SCAN_TIMEOUT_MS: "1000",
+    },
+    async () => {
+      const { logger, messages } = createTestLogger();
+      const result = await verifyCollectionReceiptExternalScanStartup({
+        isProductionLike: false,
+        logger,
+      });
+
+      assert.equal(result.ready, false);
+      assert.match(result.message, /Receipt external malware scan failed/i);
+      assert.deepEqual(messages, [
+        {
+          level: "warn",
+          message: "Receipt external malware scanner startup check failed",
+        },
+      ]);
     },
   );
 });

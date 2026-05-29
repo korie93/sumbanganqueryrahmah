@@ -1,17 +1,106 @@
 import path from "node:path";
 import fs from "node:fs/promises";
+import { isProductionLikeEnvironment } from "../config/runtime-environment";
 import { readString } from "../config/runtime-config-read-utils";
 import {
   BARE_COMMAND_PATTERN,
   UNSAFE_ENV_VALUE_PATTERN,
 } from "./collection-receipt-external-scan-shared";
 
+export type ExternalScanCommandValidationOptions = {
+  readonly allowDevelopmentScannerShim?: boolean;
+};
+
+const APPROVED_SCANNER_BASENAMES = new Set([
+  "clamdscan",
+  "clamdscan.exe",
+  "clamscan",
+  "clamscan.exe",
+]);
+
+const DEVELOPMENT_SCANNER_SHIM_BASENAMES = new Set(["node", "node.exe"]);
+
+const APPROVED_SCANNER_DIRECTORIES = new Set(
+  process.platform === "win32"
+    ? [
+      "C:\\Program Files\\ClamAV",
+      "C:\\Program Files\\ClamAV\\bin",
+      "C:\\Program Files (x86)\\ClamAV",
+      "C:\\Program Files (x86)\\ClamAV\\bin",
+    ].map(normalizePathForComparison)
+    : [
+      "/usr/bin",
+      "/usr/local/bin",
+      "/opt/clamav/bin",
+      "/opt/scanner/bin",
+    ].map(normalizePathForComparison),
+);
+
+function normalizePathForComparison(value: string): string {
+  const normalized = path.resolve(value);
+  return process.platform === "win32" ? normalized.toLowerCase() : normalized;
+}
+
+function isApprovedScannerDirectory(resolvedPath: string): boolean {
+  return APPROVED_SCANNER_DIRECTORIES.has(normalizePathForComparison(path.dirname(resolvedPath)));
+}
+
+async function isCurrentNodeExecutable(resolvedPath: string): Promise<boolean> {
+  if (!DEVELOPMENT_SCANNER_SHIM_BASENAMES.has(path.basename(resolvedPath).toLowerCase())) {
+    return false;
+  }
+
+  try {
+    const currentNodePath = await fs.realpath(process.execPath);
+    return normalizePathForComparison(resolvedPath) === normalizePathForComparison(currentNodePath);
+  } catch {
+    return normalizePathForComparison(resolvedPath) === normalizePathForComparison(process.execPath);
+  }
+}
+
+function shouldAllowDevelopmentScannerShim(options?: ExternalScanCommandValidationOptions): boolean {
+  return options?.allowDevelopmentScannerShim ?? !isProductionLikeEnvironment();
+}
+
+function isPotentiallyApprovedBareCommand(
+  command: string,
+  options?: ExternalScanCommandValidationOptions,
+): boolean {
+  const basename = command.toLowerCase();
+  return APPROVED_SCANNER_BASENAMES.has(basename)
+    || (shouldAllowDevelopmentScannerShim(options) && DEVELOPMENT_SCANNER_SHIM_BASENAMES.has(basename));
+}
+
+async function assertApprovedScannerExecutable(
+  resolvedPath: string,
+  options?: ExternalScanCommandValidationOptions,
+): Promise<void> {
+  const basename = path.basename(resolvedPath).toLowerCase();
+  if (APPROVED_SCANNER_BASENAMES.has(basename)) {
+    if (isApprovedScannerDirectory(resolvedPath)) {
+      return;
+    }
+    throw new Error("COLLECTION_RECEIPT_EXTERNAL_SCAN_COMMAND must resolve inside an approved scanner directory.");
+  }
+
+  if (shouldAllowDevelopmentScannerShim(options) && await isCurrentNodeExecutable(resolvedPath)) {
+    return;
+  }
+
+  throw new Error("COLLECTION_RECEIPT_EXTERNAL_SCAN_COMMAND must resolve to an approved scanner executable.");
+}
+
 async function resolveExistingFile(candidatePath: string): Promise<string | null> {
   try {
-    if (!(await fs.stat(candidatePath)).isFile()) {
+    const resolvedPath = await fs.realpath(candidatePath);
+    const stats = await fs.stat(resolvedPath);
+    if (!stats.isFile()) {
       return null;
     }
-    return await fs.realpath(candidatePath);
+    if (process.platform !== "win32" && (stats.mode & 0o111) === 0) {
+      return null;
+    }
+    return resolvedPath;
   } catch {
     return null;
   }
@@ -66,7 +155,10 @@ async function resolveScannerCommandOnPath(command: string): Promise<string | nu
   return null;
 }
 
-export async function validateExternalScanCommand(command: string): Promise<string> {
+export async function validateExternalScanCommand(
+  command: string,
+  options?: ExternalScanCommandValidationOptions,
+): Promise<string> {
   const normalized = command.trim();
   if (!normalized || UNSAFE_ENV_VALUE_PATTERN.test(normalized)) {
     throw new Error("COLLECTION_RECEIPT_EXTERNAL_SCAN_COMMAND is invalid.");
@@ -77,6 +169,7 @@ export async function validateExternalScanCommand(command: string): Promise<stri
     if (!resolved) {
       throw new Error("COLLECTION_RECEIPT_EXTERNAL_SCAN_COMMAND must point to an existing scanner executable.");
     }
+    await assertApprovedScannerExecutable(resolved, options);
     return resolved;
   }
 
@@ -86,10 +179,15 @@ export async function validateExternalScanCommand(command: string): Promise<stri
     );
   }
 
+  if (!isPotentiallyApprovedBareCommand(normalized, options)) {
+    throw new Error("COLLECTION_RECEIPT_EXTERNAL_SCAN_COMMAND must name an approved scanner executable.");
+  }
+
   const resolved = await resolveScannerCommandOnPath(normalized);
   if (!resolved) {
     throw new Error("COLLECTION_RECEIPT_EXTERNAL_SCAN_COMMAND must resolve to an executable on PATH.");
   }
+  await assertApprovedScannerExecutable(resolved, options);
 
   return resolved;
 }
