@@ -1671,10 +1671,13 @@ test("GET /api/collection/:id/receipt/view promotes legacy receipt_file into rel
     const primaryResponse = await fetch(`${baseUrl}/api/collection/collection-1/receipt/view`);
     assert.equal(primaryResponse.status, 200);
     assert.equal(primaryResponse.headers.get("content-type"), "application/pdf");
-    assert.equal(primaryResponse.headers.get("cache-control"), "private, no-store, max-age=0");
+    assert.equal(primaryResponse.headers.get("cache-control"), "no-store, no-cache, must-revalidate, private");
     assert.equal(primaryResponse.headers.get("pragma"), "no-cache");
     assert.equal(primaryResponse.headers.get("cross-origin-resource-policy"), "same-origin");
     assert.equal(primaryResponse.headers.get("x-content-type-options"), "nosniff");
+    assert.equal(primaryResponse.headers.get("x-frame-options"), "DENY");
+    assert.match(primaryResponse.headers.get("content-security-policy") || "", /default-src 'none'/);
+    assert.match(primaryResponse.headers.get("content-security-policy") || "", /script-src 'none'/);
 
     const promotedResponse = await fetch(
       `${baseUrl}/api/collection/collection-1/receipts/receipt-collection-1-1/view`,
