@@ -1,5 +1,6 @@
 import { badRequest, forbidden } from "../../http/errors";
 import { readPageLimit } from "../../http/validation";
+import { safeParseInteger } from "../../lib/safe-parse";
 import type { AuthenticatedUser } from "../../auth/guards";
 import { parseCollectionAmountMyrInput } from "../../../shared/collection-amount-types";
 import {
@@ -48,13 +49,13 @@ export class CollectionDailyManagementOperations {
     const body = ensureLooseObject(bodyRaw) || {};
     const username = normalizeCollectionText(body.nickname ?? body.username);
     const normalizedUsername = username.toLowerCase();
-    const year = Number.parseInt(normalizeCollectionText(body.year), 10);
-    const month = Number.parseInt(normalizeCollectionText(body.month), 10);
+    const year = safeParseInteger(body.year, { min: 2000, max: 2100 });
+    const month = safeParseInteger(body.month, { min: 1, max: 12 });
     const monthlyTarget = parseCollectionAmountMyrInput(body.monthlyTarget, { allowZero: true });
 
     if (!normalizedUsername) throw badRequest("Staff nickname is required.");
-    if (!Number.isInteger(year) || year < 2000 || year > 2100) throw badRequest("Invalid year.");
-    if (!Number.isInteger(month) || month < 1 || month > 12) throw badRequest("Invalid month.");
+    if (year === null) throw badRequest("Invalid year.");
+    if (month === null) throw badRequest("Invalid month.");
     if (monthlyTarget === null || monthlyTarget < 0) {
       throw badRequest("Monthly target must be a non-negative number.");
     }
@@ -87,13 +88,13 @@ export class CollectionDailyManagementOperations {
     const body = ensureLooseObject(bodyRaw) || {};
     const username = normalizeCollectionText(body.nickname ?? body.username);
     const normalizedUsername = username.toLowerCase();
-    const year = Number.parseInt(normalizeCollectionText(body.year), 10);
-    const month = Number.parseInt(normalizeCollectionText(body.month), 10);
+    const year = safeParseInteger(body.year, { min: 2000, max: 2100 });
+    const month = safeParseInteger(body.month, { min: 1, max: 12 });
     const rawDays = Array.isArray(body.days) ? body.days : [];
 
     if (!normalizedUsername) throw badRequest("Staff nickname is required.");
-    if (!Number.isInteger(year) || year < 2000 || year > 2100) throw badRequest("Invalid year.");
-    if (!Number.isInteger(month) || month < 1 || month > 12) throw badRequest("Invalid month.");
+    if (year === null) throw badRequest("Invalid year.");
+    if (month === null) throw badRequest("Invalid month.");
 
     const users = await this.dailyOverviewService.listAvailableDailyUsers(user);
     const foundUser = users.some((item) => item.username.toLowerCase() === normalizedUsername);
@@ -118,7 +119,7 @@ export class CollectionDailyManagementOperations {
         const note = normalizeCollectionText(item.note) || null;
 
         return {
-          day: Number.parseInt(normalizeCollectionText(item.day), 10),
+          day: safeParseInteger(item.day, { min: 1, max: maxDay }),
           status,
           leaveType,
           note: status === "HOLIDAY" ? note : null,
@@ -127,7 +128,7 @@ export class CollectionDailyManagementOperations {
           holidayName: status === "HOLIDAY" ? (leaveType ?? note) : null,
         };
       })
-      .filter((item) => Number.isInteger(item.day) && item.day >= 1 && item.day <= maxDay);
+      .filter((item): item is typeof item & { day: number } => item.day !== null);
 
     if (parsedDays.length === 0) {
       throw badRequest("At least one valid calendar day is required.");
@@ -170,15 +171,15 @@ export class CollectionDailyManagementOperations {
     const input = ensureLooseObject(inputRaw) || {};
     const username = normalizeCollectionText(input.nickname ?? input.username);
     const normalizedUsername = username.toLowerCase();
-    const year = Number.parseInt(normalizeCollectionText(input.year), 10);
-    const month = Number.parseInt(normalizeCollectionText(input.month), 10);
-    const day = Number.parseInt(normalizeCollectionText(input.day), 10);
+    const year = safeParseInteger(input.year, { min: 2000, max: 2100 });
+    const month = safeParseInteger(input.month, { min: 1, max: 12 });
 
     if (!normalizedUsername) throw badRequest("Staff nickname is required.");
-    if (!Number.isInteger(year) || year < 2000 || year > 2100) throw badRequest("Invalid year.");
-    if (!Number.isInteger(month) || month < 1 || month > 12) throw badRequest("Invalid month.");
+    if (year === null) throw badRequest("Invalid year.");
+    if (month === null) throw badRequest("Invalid month.");
     const maxDay = new Date(year, month, 0).getDate();
-    if (!Number.isInteger(day) || day < 1 || day > maxDay) throw badRequest("Invalid day.");
+    const day = safeParseInteger(input.day, { min: 1, max: maxDay });
+    if (day === null) throw badRequest("Invalid day.");
 
     const users = await this.dailyOverviewService.listAvailableDailyUsers(user);
     const foundUser = users.some((item) => item.username.toLowerCase() === normalizedUsername);
@@ -209,16 +210,16 @@ export class CollectionDailyManagementOperations {
     const query = ensureLooseObject(queryRaw) || {};
     const username = normalizeCollectionText(query.nickname ?? query.username);
     const normalizedUsername = username.toLowerCase();
-    const year = Number.parseInt(normalizeCollectionText(query.year), 10);
-    const month = Number.parseInt(normalizeCollectionText(query.month), 10);
-    const day = Number.parseInt(normalizeCollectionText(query.day), 10);
+    const year = safeParseInteger(query.year, { min: 2000, max: 2100 });
+    const month = safeParseInteger(query.month, { min: 1, max: 12 });
     const limit = readPageLimit(query.limit, 50, 100);
 
     if (!normalizedUsername) throw badRequest("Staff nickname is required.");
-    if (!Number.isInteger(year) || year < 2000 || year > 2100) throw badRequest("Invalid year.");
-    if (!Number.isInteger(month) || month < 1 || month > 12) throw badRequest("Invalid month.");
+    if (year === null) throw badRequest("Invalid year.");
+    if (month === null) throw badRequest("Invalid month.");
     const maxDay = new Date(year, month, 0).getDate();
-    if (!Number.isInteger(day) || day < 1 || day > maxDay) throw badRequest("Invalid day.");
+    const day = safeParseInteger(query.day, { min: 1, max: maxDay });
+    if (day === null) throw badRequest("Invalid day.");
 
     const users = await this.dailyOverviewService.listAvailableDailyUsers(user);
     const foundUser = users.some((item) => item.username.toLowerCase() === normalizedUsername);

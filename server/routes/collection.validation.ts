@@ -1,4 +1,5 @@
 import { getCollectionNicknameTempPassword } from "../config/security";
+import { safeParseInteger } from "../lib/safe-parse";
 import { parseCollectionAmountMyrInput } from "../../shared/collection-amount-types";
 
 export const COLLECTION_BATCHES = new Set(["P10", "P25", "MDD02", "MDD10", "MDD18", "MDD25"]);
@@ -138,16 +139,9 @@ export function isValidCollectionDate(value: string): boolean {
 export function isValidCollectionMonthKey(value: string): boolean {
   if (!COLLECTION_MONTH_KEY_REGEX.test(value)) return false;
   const [yearRaw, monthRaw] = value.split("-");
-  const year = Number.parseInt(yearRaw || "", 10);
-  const month = Number.parseInt(monthRaw || "", 10);
-  return (
-    Number.isInteger(year)
-    && year >= 2000
-    && year <= 2100
-    && Number.isInteger(month)
-    && month >= 1
-    && month <= 12
-  );
+  const year = safeParseInteger(yearRaw, { min: 2000, max: 2100 });
+  const month = safeParseInteger(monthRaw, { min: 1, max: 12 });
+  return year !== null && month !== null;
 }
 
 export function getCollectionTodayDateString(referenceDate = new Date()): string {

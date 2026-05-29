@@ -1,5 +1,6 @@
 import { badRequest } from "../../http/errors";
 import { readPageLimit } from "../../http/validation";
+import { safeParseInteger } from "../../lib/safe-parse";
 import {
   getAdminVisibleNicknameValues,
   hasNicknameValue,
@@ -30,13 +31,13 @@ export class CollectionRecordListReadOperations extends CollectionServiceSupport
     const receiptValidationStatus = parseCollectionReceiptValidationFilter(query.receiptValidationStatus);
     const duplicateOnly = parseCollectionBooleanQueryValue(query.duplicateOnly);
     const requestedNicknameFilters = readNicknameFiltersFromQuery(query);
-    const pageRaw = Number.parseInt(normalizeCollectionText(query.page), 10);
-    const offsetRaw = Number.parseInt(normalizeCollectionText(query.offset), 10);
+    const pageRaw = safeParseInteger(query.page);
+    const offsetRaw = safeParseInteger(query.offset);
     const limit = readPageLimit(query.pageSize ?? query.limit, 1000, 5000);
-    const page = Number.isInteger(pageRaw)
+    const page = pageRaw !== null
       ? Math.max(1, pageRaw)
       : 1;
-    const requestedOffset = Number.isInteger(offsetRaw)
+    const requestedOffset = offsetRaw !== null
       ? Math.max(0, offsetRaw)
       : (page - 1) * limit;
     const offset = cursor?.offset ?? requestedOffset;

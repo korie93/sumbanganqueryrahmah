@@ -1,4 +1,5 @@
 import { badRequest, forbidden } from "../../http/errors";
+import { safeParseInteger } from "../../lib/safe-parse";
 import {
   getAdminGroupNicknameValues,
   hasNicknameValue,
@@ -21,10 +22,12 @@ export class CollectionRecordSummaryReadOperations extends CollectionServiceSupp
     const user = this.requireUser(userInput);
     const yearRaw = normalizeCollectionText(query.year);
     const requestedNicknameFilters = readNicknameFiltersFromQuery(query);
-    const parsedYear = yearRaw ? Number.parseInt(yearRaw, 10) : new Date().getFullYear();
+    const parsedYear = yearRaw
+      ? safeParseInteger(yearRaw, { min: 2000, max: 2100 })
+      : new Date().getFullYear();
     const userOwnedRecordFilters = await resolveUserOwnedCollectionRecordFilters(this.storage, user);
 
-    if (!Number.isInteger(parsedYear) || parsedYear < 2000 || parsedYear > 2100) {
+    if (parsedYear === null) {
       throw badRequest("Invalid year.");
     }
 

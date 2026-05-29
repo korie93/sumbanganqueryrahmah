@@ -1,4 +1,5 @@
 import { badRequest } from "../../http/errors";
+import { safeParseInteger } from "../../lib/safe-parse";
 import {
   getAdminGroupNicknameValues,
   hasNicknameValue,
@@ -48,9 +49,9 @@ function parseCollectionMonth(value: unknown): ParsedCollectionMonth | null {
   }
 
   const [yearRaw, monthRaw] = normalized.split("-");
-  const year = Number.parseInt(yearRaw || "", 10);
-  const month = Number.parseInt(monthRaw || "", 10);
-  if (!Number.isInteger(year) || !Number.isInteger(month)) {
+  const year = safeParseInteger(yearRaw, { min: 2000, max: 2100 });
+  const month = safeParseInteger(monthRaw, { min: 1, max: 12 });
+  if (year === null || month === null) {
     return null;
   }
 

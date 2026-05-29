@@ -1,5 +1,6 @@
 import { badRequest } from "../../http/errors";
 import { readPageLimit } from "../../http/validation";
+import { safeParseInteger } from "../../lib/safe-parse";
 import {
   parseCollectionAmountMyrInput,
   parseCollectionAmountMyrNumber,
@@ -42,11 +43,11 @@ export class CollectionDailyReadOperations extends CollectionServiceSupport {
 
   async getDailyOverview(userInput: AuthenticatedUser | undefined, query: ListQuery) {
     const user = this.requireUserFn(userInput);
-    const year = Number.parseInt(normalizeCollectionText(query.year), 10);
-    const month = Number.parseInt(normalizeCollectionText(query.month), 10);
+    const year = safeParseInteger(query.year, { min: 2000, max: 2100 });
+    const month = safeParseInteger(query.month, { min: 1, max: 12 });
 
-    if (!Number.isInteger(year) || year < 2000 || year > 2100) throw badRequest("Invalid year.");
-    if (!Number.isInteger(month) || month < 1 || month > 12) throw badRequest("Invalid month.");
+    if (year === null) throw badRequest("Invalid year.");
+    if (month === null) throw badRequest("Invalid month.");
     const computation = await this.dailyOverviewService.buildDailyOverviewComputation(user, year, month, query);
     const selectedUsernames = computation.selectedUsers.map((item) => item.username);
     const currentNickname = await resolveCurrentCollectionNicknameFromSession(this.storage, user);
@@ -82,8 +83,11 @@ export class CollectionDailyReadOperations extends CollectionServiceSupport {
     }
 
     const [yearText, monthText] = monthKey.split("-");
-    const year = Number.parseInt(yearText || "", 10);
-    const month = Number.parseInt(monthText || "", 10);
+    const year = safeParseInteger(yearText, { min: 2000, max: 2100 });
+    const month = safeParseInteger(monthText, { min: 1, max: 12 });
+    if (year === null || month === null) {
+      throw badRequest("Invalid month.");
+    }
     const [availableUsers, currentNickname] = await Promise.all([
       this.dailyOverviewService.listAvailableDailyUsers(user),
       resolveCurrentCollectionNicknameFromSession(this.storage, user),
@@ -140,11 +144,12 @@ export class CollectionDailyReadOperations extends CollectionServiceSupport {
     if (!date || !isValidCollectionDate(date)) throw badRequest("Invalid date.");
 
     const [yearText, monthText] = date.split("-");
-    const year = Number.parseInt(yearText, 10);
-    const month = Number.parseInt(monthText, 10);
-    const pageRaw = Number.parseInt(normalizeCollectionText(query.page), 10);
+    const year = safeParseInteger(yearText, { min: 2000, max: 2100 });
+    const month = safeParseInteger(monthText, { min: 1, max: 12 });
+    if (year === null || month === null) throw badRequest("Invalid date.");
+    const pageRaw = safeParseInteger(query.page);
     const pageSize = readPageLimit(query.pageSize, 10, 100);
-    const requestedPage = Number.isInteger(pageRaw) ? Math.max(1, pageRaw) : 1;
+    const requestedPage = pageRaw !== null ? Math.max(1, pageRaw) : 1;
 
     const computation = await this.dailyOverviewService.buildDailyOverviewComputation(user, year, month, query);
     const selectedUsernames = computation.selectedUsers.map((item) => item.username);

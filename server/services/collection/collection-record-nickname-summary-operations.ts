@@ -1,5 +1,6 @@
 import { badRequest, forbidden } from "../../http/errors";
 import { readPageLimit } from "../../http/validation";
+import { safeParseInteger } from "../../lib/safe-parse";
 import {
   getAdminVisibleNicknameValues,
   hasNicknameValue,
@@ -63,17 +64,17 @@ export class CollectionRecordNicknameSummaryOperations extends CollectionService
 
     const summaryOnlyRaw = normalizeCollectionText(query.summaryOnly).toLowerCase();
     const summaryOnly = summaryOnlyRaw === "1" || summaryOnlyRaw === "true" || summaryOnlyRaw === "yes";
-    const pageRaw = Number.parseInt(normalizeCollectionText(query.page), 10);
-    const offsetRaw = Number.parseInt(normalizeCollectionText(query.offset), 10);
+    const pageRaw = safeParseInteger(query.page);
+    const offsetRaw = safeParseInteger(query.offset);
     const recordLimit = readPageLimit(
       query.pageSize ?? query.limit,
       COLLECTION_NICKNAME_SUMMARY_RECORD_LIMIT,
       COLLECTION_NICKNAME_SUMMARY_RECORD_LIMIT,
     );
-    const page = Number.isInteger(pageRaw)
+    const page = pageRaw !== null
       ? Math.max(1, pageRaw)
       : 1;
-    const recordOffset = Number.isInteger(offsetRaw)
+    const recordOffset = offsetRaw !== null
       ? Math.max(0, offsetRaw)
       : (page - 1) * recordLimit;
     const resolvedPage = Math.floor(recordOffset / recordLimit) + 1;

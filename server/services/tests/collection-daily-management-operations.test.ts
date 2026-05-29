@@ -121,6 +121,30 @@ test("upsertDailyTarget rejects malformed MYR input instead of coercing it", asy
   );
 });
 
+test("upsertDailyTarget rejects partial integer year values before storage writes", async () => {
+  let wroteTarget = false;
+  const operations = createOperations({
+    async getCollectionStaffNicknames() {
+      return [buildNickname()];
+    },
+    async upsertCollectionDailyTarget() {
+      wroteTarget = true;
+      throw new Error("should not be called");
+    },
+  });
+
+  await assert.rejects(
+    async () => operations.upsertDailyTarget(adminUser, {
+      username: "Alice",
+      year: "2026abc",
+      month: "4",
+      monthlyTarget: "100",
+    }),
+    /Invalid year\./,
+  );
+  assert.equal(wroteTarget, false);
+});
+
 test("upsertDailyCalendar stores holiday leave type per selected nickname only", async () => {
   const captured: Array<{
     username: string;
@@ -242,6 +266,30 @@ test("upsertDailyCalendar accepts OFF as a per-nickname company closed status", 
     note: "Company closed",
     holidayName: "OFF",
   });
+});
+
+test("upsertDailyCalendar rejects partial integer day values before storage writes", async () => {
+  let wroteCalendar = false;
+  const operations = createOperations({
+    async getCollectionStaffNicknames() {
+      return [buildNicknameWithName("Ali")];
+    },
+    async upsertCollectionDailyCalendarDays() {
+      wroteCalendar = true;
+      throw new Error("should not be called");
+    },
+  });
+
+  await assert.rejects(
+    async () => operations.upsertDailyCalendar(adminUser, {
+      username: "Ali",
+      year: "2026",
+      month: "5",
+      days: [{ day: "15abc", status: "WORKING" }],
+    }),
+    /At least one valid calendar day is required\./,
+  );
+  assert.equal(wroteCalendar, false);
 });
 
 test("upsertDailyCalendar accepts RL updates without affecting the selected nickname scope", async () => {
