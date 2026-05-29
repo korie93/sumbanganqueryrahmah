@@ -4,6 +4,14 @@ import { createInternalMetrics } from "../../internal/metrics";
 import { logger } from "../../lib/logger";
 import { safeJsonParse } from "../../lib/safe-json";
 
+function buildNestedJson(depth: number): string {
+  let json = "\"leaf\"";
+  for (let index = 0; index < depth; index += 1) {
+    json = `{"level":${json}}`;
+  }
+  return json;
+}
+
 test("safeJsonParse returns typed data for valid JSON", () => {
   const metrics = createInternalMetrics();
   const result = safeJsonParse<{ ok: boolean }>(
@@ -54,4 +62,80 @@ test("safeJsonParse rejects non-string input without throwing", () => {
 
   assert.equal(result.success, false);
   assert.equal(metrics.snapshot().counters.jsonParseFailuresTotal, 1);
+});
+
+test("safeJsonParse accepts JSON at the configured depth limit", () => {
+  const metrics = createInternalMetrics();
+  const result = safeJsonParse<unknown>(
+    buildNestedJson(20),
+    "safe_json_depth_limit_accepted",
+    { metrics, maxDepth: 20 },
+  );
+
+  assert.equal(result.success, true);
+  assert.equal(metrics.snapshot().counters.jsonParseFailuresTotal, 0);
+});
+
+test("safeJsonParse rejects JSON one level beyond the configured depth limit", () => {
+  const metrics = createInternalMetrics();
+  const result = safeJsonParse<unknown>(
+    buildNestedJson(21),
+    "safe_json_depth_limit_rejected",
+    { metrics, maxDepth: 20 },
+  );
+
+  assert.equal(result.success, false);
+  assert.match(result.error, /depth exceeds limit 20/);
+  assert.equal(metrics.snapshot().counters.jsonParseFailuresTotal, 1);
+});
+
+test("safeJsonParse rejects deeply nested JSON without recursive measurement", () => {
+  const metrics = createInternalMetrics();
+  const result = safeJsonParse<unknown>(
+    buildNestedJson(10_000),
+    "safe_json_depth_limit_deep_rejected",
+    { metrics, maxDepth: 20 },
+  );
+
+  assert.equal(result.success, false);
+  assert.match(result.error, /depth exceeds limit 20/);
+  assert.equal(metrics.snapshot().counters.jsonParseFailuresTotal, 1);
+});
+
+test("safeJsonParse rejects raw payloads over the configured byte limit", () => {
+  const metrics = createInternalMetrics();
+  const result = safeJsonParse<unknown>(
+    "{\"value\":\"0123456789\"}",
+    "safe_json_raw_size_limit",
+    { metrics, maxRawBytes: 8 },
+  );
+
+  assert.equal(result.success, false);
+  assert.match(result.error, /size exceeds limit 8/);
+  assert.equal(metrics.snapshot().counters.jsonParseFailuresTotal, 1);
+});
+
+test("safeJsonParse rejects oversized arrays, objects, and strings", () => {
+  const metrics = createInternalMetrics();
+
+  const arrayResult = safeJsonParse<unknown>(
+    "[1,2,3]",
+    "safe_json_array_limit",
+    { metrics, maxArrayLength: 2 },
+  );
+  const objectResult = safeJsonParse<unknown>(
+    "{\"a\":1,\"b\":2,\"c\":3}",
+    "safe_json_object_limit",
+    { metrics, maxObjectKeys: 2 },
+  );
+  const stringResult = safeJsonParse<unknown>(
+    "{\"value\":\"abcdef\"}",
+    "safe_json_string_limit",
+    { metrics, maxStringLength: 5 },
+  );
+
+  assert.equal(arrayResult.success, false);
+  assert.equal(objectResult.success, false);
+  assert.equal(stringResult.success, false);
+  assert.equal(metrics.snapshot().counters.jsonParseFailuresTotal, 3);
 });
