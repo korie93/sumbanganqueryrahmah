@@ -24,6 +24,7 @@ import {
   startTestServer,
   stopTestServer,
 } from "./http-test-utils";
+import { runtimeConfig } from "../../config/runtime";
 
 function createStartupSnapshot(overrides: Partial<StartupHealthSnapshot> = {}): StartupHealthSnapshot {
   return {
@@ -352,6 +353,16 @@ function createSystemRouteHarness(options?: {
   }));
 
   return { app };
+}
+
+async function withProductionLikeRuntime<T>(isProductionLike: boolean, run: () => Promise<T>): Promise<T> {
+  const previous = runtimeConfig.app.isProductionLike;
+  runtimeConfig.app.isProductionLike = isProductionLike;
+  try {
+    return await run();
+  } finally {
+    runtimeConfig.app.isProductionLike = previous;
+  }
 }
 
 test("GET /api/health/live exposes only public-safe liveness fields", async () => {
@@ -1001,4 +1012,108 @@ test("POST /api/internal/chaos/inject is the only registered chaos injection rou
   } finally {
     await stopTestServer(server);
   }
+});
+
+test("POST /api/internal/chaos/inject rejects malformed payloads without side effects", async () => {
+  let chaosCalls = 0;
+  const auditActions: string[] = [];
+  const app = createJsonTestApp();
+  registerSystemRoutes(app, createBaseSystemRouteDeps({
+    injectChaos: () => {
+      chaosCalls += 1;
+      return createChaosInjectionResult();
+    },
+    createAuditLog: async (data) => {
+      auditActions.push(data.action);
+      return createAuditLogRow(data);
+    },
+  }));
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const malformedDurationResponse = await fetch(`${baseUrl}/api/internal/chaos/inject`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-test-role": "admin",
+        "x-test-username": "admin.user",
+      },
+      body: JSON.stringify({ type: "cpu_spike", durationMs: "abc" }),
+    });
+    assert.equal(malformedDurationResponse.status, 400);
+    const malformedDurationPayload = await malformedDurationResponse.json();
+    assert.equal(malformedDurationPayload.ok, false);
+    assert.equal(malformedDurationPayload.code, "INVALID_CHAOS_PAYLOAD");
+    assert.equal(malformedDurationPayload.error.code, "INVALID_CHAOS_PAYLOAD");
+    assert.deepEqual(malformedDurationPayload.allowed, [
+      "cpu_spike",
+      "db_latency_spike",
+      "ai_delay",
+      "worker_crash",
+      "memory_pressure",
+    ]);
+
+    const missingTypeResponse = await fetch(`${baseUrl}/api/internal/chaos/inject`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-test-role": "admin",
+        "x-test-username": "admin.user",
+      },
+      body: JSON.stringify({ magnitude: 5 }),
+    });
+    assert.equal(missingTypeResponse.status, 400);
+    const missingTypePayload = await missingTypeResponse.json();
+    assert.equal(missingTypePayload.error.details.fieldErrors.type.length > 0, true);
+
+    const excessiveDurationResponse = await fetch(`${baseUrl}/api/internal/chaos/inject`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-test-role": "admin",
+        "x-test-username": "admin.user",
+      },
+      body: JSON.stringify({ type: "memory_pressure", durationMs: 300_001 }),
+    });
+    assert.equal(excessiveDurationResponse.status, 400);
+
+    assert.equal(chaosCalls, 0);
+    assert.deepEqual(auditActions, []);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("POST /api/internal/chaos/inject is hidden on production-like runtimes", async () => {
+  await withProductionLikeRuntime(true, async () => {
+    let chaosCalls = 0;
+    const app = createJsonTestApp();
+    registerSystemRoutes(app, createBaseSystemRouteDeps({
+      injectChaos: () => {
+        chaosCalls += 1;
+        return createChaosInjectionResult();
+      },
+    }));
+    const { server, baseUrl } = await startTestServer(app);
+
+    try {
+      const response = await fetch(`${baseUrl}/api/internal/chaos/inject`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-test-role": "admin",
+          "x-test-username": "admin.user",
+        },
+        body: JSON.stringify({ type: "cpu_spike" }),
+      });
+
+      assert.equal(response.status, 404);
+      const payload = await response.json();
+      assert.equal(payload.ok, false);
+      assert.equal(payload.code, "NOT_FOUND");
+      assert.equal(chaosCalls, 0);
+    } finally {
+      await stopTestServer(server);
+    }
+  });
 });
