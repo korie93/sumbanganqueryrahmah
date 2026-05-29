@@ -9,6 +9,7 @@ import {
   encryptTwoFactorSecret,
   generateCurrentTwoFactorCode,
   generateTwoFactorSecret,
+  normalizeTwoFactorCode,
   resolveTotpAlgorithm,
   verifyTwoFactorCode,
 } from "../two-factor";
@@ -176,15 +177,27 @@ test("verifyTwoFactorCode rejects invalid, short, and non-digit-only TOTP codes"
   assert.equal(verifyTwoFactorCode(secret, invalidCode), false);
   assert.equal(verifyTwoFactorCode(secret, "12345"), false);
   assert.equal(verifyTwoFactorCode(secret, "abcdef"), false);
+  assert.equal(verifyTwoFactorCode(secret, `${validCode}7`), false);
+  assert.equal(verifyTwoFactorCode(secret, `abc${validCode}`), false);
 });
 
-test("verifyTwoFactorCode keeps existing normalization for pasted spaced codes", (t) => {
+test("normalizeTwoFactorCode accepts common separators and rejects polluted values", () => {
+  assert.equal(normalizeTwoFactorCode("123456"), "123456");
+  assert.equal(normalizeTwoFactorCode("123 456"), "123456");
+  assert.equal(normalizeTwoFactorCode("123-456"), "123456");
+  assert.equal(normalizeTwoFactorCode(" 123-456 "), "123456");
+  assert.equal(normalizeTwoFactorCode("1234567"), null);
+  assert.equal(normalizeTwoFactorCode("abc123456"), null);
+  assert.equal(normalizeTwoFactorCode("123/456"), null);
+});
+
+test("verifyTwoFactorCode keeps normalization for pasted spaced and dashed codes", (t) => {
   const secret = generateTwoFactorSecret();
   t.mock.method(Date, "now", () => new Date("2026-04-29T00:00:00.000Z").getTime());
   const code = generateCurrentTwoFactorCode(secret);
-  const formattedCode = `${code.slice(0, 3)} ${code.slice(3)}`;
 
-  assert.equal(verifyTwoFactorCode(secret, formattedCode), true);
+  assert.equal(verifyTwoFactorCode(secret, `${code.slice(0, 3)} ${code.slice(3)}`), true);
+  assert.equal(verifyTwoFactorCode(secret, `${code.slice(0, 3)}-${code.slice(3)}`), true);
 });
 
 test("two-factor TOTP defaults to SHA1 and supports SHA256 as an opt-in algorithm", (t) => {

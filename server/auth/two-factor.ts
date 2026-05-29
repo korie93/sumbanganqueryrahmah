@@ -122,8 +122,9 @@ export function generateTwoFactorSecret() {
   return base32Encode(randomBytes(20));
 }
 
-export function normalizeTwoFactorCode(value: string) {
-  return String(value || "").replace(/\D/g, "").slice(0, TOTP_DIGITS);
+export function normalizeTwoFactorCode(value: string): string | null {
+  const normalized = String(value || "").replace(/[\s-]/g, "");
+  return /^\d{6}$/.test(normalized) ? normalized : null;
 }
 
 export function verifyTwoFactorCode(
@@ -133,7 +134,7 @@ export function verifyTwoFactorCode(
   algorithm = getTwoFactorTotpAlgorithm(),
 ) {
   const code = normalizeTwoFactorCode(rawCode);
-  if (code.length !== TOTP_DIGITS) {
+  if (!code) {
     return false;
   }
 

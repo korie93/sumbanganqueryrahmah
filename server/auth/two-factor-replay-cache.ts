@@ -35,7 +35,7 @@ export function buildTwoFactorReplayKey(params: ConsumeTwoFactorReplayCodeParams
   const subjectId = String(params.subjectId || "").trim();
   const purpose = params.purpose;
   const code = normalizeTwoFactorCode(params.code);
-  if (!subjectId || code.length !== 6) {
+  if (!subjectId || !code) {
     return "";
   }
 
