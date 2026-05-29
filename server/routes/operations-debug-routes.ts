@@ -1,22 +1,46 @@
-import { runtimeConfig } from "../config/runtime";
 import { asyncHandler } from "../http/async-handler";
 import type { OperationsRouteContext } from "./operations-route-context";
 
+export type OperationsDebugRouteStartupLock = Readonly<{
+  enabled: boolean;
+  requested: boolean;
+  productionLike: boolean;
+  reason: "enabled-local" | "disabled" | "production-like";
+}>;
+
 export function isOperationsDebugRoutesEnabled(
-  enabled: boolean = runtimeConfig.app.operationsDebugRoutesEnabled,
-  productionLike: boolean = runtimeConfig.app.isProductionLike,
+  enabled: boolean,
+  productionLike: boolean,
 ) {
   return enabled && !productionLike;
 }
 
+export function createOperationsDebugRouteStartupLock(params: {
+  enabled?: boolean | undefined;
+  productionLike?: boolean | undefined;
+}): OperationsDebugRouteStartupLock {
+  const requested = params.enabled === true;
+  const productionLike = params.productionLike !== false;
+  const enabled = isOperationsDebugRoutesEnabled(requested, productionLike);
+  const reason = enabled
+    ? "enabled-local"
+    : productionLike
+      ? "production-like"
+      : "disabled";
+
+  return Object.freeze({
+    enabled,
+    requested,
+    productionLike,
+    reason,
+  });
+}
+
 export function registerOperationsDebugRoutes(
   context: OperationsRouteContext,
-  options: {
-    enabled?: boolean | undefined;
-    productionLike?: boolean | undefined;
-  } = {},
+  startupLock: OperationsDebugRouteStartupLock,
 ) {
-  if (!isOperationsDebugRoutesEnabled(options.enabled, options.productionLike)) {
+  if (!startupLock.enabled) {
     return;
   }
 

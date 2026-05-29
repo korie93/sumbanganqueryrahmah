@@ -204,6 +204,7 @@ function createOperationsPermissionHarness() {
     requireRole: createTestRequireRole(),
     requireTabAccess: createTestRequireTabAccess(),
     operationsDebugRoutesEnabled: true,
+    operationsDebugRoutesProductionLike: false,
   });
 
   return {

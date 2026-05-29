@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { Request, Response } from "express";
 import {
+  createOperationsDebugRouteStartupLock,
   isOperationsDebugRoutesEnabled,
   registerOperationsDebugRoutes,
 } from "../operations-debug-routes";
@@ -29,9 +30,10 @@ test("registerOperationsDebugRoutes skips the websocket client endpoint when the
     }),
     requireRole: createTestRequireRole(),
     requireTabAccess: () => (_req, _res, next) => next(),
-  }, {
+  }, createOperationsDebugRouteStartupLock({
     enabled: false,
-  });
+    productionLike: false,
+  }));
 
   const { server, baseUrl } = await startTestServer(app);
 
@@ -65,10 +67,10 @@ test("registerOperationsDebugRoutes refuses to mount endpoints on production-lik
     }),
     requireRole: createTestRequireRole(),
     requireTabAccess: () => (_req, _res, next) => next(),
-  }, {
+  }, createOperationsDebugRouteStartupLock({
     enabled: true,
     productionLike: true,
-  });
+  }));
 
   const { server, baseUrl } = await startTestServer(app);
 
@@ -102,10 +104,10 @@ test("registerOperationsDebugRoutes mounts endpoints only when explicitly enable
     }),
     requireRole: createTestRequireRole(),
     requireTabAccess: () => (_req, _res, next) => next(),
-  }, {
+  }, createOperationsDebugRouteStartupLock({
     enabled: true,
     productionLike: false,
-  });
+  }));
 
   const { server, baseUrl } = await startTestServer(app);
 
@@ -128,4 +130,25 @@ test("isOperationsDebugRoutesEnabled requires both local runtime and explicit op
   assert.equal(isOperationsDebugRoutesEnabled(false, false), false);
   assert.equal(isOperationsDebugRoutesEnabled(true, true), false);
   assert.equal(isOperationsDebugRoutesEnabled(true, false), true);
+});
+
+test("createOperationsDebugRouteStartupLock defaults to fail-closed production-like mode", () => {
+  assert.deepEqual(createOperationsDebugRouteStartupLock({}), {
+    enabled: false,
+    requested: false,
+    productionLike: true,
+    reason: "production-like",
+  });
+  assert.deepEqual(createOperationsDebugRouteStartupLock({ enabled: true }), {
+    enabled: false,
+    requested: true,
+    productionLike: true,
+    reason: "production-like",
+  });
+  assert.deepEqual(createOperationsDebugRouteStartupLock({ enabled: true, productionLike: false }), {
+    enabled: true,
+    requested: true,
+    productionLike: false,
+    reason: "enabled-local",
+  });
 });

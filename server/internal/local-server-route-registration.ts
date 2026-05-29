@@ -308,6 +308,8 @@ export function registerLocalServerRoutes(options: RegisterLocalServerRoutesOpti
     authenticateToken,
     requireRole,
     requireTabAccess,
+    operationsDebugRoutesEnabled: environmentRuntimeConfig.app.operationsDebugRoutesEnabled,
+    operationsDebugRoutesProductionLike: environmentRuntimeConfig.app.isProductionLike,
   });
 
   registerCollectionRoutes(app, {

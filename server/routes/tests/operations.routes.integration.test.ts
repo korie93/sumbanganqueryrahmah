@@ -348,6 +348,7 @@ function createOperationsRouteHarness(options?: {
     requireRole: createTestRequireRole(),
     requireTabAccess: () => allowAllTabs(),
     operationsDebugRoutesEnabled: true,
+    operationsDebugRoutesProductionLike: false,
   });
   app.use(errorHandler);
 

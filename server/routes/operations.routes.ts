@@ -2,7 +2,10 @@ import type { Express } from "express";
 import { registerOperationsAnalyticsRoutes } from "./operations-analytics-routes";
 import { registerOperationsAuditRoutes } from "./operations-audit-routes";
 import { registerOperationsBackupRoutes } from "./operations-backup-routes";
-import { registerOperationsDebugRoutes } from "./operations-debug-routes";
+import {
+  createOperationsDebugRouteStartupLock,
+  registerOperationsDebugRoutes,
+} from "./operations-debug-routes";
 import {
   createOperationsRouteContext,
   type OperationsRouteDeps,
@@ -13,9 +16,11 @@ export function registerOperationsRoutes(app: Express, deps: OperationsRouteDeps
   registerOperationsAuditRoutes(context);
   registerOperationsAnalyticsRoutes(context);
   registerOperationsBackupRoutes(context);
-  registerOperationsDebugRoutes(context, {
+  const debugRouteStartupLock = createOperationsDebugRouteStartupLock({
     enabled: context.operationsDebugRoutesEnabled,
+    productionLike: context.operationsDebugRoutesProductionLike,
   });
+  registerOperationsDebugRoutes(context, debugRouteStartupLock);
 }
 
 export type { OperationsRouteDeps } from "./operations-route-context";
