@@ -2,6 +2,7 @@ import {
   readLoginBody,
   readTwoFactorChallengeBody,
 } from "./auth-request-parsers";
+import { rotateCsrfTokenAfterPrivilegeEscalation } from "../../http/csrf";
 import { logger } from "../../lib/logger";
 import type { AuthRouteContext } from "./auth-route-shared";
 
@@ -130,6 +131,10 @@ export function registerAuthLoginRoutes(context: AuthRouteContext) {
         },
         res,
       );
+      rotateCsrfTokenAfterPrivilegeEscalation(res, {
+        reason: "two_factor_login_verified",
+        route: req.path,
+      });
 
       closeActivitySockets(
         result.closedSessionIds,

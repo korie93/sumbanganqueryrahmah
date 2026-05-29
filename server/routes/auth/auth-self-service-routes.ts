@@ -5,10 +5,8 @@ import {
   readTwoFactorDisableBody,
   readTwoFactorSetupBody,
 } from "./auth-request-parsers";
-import {
-  clearAuthSessionCookie,
-  rotateAuthSessionCsrfCookie,
-} from "../../auth/session-cookie";
+import { clearAuthSessionCookie } from "../../auth/session-cookie";
+import { rotateCsrfTokenAfterPrivilegeEscalation } from "../../http/csrf";
 import type { AuthRouteContext } from "./auth-route-shared";
 
 export function registerAuthSelfServiceRoutes(context: AuthRouteContext) {
@@ -58,7 +56,10 @@ export function registerAuthSelfServiceRoutes(context: AuthRouteContext) {
     jsonRoute(async (req, res) => {
       const body = readTwoFactorSetupBody(req.body);
       const result = await authAccountService.startTwoFactorSetup(req.user, body);
-      rotateAuthSessionCsrfCookie(res);
+      rotateCsrfTokenAfterPrivilegeEscalation(res, {
+        reason: "two_factor_setup_started",
+        route: req.path,
+      });
       return buildOkPayload({
         setup: result.setup,
         user: buildUserPayload(result.user),
@@ -73,7 +74,10 @@ export function registerAuthSelfServiceRoutes(context: AuthRouteContext) {
     jsonRoute(async (req, res) => {
       const body = readTwoFactorCodeBody(req.body);
       const user = await authAccountService.confirmTwoFactorSetup(req.user, body);
-      rotateAuthSessionCsrfCookie(res);
+      rotateCsrfTokenAfterPrivilegeEscalation(res, {
+        reason: "two_factor_enabled",
+        route: req.path,
+      });
       return buildOkPayload({
         user: buildUserPayload(user),
       });
@@ -87,7 +91,10 @@ export function registerAuthSelfServiceRoutes(context: AuthRouteContext) {
     jsonRoute(async (req, res) => {
       const body = readTwoFactorDisableBody(req.body);
       const user = await authAccountService.disableTwoFactor(req.user, body);
-      rotateAuthSessionCsrfCookie(res);
+      rotateCsrfTokenAfterPrivilegeEscalation(res, {
+        reason: "two_factor_disabled",
+        route: req.path,
+      });
       return buildOkPayload({
         user: buildUserPayload(user),
       });
@@ -130,7 +137,10 @@ export function registerAuthSelfServiceRoutes(context: AuthRouteContext) {
         );
         clearAuthSessionCookie(res);
       } else {
-        rotateAuthSessionCsrfCookie(res);
+        rotateCsrfTokenAfterPrivilegeEscalation(res, {
+          reason: "own_credentials_updated",
+          route: req.path,
+        });
       }
 
       return {

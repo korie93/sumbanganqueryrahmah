@@ -1,8 +1,10 @@
-import type { RequestHandler } from "express";
+import type { RequestHandler, Response } from "express";
 import {
   AUTH_SESSION_COOKIE_NAME,
+  AUTH_SESSION_CSRF_COOKIE_NAME,
   readAuthSessionCsrfTokenFromHeaders,
   readCookieValueFromHeader,
+  rotateAuthSessionCsrfCookie,
 } from "../auth/session-cookie";
 import { logger } from "../lib/logger";
 import {
@@ -22,6 +24,42 @@ const CSRF_TELEMETRY_EXEMPT_PATHS = new Set([
 type CsrfMiddlewareOptions = {
   allowedOrigins?: string[];
 };
+
+export type CsrfPrivilegeEscalationReason =
+  | "two_factor_login_verified"
+  | "two_factor_setup_started"
+  | "two_factor_enabled"
+  | "two_factor_disabled"
+  | "own_credentials_updated";
+
+type CsrfPrivilegeEscalationRotationContext = {
+  reason: CsrfPrivilegeEscalationReason;
+  route?: string | undefined;
+};
+
+function responseHasPendingCsrfCookie(res: Response): boolean {
+  const setCookie = res.getHeader("Set-Cookie");
+  const values = Array.isArray(setCookie) ? setCookie : [setCookie];
+  return values.some((value) => typeof value === "string" && value.includes(`${AUTH_SESSION_CSRF_COOKIE_NAME}=`));
+}
+
+export function rotateCsrfTokenAfterPrivilegeEscalation(
+  res: Response,
+  context: CsrfPrivilegeEscalationRotationContext,
+): void {
+  const alreadyQueued = responseHasPendingCsrfCookie(res);
+  if (!alreadyQueued) {
+    rotateAuthSessionCsrfCookie(res);
+  }
+
+  logger.info("CSRF token rotation enforced after privilege escalation", {
+    event: "csrf_privilege_escalation_rotation",
+    reason: context.reason,
+    route: context.route ?? null,
+    rotated: !alreadyQueued,
+    reusedPendingRotation: alreadyQueued,
+  });
+}
 
 function logCsrfRejection(req: Parameters<RequestHandler>[0], code: string, details?: Record<string, unknown>) {
   logger.warn("CSRF request rejected", {

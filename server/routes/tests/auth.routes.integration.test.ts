@@ -1429,6 +1429,10 @@ test("POST /api/auth/login returns a 2FA challenge for enabled admin accounts an
     assert.ok(Date.parse(verifyPayload.sessionExpiresAt) > Date.now());
     const setCookie = verifyResponse.headers.get("set-cookie") || "";
     assert.match(setCookie, /sqr_auth=/);
+    const csrfToken = verifyResponse.headers.get("x-csrf-token") || "";
+    assert.equal(csrfToken.length, 64);
+    assert.match(setCookie, new RegExp(`sqr_csrf=${csrfToken}`));
+    assert.equal((setCookie.match(/sqr_csrf=/g) || []).length, 1);
     assert.equal(auditLogs.some((entry) => entry.action === "LOGIN_SECOND_FACTOR_REQUIRED"), true);
     assert.equal(auditLogs.some((entry) => entry.action === "LOGIN_SUCCESS"), true);
   } finally {
