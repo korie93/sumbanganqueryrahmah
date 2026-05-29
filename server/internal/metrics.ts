@@ -28,6 +28,8 @@ export type InternalMetricName =
   | "webVitalsLegacyRouteUsedTotal";
 
 export type InternalGaugeName =
+  | "authAdaptiveRateLimitCooldownCacheSize"
+  | "authAdaptiveRateLimitCooldownCacheUtilization"
   | "authTabVisibilityCacheSize"
   | "authTabVisibilityCacheUtilization";
 
@@ -72,6 +74,8 @@ const INTERNAL_METRIC_NAMES: readonly InternalMetricName[] = [
 ];
 
 const INTERNAL_GAUGE_NAMES: readonly InternalGaugeName[] = [
+  "authAdaptiveRateLimitCooldownCacheSize",
+  "authAdaptiveRateLimitCooldownCacheUtilization",
   "authTabVisibilityCacheSize",
   "authTabVisibilityCacheUtilization",
 ];

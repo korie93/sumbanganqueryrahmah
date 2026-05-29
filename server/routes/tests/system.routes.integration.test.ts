@@ -526,6 +526,8 @@ test("GET /api/metrics exposes aggregate internal counters to admins", async () 
     assert.equal(typeof payload.counters?.cspReportsDroppedTotal, "number");
     assert.equal(typeof payload.counters?.webVitalsAcceptedTotal, "number");
     assert.equal(typeof payload.counters?.webVitalsDroppedTotal, "number");
+    assert.equal(typeof payload.gauges?.authAdaptiveRateLimitCooldownCacheSize, "number");
+    assert.equal(typeof payload.gauges?.authAdaptiveRateLimitCooldownCacheUtilization, "number");
     assert.equal(typeof payload.gauges?.authTabVisibilityCacheSize, "number");
     assert.equal(typeof payload.gauges?.authTabVisibilityCacheUtilization, "number");
     assert.deepEqual(Object.keys(payload).sort(), ["counters", "gauges", "timestamp"]);

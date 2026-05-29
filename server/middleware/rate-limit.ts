@@ -90,6 +90,17 @@ let adaptiveRateLimitCooldownSweepJob: BackgroundSweepJob | null = null;
 let adaptiveRateLimitCachePressureLastLoggedAt = 0;
 let adaptiveRateLimitWarningEvictionLastRanAt = 0;
 
+function recordAdaptiveRateLimitCooldownCacheGauges(): void {
+  internalMetrics.gauge(
+    "authAdaptiveRateLimitCooldownCacheSize",
+    adaptiveRateLimitCooldowns.size,
+  );
+  internalMetrics.gauge(
+    "authAdaptiveRateLimitCooldownCacheUtilization",
+    adaptiveRateLimitCooldowns.size / ADAPTIVE_RATE_LIMIT_MAX_BUCKETS,
+  );
+}
+
 function normalizeKeyPart(value: unknown): string | null {
   if (typeof value !== "string") {
     return null;
@@ -172,6 +183,10 @@ export function pruneAdaptiveRateLimitCooldowns(nowMs = Date.now()): number {
     }
   }
 
+  if (removedCount > 0) {
+    recordAdaptiveRateLimitCooldownCacheGauges();
+  }
+
   return removedCount;
 }
 
@@ -240,6 +255,7 @@ function performAdaptiveRateLimitCachePressureEviction(
 
   if (evictedCount > 0) {
     internalMetrics.increment("authAdaptiveRateLimitCooldownEvictionsTotal", evictedCount);
+    recordAdaptiveRateLimitCooldownCacheGauges();
   }
 
   return {
@@ -331,17 +347,23 @@ function setAdaptiveRateLimitCooldown(
   maybeEvictAdaptiveRateLimitCooldownsForPressure(nowMs);
   const ttlMs = Math.max(1, bucket.expiresAt - nowMs);
   adaptiveRateLimitCooldowns.set(key, bucket, { ttl: ttlMs });
+  recordAdaptiveRateLimitCooldownCacheGauges();
   maybeReportAdaptiveRateLimitCachePressure(nowMs);
 }
 
 function deleteAdaptiveRateLimitCooldown(key: string): boolean {
-  return adaptiveRateLimitCooldowns.delete(key);
+  const deleted = adaptiveRateLimitCooldowns.delete(key);
+  if (deleted) {
+    recordAdaptiveRateLimitCooldownCacheGauges();
+  }
+  return deleted;
 }
 
 function clearAdaptiveRateLimitCooldownState() {
   adaptiveRateLimitCooldowns.clear();
   adaptiveRateLimitCachePressureLastLoggedAt = 0;
   adaptiveRateLimitWarningEvictionLastRanAt = 0;
+  recordAdaptiveRateLimitCooldownCacheGauges();
 }
 
 function getAdaptiveRateLimitCooldownKeys(): string[] {

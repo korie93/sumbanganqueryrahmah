@@ -446,6 +446,32 @@ test("auth adaptive cooldown cache pressure emits bounded observability", (t) =>
   }
 });
 
+test("auth adaptive cooldown cache gauges track size and utilization", () => {
+  stopAdaptiveRateLimitCooldownSweep();
+  clearAdaptiveRateLimitCooldownsForTests();
+
+  try {
+    const clearedSnapshot = getInternalMetricsSnapshot();
+    assert.equal(clearedSnapshot.gauges.authAdaptiveRateLimitCooldownCacheSize, 0);
+    assert.equal(clearedSnapshot.gauges.authAdaptiveRateLimitCooldownCacheUtilization, 0);
+
+    recordAdaptiveRateLimitViolationForTests("gauged-client", 60_000, 1_000);
+    const populatedSnapshot = getInternalMetricsSnapshot();
+    assert.equal(populatedSnapshot.gauges.authAdaptiveRateLimitCooldownCacheSize, 1);
+    assert.equal(
+      populatedSnapshot.gauges.authAdaptiveRateLimitCooldownCacheUtilization,
+      1 / 4_096,
+    );
+
+    assert.equal(pruneAdaptiveRateLimitCooldowns(61_001), 1);
+    const prunedSnapshot = getInternalMetricsSnapshot();
+    assert.equal(prunedSnapshot.gauges.authAdaptiveRateLimitCooldownCacheSize, 0);
+    assert.equal(prunedSnapshot.gauges.authAdaptiveRateLimitCooldownCacheUtilization, 0);
+  } finally {
+    clearAdaptiveRateLimitCooldownsForTests();
+  }
+});
+
 test("auth two-factor login limiter throttles repeated authenticator attempts independently", async () => {
   stopAdaptiveRateLimitCooldownSweep();
   clearAdaptiveRateLimitCooldownsForTests();
