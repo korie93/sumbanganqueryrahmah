@@ -5,6 +5,8 @@ import {
   type Options,
   type Store,
 } from "express-rate-limit";
+import { z } from "zod";
+import { internalMetrics } from "../internal/metrics";
 import { logger as defaultLogger } from "../lib/logger";
 import type { SharedRateLimitStoreConfig } from "./rate-limit-runtime";
 
@@ -47,6 +49,13 @@ local ttl = redis.call("PTTL", KEYS[1])
 return { current, ttl }
 `;
 
+const RedisIncrementEvalResultSchema = z.tuple([
+  z.number().int().min(1),
+  z.number().int(),
+]);
+
+type RedisIncrementEvalResult = z.infer<typeof RedisIncrementEvalResultSchema>;
+
 let defaultRedisClientFactoryPromise: Promise<RedisClientFactory> | null = null;
 
 const REDIS_RECONNECT_BASE_DELAY_MS = 500;
@@ -68,17 +77,7 @@ function parseRedisInteger(value: unknown): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-function parseIncrementResult(result: unknown): { totalHits: number; ttlMs: number } | null {
-  if (!Array.isArray(result) || result.length < 2) {
-    return null;
-  }
-
-  const totalHits = parseRedisInteger(result[0]);
-  const ttlMs = parseRedisInteger(result[1]);
-  if (totalHits == null || ttlMs == null) {
-    return null;
-  }
-
+function mapIncrementEvalResult([totalHits, ttlMs]: RedisIncrementEvalResult): { totalHits: number; ttlMs: number } {
   return {
     totalHits,
     ttlMs,
@@ -178,7 +177,7 @@ export class RedisRateLimitStore implements Store {
     }
 
     try {
-      const result = parseIncrementResult(
+      const result = this.parseIncrementResult(
         await client.eval(REDIS_INCREMENT_SCRIPT, {
           keys: [this.buildRedisKey(key)],
           arguments: [String(this.windowMs)],
@@ -249,6 +248,20 @@ export class RedisRateLimitStore implements Store {
   private buildRedisKey(key: string) {
     const digest = crypto.createHash("sha256").update(key).digest("hex");
     return `${this.prefix}:${digest}`;
+  }
+
+  private parseIncrementResult(result: unknown): { totalHits: number; ttlMs: number } | null {
+    const parsed = RedisIncrementEvalResultSchema.safeParse(result);
+    if (!parsed.success) {
+      internalMetrics.increment("redisRateLimitEvalTypeErrorsTotal");
+      this.logger.warn("Redis rate-limit eval returned an invalid response; falling back to process-local memory", {
+        event: "redis_rate_limit_eval_type_error",
+        issues: parsed.error.issues.length,
+      });
+      return null;
+    }
+
+    return mapIncrementEvalResult(parsed.data);
   }
 
   private async getClient() {

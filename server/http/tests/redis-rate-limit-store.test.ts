@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { Options } from "express-rate-limit";
+import { getInternalMetricsSnapshot } from "../../internal/metrics";
 import {
   createRedisReconnectStrategy,
   createSharedRateLimitStore,
@@ -12,6 +13,19 @@ type FakeRedisEntry = {
   expiresAt: number;
   hits: number;
 };
+
+type WarningEntry = {
+  message: unknown;
+  payload: unknown;
+};
+
+function readWarningEvent(warning: WarningEntry): unknown {
+  if (typeof warning.payload !== "object" || warning.payload === null || !("event" in warning.payload)) {
+    return undefined;
+  }
+
+  return warning.payload.event;
+}
 
 class FakeRedisClient {
   quitCalls = 0;
@@ -267,6 +281,68 @@ test("RedisRateLimitStore closes a failed command client before retrying", async
 
   assert.equal((await store.increment("client-1")).totalHits, 1);
   assert.equal(factoryCalls, 2);
+});
+
+test("RedisRateLimitStore records eval type errors when Lua returns null", async () => {
+  const warnings: WarningEntry[] = [];
+  const metricBefore = getInternalMetricsSnapshot().counters.redisRateLimitEvalTypeErrorsTotal;
+  const store = new RedisRateLimitStore({
+    config: redisConfig,
+    createRedisClient: () => ({
+      connect: async () => undefined,
+      decr: async () => 0,
+      del: async () => 0,
+      eval: async () => null,
+      get: async () => null,
+      pTTL: async () => -2,
+      quit: async () => undefined,
+    }),
+    logger: {
+      warn(message, payload) {
+        warnings.push({ message, payload });
+      },
+    },
+    prefix: "sqr:test:eval-null",
+  });
+  initStore(store);
+
+  assert.equal((await store.increment("client-1")).totalHits, 1);
+  assert.equal(
+    getInternalMetricsSnapshot().counters.redisRateLimitEvalTypeErrorsTotal,
+    metricBefore + 1,
+  );
+  assert.ok(warnings.some((warning) => readWarningEvent(warning) === "redis_rate_limit_eval_type_error"));
+});
+
+test("RedisRateLimitStore rejects string values from eval instead of coercing them", async () => {
+  const warnings: WarningEntry[] = [];
+  const metricBefore = getInternalMetricsSnapshot().counters.redisRateLimitEvalTypeErrorsTotal;
+  const store = new RedisRateLimitStore({
+    config: redisConfig,
+    createRedisClient: () => ({
+      connect: async () => undefined,
+      decr: async () => 0,
+      del: async () => 0,
+      eval: async () => ["3", "57"],
+      get: async () => null,
+      pTTL: async () => -2,
+      quit: async () => undefined,
+    }),
+    logger: {
+      warn(message, payload) {
+        warnings.push({ message, payload });
+      },
+    },
+    prefix: "sqr:test:eval-string",
+  });
+  initStore(store);
+
+  assert.equal((await store.increment("client-1")).totalHits, 1);
+  assert.equal(
+    getInternalMetricsSnapshot().counters.redisRateLimitEvalTypeErrorsTotal,
+    metricBefore + 1,
+  );
+  assert.ok(warnings.some((warning) => readWarningEvent(warning) === "redis_rate_limit_eval_type_error"));
 });
 
 test("createRedisReconnectStrategy uses bounded exponential backoff and structured warnings", () => {
