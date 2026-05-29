@@ -8,6 +8,7 @@ export type InternalMetricName =
   | "collectionRollupNotificationCallbackFailuresTotal"
   | "collectionRollupNotificationCriticalFailuresTotal"
   | "collectionRollupNotificationDisconnectFailuresTotal"
+  | "collectionRollupNotificationListenerRemovalFailuresTotal"
   | "collectionRollupNotificationReconnectFailuresTotal"
   | "cspReportsAcceptedTotal"
   | "cspReportsDroppedRateLimitTotal"
@@ -49,6 +50,7 @@ const INTERNAL_METRIC_NAMES: readonly InternalMetricName[] = [
   "collectionRollupNotificationCallbackFailuresTotal",
   "collectionRollupNotificationCriticalFailuresTotal",
   "collectionRollupNotificationDisconnectFailuresTotal",
+  "collectionRollupNotificationListenerRemovalFailuresTotal",
   "collectionRollupNotificationReconnectFailuresTotal",
   "cspReportsAcceptedTotal",
   "cspReportsDroppedRateLimitTotal",

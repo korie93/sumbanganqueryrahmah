@@ -149,6 +149,62 @@ type PgNotificationListenerEntry = {
   handleNotification: (message: PgNotification) => void;
 };
 
+type PgNotificationEventName = "end" | "error" | "notification";
+
+type PgNotificationEventListener =
+  | ((message: PgNotification) => void)
+  | ((error: unknown) => void)
+  | (() => void);
+
+export function removePostgresNotificationClientListener(
+  client: PgNotificationClientLike,
+  event: PgNotificationEventName,
+  listener: PgNotificationEventListener,
+): void {
+  if (event === "notification") {
+    const notificationListener = listener as (message: PgNotification) => void;
+    if (typeof client.removeListener === "function") {
+      client.removeListener(event, notificationListener);
+      return;
+    }
+    if (typeof client.off === "function") {
+      client.off(event, notificationListener);
+      return;
+    }
+  } else if (event === "error") {
+    const errorListener = listener as (error: unknown) => void;
+    if (typeof client.removeListener === "function") {
+      client.removeListener(event, errorListener);
+      return;
+    }
+    if (typeof client.off === "function") {
+      client.off(event, errorListener);
+      return;
+    }
+  } else {
+    const endListener = listener as () => void;
+    if (typeof client.removeListener === "function") {
+      client.removeListener(event, endListener);
+      return;
+    }
+    if (typeof client.off === "function") {
+      client.off(event, endListener);
+      return;
+    }
+  }
+
+  internalMetrics.increment("collectionRollupNotificationListenerRemovalFailuresTotal");
+  logger.error("PostgreSQL notification listener removal is unavailable", {
+    event: "collection_rollup_listener_removal_unavailable",
+    expected: "removeListener_or_off",
+    found: "none",
+    operation: "remove_listener",
+    source: "collection_rollup_notification",
+    status: "failed",
+  });
+  throw new Error("PostgreSQL notification client does not support listener removal.");
+}
+
 class PgNotificationListenerRegistry {
   private readonly listeners = new Map<PgNotificationClientLike, PgNotificationListenerEntry>();
 
@@ -207,33 +263,10 @@ class PgNotificationListenerRegistry {
 
   private removeListener(
     client: PgNotificationClientLike,
-    event: "end" | "error" | "notification",
-    listener: ((message: PgNotification) => void) | ((error: unknown) => void) | (() => void),
+    event: PgNotificationEventName,
+    listener: PgNotificationEventListener,
   ): void {
-    if (event === "notification") {
-      const notificationListener = listener as (message: PgNotification) => void;
-      if (client.off) {
-        client.off(event, notificationListener);
-      } else {
-        client.removeListener?.(event, notificationListener);
-      }
-      return;
-    }
-    if (event === "error") {
-      const errorListener = listener as (error: unknown) => void;
-      if (client.off) {
-        client.off(event, errorListener);
-      } else {
-        client.removeListener?.(event, errorListener);
-      }
-      return;
-    }
-    const endListener = listener as () => void;
-    if (client.off) {
-      client.off(event, endListener);
-    } else {
-      client.removeListener?.(event, endListener);
-    }
+    removePostgresNotificationClientListener(client, event, listener);
   }
 }
 

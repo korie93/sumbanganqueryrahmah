@@ -9,6 +9,7 @@ import {
   CollectionRollupRefreshNotificationSubscriber,
   assertSafeChannelName,
   escapePostgresNotificationChannel,
+  removePostgresNotificationClientListener,
   resolveCollectionRollupRefreshReconnectDelayMs,
 } from "../lib/collection-rollup-refresh-notification";
 import { logger } from "../lib/logger";
@@ -58,6 +59,25 @@ class FakeNotificationClient extends EventEmitter {
       throw this.options.endError;
     }
   }
+}
+
+function createListenerRemovalClient(options: {
+  readonly includeOff?: boolean;
+  readonly includeRemoveListener?: boolean;
+}) {
+  const emitter = new EventEmitter();
+  const client = {
+    connect: async () => undefined,
+    end: async () => undefined,
+    on: emitter.on.bind(emitter),
+    query: async () => undefined,
+    ...(options.includeOff ? { off: emitter.off.bind(emitter) } : {}),
+    ...(options.includeRemoveListener
+      ? { removeListener: emitter.removeListener.bind(emitter) }
+      : {}),
+  };
+
+  return { client, emitter };
 }
 
 test("CollectionRollupRefreshNotificationSubscriber reuses runtime PostgreSQL SSL policy", () => {
@@ -205,6 +225,66 @@ test("CollectionRollupRefreshNotificationSubscriber removes PostgreSQL listeners
     channel: COLLECTION_ROLLUP_REFRESH_NOTIFICATION_CHANNEL,
   });
   assert.equal(wakeCount, 0);
+});
+
+test("removePostgresNotificationClientListener uses removeListener when available", () => {
+  const { client, emitter } = createListenerRemovalClient({
+    includeRemoveListener: true,
+  });
+  const listener = () => undefined;
+
+  client.on("end", listener);
+  assert.equal(emitter.listenerCount("end"), 1);
+
+  removePostgresNotificationClientListener(client, "end", listener);
+  assert.equal(emitter.listenerCount("end"), 0);
+});
+
+test("removePostgresNotificationClientListener falls back to off when removeListener is unavailable", () => {
+  const { client, emitter } = createListenerRemovalClient({
+    includeOff: true,
+  });
+  const listener = (message: { channel?: string }) => {
+    assert.equal(message.channel, COLLECTION_ROLLUP_REFRESH_NOTIFICATION_CHANNEL);
+  };
+
+  client.on("notification", listener);
+  assert.equal(emitter.listenerCount("notification"), 1);
+
+  removePostgresNotificationClientListener(client, "notification", listener);
+  assert.equal(emitter.listenerCount("notification"), 0);
+});
+
+test("removePostgresNotificationClientListener records unavailable cleanup primitives", (t) => {
+  const { client } = createListenerRemovalClient({});
+  const errors: Array<{ message: string; meta?: Record<string, unknown> }> = [];
+  const beforeFailures = getInternalMetricsSnapshot()
+    .counters.collectionRollupNotificationListenerRemovalFailuresTotal;
+  t.mock.method(
+    logger,
+    "error",
+    ((message: string, meta?: Record<string, unknown>) => {
+      errors.push(meta ? { message, meta } : { message });
+    }) as typeof logger.error,
+  );
+
+  assert.throws(
+    () => removePostgresNotificationClientListener(client, "end", () => undefined),
+    /does not support listener removal/,
+  );
+
+  assert.equal(
+    getInternalMetricsSnapshot().counters.collectionRollupNotificationListenerRemovalFailuresTotal,
+    beforeFailures + 1,
+  );
+  assert.equal(
+    errors.some(({ message, meta }) => (
+      message === "PostgreSQL notification listener removal is unavailable"
+      && meta?.event === "collection_rollup_listener_removal_unavailable"
+      && meta.status === "failed"
+    )),
+    true,
+  );
 });
 
 test("CollectionRollupRefreshNotificationSubscriber retries after the initial connection fails", async () => {
