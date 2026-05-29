@@ -71,6 +71,12 @@ type ReceiptImagePreviewProps = {
 const RECEIPT_IMAGE_BASE_DISPLAY_WIDTH_PX = 960;
 const RECEIPT_IMAGE_MAX_DISPLAY_WIDTH_PX = 1_520;
 
+export function cleanupReceiptImagePreviewElement(
+  image: Pick<HTMLImageElement, "removeAttribute">,
+): void {
+  image.removeAttribute("src");
+}
+
 function ReceiptImagePreview({
   source,
   alt,
@@ -104,8 +110,7 @@ function ReceiptImagePreview({
 
     return () => {
       if (image) {
-        image.removeAttribute("src");
-        image.src = "";
+        cleanupReceiptImagePreviewElement(image);
       }
     };
   }, [source]);
