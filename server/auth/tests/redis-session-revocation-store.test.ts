@@ -333,7 +333,7 @@ test("RedisSessionRevocationStore logs sanitized Redis failures and marks health
     (service) => service.service === SESSION_REVOCATION_HEALTH_SERVICE,
   );
   assert.equal(degradedService?.reason, "SESSION_REVOCATION_REDIS_UNAVAILABLE");
-  assert.equal(degradedService?.details, RedisSessionRevocationErrorClass.RETRYABLE);
+  assert.equal(degradedService?.details, `fail-closed-mode:${RedisSessionRevocationErrorClass.RETRYABLE}`);
 });
 
 test("RedisSessionRevocationStore clears degraded health after Redis recovers", async () => {

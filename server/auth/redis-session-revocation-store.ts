@@ -44,6 +44,7 @@ const MIN_REVOCATION_TTL_MS = 1_000;
 const DEFAULT_REVOCATION_TTL_MS = 24 * 60 * 60 * 1000;
 const SESSION_REVOCATION_HEALTH_SERVICE = "session-revocation-store";
 const SESSION_REVOCATION_DEGRADED_REASON = "SESSION_REVOCATION_REDIS_UNAVAILABLE";
+const SESSION_REVOCATION_FAIL_CLOSED_MODE = "fail-closed-mode";
 const SESSION_REVOCATION_VALUE = "1";
 const ATOMIC_REVOKE_SCRIPT = `
 local existing = redis.call('GET', KEYS[1])
@@ -137,6 +138,10 @@ function sanitizeRedisSessionRevocationError(error: unknown): Record<string, str
     ...(code ? { code } : {}),
     ...(name ? { name } : {}),
   };
+}
+
+function buildFailClosedHealthDetail(classification: RedisSessionRevocationErrorClass): string {
+  return `${SESSION_REVOCATION_FAIL_CLOSED_MODE}:${classification}`;
 }
 
 async function resolveDefaultRedisClientFactory(): Promise<RedisSessionRevocationClientFactory> {
@@ -330,7 +335,7 @@ export class RedisSessionRevocationStore implements SessionRevocationStore {
     markStartupServiceDegraded(
       SESSION_REVOCATION_HEALTH_SERVICE,
       SESSION_REVOCATION_DEGRADED_REASON,
-      classification,
+      buildFailClosedHealthDetail(classification),
     );
     this.warningEmitted = true;
     this.lastWarningAt = now;

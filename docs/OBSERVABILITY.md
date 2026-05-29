@@ -84,6 +84,9 @@ revocation Redis failures emit the structured event
 `sessionRevocationRedisErrorsTotal`, and mark readiness degraded until Redis
 recovers; the payload is limited to provider, operation, classification, and
 sanitized error name/code so JWT ids and user identifiers are not logged.
+Internal health exposes the degraded service detail as
+`fail-closed-mode:<classification>` so operators can see that uncertain session
+checks are being rejected, not accepted.
 
 HTTP throttling responses expose `Retry-After`, `RateLimit-Limit`, `RateLimit-Remaining`, and `RateLimit-Reset` plus the legacy-compatible `X-RateLimit-*` variants so browser clients and operational probes can back off without parsing log output. Authenticated requests are counted against both an IP bucket and a per-user bucket (`SQR_RATE_LIMIT_USER_READS_PER_MINUTE`, `SQR_RATE_LIMIT_USER_WRITES_PER_MINUTE`, `SQR_RATE_LIMIT_USER_UPLOADS_PER_MINUTE`). CSRF rotation also returns the fresh token in `X-CSRF-Token` alongside the readable `sqr_csrf` cookie for clients that prefer header-based refresh handling after sensitive mutations.
 
