@@ -87,6 +87,33 @@ test("secret rotation runbook documents collection PII key rotation cadence and 
   }
 });
 
+test("key rotation runbook covers operational key families without fictional scripts", async () => {
+  const runbook = await readDoc("docs/KEY-ROTATION-RUNBOOK.md");
+  const normalizedRunbook = runbook.replace(/\s+/g, " ");
+  const envExample = await readDoc(".env.example");
+  const security = await readDoc("SECURITY.md");
+
+  for (const marker of [
+    "# SQR Key Rotation Runbook",
+    "SESSION_SECRET",
+    "SESSION_SECRET_PREVIOUS",
+    "SQR_AUDIT_HMAC_KEY",
+    "TWO_FACTOR_ENCRYPTION_KEY",
+    "COLLECTION_PII_ENCRYPTION_KEY",
+    "BACKUP_ENCRYPTION_KEYS",
+    "Emergency Rotation Checklist",
+    "operations rotation register",
+    "npm run collection:reencrypt-pii",
+    "does not currently include a dedicated bulk 2FA re-encryption script",
+  ]) {
+    assert.match(normalizedRunbook, new RegExp(marker.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  }
+
+  assert.doesNotMatch(runbook, /migrate-2fa-encryption|rotate-pii-encryption|verify-pii-encryption/);
+  assert.match(envExample, /docs\/KEY-ROTATION-RUNBOOK\.md/);
+  assert.match(security, /docs\/KEY-ROTATION-RUNBOOK\.md/);
+});
+
 test("dependency documentation describes the runtime import cycle guard", async () => {
   const content = await readDoc("docs/DEPENDENCY_SUPPLY_CHAIN.md");
 

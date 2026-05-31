@@ -33,6 +33,16 @@ Session revocation writes must be atomic. If Redis state cannot be confirmed
 for a security decision, auth checks should fail closed and emit structured
 metrics/logging without session IDs, tokens, or credentials.
 
+### Key rotation
+
+Production key rotation must follow
+[docs/KEY-ROTATION-RUNBOOK.md](docs/KEY-ROTATION-RUNBOOK.md). That runbook
+covers the operational cadence, emergency paths, and verification gates for
+`SESSION_SECRET`, `SESSION_SECRET_PREVIOUS`, `SQR_AUDIT_HMAC_KEY`,
+`TWO_FACTOR_ENCRYPTION_KEY`, `COLLECTION_PII_ENCRYPTION_KEY`, and backup
+encryption keys. Store actual rotation dates and key locations in the private
+operations rotation register, not in Git.
+
 ### Batch authorization
 
 Batch operations must perform per-item authorization before mutating state.
