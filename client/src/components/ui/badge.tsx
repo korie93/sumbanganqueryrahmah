@@ -11,10 +11,10 @@ const badgeVariants = cva(
     variants: {
       variant: {
         default:
-          "border-transparent bg-primary text-primary-foreground shadow-xs",
-        secondary: "border-transparent bg-secondary text-secondary-foreground",
+          "border-transparent bg-primary [color:hsl(var(--primary-foreground))] shadow-xs",
+        secondary: "border-transparent bg-secondary [color:hsl(var(--secondary-foreground))]",
         destructive:
-          "border-transparent bg-destructive text-destructive-foreground shadow-xs",
+          "border-transparent bg-destructive [color:hsl(var(--destructive-foreground))] shadow-xs",
 
         outline: " border [border-color:var(--badge-outline)] shadow-xs",
       },
