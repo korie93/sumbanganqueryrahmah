@@ -27,11 +27,14 @@ test("pre-commit guard allows normal source files without secrets", () => {
   const findings = findPreCommitSecretFindings({
     files: [
       {
-        filePath: "client/src/example.ts",
+        filePath: "client/src/example.tsx",
         text: [
           "export const label = 'Selamat datang';",
           "const configuredSessionSecret = runtimeConfig.auth.sessionSecret;",
           "const params = { password: readDatabasePassword() };",
+          "<PasswordStrengthMeter",
+          "  password={newPassword}",
+          "/>",
         ].join("\n"),
       },
     ],

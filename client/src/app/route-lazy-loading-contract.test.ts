@@ -83,3 +83,14 @@ test("system monitor child sections share lazy handles outside the route module"
     /from "@\/app\/system-monitor-lazy-sections"/,
   )
 })
+
+test("authenticated route surfaces remain wrapped in route error boundaries", () => {
+  const shellSource = readAppSource("AuthenticatedAppShell.tsx")
+  const entrySource = readAppSource("AuthenticatedAppEntry.tsx")
+
+  assert.match(shellSource, /<AppRouteErrorBoundary[\s\S]*routeKey=\{`\$\{currentPage\}:\$\{monitorSection\}:/)
+  assert.match(shellSource, /<AppPageRenderer[\s\S]*\/>/)
+  assert.match(shellSource, /routeKey="change-password"/)
+  assert.match(entrySource, /const renderRoutePage = \(routeKey: string, node: ReactNode/)
+  assert.match(entrySource, /<AppRouteErrorBoundary[\s\S]*routeKey=\{routeKey\}/)
+})

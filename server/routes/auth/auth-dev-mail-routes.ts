@@ -1,6 +1,6 @@
 import { asyncHandler } from "../../http/async-handler";
 import { isStrictLocalDevelopmentEnvironment } from "../../config/runtime-environment";
-import { readRouteParam } from "../../http/validation";
+import { readQueryObject, readRouteParam } from "../../http/validation";
 import type { AuthRouteContext } from "./auth-route-shared";
 
 function isLoopbackHost(hostname: string): boolean {
@@ -59,7 +59,7 @@ export function registerAuthDevMailRoutes(context: AuthRouteContext) {
     jsonRoute(async (req) => {
       const result = await authAccountService.listDevMailOutbox(
         req.user,
-        req.query as Record<string, unknown>,
+        readQueryObject(req.query),
       );
       return {
         ok: true,

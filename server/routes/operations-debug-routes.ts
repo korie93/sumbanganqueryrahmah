@@ -1,6 +1,7 @@
 import { timingSafeEqual } from "node:crypto";
 import type { Request, RequestHandler } from "express";
 import { asyncHandler } from "../http/async-handler";
+import { buildApiErrorResponse } from "../http/api-error-response";
 import { logger } from "../lib/logger";
 import type { OperationsRouteContext } from "./operations-route-context";
 
@@ -120,7 +121,9 @@ export function createOperationsDebugAccessGate(
         hasBearerToken: Boolean(token),
         ipAllowed,
       });
-      res.status(404).json({ message: "Not found" });
+      res.status(404).json(buildApiErrorResponse("Not found", {
+        statusCode: 404,
+      }));
       return;
     }
 

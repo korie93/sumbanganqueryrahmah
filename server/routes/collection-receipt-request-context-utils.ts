@@ -1,4 +1,5 @@
 import type { AuthenticatedRequest } from "../auth/guards";
+import { readRouteParam } from "../http/validation";
 import type { PostgresStorage } from "../storage-postgres";
 import { canUserAccessCollectionRecord } from "./collection-access";
 import { normalizeCollectionText } from "./collection.validation";
@@ -21,6 +22,24 @@ export type CollectionReceiptRequestContextSuccess = {
   requestedReceiptId: string | null;
 };
 
+function safeReadRouteParam(value: unknown, name: string): {
+  message?: string;
+  ok: boolean;
+  value?: string;
+} {
+  try {
+    return {
+      ok: true,
+      value: readRouteParam(value, name),
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      message: error instanceof Error ? error.message : `${name} is invalid.`,
+    };
+  }
+}
+
 export async function resolveCollectionReceiptRequestContext(
   storage: PostgresStorage,
   req: AuthenticatedRequest,
@@ -35,25 +54,17 @@ export async function resolveCollectionReceiptRequestContext(
     };
   }
 
-  if (Array.isArray(req.params.id)) {
+  const idParam = safeReadRouteParam(req.params.id, "Collection id");
+  if (!idParam.ok || !idParam.value) {
     return {
       ok: false,
       statusCode: 400,
-      message: "Collection id must be a single path segment.",
+      message: idParam.message || "Collection id is required.",
       reason: "invalid_collection_id",
     };
   }
 
-  const id = normalizeCollectionText(req.params.id);
-  if (!id) {
-    return {
-      ok: false,
-      statusCode: 400,
-      message: "Collection id is required.",
-      reason: "missing_collection_id",
-    };
-  }
-
+  const id = idParam.value;
   const record = await storage.getCollectionRecordById(id);
   if (!record) {
     return {
@@ -80,11 +91,20 @@ export async function resolveCollectionReceiptRequestContext(
   }
 
   const rawReceiptId = receiptIdRaw ?? req.params.receiptId ?? null;
-  if (Array.isArray(rawReceiptId)) {
+  if (rawReceiptId === null || rawReceiptId === undefined || rawReceiptId === "") {
+    return {
+      ok: true,
+      record,
+      requestedReceiptId: null,
+    };
+  }
+
+  const receiptIdParam = safeReadRouteParam(rawReceiptId, "Receipt id");
+  if (!receiptIdParam.ok || !receiptIdParam.value) {
     return {
       ok: false,
       statusCode: 400,
-      message: "Receipt id must be a single path segment.",
+      message: receiptIdParam.message || "Receipt id is invalid.",
       reason: "invalid_receipt_id",
       meta: { recordId: record.id },
     };
@@ -93,6 +113,6 @@ export async function resolveCollectionReceiptRequestContext(
   return {
     ok: true,
     record,
-    requestedReceiptId: normalizeCollectionText(rawReceiptId),
+    requestedReceiptId: normalizeCollectionText(receiptIdParam.value),
   };
 }

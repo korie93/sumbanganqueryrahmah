@@ -2,6 +2,7 @@ import { useCallback, type Dispatch, type MutableRefObject, type SetStateAction 
 
 import type { AIChatMessageInput } from "@/context/AIContext";
 import type { AIChatStatus } from "@/lib/ai-chat";
+import { useTimers } from "@/hooks/useTimers";
 import { canApplyAIChatUiUpdate, isActiveAIChatSession } from "@/components/ai-chat-session-guards";
 
 type UseAIChatTypingActionOptions = {
@@ -37,19 +38,30 @@ export function useAIChatTypingAction({
   typingDelayMs,
   typingIntervalRef,
 }: UseAIChatTypingActionOptions) {
+  const { clearManagedInterval, setManagedInterval } = useTimers();
+
+  const clearTypingInterval = useCallback(() => {
+    if (typingIntervalRef.current !== null) {
+      clearManagedInterval(typingIntervalRef.current);
+      typingIntervalRef.current = null;
+    }
+  }, [clearManagedInterval, typingIntervalRef]);
+
   return useCallback((text: string, sessionId: number) => {
     if (!canApplyAIChatUiUpdate(sessionId, sessionRef, isMountedRef)) {
       return;
     }
 
+    clearTypingInterval();
     stopTyping();
     setIsTyping(true);
     setAiStatus("TYPING");
     setStreamingText("");
 
     let index = 0;
-    typingIntervalRef.current = window.setInterval(() => {
+    typingIntervalRef.current = setManagedInterval(() => {
       if (!isActiveAIChatSession(sessionId, sessionRef)) {
+        clearTypingInterval();
         stopTyping();
         return;
       }
@@ -60,6 +72,7 @@ export function useAIChatTypingAction({
       }
 
       if (index >= text.length) {
+        clearTypingInterval();
         stopTyping();
         if (!isActiveAIChatSession(sessionId, sessionRef)) {
           return;
@@ -85,6 +98,7 @@ export function useAIChatTypingAction({
   }, [
     appendMessage,
     clearSlowNoticeTimer,
+    clearTypingInterval,
     isMountedRef,
     processingRef,
     sessionRef,
@@ -94,6 +108,7 @@ export function useAIChatTypingAction({
     setIsTyping,
     setSlowNotice,
     setStreamingText,
+    setManagedInterval,
     stopTyping,
     typingDelayMs,
     typingIntervalRef,

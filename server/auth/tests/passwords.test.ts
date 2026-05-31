@@ -4,6 +4,7 @@ import bcrypt from "bcrypt";
 import {
   CREDENTIAL_BCRYPT_COST,
   CREDENTIAL_PASSWORD_MAX_LENGTH,
+  CREDENTIAL_PASSWORD_MIN_LENGTH,
   isCredentialPasswordWithinMaxLength,
   isStrongPassword,
 } from "../credentials";
@@ -23,6 +24,8 @@ const VALID_BCRYPT_HASH = "$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewY5NU7z6
 
 test("credential password policy accepts normal passwords and rejects oversized input", () => {
   assert.equal(isStrongPassword("StrongPass123!"), true);
+  assert.equal(CREDENTIAL_PASSWORD_MIN_LENGTH, 14);
+  assert.equal(isStrongPassword("StrongPas123!"), false);
   assert.equal(isStrongPassword("StrongPass123"), false);
   assert.equal(isStrongPassword("short1!Aa"), false);
   assert.equal(isStrongPassword("a".repeat(CREDENTIAL_PASSWORD_MAX_LENGTH + 1)), false);

@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import test from "node:test";
 import {
   analyzeDependencyAuditReport,
@@ -6,6 +8,8 @@ import {
   analyzePackageOverrides,
   analyzeSecurityCriticalDependencyPins,
 } from "../lib/dependency-audit.mjs";
+
+const repoRoot = process.cwd();
 
 test("dependency audit fails the old drizzle-kit dev-only moderate chain after esbuild override", () => {
   const result = analyzeDependencyAuditReport({
@@ -129,10 +133,21 @@ test("package override audit accepts documented override set", () => {
   assert.deepEqual(result.failures, []);
 });
 
-test("security-critical dependency audit requires exact direct pins", () => {
+test("package override runbook lists the current package overrides", () => {
+  const packageJson = JSON.parse(readFileSync(path.join(repoRoot, "package.json"), "utf8"));
+  const runbook = readFileSync(path.join(repoRoot, "docs", "DEPENDENCY_SUPPLY_CHAIN.md"), "utf8");
+
+  for (const packageName of Object.keys(packageJson.overrides ?? {})) {
+    assert.match(runbook, new RegExp(`\\| \`${packageName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\` \\|`));
+  }
+
+  assert.doesNotMatch(runbook, /\| `dompurify` \|/);
+});
+
+test("security-critical dependency audit requires exact direct pins except documented patch ranges", () => {
   const result = analyzeSecurityCriticalDependencyPins({
     dependencies: {
-      bcrypt: "6.0.0",
+      bcrypt: "^6.0.0",
       busboy: "^1.6.0",
       compression: "1.8.1",
       dompurify: "3.4.1",
@@ -154,11 +169,14 @@ test("security-critical dependency audit requires exact direct pins", () => {
 
   assert.match(result.failures.join("\n"), /busboy must be pinned to an exact version/);
   assert.match(result.failures.join("\n"), /zod-validation-error is missing from direct dependencies/);
+  assert.doesNotMatch(result.failures.join("\n"), /bcrypt/);
+  assert.match(result.documentedPatchRanges.bcrypt, /security patch/i);
 });
 
-test("security-critical dependency audit accepts exact direct pins", () => {
+test("security-critical dependency audit accepts exact direct pins and documented bcrypt patch range", () => {
   const result = analyzeSecurityCriticalDependencyPins({
-    dependencies: Object.fromEntries([
+    dependencies: {
+      ...Object.fromEntries([
       "bcrypt",
       "busboy",
       "compression",
@@ -177,7 +195,9 @@ test("security-critical dependency audit accepts exact direct pins", () => {
       "ws",
       "zod",
       "zod-validation-error",
-    ].map((packageName) => [packageName, "1.2.3"])),
+      ].map((packageName) => [packageName, "1.2.3"])),
+      bcrypt: "^6.0.0",
+    },
   });
 
   assert.deepEqual(result.failures, []);

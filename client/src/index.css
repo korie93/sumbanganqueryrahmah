@@ -37,6 +37,15 @@
   background: var(--scrollbar-thumb-hover);
 }
 
+.horizontal-scroll-hint {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.horizontal-scroll-hint::-webkit-scrollbar {
+  display: none;
+}
+
 .scroll-fade-y {
   --scroll-fade-size: 1.25rem;
   -webkit-mask-image: linear-gradient(

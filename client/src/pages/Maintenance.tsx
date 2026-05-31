@@ -3,6 +3,7 @@ import { AlertTriangle, Clock3, ShieldAlert, TimerReset, Wrench } from "lucide-r
 import { getMaintenanceStatus } from "@/lib/api/settings";
 import { getBrowserLocalStorage, safeGetStorageItem, safeSetStorageItem } from "@/lib/browser-storage";
 import { formatDateTimeDDMMYYYY } from "@/lib/date-format";
+import { useTimers } from "@/hooks/useTimers";
 import {
   MAINTENANCE_COUNTDOWN_TICK_INTERVAL_MS,
   MAINTENANCE_STATUS_POLL_INTERVAL_MS,
@@ -36,6 +37,7 @@ function formatCountdown(endTime: string | null, now: number) {
 export default function MaintenancePage() {
   const [state, setState] = useState<MaintenancePayload>(DEFAULT_MAINTENANCE_STATE);
   const [now, setNow] = useState(Date.now());
+  const { clearManagedInterval, setManagedInterval } = useTimers();
 
   useEffect(() => {
     let mounted = true;
@@ -68,16 +70,17 @@ export default function MaintenancePage() {
 
     const stopPolling = () => {
       if (pollIntervalId !== null) {
-        window.clearInterval(pollIntervalId);
+        clearManagedInterval(pollIntervalId);
         pollIntervalId = null;
       }
     };
 
     const startPolling = () => {
-      if (document.hidden || pollIntervalId !== null) {
+      if (document.hidden) {
         return;
       }
-      pollIntervalId = window.setInterval(() => {
+      stopPolling();
+      pollIntervalId = setManagedInterval(() => {
         void load();
       }, MAINTENANCE_STATUS_POLL_INTERVAL_MS);
     };
@@ -110,7 +113,7 @@ export default function MaintenancePage() {
 
     void load();
     startPolling();
-    window.addEventListener("maintenance-updated", handleMaintenanceUpdated as EventListener);
+    window.addEventListener("maintenance-updated", handleMaintenanceUpdated);
     window.addEventListener("storage", handleStorage);
     document.addEventListener("visibilitychange", handleVisibilityChange);
 
@@ -118,12 +121,12 @@ export default function MaintenancePage() {
       mounted = false;
       activeController?.abort();
       activeController = null;
-      window.removeEventListener("maintenance-updated", handleMaintenanceUpdated as EventListener);
+      window.removeEventListener("maintenance-updated", handleMaintenanceUpdated);
       window.removeEventListener("storage", handleStorage);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       stopPolling();
     };
-  }, []);
+  }, [clearManagedInterval, setManagedInterval]);
 
   const countdownTargetMs = useMemo(() => {
     if (!state.endTime) {

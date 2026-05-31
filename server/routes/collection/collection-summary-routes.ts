@@ -1,3 +1,4 @@
+import { readQueryObject } from "../../http/validation";
 import type { CollectionRouteContext } from "./collection-route-shared";
 
 export function registerCollectionSummaryRoutes(context: CollectionRouteContext) {
@@ -14,28 +15,28 @@ export function registerCollectionSummaryRoutes(context: CollectionRouteContext)
     "/api/collection/summary",
     ...reportAccess,
     jsonRoute("Failed to load collection summary.", (req) =>
-      collectionService.getSummary(req.user, req.query as Record<string, unknown>)),
+      collectionService.getSummary(req.user, readQueryObject(req.query))),
   );
 
   app.get(
     "/api/collection/list",
     ...reportAccess,
     jsonRoute("Failed to load collection records.", (req) =>
-      collectionService.listRecords(req.user, req.query as Record<string, unknown>)),
+      collectionService.listRecords(req.user, readQueryObject(req.query))),
   );
 
   app.get(
     "/api/collection/monthly-comparison",
     ...reportAccess,
     jsonRoute("Failed to load monthly collection comparison.", (req) =>
-      collectionService.getMonthlyComparison(req.user, req.query as Record<string, unknown>)),
+      collectionService.getMonthlyComparison(req.user, readQueryObject(req.query))),
   );
 
   app.get(
     "/api/collection/monthly-target",
     ...reportAccess,
     jsonRoute("Failed to load monthly collection target.", (req) =>
-      collectionService.getMonthlyTarget(req.user, req.query as Record<string, unknown>)),
+      collectionService.getMonthlyTarget(req.user, readQueryObject(req.query))),
   );
 
   app.get(
@@ -48,6 +49,6 @@ export function registerCollectionSummaryRoutes(context: CollectionRouteContext)
     "/api/collection/nickname-summary",
     ...adminSummaryAccess,
     jsonRoute("Failed to load nickname summary.", (req) =>
-      collectionService.getNicknameSummary(req.user, req.query as Record<string, unknown>)),
+      collectionService.getNicknameSummary(req.user, readQueryObject(req.query))),
   );
 }

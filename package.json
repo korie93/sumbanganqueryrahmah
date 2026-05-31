@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "type": "module",
   "engines": {
-    "node": ">=24"
+    "node": ">=24 <25"
   },
   "browserslist": {
     "production": [
@@ -143,7 +143,7 @@
     "@radix-ui/react-toggle-group": "^1.1.11",
     "@radix-ui/react-tooltip": "^1.2.0",
     "@tanstack/react-query": "^5.100.5",
-    "bcrypt": "6.0.0",
+    "bcrypt": "^6.0.0",
     "busboy": "1.6.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",

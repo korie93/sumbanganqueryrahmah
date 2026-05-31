@@ -21,6 +21,7 @@ import {
   stopTestServer,
 } from "./http-test-utils";
 import type { Request, Response } from "express";
+import { createTelemetryBucketStore } from "../telemetry-drop-buckets";
 
 function createTelemetryRouteHarness(options: {
   cspReportDropGuard?: Parameters<typeof registerTelemetryRoutes>[1]["cspReportDropGuard"];
@@ -628,6 +629,97 @@ test("web vitals drop guard sweeps expired buckets without waiting for request t
 
   guard.stopWebVitalsTelemetryDropGuard?.();
   assert.equal(clearedHandle, intervalHandle);
+});
+
+test("telemetry drop bucket sweep registers SIGTERM cleanup and stops idempotently", (t) => {
+  let registeredShutdownHandler: (() => void) | null = null;
+  let removedShutdownHandler: (() => void) | null = null;
+  let clearedHandle: unknown = null;
+  let unrefCalls = 0;
+  const intervalHandle = {
+    unref() {
+      unrefCalls += 1;
+    },
+  };
+
+  t.mock.method(globalThis, "setInterval", (((_callback: TimerHandler) => (
+    intervalHandle as unknown as ReturnType<typeof setInterval>
+  )) as unknown) as typeof globalThis.setInterval);
+  t.mock.method(globalThis, "clearInterval", ((handle?: Parameters<typeof clearInterval>[0]) => {
+    clearedHandle = handle;
+  }) as typeof globalThis.clearInterval);
+
+  const store = createTelemetryBucketStore({
+    maxBuckets: 2,
+    now: () => 0,
+    signalEmitter: {
+      on(_event, listener) {
+        registeredShutdownHandler = listener;
+      },
+      off(_event, listener) {
+        removedShutdownHandler = listener;
+      },
+    },
+    sweepIntervalMs: 250,
+    windowMs: 1_000,
+  });
+
+  assert.equal(unrefCalls, 1);
+  assert.equal(typeof registeredShutdownHandler, "function");
+  (registeredShutdownHandler as unknown as () => void)();
+  store.stop();
+
+  assert.equal(clearedHandle, intervalHandle);
+  assert.equal(removedShutdownHandler, registeredShutdownHandler);
+});
+
+test("telemetry drop bucket sweep catches errors and keeps interval active", (t) => {
+  let intervalCallback: (() => void) | null = null;
+  let clearCalls = 0;
+  const errors: Array<{ message: string; payload?: Record<string, unknown> }> = [];
+  const intervalHandle = {
+    unref: () => undefined,
+  };
+
+  t.mock.method(globalThis, "setInterval", (((callback: TimerHandler, _delay?: number, ...args: unknown[]) => {
+    intervalCallback = () => {
+      if (typeof callback === "function") {
+        callback(...args);
+      }
+    };
+    return intervalHandle as unknown as ReturnType<typeof setInterval>;
+  }) as unknown) as typeof globalThis.setInterval);
+  t.mock.method(globalThis, "clearInterval", (() => {
+    clearCalls += 1;
+  }) as typeof globalThis.clearInterval);
+
+  const store = createTelemetryBucketStore({
+    logger: {
+      error(message: string, payload?: Record<string, unknown>) {
+        errors.push(payload ? { message, payload } : { message });
+      },
+    },
+    maxBuckets: 2,
+    now: () => {
+      throw new Error("synthetic telemetry sweep failure");
+    },
+    signalEmitter: {
+      on: () => undefined,
+      off: () => undefined,
+    },
+    sweepIntervalMs: 250,
+    windowMs: 1_000,
+  });
+
+  assert.ok(intervalCallback);
+  (intervalCallback as unknown as () => void)();
+
+  assert.equal(clearCalls, 0);
+  assert.equal(errors[0]?.message, "Telemetry drop bucket sweep failed");
+  assert.equal(errors[0]?.payload?.event, "telemetry_drop_bucket_sweep_error");
+
+  store.stop();
+  assert.equal(clearCalls, 1);
 });
 
 test("web vitals drop guard lifecycle cleanup stops the guard on server close", () => {

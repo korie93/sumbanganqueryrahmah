@@ -1,3 +1,4 @@
+import { ensureObject, readQueryObject } from "../../http/validation";
 import type { CollectionRouteContext } from "./collection-route-shared";
 
 export function registerCollectionDailyRoutes(context: CollectionRouteContext) {
@@ -36,8 +37,8 @@ export function registerCollectionDailyRoutes(context: CollectionRouteContext) {
     ...adminSummaryAccess,
     jsonRoute("Failed to delete collection daily calendar status.", (req) =>
       collectionService.deleteDailyCalendar(req.user, {
-        ...(req.query as Record<string, unknown>),
-        ...(req.body && typeof req.body === "object" ? req.body as Record<string, unknown> : {}),
+        ...readQueryObject(req.query),
+        ...(ensureObject(req.body) || {}),
       })),
   );
 
@@ -45,20 +46,20 @@ export function registerCollectionDailyRoutes(context: CollectionRouteContext) {
     "/api/collection/daily/calendar/audit",
     ...superuserReportAccess,
     jsonRoute("Failed to load collection daily calendar audit.", (req) =>
-      collectionService.listDailyCalendarAudit(req.user, req.query as Record<string, unknown>)),
+      collectionService.listDailyCalendarAudit(req.user, readQueryObject(req.query))),
   );
 
   app.get(
     "/api/collection/daily/overview",
     ...reportAccess,
     jsonRoute("Failed to load collection daily overview.", (req) =>
-      collectionService.getDailyOverview(req.user, req.query as Record<string, unknown>)),
+      collectionService.getDailyOverview(req.user, readQueryObject(req.query))),
   );
 
   app.get(
     "/api/collection/daily/day-details",
     ...reportAccess,
     jsonRoute("Failed to load collection daily details.", (req) =>
-      collectionService.getDailyDayDetails(req.user, req.query as Record<string, unknown>)),
+      collectionService.getDailyDayDetails(req.user, readQueryObject(req.query))),
   );
 }

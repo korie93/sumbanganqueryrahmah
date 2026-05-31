@@ -144,5 +144,5 @@ export function resolveDatabaseBootstrapMode(
 }
 
 export function resolveTwoFactorTotpAlgorithm(value: string | null): "sha1" | "sha256" {
-  return String(value || "").trim().toUpperCase() === "SHA256" ? "sha256" : "sha1";
+  return String(value || "").trim().toUpperCase() === "SHA1" ? "sha1" : "sha256";
 }

@@ -34,6 +34,20 @@ export function useActivityFeedState({
     };
   }, []);
 
+  const recordActivityFeedFailure = useCallback((error: unknown) => {
+    const nextErrorMessage = readActivityFeedErrorMessage(error);
+    if (!nextErrorMessage) {
+      return;
+    }
+
+    if (mountedRef.current) {
+      setErrorMessage(nextErrorMessage);
+    }
+    logClientError("Failed to fetch activities:", error, {
+      event: "activity_feed_fetch_failed",
+    });
+  }, []);
+
   const fetchActivities = useCallback(async (useFilters = false) => {
     const requestId = ++activeRequestIdRef.current;
     fetchControllerRef.current?.abort();
@@ -64,12 +78,10 @@ export function useActivityFeedState({
         setBannedUsers([]);
       }
     } catch (error) {
-      const nextErrorMessage = readActivityFeedErrorMessage(error);
-      if (!nextErrorMessage) {
+      if (!mountedRef.current || requestId !== activeRequestIdRef.current) {
         return;
       }
-      setErrorMessage(nextErrorMessage);
-      logClientError("Failed to fetch activities:", error);
+      recordActivityFeedFailure(error);
     } finally {
       if (fetchControllerRef.current === controller) {
         fetchControllerRef.current = null;
@@ -78,11 +90,19 @@ export function useActivityFeedState({
         setLoading(false);
       }
     }
-  }, [canModerateActivity, filtersRef]);
+  }, [canModerateActivity, filtersRef, recordActivityFeedFailure]);
+
+  const handleUnexpectedActivityFeedFailure = useCallback((error: unknown) => {
+    recordActivityFeedFailure(error);
+  }, [recordActivityFeedFailure]);
+
+  const runFetchActivities = useCallback((useFilters = false) => {
+    void fetchActivities(useFilters).catch(handleUnexpectedActivityFeedFailure);
+  }, [fetchActivities, handleUnexpectedActivityFeedFailure]);
 
   useEffect(() => {
-    void fetchActivities(false);
-  }, [fetchActivities]);
+    runFetchActivities(false);
+  }, [runFetchActivities]);
 
   useEffect(() => {
     const refreshVisibleActivity = () => {
@@ -90,7 +110,7 @@ export function useActivityFeedState({
         typeof document === "undefined" ? undefined : document.visibilityState;
 
       if (shouldAutoRefreshVisibleActivity(filtersRef.current, visibilityState)) {
-        void fetchActivities(false);
+        runFetchActivities(false);
       }
     };
 
@@ -108,7 +128,7 @@ export function useActivityFeedState({
       if (typeof document !== "undefined" && document.visibilityState !== "visible") {
         return;
       }
-      void fetchActivities(true);
+      runFetchActivities(true);
     };
 
     if (typeof document !== "undefined") {
@@ -127,11 +147,11 @@ export function useActivityFeedState({
       }
       window.clearInterval(interval);
     };
-  }, [fetchActivities, filtersRef]);
+  }, [filtersRef, runFetchActivities]);
 
   const refreshCurrentView = useCallback(() => {
-    void fetchActivities(true);
-  }, [fetchActivities]);
+    runFetchActivities(true);
+  }, [runFetchActivities]);
 
   return {
     activities,

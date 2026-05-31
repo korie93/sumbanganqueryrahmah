@@ -106,6 +106,8 @@ test("runViewerCsvExport delegates through the shared export flow", async () => 
   const anchor = {
     href: "",
     download: "",
+    remove: () => undefined,
+    style: { display: "" },
     click: () => {
       clicked = true;
     },

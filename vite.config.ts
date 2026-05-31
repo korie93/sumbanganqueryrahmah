@@ -3,13 +3,24 @@ import react from "@vitejs/plugin-react";
 import path from "path";
 
 const isProductionBuild = process.env.NODE_ENV === "production";
+const isProductionDeploy =
+  process.env.DEPLOY_ENV === "production"
+  || process.env.APP_ENV === "production"
+  || process.env.VERCEL_ENV === "production";
 const isStagingBuild =
   process.env.DEPLOY_ENV === "staging"
   || process.env.APP_ENV === "staging";
+const isProductionLikeBuild = isProductionBuild || isProductionDeploy;
+const sourcemapsExplicitlyEnabled = process.env.VITE_ENABLE_SOURCEMAPS === "1";
+
+if (isProductionLikeBuild && sourcemapsExplicitlyEnabled) {
+  throw new Error("FATAL: VITE_ENABLE_SOURCEMAPS=1 cannot be used in production builds.");
+}
+
 const enableSourceMaps =
-  !isProductionBuild
+  !isProductionLikeBuild
   && !isStagingBuild
-  && process.env.VITE_ENABLE_SOURCEMAPS === "1";
+  && sourcemapsExplicitlyEnabled;
 
 export default defineConfig({
   plugins: [react()],
@@ -18,10 +29,10 @@ export default defineConfig({
     outDir: "../dist-local/public",
     emptyOutDir: true,
     sourcemap: enableSourceMaps,
-    // 600 kB is an intentional warning threshold, not a target bundle size.
+    // 500 kB is an intentional warning threshold, not a target bundle size.
     // Large feature-isolated chunks such as Excel/PDF/chart tooling are lazy-loaded
     // and verified separately by bundle-budget checks in repo scripts.
-    chunkSizeWarningLimit: 600,
+    chunkSizeWarningLimit: 500,
     modulePreload: {
       resolveDependencies(_filename, dependencies, context) {
         if (context.hostType !== "html") {

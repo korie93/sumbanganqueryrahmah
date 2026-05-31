@@ -44,6 +44,10 @@ function isAllowedHookSecretValue(rawValue) {
   return ALLOWED_HOOK_SECRET_VALUES.some((pattern) => pattern.test(value));
 }
 
+function isJsxExpressionAttributeLine(line) {
+  return /^\s*[a-z][\w.-]*=\{[^}]*\}\s*$/u.test(String(line || ""));
+}
+
 function isEnvStyleSecretKey(rawKey) {
   const key = String(rawKey || "").trim();
   return /^[A-Z0-9_.-]+$/u.test(key) || /^[a-z0-9_.-]+$/u.test(key);
@@ -68,6 +72,10 @@ export function findGenericSecretAssignments({ filePath, text }) {
 
   for (let index = 0; index < lines.length; index += 1) {
     const line = lines[index];
+    if (isJsxExpressionAttributeLine(line)) {
+      continue;
+    }
+
     const match = line.match(GENERIC_SECRET_ASSIGNMENT_PATTERN);
     if (!match) {
       continue;

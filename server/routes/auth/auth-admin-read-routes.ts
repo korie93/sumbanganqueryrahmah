@@ -1,3 +1,4 @@
+import { readQueryObject } from "../../http/validation";
 import type { AuthRouteContext } from "./auth-route-shared";
 
 export function registerAuthAdminReadRoutes(context: AuthRouteContext) {
@@ -20,7 +21,7 @@ export function registerAuthAdminReadRoutes(context: AuthRouteContext) {
     jsonRoute(async (req) => {
       const result = await authAccountService.getManagedUsers(
         req.user,
-        req.query as Record<string, unknown>,
+        readQueryObject(req.query),
       );
       return {
         ok: true,
@@ -38,7 +39,7 @@ export function registerAuthAdminReadRoutes(context: AuthRouteContext) {
     jsonRoute(async (req) => {
       const result = await authAccountService.listPendingPasswordResetRequests(
         req.user,
-        req.query as Record<string, unknown>,
+        readQueryObject(req.query),
       );
       return {
         ok: true,

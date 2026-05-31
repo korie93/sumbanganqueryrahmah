@@ -85,8 +85,23 @@ const securityCriticalDirectDependencies = Object.freeze([
   "zod-validation-error",
 ]);
 
+const documentedSecurityPatchRangePolicies = new Map([
+  [
+    "bcrypt",
+    {
+      pattern: /^\^6\.\d+\.\d+$/,
+      reason: "Allows non-breaking bcrypt 6.x security patch updates while package-lock keeps installs reproducible.",
+    },
+  ],
+]);
+
 function isExactSemverSpecifier(value) {
   return /^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/.test(String(value || ""));
+}
+
+function isDocumentedSecurityPatchRange(packageName, value) {
+  const policy = documentedSecurityPatchRangePolicies.get(packageName);
+  return Boolean(policy?.pattern.test(String(value || "")));
 }
 
 export function analyzeDependencyAuditReport(report) {
@@ -132,14 +147,20 @@ export function analyzeSecurityCriticalDependencyPins(packageJson) {
       failures.push(`${packageName} is missing from direct dependencies`);
       continue;
     }
-    if (!isExactSemverSpecifier(specifier)) {
-      failures.push(`${packageName} must be pinned to an exact version, found "${specifier}"`);
+    if (!isExactSemverSpecifier(specifier) && !isDocumentedSecurityPatchRange(packageName, specifier)) {
+      failures.push(`${packageName} must be pinned to an exact version or documented security patch range, found "${specifier}"`);
     }
   }
 
   return {
     failures,
     packages: securityCriticalDirectDependencies,
+    documentedPatchRanges: Object.fromEntries(
+      Array.from(documentedSecurityPatchRangePolicies.entries()).map(([packageName, policy]) => [
+        packageName,
+        policy.reason,
+      ]),
+    ),
   };
 }
 

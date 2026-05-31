@@ -90,7 +90,7 @@ export function HorizontalScrollHint({
     <div className={cn("relative", className)}>
       <div
         ref={viewportRef}
-        className={cn("overflow-x-auto", viewportClassName)}
+        className={cn("horizontal-scroll-hint overflow-x-auto", viewportClassName)}
         onScroll={onScroll}
       >
         {children}

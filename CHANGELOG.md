@@ -1,5 +1,39 @@
 # Changelog
 
+## 2026-05-31 - SQR resource lifecycle and configuration hardening
+
+This release contains targeted cleanup and configuration hardening for the
+31 May 2026 resource lifecycle audit. The changes are intentionally surgical:
+resource owners now have explicit teardown paths, silent failures are surfaced,
+and production defaults remain locked down.
+
+### Runtime and security defaults
+
+- Kept the runtime on Node.js 24 LTS and narrowed `package.json` engines to
+  the supported 24.x line so future non-LTS majors are not accepted implicitly.
+- Allowed non-breaking bcrypt 6.x security patch updates while keeping the
+  lockfile deterministic and preserving exact-pin policy for other critical
+  direct dependencies.
+- Added a hard Vite config failure when `VITE_ENABLE_SOURCEMAPS=1` is set for
+  production-like builds.
+- Raised the credential password minimum for new passwords and password changes
+  from 12 to 14 characters. Existing password verification is unchanged, so
+  current users are not locked out solely because their old password is shorter.
+
+### Verification
+
+- `npm run verify:node-version`
+- `npm run audit:dependencies`
+- `npm run test:scripts`
+- `npm run typecheck`
+- `npm run lint:client`
+- `npm run lint:server`
+
+### Rollback
+
+Rollback remains commit-based. If a config hardening change causes deployment
+friction, revert the specific commit and rerun the verification commands above.
+
 ## 2026-05-28 - SQR surgical security and reliability hardening
 
 This release contains targeted hardening for the 28 May 2026 SQR audit. The

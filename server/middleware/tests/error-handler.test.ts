@@ -82,6 +82,38 @@ test("errorHandler redacts sensitive exposed HttpError detail fields", async () 
   }
 });
 
+test("errorHandler bounds exposed detail arrays and object keys", async () => {
+  const app = express();
+  app.get("/wide-details", () => {
+    throw badRequest("Invalid request.", "INVALID_REQUEST", {
+      values: Array.from({ length: 25 }, (_value, index) => index),
+      wideObject: Object.fromEntries(
+        Array.from({ length: 45 }, (_value, index) => [`key${index}`, index]),
+      ),
+    });
+  });
+  app.use(errorHandler);
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const response = await fetch(`${baseUrl}/wide-details`);
+    const payload = await response.json();
+    const details = payload.error.details as {
+      values: number[];
+      wideObject: Record<string, unknown>;
+    };
+
+    assert.equal(response.status, 400);
+    assert.equal(details.values.length, 20);
+    assert.equal(details.values.includes(24), false);
+    assert.equal(Object.keys(details.wideObject).filter((key) => key.startsWith("key")).length, 40);
+    assert.equal(details.wideObject.key40, undefined);
+    assert.equal(details.wideObject.truncated, true);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
 test("errorHandler does not expose hidden HttpError details", async () => {
   const app = express();
   app.get("/hidden-error", () => {

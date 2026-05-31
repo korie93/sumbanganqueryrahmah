@@ -4,6 +4,7 @@ import { createCsrfProtectionMiddleware } from "../http/csrf";
 import { createCorsMiddleware } from "../http/cors";
 import { createForwardedForTrustProxyWarningMiddleware } from "../http/forwarded-proxy-warning";
 import { createGlobalRequestTimeoutMiddleware } from "../http/global-request-timeout";
+import { buildApiErrorResponse } from "../http/api-error-response";
 import { registerLocalHttpBodyParsers } from "./local-http-body-parsers";
 import { registerLocalHttpCompression } from "./local-http-compression";
 import { registerLocalHttpObservability } from "./local-http-observability";
@@ -47,7 +48,9 @@ export function registerLocalHttpPipeline(app: Express, options: LocalHttpPipeli
   // Keeping the whole subtree dark prevents legacy receipt paths from becoming
   // public if their storage path is leaked or guessed.
   app.use("/uploads", (_req, res) => {
-    return res.status(404).json({ ok: false, message: "Not found." });
+    return res.status(404).json(buildApiErrorResponse("Not found.", {
+      statusCode: 404,
+    }));
   });
 
   registerLocalHttpObservability(app, {

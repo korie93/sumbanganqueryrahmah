@@ -98,9 +98,10 @@ const TIMER_CLEANUP_CONTRACTS: TimerCleanupContract[] = [
   },
   {
     filePath: "../pages/Maintenance.tsx",
-    setupPattern: /pollIntervalId = window\.setInterval\(\(\) => \{[\s\S]*MAINTENANCE_STATUS_POLL_INTERVAL_MS\)/,
+    setupPattern: /pollIntervalId = setManagedInterval\(\(\) => \{[\s\S]*MAINTENANCE_STATUS_POLL_INTERVAL_MS\)/,
     cleanupPatterns: [
-      /window\.clearInterval\(pollIntervalId\)/,
+      /const startPolling = \(\) => \{[\s\S]*stopPolling\(\);\s*pollIntervalId = setManagedInterval/,
+      /clearManagedInterval\(pollIntervalId\)/,
       /const tick = window\.setInterval\(\(\) => \{[\s\S]*return\s+\(\)\s*=>\s*\{[\s\S]*window\.clearInterval\(tick\)/,
     ],
   },
@@ -149,7 +150,7 @@ const TIMER_CLEANUP_CONTRACTS: TimerCleanupContract[] = [
 const ONE_SHOT_TIMER_EXCEPTIONS = [
   {
     filePath: "../lib/download.ts",
-    expectedPattern: /window\.setTimeout\(\(\) => \{[\s\S]*URL\.revokeObjectURL\(objectUrl\)/,
+    expectedPattern: /window\.setTimeout\(\(\) => \{[\s\S]*revokeTrackedObjectUrl\(objectUrl\)/,
   },
   {
     filePath: "../lib/web-vitals.ts",

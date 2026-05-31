@@ -42,6 +42,7 @@ test("buildSettingsMutationErrorToast falls back when the error is unstructured"
 
 test("isStrongPassword follows the shared credential password policy", () => {
   assert.equal(isStrongPassword("StrongPass123!"), true);
+  assert.equal(isStrongPassword("StrongPas123!"), false);
   assert.equal(isStrongPassword("StrongPass123"), false);
   assert.equal(isStrongPassword("nodigits"), false);
   assert.equal(isStrongPassword(`${"A".repeat(256)}1`), false);

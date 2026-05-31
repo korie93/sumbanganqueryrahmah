@@ -294,6 +294,62 @@ test("bindPgPoolMonitoring cleanup supports EventEmitter removeListener fallback
   assert.equal(pool.listenerCount("error"), 0);
 });
 
+test("bindPgPoolMonitoring cleanup fails visibly when listener removal is unavailable", () => {
+  const listeners = new Map<string, Array<(...args: unknown[]) => void>>();
+  const pool = {
+    totalCount: 0,
+    idleCount: 0,
+    waitingCount: 0,
+    options: { max: 0 },
+    on(event: string, listener: (...args: unknown[]) => void) {
+      listeners.set(event, [...(listeners.get(event) ?? []), listener]);
+    },
+  };
+  const errors: Array<{ message: string; meta: Record<string, unknown> }> = [];
+
+  const stopMonitoring = bindPgPoolMonitoring(pool, {
+    logger: {
+      warn: () => undefined,
+      error: (message, meta) => {
+        errors.push({ message, meta: meta || {} });
+      },
+    },
+  });
+
+  assert.throws(stopMonitoring, /listener removal is unavailable/);
+  assert.equal(errors.length, 4);
+  assert.equal(errors[0]?.message, "Failed to remove PostgreSQL pool listener");
+  assert.equal(errors[0]?.meta.event, "pg_pool_listener_removal_failed");
+  assert.equal(listeners.get("connect")?.length, 1);
+  assert.equal(listeners.get("acquire")?.length, 1);
+  assert.equal(listeners.get("remove")?.length, 1);
+  assert.equal(listeners.get("error")?.length, 1);
+});
+
+test("bindPgPoolMonitoring warns when registering above the listener threshold", () => {
+  const pool = new FakePool();
+  const noop = () => undefined;
+  for (let index = 0; index < 6; index += 1) {
+    pool.on("acquire", noop);
+  }
+  const warnings: Array<Record<string, unknown>> = [];
+
+  const stopMonitoring = bindPgPoolMonitoring(pool, {
+    logger: {
+      warn: (_message, meta) => {
+        warnings.push(meta || {});
+      },
+      error: () => undefined,
+    },
+  });
+
+  stopMonitoring();
+  pool.removeAllListeners("acquire");
+
+  assert.equal(warnings.some((warning) => warning.event === "pg_pool_listener_count_high"), true);
+  assert.equal(warnings.find((warning) => warning.event === "pg_pool_listener_count_high")?.poolEvent, "acquire");
+});
+
 test("bindPgPoolHealthCheck logs failures from a periodic SELECT 1 probe", async () => {
   const pool = new FakePool();
   const warnings: Array<Record<string, unknown>> = [];
@@ -320,6 +376,181 @@ test("bindPgPoolHealthCheck logs failures from a periodic SELECT 1 probe", async
   assert.equal(queryCalls > 0, true);
   assert.equal(warnings.length > 0, true);
   assert.equal((warnings[0]?.error as Error)?.message, "database unavailable");
+});
+
+test("bindPgPoolHealthCheck catches synchronous query failures and recovers with backoff probes", async () => {
+  const pool = new FakePool();
+  let currentTime = 10_000;
+  let queryCalls = 0;
+  let queryShouldFail = true;
+  pool.query = () => {
+    queryCalls += 1;
+    if (queryShouldFail) {
+      throw new Error("sync database failure");
+    }
+    return Promise.resolve({ rows: [{ ok: 1 }] });
+  };
+  const metrics = createInternalMetrics();
+  const warnings: Array<Record<string, unknown>> = [];
+  const errors: Array<Record<string, unknown>> = [];
+  const originalSetInterval = globalThis.setInterval;
+  const originalClearInterval = globalThis.clearInterval;
+  let intervalCallback: (() => void) | null = null;
+  let clearCalls = 0;
+  let unrefCalls = 0;
+
+  globalThis.setInterval = (((handler: TimerHandler, _timeout?: number, ..._args: unknown[]) => {
+    intervalCallback = typeof handler === "function" ? () => handler() : null;
+    const fakeHandle = {
+      unref() {
+        unrefCalls += 1;
+        return fakeHandle;
+      },
+    } as ReturnType<typeof setInterval>;
+    return fakeHandle;
+  }) as unknown) as typeof setInterval;
+
+  globalThis.clearInterval = (((handle?: Parameters<typeof clearInterval>[0]) => {
+    if (handle) {
+      clearCalls += 1;
+    }
+  }) as unknown) as typeof clearInterval;
+
+  try {
+    const stopHealthCheck = bindPgPoolHealthCheck(pool, {
+      intervalMs: 1_000,
+      timeoutMs: 250,
+      metrics,
+      now: () => currentTime,
+      random: () => 0,
+      recoveryBaseDelayMs: 1_000,
+      recoveryMaxDelayMs: 1_000,
+      logger: {
+        warn: (_message, meta) => {
+          warnings.push(meta || {});
+        },
+        error: (_message, meta) => {
+          errors.push(meta || {});
+        },
+      },
+    });
+
+    assert.equal(unrefCalls, 1);
+    assert.notEqual(intervalCallback, null);
+
+    const triggerInterval = () => {
+      const callback = intervalCallback;
+      if (!callback) {
+        throw new Error("Expected captured interval callback");
+      }
+      callback();
+    };
+
+    for (let index = 0; index < 5; index += 1) {
+      triggerInterval();
+      await new Promise((resolve) => setImmediate(resolve));
+    }
+
+    let snapshot = metrics.snapshot();
+    assert.equal(queryCalls, 5);
+    assert.equal(snapshot.counters.dbHealthCheckFailuresTotal, 5);
+    assert.equal(snapshot.counters.dbHealthCheckCircuitBreaksTotal, 1);
+    assert.equal(snapshot.counters.dbHealthCheckRecoveryAttemptsTotal, 0);
+    assert.equal(warnings.length, 5);
+    assert.equal(errors.length, 1);
+    assert.equal(clearCalls, 0);
+
+    triggerInterval();
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(queryCalls, 5);
+
+    currentTime += 1_000;
+    queryShouldFail = false;
+    triggerInterval();
+    await new Promise((resolve) => setImmediate(resolve));
+
+    snapshot = metrics.snapshot();
+    assert.equal(queryCalls, 6);
+    assert.equal(snapshot.counters.dbHealthCheckRecoveryAttemptsTotal, 1);
+    assert.equal(snapshot.counters.dbHealthCheckRecoverySuccessTotal, 1);
+    stopHealthCheck();
+    assert.equal(clearCalls, 1);
+  } finally {
+    globalThis.setInterval = originalSetInterval;
+    globalThis.clearInterval = originalClearInterval;
+  }
+});
+
+test("bindPgPoolHealthCheck skips concurrent probes and releases the running flag on success", async () => {
+  const pool = new FakePool();
+  const metrics = createInternalMetrics();
+  let resolveQuery: ((value: unknown) => void) | null = null;
+  let queryCalls = 0;
+  pool.queryImpl = () => {
+    queryCalls += 1;
+    return new Promise((resolve) => {
+      resolveQuery = resolve;
+    });
+  };
+  const originalSetInterval = globalThis.setInterval;
+  const originalClearInterval = globalThis.clearInterval;
+  let intervalCallback: (() => void) | null = null;
+
+  globalThis.setInterval = (((handler: TimerHandler, _timeout?: number, ..._args: unknown[]) => {
+    intervalCallback = typeof handler === "function" ? () => handler() : null;
+    const fakeHandle = {
+      unref() {
+        return fakeHandle;
+      },
+    } as ReturnType<typeof setInterval>;
+    return fakeHandle;
+  }) as unknown) as typeof setInterval;
+
+  globalThis.clearInterval = ((() => undefined) as unknown) as typeof clearInterval;
+
+  try {
+    const stopHealthCheck = bindPgPoolHealthCheck(pool, {
+      intervalMs: 1_000,
+      timeoutMs: 1_000,
+      metrics,
+      logger: {
+        warn: () => undefined,
+        error: () => undefined,
+      },
+    });
+
+    const triggerInterval = () => {
+      const callback = intervalCallback;
+      if (!callback) {
+        throw new Error("Expected captured interval callback");
+      }
+      callback();
+    };
+    const resolvePendingQuery = () => {
+      const resolve = resolveQuery;
+      if (!resolve) {
+        throw new Error("Expected pending query resolver");
+      }
+      resolve({ rows: [{ ok: 1 }] });
+    };
+
+    triggerInterval();
+    triggerInterval();
+    assert.equal(queryCalls, 1);
+    assert.equal(metrics.snapshot().counters.dbHealthCheckSkippedConcurrentTotal, 1);
+
+    resolvePendingQuery();
+    await new Promise((resolve) => setImmediate(resolve));
+    triggerInterval();
+    assert.equal(queryCalls, 2);
+
+    resolvePendingQuery();
+    await new Promise((resolve) => setImmediate(resolve));
+    stopHealthCheck();
+  } finally {
+    globalThis.setInterval = originalSetInterval;
+    globalThis.clearInterval = originalClearInterval;
+  }
 });
 
 test("bindPgPoolHealthCheck cleanup stops future interval probes", async () => {

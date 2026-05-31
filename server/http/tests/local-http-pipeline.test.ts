@@ -431,7 +431,15 @@ test("registerLocalHttpPipeline blocks direct public uploads", async () => {
     const directUploadResponse = await fetch(`${baseUrl}/uploads/sample%20report.txt`);
     assert.equal(directUploadResponse.status, 404);
     assert.equal(directUploadResponse.headers.get("content-disposition"), null);
-    assert.deepEqual(await directUploadResponse.json(), { ok: false, message: "Not found." });
+    assert.deepEqual(await directUploadResponse.json(), {
+      ok: false,
+      message: "Not found.",
+      code: "NOT_FOUND",
+      error: {
+        code: "NOT_FOUND",
+        message: "Not found.",
+      },
+    });
 
     const managedReceiptResponse = await fetch(`${baseUrl}/uploads/collection-receipts/managed.jpg`);
     assert.equal(managedReceiptResponse.status, 404);

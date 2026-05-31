@@ -135,12 +135,12 @@ export function useAIPageController({
       cancelAI();
     };
 
-    window.addEventListener(AI_RESET_EVENT, onReset as EventListener);
-    window.addEventListener(AI_CANCEL_EVENT, onCancel as EventListener);
+    window.addEventListener(AI_RESET_EVENT, onReset);
+    window.addEventListener(AI_CANCEL_EVENT, onCancel);
 
     return () => {
-      window.removeEventListener(AI_RESET_EVENT, onReset as EventListener);
-      window.removeEventListener(AI_CANCEL_EVENT, onCancel as EventListener);
+      window.removeEventListener(AI_RESET_EVENT, onReset);
+      window.removeEventListener(AI_CANCEL_EVENT, onCancel);
     };
   }, [cancelAI, resetChat]);
 

@@ -1,4 +1,5 @@
 import { lazy, type LazyExoticComponent } from "react";
+import { logClientError } from "@/lib/client-logger";
 
 type IdleCallbackHandle = number;
 type IdleCallbackDeadline = {
@@ -22,6 +23,10 @@ export type LazyWithPreload<TModule extends LazyModule> =
     preload: () => Promise<TModule>;
   };
 
+function logLazyLoadError(event: string, error: unknown) {
+  logClientError("Lazy module load failed", error, { event });
+}
+
 export function lazyWithPreload<TModule extends LazyModule>(
   factory: () => Promise<TModule>,
 ): LazyWithPreload<TModule> {
@@ -29,10 +34,17 @@ export function lazyWithPreload<TModule extends LazyModule>(
 
   const load = () => {
     if (!cachedPromise) {
-      cachedPromise = factory().catch((error) => {
+      try {
+        cachedPromise = Promise.resolve(factory()).catch((error: unknown) => {
+          cachedPromise = null;
+          logLazyLoadError("lazy_load_factory_error", error);
+          throw error;
+        });
+      } catch (error) {
         cachedPromise = null;
-        throw error;
-      });
+        logLazyLoadError("lazy_load_factory_sync_error", error);
+        return Promise.reject(error);
+      }
     }
 
     return cachedPromise;
@@ -41,6 +53,16 @@ export function lazyWithPreload<TModule extends LazyModule>(
   const component = lazy(load) as unknown as LazyWithPreload<TModule>;
   component.preload = load;
   return component;
+}
+
+function runScheduledPreload(preload: () => void | Promise<unknown>) {
+  try {
+    Promise.resolve(preload()).catch((error: unknown) => {
+      logLazyLoadError("lazy_preload_scheduled_rejection", error);
+    });
+  } catch (error) {
+    logLazyLoadError("lazy_preload_scheduled_sync_error", error);
+  }
 }
 
 export function scheduleIdlePreload(
@@ -55,7 +77,7 @@ export function scheduleIdlePreload(
 
   if (typeof idleWindow.requestIdleCallback === "function") {
     const handle = idleWindow.requestIdleCallback(() => {
-      void preload();
+      runScheduledPreload(preload);
     }, { timeout: timeoutMs });
 
     return () => {
@@ -66,7 +88,7 @@ export function scheduleIdlePreload(
   }
 
   const handle = window.setTimeout(() => {
-    void preload();
+    runScheduledPreload(preload);
   }, timeoutMs);
 
   return () => {

@@ -4,6 +4,7 @@ import {
   createIdempotencyFingerprintValidationCacheController,
   clearIdempotencyFingerprintValidationCacheForTests,
   createCollectionJsonMutationRouteHandler,
+  isIdempotencyFingerprintValidationEntryExpired,
   normalizeIdempotencyFingerprintHeaderValue,
   pruneExpiredIdempotencyFingerprintValidationCache,
   pruneIdempotencyFingerprintValidationCache,
@@ -373,6 +374,14 @@ test("pruneExpiredIdempotencyFingerprintValidationCache removes stale entries by
 
   assert.equal(pruned, 2);
   assert.deepEqual(Array.from(cache.keys()), ["fresh"]);
+});
+
+test("idempotency fingerprint cache TTL boundary is inclusive at expiry time", () => {
+  const entry = { lastValidatedAt: 1_000 };
+
+  assert.equal(isIdempotencyFingerprintValidationEntryExpired(entry, 5_999, 5_000), false);
+  assert.equal(isIdempotencyFingerprintValidationEntryExpired(entry, 6_000, 5_000), true);
+  assert.equal(isIdempotencyFingerprintValidationEntryExpired(entry, 6_001, 5_000), true);
 });
 
 test("idempotency fingerprint cache controller auto-evicts expired entries and stops its sweep timer", () => {

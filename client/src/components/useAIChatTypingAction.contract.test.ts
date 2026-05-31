@@ -10,17 +10,18 @@ const source = readFileSync(path.resolve(__dirname, "useAIChatTypingAction.ts"),
 test("AI chat typing action clears any previous interval before starting a new one", () => {
   assert.match(
     source,
-    /stopTyping\(\);\s*setIsTyping\(true\);[\s\S]*typingIntervalRef\.current = window\.setInterval/,
+    /clearTypingInterval\(\);\s*stopTyping\(\);\s*setIsTyping\(true\);[\s\S]*typingIntervalRef\.current = setManagedInterval/,
   );
+  assert.doesNotMatch(source, /window\.setInterval/);
 });
 
 test("AI chat typing action clears the interval on inactive and completion paths", () => {
   assert.match(
     source,
-    /if \(!isActiveAIChatSession\([\s\S]*?\)\) \{\s*stopTyping\(\);\s*return;/,
+    /if \(!isActiveAIChatSession\([\s\S]*?\)\) \{\s*clearTypingInterval\(\);\s*stopTyping\(\);\s*return;/,
   );
   assert.match(
     source,
-    /if \(index >= text\.length\) \{\s*stopTyping\(\);/,
+    /if \(index >= text\.length\) \{\s*clearTypingInterval\(\);\s*stopTyping\(\);/,
   );
 });

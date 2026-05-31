@@ -752,7 +752,7 @@ test("POST /api/auth/change-password rejects oversized new passwords before upda
     const payload = await response.json();
     assert.equal(payload.ok, false);
     assert.equal(payload.error.code, "INVALID_PASSWORD");
-    assert.match(payload.error.message, /between 12 and 256 characters/i);
+    assert.match(payload.error.message, /between 14 and 256 characters/i);
     assert.equal(accountUpdates.length, 0);
   } finally {
     await stopTestServer(server);

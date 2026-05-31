@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import {
@@ -194,5 +194,20 @@ test("foreign key delete governance rejects implicit delete actions", () => {
     assert.match(report, /SQL foreign key reference must declare an explicit ON DELETE action/);
   } finally {
     rmSync(cwd, { recursive: true, force: true });
+  }
+});
+
+test("database index naming runbook documents new conventions and stable legacy exceptions", () => {
+  const content = readFileSync("docs/DATABASE_INDEX_NAMING.md", "utf8");
+
+  for (const marker of [
+    "idx_<table>_<column_or_purpose>",
+    "idx_<table>_<column_or_purpose>_unique",
+    "setting_categories_name_unique",
+    "system_settings_key_unique",
+    "feature_flags_key_unique",
+    "Do not rename an existing index for style only",
+  ]) {
+    assert.match(content, new RegExp(marker.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   }
 });

@@ -11,6 +11,10 @@ import {
   getTwoFactorEncryptionSecret,
   getTwoFactorTotpAlgorithm,
 } from "../config/security";
+import {
+  internalMetrics,
+  type InternalMetricsRecorder,
+} from "../internal/metrics";
 
 const BASE32_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
 const TOTP_PERIOD_SECONDS = 30;
@@ -89,7 +93,7 @@ function getTwoFactorDecryptionCipherKeys() {
 }
 
 export function resolveTotpAlgorithm(value?: string | null): TotpAlgorithm {
-  return String(value || "").trim().toUpperCase() === "SHA256" ? "sha256" : "sha1";
+  return String(value || "").trim().toUpperCase() === "SHA1" ? "sha1" : "sha256";
 }
 
 function generateTotpAt(secret: string, timestampMs: number, algorithm = getTwoFactorTotpAlgorithm()) {
@@ -132,7 +136,9 @@ export function verifyTwoFactorCode(
   rawCode: string,
   window = 1,
   algorithm = getTwoFactorTotpAlgorithm(),
+  metrics: Pick<InternalMetricsRecorder, "increment"> = internalMetrics,
 ) {
+  const resolvedAlgorithm = resolveTotpAlgorithm(algorithm);
   const code = normalizeTwoFactorCode(rawCode);
   if (!code) {
     return false;
@@ -140,8 +146,11 @@ export function verifyTwoFactorCode(
 
   const now = Date.now();
   for (let step = -window; step <= window; step += 1) {
-    const candidate = generateTotpAt(secret, now + step * TOTP_PERIOD_SECONDS * 1000, algorithm);
+    const candidate = generateTotpAt(secret, now + step * TOTP_PERIOD_SECONDS * 1000, resolvedAlgorithm);
     if (isTotpCodeMatch(candidate, code)) {
+      if (resolvedAlgorithm === "sha1") {
+        metrics.increment("twoFactorTotpSha1VerificationSuccessTotal");
+      }
       return true;
     }
   }

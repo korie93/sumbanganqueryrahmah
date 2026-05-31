@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { DEFAULT_RUNTIME_CONFIG, DEFAULT_SYSTEM_NAME } from "@/app/constants";
 import type { AppRuntimeConfig, User } from "@/app/types";
 import { getAppConfig } from "@/lib/api";
+import { logClientError } from "@/lib/client-logger";
 
 type UseAppShellRuntimeStateArgs = {
   user: User | null;
@@ -55,7 +56,10 @@ export function useAppShellRuntimeState({ user }: UseAppShellRuntimeStateArgs) {
               : DEFAULT_RUNTIME_CONFIG.importUploadLimitBytes,
           });
         }
-      } catch {
+      } catch (error) {
+        logClientError("Failed to load app runtime config:", error, {
+          event: "app_runtime_config_load_failed",
+        });
         if (!cancelled) {
           setSystemName(DEFAULT_SYSTEM_NAME);
           setRuntimeConfig(DEFAULT_RUNTIME_CONFIG);

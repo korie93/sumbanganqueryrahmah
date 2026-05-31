@@ -15,7 +15,7 @@ if (!Number.isInteger(major) || major !== supportedMajor) {
   console.error(
     [
       `Unsupported Node.js version detected: ${version}`,
-      `This project requires Node.js ${supportedMajor}.x (see .nvmrc and package.json engines).`,
+      `This project requires Node.js ${supportedMajor}.x LTS (see .nvmrc and package.json engines).`,
       "Please switch Node version and retry.",
     ].join("\n"),
   );

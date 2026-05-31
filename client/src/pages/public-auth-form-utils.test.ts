@@ -42,9 +42,9 @@ test("validatePasswordFields enforces required password fields and confirmation 
   assert.equal(
     hasPublicAuthFieldErrors(
       validatePasswordFields({
-        currentPassword: "old-secret",
-        newPassword: "NewSecret123!",
-        confirmPassword: "NewSecret123!",
+      currentPassword: "old-secret",
+        newPassword: "NewSecret1234!",
+        confirmPassword: "NewSecret1234!",
         requireCurrentPassword: true,
       }),
     ),
@@ -59,7 +59,7 @@ test("validatePasswordFields mirrors the backend password policy", () => {
       confirmPassword: "nodigits",
     }),
     {
-      newPassword: "Password mesti antara 12 hingga 256 aksara dan mengandungi huruf besar, huruf kecil, nombor, serta simbol.",
+      newPassword: "Password mesti antara 14 hingga 256 aksara dan mengandungi huruf besar, huruf kecil, nombor, serta simbol.",
     },
   );
 
@@ -69,7 +69,7 @@ test("validatePasswordFields mirrors the backend password policy", () => {
       confirmPassword: `${"A".repeat(256)}1`,
     }),
     {
-      newPassword: "Password mesti antara 12 hingga 256 aksara dan mengandungi huruf besar, huruf kecil, nombor, serta simbol.",
+      newPassword: "Password mesti antara 14 hingga 256 aksara dan mengandungi huruf besar, huruf kecil, nombor, serta simbol.",
     },
   );
 });

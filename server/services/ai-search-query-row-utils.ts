@@ -108,10 +108,9 @@ export function ensureJsonRow<T extends AiSearchRowLike>(row: T): T {
       return row;
     }
 
-    try {
-      row.jsonDataJsonb = JSON.parse(row.jsonDataJsonb);
-    } catch {
-      // Keep original string payload for compatibility.
+    const parsed = toObjectJson(row.jsonDataJsonb);
+    if (parsed) {
+      row.jsonDataJsonb = parsed;
     }
   }
   return row;

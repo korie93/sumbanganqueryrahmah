@@ -10,6 +10,7 @@ import {
 } from "../auth/session-jwt";
 import { revokeSessionJwt } from "../auth/session-revocation-store";
 import { asyncHandler } from "../http/async-handler";
+import { readQueryObject } from "../http/validation";
 import {
   buildActivityErrorPayload,
   buildActivityFilters,
@@ -82,7 +83,7 @@ export function registerActivityReadRoutes(context: ActivityRouteContext) {
     asyncHandler(async (req: AuthenticatedRequest, res) => {
       return res.json({
         activities: await activityService.getFilteredActivities(
-          buildActivityFilters(req.query as Record<string, unknown>),
+          buildActivityFilters(readQueryObject(req.query)),
           req.user?.activityId,
         ),
       });

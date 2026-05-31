@@ -39,7 +39,7 @@ export default function ChangePasswordPage({
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const mountedRef = useRef(true);
-  const submitInFlightRef = useRef(false);
+  const changePasswordRequestIdRef = useRef(0);
   const changePasswordAbortControllerRef = useRef<AbortController | null>(null);
   const redirectTimeoutRef = useRef<number | null>(null);
 
@@ -48,8 +48,8 @@ export default function ChangePasswordPage({
 
     return () => {
       mountedRef.current = false;
-      submitInFlightRef.current = false;
-      changePasswordAbortControllerRef.current?.abort();
+      changePasswordRequestIdRef.current += 1;
+      changePasswordAbortControllerRef.current?.abort("unmount");
       changePasswordAbortControllerRef.current = null;
       if (redirectTimeoutRef.current) {
         window.clearTimeout(redirectTimeoutRef.current);
@@ -59,8 +59,8 @@ export default function ChangePasswordPage({
   }, []);
 
   const handleLogout = () => {
-    submitInFlightRef.current = false;
-    changePasswordAbortControllerRef.current?.abort();
+    changePasswordRequestIdRef.current += 1;
+    changePasswordAbortControllerRef.current?.abort("logout");
     changePasswordAbortControllerRef.current = null;
     if (redirectTimeoutRef.current) {
       window.clearTimeout(redirectTimeoutRef.current);
@@ -71,11 +71,10 @@ export default function ChangePasswordPage({
   };
 
   const handleSubmit = async () => {
-    if (loading || submitInFlightRef.current || changePasswordAbortControllerRef.current) {
-      return;
-    }
-
-    submitInFlightRef.current = true;
+    const requestId = ++changePasswordRequestIdRef.current;
+    changePasswordAbortControllerRef.current?.abort("superseded");
+    changePasswordAbortControllerRef.current = null;
+    let controller: AbortController | null = null;
     setError("");
     setSuccessMessage("");
     setCurrentPasswordError("");
@@ -97,7 +96,7 @@ export default function ChangePasswordPage({
         return;
       }
 
-      const controller = new AbortController();
+      controller = new AbortController();
       changePasswordAbortControllerRef.current = controller;
 
       const response = await changeMyPassword({
@@ -106,7 +105,11 @@ export default function ChangePasswordPage({
       }, {
         signal: controller.signal,
       });
-      if (!mountedRef.current || controller.signal.aborted) {
+      if (
+        !mountedRef.current
+        || controller.signal.aborted
+        || requestId !== changePasswordRequestIdRef.current
+      ) {
         return;
       }
 
@@ -128,15 +131,17 @@ export default function ChangePasswordPage({
     } catch (submitError) {
       if (
         isPublicAuthAbortError(submitError) ||
-        !mountedRef.current
+        !mountedRef.current ||
+        requestId !== changePasswordRequestIdRef.current
       ) {
         return;
       }
       setError(getApiErrorMessage(submitError, "Pertukaran kata laluan gagal."));
     } finally {
-      submitInFlightRef.current = false;
-      changePasswordAbortControllerRef.current = null;
-      if (mountedRef.current) {
+      if (changePasswordAbortControllerRef.current === controller) {
+        changePasswordAbortControllerRef.current = null;
+      }
+      if (mountedRef.current && requestId === changePasswordRequestIdRef.current) {
         setLoading(false);
       }
     }

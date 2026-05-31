@@ -2,7 +2,15 @@
 
 SQR release verification generates Software Bill of Materials artifacts in both
 CycloneDX JSON and SPDX JSON formats using the npm CLI built into the Node 24
-toolchain. No runtime dependency is required for SBOM generation.
+LTS toolchain. No runtime dependency is required for SBOM generation.
+
+## Node Runtime Policy
+
+The supported runtime is Node.js 24.x LTS. The `.nvmrc`, GitHub Actions
+workflows, `scripts/verify-node-version.mjs`, and `package.json` engines must
+stay aligned to the same major version. `package.json` intentionally uses
+`>=24 <25`: patch and minor updates within the LTS line are accepted, while
+future non-LTS majors require an explicit migration branch and full CI run.
 
 ## Local Command
 

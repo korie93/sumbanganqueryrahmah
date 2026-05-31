@@ -3,6 +3,7 @@ import type { AuthenticatedRequest } from "../auth/guards";
 import { logger } from "../lib/logger";
 
 const MAX_RECEIPT_RESPONSE_FILENAME_LENGTH = 255;
+const MAX_RECEIPT_ROUTE_LOG_PARAM_LENGTH = 128;
 const RECEIPT_DOWNLOAD_CSP = [
   "default-src 'none'",
   "script-src 'none'",
@@ -22,6 +23,23 @@ export function sanitizeReceiptResponseFileName(fileName: string): string {
   return sanitized || "receipt";
 }
 
+export function sanitizeReceiptRouteParamForLog(value: unknown): string | null {
+  if (Array.isArray(value)) {
+    return "[multi-value]";
+  }
+
+  const withoutControlCharacters = Array.from(String(value ?? "").trim(), (character) => {
+    const codePoint = character.codePointAt(0) ?? 0;
+    return codePoint <= 0x1f || codePoint === 0x7f ? " " : character;
+  }).join("");
+
+  const sanitized = withoutControlCharacters
+    .replace(/\s+/g, " ")
+    .slice(0, MAX_RECEIPT_ROUTE_LOG_PARAM_LENGTH);
+
+  return sanitized || null;
+}
+
 export function logCollectionReceiptWarning(params: {
   req: AuthenticatedRequest;
   mode: "view" | "download";
@@ -34,8 +52,8 @@ export function logCollectionReceiptWarning(params: {
     statusCode: params.statusCode,
     reason: params.reason,
     username: params.req.user?.username || null,
-    recordId: params.req.params.id || null,
-    receiptId: params.req.params.receiptId || null,
+    recordId: sanitizeReceiptRouteParamForLog(params.req.params.id),
+    receiptId: sanitizeReceiptRouteParamForLog(params.req.params.receiptId),
     ...params.meta,
   });
 }

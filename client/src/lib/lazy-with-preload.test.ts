@@ -41,6 +41,25 @@ test("lazyWithPreload resets the cached promise after a failed import", async ()
   assert.equal(typeof loaded.default, "function");
 });
 
+test("lazyWithPreload normalizes synchronous factory throws into retryable rejections", async () => {
+  let importCount = 0;
+  const LazyComponent = lazyWithPreload(() => {
+    importCount += 1;
+    if (importCount === 1) {
+      throw new Error("sync preload failure");
+    }
+    return Promise.resolve({
+      default: () => null,
+    });
+  });
+
+  await assert.rejects(() => LazyComponent.preload(), /sync preload failure/i);
+
+  const loaded = await LazyComponent.preload();
+  assert.equal(importCount, 2);
+  assert.equal(typeof loaded.default, "function");
+});
+
 test("scheduleIdlePreload falls back to timeout scheduling when requestIdleCallback is unavailable", async () => {
   const globalWindow = globalThis as typeof globalThis & {
     window?: TestWindow;
@@ -74,6 +93,33 @@ test("scheduleIdlePreload falls back to timeout scheduling when requestIdleCallb
 
     cancel();
     assert.deepEqual(cleared, [1]);
+  } finally {
+    globalWindow.window = previousWindow;
+  }
+});
+
+test("scheduleIdlePreload catches rejected preload promises from timeout scheduling", async () => {
+  const globalWindow = globalThis as typeof globalThis & {
+    window?: TestWindow;
+  };
+  const previousWindow = globalWindow.window;
+  const scheduled: Array<() => void> = [];
+
+  globalWindow.window = {
+    setTimeout: ((callback: TimerHandler) => {
+      scheduled.push(callback as () => void);
+      return scheduled.length;
+    }) as typeof window.setTimeout,
+    clearTimeout: (() => undefined) as typeof window.clearTimeout,
+  } as unknown as TestWindow;
+
+  try {
+    scheduleIdlePreload(async () => {
+      throw new Error("scheduled preload failed");
+    }, 25);
+
+    scheduled[0]?.();
+    await new Promise((resolve) => setImmediate(resolve));
   } finally {
     globalWindow.window = previousWindow;
   }

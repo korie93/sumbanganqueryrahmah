@@ -94,24 +94,25 @@ avoid locking out already-enrolled 2FA users.
 
 Existing authenticator apps store the TOTP algorithm at enrollment time. SQR
 therefore treats legacy encrypted 2FA payloads as `SHA1` and stores the
-algorithm in new `v2` payloads. `TWO_FACTOR_TOTP_ALGORITHM=SHA256` affects new
-enrollments only; it must not be used as an implicit migration for already
-enrolled users.
+algorithm in new `v2` payloads. `TWO_FACTOR_TOTP_ALGORITHM=SHA256` is the
+default for new enrollments only; it must not be used as an implicit migration
+for already enrolled users.
 
 ### Planned Migration
 
-1. Keep `TWO_FACTOR_TOTP_ALGORITHM=SHA1` until a user communication and support
-   window is scheduled.
+1. Keep SHA1 verification support enabled in application code until reporting
+   confirms no active legacy payloads remain.
 2. Confirm Redis-backed 2FA replay protection is healthy before the migration
    window, because re-enrollment usually increases login and verification
    traffic.
-3. Deploy with `TWO_FACTOR_TOTP_ALGORITHM=SHA256` only when support is ready for
-   users to remove and re-add their SQR authenticator entry.
+3. Deploy with `TWO_FACTOR_TOTP_ALGORITHM=SHA256` for new enrollments and keep
+   support ready for users who choose to remove and re-add their SQR
+   authenticator entry.
 4. Ask users to disable and re-enable 2FA from a trusted session. New setup QR
    codes include `algorithm=SHA256`, while users who have not re-enrolled
    continue to verify with their stored `SHA1` payload.
-5. Monitor failed 2FA verification, lockout, and support-request volume during
-   the window.
+5. Monitor failed 2FA verification, `twoFactorTotpSha1VerificationSuccessTotal`,
+   lockout, and support-request volume during the window.
 6. Keep `SHA1` verification support until reporting confirms no active
    encrypted 2FA payloads remain without the `v2.sha256` algorithm marker.
 

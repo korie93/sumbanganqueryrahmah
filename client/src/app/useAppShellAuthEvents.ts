@@ -42,8 +42,8 @@ export function useAppShellAuthEvents({
       });
     };
 
-    window.addEventListener("profile-updated", onProfileUpdated as EventListener);
-    return () => window.removeEventListener("profile-updated", onProfileUpdated as EventListener);
+    window.addEventListener("profile-updated", onProfileUpdated);
+    return () => window.removeEventListener("profile-updated", onProfileUpdated);
   }, [setUser]);
 
   useEffect(() => {

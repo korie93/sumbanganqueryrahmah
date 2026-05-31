@@ -128,8 +128,8 @@ Current overrides:
 | `qs` | Pins patched query-string parsing behavior for transitive Express middleware until all upstream packages converge. |
 | `lodash` | Pins patched lodash template handling for transitive consumers and keeps npm audit clean across nested packages. |
 | `rollup` | Pins Rollup to a patched release used by the Vite toolchain and prevents vulnerable nested Rollup versions. |
-| `dompurify` | Pins DOMPurify sanitizer fixes for transitive HTML sanitization consumers; must match the exact direct dependency spec. |
 | `esbuild` | Pins patched esbuild for dev/build tooling, including older `drizzle-kit` transitive `@esbuild-kit` packages. |
+| `ip-address` | Pins patched IP address parsing helpers for `express-rate-limit` until the upstream dependency advances. |
 
 When removing an override, remove its entry from this table and from the audit
 helper in the same dependency-only PR.

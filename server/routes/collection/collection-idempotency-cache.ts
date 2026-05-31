@@ -49,6 +49,15 @@ export function pruneIdempotencyFingerprintValidationCache(
   return removed;
 }
 
+export function isIdempotencyFingerprintValidationEntryExpired(
+  entry: IdempotencyFingerprintValidationCacheEntry,
+  now: number,
+  ttlMs: number,
+): boolean {
+  const expiresAt = entry.lastValidatedAt + ttlMs;
+  return now >= expiresAt;
+}
+
 export function pruneExpiredIdempotencyFingerprintValidationCache(
   cache: Map<string, IdempotencyFingerprintValidationCacheEntry>,
   options?: {
@@ -61,7 +70,7 @@ export function pruneExpiredIdempotencyFingerprintValidationCache(
   let removed = 0;
 
   for (const [key, entry] of cache.entries()) {
-    if (now - entry.lastValidatedAt < ttlMs) {
+    if (!isIdempotencyFingerprintValidationEntryExpired(entry, now, ttlMs)) {
       continue;
     }
 
@@ -166,7 +175,7 @@ export function createIdempotencyFingerprintValidationCacheController(
       return undefined;
     }
 
-    if (now() - entry.lastValidatedAt >= ttlMs) {
+    if (isIdempotencyFingerprintValidationEntryExpired(entry, now(), ttlMs)) {
       cache.delete(key);
       if (cache.size === 0) {
         stopSweepTimer();

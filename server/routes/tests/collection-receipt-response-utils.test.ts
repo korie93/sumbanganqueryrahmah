@@ -3,6 +3,7 @@ import test from "node:test";
 import type { Response } from "express";
 import {
   applyCollectionReceiptResponseHeaders,
+  sanitizeReceiptRouteParamForLog,
   sanitizeReceiptResponseFileName,
 } from "../collection-receipt-response-utils";
 
@@ -63,4 +64,11 @@ test("receipt response filenames are sanitized at the header boundary", () => {
   assert.equal(sanitizeReceiptResponseFileName("safe\r\nSet-Cookie:evil.pdf"), "safe_Set-Cookie_evil.pdf");
   assert.equal(sanitizeReceiptResponseFileName(""), "receipt");
   assert.equal(sanitizeReceiptResponseFileName("a".repeat(300)).length, 255);
+});
+
+test("receipt route parameters are sanitized before structured logging", () => {
+  assert.equal(sanitizeReceiptRouteParamForLog(" collection-1\r\nSet-Cookie:evil "), "collection-1 Set-Cookie:evil");
+  assert.equal(sanitizeReceiptRouteParamForLog(["collection-1", "collection-2"]), "[multi-value]");
+  assert.equal(sanitizeReceiptRouteParamForLog(""), null);
+  assert.equal(sanitizeReceiptRouteParamForLog("a".repeat(300))?.length, 128);
 });

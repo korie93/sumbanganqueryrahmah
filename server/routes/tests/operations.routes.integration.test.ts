@@ -747,7 +747,13 @@ test("GET /api/backups/jobs/:jobId returns 404 for unknown background jobs", asy
     const response = await fetch(`${baseUrl}/api/backups/jobs/missing-job`);
     assert.equal(response.status, 404);
     assert.deepEqual(await response.json(), {
+      ok: false,
       message: "Backup job not found",
+      code: "NOT_FOUND",
+      error: {
+        code: "NOT_FOUND",
+        message: "Backup job not found",
+      },
     });
   } finally {
     await stopTestServer(server);

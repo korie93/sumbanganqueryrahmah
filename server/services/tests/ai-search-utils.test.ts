@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { createInternalMetrics } from "../../internal/metrics";
 import {
   buildBranchSummary,
   buildExplanation,
@@ -123,6 +124,20 @@ test("JSON row helpers ignore oversized serialized payloads safely", () => {
   const digitsScore = scoreRowDigits(oversizedRow, "123456");
   assert.equal(digitsScore.score, 0);
   assert.deepEqual(digitsScore.parsed, {});
+});
+
+test("JSON row helpers parse malformed serialized payloads through safeJsonParse fallback", () => {
+  const metrics = createInternalMetrics();
+  const malformedJson = "{\"Nama\":\"Ali\"";
+
+  assert.equal(toObjectJson(malformedJson, { metrics }), null);
+  assert.equal(metrics.snapshot().counters.jsonParseFailuresTotal, 1);
+
+  const row = ensureJsonRow({
+    rowId: "row-malformed",
+    jsonDataJsonb: malformedJson,
+  });
+  assert.equal(row.jsonDataJsonb, malformedJson);
 });
 
 test("summary and explanation helpers produce compact AI-ready text", () => {

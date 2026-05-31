@@ -12,6 +12,7 @@ import {
 import { buildCollectionReceiptSecurityErrorResponse } from "../collection-receipt-error-response";
 export {
   createIdempotencyFingerprintValidationCacheController,
+  isIdempotencyFingerprintValidationEntryExpired,
   pruneExpiredIdempotencyFingerprintValidationCache,
   pruneIdempotencyFingerprintValidationCache,
 } from "./collection-idempotency-cache";

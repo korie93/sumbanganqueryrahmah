@@ -170,6 +170,15 @@ test("registerOperationsDebugRoutes hides mounted endpoints without the dedicate
       },
     });
     assert.equal(response.status, 404);
+    assert.deepEqual(await response.json(), {
+      ok: false,
+      message: "Not found",
+      code: "NOT_FOUND",
+      error: {
+        code: "NOT_FOUND",
+        message: "Not found",
+      },
+    });
     assert.equal(calls, 0);
   } finally {
     await stopTestServer(server);

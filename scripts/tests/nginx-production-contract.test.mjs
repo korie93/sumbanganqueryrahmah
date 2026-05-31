@@ -199,6 +199,10 @@ test("production environment templates keep upload scanning and runtime topology
     readAnyEnvValue(productionEnvText, "SQR_REDIS_RATE_LIMIT_URL", "deploy/examples/sqr.production.env.template"),
     /^rediss?:\/\//,
   );
+  assert.doesNotMatch(
+    readAnyEnvValue(productionEnvText, "SQR_REDIS_RATE_LIMIT_URL", "deploy/examples/sqr.production.env.template"),
+    /(?:localhost|127\.0\.0\.1|\[::1\]|::1)/i,
+  );
   assert.match(docText, /clamdscan --fdpass/i);
   assert.match(docText, /Redis pub\/sub WebSocket/i);
 });

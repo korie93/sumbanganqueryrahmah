@@ -1,8 +1,9 @@
 import type { Response } from "express";
 import type { WebSocket } from "ws";
 import { runWithRequestDeadline } from "../http/request-deadline";
+import { buildApiErrorResponse } from "../http/api-error-response";
 import type { AuthenticatedRequest } from "../auth/guards";
-import { ensureObject, readRouteParam } from "../http/validation";
+import { ensureObject, readQueryObject, readRouteParam } from "../http/validation";
 import type { AuditLogOperationsService } from "../services/audit-log-operations.service";
 import type { BackupJobQueueService } from "../services/backup-job-queue.service";
 import type { BackupOperationsService } from "../services/backup-operations.service";
@@ -56,7 +57,7 @@ export function createOperationsController(deps: CreateOperationsControllerDeps)
   };
 
   const listAuditLogs = async (req: AuthenticatedRequest, res: Response) => {
-    return res.json(await auditLogOperationsService.listAuditLogs(req.query as Record<string, unknown>));
+    return res.json(await auditLogOperationsService.listAuditLogs(readQueryObject(req.query)));
   };
 
   const getAuditLogStats = async (_req: AuthenticatedRequest, res: Response) => {
@@ -96,7 +97,7 @@ export function createOperationsController(deps: CreateOperationsControllerDeps)
   };
 
   const listBackups = async (req: AuthenticatedRequest, res: Response) => {
-    return res.json(await backupOperationsService.listBackups(req.query as Record<string, unknown>));
+    return res.json(await backupOperationsService.listBackups(readQueryObject(req.query)));
   };
 
   const createBackup = async (req: AuthenticatedRequest, res: Response) => {
@@ -145,7 +146,9 @@ export function createOperationsController(deps: CreateOperationsControllerDeps)
     const jobId = readRouteParam(req.params.jobId, "backup job id");
     const job = await backupJobQueueService.getJob(jobId);
     if (!job) {
-      return res.status(404).json({ message: "Backup job not found" });
+      return res.status(404).json(buildApiErrorResponse("Backup job not found", {
+        statusCode: 404,
+      }));
     }
     return res.status(200).json(job);
   };

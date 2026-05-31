@@ -102,13 +102,14 @@ sudo apt upgrade -y
 sudo apt install -y git curl unzip nginx certbot python3-certbot-nginx postgresql postgresql-contrib
 ```
 
-Pasang Node.js 24:
+Pasang Node.js 24 LTS:
 
 ```bash
 curl -fsSL https://deb.nodesource.com/setup_24.x | sudo -E bash -
 sudo apt install -y nodejs
 node -v
 npm -v
+npm run verify:node-version
 ```
 
 Pasang PM2:
@@ -271,7 +272,7 @@ Kekalkan `PG_STATEMENT_TIMEOUT_MS=30000` sebagai guard query runaway PostgreSQL.
 Jika SMTP config berubah, restart semua PM2 worker selepas update env kerana transporter SMTP dicache dalam proses.
 Jika anda rotate `SESSION_SECRET`, device fingerprint HMAC turut berubah; guna `SESSION_SECRET_PREVIOUS` untuk compatibility window yang dirancang, atau paksa login semula jika rotation kecemasan.
 Production-like startup kini mewajibkan `SQR_RATE_LIMIT_STORE=redis` dengan `SQR_REDIS_RATE_LIMIT_URL` walaupun `SQR_MAX_WORKERS=1`, supaya fixed-window rate-limit counters, adaptive runtime protection buckets, 2FA replay protection, dan JWT logout revocation dikongsi serta fail closed jika Redis bermasalah. Kekalkan `SQR_MAX_WORKERS=1` untuk production kecil. Jika mahu multi-worker, aktifkan juga `SQR_WS_SHARED_BUS=redis` untuk Redis pub/sub WebSocket, termasuk mesej broadcast serta cross-worker activity close. Runtime production akan fail fast jika multi-worker diaktifkan tanpa WebSocket shared bus. Jika Redis shared protection sudah dikonfigurasi tetapi tidak boleh dicapai, protected request akan fail closed dan perlu dianggap sebagai insiden operasi, bukan fallback biasa.
-Biarkan `TWO_FACTOR_TOTP_ALGORITHM=SHA1` untuk akaun 2FA sedia ada. `SHA256` hanya sesuai selepas jadual re-enrollment TOTP dibuat kerana aplikasi pengesah menyimpan algorithm semasa enrollment.
+Biarkan `TWO_FACTOR_TOTP_ALGORITHM=SHA256` untuk enrollment 2FA baharu. Akaun 2FA lama yang disimpan sebagai SHA1 masih boleh login kerana algorithm disimpan dalam payload encrypted masing-masing; pantau `twoFactorTotpSha1VerificationSuccessTotal` semasa migration window sebelum merancang retirement SHA1.
 
 ## 9. Build dan Migrate
 

@@ -10,6 +10,14 @@ export function ensureObject(value: unknown): Record<string, unknown> | null {
   return null;
 }
 
+export function readQueryObject(value: unknown): Record<string, unknown> {
+  const query = ensureObject(value);
+  if (!query) {
+    throw badRequest("Query parameters must be an object.", ERROR_CODES.REQUEST_BODY_INVALID);
+  }
+  return query;
+}
+
 export type RequestValidationIssue = {
   code: string;
   message: string;

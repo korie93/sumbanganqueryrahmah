@@ -47,7 +47,7 @@ export function GeneralSearchRecordDialog({
         className={
           isMobile
             ? `${mobileFullscreenDialogViewportClassName} left-0 top-0 flex w-screen max-w-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden rounded-none border-0 p-0`
-            : "w-[95vw] max-w-5xl max-h-[85vh] overflow-y-auto"
+            : "w-[min(95vw,600px)] max-h-[85vh] overflow-y-auto"
         }
       >
         <DialogHeader

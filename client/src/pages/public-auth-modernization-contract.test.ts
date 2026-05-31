@@ -53,7 +53,7 @@ test("maintenance page keeps timer cleanup logic while using the modern status l
 
   assert.match(source, /maintenance-page__status-grid/);
   assert.match(source, /role="status" aria-live="polite"/);
-  assert.match(source, /window\.clearInterval\(pollIntervalId\)/);
+  assert.match(source, /clearManagedInterval\(pollIntervalId\)/);
   assert.match(source, /window\.clearInterval\(tick\)/);
   assert.match(source, /activeController\?\.abort\(\)/);
 });

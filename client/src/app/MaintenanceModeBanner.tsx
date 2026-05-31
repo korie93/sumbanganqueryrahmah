@@ -49,10 +49,10 @@ export default function MaintenanceModeBanner({ userRole }: MaintenanceModeBanne
       setState((previous) => parseStoredMaintenanceState(event.newValue, previous));
     };
 
-    window.addEventListener("maintenance-updated", handleMaintenanceUpdated as EventListener);
+    window.addEventListener("maintenance-updated", handleMaintenanceUpdated);
     window.addEventListener("storage", handleStorage);
     return () => {
-      window.removeEventListener("maintenance-updated", handleMaintenanceUpdated as EventListener);
+      window.removeEventListener("maintenance-updated", handleMaintenanceUpdated);
       window.removeEventListener("storage", handleStorage);
     };
   }, []);

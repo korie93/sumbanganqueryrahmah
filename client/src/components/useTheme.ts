@@ -129,7 +129,7 @@ export function useTheme() {
     };
 
     window.addEventListener("storage", onStorage);
-    window.addEventListener("app-theme-change", onThemeChange as EventListener);
+    window.addEventListener("app-theme-change", onThemeChange);
     const unsubscribeSystemThemeChange = subscribeSystemThemeChange(
       systemThemeMedia,
       onSystemThemeChange,
@@ -137,7 +137,7 @@ export function useTheme() {
     syncStoredThemeOrSystemTheme();
     return () => {
       window.removeEventListener("storage", onStorage);
-      window.removeEventListener("app-theme-change", onThemeChange as EventListener);
+      window.removeEventListener("app-theme-change", onThemeChange);
       unsubscribeSystemThemeChange();
     };
   }, []);

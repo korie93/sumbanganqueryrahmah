@@ -8,6 +8,7 @@ import {
   readDate,
   readInteger,
   readPageLimit,
+  readQueryObject,
   readRouteParam,
   readStringList,
 } from "../../http/validation";
@@ -68,6 +69,22 @@ test("readRouteParam rejects missing and repeated path params", () => {
       && error.code === "INVALID_IDENTIFIER"
       && /required/i.test(error.message),
   );
+});
+
+test("readQueryObject accepts object query payloads and rejects non-object values", () => {
+  const query = { page: "1", search: "alpha" };
+  assert.equal(readQueryObject(query), query);
+
+  for (const value of [null, undefined, "page=1", ["page", "1"]]) {
+    assert.throws(
+      () => readQueryObject(value),
+      (error) =>
+        error instanceof HttpError
+        && error.statusCode === 400
+        && error.code === "REQUEST_BODY_INVALID"
+        && /Query parameters must be an object/i.test(error.message),
+    );
+  }
 });
 
 test("readDate accepts strict ISO date and datetime values", () => {

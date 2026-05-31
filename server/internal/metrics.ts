@@ -19,12 +19,18 @@ export type InternalMetricName =
   | "cspReportsDroppedRequestGuardTotal"
   | "cspReportsDroppedTotal"
   | "dbDeadlocksTotal"
+  | "dbHealthCheckCircuitBreaksTotal"
+  | "dbHealthCheckFailuresTotal"
+  | "dbHealthCheckRecoveryAttemptsTotal"
+  | "dbHealthCheckRecoverySuccessTotal"
+  | "dbHealthCheckSkippedConcurrentTotal"
   | "idempotencyFingerprintSweepErrorsTotal"
   | "jsonParseFailuresTotal"
   | "redisRateLimitEvalTypeErrorsTotal"
   | "sessionRefreshRevocationRetryAttemptsTotal"
   | "sessionRefreshRevocationRetryExhaustedTotal"
   | "sessionRevocationRedisErrorsTotal"
+  | "twoFactorTotpSha1VerificationSuccessTotal"
   | "webVitalsAcceptedTotal"
   | "webVitalsDroppedRateLimitTotal"
   | "webVitalsDroppedRequestGuardTotal"
@@ -71,12 +77,18 @@ const INTERNAL_METRIC_NAMES: readonly InternalMetricName[] = [
   "cspReportsDroppedRequestGuardTotal",
   "cspReportsDroppedTotal",
   "dbDeadlocksTotal",
+  "dbHealthCheckCircuitBreaksTotal",
+  "dbHealthCheckFailuresTotal",
+  "dbHealthCheckRecoveryAttemptsTotal",
+  "dbHealthCheckRecoverySuccessTotal",
+  "dbHealthCheckSkippedConcurrentTotal",
   "idempotencyFingerprintSweepErrorsTotal",
   "jsonParseFailuresTotal",
   "redisRateLimitEvalTypeErrorsTotal",
   "sessionRefreshRevocationRetryAttemptsTotal",
   "sessionRefreshRevocationRetryExhaustedTotal",
   "sessionRevocationRedisErrorsTotal",
+  "twoFactorTotpSha1VerificationSuccessTotal",
   "webVitalsAcceptedTotal",
   "webVitalsDroppedRateLimitTotal",
   "webVitalsDroppedRequestGuardTotal",

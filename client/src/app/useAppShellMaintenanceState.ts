@@ -55,8 +55,8 @@ export function useAppShellMaintenanceState({
       }
     };
 
-    window.addEventListener("maintenance-updated", onMaintenanceUpdated as EventListener);
-    return () => window.removeEventListener("maintenance-updated", onMaintenanceUpdated as EventListener);
+    window.addEventListener("maintenance-updated", onMaintenanceUpdated);
+    return () => window.removeEventListener("maintenance-updated", onMaintenanceUpdated);
   }, [currentPage, setCurrentPage, user]);
 
   useEffect(() => {

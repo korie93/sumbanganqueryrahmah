@@ -14,6 +14,7 @@ import { resolveCollectionReceiptRequestContext } from "./collection-receipt-req
 import {
   applyCollectionReceiptResponseHeaders,
   logCollectionReceiptWarning,
+  sanitizeReceiptRouteParamForLog,
 } from "./collection-receipt-response-utils";
 import { resolveReadableCollectionReceiptTarget } from "./collection-receipt-target-utils";
 export {
@@ -55,8 +56,12 @@ function resolveCollectionReceiptErrorCode(params: {
 }) {
   const { reason, statusCode } = params;
 
-  if (reason === "missing_collection_id") {
-    return ERROR_CODES.REQUEST_BODY_INVALID;
+  if (
+    reason === "invalid_collection_id"
+    || reason === "invalid_receipt_id"
+    || reason === "missing_collection_id"
+  ) {
+    return ERROR_CODES.INVALID_IDENTIFIER;
   }
 
   if (
@@ -198,8 +203,8 @@ export async function serveCollectionReceipt(
     logger.error("Collection receipt request crashed", {
       mode,
       username: req.user?.username || null,
-      recordId: req.params.id || null,
-      receiptId: req.params.receiptId || null,
+      recordId: sanitizeReceiptRouteParamForLog(req.params.id),
+      receiptId: sanitizeReceiptRouteParamForLog(req.params.receiptId),
       error,
     });
     return res.status(500).json(

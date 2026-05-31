@@ -64,6 +64,8 @@ export function useFloatingAILayoutState({
     }),
   );
   const floatingRootRef = useRef<HTMLDivElement | null>(null);
+  const focusListenerCleanupRef = useRef<(() => void) | null>(null);
+  const layoutListenerCleanupRef = useRef<(() => void) | null>(null);
   const shouldTrackObstacleLayout = shouldTrackFloatingAiDom({
     isOpen,
     isThinking,
@@ -107,6 +109,8 @@ export function useFloatingAILayoutState({
   };
 
   useEffect(() => {
+    focusListenerCleanupRef.current?.();
+    focusListenerCleanupRef.current = null;
     if (hiddenForAiPage || typeof document === "undefined") return;
 
     const updateFocusedEditable = () => {
@@ -123,9 +127,17 @@ export function useFloatingAILayoutState({
     document.addEventListener("focusin", updateFocusedEditable);
     document.addEventListener("focusout", updateFocusedEditable);
 
-    return () => {
+    const cleanupFocusListeners = () => {
       document.removeEventListener("focusin", updateFocusedEditable);
       document.removeEventListener("focusout", updateFocusedEditable);
+    };
+    focusListenerCleanupRef.current = cleanupFocusListeners;
+
+    return () => {
+      cleanupFocusListeners();
+      if (focusListenerCleanupRef.current === cleanupFocusListeners) {
+        focusListenerCleanupRef.current = null;
+      }
     };
   }, [hiddenForAiPage]);
 
@@ -199,6 +211,8 @@ export function useFloatingAILayoutState({
   ]);
 
   useEffect(() => {
+    layoutListenerCleanupRef.current?.();
+    layoutListenerCleanupRef.current = null;
     if (hiddenForAiPage || typeof document === "undefined" || typeof window === "undefined") return;
     const observedRoot = floatingRootRef.current;
     if (!observedRoot) return;
@@ -273,7 +287,7 @@ export function useFloatingAILayoutState({
       window.addEventListener("scroll", scheduleSync, { passive: true });
     }
 
-    return () => {
+    const cleanupLayoutListeners = () => {
       mounted = false;
       observer?.disconnect();
       resizeObserver?.disconnect();
@@ -283,9 +297,19 @@ export function useFloatingAILayoutState({
       }
       if (resizeDebounceHandle !== null) {
         window.clearTimeout(resizeDebounceHandle);
+        resizeDebounceHandle = null;
       }
       if (frame !== null) {
         window.cancelAnimationFrame(frame);
+        frame = null;
+      }
+    };
+    layoutListenerCleanupRef.current = cleanupLayoutListeners;
+
+    return () => {
+      cleanupLayoutListeners();
+      if (layoutListenerCleanupRef.current === cleanupLayoutListeners) {
+        layoutListenerCleanupRef.current = null;
       }
     };
   }, [hiddenForAiPage, shouldTrackObstacleLayout, syncLayout]);

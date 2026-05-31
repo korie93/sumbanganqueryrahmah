@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { createCipheriv, createHash, randomBytes } from "node:crypto";
 import test from "node:test";
+import { createInternalMetrics } from "../../internal/metrics";
 import { getSessionSecret, getTwoFactorDecryptionSecrets } from "../../config/security";
 import {
   buildTwoFactorOtpAuthUrl,
@@ -200,11 +201,13 @@ test("verifyTwoFactorCode keeps normalization for pasted spaced and dashed codes
   assert.equal(verifyTwoFactorCode(secret, `${code.slice(0, 3)}-${code.slice(3)}`), true);
 });
 
-test("two-factor TOTP defaults to SHA1 and supports SHA256 as an opt-in algorithm", (t) => {
+test("two-factor TOTP defaults to SHA256 and preserves SHA1 compatibility", (t) => {
   const secret = "JBSWY3DPEHPK3PXP";
+  const metrics = createInternalMetrics();
   t.mock.method(Date, "now", () => new Date("2026-04-29T00:00:00.000Z").getTime());
 
-  assert.equal(resolveTotpAlgorithm(), "sha1");
+  assert.equal(resolveTotpAlgorithm(), "sha256");
+  assert.equal(resolveTotpAlgorithm("SHA1"), "sha1");
   assert.equal(resolveTotpAlgorithm("SHA256"), "sha256");
   const sha1Code = generateCurrentTwoFactorCode(secret, "sha1");
   const sha256Code = generateCurrentTwoFactorCode(secret, "sha256");
@@ -212,6 +215,8 @@ test("two-factor TOTP defaults to SHA1 and supports SHA256 as an opt-in algorith
   assert.notEqual(sha256Code, sha1Code);
   assert.equal(verifyTwoFactorCode(secret, sha256Code, 1, "sha256"), true);
   assert.equal(verifyTwoFactorCode(secret, sha1Code, 1, "sha256"), false);
+  assert.equal(verifyTwoFactorCode(secret, sha1Code, 1, "sha1", metrics), true);
+  assert.equal(metrics.snapshot().counters.twoFactorTotpSha1VerificationSuccessTotal, 1);
   assert.match(
     buildTwoFactorOtpAuthUrl({ issuer: "SQR", username: "admin", secret, algorithm: "SHA256" }),
     /algorithm=SHA256/,

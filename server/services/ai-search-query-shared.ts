@@ -1,3 +1,6 @@
+import type { InternalMetricsRecorder } from "../internal/metrics";
+import { safeJsonParse } from "../lib/safe-json";
+
 export type AiSearchJsonRecord = Record<string, unknown>;
 
 export type AiSearchRowLike = {
@@ -6,16 +9,21 @@ export type AiSearchRowLike = {
   [key: string]: unknown;
 };
 
-export function toObjectJson(value: unknown): AiSearchJsonRecord | null {
+export function toObjectJson(
+  value: unknown,
+  options: { metrics?: InternalMetricsRecorder } = {},
+): AiSearchJsonRecord | null {
   if (!value) return null;
   if (typeof value === "object") return value as AiSearchJsonRecord;
   if (typeof value === "string") {
-    try {
-      const parsed = JSON.parse(value);
-      return parsed && typeof parsed === "object" ? (parsed as AiSearchJsonRecord) : null;
-    } catch {
-      return null;
-    }
+    const parsed = safeJsonParse<unknown>(
+      value,
+      "ai_search_query_json",
+      options.metrics ? { metrics: options.metrics } : {},
+    );
+    return parsed.success && parsed.data && typeof parsed.data === "object"
+      ? (parsed.data as AiSearchJsonRecord)
+      : null;
   }
   return null;
 }
