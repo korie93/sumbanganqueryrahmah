@@ -85,7 +85,29 @@ Suggested escalation thresholds:
 - error rate >= 5%
 - any active critical alert
 
-## 5. Canary and Rollback
+## 5. Post-Deployment Health Gate
+
+After each staging, canary, or production deploy, run the public health and
+security-header gate from an operator machine or CI/CD deploy job that can reach
+the promoted URL:
+
+```bash
+bash scripts/post-deploy-health-check.sh https://sqr-system.com
+```
+
+The script verifies the public liveness/readiness endpoints, app-owned security
+headers, malformed-login rejection, and HTTPS HSTS posture. The optional login
+burst probe is disabled by default to avoid noisy production auth attempts; run
+it only during a controlled window:
+
+```bash
+SQR_POST_DEPLOY_RATE_LIMIT_PROBE=1 \
+  bash scripts/post-deploy-health-check.sh https://sqr-system.com
+```
+
+Do not mark a deploy complete while this script exits non-zero.
+
+## 6. Canary and Rollback
 
 Canary rollout steps:
 
@@ -107,13 +129,14 @@ Rollback action:
 2. verify login + collection + summary + receipt flows
 3. keep canary disabled until root cause is confirmed
 
-## 6. Go / No-Go
+## 7. Go / No-Go
 
 Go only if all are true:
 
 - CI gates are green
 - local release verification is green
 - staging soak passes without data drift
+- post-deployment health gate passes for the promoted URL
 - canary monitoring signals are stable
 
 Otherwise: no-go and rollback/fix first.

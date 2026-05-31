@@ -40,6 +40,7 @@ policy.
 Use these checks after deployment:
 
 ```sh
+bash scripts/post-deploy-health-check.sh https://sqr-system.com
 curl -I https://sqr-system.com/
 curl -i https://sqr-system.com/api/health/live
 npm run test:http
