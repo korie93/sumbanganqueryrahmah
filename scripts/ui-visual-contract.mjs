@@ -2,6 +2,7 @@ import process from "node:process";
 import path from "node:path";
 import { mkdir, writeFile } from "node:fs/promises";
 import { chromium } from "playwright";
+import { resolvePlaywrightLaunchOptions } from "./lib/playwright-chrome.mjs";
 import {
   completeTwoFactorLoginIfNeeded,
   ensureLoginPageVisible,
@@ -282,7 +283,7 @@ async function logoutAuthenticatedContractSession(page) {
 }
 
 const run = async () => {
-  const browser = await chromium.launch({ headless: true });
+  const browser = await chromium.launch(resolvePlaywrightLaunchOptions());
   const context = await browser.newContext({
     colorScheme: "light",
     locale: "en-US",

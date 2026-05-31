@@ -224,16 +224,18 @@ jobs:
       - name: Run DB bootstrap integration tests
         run: npm run test:db-integration
 
-      - name: Cache Playwright browsers
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
-        with:
-          path: ~/.cache/ms-playwright
-          key: ${{ runner.os }}-playwright-${{ hashFiles('package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-playwright-
+      - name: Resolve system Chrome
+        run: |
+          CHROME_BIN="$(command -v google-chrome-stable || command -v google-chrome || command -v chromium-browser || true)"
+          if [ -z "$CHROME_BIN" ]; then
+            echo "No system Chrome executable found on the runner." >&2
+            exit 1
+          fi
+          echo "PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=$CHROME_BIN" >> "$GITHUB_ENV"
+          echo "CHROME_PATH=$CHROME_BIN" >> "$GITHUB_ENV"
 
-      - name: Install Playwright Chromium
-        run: npx playwright install --with-deps chromium
+      - name: Install Playwright Chromium dependencies
+        run: npx playwright install-deps chromium
 
       - name: Build
         run: npm run build
@@ -271,7 +273,7 @@ jobs:
 
       - name: Run PageSpeed Lighthouse budgets
         run: |
-          PAGESPEED_CHROME_PATH="$(node -e 'console.log(require("playwright").chromium.executablePath())')" \
+          PAGESPEED_CHROME_PATH="${PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH}" \
           PAGESPEED_REUSE_SERVER=true \
           PAGESPEED_SKIP_BUILD=true \
           PAGESPEED_BASE_URL=http://127.0.0.1:5000 \

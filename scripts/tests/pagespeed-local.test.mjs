@@ -151,8 +151,9 @@ test("strict PageSpeed runner and CI enforce Lighthouse thresholds", () => {
   assert.match(runnerSource, /--port=\$\{chromeDebugPort\}/);
   assert.match(strictRunnerSource, /PAGESPEED_ENFORCE_THRESHOLDS:\s*"true"/);
   assert.match(ciSource, /Run PageSpeed Lighthouse budgets/);
-  assert.match(ciSource, /require\("playwright"\)\.chromium\.executablePath\(\)/);
-  assert.match(ciSource, /PAGESPEED_CHROME_PATH=/);
+  assert.match(ciSource, /Resolve system Chrome/);
+  assert.match(ciSource, /PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=\$CHROME_BIN/);
+  assert.match(ciSource, /PAGESPEED_CHROME_PATH="\$\{PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH\}"/);
   assert.match(ciSource, /PAGESPEED_REUSE_SERVER=true/);
   assert.match(ciSource, /artifacts\/pagespeed/);
   assert.match(docsSource, /Performance \| 85/);

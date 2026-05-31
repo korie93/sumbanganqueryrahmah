@@ -2,6 +2,7 @@ import process from "node:process";
 import path from "node:path";
 import { mkdir, writeFile } from "node:fs/promises";
 import { chromium } from "playwright";
+import { resolvePlaywrightLaunchOptions } from "./lib/playwright-chrome.mjs";
 
 const baseUrl = process.env.SMOKE_BASE_URL || "http://127.0.0.1:5000";
 const username = process.env.SMOKE_TEST_USERNAME || "";
@@ -2301,7 +2302,7 @@ const checkLogoutFlow = async (page, context, tracker) => {
 };
 
 const run = async () => {
-  const browser = await chromium.launch({ headless: true });
+  const browser = await chromium.launch(resolvePlaywrightLaunchOptions());
   const context = await browser.newContext();
   const page = await context.newPage();
   const tracker = createTracker();
