@@ -90,14 +90,17 @@ async function assertApprovedScannerExecutable(
   throw new Error("COLLECTION_RECEIPT_EXTERNAL_SCAN_COMMAND must resolve to an approved scanner executable.");
 }
 
-async function resolveExistingFile(candidatePath: string): Promise<string | null> {
+async function resolveExistingFile(
+  candidatePath: string,
+  options: { readonly requireExecutable?: boolean } = {},
+): Promise<string | null> {
   try {
     const resolvedPath = await fs.realpath(candidatePath);
     const stats = await fs.stat(resolvedPath);
     if (!stats.isFile()) {
       return null;
     }
-    if (process.platform !== "win32" && (stats.mode & 0o111) === 0) {
+    if (options.requireExecutable && process.platform !== "win32" && (stats.mode & 0o111) === 0) {
       return null;
     }
     return resolvedPath;
@@ -118,7 +121,9 @@ async function resolveScannerCommandOnPath(command: string): Promise<string | nu
 
   if (process.platform !== "win32") {
     for (const pathEntry of pathEntries) {
-      const resolved = await resolveExistingFile(path.join(pathEntry, command));
+      const resolved = await resolveExistingFile(path.join(pathEntry, command), {
+        requireExecutable: true,
+      });
       if (resolved) {
         return resolved;
       }
@@ -135,7 +140,9 @@ async function resolveScannerCommandOnPath(command: string): Promise<string | nu
       .filter(Boolean);
 
   for (const pathEntry of pathEntries) {
-    const directMatch = await resolveExistingFile(path.join(pathEntry, command));
+    const directMatch = await resolveExistingFile(path.join(pathEntry, command), {
+      requireExecutable: true,
+    });
     if (directMatch) {
       return directMatch;
     }
@@ -145,7 +152,9 @@ async function resolveScannerCommandOnPath(command: string): Promise<string | nu
     }
 
     for (const extension of pathExtensions) {
-      const resolved = await resolveExistingFile(path.join(pathEntry, `${command}${extension}`));
+      const resolved = await resolveExistingFile(path.join(pathEntry, `${command}${extension}`), {
+        requireExecutable: true,
+      });
       if (resolved) {
         return resolved;
       }
@@ -165,7 +174,9 @@ export async function validateExternalScanCommand(
   }
 
   if (path.isAbsolute(normalized)) {
-    const resolved = await resolveExistingFile(normalized);
+    const resolved = await resolveExistingFile(normalized, {
+      requireExecutable: true,
+    });
     if (!resolved) {
       throw new Error("COLLECTION_RECEIPT_EXTERNAL_SCAN_COMMAND must point to an existing scanner executable.");
     }

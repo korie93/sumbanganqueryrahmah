@@ -253,6 +253,26 @@ test("external receipt scanner rejects missing receipt files before spawn", asyn
   }
 });
 
+test("external receipt scanner accepts a non-executable receipt file", async () => {
+  const previousEnv = snapshotEnv();
+  process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_ENABLED = "1";
+  process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_COMMAND = process.execPath;
+  process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_ARGS_JSON = "[\"-e\",\"process.exit(0)\",\"{file}\"]";
+  process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_FAIL_CLOSED = "1";
+  process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_TIMEOUT_MS = "1000";
+
+  try {
+    await withTemporaryReceiptFile(async (filePath) => {
+      if (process.platform !== "win32") {
+        await fs.chmod(filePath, 0o600);
+      }
+      await assert.doesNotReject(() => scanCollectionReceiptWithExternalScanner(filePath));
+    });
+  } finally {
+    restoreEnv(previousEnv);
+  }
+});
+
 test("external receipt scanner accepts an existing receipt file with a validated executable path", async () => {
   const previousEnv = snapshotEnv();
   process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_ENABLED = "1";
