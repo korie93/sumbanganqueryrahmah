@@ -1,5 +1,6 @@
 import "dotenv/config";
 import cluster from "node:cluster";
+import { WebSocket } from "ws";
 import type { WorkerFatalMessage, WorkerReadyMessage } from "./internal/worker-ipc";
 import { startLocalServer } from "./internal/server-startup";
 import { createLocalRuntimeEnvironment } from "./internal/local-runtime-environment";
@@ -77,6 +78,7 @@ const {
   port,
   host,
   markWebSocketConnectionsReady,
+  markWebSocketConnectionsDraining,
 } = createLocalRuntimeEnvironment({
   onGracefulShutdownMessage: (reason) => {
     shutdownProcess(reason, 0);
@@ -139,6 +141,7 @@ function shutdownProcess(reason: string, exitCode: number, details?: string) {
   }
   shuttingDown = true;
   shutdownExitCode = exitCode;
+  markWebSocketConnectionsDraining();
 
   if (exitCode === 0) {
     logger.info("Received shutdown signal, closing gracefully", { signal: reason });
@@ -149,11 +152,25 @@ function shutdownProcess(reason: string, exitCode: number, details?: string) {
     });
   }
 
-  for (const [id, ws] of connectedClients.entries()) {
+  const webSocketShutdownSnapshot = Array.from(connectedClients.entries());
+  for (const [id, ws] of webSocketShutdownSnapshot) {
     if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
-      ws.close();
+      try {
+        ws.close(1001, "server shutting down");
+      } catch (error) {
+        logger.warn("WebSocket close request failed during graceful shutdown", { error });
+        try {
+          ws.terminate();
+        } catch (terminateError) {
+          logger.warn("WebSocket terminate fallback failed during graceful shutdown", {
+            error: terminateError,
+          });
+        }
+      }
     }
-    connectedClients.delete(id);
+    if (connectedClients.get(id) === ws) {
+      connectedClients.delete(id);
+    }
   }
 
   shutdownTimer = setTimeout(() => {

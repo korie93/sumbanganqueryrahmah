@@ -84,10 +84,62 @@ export function readOptionalString(
   return normalized || undefined;
 }
 
+const DECIMAL_INTEGER_PATTERN = /^(?:0|-?[1-9]\d*)$/;
+
+type StrictIntegerParseOptions = {
+  readonly default?: number | null | undefined;
+  readonly max?: number | undefined;
+  readonly min?: number | undefined;
+};
+
+function resolveStrictIntegerDefault(options: StrictIntegerParseOptions): number | null {
+  if (options.default === undefined || options.default === null) {
+    return null;
+  }
+  if (!Number.isSafeInteger(options.default)) {
+    return null;
+  }
+  if (options.min !== undefined && options.default < options.min) {
+    return null;
+  }
+  if (options.max !== undefined && options.default > options.max) {
+    return null;
+  }
+  return options.default;
+}
+
+export function parseStrictInteger(
+  raw: unknown,
+  options: StrictIntegerParseOptions = {},
+): number | null {
+  let parsed: number | null = null;
+
+  if (typeof raw === "number") {
+    parsed = Number.isSafeInteger(raw) ? raw : null;
+  } else if (typeof raw === "string") {
+    const normalized = raw.trim();
+    if (normalized === "") {
+      return resolveStrictIntegerDefault(options);
+    }
+    parsed = DECIMAL_INTEGER_PATTERN.test(normalized) ? Number.parseInt(normalized, 10) : null;
+  }
+
+  if (parsed === null || !Number.isSafeInteger(parsed)) {
+    return resolveStrictIntegerDefault(options);
+  }
+
+  if (options.min !== undefined && parsed < options.min) {
+    return null;
+  }
+  if (options.max !== undefined && parsed > options.max) {
+    return null;
+  }
+
+  return parsed;
+}
+
 export function readInteger(value: unknown, fallback: number): number {
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed)) return fallback;
-  return Math.trunc(parsed);
+  return parseStrictInteger(value, { default: fallback }) ?? fallback;
 }
 
 export function clampInteger(value: number, min: number, max: number): number {
@@ -113,17 +165,16 @@ export function readPageLimit(
     return safeFallback;
   }
 
-  const parsed = Number(normalized);
-  if (!Number.isFinite(parsed)) {
+  const parsed = parseStrictInteger(normalized);
+  if (parsed === null) {
     return safeFallback;
   }
 
-  const limit = Math.trunc(parsed);
-  if (limit < 1) {
+  if (parsed < 1) {
     throw badRequest(PAGE_LIMIT_MIN_ERROR_MESSAGE, ERROR_CODES.REQUEST_BODY_INVALID);
   }
 
-  return Math.min(safeMax, limit);
+  return Math.min(safeMax, parsed);
 }
 
 const TRUTHY_BOOLEAN_LITERALS = new Set(["1", "true", "yes", "on"]);

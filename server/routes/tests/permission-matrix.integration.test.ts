@@ -33,6 +33,8 @@ type MatrixRequestConfig = {
   body?: unknown;
 };
 
+const OPERATIONS_DEBUG_TEST_TOKEN = "operations-debug-test-token-32-chars";
+
 function buildHeaders(role?: TestRole, extraHeaders?: Record<string, string>) {
   const headers: Record<string, string> = {
     ...extraHeaders,
@@ -71,8 +73,9 @@ async function assertRoleMatrix(
   baseUrl: string,
   request: MatrixRequestConfig,
   expected: RoleExpectationMatrix,
+  extraHeaders?: Record<string, string>,
 ) {
-  const anonymousResponse = await sendMatrixRequest(baseUrl, request);
+  const anonymousResponse = await sendMatrixRequest(baseUrl, request, undefined, extraHeaders);
   assert.equal(
     anonymousResponse.status,
     expected.anonymous,
@@ -80,7 +83,7 @@ async function assertRoleMatrix(
   );
 
   for (const role of ["user", "admin", "superuser"] as const) {
-    const response = await sendMatrixRequest(baseUrl, request, role);
+    const response = await sendMatrixRequest(baseUrl, request, role, extraHeaders);
     assert.equal(
       response.status,
       expected[role],
@@ -205,6 +208,8 @@ function createOperationsPermissionHarness() {
     requireTabAccess: createTestRequireTabAccess(),
     operationsDebugRoutesEnabled: true,
     operationsDebugRoutesProductionLike: false,
+    operationsDebugAccessToken: OPERATIONS_DEBUG_TEST_TOKEN,
+    operationsDebugAllowedIps: ["127.0.0.1"],
   });
 
   return {
@@ -831,6 +836,7 @@ test("operations routes enforce role and tab visibility consistently", async () 
       baseUrl,
       { method: "GET", path: "/api/debug/websocket-clients" },
       { anonymous: 401, user: 403, admin: 403, superuser: 200 },
+      { authorization: `Bearer ${OPERATIONS_DEBUG_TEST_TOKEN}` },
     );
 
     const deniedAdminDashboard = await sendMatrixRequest(

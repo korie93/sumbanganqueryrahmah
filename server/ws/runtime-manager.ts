@@ -22,6 +22,7 @@ import {
   DEFAULT_RUNTIME_WS_PAYLOAD_WINDOW_BYTES,
   DEFAULT_RUNTIME_WS_PAYLOAD_WINDOW_MS,
   DEFAULT_RUNTIME_WS_LARGE_MESSAGE_WARN_BYTES,
+  RUNTIME_WS_CLOSE_GOING_AWAY,
   RUNTIME_WS_CLOSE_MESSAGE_TOO_BIG,
   RUNTIME_WS_CLOSE_POLICY_VIOLATION,
   RUNTIME_WS_CLOSE_TRY_AGAIN_LATER,
@@ -103,6 +104,7 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
   const { wss, storage, secret } = options;
   const trustForwardedHeaders = options.trustForwardedHeaders === true;
   const acceptConnections = options.acceptConnections ?? (() => true);
+  const isShuttingDown = options.isShuttingDown ?? (() => false);
   const sharedBus = options.sharedBus ?? null;
   const metrics = options.metrics ?? internalMetrics;
   const now = options.now ?? Date.now;
@@ -217,6 +219,27 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
   });
 
   wss.on("connection", async (ws, req) => {
+    if (isShuttingDown()) {
+      logger.warn("WebSocket connection rejected because server shutdown is in progress", {
+        path: req.url || "/ws",
+      });
+      try {
+        ws.close(RUNTIME_WS_CLOSE_GOING_AWAY, "server shutting down");
+      } catch (error) {
+        logger.debug("WebSocket close request failed during shutdown rejection", {
+          error: sanitizeRuntimeWebSocketError(error),
+        });
+        try {
+          ws.terminate();
+        } catch (terminateError) {
+          logger.debug("WebSocket terminate fallback failed during shutdown rejection", {
+            error: sanitizeRuntimeWebSocketError(terminateError),
+          });
+        }
+      }
+      return;
+    }
+
     if (!trustForwardedHeaders && hasForwardedHeaders(req.headers)) {
       logger.warn("WebSocket handshake included forwarded headers without trusted proxy configuration", {
         hasForwardedFor: Boolean(firstHeaderValue(req.headers["x-forwarded-for"])),

@@ -174,6 +174,8 @@ function buildRateLimitKey(req: Request, scope: string, ...parts: Array<unknown>
 export function pruneAdaptiveRateLimitCooldowns(nowMs = Date.now()): number {
   let removedCount = 0;
 
+  // Keep this sweep fully synchronous: LRU mutation must not yield between
+  // key collection and deletion, otherwise request handlers could interleave.
   for (const key of Array.from(adaptiveRateLimitCooldowns.keys())) {
     const bucket = adaptiveRateLimitCooldowns.peek(key);
     if (!bucket || bucket.expiresAt <= nowMs) {
@@ -230,6 +232,7 @@ function performAdaptiveRateLimitCachePressureEviction(
 ): AdaptiveRateLimitEvictionResult {
   let evictedCount = 0;
 
+  // Pressure eviction intentionally performs only synchronous LRU reads/deletes.
   if (tier === "WARNING") {
     for (const key of adaptiveRateLimitCooldowns.rkeys()) {
       if (evictedCount >= ADAPTIVE_RATE_LIMIT_WARNING_EVICTION_BATCH_SIZE) {

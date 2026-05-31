@@ -19,6 +19,8 @@ export function registerOperationsRoutes(app: Express, deps: OperationsRouteDeps
   const debugRouteStartupLock = createOperationsDebugRouteStartupLock({
     enabled: context.operationsDebugRoutesEnabled,
     productionLike: context.operationsDebugRoutesProductionLike,
+    accessToken: context.operationsDebugAccessToken,
+    allowedIps: context.operationsDebugAllowedIps,
   });
   registerOperationsDebugRoutes(context, debugRouteStartupLock);
 }

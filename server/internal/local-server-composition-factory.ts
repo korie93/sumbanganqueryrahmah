@@ -31,6 +31,7 @@ export function createLocalServerComposition(
     ollamaChat,
     ollamaEmbed,
     acceptWebSocketConnections,
+    isWebSocketShutdownInProgress,
   } = options;
 
   const importsRepository = new ImportsRepository();
@@ -51,6 +52,7 @@ export function createLocalServerComposition(
     trustForwardedHeaders: runtimeConfig.app.trustedProxies.length > 0,
     ...(runtimeWsSharedBus ? { sharedBus: runtimeWsSharedBus } : {}),
     ...(acceptWebSocketConnections ? { acceptConnections: acceptWebSocketConnections } : {}),
+    ...(isWebSocketShutdownInProgress ? { isShuttingDown: isWebSocketShutdownInProgress } : {}),
   });
   const authGuards = createAuthGuards({ storage, secret });
   const categoryStatsService = new CategoryStatsService(storage);

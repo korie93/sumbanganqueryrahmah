@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { EventEmitter } from "node:events";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -7,8 +8,11 @@ import { CollectionReceiptSecurityError } from "../../lib/collection-receipt-sec
 import { scanCollectionReceiptWithExternalScanner } from "../../lib/collection-receipt-external-scan";
 import { readExternalScanConfig } from "../../lib/collection-receipt-external-scan-config";
 import { validateExternalScanCommand } from "../../lib/collection-receipt-external-scan-paths";
-import { runExternalReceiptScan } from "../../lib/collection-receipt-external-scan-runner";
-import { DEFAULT_COLLECTION_RECEIPT_EXTERNAL_SCAN_TIMEOUT_MS } from "../../lib/collection-receipt-external-scan-shared";
+import { runExternalReceiptScan, type ExternalScanSpawn } from "../../lib/collection-receipt-external-scan-runner";
+import {
+  DEFAULT_COLLECTION_RECEIPT_EXTERNAL_SCAN_TIMEOUT_MS,
+  type ExternalScanConfig,
+} from "../../lib/collection-receipt-external-scan-shared";
 import { getInternalMetricsSnapshot } from "../../internal/metrics";
 
 const ENV_KEYS = [
@@ -71,8 +75,139 @@ async function withTemporaryExecutable<T>(
   }
 }
 
+function createExternalScanTestConfig(overrides: Partial<ExternalScanConfig> = {}): ExternalScanConfig {
+  return {
+    enabled: true,
+    command: "scanner",
+    args: ["{file}"],
+    timeoutMs: 1_000,
+    failClosed: true,
+    cleanExitCodes: new Set([0]),
+    rejectExitCodes: new Set([1]),
+    ...overrides,
+  };
+}
+
+class FakeScannerStream extends EventEmitter {
+  removeAllListenersCalls = 0;
+
+  setEncoding(_encoding: BufferEncoding): this {
+    return this;
+  }
+
+  override removeAllListeners(eventName?: string | symbol): this {
+    this.removeAllListenersCalls += 1;
+    if (eventName === undefined) {
+      return super.removeAllListeners();
+    }
+    return super.removeAllListeners(eventName);
+  }
+}
+
+class FakeScannerProcess extends EventEmitter {
+  readonly stdout = new FakeScannerStream();
+  readonly stderr = new FakeScannerStream();
+  killed = false;
+  killCalls = 0;
+  removeAllListenersCalls = 0;
+
+  kill(_signal?: NodeJS.Signals): boolean {
+    this.killed = true;
+    this.killCalls += 1;
+    return true;
+  }
+
+  override removeAllListeners(eventName?: string | symbol): this {
+    this.removeAllListenersCalls += 1;
+    if (eventName === undefined) {
+      return super.removeAllListeners();
+    }
+    return super.removeAllListeners(eventName);
+  }
+}
+
+function createFakeScannerSpawn(child: FakeScannerProcess): ExternalScanSpawn {
+  return () => child;
+}
+
+function assertFakeScannerListenersRemoved(child: FakeScannerProcess) {
+  assert.equal(child.listenerCount("close"), 0);
+  assert.equal(child.listenerCount("error"), 0);
+  assert.equal(child.stdout.listenerCount("data"), 0);
+  assert.equal(child.stderr.listenerCount("data"), 0);
+  assert.equal(child.removeAllListenersCalls, 1);
+  assert.equal(child.stdout.removeAllListenersCalls, 1);
+  assert.equal(child.stderr.removeAllListenersCalls, 1);
+}
+
 test("external receipt scanner default timeout allows cold antivirus signature loading", () => {
   assert.equal(DEFAULT_COLLECTION_RECEIPT_EXTERNAL_SCAN_TIMEOUT_MS, 60_000);
+});
+
+test("external receipt scanner removes child process listeners after a clean exit", async () => {
+  const child = new FakeScannerProcess();
+  const scan = runExternalReceiptScan({
+    config: createExternalScanTestConfig(),
+    filePath: "receipt.pdf",
+    scannerCommand: "scanner",
+    args: ["receipt.pdf"],
+    spawnScanner: createFakeScannerSpawn(child),
+  });
+
+  assert.equal(child.listenerCount("close"), 1);
+  assert.equal(child.listenerCount("error"), 1);
+  assert.equal(child.stdout.listenerCount("data"), 1);
+  assert.equal(child.stderr.listenerCount("data"), 1);
+
+  child.stdout.emit("data", "clean");
+  child.emit("close", 0, null);
+
+  await scan;
+  assertFakeScannerListenersRemoved(child);
+  assert.equal(child.killCalls, 0);
+});
+
+test("external receipt scanner removes child process listeners after spawn errors", async () => {
+  const child = new FakeScannerProcess();
+  const scan = runExternalReceiptScan({
+    config: createExternalScanTestConfig(),
+    filePath: "receipt.pdf",
+    scannerCommand: "scanner",
+    args: ["receipt.pdf"],
+    spawnScanner: createFakeScannerSpawn(child),
+  });
+
+  child.emit("error", new Error("scanner missing"));
+
+  await assert.rejects(
+    () => scan,
+    (error: unknown) =>
+      error instanceof CollectionReceiptSecurityError
+      && error.reasonCode === "external-scan-spawn-failed",
+  );
+  assertFakeScannerListenersRemoved(child);
+  assert.equal(child.killCalls, 0);
+});
+
+test("external receipt scanner terminates and removes listeners after scanner timeout", async () => {
+  const child = new FakeScannerProcess();
+
+  await assert.rejects(
+    () =>
+      runExternalReceiptScan({
+        config: createExternalScanTestConfig({ timeoutMs: 1 }),
+        filePath: "receipt.pdf",
+        scannerCommand: "scanner",
+        args: ["receipt.pdf"],
+        spawnScanner: createFakeScannerSpawn(child),
+      }),
+    (error: unknown) =>
+      error instanceof CollectionReceiptSecurityError
+      && error.reasonCode === "external-scan-timeout",
+  );
+
+  assertFakeScannerListenersRemoved(child);
+  assert.equal(child.killCalls, 1);
 });
 
 test("external receipt scanner forces fail-closed mode in production-like runtimes", () => {

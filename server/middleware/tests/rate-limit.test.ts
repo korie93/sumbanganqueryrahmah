@@ -227,6 +227,30 @@ test("auth adaptive cooldown sweep startup is singleton and prune is safe on emp
   stopAdaptiveRateLimitCooldownSweep();
 });
 
+test("auth adaptive cooldown sweep and pressure eviction stay synchronous", () => {
+  stopAdaptiveRateLimitCooldownSweep();
+  clearAdaptiveRateLimitCooldownsForTests();
+
+  try {
+    recordAdaptiveRateLimitViolationForTests("expired-client", 1, 1_000);
+    recordAdaptiveRateLimitViolationForTests("active-client", 60_000, 1_000);
+
+    const pruned = pruneAdaptiveRateLimitCooldowns(1_010);
+    assert.equal(typeof pruned, "number");
+    assert.equal(pruned, 1);
+
+    const eviction = performAdaptiveRateLimitCachePressureEvictionForTests("NORMAL", 1_011);
+    assert.equal(eviction instanceof Promise, false);
+    assert.equal(eviction.evictedCount, 0);
+
+    recordAdaptiveRateLimitViolationForTests("request-after-sweep", 60_000, 1_012);
+    const keys = getAdaptiveRateLimitCooldownKeysForTests();
+    assert.deepEqual(new Set(keys), new Set(["active-client", "request-after-sweep"]));
+  } finally {
+    clearAdaptiveRateLimitCooldownsForTests();
+  }
+});
+
 test("auth adaptive cooldown records violations without hot-path full pruning", async () => {
   stopAdaptiveRateLimitCooldownSweep();
   clearAdaptiveRateLimitCooldownsForTests();

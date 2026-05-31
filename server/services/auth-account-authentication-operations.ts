@@ -10,6 +10,7 @@ import {
 import { ERROR_CODES } from "../../shared/error-codes";
 import {
   type AuthAccountAuthenticationStorage,
+  type AuthAccountUser,
   clearFailedLoginState,
   createAuthenticatedSession,
   failLockedLogin,
@@ -31,6 +32,11 @@ import type {
   LoginInput,
   TwoFactorLoginInput,
 } from "./auth-account-service-shared";
+import {
+  FAILED_LOGIN_LOCKOUT_REASON,
+  getSystemFailedLoginLockoutStatus,
+} from "./auth-account-lockout-policy";
+import { buildSecurityAuditDetails } from "../lib/security-audit-log";
 
 type AuthAccountAuthenticationDeps = {
   storage: AuthAccountAuthenticationStorage;
@@ -56,9 +62,38 @@ async function isVisitorBannedByDeviceFingerprint(params: {
   return false;
 }
 
+async function clearExpiredSystemFailedLoginLockout(
+  storage: Pick<AuthAccountAuthenticationStorage, "createAuditLog" | "updateUserAccount">,
+  user: AuthAccountUser,
+): Promise<AuthAccountUser> {
+  const lockoutStatus = getSystemFailedLoginLockoutStatus(user);
+  if (!lockoutStatus.expired) {
+    return user;
+  }
+
+  const clearedUser = await clearFailedLoginState(storage, user);
+  await storage.createAuditLog({
+    action: "ACCOUNT_LOCKOUT_AUTO_CLEARED",
+    performedBy: user.username,
+    targetUser: user.id,
+    details: buildSecurityAuditDetails({
+      event: "AUTH_ACCOUNT_UNLOCKED",
+      outcome: "success",
+      actorId: user.id,
+      metadata: {
+        failed_login_attempts: lockoutStatus.attempts,
+        lockout_duration_ms: lockoutStatus.lockoutMs,
+        reason: "lockout_expired",
+      },
+      message: "System failed-login lockout expired and was cleared.",
+    }),
+  });
+  return clearedUser;
+}
+
 export class AuthAccountAuthenticationOperations {
   private static readonly MAX_ALLOWED_FAILED_PASSWORD_ATTEMPTS = 3;
-  private static readonly LOCKED_ACCOUNT_REASON = "too_many_failed_password_attempts";
+  private static readonly LOCKED_ACCOUNT_REASON = FAILED_LOGIN_LOCKOUT_REASON;
   private static readonly LOCKED_ACCOUNT_MESSAGE =
     "Your account has been locked due to too many incorrect login attempts. Please contact the system administrator.";
 
@@ -82,17 +117,19 @@ export class AuthAccountAuthenticationOperations {
       throw new AuthAccountError(401, ERROR_CODES.INVALID_CREDENTIALS, "Invalid credentials");
     }
 
+    let activeUser = user;
+
     const visitorBanned = await isVisitorBannedByDeviceFingerprint({
       fingerprint: input.fingerprint,
       ipAddress: input.ipAddress,
       storage: this.deps.storage,
-      username: user.username,
+      username: activeUser.username,
     });
 
-    if (visitorBanned || user.isBanned) {
+    if (visitorBanned || activeUser.isBanned) {
       await this.deps.storage.createAuditLog({
         action: "LOGIN_FAILED_BANNED",
-        performedBy: user.username,
+        performedBy: activeUser.username,
         details: visitorBanned ? "Visitor is banned" : "User is banned",
       });
       throw new AuthAccountError(403, ERROR_CODES.ACCOUNT_BANNED, "Account is banned", {
@@ -100,10 +137,12 @@ export class AuthAccountAuthenticationOperations {
       });
     }
 
-    const blockReason = getAccountAccessBlockReason(user);
+    activeUser = await clearExpiredSystemFailedLoginLockout(this.deps.storage, activeUser);
+
+    const blockReason = getAccountAccessBlockReason(activeUser);
     if (blockReason && blockReason !== "banned") {
       if (blockReason === "locked") {
-        await failLockedLogin(this.deps.storage, user, {
+        await failLockedLogin(this.deps.storage, activeUser, {
           action: "LOGIN_BLOCKED_LOCKED_ACCOUNT",
           details: "Login blocked because the account is locked after repeated failed password attempts.",
           lockedAccountMessage: AuthAccountAuthenticationOperations.LOCKED_ACCOUNT_MESSAGE,
@@ -112,14 +151,14 @@ export class AuthAccountAuthenticationOperations {
 
       await this.deps.storage.createAuditLog({
         action: "LOGIN_FAILED_ACCOUNT_STATE",
-        performedBy: user.username,
-        targetUser: user.id,
+        performedBy: activeUser.username,
+        targetUser: activeUser.id,
         details: `Login blocked due to account state: ${blockReason}`,
       });
       throw new AuthAccountError(401, ERROR_CODES.INVALID_CREDENTIALS, "Invalid credentials");
     }
 
-    const validPassword = await verifyPassword(password, user.passwordHash);
+    const validPassword = await verifyPassword(password, activeUser.passwordHash);
     if (!validPassword) {
       await handleFailedPasswordAttempt({
         input: {
@@ -132,11 +171,11 @@ export class AuthAccountAuthenticationOperations {
         lockedReason: AuthAccountAuthenticationOperations.LOCKED_ACCOUNT_REASON,
         maxAllowedAttempts: AuthAccountAuthenticationOperations.MAX_ALLOWED_FAILED_PASSWORD_ATTEMPTS,
         storage: this.deps.storage,
-        user,
+        user: activeUser,
       });
     }
 
-    const unlockedUser = await clearFailedLoginState(this.deps.storage, user);
+    const unlockedUser = await clearFailedLoginState(this.deps.storage, activeUser);
 
     await assertLoginAllowedDuringMaintenance({
       getMaintenanceState: this.deps.getMaintenanceState,
@@ -184,18 +223,20 @@ export class AuthAccountAuthenticationOperations {
       throw new AuthAccountError(404, ERROR_CODES.USER_NOT_FOUND, "User not found.");
     }
 
+    let activeUser = user;
+
     const visitorBanned = await isVisitorBannedByDeviceFingerprint({
       fingerprint: input.fingerprint,
       ipAddress: input.ipAddress,
       storage: this.deps.storage,
-      username: user.username,
+      username: activeUser.username,
     });
 
-    if (visitorBanned || user.isBanned) {
+    if (visitorBanned || activeUser.isBanned) {
       await this.deps.storage.createAuditLog({
         action: "LOGIN_2FA_FAILED_BANNED",
-        performedBy: user.username,
-        targetUser: user.id,
+        performedBy: activeUser.username,
+        targetUser: activeUser.id,
         details: visitorBanned ? "Visitor is banned" : "User is banned",
       });
       throw new AuthAccountError(403, ERROR_CODES.ACCOUNT_BANNED, "Account is banned", {
@@ -203,10 +244,12 @@ export class AuthAccountAuthenticationOperations {
       });
     }
 
-    const blockReason = getAccountAccessBlockReason(user);
+    activeUser = await clearExpiredSystemFailedLoginLockout(this.deps.storage, activeUser);
+
+    const blockReason = getAccountAccessBlockReason(activeUser);
     if (blockReason && blockReason !== "banned") {
       if (blockReason === "locked") {
-        await failLockedLogin(this.deps.storage, user, {
+        await failLockedLogin(this.deps.storage, activeUser, {
           action: "LOGIN_2FA_BLOCKED_LOCKED_ACCOUNT",
           details: "Second-factor login blocked because the account is locked after repeated failed password attempts.",
           lockedAccountMessage: AuthAccountAuthenticationOperations.LOCKED_ACCOUNT_MESSAGE,
@@ -215,8 +258,8 @@ export class AuthAccountAuthenticationOperations {
 
       await this.deps.storage.createAuditLog({
         action: "LOGIN_2FA_FAILED_ACCOUNT_STATE",
-        performedBy: user.username,
-        targetUser: user.id,
+        performedBy: activeUser.username,
+        targetUser: activeUser.id,
         details: `Second-factor login blocked due to account state: ${blockReason}`,
       });
       throw new AuthAccountError(401, ERROR_CODES.INVALID_CREDENTIALS, "Invalid credentials");
@@ -224,27 +267,27 @@ export class AuthAccountAuthenticationOperations {
 
     await assertLoginAllowedDuringMaintenance({
       getMaintenanceState: this.deps.getMaintenanceState,
-      role: user.role,
+      role: activeUser.role,
       createAuditLog: () => this.deps.storage.createAuditLog({
         action: "LOGIN_2FA_BLOCKED_MAINTENANCE",
-        performedBy: user.username,
-        targetUser: user.id,
+        performedBy: activeUser.username,
+        targetUser: activeUser.id,
         details: "Second-factor login blocked because hard maintenance mode is active.",
       }).then(() => undefined),
     });
 
-    if (!requiresTwoFactor(user)) {
+    if (!requiresTwoFactor(activeUser)) {
       throw new AuthAccountError(409, ERROR_CODES.TWO_FACTOR_NOT_ENABLED, "Two-factor authentication is not enabled.");
     }
 
-    const encryptedSecret = String(user.twoFactorSecretEncrypted || "").trim();
+    const encryptedSecret = String(activeUser.twoFactorSecretEncrypted || "").trim();
     try {
       await verifyTwoFactorSecretCode({
         code: input.code,
         encryptedSecret,
         replay: {
           purpose: "login",
-          subjectId: user.id,
+          subjectId: activeUser.id,
         },
       });
     } catch (error) {
@@ -257,9 +300,9 @@ export class AuthAccountAuthenticationOperations {
           failureReason: "secret_invalid",
           ipAddress: input.ipAddress,
           pcName: input.pcName,
-          retryCount: user.failedLoginAttempts,
+          retryCount: activeUser.failedLoginAttempts,
           storage: this.deps.storage,
-          user,
+          user: activeUser,
         });
         throw error;
       }
@@ -268,9 +311,9 @@ export class AuthAccountAuthenticationOperations {
         failureReason: "invalid_code",
         ipAddress: input.ipAddress,
         pcName: input.pcName,
-        retryCount: user.failedLoginAttempts,
+        retryCount: activeUser.failedLoginAttempts,
         storage: this.deps.storage,
-        user,
+        user: activeUser,
       });
       throw error;
     }
@@ -284,11 +327,11 @@ export class AuthAccountAuthenticationOperations {
         ipAddress: input.ipAddress,
       },
       storage: this.deps.storage,
-      user,
+      user: activeUser,
     });
 
     return {
-      user,
+      user: activeUser,
       activity: sessionResult.activity,
       closedSessionIds: sessionResult.closedSessionIds,
     };

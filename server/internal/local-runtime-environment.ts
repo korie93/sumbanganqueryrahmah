@@ -45,6 +45,7 @@ const HTTP_SERVER_LIFECYCLE_LISTENER_LIMIT = 32;
 export function createLocalRuntimeEnvironment(options: CreateLocalRuntimeEnvironmentOptions = {}) {
   const storage = new PostgresStorage();
   let webSocketConnectionsReady = false;
+  let webSocketShutdownInProgress = false;
   const app = express();
   applyTrustedProxies(app, runtimeConfig.app.trustedProxies);
   const server = createServer(app);
@@ -122,6 +123,7 @@ export function createLocalRuntimeEnvironment(options: CreateLocalRuntimeEnviron
     defaultAiTimeoutMs: runtimeConfig.runtime.defaults.aiTimeoutMs,
     lowMemoryMode: runtimeConfig.cluster.lowMemoryMode,
     acceptWebSocketConnections: () => webSocketConnectionsReady,
+    isWebSocketShutdownInProgress: () => webSocketShutdownInProgress,
   });
   server.once("close", composition.stopTabVisibilityCacheSweep);
   server.once("close", composition.stopActivityUpdateCacheSweep);
@@ -248,6 +250,10 @@ export function createLocalRuntimeEnvironment(options: CreateLocalRuntimeEnviron
     host: runtimeConfig.app.host,
     markWebSocketConnectionsReady: () => {
       webSocketConnectionsReady = true;
+    },
+    markWebSocketConnectionsDraining: () => {
+      webSocketShutdownInProgress = true;
+      webSocketConnectionsReady = false;
     },
   };
 }

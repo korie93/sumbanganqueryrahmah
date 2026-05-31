@@ -125,6 +125,28 @@ test("persistAuthenticatedUser stores auth session data in sessionStorage instea
   assert.equal(local.getItem("user"), null);
 });
 
+test("persistAuthenticatedUser never stores bearer tokens from accidental user payload fields", () => {
+  const { session } = installStorageMocks();
+  const pollutedUser = {
+    ...sampleUser,
+    authToken: "Bearer ey.fake.jwt",
+    jwt: "ey.fake.jwt",
+    token: "plain-session-token",
+  } as User & {
+    authToken: string;
+    jwt: string;
+    token: string;
+  };
+
+  persistAuthenticatedUser(pollutedUser);
+
+  const storedUser = String(session.getItem("user") || "");
+  assert.doesNotMatch(storedUser, /plain-session-token|ey\.fake\.jwt|Bearer/);
+  assert.equal(session.getItem("token"), null);
+  assert.equal(session.getItem("authToken"), null);
+  assert.equal(session.getItem("jwt"), null);
+});
+
 test("persistAuthenticatedUser stores the server-issued session expiry when supplied", () => {
   const { session } = installStorageMocks();
   const sessionExpiresAt = "2099-05-11T01:02:03.000Z";

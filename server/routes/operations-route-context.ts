@@ -8,6 +8,8 @@ export type OperationsRouteDeps = {
   requireTabAccess: (tabId: string) => RequestHandler;
   operationsDebugRoutesEnabled?: boolean | undefined;
   operationsDebugRoutesProductionLike?: boolean | undefined;
+  operationsDebugAccessToken?: string | null | undefined;
+  operationsDebugAllowedIps?: readonly string[] | undefined;
 };
 
 export type OperationsRouteContext = {
@@ -18,6 +20,8 @@ export type OperationsRouteContext = {
   requireTabAccess: (tabId: string) => RequestHandler;
   operationsDebugRoutesEnabled?: boolean | undefined;
   operationsDebugRoutesProductionLike?: boolean | undefined;
+  operationsDebugAccessToken?: string | null | undefined;
+  operationsDebugAllowedIps?: readonly string[] | undefined;
 };
 
 export function createOperationsRouteContext(
@@ -32,5 +36,7 @@ export function createOperationsRouteContext(
     requireTabAccess: deps.requireTabAccess,
     operationsDebugRoutesEnabled: deps.operationsDebugRoutesEnabled,
     operationsDebugRoutesProductionLike: deps.operationsDebugRoutesProductionLike,
+    operationsDebugAccessToken: deps.operationsDebugAccessToken,
+    operationsDebugAllowedIps: deps.operationsDebugAllowedIps,
   };
 }

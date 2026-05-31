@@ -68,6 +68,33 @@ type PersistAuthenticatedUserOptions = {
   sessionExpiresAt?: string | number | Date | null | undefined;
 };
 
+function sanitizeAuthenticatedUserForStorage(user: User): User {
+  const candidate = {
+    id: user.id,
+    username: String(user.username || "").trim(),
+    role: String(user.role || "").trim(),
+    fullName: user.fullName ?? null,
+    email: user.email ?? null,
+    status: user.status,
+    mustChangePassword: user.mustChangePassword,
+    passwordResetBySuperuser: user.passwordResetBySuperuser,
+    isBanned: user.isBanned,
+    twoFactorEnabled: user.twoFactorEnabled,
+    twoFactorPendingSetup: user.twoFactorPendingSetup,
+    twoFactorConfiguredAt: user.twoFactorConfiguredAt ?? null,
+    sessionExpiresAt: user.sessionExpiresAt ?? null,
+  };
+  const parsed = authSessionUserSchema.safeParse(candidate);
+  if (parsed.success) {
+    return parsed.data;
+  }
+
+  return {
+    username: candidate.username || "unknown",
+    role: candidate.role || "user",
+  };
+}
+
 function canUseAuthStorage() {
   return typeof window !== "undefined"
     && getBrowserSessionStorage() !== null;
@@ -344,13 +371,14 @@ export function persistAuthenticatedUser(
   user: User,
   options: PersistAuthenticatedUserOptions = {},
 ) {
+  const storedUser = sanitizeAuthenticatedUserForStorage(user);
   writeAuthSessionMetadata({
-    sessionExpiresAt: options.sessionExpiresAt ?? user.sessionExpiresAt,
+    sessionExpiresAt: options.sessionExpiresAt ?? storedUser.sessionExpiresAt,
   });
-  writeAuthSessionValue("username", String(user.username || "").trim());
-  writeAuthSessionValue("role", String(user.role || "").trim());
-  writeAuthSessionValue("user", JSON.stringify(user));
-  setStoredForcePasswordChange(Boolean(user.mustChangePassword));
+  writeAuthSessionValue("username", String(storedUser.username || "").trim());
+  writeAuthSessionValue("role", String(storedUser.role || "").trim());
+  writeAuthSessionValue("user", JSON.stringify(storedUser));
+  setStoredForcePasswordChange(Boolean(storedUser.mustChangePassword));
 }
 
 export function clearAuthenticatedUserStorage() {

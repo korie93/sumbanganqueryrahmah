@@ -110,6 +110,8 @@ const isStrictLocalDevelopment = isStrictLocalDevelopmentEnvironment();
 const isProductionLike = isProductionLikeEnvironment();
 const debugLogs = readBoolean("DEBUG_LOGS", false) && !isProductionLike;
 const operationsDebugRoutesEnabled = readBoolean("OPERATIONS_DEBUG_ROUTES_ENABLED", false);
+const operationsDebugAccessToken = readOptionalString("OPERATIONS_DEBUG_ACCESS_TOKEN");
+const configuredOperationsDebugAllowedIps = readCommaSeparatedList("OPERATIONS_DEBUG_ALLOWED_IPS");
 const logLevel = resolveRuntimeLogLevel(
   readString("LOG_LEVEL", debugLogs ? "debug" : "info"),
   isProductionLike,
@@ -349,6 +351,8 @@ export const runtimeConfig: RuntimeConfig = Object.freeze({
     publicAppUrl,
     debugLogs,
     operationsDebugRoutesEnabled,
+    operationsDebugAccessToken,
+    operationsDebugAllowedIps: configuredOperationsDebugAllowedIps,
     logLevel,
     allowLocalDevCors: readBoolean("ALLOW_LOCAL_DEV_CORS", false),
     uploadsRootDir: resolveUploadsRootDir(),

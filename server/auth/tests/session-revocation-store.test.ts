@@ -4,6 +4,7 @@ import {
   configureSessionRevocationStoreForRuntime,
   getSessionRevocationStoreDiagnosticsForTests,
   isSessionJwtRevoked,
+  registerSessionRevocationSweepStoreForTests,
   resetSessionRevocationStoreForTests,
   revokeSessionJwt,
   sweepSessionRevocationStoreForTests,
@@ -53,6 +54,8 @@ test("memory session revocation store keeps one active sweep owner across repeat
     activeMemoryStores: 1,
     sweepActive: true,
     sweepInProgress: false,
+    consecutiveFailures: 0,
+    sweepSuspended: false,
   });
 });
 
@@ -66,6 +69,8 @@ test("memory session revocation store starts one singleton sweep interval", (t) 
     activeMemoryStores: 0,
     sweepActive: false,
     sweepInProgress: false,
+    consecutiveFailures: 0,
+    sweepSuspended: false,
   });
 
   const intervalHandle = {
@@ -99,6 +104,8 @@ test("memory session revocation store starts one singleton sweep interval", (t) 
       activeMemoryStores: 1,
       sweepActive: true,
       sweepInProgress: false,
+      consecutiveFailures: 0,
+      sweepSuspended: false,
     });
 
     configureSessionRevocationStoreForRuntime(noopStore);
@@ -107,6 +114,8 @@ test("memory session revocation store starts one singleton sweep interval", (t) 
       activeMemoryStores: 0,
       sweepActive: false,
       sweepInProgress: false,
+      consecutiveFailures: 0,
+      sweepSuspended: false,
     });
   } finally {
     resetSessionRevocationStoreForTests();
@@ -127,4 +136,41 @@ test("memory session revocation singleton sweep removes expired entries", async 
   sweepSessionRevocationStoreForTests(now);
 
   assert.equal(await isSessionJwtRevoked("jwt-swept"), false);
+});
+
+test("memory session revocation sweep backs off after repeated sweep failures", (t) => {
+  let now = 2_000_000;
+  t.mock.method(Date, "now", () => now);
+  let calls = 0;
+  const unregister = registerSessionRevocationSweepStoreForTests({
+    sweepExpired: () => {
+      calls += 1;
+      throw new Error("sweep failed");
+    },
+  });
+
+  try {
+    for (let index = 0; index < 5; index += 1) {
+      sweepSessionRevocationStoreForTests(now);
+    }
+
+    assert.equal(calls, 5);
+    assert.deepEqual(getSessionRevocationStoreDiagnosticsForTests(), {
+      activeMemoryStores: 2,
+      sweepActive: true,
+      sweepInProgress: false,
+      consecutiveFailures: 0,
+      sweepSuspended: true,
+    });
+
+    sweepSessionRevocationStoreForTests(now + 1);
+    assert.equal(calls, 5);
+
+    now += 5 * 60 * 1000 + 1;
+    sweepSessionRevocationStoreForTests(now);
+    assert.equal(calls, 6);
+    assert.equal(getSessionRevocationStoreDiagnosticsForTests().consecutiveFailures, 1);
+  } finally {
+    unregister();
+  }
 });

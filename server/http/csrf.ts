@@ -37,6 +37,16 @@ type CsrfPrivilegeEscalationRotationContext = {
   route?: string | undefined;
 };
 
+const CSRF_ROTATION_QUEUED_LOCAL_KEY = "sqrCsrfRotationQueued";
+
+function getResponseLocals(res: Response): Record<string, unknown> {
+  const responseWithOptionalLocals = res as Response & {
+    locals?: Record<string, unknown> | undefined;
+  };
+  responseWithOptionalLocals.locals ??= {};
+  return responseWithOptionalLocals.locals;
+}
+
 function responseHasPendingCsrfCookie(res: Response): boolean {
   const setCookie = res.getHeader("Set-Cookie");
   const values = Array.isArray(setCookie) ? setCookie : [setCookie];
@@ -47,7 +57,10 @@ export function rotateCsrfTokenAfterPrivilegeEscalation(
   res: Response,
   context: CsrfPrivilegeEscalationRotationContext,
 ): void {
-  const alreadyQueued = responseHasPendingCsrfCookie(res);
+  const locals = getResponseLocals(res);
+  const alreadyQueued = locals[CSRF_ROTATION_QUEUED_LOCAL_KEY] === true || responseHasPendingCsrfCookie(res);
+  locals[CSRF_ROTATION_QUEUED_LOCAL_KEY] = true;
+
   if (!alreadyQueued) {
     rotateAuthSessionCsrfCookie(res);
   }

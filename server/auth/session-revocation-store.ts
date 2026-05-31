@@ -16,6 +16,7 @@ export type SessionRevocationStore = {
 const DEFAULT_REVOCATION_TTL_MS = 24 * 60 * 60 * 1000;
 const MAX_REVOCATION_RECORDS = 25_000;
 const SWEEP_INTERVAL_MS = 5 * 60 * 1000;
+const MAX_CONSECUTIVE_SWEEP_FAILURES = 5;
 
 type SweepableSessionRevocationStore = {
   sweepExpired: (now: number) => void;
@@ -25,6 +26,8 @@ class MemorySessionRevocationSweepOrchestrator {
   private readonly stores = new Set<SweepableSessionRevocationStore>();
   private intervalHandle: NodeJS.Timeout | null = null;
   private sweepInProgress = false;
+  private consecutiveFailures = 0;
+  private suspendedUntilMs = 0;
 
   register(store: SweepableSessionRevocationStore) {
     this.stores.add(store);
@@ -42,13 +45,18 @@ class MemorySessionRevocationSweepOrchestrator {
     if (this.sweepInProgress) {
       return;
     }
+    if (this.suspendedUntilMs > now) {
+      return;
+    }
 
     this.sweepInProgress = true;
+    let failed = false;
     try {
       for (const store of Array.from(this.stores)) {
         try {
           store.sweepExpired(now);
         } catch (error) {
+          failed = true;
           logSessionRevocationStoreCloseFailure(
             defaultLogger,
             "Session revocation memory sweep failed",
@@ -57,6 +65,19 @@ class MemorySessionRevocationSweepOrchestrator {
         }
       }
     } finally {
+      if (failed) {
+        this.consecutiveFailures += 1;
+        if (this.consecutiveFailures >= MAX_CONSECUTIVE_SWEEP_FAILURES) {
+          this.suspendedUntilMs = now + SWEEP_INTERVAL_MS;
+          this.consecutiveFailures = 0;
+          defaultLogger.warn("Session revocation memory sweep temporarily suspended", {
+            suspendedUntilMs: this.suspendedUntilMs,
+          });
+        }
+      } else {
+        this.consecutiveFailures = 0;
+        this.suspendedUntilMs = 0;
+      }
       this.sweepInProgress = false;
     }
   }
@@ -66,6 +87,8 @@ class MemorySessionRevocationSweepOrchestrator {
       activeMemoryStores: this.stores.size,
       sweepActive: this.intervalHandle !== null,
       sweepInProgress: this.sweepInProgress,
+      consecutiveFailures: this.consecutiveFailures,
+      sweepSuspended: this.suspendedUntilMs > Date.now(),
     };
   }
 
@@ -253,4 +276,13 @@ export function getSessionRevocationStoreDiagnosticsForTests() {
 
 export function sweepSessionRevocationStoreForTests(now = Date.now()) {
   memorySweepOrchestrator.trigger(now);
+}
+
+export function registerSessionRevocationSweepStoreForTests(
+  store: SweepableSessionRevocationStore,
+) {
+  memorySweepOrchestrator.register(store);
+  return () => {
+    memorySweepOrchestrator.unregister(store);
+  };
 }

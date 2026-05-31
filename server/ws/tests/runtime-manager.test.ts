@@ -11,6 +11,7 @@ import { createRuntimeWsUpgradeRateLimiter } from "../upgrade-rate-limit";
 import { createRuntimeWsMessageRateLimiter } from "../message-rate-limit";
 import {
   DEFAULT_RUNTIME_WS_MAX_MESSAGE_BYTES,
+  RUNTIME_WS_CLOSE_GOING_AWAY,
   RUNTIME_WS_CLOSE_MESSAGE_TOO_BIG,
 } from "../runtime-manager-types";
 import type {
@@ -304,6 +305,100 @@ test("createRuntimeWebSocketManager rejects connections before storage is ready"
     assert.deepEqual(socket.closeCodes[0], {
       code: 1013,
       reason: "storage initializing",
+    });
+  } finally {
+    wss.emit("close");
+  }
+});
+
+test("createRuntimeWebSocketManager rejects new connections while shutdown is in progress", async () => {
+  const wss = new FakeWebSocketServer();
+  const providedMap = new Map<string, WebSocket>();
+  const socket = new FakeWebSocket();
+  let storageLookupCount = 0;
+
+  const manager = createRuntimeWebSocketManager({
+    wss: wss as unknown as import("ws").WebSocketServer,
+    storage: {
+      getActivityById: async () => {
+        storageLookupCount += 1;
+        return createActiveSession("activity-shutdown-rejected");
+      },
+      clearCollectionNicknameSessionByActivity: async () => undefined,
+    },
+    secret: TEST_SECRET,
+    connectedClients: providedMap,
+    isShuttingDown: () => true,
+  });
+
+  try {
+    wss.emit(
+      "connection",
+      socket as unknown as WebSocket,
+      createConnectionRequest(createWsToken("activity-shutdown-rejected")),
+    );
+    await flushAsyncWork();
+
+    assert.equal(storageLookupCount, 0);
+    assert.equal(providedMap.size, 0);
+    assert.equal(socket.closeCalls, 1);
+    assert.deepEqual(socket.closeCodes[0], {
+      code: RUNTIME_WS_CLOSE_GOING_AWAY,
+      reason: "server shutting down",
+    });
+    assert.deepEqual(manager.getLifecycleSnapshot(), {
+      cleanupCallbacks: 0,
+      connectedClients: 0,
+      socketEntriesByActivity: 0,
+      socketEntriesByInstance: 0,
+      trackedSockets: 0,
+    });
+  } finally {
+    wss.emit("close");
+  }
+});
+
+test("createRuntimeWebSocketManager terminates shutdown-rejected sockets if close throws", async () => {
+  const wss = new FakeWebSocketServer();
+  const socket = new FakeWebSocket();
+
+  socket.close = ((code?: number, reason?: string) => {
+    socket.closeCalls += 1;
+    const closeInfo: { code?: number; reason?: string } = {};
+    if (code !== undefined) {
+      closeInfo.code = code;
+    }
+    if (reason !== undefined) {
+      closeInfo.reason = reason;
+    }
+    socket.closeCodes.push(closeInfo);
+    throw new Error("close failed");
+  }) as FakeWebSocket["close"];
+
+  createRuntimeWebSocketManager({
+    wss: wss as unknown as import("ws").WebSocketServer,
+    storage: {
+      getActivityById: async () => undefined,
+      clearCollectionNicknameSessionByActivity: async () => undefined,
+    },
+    secret: TEST_SECRET,
+    connectedClients: new Map<string, WebSocket>(),
+    isShuttingDown: () => true,
+  });
+
+  try {
+    wss.emit(
+      "connection",
+      socket as unknown as WebSocket,
+      createConnectionRequest(createWsToken("activity-shutdown-close-fails")),
+    );
+    await flushAsyncWork();
+
+    assert.equal(socket.closeCalls, 1);
+    assert.equal(socket.terminateCalls, 1);
+    assert.deepEqual(socket.closeCodes[0], {
+      code: RUNTIME_WS_CLOSE_GOING_AWAY,
+      reason: "server shutting down",
     });
   } finally {
     wss.emit("close");

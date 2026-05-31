@@ -33,6 +33,8 @@ type CreateBackupData = Parameters<BackupOperationsBackupsRepository["createBack
 };
 type BackupRow = NonNullable<Awaited<ReturnType<BackupOperationsBackupsRepository["getBackupById"]>>>;
 
+const OPERATIONS_DEBUG_TEST_TOKEN = "operations-debug-test-token-32-chars";
+
 function createAuditRow(overrides: Partial<AuditRow> = {}): AuditRow {
   return {
     id: "audit-1",
@@ -349,6 +351,8 @@ function createOperationsRouteHarness(options?: {
     requireTabAccess: () => allowAllTabs(),
     operationsDebugRoutesEnabled: true,
     operationsDebugRoutesProductionLike: false,
+    operationsDebugAccessToken: OPERATIONS_DEBUG_TEST_TOKEN,
+    operationsDebugAllowedIps: ["127.0.0.1"],
   });
   app.use(errorHandler);
 
@@ -791,7 +795,11 @@ test("GET /api/debug/websocket-clients returns the connected activity ids", asyn
   const { server, baseUrl } = await startTestServer(app);
 
   try {
-    const response = await fetch(`${baseUrl}/api/debug/websocket-clients`);
+    const response = await fetch(`${baseUrl}/api/debug/websocket-clients`, {
+      headers: {
+        authorization: `Bearer ${OPERATIONS_DEBUG_TEST_TOKEN}`,
+      },
+    });
     assert.equal(response.status, 200);
     assert.deepEqual(await response.json(), {
       count: 2,

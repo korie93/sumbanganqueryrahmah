@@ -19,6 +19,7 @@ import {
   disposeAutoLogoutSocket,
 } from "@/components/auto-logout-socket-runtime";
 import { useAutoLogoutLifecycleController } from "@/components/auto-logout-lifecycle-state";
+import { invokeAutoLogoutCallback } from "@/components/auto-logout-logout-utils";
 
 interface AutoLogoutProps {
   onClientLogout: () => void | Promise<void>;
@@ -106,7 +107,9 @@ export default function AutoLogout({
     clearHeartbeat();
     clearHeartbeatRequest();
     cleanupSocket();
-    await onLogoutRef.current();
+    await invokeAutoLogoutCallback(onLogoutRef.current, {
+      label: "idle_logout",
+    });
   }, [
     cleanupSocket,
     clearHeartbeat,
@@ -124,7 +127,9 @@ export default function AutoLogout({
     clearHeartbeat();
     clearHeartbeatRequest();
     cleanupSocket();
-    await onClientLogoutRef.current();
+    await invokeAutoLogoutCallback(onClientLogoutRef.current, {
+      label: "client_logout",
+    });
   }, [
     cleanupSocket,
     clearHeartbeat,

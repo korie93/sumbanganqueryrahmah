@@ -7,6 +7,7 @@ import type {
 import { resolveTimestampMs } from "../lib/timestamp";
 import { ERROR_CODES } from "../../shared/error-codes";
 import { hashDeviceFingerprint } from "../auth/device-fingerprint";
+import { buildSecurityAuditDetails } from "../lib/security-audit-log";
 
 export async function getSuperuserSessionIdleWindowMs(
   storage: Pick<AuthAccountAuthenticationStorage, "getAppConfig">,
@@ -71,12 +72,17 @@ export async function replaceExistingSessionsForLogin(
     action: "LOGIN_REPLACED_EXISTING_SESSION",
     performedBy: user.username,
     targetUser: user.id,
-    details: JSON.stringify({
+    details: buildSecurityAuditDetails({
+      event: "AUTH_SESSION_REVOKED",
+      outcome: "success",
+      actorId: user.id,
+      userAgent: browserName,
       metadata: {
-        browser: browserName,
-        replaced_session_count: activeSessions.length,
-        replaced_session_ids: activeSessions.map((activity) => activity.id),
+        replaced_count: activeSessions.length,
+        reason: "new_session",
+        role: user.role,
       },
+      message: "Existing sessions were replaced by a newer login.",
     }),
   });
 
@@ -163,7 +169,19 @@ export async function createAuthenticatedSession(params: {
     action: "LOGIN_SUCCESS",
     performedBy: params.user.username,
     targetUser: params.user.id,
-    details: params.details,
+    details: buildSecurityAuditDetails({
+      event: "AUTH_LOGIN_SUCCESS",
+      outcome: "success",
+      actorId: params.user.id,
+      ipAddress: params.input.ipAddress,
+      userAgent: params.input.browserName,
+      metadata: {
+        closed_count: closedSessionIds.length,
+        mfa_used: params.details.toLowerCase().includes("2fa"),
+        role: params.user.role,
+      },
+      message: "Login completed.",
+    }),
   });
 
   return {

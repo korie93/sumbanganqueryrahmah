@@ -3,8 +3,10 @@ import test from "node:test";
 import { PAGE_LIMIT_MIN_ERROR_MESSAGE } from "../../../shared/pagination-contracts";
 import { HttpError } from "../../http/errors";
 import {
+  parseStrictInteger,
   readBooleanFlag,
   readDate,
+  readInteger,
   readPageLimit,
   readRouteParam,
   readStringList,
@@ -104,4 +106,29 @@ test("readPageLimit rejects numeric values below one with the shared pagination 
         && error.message === PAGE_LIMIT_MIN_ERROR_MESSAGE,
     );
   }
+});
+
+test("parseStrictInteger rejects non-decimal coercion edge cases", () => {
+  assert.equal(parseStrictInteger("0x10"), null);
+  assert.equal(parseStrictInteger("1e2"), null);
+  assert.equal(parseStrictInteger("1.5"), null);
+  assert.equal(parseStrictInteger("01"), null);
+  assert.equal(parseStrictInteger("100"), 100);
+  assert.equal(parseStrictInteger("0"), 0);
+  assert.equal(parseStrictInteger("-1"), -1);
+  assert.equal(parseStrictInteger(undefined, { default: 7 }), 7);
+  assert.equal(parseStrictInteger("500", { max: 100 }), null);
+  assert.equal(parseStrictInteger("0", { min: 1 }), null);
+});
+
+test("readInteger and readPageLimit avoid Number coercion for query integers", () => {
+  assert.equal(readInteger("0x10", 3), 3);
+  assert.equal(readInteger("1e2", 3), 3);
+  assert.equal(readInteger("1.5", 3), 3);
+  assert.equal(readInteger("01", 3), 3);
+  assert.equal(readInteger("100", 3), 100);
+
+  assert.equal(readPageLimit("1e2", 25, 100), 25);
+  assert.equal(readPageLimit("0x10", 25, 100), 25);
+  assert.equal(readPageLimit("01", 25, 100), 25);
 });

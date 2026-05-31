@@ -10,6 +10,7 @@ export const DEFAULT_RUNTIME_WS_MAX_CONNECTIONS = 1_000;
 export const DEFAULT_RUNTIME_WS_MAX_MESSAGE_BYTES = 64 * 1024;
 export const DEFAULT_RUNTIME_WS_PAYLOAD_WINDOW_BYTES = 512 * 1024;
 export const DEFAULT_RUNTIME_WS_PAYLOAD_WINDOW_MS = 10_000;
+export const RUNTIME_WS_CLOSE_GOING_AWAY = 1001;
 export const RUNTIME_WS_CLOSE_POLICY_VIOLATION = 1008;
 export const RUNTIME_WS_CLOSE_MESSAGE_TOO_BIG = 1009;
 export const RUNTIME_WS_CLOSE_TRY_AGAIN_LATER = 1013;
@@ -24,6 +25,7 @@ export type RuntimeManagerOptions = {
   connectedClients?: Map<string, WebSocket>;
   trustForwardedHeaders?: boolean;
   acceptConnections?: () => boolean;
+  isShuttingDown?: () => boolean;
   heartbeatIntervalMs?: number;
   largeMessageWarnBytes?: number;
   maxMessageBytes?: number;

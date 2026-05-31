@@ -9,6 +9,7 @@ import {
 import type { PostgresStorage } from "../storage-postgres";
 import { ERROR_CODES } from "../../shared/error-codes";
 import { getRequestContext } from "../lib/request-context";
+import { buildSecurityAuditDetails } from "../lib/security-audit-log";
 import { AuthAccountError } from "./auth-account-types";
 import type {
   AuthAccountAuthenticationStorage,
@@ -62,7 +63,15 @@ export async function failLockedLogin(
     action: params.action,
     performedBy: user.username,
     targetUser: user.id,
-    details: params.details,
+    details: buildSecurityAuditDetails({
+      event: "AUTH_LOGIN_FAILURE",
+      outcome: "blocked",
+      actorId: user.id,
+      metadata: {
+        reason: "account_locked",
+      },
+      message: params.details,
+    }),
   });
   throw new AuthAccountError(
     423,
@@ -98,12 +107,18 @@ export async function handleFailedPasswordAttempt(params: {
     action: result.locked ? "LOGIN_FAILED_PASSWORD_LOCKED" : "LOGIN_FAILED_PASSWORD",
     performedBy: params.user.username,
     targetUser: params.user.id,
-    details: JSON.stringify({
+    details: buildSecurityAuditDetails({
+      event: "AUTH_LOGIN_FAILURE",
+      outcome: result.locked ? "blocked" : "failure",
+      actorId: params.user.id,
+      ipAddress: params.input.ipAddress,
+      userAgent: params.input.browserName,
       metadata: {
-        browser: params.input.browserName,
         failed_login_attempts: result.failedLoginAttempts,
         locked: result.locked,
+        reason: "invalid_password",
       },
+      message: "Password login failed.",
     }),
   });
 
@@ -117,14 +132,19 @@ export async function handleFailedPasswordAttempt(params: {
       action: "ACCOUNT_LOCKED_TOO_MANY_FAILED_LOGINS",
       performedBy: params.user.username,
       targetUser: params.user.id,
-      details: JSON.stringify({
+      details: buildSecurityAuditDetails({
+        event: "AUTH_ACCOUNT_LOCKED",
+        outcome: "blocked",
+        actorId: params.user.id,
+        ipAddress: params.input.ipAddress,
+        userAgent: params.input.browserName,
         metadata: {
-          browser: params.input.browserName,
           failed_login_attempts: result.failedLoginAttempts,
           locked_reason: params.lockedReason,
           locked_by_system: true,
-          closed_session_ids: closedSessionIds,
+          closed_count: closedSessionIds.length,
         },
+        message: "Account locked after repeated failed password attempts.",
       }),
     });
   }
@@ -204,22 +224,21 @@ export async function recordTwoFactorLoginFailureAudit(params: {
     action: params.failureReason === "secret_invalid" ? "LOGIN_2FA_FAILED_SECRET" : "LOGIN_2FA_FAILED",
     performedBy: params.user.username,
     targetUser: params.user.id,
-    details: JSON.stringify({
-      event_type: "auth.two_factor.login_failed",
-      timestamp: new Date().toISOString(),
-      request_id: requestContext?.requestId ?? null,
-      ip: params.ipAddress ?? requestContext?.clientIp ?? null,
-      user_id: params.user.id,
-      username: params.user.username,
-      device: {
+    details: buildSecurityAuditDetails({
+      event: "AUTH_2FA_FAILURE",
+      outcome: "failure",
+      actorId: params.user.id,
+      ipAddress: params.ipAddress ?? requestContext?.clientIp ?? null,
+      requestId: requestContext?.requestId ?? null,
+      userAgent: requestContext?.userAgent ?? params.browserName,
+      metadata: {
         browser: params.browserName,
-        pc_name: params.pcName ?? null,
-        user_agent: requestContext?.userAgent ?? null,
+        failure_reason: params.failureReason,
+        retry_count: Number.isFinite(Number(params.retryCount))
+          ? Math.max(0, Math.trunc(Number(params.retryCount)))
+          : null,
       },
-      failure_reason: params.failureReason,
-      retry_count: Number.isFinite(Number(params.retryCount))
-        ? Math.max(0, Math.trunc(Number(params.retryCount)))
-        : null,
+      message: "Two-factor login failed.",
     }),
   });
 }

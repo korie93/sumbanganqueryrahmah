@@ -10,7 +10,10 @@ import {
   signSessionJwtWithSecret,
   verifySessionJwt,
 } from "./session-jwt";
-import { parseAuthenticatedSessionJwtPayload } from "./session-jwt-payload";
+import {
+  parseAuthenticatedSessionJwtPayload,
+  type AuthenticatedSessionJwtPayload,
+} from "./session-jwt-payload";
 import { isSessionJwtRevoked, revokeSessionJwt } from "./session-revocation-store";
 import {
   canUserBypassForcedPasswordChange,
@@ -38,6 +41,7 @@ import { createRoleTabVisibilityCache } from "./guard-tab-visibility";
 import { loadAuthenticatedSessionSnapshot } from "./guard-session-snapshot";
 import { internalMetrics } from "../internal/metrics";
 import { buildApiErrorResponse } from "../http/api-error-response";
+import { buildSecurityAuditDetails } from "../lib/security-audit-log";
 export { getInvalidatedSessionMessage } from "./guard-session-messages";
 
 export interface AuthenticatedUser {
@@ -74,6 +78,7 @@ type CreateAuthGuardsOptions = {
       isVisitorBanned: boolean;
     } | undefined>;
     touchAuthenticatedActivity?: ((activityId: string) => Promise<UserActivity | undefined>) | undefined;
+    createAuditLog?: IStorage["createAuditLog"] | undefined;
   };
   secret?: string;
   activityUpdateThrottleMs?: number;
@@ -93,6 +98,10 @@ type RefreshedSessionToken = {
   sessionExpiresAtIso?: string | null | undefined;
 };
 
+type SignedRefreshedSessionToken = RefreshedSessionToken & {
+  token: string;
+};
+
 type SessionRefreshRevocationRetryConfig = {
   attempts: number;
   baseDelayMs: number;
@@ -105,6 +114,8 @@ type SessionRefreshRevocationLogContext = {
   path: string;
 };
 
+const inFlightSessionRefreshes = new Map<string, Promise<SignedRefreshedSessionToken>>();
+
 function buildAuthGuardErrorResponse(
   statusCode: number,
   message: string,
@@ -115,6 +126,45 @@ function buildAuthGuardErrorResponse(
     ...(options?.code ? { code: options.code } : {}),
     ...(options?.extra ? { extra: options.extra } : {}),
   });
+}
+
+async function recordAuthorizationDeniedAudit(params: {
+  readonly action: "AUTHZ_PERMISSION_DENIED";
+  readonly metadata: Record<string, string | number | boolean | null>;
+  readonly req: AuthenticatedRequest;
+  readonly storage: CreateAuthGuardsOptions["storage"];
+  readonly targetResource: string;
+}): Promise<void> {
+  const createAuditLog = params.storage.createAuditLog;
+  if (typeof createAuditLog !== "function") {
+    return;
+  }
+
+  try {
+    await createAuditLog({
+      action: params.action,
+      performedBy: params.req.user?.username ?? "unknown",
+      targetUser: params.req.user?.userId ?? null,
+      targetResource: params.targetResource,
+      details: buildSecurityAuditDetails({
+        event: "AUTHZ_PERMISSION_DENIED",
+        outcome: "blocked",
+        actorId: params.req.user?.userId,
+        ipAddress: params.req.ip ?? params.req.socket?.remoteAddress ?? null,
+        userAgent: Array.isArray(params.req.headers["user-agent"])
+          ? params.req.headers["user-agent"].join(",")
+          : params.req.headers["user-agent"],
+        metadata: params.metadata,
+        message: "Authorization guard denied access.",
+      }),
+    });
+  } catch (error) {
+    logger.error("Authorization denial audit log failed", {
+      event: "authz_permission_denied_audit_failed",
+      message: error instanceof Error ? error.message : "Unknown audit error",
+      targetResource: params.targetResource,
+    });
+  }
 }
 
 const MIN_SESSION_REFRESH_REVOCATION_RETRY_ATTEMPTS = 1;
@@ -306,6 +356,68 @@ async function revokeSessionJwtForRefresh(
     : new Error("Session refresh revocation failed");
 }
 
+async function refreshSessionJwtAfterRevocation(params: {
+  config: SessionRefreshRevocationRetryConfig;
+  context: SessionRefreshRevocationLogContext;
+  decoded: AuthenticatedSessionJwtPayload;
+  secret: string;
+  sessionExpiry: ReturnType<typeof normalizeSessionExpiry>;
+  user: User;
+}): Promise<SignedRefreshedSessionToken> {
+  const oldJwtId = String(params.decoded.jti || "").trim();
+  if (!oldJwtId) {
+    throw new Error("Cannot refresh a session JWT without a JWT id.");
+  }
+
+  const existingRefresh = inFlightSessionRefreshes.get(oldJwtId);
+  if (existingRefresh) {
+    return existingRefresh;
+  }
+
+  const refreshPromise = Promise.resolve().then(async () => {
+    // The replacement JWT is intentionally signed only after the previous
+    // JTI has been durably revoked. This coalesces same-token concurrent
+    // refreshes in-process and keeps the distributed race window bounded by
+    // the revocation store's fail-closed semantics.
+    await revokeSessionJwtForRefresh(
+      {
+        jwtId: oldJwtId,
+        expiresAtMs: params.sessionExpiry?.expiresAtMs ?? 0,
+      },
+      params.context,
+      params.config,
+    );
+
+    const token = signSessionJwtWithSecret(
+      {
+        userId: params.user.id,
+        username: params.user.username,
+        role: params.user.role,
+        activityId: params.decoded.activityId,
+      },
+      params.secret,
+    );
+    const refreshedExpiry = normalizeSessionExpiry(resolveSessionJwtExpiresAt(token));
+    const refreshedJwtId = resolveSessionJwtId(token) ?? undefined;
+
+    return {
+      token,
+      exp: refreshedExpiry ? Math.floor(refreshedExpiry.expiresAtMs / 1000) : undefined,
+      jwtId: refreshedJwtId,
+      sessionExpiresAtIso: refreshedExpiry?.expiresAtIso ?? params.sessionExpiry?.expiresAtIso ?? null,
+    };
+  });
+
+  inFlightSessionRefreshes.set(oldJwtId, refreshPromise);
+  try {
+    return await refreshPromise;
+  } finally {
+    if (inFlightSessionRefreshes.get(oldJwtId) === refreshPromise) {
+      inFlightSessionRefreshes.delete(oldJwtId);
+    }
+  }
+}
+
 function firstHeaderValue(value: string | string[] | undefined): string {
   if (Array.isArray(value)) {
     return String(value[0] || "");
@@ -481,30 +593,19 @@ export function createAuthGuards(options: CreateAuthGuardsOptions) {
 
       let refreshedSessionToken: RefreshedSessionToken | null = null;
       if (tokenSource && shouldRefreshSessionJwt(decoded)) {
-        const refreshedToken = signSessionJwtWithSecret(
-          {
-            userId: user.id,
-            username: user.username,
-            role: user.role,
-            activityId: decoded.activityId,
-          },
-          secret,
-        );
-        const refreshedExpiry = normalizeSessionExpiry(resolveSessionJwtExpiresAt(refreshedToken));
-        const refreshedJwtId = resolveSessionJwtId(refreshedToken) ?? undefined;
-
+        let refreshedToken: SignedRefreshedSessionToken;
         try {
-          await revokeSessionJwtForRefresh(
-            {
-              jwtId: decoded.jti || "",
-              expiresAtMs: sessionExpiry?.expiresAtMs ?? 0,
-            },
-            {
+          refreshedToken = await refreshSessionJwtAfterRevocation({
+            config: sessionRefreshRevocationRetry,
+            context: {
               path: req.path,
               method: req.method,
             },
-            sessionRefreshRevocationRetry,
-          );
+            decoded,
+            secret,
+            sessionExpiry,
+            user,
+          });
         } catch (error) {
           logger.error("Failed to revoke previous JWT during authenticated session refresh", {
             path: req.path,
@@ -518,15 +619,15 @@ export function createAuthGuards(options: CreateAuthGuardsOptions) {
         }
 
         if (tokenSource === "cookie") {
-          refreshAuthSessionCookie(res, refreshedToken);
+          refreshAuthSessionCookie(res, refreshedToken.token);
         } else {
-          res.setHeader(AUTH_SESSION_REFRESH_HEADER_NAME, refreshedToken);
+          res.setHeader(AUTH_SESSION_REFRESH_HEADER_NAME, refreshedToken.token);
         }
 
         refreshedSessionToken = {
-          exp: refreshedExpiry ? Math.floor(refreshedExpiry.expiresAtMs / 1000) : undefined,
-          jwtId: refreshedJwtId,
-          sessionExpiresAtIso: refreshedExpiry?.expiresAtIso ?? sessionExpiry?.expiresAtIso ?? null,
+          exp: refreshedToken.exp,
+          jwtId: refreshedToken.jwtId,
+          sessionExpiresAtIso: refreshedToken.sessionExpiresAtIso,
         };
       }
 
@@ -559,12 +660,22 @@ export function createAuthGuards(options: CreateAuthGuardsOptions) {
   };
 
   const requireRole = (...roles: string[]): RequestHandler => {
-    return (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    return async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
       if (!req.user) {
         return res.status(401).json(buildAuthGuardErrorResponse(401, "Unauthenticated"));
       }
 
       if (!roles.includes(req.user.role)) {
+        await recordAuthorizationDeniedAudit({
+          action: "AUTHZ_PERMISSION_DENIED",
+          req,
+          storage,
+          targetResource: "role",
+          metadata: {
+            actual_role: req.user.role,
+            required_roles_count: roles.length,
+          },
+        });
         return res.status(403).json(buildAuthGuardErrorResponse(403, "Insufficient permissions"));
       }
       return next();
@@ -582,6 +693,16 @@ export function createAuthGuards(options: CreateAuthGuardsOptions) {
           return next();
         }
         if (role !== "admin" && role !== "user") {
+          await recordAuthorizationDeniedAudit({
+            action: "AUTHZ_PERMISSION_DENIED",
+            req,
+            storage,
+            targetResource: `tab:${tabId}`,
+            metadata: {
+              actual_role: role,
+              reason: "unsupported_role",
+            },
+          });
           return res.status(403).json(buildAuthGuardErrorResponse(403, "Insufficient permissions"));
         }
 
@@ -590,6 +711,16 @@ export function createAuthGuards(options: CreateAuthGuardsOptions) {
         const enabled = hasExplicit ? tabs[tabId] !== false : false;
 
         if (!enabled) {
+          await recordAuthorizationDeniedAudit({
+            action: "AUTHZ_PERMISSION_DENIED",
+            req,
+            storage,
+            targetResource: `tab:${tabId}`,
+            metadata: {
+              actual_role: role,
+              reason: "tab_disabled",
+            },
+          });
           return res.status(403).json(buildAuthGuardErrorResponse(403, `Tab '${tabId}' is disabled for role '${role}'`, {
             code: "TAB_ACCESS_DISABLED",
           }));
@@ -620,11 +751,31 @@ export function createAuthGuards(options: CreateAuthGuardsOptions) {
         return next();
       }
       if (role !== "admin" && role !== "user") {
+        await recordAuthorizationDeniedAudit({
+          action: "AUTHZ_PERMISSION_DENIED",
+          req,
+          storage,
+          targetResource: "monitor",
+          metadata: {
+            actual_role: role,
+            reason: "unsupported_role",
+          },
+        });
         return res.status(403).json(buildAuthGuardErrorResponse(403, "Insufficient permissions"));
       }
 
       const tabs = await tabVisibility.getRoleTabVisibilityCached(role);
       if (tabs.monitor !== true) {
+        await recordAuthorizationDeniedAudit({
+          action: "AUTHZ_PERMISSION_DENIED",
+          req,
+          storage,
+          targetResource: "monitor",
+          metadata: {
+            actual_role: role,
+            reason: "monitor_disabled",
+          },
+        });
         return res.status(403).json(buildAuthGuardErrorResponse(403, "System Monitor access is disabled for this role.", {
           code: "MONITOR_ACCESS_DISABLED",
         }));

@@ -5,6 +5,12 @@ import { encryptTwoFactorSecret, generateCurrentTwoFactorCode } from "../../auth
 import { resetTwoFactorReplayCacheForTests } from "../../auth/two-factor-replay-cache";
 import type { MaintenanceState } from "../../config/system-settings";
 import { AuthAccountService, AuthAccountError } from "../auth-account.service";
+import {
+  FAILED_LOGIN_LOCKOUT_REASON,
+  getFailedLoginLockoutDurationMs,
+  getSystemFailedLoginLockoutStatus,
+} from "../auth-account-lockout-policy";
+import { verifySecurityAuditDetails } from "../../lib/security-audit-log";
 
 const previousTwoFactorEncryptionKey = process.env.TWO_FACTOR_ENCRYPTION_KEY;
 process.env.TWO_FACTOR_ENCRYPTION_KEY = "test-two-factor-encryption-key";
@@ -103,6 +109,7 @@ async function createLockoutHarness(overrides?: Record<string, unknown>) {
   const passwordHash = await hashPassword("Password123!");
   const user = buildManagedUser(passwordHash, overrides);
   const auditActions: string[] = [];
+  const auditDetails: Array<{ action: string; details: string }> = [];
   const updateUserAccountCalls: UpdateUserAccountInput[] = [];
   const deactivatedReasons: string[] = [];
   const activity = {
@@ -139,6 +146,10 @@ async function createLockoutHarness(overrides?: Record<string, unknown>) {
     deactivateUserSessionsByFingerprint: async () => undefined,
     createAuditLog: async (entry: AuditLogInput) => {
       auditActions.push(String(entry?.action || ""));
+      auditDetails.push({
+        action: String(entry?.action || ""),
+        details: String(entry?.details || ""),
+      });
       return buildAuditLog(entry);
     },
     recordFailedLoginAttempt: async (params: FailedLoginAttemptInput) => {
@@ -147,7 +158,7 @@ async function createLockoutHarness(overrides?: Record<string, unknown>) {
       user.failedLoginAttempts = Number(user.failedLoginAttempts || 0) + 1;
       const locked = wasLocked || user.failedLoginAttempts > Number(params.maxAllowedAttempts || 0);
       if (locked && !wasLocked) {
-        user.lockedAt = params.now instanceof Date ? params.now : new Date("2026-03-20T00:30:00.000Z");
+        user.lockedAt = params.now instanceof Date ? params.now : new Date();
         user.lockedReason = String(params.lockedReason || "too_many_failed_password_attempts");
         user.lockedBySystem = true;
       }
@@ -178,6 +189,7 @@ async function createLockoutHarness(overrides?: Record<string, unknown>) {
     user,
     activity,
     auditActions,
+    auditDetails,
     updateUserAccountCalls,
     deactivatedReasons,
     getRecordFailedLoginAttemptCalls: () => recordFailedLoginAttemptCalls,
@@ -460,6 +472,7 @@ test("AuthAccountService.login replaces existing user sessions so only the lates
   const passwordHash = await hashPassword("Password123!");
   const user = buildManagedUser(passwordHash);
   const auditActions: string[] = [];
+  const auditDetailsByAction = new Map<string, string>();
   const deactivatedReasons: string[] = [];
 
   const service = createAuthAccountService({
@@ -487,6 +500,7 @@ test("AuthAccountService.login replaces existing user sessions so only the lates
     deactivateUserSessionsByFingerprint: async () => undefined,
     createAuditLog: async (entry: AuditLogInput) => {
       auditActions.push(String(entry?.action || ""));
+      auditDetailsByAction.set(String(entry?.action || ""), String(entry.details || ""));
       return buildAuditLog(entry);
     },
     createActivity: async () => ({
@@ -521,6 +535,21 @@ test("AuthAccountService.login replaces existing user sessions so only the lates
   assert.deepEqual(deactivatedReasons, ["NEW_SESSION"]);
   assert.ok(auditActions.includes("LOGIN_REPLACED_EXISTING_SESSION"));
   assert.ok(auditActions.includes("LOGIN_SUCCESS"));
+  const loginSuccessAudit = verifySecurityAuditDetails(auditDetailsByAction.get("LOGIN_SUCCESS"));
+  assert.equal(loginSuccessAudit.ok, true);
+  if (loginSuccessAudit.ok) {
+    assert.equal(loginSuccessAudit.entry.event, "AUTH_LOGIN_SUCCESS");
+    assert.equal(loginSuccessAudit.entry.outcome, "success");
+  }
+  const replacedAuditDetails = auditDetailsByAction.get("LOGIN_REPLACED_EXISTING_SESSION") || "";
+  assert.equal(replacedAuditDetails.includes("activity-old-1"), false);
+  assert.equal(replacedAuditDetails.includes("activity-old-2"), false);
+  const replacedAudit = verifySecurityAuditDetails(replacedAuditDetails);
+  assert.equal(replacedAudit.ok, true);
+  if (replacedAudit.ok) {
+    assert.equal(replacedAudit.entry.event, "AUTH_SESSION_REVOKED");
+    assert.equal(replacedAudit.entry.metadata.replaced_count, 2);
+  }
 });
 
 test("AuthAccountService.login requires second factor for admin accounts with 2FA enabled", async () => {
@@ -712,11 +741,16 @@ test("AuthAccountService.verifyTwoFactorLogin rejects replayed authenticator cod
 
   assert.equal(createActivityCalls, 1);
   assert.ok(auditActions.includes("LOGIN_2FA_FAILED"));
-  assert.match(failedTwoFactorAuditDetails, /"event_type":"auth\.two_factor\.login_failed"/);
   assert.match(failedTwoFactorAuditDetails, /"failure_reason":"invalid_code"/);
-  assert.match(failedTwoFactorAuditDetails, /"user_id":"admin-replay-1"/);
-  assert.match(failedTwoFactorAuditDetails, /"ip":"127\.0\.0\.1"/);
+  assert.equal(failedTwoFactorAuditDetails.includes("admin-replay-1"), false);
+  assert.equal(failedTwoFactorAuditDetails.includes("127.0.0.1"), false);
   assert.doesNotMatch(failedTwoFactorAuditDetails, new RegExp(code));
+  const auditVerification = verifySecurityAuditDetails(failedTwoFactorAuditDetails);
+  assert.equal(auditVerification.ok, true);
+  if (auditVerification.ok) {
+    assert.equal(auditVerification.entry.event, "AUTH_2FA_FAILURE");
+    assert.equal(auditVerification.entry.outcome, "failure");
+  }
 });
 
 test("AuthAccountService supports starting, confirming, and disabling 2FA for admin accounts", async () => {
@@ -794,7 +828,7 @@ test("AuthAccountService supports starting, confirming, and disabling 2FA for ad
 });
 
 test("AuthAccountService.login increments failed password attempts without locking through the third wrong password", async () => {
-  const { service, user, auditActions } = await createLockoutHarness();
+  const { service, user, auditActions, auditDetails } = await createLockoutHarness();
 
   for (const attempt of [1, 2, 3]) {
     await assert.rejects(
@@ -821,7 +855,42 @@ test("AuthAccountService.login increments failed password attempts without locki
     auditActions.filter((action) => action === "LOGIN_FAILED_PASSWORD").length,
     3,
   );
+  const failedPasswordAudit = verifySecurityAuditDetails(
+    auditDetails.find((entry) => entry.action === "LOGIN_FAILED_PASSWORD")?.details,
+  );
+  assert.equal(failedPasswordAudit.ok, true);
+  if (failedPasswordAudit.ok) {
+    assert.equal(failedPasswordAudit.entry.event, "AUTH_LOGIN_FAILURE");
+    assert.equal(failedPasswordAudit.entry.outcome, "failure");
+  }
   assert.equal(auditActions.includes("ACCOUNT_LOCKED_TOO_MANY_FAILED_LOGINS"), false);
+});
+
+test("auth account lockout policy applies progressive temporary durations", () => {
+  assert.equal(getFailedLoginLockoutDurationMs(4), 5 * 60 * 1000);
+  assert.equal(getFailedLoginLockoutDurationMs(5), 15 * 60 * 1000);
+  assert.equal(getFailedLoginLockoutDurationMs(10), 60 * 60 * 1000);
+  assert.equal(getFailedLoginLockoutDurationMs(20), 24 * 60 * 60 * 1000);
+
+  const active = getSystemFailedLoginLockoutStatus({
+    failedLoginAttempts: 4,
+    lockedAt: new Date("2026-03-20T00:00:00.000Z"),
+    lockedBySystem: true,
+    lockedReason: FAILED_LOGIN_LOCKOUT_REASON,
+  }, new Date("2026-03-20T00:04:00.000Z"));
+  const expired = getSystemFailedLoginLockoutStatus({
+    failedLoginAttempts: 4,
+    lockedAt: new Date("2026-03-20T00:00:00.000Z"),
+    lockedBySystem: true,
+    lockedReason: FAILED_LOGIN_LOCKOUT_REASON,
+  }, new Date("2026-03-20T00:06:00.000Z"));
+
+  assert.equal(active.active, true);
+  assert.equal(active.expired, false);
+  assert.equal(active.remainingMs, 60_000);
+  assert.equal(expired.active, false);
+  assert.equal(expired.expired, true);
+  assert.equal(expired.remainingMs, 0);
 });
 
 test("AuthAccountService.login locks an account after more than three wrong password attempts", async () => {
@@ -883,6 +952,40 @@ test("AuthAccountService.login locks an account after more than three wrong pass
   );
 
   assert.ok(auditActions.includes("LOGIN_BLOCKED_LOCKED_ACCOUNT"));
+});
+
+test("AuthAccountService.login auto-clears expired system lockouts before password verification", async () => {
+  const { service, user, activity, auditActions, updateUserAccountCalls } = await createLockoutHarness({
+    failedLoginAttempts: 4,
+    lockedAt: new Date(Date.now() - (6 * 60 * 1000)),
+    lockedReason: FAILED_LOGIN_LOCKOUT_REASON,
+    lockedBySystem: true,
+  });
+
+  const result = await service.login({
+    username: user.username,
+    password: "Password123!",
+    browserName: "chrome",
+    fingerprint: "fp-lockout",
+    ipAddress: "127.0.0.1",
+    pcName: "pc",
+  });
+
+  assert.equal(result.kind, "authenticated");
+  assert.equal(result.activity.id, activity.id);
+  assert.equal(user.failedLoginAttempts, 0);
+  assert.equal(user.lockedAt, null);
+  assert.equal(user.lockedReason, null);
+  assert.equal(user.lockedBySystem, false);
+  assert.deepEqual(updateUserAccountCalls[0], {
+    userId: user.id,
+    failedLoginAttempts: 0,
+    lockedAt: null,
+    lockedReason: null,
+    lockedBySystem: false,
+  });
+  assert.ok(auditActions.includes("ACCOUNT_LOCKOUT_AUTO_CLEARED"));
+  assert.ok(auditActions.includes("LOGIN_SUCCESS"));
 });
 
 test("AuthAccountService.login resets failed attempt counters after a successful login", async () => {

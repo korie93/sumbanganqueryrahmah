@@ -9,6 +9,31 @@ import {
   summarizeOutput,
 } from "./collection-receipt-external-scan-shared";
 
+type ExternalScanProcessStream = {
+  setEncoding(encoding: BufferEncoding): ExternalScanProcessStream;
+  on(event: "data", listener: (chunk: string) => void): ExternalScanProcessStream;
+  removeAllListeners(): ExternalScanProcessStream;
+};
+
+type ExternalScanChildProcess = {
+  readonly stdout?: ExternalScanProcessStream | null;
+  readonly stderr?: ExternalScanProcessStream | null;
+  readonly killed: boolean;
+  kill(signal?: NodeJS.Signals): boolean;
+  once(event: "error", listener: (error: Error) => void): ExternalScanChildProcess;
+  once(event: "close", listener: (code: number | null, signal: NodeJS.Signals | null) => void): ExternalScanChildProcess;
+  removeAllListeners(): ExternalScanChildProcess;
+};
+
+export type ExternalScanSpawn = (
+  command: string,
+  args: string[],
+  options: {
+    stdio: ["ignore", "pipe", "pipe"];
+    windowsHide: true;
+  },
+) => ExternalScanChildProcess;
+
 export function createOperationalScanError(
   config: ExternalScanConfig,
   filePath: string,
@@ -46,33 +71,53 @@ export async function runExternalReceiptScan({
   filePath,
   scannerCommand,
   args,
+  spawnScanner = (command, scannerArgs, options) => spawn(command, scannerArgs, options),
 }: {
   config: ExternalScanConfig;
   filePath: string;
   scannerCommand: string;
   args: string[];
+  spawnScanner?: ExternalScanSpawn;
 }) {
   const fileName = path.basename(filePath);
 
   await new Promise<void>((resolve, reject) => {
-    const child = spawn(scannerCommand, args, {
+    const child = spawnScanner(scannerCommand, args, {
       stdio: ["ignore", "pipe", "pipe"],
       windowsHide: true,
     });
 
-    let resolved = false;
+    let settled = false;
     let stdout = "";
     let stderr = "";
     let timeoutTriggered = false;
+    let timeoutId: NodeJS.Timeout | null = null;
 
-    const finish = (error?: Error | null) => {
-      if (resolved) {
-        return;
-      }
-      resolved = true;
+    const cleanup = (options: { terminate?: boolean } = {}) => {
       if (timeoutId) {
         clearTimeout(timeoutId);
+        timeoutId = null;
       }
+
+      if (options.terminate && !child.killed) {
+        try {
+          child.kill("SIGTERM");
+        } catch {
+          // The scanner may already have exited between the timeout and cleanup.
+        }
+      }
+
+      child.stdout?.removeAllListeners();
+      child.stderr?.removeAllListeners();
+      child.removeAllListeners();
+    };
+
+    const finish = (error?: Error | null, options: { terminate?: boolean } = {}) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      cleanup(options);
       if (error) {
         reject(error);
       } else {
@@ -80,9 +125,15 @@ export async function runExternalReceiptScan({
       }
     };
 
-    const timeoutId = setTimeout(() => {
+    timeoutId = setTimeout(() => {
       timeoutTriggered = true;
-      child.kill();
+      const operational = createOperationalScanError(
+        config,
+        filePath,
+        "external-scan-timeout",
+        `timed out after ${config.timeoutMs}ms`,
+      );
+      finish(operational, { terminate: true });
     }, config.timeoutMs);
     timeoutId.unref?.();
 
@@ -97,9 +148,6 @@ export async function runExternalReceiptScan({
     });
 
     child.once("error", (error) => {
-      if (resolved) {
-        return;
-      }
       const operational = createOperationalScanError(
         config,
         filePath,
@@ -110,17 +158,7 @@ export async function runExternalReceiptScan({
     });
 
     child.once("close", (code, signal) => {
-      if (resolved) {
-        return;
-      }
       if (timeoutTriggered) {
-        const operational = createOperationalScanError(
-          config,
-          filePath,
-          "external-scan-timeout",
-          `timed out after ${config.timeoutMs}ms`,
-        );
-        finish(operational);
         return;
       }
 

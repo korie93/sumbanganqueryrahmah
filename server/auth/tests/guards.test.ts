@@ -9,6 +9,7 @@ import {
   sweepExpiredTabVisibilityCacheEntriesForTests,
 } from "../guards";
 import { logger } from "../../lib/logger";
+import { verifySecurityAuditDetails } from "../../lib/security-audit-log";
 import { getInternalMetricsSnapshot } from "../../internal/metrics";
 import {
   configureSessionRevocationStoreForRuntime,
@@ -53,6 +54,71 @@ test("getInvalidatedSessionMessage falls back to generic session expiry messagin
     getInvalidatedSessionMessage(null),
     "Session expired. Please login again.",
   );
+});
+
+test("requireRole records tamper-evident permission denied audit entries", async () => {
+  const auditLogs: Array<{
+    action: string;
+    details?: string | null;
+    targetResource?: string | null;
+    targetUser?: string | null;
+  }> = [];
+  const guards = createAuthGuards({
+    storage: {
+      getActivityById: async () => undefined,
+      getUser: async () => undefined,
+      getUserByUsername: async () => undefined,
+      isVisitorBanned: async () => false,
+      updateActivity: async () => undefined,
+      getRoleTabVisibility: async () => ({}),
+      createAuditLog: async (entry) => {
+        auditLogs.push({
+          action: entry.action,
+          details: entry.details ?? null,
+          targetResource: entry.targetResource ?? null,
+          targetUser: entry.targetUser ?? null,
+        });
+        return {
+          id: `audit-${auditLogs.length}`,
+          action: entry.action,
+          performedBy: entry.performedBy,
+          requestId: entry.requestId ?? null,
+          targetUser: entry.targetUser ?? null,
+          targetResource: entry.targetResource ?? null,
+          details: entry.details ?? null,
+          timestamp: new Date("2026-05-31T00:00:00.000Z"),
+        };
+      },
+    },
+    secret: "guard-test-secret",
+  });
+  const response = createMockResponse();
+  const handler = guards.requireRole("superuser");
+
+  await handler({
+    headers: { "user-agent": "Chromium" },
+    ip: "203.0.113.10",
+    socket: { remoteAddress: "203.0.113.10" },
+    user: {
+      activityId: "activity-1",
+      role: "user",
+      userId: "user-1",
+      username: "guard.user",
+    },
+  } as never, response as never, () => undefined);
+
+  assert.equal(response.statusCode, 403);
+  assert.equal(auditLogs.length, 1);
+  assert.equal(auditLogs[0].action, "AUTHZ_PERMISSION_DENIED");
+  assert.equal(auditLogs[0].targetResource, "role");
+  assert.equal(String(auditLogs[0].details).includes("user-1"), false);
+  assert.equal(String(auditLogs[0].details).includes("203.0.113.10"), false);
+  const verification = verifySecurityAuditDetails(auditLogs[0].details);
+  assert.equal(verification.ok, true);
+  if (verification.ok) {
+    assert.equal(verification.entry.event, "AUTHZ_PERMISSION_DENIED");
+    assert.equal(verification.entry.outcome, "blocked");
+  }
 });
 
 function createMockResponse() {
@@ -100,6 +166,21 @@ function createRedisRevocationError(code: string, message = "Redis revocation co
   const error = new Error(message) as Error & { code: string };
   error.code = code;
   return error;
+}
+
+function createDeferred<T = void>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((innerResolve, innerReject) => {
+    resolve = innerResolve;
+    reject = innerReject;
+  });
+
+  return {
+    promise,
+    reject,
+    resolve,
+  };
 }
 
 function createAuthenticatedSessionSnapshot() {
@@ -985,6 +1066,109 @@ test("authenticateToken refreshes a bearer JWT inside the final 20 percent of TT
   }
 });
 
+test("authenticateToken coalesces concurrent refreshes for the same JWT id", async (t) => {
+  resetSessionRevocationStoreForTests();
+  const secret = "guard-test-secret";
+  const nowMs = Date.parse("2026-05-27T00:00:00.000Z");
+  const nowSeconds = Math.floor(nowMs / 1000);
+  const revokedJwtIds = new Set<string>();
+  const revokeStarted = createDeferred();
+  const releaseRevoke = createDeferred();
+  let revokeAttempts = 0;
+  t.mock.method(Date, "now", () => nowMs);
+
+  const restoreRevocationStore = configureSessionRevocationStoreForRuntime({
+    isRevoked: async (jwtId: string) => revokedJwtIds.has(jwtId),
+    revoke: async (record: SessionRevocationRecord) => {
+      revokeAttempts += 1;
+      revokeStarted.resolve();
+      await releaseRevoke.promise;
+      revokedJwtIds.add(record.jwtId);
+    },
+    close: () => {
+      revokedJwtIds.clear();
+    },
+  });
+
+  const guards = createAuthGuards({
+    storage: {
+      getAuthenticatedSessionSnapshot: async () => createAuthenticatedSessionSnapshot(),
+      getActivityById: async () => undefined,
+      getUser: async () => undefined,
+      getUserByUsername: async () => undefined,
+      isVisitorBanned: async () => false,
+      updateActivity: async () => undefined,
+      getRoleTabVisibility: async () => ({}),
+    },
+    secret,
+  });
+
+  const oldToken = jwt.sign(
+    {
+      userId: "user-1",
+      username: "guard.user",
+      role: "admin",
+      activityId: "activity-1",
+      iat: nowSeconds - 81,
+      exp: nowSeconds + 19,
+    },
+    secret,
+    { jwtid: "near-expiry-concurrent-jti" },
+  );
+  const firstResponse = createMockResponse();
+  const secondResponse = createMockResponse();
+  let nextCalls = 0;
+
+  try {
+    const firstAuth = guards.authenticateToken(
+      {
+        headers: {
+          authorization: `Bearer ${oldToken}`,
+        },
+        method: "GET",
+        path: "/api/me",
+      } as never,
+      firstResponse as never,
+      () => {
+        nextCalls += 1;
+      },
+    );
+
+    await revokeStarted.promise;
+
+    const secondAuth = guards.authenticateToken(
+      {
+        headers: {
+          authorization: `Bearer ${oldToken}`,
+        },
+        method: "GET",
+        path: "/api/me",
+      } as never,
+      secondResponse as never,
+      () => {
+        nextCalls += 1;
+      },
+    );
+
+    releaseRevoke.resolve();
+    await Promise.all([firstAuth, secondAuth]);
+
+    const firstRefreshedToken = String(firstResponse.getHeader(AUTH_SESSION_REFRESH_HEADER_NAME) || "");
+    const secondRefreshedToken = String(secondResponse.getHeader(AUTH_SESSION_REFRESH_HEADER_NAME) || "");
+
+    assert.equal(nextCalls, 2);
+    assert.equal(revokeAttempts, 1);
+    assert.notEqual(firstRefreshedToken, "");
+    assert.equal(secondRefreshedToken, firstRefreshedToken);
+    assert.equal(revokedJwtIds.has("near-expiry-concurrent-jti"), true);
+  } finally {
+    guards.stopTabVisibilityCacheSweep();
+    guards.stopActivityUpdateCacheSweep();
+    restoreRevocationStore();
+    resetSessionRevocationStoreForTests();
+  }
+});
+
 test("authenticateToken retries transient JWT refresh revocation failures", async (t) => {
   resetSessionRevocationStoreForTests();
   const secret = "guard-test-secret";
@@ -1598,7 +1782,7 @@ test("requireRole returns 401 when there is no authenticated user", () => {
   assert.equal(nextCalls, 0);
 });
 
-test("requireRole returns 403 when the authenticated user lacks the required role", () => {
+test("requireRole returns 403 when the authenticated user lacks the required role", async () => {
   const guards = createAuthGuards({
     storage: {
       getActivityById: async () => undefined,
@@ -1614,7 +1798,7 @@ test("requireRole returns 403 when the authenticated user lacks the required rol
   const response = createMockResponse();
   let nextCalls = 0;
 
-  guards.requireRole("superuser")(
+  await guards.requireRole("superuser")(
     { user: { role: "admin" } } as never,
     response as never,
     () => {

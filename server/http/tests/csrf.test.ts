@@ -114,6 +114,76 @@ test("rotateCsrfTokenAfterPrivilegeEscalation reuses a queued csrf cookie from s
   }
 });
 
+test("rotateCsrfTokenAfterPrivilegeEscalation is idempotent per response locals", () => {
+  const cookies: Array<{ name: string; value: string }> = [];
+  const headers = new Map<string, unknown>();
+  const infos: Array<{ message: string; payload: Record<string, unknown> | undefined }> = [];
+  const originalInfo = logger.info;
+  const res = {
+    locals: {},
+    getHeader: () => undefined,
+    setHeader: (name: string, value: unknown) => {
+      headers.set(name, value);
+    },
+    cookie: (name: string, value: string) => {
+      cookies.push({ name, value });
+    },
+  };
+  logger.info = ((message: string, payload?: Record<string, unknown>) => {
+    infos.push({ message, payload });
+  }) as typeof logger.info;
+
+  try {
+    rotateCsrfTokenAfterPrivilegeEscalation(res as never, {
+      reason: "two_factor_enabled",
+      route: "/api/auth/two-factor/enable",
+    });
+    rotateCsrfTokenAfterPrivilegeEscalation(res as never, {
+      reason: "two_factor_disabled",
+      route: "/api/auth/two-factor/disable",
+    });
+
+    assert.equal(cookies.length, 1);
+    assert.equal(headers.get(AUTH_SESSION_CSRF_HEADER_NAME), cookies[0]?.value);
+    assert.equal((res.locals as Record<string, unknown>).sqrCsrfRotationQueued, true);
+    assert.equal(infos[0]?.payload?.rotated, true);
+    assert.equal(infos[1]?.payload?.rotated, false);
+    assert.equal(infos[1]?.payload?.reusedPendingRotation, true);
+  } finally {
+    logger.info = originalInfo;
+  }
+});
+
+test("rotateCsrfTokenAfterPrivilegeEscalation coalesces same-response concurrent calls", async () => {
+  let cookieCalls = 0;
+  const originalInfo = logger.info;
+  const res = {
+    locals: {},
+    getHeader: () => undefined,
+    setHeader: () => undefined,
+    cookie: () => {
+      cookieCalls += 1;
+    },
+  };
+  logger.info = (() => undefined) as typeof logger.info;
+
+  try {
+    await Promise.all([
+      Promise.resolve().then(() => rotateCsrfTokenAfterPrivilegeEscalation(res as never, {
+        reason: "two_factor_setup_started",
+      })),
+      Promise.resolve().then(() => rotateCsrfTokenAfterPrivilegeEscalation(res as never, {
+        reason: "two_factor_enabled",
+      })),
+    ]);
+
+    assert.equal(cookieCalls, 1);
+    assert.equal((res.locals as Record<string, unknown>).sqrCsrfRotationQueued, true);
+  } finally {
+    logger.info = originalInfo;
+  }
+});
+
 test("csrf middleware rejects cross-site mutation requests when session cookie is present", async () => {
   const app = createCsrfTestApp();
   const { server, baseUrl } = await startTestServer(app);
