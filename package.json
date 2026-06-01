@@ -74,6 +74,7 @@
     "test:e2e:smoke": "node scripts/ui-smoke.mjs",
     "test:e2e:visual": "node scripts/ui-visual-contract.mjs",
     "test:e2e:a11y": "node scripts/ui-accessibility-contract.mjs",
+    "test:a11y": "npm run test:e2e:a11y",
     "test:e2e:ci-local": "node scripts/smoke-ci-local.mjs",
     "test:contracts": "tsx --test server/routes/tests/imports.routes.integration.test.ts server/routes/tests/settings.routes.integration.test.ts client/src/lib/api/tests/api-contracts.test.ts",
     "test:scripts": "node --test scripts/tests/*.test.mjs",
