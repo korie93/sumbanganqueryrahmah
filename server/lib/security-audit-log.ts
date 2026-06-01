@@ -1,5 +1,5 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
-import { getSessionSecret } from "../config/security";
+import { getAuditHmacKey } from "../config/security";
 import { getRequestContext } from "./request-context";
 
 export type SecurityAuditEventType =
@@ -73,7 +73,7 @@ const SECURITY_AUDIT_FORBIDDEN_METADATA_KEY_PATTERN =
   /(password|passcode|token|secret|session|jwt|cookie|authorization|fingerprint|email|ic|phone|account|name|address)/i;
 
 function getSecurityAuditHmacKey(): string {
-  return process.env.SQR_AUDIT_HMAC_KEY || getSessionSecret();
+  return getAuditHmacKey();
 }
 
 function normalizeAuditString(value: unknown): string {

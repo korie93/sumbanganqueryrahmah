@@ -73,7 +73,12 @@ export function registerLocalProcessFatalHandlers({
   processRef.on("uncaughtException", handlers.handleUncaughtException);
   processRef.on("unhandledRejection", handlers.handleUnhandledRejection);
 
+  let disposed = false;
   return () => {
+    if (disposed) {
+      return;
+    }
+    disposed = true;
     processRef.off("uncaughtException", handlers.handleUncaughtException);
     processRef.off("unhandledRejection", handlers.handleUnhandledRejection);
   };

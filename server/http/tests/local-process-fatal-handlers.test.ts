@@ -105,3 +105,38 @@ test("local process fatal handler registration wires and unwires process listene
   assert.equal(processHandlers.get("uncaughtException")?.length, 0);
   assert.equal(processHandlers.get("unhandledRejection")?.length, 0);
 });
+
+test("local process fatal handler cleanup is idempotent across repeated registrations", () => {
+  const processHandlers = new Map<string, TestHandler[]>();
+  const processRef = {
+    on(event: string, handler: TestHandler) {
+      const handlers = processHandlers.get(event) ?? [];
+      handlers.push(handler);
+      processHandlers.set(event, handlers);
+      return processRef;
+    },
+    off(event: string, handler: TestHandler) {
+      const handlers = processHandlers.get(event) ?? [];
+      processHandlers.set(event, handlers.filter((candidate) => candidate !== handler));
+      return processRef;
+    },
+  };
+
+  for (let index = 0; index < 10; index += 1) {
+    const dispose = registerLocalProcessFatalHandlers({
+      logger: createLogger(),
+      notifyFatal: () => undefined,
+      processRef,
+      shutdown: () => undefined,
+    });
+
+    assert.equal(processHandlers.get("uncaughtException")?.length, 1);
+    assert.equal(processHandlers.get("unhandledRejection")?.length, 1);
+
+    dispose();
+    dispose();
+
+    assert.equal(processHandlers.get("uncaughtException")?.length, 0);
+    assert.equal(processHandlers.get("unhandledRejection")?.length, 0);
+  }
+});

@@ -337,6 +337,23 @@ test("runtime env schema validates optional TOTP algorithm values", () => {
   );
 });
 
+test("runtime env schema validates optional audit HMAC key strength", () => {
+  assert.doesNotThrow(() => {
+    validateRuntimeEnvironmentSchema({
+      SQR_AUDIT_HMAC_KEY: "audit-hmac-key-minimum-32-characters-001",
+    });
+  });
+
+  assert.throws(
+    () => {
+      validateRuntimeEnvironmentSchema({
+        SQR_AUDIT_HMAC_KEY: "short-audit-key",
+      });
+    },
+    /SQR_AUDIT_HMAC_KEY must be at least 32 characters when set/i,
+  );
+});
+
 test("runtime env schema validates staged database bootstrap modes", () => {
   assert.doesNotThrow(() => {
     validateRuntimeEnvironmentSchema({

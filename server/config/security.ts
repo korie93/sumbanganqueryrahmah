@@ -7,6 +7,10 @@ export function getSessionSecret(): string {
   return runtimeConfig.auth.sessionSecret;
 }
 
+export function getAuditHmacKey(): string {
+  return runtimeConfig.auth.auditHmacKey;
+}
+
 export function getCollectionNicknameTempPassword(): string {
   return runtimeConfig.auth.collectionNicknameTempPassword;
 }

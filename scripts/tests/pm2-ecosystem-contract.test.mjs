@@ -28,6 +28,8 @@ test("PM2 ecosystem example uses direct Node entrypoint with readiness and grace
   assert.equal(app.kill_timeout, 10_000);
   assert.equal(app.listen_timeout, 5_000);
   assert.equal(app.env?.GRACEFUL_SHUTDOWN_TIMEOUT_MS, "10000");
+  assert.equal(app.max_memory_restart, "768M");
+  assert.equal(app.node_args, "--max-old-space-size=600");
 });
 
 test("PM2 deployment docs mention build-before-restart readiness contract", async () => {
@@ -40,4 +42,25 @@ test("PM2 deployment docs mention build-before-restart readiness contract", asyn
     assert.match(content, /npm run build/);
     assert.match(content, /dist-local\/server\/cluster-local\.js/);
   }
+});
+
+test("PM2 memory sizing guide documents limits, monitoring, and worker guardrails", async () => {
+  const guide = await readFile("docs/DEPLOYMENT-SIZING-GUIDE.md", "utf8");
+  const ecosystem = await readFile("deploy/pm2/ecosystem.config.cjs.example", "utf8");
+  const termuxDocs = await readFile("docs/TERMUX_PM2_DEPLOYMENT.md", "utf8");
+  const hetznerDocs = await readFile("docs/HETZNER_PRODUCTION_DEPLOYMENT.md", "utf8");
+
+  assert.match(guide, /max_memory_restart = base_memory x 1\.5 x safety_factor/);
+  assert.match(guide, /\| Low \| kurang 100 req\/min \| `512M` \| `--max-old-space-size=400` \| `1` \|/);
+  assert.match(guide, /\| Medium \| 100-500 req\/min \| `768M` \| `--max-old-space-size=600` \| `1-2` \|/);
+  assert.match(guide, /\| High \| 500-1500 req\/min \| `1024M` \| `--max-old-space-size=800` \| `2-4` \|/);
+  assert.match(guide, /pm2 monit/);
+  assert.match(guide, /pm2 list/);
+  assert.match(guide, /SQR_MAX_WORKERS=1/);
+  assert.match(guide, /SQR_RATE_LIMIT_STORE=redis/);
+  assert.match(guide, /SQR_WS_SHARED_BUS=redis/);
+
+  assert.match(ecosystem, /DEPLOYMENT-SIZING-GUIDE\.md/);
+  assert.match(termuxDocs, /DEPLOYMENT-SIZING-GUIDE\.md/);
+  assert.match(hetznerDocs, /DEPLOYMENT-SIZING-GUIDE\.md/);
 });

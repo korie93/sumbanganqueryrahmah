@@ -77,6 +77,7 @@ export type RuntimeConfig = {
   auth: {
     sessionSecret: string;
     previousSessionSecrets: string[];
+    auditHmacKey: string;
     collectionNicknameTempPassword: string;
     twoFactorAlgorithm: "sha1" | "sha256";
     twoFactorEncryptionSecret: string | null;

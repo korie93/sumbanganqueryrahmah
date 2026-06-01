@@ -8,6 +8,7 @@ type RuntimeEnvironmentSource = Record<string, string | undefined>;
 
 const DEFAULT_STRING_MAX_LENGTH = 4_096;
 const SECRET_STRING_MAX_LENGTH = 8_192;
+const AUDIT_HMAC_KEY_MIN_LENGTH = 32;
 const BOOLEAN_ENV_VALUES = new Set(["1", "0", "true", "false", "yes", "no", "on", "off"]);
 const AUTH_COOKIE_SECURE_VALUES = new Set(["auto", "true", "false", "1", "0"]);
 const SESSION_COOKIE_SAMESITE_VALUES = new Set(["strict", "lax"]);
@@ -79,6 +80,17 @@ function optionalSessionCookieSameSiteEnv() {
         "SESSION_COOKIE_SAMESITE must be one of: strict or lax.",
       )
       .optional(),
+  );
+}
+
+function optionalMinLengthEnvString(
+  name: string,
+  minLength: number,
+  maxLength = DEFAULT_STRING_MAX_LENGTH,
+) {
+  return optionalEnvString(name, maxLength).refine(
+    (value) => value === undefined || value.length >= minLength,
+    `${name} must be at least ${minLength} characters when set.`,
   );
 }
 
@@ -256,7 +268,11 @@ const runtimeEnvironmentShape = {
 
   SESSION_SECRET: optionalEnvString("SESSION_SECRET", SECRET_STRING_MAX_LENGTH),
   SESSION_SECRET_PREVIOUS: optionalEnvString("SESSION_SECRET_PREVIOUS", SECRET_STRING_MAX_LENGTH),
-  SQR_AUDIT_HMAC_KEY: optionalEnvString("SQR_AUDIT_HMAC_KEY", SECRET_STRING_MAX_LENGTH),
+  SQR_AUDIT_HMAC_KEY: optionalMinLengthEnvString(
+    "SQR_AUDIT_HMAC_KEY",
+    AUDIT_HMAC_KEY_MIN_LENGTH,
+    SECRET_STRING_MAX_LENGTH,
+  ),
   TWO_FACTOR_ENCRYPTION_KEY: optionalEnvString("TWO_FACTOR_ENCRYPTION_KEY", SECRET_STRING_MAX_LENGTH),
   TWO_FACTOR_ENCRYPTION_KEY_PREVIOUS: optionalEnvString(
     "TWO_FACTOR_ENCRYPTION_KEY_PREVIOUS",

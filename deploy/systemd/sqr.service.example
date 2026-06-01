@@ -3,12 +3,29 @@ Description=Sumbangan Query Rahmah
 After=network-online.target postgresql.service
 Wants=network-online.target postgresql.service
 
+# SECURITY NOTE: EnvironmentFile permissions
+# This service reads production secrets from /etc/sqr/production.env.
+# Create that file from deploy/examples/sqr.production.env.template and keep
+# it readable only by root and the service group:
+#
+#   sudo install -d -o root -g deploy -m 0750 /etc/sqr
+#   sudo install -o root -g deploy -m 0640 \
+#     deploy/examples/sqr.production.env.template /etc/sqr/production.env
+#   sudoedit /etc/sqr/production.env
+#   sudo ls -l /etc/sqr/production.env
+#
+# Expected permissions:
+#   -rw-r----- 1 root deploy ... /etc/sqr/production.env
+#
+# If you change User/Group below to sqr, use root:sqr instead. Do not use
+# 0644, 0755, or a user-owned environment file; it may expose database
+# passwords, session secrets, encryption keys, and SMTP credentials.
 [Service]
 Type=simple
 User=deploy
 Group=deploy
 WorkingDirectory=/var/www/sumbanganqueryrahmah
-Environment=NODE_ENV=production
+EnvironmentFile=/etc/sqr/production.env
 ExecStart=/usr/bin/npm start
 Restart=always
 RestartSec=5

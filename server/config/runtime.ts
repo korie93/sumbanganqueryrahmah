@@ -222,6 +222,7 @@ const resolvedSessionSecret = readSecretOrThrow(
   isProductionLike,
   () => buildEphemeralSecret("session"),
 );
+const resolvedAuditHmacKey = readOptionalString("SQR_AUDIT_HMAC_KEY") ?? resolvedSessionSecret;
 
 assertRuntimeSessionSecretMinBytes(resolvedSessionSecret, { nodeEnv });
 
@@ -387,6 +388,7 @@ export const runtimeConfig: RuntimeConfig = Object.freeze({
   auth: {
     sessionSecret: resolvedSessionSecret,
     previousSessionSecrets: configuredPreviousSessionSecrets,
+    auditHmacKey: resolvedAuditHmacKey,
     collectionNicknameTempPassword: readSecretOrThrow(
       "COLLECTION_NICKNAME_TEMP_PASSWORD",
       isProductionLike,

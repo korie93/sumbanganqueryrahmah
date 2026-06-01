@@ -78,6 +78,7 @@ module.exports = {
         GRACEFUL_SHUTDOWN_TIMEOUT_MS: "10000",
       },
       max_memory_restart: "768M",
+      node_args: "--max-old-space-size=600",
       restart_delay: 5000,
       kill_timeout: 10000,
       listen_timeout: 5000,
@@ -89,6 +90,7 @@ module.exports = {
 
 Simpan secret sebenar dalam `.env`, bukan dalam ecosystem file.
 PM2 contoh ini menggunakan entrypoint Node terbina terus, bukan wrapper `npm`, supaya `wait_ready` dan `shutdown_with_message` berfungsi. Jalankan `npm run build` sebelum `pm2 start` atau `pm2 restart`.
+Untuk tuning `max_memory_restart`, Node heap, dan jumlah worker, ikut [Deployment Sizing Guide](DEPLOYMENT-SIZING-GUIDE.md).
 
 ## 3. Build dan Start
 

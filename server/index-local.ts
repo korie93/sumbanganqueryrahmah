@@ -93,6 +93,7 @@ let shuttingDown = false;
 let shutdownExitCode = 0;
 let shutdownTimer: ReturnType<typeof setTimeout> | null = null;
 let serverCloseCleanupTriggered = false;
+let deregisterLocalFatalHandlers: (() => void) | null = null;
 
 server.once("close", () => {
   serverCloseCleanupTriggered = true;
@@ -141,6 +142,8 @@ function shutdownProcess(reason: string, exitCode: number, details?: string) {
   }
   shuttingDown = true;
   shutdownExitCode = exitCode;
+  deregisterLocalFatalHandlers?.();
+  deregisterLocalFatalHandlers = null;
   markWebSocketConnectionsDraining();
 
   if (exitCode === 0) {
@@ -213,7 +216,7 @@ process.once("SIGTERM", () => gracefulShutdown("SIGTERM"));
 process.once("SIGINT", () => gracefulShutdown("SIGINT"));
 process.on("message", handleSupervisorShutdownMessage);
 
-registerLocalProcessFatalHandlers({
+deregisterLocalFatalHandlers = registerLocalProcessFatalHandlers({
   logger,
   notifyFatal: notifyMasterFatalReason,
   shutdown: ({ reason, details, exitCode }) => {

@@ -328,6 +328,8 @@ module.exports = {
         NODE_ENV: "production",
         GRACEFUL_SHUTDOWN_TIMEOUT_MS: "10000"
       },
+      max_memory_restart: "768M",
+      node_args: "--max-old-space-size=600",
       kill_timeout: 10000,
       listen_timeout: 5000
     }
@@ -339,6 +341,8 @@ Lebih selamat lagi, bermula daripada:
 
 - `deploy/pm2/ecosystem.config.cjs.example`
 
+Untuk sizing `max_memory_restart`, Node heap, dan `SQR_MAX_WORKERS`, rujuk `docs/DEPLOYMENT-SIZING-GUIDE.md`.
+
 Nota penting untuk `wait_ready`:
 
 - gunakan entrypoint Node terbina terus (`dist-local/server/cluster-local.js`), bukan wrapper `npm start`
@@ -348,6 +352,24 @@ Nota penting untuk `wait_ready`:
 Jika anda lebih suka `systemd` berbanding PM2, gunakan contoh:
 
 - `deploy/systemd/sqr.service.example`
+
+Sediakan environment file yang dibaca oleh service itu sebelum enable service:
+
+```bash
+sudo install -d -o root -g deploy -m 0750 /etc/sqr
+sudo install -o root -g deploy -m 0640 \
+  deploy/examples/sqr.production.env.template /etc/sqr/production.env
+sudoedit /etc/sqr/production.env
+sudo ls -l /etc/sqr/production.env
+```
+
+Expected: `-rw-r----- 1 root deploy ... /etc/sqr/production.env`.
+
+`EnvironmentFile=/etc/sqr/production.env` mengandungi database password,
+session secret, encryption keys, dan SMTP credential. Jangan gunakan permission
+`0644`, `0755`, atau fail milik user biasa kerana mana-mana local user boleh
+membaca secrets itu. Jika anda tukar service user/group kepada `sqr`, gunakan
+`root:sqr` dan kekalkan mode `0640`.
 
 Contoh `systemd` itu sudah termasuk hardening asas yang selamat untuk VPS tunggal:
 

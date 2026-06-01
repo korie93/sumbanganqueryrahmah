@@ -18,7 +18,10 @@ module.exports = {
         PORT: "5000",
         GRACEFUL_SHUTDOWN_TIMEOUT_MS: "10000",
       },
+      // Medium-conservative baseline. See docs/DEPLOYMENT-SIZING-GUIDE.md
+      // before changing memory limits or raising SQR_MAX_WORKERS above 1.
       max_memory_restart: "768M",
+      node_args: "--max-old-space-size=600",
       min_uptime: "15s",
       max_restarts: 10,
       exp_backoff_restart_delay: 100,
