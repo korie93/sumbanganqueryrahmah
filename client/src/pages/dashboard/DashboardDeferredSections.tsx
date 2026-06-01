@@ -1,5 +1,6 @@
 import { Suspense, lazy, startTransition, useEffect, useRef, useState } from "react";
 import { OperationalSectionCard } from "@/components/layout/OperationalPage";
+import { DashboardSectionRenderBoundary } from "@/pages/dashboard/DashboardSectionRenderBoundary";
 import type { LoginTrend, PeakHour, RoleData, TopUser } from "@/pages/dashboard/types";
 
 const DashboardChartsGrid = lazy(() =>
@@ -200,47 +201,72 @@ export function DashboardDeferredSections({
     rootMargin: DASHBOARD_USER_INSIGHTS_DEFER_ROOT_MARGIN,
     timeoutMs: DASHBOARD_USER_INSIGHTS_DEFER_TIMEOUT_MS,
   });
+  const chartsBoundaryKey = [
+    "charts",
+    trendDays,
+    trendsLoading,
+    peakHoursLoading,
+    trendsErrorMessage ?? "ok",
+    peakHoursErrorMessage ?? "ok",
+  ].join(":");
+  const userInsightsBoundaryKey = [
+    "user-insights",
+    topUsersLoading,
+    roleLoading,
+    topUsersErrorMessage ?? "ok",
+    roleErrorMessage ?? "ok",
+  ].join(":");
 
   return (
     <>
       <div ref={chartsSection.triggerRef}>
         {chartsSection.shouldRender ? (
-          <Suspense fallback={<DashboardChartsFallback labelPrefix="Loading dashboard charts" />}>
-            <DashboardChartsGrid
-              onTrendDaysChange={onTrendDaysChange}
-              onRetryPeakHours={onRetryPeakHours}
-              onRetryTrends={onRetryTrends}
-              peakHoursErrorMessage={peakHoursErrorMessage}
-              peakHours={peakHours}
-              peakHoursLoading={peakHoursLoading}
-              peakHoursRetrying={peakHoursRetrying}
-              trendDays={trendDays}
-              trendsErrorMessage={trendsErrorMessage}
-              trends={trends}
-              trendsLoading={trendsLoading}
-              trendsRetrying={trendsRetrying}
-            />
-          </Suspense>
+          <DashboardSectionRenderBoundary
+            sectionName="Carta dashboard"
+            boundaryKey={chartsBoundaryKey}
+          >
+            <Suspense fallback={<DashboardChartsFallback labelPrefix="Loading dashboard charts" />}>
+              <DashboardChartsGrid
+                onTrendDaysChange={onTrendDaysChange}
+                onRetryPeakHours={onRetryPeakHours}
+                onRetryTrends={onRetryTrends}
+                peakHoursErrorMessage={peakHoursErrorMessage}
+                peakHours={peakHours}
+                peakHoursLoading={peakHoursLoading}
+                peakHoursRetrying={peakHoursRetrying}
+                trendDays={trendDays}
+                trendsErrorMessage={trendsErrorMessage}
+                trends={trends}
+                trendsLoading={trendsLoading}
+                trendsRetrying={trendsRetrying}
+              />
+            </Suspense>
+          </DashboardSectionRenderBoundary>
         ) : (
           <DashboardChartsFallback labelPrefix="Dashboard charts will load as you scroll" />
         )}
       </div>
       <div ref={userInsightsSection.triggerRef}>
         {userInsightsSection.shouldRender ? (
-          <Suspense fallback={<DashboardUserInsightsFallback labelPrefix="Loading dashboard user insights" />}>
-            <DashboardUserInsightsGrid
-              onRetryRoleDistribution={onRetryRoleDistribution}
-              onRetryTopUsers={onRetryTopUsers}
-              roleErrorMessage={roleErrorMessage}
-              roleDistribution={roleDistribution}
-              roleLoading={roleLoading}
-              roleRetrying={roleRetrying}
-              topUsersErrorMessage={topUsersErrorMessage}
-              topUsers={topUsers}
-              topUsersLoading={topUsersLoading}
-              topUsersRetrying={topUsersRetrying}
-            />
-          </Suspense>
+          <DashboardSectionRenderBoundary
+            sectionName="Insight pengguna dashboard"
+            boundaryKey={userInsightsBoundaryKey}
+          >
+            <Suspense fallback={<DashboardUserInsightsFallback labelPrefix="Loading dashboard user insights" />}>
+              <DashboardUserInsightsGrid
+                onRetryRoleDistribution={onRetryRoleDistribution}
+                onRetryTopUsers={onRetryTopUsers}
+                roleErrorMessage={roleErrorMessage}
+                roleDistribution={roleDistribution}
+                roleLoading={roleLoading}
+                roleRetrying={roleRetrying}
+                topUsersErrorMessage={topUsersErrorMessage}
+                topUsers={topUsers}
+                topUsersLoading={topUsersLoading}
+                topUsersRetrying={topUsersRetrying}
+              />
+            </Suspense>
+          </DashboardSectionRenderBoundary>
         ) : (
           <DashboardUserInsightsFallback labelPrefix="Dashboard user insights will load as you scroll" />
         )}

@@ -8,6 +8,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { fileURLToPath } from "node:url";
 import { DashboardChartsGrid } from "@/pages/dashboard/DashboardChartsGrid";
 import { DashboardPageHeader } from "@/pages/dashboard/DashboardPageHeader";
+import { DashboardSectionRenderFallback } from "@/pages/dashboard/DashboardSectionRenderBoundary";
 import { DashboardSnapshotSection } from "@/pages/dashboard/DashboardSnapshotSection";
 import { DashboardSummaryCards } from "@/pages/dashboard/DashboardSummaryCards";
 import {
@@ -121,6 +122,29 @@ test("DashboardSnapshotSection renders a retryable local error state", () => {
   assert.match(markup, /role="alert"/);
   assert.match(markup, /Cuba lagi/);
   assert.doesNotMatch(markup, /Total Users/);
+});
+
+test("Dashboard wraps major dashboard regions in accessible render error boundaries", () => {
+  const dashboardSource = readFileSync(path.resolve(__dirname, "../../Dashboard.tsx"), "utf8");
+  const deferredSource = readFileSync(path.resolve(__dirname, "../DashboardDeferredSections.tsx"), "utf8");
+  const fallbackMarkup = renderToStaticMarkup(
+    createElement(DashboardSectionRenderFallback, {
+      sectionName: "Carta dashboard",
+      onRetry: () => undefined,
+    }),
+  );
+
+  assert.match(dashboardSource, /<DashboardSectionRenderBoundary/);
+  assert.match(dashboardSource, /sectionName="Ringkasan dashboard"/);
+  assert.match(deferredSource, /sectionName="Carta dashboard"/);
+  assert.match(deferredSource, /sectionName="Insight pengguna dashboard"/);
+  assert.match(fallbackMarkup, /role="alert"/);
+  assert.match(fallbackMarkup, /aria-live="assertive"/);
+  assert.match(fallbackMarkup, /aria-label="Carta dashboard tidak dapat dimuatkan"/);
+  assert.match(fallbackMarkup, /Carta dashboard tidak dapat dimuatkan\./);
+  assert.match(fallbackMarkup, /Bahagian ini gagal dirender/);
+  assert.match(fallbackMarkup, /Cuba lagi/);
+  assert.match(fallbackMarkup, /type="button"/);
 });
 
 test("DashboardChartsGrid memoizes heavy chart rendering helpers", () => {

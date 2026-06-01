@@ -15,6 +15,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { isMobileViewportWidth } from "@/lib/responsive";
 import { DashboardDeferredSections } from "@/pages/dashboard/DashboardDeferredSections";
 import { DashboardPageHeader } from "@/pages/dashboard/DashboardPageHeader";
+import { DashboardSectionRenderBoundary } from "@/pages/dashboard/DashboardSectionRenderBoundary";
 import { DashboardSnapshotSection } from "@/pages/dashboard/DashboardSnapshotSection";
 import {
   buildDashboardQueryErrorMessages,
@@ -267,13 +268,18 @@ function DashboardContent() {
             </ul>
           </section>
         ) : null}
-        <DashboardSnapshotSection
-          summaryCards={summaryCards}
-          summaryErrorMessage={summaryErrorMessage}
-          summaryLoading={summaryLoading}
-          summaryRetrying={summaryFetching}
-          onRetrySummary={handleRetrySummary}
-        />
+        <DashboardSectionRenderBoundary
+          sectionName="Ringkasan dashboard"
+          boundaryKey={`summary:${summaryLoading}:${summaryErrorMessage ?? "ok"}:${summaryCards.length}`}
+        >
+          <DashboardSnapshotSection
+            summaryCards={summaryCards}
+            summaryErrorMessage={summaryErrorMessage}
+            summaryLoading={summaryLoading}
+            summaryRetrying={summaryFetching}
+            onRetrySummary={handleRetrySummary}
+          />
+        </DashboardSectionRenderBoundary>
         <DashboardDeferredSections
           defer={shouldDeferSecondaryMobileSections}
           trendDays={trendDays}
