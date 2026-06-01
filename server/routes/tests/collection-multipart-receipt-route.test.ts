@@ -3,6 +3,7 @@ import { PassThrough } from "node:stream";
 import test from "node:test";
 import { CollectionReceiptSecurityError } from "../../lib/collection-receipt-security";
 import { createCollectionReceiptMultipartRoute } from "../collection/collection-multipart-receipt-route";
+import { COLLECTION_RECEIPT_MAX_BYTES } from "../collection-receipt-file-type-utils";
 
 type MultipartPart =
   | { kind: "field"; name: string; value: string }
@@ -126,8 +127,8 @@ test("createCollectionReceiptMultipartRoute attaches parsed fields and uploaded 
       {
         kind: "file",
         name: "receipt",
-        filename: "receipt.txt",
-        contentType: "text/plain",
+        filename: "receipt.png",
+        contentType: "image/png",
         content: "first receipt",
       },
     ],
@@ -140,7 +141,7 @@ test("createCollectionReceiptMultipartRoute attaches parsed fields and uploaded 
   assert.deepEqual(result.body?.uploadedReceipts, [
     {
       content: "first receipt",
-      filename: "receipt.txt",
+      filename: "receipt.png",
     },
   ]);
 });
@@ -161,7 +162,7 @@ test("createCollectionReceiptMultipartRoute authorizes before processing receipt
       for await (const _chunk of stream) {
         // Should never run when request authorization fails.
       }
-      return { filename: "receipt.txt" };
+      return { filename: "receipt.png" };
     },
   });
 
@@ -170,8 +171,8 @@ test("createCollectionReceiptMultipartRoute authorizes before processing receipt
       {
         kind: "file",
         name: "receipt",
-        filename: "receipt.txt",
-        contentType: "text/plain",
+        filename: "receipt.png",
+        contentType: "image/png",
         content: "receipt body",
       },
     ],
@@ -198,7 +199,7 @@ test("createCollectionReceiptMultipartRoute cleans up completed uploads when a l
       }
 
       const filename = String(fileName || "");
-      if (filename === "broken.txt") {
+      if (filename === "broken.png") {
         throw new Error("Receipt upload failed.");
       }
 
@@ -214,22 +215,22 @@ test("createCollectionReceiptMultipartRoute cleans up completed uploads when a l
       {
         kind: "file",
         name: "receipts[]",
-        filename: "good.txt",
-        contentType: "text/plain",
+        filename: "good.png",
+        contentType: "image/png",
         content: "good receipt",
       },
       {
         kind: "file",
         name: "receipts[]",
-        filename: "broken.txt",
-        contentType: "text/plain",
+        filename: "broken.png",
+        contentType: "image/png",
         content: "bad receipt",
       },
     ],
     handler,
   );
 
-  assert.deepEqual(cleanedReceipts, [{ filename: "good.txt" }]);
+  assert.deepEqual(cleanedReceipts, [{ filename: "good.png" }]);
   assert.deepEqual(result, {
     kind: "response",
     payload: {
@@ -305,8 +306,8 @@ test("createCollectionReceiptMultipartRoute sanitizes multipart file names befor
       {
         kind: "file",
         name: "receipt",
-        filename: "..\\..\\receipt<>.txt",
-        contentType: "text/plain",
+        filename: "..\\..\\receipt<>.png",
+        contentType: "image/png",
         content: "receipt body",
       },
     ],
@@ -316,9 +317,179 @@ test("createCollectionReceiptMultipartRoute sanitizes multipart file names befor
   assert.equal(result.kind, "next");
   assert.deepEqual(result.body?.uploadedReceipts, [
     {
-      filename: "receipt_.txt",
+      filename: "receipt_.png",
     },
   ]);
+});
+
+test("createCollectionReceiptMultipartRoute rejects oversized receipt streams with 413", async () => {
+  let receiptHandlerStarted = false;
+  const handler = createCollectionReceiptMultipartRoute<
+    { filename: string },
+    Record<string, unknown>
+  >({
+    attachKey: "uploadedReceipts",
+    handleReceipt: async ({ stream }) => {
+      receiptHandlerStarted = true;
+      for await (const _chunk of stream) {
+        // The Busboy size limit should destroy this stream once it exceeds 5MB.
+      }
+      return { filename: "oversized.png" };
+    },
+  });
+
+  const result = await runMultipartHandler(
+    [
+      {
+        kind: "file",
+        name: "receipt",
+        filename: "oversized.png",
+        contentType: "image/png",
+        content: Buffer.alloc(COLLECTION_RECEIPT_MAX_BYTES + 1, 1),
+      },
+    ],
+    handler,
+  );
+
+  assert.equal(receiptHandlerStarted, true);
+  assert.deepEqual(result, {
+    kind: "response",
+    payload: {
+      ok: false,
+      message: "Receipt file exceeds 5MB.",
+    },
+    statusCode: 413,
+  });
+});
+
+test("createCollectionReceiptMultipartRoute rejects disallowed receipt MIME types before storage", async () => {
+  let receiptHandlerCalled = false;
+  const handler = createCollectionReceiptMultipartRoute<
+    { filename: string },
+    Record<string, unknown>
+  >({
+    attachKey: "uploadedReceipts",
+    handleReceipt: async ({ stream }) => {
+      receiptHandlerCalled = true;
+      for await (const _chunk of stream) {
+        // Disallowed MIME types should be rejected before this handler runs.
+      }
+      return { filename: "receipt.pdf" };
+    },
+  });
+
+  const result = await runMultipartHandler(
+    [
+      {
+        kind: "file",
+        name: "receipt",
+        filename: "receipt.pdf",
+        contentType: "text/plain",
+        content: "%PDF body",
+      },
+    ],
+    handler,
+  );
+
+  assert.equal(receiptHandlerCalled, false);
+  assert.equal(result.kind, "response");
+  assert.equal(result.statusCode, 400);
+  const payload = result.payload as {
+    error?: { code?: string };
+    message?: string;
+  };
+  assert.equal(payload.error?.code, "COLLECTION_RECEIPT_RECEIPT_MIME_NOT_ALLOWED");
+  assert.match(String(payload.message), /MIME type is not allowed/i);
+});
+
+test("createCollectionReceiptMultipartRoute rejects too many receipt files", async () => {
+  const handler = createCollectionReceiptMultipartRoute<
+    { filename: string },
+    Record<string, unknown>
+  >({
+    attachKey: "uploadedReceipts",
+    handleReceipt: async ({ fileName, stream }) => {
+      for await (const _chunk of stream) {
+        // Drain accepted streams until the file-count limit trips.
+      }
+      return { filename: String(fileName || "") };
+    },
+  });
+
+  const result = await runMultipartHandler(
+    Array.from({ length: 11 }, (_, index): MultipartPart => ({
+      kind: "file",
+      name: "receipts[]",
+      filename: `receipt-${index}.png`,
+      contentType: "image/png",
+      content: `receipt ${index}`,
+    })),
+    handler,
+  );
+
+  assert.deepEqual(result, {
+    kind: "response",
+    payload: {
+      ok: false,
+      message: "Receipt upload accepts at most 8 files per request.",
+    },
+    statusCode: 413,
+  });
+});
+
+test("createCollectionReceiptMultipartRoute rejects oversized streams before request completion", async () => {
+  const boundary = "----codex-oversized-streaming-boundary";
+  const req = new PassThrough() as PassThrough & {
+    headers: Record<string, string>;
+    is: (type: string) => boolean;
+    body?: Record<string, unknown>;
+  };
+  const handler = createCollectionReceiptMultipartRoute<
+    { filename: string },
+    Record<string, unknown>
+  >({
+    attachKey: "uploadedReceipts",
+    handleReceipt: async ({ stream }) => {
+      for await (const _chunk of stream) {
+        // The test intentionally does not send the closing multipart boundary.
+      }
+      return { filename: "oversized.png" };
+    },
+  });
+
+  req.headers = {
+    "content-type": `multipart/form-data; boundary=${boundary}`,
+  };
+  req.is = (type: string) => type === "multipart/form-data";
+
+  const result = await new Promise<{ statusCode: number; payload: unknown }>((resolve) => {
+    const res = {
+      status(statusCode: number) {
+        return {
+          json(payload: unknown) {
+            resolve({ payload, statusCode });
+          },
+        };
+      },
+    };
+
+    handler(req as never, res as never, () => {
+      throw new Error("Oversized streaming upload should not reach next().");
+    });
+    req.write(Buffer.from(
+      `--${boundary}\r\nContent-Disposition: form-data; name="receipt"; filename="oversized.png"\r\nContent-Type: image/png\r\n\r\n`,
+      "utf8",
+    ));
+    req.write(Buffer.alloc(COLLECTION_RECEIPT_MAX_BYTES + 1, 1));
+  });
+
+  assert.deepEqual(result, {
+    payload: {
+      ok: false,
+      message: "Receipt file exceeds 5MB.",
+    },
+    statusCode: 413,
+  });
 });
 
 test("createCollectionReceiptMultipartRoute fails slow multipart uploads closed with a timeout", async () => {
@@ -340,7 +511,7 @@ test("createCollectionReceiptMultipartRoute fails slow multipart uploads closed 
       for await (const _chunk of stream) {
         // The timeout path should destroy the stream before the request ends.
       }
-      return { filename: "slow.txt" };
+      return { filename: "slow.png" };
     },
   });
 
@@ -364,7 +535,7 @@ test("createCollectionReceiptMultipartRoute fails slow multipart uploads closed 
       throw new Error("Timed out multipart upload should not reach next().");
     });
     req.write(Buffer.from(
-      `--${boundary}\r\nContent-Disposition: form-data; name="receipt"; filename="slow.txt"\r\nContent-Type: text/plain\r\n\r\npartial`,
+      `--${boundary}\r\nContent-Disposition: form-data; name="receipt"; filename="slow.png"\r\nContent-Type: image/png\r\n\r\npartial`,
       "utf8",
     ));
   });

@@ -2,14 +2,35 @@ import path from "node:path";
 import Busboy from "busboy";
 import type { RequestHandler } from "express";
 import { logger } from "../../lib/logger";
+import { CollectionReceiptSecurityError } from "../../lib/collection-receipt-security";
 import {
   appendCollectionMultipartField,
   isCollectionReceiptMultipartField,
 } from "./collection-multipart-body-utils";
 import { buildCollectionReceiptSecurityErrorResponse } from "../collection-receipt-error-response";
+import {
+  COLLECTION_RECEIPT_ALLOWED_MIME,
+  COLLECTION_RECEIPT_MAX_BYTES,
+  normalizeCollectionReceiptMimeType,
+} from "../collection-receipt-file-type-utils";
 
 const MULTIPART_FILENAME_UNSAFE_CHAR_PATTERN = /[^a-zA-Z0-9._()-]+/g;
 const DEFAULT_MULTIPART_RECEIPT_UPLOAD_TIMEOUT_MS = 120_000;
+const DEFAULT_MULTIPART_RECEIPT_MAX_FILES = 8;
+
+type MultipartReceiptFileStream = NodeJS.ReadableStream & {
+  destroy?: (error?: Error) => void;
+  resume?: () => void;
+  unpipe?: (destination?: NodeJS.WritableStream | undefined) => unknown;
+};
+
+function toMultipartReceiptError(error: unknown): Error | undefined {
+  if (error instanceof Error) {
+    return error;
+  }
+
+  return error == null ? undefined : new Error(String(error));
+}
 
 class MultipartReceiptUploadTimeoutError extends Error {
   readonly statusCode = 408;
@@ -17,6 +38,15 @@ class MultipartReceiptUploadTimeoutError extends Error {
   constructor() {
     super("Receipt upload timed out. Please retry with a stable connection.");
     this.name = "MultipartReceiptUploadTimeoutError";
+  }
+}
+
+class MultipartReceiptUploadLimitError extends Error {
+  readonly statusCode = 413;
+
+  constructor(message: string) {
+    super(message);
+    this.name = "MultipartReceiptUploadLimitError";
   }
 }
 
@@ -60,8 +90,10 @@ export function createCollectionReceiptMultipartRoute<
     const parser = Busboy({
       headers: req.headers,
       limits: {
-        files: 8,
+        files: DEFAULT_MULTIPART_RECEIPT_MAX_FILES,
         fields: 40,
+        fileSize: COLLECTION_RECEIPT_MAX_BYTES,
+        parts: DEFAULT_MULTIPART_RECEIPT_MAX_FILES + 40,
       },
     });
 
@@ -70,6 +102,10 @@ export function createCollectionReceiptMultipartRoute<
     const uploadTasks: Array<Promise<TReceipt>> = [];
     let settled = false;
     let timeoutHandle: ReturnType<typeof setTimeout> | null = null;
+    const activeFileStreams = new Set<MultipartReceiptFileStream>();
+    const parserStream = parser as NodeJS.WritableStream & {
+      destroy?: (error?: Error) => void;
+    };
 
     const clearUploadTimeout = () => {
       if (!timeoutHandle) {
@@ -77,6 +113,65 @@ export function createCollectionReceiptMultipartRoute<
       }
       clearTimeout(timeoutHandle);
       timeoutHandle = null;
+    };
+
+    const cleanupTrackedFileStreams = (error?: unknown) => {
+      const cleanupError = toMultipartReceiptError(error);
+      for (const stream of activeFileStreams) {
+        try {
+          stream.unpipe?.();
+        } catch (cleanupFailure) {
+          logger.warn("Multipart receipt stream unpipe failed", {
+            error: toMultipartReceiptError(cleanupFailure)?.message ?? "Unknown cleanup failure",
+          });
+        }
+
+        try {
+          stream.resume?.();
+        } catch (cleanupFailure) {
+          logger.warn("Multipart receipt stream resume failed", {
+            error: toMultipartReceiptError(cleanupFailure)?.message ?? "Unknown cleanup failure",
+          });
+        }
+
+        try {
+          stream.destroy?.(cleanupError);
+        } catch (cleanupFailure) {
+          logger.warn("Multipart receipt stream destroy failed", {
+            error: toMultipartReceiptError(cleanupFailure)?.message ?? "Unknown cleanup failure",
+          });
+        }
+      }
+      activeFileStreams.clear();
+    };
+
+    const stopMultipartParsing = (error?: unknown) => {
+      const cleanupError = toMultipartReceiptError(error);
+      try {
+        req.unpipe(parser);
+      } catch (cleanupFailure) {
+        logger.warn("Multipart receipt request unpipe failed", {
+          error: toMultipartReceiptError(cleanupFailure)?.message ?? "Unknown cleanup failure",
+        });
+      }
+
+      try {
+        parserStream.destroy?.(cleanupError);
+      } catch (cleanupFailure) {
+        logger.warn("Multipart receipt parser destroy failed", {
+          error: toMultipartReceiptError(cleanupFailure)?.message ?? "Unknown cleanup failure",
+        });
+      }
+
+      try {
+        req.resume();
+      } catch (cleanupFailure) {
+        logger.warn("Multipart receipt request resume failed", {
+          error: toMultipartReceiptError(cleanupFailure)?.message ?? "Unknown cleanup failure",
+        });
+      }
+
+      cleanupTrackedFileStreams(cleanupError);
     };
 
     const fail = async (error: unknown, options: { waitForUploads?: boolean } = {}) => {
@@ -109,7 +204,7 @@ export function createCollectionReceiptMultipartRoute<
         return;
       }
 
-      if (error instanceof MultipartReceiptUploadTimeoutError) {
+      if (error instanceof MultipartReceiptUploadTimeoutError || error instanceof MultipartReceiptUploadLimitError) {
         res.status(error.statusCode).json({
           ok: false,
           message: error.message,
@@ -143,9 +238,36 @@ export function createCollectionReceiptMultipartRoute<
         return;
       }
 
+      const normalizedMimeType = normalizeCollectionReceiptMimeType(info.mimeType || "");
+      if (!COLLECTION_RECEIPT_ALLOWED_MIME.has(normalizedMimeType)) {
+        const error = new CollectionReceiptSecurityError(
+          "Receipt file MIME type is not allowed.",
+          "receipt-mime-not-allowed",
+        );
+        const rejectedFile = file as MultipartReceiptFileStream;
+        file.once("error", () => undefined);
+        rejectedFile.resume?.();
+        stopMultipartParsing(error);
+        void fail(error, { waitForUploads: false });
+        return;
+      }
+
+      activeFileStreams.add(file);
+      const unregisterFileStream = () => {
+        activeFileStreams.delete(file);
+      };
+      file.once("close", unregisterFileStream);
+      file.once("end", unregisterFileStream);
+      file.once("error", unregisterFileStream);
+      file.once("limit", () => {
+        const error = new MultipartReceiptUploadLimitError("Receipt file exceeds 5MB.");
+        stopMultipartParsing(error);
+        void fail(error, { waitForUploads: false });
+      });
+
       const uploadTask = params.handleReceipt({
           fileName: safeFileName,
-          mimeType: info.mimeType,
+          mimeType: normalizedMimeType,
           stream: file,
         })
         .then((receipt) => {
@@ -154,6 +276,14 @@ export function createCollectionReceiptMultipartRoute<
         });
       uploadTasks.push(uploadTask);
       void uploadTask.catch(() => undefined);
+    });
+
+    parser.once("filesLimit", () => {
+      const error = new MultipartReceiptUploadLimitError(
+        `Receipt upload accepts at most ${DEFAULT_MULTIPART_RECEIPT_MAX_FILES} files per request.`,
+      );
+      stopMultipartParsing(error);
+      void fail(error, { waitForUploads: false });
     });
 
     parser.once("error", (error) => {
@@ -196,9 +326,7 @@ export function createCollectionReceiptMultipartRoute<
     );
     timeoutHandle = setTimeout(() => {
       const timeoutError = new MultipartReceiptUploadTimeoutError();
-      req.unpipe(parser);
-      parser.destroy(timeoutError);
-      req.resume();
+      stopMultipartParsing(timeoutError);
       void fail(timeoutError, { waitForUploads: false });
     }, uploadTimeoutMs);
     timeoutHandle.unref?.();
