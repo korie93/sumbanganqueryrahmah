@@ -21,7 +21,8 @@ test("navbar controls use Malay accessible labels and include username context",
   const scrollHintSource = readSource("HorizontalScrollHint.tsx");
   const navbarStyles = readSource("Navbar.css");
 
-  assert.match(navbarSource, /aria-label="Buka menu navigasi"/);
+  assert.match(navbarSource, /aria-label=\{translate\("common\.navbar\.mobileMenuLabel"\)\}/);
+  assert.match(navbarSource, /\{translate\("common\.navbar\.mobileMenuText"\)\}/);
   assert.match(navbarSource, /<button[\s\S]*data-testid="button-open-mobile-nav"/);
   assert.doesNotMatch(navbarSource, /<div[^>]*data-testid="button-open-mobile-nav"/);
   assert.match(navbarCombinedSource, /aria-label=\{`Buka menu pengguna untuk \$\{username\}`\}/);
@@ -58,7 +59,7 @@ test("navbar controls use Malay accessible labels and include username context",
   assert.match(desktopNavigationSource, /if \(!navMountedRef\.current\) \{/);
   assert.match(userMenuSource, /navbar-dropdown-content/);
   assert.match(navbarStyles, /\.navbar-dropdown-content\[data-state="closed"\]\s*\{[\s\S]*animation:\s*none/);
-  assert.match(scrollHintSource, /hint = "Tatal untuk lagi"/);
+  assert.match(scrollHintSource, /hint = translate\("common\.horizontalScroll\.hint"\)/);
   assert.match(navbarStyles, /\.navbar-scroll-hint/);
   assert.match(navbarStyles, /\.navbar-premium-glass\s*\{[\s\S]*scrollbar-width:\s*thin/);
   assert.match(navbarStyles, /\.navbar-premium-glass\s*\{[\s\S]*scrollbar-color:\s*hsl\(var\(--muted-foreground\) \/ 0\.42\) transparent/);

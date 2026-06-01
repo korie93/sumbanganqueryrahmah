@@ -19,6 +19,8 @@ test("translate resolves namespaced keys and interpolates values", () => {
     setAppLocale("ms");
     assert.equal(translate("common.app.language.en"), "Inggeris");
     assert.equal(translate("forms.validation.required"), "Ruangan ini wajib diisi.");
+    assert.equal(translate("common.navbar.mobileMenuLabel"), "Buka menu navigasi");
+    assert.equal(translate("common.horizontalScroll.hint"), "Tatal untuk lagi");
   } finally {
     setAppLocale(originalLocale);
   }

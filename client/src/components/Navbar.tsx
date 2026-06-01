@@ -21,6 +21,7 @@ import {
 } from "@/components/navbar-utils"
 import { useTheme } from "@/components/useTheme"
 import { useDesktopNavOverflowState } from "@/components/useDesktopNavOverflowState"
+import { translate } from "@/lib/i18n"
 import "./Navbar.css"
 
 interface NavbarProps {
@@ -218,7 +219,7 @@ function NavbarImpl({
             <button
               type="button"
               className="nav-mobile-trigger px-3"
-              aria-label="Buka menu navigasi"
+              aria-label={translate("common.navbar.mobileMenuLabel")}
               aria-haspopup="dialog"
               aria-controls="mobile-navigation-drawer"
               {...mobileNavTriggerExpandedProps}
@@ -226,7 +227,7 @@ function NavbarImpl({
               data-testid="button-open-mobile-nav"
             >
               <Menu className="h-4 w-4" aria-hidden="true" />
-              <span className="hidden sm:inline">Menu</span>
+              <span className="hidden sm:inline">{translate("common.navbar.mobileMenuText")}</span>
             </button>
 
             <NavbarUserMenuDropdown

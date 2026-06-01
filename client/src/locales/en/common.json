@@ -4,5 +4,8 @@
   "app.language.switcherLabel": "Select display language",
   "actions.checkInput": "Check your input and try again.",
   "actions.retrySoon": "Please try again in a moment.",
-  "actions.waitBeforeRetry": "Please wait before trying again."
+  "actions.waitBeforeRetry": "Please wait before trying again.",
+  "horizontalScroll.hint": "Scroll for more",
+  "navbar.mobileMenuLabel": "Open navigation menu",
+  "navbar.mobileMenuText": "Menu"
 }

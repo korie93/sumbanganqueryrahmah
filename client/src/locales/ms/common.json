@@ -4,5 +4,8 @@
   "app.language.switcherLabel": "Pilih bahasa paparan",
   "actions.checkInput": "Semak input dan cuba lagi.",
   "actions.retrySoon": "Sila cuba semula sebentar lagi.",
-  "actions.waitBeforeRetry": "Sila tunggu sebelum cuba lagi."
+  "actions.waitBeforeRetry": "Sila tunggu sebelum cuba lagi.",
+  "horizontalScroll.hint": "Tatal untuk lagi",
+  "navbar.mobileMenuLabel": "Buka menu navigasi",
+  "navbar.mobileMenuText": "Menu"
 }

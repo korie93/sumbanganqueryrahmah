@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode, type UIEventHandler } from "react";
+import { translate } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
 type HorizontalScrollHintProps = {
@@ -19,7 +20,7 @@ export function HorizontalScrollHint({
   children,
   className,
   viewportClassName,
-  hint = "Tatal untuk lagi",
+  hint = translate("common.horizontalScroll.hint"),
   onScroll,
 }: HorizontalScrollHintProps) {
   const viewportRef = useRef<HTMLDivElement | null>(null);
