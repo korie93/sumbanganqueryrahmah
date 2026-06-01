@@ -5,6 +5,7 @@ import {
   RedisSessionRevocationErrorClass,
   RedisSessionRevocationStore,
   RedisSessionRevocationUnavailableError,
+  resolveRedisSessionRevocationSocketOptions,
 } from "../redis-session-revocation-store";
 import {
   clearStartupServiceDegraded,
@@ -466,4 +467,26 @@ test("RedisSessionRevocationStore rejects revocation writes when Redis is unavai
     }),
     RedisSessionRevocationUnavailableError,
   );
+});
+
+test("RedisSessionRevocationStore enables Redis TLS peer verification in production", async () => {
+  const originalNodeEnv = process.env.NODE_ENV;
+  try {
+    process.env.NODE_ENV = "production";
+    const socketOptions = resolveRedisSessionRevocationSocketOptions({
+      warn() {
+        return undefined;
+      },
+    });
+
+    assert.equal(socketOptions.tls, true);
+    assert.equal(socketOptions.rejectUnauthorized, true);
+  } finally {
+    // AUDIT-FIX [M4]: restore NODE_ENV so production TLS checks stay isolated to this test.
+    if (originalNodeEnv === undefined) {
+      delete process.env.NODE_ENV;
+    } else {
+      process.env.NODE_ENV = originalNodeEnv;
+    }
+  }
 });

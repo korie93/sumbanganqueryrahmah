@@ -26,8 +26,14 @@ type RedisSessionRevocationClientLike = {
   set: (key: string, value: string, options: { NX?: boolean; PX: number }) => Promise<unknown>;
 };
 
+type RedisSessionRevocationSocketOptions = {
+  reconnectStrategy: (retries: number, cause?: Error) => number | false;
+  rejectUnauthorized?: boolean;
+  tls?: boolean;
+};
+
 type RedisSessionRevocationClientFactory = (options: {
-  socket: { reconnectStrategy: (retries: number, cause?: Error) => number | false };
+  socket: RedisSessionRevocationSocketOptions;
   url: string;
 }) => RedisSessionRevocationClientLike;
 
@@ -59,6 +65,22 @@ return 1
 // with persistence and failover; a single local Redis node is acceptable only for strict
 // local development because revocation checks intentionally fail closed on outages.
 let defaultRedisClientFactoryPromise: Promise<RedisSessionRevocationClientFactory> | null = null;
+
+export function resolveRedisSessionRevocationSocketOptions(
+  redisLogger: LoggerLike,
+): RedisSessionRevocationSocketOptions {
+  const reconnectStrategy = createRedisReconnectStrategy(redisLogger);
+  if (process.env.NODE_ENV !== "production") {
+    return { reconnectStrategy };
+  }
+
+  return {
+    // AUDIT-FIX [M4]: production revocation Redis must use TLS with peer verification.
+    reconnectStrategy,
+    rejectUnauthorized: true,
+    tls: true,
+  };
+}
 
 export enum RedisSessionRevocationErrorClass {
   NON_RETRYABLE = "NON_RETRYABLE",
@@ -283,9 +305,7 @@ export class RedisSessionRevocationStore implements SessionRevocationStore {
     try {
       const createRedisClient = this.createRedisClient ?? await resolveDefaultRedisClientFactory();
       client = createRedisClient({
-        socket: {
-          reconnectStrategy: createRedisReconnectStrategy(this.logger),
-        },
+        socket: resolveRedisSessionRevocationSocketOptions(this.logger),
         url: this.config.redisUrl as string,
       });
       client.on?.("error", (error) => this.logRedisFailure(error));
