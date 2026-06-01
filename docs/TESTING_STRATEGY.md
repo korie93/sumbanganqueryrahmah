@@ -107,6 +107,12 @@ Perintah:
 npm run test:e2e:a11y
 ```
 
+CI menggunakan wrapper berikut supaya audit kontras mempunyai entry point yang stabil:
+
+```bash
+bash scripts/a11y-contrast-check.sh http://127.0.0.1:5000
+```
+
 Lapisan ini bukan pengganti audit manual, axe penuh, atau Lighthouse accessibility score. Ia mengunci regression praktikal yang kerap berlaku:
 
 - page mesti ada `main` landmark dan heading

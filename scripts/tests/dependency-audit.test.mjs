@@ -136,12 +136,39 @@ test("package override audit accepts documented override set", () => {
 test("package override runbook lists the current package overrides", () => {
   const packageJson = JSON.parse(readFileSync(path.join(repoRoot, "package.json"), "utf8"));
   const runbook = readFileSync(path.join(repoRoot, "docs", "DEPENDENCY_SUPPLY_CHAIN.md"), "utf8");
+  const dependencyNotes = readFileSync(path.join(repoRoot, "docs", "DEPENDENCY-NOTES.md"), "utf8");
 
   for (const packageName of Object.keys(packageJson.overrides ?? {})) {
     assert.match(runbook, new RegExp(`\\| \`${packageName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\` \\|`));
+    assert.match(dependencyNotes, new RegExp(`\\| \`${packageName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\` \\|`));
   }
 
   assert.doesNotMatch(runbook, /\| `dompurify` \|/);
+  assert.doesNotMatch(dependencyNotes, /\| `dompurify` \|/);
+});
+
+test("dependency notes document CI audit automation and compression mitigation", () => {
+  const dependencyNotes = readFileSync(path.join(repoRoot, "docs", "DEPENDENCY-NOTES.md"), "utf8");
+  const supplyChainNotes = readFileSync(path.join(repoRoot, "docs", "DEPENDENCY_SUPPLY_CHAIN.md"), "utf8");
+  const ciWorkflow = readFileSync(path.join(repoRoot, ".github", "workflows", "ci.yml"), "utf8");
+  const releaseWorkflow = readFileSync(path.join(repoRoot, ".github", "workflows", "release-verification.yml"), "utf8");
+
+  for (const marker of [
+    "npm run audit:dependencies",
+    "compression@1.8.1",
+    "1024",
+    "Gzip level is explicitly set to `6`",
+    "Binary API responses are left uncompressed",
+    "server/internal/local-http-compression.ts",
+    "server/internal/local-http-body-parsers.ts",
+    "Safe to remove when",
+  ]) {
+    assert.match(dependencyNotes, new RegExp(marker.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  }
+
+  assert.match(supplyChainNotes, /docs\/DEPENDENCY-NOTES\.md/);
+  assert.match(ciWorkflow, /npm run audit:dependencies/);
+  assert.match(releaseWorkflow, /npm run audit:dependencies/);
 });
 
 test("security-critical dependency audit requires exact direct pins except documented patch ranges", () => {

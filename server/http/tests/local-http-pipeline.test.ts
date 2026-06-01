@@ -7,6 +7,11 @@ import test from "node:test";
 import { gunzipSync } from "node:zlib";
 import express from "express";
 import { registerLocalHttpPipeline } from "../../internal/local-http-pipeline";
+import {
+  API_COMPRESSION_THRESHOLD_BYTES,
+  HTTP_COMPRESSION_LEVEL,
+  isCompressibleApiContentType,
+} from "../../internal/local-http-compression";
 import { logger } from "../../lib/logger";
 import { errorHandler } from "../../middleware/error-handler";
 import { startTestServer, stopTestServer } from "../../routes/tests/http-test-utils";
@@ -382,6 +387,53 @@ test("registerLocalHttpPipeline compresses large API responses without touching 
     assert.equal(nonApiResponse.statusCode, 200);
     assert.equal(nonApiResponse.headers["content-encoding"], undefined);
     assert.deepEqual(JSON.parse(nonApiResponse.body.toString("utf8")), payload);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("registerLocalHttpPipeline keeps compression bounded to compressible API content", async () => {
+  assert.equal(API_COMPRESSION_THRESHOLD_BYTES, 1024);
+  assert.equal(HTTP_COMPRESSION_LEVEL, 6);
+  assert.equal(isCompressibleApiContentType("application/json; charset=utf-8"), true);
+  assert.equal(isCompressibleApiContentType("application/problem+json"), true);
+  assert.equal(isCompressibleApiContentType("text/plain"), true);
+  assert.equal(isCompressibleApiContentType("image/svg+xml"), true);
+  assert.equal(isCompressibleApiContentType("application/octet-stream"), false);
+
+  const app = express();
+  registerLocalHttpPipeline(app, {
+    importBodyLimit: "1mb",
+    collectionBodyLimit: "1mb",
+    defaultBodyLimit: "100kb",
+    uploadsRootDir: path.resolve(process.cwd(), "uploads"),
+    recordRequestStarted: () => undefined,
+    recordRequestFinished: () => undefined,
+    adaptiveRateLimit: (_req, _res, next) => next(),
+    systemProtectionMiddleware: (_req, _res, next) => next(),
+    maintenanceGuard: (_req, _res, next) => next(),
+  });
+
+  app.get("/api/small-response", (_req, res) => {
+    res.type("application/json").send(JSON.stringify({ ok: true }));
+  });
+  app.get("/api/binary-response", (_req, res) => {
+    res.type("application/octet-stream").send(Buffer.alloc(4096, 7));
+  });
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const smallResponse = await requestRaw(`${baseUrl}/api/small-response`, {
+      "accept-encoding": "gzip",
+    });
+    assert.equal(smallResponse.statusCode, 200);
+    assert.equal(smallResponse.headers["content-encoding"], undefined);
+
+    const binaryResponse = await requestRaw(`${baseUrl}/api/binary-response`, {
+      "accept-encoding": "gzip",
+    });
+    assert.equal(binaryResponse.statusCode, 200);
+    assert.equal(binaryResponse.headers["content-encoding"], undefined);
   } finally {
     await stopTestServer(server);
   }

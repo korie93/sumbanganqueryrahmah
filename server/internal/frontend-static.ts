@@ -14,6 +14,7 @@ const DEFAULT_FRONTEND_PATHS = [
 ];
 
 const IMMUTABLE_ASSET_MAX_AGE_SECONDS = 60 * 60 * 24 * 365;
+const FRONTEND_COMPRESSION_LEVEL = 6;
 const FRONTEND_COMPRESSION_THRESHOLD_BYTES = 1024;
 const ROBOTS_CACHE_MAX_AGE_SECONDS = 5 * 60;
 const ROBOTS_DISALLOWED_PATHS = [
@@ -144,6 +145,7 @@ export function registerFrontendStatic(
     logger.info("Serving frontend static assets", { foundPath });
     app.use(compression({
       threshold: FRONTEND_COMPRESSION_THRESHOLD_BYTES,
+      level: FRONTEND_COMPRESSION_LEVEL,
     }));
     app.get("/robots.txt", (_req, res) => {
       res
