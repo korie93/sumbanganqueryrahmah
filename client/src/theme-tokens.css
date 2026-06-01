@@ -715,8 +715,6 @@
   --floating-ai-edge-gap: clamp(0.5rem, 2vw, 1.5rem);
   --login-card-shadow: 0 25px 40px hsl(0 0% 0% / 0.34), inset 0 0 35px hsl(0 0% 100% / 0.12);
   --login-card-mobile-shadow: 0 16px 32px hsl(0 0% 0% / 0.32);
-  --z-floating-ai-root: 40;
-  --z-floating-ai-overlay: 70;
   --app-shell-glass-shadow: 0 14px 28px hsl(215 28% 11% / 0.07);
   --app-shell-glass-shadow-dark: 0 16px 30px hsl(0 0% 0% / 0.24);
   --app-shell-section-shadow: 0 10px 24px hsl(215 28% 11% / 0.06);
