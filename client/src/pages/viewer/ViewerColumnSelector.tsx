@@ -129,7 +129,7 @@ function ViewerColumnSelectorImpl({
         <SheetTrigger asChild>{trigger}</SheetTrigger>
         <SheetContent
           side="bottom"
-          className="max-h-[80dvh] rounded-t-[24px] border-border/70 bg-background/98 pb-[calc(var(--safe-area-inset-bottom)+1rem)]"
+          className="rounded-t-[24px] border-border/70 bg-background/98 pb-[calc(var(--safe-area-inset-bottom)+1rem)]"
           data-floating-ai-avoid="true"
         >
           <SheetHeader className="pr-8 text-left">

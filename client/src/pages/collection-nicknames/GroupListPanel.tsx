@@ -57,7 +57,13 @@ export function GroupListPanel({
           className={isMobile ? "h-12 rounded-2xl" : undefined}
         />
       </div>
-      <div className={`mt-3 space-y-2 overflow-y-auto pr-1 ${isMobile ? "max-h-[48vh]" : "max-h-[58vh]"}`}>
+      <div
+        className={`mt-3 space-y-2 overflow-y-auto pr-1 ${
+          isMobile
+            ? "max-h-[min(calc(var(--viewport-min-height-value)-14rem),24rem)]"
+            : "max-h-[58vh]"
+        }`}
+      >
         {loadingGroups ? (
           <p className="text-sm text-muted-foreground">Loading groups...</p>
         ) : filteredGroups.length === 0 ? (

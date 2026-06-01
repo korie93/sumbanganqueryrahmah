@@ -60,7 +60,9 @@ export function AIConversationCard({
   onCancel,
   onReset,
 }: AIConversationCardProps) {
-  const chatHeightClass = embedded ? "h-full max-h-[350px]" : "h-[60vh]";
+  const chatHeightClass = embedded
+    ? "h-full max-h-[350px]"
+    : "h-[calc(var(--viewport-min-height-value)-14rem)] min-h-[14rem] max-h-[32rem]";
   const canStop = isProcessing || isTyping;
   const canReset = messages.length > 0 || isProcessing || isTyping;
   const remainingCharacters = getAIChatRemainingCharacterCount(query);

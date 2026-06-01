@@ -108,7 +108,7 @@ export function EditCollectionRecordDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] max-w-4xl overflow-auto">
+      <DialogContent className="max-w-4xl overflow-auto">
         <DialogHeader>
           <DialogTitle>Edit Collection Record</DialogTitle>
           <DialogDescription>{dialogDescription}</DialogDescription>

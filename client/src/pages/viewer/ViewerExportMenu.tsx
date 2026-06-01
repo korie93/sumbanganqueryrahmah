@@ -142,7 +142,7 @@ function ViewerExportMenuImpl({
         <SheetTrigger asChild>{trigger}</SheetTrigger>
         <SheetContent
           side="bottom"
-          className="max-h-[80dvh] rounded-t-[24px] pb-[calc(var(--safe-area-inset-bottom)+1rem)]"
+          className="rounded-t-[24px] pb-[calc(var(--safe-area-inset-bottom)+1rem)]"
         >
           <SheetHeader className="pr-8 text-left">
             <SheetTitle>Export Dataset</SheetTitle>

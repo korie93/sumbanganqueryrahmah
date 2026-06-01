@@ -70,7 +70,7 @@ export function BackupList({
                 totalBackups={totalBackups}
               />
             ) : (
-              <div className={`overflow-y-auto space-y-3 ${isMobile ? "max-h-[min(70vh,34rem)] pr-1" : "max-h-[400px] pr-2"}`}>
+              <div className={`overflow-y-auto space-y-3 ${isMobile ? "max-h-[min(calc(var(--viewport-min-height-value)-12rem),34rem)] pr-1" : "max-h-[400px] pr-2"}`}>
                 {filteredBackups.map((backup) => (
                   <BackupListItem
                     key={backup.id}

@@ -140,7 +140,7 @@ export function CollectionNicknameSummaryMobileFilters({
       <Sheet open={mobileFiltersOpen} onOpenChange={setMobileFiltersOpen}>
         <SheetContent
           side="bottom"
-          className="max-h-[88dvh] rounded-t-[1.75rem] border-border/70 bg-background/98 px-4 pb-[calc(var(--safe-area-inset-bottom)+1rem)] pt-4"
+          className="rounded-t-[1.75rem] border-border/70 bg-background/98 px-4 pb-[calc(var(--safe-area-inset-bottom)+1rem)] pt-4"
           data-floating-ai-avoid="true"
         >
           <SheetHeader className="pr-8 text-left">

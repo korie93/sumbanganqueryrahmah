@@ -44,7 +44,11 @@ export function NicknameAssignmentTable({
   const isMobile = useIsMobile();
 
   return (
-    <div className="max-h-[58vh] overflow-auto pr-1">
+    <div
+      className={`overflow-auto pr-1 ${
+        isMobile ? "max-h-[min(calc(var(--viewport-min-height-value)-14rem),32rem)]" : "max-h-[58vh]"
+      }`}
+    >
       {loadingNicknames ? (
         <div className="rounded-md border border-border/60 p-6 text-center text-sm text-muted-foreground">
           Loading nickname data...
