@@ -20,7 +20,7 @@ type LoggerLike = Pick<typeof logger, "warn" | "error">;
 type BindPgPoolMonitoringOptions = {
   warnCooldownMs?: number;
   logger?: LoggerLike;
-  metrics?: Pick<InternalMetricsRecorder, "increment">;
+  metrics?: Pick<InternalMetricsRecorder, "gauge" | "increment">;
 };
 
 type BindPgPoolHealthCheckOptions = {
@@ -106,6 +106,17 @@ export function isPgDeadlockError(error: unknown): boolean {
     && "code" in error
     && (error as { code?: unknown }).code === POSTGRES_DEADLOCK_SQLSTATE
   );
+}
+
+function recordPgPoolSnapshotMetrics(
+  metrics: Pick<InternalMetricsRecorder, "gauge">,
+  snapshot: PgPoolSnapshot,
+) {
+  // AUDIT-FIX [L2]: publish DB pool pressure gauges whenever lifecycle events fire.
+  metrics.gauge("dbPoolActiveConnections", Math.max(0, snapshot.total - snapshot.idle));
+  metrics.gauge("dbPoolIdleConnections", snapshot.idle);
+  metrics.gauge("dbPoolWaitingClients", snapshot.waiting);
+  metrics.gauge("dbPoolUtilizationPercent", getPgPoolUtilizationPercent(snapshot));
 }
 
 type PgPoolListenerRegistration = {
@@ -217,18 +228,24 @@ export function bindPgPoolMonitoring(pool: PgPoolLike, options: BindPgPoolMonito
   };
 
   const handleConnect = () => {
+    metrics.increment("dbPoolConnectionsCreatedTotal");
+    recordPgPoolSnapshotMetrics(metrics, getPgPoolSnapshot(pool));
     maybeWarnPressure("pool-connect");
   };
 
   const handleAcquire = () => {
+    recordPgPoolSnapshotMetrics(metrics, getPgPoolSnapshot(pool));
     maybeWarnPressure("pool-acquire");
   };
 
   const handleRemove = () => {
+    metrics.increment("dbPoolConnectionsRemovedTotal");
+    recordPgPoolSnapshotMetrics(metrics, getPgPoolSnapshot(pool));
     maybeWarnPressure("pool-remove");
   };
 
   const handleError = (error: unknown) => {
+    recordPgPoolSnapshotMetrics(metrics, getPgPoolSnapshot(pool));
     if (isPgDeadlockError(error)) {
       metrics.increment("dbDeadlocksTotal");
       sink.error("PostgreSQL deadlock detected", {

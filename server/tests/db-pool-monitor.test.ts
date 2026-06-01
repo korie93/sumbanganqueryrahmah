@@ -208,6 +208,42 @@ test("bindPgPoolMonitoring logs pool client errors with the current snapshot", (
   assert.equal((errors[0]?.error as Error)?.message, "socket lost");
 });
 
+test("bindPgPoolMonitoring records connection lifecycle counters and pressure gauges", () => {
+  const pool = new FakePool();
+  pool.totalCount = 4;
+  pool.idleCount = 1;
+  pool.waitingCount = 2;
+  pool.options.max = 5;
+  const metrics = createInternalMetrics();
+
+  bindPgPoolMonitoring(pool, {
+    metrics,
+    logger: {
+      warn: () => undefined,
+      error: () => undefined,
+    },
+  });
+
+  pool.emit("connect");
+  let snapshot = metrics.snapshot();
+  assert.equal(snapshot.counters.dbPoolConnectionsCreatedTotal, 1);
+  assert.equal(snapshot.gauges.dbPoolActiveConnections, 3);
+  assert.equal(snapshot.gauges.dbPoolIdleConnections, 1);
+  assert.equal(snapshot.gauges.dbPoolWaitingClients, 2);
+  assert.equal(snapshot.gauges.dbPoolUtilizationPercent, 60);
+
+  pool.totalCount = 3;
+  pool.idleCount = 2;
+  pool.waitingCount = 0;
+  pool.emit("remove");
+  snapshot = metrics.snapshot();
+  assert.equal(snapshot.counters.dbPoolConnectionsRemovedTotal, 1);
+  assert.equal(snapshot.gauges.dbPoolActiveConnections, 1);
+  assert.equal(snapshot.gauges.dbPoolIdleConnections, 2);
+  assert.equal(snapshot.gauges.dbPoolWaitingClients, 0);
+  assert.equal(snapshot.gauges.dbPoolUtilizationPercent, 20);
+});
+
 test("isPgDeadlockError classifies PostgreSQL deadlock SQLSTATE only", () => {
   assert.equal(isPgDeadlockError(Object.assign(new Error("deadlock"), { code: "40P01" })), true);
   assert.equal(isPgDeadlockError(Object.assign(new Error("serialization"), { code: "40001" })), false);

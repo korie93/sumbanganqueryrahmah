@@ -29,6 +29,8 @@ export type InternalMetricName =
   | "dbHealthCheckRecoveryAttemptsTotal"
   | "dbHealthCheckRecoverySuccessTotal"
   | "dbHealthCheckSkippedConcurrentTotal"
+  | "dbPoolConnectionsCreatedTotal"
+  | "dbPoolConnectionsRemovedTotal"
   | "idempotencyFingerprintSweepErrorsTotal"
   | "jsonParseFailuresTotal"
   | "jsonParseMemoryLimitExceededTotal"
@@ -51,7 +53,11 @@ export type InternalGaugeName =
   | "authAdaptiveRateLimitCooldownCacheSize"
   | "authAdaptiveRateLimitCooldownCacheUtilization"
   | "authTabVisibilityCacheSize"
-  | "authTabVisibilityCacheUtilization";
+  | "authTabVisibilityCacheUtilization"
+  | "dbPoolActiveConnections"
+  | "dbPoolIdleConnections"
+  | "dbPoolUtilizationPercent"
+  | "dbPoolWaitingClients";
 
 export type InternalMetricsRecorder = {
   gauge: (name: InternalGaugeName, value: number) => void;
@@ -94,6 +100,8 @@ const INTERNAL_METRIC_NAMES: readonly InternalMetricName[] = [
   "dbHealthCheckRecoveryAttemptsTotal",
   "dbHealthCheckRecoverySuccessTotal",
   "dbHealthCheckSkippedConcurrentTotal",
+  "dbPoolConnectionsCreatedTotal",
+  "dbPoolConnectionsRemovedTotal",
   "idempotencyFingerprintSweepErrorsTotal",
   "jsonParseFailuresTotal",
   "jsonParseMemoryLimitExceededTotal",
@@ -118,6 +126,10 @@ const INTERNAL_GAUGE_NAMES: readonly InternalGaugeName[] = [
   "authAdaptiveRateLimitCooldownCacheUtilization",
   "authTabVisibilityCacheSize",
   "authTabVisibilityCacheUtilization",
+  "dbPoolActiveConnections",
+  "dbPoolIdleConnections",
+  "dbPoolUtilizationPercent",
+  "dbPoolWaitingClients",
 ];
 
 export function createInternalMetrics(): InternalMetricsRecorder {
