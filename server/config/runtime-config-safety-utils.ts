@@ -265,6 +265,22 @@ export function assertRuntimeSafetyGuards(params: {
   }
 }
 
+export function assertProductionCorsAllowedOriginsSafety(params: {
+  corsAllowedOrigins: readonly string[];
+  isProductionLike: boolean;
+}) {
+  if (!params.isProductionLike) {
+    return;
+  }
+
+  if (params.corsAllowedOrigins.some((origin) => origin.trim() === "*")) {
+    throw new Error(
+      // AUDIT-FIX [M3]: fail closed if any production CORS layer is ever handed a wildcard origin.
+      "CORS_ALLOWED_ORIGINS cannot include wildcard '*' values on production-like hosts. Configure explicit https:// origins only.",
+    );
+  }
+}
+
 export function assertProductionRateLimiterTopologySafety(params: {
   isProductionLike: boolean;
   configuredClusterMaxWorkers: number;

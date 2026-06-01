@@ -40,6 +40,7 @@ import { isAllowedCollectionPiiRetiredField } from "./collection-pii-field-confi
 import {
   assessMailConfiguration,
   assertNoPlaceholderSecrets,
+  assertProductionCorsAllowedOriginsSafety,
   assertProductionDatabaseBootstrapModeSafety,
   assertProductionRateLimiterTopologySafety,
   assertProductionReceiptExternalScanSafety,
@@ -289,6 +290,11 @@ assertRuntimeSafetyGuards({
   localSuperuserCredentialsFileEnabled,
   mailDevOutboxEnabled,
   operationsDebugRoutesEnabled,
+});
+
+assertProductionCorsAllowedOriginsSafety({
+  corsAllowedOrigins,
+  isProductionLike,
 });
 
 assertRateLimiterMultiWorkerTopologySafety({

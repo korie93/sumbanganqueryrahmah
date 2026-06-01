@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   assertNoPlaceholderSecrets,
+  assertProductionCorsAllowedOriginsSafety,
   assertRuntimeSessionSecretMinBytes,
   assertProductionDatabaseBootstrapModeSafety,
   assertProductionRateLimiterTopologySafety,
@@ -181,6 +182,31 @@ test("assertRuntimeSafetyGuards rejects production-like startup when operations 
         operationsDebugRoutesEnabled: true,
       }),
     /OPERATIONS_DEBUG_ROUTES_ENABLED is not allowed on production-like hosts/i,
+  );
+});
+
+test("assertProductionCorsAllowedOriginsSafety rejects wildcard origins on production-like hosts", () => {
+  assert.throws(
+    () =>
+      assertProductionCorsAllowedOriginsSafety({
+        corsAllowedOrigins: ["https://sqr.example.com", "*"],
+        isProductionLike: true,
+      }),
+    /CORS_ALLOWED_ORIGINS cannot include wildcard/i,
+  );
+
+  assert.doesNotThrow(() =>
+    assertProductionCorsAllowedOriginsSafety({
+      corsAllowedOrigins: ["https://sqr.example.com"],
+      isProductionLike: true,
+    }),
+  );
+
+  assert.doesNotThrow(() =>
+    assertProductionCorsAllowedOriginsSafety({
+      corsAllowedOrigins: ["*"],
+      isProductionLike: false,
+    }),
   );
 });
 
