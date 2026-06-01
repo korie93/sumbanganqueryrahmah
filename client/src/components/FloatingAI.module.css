@@ -12,20 +12,22 @@
 .floatingTriggerShell {
   position: absolute;
   left: var(--floating-ai-trigger-left, auto);
-  right: var(--floating-ai-trigger-right, var(--floating-ai-edge-gap));
-  bottom: var(--floating-ai-trigger-bottom, var(--floating-ai-edge-gap));
+  /* AUDIT-FIX [C2]: keep trigger placement safe if runtime CSS vars fail to load. */
+  right: var(--floating-ai-trigger-right, var(--floating-ai-edge-gap, 1.5rem));
+  bottom: var(--floating-ai-trigger-bottom, var(--floating-ai-edge-gap, 1.5rem));
 }
 
 .floatingPanelShell {
   position: absolute;
   left: var(--floating-ai-panel-left, auto);
-  right: var(--floating-ai-panel-right, var(--floating-ai-edge-gap));
-  bottom: var(--floating-ai-panel-bottom, var(--floating-ai-edge-gap));
-  width: min(var(--floating-ai-panel-width, 380px), calc(100% - (var(--floating-ai-edge-gap) * 2)));
+  /* AUDIT-FIX [C2]: panel dimensions fall back to bounded mobile-safe values. */
+  right: var(--floating-ai-panel-right, var(--floating-ai-edge-gap, 1.5rem));
+  bottom: var(--floating-ai-panel-bottom, var(--floating-ai-edge-gap, 1.5rem));
+  width: min(var(--floating-ai-panel-width, 380px), calc(100% - (var(--floating-ai-edge-gap, 1.5rem) * 2)));
   height: var(--floating-ai-panel-height, 420px);
-  min-width: min(260px, calc(100% - (var(--floating-ai-edge-gap) * 2)));
+  min-width: min(260px, calc(100% - (var(--floating-ai-edge-gap, 1.5rem) * 2)));
   min-height: 200px;
-  max-width: calc(100% - (var(--floating-ai-edge-gap) * 2));
+  max-width: calc(100% - (var(--floating-ai-edge-gap, 1.5rem) * 2));
   max-height: calc(100vh - 5rem);
   max-height: calc(100svh - 5rem);
   max-height: calc(100dvh - 5rem);
@@ -53,91 +55,92 @@
 }
 
 .floatingPanelSurface {
-  color: var(--floating-ai-panel-text);
-  background: var(--floating-ai-panel-bg);
-  border-color: var(--floating-ai-panel-border);
-  box-shadow: var(--floating-ai-panel-shadow);
+  /* AUDIT-FIX [C2]: visual tokens use explicit fallbacks for resilient theming. */
+  color: var(--floating-ai-panel-text, hsl(var(--foreground)));
+  background: var(--floating-ai-panel-bg, hsl(var(--background) / 0.98));
+  border-color: var(--floating-ai-panel-border, hsl(var(--border) / 0.85));
+  box-shadow: var(--floating-ai-panel-shadow, 0 25px 50px hsl(var(--foreground) / 0.18));
 }
 
 .floatingPanelSheetSurface,
 .floatingPanelFullscreenSurfaceChrome {
-  border-color: var(--floating-ai-panel-border-strong);
-  box-shadow: var(--floating-ai-panel-shadow-strong);
+  border-color: var(--floating-ai-panel-border-strong, hsl(var(--border)));
+  box-shadow: var(--floating-ai-panel-shadow-strong, 0 30px 60px hsl(var(--foreground) / 0.22));
 }
 
 .floatingPanelDockedSurface {
-  border-color: var(--floating-ai-panel-border);
+  border-color: var(--floating-ai-panel-border, hsl(var(--border) / 0.85));
 }
 
 .floatingMobileHandle {
-  background: var(--floating-ai-mobile-handle-bg);
+  background: var(--floating-ai-mobile-handle-bg, hsl(var(--muted-foreground) / 0.35));
 }
 
 .floatingPanelHeader {
-  border-color: var(--floating-ai-header-border);
+  border-color: var(--floating-ai-header-border, hsl(var(--border) / 0.72));
 }
 
 .floatingPanelHeaderMobile {
-  color: var(--floating-ai-header-mobile-text);
-  background: var(--floating-ai-header-mobile-bg);
+  color: var(--floating-ai-header-mobile-text, hsl(var(--primary-foreground)));
+  background: var(--floating-ai-header-mobile-bg, hsl(var(--primary)));
 }
 
 .floatingPanelHeaderDesktop {
-  color: var(--floating-ai-header-title);
-  background: var(--floating-ai-header-desktop-bg);
+  color: var(--floating-ai-header-title, hsl(var(--foreground)));
+  background: var(--floating-ai-header-desktop-bg, hsl(var(--muted) / 0.76));
 }
 
 .floatingPanelTitle {
-  color: var(--floating-ai-header-title);
+  color: var(--floating-ai-header-title, hsl(var(--foreground)));
 }
 
 .floatingPanelHeaderMobile .floatingPanelTitle {
-  color: var(--floating-ai-header-mobile-text);
+  color: var(--floating-ai-header-mobile-text, hsl(var(--primary-foreground)));
 }
 
 .floatingPanelDescription {
-  color: var(--floating-ai-header-description);
+  color: var(--floating-ai-header-description, hsl(var(--muted-foreground)));
 }
 
 .floatingPanelHeaderMobile .floatingPanelDescription {
-  color: var(--floating-ai-header-mobile-description);
+  color: var(--floating-ai-header-mobile-description, hsl(var(--primary-foreground) / 0.82));
 }
 
 .floatingHeaderButton {
-  color: var(--floating-ai-header-button-text);
+  color: var(--floating-ai-header-button-text, hsl(var(--muted-foreground)));
 }
 
 .floatingHeaderButton:hover {
-  color: var(--floating-ai-header-button-hover-text);
-  background: var(--floating-ai-header-button-hover-bg);
+  color: var(--floating-ai-header-button-hover-text, hsl(var(--foreground)));
+  background: var(--floating-ai-header-button-hover-bg, hsl(var(--accent) / 0.78));
 }
 
 .floatingPanelHeaderMobile .floatingHeaderButton {
-  color: var(--floating-ai-header-mobile-button-text);
+  color: var(--floating-ai-header-mobile-button-text, hsl(var(--primary-foreground) / 0.88));
 }
 
 .floatingPanelHeaderMobile .floatingHeaderButton:hover {
-  color: var(--floating-ai-header-mobile-button-hover-text);
-  background: var(--floating-ai-header-mobile-button-hover-bg);
+  color: var(--floating-ai-header-mobile-button-hover-text, hsl(var(--primary-foreground)));
+  background: var(--floating-ai-header-mobile-button-hover-bg, hsl(var(--primary-foreground) / 0.16));
 }
 
 .floatingMinimizedStatus {
-  color: var(--floating-ai-minimized-status-text);
-  background: var(--floating-ai-minimized-status-bg);
-  border-color: var(--floating-ai-minimized-status-border);
+  color: var(--floating-ai-minimized-status-text, hsl(var(--foreground)));
+  background: var(--floating-ai-minimized-status-bg, hsl(var(--background) / 0.92));
+  border-color: var(--floating-ai-minimized-status-border, hsl(var(--border) / 0.8));
 }
 
 .floatingTriggerButton {
-  color: var(--floating-ai-trigger-text);
-  background: var(--floating-ai-trigger-bg);
-  border-color: var(--floating-ai-trigger-border);
-  box-shadow: var(--floating-ai-trigger-shadow);
+  color: var(--floating-ai-trigger-text, hsl(var(--primary-foreground)));
+  background: var(--floating-ai-trigger-bg, hsl(var(--primary)));
+  border-color: var(--floating-ai-trigger-border, hsl(var(--primary) / 0.72));
+  box-shadow: var(--floating-ai-trigger-shadow, 0 18px 35px hsl(var(--primary) / 0.28));
 }
 
 .floatingMobileBackdrop {
   position: absolute;
   inset: 0;
-  background: var(--floating-ai-backdrop);
+  background: var(--floating-ai-backdrop, hsl(var(--background) / 0.42));
 }
 
 @supports ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
@@ -157,7 +160,7 @@
   position: absolute;
   inset: -4px;
   border-radius: inherit;
-  border: 2px solid var(--floating-ai-thinking-ring);
+  border: 2px solid var(--floating-ai-thinking-ring, hsl(var(--primary) / 0.22));
   opacity: 0;
   pointer-events: none;
   transform: scale(0.92);
@@ -174,9 +177,9 @@
 
 @media (min-width: 768px) {
   .floatingPanelShell {
-    min-width: min(360px, calc(100% - (var(--floating-ai-edge-gap) * 2)));
+    min-width: min(360px, calc(100% - (var(--floating-ai-edge-gap, 1.5rem) * 2)));
     min-height: 452px;
-    max-width: min(420px, calc(100% - (var(--floating-ai-edge-gap) * 2)));
+    max-width: min(420px, calc(100% - (var(--floating-ai-edge-gap, 1.5rem) * 2)));
     max-height: calc(100vh - 6rem);
     max-height: calc(100svh - 6rem);
     max-height: calc(100dvh - 6rem);
