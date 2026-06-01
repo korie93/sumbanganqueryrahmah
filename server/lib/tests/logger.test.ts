@@ -130,6 +130,48 @@ test("sanitizeForLog redacts PostgreSQL connection URLs inside freeform strings"
   assert.equal(sanitized.stack, "Error: failed for [REDACTED]\n    at connect");
 });
 
+test("sanitizeForLog bounds recursive traversal and marks circular references", () => {
+  const circular: Record<string, unknown> = { event: "loop" };
+  circular.self = circular;
+
+  const deep: Record<string, unknown> = {};
+  let cursor = deep;
+  for (let index = 0; index < 12; index += 1) {
+    cursor.child = {};
+    cursor = cursor.child as Record<string, unknown>;
+  }
+
+  const sanitizedCircular = sanitizeForLog(circular) as Record<string, unknown>;
+  assert.equal(sanitizedCircular.self, "[CIRCULAR_REFERENCE]");
+
+  let sanitizedDeepCursor = sanitizeForLog(deep) as Record<string, unknown>;
+  for (let index = 0; index < 10; index += 1) {
+    sanitizedDeepCursor = sanitizedDeepCursor.child as Record<string, unknown>;
+  }
+  assert.equal(sanitizedDeepCursor.child, "[MAX_DEPTH_EXCEEDED]");
+});
+
+test("sanitizeForLogAllowList preserves allowlisted Error codes while bounding recursive metadata", () => {
+  const error = Object.assign(new Error("Bearer abcdefghijklmnopqrstuvwxyz should not leak"), {
+    code: "E_TEST",
+  });
+  const circular: Record<string, unknown> = {
+    event: "error",
+    details: {},
+    error,
+  };
+  circular.details = circular;
+
+  const sanitized = sanitizeForLogAllowList(circular) as Record<string, unknown>;
+
+  assert.equal(sanitized.details, "[CIRCULAR_REFERENCE]");
+  const sanitizedError = sanitized.error as Record<string, unknown>;
+  assert.equal(sanitizedError.code, "E_TEST");
+  assert.equal(sanitizedError.message, "[REDACTED] should not leak");
+  assert.equal(sanitizedError.name, "Error");
+  assert.doesNotMatch(String(sanitizedError.stack), /abcdefghijklmnopqrstuvwxyz/);
+});
+
 test("sanitizeForLog keeps invalid card-like identifiers intact to avoid false positives", () => {
   const sanitized = sanitizeForLog({
     details: "Reference 4111 1111 1111 1112 belongs to audit replay 2026-04-12.",

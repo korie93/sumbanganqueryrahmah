@@ -152,6 +152,16 @@ const BEARER_TOKEN_PATTERN = /\bBearer\s+[A-Za-z0-9._~+/=-]{12,}/gi;
 const POSTGRES_CONNECTION_URL_PATTERN = /\bpostgres(?:ql)?:\/\/[^\s"'<>]+/gi;
 const PRODUCTION_STACK_MAX_LINES = 4;
 const PRODUCTION_STACK_MAX_CHARS = 1_200;
+const LOG_REDACTION_MAX_DEPTH = 10;
+const LOG_MAX_DEPTH_EXCEEDED = "[MAX_DEPTH_EXCEEDED]";
+const LOG_CIRCULAR_REFERENCE = "[CIRCULAR_REFERENCE]";
+
+type SanitizeLogContext = {
+  allowList: boolean;
+  depth: number;
+  maxDepth: number;
+  seen: WeakSet<object>;
+};
 
 function passesLuhnCheck(rawDigits: string): boolean {
   let sum = 0;
@@ -233,89 +243,93 @@ export function sanitizeErrorStackForLog(
   return `${truncatedStack}\n${notice}`;
 }
 
-export function sanitizeForLog(value: unknown): unknown {
-  if (value instanceof Error) {
-    return sanitizeForLog({
-      name: value.name,
-      message: value.message,
-      stack: value.stack,
-    });
-  }
-
-  if (value instanceof Date) {
-    return value.toISOString();
-  }
-
+function sanitizeLogValue(value: unknown, context: SanitizeLogContext): unknown {
   if (typeof value === "string") {
     return sanitizeLogString(value);
-  }
-
-  if (Array.isArray(value)) {
-    return value.map((item) => sanitizeForLog(item));
   }
 
   if (!value || typeof value !== "object") {
     return value;
   }
 
-  const output: Record<string, unknown> = {};
-  for (const [key, nested] of Object.entries(value as Record<string, unknown>)) {
-    if (isSensitiveLogKey(key)) {
-      output[key] = "[REDACTED]";
-      continue;
-    }
-    if (key === "stack" && typeof nested === "string") {
-      output[key] = sanitizeErrorStackForLog(nested);
-      continue;
-    }
-    output[key] = sanitizeForLog(nested);
+  if (context.depth > context.maxDepth) {
+    return LOG_MAX_DEPTH_EXCEEDED;
   }
-  return output;
+
+  if (value instanceof Error) {
+    const errorPayload = context.allowList
+      ? {
+        code: "code" in value ? (value as Error & { code?: unknown }).code : undefined,
+        message: value.message,
+        name: value.name,
+        stack: value.stack,
+      }
+      : {
+        name: value.name,
+        message: value.message,
+        stack: value.stack,
+      };
+    return sanitizeLogValue(errorPayload, context);
+  }
+
+  if (value instanceof Date) {
+    return value.toISOString();
+  }
+
+  if (context.seen.has(value)) {
+    return LOG_CIRCULAR_REFERENCE;
+  }
+
+  context.seen.add(value);
+  try {
+    if (Array.isArray(value)) {
+      return value.map((item) => sanitizeLogValue(item, {
+        ...context,
+        depth: context.depth + 1,
+      }));
+    }
+
+    const output: Record<string, unknown> = {};
+    for (const [key, nested] of Object.entries(value as Record<string, unknown>)) {
+      if (isSensitiveLogKey(key)) {
+        output[key] = "[REDACTED]";
+        continue;
+      }
+      if (context.allowList && !isAllowedLogKey(key)) {
+        output[key] = "[REDACTED]";
+        continue;
+      }
+      if (key === "stack" && typeof nested === "string") {
+        output[key] = sanitizeErrorStackForLog(nested);
+        continue;
+      }
+      output[key] = sanitizeLogValue(nested, {
+        ...context,
+        depth: context.depth + 1,
+      });
+    }
+    return output;
+  } finally {
+    context.seen.delete(value);
+  }
+}
+
+export function sanitizeForLog(value: unknown): unknown {
+  return sanitizeLogValue(value, {
+    allowList: false,
+    depth: 0,
+    maxDepth: LOG_REDACTION_MAX_DEPTH,
+    seen: new WeakSet<object>(),
+  });
 }
 
 export function sanitizeForLogAllowList(value: unknown): unknown {
-  if (value instanceof Error) {
-    return sanitizeForLogAllowList({
-      code: "code" in value ? (value as Error & { code?: unknown }).code : undefined,
-      message: value.message,
-      name: value.name,
-      stack: value.stack,
-    });
-  }
-
-  if (value instanceof Date) {
-    return value.toISOString();
-  }
-
-  if (typeof value === "string") {
-    return sanitizeLogString(value);
-  }
-
-  if (Array.isArray(value)) {
-    return value.map((item) => sanitizeForLogAllowList(item));
-  }
-
-  if (!value || typeof value !== "object") {
-    return value;
-  }
-
-  const output: Record<string, unknown> = {};
-  for (const [key, nested] of Object.entries(value as Record<string, unknown>)) {
-    if (isSensitiveLogKey(key)) {
-      output[key] = "[REDACTED]";
-      continue;
-    }
-    if (!isAllowedLogKey(key)) {
-      output[key] = "[REDACTED]";
-      continue;
-    }
-    if (key === "stack" && typeof nested === "string") {
-      output[key] = sanitizeErrorStackForLog(nested);
-      continue;
-    }
-    output[key] = sanitizeForLogAllowList(nested);
-  }
-  return output;
+  return sanitizeLogValue(value, {
+    allowList: true,
+    depth: 0,
+    maxDepth: LOG_REDACTION_MAX_DEPTH,
+    seen: new WeakSet<object>(),
+  });
 }
 
 const rootLogger = pino({
