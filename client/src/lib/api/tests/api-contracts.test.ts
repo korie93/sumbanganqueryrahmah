@@ -105,7 +105,7 @@ test("shared API contracts accept nullish actor fields without widening required
   assert.equal(malformedAuditRecord.success, false);
 });
 
-test("shared API error payload contract accepts shared and domain-specific uppercase codes only", () => {
+test("shared API error payload contract accepts only enumerated API error codes", () => {
   const sharedCodePayload = apiErrorPayloadSchema.safeParse({
     ok: false,
     message: "Forbidden",
@@ -117,11 +117,18 @@ test("shared API error payload contract accepts shared and domain-specific upper
     ok: false,
     message: "Conflict",
     error: {
-      code: "USERNAME_TAKEN",
+      code: ERROR_CODES.USERNAME_TAKEN,
       message: "Username already exists.",
     },
   });
   assert.equal(domainCodePayload.success, true);
+
+  const typoUppercaseCodePayload = apiErrorPayloadSchema.safeParse({
+    ok: false,
+    message: "Bad request",
+    code: "PERMISSION_DENIEDD",
+  });
+  assert.equal(typoUppercaseCodePayload.success, false);
 
   const malformedCodePayload = apiErrorPayloadSchema.safeParse({
     ok: false,

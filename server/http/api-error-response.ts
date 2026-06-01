@@ -1,8 +1,8 @@
-import { ERROR_CODES } from "../../shared/error-codes";
+import { ERROR_CODES, type ErrorCode } from "../../shared/error-codes";
 import { sanitizeHttpErrorDetails } from "./error-details";
 
 export type ApiErrorDetail = {
-  code: string;
+  code: ErrorCode;
   message: string;
   details?: unknown;
   requestId?: string;
@@ -11,20 +11,20 @@ export type ApiErrorDetail = {
 export type ApiErrorResponse = {
   ok: false;
   message: string;
-  code: string;
+  code: ErrorCode;
   requestId?: string;
   error: ApiErrorDetail;
 };
 
 type ApiErrorResponseOptions = {
-  code?: string | undefined;
+  code?: ErrorCode | undefined;
   details?: unknown;
   extra?: Record<string, unknown> | undefined;
   requestId?: string | undefined;
   statusCode?: number | undefined;
 };
 
-export function resolveApiErrorCode(statusCode: number | undefined, explicitCode: string | undefined): string {
+export function resolveApiErrorCode(statusCode: number | undefined, explicitCode: ErrorCode | undefined): ErrorCode {
   if (explicitCode) {
     return explicitCode;
   }
@@ -33,23 +33,23 @@ export function resolveApiErrorCode(statusCode: number | undefined, explicitCode
     case 400:
       return ERROR_CODES.REQUEST_BODY_INVALID;
     case 401:
-      return "UNAUTHORIZED";
+      return ERROR_CODES.UNAUTHORIZED;
     case 403:
       return ERROR_CODES.PERMISSION_DENIED;
     case 404:
       return ERROR_CODES.NOT_FOUND;
     case 409:
-      return "CONFLICT";
+      return ERROR_CODES.CONFLICT;
     case 413:
       return ERROR_CODES.PAYLOAD_TOO_LARGE;
     case 423:
       return ERROR_CODES.ACCOUNT_LOCKED;
     case 429:
-      return "RATE_LIMITED";
+      return ERROR_CODES.RATE_LIMITED;
     case 503:
-      return "SERVICE_UNAVAILABLE";
+      return ERROR_CODES.SERVICE_UNAVAILABLE;
     default:
-      return "INTERNAL_ERROR";
+      return ERROR_CODES.INTERNAL_ERROR;
   }
 }
 

@@ -1,13 +1,15 @@
+import type { ErrorCode } from "../../shared/error-codes";
+
 export class HttpError extends Error {
   readonly statusCode: number;
-  readonly code?: string | undefined;
+  readonly code?: ErrorCode | undefined;
   readonly details?: unknown;
   readonly expose: boolean;
 
   constructor(
     statusCode: number,
     message: string,
-    options?: { code?: string | undefined; details?: unknown; expose?: boolean | undefined },
+    options?: { code?: ErrorCode | undefined; details?: unknown; expose?: boolean | undefined },
   ) {
     super(message);
     this.name = "HttpError";
@@ -18,22 +20,22 @@ export class HttpError extends Error {
   }
 }
 
-export function badRequest(message: string, code?: string, details?: unknown) {
+export function badRequest(message: string, code?: ErrorCode, details?: unknown) {
   return new HttpError(400, message, { code, details });
 }
 
-export function unauthorized(message = "Authentication required.", code?: string) {
+export function unauthorized(message = "Authentication required.", code?: ErrorCode) {
   return new HttpError(401, message, { code });
 }
 
-export function forbidden(message = "Insufficient permissions.", code?: string) {
+export function forbidden(message = "Insufficient permissions.", code?: ErrorCode) {
   return new HttpError(403, message, { code });
 }
 
-export function notFound(message = "Resource not found.", code?: string) {
+export function notFound(message = "Resource not found.", code?: ErrorCode) {
   return new HttpError(404, message, { code });
 }
 
-export function conflict(message: string, code?: string) {
+export function conflict(message: string, code?: ErrorCode) {
   return new HttpError(409, message, { code });
 }

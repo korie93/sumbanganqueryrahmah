@@ -1,6 +1,6 @@
 import type { NextFunction, Request, RequestHandler, Response } from "express";
 import type { User, UserActivity } from "../../shared/schema-postgres";
-import { ERROR_CODES } from "../../shared/error-codes";
+import { ERROR_CODES, type ErrorCode } from "../../shared/error-codes";
 import type { IStorage } from "../storage-postgres";
 import { getSessionSecret } from "../config/security";
 import {
@@ -119,7 +119,7 @@ const inFlightSessionRefreshes = new Map<string, Promise<SignedRefreshedSessionT
 function buildAuthGuardErrorResponse(
   statusCode: number,
   message: string,
-  options?: { code?: string | undefined; extra?: Record<string, unknown> | undefined },
+  options?: { code?: ErrorCode | undefined; extra?: Record<string, unknown> | undefined },
 ) {
   return buildApiErrorResponse(message, {
     statusCode,

@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { jsonObjectSchema, jsonValueSchema } from "./json-schema";
-import { sharedErrorCodeSchema } from "./error-codes";
+import { sharedErrorCodeSchema, type ErrorCode } from "./error-codes";
 import { PAGE_LIMIT_MIN_ERROR_MESSAGE } from "./pagination-contracts";
 
 const nonEmptyStringSchema = z.string().trim().min(1);
@@ -27,10 +27,8 @@ export const sensitiveResponseFieldBlocklist = [
 
 export const sensitiveResponseFieldSchema = z.enum(sensitiveResponseFieldBlocklist);
 
-export const apiErrorCodeSchema = z.union([
-  sharedErrorCodeSchema,
-  z.string().trim().regex(/^[A-Z][A-Z0-9_]*$/),
-]);
+export const apiErrorCodeSchema = sharedErrorCodeSchema;
+export type ApiErrorCode = ErrorCode;
 
 export const offsetPaginationMetaSchema = z.object({
   mode: z.literal("offset"),
