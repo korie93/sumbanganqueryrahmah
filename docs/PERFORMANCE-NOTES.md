@@ -15,15 +15,22 @@ Audit result: 7 necessary instances, 0 optional removals.
 
 Do not remove `useLatestRef` from these areas without profiling and lifecycle tests that cover timer cleanup, visibility changes, unmount during async work, and forced logout.
 
-## Large Component Decomposition Notes
-
-The next safe decomposition candidates remain:
+## P4-1 Large Component Decomposition
 
 | Component | Current role | Safe extraction boundary |
 | --- | --- | --- |
-| `client/src/pages/Login.tsx` | Public auth shell and form orchestration. | Extract visual-only sections only after updating source-contract tests that currently inspect stable login markup and test IDs. |
-| `client/src/pages/ActivateAccount.tsx` | Activation token validation and password form orchestration. | Extract status panels and form fields without changing abort-controller ownership. |
-| `client/src/pages/dashboard/DashboardChartsGrid.tsx` | Chart layout, tooltips, and retry sections. | Extract chart cards and tooltip renderers while preserving Recharts props. |
-| `client/src/components/Navbar.tsx` | Navigation shell and action controls. | Extract mobile/desktop sections separately so route state ownership stays centralized. |
+| `client/src/pages/Login.tsx` | Public auth shell and form orchestration. | Visual-only panels, header, footer, password-toggle, locked alert, and secondary actions now live in `LoginParts.tsx`. Login keeps state, timers, field ownership, test IDs, and submit flow. |
+| `client/src/pages/ActivateAccount.tsx` | Activation token validation and password form orchestration. | Status cards, icons, activation form, and actions now live in `ActivateAccountParts.tsx`. Abort-controller ownership and redirect timer cleanup remain in the page. |
+| `client/src/pages/dashboard/DashboardChartsGrid.tsx` | Chart layout and retry orchestration. | Tooltip, legend, period selector, loading state, empty state, and compact hour formatting now live in `DashboardChartsGridParts.tsx`. Recharts data preparation and retry behavior remain in the grid. |
+| `client/src/components/Navbar.tsx` | Navigation shell and route state ownership. | Brand cluster and user menu dropdown now live in `NavbarParts.tsx`. Route state, focus restoration lifecycle, mobile drawer state, and overflow tracking remain in the navbar shell. |
 
-Because this release set is documentation/configuration-focused, runtime refactors should remain in a dedicated visual-regression PR rather than being bundled with dependency and release-readiness changes.
+Line-count result after extraction:
+
+| Component | Lines |
+| --- | ---: |
+| `client/src/pages/Login.tsx` | 300 |
+| `client/src/pages/ActivateAccount.tsx` | 250 |
+| `client/src/pages/dashboard/DashboardChartsGrid.tsx` | 257 |
+| `client/src/components/Navbar.tsx` | 258 |
+
+The extraction is intentionally behavior-neutral: source contracts now inspect the extracted parts where visual markup moved, and timer/focus ownership remains in the original orchestration components.

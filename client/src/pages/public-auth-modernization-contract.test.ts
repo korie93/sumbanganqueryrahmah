@@ -11,7 +11,7 @@ function readPageSource(relativePath: string) {
 }
 
 test("login page uses the compact modern shell without animated orb layers", () => {
-  const source = readPageSource("Login.tsx");
+  const source = `${readPageSource("Login.tsx")}\n${readPageSource("LoginParts.tsx")}`;
   const css = readPageSource("Login.css");
 
   assert.match(source, /login-card login-card-grid/);
@@ -30,7 +30,7 @@ test("login page uses the compact modern shell without animated orb layers", () 
 
 test("public auth recovery pages expose labels and decorative icons correctly", () => {
   const forgotSource = readPageSource("ForgotPassword.tsx");
-  const activateSource = readPageSource("ActivateAccount.tsx");
+  const activateSource = `${readPageSource("ActivateAccount.tsx")}\n${readPageSource("ActivateAccountParts.tsx")}`;
   const resetSource = readPageSource("ResetPassword.tsx");
 
   assert.match(forgotSource, /<label htmlFor="forgot-password-identifier" className="public-auth-field-label">/);

@@ -81,9 +81,11 @@ test("glass wrapper base styles are owned by the component stylesheet", () => {
 
 test("login page exposes real labels and a stable primary heading", () => {
   const loginSource = readClientSource("../pages/Login.tsx");
+  const loginPartsSource = readClientSource("../pages/LoginParts.tsx");
+  const combinedLoginSource = `${loginSource}\n${loginPartsSource}`;
 
-  assert.match(loginSource, /<h1 className="login-title/);
-  assert.doesNotMatch(loginSource, /<h2 className="login-title/);
+  assert.match(combinedLoginSource, /<h1 className="login-title/);
+  assert.doesNotMatch(combinedLoginSource, /<h2 className="login-title/);
   assert.match(loginSource, /<label htmlFor="login-username" className="login-field-label/);
   assert.match(loginSource, /<label htmlFor="login-password" className="login-field-label/);
   assert.match(loginSource, /<label htmlFor="login-two-factor-code" className="login-field-label/);

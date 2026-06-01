@@ -22,6 +22,8 @@ test("tailwind public config covers all landing route files", () => {
     "client/src/pages/LandingHeroShell.tsx",
     "client/src/pages/LandingDeferredSections.tsx",
     "client/src/pages/LandingRouteFallback.tsx",
+    "client/src/pages/LandingHeroInsightStrip.tsx",
+    "client/src/pages/LandingProductPreview.tsx",
   ];
 
   for (const filePath of requiredLandingFiles) {
@@ -36,8 +38,10 @@ test("tailwind public config covers all landing route files", () => {
 test("tailwind public config still covers public auth route files", () => {
   const requiredPublicRouteFiles = [
     "client/src/pages/Login.tsx",
+    "client/src/pages/LoginParts.tsx",
     "client/src/pages/ForgotPassword.tsx",
     "client/src/pages/ActivateAccount.tsx",
+    "client/src/pages/ActivateAccountParts.tsx",
     "client/src/pages/ResetPassword.tsx",
     "client/src/pages/ChangePassword.tsx",
     "client/src/pages/Maintenance.tsx",

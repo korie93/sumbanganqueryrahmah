@@ -1,8 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
-import { ArrowLeft, BadgeCheck, KeyRound, ShieldAlert } from "lucide-react";
-import { PasswordStrengthMeter } from "@/components/PasswordStrengthMeter";
-import { PublicAuthButton, PublicAuthInput } from "@/components/PublicAuthControls";
 import { PublicAuthLayout } from "@/components/PublicAuthLayout";
 import {
   activateAccount,
@@ -17,12 +14,16 @@ import {
   validatePasswordFields,
 } from "@/pages/public-auth-form-utils";
 import {
-  formatPublicAuthExpiry,
   getPublicAuthTokenFromLocation,
   isPublicAuthAbortError,
 } from "@/pages/public-auth-runtime-utils";
-
-type ActivationPhase = "invalid" | "ready" | "success" | "validating";
+import {
+  ActivateAccountIcon,
+  ActivationActions,
+  ActivationPasswordForm,
+  ActivationStatusCard,
+  type ActivationPhase,
+} from "@/pages/ActivateAccountParts";
 
 const ACTIVATION_SUCCESS_REDIRECT_DELAY_MS = 1_200;
 
@@ -244,142 +245,36 @@ export default function ActivateAccountPage({ onBackToLogin }: ActivateAccountPa
       showBackButton={false}
       backLabel="Kembali ke log masuk"
       onBackClick={navigateToLogin}
-      icon={
-        phase === "invalid" ? (
-          <ShieldAlert className="h-7 w-7" aria-hidden="true" focusable="false" />
-        ) : phase === "success" ? (
-          <BadgeCheck className="h-7 w-7" aria-hidden="true" focusable="false" />
-        ) : (
-          <KeyRound className="h-7 w-7" aria-hidden="true" focusable="false" />
-        )
-      }
+      icon={<ActivateAccountIcon phase={phase} />}
     >
-      {phase === "validating" ? (
-        <div className="public-auth-status-card public-auth-status-card--info" role="status" aria-live="polite">
-          Sedang mengesahkan pautan aktivasi anda...
-        </div>
-      ) : null}
-
-      {phase === "invalid" ? (
-        <div className="public-auth-status-card public-auth-status-card--error" role="alert">
-          {error || "Pautan aktivasi tidak sah atau telah tamat tempoh."}
-        </div>
-      ) : null}
-
-      {phase === "success" ? (
-        <div className="public-auth-status-card public-auth-status-card--success" role="status" aria-live="polite">
-          Kata laluan berjaya dicipta. Anda akan dibawa semula ke halaman log masuk sebentar lagi.
-        </div>
-      ) : null}
+      <ActivationStatusCard error={error} phase={phase} />
 
       {phase === "ready" && activation ? (
-        <>
-          <dl className="public-auth-account-summary">
-            <div className="public-auth-account-summary__row">
-              <dt>Nama pengguna</dt>
-              <dd>{activation.username}</dd>
-            </div>
-            <div className="public-auth-account-summary__row">
-              <dt>Peranan</dt>
-              <dd>{activation.role}</dd>
-            </div>
-            <div className="public-auth-account-summary__row">
-              <dt>Tamat tempoh</dt>
-              <dd>{formatPublicAuthExpiry(activation.expiresAt)}</dd>
-            </div>
-          </dl>
-          <div className="space-y-2">
-            <label htmlFor="activate-account-new-password" className="public-auth-field-label">
-              Kata laluan baharu
-            </label>
-            <PublicAuthInput
-              ref={newPasswordInputRef}
-              id="activate-account-new-password"
-              name="newPassword"
-              type="password"
-              value={newPassword}
-              onChange={(event) => {
-                setNewPassword(event.target.value);
-                setNewPasswordError("");
-                setError("");
-              }}
-              onKeyDown={onPasswordKeyDown}
-              placeholder="Masukkan kata laluan baharu"
-              autoComplete="new-password"
-              disabled={loading}
-              {...newPasswordInvalidProps}
-            />
-          </div>
-          <PasswordStrengthMeter
-            id="activate-password-strength"
-            password={newPassword}
-          />
-          {newPasswordError ? (
-            <p id="activate-password-new-error" className="public-auth-field-error" role="alert">
-              {newPasswordError}
-            </p>
-          ) : null}
-          <div className="space-y-2">
-            <label htmlFor="activate-account-confirm-password" className="public-auth-field-label">
-              Sahkan kata laluan baharu
-            </label>
-            <PublicAuthInput
-              id="activate-account-confirm-password"
-              name="confirmPassword"
-              type="password"
-              value={confirmPassword}
-              onChange={(event) => {
-                setConfirmPassword(event.target.value);
-                setConfirmPasswordError("");
-                setError("");
-              }}
-              onKeyDown={onPasswordKeyDown}
-              placeholder="Masukkan semula kata laluan"
-              autoComplete="new-password"
-              disabled={loading}
-              {...confirmPasswordInvalidProps}
-            />
-          </div>
-          {confirmPasswordError ? (
-            <p id="activate-password-confirm-error" className="public-auth-field-error" role="alert">
-              {confirmPasswordError}
-            </p>
-          ) : null}
-          {error ? (
-            <div className="public-auth-status-card public-auth-status-card--error" role="alert">
-              {error}
-            </div>
-          ) : null}
-          <PublicAuthButton
-            onClick={() => void handleActivate()}
-            disabled={loading}
-          >
-            {loading ? "Sedang mencipta kata laluan..." : "Cipta Kata Laluan"}
-          </PublicAuthButton>
-        </>
+        <ActivationPasswordForm
+          activation={activation}
+          confirmPassword={confirmPassword}
+          confirmPasswordError={confirmPasswordError}
+          confirmPasswordInvalidProps={confirmPasswordInvalidProps}
+          error={error}
+          loading={loading}
+          newPassword={newPassword}
+          newPasswordError={newPasswordError}
+          newPasswordInputRef={newPasswordInputRef}
+          newPasswordInvalidProps={newPasswordInvalidProps}
+          onActivate={() => void handleActivate()}
+          onClearConfirmPasswordError={() => setConfirmPasswordError("")}
+          onClearFormError={() => setError("")}
+          onClearNewPasswordError={() => setNewPasswordError("")}
+          onConfirmPasswordChange={setConfirmPassword}
+          onNewPasswordChange={setNewPassword}
+          onPasswordKeyDown={onPasswordKeyDown}
+        />
       ) : null}
 
-      {phase === "success" ? (
-        <PublicAuthButton
-          type="button"
-          onClick={() => {
-            navigateToLogin();
-          }}
-        >
-          Buka Halaman Log Masuk
-        </PublicAuthButton>
-      ) : null}
-
-      <PublicAuthButton
-        type="button"
-        variant="ghost"
-        onClick={() => {
-          navigateToLogin();
-        }}
-      >
-        <ArrowLeft className="mr-2 h-4 w-4" aria-hidden="true" focusable="false" />
-        Kembali ke log masuk
-      </PublicAuthButton>
+      <ActivationActions
+        phase={phase}
+        onBackToLogin={navigateToLogin}
+      />
     </PublicAuthLayout>
   );
 }

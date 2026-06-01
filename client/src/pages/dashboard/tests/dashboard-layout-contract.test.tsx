@@ -125,8 +125,9 @@ test("DashboardSnapshotSection renders a retryable local error state", () => {
 
 test("DashboardChartsGrid memoizes heavy chart rendering helpers", () => {
   const source = readFileSync(path.resolve(__dirname, "../DashboardChartsGrid.tsx"), "utf8");
+  const partsSource = readFileSync(path.resolve(__dirname, "../DashboardChartsGridParts.tsx"), "utf8");
 
-  assert.match(source, /const CompactChartTooltip = memo\(function CompactChartTooltip/);
+  assert.match(partsSource, /const CompactChartTooltip = memo\(function CompactChartTooltip/);
   assert.match(source, /const loginTrendTickDates = useMemo\(/);
   assert.match(source, /const renderLoginTrendTooltip = useCallback\(/);
   assert.match(source, /const renderPeakHoursTooltip = useCallback\(/);

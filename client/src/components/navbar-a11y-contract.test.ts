@@ -12,6 +12,8 @@ function readSource(fileName: string) {
 
 test("navbar controls use Malay accessible labels and include username context", () => {
   const navbarSource = readSource("Navbar.tsx");
+  const navbarPartsSource = readSource("NavbarParts.tsx");
+  const navbarCombinedSource = `${navbarSource}\n${navbarPartsSource}`;
   const homeButtonSource = readSource("NavbarHomeButton.tsx");
   const desktopNavigationSource = readSource("NavbarDesktopNavigation.tsx");
   const userMenuSource = readSource("NavbarUserMenuContent.tsx");
@@ -22,7 +24,7 @@ test("navbar controls use Malay accessible labels and include username context",
   assert.match(navbarSource, /aria-label="Buka menu navigasi"/);
   assert.match(navbarSource, /<button[\s\S]*data-testid="button-open-mobile-nav"/);
   assert.doesNotMatch(navbarSource, /<div[^>]*data-testid="button-open-mobile-nav"/);
-  assert.match(navbarSource, /aria-label=\{`Buka menu pengguna untuk \$\{username\}`\}/);
+  assert.match(navbarCombinedSource, /aria-label=\{`Buka menu pengguna untuk \$\{username\}`\}/);
   assert.match(navbarSource, /onCloseAutoFocus=\{restoreDesktopUserMenuFocus\}/);
   assert.match(navbarSource, /onCloseAutoFocus=\{restoreMobileUserMenuFocus\}/);
   assert.match(navbarSource, /onEscapeKeyDown=\{scheduleDesktopUserMenuTriggerFocus\}/);
@@ -36,7 +38,7 @@ test("navbar controls use Malay accessible labels and include username context",
   assert.match(navbarSource, /if \(!navbarMountedRef\.current\) \{/);
   assert.match(navbarSource, /useEffect\(\(\) => \{\s*setMobileNavOpen\(false\)\s*\}, \[activeLocation\.pathname\]\)/);
   assert.match(navbarSource, /desktopUserMenuTriggerRef\.current\?\.focus\(\{ preventScroll: true \}\)/);
-  assert.match(navbarSource, /\{\[\.\.\.username\]\[0\] \|\| ""\}/);
+  assert.match(navbarCombinedSource, /\{\[\.\.\.username\]\[0\] \|\| ""\}/);
   assert.doesNotMatch(navbarSource, /window\.location/);
   assert.match(homeButtonSource, /aria-label="Utama"/);
   assert.match(homeButtonSource, />Utama<\/span>/);
@@ -69,7 +71,7 @@ test("navbar controls use Malay accessible labels and include username context",
   assert.match(mobileNavigationSource, /rounded-full bg-primary-foreground px-2 py-0\.5 text-xxs font-semibold uppercase tracking-label-xs text-primary/);
   assert.match(navbarStyles, /\.nav-pill\.nav-pill-active\s*\{[\s\S]*color:\s*hsl\(var\(--primary-foreground\)\);/);
   assert.match(navbarStyles, /\.user-menu-role\s*\{[\s\S]*color:\s*hsl\(var\(--primary-foreground\)\);/);
-  assert.doesNotMatch(navbarSource, /Open user menu|Open navigation menu/);
+  assert.doesNotMatch(navbarCombinedSource, /Open user menu|Open navigation menu/);
   assert.doesNotMatch(desktopNavigationSource, /Primary navigation|Scroll for more/);
   assert.doesNotMatch(scrollHintSource, /Scroll for more/);
   assert.doesNotMatch(mobileNavigationSource, /Mobile navigation|Current section:/);

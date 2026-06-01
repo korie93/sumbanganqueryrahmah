@@ -22,8 +22,8 @@ test("data-heavy truncated rows expose title and aria-label text", () => {
     "../pages/collection/CollectionReceiptPanel.tsx",
     "../pages/collection/CollectionDailyDayDetailsDialogParts.tsx",
     "../pages/dashboard/DashboardUserInsightsGrid.tsx",
-    "../pages/dashboard/DashboardChartsGrid.tsx",
-    "../components/Navbar.tsx",
+    "../pages/dashboard/DashboardChartsGridParts.tsx",
+    "../components/NavbarParts.tsx",
   ];
 
   for (const sourcePath of sourcePaths) {

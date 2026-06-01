@@ -1,12 +1,19 @@
 import { memo, useCallback, useMemo } from "react";
 import { Clock, TrendingUp } from "lucide-react";
-import { Area, AreaChart, Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis, type TooltipProps } from "recharts";
-import type { NameType, ValueType } from "recharts/types/component/DefaultTooltipContent";
+import { Area, AreaChart, Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DashboardSectionError } from "@/pages/dashboard/DashboardSectionError";
 import type { LoginTrend, PeakHour } from "@/pages/dashboard/types";
+import {
+  CompactChartTooltip,
+  DashboardChartEmptyState,
+  DashboardChartLoadingState,
+  DashboardTrendLegend,
+  DashboardTrendPeriodSelector,
+  formatDashboardHourCompact,
+  type DashboardTooltipProps,
+} from "@/pages/dashboard/DashboardChartsGridParts";
 import {
   buildDashboardTrendTickDates,
   formatDashboardAxisDate,
@@ -28,74 +35,6 @@ interface DashboardChartsGridProps {
   trendsLoading: boolean;
   trendsRetrying: boolean;
 }
-
-type DashboardTooltipProps = TooltipProps<ValueType, NameType>;
-
-type CompactChartTooltipProps = Pick<DashboardTooltipProps, "active" | "label" | "payload"> & {
-  formatLabel: (label: string | number) => string;
-};
-
-const LOGIN_TREND_LEGEND_ITEMS = [
-  { label: "Logins", dotClassName: "bg-[hsl(var(--chart-1))]" },
-  { label: "Logouts", dotClassName: "bg-[hsl(var(--chart-2))]" },
-];
-const TREND_DAY_OPTIONS = [7, 14, 30] as const;
-
-const TOOLTIP_DOT_CLASS_BY_NAME: Record<string, string> = {
-  Logins: "bg-[hsl(var(--chart-1))]",
-  Logouts: "bg-[hsl(var(--chart-2))]",
-};
-
-function formatTooltipValue(value: ValueType | undefined) {
-  if (Array.isArray(value)) {
-    return value.join(" / ");
-  }
-  return String(value ?? "");
-}
-
-function formatDashboardHourCompact(hour: number) {
-  return formatDashboardHour(hour).replace(" AM", "a").replace(" PM", "p").replace(" ", "");
-}
-
-const CompactChartTooltip = memo(function CompactChartTooltip({
-  active,
-  payload,
-  label,
-  formatLabel,
-}: CompactChartTooltipProps) {
-  if (!active || !payload?.length || label === undefined) {
-    return null;
-  }
-
-  return (
-    <div className="min-w-[132px] max-w-[200px] rounded-xl border border-border/70 bg-popover px-3 py-2 text-popover-foreground shadow-lg">
-      <p className="text-2xs font-semibold uppercase tracking-label-md text-muted-foreground">
-        {formatLabel(label)}
-      </p>
-      <div className="mt-2 space-y-1.5">
-        {payload.map((item) => (
-          <div key={String(item.name)} className="flex items-center justify-between gap-3 text-xs">
-            <div className="flex min-w-0 items-center gap-2">
-              <span
-                className={`h-2.5 w-2.5 shrink-0 rounded-full ${TOOLTIP_DOT_CLASS_BY_NAME[String(item.name || "")] || "bg-[hsl(var(--chart-3))]"}`}
-                aria-hidden="true"
-              />
-              <span
-                className="truncate text-muted-foreground"
-                title={String(item.name ?? "")}
-                aria-label={String(item.name ?? "")}
-              >
-                {String(item.name ?? "")}
-              </span>
-            </div>
-            <span className="shrink-0 font-semibold text-foreground">{formatTooltipValue(item.value)}</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-});
-CompactChartTooltip.displayName = "CompactChartTooltip";
 
 function DashboardChartsGridImpl({
   onTrendDaysChange,
@@ -150,43 +89,10 @@ function DashboardChartsGridImpl({
                   : "Daily login and logout activity over the selected period."}
               </p>
             </div>
-            <div
-              className="grid grid-cols-3 gap-1 rounded-xl border border-border/60 bg-muted/15 p-1"
-              role="group"
-              aria-label="Select trend period"
-            >
-              {TREND_DAY_OPTIONS.map((days) => (
-                trendDays === days ? (
-                  <Button
-                    key={days}
-                    type="button"
-                    variant="default"
-                    size="sm"
-                    className="h-8 rounded-lg px-2.5 text-xs sm:h-9 sm:px-3 sm:text-sm"
-                    onClick={() => onTrendDaysChange(days)}
-                    aria-pressed="true"
-                    aria-label={`Show ${days} day trends`}
-                    data-testid={`button-trend-${days}d`}
-                  >
-                    {days}d
-                  </Button>
-                ) : (
-                  <Button
-                    key={days}
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="h-8 rounded-lg px-2.5 text-xs sm:h-9 sm:px-3 sm:text-sm"
-                    onClick={() => onTrendDaysChange(days)}
-                    aria-pressed="false"
-                    aria-label={`Show ${days} day trends`}
-                    data-testid={`button-trend-${days}d`}
-                  >
-                    {days}d
-                  </Button>
-                )
-              ))}
-            </div>
+            <DashboardTrendPeriodSelector
+              trendDays={trendDays}
+              onTrendDaysChange={onTrendDaysChange}
+            />
           </div>
         </CardHeader>
         <CardContent className="space-y-3" aria-live="polite">
@@ -199,14 +105,11 @@ function DashboardChartsGridImpl({
               minHeightClassName={chartHeightClassName}
             />
           ) : trendsLoading ? (
-            <div
-              className={`flex items-center justify-center rounded-xl border border-border/50 bg-muted/10 ${chartHeightClassName}`}
-              role="status"
-              aria-label="Loading login trends"
-            >
-              <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary/30 border-t-primary" />
-              <span className="sr-only">Loading login trends chart</span>
-            </div>
+            <DashboardChartLoadingState
+              className={chartHeightClassName}
+              label="Loading login trends"
+              screenReaderLabel="Loading login trends chart"
+            />
           ) : trends && trends.length > 0 ? (
             <>
               <div
@@ -269,24 +172,10 @@ function DashboardChartsGridImpl({
                   </AreaChart>
                 </ResponsiveContainer>
               </div>
-              <div className="flex flex-wrap gap-2">
-                {LOGIN_TREND_LEGEND_ITEMS.map((item) => (
-                  <div
-                    key={item.label}
-                    className="inline-flex items-center gap-2 rounded-full border border-border/60 bg-muted/10 px-3 py-1.5 text-xs text-muted-foreground"
-                  >
-                    <span className={`h-2.5 w-2.5 rounded-full ${item.dotClassName}`} aria-hidden="true" />
-                    <span>{item.label}</span>
-                  </div>
-                ))}
-              </div>
+              <DashboardTrendLegend />
             </>
           ) : (
-            <div
-              className={`flex items-center justify-center rounded-xl border border-dashed border-border/60 bg-muted/10 text-muted-foreground ${chartHeightClassName}`}
-            >
-              No data available
-            </div>
+            <DashboardChartEmptyState className={chartHeightClassName} />
           )}
         </CardContent>
       </Card>
@@ -317,14 +206,11 @@ function DashboardChartsGridImpl({
               minHeightClassName={chartHeightClassName}
             />
           ) : peakHoursLoading ? (
-            <div
-              className={`flex items-center justify-center rounded-xl border border-border/50 bg-muted/10 ${chartHeightClassName}`}
-              role="status"
-              aria-label="Loading peak hours"
-            >
-              <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary/30 border-t-primary" />
-              <span className="sr-only">Loading peak hours chart</span>
-            </div>
+            <DashboardChartLoadingState
+              className={chartHeightClassName}
+              label="Loading peak hours"
+              screenReaderLabel="Loading peak hours chart"
+            />
           ) : peakHours && peakHours.length > 0 ? (
             <div
               className={`min-w-0 ${chartHeightClassName}`}
@@ -364,11 +250,7 @@ function DashboardChartsGridImpl({
               </ResponsiveContainer>
             </div>
           ) : (
-            <div
-              className={`flex items-center justify-center rounded-xl border border-dashed border-border/60 bg-muted/10 text-muted-foreground ${chartHeightClassName}`}
-            >
-              No data available
-            </div>
+            <DashboardChartEmptyState className={chartHeightClassName} />
           )}
         </CardContent>
       </Card>

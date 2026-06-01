@@ -1,11 +1,18 @@
 import { useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
-import { Eye, EyeOff, LogIn } from "lucide-react";
 import type { User } from "@/app/types";
-import { BrandLogo } from "@/components/BrandLogo";
 import { ExpandableMessage } from "@/components/ExpandableMessage";
 import { PublicAuthButton, PublicAuthInput } from "@/components/PublicAuthControls";
 import { shouldAutoFocusPublicAuthField } from "@/lib/interaction-media";
+import {
+  LoginAsidePanel,
+  LoginBrandHeader,
+  LoginFooter,
+  LoginLockedAlert,
+  LoginPasswordVisibilityButton,
+  LoginSecondaryActions,
+  LoginSubmitContent,
+} from "@/pages/LoginParts";
 import { useLoginPageState } from "@/pages/useLoginPageState";
 import "./Login.css";
 
@@ -146,35 +153,10 @@ export default function Login({ onBanned, onForgotPasswordClick, onLandingClick,
           <div className="login-bg-effect login-halo pointer-events-none absolute -inset-4 hidden rounded-[2rem] blur-2xl sm:block" />
 
           <div className="login-card login-card-grid">
-            <div className="login-card-aside" aria-hidden="true">
-              <div className="login-aside-kicker">Akses SQR</div>
-              <div className="login-aside-title">Log masuk pantas untuk operasi harian.</div>
-              <div className="login-aside-copy">
-                Satu pintu masuk yang ringkas, pantas, dan jelas untuk pasukan operasi.
-              </div>
-              <div className="login-aside-metrics">
-                <span>2FA tersedia</span>
-                <span>Sesi dilindungi</span>
-              </div>
-            </div>
+            <LoginAsidePanel />
 
             <div className="login-card-form">
-              <div className="login-brand mb-7 flex flex-col items-center">
-                <div className="login-brand-mark mb-4 flex h-16 w-16 items-center justify-center rounded-2xl shadow-lg">
-                  <BrandLogo
-                    decorative
-                    priority
-                    className="block h-10 w-10"
-                    imageClassName="h-full w-full"
-                  />
-                </div>
-                <h1 className="login-title text-center text-2xl font-bold">
-                  Log Masuk SQR
-                </h1>
-                <p className="login-subtitle mt-2 text-center text-sm">
-                  Platform operasi dalaman Sumbangan Query Rahmah
-                </p>
-              </div>
+              <LoginBrandHeader />
 
               <form className="login-form space-y-4" onSubmit={handleSubmit} noValidate {...loginFormBusyProps}>
                 <div className="space-y-2">
@@ -251,33 +233,11 @@ export default function Login({ onBanned, onForgotPasswordClick, onLandingClick,
                         disabled={loading}
                         {...passwordInvalidProps}
                       />
-                      {showPassword ? (
-                        <button
-                          type="button"
-                          onClick={toggleShowPassword}
-                          disabled={loading}
-                          className="login-password-toggle absolute right-1 top-1/2 inline-flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-xl transition-colors"
-                          data-testid="button-toggle-password"
-                          aria-label="Sembunyi kata laluan"
-                          aria-pressed="true"
-                          title="Sembunyi kata laluan"
-                        >
-                          <EyeOff className="h-5 w-5" aria-hidden="true" focusable="false" />
-                        </button>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={toggleShowPassword}
-                          disabled={loading}
-                          className="login-password-toggle absolute right-1 top-1/2 inline-flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-xl transition-colors"
-                          data-testid="button-toggle-password"
-                          aria-label="Papar kata laluan"
-                          aria-pressed="false"
-                          title="Papar kata laluan"
-                        >
-                          <Eye className="h-5 w-5" aria-hidden="true" focusable="false" />
-                        </button>
-                      )}
+                      <LoginPasswordVisibilityButton
+                        loading={loading}
+                        showPassword={showPassword}
+                        onToggle={toggleShowPassword}
+                      />
                     </div>
                     {passwordError ? (
                       <p id="login-password-error" className="login-field-error text-sm" role="alert">
@@ -321,57 +281,26 @@ export default function Login({ onBanned, onForgotPasswordClick, onLandingClick,
                   disabled={loading || lockedFlow}
                   data-testid="button-login"
                 >
-                  {loading ? (
-                    <div className="flex items-center gap-2">
-                      <div className="login-submit-spinner h-5 w-5 animate-spin rounded-full border-2" aria-hidden="true" />
-                      {twoFactorChallengeToken ? "Mengesahkan..." : "Sedang log masuk..."}
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-2">
-                      <LogIn className="h-5 w-5" aria-hidden="true" focusable="false" />
-                      {lockedFlow ? "Akaun Dikunci" : twoFactorChallengeToken ? "Sahkan Kod" : "Log Masuk"}
-                    </div>
-                  )}
+                  <LoginSubmitContent
+                    lockedFlow={lockedFlow}
+                    loading={loading}
+                    twoFactorChallengeToken={twoFactorChallengeToken}
+                  />
                 </PublicAuthButton>
               </form>
 
               {lockedFlow ? (
-                <div className="login-alert login-alert--warning mt-4 text-sm" role="alert">
-                  <div className="font-medium">
-                    <ExpandableMessage>
-                      {lockedAccountMessage || "Akaun anda telah dikunci kerana terlalu banyak percubaan log masuk yang tidak sah."}
-                    </ExpandableMessage>
-                  </div>
-                  <div
-                    className="login-alert--warning-subtext mt-1 text-xs"
-                    role="status"
-                    aria-live="polite"
-                    aria-atomic="true"
-                  >
-                    {lockedCountdownSeconds > 0
-                      ? `Sila cuba semula dalam ${lockedCountdownSeconds} saat.`
-                      : "Sila hubungi pentadbir sistem untuk pengaktifan semula akaun."}
-                  </div>
-                </div>
+                <LoginLockedAlert
+                  lockedAccountMessage={lockedAccountMessage}
+                  lockedCountdownSeconds={lockedCountdownSeconds}
+                />
               ) : null}
 
-              {twoFactorChallengeToken ? (
-                <button
-                  type="button"
-                  onClick={returnToPasswordLogin}
-                  className="login-secondary-link mt-3 inline-flex min-h-11 w-full items-center justify-center rounded-xl text-center text-sm transition-colors"
-                >
-                  Kembali ke log masuk kata laluan
-                </button>
-              ) : null}
-
-              <button
-                type="button"
-                onClick={goToForgotPassword}
-                className="login-secondary-link mt-4 inline-flex min-h-11 w-full items-center justify-center rounded-xl text-center text-sm transition-colors"
-              >
-                Lupa kata laluan?
-              </button>
+              <LoginSecondaryActions
+                twoFactorChallengeToken={twoFactorChallengeToken}
+                onForgotPassword={goToForgotPassword}
+                onReturnToPasswordLogin={returnToPasswordLogin}
+              />
 
               {error && !lockedFlow && (
                 <div className="login-alert login-alert--error mt-4 text-sm" role="alert">
@@ -385,9 +314,7 @@ export default function Login({ onBanned, onForgotPasswordClick, onLandingClick,
                 </div>
               )}
 
-              <div className="login-footer mt-7 text-center text-xs">
-                Sumbangan Query Rahmah
-              </div>
+              <LoginFooter />
             </div>
           </div>
         </div>

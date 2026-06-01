@@ -1,26 +1,19 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { ChevronDown, Menu } from "lucide-react"
+import { Menu } from "lucide-react"
 import { useLocation } from "wouter"
 
-import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
 import {
   getVisibleNavItems,
   getVisibleNavigationGroups,
   getVisiblePrimaryNavItems,
-  HOME_NAV_ITEM,
   resolveNavigationTarget,
   resolveActiveNavigationItemId,
 } from "@/app/navigation"
 import { prefetchNavigationTargetWithDiagnostics } from "@/app/navigation-prefetch"
 import type { MonitorSection, TabVisibility } from "@/app/types"
-import { BrandLogo } from "@/components/BrandLogo"
 import { NavbarDesktopNavigation } from "@/components/NavbarDesktopNavigation"
-import { NavbarHomeButton } from "@/components/NavbarHomeButton"
 import { NavbarMobileNavigation } from "@/components/NavbarMobileNavigation"
-import { NavbarUserMenuContent } from "@/components/NavbarUserMenuContent"
+import { NavbarBrandCluster, NavbarUserMenuDropdown } from "@/components/NavbarParts"
 import {
   buildDesktopNavLayoutKey,
   resolveNavbarActiveMobileItemId,
@@ -213,38 +206,13 @@ function NavbarImpl({
     <header className="navbar-safe-area-shell sticky top-0 z-[var(--z-navbar)] w-full border-b border-border/70 bg-background/95 supports-[backdrop-filter]:bg-background/90 supports-[backdrop-filter]:backdrop-blur-md">
       <div className="mx-auto flex max-w-[1440px] flex-col gap-3 px-3 py-2 md:px-4 lg:min-h-16 lg:flex-row lg:items-center">
         <div className="flex min-w-0 items-start justify-between gap-3 lg:flex-[0_1_auto] lg:items-center lg:pr-2">
-          <div className="flex min-w-0 items-center gap-3">
-            <div className="flex min-w-0 items-center gap-2 rounded-full border border-border/70 bg-card/75 px-2.5 py-1.5 shadow-sm lg:max-w-[17rem] xl:max-w-none">
-              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 ring-1 ring-primary/10">
-                <BrandLogo
-                  decorative
-                  priority
-                  className="block h-5 w-5"
-                  imageClassName="h-full w-full"
-                />
-              </div>
-              <div className="min-w-0">
-                <p
-                  className="truncate text-sm font-semibold text-foreground"
-                  title={systemName || "SQR System"}
-                  aria-label={systemName || "SQR System"}
-                >
-                  {systemName || "SQR System"}
-                </p>
-                <p className="hidden text-2xs text-muted-foreground sm:block">
-                  Ruang kerja operasi
-                </p>
-              </div>
-            </div>
-
-            {showHomeButton ? (
-              <NavbarHomeButton
-                active={activeNavigationItemId === HOME_NAV_ITEM.id}
-                onNavigate={navigateToItem}
-                onPrefetch={prefetchItem}
-              />
-            ) : null}
-          </div>
+          <NavbarBrandCluster
+            activeNavigationItemId={activeNavigationItemId}
+            showHomeButton={showHomeButton}
+            systemName={systemName}
+            onNavigate={navigateToItem}
+            onPrefetch={prefetchItem}
+          />
 
           <div className="flex shrink-0 items-center gap-2 lg:hidden">
             <button
@@ -261,40 +229,17 @@ function NavbarImpl({
               <span className="hidden sm:inline">Menu</span>
             </button>
 
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button
-                  ref={mobileUserMenuTriggerRef}
-                  type="button"
-                  className="user-menu-trigger px-2.5 sm:px-3"
-                  data-testid="button-user-menu-mobile"
-                  aria-label={`Buka menu pengguna untuk ${username}`}
-                  aria-haspopup="menu"
-                >
-                  <span className="user-menu-avatar">
-                    {[...username][0] || ""}
-                  </span>
-                  <span className="hidden min-w-0 sm:flex sm:flex-col sm:items-start sm:leading-tight">
-                    <span className="truncate text-xs font-medium text-foreground" title={username} aria-label={username}>
-                      {username}
-                    </span>
-                    <span className="truncate text-2xs text-muted-foreground" title={userRole} aria-label={userRole}>
-                      {userRole}
-                    </span>
-                  </span>
-                  <ChevronDown className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-                </button>
-              </DropdownMenuTrigger>
-              <NavbarUserMenuContent
-                username={username}
-                userRole={userRole}
-                theme={theme}
-                setTheme={setTheme}
-                onLogout={onLogout}
-                onCloseAutoFocus={restoreMobileUserMenuFocus}
-                onEscapeKeyDown={scheduleMobileUserMenuTriggerFocus}
-              />
-            </DropdownMenu>
+            <NavbarUserMenuDropdown
+              variant="mobile"
+              triggerRef={mobileUserMenuTriggerRef}
+              username={username}
+              userRole={userRole}
+              theme={theme}
+              setTheme={setTheme}
+              onLogout={onLogout}
+              onCloseAutoFocus={restoreMobileUserMenuFocus}
+              onEscapeKeyDown={scheduleMobileUserMenuTriggerFocus}
+            />
           </div>
         </div>
 
@@ -310,38 +255,17 @@ function NavbarImpl({
         />
 
         <div className="ml-auto hidden shrink-0 items-center gap-2 lg:flex">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                ref={desktopUserMenuTriggerRef}
-                type="button"
-                className="user-menu-trigger max-w-[15rem] xl:max-w-none"
-                data-testid="button-user-menu"
-                aria-label={`Buka menu pengguna untuk ${username}`}
-                aria-haspopup="menu"
-              >
-                <span className="user-menu-avatar" aria-hidden="true">
-                  {[...username][0] || ""}
-                </span>
-                <span className="user-menu-copy max-w-[10.5rem] xl:max-w-none">
-                  <span className="truncate font-medium text-foreground" title={username} aria-label={username}>
-                    {username}
-                  </span>
-                  <span className="user-menu-role">{userRole}</span>
-                </span>
-                <ChevronDown className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-              </button>
-            </DropdownMenuTrigger>
-            <NavbarUserMenuContent
-              username={username}
-              userRole={userRole}
-              theme={theme}
-              setTheme={setTheme}
-              onLogout={onLogout}
-              onCloseAutoFocus={restoreDesktopUserMenuFocus}
-              onEscapeKeyDown={scheduleDesktopUserMenuTriggerFocus}
-            />
-          </DropdownMenu>
+          <NavbarUserMenuDropdown
+            variant="desktop"
+            triggerRef={desktopUserMenuTriggerRef}
+            username={username}
+            userRole={userRole}
+            theme={theme}
+            setTheme={setTheme}
+            onLogout={onLogout}
+            onCloseAutoFocus={restoreDesktopUserMenuFocus}
+            onEscapeKeyDown={scheduleDesktopUserMenuTriggerFocus}
+          />
         </div>
       </div>
 
