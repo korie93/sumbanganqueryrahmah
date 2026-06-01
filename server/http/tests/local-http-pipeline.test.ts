@@ -256,6 +256,61 @@ test("registerLocalHttpPipeline marks API responses as non-cacheable by default"
   }
 });
 
+test("registerLocalHttpPipeline strips sensitive fields from API JSON responses only", async (t) => {
+  const warningLogs: Array<{ message: string; payload: unknown }> = [];
+  t.mock.method(logger, "warn", (message: string, payload: unknown) => {
+    warningLogs.push({ message, payload });
+  });
+
+  const app = express();
+  registerLocalHttpPipeline(app, {
+    importBodyLimit: "1mb",
+    collectionBodyLimit: "1mb",
+    defaultBodyLimit: "100kb",
+    uploadsRootDir: path.resolve(process.cwd(), "uploads"),
+    recordRequestStarted: () => undefined,
+    recordRequestFinished: () => undefined,
+    adaptiveRateLimit: (_req, _res, next) => next(),
+    systemProtectionMiddleware: (_req, _res, next) => next(),
+    maintenanceGuard: (_req, _res, next) => next(),
+  });
+
+  const leakyPayload = {
+    ok: true,
+    profile: {
+      passwordHash: "hash",
+      username: "operator",
+    },
+  };
+  app.get("/api/leaky-response", (_req, res) => {
+    res.json(leakyPayload);
+  });
+  app.get("/leaky-response", (_req, res) => {
+    res.json(leakyPayload);
+  });
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const apiResponse = await fetch(`${baseUrl}/api/leaky-response`);
+    assert.equal(apiResponse.status, 200);
+    const apiPayload = await apiResponse.json() as {
+      profile?: Record<string, unknown>;
+    };
+    assert.equal("passwordHash" in (apiPayload.profile ?? {}), false);
+    assert.equal(apiPayload.profile?.username, "operator");
+
+    const nonApiResponse = await fetch(`${baseUrl}/leaky-response`);
+    assert.equal(nonApiResponse.status, 200);
+    const nonApiPayload = await nonApiResponse.json() as {
+      profile?: Record<string, unknown>;
+    };
+    assert.equal(nonApiPayload.profile?.passwordHash, "hash");
+    assert.equal(warningLogs.some((entry) => entry.message === "API response sanitizer stripped sensitive fields"), true);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
 test("registerLocalHttpPipeline applies the 4KB web-vitals body limit to canonical and legacy telemetry paths", async () => {
   const app = express();
   registerLocalHttpPipeline(app, {

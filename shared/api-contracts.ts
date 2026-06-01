@@ -9,6 +9,24 @@ const nullishStringSchema = z.string().nullish();
 const nonNegativeIntSchema = z.number().int().nonnegative();
 const positiveIntSchema = z.number().int().positive();
 const paginationLimitSchema = z.number().int().min(1, PAGE_LIMIT_MIN_ERROR_MESSAGE).max(1000);
+export const sensitiveResponseFieldBlocklist = [
+  "adminOverrideReason",
+  "backupEncryptionKey",
+  "backupEncryptionKeys",
+  "collectionPiiEncryptionKey",
+  "encryptedTotpSecret",
+  "hashedPassword",
+  "internalNotes",
+  "passwordHash",
+  "passwordSalt",
+  "piiEncryptionKey",
+  "totpSecret",
+  "totpSecretEncrypted",
+  "twoFactorSecretEncrypted",
+] as const;
+
+export const sensitiveResponseFieldSchema = z.enum(sensitiveResponseFieldBlocklist);
+
 export const apiErrorCodeSchema = z.union([
   sharedErrorCodeSchema,
   z.string().trim().regex(/^[A-Z][A-Z0-9_]*$/),

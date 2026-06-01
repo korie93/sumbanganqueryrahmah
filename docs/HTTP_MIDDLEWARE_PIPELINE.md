@@ -16,19 +16,21 @@ change has a dedicated security review and focused tests.
 4. `createCorsMiddleware()` validates browser origins and sets CORS headers.
 5. `/uploads` is dark-routed to `404` before observability and application
    routes, preventing direct public receipt access.
-6. `registerLocalHttpObservability(app, tracker)` assigns request accounting
+6. `createSensitiveApiResponseSanitizerMiddleware()` wraps API JSON responses
+   and strips sensitive fields if a handler accidentally returns raw records.
+7. `registerLocalHttpObservability(app, tracker)` assigns request accounting
    and completion logging.
-7. `createForwardedForTrustProxyWarningMiddleware()` warns when forwarded
+8. `createForwardedForTrustProxyWarningMiddleware()` warns when forwarded
    client IP headers arrive without explicit `TRUSTED_PROXIES`.
-8. `createGlobalRequestTimeoutMiddleware()` attaches the per-request abort
+9. `createGlobalRequestTimeoutMiddleware()` attaches the per-request abort
    signal and timeout boundary.
-9. `/api` cache headers set `Cache-Control: no-store` and `Pragma: no-cache`.
-10. `createCsrfProtectionMiddleware()` rejects cookie-authenticated unsafe API
+10. `/api` cache headers set `Cache-Control: no-store` and `Pragma: no-cache`.
+11. `createCsrfProtectionMiddleware()` rejects cookie-authenticated unsafe API
     mutations without a valid same-origin CSRF signal.
-11. `adaptiveRateLimit` applies IP and authenticated-user API throttles.
-12. `systemProtectionMiddleware` applies adaptive runtime pressure protection.
-13. `maintenanceGuard` blocks protected routes while maintenance mode is active.
-14. Domain route registration happens after this pipeline in
+12. `adaptiveRateLimit` applies IP and authenticated-user API throttles.
+13. `systemProtectionMiddleware` applies adaptive runtime pressure protection.
+14. `maintenanceGuard` blocks protected routes while maintenance mode is active.
+15. Domain route registration happens after this pipeline in
     `server/internal/local-runtime-environment.ts`.
 
 ## Rules For Changes

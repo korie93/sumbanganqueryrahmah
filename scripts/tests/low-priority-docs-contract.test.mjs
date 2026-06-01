@@ -30,6 +30,7 @@ test("HTTP middleware pipeline documentation preserves security-critical orderin
     "registerLocalHttpCompression",
     "registerLocalHttpBodyParsers",
     "createCorsMiddleware",
+    "createSensitiveApiResponseSanitizerMiddleware",
     "createCsrfProtectionMiddleware",
     "adaptiveRateLimit",
     "systemProtectionMiddleware",

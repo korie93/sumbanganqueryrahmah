@@ -5,6 +5,7 @@ import { createCorsMiddleware } from "../http/cors";
 import { createForwardedForTrustProxyWarningMiddleware } from "../http/forwarded-proxy-warning";
 import { createGlobalRequestTimeoutMiddleware } from "../http/global-request-timeout";
 import { buildApiErrorResponse } from "../http/api-error-response";
+import { createSensitiveApiResponseSanitizerMiddleware } from "../http/response-sanitizer";
 import { registerLocalHttpBodyParsers } from "./local-http-body-parsers";
 import { registerLocalHttpCompression } from "./local-http-compression";
 import { registerLocalHttpObservability } from "./local-http-observability";
@@ -52,6 +53,8 @@ export function registerLocalHttpPipeline(app: Express, options: LocalHttpPipeli
       statusCode: 404,
     }));
   });
+
+  app.use("/api", createSensitiveApiResponseSanitizerMiddleware());
 
   registerLocalHttpObservability(app, {
     recordRequestFinished,
