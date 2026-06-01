@@ -33,6 +33,7 @@ function focusMainContent(event: React.MouseEvent<HTMLAnchorElement>) {
   }
   mainContent.focus({ preventScroll: true });
   mainContent.scrollIntoView({ block: "start" });
+  // AUDIT-FIX [M8]: hash-only replaceState avoids router churn; analytics should ignore this skip-link focus URL update.
   window.history.replaceState(null, "", "#main-content");
 }
 
