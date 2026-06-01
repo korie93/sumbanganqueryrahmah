@@ -67,6 +67,19 @@ test("viewer controls use stable item callbacks", () => {
   assert.match(searchSource, /const handleSearchInputChange = useCallback\(/);
 });
 
+test("viewer search and filter controls expose explicit accessible labels", () => {
+  const filterRowSource = readViewerSource("ViewerFilterRow.tsx");
+  const searchSource = readViewerSource("ViewerSearchBar.tsx");
+
+  assert.match(searchSource, /htmlFor="viewer-search-query"/);
+  assert.match(searchSource, /Search all rows/);
+  assert.match(filterRowSource, /viewer-filter-column-label-/);
+  assert.match(filterRowSource, /aria-labelledby=\{columnLabelId\}/);
+  assert.match(filterRowSource, /viewer-filter-operator-label-/);
+  assert.match(filterRowSource, /aria-labelledby=\{operatorLabelId\}/);
+  assert.match(filterRowSource, /htmlFor=\{valueInputId\}/);
+});
+
 test("viewer page state avoids object-wide dependencies for active filter chips", () => {
   const source = readViewerSource("useViewerPageState.ts");
 

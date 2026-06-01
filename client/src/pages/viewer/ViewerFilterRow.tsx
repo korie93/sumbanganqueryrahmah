@@ -39,11 +39,22 @@ function ViewerFilterRowImpl({
   const handleRemoveFilter = useCallback(() => {
     onRemoveFilter(index);
   }, [index, onRemoveFilter]);
+  const rowNumber = index + 1;
+  const columnLabelId = `viewer-filter-column-label-${index}`;
+  const operatorLabelId = `viewer-filter-operator-label-${index}`;
+  const valueInputId = `viewer-filter-value-${index}`;
 
   return (
     <div className="flex flex-col gap-2 rounded-xl border border-border/60 bg-background/70 p-3 sm:flex-row sm:flex-wrap sm:items-center">
+      <span id={columnLabelId} className="sr-only">
+        Filter {rowNumber} column
+      </span>
       <Select value={filter.column} onValueChange={handleColumnChange}>
-        <SelectTrigger className="w-full sm:w-40" data-testid={`select-filter-column-${index}`}>
+        <SelectTrigger
+          aria-labelledby={columnLabelId}
+          className="w-full sm:w-40"
+          data-testid={`select-filter-column-${index}`}
+        >
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
@@ -55,11 +66,18 @@ function ViewerFilterRowImpl({
         </SelectContent>
       </Select>
 
+      <span id={operatorLabelId} className="sr-only">
+        Filter {rowNumber} operator
+      </span>
       <Select
         value={filter.operator}
         onValueChange={handleOperatorChange}
       >
-        <SelectTrigger className="w-full sm:w-32" data-testid={`select-filter-operator-${index}`}>
+        <SelectTrigger
+          aria-labelledby={operatorLabelId}
+          className="w-full sm:w-32"
+          data-testid={`select-filter-operator-${index}`}
+        >
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
@@ -71,8 +89,11 @@ function ViewerFilterRowImpl({
         </SelectContent>
       </Select>
 
+      <label htmlFor={valueInputId} className="sr-only">
+        Filter {rowNumber} value
+      </label>
       <Input
-        id={`viewer-filter-value-${index}`}
+        id={valueInputId}
         name={`viewerFilterValue${index + 1}`}
         type="search"
         value={filter.value}

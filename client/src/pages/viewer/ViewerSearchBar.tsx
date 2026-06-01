@@ -43,6 +43,9 @@ function ViewerSearchBarImpl({
     >
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
         <div className="relative min-w-48 max-w-xl flex-1">
+          <label htmlFor="viewer-search-query" className="sr-only">
+            Search all rows
+          </label>
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
             ref={searchInputRef}
