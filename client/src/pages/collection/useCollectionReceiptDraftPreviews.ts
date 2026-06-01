@@ -7,9 +7,21 @@ export type CollectionReceiptDraftPreview = {
   file: File;
   url: string;
   kind: ReceiptPreviewKind;
+  width: number;
+  height: number;
 };
 
 const MAX_COLLECTION_RECEIPT_PREVIEW_EDGE = 960;
+
+type CollectionReceiptDraftThumbnail = {
+  url: string;
+  width: number;
+  height: number;
+};
+
+function createEmptyCollectionReceiptDraftThumbnail(): CollectionReceiptDraftThumbnail {
+  return { url: "", width: 0, height: 0 };
+}
 
 function createCollectionReceiptDraftFileIdResolver() {
   const fileIds = new WeakMap<File, string>();
@@ -82,7 +94,7 @@ function orderCollectionReceiptDraftPreviews(
   return orderedPreviews;
 }
 
-async function createImageElementThumbnailUrl(file: File): Promise<string> {
+async function createImageElementThumbnail(file: File): Promise<CollectionReceiptDraftThumbnail> {
   const sourceUrl = URL.createObjectURL(file);
   let image: HTMLImageElement | null = null;
   const canvas = document.createElement("canvas");
@@ -100,14 +112,14 @@ async function createImageElementThumbnailUrl(file: File): Promise<string> {
       image.naturalHeight || image.height,
     );
     if (!dimensions.width || !dimensions.height) {
-      return "";
+      return createEmptyCollectionReceiptDraftThumbnail();
     }
 
     canvas.width = dimensions.width;
     canvas.height = dimensions.height;
     const context = canvas.getContext("2d");
     if (!context) {
-      return "";
+      return createEmptyCollectionReceiptDraftThumbnail();
     }
 
     context.drawImage(image, 0, 0, dimensions.width, dimensions.height);
@@ -115,7 +127,9 @@ async function createImageElementThumbnailUrl(file: File): Promise<string> {
       canvas.toBlob(resolve, "image/webp", 0.72);
     });
 
-    return thumbnailBlob ? URL.createObjectURL(thumbnailBlob) : "";
+    return thumbnailBlob
+      ? { url: URL.createObjectURL(thumbnailBlob), ...dimensions }
+      : createEmptyCollectionReceiptDraftThumbnail();
   } finally {
     if (image) {
       image.src = "";
@@ -126,9 +140,9 @@ async function createImageElementThumbnailUrl(file: File): Promise<string> {
   }
 }
 
-async function createBitmapThumbnailUrl(file: File): Promise<string> {
+async function createBitmapThumbnail(file: File): Promise<CollectionReceiptDraftThumbnail> {
   if (typeof createImageBitmap !== "function") {
-    return createImageElementThumbnailUrl(file);
+    return createImageElementThumbnail(file);
   }
 
   let bitmap: ImageBitmap | null = null;
@@ -138,14 +152,14 @@ async function createBitmapThumbnailUrl(file: File): Promise<string> {
     bitmap = await createImageBitmap(file);
     const dimensions = fitCollectionReceiptPreviewDimensions(bitmap.width, bitmap.height);
     if (!dimensions.width || !dimensions.height) {
-      return "";
+      return createEmptyCollectionReceiptDraftThumbnail();
     }
 
     canvas.width = dimensions.width;
     canvas.height = dimensions.height;
     const context = canvas.getContext("2d");
     if (!context) {
-      return "";
+      return createEmptyCollectionReceiptDraftThumbnail();
     }
 
     context.drawImage(bitmap, 0, 0, dimensions.width, dimensions.height);
@@ -153,9 +167,11 @@ async function createBitmapThumbnailUrl(file: File): Promise<string> {
       canvas.toBlob(resolve, "image/webp", 0.72);
     });
 
-    return thumbnailBlob ? URL.createObjectURL(thumbnailBlob) : "";
+    return thumbnailBlob
+      ? { url: URL.createObjectURL(thumbnailBlob), ...dimensions }
+      : createEmptyCollectionReceiptDraftThumbnail();
   } catch {
-    return createImageElementThumbnailUrl(file);
+    return createImageElementThumbnail(file);
   } finally {
     bitmap?.close();
     canvas.width = 0;
@@ -172,16 +188,18 @@ async function createCollectionReceiptDraftPreview(
     fileName: file.name,
   });
 
-  let url = "";
+  let thumbnail = createEmptyCollectionReceiptDraftThumbnail();
   if (kind === "image" && typeof document !== "undefined") {
-    url = await createBitmapThumbnailUrl(file);
+    thumbnail = await createBitmapThumbnail(file);
   }
 
   return {
     key: buildCollectionReceiptDraftPreviewKey(fileId),
     file,
-    url,
+    url: thumbnail.url,
     kind,
+    width: thumbnail.width,
+    height: thumbnail.height,
   } satisfies CollectionReceiptDraftPreview;
 }
 

@@ -44,6 +44,10 @@ export function CollectionReceiptDraftCard({
   const dateInputId = `pending-receipt-date-${index}`;
   const referenceInputId = `pending-receipt-reference-${index}`;
   const receiptPositionLabel = `Receipt ${index + 1} of ${Math.max(1, totalCount)}`;
+  const hasPreviewDimensions = preview.width > 0 && preview.height > 0;
+  const previewAspectRatio = hasPreviewDimensions
+    ? `${preview.width} / ${preview.height}`
+    : undefined;
 
   return (
     <article className="rounded-xl border border-border/70 bg-background shadow-sm">
@@ -54,9 +58,12 @@ export function CollectionReceiptDraftCard({
               <img
                 src={safePreviewUrl}
                 alt={`Preview receipt ${index + 1}: ${preview.file.name}`}
-                className="max-h-[30rem] w-full rounded-lg object-contain"
+                width={hasPreviewDimensions ? preview.width : undefined}
+                height={hasPreviewDimensions ? preview.height : undefined}
+                className="h-auto max-h-[30rem] w-full rounded-lg object-contain"
                 loading="lazy"
                 decoding="async"
+                style={previewAspectRatio ? { aspectRatio: previewAspectRatio } : undefined}
               />
             ) : (
               <div className="flex flex-col items-center gap-2 text-muted-foreground">
