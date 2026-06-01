@@ -23,8 +23,20 @@ function createCsrfTestApp() {
       allowedOrigins: [ALLOWED_ORIGIN],
     }),
   );
-  app.post("/api/mutate", (_req, res) => {
+  for (const method of ["post", "put", "patch", "delete"] as const) {
+    app[method]("/api/mutate", (_req, res) => {
+      res.json({ ok: true, method: method.toUpperCase() });
+    });
+  }
+  app.post("/api/mutate-and-rotate", (_req, res) => {
+    rotateCsrfTokenAfterPrivilegeEscalation(res, {
+      reason: "own_credentials_updated",
+      route: "/api/mutate-and-rotate",
+    });
     res.json({ ok: true });
+  });
+  app.post("/api/rejected-mutate", (_req, res) => {
+    res.status(400).json({ ok: false });
   });
   app.post("/api/csp-report", (_req, res) => {
     res.status(204).end();
@@ -227,7 +239,7 @@ test("csrf middleware accepts session mutations with a valid double-submit token
     });
 
     assert.equal(response.status, 200);
-    assert.deepEqual(await response.json(), { ok: true });
+    assert.deepEqual(await response.json(), { ok: true, method: "POST" });
   } finally {
     await stopTestServer(server);
   }
@@ -306,7 +318,7 @@ test("csrf middleware accepts cookie-authenticated mutations with a same-origin 
     });
 
     assert.equal(response.status, 200);
-    assert.deepEqual(await response.json(), { ok: true });
+    assert.deepEqual(await response.json(), { ok: true, method: "POST" });
   } finally {
     await stopTestServer(server);
   }
@@ -322,7 +334,7 @@ test("csrf middleware allows requests without auth session cookies", async () =>
     });
 
     assert.equal(response.status, 200);
-    assert.deepEqual(await response.json(), { ok: true });
+    assert.deepEqual(await response.json(), { ok: true, method: "POST" });
   } finally {
     await stopTestServer(server);
   }
@@ -341,8 +353,110 @@ test("csrf middleware allows bearer-only API mutations because cookies are not a
     });
 
     assert.equal(response.status, 200);
-    assert.deepEqual(await response.json(), { ok: true });
+    assert.deepEqual(await response.json(), { ok: true, method: "POST" });
   } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("csrf middleware rotates csrf cookies for successful authenticated state-changing operations", async () => {
+  const app = createCsrfTestApp();
+  const { server, baseUrl } = await startTestServer(app);
+  const originalInfo = logger.info;
+  const infos: Array<{ message: string; payload: Record<string, unknown> | undefined }> = [];
+  logger.info = ((message: string, payload?: Record<string, unknown>) => {
+    infos.push({ message, payload });
+  }) as typeof logger.info;
+
+  try {
+    for (const method of ["POST", "PUT", "PATCH", "DELETE"]) {
+      const response = await fetch(`${baseUrl}/api/mutate`, {
+        method,
+        headers: {
+          Cookie: `sqr_auth=token-value; sqr_csrf=${VALID_CSRF_TOKEN}`,
+          "X-CSRF-Token": VALID_CSRF_TOKEN,
+        },
+      });
+
+      assert.equal(response.status, 200);
+      const csrfHeader = response.headers.get(AUTH_SESSION_CSRF_HEADER_NAME) || "";
+      const setCookie = response.headers.get("set-cookie") || "";
+      assert.equal(csrfHeader.length, 64);
+      assert.notEqual(csrfHeader, VALID_CSRF_TOKEN);
+      assert.match(setCookie, new RegExp(`${AUTH_SESSION_CSRF_COOKIE_NAME}=${csrfHeader}`));
+    }
+
+    const stateChangingRotations = infos.filter(
+      (info) => info.payload?.event === "csrf_state_changing_rotation",
+    );
+    assert.equal(stateChangingRotations.length, 4);
+    assert.deepEqual(
+      stateChangingRotations.map((info) => info.payload?.method),
+      ["POST", "PUT", "PATCH", "DELETE"],
+    );
+    assert.equal(stateChangingRotations.every((info) => info.payload?.rotated === true), true);
+  } finally {
+    logger.info = originalInfo;
+    await stopTestServer(server);
+  }
+});
+
+test("csrf middleware does not rotate csrf cookies for rejected or unauthenticated mutations", async () => {
+  const app = createCsrfTestApp();
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const rejectedResponse = await fetch(`${baseUrl}/api/rejected-mutate`, {
+      method: "POST",
+      headers: {
+        Cookie: `sqr_auth=token-value; sqr_csrf=${VALID_CSRF_TOKEN}`,
+        "X-CSRF-Token": VALID_CSRF_TOKEN,
+      },
+    });
+    assert.equal(rejectedResponse.status, 400);
+    assert.equal(rejectedResponse.headers.has(AUTH_SESSION_CSRF_HEADER_NAME), false);
+    assert.doesNotMatch(rejectedResponse.headers.get("set-cookie") || "", /sqr_csrf=/);
+
+    const unauthenticatedResponse = await fetch(`${baseUrl}/api/mutate`, {
+      method: "POST",
+    });
+    assert.equal(unauthenticatedResponse.status, 200);
+    assert.equal(unauthenticatedResponse.headers.has(AUTH_SESSION_CSRF_HEADER_NAME), false);
+    assert.doesNotMatch(unauthenticatedResponse.headers.get("set-cookie") || "", /sqr_csrf=/);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("csrf middleware coalesces automatic rotation with route-level privilege rotation", async () => {
+  const app = createCsrfTestApp();
+  const { server, baseUrl } = await startTestServer(app);
+  const originalInfo = logger.info;
+  const infos: Array<{ message: string; payload: Record<string, unknown> | undefined }> = [];
+  logger.info = ((message: string, payload?: Record<string, unknown>) => {
+    infos.push({ message, payload });
+  }) as typeof logger.info;
+
+  try {
+    const response = await fetch(`${baseUrl}/api/mutate-and-rotate`, {
+      method: "POST",
+      headers: {
+        Cookie: `sqr_auth=token-value; sqr_csrf=${VALID_CSRF_TOKEN}`,
+        "X-CSRF-Token": VALID_CSRF_TOKEN,
+      },
+    });
+
+    assert.equal(response.status, 200);
+    const setCookie = response.headers.get("set-cookie") || "";
+    assert.equal((setCookie.match(/sqr_csrf=/g) || []).length, 1);
+    assert.equal(response.headers.get(AUTH_SESSION_CSRF_HEADER_NAME)?.length, 64);
+    assert.equal(infos[0]?.payload?.event, "csrf_privilege_escalation_rotation");
+    assert.equal(infos[0]?.payload?.rotated, true);
+    assert.equal(infos[1]?.payload?.event, "csrf_state_changing_rotation");
+    assert.equal(infos[1]?.payload?.rotated, false);
+    assert.equal(infos[1]?.payload?.reusedPendingRotation, true);
+  } finally {
+    logger.info = originalInfo;
     await stopTestServer(server);
   }
 });
@@ -391,6 +505,32 @@ test("csrf middleware exempts canonical web-vitals telemetry from token checks",
     });
 
     assert.equal(response.status, 204);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("csrf middleware does not rotate csrf cookies for telemetry exemption responses", async () => {
+  const app = createCsrfTestApp();
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(`${baseUrl}/api/telemetry/web-vitals`, {
+      method: "POST",
+      headers: {
+        Cookie: `sqr_auth=token-value; sqr_csrf=${VALID_CSRF_TOKEN}`,
+        "Content-Type": "application/json",
+        Origin: ALLOWED_ORIGIN,
+      },
+      body: JSON.stringify({
+        name: "LCP",
+        value: 123,
+      }),
+    });
+
+    assert.equal(response.status, 204);
+    assert.equal(response.headers.has(AUTH_SESSION_CSRF_HEADER_NAME), false);
+    assert.doesNotMatch(response.headers.get("set-cookie") || "", /sqr_csrf=/);
   } finally {
     await stopTestServer(server);
   }

@@ -1,3 +1,4 @@
+import type { OutgoingHttpHeader, OutgoingHttpHeaders } from "node:http";
 import type { RequestHandler, Response } from "express";
 import {
   AUTH_SESSION_COOKIE_NAME,
@@ -38,6 +39,13 @@ type CsrfPrivilegeEscalationRotationContext = {
 };
 
 const CSRF_ROTATION_QUEUED_LOCAL_KEY = "sqrCsrfRotationQueued";
+const CSRF_ROTATION_WRITE_HEAD_PATCHED_LOCAL_KEY = "sqrCsrfRotationWriteHeadPatched";
+
+type WriteHeadArgs = [
+  statusCode: number,
+  statusMessageOrHeaders?: string | OutgoingHttpHeaders | OutgoingHttpHeader[],
+  headers?: OutgoingHttpHeaders | OutgoingHttpHeader[],
+];
 
 function getResponseLocals(res: Response): Record<string, unknown> {
   const responseWithOptionalLocals = res as Response & {
@@ -57,6 +65,18 @@ export function rotateCsrfTokenAfterPrivilegeEscalation(
   res: Response,
   context: CsrfPrivilegeEscalationRotationContext,
 ): void {
+  rotateCsrfTokenOnce(res, "CSRF token rotation enforced after privilege escalation", {
+    event: "csrf_privilege_escalation_rotation",
+    reason: context.reason,
+    route: context.route ?? null,
+  });
+}
+
+function rotateCsrfTokenOnce(
+  res: Response,
+  message: string,
+  context: Record<string, unknown>,
+): void {
   const locals = getResponseLocals(res);
   const alreadyQueued = locals[CSRF_ROTATION_QUEUED_LOCAL_KEY] === true || responseHasPendingCsrfCookie(res);
   locals[CSRF_ROTATION_QUEUED_LOCAL_KEY] = true;
@@ -65,13 +85,38 @@ export function rotateCsrfTokenAfterPrivilegeEscalation(
     rotateAuthSessionCsrfCookie(res);
   }
 
-  logger.info("CSRF token rotation enforced after privilege escalation", {
-    event: "csrf_privilege_escalation_rotation",
-    reason: context.reason,
-    route: context.route ?? null,
+  logger.info(message, {
+    ...context,
     rotated: !alreadyQueued,
     reusedPendingRotation: alreadyQueued,
   });
+}
+
+function isSuccessfulResponseStatus(statusCode: number): boolean {
+  return statusCode >= 200 && statusCode < 300;
+}
+
+function queueCsrfTokenRotationForSuccessfulMutation(req: Parameters<RequestHandler>[0], res: Response): void {
+  const locals = getResponseLocals(res);
+  if (locals[CSRF_ROTATION_WRITE_HEAD_PATCHED_LOCAL_KEY] === true) {
+    return;
+  }
+
+  locals[CSRF_ROTATION_WRITE_HEAD_PATCHED_LOCAL_KEY] = true;
+
+  const originalWriteHead = res.writeHead.bind(res) as (...args: WriteHeadArgs) => Response;
+  res.writeHead = ((...args: WriteHeadArgs) => {
+    const [statusCode] = args;
+    if (!res.headersSent && isSuccessfulResponseStatus(statusCode)) {
+      rotateCsrfTokenOnce(res, "CSRF token rotation enforced after successful state-changing operation", {
+        event: "csrf_state_changing_rotation",
+        method: req.method,
+        path: req.path,
+      });
+    }
+
+    return originalWriteHead(...args);
+  }) as Response["writeHead"];
 }
 
 function logCsrfRejection(req: Parameters<RequestHandler>[0], code: string, details?: Record<string, unknown>) {
@@ -143,6 +188,8 @@ export function createCsrfProtectionMiddleware(options: CsrfMiddlewareOptions = 
     if (!authCookie) {
       return next();
     }
+
+    queueCsrfTokenRotationForSuccessfulMutation(req, res);
 
     // Strong check path: double-submit token (cookie + header).
     if (readAuthSessionCsrfTokenFromHeaders(req.headers)) {
