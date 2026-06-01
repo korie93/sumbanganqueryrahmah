@@ -8,8 +8,10 @@ export type InternalMetricName =
   | "backupPayloadIntegrityFailuresTotal"
   | "collectionPiiDecryptFallbackTotal"
   | "collectionPiiDecryptFailClosedTotal"
+  | "collectionReceiptExternalScanArgValidationFailuresTotal"
   | "collectionReceiptExternalScanFailOpenBypassTotal"
   | "collectionReceiptExternalScanFailuresTotal"
+  | "collectionReceiptPathTraversalBlockedTotal"
   | "collectionRollupNotificationCallbackFailuresTotal"
   | "collectionRollupNotificationCriticalFailuresTotal"
   | "collectionRollupNotificationDisconnectFailuresTotal"
@@ -67,8 +69,10 @@ const INTERNAL_METRIC_NAMES: readonly InternalMetricName[] = [
   "backupPayloadIntegrityFailuresTotal",
   "collectionPiiDecryptFallbackTotal",
   "collectionPiiDecryptFailClosedTotal",
+  "collectionReceiptExternalScanArgValidationFailuresTotal",
   "collectionReceiptExternalScanFailOpenBypassTotal",
   "collectionReceiptExternalScanFailuresTotal",
+  "collectionReceiptPathTraversalBlockedTotal",
   "collectionRollupNotificationCallbackFailuresTotal",
   "collectionRollupNotificationCriticalFailuresTotal",
   "collectionRollupNotificationDisconnectFailuresTotal",

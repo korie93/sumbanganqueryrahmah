@@ -3,6 +3,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
 import { hashPassword } from "../../auth/passwords";
+import { getInternalMetricsSnapshot } from "../../internal/metrics";
 import { logger } from "../../lib/logger";
 import { registerCollectionRoutes } from "../collection.routes";
 import type { PostgresStorage } from "../../storage-postgres";
@@ -1687,6 +1688,62 @@ test("GET /api/collection/:id/receipt/view promotes legacy receipt_file into rel
   } finally {
     await stopTestServer(server);
     await fs.unlink(path.join(uploadsDir, storedFileName)).catch(() => undefined);
+  }
+});
+
+test("GET /api/collection/:id/receipt/view rejects receipt symlinks that escape the managed directory", async (t) => {
+  const uploadsDir = path.resolve(process.cwd(), "uploads", "collection-receipts");
+  const outsideDir = path.resolve(process.cwd(), "var", "collection-receipt-path-security");
+  const storedFileName = `route-test-symlink-receipt-${Date.now()}-${Math.random().toString(16).slice(2)}.pdf`;
+  const storedReceiptPath = `/uploads/collection-receipts/${storedFileName}`;
+  const symlinkPath = path.join(uploadsDir, storedFileName);
+  const outsideFile = path.join(outsideDir, "outside-receipt.pdf");
+  await fs.mkdir(uploadsDir, { recursive: true });
+  await fs.mkdir(outsideDir, { recursive: true });
+  await fs.writeFile(outsideFile, createTinyPdfBuffer());
+  try {
+    await fs.symlink(outsideFile, symlinkPath);
+  } catch {
+    t.skip("filesystem does not permit symlink creation for this test user");
+    return;
+  }
+
+  const { storage } = createCoreCollectionStorageDouble({
+    sessionNickname: "Collector Alpha",
+    seedRecordOverrides: {
+      receiptFile: storedReceiptPath,
+    },
+  });
+  const app = createJsonTestApp();
+  const beforeBlockedCount = getInternalMetricsSnapshot().counters.collectionReceiptPathTraversalBlockedTotal;
+
+  registerCollectionRoutes(app, {
+    storage,
+    authenticateToken: createTestAuthenticateToken({
+      userId: "user-1",
+      username: "staff.user",
+      role: "user",
+      activityId: "activity-user-collection-receipt-symlink",
+    }),
+    requireRole: createTestRequireRole(),
+    requireTabAccess: () => allowAllTabs(),
+  });
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const response = await fetch(`${baseUrl}/api/collection/collection-1/receipt/view`);
+    assert.equal(response.status, 403);
+    const payload = await response.json();
+    assert.equal(payload.ok, false);
+    assert.equal(payload.error?.code, "FORBIDDEN");
+    assert.equal(
+      getInternalMetricsSnapshot().counters.collectionReceiptPathTraversalBlockedTotal,
+      beforeBlockedCount + 1,
+    );
+  } finally {
+    await stopTestServer(server);
+    await fs.unlink(symlinkPath).catch(() => undefined);
+    await fs.rm(outsideDir, { recursive: true, force: true });
   }
 });
 

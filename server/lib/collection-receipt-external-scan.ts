@@ -66,7 +66,22 @@ export async function scanCollectionReceiptWithExternalScanner(filePath: string)
     return;
   }
 
-  const args = buildScanArgs(config, validatedFilePath);
+  let args: string[];
+  try {
+    args = buildScanArgs(config, validatedFilePath);
+  } catch (error) {
+    const operational = createOperationalScanError(
+      config,
+      filePath,
+      "external-scan-args-invalid",
+      error instanceof Error ? error.message : "invalid scanner arguments",
+    );
+    if (operational) {
+      throw operational;
+    }
+    return;
+  }
+
   await runExternalReceiptScan({
     config,
     filePath,

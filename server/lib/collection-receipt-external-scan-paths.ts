@@ -6,6 +6,10 @@ import {
   BARE_COMMAND_PATTERN,
   UNSAFE_ENV_VALUE_PATTERN,
 } from "./collection-receipt-external-scan-shared";
+import {
+  assertCollectionReceiptPathWithinBounds,
+  PathTraversalError,
+} from "./path-security";
 
 export type ExternalScanCommandValidationOptions = {
   readonly allowDevelopmentScannerShim?: boolean;
@@ -214,5 +218,15 @@ export async function validateExternalScanFilePath(filePath: string): Promise<st
     throw new Error("receipt file path must point to an existing file.");
   }
 
-  return resolved;
+  try {
+    return assertCollectionReceiptPathWithinBounds(
+      resolved,
+      "collection-receipt-external-scan-target",
+    );
+  } catch (error) {
+    if (error instanceof PathTraversalError) {
+      throw new Error("receipt file path must stay inside the managed receipt directory.");
+    }
+    throw error;
+  }
 }

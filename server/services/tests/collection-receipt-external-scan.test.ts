@@ -4,15 +4,18 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { COLLECTION_RECEIPT_DIR } from "../../lib/collection-receipt-files";
 import { CollectionReceiptSecurityError } from "../../lib/collection-receipt-security";
 import { scanCollectionReceiptWithExternalScanner } from "../../lib/collection-receipt-external-scan";
 import { readExternalScanConfig } from "../../lib/collection-receipt-external-scan-config";
 import { validateExternalScanCommand } from "../../lib/collection-receipt-external-scan-paths";
 import { runExternalReceiptScan, type ExternalScanSpawn } from "../../lib/collection-receipt-external-scan-runner";
 import {
+  buildScanArgs,
   DEFAULT_COLLECTION_RECEIPT_EXTERNAL_SCAN_TIMEOUT_MS,
   type ExternalScanConfig,
 } from "../../lib/collection-receipt-external-scan-shared";
+import { ScanArgError } from "../../lib/scanner-arg-validator";
 import { getInternalMetricsSnapshot } from "../../internal/metrics";
 
 const ENV_KEYS = [
@@ -45,9 +48,11 @@ function restoreEnv(snapshot: Map<string, string | undefined>) {
 
 async function withTemporaryReceiptFile<T>(
   run: (filePath: string) => Promise<T> | T,
+  fileName = "receipt.pdf",
 ): Promise<T> {
-  const temporaryDirectory = await fs.mkdtemp(path.join(os.tmpdir(), "receipt-external-scan-"));
-  const filePath = path.join(temporaryDirectory, "receipt.pdf");
+  await fs.mkdir(COLLECTION_RECEIPT_DIR, { recursive: true });
+  const temporaryDirectory = await fs.mkdtemp(path.join(COLLECTION_RECEIPT_DIR, "receipt-external-scan-"));
+  const filePath = path.join(temporaryDirectory, fileName);
   await fs.writeFile(filePath, "scan-target");
 
   try {
@@ -386,6 +391,66 @@ test("external receipt scanner rejects missing receipt files before spawn", asyn
   } finally {
     restoreEnv(previousEnv);
   }
+});
+
+test("external receipt scanner rejects files outside the managed receipt directory before spawn", async () => {
+  const previousEnv = snapshotEnv();
+  process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_ENABLED = "1";
+  process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_COMMAND = process.execPath;
+  process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_ARGS_JSON = "[\"-e\",\"process.exit(0)\",\"{file}\"]";
+  process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_FAIL_CLOSED = "1";
+  process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_TIMEOUT_MS = "1000";
+
+  const temporaryDirectory = await fs.mkdtemp(path.join(os.tmpdir(), "receipt-external-scan-outside-"));
+  const outsideFilePath = path.join(temporaryDirectory, "outside-receipt.pdf");
+  await fs.writeFile(outsideFilePath, "scan-target");
+
+  try {
+    await assert.rejects(
+      () => scanCollectionReceiptWithExternalScanner(outsideFilePath),
+      (error: unknown) =>
+        error instanceof CollectionReceiptSecurityError
+        && error.reasonCode === "external-scan-file-invalid",
+    );
+  } finally {
+    restoreEnv(previousEnv);
+    await fs.rm(temporaryDirectory, { recursive: true, force: true });
+  }
+});
+
+test("external receipt scanner rejects dynamic filename args that look like scanner flags", async () => {
+  const previousEnv = snapshotEnv();
+  process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_ENABLED = "1";
+  process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_COMMAND = process.execPath;
+  process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_ARGS_JSON = "[\"-e\",\"process.exit(0)\",\"{filename}\"]";
+  process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_FAIL_CLOSED = "1";
+  process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_TIMEOUT_MS = "1000";
+
+  try {
+    const before = getInternalMetricsSnapshot().counters;
+    await withTemporaryReceiptFile(async (filePath) => {
+      await assert.rejects(
+        () => scanCollectionReceiptWithExternalScanner(filePath),
+        (error: unknown) =>
+          error instanceof CollectionReceiptSecurityError
+          && error.reasonCode === "external-scan-args-invalid",
+      );
+    }, "--scanner-flag.pdf");
+    const after = getInternalMetricsSnapshot().counters;
+    assert.equal(
+      after.collectionReceiptExternalScanArgValidationFailuresTotal,
+      before.collectionReceiptExternalScanArgValidationFailuresTotal + 1,
+    );
+  } finally {
+    restoreEnv(previousEnv);
+  }
+});
+
+test("external receipt scanner argument builder rejects null-byte dynamic paths", () => {
+  assert.throws(
+    () => buildScanArgs(createExternalScanTestConfig(), `receipt\0.pdf`),
+    ScanArgError,
+  );
 });
 
 test("external receipt scanner accepts a non-executable receipt file", async () => {

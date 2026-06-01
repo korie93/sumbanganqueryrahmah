@@ -2,6 +2,11 @@ import type { Response } from "express";
 import type { AuthenticatedRequest } from "../auth/guards";
 import { ERROR_CODES } from "../../shared/error-codes";
 import { logger } from "../lib/logger";
+import {
+  assertCollectionReceiptPathWithinBounds,
+  PathAccessError,
+  PathTraversalError,
+} from "../lib/path-security";
 import type {
   PostgresStorage,
 } from "../storage-postgres";
@@ -75,6 +80,10 @@ function resolveCollectionReceiptErrorCode(params: {
 
   if (reason === "preview_not_supported") {
     return COLLECTION_RECEIPT_ERROR_CODES.PREVIEW_UNSUPPORTED;
+  }
+
+  if (reason === "receipt_storage_out_of_bounds") {
+    return ERROR_CODES.FORBIDDEN;
   }
 
   if (statusCode >= 500 || reason === "send_file_failed") {
@@ -166,6 +175,55 @@ export async function serveCollectionReceipt(
     const safeFileName = sanitizeReceiptDownloadName(
       selectedReceipt?.originalFileName || resolved.storedFileName,
     );
+    let safeAbsolutePath: string;
+    try {
+      safeAbsolutePath = assertCollectionReceiptPathWithinBounds(
+        resolved.absolutePath,
+        "collection-receipt-file-serve",
+      );
+    } catch (error) {
+      if (error instanceof PathTraversalError) {
+        logCollectionReceiptWarning({
+          req,
+          mode,
+          statusCode: 403,
+          reason: "receipt_storage_out_of_bounds",
+          meta: {
+            recordId: record.id,
+            requestedReceiptId,
+          },
+        });
+        return res.status(403).json(
+          buildCollectionReceiptErrorResponse(
+            "Akses ditolak.",
+            ERROR_CODES.FORBIDDEN,
+          ),
+        );
+      }
+
+      if (error instanceof PathAccessError) {
+        logCollectionReceiptWarning({
+          req,
+          mode,
+          statusCode: 404,
+          reason: "send_file_missing",
+          meta: {
+            recordId: record.id,
+            requestedReceiptId,
+            errorCode: error.code,
+          },
+        });
+        return res.status(404).json(
+          buildCollectionReceiptErrorResponse(
+            "Receipt file not found.",
+            COLLECTION_RECEIPT_ERROR_CODES.NOT_FOUND,
+          ),
+        );
+      }
+
+      throw error;
+    }
+
     applyCollectionReceiptResponseHeaders({
       res,
       mode,
@@ -173,7 +231,7 @@ export async function serveCollectionReceipt(
       safeFileName,
     });
 
-    return res.sendFile(resolved.absolutePath, (err) => {
+    return res.sendFile(safeAbsolutePath, (err) => {
       if (!err || res.headersSent) return;
       const sendErr = err as NodeJS.ErrnoException;
       const status = sendErr.code === "ENOENT" ? 404 : 500;

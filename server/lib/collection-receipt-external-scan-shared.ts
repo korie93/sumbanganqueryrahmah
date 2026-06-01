@@ -1,6 +1,7 @@
 import path from "node:path";
 import { z } from "zod";
 import { readOptionalString as readRuntimeOptionalString } from "../config/runtime-config-read-utils";
+import { validateScannerDynamicArgValue } from "./scanner-arg-validator";
 import { safeJsonParse } from "./safe-json";
 
 export const DEFAULT_COLLECTION_RECEIPT_EXTERNAL_SCAN_TIMEOUT_MS = 60_000;
@@ -151,10 +152,12 @@ export function validateScannerArgs(args: string[]): string[] {
 }
 
 export function buildScanArgs(config: ExternalScanConfig, filePath: string): string[] {
+  const safeFilePath = validateScannerDynamicArgValue(filePath);
+  const safeFileName = validateScannerDynamicArgValue(path.basename(safeFilePath));
   return config.args.map((entry) =>
     entry
-      .replace(/\{file\}/g, filePath)
-      .replace(/\{filename\}/g, path.basename(filePath)));
+      .replace(/\{file\}/g, safeFilePath)
+      .replace(/\{filename\}/g, safeFileName));
 }
 
 export function summarizeOutput(output: string): string | null {
