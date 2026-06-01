@@ -74,6 +74,7 @@ export default tseslint.config(
       "jsx-a11y/click-events-have-key-events": "error",
       "jsx-a11y/label-has-for": "off",
       "jsx-a11y/no-static-element-interactions": "error",
+      "eqeqeq": ["error", "always", { null: "ignore" }], // AUDIT-FIX [M13]: allow only intentional nullish loose checks.
       "no-extra-boolean-cast": "warn",
       "no-irregular-whitespace": "warn",
       "no-restricted-syntax": [
@@ -118,6 +119,7 @@ export default tseslint.config(
           varsIgnorePattern: "^_",
         },
       ],
+      "eqeqeq": ["error", "always", { null: "ignore" }], // AUDIT-FIX [M13]: allow only intentional nullish loose checks.
       "no-extra-boolean-cast": "warn",
       "no-irregular-whitespace": "warn",
       "no-unsafe-finally": "warn",
