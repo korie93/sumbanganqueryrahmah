@@ -470,6 +470,40 @@ test("auth adaptive cooldown cache pressure emits bounded observability", (t) =>
   }
 });
 
+test("auth adaptive cooldown cache near-capacity alert fires at ninety percent", (t) => {
+  stopAdaptiveRateLimitCooldownSweep();
+  clearAdaptiveRateLimitCooldownsForTests();
+
+  const warningLogs: Array<{ message: string; payload: Record<string, unknown> | undefined }> = [];
+  const metricBefore = getInternalMetricsSnapshot()
+    .counters.authAdaptiveRateLimitCooldownCacheNearCapacityAlertsTotal;
+  t.mock.method(logger, "warn", (message: string, payload?: Record<string, unknown>) => {
+    warningLogs.push({ message, payload });
+  });
+
+  try {
+    const nowMs = Date.parse("2026-06-01T00:00:00.000Z");
+    const alertThresholdEntries = Math.ceil(4_096 * 0.90);
+    for (let index = 0; index < alertThresholdEntries; index += 1) {
+      recordAdaptiveRateLimitViolationForTests(`near-capacity-client-${index}`, 60_000, nowMs);
+    }
+    recordAdaptiveRateLimitViolationForTests("near-capacity-client-extra", 60_000, nowMs + 1);
+
+    const metricAfter = getInternalMetricsSnapshot()
+      .counters.authAdaptiveRateLimitCooldownCacheNearCapacityAlertsTotal;
+    assert.equal(metricAfter - metricBefore, 1);
+    assert.ok(warningLogs.some((entry) =>
+      entry.message === "Auth adaptive rate-limit cooldown cache near capacity"
+      && entry.payload?.bucketCount === alertThresholdEntries
+      && entry.payload?.maxBuckets === 4_096
+      && entry.payload?.thresholdPercent === 90
+      && entry.payload?.utilizationPercent === 90
+    ));
+  } finally {
+    clearAdaptiveRateLimitCooldownsForTests();
+  }
+});
+
 test("auth adaptive cooldown cache gauges track size and utilization", () => {
   stopAdaptiveRateLimitCooldownSweep();
   clearAdaptiveRateLimitCooldownsForTests();

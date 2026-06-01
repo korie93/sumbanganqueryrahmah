@@ -1,5 +1,6 @@
 export type InternalMetricName =
   | "apiResponseSensitiveFieldsStrippedTotal"
+  | "authAdaptiveRateLimitCooldownCacheNearCapacityAlertsTotal"
   | "authAdaptiveRateLimitCooldownCachePressureTotal"
   | "authAdaptiveRateLimitCooldownEvictionsTotal"
   | "authIdentityFallbackTotal"
@@ -62,6 +63,7 @@ export type InternalMetricsRecorder = {
 
 const INTERNAL_METRIC_NAMES: readonly InternalMetricName[] = [
   "apiResponseSensitiveFieldsStrippedTotal",
+  "authAdaptiveRateLimitCooldownCacheNearCapacityAlertsTotal",
   "authAdaptiveRateLimitCooldownCachePressureTotal",
   "authAdaptiveRateLimitCooldownEvictionsTotal",
   "authIdentityFallbackTotal",

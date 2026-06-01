@@ -54,6 +54,7 @@ const ADAPTIVE_RATE_LIMIT_MAX_BUCKETS = 4_096;
 const ADAPTIVE_RATE_LIMIT_MAX_COOLDOWN_MS = 60 * 60 * 1000;
 const ADAPTIVE_RATE_LIMIT_SWEEP_INTERVAL_MS = 30_000;
 const ADAPTIVE_RATE_LIMIT_CACHE_PRESSURE_THRESHOLD_RATIO = 0.85;
+const ADAPTIVE_RATE_LIMIT_CACHE_NEAR_CAPACITY_ALERT_RATIO = 0.90;
 const ADAPTIVE_RATE_LIMIT_CACHE_PRESSURE_LOG_INTERVAL_MS = 60_000;
 const ADAPTIVE_RATE_LIMIT_WARNING_EVICTION_BATCH_SIZE = 512;
 
@@ -88,6 +89,7 @@ const adaptiveRateLimitCooldowns = new LRUCache<string, AdaptiveRateLimitBucket>
 });
 let adaptiveRateLimitCooldownSweepJob: BackgroundSweepJob | null = null;
 let adaptiveRateLimitCachePressureLastLoggedAt = 0;
+let adaptiveRateLimitCacheNearCapacityLastAlertedAt = 0;
 let adaptiveRateLimitWarningEvictionLastRanAt = 0;
 
 function recordAdaptiveRateLimitCooldownCacheGauges(): void {
@@ -342,6 +344,33 @@ function maybeReportAdaptiveRateLimitCachePressure(nowMs: number) {
   });
 }
 
+function maybeReportAdaptiveRateLimitCacheNearCapacity(nowMs: number) {
+  const bucketCount = adaptiveRateLimitCooldowns.size;
+  const nearCapacityThreshold = Math.ceil(
+    ADAPTIVE_RATE_LIMIT_MAX_BUCKETS * ADAPTIVE_RATE_LIMIT_CACHE_NEAR_CAPACITY_ALERT_RATIO,
+  );
+  if (bucketCount < nearCapacityThreshold) {
+    return;
+  }
+
+  if (
+    adaptiveRateLimitCacheNearCapacityLastAlertedAt > 0
+    && nowMs - adaptiveRateLimitCacheNearCapacityLastAlertedAt
+      < ADAPTIVE_RATE_LIMIT_CACHE_PRESSURE_LOG_INTERVAL_MS
+  ) {
+    return;
+  }
+
+  adaptiveRateLimitCacheNearCapacityLastAlertedAt = nowMs;
+  internalMetrics.increment("authAdaptiveRateLimitCooldownCacheNearCapacityAlertsTotal");
+  logger.warn("Auth adaptive rate-limit cooldown cache near capacity", {
+    bucketCount,
+    maxBuckets: ADAPTIVE_RATE_LIMIT_MAX_BUCKETS,
+    thresholdPercent: Math.round(ADAPTIVE_RATE_LIMIT_CACHE_NEAR_CAPACITY_ALERT_RATIO * 100),
+    utilizationPercent: Math.round((bucketCount / ADAPTIVE_RATE_LIMIT_MAX_BUCKETS) * 100),
+  });
+}
+
 function setAdaptiveRateLimitCooldown(
   key: string,
   bucket: AdaptiveRateLimitBucket,
@@ -352,6 +381,7 @@ function setAdaptiveRateLimitCooldown(
   adaptiveRateLimitCooldowns.set(key, bucket, { ttl: ttlMs });
   recordAdaptiveRateLimitCooldownCacheGauges();
   maybeReportAdaptiveRateLimitCachePressure(nowMs);
+  maybeReportAdaptiveRateLimitCacheNearCapacity(nowMs);
 }
 
 function deleteAdaptiveRateLimitCooldown(key: string): boolean {
@@ -365,6 +395,7 @@ function deleteAdaptiveRateLimitCooldown(key: string): boolean {
 function clearAdaptiveRateLimitCooldownState() {
   adaptiveRateLimitCooldowns.clear();
   adaptiveRateLimitCachePressureLastLoggedAt = 0;
+  adaptiveRateLimitCacheNearCapacityLastAlertedAt = 0;
   adaptiveRateLimitWarningEvictionLastRanAt = 0;
   recordAdaptiveRateLimitCooldownCacheGauges();
 }
