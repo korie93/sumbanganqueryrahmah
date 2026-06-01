@@ -7,6 +7,7 @@ test("Node runtime policy accepts the supported 24.x line and next major range",
   const packageLock = JSON.parse(readFileSync("package-lock.json", "utf8"));
   const nvmrc = readFileSync(".nvmrc", "utf8").trim();
   const verifyScript = readFileSync("scripts/verify-node-version.mjs", "utf8");
+  const supplyChainDocs = readFileSync("docs/SUPPLY_CHAIN.md", "utf8");
 
   assert.equal(packageJson.engines.node, ">=24 <26");
   assert.equal(packageLock.packages[""].engines.node, ">=24 <26");
@@ -14,4 +15,8 @@ test("Node runtime policy accepts the supported 24.x line and next major range",
   assert.match(verifyScript, /minimumMajor = 24/);
   assert.match(verifyScript, /exclusiveMaximumMajor = 26/);
   assert.match(verifyScript, /Node\.js >=\$\{minimumMajor\} <\$\{exclusiveMaximumMajor\}/);
+  assert.match(supplyChainDocs, /`>=24 <26`/);
+  assert.match(supplyChainDocs, /### Node Upgrade Path/);
+  assert.match(supplyChainDocs, /isolated branch/);
+  assert.match(supplyChainDocs, /staging and soak/);
 });

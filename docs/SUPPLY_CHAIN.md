@@ -9,8 +9,24 @@ LTS toolchain. No runtime dependency is required for SBOM generation.
 The supported runtime is Node.js 24.x LTS. The `.nvmrc`, GitHub Actions
 workflows, `scripts/verify-node-version.mjs`, and `package.json` engines must
 stay aligned to the same major version. `package.json` intentionally uses
-`>=24 <25`: patch and minor updates within the LTS line are accepted, while
-future non-LTS majors require an explicit migration branch and full CI run.
+`>=24 <26`: patch/minor updates within the current supported line are accepted,
+and the next major range is reserved for an explicit migration branch only.
+
+### Node Upgrade Path
+
+Node runtime upgrades must be treated as supply-chain changes, not incidental
+dependency churn:
+
+1. Track the upstream Node.js release schedule and open an isolated branch when
+   the next target major is ready for evaluation.
+2. Update `.nvmrc`, `package.json`, `package-lock.json`, GitHub Actions
+   `node-version`, and `scripts/verify-node-version.mjs` together.
+3. Run the full CI gate locally where practical: repo hygiene, secret scan,
+   dependency audit, typecheck, lint, tests, build, bundle budgets, accessibility
+   contracts, and PageSpeed budgets.
+4. Deploy to staging and soak before production promotion.
+5. Document any accepted incompatibilities or baseline updates in the pull
+   request before merging.
 
 ## Local Command
 
