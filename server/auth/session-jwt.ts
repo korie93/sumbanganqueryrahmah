@@ -3,6 +3,9 @@ import jwt, { type SignOptions } from "jsonwebtoken";
 import { runtimeConfig } from "../config/runtime";
 import { SESSION_JWT_DEFAULT_EXPIRY as SESSION_JWT_DEFAULT_EXPIRY_VALUE } from "./session-lifetime";
 
+// AUDIT-FIX [M1]: HS256 remains for legacy compatibility until the RS256 key rollout lands;
+// migrate by adding SESSION_JWT_PRIVATE_KEY/SESSION_JWT_PUBLIC_KEY, accepting both algorithms
+// during rotation, then removing HS256 after every legacy token has expired.
 export const SESSION_JWT_ALGORITHM = "HS256" as const;
 export const SESSION_JWT_REFRESH_REMAINING_TTL_RATIO = 0.2;
 export const SESSION_JWT_DEFAULT_EXPIRY_JITTER_SECONDS = 15 * 60;
