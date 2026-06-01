@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import express from "express";
-import { createGlobalRequestTimeoutMiddleware } from "../global-request-timeout";
+import {
+  LONG_OPERATION_REQUEST_TIMEOUTS_MS,
+  createGlobalRequestTimeoutMiddleware,
+  resolveGlobalRequestTimeoutMs,
+} from "../global-request-timeout";
 import { runWithRequestDeadline } from "../request-deadline";
 import { logger } from "../../lib/logger";
 import { startTestServer, stopTestServer } from "../../routes/tests/http-test-utils";
@@ -60,6 +64,76 @@ test("global request timeout skips websocket upgrade paths", async () => {
     const response = await fetch(`${baseUrl}/ws/health`);
     assert.equal(response.status, 200);
     assert.deepEqual(await response.json(), { ok: true });
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("global request timeout resolves long-operation route budgets by longest prefix", () => {
+  assert.equal(
+    resolveGlobalRequestTimeoutMs("/api/imports/import-1/analyze", 20),
+    LONG_OPERATION_REQUEST_TIMEOUTS_MS.imports,
+  );
+  assert.equal(
+    resolveGlobalRequestTimeoutMs("/api/backups/backup-1/export", 20),
+    LONG_OPERATION_REQUEST_TIMEOUTS_MS.backups,
+  );
+  assert.equal(
+    resolveGlobalRequestTimeoutMs("/api/reports/monthly", 20),
+    LONG_OPERATION_REQUEST_TIMEOUTS_MS.reports,
+  );
+  assert.equal(
+    resolveGlobalRequestTimeoutMs("/api/collection/monthly-comparison", 20),
+    LONG_OPERATION_REQUEST_TIMEOUTS_MS.reports,
+  );
+  assert.equal(resolveGlobalRequestTimeoutMs("/api/settings", 20), 20);
+  assert.equal(
+    resolveGlobalRequestTimeoutMs("/api/imports-extra", 20),
+    20,
+  );
+  assert.equal(
+    resolveGlobalRequestTimeoutMs("/api/imports/special", 20, [
+      { pathPrefix: "/api/imports", timeoutMs: 100 },
+      { pathPrefix: "/api/imports/special", timeoutMs: 250 },
+    ]),
+    250,
+  );
+});
+
+test("global request timeout uses route-specific budget before aborting", async () => {
+  const app = express();
+  app.use(createGlobalRequestTimeoutMiddleware({
+    timeoutMs: 15,
+    routeTimeouts: [
+      { pathPrefix: "/api/slow-import", timeoutMs: 80 },
+    ],
+  }));
+  app.get("/api/slow-import", (_req, res) => {
+    setTimeout(() => {
+      if (!res.headersSent) {
+        res.json({ ok: true });
+      }
+    }, 30).unref();
+  });
+  app.get("/api/ordinary-slow", (_req, res) => {
+    setTimeout(() => {
+      if (!res.headersSent) {
+        res.json({ ok: true });
+      }
+    }, 30).unref();
+  });
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const longOperationResponse = await fetch(`${baseUrl}/api/slow-import`);
+    assert.equal(longOperationResponse.status, 200);
+    assert.deepEqual(await longOperationResponse.json(), { ok: true });
+
+    const ordinaryResponse = await fetch(`${baseUrl}/api/ordinary-slow`);
+    assert.equal(ordinaryResponse.status, 504);
+    const payload = await ordinaryResponse.json();
+    assert.equal(payload.error.code, ERROR_CODES.REQUEST_TIMEOUT);
+    assert.equal(payload.error.details.timeoutMs, 15);
   } finally {
     await stopTestServer(server);
   }
