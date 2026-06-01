@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { buildViewerFiltersEmptyMessage } from "@/pages/viewer/filter-utils";
@@ -13,7 +14,7 @@ interface ViewerFiltersPanelProps {
   onRemoveFilter: (index: number) => void;
 }
 
-export function ViewerFiltersPanel({
+function ViewerFiltersPanelImpl({
   headers,
   columnFilters,
   onAddFilter,
@@ -68,3 +69,5 @@ export function ViewerFiltersPanel({
     </div>
   );
 }
+
+export const ViewerFiltersPanel = memo(ViewerFiltersPanelImpl);

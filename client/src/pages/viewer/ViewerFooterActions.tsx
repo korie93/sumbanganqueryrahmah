@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { ChevronLeft, ChevronRight, Loader2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { buildViewerFooterPageLabel } from "@/pages/viewer/footer-utils";
@@ -14,7 +15,7 @@ interface ViewerFooterActionsProps {
   onNextPage: () => void;
 }
 
-export function ViewerFooterActions({
+function ViewerFooterActionsImpl({
   currentPage,
   totalPages,
   selectedRowCount,
@@ -76,3 +77,5 @@ export function ViewerFooterActions({
     </div>
   );
 }
+
+export const ViewerFooterActions = memo(ViewerFooterActionsImpl);

@@ -1,4 +1,4 @@
-import { Suspense, lazy } from "react";
+import { Suspense, lazy, memo, useMemo } from "react";
 import { Columns } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -42,7 +42,7 @@ interface ViewerColumnSelectorProps {
   onDeselectAllColumns: () => void;
 }
 
-export function ViewerColumnSelector({
+function ViewerColumnSelectorImpl({
   open,
   headers,
   selectedColumns,
@@ -53,57 +53,74 @@ export function ViewerColumnSelector({
 }: ViewerColumnSelectorProps) {
   const isMobile = useIsMobile();
 
-  const trigger = (
-    <Button variant="outline" data-testid="button-column-selector" className="w-full sm:w-auto">
-      <Columns className="w-4 h-4 mr-2" />
-      {buildViewerColumnSelectorLabel(selectedColumns.size, headers.length)}
-    </Button>
+  const trigger = useMemo(
+    () => (
+      <Button variant="outline" data-testid="button-column-selector" className="w-full sm:w-auto">
+        <Columns className="w-4 h-4 mr-2" />
+        {buildViewerColumnSelectorLabel(selectedColumns.size, headers.length)}
+      </Button>
+    ),
+    [headers.length, selectedColumns.size],
   );
 
-  const selectorListFallback = (
-    <div aria-hidden="true" className="max-h-48 space-y-2 overflow-y-auto">
-      {VIEWER_COLUMN_SELECTOR_FALLBACK_KEYS.slice(0, Math.min(headers.length, 6) || 4).map((fallbackKey) => (
-        <div
-          key={fallbackKey}
-          className="h-6 animate-pulse rounded-md border border-border/50 bg-muted/20"
-        />
-      ))}
-    </div>
-  );
-
-  const selectorContent = (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between gap-2">
-        <span className="font-medium text-sm">Select Columns</span>
-        <div className="flex gap-1">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={onSelectAllColumns}
-            data-testid="button-select-all-columns"
-          >
-            All
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={onDeselectAllColumns}
-            data-testid="button-deselect-columns"
-          >
-            Min
-          </Button>
-        </div>
-      </div>
-      {open ? (
-        <Suspense fallback={selectorListFallback}>
-          <ViewerColumnSelectorList
-            headers={headers}
-            selectedColumns={selectedColumns}
-            onToggleColumn={onToggleColumn}
+  const selectorListFallback = useMemo(
+    () => (
+      <div aria-hidden="true" className="max-h-48 space-y-2 overflow-y-auto">
+        {VIEWER_COLUMN_SELECTOR_FALLBACK_KEYS.slice(0, Math.min(headers.length, 6) || 4).map((fallbackKey) => (
+          <div
+            key={fallbackKey}
+            className="h-6 animate-pulse rounded-md border border-border/50 bg-muted/20"
           />
-        </Suspense>
-      ) : null}
-    </div>
+        ))}
+      </div>
+    ),
+    [headers.length],
+  );
+
+  const selectorContent = useMemo(
+    () => (
+      <div className="space-y-3">
+        <div className="flex items-center justify-between gap-2">
+          <span className="font-medium text-sm">Select Columns</span>
+          <div className="flex gap-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onSelectAllColumns}
+              data-testid="button-select-all-columns"
+            >
+              All
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onDeselectAllColumns}
+              data-testid="button-deselect-columns"
+            >
+              Min
+            </Button>
+          </div>
+        </div>
+        {open ? (
+          <Suspense fallback={selectorListFallback}>
+            <ViewerColumnSelectorList
+              headers={headers}
+              selectedColumns={selectedColumns}
+              onToggleColumn={onToggleColumn}
+            />
+          </Suspense>
+        ) : null}
+      </div>
+    ),
+    [
+      headers,
+      onDeselectAllColumns,
+      onSelectAllColumns,
+      onToggleColumn,
+      open,
+      selectedColumns,
+      selectorListFallback,
+    ],
   );
 
   if (isMobile) {
@@ -136,3 +153,5 @@ export function ViewerColumnSelector({
     </Popover>
   );
 }
+
+export const ViewerColumnSelector = memo(ViewerColumnSelectorImpl);

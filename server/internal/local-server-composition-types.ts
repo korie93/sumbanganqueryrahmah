@@ -89,6 +89,7 @@ export type LocalServerComposition = {
   getTabVisibilityCacheStats: AuthGuards["getTabVisibilityCacheStats"];
   stopActivityUpdateCacheSweep: AuthGuards["stopActivityUpdateCacheSweep"];
   stopTabVisibilityCacheSweep: AuthGuards["stopTabVisibilityCacheSweep"];
+  clearSessionRefreshDeduplication: AuthGuards["clearSessionRefreshDeduplication"];
 };
 
 export type RegisterLocalServerRoutesOptions = {

@@ -1,4 +1,4 @@
-import type { RefObject } from "react";
+import { memo, type RefObject } from "react";
 import type { ActiveFilterChip } from "@/components/data/ActiveFilterChips";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { ViewerLoadingSkeleton } from "@/pages/viewer/ViewerLoadingSkeleton";
@@ -56,7 +56,7 @@ type ViewerContentProps = {
   onShowFiltersChange: (open: boolean) => void;
 };
 
-export function ViewerContent({
+function ViewerContentImpl({
   rows,
   headers,
   visibleHeaders,
@@ -181,3 +181,5 @@ export function ViewerContent({
     </>
   );
 }
+
+export const ViewerContent = memo(ViewerContentImpl);

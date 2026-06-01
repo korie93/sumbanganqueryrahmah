@@ -1,3 +1,4 @@
+import { memo } from "react";
 import styles from "@/pages/viewer/ViewerFooter.module.css";
 import { buildViewerFooterSummary } from "@/pages/viewer/footer-utils";
 import { ViewerFooterActions } from "@/pages/viewer/ViewerFooterActions";
@@ -20,7 +21,7 @@ interface ViewerFooterProps {
   onNextPage: () => void;
 }
 
-export function ViewerFooter({
+function ViewerFooterImpl({
   filteredRowsCount,
   rowsCount,
   totalRows,
@@ -70,3 +71,5 @@ export function ViewerFooter({
     </div>
   );
 }
+
+export const ViewerFooter = memo(ViewerFooterImpl);

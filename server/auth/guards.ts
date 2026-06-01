@@ -1,3 +1,4 @@
+import { createHmac } from "node:crypto";
 import type { NextFunction, Request, RequestHandler, Response } from "express";
 import type { User, UserActivity } from "../../shared/schema-postgres";
 import { ERROR_CODES, type ErrorCode } from "../../shared/error-codes";
@@ -115,6 +116,13 @@ type SessionRefreshRevocationLogContext = {
 };
 
 const inFlightSessionRefreshes = new Map<string, Promise<SignedRefreshedSessionToken>>();
+
+function createSessionRefreshDedupKey(jwtId: string, secret: string): string {
+  return createHmac("sha256", secret)
+    .update("session-refresh:")
+    .update(jwtId)
+    .digest("hex");
+}
 
 function buildAuthGuardErrorResponse(
   statusCode: number,
@@ -369,8 +377,10 @@ async function refreshSessionJwtAfterRevocation(params: {
     throw new Error("Cannot refresh a session JWT without a JWT id.");
   }
 
-  const existingRefresh = inFlightSessionRefreshes.get(oldJwtId);
+  const refreshDedupKey = createSessionRefreshDedupKey(oldJwtId, params.secret);
+  const existingRefresh = inFlightSessionRefreshes.get(refreshDedupKey);
   if (existingRefresh) {
+    internalMetrics.increment("sessionRefreshDedupedTotal");
     return existingRefresh;
   }
 
@@ -408,14 +418,18 @@ async function refreshSessionJwtAfterRevocation(params: {
     };
   });
 
-  inFlightSessionRefreshes.set(oldJwtId, refreshPromise);
+  inFlightSessionRefreshes.set(refreshDedupKey, refreshPromise);
   try {
     return await refreshPromise;
   } finally {
-    if (inFlightSessionRefreshes.get(oldJwtId) === refreshPromise) {
-      inFlightSessionRefreshes.delete(oldJwtId);
+    if (inFlightSessionRefreshes.get(refreshDedupKey) === refreshPromise) {
+      inFlightSessionRefreshes.delete(refreshDedupKey);
     }
   }
+}
+
+function clearSessionRefreshDeduplication(): void {
+  inFlightSessionRefreshes.clear();
 }
 
 function firstHeaderValue(value: string | string[] | undefined): string {
@@ -804,6 +818,7 @@ export function createAuthGuards(options: CreateAuthGuardsOptions) {
     },
     stopActivityUpdateCacheSweep: activityUpdates.stop,
     stopTabVisibilityCacheSweep: tabVisibility.stop,
+    clearSessionRefreshDeduplication,
   };
 }
 

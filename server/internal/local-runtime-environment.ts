@@ -127,6 +127,7 @@ export function createLocalRuntimeEnvironment(options: CreateLocalRuntimeEnviron
   });
   server.once("close", composition.stopTabVisibilityCacheSweep);
   server.once("close", composition.stopActivityUpdateCacheSweep);
+  server.once("close", composition.clearSessionRefreshDeduplication);
   const {
     aiSearchService,
     categoryStatsService,

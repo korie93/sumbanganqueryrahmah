@@ -186,17 +186,21 @@ export function useViewerPageState({
     exportState.cancelActiveExport();
     data.clearAllData();
     setSelectedColumns(new Set<string>());
-  }, [data, exportState]);
+  }, [data.clearAllData, exportState.cancelActiveExport]);
+
+  const handleClearSearchFilter = useCallback(() => {
+    data.handleSearchChange("");
+  }, [data.handleSearchChange]);
 
   const activeFilterChips = useMemo(
     () =>
       buildViewerActiveFilterChips({
         search: data.search,
         activeColumnFilters: data.activeColumnFilters,
-        onClearSearch: () => data.handleSearchChange(""),
+        onClearSearch: handleClearSearchFilter,
         onRemoveFilter: data.removeFilter,
       }),
-    [data],
+    [data.activeColumnFilters, data.removeFilter, data.search, handleClearSearchFilter],
   );
 
   return {

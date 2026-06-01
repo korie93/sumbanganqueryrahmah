@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ViewerMobileCard } from "@/pages/viewer/ViewerMobileCard";
 import type { DataRowWithId } from "@/pages/viewer/types";
@@ -11,7 +12,7 @@ interface ViewerMobileCardsTableProps {
   visibleHeaders: string[];
 }
 
-export function ViewerMobileCardsTable({
+function ViewerMobileCardsTableImpl({
   filteredRows,
   onToggleRowSelection,
   onToggleSelectAllFiltered,
@@ -50,3 +51,5 @@ export function ViewerMobileCardsTable({
     </div>
   );
 }
+
+export const ViewerMobileCardsTable = memo(ViewerMobileCardsTableImpl);

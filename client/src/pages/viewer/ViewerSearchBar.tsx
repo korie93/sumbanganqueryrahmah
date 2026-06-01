@@ -1,4 +1,4 @@
-import type { RefObject } from "react";
+import { memo, useCallback, type ChangeEvent, type RefObject } from "react";
 import { Search } from "lucide-react";
 import { ActiveFilterChips, type ActiveFilterChip } from "@/components/data/ActiveFilterChips";
 import { Input } from "@/components/ui/input";
@@ -17,7 +17,7 @@ interface ViewerSearchBarProps {
   onSearchChange: (value: string) => void;
 }
 
-export function ViewerSearchBar({
+function ViewerSearchBarImpl({
   search,
   filteredRowsCount,
   rowsCount,
@@ -28,6 +28,9 @@ export function ViewerSearchBar({
   onSearchChange,
 }: ViewerSearchBarProps) {
   const isMobile = useIsMobile();
+  const handleSearchInputChange = useCallback((event: ChangeEvent<HTMLInputElement>) => {
+    onSearchChange(event.target.value);
+  }, [onSearchChange]);
 
   return (
     <div
@@ -47,7 +50,7 @@ export function ViewerSearchBar({
             name="viewerSearchQuery"
             type="search"
             value={search}
-            onChange={(event) => onSearchChange(event.target.value)}
+            onChange={handleSearchInputChange}
             placeholder="Search all rows..."
             autoComplete="off"
             autoCapitalize="none"
@@ -71,3 +74,5 @@ export function ViewerSearchBar({
     </div>
   );
 }
+
+export const ViewerSearchBar = memo(ViewerSearchBarImpl);

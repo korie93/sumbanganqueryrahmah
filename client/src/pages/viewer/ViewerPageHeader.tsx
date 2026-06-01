@@ -1,4 +1,4 @@
-import { Suspense, lazy } from "react";
+import { Suspense, lazy, memo } from "react";
 import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { OperationalPageHeader } from "@/components/layout/OperationalPage";
@@ -57,7 +57,7 @@ function ViewerPageHeaderActionsFallback() {
   );
 }
 
-export function ViewerPageHeader({
+function ViewerPageHeaderImpl({
   importName,
   rowsCount,
   totalRows,
@@ -139,3 +139,5 @@ export function ViewerPageHeader({
     />
   );
 }
+
+export const ViewerPageHeader = memo(ViewerPageHeaderImpl);

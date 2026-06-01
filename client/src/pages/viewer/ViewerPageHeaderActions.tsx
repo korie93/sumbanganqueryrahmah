@@ -1,4 +1,4 @@
-import { Suspense, lazy } from "react";
+import { Suspense, lazy, memo } from "react";
 import { Filter, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { buildViewerFiltersButtonLabel } from "@/pages/viewer/page-header-utils";
@@ -49,7 +49,7 @@ function ViewerHeaderButtonFallback({ label }: { label: string }) {
   );
 }
 
-export function ViewerPageHeaderActions({
+function ViewerPageHeaderActionsImpl({
   exportBusy,
   filteredRowsCount,
   filterCount,
@@ -130,3 +130,5 @@ export function ViewerPageHeaderActions({
     </div>
   );
 }
+
+export const ViewerPageHeaderActions = memo(ViewerPageHeaderActionsImpl);

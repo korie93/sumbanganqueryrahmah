@@ -1066,7 +1066,7 @@ test("authenticateToken refreshes a bearer JWT inside the final 20 percent of TT
   }
 });
 
-test("authenticateToken coalesces concurrent refreshes for the same JWT id", async (t) => {
+test("authenticateToken coalesces 100 concurrent refreshes for the same JWT id", async (t) => {
   resetSessionRevocationStoreForTests();
   const secret = "guard-test-secret";
   const nowMs = Date.parse("2026-05-27T00:00:00.000Z");
@@ -1103,6 +1103,7 @@ test("authenticateToken coalesces concurrent refreshes for the same JWT id", asy
     secret,
   });
 
+  const beforeDedupCount = getInternalMetricsSnapshot().counters.sessionRefreshDedupedTotal;
   const oldToken = jwt.sign(
     {
       userId: "user-1",
@@ -1115,20 +1116,21 @@ test("authenticateToken coalesces concurrent refreshes for the same JWT id", asy
     secret,
     { jwtid: "near-expiry-concurrent-jti" },
   );
-  const firstResponse = createMockResponse();
-  const secondResponse = createMockResponse();
+  const responses = Array.from({ length: 100 }, () => createMockResponse());
   let nextCalls = 0;
+
+  const createRefreshRequest = () => ({
+    headers: {
+      authorization: `Bearer ${oldToken}`,
+    },
+    method: "GET",
+    path: "/api/me",
+  });
 
   try {
     const firstAuth = guards.authenticateToken(
-      {
-        headers: {
-          authorization: `Bearer ${oldToken}`,
-        },
-        method: "GET",
-        path: "/api/me",
-      } as never,
-      firstResponse as never,
+      createRefreshRequest() as never,
+      responses[0]! as never,
       () => {
         nextCalls += 1;
       },
@@ -1136,34 +1138,130 @@ test("authenticateToken coalesces concurrent refreshes for the same JWT id", asy
 
     await revokeStarted.promise;
 
-    const secondAuth = guards.authenticateToken(
-      {
-        headers: {
-          authorization: `Bearer ${oldToken}`,
+    const joinedAuths = responses.slice(1).map((response) =>
+      guards.authenticateToken(
+        createRefreshRequest() as never,
+        response as never,
+        () => {
+          nextCalls += 1;
         },
-        method: "GET",
-        path: "/api/me",
-      } as never,
-      secondResponse as never,
-      () => {
-        nextCalls += 1;
-      },
+      ),
     );
 
     releaseRevoke.resolve();
-    await Promise.all([firstAuth, secondAuth]);
+    await Promise.all([firstAuth, ...joinedAuths]);
 
-    const firstRefreshedToken = String(firstResponse.getHeader(AUTH_SESSION_REFRESH_HEADER_NAME) || "");
-    const secondRefreshedToken = String(secondResponse.getHeader(AUTH_SESSION_REFRESH_HEADER_NAME) || "");
+    const refreshedTokens = responses.map((response) =>
+      String(response.getHeader(AUTH_SESSION_REFRESH_HEADER_NAME) || ""),
+    );
+    const afterDedupCount = getInternalMetricsSnapshot().counters.sessionRefreshDedupedTotal;
 
-    assert.equal(nextCalls, 2);
+    assert.equal(nextCalls, 100);
     assert.equal(revokeAttempts, 1);
-    assert.notEqual(firstRefreshedToken, "");
-    assert.equal(secondRefreshedToken, firstRefreshedToken);
+    assert.notEqual(refreshedTokens[0], "");
+    assert.equal(new Set(refreshedTokens).size, 1);
+    assert.equal(afterDedupCount - beforeDedupCount, 99);
     assert.equal(revokedJwtIds.has("near-expiry-concurrent-jti"), true);
   } finally {
     guards.stopTabVisibilityCacheSweep();
     guards.stopActivityUpdateCacheSweep();
+    guards.clearSessionRefreshDeduplication();
+    restoreRevocationStore();
+    resetSessionRevocationStoreForTests();
+  }
+});
+
+test("authenticateToken clears failed refresh locks so later retries can refresh", async (t) => {
+  resetSessionRevocationStoreForTests();
+  const secret = "guard-test-secret";
+  const nowMs = Date.parse("2026-05-27T00:00:00.000Z");
+  const nowSeconds = Math.floor(nowMs / 1000);
+  const revokedJwtIds = new Set<string>();
+  let revokeAttempts = 0;
+  t.mock.method(Date, "now", () => nowMs);
+
+  const restoreRevocationStore = configureSessionRevocationStoreForRuntime({
+    isRevoked: async (jwtId: string) => revokedJwtIds.has(jwtId),
+    revoke: async (record: SessionRevocationRecord) => {
+      revokeAttempts += 1;
+      if (revokeAttempts === 1) {
+        throw createRedisRevocationError("ETIMEDOUT");
+      }
+      revokedJwtIds.add(record.jwtId);
+    },
+  });
+
+  const guards = createAuthGuards({
+    storage: {
+      getAuthenticatedSessionSnapshot: async () => createAuthenticatedSessionSnapshot(),
+      getActivityById: async () => undefined,
+      getUser: async () => undefined,
+      getUserByUsername: async () => undefined,
+      isVisitorBanned: async () => false,
+      updateActivity: async () => undefined,
+      getRoleTabVisibility: async () => ({}),
+    },
+    secret,
+    sessionRefreshRevocationRetry: {
+      attempts: 1,
+      baseDelayMs: 0,
+      maxDelayMs: 0,
+    },
+  });
+
+  const oldToken = jwt.sign(
+    {
+      userId: "user-1",
+      username: "guard.user",
+      role: "admin",
+      activityId: "activity-1",
+      iat: nowSeconds - 81,
+      exp: nowSeconds + 19,
+    },
+    secret,
+    { jwtid: "near-expiry-retry-after-failure-jti" },
+  );
+  const createRefreshRequest = () => ({
+    headers: {
+      authorization: `Bearer ${oldToken}`,
+    },
+    method: "GET",
+    path: "/api/me",
+  });
+
+  try {
+    const failedResponse = createMockResponse();
+    let failedNextCalls = 0;
+    await guards.authenticateToken(
+      createRefreshRequest() as never,
+      failedResponse as never,
+      () => {
+        failedNextCalls += 1;
+      },
+    );
+
+    assert.equal(failedNextCalls, 0);
+    assert.equal(failedResponse.statusCode, 503);
+    assert.equal(revokeAttempts, 1);
+
+    const retryResponse = createMockResponse();
+    let retryNextCalls = 0;
+    await guards.authenticateToken(
+      createRefreshRequest() as never,
+      retryResponse as never,
+      () => {
+        retryNextCalls += 1;
+      },
+    );
+
+    assert.equal(retryNextCalls, 1);
+    assert.equal(revokeAttempts, 2);
+    assert.notEqual(String(retryResponse.getHeader(AUTH_SESSION_REFRESH_HEADER_NAME) || ""), "");
+    assert.equal(revokedJwtIds.has("near-expiry-retry-after-failure-jti"), true);
+  } finally {
+    guards.stopTabVisibilityCacheSweep();
+    guards.stopActivityUpdateCacheSweep();
+    guards.clearSessionRefreshDeduplication();
     restoreRevocationStore();
     resetSessionRevocationStoreForTests();
   }

@@ -1,3 +1,4 @@
+import { memo, useCallback, useMemo } from "react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ViewerDataFieldCard } from "@/pages/viewer/ViewerDataFieldCard";
 import { buildViewerRowAriaLabel } from "@/pages/viewer/viewer-row-aria";
@@ -14,18 +15,33 @@ interface ViewerMobileCardProps {
   onToggleRowSelection: (rowId: number) => void;
 }
 
-export function ViewerMobileCard({
+function ViewerMobileCardImpl({
   row,
   selected,
   visibleHeaders,
   onToggleRowSelection,
 }: ViewerMobileCardProps) {
-  const previewHeaders = visibleHeaders.slice(0, 4);
-  const overflowHeaders = visibleHeaders.slice(4);
+  const previewHeaders = useMemo(() => visibleHeaders.slice(0, 4), [visibleHeaders]);
+  const overflowHeaders = useMemo(() => visibleHeaders.slice(4), [visibleHeaders]);
+  const rowAriaLabel = useMemo(
+    () => buildViewerRowAriaLabel({ row, visibleHeaders }),
+    [row, visibleHeaders],
+  );
+  const visibleFieldsSummary = useMemo(
+    () => buildViewerVisibleFieldsSummary(visibleHeaders.length),
+    [visibleHeaders.length],
+  );
+  const overflowFieldsLabel = useMemo(
+    () => buildViewerOverflowFieldsLabel(overflowHeaders.length),
+    [overflowHeaders.length],
+  );
+  const handleToggleRow = useCallback(() => {
+    onToggleRowSelection(row.__rowId);
+  }, [onToggleRowSelection, row.__rowId]);
 
   return (
     <article
-      aria-label={buildViewerRowAriaLabel({ row, visibleHeaders })}
+      aria-label={rowAriaLabel}
       className={`rounded-2xl border border-border/60 bg-background/80 p-3 shadow-sm ${selected ? "border-primary/40 bg-primary/5" : ""}`}
       role="group"
     >
@@ -35,12 +51,12 @@ export function ViewerMobileCard({
             Row {row.__rowId + 1}
           </p>
           <p className="text-sm text-muted-foreground">
-            {buildViewerVisibleFieldsSummary(visibleHeaders.length)}
+            {visibleFieldsSummary}
           </p>
         </div>
         <Checkbox
           checked={selected}
-          onCheckedChange={() => onToggleRowSelection(row.__rowId)}
+          onCheckedChange={handleToggleRow}
           aria-label={`Select row ${row.__rowId + 1}`}
         />
       </div>
@@ -60,7 +76,7 @@ export function ViewerMobileCard({
       {overflowHeaders.length > 0 ? (
         <details className="mt-3 rounded-xl border border-border/50 bg-background/70">
           <summary className="cursor-pointer list-none px-3 py-2 text-sm font-medium text-primary">
-            {buildViewerOverflowFieldsLabel(overflowHeaders.length)}
+            {overflowFieldsLabel}
           </summary>
           <dl className="space-y-2 border-t border-border/50 px-3 py-3">
             {overflowHeaders.map((header) => (
@@ -77,3 +93,5 @@ export function ViewerMobileCard({
     </article>
   );
 }
+
+export const ViewerMobileCard = memo(ViewerMobileCardImpl);

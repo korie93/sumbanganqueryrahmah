@@ -1,3 +1,4 @@
+import { memo, useCallback, type ChangeEvent } from "react";
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,16 +20,29 @@ interface ViewerFilterRowProps {
   onUpdateFilter: (index: number, field: ViewerFilterMutableField, value: string) => void;
 }
 
-export function ViewerFilterRow({
+function ViewerFilterRowImpl({
   filter,
   headers,
   index,
   onRemoveFilter,
   onUpdateFilter,
 }: ViewerFilterRowProps) {
+  const handleColumnChange = useCallback((value: string) => {
+    onUpdateFilter(index, "column", value);
+  }, [index, onUpdateFilter]);
+  const handleOperatorChange = useCallback((value: string) => {
+    onUpdateFilter(index, "operator", value);
+  }, [index, onUpdateFilter]);
+  const handleValueChange = useCallback((event: ChangeEvent<HTMLInputElement>) => {
+    onUpdateFilter(index, "value", event.target.value);
+  }, [index, onUpdateFilter]);
+  const handleRemoveFilter = useCallback(() => {
+    onRemoveFilter(index);
+  }, [index, onRemoveFilter]);
+
   return (
     <div className="flex flex-col gap-2 rounded-xl border border-border/60 bg-background/70 p-3 sm:flex-row sm:flex-wrap sm:items-center">
-      <Select value={filter.column} onValueChange={(value) => onUpdateFilter(index, "column", value)}>
+      <Select value={filter.column} onValueChange={handleColumnChange}>
         <SelectTrigger className="w-full sm:w-40" data-testid={`select-filter-column-${index}`}>
           <SelectValue />
         </SelectTrigger>
@@ -43,7 +57,7 @@ export function ViewerFilterRow({
 
       <Select
         value={filter.operator}
-        onValueChange={(value) => onUpdateFilter(index, "operator", value)}
+        onValueChange={handleOperatorChange}
       >
         <SelectTrigger className="w-full sm:w-32" data-testid={`select-filter-operator-${index}`}>
           <SelectValue />
@@ -62,7 +76,7 @@ export function ViewerFilterRow({
         name={`viewerFilterValue${index + 1}`}
         type="search"
         value={filter.value}
-        onChange={(event) => onUpdateFilter(index, "value", event.target.value)}
+        onChange={handleValueChange}
         placeholder="Value..."
         autoComplete="off"
         className="min-w-0 flex-1"
@@ -72,7 +86,7 @@ export function ViewerFilterRow({
       <Button
         variant="ghost"
         size="sm"
-        onClick={() => onRemoveFilter(index)}
+        onClick={handleRemoveFilter}
         data-testid={`button-remove-filter-${index}`}
         className="w-full justify-center gap-2 self-end sm:w-auto sm:justify-start sm:self-auto"
       >
@@ -82,3 +96,5 @@ export function ViewerFilterRow({
     </div>
   );
 }
+
+export const ViewerFilterRow = memo(ViewerFilterRowImpl);

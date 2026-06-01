@@ -1,4 +1,4 @@
-import type { MutableRefObject } from "react";
+import { memo, type MutableRefObject } from "react";
 import { FixedSizeList } from "react-window";
 import { Checkbox } from "@/components/ui/checkbox";
 import type { DataRowWithId, ViewerVirtualRowData } from "@/pages/viewer/types";
@@ -20,7 +20,7 @@ interface ViewerVirtualizedTableProps {
   visibleHeaders: string[];
 }
 
-export function ViewerVirtualizedTable({
+function ViewerVirtualizedTableImpl({
   filteredRows,
   gridTemplateColumns,
   onToggleSelectAllFiltered,
@@ -68,3 +68,5 @@ export function ViewerVirtualizedTable({
     </div>
   );
 }
+
+export const ViewerVirtualizedTable = memo(ViewerVirtualizedTableImpl);

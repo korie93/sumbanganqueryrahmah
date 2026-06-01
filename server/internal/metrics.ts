@@ -30,6 +30,7 @@ export type InternalMetricName =
   | "idempotencyFingerprintSweepErrorsTotal"
   | "jsonParseFailuresTotal"
   | "redisRateLimitEvalTypeErrorsTotal"
+  | "sessionRefreshDedupedTotal"
   | "sessionRefreshRevocationRetryAttemptsTotal"
   | "sessionRefreshRevocationRetryExhaustedTotal"
   | "sessionRevocationRedisErrorsTotal"
@@ -91,6 +92,7 @@ const INTERNAL_METRIC_NAMES: readonly InternalMetricName[] = [
   "idempotencyFingerprintSweepErrorsTotal",
   "jsonParseFailuresTotal",
   "redisRateLimitEvalTypeErrorsTotal",
+  "sessionRefreshDedupedTotal",
   "sessionRefreshRevocationRetryAttemptsTotal",
   "sessionRefreshRevocationRetryExhaustedTotal",
   "sessionRevocationRedisErrorsTotal",

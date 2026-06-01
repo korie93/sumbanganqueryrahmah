@@ -1,4 +1,4 @@
-import { Suspense, lazy, useLayoutEffect, useMemo, useRef } from "react";
+import { Suspense, lazy, memo, useLayoutEffect, useMemo, useRef } from "react";
 import { HorizontalScrollHint } from "@/components/HorizontalScrollHint";
 import { useIsMobile } from "@/hooks/use-mobile";
 import type { DataRowWithId, ViewerVirtualRowData } from "@/pages/viewer/types";
@@ -42,7 +42,7 @@ interface ViewerDataTableProps {
   visibleHeaders: string[];
 }
 
-export function ViewerDataTable({
+function ViewerDataTableImpl({
   debouncedSearch,
   enableVirtualRows,
   filteredRows,
@@ -78,21 +78,27 @@ export function ViewerDataTable({
     [filteredRows, gridTemplateColumns, onToggleRowSelection, selectedRowIds, visibleHeaders],
   );
 
-  const desktopTableFallback = (
-    <div className="flex min-h-[320px] items-center justify-center rounded-xl border border-border/60 bg-background/60">
-      <div className="h-7 w-7 animate-spin rounded-full border-2 border-primary/30 border-t-primary" />
-    </div>
+  const desktopTableFallback = useMemo(
+    () => (
+      <div className="flex min-h-[320px] items-center justify-center rounded-xl border border-border/60 bg-background/60">
+        <div className="h-7 w-7 animate-spin rounded-full border-2 border-primary/30 border-t-primary" />
+      </div>
+    ),
+    [],
   );
-  const mobileTableFallback = (
-    <div className="space-y-3">
-      <div className="h-12 animate-pulse rounded-xl border border-border/60 bg-background/60" />
-      {VIEWER_MOBILE_CARD_FALLBACK_KEYS.map((fallbackKey) => (
-        <div
-          key={fallbackKey}
-          className="h-40 animate-pulse rounded-2xl border border-border/60 bg-background/60"
-        />
-      ))}
-    </div>
+  const mobileTableFallback = useMemo(
+    () => (
+      <div className="space-y-3">
+        <div className="h-12 animate-pulse rounded-xl border border-border/60 bg-background/60" />
+        {VIEWER_MOBILE_CARD_FALLBACK_KEYS.map((fallbackKey) => (
+          <div
+            key={fallbackKey}
+            className="h-40 animate-pulse rounded-2xl border border-border/60 bg-background/60"
+          />
+        ))}
+      </div>
+    ),
+    [],
   );
 
   return (
@@ -147,3 +153,5 @@ export function ViewerDataTable({
     </div>
   );
 }
+
+export const ViewerDataTable = memo(ViewerDataTableImpl);

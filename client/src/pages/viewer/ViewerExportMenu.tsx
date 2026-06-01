@@ -1,4 +1,4 @@
-import { Suspense, lazy, useState } from "react";
+import { Suspense, lazy, memo, useCallback, useMemo, useState } from "react";
 import { Download, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -46,7 +46,7 @@ interface ViewerExportMenuProps {
   onExportExcel: (exportFiltered?: boolean, exportSelected?: boolean) => void;
 }
 
-export function ViewerExportMenu({
+function ViewerExportMenuImpl({
   exportBusy,
   totalRows,
   filteredRowsCount,
@@ -61,15 +61,19 @@ export function ViewerExportMenu({
   const isMobile = useIsMobile();
   const [mobileSheetOpen, setMobileSheetOpen] = useState(false);
   const [desktopPopoverOpen, setDesktopPopoverOpen] = useState(false);
-  const sections = buildViewerExportMenuSections({
-    exportBusy,
-    totalRows,
-    filteredRowsCount,
-    selectedRowCount,
-    hasFilteredSubset,
-  });
+  const sections = useMemo(
+    () =>
+      buildViewerExportMenuSections({
+        exportBusy,
+        totalRows,
+        filteredRowsCount,
+        selectedRowCount,
+        hasFilteredSubset,
+      }),
+    [exportBusy, filteredRowsCount, hasFilteredSubset, selectedRowCount, totalRows],
+  );
 
-  const runExport = (
+  const runExport = useCallback((
     closeAfterAction: boolean,
     kind: ViewerExportActionKind,
     exportFiltered = false,
@@ -86,28 +90,50 @@ export function ViewerExportMenu({
     if (closeAfterAction) {
       setMobileSheetOpen(false);
     }
-  };
+  }, [onExportCsv, onExportExcel, onExportPdf]);
 
-  const trigger = (
-    <Button variant="outline" disabled={exportBusy} data-testid="button-export-menu" className="w-full sm:w-auto">
-      {exportBusy ? (
-        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-      ) : (
-        <Download className="w-4 h-4 mr-2" />
-      )}
-      Export
-    </Button>
+  const runMobileExport = useCallback((
+    kind: ViewerExportActionKind,
+    exportFiltered: boolean,
+    exportSelected: boolean,
+  ) => {
+    runExport(true, kind, exportFiltered, exportSelected);
+  }, [runExport]);
+
+  const runDesktopExport = useCallback((
+    kind: ViewerExportActionKind,
+    exportFiltered: boolean,
+    exportSelected: boolean,
+  ) => {
+    runExport(false, kind, exportFiltered, exportSelected);
+  }, [runExport]);
+
+  const trigger = useMemo(
+    () => (
+      <Button variant="outline" disabled={exportBusy} data-testid="button-export-menu" className="w-full sm:w-auto">
+        {exportBusy ? (
+          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+        ) : (
+          <Download className="w-4 h-4 mr-2" />
+        )}
+        Export
+      </Button>
+    ),
+    [exportBusy],
   );
 
-  const exportOptionsFallback = (
-    <div aria-hidden="true" className="space-y-2">
-      {VIEWER_EXPORT_OPTION_FALLBACK_KEYS.map((fallbackKey) => (
-        <div
-          key={fallbackKey}
-          className="h-9 animate-pulse rounded-md border border-border/50 bg-muted/20"
-        />
-      ))}
-    </div>
+  const exportOptionsFallback = useMemo(
+    () => (
+      <div aria-hidden="true" className="space-y-2">
+        {VIEWER_EXPORT_OPTION_FALLBACK_KEYS.map((fallbackKey) => (
+          <div
+            key={fallbackKey}
+            className="h-9 animate-pulse rounded-md border border-border/50 bg-muted/20"
+          />
+        ))}
+      </div>
+    ),
+    [],
   );
 
   if (isMobile) {
@@ -131,9 +157,7 @@ export function ViewerExportMenu({
                   headersCount={headersCount}
                   sections={sections}
                   selectedColumnsCount={selectedColumnsCount}
-                  onRunExport={(kind, exportFiltered, exportSelected) =>
-                    runExport(true, kind, exportFiltered, exportSelected)
-                  }
+                  onRunExport={runMobileExport}
                 />
               </Suspense>
             ) : null}
@@ -155,9 +179,7 @@ export function ViewerExportMenu({
               headersCount={headersCount}
               sections={sections}
               selectedColumnsCount={selectedColumnsCount}
-              onRunExport={(kind, exportFiltered, exportSelected) =>
-                runExport(false, kind, exportFiltered, exportSelected)
-              }
+              onRunExport={runDesktopExport}
             />
           </Suspense>
         ) : null}
@@ -165,3 +187,5 @@ export function ViewerExportMenu({
     </Popover>
   );
 }
+
+export const ViewerExportMenu = memo(ViewerExportMenuImpl);

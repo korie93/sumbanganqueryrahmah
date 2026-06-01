@@ -1,3 +1,4 @@
+import { memo, useCallback, useMemo } from "react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { buildViewerRowAriaLabel } from "@/pages/viewer/viewer-row-aria";
 import type { DataRowWithId } from "@/pages/viewer/types";
@@ -11,7 +12,57 @@ interface ViewerStandardTableProps {
   visibleHeaders: string[];
 }
 
-export function ViewerStandardTable({
+interface ViewerStandardTableRowProps {
+  row: DataRowWithId;
+  selected: boolean;
+  visibleHeaders: string[];
+  onToggleRowSelection: (rowId: number) => void;
+}
+
+const ViewerStandardTableRow = memo(function ViewerStandardTableRow({
+  row,
+  selected,
+  visibleHeaders,
+  onToggleRowSelection,
+}: ViewerStandardTableRowProps) {
+  const rowAriaLabel = useMemo(
+    () => buildViewerRowAriaLabel({ row, visibleHeaders }),
+    [row, visibleHeaders],
+  );
+  const handleToggleRow = useCallback(() => {
+    onToggleRowSelection(row.__rowId);
+  }, [onToggleRowSelection, row.__rowId]);
+
+  return (
+    <tr
+      aria-label={rowAriaLabel}
+      className={`h-[48px] border-t border-border hover:bg-muted/50 ${selected ? "bg-primary/10" : ""}`}
+    >
+      <td className="p-3">
+        <Checkbox
+          checked={selected}
+          onCheckedChange={handleToggleRow}
+        />
+      </td>
+      <td className="p-3 text-muted-foreground">{row.__rowId + 1}</td>
+      {visibleHeaders.map((header) => {
+        const cellText = String(row[header] ?? "-");
+
+        return (
+          <td
+            key={header}
+            className="max-w-[300px] truncate whitespace-nowrap p-3 text-foreground"
+            title={cellText}
+          >
+            {cellText}
+          </td>
+        );
+      })}
+    </tr>
+  );
+});
+
+function ViewerStandardTableImpl({
   filteredRows,
   onToggleRowSelection,
   onToggleSelectAllFiltered,
@@ -41,31 +92,18 @@ export function ViewerStandardTable({
         </thead>
         <tbody>
           {filteredRows.map((row) => (
-            <tr
+            <ViewerStandardTableRow
               key={row.__rowId}
-              aria-label={buildViewerRowAriaLabel({ row, visibleHeaders })}
-              className={`h-[48px] border-t border-border hover:bg-muted/50 ${selectedRowIds.has(row.__rowId) ? "bg-primary/10" : ""}`}
-            >
-              <td className="p-3">
-                <Checkbox
-                  checked={selectedRowIds.has(row.__rowId)}
-                  onCheckedChange={() => onToggleRowSelection(row.__rowId)}
-                />
-              </td>
-              <td className="p-3 text-muted-foreground">{row.__rowId + 1}</td>
-              {visibleHeaders.map((header) => (
-                <td
-                  key={header}
-                  className="max-w-[300px] truncate whitespace-nowrap p-3 text-foreground"
-                  title={String(row[header] ?? "-")}
-                >
-                  {String(row[header] ?? "-")}
-                </td>
-              ))}
-            </tr>
+              row={row}
+              selected={selectedRowIds.has(row.__rowId)}
+              visibleHeaders={visibleHeaders}
+              onToggleRowSelection={onToggleRowSelection}
+            />
           ))}
         </tbody>
       </table>
     </div>
   );
 }
+
+export const ViewerStandardTable = memo(ViewerStandardTableImpl);

@@ -97,5 +97,6 @@ export function createLocalServerComposition(
     getTabVisibilityCacheStats: authGuards.getTabVisibilityCacheStats,
     stopActivityUpdateCacheSweep: authGuards.stopActivityUpdateCacheSweep,
     stopTabVisibilityCacheSweep: authGuards.stopTabVisibilityCacheSweep,
+    clearSessionRefreshDeduplication: authGuards.clearSessionRefreshDeduplication,
   };
 }

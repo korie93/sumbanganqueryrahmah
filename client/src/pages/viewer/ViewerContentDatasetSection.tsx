@@ -1,4 +1,4 @@
-import { Suspense, lazy, type RefObject } from "react";
+import { Suspense, lazy, memo, type RefObject } from "react";
 import { OperationalSectionCard } from "@/components/layout/OperationalPage";
 import type { ActiveFilterChip } from "@/components/data/ActiveFilterChips";
 import type { DataRowWithId } from "@/pages/viewer/types";
@@ -59,7 +59,7 @@ type ViewerContentDatasetSectionProps = {
   onNextPage: () => void;
 };
 
-export function ViewerContentDatasetSection({
+function ViewerContentDatasetSectionImpl({
   rows,
   filteredRows,
   visibleHeaders,
@@ -154,3 +154,5 @@ export function ViewerContentDatasetSection({
     </OperationalSectionCard>
   );
 }
+
+export const ViewerContentDatasetSection = memo(ViewerContentDatasetSectionImpl);
