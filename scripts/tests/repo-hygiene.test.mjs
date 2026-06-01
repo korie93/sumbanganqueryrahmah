@@ -81,19 +81,35 @@ test("repo hygiene flags hardcoded nodemailer auth passwords", () => {
 });
 
 test("repo hygiene flags high-confidence committed provider tokens", () => {
+  const openAiEnvKey = "OPENAI_" + "API_KEY";
   const openAiPrefix = "sk-proj-";
+  const openAiToken = `${openAiPrefix}abcdefghijklmnopqrstuvwxyz0123456789`;
+  const awsEnvKey = "AWS_ACCESS_" + "KEY_ID";
   const awsPrefix = "AKIA";
+  const awsToken = `${awsPrefix}IOSFODNN7EXAMPLE`;
   const findings = findHighConfidenceSecretTokens({
     filePath: "docs/example.md",
     text: `
-OPENAI_API_KEY=${openAiPrefix}abcdefghijklmnopqrstuvwxyz0123456789
-AWS_ACCESS_KEY_ID=${awsPrefix}IOSFODNN7EXAMPLE
+${openAiEnvKey}=${openAiToken}
+${awsEnvKey}=${awsToken}
 `,
   });
 
   assert.equal(findings.length, 2);
   assert.match(findings[0], /OpenAI API key/i);
   assert.match(findings[1], /AWS access key id/i);
+});
+
+test("repo hygiene flags masked secret placeholders", () => {
+  const secretKey = "DATABASE_" + "PASSWORD";
+  const maskedValue = "*".repeat(6);
+  const findings = findHighConfidenceSecretTokens({
+    filePath: "docs/example.md",
+    text: `${secretKey}=${maskedValue}\n`,
+  });
+
+  assert.equal(findings.length, 1);
+  assert.match(findings[0], /masked secret placeholder/i);
 });
 
 test("repo hygiene allows generated CI placeholders during secret scanning", () => {

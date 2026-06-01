@@ -94,6 +94,11 @@ const HIGH_CONFIDENCE_SECRET_TOKEN_RULES = [
     label: "private key block",
     regex: /-----BEGIN [A-Z ]*PRIVATE KEY-----/g,
   },
+  // AUDIT-FIX [L5]: reject masked secret placeholders that can hide real committed values.
+  {
+    label: "masked secret placeholder",
+    regex: /\*{6,}/g,
+  },
 ];
 
 const PINNED_GITHUB_ACTION_REF_PATTERN = /^[a-f0-9]{40}$/;
