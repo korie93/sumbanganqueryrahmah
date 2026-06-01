@@ -73,6 +73,10 @@ export const schemaGovernanceManifest = {
       ["drizzle-schema", "drizzle-migration", "runtime-ddl"],
       "Audit logs now have a reviewed Drizzle migration while runtime bootstrap stays additive for backward-compatible normalization.",
     ),
+    audit_migration_log: hybridManaged(
+      ["drizzle-migration"],
+      "Forward-only migration audit ledger records reviewed remediation decisions without mutating historical migration SQL.",
+    ),
     backup_jobs: drizzleReviewed(
       ["drizzle-schema", "drizzle-migration", "runtime-ddl"],
       "Backup queue persistence now has a reviewed Drizzle migration while runtime bootstrap keeps legacy installs compatible.",

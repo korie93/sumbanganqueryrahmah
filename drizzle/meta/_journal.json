@@ -274,6 +274,13 @@
       "when": 1775923900000,
       "tag": "0038_collection_daily_calendar_audit",
       "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1780332742500,
+      "tag": "0039_settings_fk_not_null_idempotency_audit",
+      "breakpoints": true
     }
   ]
 }
