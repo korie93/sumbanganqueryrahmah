@@ -11,6 +11,7 @@ export const JSON_PARSE_LIMITS = {
   maxStringLength: 100_000,
   maxArrayLength: 10_000,
   maxRawBytes: 10 * 1024 * 1024,
+  maxTotalBytes: 5 * 1024 * 1024,
 } as const;
 
 type SafeJsonParseOptions = {
@@ -20,6 +21,7 @@ type SafeJsonParseOptions = {
   maxObjectKeys?: number | undefined;
   maxRawBytes?: number | undefined;
   maxStringLength?: number | undefined;
+  maxTotalBytes?: number | undefined;
 };
 
 type JsonParseLimits = {
@@ -28,6 +30,7 @@ type JsonParseLimits = {
   maxObjectKeys: number;
   maxRawBytes: number;
   maxStringLength: number;
+  maxTotalBytes: number;
 };
 
 function recordJsonParseFailure(
@@ -41,6 +44,9 @@ function recordJsonParseFailure(
     errorType,
   });
   metrics.increment("jsonParseFailuresTotal");
+  if (errorType === "JsonMemoryLimitExceeded") {
+    metrics.increment("jsonParseMemoryLimitExceededTotal");
+  }
 }
 
 function normalizePositiveInteger(value: number | undefined, fallback: number): number {
@@ -56,11 +62,20 @@ function resolveJsonParseLimits(options: SafeJsonParseOptions): JsonParseLimits 
     maxObjectKeys: normalizePositiveInteger(options.maxObjectKeys, JSON_PARSE_LIMITS.maxObjectKeys),
     maxRawBytes: normalizePositiveInteger(options.maxRawBytes, JSON_PARSE_LIMITS.maxRawBytes),
     maxStringLength: normalizePositiveInteger(options.maxStringLength, JSON_PARSE_LIMITS.maxStringLength),
+    maxTotalBytes: normalizePositiveInteger(options.maxTotalBytes, JSON_PARSE_LIMITS.maxTotalBytes),
   };
 }
 
 function validateJsonValueLimits(value: unknown, limits: JsonParseLimits): string | null {
   const stack: Array<{ depth: number; value: unknown }> = [{ depth: 0, value }];
+  let totalBytes = 0;
+
+  const addTotalBytes = (bytes: number): string | null => {
+    totalBytes += bytes;
+    return totalBytes > limits.maxTotalBytes
+      ? `JSON cumulative byte size exceeds limit ${limits.maxTotalBytes}`
+      : null;
+  };
 
   while (stack.length > 0) {
     const current = stack.pop();
@@ -75,6 +90,10 @@ function validateJsonValueLimits(value: unknown, limits: JsonParseLimits): strin
     if (typeof current.value === "string") {
       if (current.value.length > limits.maxStringLength) {
         return `JSON string length exceeds limit ${limits.maxStringLength}`;
+      }
+      const totalByteError = addTotalBytes(Buffer.byteLength(current.value, "utf8"));
+      if (totalByteError) {
+        return totalByteError;
       }
       continue;
     }
@@ -99,7 +118,11 @@ function validateJsonValueLimits(value: unknown, limits: JsonParseLimits): strin
       return `JSON object key count exceeds limit ${limits.maxObjectKeys}`;
     }
 
-    for (const [, nestedValue] of entries) {
+    for (const [key, nestedValue] of entries) {
+      const totalByteError = addTotalBytes(Buffer.byteLength(key, "utf8"));
+      if (totalByteError) {
+        return totalByteError;
+      }
       stack.push({ depth: current.depth + 1, value: nestedValue });
     }
   }
@@ -135,7 +158,13 @@ export function safeJsonParse<T>(
     const data = JSON.parse(raw) as T;
     const limitError = validateJsonValueLimits(data, limits);
     if (limitError) {
-      recordJsonParseFailure(context, "JsonLimitExceeded", metrics);
+      recordJsonParseFailure(
+        context,
+        limitError.includes("cumulative byte size")
+          ? "JsonMemoryLimitExceeded"
+          : "JsonLimitExceeded",
+        metrics,
+      );
       return {
         success: false,
         error: limitError,

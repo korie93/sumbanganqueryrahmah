@@ -30,6 +30,7 @@ export type InternalMetricName =
   | "dbHealthCheckSkippedConcurrentTotal"
   | "idempotencyFingerprintSweepErrorsTotal"
   | "jsonParseFailuresTotal"
+  | "jsonParseMemoryLimitExceededTotal"
   | "redisRateLimitEvalTypeErrorsTotal"
   | "sessionRefreshDedupedTotal"
   | "sessionRefreshRevocationRetryAttemptsTotal"
@@ -93,6 +94,7 @@ const INTERNAL_METRIC_NAMES: readonly InternalMetricName[] = [
   "dbHealthCheckSkippedConcurrentTotal",
   "idempotencyFingerprintSweepErrorsTotal",
   "jsonParseFailuresTotal",
+  "jsonParseMemoryLimitExceededTotal",
   "redisRateLimitEvalTypeErrorsTotal",
   "sessionRefreshDedupedTotal",
   "sessionRefreshRevocationRetryAttemptsTotal",

@@ -139,3 +139,21 @@ test("safeJsonParse rejects oversized arrays, objects, and strings", () => {
   assert.equal(stringResult.success, false);
   assert.equal(metrics.snapshot().counters.jsonParseFailuresTotal, 3);
 });
+
+test("safeJsonParse rejects parsed values over the cumulative byte budget", () => {
+  const metrics = createInternalMetrics();
+  const result = safeJsonParse<unknown>(
+    "{\"first\":\"abc\",\"second\":\"def\"}",
+    "safe_json_total_byte_budget",
+    {
+      metrics,
+      maxStringLength: 10,
+      maxTotalBytes: 8,
+    },
+  );
+
+  assert.equal(result.success, false);
+  assert.match(result.error, /cumulative byte size exceeds limit 8/);
+  assert.equal(metrics.snapshot().counters.jsonParseFailuresTotal, 1);
+  assert.equal(metrics.snapshot().counters.jsonParseMemoryLimitExceededTotal, 1);
+});
