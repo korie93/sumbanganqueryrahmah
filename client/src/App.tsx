@@ -206,7 +206,12 @@ function App() {
   return (
     <>
       <AppReadySignal />
-      <a className="skip-to-main-link" href="#main-content" onClick={focusMainContent}>
+      <a
+        aria-label="Skip to main content"
+        className="skip-to-main-link"
+        href="#main-content"
+        onClick={focusMainContent}
+      >
         Langkau ke kandungan utama
       </a>
       <AppContent />
