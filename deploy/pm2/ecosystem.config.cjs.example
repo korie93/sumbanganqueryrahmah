@@ -26,7 +26,7 @@ module.exports = {
       max_restarts: 10,
       exp_backoff_restart_delay: 100,
       restart_delay: 5000,
-      kill_timeout: 10000,
+      kill_timeout: 15000, // AUDIT-FIX [M14]: PM2 waits graceful shutdown timeout plus a 5s cleanup margin.
       listen_timeout: 5000,
       time: true,
     },
