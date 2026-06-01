@@ -8,11 +8,23 @@ import {
 
 function createLogger() {
   return {
+    infoCalls: [] as Array<{ message: string; metadata?: Record<string, unknown> | undefined }>,
+    warnCalls: [] as Array<{ message: string; metadata?: Record<string, unknown> | undefined }>,
     errorCalls: [] as Array<{ message: string; metadata?: Record<string, unknown> | undefined }>,
+    info(message: string, metadata?: Record<string, unknown>) {
+      this.infoCalls.push({ message, metadata });
+    },
+    warn(message: string, metadata?: Record<string, unknown>) {
+      this.warnCalls.push({ message, metadata });
+    },
     error(message: string, metadata?: Record<string, unknown>) {
       this.errorCalls.push({ message, metadata });
     },
   };
+}
+
+function lastCall<T>(calls: T[]): T | undefined {
+  return calls[calls.length - 1];
 }
 
 test("resolvePgPoolShutdownTimeoutMs keeps shutdown bounds inside a safe window", () => {
@@ -42,6 +54,10 @@ test("shutdownPgPoolSafely logs pool end failures instead of swallowing them", a
   assert.equal(closed, false);
   assert.equal(stopBackgroundTasksCalls, 1);
   assert.equal(logger.errorCalls[0]?.message, "Failed to close PostgreSQL pool during shutdown");
+  assert.equal(logger.errorCalls[0]?.metadata?.event, "db_pool_drain_error");
+  assert.equal(logger.infoCalls[0]?.metadata?.event, "db_pool_drain_start");
+  assert.equal(lastCall(logger.infoCalls)?.metadata?.event, "db_pool_drain_complete");
+  assert.equal(lastCall(logger.infoCalls)?.metadata?.outcome, "error");
 });
 
 test("shutdownPgPoolSafely enforces a timeout boundary when pool close hangs", async () => {
@@ -84,6 +100,10 @@ test("shutdownPgPoolSafely enforces a timeout boundary when pool close hangs", a
 
     assert.equal(closed, false);
     assert.equal(logger.errorCalls[0]?.message, "PostgreSQL pool shutdown timed out");
+    assert.equal(logger.warnCalls[0]?.message, "PostgreSQL pool shutdown drain timed out");
+    assert.equal(logger.warnCalls[0]?.metadata?.event, "db_pool_drain_timeout");
+    assert.equal(logger.warnCalls[0]?.metadata?.action, "continue_shutdown_after_timeout");
+    assert.equal(lastCall(logger.infoCalls)?.metadata?.outcome, "timeout");
     assert.notEqual(clearedHandle, null);
   } finally {
     globalThis.setTimeout = originalSetTimeout;
@@ -111,4 +131,27 @@ test("shutdownPgPoolSafely logs background task cleanup failures too", async () 
     logger.errorCalls[0]?.message,
     "Failed to stop PostgreSQL pool background tasks during shutdown",
   );
+  assert.equal(logger.infoCalls[0]?.metadata?.event, "db_pool_drain_start");
+  assert.equal(lastCall(logger.infoCalls)?.metadata?.outcome, "closed");
+});
+
+test("shutdownPgPoolSafely logs start and completion when pool closes cleanly", async () => {
+  const logger = createLogger();
+
+  const closed = await shutdownPgPoolSafely({
+    logger,
+    phase: "graceful-shutdown",
+    timeoutMs: 1_000,
+    stopBackgroundTasks: () => undefined,
+    poolRef: {
+      end: async () => undefined,
+    },
+  });
+
+  assert.equal(closed, true);
+  assert.equal(logger.infoCalls[0]?.message, "PostgreSQL pool shutdown drain started");
+  assert.equal(logger.infoCalls[0]?.metadata?.event, "db_pool_drain_start");
+  assert.equal(lastCall(logger.infoCalls)?.message, "PostgreSQL pool shutdown drain completed");
+  assert.equal(lastCall(logger.infoCalls)?.metadata?.event, "db_pool_drain_complete");
+  assert.equal(lastCall(logger.infoCalls)?.metadata?.outcome, "closed");
 });

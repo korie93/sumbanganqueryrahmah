@@ -1,4 +1,6 @@
 type ShutdownLogger = {
+  info?: (message: string, metadata?: Record<string, unknown>) => void;
+  warn?: (message: string, metadata?: Record<string, unknown>) => void;
   error: (message: string, metadata?: Record<string, unknown>) => void;
 };
 
@@ -32,6 +34,14 @@ export async function shutdownPgPoolSafely({
   stopBackgroundTasks,
   timeoutMs,
 }: ShutdownPgPoolSafelyOptions) {
+  const startedAt = Date.now();
+
+  logger.info?.("PostgreSQL pool shutdown drain started", {
+    event: "db_pool_drain_start",
+    phase,
+    timeoutMs,
+  });
+
   try {
     stopBackgroundTasks();
   } catch (error) {
@@ -64,19 +74,48 @@ export async function shutdownPgPoolSafely({
 
   if (result.kind === "error") {
     logger.error("Failed to close PostgreSQL pool during shutdown", {
+      event: "db_pool_drain_error",
       phase,
+      elapsedMs: Date.now() - startedAt,
       error: result.error,
+    });
+    logger.info?.("PostgreSQL pool shutdown drain completed", {
+      event: "db_pool_drain_complete",
+      phase,
+      outcome: "error",
+      elapsedMs: Date.now() - startedAt,
     });
     return false;
   }
 
   if (result.kind === "timeout") {
-    logger.error("PostgreSQL pool shutdown timed out", {
+    logger.warn?.("PostgreSQL pool shutdown drain timed out", {
+      event: "db_pool_drain_timeout",
       phase,
       timeoutMs,
+      elapsedMs: Date.now() - startedAt,
+      action: "continue_shutdown_after_timeout",
+    });
+    logger.error("PostgreSQL pool shutdown timed out", {
+      event: "db_pool_drain_timeout",
+      phase,
+      timeoutMs,
+      elapsedMs: Date.now() - startedAt,
+    });
+    logger.info?.("PostgreSQL pool shutdown drain completed", {
+      event: "db_pool_drain_complete",
+      phase,
+      outcome: "timeout",
+      elapsedMs: Date.now() - startedAt,
     });
     return false;
   }
 
+  logger.info?.("PostgreSQL pool shutdown drain completed", {
+    event: "db_pool_drain_complete",
+    phase,
+    outcome: "closed",
+    elapsedMs: Date.now() - startedAt,
+  });
   return true;
 }
