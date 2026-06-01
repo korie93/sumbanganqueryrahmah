@@ -67,6 +67,35 @@ test("runtime env schema rejects malformed integer values", () => {
   );
 });
 
+test("runtime env schema validates bcrypt cost factor bounds", () => {
+  assert.doesNotThrow(() => {
+    validateRuntimeEnvironmentSchema({
+      BCRYPT_COST_FACTOR: "12",
+    });
+    validateRuntimeEnvironmentSchema({
+      BCRYPT_COST_FACTOR: "20",
+    });
+  });
+
+  assert.throws(
+    () => {
+      validateRuntimeEnvironmentSchema({
+        BCRYPT_COST_FACTOR: "11",
+      });
+    },
+    /BCRYPT_COST_FACTOR.*at least 12/i,
+  );
+
+  assert.throws(
+    () => {
+      validateRuntimeEnvironmentSchema({
+        BCRYPT_COST_FACTOR: "21",
+      });
+    },
+    /BCRYPT_COST_FACTOR.*at most 20/i,
+  );
+});
+
 test("runtime env schema rejects integer values outside configured bounds", () => {
   assert.throws(
     () => {

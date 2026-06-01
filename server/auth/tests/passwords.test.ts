@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import bcrypt from "bcrypt";
+import { runtimeConfig } from "../../config/runtime";
 import {
   CREDENTIAL_BCRYPT_COST,
   CREDENTIAL_PASSWORD_MAX_LENGTH,
@@ -111,6 +112,7 @@ test("hashPassword uses an explicit bcrypt cost of at least 12", async (t) => {
 
   assert.equal(hashMock.mock.callCount(), 1);
   assert.equal(hashMock.mock.calls[0]?.arguments[1], CREDENTIAL_BCRYPT_COST);
+  assert.equal(CREDENTIAL_BCRYPT_COST, runtimeConfig.auth.bcryptCost);
   assert.equal(CREDENTIAL_BCRYPT_COST >= 12, true);
 });
 

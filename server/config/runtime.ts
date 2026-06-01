@@ -389,6 +389,7 @@ export const runtimeConfig: RuntimeConfig = Object.freeze({
     sessionSecret: resolvedSessionSecret,
     previousSessionSecrets: configuredPreviousSessionSecrets,
     auditHmacKey: resolvedAuditHmacKey,
+    bcryptCost: readInt("BCRYPT_COST_FACTOR", 12, { min: 12, max: 20 }),
     collectionNicknameTempPassword: readSecretOrThrow(
       "COLLECTION_NICKNAME_TEMP_PASSWORD",
       isProductionLike,

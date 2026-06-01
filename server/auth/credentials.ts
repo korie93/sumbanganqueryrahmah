@@ -7,13 +7,14 @@ import {
   isCredentialPasswordPolicyCompliant,
   isCredentialPasswordWithinMaxLength,
 } from "../../shared/password-policy";
+import { runtimeConfig } from "../config/runtime";
 import { normalizeCredentialUsername } from "./username-normalization";
 
 export const CREDENTIAL_USERNAME_REGEX = /^[a-zA-Z0-9._-]{3,32}$/;
 export const CREDENTIAL_EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 export const CREDENTIAL_PASSWORD_MIN_LENGTH = SHARED_CREDENTIAL_PASSWORD_MIN_LENGTH;
 export const CREDENTIAL_PASSWORD_MAX_LENGTH = SHARED_CREDENTIAL_PASSWORD_MAX_LENGTH;
-export const CREDENTIAL_BCRYPT_COST = 12;
+export const CREDENTIAL_BCRYPT_COST = runtimeConfig.auth.bcryptCost;
 
 export type CredentialErrorCode = Extract<
   ErrorCode,
