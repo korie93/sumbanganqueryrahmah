@@ -336,6 +336,31 @@
   }
 }
 
+/* AUDIT-FIX [M9]: preserve navbar controls on ultra-small legacy mobile widths. */
+@media (max-width: 319px) {
+  .navbar-safe-area-shell {
+    padding-left: max(0.35rem, var(--safe-area-inset-left));
+    padding-right: max(0.35rem, var(--safe-area-inset-right));
+  }
+
+  .navbar-premium-glass {
+    gap: 0.25rem;
+    padding: 0.25rem;
+  }
+
+  .nav-mobile-trigger,
+  .user-menu-trigger,
+  .nav-pill {
+    min-height: 2.5rem;
+    padding-left: 0.55rem;
+    padding-right: 0.55rem;
+  }
+
+  .nav-pill-label {
+    max-width: 8rem;
+  }
+}
+
 @media (max-width: 767px) {
   .nav-mobile-trigger,
   .user-menu-trigger {

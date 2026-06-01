@@ -63,6 +63,7 @@ test("navbar controls use Malay accessible labels and include username context",
   assert.match(navbarStyles, /\.navbar-scroll-hint/);
   assert.match(navbarStyles, /\.navbar-premium-glass\s*\{[\s\S]*scrollbar-width:\s*thin/);
   assert.match(navbarStyles, /\.navbar-premium-glass\s*\{[\s\S]*scrollbar-color:\s*hsl\(var\(--muted-foreground\) \/ 0\.42\) transparent/);
+  assert.match(navbarStyles, /@media \(max-width: 319px\)/);
   assert.match(mobileNavigationSource, /<SheetTitle>Navigasi<\/SheetTitle>/);
   assert.match(mobileNavigationSource, /Bahagian semasa:/);
   assert.match(mobileNavigationSource, /aria-label="Navigasi mudah alih"/);

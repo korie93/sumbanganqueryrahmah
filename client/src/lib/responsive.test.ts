@@ -17,7 +17,8 @@ import {
 } from "./responsive";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const APPROVED_CSS_BREAKPOINT_WIDTHS = new Set([640, 767, 768, 1023, 1024]);
+// AUDIT-FIX [M9]: 319px is the approved ultra-small fallback tier below the 320px handset baseline.
+const APPROVED_CSS_BREAKPOINT_WIDTHS = new Set([319, 640, 767, 768, 1023, 1024]);
 const RESPONSIVE_CSS_CONTRACT_FILES = [
   "../pages/Login.css",
   "../components/PublicAuthLayout.css",
