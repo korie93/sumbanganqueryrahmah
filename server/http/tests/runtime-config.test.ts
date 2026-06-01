@@ -116,6 +116,38 @@ test("runtime config rejects production startup when backup encryption keys are 
   );
 });
 
+test("runtime config rejects production startup when backup encryption key material is weak", async () => {
+  await withEnv(
+    {
+      ...productionBaseOverrides,
+      BACKUP_ENCRYPTION_KEY: "short-backup-key",
+      BACKUP_ENCRYPTION_KEYS: null,
+      BACKUP_FEATURE_ENABLED: "1",
+    },
+    async () => {
+      await assert.rejects(
+        importRuntimeFresh(),
+        /BACKUP_ENCRYPTION_KEY or BACKUP_ENCRYPTION_KEYS must be a unique random secret of at least 32 characters/i,
+      );
+    },
+  );
+});
+
+test("runtime config accepts production startup without backup keys when backups are disabled", async () => {
+  await withEnv(
+    {
+      ...productionBaseOverrides,
+      BACKUP_ENCRYPTION_KEY: null,
+      BACKUP_ENCRYPTION_KEYS: null,
+      BACKUP_FEATURE_ENABLED: "0",
+    },
+    async () => {
+      const runtimeModule = await importRuntimeFresh();
+      assert.equal(runtimeModule.runtimeConfig.backups.featureEnabled, false);
+    },
+  );
+});
+
 test("runtime config rejects production startup when collection PII encryption key is missing", async () => {
   await withEnv(
     {

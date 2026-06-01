@@ -27,6 +27,8 @@ const STRONG_PREVIOUS_TWO_FACTOR_SECRET = "sqr-prod-previous-two-factor-secret-m
 const STRONG_COLLECTION_PII_SECRET = "sqr-prod-collection-pii-secret-minimum-001";
 const STRONG_PREVIOUS_COLLECTION_PII_SECRET =
   "sqr-prod-previous-collection-pii-secret-minimum-001";
+const STRONG_BACKUP_SECRET = "sqr-prod-backup-secret-32-chars-minimum-001";
+const STRONG_PREVIOUS_BACKUP_SECRET = "sqr-prod-previous-backup-secret-minimum-001";
 
 test("resolveCookieSecure respects explicit and auto values", () => {
   assert.equal(
@@ -440,7 +442,7 @@ test("assertNoPlaceholderSecrets rejects production-like previous collection PII
         configuredPreviousCollectionPiiEncryptionKeys: [
           "GENERATE_ME_COLLECTION_PII_KEY_DO_NOT_REUSE_SESSION_SECRET",
         ],
-        configuredBackupEncryptionKey: "prod-backup-secret",
+        configuredBackupEncryptionKey: STRONG_BACKUP_SECRET,
         configuredBackupEncryptionKeys: null,
       }),
     /COLLECTION_PII_ENCRYPTION_KEY_PREVIOUS must not use an example, placeholder, or template value/i,
@@ -478,8 +480,8 @@ test("assertNoPlaceholderSecrets validates production current and previous runti
       configuredPreviousTwoFactorEncryptionKeys: [STRONG_PREVIOUS_TWO_FACTOR_SECRET],
       configuredCollectionPiiEncryptionKey: STRONG_COLLECTION_PII_SECRET,
       configuredPreviousCollectionPiiEncryptionKeys: [STRONG_PREVIOUS_COLLECTION_PII_SECRET],
-      configuredBackupEncryptionKey: "prod-backup-secret",
-      configuredBackupEncryptionKeys: null,
+      configuredBackupEncryptionKey: STRONG_BACKUP_SECRET,
+      configuredBackupEncryptionKeys: `previous:${STRONG_PREVIOUS_BACKUP_SECRET}`,
     }),
   );
 
@@ -494,7 +496,7 @@ test("assertNoPlaceholderSecrets validates production current and previous runti
         configuredPreviousTwoFactorEncryptionKeys: [],
         configuredCollectionPiiEncryptionKey: STRONG_COLLECTION_PII_SECRET,
         configuredPreviousCollectionPiiEncryptionKeys: [],
-        configuredBackupEncryptionKey: "prod-backup-secret",
+        configuredBackupEncryptionKey: STRONG_BACKUP_SECRET,
         configuredBackupEncryptionKeys: null,
       }),
     /SESSION_SECRET_PREVIOUS must be a unique random secret of at least 32 characters/i,
@@ -511,10 +513,46 @@ test("assertNoPlaceholderSecrets validates production current and previous runti
         configuredPreviousTwoFactorEncryptionKeys: ["ganti-dengan-secret-2fa-yang-kuat-dan-berbeza"],
         configuredCollectionPiiEncryptionKey: STRONG_COLLECTION_PII_SECRET,
         configuredPreviousCollectionPiiEncryptionKeys: [],
-        configuredBackupEncryptionKey: "prod-backup-secret",
+        configuredBackupEncryptionKey: STRONG_BACKUP_SECRET,
         configuredBackupEncryptionKeys: null,
       }),
     /TWO_FACTOR_ENCRYPTION_KEY_PREVIOUS must not use an example, placeholder, or template value/i,
+  );
+});
+
+test("assertNoPlaceholderSecrets validates production backup encryption key material", () => {
+  assert.throws(
+    () =>
+      assertNoPlaceholderSecrets({
+        isProductionLike: true,
+        configuredSessionSecret: STRONG_SESSION_SECRET,
+        configuredPreviousSessionSecrets: [],
+        configuredPgPassword: "prod-db-password",
+        configuredTwoFactorEncryptionKey: STRONG_TWO_FACTOR_SECRET,
+        configuredPreviousTwoFactorEncryptionKeys: [],
+        configuredCollectionPiiEncryptionKey: STRONG_COLLECTION_PII_SECRET,
+        configuredPreviousCollectionPiiEncryptionKeys: [],
+        configuredBackupEncryptionKey: "short-backup-key",
+        configuredBackupEncryptionKeys: null,
+      }),
+    /BACKUP_ENCRYPTION_KEY or BACKUP_ENCRYPTION_KEYS must be a unique random secret of at least 32 characters/i,
+  );
+
+  assert.throws(
+    () =>
+      assertNoPlaceholderSecrets({
+        isProductionLike: true,
+        configuredSessionSecret: STRONG_SESSION_SECRET,
+        configuredPreviousSessionSecrets: [],
+        configuredPgPassword: "prod-db-password",
+        configuredTwoFactorEncryptionKey: STRONG_TWO_FACTOR_SECRET,
+        configuredPreviousTwoFactorEncryptionKeys: [],
+        configuredCollectionPiiEncryptionKey: STRONG_COLLECTION_PII_SECRET,
+        configuredPreviousCollectionPiiEncryptionKeys: [],
+        configuredBackupEncryptionKey: null,
+        configuredBackupEncryptionKeys: "primary:GENERATE_ME_BACKUP_KEY_AND_STORE_OFFLINE",
+      }),
+    /BACKUP_ENCRYPTION_KEY or BACKUP_ENCRYPTION_KEYS must not use an example, placeholder, or template value/i,
   );
 });
 

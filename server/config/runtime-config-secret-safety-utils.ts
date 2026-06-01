@@ -2,9 +2,6 @@ const PLACEHOLDER_DATABASE_PASSWORDS = new Set([
   "change-this-db-password",
   "GENERATE_ME_DB_PASSWORD_DO_NOT_USE_IN_PRODUCTION",
 ]);
-const PLACEHOLDER_BACKUP_ENCRYPTION_KEYS = new Set([
-  "GENERATE_ME_BACKUP_KEY_AND_STORE_OFFLINE",
-]);
 const RUNTIME_SECRET_MIN_LENGTH = 32;
 const SESSION_SECRET_MIN_BYTES = 32;
 const TEMPLATE_SECRET_PATTERNS = [
@@ -60,6 +57,30 @@ function assertOptionalStrongRuntimeSecret(name: string, value: string | null | 
   assertStrongRuntimeSecret(name, value);
 }
 
+function getBackupEncryptionKeyMaterialCandidates(params: {
+  configuredBackupEncryptionKey: string | null;
+  configuredBackupEncryptionKeys: string | null;
+}): string[] {
+  const candidates: string[] = [];
+  const singleKey = String(params.configuredBackupEncryptionKey || "").trim();
+  if (singleKey) {
+    candidates.push(singleKey);
+  }
+
+  for (const entry of String(params.configuredBackupEncryptionKeys || "").split(/[,\n;]+/)) {
+    const normalized = entry.trim();
+    if (!normalized) {
+      continue;
+    }
+    const separatorIndex = normalized.indexOf(":");
+    candidates.push(separatorIndex >= 0
+      ? normalized.slice(separatorIndex + 1).trim()
+      : normalized);
+  }
+
+  return candidates;
+}
+
 export function assertNoPlaceholderSecrets(params: {
   isProductionLike: boolean;
   configuredSessionSecret: string | null;
@@ -104,19 +125,10 @@ export function assertNoPlaceholderSecrets(params: {
     assertStrongRuntimeSecret("COLLECTION_PII_ENCRYPTION_KEY_PREVIOUS", previousCollectionPiiKey);
   }
 
-  const configuredBackupKeys = [
-    params.configuredBackupEncryptionKey,
-    ...String(params.configuredBackupEncryptionKeys || "")
-      .split(",")
-      .map((entry) => entry.trim())
-      .filter(Boolean),
-  ].filter((entry): entry is string => Boolean(entry));
-
-  for (const backupKey of configuredBackupKeys) {
-    if (PLACEHOLDER_BACKUP_ENCRYPTION_KEYS.has(backupKey)) {
-      throw new Error(
-        "BACKUP_ENCRYPTION_KEY or BACKUP_ENCRYPTION_KEYS contains a placeholder value and must be replaced before non-local startup.",
-      );
-    }
+  for (const backupKey of getBackupEncryptionKeyMaterialCandidates({
+    configuredBackupEncryptionKey: params.configuredBackupEncryptionKey,
+    configuredBackupEncryptionKeys: params.configuredBackupEncryptionKeys,
+  })) {
+    assertStrongRuntimeSecret("BACKUP_ENCRYPTION_KEY or BACKUP_ENCRYPTION_KEYS", backupKey);
   }
 }

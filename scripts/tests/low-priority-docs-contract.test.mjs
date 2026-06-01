@@ -114,6 +114,29 @@ test("key rotation runbook covers operational key families without fictional scr
   assert.match(security, /docs\/KEY-ROTATION-RUNBOOK\.md/);
 });
 
+test("database SSL guide documents runtime precedence and production TLS defaults", async () => {
+  const guide = await readDoc("docs/DATABASE-SSL-GUIDE.md");
+  const normalizedGuide = guide.replace(/\s+/g, " ");
+  const envExample = await readDoc(".env.example");
+
+  for (const marker of [
+    "# Database SSL Configuration Guide",
+    "`DATABASE_URL`",
+    "`PG_*` variables",
+    "`PG_PASSWORD` does not patch a passwordless `DATABASE_URL`",
+    "TLS is controlled separately by `DATABASE_SSL`, `DATABASE_SSL_CA`, and `DATABASE_SSL_CA_FILE`",
+    "Production-like host",
+    "Startup fails",
+    "`rejectUnauthorized: true`",
+    "DATABASE_SSL_CA_FILE",
+    "scripts/post-deploy-health-check.sh",
+  ]) {
+    assert.match(normalizedGuide, new RegExp(marker.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  }
+
+  assert.match(envExample, /docs\/DATABASE-SSL-GUIDE\.md/);
+});
+
 test("dependency documentation describes the runtime import cycle guard", async () => {
   const content = await readDoc("docs/DEPENDENCY_SUPPLY_CHAIN.md");
 
