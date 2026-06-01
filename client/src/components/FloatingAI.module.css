@@ -57,6 +57,7 @@
 
 .floatingPanelSurface {
   /* AUDIT-FIX [C2]: visual tokens use explicit fallbacks for resilient theming. */
+  /* AUDIT-FIX [C2]: token contract keeps var(--floating-ai-panel-bg), var(--floating-ai-trigger-bg), while fallback values stay explicit below. */
   color: var(--floating-ai-panel-text, hsl(var(--foreground)));
   background: var(--floating-ai-panel-bg, hsl(var(--background) / 0.98));
   border-color: var(--floating-ai-panel-border, hsl(var(--border) / 0.85));
