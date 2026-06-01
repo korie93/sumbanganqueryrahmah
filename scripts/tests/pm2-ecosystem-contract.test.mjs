@@ -25,7 +25,11 @@ test("PM2 ecosystem example uses direct Node entrypoint with readiness and grace
   assert.equal(app.args, undefined);
   assert.equal(app.wait_ready, true);
   assert.equal(app.shutdown_with_message, true);
-  assert.equal(app.kill_timeout, 10_000);
+  assert.equal(
+    app.kill_timeout,
+    Number(app.env?.GRACEFUL_SHUTDOWN_TIMEOUT_MS) + 5_000,
+    "AUDIT-FIX [M14]: PM2 kill_timeout must keep a 5s buffer after graceful shutdown",
+  );
   assert.equal(app.listen_timeout, 5_000);
   assert.equal(app.env?.GRACEFUL_SHUTDOWN_TIMEOUT_MS, "10000");
   assert.equal(app.max_memory_restart, "768M");
