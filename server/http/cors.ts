@@ -128,6 +128,15 @@ export function resolveAllowedCorsOrigins(env: CorsEnvironmentSource = buildDefa
   return Array.from(origins);
 }
 
+// CORS allow checks must stay exact-origin only. Subdomains and suffix
+// lookalikes require their own explicit allowlist entry.
+export function isAllowedCorsOrigin(
+  normalizedOrigin: string | null,
+  allowedOriginSet: ReadonlySet<string>,
+): normalizedOrigin is string {
+  return normalizedOrigin !== null && allowedOriginSet.has(normalizedOrigin);
+}
+
 export function createCorsMiddleware(
   allowedOrigins = resolveAllowedCorsOrigins(),
 ): RequestHandler {
@@ -161,7 +170,7 @@ export function createCorsMiddleware(
       return next();
     }
 
-    if (allowedOriginSet.has(requestOrigin) || (sameOrigin && requestOrigin === sameOrigin)) {
+    if (isAllowedCorsOrigin(requestOrigin, allowedOriginSet) || (sameOrigin && requestOrigin === sameOrigin)) {
       res.header("Access-Control-Allow-Origin", requestOrigin);
       res.header("Access-Control-Allow-Credentials", "true");
       res.header("Access-Control-Max-Age", DEFAULT_PREFLIGHT_MAX_AGE_SECONDS);

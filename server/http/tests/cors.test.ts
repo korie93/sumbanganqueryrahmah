@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import express from "express";
-import { createCorsMiddleware, resolveAllowedCorsOrigins } from "../cors";
+import { createCorsMiddleware, isAllowedCorsOrigin, resolveAllowedCorsOrigins } from "../cors";
 import { logger } from "../../lib/logger";
 import { startTestServer, stopTestServer } from "../../routes/tests/http-test-utils";
 
@@ -101,6 +101,19 @@ test("resolveAllowedCorsOrigins rejects wildcard-style configured origins", () =
   }
 });
 
+test("isAllowedCorsOrigin allows exact origins only", () => {
+  const allowedOrigins = new Set([
+    "https://example.com",
+    "https://admin.example.com",
+  ]);
+
+  assert.equal(isAllowedCorsOrigin("https://example.com", allowedOrigins), true);
+  assert.equal(isAllowedCorsOrigin("https://admin.example.com", allowedOrigins), true);
+  assert.equal(isAllowedCorsOrigin("https://sub.example.com", allowedOrigins), false);
+  assert.equal(isAllowedCorsOrigin("https://evil-example.com", allowedOrigins), false);
+  assert.equal(isAllowedCorsOrigin("https://example.com.evil.test", allowedOrigins), false);
+});
+
 test("allowed origins receive an exact Access-Control-Allow-Origin header", async () => {
   const app = createCorsTestApp(["https://app.example.com"]);
   const { server, baseUrl } = await startTestServer(app);
@@ -117,6 +130,28 @@ test("allowed origins receive an exact Access-Control-Allow-Origin header", asyn
     assert.equal(response.headers.get("access-control-allow-credentials"), "true");
     assert.equal(response.headers.get("access-control-max-age"), "600");
     assert.equal((await response.json()).ok, true);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("cors middleware rejects suffix and subdomain lookalike origins", async () => {
+  const app = createCorsTestApp(["https://example.com"]);
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    for (const origin of [
+      "https://sub.example.com",
+      "https://evil-example.com",
+      "https://example.com.evil.test",
+    ]) {
+      const response = await fetch(`${baseUrl}/ping`, {
+        headers: { Origin: origin },
+      });
+
+      assert.equal(response.status, 403);
+      assert.equal(response.headers.get("access-control-allow-origin"), null);
+    }
   } finally {
     await stopTestServer(server);
   }
