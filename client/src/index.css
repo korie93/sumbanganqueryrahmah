@@ -90,6 +90,28 @@
   }
 }
 
+:where(button, input, select, textarea):disabled,
+:where([role="button"], [role="menuitem"], [role="option"], [role="tab"]):where(
+  [aria-disabled="true"],
+  [data-disabled],
+  [data-disabled="true"]
+) {
+  opacity: 1 !important;
+  color: hsl(var(--disabled-foreground) / 1) !important;
+  border-color: hsl(var(--disabled-border) / 1);
+  background-color: hsl(var(--disabled) / 1);
+  cursor: not-allowed;
+}
+
+:where(button, input, select, textarea):disabled svg,
+:where([role="button"], [role="menuitem"], [role="option"], [role="tab"]):where(
+  [aria-disabled="true"],
+  [data-disabled],
+  [data-disabled="true"]
+) svg {
+  color: hsl(var(--disabled-foreground) / 1) !important;
+}
+
 .url-preview-dialog-footer-mobile {
   padding-bottom: calc(var(--safe-area-inset-bottom) + 0.75rem);
 }

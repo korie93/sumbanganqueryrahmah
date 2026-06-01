@@ -17,6 +17,7 @@ import { buildAuditLogSummary } from "@/pages/audit-logs/audit-log-classificatio
 import type { AuditLogRecord } from "@/pages/audit-logs/types";
 import { formatAuditTime, getAuditActionInfo } from "@/pages/audit-logs/utils";
 import { useToast } from "@/hooks/use-toast";
+import { logClientError } from "@/lib/client-logger";
 
 type AuditLogDetailSheetProps = {
   log: AuditLogRecord | null;
@@ -66,7 +67,8 @@ export function AuditLogDetailSheet({ log, onOpenChange, onTraceRequestId }: Aud
         title: "Request ID copied",
         description: "Use this ID to match audit records with server logs.",
       });
-    } catch {
+    } catch (error: unknown) {
+      logClientError("[AuditLogDetailSheet] Failed to copy request ID", error);
       toast({
         title: "Failed to copy",
         description: "Please copy the request ID manually.",

@@ -33,6 +33,9 @@
   --secondary-foreground: 222 47% 11%;
   --muted: 214 20% 90%;
   --muted-foreground: 215 18% 38%;
+  --disabled: 214 20% 91%;
+  --disabled-foreground: 215 20% 32%;
+  --disabled-border: 214 20% 76%;
   --accent: 214 28% 82%;
   --accent-foreground: 222 47% 11%;
   --destructive: 0 84% 45%;
@@ -452,6 +455,9 @@
   --secondary-foreground: 210 40% 98%;
   --muted: 217 19% 21%;
   --muted-foreground: 215 20% 65%;
+  --disabled: 217 19% 22%;
+  --disabled-foreground: 215 20% 72%;
+  --disabled-border: 217 19% 38%;
   --accent: 217 20% 21%;
   --accent-foreground: 210 40% 98%;
   --destructive: 0 62% 53%;
