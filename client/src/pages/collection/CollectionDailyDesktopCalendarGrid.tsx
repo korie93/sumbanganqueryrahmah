@@ -70,14 +70,17 @@ export function CollectionDailyDesktopCalendarGrid({
   const showHeatmapContent = viewMode === "heatmap";
   const showLargeIconContent = viewMode === "icon-lg";
   const showMediumIconContent = viewMode === "icon-md" || showLargeIconContent;
+  const leadingBlankDays = Array.from({ length: firstWeekday }, (_, blankOffset) => (
+    `leading-blank-${firstWeekday}-${blankOffset + 1}`
+  ));
 
   return (
     <div
       className={`collection-daily-desktop-grid collection-daily-desktop-grid-mode-${viewMode} grid gap-2`}
       data-testid="collection-daily-calendar-grid"
     >
-      {Array.from({ length: firstWeekday }).map((_, index) => (
-        <div className="collection-daily-calendar-blank" key={`blank-${index}`} />
+      {leadingBlankDays.map((blankKey) => (
+        <div className="collection-daily-calendar-blank" key={blankKey} />
       ))}
       {days.map((day) => {
         const editable = editableCalendarByDay.get(day.day);

@@ -55,7 +55,7 @@ export function ViewerFiltersPanel({
         <div className="space-y-3">
           {columnFilters.map((filter, index) => (
             <ViewerFilterRow
-              key={filter.id ?? `viewer-filter-${index}`}
+              key={filter.id ?? `${filter.column}:${filter.operator}:${filter.value}`}
               filter={filter}
               headers={headers}
               index={index}

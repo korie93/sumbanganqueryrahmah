@@ -1,6 +1,7 @@
 import js from "@eslint/js";
 import globals from "globals";
 import jsxA11y from "eslint-plugin-jsx-a11y";
+import react from "eslint-plugin-react";
 import reactHooks from "eslint-plugin-react-hooks";
 import tseslint from "typescript-eslint";
 
@@ -46,6 +47,14 @@ export default tseslint.config(
         ...globals.es2024,
       },
     },
+    plugins: {
+      react,
+    },
+    settings: {
+      react: {
+        version: "detect",
+      },
+    },
     rules: {
       ...jsxA11yRecommendedWarnings,
       "@typescript-eslint/no-unused-vars": [
@@ -81,6 +90,7 @@ export default tseslint.config(
       "no-unsafe-finally": "warn",
       "no-unused-vars": "off",
       "no-useless-escape": "warn",
+      "react/no-array-index-key": "error",
       "react-hooks/exhaustive-deps": "warn",
     },
   },

@@ -18,9 +18,9 @@ export function AuditLogChangeDiffViewer({ changes }: AuditLogChangeDiffViewerPr
         Before / After
       </h3>
       <div className="mt-3 space-y-3">
-        {changes.map((change, index) => (
+        {changes.map((change) => (
           <article
-            key={`${change.field}:${index}`}
+            key={`${change.field}:${change.before}:${change.after}`}
             className="rounded-xl border border-border/60 bg-background/75 p-3"
           >
             <p className="text-sm font-semibold text-foreground">{change.field}</p>
@@ -51,4 +51,3 @@ export function AuditLogChangeDiffViewer({ changes }: AuditLogChangeDiffViewerPr
     </section>
   );
 }
-

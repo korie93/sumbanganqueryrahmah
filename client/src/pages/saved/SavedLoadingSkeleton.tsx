@@ -1,5 +1,12 @@
 import { Skeleton } from "@/components/ui/skeleton";
 
+const SAVED_SKELETON_ROW_KEYS = [
+  "recent-save",
+  "pinned-save",
+  "shared-save",
+  "archived-save",
+] as const;
+
 export function SavedLoadingSkeleton() {
   return (
     <div className="space-y-4" data-testid="saved-loading-skeleton">
@@ -22,9 +29,9 @@ export function SavedLoadingSkeleton() {
             </div>
             <Skeleton className="h-5 w-5 rounded-full" />
           </div>
-          {Array.from({ length: 4 }, (_, index) => (
+          {SAVED_SKELETON_ROW_KEYS.map((rowKey) => (
             <div
-              key={`saved-skeleton-row-${index}`}
+              key={rowKey}
               className="rounded-xl border border-border/60 bg-background/70 p-3 sm:p-4"
             >
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">

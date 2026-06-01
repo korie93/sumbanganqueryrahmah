@@ -23,6 +23,15 @@ const ViewerColumnSelectorList = lazy(() =>
   })),
 );
 
+const VIEWER_COLUMN_SELECTOR_FALLBACK_KEYS = [
+  "column-a",
+  "column-b",
+  "column-c",
+  "column-d",
+  "column-e",
+  "column-f",
+] as const;
+
 interface ViewerColumnSelectorProps {
   open: boolean;
   headers: string[];
@@ -53,9 +62,9 @@ export function ViewerColumnSelector({
 
   const selectorListFallback = (
     <div aria-hidden="true" className="max-h-48 space-y-2 overflow-y-auto">
-      {Array.from({ length: Math.min(headers.length, 6) || 4 }).map((_, index) => (
+      {VIEWER_COLUMN_SELECTOR_FALLBACK_KEYS.slice(0, Math.min(headers.length, 6) || 4).map((fallbackKey) => (
         <div
-          key={`viewer-column-selector-fallback-${index}`}
+          key={fallbackKey}
           className="h-6 animate-pulse rounded-md border border-border/50 bg-muted/20"
         />
       ))}

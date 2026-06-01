@@ -11,6 +11,36 @@ type AIMessageMarkdownBlock =
   | { type: "list"; ordered: boolean; items: string[] }
   | { type: "paragraph"; lines: string[] };
 
+function hashAIMessageKey(value: string) {
+  let hash = 5381;
+  for (const character of value) {
+    hash = (hash * 33) ^ character.charCodeAt(0);
+  }
+  return (hash >>> 0).toString(36);
+}
+
+function createAIMessageContentKeyFactory() {
+  const seenKeys = new Map<string, number>();
+
+  return (scope: string, value: string) => {
+    const baseKey = `${scope}:${hashAIMessageKey(value)}`;
+    const seenCount = seenKeys.get(baseKey) ?? 0;
+    seenKeys.set(baseKey, seenCount + 1);
+
+    return seenCount === 0 ? baseKey : `${baseKey}:repeat-${seenCount}`;
+  };
+}
+
+function getAIMessageBlockSeed(block: AIMessageMarkdownBlock) {
+  if (block.type === "code") {
+    return `${block.language ?? ""}\n${block.content}`;
+  }
+  if (block.type === "list") {
+    return `${block.ordered ? "ordered" : "unordered"}\n${block.items.join("\n")}`;
+  }
+  return block.lines.join("\n");
+}
+
 function parseAIMessageMarkdownBlocks(content: string): AIMessageMarkdownBlock[] {
   const lines = content.replace(/\r\n?/g, "\n").split("\n");
   const blocks: AIMessageMarkdownBlock[] = [];
@@ -101,13 +131,24 @@ function parseAIMessageMarkdownBlocks(content: string): AIMessageMarkdownBlock[]
   return blocks;
 }
 
-function renderParagraphLines(lines: string[], blockIndex: number) {
-  return lines.map((line, index) => (
-    <span key={`paragraph:${blockIndex}:line:${index}`}>
-      {index > 0 ? <br /> : null}
+function renderParagraphLines(
+  lines: string[],
+  blockKey: string,
+  getContentKey: (scope: string, value: string) => string,
+) {
+  let isFirstLine = true;
+
+  return lines.map((line) => {
+    const needsLineBreak = !isFirstLine;
+    isFirstLine = false;
+
+    return (
+      <span key={getContentKey(`${blockKey}:line`, line)}>
+        {needsLineBreak ? <br /> : null}
       {line}
-    </span>
-  ));
+      </span>
+    );
+  });
 }
 
 function renderAIMessageMarkdown(content: string): ReactNode {
@@ -116,10 +157,14 @@ function renderAIMessageMarkdown(content: string): ReactNode {
     return null;
   }
 
-  return blocks.map((block, index) => {
+  const getContentKey = createAIMessageContentKeyFactory();
+
+  return blocks.map((block) => {
+    const blockKey = getContentKey(`block:${block.type}`, getAIMessageBlockSeed(block));
+
     if (block.type === "code") {
       return (
-        <pre key={`code:${index}`} className="ai-markdown-code">
+        <pre key={blockKey} className="ai-markdown-code">
           <code data-language={block.language || undefined}>{block.content}</code>
         </pre>
       );
@@ -128,17 +173,17 @@ function renderAIMessageMarkdown(content: string): ReactNode {
     if (block.type === "list") {
       const ListTag = block.ordered ? "ol" : "ul";
       return (
-        <ListTag key={`list:${index}`} className="ai-markdown-list">
-          {block.items.map((item, itemIndex) => (
-            <li key={`list:${index}:item:${itemIndex}`}>{item}</li>
+        <ListTag key={blockKey} className="ai-markdown-list">
+          {block.items.map((item) => (
+            <li key={getContentKey(`${blockKey}:item`, item)}>{item}</li>
           ))}
         </ListTag>
       );
     }
 
     return (
-      <p key={`paragraph:${index}`} className="ai-markdown-paragraph">
-        {renderParagraphLines(block.lines, index)}
+      <p key={blockKey} className="ai-markdown-paragraph">
+        {renderParagraphLines(block.lines, blockKey, getContentKey)}
       </p>
     );
   });

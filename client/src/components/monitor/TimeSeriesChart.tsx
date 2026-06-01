@@ -73,8 +73,8 @@ function TimeSeriesChartImpl({ title, color, unit = "", description, data }: Tim
                 </tr>
               </thead>
               <tbody>
-                {accessibility.rows.map((row, index) => (
-                  <tr key={`${row.timestampLabel}-${index}`}>
+                {accessibility.rows.map((row) => (
+                  <tr key={row.key}>
                     <td>{row.timestampLabel}</td>
                     <td>{row.valueLabel}</td>
                   </tr>

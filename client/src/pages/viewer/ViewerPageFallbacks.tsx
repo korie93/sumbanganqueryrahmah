@@ -1,3 +1,17 @@
+const VIEWER_CONTENT_CARD_FALLBACK_KEYS = [
+  "summary-card",
+  "columns-card",
+  "rows-card",
+] as const;
+
+const VIEWER_CONTENT_ROW_FALLBACK_KEYS = [
+  "first-row",
+  "second-row",
+  "third-row",
+  "fourth-row",
+  "fifth-row",
+] as const;
+
 export function ViewerPageHeaderFallback() {
   return (
     <div className="mb-6 space-y-3 rounded-3xl border border-border/70 bg-card/95 px-5 py-5 shadow-sm">
@@ -23,9 +37,9 @@ export function ViewerContentFallback() {
   return (
     <div className="space-y-4">
       <div className="grid gap-3 md:grid-cols-3">
-        {Array.from({ length: 3 }).map((_, index) => (
+        {VIEWER_CONTENT_CARD_FALLBACK_KEYS.map((fallbackKey) => (
           <div
-            key={`viewer-content-card-fallback-${index}`}
+            key={fallbackKey}
             className="h-24 animate-pulse rounded-2xl border border-border/60 bg-card/70"
           />
         ))}
@@ -33,9 +47,9 @@ export function ViewerContentFallback() {
       <div className="rounded-3xl border border-border/70 bg-card/95 p-5 shadow-sm">
         <div className="mb-4 h-11 w-full animate-pulse rounded-xl border border-border/60 bg-muted/25" />
         <div className="space-y-3">
-          {Array.from({ length: 5 }).map((_, index) => (
+          {VIEWER_CONTENT_ROW_FALLBACK_KEYS.map((fallbackKey) => (
             <div
-              key={`viewer-content-row-fallback-${index}`}
+              key={fallbackKey}
               className="h-12 animate-pulse rounded-xl border border-border/60 bg-muted/20"
             />
           ))}

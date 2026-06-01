@@ -25,6 +25,8 @@ export function GeneralSearchResultsPagination({
   totalPages,
   totalResults,
 }: GeneralSearchResultsPaginationProps) {
+  let previousRenderedPage: number | null = null;
+
   return (
     <div className={`mt-4 gap-3 ${isMobile ? "space-y-3" : "flex flex-wrap items-center justify-between"}`}>
       <p className="text-sm text-muted-foreground">
@@ -70,14 +72,20 @@ export function GeneralSearchResultsPagination({
               Previous
             </Button>
             <div className="flex items-center gap-1">
-              {pageItems.map((item, index) =>
-                item === "ellipsis" ? (
-                  <span key={`ellipsis-${index}`} className="text-muted-foreground">
+              {pageItems.map((item) => {
+                if (item === "ellipsis") {
+                  return (
+                  <span key={`ellipsis-after-${previousRenderedPage ?? "start"}`} className="text-muted-foreground">
                     ...
                   </span>
-                ) : (
+                  );
+                }
+
+                previousRenderedPage = item;
+
+                return (
                   <Button
-                    key={item}
+                    key={`page-${item}`}
                     variant={currentPage === item ? "default" : "outline"}
                     size="sm"
                     onClick={() => onPageChange(item)}
@@ -87,8 +95,8 @@ export function GeneralSearchResultsPagination({
                   >
                     {item}
                   </Button>
-                ),
-              )}
+                );
+              })}
             </div>
             <Button
               variant="outline"

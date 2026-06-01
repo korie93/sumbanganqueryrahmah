@@ -20,6 +20,12 @@ const ViewerVirtualizedTable = lazy(() =>
   })),
 );
 
+const VIEWER_MOBILE_CARD_FALLBACK_KEYS = [
+  "first-card",
+  "second-card",
+  "third-card",
+] as const;
+
 interface ViewerDataTableProps {
   debouncedSearch: string;
   enableVirtualRows: boolean;
@@ -80,9 +86,9 @@ export function ViewerDataTable({
   const mobileTableFallback = (
     <div className="space-y-3">
       <div className="h-12 animate-pulse rounded-xl border border-border/60 bg-background/60" />
-      {Array.from({ length: 3 }).map((_, index) => (
+      {VIEWER_MOBILE_CARD_FALLBACK_KEYS.map((fallbackKey) => (
         <div
-          key={`viewer-mobile-card-fallback-${index}`}
+          key={fallbackKey}
           className="h-40 animate-pulse rounded-2xl border border-border/60 bg-background/60"
         />
       ))}

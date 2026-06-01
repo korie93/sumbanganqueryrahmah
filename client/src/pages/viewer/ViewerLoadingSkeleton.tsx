@@ -1,5 +1,16 @@
 import { Skeleton } from "@/components/ui/skeleton";
 
+const VIEWER_SKELETON_ROW_KEYS = [
+  "row-a",
+  "row-b",
+  "row-c",
+  "row-d",
+  "row-e",
+  "row-f",
+  "row-g",
+  "row-h",
+] as const;
+
 export function ViewerLoadingSkeleton() {
   return (
     <div className="space-y-4" data-testid="viewer-loading-skeleton">
@@ -16,8 +27,8 @@ export function ViewerLoadingSkeleton() {
           <Skeleton className="h-5 w-48" />
           <div className="grid gap-2">
             <Skeleton className="h-10 w-full" />
-            {Array.from({ length: 8 }, (_, index) => (
-              <Skeleton key={`viewer-skeleton-row-${index}`} className="h-12 w-full" />
+            {VIEWER_SKELETON_ROW_KEYS.map((rowKey) => (
+              <Skeleton key={rowKey} className="h-12 w-full" />
             ))}
           </div>
         </div>

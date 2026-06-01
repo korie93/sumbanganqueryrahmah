@@ -10,6 +10,12 @@ const ViewerPageHeaderActions = lazy(() =>
   })),
 );
 
+const VIEWER_HEADER_ACTION_FALLBACK_KEYS = [
+  "primary-action",
+  "secondary-action",
+  "tertiary-action",
+] as const;
+
 interface ViewerPageHeaderProps {
   importName: string;
   rowsCount: number;
@@ -41,9 +47,9 @@ interface ViewerPageHeaderProps {
 function ViewerPageHeaderActionsFallback() {
   return (
     <div className="flex w-full flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center xl:w-auto xl:justify-end">
-      {Array.from({ length: 3 }).map((_, index) => (
+      {VIEWER_HEADER_ACTION_FALLBACK_KEYS.map((fallbackKey) => (
         <div
-          key={`viewer-header-action-fallback-${index}`}
+          key={fallbackKey}
           className="h-10 w-full animate-pulse rounded-md border border-border/60 bg-muted/30 sm:w-28"
         />
       ))}

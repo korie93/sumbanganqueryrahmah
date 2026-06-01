@@ -53,12 +53,12 @@ test("AI messages render markdown through React nodes instead of raw HTML", () =
   assert.match(sanitizerSource, /ALLOWED_TAGS: \[\]/);
   assert.match(sanitizerSource, /removeUnsafeAIControlCharacters/);
   assert.match(source, /function parseAIMessageMarkdownBlocks/);
-  assert.match(source, /<pre key=\{`code:\$\{index\}`\} className="ai-markdown-code">/);
+  assert.match(source, /function createAIMessageContentKeyFactory/);
+  assert.match(source, /<pre key=\{blockKey\} className="ai-markdown-code">/);
   assert.match(source, /const ListTag = block\.ordered \? "ol" : "ul"/);
-  assert.match(source, /key=\{`list:\$\{index\}:item:\$\{itemIndex\}`\}/);
-  assert.match(source, /key=\{`paragraph:\$\{blockIndex\}:line:\$\{index\}`\}/);
-  assert.doesNotMatch(source, /key=\{`\$\{itemIndex\}:\$\{item\}`\}/);
-  assert.doesNotMatch(source, /key=\{`\$\{index\}:\$\{line\}`\}/);
+  assert.match(source, /key=\{getContentKey\(`\$\{blockKey\}:item`, item\)\}/);
+  assert.match(source, /key=\{getContentKey\(`\$\{blockKey\}:line`, line\)\}/);
+  assert.doesNotMatch(source, /key=\{`[^`]*\$\{(?:index|itemIndex|blockIndex)\}/);
   assert.match(source, /<br \/>/);
   assert.doesNotMatch(source, /dangerouslySetInnerHTML/);
 });

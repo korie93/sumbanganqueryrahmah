@@ -26,6 +26,13 @@ const ViewerExportOptionsList = lazy(() =>
   })),
 );
 
+const VIEWER_EXPORT_OPTION_FALLBACK_KEYS = [
+  "csv-option",
+  "pdf-option",
+  "excel-option",
+  "selected-option",
+] as const;
+
 interface ViewerExportMenuProps {
   exportBusy: boolean;
   totalRows: number;
@@ -94,9 +101,9 @@ export function ViewerExportMenu({
 
   const exportOptionsFallback = (
     <div aria-hidden="true" className="space-y-2">
-      {Array.from({ length: 4 }).map((_, index) => (
+      {VIEWER_EXPORT_OPTION_FALLBACK_KEYS.map((fallbackKey) => (
         <div
-          key={`viewer-export-option-fallback-${index}`}
+          key={fallbackKey}
           className="h-9 animate-pulse rounded-md border border-border/50 bg-muted/20"
         />
       ))}

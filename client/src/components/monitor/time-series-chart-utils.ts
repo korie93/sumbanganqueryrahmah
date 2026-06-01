@@ -4,6 +4,7 @@ export type TimeSeriesPoint = {
 };
 
 export type TimeSeriesChartAccessibilityRow = {
+  key: string;
   timestampLabel: string;
   valueLabel: string;
 };
@@ -62,6 +63,7 @@ export function buildTimeSeriesChartAccessibilityContent(
 
   return {
     rows: chartData.map((point) => ({
+      key: `${point.t}:${point.v}`,
       timestampLabel: formatTimeSeriesAccessibilityLabel(point.t),
       valueLabel: formatTimeSeriesAccessibilityValue(point.v, unit),
     })),
