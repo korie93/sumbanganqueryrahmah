@@ -55,6 +55,9 @@ redis.call('SET', KEYS[1], ARGV[1], 'PX', ARGV[2], 'NX')
 return 1
 `;
 
+// AUDIT-FIX [M2]: production HA depends on a managed Redis/Sentinel/cluster endpoint
+// with persistence and failover; a single local Redis node is acceptable only for strict
+// local development because revocation checks intentionally fail closed on outages.
 let defaultRedisClientFactoryPromise: Promise<RedisSessionRevocationClientFactory> | null = null;
 
 export enum RedisSessionRevocationErrorClass {
