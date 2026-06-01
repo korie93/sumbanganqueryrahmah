@@ -56,13 +56,17 @@ test("getInvalidatedSessionMessage falls back to generic session expiry messagin
   );
 });
 
-test("requireRole records tamper-evident permission denied audit entries", async () => {
+test("requireRole records tamper-evident permission denied audit entries", async (t) => {
   const auditLogs: Array<{
     action: string;
     details?: string | null;
     targetResource?: string | null;
     targetUser?: string | null;
   }> = [];
+  const warningLogs: Array<{ message: string; payload: Record<string, unknown> }> = [];
+  t.mock.method(logger, "warn", (message: string, payload: Record<string, unknown>) => {
+    warningLogs.push({ message, payload });
+  });
   const guards = createAuthGuards({
     storage: {
       getActivityById: async () => undefined,
@@ -94,10 +98,13 @@ test("requireRole records tamper-evident permission denied audit entries", async
   });
   const response = createMockResponse();
   const handler = guards.requireRole("superuser");
+  const beforeMetrics = getInternalMetricsSnapshot();
 
   await handler({
     headers: { "user-agent": "Chromium" },
     ip: "203.0.113.10",
+    method: "PATCH",
+    path: "/api/admin/users",
     socket: { remoteAddress: "203.0.113.10" },
     user: {
       activityId: "activity-1",
@@ -108,6 +115,16 @@ test("requireRole records tamper-evident permission denied audit entries", async
   } as never, response as never, () => undefined);
 
   assert.equal(response.statusCode, 403);
+  assert.equal(getInternalMetricsSnapshot().counters.authorizationFailuresTotal, beforeMetrics.counters.authorizationFailuresTotal + 1);
+  assert.equal(warningLogs.length, 1);
+  assert.equal(warningLogs[0].message, "Authorization guard denied access");
+  assert.equal(warningLogs[0].payload.event, "authorization_failure");
+  assert.equal(warningLogs[0].payload.targetResource, "role");
+  assert.equal(warningLogs[0].payload.method, "PATCH");
+  assert.equal(warningLogs[0].payload.path, "/api/admin/users");
+  assert.equal(warningLogs[0].payload.requiredRolesCount, 1);
+  assert.equal(String(warningLogs[0].payload.userIdHash).length, 16);
+  assert.equal(JSON.stringify(warningLogs[0].payload).includes("user-1"), false);
   assert.equal(auditLogs.length, 1);
   assert.equal(auditLogs[0].action, "AUTHZ_PERMISSION_DENIED");
   assert.equal(auditLogs[0].targetResource, "role");

@@ -3,6 +3,7 @@ export type InternalMetricName =
   | "authAdaptiveRateLimitCooldownCacheNearCapacityAlertsTotal"
   | "authAdaptiveRateLimitCooldownCachePressureTotal"
   | "authAdaptiveRateLimitCooldownEvictionsTotal"
+  | "authorizationFailuresTotal"
   | "authIdentityFallbackTotal"
   | "authTabVisibilityCacheEvictionsTotal"
   | "authTabVisibilityCacheExpiredEntriesTotal"
@@ -67,6 +68,7 @@ const INTERNAL_METRIC_NAMES: readonly InternalMetricName[] = [
   "authAdaptiveRateLimitCooldownCacheNearCapacityAlertsTotal",
   "authAdaptiveRateLimitCooldownCachePressureTotal",
   "authAdaptiveRateLimitCooldownEvictionsTotal",
+  "authorizationFailuresTotal",
   "authIdentityFallbackTotal",
   "authTabVisibilityCacheEvictionsTotal",
   "authTabVisibilityCacheExpiredEntriesTotal",

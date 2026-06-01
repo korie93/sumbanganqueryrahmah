@@ -124,6 +124,19 @@ function createSessionRefreshDedupKey(jwtId: string, secret: string): string {
     .digest("hex");
 }
 
+function hashAuthorizationUserIdForLog(userId: string | undefined): string | null {
+  const normalizedUserId = String(userId || "").trim();
+  if (!normalizedUserId) {
+    return null;
+  }
+
+  return createHmac("sha256", getSessionSecret())
+    .update("authorization-failure:user:")
+    .update(normalizedUserId)
+    .digest("hex")
+    .slice(0, 16);
+}
+
 function buildAuthGuardErrorResponse(
   statusCode: number,
   message: string,
@@ -136,6 +149,25 @@ function buildAuthGuardErrorResponse(
   });
 }
 
+function recordAuthorizationDeniedTelemetry(params: {
+  readonly metadata: Record<string, string | number | boolean | null>;
+  readonly req: AuthenticatedRequest;
+  readonly targetResource: string;
+}): void {
+  internalMetrics.increment("authorizationFailuresTotal");
+  logger.warn("Authorization guard denied access", {
+    event: "authorization_failure",
+    userIdHash: hashAuthorizationUserIdForLog(params.req.user?.userId),
+    targetResource: params.targetResource,
+    method: params.req.method,
+    path: params.req.path,
+    requiredRolesCount: typeof params.metadata.required_roles_count === "number"
+      ? params.metadata.required_roles_count
+      : null,
+    reason: typeof params.metadata.reason === "string" ? params.metadata.reason : null,
+  });
+}
+
 async function recordAuthorizationDeniedAudit(params: {
   readonly action: "AUTHZ_PERMISSION_DENIED";
   readonly metadata: Record<string, string | number | boolean | null>;
@@ -143,6 +175,8 @@ async function recordAuthorizationDeniedAudit(params: {
   readonly storage: CreateAuthGuardsOptions["storage"];
   readonly targetResource: string;
 }): Promise<void> {
+  recordAuthorizationDeniedTelemetry(params);
+
   const createAuditLog = params.storage.createAuditLog;
   if (typeof createAuditLog !== "function") {
     return;
