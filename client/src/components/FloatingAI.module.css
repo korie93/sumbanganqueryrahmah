@@ -1,6 +1,7 @@
 .floatingRoot {
   inset: 0;
   z-index: var(--z-floating-ai-root);
+  overflow: hidden; /* AUDIT-FIX [M10]: fallback for browsers without overflow: clip support. */
   overflow: clip;
   padding-bottom: var(--safe-area-inset-bottom);
 }
