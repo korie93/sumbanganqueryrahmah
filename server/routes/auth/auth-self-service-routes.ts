@@ -52,6 +52,7 @@ export function registerAuthSelfServiceRoutes(context: AuthRouteContext) {
   app.post(
     "/api/auth/two-factor/setup",
     authenticateToken,
+    rateLimiters.twoFactorManagement,
     rateLimiters.authenticatedAuth,
     jsonRoute(async (req, res) => {
       const body = readTwoFactorSetupBody(req.body);
@@ -70,6 +71,7 @@ export function registerAuthSelfServiceRoutes(context: AuthRouteContext) {
   app.post(
     "/api/auth/two-factor/enable",
     authenticateToken,
+    rateLimiters.twoFactorManagement,
     rateLimiters.authenticatedAuth,
     jsonRoute(async (req, res) => {
       const body = readTwoFactorCodeBody(req.body);
@@ -87,6 +89,7 @@ export function registerAuthSelfServiceRoutes(context: AuthRouteContext) {
   app.post(
     "/api/auth/two-factor/disable",
     authenticateToken,
+    rateLimiters.twoFactorManagement,
     rateLimiters.authenticatedAuth,
     jsonRoute(async (req, res) => {
       const body = readTwoFactorDisableBody(req.body);

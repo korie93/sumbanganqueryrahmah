@@ -22,6 +22,7 @@ export type AuthRouteRateLimiters = {
   loginIp: RequestHandler;
   login: RequestHandler;
   twoFactorLogin: RequestHandler;
+  twoFactorManagement: RequestHandler;
   publicRecovery: RequestHandler;
   authenticatedAuth: RequestHandler;
   adminAction: RequestHandler;
@@ -646,6 +647,16 @@ export function createAuthRouteRateLimiters(): AuthRouteRateLimiters {
       message: "Too many authenticator code attempts. Please try again shortly.",
       adaptiveCooldown: true,
       keyGenerator: (req) => buildRateLimitKey(req, "auth-login-2fa"),
+    }),
+    twoFactorManagement: createJsonRateLimiter({
+      windowMs: 60 * 1000,
+      max: 5,
+      code: ERROR_CODES.AUTH_MUTATION_RATE_LIMITED,
+      message: "Too many two-factor security updates. Please wait before trying again.",
+      keyGenerator: (req) => {
+        const authReq = req as AuthenticatedLikeRequest;
+        return buildRateLimitKey(req, `auth-two-factor:${req.path}`, authReq.user?.username);
+      },
     }),
     publicRecovery: createJsonRateLimiter({
       windowMs: 10 * 60 * 1000,

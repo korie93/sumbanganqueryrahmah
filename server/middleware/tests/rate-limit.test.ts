@@ -568,3 +568,53 @@ test("auth two-factor login limiter throttles repeated authenticator attempts in
     await stopTestServer(server);
   }
 });
+
+test("auth two-factor management limiter caps sensitive setup bursts at five per minute", async () => {
+  stopAdaptiveRateLimitCooldownSweep();
+  clearAdaptiveRateLimitCooldownsForTests();
+
+  const app = express();
+  app.use(express.json());
+  app.use((req, _res, next) => {
+    (req as Request & { user: { username: string } }).user = { username: "admin.twofactor" };
+    next();
+  });
+  const limiters = createAuthRouteRateLimiters();
+  app.post("/two-factor/setup", limiters.twoFactorManagement, (_req, res) => {
+    res.status(204).end();
+  });
+
+  const { baseUrl, server } = await startTestServer(app);
+
+  try {
+    for (let index = 0; index < 5; index += 1) {
+      const response = await fetch(`${baseUrl}/two-factor/setup`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ currentPassword: "Password123!" }),
+      });
+      assert.equal(response.status, 204);
+    }
+
+    const throttled = await fetch(`${baseUrl}/two-factor/setup`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ currentPassword: "Password123!" }),
+    });
+
+    assert.equal(throttled.status, 429);
+    assert.equal(throttled.headers.get("ratelimit-limit"), "5");
+    const payload = await throttled.json();
+    assert.equal(payload.ok, false);
+    assert.equal(payload.error?.code, ERROR_CODES.AUTH_MUTATION_RATE_LIMITED);
+    assert.equal(
+      payload.error?.message,
+      "Too many two-factor security updates. Please wait before trying again.",
+    );
+    assert.equal(typeof payload.retryAfterMs, "number");
+  } finally {
+    stopAdaptiveRateLimitCooldownSweep();
+    clearAdaptiveRateLimitCooldownsForTests();
+    await stopTestServer(server);
+  }
+});

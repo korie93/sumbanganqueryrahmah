@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import type { RequestHandler } from "express";
 import rateLimit from "express-rate-limit";
 import jwt from "jsonwebtoken";
 import type { WebSocket } from "ws";
@@ -1637,6 +1638,77 @@ test("authenticated users can set up, enable, and disable 2FA through auth route
     assert.equal(auditLogs.some((entry) => entry.action === "TWO_FACTOR_SETUP_INITIATED"), true);
     assert.equal(auditLogs.some((entry) => entry.action === "TWO_FACTOR_ENABLED"), true);
     assert.equal(auditLogs.some((entry) => entry.action === "TWO_FACTOR_DISABLED"), true);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("2FA management routes use the dedicated sensitive-operation limiter", async () => {
+  const user = {
+    id: "admin-two-factor-limited-1",
+    username: "admin.twofactor.limited",
+    fullName: "Admin Two Factor Limited",
+    email: "admin.twofactor.limited@example.com",
+    role: "admin",
+    status: "active",
+    passwordHash: "unused",
+    mustChangePassword: false,
+    passwordResetBySuperuser: false,
+    createdBy: null,
+    createdAt: new Date("2026-03-01T00:00:00.000Z"),
+    updatedAt: new Date("2026-03-01T00:00:00.000Z"),
+    passwordChangedAt: new Date("2026-03-01T00:00:00.000Z"),
+    activatedAt: new Date("2026-03-01T00:00:00.000Z"),
+    lastLoginAt: null,
+    isBanned: false,
+    twoFactorEnabled: false,
+    twoFactorSecretEncrypted: null,
+    twoFactorConfiguredAt: null,
+  };
+  let limiterCalls = 0;
+  const twoFactorManagementLimiter: RequestHandler = (_req, res) => {
+    limiterCalls += 1;
+    res.status(429).json({
+      ok: false,
+      error: {
+        code: ERROR_CODES.AUTH_MUTATION_RATE_LIMITED,
+        message: "Too many two-factor security updates. Please wait before trying again.",
+      },
+    });
+  };
+
+  const app = createJsonTestApp();
+  registerAuthRoutes(app, {
+    storage: {} as PostgresStorage,
+    authenticateToken: authenticateAs(user),
+    requireRole: () => (_req, _res, next) => next(),
+    connectedClients: new Map(),
+    rateLimiters: {
+      twoFactorManagement: twoFactorManagementLimiter,
+    },
+  });
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    for (const route of [
+      "/api/auth/two-factor/setup",
+      "/api/auth/two-factor/enable",
+      "/api/auth/two-factor/disable",
+    ]) {
+      const response = await fetch(`${baseUrl}${route}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({}),
+      });
+
+      assert.equal(response.status, 429);
+      const payload = await response.json();
+      assert.equal(payload.error?.code, ERROR_CODES.AUTH_MUTATION_RATE_LIMITED);
+    }
+
+    assert.equal(limiterCalls, 3);
   } finally {
     await stopTestServer(server);
   }
