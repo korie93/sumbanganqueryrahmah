@@ -14,7 +14,7 @@
 
 .collection-monthly-comparison-filter-card {
   position: relative;
-  overflow: hidden;
+  overflow: clip;
 }
 
 .collection-monthly-comparison-filter-card::before {
@@ -29,7 +29,7 @@
 
 .collection-monthly-comparison-section-card {
   position: relative;
-  overflow: hidden;
+  overflow: clip;
 }
 
 .collection-monthly-comparison-section-card::before {
