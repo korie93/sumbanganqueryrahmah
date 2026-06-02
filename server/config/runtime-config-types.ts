@@ -77,6 +77,8 @@ export type RuntimeConfig = {
   auth: {
     sessionSecret: string;
     previousSessionSecrets: string[];
+    sessionJwtPrivateKey: string | null;
+    sessionJwtPublicKey: string | null;
     auditHmacKey: string;
     bcryptCost: number;
     collectionNicknameTempPassword: string;

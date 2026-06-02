@@ -1,10 +1,11 @@
+import { memo } from "react";
 import type { ListChildComponentProps } from "react-window";
 import { Checkbox } from "@/components/ui/checkbox";
 import { PositionedRowShell, ViewerGridShell } from "@/pages/viewer/viewer-grid-shell";
 import { buildViewerRowAriaLabel } from "@/pages/viewer/viewer-row-aria";
 import type { ViewerVirtualRowData } from "@/pages/viewer/types";
 
-export function ViewerVirtualizedRow({
+function ViewerVirtualizedRowImpl({
   index,
   style,
   data,
@@ -47,3 +48,17 @@ export function ViewerVirtualizedRow({
     </PositionedRowShell>
   );
 }
+
+function areVirtualizedRowPropsEqual(
+  previous: ListChildComponentProps<ViewerVirtualRowData>,
+  next: ListChildComponentProps<ViewerVirtualRowData>,
+) {
+  return previous.index === next.index
+    && previous.data === next.data
+    && previous.style.top === next.style.top
+    && previous.style.left === next.style.left
+    && previous.style.width === next.style.width
+    && previous.style.height === next.style.height;
+}
+
+export const ViewerVirtualizedRow = memo(ViewerVirtualizedRowImpl, areVirtualizedRowPropsEqual);

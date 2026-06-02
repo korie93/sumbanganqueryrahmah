@@ -33,19 +33,21 @@ environment file only.
 
 ## `SESSION_SECRET`
 
-`SESSION_SECRET` signs session JWTs. New sessions are always signed with the
-active `SESSION_SECRET`. Existing sessions can remain valid during a planned
-rotation window through `SESSION_SECRET_PREVIOUS`.
+`SESSION_SECRET` signs legacy HS256 session JWTs and remains the compatibility
+fallback while RS256 key material is rolled out. Existing HS256 sessions can
+remain valid during a planned rotation window through `SESSION_SECRET_PREVIOUS`.
 
 Runtime startup rejects non-test `SESSION_SECRET` values shorter than 32 bytes.
 Generate at least 32 random bytes per environment; the examples above produce
 values with enough entropy for the JWT signing key.
 
-Session JWTs are signed and verified as `HS256` only. Verification explicitly
-rejects other algorithms to avoid algorithm-confusion bugs. A future migration
-to `RS256` or `ES256` should introduce managed private/public key material,
-publish a `kid`-based verification set, dual-verify during the compatibility
-window, then retire HS256 after all old sessions expire.
+When `SESSION_JWT_PRIVATE_KEY` and `SESSION_JWT_PUBLIC_KEY` are both
+configured, new session JWTs are signed as `RS256`. Verification accepts RS256
+tokens with the configured public key and legacy HS256 tokens with
+`SESSION_SECRET` / `SESSION_SECRET_PREVIOUS` until the compatibility window
+ends. Other algorithms are rejected to avoid algorithm-confusion bugs. Store PEM
+keys in the deployment secret manager; if an environment file is used, encode
+line breaks as literal `\n` sequences.
 
 Device and tab session fingerprints are tied to the verified session token. A
 rotation without `SESSION_SECRET_PREVIOUS` invalidates existing sessions, so

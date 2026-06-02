@@ -3,8 +3,9 @@ import { internalMetrics } from "../internal/metrics";
 import {
   TAB_VISIBILITY_CACHE_MAX_SIZE,
   TAB_VISIBILITY_CACHE_SWEEP_INTERVAL_MS,
+  TAB_VISIBILITY_CACHE_TARGET_SIZE_AFTER_EVICTION,
   TAB_VISIBILITY_CACHE_TTL_MS,
-  evictOldestTabVisibilityCacheEntry,
+  evictOldestTabVisibilityCacheEntries,
   sweepExpiredTabVisibilityCacheEntries,
   type TabVisibilityCacheEntry,
 } from "./guard-cache";
@@ -59,15 +60,14 @@ export function createRoleTabVisibilityCache(options: {
     sweepExpiredEntries(cachedAt);
 
     if (!tabVisibilityCache.has(role)) {
-      let evicted = 0;
-      while (tabVisibilityCache.size >= TAB_VISIBILITY_CACHE_MAX_SIZE) {
-        if (!evictOldestTabVisibilityCacheEntry(tabVisibilityCache)) {
-          break;
+      if (tabVisibilityCache.size >= TAB_VISIBILITY_CACHE_MAX_SIZE) {
+        const evicted = evictOldestTabVisibilityCacheEntries(
+          tabVisibilityCache,
+          TAB_VISIBILITY_CACHE_TARGET_SIZE_AFTER_EVICTION,
+        );
+        if (evicted.length > 0) {
+          internalMetrics.increment("authTabVisibilityCacheEvictionsTotal", evicted.length);
         }
-        evicted += 1;
-      }
-      if (evicted > 0) {
-        internalMetrics.increment("authTabVisibilityCacheEvictionsTotal", evicted);
       }
     }
 

@@ -1691,6 +1691,76 @@ test("runtime manager enforces the global connection limit across in-flight hand
   }
 });
 
+test("runtime manager enforces active per-IP connection limits and releases counts on close", async () => {
+  const wss = new FakeWebSocketServer();
+  const providedMap = new Map<string, WebSocket>();
+  const firstSocket = new FakeWebSocket();
+  const secondSocket = new FakeWebSocket();
+  const thirdSocket = new FakeWebSocket();
+  const fourthSocket = new FakeWebSocket();
+  const clientIp = "198.51.100.77";
+  const firstActivityId = "activity-ip-limit-first";
+  const secondActivityId = "activity-ip-limit-second";
+  const thirdActivityId = "activity-ip-limit-third";
+  const fourthActivityId = "activity-ip-limit-fourth";
+
+  createRuntimeWebSocketManager({
+    wss: wss as unknown as import("ws").WebSocketServer,
+    storage: {
+      getActivityById: async (activityId: string) => createActiveSession(activityId),
+      clearCollectionNicknameSessionByActivity: async () => undefined,
+    },
+    secret: TEST_SECRET,
+    connectedClients: providedMap,
+    maxConnectionsPerIp: 2,
+  });
+
+  try {
+    wss.emit(
+      "connection",
+      firstSocket as unknown as WebSocket,
+      createConnectionRequest(createWsToken(firstActivityId), { remoteAddress: clientIp }),
+    );
+    wss.emit(
+      "connection",
+      secondSocket as unknown as WebSocket,
+      createConnectionRequest(createWsToken(secondActivityId), { remoteAddress: clientIp }),
+    );
+    await flushAsyncWork();
+
+    assert.equal(providedMap.get(firstActivityId), firstSocket as unknown as WebSocket);
+    assert.equal(providedMap.get(secondActivityId), secondSocket as unknown as WebSocket);
+
+    wss.emit(
+      "connection",
+      thirdSocket as unknown as WebSocket,
+      createConnectionRequest(createWsToken(thirdActivityId), { remoteAddress: clientIp }),
+    );
+    await flushAsyncWork();
+
+    assert.equal(providedMap.has(thirdActivityId), false);
+    assert.deepEqual(thirdSocket.closeCodes, [
+      { code: 1013, reason: "ip connection limit reached" },
+    ]);
+
+    firstSocket.close();
+    await flushAsyncWork();
+
+    wss.emit(
+      "connection",
+      fourthSocket as unknown as WebSocket,
+      createConnectionRequest(createWsToken(fourthActivityId), { remoteAddress: clientIp }),
+    );
+    await flushAsyncWork();
+
+    assert.equal(providedMap.has(firstActivityId), false);
+    assert.equal(providedMap.get(fourthActivityId), fourthSocket as unknown as WebSocket);
+    assert.equal(fourthSocket.closeCalls, 0);
+  } finally {
+    wss.emit("close");
+  }
+});
+
 test("runtime manager closes clients that exceed the inbound message rate limit", async () => {
   const wss = new FakeWebSocketServer();
   const providedMap = new Map<string, WebSocket>();

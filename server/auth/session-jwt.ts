@@ -1,12 +1,14 @@
 import { randomUUID } from "node:crypto";
-import jwt, { type SignOptions } from "jsonwebtoken";
+import jwt, { type Algorithm, type SignOptions } from "jsonwebtoken";
 import { runtimeConfig } from "../config/runtime";
 import { SESSION_JWT_DEFAULT_EXPIRY as SESSION_JWT_DEFAULT_EXPIRY_VALUE } from "./session-lifetime";
 
-// AUDIT-FIX [M1]: HS256 remains for legacy compatibility until the RS256 key rollout lands;
-// migrate by adding SESSION_JWT_PRIVATE_KEY/SESSION_JWT_PUBLIC_KEY, accepting both algorithms
-// during rotation, then removing HS256 after every legacy token has expired.
-export const SESSION_JWT_ALGORITHM = "HS256" as const;
+export const SESSION_JWT_ALGORITHM = "RS256" as const;
+export const SESSION_JWT_LEGACY_ALGORITHM = "HS256" as const;
+export const SESSION_JWT_ALLOWED_ALGORITHMS = [
+  SESSION_JWT_ALGORITHM,
+  SESSION_JWT_LEGACY_ALGORITHM,
+] as const;
 export const SESSION_JWT_REFRESH_REMAINING_TTL_RATIO = 0.2;
 export const SESSION_JWT_DEFAULT_EXPIRY_JITTER_SECONDS = 15 * 60;
 export const SESSION_JWT_MIN_DEFAULT_EXPIRY_SECONDS = Math.max(
@@ -19,6 +21,14 @@ type RefreshableSessionClaims = {
   exp?: number | undefined;
   iat?: number | undefined;
   jti?: string | undefined;
+};
+
+type SessionJwtAlgorithm = typeof SESSION_JWT_ALLOWED_ALGORITHMS[number];
+
+export type SessionJwtKeySet = {
+  hsSecrets: readonly string[];
+  rsPrivateKey?: string | null | undefined;
+  rsPublicKeys?: readonly string[] | null | undefined;
 };
 
 function normalizeVerificationSecrets(secrets: string | readonly string[] | null | undefined): string[] {
@@ -35,6 +45,57 @@ export function getSessionJwtVerificationSecrets(): readonly string[] {
     runtimeConfig.auth.sessionSecret,
     ...runtimeConfig.auth.previousSessionSecrets,
   ];
+}
+
+function getRuntimeSessionJwtKeySet(
+  hsSecrets: string | readonly string[] | null | undefined = getSessionJwtVerificationSecrets(),
+): SessionJwtKeySet {
+  return {
+    hsSecrets: normalizeVerificationSecrets(hsSecrets),
+    rsPrivateKey: runtimeConfig.auth.sessionJwtPrivateKey,
+    rsPublicKeys: runtimeConfig.auth.sessionJwtPublicKey ? [runtimeConfig.auth.sessionJwtPublicKey] : [],
+  };
+}
+
+function normalizeRsaKey(key: string | null | undefined): string | null {
+  const normalized = String(key || "").trim().replace(/\\n/g, "\n");
+  return normalized || null;
+}
+
+function normalizeRsaPublicKeys(keys: readonly string[] | null | undefined): string[] {
+  return (keys ?? [])
+    .map((key) => normalizeRsaKey(key))
+    .filter((key): key is string => Boolean(key));
+}
+
+function readJwtAlgorithm(token: string): string | null {
+  const decoded = jwt.decode(token, { complete: true }) as { header?: { alg?: unknown } } | null;
+  const algorithm = String(decoded?.header?.alg || "").trim();
+  return algorithm || null;
+}
+
+function isSessionJwtAlgorithm(value: string | null): value is SessionJwtAlgorithm {
+  return value === SESSION_JWT_ALGORITHM || value === SESSION_JWT_LEGACY_ALGORITHM;
+}
+
+function buildSessionJwtSignOptions(
+  payload: object,
+  algorithm: SessionJwtAlgorithm,
+  options?: Omit<SignOptions, "algorithm">,
+): SignOptions {
+  const payloadJwtId = String((payload as { jti?: unknown }).jti || "").trim();
+  const jwtid = options?.jwtid || (payloadJwtId ? undefined : randomUUID());
+  const signOptions: SignOptions = {
+    algorithm,
+    ...options,
+  };
+  if (signOptions.expiresIn === undefined) {
+    signOptions.expiresIn = resolveSessionJwtDefaultExpiresInSeconds();
+  }
+  if (jwtid) {
+    signOptions.jwtid = jwtid;
+  }
+  return signOptions;
 }
 
 export function resolveSessionJwtDefaultExpiresInSeconds(
@@ -55,7 +116,7 @@ export function signSessionJwt<TPayload extends object>(
   payload: TPayload,
   options?: Omit<SignOptions, "algorithm">,
 ): string {
-  return signSessionJwtWithSecret(payload, runtimeConfig.auth.sessionSecret, options);
+  return signSessionJwtWithKeySet(payload, getRuntimeSessionJwtKeySet(), options);
 }
 
 export function signSessionJwtWithSecret<TPayload extends object>(
@@ -63,19 +124,33 @@ export function signSessionJwtWithSecret<TPayload extends object>(
   secret: string,
   options?: Omit<SignOptions, "algorithm">,
 ): string {
-  const payloadJwtId = String((payload as { jti?: unknown }).jti || "").trim();
-  const jwtid = options?.jwtid || (payloadJwtId ? undefined : randomUUID());
-  const signOptions: SignOptions = {
-    algorithm: SESSION_JWT_ALGORITHM,
-    ...options,
-  };
-  if (signOptions.expiresIn === undefined) {
-    signOptions.expiresIn = resolveSessionJwtDefaultExpiresInSeconds();
+  return signSessionJwtWithKeySet(payload, getRuntimeSessionJwtKeySet(secret), options);
+}
+
+export function signSessionJwtWithKeySet<TPayload extends object>(
+  payload: TPayload,
+  keySet: SessionJwtKeySet,
+  options?: Omit<SignOptions, "algorithm">,
+): string {
+  const rsaPrivateKey = normalizeRsaKey(keySet.rsPrivateKey);
+  if (rsaPrivateKey) {
+    return jwt.sign(
+      payload,
+      rsaPrivateKey,
+      buildSessionJwtSignOptions(payload, SESSION_JWT_ALGORITHM, options),
+    );
   }
-  if (jwtid) {
-    signOptions.jwtid = jwtid;
+
+  const [secret] = normalizeVerificationSecrets(keySet.hsSecrets);
+  if (!secret) {
+    throw new Error("No JWT signing secret is configured.");
   }
-  return jwt.sign(payload, secret, signOptions);
+
+  return jwt.sign(
+    payload,
+    secret,
+    buildSessionJwtSignOptions(payload, SESSION_JWT_LEGACY_ALGORITHM, options),
+  );
 }
 
 export function shouldRefreshSessionJwt(
@@ -125,16 +200,35 @@ export function verifyJwtWithAnySecret<TPayload>(
   token: string,
   secrets: string | readonly string[],
 ): TPayload {
-  const candidates = normalizeVerificationSecrets(secrets);
+  return verifySessionJwtWithKeySet<TPayload>(token, getRuntimeSessionJwtKeySet(secrets));
+}
+
+export function verifySessionJwtWithKeySet<TPayload>(
+  token: string,
+  keySet: SessionJwtKeySet,
+): TPayload {
+  const algorithm = readJwtAlgorithm(token);
+  if (!isSessionJwtAlgorithm(algorithm)) {
+    throw new Error("JWT uses an unsupported session signing algorithm.");
+  }
+
+  const candidates = algorithm === SESSION_JWT_ALGORITHM
+    ? normalizeRsaPublicKeys(keySet.rsPublicKeys)
+    : normalizeVerificationSecrets(keySet.hsSecrets);
+
   if (candidates.length === 0) {
-    throw new Error("No JWT verification secrets are configured.");
+    throw new Error(
+      algorithm === SESSION_JWT_ALGORITHM
+        ? "No JWT public verification keys are configured."
+        : "No JWT verification secrets are configured.",
+    );
   }
 
   let lastError: unknown = null;
-  for (const secret of candidates) {
+  for (const key of candidates) {
     try {
-      return jwt.verify(token, secret, {
-        algorithms: [SESSION_JWT_ALGORITHM],
+      return jwt.verify(token, key, {
+        algorithms: [algorithm as Algorithm],
       }) as TPayload;
     } catch (error) {
       lastError = error;
@@ -149,8 +243,8 @@ export function verifySessionJwt<TPayload>(
   secrets?: string | readonly string[] | null,
 ): TPayload {
   const candidates = normalizeVerificationSecrets(secrets);
-  return verifyJwtWithAnySecret<TPayload>(
+  return verifySessionJwtWithKeySet<TPayload>(
     token,
-    candidates.length > 0 ? candidates : getSessionJwtVerificationSecrets(),
+    getRuntimeSessionJwtKeySet(candidates.length > 0 ? candidates : getSessionJwtVerificationSecrets()),
   );
 }

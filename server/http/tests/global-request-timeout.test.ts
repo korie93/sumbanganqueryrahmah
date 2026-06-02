@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { EventEmitter } from "node:events";
 import test from "node:test";
 import express from "express";
 import {
@@ -10,6 +11,24 @@ import { runWithRequestDeadline } from "../request-deadline";
 import { logger } from "../../lib/logger";
 import { startTestServer, stopTestServer } from "../../routes/tests/http-test-utils";
 import { ERROR_CODES } from "../../../shared/error-codes";
+
+class FakeTimeoutResponse extends EventEmitter {
+  locals: Record<string, unknown> = {};
+  headersSent = false;
+  writableEnded = false;
+
+  getHeader(_name: string) {
+    return undefined;
+  }
+
+  status(_code: number) {
+    return this;
+  }
+
+  json(_payload: unknown) {
+    return this;
+  }
+}
 
 test("global request timeout returns a correlated 504 response and aborts downstream work", async (t) => {
   const warningLogs: Array<{ message: string; payload: unknown }> = [];
@@ -67,6 +86,56 @@ test("global request timeout skips websocket upgrade paths", async () => {
   } finally {
     await stopTestServer(server);
   }
+});
+
+test("global request timeout clears timers and listeners when response finishes", (t) => {
+  const timeoutHandle = {
+    unref() {
+      return this;
+    },
+  } as unknown as ReturnType<typeof setTimeout>;
+  const clearedHandles: Array<ReturnType<typeof setTimeout>> = [];
+  const setTimeoutMock = t.mock.method(
+    globalThis,
+    "setTimeout",
+    (((_handler: TimerHandler, _delay?: number) => timeoutHandle) as unknown) as typeof setTimeout,
+  );
+  const clearTimeoutMock = t.mock.method(
+    globalThis,
+    "clearTimeout",
+    (((handle?: ReturnType<typeof setTimeout>) => {
+      if (handle) {
+        clearedHandles.push(handle);
+      }
+    }) as unknown) as typeof clearTimeout,
+  );
+  const middleware = createGlobalRequestTimeoutMiddleware({ timeoutMs: 5_000 });
+  const response = new FakeTimeoutResponse();
+  let nextCalls = 0;
+
+  middleware(
+    {
+      headers: {},
+      method: "GET",
+      path: "/api/me",
+    } as never,
+    response as never,
+    () => {
+      nextCalls += 1;
+    },
+  );
+
+  assert.equal(nextCalls, 1);
+  assert.equal(setTimeoutMock.mock.callCount(), 1);
+  assert.equal(response.listenerCount("finish"), 1);
+  assert.equal(response.listenerCount("close"), 1);
+
+  response.emit("finish");
+
+  assert.equal(clearTimeoutMock.mock.callCount(), 1);
+  assert.deepEqual(clearedHandles, [timeoutHandle]);
+  assert.equal(response.listenerCount("finish"), 0);
+  assert.equal(response.listenerCount("close"), 0);
 });
 
 test("global request timeout resolves long-operation route budgets by longest prefix", () => {

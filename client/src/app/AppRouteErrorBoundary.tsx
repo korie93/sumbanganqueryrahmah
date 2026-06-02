@@ -93,6 +93,9 @@ export class AppRouteErrorBoundary extends Component<
             tabIndex={-1}
             role="alert"
             aria-live="assertive"
+            aria-atomic="true"
+            aria-labelledby="app-route-error-boundary-title"
+            aria-describedby="app-route-error-boundary-description"
           >
             <div className="app-route-error-boundary__content">
               <div className="app-route-error-boundary__header">
@@ -100,10 +103,10 @@ export class AppRouteErrorBoundary extends Component<
                   <AlertTriangle className="h-5 w-5" />
                 </div>
                 <div>
-                  <h2 className="app-route-error-boundary__title">
+                  <h2 id="app-route-error-boundary-title" className="app-route-error-boundary__title">
                     {resolveRouteErrorTitle(this.props.routeLabel)}
                   </h2>
-                  <p className="app-route-error-boundary__description">
+                  <p id="app-route-error-boundary-description" className="app-route-error-boundary__description">
                     {resolveRouteErrorDescription(this.state.error)}
                   </p>
                 </div>

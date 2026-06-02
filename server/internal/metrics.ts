@@ -3,6 +3,8 @@ export type InternalMetricName =
   | "authAdaptiveRateLimitCooldownCacheNearCapacityAlertsTotal"
   | "authAdaptiveRateLimitCooldownCachePressureTotal"
   | "authAdaptiveRateLimitCooldownEvictionsTotal"
+  | "authActivityUpdateCacheEvictionsTotal"
+  | "authActivityUpdateCacheExpiredEntriesTotal"
   | "authorizationFailuresTotal"
   | "authIdentityFallbackTotal"
   | "authTabVisibilityCacheEvictionsTotal"
@@ -52,6 +54,8 @@ export type InternalMetricName =
 export type InternalGaugeName =
   | "authAdaptiveRateLimitCooldownCacheSize"
   | "authAdaptiveRateLimitCooldownCacheUtilization"
+  | "authActivityUpdateCacheSize"
+  | "authActivityUpdateCacheUtilization"
   | "authTabVisibilityCacheSize"
   | "authTabVisibilityCacheUtilization"
   | "dbPoolActiveConnections"
@@ -74,6 +78,8 @@ const INTERNAL_METRIC_NAMES: readonly InternalMetricName[] = [
   "authAdaptiveRateLimitCooldownCacheNearCapacityAlertsTotal",
   "authAdaptiveRateLimitCooldownCachePressureTotal",
   "authAdaptiveRateLimitCooldownEvictionsTotal",
+  "authActivityUpdateCacheEvictionsTotal",
+  "authActivityUpdateCacheExpiredEntriesTotal",
   "authorizationFailuresTotal",
   "authIdentityFallbackTotal",
   "authTabVisibilityCacheEvictionsTotal",
@@ -124,6 +130,8 @@ const INTERNAL_METRIC_NAMES: readonly InternalMetricName[] = [
 const INTERNAL_GAUGE_NAMES: readonly InternalGaugeName[] = [
   "authAdaptiveRateLimitCooldownCacheSize",
   "authAdaptiveRateLimitCooldownCacheUtilization",
+  "authActivityUpdateCacheSize",
+  "authActivityUpdateCacheUtilization",
   "authTabVisibilityCacheSize",
   "authTabVisibilityCacheUtilization",
   "dbPoolActiveConnections",

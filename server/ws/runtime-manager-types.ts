@@ -6,6 +6,7 @@ import type { RuntimeWsMessageRateLimiter } from "./message-rate-limit";
 import type { RuntimeWsSharedBus } from "./runtime-shared-bus";
 
 export const MAX_RUNTIME_WS_CONNECTIONS_PER_USER = 5;
+export const DEFAULT_RUNTIME_WS_MAX_CONNECTIONS_PER_IP = 20;
 export const DEFAULT_RUNTIME_WS_MAX_CONNECTIONS = 1_000;
 export const DEFAULT_RUNTIME_WS_MAX_MESSAGE_BYTES = 64 * 1024;
 export const DEFAULT_RUNTIME_WS_PAYLOAD_WINDOW_BYTES = 512 * 1024;
@@ -32,6 +33,7 @@ export type RuntimeManagerOptions = {
   maxPayloadWindowBytes?: number;
   payloadWindowMs?: number;
   maxConnections?: number;
+  maxConnectionsPerIp?: number;
   metrics?: Pick<InternalMetricsRecorder, "increment">;
   messageRateLimiterFactory?: () => RuntimeWsMessageRateLimiter;
   now?: () => number;

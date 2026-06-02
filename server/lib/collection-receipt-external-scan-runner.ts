@@ -150,13 +150,19 @@ export async function runExternalReceiptScan({
           }
         }
         scheduleForceKill();
-      } else if (!options.terminate) {
+      } else {
         clearForceKillTimer();
       }
 
       child.stdout?.removeAllListeners();
       child.stderr?.removeAllListeners();
       child.removeAllListeners();
+
+      if (options.terminate) {
+        child.once("close", () => {
+          clearForceKillTimer();
+        });
+      }
     };
 
     const finish = (error?: Error | null, options: { terminate?: boolean } = {}) => {

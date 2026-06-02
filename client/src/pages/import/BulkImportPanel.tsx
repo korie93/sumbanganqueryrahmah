@@ -35,6 +35,7 @@ export function BulkImportPanel({
   const hasImportableFiles = bulkResults.some((result) => !result.blocked);
   const failedCount = bulkResults.filter((result) => result.status === "error").length;
   const successCount = bulkResults.filter((result) => result.status === "success").length;
+  const roundedBulkProgress = Math.round(bulkProgress);
   const bulkBusyProps = bulkProcessing ? { "aria-busy": "true" as const } : {};
   const bulkDropzoneDisabledProps = bulkProcessing
     ? { "aria-disabled": "true" as const }
@@ -62,7 +63,7 @@ export function BulkImportPanel({
         role="button"
         tabIndex={bulkProcessing ? -1 : 0}
         aria-label="Select bulk import files"
-        className={`rounded-xl border-2 border-dashed border-slate-300 p-5 text-center transition-colors dark:border-slate-600 sm:p-8 ${
+        className={`rounded-xl border-2 border-dashed border-slate-300 p-5 text-center transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 dark:border-slate-600 sm:p-8 ${
           bulkProcessing ? "cursor-not-allowed opacity-70" : "cursor-pointer hover:border-primary"
         }`}
         onClick={() => {
@@ -144,9 +145,17 @@ export function BulkImportPanel({
 
           {bulkProcessing ? (
             <div className="mb-4" role="status" aria-live="polite">
-              <Progress value={bulkProgress} className="h-2" />
+              <Progress
+                value={bulkProgress}
+                className="h-2"
+                aria-label="Bulk import progress"
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={roundedBulkProgress}
+                aria-valuetext={`${roundedBulkProgress}% processed`}
+              />
               <p className="text-sm text-muted-foreground mt-2 text-center">
-                Processing: {Math.round(bulkProgress)}%
+                Processing: {roundedBulkProgress}%
               </p>
             </div>
           ) : null}

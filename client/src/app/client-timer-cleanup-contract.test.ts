@@ -93,8 +93,11 @@ const TIMER_CLEANUP_CONTRACTS: TimerCleanupContract[] = [
   },
   {
     filePath: "../pages/Login.tsx",
-    setupPattern: /const intervalId = window\.setInterval\(refreshCountdown,\s*1000\)/,
-    cleanupPatterns: [/window\.clearInterval\(intervalId\)/],
+    setupPattern: /lockedCountdownIntervalRef\.current = window\.setInterval\(refreshCountdown,\s*1000\)/,
+    cleanupPatterns: [
+      /window\.clearInterval\(lockedCountdownIntervalRef\.current\)/,
+      /lockedCountdownIntervalRef\.current = null/,
+    ],
   },
   {
     filePath: "../pages/Maintenance.tsx",

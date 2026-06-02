@@ -44,7 +44,10 @@ export async function saveMultipartCollectionReceipt(
     fileName.includes(".") ? fileName.slice(fileName.lastIndexOf(".")) : "",
   );
   if (fileName.includes(".") && !extensionType) {
-    throw new Error("Receipt file extension is not allowed.");
+    throw new CollectionReceiptSecurityError(
+      "Receipt file extension is not allowed.",
+      "receipt-extension-not-allowed",
+    );
   }
 
   await ensureCollectionReceiptUploadDirectory();

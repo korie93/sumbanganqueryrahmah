@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
+import { generateKeyPairSync } from "node:crypto";
 import test from "node:test";
 import jwt from "jsonwebtoken";
 import {
   SESSION_JWT_DEFAULT_EXPIRY,
   SESSION_JWT_DEFAULT_EXPIRY_JITTER_SECONDS,
   SESSION_JWT_ALGORITHM,
+  SESSION_JWT_LEGACY_ALGORITHM,
   SESSION_JWT_MIN_DEFAULT_EXPIRY_SECONDS,
   resolveSessionJwtExpiresAt,
   resolveSessionJwtId,
@@ -12,7 +14,9 @@ import {
   shouldRefreshSessionJwt,
   signSessionJwt,
   signSessionJwtWithSecret,
+  signSessionJwtWithKeySet,
   verifyJwtWithAnySecret,
+  verifySessionJwtWithKeySet,
 } from "../session-jwt";
 import {
   parseAuthenticatedSessionJwtPayload,
@@ -121,7 +125,7 @@ test("verifyJwtWithAnySecret accepts a token signed with a previous manual rotat
   const token = jwt.sign(
     { username: "alice", role: "admin" },
     "old-secret",
-    { algorithm: SESSION_JWT_ALGORITHM },
+    { algorithm: SESSION_JWT_LEGACY_ALGORITHM },
   );
 
   const payload = verifyJwtWithAnySecret<{ username: string; role: string }>(token, [
@@ -137,13 +141,56 @@ test("verifyJwtWithAnySecret rejects when none of the configured secrets can ver
   const token = jwt.sign(
     { username: "alice" },
     "different-secret",
-    { algorithm: SESSION_JWT_ALGORITHM },
+    { algorithm: SESSION_JWT_LEGACY_ALGORITHM },
   );
 
   assert.throws(
     () => verifyJwtWithAnySecret(token, ["current-secret", "old-secret"]),
     /invalid signature/i,
   );
+});
+
+test("session JWT keyset signs new tokens with RS256 while accepting legacy HS256 tokens", () => {
+  const { privateKey, publicKey } = generateKeyPairSync("rsa", {
+    modulusLength: 2048,
+  });
+  const privatePem = privateKey.export({ format: "pem", type: "pkcs8" }).toString();
+  const publicPem = publicKey.export({ format: "pem", type: "spki" }).toString();
+  const keySet = {
+    hsSecrets: ["legacy-secret"],
+    rsPrivateKey: privatePem,
+    rsPublicKeys: [publicPem],
+  };
+
+  const modernToken = signSessionJwtWithKeySet({ username: "alice", role: "admin" }, keySet);
+  const modernDecoded = jwt.decode(modernToken, { complete: true }) as {
+    header?: { alg?: string };
+  } | null;
+
+  assert.equal(modernDecoded?.header?.alg, SESSION_JWT_ALGORITHM);
+  assert.deepEqual(
+    verifySessionJwtWithKeySet<{ username: string; role: string }>(modernToken, keySet),
+    {
+      username: "alice",
+      role: "admin",
+      iat: (jwt.decode(modernToken) as { iat: number }).iat,
+      exp: (jwt.decode(modernToken) as { exp: number }).exp,
+      jti: (jwt.decode(modernToken) as { jti: string }).jti,
+    },
+  );
+
+  const legacyToken = jwt.sign(
+    { username: "legacy", role: "user" },
+    "legacy-secret",
+    { algorithm: SESSION_JWT_LEGACY_ALGORITHM },
+  );
+  const legacyPayload = verifySessionJwtWithKeySet<{ username: string; role: string }>(
+    legacyToken,
+    keySet,
+  );
+
+  assert.equal(legacyPayload.username, "legacy");
+  assert.equal(legacyPayload.role, "user");
 });
 
 test("verifyJwtWithAnySecret rejects tokens signed with non-session algorithms", () => {
@@ -155,7 +202,7 @@ test("verifyJwtWithAnySecret rejects tokens signed with non-session algorithms",
 
   assert.throws(
     () => verifyJwtWithAnySecret(token, ["current-secret"]),
-    /invalid algorithm/i,
+    /unsupported session signing algorithm/i,
   );
 });
 

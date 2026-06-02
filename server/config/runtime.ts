@@ -146,6 +146,12 @@ const configuredPreviousSessionSecrets = resolvePreviousSessionSecrets(
   readCommaSeparatedList("SESSION_SECRET_PREVIOUS"),
   configuredSessionSecret,
 );
+const normalizePemEnvSecret = (value: string | null): string | null => {
+  const normalized = String(value || "").trim().replace(/\\n/g, "\n");
+  return normalized || null;
+};
+const configuredSessionJwtPrivateKey = normalizePemEnvSecret(readOptionalString("SESSION_JWT_PRIVATE_KEY"));
+const configuredSessionJwtPublicKey = normalizePemEnvSecret(readOptionalString("SESSION_JWT_PUBLIC_KEY"));
 const configuredDatabaseUrl = readOptionalString("DATABASE_URL");
 const parsedDatabaseUrl = parseDatabaseUrl(configuredDatabaseUrl);
 const databaseSslConfig = resolveDatabaseSslConfig(readOptionalString("DATABASE_SSL"), {
@@ -400,6 +406,8 @@ export const runtimeConfig: RuntimeConfig = Object.freeze({
   auth: {
     sessionSecret: resolvedSessionSecret,
     previousSessionSecrets: configuredPreviousSessionSecrets,
+    sessionJwtPrivateKey: configuredSessionJwtPrivateKey,
+    sessionJwtPublicKey: configuredSessionJwtPublicKey,
     auditHmacKey: resolvedAuditHmacKey,
     bcryptCost: readInt("BCRYPT_COST_FACTOR", 12, { min: 12, max: 20 }),
     collectionNicknameTempPassword: readSecretOrThrow(

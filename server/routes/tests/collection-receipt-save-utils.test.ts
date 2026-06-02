@@ -106,3 +106,27 @@ test("multipart receipt storage creates the managed upload directory on demand",
     }
   }
 });
+
+test("multipart receipt storage rejects unsafe extensions and content mismatches", async () => {
+  await assert.rejects(
+    () => saveMultipartCollectionReceipt({
+      fileName: "receipt.exe",
+      mimeType: "application/pdf",
+      stream: createReceiptStream(createTinyPdfBuffer()),
+    }),
+    (error: unknown) =>
+      error instanceof CollectionReceiptSecurityError &&
+      error.reasonCode === "receipt-extension-not-allowed",
+  );
+
+  await assert.rejects(
+    () => saveMultipartCollectionReceipt({
+      fileName: "receipt.png",
+      mimeType: "image/png",
+      stream: createReceiptStream(createTinyPdfBuffer()),
+    }),
+    (error: unknown) =>
+      error instanceof CollectionReceiptSecurityError &&
+      error.reasonCode === "receipt-extension-mismatch",
+  );
+});

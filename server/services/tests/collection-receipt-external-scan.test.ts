@@ -138,8 +138,11 @@ function createFakeScannerSpawn(child: FakeScannerProcess): ExternalScanSpawn {
   return () => child;
 }
 
-function assertFakeScannerListenersRemoved(child: FakeScannerProcess) {
-  assert.equal(child.listenerCount("close"), 0);
+function assertFakeScannerListenersRemoved(
+  child: FakeScannerProcess,
+  options: { pendingTimeoutCloseCleanup?: boolean } = {},
+) {
+  assert.equal(child.listenerCount("close"), options.pendingTimeoutCloseCleanup ? 1 : 0);
   assert.equal(child.listenerCount("error"), 0);
   assert.equal(child.stdout.listenerCount("data"), 0);
   assert.equal(child.stderr.listenerCount("data"), 0);
@@ -214,9 +217,12 @@ test("external receipt scanner terminates and removes listeners after scanner ti
       && error.reasonCode === "external-scan-timeout",
   );
 
-  assertFakeScannerListenersRemoved(child);
+  assertFakeScannerListenersRemoved(child, { pendingTimeoutCloseCleanup: true });
   assert.equal(child.killCalls, 1);
   assert.deepEqual(child.killSignals, ["SIGTERM"]);
+
+  child.emit("close", null, "SIGTERM");
+  assert.equal(child.listenerCount("close"), 0);
 });
 
 test("external receipt scanner force kills timed-out scanners after the grace period", async () => {
@@ -239,6 +245,31 @@ test("external receipt scanner force kills timed-out scanners after the grace pe
   await new Promise((resolve) => setTimeout(resolve, 5));
 
   assert.deepEqual(child.killSignals, ["SIGTERM", "SIGKILL"]);
+});
+
+test("external receipt scanner cancels force kill when timed-out scanner exits during grace", async () => {
+  const child = new FakeScannerProcess();
+
+  await assert.rejects(
+    () =>
+      runExternalReceiptScan({
+        config: createExternalScanTestConfig({ timeoutMs: 1 }),
+        filePath: "receipt.pdf",
+        scannerCommand: "scanner",
+        args: ["receipt.pdf"],
+        spawnScanner: createFakeScannerSpawn(child),
+        forceKillGraceMs: 20,
+      }),
+    (error: unknown) =>
+      error instanceof CollectionReceiptSecurityError
+      && error.reasonCode === "external-scan-timeout",
+  );
+
+  child.emit("close", null, "SIGTERM");
+  await new Promise((resolve) => setTimeout(resolve, 30));
+
+  assert.deepEqual(child.killSignals, ["SIGTERM"]);
+  assert.equal(child.listenerCount("close"), 0);
 });
 
 test("external receipt scanner forces fail-closed mode in production-like runtimes", () => {

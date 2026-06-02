@@ -30,6 +30,14 @@ import {
 import type { LoginTrend, PeakHour, RoleData, SummaryData, TopUser } from "@/pages/dashboard/types";
 import { buildSummaryCards, exportDashboardToPdf } from "@/pages/dashboard/utils";
 
+type DashboardRefetch = () => Promise<unknown>;
+
+function useDashboardRetryHandler(refetch: DashboardRefetch) {
+  return useCallback(() => {
+    void refetch();
+  }, [refetch]);
+}
+
 function DashboardContent() {
   const isMobile = useIsMobile();
   const shouldDeferSecondaryMobileSections =
@@ -84,6 +92,8 @@ function DashboardContent() {
     refetchIntervalInBackground: false,
   });
 
+  const secondaryDashboardQueriesEnabled = !summaryLoading && !trendsLoading && !topUsersLoading;
+
   const {
     data: peakHours,
     error: peakHoursError,
@@ -94,6 +104,7 @@ function DashboardContent() {
   } = useQuery<PeakHour[]>({
     queryKey: ["/api/analytics/peak-hours"],
     queryFn: ({ signal }) => getPeakHours({ signal }),
+    enabled: secondaryDashboardQueriesEnabled,
     refetchInterval: () => resolveVisibleDashboardRefetchInterval(DASHBOARD_SECONDARY_REFETCH_INTERVAL_MS),
     refetchIntervalInBackground: false,
   });
@@ -108,6 +119,7 @@ function DashboardContent() {
   } = useQuery<RoleData[]>({
     queryKey: ["/api/analytics/role-distribution"],
     queryFn: ({ signal }) => getRoleDistribution({ signal }),
+    enabled: secondaryDashboardQueriesEnabled,
     refetchInterval: () => resolveVisibleDashboardRefetchInterval(DASHBOARD_SECONDARY_REFETCH_INTERVAL_MS),
     refetchIntervalInBackground: false,
   });
@@ -159,21 +171,11 @@ function DashboardContent() {
       trendsIsError,
     ],
   );
-  const handleRetrySummary = useCallback(() => {
-    void refetchSummary();
-  }, [refetchSummary]);
-  const handleRetryTrends = useCallback(() => {
-    void refetchTrends();
-  }, [refetchTrends]);
-  const handleRetryTopUsers = useCallback(() => {
-    void refetchTopUsers();
-  }, [refetchTopUsers]);
-  const handleRetryPeakHours = useCallback(() => {
-    void refetchPeakHours();
-  }, [refetchPeakHours]);
-  const handleRetryRoles = useCallback(() => {
-    void refetchRoles();
-  }, [refetchRoles]);
+  const handleRetrySummary = useDashboardRetryHandler(refetchSummary);
+  const handleRetryTrends = useDashboardRetryHandler(refetchTrends);
+  const handleRetryTopUsers = useDashboardRetryHandler(refetchTopUsers);
+  const handleRetryPeakHours = useDashboardRetryHandler(refetchPeakHours);
+  const handleRetryRoles = useDashboardRetryHandler(refetchRoles);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -294,11 +296,11 @@ function DashboardContent() {
           trendsRetrying={trendsFetching}
           peakHours={peakHours ?? []}
           peakHoursErrorMessage={peakHoursErrorMessage}
-          peakHoursLoading={peakHoursLoading}
+          peakHoursLoading={!secondaryDashboardQueriesEnabled || peakHoursLoading}
           peakHoursRetrying={peakHoursFetching}
           roleDistribution={roleDistribution ?? []}
           roleErrorMessage={roleDistributionErrorMessage}
-          roleLoading={roleLoading}
+          roleLoading={!secondaryDashboardQueriesEnabled || roleLoading}
           roleRetrying={roleDistributionFetching}
           topUsers={topUsers ?? []}
           topUsersErrorMessage={topUsersErrorMessage}

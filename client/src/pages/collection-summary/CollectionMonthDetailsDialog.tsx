@@ -68,7 +68,7 @@ export function CollectionMonthDetailsDialog({
         className={
           isMobile
             ? `${mobileFullscreenDialogViewportClassName} flex w-screen max-w-none flex-col overflow-hidden rounded-none border-0 p-0`
-            : "flex h-[88vh] w-[96vw] max-w-6xl flex-col overflow-hidden"
+            : "flex h-[calc(var(--viewport-min-height-value)-2rem)] w-[96vw] max-w-6xl flex-col overflow-hidden"
         }
       >
         <DialogHeader className={isMobile ? "border-b border-border/60 px-4 py-4 pr-12 text-left" : "border-b border-border/60 pb-3"}>

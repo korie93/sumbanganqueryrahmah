@@ -37,13 +37,17 @@ function focusMainContent(event: React.MouseEvent<HTMLAnchorElement>) {
   window.history.replaceState(null, "", "#main-content");
 }
 
-function AppReadySignal() {
+function AppReadySignal({ ready }: { ready: boolean }) {
   useEffect(() => {
+    if (!ready || typeof window === "undefined") {
+      return;
+    }
+
     const frameId = window.requestAnimationFrame(markAppReadyAndRemoveBootShell);
     return () => {
       window.cancelAnimationFrame(frameId);
     };
-  }, []);
+  }, [ready]);
 
   return null;
 }
@@ -106,107 +110,156 @@ function AppContent() {
     handlePublicNavigate(resolveAuthenticatedRoleHomePage(user?.role));
   };
 
+  const readySignal = <AppReadySignal ready={isInitialized} />;
+
   if (!isInitialized) {
-    return <PageSpinner fullscreen />;
+    return (
+      <>
+        {readySignal}
+        <PageSpinner fullscreen />
+      </>
+    );
   }
 
   if (isBannedSessionFlagSet()) {
-    return renderRoutePage("banned", <BannedPage onRetryLogin={handleBannedRetryLogin} />);
+    return (
+      <>
+        {readySignal}
+        {renderRoutePage("banned", <BannedPage onRetryLogin={handleBannedRetryLogin} />)}
+      </>
+    );
   }
 
   if (!user) {
     if (currentPage === "home") {
-      return renderRoutePage(
-        "home",
-        <LandingPage onLoginClick={() => handlePublicNavigate("login")} />,
-        true,
-        <LandingRouteFallback onLoginClick={() => handlePublicNavigate("login")} />,
+      return (
+        <>
+          {readySignal}
+          {renderRoutePage(
+            "home",
+            <LandingPage onLoginClick={() => handlePublicNavigate("login")} />,
+            true,
+            <LandingRouteFallback onLoginClick={() => handlePublicNavigate("login")} />,
+          )}
+        </>
       );
     }
 
     if (currentPage === "maintenance") {
-      return renderRoutePage("maintenance", <MaintenanceRoutePage />);
+      return (
+        <>
+          {readySignal}
+          {renderRoutePage("maintenance", <MaintenanceRoutePage />)}
+        </>
+      );
     }
 
     if (currentPage === "forgot-password") {
-      return renderRoutePage(
-        "forgot-password",
-        (
-          <ForgotPasswordPage
-            onBackToHome={() => handlePublicNavigate("home")}
-            onBackToLogin={() => handlePublicNavigate("login")}
-          />
-        ),
+      return (
+        <>
+          {readySignal}
+          {renderRoutePage(
+            "forgot-password",
+            (
+              <ForgotPasswordPage
+                onBackToHome={() => handlePublicNavigate("home")}
+                onBackToLogin={() => handlePublicNavigate("login")}
+              />
+            ),
+          )}
+        </>
       );
     }
 
     if (currentPage === "activate-account") {
-      return renderRoutePage(
-        "activate-account",
-        <ActivateAccountPage onBackToLogin={() => handlePublicNavigate("login")} />,
+      return (
+        <>
+          {readySignal}
+          {renderRoutePage(
+            "activate-account",
+            <ActivateAccountPage onBackToLogin={() => handlePublicNavigate("login")} />,
+          )}
+        </>
       );
     }
 
     if (currentPage === "reset-password") {
-      return renderRoutePage(
-        "reset-password",
-        (
-          <ResetPasswordPage
-            onBackToHome={() => handlePublicNavigate("home")}
-            onBackToLogin={() => handlePublicNavigate("login")}
-          />
-        ),
+      return (
+        <>
+          {readySignal}
+          {renderRoutePage(
+            "reset-password",
+            (
+              <ResetPasswordPage
+                onBackToHome={() => handlePublicNavigate("home")}
+                onBackToLogin={() => handlePublicNavigate("login")}
+              />
+            ),
+          )}
+        </>
       );
     }
 
     if (currentPage === "not-found") {
-      return renderRoutePage(
-        "not-found",
-        (
-          <NotFoundPage
-            onNavigateHome={() => handlePublicNavigate("home")}
-            onLoginClick={() => handlePublicNavigate("login")}
-          />
-        ),
+      return (
+        <>
+          {readySignal}
+          {renderRoutePage(
+            "not-found",
+            (
+              <NotFoundPage
+                onNavigateHome={() => handlePublicNavigate("home")}
+                onLoginClick={() => handlePublicNavigate("login")}
+              />
+            ),
+          )}
+        </>
       );
     }
 
-    return renderRoutePage(
-      "login",
-      (
-        <LoginPage
-          onBanned={handleBannedSessionDetected}
-          onForgotPasswordClick={() => handlePublicNavigate("forgot-password")}
-          onLandingClick={() => handlePublicNavigate("home")}
-          onLoginSuccess={handleLoginSuccess}
-        />
-      ),
+    return (
+      <>
+        {readySignal}
+        {renderRoutePage(
+          "login",
+          (
+            <LoginPage
+              onBanned={handleBannedSessionDetected}
+              onForgotPasswordClick={() => handlePublicNavigate("forgot-password")}
+              onLandingClick={() => handlePublicNavigate("home")}
+              onLoginSuccess={handleLoginSuccess}
+            />
+          ),
+        )}
+      </>
     );
   }
 
   return (
-    <AppRouteErrorBoundary
-      routeKey={`authenticated-entry:${currentPage}:${monitorSection}`}
-      routeLabel={currentPage}
-      fullscreen
-      onNavigateHome={handleAuthenticatedNavigateHome}
-    >
-      <Suspense fallback={<PageSpinner fullscreen />}>
-        <AuthenticatedAppEntry
-          initialUser={user}
-          initialPage={currentPage}
-          initialMonitorSection={monitorSection}
-          onLoggedOut={handleAuthenticatedLogout}
-        />
-      </Suspense>
-    </AppRouteErrorBoundary>
+    <>
+      {readySignal}
+      <AppRouteErrorBoundary
+        routeKey={`authenticated-entry:${currentPage}:${monitorSection}`}
+        routeLabel={currentPage}
+        fullscreen
+        onNavigateHome={handleAuthenticatedNavigateHome}
+      >
+        <Suspense fallback={<PageSpinner fullscreen />}>
+          <AuthenticatedAppEntry
+            initialUser={user}
+            initialPage={currentPage}
+            initialMonitorSection={monitorSection}
+            onLoggedOut={handleAuthenticatedLogout}
+          />
+        </Suspense>
+      </AppRouteErrorBoundary>
+    </>
   );
 }
 
 function App() {
   return (
     <>
-      <AppReadySignal />
       <a
         aria-label="Skip to main content"
         className="skip-to-main-link"

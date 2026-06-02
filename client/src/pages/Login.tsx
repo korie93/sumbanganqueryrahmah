@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import type { User } from "@/app/types";
 import { ExpandableMessage } from "@/components/ExpandableMessage";
@@ -95,6 +95,14 @@ export default function Login({ onBanned, onForgotPasswordClick, onLandingClick,
     };
   const [lockedCountdownMs, setLockedCountdownMs] = useState(0);
   const mountedRef = useRef(true);
+  const lockedCountdownIntervalRef = useRef<number | null>(null);
+
+  const clearLockedCountdownInterval = useCallback(() => {
+    if (typeof window !== "undefined" && lockedCountdownIntervalRef.current !== null) {
+      window.clearInterval(lockedCountdownIntervalRef.current);
+      lockedCountdownIntervalRef.current = null;
+    }
+  }, []);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -124,12 +132,14 @@ export default function Login({ onBanned, onForgotPasswordClick, onLandingClick,
 
   useEffect(() => {
     if (!lockedFlow || !lockedRetryUntilMs) {
+      clearLockedCountdownInterval();
       if (mountedRef.current) {
         setLockedCountdownMs(0);
       }
       return;
     }
 
+    clearLockedCountdownInterval();
     const refreshCountdown = () => {
       if (!mountedRef.current) {
         return;
@@ -137,12 +147,12 @@ export default function Login({ onBanned, onForgotPasswordClick, onLandingClick,
       setLockedCountdownMs(Math.max(0, lockedRetryUntilMs - Date.now()));
     };
     refreshCountdown();
-    const intervalId = window.setInterval(refreshCountdown, 1000);
+    lockedCountdownIntervalRef.current = window.setInterval(refreshCountdown, 1000);
 
     return () => {
-      window.clearInterval(intervalId);
+      clearLockedCountdownInterval();
     };
-  }, [lockedFlow, lockedRetryUntilMs]);
+  }, [clearLockedCountdownInterval, lockedFlow, lockedRetryUntilMs]);
 
   const lockedCountdownSeconds = Math.ceil(lockedCountdownMs / 1000);
 

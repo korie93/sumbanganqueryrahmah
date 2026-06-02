@@ -18,6 +18,7 @@ import { parseRuntimeWebSocketHandshakeUrl } from "./runtime-handshake";
 import {
   MAX_RUNTIME_WS_CONNECTIONS_PER_USER,
   DEFAULT_RUNTIME_WS_MAX_CONNECTIONS,
+  DEFAULT_RUNTIME_WS_MAX_CONNECTIONS_PER_IP,
   DEFAULT_RUNTIME_WS_MAX_MESSAGE_BYTES,
   DEFAULT_RUNTIME_WS_PAYLOAD_WINDOW_BYTES,
   DEFAULT_RUNTIME_WS_PAYLOAD_WINDOW_MS,
@@ -131,6 +132,10 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
   const messageRateLimiterFactory =
     options.messageRateLimiterFactory ?? (() => createRuntimeWsMessageRateLimiter());
   const maxConnections = normalizePositiveInteger(options.maxConnections, DEFAULT_RUNTIME_WS_MAX_CONNECTIONS);
+  const maxConnectionsPerIp = normalizePositiveInteger(
+    options.maxConnectionsPerIp,
+    DEFAULT_RUNTIME_WS_MAX_CONNECTIONS_PER_IP,
+  );
   const largeMessageWarnBytes = normalizePositiveInteger(
     options.largeMessageWarnBytes,
     DEFAULT_RUNTIME_WS_LARGE_MESSAGE_WARN_BYTES,
@@ -142,6 +147,7 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
   );
   const payloadWindowMs = normalizePositiveInteger(options.payloadWindowMs, DEFAULT_RUNTIME_WS_PAYLOAD_WINDOW_MS);
   const lifecycleRegistry = new RuntimeSocketLifecycleRegistry(connectedClients);
+  const activeConnectionCountByIp = new Map<string, number>();
   const { socketEntriesByActivity, trackedSockets } = lifecycleRegistry;
   const logCleanupDiagnostic = (message: string, metadata: Record<string, unknown>) => {
     if (!shouldLogRuntimeWebSocketCleanupDiagnostics()) {
@@ -206,6 +212,7 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
     unsubscribeSharedBus?.();
     void sharedBus?.close();
     upgradeRateLimiter.clear();
+    activeConnectionCountByIp.clear();
     suppressSharedClosePublish = true;
     try {
       closeRuntimeWebSocketServerState({
@@ -292,6 +299,30 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
       return;
     }
 
+    const activeIpConnectionCount = activeConnectionCountByIp.get(upgradeRateLimitKey) ?? 0;
+    if (activeIpConnectionCount >= maxConnectionsPerIp) {
+      logger.warn("WebSocket connection rejected because the per-IP connection limit was reached", {
+        maxConnectionsPerIp,
+        trustedProxiesConfigured: trustForwardedHeaders,
+      });
+      try {
+        ws.close(RUNTIME_WS_CLOSE_TRY_AGAIN_LATER, "ip connection limit reached");
+      } catch (error) {
+        logger.debug("WebSocket close request failed during per-IP connection limit rejection", {
+          error: sanitizeRuntimeWebSocketError(error),
+        });
+        try {
+          ws.terminate();
+        } catch (terminateError) {
+          logger.debug("WebSocket terminate fallback failed during per-IP connection limit rejection", {
+            error: sanitizeRuntimeWebSocketError(terminateError),
+          });
+        }
+      }
+      return;
+    }
+    activeConnectionCountByIp.set(upgradeRateLimitKey, activeIpConnectionCount + 1);
+
     let activityId: string | null = null;
     let socketEntry: RuntimeTrackedSocketEntry | null = null;
     let cleanedUp = false;
@@ -300,6 +331,21 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
     let payloadWindowStartedAt = now();
     let payloadWindowBytes = 0;
     const messageRateLimiter = messageRateLimiterFactory();
+    let activeIpConnectionReleased = false;
+
+    const releaseActiveIpConnection = () => {
+      if (activeIpConnectionReleased) {
+        return;
+      }
+
+      activeIpConnectionReleased = true;
+      const currentCount = activeConnectionCountByIp.get(upgradeRateLimitKey) ?? 0;
+      if (currentCount <= 1) {
+        activeConnectionCountByIp.delete(upgradeRateLimitKey);
+        return;
+      }
+      activeConnectionCountByIp.set(upgradeRateLimitKey, currentCount - 1);
+    };
 
     const markSocketAlive = () => {
       if (cleanedUp) {
@@ -351,6 +397,7 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
         });
       } finally {
         lifecycleRegistry.deregisterSocket(ws);
+        releaseActiveIpConnection();
         socketEntry = null;
         payloadWindowBytes = 0;
         payloadWindowStartedAt = now();

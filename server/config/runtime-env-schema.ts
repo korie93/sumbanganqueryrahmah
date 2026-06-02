@@ -268,6 +268,8 @@ const runtimeEnvironmentShape = {
 
   SESSION_SECRET: optionalEnvString("SESSION_SECRET", SECRET_STRING_MAX_LENGTH),
   SESSION_SECRET_PREVIOUS: optionalEnvString("SESSION_SECRET_PREVIOUS", SECRET_STRING_MAX_LENGTH),
+  SESSION_JWT_PRIVATE_KEY: optionalEnvString("SESSION_JWT_PRIVATE_KEY", SECRET_STRING_MAX_LENGTH),
+  SESSION_JWT_PUBLIC_KEY: optionalEnvString("SESSION_JWT_PUBLIC_KEY", SECRET_STRING_MAX_LENGTH),
   BCRYPT_COST_FACTOR: optionalIntEnv("BCRYPT_COST_FACTOR", { min: 12, max: 20 }),
   SQR_AUDIT_HMAC_KEY: optionalMinLengthEnvString(
     "SQR_AUDIT_HMAC_KEY",
@@ -416,6 +418,15 @@ const runtimeEnvironmentShape = {
 } satisfies z.ZodRawShape;
 
 const runtimeEnvironmentSchema = z.object(runtimeEnvironmentShape).strict().superRefine((env, ctx) => {
+  if ((env.SESSION_JWT_PRIVATE_KEY && !env.SESSION_JWT_PUBLIC_KEY)
+      || (!env.SESSION_JWT_PRIVATE_KEY && env.SESSION_JWT_PUBLIC_KEY)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["SESSION_JWT_PRIVATE_KEY"],
+      message: "SESSION_JWT_PRIVATE_KEY and SESSION_JWT_PUBLIC_KEY must be configured together.",
+    });
+  }
+
   if (env.COLLECTION_PII_RETIRED_FIELDS && !env.COLLECTION_PII_ENCRYPTION_KEY) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,

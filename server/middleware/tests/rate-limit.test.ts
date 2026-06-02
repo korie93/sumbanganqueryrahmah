@@ -232,10 +232,10 @@ test("auth adaptive cooldown sweep and pressure eviction stay synchronous", () =
   clearAdaptiveRateLimitCooldownsForTests();
 
   try {
-    recordAdaptiveRateLimitViolationForTests("expired-client", 1, 1_000);
+    recordAdaptiveRateLimitViolationForTests("expired-client", 1_000, 1_000);
     recordAdaptiveRateLimitViolationForTests("active-client", 60_000, 1_000);
 
-    const pruned = pruneAdaptiveRateLimitCooldowns(1_010);
+    const pruned = pruneAdaptiveRateLimitCooldowns(2_010);
     assert.equal(typeof pruned, "number");
     assert.equal(pruned, 1);
 

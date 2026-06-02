@@ -15,6 +15,8 @@ type CollectionMonthDetailsDesktopTableProps = Pick<
   "loading" | "records" | "page" | "pageSize" | "toDisplayDate"
 >;
 
+const stickyHeaderClassName = "sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-background/95 backdrop-blur";
+
 export function CollectionMonthDetailsDesktopTable({
   loading,
   records,
@@ -26,15 +28,15 @@ export function CollectionMonthDetailsDesktopTable({
     <Table className="min-w-[980px] text-sm">
       <TableHeader>
         <TableRow>
-          <TableHead className="sticky top-0 z-[var(--z-sticky-header)] bg-background">No.</TableHead>
-          <TableHead className="sticky top-0 z-[var(--z-sticky-header)] bg-background">Date</TableHead>
-          <TableHead className="sticky top-0 z-[var(--z-sticky-header)] bg-background">Customer Name</TableHead>
-          <TableHead className="sticky top-0 z-[var(--z-sticky-header)] bg-background">IC Number</TableHead>
-          <TableHead className="sticky top-0 z-[var(--z-sticky-header)] bg-background">Customer Phone</TableHead>
-          <TableHead className="sticky top-0 z-[var(--z-sticky-header)] bg-background">Account Number</TableHead>
-          <TableHead className="sticky top-0 z-[var(--z-sticky-header)] bg-background">Batch</TableHead>
-          <TableHead className="sticky top-0 z-[var(--z-sticky-header)] bg-background">Amount</TableHead>
-          <TableHead className="sticky top-0 z-[var(--z-sticky-header)] bg-background">Staff Nickname</TableHead>
+          <TableHead className={stickyHeaderClassName}>No.</TableHead>
+          <TableHead className={stickyHeaderClassName}>Date</TableHead>
+          <TableHead className={stickyHeaderClassName}>Customer Name</TableHead>
+          <TableHead className={stickyHeaderClassName}>IC Number</TableHead>
+          <TableHead className={stickyHeaderClassName}>Customer Phone</TableHead>
+          <TableHead className={stickyHeaderClassName}>Account Number</TableHead>
+          <TableHead className={stickyHeaderClassName}>Batch</TableHead>
+          <TableHead className={stickyHeaderClassName}>Amount</TableHead>
+          <TableHead className={stickyHeaderClassName}>Staff Nickname</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>

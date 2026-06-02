@@ -14,4 +14,7 @@ test("dashboard lifecycle uses AbortController and TanStack Query signals instea
   assert.match(source, /controller\.abort\(\)/);
   assert.match(source, /queryFn: \(\{ signal \}\) => getAnalyticsSummary\(\{ signal \}\)/);
   assert.match(source, /queryFn: \(\{ signal \}\) => getLoginTrends\(trendDays, \{ signal \}\)/);
+  assert.match(source, /const secondaryDashboardQueriesEnabled = !summaryLoading && !trendsLoading && !topUsersLoading/);
+  assert.match(source, /enabled: secondaryDashboardQueriesEnabled/);
+  assert.match(source, /function useDashboardRetryHandler\(refetch: DashboardRefetch\)/);
 });
