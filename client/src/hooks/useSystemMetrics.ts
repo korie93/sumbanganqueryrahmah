@@ -43,6 +43,15 @@ export {
   combineOpenCircuitCount,
 } from "@/hooks/system-metrics-utils";
 
+/**
+ * AUDIT2-FIX [L3]
+ * Polls system health, worker, alert, and web-vitals endpoints as one
+ * coordinated dashboard data source.
+ *
+ * The hook keeps a single in-flight poll, merges pending refresh requests,
+ * slows polling while the tab is hidden, and aborts the active request during
+ * unmount so the monitor page cannot update stale React state.
+ */
 export function useSystemMetrics(options: UseSystemMetricsOptions = {}): UseSystemMetricsResult {
   const {
     includeHistory,

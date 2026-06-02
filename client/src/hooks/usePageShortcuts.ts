@@ -82,6 +82,14 @@ export function matchesPageShortcut(
   return true;
 }
 
+/**
+ * AUDIT2-FIX [L3]
+ * Registers page-level keyboard shortcuts with editable-field protection.
+ *
+ * Shortcuts are kept in a ref so the global keydown listener remains stable
+ * while callers can update handlers or enabled state without rebinding the
+ * browser event listener on every render.
+ */
 export function usePageShortcuts(shortcuts: PageShortcutDefinition[]) {
   const shortcutsRef = useRef(shortcuts);
   const hasShortcuts = shortcuts.length > 0;

@@ -2,6 +2,14 @@ import { useCallback, useEffect, useRef } from "react"
 
 type TimerCallback = () => void
 
+/**
+ * AUDIT2-FIX [L3]
+ * Tracks timeouts and intervals created by a component and clears every
+ * outstanding timer during unmount.
+ *
+ * Use this hook for component-owned timers so delayed callbacks do not fire
+ * after the component lifecycle has ended.
+ */
 export function useTimers() {
   const timeoutIdsRef = useRef(new Set<number>())
   const intervalIdsRef = useRef(new Set<number>())
