@@ -34,9 +34,7 @@ const FORBIDDEN_RESPONSE_INFO_PATTERNS = [
   /(?:postgres(?:ql)?:\/\/|mysql:\/\/|redis:\/\/|mongodb(?:\+srv)?:\/\/)/i,
 ] as const;
 
-const MAX_RESPONSE_INFO_SCAN_DEPTH = 4;
-const MAX_RESPONSE_INFO_ARRAY_SCAN = 20;
-const MAX_RESPONSE_INFO_OBJECT_KEYS_SCAN = 40;
+const MAX_RESPONSE_INFO_TOTAL_PROPERTIES_SCAN = 1_000;
 
 function getGenericProductionMessage(statusCode: number): string {
   if (statusCode === 400) return "Invalid request.";
@@ -49,7 +47,22 @@ function getGenericProductionMessage(statusCode: number): string {
   return "Internal server error";
 }
 
-export function containsForbiddenErrorResponseInfo(value: unknown, depth = 0): boolean {
+type ResponseInfoScanState = {
+  scannedProperties: number;
+  visited: WeakSet<object>;
+};
+
+function createResponseInfoScanState(): ResponseInfoScanState {
+  return {
+    scannedProperties: 0,
+    visited: new WeakSet<object>(),
+  };
+}
+
+export function containsForbiddenErrorResponseInfo(
+  value: unknown,
+  state: ResponseInfoScanState = createResponseInfoScanState(),
+): boolean {
   if (value === null || value === undefined) {
     return false;
   }
@@ -66,26 +79,50 @@ export function containsForbiddenErrorResponseInfo(value: unknown, depth = 0): b
     return false;
   }
 
-  if (depth >= MAX_RESPONSE_INFO_SCAN_DEPTH) {
+  if (Array.isArray(value)) {
+    if (state.visited.has(value)) {
+      return false;
+    }
+    state.visited.add(value);
+    for (const item of value) {
+      state.scannedProperties += 1;
+      if (state.scannedProperties > MAX_RESPONSE_INFO_TOTAL_PROPERTIES_SCAN) {
+        return true;
+      }
+      if (containsForbiddenErrorResponseInfo(item, state)) {
+        return true;
+      }
+    }
     return false;
   }
 
-  if (Array.isArray(value)) {
-    return value
-      .slice(0, MAX_RESPONSE_INFO_ARRAY_SCAN)
-      .some((item) => containsForbiddenErrorResponseInfo(item, depth + 1));
-  }
-
   if (typeof value !== "object") {
-    return containsForbiddenErrorResponseInfo(String(value), depth + 1);
+    return containsForbiddenErrorResponseInfo(String(value), state);
   }
 
-  return Object.entries(value as Record<string, unknown>)
-    .slice(0, MAX_RESPONSE_INFO_OBJECT_KEYS_SCAN)
-    .some(([key, nestedValue]) => (
-      containsForbiddenErrorResponseInfo(key, depth + 1)
-      || containsForbiddenErrorResponseInfo(nestedValue, depth + 1)
-    ));
+  if (state.visited.has(value)) {
+    return false;
+  }
+  state.visited.add(value);
+
+  for (const [key, nestedValue] of Object.entries(value as Record<string, unknown>)) {
+    state.scannedProperties += 1;
+    if (state.scannedProperties > MAX_RESPONSE_INFO_TOTAL_PROPERTIES_SCAN) {
+      logger.warn("API error response info scan exceeded property limit", {
+        event: "api_error_response_info_scan_too_large",
+        maxProperties: MAX_RESPONSE_INFO_TOTAL_PROPERTIES_SCAN,
+      });
+      return true;
+    }
+    if (
+      containsForbiddenErrorResponseInfo(key, state)
+      || containsForbiddenErrorResponseInfo(nestedValue, state)
+    ) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 function sanitizeErrorForResponse(params: {

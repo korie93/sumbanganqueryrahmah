@@ -297,6 +297,34 @@ test("errorHandler strips production exposed stack and file path details", async
   }
 });
 
+test("errorHandler detects deeply nested sensitive production details", async () => {
+  const app = express();
+  const deeplyNested = Array.from({ length: 12 }).reduceRight<Record<string, unknown>>(
+    (nested, _value, index) => ({ [`level${index}`]: nested }),
+    { connectionString: "postgresql://sqr:sqr-secret@db.internal/sqr_db" },
+  );
+
+  app.get("/deep-sensitive-details", () => {
+    throw badRequest("Invalid request.", "INVALID_REQUEST", deeplyNested);
+  });
+  app.use(createErrorHandler({ productionLike: true }));
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const response = await fetch(`${baseUrl}/deep-sensitive-details`);
+    const payload = await response.json();
+    const serialized = JSON.stringify(payload);
+
+    assert.equal(response.status, 400);
+    assert.doesNotThrow(() => apiErrorPayloadSchema.parse(payload));
+    assert.deepEqual(payload, expectApiError("Invalid request.", "INVALID_REQUEST"));
+    assert.equal(serialized.includes("postgresql://"), false);
+    assert.equal(serialized.includes("connectionString"), false);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
 test("errorHandler keeps detailed exposed messages outside production-like mode", async () => {
   const app = express();
   app.get("/dev-query", () => {
