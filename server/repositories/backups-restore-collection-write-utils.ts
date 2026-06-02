@@ -6,11 +6,11 @@ import {
   resolveStoredCollectionPiiPlaintextValue,
 } from "../lib/collection-pii-encryption";
 import {
-  BACKUP_CHUNK_SIZE,
   type BackupCollectionReceipt,
   type BackupCollectionRecord,
   type RestoreStats,
 } from "./backups-repository-types";
+import { resolveRestoreChunkSize } from "./backups-restore-config";
 import {
   normalizeBackupCollectionReceipt,
   normalizeBackupCollectionRecord,
@@ -43,6 +43,7 @@ export async function restoreCollectionRecordsFromBackup(
   backupDataReader: BackupPayloadChunkReader,
   stats: RestoreStats,
 ) {
+  const restoreChunkSize = resolveRestoreChunkSize();
   const flushRecordInsertBatch = async (insertBatch: NormalizedBackupCollectionRecord[]) => {
     if (!insertBatch.length) {
       return;
@@ -182,7 +183,7 @@ export async function restoreCollectionRecordsFromBackup(
 
   for await (const chunk of backupDataReader.iterateArrayChunks<BackupCollectionRecord>(
     "collectionRecords",
-    BACKUP_CHUNK_SIZE,
+    restoreChunkSize,
   )) {
     const pendingBatch: NormalizedBackupCollectionRecord[] = [];
 
@@ -210,6 +211,7 @@ export async function restoreCollectionRecordReceiptsFromBackup(
   backupDataReader: BackupPayloadChunkReader,
   stats: RestoreStats,
 ) {
+  const restoreChunkSize = resolveRestoreChunkSize();
   const flushReceiptInsertBatch = async (insertBatch: NormalizedBackupCollectionReceipt[]) => {
     if (!insertBatch.length) {
       return;
@@ -264,7 +266,7 @@ export async function restoreCollectionRecordReceiptsFromBackup(
 
   for await (const chunk of backupDataReader.iterateArrayChunks<BackupCollectionReceipt>(
     "collectionRecordReceipts",
-    BACKUP_CHUNK_SIZE,
+    restoreChunkSize,
   )) {
     const pendingBatch: NormalizedBackupCollectionReceipt[] = [];
 

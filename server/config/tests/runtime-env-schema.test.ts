@@ -198,6 +198,32 @@ test("runtime env schema rejects backup payload limits below the minimum bound",
   );
 });
 
+test("runtime env schema validates restore chunk size bounds", () => {
+  assert.doesNotThrow(() => {
+    validateRuntimeEnvironmentSchema({
+      RESTORE_CHUNK_SIZE: "500",
+    });
+  });
+
+  assert.throws(
+    () => {
+      validateRuntimeEnvironmentSchema({
+        RESTORE_CHUNK_SIZE: "0",
+      });
+    },
+    /RESTORE_CHUNK_SIZE.*at least 1/i,
+  );
+
+  assert.throws(
+    () => {
+      validateRuntimeEnvironmentSchema({
+        RESTORE_CHUNK_SIZE: "5001",
+      });
+    },
+    /RESTORE_CHUNK_SIZE.*at most 5000/i,
+  );
+});
+
 test("runtime env schema preserves the existing AUTH_COOKIE_SECURE error contract", () => {
   assert.throws(
     () => {

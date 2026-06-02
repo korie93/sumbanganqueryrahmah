@@ -64,14 +64,18 @@ function createBackupRestoreExecutor(
 
 function createCollectionRecordReader(
   records: BackupCollectionRecord[],
+  seenChunkSizes: number[] = [],
 ): BackupPayloadChunkReader {
   return {
-    async *iterateArrayChunks<T>(key: string): AsyncGenerator<T[]> {
+    async *iterateArrayChunks<T>(key: string, chunkSize: number): AsyncGenerator<T[]> {
       if (key !== "collectionRecords") {
         return;
       }
 
-      yield records as unknown as T[];
+      seenChunkSizes.push(chunkSize);
+      for (let index = 0; index < records.length; index += chunkSize) {
+        yield records.slice(index, index + chunkSize) as unknown as T[];
+      }
     },
   };
 }
@@ -86,6 +90,20 @@ async function withCollectionPiiEncryptionKey<T>(secret: string, fn: () => Promi
       delete process.env.COLLECTION_PII_ENCRYPTION_KEY;
     } else {
       process.env.COLLECTION_PII_ENCRYPTION_KEY = previous;
+    }
+  }
+}
+
+async function withRestoreChunkSize<T>(chunkSize: string, fn: () => Promise<T> | T): Promise<T> {
+  const previous = process.env.RESTORE_CHUNK_SIZE;
+  process.env.RESTORE_CHUNK_SIZE = chunkSize;
+  try {
+    return await fn();
+  } finally {
+    if (previous === undefined) {
+      delete process.env.RESTORE_CHUNK_SIZE;
+    } else {
+      process.env.RESTORE_CHUNK_SIZE = previous;
     }
   }
 }
@@ -264,6 +282,63 @@ test("collection restore batches temp-table tracking and inserts for large resto
   assert.equal(stats.collectionRecords.processed, 205);
   assert.equal(stats.collectionRecords.inserted, 205);
   assert.equal(stats.collectionRecords.skipped, 0);
+});
+
+test("collection restore honors RESTORE_CHUNK_SIZE for bounded restore reads", async () => {
+  await withRestoreChunkSize("50", async () => {
+    const seenChunkSizes: number[] = [];
+    const executedQueries: string[] = [];
+    const tx = createBackupRestoreExecutor(
+      async (query: unknown) => {
+        const sqlText = normalizeSqlText(query);
+        executedQueries.push(sqlText);
+
+        if (sqlText.includes("INSERT INTO public.collection_records")) {
+          const insertedRows = (sqlText.match(/::uuid/g) ?? []).length;
+          return {
+            rows: Array.from({ length: insertedRows }, (_, index) => ({ id: `record-${index + 1}` })),
+          };
+        }
+
+        return { rows: [] };
+      },
+      "Unexpected insert() call during restore chunk size test.",
+    );
+    const records = Array.from({ length: 120 }, (_, index) => ({
+      id: `11111111-1111-1111-1111-${String(index + 1).padStart(12, "0")}`,
+      customerName: `Customer ${index + 1}`,
+      icNumber: `90010101${String(index + 1).padStart(4, "0")}`,
+      customerPhone: `012300${String(index + 1).padStart(4, "0")}`,
+      accountNumber: `ACC-${index + 1}`,
+      batch: "P10",
+      paymentDate: "2026-03-31",
+      amount: 100,
+      receiptFile: null,
+      receiptTotalAmountCents: 10000,
+      receiptValidationStatus: "matched",
+      receiptValidationMessage: null,
+      receiptCount: 1,
+      duplicateReceiptFlag: false,
+      createdByLogin: "system",
+      collectionStaffNickname: "Collector Alpha",
+      staffUsername: "Collector Alpha",
+      createdAt: "2026-03-31T08:00:00.000Z",
+    }));
+    const backupDataReader = createCollectionRecordReader(records, seenChunkSizes);
+    const stats = createRestoreStats();
+
+    await initializeRestoreTrackingTempTable(tx);
+    await restoreCollectionRecordsFromBackup(tx, backupDataReader, stats);
+
+    assert.deepEqual(seenChunkSizes, [50]);
+    assert.equal(
+      executedQueries.filter((query) => query.includes("INSERT INTO public.collection_records")).length,
+      3,
+    );
+    assert.equal(stats.collectionRecords.processed, 120);
+    assert.equal(stats.collectionRecords.inserted, 120);
+    assert.equal(stats.collectionRecords.skipped, 0);
+  });
 });
 
 test("normalizeBackupCollectionRecord keeps restore fallbacks stable", () => {

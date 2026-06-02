@@ -7,10 +7,10 @@ import type {
 } from "../../shared/schema-postgres";
 import { auditLogs, dataRows, imports, users } from "../../shared/schema-postgres";
 import {
-  BACKUP_CHUNK_SIZE,
   type BackupUserRecord,
   type RestoreStats,
 } from "./backups-repository-types";
+import { resolveRestoreChunkSize } from "./backups-restore-config";
 import {
   type BackupPayloadChunkReader,
   type BackupRestoreExecutor,
@@ -27,7 +27,8 @@ export async function restoreImportsFromBackup(
   backupDataReader: BackupPayloadChunkReader,
   stats: RestoreStats,
 ) {
-  for await (const chunk of backupDataReader.iterateArrayChunks<BackupImportRecord>("imports", BACKUP_CHUNK_SIZE)) {
+  const restoreChunkSize = resolveRestoreChunkSize();
+  for await (const chunk of backupDataReader.iterateArrayChunks<BackupImportRecord>("imports", restoreChunkSize)) {
     const rows = chunk.map((record) => ({
       id: record.id,
       name: record.name,
@@ -65,7 +66,8 @@ export async function restoreDataRowsFromBackup(
   backupDataReader: BackupPayloadChunkReader,
   stats: RestoreStats,
 ) {
-  for await (const chunk of backupDataReader.iterateArrayChunks<DataRow>("dataRows", BACKUP_CHUNK_SIZE)) {
+  const restoreChunkSize = resolveRestoreChunkSize();
+  for await (const chunk of backupDataReader.iterateArrayChunks<DataRow>("dataRows", restoreChunkSize)) {
     const rows = chunk.map((row) => ({
       id: row.id ?? crypto.randomUUID(),
       importId: row.importId,
@@ -88,7 +90,8 @@ export async function restoreUsersFromBackup(
   backupDataReader: BackupPayloadChunkReader,
   stats: RestoreStats,
 ) {
-  for await (const chunk of backupDataReader.iterateArrayChunks<BackupUserRecord>("users", BACKUP_CHUNK_SIZE)) {
+  const restoreChunkSize = resolveRestoreChunkSize();
+  for await (const chunk of backupDataReader.iterateArrayChunks<BackupUserRecord>("users", restoreChunkSize)) {
     const now = new Date();
     const rows = chunk
       .filter((user) => Boolean(user.passwordHash))
@@ -132,7 +135,8 @@ export async function restoreAuditLogsFromBackup(
   backupDataReader: BackupPayloadChunkReader,
   stats: RestoreStats,
 ) {
-  for await (const chunk of backupDataReader.iterateArrayChunks<AuditLog>("auditLogs", BACKUP_CHUNK_SIZE)) {
+  const restoreChunkSize = resolveRestoreChunkSize();
+  for await (const chunk of backupDataReader.iterateArrayChunks<AuditLog>("auditLogs", restoreChunkSize)) {
     const rows = chunk.map((log) => ({
       id: log.id ?? crypto.randomUUID(),
       action: log.action,

@@ -354,6 +354,7 @@ const runtimeEnvironmentShape = {
     min: 1_048_576,
     max: 536_870_912,
   }),
+  RESTORE_CHUNK_SIZE: optionalIntEnv("RESTORE_CHUNK_SIZE", { min: 1, max: 5_000 }),
 
   SMTP_SERVICE: optionalEnvString("SMTP_SERVICE", 255),
   SMTP_HOST: optionalEnvString("SMTP_HOST", 255),
