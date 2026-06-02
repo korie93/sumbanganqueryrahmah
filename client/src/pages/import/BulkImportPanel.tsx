@@ -74,6 +74,9 @@ export function BulkImportPanel({
         data-testid="dropzone-bulk"
         {...bulkDropzoneDisabledProps}
       >
+        <label htmlFor="bulk-import-file-input" className="sr-only">
+          Select bulk import files
+        </label>
         <input
           id="bulk-import-file-input"
           name="bulkImportFiles"

@@ -32,6 +32,7 @@ export function LeaveTypeSelect({
       }}
       disabled={disabled}
       required={required}
+      aria-label="Leave type"
       className={cn(
         "h-9 w-full rounded-lg border border-input bg-background px-2 text-xs text-foreground shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-60",
         className,
