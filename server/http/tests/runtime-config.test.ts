@@ -477,7 +477,7 @@ test("runtime config rejects production startup when rate limiting still uses pr
     async () => {
       await assert.rejects(
         importRuntimeFresh(),
-        /SQR_RATE_LIMIT_STORE=redis with SQR_REDIS_RATE_LIMIT_URL is required outside strict local development/i,
+        /AUDIT2-FIX \[M1\].*SQR_RATE_LIMIT_STORE=redis with SQR_REDIS_RATE_LIMIT_URL is required outside strict local development/i,
       );
     },
   );

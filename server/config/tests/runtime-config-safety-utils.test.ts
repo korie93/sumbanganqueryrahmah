@@ -219,7 +219,7 @@ test("assertProductionRateLimiterTopologySafety rejects production-like startup 
         configuredClusterMaxWorkers: 2,
         distributedStoreConfigured: false,
       }),
-    /SQR_RATE_LIMIT_STORE=redis with SQR_REDIS_RATE_LIMIT_URL is required outside strict local development/i,
+    /AUDIT2-FIX \[M1\].*SQR_RATE_LIMIT_STORE=redis with SQR_REDIS_RATE_LIMIT_URL is required outside strict local development/i,
   );
 
   assert.throws(
@@ -229,7 +229,7 @@ test("assertProductionRateLimiterTopologySafety rejects production-like startup 
         configuredClusterMaxWorkers: 1,
         distributedStoreConfigured: false,
       }),
-    /SQR_RATE_LIMIT_STORE=redis with SQR_REDIS_RATE_LIMIT_URL is required outside strict local development/i,
+    /process-local in-memory rate-limit state is lost on restart/i,
   );
 
   assert.doesNotThrow(() =>

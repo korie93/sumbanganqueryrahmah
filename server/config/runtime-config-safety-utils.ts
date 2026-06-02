@@ -291,7 +291,7 @@ export function assertProductionRateLimiterTopologySafety(params: {
   }
 
   throw new Error(
-    "SQR_RATE_LIMIT_STORE=redis with SQR_REDIS_RATE_LIMIT_URL is required outside strict local development so fixed-window rate limits, adaptive protection, 2FA replay protection, and session revocation share state safely. Use SQR_RATE_LIMIT_STORE=memory only on strict local or test hosts.",
+    "AUDIT2-FIX [M1]: SQR_RATE_LIMIT_STORE=redis with SQR_REDIS_RATE_LIMIT_URL is required outside strict local development because process-local in-memory rate-limit state is lost on restart and is not shared across workers. Fixed-window rate limits, adaptive protection, 2FA replay protection, and session revocation must share state safely. Use SQR_RATE_LIMIT_STORE=memory only on strict local or test hosts.",
   );
 }
 
