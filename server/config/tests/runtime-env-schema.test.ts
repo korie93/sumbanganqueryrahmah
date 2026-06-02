@@ -522,6 +522,7 @@ test("runtime env schema validates receipt external malware scanner settings", (
       COLLECTION_RECEIPT_EXTERNAL_SCAN_COMMAND: "clamdscan",
       COLLECTION_RECEIPT_EXTERNAL_SCAN_ARGS_JSON: "[\"--fdpass\",\"--no-summary\",\"{file}\"]",
       COLLECTION_RECEIPT_EXTERNAL_SCAN_TIMEOUT_MS: "60000",
+      SQR_SCANNER_TIMEOUT_MS: "30000",
       COLLECTION_RECEIPT_EXTERNAL_SCAN_FAIL_CLOSED: "1",
       COLLECTION_RECEIPT_EXTERNAL_SCAN_CLEAN_EXIT_CODES: "0",
       COLLECTION_RECEIPT_EXTERNAL_SCAN_REJECT_EXIT_CODES: "1",
@@ -544,5 +545,14 @@ test("runtime env schema validates receipt external malware scanner settings", (
       });
     },
     /COLLECTION_RECEIPT_EXTERNAL_SCAN_TIMEOUT_MS.*at least 1000/i,
+  );
+
+  assert.throws(
+    () => {
+      validateRuntimeEnvironmentSchema({
+        SQR_SCANNER_TIMEOUT_MS: "999",
+      });
+    },
+    /SQR_SCANNER_TIMEOUT_MS.*at least 1000/i,
   );
 });

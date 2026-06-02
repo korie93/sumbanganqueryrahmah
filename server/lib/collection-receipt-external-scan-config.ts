@@ -18,16 +18,28 @@ function resolveExternalScanFailClosed(): boolean {
   return readBooleanEnvFlag("COLLECTION_RECEIPT_EXTERNAL_SCAN_FAIL_CLOSED", true);
 }
 
+function readExternalScanTimeoutMs(): number {
+  if (readOptionalString("SQR_SCANNER_TIMEOUT_MS")) {
+    return readInt(
+      "SQR_SCANNER_TIMEOUT_MS",
+      DEFAULT_COLLECTION_RECEIPT_EXTERNAL_SCAN_TIMEOUT_MS,
+      1_000,
+    );
+  }
+
+  return readInt(
+    "COLLECTION_RECEIPT_EXTERNAL_SCAN_TIMEOUT_MS",
+    DEFAULT_COLLECTION_RECEIPT_EXTERNAL_SCAN_TIMEOUT_MS,
+    1_000,
+  );
+}
+
 export function readExternalScanConfig(): ExternalScanConfig {
   return {
     enabled: readBooleanEnvFlag("COLLECTION_RECEIPT_EXTERNAL_SCAN_ENABLED", false),
     command: readOptionalString("COLLECTION_RECEIPT_EXTERNAL_SCAN_COMMAND"),
     args: validateScannerArgs(parseScannerArgsJson()),
-    timeoutMs: readInt(
-      "COLLECTION_RECEIPT_EXTERNAL_SCAN_TIMEOUT_MS",
-      DEFAULT_COLLECTION_RECEIPT_EXTERNAL_SCAN_TIMEOUT_MS,
-      1_000,
-    ),
+    timeoutMs: readExternalScanTimeoutMs(),
     failClosed: resolveExternalScanFailClosed(),
     cleanExitCodes: parseExitCodeSet(
       readOptionalString("COLLECTION_RECEIPT_EXTERNAL_SCAN_CLEAN_EXIT_CODES") || "0",

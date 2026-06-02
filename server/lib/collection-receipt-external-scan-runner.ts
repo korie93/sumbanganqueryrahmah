@@ -30,9 +30,13 @@ export type ExternalScanSpawn = (
   args: string[],
   options: {
     stdio: ["ignore", "pipe", "pipe"];
+    timeout: number;
+    killSignal: NodeJS.Signals;
     windowsHide: true;
   },
 ) => ExternalScanChildProcess;
+
+export const EXTERNAL_SCAN_FORCE_KILL_GRACE_MS = 2_000;
 
 export function createOperationalScanError(
   config: ExternalScanConfig,
@@ -72,18 +76,22 @@ export async function runExternalReceiptScan({
   scannerCommand,
   args,
   spawnScanner = (command, scannerArgs, options) => spawn(command, scannerArgs, options),
+  forceKillGraceMs = EXTERNAL_SCAN_FORCE_KILL_GRACE_MS,
 }: {
   config: ExternalScanConfig;
   filePath: string;
   scannerCommand: string;
   args: string[];
   spawnScanner?: ExternalScanSpawn;
+  forceKillGraceMs?: number;
 }) {
   const fileName = path.basename(filePath);
 
   await new Promise<void>((resolve, reject) => {
     const child = spawnScanner(scannerCommand, args, {
       stdio: ["ignore", "pipe", "pipe"],
+      timeout: config.timeoutMs,
+      killSignal: "SIGTERM",
       windowsHide: true,
     });
 
@@ -92,6 +100,39 @@ export async function runExternalReceiptScan({
     let stderr = "";
     let timeoutTriggered = false;
     let timeoutId: NodeJS.Timeout | null = null;
+    let forceKillTimeoutId: NodeJS.Timeout | null = null;
+
+    const clearForceKillTimer = () => {
+      if (forceKillTimeoutId) {
+        clearTimeout(forceKillTimeoutId);
+        forceKillTimeoutId = null;
+      }
+    };
+
+    const scheduleForceKill = () => {
+      if (forceKillTimeoutId || forceKillGraceMs < 0) {
+        return;
+      }
+
+      forceKillTimeoutId = setTimeout(() => {
+        forceKillTimeoutId = null;
+        try {
+          logger.error("AUDIT2-FIX [M4]: Scanner process timed out; force killing", {
+            fileName,
+            reasonCode: "external-scan-timeout-force-kill",
+            timeoutMs: config.timeoutMs,
+            graceMs: forceKillGraceMs,
+          });
+          child.kill("SIGKILL");
+        } catch {
+          logger.debug("Scanner process force kill failed after timeout", {
+            fileName,
+            reasonCode: "external-scan-timeout-force-kill-failed",
+          });
+        }
+      }, forceKillGraceMs);
+      forceKillTimeoutId.unref?.();
+    };
 
     const cleanup = (options: { terminate?: boolean } = {}) => {
       if (timeoutId) {
@@ -99,12 +140,18 @@ export async function runExternalReceiptScan({
         timeoutId = null;
       }
 
-      if (options.terminate && !child.killed) {
-        try {
-          child.kill("SIGTERM");
-        } catch {
-          // The scanner may already have exited between the timeout and cleanup.
+      if (options.terminate) {
+        if (!child.killed) {
+          try {
+            // AUDIT2-FIX [M4]: timeout first asks the scanner to terminate gracefully.
+            child.kill("SIGTERM");
+          } catch {
+            // The scanner may already have exited between the timeout and cleanup.
+          }
         }
+        scheduleForceKill();
+      } else if (!options.terminate) {
+        clearForceKillTimer();
       }
 
       child.stdout?.removeAllListeners();

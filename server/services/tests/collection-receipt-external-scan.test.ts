@@ -29,6 +29,7 @@ const ENV_KEYS = [
   "COLLECTION_RECEIPT_EXTERNAL_SCAN_ARGS_JSON",
   "COLLECTION_RECEIPT_EXTERNAL_SCAN_FAIL_CLOSED",
   "COLLECTION_RECEIPT_EXTERNAL_SCAN_TIMEOUT_MS",
+  "SQR_SCANNER_TIMEOUT_MS",
 ] as const;
 
 function snapshotEnv() {
@@ -114,11 +115,13 @@ class FakeScannerProcess extends EventEmitter {
   readonly stderr = new FakeScannerStream();
   killed = false;
   killCalls = 0;
+  killSignals: Array<NodeJS.Signals | undefined> = [];
   removeAllListenersCalls = 0;
 
-  kill(_signal?: NodeJS.Signals): boolean {
+  kill(signal?: NodeJS.Signals): boolean {
     this.killed = true;
     this.killCalls += 1;
+    this.killSignals.push(signal);
     return true;
   }
 
@@ -213,6 +216,29 @@ test("external receipt scanner terminates and removes listeners after scanner ti
 
   assertFakeScannerListenersRemoved(child);
   assert.equal(child.killCalls, 1);
+  assert.deepEqual(child.killSignals, ["SIGTERM"]);
+});
+
+test("external receipt scanner force kills timed-out scanners after the grace period", async () => {
+  const child = new FakeScannerProcess();
+
+  await assert.rejects(
+    () =>
+      runExternalReceiptScan({
+        config: createExternalScanTestConfig({ timeoutMs: 1 }),
+        filePath: "receipt.pdf",
+        scannerCommand: "scanner",
+        args: ["receipt.pdf"],
+        spawnScanner: createFakeScannerSpawn(child),
+        forceKillGraceMs: 1,
+      }),
+    (error: unknown) =>
+      error instanceof CollectionReceiptSecurityError
+      && error.reasonCode === "external-scan-timeout",
+  );
+  await new Promise((resolve) => setTimeout(resolve, 5));
+
+  assert.deepEqual(child.killSignals, ["SIGTERM", "SIGKILL"]);
 });
 
 test("external receipt scanner forces fail-closed mode in production-like runtimes", () => {
@@ -225,6 +251,21 @@ test("external receipt scanner forces fail-closed mode in production-like runtim
 
   try {
     assert.equal(readExternalScanConfig().failClosed, true);
+  } finally {
+    restoreEnv(previousEnv);
+  }
+});
+
+test("external receipt scanner accepts SQR_SCANNER_TIMEOUT_MS as the timeout alias", () => {
+  const previousEnv = snapshotEnv();
+  process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_ENABLED = "1";
+  process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_COMMAND = "clamscan";
+  process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_ARGS_JSON = "[\"{file}\"]";
+  process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_TIMEOUT_MS = "60000";
+  process.env.SQR_SCANNER_TIMEOUT_MS = "30000";
+
+  try {
+    assert.equal(readExternalScanConfig().timeoutMs, 30_000);
   } finally {
     restoreEnv(previousEnv);
   }
