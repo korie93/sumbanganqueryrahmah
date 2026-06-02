@@ -106,6 +106,22 @@ export const collectionRecords = pgTable("collection_records", {
     "chk_collection_records_staff_username_matches_nickname",
     sql`lower(${table.staffUsername}) = lower(${table.collectionStaffNickname})`,
   ),
+  customerNamePiiXor: check(
+    "chk_collection_records_customer_name_pii_xor",
+    sql`NULLIF(trim(COALESCE(${table.customerName}, '')), '') IS NULL OR NULLIF(trim(COALESCE(${table.customerNameEncrypted}, '')), '') IS NULL`,
+  ),
+  icNumberPiiXor: check(
+    "chk_collection_records_ic_number_pii_xor",
+    sql`NULLIF(trim(COALESCE(${table.icNumber}, '')), '') IS NULL OR NULLIF(trim(COALESCE(${table.icNumberEncrypted}, '')), '') IS NULL`,
+  ),
+  customerPhonePiiXor: check(
+    "chk_collection_records_customer_phone_pii_xor",
+    sql`CASE WHEN trim(COALESCE(${table.customerPhone}, '')) IN ('', '-') THEN NULL ELSE trim(${table.customerPhone}) END IS NULL OR NULLIF(trim(COALESCE(${table.customerPhoneEncrypted}, '')), '') IS NULL`,
+  ),
+  accountNumberPiiXor: check(
+    "chk_collection_records_account_number_pii_xor",
+    sql`NULLIF(trim(COALESCE(${table.accountNumber}, '')), '') IS NULL OR NULLIF(trim(COALESCE(${table.accountNumberEncrypted}, '')), '') IS NULL`,
+  ),
 }));
 
 export const collectionRecordReceipts = pgTable("collection_record_receipts", {

@@ -281,6 +281,13 @@
       "when": 1780332742500,
       "tag": "0039_settings_fk_not_null_idempotency_audit",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1780358400000,
+      "tag": "0041_pii_xor_check_constraints",
+      "breakpoints": true
     }
   ]
 }

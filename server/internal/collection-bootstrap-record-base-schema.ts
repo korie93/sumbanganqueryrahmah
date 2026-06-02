@@ -252,4 +252,86 @@ export async function ensureCollectionRecordBaseSchema(database: BootstrapSqlExe
 
   await backfillCollectionRecordEncryptedPii(database);
   await backfillCollectionRecordPiiSearchHashes(database);
+  await executeBootstrapStatements(database, [
+    sql`
+      DO $$
+      BEGIN
+        -- AUDIT2-FIX [M5]: Runtime bootstrap mirrors migration 0041 PII double-storage guards.
+        UPDATE public.collection_records
+        SET
+          customer_name = CASE
+            WHEN NULLIF(trim(COALESCE(customer_name_encrypted, '')), '') IS NOT NULL THEN NULL
+            ELSE NULLIF(trim(COALESCE(customer_name, '')), '')
+          END,
+          ic_number = CASE
+            WHEN NULLIF(trim(COALESCE(ic_number_encrypted, '')), '') IS NOT NULL THEN NULL
+            ELSE NULLIF(trim(COALESCE(ic_number, '')), '')
+          END,
+          customer_phone = CASE
+            WHEN NULLIF(trim(COALESCE(customer_phone_encrypted, '')), '') IS NOT NULL THEN NULL
+            WHEN trim(COALESCE(customer_phone, '')) IN ('', '-') THEN NULL
+            ELSE trim(customer_phone)
+          END,
+          account_number = CASE
+            WHEN NULLIF(trim(COALESCE(account_number_encrypted, '')), '') IS NOT NULL THEN NULL
+            ELSE NULLIF(trim(COALESCE(account_number, '')), '')
+          END;
+
+        IF NOT EXISTS (
+          SELECT 1
+          FROM pg_constraint
+          WHERE conname = 'chk_collection_records_customer_name_pii_xor'
+        ) THEN
+          ALTER TABLE public.collection_records
+          ADD CONSTRAINT chk_collection_records_customer_name_pii_xor
+          CHECK (
+            NULLIF(trim(COALESCE(customer_name, '')), '') IS NULL
+            OR NULLIF(trim(COALESCE(customer_name_encrypted, '')), '') IS NULL
+          );
+        END IF;
+
+        IF NOT EXISTS (
+          SELECT 1
+          FROM pg_constraint
+          WHERE conname = 'chk_collection_records_ic_number_pii_xor'
+        ) THEN
+          ALTER TABLE public.collection_records
+          ADD CONSTRAINT chk_collection_records_ic_number_pii_xor
+          CHECK (
+            NULLIF(trim(COALESCE(ic_number, '')), '') IS NULL
+            OR NULLIF(trim(COALESCE(ic_number_encrypted, '')), '') IS NULL
+          );
+        END IF;
+
+        IF NOT EXISTS (
+          SELECT 1
+          FROM pg_constraint
+          WHERE conname = 'chk_collection_records_customer_phone_pii_xor'
+        ) THEN
+          ALTER TABLE public.collection_records
+          ADD CONSTRAINT chk_collection_records_customer_phone_pii_xor
+          CHECK (
+            CASE
+              WHEN trim(COALESCE(customer_phone, '')) IN ('', '-') THEN NULL
+              ELSE trim(customer_phone)
+            END IS NULL
+            OR NULLIF(trim(COALESCE(customer_phone_encrypted, '')), '') IS NULL
+          );
+        END IF;
+
+        IF NOT EXISTS (
+          SELECT 1
+          FROM pg_constraint
+          WHERE conname = 'chk_collection_records_account_number_pii_xor'
+        ) THEN
+          ALTER TABLE public.collection_records
+          ADD CONSTRAINT chk_collection_records_account_number_pii_xor
+          CHECK (
+            NULLIF(trim(COALESCE(account_number, '')), '') IS NULL
+            OR NULLIF(trim(COALESCE(account_number_encrypted, '')), '') IS NULL
+          );
+        END IF;
+      END $$;
+    `,
+  ]);
 }

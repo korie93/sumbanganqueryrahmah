@@ -93,6 +93,14 @@ const collectionPiiPlaintextNullableMigrationSql = readFileSync(
   path.join(repoRoot, "drizzle", collectionPiiPlaintextNullableMigrationFileName),
   "utf8",
 );
+const collectionPiiXorMigrationFileName = migrationSqlFileNames.find((name) => /^0041_.*\.sql$/.test(name));
+if (!collectionPiiXorMigrationFileName) {
+  throw new Error("Expected a 0041 collection PII XOR constraint migration file in drizzle/");
+}
+const collectionPiiXorMigrationSql = readFileSync(
+  path.join(repoRoot, "drizzle", collectionPiiXorMigrationFileName),
+  "utf8",
+);
 const collectionAuditConstraintMigrationFileName = migrationSqlFileNames.find((name) => /^0032_.*\.sql$/.test(name));
 if (!collectionAuditConstraintMigrationFileName) {
   throw new Error("Expected a 0032 collection audit constraint migration file in drizzle/");
@@ -1982,6 +1990,112 @@ test(
 );
 
 test(
+  "collection PII XOR migration redacts legacy plaintext and rejects double storage",
+  { skip: skipReason || false },
+  async () => {
+    await withTempDatabase(async ({ pool }) => {
+      await pool.query(`
+        CREATE TABLE public.collection_records (
+          id uuid PRIMARY KEY,
+          customer_name text,
+          customer_name_encrypted text,
+          ic_number text,
+          ic_number_encrypted text,
+          customer_phone text,
+          customer_phone_encrypted text,
+          account_number text,
+          account_number_encrypted text
+        );
+      `);
+
+      await pool.query(`
+        INSERT INTO public.collection_records (
+          id,
+          customer_name,
+          customer_name_encrypted,
+          ic_number,
+          ic_number_encrypted,
+          customer_phone,
+          customer_phone_encrypted,
+          account_number,
+          account_number_encrypted
+        )
+        VALUES (
+          '77777777-7777-7777-7777-777777777777'::uuid,
+          'Legacy Customer',
+          'enc.customer',
+          '900101015555',
+          'enc.ic',
+          '0123000001',
+          'enc.phone',
+          'ACC-1001',
+          'enc.account'
+        )
+      `);
+
+      await applySql(pool, collectionPiiXorMigrationSql);
+      await applySql(pool, collectionPiiXorMigrationSql);
+
+      assert.equal(await constraintExists(pool, "chk_collection_records_customer_name_pii_xor"), true);
+      assert.equal(await constraintExists(pool, "chk_collection_records_ic_number_pii_xor"), true);
+      assert.equal(await constraintExists(pool, "chk_collection_records_customer_phone_pii_xor"), true);
+      assert.equal(await constraintExists(pool, "chk_collection_records_account_number_pii_xor"), true);
+
+      const migrated = await pool.query<{
+        customer_name: string | null;
+        customer_name_encrypted: string | null;
+        ic_number: string | null;
+        customer_phone: string | null;
+        account_number: string | null;
+      }>(`
+        SELECT
+          customer_name,
+          customer_name_encrypted,
+          ic_number,
+          customer_phone,
+          account_number
+        FROM public.collection_records
+        WHERE id = '77777777-7777-7777-7777-777777777777'::uuid
+      `);
+
+      assert.equal(migrated.rows[0]?.customer_name, null);
+      assert.equal(migrated.rows[0]?.customer_name_encrypted, "enc.customer");
+      assert.equal(migrated.rows[0]?.ic_number, null);
+      assert.equal(migrated.rows[0]?.customer_phone, null);
+      assert.equal(migrated.rows[0]?.account_number, null);
+
+      await assert.rejects(
+        pool.query(`
+          INSERT INTO public.collection_records (
+            id,
+            customer_name,
+            customer_name_encrypted
+          )
+          VALUES (
+            '88888888-8888-8888-8888-888888888888'::uuid,
+            'Plain Customer',
+            'enc.customer'
+          )
+        `),
+        /chk_collection_records_customer_name_pii_xor/,
+      );
+
+      await pool.query(`
+        INSERT INTO public.collection_records (
+          id,
+          customer_name,
+          customer_name_encrypted
+        )
+        VALUES
+          ('99999999-9999-9999-9999-999999999999'::uuid, 'Plain Customer', NULL),
+          ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'::uuid, NULL, 'enc.customer'),
+          ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb'::uuid, NULL, NULL)
+      `);
+    });
+  },
+);
+
+test(
   "collection bootstrap backfills encrypted PII shadow columns when a collection PII key is configured",
   { skip: skipReason || false },
   async () => {
@@ -2036,28 +2150,40 @@ test(
         assert.equal(await indexExists(pool, "idx_collection_records_customer_name_search_hashes"), true);
 
         const encryptedRecord = await pool.query<{
+          customer_name: string | null;
           customer_name_encrypted: string | null;
           customer_name_search_hashes: string[] | null;
+          ic_number: string | null;
           ic_number_encrypted: string | null;
+          customer_phone: string | null;
           customer_phone_encrypted: string | null;
+          account_number: string | null;
           account_number_encrypted: string | null;
         }>(`
           SELECT
+            customer_name,
             customer_name_encrypted,
             customer_name_search_hashes,
+            ic_number,
             ic_number_encrypted,
+            customer_phone,
             customer_phone_encrypted,
+            account_number,
             account_number_encrypted
           FROM public.collection_records
           WHERE id = $1::uuid
         `, [recordId]);
 
         const row = encryptedRecord.rows[0];
+        assert.equal(row?.customer_name, null);
         assert.ok(row?.customer_name_encrypted);
         assert.ok(Array.isArray(row?.customer_name_search_hashes));
         assert.ok((row?.customer_name_search_hashes?.length ?? 0) > 0);
+        assert.equal(row?.ic_number, null);
         assert.ok(row?.ic_number_encrypted);
+        assert.equal(row?.customer_phone, null);
         assert.ok(row?.customer_phone_encrypted);
+        assert.equal(row?.account_number, null);
         assert.ok(row?.account_number_encrypted);
         assert.equal(decryptCollectionPiiValue(String(row?.customer_name_encrypted || "")), "Encrypted Customer");
         assert.equal(decryptCollectionPiiValue(String(row?.ic_number_encrypted || "")), "900101015555");
