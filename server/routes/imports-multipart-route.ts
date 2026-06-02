@@ -39,6 +39,9 @@ type MultipartResponseLifecycle = {
 };
 
 const IMPORT_MULTIPART_FILE_STREAM_TIMEOUT_MS = 30_000;
+const IMPORT_MULTIPART_FIELD_VALUE_MAX_BYTES = 1_024;
+const ALLOWED_IMPORT_MULTIPART_FIELD_NAMES = new Set(["name"]);
+const ALLOWED_IMPORT_MULTIPART_FILE_FIELD_NAMES = new Set(["file"]);
 
 function createMultipartUploadStreamRegistry() {
   const streams = new Set<MultipartUploadFileStream>();
@@ -191,6 +194,8 @@ export function createImportsMultipartRoute(
     const parser = Busboy({
       headers: req.headers,
       limits: {
+        fieldNameSize: 64,
+        fieldSize: IMPORT_MULTIPART_FIELD_VALUE_MAX_BYTES,
         files: 1,
         fields: 4,
         fileSize: safeMaxFileSizeBytes,
@@ -308,12 +313,31 @@ export function createImportsMultipartRoute(
     };
 
     parser.on("field", (fieldName, value) => {
-      if (String(fieldName || "").trim() === "name") {
+      const normalizedFieldName = String(fieldName || "").trim();
+      if (!ALLOWED_IMPORT_MULTIPART_FIELD_NAMES.has(normalizedFieldName)) {
+        logger.warn("Ignored unknown multipart import field", {
+          event: "multipart_import_unknown_field_ignored",
+          fieldName: normalizedFieldName.slice(0, 64),
+        });
+        return;
+      }
+
+      if (normalizedFieldName === "name") {
         body.name = String(value || "").trim().slice(0, 160);
       }
     });
 
-    parser.on("file", (_fieldName, file, info) => {
+    parser.on("file", (fieldName, file, info) => {
+      const normalizedFieldName = String(fieldName || "").trim();
+      if (!ALLOWED_IMPORT_MULTIPART_FILE_FIELD_NAMES.has(normalizedFieldName)) {
+        logger.warn("Ignored unknown multipart import file field", {
+          event: "multipart_import_unknown_file_field_ignored",
+          fieldName: normalizedFieldName.slice(0, 64),
+        });
+        file.resume();
+        return;
+      }
+
       if (!info.filename || fileTask) {
         file.resume();
         return;

@@ -285,6 +285,56 @@ test("createImportsMultipartRoute ignores file parts without filenames and still
   });
 });
 
+test("createImportsMultipartRoute ignores unknown multipart text fields", async () => {
+  const handler = createImportsMultipartRoute(0);
+
+  const result = await runMultipartHandler(
+    [
+      { kind: "field", name: "metadata", value: "{\"name\":\"Injected\"}" },
+      {
+        kind: "file",
+        name: "file",
+        filename: "customers.csv",
+        contentType: "text/csv",
+        content: "name,amount\nAlice,12\n",
+      },
+    ],
+    handler,
+  );
+
+  assert.equal(result.kind, "next");
+  assert.deepEqual(result.body, {
+    filename: "customers.csv",
+    name: "customers",
+  });
+});
+
+test("createImportsMultipartRoute ignores file parts with unknown field names", async () => {
+  const handler = createImportsMultipartRoute();
+
+  const result = await runMultipartHandler(
+    [
+      {
+        kind: "file",
+        name: "payload",
+        filename: "customers.csv",
+        contentType: "text/csv",
+        content: "name,amount\nAlice,12\n",
+      },
+    ],
+    handler,
+  );
+
+  assert.deepEqual(result, {
+    kind: "response",
+    payload: {
+      ok: false,
+      message: "Please select a CSV or Excel file to import.",
+    },
+    statusCode: 400,
+  });
+});
+
 test("createImportsMultipartRoute returns parser failures as safe client errors", async () => {
   const handler = createImportsMultipartRoute();
 
