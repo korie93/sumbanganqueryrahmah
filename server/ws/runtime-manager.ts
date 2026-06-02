@@ -109,9 +109,18 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
   const sharedBus = options.sharedBus ?? null;
   const metrics = options.metrics ?? internalMetrics;
   const now = options.now ?? Date.now;
-  let suppressSharedClosePublish = false;
+  let suppressSharedClosePublishDepth = 0;
+  const isSharedClosePublishSuppressed = () => suppressSharedClosePublishDepth > 0;
+  const withSharedClosePublishSuppressed = (callback: () => void) => {
+    suppressSharedClosePublishDepth += 1;
+    try {
+      callback();
+    } finally {
+      suppressSharedClosePublishDepth = Math.max(0, suppressSharedClosePublishDepth - 1);
+    }
+  };
   const publishSharedCloseActivity = (activityId: string, reason: string) => {
-    if (!sharedBus || suppressSharedClosePublish) {
+    if (!sharedBus || isSharedClosePublishSuppressed()) {
       return;
     }
 
@@ -148,6 +157,22 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
   const payloadWindowMs = normalizePositiveInteger(options.payloadWindowMs, DEFAULT_RUNTIME_WS_PAYLOAD_WINDOW_MS);
   const lifecycleRegistry = new RuntimeSocketLifecycleRegistry(connectedClients);
   const activeConnectionCountByIp = new Map<string, number>();
+  const tryReserveActiveIpConnection = (ipKey: string): boolean => {
+    const currentCount = activeConnectionCountByIp.get(ipKey) ?? 0;
+    if (currentCount >= maxConnectionsPerIp) {
+      return false;
+    }
+    activeConnectionCountByIp.set(ipKey, currentCount + 1);
+    return true;
+  };
+  const releaseReservedIpConnection = (ipKey: string): void => {
+    const currentCount = activeConnectionCountByIp.get(ipKey) ?? 0;
+    if (currentCount <= 1) {
+      activeConnectionCountByIp.delete(ipKey);
+      return;
+    }
+    activeConnectionCountByIp.set(ipKey, currentCount - 1);
+  };
   const { socketEntriesByActivity, trackedSockets } = lifecycleRegistry;
   const logCleanupDiagnostic = (message: string, metadata: Record<string, unknown>) => {
     if (!shouldLogRuntimeWebSocketCleanupDiagnostics()) {
@@ -195,17 +220,14 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
     }
 
     const targetWs = connectedClients.get(event.activityId);
-    suppressSharedClosePublish = true;
-    try {
+    withSharedClosePublishSuppressed(() => {
       cleanupClient(event.activityId, {
         ...(targetWs ? { expectedWs: targetWs } : {}),
         clearSession: false,
         closeWith: "close",
         reason: event.reason ?? "shared-bus-close",
       });
-    } finally {
-      suppressSharedClosePublish = false;
-    }
+    });
   });
 
   wss.once("close", () => {
@@ -213,16 +235,13 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
     void sharedBus?.close();
     upgradeRateLimiter.clear();
     activeConnectionCountByIp.clear();
-    suppressSharedClosePublish = true;
-    try {
+    withSharedClosePublishSuppressed(() => {
       closeRuntimeWebSocketServerState({
         cleanupClient,
         heartbeatHandle,
         lifecycleRegistry,
       });
-    } finally {
-      suppressSharedClosePublish = false;
-    }
+    });
   });
 
   wss.on("connection", async (ws, req) => {
@@ -299,8 +318,7 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
       return;
     }
 
-    const activeIpConnectionCount = activeConnectionCountByIp.get(upgradeRateLimitKey) ?? 0;
-    if (activeIpConnectionCount >= maxConnectionsPerIp) {
+    if (!tryReserveActiveIpConnection(upgradeRateLimitKey)) {
       logger.warn("WebSocket connection rejected because the per-IP connection limit was reached", {
         maxConnectionsPerIp,
         trustedProxiesConfigured: trustForwardedHeaders,
@@ -321,7 +339,6 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
       }
       return;
     }
-    activeConnectionCountByIp.set(upgradeRateLimitKey, activeIpConnectionCount + 1);
 
     let activityId: string | null = null;
     let socketEntry: RuntimeTrackedSocketEntry | null = null;
@@ -339,12 +356,7 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
       }
 
       activeIpConnectionReleased = true;
-      const currentCount = activeConnectionCountByIp.get(upgradeRateLimitKey) ?? 0;
-      if (currentCount <= 1) {
-        activeConnectionCountByIp.delete(upgradeRateLimitKey);
-        return;
-      }
-      activeConnectionCountByIp.set(upgradeRateLimitKey, currentCount - 1);
+      releaseReservedIpConnection(upgradeRateLimitKey);
     };
 
     const markSocketAlive = () => {
