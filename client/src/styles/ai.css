@@ -216,6 +216,11 @@
   min-width: min(280px, 82%);
 }
 
+.ai-page-message-log {
+  height: clamp(12rem, calc(var(--viewport-min-height-value) - 28rem), 24rem);
+  min-height: 12rem;
+}
+
 .ai-loading-skeleton-lines {
   display: grid;
   gap: 8px;

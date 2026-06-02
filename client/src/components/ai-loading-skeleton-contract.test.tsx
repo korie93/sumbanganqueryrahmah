@@ -39,7 +39,9 @@ test("AI processing indicator delay cleans up timers and is used by both AI surf
   assert.match(aiChatSource, /<AILoadingSkeleton/);
   assert.match(aiPageSource, /useDelayedVisibleFlag\(/);
   assert.match(aiPageSource, /<AILoadingSkeleton/);
+  assert.match(aiPageSource, /ai-page-message-log/);
   assert.match(aiCssSource, /@keyframes aiLoadingShimmer/);
   assert.match(aiCssSource, /prefers-reduced-motion: reduce/);
+  assert.match(aiCssSource, /\.ai-page-message-log\s*{[\s\S]*calc\(var\(--viewport-min-height-value\) - 28rem\)/);
   assert.match(aiCssSource, /\.ai-loading-skeleton-line\s*{[\s\S]*animation: aiLoadingShimmer/);
 });
