@@ -169,6 +169,50 @@ async function detectPostgresAvailability(): Promise<string | null> {
 
 const skipReason = await detectPostgresAvailability();
 
+const TEMP_DATABASE_DRAIN_ATTEMPTS = 5;
+const TEMP_DATABASE_DRAIN_DELAY_MS = 50;
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+async function getTempDatabaseBackendCount(adminPool: pg.Pool, databaseName: string): Promise<number> {
+  const result = await adminPool.query<{ count: number }>(
+    `
+      SELECT COUNT(*)::int AS count
+      FROM pg_stat_activity
+      WHERE datname = $1
+        AND pid <> pg_backend_pid()
+    `,
+    [databaseName],
+  );
+  return result.rows[0]?.count ?? 0;
+}
+
+async function waitForTempDatabaseBackendsToDrain(adminPool: pg.Pool, databaseName: string): Promise<number> {
+  for (let attempt = 0; attempt < TEMP_DATABASE_DRAIN_ATTEMPTS; attempt += 1) {
+    const remainingBackends = await getTempDatabaseBackendCount(adminPool, databaseName);
+    if (remainingBackends === 0) {
+      return 0;
+    }
+    await delay(TEMP_DATABASE_DRAIN_DELAY_MS * (attempt + 1));
+  }
+  return getTempDatabaseBackendCount(adminPool, databaseName);
+}
+
+async function dropTempDatabase(adminPool: pg.Pool, databaseName: string, quotedDatabaseName: string): Promise<void> {
+  const remainingBackends = await waitForTempDatabaseBackendsToDrain(adminPool, databaseName);
+  if (remainingBackends > 0) {
+    await adminPool.query(
+      `SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = $1 AND pid <> pg_backend_pid()`,
+      [databaseName],
+    );
+  }
+  await adminPool.query(`DROP DATABASE IF EXISTS ${quotedDatabaseName}`);
+}
+
 async function withTempDatabase(
   run: (context: { pool: pg.Pool; databaseName: string }) => Promise<void>,
 ): Promise<void> {
@@ -200,11 +244,7 @@ async function withTempDatabase(
     }
   } finally {
     try {
-      await adminPool.query(
-        `SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = $1 AND pid <> pg_backend_pid()`,
-        [databaseName],
-      );
-      await adminPool.query(`DROP DATABASE IF EXISTS ${quotedDatabaseName}`);
+      await dropTempDatabase(adminPool, databaseName, quotedDatabaseName);
     } finally {
       await adminPool.end().catch(() => undefined);
     }
