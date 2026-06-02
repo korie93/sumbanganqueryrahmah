@@ -1,16 +1,12 @@
 import type { AuthenticatedRequest } from "../auth/guards";
 import { asyncHandler, routeHandler } from "../http/async-handler";
-import { readPageLimit } from "../http/validation";
+import {
+  buildPaginationMetadata,
+  clampOffsetPaginationToTotal,
+  parseOffsetPaginationQuery,
+  toDbOffset,
+} from "../utils/pagination";
 import type { SystemRouteContext } from "./system-route-context";
-
-function readPositivePage(value: unknown, fallback: number) {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? Math.max(1, Math.floor(parsed)) : fallback;
-}
-
-function readPageSize(value: unknown, fallback: number) {
-  return readPageLimit(value, fallback, 100);
-}
 
 function readCleanupDays(value: unknown, fallback: number) {
   const parsed = Number(value);
@@ -40,19 +36,21 @@ export function registerSystemAlertRoutes(context: SystemRouteContext) {
     routeHandler((req, res) => {
       const snapshot = computeInternalMonitorSnapshot();
       const alerts = buildInternalMonitorAlerts(snapshot);
-      const page = readPositivePage(req.query.page, 1);
-      const pageSize = readPageSize(req.query.pageSize, 5);
+      const requestedPagination = parseOffsetPaginationQuery(req.query, {
+        defaultLimit: 5,
+        maxLimit: 100,
+      });
       const totalItems = alerts.length;
-      const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
-      const safePage = Math.min(page, totalPages);
-      const startIndex = (safePage - 1) * pageSize;
+      const pagination = clampOffsetPaginationToTotal(requestedPagination, totalItems);
+      const { offset, limit } = toDbOffset(pagination);
+      const metadata = buildPaginationMetadata(totalItems, pagination);
       res.json({
-        alerts: alerts.slice(startIndex, startIndex + pageSize),
+        alerts: alerts.slice(offset, offset + limit),
         pagination: {
-          page: safePage,
-          pageSize,
+          page: metadata.page,
+          pageSize: metadata.pageSize,
           totalItems,
-          totalPages,
+          totalPages: metadata.totalPages,
         },
         updatedAt: snapshot.updatedAt,
       });
@@ -65,9 +63,13 @@ export function registerSystemAlertRoutes(context: SystemRouteContext) {
     requireRole("user", "admin", "superuser"),
     requireMonitorAccess,
     asyncHandler(async (req, res) => {
+      const pagination = parseOffsetPaginationQuery(req.query, {
+        defaultLimit: 5,
+        maxLimit: 100,
+      });
       const incidents = await listMonitorAlertHistory({
-        page: readPositivePage(req.query.page, 1),
-        pageSize: readPageSize(req.query.pageSize, 5),
+        page: pagination.page,
+        pageSize: pagination.pageSize,
       });
       res.json({
         incidents: incidents.incidents,
