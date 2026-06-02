@@ -92,6 +92,11 @@ class MemorySessionRevocationSweepOrchestrator {
     };
   }
 
+  resetFailureBackoff() {
+    this.consecutiveFailures = 0;
+    this.suspendedUntilMs = 0;
+  }
+
   private start() {
     if (this.intervalHandle || this.stores.size === 0) {
       return;
@@ -228,6 +233,7 @@ export function configureSessionRevocationStoreForRuntime(
 ) {
   const previousStore = activeStore;
   activeStore = store ?? new MemorySessionRevocationStore();
+  memorySweepOrchestrator.resetFailureBackoff();
   const sink = options.logger ?? defaultLogger;
   if (previousStore !== activeStore) {
     closeSessionRevocationStoreSafely(
@@ -263,6 +269,7 @@ export async function revokeSessionJwt(record: SessionRevocationRecord): Promise
 export function resetSessionRevocationStoreForTests() {
   const storeToClose = activeStore;
   activeStore = new MemorySessionRevocationStore();
+  memorySweepOrchestrator.resetFailureBackoff();
   closeSessionRevocationStoreSafely(
     storeToClose,
     defaultLogger,

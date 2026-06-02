@@ -174,3 +174,46 @@ test("memory session revocation sweep backs off after repeated sweep failures", 
     unregister();
   }
 });
+
+test("memory session revocation validation remains active while sweep is suspended", async (t) => {
+  let now = 3_000_000;
+  t.mock.method(Date, "now", () => now);
+  let calls = 0;
+  const unregister = registerSessionRevocationSweepStoreForTests({
+    sweepExpired: () => {
+      calls += 1;
+      throw new Error("sweep failed");
+    },
+  });
+
+  try {
+    for (let index = 0; index < 5; index += 1) {
+      sweepSessionRevocationStoreForTests(now);
+    }
+
+    assert.equal(calls, 5);
+    assert.equal(getSessionRevocationStoreDiagnosticsForTests().sweepSuspended, true);
+
+    await revokeSessionJwt({
+      jwtId: "jwt-active-during-suspension",
+      expiresAtMs: now + 10_000,
+    });
+    await revokeSessionJwt({
+      jwtId: "jwt-expiring-during-suspension",
+      expiresAtMs: now + 1,
+    });
+
+    assert.equal(await isSessionJwtRevoked("jwt-active-during-suspension"), true);
+    assert.equal(await isSessionJwtRevoked("jwt-expiring-during-suspension"), true);
+
+    now += 2;
+
+    assert.equal(await isSessionJwtRevoked("jwt-active-during-suspension"), true);
+    assert.equal(await isSessionJwtRevoked("jwt-expiring-during-suspension"), false);
+
+    sweepSessionRevocationStoreForTests(now);
+    assert.equal(calls, 5);
+  } finally {
+    unregister();
+  }
+});
