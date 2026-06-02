@@ -40,6 +40,50 @@ type MultipartResponseLifecycle = {
 
 const IMPORT_MULTIPART_FILE_STREAM_TIMEOUT_MS = 30_000;
 
+function createMultipartUploadStreamRegistry() {
+  const streams = new Set<MultipartUploadFileStream>();
+  const timeouts = new Map<MultipartUploadFileStream, NodeJS.Timeout>();
+
+  return {
+    get size() {
+      return streams.size;
+    },
+    add(file: MultipartUploadFileStream): void {
+      streams.add(file);
+    },
+    has(file: MultipartUploadFileStream): boolean {
+      return streams.has(file);
+    },
+    delete(file: MultipartUploadFileStream): void {
+      const timeoutId = timeouts.get(file);
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+        timeouts.delete(file);
+      }
+      streams.delete(file);
+    },
+    setTimeout(file: MultipartUploadFileStream, timeoutId: NodeJS.Timeout): void {
+      timeouts.set(file, timeoutId);
+    },
+    cleanup(
+      error: unknown,
+      onCleanupFailure?: MultipartTrackedStreamCleanupObserver,
+    ): number {
+      for (const timeoutId of timeouts.values()) {
+        clearTimeout(timeoutId);
+      }
+      timeouts.clear();
+      const cleaned = cleanupTrackedMultipartUploadStreamsForTests(
+        [...streams],
+        error,
+        onCleanupFailure,
+      );
+      streams.clear();
+      return cleaned;
+    },
+  };
+}
+
 function toMultipartCleanupError(error: unknown): Error | undefined {
   if (error instanceof Error) {
     return error;
@@ -160,8 +204,7 @@ export function createImportsMultipartRoute(
     let fileTask: Promise<PreparedMultipartImportUpload> | null = null;
     let settled = false;
     let quotaReleased = false;
-    const activeFileStreams = new Set<MultipartUploadFileStream>();
-    const activeFileStreamTimeouts = new Map<MultipartUploadFileStream, NodeJS.Timeout>();
+    const activeFileStreams = createMultipartUploadStreamRegistry();
     const logMultipartCleanupFailure = (
       step: string,
       cleanupFailure: unknown,
@@ -183,16 +226,11 @@ export function createImportsMultipartRoute(
     };
 
     const cleanupTrackedFileStreams = (error?: unknown) => {
-      for (const timeoutId of activeFileStreamTimeouts.values()) {
-        clearTimeout(timeoutId);
-      }
-      activeFileStreamTimeouts.clear();
-      cleanupTrackedMultipartUploadStreamsForTests(activeFileStreams, error, (step, cleanupFailure) => {
+      activeFileStreams.cleanup(error, (step, cleanupFailure) => {
         logMultipartCleanupFailure(`file-stream:${step}`, cleanupFailure, {
           trackedStreamCount: activeFileStreams.size,
         });
       });
-      activeFileStreams.clear();
     };
 
     const stopMultipartParsing = (error?: unknown) => {
@@ -216,11 +254,6 @@ export function createImportsMultipartRoute(
       activeFileStreams.add(file);
 
       const unregisterStream = () => {
-        const timeoutId = activeFileStreamTimeouts.get(file);
-        if (timeoutId) {
-          clearTimeout(timeoutId);
-          activeFileStreamTimeouts.delete(file);
-        }
         activeFileStreams.delete(file);
       };
 
@@ -246,7 +279,7 @@ export function createImportsMultipartRoute(
         }
       }, IMPORT_MULTIPART_FILE_STREAM_TIMEOUT_MS);
       timeoutId.unref?.();
-      activeFileStreamTimeouts.set(file, timeoutId);
+      activeFileStreams.setTimeout(file, timeoutId);
 
       file.once?.("close", unregisterStream);
       file.once?.("end", unregisterStream);
@@ -359,6 +392,15 @@ export function createImportsMultipartRoute(
         error: error instanceof Error ? error.message : "Unknown request stream error",
       });
       stopMultipartParsing(error);
+      releaseQuota();
+      settled = true;
+    });
+
+    req.once("aborted", () => {
+      if (settled) {
+        return;
+      }
+      stopMultipartParsing(new Error("Multipart import request aborted before completion."));
       releaseQuota();
       settled = true;
     });
