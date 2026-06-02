@@ -1188,6 +1188,121 @@ test("authenticateToken coalesces 100 concurrent refreshes for the same JWT id",
   }
 });
 
+test("authenticateToken rejects new JWT refreshes when the in-flight map reaches capacity", async (t) => {
+  resetSessionRevocationStoreForTests();
+  const previousMaxInFlightRefreshes = process.env.SQR_MAX_INFLIGHT_REFRESHES;
+  process.env.SQR_MAX_INFLIGHT_REFRESHES = "1";
+  const secret = "guard-test-secret";
+  const nowMs = Date.parse("2026-05-27T00:00:00.000Z");
+  const nowSeconds = Math.floor(nowMs / 1000);
+  const revokedJwtIds = new Set<string>();
+  const revokeStarted = createDeferred();
+  const releaseRevoke = createDeferred();
+  const warnings: Array<{ message: string; payload: Record<string, unknown> | undefined }> = [];
+  t.mock.method(Date, "now", () => nowMs);
+  t.mock.method(logger, "warn", (message: string, payload?: Record<string, unknown>) => {
+    warnings.push({ message, payload });
+  });
+
+  const restoreRevocationStore = configureSessionRevocationStoreForRuntime({
+    isRevoked: async (jwtId: string) => revokedJwtIds.has(jwtId),
+    revoke: async (record: SessionRevocationRecord) => {
+      if (record.jwtId === "capacity-first-jti") {
+        revokeStarted.resolve();
+        await releaseRevoke.promise;
+      }
+      revokedJwtIds.add(record.jwtId);
+    },
+  });
+
+  const guards = createAuthGuards({
+    storage: {
+      getAuthenticatedSessionSnapshot: async () => createAuthenticatedSessionSnapshot(),
+      getActivityById: async () => undefined,
+      getUser: async () => undefined,
+      getUserByUsername: async () => undefined,
+      isVisitorBanned: async () => false,
+      updateActivity: async () => undefined,
+      getRoleTabVisibility: async () => ({}),
+    },
+    secret,
+  });
+
+  const createToken = (jwtid: string) => jwt.sign(
+    {
+      userId: "user-1",
+      username: "guard.user",
+      role: "admin",
+      activityId: "activity-1",
+      iat: nowSeconds - 81,
+      exp: nowSeconds + 19,
+    },
+    secret,
+    { jwtid },
+  );
+  const createRefreshRequest = (token: string) => ({
+    headers: {
+      authorization: `Bearer ${token}`,
+    },
+    method: "GET",
+    path: "/api/me",
+  });
+  const firstResponse = createMockResponse();
+  const rejectedResponse = createMockResponse();
+  let nextCalls = 0;
+
+  try {
+    const firstAuth = guards.authenticateToken(
+      createRefreshRequest(createToken("capacity-first-jti")) as never,
+      firstResponse as never,
+      () => {
+        nextCalls += 1;
+      },
+    );
+
+    await revokeStarted.promise;
+
+    await guards.authenticateToken(
+      createRefreshRequest(createToken("capacity-second-jti")) as never,
+      rejectedResponse as never,
+      () => {
+        nextCalls += 1;
+      },
+    );
+
+    releaseRevoke.resolve();
+    await firstAuth;
+
+    assert.equal(nextCalls, 1);
+    assert.equal(rejectedResponse.statusCode, 503);
+    assert.deepEqual(rejectedResponse.body, expectApiError(
+      "Session refresh is temporarily unavailable. Please try again.",
+      "SESSION_REFRESH_UNAVAILABLE",
+    ));
+    assert.equal(warnings.length, 1);
+    assert.equal(
+      warnings[0]?.message,
+      "AUDIT2-FIX [L1]: In-flight refresh map at capacity; rejecting new refresh to prevent memory growth",
+    );
+    assert.equal(warnings[0]?.payload?.event, "session_refresh_inflight_capacity_reached");
+    assert.equal(warnings[0]?.payload?.currentSize, 1);
+    assert.equal(warnings[0]?.payload?.max, 1);
+    assert.doesNotMatch(JSON.stringify(warnings), /capacity-first-jti|capacity-second-jti|guard\.user|user-1/);
+  } finally {
+    releaseRevoke.resolve();
+    guards.stopTabVisibilityCacheSweep();
+    guards.stopActivityUpdateCacheSweep();
+    guards.clearSessionRefreshDeduplication();
+    restoreRevocationStore();
+    resetSessionRevocationStoreForTests();
+    if (previousMaxInFlightRefreshes === undefined) {
+      delete process.env.SQR_MAX_INFLIGHT_REFRESHES;
+    } else {
+      process.env.SQR_MAX_INFLIGHT_REFRESHES = previousMaxInFlightRefreshes;
+    }
+  }
+});
+
 test("authenticateToken clears failed refresh locks so later retries can refresh", async (t) => {
   resetSessionRevocationStoreForTests();
   const secret = "guard-test-secret";

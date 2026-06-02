@@ -234,6 +234,34 @@ const NON_RETRYABLE_SESSION_REVOCATION_ERROR_CODES = new Set([
   "WRONGPASS",
   "WRONGTYPE",
 ]);
+const DEFAULT_MAX_INFLIGHT_SESSION_REFRESHES = 500;
+const MIN_MAX_INFLIGHT_SESSION_REFRESHES = 1;
+const HARD_MAX_INFLIGHT_SESSION_REFRESHES = 10_000;
+
+function resolveMaxInFlightSessionRefreshes(): number {
+  const parsed = Number.parseInt(process.env.SQR_MAX_INFLIGHT_REFRESHES ?? "", 10);
+  if (!Number.isFinite(parsed)) {
+    return DEFAULT_MAX_INFLIGHT_SESSION_REFRESHES;
+  }
+  return Math.min(
+    HARD_MAX_INFLIGHT_SESSION_REFRESHES,
+    Math.max(MIN_MAX_INFLIGHT_SESSION_REFRESHES, Math.trunc(parsed)),
+  );
+}
+
+function assertInFlightSessionRefreshCapacity(): void {
+  const max = resolveMaxInFlightSessionRefreshes();
+  if (inFlightSessionRefreshes.size < max) {
+    return;
+  }
+
+  logger.warn("AUDIT2-FIX [L1]: In-flight refresh map at capacity; rejecting new refresh to prevent memory growth", {
+    event: "session_refresh_inflight_capacity_reached",
+    currentSize: inFlightSessionRefreshes.size,
+    max,
+  });
+  throw new Error("Too many concurrent session refreshes; retry shortly.");
+}
 
 function normalizeRetryAttempts(value: number | undefined): number {
   if (!Number.isFinite(value)) {
@@ -417,6 +445,7 @@ async function refreshSessionJwtAfterRevocation(params: {
     internalMetrics.increment("sessionRefreshDedupedTotal");
     return existingRefresh;
   }
+  assertInFlightSessionRefreshCapacity();
 
   const refreshPromise = Promise.resolve().then(async () => {
     // The replacement JWT is intentionally signed only after the previous
