@@ -107,6 +107,32 @@ test("runtime env schema rejects integer values outside configured bounds", () =
   );
 });
 
+test("runtime env schema validates event listener limit tuning", () => {
+  assert.doesNotThrow(() => {
+    validateRuntimeEnvironmentSchema({
+      SQR_MAX_EVENT_LISTENERS: "64",
+    });
+  });
+
+  assert.throws(
+    () => {
+      validateRuntimeEnvironmentSchema({
+        SQR_MAX_EVENT_LISTENERS: "15",
+      });
+    },
+    /SQR_MAX_EVENT_LISTENERS.*at least 16/i,
+  );
+
+  assert.throws(
+    () => {
+      validateRuntimeEnvironmentSchema({
+        SQR_MAX_EVENT_LISTENERS: "1025",
+      });
+    },
+    /SQR_MAX_EVENT_LISTENERS.*at most 1024/i,
+  );
+});
+
 test("runtime env schema validates session timeout minute bounds", () => {
   assert.doesNotThrow(() => {
     validateRuntimeEnvironmentSchema({

@@ -140,6 +140,7 @@ export type RuntimeConfig = {
     collectionRollupListenReconnectMs: number;
     httpRequestTimeoutMs: number;
     httpSlowRequestMs: number;
+    maxEventListeners: number;
     analyticsTimeZone: string;
   };
   collection: {

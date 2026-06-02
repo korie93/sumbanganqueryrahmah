@@ -487,6 +487,7 @@ export const runtimeConfig: RuntimeConfig = Object.freeze({
     collectionRollupListenReconnectMs: readInt("COLLECTION_ROLLUP_LISTEN_RECONNECT_MS", 5_000, { min: 1_000 }),
     httpRequestTimeoutMs: readInt("HTTP_REQUEST_TIMEOUT_MS", 115_000, { min: 1_000 }),
     httpSlowRequestMs: readInt("HTTP_SLOW_REQUEST_MS", 1_500, { min: 250 }),
+    maxEventListeners: readInt("SQR_MAX_EVENT_LISTENERS", 64, { min: 16, max: 1_024 }),
     analyticsTimeZone: readString("ANALYTICS_TZ", "Asia/Kuala_Lumpur"),
   },
   collection: {

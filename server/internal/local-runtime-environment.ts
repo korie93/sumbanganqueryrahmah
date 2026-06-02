@@ -40,7 +40,6 @@ type CreateLocalRuntimeEnvironmentOptions = {
 const DB_METHOD_WRAP_EXCLUDE = new Set<string>(["constructor"]);
 const WEBSOCKET_MAX_PAYLOAD_BYTES = 100 * 1024;
 const HTTP_SERVER_TIMEOUT_MS = 120_000;
-const HTTP_SERVER_LIFECYCLE_LISTENER_LIMIT = 32;
 
 export function createLocalRuntimeEnvironment(options: CreateLocalRuntimeEnvironmentOptions = {}) {
   const storage = new PostgresStorage();
@@ -54,7 +53,8 @@ export function createLocalRuntimeEnvironment(options: CreateLocalRuntimeEnviron
   // cache sweepers, rate limit sweeps, telemetry guards, queue listeners).
   // Raise the per-server listener cap so Node does not report those expected
   // lifecycle hooks as a possible leak.
-  server.setMaxListeners(Math.max(server.getMaxListeners(), HTTP_SERVER_LIFECYCLE_LISTENER_LIMIT));
+  // AUDIT2-FIX [M3]: keep the expected lifecycle listener allowance configurable.
+  server.setMaxListeners(Math.max(server.getMaxListeners(), runtimeConfig.runtime.maxEventListeners));
   const wss = new WebSocketServer({
     server,
     path: "/ws",
