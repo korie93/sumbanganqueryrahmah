@@ -471,8 +471,8 @@ async function refreshSessionJwtAfterRevocation(params: {
       },
       params.secret,
     );
-    const refreshedExpiry = normalizeSessionExpiry(resolveSessionJwtExpiresAt(token));
-    const refreshedJwtId = resolveSessionJwtId(token) ?? undefined;
+    const refreshedExpiry = normalizeSessionExpiry(resolveSessionJwtExpiresAt(token, params.secret));
+    const refreshedJwtId = resolveSessionJwtId(token, params.secret) ?? undefined;
 
     return {
       token,

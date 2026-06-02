@@ -4,10 +4,6 @@ import {
   clearAuthSessionCookie,
   readAuthSessionTokenFromHeaders,
 } from "../auth/session-cookie";
-import {
-  resolveSessionJwtExpiresAt,
-  resolveSessionJwtId,
-} from "../auth/session-jwt";
 import { revokeSessionJwt } from "../auth/session-revocation-store";
 import { asyncHandler } from "../http/async-handler";
 import { readQueryObject } from "../http/validation";
@@ -38,13 +34,13 @@ export function registerActivityReadRoutes(context: ActivityRouteContext) {
       }
 
       const token = readAuthSessionTokenFromHeaders(req.headers);
-      const jwtId = token ? resolveSessionJwtId(token) : null;
+      const jwtId = token ? String(req.user.jti || "").trim() : "";
       await activityService.logout(req.user.activityId, req.user.username);
       if (token && jwtId) {
         try {
           await revokeSessionJwt({
             jwtId,
-            expiresAtMs: resolveSessionJwtExpiresAt(token)?.getTime() ?? 0,
+            expiresAtMs: typeof req.user.exp === "number" ? req.user.exp * 1000 : 0,
           });
         } catch {
           clearAuthSessionCookie(res);

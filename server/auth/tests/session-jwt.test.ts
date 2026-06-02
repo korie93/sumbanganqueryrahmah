@@ -15,7 +15,9 @@ import {
   signSessionJwt,
   signSessionJwtWithSecret,
   signSessionJwtWithKeySet,
+  validateJwtAlgorithm,
   verifyJwtWithAnySecret,
+  verifySessionJwt,
   verifySessionJwtWithKeySet,
 } from "../session-jwt";
 import {
@@ -25,10 +27,10 @@ import {
 
 test("signSessionJwt applies the default session expiry when omitted", () => {
   const token = signSessionJwt({ username: "alice", role: "admin" });
-  const decoded = jwt.decode(token) as { iat?: number; exp?: number; jti?: string } | null;
+  const decoded = verifySessionJwt<{ iat?: number; exp?: number; jti?: string }>(token);
 
-  assert.ok(decoded?.iat);
-  assert.ok(decoded?.exp);
+  assert.ok(decoded.iat);
+  assert.ok(decoded.exp);
   assert.match(decoded?.jti ?? "", /^[0-9a-f-]{36}$/i);
   assert.ok(decoded.exp - decoded.iat <= SESSION_JWT_DEFAULT_EXPIRY);
   assert.ok(decoded.exp - decoded.iat >= SESSION_JWT_MIN_DEFAULT_EXPIRY_SECONDS);
@@ -59,9 +61,9 @@ test("signSessionJwt applies bounded non-identical jitter only to default expiry
 
   const defaultTtls = [0, 1, 2].map(() => {
     const token = signSessionJwt({ username: "alice", role: "admin" });
-    const decoded = jwt.decode(token) as { iat?: number; exp?: number } | null;
-    assert.ok(decoded?.iat);
-    assert.ok(decoded?.exp);
+    const decoded = verifySessionJwt<{ iat?: number; exp?: number }>(token);
+    assert.ok(decoded.iat);
+    assert.ok(decoded.exp);
     return decoded.exp - decoded.iat;
   });
 
@@ -76,9 +78,9 @@ test("signSessionJwt applies bounded non-identical jitter only to default expiry
     { username: "alice", role: "admin", purpose: "two_factor_login" },
     { expiresIn: "5m" },
   );
-  const twoFactorDecoded = jwt.decode(twoFactorToken) as { iat?: number; exp?: number } | null;
-  assert.ok(twoFactorDecoded?.iat);
-  assert.ok(twoFactorDecoded?.exp);
+  const twoFactorDecoded = verifySessionJwt<{ iat?: number; exp?: number }>(twoFactorToken);
+  assert.ok(twoFactorDecoded.iat);
+  assert.ok(twoFactorDecoded.exp);
   assert.equal(twoFactorDecoded.exp - twoFactorDecoded.iat, 5 * 60);
 });
 
@@ -163,19 +165,22 @@ test("session JWT keyset signs new tokens with RS256 while accepting legacy HS25
   };
 
   const modernToken = signSessionJwtWithKeySet({ username: "alice", role: "admin" }, keySet);
-  const modernDecoded = jwt.decode(modernToken, { complete: true }) as {
-    header?: { alg?: string };
-  } | null;
-
-  assert.equal(modernDecoded?.header?.alg, SESSION_JWT_ALGORITHM);
+  assert.equal(validateJwtAlgorithm(modernToken), SESSION_JWT_ALGORITHM);
+  const modernPayload = verifySessionJwtWithKeySet<{
+    username: string;
+    role: string;
+    iat: number;
+    exp: number;
+    jti: string;
+  }>(modernToken, keySet);
   assert.deepEqual(
-    verifySessionJwtWithKeySet<{ username: string; role: string }>(modernToken, keySet),
+    modernPayload,
     {
       username: "alice",
       role: "admin",
-      iat: (jwt.decode(modernToken) as { iat: number }).iat,
-      exp: (jwt.decode(modernToken) as { exp: number }).exp,
-      jti: (jwt.decode(modernToken) as { jti: string }).jti,
+      iat: modernPayload.iat,
+      exp: modernPayload.exp,
+      jti: modernPayload.jti,
     },
   );
 
@@ -203,6 +208,42 @@ test("verifyJwtWithAnySecret rejects tokens signed with non-session algorithms",
   assert.throws(
     () => verifyJwtWithAnySecret(token, ["current-secret"]),
     /unsupported session signing algorithm/i,
+  );
+});
+
+function createUnsignedJwt(payload: Record<string, unknown>, algorithm: string): string {
+  const encode = (value: Record<string, unknown>) => Buffer
+    .from(JSON.stringify(value), "utf8")
+    .toString("base64url");
+  return `${encode({ alg: algorithm, typ: "JWT" })}.${encode(payload)}.`;
+}
+
+test("verifyJwtWithAnySecret rejects alg none tokens before signature verification", () => {
+  const token = createUnsignedJwt({ username: "alice" }, "none");
+
+  assert.throws(
+    () => verifyJwtWithAnySecret(token, ["current-secret"]),
+    /alg=none is not allowed/i,
+  );
+});
+
+test("verifyJwtWithAnySecret rejects tampered tokens after algorithm validation", () => {
+  const token = jwt.sign(
+    { username: "alice" },
+    "current-secret",
+    { algorithm: SESSION_JWT_LEGACY_ALGORITHM },
+  );
+  const [header, , signature] = token.split(".");
+  if (!header || !signature) {
+    assert.fail("Expected a compact JWT with header and signature segments.");
+  }
+  const tamperedPayload = Buffer
+    .from(JSON.stringify({ username: "mallory" }), "utf8")
+    .toString("base64url");
+
+  assert.throws(
+    () => verifyJwtWithAnySecret(`${header}.${tamperedPayload}.${signature}`, ["current-secret"]),
+    /invalid signature/i,
   );
 });
 

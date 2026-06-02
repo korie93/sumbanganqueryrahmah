@@ -31,6 +31,13 @@ export type SessionJwtKeySet = {
   rsPublicKeys?: readonly string[] | null | undefined;
 };
 
+export class JwtAlgorithmError extends Error {
+  constructor(message = "JWT uses an unsupported session signing algorithm.") {
+    super(message);
+    this.name = "JwtAlgorithmError";
+  }
+}
+
 function normalizeVerificationSecrets(secrets: string | readonly string[] | null | undefined): string[] {
   if (Array.isArray(secrets)) {
     return secrets.map((value) => String(value || "").trim()).filter(Boolean);
@@ -68,14 +75,37 @@ function normalizeRsaPublicKeys(keys: readonly string[] | null | undefined): str
     .filter((key): key is string => Boolean(key));
 }
 
-function readJwtAlgorithm(token: string): string | null {
-  const decoded = jwt.decode(token, { complete: true }) as { header?: { alg?: unknown } } | null;
-  const algorithm = String(decoded?.header?.alg || "").trim();
-  return algorithm || null;
+function readJwtHeaderAlgorithm(token: string): string | null {
+  const [headerSegment] = String(token || "").split(".");
+  if (!headerSegment) {
+    return null;
+  }
+
+  try {
+    const header = JSON.parse(Buffer.from(headerSegment, "base64url").toString("utf8")) as {
+      alg?: unknown;
+    };
+    const algorithm = String(header.alg || "").trim();
+    return algorithm || null;
+  } catch {
+    return null;
+  }
 }
 
 function isSessionJwtAlgorithm(value: string | null): value is SessionJwtAlgorithm {
   return value === SESSION_JWT_ALGORITHM || value === SESSION_JWT_LEGACY_ALGORITHM;
+}
+
+export function validateJwtAlgorithm(token: string): SessionJwtAlgorithm {
+  const algorithm = readJwtHeaderAlgorithm(token);
+  if (algorithm?.toLowerCase() === "none") {
+    throw new JwtAlgorithmError("JWT alg=none is not allowed for session tokens.");
+  }
+  if (!isSessionJwtAlgorithm(algorithm)) {
+    throw new JwtAlgorithmError();
+  }
+
+  return algorithm;
 }
 
 function buildSessionJwtSignOptions(
@@ -178,9 +208,18 @@ export function shouldRefreshSessionJwt(
   return remainingTtlMs / totalTtlMs <= SESSION_JWT_REFRESH_REMAINING_TTL_RATIO;
 }
 
-export function resolveSessionJwtExpiresAt(token: string): Date | null {
-  const decoded = jwt.decode(token) as { exp?: unknown } | null;
-  const expSeconds = Number(decoded?.exp);
+export function resolveSessionJwtExpiresAt(
+  token: string,
+  secrets?: string | readonly string[] | null,
+): Date | null {
+  let claims: { exp?: unknown };
+  try {
+    claims = verifySessionJwt<{ exp?: unknown }>(token, secrets);
+  } catch {
+    return null;
+  }
+
+  const expSeconds = Number(claims.exp);
   if (!Number.isFinite(expSeconds) || expSeconds <= 0) {
     return null;
   }
@@ -190,9 +229,18 @@ export function resolveSessionJwtExpiresAt(token: string): Date | null {
     : null;
 }
 
-export function resolveSessionJwtId(token: string): string | null {
-  const decoded = jwt.decode(token) as { jti?: unknown } | null;
-  const jwtId = String(decoded?.jti || "").trim();
+export function resolveSessionJwtId(
+  token: string,
+  secrets?: string | readonly string[] | null,
+): string | null {
+  let claims: { jti?: unknown };
+  try {
+    claims = verifySessionJwt<{ jti?: unknown }>(token, secrets);
+  } catch {
+    return null;
+  }
+
+  const jwtId = String(claims.jti || "").trim();
   return jwtId || null;
 }
 
@@ -207,10 +255,7 @@ export function verifySessionJwtWithKeySet<TPayload>(
   token: string,
   keySet: SessionJwtKeySet,
 ): TPayload {
-  const algorithm = readJwtAlgorithm(token);
-  if (!isSessionJwtAlgorithm(algorithm)) {
-    throw new Error("JWT uses an unsupported session signing algorithm.");
-  }
+  const algorithm = validateJwtAlgorithm(token);
 
   const candidates = algorithm === SESSION_JWT_ALGORITHM
     ? normalizeRsaPublicKeys(keySet.rsPublicKeys)
