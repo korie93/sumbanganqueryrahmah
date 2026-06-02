@@ -37,6 +37,7 @@ export type InternalMetricName =
   | "jsonParseFailuresTotal"
   | "jsonParseMemoryLimitExceededTotal"
   | "redisRateLimitEvalTypeErrorsTotal"
+  | "redisRateLimitFallbackMemoryStoreUsesTotal"
   | "sessionRefreshDedupedTotal"
   | "sessionRefreshRevocationRetryAttemptsTotal"
   | "sessionRefreshRevocationRetryExhaustedTotal"
@@ -112,6 +113,7 @@ const INTERNAL_METRIC_NAMES: readonly InternalMetricName[] = [
   "jsonParseFailuresTotal",
   "jsonParseMemoryLimitExceededTotal",
   "redisRateLimitEvalTypeErrorsTotal",
+  "redisRateLimitFallbackMemoryStoreUsesTotal",
   "sessionRefreshDedupedTotal",
   "sessionRefreshRevocationRetryAttemptsTotal",
   "sessionRefreshRevocationRetryExhaustedTotal",

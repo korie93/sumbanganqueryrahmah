@@ -5,6 +5,7 @@ import { getInternalMetricsSnapshot } from "../../internal/metrics";
 import {
   createRedisReconnectStrategy,
   createSharedRateLimitStore,
+  REDIS_RATE_LIMIT_FALLBACK_MAX_KEYS,
   RedisRateLimitStore,
 } from "../../middleware/redis-rate-limit-store";
 import type { SharedRateLimitStoreConfig } from "../../middleware/rate-limit-runtime";
@@ -28,6 +29,7 @@ function readWarningEvent(warning: WarningEntry): unknown {
 }
 
 class FakeRedisClient {
+  multiCalls = 0;
   quitCalls = 0;
 
   constructor(private readonly entries: Map<string, FakeRedisEntry>) {}
@@ -92,6 +94,23 @@ class FakeRedisClient {
     this.quitCalls += 1;
     return undefined;
   }
+
+  multi() {
+    this.multiCalls += 1;
+    const operations: Array<() => Promise<unknown>> = [];
+    const pipeline = {
+      get: (key: string) => {
+        operations.push(() => this.get(key));
+        return pipeline;
+      },
+      pTTL: (key: string) => {
+        operations.push(() => this.pTTL(key));
+        return pipeline;
+      },
+      exec: async () => Promise.all(operations.map((operation) => operation())),
+    };
+    return pipeline;
+  }
 }
 
 const redisConfig: SharedRateLimitStoreConfig = {
@@ -132,6 +151,7 @@ test("RedisRateLimitStore shares counters across store instances", async () => {
 
 test("RedisRateLimitStore falls back to memory when Redis cannot connect", async () => {
   const warnings: unknown[] = [];
+  const metricBefore = getInternalMetricsSnapshot().counters.redisRateLimitFallbackMemoryStoreUsesTotal;
   let now = 1_000;
   const store = new RedisRateLimitStore({
     config: redisConfig,
@@ -159,11 +179,56 @@ test("RedisRateLimitStore falls back to memory when Redis cannot connect", async
   assert.equal((await store.increment("client-1")).totalHits, 1);
   assert.equal((await store.increment("client-1")).totalHits, 2);
   assert.equal((await store.get("client-1"))?.totalHits, 2);
+  assert.equal(
+    getInternalMetricsSnapshot().counters.redisRateLimitFallbackMemoryStoreUsesTotal,
+    metricBefore + 3,
+  );
   assert.equal(warnings.length, 1);
 
   now += 5_000;
   assert.equal((await store.increment("client-1")).totalHits, 3);
   assert.equal(warnings.length, 2);
+});
+
+test("RedisRateLimitStore bounds fallback memory entries with LRU eviction", async () => {
+  const store = new RedisRateLimitStore({
+    config: {
+      distributedStoreConfigured: false,
+      provider: "memory",
+      redisUrl: null,
+    },
+    logger: {
+      warn() {},
+    },
+    prefix: "sqr:test:bounded-fallback",
+  });
+  initStore(store);
+
+  for (let index = 0; index < REDIS_RATE_LIMIT_FALLBACK_MAX_KEYS + 5_000; index += 1) {
+    await store.increment(`client-${index}`);
+  }
+
+  assert.ok(store.getFallbackStoreSizeForTests() <= REDIS_RATE_LIMIT_FALLBACK_MAX_KEYS);
+  assert.equal(await store.get("client-0"), undefined);
+  assert.equal((await store.get(`client-${REDIS_RATE_LIMIT_FALLBACK_MAX_KEYS + 4_999}`))?.totalHits, 1);
+});
+
+test("RedisRateLimitStore reads hits and TTL through a Redis pipeline", async () => {
+  const entries = new Map<string, FakeRedisEntry>();
+  const client = new FakeRedisClient(entries);
+  const store = new RedisRateLimitStore({
+    config: redisConfig,
+    createRedisClient: () => client,
+    logger: {
+      warn() {},
+    },
+    prefix: "sqr:test:pipeline",
+  });
+  initStore(store);
+
+  await store.increment("client-1");
+  assert.equal((await store.get("client-1"))?.totalHits, 1);
+  assert.equal(client.multiCalls, 1);
 });
 
 test("RedisRateLimitStore retries Redis after a failed connection instead of permanently disabling it", async () => {

@@ -1,10 +1,10 @@
 import crypto from "node:crypto";
 import {
-  MemoryStore,
   type ClientRateLimitInfo,
   type Options,
   type Store,
 } from "express-rate-limit";
+import { LRUCache } from "lru-cache";
 import { z } from "zod";
 import { internalMetrics } from "../internal/metrics";
 import { logger as defaultLogger } from "../lib/logger";
@@ -21,9 +21,16 @@ type RedisClientLike = {
     options: { arguments: string[]; keys: string[] },
   ) => Promise<unknown>;
   get: (key: string) => Promise<unknown>;
+  multi?: () => RedisMultiLike;
   on?: (event: string, listener: (error: unknown) => void) => unknown;
   pTTL: (key: string) => Promise<unknown>;
   quit?: () => Promise<unknown>;
+};
+
+type RedisMultiLike = {
+  exec: () => Promise<unknown>;
+  get: (key: string) => RedisMultiLike;
+  pTTL: (key: string) => RedisMultiLike;
 };
 
 type RedisClientFactory = (options: {
@@ -60,7 +67,101 @@ let defaultRedisClientFactoryPromise: Promise<RedisClientFactory> | null = null;
 
 const REDIS_RECONNECT_BASE_DELAY_MS = 500;
 const REDIS_RECONNECT_MAX_DELAY_MS = 30_000;
+export const REDIS_RATE_LIMIT_FALLBACK_MAX_KEYS = 10_000;
+export const REDIS_RATE_LIMIT_FALLBACK_TTL_MS = 60_000;
 export const REDIS_UNAVAILABLE_WARNING_REPEAT_MS = 60_000;
+
+type FallbackRateLimitEntry = {
+  resetTime: Date;
+  totalHits: number;
+};
+
+class BoundedMemoryRateLimitStore implements Store {
+  readonly localKeys = true;
+  private readonly cache = new LRUCache<string, FallbackRateLimitEntry>({
+    max: REDIS_RATE_LIMIT_FALLBACK_MAX_KEYS,
+    ttl: REDIS_RATE_LIMIT_FALLBACK_TTL_MS,
+    updateAgeOnGet: false,
+  });
+  private readonly now: () => number;
+  private windowMs = REDIS_RATE_LIMIT_FALLBACK_TTL_MS;
+
+  constructor(now: () => number) {
+    this.now = now;
+  }
+
+  init(options: Options): void {
+    this.windowMs = Math.max(1, Math.trunc(Number(options.windowMs) || REDIS_RATE_LIMIT_FALLBACK_TTL_MS));
+    this.cache.clear();
+  }
+
+  async get(key: string): Promise<ClientRateLimitInfo | undefined> {
+    const entry = this.cache.get(key);
+    if (!entry) {
+      return undefined;
+    }
+
+    if (entry.resetTime.getTime() <= this.now()) {
+      this.cache.delete(key);
+      return undefined;
+    }
+
+    return {
+      resetTime: entry.resetTime,
+      totalHits: entry.totalHits,
+    };
+  }
+
+  async increment(key: string): Promise<ClientRateLimitInfo> {
+    const existing = await this.get(key);
+    const nowMs = this.now();
+    const resetTime = existing?.resetTime instanceof Date
+      ? existing.resetTime
+      : new Date(nowMs + this.windowMs);
+    const totalHits = (existing?.totalHits ?? 0) + 1;
+    const ttl = Math.max(1, resetTime.getTime() - nowMs);
+    const entry = { resetTime, totalHits };
+    this.cache.set(key, entry, { ttl });
+    return entry;
+  }
+
+  async decrement(key: string): Promise<void> {
+    const existing = await this.get(key);
+    if (!existing) {
+      return;
+    }
+    if (!(existing.resetTime instanceof Date)) {
+      this.cache.delete(key);
+      return;
+    }
+
+    const totalHits = existing.totalHits - 1;
+    if (totalHits <= 0) {
+      this.cache.delete(key);
+      return;
+    }
+
+    this.cache.set(key, {
+      resetTime: existing.resetTime,
+      totalHits,
+    }, {
+      ttl: Math.max(1, existing.resetTime.getTime() - this.now()),
+    });
+  }
+
+  async resetKey(key: string): Promise<void> {
+    this.cache.delete(key);
+  }
+
+  shutdown(): void {
+    this.cache.clear();
+  }
+
+  get size(): number {
+    this.cache.purgeStale();
+    return this.cache.size;
+  }
+}
 
 async function resolveDefaultRedisClientFactory(): Promise<RedisClientFactory> {
   defaultRedisClientFactoryPromise ??= import("redis")
@@ -82,6 +183,19 @@ function mapIncrementEvalResult([totalHits, ttlMs]: RedisIncrementEvalResult): {
     totalHits,
     ttlMs,
   };
+}
+
+function parseRedisPipelinePair(result: unknown): [unknown, unknown] | null {
+  if (!Array.isArray(result) || result.length < 2) {
+    return null;
+  }
+
+  const [first, second] = result;
+  if (Array.isArray(first) && Array.isArray(second) && first.length >= 2 && second.length >= 2) {
+    return [first[1], second[1]];
+  }
+
+  return [first, second];
 }
 
 function normalizeRedisPrefix(prefix: string) {
@@ -117,9 +231,9 @@ export class RedisRateLimitStore implements Store {
 
   private readonly config: SharedRateLimitStoreConfig;
   private readonly createRedisClient: RedisClientFactory | null;
+  private readonly fallbackStore: BoundedMemoryRateLimitStore;
   private readonly logger: LoggerLike;
   private readonly now: () => number;
-  private readonly fallbackStore = new MemoryStore();
   private client: RedisClientLike | null = null;
   private clientPromise: Promise<RedisClientLike | null> | null = null;
   private lastWarningAt = 0;
@@ -133,6 +247,7 @@ export class RedisRateLimitStore implements Store {
     this.createRedisClient = options.createRedisClient ?? null;
     this.logger = options.logger ?? defaultLogger;
     this.now = options.now ?? Date.now;
+    this.fallbackStore = new BoundedMemoryRateLimitStore(this.now);
     this.prefix = normalizeRedisPrefix(options.prefix);
     this.warningRepeatMs = Math.max(1, Math.trunc(Number(options.warningRepeatMs ?? REDIS_UNAVAILABLE_WARNING_REPEAT_MS)));
   }
@@ -145,15 +260,13 @@ export class RedisRateLimitStore implements Store {
   async get(key: string): Promise<ClientRateLimitInfo | undefined> {
     const client = await this.getClient();
     if (!client) {
+      this.recordFallbackUsage();
       return this.fallbackStore.get(key);
     }
 
     try {
       const redisKey = this.buildRedisKey(key);
-      const [rawHits, rawTtl] = await Promise.all([
-        client.get(redisKey),
-        client.pTTL(redisKey),
-      ]);
+      const [rawHits, rawTtl] = await this.getRedisHitsAndTtl(client, redisKey);
       const totalHits = parseRedisInteger(rawHits);
       const ttlMs = parseRedisInteger(rawTtl);
       if (!totalHits || ttlMs == null || ttlMs < 0) {
@@ -166,6 +279,7 @@ export class RedisRateLimitStore implements Store {
       };
     } catch (error) {
       this.handleRedisFailure(error);
+      this.recordFallbackUsage();
       return this.fallbackStore.get(key);
     }
   }
@@ -173,6 +287,7 @@ export class RedisRateLimitStore implements Store {
   async increment(key: string): Promise<ClientRateLimitInfo> {
     const client = await this.getClient();
     if (!client) {
+      this.recordFallbackUsage();
       return this.fallbackStore.increment(key);
     }
 
@@ -193,6 +308,7 @@ export class RedisRateLimitStore implements Store {
       };
     } catch (error) {
       this.handleRedisFailure(error);
+      this.recordFallbackUsage();
       return this.fallbackStore.increment(key);
     }
   }
@@ -200,6 +316,7 @@ export class RedisRateLimitStore implements Store {
   async decrement(key: string): Promise<void> {
     const client = await this.getClient();
     if (!client) {
+      this.recordFallbackUsage();
       await this.fallbackStore.decrement(key);
       return;
     }
@@ -212,6 +329,7 @@ export class RedisRateLimitStore implements Store {
       }
     } catch (error) {
       this.handleRedisFailure(error);
+      this.recordFallbackUsage();
       await this.fallbackStore.decrement(key);
     }
   }
@@ -219,6 +337,7 @@ export class RedisRateLimitStore implements Store {
   async resetKey(key: string): Promise<void> {
     const client = await this.getClient();
     if (!client) {
+      this.recordFallbackUsage();
       await this.fallbackStore.resetKey(key);
       return;
     }
@@ -227,6 +346,7 @@ export class RedisRateLimitStore implements Store {
       await client.del(this.buildRedisKey(key));
     } catch (error) {
       this.handleRedisFailure(error);
+      this.recordFallbackUsage();
       await this.fallbackStore.resetKey(key);
     }
   }
@@ -248,6 +368,31 @@ export class RedisRateLimitStore implements Store {
   private buildRedisKey(key: string) {
     const digest = crypto.createHash("sha256").update(key).digest("hex");
     return `${this.prefix}:${digest}`;
+  }
+
+  private async getRedisHitsAndTtl(client: RedisClientLike, redisKey: string): Promise<[unknown, unknown]> {
+    if (typeof client.multi === "function") {
+      const pipelineResult = parseRedisPipelinePair(
+        await client.multi().get(redisKey).pTTL(redisKey).exec(),
+      );
+      if (!pipelineResult) {
+        throw new Error("Redis rate-limit GET+PTTL pipeline returned an invalid response.");
+      }
+      return pipelineResult;
+    }
+
+    return Promise.all([
+      client.get(redisKey),
+      client.pTTL(redisKey),
+    ]);
+  }
+
+  private recordFallbackUsage() {
+    internalMetrics.increment("redisRateLimitFallbackMemoryStoreUsesTotal");
+  }
+
+  getFallbackStoreSizeForTests(): number {
+    return this.fallbackStore.size;
   }
 
   private parseIncrementResult(result: unknown): { totalHits: number; ttlMs: number } | null {
