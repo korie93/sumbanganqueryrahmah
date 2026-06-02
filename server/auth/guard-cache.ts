@@ -22,9 +22,15 @@ export const ACTIVITY_UPDATE_CACHE_TARGET_SIZE_AFTER_EVICTION = Math.floor(
   ACTIVITY_UPDATE_CACHE_MAX_SIZE * 0.8,
 );
 
-type GuardCacheDisposeHandler<T extends {}> = (entry: T, key: string, reason: LRUCache.DisposeReason) => void;
+type GuardCacheValue = object | string | number | boolean | symbol | bigint;
 
-type GuardCacheOptions<T extends {}> = {
+type GuardCacheDisposeHandler<T extends GuardCacheValue> = (
+  entry: T,
+  key: string,
+  reason: LRUCache.DisposeReason,
+) => void;
+
+type GuardCacheOptions<T extends GuardCacheValue> = {
   maxSize: number;
   ttlMs: number;
   onDispose?: GuardCacheDisposeHandler<T> | undefined;
@@ -40,7 +46,7 @@ function normalizeCacheLimit(value: number, fallback: number): number {
   return Math.max(1, Math.trunc(value));
 }
 
-function createGuardLruCache<T extends {}>(options: GuardCacheOptions<T>): LRUCache<string, T> {
+function createGuardLruCache<T extends GuardCacheValue>(options: GuardCacheOptions<T>): LRUCache<string, T> {
   return new LRUCache<string, T>({
     max: normalizeCacheLimit(options.maxSize, 1),
     ttl: normalizeCacheLimit(options.ttlMs, 1),
@@ -80,7 +86,7 @@ export function createActivityUpdateLruCache(options?: {
   });
 }
 
-export function purgeStaleLruCacheEntries<T extends {}>(cache: LRUCache<string, T>): number {
+export function purgeStaleLruCacheEntries<T extends GuardCacheValue>(cache: LRUCache<string, T>): number {
   const sizeBefore = cache.size;
   cache.purgeStale();
   return Math.max(0, sizeBefore - cache.size);
