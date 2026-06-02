@@ -69,6 +69,7 @@ type ReceiptImagePreviewProps = {
 };
 
 const RECEIPT_IMAGE_BASE_DISPLAY_WIDTH_PX = 960;
+const RECEIPT_IMAGE_BASE_DISPLAY_HEIGHT_PX = 1_280;
 const RECEIPT_IMAGE_MAX_DISPLAY_WIDTH_PX = 1_520;
 
 export function cleanupReceiptImagePreviewElement(
@@ -121,9 +122,12 @@ function ReceiptImagePreview({
       ref={imageRef}
       src={source}
       alt={alt}
+      width={RECEIPT_IMAGE_BASE_DISPLAY_WIDTH_PX}
+      height={RECEIPT_IMAGE_BASE_DISPLAY_HEIGHT_PX}
       className={className}
       decoding="async"
       draggable={false}
+      loading="lazy"
     />
   );
 }

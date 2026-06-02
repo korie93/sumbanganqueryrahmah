@@ -80,10 +80,9 @@ test("floating AI dialog exposes boolean disclosure state and semantic heading",
   assert.match(source, /const modalDialogA11yProps = isMobile/);
   assert.match(focusSource, /onEscapeKeyDown: handleMinimize/);
   assert.match(panelSource, /<h2\s+id=\{panelTitleId\}/);
-  assert.match(source, /role="presentation"/);
-  assert.match(source, /aria-hidden="true"/);
-  assert.doesNotMatch(source, /aria-label="Tutup panel AI"/);
-  assert.doesNotMatch(source, /<button[\s\S]{0,240}floatingMobileBackdrop/);
+  assert.match(source, /<button[\s\S]*styles\.floatingMobileBackdrop[\s\S]*aria-label=\{`Tutup panel \$\{assistantLabel\}`\}[\s\S]*onKeyDown=\{handleBackdropKeyDown\}/);
+  assert.doesNotMatch(source, /role="presentation"/);
+  assert.doesNotMatch(source, /aria-hidden="true"/);
   assert.match(combinedSource, /aria-label=\{`Kecilkan panel \$\{assistantLabel\}`\}/);
   assert.match(panelSource, /aria-label=\{`Memuatkan panel \$\{assistantLabel\}`\}/);
   assert.match(panelSource, /aria-label=\{`Reset sesi \$\{assistantLabel\}`\}/);

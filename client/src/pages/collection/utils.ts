@@ -1,6 +1,7 @@
 import type { CollectionBatch, CollectionReceiptPayload, CollectionRecord } from "@/lib/api";
 import { apiErrorPayloadSchema } from "@shared/api-contracts";
 import { getBrowserSessionStorage, safeGetStorageItem } from "@/lib/browser-storage";
+import { safeJsonParseResult } from "@/lib/utils/safe-json";
 import {
   formatCollectionAmountMyrString,
   parseCollectionAmountMyrNumber,
@@ -40,8 +41,9 @@ export function parseCollectionApiErrorDetails(error: unknown): CollectionApiErr
   const fallbackStatus = statusMatch?.[1] ? Number.parseInt(statusMatch[1], 10) : null;
   const jsonPart = raw.replace(/^\d+:\s*/, "");
 
-  try {
-    const parsedUnknown = JSON.parse(jsonPart);
+  const parsedResult = safeJsonParseResult<unknown>(jsonPart);
+  if (parsedResult.ok) {
+    const parsedUnknown = parsedResult.data;
     const normalized = apiErrorPayloadSchema.safeParse(parsedUnknown);
     const parsed = normalized.success
       ? normalized.data
@@ -70,14 +72,14 @@ export function parseCollectionApiErrorDetails(error: unknown): CollectionApiErr
         || raw,
       ),
     };
-  } catch {
-    return {
-      status: fallbackStatus,
-      code: null,
-      requestId: null,
-      message: raw,
-    };
   }
+
+  return {
+    status: fallbackStatus,
+    code: null,
+    requestId: null,
+    message: raw,
+  };
 }
 
 export function parseApiError(error: unknown): string {

@@ -2,6 +2,7 @@ import {
   buildMutationErrorToast,
   type MutationToastPayload,
 } from "@/lib/mutation-feedback";
+import { safeJsonParseResult } from "@/lib/utils/safe-json";
 import type { NormalizedSettingsError, SettingItem } from "@/pages/settings/types";
 import { isCredentialPasswordPolicyCompliant } from "@shared/password-policy";
 
@@ -38,18 +39,23 @@ export function normalizeSettingsErrorPayload(rawError: unknown): NormalizedSett
   const message = String(anyError.message || "");
   const jsonPart = message.replace(/^\d+:\s*/, "");
 
-  try {
-    const parsed = JSON.parse(jsonPart);
+  const parsedResult = safeJsonParseResult<Record<string, unknown>>(jsonPart);
+  if (parsedResult.ok && parsedResult.data && typeof parsedResult.data === "object") {
+    const parsed = parsedResult.data as {
+      error?: { code?: unknown; message?: unknown };
+      message?: unknown;
+      requiresConfirmation?: unknown;
+    };
     const parsedCode = typeof parsed?.error?.code === "string" ? parsed.error.code : undefined;
     const parsedMessage = String(parsed?.error?.message || parsed?.message || fallback.message);
     return {
       message: parsedMessage,
       requiresConfirmation: parsed?.requiresConfirmation === true,
-      code: parsedCode,
+      ...(parsedCode ? { code: parsedCode } : {}),
     };
-  } catch {
-    return { message: message || fallback.message };
   }
+
+  return { message: message || fallback.message };
 }
 
 export function buildSettingsMutationErrorToast(

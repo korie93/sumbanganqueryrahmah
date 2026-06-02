@@ -1,5 +1,6 @@
 import type { User } from "@/app/types";
 import type { LoginSuccessResponse } from "@/lib/api/auth";
+import { safeJsonParseResult } from "@/lib/utils/safe-json";
 import { normalizeAuthIdentifier, normalizeTwoFactorCode } from "@/pages/auth-field-utils";
 
 export type LoginFieldErrors = {
@@ -95,14 +96,14 @@ function parseStructuredErrorMessage(message: string): Record<string, unknown> |
     return null;
   }
 
-  try {
-    const parsed = JSON.parse(match[1]) as unknown;
-    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
-      ? parsed as Record<string, unknown>
-      : null;
-  } catch {
+  const parsed = safeJsonParseResult<unknown>(match[1]);
+  if (!parsed.ok) {
     return null;
   }
+
+  return parsed.data && typeof parsed.data === "object" && !Array.isArray(parsed.data)
+      ? parsed.data as Record<string, unknown>
+      : null;
 }
 
 export function readRetryAfterMs(error: unknown): number | null {

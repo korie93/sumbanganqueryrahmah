@@ -94,6 +94,15 @@ export default function Login({ onBanned, onForgotPasswordClick, onLandingClick,
       "aria-describedby": "login-captcha-help",
     };
   const [lockedCountdownMs, setLockedCountdownMs] = useState(0);
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    mountedRef.current = true;
+
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (typeof window === "undefined" || !usernameInputRef.current) {
@@ -115,11 +124,16 @@ export default function Login({ onBanned, onForgotPasswordClick, onLandingClick,
 
   useEffect(() => {
     if (!lockedFlow || !lockedRetryUntilMs) {
-      setLockedCountdownMs(0);
+      if (mountedRef.current) {
+        setLockedCountdownMs(0);
+      }
       return;
     }
 
     const refreshCountdown = () => {
+      if (!mountedRef.current) {
+        return;
+      }
       setLockedCountdownMs(Math.max(0, lockedRetryUntilMs - Date.now()));
     };
     refreshCountdown();

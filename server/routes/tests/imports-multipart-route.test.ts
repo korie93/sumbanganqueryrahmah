@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
+import { readFileSync } from "node:fs";
 import { access } from "node:fs/promises";
 import { PassThrough } from "node:stream";
 import { setTimeout as delay } from "node:timers/promises";
@@ -442,4 +443,12 @@ test("cleanupTrackedMultipartUploadStreamsForTests reports best-effort cleanup f
     { step: "resume", message: "resume failed" },
     { step: "destroy", message: "destroy failed" },
   ]);
+});
+
+test("createImportsMultipartRoute protects hanging file streams with an unref timeout", () => {
+  const source = readFileSync("server/routes/imports-multipart-route.ts", "utf8");
+
+  assert.match(source, /IMPORT_MULTIPART_FILE_STREAM_TIMEOUT_MS\s*=\s*30_000/);
+  assert.match(source, /multipart_import_file_stream_timeout/);
+  assert.match(source, /timeoutId\.unref\?\.\(\)/);
 });

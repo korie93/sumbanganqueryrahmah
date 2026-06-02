@@ -1,4 +1,4 @@
-import { memo, useCallback, useId, useRef, type MouseEvent } from "react";
+import { memo, useCallback, useId, useRef, type KeyboardEvent, type MouseEvent } from "react";
 import { useLocation } from "wouter";
 import {
   FloatingRootContainer,
@@ -99,7 +99,16 @@ function FloatingAI({ timeoutMs, aiEnabled, activePage, systemName }: FloatingAI
     event.currentTarget.blur();
     handleMinimize();
   }, [handleMinimize]);
-  const handleBackdropClick = useCallback((event: MouseEvent<HTMLDivElement>) => {
+  const handleBackdropClick = useCallback((event: MouseEvent<HTMLButtonElement>) => {
+    event.currentTarget.blur();
+    handleMinimize();
+  }, [handleMinimize]);
+  const handleBackdropKeyDown = useCallback((event: KeyboardEvent<HTMLButtonElement>) => {
+    if (event.key !== "Escape" && event.key !== "Enter" && event.key !== " ") {
+      return;
+    }
+
+    event.preventDefault();
     event.currentTarget.blur();
     handleMinimize();
   }, [handleMinimize]);
@@ -130,14 +139,15 @@ function FloatingAI({ timeoutMs, aiEnabled, activePage, systemName }: FloatingAI
       hidden={layoutState.rootHidden}
     >
       {isMobile && shouldShowPanel ? (
-        <div
+        <button
+          type="button"
           className={cn(
-            "pointer-events-auto border-0 bg-transparent p-0",
+            "pointer-events-auto appearance-none border-0 bg-transparent p-0",
             styles.floatingMobileBackdrop,
           )}
-          aria-hidden="true"
-          role="presentation"
+          aria-label={`Tutup panel ${assistantLabel}`}
           onClick={handleBackdropClick}
+          onKeyDown={handleBackdropKeyDown}
         />
       ) : null}
       <FloatingAIPanel

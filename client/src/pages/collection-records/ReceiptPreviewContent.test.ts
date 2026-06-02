@@ -25,3 +25,11 @@ test("receipt image cleanup avoids assigning an empty image source", () => {
   assert.match(source, /cleanupReceiptImagePreviewElement\(image\)/);
   assert.doesNotMatch(source, /image\.src\s*=\s*""/);
 });
+
+test("receipt image preview declares dimensions and lazy loading to reduce layout shift", () => {
+  const source = readFileSync(path.resolve(__dirname, "ReceiptPreviewContent.tsx"), "utf8");
+
+  assert.match(source, /width=\{RECEIPT_IMAGE_BASE_DISPLAY_WIDTH_PX\}/);
+  assert.match(source, /height=\{RECEIPT_IMAGE_BASE_DISPLAY_HEIGHT_PX\}/);
+  assert.match(source, /loading="lazy"/);
+});

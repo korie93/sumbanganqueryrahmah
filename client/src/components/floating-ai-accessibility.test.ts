@@ -226,12 +226,13 @@ test("applyFloatingAiModalAccessibility traps focus within the dialog and restor
   assert.equal(documentObject.activeElement, previousFocus);
 });
 
-test("FloatingAI mobile backdrop stays presentation-only while Escape closes through the focus trap", () => {
+test("FloatingAI mobile backdrop is a keyboard-dismissable button while Escape also closes through the focus trap", () => {
   const floatingAiSource = readComponentSource("FloatingAI.tsx");
   const focusManagementSource = readComponentSource("useFloatingAIFocusManagement.ts");
 
-  assert.match(floatingAiSource, /<div[\s\S]*styles\.floatingMobileBackdrop[\s\S]*aria-hidden="true"[\s\S]*role="presentation"[\s\S]*onClick=\{handleBackdropClick\}/);
-  assert.doesNotMatch(floatingAiSource, /<button[\s\S]*styles\.floatingMobileBackdrop/);
+  assert.match(floatingAiSource, /<button[\s\S]*styles\.floatingMobileBackdrop[\s\S]*aria-label=\{`Tutup panel \$\{assistantLabel\}`\}[\s\S]*onClick=\{handleBackdropClick\}[\s\S]*onKeyDown=\{handleBackdropKeyDown\}/);
+  assert.doesNotMatch(floatingAiSource, /role="presentation"/);
+  assert.doesNotMatch(floatingAiSource, /aria-hidden="true"/);
   assert.match(focusManagementSource, /onEscapeKeyDown:\s*handleMinimize/);
 });
 
