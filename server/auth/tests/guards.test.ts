@@ -356,39 +356,24 @@ test("activity update cache sweep removes expired entries without waiting for th
   assert.deepEqual(Array.from(cache.keys()), ["fresh"]);
 });
 
-test("auth guard caches register unrefed sweep intervals and clear them idempotently", (t) => {
-  const capturedIntervalMs: number[] = [];
-  let unrefCalls = 0;
-  const fakeHandles = [{
-    unref() {
-      unrefCalls += 1;
-      return this;
-    },
-  }, {
-    unref() {
-      unrefCalls += 1;
-      return this;
-    },
-  }] as unknown as NodeJS.Timeout[];
-  const clearedHandles: NodeJS.Timeout[] = [];
-
+test("auth guard caches avoid background sweep intervals and stop idempotently", (t) => {
   const setIntervalMock = t.mock.method(
     globalThis,
     "setInterval",
     (((handler: TimerHandler, delay?: number) => {
       assert.equal(typeof handler, "function");
-      capturedIntervalMs.push(Number(delay ?? 0));
-      return fakeHandles[capturedIntervalMs.length - 1];
+      assert.equal(typeof delay, "number");
+      return {
+        unref() {
+          return this;
+        },
+      } as unknown as NodeJS.Timeout;
     }) as unknown) as typeof setInterval,
   );
   const clearIntervalMock = t.mock.method(
     globalThis,
     "clearInterval",
-    (((handle?: NodeJS.Timeout) => {
-      if (handle) {
-        clearedHandles.push(handle);
-      }
-    }) as unknown) as typeof clearInterval,
+    (((_handle?: NodeJS.Timeout) => undefined) as unknown) as typeof clearInterval,
   );
 
   const guards = createAuthGuards({
@@ -403,17 +388,14 @@ test("auth guard caches register unrefed sweep intervals and clear them idempote
     secret: "guard-test-secret",
   });
 
-  assert.equal(setIntervalMock.mock.callCount(), 2);
-  assert.deepEqual(capturedIntervalMs, [5 * 60 * 1000, 2 * 60 * 1000]);
-  assert.equal(unrefCalls, 2);
+  assert.equal(setIntervalMock.mock.callCount(), 0);
 
   guards.stopTabVisibilityCacheSweep();
   guards.stopActivityUpdateCacheSweep();
   guards.stopTabVisibilityCacheSweep();
   guards.stopActivityUpdateCacheSweep();
 
-  assert.equal(clearIntervalMock.mock.callCount(), 2);
-  assert.deepEqual(clearedHandles, fakeHandles);
+  assert.equal(clearIntervalMock.mock.callCount(), 0);
 });
 
 test("authenticateToken prefers the composite session snapshot when storage exposes it", async () => {

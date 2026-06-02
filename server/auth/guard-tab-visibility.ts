@@ -3,11 +3,9 @@ import { internalMetrics } from "../internal/metrics";
 import {
   TAB_VISIBILITY_CACHE_MAX_SIZE,
   TAB_VISIBILITY_CACHE_SWEEP_INTERVAL_MS,
-  TAB_VISIBILITY_CACHE_TARGET_SIZE_AFTER_EVICTION,
   TAB_VISIBILITY_CACHE_TTL_MS,
-  evictOldestTabVisibilityCacheEntries,
-  sweepExpiredTabVisibilityCacheEntries,
-  type TabVisibilityCacheEntry,
+  createTabVisibilityLruCache,
+  purgeStaleLruCacheEntries,
 } from "./guard-cache";
 
 type TabVisibilityStorage = Pick<IStorage, "getRoleTabVisibility">;
@@ -24,14 +22,20 @@ export function createRoleTabVisibilityCache(options: {
   storage: TabVisibilityStorage;
 }) {
   const storage = options.storage;
-  const tabVisibilityCache = new Map<string, TabVisibilityCacheEntry>();
+  const tabVisibilityCache = createTabVisibilityLruCache({
+    onDispose: (_entry, _role, reason) => {
+      if (reason === "evict") {
+        internalMetrics.increment("authTabVisibilityCacheEvictionsTotal");
+      }
+      if (reason === "expire") {
+        internalMetrics.increment("authTabVisibilityCacheExpiredEntriesTotal");
+      }
+    },
+  });
   let stopped = false;
-  const sweepHandle = setInterval(() => {
-    sweepExpiredEntries();
-  }, TAB_VISIBILITY_CACHE_SWEEP_INTERVAL_MS);
-  sweepHandle.unref?.();
 
   function getStats(): TabVisibilityCacheStats {
+    tabVisibilityCache.purgeStale();
     return {
       size: tabVisibilityCache.size,
       maxSize: TAB_VISIBILITY_CACHE_MAX_SIZE,
@@ -48,30 +52,14 @@ export function createRoleTabVisibilityCache(options: {
   }
 
   function sweepExpiredEntries(now = Date.now()): number {
-    const removed = sweepExpiredTabVisibilityCacheEntries(tabVisibilityCache, now);
-    if (removed > 0) {
-      internalMetrics.increment("authTabVisibilityCacheExpiredEntriesTotal", removed);
-    }
+    void now;
+    const removed = purgeStaleLruCacheEntries(tabVisibilityCache);
     publishMetrics();
     return removed;
   }
 
   function setRoleTabVisibilityCache(role: string, tabs: Record<string, boolean>, cachedAt: number) {
-    sweepExpiredEntries(cachedAt);
-
-    if (!tabVisibilityCache.has(role)) {
-      if (tabVisibilityCache.size >= TAB_VISIBILITY_CACHE_MAX_SIZE) {
-        const evicted = evictOldestTabVisibilityCacheEntries(
-          tabVisibilityCache,
-          TAB_VISIBILITY_CACHE_TARGET_SIZE_AFTER_EVICTION,
-        );
-        if (evicted.length > 0) {
-          internalMetrics.increment("authTabVisibilityCacheEvictionsTotal", evicted.length);
-        }
-      }
-    }
-
-    tabVisibilityCache.set(role, { tabs, cachedAt });
+    tabVisibilityCache.set(role, { tabs, cachedAt }, { start: cachedAt });
     publishMetrics();
   }
 
@@ -107,7 +95,7 @@ export function createRoleTabVisibilityCache(options: {
         return;
       }
       stopped = true;
-      clearInterval(sweepHandle);
+      publishMetrics();
     },
   };
 }

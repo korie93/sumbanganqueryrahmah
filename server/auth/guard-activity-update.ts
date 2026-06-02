@@ -5,12 +5,10 @@ import { internalMetrics } from "../internal/metrics";
 import { logger } from "../lib/logger";
 import {
   ACTIVITY_UPDATE_CACHE_MAX_SIZE,
-  ACTIVITY_UPDATE_CACHE_PREEMPTIVE_EVICTION_THRESHOLD,
-  ACTIVITY_UPDATE_CACHE_SWEEP_INTERVAL_MS,
-  ACTIVITY_UPDATE_CACHE_TARGET_SIZE_AFTER_EVICTION,
+  ACTIVITY_UPDATE_CACHE_TTL_MS,
   ACTIVITY_UPDATE_THROTTLE_MS,
-  evictOldestActivityUpdateCacheEntries,
-  sweepExpiredActivityUpdateCacheEntries,
+  createActivityUpdateLruCache,
+  purgeStaleLruCacheEntries,
 } from "./guard-cache";
 
 type ActivityUpdateResult = "updated" | "skipped" | "stale";
@@ -47,58 +45,33 @@ export function createActivityUpdateThrottler(options: {
   const auditLogger = options.logger ?? logger;
   const activityUpdateThrottleMs = Math.max(0, options.activityUpdateThrottleMs ?? ACTIVITY_UPDATE_THROTTLE_MS);
   const cacheMaxSize = normalizeCacheLimit(options.cacheMaxSize, ACTIVITY_UPDATE_CACHE_MAX_SIZE);
-  const cachePreemptiveEvictionThreshold = Math.min(
-    cacheMaxSize,
-    normalizeCacheLimit(
-      options.cachePreemptiveEvictionThreshold,
-      ACTIVITY_UPDATE_CACHE_PREEMPTIVE_EVICTION_THRESHOLD,
-    ),
-  );
-  const cacheTargetSizeAfterEviction = Math.min(
-    cachePreemptiveEvictionThreshold - 1,
-    normalizeCacheLimit(
-      options.cacheTargetSizeAfterEviction,
-      ACTIVITY_UPDATE_CACHE_TARGET_SIZE_AFTER_EVICTION,
-    ),
-  );
-  const activityUpdateCache = new Map<string, number>();
+  void options.cachePreemptiveEvictionThreshold;
+  void options.cacheTargetSizeAfterEviction;
+  const activityUpdateCache = createActivityUpdateLruCache({
+    maxSize: cacheMaxSize,
+    ttlMs: ACTIVITY_UPDATE_CACHE_TTL_MS,
+    onDispose: (_updatedAt, _activityId, reason) => {
+      if (reason === "evict") {
+        internalMetrics.increment("authActivityUpdateCacheEvictionsTotal");
+      }
+      if (reason === "expire") {
+        internalMetrics.increment("authActivityUpdateCacheExpiredEntriesTotal");
+      }
+    },
+  });
   let stopped = false;
-  const sweepHandle = setInterval(() => {
-    const removed = sweepExpiredActivityUpdateCacheEntries(activityUpdateCache);
-    if (removed > 0) {
-      internalMetrics.increment("authActivityUpdateCacheExpiredEntriesTotal", removed);
-    }
-    publishMetrics();
-  }, ACTIVITY_UPDATE_CACHE_SWEEP_INTERVAL_MS);
-  sweepHandle.unref?.();
 
   function publishMetrics(): void {
+    activityUpdateCache.purgeStale();
     internalMetrics.gauge("authActivityUpdateCacheSize", activityUpdateCache.size);
     internalMetrics.gauge("authActivityUpdateCacheUtilization", activityUpdateCache.size / cacheMaxSize);
   }
 
   function sweepExpiredReservations(now = Date.now()): number {
-    const removed = sweepExpiredActivityUpdateCacheEntries(activityUpdateCache, now);
-    if (removed > 0) {
-      internalMetrics.increment("authActivityUpdateCacheExpiredEntriesTotal", removed);
-    }
+    void now;
+    const removed = purgeStaleLruCacheEntries(activityUpdateCache);
     publishMetrics();
     return removed;
-  }
-
-  function evictUnderPressure(): void {
-    if (activityUpdateCache.size < cachePreemptiveEvictionThreshold) {
-      return;
-    }
-
-    const evicted = evictOldestActivityUpdateCacheEntries(
-      activityUpdateCache,
-      cacheTargetSizeAfterEviction,
-    );
-    if (evicted.length > 0) {
-      internalMetrics.increment("authActivityUpdateCacheEvictionsTotal", evicted.length);
-      publishMetrics();
-    }
   }
 
   function reserveActivityUpdate(activityId: string, now: number) {
@@ -112,11 +85,7 @@ export function createActivityUpdateThrottler(options: {
       return false;
     }
 
-    if (!activityUpdateCache.has(activityId)) {
-      evictUnderPressure();
-    }
-
-    activityUpdateCache.set(activityId, now);
+    activityUpdateCache.set(activityId, now, { start: now });
     publishMetrics();
     return true;
   }
@@ -146,8 +115,8 @@ export function createActivityUpdateThrottler(options: {
       return {
         size: activityUpdateCache.size,
         maxSize: cacheMaxSize,
-        preemptiveEvictionThreshold: cachePreemptiveEvictionThreshold,
-        targetSizeAfterEviction: cacheTargetSizeAfterEviction,
+        preemptiveEvictionThreshold: cacheMaxSize,
+        targetSizeAfterEviction: cacheMaxSize,
         utilization: activityUpdateCache.size / cacheMaxSize,
       };
     },
@@ -178,7 +147,7 @@ export function createActivityUpdateThrottler(options: {
         return;
       }
       stopped = true;
-      clearInterval(sweepHandle);
+      publishMetrics();
     },
   };
 }

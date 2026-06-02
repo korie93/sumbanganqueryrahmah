@@ -44,7 +44,7 @@ test("activity update throttler logs skipped writes with coarse non-PII audit me
   assert.equal(Object.values(logs[0]?.metadata).includes(activityId), false);
 });
 
-test("activity update throttler preemptively evicts old reservations before max capacity", async (t) => {
+test("activity update throttler evicts least recently used reservations at max capacity", async (t) => {
   let now = 1_000_000;
   t.mock.method(Date, "now", () => now++);
 
@@ -53,8 +53,6 @@ test("activity update throttler preemptively evicts old reservations before max 
   const throttler = createActivityUpdateThrottler({
     activityUpdateThrottleMs: 30_000,
     cacheMaxSize: 6,
-    cachePreemptiveEvictionThreshold: 5,
-    cacheTargetSizeAfterEviction: 3,
     storage: {
       updateActivity: async () => {
         updateCalls += 1;
@@ -64,24 +62,24 @@ test("activity update throttler preemptively evicts old reservations before max 
   });
 
   try {
-    for (let index = 0; index < 6; index += 1) {
+    for (let index = 0; index < 7; index += 1) {
       assert.equal(await throttler.updateAuthenticatedActivity(`activity-${index}`), "updated");
     }
 
     const stats = throttler.getStats();
     const afterMetrics = getInternalMetricsSnapshot();
 
-    assert.equal(updateCalls, 6);
-    assert.equal(stats.size, 4);
+    assert.equal(updateCalls, 7);
+    assert.equal(stats.size, 6);
     assert.equal(stats.maxSize, 6);
-    assert.equal(stats.preemptiveEvictionThreshold, 5);
-    assert.equal(stats.targetSizeAfterEviction, 3);
-    assert.equal(afterMetrics.gauges.authActivityUpdateCacheSize, 4);
-    assert.equal(afterMetrics.gauges.authActivityUpdateCacheUtilization, 4 / 6);
+    assert.equal(stats.preemptiveEvictionThreshold, 6);
+    assert.equal(stats.targetSizeAfterEviction, 6);
+    assert.equal(afterMetrics.gauges.authActivityUpdateCacheSize, 6);
+    assert.equal(afterMetrics.gauges.authActivityUpdateCacheUtilization, 1);
     assert.equal(
       afterMetrics.counters.authActivityUpdateCacheEvictionsTotal
         - beforeMetrics.counters.authActivityUpdateCacheEvictionsTotal,
-      2,
+      1,
     );
   } finally {
     throttler.stop();

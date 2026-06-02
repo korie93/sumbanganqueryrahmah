@@ -3,7 +3,6 @@ import test from "node:test";
 import { getInternalMetricsSnapshot } from "../../internal/metrics";
 import {
   TAB_VISIBILITY_CACHE_MAX_SIZE,
-  TAB_VISIBILITY_CACHE_TARGET_SIZE_AFTER_EVICTION,
   TAB_VISIBILITY_CACHE_TTL_MS,
 } from "../guard-cache";
 import { createRoleTabVisibilityCache } from "../guard-tab-visibility";
@@ -28,14 +27,12 @@ test("role tab visibility cache stays bounded and publishes pressure gauges", as
     const metrics = getInternalMetricsSnapshot();
 
     assert.equal(lookupCount, TAB_VISIBILITY_CACHE_MAX_SIZE + 5);
-    assert.equal(stats.size, TAB_VISIBILITY_CACHE_TARGET_SIZE_AFTER_EVICTION + 5);
+    assert.equal(stats.size, TAB_VISIBILITY_CACHE_MAX_SIZE);
     assert.equal(stats.maxSize, TAB_VISIBILITY_CACHE_MAX_SIZE);
     assert.equal(stats.utilization, stats.size / TAB_VISIBILITY_CACHE_MAX_SIZE);
     assert.equal(metrics.gauges.authTabVisibilityCacheSize, stats.size);
     assert.equal(metrics.gauges.authTabVisibilityCacheUtilization, stats.utilization);
-    assert.ok(metrics.counters.authTabVisibilityCacheEvictionsTotal >= (
-      TAB_VISIBILITY_CACHE_MAX_SIZE - TAB_VISIBILITY_CACHE_TARGET_SIZE_AFTER_EVICTION
-    ));
+    assert.ok(metrics.counters.authTabVisibilityCacheEvictionsTotal >= 5);
   } finally {
     cache.stop();
   }
