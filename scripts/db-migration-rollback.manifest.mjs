@@ -57,6 +57,7 @@ const MIGRATION_TAGS = Object.freeze([
   "0037_collection_daily_calendar_off_leave_type",
   "0038_collection_daily_calendar_audit",
   "0039_settings_fk_not_null_idempotency_audit",
+  "0041_pii_xor_check_constraints",
 ]);
 
 export const migrationRollbackManifest = Object.freeze(
