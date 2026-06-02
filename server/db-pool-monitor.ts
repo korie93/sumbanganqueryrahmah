@@ -43,6 +43,7 @@ const POSTGRES_DEADLOCK_SQLSTATE = "40P01";
 const PERCENT_MULTIPLIER = 100;
 const PERCENT_PRECISION_MULTIPLIER = 10;
 const PG_POOL_LISTENER_COUNT_WARNING_THRESHOLD = 5;
+const PG_POOL_LISTENER_COUNT_HARD_LIMIT = 10;
 const MAX_CONSECUTIVE_PG_POOL_HEALTH_CHECK_FAILURES = 5;
 const PG_POOL_HEALTH_CHECK_RECOVERY_BASE_DELAY_MS = 5_000;
 const PG_POOL_HEALTH_CHECK_RECOVERY_MAX_DELAY_MS = 60_000;
@@ -138,7 +139,11 @@ function removePoolListener(pool: PgPoolLike, registration: PgPoolListenerRegist
   throw new Error("PostgreSQL pool listener removal is unavailable");
 }
 
-function createPgPoolListenerRegistry(pool: PgPoolLike, sink: LoggerLike) {
+function createPgPoolListenerRegistry(
+  pool: PgPoolLike,
+  sink: LoggerLike,
+  metrics: Pick<InternalMetricsRecorder, "increment">,
+) {
   let registrations: PgPoolListenerRegistration[] = [];
 
   const register = (event: string, listener: (...args: unknown[]) => void) => {
@@ -152,6 +157,18 @@ function createPgPoolListenerRegistry(pool: PgPoolLike, sink: LoggerLike) {
         poolEvent: event,
         listenerCount: existingCount,
       });
+    }
+
+    if (existingCount >= PG_POOL_LISTENER_COUNT_HARD_LIMIT) {
+      metrics.increment("dbPoolListenerRegistrationRejectedTotal");
+      sink.error("PostgreSQL pool listener hard limit reached", {
+        action: "listener_rejected",
+        event: "pg_pool_listener_count_hard_limit",
+        hardLimit: PG_POOL_LISTENER_COUNT_HARD_LIMIT,
+        listenerCount: existingCount,
+        poolEvent: event,
+      });
+      throw new Error("PostgreSQL pool listener hard limit reached");
     }
 
     pool.on(event, listener);
@@ -197,7 +214,7 @@ export function bindPgPoolMonitoring(pool: PgPoolLike, options: BindPgPoolMonito
   const warnCooldownMs = Math.max(1_000, Number(options.warnCooldownMs || 60_000));
   const sink = options.logger ?? logger;
   const metrics = options.metrics ?? internalMetrics;
-  const listenerRegistry = createPgPoolListenerRegistry(pool, sink);
+  const listenerRegistry = createPgPoolListenerRegistry(pool, sink, metrics);
   let lastWarningAt = 0;
   let lastWarningSignature = "";
 
@@ -262,10 +279,15 @@ export function bindPgPoolMonitoring(pool: PgPoolLike, options: BindPgPoolMonito
     maybeWarnPressure("pool-error");
   };
 
-  listenerRegistry.register("connect", handleConnect);
-  listenerRegistry.register("acquire", handleAcquire);
-  listenerRegistry.register("remove", handleRemove);
-  listenerRegistry.register("error", handleError);
+  try {
+    listenerRegistry.register("connect", handleConnect);
+    listenerRegistry.register("acquire", handleAcquire);
+    listenerRegistry.register("remove", handleRemove);
+    listenerRegistry.register("error", handleError);
+  } catch (error) {
+    listenerRegistry.cleanup();
+    throw error;
+  }
 
   return () => {
     listenerRegistry.cleanup();

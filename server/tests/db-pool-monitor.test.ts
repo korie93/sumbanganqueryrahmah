@@ -386,6 +386,44 @@ test("bindPgPoolMonitoring warns when registering above the listener threshold",
   assert.equal(warnings.find((warning) => warning.event === "pg_pool_listener_count_high")?.poolEvent, "acquire");
 });
 
+test("bindPgPoolMonitoring rejects listener registration at the hard limit and cleans up partial registrations", () => {
+  const pool = new FakePool();
+  const noop = () => undefined;
+  for (let index = 0; index < 10; index += 1) {
+    pool.on("acquire", noop);
+  }
+  const metrics = createInternalMetrics();
+  const errors: Array<{ message: string; meta: Record<string, unknown> }> = [];
+
+  assert.throws(
+    () => bindPgPoolMonitoring(pool, {
+      metrics,
+      logger: {
+        warn: () => undefined,
+        error: (message, meta) => {
+          errors.push({ message, meta: meta || {} });
+        },
+      },
+    }),
+    /listener hard limit reached/,
+  );
+
+  assert.equal(pool.listenerCount("connect"), 0);
+  assert.equal(pool.listenerCount("acquire"), 10);
+  assert.equal(pool.listenerCount("remove"), 0);
+  assert.equal(pool.listenerCount("error"), 0);
+  assert.equal(metrics.snapshot().counters.dbPoolListenerRegistrationRejectedTotal, 1);
+  assert.equal(errors.length, 1);
+  assert.equal(errors[0]?.message, "PostgreSQL pool listener hard limit reached");
+  assert.equal(errors[0]?.meta.event, "pg_pool_listener_count_hard_limit");
+  assert.equal(errors[0]?.meta.action, "listener_rejected");
+  assert.equal(errors[0]?.meta.hardLimit, 10);
+  assert.equal(errors[0]?.meta.listenerCount, 10);
+  assert.equal(errors[0]?.meta.poolEvent, "acquire");
+
+  pool.removeAllListeners("acquire");
+});
+
 test("bindPgPoolHealthCheck logs failures from a periodic SELECT 1 probe", async () => {
   const pool = new FakePool();
   const warnings: Array<Record<string, unknown>> = [];
