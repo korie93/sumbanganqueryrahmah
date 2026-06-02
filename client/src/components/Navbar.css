@@ -336,8 +336,8 @@
   }
 }
 
-/* AUDIT-FIX [M9]: preserve navbar controls on ultra-small legacy mobile widths. */
-@media (max-width: 319px) {
+/* AUDIT-FIX [M9]: preserve navbar controls on compact mobile widths using the shared sm breakpoint. */
+@media (max-width: 640px) {
   .navbar-safe-area-shell {
     padding-left: max(0.35rem, var(--safe-area-inset-left));
     padding-right: max(0.35rem, var(--safe-area-inset-right));
