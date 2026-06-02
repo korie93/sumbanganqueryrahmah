@@ -404,12 +404,14 @@ test("collection PII decrypt failures are observable without logging payload val
     },
   );
 
-  assert.equal(debugLogs.length, 2);
-  assert.equal(debugLogs[0]?.message, "Collection PII decryption candidate failed");
-  assert.equal(debugLogs[0]?.metadata.payloadLength, "invalid-encrypted-payload".length);
-  assert.equal(debugLogs[0]?.metadata.secretIndex, 0);
-  assert.equal(debugLogs[0]?.metadata.secretCount, 2);
-  assert.equal(Object.prototype.hasOwnProperty.call(debugLogs[0]?.metadata ?? {}, "payload"), false);
+  const candidateLogs = debugLogs.filter((entry) => entry.message === "Collection PII decryption candidate failed");
+  assert.equal(candidateLogs.length, 2);
+  assert.equal(candidateLogs[0]?.metadata.payloadLength, "invalid-encrypted-payload".length);
+  assert.equal(candidateLogs[0]?.metadata.secretIndex, 0);
+  assert.equal(candidateLogs[0]?.metadata.secretCount, 2);
+  assert.equal(debugLogs.every((entry) =>
+    !Object.prototype.hasOwnProperty.call(entry.metadata ?? {}, "payload")
+  ), true);
 });
 
 test("collection PII safe decrypt increments fallback metric on failure", () => {

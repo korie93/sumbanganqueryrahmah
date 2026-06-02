@@ -3,6 +3,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { runtimeConfig } from "../config/runtime";
 import { resolveUploadsRootDir } from "../config/upload-paths";
+import { logger } from "./logger";
 
 export const COLLECTION_UPLOADS_ROOT_DIR = resolveUploadsRootDir();
 export const COLLECTION_RECEIPT_DIR = path.resolve(COLLECTION_UPLOADS_ROOT_DIR, "collection-receipts");
@@ -66,7 +67,12 @@ export async function collectionReceiptFileExists(
   try {
     await fs.access(resolved.absolutePath, fsConstants.R_OK);
     return true;
-  } catch {
+  } catch (error) {
+    logger.debug("Collection receipt file is not readable", {
+      operation: "collection_receipt_file_exists",
+      isManagedCollectionReceipt: resolved.isManagedCollectionReceipt,
+      error: error instanceof Error ? error.message : "Unknown file access failure",
+    });
     return false;
   }
 }

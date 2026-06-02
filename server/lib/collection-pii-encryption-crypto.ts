@@ -1,5 +1,6 @@
 import { createCipheriv, createDecipheriv, createHash, hkdfSync, randomBytes } from "node:crypto";
 import { normalizeCollectionPiiValue } from "./collection-pii-encryption-normalize";
+import { logger } from "./logger";
 
 export const COLLECTION_PII_ENCRYPTION_INFO = "sqr-collection-pii-encryption-v1";
 export const COLLECTION_PII_ENCRYPTION_SALT = "sqr-collection-pii-encryption-salt-v1";
@@ -59,7 +60,13 @@ export function decryptCollectionPiiValueWithSecret(payload: string, secret: str
   } catch (hkdfError) {
     try {
       return decryptCollectionPiiValueWithKey(payload, getLegacyCollectionPiiCipherKey(secret));
-    } catch {
+    } catch (legacyError) {
+      logger.debug("Collection PII legacy decrypt fallback failed", {
+        operation: "decryptCollectionPiiValueWithSecret",
+        payloadLength: payload.length,
+        hkdfError: hkdfError instanceof Error ? hkdfError.message : "Unknown HKDF decrypt failure",
+        legacyError: legacyError instanceof Error ? legacyError.message : "Unknown legacy decrypt failure",
+      });
       throw hkdfError;
     }
   }
@@ -81,7 +88,12 @@ export function decryptCollectionPiiValueWithSecretSafe(payload: unknown, secret
   try {
     const decrypted = decryptCollectionPiiValueWithSecret(normalized, secret);
     return normalizeCollectionPiiValue(decrypted) || null;
-  } catch {
+  } catch (error) {
+    logger.debug("Safe collection PII decrypt returned null after decrypt failure", {
+      operation: "decryptCollectionPiiValueWithSecretSafe",
+      payloadLength: normalized.length,
+      error: error instanceof Error ? error.message : "Unknown decrypt failure",
+    });
     return null;
   }
 }

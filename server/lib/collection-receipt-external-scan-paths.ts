@@ -6,6 +6,7 @@ import {
   BARE_COMMAND_PATTERN,
   UNSAFE_ENV_VALUE_PATTERN,
 } from "./collection-receipt-external-scan-shared";
+import { logger } from "./logger";
 import {
   assertCollectionReceiptPathWithinBounds,
   PathTraversalError,
@@ -57,7 +58,11 @@ async function isCurrentNodeExecutable(resolvedPath: string): Promise<boolean> {
   try {
     const currentNodePath = await fs.realpath(process.execPath);
     return normalizePathForComparison(resolvedPath) === normalizePathForComparison(currentNodePath);
-  } catch {
+  } catch (error) {
+    logger.debug("Failed to resolve current Node executable realpath during scanner validation", {
+      operation: "external_scan_current_node_realpath",
+      error: error instanceof Error ? error.message : "Unknown realpath failure",
+    });
     return normalizePathForComparison(resolvedPath) === normalizePathForComparison(process.execPath);
   }
 }
@@ -108,7 +113,12 @@ async function resolveExistingFile(
       return null;
     }
     return resolvedPath;
-  } catch {
+  } catch (error) {
+    logger.debug("External scanner path candidate did not resolve to an accessible file", {
+      operation: "external_scan_resolve_existing_file",
+      requireExecutable: options.requireExecutable === true,
+      error: error instanceof Error ? error.message : "Unknown file resolution failure",
+    });
     return null;
   }
 }

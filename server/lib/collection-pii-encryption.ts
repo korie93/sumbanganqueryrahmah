@@ -455,7 +455,12 @@ export function shouldRewriteCollectionPiiShadowValue(params: {
       normalizeCollectionPiiValue(params.encrypted),
       currentSecret,
     ) !== resolved;
-  } catch {
+  } catch (error) {
+    logger.debug("Collection PII shadow value requires rewrite after current-key decrypt check failed", {
+      operation: "shouldRewriteCollectionPiiShadowValue",
+      encryptedLength: normalizeCollectionPiiValue(params.encrypted).length,
+      error: summarizeCollectionPiiDecryptError(error),
+    });
     return true;
   }
 }
