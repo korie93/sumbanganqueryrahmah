@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { DEFAULT_ACTIVITY_FILTERS } from "@/pages/activity/types";
 import type { ActivityRecord } from "@/pages/activity/types";
 import {
@@ -7,6 +9,7 @@ import {
   formatActivityTime,
   getActivityFilterCount,
   getSessionDuration,
+  getStatusBadge,
   hasActiveActivityFilters,
   parseActivityUserAgent,
 } from "@/pages/activity/utils";
@@ -67,4 +70,26 @@ test("countActivitiesByStatus counts matching visible rows", () => {
   ] as ActivityRecord[];
 
   assert.equal(countActivitiesByStatus(activities, "ONLINE"), 2);
+});
+
+test("activity status badges keep light-mode text readable", () => {
+  const markup = renderToStaticMarkup(
+    createElement(
+      "div",
+      null,
+      getStatusBadge("ONLINE"),
+      getStatusBadge("IDLE"),
+      getStatusBadge("LOGOUT"),
+      getStatusBadge("KICKED"),
+      getStatusBadge("BANNED"),
+    ),
+  );
+
+  assert.match(markup, /text-green-700/);
+  assert.match(markup, /text-amber-800/);
+  assert.match(markup, /text-slate-700/);
+  assert.match(markup, /text-orange-800/);
+  assert.match(markup, /text-rose-800/);
+  assert.doesNotMatch(markup, /bg-primary/);
+  assert.doesNotMatch(markup, /primary-foreground/);
 });

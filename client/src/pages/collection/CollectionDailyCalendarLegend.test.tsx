@@ -19,4 +19,20 @@ test("CollectionDailyCalendarLegend explains result colors and leave codes", () 
   assert.match(markup, /Annual Leave/);
   assert.match(markup, /OFF/);
   assert.match(markup, /Company Closed/);
+  assert.match(markup, /text-emerald-800/);
+  assert.doesNotMatch(markup, /bg-primary/);
+  assert.doesNotMatch(markup, /primary-foreground/);
+});
+
+test("CollectionDailyCalendarLegend keeps mobile legend badges readable in light mode", () => {
+  const markup = renderToStaticMarkup(
+    createElement(CollectionDailyCalendarLegend, {
+      isMobile: true,
+    }),
+  );
+
+  assert.match(markup, /text-rose-700/);
+  assert.match(markup, /text-emerald-800/);
+  assert.doesNotMatch(markup, /bg-primary/);
+  assert.doesNotMatch(markup, /primary-foreground/);
 });

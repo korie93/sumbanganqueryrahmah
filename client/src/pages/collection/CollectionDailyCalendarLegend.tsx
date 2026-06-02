@@ -12,6 +12,7 @@ type CollectionDailyCalendarLegendProps = {
 function StatusCodeBadge({ item }: { item: CollectionDailyCalendarLegendItem }) {
   return (
     <Badge
+      variant="outline"
       className={`collection-daily-legend-badge inline-flex items-center gap-1.5 ${item.className} hover:bg-current/0`}
       title={`${item.code ? `${item.code} - ` : ""}${item.detail}`}
     >
@@ -33,6 +34,7 @@ export function CollectionDailyCalendarLegend({ isMobile }: CollectionDailyCalen
           {COLLECTION_DAILY_RESULT_LEGEND_ITEMS.map((item) => (
             <Badge
               key={item.label}
+              variant="outline"
               className={`collection-daily-legend-badge ${item.className} hover:bg-current/0`}
               title={item.detail}
             >
