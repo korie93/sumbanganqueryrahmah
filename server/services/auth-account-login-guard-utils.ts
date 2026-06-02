@@ -10,6 +10,7 @@ import type { PostgresStorage } from "../storage-postgres";
 import { ERROR_CODES } from "../../shared/error-codes";
 import { getRequestContext } from "../lib/request-context";
 import { buildSecurityAuditDetails } from "../lib/security-audit-log";
+import { t } from "../i18n/server";
 import { AuthAccountError } from "./auth-account-types";
 import type {
   AuthAccountAuthenticationStorage,
@@ -160,7 +161,7 @@ export async function handleFailedPasswordAttempt(params: {
     );
   }
 
-  throw new AuthAccountError(401, ERROR_CODES.INVALID_CREDENTIALS, "Invalid credentials");
+  throw new AuthAccountError(401, ERROR_CODES.INVALID_CREDENTIALS, t("auth.invalidCredentials"));
 }
 
 export async function verifyTwoFactorSecretCode(params: {
@@ -180,7 +181,7 @@ export async function verifyTwoFactorSecretCode(params: {
     throw new AuthAccountError(
       500,
       ERROR_CODES.TWO_FACTOR_SECRET_INVALID,
-      "Two-factor authentication is unavailable.",
+      t("auth.twoFactorUnavailable"),
     );
   }
 
@@ -188,7 +189,7 @@ export async function verifyTwoFactorSecretCode(params: {
     throw new AuthAccountError(
       401,
       ERROR_CODES.TWO_FACTOR_INVALID_CODE,
-      "Authenticator code is invalid.",
+      t("auth.twoFactorInvalidCode"),
     );
   }
 
@@ -203,7 +204,7 @@ export async function verifyTwoFactorSecretCode(params: {
     throw new AuthAccountError(
       401,
       ERROR_CODES.TWO_FACTOR_INVALID_CODE,
-      "Authenticator code is invalid.",
+      t("auth.twoFactorInvalidCode"),
     );
   }
 

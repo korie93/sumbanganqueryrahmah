@@ -43,6 +43,7 @@ import { loadAuthenticatedSessionSnapshot } from "./guard-session-snapshot";
 import { internalMetrics } from "../internal/metrics";
 import { buildApiErrorResponse } from "../http/api-error-response";
 import { buildSecurityAuditDetails } from "../lib/security-audit-log";
+import { t } from "../i18n/server";
 export { getInvalidatedSessionMessage } from "./guard-session-messages";
 
 export interface AuthenticatedUser {
@@ -540,7 +541,7 @@ export function createAuthGuards(options: CreateAuthGuardsOptions) {
 
     if (!token) {
       clearAuthSessionCookie(res);
-      return res.status(401).json(buildAuthGuardErrorResponse(401, "Token required", {
+      return res.status(401).json(buildAuthGuardErrorResponse(401, t("auth.tokenRequired"), {
         code: "TOKEN_REQUIRED",
       }));
     }
@@ -552,7 +553,7 @@ export function createAuthGuards(options: CreateAuthGuardsOptions) {
       );
       if (await isSessionJwtRevoked(decoded.jti)) {
         clearAuthSessionCookie(res);
-        return res.status(401).json(buildAuthGuardErrorResponse(401, "Session expired. Please login again.", {
+        return res.status(401).json(buildAuthGuardErrorResponse(401, t("auth.sessionExpired"), {
           code: ERROR_CODES.TOKEN_EXPIRED,
           extra: { forceLogout: true },
         }));
@@ -569,7 +570,7 @@ export function createAuthGuards(options: CreateAuthGuardsOptions) {
 
       if (isVisitorBanned) {
         clearAuthSessionCookie(res);
-        return res.status(401).json(buildAuthGuardErrorResponse(401, "Session banned. Please login again.", {
+        return res.status(401).json(buildAuthGuardErrorResponse(401, t("auth.sessionBanned"), {
           code: ERROR_CODES.ACCOUNT_BANNED,
           extra: { forceLogout: true },
         }));
@@ -582,7 +583,7 @@ export function createAuthGuards(options: CreateAuthGuardsOptions) {
           logoutReason: "USER_NOT_FOUND",
         });
         clearAuthSessionCookie(res);
-        return res.status(401).json(buildAuthGuardErrorResponse(401, "Session expired. Please login again.", {
+        return res.status(401).json(buildAuthGuardErrorResponse(401, t("auth.sessionExpired"), {
           code: ERROR_CODES.USER_NOT_FOUND,
           extra: { forceLogout: true },
         }));
@@ -598,10 +599,10 @@ export function createAuthGuards(options: CreateAuthGuardsOptions) {
         clearAuthSessionCookie(res);
         const statusCode = blockReason === "banned" ? 403 : blockReason === "locked" ? 423 : 401;
         const message = blockReason === "banned"
-          ? "Account is banned"
+          ? t("auth.accountBanned")
           : blockReason === "locked"
-            ? "Your account has been locked due to too many incorrect login attempts. Please contact the system administrator."
-            : "Session expired. Please login again.";
+            ? t("auth.accountLocked")
+            : t("auth.sessionExpired");
         const code = blockReason === "banned"
           ? ERROR_CODES.ACCOUNT_BANNED
           : blockReason === "locked"
@@ -620,7 +621,7 @@ export function createAuthGuards(options: CreateAuthGuardsOptions) {
       const forcePasswordChange =
         user.mustChangePassword === true && !canUserBypassForcedPasswordChange(user.role);
       if (forcePasswordChange && !canAccessDuringForcedPasswordChange(req.method, req.path)) {
-        return res.status(403).json(buildAuthGuardErrorResponse(403, "Password change required before accessing the application.", {
+        return res.status(403).json(buildAuthGuardErrorResponse(403, t("auth.passwordChangeRequired"), {
           code: ERROR_CODES.PASSWORD_CHANGE_REQUIRED,
           extra: { forcePasswordChange: true },
         }));
@@ -653,7 +654,7 @@ export function createAuthGuards(options: CreateAuthGuardsOptions) {
           logoutReason: "USER_IDENTITY_INCOMPLETE",
         });
         clearAuthSessionCookie(res);
-        return res.status(401).json(buildAuthGuardErrorResponse(401, "Session expired. Please login again.", {
+        return res.status(401).json(buildAuthGuardErrorResponse(401, t("auth.sessionExpired"), {
           code: ERROR_CODES.ACCOUNT_UNAVAILABLE,
           extra: { forceLogout: true },
         }));
@@ -662,7 +663,7 @@ export function createAuthGuards(options: CreateAuthGuardsOptions) {
       const activityUpdateResult = await activityUpdates.updateAuthenticatedActivity(decoded.activityId);
       if (activityUpdateResult === "stale") {
         clearAuthSessionCookie(res);
-        return res.status(401).json(buildAuthGuardErrorResponse(401, "Session expired. Please login again.", {
+        return res.status(401).json(buildAuthGuardErrorResponse(401, t("auth.sessionExpired"), {
           code: ERROR_CODES.TOKEN_EXPIRED,
           extra: { forceLogout: true },
         }));
@@ -690,7 +691,7 @@ export function createAuthGuards(options: CreateAuthGuardsOptions) {
             error: sanitizeSessionRefreshRevocationError(error),
           });
           clearAuthSessionCookie(res);
-          return res.status(503).json(buildAuthGuardErrorResponse(503, "Session refresh is temporarily unavailable. Please try again.", {
+          return res.status(503).json(buildAuthGuardErrorResponse(503, t("auth.sessionRefreshUnavailable"), {
             code: "SESSION_REFRESH_UNAVAILABLE",
           }));
         }
@@ -730,7 +731,7 @@ export function createAuthGuards(options: CreateAuthGuardsOptions) {
         error: (error as Error)?.message,
       });
       clearAuthSessionCookie(res);
-      return res.status(401).json(buildAuthGuardErrorResponse(401, "Invalid token", {
+      return res.status(401).json(buildAuthGuardErrorResponse(401, t("auth.invalidToken"), {
         code: ERROR_CODES.INVALID_TOKEN,
       }));
     }

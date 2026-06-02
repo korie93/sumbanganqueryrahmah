@@ -37,6 +37,7 @@ import {
   getSystemFailedLoginLockoutStatus,
 } from "./auth-account-lockout-policy";
 import { buildSecurityAuditDetails } from "../lib/security-audit-log";
+import { t } from "../i18n/server";
 
 type AuthAccountAuthenticationDeps = {
   storage: AuthAccountAuthenticationStorage;
@@ -94,8 +95,7 @@ async function clearExpiredSystemFailedLoginLockout(
 export class AuthAccountAuthenticationOperations {
   private static readonly MAX_ALLOWED_FAILED_PASSWORD_ATTEMPTS = 3;
   private static readonly LOCKED_ACCOUNT_REASON = FAILED_LOGIN_LOCKOUT_REASON;
-  private static readonly LOCKED_ACCOUNT_MESSAGE =
-    "Your account has been locked due to too many incorrect login attempts. Please contact the system administrator.";
+  private static readonly LOCKED_ACCOUNT_MESSAGE = t("auth.accountLocked");
 
   constructor(private readonly deps: AuthAccountAuthenticationDeps) {}
 
@@ -114,7 +114,7 @@ export class AuthAccountAuthenticationOperations {
         performedBy: username || "unknown",
         details: "User not found",
       });
-      throw new AuthAccountError(401, ERROR_CODES.INVALID_CREDENTIALS, "Invalid credentials");
+      throw new AuthAccountError(401, ERROR_CODES.INVALID_CREDENTIALS, t("auth.invalidCredentials"));
     }
 
     let activeUser = user;
@@ -132,7 +132,7 @@ export class AuthAccountAuthenticationOperations {
         performedBy: activeUser.username,
         details: visitorBanned ? "Visitor is banned" : "User is banned",
       });
-      throw new AuthAccountError(403, ERROR_CODES.ACCOUNT_BANNED, "Account is banned", {
+      throw new AuthAccountError(403, ERROR_CODES.ACCOUNT_BANNED, t("auth.accountBanned"), {
         banned: true,
       });
     }
@@ -155,7 +155,7 @@ export class AuthAccountAuthenticationOperations {
         targetUser: activeUser.id,
         details: `Login blocked due to account state: ${blockReason}`,
       });
-      throw new AuthAccountError(401, ERROR_CODES.INVALID_CREDENTIALS, "Invalid credentials");
+      throw new AuthAccountError(401, ERROR_CODES.INVALID_CREDENTIALS, t("auth.invalidCredentials"));
     }
 
     const validPassword = await verifyPassword(password, activeUser.passwordHash);
@@ -239,7 +239,7 @@ export class AuthAccountAuthenticationOperations {
         targetUser: activeUser.id,
         details: visitorBanned ? "Visitor is banned" : "User is banned",
       });
-      throw new AuthAccountError(403, ERROR_CODES.ACCOUNT_BANNED, "Account is banned", {
+      throw new AuthAccountError(403, ERROR_CODES.ACCOUNT_BANNED, t("auth.accountBanned"), {
         banned: true,
       });
     }
@@ -262,7 +262,7 @@ export class AuthAccountAuthenticationOperations {
         targetUser: activeUser.id,
         details: `Second-factor login blocked due to account state: ${blockReason}`,
       });
-      throw new AuthAccountError(401, ERROR_CODES.INVALID_CREDENTIALS, "Invalid credentials");
+      throw new AuthAccountError(401, ERROR_CODES.INVALID_CREDENTIALS, t("auth.invalidCredentials"));
     }
 
     await assertLoginAllowedDuringMaintenance({
@@ -277,7 +277,7 @@ export class AuthAccountAuthenticationOperations {
     });
 
     if (!requiresTwoFactor(activeUser)) {
-      throw new AuthAccountError(409, ERROR_CODES.TWO_FACTOR_NOT_ENABLED, "Two-factor authentication is not enabled.");
+      throw new AuthAccountError(409, ERROR_CODES.TWO_FACTOR_NOT_ENABLED, t("auth.twoFactorNotEnabled"));
     }
 
     const encryptedSecret = String(activeUser.twoFactorSecretEncrypted || "").trim();
