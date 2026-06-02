@@ -56,8 +56,8 @@ export class ActivityService {
     return this.sessionOperations.deleteActivityLog(activityId);
   }
 
-  async bulkDeleteActivityLogs(activityIds: string[]) {
-    return this.sessionOperations.bulkDeleteActivityLogs(activityIds);
+  async bulkDeleteActivityLogs(activityIds: string[], performedBy: string) {
+    return this.sessionOperations.bulkDeleteActivityLogs(activityIds, performedBy);
   }
 
   async kickActivity(activityId: string, performedBy: string): Promise<KickActivityResult> {

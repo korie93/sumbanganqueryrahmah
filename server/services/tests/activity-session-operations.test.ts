@@ -40,9 +40,18 @@ function createStorageMock(overrides: Partial<ActivityStorage> = {}): ActivitySt
 test("bulkDeleteActivityLogs reports not found ids and closes deleted activities", async () => {
   const deletedIds: string[] = [];
   const closedIds: string[] = [];
+  const auditEntries: Array<Parameters<ActivityStorage["createAuditLog"]>[0]> = [];
 
   const operations = createActivitySessionOperations(
     createStorageMock({
+      createAuditLog: async (entry) => {
+        auditEntries.push(entry);
+        return {
+          id: `audit-${auditEntries.length}`,
+          ...entry,
+          timestamp: new Date("2026-04-08T00:00:00.000Z"),
+        } as AuditRecord;
+      },
       getActivityById: async (activityId: string) =>
         activityId === "missing"
           ? undefined
@@ -71,7 +80,7 @@ test("bulkDeleteActivityLogs reports not found ids and closes deleted activities
     },
   );
 
-  const result = await operations.bulkDeleteActivityLogs(["a1", "missing", "a2"]);
+  const result = await operations.bulkDeleteActivityLogs(["a1", "missing", "a2"], "admin.user");
 
   assert.deepEqual(result, {
     deletedCount: 2,
@@ -79,6 +88,13 @@ test("bulkDeleteActivityLogs reports not found ids and closes deleted activities
   });
   assert.deepEqual(deletedIds, ["a1", "a2"]);
   assert.deepEqual(closedIds, ["a1", "a2"]);
+  assert.equal(auditEntries.length, 1);
+  assert.equal(auditEntries[0]?.action, "BULK_DELETE_ACTIVITY_LOGS");
+  assert.equal(auditEntries[0]?.performedBy, "admin.user");
+  const details = JSON.parse(String(auditEntries[0]?.details));
+  assert.equal(details.requestedCount, 3);
+  assert.equal(details.deletedCount, 2);
+  assert.equal(details.notFoundCount, 1);
 });
 
 test("heartbeat marks activity online and returns ISO timestamp", async () => {

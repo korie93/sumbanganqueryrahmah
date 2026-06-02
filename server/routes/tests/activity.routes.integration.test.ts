@@ -607,8 +607,8 @@ test("POST /api/activity/logout fails closed when JWT revocation cannot be guara
   }
 });
 
-test("DELETE /api/activity/logs/bulk-delete deduplicates ids and reports missing activity ids", async () => {
-  const { app, deleteActivityCalls, clearNicknameSessionCalls, socketStates } = createActivityRouteHarness({
+test("DELETE /api/activity/logs/bulk-delete deduplicates ids and audits the batch", async () => {
+  const { app, auditLogs, deleteActivityCalls, clearNicknameSessionCalls, socketStates } = createActivityRouteHarness({
     authenticateToken: createTestAuthenticateToken({
       userId: "admin-1",
       username: "admin.user",
@@ -641,6 +641,55 @@ test("DELETE /api/activity/logs/bulk-delete deduplicates ids and reports missing
     assert.deepEqual(clearNicknameSessionCalls, ["activity-2", "activity-3"]);
     assert.equal(socketStates.get("activity-2")?.closeCalls, 1);
     assert.equal(socketStates.get("activity-3")?.closeCalls, 1);
+    assert.equal(auditLogs.length, 1);
+    assert.equal(auditLogs[0].action, "BULK_DELETE_ACTIVITY_LOGS");
+    assert.equal(auditLogs[0].performedBy, "admin.user");
+    assert.equal(auditLogs[0].targetUser, undefined);
+    const auditDetails = JSON.parse(String(auditLogs[0].details));
+    assert.equal(auditDetails.requestedCount, 3);
+    assert.equal(auditDetails.deletedCount, 2);
+    assert.equal(auditDetails.notFoundCount, 1);
+    assert.equal(typeof auditDetails.durationMs, "number");
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("DELETE /api/activity/logs/bulk-delete audits failed batch delete attempts", async () => {
+  const { app, auditLogs } = createActivityRouteHarness({
+    authenticateToken: createTestAuthenticateToken({
+      userId: "admin-1",
+      username: "admin.user",
+      role: "admin",
+      activityId: "activity-1",
+    }),
+    storageOverrides: {
+      deleteActivity: async () => {
+        throw new Error("delete failed");
+      },
+    },
+  });
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(`${baseUrl}/api/activity/logs/bulk-delete`, {
+      method: "DELETE",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        activityIds: ["activity-2"],
+      }),
+    });
+
+    assert.equal(response.status, 500);
+    assert.equal(auditLogs.length, 1);
+    assert.equal(auditLogs[0].action, "BULK_DELETE_ACTIVITY_LOGS_FAILED");
+    assert.equal(auditLogs[0].performedBy, "admin.user");
+    const auditDetails = JSON.parse(String(auditLogs[0].details));
+    assert.equal(auditDetails.requestedCount, 1);
+    assert.equal(auditDetails.errorType, "Error");
+    assert.equal(typeof auditDetails.durationMs, "number");
   } finally {
     await stopTestServer(server);
   }

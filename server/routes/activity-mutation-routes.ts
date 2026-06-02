@@ -55,7 +55,7 @@ export function registerActivityMutationRoutes(context: ActivityRouteContext) {
       }
 
       const { deletedCount, notFoundIds } =
-        await activityService.bulkDeleteActivityLogs(activityIds);
+        await activityService.bulkDeleteActivityLogs(activityIds, req.user!.username);
 
       return res.json(buildActivitySuccessPayload({
         requestedCount: activityIds.length,

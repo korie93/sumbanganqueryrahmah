@@ -1,4 +1,5 @@
 import { resolveTimestampMs, serializeTimestamp } from "../lib/timestamp";
+import { logger } from "../lib/logger";
 import type { ActivityFilters, ActivityStorage } from "./activity-service-types";
 
 type CloseActivitySocket = (
@@ -98,6 +99,59 @@ function sortActivitiesByLoginTimeDesc<T extends ActivityListItem>(activities: T
     }
     return rightMs - leftMs;
   });
+}
+
+function buildActivityBatchAuditDetails(params: {
+  requestedCount: number;
+  deletedCount: number;
+  notFoundCount: number;
+  durationMs: number;
+}) {
+  return JSON.stringify({
+    requestedCount: params.requestedCount,
+    deletedCount: params.deletedCount,
+    notFoundCount: params.notFoundCount,
+    durationMs: params.durationMs,
+  });
+}
+
+function buildActivityBatchFailureAuditDetails(params: {
+  requestedCount: number;
+  durationMs: number;
+  errorType: string;
+}) {
+  return JSON.stringify({
+    requestedCount: params.requestedCount,
+    durationMs: params.durationMs,
+    errorType: params.errorType,
+  });
+}
+
+async function createBatchFailureAuditLog(params: {
+  storage: ActivityStorage;
+  performedBy: string;
+  requestedCount: number;
+  startedAt: number;
+  error: unknown;
+}) {
+  try {
+    await params.storage.createAuditLog({
+      action: "BULK_DELETE_ACTIVITY_LOGS_FAILED",
+      performedBy: params.performedBy,
+      targetResource: "activity_logs",
+      details: buildActivityBatchFailureAuditDetails({
+        requestedCount: params.requestedCount,
+        durationMs: Date.now() - params.startedAt,
+        errorType: params.error instanceof Error ? params.error.name : "UnknownError",
+      }),
+    });
+  } catch (auditError) {
+    logger.error("Activity batch operation failure audit failed", {
+      event: "activity_batch_failure_audit_failed",
+      action: "BULK_DELETE_ACTIVITY_LOGS_FAILED",
+      errorType: auditError instanceof Error ? auditError.name : "UnknownError",
+    });
+  }
 }
 
 function reconcileRequestingActivityPresence<T extends ActivityListItem>(
@@ -200,21 +254,47 @@ export function createActivitySessionOperations(
       await closeSocket(activityId);
     },
 
-    async bulkDeleteActivityLogs(activityIds: string[]) {
+    async bulkDeleteActivityLogs(activityIds: string[], performedBy: string) {
+      const startedAt = Date.now();
       let deletedCount = 0;
       const notFoundIds: string[] = [];
 
-      for (const activityId of activityIds) {
-        const activity = await storage.getActivityById(activityId);
-        if (!activity) {
-          notFoundIds.push(activityId);
-          continue;
-        }
+      try {
+        for (const activityId of activityIds) {
+          const activity = await storage.getActivityById(activityId);
+          if (!activity) {
+            notFoundIds.push(activityId);
+            continue;
+          }
 
-        await storage.deleteActivity(activityId);
-        await closeSocket(activityId);
-        deletedCount += 1;
+          await storage.deleteActivity(activityId);
+          await closeSocket(activityId);
+          deletedCount += 1;
+        }
+      } catch (error) {
+        // AUDIT2-FIX [M2]: failed state-changing batch operations leave an audit trail.
+        await createBatchFailureAuditLog({
+          storage,
+          performedBy,
+          requestedCount: activityIds.length,
+          startedAt,
+          error,
+        });
+        throw error;
       }
+
+      // AUDIT2-FIX [M2]: successful state-changing batch operations leave an audit trail.
+      await storage.createAuditLog({
+        action: "BULK_DELETE_ACTIVITY_LOGS",
+        performedBy,
+        targetResource: "activity_logs",
+        details: buildActivityBatchAuditDetails({
+          requestedCount: activityIds.length,
+          deletedCount,
+          notFoundCount: notFoundIds.length,
+          durationMs: Date.now() - startedAt,
+        }),
+      });
 
       return {
         deletedCount,
