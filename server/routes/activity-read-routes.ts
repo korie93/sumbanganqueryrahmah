@@ -15,6 +15,53 @@ import {
   type ActivityRouteContext,
 } from "./activity-route-context";
 
+type LogoutJwtRevocationClaims = {
+  jwtId: string;
+  expiresAtMs: number;
+};
+
+function readLogoutJwtClaimsFromToken(token: string): LogoutJwtRevocationClaims | null {
+  const [, payloadSegment] = String(token || "").split(".");
+  if (!payloadSegment) {
+    return null;
+  }
+
+  try {
+    const payload = JSON.parse(Buffer.from(payloadSegment, "base64url").toString("utf8")) as {
+      exp?: unknown;
+      jti?: unknown;
+    };
+    const jwtId = String(payload.jti || "").trim();
+    if (!jwtId) {
+      return null;
+    }
+
+    const expSeconds = Number(payload.exp);
+    const expiresAtMs = Number.isFinite(expSeconds) && expSeconds > 0 ? expSeconds * 1000 : 0;
+    return { jwtId, expiresAtMs };
+  } catch {
+    return null;
+  }
+}
+
+function resolveLogoutJwtRevocationClaims(
+  token: string,
+  user: AuthenticatedRequest["user"],
+): LogoutJwtRevocationClaims | null {
+  const decodedClaims = readLogoutJwtClaimsFromToken(token);
+  const jwtId = String(user?.jti || decodedClaims?.jwtId || "").trim();
+  if (!jwtId) {
+    return null;
+  }
+
+  const userExpiresAtMs = typeof user?.exp === "number" ? user.exp * 1000 : 0;
+  const expiresAtMs = Number.isFinite(userExpiresAtMs) && userExpiresAtMs > 0
+    ? userExpiresAtMs
+    : decodedClaims?.expiresAtMs ?? 0;
+
+  return { jwtId, expiresAtMs };
+}
+
 export function registerActivityReadRoutes(context: ActivityRouteContext) {
   const {
     app,
@@ -34,13 +81,13 @@ export function registerActivityReadRoutes(context: ActivityRouteContext) {
       }
 
       const token = readAuthSessionTokenFromHeaders(req.headers);
-      const jwtId = token ? String(req.user.jti || "").trim() : "";
+      const revocationClaims = token ? resolveLogoutJwtRevocationClaims(token, req.user) : null;
       await activityService.logout(req.user.activityId, req.user.username);
-      if (token && jwtId) {
+      if (revocationClaims) {
         try {
           await revokeSessionJwt({
-            jwtId,
-            expiresAtMs: typeof req.user.exp === "number" ? req.user.exp * 1000 : 0,
+            jwtId: revocationClaims.jwtId,
+            expiresAtMs: revocationClaims.expiresAtMs,
           });
         } catch {
           clearAuthSessionCookie(res);
