@@ -80,7 +80,7 @@ export function useAppShellNavigation({
       setCurrentPage("general-search");
       safeSetStorageItem(storage, "activeTab", "general-search");
       safeSetStorageItem(storage, "lastPage", "general-search");
-      replaceHistory("/");
+      replaceHistory(buildPathForPage("general-search"));
       return;
     }
 

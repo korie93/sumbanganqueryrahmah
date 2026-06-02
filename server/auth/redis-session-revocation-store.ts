@@ -68,10 +68,21 @@ let defaultRedisClientFactoryPromise: Promise<RedisSessionRevocationClientFactor
 
 export function resolveRedisSessionRevocationSocketOptions(
   redisLogger: LoggerLike,
+  redisUrl?: string | null,
 ): RedisSessionRevocationSocketOptions {
   const reconnectStrategy = createRedisReconnectStrategy(redisLogger);
   if (process.env.NODE_ENV !== "production") {
     return { reconnectStrategy };
+  }
+
+  if (isLoopbackRedisUrl(redisUrl)) {
+    return { reconnectStrategy };
+  }
+
+  if (!isTlsRedisUrl(redisUrl)) {
+    throw new Error(
+      "Production Redis session revocation URL must use rediss:// unless it targets loopback.",
+    );
   }
 
   return {
@@ -80,6 +91,27 @@ export function resolveRedisSessionRevocationSocketOptions(
     rejectUnauthorized: true,
     tls: true,
   };
+}
+
+function isTlsRedisUrl(redisUrl: string | null | undefined): boolean {
+  try {
+    return new URL(String(redisUrl || "")).protocol === "rediss:";
+  } catch {
+    return false;
+  }
+}
+
+function isLoopbackRedisUrl(redisUrl: string | null | undefined): boolean {
+  try {
+    const url = new URL(String(redisUrl || ""));
+    if (url.protocol !== "redis:") {
+      return false;
+    }
+    const hostname = url.hostname.toLowerCase().replace(/^\[|\]$/g, "");
+    return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
+  } catch {
+    return false;
+  }
 }
 
 export enum RedisSessionRevocationErrorClass {
@@ -305,7 +337,7 @@ export class RedisSessionRevocationStore implements SessionRevocationStore {
     try {
       const createRedisClient = this.createRedisClient ?? await resolveDefaultRedisClientFactory();
       client = createRedisClient({
-        socket: resolveRedisSessionRevocationSocketOptions(this.logger),
+        socket: resolveRedisSessionRevocationSocketOptions(this.logger, this.config.redisUrl),
         url: this.config.redisUrl as string,
       });
       client.on?.("error", (error) => this.logRedisFailure(error));

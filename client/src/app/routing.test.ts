@@ -20,6 +20,23 @@ test("resolveRouteFromLocation supports direct app route aliases inside the auth
   assert.deepEqual(resolveRouteFromLocation("/import", ""), { page: "import" });
   assert.deepEqual(resolveRouteFromLocation("/saved", ""), { page: "saved" });
   assert.deepEqual(resolveRouteFromLocation("/viewer", ""), { page: "viewer" });
+  assert.deepEqual(resolveRouteFromLocation("/ai", ""), { page: "ai" });
+});
+
+test("buildPathForPage keeps authenticated app pages out of the public landing route", () => {
+  assert.equal(buildPathForPage("general-search"), "/general-search");
+  assert.equal(buildPathForPage("import"), "/import");
+  assert.equal(buildPathForPage("saved"), "/saved");
+  assert.equal(buildPathForPage("viewer"), "/viewer");
+  assert.equal(buildPathForPage("ai"), "/ai");
+});
+
+test("buildPathForPage maps monitor pages to canonical monitor URLs", () => {
+  assert.equal(buildPathForPage("dashboard"), "/monitor?section=dashboard");
+  assert.equal(buildPathForPage("activity"), "/monitor?section=activity");
+  assert.equal(buildPathForPage("analysis"), "/monitor?section=analysis");
+  assert.equal(buildPathForPage("audit"), "/monitor?section=audit");
+  assert.equal(buildPathForPage("audit-logs"), "/monitor?section=audit");
 });
 
 test("buildPathForPage returns stable public paths", () => {

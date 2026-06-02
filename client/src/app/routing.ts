@@ -31,6 +31,23 @@ const DIRECT_APP_ROUTE_ALIASES: Record<string, string> = {
   "/import": "import",
   "/saved": "saved",
   "/viewer": "viewer",
+  "/ai": "ai",
+};
+
+const DIRECT_APP_PAGE_PATHS: Record<string, string> = {
+  "general-search": "/general-search",
+  import: "/import",
+  saved: "/saved",
+  viewer: "/viewer",
+  ai: "/ai",
+};
+
+const MONITOR_PAGE_SECTIONS: Record<string, MonitorSection> = {
+  dashboard: "dashboard",
+  activity: "activity",
+  analysis: "analysis",
+  audit: "audit",
+  "audit-logs": "audit",
 };
 
 export function parseMonitorSectionFromQuery(search: string): MonitorSection | null {
@@ -134,6 +151,12 @@ export function isPublicAuthRoutePage(page: string) {
 }
 
 export function buildPathForPage(page: string, monitorSection: MonitorSection = "monitor") {
+  const directAppPath = DIRECT_APP_PAGE_PATHS[page];
+  if (directAppPath) return directAppPath;
+
+  const monitorPageSection = MONITOR_PAGE_SECTIONS[page];
+  if (monitorPageSection) return `/monitor?section=${monitorPageSection}`;
+
   if (page === "home") return "/";
   if (page === "login") return "/login";
   if (page === "banned") return "/banned";

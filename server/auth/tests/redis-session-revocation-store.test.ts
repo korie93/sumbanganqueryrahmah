@@ -469,7 +469,7 @@ test("RedisSessionRevocationStore rejects revocation writes when Redis is unavai
   );
 });
 
-test("RedisSessionRevocationStore enables Redis TLS peer verification in production", async () => {
+test("RedisSessionRevocationStore enables Redis TLS peer verification for rediss URLs in production", async () => {
   const originalNodeEnv = process.env.NODE_ENV;
   try {
     process.env.NODE_ENV = "production";
@@ -477,12 +477,55 @@ test("RedisSessionRevocationStore enables Redis TLS peer verification in product
       warn() {
         return undefined;
       },
-    });
+    }, "rediss://redis.internal:6380/0");
 
     assert.equal(socketOptions.tls, true);
     assert.equal(socketOptions.rejectUnauthorized, true);
   } finally {
     // AUDIT-FIX [M4]: restore NODE_ENV so production TLS checks stay isolated to this test.
+    if (originalNodeEnv === undefined) {
+      delete process.env.NODE_ENV;
+    } else {
+      process.env.NODE_ENV = originalNodeEnv;
+    }
+  }
+});
+
+test("RedisSessionRevocationStore allows production loopback Redis without TLS socket flags", async () => {
+  const originalNodeEnv = process.env.NODE_ENV;
+  try {
+    process.env.NODE_ENV = "production";
+    const socketOptions = resolveRedisSessionRevocationSocketOptions({
+      warn() {
+        return undefined;
+      },
+    }, "redis://127.0.0.1:6379/0");
+
+    assert.equal(socketOptions.tls, undefined);
+    assert.equal(socketOptions.rejectUnauthorized, undefined);
+    assert.equal(typeof socketOptions.reconnectStrategy, "function");
+  } finally {
+    if (originalNodeEnv === undefined) {
+      delete process.env.NODE_ENV;
+    } else {
+      process.env.NODE_ENV = originalNodeEnv;
+    }
+  }
+});
+
+test("RedisSessionRevocationStore rejects non-loopback redis URLs in production socket options", async () => {
+  const originalNodeEnv = process.env.NODE_ENV;
+  try {
+    process.env.NODE_ENV = "production";
+    assert.throws(
+      () => resolveRedisSessionRevocationSocketOptions({
+        warn() {
+          return undefined;
+        },
+      }, "redis://redis.internal:6379/0"),
+      /rediss:\/\/ unless it targets loopback/i,
+    );
+  } finally {
     if (originalNodeEnv === undefined) {
       delete process.env.NODE_ENV;
     } else {
