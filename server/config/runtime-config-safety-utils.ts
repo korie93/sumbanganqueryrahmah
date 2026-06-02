@@ -295,6 +295,26 @@ export function assertProductionRateLimiterTopologySafety(params: {
   );
 }
 
+export function assertProductionRedisTlsSafety(params: {
+  isProductionLike: boolean;
+  redisUrls: ReadonlyArray<string | null | undefined>;
+}) {
+  if (!params.isProductionLike) {
+    return;
+  }
+
+  const hasInsecureRedisUrl = params.redisUrls.some((redisUrl) =>
+    String(redisUrl || "").trim().toLowerCase().startsWith("redis://"));
+
+  if (!hasInsecureRedisUrl) {
+    return;
+  }
+
+  throw new Error(
+    "Redis URLs must use rediss:// on production-like hosts so shared rate-limit, session, replay, health, and WebSocket state are encrypted in transit.",
+  );
+}
+
 export function assertRateLimiterMultiWorkerTopologySafety(params: {
   configuredClusterMaxWorkers: number;
   distributedStoreConfigured: boolean;

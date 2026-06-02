@@ -483,6 +483,22 @@ test("runtime config rejects production startup when rate limiting still uses pr
   );
 });
 
+test("runtime config rejects production startup when Redis URLs do not use TLS", async () => {
+  await withEnv(
+    {
+      ...productionBaseOverrides,
+      BACKUP_FEATURE_ENABLED: "0",
+      SQR_REDIS_RATE_LIMIT_URL: "redis://redis.internal:6379/0",
+    },
+    async () => {
+      await assert.rejects(
+        importRuntimeFresh(),
+        /Redis URLs must use rediss:\/\/ on production-like hosts/i,
+      );
+    },
+  );
+});
+
 test("runtime config rejects production startup when receipt malware scanning is disabled", async () => {
   await withEnv(
     {

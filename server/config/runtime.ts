@@ -44,6 +44,7 @@ import {
   assertProductionDatabaseBootstrapModeSafety,
   assertProductionRateLimiterTopologySafety,
   assertProductionReceiptExternalScanSafety,
+  assertProductionRedisTlsSafety,
   assertProductionTwoFactorReplayTopologySafety,
   assertProductionWebSocketRuntimeTopologySafety,
   assertRateLimiterMultiWorkerTopologySafety,
@@ -306,6 +307,11 @@ assertProductionRateLimiterTopologySafety({
   isProductionLike,
   configuredClusterMaxWorkers,
   distributedStoreConfigured: sharedRateLimitStore.distributedStoreConfigured,
+});
+
+assertProductionRedisTlsSafety({
+  isProductionLike,
+  redisUrls: [sharedRateLimitStore.redisUrl, websocketSharedBus.redisUrl],
 });
 
 assertProductionReceiptExternalScanSafety({

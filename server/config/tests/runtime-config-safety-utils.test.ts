@@ -7,6 +7,7 @@ import {
   assertProductionDatabaseBootstrapModeSafety,
   assertProductionRateLimiterTopologySafety,
   assertProductionReceiptExternalScanSafety,
+  assertProductionRedisTlsSafety,
   assertProductionTwoFactorReplayTopologySafety,
   assertProductionWebSocketRuntimeTopologySafety,
   assertRateLimiterMultiWorkerTopologySafety,
@@ -244,6 +245,31 @@ test("assertProductionRateLimiterTopologySafety rejects production-like startup 
       isProductionLike: true,
       configuredClusterMaxWorkers: 2,
       distributedStoreConfigured: true,
+    }),
+  );
+});
+
+test("assertProductionRedisTlsSafety requires rediss URLs on production-like hosts", () => {
+  assert.throws(
+    () =>
+      assertProductionRedisTlsSafety({
+        isProductionLike: true,
+        redisUrls: ["redis://redis.internal:6379/0"],
+      }),
+    /Redis URLs must use rediss:\/\/ on production-like hosts/i,
+  );
+
+  assert.doesNotThrow(() =>
+    assertProductionRedisTlsSafety({
+      isProductionLike: true,
+      redisUrls: ["rediss://redis.internal:6380/0", null],
+    }),
+  );
+
+  assert.doesNotThrow(() =>
+    assertProductionRedisTlsSafety({
+      isProductionLike: false,
+      redisUrls: ["redis://127.0.0.1:6379/0"],
     }),
   );
 });
