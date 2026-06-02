@@ -5,6 +5,7 @@ import {
   clearStartupServiceDegraded,
   markStartupServiceDegraded,
 } from "../internal/startup-health";
+import { isProductionLikeEnvironment } from "../config/runtime-environment";
 import type { SharedRateLimitStoreConfig } from "../middleware/rate-limit-runtime";
 import {
   createRedisReconnectStrategy,
@@ -71,7 +72,7 @@ export function resolveRedisSessionRevocationSocketOptions(
   redisUrl?: string | null,
 ): RedisSessionRevocationSocketOptions {
   const reconnectStrategy = createRedisReconnectStrategy(redisLogger);
-  if (process.env.NODE_ENV !== "production") {
+  if (!isProductionLikeEnvironment()) {
     return { reconnectStrategy };
   }
 

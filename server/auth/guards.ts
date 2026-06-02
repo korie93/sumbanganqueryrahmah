@@ -4,6 +4,7 @@ import type { User, UserActivity } from "../../shared/schema-postgres";
 import { ERROR_CODES, type ErrorCode } from "../../shared/error-codes";
 import type { IStorage } from "../storage-postgres";
 import { getSessionSecret } from "../config/security";
+import { readInt } from "../config/runtime-config-read-utils";
 import {
   resolveSessionJwtExpiresAt,
   resolveSessionJwtId,
@@ -240,14 +241,10 @@ const MIN_MAX_INFLIGHT_SESSION_REFRESHES = 1;
 const HARD_MAX_INFLIGHT_SESSION_REFRESHES = 10_000;
 
 function resolveMaxInFlightSessionRefreshes(): number {
-  const parsed = Number.parseInt(process.env.SQR_MAX_INFLIGHT_REFRESHES ?? "", 10);
-  if (!Number.isFinite(parsed)) {
-    return DEFAULT_MAX_INFLIGHT_SESSION_REFRESHES;
-  }
-  return Math.min(
-    HARD_MAX_INFLIGHT_SESSION_REFRESHES,
-    Math.max(MIN_MAX_INFLIGHT_SESSION_REFRESHES, Math.trunc(parsed)),
-  );
+  return readInt("SQR_MAX_INFLIGHT_REFRESHES", DEFAULT_MAX_INFLIGHT_SESSION_REFRESHES, {
+    min: MIN_MAX_INFLIGHT_SESSION_REFRESHES,
+    max: HARD_MAX_INFLIGHT_SESSION_REFRESHES,
+  });
 }
 
 function assertInFlightSessionRefreshCapacity(): void {
