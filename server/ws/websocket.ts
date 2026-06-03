@@ -14,9 +14,20 @@ function getDefaultSessionSecrets() {
   return getSessionJwtVerificationSecrets();
 }
 
-// Legacy setupWebSocket is process-local by design. Production startup currently
-// constrains workers until shared limiter/broadcast infrastructure exists, so
-// this Map must not be treated as distributed cluster state.
+/**
+ * ARCHITECTURE CONSTRAINT: This map is process-local.
+ *
+ * In multi-worker cluster mode, each worker owns a separate connectedClients
+ * map. Direct iteration only reaches sockets attached to the same worker.
+ *
+ * Safe production modes:
+ * - SQR_MAX_WORKERS=1 for single-process deployments.
+ * - SQR_MAX_WORKERS>1 only with SQR_WS_SHARED_BUS=redis so runtime broadcasts
+ *   and activity close events propagate across workers.
+ *
+ * Production-like startup fails fast when multi-worker WebSocket fan-out would
+ * otherwise rely on this process-local map alone. See docs/architecture.md.
+ */
 export const connectedClients = new Map<string, WebSocket>();
 
 export function setupWebSocket(server: Server, options: LegacyWebSocketOptions = {}) {
