@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { db } from "../../db-postgres";
+import { dbRead } from "../../db-postgres";
 import {
   MAX_SEARCH_OFFSET,
   SearchRepository,
@@ -10,15 +10,15 @@ import { collectBoundValues, collectSqlText } from "./sql-test-utils";
 function withMockedDbExecute(
   handler: (queryText: string) => { rows?: unknown[] },
 ): () => void {
-  const originalExecute = db.execute;
+  const originalExecute = dbRead.execute;
 
-  (db as unknown as {
-    execute: typeof db.execute;
-  }).execute = (async (query) => handler(collectSqlText(query))) as typeof db.execute;
+  (dbRead as unknown as {
+    execute: typeof dbRead.execute;
+  }).execute = (async (query) => handler(collectSqlText(query))) as typeof dbRead.execute;
 
   return () => {
-    (db as unknown as {
-      execute: typeof db.execute;
+    (dbRead as unknown as {
+      execute: typeof dbRead.execute;
     }).execute = originalExecute;
   };
 }
@@ -122,14 +122,14 @@ test("SearchRepository.searchGlobalDataRows avoids exact counts on normal result
 test("SearchRepository.searchSimpleDataRows parameterizes LIKE injection attempts with an ESCAPE clause", async () => {
   const repository = new SearchRepository();
   const rawQueries: unknown[] = [];
-  const originalExecute = db.execute;
+  const originalExecute = dbRead.execute;
 
-  (db as unknown as {
-    execute: typeof db.execute;
+  (dbRead as unknown as {
+    execute: typeof dbRead.execute;
   }).execute = (async (query: unknown) => {
     rawQueries.push(query);
     return { rows: [] };
-  }) as unknown as typeof db.execute;
+  }) as unknown as typeof dbRead.execute;
 
   try {
     await repository.searchSimpleDataRows("'; DROP TABLE users; --");
@@ -142,8 +142,8 @@ test("SearchRepository.searchSimpleDataRows parameterizes LIKE injection attempt
     assert.match(sqlText, /\bESCAPE\b/i);
     assert.ok(boundValues.includes("%'; drop table users; --%"));
   } finally {
-    (db as unknown as {
-      execute: typeof db.execute;
+    (dbRead as unknown as {
+      execute: typeof dbRead.execute;
     }).execute = originalExecute;
   }
 });
@@ -229,10 +229,10 @@ test("SearchRepository.searchDataRows still allows deep traversal via cursor pag
 test("SearchRepository.searchDataRows ignores column filters that are not real columns for the import", async () => {
   const repository = new SearchRepository();
   const rawQueries: unknown[] = [];
-  const originalExecute = db.execute;
+  const originalExecute = dbRead.execute;
 
-  (db as unknown as {
-    execute: typeof db.execute;
+  (dbRead as unknown as {
+    execute: typeof dbRead.execute;
   }).execute = (async (query) => {
     rawQueries.push(query);
     const queryText = collectSqlText(query);
@@ -251,7 +251,7 @@ test("SearchRepository.searchDataRows ignores column filters that are not real c
         },
       ],
     };
-  }) as typeof db.execute;
+  }) as typeof dbRead.execute;
 
   try {
     const result = await repository.searchDataRows({
@@ -288,8 +288,8 @@ test("SearchRepository.searchDataRows ignores column filters that are not real c
     assert.ok(!dataBoundValues.includes("DROP TABLE users"));
     assert.ok(!dataBoundValues.includes("blocked-value"));
   } finally {
-    (db as unknown as {
-      execute: typeof db.execute;
+    (dbRead as unknown as {
+      execute: typeof dbRead.execute;
     }).execute = originalExecute;
   }
 });
@@ -331,11 +331,11 @@ test("SearchRepository.advancedSearchDataRows caches allowed columns and filters
 
   const repository = new SearchRepository();
   const rawQueries: unknown[] = [];
-  const originalExecute = db.execute;
+  const originalExecute = dbRead.execute;
   let schemaLookupCount = 0;
 
-  (db as unknown as {
-    execute: typeof db.execute;
+  (dbRead as unknown as {
+    execute: typeof dbRead.execute;
   }).execute = (async (query) => {
     rawQueries.push(query);
     const queryText = collectSqlText(query);
@@ -360,7 +360,7 @@ test("SearchRepository.advancedSearchDataRows caches allowed columns and filters
         },
       ],
     };
-  }) as typeof db.execute;
+  }) as typeof dbRead.execute;
 
   try {
     await repository.advancedSearchDataRows(
@@ -387,8 +387,8 @@ test("SearchRepository.advancedSearchDataRows caches allowed columns and filters
     assert.ok(!boundValues.includes("DROP TABLE users"));
     assert.ok(!boundValues.includes("blocked-value"));
   } finally {
-    (db as unknown as {
-      execute: typeof db.execute;
+    (dbRead as unknown as {
+      execute: typeof dbRead.execute;
     }).execute = originalExecute;
   }
 });
@@ -398,11 +398,11 @@ test("SearchRepository.advancedSearchDataRows refreshes allowed columns after TT
   t.mock.method(Date, "now", () => now);
 
   const repository = new SearchRepository();
-  const originalExecute = db.execute;
+  const originalExecute = dbRead.execute;
   let schemaLookupCount = 0;
 
-  (db as unknown as {
-    execute: typeof db.execute;
+  (dbRead as unknown as {
+    execute: typeof dbRead.execute;
   }).execute = (async (query) => {
     const queryText = collectSqlText(query);
 
@@ -426,7 +426,7 @@ test("SearchRepository.advancedSearchDataRows refreshes allowed columns after TT
         },
       ],
     };
-  }) as typeof db.execute;
+  }) as typeof dbRead.execute;
 
   try {
     await repository.advancedSearchDataRows(
@@ -445,8 +445,8 @@ test("SearchRepository.advancedSearchDataRows refreshes allowed columns after TT
 
     assert.equal(schemaLookupCount, 2);
   } finally {
-    (db as unknown as {
-      execute: typeof db.execute;
+    (dbRead as unknown as {
+      execute: typeof dbRead.execute;
     }).execute = originalExecute;
   }
 });

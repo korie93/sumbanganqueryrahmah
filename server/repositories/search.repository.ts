@@ -1,5 +1,5 @@
 import { sql, type SQL } from "drizzle-orm";
-import { db } from "../db-postgres";
+import { dbRead } from "../db-postgres";
 import {
   mapAdvancedSearchDataRow,
   mapSearchDataRow,
@@ -40,7 +40,7 @@ export class SearchRepository {
 
   private async getGlobalSearchTotal(search: string): Promise<number> {
     const jsonSearchCondition = buildJsonTextContainsCondition(search);
-    const totalResult = await db.execute(sql`
+    const totalResult = await dbRead.execute(sql`
       SELECT COUNT(*)::int AS total
       FROM public.data_rows dr
       JOIN public.imports i ON i.id = dr.import_id
@@ -52,7 +52,7 @@ export class SearchRepository {
   }
 
   private async getImportSearchTotal(whereClause: SQL): Promise<number> {
-    const totalResult = await db.execute(sql`
+    const totalResult = await dbRead.execute(sql`
       SELECT COUNT(*)::int AS total
       FROM public.data_rows dr
       WHERE ${whereClause}
@@ -62,7 +62,7 @@ export class SearchRepository {
   }
 
   private async getImportColumnNames(importId: string): Promise<Set<string>> {
-    const result = await db.execute(sql`
+    const result = await dbRead.execute(sql`
       SELECT DISTINCT key AS column_name
       FROM public.data_rows dr
       CROSS JOIN LATERAL jsonb_object_keys(dr.json_data::jsonb) AS key
@@ -97,7 +97,7 @@ export class SearchRepository {
       };
     }
 
-    const rowsResult = await db.execute(sql`
+    const rowsResult = await dbRead.execute(sql`
       SELECT
         dr.id,
         dr.import_id,
@@ -132,7 +132,7 @@ export class SearchRepository {
 
   async searchSimpleDataRows(search: string) {
     const jsonSearchCondition = buildJsonTextContainsCondition(search);
-    return db.execute(sql`
+    return dbRead.execute(sql`
       SELECT
         dr.import_id as "importId",
         i.name as "importName",
@@ -207,7 +207,7 @@ export class SearchRepository {
       };
     }
 
-    const rowsResult = await db.execute(sql`
+    const rowsResult = await dbRead.execute(sql`
       SELECT
         dr.id,
         dr.import_id as "importId",
@@ -265,7 +265,7 @@ export class SearchRepository {
     const safeLimit = Math.min(Math.max(1, limit), MAX_SEARCH_LIMIT);
     const safeOffset = normalizeSearchOffset(offset);
 
-    const totalResult = await db.execute(sql`
+    const totalResult = await dbRead.execute(sql`
       SELECT COUNT(*)::int AS total
       FROM public.data_rows dr
       JOIN public.imports i ON i.id = dr.import_id
@@ -280,7 +280,7 @@ export class SearchRepository {
       };
     }
 
-    const rowsResult = await db.execute(sql`
+    const rowsResult = await dbRead.execute(sql`
       SELECT
         dr.id,
         dr.import_id as "importId",
@@ -305,7 +305,7 @@ export class SearchRepository {
   }
 
   async getAllColumnNames(): Promise<string[]> {
-    const result = await db.execute(sql`
+    const result = await dbRead.execute(sql`
       SELECT DISTINCT key AS column_name
       FROM public.data_rows dr
       JOIN public.imports i ON i.id = dr.import_id

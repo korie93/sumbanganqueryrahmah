@@ -330,6 +330,13 @@ function createBaseSystemRouteDeps(
     ...createSystemRouteExtraDeps(),
     createAuditLog: async (data) => createAuditLogRow(data),
     checkDbConnectivity: async () => true,
+    getReadReplicaHealthSnapshot: () => ({
+      configured: false,
+      fallbackCount: 0,
+      lastErrorAt: null,
+      lastErrorCode: null,
+      state: "primary-only",
+    }),
     getStartupHealthSnapshot: () => createStartupSnapshot(),
     getTabVisibilityCacheStats: () => ({
       maxSize: 100,
@@ -579,6 +586,8 @@ test("GET /internal/health exposes startup details only to privileged users", as
     assert.equal(payload.mode, "postgresql");
     assert.equal(payload.database, "unreachable");
     assert.equal(payload.ready, false);
+    assert.equal(payload.readReplica.state, "primary-only");
+    assert.equal(payload.readReplica.configured, false);
     assert.equal(payload.caches.tabVisibility.size, 2);
     assert.equal(payload.caches.tabVisibility.maxSize, 100);
     assert.equal(payload.live.live, true);

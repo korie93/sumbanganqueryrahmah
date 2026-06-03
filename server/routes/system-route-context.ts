@@ -13,6 +13,7 @@ import type { MonitorAlertIncidentPage } from "../repositories/monitor-alert-his
 import type { AuditLog, InsertAuditLog } from "../../shared/schema-postgres";
 import type { WebVitalOverviewPayload } from "../../shared/web-vitals";
 import type { TabVisibilityCacheStats } from "../auth/guard-tab-visibility";
+import type { ReadReplicaHealthSnapshot } from "../db-read-replica";
 
 export type LocalCircuitSnapshots = {
   ai: CircuitSnapshot;
@@ -54,6 +55,7 @@ export type SystemRouteDeps = {
   getWebVitalsOverview: () => WebVitalOverviewPayload;
   createAuditLog: (data: InsertAuditLog) => Promise<AuditLog>;
   checkDbConnectivity: () => Promise<boolean>;
+  getReadReplicaHealthSnapshot: () => ReadReplicaHealthSnapshot;
   getStartupHealthSnapshot: () => StartupHealthSnapshot;
   getTabVisibilityCacheStats: () => TabVisibilityCacheStats;
 };

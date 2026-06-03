@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { db } from "../../db-postgres";
+import { dbRead } from "../../db-postgres";
 import { AnalyticsRepository, serializeAnalyticsTimestamp } from "../analytics.repository";
 
 test("serializeAnalyticsTimestamp normalizes valid timestamps and rejects invalid ones", () => {
@@ -18,10 +18,10 @@ test("serializeAnalyticsTimestamp normalizes valid timestamps and rejects invali
 
 test("AnalyticsRepository.getTopActiveUsers returns normalized last login timestamps", async () => {
   const repository = new AnalyticsRepository();
-  const originalExecute = db.execute;
+  const originalExecute = dbRead.execute;
 
-  (db as unknown as {
-    execute: typeof db.execute;
+  (dbRead as unknown as {
+    execute: typeof dbRead.execute;
   }).execute = (async () => ({
     rows: [
       {
@@ -31,7 +31,7 @@ test("AnalyticsRepository.getTopActiveUsers returns normalized last login timest
         lastLogin: new Date("2026-04-05T03:15:00.000Z"),
       },
     ],
-  })) as unknown as typeof db.execute;
+  })) as unknown as typeof dbRead.execute;
 
   try {
     const result = await repository.getTopActiveUsers(10);
@@ -44,8 +44,8 @@ test("AnalyticsRepository.getTopActiveUsers returns normalized last login timest
       },
     ]);
   } finally {
-    (db as unknown as {
-      execute: typeof db.execute;
+    (dbRead as unknown as {
+      execute: typeof dbRead.execute;
     }).execute = originalExecute;
   }
 });

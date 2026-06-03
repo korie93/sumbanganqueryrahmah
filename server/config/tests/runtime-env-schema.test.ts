@@ -24,6 +24,16 @@ test("runtime env schema accepts DATABASE_URL-only database configuration", () =
   });
 });
 
+test("runtime env schema accepts optional read replica database configuration", () => {
+  assert.doesNotThrow(() => {
+    validateRuntimeEnvironmentSchema({
+      DATABASE_URL: "postgres://postgres:password@primary.internal:5432/sqr_db",
+      DATABASE_REPLICA_URL: "postgres://postgres:password@replica.internal:5432/sqr_db",
+      BACKUP_FEATURE_ENABLED: "1",
+    });
+  });
+});
+
 test("runtime env schema ignores unrelated host environment keys", () => {
   assert.doesNotThrow(() => {
     validateRuntimeEnvironmentSchema({

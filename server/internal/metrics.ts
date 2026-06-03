@@ -34,6 +34,8 @@ export type InternalMetricName =
   | "dbPoolConnectionsCreatedTotal"
   | "dbPoolConnectionsRemovedTotal"
   | "dbPoolListenerRegistrationRejectedTotal"
+  | "dbReadReplicaFallbacksTotal"
+  | "dbReadReplicaHealthCheckFailuresTotal"
   | "idempotencyFingerprintSweepErrorsTotal"
   | "jsonParseFailuresTotal"
   | "jsonParseMemoryLimitExceededTotal"
@@ -111,6 +113,8 @@ const INTERNAL_METRIC_NAMES: readonly InternalMetricName[] = [
   "dbPoolConnectionsCreatedTotal",
   "dbPoolConnectionsRemovedTotal",
   "dbPoolListenerRegistrationRejectedTotal",
+  "dbReadReplicaFallbacksTotal",
+  "dbReadReplicaHealthCheckFailuresTotal",
   "idempotencyFingerprintSweepErrorsTotal",
   "jsonParseFailuresTotal",
   "jsonParseMemoryLimitExceededTotal",

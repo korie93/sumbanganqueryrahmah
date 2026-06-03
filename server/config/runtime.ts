@@ -156,6 +156,8 @@ const configuredSessionJwtPrivateKey = normalizePemEnvSecret(readOptionalString(
 const configuredSessionJwtPublicKey = normalizePemEnvSecret(readOptionalString("SESSION_JWT_PUBLIC_KEY"));
 const configuredDatabaseUrl = readOptionalString("DATABASE_URL");
 const parsedDatabaseUrl = parseDatabaseUrl(configuredDatabaseUrl);
+const configuredDatabaseReplicaUrl = readOptionalString("DATABASE_REPLICA_URL");
+const parsedDatabaseReplicaUrl = parseDatabaseUrl(configuredDatabaseReplicaUrl);
 const databaseSslConfig = resolveDatabaseSslConfig(readOptionalString("DATABASE_SSL"), {
   ca: readOptionalString("DATABASE_SSL_CA"),
   caFile: readOptionalString("DATABASE_SSL_CA_FILE"),
@@ -271,6 +273,17 @@ assertPostgresRuntimeCredentialFormat({
   password: resolvedDatabasePassword,
   user: resolvedDatabaseUser,
 });
+
+if (configuredDatabaseReplicaUrl) {
+  assertPostgresRuntimeCredentialFormat({
+    connectionString: configuredDatabaseReplicaUrl,
+    database: parsedDatabaseReplicaUrl?.database || resolvedDatabaseName,
+    host: parsedDatabaseReplicaUrl?.host || resolvedDatabaseHost,
+    isProductionLike,
+    password: parsedDatabaseReplicaUrl?.password || "",
+    user: parsedDatabaseReplicaUrl?.user || "",
+  });
+}
 
 const mailConfiguration = assessMailConfiguration({
   smtpService: readOptionalString("SMTP_SERVICE"),
@@ -390,6 +403,7 @@ export const runtimeConfig: RuntimeConfig = Object.freeze({
   },
   database: {
     connectionString: configuredDatabaseUrl,
+    replicaConnectionString: configuredDatabaseReplicaUrl,
     host: resolvedDatabaseHost,
     port: resolvedDatabasePort,
     user: resolvedDatabaseUser,

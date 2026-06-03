@@ -12,7 +12,7 @@ import {
 import { stopIntelligenceFailSafeLogger } from "./intelligence/intelligence-failsafe-logger";
 import { registerLocalProcessFatalHandlers } from "./internal/local-process-fatal-handlers";
 import { markStartupFailed } from "./internal/startup-health";
-import { pool, stopPgPoolBackgroundTasks } from "./db-postgres";
+import { closePostgresPools, stopPgPoolBackgroundTasks } from "./db-postgres";
 import { logger } from "./lib/logger";
 import { runtimeConfig } from "./config/runtime";
 import { validateSessionJwtStartupConfiguration } from "./auth/session-jwt";
@@ -123,7 +123,7 @@ async function finishShutdown() {
   await shutdownPgPoolSafely({
     logger,
     phase: "graceful-shutdown",
-    poolRef: pool,
+    poolRef: { end: closePostgresPools },
     stopBackgroundTasks: stopPgPoolBackgroundTasks,
     timeoutMs: PG_POOL_SHUTDOWN_TIMEOUT_MS,
   });

@@ -1,5 +1,5 @@
 import { sql, type SQL } from "drizzle-orm";
-import { db } from "../db-postgres";
+import { dbRead } from "../db-postgres";
 import { buildLikePattern } from "./sql-like-utils";
 import type { CategoryRule, CategoryStatRow } from "./ai-category-types";
 import {
@@ -89,7 +89,7 @@ export async function countRowsByCategoryKeywords(params: { groups: CategoryRule
   }
 
   const selectParts = countSqls.length > 0 ? sql.join(countSqls, sql` || `) : sql`'{}'::jsonb`;
-  const result = await db.execute(sql`
+  const result = await dbRead.execute(sql`
     SELECT
       COUNT(*)::int as "total",
       (${selectParts}) as "counts"
@@ -117,7 +117,7 @@ export async function getCategoryRules(): Promise<Array<{
   matchMode: string;
   enabled: boolean;
 }>> {
-  const result = await db.execute(sql`
+  const result = await dbRead.execute(sql`
     SELECT key, terms, fields, match_mode, enabled
     FROM public.ai_category_rules
     ORDER BY key
@@ -139,7 +139,7 @@ export async function getCategoryRules(): Promise<Array<{
 }
 
 export async function getCategoryRulesMaxUpdatedAt(): Promise<Date | null> {
-  const result = await db.execute(sql`
+  const result = await dbRead.execute(sql`
     SELECT MAX(updated_at) as updated_at
     FROM public.ai_category_rules
   `);
@@ -150,7 +150,7 @@ export async function getCategoryRulesMaxUpdatedAt(): Promise<Date | null> {
 export async function getCategoryStats(keys: string[]): Promise<CategoryStatRow[]> {
   if (!keys.length) return [];
 
-  const result = await db.execute(sql`
+  const result = await dbRead.execute(sql`
     SELECT key, total, samples, updated_at
     FROM public.ai_category_stats
     WHERE key IN (${buildTextInList(keys)})

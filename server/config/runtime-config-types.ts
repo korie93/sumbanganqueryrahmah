@@ -58,6 +58,7 @@ export type RuntimeConfig = {
   };
   database: {
     connectionString: string | null;
+    replicaConnectionString: string | null;
     host: string;
     port: number;
     user: string;

@@ -67,6 +67,7 @@ export function registerSystemHealthRoutes(context: SystemRouteContext) {
     requireRole,
     getMaintenanceStateCached,
     checkDbConnectivity,
+    getReadReplicaHealthSnapshot,
     getStartupHealthSnapshot,
     getTabVisibilityCacheStats,
   } = context;
@@ -106,6 +107,7 @@ export function registerSystemHealthRoutes(context: SystemRouteContext) {
         caches: {
           tabVisibility: getTabVisibilityCacheStats(),
         },
+        readReplica: getReadReplicaHealthSnapshot(),
         live: buildLiveHealthPayload(getStartupHealthSnapshot),
       });
     }),

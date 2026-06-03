@@ -1,6 +1,6 @@
 import { count, eq, gte, sql } from "drizzle-orm";
 import { auditLogs, dataRows, imports, userActivity, users } from "../../shared/schema-postgres";
-import { db } from "../db-postgres";
+import { dbRead } from "../db-postgres";
 import {
   ANALYTICS_TZ,
   BACKUP_ACTIVITY_ACTIONS,
@@ -39,21 +39,21 @@ export class AnalyticsRepository {
       loginFailures24h,
       backupActions24h,
     ] = await Promise.all([
-      db.select({ value: count() }).from(users),
-      db.select({ value: count() }).from(userActivity).where(eq(userActivity.isActive, true)),
-      db.select({ value: count() }).from(userActivity).where(gte(userActivity.loginTime, today)),
-      db.select({ value: count() }).from(dataRows),
-      db.select({ value: count() }).from(imports).where(eq(imports.isDeleted, false)),
-      db.select({ value: count() }).from(users).where(eq(users.isBanned, true)),
-      db.select({ value: count() }).from(auditLogs).where(sql`
+      dbRead.select({ value: count() }).from(users),
+      dbRead.select({ value: count() }).from(userActivity).where(eq(userActivity.isActive, true)),
+      dbRead.select({ value: count() }).from(userActivity).where(gte(userActivity.loginTime, today)),
+      dbRead.select({ value: count() }).from(dataRows),
+      dbRead.select({ value: count() }).from(imports).where(eq(imports.isDeleted, false)),
+      dbRead.select({ value: count() }).from(users).where(eq(users.isBanned, true)),
+      dbRead.select({ value: count() }).from(auditLogs).where(sql`
         action = ${COLLECTION_RECORD_VERSION_CONFLICT_ACTION}
         AND timestamp >= NOW() - INTERVAL '24 hours'
       `),
-      db.select({ value: count() }).from(auditLogs).where(sql`
+      dbRead.select({ value: count() }).from(auditLogs).where(sql`
         action IN (${buildAuditActionList(LOGIN_FAILURE_ACTIONS)})
         AND timestamp >= NOW() - INTERVAL '24 hours'
       `),
-      db.select({ value: count() }).from(auditLogs).where(sql`
+      dbRead.select({ value: count() }).from(auditLogs).where(sql`
         action IN (${buildAuditActionList(BACKUP_ACTIVITY_ACTIONS)})
         AND timestamp >= NOW() - INTERVAL '24 hours'
       `),
@@ -73,7 +73,7 @@ export class AnalyticsRepository {
   }
 
   async getLoginTrends(days = 7): Promise<Array<{ date: string; logins: number; logouts: number }>> {
-    const result = await db.execute(sql`
+    const result = await dbRead.execute(sql`
       WITH bounds AS (
         SELECT (NOW() AT TIME ZONE ${ANALYTICS_TZ})::date AS end_date
       ),
@@ -119,7 +119,7 @@ export class AnalyticsRepository {
     loginCount: number;
     lastLogin: string | null;
   }>> {
-    const result = await db.execute(sql`
+    const result = await dbRead.execute(sql`
       SELECT
         ua.username,
         ua.role,
@@ -149,7 +149,7 @@ export class AnalyticsRepository {
   }
 
   async getPeakHours(): Promise<Array<{ hour: number; count: number }>> {
-    const result = await db.execute(sql`
+    const result = await dbRead.execute(sql`
       SELECT
         EXTRACT(HOUR FROM (login_time AT TIME ZONE ${ANALYTICS_TZ}))::int AS hour,
         COUNT(*)::int AS count
@@ -175,7 +175,7 @@ export class AnalyticsRepository {
   }
 
   async getRoleDistribution(): Promise<Array<{ role: string; count: number }>> {
-    const result = await db.execute(sql`
+    const result = await dbRead.execute(sql`
       SELECT role, COUNT(*)::int AS count
       FROM public.users
       GROUP BY role

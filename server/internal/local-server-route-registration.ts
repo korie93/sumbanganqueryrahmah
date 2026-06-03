@@ -8,7 +8,7 @@ import { createImportsController } from "../controllers/imports.controller";
 import { createOperationsController } from "../controllers/operations.controller";
 import { createSearchController } from "../controllers/search.controller";
 import { createWebVitalsTelemetryController } from "../controllers/web-vitals-telemetry.controller";
-import { pool } from "../db-postgres";
+import { getReadReplicaHealthSnapshot, pool } from "../db-postgres";
 import { injectChaos, getIntelligenceExplainability } from "../intelligence";
 import { CollectionRollupRefreshNotificationSubscriber } from "../lib/collection-rollup-refresh-notification";
 import { logger } from "../lib/logger";
@@ -204,6 +204,7 @@ export function registerLocalServerRoutes(options: RegisterLocalServerRoutesOpti
         return false;
       }
     },
+    getReadReplicaHealthSnapshot,
     getStartupHealthSnapshot,
     getTabVisibilityCacheStats,
   });

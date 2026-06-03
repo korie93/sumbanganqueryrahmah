@@ -736,6 +736,13 @@ function createSystemPermissionHarness() {
       ...data,
     } as never),
     checkDbConnectivity: async () => true,
+    getReadReplicaHealthSnapshot: () => ({
+      configured: false,
+      fallbackCount: 0,
+      lastErrorAt: null,
+      lastErrorCode: null,
+      state: "primary-only",
+    }),
     getStartupHealthSnapshot: () => ({
       degraded: false,
       degradedServices: [],
