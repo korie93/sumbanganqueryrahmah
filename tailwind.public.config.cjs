@@ -88,10 +88,10 @@ module.exports = {
           border: "var(--sidebar-accent-border)",
         },
         status: {
-          online: "rgb(34 197 94)",
-          away: "rgb(245 158 11)",
-          busy: "rgb(239 68 68)",
-          offline: "rgb(156 163 175)",
+          online: "hsl(var(--status-online) / <alpha-value>)",
+          away: "hsl(var(--status-away) / <alpha-value>)",
+          busy: "hsl(var(--status-busy) / <alpha-value>)",
+          offline: "hsl(var(--status-offline) / <alpha-value>)",
         },
       },
       fontFamily: {

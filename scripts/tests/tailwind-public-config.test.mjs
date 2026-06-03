@@ -1,10 +1,21 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
+import { readFileSync } from "node:fs";
 import { matchesGlob } from "node:path";
 
 const require = createRequire(import.meta.url);
 const tailwindPublicConfig = require("../../tailwind.public.config.cjs");
+const semanticTokensSource = readFileSync(
+  new URL("../../client/src/styles/tokens/colors/_semantic.css", import.meta.url),
+  "utf8",
+);
+const expectedStatusColors = {
+  online: "hsl(var(--status-online) / <alpha-value>)",
+  away: "hsl(var(--status-away) / <alpha-value>)",
+  busy: "hsl(var(--status-busy) / <alpha-value>)",
+  offline: "hsl(var(--status-offline) / <alpha-value>)",
+};
 
 const normalizePattern = (pattern) => pattern.replace(/^\.\//, "").replaceAll("\\", "/");
 const normalizePath = (filePath) => filePath.replaceAll("\\", "/");
@@ -53,6 +64,21 @@ test("tailwind public config still covers public auth route files", () => {
       isCoveredByPublicTailwind(filePath),
       true,
       `${filePath} must stay included in tailwind.public.config.cjs content globs`,
+    );
+  }
+});
+
+test("tailwind public config uses shared status color tokens", () => {
+  assert.deepEqual(
+    tailwindPublicConfig.theme.extend.colors.status,
+    expectedStatusColors,
+  );
+
+  for (const tokenName of Object.keys(expectedStatusColors)) {
+    assert.match(
+      semanticTokensSource,
+      new RegExp(`--status-${tokenName}:\\s*\\d`),
+      `--status-${tokenName} must be defined in semantic color tokens`,
     );
   }
 });

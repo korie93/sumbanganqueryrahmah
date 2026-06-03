@@ -49,6 +49,8 @@
   z-layer utilities with shared layering tokens.
 - Replaced decorative `overflow: hidden` surface clipping with `overflow: clip`
   fallbacks where content should not create nested scroll containers.
+- Aligned the public Tailwind status color scale with shared semantic CSS
+  variables instead of hardcoded RGB values.
 
 ### Verification
 
@@ -66,6 +68,8 @@
 - `tsx --test server/auth/tests/guards.test.ts`
 - `tsx --test server/tests/collection-rollup-refresh-notification.test.ts`
 - `tsx --test server/lib/tests/logger.test.ts`
+- `node --test scripts/tests/tailwind-public-config.test.mjs`
+- `npm run verify:design-token-color-compatibility`
 
 ## 2026-05-31 - SQR resource lifecycle and configuration hardening
 
