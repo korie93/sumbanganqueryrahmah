@@ -12,10 +12,16 @@
 - Moved collection monthly summary window listener cleanup to AbortController
   signals so refresh listeners are released atomically on hook unmount.
 
+### Accessibility
+
+- Added explicit group and pressed-state semantics to monthly comparison quick
+  range controls, with contracts for login and month-field accessible labels.
+
 ### Verification
 
 - `tsx --test server/middleware/tests/rate-limit.test.ts`
 - `tsx --test client/src/pages/collection-summary/useCollectionMonthlySameDayPace.contract.test.ts client/src/pages/collection-summary/useCollectionMonthlyComparisonData.contract.test.ts`
+- `tsx --test client/src/pages/collection-summary/collection-monthly-comparison-a11y.contract.test.ts`
 
 ## 2026-05-31 - SQR resource lifecycle and configuration hardening
 

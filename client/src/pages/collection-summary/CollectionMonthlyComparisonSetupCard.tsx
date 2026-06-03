@@ -188,7 +188,11 @@ export function CollectionMonthlyComparisonSetupCard({
           Last month = target
         </span>
       </div>
-      <div className="mt-3 flex flex-wrap items-center gap-2">
+      <div
+        className="mt-3 flex flex-wrap items-center gap-2"
+        role="group"
+        aria-label="Quick monthly comparison ranges"
+      >
         <span className="text-xs font-medium text-muted-foreground">Quick range</span>
         {rangePresets.map((preset) => {
           const active = preset.startMonth === startMonth && preset.endMonth === endMonth;
@@ -196,6 +200,8 @@ export function CollectionMonthlyComparisonSetupCard({
             <button
               key={preset.id}
               type="button"
+              aria-label={`Apply quick range ${preset.label}`}
+              aria-pressed={active}
               className={
                 active
                   ? "inline-flex h-8 items-center justify-center rounded-full border border-primary bg-primary/10 px-3 text-xs font-medium text-primary"
