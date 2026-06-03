@@ -8,7 +8,7 @@ import {
 
 function buildCompliantFilesByPath() {
   return {
-    "client/src/theme-tokens.css": [
+    "client/src/styles/tokens/index.css": [
       "--primary-border: hsl(217 91% 42%);",
       "--accent-border: hsl(214 28% 74%);",
       ".dark {",
@@ -39,13 +39,13 @@ test("design token color compatibility rejects missing required files", () => {
   const validation = validateDesignTokenColorCompatibility({ filesByPath: {} });
 
   assert.equal(validation.failures.length, 1);
-  assert.match(validation.failures[0], /theme-tokens\.css/);
+  assert.match(validation.failures[0], /styles\/tokens\/index\.css/);
 });
 
 test("design token color compatibility flags relative hsl syntax", () => {
   const validation = validateDesignTokenColorCompatibility({
     filesByPath: {
-      "client/src/theme-tokens.css": [
+      "client/src/styles/tokens/index.css": [
         "--primary-border: hsl(217 91% 42%);",
         "--accent-border: hsl(214 28% 74%);",
         ".dark {",

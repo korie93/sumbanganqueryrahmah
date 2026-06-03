@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import test from "node:test";
+import { readThemeTokenSource } from "../lib/design-token-source.mjs";
 
 test("theme shadow 2xl tokens keep layered depth like the other elevation tokens", () => {
-  const css = readFileSync("client/src/theme-tokens.css", "utf8");
+  const css = readThemeTokenSource();
   const declarations = [...css.matchAll(/--shadow-2xl:\s*([^;]+);/g)].map((match) => match[1]);
 
   assert.equal(declarations.length, 2);

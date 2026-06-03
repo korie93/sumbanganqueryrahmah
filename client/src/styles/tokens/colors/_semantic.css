@@ -1,0 +1,236 @@
+/* Semantic color tokens */
+
+:root {
+  color-scheme: light;
+
+  --button-outline: rgba(0, 0, 0, 0.1);
+
+  --badge-outline: rgba(0, 0, 0, 0.05);
+
+  --background: 210 20% 98%;
+
+  --foreground: 222 47% 11%;
+
+  --border: 214 20% 88%;
+
+  --card: 210 20% 96%;
+
+  --card-foreground: 222 47% 11%;
+
+  --card-border: 214 20% 90%;
+
+  --sidebar: 210 20% 94%;
+
+  --sidebar-foreground: 222 47% 11%;
+
+  --sidebar-border: 214 20% 86%;
+
+  --sidebar-primary: 217 91% 50%;
+
+  --sidebar-primary-foreground: 210 40% 98%;
+
+  --sidebar-accent: 214 28% 78%;
+
+  --sidebar-accent-foreground: 222 47% 11%;
+
+  --sidebar-ring: 217 91% 60%;
+
+  --popover: 210 20% 92%;
+
+  --popover-foreground: 222 47% 11%;
+
+  --popover-border: 214 20% 84%;
+
+  --primary: 217 91% 50%;
+
+  --primary-foreground: 210 40% 98%;
+
+  --secondary: 214 25% 86%;
+
+  --secondary-foreground: 222 47% 11%;
+
+  --muted: 214 20% 90%;
+
+  --muted-foreground: 215 18% 38%;
+
+  --disabled: 214 20% 91%;
+
+  --disabled-foreground: 215 20% 32%;
+
+  --disabled-border: 214 20% 76%;
+
+  --accent: 214 28% 82%;
+
+  --accent-foreground: 222 47% 11%;
+
+  --destructive: 0 84% 45%;
+
+  --destructive-foreground: 210 40% 98%;
+
+  --input: 214 32% 76%;
+
+  --ring: 217 91% 60%;
+
+  --color-focus: 217 91% 42%;
+
+  --focus-ring: 2px solid hsl(var(--color-focus) / 0.86);
+
+  --focus-ring-offset: 2px;
+
+  --focus-ring-radius: var(--radius-sm);
+
+  --scrollbar-track: hsl(var(--muted) / 0.45);
+
+  --scrollbar-thumb: hsl(var(--primary) / 0.45);
+
+  --scrollbar-thumb-hover: hsl(var(--primary) / 0.72);
+
+  --chart-1: 217 91% 45%;
+
+  --chart-2: 271 91% 50%;
+
+  --chart-3: 142 76% 36%;
+
+  --chart-4: 28 80% 52%;
+
+  --chart-5: 340 82% 52%;
+
+  --status-online: 142 71% 45%;
+
+  --status-away: 38 92% 50%;
+
+  --status-busy: 0 84% 60%;
+
+  --status-offline: 220 9% 46%;
+
+  --print-background: 0 0% 100%;
+
+  --print-foreground: 222 47% 11%;
+
+  --sidebar-primary-border: hsl(217 91% 42%);
+
+  --sidebar-accent-border: hsl(214 28% 70%);
+
+  --primary-border: hsl(217 91% 42%);
+
+  --secondary-border: hsl(214 25% 78%);
+
+  --muted-border: hsl(214 20% 82%);
+
+  --accent-border: hsl(214 28% 74%);
+
+  --destructive-border: hsl(0 84% 37%);
+}
+
+.dark {
+  color-scheme: dark;
+
+  --button-outline: rgba(255, 255, 255, 0.1);
+
+  --badge-outline: rgba(255, 255, 255, 0.05);
+
+  --background: 222 47% 11%;
+
+  --foreground: 210 40% 98%;
+
+  --border: 217 19% 27%;
+
+  --card: 222 47% 13%;
+
+  --card-foreground: 210 40% 98%;
+
+  --card-border: 217 19% 20%;
+
+  --sidebar: 222 47% 15%;
+
+  --sidebar-foreground: 210 40% 98%;
+
+  --sidebar-border: 217 19% 23%;
+
+  --sidebar-primary: 217 91% 50%;
+
+  --sidebar-primary-foreground: 210 40% 98%;
+
+  --sidebar-accent: 217 20% 21%;
+
+  --sidebar-accent-foreground: 210 40% 98%;
+
+  --sidebar-ring: 217 91% 60%;
+
+  --popover: 222 47% 17%;
+
+  --popover-foreground: 210 40% 98%;
+
+  --popover-border: 217 19% 25%;
+
+  --primary: 217 91% 50%;
+
+  --primary-foreground: 210 40% 98%;
+
+  --secondary: 217 20% 22%;
+
+  --secondary-foreground: 210 40% 98%;
+
+  --muted: 217 19% 21%;
+
+  --muted-foreground: 215 20% 65%;
+
+  --disabled: 217 19% 22%;
+
+  --disabled-foreground: 215 20% 72%;
+
+  --disabled-border: 217 19% 38%;
+
+  --accent: 217 20% 21%;
+
+  --accent-foreground: 210 40% 98%;
+
+  --destructive: 0 62% 53%;
+
+  --destructive-foreground: 210 40% 98%;
+
+  --input: 217 32% 38%;
+
+  --ring: 217 91% 60%;
+
+  --color-focus: 214 95% 87%;
+
+  --focus-ring: 2px solid hsl(var(--color-focus) / 0.9);
+
+  --focus-ring-offset: 2px;
+
+  --focus-ring-radius: var(--radius-sm);
+
+  --chart-1: 217 91% 65%;
+
+  --chart-2: 271 91% 70%;
+
+  --chart-3: 142 76% 56%;
+
+  --chart-4: 28 80% 62%;
+
+  --chart-5: 340 82% 62%;
+
+  --status-online: 142 71% 55%;
+
+  --status-away: 38 92% 58%;
+
+  --status-busy: 0 84% 65%;
+
+  --status-offline: 220 13% 70%;
+
+  --sidebar-primary-border: hsl(217 91% 59%);
+
+  --sidebar-accent-border: hsl(217 20% 30%);
+
+  --primary-border: hsl(217 91% 59%);
+
+  --secondary-border: hsl(217 20% 31%);
+
+  --muted-border: hsl(217 19% 30%);
+
+  --accent-border: hsl(217 20% 30%);
+
+  --destructive-border: hsl(0 62% 39%);
+}
+

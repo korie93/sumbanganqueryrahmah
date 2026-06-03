@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
+import { readThemeTokenSource } from "../lib/theme-token-source.test-helper";
 
 const clientSrcRoot = path.resolve(process.cwd(), "client/src");
 
@@ -20,7 +21,7 @@ test("analysis loading skeleton uses one CSS variable for pulse delays", () => {
 });
 
 test("design tokens keep a broad monospace fallback stack", () => {
-  const tokens = readClientSource("theme-tokens.css");
+  const tokens = readThemeTokenSource();
 
   assert.match(
     tokens,

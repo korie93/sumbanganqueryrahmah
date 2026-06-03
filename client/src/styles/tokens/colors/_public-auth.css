@@ -1,0 +1,334 @@
+/* Public authentication color tokens */
+
+:root {
+  --public-auth-layout-bg: linear-gradient(135deg, hsl(222 47% 9%), hsl(217 91% 22%) 52%, hsl(188 78% 24%));
+
+  --public-auth-pattern-dot: hsl(199 89% 74% / 0.16);
+
+  --public-auth-glow-top: hsl(217 91% 60% / 0.18);
+
+  --public-auth-glow-bottom: hsl(188 94% 68% / 0.16);
+
+  --public-auth-glow-center: hsl(199 89% 68% / 0.1);
+
+  --public-auth-shell-border: hsl(214 42% 86%);
+
+  --public-auth-shell-surface: hsl(0 0% 100% / 0.72);
+
+  --public-auth-shell-surface-muted: hsl(214 100% 97%);
+
+  --public-auth-shell-surface-strong: hsl(0 0% 100% / 0.98);
+
+  --public-auth-shell-surface-strong-sm: hsl(0 0% 100% / 0.92);
+
+  --public-auth-text-strong: hsl(224 61% 17%);
+
+  --public-auth-text-muted: hsl(221 28% 42%);
+
+  --public-auth-text-soft: hsl(219 18% 34%);
+
+  --public-auth-badge: hsl(217 91% 46%);
+
+  --public-auth-focus-ring: hsl(var(--ring) / 0.32);
+
+  --public-auth-halo: hsl(217 91% 70% / 0.22);
+
+  --public-auth-primary-bg: hsl(221 83% 55%);
+
+  --public-auth-primary-bg-hover: hsl(221 83% 50%);
+
+  --public-auth-primary-ring: hsl(var(--ring) / 0.56);
+
+  --public-auth-ghost-text: hsl(221 83% 42%);
+
+  --public-auth-ghost-hover-bg: hsl(214 100% 97%);
+
+  --public-auth-ghost-ring: hsl(var(--ring) / 0.4);
+
+  --public-auth-input-bg: hsl(0 0% 100% / 0.98);
+
+  --public-auth-input-border: hsl(214 32% 82%);
+
+  --public-auth-input-text: hsl(222 47% 11%);
+
+  --public-auth-input-placeholder: hsl(215 20% 65%);
+
+  --public-auth-input-focus: hsl(var(--ring) / 0.48);
+
+  --login-layout-bg: var(--public-auth-layout-bg);
+
+  --login-pattern-dot: var(--public-auth-pattern-dot);
+
+  --login-glow-top: hsl(217 91% 60% / 0.08);
+
+  --login-glow-bottom: hsl(188 94% 42% / 0.08);
+
+  --login-glow-center: hsl(199 89% 48% / 0.05);
+
+  --login-back-button-border: var(--public-auth-shell-border);
+
+  --login-back-button-bg: hsl(218 100% 97% / 0.82);
+
+  --login-back-button-text: var(--public-auth-text-muted);
+
+  --login-back-button-bg-hover: hsl(0 0% 100% / 0.94);
+
+  --login-back-button-text-hover: var(--public-auth-text-strong);
+
+  --login-back-button-ring: var(--public-auth-focus-ring);
+
+  --login-card-surface: linear-gradient(180deg, hsl(0 0% 100% / 0.985), hsl(213 100% 99% / 0.975));
+
+  --login-card-border: hsl(214 42% 86%);
+
+  --login-card-border-gradient: linear-gradient(
+    160deg,
+    hsl(0 0% 100% / 0.88),
+    hsl(214 72% 90% / 0.52),
+    hsl(217 91% 62% / 0.2)
+  );
+
+  --login-card-overlay-gradient: linear-gradient(
+    to bottom right,
+    hsl(0 0% 100% / 0.34),
+    hsl(214 95% 92% / 0.12) 42%,
+    hsl(217 91% 70% / 0.06)
+  );
+
+  --login-card-halo: hsl(217 91% 70% / 0.18);
+
+  --login-mobile-card-surface: linear-gradient(180deg, hsl(0 0% 100% / 0.985), hsl(213 100% 99% / 0.975));
+
+  --login-mobile-card-border: hsl(214 42% 86%);
+
+  --login-brand-surface: hsl(217 91% 50% / 0.08);
+
+  --login-brand-border: hsl(217 91% 50% / 0.18);
+
+  --login-title-text: hsl(224 61% 17%);
+
+  --login-subtitle-text: hsl(221 24% 43%);
+
+  --login-input-bg: var(--public-auth-input-bg);
+
+  --login-input-text: var(--public-auth-input-text);
+
+  --login-input-placeholder: var(--public-auth-input-placeholder);
+
+  --login-input-focus-ring: var(--public-auth-primary-ring);
+
+  --login-password-toggle-text: hsl(215 16% 47%);
+
+  --login-password-toggle-text-hover: hsl(222 47% 11%);
+
+  --login-password-toggle-ring: var(--public-auth-input-focus);
+
+  --login-submit-gradient: linear-gradient(90deg, hsl(221 83% 55%), hsl(221 83% 50%));
+
+  --login-submit-gradient-hover: linear-gradient(90deg, hsl(221 83% 52%), hsl(221 83% 47%));
+
+  --login-submit-text: hsl(210 40% 98%);
+
+  --login-submit-ring: hsl(214 95% 93% / 0.7);
+
+  --login-spinner-track: hsl(0 0% 100% / 0.3);
+
+  --login-spinner-head: hsl(0 0% 100%);
+
+  --login-link-text: hsl(221 83% 52%);
+
+  --login-link-bg-hover: hsl(214 100% 97%);
+
+  --login-link-text-hover: hsl(221 83% 44%);
+
+  --login-link-ring: var(--public-auth-ghost-ring);
+
+  --login-alert-warning-bg: hsl(42 92% 54% / 0.14);
+
+  --login-alert-warning-border: hsl(42 92% 44% / 0.3);
+
+  --login-alert-warning-text: hsl(32 95% 24%);
+
+  --login-alert-warning-subtext: hsl(32 72% 30%);
+
+  --login-alert-error-bg: hsl(0 72% 52% / 0.1);
+
+  --login-alert-error-border: hsl(0 72% 52% / 0.22);
+
+  --login-alert-error-text: hsl(0 62% 38%);
+
+  --login-alert-success-bg: hsl(152 72% 32% / 0.1);
+
+  --login-alert-success-border: hsl(152 72% 44% / 0.22);
+
+  --login-alert-success-text: hsl(152 70% 24%);
+
+  --login-footer-text: hsl(221 20% 42%);
+}
+
+.dark {
+  --public-auth-layout-bg: linear-gradient(135deg, hsl(222 47% 11%), hsl(221 83% 35%), hsl(222 47% 11%));
+
+  --public-auth-pattern-dot: hsl(210 72% 54% / 0.4);
+
+  --public-auth-glow-top: hsl(217 91% 60% / 0.18);
+
+  --public-auth-glow-bottom: hsl(271 91% 68% / 0.18);
+
+  --public-auth-glow-center: hsl(217 91% 70% / 0.1);
+
+  --public-auth-shell-border: hsl(0 0% 100% / 0.14);
+
+  --public-auth-shell-surface: hsl(0 0% 100% / 0.1);
+
+  --public-auth-shell-surface-muted: hsl(0 0% 100% / 0.05);
+
+  --public-auth-shell-surface-strong: hsl(222 84% 6% / 0.85);
+
+  --public-auth-shell-surface-strong-sm: hsl(222 84% 6% / 0.75);
+
+  --public-auth-text-strong: hsl(0 0% 100%);
+
+  --public-auth-text-muted: hsl(0 0% 100% / 0.82);
+
+  --public-auth-text-soft: hsl(0 0% 100% / 0.88);
+
+  --public-auth-badge: hsl(214 95% 93% / 0.82);
+
+  --public-auth-focus-ring: hsl(var(--ring) / 0.34);
+
+  --public-auth-halo: hsl(217 91% 70% / 0.14);
+
+  --public-auth-primary-bg: hsl(221 83% 55%);
+
+  --public-auth-primary-bg-hover: hsl(221 83% 50%);
+
+  --public-auth-primary-ring: hsl(var(--ring) / 0.6);
+
+  --public-auth-ghost-text: hsl(214 32% 91%);
+
+  --public-auth-ghost-hover-bg: hsl(0 0% 100% / 0.08);
+
+  --public-auth-ghost-ring: hsl(var(--ring) / 0.44);
+
+  --public-auth-input-bg: hsl(0 0% 100% / 0.95);
+
+  --public-auth-input-border: hsl(0 0% 100% / 0.12);
+
+  --public-auth-input-text: hsl(222 47% 11%);
+
+  --public-auth-input-placeholder: hsl(215 20% 65%);
+
+  --public-auth-input-focus: hsl(var(--ring) / 0.56);
+
+  --login-layout-bg: var(--public-auth-layout-bg);
+
+  --login-pattern-dot: var(--public-auth-pattern-dot);
+
+  --login-glow-top: hsl(217 91% 60% / 0.18);
+
+  --login-glow-bottom: hsl(271 91% 68% / 0.18);
+
+  --login-glow-center: hsl(217 91% 70% / 0.1);
+
+  --login-back-button-border: var(--public-auth-shell-border);
+
+  --login-back-button-bg: var(--public-auth-shell-surface-muted);
+
+  --login-back-button-text: var(--public-auth-text-muted);
+
+  --login-back-button-bg-hover: var(--public-auth-shell-surface);
+
+  --login-back-button-text-hover: var(--public-auth-text-strong);
+
+  --login-back-button-ring: var(--public-auth-focus-ring);
+
+  --login-card-surface: hsl(0 0% 100% / 0.12);
+
+  --login-card-border: hsl(0 0% 100% / 0.44);
+
+  --login-card-border-gradient: linear-gradient(
+    160deg,
+    hsl(0 0% 100% / 0.48),
+    hsl(217 35% 72% / 0.18),
+    hsl(0 0% 100% / 0.34)
+  );
+
+  --login-card-overlay-gradient: linear-gradient(
+    to bottom right,
+    hsl(0 0% 100% / 0.24),
+    hsl(0 0% 100% / 0.05) 40%,
+    hsl(0 0% 100% / 0.02)
+  );
+
+  --login-card-halo: hsl(217 91% 70% / 0.14);
+
+  --login-mobile-card-surface: hsl(222 47% 11% / 0.94);
+
+  --login-mobile-card-border: hsl(0 0% 100% / 0.18);
+
+  --login-brand-surface: hsl(0 0% 100% / 0.16);
+
+  --login-brand-border: hsl(0 0% 100% / 0.2);
+
+  --login-title-text: var(--public-auth-text-strong);
+
+  --login-subtitle-text: hsl(0 0% 100% / 0.72);
+
+  --login-input-bg: var(--public-auth-input-bg);
+
+  --login-input-text: var(--public-auth-input-text);
+
+  --login-input-placeholder: var(--public-auth-input-placeholder);
+
+  --login-input-focus-ring: var(--public-auth-primary-ring);
+
+  --login-password-toggle-text: hsl(215 16% 47%);
+
+  --login-password-toggle-text-hover: hsl(222 47% 11%);
+
+  --login-password-toggle-ring: var(--public-auth-input-focus);
+
+  --login-submit-gradient: linear-gradient(90deg, hsl(221 83% 55%), hsl(221 83% 50%));
+
+  --login-submit-gradient-hover: linear-gradient(90deg, hsl(221 83% 52%), hsl(221 83% 47%));
+
+  --login-submit-text: hsl(210 40% 98%);
+
+  --login-submit-ring: hsl(214 95% 93% / 0.74);
+
+  --login-spinner-track: hsl(0 0% 100% / 0.3);
+
+  --login-spinner-head: hsl(0 0% 100%);
+
+  --login-link-text: hsl(0 0% 100% / 0.76);
+
+  --login-link-bg-hover: hsl(0 0% 100% / 0.08);
+
+  --login-link-text-hover: hsl(0 0% 100%);
+
+  --login-link-ring: var(--public-auth-ghost-ring);
+
+  --login-alert-warning-bg: hsl(42 92% 54% / 0.2);
+
+  --login-alert-warning-border: hsl(42 92% 54% / 0.4);
+
+  --login-alert-warning-text: hsl(48 100% 96%);
+
+  --login-alert-warning-subtext: hsl(48 100% 90% / 0.9);
+
+  --login-alert-error-bg: hsl(0 72% 52% / 0.2);
+
+  --login-alert-error-border: hsl(0 72% 52% / 0.3);
+
+  --login-alert-error-text: hsl(0 100% 92%);
+
+  --login-alert-success-bg: hsl(152 72% 32% / 0.24);
+
+  --login-alert-success-border: hsl(152 72% 44% / 0.36);
+
+  --login-alert-success-text: hsl(152 100% 94%);
+
+  --login-footer-text: hsl(0 0% 100% / 0.5);
+}
+

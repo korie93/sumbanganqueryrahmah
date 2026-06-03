@@ -30,12 +30,12 @@ test("design token spacing contract accepts the guarded theme and layout markers
 
 test("design token spacing contract flags missing required files", () => {
   const filesByPath = buildCompliantFilesByPath();
-  delete filesByPath["client/src/theme-tokens.css"];
+  delete filesByPath["client/src/styles/tokens/_spacing.css"];
 
   const validation = validateDesignTokenSpacingContract({ filesByPath });
 
   assert.equal(validation.failures.length, 1);
-  assert.match(validation.failures[0], /client\/src\/theme-tokens\.css/);
+  assert.match(validation.failures[0], /client\/src\/styles\/tokens\/_spacing\.css/);
 });
 
 test("design token spacing contract flags missing spacing markers with readable labels", () => {

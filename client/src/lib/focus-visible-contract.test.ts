@@ -1,12 +1,8 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import path from "node:path";
 import test from "node:test";
+import { readThemeTokenSource } from "./theme-token-source.test-helper";
 
-const themeTokensSource = readFileSync(
-  path.resolve(process.cwd(), "client", "src", "theme-tokens.css"),
-  "utf8",
-);
+const themeTokensSource = readThemeTokenSource();
 
 test("theme tokens expose a shared focus-visible ring contract", () => {
   assert.match(themeTokensSource, /--color-focus:\s*217 91% 42%/);

@@ -1,6 +1,6 @@
 export const DESIGN_TOKEN_COLOR_COMPATIBILITY_REQUIREMENTS = [
   {
-    filePath: "client/src/theme-tokens.css",
+    filePath: "client/src/styles/tokens/index.css",
     checks: [
       {
         label: "theme tokens avoid relative hsl(from ...) color syntax",

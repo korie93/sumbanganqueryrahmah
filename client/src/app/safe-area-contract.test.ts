@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const clientSrcRoot = path.resolve(__dirname, "..");
-const allowedDirectEnvFile = path.resolve(clientSrcRoot, "theme-tokens.css");
+const allowedDirectEnvFile = path.resolve(clientSrcRoot, "styles", "tokens", "_safe-area.css");
 const directSafeAreaEnvMarker = "env(" + "safe-area";
 const sourceExtensions = new Set([".css", ".ts", ".tsx"]);
 

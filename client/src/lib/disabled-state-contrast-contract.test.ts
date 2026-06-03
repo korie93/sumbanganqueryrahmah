@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import { readThemeTokenSource } from "./theme-token-source.test-helper";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const clientSrcDir = path.resolve(__dirname, "..");
@@ -65,7 +66,7 @@ function contrastRatio(foreground: Hsl, background: Hsl): number {
 }
 
 test("disabled state design tokens keep AA contrast in light and dark themes", () => {
-  const source = readRepoFile("client/src/theme-tokens.css");
+  const source = readThemeTokenSource();
   const disabledForeground = getTokenOccurrences(source, "--disabled-foreground");
   const disabledBackground = getTokenOccurrences(source, "--disabled");
 

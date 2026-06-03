@@ -9,6 +9,7 @@ import {
   readThemeTokenContrastReport,
   validateThemeContrast,
 } from "../lib/design-token-contrast.mjs";
+import { readThemeTokenSource, THEME_TOKEN_ENTRY_FILE_PATH } from "../lib/design-token-source.mjs";
 import { readFileSync } from "node:fs";
 
 function extractCssVariableValue(cssBlock, variableName) {
@@ -110,7 +111,7 @@ test("validateThemeContrast reports insufficient token contrast", () => {
 
 test("theme token foreground pairs meet WCAG AA normal text contrast", () => {
   const report = readThemeTokenContrastReport(
-    path.resolve(process.cwd(), "client/src/theme-tokens.css"),
+    path.resolve(process.cwd(), THEME_TOKEN_ENTRY_FILE_PATH),
   );
 
   assert.deepEqual(report.lightFailures, []);
@@ -118,10 +119,7 @@ test("theme token foreground pairs meet WCAG AA normal text contrast", () => {
 });
 
 test("light theme accent surfaces stay visually distinct from their parent backgrounds", () => {
-  const css = readFileSync(
-    path.resolve(process.cwd(), "client/src/theme-tokens.css"),
-    "utf8",
-  );
+  const css = readThemeTokenSource();
   const lightTokens = parseHslTokens(extractCssRuleBlock(css, ":root"));
 
   assert.deepEqual(
@@ -137,10 +135,7 @@ test("light theme accent surfaces stay visually distinct from their parent backg
 });
 
 test("public auth text tokens keep WCAG AA contrast against the auth shell surface", () => {
-  const css = readFileSync(
-    path.resolve(process.cwd(), "client/src/theme-tokens.css"),
-    "utf8",
-  );
+  const css = readThemeTokenSource();
 
   for (const selector of [":root", ".dark"]) {
     const cssBlock = extractCssRuleBlock(css, selector);
@@ -173,10 +168,7 @@ test("public auth text tokens keep WCAG AA contrast against the auth shell surfa
 });
 
 test("public auth primary buttons and login submit gradients keep readable white text", () => {
-  const css = readFileSync(
-    path.resolve(process.cwd(), "client/src/theme-tokens.css"),
-    "utf8",
-  );
+  const css = readThemeTokenSource();
 
   for (const selector of [":root", ".dark"]) {
     const cssBlock = extractCssRuleBlock(css, selector);
@@ -215,10 +207,7 @@ test("public auth primary buttons and login submit gradients keep readable white
 });
 
 test("audit contrast pairs keep muted and destructive tokens readable on their parent backgrounds", () => {
-  const css = readFileSync(
-    path.resolve(process.cwd(), "client/src/theme-tokens.css"),
-    "utf8",
-  );
+  const css = readThemeTokenSource();
   const lightTokens = parseHslTokens(extractCssRuleBlock(css, ":root"));
   const darkTokens = parseHslTokens(extractCssRuleBlock(css, ".dark"));
 
@@ -246,10 +235,7 @@ test("audit contrast pairs keep muted and destructive tokens readable on their p
 });
 
 test("focus ring token meets WCAG UI contrast in light and dark themes", () => {
-  const css = readFileSync(
-    path.resolve(process.cwd(), "client/src/theme-tokens.css"),
-    "utf8",
-  );
+  const css = readThemeTokenSource();
 
   for (const selector of [":root", ".dark"]) {
     const tokens = parseHslTokens(extractCssRuleBlock(css, selector));
@@ -269,10 +255,7 @@ test("focus ring token meets WCAG UI contrast in light and dark themes", () => {
 });
 
 test("dark navbar active pill keeps WCAG AA text contrast", () => {
-  const tokenCss = readFileSync(
-    path.resolve(process.cwd(), "client/src/theme-tokens.css"),
-    "utf8",
-  );
+  const tokenCss = readThemeTokenSource();
   const navbarCss = readFileSync(
     path.resolve(process.cwd(), "client/src/components/Navbar.css"),
     "utf8",

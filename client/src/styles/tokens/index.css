@@ -1,0 +1,12 @@
+/*
+ * Design token source of truth.
+ * Keep shared visual primitives here and document token family changes in
+ * docs/CSS_ARCHITECTURE.md before pruning broad token groups.
+ */
+@import "./_colors.css";
+@import "./_typography.css";
+@import "./_spacing.css";
+@import "./_shadows.css";
+@import "./_z-index.css";
+@import "./_safe-area.css";
+@import "./_animations.css";

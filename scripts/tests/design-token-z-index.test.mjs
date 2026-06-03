@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import test from "node:test";
+import { readThemeTokenSource } from "../lib/design-token-source.mjs";
 
 const CLIENT_SOURCE_ROOT = path.resolve(process.cwd(), "client/src");
 const SOURCE_FILE_EXTENSIONS = new Set([".ts", ".tsx"]);
@@ -30,8 +31,7 @@ function collectSourceFiles(directoryPath) {
 }
 
 function readThemeZIndexTokens() {
-  const themePath = path.resolve(process.cwd(), "client/src/theme-tokens.css");
-  const css = fs.readFileSync(themePath, "utf8");
+  const css = readThemeTokenSource();
   const tokens = new Map();
 
   for (const match of css.matchAll(/--(z-[a-z0-9-]+):\s*(-?\d+);/gi)) {

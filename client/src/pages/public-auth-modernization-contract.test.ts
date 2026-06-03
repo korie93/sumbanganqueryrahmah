@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import { readThemeTokenSource } from "../lib/theme-token-source.test-helper";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -74,7 +75,7 @@ test("single-tab blocked page uses readable token-based copy and accessible guid
 
 test("landing and public auth theme use a dark SQR backdrop with elevated light auth surfaces", () => {
   const landingCss = readPageSource("Landing.css");
-  const tokenSource = readPageSource("../theme-tokens.css");
+  const tokenSource = readThemeTokenSource();
 
   assert.match(tokenSource, /--public-auth-layout-bg: linear-gradient\(135deg, hsl\(222 47% 9%\)/);
   assert.match(tokenSource, /--public-auth-shell-surface-strong: hsl\(0 0% 100% \/ 0\.98\);/);

@@ -4,7 +4,7 @@ import App from "./App";
 import { installGlobalUnhandledRejectionHandler } from "./lib/global-unhandled-rejection";
 import { detectLowSpecMode } from "./lib/low-spec-mode";
 import { initializeWebVitalsReporting } from "./lib/web-vitals";
-import "./theme-tokens.css";
+import "./styles/tokens/index.css";
 import "./public-shell.css";
 
 installGlobalUnhandledRejectionHandler();

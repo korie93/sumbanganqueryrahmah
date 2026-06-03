@@ -1,0 +1,121 @@
+/* Interaction elevation utilities */
+
+/* .no-default-hover-elevate/no-default-active-elevate is an escape hatch so consumers of
+ * buttons/badges can remove the automatic brightness adjustment on interactions
+ * and program their own. */
+/**
+ * Toggleable backgrounds go behind the content. Hoverable/active goes on top.
+ * This way they can stack/compound. Both will overlap the parent's borders!
+ * So borders will be automatically adjusted both on toggle, and hover/active,
+ * and they will be compounded.
+ */
+.toggle-elevate::before,
+.toggle-elevate-2::before {
+  content: "";
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  z-index: -1;
+}
+
+.toggle-elevate.toggle-elevated::before {
+  background-color: var(--elevate-2);
+}
+
+/* If there's a 1px border, adjust the inset so that it covers that parent's border */
+.border.toggle-elevate::before {
+  inset: -1px;
+}
+
+/* Overflow-clipped surfaces cannot rely on the border-overlap variant below, so they get
+ * an inset fallback further down. */
+.hover-elevate:not(.no-default-hover-elevate),
+.active-elevate:not(.no-default-active-elevate),
+.hover-elevate-2:not(.no-default-hover-elevate),
+.active-elevate-2:not(.no-default-active-elevate) {
+  position: relative;
+  z-index: 0;
+}
+
+.hover-elevate:not(.no-default-hover-elevate)::after,
+.active-elevate:not(.no-default-active-elevate)::after,
+.hover-elevate-2:not(.no-default-hover-elevate)::after,
+.active-elevate-2:not(.no-default-active-elevate)::after {
+  content: "";
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  z-index: 1;
+}
+
+.active-elevate:active:not(.no-default-active-elevate)::after {
+  background-color: var(--elevate-1);
+}
+
+.overflow-hidden.border.active-elevate:active:not(.no-active-interaction-elevate)::after,
+.overflow-clip.border.active-elevate:active:not(.no-active-interaction-elevate)::after {
+  box-shadow: inset 0 0 0 1px var(--elevate-1);
+}
+
+.active-elevate-2:active:not(.no-default-active-elevate)::after {
+  background-color: var(--elevate-2);
+}
+
+.overflow-hidden.border.active-elevate-2:active:not(.no-active-interaction-elevate)::after,
+.overflow-clip.border.active-elevate-2:active:not(.no-active-interaction-elevate)::after {
+  box-shadow: inset 0 0 0 1px var(--elevate-2);
+}
+
+/* If there's a 1px border, adjust the inset so that it covers that parent's border */
+.border.hover-elevate:not(.no-hover-interaction-elevate)::after,
+.border.active-elevate:not(.no-active-interaction-elevate)::after,
+.border.hover-elevate-2:not(.no-hover-interaction-elevate)::after,
+.border.active-elevate-2:not(.no-active-interaction-elevate)::after,
+.border.hover-elevate:not(.no-hover-interaction-elevate)::after {
+  inset: -1px;
+}
+
+.overflow-hidden.border.hover-elevate:not(.no-hover-interaction-elevate)::after,
+.overflow-hidden.border.active-elevate:not(.no-active-interaction-elevate)::after,
+.overflow-hidden.border.hover-elevate-2:not(.no-hover-interaction-elevate)::after,
+.overflow-hidden.border.active-elevate-2:not(.no-active-interaction-elevate)::after,
+.overflow-clip.border.hover-elevate:not(.no-hover-interaction-elevate)::after,
+.overflow-clip.border.active-elevate:not(.no-active-interaction-elevate)::after,
+.overflow-clip.border.hover-elevate-2:not(.no-hover-interaction-elevate)::after,
+.overflow-clip.border.active-elevate-2:not(.no-active-interaction-elevate)::after {
+  inset: 0;
+  box-shadow: inset 0 0 0 1px transparent;
+}
+
+/* ===========================================================
+   LOW SPEC MODE (2GB RAM / older CPU friendly)
+=========================================================== */
+
+.low-spec *,
+.low-spec *::before,
+.low-spec *::after {
+  animation: none !important;
+  transition: none !important;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .hover-elevate:hover:not(.no-default-hover-elevate)::after {
+    background-color: var(--elevate-1);
+  }
+
+  .overflow-hidden.border.hover-elevate:hover:not(.no-hover-interaction-elevate)::after,
+  .overflow-clip.border.hover-elevate:hover:not(.no-hover-interaction-elevate)::after {
+    box-shadow: inset 0 0 0 1px var(--elevate-1);
+  }
+
+  .hover-elevate-2:hover:not(.no-default-hover-elevate)::after {
+    background-color: var(--elevate-2);
+  }
+
+  .overflow-hidden.border.hover-elevate-2:hover:not(.no-hover-interaction-elevate)::after,
+  .overflow-clip.border.hover-elevate-2:hover:not(.no-hover-interaction-elevate)::after {
+    box-shadow: inset 0 0 0 1px var(--elevate-2);
+  }
+}

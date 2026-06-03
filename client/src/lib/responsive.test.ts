@@ -24,7 +24,8 @@ const RESPONSIVE_CSS_CONTRACT_FILES = [
   "../components/PublicAuthLayout.css",
   "../components/Navbar.css",
   "../index.css",
-  "../theme-tokens.css",
+  "../styles/tokens/_safe-area.css",
+  "../styles/tokens/_animations.css",
 ];
 
 test("responsive contract exposes the shared breakpoint tiers and derived queries", () => {

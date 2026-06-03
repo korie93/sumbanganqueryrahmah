@@ -1,0 +1,204 @@
+/* AI surface color tokens */
+
+:root {
+  --ai-surface-bg: linear-gradient(180deg, hsl(0 0% 100% / 0.98) 0%, hsl(210 40% 98% / 0.96) 100%);
+
+  --ai-surface-border: hsl(var(--border) / 0.85);
+
+  --ai-status-text: hsl(199 89% 32%);
+
+  --ai-status-bg: hsl(199 89% 48% / 0.1);
+
+  --ai-notice-bg: hsl(210 40% 98% / 0.92);
+
+  --ai-notice-text: hsl(215 25% 27%);
+
+  --ai-scroll-thumb: hsl(215 20% 65%);
+
+  --ai-empty-text: hsl(215 16% 47%);
+
+  --ai-assistant-bubble-bg: hsl(210 40% 98% / 0.98);
+
+  --ai-assistant-bubble-text: hsl(222 47% 11%);
+
+  --ai-assistant-bubble-border: hsl(199 89% 48% / 0.18);
+
+  --ai-input-surface-bg: hsl(0 0% 100% / 0.96);
+
+  --ai-input-surface-border: hsl(215 20% 65% / 0.45);
+
+  --ai-input-bg: hsl(0 0% 100% / 0.98);
+
+  --ai-input-border: hsl(215 20% 65% / 0.85);
+
+  --ai-input-text: hsl(222 47% 11%);
+
+  --ai-send-btn-bg: hsl(199 89% 48%);
+
+  --ai-send-btn-border: hsl(199 94% 86% / 0.3);
+
+  --ai-stop-btn-text: hsl(215 20% 65%);
+
+  --floating-ai-backdrop: hsl(222 47% 11% / 0.72);
+
+  --floating-ai-panel-bg: hsl(0 0% 100% / 0.98);
+
+  --floating-ai-panel-text: hsl(var(--foreground) / 1);
+
+  --floating-ai-panel-border: hsl(199 89% 48% / 0.15);
+
+  --floating-ai-panel-border-strong: hsl(199 89% 48% / 0.2);
+
+  --floating-ai-mobile-handle-bg: hsl(215 16% 47% / 0.45);
+
+  --floating-ai-header-border: hsl(214 20% 88% / 0.8);
+
+  --floating-ai-header-desktop-bg: linear-gradient(
+    90deg,
+    hsl(199 89% 48% / 0.12),
+    hsl(214 25% 86% / 0.6),
+    transparent
+  );
+
+  --floating-ai-header-mobile-bg: hsl(222 47% 11% / 0.8);
+
+  --floating-ai-header-mobile-text: hsl(0 0% 100%);
+
+  --floating-ai-header-mobile-description: hsl(0 0% 100% / 0.7);
+
+  --floating-ai-header-mobile-button-text: hsl(0 0% 100% / 0.8);
+
+  --floating-ai-header-mobile-button-hover-bg: hsl(0 0% 100% / 0.1);
+
+  --floating-ai-header-mobile-button-hover-text: hsl(0 0% 100%);
+
+  --floating-ai-header-title: hsl(222 47% 11%);
+
+  --floating-ai-header-description: hsl(215 16% 47%);
+
+  --floating-ai-header-button-text: hsl(215 16% 47%);
+
+  --floating-ai-header-button-hover-bg: hsl(214 25% 86% / 0.7);
+
+  --floating-ai-header-button-hover-text: hsl(222 47% 11%);
+
+  --floating-ai-minimized-status-bg: hsl(217 91% 60% / 0.1);
+
+  --floating-ai-minimized-status-border: hsl(217 91% 60% / 0.35);
+
+  --floating-ai-minimized-status-text: hsl(214 95% 87%);
+
+  --floating-ai-trigger-bg: hsl(199 89% 48%);
+
+  --floating-ai-trigger-border: hsl(199 89% 72% / 0.3);
+
+  --floating-ai-trigger-text: hsl(0 0% 100%);
+
+  --floating-ai-thinking-ring: hsl(217 91% 60% / 0.7);
+
+  --floating-ai-thinking-ring-clear: hsl(217 91% 60% / 0);
+
+  --floating-ai-edge-gap: clamp(0.5rem, 2vw, 1.5rem);
+}
+
+.dark {
+  --ai-surface-bg: linear-gradient(180deg, hsl(222 47% 11% / 0.94) 0%, hsl(222 47% 11% / 0.88) 100%);
+
+  --ai-surface-border: hsl(var(--border) / 0.7);
+
+  --ai-status-text: hsl(214 95% 87%);
+
+  --ai-status-bg: hsl(199 89% 48% / 0.08);
+
+  --ai-notice-bg: hsl(215 25% 27% / 0.35);
+
+  --ai-notice-text: hsl(214 32% 91%);
+
+  --ai-scroll-thumb: hsl(215 25% 27%);
+
+  --ai-empty-text: hsl(215 20% 65%);
+
+  --ai-assistant-bubble-bg: hsl(217 32% 22% / 0.98);
+
+  --ai-assistant-bubble-text: hsl(210 40% 98%);
+
+  --ai-assistant-bubble-border: hsl(213 94% 68% / 0.18);
+
+  --ai-input-surface-bg: hsl(222 47% 11% / 0.92);
+
+  --ai-input-surface-border: hsl(215 25% 27% / 0.72);
+
+  --ai-input-bg: hsl(222 47% 11% / 0.92);
+
+  --ai-input-border: hsl(215 25% 27% / 0.95);
+
+  --ai-input-text: hsl(210 40% 98%);
+
+  --ai-send-btn-bg: hsl(199 89% 48%);
+
+  --ai-send-btn-border: hsl(199 94% 86% / 0.24);
+
+  --ai-stop-btn-text: hsl(215 20% 65%);
+
+  --floating-ai-backdrop: hsl(222 47% 11% / 0.72);
+
+  --floating-ai-panel-bg: hsl(222 47% 11% / 0.98);
+
+  --floating-ai-panel-text: hsl(var(--card-foreground) / 1);
+
+  --floating-ai-panel-border: hsl(199 89% 48% / 0.18);
+
+  --floating-ai-panel-border-strong: hsl(199 89% 48% / 0.24);
+
+  --floating-ai-mobile-handle-bg: hsl(0 0% 100% / 0.2);
+
+  --floating-ai-header-border: hsl(0 0% 100% / 0.1);
+
+  --floating-ai-header-desktop-bg: linear-gradient(
+    90deg,
+    hsl(199 89% 48% / 0.12),
+    hsl(222 47% 11% / 0),
+    transparent
+  );
+
+  --floating-ai-header-mobile-bg: hsl(222 47% 11% / 0.88);
+
+  --floating-ai-header-mobile-text: hsl(0 0% 100%);
+
+  --floating-ai-header-mobile-description: hsl(0 0% 100% / 0.7);
+
+  --floating-ai-header-mobile-button-text: hsl(0 0% 100% / 0.8);
+
+  --floating-ai-header-mobile-button-hover-bg: hsl(0 0% 100% / 0.1);
+
+  --floating-ai-header-mobile-button-hover-text: hsl(0 0% 100%);
+
+  --floating-ai-header-title: hsl(210 40% 98%);
+
+  --floating-ai-header-description: hsl(215 20% 73% / 0.9);
+
+  --floating-ai-header-button-text: hsl(215 20% 86%);
+
+  --floating-ai-header-button-hover-bg: hsl(0 0% 100% / 0.1);
+
+  --floating-ai-header-button-hover-text: hsl(0 0% 100%);
+
+  --floating-ai-minimized-status-bg: hsl(217 91% 60% / 0.1);
+
+  --floating-ai-minimized-status-border: hsl(217 91% 60% / 0.35);
+
+  --floating-ai-minimized-status-text: hsl(214 95% 87%);
+
+  --floating-ai-trigger-bg: hsl(199 89% 48%);
+
+  --floating-ai-trigger-border: hsl(199 89% 72% / 0.3);
+
+  --floating-ai-trigger-text: hsl(0 0% 100%);
+
+  --floating-ai-thinking-ring: hsl(217 91% 60% / 0.7);
+
+  --floating-ai-thinking-ring-clear: hsl(217 91% 60% / 0);
+
+  --floating-ai-edge-gap: clamp(0.5rem, 2vw, 1.5rem);
+}
+

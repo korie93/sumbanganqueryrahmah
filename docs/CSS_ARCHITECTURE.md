@@ -16,8 +16,8 @@ responsive behavior, accessibility, dan performance kekal konsisten.
 1. `client/src/public-shell.css`
    Digunakan oleh [main.tsx](../client/src/main.tsx) untuk memuatkan Tailwind `base`, `components`, dan `utilities` bagi shell awal aplikasi.
 
-2. `client/src/theme-tokens.css`
-   Sumber utama design tokens. Fail ini menyimpan token global seperti `--background`, `--border`, `--shadow-*`, `--spacing-*`, `--safe-area-inset-*`, dan keluarga token khusus seperti `--public-auth-*`, `--login-*`, `--banned-*`, `--not-found-*`, dan token navigasi/shell yang lain.
+2. `client/src/styles/tokens/index.css`
+   Sumber utama design tokens. Entry ini memuatkan subfail token seperti `_colors.css`, `_spacing.css`, `_typography.css`, `_shadows.css`, `_z-index.css`, `_safe-area.css`, dan `_animations.css`. `client/src/theme-tokens.css` kekal sebagai wrapper keserasian kecil sahaja.
 
 3. `client/src/index.css`
    Global app styling untuk perkara rentas-halaman seperti `prefers-reduced-motion`, print mode, dan reset/utility global yang perlu wujud selepas authenticated bundle dimuatkan.
@@ -36,7 +36,7 @@ responsive behavior, accessibility, dan performance kekal konsisten.
 
 ## Loading Order
 
-- [main.tsx](../client/src/main.tsx) memuatkan `public-shell.css` dan `theme-tokens.css`.
+- [main.tsx](../client/src/main.tsx) memuatkan `public-shell.css` dan `styles/tokens/index.css`.
 - [AuthenticatedAppEntry.tsx](../client/src/app/AuthenticatedAppEntry.tsx) memuatkan `index.css` untuk global application rules selepas pengguna memasuki shell utama.
 - Komponen dan halaman memuatkan fail CSS masing-masing secara setempat, contohnya [AuthenticatedAppShell.tsx](../client/src/app/AuthenticatedAppShell.tsx), [Navbar.tsx](../client/src/components/Navbar.tsx), dan [FloatingAI.tsx](../client/src/components/FloatingAI.tsx).
 
@@ -73,10 +73,10 @@ Gunakan CSS modules apabila:
 
 - Jangan tambah warna terus seperti `#fff`, `rgba(...)`, atau `hsl(...)` di komponen jika token setara sudah wujud.
 - Untuk warna bertema, guna `hsl(var(--token) / alpha)` atau token shadow/background sedia ada.
-- Jika nilai baru benar-benar perlu dikongsi, daftarkan di `client/src/theme-tokens.css` mengikut keluarga yang jelas.
+- Jika nilai baru benar-benar perlu dikongsi, daftarkan di subfail `client/src/styles/tokens/` mengikut keluarga yang jelas.
 - Kekalkan pasangan light/dark dalam keluarga token yang sama. Jika menambah `--example-*` di `:root`, sediakan override yang sepadan di `.dark` jika komponen itu muncul dalam kedua-dua tema.
 - Spacing baharu perlu berpunca daripada scale `--spacing-*` dan bukannya nilai raw yang sukar diseragamkan.
-- Scrollbar global perlu guna token `--scrollbar-*` daripada `theme-tokens.css`; elakkan warna atau saiz scrollbar hardcoded dalam CSS feature.
+- Scrollbar global perlu guna token `--scrollbar-*` daripada token bundle; elakkan warna atau saiz scrollbar hardcoded dalam CSS feature.
 
 ## Responsive and Viewport Rules
 
@@ -89,7 +89,7 @@ Gunakan CSS modules apabila:
 
 ## Accessibility and Performance Rules
 
-- Setiap interactive surface perlu ada `:focus-visible` yang jelas. Token global `--focus-ring`, `--focus-ring-offset`, dan `--focus-ring-radius` di `theme-tokens.css` ialah default untuk kawalan baharu; override komponen hanya dibenarkan jika perlu mengekalkan visual system sedia ada.
+- Setiap interactive surface perlu ada `:focus-visible` yang jelas. Token global `--focus-ring`, `--focus-ring-offset`, dan `--focus-ring-radius` di token bundle ialah default untuk kawalan baharu; override komponen hanya dibenarkan jika perlu mengekalkan visual system sedia ada.
 - Elakkan visible `:focus` ring yang luas kerana ia muncul pada klik tetikus. Gunakan `:focus-visible` untuk ring keyboard dan `:focus:not(:focus-visible)` hanya untuk menyenyapkan outline default yang tidak disengajakan. Untuk browser lama, sediakan fallback di dalam `@supports not selector(:focus-visible)`.
 - Semak `@media (forced-colors: active)` apabila menambah focus style tersuai supaya ring kekal kelihatan dalam Windows High Contrast.
 - Hormati `prefers-reduced-motion`; jangan jadikan animasi penting untuk kefahaman asas.
@@ -120,7 +120,7 @@ Gunakan CSS modules apabila:
 - Navigation-specific styling: [client/src/components/Navbar.css](../client/src/components/Navbar.css)
 - Floating, scoped geometry: [client/src/components/FloatingAI.module.css](../client/src/components/FloatingAI.module.css)
 - Tiny local module for safe area: [client/src/pages/viewer/ViewerFooter.module.css](../client/src/pages/viewer/ViewerFooter.module.css)
-- Token source of truth: [client/src/theme-tokens.css](../client/src/theme-tokens.css)
+- Token source of truth: [client/src/styles/tokens/index.css](../client/src/styles/tokens/index.css)
 
 ## Review Checklist
 

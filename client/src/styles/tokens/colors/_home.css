@@ -1,0 +1,54 @@
+/* Home surface color tokens */
+
+:root {
+  --home-hero-border: hsl(0 0% 100% / 0.14);
+
+  --home-hero-glow: hsl(0 0% 100% / 0.18);
+
+  --home-hero-gradient-start: hsl(204 88% 30% / 0.96);
+
+  --home-hero-gradient-mid: hsl(221 76% 48% / 0.94);
+
+  --home-hero-gradient-end: hsl(217 79% 54% / 0.9);
+
+  --home-hero-chip-border: hsl(0 0% 100% / 0.18);
+
+  --home-hero-chip-bg: hsl(0 0% 100% / 0.12);
+
+  --home-hero-chip-text: hsl(0 0% 100% / 0.92);
+
+  --home-hero-action-border: hsl(0 0% 100% / 0.16);
+
+  --home-hero-action-bg: hsl(0 0% 100% / 0.15);
+
+  --home-hero-action-bg-hover: hsl(0 0% 100% / 0.22);
+
+  --home-hero-action-text: hsl(0 0% 100%);
+}
+
+.dark {
+  --home-hero-border: hsl(215 20% 65% / 0.18);
+
+  --home-hero-glow: hsl(215 20% 65% / 0.12);
+
+  --home-hero-gradient-start: hsl(222 47% 11% / 0.96);
+
+  --home-hero-gradient-mid: hsl(217 25% 17% / 0.98);
+
+  --home-hero-gradient-end: hsl(222 47% 11% / 0.98);
+
+  --home-hero-chip-border: hsl(215 20% 65% / 0.2);
+
+  --home-hero-chip-bg: hsl(222 47% 11% / 0.42);
+
+  --home-hero-chip-text: hsl(210 40% 98% / 0.92);
+
+  --home-hero-action-border: hsl(215 20% 65% / 0.16);
+
+  --home-hero-action-bg: hsl(222 47% 11% / 0.44);
+
+  --home-hero-action-bg-hover: hsl(222 47% 11% / 0.52);
+
+  --home-hero-action-text: hsl(210 40% 98%);
+}
+

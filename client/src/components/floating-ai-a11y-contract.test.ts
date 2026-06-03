@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import { readThemeTokenSource } from "../lib/theme-token-source.test-helper";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const clientSrcDir = path.resolve(__dirname, "..");
@@ -98,7 +99,7 @@ test("floating AI visual colors are sourced from design tokens", () => {
   const panelSource = readComponentSource("FloatingAIPanel.tsx");
   const triggerSource = readComponentSource("FloatingAITrigger.tsx");
   const floatingCss = readComponentSource("FloatingAI.module.css");
-  const tokens = readClientSource("theme-tokens.css");
+  const tokens = readThemeTokenSource();
   const combinedSource = `${source}\n${panelSource}\n${triggerSource}`;
 
   assert.doesNotMatch(combinedSource, /bg-sky-500|bg-slate-950|text-slate-|border-sky-|border-blue-500|bg-blue-500|text-blue-200/);
@@ -149,7 +150,7 @@ test("floating AI motion and scroll styles include accessibility fallbacks", () 
 });
 
 test("viewport fallback only reaches 100vh when dvh and svh are unsupported", () => {
-  const tokens = readClientSource("theme-tokens.css");
+  const tokens = readThemeTokenSource();
 
   assert.match(tokens, /@supports not \(height: 100dvh\) \{/);
   assert.match(tokens, /@supports not \(height: 100dvh\) and not \(height: 100svh\) \{/);

@@ -1,0 +1,190 @@
+/* Safe-area and viewport tokens */
+
+:root {
+  --safe-area-inset-top: env(safe-area-inset-top, 0px);
+
+  --safe-area-inset-right: env(safe-area-inset-right, 0px);
+
+  --safe-area-inset-bottom: env(safe-area-inset-bottom, 0px);
+
+  --safe-area-inset-left: env(safe-area-inset-left, 0px);
+
+  --viewport-keyboard-inset-bottom: env(keyboard-inset-height, 0px);
+
+  --viewport-safe-height-value: min(100dvh, max(0px, calc(100vh - var(--viewport-keyboard-inset-bottom))));
+
+  --viewport-min-height-value: var(--viewport-safe-height-value);
+
+  --app-shell-min-height-value: calc(var(--viewport-min-height-value) - 3.5rem);
+}
+
+/* Safe-area viewport utilities and keyboard focus affordances */
+
+.viewport-min-height {
+  min-height: var(--viewport-min-height-value);
+}
+
+.app-shell-min-height {
+  min-height: var(--app-shell-min-height-value);
+}
+
+@supports not (height: 100dvh) {
+  :root {
+    --viewport-safe-height-value: min(100svh, max(0px, calc(100vh - var(--viewport-keyboard-inset-bottom))));
+    --viewport-min-height-value: var(--viewport-safe-height-value);
+    --app-shell-min-height-value: calc(var(--viewport-min-height-value) - 3.5rem);
+  }
+}
+
+@supports not (height: 100dvh) and not (height: 100svh) {
+  :root {
+    --viewport-safe-height-value: max(0px, calc(100vh - var(--viewport-keyboard-inset-bottom)));
+    --viewport-min-height-value: var(--viewport-safe-height-value);
+    --app-shell-min-height-value: calc(var(--viewport-min-height-value) - 3.5rem);
+  }
+}
+
+:where(
+  a[href],
+  button,
+  input,
+  select,
+  summary,
+  textarea,
+  [role="button"],
+  [role="checkbox"],
+  [role="link"],
+  [role="menuitem"],
+  [role="menuitemcheckbox"],
+  [role="menuitemradio"],
+  [role="radio"],
+  [role="switch"],
+  [role="tab"],
+  [tabindex]:not([tabindex="-1"])
+):focus-visible {
+  border-radius: var(--focus-ring-radius);
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+
+:where(
+  a[href],
+  button,
+  input,
+  select,
+  summary,
+  textarea,
+  [role="button"],
+  [role="checkbox"],
+  [role="link"],
+  [role="menuitem"],
+  [role="menuitemcheckbox"],
+  [role="menuitemradio"],
+  [role="radio"],
+  [role="switch"],
+  [role="tab"],
+  [tabindex]:not([tabindex="-1"])
+):focus:not(:focus-visible) {
+  outline: none;
+}
+
+@supports not selector(:focus-visible) {
+  :where(
+    a[href],
+    button,
+    input,
+    select,
+    summary,
+    textarea,
+    [role="button"],
+    [role="checkbox"],
+    [role="link"],
+    [role="menuitem"],
+    [role="menuitemcheckbox"],
+    [role="menuitemradio"],
+    [role="radio"],
+    [role="switch"],
+    [role="tab"],
+    [tabindex]:not([tabindex="-1"])
+  ):focus {
+    border-radius: var(--focus-ring-radius);
+    outline: var(--focus-ring);
+    outline-offset: var(--focus-ring-offset);
+  }
+}
+
+@media (forced-colors: active) {
+  :where(
+    a[href],
+    button,
+    input,
+    select,
+    summary,
+    textarea,
+    [role="button"],
+    [role="checkbox"],
+    [role="link"],
+    [role="menuitem"],
+    [role="menuitemcheckbox"],
+    [role="menuitemradio"],
+    [role="radio"],
+    [role="switch"],
+    [role="tab"],
+    [tabindex]:not([tabindex="-1"])
+  ):focus-visible {
+    outline: 2px solid CanvasText;
+    outline-offset: var(--focus-ring-offset);
+  }
+}
+
+.skip-to-main-link {
+  position: fixed;
+  left: var(--spacing-3);
+  top: max(var(--spacing-3), var(--safe-area-inset-top));
+  z-index: var(--z-tooltip);
+  transform: translateY(calc(-100% - var(--spacing-2)));
+  border-radius: 9999px;
+  border: 1px solid hsl(var(--border) / 0.9);
+  background: hsl(var(--background) / 0.98);
+  color: hsl(var(--foreground));
+  padding: var(--spacing-2) var(--spacing-4);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  box-shadow: var(--nav-trigger-shadow);
+  transition: transform 160ms ease;
+}
+
+.skip-to-main-link:focus {
+  outline: none;
+}
+
+.skip-to-main-link:focus-visible {
+  transform: translateY(0);
+  outline: none;
+  box-shadow: 0 0 0 3px hsl(var(--ring) / 0.42), var(--nav-trigger-shadow);
+}
+
+@supports not selector(:focus-visible) {
+  .skip-to-main-link:focus {
+    transform: translateY(0);
+    outline: none;
+    box-shadow: 0 0 0 3px hsl(var(--ring) / 0.42), var(--nav-trigger-shadow);
+  }
+}
+
+#main-content {
+  scroll-margin-top: calc(3.5rem + var(--spacing-3));
+}
+
+#main-content:focus {
+  outline: 2px solid hsl(var(--ring) / 0.42);
+  outline-offset: 4px;
+}
+
+#main-content:focus:not(:focus-visible) {
+  outline-color: transparent;
+}
+
+#main-content:focus-visible {
+  outline-color: hsl(var(--ring) / 0.68);
+}

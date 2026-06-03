@@ -1,6 +1,6 @@
 export const DESIGN_TOKEN_SPACING_REQUIREMENTS = [
   {
-    filePath: "client/src/theme-tokens.css",
+    filePath: "client/src/styles/tokens/_spacing.css",
     checks: [
       {
         label: "theme tokens keep the spacing base unit",

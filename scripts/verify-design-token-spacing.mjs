@@ -1,6 +1,7 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { readFileSync } from "node:fs";
+import { readCssWithImports } from "./lib/design-token-source.mjs";
 import {
   DESIGN_TOKEN_SPACING_REQUIREMENTS,
   formatDesignTokenSpacingContractReport,
@@ -13,7 +14,9 @@ const repoRoot = path.resolve(scriptDir, "..");
 const filesByPath = Object.fromEntries(
   DESIGN_TOKEN_SPACING_REQUIREMENTS.map((requirement) => [
     requirement.filePath,
-    readFileSync(path.join(repoRoot, requirement.filePath), "utf8"),
+    requirement.filePath.endsWith(".css")
+      ? readCssWithImports(path.join(repoRoot, requirement.filePath))
+      : readFileSync(path.join(repoRoot, requirement.filePath), "utf8"),
   ]),
 );
 const validation = validateDesignTokenSpacingContract({ filesByPath });

@@ -1,0 +1,47 @@
+/* Layering tokens */
+
+:root {
+  --z-login-card-border: -2;
+
+  --z-login-card-overlay: -1;
+
+  /* Layer order: page chrome < navbar < transient AI/nav overlays < modal < popover < tooltip < toast. */
+  --z-public-auth-main: 5;
+
+  --z-sticky-header: 15;
+
+  --z-sticky-content: 20;
+
+  --z-navbar: 30;
+
+  /* Transient app shells must stay below modal overlay/content. */
+  --z-floating-ai-root: 40;
+
+  --z-mobile-nav-overlay: 60;
+
+  --z-floating-ai-overlay: 70;
+
+  --z-mobile-nav-panel: 80;
+
+  /* Modal and transient overlay layers reserve the 100+ range. */
+  --z-modal-overlay: 100;
+
+  --z-modal-content: 110;
+
+  --z-popover: 120;
+
+  --z-tooltip: 130;
+
+  --z-toast: 140;
+
+  --z-sidebar-desktop: 8;
+
+  --z-sidebar-rail: 20;
+
+  --z-inline-overlay: 1;
+
+  --z-navbar-scroll-fade: 1;
+
+  --z-navbar-scroll-hint: 2;
+}
+

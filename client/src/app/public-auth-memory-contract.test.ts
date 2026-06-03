@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import { readThemeTokenSource } from "../lib/theme-token-source.test-helper";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -104,7 +105,7 @@ test("client entry installs unhandled rejection logging before low-spec detectio
   const mainSource = readClientSource("../main.tsx");
   const unhandledIndex = mainSource.indexOf("installGlobalUnhandledRejectionHandler();");
   const lowSpecIndex = mainSource.indexOf("if (detectLowSpecMode())");
-  const tokensImportIndex = mainSource.indexOf('import "./theme-tokens.css";');
+  const tokensImportIndex = mainSource.indexOf('import "./styles/tokens/index.css";');
   const publicShellImportIndex = mainSource.indexOf('import "./public-shell.css";');
 
   assert.notEqual(unhandledIndex, -1);
@@ -121,7 +122,7 @@ test("client entry installs unhandled rejection logging before low-spec detectio
 
 test("browser color scheme metadata matches the light and dark token strategy", () => {
   const indexSource = readClientSource("../../index.html");
-  const tokenSource = readClientSource("../theme-tokens.css");
+  const tokenSource = readThemeTokenSource();
 
   assert.match(indexSource, /<html lang="ms">/);
   assert.match(indexSource, /<meta name="color-scheme" content="light dark" \/>/);
@@ -163,7 +164,7 @@ test("web app manifest exposes a lightweight internal shortcut", () => {
 
 test("global visible scrollbars include Firefox styling", () => {
   const indexCss = readClientSource("../index.css");
-  const themeTokensCss = readClientSource("../theme-tokens.css");
+  const themeTokensCss = readThemeTokenSource();
   const scrollbarBlock = readFirstCssRuleBlock(indexCss, ".scrollbar-visible");
 
   assert.match(themeTokensCss, /--scrollbar-size:\s*var\(--spacing-2\);/);

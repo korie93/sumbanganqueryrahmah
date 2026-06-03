@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readCssWithImports } from "./design-token-source.mjs";
 
 const HSL_TOKEN_PATTERN = /--([a-z0-9-]+):\s*([0-9.]+)\s+([0-9.]+)%\s+([0-9.]+)%;/gi;
 const DEFAULT_TOKEN_PAIRS = [
@@ -18,30 +18,41 @@ const DEFAULT_TOKEN_PAIRS = [
 ];
 
 export function extractCssRuleBlock(css, selector) {
-  const selectorIndex = css.indexOf(selector);
-  if (selectorIndex < 0) {
-    return "";
-  }
+  const blocks = [];
+  let searchIndex = 0;
 
-  const openIndex = css.indexOf("{", selectorIndex);
-  if (openIndex < 0) {
-    return "";
-  }
+  while (searchIndex < css.length) {
+    const selectorIndex = css.indexOf(selector, searchIndex);
+    if (selectorIndex < 0) {
+      break;
+    }
 
-  let depth = 0;
-  for (let index = openIndex; index < css.length; index += 1) {
-    const char = css[index];
-    if (char === "{") {
-      depth += 1;
-    } else if (char === "}") {
-      depth -= 1;
-      if (depth === 0) {
-        return css.slice(openIndex + 1, index);
+    const openIndex = css.indexOf("{", selectorIndex);
+    if (openIndex < 0) {
+      break;
+    }
+
+    let depth = 0;
+    for (let index = openIndex; index < css.length; index += 1) {
+      const char = css[index];
+      if (char === "{") {
+        depth += 1;
+      } else if (char === "}") {
+        depth -= 1;
+        if (depth === 0) {
+          blocks.push(css.slice(openIndex + 1, index));
+          searchIndex = index + 1;
+          break;
+        }
       }
+    }
+
+    if (searchIndex <= selectorIndex) {
+      break;
     }
   }
 
-  return "";
+  return blocks.join("\n");
 }
 
 export function parseHslTokens(cssBlock) {
@@ -128,7 +139,7 @@ export function validateThemeContrast(tokens, { minRatio = 4.5, tokenPairs = DEF
 }
 
 export function readThemeTokenContrastReport(themeTokensPath) {
-  const css = readFileSync(themeTokensPath, "utf8");
+  const css = readCssWithImports(themeTokensPath);
   const lightTokens = parseHslTokens(extractCssRuleBlock(css, ":root"));
   const darkTokens = parseHslTokens(extractCssRuleBlock(css, ".dark"));
 
