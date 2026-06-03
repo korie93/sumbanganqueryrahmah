@@ -1,0 +1,20 @@
+*,
+*::before,
+*::after {
+  animation-delay: 0s !important;
+  animation-duration: 0s !important;
+  caret-color: transparent !important;
+  scroll-behavior: auto !important;
+  transition-delay: 0s !important;
+  transition-duration: 0s !important;
+}
+
+[data-testid="button-user-menu"],
+[data-testid="button-user-menu-mobile"],
+[data-testid*="count"],
+[data-testid*="date"],
+[data-testid*="timestamp"],
+[aria-live="polite"] {
+  color: transparent !important;
+  text-shadow: none !important;
+}

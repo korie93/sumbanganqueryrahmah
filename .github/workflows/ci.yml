@@ -268,6 +268,9 @@ jobs:
       - name: Run visual layout contracts
         run: VISUAL_BASE_URL=http://127.0.0.1:5000 VISUAL_ARTIFACTS_DIR=artifacts/visual-layout npm run test:e2e:visual
 
+      - name: Run Playwright visual regression snapshots
+        run: VISUAL_BASE_URL=http://127.0.0.1:5000 npm run test:visual
+
       - name: Run accessibility contracts
         run: bash scripts/a11y-contrast-check.sh http://127.0.0.1:5000
 
@@ -352,3 +355,5 @@ jobs:
             server.log
             artifacts/smoke-ui
             artifacts/visual-layout
+            artifacts/playwright-report
+            artifacts/playwright-test-results

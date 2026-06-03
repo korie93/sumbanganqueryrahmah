@@ -73,6 +73,8 @@
     "test:client": "node scripts/run-client-tests.mjs",
     "test:e2e:smoke": "node scripts/ui-smoke.mjs",
     "test:e2e:visual": "node scripts/ui-visual-contract.mjs",
+    "test:visual": "playwright test tests/visual/",
+    "test:visual:update": "playwright test tests/visual/ --update-snapshots",
     "test:e2e:a11y": "node scripts/ui-accessibility-contract.mjs",
     "test:a11y": "npm run test:e2e:a11y",
     "test:e2e:ci-local": "node scripts/smoke-ci-local.mjs",
@@ -194,6 +196,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",
+    "@playwright/test": "^1.60.0",
     "@tailwindcss/typography": "^0.5.16",
     "@types/bcrypt": "^6.0.0",
     "@types/busboy": "^1.5.4",
