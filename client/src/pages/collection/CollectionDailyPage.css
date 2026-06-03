@@ -17,6 +17,7 @@
   gap: 1rem;
   align-items: center;
   overflow: hidden;
+  overflow: clip;
   border: 1px solid var(--collection-daily-border);
   border-radius: 24px;
   background:
@@ -59,6 +60,7 @@
 .collection-daily-filters-card,
 .collection-daily-calendar-card {
   overflow: hidden;
+  overflow: clip;
 }
 
 .collection-daily-edit-helper {
@@ -119,6 +121,7 @@
   grid-template-rows: auto minmax(0, 1fr);
   max-height: calc(var(--viewport-min-height-value) - 1rem);
   overflow: hidden;
+  overflow: clip;
   border-radius: 22px;
 }
 
@@ -264,6 +267,7 @@
 .collection-daily-mobile-day-card,
 .collection-daily-desktop-day {
   overflow: hidden;
+  overflow: clip;
   transition:
     box-shadow 160ms ease,
     transform 160ms ease,

@@ -63,6 +63,7 @@
 .login-card {
   position: relative;
   overflow: hidden;
+  overflow: clip;
   border-radius: 2rem;
   background: var(--login-card-surface);
   background-clip: padding-box;

@@ -21,6 +21,8 @@
 
 - Added generic z-index scale aliases and replaced remaining local hardcoded
   z-layer utilities with shared layering tokens.
+- Replaced decorative `overflow: hidden` surface clipping with `overflow: clip`
+  fallbacks where content should not create nested scroll containers.
 
 ### Verification
 

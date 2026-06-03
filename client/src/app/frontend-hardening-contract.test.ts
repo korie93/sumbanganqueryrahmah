@@ -57,6 +57,19 @@ test("z-index layering uses shared design tokens instead of hardcoded local laye
   assert.match(calendarSource, /focus-within:z-\[var\(--z-sticky-content\)\]/);
 });
 
+test("decorative clipped surfaces use overflow clip with hidden fallback", () => {
+  const loginCssSource = readClientSource("../pages/Login.css");
+  const dailyCssSource = readClientSource("../pages/collection/CollectionDailyPage.css");
+  const monthlyCssSource = readClientSource("../pages/collection-summary/CollectionMonthlyComparisonPanel.css");
+
+  assert.match(loginCssSource, /\.login-card \{[\s\S]*overflow: hidden;[\s\S]*overflow: clip;/);
+  assert.match(dailyCssSource, /\.collection-daily-role-guide \{[\s\S]*overflow: hidden;[\s\S]*overflow: clip;/);
+  assert.match(dailyCssSource, /\.collection-daily-filters-card,\s*\.collection-daily-calendar-card \{[\s\S]*overflow: hidden;[\s\S]*overflow: clip;/);
+  assert.match(dailyCssSource, /\.collection-daily-mobile-day-card,\s*\.collection-daily-desktop-day \{[\s\S]*overflow: hidden;[\s\S]*overflow: clip;/);
+  assert.match(monthlyCssSource, /\.collection-monthly-comparison-filter-card \{[\s\S]*overflow: clip;/);
+  assert.match(monthlyCssSource, /\.collection-monthly-comparison-section-card \{[\s\S]*overflow: clip;/);
+});
+
 test("route error boundary announces failures as an atomic alert", () => {
   const source = readClientSource("../app/AppRouteErrorBoundary.tsx");
 
