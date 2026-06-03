@@ -15,6 +15,7 @@ import {
   getAdaptiveRateLimitCachePressureTier,
   getAdaptiveRateLimitCooldownStats,
   getAdaptiveRateLimitCooldownKeysForTests,
+  getAdaptiveRateLimitCooldownShardSizesForTests,
   normalizeAuthRateLimitIdentifier,
   performAdaptiveRateLimitCachePressureEvictionForTests,
   pruneAdaptiveRateLimitCooldowns,
@@ -425,7 +426,14 @@ test("auth adaptive cooldown hard cap stays bounded across sustained inserts", (
     }
 
     const keys = getAdaptiveRateLimitCooldownKeysForTests();
+    const shardSizes = getAdaptiveRateLimitCooldownShardSizesForTests();
+
     assert.ok(getAdaptiveRateLimitCooldownStats().bucketCount <= 4_096);
+    assert.ok(shardSizes.every((size) => size <= 512));
+    assert.equal(
+      shardSizes.reduce((total, size) => total + size, 0),
+      getAdaptiveRateLimitCooldownStats().bucketCount,
+    );
     assert.equal(keys.length, getAdaptiveRateLimitCooldownStats().bucketCount);
     assert.equal(keys.includes("sustained-client-0"), false);
     assert.equal(keys.includes("sustained-client-50000"), true);

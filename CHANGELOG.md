@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-06-03 - SQR autonomous audit hardening
+
+### Performance
+
+- Sharded the adaptive auth rate-limit cooldown cache into bounded LRU segments
+  so pressure eviction no longer walks one global cache during sustained bursts.
+
+### Verification
+
+- `tsx --test server/middleware/tests/rate-limit.test.ts`
+
 ## 2026-05-31 - SQR resource lifecycle and configuration hardening
 
 This release contains targeted cleanup and configuration hardening for the

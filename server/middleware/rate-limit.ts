@@ -52,12 +52,17 @@ type AuthenticatedLikeRequest = Request & {
 
 const AUTH_RATE_LIMIT_HASH_LENGTH = 24;
 const ADAPTIVE_RATE_LIMIT_MAX_BUCKETS = 4_096;
+const ADAPTIVE_RATE_LIMIT_SHARD_COUNT = 8;
+const ADAPTIVE_RATE_LIMIT_BUCKETS_PER_SHARD =
+  ADAPTIVE_RATE_LIMIT_MAX_BUCKETS / ADAPTIVE_RATE_LIMIT_SHARD_COUNT;
 const ADAPTIVE_RATE_LIMIT_MAX_COOLDOWN_MS = 60 * 60 * 1000;
 const ADAPTIVE_RATE_LIMIT_SWEEP_INTERVAL_MS = 30_000;
 const ADAPTIVE_RATE_LIMIT_CACHE_PRESSURE_THRESHOLD_RATIO = 0.85;
 const ADAPTIVE_RATE_LIMIT_CACHE_NEAR_CAPACITY_ALERT_RATIO = 0.90;
 const ADAPTIVE_RATE_LIMIT_CACHE_PRESSURE_LOG_INTERVAL_MS = 60_000;
 const ADAPTIVE_RATE_LIMIT_WARNING_EVICTION_BATCH_SIZE = 512;
+const ADAPTIVE_RATE_LIMIT_WARNING_EVICTION_BATCH_SIZE_PER_SHARD =
+  ADAPTIVE_RATE_LIMIT_WARNING_EVICTION_BATCH_SIZE / ADAPTIVE_RATE_LIMIT_SHARD_COUNT;
 
 const ADAPTIVE_RATE_LIMIT_CACHE_PRESSURE_TIERS = {
   NORMAL: { threshold: 0, severity: 0 },
@@ -81,13 +86,166 @@ type AdaptiveRateLimitBucket = {
   strikeCount: number;
 };
 
-const adaptiveRateLimitCooldowns = new LRUCache<string, AdaptiveRateLimitBucket>({
-  allowStale: false,
-  max: ADAPTIVE_RATE_LIMIT_MAX_BUCKETS,
-  ttl: ADAPTIVE_RATE_LIMIT_MAX_COOLDOWN_MS,
-  ttlAutopurge: false,
-  updateAgeOnGet: false,
-});
+type AdaptiveRateLimitCooldownShard = LRUCache<string, AdaptiveRateLimitBucket>;
+
+class ShardedAdaptiveRateLimitCooldownStore {
+  private readonly shards: AdaptiveRateLimitCooldownShard[];
+
+  constructor() {
+    this.shards = Array.from({ length: ADAPTIVE_RATE_LIMIT_SHARD_COUNT }, () =>
+      new LRUCache<string, AdaptiveRateLimitBucket>({
+        allowStale: false,
+        max: ADAPTIVE_RATE_LIMIT_BUCKETS_PER_SHARD,
+        ttl: ADAPTIVE_RATE_LIMIT_MAX_COOLDOWN_MS,
+        ttlAutopurge: false,
+        updateAgeOnGet: false,
+      }),
+    );
+  }
+
+  get size(): number {
+    return this.shards.reduce((total, shard) => total + shard.size, 0);
+  }
+
+  clear(): void {
+    for (const shard of this.shards) {
+      shard.clear();
+    }
+  }
+
+  delete(key: string): boolean {
+    return this.getShard(key).delete(key);
+  }
+
+  deleteOldest(targetEvictCount: number): number {
+    const normalizedTarget = Math.max(0, Math.trunc(targetEvictCount));
+    let evictedCount = 0;
+
+    while (evictedCount < normalizedTarget) {
+      const candidate = this.findOldestShardCandidate();
+      if (!candidate) {
+        break;
+      }
+
+      if (candidate.shard.delete(candidate.key)) {
+        evictedCount += 1;
+      }
+    }
+
+    return evictedCount;
+  }
+
+  evictExpiredFromOldest(nowMs: number, maxPerShard: number): number {
+    const normalizedMaxPerShard = Math.max(0, Math.trunc(maxPerShard));
+    let evictedCount = 0;
+
+    for (const shard of this.shards) {
+      let inspectedCount = 0;
+      for (const key of shard.rkeys()) {
+        if (inspectedCount >= normalizedMaxPerShard) {
+          break;
+        }
+
+        inspectedCount += 1;
+        const bucket = shard.peek(key);
+        if (!bucket || bucket.expiresAt <= nowMs) {
+          if (shard.delete(key)) {
+            evictedCount += 1;
+          }
+        }
+      }
+    }
+
+    return evictedCount;
+  }
+
+  get(key: string): AdaptiveRateLimitBucket | null {
+    return this.getShard(key).get(key) ?? null;
+  }
+
+  keys(): string[] {
+    return this.shards.flatMap((shard) => Array.from(shard.keys()));
+  }
+
+  peek(key: string): AdaptiveRateLimitBucket | null {
+    return this.getShard(key).peek(key) ?? null;
+  }
+
+  pruneExpired(nowMs: number): number {
+    let removedCount = 0;
+
+    for (const shard of this.shards) {
+      for (const key of Array.from(shard.keys())) {
+        const bucket = shard.peek(key);
+        if (!bucket || bucket.expiresAt <= nowMs) {
+          if (shard.delete(key)) {
+            removedCount += 1;
+          }
+        }
+      }
+    }
+
+    return removedCount;
+  }
+
+  set(key: string, bucket: AdaptiveRateLimitBucket, ttlMs: number): void {
+    this.getShard(key).set(key, bucket, { ttl: ttlMs });
+  }
+
+  shardSizes(): number[] {
+    return this.shards.map((shard) => shard.size);
+  }
+
+  private findOldestShardCandidate(): {
+    key: string;
+    lastSeenAt: number;
+    shard: AdaptiveRateLimitCooldownShard;
+  } | null {
+    let oldestCandidate: {
+      key: string;
+      lastSeenAt: number;
+      shard: AdaptiveRateLimitCooldownShard;
+    } | null = null;
+
+    for (const shard of this.shards) {
+      const oldestKey = shard.rkeys().next().value;
+      if (typeof oldestKey !== "string") {
+        continue;
+      }
+
+      const bucket = shard.peek(oldestKey);
+      const lastSeenAt = bucket?.lastSeenAt ?? Number.NEGATIVE_INFINITY;
+      if (!oldestCandidate || lastSeenAt < oldestCandidate.lastSeenAt) {
+        oldestCandidate = {
+          key: oldestKey,
+          lastSeenAt,
+          shard,
+        };
+      }
+    }
+
+    return oldestCandidate;
+  }
+
+  private getShard(key: string): AdaptiveRateLimitCooldownShard {
+    const shard = this.shards[this.getShardIndex(key)];
+    if (!shard) {
+      throw new Error("Adaptive rate-limit cooldown shard unavailable.");
+    }
+    return shard;
+  }
+
+  private getShardIndex(key: string): number {
+    let hash = 0x811c9dc5;
+    for (let index = 0; index < key.length; index += 1) {
+      hash ^= key.charCodeAt(index);
+      hash = Math.imul(hash, 0x01000193);
+    }
+    return (hash >>> 0) % ADAPTIVE_RATE_LIMIT_SHARD_COUNT;
+  }
+}
+
+const adaptiveRateLimitCooldowns = new ShardedAdaptiveRateLimitCooldownStore();
 let adaptiveRateLimitCooldownSweepJob: BackgroundSweepJob | null = null;
 let adaptiveRateLimitCachePressureLastLoggedAt = 0;
 let adaptiveRateLimitCacheNearCapacityLastAlertedAt = 0;
@@ -175,18 +333,9 @@ function buildRateLimitKey(req: Request, scope: string, ...parts: Array<unknown>
 }
 
 export function pruneAdaptiveRateLimitCooldowns(nowMs = Date.now()): number {
-  let removedCount = 0;
-
   // Keep this sweep fully synchronous: LRU mutation must not yield between
   // key collection and deletion, otherwise request handlers could interleave.
-  for (const key of Array.from(adaptiveRateLimitCooldowns.keys())) {
-    const bucket = adaptiveRateLimitCooldowns.peek(key);
-    if (!bucket || bucket.expiresAt <= nowMs) {
-      if (adaptiveRateLimitCooldowns.delete(key)) {
-        removedCount += 1;
-      }
-    }
-  }
+  const removedCount = adaptiveRateLimitCooldowns.pruneExpired(nowMs);
 
   if (removedCount > 0) {
     recordAdaptiveRateLimitCooldownCacheGauges();
@@ -217,16 +366,7 @@ export function getAdaptiveRateLimitCachePressureTier(
 }
 
 function deleteOldestAdaptiveRateLimitCooldowns(targetEvictCount: number): number {
-  let evictedCount = 0;
-  for (const key of adaptiveRateLimitCooldowns.rkeys()) {
-    if (evictedCount >= targetEvictCount) {
-      break;
-    }
-    if (adaptiveRateLimitCooldowns.delete(key)) {
-      evictedCount += 1;
-    }
-  }
-  return evictedCount;
+  return adaptiveRateLimitCooldowns.deleteOldest(targetEvictCount);
 }
 
 function performAdaptiveRateLimitCachePressureEviction(
@@ -237,18 +377,10 @@ function performAdaptiveRateLimitCachePressureEviction(
 
   // Pressure eviction intentionally performs only synchronous LRU reads/deletes.
   if (tier === "WARNING") {
-    for (const key of adaptiveRateLimitCooldowns.rkeys()) {
-      if (evictedCount >= ADAPTIVE_RATE_LIMIT_WARNING_EVICTION_BATCH_SIZE) {
-        break;
-      }
-
-      const bucket = adaptiveRateLimitCooldowns.peek(key);
-      if (!bucket || bucket.expiresAt <= nowMs) {
-        if (adaptiveRateLimitCooldowns.delete(key)) {
-          evictedCount += 1;
-        }
-      }
-    }
+    evictedCount = adaptiveRateLimitCooldowns.evictExpiredFromOldest(
+      nowMs,
+      ADAPTIVE_RATE_LIMIT_WARNING_EVICTION_BATCH_SIZE_PER_SHARD,
+    );
   } else if (tier === "CRITICAL") {
     evictedCount = deleteOldestAdaptiveRateLimitCooldowns(
       Math.max(1, Math.floor(adaptiveRateLimitCooldowns.size * 0.2)),
@@ -379,7 +511,7 @@ function setAdaptiveRateLimitCooldown(
 ) {
   maybeEvictAdaptiveRateLimitCooldownsForPressure(nowMs);
   const ttlMs = Math.max(1, bucket.expiresAt - nowMs);
-  adaptiveRateLimitCooldowns.set(key, bucket, { ttl: ttlMs });
+  adaptiveRateLimitCooldowns.set(key, bucket, ttlMs);
   recordAdaptiveRateLimitCooldownCacheGauges();
   maybeReportAdaptiveRateLimitCachePressure(nowMs);
   maybeReportAdaptiveRateLimitCacheNearCapacity(nowMs);
@@ -452,6 +584,10 @@ export function clearAdaptiveRateLimitCooldownsForTests() {
 
 export function getAdaptiveRateLimitCooldownKeysForTests(): string[] {
   return getAdaptiveRateLimitCooldownKeys();
+}
+
+export function getAdaptiveRateLimitCooldownShardSizesForTests(): number[] {
+  return adaptiveRateLimitCooldowns.shardSizes();
 }
 
 function resolveJsonRateLimiterKey(req: Request, options: JsonRateLimiterOptions): string {
