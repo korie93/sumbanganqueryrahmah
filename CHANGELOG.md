@@ -11,6 +11,8 @@
 
 - Split API retry, backoff, and circuit-breaker transport helpers out of the
   main API client while keeping the existing public API exports stable.
+- Decomposed the AI page controller into focused state, actions, and lifecycle
+  hooks while preserving the existing page controller contract.
 
 ### Bug Fixes
 
@@ -36,6 +38,7 @@
 - `tsx --test client/src/pages/collection-summary/collection-monthly-comparison-a11y.contract.test.ts`
 - `tsx --test client/src/app/frontend-hardening-contract.test.ts`
 - `tsx --test client/src/lib/queryClient.test.ts client/src/lib/api-client-navigation-contract.test.ts client/src/lib/api/tests/request-cancellation.test.ts`
+- `tsx --test client/src/pages/ai/ai-page-controller-utils.test.ts client/src/pages/ai/ai-page-controller-structure.contract.test.ts client/src/pages/ai/ai-conversation-card-a11y-contract.test.ts client/src/app/client-timer-cleanup-contract.test.ts`
 
 ## 2026-05-31 - SQR resource lifecycle and configuration hardening
 
