@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { resolveTimestampMs, serializeTimestamp } from "../lib/timestamp";
 import { logger } from "../lib/logger";
 import type { ActivityFilters, ActivityStorage } from "./activity-service-types";
@@ -21,6 +22,13 @@ type ActivityListItem = Awaited<ReturnType<ActivityStorage["getAllActivities"]>>
 
 function resolveActivityTimestampMs(value: Date | string | null | undefined) {
   return resolveTimestampMs(value);
+}
+
+function hashActivityIdForLogoutFlush(activityId: string): string {
+  return createHash("sha256")
+    .update(activityId)
+    .digest("base64url")
+    .slice(0, 16);
 }
 
 type SerializedActivityListItem<T extends ActivityListItem> = Omit<
@@ -154,6 +162,23 @@ async function createBatchFailureAuditLog(params: {
   }
 }
 
+async function flushActivitySessionBeforeLogout(
+  storage: ActivityStorage,
+  activityId: string,
+): Promise<void> {
+  try {
+    await storage.updateActivity(activityId, {
+      lastActivityTime: new Date(),
+    });
+  } catch (error) {
+    logger.warn("Activity session flush failed before logout; continuing logout", {
+      event: "activity_logout_flush_failed",
+      activityIdHash: hashActivityIdForLogoutFlush(activityId),
+      errorType: error instanceof Error ? error.name : "UnknownError",
+    });
+  }
+}
+
 function reconcileRequestingActivityPresence<T extends ActivityListItem>(
   activities: T[],
   requestingActivity: T | undefined,
@@ -200,6 +225,8 @@ export function createActivitySessionOperations(
       if (!activity || activity.isActive === false) {
         return;
       }
+
+      await flushActivitySessionBeforeLogout(storage, activityId);
 
       await storage.updateActivity(activityId, {
         isActive: false,

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { logger } from "../../lib/logger";
 import { createActivitySessionOperations } from "../activity-session-operations";
 import type { ActivityStorage } from "../activity-service-types";
 
@@ -36,6 +37,110 @@ function createStorageMock(overrides: Partial<ActivityStorage> = {}): ActivitySt
     ...overrides,
   };
 }
+
+function createActiveActivityRecord(activityId = "act-1"): ActivityRecord {
+  return {
+    id: activityId,
+    userId: "user-1",
+    username: "ali",
+    role: "user",
+    fingerprint: null,
+    ipAddress: null,
+    browser: null,
+    isActive: true,
+    pcName: null,
+    loginTime: null,
+    logoutTime: null,
+    lastActivityTime: null,
+    logoutReason: null,
+  } as ActivityRecord;
+}
+
+function isPreLogoutFlushPatch(patch: unknown): boolean {
+  return Boolean(
+    patch
+      && typeof patch === "object"
+      && Object.prototype.hasOwnProperty.call(patch, "lastActivityTime")
+      && !Object.prototype.hasOwnProperty.call(patch, "logoutTime"),
+  );
+}
+
+test("logout flushes activity session state before marking the session inactive", async () => {
+  const events: string[] = [];
+  const operations = createActivitySessionOperations(
+    createStorageMock({
+      getActivityById: async () => createActiveActivityRecord(),
+      updateActivity: async (_activityId, patch) => {
+        events.push(isPreLogoutFlushPatch(patch) ? "flush" : "logout");
+        return undefined;
+      },
+      createAuditLog: async (entry) => {
+        events.push("audit");
+        return {
+          id: "audit-logout",
+          ...entry,
+          timestamp: new Date("2026-04-08T00:00:00.000Z"),
+        } as AuditRecord;
+      },
+    }),
+    async () => {
+      events.push("close-socket");
+    },
+  );
+
+  await operations.logout("act-1", "ali");
+
+  assert.deepEqual(events, ["flush", "logout", "close-socket", "audit"]);
+});
+
+test("logout continues and logs when the pre-logout activity flush fails", async () => {
+  const originalWarn = logger.warn;
+  const events: string[] = [];
+  const warnings: Array<{ message: string; payload: Record<string, unknown> | undefined }> = [];
+  logger.warn = ((message: string, payload?: Record<string, unknown>) => {
+    warnings.push({ message, payload });
+  }) as typeof logger.warn;
+
+  const operations = createActivitySessionOperations(
+    createStorageMock({
+      getActivityById: async () => createActiveActivityRecord(),
+      updateActivity: async (_activityId, patch) => {
+        if (isPreLogoutFlushPatch(patch)) {
+          events.push("flush");
+          throw new Error("last activity write failed");
+        }
+
+        events.push("logout");
+        return undefined;
+      },
+      createAuditLog: async (entry) => {
+        events.push("audit");
+        return {
+          id: "audit-logout",
+          ...entry,
+          timestamp: new Date("2026-04-08T00:00:00.000Z"),
+        } as AuditRecord;
+      },
+    }),
+    async () => {
+      events.push("close-socket");
+    },
+  );
+
+  try {
+    await operations.logout("act-1", "ali");
+
+    assert.deepEqual(events, ["flush", "logout", "close-socket", "audit"]);
+    assert.equal(warnings.length, 1);
+    assert.equal(warnings[0].message, "Activity session flush failed before logout; continuing logout");
+    assert.equal(warnings[0].payload?.event, "activity_logout_flush_failed");
+    assert.equal(warnings[0].payload?.errorType, "Error");
+    assert.equal(String(warnings[0].payload?.activityIdHash || "").length, 16);
+    assert.equal(JSON.stringify(warnings[0].payload).includes("act-1"), false);
+  } finally {
+    logger.warn = originalWarn;
+  }
+});
 
 test("bulkDeleteActivityLogs reports not found ids and closes deleted activities", async () => {
   const deletedIds: string[] = [];
