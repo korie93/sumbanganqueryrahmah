@@ -321,6 +321,7 @@ test("POST /telemetry/web-vitals is retired with 410 after the sunset date", asy
     assert.equal(response.status, 410);
     assert.equal(response.headers.get("Deprecation"), "true");
     assert.equal(response.headers.get("Sunset"), LEGACY_WEB_VITALS_TELEMETRY_SUNSET);
+    assert.match(String(response.headers.get("Link") || ""), new RegExp(`<${CANONICAL_WEB_VITALS_TELEMETRY_PATH}>; rel="successor-version"`));
     const payload = await response.json();
     assert.deepEqual(payload, {
       ok: false,

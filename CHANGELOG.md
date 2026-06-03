@@ -39,6 +39,8 @@
   notification listener registry while preserving the active PostgreSQL listener.
 - Added structured fire-and-forget failure context for collection rollup
   notification callbacks, reconnects, and disconnect cleanup paths.
+- Locked the legacy web-vitals telemetry alias to explicit deprecation, sunset,
+  and successor-route headers for both compatibility and retired responses.
 
 ### Accessibility
 
@@ -82,6 +84,7 @@
 - `tsx --test client/src/lib/client-logger.test.ts client/src/lib/utils/safe-json.test.ts client/src/lib/global-unhandled-rejection.test.ts`
 - `node --test scripts/tests/design-token-contrast.test.mjs`
 - `npx tsx --test client/src/components/public-component-jsdoc-contract.test.ts`
+- `npx tsx --test server/routes/tests/telemetry.routes.integration.test.ts`
 - `npm run lint:client`
 - `npm run typecheck`
 
