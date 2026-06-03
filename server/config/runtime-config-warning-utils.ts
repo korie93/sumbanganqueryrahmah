@@ -13,6 +13,8 @@ export function buildRuntimeConfigWarnings(params: {
   configuredPgPassword: string | null;
   configuredAuthCookieSecure: string | null;
   configuredClusterMaxWorkers: number;
+  databaseBootstrapMode?: "runtime" | "migration";
+  allowRuntimeBootstrapInProduction?: boolean;
   twoFactorReplayStoreConfigured?: boolean;
   websocketSharedBusConfigured?: boolean;
   hstsMaxAgeSeconds?: number;
@@ -31,6 +33,8 @@ export function buildRuntimeConfigWarnings(params: {
     configuredPgPassword,
     configuredAuthCookieSecure,
     configuredClusterMaxWorkers,
+    databaseBootstrapMode,
+    allowRuntimeBootstrapInProduction = false,
     twoFactorReplayStoreConfigured = false,
     websocketSharedBusConfigured = false,
     hstsMaxAgeSeconds,
@@ -146,6 +150,20 @@ export function buildRuntimeConfigWarnings(params: {
       code: "HSTS_PRELOAD_MAX_AGE_TOO_LOW",
       envNames: ["HSTS_MAX_AGE_SECONDS"],
       message: "HSTS preload requires HSTS_MAX_AGE_SECONDS to be at least 31536000.",
+      severity: "warning",
+    });
+  }
+
+  if (
+    isProductionLike
+    && databaseBootstrapMode === "runtime"
+    && allowRuntimeBootstrapInProduction
+  ) {
+    warnings.push({
+      code: "DANGEROUS_RUNTIME_DB_BOOTSTRAP_ACTIVE",
+      envNames: ["SQR_DB_BOOTSTRAP_MODE", "SQR_ALLOW_RUNTIME_DB_BOOTSTRAP_IN_PRODUCTION"],
+      message:
+        "DANGEROUS_ESCAPE_HATCH_ACTIVE: production runtime DB bootstrap is enabled. This bypasses migration-first startup safety and must be removed immediately after emergency recovery.",
       severity: "warning",
     });
   }

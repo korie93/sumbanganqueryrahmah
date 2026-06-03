@@ -384,6 +384,17 @@ assertProductionDatabaseBootstrapModeSafety({
   allowRuntimeBootstrapInProduction,
 });
 
+if (
+  isProductionLike
+  && databaseBootstrapMode === "runtime"
+  && allowRuntimeBootstrapInProduction
+) {
+  // TODO(v2.0): Remove this escape hatch entirely; see ARCHITECTURE.md#deprecations.
+  console.error(
+    "[SECURITY WARNING] Runtime DB bootstrap escape hatch is ACTIVE. Remove SQR_ALLOW_RUNTIME_DB_BOOTSTRAP_IN_PRODUCTION immediately after emergency recovery.",
+  );
+}
+
 assertNoPlaceholderSecrets({
   isProductionLike,
   configuredSessionSecret,
@@ -631,6 +642,8 @@ const runtimeWarnings = buildRuntimeConfigWarnings({
   configuredPgPassword,
   configuredAuthCookieSecure,
   configuredClusterMaxWorkers,
+  databaseBootstrapMode,
+  allowRuntimeBootstrapInProduction,
   twoFactorReplayStoreConfigured: sharedRateLimitStore.distributedStoreConfigured,
   websocketSharedBusConfigured: websocketSharedBus.distributedBusConfigured,
   hstsMaxAgeSeconds: hstsHeaderConfig.maxAge,

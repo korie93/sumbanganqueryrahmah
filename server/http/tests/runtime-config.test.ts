@@ -424,7 +424,7 @@ test("runtime config rejects operations debug route enablement on production-lik
   );
 });
 
-test("runtime config defaults database bootstrap to migration on production-like hosts", async () => {
+test("runtime config defaults database bootstrap to migration on production-like hosts", async (t) => {
   const localBase = {
     NODE_ENV: "development",
     HOST: "127.0.0.1",
@@ -506,8 +506,20 @@ test("runtime config defaults database bootstrap to migration on production-like
       SQR_ALLOW_RUNTIME_DB_BOOTSTRAP_IN_PRODUCTION: "1",
     },
     async () => {
+      const securityWarnings: string[] = [];
+      const consoleErrorMock = t.mock.method(console, "error", (message?: unknown) => {
+        securityWarnings.push(String(message));
+      });
       const runtimeModule = await importRuntimeFresh();
       assert.equal(runtimeModule.runtimeConfig.bootstrap.databaseMode, "runtime");
+      assert.match(
+        runtimeModule.runtimeConfigValidation.warnings
+          .map((warning: { code: string }) => warning.code)
+          .join(","),
+        /DANGEROUS_RUNTIME_DB_BOOTSTRAP_ACTIVE/,
+      );
+      assert.equal(consoleErrorMock.mock.callCount(), 1);
+      assert.match(securityWarnings.join("\n"), /Runtime DB bootstrap escape hatch is ACTIVE/);
     },
   );
 });

@@ -58,13 +58,19 @@ Topologi deployment yang disokong dan didokumenkan secara rasmi pada masa ini ia
 
 - satu primary app runtime
 - satu primary PostgreSQL database
+- optional PostgreSQL read replica untuk read-heavy query paths
 - Nginx reverse proxy di hadapan app
 
 Ini bermaksud:
 
-- read replica belum menjadi sebahagian daripada kontrak runtime/config rasmi
-- reporting dan analytics queries masih berjalan pada primary PostgreSQL yang sama
-- sebarang reka bentuk read-replica patut dianggap kerja seni bina berasingan, bukan andaian sedia ada
+- primary database kekal sumber kebenaran untuk writes, auth, audit, backup,
+  restore, dan migration
+- `DATABASE_REPLICA_URL` boleh dikonfigurasi untuk repository read paths yang
+  selamat dibaca dari replica; jika replica gagal, runtime fallback ke primary
+  dan health/degraded-state melaporkan isu tersebut
+- analytics/read-only database role tidak dicipta oleh migration aplikasi kerana
+  password dan grant production patut diurus melalui DBA atau managed database
+  control plane; lihat `docs/database/read-replica-plan.md`
 
 ## Repository Structure
 
@@ -231,8 +237,21 @@ constraints:
 
 Current deployment assumption:
 
-- single-primary PostgreSQL connection
-- no dedicated read-replica DSN or routing contract yet
+- single-primary PostgreSQL connection by default
+- optional `DATABASE_REPLICA_URL` for read-heavy paths that can fall back to
+  primary without changing API behavior
+- same TLS verification posture for primary and replica connections
+- least-privilege read-only DB user should be provisioned outside application
+  migrations when the deployment platform supports separate grants
+
+## Deprecations
+
+- Production runtime database bootstrap is an emergency escape hatch only.
+  `SQR_DB_BOOTSTRAP_MODE=runtime` with
+  `SQR_ALLOW_RUNTIME_DB_BOOTSTRAP_IN_PRODUCTION` emits a startup security
+  warning and should be removed after recovery. Target removal: v2.0.
+- Migration-first startup is the supported production path: run
+  `npm run db:migrate`, then start or restart the app runtime.
 
 ## Concrete Request Examples
 

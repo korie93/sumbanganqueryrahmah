@@ -486,6 +486,33 @@ test("assertProductionDatabaseBootstrapModeSafety rejects production runtime boo
   );
 });
 
+test("buildRuntimeConfigWarnings reports production runtime bootstrap escape hatch", () => {
+  const warnings = buildRuntimeConfigWarnings({
+    isStrictLocalDevelopment: false,
+    isProductionLike: true,
+    publicAppUrl: "https://sqr.example.com",
+    configuredSessionSecret: STRONG_SESSION_SECRET,
+    configuredAuditHmacKey: "sqr-prod-audit-hmac-key-minimum-32-chars-001",
+    configuredCollectionNicknameTempPassword: "collection-temp-password-minimum-32-chars",
+    configuredCollectionPiiEncryptionKey: STRONG_COLLECTION_PII_SECRET,
+    configuredPgPassword: "postgres-password-minimum-32-chars",
+    configuredAuthCookieSecure: null,
+    configuredClusterMaxWorkers: 1,
+    databaseBootstrapMode: "runtime",
+    allowRuntimeBootstrapInProduction: true,
+    mailConfiguration: {
+      effectiveFrom: "smtp",
+      hasAnyInput: true,
+      isConfigured: true,
+      isIncomplete: false,
+    },
+  });
+
+  assert.ok(
+    warnings.some((warning) => warning.code === "DANGEROUS_RUNTIME_DB_BOOTSTRAP_ACTIVE"),
+  );
+});
+
 test("assertNoPlaceholderSecrets rejects production-like generated placeholders", () => {
   assert.throws(
     () =>
