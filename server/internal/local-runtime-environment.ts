@@ -17,6 +17,7 @@ import { configureTwoFactorReplayStoreForRuntime } from "../auth/two-factor-repl
 import { createTwoFactorReplayStore } from "../auth/redis-two-factor-replay-store";
 import { configureSessionRevocationStoreForRuntime } from "../auth/session-revocation-store";
 import { createSessionRevocationStore } from "../auth/redis-session-revocation-store";
+import { startOrphanedUploadCleanupJob } from "../jobs/cleanup-orphaned-uploads";
 import { stopAdaptiveRateLimitCooldownSweep } from "../middleware/rate-limit";
 import {
   createLocalServerComposition,
@@ -160,6 +161,8 @@ export function createLocalRuntimeEnvironment(options: CreateLocalRuntimeEnviron
     createSessionRevocationStore(runtimeConfig.rateLimiting.store),
   );
   server.once("close", stopSessionRevocationStore);
+  const stopOrphanedUploadCleanupJob = startOrphanedUploadCleanupJob();
+  server.once("close", stopOrphanedUploadCleanupJob);
   const { adaptiveRateLimit, systemProtectionMiddleware, stopAdaptiveRateStateSweep } =
     createApiProtectionMiddleware({
       ...(adaptiveRateStore ? { adaptiveRateStore } : {}),

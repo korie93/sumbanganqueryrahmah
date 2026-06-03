@@ -2,7 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { pipeline } from "node:stream/promises";
 import { logger } from "../lib/logger";
 import {
@@ -31,6 +31,7 @@ export type PreparedMultipartImportUpload =
   };
 
 export const IMPORT_TOO_LARGE_MESSAGE = IMPORT_UPLOAD_TOO_LARGE_MESSAGE;
+const IMPORT_UPLOAD_TEMP_DIR_PREFIX = "sqr-import-upload-";
 
 type LimitAwareReadableStream = NodeJS.ReadableStream & {
   off?: (event: "limit", listener: () => void) => unknown;
@@ -44,6 +45,16 @@ function removeLimitListener(file: NodeJS.ReadableStream, listener: () => void) 
     return;
   }
   limitAwareFile.removeListener?.("limit", listener);
+}
+
+export function resolveImportUploadTempRootDir() {
+  return process.env.UPLOAD_TMP_DIR?.trim() || os.tmpdir();
+}
+
+async function createImportUploadTempDir() {
+  const tempRootDir = resolveImportUploadTempRootDir();
+  await mkdir(tempRootDir, { recursive: true });
+  return mkdtemp(path.join(tempRootDir, IMPORT_UPLOAD_TEMP_DIR_PREFIX));
 }
 
 async function cleanupImportUploadPath(
@@ -88,7 +99,7 @@ export async function parseMultipartImportUpload(params: {
   filename: string;
 }) {
   const { file, filename } = params;
-  const tempDir = await mkdtemp(path.join(os.tmpdir(), "sqr-import-upload-"));
+  const tempDir = await createImportUploadTempDir();
   const tempFilePath = path.join(tempDir, `${Date.now()}-${randomUUID()}.upload`);
   let exceededSizeLimit = false;
 
@@ -128,7 +139,7 @@ export async function prepareMultipartImportUpload(params: {
   filename: string;
 }): Promise<PreparedMultipartImportUpload> {
   const { file, filename } = params;
-  const tempDir = await mkdtemp(path.join(os.tmpdir(), "sqr-import-upload-"));
+  const tempDir = await createImportUploadTempDir();
   const tempFilePath = path.join(tempDir, `${Date.now()}-${randomUUID()}.upload`);
   let exceededSizeLimit = false;
   let keepStagedFile = false;

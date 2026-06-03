@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { mkdtemp } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import { Readable } from "node:stream";
 import {
   IMPORT_TOO_LARGE_MESSAGE,
@@ -10,6 +10,7 @@ import {
   normalizeImportName,
   parseMultipartImportUpload,
   prepareMultipartImportUpload,
+  resolveImportUploadTempRootDir,
   resolveImportMultipartFailure,
 } from "../imports-multipart-utils";
 import { DEFAULT_IMPORT_CSV_MAX_MATERIALIZED_ROWS } from "../../services/import-upload-csv-utils";
@@ -135,6 +136,36 @@ test("prepareMultipartImportUpload removes limit listeners after successful stag
     assert.equal(upload.kind, "csv-file");
   } finally {
     await cleanupPreparedMultipartImportUpload(upload);
+  }
+});
+
+test("prepareMultipartImportUpload uses UPLOAD_TMP_DIR when it is configured", async () => {
+  const originalUploadTmpDir = process.env.UPLOAD_TMP_DIR;
+  const tempRoot = await mkdtemp(path.join(os.tmpdir(), "sqr-import-upload-root-"));
+  const file = Readable.from("name,amount\nAlice,12\n");
+  process.env.UPLOAD_TMP_DIR = tempRoot;
+
+  try {
+    const upload = await prepareMultipartImportUpload({
+      file,
+      filename: "multipart-import.csv",
+    });
+
+    try {
+      assert.equal(resolveImportUploadTempRootDir(), tempRoot);
+      assert.equal(upload.kind, "csv-file");
+      assert.equal(path.dirname(upload.tempDir), tempRoot);
+      assert.equal(upload.filePath.startsWith(upload.tempDir), true);
+    } finally {
+      await cleanupPreparedMultipartImportUpload(upload);
+    }
+  } finally {
+    if (originalUploadTmpDir === undefined) {
+      delete process.env.UPLOAD_TMP_DIR;
+    } else {
+      process.env.UPLOAD_TMP_DIR = originalUploadTmpDir;
+    }
+    await rm(tempRoot, { recursive: true, force: true });
   }
 });
 
