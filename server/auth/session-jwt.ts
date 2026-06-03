@@ -15,6 +15,10 @@ export const SESSION_JWT_MIN_DEFAULT_EXPIRY_SECONDS = Math.max(
   60,
   SESSION_JWT_DEFAULT_EXPIRY_VALUE - SESSION_JWT_DEFAULT_EXPIRY_JITTER_SECONDS,
 );
+export const SESSION_JWT_HS256_FALLBACK_WARNING =
+  "WARNING: JWT using HS256 fallback. DO NOT use in production.";
+export const SESSION_JWT_RS256_PRODUCTION_REQUIRED_ERROR =
+  "FATAL: SESSION_JWT_PRIVATE_KEY and SESSION_JWT_PUBLIC_KEY are required in production; HS256 fallback is not allowed.";
 export { SESSION_JWT_DEFAULT_EXPIRY } from "./session-lifetime";
 
 type RefreshableSessionClaims = {
@@ -24,6 +28,13 @@ type RefreshableSessionClaims = {
 };
 
 type SessionJwtAlgorithm = typeof SESSION_JWT_ALLOWED_ALGORITHMS[number];
+
+type SessionJwtStartupValidationOptions = {
+  nodeEnv?: string | null | undefined;
+  privateKey?: string | null | undefined;
+  publicKey?: string | null | undefined;
+  warn?: (message: string) => void;
+};
 
 export type SessionJwtKeySet = {
   hsSecrets: readonly string[];
@@ -67,6 +78,66 @@ function getRuntimeSessionJwtKeySet(
 function normalizeRsaKey(key: string | null | undefined): string | null {
   const normalized = String(key || "").trim().replace(/\\n/g, "\n");
   return normalized || null;
+}
+
+let sessionJwtFallbackWarningEmitted = false;
+
+function assertValidSessionJwtRsaKeyPair(privateKey: string, publicKey: string): void {
+  try {
+    const probeToken = jwt.sign(
+      { purpose: "session-jwt-startup-validation" },
+      privateKey,
+      {
+        algorithm: SESSION_JWT_ALGORITHM,
+        expiresIn: "1m",
+        jwtid: "session-jwt-startup-validation",
+      },
+    );
+    jwt.verify(probeToken, publicKey, {
+      algorithms: [SESSION_JWT_ALGORITHM],
+    });
+  } catch {
+    throw new Error(
+      "FATAL: SESSION_JWT_PRIVATE_KEY and SESSION_JWT_PUBLIC_KEY must be a valid matching RSA key pair for RS256 session JWTs.",
+    );
+  }
+}
+
+export function resetSessionJwtStartupValidationWarningForTests(): void {
+  sessionJwtFallbackWarningEmitted = false;
+}
+
+export function validateSessionJwtStartupConfiguration(
+  options: SessionJwtStartupValidationOptions = {},
+): SessionJwtAlgorithm {
+  const nodeEnv = String(options.nodeEnv ?? runtimeConfig.app.nodeEnv)
+    .trim()
+    .toLowerCase();
+  const privateKey = normalizeRsaKey(options.privateKey ?? runtimeConfig.auth.sessionJwtPrivateKey);
+  const publicKey = normalizeRsaKey(options.publicKey ?? runtimeConfig.auth.sessionJwtPublicKey);
+
+  if (privateKey && publicKey) {
+    assertValidSessionJwtRsaKeyPair(privateKey, publicKey);
+    return SESSION_JWT_ALGORITHM;
+  }
+
+  if (privateKey || publicKey) {
+    throw new Error(
+      "FATAL: SESSION_JWT_PRIVATE_KEY and SESSION_JWT_PUBLIC_KEY must be configured together.",
+    );
+  }
+
+  if (nodeEnv === "production") {
+    throw new Error(SESSION_JWT_RS256_PRODUCTION_REQUIRED_ERROR);
+  }
+
+  if (!sessionJwtFallbackWarningEmitted) {
+    const warn = options.warn ?? console.warn;
+    warn(SESSION_JWT_HS256_FALLBACK_WARNING);
+    sessionJwtFallbackWarningEmitted = true;
+  }
+
+  return SESSION_JWT_LEGACY_ALGORITHM;
 }
 
 function normalizeRsaPublicKeys(keys: readonly string[] | null | undefined): string[] {

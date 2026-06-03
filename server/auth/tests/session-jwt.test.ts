@@ -5,17 +5,21 @@ import jwt from "jsonwebtoken";
 import {
   SESSION_JWT_DEFAULT_EXPIRY,
   SESSION_JWT_DEFAULT_EXPIRY_JITTER_SECONDS,
+  SESSION_JWT_HS256_FALLBACK_WARNING,
   SESSION_JWT_ALGORITHM,
   SESSION_JWT_LEGACY_ALGORITHM,
   SESSION_JWT_MIN_DEFAULT_EXPIRY_SECONDS,
+  SESSION_JWT_RS256_PRODUCTION_REQUIRED_ERROR,
   resolveSessionJwtExpiresAt,
   resolveSessionJwtId,
   resolveSessionJwtDefaultExpiresInSeconds,
+  resetSessionJwtStartupValidationWarningForTests,
   shouldRefreshSessionJwt,
   signSessionJwt,
   signSessionJwtWithSecret,
   signSessionJwtWithKeySet,
   validateJwtAlgorithm,
+  validateSessionJwtStartupConfiguration,
   verifyJwtWithAnySecret,
   verifySessionJwt,
   verifySessionJwtWithKeySet,
@@ -196,6 +200,71 @@ test("session JWT keyset signs new tokens with RS256 while accepting legacy HS25
 
   assert.equal(legacyPayload.username, "legacy");
   assert.equal(legacyPayload.role, "user");
+});
+
+test("session JWT startup validation rejects production HS256 fallback", () => {
+  resetSessionJwtStartupValidationWarningForTests();
+
+  assert.throws(
+    () => validateSessionJwtStartupConfiguration({
+      nodeEnv: "production",
+      privateKey: "",
+      publicKey: "",
+      warn: () => assert.fail("production fallback must not warn and continue"),
+    }),
+    new RegExp(SESSION_JWT_RS256_PRODUCTION_REQUIRED_ERROR.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")),
+  );
+});
+
+test("session JWT startup validation warns for development HS256 fallback", () => {
+  resetSessionJwtStartupValidationWarningForTests();
+  const warnings: string[] = [];
+
+  const algorithm = validateSessionJwtStartupConfiguration({
+    nodeEnv: "development",
+    privateKey: "",
+    publicKey: "",
+    warn: (message) => warnings.push(message),
+  });
+
+  assert.equal(algorithm, SESSION_JWT_LEGACY_ALGORITHM);
+  assert.deepEqual(warnings, [SESSION_JWT_HS256_FALLBACK_WARNING]);
+});
+
+test("session JWT startup validation accepts matching RS256 key material", () => {
+  const { privateKey, publicKey } = generateKeyPairSync("rsa", {
+    modulusLength: 2048,
+  });
+  const privatePem = privateKey.export({ format: "pem", type: "pkcs8" }).toString();
+  const publicPem = publicKey.export({ format: "pem", type: "spki" }).toString();
+
+  const algorithm = validateSessionJwtStartupConfiguration({
+    nodeEnv: "production",
+    privateKey: privatePem,
+    publicKey: publicPem,
+    warn: () => assert.fail("RS256 startup validation should not warn"),
+  });
+
+  assert.equal(algorithm, SESSION_JWT_ALGORITHM);
+});
+
+test("session JWT startup validation rejects mismatched RS256 keys", () => {
+  const { privateKey } = generateKeyPairSync("rsa", {
+    modulusLength: 2048,
+  });
+  const { publicKey } = generateKeyPairSync("rsa", {
+    modulusLength: 2048,
+  });
+
+  assert.throws(
+    () => validateSessionJwtStartupConfiguration({
+      nodeEnv: "production",
+      privateKey: privateKey.export({ format: "pem", type: "pkcs8" }).toString(),
+      publicKey: publicKey.export({ format: "pem", type: "spki" }).toString(),
+      warn: () => assert.fail("mismatched RS256 keys must not warn and continue"),
+    }),
+    /valid matching RSA key pair/i,
+  );
 });
 
 test("verifyJwtWithAnySecret rejects tokens signed with non-session algorithms", () => {

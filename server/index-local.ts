@@ -15,6 +15,7 @@ import { markStartupFailed } from "./internal/startup-health";
 import { pool, stopPgPoolBackgroundTasks } from "./db-postgres";
 import { logger } from "./lib/logger";
 import { runtimeConfig } from "./config/runtime";
+import { validateSessionJwtStartupConfiguration } from "./auth/session-jwt";
 import { stopAdaptiveRateLimitCooldownSweep } from "./middleware/rate-limit";
 import { closeHttpServerForShutdown } from "./internal/http-server-shutdown";
 
@@ -29,6 +30,7 @@ type StartupReasonError = Error & {
 };
 
 const workerIpcProcess = process as WorkerIpcProcess;
+validateSessionJwtStartupConfiguration();
 
 function notifyMasterFatalReason(reason: string, details?: string) {
   if (reportedWorkerFatalReason) return;
