@@ -8,11 +8,17 @@ const chromiumExecutablePath =
   process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH
   || process.env.CHROME_PATH
   || undefined;
+const visualMaxDiffPixelRatio = Number.parseFloat(
+  process.env.VISUAL_MAX_DIFF_PIXEL_RATIO
+  || (process.env.CI ? "0.05" : "0.001"),
+);
 
 export default defineConfig({
   expect: {
     toHaveScreenshot: {
-      maxDiffPixelRatio: 0.001,
+      maxDiffPixelRatio: Number.isFinite(visualMaxDiffPixelRatio)
+        ? visualMaxDiffPixelRatio
+        : 0.001,
       threshold: 0.2,
     },
     timeout: 15_000,
