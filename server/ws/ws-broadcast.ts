@@ -6,22 +6,28 @@ import {
 } from "./ws-lifecycle";
 import {
   MAX_RUNTIME_WS_BUFFERED_BYTES,
+  RUNTIME_WS_BACKPRESSURE_GRACE_MS,
   serializeRuntimeWsPayload,
 } from "./ws-message-router";
 
 type RuntimeWsBroadcasterOptions = {
   cleanupClient: RuntimeWsCleanupClient;
   connectedClients: Map<string, WebSocket>;
+  now?: () => number;
 };
 
 export function createRuntimeWsBroadcaster({
   cleanupClient,
   connectedClients,
+  now = Date.now,
 }: RuntimeWsBroadcasterOptions): (payload: Record<string, unknown>) => void {
+  const backpressureStartedAtBySocket = new WeakMap<WebSocket, number>();
+
   const dropBackpressuredSocket = (activityId: string, ws: WebSocket) => {
-    logger.warn("WebSocket client dropped because the send buffer exceeded the runtime limit", {
+    logger.warn("WebSocket client dropped because the send buffer remained above the runtime limit after grace period", {
       activityId,
       bufferedAmount: ws.bufferedAmount,
+      graceMs: RUNTIME_WS_BACKPRESSURE_GRACE_MS,
       maxBufferedBytes: MAX_RUNTIME_WS_BUFFERED_BYTES,
     });
     cleanupClient(activityId, {
@@ -29,6 +35,41 @@ export function createRuntimeWsBroadcaster({
       closeWith: "terminate",
       clearSession: true,
     });
+  };
+
+  const shouldDeferBackpressuredSend = (
+    activityId: string,
+    ws: WebSocket,
+    messageBytes: number,
+  ): boolean => {
+    const projectedBufferedAmount = ws.bufferedAmount + messageBytes;
+    if (
+      ws.bufferedAmount <= MAX_RUNTIME_WS_BUFFERED_BYTES
+      && projectedBufferedAmount <= MAX_RUNTIME_WS_BUFFERED_BYTES
+    ) {
+      backpressureStartedAtBySocket.delete(ws);
+      return false;
+    }
+
+    const currentTime = now();
+    const existingStartedAt = backpressureStartedAtBySocket.get(ws);
+    const startedAt = existingStartedAt ?? currentTime;
+    if (existingStartedAt === undefined) {
+      backpressureStartedAtBySocket.set(ws, startedAt);
+      logger.warn("WebSocket broadcast deferred because the send buffer is backpressured", {
+        activityId,
+        bufferedAmount: ws.bufferedAmount,
+        graceMs: RUNTIME_WS_BACKPRESSURE_GRACE_MS,
+        maxBufferedBytes: MAX_RUNTIME_WS_BUFFERED_BYTES,
+        projectedBufferedAmount,
+      });
+    }
+
+    if (currentTime - startedAt >= RUNTIME_WS_BACKPRESSURE_GRACE_MS) {
+      dropBackpressuredSocket(activityId, ws);
+    }
+
+    return true;
   };
 
   return (payload: Record<string, unknown>) => {
@@ -47,19 +88,13 @@ export function createRuntimeWsBroadcaster({
         continue;
       }
 
-      if (
-        ws.bufferedAmount > MAX_RUNTIME_WS_BUFFERED_BYTES
-        || ws.bufferedAmount + messageBytes > MAX_RUNTIME_WS_BUFFERED_BYTES
-      ) {
-        dropBackpressuredSocket(activityId, ws);
+      if (shouldDeferBackpressuredSend(activityId, ws, messageBytes)) {
         continue;
       }
 
       try {
         ws.send(message);
-        if (ws.bufferedAmount > MAX_RUNTIME_WS_BUFFERED_BYTES) {
-          dropBackpressuredSocket(activityId, ws);
-        }
+        shouldDeferBackpressuredSend(activityId, ws, 0);
       } catch (error) {
         logger.warn("WebSocket broadcast failed", {
           activityId,

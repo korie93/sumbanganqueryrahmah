@@ -713,13 +713,14 @@ test("broadcastWsMessage skips oversized payloads before sending to sockets", ()
   }
 });
 
-test("broadcastWsMessage drops sockets whose send buffer exceeds the runtime limit", () => {
+test("broadcastWsMessage gives slow clients a grace period before dropping them", () => {
   const wss = new FakeWebSocketServer();
   const providedMap = new Map<string, WebSocket>();
   const slowSocket = new FakeWebSocket();
   const originalLoggerWarn = logger.warn;
   const warnings: Array<{ message: string; payload: unknown }> = [];
   let clearSessionCalls = 0;
+  let nowMs = 0;
 
   slowSocket.send = (payload: string) => {
     slowSocket.sentMessages.push(String(payload));
@@ -741,27 +742,45 @@ test("broadcastWsMessage drops sockets whose send buffer exceeds the runtime lim
     },
     secret: "test-secret",
     connectedClients: providedMap,
+    now: () => nowMs,
   });
 
   try {
     manager.broadcastWsMessage({ type: "ping" });
+    nowMs = 1_000;
+    manager.broadcastWsMessage({ type: "ping" });
+
+    assert.equal(slowSocket.sentMessages.length, 1);
+    assert.equal(slowSocket.terminateCalls, 0);
+    assert.equal(providedMap.has("activity-backpressure"), true);
+    assert.equal(clearSessionCalls, 0);
+    assert.equal(warnings.length, 1);
+    assert.equal(warnings[0].message, "WebSocket broadcast deferred because the send buffer is backpressured");
+
+    nowMs = 5_000;
+    manager.broadcastWsMessage({ type: "ping" });
+
     assert.equal(slowSocket.sentMessages.length, 1);
     assert.equal(slowSocket.terminateCalls, 1);
     assert.equal(providedMap.has("activity-backpressure"), false);
     assert.equal(clearSessionCalls, 1);
-    assert.equal(warnings.length, 1);
-    assert.equal(warnings[0].message, "WebSocket client dropped because the send buffer exceeded the runtime limit");
+    assert.equal(warnings.length, 2);
+    assert.equal(
+      warnings[1].message,
+      "WebSocket client dropped because the send buffer remained above the runtime limit after grace period",
+    );
   } finally {
     logger.warn = originalLoggerWarn;
     wss.emit("close");
   }
 });
 
-test("broadcastWsMessage drops sockets before send when the next payload would exceed the buffer limit", () => {
+test("broadcastWsMessage resumes deferred sockets when the send buffer drains during grace", () => {
   const wss = new FakeWebSocketServer();
   const providedMap = new Map<string, WebSocket>();
   const slowSocket = new FakeWebSocket();
   let clearSessionCalls = 0;
+  let nowMs = 0;
 
   slowSocket.bufferedAmount = 250 * 1024;
   providedMap.set("activity-pre-send-backpressure", slowSocket as unknown as WebSocket);
@@ -776,15 +795,25 @@ test("broadcastWsMessage drops sockets before send when the next payload would e
     },
     secret: "test-secret",
     connectedClients: providedMap,
+    now: () => nowMs,
   });
 
   try {
     manager.broadcastWsMessage({ type: "ping", payload: "x".repeat(10 * 1024) });
 
     assert.equal(slowSocket.sentMessages.length, 0);
-    assert.equal(slowSocket.terminateCalls, 1);
-    assert.equal(providedMap.has("activity-pre-send-backpressure"), false);
-    assert.equal(clearSessionCalls, 1);
+    assert.equal(slowSocket.terminateCalls, 0);
+    assert.equal(providedMap.has("activity-pre-send-backpressure"), true);
+    assert.equal(clearSessionCalls, 0);
+
+    nowMs = 1_000;
+    slowSocket.bufferedAmount = 0;
+    manager.broadcastWsMessage({ type: "ping" });
+
+    assert.equal(slowSocket.sentMessages.length, 1);
+    assert.equal(slowSocket.terminateCalls, 0);
+    assert.equal(providedMap.has("activity-pre-send-backpressure"), true);
+    assert.equal(clearSessionCalls, 0);
   } finally {
     wss.emit("close");
   }

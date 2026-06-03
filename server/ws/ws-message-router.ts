@@ -3,6 +3,7 @@ import { sanitizeRuntimeWebSocketError } from "./ws-lifecycle";
 
 export const MAX_RUNTIME_WS_BUFFERED_BYTES = 256 * 1024;
 export const MAX_RUNTIME_WS_MESSAGE_BYTES = 64 * 1024;
+export const RUNTIME_WS_BACKPRESSURE_GRACE_MS = 5_000;
 
 export function serializeRuntimeWsPayload(payload: Record<string, unknown>): string | null {
   try {

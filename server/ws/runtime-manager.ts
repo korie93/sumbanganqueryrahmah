@@ -199,7 +199,7 @@ export function createRuntimeWebSocketManager(options: RuntimeManagerOptions): {
     lifecycleRegistry,
     logCleanupDiagnostic,
   });
-  const broadcastLocalWsMessage = createRuntimeWsBroadcaster({ connectedClients, cleanupClient });
+  const broadcastLocalWsMessage = createRuntimeWsBroadcaster({ connectedClients, cleanupClient, now });
   const broadcastWsMessage = (payload: Record<string, unknown>) => {
     broadcastLocalWsMessage(payload);
     sharedBus?.publish({
