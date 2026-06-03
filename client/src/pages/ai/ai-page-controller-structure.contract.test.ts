@@ -30,3 +30,11 @@ test("AI page lifecycle event listeners are abortable on unmount", () => {
   assert.match(lifecycleSource, /addEventListener\(AI_CANCEL_EVENT, onCancel, \{ signal: controller\.signal \}\)/);
   assert.match(lifecycleSource, /controller\.abort\(\)/);
 });
+
+test("AI page local state is centralized in a reducer", () => {
+  const stateSource = readAiSource("useAIPageState.ts");
+
+  assert.match(stateSource, /useReducer\(aiPageStateReducer, AI_PAGE_INITIAL_STATE\)/);
+  assert.match(stateSource, /export function aiPageStateReducer/);
+  assert.doesNotMatch(stateSource, /useState\(/);
+});
