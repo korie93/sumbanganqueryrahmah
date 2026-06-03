@@ -42,7 +42,10 @@ type CollectionRollupRefreshNotificationSubscriberOptions = {
 const DEFAULT_ROLLUP_REFRESH_NOTIFICATION_RECONNECT_DELAY_MS = 5_000;
 const DEFAULT_ROLLUP_REFRESH_NOTIFICATION_MAX_RECONNECT_DELAY_MS = 60_000;
 const DEFAULT_ROLLUP_REFRESH_NOTIFICATION_RECONNECT_JITTER_RATIO = 0.2;
+const PG_NOTIFICATION_LISTENER_CLEANUP_INTERVAL_MS = 5 * 60 * 1000;
 const PG_NOTIFICATION_EXPECTED_LISTENER_COUNT = 3;
+const PG_NOTIFICATION_LISTENER_TTL_MS = 30 * 60 * 1000;
+const PG_NOTIFICATION_MAX_LISTENER_REGISTRATIONS = 5;
 const PG_NOTIFICATION_LISTENER_LIMIT_BUFFER = 4;
 const SAFE_PG_CHANNEL_PATTERN = /^[a-z_][a-z0-9_-]{0,62}$/i;
 const FORBIDDEN_PG_CHANNEL_KEYWORDS = [
@@ -149,6 +152,15 @@ type PgNotificationListenerEntry = {
   handleNotification: (message: PgNotification) => void;
 };
 
+type PgNotificationListenerRegistration = PgNotificationListenerEntry & {
+  id: number;
+  registeredAt: number;
+};
+
+type PgNotificationListenerRegistryOptions = {
+  isProtectedClient?: (client: PgNotificationClientLike) => boolean;
+};
+
 type PgNotificationEventName = "end" | "error" | "notification";
 
 type PgNotificationEventListener =
@@ -206,7 +218,14 @@ export function removePostgresNotificationClientListener(
 }
 
 class PgNotificationListenerRegistry {
-  private readonly listeners = new Map<PgNotificationClientLike, PgNotificationListenerEntry>();
+  private readonly isProtectedClient: (client: PgNotificationClientLike) => boolean;
+  private readonly listeners = new Map<PgNotificationClientLike, PgNotificationListenerRegistration>();
+  private cleanupTimer: NodeJS.Timeout | null = null;
+  private nextListenerId = 0;
+
+  constructor(options: PgNotificationListenerRegistryOptions = {}) {
+    this.isProtectedClient = options.isProtectedClient ?? (() => false);
+  }
 
   get size(): number {
     return this.listeners.size;
@@ -218,12 +237,20 @@ class PgNotificationListenerRegistry {
 
   subscribe(client: PgNotificationClientLike, entry: PgNotificationListenerEntry): void {
     this.unsubscribe(client);
+    this.pruneExpiredListeners(Date.now());
+    this.evictOldestListenersUntilBelowLimit();
     this.raiseMaxListenersIfNeeded(client);
 
     client.on("notification", entry.handleNotification);
     client.on("error", entry.handleError);
     client.on("end", entry.handleEnd);
-    this.listeners.set(client, entry);
+    this.listeners.set(client, {
+      ...entry,
+      id: this.nextListenerId,
+      registeredAt: Date.now(),
+    });
+    this.nextListenerId += 1;
+    this.ensurePeriodicCleanup();
   }
 
   unsubscribe(client: PgNotificationClientLike): void {
@@ -238,6 +265,7 @@ class PgNotificationListenerRegistry {
       this.removeListener(client, "end", entry.handleEnd);
     } finally {
       this.listeners.delete(client);
+      this.stopPeriodicCleanupIfIdle();
     }
   }
 
@@ -245,6 +273,105 @@ class PgNotificationListenerRegistry {
     for (const client of Array.from(this.listeners.keys())) {
       this.unsubscribe(client);
     }
+    this.stopPeriodicCleanup();
+  }
+
+  private ensurePeriodicCleanup(): void {
+    if (this.cleanupTimer || this.listeners.size === 0) {
+      return;
+    }
+
+    this.cleanupTimer = setInterval(() => {
+      this.pruneExpiredListeners(Date.now());
+      this.stopPeriodicCleanupIfIdle();
+    }, PG_NOTIFICATION_LISTENER_CLEANUP_INTERVAL_MS);
+    this.cleanupTimer.unref?.();
+  }
+
+  private stopPeriodicCleanupIfIdle(): void {
+    if (this.listeners.size === 0) {
+      this.stopPeriodicCleanup();
+    }
+  }
+
+  private stopPeriodicCleanup(): void {
+    if (!this.cleanupTimer) {
+      return;
+    }
+
+    clearInterval(this.cleanupTimer);
+    this.cleanupTimer = null;
+  }
+
+  private pruneExpiredListeners(now: number): void {
+    let expiredCount = 0;
+
+    for (const [client, entry] of Array.from(this.listeners.entries())) {
+      if (
+        !this.isProtectedClient(client)
+        && now - entry.registeredAt > PG_NOTIFICATION_LISTENER_TTL_MS
+      ) {
+        this.unsubscribe(client);
+        expiredCount += 1;
+      }
+    }
+
+    if (expiredCount > 0) {
+      internalMetrics.increment("collectionRollupNotificationListenerExpiredTotal", expiredCount);
+      logger.warn("Expired collection rollup notification listener registrations were removed", {
+        event: "collection_rollup_notification_listener_expired",
+        operation: "listener_registry_cleanup",
+        removed: expiredCount,
+        status: "cleaned",
+        ttlMs: PG_NOTIFICATION_LISTENER_TTL_MS,
+      });
+    }
+  }
+
+  private evictOldestListenersUntilBelowLimit(): void {
+    let evictionCount = 0;
+
+    while (this.listeners.size >= PG_NOTIFICATION_MAX_LISTENER_REGISTRATIONS) {
+      const oldestClient = this.findOldestEvictableClient();
+      if (!oldestClient) {
+        break;
+      }
+
+      this.unsubscribe(oldestClient);
+      evictionCount += 1;
+    }
+
+    if (evictionCount > 0) {
+      internalMetrics.increment("collectionRollupNotificationListenerEvictionsTotal", evictionCount);
+      logger.warn("Collection rollup notification listener registry cap evicted stale registrations", {
+        event: "collection_rollup_notification_listener_evicted",
+        limit: PG_NOTIFICATION_MAX_LISTENER_REGISTRATIONS,
+        operation: "listener_registry_cleanup",
+        removed: evictionCount,
+        status: "cleaned",
+      });
+    }
+  }
+
+  private findOldestEvictableClient(): PgNotificationClientLike | null {
+    let oldestClient: PgNotificationClientLike | null = null;
+    let oldestEntry: PgNotificationListenerRegistration | null = null;
+
+    for (const [client, entry] of this.listeners.entries()) {
+      if (this.isProtectedClient(client)) {
+        continue;
+      }
+      if (
+        !oldestEntry
+        || entry.registeredAt < oldestEntry.registeredAt
+        || (entry.registeredAt === oldestEntry.registeredAt && entry.id < oldestEntry.id)
+      ) {
+        oldestClient = client;
+        oldestEntry = entry;
+      }
+    }
+
+    return oldestClient;
   }
 
   private raiseMaxListenersIfNeeded(client: PgNotificationClientLike): void {
@@ -308,11 +435,14 @@ export class CollectionRollupRefreshNotificationSubscriber
   private reconnectTimer: NodeJS.Timeout | null = null;
   private reconnectAttempt = 0;
   private currentClient: PgNotificationClientLike | null = null;
-  private readonly listenerRegistry = new PgNotificationListenerRegistry();
+  private readonly listenerRegistry: PgNotificationListenerRegistry;
   private readonly closingClients = new Set<PgNotificationClientLike>();
   private notifyCallback: (() => unknown) | null = null;
 
   constructor(options: CollectionRollupRefreshNotificationSubscriberOptions = {}) {
+    this.listenerRegistry = new PgNotificationListenerRegistry({
+      isProtectedClient: (client) => client === this.currentClient,
+    });
     this.channel = assertSafeChannelName(
       options.channel ?? COLLECTION_ROLLUP_REFRESH_NOTIFICATION_CHANNEL,
     );

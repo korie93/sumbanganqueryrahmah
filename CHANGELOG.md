@@ -33,6 +33,8 @@
   debug endpoints before the debug token access gate.
 - Replaced fail-fast session refresh capacity handling with a bounded
   backpressure queue that times out fail-closed when refresh slots do not free.
+- Added cap, TTL pruning, and aggregate metrics to the collection rollup
+  notification listener registry while preserving the active PostgreSQL listener.
 
 ### Accessibility
 
@@ -60,6 +62,7 @@
 - `tsx --test client/src/app/client-timer-cleanup-contract.test.ts client/src/pages/login-page-utils.test.ts client/src/pages/login-lock-state.test.ts`
 - `tsx --test client/src/pages/collection-summary/useCollectionMonthlySameDayPace.contract.test.ts client/src/pages/dashboard/tests/dashboard-layout-contract.test.tsx client/src/pages/dashboard/tests/dashboard-query-errors.test.ts`
 - `tsx --test server/auth/tests/guards.test.ts`
+- `tsx --test server/tests/collection-rollup-refresh-notification.test.ts`
 
 ## 2026-05-31 - SQR resource lifecycle and configuration hardening
 

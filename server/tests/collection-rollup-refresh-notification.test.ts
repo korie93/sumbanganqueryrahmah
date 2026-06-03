@@ -61,6 +61,34 @@ class FakeNotificationClient extends EventEmitter {
   }
 }
 
+function createNotificationListenerEntryForTest() {
+  return {
+    handleEnd: () => undefined,
+    handleError: (error: unknown) => {
+      void error;
+    },
+    handleNotification: (message: { channel?: string }) => {
+      void message;
+    },
+  };
+}
+
+type NotificationListenerEntryForTest = ReturnType<typeof createNotificationListenerEntryForTest>;
+
+type NotificationListenerRegistryForTest = {
+  readonly size: number;
+  subscribe(client: FakeNotificationClient, entry: NotificationListenerEntryForTest): void;
+  teardown(): void;
+};
+
+function getNotificationListenerRegistryForTest(
+  subscriber: CollectionRollupRefreshNotificationSubscriber,
+): NotificationListenerRegistryForTest {
+  return (subscriber as unknown as {
+    listenerRegistry: NotificationListenerRegistryForTest;
+  }).listenerRegistry;
+}
+
 function createListenerRemovalClient(options: {
   readonly includeOff?: boolean;
   readonly includeRemoveListener?: boolean;
@@ -437,6 +465,79 @@ test("CollectionRollupRefreshNotificationSubscriber keeps listener count stable 
     pendingListenerCleanups: 0,
     reconnectPending: false,
   });
+});
+
+test("CollectionRollupRefreshNotificationSubscriber caps stale listener registrations", () => {
+  const subscriber = new CollectionRollupRefreshNotificationSubscriber({
+    clientFactory: () => new FakeNotificationClient(),
+    reconnectDelayMs: 20,
+  });
+  const registry = getNotificationListenerRegistryForTest(subscriber);
+  const clients = Array.from({ length: 6 }, () => new FakeNotificationClient());
+  const beforeEvictions = getInternalMetricsSnapshot()
+    .counters.collectionRollupNotificationListenerEvictionsTotal;
+
+  for (const client of clients) {
+    registry.subscribe(client, createNotificationListenerEntryForTest());
+  }
+
+  assert.equal(registry.size, 5);
+  assert.equal(clients[0].listenerCount("notification"), 0);
+  assert.equal(clients[0].listenerCount("error"), 0);
+  assert.equal(clients[0].listenerCount("end"), 0);
+
+  for (const client of clients.slice(1)) {
+    assert.equal(client.listenerCount("notification"), 1);
+    assert.equal(client.listenerCount("error"), 1);
+    assert.equal(client.listenerCount("end"), 1);
+  }
+  assert.equal(
+    getInternalMetricsSnapshot().counters.collectionRollupNotificationListenerEvictionsTotal,
+    beforeEvictions + 1,
+  );
+
+  registry.teardown();
+  for (const client of clients) {
+    assert.equal(client.listenerCount("notification"), 0);
+    assert.equal(client.listenerCount("error"), 0);
+    assert.equal(client.listenerCount("end"), 0);
+  }
+});
+
+test("CollectionRollupRefreshNotificationSubscriber prunes expired stale listener registrations", (t) => {
+  const subscriber = new CollectionRollupRefreshNotificationSubscriber({
+    clientFactory: () => new FakeNotificationClient(),
+    reconnectDelayMs: 20,
+  });
+  const registry = getNotificationListenerRegistryForTest(subscriber);
+  const staleClient = new FakeNotificationClient();
+  const freshClient = new FakeNotificationClient();
+  const beforeExpired = getInternalMetricsSnapshot()
+    .counters.collectionRollupNotificationListenerExpiredTotal;
+  let nowMs = 1_800_000_000_000;
+
+  t.mock.method(Date, "now", () => nowMs);
+
+  registry.subscribe(staleClient, createNotificationListenerEntryForTest());
+  nowMs += 30 * 60 * 1000 + 1;
+  registry.subscribe(freshClient, createNotificationListenerEntryForTest());
+
+  assert.equal(registry.size, 1);
+  assert.equal(staleClient.listenerCount("notification"), 0);
+  assert.equal(staleClient.listenerCount("error"), 0);
+  assert.equal(staleClient.listenerCount("end"), 0);
+  assert.equal(freshClient.listenerCount("notification"), 1);
+  assert.equal(freshClient.listenerCount("error"), 1);
+  assert.equal(freshClient.listenerCount("end"), 1);
+  assert.equal(
+    getInternalMetricsSnapshot().counters.collectionRollupNotificationListenerExpiredTotal,
+    beforeExpired + 1,
+  );
+
+  registry.teardown();
+  assert.equal(freshClient.listenerCount("notification"), 0);
+  assert.equal(freshClient.listenerCount("error"), 0);
+  assert.equal(freshClient.listenerCount("end"), 0);
 });
 
 test("CollectionRollupRefreshNotificationSubscriber contains notification callback failures", async (t) => {
