@@ -44,6 +44,8 @@
 
 - Added explicit group and pressed-state semantics to monthly comparison quick
   range controls, with contracts for login and month-field accessible labels.
+- Raised semantic foreground, primary, destructive, and public-auth action
+  tokens to satisfy WCAG AAA contrast contracts for normal text pairs.
 
 ### Design System
 
@@ -73,6 +75,7 @@
 - `node --test scripts/tests/tailwind-public-config.test.mjs`
 - `npm run verify:design-token-color-compatibility`
 - `tsx --test client/src/lib/client-logger.test.ts client/src/lib/utils/safe-json.test.ts client/src/lib/global-unhandled-rejection.test.ts`
+- `node --test scripts/tests/design-token-contrast.test.mjs`
 
 ## 2026-05-31 - SQR resource lifecycle and configuration hardening
 

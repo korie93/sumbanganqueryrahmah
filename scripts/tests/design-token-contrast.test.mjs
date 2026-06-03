@@ -118,6 +118,21 @@ test("theme token foreground pairs meet WCAG AA normal text contrast", () => {
   assert.deepEqual(report.darkFailures, []);
 });
 
+test("theme token foreground pairs meet WCAG AAA normal text contrast", () => {
+  const css = readThemeTokenSource();
+  const lightTokens = parseHslTokens(extractCssRuleBlock(css, ":root"));
+  const darkTokens = parseHslTokens(extractCssRuleBlock(css, ".dark"));
+
+  assert.deepEqual(
+    validateThemeContrast(lightTokens, { minRatio: 7 }),
+    [],
+  );
+  assert.deepEqual(
+    validateThemeContrast(darkTokens, { minRatio: 7 }),
+    [],
+  );
+});
+
 test("light theme accent surfaces stay visually distinct from their parent backgrounds", () => {
   const css = readThemeTokenSource();
   const lightTokens = parseHslTokens(extractCssRuleBlock(css, ":root"));
@@ -167,7 +182,7 @@ test("public auth text tokens keep WCAG AA contrast against the auth shell surfa
   }
 });
 
-test("public auth primary buttons and login submit gradients keep readable white text", () => {
+test("public auth primary buttons and login submit gradients meet WCAG AAA contrast", () => {
   const css = readThemeTokenSource();
 
   for (const selector of [":root", ".dark"]) {
@@ -189,18 +204,18 @@ test("public auth primary buttons and login submit gradients keep readable white
     ];
 
     assert.ok(
-      getContrastRatio(publicAuthPrimaryBackground, publicAuthPrimaryText) >= 4.5,
-      `${selector} public auth primary background must satisfy WCAG AA contrast`,
+      getContrastRatio(publicAuthPrimaryBackground, publicAuthPrimaryText) >= 7,
+      `${selector} public auth primary background must satisfy WCAG AAA contrast`,
     );
     assert.ok(
-      getContrastRatio(publicAuthPrimaryBackgroundHover, publicAuthPrimaryText) >= 4.5,
-      `${selector} public auth primary hover background must satisfy WCAG AA contrast`,
+      getContrastRatio(publicAuthPrimaryBackgroundHover, publicAuthPrimaryText) >= 7,
+      `${selector} public auth primary hover background must satisfy WCAG AAA contrast`,
     );
 
     for (const [index, gradientStop] of loginSubmitGradientStops.entries()) {
       assert.ok(
-        getContrastRatio(gradientStop, loginSubmitText) >= 4.5,
-        `${selector} login submit gradient stop ${index + 1} must satisfy WCAG AA contrast`,
+        getContrastRatio(gradientStop, loginSubmitText) >= 7,
+        `${selector} login submit gradient stop ${index + 1} must satisfy WCAG AAA contrast`,
       );
     }
   }

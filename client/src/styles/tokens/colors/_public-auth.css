@@ -33,9 +33,9 @@
 
   --public-auth-halo: hsl(217 91% 70% / 0.22);
 
-  --public-auth-primary-bg: hsl(221 83% 55%);
+  --public-auth-primary-bg: hsl(221 83% 42%);
 
-  --public-auth-primary-bg-hover: hsl(221 83% 50%);
+  --public-auth-primary-bg-hover: hsl(221 83% 40%);
 
   --public-auth-primary-ring: hsl(var(--ring) / 0.56);
 
@@ -123,9 +123,9 @@
 
   --login-password-toggle-ring: var(--public-auth-input-focus);
 
-  --login-submit-gradient: linear-gradient(90deg, hsl(221 83% 55%), hsl(221 83% 50%));
+  --login-submit-gradient: linear-gradient(90deg, hsl(221 83% 42%), hsl(221 83% 40%));
 
-  --login-submit-gradient-hover: linear-gradient(90deg, hsl(221 83% 52%), hsl(221 83% 47%));
+  --login-submit-gradient-hover: linear-gradient(90deg, hsl(221 83% 40%), hsl(221 83% 38%));
 
   --login-submit-text: hsl(210 40% 98%);
 
@@ -199,9 +199,9 @@
 
   --public-auth-halo: hsl(217 91% 70% / 0.14);
 
-  --public-auth-primary-bg: hsl(221 83% 55%);
+  --public-auth-primary-bg: hsl(221 83% 74%);
 
-  --public-auth-primary-bg-hover: hsl(221 83% 50%);
+  --public-auth-primary-bg-hover: hsl(221 83% 72%);
 
   --public-auth-primary-ring: hsl(var(--ring) / 0.6);
 
@@ -289,9 +289,9 @@
 
   --login-password-toggle-ring: var(--public-auth-input-focus);
 
-  --login-submit-gradient: linear-gradient(90deg, hsl(221 83% 55%), hsl(221 83% 50%));
+  --login-submit-gradient: linear-gradient(90deg, hsl(221 83% 42%), hsl(221 83% 40%));
 
-  --login-submit-gradient-hover: linear-gradient(90deg, hsl(221 83% 52%), hsl(221 83% 47%));
+  --login-submit-gradient-hover: linear-gradient(90deg, hsl(221 83% 40%), hsl(221 83% 38%));
 
   --login-submit-text: hsl(210 40% 98%);
 
@@ -331,4 +331,3 @@
 
   --login-footer-text: hsl(0 0% 100% / 0.5);
 }
-
