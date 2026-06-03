@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, type FocusEvent } from "react";
 
 import type { User } from "@/app/types";
 import { consumeStoredAuthNotice } from "@/lib/auth-session";
@@ -15,6 +15,11 @@ type UseLoginPageStateParams = {
   onLandingClick?: (() => void) | undefined;
   onLoginSuccess: (user: User) => void;
 };
+
+function isLoginSubmitFocusTarget(event: FocusEvent<HTMLInputElement>): boolean {
+  return event.relatedTarget instanceof HTMLElement
+    && event.relatedTarget.dataset.testid === "button-login";
+}
 
 export function useLoginPageState({
   onBanned,
@@ -72,12 +77,20 @@ export function useLoginPageState({
     }
   }, [form, security]);
 
-  const handleUsernameBlur = useCallback(() => {
+  const handleUsernameBlur = useCallback((event: FocusEvent<HTMLInputElement>) => {
+    if (isLoginSubmitFocusTarget(event)) {
+      return;
+    }
+
     const fieldErrors = validatePasswordLoginFields(form.username, form.password);
     form.setUsernameError(fieldErrors.username ?? "");
   }, [form]);
 
-  const handlePasswordBlur = useCallback(() => {
+  const handlePasswordBlur = useCallback((event: FocusEvent<HTMLInputElement>) => {
+    if (isLoginSubmitFocusTarget(event)) {
+      return;
+    }
+
     const fieldErrors = validatePasswordLoginFields(form.username, form.password);
     form.setPasswordError(fieldErrors.password ?? "");
   }, [form]);
