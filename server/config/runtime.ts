@@ -9,6 +9,7 @@ import {
   MIN_SESSION_TIMEOUT_MINUTES,
   validateRuntimeEnvironmentSchema,
 } from "./runtime-env-schema";
+import { validateProductionConfig } from "./validate-env";
 import { resolveUploadsRootDir } from "./upload-paths";
 import { DEFAULT_IMPORT_BODY_LIMIT } from "./body-limit";
 import { parseBodyLimitToBytes, DEFAULT_IMPORT_UPLOAD_LIMIT_BYTES } from "./body-limit";
@@ -76,6 +77,7 @@ import type {
 export type { RuntimeConfigDiagnostic, RuntimeConfigValidation } from "./runtime-config-types";
 
 validateRuntimeEnvironmentSchema();
+validateProductionConfig();
 
 const MIN_COUNT = 1;
 const MIN_ZERO_COUNT = 0;

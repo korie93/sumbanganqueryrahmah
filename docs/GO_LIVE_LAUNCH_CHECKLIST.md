@@ -8,7 +8,7 @@ This checklist is the final gate before controlled production launch.
 - [ ] Missing critical secrets fail fast at startup.
 - [ ] `TWO_FACTOR_ENCRYPTION_KEY` is configured with a unique non-placeholder value.
 - [ ] `COLLECTION_PII_ENCRYPTION_KEY` is configured with a unique non-placeholder value.
-- [ ] `BACKUP_ENCRYPTION_KEY` (or `BACKUP_ENCRYPTION_KEYS`) is configured when backups are enabled.
+- [ ] `BACKUP_ENCRYPTION_KEY` (or `BACKUP_ENCRYPTION_KEYS`) is configured; production startup rejects missing backup keys even if backups are temporarily disabled.
 - [ ] Secret rotation runbook has been reviewed: `docs/SECRET_ROTATION.md`.
 - [ ] Dev-only bootstrap/mail-preview behavior is disabled in production-like mode.
 - [ ] Session/auth cookie configuration is production-safe.

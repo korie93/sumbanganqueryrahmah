@@ -216,9 +216,9 @@ export function assertRuntimeSafetyGuards(params: {
 }) {
   const { isProductionLike, isStrictLocalDevelopment, mailConfiguration } = params;
 
-  if (isProductionLike && params.backupFeatureEnabled && !params.hasBackupEncryptionKeyConfigured) {
+  if (isProductionLike && !params.hasBackupEncryptionKeyConfigured) {
     throw new Error(
-      "BACKUP_ENCRYPTION_KEY or BACKUP_ENCRYPTION_KEYS is required when backups are enabled outside strict local development.",
+      "BACKUP_ENCRYPTION_KEY or BACKUP_ENCRYPTION_KEYS is required outside strict local development so backup encryption cannot be bypassed with runtime feature flags.",
     );
   }
 

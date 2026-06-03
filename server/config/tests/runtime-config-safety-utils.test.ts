@@ -107,7 +107,32 @@ test("assertRuntimeSafetyGuards rejects production-like backups without encrypti
         mailDevOutboxEnabled: false,
         operationsDebugRoutesEnabled: false,
       }),
-    /BACKUP_ENCRYPTION_KEY or BACKUP_ENCRYPTION_KEYS is required/i,
+    /BACKUP_ENCRYPTION_KEY or BACKUP_ENCRYPTION_KEYS is required outside strict local development/i,
+  );
+});
+
+test("assertRuntimeSafetyGuards rejects production-like startup without backup keys even when backups are disabled", () => {
+  assert.throws(
+    () =>
+      assertRuntimeSafetyGuards({
+        isProductionLike: true,
+        isStrictLocalDevelopment: false,
+        mailConfiguration: {
+          effectiveFrom: null,
+          hasAnyInput: false,
+          isConfigured: false,
+          isIncomplete: false,
+        },
+        backupFeatureEnabled: false,
+        hasBackupEncryptionKeyConfigured: false,
+        hasCollectionPiiEncryptionKeyConfigured: true,
+        hasTwoFactorEncryptionKeyConfigured: true,
+        seedDefaultUsers: false,
+        localSuperuserCredentialsFileEnabled: false,
+        mailDevOutboxEnabled: false,
+        operationsDebugRoutesEnabled: false,
+      }),
+    /backup encryption cannot be bypassed with runtime feature flags/i,
   );
 });
 

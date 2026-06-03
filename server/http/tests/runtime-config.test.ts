@@ -47,6 +47,8 @@ async function withEnv<T>(
 const productionBaseOverrides: Record<string, string | null> = {
   NODE_ENV: "production",
   SESSION_SECRET: PROD_SESSION_SECRET,
+  SESSION_JWT_PRIVATE_KEY: "test-private-key-present-for-runtime-preflight",
+  SESSION_JWT_PUBLIC_KEY: "test-public-key-present-for-runtime-preflight",
   COLLECTION_NICKNAME_TEMP_PASSWORD: "ProdTempPass12345",
   COLLECTION_PII_ENCRYPTION_KEY: "C".repeat(32),
   TWO_FACTOR_ENCRYPTION_KEY: "T".repeat(32),
@@ -110,7 +112,7 @@ test("runtime config rejects production startup when backup encryption keys are 
     async () => {
       await assert.rejects(
         importRuntimeFresh(),
-        /BACKUP_ENCRYPTION_KEY or BACKUP_ENCRYPTION_KEYS is required when backups are enabled outside strict local development/i,
+        /FATAL: Missing required production environment variables:[\s\S]*BACKUP_ENCRYPTION_KEY or BACKUP_ENCRYPTION_KEYS/i,
       );
     },
   );
@@ -133,7 +135,7 @@ test("runtime config rejects production startup when backup encryption key mater
   );
 });
 
-test("runtime config accepts production startup without backup keys when backups are disabled", async () => {
+test("runtime config rejects production startup without backup keys even when backups are disabled", async () => {
   await withEnv(
     {
       ...productionBaseOverrides,
@@ -142,8 +144,30 @@ test("runtime config accepts production startup without backup keys when backups
       BACKUP_FEATURE_ENABLED: "0",
     },
     async () => {
-      const runtimeModule = await importRuntimeFresh();
-      assert.equal(runtimeModule.runtimeConfig.backups.featureEnabled, false);
+      await assert.rejects(
+        importRuntimeFresh(),
+        /BACKUP_ENCRYPTION_KEY or BACKUP_ENCRYPTION_KEYS/i,
+      );
+    },
+  );
+});
+
+test("runtime config rejects production startup with a complete missing-env list", async () => {
+  await withEnv(
+    {
+      ...productionBaseOverrides,
+      SESSION_JWT_PRIVATE_KEY: null,
+      SESSION_JWT_PUBLIC_KEY: null,
+      BACKUP_ENCRYPTION_KEY: null,
+      BACKUP_ENCRYPTION_KEYS: null,
+      COLLECTION_PII_ENCRYPTION_KEY: null,
+      TWO_FACTOR_ENCRYPTION_KEY: null,
+    },
+    async () => {
+      await assert.rejects(
+        importRuntimeFresh(),
+        /FATAL: Missing required production environment variables:[\s\S]*SESSION_JWT_PRIVATE_KEY[\s\S]*SESSION_JWT_PUBLIC_KEY[\s\S]*BACKUP_ENCRYPTION_KEY or BACKUP_ENCRYPTION_KEYS[\s\S]*COLLECTION_PII_ENCRYPTION_KEY[\s\S]*TWO_FACTOR_ENCRYPTION_KEY/i,
+      );
     },
   );
 });
@@ -158,7 +182,7 @@ test("runtime config rejects production startup when collection PII encryption k
     async () => {
       await assert.rejects(
         importRuntimeFresh(),
-        /COLLECTION_PII_ENCRYPTION_KEY is required outside strict local development/i,
+        /FATAL: Missing required production environment variables:[\s\S]*COLLECTION_PII_ENCRYPTION_KEY/i,
       );
     },
   );
@@ -174,7 +198,7 @@ test("runtime config rejects production startup when the two-factor encryption k
     async () => {
       await assert.rejects(
         importRuntimeFresh(),
-        /TWO_FACTOR_ENCRYPTION_KEY is required outside strict local development/i,
+        /FATAL: Missing required production environment variables:[\s\S]*TWO_FACTOR_ENCRYPTION_KEY/i,
       );
     },
   );
@@ -488,6 +512,7 @@ test("runtime config rejects production startup when Redis URLs do not use TLS",
     {
       ...productionBaseOverrides,
       BACKUP_FEATURE_ENABLED: "0",
+      BACKUP_ENCRYPTION_KEY: "A".repeat(32),
       SQR_REDIS_RATE_LIMIT_URL: "redis://redis.internal:6379/0",
     },
     async () => {
