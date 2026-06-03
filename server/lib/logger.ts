@@ -50,6 +50,7 @@ const ALLOWED_LOG_KEYS = new Set([
   "code",
   "contentlength",
   "count",
+  "critical",
   "cwd",
   "database",
   "delta",

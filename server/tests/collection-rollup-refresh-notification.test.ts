@@ -571,7 +571,14 @@ test("CollectionRollupRefreshNotificationSubscriber contains notification callba
     warnings.some(({ message, meta }) => (
       message === "Collection rollup notification callback failed; polling fallback remains active"
       && meta?.event === "collection_rollup_notification_async_failure"
+      && meta.category === "fire_and_forget"
+      && meta.source === "collection_rollup_refresh_notification"
       && meta.operation === "notify_callback"
+      && meta.status === "contained_failure"
+      && meta.name === "Error"
+      && meta.details === "callback failed"
+      && typeof meta.capturedAt === "string"
+      && typeof meta.stack === "string"
       && !("error" in meta)
     )),
     true,
@@ -615,8 +622,16 @@ test("CollectionRollupRefreshNotificationSubscriber observes rejected async noti
     warnings.some(({ message, meta }) => (
       message === "Collection rollup notification callback failed; polling fallback remains active"
       && meta?.event === "collection_rollup_notification_async_failure"
+      && meta.category === "fire_and_forget"
+      && meta.source === "collection_rollup_refresh_notification"
       && meta.operation === "notify_callback"
       && meta.critical === false
+      && meta.status === "contained_failure"
+      && meta.name === "Error"
+      && meta.details === "callback failed"
+      && typeof meta.capturedAt === "string"
+      && typeof meta.stack === "string"
+      && !("error" in meta)
     )),
     true,
   );

@@ -2,7 +2,7 @@ import pg from "pg";
 import { buildPgSslPoolConfig } from "../config/database-ssl";
 import { runtimeConfig } from "../config/runtime";
 import { internalMetrics, type InternalMetricName } from "../internal/metrics";
-import { logger } from "./logger";
+import { logger, sanitizeErrorStackForLog } from "./logger";
 
 const { Client } = pg;
 
@@ -77,6 +77,7 @@ const ROLLUP_NOTIFICATION_FAILURE_METRICS = {
   disconnect_cleanup: "collectionRollupNotificationDisconnectFailuresTotal",
   reconnect: "collectionRollupNotificationReconnectFailuresTotal",
 } as const satisfies Record<RollupNotificationAsyncOperation, InternalMetricName>;
+const ROLLUP_NOTIFICATION_LOG_SOURCE = "collection_rollup_refresh_notification";
 
 export type CollectionRollupRefreshNotificationSubscriberLike = {
   start(onNotify: () => void): Promise<void>;
@@ -120,6 +121,23 @@ function readErrorName(error: unknown): string {
     return "NullError";
   }
   return `${typeof error}Error`;
+}
+
+function readErrorMessage(error: unknown): string {
+  if (error instanceof Error && error.message.trim()) {
+    return error.message;
+  }
+  if (typeof error === "string" && error.trim()) {
+    return error;
+  }
+  if (error === null) {
+    return "Null error";
+  }
+  return `${typeof error} error`;
+}
+
+function readErrorStack(error: unknown): string | undefined {
+  return error instanceof Error ? error.stack : undefined;
 }
 
 function createDefaultClient(): PgNotificationClientLike {
@@ -320,10 +338,10 @@ class PgNotificationListenerRegistry {
       internalMetrics.increment("collectionRollupNotificationListenerExpiredTotal", expiredCount);
       logger.warn("Expired collection rollup notification listener registrations were removed", {
         event: "collection_rollup_notification_listener_expired",
+        durationMs: PG_NOTIFICATION_LISTENER_TTL_MS,
         operation: "listener_registry_cleanup",
-        removed: expiredCount,
+        removedCount: expiredCount,
         status: "cleaned",
-        ttlMs: PG_NOTIFICATION_LISTENER_TTL_MS,
       });
     }
   }
@@ -347,7 +365,7 @@ class PgNotificationListenerRegistry {
         event: "collection_rollup_notification_listener_evicted",
         limit: PG_NOTIFICATION_MAX_LISTENER_REGISTRATIONS,
         operation: "listener_registry_cleanup",
-        removed: evictionCount,
+        removedCount: evictionCount,
         status: "cleaned",
       });
     }
@@ -621,12 +639,22 @@ export class CollectionRollupRefreshNotificationSubscriber
     }
 
     logger.warn(ROLLUP_NOTIFICATION_FAILURE_MESSAGES[params.operation], {
+      capturedAt: new Date().toISOString(),
+      category: "fire_and_forget",
       channel: this.channel,
       critical: params.critical,
-      errorCode: readErrorCode(params.error),
-      errorName: readErrorName(params.error),
+      code: readErrorCode(params.error),
+      details: runtimeConfig.app.isProductionLike ? undefined : readErrorMessage(params.error),
       event: "collection_rollup_notification_async_failure",
+      name: readErrorName(params.error),
       operation: params.operation,
+      source: ROLLUP_NOTIFICATION_LOG_SOURCE,
+      stack: runtimeConfig.app.isProductionLike
+        ? undefined
+        : sanitizeErrorStackForLog(readErrorStack(params.error), {
+            productionLike: false,
+          }),
+      status: params.critical ? "critical_failure" : "contained_failure",
     });
   }
 
