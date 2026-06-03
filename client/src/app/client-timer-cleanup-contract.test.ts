@@ -97,6 +97,14 @@ const TIMER_CLEANUP_CONTRACTS: TimerCleanupContract[] = [
     cleanupPatterns: [
       /window\.clearInterval\(lockedCountdownIntervalRef\.current\)/,
       /lockedCountdownIntervalRef\.current = null/,
+      /mountedRef\.current = false;[\s\S]*clearLockedCountdownInterval\(\)/,
+    ],
+  },
+  {
+    filePath: "../pages/Login.tsx",
+    setupPattern: /const frameId = window\.requestAnimationFrame/,
+    cleanupPatterns: [
+      /window\.cancelAnimationFrame\(frameId\)/,
     ],
   },
   {
@@ -186,4 +194,13 @@ test("one-shot utility timers are documented as non-lifecycle exceptions", () =>
 
     assert.match(source, exception.expectedPattern, `${exception.filePath} should remain an audited one-shot timer`);
   }
+});
+
+test("AI page typing interval remains owned by runtime cleanup refs", () => {
+  const typingSource = readClientSource("../pages/ai/useAIPageTypingAction.ts");
+  const runtimeSource = readClientSource("../pages/ai/useAIPageRuntimeRefs.ts");
+
+  assert.match(typingSource, /stopTyping\(\);[\s\S]*typingTimerRef\.current = window\.setInterval/);
+  assert.match(runtimeSource, /window\.clearInterval\(typingTimerRef\.current\)/);
+  assert.match(runtimeSource, /typingTimerRef\.current = null/);
 });

@@ -22,6 +22,8 @@
 
 - Moved collection monthly summary window listener cleanup to AbortController
   signals so refresh listeners are released atomically on hook unmount.
+- Hardened login locked-account countdown unmount cleanup and added contracts
+  for login animation-frame and AI typing interval ownership.
 
 ### Security
 
@@ -51,6 +53,7 @@
 - `tsx --test client/src/pages/ai/useAIPageState.reducer.test.ts client/src/pages/ai/ai-page-controller-structure.contract.test.ts client/src/pages/ai/ai-page-controller-utils.test.ts client/src/app/client-timer-cleanup-contract.test.ts`
 - `tsx --test server/lib/tests/process-timeout-manager.test.ts server/services/tests/collection-receipt-external-scan.test.ts server/services/tests/collection-receipt-external-scan-startup.test.ts`
 - `tsx --test server/routes/tests/operations-debug-routes.test.ts server/routes/tests/operations.routes.integration.test.ts`
+- `tsx --test client/src/app/client-timer-cleanup-contract.test.ts client/src/pages/login-page-utils.test.ts client/src/pages/login-lock-state.test.ts`
 
 ## 2026-05-31 - SQR resource lifecycle and configuration hardening
 

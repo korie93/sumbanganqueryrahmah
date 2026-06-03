@@ -113,8 +113,9 @@ export default function Login({ onBanned, onForgotPasswordClick, onLandingClick,
 
     return () => {
       mountedRef.current = false;
+      clearLockedCountdownInterval();
     };
-  }, []);
+  }, [clearLockedCountdownInterval]);
 
   useEffect(() => {
     if (typeof window === "undefined" || !usernameInputRef.current) {
