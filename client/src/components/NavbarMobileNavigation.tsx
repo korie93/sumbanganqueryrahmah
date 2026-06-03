@@ -97,4 +97,7 @@ function NavbarMobileNavigationImpl({
   )
 }
 
+/**
+ * Renders the shared navbar mobile navigation component used across SQR screens.
+ */
 export const NavbarMobileNavigation = memo(NavbarMobileNavigationImpl)

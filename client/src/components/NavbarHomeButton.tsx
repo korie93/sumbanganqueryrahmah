@@ -33,4 +33,7 @@ function NavbarHomeButtonImpl({
   )
 }
 
+/**
+ * Renders the shared navbar home button component used across SQR screens.
+ */
 export const NavbarHomeButton = memo(NavbarHomeButtonImpl)

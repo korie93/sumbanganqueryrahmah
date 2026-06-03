@@ -38,6 +38,9 @@ type FloatingAIPanelProps = {
   timeoutMs: number;
 };
 
+/**
+ * Renders the shared floating ai panel component used across SQR screens.
+ */
 export function FloatingAIPanel({
   activePage,
   aiEnabled,

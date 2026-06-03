@@ -4,6 +4,9 @@ type AILoadingSkeletonProps = {
   label?: string;
 };
 
+/**
+ * Renders the ai loading skeleton loading state for deferred SQR UI.
+ */
 export function AILoadingSkeleton({
   label = "AI sedang menyediakan jawapan...",
 }: AILoadingSkeletonProps) {

@@ -283,4 +283,7 @@ function MonitorWebVitalsSectionImpl({
   );
 }
 
+/**
+ * Renders the shared monitor web vitals section component used across SQR screens.
+ */
 export const MonitorWebVitalsSection = memo(MonitorWebVitalsSectionImpl);

@@ -13,6 +13,9 @@ type FloatingAIChatErrorBoundaryState = {
   boundaryKey: string;
 };
 
+/**
+ * Isolates failures inside the floating ai chat error boundary so the rest of the UI remains usable.
+ */
 export class FloatingAIChatErrorBoundary extends Component<
   FloatingAIChatErrorBoundaryProps,
   FloatingAIChatErrorBoundaryState

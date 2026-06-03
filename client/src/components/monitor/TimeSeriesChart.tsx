@@ -123,6 +123,9 @@ function TimeSeriesChartImpl({ title, color, unit = "", description, data }: Tim
   );
 }
 
+/**
+ * Renders the shared time series chart component used across SQR screens.
+ */
 export const TimeSeriesChart = memo(TimeSeriesChartImpl);
 
 export type { TimeSeriesPoint };

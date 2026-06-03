@@ -7,6 +7,9 @@ type FloatingRootContainerProps = {
   children: ReactNode;
 };
 
+/**
+ * Renders the shared floating root container component used across SQR screens.
+ */
 export function FloatingRootContainer({
   rootRef,
   className,
@@ -26,6 +29,9 @@ type FloatingPanelShellProps = {
   children: ReactNode;
 };
 
+/**
+ * Renders the shared floating panel shell component used across SQR screens.
+ */
 export function FloatingPanelShell({
   className,
   hidden,
@@ -44,6 +50,9 @@ type FloatingTriggerShellProps = {
   children: ReactNode;
 };
 
+/**
+ * Renders the shared floating trigger shell component used across SQR screens.
+ */
 export function FloatingTriggerShell({
   className,
   hidden,

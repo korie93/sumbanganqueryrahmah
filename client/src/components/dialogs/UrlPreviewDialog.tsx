@@ -24,6 +24,9 @@ type UrlPreviewDialogProps = {
   onClose: () => void;
 };
 
+/**
+ * Renders the shared url preview dialog component used across SQR screens.
+ */
 export function UrlPreviewDialog({
   open,
   title,

@@ -97,6 +97,9 @@ function SideTabNavigationFallback({
   );
 }
 
+/**
+ * Renders the shared lazy side tab navigation component used across SQR screens.
+ */
 export function LazySideTabNavigation({
   fallbackClassName,
   ...props

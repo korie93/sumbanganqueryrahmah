@@ -220,6 +220,9 @@ const MenubarSeparator = React.forwardRef<
 ))
 MenubarSeparator.displayName = MenubarPrimitive.Separator.displayName
 
+/**
+ * Renders the shared menubar shortcut component used across SQR screens.
+ */
 const MenubarShortcut = ({
   className,
   ...props

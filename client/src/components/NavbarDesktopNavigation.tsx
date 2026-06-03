@@ -276,4 +276,7 @@ function NavbarDesktopNavigationImpl({
   )
 }
 
+/**
+ * Renders the shared navbar desktop navigation component used across SQR screens.
+ */
 export const NavbarDesktopNavigation = memo(NavbarDesktopNavigationImpl)

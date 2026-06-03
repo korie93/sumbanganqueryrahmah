@@ -9,6 +9,9 @@ import { Input } from "@/components/ui/input"
 import { Separator } from "@/components/ui/separator"
 import { Skeleton } from "@/components/ui/skeleton"
 
+/**
+ * Renders the shared sidebar input component used across SQR screens.
+ */
 function SidebarInput({
   className,
   ...props
@@ -23,6 +26,9 @@ function SidebarInput({
   )
 }
 
+/**
+ * Renders the sidebar header region for grouped SQR content.
+ */
 function SidebarHeader({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
@@ -34,6 +40,9 @@ function SidebarHeader({ className, ...props }: React.ComponentProps<"div">) {
   )
 }
 
+/**
+ * Renders the sidebar footer action region for grouped SQR content.
+ */
 function SidebarFooter({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
@@ -45,6 +54,9 @@ function SidebarFooter({ className, ...props }: React.ComponentProps<"div">) {
   )
 }
 
+/**
+ * Renders the shared sidebar separator component used across SQR screens.
+ */
 function SidebarSeparator({
   className,
   ...props
@@ -59,6 +71,9 @@ function SidebarSeparator({
   )
 }
 
+/**
+ * Renders the sidebar content surface with standard SQR layout behavior.
+ */
 function SidebarContent({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
@@ -73,6 +88,9 @@ function SidebarContent({ className, ...props }: React.ComponentProps<"div">) {
   )
 }
 
+/**
+ * Renders the shared sidebar group component used across SQR screens.
+ */
 function SidebarGroup({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
@@ -84,6 +102,9 @@ function SidebarGroup({ className, ...props }: React.ComponentProps<"div">) {
   )
 }
 
+/**
+ * Renders the shared sidebar group label component used across SQR screens.
+ */
 function SidebarGroupLabel({
   className,
   asChild = false,
@@ -105,6 +126,9 @@ function SidebarGroupLabel({
   )
 }
 
+/**
+ * Renders the shared sidebar group action component used across SQR screens.
+ */
 function SidebarGroupAction({
   className,
   asChild = false,
@@ -127,6 +151,9 @@ function SidebarGroupAction({
   )
 }
 
+/**
+ * Renders the sidebar group content surface with standard SQR layout behavior.
+ */
 function SidebarGroupContent({
   className,
   ...props
@@ -141,6 +168,9 @@ function SidebarGroupContent({
   )
 }
 
+/**
+ * Renders the shared sidebar menu component used across SQR screens.
+ */
 function SidebarMenu({ className, ...props }: React.ComponentProps<"ul">) {
   return (
     <ul
@@ -152,6 +182,9 @@ function SidebarMenu({ className, ...props }: React.ComponentProps<"ul">) {
   )
 }
 
+/**
+ * Renders the shared sidebar menu item component used across SQR screens.
+ */
 function SidebarMenuItem({ className, ...props }: React.ComponentProps<"li">) {
   return (
     <li
@@ -163,6 +196,9 @@ function SidebarMenuItem({ className, ...props }: React.ComponentProps<"li">) {
   )
 }
 
+/**
+ * Renders the shared sidebar menu action component used across SQR screens.
+ */
 function SidebarMenuAction({
   className,
   asChild = false,
@@ -194,6 +230,9 @@ function SidebarMenuAction({
   )
 }
 
+/**
+ * Renders the shared sidebar menu badge component used across SQR screens.
+ */
 function SidebarMenuBadge({
   className,
   ...props
@@ -216,6 +255,9 @@ function SidebarMenuBadge({
   )
 }
 
+/**
+ * Renders the sidebar menu skeleton loading state for deferred SQR UI.
+ */
 function SidebarMenuSkeleton({
   className,
   showIcon = false,
@@ -256,6 +298,9 @@ function SidebarMenuSkeleton({
   )
 }
 
+/**
+ * Renders the shared sidebar menu sub component used across SQR screens.
+ */
 function SidebarMenuSub({ className, ...props }: React.ComponentProps<"ul">) {
   return (
     <ul
@@ -271,6 +316,9 @@ function SidebarMenuSub({ className, ...props }: React.ComponentProps<"ul">) {
   )
 }
 
+/**
+ * Renders the shared sidebar menu sub item component used across SQR screens.
+ */
 function SidebarMenuSubItem({
   className,
   ...props
@@ -285,6 +333,9 @@ function SidebarMenuSubItem({
   )
 }
 
+/**
+ * Renders the shared sidebar menu sub button component used across SQR screens.
+ */
 function SidebarMenuSubButton({
   asChild = false,
   size = "md",

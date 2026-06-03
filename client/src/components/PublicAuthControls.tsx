@@ -14,6 +14,9 @@ type PublicAuthButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: "primary" | "ghost";
 };
 
+/**
+ * Renders the shared public auth button component used across SQR screens.
+ */
 export function PublicAuthButton({
   className,
   type = "button",
@@ -33,6 +36,9 @@ export function PublicAuthButton({
   );
 }
 
+/**
+ * Renders the shared public auth input component used across SQR screens.
+ */
 export const PublicAuthInput = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement>>(
   function PublicAuthInput({ className, ...props }, ref) {
     const generatedId = useId();

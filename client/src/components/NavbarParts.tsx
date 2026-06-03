@@ -73,6 +73,9 @@ export function NavbarBrandCluster({
   );
 }
 
+/**
+ * Renders the shared navbar user menu dropdown component used across SQR screens.
+ */
 export function NavbarUserMenuDropdown({
   onCloseAutoFocus,
   onEscapeKeyDown,

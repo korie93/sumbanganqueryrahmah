@@ -163,6 +163,9 @@ const ContextMenuSeparator = React.forwardRef<
 ))
 ContextMenuSeparator.displayName = ContextMenuPrimitive.Separator.displayName
 
+/**
+ * Renders the shared context menu shortcut component used across SQR screens.
+ */
 const ContextMenuShortcut = ({
   className,
   ...props

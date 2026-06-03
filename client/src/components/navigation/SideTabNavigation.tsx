@@ -40,6 +40,9 @@ function resolveSideTabWidthClass(width: number, fallbackClassName: string) {
   return sideTabWidthClassByPixels.get(width) ?? fallbackClassName;
 }
 
+/**
+ * Renders the shared side tab navigation component used across SQR screens.
+ */
 export function SideTabNavigation({
   items,
   selectedKey,

@@ -143,4 +143,7 @@ function MonitorChaosSectionImpl({
   );
 }
 
+/**
+ * Renders the shared monitor chaos section component used across SQR screens.
+ */
 export const MonitorChaosSection = memo(MonitorChaosSectionImpl);

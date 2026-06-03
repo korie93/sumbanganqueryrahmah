@@ -98,4 +98,7 @@ function MonitorRollupQueueControlsSectionImpl({
   );
 }
 
+/**
+ * Renders the shared monitor rollup queue controls section component used across SQR screens.
+ */
 export const MonitorRollupQueueControlsSection = memo(MonitorRollupQueueControlsSectionImpl);

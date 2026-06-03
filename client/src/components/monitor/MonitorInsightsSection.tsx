@@ -214,4 +214,7 @@ function MonitorInsightsSectionImpl({
   );
 }
 
+/**
+ * Renders the shared monitor insights section component used across SQR screens.
+ */
 export const MonitorInsightsSection = memo(MonitorInsightsSectionImpl);

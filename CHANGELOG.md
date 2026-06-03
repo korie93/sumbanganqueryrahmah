@@ -56,6 +56,11 @@
 - Aligned the public Tailwind status color scale with shared semantic CSS
   variables instead of hardcoded RGB values.
 
+### Documentation
+
+- Added JSDoc coverage for heavily reused public component exports and a static
+  contract to keep future shared component APIs documented.
+
 ### Verification
 
 - `tsx --test server/middleware/tests/rate-limit.test.ts`
@@ -76,6 +81,9 @@
 - `npm run verify:design-token-color-compatibility`
 - `tsx --test client/src/lib/client-logger.test.ts client/src/lib/utils/safe-json.test.ts client/src/lib/global-unhandled-rejection.test.ts`
 - `node --test scripts/tests/design-token-contrast.test.mjs`
+- `npx tsx --test client/src/components/public-component-jsdoc-contract.test.ts`
+- `npm run lint:client`
+- `npm run typecheck`
 
 ## 2026-05-31 - SQR resource lifecycle and configuration hardening
 

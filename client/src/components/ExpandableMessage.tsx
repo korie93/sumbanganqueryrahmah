@@ -10,6 +10,9 @@ type ExpandableMessageProps = {
   previewLimit?: number | undefined;
 };
 
+/**
+ * Renders the shared expandable message component used across SQR screens.
+ */
 export function ExpandableMessage({
   buttonClassName,
   children,

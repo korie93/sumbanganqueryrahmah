@@ -35,6 +35,9 @@ import {
   SidebarSeparator,
 } from "@/components/ui/sidebar-primitives"
 
+/**
+ * Renders the shared sidebar component used across SQR screens.
+ */
 function Sidebar({
   side = "left",
   variant = "sidebar",

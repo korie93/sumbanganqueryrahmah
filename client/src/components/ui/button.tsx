@@ -46,6 +46,9 @@ export interface ButtonProps
   asChild?: boolean
 }
 
+/**
+ * Renders the shared button component used across SQR screens.
+ */
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   ({ className, variant, size, asChild = false, title, "aria-label": ariaLabel, ...props }, ref) => {
     const Comp = asChild ? Slot : "button"

@@ -17,6 +17,9 @@ type PublicAuthLayoutProps = {
   onBackClick?: () => void;
 };
 
+/**
+ * Renders the shared public auth layout component used across SQR screens.
+ */
 export function PublicAuthLayout({
   badge,
   title,

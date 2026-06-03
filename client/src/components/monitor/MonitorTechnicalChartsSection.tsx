@@ -186,4 +186,7 @@ function MonitorTechnicalChartsSectionImpl({
   );
 }
 
+/**
+ * Renders the shared monitor technical charts section component used across SQR screens.
+ */
 export const MonitorTechnicalChartsSection = memo(MonitorTechnicalChartsSectionImpl);

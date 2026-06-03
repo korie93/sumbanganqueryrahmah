@@ -22,6 +22,9 @@ const LABEL_CLASSES = [
   "text-green-700 dark:text-green-200",
 ] as const;
 
+/**
+ * Renders the shared password strength meter component used across SQR screens.
+ */
 export function PasswordStrengthMeter({
   className = "",
   id = "password-strength",

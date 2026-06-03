@@ -41,6 +41,9 @@ function toIsoDateValue(date: Date) {
   return `${year}-${month}-${day}`;
 }
 
+/**
+ * Renders the shared date picker field component used across SQR screens.
+ */
 export function DatePickerField({
   value,
   onChange,

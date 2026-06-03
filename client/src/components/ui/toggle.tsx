@@ -26,6 +26,9 @@ const toggleVariants = cva(
   }
 )
 
+/**
+ * Renders the shared toggle component used across SQR screens.
+ */
 const Toggle = React.forwardRef<
   React.ElementRef<typeof TogglePrimitive.Root>,
   React.ComponentPropsWithoutRef<typeof TogglePrimitive.Root> &

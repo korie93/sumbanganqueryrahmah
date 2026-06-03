@@ -31,6 +31,9 @@ export function useSidebar() {
   return context
 }
 
+/**
+ * Provides the shared sidebar provider context for descendant SQR components.
+ */
 export function SidebarProvider({
   defaultOpen = true,
   open: openProp,

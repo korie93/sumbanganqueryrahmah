@@ -5,6 +5,9 @@ import { Drawer as DrawerPrimitive } from "vaul"
 
 import { cn } from "@/lib/utils"
 
+/**
+ * Renders the shared drawer component used across SQR screens.
+ */
 const Drawer = ({
   shouldScaleBackground = true,
   ...props
@@ -18,10 +21,16 @@ Drawer.displayName = "Drawer"
 
 const DrawerTrigger = DrawerPrimitive.Trigger
 
+/**
+ * Renders the shared drawer portal component used across SQR screens.
+ */
 const DrawerPortal = DrawerPrimitive.Portal
 
 const DrawerClose = DrawerPrimitive.Close
 
+/**
+ * Renders the shared drawer overlay component used across SQR screens.
+ */
 const DrawerOverlay = React.forwardRef<
   React.ElementRef<typeof DrawerPrimitive.Overlay>,
   React.ComponentPropsWithoutRef<typeof DrawerPrimitive.Overlay>
@@ -34,6 +43,9 @@ const DrawerOverlay = React.forwardRef<
 ))
 DrawerOverlay.displayName = DrawerPrimitive.Overlay.displayName
 
+/**
+ * Renders the drawer content surface with standard SQR layout behavior.
+ */
 const DrawerContent = React.forwardRef<
   React.ElementRef<typeof DrawerPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof DrawerPrimitive.Content>
@@ -55,6 +67,9 @@ const DrawerContent = React.forwardRef<
 ))
 DrawerContent.displayName = "DrawerContent"
 
+/**
+ * Renders the drawer header region for grouped SQR content.
+ */
 const DrawerHeader = ({
   className,
   ...props
@@ -66,6 +81,9 @@ const DrawerHeader = ({
 )
 DrawerHeader.displayName = "DrawerHeader"
 
+/**
+ * Renders the drawer footer action region for grouped SQR content.
+ */
 const DrawerFooter = ({
   className,
   ...props

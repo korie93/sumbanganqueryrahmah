@@ -53,4 +53,7 @@ function MonitorAlertHistoryListImpl({ alertHistory }: MonitorAlertHistoryListPr
   );
 }
 
+/**
+ * Renders the shared monitor alert history list component used across SQR screens.
+ */
 export const MonitorAlertHistoryList = memo(MonitorAlertHistoryListImpl);

@@ -346,4 +346,7 @@ function MonitorAlertsSectionImpl({
   );
 }
 
+/**
+ * Renders the shared monitor alerts section component used across SQR screens.
+ */
 export const MonitorAlertsSection = memo(MonitorAlertsSectionImpl);

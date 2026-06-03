@@ -174,4 +174,7 @@ function MonitorStatusBannersImpl({
   );
 }
 
+/**
+ * Renders the shared monitor status banners component used across SQR screens.
+ */
 export const MonitorStatusBanners = memo(MonitorStatusBannersImpl);

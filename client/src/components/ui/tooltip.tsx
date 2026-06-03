@@ -5,12 +5,24 @@ import * as TooltipPrimitive from "@radix-ui/react-tooltip"
 
 import { cn } from "@/lib/utils"
 
+/**
+ * Provides the shared tooltip provider context for descendant SQR components.
+ */
 const TooltipProvider = TooltipPrimitive.Provider
 
+/**
+ * Renders the shared tooltip component used across SQR screens.
+ */
 const Tooltip = TooltipPrimitive.Root
 
+/**
+ * Renders the tooltip trigger control for its companion surface.
+ */
 const TooltipTrigger = TooltipPrimitive.Trigger
 
+/**
+ * Renders the tooltip content surface with standard SQR layout behavior.
+ */
 const TooltipContent = React.forwardRef<
   React.ElementRef<typeof TooltipPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof TooltipPrimitive.Content>

@@ -138,4 +138,7 @@ function MonitorOverviewSectionImpl({
   );
 }
 
+/**
+ * Renders the shared monitor overview section component used across SQR screens.
+ */
 export const MonitorOverviewSection = memo(MonitorOverviewSectionImpl);

@@ -25,4 +25,7 @@ function InfoHintImpl({ text }: InfoHintProps) {
   );
 }
 
+/**
+ * Renders the shared info hint component used across SQR screens.
+ */
 export const InfoHint = memo(InfoHintImpl);

@@ -26,6 +26,9 @@ function resolveChipToneClassName(tone: ActiveFilterChip["tone"]) {
   return "border-border/70 bg-background/80 text-foreground";
 }
 
+/**
+ * Renders the shared active filter chips component used across SQR screens.
+ */
 export function ActiveFilterChips({
   items,
   onClearAll,

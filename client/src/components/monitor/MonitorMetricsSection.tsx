@@ -167,4 +167,7 @@ function MonitorMetricsSectionImpl({ metricGroups, embedded = false }: MonitorMe
   );
 }
 
+/**
+ * Renders the shared monitor metrics section component used across SQR screens.
+ */
 export const MonitorMetricsSection = memo(MonitorMetricsSectionImpl);

@@ -29,6 +29,9 @@ interface AutoLogoutProps {
   username?: string;
 }
 
+/**
+ * Renders the shared auto logout component used across SQR screens.
+ */
 export default function AutoLogout({
   onClientLogout,
   onLogout,

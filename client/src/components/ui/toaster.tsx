@@ -9,6 +9,9 @@ import {
   ToastViewport,
 } from "@/components/ui/toast"
 
+/**
+ * Renders the shared toaster component used across SQR screens.
+ */
 export function Toaster() {
   const { toasts } = useToast()
 

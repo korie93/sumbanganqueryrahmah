@@ -7,6 +7,9 @@ import { buttonVariants } from "@/components/ui/button"
 
 export type CalendarProps = React.ComponentProps<typeof DayPicker>
 
+/**
+ * Renders the shared calendar component used across SQR screens.
+ */
 function Calendar({
   className,
   classNames,

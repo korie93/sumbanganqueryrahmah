@@ -45,6 +45,9 @@ type AppPaginationBarProps = {
   onPageSizeChange: (pageSize: number) => void;
 };
 
+/**
+ * Renders the shared app pagination bar component used across SQR screens.
+ */
 export function AppPaginationBar({
   disabled = false,
   loading = false,

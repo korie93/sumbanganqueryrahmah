@@ -51,4 +51,7 @@ function MonitorSectionPaginationBarImpl({
   );
 }
 
+/**
+ * Renders the shared monitor section pagination bar component used across SQR screens.
+ */
 export const MonitorSectionPaginationBar = memo(MonitorSectionPaginationBarImpl);

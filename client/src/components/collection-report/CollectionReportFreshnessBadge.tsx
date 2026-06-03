@@ -9,6 +9,9 @@ type CollectionReportFreshnessBadgeProps = {
   className?: string;
 };
 
+/**
+ * Renders the shared collection report freshness badge component used across SQR screens.
+ */
 export function CollectionReportFreshnessBadge({
   freshness,
   className = "",

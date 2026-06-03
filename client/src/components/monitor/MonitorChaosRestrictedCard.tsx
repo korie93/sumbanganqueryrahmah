@@ -11,4 +11,7 @@ function MonitorChaosRestrictedCardImpl() {
   );
 }
 
+/**
+ * Renders the shared monitor chaos restricted card component used across SQR screens.
+ */
 export const MonitorChaosRestrictedCard = memo(MonitorChaosRestrictedCardImpl);

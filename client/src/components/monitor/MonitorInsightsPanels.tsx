@@ -60,4 +60,7 @@ function MonitorInsightsPanelsImpl({
   );
 }
 
+/**
+ * Renders the shared monitor insights panels component used across SQR screens.
+ */
 export const MonitorInsightsPanels = memo(MonitorInsightsPanelsImpl);

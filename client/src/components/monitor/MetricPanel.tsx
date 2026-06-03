@@ -85,5 +85,8 @@ function MetricPanelImpl({
   );
 }
 
+/**
+ * Renders the shared metric panel component used across SQR screens.
+ */
 export const MetricPanel = memo(MetricPanelImpl);
 export type { MetricStatus, MetricTrend };

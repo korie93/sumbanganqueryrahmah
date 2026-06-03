@@ -47,4 +47,7 @@ function MonitorActiveAlertsListImpl({ alerts }: MonitorActiveAlertsListProps) {
   );
 }
 
+/**
+ * Renders the shared monitor active alerts list component used across SQR screens.
+ */
 export const MonitorActiveAlertsList = memo(MonitorActiveAlertsListImpl);

@@ -23,6 +23,9 @@ type SideTabDataPanelProps = {
   children: ReactNode;
 };
 
+/**
+ * Renders the shared side tab data panel component used across SQR screens.
+ */
 export function SideTabDataPanel({
   title,
   description,

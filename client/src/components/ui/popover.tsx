@@ -3,10 +3,19 @@ import * as PopoverPrimitive from "@radix-ui/react-popover"
 
 import { cn } from "@/lib/utils"
 
+/**
+ * Renders the shared popover component used across SQR screens.
+ */
 const Popover = PopoverPrimitive.Root
 
+/**
+ * Renders the popover trigger control for its companion surface.
+ */
 const PopoverTrigger = PopoverPrimitive.Trigger
 
+/**
+ * Renders the popover content surface with standard SQR layout behavior.
+ */
 const PopoverContent = React.forwardRef<
   React.ElementRef<typeof PopoverPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof PopoverPrimitive.Content>

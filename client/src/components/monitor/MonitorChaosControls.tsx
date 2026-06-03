@@ -127,4 +127,7 @@ function MonitorChaosControlsImpl({
   );
 }
 
+/**
+ * Renders the shared monitor chaos controls component used across SQR screens.
+ */
 export const MonitorChaosControls = memo(MonitorChaosControlsImpl);

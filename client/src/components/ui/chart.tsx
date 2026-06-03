@@ -13,6 +13,9 @@ import {
 } from "./chart-shared"
 import { sanitizeChartToken } from "./chart-style-utils"
 
+/**
+ * Renders the shared chart container component used across SQR screens.
+ */
 const ChartContainer = React.forwardRef<
   HTMLDivElement,
   React.ComponentProps<"div"> & {

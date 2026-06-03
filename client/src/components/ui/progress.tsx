@@ -16,6 +16,9 @@ function normalizeProgressValue(value: number | null | undefined) {
   return Math.min(100, Math.max(0, value))
 }
 
+/**
+ * Renders the shared progress component used across SQR screens.
+ */
 const Progress = React.forwardRef<
   React.ElementRef<typeof ProgressPrimitive.Root>,
   React.ComponentPropsWithoutRef<typeof ProgressPrimitive.Root>

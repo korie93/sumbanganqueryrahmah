@@ -7,6 +7,9 @@ type LanguageSwitcherProps = {
   onLocaleChange?: ((locale: AppLocale) => void) | undefined;
 };
 
+/**
+ * Renders the shared language switcher component used across SQR screens.
+ */
 export function LanguageSwitcher({
   id = "app-language-switcher",
   locale = getAppLocale(),

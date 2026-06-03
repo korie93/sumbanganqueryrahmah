@@ -19,6 +19,9 @@ type NavbarUserMenuContentProps = {
   onEscapeKeyDown?: (event: KeyboardEvent) => void
 }
 
+/**
+ * Renders the navbar user menu content surface with standard SQR layout behavior.
+ */
 export function NavbarUserMenuContent({
   username,
   userRole,

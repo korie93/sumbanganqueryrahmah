@@ -41,6 +41,9 @@ type OperationalMetricProps = {
   className?: string | undefined;
 };
 
+/**
+ * Renders the shared operational page component used across SQR screens.
+ */
 export function OperationalPage({
   children,
   className,
@@ -61,6 +64,9 @@ export function OperationalPage({
   );
 }
 
+/**
+ * Renders the operational page header region for grouped SQR content.
+ */
 export function OperationalPageHeader({
   title,
   description,
@@ -106,6 +112,9 @@ export function OperationalPageHeader({
   );
 }
 
+/**
+ * Renders the shared operational section card component used across SQR screens.
+ */
 export function OperationalSectionCard({
   children,
   title,
@@ -150,6 +159,9 @@ export function OperationalSectionCard({
   );
 }
 
+/**
+ * Renders the shared operational summary strip component used across SQR screens.
+ */
 export function OperationalSummaryStrip({
   children,
   className,
@@ -157,6 +169,9 @@ export function OperationalSummaryStrip({
   return <div className={cn("ops-summary-strip", className)}>{children}</div>;
 }
 
+/**
+ * Renders the shared operational metric component used across SQR screens.
+ */
 export function OperationalMetric({
   label,
   value,

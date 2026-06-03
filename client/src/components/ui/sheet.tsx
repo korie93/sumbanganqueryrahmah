@@ -8,14 +8,26 @@ import { X } from "lucide-react"
 import { viewportSafeSheetMaxHeightClassName } from "@/components/ui/dialog-viewport"
 import { cn } from "@/lib/utils"
 
+/**
+ * Renders the shared sheet component used across SQR screens.
+ */
 const Sheet = SheetPrimitive.Root
 
+/**
+ * Renders the sheet trigger control for its companion surface.
+ */
 const SheetTrigger = SheetPrimitive.Trigger
 
 const SheetClose = SheetPrimitive.Close
 
+/**
+ * Renders the shared sheet portal component used across SQR screens.
+ */
 const SheetPortal = SheetPrimitive.Portal
 
+/**
+ * Renders the shared sheet overlay component used across SQR screens.
+ */
 const SheetOverlay = React.forwardRef<
   React.ElementRef<typeof SheetPrimitive.Overlay>,
   React.ComponentPropsWithoutRef<typeof SheetPrimitive.Overlay>
@@ -54,6 +66,9 @@ interface SheetContentProps
   extends React.ComponentPropsWithoutRef<typeof SheetPrimitive.Content>,
     VariantProps<typeof sheetVariants> {}
 
+/**
+ * Renders the sheet content surface with standard SQR layout behavior.
+ */
 const SheetContent = React.forwardRef<
   React.ElementRef<typeof SheetPrimitive.Content>,
   SheetContentProps
@@ -75,6 +90,9 @@ const SheetContent = React.forwardRef<
 ))
 SheetContent.displayName = SheetPrimitive.Content.displayName
 
+/**
+ * Renders the sheet header region for grouped SQR content.
+ */
 const SheetHeader = ({
   className,
   ...props
@@ -89,6 +107,9 @@ const SheetHeader = ({
 )
 SheetHeader.displayName = "SheetHeader"
 
+/**
+ * Renders the sheet footer action region for grouped SQR content.
+ */
 const SheetFooter = ({
   className,
   ...props
@@ -103,6 +124,9 @@ const SheetFooter = ({
 )
 SheetFooter.displayName = "SheetFooter"
 
+/**
+ * Renders the sheet title text with the shared heading semantics.
+ */
 const SheetTitle = React.forwardRef<
   React.ElementRef<typeof SheetPrimitive.Title>,
   React.ComponentPropsWithoutRef<typeof SheetPrimitive.Title>
@@ -115,6 +139,9 @@ const SheetTitle = React.forwardRef<
 ))
 SheetTitle.displayName = SheetPrimitive.Title.displayName
 
+/**
+ * Renders the sheet description supporting text with the shared muted style.
+ */
 const SheetDescription = React.forwardRef<
   React.ElementRef<typeof SheetPrimitive.Description>,
   React.ComponentPropsWithoutRef<typeof SheetPrimitive.Description>

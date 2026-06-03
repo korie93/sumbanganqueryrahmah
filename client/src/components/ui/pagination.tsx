@@ -4,6 +4,9 @@ import { ChevronLeft, ChevronRight, MoreHorizontal } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { ButtonProps, buttonVariants } from "@/components/ui/button"
 
+/**
+ * Renders the shared pagination component used across SQR screens.
+ */
 const Pagination = ({ className, ...props }: React.ComponentProps<"nav">) => (
   <nav
     role="navigation"
@@ -14,6 +17,9 @@ const Pagination = ({ className, ...props }: React.ComponentProps<"nav">) => (
 )
 Pagination.displayName = "Pagination"
 
+/**
+ * Renders the pagination content surface with standard SQR layout behavior.
+ */
 const PaginationContent = React.forwardRef<
   HTMLUListElement,
   React.ComponentProps<"ul">
@@ -26,6 +32,9 @@ const PaginationContent = React.forwardRef<
 ))
 PaginationContent.displayName = "PaginationContent"
 
+/**
+ * Renders the shared pagination item component used across SQR screens.
+ */
 const PaginationItem = React.forwardRef<
   HTMLLIElement,
   React.ComponentProps<"li">
@@ -39,6 +48,9 @@ type PaginationLinkProps = {
 } & Pick<ButtonProps, "size"> &
   React.ComponentProps<"a">
 
+/**
+ * Renders the shared pagination link component used across SQR screens.
+ */
 const PaginationLink = ({
   children,
   className,
@@ -73,6 +85,9 @@ const PaginationLink = ({
 }
 PaginationLink.displayName = "PaginationLink"
 
+/**
+ * Renders the shared pagination previous component used across SQR screens.
+ */
 const PaginationPrevious = ({
   className,
   ...props
@@ -89,6 +104,9 @@ const PaginationPrevious = ({
 )
 PaginationPrevious.displayName = "PaginationPrevious"
 
+/**
+ * Renders the shared pagination next component used across SQR screens.
+ */
 const PaginationNext = ({
   className,
   ...props
@@ -105,6 +123,9 @@ const PaginationNext = ({
 )
 PaginationNext.displayName = "PaginationNext"
 
+/**
+ * Renders the shared pagination ellipsis component used across SQR screens.
+ */
 const PaginationEllipsis = ({
   className,
   ...props

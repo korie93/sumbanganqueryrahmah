@@ -17,4 +17,7 @@ function MonitorAccessDeniedImpl() {
   );
 }
 
+/**
+ * Renders the shared monitor access denied component used across SQR screens.
+ */
 export const MonitorAccessDenied = memo(MonitorAccessDeniedImpl);

@@ -107,4 +107,7 @@ function MonitorOverviewHeroImpl({
   );
 }
 
+/**
+ * Renders the shared monitor overview hero component used across SQR screens.
+ */
 export const MonitorOverviewHero = memo(MonitorOverviewHeroImpl);

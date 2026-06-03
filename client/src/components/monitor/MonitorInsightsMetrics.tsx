@@ -104,4 +104,7 @@ function MonitorInsightsMetricsImpl({
   );
 }
 
+/**
+ * Renders the shared monitor insights metrics component used across SQR screens.
+ */
 export const MonitorInsightsMetrics = memo(MonitorInsightsMetricsImpl);

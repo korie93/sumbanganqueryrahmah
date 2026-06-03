@@ -28,6 +28,9 @@ type MobileActionMenuProps = {
   align?: "start" | "center" | "end";
 };
 
+/**
+ * Renders the shared mobile action menu component used across SQR screens.
+ */
 export function MobileActionMenu({
   items,
   triggerLabel = "More actions",

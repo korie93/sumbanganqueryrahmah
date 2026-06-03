@@ -28,6 +28,9 @@ type AIChatProps = {
 
 export type AIChatStatus = SharedAIChatStatus;
 
+/**
+ * Renders the shared ai chat component used across SQR screens.
+ */
 export default function AIChat({
   timeoutMs,
   aiEnabled,

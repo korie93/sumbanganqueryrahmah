@@ -84,6 +84,9 @@ export function MonitorMetricsFallback() {
   );
 }
 
+/**
+ * Renders the monitor section card fallback loading state for deferred SQR UI.
+ */
 export function MonitorSectionCardFallback({
   title,
   blocks = 2,
@@ -215,6 +218,9 @@ type MonitorDeferredSectionToggleProps = {
   onToggle: () => void;
 };
 
+/**
+ * Renders the shared monitor deferred section toggle component used across SQR screens.
+ */
 export function MonitorDeferredSectionToggle({
   title,
   headline,

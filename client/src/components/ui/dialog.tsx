@@ -7,14 +7,26 @@ import { X } from "lucide-react"
 import { viewportSafeDialogMaxHeightClassName } from "@/components/ui/dialog-viewport"
 import { cn } from "@/lib/utils"
 
+/**
+ * Renders the shared dialog component used across SQR screens.
+ */
 const Dialog = DialogPrimitive.Root
 
+/**
+ * Renders the dialog trigger control for its companion surface.
+ */
 const DialogTrigger = DialogPrimitive.Trigger
 
+/**
+ * Renders the shared dialog portal component used across SQR screens.
+ */
 const DialogPortal = DialogPrimitive.Portal
 
 const DialogClose = DialogPrimitive.Close
 
+/**
+ * Renders the shared dialog overlay component used across SQR screens.
+ */
 const DialogOverlay = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Overlay>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Overlay>
@@ -30,6 +42,9 @@ const DialogOverlay = React.forwardRef<
 ))
 DialogOverlay.displayName = DialogPrimitive.Overlay.displayName
 
+/**
+ * Renders the dialog content surface with standard SQR layout behavior.
+ */
 const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
@@ -54,6 +69,9 @@ const DialogContent = React.forwardRef<
 ))
 DialogContent.displayName = DialogPrimitive.Content.displayName
 
+/**
+ * Renders the dialog header region for grouped SQR content.
+ */
 const DialogHeader = ({
   className,
   ...props
@@ -68,6 +86,9 @@ const DialogHeader = ({
 )
 DialogHeader.displayName = "DialogHeader"
 
+/**
+ * Renders the dialog footer action region for grouped SQR content.
+ */
 const DialogFooter = ({
   className,
   ...props
@@ -82,6 +103,9 @@ const DialogFooter = ({
 )
 DialogFooter.displayName = "DialogFooter"
 
+/**
+ * Renders the dialog title text with the shared heading semantics.
+ */
 const DialogTitle = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Title>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Title>
@@ -97,6 +121,9 @@ const DialogTitle = React.forwardRef<
 ))
 DialogTitle.displayName = DialogPrimitive.Title.displayName
 
+/**
+ * Renders the dialog description supporting text with the shared muted style.
+ */
 const DialogDescription = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Description>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Description>

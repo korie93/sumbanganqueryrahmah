@@ -1,5 +1,8 @@
 import { cn } from "@/lib/utils"
 
+/**
+ * Renders the skeleton loading state for deferred SQR UI.
+ */
 function Skeleton({
   className,
   ...props

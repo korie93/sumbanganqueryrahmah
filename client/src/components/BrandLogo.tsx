@@ -6,6 +6,9 @@ type BrandLogoProps = {
   priority?: boolean;
 };
 
+/**
+ * Renders the shared brand logo component used across SQR screens.
+ */
 export function BrandLogo({
   alt = "SQR System logo",
   className,

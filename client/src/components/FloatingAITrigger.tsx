@@ -20,6 +20,9 @@ type FloatingAITriggerProps = {
   unreadCount: number;
 };
 
+/**
+ * Renders the floating ai trigger control for its companion surface.
+ */
 export function FloatingAITrigger({
   assistantLabel,
   handleTriggerToggleClick,

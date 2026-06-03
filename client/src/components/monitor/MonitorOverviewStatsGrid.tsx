@@ -89,4 +89,7 @@ function MonitorOverviewStatsGridImpl({
   );
 }
 
+/**
+ * Renders the shared monitor overview stats grid component used across SQR screens.
+ */
 export const MonitorOverviewStatsGrid = memo(MonitorOverviewStatsGridImpl);

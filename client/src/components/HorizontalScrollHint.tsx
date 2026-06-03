@@ -16,6 +16,9 @@ type HorizontalOverflowState = {
   canScrollRight: boolean;
 };
 
+/**
+ * Renders the shared horizontal scroll hint component used across SQR screens.
+ */
 export function HorizontalScrollHint({
   children,
   className,
