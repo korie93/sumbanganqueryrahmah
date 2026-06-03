@@ -7,6 +7,11 @@
 - Sharded the adaptive auth rate-limit cooldown cache into bounded LRU segments
   so pressure eviction no longer walks one global cache during sustained bursts.
 
+### Architecture
+
+- Split API retry, backoff, and circuit-breaker transport helpers out of the
+  main API client while keeping the existing public API exports stable.
+
 ### Bug Fixes
 
 - Moved collection monthly summary window listener cleanup to AbortController
@@ -30,6 +35,7 @@
 - `tsx --test client/src/pages/collection-summary/useCollectionMonthlySameDayPace.contract.test.ts client/src/pages/collection-summary/useCollectionMonthlyComparisonData.contract.test.ts`
 - `tsx --test client/src/pages/collection-summary/collection-monthly-comparison-a11y.contract.test.ts`
 - `tsx --test client/src/app/frontend-hardening-contract.test.ts`
+- `tsx --test client/src/lib/queryClient.test.ts client/src/lib/api-client-navigation-contract.test.ts client/src/lib/api/tests/request-cancellation.test.ts`
 
 ## 2026-05-31 - SQR resource lifecycle and configuration hardening
 
