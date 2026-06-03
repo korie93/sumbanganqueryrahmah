@@ -74,15 +74,15 @@ export function CollectionNicknameAlertDialogs({
           className={isMobile ? "max-w-md rounded-[1.5rem] border-border/60 p-5 pt-6 shadow-2xl" : "max-w-md"}
           data-floating-ai-avoid="true"
         >
-          <DialogHeader className={isMobile ? "pr-8 text-left" : undefined}>
+          <DialogHeader className={isMobile ? "pr-8 text-left" : ""}>
             <DialogTitle>Nyahaktif Nickname</DialogTitle>
             <DialogDescription>Adakah anda pasti mahu nyahaktif nickname ini?</DialogDescription>
           </DialogHeader>
-          <DialogFooter className={isMobile ? "gap-3 pt-2" : undefined}>
+          <DialogFooter className={isMobile ? "gap-3 pt-2" : ""}>
             <Button
               variant="outline"
               onClick={() => onPendingDeactivateOpenChange(false)}
-              className={isMobile ? "h-11 w-full rounded-xl" : undefined}
+              className={isMobile ? "h-11 w-full rounded-xl" : ""}
             >
               Batal
             </Button>
@@ -90,7 +90,7 @@ export function CollectionNicknameAlertDialogs({
               variant="destructive"
               onClick={onConfirmDeactivate}
               disabled={!pendingDeactivate || statusBusyId === pendingDeactivate.id}
-              className={isMobile ? "h-11 w-full rounded-xl" : undefined}
+              className={isMobile ? "h-11 w-full rounded-xl" : ""}
             >
               {pendingDeactivate && statusBusyId === pendingDeactivate.id ? "Processing..." : "Nyahaktif"}
             </Button>
@@ -100,24 +100,24 @@ export function CollectionNicknameAlertDialogs({
 
       <AlertDialog open={Boolean(pendingDeleteGroup)} onOpenChange={onPendingDeleteGroupOpenChange}>
         <AlertDialogContent
-          className={isMobile ? "rounded-[1.5rem] border-border/60 p-5 pt-6 shadow-2xl" : undefined}
+          className={isMobile ? "rounded-[1.5rem] border-border/60 p-5 pt-6 shadow-2xl" : ""}
           data-floating-ai-avoid="true"
         >
-          <AlertDialogHeader className={isMobile ? "text-left" : undefined}>
+          <AlertDialogHeader className={isMobile ? "text-left" : ""}>
             <AlertDialogTitle>Padam Admin Group</AlertDialogTitle>
             <AlertDialogDescription>Adakah anda pasti mahu padam group ini?</AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter className={isMobile ? "gap-3 pt-2" : undefined}>
+          <AlertDialogFooter className={isMobile ? "gap-3 pt-2" : ""}>
             <AlertDialogCancel
               disabled={deletingGroup}
-              className={isMobile ? "mt-0 h-11 w-full rounded-xl" : undefined}
+              className={isMobile ? "mt-0 h-11 w-full rounded-xl" : ""}
             >
               Batal
             </AlertDialogCancel>
             <AlertDialogAction
               onClick={onConfirmDeleteGroup}
               disabled={deletingGroup}
-              className={isMobile ? "h-11 w-full rounded-xl" : undefined}
+              className={isMobile ? "h-11 w-full rounded-xl" : ""}
             >
               {deletingGroup ? "Processing..." : "Padam"}
             </AlertDialogAction>
@@ -127,26 +127,26 @@ export function CollectionNicknameAlertDialogs({
 
       <AlertDialog open={Boolean(pendingDeleteNickname)} onOpenChange={onPendingDeleteNicknameOpenChange}>
         <AlertDialogContent
-          className={isMobile ? "rounded-[1.5rem] border-border/60 p-5 pt-6 shadow-2xl" : undefined}
+          className={isMobile ? "rounded-[1.5rem] border-border/60 p-5 pt-6 shadow-2xl" : ""}
           data-floating-ai-avoid="true"
         >
-          <AlertDialogHeader className={isMobile ? "text-left" : undefined}>
+          <AlertDialogHeader className={isMobile ? "text-left" : ""}>
             <AlertDialogTitle>Padam Nickname</AlertDialogTitle>
             <AlertDialogDescription>
               Jika nickname sedang digunakan, sistem akan nyahaktifkan secara selamat.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter className={isMobile ? "gap-3 pt-2" : undefined}>
+          <AlertDialogFooter className={isMobile ? "gap-3 pt-2" : ""}>
             <AlertDialogCancel
               disabled={Boolean(deletingNicknameId)}
-              className={isMobile ? "mt-0 h-11 w-full rounded-xl" : undefined}
+              className={isMobile ? "mt-0 h-11 w-full rounded-xl" : ""}
             >
               Batal
             </AlertDialogCancel>
             <AlertDialogAction
               onClick={onConfirmDeleteNickname}
               disabled={!pendingDeleteNickname || Boolean(deletingNicknameId)}
-              className={isMobile ? "h-11 w-full rounded-xl" : undefined}
+              className={isMobile ? "h-11 w-full rounded-xl" : ""}
             >
               {deletingNicknameId ? "Processing..." : "Padam"}
             </AlertDialogAction>
@@ -156,24 +156,24 @@ export function CollectionNicknameAlertDialogs({
 
       <AlertDialog open={Boolean(pendingResetPassword)} onOpenChange={onPendingResetPasswordOpenChange}>
         <AlertDialogContent
-          className={isMobile ? "rounded-[1.5rem] border-border/60 p-5 pt-6 shadow-2xl" : undefined}
+          className={isMobile ? "rounded-[1.5rem] border-border/60 p-5 pt-6 shadow-2xl" : ""}
           data-floating-ai-avoid="true"
         >
-          <AlertDialogHeader className={isMobile ? "text-left" : undefined}>
+          <AlertDialogHeader className={isMobile ? "text-left" : ""}>
             <AlertDialogTitle>Reset Password Nickname</AlertDialogTitle>
             <AlertDialogDescription>Adakah anda pasti mahu reset password nickname ini?</AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter className={isMobile ? "gap-3 pt-2" : undefined}>
+          <AlertDialogFooter className={isMobile ? "gap-3 pt-2" : ""}>
             <AlertDialogCancel
               disabled={Boolean(resettingNicknameId)}
-              className={isMobile ? "mt-0 h-11 w-full rounded-xl" : undefined}
+              className={isMobile ? "mt-0 h-11 w-full rounded-xl" : ""}
             >
               Batal
             </AlertDialogCancel>
             <AlertDialogAction
               onClick={onConfirmResetPassword}
               disabled={!pendingResetPassword || Boolean(resettingNicknameId)}
-              className={isMobile ? "h-11 w-full rounded-xl" : undefined}
+              className={isMobile ? "h-11 w-full rounded-xl" : ""}
             >
               {resettingNicknameId ? "Processing..." : "Reset Password"}
             </AlertDialogAction>
@@ -183,23 +183,23 @@ export function CollectionNicknameAlertDialogs({
 
       <AlertDialog open={Boolean(pendingUngroup)} onOpenChange={onPendingUngroupOpenChange}>
         <AlertDialogContent
-          className={isMobile ? "rounded-[1.5rem] border-border/60 p-5 pt-6 shadow-2xl" : undefined}
+          className={isMobile ? "rounded-[1.5rem] border-border/60 p-5 pt-6 shadow-2xl" : ""}
           data-floating-ai-avoid="true"
         >
-          <AlertDialogHeader className={isMobile ? "text-left" : undefined}>
+          <AlertDialogHeader className={isMobile ? "text-left" : ""}>
             <AlertDialogTitle>Ungroup Nickname</AlertDialogTitle>
             <AlertDialogDescription>
               Adakah anda pasti mahu buang nickname ini daripada grouping admin ini?
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter className={isMobile ? "gap-3 pt-2" : undefined}>
-            <AlertDialogCancel className={isMobile ? "mt-0 h-11 w-full rounded-xl" : undefined}>
+          <AlertDialogFooter className={isMobile ? "gap-3 pt-2" : ""}>
+            <AlertDialogCancel className={isMobile ? "mt-0 h-11 w-full rounded-xl" : ""}>
               Batal
             </AlertDialogCancel>
             <AlertDialogAction
               onClick={onConfirmUngroup}
               disabled={ungrouping}
-              className={isMobile ? "h-11 w-full rounded-xl" : undefined}
+              className={isMobile ? "h-11 w-full rounded-xl" : ""}
             >
               {ungrouping ? "Processing..." : "Buang"}
             </AlertDialogAction>
@@ -209,22 +209,22 @@ export function CollectionNicknameAlertDialogs({
 
       <AlertDialog open={confirmSwitchOpen} onOpenChange={onConfirmSwitchOpenChange}>
         <AlertDialogContent
-          className={isMobile ? "rounded-[1.5rem] border-border/60 p-5 pt-6 shadow-2xl" : undefined}
+          className={isMobile ? "rounded-[1.5rem] border-border/60 p-5 pt-6 shadow-2xl" : ""}
           data-floating-ai-avoid="true"
         >
-          <AlertDialogHeader className={isMobile ? "text-left" : undefined}>
+          <AlertDialogHeader className={isMobile ? "text-left" : ""}>
             <AlertDialogTitle>Perubahan Belum Disimpan</AlertDialogTitle>
             <AlertDialogDescription>
               Perubahan belum disimpan. Adakah anda mahu teruskan tanpa simpan?
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter className={isMobile ? "gap-3 pt-2" : undefined}>
-            <AlertDialogCancel className={isMobile ? "mt-0 h-11 w-full rounded-xl" : undefined}>
+          <AlertDialogFooter className={isMobile ? "gap-3 pt-2" : ""}>
+            <AlertDialogCancel className={isMobile ? "mt-0 h-11 w-full rounded-xl" : ""}>
               Batal
             </AlertDialogCancel>
             <AlertDialogAction
               onClick={onConfirmSwitch}
-              className={isMobile ? "h-11 w-full rounded-xl" : undefined}
+              className={isMobile ? "h-11 w-full rounded-xl" : ""}
             >
               Teruskan
             </AlertDialogAction>

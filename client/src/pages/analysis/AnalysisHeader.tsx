@@ -95,7 +95,7 @@ export function AnalysisHeader({
           </Button>
         </>
       }
-      className={isMobile ? "rounded-[28px] border-border/60 bg-background/85" : undefined}
+      className={isMobile ? "rounded-[28px] border-border/60 bg-background/85" : ""}
     />
   );
 }

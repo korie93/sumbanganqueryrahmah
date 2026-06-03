@@ -139,7 +139,7 @@ export default function SettingsPage({
                   </Badge>
                 ) : null
               }
-              className={isMobile ? "rounded-[28px] border-border/60 bg-background/85" : undefined}
+              className={isMobile ? "rounded-[28px] border-border/60 bg-background/85" : ""}
             />
 
             <div className="relative flex flex-col gap-3 lg:flex-row lg:items-start lg:gap-4">

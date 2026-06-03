@@ -110,7 +110,7 @@ export function MyAccountSecurityCard({
 
   return (
     <Card className="border-border/60 bg-background/70">
-      <CardHeader className={isMobile ? "space-y-4 pb-4" : undefined}>
+      <CardHeader className={isMobile ? "space-y-4 pb-4" : ""}>
         <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
           <KeyRound className="h-5 w-5" />
           Keselamatan Akaun
@@ -136,9 +136,9 @@ export function MyAccountSecurityCard({
           </div>
         ) : null}
       </CardHeader>
-      <CardContent className={isMobile ? "pt-0" : undefined}>
+      <CardContent className={isMobile ? "pt-0" : ""}>
         <Card className="border-border/60 bg-background/60">
-          <CardHeader className={isMobile ? "pb-4" : undefined}>
+          <CardHeader className={isMobile ? "pb-4" : ""}>
             <CardTitle className="text-base">Akaun Saya</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4 sm:space-y-6">

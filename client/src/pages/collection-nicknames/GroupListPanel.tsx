@@ -54,7 +54,7 @@ export function GroupListPanel({
           placeholder="Cari leader/member..."
           enterKeyHint="search"
           autoComplete="off"
-          className={isMobile ? "h-12 rounded-2xl" : undefined}
+          className={isMobile ? "h-12 rounded-2xl" : ""}
         />
       </div>
       <div

@@ -56,7 +56,7 @@ export function CollectionNicknameStaffFormDialogs({
           className={isMobile ? "max-w-md rounded-[1.5rem] border-border/60 p-5 pt-6 shadow-2xl" : "max-w-md"}
           data-floating-ai-avoid="true"
         >
-          <DialogHeader className={isMobile ? "pr-8 text-left" : undefined}>
+          <DialogHeader className={isMobile ? "pr-8 text-left" : ""}>
             <DialogTitle>Tambah Nickname</DialogTitle>
             <DialogDescription>Tambah nickname rasmi baharu dan tetapkan role scope.</DialogDescription>
           </DialogHeader>
@@ -70,13 +70,13 @@ export function CollectionNicknameStaffFormDialogs({
               placeholder="Contoh: SW.NAMA_NO"
               autoComplete="off"
               maxLength={64}
-              className={isMobile ? "h-12 rounded-2xl" : undefined}
+              className={isMobile ? "h-12 rounded-2xl" : ""}
             />
           </div>
           <div className="space-y-2">
             <Label htmlFor={newRoleScopeTriggerId}>Role Scope</Label>
             <Select value={newRoleScope} onValueChange={onNewRoleScopeChange}>
-              <SelectTrigger id={newRoleScopeTriggerId} className={isMobile ? "h-12 rounded-2xl" : undefined}>
+              <SelectTrigger id={newRoleScopeTriggerId} className={isMobile ? "h-12 rounded-2xl" : ""}>
                 <SelectValue placeholder="Pilih role scope" />
               </SelectTrigger>
               <SelectContent>
@@ -88,19 +88,19 @@ export function CollectionNicknameStaffFormDialogs({
               </SelectContent>
             </Select>
           </div>
-          <DialogFooter className={isMobile ? "gap-3 pt-2" : undefined}>
+          <DialogFooter className={isMobile ? "gap-3 pt-2" : ""}>
             <Button
               variant="outline"
               onClick={() => onAddOpenChange(false)}
               disabled={addingNickname}
-              className={isMobile ? "h-11 w-full rounded-xl" : undefined}
+              className={isMobile ? "h-11 w-full rounded-xl" : ""}
             >
               Batal
             </Button>
             <Button
               onClick={onCreateNickname}
               disabled={addingNickname}
-              className={isMobile ? "h-11 w-full rounded-xl" : undefined}
+              className={isMobile ? "h-11 w-full rounded-xl" : ""}
             >
               {addingNickname ? "Saving..." : "Simpan"}
             </Button>
@@ -113,7 +113,7 @@ export function CollectionNicknameStaffFormDialogs({
           className={isMobile ? "max-w-md rounded-[1.5rem] border-border/60 p-5 pt-6 shadow-2xl" : "max-w-md"}
           data-floating-ai-avoid="true"
         >
-          <DialogHeader className={isMobile ? "pr-8 text-left" : undefined}>
+          <DialogHeader className={isMobile ? "pr-8 text-left" : ""}>
             <DialogTitle>Edit Nickname</DialogTitle>
             <DialogDescription>Kemaskini nama nickname dan role scope akses nickname.</DialogDescription>
           </DialogHeader>
@@ -126,13 +126,13 @@ export function CollectionNicknameStaffFormDialogs({
               onChange={(event) => onEditValueChange(event.target.value)}
               autoComplete="off"
               maxLength={64}
-              className={isMobile ? "h-12 rounded-2xl" : undefined}
+              className={isMobile ? "h-12 rounded-2xl" : ""}
             />
           </div>
           <div className="space-y-2">
             <Label htmlFor={editRoleScopeTriggerId}>Role Scope</Label>
             <Select value={editRoleScope} onValueChange={onEditRoleScopeChange}>
-              <SelectTrigger id={editRoleScopeTriggerId} className={isMobile ? "h-12 rounded-2xl" : undefined}>
+              <SelectTrigger id={editRoleScopeTriggerId} className={isMobile ? "h-12 rounded-2xl" : ""}>
                 <SelectValue placeholder="Pilih role scope" />
               </SelectTrigger>
               <SelectContent>
@@ -144,19 +144,19 @@ export function CollectionNicknameStaffFormDialogs({
               </SelectContent>
             </Select>
           </div>
-          <DialogFooter className={isMobile ? "gap-3 pt-2" : undefined}>
+          <DialogFooter className={isMobile ? "gap-3 pt-2" : ""}>
             <Button
               variant="outline"
               onClick={() => onEditingNicknameOpenChange(false)}
               disabled={savingEdit}
-              className={isMobile ? "h-11 w-full rounded-xl" : undefined}
+              className={isMobile ? "h-11 w-full rounded-xl" : ""}
             >
               Batal
             </Button>
             <Button
               onClick={onSaveEditNickname}
               disabled={savingEdit}
-              className={isMobile ? "h-11 w-full rounded-xl" : undefined}
+              className={isMobile ? "h-11 w-full rounded-xl" : ""}
             >
               {savingEdit ? "Saving..." : "Simpan"}
             </Button>

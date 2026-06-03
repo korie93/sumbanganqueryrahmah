@@ -107,7 +107,7 @@ export function NicknameAssignmentHeader({
           placeholder="Cari nickname..."
           enterKeyHint="search"
           autoComplete="off"
-          className={isMobile ? "h-12 rounded-2xl" : undefined}
+          className={isMobile ? "h-12 rounded-2xl" : ""}
         />
         <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center" data-floating-ai-avoid="true">
           <Button variant="outline" onClick={onSelectAll} disabled={!selectedGroupId} className="w-full sm:w-auto">

@@ -67,7 +67,7 @@ export function UserAccountManagementSection({
         outboxCount={devMailOutboxPagination.total}
         pendingResetCount={pendingResetRequestsPagination.total}
       />
-      <CardContent className={isMobile ? "pt-0" : undefined}>
+      <CardContent className={isMobile ? "pt-0" : ""}>
         <div className="relative flex flex-col gap-3 lg:flex-row lg:items-start lg:gap-4">
           <UserAccountManagementNav
             activeTab={sectionState.activeTab}

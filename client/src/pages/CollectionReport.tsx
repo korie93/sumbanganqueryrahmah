@@ -121,7 +121,7 @@ export default function CollectionReport() {
           ) : undefined
         }
         actions={headerActions}
-        className={isMobile ? "border-border/60 bg-background" : undefined}
+        className={isMobile ? "border-border/60 bg-background" : ""}
       />
 
       <div className="relative flex flex-col gap-4 lg:flex-row lg:items-start">

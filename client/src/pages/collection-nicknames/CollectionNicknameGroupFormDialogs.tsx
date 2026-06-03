@@ -48,14 +48,14 @@ export function CollectionNicknameGroupFormDialogs({
           className={isMobile ? "max-w-md rounded-[1.5rem] border-border/60 p-5 pt-6 shadow-2xl" : "max-w-md"}
           data-floating-ai-avoid="true"
         >
-          <DialogHeader className={isMobile ? "pr-8 text-left" : undefined}>
+          <DialogHeader className={isMobile ? "pr-8 text-left" : ""}>
             <DialogTitle>Tambah Admin Group</DialogTitle>
             <DialogDescription>Pilih leader nickname untuk group admin baharu.</DialogDescription>
           </DialogHeader>
           <div className="space-y-2">
             <Label htmlFor={createLeaderTriggerId}>Leader Nickname</Label>
             <Select value={createLeaderId} onValueChange={onCreateLeaderIdChange}>
-              <SelectTrigger id={createLeaderTriggerId} className={isMobile ? "h-12 rounded-2xl" : undefined}>
+              <SelectTrigger id={createLeaderTriggerId} className={isMobile ? "h-12 rounded-2xl" : ""}>
                 <SelectValue placeholder="Pilih leader nickname" />
               </SelectTrigger>
               <SelectContent>
@@ -67,19 +67,19 @@ export function CollectionNicknameGroupFormDialogs({
               </SelectContent>
             </Select>
           </div>
-          <DialogFooter className={isMobile ? "gap-3 pt-2" : undefined}>
+          <DialogFooter className={isMobile ? "gap-3 pt-2" : ""}>
             <Button
               variant="outline"
               onClick={() => onCreateGroupOpenChange(false)}
               disabled={creatingGroup}
-              className={isMobile ? "h-11 w-full rounded-xl" : undefined}
+              className={isMobile ? "h-11 w-full rounded-xl" : ""}
             >
               Batal
             </Button>
             <Button
               onClick={onCreateGroup}
               disabled={creatingGroup || !createLeaderId}
-              className={isMobile ? "h-11 w-full rounded-xl" : undefined}
+              className={isMobile ? "h-11 w-full rounded-xl" : ""}
             >
               {creatingGroup ? "Saving..." : "Simpan"}
             </Button>
@@ -92,14 +92,14 @@ export function CollectionNicknameGroupFormDialogs({
           className={isMobile ? "max-w-md rounded-[1.5rem] border-border/60 p-5 pt-6 shadow-2xl" : "max-w-md"}
           data-floating-ai-avoid="true"
         >
-          <DialogHeader className={isMobile ? "pr-8 text-left" : undefined}>
+          <DialogHeader className={isMobile ? "pr-8 text-left" : ""}>
             <DialogTitle>Tukar Leader Group</DialogTitle>
             <DialogDescription>Leader nickname mesti unik dan bertaraf admin.</DialogDescription>
           </DialogHeader>
           <div className="space-y-2">
             <Label htmlFor={changeLeaderTriggerId}>Leader Nickname</Label>
             <Select value={changeLeaderId} onValueChange={onChangeLeaderIdChange}>
-              <SelectTrigger id={changeLeaderTriggerId} className={isMobile ? "h-12 rounded-2xl" : undefined}>
+              <SelectTrigger id={changeLeaderTriggerId} className={isMobile ? "h-12 rounded-2xl" : ""}>
                 <SelectValue placeholder="Pilih leader nickname" />
               </SelectTrigger>
               <SelectContent>
@@ -111,19 +111,19 @@ export function CollectionNicknameGroupFormDialogs({
               </SelectContent>
             </Select>
           </div>
-          <DialogFooter className={isMobile ? "gap-3 pt-2" : undefined}>
+          <DialogFooter className={isMobile ? "gap-3 pt-2" : ""}>
             <Button
               variant="outline"
               onClick={() => onChangeLeaderOpenChange(false)}
               disabled={savingLeader}
-              className={isMobile ? "h-11 w-full rounded-xl" : undefined}
+              className={isMobile ? "h-11 w-full rounded-xl" : ""}
             >
               Batal
             </Button>
             <Button
               onClick={onSaveLeader}
               disabled={savingLeader || !changeLeaderId}
-              className={isMobile ? "h-11 w-full rounded-xl" : undefined}
+              className={isMobile ? "h-11 w-full rounded-xl" : ""}
             >
               {savingLeader ? "Saving..." : "Simpan"}
             </Button>

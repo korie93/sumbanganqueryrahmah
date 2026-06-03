@@ -26,7 +26,7 @@ export function UserAccountManagementHeader({
   });
 
   return (
-    <CardHeader className={isMobile ? "space-y-4 pb-4" : undefined}>
+    <CardHeader className={isMobile ? "space-y-4 pb-4" : ""}>
       <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
         <Users className="h-5 w-5" />
         User Account Management
