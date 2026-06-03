@@ -15,6 +15,8 @@
   hooks while preserving the existing page controller contract.
 - Centralized AI page-local state in a reducer with reducer unit coverage for
   each state transition and React-style functional setter parity.
+- Extracted scanner child-process soft/hard timeout handling into a shared
+  timeout chain used by runtime scans and startup version checks.
 
 ### Bug Fixes
 
@@ -42,6 +44,7 @@
 - `tsx --test client/src/lib/queryClient.test.ts client/src/lib/api-client-navigation-contract.test.ts client/src/lib/api/tests/request-cancellation.test.ts`
 - `tsx --test client/src/pages/ai/ai-page-controller-utils.test.ts client/src/pages/ai/ai-page-controller-structure.contract.test.ts client/src/pages/ai/ai-conversation-card-a11y-contract.test.ts client/src/app/client-timer-cleanup-contract.test.ts`
 - `tsx --test client/src/pages/ai/useAIPageState.reducer.test.ts client/src/pages/ai/ai-page-controller-structure.contract.test.ts client/src/pages/ai/ai-page-controller-utils.test.ts client/src/app/client-timer-cleanup-contract.test.ts`
+- `tsx --test server/lib/tests/process-timeout-manager.test.ts server/services/tests/collection-receipt-external-scan.test.ts server/services/tests/collection-receipt-external-scan-startup.test.ts`
 
 ## 2026-05-31 - SQR resource lifecycle and configuration hardening
 

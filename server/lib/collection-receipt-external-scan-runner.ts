@@ -8,6 +8,7 @@ import {
   type ExternalScanConfig,
   summarizeOutput,
 } from "./collection-receipt-external-scan-shared";
+import { createProcessTimeoutChain, type ProcessTimeoutChain } from "./process-timeout-manager";
 
 type ExternalScanProcessStream = {
   setEncoding(encoding: BufferEncoding): ExternalScanProcessStream;
@@ -99,60 +100,10 @@ export async function runExternalReceiptScan({
     let stdout = "";
     let stderr = "";
     let timeoutTriggered = false;
-    let timeoutId: NodeJS.Timeout | null = null;
-    let forceKillTimeoutId: NodeJS.Timeout | null = null;
-
-    const clearForceKillTimer = () => {
-      if (forceKillTimeoutId) {
-        clearTimeout(forceKillTimeoutId);
-        forceKillTimeoutId = null;
-      }
-    };
-
-    const scheduleForceKill = () => {
-      if (forceKillTimeoutId || forceKillGraceMs < 0) {
-        return;
-      }
-
-      forceKillTimeoutId = setTimeout(() => {
-        forceKillTimeoutId = null;
-        try {
-          logger.error("AUDIT2-FIX [M4]: Scanner process timed out; force killing", {
-            fileName,
-            reasonCode: "external-scan-timeout-force-kill",
-            timeoutMs: config.timeoutMs,
-            graceMs: forceKillGraceMs,
-          });
-          child.kill("SIGKILL");
-        } catch {
-          logger.debug("Scanner process force kill failed after timeout", {
-            fileName,
-            reasonCode: "external-scan-timeout-force-kill-failed",
-          });
-        }
-      }, forceKillGraceMs);
-      forceKillTimeoutId.unref?.();
-    };
+    let timeoutChain: ProcessTimeoutChain | null = null;
 
     const cleanup = (options: { terminate?: boolean } = {}) => {
-      if (timeoutId) {
-        clearTimeout(timeoutId);
-        timeoutId = null;
-      }
-
-      if (options.terminate) {
-        if (!child.killed) {
-          try {
-            // AUDIT2-FIX [M4]: timeout first asks the scanner to terminate gracefully.
-            child.kill("SIGTERM");
-          } catch {
-            // The scanner may already have exited between the timeout and cleanup.
-          }
-        }
-        scheduleForceKill();
-      } else {
-        clearForceKillTimer();
-      }
+      timeoutChain?.cancel({ preserveHardTimeout: Boolean(options.terminate) });
 
       child.stdout?.removeAllListeners();
       child.stderr?.removeAllListeners();
@@ -160,7 +111,7 @@ export async function runExternalReceiptScan({
 
       if (options.terminate) {
         child.once("close", () => {
-          clearForceKillTimer();
+          timeoutChain?.cancelHardTimeout();
         });
       }
     };
@@ -178,17 +129,37 @@ export async function runExternalReceiptScan({
       }
     };
 
-    timeoutId = setTimeout(() => {
-      timeoutTriggered = true;
-      const operational = createOperationalScanError(
-        config,
-        filePath,
-        "external-scan-timeout",
-        `timed out after ${config.timeoutMs}ms`,
-      );
-      finish(operational, { terminate: true });
-    }, config.timeoutMs);
-    timeoutId.unref?.();
+    timeoutChain = createProcessTimeoutChain({
+      hardTimeoutMs: forceKillGraceMs,
+      onHardTimeout: () => {
+        logger.error("AUDIT2-FIX [M4]: Scanner process timed out; force killing", {
+          fileName,
+          reasonCode: "external-scan-timeout-force-kill",
+          timeoutMs: config.timeoutMs,
+          graceMs: forceKillGraceMs,
+        });
+      },
+      onKillError: (signal) => {
+        if (signal === "SIGKILL") {
+          logger.debug("Scanner process force kill failed after timeout", {
+            fileName,
+            reasonCode: "external-scan-timeout-force-kill-failed",
+          });
+        }
+      },
+      onSoftTimeout: () => {
+        timeoutTriggered = true;
+        const operational = createOperationalScanError(
+          config,
+          filePath,
+          "external-scan-timeout",
+          `timed out after ${config.timeoutMs}ms`,
+        );
+        finish(operational, { terminate: true });
+      },
+      process: child,
+      softTimeoutMs: config.timeoutMs,
+    });
 
     child.stdout?.setEncoding("utf8");
     child.stdout?.on("data", (chunk: string) => {

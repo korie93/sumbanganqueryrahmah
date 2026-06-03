@@ -7,6 +7,7 @@ import { validateExternalScanCommand } from "./collection-receipt-external-scan-
 import { buildScanArgs, summarizeOutput } from "./collection-receipt-external-scan-shared";
 import { runExternalReceiptScan } from "./collection-receipt-external-scan-runner";
 import { logger as defaultLogger } from "./logger";
+import { createProcessTimeoutChain, type ProcessTimeoutChain } from "./process-timeout-manager";
 
 type StartupLogger = Pick<typeof defaultLogger, "info" | "warn">;
 
@@ -18,6 +19,7 @@ export type ReceiptExternalScanStartupVerification = {
 };
 
 const STARTUP_VERSION_TIMEOUT_MS = 5_000;
+const STARTUP_VERSION_FORCE_KILL_GRACE_MS = 2_000;
 
 function buildStartupScanError(message: string, reason = "COLLECTION_RECEIPT_EXTERNAL_SCAN_UNAVAILABLE") {
   const error = new Error(message);
@@ -36,13 +38,14 @@ async function readScannerVersion(scannerCommand: string): Promise<string | null
     let stderr = "";
     let resolved = false;
     let timedOut = false;
+    let timeoutChain: ProcessTimeoutChain | null = null;
 
     const finish = (error?: Error | null, value?: string | null) => {
       if (resolved) {
         return;
       }
       resolved = true;
-      clearTimeout(timeoutId);
+      timeoutChain?.cancel();
       if (error) {
         reject(error);
       } else {
@@ -50,11 +53,14 @@ async function readScannerVersion(scannerCommand: string): Promise<string | null
       }
     };
 
-    const timeoutId = setTimeout(() => {
-      timedOut = true;
-      child.kill();
-    }, STARTUP_VERSION_TIMEOUT_MS);
-    timeoutId.unref?.();
+    timeoutChain = createProcessTimeoutChain({
+      hardTimeoutMs: STARTUP_VERSION_FORCE_KILL_GRACE_MS,
+      onSoftTimeout: () => {
+        timedOut = true;
+      },
+      process: child,
+      softTimeoutMs: STARTUP_VERSION_TIMEOUT_MS,
+    });
 
     child.stdout?.setEncoding("utf8");
     child.stdout?.on("data", (chunk: string) => {
