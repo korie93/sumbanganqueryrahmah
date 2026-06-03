@@ -24,6 +24,8 @@
   signals so refresh listeners are released atomically on hook unmount.
 - Hardened login locked-account countdown unmount cleanup and added contracts
   for login animation-frame and AI typing interval ownership.
+- Switched independent dashboard refresh and collection same-day pace fetches
+  to settled-result handling so partial failures keep usable successful data.
 
 ### Security
 
@@ -54,6 +56,7 @@
 - `tsx --test server/lib/tests/process-timeout-manager.test.ts server/services/tests/collection-receipt-external-scan.test.ts server/services/tests/collection-receipt-external-scan-startup.test.ts`
 - `tsx --test server/routes/tests/operations-debug-routes.test.ts server/routes/tests/operations.routes.integration.test.ts`
 - `tsx --test client/src/app/client-timer-cleanup-contract.test.ts client/src/pages/login-page-utils.test.ts client/src/pages/login-lock-state.test.ts`
+- `tsx --test client/src/pages/collection-summary/useCollectionMonthlySameDayPace.contract.test.ts client/src/pages/dashboard/tests/dashboard-layout-contract.test.tsx client/src/pages/dashboard/tests/dashboard-query-errors.test.ts`
 
 ## 2026-05-31 - SQR resource lifecycle and configuration hardening
 

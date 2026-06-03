@@ -147,6 +147,15 @@ test("Dashboard wraps major dashboard regions in accessible render error boundar
   assert.match(fallbackMarkup, /type="button"/);
 });
 
+test("Dashboard manual refresh tolerates partial query failures", () => {
+  const dashboardSource = readFileSync(path.resolve(__dirname, "../../Dashboard.tsx"), "utf8");
+
+  assert.match(dashboardSource, /Promise\.allSettled\(/);
+  assert.match(dashboardSource, /getRejectedDashboardRefreshResults/);
+  assert.match(dashboardSource, /Dashboard refresh query failed:/);
+  assert.doesNotMatch(dashboardSource, /await Promise\.all\(\[[\s\S]*refetchSummary\(\)/);
+});
+
 test("DashboardChartsGrid memoizes heavy chart rendering helpers", () => {
   const source = readFileSync(path.resolve(__dirname, "../DashboardChartsGrid.tsx"), "utf8");
   const partsSource = readFileSync(path.resolve(__dirname, "../DashboardChartsGridParts.tsx"), "utf8");

@@ -32,6 +32,10 @@ import { buildSummaryCards, exportDashboardToPdf } from "@/pages/dashboard/utils
 
 type DashboardRefetch = () => Promise<unknown>;
 
+function getRejectedDashboardRefreshResults(results: PromiseSettledResult<unknown>[]) {
+  return results.filter((result): result is PromiseRejectedResult => result.status === "rejected");
+}
+
 function useDashboardRetryHandler(refetch: DashboardRefetch) {
   return useCallback(() => {
     void refetch();
@@ -200,13 +204,24 @@ function DashboardContent() {
     refreshInFlightRef.current = true;
     setRefreshing(true);
     try {
-      await Promise.all([
+      const results = await Promise.allSettled([
         refetchSummary(),
         refetchTrends(),
         refetchTopUsers(),
         refetchPeakHours(),
         refetchRoles(),
       ]);
+      const failures = getRejectedDashboardRefreshResults(results);
+      if (failures.length > 0) {
+        for (const failure of failures) {
+          logClientError("Dashboard refresh query failed:", failure.reason);
+        }
+        toast({
+          title: "Refresh incomplete",
+          description: "Some dashboard sections could not refresh. Existing section error states remain available.",
+          variant: "destructive",
+        });
+      }
     } finally {
       refreshInFlightRef.current = false;
       if (isDashboardLifecycleActive()) {

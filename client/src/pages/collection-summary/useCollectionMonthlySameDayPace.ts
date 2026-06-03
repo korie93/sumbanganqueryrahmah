@@ -4,6 +4,7 @@ import {
   type CollectionDailyOverviewResponse,
   type CollectionMonthlyComparisonResponse,
 } from "@/lib/api";
+import { logClientError } from "@/lib/client-logger";
 import {
   buildCollectionDailyOverviewCacheKey,
   createCollectionDailyOverviewCache,
@@ -44,6 +45,12 @@ function isAbortError(error: unknown) {
   return error instanceof DOMException
     ? error.name === "AbortError"
     : error instanceof Error && error.name === "AbortError";
+}
+
+function isRejectedOverviewResult(
+  result: PromiseSettledResult<CollectionDailyOverviewResponse>,
+): result is PromiseRejectedResult {
+  return result.status === "rejected";
 }
 
 function buildSameDayPaceRequest(
@@ -190,7 +197,7 @@ export function useCollectionMonthlySameDayPace({
     setErrorMessage(null);
 
     try {
-      const [currentResponse, previousResponse] = await Promise.all([
+      const [currentResult, previousResult] = await Promise.allSettled([
         loadOverviewFromCacheOrApi({
           monthKey: request.currentMonthKey,
           nickname: request.nickname,
@@ -207,8 +214,25 @@ export function useCollectionMonthlySameDayPace({
         return;
       }
 
-      setCurrentOverview(currentResponse);
-      setPreviousOverview(previousResponse);
+      const failedResults = [currentResult, previousResult].filter(isRejectedOverviewResult);
+      if (failedResults.length > 0) {
+        const failedResult = failedResults[0];
+        if (isAbortError(failedResult.reason)) {
+          return;
+        }
+        logClientError("Collection same-day pace overview request failed:", failedResult.reason);
+        setCurrentOverview(currentResult.status === "fulfilled" ? currentResult.value : null);
+        setPreviousOverview(previousResult.status === "fulfilled" ? previousResult.value : null);
+        setErrorMessage(parseApiError(failedResult.reason));
+        return;
+      }
+
+      if (currentResult.status !== "fulfilled" || previousResult.status !== "fulfilled") {
+        return;
+      }
+
+      setCurrentOverview(currentResult.value);
+      setPreviousOverview(previousResult.value);
     } catch (error: unknown) {
       if (controller.signal.aborted || isAbortError(error)) {
         return;

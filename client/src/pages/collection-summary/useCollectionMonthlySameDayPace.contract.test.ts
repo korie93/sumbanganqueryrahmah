@@ -27,7 +27,9 @@ test("useCollectionMonthlySameDayPace keeps daily comparison loading abortable a
   assert.match(source, /dayRange/);
   assert.match(source, /resolveCollectionMonthlyComparisonTargetForMonth/);
   assert.match(source, /setComparisonMode/);
-  assert.match(source, /Promise\.all\(/);
+  assert.match(source, /Promise\.allSettled\(/);
+  assert.match(source, /setCurrentOverview\(currentResult\.status === "fulfilled" \? currentResult\.value : null\)/);
+  assert.match(source, /setPreviousOverview\(previousResult\.status === "fulfilled" \? previousResult\.value : null\)/);
   assert.match(source, /currentOverview\.summary\.monthlyTarget/);
   assert.match(source, /previousOverview\.summary\.monthlyTarget/);
   assert.match(source, /abortControllerRef\.current\.abort\(\)/);
