@@ -187,6 +187,15 @@ export type RuntimeConfig = {
       writes: number;
     };
   };
+  queue: {
+    cleanupRepeatMs: number;
+    enabled: boolean;
+    prefix: string;
+    redisSource: "explicit" | "legacy" | "rate-limit" | "websocket" | "none";
+    redisUrl: string | null;
+    removeOnComplete: number;
+    removeOnFail: number;
+  };
   websocket: {
     maxConnections: number;
     maxMessageBytes: number;

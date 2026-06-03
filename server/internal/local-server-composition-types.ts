@@ -21,6 +21,7 @@ import type {
   InternalMonitorSnapshot,
   WorkerControlState,
 } from "./runtime-monitor-manager";
+import type { BackgroundQueueHealthSnapshot } from "../queue/health";
 
 type AuthGuards = ReturnType<typeof createAuthGuards>;
 
@@ -94,6 +95,9 @@ export type LocalServerComposition = {
 
 export type RegisterLocalServerRoutesOptions = {
   app: Express;
+  backgroundQueues: {
+    getHealthSnapshot: () => Promise<BackgroundQueueHealthSnapshot>;
+  };
   server: Server;
   composition: LocalServerComposition;
   runtimeConfig: RuntimeConfigRouteDeps;

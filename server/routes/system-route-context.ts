@@ -14,6 +14,7 @@ import type { AuditLog, InsertAuditLog } from "../../shared/schema-postgres";
 import type { WebVitalOverviewPayload } from "../../shared/web-vitals";
 import type { TabVisibilityCacheStats } from "../auth/guard-tab-visibility";
 import type { ReadReplicaHealthSnapshot } from "../db-read-replica";
+import type { BackgroundQueueHealthSnapshot } from "../queue/health";
 
 export type LocalCircuitSnapshots = {
   ai: CircuitSnapshot;
@@ -58,6 +59,7 @@ export type SystemRouteDeps = {
   getReadReplicaHealthSnapshot: () => ReadReplicaHealthSnapshot;
   getStartupHealthSnapshot: () => StartupHealthSnapshot;
   getTabVisibilityCacheStats: () => TabVisibilityCacheStats;
+  getBackgroundQueueHealthSnapshot: () => Promise<BackgroundQueueHealthSnapshot>;
 };
 
 export type SystemRouteContext = {

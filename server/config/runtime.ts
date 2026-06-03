@@ -64,6 +64,7 @@ import {
   resolveTrustedProxies,
 } from "./runtime-config-safety-utils";
 import { resolveSharedRateLimitStoreConfig } from "../middleware/rate-limit-runtime";
+import { resolveBackgroundQueueConfig } from "../queue/config";
 import { resolveRuntimeWsSharedBusConfig } from "../ws/runtime-shared-bus-config";
 import {
   DEFAULT_RUNTIME_WS_MAX_CONNECTIONS,
@@ -202,6 +203,10 @@ const websocketSharedBus = resolveRuntimeWsSharedBusConfig({
   redisUrl: readOptionalString("SQR_REDIS_WS_URL"),
   sharedRedisUrl: sharedRateLimitStore.redisUrl,
 });
+const backgroundQueueConfig = resolveBackgroundQueueConfig({
+  rateLimitRedisUrl: sharedRateLimitStore.redisUrl,
+  websocketRedisUrl: websocketSharedBus.redisUrl,
+});
 const configuredWebSocketMaxConnections = readInt(
   "SQR_WS_MAX_CONNECTIONS",
   DEFAULT_RUNTIME_WS_MAX_CONNECTIONS,
@@ -332,7 +337,11 @@ assertProductionRateLimiterTopologySafety({
 
 assertProductionRedisTlsSafety({
   isProductionLike,
-  redisUrls: [sharedRateLimitStore.redisUrl, websocketSharedBus.redisUrl],
+  redisUrls: [
+    sharedRateLimitStore.redisUrl,
+    websocketSharedBus.redisUrl,
+    backgroundQueueConfig.redisUrl,
+  ],
 });
 
 assertProductionReceiptExternalScanSafety({
@@ -554,6 +563,7 @@ export const runtimeConfig: RuntimeConfig = Object.freeze({
       writes: readInt("SQR_RATE_LIMIT_USER_WRITES_PER_MINUTE", 100, { min: 1, max: 100_000 }),
     },
   },
+  queue: backgroundQueueConfig,
   websocket: {
     maxConnections: configuredWebSocketMaxConnections,
     maxMessageBytes: configuredWebSocketMaxMessageBytes,

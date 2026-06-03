@@ -59,6 +59,7 @@ export function registerLocalServerRoutes(options: RegisterLocalServerRoutesOpti
     server,
     composition,
     runtimeConfig,
+    backgroundQueues,
     runtimeMonitor,
     withAiConcurrencyGate,
     withExportCircuit,
@@ -207,6 +208,7 @@ export function registerLocalServerRoutes(options: RegisterLocalServerRoutesOpti
     getReadReplicaHealthSnapshot,
     getStartupHealthSnapshot,
     getTabVisibilityCacheStats,
+    getBackgroundQueueHealthSnapshot: () => backgroundQueues.getHealthSnapshot(),
   });
 
   registerAuthRoutes(app, {

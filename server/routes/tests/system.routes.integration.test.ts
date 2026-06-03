@@ -345,6 +345,54 @@ function createBaseSystemRouteDeps(
       ttlMs: 300_000,
       utilization: 0.02,
     }),
+    getBackgroundQueueHealthSnapshot: async () => ({
+      configured: true,
+      redisSource: "rate-limit",
+      queues: {
+        audit: {
+          active: 0,
+          completed: 0,
+          delayed: 0,
+          failed: 0,
+          paused: 0,
+          status: "ready",
+          waiting: 0,
+        },
+        backup: {
+          active: 0,
+          completed: 0,
+          delayed: 0,
+          failed: 0,
+          paused: 0,
+          status: "ready",
+          waiting: 0,
+        },
+        cleanup: {
+          active: 1,
+          completed: 4,
+          delayed: 1,
+          failed: 0,
+          paused: 0,
+          status: "ready",
+          waiting: 0,
+        },
+        email: {
+          active: 0,
+          completed: 0,
+          delayed: 0,
+          failed: 0,
+          paused: 0,
+          status: "ready",
+          waiting: 2,
+        },
+      },
+      workers: {
+        audit: "running",
+        backup: "running",
+        cleanup: "running",
+        email: "running",
+      },
+    }),
     ...overrides,
   };
 }
@@ -588,6 +636,9 @@ test("GET /internal/health exposes startup details only to privileged users", as
     assert.equal(payload.ready, false);
     assert.equal(payload.readReplica.state, "primary-only");
     assert.equal(payload.readReplica.configured, false);
+    assert.equal(payload.backgroundQueues.configured, true);
+    assert.equal(payload.backgroundQueues.queues.cleanup.active, 1);
+    assert.equal(payload.backgroundQueues.queues.email.waiting, 2);
     assert.equal(payload.caches.tabVisibility.size, 2);
     assert.equal(payload.caches.tabVisibility.maxSize, 100);
     assert.equal(payload.live.live, true);

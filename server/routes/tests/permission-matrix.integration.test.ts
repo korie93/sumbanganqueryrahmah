@@ -765,6 +765,54 @@ function createSystemPermissionHarness() {
       ttlMs: 300_000,
       utilization: 0,
     }),
+    getBackgroundQueueHealthSnapshot: async () => ({
+      configured: false,
+      redisSource: "none",
+      queues: {
+        audit: {
+          active: 0,
+          completed: 0,
+          delayed: 0,
+          failed: 0,
+          paused: 0,
+          status: "disabled",
+          waiting: 0,
+        },
+        backup: {
+          active: 0,
+          completed: 0,
+          delayed: 0,
+          failed: 0,
+          paused: 0,
+          status: "disabled",
+          waiting: 0,
+        },
+        cleanup: {
+          active: 0,
+          completed: 0,
+          delayed: 0,
+          failed: 0,
+          paused: 0,
+          status: "disabled",
+          waiting: 0,
+        },
+        email: {
+          active: 0,
+          completed: 0,
+          delayed: 0,
+          failed: 0,
+          paused: 0,
+          status: "disabled",
+          waiting: 0,
+        },
+      },
+      workers: {
+        audit: "disabled",
+        backup: "disabled",
+        cleanup: "disabled",
+        email: "disabled",
+      },
+    }),
   });
 
   return {

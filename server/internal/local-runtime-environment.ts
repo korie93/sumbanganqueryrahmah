@@ -19,10 +19,12 @@ import { configureSessionRevocationStoreForRuntime } from "../auth/session-revoc
 import { createSessionRevocationStore } from "../auth/redis-session-revocation-store";
 import { startOrphanedUploadCleanupJob } from "../jobs/cleanup-orphaned-uploads";
 import { stopAdaptiveRateLimitCooldownSweep } from "../middleware/rate-limit";
+import { createBackgroundQueueRuntime } from "../queue/runtime";
 import {
   createLocalServerComposition,
   registerLocalServerRoutes,
 } from "./local-server-composition";
+import { startBackgroundServiceWithHealthSignal } from "./background-service-health";
 import { registerLocalHttpPipeline } from "./local-http-pipeline";
 import {
   attachLocalRuntimeGlue,
@@ -161,8 +163,24 @@ export function createLocalRuntimeEnvironment(options: CreateLocalRuntimeEnviron
     createSessionRevocationStore(runtimeConfig.rateLimiting.store),
   );
   server.once("close", stopSessionRevocationStore);
-  const stopOrphanedUploadCleanupJob = startOrphanedUploadCleanupJob();
-  server.once("close", stopOrphanedUploadCleanupJob);
+  const backgroundQueueRuntime = createBackgroundQueueRuntime(runtimeConfig.queue);
+  const backgroundQueueHealthSignal = startBackgroundServiceWithHealthSignal({
+    service: "background-job-queue",
+    failureReason: "BACKGROUND_JOB_QUEUE_START_FAILED",
+    failureDetails: "BullMQ background queues failed to start; scheduled cleanup will be degraded.",
+    failureLogMessage: "Failed to start BullMQ background job queues",
+    start: () => backgroundQueueRuntime.start(),
+  });
+  server.once("close", () => {
+    backgroundQueueHealthSignal.stop();
+    void backgroundQueueRuntime.close().catch((error) => {
+      logger.warn("Failed to close BullMQ background job queues cleanly", { error });
+    });
+  });
+  if (!backgroundQueueRuntime.configured) {
+    const stopOrphanedUploadCleanupJob = startOrphanedUploadCleanupJob();
+    server.once("close", stopOrphanedUploadCleanupJob);
+  }
   const { adaptiveRateLimit, systemProtectionMiddleware, stopAdaptiveRateStateSweep } =
     createApiProtectionMiddleware({
       ...(adaptiveRateStore ? { adaptiveRateStore } : {}),
@@ -219,6 +237,9 @@ export function createLocalRuntimeEnvironment(options: CreateLocalRuntimeEnviron
   });
   registerLocalServerRoutes({
     app,
+    backgroundQueues: {
+      getHealthSnapshot: () => backgroundQueueRuntime.getHealthSnapshot(),
+    },
     server,
     composition,
     runtimeConfig: {
