@@ -24,6 +24,35 @@ export type ExistingCollectionAccessRecord = NonNullable<
   Awaited<ReturnType<CollectionStoragePort["getCollectionRecordById"]>>
 >;
 
+function isCollectionAccessUserSnapshotUsable(user: CollectionAccessUser): boolean {
+  const status = normalizeCollectionText("status" in user ? user.status : undefined).toLowerCase();
+  if (status && status !== "active") {
+    return false;
+  }
+
+  if ("isBanned" in user && user.isBanned === true) {
+    return false;
+  }
+
+  const sessionExpiresAt = normalizeCollectionText(
+    "sessionExpiresAt" in user ? user.sessionExpiresAt : undefined,
+  );
+  if (sessionExpiresAt) {
+    const expiryMs = Date.parse(sessionExpiresAt);
+    if (!Number.isFinite(expiryMs) || expiryMs <= Date.now()) {
+      return false;
+    }
+  }
+
+  if ("exp" in user && typeof user.exp === "number") {
+    if (!Number.isFinite(user.exp) || user.exp * 1000 <= Date.now()) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 export async function resolveCurrentCollectionNicknameFromSession(
   storage: CollectionStoragePort,
   user: CollectionAccessUser,
@@ -89,6 +118,10 @@ export async function canUserAccessCollectionRecord(
     collectionStaffNickname?: string | null;
   },
 ): Promise<boolean> {
+  if (!isCollectionAccessUserSnapshotUsable(user)) {
+    return false;
+  }
+
   if (user.role === "superuser") return true;
 
   if (user.role === "user") {

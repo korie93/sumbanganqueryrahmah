@@ -47,6 +47,7 @@ export type InternalMetricName =
   | "sessionRefreshRevocationRetryAttemptsTotal"
   | "sessionRefreshRevocationRetryExhaustedTotal"
   | "sessionRevocationRedisErrorsTotal"
+  | "twoFactorInvalidBase32SecretTotal"
   | "twoFactorTotpSha1VerificationSuccessTotal"
   | "webVitalsAcceptedTotal"
   | "webVitalsDroppedRateLimitTotal"
@@ -128,6 +129,7 @@ const INTERNAL_METRIC_NAMES: readonly InternalMetricName[] = [
   "sessionRefreshRevocationRetryAttemptsTotal",
   "sessionRefreshRevocationRetryExhaustedTotal",
   "sessionRevocationRedisErrorsTotal",
+  "twoFactorInvalidBase32SecretTotal",
   "twoFactorTotpSha1VerificationSuccessTotal",
   "webVitalsAcceptedTotal",
   "webVitalsDroppedRateLimitTotal",

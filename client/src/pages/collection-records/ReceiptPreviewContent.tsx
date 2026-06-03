@@ -182,7 +182,7 @@ export function ReceiptPreviewContent({
         <div className="flex h-full min-h-[280px] items-center justify-center">
           <div className="w-full max-w-sm rounded-2xl border border-border/70 bg-background px-4 py-5 text-center shadow-sm">
             <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
-              <FileText className="h-6 w-6" />
+              <FileText className="h-6 w-6" aria-hidden="true" />
             </div>
             <div className="mt-4 space-y-2">
               <p className="text-sm font-semibold text-foreground">PDF preview is limited on this device</p>
@@ -196,7 +196,7 @@ export function ReceiptPreviewContent({
             <div className="mt-4 flex flex-col gap-2">
               <Button className="w-full" asChild>
                 <a href={safeSource} target="_blank" rel="noreferrer noopener">
-                  <ExternalLink className="mr-2 h-4 w-4" />
+                  <ExternalLink className="mr-2 h-4 w-4" aria-hidden="true" />
                   Open PDF in Browser
                 </a>
               </Button>
@@ -207,7 +207,7 @@ export function ReceiptPreviewContent({
                 disabled={downloading}
                 className="w-full"
               >
-                <Download className="mr-2 h-4 w-4" />
+                <Download className="mr-2 h-4 w-4" aria-hidden="true" />
                 {downloading ? "Downloading..." : "Download Original"}
               </Button>
             </div>

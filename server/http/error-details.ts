@@ -9,9 +9,76 @@ const MAX_ERROR_DETAIL_ARRAY_LENGTH = 20;
 const MAX_ERROR_DETAIL_OBJECT_KEYS = 40;
 const MAX_ERROR_DETAIL_STRING_LENGTH = 500;
 const REDACTED_ERROR_DETAIL = "[redacted]";
+const MAX_ERROR_DETAIL_DECODE_PASSES = 3;
+
+function decodeHtmlEntities(value: string): string {
+  return value.replace(
+    /&(?:#(\d{1,7})|#x([0-9a-f]{1,6})|colon|sol|bsol|period|commat|num|percnt);/gi,
+    (entity, decimal: string | undefined, hexadecimal: string | undefined) => {
+      if (decimal) {
+        const codePoint = Number.parseInt(decimal, 10);
+        return Number.isFinite(codePoint) && codePoint >= 0 && codePoint <= 0x10ffff
+          ? String.fromCodePoint(codePoint)
+          : entity;
+      }
+      if (hexadecimal) {
+        const codePoint = Number.parseInt(hexadecimal, 16);
+        return Number.isFinite(codePoint) && codePoint >= 0 && codePoint <= 0x10ffff
+          ? String.fromCodePoint(codePoint)
+          : entity;
+      }
+
+      switch (String(entity).toLowerCase()) {
+        case "&colon;":
+          return ":";
+        case "&sol;":
+          return "/";
+        case "&bsol;":
+          return "\\";
+        case "&period;":
+          return ".";
+        case "&commat;":
+          return "@";
+        case "&num;":
+          return "#";
+        case "&percnt;":
+          return "%";
+        default:
+          return entity;
+      }
+    },
+  );
+}
+
+function createInspectableStringVariants(value: string): string[] {
+  const variants = new Set([value]);
+  let current = value;
+
+  for (let pass = 0; pass < MAX_ERROR_DETAIL_DECODE_PASSES; pass += 1) {
+    const htmlDecoded = decodeHtmlEntities(current);
+    if (htmlDecoded !== current) {
+      variants.add(htmlDecoded);
+      current = htmlDecoded;
+      continue;
+    }
+
+    try {
+      const urlDecoded = decodeURIComponent(current.replace(/\+/g, "%20"));
+      if (urlDecoded === current) {
+        break;
+      }
+      variants.add(urlDecoded);
+      current = urlDecoded;
+    } catch {
+      break;
+    }
+  }
+
+  return [...variants];
+}
 
 function sanitizeErrorDetailString(value: string): string {
-  if (SENSITIVE_DETAIL_VALUE_PATTERN.test(value)) {
+  if (createInspectableStringVariants(value).some((variant) => SENSITIVE_DETAIL_VALUE_PATTERN.test(variant))) {
     return REDACTED_ERROR_DETAIL;
   }
 

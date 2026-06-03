@@ -112,20 +112,23 @@ const Carousel = React.forwardRef<
       return bindCarouselSelectionEvents(api ?? undefined, onSelect)
     }, [api, onSelect])
 
+    const contextValue = React.useMemo(
+      () => ({
+        carouselRef,
+        api,
+        opts,
+        orientation:
+          orientation || (opts?.axis === "y" ? "vertical" : "horizontal"),
+        scrollPrev,
+        scrollNext,
+        canScrollPrev,
+        canScrollNext,
+      }),
+      [api, canScrollNext, canScrollPrev, carouselRef, opts, orientation, scrollNext, scrollPrev],
+    )
+
     return (
-      <CarouselContext.Provider
-        value={{
-          carouselRef,
-          api: api,
-          opts,
-          orientation:
-            orientation || (opts?.axis === "y" ? "vertical" : "horizontal"),
-          scrollPrev,
-          scrollNext,
-          canScrollPrev,
-          canScrollNext,
-        }}
-      >
+      <CarouselContext.Provider value={contextValue}>
         <div
           ref={ref}
           onKeyDownCapture={handleKeyDown}
@@ -217,7 +220,7 @@ const CarouselPrevious = React.forwardRef<
       onClick={scrollPrev}
       {...props}
     >
-      <ArrowLeft className="h-4 w-4" />
+      <ArrowLeft className="h-4 w-4" aria-hidden="true" />
       <span className="sr-only">Previous slide</span>
     </Button>
   )
@@ -249,7 +252,7 @@ const CarouselNext = React.forwardRef<
       onClick={scrollNext}
       {...props}
     >
-      <ArrowRight className="h-4 w-4" />
+      <ArrowRight className="h-4 w-4" aria-hidden="true" />
       <span className="sr-only">Next slide</span>
     </Button>
   )

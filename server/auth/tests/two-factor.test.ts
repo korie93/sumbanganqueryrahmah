@@ -182,6 +182,22 @@ test("verifyTwoFactorCode rejects invalid, short, and non-digit-only TOTP codes"
   assert.equal(verifyTwoFactorCode(secret, `abc${validCode}`), false);
 });
 
+test("two-factor Base32 secrets are decoded with strict RFC 4648 validation", (t) => {
+  const secret = "JBSWY3DPEHPK3PXP";
+  const metrics = createInternalMetrics();
+  t.mock.method(Date, "now", () => new Date("2026-04-29T00:00:00.000Z").getTime());
+  const validCode = generateCurrentTwoFactorCode(secret);
+
+  assert.equal(verifyTwoFactorCode(secret.toLowerCase(), validCode, 1, "sha256", metrics), true);
+  assert.equal(verifyTwoFactorCode(`${secret}=`, validCode, 1, "sha256", metrics), false);
+  assert.equal(verifyTwoFactorCode("JBSWY3DPEHPK3PX$", validCode, 1, "sha256", metrics), false);
+  assert.throws(
+    () => generateCurrentTwoFactorCode("JBSWY3DPEHPK3PX$"),
+    /Invalid Base32 secret/i,
+  );
+  assert.equal(metrics.snapshot().counters.twoFactorInvalidBase32SecretTotal, 2);
+});
+
 test("normalizeTwoFactorCode accepts common separators and rejects polluted values", () => {
   assert.equal(normalizeTwoFactorCode("123456"), "123456");
   assert.equal(normalizeTwoFactorCode("123 456"), "123456");

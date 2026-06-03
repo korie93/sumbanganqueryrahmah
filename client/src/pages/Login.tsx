@@ -26,6 +26,10 @@ interface LoginProps {
 export default function Login({ onBanned, onForgotPasswordClick, onLandingClick, onLoginSuccess }: LoginProps) {
   const [, navigate] = useLocation();
   const usernameInputRef = useRef<HTMLInputElement | null>(null);
+  const passwordInputRef = useRef<HTMLInputElement | null>(null);
+  const twoFactorCodeInputRef = useRef<HTMLInputElement | null>(null);
+  const captchaResponseInputRef = useRef<HTMLInputElement | null>(null);
+  const lastFocusedValidationKeyRef = useRef("");
   const {
     username,
     password,
@@ -136,6 +140,42 @@ export default function Login({ onBanned, onForgotPasswordClick, onLandingClick,
   }, []);
 
   useEffect(() => {
+    if (loading) {
+      return;
+    }
+
+    const validationKey = [
+      usernameError,
+      passwordError,
+      twoFactorCodeError,
+      captchaResponseError,
+    ].filter(Boolean).join("|");
+
+    if (!validationKey) {
+      lastFocusedValidationKeyRef.current = "";
+      return;
+    }
+
+    if (lastFocusedValidationKeyRef.current === validationKey) {
+      return;
+    }
+
+    const target =
+      usernameError ? usernameInputRef.current :
+        passwordError ? passwordInputRef.current :
+          twoFactorCodeError ? twoFactorCodeInputRef.current :
+            captchaResponseError ? captchaResponseInputRef.current :
+              null;
+
+    if (!target) {
+      return;
+    }
+
+    lastFocusedValidationKeyRef.current = validationKey;
+    target.focus({ preventScroll: true });
+  }, [captchaResponseError, loading, passwordError, twoFactorCodeError, usernameError]);
+
+  useEffect(() => {
     if (!lockedFlow || !lockedRetryUntilMs) {
       clearLockedCountdownInterval();
       if (mountedRef.current) {
@@ -220,6 +260,7 @@ export default function Login({ onBanned, onForgotPasswordClick, onLandingClick,
                       Kod pengesahan dua faktor
                     </label>
                     <PublicAuthInput
+                      ref={twoFactorCodeInputRef}
                       id="login-two-factor-code"
                       name="twoFactorCode"
                       className="login-input login-input--otp w-full rounded-xl px-4 py-3 text-center transition-all"
@@ -251,6 +292,7 @@ export default function Login({ onBanned, onForgotPasswordClick, onLandingClick,
                     </label>
                     <div className="relative">
                       <PublicAuthInput
+                        ref={passwordInputRef}
                         id="login-password"
                         name="password"
                         className="login-input w-full rounded-xl px-4 py-3 pr-12 transition-all"
@@ -282,6 +324,7 @@ export default function Login({ onBanned, onForgotPasswordClick, onLandingClick,
                           Pengesahan keselamatan
                         </label>
                         <PublicAuthInput
+                          ref={captchaResponseInputRef}
                           id="login-captcha-response"
                           name="captchaResponse"
                           className="login-input w-full rounded-xl px-4 py-3 transition-all"

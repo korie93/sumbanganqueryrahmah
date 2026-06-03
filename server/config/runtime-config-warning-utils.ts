@@ -7,6 +7,7 @@ export function buildRuntimeConfigWarnings(params: {
   isProductionLike: boolean;
   publicAppUrl: string | null;
   configuredSessionSecret: string | null;
+  configuredAuditHmacKey?: string | null | undefined;
   configuredCollectionNicknameTempPassword: string | null;
   configuredCollectionPiiEncryptionKey: string | null;
   configuredPgPassword: string | null;
@@ -24,6 +25,7 @@ export function buildRuntimeConfigWarnings(params: {
     isProductionLike,
     publicAppUrl,
     configuredSessionSecret,
+    configuredAuditHmacKey,
     configuredCollectionNicknameTempPassword,
     configuredCollectionPiiEncryptionKey,
     configuredPgPassword,
@@ -59,6 +61,15 @@ export function buildRuntimeConfigWarnings(params: {
       code: "SESSION_SECRET_EPHEMERAL_LOCAL",
       envNames: ["SESSION_SECRET"],
       message: "SESSION_SECRET is not set, so a temporary in-memory secret will be generated on each boot.",
+      severity: "warning",
+    });
+  }
+
+  if (isStrictLocalDevelopment && !configuredAuditHmacKey) {
+    warnings.push({
+      code: "SQR_AUDIT_HMAC_KEY_FALLBACK_LOCAL",
+      envNames: ["SQR_AUDIT_HMAC_KEY", "SESSION_SECRET"],
+      message: "SQR_AUDIT_HMAC_KEY is not set, so local audit log HMACs will reuse SESSION_SECRET. Configure a distinct key outside local development.",
       severity: "warning",
     });
   }

@@ -675,6 +675,32 @@ test("buildRuntimeConfigWarnings warns when local collection PII encryption is n
   );
 });
 
+test("buildRuntimeConfigWarnings reports local audit HMAC fallback", () => {
+  const warnings = buildRuntimeConfigWarnings({
+    isStrictLocalDevelopment: true,
+    isProductionLike: false,
+    publicAppUrl: "http://127.0.0.1:5000",
+    configuredSessionSecret: "local-session-secret-minimum-32-characters",
+    configuredAuditHmacKey: null,
+    configuredCollectionNicknameTempPassword: "TempPassword12345",
+    configuredCollectionPiiEncryptionKey: "collection-pii-secret",
+    configuredPgPassword: "local-db-password",
+    configuredAuthCookieSecure: null,
+    configuredClusterMaxWorkers: 1,
+    mailConfiguration: {
+      effectiveFrom: null,
+      hasAnyInput: false,
+      isConfigured: false,
+      isIncomplete: false,
+    },
+  });
+
+  assert.match(
+    warnings.map((warning) => warning.code).join(","),
+    /SQR_AUDIT_HMAC_KEY_FALLBACK_LOCAL/,
+  );
+});
+
 test("buildRuntimeConfigWarnings reports when insecure auth cookies are forced on production-like hosts", () => {
   const warnings = buildRuntimeConfigWarnings({
     isStrictLocalDevelopment: false,

@@ -28,9 +28,10 @@ const ChartContainer = React.forwardRef<
   const uniqueId = React.useId()
   const chartId = sanitizeChartToken(`chart-${id || uniqueId.replace(/:/g, "")}`)
   const resolvedAriaLabel = ariaLabel ?? (props["aria-labelledby"] ? undefined : "Data chart")
+  const contextValue = React.useMemo(() => ({ config }), [config])
 
   return (
-    <ChartContext.Provider value={{ config }}>
+    <ChartContext.Provider value={contextValue}>
       <div
         {...props}
         data-chart={chartId}

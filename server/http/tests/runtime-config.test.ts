@@ -47,6 +47,7 @@ async function withEnv<T>(
 const productionBaseOverrides: Record<string, string | null> = {
   NODE_ENV: "production",
   SESSION_SECRET: PROD_SESSION_SECRET,
+  SQR_AUDIT_HMAC_KEY: "prod-audit-hmac-key-minimum-32-characters-001",
   SESSION_JWT_PRIVATE_KEY: "test-private-key-present-for-runtime-preflight",
   SESSION_JWT_PUBLIC_KEY: "test-public-key-present-for-runtime-preflight",
   COLLECTION_NICKNAME_TEMP_PASSWORD: "ProdTempPass12345",
@@ -80,6 +81,7 @@ const productionLikeDevelopmentBaseOverrides: Record<string, string | null> = {
   HOST: "0.0.0.0",
   PUBLIC_APP_URL: "http://10.10.10.10:5000",
   SESSION_SECRET: PROD_LIKE_SESSION_SECRET,
+  SQR_AUDIT_HMAC_KEY: "prod-like-audit-hmac-key-minimum-32-characters-001",
   COLLECTION_NICKNAME_TEMP_PASSWORD: "ProdLikeTempPass12345",
   COLLECTION_PII_ENCRYPTION_KEY: "C".repeat(32),
   TWO_FACTOR_ENCRYPTION_KEY: "T".repeat(32),
@@ -106,6 +108,27 @@ const productionLikeDevelopmentBaseOverrides: Record<string, string | null> = {
   COLLECTION_RECEIPT_EXTERNAL_SCAN_FAIL_CLOSED: "1",
 };
 
+test("runtime config does not persist seed passwords in the global config object", async () => {
+  await withEnv(
+    {
+      NODE_ENV: "development",
+      HOST: "127.0.0.1",
+      PUBLIC_APP_URL: "http://127.0.0.1:5000",
+      SEED_DEFAULT_USERS: "1",
+      SEED_SUPERUSER_PASSWORD: "local-superuser-seed-password",
+      SEED_ADMIN_PASSWORD: "local-admin-seed-password",
+      SEED_USER_PASSWORD: "local-user-seed-password",
+    },
+    async () => {
+      const runtimeModule = await importRuntimeFresh();
+      assert.equal(runtimeModule.runtimeConfig.bootstrap.users.superuser.password, "");
+      assert.equal(runtimeModule.runtimeConfig.bootstrap.users.admin.password, "");
+      assert.equal(runtimeModule.runtimeConfig.bootstrap.users.user.password, "");
+      assert.equal(runtimeModule.runtimeConfig.bootstrap.freshLocalSuperuser.password, "");
+    },
+  );
+});
+
 test("runtime config rejects production startup when backup encryption keys are missing", async () => {
   await withEnv(
     productionBaseOverrides,
@@ -113,6 +136,38 @@ test("runtime config rejects production startup when backup encryption keys are 
       await assert.rejects(
         importRuntimeFresh(),
         /FATAL: Missing required production environment variables:[\s\S]*BACKUP_ENCRYPTION_KEY or BACKUP_ENCRYPTION_KEYS/i,
+      );
+    },
+  );
+});
+
+test("runtime config rejects production startup without an explicit audit HMAC key", async () => {
+  await withEnv(
+    {
+      ...productionBaseOverrides,
+      SQR_AUDIT_HMAC_KEY: null,
+      BACKUP_ENCRYPTION_KEY: "A".repeat(32),
+    },
+    async () => {
+      await assert.rejects(
+        importRuntimeFresh(),
+        /SQR_AUDIT_HMAC_KEY is required on production-like hosts/i,
+      );
+    },
+  );
+});
+
+test("runtime config rejects production audit HMAC key reuse of the session secret", async () => {
+  await withEnv(
+    {
+      ...productionBaseOverrides,
+      SQR_AUDIT_HMAC_KEY: PROD_SESSION_SECRET,
+      BACKUP_ENCRYPTION_KEY: "A".repeat(32),
+    },
+    async () => {
+      await assert.rejects(
+        importRuntimeFresh(),
+        /SQR_AUDIT_HMAC_KEY must be distinct from SESSION_SECRET/i,
       );
     },
   );

@@ -53,6 +53,8 @@ test("errorHandler redacts sensitive exposed HttpError detail fields", async () 
     throw badRequest("Invalid request.", "INVALID_REQUEST", {
       field: "receipt",
       PG_PASSWORD: "sqr-secret-password",
+      encodedConnectionString: "postgres%3A%2F%2Fsqr%3Asqr-secret%40db.internal%2Fsqr_db",
+      htmlEncodedBearer: "Bearer&#32;eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.secret",
       nested: {
         stack: "Error: leaked stack\n    at /srv/app/server.ts:1:1",
         connectionString: "postgresql://sqr:sqr-secret@db.internal/sqr_db",
@@ -71,11 +73,70 @@ test("errorHandler redacts sensitive exposed HttpError detail fields", async () 
     assert.deepEqual(payload.error.details, {
       field: "receipt",
       PG_PASSWORD: "[redacted]",
+      encodedConnectionString: "[redacted]",
+      htmlEncodedBearer: "[redacted]",
       nested: {
         stack: "[redacted]",
         connectionString: "[redacted]",
         retryable: true,
       },
+    });
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("errorHandler blocks encoded sensitive production response content", async () => {
+  const app = express();
+  app.get("/encoded-sensitive-error", () => {
+    throw badRequest(
+      "DATABASE_URL%3Dpostgres%3A%2F%2Fsqr%3Asecret%40db.internal%2Fsqr",
+      "INVALID_REQUEST",
+      {
+        nested: {
+          tokenHint: "Bearer&#32;eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.secret",
+        },
+      },
+    );
+  });
+  app.use(createErrorHandler({ productionLike: true }));
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const response = await fetch(`${baseUrl}/encoded-sensitive-error`);
+    const payload = await response.json();
+    const serialized = JSON.stringify(payload);
+
+    assert.equal(response.status, 400);
+    assert.doesNotThrow(() => apiErrorPayloadSchema.parse(payload));
+    assert.deepEqual(payload, expectApiError("Invalid request.", "INVALID_REQUEST"));
+    assert.equal(serialized.includes("DATABASE_URL"), false);
+    assert.equal(serialized.includes("Bearer"), false);
+    assert.equal(serialized.includes("postgres"), false);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("errorHandler tolerates invalid encoded entity probes while sanitizing details", async () => {
+  const app = express();
+  app.get("/invalid-entity-probe", () => {
+    throw badRequest("Invalid request.", "INVALID_REQUEST", {
+      harmlessProbe: "&#9999999;",
+      encodedConnectionString: "postgres%3A%2F%2Fsqr%3Asqr-secret%40db.internal%2Fsqr_db",
+    });
+  });
+  app.use(errorHandler);
+
+  const { server, baseUrl } = await startTestServer(app);
+  try {
+    const response = await fetch(`${baseUrl}/invalid-entity-probe`);
+    const payload = await response.json();
+
+    assert.equal(response.status, 400);
+    assert.deepEqual(payload.error.details, {
+      harmlessProbe: "&#9999999;",
+      encodedConnectionString: "[redacted]",
     });
   } finally {
     await stopTestServer(server);

@@ -239,7 +239,21 @@ const resolvedSessionSecret = readSecretOrThrow(
   isProductionLike,
   () => buildEphemeralSecret("session"),
 );
-const resolvedAuditHmacKey = readOptionalString("SQR_AUDIT_HMAC_KEY") ?? resolvedSessionSecret;
+const configuredAuditHmacKey = readOptionalString("SQR_AUDIT_HMAC_KEY");
+const resolvedAuditHmacKey = (() => {
+  if (configuredAuditHmacKey) {
+    if (isProductionLike && configuredAuditHmacKey === resolvedSessionSecret) {
+      throw new Error("SQR_AUDIT_HMAC_KEY must be distinct from SESSION_SECRET on production-like hosts.");
+    }
+    return configuredAuditHmacKey;
+  }
+
+  if (isProductionLike) {
+    throw new Error("SQR_AUDIT_HMAC_KEY is required on production-like hosts and must not fallback to SESSION_SECRET.");
+  }
+
+  return resolvedSessionSecret;
+})();
 
 assertRuntimeSessionSecretMinBytes(resolvedSessionSecret, { nodeEnv });
 
@@ -582,23 +596,25 @@ export const runtimeConfig: RuntimeConfig = Object.freeze({
     users: {
       superuser: {
         username: readString("SEED_SUPERUSER_USERNAME", "superuser"),
-        password: readString("SEED_SUPERUSER_PASSWORD", ""),
+        // Seed passwords are read transiently by the bootstrapper so they are
+        // not retained in the long-lived runtimeConfig object.
+        password: "",
         fullName: readString("SEED_SUPERUSER_FULL_NAME", "Superuser"),
       },
       admin: {
         username: readString("SEED_ADMIN_USERNAME", "admin1"),
-        password: readString("SEED_ADMIN_PASSWORD", ""),
+        password: "",
         fullName: readString("SEED_ADMIN_FULL_NAME", "Admin"),
       },
       user: {
         username: readString("SEED_USER_USERNAME", "user1"),
-        password: readString("SEED_USER_PASSWORD", ""),
+        password: "",
         fullName: readString("SEED_USER_FULL_NAME", "User"),
       },
     },
     freshLocalSuperuser: {
       username: readString("SEED_SUPERUSER_USERNAME", "superuser"),
-      password: readString("SEED_SUPERUSER_PASSWORD", ""),
+      password: "",
       fullName: readString("SEED_SUPERUSER_FULL_NAME", "Local Superuser"),
     },
   },
@@ -609,6 +625,7 @@ const runtimeWarnings = buildRuntimeConfigWarnings({
   isProductionLike,
   publicAppUrl,
   configuredSessionSecret,
+  configuredAuditHmacKey,
   configuredCollectionNicknameTempPassword,
   configuredCollectionPiiEncryptionKey,
   configuredPgPassword,

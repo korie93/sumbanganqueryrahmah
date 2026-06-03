@@ -2,13 +2,16 @@ import {
   readLoginBody,
   readTwoFactorChallengeBody,
 } from "./auth-request-parsers";
+import { ERROR_CODES } from "../../../shared/error-codes";
 import { rotateCsrfTokenAfterPrivilegeEscalation } from "../../http/csrf";
+import { HttpError } from "../../http/errors";
 import { logger } from "../../lib/logger";
 import type { AuthRouteContext } from "./auth-route-shared";
 
 const LEGACY_LOGIN_ROUTE = "/api/login";
 const CANONICAL_LOGIN_ROUTE = "/api/auth/login";
 const LEGACY_LOGIN_ROUTE_SUNSET = "Thu, 31 Dec 2026 23:59:59 GMT";
+const TWO_FACTOR_CHALLENGE_SIGNING_UNAVAILABLE_MESSAGE = "Authentication temporarily unavailable.";
 
 export function registerAuthLoginRoutes(context: AuthRouteContext) {
   const {
@@ -38,10 +41,9 @@ export function registerAuthLoginRoutes(context: AuthRouteContext) {
     });
 
     if (loginResult.kind === "two_factor_required") {
-      return {
-        ok: true,
-        twoFactorRequired: true,
-        challengeToken: signTwoFactorChallengeToken({
+      let challengeToken: string;
+      try {
+        challengeToken = signTwoFactorChallengeToken({
           userId: loginResult.user.id,
           username: loginResult.user.username,
           role: loginResult.user.role,
@@ -49,7 +51,21 @@ export function registerAuthLoginRoutes(context: AuthRouteContext) {
           browserName,
           pcName: body.pcName,
           ipAddress,
-        }),
+        });
+      } catch (error) {
+        logger.error("Two-factor login challenge token signing failed", {
+          event: "two_factor_challenge_token_sign_failed",
+          errorName: error instanceof Error ? error.name : "UnknownError",
+        });
+        throw new HttpError(503, TWO_FACTOR_CHALLENGE_SIGNING_UNAVAILABLE_MESSAGE, {
+          code: ERROR_CODES.SERVICE_UNAVAILABLE,
+        });
+      }
+
+      return {
+        ok: true,
+        twoFactorRequired: true,
+        challengeToken,
         username: loginResult.user.username,
         role: loginResult.user.role,
         mustChangePassword: loginResult.user.mustChangePassword,

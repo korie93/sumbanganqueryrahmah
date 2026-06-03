@@ -17,6 +17,8 @@ import {
 } from "../internal/metrics";
 
 const BASE32_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+const BASE32_SAFE_PATTERN = /^[A-Z2-7]+=*$/;
+const BASE32_VALID_UNPADDED_REMAINDERS = new Set([0, 2, 4, 5, 7]);
 const TOTP_PERIOD_SECONDS = 30;
 const TOTP_DIGITS = 6;
 export type TotpAlgorithm = "sha1" | "sha256";
@@ -48,11 +50,33 @@ function base32Encode(buffer: Buffer) {
   return output;
 }
 
+function normalizeStrictBase32(value: string): string {
+  const normalized = String(value || "").trim().toUpperCase();
+  if (!normalized) {
+    throw new Error("Invalid Base32 secret.");
+  }
+  if (!BASE32_SAFE_PATTERN.test(normalized)) {
+    throw new Error("Invalid Base32 secret.");
+  }
+
+  const firstPaddingIndex = normalized.indexOf("=");
+  if (firstPaddingIndex !== -1) {
+    const padding = normalized.slice(firstPaddingIndex);
+    if (!/^=+$/.test(padding) || normalized.length % 8 !== 0) {
+      throw new Error("Invalid Base32 secret.");
+    }
+  }
+
+  const unpadded = normalized.replace(/=+$/g, "");
+  if (!BASE32_VALID_UNPADDED_REMAINDERS.has(unpadded.length % 8)) {
+    throw new Error("Invalid Base32 secret.");
+  }
+
+  return unpadded;
+}
+
 function base32Decode(value: string) {
-  const normalized = String(value || "")
-    .toUpperCase()
-    .replace(/=+$/g, "")
-    .replace(/[^A-Z2-7]/g, "");
+  const normalized = normalizeStrictBase32(value);
 
   let bits = 0;
   let current = 0;
@@ -145,14 +169,19 @@ export function verifyTwoFactorCode(
   }
 
   const now = Date.now();
-  for (let step = -window; step <= window; step += 1) {
-    const candidate = generateTotpAt(secret, now + step * TOTP_PERIOD_SECONDS * 1000, resolvedAlgorithm);
-    if (isTotpCodeMatch(candidate, code)) {
-      if (resolvedAlgorithm === "sha1") {
-        metrics.increment("twoFactorTotpSha1VerificationSuccessTotal");
+  try {
+    for (let step = -window; step <= window; step += 1) {
+      const candidate = generateTotpAt(secret, now + step * TOTP_PERIOD_SECONDS * 1000, resolvedAlgorithm);
+      if (isTotpCodeMatch(candidate, code)) {
+        if (resolvedAlgorithm === "sha1") {
+          metrics.increment("twoFactorTotpSha1VerificationSuccessTotal");
+        }
+        return true;
       }
-      return true;
     }
+  } catch {
+    metrics.increment("twoFactorInvalidBase32SecretTotal");
+    return false;
   }
 
   return false;

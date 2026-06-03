@@ -75,3 +75,22 @@ test("login request lifecycle aborts pending auth work and ignores stale respons
   assert.match(source, /controller\?\.signal\.aborted/);
   assert.match(source, /setLoading\(false\)/);
 });
+
+test("login submit validation focuses the first invalid field with announced errors", () => {
+  const source = readSource("Login.tsx");
+
+  assert.match(source, /const usernameInputRef = useRef<HTMLInputElement \| null>\(null\)/);
+  assert.match(source, /const passwordInputRef = useRef<HTMLInputElement \| null>\(null\)/);
+  assert.match(source, /const twoFactorCodeInputRef = useRef<HTMLInputElement \| null>\(null\)/);
+  assert.match(source, /const captchaResponseInputRef = useRef<HTMLInputElement \| null>\(null\)/);
+  assert.match(source, /lastFocusedValidationKeyRef/);
+  assert.match(source, /target\.focus\(\{ preventScroll: true \}\)/);
+  assert.match(source, /ref=\{usernameInputRef\}/);
+  assert.match(source, /ref=\{passwordInputRef\}/);
+  assert.match(source, /ref=\{twoFactorCodeInputRef\}/);
+  assert.match(source, /ref=\{captchaResponseInputRef\}/);
+  assert.match(source, /id="login-username-error"[^>]*role="alert"/);
+  assert.match(source, /id="login-password-error"[^>]*role="alert"/);
+  assert.match(source, /id="login-two-factor-error"[^>]*role="alert"/);
+  assert.match(source, /id="login-captcha-error"[^>]*role="alert"/);
+});

@@ -68,6 +68,54 @@ test("createAuthorizeCollectionRecordAccess rejects records outside the current 
   );
 });
 
+test("createAuthorizeCollectionRecordAccess fails closed for banned collection users", async () => {
+  const authorize = createAuthorizeCollectionRecordAccess({
+    storage: createStorage(collectionRecord("alice", "team-a")),
+  });
+
+  await assert.rejects(
+    () => authorize(createRequest({ id: "record-1" }, {
+      ...ownerUser,
+      isBanned: true,
+      status: "active",
+    })),
+    (error: unknown) => {
+      assert.equal((error as CapturedHttpError).statusCode, 403);
+      return true;
+    },
+  );
+});
+
+test("createAuthorizeCollectionRecordAccess fails closed for inactive or expired session snapshots", async () => {
+  const authorize = createAuthorizeCollectionRecordAccess({
+    storage: createStorage(collectionRecord("alice", "team-a")),
+  });
+
+  await assert.rejects(
+    () => authorize(createRequest({ id: "record-1" }, {
+      ...ownerUser,
+      sessionExpiresAt: "2026-01-01T00:00:00.000Z",
+      status: "active",
+    })),
+    (error: unknown) => {
+      assert.equal((error as CapturedHttpError).statusCode, 403);
+      return true;
+    },
+  );
+
+  await assert.rejects(
+    () => authorize(createRequest({ id: "record-1" }, {
+      ...ownerUser,
+      sessionExpiresAt: "2999-01-01T00:00:00.000Z",
+      status: "disabled",
+    })),
+    (error: unknown) => {
+      assert.equal((error as CapturedHttpError).statusCode, 403);
+      return true;
+    },
+  );
+});
+
 test("createAuthorizeCollectionRecordAccess rejects missing records without leaking existence details", async () => {
   const authorize = createAuthorizeCollectionRecordAccess({
     storage: createStorage(undefined),

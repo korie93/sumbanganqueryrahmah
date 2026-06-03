@@ -20,23 +20,27 @@ type SeedableUser = {
   role: string;
 };
 
+function readSeedPassword(envName: "SEED_SUPERUSER_PASSWORD" | "SEED_ADMIN_PASSWORD" | "SEED_USER_PASSWORD"): string {
+  return String(process.env[envName] || "").trim();
+}
+
 function resolveConfiguredSeedUsers(): SeedableUser[] {
   return [
     {
       username: runtimeConfig.bootstrap.users.superuser.username,
-      password: runtimeConfig.bootstrap.users.superuser.password,
+      password: readSeedPassword("SEED_SUPERUSER_PASSWORD"),
       fullName: runtimeConfig.bootstrap.users.superuser.fullName,
       role: "superuser",
     },
     {
       username: runtimeConfig.bootstrap.users.admin.username,
-      password: runtimeConfig.bootstrap.users.admin.password,
+      password: readSeedPassword("SEED_ADMIN_PASSWORD"),
       fullName: runtimeConfig.bootstrap.users.admin.fullName,
       role: "admin",
     },
     {
       username: runtimeConfig.bootstrap.users.user.username,
-      password: runtimeConfig.bootstrap.users.user.password,
+      password: readSeedPassword("SEED_USER_PASSWORD"),
       fullName: runtimeConfig.bootstrap.users.user.fullName,
       role: "user",
     },
@@ -75,7 +79,7 @@ export async function seedUsersBootstrapDefaults(): Promise<void> {
 
   if (isFreshLocalBootstrap) {
     const bootstrapUsername = runtimeConfig.bootstrap.freshLocalSuperuser.username;
-    const bootstrapPassword = String(runtimeConfig.bootstrap.freshLocalSuperuser.password || "").trim();
+    const bootstrapPassword = readSeedPassword("SEED_SUPERUSER_PASSWORD");
     if (!bootstrapPassword) {
       throw new Error(
         "Fresh local bootstrap requires SEED_SUPERUSER_PASSWORD. Temporary credential generation and disk output are disabled by default.",
