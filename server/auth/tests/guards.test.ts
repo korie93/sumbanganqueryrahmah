@@ -1171,7 +1171,7 @@ test("authenticateToken coalesces 100 concurrent refreshes for the same JWT id",
   }
 });
 
-test("authenticateToken rejects new JWT refreshes when the in-flight map reaches capacity", async (t) => {
+test("authenticateToken queues new JWT refreshes when the in-flight map reaches capacity", async (t) => {
   resetSessionRevocationStoreForTests();
   const previousMaxInFlightRefreshes = process.env.SQR_MAX_INFLIGHT_REFRESHES;
   process.env.SQR_MAX_INFLIGHT_REFRESHES = "1";
@@ -1231,7 +1231,7 @@ test("authenticateToken rejects new JWT refreshes when the in-flight map reaches
     path: "/api/me",
   });
   const firstResponse = createMockResponse();
-  const rejectedResponse = createMockResponse();
+  const queuedResponse = createMockResponse();
   let nextCalls = 0;
 
   try {
@@ -1245,29 +1245,30 @@ test("authenticateToken rejects new JWT refreshes when the in-flight map reaches
 
     await revokeStarted.promise;
 
-    await guards.authenticateToken(
+    const queuedAuth = guards.authenticateToken(
       createRefreshRequest(createToken("capacity-second-jti")) as never,
-      rejectedResponse as never,
+      queuedResponse as never,
       () => {
         nextCalls += 1;
       },
     );
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.equal(nextCalls, 0);
 
     releaseRevoke.resolve();
-    await firstAuth;
+    await Promise.all([firstAuth, queuedAuth]);
 
-    assert.equal(nextCalls, 1);
-    assert.equal(rejectedResponse.statusCode, 503);
-    assert.deepEqual(rejectedResponse.body, expectApiError(
-      "Session refresh is temporarily unavailable. Please try again.",
-      "SESSION_REFRESH_UNAVAILABLE",
-    ));
+    assert.equal(nextCalls, 2);
+    assert.equal(firstResponse.statusCode, 200);
+    assert.equal(queuedResponse.statusCode, 200);
+    assert.notEqual(String(firstResponse.getHeader(AUTH_SESSION_REFRESH_HEADER_NAME) || ""), "");
+    assert.notEqual(String(queuedResponse.getHeader(AUTH_SESSION_REFRESH_HEADER_NAME) || ""), "");
     assert.equal(warnings.length, 1);
     assert.equal(
       warnings[0]?.message,
-      "AUDIT2-FIX [L1]: In-flight refresh map at capacity; rejecting new refresh to prevent memory growth",
+      "AUDIT2-FIX [L1]: In-flight refresh map at capacity; queueing refresh until a slot is available",
     );
-    assert.equal(warnings[0]?.payload?.event, "session_refresh_inflight_capacity_reached");
+    assert.equal(warnings[0]?.payload?.event, "session_refresh_inflight_capacity_queued");
     assert.equal(warnings[0]?.payload?.currentSize, 1);
     assert.equal(warnings[0]?.payload?.max, 1);
     assert.doesNotMatch(JSON.stringify(warnings), /capacity-first-jti|capacity-second-jti|guard\.user|user-1/);
@@ -1282,6 +1283,124 @@ test("authenticateToken rejects new JWT refreshes when the in-flight map reaches
       delete process.env.SQR_MAX_INFLIGHT_REFRESHES;
     } else {
       process.env.SQR_MAX_INFLIGHT_REFRESHES = previousMaxInFlightRefreshes;
+    }
+  }
+});
+
+test("authenticateToken fails closed when the session refresh backpressure queue times out", async (t) => {
+  resetSessionRevocationStoreForTests();
+  const previousMaxInFlightRefreshes = process.env.SQR_MAX_INFLIGHT_REFRESHES;
+  const previousQueueTimeout = process.env.SQR_SESSION_REFRESH_QUEUE_TIMEOUT_MS;
+  process.env.SQR_MAX_INFLIGHT_REFRESHES = "1";
+  process.env.SQR_SESSION_REFRESH_QUEUE_TIMEOUT_MS = "50";
+  const secret = "guard-test-secret";
+  const nowMs = Date.parse("2026-05-27T00:00:00.000Z");
+  const nowSeconds = Math.floor(nowMs / 1000);
+  const revokedJwtIds = new Set<string>();
+  const revokeStarted = createDeferred();
+  const releaseRevoke = createDeferred();
+  const warnings: Array<{ message: string; payload: Record<string, unknown> | undefined }> = [];
+  t.mock.method(Date, "now", () => nowMs);
+  t.mock.method(logger, "warn", (message: string, payload?: Record<string, unknown>) => {
+    warnings.push({ message, payload });
+  });
+
+  const restoreRevocationStore = configureSessionRevocationStoreForRuntime({
+    isRevoked: async (jwtId: string) => revokedJwtIds.has(jwtId),
+    revoke: async (record: SessionRevocationRecord) => {
+      if (record.jwtId === "timeout-first-jti") {
+        revokeStarted.resolve();
+        await releaseRevoke.promise;
+      }
+      revokedJwtIds.add(record.jwtId);
+    },
+  });
+
+  const guards = createAuthGuards({
+    storage: {
+      getAuthenticatedSessionSnapshot: async () => createAuthenticatedSessionSnapshot(),
+      getActivityById: async () => undefined,
+      getUser: async () => undefined,
+      getUserByUsername: async () => undefined,
+      isVisitorBanned: async () => false,
+      updateActivity: async () => undefined,
+      getRoleTabVisibility: async () => ({}),
+    },
+    secret,
+  });
+
+  const createToken = (jwtid: string) => jwt.sign(
+    {
+      userId: "user-1",
+      username: "guard.user",
+      role: "admin",
+      activityId: "activity-1",
+      iat: nowSeconds - 81,
+      exp: nowSeconds + 19,
+    },
+    secret,
+    { jwtid },
+  );
+  const createRefreshRequest = (token: string) => ({
+    headers: {
+      authorization: `Bearer ${token}`,
+    },
+    method: "GET",
+    path: "/api/me",
+  });
+  const firstResponse = createMockResponse();
+  const timedOutResponse = createMockResponse();
+  let nextCalls = 0;
+
+  try {
+    const firstAuth = guards.authenticateToken(
+      createRefreshRequest(createToken("timeout-first-jti")) as never,
+      firstResponse as never,
+      () => {
+        nextCalls += 1;
+      },
+    );
+
+    await revokeStarted.promise;
+
+    await guards.authenticateToken(
+      createRefreshRequest(createToken("timeout-second-jti")) as never,
+      timedOutResponse as never,
+      () => {
+        nextCalls += 1;
+      },
+    );
+
+    releaseRevoke.resolve();
+    await firstAuth;
+
+    assert.equal(nextCalls, 1);
+    assert.equal(timedOutResponse.statusCode, 503);
+    assert.deepEqual(timedOutResponse.body, expectApiError(
+      "Session refresh is temporarily unavailable. Please try again.",
+      "SESSION_REFRESH_UNAVAILABLE",
+    ));
+    assert.equal(
+      warnings.some((entry) => entry.payload?.event === "session_refresh_queue_timeout"),
+      true,
+    );
+    assert.doesNotMatch(JSON.stringify(warnings), /timeout-first-jti|timeout-second-jti|guard\.user|user-1/);
+  } finally {
+    releaseRevoke.resolve();
+    guards.stopTabVisibilityCacheSweep();
+    guards.stopActivityUpdateCacheSweep();
+    guards.clearSessionRefreshDeduplication();
+    restoreRevocationStore();
+    resetSessionRevocationStoreForTests();
+    if (previousMaxInFlightRefreshes === undefined) {
+      delete process.env.SQR_MAX_INFLIGHT_REFRESHES;
+    } else {
+      process.env.SQR_MAX_INFLIGHT_REFRESHES = previousMaxInFlightRefreshes;
+    }
+    if (previousQueueTimeout === undefined) {
+      delete process.env.SQR_SESSION_REFRESH_QUEUE_TIMEOUT_MS;
+    } else {
+      process.env.SQR_SESSION_REFRESH_QUEUE_TIMEOUT_MS = previousQueueTimeout;
     }
   }
 });

@@ -31,6 +31,8 @@
 
 - Added a dedicated hashed-fingerprint rate limiter to startup-gated operations
   debug endpoints before the debug token access gate.
+- Replaced fail-fast session refresh capacity handling with a bounded
+  backpressure queue that times out fail-closed when refresh slots do not free.
 
 ### Accessibility
 
@@ -57,6 +59,7 @@
 - `tsx --test server/routes/tests/operations-debug-routes.test.ts server/routes/tests/operations.routes.integration.test.ts`
 - `tsx --test client/src/app/client-timer-cleanup-contract.test.ts client/src/pages/login-page-utils.test.ts client/src/pages/login-lock-state.test.ts`
 - `tsx --test client/src/pages/collection-summary/useCollectionMonthlySameDayPace.contract.test.ts client/src/pages/dashboard/tests/dashboard-layout-contract.test.tsx client/src/pages/dashboard/tests/dashboard-query-errors.test.ts`
+- `tsx --test server/auth/tests/guards.test.ts`
 
 ## 2026-05-31 - SQR resource lifecycle and configuration hardening
 

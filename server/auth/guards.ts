@@ -120,8 +120,15 @@ type SessionRefreshRevocationLogContext = {
 };
 
 const inFlightSessionRefreshes = new Map<string, Promise<SignedRefreshedSessionToken>>();
+type SessionRefreshSlotWaiter = {
+  reject: (reason: Error) => void;
+  resolve: () => void;
+  timer: NodeJS.Timeout;
+};
+const sessionRefreshSlotWaiters: SessionRefreshSlotWaiter[] = [];
+let reservedSessionRefreshSlots = 0;
 
-function getOrCreateInFlightSessionRefresh(
+async function getOrCreateInFlightSessionRefresh(
   refreshDedupKey: string,
   createRefreshPromise: () => Promise<SignedRefreshedSessionToken>,
 ): Promise<SignedRefreshedSessionToken> {
@@ -131,7 +138,15 @@ function getOrCreateInFlightSessionRefresh(
     return existingRefresh;
   }
 
-  assertInFlightSessionRefreshCapacity();
+  const hadReservedSlot = await waitForInFlightSessionRefreshSlot();
+  const existingRefreshAfterWait = inFlightSessionRefreshes.get(refreshDedupKey);
+  if (existingRefreshAfterWait) {
+    if (hadReservedSlot) {
+      releaseReservedSessionRefreshSlot();
+    }
+    internalMetrics.increment("sessionRefreshDedupedTotal");
+    return existingRefreshAfterWait;
+  }
 
   const refreshPromise = Promise.resolve()
     .then(createRefreshPromise)
@@ -139,9 +154,13 @@ function getOrCreateInFlightSessionRefresh(
       if (inFlightSessionRefreshes.get(refreshDedupKey) === refreshPromise) {
         inFlightSessionRefreshes.delete(refreshDedupKey);
       }
+      notifySessionRefreshSlotAvailable();
     });
 
   inFlightSessionRefreshes.set(refreshDedupKey, refreshPromise);
+  if (hadReservedSlot) {
+    releaseReservedSessionRefreshSlot();
+  }
   return refreshPromise;
 }
 
@@ -265,6 +284,10 @@ const NON_RETRYABLE_SESSION_REVOCATION_ERROR_CODES = new Set([
 const DEFAULT_MAX_INFLIGHT_SESSION_REFRESHES = 500;
 const MIN_MAX_INFLIGHT_SESSION_REFRESHES = 1;
 const HARD_MAX_INFLIGHT_SESSION_REFRESHES = 10_000;
+const DEFAULT_MAX_WAITING_SESSION_REFRESHES = 500;
+const DEFAULT_SESSION_REFRESH_QUEUE_TIMEOUT_MS = 5_000;
+const MIN_SESSION_REFRESH_QUEUE_TIMEOUT_MS = 50;
+const MAX_SESSION_REFRESH_QUEUE_TIMEOUT_MS = 30_000;
 
 function resolveMaxInFlightSessionRefreshes(): number {
   return readInt("SQR_MAX_INFLIGHT_REFRESHES", DEFAULT_MAX_INFLIGHT_SESSION_REFRESHES, {
@@ -273,18 +296,99 @@ function resolveMaxInFlightSessionRefreshes(): number {
   });
 }
 
-function assertInFlightSessionRefreshCapacity(): void {
+function resolveMaxWaitingSessionRefreshes(): number {
+  return readInt("SQR_MAX_WAITING_REFRESHES", DEFAULT_MAX_WAITING_SESSION_REFRESHES, {
+    min: 0,
+    max: HARD_MAX_INFLIGHT_SESSION_REFRESHES,
+  });
+}
+
+function resolveSessionRefreshQueueTimeoutMs(): number {
+  return readInt("SQR_SESSION_REFRESH_QUEUE_TIMEOUT_MS", DEFAULT_SESSION_REFRESH_QUEUE_TIMEOUT_MS, {
+    min: MIN_SESSION_REFRESH_QUEUE_TIMEOUT_MS,
+    max: MAX_SESSION_REFRESH_QUEUE_TIMEOUT_MS,
+  });
+}
+
+function getReservedSessionRefreshCapacityUsage(): number {
+  return inFlightSessionRefreshes.size + reservedSessionRefreshSlots;
+}
+
+function releaseReservedSessionRefreshSlot(): void {
+  reservedSessionRefreshSlots = Math.max(0, reservedSessionRefreshSlots - 1);
+  notifySessionRefreshSlotAvailable();
+}
+
+function removeSessionRefreshSlotWaiter(waiter: SessionRefreshSlotWaiter): void {
+  const index = sessionRefreshSlotWaiters.indexOf(waiter);
+  if (index >= 0) {
+    sessionRefreshSlotWaiters.splice(index, 1);
+  }
+}
+
+function notifySessionRefreshSlotAvailable(): void {
   const max = resolveMaxInFlightSessionRefreshes();
-  if (inFlightSessionRefreshes.size < max) {
-    return;
+  while (
+    sessionRefreshSlotWaiters.length > 0
+    && getReservedSessionRefreshCapacityUsage() < max
+  ) {
+    const waiter = sessionRefreshSlotWaiters.shift();
+    if (!waiter) {
+      return;
+    }
+    clearTimeout(waiter.timer);
+    reservedSessionRefreshSlots += 1;
+    waiter.resolve();
+  }
+}
+
+async function waitForInFlightSessionRefreshSlot(): Promise<boolean> {
+  const max = resolveMaxInFlightSessionRefreshes();
+  if (getReservedSessionRefreshCapacityUsage() < max) {
+    return false;
   }
 
-  logger.warn("AUDIT2-FIX [L1]: In-flight refresh map at capacity; rejecting new refresh to prevent memory growth", {
-    event: "session_refresh_inflight_capacity_reached",
+  const maxWaiting = resolveMaxWaitingSessionRefreshes();
+  if (sessionRefreshSlotWaiters.length >= maxWaiting) {
+    logger.warn("AUDIT2-FIX [L1]: Session refresh queue at capacity; rejecting new refresh to prevent memory growth", {
+      event: "session_refresh_queue_capacity_reached",
+      currentSize: inFlightSessionRefreshes.size,
+      max,
+      waiting: sessionRefreshSlotWaiters.length,
+      maxWaiting,
+    });
+    throw new Error("Too many queued session refreshes; retry shortly.");
+  }
+
+  const timeoutMs = resolveSessionRefreshQueueTimeoutMs();
+  logger.warn("AUDIT2-FIX [L1]: In-flight refresh map at capacity; queueing refresh until a slot is available", {
+    event: "session_refresh_inflight_capacity_queued",
     currentSize: inFlightSessionRefreshes.size,
     max,
+    timeoutMs,
+    waiting: sessionRefreshSlotWaiters.length + 1,
   });
-  throw new Error("Too many concurrent session refreshes; retry shortly.");
+
+  await new Promise<void>((resolve, reject) => {
+    const waiter: SessionRefreshSlotWaiter = {
+      reject,
+      resolve,
+      timer: setTimeout(() => {
+        removeSessionRefreshSlotWaiter(waiter);
+        logger.warn("AUDIT2-FIX [L1]: Session refresh queue wait timed out", {
+          event: "session_refresh_queue_timeout",
+          currentSize: inFlightSessionRefreshes.size,
+          max,
+          timeoutMs,
+        });
+        reject(new Error("Timed out waiting for session refresh capacity."));
+      }, timeoutMs),
+    };
+    waiter.timer.unref?.();
+    sessionRefreshSlotWaiters.push(waiter);
+  });
+
+  return true;
 }
 
 function normalizeRetryAttempts(value: number | undefined): number {
@@ -538,6 +642,14 @@ async function refreshSessionJwtAfterRevocation(params: {
 
 function clearSessionRefreshDeduplication(): void {
   inFlightSessionRefreshes.clear();
+  reservedSessionRefreshSlots = 0;
+  while (sessionRefreshSlotWaiters.length > 0) {
+    const waiter = sessionRefreshSlotWaiters.shift();
+    if (waiter) {
+      clearTimeout(waiter.timer);
+      waiter.reject(new Error("Session refresh queue cleared."));
+    }
+  }
 }
 
 function firstHeaderValue(value: string | string[] | undefined): string {
