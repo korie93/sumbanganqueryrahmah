@@ -23,6 +23,11 @@
 - Moved collection monthly summary window listener cleanup to AbortController
   signals so refresh listeners are released atomically on hook unmount.
 
+### Security
+
+- Added a dedicated hashed-fingerprint rate limiter to startup-gated operations
+  debug endpoints before the debug token access gate.
+
 ### Accessibility
 
 - Added explicit group and pressed-state semantics to monthly comparison quick
@@ -45,6 +50,7 @@
 - `tsx --test client/src/pages/ai/ai-page-controller-utils.test.ts client/src/pages/ai/ai-page-controller-structure.contract.test.ts client/src/pages/ai/ai-conversation-card-a11y-contract.test.ts client/src/app/client-timer-cleanup-contract.test.ts`
 - `tsx --test client/src/pages/ai/useAIPageState.reducer.test.ts client/src/pages/ai/ai-page-controller-structure.contract.test.ts client/src/pages/ai/ai-page-controller-utils.test.ts client/src/app/client-timer-cleanup-contract.test.ts`
 - `tsx --test server/lib/tests/process-timeout-manager.test.ts server/services/tests/collection-receipt-external-scan.test.ts server/services/tests/collection-receipt-external-scan-startup.test.ts`
+- `tsx --test server/routes/tests/operations-debug-routes.test.ts server/routes/tests/operations.routes.integration.test.ts`
 
 ## 2026-05-31 - SQR resource lifecycle and configuration hardening
 

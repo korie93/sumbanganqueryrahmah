@@ -1,12 +1,16 @@
-import { timingSafeEqual } from "node:crypto";
+import { createHash, timingSafeEqual } from "node:crypto";
 import type { Request, RequestHandler } from "express";
+import rateLimit from "express-rate-limit";
 import { asyncHandler } from "../http/async-handler";
 import { buildApiErrorResponse } from "../http/api-error-response";
 import { logger } from "../lib/logger";
+import { buildRequestRateLimitFingerprint } from "../middleware/rate-limit";
 import type { OperationsRouteContext } from "./operations-route-context";
 
 const MIN_DEBUG_ACCESS_TOKEN_LENGTH = 32;
 const DEFAULT_DEBUG_ALLOWED_IPS = Object.freeze(["127.0.0.1", "::1"]);
+export const OPERATIONS_DEBUG_RATE_LIMIT_WINDOW_MS = 60_000;
+export const OPERATIONS_DEBUG_RATE_LIMIT_MAX = 10;
 
 export type OperationsDebugRouteStartupLock = Readonly<{
   enabled: boolean;
@@ -106,6 +110,38 @@ function isDebugIpAllowed(req: Request, allowedIps: readonly string[]) {
   return candidates.some((ip) => ip !== null && allowed.has(ip));
 }
 
+function buildOperationsDebugRateLimitKey(req: Request) {
+  const fingerprint = buildRequestRateLimitFingerprint(req).join("|");
+  return createHash("sha256")
+    .update(`operations-debug:${fingerprint}`)
+    .digest("hex")
+    .slice(0, 32);
+}
+
+export function createOperationsDebugRateLimiter(options: {
+  max?: number | undefined;
+  windowMs?: number | undefined;
+} = {}): RequestHandler {
+  const max = options.max ?? OPERATIONS_DEBUG_RATE_LIMIT_MAX;
+  const windowMs = options.windowMs ?? OPERATIONS_DEBUG_RATE_LIMIT_WINDOW_MS;
+
+  return rateLimit({
+    windowMs,
+    max,
+    standardHeaders: true,
+    legacyHeaders: false,
+    keyGenerator: buildOperationsDebugRateLimitKey,
+    handler: (req, res) => {
+      logger.warn("Operations debug route rate limit exceeded", {
+        path: req.path,
+      });
+      res.status(429).json(buildApiErrorResponse("Too many debug requests", {
+        statusCode: 429,
+      }));
+    },
+  });
+}
+
 export function createOperationsDebugAccessGate(
   startupLock: OperationsDebugRouteStartupLock,
 ): RequestHandler {
@@ -150,10 +186,12 @@ export function registerOperationsDebugRoutes(
   } = context;
   const debugAuditMiddleware = context.debugAuditMiddleware ?? ((_req, _res, next) => next());
   const debugAccessGate = createOperationsDebugAccessGate(startupLock);
+  const debugRateLimiter = createOperationsDebugRateLimiter();
 
   app.get(
     "/api/debug/websocket-clients",
     debugAuditMiddleware,
+    debugRateLimiter,
     debugAccessGate,
     authenticateToken,
     requireRole("superuser"),

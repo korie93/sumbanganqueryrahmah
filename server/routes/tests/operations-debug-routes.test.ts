@@ -6,6 +6,7 @@ import {
   type DebugAuditEntry,
 } from "../../middleware/debug-audit";
 import {
+  OPERATIONS_DEBUG_RATE_LIMIT_MAX,
   createOperationsDebugRouteStartupLock,
   createOperationsDebugAccessGate,
   isOperationsDebugRoutesEnabled,
@@ -193,6 +194,66 @@ test("registerOperationsDebugRoutes hides mounted endpoints without the dedicate
     assert.equal(debugAuditEntries.length, 1);
     assert.equal(debugAuditEntries[0]?.path, "/api/debug/websocket-clients");
     assert.equal(debugAuditEntries[0]?.userId, null);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("registerOperationsDebugRoutes rate limits repeated debug endpoint probes", async () => {
+  const app = createJsonTestApp();
+  let calls = 0;
+
+  registerOperationsDebugRoutes({
+    app,
+    operationsController: {
+      getWebsocketClients: async (_req: Request, res: Response) => {
+        calls += 1;
+        return res.json({ ok: true });
+      },
+    } as never,
+    authenticateToken: createTestAuthenticateToken({
+      userId: "super-1",
+      username: "super.user",
+      role: "superuser",
+      activityId: "activity-1",
+    }),
+    requireRole: createTestRequireRole(),
+    requireTabAccess: () => (_req, _res, next) => next(),
+  }, createOperationsDebugRouteStartupLock({
+    enabled: true,
+    productionLike: false,
+    accessToken: DEBUG_ACCESS_TOKEN,
+    allowedIps: ["127.0.0.1"],
+  }));
+
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    for (let attempt = 0; attempt < OPERATIONS_DEBUG_RATE_LIMIT_MAX; attempt += 1) {
+      const response = await fetch(`${baseUrl}/api/debug/websocket-clients`, {
+        headers: {
+          authorization: "Bearer wrong-token",
+        },
+      });
+      assert.equal(response.status, 404);
+    }
+
+    const limited = await fetch(`${baseUrl}/api/debug/websocket-clients`, {
+      headers: {
+        authorization: "Bearer wrong-token",
+      },
+    });
+    assert.equal(limited.status, 429);
+    assert.deepEqual(await limited.json(), {
+      ok: false,
+      message: "Too many debug requests",
+      code: "RATE_LIMITED",
+      error: {
+        code: "RATE_LIMITED",
+        message: "Too many debug requests",
+      },
+    });
+    assert.equal(calls, 0);
   } finally {
     await stopTestServer(server);
   }
