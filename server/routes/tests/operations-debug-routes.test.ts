@@ -2,6 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { Request, Response } from "express";
 import {
+  createDebugAuditMiddleware,
+  type DebugAuditEntry,
+} from "../../middleware/debug-audit";
+import {
   createOperationsDebugRouteStartupLock,
   createOperationsDebugAccessGate,
   isOperationsDebugRoutesEnabled,
@@ -135,6 +139,7 @@ test("registerOperationsDebugRoutes mounts endpoints only when explicitly enable
 test("registerOperationsDebugRoutes hides mounted endpoints without the dedicated debug token", async () => {
   const app = createJsonTestApp();
   let calls = 0;
+  const debugAuditEntries: DebugAuditEntry[] = [];
 
   registerOperationsDebugRoutes({
     app,
@@ -152,6 +157,11 @@ test("registerOperationsDebugRoutes hides mounted endpoints without the dedicate
     }),
     requireRole: createTestRequireRole(),
     requireTabAccess: () => (_req, _res, next) => next(),
+    debugAuditMiddleware: createDebugAuditMiddleware({
+      insert: (entry) => {
+        debugAuditEntries.push(entry);
+      },
+    }),
   }, createOperationsDebugRouteStartupLock({
     enabled: true,
     productionLike: false,
@@ -180,9 +190,35 @@ test("registerOperationsDebugRoutes hides mounted endpoints without the dedicate
       },
     });
     assert.equal(calls, 0);
+    assert.equal(debugAuditEntries.length, 1);
+    assert.equal(debugAuditEntries[0]?.path, "/api/debug/websocket-clients");
+    assert.equal(debugAuditEntries[0]?.userId, null);
   } finally {
     await stopTestServer(server);
   }
+});
+
+test("createDebugAuditMiddleware keeps debug route requests flowing when audit insert fails", () => {
+  const middleware = createDebugAuditMiddleware({
+    insert: () => {
+      throw new Error("audit unavailable");
+    },
+  });
+  let nextCalled = false;
+
+  middleware({
+    headers: {},
+    ip: "127.0.0.1",
+    method: "GET",
+    originalUrl: "/api/debug/websocket-clients",
+    path: "/api/debug/websocket-clients",
+    query: {},
+    socket: { remoteAddress: "127.0.0.1" },
+  } as unknown as Request, {} as Response, () => {
+    nextCalled = true;
+  });
+
+  assert.equal(nextCalled, true);
 });
 
 test("registerOperationsDebugRoutes hides mounted endpoints from non-allowlisted IPs", async () => {

@@ -148,10 +148,12 @@ export function registerOperationsDebugRoutes(
     authenticateToken,
     requireRole,
   } = context;
+  const debugAuditMiddleware = context.debugAuditMiddleware ?? ((_req, _res, next) => next());
   const debugAccessGate = createOperationsDebugAccessGate(startupLock);
 
   app.get(
     "/api/debug/websocket-clients",
+    debugAuditMiddleware,
     debugAccessGate,
     authenticateToken,
     requireRole("superuser"),

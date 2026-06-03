@@ -1,4 +1,5 @@
 import type { Express } from "express";
+import { createDebugAuditMiddleware } from "../middleware/debug-audit";
 import { registerOperationsAnalyticsRoutes } from "./operations-analytics-routes";
 import { registerOperationsAuditRoutes } from "./operations-audit-routes";
 import { registerOperationsBackupRoutes } from "./operations-backup-routes";
@@ -12,7 +13,10 @@ import {
 } from "./operations-route-context";
 
 export function registerOperationsRoutes(app: Express, deps: OperationsRouteDeps) {
-  const context = createOperationsRouteContext(app, deps);
+  const context = createOperationsRouteContext(app, {
+    ...deps,
+    debugAuditMiddleware: deps.debugAuditMiddleware ?? createDebugAuditMiddleware(),
+  });
   registerOperationsAuditRoutes(context);
   registerOperationsAnalyticsRoutes(context);
   registerOperationsBackupRoutes(context);

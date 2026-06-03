@@ -11,6 +11,7 @@ import {
   backups,
   bannedSessions,
   dataRows,
+  debugAuditLogs,
   imports,
   monitorAlertIncidents,
   passwordResetRequests,
@@ -57,6 +58,7 @@ export {
   userActivity,
   bannedSessions,
   auditLogs,
+  debugAuditLogs,
   backups,
   backupPayloadChunks,
   backupJobs,
@@ -246,6 +248,7 @@ export type UserActivity = typeof userActivity.$inferSelect;
 export type BannedSessionRow = typeof bannedSessions.$inferSelect;
 export type InsertAuditLog = z.infer<typeof insertAuditLogSchema>;
 export type AuditLog = typeof auditLogs.$inferSelect;
+export type DebugAuditLog = typeof debugAuditLogs.$inferSelect;
 export type InsertBackup = z.infer<typeof insertBackupSchema>;
 export type Backup = typeof backups.$inferSelect;
 export type BackupPayloadChunkRow = typeof backupPayloadChunks.$inferSelect;

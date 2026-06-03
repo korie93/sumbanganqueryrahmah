@@ -6,6 +6,7 @@ export type OperationsRouteDeps = {
   authenticateToken: RequestHandler;
   requireRole: (...roles: string[]) => RequestHandler;
   requireTabAccess: (tabId: string) => RequestHandler;
+  debugAuditMiddleware?: RequestHandler | undefined;
   operationsDebugRoutesEnabled?: boolean | undefined;
   operationsDebugRoutesProductionLike?: boolean | undefined;
   operationsDebugAccessToken?: string | null | undefined;
@@ -18,6 +19,7 @@ export type OperationsRouteContext = {
   authenticateToken: RequestHandler;
   requireRole: (...roles: string[]) => RequestHandler;
   requireTabAccess: (tabId: string) => RequestHandler;
+  debugAuditMiddleware?: RequestHandler | undefined;
   operationsDebugRoutesEnabled?: boolean | undefined;
   operationsDebugRoutesProductionLike?: boolean | undefined;
   operationsDebugAccessToken?: string | null | undefined;
@@ -34,6 +36,7 @@ export function createOperationsRouteContext(
     authenticateToken: deps.authenticateToken,
     requireRole: deps.requireRole,
     requireTabAccess: deps.requireTabAccess,
+    debugAuditMiddleware: deps.debugAuditMiddleware,
     operationsDebugRoutesEnabled: deps.operationsDebugRoutesEnabled,
     operationsDebugRoutesProductionLike: deps.operationsDebugRoutesProductionLike,
     operationsDebugAccessToken: deps.operationsDebugAccessToken,

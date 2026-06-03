@@ -189,6 +189,22 @@ export const auditLogs = pgTable("audit_logs", {
   requestIdIdx: index("idx_audit_logs_request_id").on(table.requestId),
 }));
 
+export const debugAuditLogs = pgTable("debug_audit_log", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  timestamp: utcTimestamp("timestamp").defaultNow().notNull(),
+  userId: text("user_id"),
+  ipAddress: text("ip_address"),
+  method: text("method").notNull(),
+  path: text("path").notNull(),
+  userAgent: text("user_agent"),
+  queryParams: text("query_params").notNull().default("{}"),
+}, (table) => ({
+  timestampIdx: index("idx_debug_audit_log_timestamp").on(table.timestamp),
+  userIdIdx: index("idx_debug_audit_log_user_id").on(table.userId),
+  ipAddressIdx: index("idx_debug_audit_log_ip_address").on(table.ipAddress),
+  pathIdx: index("idx_debug_audit_log_path").on(table.path),
+}));
+
 export const mutationIdempotencyKeys = pgTable("mutation_idempotency_keys", {
   id: uuid("id").defaultRandom().primaryKey(),
   scope: text("scope").notNull(),

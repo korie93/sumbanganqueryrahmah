@@ -6,6 +6,10 @@ import test from "node:test";
 import type { WebSocket } from "ws";
 import { createOperationsController } from "../../controllers/operations.controller";
 import { errorHandler } from "../../middleware/error-handler";
+import {
+  createDebugAuditMiddleware,
+  type DebugAuditEntry,
+} from "../../middleware/debug-audit";
 import { AuditLogOperationsService } from "../../services/audit-log-operations.service";
 import { BackupJobQueueService } from "../../services/backup-job-queue.service";
 import { BackupOperationsService } from "../../services/backup-operations.service";
@@ -88,6 +92,7 @@ function createOperationsRouteHarness(options?: {
   maxPayloadBytes?: number;
 }) {
   const auditLogs: AuditEntry[] = [];
+  const debugAuditEntries: DebugAuditEntry[] = [];
   const cleanupCalls: Date[] = [];
   const topUserCalls: number[] = [];
   const createBackupCalls: CreateBackupData[] = [];
@@ -349,6 +354,11 @@ function createOperationsRouteHarness(options?: {
     }),
     requireRole: createTestRequireRole(),
     requireTabAccess: () => allowAllTabs(),
+    debugAuditMiddleware: createDebugAuditMiddleware({
+      insert: (entry) => {
+        debugAuditEntries.push(entry);
+      },
+    }),
     operationsDebugRoutesEnabled: true,
     operationsDebugRoutesProductionLike: false,
     operationsDebugAccessToken: OPERATIONS_DEBUG_TEST_TOKEN,
@@ -359,6 +369,7 @@ function createOperationsRouteHarness(options?: {
   return {
     app,
     auditLogs,
+    debugAuditEntries,
     cleanupCalls,
     topUserCalls,
     createBackupCalls,
@@ -797,11 +808,11 @@ test("GET /api/backups requires superuser role", async () => {
 });
 
 test("GET /api/debug/websocket-clients returns the connected activity ids", async () => {
-  const { app } = createOperationsRouteHarness();
+  const { app, debugAuditEntries } = createOperationsRouteHarness();
   const { server, baseUrl } = await startTestServer(app);
 
   try {
-    const response = await fetch(`${baseUrl}/api/debug/websocket-clients`, {
+    const response = await fetch(`${baseUrl}/api/debug/websocket-clients?probe=1`, {
       headers: {
         authorization: `Bearer ${OPERATIONS_DEBUG_TEST_TOKEN}`,
       },
@@ -811,6 +822,11 @@ test("GET /api/debug/websocket-clients returns the connected activity ids", asyn
       count: 2,
       clients: ["activity-1", "activity-2"],
     });
+    assert.equal(debugAuditEntries.length, 1);
+    assert.equal(debugAuditEntries[0]?.method, "GET");
+    assert.equal(debugAuditEntries[0]?.path, "/api/debug/websocket-clients");
+    assert.equal(debugAuditEntries[0]?.userId, null);
+    assert.match(debugAuditEntries[0]?.queryParams ?? "", /"probe":"1"/);
   } finally {
     await stopTestServer(server);
   }

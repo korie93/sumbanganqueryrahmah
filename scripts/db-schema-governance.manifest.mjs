@@ -77,6 +77,10 @@ export const schemaGovernanceManifest = {
       ["drizzle-migration"],
       "Forward-only migration audit ledger records reviewed remediation decisions without mutating historical migration SQL.",
     ),
+    debug_audit_log: drizzleReviewed(
+      ["drizzle-schema", "drizzle-migration"],
+      "Operations debug route access attempts use a dedicated audit stream separate from user-facing audit logs.",
+    ),
     backup_jobs: drizzleReviewed(
       ["drizzle-schema", "drizzle-migration", "runtime-ddl"],
       "Backup queue persistence now has a reviewed Drizzle migration while runtime bootstrap keeps legacy installs compatible.",

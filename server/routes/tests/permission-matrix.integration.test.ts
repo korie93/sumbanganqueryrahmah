@@ -206,6 +206,7 @@ function createOperationsPermissionHarness() {
     authenticateToken: createTestAuthenticateToken(),
     requireRole: createTestRequireRole(),
     requireTabAccess: createTestRequireTabAccess(),
+    debugAuditMiddleware: (_req, _res, next) => next(),
     operationsDebugRoutesEnabled: true,
     operationsDebugRoutesProductionLike: false,
     operationsDebugAccessToken: OPERATIONS_DEBUG_TEST_TOKEN,
