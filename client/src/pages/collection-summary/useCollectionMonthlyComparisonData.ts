@@ -222,9 +222,12 @@ export function useCollectionMonthlyComparisonData({
       void loadComparison(appliedFilters);
     };
 
-    window.addEventListener(COLLECTION_DATA_CHANGED_EVENT, handleCollectionDataChanged);
+    const eventListenerController = new AbortController();
+    window.addEventListener(COLLECTION_DATA_CHANGED_EVENT, handleCollectionDataChanged, {
+      signal: eventListenerController.signal,
+    });
     return () => {
-      window.removeEventListener(COLLECTION_DATA_CHANGED_EVENT, handleCollectionDataChanged);
+      eventListenerController.abort();
     };
   }, [appliedFilters, loadComparison]);
 

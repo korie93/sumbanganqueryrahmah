@@ -31,6 +31,8 @@ test("useCollectionMonthlySameDayPace keeps daily comparison loading abortable a
   assert.match(source, /currentOverview\.summary\.monthlyTarget/);
   assert.match(source, /previousOverview\.summary\.monthlyTarget/);
   assert.match(source, /abortControllerRef\.current\.abort\(\)/);
-  assert.match(source, /window\.addEventListener\(COLLECTION_DATA_CHANGED_EVENT/);
-  assert.match(source, /window\.removeEventListener\(COLLECTION_DATA_CHANGED_EVENT/);
+  assert.match(source, /const eventListenerController = new AbortController\(\);/);
+  assert.match(source, /window\.addEventListener\(COLLECTION_DATA_CHANGED_EVENT, handleCollectionDataChanged, \{\s*signal: eventListenerController\.signal,\s*\}\);/s);
+  assert.match(source, /eventListenerController\.abort\(\)/);
+  assert.doesNotMatch(source, /window\.removeEventListener\(COLLECTION_DATA_CHANGED_EVENT/);
 });

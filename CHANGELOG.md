@@ -7,9 +7,15 @@
 - Sharded the adaptive auth rate-limit cooldown cache into bounded LRU segments
   so pressure eviction no longer walks one global cache during sustained bursts.
 
+### Bug Fixes
+
+- Moved collection monthly summary window listener cleanup to AbortController
+  signals so refresh listeners are released atomically on hook unmount.
+
 ### Verification
 
 - `tsx --test server/middleware/tests/rate-limit.test.ts`
+- `tsx --test client/src/pages/collection-summary/useCollectionMonthlySameDayPace.contract.test.ts client/src/pages/collection-summary/useCollectionMonthlyComparisonData.contract.test.ts`
 
 ## 2026-05-31 - SQR resource lifecycle and configuration hardening
 

@@ -31,8 +31,10 @@ test("useCollectionMonthlyComparisonData aborts in-flight requests on cleanup an
   assert.match(source, /const abortControllerRef = useRef<AbortController \| null>\(null\)/);
   assert.match(source, /abortControllerRef\.current\.abort\(\)/);
   assert.match(source, /return \(\) => \{\s*isMountedRef\.current = false;\s*abortRequest\(\);\s*\};/s);
-  assert.match(source, /window\.addEventListener\(COLLECTION_DATA_CHANGED_EVENT/);
-  assert.match(source, /window\.removeEventListener\(COLLECTION_DATA_CHANGED_EVENT/);
+  assert.match(source, /const eventListenerController = new AbortController\(\);/);
+  assert.match(source, /window\.addEventListener\(COLLECTION_DATA_CHANGED_EVENT, handleCollectionDataChanged, \{\s*signal: eventListenerController\.signal,\s*\}\);/s);
+  assert.match(source, /eventListenerController\.abort\(\)/);
+  assert.doesNotMatch(source, /window\.removeEventListener\(COLLECTION_DATA_CHANGED_EVENT/);
 });
 
 test("useCollectionMonthlyComparisonTarget reads configured target safely without stale fallback", () => {
