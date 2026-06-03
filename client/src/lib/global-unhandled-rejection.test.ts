@@ -59,13 +59,30 @@ test("installGlobalUnhandledRejectionHandler logs unhandled errors through clien
   }
 });
 
-test("installGlobalUnhandledRejectionHandler falls back to console errors outside diagnostic mode", () => {
+test("installGlobalUnhandledRejectionHandler stays silent outside diagnostic mode by default", () => {
   const { target, getListener } = createUnhandledRejectionTarget();
-  const fallbackErrors: unknown[][] = [];
   const cleanup = installGlobalUnhandledRejectionHandler({
     env: { DEV: false, VITE_CLIENT_DEBUG: "0" },
-    fallbackConsoleError: (...args: unknown[]) => {
-      fallbackErrors.push(args);
+    target,
+  });
+
+  try {
+    const listener = getListener();
+
+    assert.ok(listener);
+    listener({ reason: "network timeout" });
+  } finally {
+    cleanup();
+  }
+});
+
+test("installGlobalUnhandledRejectionHandler can forward production diagnostics to a reporter", () => {
+  const { target, getListener } = createUnhandledRejectionTarget();
+  const reported: unknown[][] = [];
+  const cleanup = installGlobalUnhandledRejectionHandler({
+    env: { DEV: false, VITE_CLIENT_DEBUG: "0" },
+    productionReporter: (message, reason, details) => {
+      reported.push([message, reason, details]);
     },
     target,
   });
@@ -76,7 +93,13 @@ test("installGlobalUnhandledRejectionHandler falls back to console errors outsid
     assert.ok(listener);
     listener({ reason: "network timeout" });
 
-    assert.deepEqual(fallbackErrors, [["Unhandled promise rejection", "network timeout"]]);
+    assert.deepEqual(reported, [
+      [
+        "Unhandled promise rejection",
+        "network timeout",
+        { reasonType: "string", source: "window.unhandledrejection" },
+      ],
+    ]);
   } finally {
     cleanup();
   }

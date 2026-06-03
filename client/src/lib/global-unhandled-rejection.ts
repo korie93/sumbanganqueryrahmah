@@ -14,8 +14,12 @@ type GlobalUnhandledRejectionTarget = {
 
 type InstallGlobalUnhandledRejectionOptions = {
   env?: ClientLoggerEnvironment;
-  fallbackConsoleError?: (...args: unknown[]) => void;
   logError?: typeof logClientError;
+  productionReporter?: (
+    message: string,
+    reason: unknown | undefined,
+    details: ReturnType<typeof buildUnhandledRejectionDetails>,
+  ) => void;
   target?: GlobalUnhandledRejectionTarget;
 };
 
@@ -32,7 +36,7 @@ export function installGlobalUnhandledRejectionHandler(
   const target = options.target ?? (window as GlobalUnhandledRejectionTarget);
   const env = options.env ?? import.meta.env;
   const logError = options.logError ?? logClientError;
-  const fallbackConsoleError = options.fallbackConsoleError ?? console.error;
+  const productionReporter = options.productionReporter;
 
   target.__SQR_UNHANDLED_REJECTION_CLEANUP__?.();
 
@@ -53,12 +57,7 @@ export function installGlobalUnhandledRejectionHandler(
       return;
     }
 
-    if (reason === undefined) {
-      fallbackConsoleError("Unhandled promise rejection");
-      return;
-    }
-
-    fallbackConsoleError("Unhandled promise rejection", reason);
+    productionReporter?.("Unhandled promise rejection", reason, details);
   };
 
   target.addEventListener("unhandledrejection", onUnhandledRejection);

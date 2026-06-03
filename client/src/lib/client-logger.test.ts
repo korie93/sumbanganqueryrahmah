@@ -73,3 +73,19 @@ test("logClientWarning writes to console during development diagnostics", () => 
     console.warn = originalConsoleWarn;
   }
 });
+
+test("logClientWarning writes details without an undefined error placeholder", () => {
+  const captured: unknown[][] = [];
+  const originalConsoleWarn = console.warn;
+  console.warn = ((...args: unknown[]) => {
+    captured.push(args);
+  }) as typeof console.warn;
+
+  try {
+    logClientWarning("dev warning", undefined, { context: "safe-json" }, { DEV: true });
+    assert.equal(captured.length, 1);
+    assert.deepEqual(captured[0], ["dev warning", { context: "safe-json" }]);
+  } finally {
+    console.warn = originalConsoleWarn;
+  }
+});

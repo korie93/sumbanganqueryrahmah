@@ -7,6 +7,21 @@ export function shouldLogClientDiagnostics(env: ClientLoggerEnvironment = import
   return Boolean(env?.DEV || env?.VITE_CLIENT_DEBUG === "1");
 }
 
+function buildClientLogArguments(
+  message: string,
+  error?: unknown,
+  details?: unknown,
+): unknown[] {
+  const args: unknown[] = [message];
+  if (error !== undefined) {
+    args.push(error);
+  }
+  if (details !== undefined) {
+    args.push(details);
+  }
+  return args;
+}
+
 export function logClientError(
   message: string,
   error?: unknown,
@@ -17,17 +32,7 @@ export function logClientError(
     return;
   }
 
-  if (details !== undefined) {
-    console.error(message, error, details);
-    return;
-  }
-
-  if (error !== undefined) {
-    console.error(message, error);
-    return;
-  }
-
-  console.error(message);
+  console.error(...buildClientLogArguments(message, error, details));
 }
 
 export function logClientWarning(
@@ -40,15 +45,5 @@ export function logClientWarning(
     return;
   }
 
-  if (details !== undefined) {
-    console.warn(message, error, details);
-    return;
-  }
-
-  if (error !== undefined) {
-    console.warn(message, error);
-    return;
-  }
-
-  console.warn(message);
+  console.warn(...buildClientLogArguments(message, error, details));
 }

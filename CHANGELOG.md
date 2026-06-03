@@ -26,6 +26,8 @@
   for login animation-frame and AI typing interval ownership.
 - Switched independent dashboard refresh and collection same-day pace fetches
   to settled-result handling so partial failures keep usable successful data.
+- Routed safe JSON parse diagnostics through the gated client logger and made
+  unhandled rejection production reporting opt-in instead of console-backed.
 
 ### Security
 
@@ -70,6 +72,7 @@
 - `tsx --test server/lib/tests/logger.test.ts`
 - `node --test scripts/tests/tailwind-public-config.test.mjs`
 - `npm run verify:design-token-color-compatibility`
+- `tsx --test client/src/lib/client-logger.test.ts client/src/lib/utils/safe-json.test.ts client/src/lib/global-unhandled-rejection.test.ts`
 
 ## 2026-05-31 - SQR resource lifecycle and configuration hardening
 

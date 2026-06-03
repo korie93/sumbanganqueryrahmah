@@ -1,15 +1,14 @@
+import { logClientWarning, type ClientLoggerEnvironment } from "@/lib/client-logger";
+
 export type JsonResult<T> =
   | { ok: true; data: T }
   | { ok: false; error: string };
-
-function shouldLogJsonParseFailure(): boolean {
-  return Boolean(import.meta.env?.DEV);
-}
 
 export function safeJsonParse<T>(
   raw: string | null | undefined,
   fallback: T,
   debugContext?: string,
+  env: ClientLoggerEnvironment = import.meta.env,
 ): T {
   if (raw === null || raw === undefined || raw === "") {
     return fallback;
@@ -18,12 +17,12 @@ export function safeJsonParse<T>(
   try {
     return JSON.parse(raw) as T;
   } catch {
-    if (shouldLogJsonParseFailure()) {
-      console.warn(
-        "[safeJsonParse] Failed to parse JSON",
-        debugContext ? `(context: ${debugContext})` : "",
-      );
-    }
+    logClientWarning(
+      "[safeJsonParse] Failed to parse JSON",
+      undefined,
+      debugContext ? { context: debugContext } : undefined,
+      env,
+    );
     return fallback;
   }
 }
