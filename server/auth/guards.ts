@@ -121,6 +121,30 @@ type SessionRefreshRevocationLogContext = {
 
 const inFlightSessionRefreshes = new Map<string, Promise<SignedRefreshedSessionToken>>();
 
+function getOrCreateInFlightSessionRefresh(
+  refreshDedupKey: string,
+  createRefreshPromise: () => Promise<SignedRefreshedSessionToken>,
+): Promise<SignedRefreshedSessionToken> {
+  const existingRefresh = inFlightSessionRefreshes.get(refreshDedupKey);
+  if (existingRefresh) {
+    internalMetrics.increment("sessionRefreshDedupedTotal");
+    return existingRefresh;
+  }
+
+  assertInFlightSessionRefreshCapacity();
+
+  const refreshPromise = Promise.resolve()
+    .then(createRefreshPromise)
+    .finally(() => {
+      if (inFlightSessionRefreshes.get(refreshDedupKey) === refreshPromise) {
+        inFlightSessionRefreshes.delete(refreshDedupKey);
+      }
+    });
+
+  inFlightSessionRefreshes.set(refreshDedupKey, refreshPromise);
+  return refreshPromise;
+}
+
 function createSessionRefreshDedupKey(jwtId: string, secret: string): string {
   return createHmac("sha256", secret)
     .update("session-refresh:")
@@ -477,14 +501,7 @@ async function refreshSessionJwtAfterRevocation(params: {
   }
 
   const refreshDedupKey = createSessionRefreshDedupKey(oldJwtId, params.secret);
-  const existingRefresh = inFlightSessionRefreshes.get(refreshDedupKey);
-  if (existingRefresh) {
-    internalMetrics.increment("sessionRefreshDedupedTotal");
-    return existingRefresh;
-  }
-  assertInFlightSessionRefreshCapacity();
-
-  const refreshPromise = Promise.resolve().then(async () => {
+  return getOrCreateInFlightSessionRefresh(refreshDedupKey, async () => {
     // The replacement JWT is intentionally signed only after the previous
     // JTI has been durably revoked. This coalesces same-token concurrent
     // refreshes in-process and keeps the distributed race window bounded by
@@ -517,15 +534,6 @@ async function refreshSessionJwtAfterRevocation(params: {
       sessionExpiresAtIso: refreshedExpiry?.expiresAtIso ?? params.sessionExpiry?.expiresAtIso ?? null,
     };
   });
-
-  inFlightSessionRefreshes.set(refreshDedupKey, refreshPromise);
-  try {
-    return await refreshPromise;
-  } finally {
-    if (inFlightSessionRefreshes.get(refreshDedupKey) === refreshPromise) {
-      inFlightSessionRefreshes.delete(refreshDedupKey);
-    }
-  }
 }
 
 function clearSessionRefreshDeduplication(): void {
