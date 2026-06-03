@@ -37,6 +37,26 @@ test("collection month details dialog uses viewport tokens and consistent sticky
   assert.match(tableSource, /const stickyHeaderClassName = "sticky top-0 z-\[var\(--z-sticky-header\)\]/);
 });
 
+test("z-index layering uses shared design tokens instead of hardcoded local layers", () => {
+  const zIndexTokensSource = readClientSource("../styles/tokens/_z-index.css");
+  const animationsSource = readClientSource("../styles/tokens/_animations.css");
+  const resizableSource = readClientSource("../components/ui/resizable.tsx");
+  const navigationMenuSource = readClientSource("../components/ui/navigation-menu.tsx");
+  const inputOtpSource = readClientSource("../components/ui/input-otp.tsx");
+  const calendarSource = readClientSource("../components/ui/calendar.tsx");
+
+  assert.match(zIndexTokensSource, /--z-raised: 10;/);
+  assert.match(zIndexTokensSource, /--z-floating: var\(--z-floating-ai-overlay\);/);
+  assert.match(zIndexTokensSource, /--z-modal: var\(--z-modal-content\);/);
+  assert.match(animationsSource, /z-index: var\(--z-below\);/);
+  assert.match(animationsSource, /z-index: var\(--z-base\);/);
+  assert.match(animationsSource, /z-index: var\(--z-inline\);/);
+  assert.match(resizableSource, /z-\[var\(--z-raised\)\]/);
+  assert.match(navigationMenuSource, /z-\[var\(--z-raised\)\]/);
+  assert.match(inputOtpSource, /z-\[var\(--z-raised\)\]/);
+  assert.match(calendarSource, /focus-within:z-\[var\(--z-sticky-content\)\]/);
+});
+
 test("route error boundary announces failures as an atomic alert", () => {
   const source = readClientSource("../app/AppRouteErrorBoundary.tsx");
 

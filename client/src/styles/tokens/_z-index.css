@@ -43,5 +43,17 @@
   --z-navbar-scroll-fade: 1;
 
   --z-navbar-scroll-hint: 2;
-}
 
+  /* Generic scale aliases for new UI work. Existing semantic tokens above remain the source of truth. */
+  --z-below: -1;
+  --z-base: 0;
+  --z-inline: var(--z-inline-overlay);
+  --z-raised: 10;
+  --z-sticky: var(--z-sticky-content);
+  --z-navigation: var(--z-navbar);
+  --z-floating: var(--z-floating-ai-overlay);
+  --z-overlay: var(--z-mobile-nav-overlay);
+  --z-modal: var(--z-modal-content);
+  --z-dropdown: var(--z-popover);
+  --z-critical: 999;
+}

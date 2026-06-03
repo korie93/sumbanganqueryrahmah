@@ -133,12 +133,12 @@ export function SideTabNavigation({
                     className="absolute inset-0 rounded-[1.4rem] border border-primary/35 bg-primary/10 shadow-[inset_0_1px_0_hsl(0_0%_100%_/_0.6)] dark:border-primary/30 dark:bg-primary/14 dark:shadow-[inset_0_1px_0_hsl(0_0%_100%_/_0.08)]"
                   />
 
-                  <span className="relative z-10 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-background text-primary shadow-sm dark:bg-white/8 dark:text-primary-foreground">
+                  <span className="relative z-[var(--z-raised)] inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-background text-primary shadow-sm dark:bg-white/8 dark:text-primary-foreground">
                     <Icon className="h-4 w-4" />
                   </span>
 
                   {!collapsed ? (
-                    <span className="relative z-10 flex min-w-0 flex-1 items-start justify-between gap-2">
+                    <span className="relative z-[var(--z-raised)] flex min-w-0 flex-1 items-start justify-between gap-2">
                       <span className="min-w-0 space-y-0.5 text-left">
                         <span className="block truncate font-semibold leading-tight">{item.label}</span>
                         {item.description ? (
@@ -167,12 +167,12 @@ export function SideTabNavigation({
                   aria-label={item.label}
                   title={collapsed ? item.label : item.description || item.label}
                 >
-                  <span className="relative z-10 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-background shadow-sm dark:bg-white/6 dark:text-foreground/90">
+                  <span className="relative z-[var(--z-raised)] inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-background shadow-sm dark:bg-white/6 dark:text-foreground/90">
                     <Icon className="h-4 w-4" />
                   </span>
 
                   {!collapsed ? (
-                    <span className="relative z-10 flex min-w-0 flex-1 items-start justify-between gap-2">
+                    <span className="relative z-[var(--z-raised)] flex min-w-0 flex-1 items-start justify-between gap-2">
                       <span className="min-w-0 space-y-0.5 text-left">
                         <span className="block truncate font-semibold leading-tight text-foreground/88 dark:text-foreground/92">{item.label}</span>
                         {item.description ? (

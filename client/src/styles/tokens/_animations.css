@@ -16,7 +16,7 @@
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  z-index: -1;
+  z-index: var(--z-below);
 }
 
 .toggle-elevate.toggle-elevated::before {
@@ -35,7 +35,7 @@
 .hover-elevate-2:not(.no-default-hover-elevate),
 .active-elevate-2:not(.no-default-active-elevate) {
   position: relative;
-  z-index: 0;
+  z-index: var(--z-base);
 }
 
 .hover-elevate:not(.no-default-hover-elevate)::after,
@@ -47,7 +47,7 @@
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  z-index: 1;
+  z-index: var(--z-inline);
 }
 
 .active-elevate:active:not(.no-default-active-elevate)::after {

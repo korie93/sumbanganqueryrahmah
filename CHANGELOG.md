@@ -17,11 +17,17 @@
 - Added explicit group and pressed-state semantics to monthly comparison quick
   range controls, with contracts for login and month-field accessible labels.
 
+### Design System
+
+- Added generic z-index scale aliases and replaced remaining local hardcoded
+  z-layer utilities with shared layering tokens.
+
 ### Verification
 
 - `tsx --test server/middleware/tests/rate-limit.test.ts`
 - `tsx --test client/src/pages/collection-summary/useCollectionMonthlySameDayPace.contract.test.ts client/src/pages/collection-summary/useCollectionMonthlyComparisonData.contract.test.ts`
 - `tsx --test client/src/pages/collection-summary/collection-monthly-comparison-a11y.contract.test.ts`
+- `tsx --test client/src/app/frontend-hardening-contract.test.ts`
 
 ## 2026-05-31 - SQR resource lifecycle and configuration hardening
 
