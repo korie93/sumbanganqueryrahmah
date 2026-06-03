@@ -18,6 +18,7 @@ import { runtimeConfig } from "./config/runtime";
 import { validateSessionJwtStartupConfiguration } from "./auth/session-jwt";
 import { stopAdaptiveRateLimitCooldownSweep } from "./middleware/rate-limit";
 import { closeHttpServerForShutdown } from "./internal/http-server-shutdown";
+import { initializeTelemetry, shutdownTelemetry } from "./telemetry/tracer";
 
 let reportedWorkerFatalReason: string | null = null;
 
@@ -31,6 +32,7 @@ type StartupReasonError = Error & {
 
 const workerIpcProcess = process as WorkerIpcProcess;
 validateSessionJwtStartupConfiguration();
+initializeTelemetry();
 
 function notifyMasterFatalReason(reason: string, details?: string) {
   if (reportedWorkerFatalReason) return;
@@ -125,6 +127,7 @@ async function finishShutdown() {
     stopBackgroundTasks: stopPgPoolBackgroundTasks,
     timeoutMs: PG_POOL_SHUTDOWN_TIMEOUT_MS,
   });
+  await shutdownTelemetry();
 
   logger.info("Server closed gracefully");
   process.exit(shutdownExitCode);

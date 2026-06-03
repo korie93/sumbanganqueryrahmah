@@ -19,6 +19,7 @@ import {
   type SessionRevocationRecord,
 } from "../session-revocation-store";
 import { AUTH_SESSION_REFRESH_HEADER_NAME } from "../session-cookie";
+import { SpanStatusCode, tracer } from "../../telemetry/tracer";
 
 test("getInvalidatedSessionMessage returns reset-specific messaging for password reset invalidation", () => {
   assert.equal(
@@ -1388,10 +1389,43 @@ test("authenticateToken retries transient JWT refresh revocation failures", asyn
   const nowSeconds = Math.floor(nowMs / 1000);
   const revokedJwtIds = new Set<string>();
   const warnings: Array<{ message: string; payload: Record<string, unknown> | undefined }> = [];
+  const spans: Array<{
+    attributes: Record<string, unknown>;
+    ended: boolean;
+    exceptions: string[];
+    name: string;
+    statuses: Array<{ code: number; message?: string }>;
+  }> = [];
   let revokeAttempts = 0;
   t.mock.method(Date, "now", () => nowMs);
   t.mock.method(logger, "warn", (message: string, payload?: Record<string, unknown>) => {
     warnings.push({ message, payload });
+  });
+  t.mock.method(tracer, "startSpan", (name: string, options?: { attributes?: Record<string, unknown> }) => {
+    const span = {
+      attributes: { ...(options?.attributes ?? {}) },
+      ended: false,
+      exceptions: [] as string[],
+      name,
+      statuses: [] as Array<{ code: number; message?: string }>,
+    };
+    spans.push(span);
+    return {
+      setAttribute(key: string, value: unknown) {
+        span.attributes[key] = value;
+        return this;
+      },
+      setStatus(status: { code: number; message?: string }) {
+        span.statuses.push(status);
+        return this;
+      },
+      recordException(error: Error | string) {
+        span.exceptions.push(error instanceof Error ? error.message : error);
+      },
+      end() {
+        span.ended = true;
+      },
+    } as never;
   });
   const restoreRevocationStore = configureSessionRevocationStoreForRuntime({
     isRevoked: async (jwtId: string) => revokedJwtIds.has(jwtId),
@@ -1469,7 +1503,21 @@ test("authenticateToken retries transient JWT refresh revocation failures", asyn
       name: "Error",
       retryable: true,
     });
+    assert.equal(spans.length, 3);
+    assert.equal(spans.every((span) => span.name === "session.refresh.revocation"), true);
+    assert.equal(spans.every((span) => span.ended), true);
+    assert.deepEqual(
+      spans.map((span) => span.attributes["session.refresh.attempt"]),
+      [1, 2, 3],
+    );
+    assert.deepEqual(
+      spans.map((span) => span.statuses[span.statuses.length - 1]?.code),
+      [SpanStatusCode.ERROR, SpanStatusCode.ERROR, SpanStatusCode.OK],
+    );
+    assert.equal(spans[0]?.attributes["session.refresh.retryable"], true);
+    assert.deepEqual(spans[0]?.exceptions, ["Error:ECONNRESET"]);
     assert.doesNotMatch(JSON.stringify(warnings), /near-expiry-retry-jti|guard\.user|user-1/);
+    assert.doesNotMatch(JSON.stringify(spans), /near-expiry-retry-jti|guard\.user|user-1/);
   } finally {
     guards.stopTabVisibilityCacheSweep();
     guards.stopActivityUpdateCacheSweep();

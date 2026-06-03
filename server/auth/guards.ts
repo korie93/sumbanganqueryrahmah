@@ -1,4 +1,5 @@
 import { createHmac } from "node:crypto";
+import type { Span } from "@opentelemetry/api";
 import type { NextFunction, Request, RequestHandler, Response } from "express";
 import type { User, UserActivity } from "../../shared/schema-postgres";
 import { ERROR_CODES, type ErrorCode } from "../../shared/error-codes";
@@ -45,6 +46,7 @@ import { internalMetrics } from "../internal/metrics";
 import { buildApiErrorResponse } from "../http/api-error-response";
 import { buildSecurityAuditDetails } from "../lib/security-audit-log";
 import { t } from "../i18n/server";
+import { SpanStatusCode, tracer } from "../telemetry/tracer";
 export { getInvalidatedSessionMessage } from "./guard-session-messages";
 
 export interface AuthenticatedUser {
@@ -380,6 +382,29 @@ function sanitizeSessionRefreshRevocationError(error: unknown) {
   };
 }
 
+function createSanitizedSessionRefreshRevocationException(error: unknown): Error {
+  const sanitizedError = sanitizeSessionRefreshRevocationError(error);
+  const code = typeof sanitizedError.code === "string" ? sanitizedError.code : "";
+  const name = typeof sanitizedError.name === "string" ? sanitizedError.name : "UnknownError";
+  return new Error(code ? `${name}:${code}` : name);
+}
+
+function startSessionRefreshRevocationSpan(params: {
+  attempt: number;
+  context: SessionRefreshRevocationLogContext;
+  maxAttempts: number;
+}): Span {
+  return tracer.startSpan("session.refresh.revocation", {
+    attributes: {
+      "http.request.method": params.context.method,
+      "http.route": params.context.path,
+      "session.refresh.attempt": params.attempt,
+      "session.refresh.max_attempts": params.maxAttempts,
+      "session.refresh.operation": "revoke_previous_jwt",
+    },
+  });
+}
+
 async function revokeSessionJwtForRefresh(
   record: Parameters<typeof revokeSessionJwt>[0],
   context: SessionRefreshRevocationLogContext,
@@ -388,13 +413,25 @@ async function revokeSessionJwtForRefresh(
   let lastError: unknown;
 
   for (let attempt = 1; attempt <= config.attempts; attempt += 1) {
+    const span = startSessionRefreshRevocationSpan({
+      attempt,
+      context,
+      maxAttempts: config.attempts,
+    });
     try {
       await revokeSessionJwt(record);
+      span.setStatus({ code: SpanStatusCode.OK });
       return;
     } catch (error) {
       lastError = error;
       internalMetrics.increment("sessionRevocationRedisErrorsTotal");
       const retryable = isSessionRefreshRevocationRetryableError(error);
+      span.setAttribute("session.refresh.retryable", retryable);
+      span.recordException(createSanitizedSessionRefreshRevocationException(error));
+      span.setStatus({
+        code: SpanStatusCode.ERROR,
+        message: retryable ? "retryable_revocation_failure" : "non_retryable_revocation_failure",
+      });
 
       if (!retryable || attempt >= config.attempts) {
         if (retryable) {
@@ -416,6 +453,8 @@ async function revokeSessionJwtForRefresh(
         error: sanitizeSessionRefreshRevocationError(error),
       });
       await sleepSessionRefreshRevocationRetry(retryAfterMs);
+    } finally {
+      span.end();
     }
   }
 
