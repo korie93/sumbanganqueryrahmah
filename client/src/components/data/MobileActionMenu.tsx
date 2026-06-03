@@ -50,7 +50,6 @@ export function MobileActionMenu({
           size="icon"
           className={cn("h-10 w-10 shrink-0 md:hidden", className)}
           {...triggerAriaLabelProps}
-          title={triggerLabel}
         >
           <MoreHorizontal className="h-4 w-4" />
         </Button>

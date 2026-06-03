@@ -39,7 +39,6 @@ const SelectScrollUpButton = React.forwardRef<
   <SelectPrimitive.ScrollUpButton
     ref={ref}
     aria-label="Scroll up options"
-    title="Scroll up options"
     className={cn(
       "flex cursor-default items-center justify-center py-1",
       className
@@ -58,7 +57,6 @@ const SelectScrollDownButton = React.forwardRef<
   <SelectPrimitive.ScrollDownButton
     ref={ref}
     aria-label="Scroll down options"
-    title="Scroll down options"
     className={cn(
       "flex cursor-default items-center justify-center py-1",
       className

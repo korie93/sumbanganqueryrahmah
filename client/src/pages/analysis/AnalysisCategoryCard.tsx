@@ -43,7 +43,6 @@ export function AnalysisCategoryCard({
                   )}
                   onClick={() => onCopySample(sample)}
                   aria-label={`Copy sample value ${sample}`}
-                  title={`Copy ${sample}`}
                   data-testid={`badge-sample-${testIdTitle}-${index}`}
                 >
                   {sample}

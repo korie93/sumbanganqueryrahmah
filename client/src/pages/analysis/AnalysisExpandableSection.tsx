@@ -100,7 +100,6 @@ export function AnalysisExpandableSection({
                         size="sm"
                         onClick={() => onCopyItem(item, itemKey)}
                         aria-label="Copy value"
-                        title="Copy value"
                         data-testid={`button-copy-${sectionKey}-${index}`}
                       >
                         {copiedItems[itemKey] ? (

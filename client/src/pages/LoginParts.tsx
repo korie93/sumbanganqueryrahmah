@@ -88,7 +88,6 @@ export function LoginPasswordVisibilityButton({
         data-testid="button-toggle-password"
         aria-label="Sembunyi kata laluan"
         aria-pressed="true"
-        title="Sembunyi kata laluan"
       >
         <EyeOff className="h-5 w-5" aria-hidden="true" focusable="false" />
       </button>
@@ -104,7 +103,6 @@ export function LoginPasswordVisibilityButton({
       data-testid="button-toggle-password"
       aria-label="Papar kata laluan"
       aria-pressed="false"
-      title="Papar kata laluan"
     >
       <Eye className="h-5 w-5" aria-hidden="true" focusable="false" />
     </button>

@@ -321,7 +321,6 @@ export function AnalysisDuplicatesPanel({
                               size="sm"
                               onClick={() => onCopyDuplicate(duplicate.value)}
                               aria-label="Copy duplicate value"
-                              title="Copy duplicate value"
                               data-testid={`button-copy-dup-${index}`}
                             >
                               <Copy className="w-4 h-4" />

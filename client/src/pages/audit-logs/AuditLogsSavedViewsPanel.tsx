@@ -116,7 +116,6 @@ export function AuditLogsSavedViewsPanel({
                 className="h-8 w-8 shrink-0"
                 onClick={() => handleDeleteView(view.id)}
                 aria-label={`Delete saved audit view ${view.label}`}
-                title={`Delete ${view.label}`}
                 data-testid={`button-delete-audit-view-${view.id}`}
               >
                 <Trash2 className="h-4 w-4" aria-hidden="true" />
@@ -128,4 +127,3 @@ export function AuditLogsSavedViewsPanel({
     </section>
   );
 }
-

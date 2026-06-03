@@ -4,6 +4,7 @@ import { pool } from "../server/db-postgres";
 import { assertCollectionPiiPostgresReady } from "./collection-pii-postgres";
 import {
   buildCollectionRecordPiiSearchHashes,
+  decryptCollectionPiiValueResult,
   type CollectionRecordPiiSearchHashes,
   encryptCollectionPiiFieldValue,
   hasCollectionPiiEncryptionConfigured,
@@ -13,6 +14,7 @@ import {
 } from "../server/lib/collection-pii-encryption";
 import {
   buildCollectionPiiScriptSelectClause,
+  buildCollectionPiiScriptSelectColumns,
   COLLECTION_PII_SCRIPT_FIELDS,
   parseCollectionPiiScriptFields,
   type CollectionPiiScriptField,
@@ -45,6 +47,15 @@ type CliOptions = {
 
 export type CollectionPiiRewritePlan = Record<CollectionPiiScriptField, boolean>;
 
+export type CollectionPiiPreflightSummary = {
+  decryptableEncryptedFields: number;
+  keyValidation: "passed";
+  rollbackSnapshotRows: number | null;
+  rollbackSnapshotTable: string | null;
+  scannedRows: number;
+  unreadableEncryptedFields: number;
+};
+
 export type CollectionPiiReencryptionSummary = {
   apply: boolean;
   batchSize: number;
@@ -56,7 +67,24 @@ export type CollectionPiiReencryptionSummary = {
   rewriteCandidates: number;
   rewrittenFields: number;
   rewrittenRows: number;
+  preflight: CollectionPiiPreflightSummary;
 };
+
+type CollectionPiiDecryptabilitySummary = {
+  decryptableEncryptedFields: number;
+  scannedRows: number;
+  unreadableEncryptedFields: number;
+};
+
+const COLLECTION_PII_ENCRYPTED_COLUMN_BY_FIELD = {
+  customerName: "customer_name_encrypted",
+  icNumber: "ic_number_encrypted",
+  customerPhone: "customer_phone_encrypted",
+  accountNumber: "account_number_encrypted",
+} as const satisfies Record<CollectionPiiScriptField, keyof CollectionPiiRow>;
+
+const COLLECTION_PII_ROLLBACK_TABLE_PREFIX = "collection_records_pii_reencrypt_rollback";
+const COLLECTION_PII_ROLLBACK_COLUMN_PATTERN = /_(?:encrypted|search_hash|search_hashes)$/;
 
 function parsePositiveInteger(value: string, flagName: string): number {
   const parsed = Number.parseInt(value, 10);
@@ -132,6 +160,101 @@ export function parseCliOptions(argv: string[]): CliOptions {
     fields,
     json,
     maxRows,
+  };
+}
+
+function normalizeCollectionPiiSnapshotTimestamp(now: Date): string {
+  return now.toISOString().replace(/\D/g, "").slice(0, 17);
+}
+
+function quotePgIdentifier(identifier: string): string {
+  if (!/^[a-z_][a-z0-9_]*$/i.test(identifier)) {
+    throw new Error("Unsafe PostgreSQL identifier generated for collection PII rollback snapshot.");
+  }
+
+  return `"${identifier.replace(/"/g, "\"\"")}"`;
+}
+
+export function buildCollectionPiiRollbackSnapshotName(now = new Date()): string {
+  return `${COLLECTION_PII_ROLLBACK_TABLE_PREFIX}_${normalizeCollectionPiiSnapshotTimestamp(now)}`;
+}
+
+function buildCollectionPiiRollbackColumns(
+  fields: ReadonlySet<CollectionPiiScriptField>,
+): string[] {
+  return buildCollectionPiiScriptSelectColumns(fields)
+    .filter((column) => column === "id" || COLLECTION_PII_ROLLBACK_COLUMN_PATTERN.test(column));
+}
+
+export function buildCollectionPiiRollbackSql(
+  snapshotTableName: string,
+  fields: ReadonlySet<CollectionPiiScriptField> = new Set(COLLECTION_PII_SCRIPT_FIELDS),
+): string {
+  const snapshotIdentifier = `public.${quotePgIdentifier(snapshotTableName)}`;
+  const restoreColumns = buildCollectionPiiRollbackColumns(fields)
+    .filter((column) => column !== "id");
+  const assignments = restoreColumns
+    .map((column) => `${column} = snapshot.${column}`)
+    .join(",\n    ");
+
+  return [
+    "BEGIN;",
+    "UPDATE public.collection_records AS target",
+    "SET",
+    `    ${assignments}`,
+    `FROM ${snapshotIdentifier} AS snapshot`,
+    "WHERE target.id = snapshot.id;",
+    "COMMIT;",
+  ].join("\n");
+}
+
+export function validateCollectionPiiActiveKey(): void {
+  const probeValue = "collection-pii-key-rotation-precheck";
+  const encryptedProbe = encryptCollectionPiiFieldValue(probeValue);
+  if (!encryptedProbe) {
+    throw new Error("Collection PII active key validation failed: encryption returned no payload.");
+  }
+
+  const decryptResult = decryptCollectionPiiValueResult(encryptedProbe, {
+    operation: "collectionPiiActiveKeyPrecheck",
+    logFailure: false,
+  });
+  if (!decryptResult.success || decryptResult.data !== probeValue) {
+    throw new Error("Collection PII active key validation failed: encrypted probe could not be decrypted.");
+  }
+}
+
+export function summarizeCollectionPiiDecryptability(
+  rows: readonly CollectionPiiRow[],
+  fields: ReadonlySet<CollectionPiiScriptField> = new Set(COLLECTION_PII_SCRIPT_FIELDS),
+): CollectionPiiDecryptabilitySummary {
+  let decryptableEncryptedFields = 0;
+  let unreadableEncryptedFields = 0;
+
+  for (const row of rows) {
+    for (const field of fields) {
+      const encryptedColumn = COLLECTION_PII_ENCRYPTED_COLUMN_BY_FIELD[field];
+      const encryptedValue = row[encryptedColumn];
+      if (typeof encryptedValue !== "string" || encryptedValue.trim().length === 0) {
+        continue;
+      }
+
+      const result = decryptCollectionPiiValueResult(encryptedValue, {
+        operation: "collectionPiiReencryptionPrecheck",
+        logFailure: false,
+      });
+      if (result.success) {
+        decryptableEncryptedFields += 1;
+      } else {
+        unreadableEncryptedFields += 1;
+      }
+    }
+  }
+
+  return {
+    decryptableEncryptedFields,
+    scannedRows: rows.length,
+    unreadableEncryptedFields,
   };
 }
 
@@ -298,6 +421,7 @@ function buildCollectionPiiReencryptionUpdate(
 
 function createCollectionPiiReencryptionSummary(params: {
   options: CliOptions;
+  preflight: CollectionPiiPreflightSummary;
   processedRows: number;
   rewriteCandidateFields: number;
   rewriteCandidates: number;
@@ -315,6 +439,7 @@ function createCollectionPiiReencryptionSummary(params: {
     rewriteCandidates: params.rewriteCandidates,
     rewrittenFields: params.rewrittenFields,
     rewrittenRows: params.rewrittenRows,
+    preflight: params.preflight,
   };
 }
 
@@ -325,9 +450,124 @@ function renderCollectionPiiReencryptionSummary(summary: CollectionPiiReencrypti
     `rewriteCandidateFields=${summary.rewriteCandidateFields}`,
     `rewritten=${summary.rewrittenRows}`,
     `rewrittenFields=${summary.rewrittenFields}`,
+    `preflightScanned=${summary.preflight.scannedRows}`,
+    `preflightDecryptable=${summary.preflight.decryptableEncryptedFields}`,
+    `preflightUnreadable=${summary.preflight.unreadableEncryptedFields}`,
+    `rollbackSnapshot=${summary.preflight.rollbackSnapshotTable ?? "none"}`,
     `mode=${summary.mode}`,
     `fields=${summary.fields.join(",")}`,
   ].join(" ");
+}
+
+async function verifyAllCollectionPiiEncryptedFieldsDecryptable(
+  options: CliOptions,
+): Promise<CollectionPiiDecryptabilitySummary> {
+  let decryptableEncryptedFields = 0;
+  let scannedRows = 0;
+  let unreadableEncryptedFields = 0;
+  let lastId: string | null = null;
+  const selectClause = buildCollectionPiiScriptSelectClause(options.fields);
+
+  while (true) {
+    const result = await pool.query<CollectionPiiRow>(
+      `
+        SELECT
+          ${selectClause}
+        FROM public.collection_records
+        WHERE ($1::uuid IS NULL OR id > $1::uuid)
+        ORDER BY id ASC
+        LIMIT $2
+      `,
+      [lastId, options.batchSize],
+    );
+
+    if (result.rows.length === 0) {
+      break;
+    }
+
+    const batchSummary = summarizeCollectionPiiDecryptability(result.rows, options.fields);
+    decryptableEncryptedFields += batchSummary.decryptableEncryptedFields;
+    scannedRows += batchSummary.scannedRows;
+    unreadableEncryptedFields += batchSummary.unreadableEncryptedFields;
+    lastId = result.rows[result.rows.length - 1]?.id ?? lastId;
+
+    console.warn(
+      [
+        "collection-pii-preflight",
+        `scanned=${scannedRows}`,
+        `decryptable=${decryptableEncryptedFields}`,
+        `unreadable=${unreadableEncryptedFields}`,
+      ].join(" "),
+    );
+
+    if (result.rows.length < options.batchSize) {
+      break;
+    }
+  }
+
+  if (unreadableEncryptedFields > 0) {
+    throw new Error(
+      `Collection PII re-encryption precheck failed: ${unreadableEncryptedFields} encrypted field(s) are not decryptable with the configured current/previous keys.`,
+    );
+  }
+
+  return {
+    decryptableEncryptedFields,
+    scannedRows,
+    unreadableEncryptedFields,
+  };
+}
+
+async function createCollectionPiiRollbackSnapshot(
+  fields: ReadonlySet<CollectionPiiScriptField>,
+): Promise<{ rowCount: number; tableName: string }> {
+  const snapshotTableName = buildCollectionPiiRollbackSnapshotName();
+  const snapshotIdentifier = `public.${quotePgIdentifier(snapshotTableName)}`;
+  const selectColumns = buildCollectionPiiRollbackColumns(fields).join(",\n    ");
+
+  await pool.query(
+    `
+      CREATE TABLE ${snapshotIdentifier} AS
+      SELECT
+        ${selectColumns}
+      FROM public.collection_records
+    `,
+  );
+
+  const countResult = await pool.query<{ count: string }>(
+    `SELECT COUNT(*)::text AS count FROM ${snapshotIdentifier}`,
+  );
+  const rowCount = Number.parseInt(countResult.rows[0]?.count ?? "0", 10);
+  if (!Number.isSafeInteger(rowCount) || rowCount < 0) {
+    throw new Error("Collection PII rollback snapshot row count could not be verified.");
+  }
+
+  console.warn(`collection-pii-rollback-snapshot table=public.${snapshotTableName} rows=${rowCount}`);
+  console.warn(`collection-pii-rollback-sql\n${buildCollectionPiiRollbackSql(snapshotTableName, fields)}`);
+
+  return {
+    rowCount,
+    tableName: `public.${snapshotTableName}`,
+  };
+}
+
+async function runCollectionPiiReencryptionPreflight(
+  options: CliOptions,
+): Promise<CollectionPiiPreflightSummary> {
+  validateCollectionPiiActiveKey();
+  const decryptability = await verifyAllCollectionPiiEncryptedFieldsDecryptable(options);
+  const snapshot = options.apply
+    ? await createCollectionPiiRollbackSnapshot(options.fields)
+    : null;
+
+  return {
+    decryptableEncryptedFields: decryptability.decryptableEncryptedFields,
+    keyValidation: "passed",
+    rollbackSnapshotRows: snapshot?.rowCount ?? null,
+    rollbackSnapshotTable: snapshot?.tableName ?? null,
+    scannedRows: decryptability.scannedRows,
+    unreadableEncryptedFields: decryptability.unreadableEncryptedFields,
+  };
 }
 
 export async function main() {
@@ -350,6 +590,8 @@ export async function main() {
   const selectClause = buildCollectionPiiScriptSelectClause(options.fields);
 
   try {
+    const preflight = await runCollectionPiiReencryptionPreflight(options);
+
     while (true) {
       const remainingLimit = options.maxRows === null
         ? options.batchSize
@@ -406,6 +648,17 @@ export async function main() {
         );
         rewrittenRows += 1;
         rewrittenFields += plannedFieldCount;
+
+        if (rewrittenRows % options.batchSize === 0) {
+          console.warn(
+            [
+              "collection-pii-reencrypt-progress",
+              `processed=${processedRows}`,
+              `rewritten=${rewrittenRows}`,
+              `rewriteCandidates=${rewriteCandidates}`,
+            ].join(" "),
+          );
+        }
       }
 
       if (result.rows.length < remainingLimit) {
@@ -415,6 +668,7 @@ export async function main() {
 
     const summary = createCollectionPiiReencryptionSummary({
       options,
+      preflight,
       processedRows,
       rewriteCandidateFields,
       rewriteCandidates,

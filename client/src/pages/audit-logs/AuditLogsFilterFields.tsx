@@ -240,7 +240,6 @@ export function AuditLogsFilterFields({
                   className="h-4 w-4 p-0 ml-1"
                   onClick={() => onActionFilterChange("all")}
                   aria-label="Clear action filter"
-                  title="Clear action filter"
                   data-testid="button-clear-action-filter"
                 >
                   <X className="h-3 w-3" />
@@ -256,7 +255,6 @@ export function AuditLogsFilterFields({
                   className="h-4 w-4 p-0 ml-1"
                   onClick={() => onRiskFilterChange("all")}
                   aria-label="Clear risk filter"
-                  title="Clear risk filter"
                   data-testid="button-clear-risk-filter"
                 >
                   <X className="h-3 w-3" />
@@ -272,7 +270,6 @@ export function AuditLogsFilterFields({
                   className="h-4 w-4 p-0 ml-1"
                   onClick={() => onCategoryFilterChange("all")}
                   aria-label="Clear category filter"
-                  title="Clear category filter"
                   data-testid="button-clear-category-filter"
                 >
                   <X className="h-3 w-3" />
@@ -288,7 +285,6 @@ export function AuditLogsFilterFields({
                   className="h-4 w-4 p-0 ml-1"
                   onClick={() => onPerformedByFilterChange("")}
                   aria-label="Clear performed by filter"
-                  title="Clear performed by filter"
                   data-testid="button-clear-performed-by-filter"
                 >
                   <X className="h-3 w-3" />
@@ -304,7 +300,6 @@ export function AuditLogsFilterFields({
                   className="h-4 w-4 p-0 ml-1"
                   onClick={() => onTargetUserFilterChange("")}
                   aria-label="Clear target user filter"
-                  title="Clear target user filter"
                   data-testid="button-clear-target-user-filter"
                 >
                   <X className="h-3 w-3" />
@@ -320,7 +315,6 @@ export function AuditLogsFilterFields({
                   className="h-4 w-4 p-0 ml-1"
                   onClick={() => onSearchTextChange("")}
                   aria-label="Clear search text filter"
-                  title="Clear search text filter"
                   data-testid="button-clear-search-filter"
                 >
                   <X className="h-3 w-3" />
@@ -338,7 +332,6 @@ export function AuditLogsFilterFields({
                   className="h-4 w-4 p-0 ml-1"
                   onClick={() => onDatePresetChange("all")}
                   aria-label="Clear date filter"
-                  title="Clear date filter"
                   data-testid="button-clear-date-filter"
                 >
                   <X className="h-3 w-3" />

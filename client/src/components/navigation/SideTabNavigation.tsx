@@ -91,7 +91,6 @@ export function SideTabNavigation({
               size="icon"
               className="h-11 w-11"
               aria-label="Expand navigation"
-              title="Expand navigation"
               onClick={() => onCollapsedChange(false)}
             >
               <PanelLeftOpen className="h-4 w-4" />
@@ -103,7 +102,6 @@ export function SideTabNavigation({
               size="icon"
               className="h-11 w-11"
               aria-label="Collapse navigation"
-              title="Collapse navigation"
               onClick={() => onCollapsedChange(true)}
             >
               <PanelLeftClose className="h-4 w-4" />
@@ -216,14 +214,13 @@ export function SideTabNavigation({
                 size="icon"
                 className="h-11 w-11"
                 aria-label="Close navigation menu"
-                title="Close navigation menu"
                 onClick={() => onMobileOpenChange(false)}
               >
                 <X className="h-4 w-4" />
               </Button>
             </div>
 
-            <div className="space-y-1">
+            <nav className="space-y-1" aria-label={`${navigationLabel} mobile`}>
               {items.map((item) => {
                 const Icon = item.icon;
                 const active = selectedKey === item.key;
@@ -282,7 +279,7 @@ export function SideTabNavigation({
                   )
                 );
               })}
-            </div>
+            </nav>
           </aside>
         </>
       ) : null}

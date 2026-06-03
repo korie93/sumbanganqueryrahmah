@@ -37,7 +37,7 @@ export function ActiveFilterChips({
   }
 
   return (
-    <div className={cn("flex flex-wrap items-center gap-2", className)}>
+    <section className={cn("flex flex-wrap items-center gap-2", className)} aria-label={label}>
       <span className="text-2xs font-semibold uppercase tracking-label-md text-muted-foreground">
         {label}
       </span>
@@ -56,7 +56,6 @@ export function ActiveFilterChips({
               onClick={item.onRemove}
               className="inline-flex h-4 w-4 items-center justify-center rounded-full hover:bg-black/5 dark:hover:bg-white/10"
               aria-label={`Remove filter ${item.label}`}
-              title={`Remove filter ${item.label}`}
             >
               <X className="h-3 w-3" />
             </button>
@@ -68,6 +67,6 @@ export function ActiveFilterChips({
           Clear all
         </Button>
       ) : null}
-    </div>
+    </section>
   );
 }

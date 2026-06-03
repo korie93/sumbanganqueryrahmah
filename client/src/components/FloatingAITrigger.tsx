@@ -56,7 +56,6 @@ export function FloatingAITrigger({
         ref={triggerButtonRef}
         type="button"
         onClick={handleTriggerToggleClick}
-        title={assistantLabel}
         aria-controls={panelId}
         aria-haspopup="dialog"
         aria-label={isOpen ? `Kecilkan panel ${assistantLabel}` : `Buka panel ${assistantLabel}`}

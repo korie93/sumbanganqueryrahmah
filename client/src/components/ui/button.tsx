@@ -52,12 +52,13 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     const resolvedAriaLabel =
       ariaLabel ?? (size === "icon" && typeof title === "string" ? title : undefined)
     const ariaLabelProps = resolvedAriaLabel ? { "aria-label": resolvedAriaLabel } : {}
+    const nativeTitle = size === "icon" ? undefined : title
 
     return (
       <Comp
         className={cn(buttonVariants({ variant, size, className }))}
         ref={ref}
-        title={title}
+        title={nativeTitle}
         {...ariaLabelProps}
         {...props}
       />

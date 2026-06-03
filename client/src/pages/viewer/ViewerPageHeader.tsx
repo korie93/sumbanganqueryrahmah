@@ -96,7 +96,6 @@ function ViewerPageHeaderImpl({
             data-testid="button-back"
             className="mt-0.5 shrink-0 sm:mt-0"
             aria-label="Go back"
-            title="Go back"
           >
             <ArrowLeft className="w-5 h-5" />
           </Button>

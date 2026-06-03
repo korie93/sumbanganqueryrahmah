@@ -43,8 +43,8 @@ export function GeneralSearchAdvancedControls({
 
   return (
     <div className="space-y-4">
-      <div className={`gap-3 ${isMobile ? "space-y-2" : "flex flex-wrap items-center"}`}>
-        <span className="text-sm text-muted-foreground">Combine filters with:</span>
+      <fieldset className={`m-0 min-w-0 border-0 p-0 gap-3 ${isMobile ? "space-y-2" : "flex flex-wrap items-center"}`}>
+        <legend className="text-sm text-muted-foreground">Combine filters with:</legend>
         <div className={`gap-2 ${isMobile ? "grid grid-cols-2" : "flex"}`}>
           <Button
             variant={logic === "AND" ? "default" : "outline"}
@@ -65,7 +65,7 @@ export function GeneralSearchAdvancedControls({
             OR
           </Button>
         </div>
-      </div>
+      </fieldset>
 
       <div className="space-y-3">
         {filters.map((filter, index) => (
@@ -86,7 +86,6 @@ export function GeneralSearchAdvancedControls({
                   disabled={filters.length === 1}
                   className="h-11 w-11 shrink-0"
                   aria-label={`Remove filter ${index + 1}`}
-                  title={`Remove filter ${index + 1}`}
                   data-testid={`button-remove-filter-${index}`}
                 >
                   <X className="h-4 w-4" />
@@ -163,7 +162,6 @@ export function GeneralSearchAdvancedControls({
                 disabled={filters.length === 1}
                 className="shrink-0"
                 aria-label={`Remove filter ${index + 1}`}
-                title={`Remove filter ${index + 1}`}
                 data-testid={`button-remove-filter-${index}`}
               >
                 <X className="h-4 w-4" />

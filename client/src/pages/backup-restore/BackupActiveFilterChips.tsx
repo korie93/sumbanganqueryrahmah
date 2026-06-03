@@ -36,7 +36,7 @@ export function BackupActiveFilterChips({
   }
 
   return (
-    <div className="flex items-center gap-2 flex-wrap pt-2 border-t">
+    <section className="flex items-center gap-2 flex-wrap pt-2 border-t" aria-label="Active backup filters">
       <span className="text-sm text-muted-foreground">Active filters:</span>
       {searchName ? (
         <Badge variant="secondary" className="gap-1">
@@ -47,7 +47,6 @@ export function BackupActiveFilterChips({
             className="h-4 w-4 p-0 ml-1"
             onClick={() => onSearchNameChange("")}
             aria-label="Clear backup name filter"
-            title="Clear backup name filter"
             data-testid="button-clear-name-filter"
           >
             <X className="h-3 w-3" />
@@ -63,7 +62,6 @@ export function BackupActiveFilterChips({
             className="h-4 w-4 p-0 ml-1"
             onClick={() => onCreatedByFilterChange("")}
             aria-label="Clear backup creator filter"
-            title="Clear backup creator filter"
             data-testid="button-clear-created-by-filter"
           >
             <X className="h-3 w-3" />
@@ -81,7 +79,6 @@ export function BackupActiveFilterChips({
             className="h-4 w-4 p-0 ml-1"
             onClick={() => onDatePresetChange("all")}
             aria-label="Clear backup date filter"
-            title="Clear backup date filter"
             data-testid="button-clear-backup-date-filter"
           >
             <X className="h-3 w-3" />
@@ -97,13 +94,12 @@ export function BackupActiveFilterChips({
             className="h-4 w-4 p-0 ml-1"
             onClick={() => onSortByChange("newest")}
             aria-label="Clear backup sort filter"
-            title="Clear backup sort filter"
             data-testid="button-clear-sort-filter"
           >
             <X className="h-3 w-3" />
           </Button>
         </Badge>
       ) : null}
-    </div>
+    </section>
   );
 }

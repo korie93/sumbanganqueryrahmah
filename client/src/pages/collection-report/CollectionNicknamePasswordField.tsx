@@ -49,7 +49,6 @@ export function CollectionNicknamePasswordField({
             onClick={onToggleVisibility}
             disabled={disabled}
             aria-label="Hide password"
-            title="Hide password"
           >
             <EyeOff className="h-4 w-4" />
           </button>
@@ -60,7 +59,6 @@ export function CollectionNicknamePasswordField({
             onClick={onToggleVisibility}
             disabled={disabled}
             aria-label="Show password"
-            title="Show password"
           >
             <Eye className="h-4 w-4" />
           </button>
