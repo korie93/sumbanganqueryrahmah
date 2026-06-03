@@ -36,7 +36,9 @@ type ActivationPasswordFormProps = {
   onClearConfirmPasswordError: () => void;
   onClearFormError: () => void;
   onClearNewPasswordError: () => void;
+  onConfirmPasswordBlur: () => void;
   onConfirmPasswordChange: (value: string) => void;
+  onNewPasswordBlur: () => void;
   onNewPasswordChange: (value: string) => void;
   onPasswordKeyDown: (event: KeyboardEvent<HTMLInputElement>) => void;
 };
@@ -101,7 +103,9 @@ export function ActivationPasswordForm({
   onClearConfirmPasswordError,
   onClearFormError,
   onClearNewPasswordError,
+  onConfirmPasswordBlur,
   onConfirmPasswordChange,
+  onNewPasswordBlur,
   onNewPasswordChange,
   onPasswordKeyDown,
 }: ActivationPasswordFormProps) {
@@ -136,6 +140,7 @@ export function ActivationPasswordForm({
             onClearNewPasswordError();
             onClearFormError();
           }}
+          onBlur={onNewPasswordBlur}
           onKeyDown={onPasswordKeyDown}
           placeholder="Masukkan kata laluan baharu"
           autoComplete="new-password"
@@ -166,6 +171,7 @@ export function ActivationPasswordForm({
             onClearConfirmPasswordError();
             onClearFormError();
           }}
+          onBlur={onConfirmPasswordBlur}
           onKeyDown={onPasswordKeyDown}
           placeholder="Masukkan semula kata laluan"
           autoComplete="new-password"

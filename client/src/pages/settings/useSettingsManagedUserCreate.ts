@@ -11,6 +11,7 @@ export function useSettingsManagedUserCreate({
 }: UseSettingsManagedUserCreateArgs) {
   const formState = useSettingsManagedUserCreateFormState();
   const submitAction = useSettingsManagedUserCreateSubmitAction({
+    applyCreateFieldErrors: formState.applyCreateFieldErrors,
     createDraft: formState.draft,
     isMountedRef,
     loadDevMailOutbox,
@@ -22,6 +23,7 @@ export function useSettingsManagedUserCreate({
 
   return {
     createEmailInput: formState.createEmailInput,
+    createFieldErrors: formState.createFieldErrors,
     createFullNameInput: formState.createFullNameInput,
     createRoleInput: formState.createRoleInput,
     createUsernameInput: formState.createUsernameInput,
@@ -31,5 +33,6 @@ export function useSettingsManagedUserCreate({
     setCreateFullNameInput: formState.setCreateFullNameInput,
     setCreateRoleInput: formState.setCreateRoleInput,
     setCreateUsernameInput: formState.setCreateUsernameInput,
+    validateCreateField: formState.validateCreateField,
   };
 }

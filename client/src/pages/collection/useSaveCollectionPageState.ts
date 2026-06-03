@@ -44,6 +44,7 @@ export function useSaveCollectionPageState({
     onSaved,
     mutationFeedback,
     clearPageState,
+    applyFieldErrors: formState.applyFieldErrors,
   });
   const {
     clearLastSavedSummary,
@@ -114,6 +115,7 @@ export function useSaveCollectionPageState({
     lastSavedSummary,
     maxPaymentDate: formState.maxPaymentDate,
     isPaymentDateInFuture: formState.isPaymentDateInFuture,
+    fieldErrors: formState.fieldErrors,
     draftRestoreNotice: draftState.draftRestoreNotice,
     restoreNoticeLabel: draftState.restoreNoticeLabel,
     setCustomerName: formState.setCustomerName,
@@ -123,6 +125,7 @@ export function useSaveCollectionPageState({
     setBatch: formState.setBatch,
     setPaymentDate: formState.setPaymentDate,
     setAmount: formState.setAmount,
+    validateField: formState.validateField,
     clearForm,
     clearLastSavedSummary,
     clearSubmitFailure: submitState.clearSubmitFailure,

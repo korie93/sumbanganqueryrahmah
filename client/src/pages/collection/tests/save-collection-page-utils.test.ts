@@ -5,6 +5,7 @@ import {
   formatSaveCollectionRestoreNoticeLabel,
   removeSaveCollectionReceiptAtIndex,
   validateSaveCollectionForm,
+  validateSaveCollectionFormFields,
 } from "@/pages/collection/save-collection-page-utils";
 
 test("validateSaveCollectionForm rejects invalid customer and payment inputs", () => {
@@ -34,6 +35,29 @@ test("validateSaveCollectionForm rejects invalid customer and payment inputs", (
       amount: "10.00",
     }),
     "Customer Phone Number is invalid. Use 8-20 chars with digits/space/dash/plus.",
+  );
+});
+
+test("validateSaveCollectionFormFields returns inline field-level errors", () => {
+  assert.deepEqual(
+    validateSaveCollectionFormFields({
+      staffNickname: "ab",
+      customerName: "",
+      icNumber: "",
+      customerPhone: "bad",
+      accountNumber: "",
+      batch: "P10",
+      paymentDate: "not-a-date",
+      amount: "0",
+    }),
+    {
+      customerName: "Customer Name is required.",
+      icNumber: "IC Number is required.",
+      customerPhone: "Customer Phone Number is invalid. Use 8-20 chars with digits/space/dash/plus.",
+      accountNumber: "Account Number is required.",
+      paymentDate: "Payment Date is invalid.",
+      amount: "Amount must be greater than 0.",
+    },
   );
 });
 

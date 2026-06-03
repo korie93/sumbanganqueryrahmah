@@ -28,6 +28,18 @@ export type SaveCollectionFormValues = {
   amount: string;
 };
 
+export type SaveCollectionFieldName =
+  | "staffNickname"
+  | "customerName"
+  | "icNumber"
+  | "customerPhone"
+  | "accountNumber"
+  | "batch"
+  | "paymentDate"
+  | "amount";
+
+export type SaveCollectionFieldErrors = Partial<Record<SaveCollectionFieldName, string>>;
+
 export type SaveCollectionMutationPayload = {
   customerName: string;
   icNumber: string;
@@ -54,20 +66,56 @@ export function formatSaveCollectionRestoreNoticeLabel(restoredAt: string | null
 }
 
 export function validateSaveCollectionForm(values: SaveCollectionFormValues): string | null {
-  if (!values.staffNickname || values.staffNickname.trim().length < 2) {
-    return "Staff nickname is required.";
+  const errors = validateSaveCollectionFormFields(values);
+  const orderedFields: SaveCollectionFieldName[] = [
+    "staffNickname",
+    "customerName",
+    "icNumber",
+    "customerPhone",
+    "accountNumber",
+    "batch",
+    "paymentDate",
+    "amount",
+  ];
+  for (const field of orderedFields) {
+    if (errors[field]) {
+      return errors[field] ?? null;
+    }
   }
-  if (!values.customerName.trim()) return "Customer Name is required.";
-  if (!values.icNumber.trim()) return "IC Number is required.";
-  if (!isValidCustomerPhone(values.customerPhone)) {
-    return "Customer Phone Number is invalid. Use 8-20 chars with digits/space/dash/plus.";
-  }
-  if (!values.accountNumber.trim()) return "Account Number is required.";
-  if (!COLLECTION_BATCH_OPTIONS.includes(values.batch)) return "Batch is not valid.";
-  if (!isValidDate(values.paymentDate)) return "Payment Date is invalid.";
-  if (isFutureDate(values.paymentDate)) return "Payment Date cannot be in the future.";
-  if (!isPositiveAmount(values.amount)) return "Amount must be greater than 0.";
   return null;
+}
+
+export function validateSaveCollectionFormFields(values: SaveCollectionFormValues): SaveCollectionFieldErrors {
+  const errors: SaveCollectionFieldErrors = {};
+
+  if (!values.staffNickname || values.staffNickname.trim().length < 2) {
+    errors.staffNickname = "Staff nickname is required.";
+  }
+  if (!values.customerName.trim()) {
+    errors.customerName = "Customer Name is required.";
+  }
+  if (!values.icNumber.trim()) {
+    errors.icNumber = "IC Number is required.";
+  }
+  if (!isValidCustomerPhone(values.customerPhone)) {
+    errors.customerPhone = "Customer Phone Number is invalid. Use 8-20 chars with digits/space/dash/plus.";
+  }
+  if (!values.accountNumber.trim()) {
+    errors.accountNumber = "Account Number is required.";
+  }
+  if (!COLLECTION_BATCH_OPTIONS.includes(values.batch)) {
+    errors.batch = "Batch is not valid.";
+  }
+  if (!isValidDate(values.paymentDate)) {
+    errors.paymentDate = "Payment Date is invalid.";
+  } else if (isFutureDate(values.paymentDate)) {
+    errors.paymentDate = "Payment Date cannot be in the future.";
+  }
+  if (!isPositiveAmount(values.amount)) {
+    errors.amount = "Amount must be greater than 0.";
+  }
+
+  return errors;
 }
 
 export function buildSaveCollectionMutationPayload(options: {

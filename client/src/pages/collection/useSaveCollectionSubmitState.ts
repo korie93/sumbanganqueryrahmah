@@ -9,6 +9,8 @@ import {
 import type { CollectionReceiptDraftInput } from "@/pages/collection/receipt-validation";
 import {
   buildSaveCollectionMutationPayload,
+  validateSaveCollectionFormFields,
+  type SaveCollectionFieldErrors,
   type SaveCollectionFormValues,
   validateSaveCollectionForm,
 } from "@/pages/collection/save-collection-page-utils";
@@ -37,6 +39,7 @@ type UseSaveCollectionSubmitStateOptions = {
   onSaved?: (() => void) | undefined;
   mutationFeedback: MutationFeedbackApi;
   clearPageState: () => void;
+  applyFieldErrors?: ((errors: SaveCollectionFieldErrors) => void) | undefined;
 };
 
 export function useSaveCollectionSubmitState({
@@ -46,6 +49,7 @@ export function useSaveCollectionSubmitState({
   onSaved,
   mutationFeedback,
   clearPageState,
+  applyFieldErrors,
 }: UseSaveCollectionSubmitStateOptions) {
   const mountedRef = useRef(true);
   const submitInFlightRef = useRef(false);
@@ -87,6 +91,7 @@ export function useSaveCollectionSubmitState({
 
     const validationError = validateSaveCollectionForm(values);
     if (validationError) {
+      applyFieldErrors?.(validateSaveCollectionFormFields(values));
       clearLastSavedSummary();
       if (mountedRef.current) {
         setSubmitPhase("failed");
@@ -184,6 +189,7 @@ export function useSaveCollectionSubmitState({
   }, [
     clearPageState,
     clearLastSavedSummary,
+    applyFieldErrors,
     mutationFeedback,
     onSaved,
     receiptDrafts,

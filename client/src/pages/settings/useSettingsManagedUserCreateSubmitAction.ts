@@ -12,7 +12,9 @@ import {
   findDuplicateManagedUser,
   normalizeManagedUserCreateDraft,
   validateManagedUserCreateDraft,
+  validateManagedUserCreateDraftFields,
 } from "@/pages/settings/settings-managed-user-create-utils";
+import type { ManagedUserCreateFieldErrors } from "@/pages/settings/settings-managed-user-create-utils";
 import {
   getManagedUserDeliveryPreviewUrl,
   resolveManagedUserDeliveryRecipient,
@@ -24,11 +26,13 @@ import {
 } from "@/pages/settings/utils";
 
 type UseSettingsManagedUserCreateSubmitActionArgs = UseSettingsManagedUserCreateArgs & {
+  applyCreateFieldErrors: (errors: ManagedUserCreateFieldErrors) => void;
   createDraft: Parameters<typeof validateManagedUserCreateDraft>[0];
   resetCreateManagedUserForm: () => void;
 };
 
 export function useSettingsManagedUserCreateSubmitAction({
+  applyCreateFieldErrors,
   createDraft,
   isMountedRef,
   loadDevMailOutbox,
@@ -47,6 +51,7 @@ export function useSettingsManagedUserCreateSubmitAction({
 
     const validationError = validateManagedUserCreateDraft(createDraft);
     if (validationError) {
+      applyCreateFieldErrors(validateManagedUserCreateDraftFields(createDraft));
       toast({
         title: "Validation Error",
         description: validationError,
@@ -158,6 +163,7 @@ export function useSettingsManagedUserCreateSubmitAction({
   }, [
     createDraft,
     creatingManagedUser,
+    applyCreateFieldErrors,
     isMountedRef,
     loadDevMailOutbox,
     loadManagedUsers,

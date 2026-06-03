@@ -7,60 +7,84 @@ import { useIsMobile } from "@/hooks/use-mobile";
 
 interface MyAccountSecurityCardProps {
   confirmPasswordInput: string;
+  confirmPasswordError: string | null;
   currentPasswordInput: string;
+  currentPasswordError: string | null;
   currentUserRole: string;
   newPasswordInput: string;
+  newPasswordError: string | null;
   onDisableTwoFactor: () => void;
   onEnableTwoFactor: () => void;
   onChangePassword: () => void;
   onChangeUsername: () => void;
+  onConfirmPasswordBlur: () => void;
   onConfirmPasswordInputChange: (value: string) => void;
+  onCurrentPasswordBlur: () => void;
   onCurrentPasswordInputChange: (value: string) => void;
+  onNewPasswordBlur: () => void;
   onNewPasswordInputChange: (value: string) => void;
   onStartTwoFactorSetup: () => void;
+  onTwoFactorCodeBlur: () => void;
   onTwoFactorCodeInputChange: (value: string) => void;
+  onTwoFactorPasswordBlur: () => void;
   onTwoFactorPasswordInputChange: (value: string) => void;
+  onUsernameBlur: () => void;
   onUsernameInputChange: (value: string) => void;
   passwordSaving: boolean;
+  twoFactorCodeError: string | null;
   twoFactorCodeInput: string;
   twoFactorEnabled: boolean;
   twoFactorLoading: boolean;
+  twoFactorPasswordError: string | null;
   twoFactorPasswordInput: string;
   twoFactorPendingSetup: boolean;
   twoFactorSetupAccountName: string;
   twoFactorSetupIssuer: string;
   twoFactorSetupSecret: string;
   twoFactorSetupUri: string;
+  usernameError: string | null;
   usernameInput: string;
   usernameSaving: boolean;
 }
 
 export function MyAccountSecurityCard({
   confirmPasswordInput,
+  confirmPasswordError,
   currentPasswordInput,
+  currentPasswordError,
   currentUserRole,
   newPasswordInput,
+  newPasswordError,
   onDisableTwoFactor,
   onEnableTwoFactor,
   onChangePassword,
   onChangeUsername,
+  onConfirmPasswordBlur,
   onConfirmPasswordInputChange,
+  onCurrentPasswordBlur,
   onCurrentPasswordInputChange,
+  onNewPasswordBlur,
   onNewPasswordInputChange,
   onStartTwoFactorSetup,
+  onTwoFactorCodeBlur,
   onTwoFactorCodeInputChange,
+  onTwoFactorPasswordBlur,
   onTwoFactorPasswordInputChange,
+  onUsernameBlur,
   onUsernameInputChange,
   passwordSaving,
+  twoFactorCodeError,
   twoFactorCodeInput,
   twoFactorEnabled,
   twoFactorLoading,
+  twoFactorPasswordError,
   twoFactorPasswordInput,
   twoFactorPendingSetup,
   twoFactorSetupAccountName,
   twoFactorSetupIssuer,
   twoFactorSetupSecret,
   twoFactorSetupUri,
+  usernameError,
   usernameInput,
   usernameSaving,
 }: MyAccountSecurityCardProps) {
@@ -77,6 +101,12 @@ export function MyAccountSecurityCard({
     : twoFactorPendingSetup
       ? "secondary"
       : "outline";
+  const usernameErrorId = "my-account-username-error";
+  const currentPasswordErrorId = "my-account-current-password-error";
+  const newPasswordErrorId = "my-account-new-password-error";
+  const confirmPasswordErrorId = "my-account-confirm-password-error";
+  const twoFactorPasswordErrorId = "my-account-two-factor-password-error";
+  const twoFactorCodeErrorId = "my-account-two-factor-code-error";
 
   return (
     <Card className="border-border/60 bg-background/70">
@@ -129,12 +159,20 @@ export function MyAccountSecurityCard({
                     name="accountUsername"
                     value={usernameInput}
                     onChange={(event) => onUsernameInputChange(event.target.value)}
+                    onBlur={onUsernameBlur}
                     disabled={securityBusy}
                     autoComplete="username"
                     autoCapitalize="none"
                     autoCorrect="off"
                     spellCheck={false}
+                    aria-invalid={usernameError ? true : undefined}
+                    aria-describedby={usernameError ? usernameErrorId : undefined}
                   />
+                  {usernameError ? (
+                    <p id={usernameErrorId} className="text-xs text-destructive" role="alert">
+                      {usernameError}
+                    </p>
+                  ) : null}
                 </div>
                 <Button
                   onClick={onChangeUsername}
@@ -171,9 +209,17 @@ export function MyAccountSecurityCard({
                     type="password"
                     value={currentPasswordInput}
                     onChange={(event) => onCurrentPasswordInputChange(event.target.value)}
+                    onBlur={onCurrentPasswordBlur}
                     disabled={securityBusy}
                     autoComplete="current-password"
+                    aria-invalid={currentPasswordError ? true : undefined}
+                    aria-describedby={currentPasswordError ? currentPasswordErrorId : undefined}
                   />
+                  {currentPasswordError ? (
+                    <p id={currentPasswordErrorId} className="text-xs text-destructive" role="alert">
+                      {currentPasswordError}
+                    </p>
+                  ) : null}
                 </div>
                 <div className="space-y-2">
                   <label htmlFor="my-account-new-password" className="text-sm font-medium">
@@ -185,9 +231,17 @@ export function MyAccountSecurityCard({
                     type="password"
                     value={newPasswordInput}
                     onChange={(event) => onNewPasswordInputChange(event.target.value)}
+                    onBlur={onNewPasswordBlur}
                     disabled={securityBusy}
                     autoComplete="new-password"
+                    aria-invalid={newPasswordError ? true : undefined}
+                    aria-describedby={newPasswordError ? newPasswordErrorId : undefined}
                   />
+                  {newPasswordError ? (
+                    <p id={newPasswordErrorId} className="text-xs text-destructive" role="alert">
+                      {newPasswordError}
+                    </p>
+                  ) : null}
                 </div>
                 <div className="space-y-2">
                   <label htmlFor="my-account-confirm-password" className="text-sm font-medium">
@@ -199,9 +253,17 @@ export function MyAccountSecurityCard({
                     type="password"
                     value={confirmPasswordInput}
                     onChange={(event) => onConfirmPasswordInputChange(event.target.value)}
+                    onBlur={onConfirmPasswordBlur}
                     disabled={securityBusy}
                     autoComplete="new-password"
+                    aria-invalid={confirmPasswordError ? true : undefined}
+                    aria-describedby={confirmPasswordError ? confirmPasswordErrorId : undefined}
                   />
+                  {confirmPasswordError ? (
+                    <p id={confirmPasswordErrorId} className="text-xs text-destructive" role="alert">
+                      {confirmPasswordError}
+                    </p>
+                  ) : null}
                 </div>
               </div>
               <div className="flex flex-col gap-2 sm:flex-row sm:justify-end" data-floating-ai-avoid="true">
@@ -244,9 +306,17 @@ export function MyAccountSecurityCard({
                       type="password"
                       value={twoFactorPasswordInput}
                       onChange={(event) => onTwoFactorPasswordInputChange(event.target.value)}
+                      onBlur={onTwoFactorPasswordBlur}
                       disabled={securityBusy}
                       autoComplete="current-password"
+                      aria-invalid={twoFactorPasswordError ? true : undefined}
+                      aria-describedby={twoFactorPasswordError ? twoFactorPasswordErrorId : undefined}
                     />
+                    {twoFactorPasswordError ? (
+                      <p id={twoFactorPasswordErrorId} className="text-xs text-destructive" role="alert">
+                        {twoFactorPasswordError}
+                      </p>
+                    ) : null}
                   </div>
                   <div className="space-y-2">
                     <label htmlFor="my-account-two-factor-code" className="text-sm font-medium">
@@ -259,10 +329,18 @@ export function MyAccountSecurityCard({
                       placeholder="000000"
                       value={twoFactorCodeInput}
                       onChange={(event) => onTwoFactorCodeInputChange(event.target.value)}
+                      onBlur={onTwoFactorCodeBlur}
                       disabled={securityBusy && !twoFactorPendingSetup}
                       pattern="[0-9]*"
                       autoComplete="one-time-code"
+                      aria-invalid={twoFactorCodeError ? true : undefined}
+                      aria-describedby={twoFactorCodeError ? twoFactorCodeErrorId : undefined}
                     />
+                    {twoFactorCodeError ? (
+                      <p id={twoFactorCodeErrorId} className="text-xs text-destructive" role="alert">
+                        {twoFactorCodeError}
+                      </p>
+                    ) : null}
                   </div>
                 </div>
 

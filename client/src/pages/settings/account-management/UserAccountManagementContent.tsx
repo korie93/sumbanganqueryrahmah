@@ -39,6 +39,7 @@ export function UserAccountManagementContent({
   activeTab,
   clearingDevMailOutbox,
   createEmailInput,
+  createFieldErrors,
   createFullNameInput,
   createRoleInput,
   createUsernameInput,
@@ -57,6 +58,7 @@ export function UserAccountManagementContent({
   managedUsersQuery,
   onClearDevMailOutbox,
   onCreateEmailInputChange,
+  onCreateFieldBlur,
   onCreateFullNameInputChange,
   onCreateManagedUser,
   onCreateRoleInputChange,
@@ -83,11 +85,13 @@ export function UserAccountManagementContent({
       {activeTab === "create-closed-account" ? (
         <CreateClosedAccountSection
           createEmailInput={createEmailInput}
+          createFieldErrors={createFieldErrors}
           createFullNameInput={createFullNameInput}
           createRoleInput={createRoleInput}
           createUsernameInput={createUsernameInput}
           creatingManagedUser={creatingManagedUser}
           onCreateEmailInputChange={onCreateEmailInputChange}
+          onCreateFieldBlur={onCreateFieldBlur}
           onCreateFullNameInputChange={onCreateFullNameInputChange}
           onCreateManagedUser={onCreateManagedUser}
           onCreateRoleInputChange={onCreateRoleInputChange}

@@ -76,6 +76,11 @@ export default function ForgotPasswordPage({
     }
   };
 
+  const handleIdentifierBlur = () => {
+    const fieldErrors = validateIdentifierField(identifier);
+    setIdentifierError(fieldErrors.identifier ?? "");
+  };
+
   const identifierInvalidProps = identifierError
     ? {
       "aria-invalid": "true" as const,
@@ -115,6 +120,7 @@ export default function ForgotPasswordPage({
                 setIdentifierError("");
                 setError("");
               }}
+              onBlur={handleIdentifierBlur}
               onKeyDown={(event) => {
                 if (event.key === "Enter") {
                   void handleSubmit();

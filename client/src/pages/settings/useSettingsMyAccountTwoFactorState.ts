@@ -24,19 +24,49 @@ type UseSettingsMyAccountTwoFactorStateArgs = UseSettingsMyAccountArgs & {
   syncCurrentUser: SyncCurrentUserFn;
 };
 
+function validateTwoFactorPasswordInput(value: string): string | null {
+  return value ? null : "Current password is required for two-factor authentication.";
+}
+
+function validateTwoFactorCodeInput(value: string): string | null {
+  return normalizeAuthenticatorCode(value).length === 6
+    ? null
+    : "Enter the 6-digit authenticator code.";
+}
+
 export function useSettingsMyAccountTwoFactorState({
   currentUser,
   isMountedRef,
   syncCurrentUser,
   toast,
 }: UseSettingsMyAccountTwoFactorStateArgs) {
-  const [twoFactorPasswordInput, setTwoFactorPasswordInput] = useState("");
-  const [twoFactorCodeInput, setTwoFactorCodeInput] = useState("");
+  const [twoFactorPasswordInput, setTwoFactorPasswordInputState] = useState("");
+  const [twoFactorPasswordError, setTwoFactorPasswordError] = useState<string | null>(null);
+  const [twoFactorCodeInput, setTwoFactorCodeInputState] = useState("");
+  const [twoFactorCodeError, setTwoFactorCodeError] = useState<string | null>(null);
   const [twoFactorSetupSecret, setTwoFactorSetupSecret] = useState("");
   const [twoFactorSetupAccountName, setTwoFactorSetupAccountName] = useState("");
   const [twoFactorSetupIssuer, setTwoFactorSetupIssuer] = useState("");
   const [twoFactorSetupUri, setTwoFactorSetupUri] = useState("");
   const [twoFactorLoading, setTwoFactorLoading] = useState(false);
+
+  const setTwoFactorPasswordInput = useCallback((value: string) => {
+    setTwoFactorPasswordInputState(value);
+    setTwoFactorPasswordError(null);
+  }, []);
+
+  const setTwoFactorCodeInput = useCallback((value: string) => {
+    setTwoFactorCodeInputState(value);
+    setTwoFactorCodeError(null);
+  }, []);
+
+  const handleTwoFactorPasswordBlur = useCallback(() => {
+    setTwoFactorPasswordError(validateTwoFactorPasswordInput(twoFactorPasswordInput));
+  }, [twoFactorPasswordInput]);
+
+  const handleTwoFactorCodeBlur = useCallback(() => {
+    setTwoFactorCodeError(validateTwoFactorCodeInput(twoFactorCodeInput));
+  }, [twoFactorCodeInput]);
 
   const clearTwoFactorSetupState = useCallback(() => {
     setTwoFactorSetupSecret("");
@@ -44,6 +74,7 @@ export function useSettingsMyAccountTwoFactorState({
     setTwoFactorSetupIssuer("");
     setTwoFactorSetupUri("");
     setTwoFactorCodeInput("");
+    setTwoFactorCodeError(null);
   }, []);
 
   const handleStartTwoFactorSetup = useCallback(async () => {
@@ -57,10 +88,12 @@ export function useSettingsMyAccountTwoFactorState({
       return;
     }
 
-    if (!twoFactorPasswordInput) {
+    const passwordValidationError = validateTwoFactorPasswordInput(twoFactorPasswordInput);
+    setTwoFactorPasswordError(passwordValidationError);
+    if (passwordValidationError) {
       toast({
         title: "Validation Error",
-        description: "Current password is required to start two-factor setup.",
+        description: passwordValidationError,
         variant: "destructive",
       });
       return;
@@ -93,10 +126,12 @@ export function useSettingsMyAccountTwoFactorState({
   const handleEnableTwoFactor = useCallback(async () => {
     if (!currentUser || twoFactorLoading) return;
     const normalizedCode = normalizeAuthenticatorCode(twoFactorCodeInput);
-    if (normalizedCode.length !== 6) {
+    const codeValidationError = validateTwoFactorCodeInput(twoFactorCodeInput);
+    setTwoFactorCodeError(codeValidationError);
+    if (codeValidationError) {
       toast({
         title: "Validation Error",
-        description: "Enter the 6-digit authenticator code.",
+        description: codeValidationError,
         variant: "destructive",
       });
       return;
@@ -110,6 +145,7 @@ export function useSettingsMyAccountTwoFactorState({
       syncCurrentUser(nextUser);
       clearTwoFactorSetupState();
       setTwoFactorPasswordInput("");
+      setTwoFactorPasswordError(null);
       toast(buildMutationSuccessToast({
         title: "Two-Factor Enabled",
         description: "Authenticator-based sign-in is now active for this account.",
@@ -125,20 +161,17 @@ export function useSettingsMyAccountTwoFactorState({
 
   const handleDisableTwoFactor = useCallback(async () => {
     if (!currentUser || twoFactorLoading) return;
-    if (!twoFactorPasswordInput) {
-      toast({
-        title: "Validation Error",
-        description: "Current password is required to disable two-factor authentication.",
-        variant: "destructive",
-      });
-      return;
-    }
-
     const normalizedCode = normalizeAuthenticatorCode(twoFactorCodeInput);
-    if (normalizedCode.length !== 6) {
+    const passwordValidationError = validateTwoFactorPasswordInput(twoFactorPasswordInput);
+    const codeValidationError = validateTwoFactorCodeInput(twoFactorCodeInput);
+    setTwoFactorPasswordError(passwordValidationError);
+    setTwoFactorCodeError(codeValidationError);
+
+    const validationError = passwordValidationError ?? codeValidationError;
+    if (validationError) {
       toast({
         title: "Validation Error",
-        description: "Enter the 6-digit authenticator code.",
+        description: validationError,
         variant: "destructive",
       });
       return;
@@ -155,6 +188,7 @@ export function useSettingsMyAccountTwoFactorState({
       syncCurrentUser(nextUser);
       clearTwoFactorSetupState();
       setTwoFactorPasswordInput("");
+      setTwoFactorPasswordError(null);
       toast(buildMutationSuccessToast({
         title: "Two-Factor Disabled",
         description: "Authenticator-based sign-in has been turned off for this account.",
@@ -172,10 +206,14 @@ export function useSettingsMyAccountTwoFactorState({
     handleDisableTwoFactor,
     handleEnableTwoFactor,
     handleStartTwoFactorSetup,
+    handleTwoFactorCodeBlur,
+    handleTwoFactorPasswordBlur,
     setTwoFactorCodeInput,
     setTwoFactorPasswordInput,
+    twoFactorCodeError,
     twoFactorCodeInput,
     twoFactorLoading,
+    twoFactorPasswordError,
     twoFactorPasswordInput,
     twoFactorSetupAccountName,
     twoFactorSetupIssuer,

@@ -8,6 +8,11 @@ import {
   validateCredentialUsername,
 } from "@/pages/settings/settings-credential-validation";
 
+export type ManagedUserCreateFieldErrors = Partial<Record<
+  "createUsernameInput" | "createEmailInput",
+  string
+>>;
+
 export function normalizeManagedUserCreateDraft(draft: ManagedUserCreateDraft) {
   return {
     normalizedEmail: normalizeCredentialEmail(draft.createEmailInput),
@@ -17,19 +22,28 @@ export function normalizeManagedUserCreateDraft(draft: ManagedUserCreateDraft) {
   };
 }
 
-export function validateManagedUserCreateDraft(draft: ManagedUserCreateDraft) {
+export function validateManagedUserCreateDraftFields(
+  draft: ManagedUserCreateDraft,
+): ManagedUserCreateFieldErrors {
   const normalized = normalizeManagedUserCreateDraft(draft);
   const usernameValidationError = validateCredentialUsername(normalized.normalizedUsername);
+  const errors: ManagedUserCreateFieldErrors = {};
 
   if (usernameValidationError) {
-    return usernameValidationError;
+    errors.createUsernameInput = usernameValidationError;
   }
 
   if (!normalized.normalizedEmail) {
-    return MANAGED_USER_EMAIL_REQUIRED_MESSAGE;
+    errors.createEmailInput = MANAGED_USER_EMAIL_REQUIRED_MESSAGE;
   }
 
-  return null;
+  return errors;
+}
+
+export function validateManagedUserCreateDraft(draft: ManagedUserCreateDraft) {
+  const errors = validateManagedUserCreateDraftFields(draft);
+
+  return errors.createUsernameInput ?? errors.createEmailInput ?? null;
 }
 
 export function findDuplicateManagedUser(options: {

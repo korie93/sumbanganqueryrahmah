@@ -207,6 +207,25 @@ export default function ActivateAccountPage({ onBackToLogin }: ActivateAccountPa
     }
   };
 
+  const validateNewPasswordOnBlur = () => {
+    const fieldErrors = validatePasswordFields({
+      newPassword,
+      confirmPassword,
+    });
+    setNewPasswordError(fieldErrors.newPassword ?? "");
+    if (confirmPassword) {
+      setConfirmPasswordError(fieldErrors.confirmPassword ?? "");
+    }
+  };
+
+  const validateConfirmPasswordOnBlur = () => {
+    const fieldErrors = validatePasswordFields({
+      newPassword,
+      confirmPassword,
+    });
+    setConfirmPasswordError(fieldErrors.confirmPassword ?? "");
+  };
+
   const onPasswordKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
     if (event.key === "Enter") {
       void handleActivate();
@@ -266,7 +285,9 @@ export default function ActivateAccountPage({ onBackToLogin }: ActivateAccountPa
           onClearFormError={() => setError("")}
           onClearNewPasswordError={() => setNewPasswordError("")}
           onConfirmPasswordChange={setConfirmPassword}
+          onConfirmPasswordBlur={validateConfirmPasswordOnBlur}
           onNewPasswordChange={setNewPassword}
+          onNewPasswordBlur={validateNewPasswordOnBlur}
           onPasswordKeyDown={onPasswordKeyDown}
         />
       ) : null}

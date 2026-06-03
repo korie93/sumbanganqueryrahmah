@@ -25,6 +25,18 @@ type UseSettingsMyAccountCredentialStateArgs = UseSettingsMyAccountArgs & {
   syncCurrentUser: SyncCurrentUserFn;
 };
 
+function validateCurrentPasswordInput(value: string): string | null {
+  return value ? null : "Current password is required.";
+}
+
+function validateNewPasswordInput(value: string): string | null {
+  return isStrongPassword(value) ? null : getCredentialPasswordPolicyMessage();
+}
+
+function validateConfirmPasswordInput(newPassword: string, confirmPassword: string): string | null {
+  return newPassword === confirmPassword ? null : "Confirm password does not match.";
+}
+
 export function useSettingsMyAccountCredentialState({
   currentUser,
   forceLogoutAfterPasswordChange,
@@ -32,12 +44,58 @@ export function useSettingsMyAccountCredentialState({
   syncCurrentUser,
   toast,
 }: UseSettingsMyAccountCredentialStateArgs) {
-  const [usernameInput, setUsernameInput] = useState("");
+  const [usernameInput, setUsernameInputState] = useState("");
+  const [usernameError, setUsernameError] = useState<string | null>(null);
   const [usernameSaving, setUsernameSaving] = useState(false);
-  const [currentPasswordInput, setCurrentPasswordInput] = useState("");
-  const [newPasswordInput, setNewPasswordInput] = useState("");
-  const [confirmPasswordInput, setConfirmPasswordInput] = useState("");
+  const [currentPasswordInput, setCurrentPasswordInputState] = useState("");
+  const [currentPasswordError, setCurrentPasswordError] = useState<string | null>(null);
+  const [newPasswordInput, setNewPasswordInputState] = useState("");
+  const [newPasswordError, setNewPasswordError] = useState<string | null>(null);
+  const [confirmPasswordInput, setConfirmPasswordInputState] = useState("");
+  const [confirmPasswordError, setConfirmPasswordError] = useState<string | null>(null);
   const [passwordSaving, setPasswordSaving] = useState(false);
+
+  const setUsernameInput = useCallback((value: string) => {
+    setUsernameInputState(value);
+    setUsernameError(null);
+  }, []);
+
+  const setCurrentPasswordInput = useCallback((value: string) => {
+    setCurrentPasswordInputState(value);
+    setCurrentPasswordError(null);
+  }, []);
+
+  const setNewPasswordInput = useCallback((value: string) => {
+    setNewPasswordInputState(value);
+    setNewPasswordError(null);
+    if (confirmPasswordInput) {
+      setConfirmPasswordError(validateConfirmPasswordInput(value, confirmPasswordInput));
+    }
+  }, [confirmPasswordInput]);
+
+  const setConfirmPasswordInput = useCallback((value: string) => {
+    setConfirmPasswordInputState(value);
+    setConfirmPasswordError(null);
+  }, []);
+
+  const handleUsernameBlur = useCallback(() => {
+    setUsernameError(validateCredentialUsername(normalizeCredentialUsername(usernameInput)));
+  }, [usernameInput]);
+
+  const handleCurrentPasswordBlur = useCallback(() => {
+    setCurrentPasswordError(validateCurrentPasswordInput(currentPasswordInput));
+  }, [currentPasswordInput]);
+
+  const handleNewPasswordBlur = useCallback(() => {
+    setNewPasswordError(validateNewPasswordInput(newPasswordInput));
+    if (confirmPasswordInput) {
+      setConfirmPasswordError(validateConfirmPasswordInput(newPasswordInput, confirmPasswordInput));
+    }
+  }, [confirmPasswordInput, newPasswordInput]);
+
+  const handleConfirmPasswordBlur = useCallback(() => {
+    setConfirmPasswordError(validateConfirmPasswordInput(newPasswordInput, confirmPasswordInput));
+  }, [confirmPasswordInput, newPasswordInput]);
 
   const handleChangeUsername = useCallback(async () => {
     if (!currentUser || usernameSaving) return;
@@ -45,6 +103,7 @@ export function useSettingsMyAccountCredentialState({
 
     const usernameValidationError = validateCredentialUsername(normalized);
     if (usernameValidationError) {
+      setUsernameError(usernameValidationError);
       toast({
         title: "Validation Error",
         description: usernameValidationError,
@@ -66,6 +125,7 @@ export function useSettingsMyAccountCredentialState({
       if (!isMountedRef.current) return;
       syncCurrentUser(nextUser);
       setUsernameInput(nextUser.username);
+      setUsernameError(null);
 
       toast(buildMutationSuccessToast({
         title: "Username Updated",
@@ -83,28 +143,20 @@ export function useSettingsMyAccountCredentialState({
   const handleChangePassword = useCallback(async () => {
     if (!currentUser || passwordSaving) return;
 
-    if (!currentPasswordInput) {
-      toast({
-        title: "Validation Error",
-        description: "Current password is required.",
-        variant: "destructive",
-      });
-      return;
-    }
+    const nextCurrentPasswordError = validateCurrentPasswordInput(currentPasswordInput);
+    const nextNewPasswordError = validateNewPasswordInput(newPasswordInput);
+    const nextConfirmPasswordError = validateConfirmPasswordInput(newPasswordInput, confirmPasswordInput);
 
-    if (!isStrongPassword(newPasswordInput)) {
-      toast({
-        title: "Validation Error",
-        description: getCredentialPasswordPolicyMessage(),
-        variant: "destructive",
-      });
-      return;
-    }
+    setCurrentPasswordError(nextCurrentPasswordError);
+    setNewPasswordError(nextNewPasswordError);
+    setConfirmPasswordError(nextConfirmPasswordError);
 
-    if (newPasswordInput !== confirmPasswordInput) {
+    const validationError =
+      nextCurrentPasswordError ?? nextNewPasswordError ?? nextConfirmPasswordError;
+    if (validationError) {
       toast({
         title: "Validation Error",
-        description: "Confirm password does not match.",
+        description: validationError,
         variant: "destructive",
       });
       return;
@@ -121,6 +173,9 @@ export function useSettingsMyAccountCredentialState({
       setCurrentPasswordInput("");
       setNewPasswordInput("");
       setConfirmPasswordInput("");
+      setCurrentPasswordError(null);
+      setNewPasswordError(null);
+      setConfirmPasswordError(null);
 
       toast(buildMutationSuccessToast({
         title: "Password Updated",
@@ -150,15 +205,23 @@ export function useSettingsMyAccountCredentialState({
 
   return {
     confirmPasswordInput,
+    confirmPasswordError,
     currentPasswordInput,
+    currentPasswordError,
+    handleConfirmPasswordBlur,
     handleChangePassword,
     handleChangeUsername,
+    handleCurrentPasswordBlur,
+    handleNewPasswordBlur,
+    handleUsernameBlur,
     newPasswordInput,
+    newPasswordError,
     passwordSaving,
     setConfirmPasswordInput,
     setCurrentPasswordInput,
     setNewPasswordInput,
     setUsernameInput,
+    usernameError,
     usernameInput,
     usernameSaving,
   };

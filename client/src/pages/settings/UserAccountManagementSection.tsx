@@ -11,6 +11,7 @@ export type { UserAccountManagementSectionProps } from "@/pages/settings/account
 export function UserAccountManagementSection({
   clearingDevMailOutbox,
   createEmailInput,
+  createFieldErrors,
   createFullNameInput,
   createRoleInput,
   createUsernameInput,
@@ -29,6 +30,7 @@ export function UserAccountManagementSection({
   managedUsersQuery,
   onClearDevMailOutbox,
   onCreateEmailInputChange,
+  onCreateFieldBlur,
   onCreateFullNameInputChange,
   onCreateManagedUser,
   onCreateRoleInputChange,
@@ -83,6 +85,7 @@ export function UserAccountManagementSection({
             activeTab={sectionState.activeTab}
             clearingDevMailOutbox={clearingDevMailOutbox}
             createEmailInput={createEmailInput}
+            createFieldErrors={createFieldErrors}
             createFullNameInput={createFullNameInput}
             createRoleInput={createRoleInput}
             createUsernameInput={createUsernameInput}
@@ -101,6 +104,7 @@ export function UserAccountManagementSection({
             managedUsersQuery={managedUsersQuery}
             onClearDevMailOutbox={onClearDevMailOutbox}
             onCreateEmailInputChange={onCreateEmailInputChange}
+            onCreateFieldBlur={onCreateFieldBlur}
             onCreateFullNameInputChange={onCreateFullNameInputChange}
             onCreateManagedUser={onCreateManagedUser}
             onCreateRoleInputChange={onCreateRoleInputChange}

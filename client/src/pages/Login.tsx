@@ -49,6 +49,10 @@ export default function Login({ onBanned, onForgotPasswordClick, onLandingClick,
     setTwoFactorCode,
     setCaptchaResponse,
     handleUsernameChange,
+    handleUsernameBlur,
+    handlePasswordBlur,
+    handleTwoFactorCodeBlur,
+    handleCaptchaResponseBlur,
     handleSubmit,
     handleInputKeyDown,
     toggleShowPassword,
@@ -195,6 +199,7 @@ export default function Login({ onBanned, onForgotPasswordClick, onLandingClick,
                     placeholder="Masukkan username"
                     value={username}
                     onChange={(e) => handleUsernameChange(e.target.value)}
+                    onBlur={handleUsernameBlur}
                     onKeyDown={handleInputKeyDown}
                     autoComplete="username"
                     data-testid="input-username"
@@ -222,6 +227,7 @@ export default function Login({ onBanned, onForgotPasswordClick, onLandingClick,
                       pattern="[0-9]*"
                       value={twoFactorCode}
                       onChange={(e) => setTwoFactorCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                      onBlur={handleTwoFactorCodeBlur}
                       onKeyDown={handleInputKeyDown}
                       autoComplete="one-time-code"
                       data-testid="input-two-factor-code"
@@ -251,6 +257,7 @@ export default function Login({ onBanned, onForgotPasswordClick, onLandingClick,
                         type={showPassword ? "text" : "password"}
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
+                        onBlur={handlePasswordBlur}
                         onKeyDown={handleInputKeyDown}
                         autoComplete="current-password"
                         data-testid="input-password"
@@ -280,6 +287,7 @@ export default function Login({ onBanned, onForgotPasswordClick, onLandingClick,
                           placeholder="Masukkan jawapan"
                           value={captchaResponse}
                           onChange={(e) => setCaptchaResponse(e.target.value)}
+                          onBlur={handleCaptchaResponseBlur}
                           onKeyDown={handleInputKeyDown}
                           autoComplete="off"
                           data-testid="input-captcha-response"

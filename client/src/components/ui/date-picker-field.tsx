@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type FocusEventHandler } from "react";
 import { Calendar as CalendarIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Calendar, type CalendarProps } from "@/components/ui/calendar";
@@ -19,6 +19,9 @@ interface DatePickerFieldProps {
   disabledDates?: CalendarProps["disabled"];
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
+  onBlur?: FocusEventHandler<HTMLButtonElement> | undefined;
+  "aria-describedby"?: string | undefined;
+  "aria-invalid"?: boolean | "true" | "false" | "grammar" | "spelling" | undefined;
 }
 
 function getSelectedDate(value: string) {
@@ -51,6 +54,9 @@ export function DatePickerField({
   disabledDates,
   open: controlledOpen,
   onOpenChange,
+  onBlur,
+  "aria-describedby": ariaDescribedBy,
+  "aria-invalid": ariaInvalid,
 }: DatePickerFieldProps) {
   const [internalOpen, setInternalOpen] = useState(false);
   const open = controlledOpen ?? internalOpen;
@@ -67,6 +73,9 @@ export function DatePickerField({
           type="button"
           variant="outline"
           disabled={disabled}
+          onBlur={onBlur}
+          aria-describedby={ariaDescribedBy}
+          aria-invalid={ariaInvalid}
           {...triggerAriaLabelProps}
           title={triggerLabel}
           className={cn(

@@ -170,6 +170,25 @@ export default function ResetPasswordPage({ onBackToHome, onBackToLogin }: Reset
     }
   };
 
+  const validateNewPasswordOnBlur = () => {
+    const fieldErrors = validatePasswordFields({
+      newPassword,
+      confirmPassword,
+    });
+    setNewPasswordError(fieldErrors.newPassword ?? "");
+    if (confirmPassword) {
+      setConfirmPasswordError(fieldErrors.confirmPassword ?? "");
+    }
+  };
+
+  const validateConfirmPasswordOnBlur = () => {
+    const fieldErrors = validatePasswordFields({
+      newPassword,
+      confirmPassword,
+    });
+    setConfirmPasswordError(fieldErrors.confirmPassword ?? "");
+  };
+
   const onPasswordKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
     if (event.key === "Enter") {
       void handleResetPassword();
@@ -259,6 +278,7 @@ export default function ResetPasswordPage({ onBackToHome, onBackToLogin }: Reset
                 setNewPasswordError("");
                 setError("");
               }}
+              onBlur={validateNewPasswordOnBlur}
               onKeyDown={onPasswordKeyDown}
               placeholder="Masukkan kata laluan baharu"
               autoComplete="new-password"
@@ -289,6 +309,7 @@ export default function ResetPasswordPage({ onBackToHome, onBackToLogin }: Reset
                 setConfirmPasswordError("");
                 setError("");
               }}
+              onBlur={validateConfirmPasswordOnBlur}
               onKeyDown={onPasswordKeyDown}
               placeholder="Masukkan semula kata laluan"
               autoComplete="new-password"

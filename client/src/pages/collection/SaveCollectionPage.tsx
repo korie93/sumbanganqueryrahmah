@@ -32,6 +32,7 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
   const customerIcNumberInputId = "save-collection-customer-ic-number";
   const customerPhoneInputId = "save-collection-customer-phone";
   const accountNumberInputId = "save-collection-account-number";
+  const batchInputId = "save-collection-batch";
   const paymentDateButtonId = "save-collection-payment-date-button";
   const amountInputId = "save-collection-amount";
   const state = useSaveCollectionPageState({
@@ -39,6 +40,15 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
     onSaved,
     mutationFeedback,
   });
+  const customerNameErrorId = `${customerNameInputId}-error`;
+  const icNumberErrorId = `${customerIcNumberInputId}-error`;
+  const customerPhoneErrorId = `${customerPhoneInputId}-error`;
+  const accountNumberErrorId = `${accountNumberInputId}-error`;
+  const batchErrorId = `${batchInputId}-error`;
+  const paymentDateErrorId = `${paymentDateButtonId}-error`;
+  const amountErrorId = `${amountInputId}-error`;
+  const paymentDateError = state.fieldErrors.paymentDate
+    || (state.isPaymentDateInFuture ? "Payment Date cannot be in the future." : "");
 
   usePageShortcuts([
     {
@@ -61,9 +71,17 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
           name="customerName"
           value={state.customerName}
           onChange={(e) => state.setCustomerName(e.target.value)}
+          onBlur={() => state.validateField("customerName")}
           disabled={state.submitting}
           autoComplete="name"
+          aria-invalid={state.fieldErrors.customerName ? true : undefined}
+          aria-describedby={state.fieldErrors.customerName ? customerNameErrorId : undefined}
         />
+        {state.fieldErrors.customerName ? (
+          <p id={customerNameErrorId} className="text-xs text-destructive" role="alert">
+            {state.fieldErrors.customerName}
+          </p>
+        ) : null}
       </div>
       <div className="space-y-2">
         <Label htmlFor={customerIcNumberInputId}>IC Number</Label>
@@ -72,10 +90,18 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
           name="customerIcNumber"
           value={state.icNumber}
           onChange={(e) => state.setIcNumber(e.target.value)}
+          onBlur={() => state.validateField("icNumber")}
           disabled={state.submitting}
           inputMode="numeric"
           autoComplete="off"
+          aria-invalid={state.fieldErrors.icNumber ? true : undefined}
+          aria-describedby={state.fieldErrors.icNumber ? icNumberErrorId : undefined}
         />
+        {state.fieldErrors.icNumber ? (
+          <p id={icNumberErrorId} className="text-xs text-destructive" role="alert">
+            {state.fieldErrors.icNumber}
+          </p>
+        ) : null}
       </div>
       <div className="space-y-2">
         <Label htmlFor={customerPhoneInputId}>Customer Phone Number</Label>
@@ -85,11 +111,19 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
           type="tel"
           value={state.customerPhone}
           onChange={(e) => state.setCustomerPhone(e.target.value)}
+          onBlur={() => state.validateField("customerPhone")}
           disabled={state.submitting}
           placeholder="+60 12-345 6789"
           inputMode="tel"
           autoComplete="tel"
+          aria-invalid={state.fieldErrors.customerPhone ? true : undefined}
+          aria-describedby={state.fieldErrors.customerPhone ? customerPhoneErrorId : undefined}
         />
+        {state.fieldErrors.customerPhone ? (
+          <p id={customerPhoneErrorId} className="text-xs text-destructive" role="alert">
+            {state.fieldErrors.customerPhone}
+          </p>
+        ) : null}
       </div>
     </>
   );
@@ -103,19 +137,30 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
           name="accountNumber"
           value={state.accountNumber}
           onChange={(e) => state.setAccountNumber(e.target.value)}
+          onBlur={() => state.validateField("accountNumber")}
           disabled={state.submitting}
           autoComplete="off"
+          aria-invalid={state.fieldErrors.accountNumber ? true : undefined}
+          aria-describedby={state.fieldErrors.accountNumber ? accountNumberErrorId : undefined}
         />
+        {state.fieldErrors.accountNumber ? (
+          <p id={accountNumberErrorId} className="text-xs text-destructive" role="alert">
+            {state.fieldErrors.accountNumber}
+          </p>
+        ) : null}
       </div>
       <div className="space-y-2">
-        <Label htmlFor="save-collection-batch">Batch</Label>
+        <Label htmlFor={batchInputId}>Batch</Label>
         <select
-          id="save-collection-batch"
+          id={batchInputId}
           name="collectionBatch"
           value={state.batch}
           onChange={(event) => state.setBatch(event.target.value as CollectionBatch)}
+          onBlur={() => state.validateField("batch")}
           disabled={state.submitting}
           aria-label="Batch"
+          aria-invalid={state.fieldErrors.batch ? true : undefined}
+          aria-describedby={state.fieldErrors.batch ? batchErrorId : undefined}
           className={cn(
             "w-full border border-input bg-background px-3 text-sm",
             isMobile ? "h-12 rounded-2xl" : "h-10 rounded-md",
@@ -127,6 +172,11 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
             </option>
           ))}
         </select>
+        {state.fieldErrors.batch ? (
+          <p id={batchErrorId} className="text-xs text-destructive" role="alert">
+            {state.fieldErrors.batch}
+          </p>
+        ) : null}
       </div>
       <div className="space-y-2">
         <Label htmlFor={paymentDateButtonId}>Payment Date</Label>
@@ -134,14 +184,19 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
           buttonId={paymentDateButtonId}
           value={state.paymentDate}
           onChange={state.setPaymentDate}
+          onBlur={() => state.validateField("paymentDate")}
           disabled={state.submitting}
           placeholder="Select payment date..."
           ariaLabel="Payment Date"
+          aria-invalid={paymentDateError ? true : undefined}
+          aria-describedby={paymentDateError ? paymentDateErrorId : undefined}
           buttonTestId="save-collection-payment-date"
           disabledDates={{ after: new Date(`${state.maxPaymentDate}T23:59:59`) }}
         />
-        {state.isPaymentDateInFuture ? (
-          <p className="text-xs text-destructive">Payment Date cannot be in the future.</p>
+        {paymentDateError ? (
+          <p id={paymentDateErrorId} className="text-xs text-destructive" role="alert">
+            {paymentDateError}
+          </p>
         ) : null}
       </div>
       <div className="space-y-2">
@@ -154,9 +209,17 @@ function SaveCollectionPage({ staffNickname, onSaved }: SaveCollectionPageProps)
           step="0.01"
           value={state.amount}
           onChange={(e) => state.setAmount(e.target.value)}
+          onBlur={() => state.validateField("amount")}
           disabled={state.submitting}
           inputMode="decimal"
+          aria-invalid={state.fieldErrors.amount ? true : undefined}
+          aria-describedby={state.fieldErrors.amount ? amountErrorId : undefined}
         />
+        {state.fieldErrors.amount ? (
+          <p id={amountErrorId} className="text-xs text-destructive" role="alert">
+            {state.fieldErrors.amount}
+          </p>
+        ) : null}
       </div>
     </>
   );

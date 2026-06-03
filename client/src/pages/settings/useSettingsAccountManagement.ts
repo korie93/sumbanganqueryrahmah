@@ -110,6 +110,7 @@ export function useSettingsAccountManagement({
   });
   const {
     createEmailInput,
+    createFieldErrors,
     createFullNameInput,
     createRoleInput,
     createUsernameInput,
@@ -125,10 +126,12 @@ export function useSettingsAccountManagement({
     setCreateFullNameInput,
     setCreateRoleInput,
     setCreateUsernameInput,
+    validateCreateField,
   } = managedUserMutations;
 
   return {
     createEmailInput,
+    createFieldErrors,
     createFullNameInput,
     createRoleInput,
     createUsernameInput,
@@ -189,6 +192,7 @@ export function useSettingsAccountManagement({
     setCreateFullNameInput,
     setCreateRoleInput,
     setCreateUsernameInput,
+    validateCreateField,
     setManagedEmailInput,
     setManagedFullNameInput,
     setManagedIsBanned,

@@ -4,14 +4,17 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { useMobileKeyboardState } from "@/hooks/use-mobile-keyboard-state";
 import { cn } from "@/lib/utils";
+import type { ManagedUserCreateFieldErrors } from "@/pages/settings/settings-managed-user-create-utils";
 
 interface CreateClosedAccountSectionProps {
   createEmailInput: string;
+  createFieldErrors: ManagedUserCreateFieldErrors;
   createFullNameInput: string;
   createRoleInput: "admin" | "user";
   createUsernameInput: string;
   creatingManagedUser: boolean;
   onCreateEmailInputChange: (value: string) => void;
+  onCreateFieldBlur: (field: keyof ManagedUserCreateFieldErrors) => void;
   onCreateFullNameInputChange: (value: string) => void;
   onCreateManagedUser: () => void;
   onCreateRoleInputChange: (value: "admin" | "user") => void;
@@ -20,17 +23,21 @@ interface CreateClosedAccountSectionProps {
 
 export function CreateClosedAccountSection({
   createEmailInput,
+  createFieldErrors,
   createFullNameInput,
   createRoleInput,
   createUsernameInput,
   creatingManagedUser,
   onCreateEmailInputChange,
+  onCreateFieldBlur,
   onCreateFullNameInputChange,
   onCreateManagedUser,
   onCreateRoleInputChange,
   onCreateUsernameInputChange,
 }: CreateClosedAccountSectionProps) {
   const keyboardOpen = useMobileKeyboardState();
+  const usernameErrorId = "create-closed-account-username-error";
+  const emailErrorId = "create-closed-account-email-error";
 
   return (
     <Card className="border-border/60 bg-background/60">
@@ -69,13 +76,23 @@ export function CreateClosedAccountSection({
               name="closedAccountUsername"
               value={createUsernameInput}
               onChange={(event) => onCreateUsernameInputChange(event.target.value)}
+              onBlur={() => onCreateFieldBlur("createUsernameInput")}
               placeholder="Username"
               disabled={creatingManagedUser}
               autoComplete="username"
               autoCapitalize="none"
               autoCorrect="off"
               spellCheck={false}
+              aria-invalid={createFieldErrors.createUsernameInput ? true : undefined}
+              aria-describedby={
+                createFieldErrors.createUsernameInput ? usernameErrorId : undefined
+              }
             />
+            {createFieldErrors.createUsernameInput ? (
+              <p id={usernameErrorId} className="text-xs text-destructive" role="alert">
+                {createFieldErrors.createUsernameInput}
+              </p>
+            ) : null}
           </div>
           <div className="space-y-2">
             <label htmlFor="create-closed-account-email" className="text-sm font-medium">
@@ -87,6 +104,7 @@ export function CreateClosedAccountSection({
               type="email"
               value={createEmailInput}
               onChange={(event) => onCreateEmailInputChange(event.target.value)}
+              onBlur={() => onCreateFieldBlur("createEmailInput")}
               placeholder="Email"
               disabled={creatingManagedUser}
               inputMode="email"
@@ -94,7 +112,14 @@ export function CreateClosedAccountSection({
               autoCapitalize="none"
               autoCorrect="off"
               spellCheck={false}
+              aria-invalid={createFieldErrors.createEmailInput ? true : undefined}
+              aria-describedby={createFieldErrors.createEmailInput ? emailErrorId : undefined}
             />
+            {createFieldErrors.createEmailInput ? (
+              <p id={emailErrorId} className="text-xs text-destructive" role="alert">
+                {createFieldErrors.createEmailInput}
+              </p>
+            ) : null}
           </div>
           <div className="space-y-2">
             <label htmlFor="create-closed-account-role" className="text-sm font-medium">

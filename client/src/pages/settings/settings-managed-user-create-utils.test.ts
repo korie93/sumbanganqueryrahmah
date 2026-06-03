@@ -4,6 +4,7 @@ import {
   findDuplicateManagedUser,
   normalizeManagedUserCreateDraft,
   validateManagedUserCreateDraft,
+  validateManagedUserCreateDraftFields,
 } from "@/pages/settings/settings-managed-user-create-utils";
 
 test("normalizeManagedUserCreateDraft trims and lowercases account identifiers", () => {
@@ -44,6 +45,21 @@ test("validateManagedUserCreateDraft requires an activation email", () => {
       createUsernameInput: "alice",
     }),
     "Email is required for account activation.",
+  );
+});
+
+test("validateManagedUserCreateDraftFields returns inline field errors", () => {
+  assert.deepEqual(
+    validateManagedUserCreateDraftFields({
+      createEmailInput: "   ",
+      createFullNameInput: "Alice",
+      createRoleInput: "user",
+      createUsernameInput: "a",
+    }),
+    {
+      createEmailInput: "Email is required for account activation.",
+      createUsernameInput: "Username must match ^[a-zA-Z0-9._-]{3,32}$.",
+    },
   );
 });
 

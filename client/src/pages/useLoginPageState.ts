@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef } from "react";
 import type { User } from "@/app/types";
 import { consumeStoredAuthNotice } from "@/lib/auth-session";
 import { isLockedAccountFlow } from "@/pages/login-lock-state";
+import { validatePasswordLoginFields, validateTwoFactorCodeField } from "@/pages/login-page-utils";
 import { useLoginFormState } from "@/pages/useLoginFormState";
 import { useLoginRedirect } from "@/pages/useLoginRedirect";
 import { useLoginSecurity } from "@/pages/useLoginSecurity";
@@ -71,6 +72,29 @@ export function useLoginPageState({
     }
   }, [form, security]);
 
+  const handleUsernameBlur = useCallback(() => {
+    const fieldErrors = validatePasswordLoginFields(form.username, form.password);
+    form.setUsernameError(fieldErrors.username ?? "");
+  }, [form]);
+
+  const handlePasswordBlur = useCallback(() => {
+    const fieldErrors = validatePasswordLoginFields(form.username, form.password);
+    form.setPasswordError(fieldErrors.password ?? "");
+  }, [form]);
+
+  const handleTwoFactorCodeBlur = useCallback(() => {
+    const fieldErrors = validateTwoFactorCodeField(security.twoFactorCode);
+    security.setTwoFactorCodeError(fieldErrors.twoFactorCode ?? "");
+  }, [security]);
+
+  const handleCaptchaResponseBlur = useCallback(() => {
+    security.setCaptchaResponseError(
+      security.captchaResponse.trim()
+        ? ""
+        : "Sila masukkan jawapan pengesahan keselamatan.",
+    );
+  }, [security]);
+
   const returnToPasswordLogin = useCallback(() => {
     security.clearTwoFactorChallenge();
     form.setNotice("");
@@ -127,6 +151,10 @@ export function useLoginPageState({
     setTwoFactorCode,
     setCaptchaResponse: security.setCaptchaResponse,
     handleUsernameChange,
+    handleUsernameBlur,
+    handlePasswordBlur,
+    handleTwoFactorCodeBlur,
+    handleCaptchaResponseBlur,
     handleSubmit: submission.handleSubmit,
     handleInputKeyDown: submission.handleInputKeyDown,
     toggleShowPassword: form.toggleShowPassword,

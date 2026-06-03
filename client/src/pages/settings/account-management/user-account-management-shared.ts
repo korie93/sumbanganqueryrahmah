@@ -14,10 +14,12 @@ import type {
   PendingResetRequestsPaginationState,
   PendingResetRequestsQueryState,
 } from "@/pages/settings/useSettingsManagedUserData";
+import type { ManagedUserCreateFieldErrors } from "@/pages/settings/settings-managed-user-create-utils";
 
 export interface UserAccountManagementSectionProps {
   clearingDevMailOutbox: boolean;
   createEmailInput: string;
+  createFieldErrors: ManagedUserCreateFieldErrors;
   createFullNameInput: string;
   createRoleInput: "admin" | "user";
   createUsernameInput: string;
@@ -36,6 +38,7 @@ export interface UserAccountManagementSectionProps {
   managedUsersQuery: ManagedUsersQueryState;
   onClearDevMailOutbox: () => void;
   onCreateEmailInputChange: (value: string) => void;
+  onCreateFieldBlur: (field: keyof ManagedUserCreateFieldErrors) => void;
   onCreateFullNameInputChange: (value: string) => void;
   onCreateManagedUser: () => void;
   onCreateRoleInputChange: (value: "admin" | "user") => void;

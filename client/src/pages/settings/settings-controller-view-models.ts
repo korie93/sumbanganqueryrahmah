@@ -5,30 +5,42 @@ import type { ManagedUser } from "@/pages/settings/types";
 
 type SecurityViewModelArgs = {
   confirmPasswordInput: string;
+  confirmPasswordError: string | null;
   currentPasswordInput: string;
+  currentPasswordError: string | null;
   currentUserRole: string;
   newPasswordInput: string;
+  newPasswordError: string | null;
   onDisableTwoFactor: () => void;
   onEnableTwoFactor: () => void;
   onChangePassword: () => void;
   onChangeUsername: () => void;
+  onConfirmPasswordBlur: () => void;
   onConfirmPasswordInputChange: (value: string) => void;
+  onCurrentPasswordBlur: () => void;
   onCurrentPasswordInputChange: (value: string) => void;
+  onNewPasswordBlur: () => void;
   onNewPasswordInputChange: (value: string) => void;
   onStartTwoFactorSetup: () => void;
+  onTwoFactorCodeBlur: () => void;
   onTwoFactorCodeInputChange: (value: string) => void;
+  onTwoFactorPasswordBlur: () => void;
   onTwoFactorPasswordInputChange: (value: string) => void;
+  onUsernameBlur: () => void;
   onUsernameInputChange: (value: string) => void;
   passwordSaving: boolean;
+  twoFactorCodeError: string | null;
   twoFactorCodeInput: string;
   twoFactorEnabled: boolean;
   twoFactorLoading: boolean;
+  twoFactorPasswordError: string | null;
   twoFactorPasswordInput: string;
   twoFactorPendingSetup: boolean;
   twoFactorSetupAccountName: string;
   twoFactorSetupIssuer: string;
   twoFactorSetupSecret: string;
   twoFactorSetupUri: string;
+  usernameError: string | null;
   usernameInput: string;
   usernameSaving: boolean;
 };
@@ -65,30 +77,42 @@ export function buildSettingsSecurityViewModel(
 ): AccountSecuritySectionProps {
   return {
     confirmPasswordInput: args.confirmPasswordInput,
+    confirmPasswordError: args.confirmPasswordError,
     currentPasswordInput: args.currentPasswordInput,
+    currentPasswordError: args.currentPasswordError,
     currentUserRole: args.currentUserRole,
     newPasswordInput: args.newPasswordInput,
+    newPasswordError: args.newPasswordError,
     onDisableTwoFactor: args.onDisableTwoFactor,
     onEnableTwoFactor: args.onEnableTwoFactor,
     onChangePassword: args.onChangePassword,
     onChangeUsername: args.onChangeUsername,
+    onConfirmPasswordBlur: args.onConfirmPasswordBlur,
     onConfirmPasswordInputChange: args.onConfirmPasswordInputChange,
+    onCurrentPasswordBlur: args.onCurrentPasswordBlur,
     onCurrentPasswordInputChange: args.onCurrentPasswordInputChange,
+    onNewPasswordBlur: args.onNewPasswordBlur,
     onNewPasswordInputChange: args.onNewPasswordInputChange,
     onStartTwoFactorSetup: args.onStartTwoFactorSetup,
+    onTwoFactorCodeBlur: args.onTwoFactorCodeBlur,
     onTwoFactorCodeInputChange: args.onTwoFactorCodeInputChange,
+    onTwoFactorPasswordBlur: args.onTwoFactorPasswordBlur,
     onTwoFactorPasswordInputChange: args.onTwoFactorPasswordInputChange,
+    onUsernameBlur: args.onUsernameBlur,
     onUsernameInputChange: args.onUsernameInputChange,
     passwordSaving: args.passwordSaving,
+    twoFactorCodeError: args.twoFactorCodeError,
     twoFactorCodeInput: args.twoFactorCodeInput,
     twoFactorEnabled: args.twoFactorEnabled,
     twoFactorLoading: args.twoFactorLoading,
+    twoFactorPasswordError: args.twoFactorPasswordError,
     twoFactorPasswordInput: args.twoFactorPasswordInput,
     twoFactorPendingSetup: args.twoFactorPendingSetup,
     twoFactorSetupAccountName: args.twoFactorSetupAccountName,
     twoFactorSetupIssuer: args.twoFactorSetupIssuer,
     twoFactorSetupSecret: args.twoFactorSetupSecret,
     twoFactorSetupUri: args.twoFactorSetupUri,
+    usernameError: args.usernameError,
     usernameInput: args.usernameInput,
     usernameSaving: args.usernameSaving,
   };

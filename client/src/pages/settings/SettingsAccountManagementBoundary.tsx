@@ -79,6 +79,7 @@ export function SettingsAccountManagementBoundary({
       <UserAccountManagementSection
         clearingDevMailOutbox={accountManagement.clearingDevMailOutbox}
         createEmailInput={accountManagement.createEmailInput}
+        createFieldErrors={accountManagement.createFieldErrors}
         createFullNameInput={accountManagement.createFullNameInput}
         createRoleInput={accountManagement.createRoleInput}
         createUsernameInput={accountManagement.createUsernameInput}
@@ -97,6 +98,7 @@ export function SettingsAccountManagementBoundary({
         managedUsersQuery={accountManagement.managedUsersQuery}
         onClearDevMailOutbox={() => void accountManagement.handleClearDevMailOutbox()}
         onCreateEmailInputChange={accountManagement.setCreateEmailInput}
+        onCreateFieldBlur={accountManagement.validateCreateField}
         onCreateFullNameInputChange={accountManagement.setCreateFullNameInput}
         onCreateManagedUser={() => void accountManagement.handleCreateManagedUser()}
         onCreateRoleInputChange={accountManagement.setCreateRoleInput}

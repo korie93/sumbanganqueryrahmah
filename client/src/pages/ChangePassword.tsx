@@ -147,6 +147,39 @@ export default function ChangePasswordPage({
     }
   };
 
+  const validateCurrentPasswordOnBlur = () => {
+    const fieldErrors = validatePasswordFields({
+      currentPassword,
+      newPassword,
+      confirmPassword,
+      requireCurrentPassword: true,
+    });
+    setCurrentPasswordError(fieldErrors.currentPassword ?? "");
+  };
+
+  const validateNewPasswordOnBlur = () => {
+    const fieldErrors = validatePasswordFields({
+      currentPassword,
+      newPassword,
+      confirmPassword,
+      requireCurrentPassword: true,
+    });
+    setNewPasswordError(fieldErrors.newPassword ?? "");
+    if (confirmPassword) {
+      setConfirmPasswordError(fieldErrors.confirmPassword ?? "");
+    }
+  };
+
+  const validateConfirmPasswordOnBlur = () => {
+    const fieldErrors = validatePasswordFields({
+      currentPassword,
+      newPassword,
+      confirmPassword,
+      requireCurrentPassword: true,
+    });
+    setConfirmPasswordError(fieldErrors.confirmPassword ?? "");
+  };
+
   const currentPasswordInvalidProps = currentPasswordError
     ? {
       "aria-invalid": "true" as const,
@@ -196,6 +229,7 @@ export default function ChangePasswordPage({
           setCurrentPasswordError("");
           setError("");
         }}
+        onBlur={validateCurrentPasswordOnBlur}
         placeholder="Kata laluan semasa"
         autoComplete="current-password"
         disabled={loading}
@@ -216,6 +250,7 @@ export default function ChangePasswordPage({
           setNewPasswordError("");
           setError("");
         }}
+        onBlur={validateNewPasswordOnBlur}
         placeholder="Kata laluan baharu"
         autoComplete="new-password"
         disabled={loading}
@@ -240,6 +275,7 @@ export default function ChangePasswordPage({
           setConfirmPasswordError("");
           setError("");
         }}
+        onBlur={validateConfirmPasswordOnBlur}
         placeholder="Sahkan kata laluan baharu"
         autoComplete="new-password"
         disabled={loading}
