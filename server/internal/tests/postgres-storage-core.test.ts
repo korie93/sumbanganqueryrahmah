@@ -51,6 +51,8 @@ test("PostgresStorageCore keeps dependent bootstrap steps ordered while parallel
 
   const usersEndIndex = storage.events.indexOf("end:users-table");
   const importsStartIndex = storage.events.indexOf("start:imports-table");
+  const importsEndIndex = storage.events.indexOf("end:imports-table");
+  const dataRowsStartIndex = storage.events.indexOf("start:data-rows-table");
   const collectionDailyEndIndex = storage.events.indexOf("end:collection-daily-tables");
   const defaultSeedStartIndex = storage.events.indexOf("start:default-users-seed");
   const backupsStartIndex = storage.events.indexOf("start:backups-table");
@@ -73,6 +75,7 @@ test("PostgresStorageCore keeps dependent bootstrap steps ordered while parallel
   );
 
   assert.equal(usersEndIndex < importsStartIndex, true);
+  assert.equal(importsEndIndex < dataRowsStartIndex, true);
   assert.equal(collectionDailyEndIndex < defaultSeedStartIndex, true);
   assert.equal(defaultSeedStartIndex < backupsStartIndex, true);
   assert.equal(backupsStartIndex < performanceStartIndex, true);

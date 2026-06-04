@@ -68,10 +68,10 @@ export function buildPostgresStorageBootstrapPlan(
 ): Array<StorageBootstrapStep | StorageBootstrapStepGroup> {
   return [
     { name: "users-table", run: handlers.ensureUsersTable },
+    { name: "imports-table", run: handlers.ensureImportsTable },
     {
       name: "core-schema-primitives",
       steps: [
-        { name: "imports-table", run: handlers.ensureImportsTable },
         { name: "data-rows-table", run: handlers.ensureDataRowsTable },
         { name: "user-activity-table", run: handlers.ensureUserActivityTable },
         { name: "audit-logs-table", run: handlers.ensureAuditLogsTable },
