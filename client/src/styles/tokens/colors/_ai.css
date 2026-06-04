@@ -193,6 +193,4 @@
   --floating-ai-thinking-ring: rgba(86, 156, 212, 0.7);
 
   --floating-ai-thinking-ring-clear: rgba(86, 156, 212, 0);
-
-  --floating-ai-edge-gap: clamp(0.5rem, 2vw, 1.5rem);
 }

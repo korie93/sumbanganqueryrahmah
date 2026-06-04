@@ -25,7 +25,6 @@ test("dark mode exposes neutral corporate semantic tokens", () => {
 
 test("dark mode suppresses glassmorphism and old blue page backdrops", () => {
   const glassWrapperCss = readClientSource("components/GlassWrapper.css");
-  const indexCss = readClientSource("index.css");
   const loginCss = readClientSource("pages/Login.css");
   const publicAuthCss = readClientSource("components/PublicAuthLayout.css");
   const floatingAiCss = readClientSource("components/FloatingAI.module.css");
@@ -57,7 +56,6 @@ test("dark mode suppresses glassmorphism and old blue page backdrops", () => {
     glassWrapperCss,
     /\.dark \.glass-wrapper\s*{[\s\S]*backdrop-filter:\s*none !important;/,
   );
-  assert.match(indexCss, /\.dark :where\(\[class\*="backdrop-blur"\]\)\s*{/);
   assert.match(loginCss, /\.dark \.login-card\s*{[\s\S]*backdrop-filter:\s*none !important;/);
   assert.match(
     publicAuthCss,

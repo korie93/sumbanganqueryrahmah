@@ -309,10 +309,6 @@
 
   --focus-ring: 2px solid hsl(var(--color-focus) / 0.88);
 
-  --focus-ring-offset: 2px;
-
-  --focus-ring-radius: var(--radius-sm);
-
   --chart-1: 207 60% 58%;
 
   --chart-2: 122 75% 59%;

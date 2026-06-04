@@ -177,22 +177,6 @@
 
   --banned-card-surface: var(--dm-surface);
 
-  --banned-card-border: hsl(0 72% 52% / 0.2);
-
-  --banned-shield-glow: hsl(0 72% 52%);
-
-  --banned-shield-core: linear-gradient(135deg, hsl(0 72% 52%), hsl(0 63% 34%));
-
-  --banned-shield-border: hsl(0 72% 52% / 0.3);
-
-  --banned-shield-icon: hsl(0 0% 100%);
-
-  --banned-status-bg: hsl(0 72% 52% / 0.2);
-
-  --banned-status-border: hsl(0 72% 52% / 0.3);
-
-  --banned-status-text: hsl(0 84% 66%);
-
   --banned-title-text: var(--color-text-primary);
 
   --banned-copy-text: var(--color-text-muted);
@@ -264,16 +248,6 @@
   --not-found-primary-button-text: hsl(0 0% 0%);
 
   --not-found-primary-button-ring: var(--color-focus-ring);
-
-  --forbidden-accent-bg: hsl(0 72% 52% / 0.1);
-
-  --forbidden-accent-border: hsl(0 72% 52% / 0.35);
-
-  --forbidden-accent-border-soft: hsl(0 72% 52% / 0.25);
-
-  --forbidden-accent-text: hsl(0 84% 76%);
-
-  --forbidden-accent-icon: hsl(0 84% 66%);
 
   --forbidden-shell-gradient: var(--dm-bg);
 

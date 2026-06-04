@@ -221,27 +221,15 @@
 
   --public-auth-input-focus: var(--color-focus-ring);
 
-  --login-layout-bg: var(--public-auth-layout-bg);
-
-  --login-pattern-dot: var(--public-auth-pattern-dot);
-
   --login-glow-top: transparent;
 
   --login-glow-bottom: transparent;
 
   --login-glow-center: transparent;
 
-  --login-back-button-border: var(--public-auth-shell-border);
-
   --login-back-button-bg: var(--public-auth-shell-surface-muted);
 
-  --login-back-button-text: var(--public-auth-text-muted);
-
   --login-back-button-bg-hover: var(--public-auth-shell-surface);
-
-  --login-back-button-text-hover: var(--public-auth-text-strong);
-
-  --login-back-button-ring: var(--public-auth-focus-ring);
 
   --login-card-surface: var(--dm-surface-elevated);
 
@@ -265,19 +253,9 @@
 
   --login-subtitle-text: var(--color-text-secondary);
 
-  --login-input-bg: var(--public-auth-input-bg);
-
-  --login-input-text: var(--public-auth-input-text);
-
-  --login-input-placeholder: var(--public-auth-input-placeholder);
-
-  --login-input-focus-ring: var(--public-auth-primary-ring);
-
   --login-password-toggle-text: var(--color-text-muted);
 
   --login-password-toggle-text-hover: var(--color-text-primary);
-
-  --login-password-toggle-ring: var(--public-auth-input-focus);
 
   --login-submit-gradient: var(--dm-primary);
 
@@ -287,17 +265,11 @@
 
   --login-submit-ring: var(--color-focus-ring);
 
-  --login-spinner-track: hsl(0 0% 100% / 0.3);
-
-  --login-spinner-head: hsl(0 0% 100%);
-
   --login-link-text: var(--color-text-secondary);
 
   --login-link-bg-hover: var(--color-surface-elevated);
 
   --login-link-text-hover: var(--color-text-primary);
-
-  --login-link-ring: var(--public-auth-ghost-ring);
 
   --login-alert-warning-bg: rgba(250, 200, 0, 0.14);
 
