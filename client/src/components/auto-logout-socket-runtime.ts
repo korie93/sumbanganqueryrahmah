@@ -93,6 +93,16 @@ export function bindAutoLogoutSocket({
     disposeAutoLogoutSocket(socket, wsRef)
   }
 
+  const runClientLogoutSafely = (label: string, onSettled?: () => void) => {
+    void runClientLogout()
+      .catch((error) => {
+        warnAutoLogoutDiagnostic(`${label} failed:`, error)
+      })
+      .finally(() => {
+        onSettled?.()
+      })
+  }
+
   const scheduleReconnect = () => {
     const nextUsername = username || getStoredUsername()
     if (!mountedRef.current || !reconnectEnabledRef.current || !nextUsername) {
@@ -149,17 +159,17 @@ export function bindAutoLogoutSocket({
 
         if (message.type === "kicked") {
           notifyAutoLogoutNotice(message.reason, "Anda telah dilogout oleh pentadbir.")
-          void runClientLogout()
+          runClientLogoutSafely("Kicked websocket logout")
         }
 
         if (message.type === "logout") {
           notifyAutoLogoutNotice(message.reason, "Sesi anda telah ditamatkan.")
-          void runClientLogout()
+          runClientLogoutSafely("Forced websocket logout")
         }
 
         if (message.type === "idle_timeout") {
           notifyAutoLogoutNotice(message.reason, "Sesi anda telah tamat kerana tidak aktif.")
-          void runClientLogout()
+          runClientLogoutSafely("Idle timeout websocket logout")
         }
 
         if (message.type === "banned") {
@@ -169,7 +179,7 @@ export function bindAutoLogoutSocket({
           reconnectAttemptRef.current = 0
           clearReconnect()
           disposeSocketInstance(activeSocket)
-          void runClientLogout().finally(() => {
+          runClientLogoutSafely("Banned websocket logout", () => {
             if (!mountedRef.current) {
               return
             }
