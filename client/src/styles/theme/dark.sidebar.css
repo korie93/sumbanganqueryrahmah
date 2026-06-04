@@ -1,0 +1,84 @@
+.dark :where(
+  [data-sidebar="sidebar"],
+  [data-slot="sidebar-inner"],
+  [data-slot="sidebar-content"],
+  .side-tab-nav,
+  .side-tab-nav-mobile,
+  .navbar-premium-glass
+) {
+  background: var(--dm-sidebar-bg) !important;
+  border-color: var(--dm-sidebar-border) !important;
+  color: var(--dm-text-secondary);
+}
+
+.dark :where(
+  [data-sidebar="sidebar"] a,
+  [data-sidebar="sidebar"] button,
+  [data-sidebar="menu-button"],
+  [data-sidebar="menu-sub-button"],
+  .side-tab-nav-item,
+  .nav-pill
+) {
+  color: var(--dm-text-secondary);
+}
+
+.dark :where(
+  [data-sidebar="sidebar"] svg,
+  [data-sidebar="menu-button"] svg,
+  [data-sidebar="menu-sub-button"] svg,
+  .side-tab-nav svg,
+  .side-tab-nav-mobile svg,
+  .navbar-premium-glass svg
+) {
+  color: currentColor;
+  stroke: currentColor;
+}
+
+.dark :where(.side-tab-nav-icon, [data-sidebar="menu-skeleton-icon"]) {
+  background: var(--dm-surface-elevated) !important;
+  color: var(--dm-sidebar-icon) !important;
+}
+
+.dark :where(
+  [data-sidebar="menu-button"]:hover,
+  [data-sidebar="menu-sub-button"]:hover,
+  .side-tab-nav-item:not([data-active="true"]):hover,
+  .nav-pill:not(.nav-pill-active):hover
+) {
+  background: var(--dm-sidebar-item-hover) !important;
+  color: var(--dm-text-primary) !important;
+}
+
+.dark :where(
+  [data-sidebar="menu-button"][data-active="true"],
+  [data-sidebar="menu-sub-button"][data-active="true"],
+  .side-tab-nav-item[data-active="true"],
+  .nav-pill.nav-pill-active,
+  .navbar-premium-glass [aria-current="page"]
+) {
+  background: var(--dm-sidebar-item-active) !important;
+  border-color: var(--dm-primary) !important;
+  color: var(--dm-sidebar-icon-active) !important;
+}
+
+.dark :where(
+  .side-tab-nav-item[data-active="true"] .side-tab-nav-icon,
+  .side-tab-nav-item[data-active="true"] svg,
+  .nav-pill.nav-pill-active svg,
+  .navbar-premium-glass [aria-current="page"] svg
+) {
+  color: var(--dm-sidebar-icon-active) !important;
+  stroke: currentColor;
+}
+
+.dark .side-tab-nav-active-surface {
+  background: var(--dm-sidebar-item-active) !important;
+  border-color: var(--dm-primary) !important;
+  box-shadow: none !important;
+}
+
+.dark :where(.navbar-scroll-hint, .nav-mobile-trigger, .user-menu-trigger) {
+  background: var(--dm-surface-elevated) !important;
+  border-color: var(--dm-sidebar-border) !important;
+  color: var(--dm-text-secondary);
+}

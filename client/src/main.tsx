@@ -6,6 +6,7 @@ import { detectLowSpecMode } from "./lib/low-spec-mode";
 import { initializeWebVitalsReporting } from "./lib/web-vitals";
 import "./styles/tokens/index.css";
 import "./public-shell.css";
+import "./styles/theme/index.css";
 
 installGlobalUnhandledRejectionHandler();
 

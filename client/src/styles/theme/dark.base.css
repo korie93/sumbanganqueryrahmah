@@ -1,0 +1,53 @@
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+.dark,
+.dark body,
+.dark #root {
+  background: var(--dm-bg);
+  color: var(--dm-text-primary);
+}
+
+.dark body {
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+.dark :where(
+  #root,
+  .app,
+  .layout,
+  .viewport-min-height,
+  .app-shell-min-height,
+  .public-auth-layout,
+  .login-page,
+  main
+) {
+  background-color: var(--dm-bg) !important;
+  color: var(--dm-text-primary);
+}
+
+.dark :where(.viewport-min-height, .app-shell-min-height, .public-auth-layout, .login-page) {
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+.dark .app-shell-min-height.bg-gradient-to-br {
+  background-image: none !important;
+  background-color: var(--dm-bg) !important;
+}
+
+.dark :where(.text-muted, .label, .description, .text-muted-foreground, [class*="text-muted-foreground"]) {
+  color: var(--dm-text-muted) !important;
+}
+
+.dark :where([class*="text-foreground/"]) {
+  color: var(--dm-text-secondary);
+}
+
+.dark :where(:focus-visible) {
+  outline-color: var(--dm-primary);
+}

@@ -60,7 +60,7 @@ export default function AI({
   }
 
   return (
-    <div className="app-shell-min-height bg-gradient-to-br from-slate-100 via-blue-50 to-slate-100 p-6 dark:from-background dark:via-card dark:to-background">
+    <div className="app-shell-min-height bg-gradient-to-br from-slate-100 via-blue-50 to-slate-100 p-6 dark:bg-background dark:bg-none">
       <div className="mx-auto max-w-5xl space-y-4">
         <div className="flex flex-col gap-2">
           <h1 className="text-3xl font-semibold text-foreground">AI Chat</h1>

@@ -304,9 +304,17 @@
 }
 
 .dark .login-card-aside {
-  background:
-    linear-gradient(135deg, rgba(86, 156, 212, 0.1), rgba(102, 99, 91, 0.12)),
-    var(--color-surface);
+  background: var(--dm-surface);
+}
+
+.dark .login-card {
+  background: var(--dm-surface-elevated);
+  border-color: var(--dm-border);
+}
+
+.dark .login-card::before,
+.dark .login-card::after {
+  display: none;
 }
 
 .dark .login-brand-mark {

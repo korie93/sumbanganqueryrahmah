@@ -1,0 +1,33 @@
+.dark :where(
+  .modal,
+  .dialog,
+  [role="dialog"],
+  [data-radix-dialog-content],
+  [data-slot="dialog-content"],
+  [data-slot="sheet-content"],
+  [data-slot="alert-dialog-content"]
+) {
+  background: var(--dm-surface-elevated) !important;
+  border-color: var(--dm-border) !important;
+  color: var(--dm-text-primary) !important;
+}
+
+.dark :where(
+  [data-slot="dialog-overlay"],
+  [data-slot="sheet-overlay"],
+  [data-slot="alert-dialog-overlay"]
+) {
+  background: rgb(0 0 0 / 0.72) !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
+.dark :where(
+  .toast,
+  [data-sonner-toast],
+  [data-slot="toast"]
+) {
+  background: var(--dm-surface-elevated) !important;
+  border-color: var(--dm-border) !important;
+  color: var(--dm-text-primary) !important;
+}

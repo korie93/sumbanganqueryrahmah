@@ -1,0 +1,53 @@
+.dark :where(
+  input,
+  select,
+  textarea,
+  [role="combobox"],
+  [data-slot="select-trigger"],
+  [data-slot="command-input"]
+) {
+  background-color: var(--dm-input-bg) !important;
+  border-color: var(--dm-input-border) !important;
+  color: var(--dm-text-primary) !important;
+}
+
+.dark :where(input, textarea)::placeholder {
+  color: var(--dm-input-placeholder) !important;
+  opacity: 1;
+}
+
+.dark :where(
+  button:disabled,
+  input:disabled,
+  select:disabled,
+  textarea:disabled,
+  [aria-disabled="true"],
+  [data-disabled="true"]
+) {
+  background-color: hsl(var(--disabled) / 1) !important;
+  border-color: hsl(var(--disabled-border) / 1) !important;
+  color: hsl(var(--disabled-foreground) / 1) !important;
+  opacity: 1 !important;
+}
+
+.dark :where(
+  [data-slot="dropdown-menu-content"],
+  [data-slot="select-content"],
+  [data-slot="popover-content"],
+  [cmdk-root],
+  [cmdk-list]
+) {
+  background: var(--dm-surface-elevated) !important;
+  border-color: var(--dm-border) !important;
+  color: var(--dm-text-primary) !important;
+}
+
+.dark :where(
+  [role="menuitem"]:hover,
+  [role="option"]:hover,
+  [cmdk-item][aria-selected="true"],
+  [data-highlighted]
+) {
+  background: var(--dm-surface-hover) !important;
+  color: var(--dm-text-primary) !important;
+}

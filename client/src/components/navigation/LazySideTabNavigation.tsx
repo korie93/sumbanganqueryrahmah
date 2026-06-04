@@ -36,7 +36,7 @@ function SideTabNavigationFallback({
 
       <aside
         className={cn(
-          "sticky top-4 hidden w-72 shrink-0 overflow-hidden rounded-xl border border-border/70 bg-background p-3 shadow-sm lg:block",
+          "side-tab-nav sticky top-4 hidden w-72 shrink-0 overflow-hidden rounded-xl border border-border/70 bg-background p-3 shadow-sm lg:block",
           className,
           fallbackClassName,
         )}
@@ -68,7 +68,7 @@ function SideTabNavigationFallback({
             aria-hidden="true"
           />
           <aside
-            className="fixed inset-y-0 left-0 z-[var(--z-mobile-nav-panel)] w-[290px] border-r border-border/70 bg-background p-3 shadow-xl lg:hidden"
+            className="side-tab-nav-mobile fixed inset-y-0 left-0 z-[var(--z-mobile-nav-panel)] w-[290px] border-r border-border/70 bg-background p-3 shadow-xl lg:hidden"
             aria-label={`${navigationLabel || "Navigation"} loading`}
           >
             <div className="mb-3 flex items-center justify-between">

@@ -57,7 +57,7 @@ export function ActiveFilterChips({
             <button
               type="button"
               onClick={item.onRemove}
-              className="inline-flex h-4 w-4 items-center justify-center rounded-full hover:bg-black/5 dark:hover:bg-white/10"
+              className="inline-flex h-4 w-4 items-center justify-center rounded-full hover:bg-black/5 dark:hover:bg-accent"
               aria-label={`Remove filter ${item.label}`}
             >
               <X className="h-3 w-3" />

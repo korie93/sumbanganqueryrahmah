@@ -102,7 +102,7 @@
 }
 
 .dark {
-  --ai-surface-bg: linear-gradient(180deg, var(--color-surface) 0%, var(--color-bg-soft) 100%);
+  --ai-surface-bg: var(--dm-surface);
 
   --ai-surface-border: var(--color-border-soft);
 
@@ -114,7 +114,7 @@
 
   --ai-notice-text: var(--color-text-secondary);
 
-  --ai-scroll-thumb: rgb(102, 99, 91);
+  --ai-scroll-thumb: var(--dm-border);
 
   --ai-empty-text: var(--color-text-muted);
 
@@ -154,12 +154,7 @@
 
   --floating-ai-header-border: var(--color-border-soft);
 
-  --floating-ai-header-desktop-bg: linear-gradient(
-    90deg,
-    rgba(86, 156, 212, 0.1),
-    rgba(50, 50, 49, 0.3),
-    transparent
-  );
+  --floating-ai-header-desktop-bg: var(--dm-surface-elevated);
 
   --floating-ai-header-mobile-bg: var(--color-surface-elevated);
 

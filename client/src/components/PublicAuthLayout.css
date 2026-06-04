@@ -296,6 +296,15 @@
   box-shadow: none;
 }
 
+.dark .public-auth-layout__card {
+  background: var(--dm-surface-elevated);
+  border-color: var(--dm-border);
+}
+
+.dark .public-auth-layout__card::after {
+  display: none;
+}
+
 .dark .public-auth-note,
 .dark .public-auth-account-summary,
 .dark .public-auth-status-card {

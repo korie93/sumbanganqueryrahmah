@@ -163,19 +163,19 @@
 }
 
 .dark {
-  --banned-layout-bg: linear-gradient(135deg, var(--color-bg), rgba(251, 44, 54, 0.16), var(--color-bg-soft));
+  --banned-layout-bg: var(--dm-bg);
 
-  --banned-pattern-dot: rgba(102, 99, 91, 0.26);
+  --banned-pattern-dot: transparent;
 
-  --banned-orb-top: rgba(251, 44, 54, 0.08);
+  --banned-orb-top: transparent;
 
-  --banned-orb-bottom: rgba(102, 99, 91, 0.14);
+  --banned-orb-bottom: transparent;
 
-  --banned-orb-center: rgba(251, 44, 54, 0.08);
+  --banned-orb-center: transparent;
 
-  --banned-halo: hsl(0 72% 52% / 0.1);
+  --banned-halo: transparent;
 
-  --banned-card-surface: linear-gradient(180deg, var(--color-surface), var(--color-bg-soft));
+  --banned-card-surface: var(--dm-surface);
 
   --banned-card-border: hsl(0 72% 52% / 0.2);
 
@@ -225,11 +225,11 @@
 
   --banned-footer-subtext: var(--color-text-disabled);
 
-  --not-found-layout-bg: linear-gradient(135deg, var(--color-bg), var(--color-surface), var(--color-bg));
+  --not-found-layout-bg: var(--dm-bg);
 
-  --not-found-orb-primary: rgba(86, 156, 212, 0.1);
+  --not-found-orb-primary: transparent;
 
-  --not-found-orb-secondary: rgba(102, 99, 91, 0.12);
+  --not-found-orb-secondary: transparent;
 
   --not-found-card-surface: var(--color-surface);
 
@@ -251,7 +251,7 @@
 
   --not-found-secondary-button-bg: var(--color-surface-elevated);
 
-  --not-found-secondary-button-bg-hover: rgb(58, 58, 57);
+  --not-found-secondary-button-bg-hover: var(--dm-surface-hover);
 
   --not-found-secondary-button-text: var(--color-text-primary);
 
@@ -275,7 +275,7 @@
 
   --forbidden-accent-icon: hsl(0 84% 66%);
 
-  --forbidden-shell-gradient: linear-gradient(135deg, var(--color-bg), var(--color-surface), rgba(251, 44, 54, 0.08));
+  --forbidden-shell-gradient: var(--dm-bg);
 
   --forbidden-primary-button-bg: var(--color-primary);
 
@@ -285,7 +285,7 @@
 
   --forbidden-primary-button-ring: var(--color-focus-ring);
 
-  --maintenance-layout-bg: linear-gradient(135deg, var(--color-bg), var(--color-surface), var(--color-bg-soft));
+  --maintenance-layout-bg: var(--dm-bg);
 
   --maintenance-shell-surface: var(--color-surface);
 

@@ -178,13 +178,13 @@ export function CollectionMonthlyComparisonSetupCard({
         </button>
       </div>
       <div className="mt-2.5 flex flex-wrap items-center gap-2 text-xs text-foreground/68 dark:text-foreground/74">
-        <span className="rounded-full border border-border/60 bg-background px-2.5 py-1 dark:border-white/10 dark:bg-white/[0.04]">
+        <span className="rounded-full border border-border/60 bg-background px-2.5 py-1 dark:border-border/70 dark:bg-card">
           Single nickname only
         </span>
-        <span className="rounded-full border border-border/60 bg-background px-2.5 py-1 dark:border-white/10 dark:bg-white/[0.04]">
+        <span className="rounded-full border border-border/60 bg-background px-2.5 py-1 dark:border-border/70 dark:bg-card">
           First month = base
         </span>
-        <span className="rounded-full border border-border/60 bg-background px-2.5 py-1 dark:border-white/10 dark:bg-white/[0.04]">
+        <span className="rounded-full border border-border/60 bg-background px-2.5 py-1 dark:border-border/70 dark:bg-card">
           Last month = target
         </span>
       </div>

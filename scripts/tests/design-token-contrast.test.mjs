@@ -71,6 +71,21 @@ function rgbToHslColorValue(red, green, blue, alpha = 1) {
 
 function parseHslColorValue(value) {
   const normalized = String(value || "").trim();
+  const hexMatch = normalized.match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
+
+  if (hexMatch) {
+    const hex = hexMatch[1];
+    const [red, green, blue] = hex.length === 3
+      ? [...hex].map((channel) => Number.parseInt(channel + channel, 16))
+      : [
+        Number.parseInt(hex.slice(0, 2), 16),
+        Number.parseInt(hex.slice(2, 4), 16),
+        Number.parseInt(hex.slice(4, 6), 16),
+      ];
+
+    return rgbToHslColorValue(red, green, blue);
+  }
+
   const match = normalized.match(
     /^hsl\(\s*([0-9.]+)\s+([0-9.]+)%\s+([0-9.]+)%(?:\s*\/\s*([0-9.]+))?\s*\)$/i,
   );
@@ -101,7 +116,7 @@ function parseHslColorValue(value) {
 }
 
 function extractHslColorValues(value) {
-  return Array.from(String(value || "").matchAll(/(?:hsl|rgb)a?\([^)]*\)/gi), (match) =>
+  return Array.from(String(value || "").matchAll(/#[0-9a-f]{3}(?:[0-9a-f]{3})?\b|(?:hsl|rgb)a?\([^)]*\)/gi), (match) =>
     parseHslColorValue(match[0]),
   );
 }

@@ -167,15 +167,15 @@
 }
 
 .dark {
-  --public-auth-layout-bg: linear-gradient(135deg, var(--color-bg), var(--color-surface), var(--color-bg));
+  --public-auth-layout-bg: var(--dm-bg);
 
-  --public-auth-pattern-dot: rgba(102, 99, 91, 0.28);
+  --public-auth-pattern-dot: transparent;
 
-  --public-auth-glow-top: rgba(86, 156, 212, 0.08);
+  --public-auth-glow-top: transparent;
 
-  --public-auth-glow-bottom: rgba(102, 99, 91, 0.14);
+  --public-auth-glow-bottom: transparent;
 
-  --public-auth-glow-center: rgba(86, 156, 212, 0.06);
+  --public-auth-glow-center: transparent;
 
   --public-auth-shell-border: var(--color-border-soft);
 
@@ -197,7 +197,7 @@
 
   --public-auth-focus-ring: var(--color-focus-ring);
 
-  --public-auth-halo: rgba(86, 156, 212, 0.12);
+  --public-auth-halo: transparent;
 
   --public-auth-primary-bg: var(--color-primary);
 
@@ -225,11 +225,11 @@
 
   --login-pattern-dot: var(--public-auth-pattern-dot);
 
-  --login-glow-top: rgba(86, 156, 212, 0.08);
+  --login-glow-top: transparent;
 
-  --login-glow-bottom: rgba(102, 99, 91, 0.14);
+  --login-glow-bottom: transparent;
 
-  --login-glow-center: rgba(86, 156, 212, 0.06);
+  --login-glow-center: transparent;
 
   --login-back-button-border: var(--public-auth-shell-border);
 
@@ -243,31 +243,21 @@
 
   --login-back-button-ring: var(--public-auth-focus-ring);
 
-  --login-card-surface: var(--color-surface-elevated);
+  --login-card-surface: var(--dm-surface-elevated);
 
   --login-card-border: var(--color-border);
 
-  --login-card-border-gradient: linear-gradient(
-    160deg,
-    rgba(102, 99, 91, 0.48),
-    rgba(86, 156, 212, 0.2),
-    rgba(102, 99, 91, 0.28)
-  );
+  --login-card-border-gradient: none;
 
-  --login-card-overlay-gradient: linear-gradient(
-    to bottom right,
-    rgba(255, 255, 255, 0.05),
-    rgba(255, 255, 255, 0.02) 42%,
-    rgba(86, 156, 212, 0.05)
-  );
+  --login-card-overlay-gradient: none;
 
-  --login-card-halo: rgba(86, 156, 212, 0.1);
+  --login-card-halo: transparent;
 
   --login-mobile-card-surface: var(--color-surface-elevated);
 
   --login-mobile-card-border: var(--color-border-soft);
 
-  --login-brand-surface: rgba(86, 156, 212, 0.12);
+  --login-brand-surface: var(--dm-surface-hover);
 
   --login-brand-border: rgba(86, 156, 212, 0.28);
 
@@ -289,9 +279,9 @@
 
   --login-password-toggle-ring: var(--public-auth-input-focus);
 
-  --login-submit-gradient: linear-gradient(90deg, var(--color-primary), var(--color-primary));
+  --login-submit-gradient: var(--dm-primary);
 
-  --login-submit-gradient-hover: linear-gradient(90deg, var(--color-primary-hover), var(--color-primary-hover));
+  --login-submit-gradient-hover: var(--dm-primary-hover);
 
   --login-submit-text: hsl(0 0% 0%);
 

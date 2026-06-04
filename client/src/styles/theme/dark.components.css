@@ -1,0 +1,80 @@
+.dark :where(
+  [class*="backdrop-blur"],
+  .glass-wrapper,
+  .navbar-premium-glass,
+  .login-card,
+  .public-auth-layout__card,
+  .home-mobile-hero-chip,
+  .floatingMobileBackdrop
+) {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
+.dark :where(
+  .glass-wrapper,
+  .shadcn-card,
+  .card,
+  .panel,
+  .summary-card,
+  .metric-card,
+  .ops-header-card,
+  .ops-section-card,
+  .ops-toolbar,
+  .ops-summary-strip,
+  .ops-metric,
+  .ops-inline-note,
+  .ops-empty-state,
+  .ops-table-shell,
+  .public-auth-layout__card,
+  .login-card,
+  .home-mobile-surface,
+  .home-mobile-quick-card,
+  .home-mobile-list-card,
+  .home-desktop-list-card,
+  .home-card,
+  .home-desktop-hero,
+  .home-desktop-stat-chip,
+  .home-desktop-primary-card,
+  .home-section-shell,
+  .floatingPanelSurface
+) {
+  background: var(--dm-surface) !important;
+  border-color: var(--dm-border-soft) !important;
+  color: var(--dm-text-primary);
+  box-shadow: 0 8px 22px rgb(0 0 0 / 0.28);
+}
+
+.dark :where(
+  .ops-metric,
+  .public-auth-layout__card,
+  .login-card,
+  .floatingPanelSurface,
+  [role="dialog"]
+) {
+  background: var(--dm-surface-elevated) !important;
+  border-color: var(--dm-border) !important;
+}
+
+.dark :where(.login-card)::before,
+.dark :where(.login-card)::after,
+.dark :where(.public-auth-layout__card)::after {
+  display: none !important;
+}
+
+.dark :where(
+  .home-mobile-hero,
+  .banned-page__card,
+  .banned-page__contact,
+  .collection-daily-state-card,
+  .collection-daily-supporting-panel,
+  .collection-daily-day-details-state
+) {
+  background: var(--dm-surface) !important;
+  border-color: var(--dm-border-soft) !important;
+  color: var(--dm-text-primary);
+}
+
+.dark :where(.Badge, .badge, [data-slot="badge"]) {
+  border-color: var(--dm-border-soft);
+}

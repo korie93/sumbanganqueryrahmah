@@ -37,7 +37,7 @@ export function CollectionSidebar({
   return (
     <>
       <section
-        className="rounded-[1.5rem] border border-border/70 bg-background p-3 shadow-sm dark:border-border/70 dark:bg-card/96 dark:shadow-[0_20px_36px_-28px_hsl(0_0%_0%_/_0.72)] lg:hidden"
+        className="rounded-[1.5rem] border border-border/70 bg-background p-3 shadow-sm dark:border-border/70 dark:bg-card dark:shadow-[0_20px_36px_-28px_hsl(0_0%_0%_/_0.72)] lg:hidden"
         data-testid="collection-mobile-launcher"
       >
         <div className="flex items-center justify-between gap-3">
@@ -72,19 +72,20 @@ export function CollectionSidebar({
                 key={`collection-mobile-${item.key}`}
                 type="button"
                 onClick={() => onSelectSubPage(item.key)}
-                  className={cn(
-                    "inline-flex min-h-10 shrink-0 items-center gap-2 rounded-full border px-3.5 py-2 text-left text-nav-sm font-semibold transition-colors",
-                    active
+                data-active={active ? "true" : "false"}
+                className={cn(
+                  "side-tab-nav-item inline-flex min-h-10 shrink-0 items-center gap-2 rounded-full border px-3.5 py-2 text-left text-nav-sm font-semibold transition-colors",
+                  active
                     ? "border-primary bg-primary text-primary-foreground shadow-sm dark:border-primary dark:bg-primary dark:text-primary-foreground"
-                    : "border-border/60 bg-muted/25 text-foreground/88 hover:border-primary/20 hover:bg-accent/45 hover:text-foreground dark:border-white/10 dark:bg-white/[0.03] dark:text-foreground/92 dark:hover:bg-white/[0.06]",
+                    : "border-border/60 bg-muted/25 text-foreground/88 hover:border-primary/20 hover:bg-accent/45 hover:text-foreground dark:border-border/70 dark:bg-card dark:text-foreground/92 dark:hover:bg-accent",
                 )}
               >
                 <span
                   className={cn(
-                    "inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full",
+                    "side-tab-nav-icon inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full",
                     active
                       ? "bg-primary-foreground text-primary"
-                      : "bg-background/80 text-foreground dark:bg-white/[0.06] dark:text-foreground/88",
+                      : "bg-background/80 text-foreground dark:bg-card dark:text-foreground/88",
                   )}
                 >
                   <Icon className="h-4 w-4 shrink-0" />
@@ -98,7 +99,7 @@ export function CollectionSidebar({
         <Button
           type="button"
           variant="ghost"
-          className="mt-2 h-10 w-full justify-between rounded-xl border border-dashed border-border/60 text-foreground/76 hover:text-foreground dark:border-white/10 dark:bg-white/[0.02] dark:text-foreground/82 dark:hover:bg-white/[0.05] dark:hover:text-foreground"
+          className="mt-2 h-10 w-full justify-between rounded-xl border border-dashed border-border/60 text-foreground/76 hover:text-foreground dark:border-border/70 dark:bg-card dark:text-foreground/82 dark:hover:bg-accent dark:hover:text-foreground"
           onClick={() => onMobileOpenChange(true)}
           data-testid="button-open-collection-sections"
         >

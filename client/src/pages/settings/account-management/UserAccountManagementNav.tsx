@@ -89,7 +89,7 @@ export function UserAccountManagementNav({
     <>
       {isMobile ? (
         <div className="space-y-3 lg:hidden">
-          <div className="rounded-[24px] border border-border/60 bg-background/75 p-4 shadow-sm dark:border-border/70 dark:bg-card/96 dark:shadow-[0_20px_36px_-28px_hsl(0_0%_0%_/_0.72)]">
+          <div className="rounded-[24px] border border-border/60 bg-background/75 p-4 shadow-sm dark:border-border/70 dark:bg-card dark:shadow-[0_20px_36px_-28px_hsl(0_0%_0%_/_0.72)]">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0 space-y-1">
                 <p className="text-2xs font-semibold uppercase tracking-label-3xl text-foreground/64 dark:text-foreground/76">
@@ -108,7 +108,7 @@ export function UserAccountManagementNav({
                 type="button"
                 variant="outline"
                 size="sm"
-                className="shrink-0 rounded-full dark:border-white/10 dark:bg-white/[0.03] dark:text-foreground/88 dark:hover:bg-white/[0.06] dark:hover:text-foreground"
+                className="shrink-0 rounded-full dark:border-border/70 dark:bg-card dark:text-foreground/88 dark:hover:bg-accent dark:hover:text-foreground"
                 onClick={() => onMobileOpenChange(true)}
               >
                 <Menu className="h-4 w-4" />
@@ -131,19 +131,20 @@ export function UserAccountManagementNav({
                     key={`account-nav-mobile-${item.key}`}
                     type="button"
                     onClick={() => onSelect(item.key as UserAccountManagementTabId)}
+                    data-active={active ? "true" : "false"}
                     className={cn(
-                      "flex min-h-10 min-w-fit items-center gap-2 rounded-full border px-3.5 py-2 text-left text-nav-sm font-semibold transition-colors",
+                      "side-tab-nav-item flex min-h-10 min-w-fit items-center gap-2 rounded-full border px-3.5 py-2 text-left text-nav-sm font-semibold transition-colors",
                       active
                         ? "border-primary bg-primary text-primary-foreground shadow-sm dark:border-primary dark:bg-primary dark:text-primary-foreground"
-                        : "border-border/60 bg-background/80 text-foreground/78 hover:border-primary/20 hover:text-foreground dark:border-white/10 dark:bg-white/[0.03] dark:text-foreground/88 dark:hover:bg-white/[0.06] dark:hover:text-foreground",
+                        : "border-border/60 bg-background/80 text-foreground/78 hover:border-primary/20 hover:text-foreground dark:border-border/70 dark:bg-card dark:text-foreground/88 dark:hover:bg-accent dark:hover:text-foreground",
                     )}
                   >
                     <span
                       className={cn(
-                        "inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full",
+                        "side-tab-nav-icon inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full",
                         active
                           ? "bg-primary-foreground text-primary"
-                          : "bg-background/80 text-foreground dark:bg-white/[0.06] dark:text-foreground/88",
+                          : "bg-background/80 text-foreground dark:bg-card dark:text-foreground/88",
                       )}
                     >
                       <Icon className="h-3.5 w-3.5" />
