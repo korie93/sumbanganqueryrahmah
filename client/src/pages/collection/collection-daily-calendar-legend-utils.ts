@@ -34,7 +34,7 @@ export const COLLECTION_DAILY_RESULT_LEGEND_ITEMS: readonly CollectionDailyCalen
   {
     label: "Holiday / Leave",
     detail: "Holiday, leave, or company OFF day",
-    className: "border-slate-300/60 bg-slate-100/80 text-slate-700 dark:bg-slate-900/55 dark:text-slate-200",
+    className: "border-slate-300/60 bg-slate-100/80 text-slate-700 dark:border-border/70 dark:bg-card dark:text-card-foreground",
     dotClassName: "bg-slate-500",
   },
   {
@@ -47,7 +47,7 @@ export const COLLECTION_DAILY_RESULT_LEGEND_ITEMS: readonly CollectionDailyCalen
 
 function getLeaveLegendClassName(leaveType: CollectionDailyLeaveType) {
   if (leaveType === "OFF") {
-    return "border-slate-400/60 bg-slate-100 text-slate-800 dark:bg-slate-900/70 dark:text-slate-100";
+    return "border-slate-400/60 bg-slate-100 text-slate-800 dark:border-border/70 dark:bg-card dark:text-card-foreground";
   }
 
   if (leaveType === "MC") {

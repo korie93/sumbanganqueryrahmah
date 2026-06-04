@@ -28,7 +28,7 @@ export function HomeMobileLayout({
   onPrefetchItem,
 }: HomeMobileLayoutProps) {
   return (
-    <div className="app-shell-min-height bg-gradient-to-br from-slate-100 via-blue-50 to-slate-100 p-3 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900">
+    <div className="app-shell-min-height bg-gradient-to-br from-slate-100 via-blue-50 to-slate-100 p-3 dark:from-background dark:via-card dark:to-background">
       <div className="mx-auto max-w-md space-y-4">
         <section className="home-mobile-hero">
           <div className="flex items-start justify-between gap-3">
@@ -177,7 +177,7 @@ export function HomeDesktopLayout({
     sections.workspaceItems.length > 0 || sections.insightsItems.length > 0 || sections.overflowItems.length > 0;
 
   return (
-    <div className="app-shell-min-height bg-gradient-to-br from-slate-100 via-blue-50 to-slate-100 p-4 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 md:p-6">
+    <div className="app-shell-min-height bg-gradient-to-br from-slate-100 via-blue-50 to-slate-100 p-4 dark:from-background dark:via-card dark:to-background md:p-6">
       <div className="mx-auto max-w-6xl space-y-6">
         <section className="home-desktop-hero">
           <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">

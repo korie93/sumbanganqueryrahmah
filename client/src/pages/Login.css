@@ -303,6 +303,16 @@
   box-shadow: 0 18px 34px -24px hsl(217 91% 44% / 0.42);
 }
 
+.dark .login-card-aside {
+  background:
+    linear-gradient(135deg, rgba(86, 156, 212, 0.1), rgba(102, 99, 91, 0.12)),
+    var(--color-surface);
+}
+
+.dark .login-brand-mark {
+  box-shadow: 0 18px 34px -24px hsl(0 0% 0% / 0.38);
+}
+
 .low-spec .login-card {
   -webkit-backdrop-filter: none !important;
   backdrop-filter: none !important;
@@ -325,6 +335,11 @@
   .login-card {
     -webkit-backdrop-filter: saturate(120%);
     backdrop-filter: saturate(120%);
+  }
+
+  .dark .login-card {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
   }
 }
 

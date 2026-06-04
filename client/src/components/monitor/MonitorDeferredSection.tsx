@@ -28,12 +28,12 @@ export function MonitorChartsFallback() {
   return (
     <OperationalSectionCard className="bg-background/80" contentClassName="space-y-4 p-4">
       <div role="status" aria-live="polite" aria-label="Loading technical charts" className="space-y-4">
-        <div className="h-6 w-48 animate-pulse rounded bg-slate-300/70 dark:bg-slate-700/70" />
+        <div className="h-6 w-48 animate-pulse rounded bg-slate-300/70 dark:bg-muted" />
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
           {MONITOR_CHART_FALLBACK_KEYS.map((key) => (
             <div
               key={`monitor-chart-fallback-${key}`}
-              className="h-64 animate-pulse rounded-xl bg-slate-300/60 dark:bg-slate-800/70"
+              className="h-64 animate-pulse rounded-xl bg-slate-300/60 dark:bg-muted"
             />
           ))}
         </div>
@@ -47,14 +47,14 @@ export function MonitorInsightsFallback() {
     <OperationalSectionCard className="bg-background/80" contentClassName="space-y-4 p-4">
       <div role="status" aria-live="polite" aria-label="Loading intelligence insights" className="space-y-4">
         <div className="space-y-2">
-          <div className="h-6 w-56 animate-pulse rounded bg-slate-300/70 dark:bg-slate-700/70" />
-          <div className="h-4 w-full max-w-2xl animate-pulse rounded bg-slate-300/60 dark:bg-slate-800/70" />
+          <div className="h-6 w-56 animate-pulse rounded bg-slate-300/70 dark:bg-muted" />
+          <div className="h-4 w-full max-w-2xl animate-pulse rounded bg-slate-300/60 dark:bg-muted" />
         </div>
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           {MONITOR_INSIGHT_FALLBACK_KEYS.map((key) => (
             <div
               key={`monitor-insight-fallback-${key}`}
-              className="h-32 animate-pulse rounded-xl bg-slate-300/60 dark:bg-slate-800/70"
+              className="h-32 animate-pulse rounded-xl bg-slate-300/60 dark:bg-muted"
             />
           ))}
         </div>
@@ -68,8 +68,8 @@ export function MonitorMetricsFallback() {
     <OperationalSectionCard className="bg-background/80" contentClassName="space-y-4 p-4">
       <div role="status" aria-live="polite" aria-label="Loading key metrics" className="space-y-4">
         <div className="space-y-2">
-          <div className="h-6 w-40 animate-pulse rounded bg-slate-300/70 dark:bg-slate-700/70" />
-          <div className="h-4 w-full max-w-xl animate-pulse rounded bg-slate-300/60 dark:bg-slate-800/70" />
+          <div className="h-6 w-40 animate-pulse rounded bg-slate-300/70 dark:bg-muted" />
+          <div className="h-4 w-full max-w-xl animate-pulse rounded bg-slate-300/60 dark:bg-muted" />
         </div>
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-4">
           {MONITOR_METRIC_FALLBACK_KEYS.map((key) => (
@@ -99,12 +99,12 @@ export function MonitorSectionCardFallback({
   return (
     <OperationalSectionCard className="bg-background/80" contentClassName="space-y-3 p-4">
       <div role="status" aria-live="polite" {...statusAriaLabelProps} className="space-y-3">
-        <div className="h-5 w-40 animate-pulse rounded bg-slate-300/70 dark:bg-slate-700/70" />
+        <div className="h-5 w-40 animate-pulse rounded bg-slate-300/70 dark:bg-muted" />
         <div className="space-y-3">
           {Array.from({ length: blocks }, (_, index) => `section-${index + 1}`).map((key) => (
             <div
               key={`monitor-section-fallback-${key}`}
-              className="h-20 animate-pulse rounded-xl bg-slate-300/60 dark:bg-slate-800/70"
+              className="h-20 animate-pulse rounded-xl bg-slate-300/60 dark:bg-muted"
             />
           ))}
         </div>
@@ -122,12 +122,12 @@ export function MonitorWebVitalsInlineFallback() {
         aria-label="Loading real user experience details"
         className="space-y-3"
       >
-        <div className="h-5 w-48 animate-pulse rounded bg-slate-300/70 dark:bg-slate-700/70" />
+        <div className="h-5 w-48 animate-pulse rounded bg-slate-300/70 dark:bg-muted" />
         <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
           {MONITOR_WEB_VITAL_FALLBACK_KEYS.map((key) => (
             <div
               key={`monitor-web-vital-fallback-${key}`}
-              className="h-36 animate-pulse rounded-2xl bg-slate-300/60 dark:bg-slate-800/70"
+              className="h-36 animate-pulse rounded-2xl bg-slate-300/60 dark:bg-muted"
             />
           ))}
         </div>

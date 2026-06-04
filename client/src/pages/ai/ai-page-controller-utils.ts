@@ -36,7 +36,7 @@ export function getAIPageStatusContent(status: AIChatStatus): AIPageStatusConten
     return {
       icon: Search,
       text: "AI sedang mencari maklumat...",
-      className: "border-blue-500/35 bg-blue-500/10 text-blue-700 dark:text-blue-300",
+      className: "border-blue-500/35 bg-blue-500/10 text-blue-700 dark:text-primary",
     };
   }
   if (status === "PROCESSING") {

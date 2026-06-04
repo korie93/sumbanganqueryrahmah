@@ -17,7 +17,7 @@ export function getStatusBadge(status: ActivityStatus) {
       );
     case "LOGOUT":
       return (
-        <Badge variant="outline" className="border-slate-300/70 bg-slate-100 text-slate-700 dark:bg-slate-900/60 dark:text-slate-200">
+        <Badge variant="outline" className="border-slate-300/70 bg-slate-100 text-slate-700 dark:border-border/70 dark:bg-card dark:text-card-foreground">
           LOGOUT
         </Badge>
       );

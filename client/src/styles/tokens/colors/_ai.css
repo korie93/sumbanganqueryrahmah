@@ -102,103 +102,102 @@
 }
 
 .dark {
-  --ai-surface-bg: linear-gradient(180deg, hsl(222 47% 11% / 0.94) 0%, hsl(222 47% 11% / 0.88) 100%);
+  --ai-surface-bg: linear-gradient(180deg, var(--color-surface) 0%, var(--color-bg-soft) 100%);
 
-  --ai-surface-border: hsl(var(--border) / 0.7);
+  --ai-surface-border: var(--color-border-soft);
 
-  --ai-status-text: hsl(214 95% 87%);
+  --ai-status-text: var(--color-primary);
 
-  --ai-status-bg: hsl(199 89% 48% / 0.08);
+  --ai-status-bg: rgba(86, 156, 212, 0.12);
 
-  --ai-notice-bg: hsl(215 25% 27% / 0.35);
+  --ai-notice-bg: var(--color-surface-elevated);
 
-  --ai-notice-text: hsl(214 32% 91%);
+  --ai-notice-text: var(--color-text-secondary);
 
-  --ai-scroll-thumb: hsl(215 25% 27%);
+  --ai-scroll-thumb: rgb(102, 99, 91);
 
-  --ai-empty-text: hsl(215 20% 65%);
+  --ai-empty-text: var(--color-text-muted);
 
-  --ai-assistant-bubble-bg: hsl(217 32% 22% / 0.98);
+  --ai-assistant-bubble-bg: var(--color-surface-elevated);
 
-  --ai-assistant-bubble-text: hsl(210 40% 98%);
+  --ai-assistant-bubble-text: var(--color-text-primary);
 
-  --ai-assistant-bubble-border: hsl(213 94% 68% / 0.18);
+  --ai-assistant-bubble-border: var(--color-border-soft);
 
-  --ai-input-surface-bg: hsl(222 47% 11% / 0.92);
+  --ai-input-surface-bg: var(--color-surface);
 
-  --ai-input-surface-border: hsl(215 25% 27% / 0.72);
+  --ai-input-surface-border: var(--color-border-soft);
 
-  --ai-input-bg: hsl(222 47% 11% / 0.92);
+  --ai-input-bg: var(--color-input-bg);
 
-  --ai-input-border: hsl(215 25% 27% / 0.95);
+  --ai-input-border: var(--color-input-border);
 
-  --ai-input-text: hsl(210 40% 98%);
+  --ai-input-text: var(--color-text-primary);
 
-  --ai-send-btn-bg: hsl(199 89% 48%);
+  --ai-send-btn-bg: var(--color-primary);
 
-  --ai-send-btn-border: hsl(199 94% 86% / 0.24);
+  --ai-send-btn-border: rgba(86, 156, 212, 0.32);
 
-  --ai-stop-btn-text: hsl(215 20% 65%);
+  --ai-stop-btn-text: var(--color-text-muted);
 
-  --floating-ai-backdrop: hsl(222 47% 11% / 0.72);
+  --floating-ai-backdrop: rgba(14, 14, 14, 0.78);
 
-  --floating-ai-panel-bg: hsl(222 47% 11% / 0.98);
+  --floating-ai-panel-bg: var(--color-surface);
 
-  --floating-ai-panel-text: hsl(var(--card-foreground) / 1);
+  --floating-ai-panel-text: var(--color-text-primary);
 
-  --floating-ai-panel-border: hsl(199 89% 48% / 0.18);
+  --floating-ai-panel-border: var(--color-border-soft);
 
-  --floating-ai-panel-border-strong: hsl(199 89% 48% / 0.24);
+  --floating-ai-panel-border-strong: var(--color-border);
 
-  --floating-ai-mobile-handle-bg: hsl(0 0% 100% / 0.2);
+  --floating-ai-mobile-handle-bg: rgba(212, 212, 212, 0.28);
 
-  --floating-ai-header-border: hsl(0 0% 100% / 0.1);
+  --floating-ai-header-border: var(--color-border-soft);
 
   --floating-ai-header-desktop-bg: linear-gradient(
     90deg,
-    hsl(199 89% 48% / 0.12),
-    hsl(222 47% 11% / 0),
+    rgba(86, 156, 212, 0.1),
+    rgba(50, 50, 49, 0.3),
     transparent
   );
 
-  --floating-ai-header-mobile-bg: hsl(222 47% 11% / 0.88);
+  --floating-ai-header-mobile-bg: var(--color-surface-elevated);
 
-  --floating-ai-header-mobile-text: hsl(0 0% 100%);
+  --floating-ai-header-mobile-text: var(--color-text-primary);
 
-  --floating-ai-header-mobile-description: hsl(0 0% 100% / 0.7);
+  --floating-ai-header-mobile-description: var(--color-text-secondary);
 
-  --floating-ai-header-mobile-button-text: hsl(0 0% 100% / 0.8);
+  --floating-ai-header-mobile-button-text: var(--color-text-secondary);
 
-  --floating-ai-header-mobile-button-hover-bg: hsl(0 0% 100% / 0.1);
+  --floating-ai-header-mobile-button-hover-bg: var(--color-surface);
 
-  --floating-ai-header-mobile-button-hover-text: hsl(0 0% 100%);
+  --floating-ai-header-mobile-button-hover-text: var(--color-text-primary);
 
-  --floating-ai-header-title: hsl(210 40% 98%);
+  --floating-ai-header-title: var(--color-text-primary);
 
-  --floating-ai-header-description: hsl(215 20% 73% / 0.9);
+  --floating-ai-header-description: var(--color-text-secondary);
 
-  --floating-ai-header-button-text: hsl(215 20% 86%);
+  --floating-ai-header-button-text: var(--color-text-secondary);
 
-  --floating-ai-header-button-hover-bg: hsl(0 0% 100% / 0.1);
+  --floating-ai-header-button-hover-bg: var(--color-surface-elevated);
 
-  --floating-ai-header-button-hover-text: hsl(0 0% 100%);
+  --floating-ai-header-button-hover-text: var(--color-text-primary);
 
-  --floating-ai-minimized-status-bg: hsl(217 91% 60% / 0.1);
+  --floating-ai-minimized-status-bg: rgba(86, 156, 212, 0.12);
 
-  --floating-ai-minimized-status-border: hsl(217 91% 60% / 0.35);
+  --floating-ai-minimized-status-border: rgba(86, 156, 212, 0.35);
 
-  --floating-ai-minimized-status-text: hsl(214 95% 87%);
+  --floating-ai-minimized-status-text: var(--color-primary);
 
-  --floating-ai-trigger-bg: hsl(199 89% 48%);
+  --floating-ai-trigger-bg: var(--color-primary);
 
-  --floating-ai-trigger-border: hsl(199 89% 72% / 0.3);
+  --floating-ai-trigger-border: rgba(86, 156, 212, 0.32);
 
-  --floating-ai-trigger-text: hsl(0 0% 100%);
+  --floating-ai-trigger-text: hsl(0 0% 0%);
 
-  --floating-ai-thinking-ring: hsl(217 91% 60% / 0.7);
+  --floating-ai-thinking-ring: rgba(86, 156, 212, 0.7);
 
-  --floating-ai-thinking-ring-clear: hsl(217 91% 60% / 0);
+  --floating-ai-thinking-ring-clear: rgba(86, 156, 212, 0);
 
   --floating-ai-edge-gap: clamp(0.5rem, 2vw, 1.5rem);
 }
-

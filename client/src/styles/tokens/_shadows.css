@@ -103,27 +103,27 @@
 
   --elevate-2: rgba(255, 255, 255, 0.09);
 
-  --shadow-2xs: 0px 2px 0px 0px hsl(217 91% 60% / 0.12);
+  --shadow-2xs: 0px 2px 0px 0px hsl(0 0% 0% / 0.18);
 
-  --shadow-xs: 0px 2px 0px 0px hsl(217 91% 60% / 0.14);
+  --shadow-xs: 0px 2px 0px 0px hsl(0 0% 0% / 0.2);
 
-  --shadow-sm: 0px 2px 0px 0px hsl(217 91% 60% / 0.14), 0px 1px 2px -1px hsl(217 91% 60% / 0.2);
+  --shadow-sm: 0px 2px 0px 0px hsl(0 0% 0% / 0.2), 0px 1px 2px -1px hsl(0 0% 0% / 0.28);
 
-  --shadow: 0px 2px 0px 0px hsl(217 91% 60% / 0.16), 0px 1px 2px -1px hsl(217 91% 60% / 0.24);
+  --shadow: 0px 2px 0px 0px hsl(0 0% 0% / 0.24), 0px 1px 2px -1px hsl(0 0% 0% / 0.3);
 
-  --shadow-md: 0px 2px 0px 0px hsl(217 91% 60% / 0.18), 0px 2px 4px -1px hsl(217 91% 60% / 0.28);
+  --shadow-md: 0px 2px 0px 0px hsl(0 0% 0% / 0.26), 0px 2px 4px -1px hsl(0 0% 0% / 0.32);
 
-  --shadow-lg: 0px 2px 0px 0px hsl(217 91% 60% / 0.2), 0px 4px 6px -1px hsl(217 91% 60% / 0.3);
+  --shadow-lg: 0px 2px 0px 0px hsl(0 0% 0% / 0.28), 0px 4px 6px -1px hsl(0 0% 0% / 0.34);
 
-  --shadow-xl: 0px 2px 0px 0px hsl(217 91% 60% / 0.22), 0px 8px 10px -1px hsl(217 91% 60% / 0.34);
+  --shadow-xl: 0px 2px 0px 0px hsl(0 0% 0% / 0.3), 0px 8px 10px -1px hsl(0 0% 0% / 0.38);
 
-  --shadow-2xl: 0px 2px 0px 0px hsl(217 91% 60% / 0.28), 0px 16px 24px -4px hsl(217 91% 60% / 0.38);
+  --shadow-2xl: 0px 2px 0px 0px hsl(0 0% 0% / 0.34), 0px 16px 24px -4px hsl(0 0% 0% / 0.46);
 
   --public-auth-shadow: hsl(0 0% 0% / 0.34);
 
   --public-auth-shadow-soft: hsl(0 0% 0% / 0.24);
 
-  --login-submit-shadow: 0 18px 30px hsl(217 91% 50% / 0.34);
+  --login-submit-shadow: 0 18px 30px hsl(var(--primary) / 0.24);
 
   --banned-card-shadow: 0 24px 40px hsl(0 63% 18% / 0.2);
 
@@ -135,7 +135,7 @@
 
   --floating-ai-panel-shadow-strong: var(--shadow-2xl);
 
-  --floating-ai-trigger-shadow: 0 18px 38px hsl(199 89% 48% / 0.33);
+  --floating-ai-trigger-shadow: 0 18px 38px hsl(var(--primary) / 0.28);
 
   --login-card-shadow: 0 25px 40px hsl(0 0% 0% / 0.34), inset 0 0 35px hsl(0 0% 100% / 0.12);
 
@@ -173,19 +173,19 @@
 
   --home-title-shadow-rest: 0 0 14px hsl(215 20% 65% / 0.6);
 
-  --home-hero-shadow: 0 28px 44px hsl(222 47% 4% / 0.42);
+  --home-hero-shadow: 0 28px 44px hsl(0 0% 0% / 0.42);
 
-  --home-hero-action-shadow: 0 12px 22px hsl(222 47% 4% / 0.3);
+  --home-hero-action-shadow: 0 12px 22px hsl(0 0% 0% / 0.3);
 
-  --home-surface-shadow: 0 20px 34px hsl(222 47% 4% / 0.26);
+  --home-surface-shadow: 0 20px 34px hsl(0 0% 0% / 0.26);
 
-  --home-quick-card-shadow: 0 18px 30px hsl(222 47% 4% / 0.26);
+  --home-quick-card-shadow: 0 18px 30px hsl(0 0% 0% / 0.26);
 
-  --home-quick-card-shadow-hover: 0 18px 32px hsl(222 47% 4% / 0.3);
+  --home-quick-card-shadow-hover: 0 18px 32px hsl(0 0% 0% / 0.3);
 
-  --home-list-card-shadow: 0 14px 22px hsl(222 47% 4% / 0.22);
+  --home-list-card-shadow: 0 14px 22px hsl(0 0% 0% / 0.22);
 
-  --home-list-card-shadow-hover: 0 14px 24px hsl(222 47% 4% / 0.28);
+  --home-list-card-shadow-hover: 0 14px 24px hsl(0 0% 0% / 0.28);
 
   --home-card-shadow: 0 18px 30px hsl(0 0% 0% / 0.28);
 
@@ -195,4 +195,3 @@
 
   --error-boundary-card-focus-shadow: 0 0 0 3px hsl(var(--ring) / 0.35), var(--error-boundary-card-shadow);
 }
-

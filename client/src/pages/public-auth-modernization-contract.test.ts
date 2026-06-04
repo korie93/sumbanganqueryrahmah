@@ -73,12 +73,15 @@ test("single-tab blocked page uses readable token-based copy and accessible guid
   assert.match(css, /\.single-tab-blocked__actions\s*{/);
 });
 
-test("landing and public auth theme use a dark SQR backdrop with elevated light auth surfaces", () => {
+test("landing and public auth theme use neutral dark-mode auth surfaces", () => {
   const landingCss = readPageSource("Landing.css");
   const tokenSource = readThemeTokenSource();
 
-  assert.match(tokenSource, /--public-auth-layout-bg: linear-gradient\(135deg, hsl\(222 47% 9%\)/);
-  assert.match(tokenSource, /--public-auth-shell-surface-strong: hsl\(0 0% 100% \/ 0\.98\);/);
+  assert.match(
+    tokenSource,
+    /--public-auth-layout-bg:\s*linear-gradient\(135deg, var\(--color-bg\), var\(--color-surface\), var\(--color-bg\)\);/,
+  );
+  assert.match(tokenSource, /--public-auth-shell-surface-strong:\s*var\(--color-surface-elevated\);/);
   assert.match(landingCss, /\.landing-hero-panel\s*{/);
   assert.match(landingCss, /--landing-primary:\s*hsl\(221 83% 53%\);/);
   assert.match(landingCss, /--landing-trust:\s*hsl\(154 58% 32%\);/);

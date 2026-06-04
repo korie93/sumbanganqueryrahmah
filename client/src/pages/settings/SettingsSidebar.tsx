@@ -49,7 +49,7 @@ export function SettingsSidebar({
     <>
       {isMobile ? (
         <div className="space-y-3 lg:hidden">
-          <div className="rounded-[2rem] border border-border/60 bg-background/92 p-4 shadow-[0_20px_36px_-30px_hsl(222_47%_11%_/_0.18)] dark:border-white/10 dark:bg-[hsl(224_38%_12%_/_0.96)] dark:shadow-[0_20px_36px_-28px_hsl(222_72%_5%_/_0.72)]">
+          <div className="rounded-[2rem] border border-border/60 bg-background/92 p-4 shadow-[0_20px_36px_-30px_hsl(222_47%_11%_/_0.18)] dark:border-border/70 dark:bg-card/96 dark:shadow-[0_20px_36px_-28px_hsl(0_0%_0%_/_0.72)]">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0 space-y-1">
                 <p className="text-2xs font-semibold uppercase tracking-label-3xl text-foreground/64 dark:text-foreground/76">

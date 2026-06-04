@@ -32,7 +32,7 @@ export default function GeneralSearch({
   const shouldShowRecordDialog = state.selectedRecord !== null;
 
   return (
-    <div className="app-shell-min-height bg-gradient-to-br from-slate-100 via-blue-50 to-slate-100 px-3 py-4 sm:p-6 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900">
+    <div className="app-shell-min-height bg-gradient-to-br from-slate-100 via-blue-50 to-slate-100 px-3 py-4 sm:p-6 dark:from-background dark:via-card dark:to-background">
       <div className="mx-auto max-w-6xl">
         {isMobile ? (
           <div className="mb-2 px-1" data-floating-ai-avoid="true">

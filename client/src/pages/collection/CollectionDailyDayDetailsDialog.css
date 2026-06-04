@@ -40,6 +40,11 @@
     background: hsl(var(--background) / 0.84);
     backdrop-filter: blur(10px);
   }
+
+  .dark .collection-day-sticky-summary {
+    background: hsl(var(--card) / 1);
+    backdrop-filter: none !important;
+  }
 }
 
 .collection-day-sticky-summary-main {

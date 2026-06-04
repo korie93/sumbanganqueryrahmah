@@ -63,7 +63,7 @@ export function BulkImportPanel({
         role="button"
         tabIndex={bulkProcessing ? -1 : 0}
         aria-label="Select bulk import files"
-        className={`rounded-xl border-2 border-dashed border-slate-300 p-5 text-center transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 dark:border-slate-600 sm:p-8 ${
+        className={`rounded-xl border-2 border-dashed border-slate-300 p-5 text-center transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 dark:border-border sm:p-8 ${
           bulkProcessing ? "cursor-not-allowed opacity-70" : "cursor-pointer hover:border-primary"
         }`}
         onClick={() => {
@@ -173,7 +173,7 @@ export function BulkImportPanel({
                     : result.status === "error"
                       ? "bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800"
                       : result.status === "processing"
-                        ? "bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800"
+                        ? "bg-blue-50 dark:bg-primary/10 border-blue-200 dark:border-primary/40"
                         : "bg-muted/50 border-border"
                 }`}
                 data-testid={`bulk-file-${index}`}

@@ -16,11 +16,11 @@ export const DESIGN_TOKEN_COLOR_COMPATIBILITY_REQUIREMENTS = [
       },
       {
         label: "dark theme exposes an explicit primary border token",
-        predicate: (text) => text.includes("--primary-border: hsl(217 91% 59%);"),
+        predicate: (text) => text.includes("--primary-border: hsl(207 60% 48%);"),
       },
       {
         label: "dark theme exposes an explicit destructive border token",
-        predicate: (text) => text.includes("--destructive-border: hsl(0 62% 39%);"),
+        predicate: (text) => text.includes("--destructive-border: hsl(357 72% 38%);"),
       },
     ],
   },

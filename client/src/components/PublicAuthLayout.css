@@ -289,6 +289,39 @@
   overflow-wrap: anywhere;
 }
 
+.dark .public-auth-layout__brand-icon,
+.dark .public-auth-layout__intro-icon {
+  background: var(--color-surface);
+  color: var(--color-primary);
+  box-shadow: none;
+}
+
+.dark .public-auth-note,
+.dark .public-auth-account-summary,
+.dark .public-auth-status-card {
+  border-color: var(--color-border-soft);
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
+}
+
+.dark .public-auth-status-card--info {
+  border-color: rgba(86, 156, 212, 0.32);
+  background: rgba(86, 156, 212, 0.12);
+  color: var(--color-text-primary);
+}
+
+.dark .public-auth-status-card--success {
+  border-color: rgba(72, 229, 77, 0.28);
+  background: rgba(72, 229, 77, 0.1);
+  color: rgb(178, 255, 181);
+}
+
+.dark .public-auth-status-card--error {
+  border-color: rgba(251, 44, 54, 0.3);
+  background: rgba(251, 44, 54, 0.12);
+  color: rgb(255, 184, 188);
+}
+
 .public-auth-layout--minimal .public-auth-layout__brand,
 .public-auth-layout--minimal .public-auth-layout__intro {
   align-items: center;
@@ -333,6 +366,11 @@
     .public-auth-layout:not(.public-auth-layout--minimal) .public-auth-layout__card {
       -webkit-backdrop-filter: saturate(120%);
       backdrop-filter: saturate(120%);
+    }
+
+    .dark .public-auth-layout:not(.public-auth-layout--minimal) .public-auth-layout__card {
+      -webkit-backdrop-filter: none !important;
+      backdrop-filter: none !important;
     }
   }
 }

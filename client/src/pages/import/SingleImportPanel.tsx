@@ -82,7 +82,7 @@ export function SingleImportPanel({
           role="button"
           tabIndex={loading ? -1 : 0}
           aria-label="Select single import file"
-          className={`rounded-xl border-2 border-dashed border-slate-300 p-5 text-center transition-colors dark:border-slate-600 sm:p-8 ${
+          className={`rounded-xl border-2 border-dashed border-slate-300 p-5 text-center transition-colors dark:border-border sm:p-8 ${
             loading ? "cursor-not-allowed opacity-70" : "cursor-pointer hover:border-primary"
           }`}
           onClick={() => {

@@ -37,7 +37,7 @@ export function CollectionSidebar({
   return (
     <>
       <section
-        className="rounded-[1.5rem] border border-border/70 bg-background p-3 shadow-sm dark:border-white/10 dark:bg-[hsl(224_38%_12%_/_0.96)] dark:shadow-[0_20px_36px_-28px_hsl(222_72%_5%_/_0.72)] lg:hidden"
+        className="rounded-[1.5rem] border border-border/70 bg-background p-3 shadow-sm dark:border-border/70 dark:bg-card/96 dark:shadow-[0_20px_36px_-28px_hsl(0_0%_0%_/_0.72)] lg:hidden"
         data-testid="collection-mobile-launcher"
       >
         <div className="flex items-center justify-between gap-3">

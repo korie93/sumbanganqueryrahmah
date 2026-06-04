@@ -21,7 +21,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 type DashboardRoleChartSurface = Parameters<typeof sanitizeDashboardRoleDistributionChartSurface>[0];
 
 const summaryCards: SummaryCardItem[] = [
-  { title: "Total Users", value: 10, icon: Users, color: "text-blue-600 dark:text-blue-400" },
+  { title: "Total Users", value: 10, icon: Users, color: "text-blue-600 dark:text-primary" },
   { title: "Active Sessions", value: 4, icon: Activity, color: "text-green-600 dark:text-green-400" },
   { title: "Logins Today", value: 8, icon: LogIn, color: "text-purple-600 dark:text-purple-400" },
   { title: "Total Data Rows", value: 1200, icon: Database, color: "text-orange-600 dark:text-orange-400" },

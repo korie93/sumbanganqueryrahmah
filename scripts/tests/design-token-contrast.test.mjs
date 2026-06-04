@@ -18,26 +18,90 @@ function extractCssVariableValue(cssBlock, variableName) {
   return match?.[1]?.trim() || null;
 }
 
+function extractCssVariableMap(cssBlock) {
+  return new Map(
+    Array.from(
+      cssBlock.matchAll(/--([a-z0-9_-]+):\s*([^;]+);/gi),
+      (match) => [match[1], match[2].trim()],
+    ),
+  );
+}
+
+function resolveCssVariableReferences(value, variables, seen = new Set()) {
+  return String(value || "").replace(/var\(--([a-z0-9_-]+)\)/gi, (_match, variableName) => {
+    if (seen.has(variableName)) {
+      return "";
+    }
+
+    const variableValue = variables.get(variableName);
+    if (!variableValue) {
+      return "";
+    }
+
+    return resolveCssVariableReferences(variableValue, variables, new Set([...seen, variableName]));
+  });
+}
+
+function rgbToHslColorValue(red, green, blue, alpha = 1) {
+  const [normalizedRed, normalizedGreen, normalizedBlue] = [red, green, blue].map((channel) => channel / 255);
+  const max = Math.max(normalizedRed, normalizedGreen, normalizedBlue);
+  const min = Math.min(normalizedRed, normalizedGreen, normalizedBlue);
+  const delta = max - min;
+  const lightness = (max + min) / 2;
+  const saturation = delta === 0 ? 0 : delta / (1 - Math.abs(2 * lightness - 1));
+  let hue = 0;
+
+  if (delta !== 0) {
+    if (max === normalizedRed) {
+      hue = 60 * (((normalizedGreen - normalizedBlue) / delta) % 6);
+    } else if (max === normalizedGreen) {
+      hue = 60 * ((normalizedBlue - normalizedRed) / delta + 2);
+    } else {
+      hue = 60 * ((normalizedRed - normalizedGreen) / delta + 4);
+    }
+  }
+
+  return {
+    alpha,
+    h: (hue + 360) % 360,
+    l: lightness * 100,
+    s: saturation * 100,
+  };
+}
+
 function parseHslColorValue(value) {
   const normalized = String(value || "").trim();
   const match = normalized.match(
     /^hsl\(\s*([0-9.]+)\s+([0-9.]+)%\s+([0-9.]+)%(?:\s*\/\s*([0-9.]+))?\s*\)$/i,
   );
 
-  if (!match) {
-    throw new Error(`Unsupported HSL color value: ${value}`);
+  if (match) {
+    return {
+      alpha: match[4] ? Number.parseFloat(match[4]) : 1,
+      h: Number.parseFloat(match[1]),
+      l: Number.parseFloat(match[3]),
+      s: Number.parseFloat(match[2]),
+    };
   }
 
-  return {
-    alpha: match[4] ? Number.parseFloat(match[4]) : 1,
-    h: Number.parseFloat(match[1]),
-    l: Number.parseFloat(match[3]),
-    s: Number.parseFloat(match[2]),
-  };
+  const rgbMatch = normalized.match(
+    /^rgba?\(\s*([0-9.]+)\s*,\s*([0-9.]+)\s*,\s*([0-9.]+)(?:\s*,\s*([0-9.]+))?\s*\)$/i,
+  );
+
+  if (!rgbMatch) {
+    throw new Error(`Unsupported CSS color value: ${value}`);
+  }
+
+  return rgbToHslColorValue(
+    Number.parseFloat(rgbMatch[1]),
+    Number.parseFloat(rgbMatch[2]),
+    Number.parseFloat(rgbMatch[3]),
+    rgbMatch[4] ? Number.parseFloat(rgbMatch[4]) : 1,
+  );
 }
 
 function extractHslColorValues(value) {
-  return Array.from(String(value || "").matchAll(/hsl\([^)]*\)/gi), (match) =>
+  return Array.from(String(value || "").matchAll(/(?:hsl|rgb)a?\([^)]*\)/gi), (match) =>
     parseHslColorValue(match[0]),
   );
 }
@@ -154,18 +218,18 @@ test("public auth text tokens keep WCAG AA contrast against the auth shell surfa
 
   for (const selector of [":root", ".dark"]) {
     const cssBlock = extractCssRuleBlock(css, selector);
-    const layoutBase = parseHslColorValue(
-      extractCssVariableValue(cssBlock, "public-auth-layout-bg")
-        ?.match(/hsl\([^)]*\)/i)?.[0] || "",
-    );
+    const variables = extractCssVariableMap(cssBlock);
+    const layoutBase = extractHslColorValues(
+      resolveCssVariableReferences(extractCssVariableValue(cssBlock, "public-auth-layout-bg"), variables),
+    )[0];
     const surface = parseHslColorValue(
-      extractCssVariableValue(cssBlock, "public-auth-shell-surface-strong"),
+      resolveCssVariableReferences(extractCssVariableValue(cssBlock, "public-auth-shell-surface-strong"), variables),
     );
     const textSoft = parseHslColorValue(
-      extractCssVariableValue(cssBlock, "public-auth-text-soft"),
+      resolveCssVariableReferences(extractCssVariableValue(cssBlock, "public-auth-text-soft"), variables),
     );
     const textMuted = parseHslColorValue(
-      extractCssVariableValue(cssBlock, "public-auth-text-muted"),
+      resolveCssVariableReferences(extractCssVariableValue(cssBlock, "public-auth-text-muted"), variables),
     );
     const effectiveSurface = compositeColor(surface, layoutBase);
     const effectiveTextSoft = compositeColor(textSoft, effectiveSurface);
@@ -188,19 +252,24 @@ test("public auth primary buttons and login submit gradients meet WCAG AAA contr
   for (const selector of [":root", ".dark"]) {
     const cssBlock = extractCssRuleBlock(css, selector);
     const tokens = parseHslTokens(cssBlock);
+    const variables = extractCssVariableMap(cssBlock);
     const publicAuthPrimaryBackground = parseHslColorValue(
-      extractCssVariableValue(cssBlock, "public-auth-primary-bg"),
+      resolveCssVariableReferences(extractCssVariableValue(cssBlock, "public-auth-primary-bg"), variables),
     );
     const publicAuthPrimaryBackgroundHover = parseHslColorValue(
-      extractCssVariableValue(cssBlock, "public-auth-primary-bg-hover"),
+      resolveCssVariableReferences(extractCssVariableValue(cssBlock, "public-auth-primary-bg-hover"), variables),
     );
     const publicAuthPrimaryText = tokens.get("primary-foreground");
     const loginSubmitText = parseHslColorValue(
-      extractCssVariableValue(cssBlock, "login-submit-text"),
+      resolveCssVariableReferences(extractCssVariableValue(cssBlock, "login-submit-text"), variables),
     );
     const loginSubmitGradientStops = [
-      ...extractHslColorValues(extractCssVariableValue(cssBlock, "login-submit-gradient")),
-      ...extractHslColorValues(extractCssVariableValue(cssBlock, "login-submit-gradient-hover")),
+      ...extractHslColorValues(
+        resolveCssVariableReferences(extractCssVariableValue(cssBlock, "login-submit-gradient"), variables),
+      ),
+      ...extractHslColorValues(
+        resolveCssVariableReferences(extractCssVariableValue(cssBlock, "login-submit-gradient-hover"), variables),
+      ),
     ];
 
     assert.ok(

@@ -34,7 +34,7 @@ export function getStatusPillClass(status: CollectionDayStatus) {
   if (status === "red") {
     return "border-rose-500/35 bg-rose-50 text-rose-700 dark:border-rose-400/30 dark:bg-rose-500/10 dark:text-rose-300";
   }
-  return "border-slate-400/40 bg-slate-100 text-slate-700 dark:border-slate-500/40 dark:bg-slate-800/60 dark:text-slate-300";
+  return "border-slate-400/40 bg-slate-100 text-slate-700 dark:border-border/70 dark:bg-card dark:text-muted-foreground";
 }
 
 export function getProgressBarClass(status: CollectionDayStatus) {

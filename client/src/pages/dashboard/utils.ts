@@ -79,7 +79,7 @@ export function buildSummaryCards(summary: SummaryData | undefined): SummaryCard
       title: "Total Users",
       value: summary?.totalUsers || 0,
       icon: Users,
-      color: "text-blue-600 dark:text-blue-400",
+      color: "text-blue-600 dark:text-primary",
     },
     {
       title: "Active Sessions",

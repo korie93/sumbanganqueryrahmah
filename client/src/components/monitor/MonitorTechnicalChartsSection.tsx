@@ -135,7 +135,7 @@ function MonitorTechnicalChartsSectionImpl({
   };
 
   return (
-    <section className={embedded ? "space-y-4" : "rounded-2xl border border-border/60 bg-slate-200/40 p-4 dark:bg-slate-900/60"}>
+    <section className={embedded ? "space-y-4" : "rounded-2xl border border-border/60 bg-slate-200/40 p-4 dark:bg-card"}>
       {embedded ? null : (
         <div className="mb-3">
           <div className="flex items-center gap-2">

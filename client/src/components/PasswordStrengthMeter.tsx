@@ -41,10 +41,10 @@ export function PasswordStrengthMeter({
       role="status"
       aria-live="polite"
       aria-label={evaluation.ariaLabel}
-      className={`rounded-lg border border-slate-200/80 bg-white/70 p-3 text-xs text-slate-600 shadow-sm dark:border-slate-700/70 dark:bg-slate-900/50 dark:text-slate-300 ${className}`}
+      className={`rounded-lg border border-slate-200/80 bg-white/70 p-3 text-xs text-slate-600 shadow-sm dark:border-border/70 dark:bg-card dark:text-muted-foreground ${className}`}
     >
       <div className="flex items-center justify-between gap-3">
-        <span className="font-medium text-slate-700 dark:text-slate-200">
+        <span className="font-medium text-slate-700 dark:text-card-foreground">
           Kekuatan kata laluan
         </span>
         <span className={`font-semibold ${labelClass}`}>
@@ -58,13 +58,13 @@ export function PasswordStrengthMeter({
             className={`h-1.5 rounded-full transition-colors duration-200 motion-reduce:transition-none ${
               segment < filledSegments
                 ? activeSegmentClass
-                : "bg-slate-200/80 dark:bg-slate-700/70"
+                : "bg-slate-200/80 dark:bg-muted"
             }`}
           />
         ))}
       </div>
       {evaluation.feedback.length > 0 ? (
-        <ul className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-slate-500 dark:text-slate-400">
+        <ul className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-slate-500 dark:text-muted-foreground">
           {evaluation.feedback.slice(0, 3).map((item) => (
             <li key={item}>{item}</li>
           ))}
