@@ -17,20 +17,6 @@
 }
 
 .dark :where(
-  button:disabled,
-  input:disabled,
-  select:disabled,
-  textarea:disabled,
-  [aria-disabled="true"],
-  [data-disabled="true"]
-) {
-  background-color: hsl(var(--disabled) / 1) !important;
-  border-color: hsl(var(--disabled-border) / 1) !important;
-  color: hsl(var(--disabled-foreground) / 1) !important;
-  opacity: 1 !important;
-}
-
-.dark :where(
   [data-slot="dropdown-menu-content"],
   [data-slot="select-content"],
   [data-slot="popover-content"],
