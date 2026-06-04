@@ -66,6 +66,8 @@ test("dark mode suppresses glassmorphism and old blue page backdrops", () => {
   assert.match(floatingAiCss, /:global\(\.dark\) \.floatingMobileBackdrop\s*{[\s\S]*backdrop-filter:\s*none !important;/);
   assert.match(navbarCss, /\.dark \.navbar-premium-glass\s*{[\s\S]*backdrop-filter:\s*none !important;/);
   assert.match(pageSources, /side-tab-nav/);
+  assert.match(pageSources, /side-tab-nav-mobile[\s\S]*bg-background p-4[\s\S]*dark:bg-card/);
+  assert.doesNotMatch(pageSources, /side-tab-nav-mobile[\s\S]*bg-background\/98/);
   assert.match(pageSources, /data-active=\{active \? "true" : "false"\}/);
   assert.doesNotMatch(pageSources, /dark:(from|via|to)-/);
   assert.doesNotMatch(pageSources, /dark:bg-white\/\[/);

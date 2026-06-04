@@ -209,7 +209,7 @@ export function SideTabNavigation({
             onClick={() => onMobileOpenChange(false)}
           />
           <aside
-            className="side-tab-nav-mobile fixed inset-y-0 left-0 z-[var(--z-mobile-nav-panel)] w-[320px] max-w-[92vw] border-r border-border/70 bg-background/98 p-4 shadow-2xl dark:border-border/70 dark:bg-card lg:hidden"
+            className="side-tab-nav-mobile fixed inset-y-0 left-0 z-[var(--z-mobile-nav-panel)] w-[320px] max-w-[92vw] border-r border-border/70 bg-background p-4 shadow-2xl dark:border-border/70 dark:bg-card lg:hidden"
           >
             <div className="mb-3 flex items-center justify-between">
               <p className="text-sm font-semibold">{navigationLabel}</p>
