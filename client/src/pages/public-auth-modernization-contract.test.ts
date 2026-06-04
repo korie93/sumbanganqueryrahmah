@@ -102,6 +102,8 @@ test("landing hero uses compact modular preview sections", () => {
   assert.match(landingSource, /rightPane=\{<LandingProductPreview \/>\}/);
   assert.doesNotMatch(landingSource, /landing-feature-card/);
   assert.match(heroShellSource, /Log Masuk ke Sistem/);
+  assert.match(heroShellSource, /className="flex flex-1 flex-col justify-start pt-5 pb-8 sm:pt-6 sm:pb-10 lg:pt-8 lg:pb-12"/);
+  assert.doesNotMatch(heroShellSource, /id="main-content"[\s\S]*justify-center/);
   assert.match(insightSource, /role="list"/);
   assert.match(previewSource, /landing-workspace-preview/);
   assert.match(previewSource, /role="group"/);
