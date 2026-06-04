@@ -61,6 +61,12 @@ test("Floating AI trigger exposes dialog relationship and expanded state", () =>
   assert.match(triggerSource, /aria-expanded=\{isOpen\}/);
 });
 
+test("sidebar rail is an explicit non-submit control", () => {
+  const sidebarSource = readSource("sidebar.tsx");
+
+  assert.match(sidebarSource, /<button[\s\S]*type="button"[\s\S]*data-sidebar="rail"/);
+});
+
 test("modal shells use Radix focus-managed primitives and labelled close controls", () => {
   const dialogSource = readSource("dialog.tsx");
   const sheetSource = readSource("sheet.tsx");
