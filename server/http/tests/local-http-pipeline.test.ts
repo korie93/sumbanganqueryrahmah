@@ -15,7 +15,11 @@ import {
 import { logger } from "../../lib/logger";
 import { errorHandler } from "../../middleware/error-handler";
 import { startTestServer, stopTestServer } from "../../routes/tests/http-test-utils";
-import { SQR_TRUSTED_TYPES_POLICY_NAME } from "../../../shared/trusted-types";
+import {
+  DOMPURIFY_TRUSTED_TYPES_POLICY_NAME,
+  SQR_ALLOWED_TRUSTED_TYPES_POLICY_NAMES,
+  SQR_TRUSTED_TYPES_POLICY_NAME,
+} from "../../../shared/trusted-types";
 
 function requestRaw(urlString: string, headers: Record<string, string> = {}) {
   const url = new URL(urlString);
@@ -105,7 +109,10 @@ test("registerLocalHttpPipeline allows blob receipt previews in the CSP header",
     assert.match(csp, /style-src-elem[^;]*sha256-nzTgYzXYDNe6BAHiiI7NNlfK8n\/auuOAhh2t92YvuXo=/i);
     assert.match(csp, /style-src-attr 'none'/i);
     assert.match(csp, /require-trusted-types-for 'script'/i);
-    assert.match(csp, new RegExp(`trusted-types default ${SQR_TRUSTED_TYPES_POLICY_NAME}`, "i"));
+    assert.match(csp, new RegExp(`trusted-types ${SQR_ALLOWED_TRUSTED_TYPES_POLICY_NAMES.join(" ")}`, "i"));
+    assert.match(csp, new RegExp(`trusted-types[^;]*\\b${SQR_TRUSTED_TYPES_POLICY_NAME}\\b`, "i"));
+    assert.match(csp, new RegExp(`trusted-types[^;]*\\b${DOMPURIFY_TRUSTED_TYPES_POLICY_NAME}\\b`, "i"));
+    assert.doesNotMatch(csp, /trusted-types[^;]*\*/i);
     assert.match(csp, /report-uri \/api\/csp-report/i);
     assert.match(csp, /report-to sqr-csp-endpoint/i);
     assert.doesNotMatch(csp, /script-src[^;]*unsafe-inline/i);

@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import helmet from "helmet";
 import { runtimeConfig } from "../config/runtime";
-import { SQR_TRUSTED_TYPES_POLICY_NAME } from "../../shared/trusted-types";
+import { SQR_ALLOWED_TRUSTED_TYPES_POLICY_NAMES } from "../../shared/trusted-types";
 
 export const CSP_REPORT_ENDPOINT_PATH = "/api/csp-report";
 const CSP_REPORT_GROUP = "sqr-csp-endpoint";
@@ -95,7 +95,7 @@ export function registerLocalHttpSecurityHeaders(app: Express) {
         // only those hashes instead of reopening style-src-elem unsafe-inline.
         styleSrcElem: ["'self'", ...REACT_REMOVE_SCROLL_BAR_STYLE_HASHES],
         styleSrcAttr: ["'none'"],
-        trustedTypes: ["default", SQR_TRUSTED_TYPES_POLICY_NAME],
+        trustedTypes: [...SQR_ALLOWED_TRUSTED_TYPES_POLICY_NAMES],
         "require-trusted-types-for": ["'script'"],
         reportUri: [CSP_REPORT_ENDPOINT_PATH],
         reportTo: [CSP_REPORT_GROUP],

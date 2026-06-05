@@ -29,7 +29,7 @@ changed at the same time.
 | `style-src` | `'self'` | Loads app stylesheets only from this origin. |
 | `style-src-elem` | `'self'` plus checked hashes | Allows deterministic `react-remove-scroll-bar` style tags only. |
 | `style-src-attr` | `'none'` | Blocks inline style attributes. |
-| `trusted-types` | `default sqr-ui` | Limits DOM sinks to approved Trusted Types policies. |
+| `trusted-types` | `default sqr-ui dompurify` | Limits DOM sinks to approved Trusted Types policies, including DOMPurify's sanitizer policy. |
 | `require-trusted-types-for` | `'script'` | Enforces Trusted Types on script-relevant sinks. |
 | `report-uri` | `/api/csp-report` | Legacy CSP report endpoint. |
 | `report-to` | `sqr-csp-endpoint` | Modern browser reporting group. |
