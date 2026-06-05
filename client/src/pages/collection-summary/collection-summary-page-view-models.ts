@@ -1,4 +1,5 @@
 import type { CollectionMonthDetailsDialogProps } from "@/pages/collection-summary/CollectionMonthDetailsDialog";
+import type { CollectionSummaryBarChartDialogProps } from "@/pages/collection-summary/CollectionSummaryBarChartDialog";
 import type { CollectionSummaryFiltersProps } from "@/pages/collection-summary/CollectionSummaryFilters";
 import type { CollectionSummaryTableProps } from "@/pages/collection-summary/CollectionSummaryTable";
 import type { CollectionSummaryTotalsProps } from "@/pages/collection-summary/CollectionSummaryTotals";
@@ -16,6 +17,7 @@ type BuildCollectionSummaryPageViewModelsOptions = {
 
 type CollectionSummaryPageViewModels = {
   filters: CollectionSummaryFiltersProps;
+  barChart: CollectionSummaryBarChartDialogProps;
   table: CollectionSummaryTableProps;
   totals: CollectionSummaryTotalsProps;
   monthDialog: CollectionMonthDetailsDialogProps | null;
@@ -51,6 +53,14 @@ export function buildCollectionSummaryPageViewModels({
       onToggleNickname: summaryData.toggleNickname,
       onSelectAllVisible: summaryData.selectAllVisible,
       onClearAllSelected: summaryData.clearAllSelected,
+    },
+    barChart: {
+      loading: summaryData.loading,
+      summaryRows: summaryData.summaryRows,
+      selectedYear: summaryData.selectedYear,
+      selectedNicknameLabel: summaryData.selectedNicknameLabel,
+      selectedNicknamesCount: summaryData.selectedNicknames.length,
+      grandTotal: summaryData.grandTotal,
     },
     table: {
       loading: summaryData.loading,

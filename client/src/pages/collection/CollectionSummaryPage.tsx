@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/sheet";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { buildCollectionSummaryPageViewModels } from "@/pages/collection-summary/collection-summary-page-view-models";
+import { CollectionSummaryBarChartDialog } from "@/pages/collection-summary/CollectionSummaryBarChartDialog";
 import { CollectionSummaryFilters } from "@/pages/collection-summary/CollectionSummaryFilters";
 import { useCollectionSummaryData } from "@/pages/collection-summary/useCollectionSummaryData";
 import { useCollectionSummaryMonthDialog } from "@/pages/collection-summary/useCollectionSummaryMonthDialog";
@@ -70,6 +71,7 @@ function CollectionSummaryPage({ role }: CollectionSummaryPageProps) {
       title="Collection Summary"
       description={summaryData.freshness?.message || "Review monthly totals with a cleaner month-by-month drill-down flow."}
       badge={<CollectionReportFreshnessBadge freshness={summaryData.freshness} />}
+      actions={<CollectionSummaryBarChartDialog {...viewModels.barChart} />}
       contentClassName="space-y-4"
     >
       {isMobile ? (
