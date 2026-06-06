@@ -8,7 +8,17 @@ import {
   resolveDashboardExportPaintColor,
   resolveDashboardExportScale,
   sanitizeDashboardExportClone,
+  withDashboardTrustedHtmlDocumentWrite,
 } from "@/pages/dashboard/utils";
+
+type TrustedTypesPolicyLike = {
+  createHTML: (input: string) => unknown;
+};
+
+type DashboardTrustedTypesGlobal = typeof globalThis & {
+  Document?: unknown;
+  __sqrTrustedTypesPolicy?: TrustedTypesPolicyLike | null;
+};
 
 test("resolveDashboardExportBlockReason blocks exports while dashboard work is already active", () => {
   assert.equal(
@@ -149,4 +159,49 @@ test("sanitizeDashboardExportClone replaces SVG and inline CSS variable colors",
   assert.equal(svgLine.readAttribute("stroke"), "#2563eb");
   assert.equal(svgStop.readAttribute("stop-color"), "#16a34a");
   assert.equal(styledNode.readAttribute("style"), "color: #2563eb; border-color: #e2e8f0;");
+});
+
+test("withDashboardTrustedHtmlDocumentWrite supplies TrustedHTML to html2canvas document writes", async () => {
+  const trustedTypesGlobal = globalThis as unknown as DashboardTrustedTypesGlobal;
+  const previousDocument = trustedTypesGlobal.Document;
+  const previousPolicy = trustedTypesGlobal.__sqrTrustedTypesPolicy;
+  const writeCalls: unknown[][] = [];
+
+  class FakeDocument {
+    write(...parts: unknown[]) {
+      writeCalls.push(parts);
+    }
+  }
+
+  try {
+    Reflect.set(trustedTypesGlobal, "Document", FakeDocument);
+    trustedTypesGlobal.__sqrTrustedTypesPolicy = {
+      createHTML(input) {
+        return { trustedHtml: input };
+      },
+    };
+
+    const fakeDocument = new FakeDocument();
+    const originalWrite = FakeDocument.prototype.write;
+
+    await withDashboardTrustedHtmlDocumentWrite(async () => {
+      fakeDocument.write("<!doctype html>", "<html></html>");
+    });
+
+    assert.equal(FakeDocument.prototype.write, originalWrite);
+    assert.equal((writeCalls[0]?.[0] as { trustedHtml?: string }).trustedHtml, "<!doctype html>");
+    assert.equal((writeCalls[0]?.[1] as { trustedHtml?: string }).trustedHtml, "<html></html>");
+  } finally {
+    if (previousDocument === undefined) {
+      Reflect.deleteProperty(trustedTypesGlobal, "Document");
+    } else {
+      Reflect.set(trustedTypesGlobal, "Document", previousDocument);
+    }
+
+    if (previousPolicy === undefined) {
+      delete trustedTypesGlobal.__sqrTrustedTypesPolicy;
+    } else {
+      trustedTypesGlobal.__sqrTrustedTypesPolicy = previousPolicy;
+    }
+  }
 });

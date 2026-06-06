@@ -4,6 +4,7 @@ import {
   formatDateTimeDDMMYYYY,
   formatOperationalDateTime,
 } from "@/lib/date-format";
+import { getSqrTrustedTypesPolicy } from "@/lib/trusted-types";
 import type { SummaryCardItem, SummaryData } from "@/pages/dashboard/types";
 import type { LoginTrend } from "@/pages/dashboard/types";
 
@@ -19,6 +20,12 @@ export const DASHBOARD_PDF_EXPORT_FAILURE_MESSAGE = "Gagal jana PDF. Sila cuba s
 
 type DashboardHtml2Canvas = typeof import("html2canvas")["default"];
 type DashboardHtml2CanvasOptions = NonNullable<Parameters<DashboardHtml2Canvas>[1]>;
+type DashboardDocumentWrite = typeof Document.prototype.write;
+type DashboardDocumentConstructor = {
+  prototype: {
+    write: DashboardDocumentWrite;
+  };
+};
 
 export const ROLE_COLORS: Record<string, string> = {
   superuser: "hsl(var(--chart-1))",
@@ -258,13 +265,49 @@ export function sanitizeDashboardExportClone(root: ParentNode, isDark: boolean) 
   });
 }
 
+function createDashboardTrustedHtml(input: string) {
+  const policy = getSqrTrustedTypesPolicy();
+  return policy ? policy.createHTML(input) : input;
+}
+
+function getDashboardDocumentConstructor() {
+  return (globalThis as typeof globalThis & {
+    Document?: DashboardDocumentConstructor;
+  }).Document;
+}
+
+export async function withDashboardTrustedHtmlDocumentWrite<T>(operation: () => Promise<T>) {
+  const documentConstructor = getDashboardDocumentConstructor();
+  const documentPrototype = documentConstructor?.prototype;
+  if (!documentPrototype || typeof documentPrototype.write !== "function") {
+    return operation();
+  }
+
+  const originalWrite = documentPrototype.write;
+  documentPrototype.write = function writeTrustedDashboardHtml(
+    this: Document,
+    ...text: string[]
+  ) {
+    const trustedText = text.map((part) =>
+      createDashboardTrustedHtml(String(part)),
+    ) as unknown as string[];
+    return originalWrite.apply(this, trustedText);
+  };
+
+  try {
+    return await operation();
+  } finally {
+    documentPrototype.write = originalWrite;
+  }
+}
+
 export async function captureDashboardElementCanvas(
   element: HTMLElement,
   html2canvas: DashboardHtml2Canvas,
   options: DashboardHtml2CanvasOptions,
 ) {
   try {
-    return await html2canvas(element, options);
+    return await withDashboardTrustedHtmlDocumentWrite(() => html2canvas(element, options));
   } catch (error) {
     const exportError = new Error(DASHBOARD_PDF_EXPORT_FAILURE_MESSAGE) as Error & {
       cause?: unknown;
