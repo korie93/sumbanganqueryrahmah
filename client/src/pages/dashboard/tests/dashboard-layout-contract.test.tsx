@@ -211,6 +211,34 @@ test("DashboardLoginRiskInsights renders operator-ready status from existing log
   assert.match(markup, /Gunakan panel ini bersama rekod login terbaru/);
 });
 
+test("DashboardLoginRiskInsights keeps warning status contrast above axe thresholds", () => {
+  const markup = renderToStaticMarkup(
+    createElement(DashboardLoginRiskInsights, {
+      loading: false,
+      recentLoginActivities: [],
+      summary: {
+        activeSessions: 2,
+        bannedUsers: 0,
+        loginsToday: 4,
+        loginFailures24h: 2,
+        totalDataRows: 100,
+        totalImports: 4,
+        totalUsers: 10,
+      },
+      trends: [
+        { date: "2026-05-04", logins: 2, logouts: 1 },
+        { date: "2026-05-05", logins: 3, logouts: 1 },
+        { date: "2026-05-06", logins: 4, logouts: 1 },
+      ],
+    }),
+  );
+
+  assert.match(markup, /Login risk status Watch/);
+  assert.match(markup, /text-amber-800/);
+  assert.match(markup, /dark:text-amber-200/);
+  assert.doesNotMatch(markup, /text-amber-700/);
+});
+
 test("DashboardRecentLoginActivity renders masked access rows with retryable error state", () => {
   const markup = renderToStaticMarkup(
     createElement(DashboardRecentLoginActivity, {

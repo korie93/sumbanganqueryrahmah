@@ -24,7 +24,7 @@ const TONE_CLASS_BY_TONE: Record<DashboardAccessSignalTone, string> = {
   danger: "border-rose-500/50 bg-rose-500/10 text-rose-700 dark:text-rose-300",
   info: "border-sky-500/40 bg-sky-500/10 text-sky-700 dark:text-sky-300",
   success: "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
-  warning: "border-amber-500/50 bg-amber-500/10 text-amber-700 dark:text-amber-300",
+  warning: "border-amber-500/50 bg-amber-500/10 text-amber-800 dark:text-amber-200",
 };
 
 const TONE_BAR_CLASS_BY_TONE: Record<DashboardAccessSignalTone, string> = {
