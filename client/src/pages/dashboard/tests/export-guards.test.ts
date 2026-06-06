@@ -3,12 +3,14 @@ import test from "node:test";
 import { resolveDashboardExportBlockReason } from "@/pages/dashboard/export-guards";
 import {
   captureDashboardElementCanvas,
+  collectDashboardFallbackPdfLines,
   DASHBOARD_PDF_EXPORT_FAILURE_MESSAGE,
   assertDashboardExportableElement,
   resolveDashboardExportPaintColor,
   resolveDashboardExportScale,
   sanitizeDashboardExportClone,
   withDashboardTrustedHtmlDocumentWrite,
+  writeDashboardFallbackPdf,
 } from "@/pages/dashboard/utils";
 
 type TrustedTypesPolicyLike = {
@@ -27,6 +29,31 @@ type DashboardTrustedTypesGlobal = typeof globalThis & {
     ) => TrustedTypesPolicyLike;
   };
 };
+
+function createFakeTextNode(textContent: string) {
+  return {
+    nodeType: 3,
+    textContent,
+  } as unknown as Node;
+}
+
+function createFakeElementNode(
+  tagName: string,
+  childNodes: readonly Node[] = [],
+  excluded = false,
+) {
+  return {
+    nodeType: 1,
+    tagName,
+    childNodes,
+    matches() {
+      return excluded;
+    },
+    closest() {
+      return excluded ? {} : null;
+    },
+  } as unknown as Element;
+}
 
 test("resolveDashboardExportBlockReason blocks exports while dashboard work is already active", () => {
   assert.equal(
@@ -167,6 +194,78 @@ test("sanitizeDashboardExportClone replaces SVG and inline CSS variable colors",
   assert.equal(svgLine.readAttribute("stroke"), "#2563eb");
   assert.equal(svgStop.readAttribute("stop-color"), "#16a34a");
   assert.equal(styledNode.readAttribute("style"), "color: #2563eb; border-color: #e2e8f0;");
+});
+
+test("collectDashboardFallbackPdfLines extracts safe visible dashboard text only", () => {
+  const hiddenSection = createFakeElementNode("div", [createFakeTextNode("Hidden value")], true);
+  const root = createFakeElementNode("div", [
+    createFakeTextNode(" Dashboard Analytics "),
+    createFakeTextNode(" Dashboard Analytics "),
+    createFakeElementNode("section", [
+      createFakeTextNode("Total Users"),
+      createFakeTextNode("10"),
+    ]),
+    hiddenSection,
+    createFakeElementNode("script", [createFakeTextNode("alert(1)")]),
+  ]);
+
+  assert.deepEqual(collectDashboardFallbackPdfLines(root), [
+    "Dashboard Analytics",
+    "Total Users",
+    "10",
+  ]);
+});
+
+test("writeDashboardFallbackPdf writes dashboard text when canvas capture is unavailable", () => {
+  const textCalls: string[] = [];
+  const pdf = {
+    internal: {
+      pageSize: {
+        getWidth: () => 297,
+        getHeight: () => 210,
+      },
+    },
+    addPage() {
+      // Single-page test fixture.
+    },
+    line() {
+      // Styling call.
+    },
+    rect() {
+      // Styling call.
+    },
+    setDrawColor() {
+      // Styling call.
+    },
+    setFillColor() {
+      // Styling call.
+    },
+    setFont() {
+      // Styling call.
+    },
+    setFontSize() {
+      // Styling call.
+    },
+    setLineWidth() {
+      // Styling call.
+    },
+    setTextColor() {
+      // Styling call.
+    },
+    splitTextToSize(line: string) {
+      return [line];
+    },
+    text(value: string | string[]) {
+      textCalls.push(Array.isArray(value) ? value.join(" ") : value);
+    },
+  } as unknown as Parameters<typeof writeDashboardFallbackPdf>[0];
+
+  writeDashboardFallbackPdf(pdf, ["Dashboard Analytics", "Total Users", "10"], "dark");
+
+  assert.ok(textCalls.includes("SQR Dashboard Analytics Report"));
+  assert.ok(textCalls.includes("Dashboard Analytics"));
+  assert.ok(textCalls.includes("Total Users"));
+  assert.ok(textCalls.includes("10"));
 });
 
 test("withDashboardTrustedHtmlDocumentWrite supplies TrustedHTML to html2canvas document writes", async () => {
