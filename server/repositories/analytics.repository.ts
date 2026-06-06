@@ -7,6 +7,11 @@ import {
   buildAuditActionList,
   COLLECTION_RECORD_VERSION_CONFLICT_ACTION,
   LOGIN_FAILURE_ACTIONS,
+  maskAnalyticsIpAddress,
+  sanitizeAnalyticsShortText,
+  summarizeAnalyticsBrowser,
+  type RecentLoginActivity,
+  type RecentLoginActivityRow,
   serializeAnalyticsTimestamp,
   type TopActiveUserRow,
 } from "./analytics-repository-shared";
@@ -145,6 +150,36 @@ export class AnalyticsRepository {
       role: row.role,
       loginCount: row.loginCount,
       lastLogin: serializeAnalyticsTimestamp(row.lastLogin),
+    }));
+  }
+
+  async getRecentLoginActivity(limit = 8): Promise<RecentLoginActivity[]> {
+    const result = await dbRead.execute(sql`
+      SELECT
+        username,
+        role,
+        login_time AS "loginTime",
+        last_activity_time AS "lastActivityTime",
+        logout_time AS "logoutTime",
+        is_active AS "isActive",
+        browser,
+        ip_address AS "ipAddress",
+        logout_reason AS "logoutReason"
+      FROM public.user_activity
+      ORDER BY COALESCE(login_time, last_activity_time, logout_time) DESC NULLS LAST, username ASC
+      LIMIT ${limit}
+    `);
+
+    return (result.rows as RecentLoginActivityRow[]).map((row) => ({
+      browser: summarizeAnalyticsBrowser(row.browser),
+      ipAddress: maskAnalyticsIpAddress(row.ipAddress),
+      lastActivityTime: serializeAnalyticsTimestamp(row.lastActivityTime),
+      loginTime: serializeAnalyticsTimestamp(row.loginTime),
+      logoutReason: sanitizeAnalyticsShortText(row.logoutReason),
+      logoutTime: serializeAnalyticsTimestamp(row.logoutTime),
+      role: row.role,
+      status: row.isActive ? "active" : "ended",
+      username: row.username,
     }));
   }
 

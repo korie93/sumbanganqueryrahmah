@@ -20,6 +20,7 @@ import {
   getBackups,
   getLoginTrends,
   getPeakHours,
+  getRecentLoginActivity,
   getRoleDistribution,
   getTopActiveUsers,
 } from "@/lib/api";
@@ -132,6 +133,10 @@ async function prefetchDashboardData() {
     queryClient.prefetchQuery({
       queryKey: ["/api/analytics/top-users"],
       queryFn: ({ signal }) => getTopActiveUsers(10, { signal }),
+    }),
+    queryClient.prefetchQuery({
+      queryKey: ["/api/analytics/recent-login-activity"],
+      queryFn: ({ signal }) => getRecentLoginActivity(8, { signal }),
     }),
     queryClient.prefetchQuery({
       queryKey: ["/api/analytics/peak-hours"],

@@ -1,4 +1,4 @@
-import type { RoleData, TopUser } from "@/pages/dashboard/types";
+import type { RecentLoginActivity, RoleData, TopUser } from "@/pages/dashboard/types";
 
 type DashboardTopUserRowAriaOptions = {
   formattedLastLogin: string;
@@ -8,6 +8,14 @@ type DashboardTopUserRowAriaOptions = {
 
 type DashboardRoleDistributionRowAriaOptions = {
   item: RoleData;
+};
+
+type DashboardRecentLoginActivityRowAriaOptions = {
+  activity: RecentLoginActivity;
+  formattedLoginTime: string;
+  formattedLastActivityTime: string;
+  index: number;
+  statusLabel: string;
 };
 
 function normalizeDashboardValue(value: string | number | null | undefined) {
@@ -35,5 +43,22 @@ export function buildDashboardRoleDistributionRowAriaLabel({
   return [
     `Role ${normalizeDashboardValue(item.role)}`,
     `${normalizeDashboardValue(item.count)} users`,
+  ].join(", ");
+}
+
+export function buildDashboardRecentLoginActivityRowAriaLabel({
+  activity,
+  formattedLastActivityTime,
+  formattedLoginTime,
+  index,
+  statusLabel,
+}: DashboardRecentLoginActivityRowAriaOptions) {
+  return [
+    `Recent login ${index}`,
+    normalizeDashboardValue(activity.username),
+    `role ${normalizeDashboardValue(activity.role)}`,
+    `status ${normalizeDashboardValue(statusLabel)}`,
+    `login time ${normalizeDashboardValue(formattedLoginTime)}`,
+    `last activity ${normalizeDashboardValue(formattedLastActivityTime)}`,
   ].join(", ");
 }

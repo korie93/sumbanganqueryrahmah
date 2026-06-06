@@ -8,6 +8,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { fileURLToPath } from "node:url";
 import { DashboardChartsGrid } from "@/pages/dashboard/DashboardChartsGrid";
 import { DashboardPageHeader } from "@/pages/dashboard/DashboardPageHeader";
+import { DashboardRecentLoginActivity } from "@/pages/dashboard/DashboardRecentLoginActivity";
 import { DashboardSectionRenderFallback } from "@/pages/dashboard/DashboardSectionRenderBoundary";
 import { DashboardSnapshotSection } from "@/pages/dashboard/DashboardSnapshotSection";
 import { DashboardSummaryCards } from "@/pages/dashboard/DashboardSummaryCards";
@@ -154,6 +155,7 @@ test("Dashboard wraps major dashboard regions in accessible render error boundar
   assert.match(dashboardSource, /<DashboardSectionRenderBoundary/);
   assert.match(dashboardSource, /sectionName="Ringkasan dashboard"/);
   assert.match(deferredSource, /sectionName="Carta dashboard"/);
+  assert.match(deferredSource, /sectionName="Aktiviti login dashboard"/);
   assert.match(deferredSource, /sectionName="Insight pengguna dashboard"/);
   assert.match(fallbackMarkup, /role="alert"/);
   assert.match(fallbackMarkup, /aria-live="assertive"/);
@@ -162,6 +164,53 @@ test("Dashboard wraps major dashboard regions in accessible render error boundar
   assert.match(fallbackMarkup, /Bahagian ini gagal dirender/);
   assert.match(fallbackMarkup, /Cuba lagi/);
   assert.match(fallbackMarkup, /type="button"/);
+});
+
+test("DashboardRecentLoginActivity renders masked access rows with retryable error state", () => {
+  const markup = renderToStaticMarkup(
+    createElement(DashboardRecentLoginActivity, {
+      activities: [
+        {
+          browser: "Chrome",
+          ipAddress: "10.42.x.x",
+          lastActivityTime: "2026-05-06T02:30:00Z",
+          loginTime: "2026-05-06T02:00:00Z",
+          logoutReason: null,
+          logoutTime: null,
+          role: "superuser",
+          status: "active",
+          username: "super.user",
+        },
+      ],
+      errorMessage: null,
+      loading: false,
+      onRetry: () => undefined,
+      retrying: false,
+    }),
+  );
+
+  assert.match(markup, /Recent Login Activity/);
+  assert.match(markup, /Latest access events with masked network details/);
+  assert.match(markup, /super\.user/);
+  assert.match(markup, /10\.42\.x\.x/);
+  assert.match(markup, /Chrome/);
+  assert.match(markup, /aria-label="Recent login activity list"/);
+  assert.match(markup, /tabindex="0"/);
+
+  const errorMarkup = renderToStaticMarkup(
+    createElement(DashboardRecentLoginActivity, {
+      activities: [],
+      errorMessage: "Recent login API gagal.",
+      loading: false,
+      onRetry: () => undefined,
+      retrying: false,
+    }),
+  );
+
+  assert.match(errorMarkup, /Aktiviti login gagal dimuat/);
+  assert.match(errorMarkup, /Recent login API gagal\./);
+  assert.match(errorMarkup, /Cuba lagi/);
+  assert.doesNotMatch(errorMarkup, /No recent login activity is available yet/);
 });
 
 test("Dashboard manual refresh tolerates partial query failures", () => {

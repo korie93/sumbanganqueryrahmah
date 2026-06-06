@@ -145,6 +145,24 @@ export class PostgresOperationsStorage extends PostgresCollectionStorage {
     return this.analyticsRepository.getTopActiveUsers(limit);
   }
 
+  async getRecentLoginActivity(
+    limit: number = 8,
+  ): Promise<
+    Array<{
+      browser: string | null;
+      ipAddress: string | null;
+      lastActivityTime: string | null;
+      loginTime: string | null;
+      logoutReason: string | null;
+      logoutTime: string | null;
+      role: string;
+      status: "active" | "ended";
+      username: string;
+    }>
+  > {
+    return this.analyticsRepository.getRecentLoginActivity(limit);
+  }
+
   async getPeakHours(): Promise<Array<{ hour: number; count: number }>> {
     return this.analyticsRepository.getPeakHours();
   }

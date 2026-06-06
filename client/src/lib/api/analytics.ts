@@ -29,6 +29,16 @@ export async function getTopActiveUsers(pageSize: number = 10, options?: Analyti
   return response.json();
 }
 
+export async function getRecentLoginActivity(pageSize: number = 8, options?: AnalyticsRequestOptions) {
+  const response = await apiRequest(
+    "GET",
+    `/api/analytics/recent-login-activity?pageSize=${pageSize}`,
+    undefined,
+    options,
+  );
+  return response.json();
+}
+
 export async function getPeakHours(options?: AnalyticsRequestOptions) {
   const response = await apiRequest("GET", "/api/analytics/peak-hours", undefined, options);
   return response.json();

@@ -95,6 +95,7 @@ function createOperationsRouteHarness(options?: {
   const debugAuditEntries: DebugAuditEntry[] = [];
   const cleanupCalls: Date[] = [];
   const topUserCalls: number[] = [];
+  const recentLoginActivityCalls: number[] = [];
   const createBackupCalls: CreateBackupData[] = [];
   const restoreCalls: unknown[] = [];
   const deleteBackupCalls: string[] = [];
@@ -164,6 +165,20 @@ function createOperationsRouteHarness(options?: {
     getTopActiveUsers: async (limit: number) => {
       topUserCalls.push(limit);
       return [{ username: "super.user", role: "superuser", loginCount: 9, lastLogin: null }];
+    },
+    getRecentLoginActivity: async (limit: number) => {
+      recentLoginActivityCalls.push(limit);
+      return [{
+        browser: "Chrome",
+        ipAddress: "127.0.x.x",
+        lastActivityTime: "2026-03-20T02:00:00.000Z",
+        loginTime: "2026-03-20T01:30:00.000Z",
+        logoutReason: null,
+        logoutTime: null,
+        role: "superuser",
+        status: "active",
+        username: "super.user",
+      }];
     },
     getPeakHours: async () => [{ hour: 9, count: 4 }],
     getRoleDistribution: async () => [{ role: "superuser", count: 1 }],
@@ -372,6 +387,7 @@ function createOperationsRouteHarness(options?: {
     debugAuditEntries,
     cleanupCalls,
     topUserCalls,
+    recentLoginActivityCalls,
     createBackupCalls,
     restoreCalls,
     deleteBackupCalls,
@@ -500,6 +516,46 @@ test("GET /api/analytics/top-users accepts pageSize value one", async () => {
     const response = await fetch(`${baseUrl}/api/analytics/top-users?pageSize=1`);
     assert.equal(response.status, 200);
     assert.deepEqual(topUserCalls, [1]);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("GET /api/analytics/recent-login-activity returns sanitized dashboard activity rows", async () => {
+  const { app, recentLoginActivityCalls } = createOperationsRouteHarness();
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(`${baseUrl}/api/analytics/recent-login-activity?pageSize=2`);
+    assert.equal(response.status, 200);
+    assert.deepEqual(recentLoginActivityCalls, [2]);
+    assert.deepEqual(await response.json(), [
+      {
+        browser: "Chrome",
+        ipAddress: "127.0.x.x",
+        lastActivityTime: "2026-03-20T02:00:00.000Z",
+        loginTime: "2026-03-20T01:30:00.000Z",
+        logoutReason: null,
+        logoutTime: null,
+        role: "superuser",
+        status: "active",
+        username: "super.user",
+      },
+    ]);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("GET /api/analytics/recent-login-activity rejects page-size values below one", async () => {
+  const { app, recentLoginActivityCalls } = createOperationsRouteHarness();
+  const { server, baseUrl } = await startTestServer(app);
+
+  try {
+    const response = await fetch(`${baseUrl}/api/analytics/recent-login-activity?pageSize=0`);
+    assert.equal(response.status, 400);
+    assert.equal((await response.json()).message, "Page limit must be at least 1");
+    assert.deepEqual(recentLoginActivityCalls, []);
   } finally {
     await stopTestServer(server);
   }

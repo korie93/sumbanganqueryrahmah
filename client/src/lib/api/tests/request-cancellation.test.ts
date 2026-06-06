@@ -12,6 +12,7 @@ import {
   getAnalyticsSummary,
   getLoginTrends,
   getPeakHours,
+  getRecentLoginActivity,
   getRoleDistribution,
   getTopActiveUsers,
 } from "@/lib/api/analytics";
@@ -633,6 +634,9 @@ test("analytics API wrappers forward AbortSignal", async () => {
     if (url === "/api/analytics/top-users?pageSize=15") {
       return jsonResponse([]);
     }
+    if (url === "/api/analytics/recent-login-activity?pageSize=6") {
+      return jsonResponse([]);
+    }
     if (url === "/api/analytics/peak-hours") {
       return jsonResponse([]);
     }
@@ -647,21 +651,23 @@ test("analytics API wrappers forward AbortSignal", async () => {
     await getAnalyticsSummary({ signal: controller.signal });
     await getLoginTrends(14, { signal: controller.signal });
     await getTopActiveUsers(15, { signal: controller.signal });
+    await getRecentLoginActivity(6, { signal: controller.signal });
     await getPeakHours({ signal: controller.signal });
     await getRoleDistribution({ signal: controller.signal });
   } finally {
     restoreFetch();
   }
 
-  assert.equal(requests.length, 5);
+  assert.equal(requests.length, 6);
   for (const request of requests) {
     assert.equal(request.signal, controller.signal);
   }
   assert.equal(requests[0]?.url, "/api/analytics/summary");
   assert.equal(requests[1]?.url, "/api/analytics/login-trends?days=14");
   assert.equal(requests[2]?.url, "/api/analytics/top-users?pageSize=15");
-  assert.equal(requests[3]?.url, "/api/analytics/peak-hours");
-  assert.equal(requests[4]?.url, "/api/analytics/role-distribution");
+  assert.equal(requests[3]?.url, "/api/analytics/recent-login-activity?pageSize=6");
+  assert.equal(requests[4]?.url, "/api/analytics/peak-hours");
+  assert.equal(requests[5]?.url, "/api/analytics/role-distribution");
 });
 
 test("activity API wrappers forward AbortSignal", async () => {

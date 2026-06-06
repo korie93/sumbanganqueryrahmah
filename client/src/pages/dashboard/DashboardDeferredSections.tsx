@@ -1,7 +1,13 @@
 import { Suspense, lazy, startTransition, useEffect, useRef, useState } from "react";
 import { OperationalSectionCard } from "@/components/layout/OperationalPage";
 import { DashboardSectionRenderBoundary } from "@/pages/dashboard/DashboardSectionRenderBoundary";
-import type { LoginTrend, PeakHour, RoleData, TopUser } from "@/pages/dashboard/types";
+import type {
+  LoginTrend,
+  PeakHour,
+  RecentLoginActivity,
+  RoleData,
+  TopUser,
+} from "@/pages/dashboard/types";
 
 const DashboardChartsGrid = lazy(() =>
   import("@/pages/dashboard/DashboardChartsGrid").then((module) => ({
@@ -13,8 +19,15 @@ const DashboardUserInsightsGrid = lazy(() =>
     default: module.DashboardUserInsightsGrid,
   })),
 );
+const DashboardRecentLoginActivity = lazy(() =>
+  import("@/pages/dashboard/DashboardRecentLoginActivity").then((module) => ({
+    default: module.DashboardRecentLoginActivity,
+  })),
+);
 const DEFERRED_DASHBOARD_SECTION_ROOT_MARGIN_DEFAULT = "320px 0px";
 const DEFERRED_DASHBOARD_SECTION_TIMEOUT_MS_DEFAULT = 1_400;
+const DASHBOARD_RECENT_ACTIVITY_DEFER_ROOT_MARGIN = "360px 0px";
+const DASHBOARD_RECENT_ACTIVITY_DEFER_TIMEOUT_MS = 1_300;
 const DASHBOARD_CHARTS_DEFER_ROOT_MARGIN = "260px 0px";
 const DASHBOARD_CHARTS_DEFER_TIMEOUT_MS = 1_200;
 const DASHBOARD_USER_INSIGHTS_DEFER_ROOT_MARGIN = "420px 0px";
@@ -145,6 +158,7 @@ type DashboardDeferredSectionsProps = {
   trendDays: number;
   onTrendDaysChange: (days: number) => void;
   onRetryPeakHours: () => void;
+  onRetryRecentLoginActivity: () => void;
   onRetryRoleDistribution: () => void;
   onRetryTopUsers: () => void;
   onRetryTrends: () => void;
@@ -156,6 +170,10 @@ type DashboardDeferredSectionsProps = {
   peakHours: PeakHour[] | undefined;
   peakHoursLoading: boolean;
   peakHoursRetrying: boolean;
+  recentLoginActivities: RecentLoginActivity[] | undefined;
+  recentLoginActivityErrorMessage: string | null;
+  recentLoginActivityLoading: boolean;
+  recentLoginActivityRetrying: boolean;
   roleDistribution: RoleData[] | undefined;
   roleErrorMessage: string | null;
   roleLoading: boolean;
@@ -171,6 +189,7 @@ export function DashboardDeferredSections({
   trendDays,
   onTrendDaysChange,
   onRetryPeakHours,
+  onRetryRecentLoginActivity,
   onRetryRoleDistribution,
   onRetryTopUsers,
   onRetryTrends,
@@ -182,6 +201,10 @@ export function DashboardDeferredSections({
   peakHours,
   peakHoursLoading,
   peakHoursRetrying,
+  recentLoginActivities,
+  recentLoginActivityErrorMessage,
+  recentLoginActivityLoading,
+  recentLoginActivityRetrying,
   roleDistribution,
   roleErrorMessage,
   roleLoading,
@@ -191,6 +214,11 @@ export function DashboardDeferredSections({
   topUsersLoading,
   topUsersRetrying,
 }: DashboardDeferredSectionsProps) {
+  const recentLoginActivitySection = useDeferredDashboardSectionMount({
+    enabled: defer,
+    rootMargin: DASHBOARD_RECENT_ACTIVITY_DEFER_ROOT_MARGIN,
+    timeoutMs: DASHBOARD_RECENT_ACTIVITY_DEFER_TIMEOUT_MS,
+  });
   const chartsSection = useDeferredDashboardSectionMount({
     enabled: defer,
     rootMargin: DASHBOARD_CHARTS_DEFER_ROOT_MARGIN,
@@ -216,9 +244,45 @@ export function DashboardDeferredSections({
     topUsersErrorMessage ?? "ok",
     roleErrorMessage ?? "ok",
   ].join(":");
+  const recentLoginActivityBoundaryKey = [
+    "recent-login-activity",
+    recentLoginActivityLoading,
+    recentLoginActivityErrorMessage ?? "ok",
+    recentLoginActivities?.length ?? 0,
+  ].join(":");
 
   return (
     <>
+      <div ref={recentLoginActivitySection.triggerRef}>
+        {recentLoginActivitySection.shouldRender ? (
+          <DashboardSectionRenderBoundary
+            sectionName="Aktiviti login dashboard"
+            boundaryKey={recentLoginActivityBoundaryKey}
+          >
+            <Suspense
+              fallback={
+                <DashboardSectionFallback
+                  label="Loading recent login activity"
+                  visualClassName="h-[280px]"
+                />
+              }
+            >
+              <DashboardRecentLoginActivity
+                activities={recentLoginActivities}
+                errorMessage={recentLoginActivityErrorMessage}
+                loading={recentLoginActivityLoading}
+                onRetry={onRetryRecentLoginActivity}
+                retrying={recentLoginActivityRetrying}
+              />
+            </Suspense>
+          </DashboardSectionRenderBoundary>
+        ) : (
+          <DashboardSectionFallback
+            label="Recent login activity will load as you scroll"
+            visualClassName="h-[280px]"
+          />
+        )}
+      </div>
       <div ref={chartsSection.triggerRef}>
         {chartsSection.shouldRender ? (
           <DashboardSectionRenderBoundary

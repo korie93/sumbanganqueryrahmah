@@ -25,6 +25,20 @@ export interface TopUser {
   lastLogin: string | null;
 }
 
+export type RecentLoginActivityStatus = "active" | "ended";
+
+export interface RecentLoginActivity {
+  browser: string | null;
+  ipAddress: string | null;
+  lastActivityTime: string | null;
+  loginTime: string | null;
+  logoutReason: string | null;
+  logoutTime: string | null;
+  role: string;
+  status: RecentLoginActivityStatus;
+  username: string;
+}
+
 export interface PeakHour {
   hour: number;
   count: number;

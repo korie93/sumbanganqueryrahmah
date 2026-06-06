@@ -23,6 +23,7 @@ test("OperationsAnalyticsService proxies summary and distribution reads", async 
     getDashboardSummary: async () => summary,
     getLoginTrends: async () => [],
     getTopActiveUsers: async () => [],
+    getRecentLoginActivity: async () => [],
     getPeakHours: async () => peakHours,
     getRoleDistribution: async () => roleDistribution,
   };
@@ -36,6 +37,7 @@ test("OperationsAnalyticsService proxies summary and distribution reads", async 
 test("OperationsAnalyticsService clamps login-trend days and validates active-user limits", async () => {
   const loginTrendCalls: number[] = [];
   const topUserCalls: number[] = [];
+  const recentLoginActivityCalls: number[] = [];
   const analyticsRepository: OperationsAnalyticsRepository = {
     getDashboardSummary: async () => ({
       totalUsers: 0,
@@ -56,6 +58,20 @@ test("OperationsAnalyticsService clamps login-trend days and validates active-us
       topUserCalls.push(limit);
       return [{ username: "super.user", role: "superuser", loginCount: limit, lastLogin: null }];
     },
+    getRecentLoginActivity: async (limit: number) => {
+      recentLoginActivityCalls.push(limit);
+      return [{
+        browser: "Chrome",
+        ipAddress: "127.0.x.x",
+        lastActivityTime: null,
+        loginTime: null,
+        logoutReason: null,
+        logoutTime: null,
+        role: "superuser",
+        status: "active",
+        username: "super.user",
+      }];
+    },
     getPeakHours: async () => [],
     getRoleDistribution: async () => [],
   };
@@ -63,14 +79,21 @@ test("OperationsAnalyticsService clamps login-trend days and validates active-us
 
   const loginTrends = await service.getLoginTrends(0);
   const topUsers = await service.getTopActiveUsers(1);
+  const recentLoginActivity = await service.getRecentLoginActivity(2);
 
   assert.deepEqual(loginTrendCalls, [1]);
   assert.deepEqual(topUserCalls, [1]);
+  assert.deepEqual(recentLoginActivityCalls, [2]);
   assert.equal(loginTrends[0].logins, 1);
   assert.equal(topUsers[0].loginCount, 1);
+  assert.equal(recentLoginActivity[0].username, "super.user");
 
   await assert.rejects(
     () => service.getTopActiveUsers(0),
+    /Page limit must be at least 1/,
+  );
+  await assert.rejects(
+    () => service.getRecentLoginActivity(0),
     /Page limit must be at least 1/,
   );
 });

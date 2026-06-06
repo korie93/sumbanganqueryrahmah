@@ -6,6 +6,7 @@ import {
   getAnalyticsSummary,
   getLoginTrends,
   getPeakHours,
+  getRecentLoginActivity,
   getRoleDistribution,
   getTopActiveUsers,
 } from "@/lib/api";
@@ -27,7 +28,14 @@ import {
   DASHBOARD_SECONDARY_REFETCH_INTERVAL_MS,
   resolveVisibleDashboardRefetchInterval,
 } from "@/pages/dashboard/refetch-visibility";
-import type { LoginTrend, PeakHour, RoleData, SummaryData, TopUser } from "@/pages/dashboard/types";
+import type {
+  LoginTrend,
+  PeakHour,
+  RecentLoginActivity,
+  RoleData,
+  SummaryData,
+  TopUser,
+} from "@/pages/dashboard/types";
 import { buildSummaryCards, exportDashboardToPdf } from "@/pages/dashboard/utils";
 
 type DashboardRefetch = () => Promise<unknown>;
@@ -96,6 +104,20 @@ function DashboardContent() {
     refetchIntervalInBackground: false,
   });
 
+  const {
+    data: recentLoginActivities,
+    error: recentLoginActivityError,
+    isError: recentLoginActivityIsError,
+    isFetching: recentLoginActivityFetching,
+    isLoading: recentLoginActivityLoading,
+    refetch: refetchRecentLoginActivity,
+  } = useQuery<RecentLoginActivity[]>({
+    queryKey: ["/api/analytics/recent-login-activity"],
+    queryFn: ({ signal }) => getRecentLoginActivity(8, { signal }),
+    refetchInterval: () => resolveVisibleDashboardRefetchInterval(DASHBOARD_PRIMARY_REFETCH_INTERVAL_MS),
+    refetchIntervalInBackground: false,
+  });
+
   const secondaryDashboardQueriesEnabled = !summaryLoading && !trendsLoading && !topUsersLoading;
 
   const {
@@ -141,6 +163,10 @@ function DashboardContent() {
     () => (topUsersIsError ? getDashboardQueryErrorDetail(topUsersError) : null),
     [topUsersError, topUsersIsError],
   );
+  const recentLoginActivityErrorMessage = useMemo(
+    () => (recentLoginActivityIsError ? getDashboardQueryErrorDetail(recentLoginActivityError) : null),
+    [recentLoginActivityError, recentLoginActivityIsError],
+  );
   const peakHoursErrorMessage = useMemo(
     () => (peakHoursIsError ? getDashboardQueryErrorDetail(peakHoursError) : null),
     [peakHoursError, peakHoursIsError],
@@ -159,6 +185,7 @@ function DashboardContent() {
         { error: summaryError, failed: summaryIsError, label: "Ringkasan" },
         { error: trendsError, failed: trendsIsError, label: "Trend login" },
         { error: topUsersError, failed: topUsersIsError, label: "Pengguna aktif" },
+        { error: recentLoginActivityError, failed: recentLoginActivityIsError, label: "Aktiviti login" },
         { error: peakHoursError, failed: peakHoursIsError, label: "Waktu puncak" },
         { error: roleDistributionError, failed: roleDistributionIsError, label: "Taburan peranan" },
       ]),
@@ -167,6 +194,8 @@ function DashboardContent() {
       peakHoursIsError,
       roleDistributionError,
       roleDistributionIsError,
+      recentLoginActivityError,
+      recentLoginActivityIsError,
       summaryError,
       summaryIsError,
       topUsersError,
@@ -178,6 +207,7 @@ function DashboardContent() {
   const handleRetrySummary = useDashboardRetryHandler(refetchSummary);
   const handleRetryTrends = useDashboardRetryHandler(refetchTrends);
   const handleRetryTopUsers = useDashboardRetryHandler(refetchTopUsers);
+  const handleRetryRecentLoginActivity = useDashboardRetryHandler(refetchRecentLoginActivity);
   const handleRetryPeakHours = useDashboardRetryHandler(refetchPeakHours);
   const handleRetryRoles = useDashboardRetryHandler(refetchRoles);
 
@@ -208,6 +238,7 @@ function DashboardContent() {
         refetchSummary(),
         refetchTrends(),
         refetchTopUsers(),
+        refetchRecentLoginActivity(),
         refetchPeakHours(),
         refetchRoles(),
       ]);
@@ -228,7 +259,15 @@ function DashboardContent() {
         setRefreshing(false);
       }
     }
-  }, [isDashboardLifecycleActive, refetchPeakHours, refetchRoles, refetchSummary, refetchTopUsers, refetchTrends]);
+  }, [
+    isDashboardLifecycleActive,
+    refetchPeakHours,
+    refetchRecentLoginActivity,
+    refetchRoles,
+    refetchSummary,
+    refetchTopUsers,
+    refetchTrends,
+  ]);
 
   const handleExportPdf = useCallback(async () => {
     if (!dashboardRef.current || exportBlockReason || exportInFlightRef.current) return;
@@ -304,6 +343,7 @@ function DashboardContent() {
           trendDays={trendDays}
           onTrendDaysChange={setTrendDays}
           onRetryPeakHours={handleRetryPeakHours}
+          onRetryRecentLoginActivity={handleRetryRecentLoginActivity}
           onRetryRoleDistribution={handleRetryRoles}
           onRetryTopUsers={handleRetryTopUsers}
           onRetryTrends={handleRetryTrends}
@@ -315,6 +355,10 @@ function DashboardContent() {
           peakHoursErrorMessage={peakHoursErrorMessage}
           peakHoursLoading={!secondaryDashboardQueriesEnabled || peakHoursLoading}
           peakHoursRetrying={peakHoursFetching}
+          recentLoginActivities={recentLoginActivities ?? []}
+          recentLoginActivityErrorMessage={recentLoginActivityErrorMessage}
+          recentLoginActivityLoading={recentLoginActivityLoading}
+          recentLoginActivityRetrying={recentLoginActivityFetching}
           roleDistribution={roleDistribution ?? []}
           roleErrorMessage={roleDistributionErrorMessage}
           roleLoading={!secondaryDashboardQueriesEnabled || roleLoading}

@@ -5,7 +5,9 @@ import {
   buildDashboardTrendTickDates,
   buildSummaryCards,
   formatDashboardAxisDate,
+  formatDashboardRecentLoginTime,
   formatDashboardUserLastLogin,
+  resolveDashboardRecentLoginStatusMeta,
 } from "@/pages/dashboard/utils";
 
 test("buildSummaryCards includes stale conflict monitor value when provided", () => {
@@ -91,6 +93,16 @@ test("formatDashboardUserLastLogin keeps login timestamps in operational timezon
 
 test("formatDashboardUserLastLogin falls back safely when missing", () => {
   assert.equal(formatDashboardUserLastLogin(null), "Unknown");
+});
+
+test("recent login utilities keep timestamps readable and status labels explicit", () => {
+  assert.equal(
+    formatDashboardRecentLoginTime("2026-04-02T10:27:00.000Z"),
+    "02/04/2026, 6:27 PM",
+  );
+  assert.equal(formatDashboardRecentLoginTime(null), "Unknown");
+  assert.equal(resolveDashboardRecentLoginStatusMeta("active").label, "Active");
+  assert.equal(resolveDashboardRecentLoginStatusMeta("ended").label, "Ended");
 });
 
 test("formatDashboardAxisDate keeps dashboard x-axis labels compact", () => {

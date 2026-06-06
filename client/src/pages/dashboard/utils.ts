@@ -9,8 +9,13 @@ import {
   initializeTrustedTypesRuntimeForGlobal,
   type TrustedTypesRuntimeGlobal,
 } from "@/lib/trusted-types-runtime";
-import type { DashboardAccessSignal, SummaryCardItem, SummaryData } from "@/pages/dashboard/types";
-import type { LoginTrend } from "@/pages/dashboard/types";
+import type {
+  DashboardAccessSignal,
+  LoginTrend,
+  RecentLoginActivityStatus,
+  SummaryCardItem,
+  SummaryData,
+} from "@/pages/dashboard/types";
 
 let html2canvasLoader: Promise<typeof import("html2canvas")["default"]> | null = null;
 let jsPdfLoader: Promise<typeof import("jspdf")["default"]> | null = null;
@@ -114,6 +119,25 @@ export function buildDashboardTrendTickDates(
 export function formatDashboardUserLastLogin(value: string | null | undefined) {
   if (!value) return "Unknown";
   return formatOperationalDateTime(value, { fallback: "Unknown" });
+}
+
+export function formatDashboardRecentLoginTime(value: string | null | undefined) {
+  if (!value) return "Unknown";
+  return formatOperationalDateTime(value, { fallback: "Unknown" });
+}
+
+export function resolveDashboardRecentLoginStatusMeta(status: RecentLoginActivityStatus) {
+  if (status === "active") {
+    return {
+      label: "Active",
+      className: "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
+    };
+  }
+
+  return {
+    label: "Ended",
+    className: "border-slate-400/40 bg-slate-500/10 text-slate-700 dark:text-slate-300",
+  };
 }
 
 export function buildSummaryCards(summary: SummaryData | undefined): SummaryCardItem[] {

@@ -6,6 +6,7 @@ type OperationsAnalyticsRepository = Pick<
   | "getDashboardSummary"
   | "getLoginTrends"
   | "getPeakHours"
+  | "getRecentLoginActivity"
   | "getRoleDistribution"
   | "getTopActiveUsers"
 >;
@@ -23,6 +24,10 @@ export class OperationsAnalyticsService {
 
   async getTopActiveUsers(limit?: unknown) {
     return this.analyticsRepository.getTopActiveUsers(readPageLimit(limit, 10, 100));
+  }
+
+  async getRecentLoginActivity(limit?: unknown) {
+    return this.analyticsRepository.getRecentLoginActivity(readPageLimit(limit, 8, 25));
   }
 
   async getPeakHours() {

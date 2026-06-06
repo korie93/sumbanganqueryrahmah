@@ -35,6 +35,14 @@ export function registerOperationsAnalyticsRoutes(context: OperationsRouteContex
   );
 
   app.get(
+    "/api/analytics/recent-login-activity",
+    authenticateToken,
+    requireRole("user", "admin", "superuser"),
+    requireTabAccess("dashboard"),
+    asyncHandler(operationsController.getRecentLoginActivity),
+  );
+
+  app.get(
     "/api/analytics/peak-hours",
     authenticateToken,
     requireRole("user", "admin", "superuser"),
