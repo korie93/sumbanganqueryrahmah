@@ -64,3 +64,16 @@ export interface DashboardAccessSignal {
   description: string;
   tone: DashboardAccessSignalTone;
 }
+
+export interface DashboardLoginRiskInsight {
+  title: string;
+  value: string;
+  description: string;
+  tone: DashboardAccessSignalTone;
+}
+
+export interface DashboardLoginRiskSummary {
+  label: string;
+  description: string;
+  tone: DashboardAccessSignalTone;
+}

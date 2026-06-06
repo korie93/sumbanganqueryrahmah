@@ -11,7 +11,10 @@ import {
 } from "@/lib/trusted-types-runtime";
 import type {
   DashboardAccessSignal,
+  DashboardLoginRiskInsight,
+  DashboardLoginRiskSummary,
   LoginTrend,
+  RecentLoginActivity,
   RecentLoginActivityStatus,
   SummaryCardItem,
   SummaryData,
@@ -237,6 +240,110 @@ export function buildDashboardAccessSignals(summary: SummaryData | undefined): D
       tone: bannedUsers > 0 ? "warning" : "success",
     },
   ];
+}
+
+function getLatestDashboardTrendLogins(trends: readonly LoginTrend[] | undefined) {
+  if (!trends?.length) {
+    return { latest: 0, previousAverage: 0 };
+  }
+
+  const loginCounts = trends
+    .map((trend) => trend.logins)
+    .filter((count) => Number.isFinite(count) && count >= 0);
+  if (loginCounts.length === 0) {
+    return { latest: 0, previousAverage: 0 };
+  }
+
+  const latest = loginCounts[loginCounts.length - 1] ?? 0;
+  const previousCounts = loginCounts.slice(0, -1);
+  const previousAverage = previousCounts.length > 0
+    ? previousCounts.reduce((total, count) => total + count, 0) / previousCounts.length
+    : latest;
+
+  return { latest, previousAverage };
+}
+
+export function buildDashboardLoginRiskInsights(input: {
+  recentLoginActivities?: readonly RecentLoginActivity[] | undefined;
+  summary?: SummaryData | undefined;
+  trends?: readonly LoginTrend[] | undefined;
+}): DashboardLoginRiskInsight[] {
+  const { recentLoginActivities, summary, trends } = input;
+  const failedLogins = summary?.loginFailures24h ?? 0;
+  const activeSessions = summary?.activeSessions ?? 0;
+  const totalUsers = summary?.totalUsers ?? 0;
+  const activeSessionRatio = totalUsers > 0 ? activeSessions / totalUsers : 0;
+  const recentRows = recentLoginActivities ?? [];
+  const recentActiveSessions = recentRows.filter((activity) => activity.status === "active").length;
+  const { latest, previousAverage } = getLatestDashboardTrendLogins(trends);
+  const spikeThreshold = Math.max(3, previousAverage * 1.5);
+  const hasLoginSpike = latest >= spikeThreshold && latest > previousAverage;
+
+  return [
+    {
+      title: "Failed login pressure",
+      value: failedLogins.toLocaleString(),
+      description: failedLogins > 0
+        ? "Semak percubaan gagal berulang dan akaun yang mungkin perlu dikunci."
+        : "Tiada percubaan gagal direkod dalam 24 jam terakhir.",
+      tone: failedLogins >= 10 ? "danger" : failedLogins > 0 ? "warning" : "success",
+    },
+    {
+      title: "Active session load",
+      value: totalUsers > 0
+        ? `${activeSessions.toLocaleString()} / ${totalUsers.toLocaleString()}`
+        : activeSessions.toLocaleString(),
+      description: activeSessionRatio >= 0.75
+        ? "Sesi aktif tinggi berbanding jumlah pengguna; semak sesi lama atau peranti berganda."
+        : "Beban sesi aktif berada dalam julat biasa.",
+      tone: activeSessionRatio >= 0.75 ? "warning" : activeSessions > 0 ? "success" : "info",
+    },
+    {
+      title: "Login trend check",
+      value: `${latest.toLocaleString()} latest day`,
+      description: hasLoginSpike
+        ? "Login harian naik mendadak berbanding purata tempoh semasa."
+        : "Tiada spike login besar dikesan pada hari terkini.",
+      tone: hasLoginSpike ? "warning" : latest > 0 ? "success" : "info",
+    },
+    {
+      title: "Recent session state",
+      value: `${recentActiveSessions.toLocaleString()} active`,
+      description: recentRows.length > 0
+        ? "Rekod terbaru menunjukkan sesi aktif dan sesi tamat secara ringkas."
+        : "Belum ada rekod login terbaru untuk dirumuskan.",
+      tone: recentActiveSessions > 0 ? "success" : "info",
+    },
+  ];
+}
+
+export function resolveDashboardLoginRiskSummary(
+  insights: readonly DashboardLoginRiskInsight[],
+): DashboardLoginRiskSummary {
+  const dangerCount = insights.filter((insight) => insight.tone === "danger").length;
+  const warningCount = insights.filter((insight) => insight.tone === "warning").length;
+
+  if (dangerCount > 0) {
+    return {
+      label: "Attention",
+      description: `${dangerCount} signal memerlukan semakan segera.`,
+      tone: "danger",
+    };
+  }
+
+  if (warningCount > 0) {
+    return {
+      label: "Watch",
+      description: `${warningCount} signal perlu dipantau.`,
+      tone: "warning",
+    };
+  }
+
+  return {
+    label: "Normal",
+    description: "Tiada tekanan login besar dikesan.",
+    tone: "success",
+  };
 }
 
 function loadHtml2Canvas() {

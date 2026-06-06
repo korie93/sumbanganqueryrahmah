@@ -6,6 +6,7 @@ import type {
   PeakHour,
   RecentLoginActivity,
   RoleData,
+  SummaryData,
   TopUser,
 } from "@/pages/dashboard/types";
 
@@ -24,8 +25,15 @@ const DashboardRecentLoginActivity = lazy(() =>
     default: module.DashboardRecentLoginActivity,
   })),
 );
+const DashboardLoginRiskInsights = lazy(() =>
+  import("@/pages/dashboard/DashboardLoginRiskInsights").then((module) => ({
+    default: module.DashboardLoginRiskInsights,
+  })),
+);
 const DEFERRED_DASHBOARD_SECTION_ROOT_MARGIN_DEFAULT = "320px 0px";
 const DEFERRED_DASHBOARD_SECTION_TIMEOUT_MS_DEFAULT = 1_400;
+const DASHBOARD_LOGIN_RISK_DEFER_ROOT_MARGIN = "340px 0px";
+const DASHBOARD_LOGIN_RISK_DEFER_TIMEOUT_MS = 1_250;
 const DASHBOARD_RECENT_ACTIVITY_DEFER_ROOT_MARGIN = "360px 0px";
 const DASHBOARD_RECENT_ACTIVITY_DEFER_TIMEOUT_MS = 1_300;
 const DASHBOARD_CHARTS_DEFER_ROOT_MARGIN = "260px 0px";
@@ -178,6 +186,8 @@ type DashboardDeferredSectionsProps = {
   roleErrorMessage: string | null;
   roleLoading: boolean;
   roleRetrying: boolean;
+  summary: SummaryData | undefined;
+  summaryLoading: boolean;
   topUsers: TopUser[] | undefined;
   topUsersErrorMessage: string | null;
   topUsersLoading: boolean;
@@ -209,11 +219,18 @@ export function DashboardDeferredSections({
   roleErrorMessage,
   roleLoading,
   roleRetrying,
+  summary,
+  summaryLoading,
   topUsers,
   topUsersErrorMessage,
   topUsersLoading,
   topUsersRetrying,
 }: DashboardDeferredSectionsProps) {
+  const loginRiskSection = useDeferredDashboardSectionMount({
+    enabled: defer,
+    rootMargin: DASHBOARD_LOGIN_RISK_DEFER_ROOT_MARGIN,
+    timeoutMs: DASHBOARD_LOGIN_RISK_DEFER_TIMEOUT_MS,
+  });
   const recentLoginActivitySection = useDeferredDashboardSectionMount({
     enabled: defer,
     rootMargin: DASHBOARD_RECENT_ACTIVITY_DEFER_ROOT_MARGIN,
@@ -250,9 +267,46 @@ export function DashboardDeferredSections({
     recentLoginActivityErrorMessage ?? "ok",
     recentLoginActivities?.length ?? 0,
   ].join(":");
+  const loginRiskBoundaryKey = [
+    "login-risk-insights",
+    summaryLoading,
+    trendsLoading,
+    recentLoginActivityLoading,
+    summary?.loginFailures24h ?? 0,
+    recentLoginActivities?.length ?? 0,
+  ].join(":");
 
   return (
     <>
+      <div ref={loginRiskSection.triggerRef}>
+        {loginRiskSection.shouldRender ? (
+          <DashboardSectionRenderBoundary
+            sectionName="Insight risiko login dashboard"
+            boundaryKey={loginRiskBoundaryKey}
+          >
+            <Suspense
+              fallback={
+                <DashboardSectionFallback
+                  label="Loading login risk insights"
+                  visualClassName="h-[240px]"
+                />
+              }
+            >
+              <DashboardLoginRiskInsights
+                loading={summaryLoading || trendsLoading || recentLoginActivityLoading}
+                recentLoginActivities={recentLoginActivities}
+                summary={summary}
+                trends={trends}
+              />
+            </Suspense>
+          </DashboardSectionRenderBoundary>
+        ) : (
+          <DashboardSectionFallback
+            label="Login risk insights will load as you scroll"
+            visualClassName="h-[240px]"
+          />
+        )}
+      </div>
       <div ref={recentLoginActivitySection.triggerRef}>
         {recentLoginActivitySection.shouldRender ? (
           <DashboardSectionRenderBoundary

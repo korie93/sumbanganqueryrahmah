@@ -363,6 +363,8 @@ function DashboardContent() {
           roleErrorMessage={roleDistributionErrorMessage}
           roleLoading={!secondaryDashboardQueriesEnabled || roleLoading}
           roleRetrying={roleDistributionFetching}
+          summary={summary}
+          summaryLoading={summaryLoading}
           topUsers={topUsers ?? []}
           topUsersErrorMessage={topUsersErrorMessage}
           topUsersLoading={topUsersLoading}

@@ -2,11 +2,13 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   buildDashboardAccessSignals,
+  buildDashboardLoginRiskInsights,
   buildDashboardTrendTickDates,
   buildSummaryCards,
   formatDashboardAxisDate,
   formatDashboardRecentLoginTime,
   formatDashboardUserLastLogin,
+  resolveDashboardLoginRiskSummary,
   resolveDashboardRecentLoginStatusMeta,
 } from "@/pages/dashboard/utils";
 
@@ -82,6 +84,70 @@ test("buildDashboardAccessSignals classifies login pressure for operator review"
 
   assert.equal(signals.find((signal) => signal.title === "Gagal login 24j")?.tone, "danger");
   assert.equal(signals.find((signal) => signal.title === "Akaun disekat")?.tone, "warning");
+});
+
+test("buildDashboardLoginRiskInsights escalates failed login and trend pressure", () => {
+  const insights = buildDashboardLoginRiskInsights({
+    recentLoginActivities: [
+      {
+        browser: "Chrome",
+        ipAddress: "10.42.x.x",
+        lastActivityTime: "2026-05-06T02:30:00Z",
+        loginTime: "2026-05-06T02:00:00Z",
+        logoutReason: null,
+        logoutTime: null,
+        role: "superuser",
+        status: "active",
+        username: "super.user",
+      },
+    ],
+    summary: {
+      activeSessions: 9,
+      bannedUsers: 0,
+      loginsToday: 10,
+      loginFailures24h: 12,
+      totalDataRows: 100,
+      totalImports: 4,
+      totalUsers: 10,
+    },
+    trends: [
+      { date: "2026-05-04", logins: 2, logouts: 1 },
+      { date: "2026-05-05", logins: 3, logouts: 1 },
+      { date: "2026-05-06", logins: 10, logouts: 2 },
+    ],
+  });
+
+  assert.equal(insights.find((insight) => insight.title === "Failed login pressure")?.tone, "danger");
+  assert.equal(insights.find((insight) => insight.title === "Active session load")?.tone, "warning");
+  assert.equal(insights.find((insight) => insight.title === "Login trend check")?.tone, "warning");
+  assert.equal(insights.find((insight) => insight.title === "Recent session state")?.tone, "success");
+  assert.equal(resolveDashboardLoginRiskSummary(insights).label, "Attention");
+});
+
+test("buildDashboardLoginRiskInsights stays calm for normal login signals", () => {
+  const insights = buildDashboardLoginRiskInsights({
+    recentLoginActivities: [],
+    summary: {
+      activeSessions: 1,
+      bannedUsers: 0,
+      loginsToday: 2,
+      loginFailures24h: 0,
+      totalDataRows: 100,
+      totalImports: 4,
+      totalUsers: 10,
+    },
+    trends: [
+      { date: "2026-05-04", logins: 2, logouts: 1 },
+      { date: "2026-05-05", logins: 2, logouts: 1 },
+      { date: "2026-05-06", logins: 2, logouts: 1 },
+    ],
+  });
+
+  assert.equal(insights.find((insight) => insight.title === "Failed login pressure")?.tone, "success");
+  assert.equal(insights.find((insight) => insight.title === "Active session load")?.tone, "success");
+  assert.equal(insights.find((insight) => insight.title === "Login trend check")?.tone, "success");
+  assert.equal(insights.find((insight) => insight.title === "Recent session state")?.tone, "info");
+  assert.equal(resolveDashboardLoginRiskSummary(insights).label, "Normal");
 });
 
 test("formatDashboardUserLastLogin keeps login timestamps in operational timezone", () => {

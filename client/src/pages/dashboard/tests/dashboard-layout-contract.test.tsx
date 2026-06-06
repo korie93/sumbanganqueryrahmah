@@ -7,6 +7,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { fileURLToPath } from "node:url";
 import { DashboardChartsGrid } from "@/pages/dashboard/DashboardChartsGrid";
+import { DashboardLoginRiskInsights } from "@/pages/dashboard/DashboardLoginRiskInsights";
 import { DashboardPageHeader } from "@/pages/dashboard/DashboardPageHeader";
 import { DashboardRecentLoginActivity } from "@/pages/dashboard/DashboardRecentLoginActivity";
 import { DashboardSectionRenderFallback } from "@/pages/dashboard/DashboardSectionRenderBoundary";
@@ -155,6 +156,7 @@ test("Dashboard wraps major dashboard regions in accessible render error boundar
   assert.match(dashboardSource, /<DashboardSectionRenderBoundary/);
   assert.match(dashboardSource, /sectionName="Ringkasan dashboard"/);
   assert.match(deferredSource, /sectionName="Carta dashboard"/);
+  assert.match(deferredSource, /sectionName="Insight risiko login dashboard"/);
   assert.match(deferredSource, /sectionName="Aktiviti login dashboard"/);
   assert.match(deferredSource, /sectionName="Insight pengguna dashboard"/);
   assert.match(fallbackMarkup, /role="alert"/);
@@ -164,6 +166,49 @@ test("Dashboard wraps major dashboard regions in accessible render error boundar
   assert.match(fallbackMarkup, /Bahagian ini gagal dirender/);
   assert.match(fallbackMarkup, /Cuba lagi/);
   assert.match(fallbackMarkup, /type="button"/);
+});
+
+test("DashboardLoginRiskInsights renders operator-ready status from existing login signals", () => {
+  const markup = renderToStaticMarkup(
+    createElement(DashboardLoginRiskInsights, {
+      loading: false,
+      recentLoginActivities: [
+        {
+          browser: "Chrome",
+          ipAddress: "10.42.x.x",
+          lastActivityTime: "2026-05-06T02:30:00Z",
+          loginTime: "2026-05-06T02:00:00Z",
+          logoutReason: null,
+          logoutTime: null,
+          role: "superuser",
+          status: "active",
+          username: "super.user",
+        },
+      ],
+      summary: {
+        activeSessions: 9,
+        bannedUsers: 0,
+        loginsToday: 10,
+        loginFailures24h: 12,
+        totalDataRows: 100,
+        totalImports: 4,
+        totalUsers: 10,
+      },
+      trends: [
+        { date: "2026-05-04", logins: 2, logouts: 1 },
+        { date: "2026-05-05", logins: 3, logouts: 1 },
+        { date: "2026-05-06", logins: 10, logouts: 2 },
+      ],
+    }),
+  );
+
+  assert.match(markup, /Login Risk Insights/);
+  assert.match(markup, /Login risk status Attention/);
+  assert.match(markup, /Failed login pressure/);
+  assert.match(markup, /Active session load/);
+  assert.match(markup, /Login trend check/);
+  assert.match(markup, /Recent session state/);
+  assert.match(markup, /Gunakan panel ini bersama rekod login terbaru/);
 });
 
 test("DashboardRecentLoginActivity renders masked access rows with retryable error state", () => {
