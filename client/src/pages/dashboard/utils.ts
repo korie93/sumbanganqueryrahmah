@@ -11,6 +11,10 @@ let html2canvasLoader: Promise<typeof import("html2canvas")["default"]> | null =
 let jsPdfLoader: Promise<typeof import("jspdf")["default"]> | null = null;
 const DASHBOARD_EXPORT_ROOT_ATTRIBUTE = "data-dashboard-export-root";
 const DASHBOARD_EXPORT_EXCLUDED_SELECTOR = "[hidden], [aria-hidden='true'], [data-export-sensitive='true']";
+const DASHBOARD_EXPORT_DEFAULT_SCALE = 2;
+const DASHBOARD_EXPORT_MAX_CANVAS_DIMENSION = 8192;
+const DASHBOARD_EXPORT_MAX_CANVAS_PIXELS = 12_000_000;
+const DASHBOARD_EXPORT_SVG_COLOR_ATTRIBUTES = ["fill", "stroke", "stop-color"] as const;
 export const DASHBOARD_PDF_EXPORT_FAILURE_MESSAGE = "Gagal jana PDF. Sila cuba semula.";
 
 type DashboardHtml2Canvas = typeof import("html2canvas")["default"];
@@ -158,6 +162,102 @@ function shouldIgnoreDashboardExportElement(node: Element) {
   return node.tagName === "IFRAME" || node.matches(DASHBOARD_EXPORT_EXCLUDED_SELECTOR);
 }
 
+const DASHBOARD_EXPORT_LIGHT_PALETTE: Record<string, string> = {
+  "--background": "#ffffff",
+  "--border": "#e2e8f0",
+  "--card": "#ffffff",
+  "--chart-1": "#2563eb",
+  "--chart-2": "#16a34a",
+  "--chart-3": "#f97316",
+  "--chart-4": "#7c3aed",
+  "--chart-5": "#0891b2",
+  "--destructive": "#dc2626",
+  "--foreground": "#1e293b",
+  "--muted": "#f1f5f9",
+  "--muted-foreground": "#64748b",
+  "--primary": "#2563eb",
+  "--primary-foreground": "#ffffff",
+};
+
+const DASHBOARD_EXPORT_DARK_PALETTE: Record<string, string> = {
+  "--background": "#1e293b",
+  "--border": "#475569",
+  "--card": "#1e293b",
+  "--chart-1": "#60a5fa",
+  "--chart-2": "#4ade80",
+  "--chart-3": "#fb923c",
+  "--chart-4": "#a78bfa",
+  "--chart-5": "#22d3ee",
+  "--destructive": "#f87171",
+  "--foreground": "#e2e8f0",
+  "--muted": "#334155",
+  "--muted-foreground": "#94a3b8",
+  "--primary": "#60a5fa",
+  "--primary-foreground": "#0f172a",
+};
+
+function getDashboardExportPalette(isDark: boolean) {
+  return isDark ? DASHBOARD_EXPORT_DARK_PALETTE : DASHBOARD_EXPORT_LIGHT_PALETTE;
+}
+
+export function resolveDashboardExportScale(width: number, height: number) {
+  const safeWidth = Math.max(1, Math.ceil(width));
+  const safeHeight = Math.max(1, Math.ceil(height));
+  const pixelScale = Math.sqrt(DASHBOARD_EXPORT_MAX_CANVAS_PIXELS / (safeWidth * safeHeight));
+  const dimensionScale = DASHBOARD_EXPORT_MAX_CANVAS_DIMENSION / Math.max(safeWidth, safeHeight);
+  const scale = Math.min(DASHBOARD_EXPORT_DEFAULT_SCALE, pixelScale, dimensionScale);
+
+  return Number(Math.max(0.1, scale).toFixed(2));
+}
+
+export function resolveDashboardExportPaintColor(
+  value: string | null | undefined,
+  isDark: boolean,
+) {
+  const normalized = value?.trim();
+  if (!normalized || normalized === "none" || normalized.startsWith("url(") || !normalized.includes("var(")) {
+    return null;
+  }
+
+  const variableName = /--[\w-]+/.exec(normalized)?.[0];
+  if (!variableName) {
+    return null;
+  }
+
+  const palette = getDashboardExportPalette(isDark);
+  return palette[variableName] ?? palette["--foreground"];
+}
+
+function resolveDashboardInlineStyleColors(styleValue: string, isDark: boolean) {
+  const palette = getDashboardExportPalette(isDark);
+  return styleValue.replace(
+    /hsl\(var\((--[\w-]+)\)(?:\s*\/\s*[\d.]+)?\)/g,
+    (_match, variableName: string) => palette[variableName] ?? palette["--foreground"],
+  );
+}
+
+export function sanitizeDashboardExportClone(root: ParentNode, isDark: boolean) {
+  root
+    .querySelectorAll("svg [fill], svg [stroke], svg [stop-color]")
+    .forEach((node) => {
+      for (const attribute of DASHBOARD_EXPORT_SVG_COLOR_ATTRIBUTES) {
+        const resolvedColor = resolveDashboardExportPaintColor(
+          node.getAttribute(attribute),
+          isDark,
+        );
+        if (resolvedColor) {
+          node.setAttribute(attribute, resolvedColor);
+        }
+      }
+    });
+
+  root.querySelectorAll<HTMLElement>("[style*='hsl(var']").forEach((node) => {
+    const currentStyle = node.getAttribute("style");
+    if (!currentStyle) return;
+    node.setAttribute("style", resolveDashboardInlineStyleColors(currentStyle, isDark));
+  });
+}
+
 export async function captureDashboardElementCanvas(
   element: HTMLElement,
   html2canvas: DashboardHtml2Canvas,
@@ -186,13 +286,15 @@ export async function exportDashboardToPdf(element: HTMLDivElement) {
   const backgroundColor = isDark ? "#1e293b" : "#ffffff";
 
   const canvas = await captureDashboardElementCanvas(element, html2canvas, {
-    scale: 2,
+    scale: resolveDashboardExportScale(element.scrollWidth, element.scrollHeight),
     useCORS: true,
-    allowTaint: true,
+    allowTaint: false,
     logging: false,
     backgroundColor,
     width: element.scrollWidth,
     height: element.scrollHeight,
+    windowWidth: Math.max(document.documentElement.clientWidth, element.scrollWidth),
+    windowHeight: Math.max(document.documentElement.clientHeight, element.scrollHeight),
     scrollX: 0,
     scrollY: -window.scrollY,
     ignoreElements: shouldIgnoreDashboardExportElement,
@@ -207,10 +309,15 @@ export async function exportDashboardToPdf(element: HTMLDivElement) {
         .recharts-text { fill: ${isDark ? "#e2e8f0" : "#1e293b"} !important; }
       `;
       clonedDoc.head.appendChild(style);
+      sanitizeDashboardExportClone(clonedDoc, isDark);
     },
   });
 
   try {
+    if (canvas.width <= 0 || canvas.height <= 0) {
+      throw new Error(DASHBOARD_PDF_EXPORT_FAILURE_MESSAGE);
+    }
+
     const imageData = canvas.toDataURL("image/png", 1.0);
     const pdf = new jsPDF({
       orientation: "landscape",
