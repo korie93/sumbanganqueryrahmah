@@ -24,6 +24,11 @@ const DASHBOARD_FALLBACK_PDF_MAX_LINES = 90;
 const DASHBOARD_FALLBACK_PDF_MAX_LINE_LENGTH = 130;
 const DASHBOARD_DOM_ELEMENT_NODE_TYPE = 1;
 const DASHBOARD_DOM_TEXT_NODE_TYPE = 3;
+const DASHBOARD_PDF_MARGIN_MM = 14;
+const DASHBOARD_PDF_HEADER_HEIGHT_MM = 39;
+const DASHBOARD_PDF_FOOTER_HEIGHT_MM = 12;
+const DASHBOARD_PDF_ROW_GAP_MM = 3;
+const DASHBOARD_PDF_FALLBACK_ROW_MIN_HEIGHT_MM = 10;
 export const DASHBOARD_PDF_EXPORT_FAILURE_MESSAGE = "Gagal jana PDF. Sila cuba semula.";
 
 type DashboardHtml2Canvas = typeof import("html2canvas")["default"];
@@ -44,6 +49,15 @@ type DashboardTrustedTypesTarget = TrustedTypesRuntimeGlobal & {
 };
 type DashboardCleanup = () => void;
 type DashboardPdfTheme = "dark" | "light";
+type DashboardPdfRgb = readonly [number, number, number];
+type DashboardCanvasPdfSlice = {
+  readonly sourceY: number;
+  readonly sourceHeight: number;
+  readonly imageX: number;
+  readonly imageY: number;
+  readonly imageWidth: number;
+  readonly imageHeight: number;
+};
 
 export const ROLE_COLORS: Record<string, string> = {
   superuser: "hsl(var(--chart-1))",
@@ -418,6 +432,32 @@ function getDashboardPdfTheme(isDark: boolean): DashboardPdfTheme {
   return isDark ? "dark" : "light";
 }
 
+function getDashboardPdfThemeColors(theme: DashboardPdfTheme) {
+  const isDark = theme === "dark";
+  return {
+    accent: (isDark ? [96, 165, 250] : [37, 99, 235]) as DashboardPdfRgb,
+    card: (isDark ? [22, 32, 48] : [248, 250, 252]) as DashboardPdfRgb,
+    line: (isDark ? [71, 85, 105] : [203, 213, 225]) as DashboardPdfRgb,
+    mutedText: (isDark ? [148, 163, 184] : [100, 116, 139]) as DashboardPdfRgb,
+    page: (isDark ? [15, 23, 42] : [255, 255, 255]) as DashboardPdfRgb,
+    primaryText: (isDark ? [248, 250, 252] : [15, 23, 42]) as DashboardPdfRgb,
+    softAccent: (isDark ? [30, 41, 59] : [239, 246, 255]) as DashboardPdfRgb,
+    surface: (isDark ? [30, 41, 59] : [255, 255, 255]) as DashboardPdfRgb,
+  };
+}
+
+function setDashboardPdfFillColor(pdf: DashboardJsPdfDocument, color: DashboardPdfRgb) {
+  pdf.setFillColor(color[0], color[1], color[2]);
+}
+
+function setDashboardPdfDrawColor(pdf: DashboardJsPdfDocument, color: DashboardPdfRgb) {
+  pdf.setDrawColor(color[0], color[1], color[2]);
+}
+
+function setDashboardPdfTextColor(pdf: DashboardJsPdfDocument, color: DashboardPdfRgb) {
+  pdf.setTextColor(color[0], color[1], color[2]);
+}
+
 function normalizeDashboardFallbackPdfLine(value: string | null | undefined) {
   const normalized = value?.replace(/\s+/g, " ").trim() ?? "";
   if (!normalized) {
@@ -493,32 +533,59 @@ export function collectDashboardFallbackPdfLines(
 }
 
 function setDashboardPdfPageTheme(pdf: DashboardJsPdfDocument, theme: DashboardPdfTheme) {
-  const isDark = theme === "dark";
+  const colors = getDashboardPdfThemeColors(theme);
   const pageWidth = pdf.internal.pageSize.getWidth();
   const pageHeight = pdf.internal.pageSize.getHeight();
 
-  pdf.setFillColor(isDark ? 30 : 255, isDark ? 41 : 255, isDark ? 59 : 255);
+  setDashboardPdfFillColor(pdf, colors.page);
   pdf.rect(0, 0, pageWidth, pageHeight, "F");
   return { pageWidth, pageHeight };
 }
 
-function writeDashboardPdfHeader(pdf: DashboardJsPdfDocument, theme: DashboardPdfTheme) {
-  const isDark = theme === "dark";
+function writeDashboardPdfHeader(
+  pdf: DashboardJsPdfDocument,
+  theme: DashboardPdfTheme,
+  modeLabel: string,
+) {
+  const colors = getDashboardPdfThemeColors(theme);
   const { pageWidth } = setDashboardPdfPageTheme(pdf, theme);
 
-  pdf.setFontSize(20);
+  setDashboardPdfFillColor(pdf, colors.surface);
+  setDashboardPdfDrawColor(pdf, colors.line);
+  pdf.rect(DASHBOARD_PDF_MARGIN_MM, 10, pageWidth - DASHBOARD_PDF_MARGIN_MM * 2, 24, "FD");
+
+  setDashboardPdfFillColor(pdf, colors.accent);
+  pdf.rect(DASHBOARD_PDF_MARGIN_MM, 10, 3, 24, "F");
+
+  setDashboardPdfFillColor(pdf, colors.softAccent);
+  pdf.rect(pageWidth - DASHBOARD_PDF_MARGIN_MM - 39, 15, 29, 9, "F");
+  setDashboardPdfTextColor(pdf, colors.accent);
+  pdf.setFontSize(8);
   pdf.setFont("helvetica", "bold");
-  pdf.setTextColor(isDark ? 255 : 30);
-  pdf.text("SQR Dashboard Analytics Report", 14, 18);
+  pdf.text(modeLabel, pageWidth - DASHBOARD_PDF_MARGIN_MM - 34, 21);
 
-  pdf.setFontSize(11);
+  pdf.setFontSize(9);
+  pdf.setFont("helvetica", "bold");
+  setDashboardPdfTextColor(pdf, colors.mutedText);
+  pdf.text("SQR SYSTEM", DASHBOARD_PDF_MARGIN_MM + 8, 17);
+
+  pdf.setFontSize(17);
+  pdf.setFont("helvetica", "bold");
+  setDashboardPdfTextColor(pdf, colors.primaryText);
+  pdf.text("Dashboard Login Report", DASHBOARD_PDF_MARGIN_MM + 8, 25);
+
+  pdf.setFontSize(9);
   pdf.setFont("helvetica", "normal");
-  pdf.setTextColor(isDark ? 180 : 100);
-  pdf.text(`Generated: ${formatDateTimeDDMMYYYY(new Date(), { includeSeconds: true })}`, 14, 26);
+  setDashboardPdfTextColor(pdf, colors.mutedText);
+  pdf.text(
+    `Generated ${formatDateTimeDDMMYYYY(new Date(), { includeSeconds: true })} - Login activity and system analytics`,
+    DASHBOARD_PDF_MARGIN_MM + 8,
+    31,
+  );
 
-  pdf.setDrawColor(isDark ? 100 : 200);
+  setDashboardPdfDrawColor(pdf, colors.line);
   pdf.setLineWidth(0.5);
-  pdf.line(14, 30, pageWidth - 14, 30);
+  pdf.line(DASHBOARD_PDF_MARGIN_MM, DASHBOARD_PDF_HEADER_HEIGHT_MM, pageWidth - DASHBOARD_PDF_MARGIN_MM, DASHBOARD_PDF_HEADER_HEIGHT_MM);
 }
 
 function writeDashboardPdfFooter(
@@ -527,14 +594,45 @@ function writeDashboardPdfFooter(
   pageNumber: number,
   pageCount: number,
 ) {
-  const isDark = theme === "dark";
+  const colors = getDashboardPdfThemeColors(theme);
   const pageWidth = pdf.internal.pageSize.getWidth();
   const pageHeight = pdf.internal.pageSize.getHeight();
 
   pdf.setFontSize(8);
-  pdf.setTextColor(isDark ? 120 : 150);
-  pdf.text("Sumbangan Query Rahmah (SQR) System", 14, pageHeight - 5);
-  pdf.text(`Page ${pageNumber} of ${pageCount}`, pageWidth - 34, pageHeight - 5);
+  setDashboardPdfTextColor(pdf, colors.mutedText);
+  pdf.text("Sumbangan Query Rahmah (SQR) System", DASHBOARD_PDF_MARGIN_MM, pageHeight - 6);
+  pdf.text(`Page ${pageNumber} of ${pageCount}`, pageWidth - 34, pageHeight - 6);
+}
+
+export function resolveDashboardCanvasPdfSlices(
+  canvasWidth: number,
+  canvasHeight: number,
+  pageWidth: number,
+  pageHeight: number,
+): DashboardCanvasPdfSlice[] {
+  const safeCanvasWidth = Math.max(1, Math.ceil(canvasWidth));
+  const safeCanvasHeight = Math.max(1, Math.ceil(canvasHeight));
+  const imageWidth = pageWidth - DASHBOARD_PDF_MARGIN_MM * 2;
+  const availableHeight = pageHeight
+    - DASHBOARD_PDF_HEADER_HEIGHT_MM
+    - DASHBOARD_PDF_FOOTER_HEIGHT_MM;
+  const imageScale = imageWidth / safeCanvasWidth;
+  const sourceSliceHeight = Math.max(1, Math.floor(availableHeight / imageScale));
+  const slices: DashboardCanvasPdfSlice[] = [];
+
+  for (let sourceY = 0; sourceY < safeCanvasHeight; sourceY += sourceSliceHeight) {
+    const sourceHeight = Math.min(sourceSliceHeight, safeCanvasHeight - sourceY);
+    slices.push({
+      sourceY,
+      sourceHeight,
+      imageX: DASHBOARD_PDF_MARGIN_MM,
+      imageY: DASHBOARD_PDF_HEADER_HEIGHT_MM + 4,
+      imageWidth,
+      imageHeight: sourceHeight * imageScale,
+    });
+  }
+
+  return slices;
 }
 
 function saveDashboardCanvasPdf(
@@ -542,25 +640,55 @@ function saveDashboardCanvasPdf(
   canvas: HTMLCanvasElement,
   theme: DashboardPdfTheme,
 ) {
-  const isDark = theme === "dark";
-  const imageData = canvas.toDataURL("image/png", 1.0);
-  writeDashboardPdfHeader(pdf, theme);
-
   const pageWidth = pdf.internal.pageSize.getWidth();
   const pageHeight = pdf.internal.pageSize.getHeight();
-  const margin = 14;
-  const headerHeight = 35;
-  const availableWidth = pageWidth - margin * 2;
-  const availableHeight = pageHeight - headerHeight - margin;
-  const ratio = Math.min(availableWidth / canvas.width, availableHeight / canvas.height);
-  const finalWidth = canvas.width * ratio;
-  const finalHeight = canvas.height * ratio;
-  const imageX = margin + (availableWidth - finalWidth) / 2;
-  const imageY = headerHeight;
+  const slices = resolveDashboardCanvasPdfSlices(
+    canvas.width,
+    canvas.height,
+    pageWidth,
+    pageHeight,
+  );
+  const sliceCanvas = document.createElement("canvas");
+  const sliceContext = sliceCanvas.getContext("2d");
+  if (!sliceContext) {
+    throw new Error("Dashboard PDF canvas renderer is unavailable.");
+  }
 
-  pdf.addImage(imageData, "PNG", imageX, imageY, finalWidth, finalHeight);
-  pdf.setTextColor(isDark ? 120 : 150);
-  writeDashboardPdfFooter(pdf, theme, 1, 1);
+  try {
+    sliceCanvas.width = canvas.width;
+    for (const [index, slice] of slices.entries()) {
+      if (index > 0) {
+        pdf.addPage();
+      }
+
+      writeDashboardPdfHeader(pdf, theme, "VISUAL");
+      sliceCanvas.height = slice.sourceHeight;
+      sliceContext.clearRect(0, 0, sliceCanvas.width, sliceCanvas.height);
+      sliceContext.drawImage(
+        canvas,
+        0,
+        slice.sourceY,
+        canvas.width,
+        slice.sourceHeight,
+        0,
+        0,
+        canvas.width,
+        slice.sourceHeight,
+      );
+      pdf.addImage(
+        sliceCanvas.toDataURL("image/png", 1.0),
+        "PNG",
+        slice.imageX,
+        slice.imageY,
+        slice.imageWidth,
+        slice.imageHeight,
+      );
+      writeDashboardPdfFooter(pdf, theme, index + 1, slices.length);
+    }
+  } finally {
+    sliceCanvas.width = 0;
+    sliceCanvas.height = 0;
+  }
 }
 
 export function writeDashboardFallbackPdf(
@@ -568,43 +696,67 @@ export function writeDashboardFallbackPdf(
   lines: readonly string[],
   theme: DashboardPdfTheme,
 ) {
+  const colors = getDashboardPdfThemeColors(theme);
   const safeLines = lines.length > 0 ? lines : ["Dashboard data is currently unavailable."];
   const pageHeight = pdf.internal.pageSize.getHeight();
   const pageWidth = pdf.internal.pageSize.getWidth();
-  const contentWidth = pageWidth - 28;
-  const lineHeight = 6;
-  const pageContentStartY = 40;
-  const pageContentEndY = pageHeight - 14;
-  const pages: string[][] = [[]];
+  const contentWidth = pageWidth - DASHBOARD_PDF_MARGIN_MM * 2;
+  const textWidth = contentWidth - 8;
+  const lineHeight = 5;
+  const pageContentStartY = DASHBOARD_PDF_HEADER_HEIGHT_MM + 6;
+  const pageContentEndY = pageHeight - DASHBOARD_PDF_FOOTER_HEIGHT_MM - 2;
+  const pages: string[][][] = [[]];
   let cursorY = pageContentStartY;
 
   for (const line of safeLines) {
-    const wrapped = pdf.splitTextToSize(line, contentWidth) as string[];
-    for (const wrappedLine of wrapped) {
-      if (cursorY + lineHeight > pageContentEndY) {
-        pages.push([]);
-        cursorY = pageContentStartY;
-      }
-      pages[pages.length - 1]!.push(wrappedLine);
-      cursorY += lineHeight;
+    const wrapped = pdf.splitTextToSize(line, textWidth) as string[];
+    const rowHeight = Math.max(
+      DASHBOARD_PDF_FALLBACK_ROW_MIN_HEIGHT_MM,
+      wrapped.length * lineHeight + 5,
+    );
+    if (cursorY + rowHeight > pageContentEndY && pages[pages.length - 1]!.length > 0) {
+      pages.push([]);
+      cursorY = pageContentStartY;
     }
-    cursorY += 2;
+
+    pages[pages.length - 1]!.push(wrapped);
+    cursorY += rowHeight + DASHBOARD_PDF_ROW_GAP_MM;
   }
 
-  pages.forEach((pageLines, pageIndex) => {
+  pages.forEach((pageRows, pageIndex) => {
     if (pageIndex > 0) {
       pdf.addPage();
     }
 
-    writeDashboardPdfHeader(pdf, theme);
-    pdf.setFontSize(10);
-    pdf.setFont("helvetica", "normal");
-    pdf.setTextColor(theme === "dark" ? 226 : 30);
+    writeDashboardPdfHeader(pdf, theme, "SUMMARY");
+    setDashboardPdfFillColor(pdf, colors.softAccent);
+    setDashboardPdfDrawColor(pdf, colors.line);
+    pdf.rect(DASHBOARD_PDF_MARGIN_MM, pageContentStartY - 2, contentWidth, 11, "FD");
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(9);
+    setDashboardPdfTextColor(pdf, colors.primaryText);
+    pdf.text("Readable dashboard summary", DASHBOARD_PDF_MARGIN_MM + 4, pageContentStartY + 5);
 
-    let lineY = pageContentStartY;
-    for (const line of pageLines) {
-      pdf.text(line, 14, lineY);
-      lineY += lineHeight;
+    let lineY = pageContentStartY + 16;
+    for (const [rowIndex, rowLines] of pageRows.entries()) {
+      const rowHeight = Math.max(
+        DASHBOARD_PDF_FALLBACK_ROW_MIN_HEIGHT_MM,
+        rowLines.length * lineHeight + 5,
+      );
+      setDashboardPdfFillColor(pdf, rowIndex % 2 === 0 ? colors.card : colors.surface);
+      setDashboardPdfDrawColor(pdf, colors.line);
+      pdf.rect(DASHBOARD_PDF_MARGIN_MM, lineY - 4, contentWidth, rowHeight, "FD");
+
+      pdf.setFont("helvetica", rowIndex === 0 && pageIndex === 0 ? "bold" : "normal");
+      pdf.setFontSize(rowIndex === 0 && pageIndex === 0 ? 11 : 9);
+      setDashboardPdfTextColor(pdf, colors.primaryText);
+      let wrappedLineY = lineY + 2;
+      for (const wrappedLine of rowLines) {
+        pdf.text(wrappedLine, DASHBOARD_PDF_MARGIN_MM + 4, wrappedLineY);
+        wrappedLineY += lineHeight;
+      }
+
+      lineY += rowHeight + DASHBOARD_PDF_ROW_GAP_MM;
     }
 
     writeDashboardPdfFooter(pdf, theme, pageIndex + 1, pages.length);

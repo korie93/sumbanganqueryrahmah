@@ -6,6 +6,7 @@ import {
   collectDashboardFallbackPdfLines,
   DASHBOARD_PDF_EXPORT_FAILURE_MESSAGE,
   assertDashboardExportableElement,
+  resolveDashboardCanvasPdfSlices,
   resolveDashboardExportPaintColor,
   resolveDashboardExportScale,
   sanitizeDashboardExportClone,
@@ -142,6 +143,26 @@ test("resolveDashboardExportScale caps oversized dashboard captures to protect m
   assert.ok(3200 * scale * 6000 * scale <= 12_100_000);
 });
 
+test("resolveDashboardCanvasPdfSlices keeps tall dashboard captures readable across pages", () => {
+  const pageWidth = 297;
+  const pageHeight = 210;
+  const slices = resolveDashboardCanvasPdfSlices(1200, 2600, pageWidth, pageHeight);
+
+  assert.ok(slices.length > 1);
+  assert.equal(slices[0]?.sourceY, 0);
+
+  const lastSlice = slices[slices.length - 1]!;
+  assert.equal(lastSlice.sourceY + lastSlice.sourceHeight, 2600);
+
+  for (const slice of slices) {
+    assert.equal(slice.imageX, 14);
+    assert.equal(slice.imageY, 43);
+    assert.ok(slice.imageWidth > 0);
+    assert.ok(slice.imageHeight > 0);
+    assert.ok(slice.imageY + slice.imageHeight <= pageHeight - 8);
+  }
+});
+
 test("resolveDashboardExportPaintColor converts chart CSS variables for html2canvas", () => {
   assert.equal(resolveDashboardExportPaintColor("hsl(var(--chart-1))", false), "#2563eb");
   assert.equal(resolveDashboardExportPaintColor("hsl(var(--chart-1))", true), "#60a5fa");
@@ -262,7 +283,8 @@ test("writeDashboardFallbackPdf writes dashboard text when canvas capture is una
 
   writeDashboardFallbackPdf(pdf, ["Dashboard Analytics", "Total Users", "10"], "dark");
 
-  assert.ok(textCalls.includes("SQR Dashboard Analytics Report"));
+  assert.ok(textCalls.includes("Dashboard Login Report"));
+  assert.ok(textCalls.includes("Readable dashboard summary"));
   assert.ok(textCalls.includes("Dashboard Analytics"));
   assert.ok(textCalls.includes("Total Users"));
   assert.ok(textCalls.includes("10"));
