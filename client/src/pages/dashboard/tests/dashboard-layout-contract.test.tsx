@@ -155,6 +155,8 @@ test("Dashboard wraps major dashboard regions in accessible render error boundar
 
   assert.match(dashboardSource, /<DashboardSectionRenderBoundary/);
   assert.match(dashboardSource, /sectionName="Ringkasan dashboard"/);
+  assert.match(deferredSource, /Dashboard login review workspace/);
+  assert.match(deferredSource, /xl:grid-cols-\[minmax\(0,0\.9fr\)_minmax\(0,1\.1fr\)\]/);
   assert.match(deferredSource, /sectionName="Carta dashboard"/);
   assert.match(deferredSource, /sectionName="Insight risiko login dashboard"/);
   assert.match(deferredSource, /sectionName="Aktiviti login dashboard"/);
@@ -169,6 +171,7 @@ test("Dashboard wraps major dashboard regions in accessible render error boundar
 });
 
 test("DashboardLoginRiskInsights renders operator-ready status from existing login signals", () => {
+  const source = readFileSync(path.resolve(__dirname, "../DashboardLoginRiskInsights.tsx"), "utf8");
   const markup = renderToStaticMarkup(
     createElement(DashboardLoginRiskInsights, {
       loading: false,
@@ -209,6 +212,8 @@ test("DashboardLoginRiskInsights renders operator-ready status from existing log
   assert.match(markup, /Login trend check/);
   assert.match(markup, /Recent session state/);
   assert.match(markup, /Gunakan panel ini bersama rekod login terbaru/);
+  assert.match(source, /className="grid gap-2 sm:grid-cols-2"/);
+  assert.match(source, /text-xl font-bold/);
 });
 
 test("DashboardLoginRiskInsights keeps warning status contrast above axe thresholds", () => {
@@ -240,6 +245,7 @@ test("DashboardLoginRiskInsights keeps warning status contrast above axe thresho
 });
 
 test("DashboardRecentLoginActivity renders masked access rows with retryable error state", () => {
+  const source = readFileSync(path.resolve(__dirname, "../DashboardRecentLoginActivity.tsx"), "utf8");
   const markup = renderToStaticMarkup(
     createElement(DashboardRecentLoginActivity, {
       activities: [
@@ -269,6 +275,8 @@ test("DashboardRecentLoginActivity renders masked access rows with retryable err
   assert.match(markup, /Chrome/);
   assert.match(markup, /aria-label="Recent login activity list"/);
   assert.match(markup, /tabindex="0"/);
+  assert.match(source, /max-h-\[360px\]/);
+  assert.match(source, /xl:grid-cols-1 2xl:grid-cols-2/);
 
   const errorMarkup = renderToStaticMarkup(
     createElement(DashboardRecentLoginActivity, {

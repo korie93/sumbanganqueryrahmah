@@ -20,7 +20,7 @@ function getAccessSignalToneClassName(tone: DashboardAccessSignalTone) {
   }
 
   if (tone === "warning") {
-    return "border-amber-500/50 bg-amber-500/10 text-amber-700 dark:text-amber-200";
+    return "border-amber-500/50 bg-amber-500/10 text-amber-800 dark:text-amber-200";
   }
 
   if (tone === "success") {
@@ -34,30 +34,30 @@ function DashboardAccessWatchlist({ signals }: { signals: readonly DashboardAcce
   return (
     <section
       aria-label="Login access watchlist"
-      className="rounded-2xl border border-border/60 bg-muted/20 p-4"
+      className="rounded-2xl border border-border/60 bg-muted/20 p-3 sm:p-4"
       data-testid="dashboard-access-watchlist"
     >
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+      <div className="flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between">
         <div className="min-w-0">
           <p className="text-xs font-semibold uppercase tracking-label-md text-muted-foreground">
             Access watchlist
           </p>
           <h3 className="mt-1 text-base font-semibold text-foreground">Login readiness at a glance</h3>
         </div>
-        <p className="text-xs leading-5 text-muted-foreground sm:max-w-md sm:text-right">
+        <p className="text-xs leading-5 text-muted-foreground lg:max-w-md lg:text-right">
           Ringkasan cepat untuk sesi aktif, login berjaya, cubaan gagal, dan akaun yang disekat.
         </p>
       </div>
 
-      <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4">
         {signals.map((signal) => (
           <article
             key={signal.title}
-            className={`rounded-xl border p-3 ${getAccessSignalToneClassName(signal.tone)}`}
+            className={`rounded-xl border p-2.5 sm:p-3 ${getAccessSignalToneClassName(signal.tone)}`}
           >
             <p className="text-xs font-semibold uppercase tracking-label-md opacity-80">{signal.title}</p>
-            <p className="mt-2 text-2xl font-bold leading-none">{signal.value}</p>
-            <p className="mt-2 text-xs leading-5 opacity-85">{signal.description}</p>
+            <p className="mt-1.5 text-xl font-bold leading-none sm:text-2xl">{signal.value}</p>
+            <p className="mt-1.5 text-xs leading-4 opacity-85">{signal.description}</p>
           </article>
         ))}
       </div>

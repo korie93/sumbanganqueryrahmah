@@ -21,14 +21,14 @@ interface DashboardRecentLoginActivityProps {
 function DashboardRecentLoginActivitySkeleton() {
   return (
     <div
-      className="grid gap-3 lg:grid-cols-2"
+      className="grid gap-2 lg:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2"
       role="status"
       aria-label="Loading recent login activity"
     >
       {Array.from({ length: 4 }, (_, index) => (
         <div
           key={index}
-          className="rounded-2xl border border-border/60 bg-muted/10 p-4"
+          className="rounded-xl border border-border/60 bg-muted/10 p-3"
           aria-hidden="true"
         >
           <div className="h-4 w-40 animate-pulse rounded bg-slate-200/80 dark:bg-muted" />
@@ -59,7 +59,7 @@ function DashboardRecentLoginActivityImpl({
       data-floating-ai-avoid="true"
       data-testid="card-recent-login-activity"
     >
-      <CardHeader className="space-y-1 pb-3">
+      <CardHeader className="space-y-1 pb-2">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0 space-y-1">
             <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
@@ -88,7 +88,7 @@ function DashboardRecentLoginActivityImpl({
           <DashboardRecentLoginActivitySkeleton />
         ) : safeActivities.length > 0 ? (
           <div
-            className="grid max-h-[430px] gap-3 overflow-y-auto pr-1 lg:grid-cols-2"
+            className="grid max-h-[360px] gap-2 overflow-y-auto pr-1 lg:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2"
             role="region"
             tabIndex={0}
             aria-label="Recent login activity list"
@@ -111,7 +111,7 @@ function DashboardRecentLoginActivityImpl({
                     index: index + 1,
                     statusLabel: statusMeta.label,
                   })}
-                  className="rounded-2xl border border-border/60 bg-muted/10 p-4 shadow-sm"
+                  className="rounded-xl border border-border/60 bg-muted/10 p-3 shadow-sm"
                   data-testid={`row-recent-login-activity-${index}`}
                 >
                   <div className="flex items-start justify-between gap-3">
@@ -128,23 +128,23 @@ function DashboardRecentLoginActivityImpl({
                         </Badge>
                       </div>
                     </div>
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
                       <Clock className="h-4 w-4" aria-hidden="true" />
                     </div>
                   </div>
 
-                  <div className="mt-4 grid gap-3 text-xs text-muted-foreground sm:grid-cols-2">
-                    <div className="rounded-xl border border-border/50 bg-background/60 p-3">
+                  <div className="mt-3 grid gap-2 text-xs text-muted-foreground sm:grid-cols-2">
+                    <div className="rounded-lg border border-border/50 bg-background/60 p-2.5">
                       <p className="font-medium text-foreground">Login</p>
                       <p className="mt-1 leading-5">{formattedLoginTime}</p>
                     </div>
-                    <div className="rounded-xl border border-border/50 bg-background/60 p-3">
+                    <div className="rounded-lg border border-border/50 bg-background/60 p-2.5">
                       <p className="font-medium text-foreground">Last activity</p>
                       <p className="mt-1 leading-5">{formattedLastActivityTime}</p>
                     </div>
                   </div>
 
-                  <div className="mt-3 flex flex-col gap-2 rounded-xl border border-border/50 bg-background/60 p-3 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+                  <div className="mt-2 flex flex-col gap-2 rounded-lg border border-border/50 bg-background/60 p-2.5 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
                     <span className="flex min-w-0 items-center gap-2">
                       <Globe2 className="h-4 w-4 shrink-0" aria-hidden="true" />
                       <span className="truncate" title={browser}>

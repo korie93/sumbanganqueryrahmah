@@ -37,19 +37,19 @@ const TONE_BAR_CLASS_BY_TONE: Record<DashboardAccessSignalTone, string> = {
 function DashboardLoginRiskInsightsSkeleton() {
   return (
     <div
-      className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"
+      className="grid gap-2 sm:grid-cols-2"
       role="status"
       aria-label="Loading login risk insights"
     >
       {Array.from({ length: 4 }, (_, index) => (
         <div
           key={index}
-          className="rounded-2xl border border-border/60 bg-muted/10 p-4"
+          className="rounded-xl border border-border/60 bg-muted/10 p-3"
           aria-hidden="true"
         >
           <div className="h-3 w-24 animate-pulse rounded bg-slate-200/80 dark:bg-muted" />
-          <div className="mt-4 h-7 w-20 animate-pulse rounded bg-slate-200/70 dark:bg-muted" />
-          <div className="mt-3 h-10 animate-pulse rounded-xl bg-slate-200/60 dark:bg-muted" />
+          <div className="mt-3 h-6 w-16 animate-pulse rounded bg-slate-200/70 dark:bg-muted" />
+          <div className="mt-2 h-8 animate-pulse rounded-lg bg-slate-200/60 dark:bg-muted" />
         </div>
       ))}
       <span className="sr-only">Loading login risk insights</span>
@@ -75,7 +75,7 @@ function DashboardLoginRiskInsightsImpl({
       data-floating-ai-avoid="true"
       data-testid="card-login-risk-insights"
     >
-      <CardHeader className="space-y-1 pb-3">
+      <CardHeader className="space-y-1 pb-2">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0 space-y-1">
             <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
@@ -83,7 +83,7 @@ function DashboardLoginRiskInsightsImpl({
               Login Risk Insights
             </CardTitle>
             <p className="text-xs leading-5 text-muted-foreground sm:text-sm">
-              Operator-ready signals derived from recent sessions, failed logins, and login trend shape.
+              Priority view of failed attempts, active sessions, and login trend pressure.
             </p>
           </div>
           <Badge
@@ -95,27 +95,27 @@ function DashboardLoginRiskInsightsImpl({
           </Badge>
         </div>
       </CardHeader>
-      <CardContent className="space-y-4" aria-live="polite">
+      <CardContent className="space-y-3" aria-live="polite">
         {loading ? (
           <DashboardLoginRiskInsightsSkeleton />
         ) : (
           <>
-            <div className="rounded-2xl border border-border/60 bg-muted/10 p-4">
+            <div className="rounded-xl border border-border/60 bg-muted/10 p-3">
               <div className="flex items-start gap-3">
                 <div className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${TONE_BAR_CLASS_BY_TONE[riskSummary.tone]}`} />
                 <div className="min-w-0">
                   <p className="text-sm font-semibold text-foreground">{riskSummary.description}</p>
-                  <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                  <p className="mt-1 text-xs leading-4 text-muted-foreground">
                     Gunakan panel ini bersama rekod login terbaru sebelum tindakan sekat, reset, atau audit.
                   </p>
                 </div>
               </div>
             </div>
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="grid gap-2 sm:grid-cols-2">
               {insights.map((insight) => (
                 <article
                   key={insight.title}
-                  className="relative overflow-hidden rounded-2xl border border-border/60 bg-background p-4 shadow-sm"
+                  className="relative overflow-hidden rounded-xl border border-border/60 bg-background p-3 shadow-sm"
                   role="group"
                   aria-label={`${insight.title}: ${insight.value}. ${insight.description}`}
                 >
@@ -128,11 +128,11 @@ function DashboardLoginRiskInsightsImpl({
                       <p className="text-xs font-medium uppercase tracking-label-sm text-muted-foreground">
                         {insight.title}
                       </p>
-                      <p className="mt-2 break-words text-2xl font-bold leading-none text-foreground">
+                      <p className="mt-1.5 break-words text-xl font-bold leading-none text-foreground">
                         {insight.value}
                       </p>
                     </div>
-                    <div className={`rounded-full border p-2 ${TONE_CLASS_BY_TONE[insight.tone]}`}>
+                    <div className={`rounded-full border p-1.5 ${TONE_CLASS_BY_TONE[insight.tone]}`}>
                       {insight.tone === "danger" || insight.tone === "warning" ? (
                         <AlertTriangle className="h-4 w-4" aria-hidden="true" />
                       ) : (
@@ -140,7 +140,7 @@ function DashboardLoginRiskInsightsImpl({
                       )}
                     </div>
                   </div>
-                  <p className="mt-3 text-xs leading-5 text-muted-foreground">{insight.description}</p>
+                  <p className="mt-2 text-xs leading-4 text-muted-foreground">{insight.description}</p>
                 </article>
               ))}
             </div>
