@@ -260,6 +260,17 @@ test("DashboardRecentLoginActivity renders masked access rows with retryable err
           status: "active",
           username: "super.user",
         },
+        {
+          browser: "Edge",
+          ipAddress: "10.43.x.x",
+          lastActivityTime: "2026-05-06T04:30:00Z",
+          loginTime: "2026-05-06T04:00:00Z",
+          logoutReason: "IDLE_TIMEOUT",
+          logoutTime: "2026-05-06T05:00:00Z",
+          role: "admin",
+          status: "ended",
+          username: "watch.user",
+        },
       ],
       errorMessage: null,
       loading: false,
@@ -271,12 +282,17 @@ test("DashboardRecentLoginActivity renders masked access rows with retryable err
   assert.match(markup, /Recent Login Activity/);
   assert.match(markup, /Latest access events with masked network details/);
   assert.match(markup, /super\.user/);
+  assert.match(markup, /watch\.user/);
   assert.match(markup, /10\.42\.x\.x/);
   assert.match(markup, /Chrome/);
-  assert.match(markup, /aria-label="Recent login activity list"/);
+  assert.match(markup, /Filter recent login activity/);
+  assert.match(markup, /button-login-activity-filter-all/);
+  assert.match(markup, /Show attention login activity, 1 records/);
+  assert.match(markup, /aria-label="All recent login activity list"/);
   assert.match(markup, /tabindex="0"/);
   assert.match(source, /max-h-\[360px\]/);
   assert.match(source, /xl:grid-cols-1 2xl:grid-cols-2/);
+  assert.match(source, /useMemo\(/);
 
   const errorMarkup = renderToStaticMarkup(
     createElement(DashboardRecentLoginActivity, {

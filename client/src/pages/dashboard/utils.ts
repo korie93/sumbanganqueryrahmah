@@ -38,6 +38,10 @@ const DASHBOARD_PDF_FOOTER_HEIGHT_MM = 12;
 const DASHBOARD_PDF_ROW_GAP_MM = 3;
 const DASHBOARD_PDF_FALLBACK_ROW_MIN_HEIGHT_MM = 10;
 export const DASHBOARD_PDF_EXPORT_FAILURE_MESSAGE = "Gagal jana PDF. Sila cuba semula.";
+export type DashboardRecentLoginActivityFilter = "all" | "active" | "ended" | "attention";
+
+const DASHBOARD_RECENT_LOGIN_ATTENTION_REASON_PATTERN =
+  /banned|blocked|expired|forced|idle|kicked|locked|revoked|timeout/i;
 
 type DashboardHtml2Canvas = typeof import("html2canvas")["default"];
 type DashboardHtml2CanvasOptions = NonNullable<Parameters<DashboardHtml2Canvas>[1]>;
@@ -140,6 +144,41 @@ export function resolveDashboardRecentLoginStatusMeta(status: RecentLoginActivit
   return {
     label: "Ended",
     className: "border-slate-400/40 bg-slate-500/10 text-slate-700 dark:text-slate-300",
+  };
+}
+
+export function isDashboardRecentLoginAttentionActivity(activity: RecentLoginActivity) {
+  const logoutReason = activity.logoutReason?.trim();
+  if (!logoutReason) {
+    return false;
+  }
+
+  return DASHBOARD_RECENT_LOGIN_ATTENTION_REASON_PATTERN.test(logoutReason);
+}
+
+export function filterDashboardRecentLoginActivities(
+  activities: readonly RecentLoginActivity[],
+  filter: DashboardRecentLoginActivityFilter,
+) {
+  if (filter === "all") {
+    return [...activities];
+  }
+
+  if (filter === "attention") {
+    return activities.filter(isDashboardRecentLoginAttentionActivity);
+  }
+
+  return activities.filter((activity) => activity.status === filter);
+}
+
+export function buildDashboardRecentLoginActivityFilterCounts(
+  activities: readonly RecentLoginActivity[],
+): Record<DashboardRecentLoginActivityFilter, number> {
+  return {
+    active: activities.filter((activity) => activity.status === "active").length,
+    all: activities.length,
+    attention: activities.filter(isDashboardRecentLoginAttentionActivity).length,
+    ended: activities.filter((activity) => activity.status === "ended").length,
   };
 }
 

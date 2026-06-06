@@ -1,16 +1,20 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  buildDashboardRecentLoginActivityFilterCounts,
   buildDashboardAccessSignals,
   buildDashboardLoginRiskInsights,
   buildDashboardTrendTickDates,
   buildSummaryCards,
+  filterDashboardRecentLoginActivities,
   formatDashboardAxisDate,
   formatDashboardRecentLoginTime,
   formatDashboardUserLastLogin,
+  isDashboardRecentLoginAttentionActivity,
   resolveDashboardLoginRiskSummary,
   resolveDashboardRecentLoginStatusMeta,
 } from "@/pages/dashboard/utils";
+import type { RecentLoginActivity } from "@/pages/dashboard/types";
 
 test("buildSummaryCards includes stale conflict monitor value when provided", () => {
   const cards = buildSummaryCards({
@@ -169,6 +173,60 @@ test("recent login utilities keep timestamps readable and status labels explicit
   assert.equal(formatDashboardRecentLoginTime(null), "Unknown");
   assert.equal(resolveDashboardRecentLoginStatusMeta("active").label, "Active");
   assert.equal(resolveDashboardRecentLoginStatusMeta("ended").label, "Ended");
+});
+
+test("recent login activity filters count active, ended, and attention rows", () => {
+  const activities: RecentLoginActivity[] = [
+    {
+      browser: "Chrome",
+      ipAddress: "10.42.x.x",
+      lastActivityTime: "2026-05-06T02:30:00Z",
+      loginTime: "2026-05-06T02:00:00Z",
+      logoutReason: null,
+      logoutTime: null,
+      role: "superuser",
+      status: "active",
+      username: "active.user",
+    },
+    {
+      browser: "Edge",
+      ipAddress: "10.43.x.x",
+      lastActivityTime: "2026-05-06T03:30:00Z",
+      loginTime: "2026-05-06T03:00:00Z",
+      logoutReason: "USER_LOGOUT",
+      logoutTime: "2026-05-06T04:00:00Z",
+      role: "admin",
+      status: "ended",
+      username: "ended.user",
+    },
+    {
+      browser: "Firefox",
+      ipAddress: "10.44.x.x",
+      lastActivityTime: "2026-05-06T04:30:00Z",
+      loginTime: "2026-05-06T04:00:00Z",
+      logoutReason: "IDLE_TIMEOUT",
+      logoutTime: "2026-05-06T05:00:00Z",
+      role: "user",
+      status: "ended",
+      username: "attention.user",
+    },
+  ];
+
+  assert.equal(isDashboardRecentLoginAttentionActivity(activities[2]!), true);
+  assert.deepEqual(buildDashboardRecentLoginActivityFilterCounts(activities), {
+    active: 1,
+    all: 3,
+    attention: 1,
+    ended: 2,
+  });
+  assert.deepEqual(
+    filterDashboardRecentLoginActivities(activities, "attention").map((activity) => activity.username),
+    ["attention.user"],
+  );
+  assert.deepEqual(
+    filterDashboardRecentLoginActivities(activities, "active").map((activity) => activity.username),
+    ["active.user"],
+  );
 });
 
 test("formatDashboardAxisDate keeps dashboard x-axis labels compact", () => {
