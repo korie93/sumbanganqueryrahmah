@@ -5,6 +5,10 @@ import {
   formatOperationalDateTime,
 } from "@/lib/date-format";
 import { getSqrTrustedTypesPolicy } from "@/lib/trusted-types";
+import {
+  initializeTrustedTypesRuntimeForGlobal,
+  type TrustedTypesRuntimeGlobal,
+} from "@/lib/trusted-types-runtime";
 import type { SummaryCardItem, SummaryData } from "@/pages/dashboard/types";
 import type { LoginTrend } from "@/pages/dashboard/types";
 
@@ -26,6 +30,14 @@ type DashboardDocumentConstructor = {
     write: DashboardDocumentWrite;
   };
 };
+type DashboardIframeConstructor = {
+  prototype: HTMLIFrameElement;
+};
+type DashboardTrustedTypesTarget = TrustedTypesRuntimeGlobal & {
+  Document?: DashboardDocumentConstructor;
+  HTMLIFrameElement?: DashboardIframeConstructor;
+};
+type DashboardCleanup = () => void;
 
 export const ROLE_COLORS: Record<string, string> = {
   superuser: "hsl(var(--chart-1))",
@@ -270,18 +282,49 @@ function createDashboardTrustedHtml(input: string) {
   return policy ? policy.createHTML(input) : input;
 }
 
-function getDashboardDocumentConstructor() {
-  return (globalThis as typeof globalThis & {
-    Document?: DashboardDocumentConstructor;
-  }).Document;
+function getDashboardTrustedTypesTarget(target: unknown) {
+  if (!target || typeof target !== "object") {
+    return null;
+  }
+
+  return target as DashboardTrustedTypesTarget;
 }
 
-export async function withDashboardTrustedHtmlDocumentWrite<T>(operation: () => Promise<T>) {
-  const documentConstructor = getDashboardDocumentConstructor();
-  const documentPrototype = documentConstructor?.prototype;
-  if (!documentPrototype || typeof documentPrototype.write !== "function") {
-    return operation();
+function initializeDashboardTrustedTypesTarget(target: unknown) {
+  const trustedTypesTarget = getDashboardTrustedTypesTarget(target);
+  if (!trustedTypesTarget) {
+    return undefined;
   }
+
+  return initializeTrustedTypesRuntimeForGlobal(trustedTypesTarget);
+}
+
+function createDashboardTrustedHtmlForTarget(input: string, target: unknown) {
+  const policy = initializeDashboardTrustedTypesTarget(target);
+  if (policy) {
+    return policy.createHTML(input);
+  }
+
+  return target === globalThis ? createDashboardTrustedHtml(input) : input;
+}
+
+function patchDashboardDocumentWriteForTarget(
+  target: unknown,
+  patchedDocumentPrototypes: WeakSet<object>,
+  cleanups: DashboardCleanup[],
+) {
+  const trustedTypesTarget = getDashboardTrustedTypesTarget(target);
+  const documentPrototype = trustedTypesTarget?.Document?.prototype;
+  if (
+    !documentPrototype
+    || typeof documentPrototype.write !== "function"
+    || patchedDocumentPrototypes.has(documentPrototype)
+  ) {
+    return;
+  }
+
+  initializeDashboardTrustedTypesTarget(trustedTypesTarget);
+  patchedDocumentPrototypes.add(documentPrototype);
 
   const originalWrite = documentPrototype.write;
   documentPrototype.write = function writeTrustedDashboardHtml(
@@ -289,15 +332,63 @@ export async function withDashboardTrustedHtmlDocumentWrite<T>(operation: () => 
     ...text: string[]
   ) {
     const trustedText = text.map((part) =>
-      createDashboardTrustedHtml(String(part)),
+      createDashboardTrustedHtmlForTarget(String(part), trustedTypesTarget),
     ) as unknown as string[];
     return originalWrite.apply(this, trustedText);
   };
 
+  cleanups.push(() => {
+    documentPrototype.write = originalWrite;
+    patchedDocumentPrototypes.delete(documentPrototype);
+  });
+}
+
+function getDashboardIframeConstructor() {
+  return (globalThis as typeof globalThis & {
+    HTMLIFrameElement?: DashboardIframeConstructor;
+  }).HTMLIFrameElement;
+}
+
+export async function withDashboardTrustedHtmlDocumentWrite<T>(operation: () => Promise<T>) {
+  const cleanups: DashboardCleanup[] = [];
+  const patchedDocumentPrototypes = new WeakSet<object>();
+
+  patchDashboardDocumentWriteForTarget(globalThis, patchedDocumentPrototypes, cleanups);
+
+  const iframeConstructor = getDashboardIframeConstructor();
+  const iframePrototype = iframeConstructor?.prototype;
+  const contentWindowDescriptor = iframePrototype
+    ? Object.getOwnPropertyDescriptor(iframePrototype, "contentWindow")
+    : undefined;
+
+  if (iframePrototype && contentWindowDescriptor?.get && contentWindowDescriptor.configurable) {
+    Object.defineProperty(iframePrototype, "contentWindow", {
+      ...contentWindowDescriptor,
+      get(this: HTMLIFrameElement) {
+        const frameWindow = contentWindowDescriptor.get?.call(this) ?? null;
+        if (frameWindow) {
+          initializeDashboardTrustedTypesTarget(frameWindow);
+          patchDashboardDocumentWriteForTarget(
+            frameWindow,
+            patchedDocumentPrototypes,
+            cleanups,
+          );
+        }
+        return frameWindow;
+      },
+    });
+
+    cleanups.push(() => {
+      Object.defineProperty(iframePrototype, "contentWindow", contentWindowDescriptor);
+    });
+  }
+
   try {
     return await operation();
   } finally {
-    documentPrototype.write = originalWrite;
+    for (const cleanup of cleanups.reverse()) {
+      cleanup();
+    }
   }
 }
 

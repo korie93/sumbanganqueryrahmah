@@ -1,12 +1,12 @@
 import { sanitizeTrustedScriptURL } from "./trusted-script-url"
 import { sanitizeTrustedHtml } from "./trusted-types"
 
-type TrustedTypesPolicyLike = {
+export type TrustedTypesPolicyLike = {
   createHTML: (input: string) => unknown
   createScriptURL?: (input: string) => unknown
 }
 
-type TrustedTypesFactoryLike = {
+export type TrustedTypesFactoryLike = {
   createPolicy: (
     name: string,
     rules: {
@@ -16,16 +16,15 @@ type TrustedTypesFactoryLike = {
   ) => TrustedTypesPolicyLike
 }
 
-type TrustedTypesGlobalLike = typeof globalThis & {
+export type TrustedTypesRuntimeGlobal = typeof globalThis & {
   trustedTypes?: TrustedTypesFactoryLike
   __sqrTrustedTypesDefaultPolicy?: TrustedTypesPolicyLike | null
 }
 
-export function initializeTrustedTypesRuntime(
+export function initializeTrustedTypesRuntimeForGlobal(
+  trustedTypesGlobal: TrustedTypesRuntimeGlobal,
   sanitizeHtml: (input: string) => string = sanitizeTrustedHtml
 ) {
-  const trustedTypesGlobal = globalThis as TrustedTypesGlobalLike
-
   if (trustedTypesGlobal.__sqrTrustedTypesDefaultPolicy !== undefined) {
     return trustedTypesGlobal.__sqrTrustedTypesDefaultPolicy || undefined
   }
@@ -47,4 +46,13 @@ export function initializeTrustedTypesRuntime(
     trustedTypesGlobal.__sqrTrustedTypesDefaultPolicy = null
     return undefined
   }
+}
+
+export function initializeTrustedTypesRuntime(
+  sanitizeHtml: (input: string) => string = sanitizeTrustedHtml
+) {
+  return initializeTrustedTypesRuntimeForGlobal(
+    globalThis as TrustedTypesRuntimeGlobal,
+    sanitizeHtml
+  )
 }

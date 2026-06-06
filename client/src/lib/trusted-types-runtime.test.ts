@@ -1,7 +1,11 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 
-import { initializeTrustedTypesRuntime } from "./trusted-types-runtime"
+import {
+  initializeTrustedTypesRuntime,
+  initializeTrustedTypesRuntimeForGlobal,
+  type TrustedTypesRuntimeGlobal,
+} from "./trusted-types-runtime"
 
 type TrustedTypesPolicyLike = {
   createHTML: (input: string) => unknown
@@ -97,4 +101,27 @@ test("initializeTrustedTypesRuntime falls back cleanly when trusted types are un
   } finally {
     restoreTrustedTypesState(trustedTypesGlobal, previousFactory, previousPolicy)
   }
+})
+
+test("initializeTrustedTypesRuntimeForGlobal installs an isolated policy on iframe-like globals", () => {
+  const iframeLikeGlobal = {
+    trustedTypes: {
+      createPolicy(name: string, rules: { createHTML: (input: string) => string }) {
+        assert.equal(name, "default")
+        return {
+          createHTML(input: string) {
+            return `iframe-trusted:${rules.createHTML(input)}`
+          },
+        }
+      },
+    },
+  } as TrustedTypesRuntimeGlobal
+
+  const policy = initializeTrustedTypesRuntimeForGlobal(
+    iframeLikeGlobal,
+    (input) => input.replace(/</g, "&lt;")
+  )
+
+  assert.equal(policy?.createHTML("<html></html>"), "iframe-trusted:&lt;html>&lt;/html>")
+  assert.equal(iframeLikeGlobal.__sqrTrustedTypesDefaultPolicy, policy)
 })

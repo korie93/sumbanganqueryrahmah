@@ -17,7 +17,15 @@ type TrustedTypesPolicyLike = {
 
 type DashboardTrustedTypesGlobal = typeof globalThis & {
   Document?: unknown;
+  HTMLIFrameElement?: unknown;
+  __sqrTrustedTypesDefaultPolicy?: TrustedTypesPolicyLike | null;
   __sqrTrustedTypesPolicy?: TrustedTypesPolicyLike | null;
+  trustedTypes?: {
+    createPolicy: (
+      name: string,
+      rules: { createHTML: (input: string) => string },
+    ) => TrustedTypesPolicyLike;
+  };
 };
 
 test("resolveDashboardExportBlockReason blocks exports while dashboard work is already active", () => {
@@ -202,6 +210,94 @@ test("withDashboardTrustedHtmlDocumentWrite supplies TrustedHTML to html2canvas 
       delete trustedTypesGlobal.__sqrTrustedTypesPolicy;
     } else {
       trustedTypesGlobal.__sqrTrustedTypesPolicy = previousPolicy;
+    }
+  }
+});
+
+test("withDashboardTrustedHtmlDocumentWrite initializes Trusted Types inside html2canvas iframes", async () => {
+  const trustedTypesGlobal = globalThis as unknown as DashboardTrustedTypesGlobal;
+  const previousDocument = trustedTypesGlobal.Document;
+  const previousIframe = trustedTypesGlobal.HTMLIFrameElement;
+  const previousDefaultPolicy = trustedTypesGlobal.__sqrTrustedTypesDefaultPolicy;
+  const frameWriteCalls: unknown[][] = [];
+  const createdPolicyNames: string[] = [];
+
+  class FakeTopDocument {
+    write() {
+      // Top document writes are not part of this iframe regression case.
+    }
+  }
+
+  class FakeFrameDocument {
+    write(...parts: unknown[]) {
+      frameWriteCalls.push(parts);
+    }
+  }
+
+  const fakeFrameWindow = {
+    Document: FakeFrameDocument,
+    trustedTypes: {
+      createPolicy(name: string, rules: { createHTML: (input: string) => string }) {
+        createdPolicyNames.push(name);
+        return {
+          createHTML(input: string) {
+            return { trustedHtml: rules.createHTML(input) };
+          },
+        };
+      },
+    },
+  };
+
+  class FakeIframeElement {
+    get contentWindow() {
+      return fakeFrameWindow;
+    }
+  }
+
+  try {
+    Reflect.set(trustedTypesGlobal, "Document", FakeTopDocument);
+    Reflect.set(trustedTypesGlobal, "HTMLIFrameElement", FakeIframeElement);
+
+    const originalContentWindowDescriptor = Object.getOwnPropertyDescriptor(
+      FakeIframeElement.prototype,
+      "contentWindow",
+    );
+    const originalFrameWrite = FakeFrameDocument.prototype.write;
+
+    await withDashboardTrustedHtmlDocumentWrite(async () => {
+      const iframe = new FakeIframeElement();
+      const frameWindow = iframe.contentWindow;
+      const frameDocument = new frameWindow.Document();
+      frameDocument.write("<!doctype html><html></html>");
+    });
+
+    assert.equal(FakeFrameDocument.prototype.write, originalFrameWrite);
+    assert.deepEqual(createdPolicyNames, ["default"]);
+    assert.equal(
+      (frameWriteCalls[0]?.[0] as { trustedHtml?: string }).trustedHtml,
+      "<!doctype html><html></html>",
+    );
+    assert.deepEqual(
+      Object.getOwnPropertyDescriptor(FakeIframeElement.prototype, "contentWindow"),
+      originalContentWindowDescriptor,
+    );
+  } finally {
+    if (previousDocument === undefined) {
+      Reflect.deleteProperty(trustedTypesGlobal, "Document");
+    } else {
+      Reflect.set(trustedTypesGlobal, "Document", previousDocument);
+    }
+
+    if (previousIframe === undefined) {
+      Reflect.deleteProperty(trustedTypesGlobal, "HTMLIFrameElement");
+    } else {
+      Reflect.set(trustedTypesGlobal, "HTMLIFrameElement", previousIframe);
+    }
+
+    if (previousDefaultPolicy === undefined) {
+      delete trustedTypesGlobal.__sqrTrustedTypesDefaultPolicy;
+    } else {
+      trustedTypesGlobal.__sqrTrustedTypesDefaultPolicy = previousDefaultPolicy;
     }
   }
 });
