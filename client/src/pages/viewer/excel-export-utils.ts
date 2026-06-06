@@ -10,7 +10,7 @@ export function buildViewerWorksheetData(
 
     headers.forEach((header) => {
       const value = row[header];
-      const stringValue = String(value || "");
+      const stringValue = String(value ?? "");
       const isIcColumn = potentialIcColumns.includes(header);
       const looksLikeIc = /^\d{6,14}$/.test(stringValue.replace(/[-\s]/g, ""));
 
@@ -29,7 +29,7 @@ export function buildViewerWorksheetColumns(headers: string[], rows: DataRowWith
   return headers.map((header) => {
     const maxLength = Math.max(
       header.length,
-      ...rows.slice(0, 100).map((row) => String(row[header] || "").length),
+      ...rows.slice(0, 100).map((row) => String(row[header] ?? "").length),
     );
 
     return { wch: Math.min(maxLength + 2, 50) };

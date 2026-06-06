@@ -1,4 +1,4 @@
-import { downloadBlob } from "@/lib/download";
+import { buildCsvContent, downloadCsv } from "@/lib/csv";
 import type { ColumnFilter, DataRowWithId } from "@/pages/viewer/types";
 
 export function extractHeadersFromRows(rows: DataRowWithId[]) {
@@ -44,13 +44,9 @@ export function filterViewerRows(rows: DataRowWithId[], columnFilters: ColumnFil
 }
 
 export function downloadViewerRowsAsCsv(headers: string[], rows: DataRowWithId[], filename: string) {
-  const csvContent = [
-    headers.join(","),
-    ...rows.map((row) =>
-      headers.map((header) => `"${String(row[header] || "").replace(/"/g, '""')}"`).join(","),
-    ),
-  ].join("\n");
-
-  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-  downloadBlob(blob, filename);
+  const csvContent = buildCsvContent(
+    headers,
+    rows.map((row) => headers.map((header) => row[header] ?? "")),
+  );
+  downloadCsv(csvContent, filename);
 }

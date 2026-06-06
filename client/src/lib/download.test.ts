@@ -98,7 +98,9 @@ function withDownloadDom(
 }
 
 test("sanitizeDownloadFilename normalizes unsafe names", () => {
-  assert.equal(sanitizeDownloadFilename("../report final\r\n.csv"), ".._report_final_.csv");
+  assert.equal(sanitizeDownloadFilename("../report final\r\n.csv"), "_report_final_.csv");
+  assert.equal(sanitizeDownloadFilename("..\\..\\.env"), "_._.env");
+  assert.equal(sanitizeDownloadFilename("..."), "download");
   assert.equal(sanitizeDownloadFilename(""), "download");
   assert.equal(sanitizeDownloadFilename("a".repeat(300)).length, 255);
 });

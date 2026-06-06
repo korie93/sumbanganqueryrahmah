@@ -1,4 +1,4 @@
-import { downloadBlob } from "@/lib/download";
+import { downloadCsv } from "@/lib/csv";
 import { formatDateTimeMalaysia } from "@/lib/date-format";
 import type { BackupRecord } from "@/pages/backup-restore/types";
 
@@ -36,8 +36,7 @@ export function exportBackupsToCsv(backups: BackupRecord[]) {
   if (backups.length === 0) return;
 
   const csvContent = buildBackupsCsvContent(backups);
-  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-  downloadBlob(blob, `SQR-backups-${new Date().toISOString().split("T")[0]}.csv`);
+  downloadCsv(csvContent, `SQR-backups-${new Date().toISOString().split("T")[0]}.csv`);
 }
 
 function loadBackupsJsPdfModule() {

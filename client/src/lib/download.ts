@@ -7,9 +7,12 @@ const activeObjectUrls = new Map<string, number>();
 export function sanitizeDownloadFilename(rawFilename: string) {
   const sanitized = rawFilename
     .replace(/[^\w.\-\s]/g, "_")
+    .replace(/\.{2,}/g, ".")
+    .replace(/^\.+/g, "")
     .replace(/\s+/g, "_")
     .replace(/_{2,}/g, "_")
-    .slice(0, MAX_DOWNLOAD_FILENAME_LENGTH);
+    .slice(0, MAX_DOWNLOAD_FILENAME_LENGTH)
+    .replace(/^[._-]+$/g, "");
 
   return sanitized || "download";
 }

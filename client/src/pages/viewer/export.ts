@@ -3,6 +3,7 @@ import type { DataRowWithId } from "@/pages/viewer/types";
 import { formatDateTimeDDMMYYYY } from "@/lib/date-format";
 import {
   buildViewerExportFilename,
+  chunkViewerPdfHeaders,
   loadViewerJsPdfModule,
   loadViewerXlsxModule,
   resolveViewerPotentialIcColumns,
@@ -54,7 +55,7 @@ export async function exportViewerRowsToPdf({
   exportFiltered,
   exportSelected,
 }: ViewerExportParams) {
-  if (rows.length === 0) return;
+  if (rows.length === 0 || headers.length === 0) return;
 
   const { default: jsPDF } = await loadViewerJsPdfModule();
   const isDark = document.documentElement.classList.contains("dark");
@@ -70,107 +71,155 @@ export async function exportViewerRowsToPdf({
   const margin = 10;
   const tableWidth = pageWidth - margin * 2;
   const maxColsPerPage = useLandscape ? 10 : 6;
-  const fontSize = headers.length > 8 ? 6 : headers.length > 5 ? 7 : 8;
-  const rowHeight = fontSize <= 6 ? 5 : 6;
-  const minColWidth = 18;
-  const colWidth = Math.max(minColWidth, tableWidth / Math.min(headers.length, maxColsPerPage));
-  const maxCharsPerCol = Math.floor((colWidth - 2) / (fontSize * 0.35));
-  const maxRowsPerPage = Math.floor((pageHeight - margin - 25) / rowHeight);
+  const headerChunks = chunkViewerPdfHeaders(headers, maxColsPerPage);
+  const generatedAt = formatDateTimeDDMMYYYY(new Date(), { includeSeconds: true });
   let yPos = margin;
-  let rowsOnPage = 0;
   let pageNumber = 1;
+  let isFirstPdfPage = true;
 
   const truncateText = (text: string, maxLength: number) =>
     text.length <= maxLength ? text : `${text.substring(0, maxLength - 2)}..`;
+
+  const resolveTableLayout = (columnCount: number) => {
+    const safeColumnCount = Math.max(1, columnCount);
+    const fontSize = safeColumnCount > 8 ? 6 : safeColumnCount > 5 ? 7 : 8;
+    const rowHeight = fontSize <= 6 ? 5 : 6;
+    const colWidth = tableWidth / safeColumnCount;
+    const maxCharsPerCol = Math.max(3, Math.floor((colWidth - 2) / (fontSize * 0.35)));
+    const maxRowsPerPage = Math.max(1, Math.floor((pageHeight - margin - 25) / rowHeight));
+
+    return {
+      colWidth,
+      fontSize,
+      maxCharsPerCol,
+      maxRowsPerPage,
+      rowHeight,
+    };
+  };
 
   const drawBackground = () => {
     pdf.setFillColor(isDark ? 30 : 255, isDark ? 41 : 255, isDark ? 59 : 255);
     pdf.rect(0, 0, pageWidth, pageHeight, "F");
   };
 
-  const drawHeader = () => {
-    pdf.setFillColor(isDark ? 50 : 230, isDark ? 60 : 230, isDark ? 70 : 235);
-    pdf.rect(margin, yPos, tableWidth, rowHeight, "F");
-    pdf.setFontSize(fontSize);
-    pdf.setFont("helvetica", "bold");
-    pdf.setTextColor(isDark ? 255 : 30);
-    headers.forEach((header, index) => {
-      const xPos = margin + index * colWidth + 1;
-      if (xPos < pageWidth - margin) {
-        pdf.text(truncateText(header, maxCharsPerCol), xPos, yPos + rowHeight - 1.5);
-      }
-    });
-    yPos += rowHeight;
+  const drawFooter = () => {
+    pdf.setFontSize(8);
+    pdf.setTextColor(isDark ? 120 : 150);
+    pdf.text(`Page ${pageNumber}`, pageWidth - margin - 15, pageHeight - 8);
+    pdf.text("SQR System", margin, pageHeight - 8);
   };
 
-  drawBackground();
-  pdf.setFontSize(16);
-  pdf.setFont("helvetica", "bold");
-  pdf.setTextColor(isDark ? 255 : 30);
-  pdf.text(importName || "Data Export", margin, yPos + 5);
-  yPos += 10;
+  const drawReportHeader = (chunkIndex: number) => {
+    pdf.setFontSize(16);
+    pdf.setFont("helvetica", "bold");
+    pdf.setTextColor(isDark ? 255 : 30);
+    pdf.text(importName || "Data Export", margin, yPos + 5);
+    yPos += 10;
 
-  pdf.setFontSize(9);
-  pdf.setFont("helvetica", "normal");
-  pdf.setTextColor(isDark ? 180 : 100);
-  let exportType = "All Data";
-  if (exportFiltered) exportType = "Filtered Data";
-  if (exportSelected) exportType = "Selected Data";
-  pdf.text(
-    `${exportType} | ${rows.length} rows | ${formatDateTimeDDMMYYYY(new Date(), { includeSeconds: true })}`,
-    margin,
-    yPos,
-  );
-  yPos += 6;
+    pdf.setFontSize(9);
+    pdf.setFont("helvetica", "normal");
+    pdf.setTextColor(isDark ? 180 : 100);
+    let exportType = "All Data";
+    if (exportFiltered) exportType = "Filtered Data";
+    if (exportSelected) exportType = "Selected Data";
 
-  pdf.setDrawColor(isDark ? 100 : 200);
-  pdf.setLineWidth(0.3);
-  pdf.line(margin, yPos, pageWidth - margin, yPos);
-  yPos += 4;
+    const columnRangeLabel =
+      headerChunks.length > 1
+        ? ` | Columns ${chunkIndex * maxColsPerPage + 1}-${Math.min((chunkIndex + 1) * maxColsPerPage, headers.length)} of ${headers.length}`
+        : "";
+    pdf.text(
+      `${exportType} | ${rows.length} rows${columnRangeLabel} | ${generatedAt}`,
+      margin,
+      yPos,
+    );
+    yPos += 6;
 
-  drawHeader();
-  pdf.setFont("helvetica", "normal");
-  pdf.setFontSize(fontSize);
+    pdf.setDrawColor(isDark ? 100 : 200);
+    pdf.setLineWidth(0.3);
+    pdf.line(margin, yPos, pageWidth - margin, yPos);
+    yPos += 4;
+  };
 
-  rows.forEach((row, rowIndex) => {
-    if (rowsOnPage >= maxRowsPerPage - 1) {
-      pdf.setFontSize(7);
-      pdf.setTextColor(isDark ? 120 : 150);
-      pdf.text(`Page ${pageNumber}`, pageWidth - margin - 12, pageHeight - 6);
-      pdf.text("SQR System", margin, pageHeight - 6);
+  const drawTableHeader = (
+    headersForPage: string[],
+    layout: ReturnType<typeof resolveTableLayout>,
+  ) => {
+    pdf.setFillColor(isDark ? 50 : 230, isDark ? 60 : 230, isDark ? 70 : 235);
+    pdf.rect(margin, yPos, tableWidth, layout.rowHeight, "F");
+    pdf.setFontSize(layout.fontSize);
+    pdf.setFont("helvetica", "bold");
+    pdf.setTextColor(isDark ? 255 : 30);
+    headersForPage.forEach((header, index) => {
+      const xPos = margin + index * layout.colWidth + 1;
+      pdf.text(
+        truncateText(header, layout.maxCharsPerCol),
+        xPos,
+        yPos + layout.rowHeight - 1.5,
+      );
+    });
+    yPos += layout.rowHeight;
+  };
 
+  const startPdfPage = (
+    chunkIndex: number,
+    headersForPage: string[],
+    layout: ReturnType<typeof resolveTableLayout>,
+  ) => {
+    if (!isFirstPdfPage) {
       pdf.addPage();
       pageNumber += 1;
-      yPos = margin;
-      rowsOnPage = 0;
-      drawBackground();
-      drawHeader();
-      pdf.setFont("helvetica", "normal");
-      pdf.setFontSize(fontSize);
     }
+    isFirstPdfPage = false;
+    yPos = margin;
+    drawBackground();
+    drawReportHeader(chunkIndex);
+    drawTableHeader(headersForPage, layout);
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(layout.fontSize);
+  };
 
-    if (rowIndex % 2 === 0) {
-      pdf.setFillColor(isDark ? 40 : 245, isDark ? 50 : 245, isDark ? 60 : 250);
-      pdf.rect(margin, yPos, tableWidth, rowHeight, "F");
-    }
+  headerChunks.forEach((headersForPage, chunkIndex) => {
+    const layout = resolveTableLayout(headersForPage.length);
+    let rowsOnPage = 0;
 
-    pdf.setTextColor(isDark ? 220 : 50);
-    headers.forEach((header, index) => {
-      const xPos = margin + index * colWidth + 1;
-      if (xPos < pageWidth - margin) {
-        const cellValue = String(row[header] || "");
-        pdf.text(truncateText(cellValue, maxCharsPerCol), xPos, yPos + rowHeight - 1.5);
+    startPdfPage(chunkIndex, headersForPage, layout);
+
+    rows.forEach((row, rowIndex) => {
+      if (rowsOnPage >= layout.maxRowsPerPage - 1) {
+        drawFooter();
+        pdf.addPage();
+        pageNumber += 1;
+        yPos = margin;
+        rowsOnPage = 0;
+        drawBackground();
+        drawReportHeader(chunkIndex);
+        drawTableHeader(headersForPage, layout);
+        pdf.setFont("helvetica", "normal");
+        pdf.setFontSize(layout.fontSize);
       }
+
+      if (rowIndex % 2 === 0) {
+        pdf.setFillColor(isDark ? 40 : 245, isDark ? 50 : 245, isDark ? 60 : 250);
+        pdf.rect(margin, yPos, tableWidth, layout.rowHeight, "F");
+      }
+
+      pdf.setTextColor(isDark ? 220 : 50);
+      headersForPage.forEach((header, index) => {
+        const xPos = margin + index * layout.colWidth + 1;
+        const cellValue = String(row[header] ?? "");
+        pdf.text(
+          truncateText(cellValue, layout.maxCharsPerCol),
+          xPos,
+          yPos + layout.rowHeight - 1.5,
+        );
+      });
+
+      yPos += layout.rowHeight;
+      rowsOnPage += 1;
     });
 
-    yPos += rowHeight;
-    rowsOnPage += 1;
+    drawFooter();
   });
-
-  pdf.setFontSize(8);
-  pdf.setTextColor(isDark ? 120 : 150);
-  pdf.text(`Page ${pageNumber}`, pageWidth - margin - 15, pageHeight - 8);
-  pdf.text("SQR System", margin, pageHeight - 8);
 
   pdf.save(buildViewerExportFilename(importName, "pdf", exportFiltered, exportSelected));
 }

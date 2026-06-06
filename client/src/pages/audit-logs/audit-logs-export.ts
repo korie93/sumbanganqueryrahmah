@@ -1,4 +1,4 @@
-import { downloadBlob } from "@/lib/download";
+import { downloadCsv } from "@/lib/csv";
 import { formatDateTimeMalaysia } from "@/lib/date-format";
 import { buildAuditLogSummary } from "@/pages/audit-logs/audit-log-classification";
 import { buildReadableAuditDetails } from "@/pages/audit-logs/audit-log-readable-details";
@@ -44,8 +44,7 @@ export function exportAuditLogsToCsv(logs: AuditLogRecord[]) {
   if (logs.length === 0) return;
 
   const csvContent = buildAuditLogsCsvContent(logs);
-  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-  downloadBlob(blob, `SQR-audit-logs-${new Date().toISOString().split("T")[0]}.csv`);
+  downloadCsv(csvContent, `SQR-audit-logs-${new Date().toISOString().split("T")[0]}.csv`);
 }
 
 function loadAuditLogsJsPdfModule() {

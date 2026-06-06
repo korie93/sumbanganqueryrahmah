@@ -1,5 +1,6 @@
 import { Suspense, lazy, memo, useCallback } from "react";
 import { LazyDialogFallback } from "@/components/LazySuspenseFallback";
+import { downloadCsv } from "@/lib/csv";
 import { downloadBlob } from "@/lib/download";
 import type { CollectionStaffNickname } from "@/lib/api";
 import { CollectionMonthlyComparisonPanel } from "./CollectionMonthlyComparisonPanel";
@@ -72,8 +73,7 @@ function CollectionMonthlyComparisonSection({
         sameDayPace: sameDayPace.pace,
       },
     );
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-    downloadBlob(blob, buildCollectionMonthlyComparisonCsvFilename(comparisonData.data));
+    downloadCsv(csvContent, buildCollectionMonthlyComparisonCsvFilename(comparisonData.data));
   }, [comparisonData.data, comparisonTarget.monthlyTargetAmount, comparisonTarget.targetsByMonth, sameDayPace.pace]);
   const handlePrintReport = useCallback(() => {
     const data = comparisonData.data;

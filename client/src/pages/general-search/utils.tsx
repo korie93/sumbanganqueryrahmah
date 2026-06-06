@@ -1,4 +1,4 @@
-import { downloadBlob } from "@/lib/download";
+import { buildCsvContent, downloadCsv } from "@/lib/csv";
 import type { FilterRow, SearchOperatorOption, SearchResultRow } from "@/pages/general-search/types";
 
 export const OPERATORS: SearchOperatorOption[] = [
@@ -113,15 +113,11 @@ export function collectSearchHeaders(rows: SearchResultRow[], canSeeSourceFile: 
 }
 
 export function downloadSearchResultsAsCsv(headers: string[], rows: SearchResultRow[], filename: string) {
-  const csvContent = [
-    headers.join(","),
-    ...rows.map((row) =>
-      headers.map((header) => `"${getCellDisplayText(row[header]).replace(/"/g, '""')}"`).join(","),
-    ),
-  ].join("\n");
-
-  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-  downloadBlob(blob, filename);
+  const csvContent = buildCsvContent(
+    headers,
+    rows.map((row) => headers.map((header) => getCellDisplayText(row[header]))),
+  );
+  downloadCsv(csvContent, filename);
 }
 
 export function highlightMatch(text: string, query: string): JSX.Element {

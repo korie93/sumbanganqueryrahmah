@@ -33,3 +33,14 @@ export function resolveViewerPotentialIcColumns(headers: string[]) {
 
   return headers.filter((header) => icPatterns.test(header.replace(/[_-]/g, " ")));
 }
+
+export function chunkViewerPdfHeaders(headers: string[], maxColumnsPerPage: number) {
+  const safeMaxColumns = Math.max(1, Math.floor(maxColumnsPerPage));
+  const chunks: string[][] = [];
+
+  for (let index = 0; index < headers.length; index += safeMaxColumns) {
+    chunks.push(headers.slice(index, index + safeMaxColumns));
+  }
+
+  return chunks.length > 0 ? chunks : [[]];
+}

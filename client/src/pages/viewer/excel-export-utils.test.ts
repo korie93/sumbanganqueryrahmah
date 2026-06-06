@@ -40,3 +40,24 @@ test("buildViewerWorksheetColumns caps wide columns cleanly", () => {
 
   assert.deepEqual(columns, [{ wch: 50 }]);
 });
+
+test("viewer worksheet helpers preserve zero and false values", () => {
+  const rows = [
+    {
+      __rowId: 1,
+      amount: 0,
+      active: false,
+    },
+  ];
+
+  assert.deepEqual(buildViewerWorksheetData(["amount", "active"], rows, []), [
+    {
+      amount: 0,
+      active: "false",
+    },
+  ]);
+  assert.deepEqual(buildViewerWorksheetColumns(["amount", "active"], rows), [
+    { wch: 8 },
+    { wch: 8 },
+  ]);
+});
