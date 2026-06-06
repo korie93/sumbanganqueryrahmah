@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  buildDashboardAccessSignals,
   buildDashboardTrendTickDates,
   buildSummaryCards,
   formatDashboardAxisDate,
@@ -21,9 +22,13 @@ test("buildSummaryCards includes stale conflict monitor value when provided", ()
   const staleConflictCard = cards.find((card) => card.title === "Stale Record Conflicts (24h)");
   assert.ok(staleConflictCard);
   assert.equal(staleConflictCard.value, 7);
+
+  const failedLoginCard = cards.find((card) => card.title === "Failed Logins (24h)");
+  assert.ok(failedLoginCard);
+  assert.equal(failedLoginCard.value, 0);
 });
 
-test("buildSummaryCards falls back to zero stale conflict count", () => {
+test("buildSummaryCards falls back to zero optional monitor counts", () => {
   const cards = buildSummaryCards({
     totalUsers: 10,
     activeSessions: 2,
@@ -36,6 +41,45 @@ test("buildSummaryCards falls back to zero stale conflict count", () => {
   const staleConflictCard = cards.find((card) => card.title === "Stale Record Conflicts (24h)");
   assert.ok(staleConflictCard);
   assert.equal(staleConflictCard.value, 0);
+
+  const failedLoginCard = cards.find((card) => card.title === "Failed Logins (24h)");
+  assert.ok(failedLoginCard);
+  assert.equal(failedLoginCard.value, 0);
+
+  const backupActionCard = cards.find((card) => card.title === "Backup Actions (24h)");
+  assert.ok(backupActionCard);
+  assert.equal(backupActionCard.value, 0);
+});
+
+test("buildSummaryCards includes optional failed login and backup action counts", () => {
+  const cards = buildSummaryCards({
+    totalUsers: 10,
+    activeSessions: 2,
+    loginsToday: 5,
+    totalDataRows: 100,
+    totalImports: 4,
+    bannedUsers: 1,
+    backupActions24h: 3,
+    loginFailures24h: 12,
+  });
+
+  assert.equal(cards.find((card) => card.title === "Failed Logins (24h)")?.value, 12);
+  assert.equal(cards.find((card) => card.title === "Backup Actions (24h)")?.value, 3);
+});
+
+test("buildDashboardAccessSignals classifies login pressure for operator review", () => {
+  const signals = buildDashboardAccessSignals({
+    totalUsers: 10,
+    activeSessions: 2,
+    loginsToday: 5,
+    totalDataRows: 100,
+    totalImports: 4,
+    bannedUsers: 1,
+    loginFailures24h: 12,
+  });
+
+  assert.equal(signals.find((signal) => signal.title === "Gagal login 24j")?.tone, "danger");
+  assert.equal(signals.find((signal) => signal.title === "Akaun disekat")?.tone, "warning");
 });
 
 test("formatDashboardUserLastLogin keeps login timestamps in operational timezone", () => {

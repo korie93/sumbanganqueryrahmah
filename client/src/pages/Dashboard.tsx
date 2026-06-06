@@ -257,6 +257,7 @@ function DashboardContent() {
     <OperationalPage width="content">
       <DashboardPageHeader
         isMobile={isMobile}
+        kpiCount={summaryCards.length}
         trendDays={trendDays}
         exportingPdf={exportingPdf}
         exportBlockReason={exportBlockReason}
@@ -290,6 +291,7 @@ function DashboardContent() {
           boundaryKey={`summary:${summaryLoading}:${summaryErrorMessage ?? "ok"}:${summaryCards.length}`}
         >
           <DashboardSnapshotSection
+            summary={summary}
             summaryCards={summaryCards}
             summaryErrorMessage={summaryErrorMessage}
             summaryLoading={summaryLoading}

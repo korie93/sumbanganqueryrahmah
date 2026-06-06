@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 
 type DashboardPageHeaderProps = {
   isMobile: boolean;
+  kpiCount: number;
   trendDays: number;
   exportingPdf: boolean;
   exportBlockReason: string | null;
@@ -15,6 +16,7 @@ type DashboardPageHeaderProps = {
 
 export function DashboardPageHeader({
   isMobile,
+  kpiCount,
   trendDays,
   exportingPdf,
   exportBlockReason,
@@ -24,12 +26,12 @@ export function DashboardPageHeader({
 }: DashboardPageHeaderProps) {
   return (
     <OperationalPageHeader
-      title={<span data-testid="text-dashboard-title">Dashboard Analytics</span>}
-      eyebrow="Insights"
+      title={<span data-testid="text-dashboard-title">Login & Access Dashboard</span>}
+      eyebrow="Access Insights"
       description={
         isMobile
-          ? "System health, activity, and usage insights in one compact mobile-friendly view."
-          : "System overview, activity signals, and analytics in one compact workspace."
+          ? "Pantau login, sesi aktif, dan risiko akaun dalam paparan ringkas."
+          : "Pantau aktiviti log masuk, sesi aktif, kegagalan akses, dan risiko akaun dalam satu workspace operasi."
       }
       badge={
         <div className="flex flex-wrap gap-2">
@@ -37,7 +39,7 @@ export function DashboardPageHeader({
             Trend {trendDays}d
           </Badge>
           <Badge variant="outline" className="rounded-full px-3 py-1.5">
-            7 KPI cards
+            {kpiCount} KPI akses
           </Badge>
           <Badge variant="outline" className="rounded-full px-3 py-1.5">
             Auto refresh

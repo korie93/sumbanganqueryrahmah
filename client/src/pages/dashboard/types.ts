@@ -41,3 +41,12 @@ export interface SummaryCardItem {
   icon: LucideIcon;
   color: string;
 }
+
+export type DashboardAccessSignalTone = "success" | "warning" | "danger" | "info";
+
+export interface DashboardAccessSignal {
+  title: string;
+  value: string;
+  description: string;
+  tone: DashboardAccessSignalTone;
+}

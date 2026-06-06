@@ -24,9 +24,11 @@ const summaryCards: SummaryCardItem[] = [
   { title: "Total Users", value: 10, icon: Users, color: "text-blue-600 dark:text-primary" },
   { title: "Active Sessions", value: 4, icon: Activity, color: "text-green-600 dark:text-green-400" },
   { title: "Logins Today", value: 8, icon: LogIn, color: "text-purple-600 dark:text-purple-400" },
+  { title: "Failed Logins (24h)", value: 2, icon: AlertTriangle, color: "text-rose-600 dark:text-rose-400" },
+  { title: "Banned Users", value: 1, icon: ShieldOff, color: "text-red-600 dark:text-red-400" },
   { title: "Total Data Rows", value: 1200, icon: Database, color: "text-orange-600 dark:text-orange-400" },
   { title: "Total Imports", value: 25, icon: FileText, color: "text-teal-600 dark:text-teal-400" },
-  { title: "Banned Users", value: 1, icon: ShieldOff, color: "text-red-600 dark:text-red-400" },
+  { title: "Backup Actions (24h)", value: 0, icon: FileText, color: "text-cyan-700 dark:text-cyan-300" },
   {
     title: "Stale Record Conflicts (24h)",
     value: 3,
@@ -39,6 +41,7 @@ test("DashboardPageHeader keeps compact solid actions and status badges", () => 
   const markup = renderToStaticMarkup(
     createElement(DashboardPageHeader, {
       isMobile: false,
+      kpiCount: 9,
       trendDays: 14,
       exportingPdf: false,
       exportBlockReason: null,
@@ -48,9 +51,9 @@ test("DashboardPageHeader keeps compact solid actions and status badges", () => 
     }),
   );
 
-  assert.match(markup, /Dashboard Analytics/);
+  assert.match(markup, /Login &amp; Access Dashboard/);
   assert.match(markup, /Trend 14d/);
-  assert.match(markup, /7 KPI cards/);
+  assert.match(markup, /9 KPI akses/);
   assert.match(markup, /Auto refresh/);
   assert.match(markup, /button-export-pdf/);
   assert.match(markup, /button-refresh-dashboard/);
@@ -93,6 +96,16 @@ test("DashboardSummaryCards hides loading skeletons from assistive technology", 
 test("DashboardSnapshotSection surfaces metric count badge with compact summary copy", () => {
   const markup = renderToStaticMarkup(
     createElement(DashboardSnapshotSection, {
+      summary: {
+        activeSessions: 4,
+        bannedUsers: 1,
+        collectionRecordVersionConflicts24h: 3,
+        loginsToday: 8,
+        totalDataRows: 1200,
+        totalImports: 25,
+        totalUsers: 10,
+        loginFailures24h: 2,
+      },
       summaryCards: summaryCards.slice(0, 3),
       summaryErrorMessage: null,
       summaryLoading: false,
@@ -101,14 +114,18 @@ test("DashboardSnapshotSection surfaces metric count badge with compact summary 
     }),
   );
 
-  assert.match(markup, /Quick Snapshot/);
+  assert.match(markup, /Login Snapshot/);
   assert.match(markup, /3 metrics/);
-  assert.match(markup, /compact dashboard snapshot/);
+  assert.match(markup, /fast operator review/);
+  assert.match(markup, /Access watchlist/);
+  assert.match(markup, /Login readiness at a glance/);
+  assert.match(markup, /Gagal login 24j/);
 });
 
 test("DashboardSnapshotSection renders a retryable local error state", () => {
   const markup = renderToStaticMarkup(
     createElement(DashboardSnapshotSection, {
+      summary: undefined,
       summaryCards,
       summaryErrorMessage: "Ringkasan tidak dapat dicapai.",
       summaryLoading: false,

@@ -9,7 +9,7 @@ import {
   initializeTrustedTypesRuntimeForGlobal,
   type TrustedTypesRuntimeGlobal,
 } from "@/lib/trusted-types-runtime";
-import type { SummaryCardItem, SummaryData } from "@/pages/dashboard/types";
+import type { DashboardAccessSignal, SummaryCardItem, SummaryData } from "@/pages/dashboard/types";
 import type { LoginTrend } from "@/pages/dashboard/types";
 
 let html2canvasLoader: Promise<typeof import("html2canvas")["default"]> | null = null;
@@ -137,6 +137,18 @@ export function buildSummaryCards(summary: SummaryData | undefined): SummaryCard
       color: "text-purple-600 dark:text-purple-400",
     },
     {
+      title: "Failed Logins (24h)",
+      value: summary?.loginFailures24h || 0,
+      icon: AlertTriangle,
+      color: "text-rose-600 dark:text-rose-400",
+    },
+    {
+      title: "Banned Users",
+      value: summary?.bannedUsers || 0,
+      icon: ShieldOff,
+      color: "text-red-600 dark:text-red-400",
+    },
+    {
       title: "Total Data Rows",
       value: summary?.totalDataRows || 0,
       icon: Database,
@@ -149,16 +161,56 @@ export function buildSummaryCards(summary: SummaryData | undefined): SummaryCard
       color: "text-teal-600 dark:text-teal-400",
     },
     {
-      title: "Banned Users",
-      value: summary?.bannedUsers || 0,
-      icon: ShieldOff,
-      color: "text-red-600 dark:text-red-400",
+      title: "Backup Actions (24h)",
+      value: summary?.backupActions24h || 0,
+      icon: FileText,
+      color: "text-cyan-700 dark:text-cyan-300",
     },
     {
       title: "Stale Record Conflicts (24h)",
       value: summary?.collectionRecordVersionConflicts24h || 0,
       icon: AlertTriangle,
       color: "text-amber-600 dark:text-amber-400",
+    },
+  ];
+}
+
+export function buildDashboardAccessSignals(summary: SummaryData | undefined): DashboardAccessSignal[] {
+  const activeSessions = summary?.activeSessions ?? 0;
+  const loginsToday = summary?.loginsToday ?? 0;
+  const loginFailures24h = summary?.loginFailures24h ?? 0;
+  const bannedUsers = summary?.bannedUsers ?? 0;
+
+  return [
+    {
+      title: "Sesi aktif",
+      value: activeSessions.toLocaleString(),
+      description: "Sesi pengguna yang sedang hidup dan perlu dipantau.",
+      tone: "info",
+    },
+    {
+      title: "Login hari ini",
+      value: loginsToday.toLocaleString(),
+      description: loginsToday > 0
+        ? "Aktiviti akses harian sedang direkod."
+        : "Belum ada login berjaya direkod hari ini.",
+      tone: loginsToday > 0 ? "success" : "info",
+    },
+    {
+      title: "Gagal login 24j",
+      value: loginFailures24h.toLocaleString(),
+      description: loginFailures24h > 0
+        ? "Semak pola percubaan gagal berulang."
+        : "Tiada tekanan gagal login dikesan.",
+      tone: loginFailures24h >= 10 ? "danger" : loginFailures24h > 0 ? "warning" : "success",
+    },
+    {
+      title: "Akaun disekat",
+      value: bannedUsers.toLocaleString(),
+      description: bannedUsers > 0
+        ? "Akaun disekat perlu kekal dalam audit akses."
+        : "Tiada akaun disekat direkod.",
+      tone: bannedUsers > 0 ? "warning" : "success",
     },
   ];
 }
