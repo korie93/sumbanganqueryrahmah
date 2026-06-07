@@ -28,6 +28,7 @@ export type RecentLoginActivityStatus = "active" | "ended";
 
 export type RecentLoginActivityRow = {
   browser: string | null;
+  id: string;
   ipAddress: string | null;
   isActive: boolean | null;
   lastActivityTime: Date | string | null;
@@ -40,6 +41,7 @@ export type RecentLoginActivityRow = {
 
 export type RecentLoginActivity = {
   browser: string | null;
+  id: string;
   ipAddress: string | null;
   lastActivityTime: string | null;
   loginTime: string | null;

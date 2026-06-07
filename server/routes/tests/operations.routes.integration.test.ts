@@ -170,6 +170,7 @@ function createOperationsRouteHarness(options?: {
       recentLoginActivityCalls.push(limit);
       return [{
         browser: "Chrome",
+        id: "activity-1",
         ipAddress: "127.0.x.x",
         lastActivityTime: "2026-03-20T02:00:00.000Z",
         loginTime: "2026-03-20T01:30:00.000Z",
@@ -532,6 +533,7 @@ test("GET /api/analytics/recent-login-activity returns sanitized dashboard activ
     assert.deepEqual(await response.json(), [
       {
         browser: "Chrome",
+        id: "activity-1",
         ipAddress: "127.0.x.x",
         lastActivityTime: "2026-03-20T02:00:00.000Z",
         loginTime: "2026-03-20T01:30:00.000Z",

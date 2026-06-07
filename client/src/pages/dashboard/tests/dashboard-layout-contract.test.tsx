@@ -211,6 +211,7 @@ test("DashboardLoginCommandBar gives operators a compact first-read status strip
       recentLoginActivities: [
         {
           browser: "Chrome",
+          id: "activity-active",
           ipAddress: "10.42.x.x",
           lastActivityTime: "2026-05-06T02:30:00Z",
           loginTime: "2026-05-06T02:00:00Z",
@@ -420,6 +421,7 @@ test("DashboardLoginReviewSidebar turns scattered login panels into a compact si
         },
         {
           browser: "Edge",
+          id: "activity-ended",
           ipAddress: "10.43.x.x",
           lastActivityTime: "2026-05-06T04:30:00Z",
           loginTime: "2026-05-06T04:00:00Z",
@@ -815,6 +817,7 @@ test("DashboardRecentLoginActivity renders masked access rows with retryable err
       ],
       errorMessage: null,
       loading: false,
+      onDeleteEndedActivity: () => undefined,
       onRetry: () => undefined,
       retrying: false,
     }),
@@ -831,8 +834,17 @@ test("DashboardRecentLoginActivity renders masked access rows with retryable err
   assert.match(markup, /Show attention login activity, 1 records/);
   assert.match(markup, /aria-label="All recent login activity list"/);
   assert.match(markup, /Open login activity details for super\.user/);
+  assert.match(markup, /Showing 1-2 of 2/);
+  assert.match(markup, /button-login-activity-prev-page/);
+  assert.match(markup, /button-login-activity-next-page/);
+  assert.match(source, /Delete ended login activity log for/);
+  assert.doesNotMatch(markup, /Delete ended login activity log for super\.user/);
   assert.match(markup, /Details/);
   assert.match(markup, /tabindex="0"/);
+  assert.match(source, /RECENT_LOGIN_ACTIVITY_PAGE_SIZE = 4/);
+  assert.match(source, /AlertDialog/);
+  assert.match(source, /Delete ended login log\?/);
+  assert.match(source, /status === "ended"/);
   assert.match(source, /max-h-\[360px\]/);
   assert.match(source, /xl:grid-cols-1 2xl:grid-cols-2/);
   assert.match(source, /useMemo\(/);

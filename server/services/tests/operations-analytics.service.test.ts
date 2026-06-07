@@ -62,6 +62,7 @@ test("OperationsAnalyticsService clamps login-trend days and validates active-us
       recentLoginActivityCalls.push(limit);
       return [{
         browser: "Chrome",
+        id: "activity-1",
         ipAddress: "127.0.x.x",
         lastActivityTime: null,
         loginTime: null,

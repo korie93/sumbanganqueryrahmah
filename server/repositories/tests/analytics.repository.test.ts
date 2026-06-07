@@ -74,6 +74,7 @@ test("AnalyticsRepository.getRecentLoginActivity returns sanitized recent access
     rows: [
       {
         browser: "Mozilla/5.0 Firefox/126.0",
+        id: "activity-1",
         ipAddress: "192.168.10.25",
         isActive: true,
         lastActivityTime: new Date("2026-04-05T03:20:00.000Z"),
@@ -91,6 +92,7 @@ test("AnalyticsRepository.getRecentLoginActivity returns sanitized recent access
     assert.deepEqual(result, [
       {
         browser: "Firefox",
+        id: "activity-1",
         ipAddress: "192.168.x.x",
         lastActivityTime: "2026-04-05T03:20:00.000Z",
         loginTime: "2026-04-05T03:15:00.000Z",

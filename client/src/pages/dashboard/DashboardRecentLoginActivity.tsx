@@ -1,5 +1,15 @@
 import { memo, useCallback, useMemo, useState, type ReactNode } from "react";
-import { Clock, Eye, Globe2, ShieldCheck } from "lucide-react";
+import { ChevronLeft, ChevronRight, Clock, Eye, Globe2, ShieldCheck, Trash2 } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -24,13 +34,16 @@ import {
 
 interface DashboardRecentLoginActivityProps {
   activities: RecentLoginActivity[] | undefined;
+  deletingActivityId?: string | null | undefined;
   errorMessage: string | null;
   loading: boolean;
+  onDeleteEndedActivity?: ((activity: RecentLoginActivity) => void) | undefined;
   onRetry: () => void;
   retrying: boolean;
 }
 
 const EMPTY_RECENT_LOGIN_ACTIVITIES: readonly RecentLoginActivity[] = [];
+const RECENT_LOGIN_ACTIVITY_PAGE_SIZE = 4;
 const RECENT_LOGIN_FILTER_OPTIONS: readonly {
   readonly id: DashboardRecentLoginActivityFilter;
   readonly label: string;
@@ -162,13 +175,17 @@ function DashboardRecentLoginActivitySkeleton() {
 
 function DashboardRecentLoginActivityImpl({
   activities,
+  deletingActivityId = null,
   errorMessage,
   loading,
+  onDeleteEndedActivity,
   onRetry,
   retrying,
 }: DashboardRecentLoginActivityProps) {
   const [selectedFilter, setSelectedFilter] = useState<DashboardRecentLoginActivityFilter>("all");
+  const [selectedPage, setSelectedPage] = useState(1);
   const [selectedActivity, setSelectedActivity] = useState<RecentLoginActivity | null>(null);
+  const [deleteCandidate, setDeleteCandidate] = useState<RecentLoginActivity | null>(null);
   const safeActivities = activities ?? EMPTY_RECENT_LOGIN_ACTIVITIES;
   const filterCounts = useMemo(
     () => buildDashboardRecentLoginActivityFilterCounts(safeActivities),
@@ -178,13 +195,44 @@ function DashboardRecentLoginActivityImpl({
     () => filterDashboardRecentLoginActivities(safeActivities, selectedFilter),
     [safeActivities, selectedFilter],
   );
+  const totalPages = Math.max(1, Math.ceil(visibleActivities.length / RECENT_LOGIN_ACTIVITY_PAGE_SIZE));
+  const activePage = Math.min(selectedPage, totalPages);
+  const pageStartIndex = (activePage - 1) * RECENT_LOGIN_ACTIVITY_PAGE_SIZE;
+  const pageEndIndex = Math.min(pageStartIndex + RECENT_LOGIN_ACTIVITY_PAGE_SIZE, visibleActivities.length);
+  const pagedActivities = useMemo(
+    () => visibleActivities.slice(pageStartIndex, pageEndIndex),
+    [pageEndIndex, pageStartIndex, visibleActivities],
+  );
+  const shownStart = visibleActivities.length > 0 ? pageStartIndex + 1 : 0;
+  const shownEnd = visibleActivities.length > 0 ? pageEndIndex : 0;
   const selectedFilterLabel =
     RECENT_LOGIN_FILTER_OPTIONS.find((option) => option.id === selectedFilter)?.label ?? "All";
+  const handleFilterSelect = useCallback((filter: DashboardRecentLoginActivityFilter) => {
+    setSelectedFilter(filter);
+    setSelectedPage(1);
+  }, []);
+  const handlePreviousPage = useCallback(() => {
+    setSelectedPage((page) => Math.max(1, page - 1));
+  }, []);
+  const handleNextPage = useCallback(() => {
+    setSelectedPage((page) => Math.min(totalPages, page + 1));
+  }, [totalPages]);
   const handleDetailSheetOpenChange = useCallback((open: boolean) => {
     if (!open) {
       setSelectedActivity(null);
     }
   }, []);
+  const handleDeleteDialogOpenChange = useCallback((open: boolean) => {
+    if (!open) {
+      setDeleteCandidate(null);
+    }
+  }, []);
+  const handleConfirmDelete = useCallback(() => {
+    if (deleteCandidate && onDeleteEndedActivity) {
+      onDeleteEndedActivity(deleteCandidate);
+    }
+    setDeleteCandidate(null);
+  }, [deleteCandidate, onDeleteEndedActivity]);
 
   return (
     <>
@@ -236,7 +284,7 @@ function DashboardRecentLoginActivityImpl({
                       variant={active ? "default" : "ghost"}
                       size="sm"
                       className="h-8 justify-center rounded-lg px-2 text-xs"
-                      onClick={() => setSelectedFilter(option.id)}
+                      onClick={() => handleFilterSelect(option.id)}
                       aria-pressed={active ? "true" : "false"}
                       aria-label={`Show ${option.label.toLowerCase()} login activity, ${filterCounts[option.id]} records`}
                       data-testid={`button-login-activity-filter-${option.id}`}
@@ -251,95 +299,153 @@ function DashboardRecentLoginActivityImpl({
               </div>
 
               {visibleActivities.length > 0 ? (
-                <div
-                  className="grid max-h-[360px] gap-2 overflow-y-auto pr-1 lg:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2"
-                  role="region"
-                  tabIndex={0}
-                  aria-label={`${selectedFilterLabel} recent login activity list`}
-                >
-                  {visibleActivities.map((activity, index) => {
-                    const statusMeta = resolveDashboardRecentLoginStatusMeta(activity.status);
-                    const formattedLoginTime = formatDashboardRecentLoginTime(activity.loginTime);
-                    const formattedLastActivityTime = formatDashboardRecentLoginTime(activity.lastActivityTime);
-                    const browser = activity.browser ?? "Unknown browser";
-                    const ipAddress = activity.ipAddress ?? "Unknown network";
-
-                    return (
-                      <article
-                        key={`${activity.username}-${activity.loginTime ?? index}`}
-                        role="group"
-                        aria-label={buildDashboardRecentLoginActivityRowAriaLabel({
-                          activity,
-                          formattedLastActivityTime,
-                          formattedLoginTime,
-                          index: index + 1,
-                          statusLabel: statusMeta.label,
-                        })}
-                        className="rounded-xl border border-border/60 bg-muted/10 p-3 shadow-sm"
-                        data-testid={`row-recent-login-activity-${index}`}
+                <>
+                  <div className="flex flex-col gap-2 rounded-xl border border-border/60 bg-muted/10 p-2 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+                    <span>
+                      Showing {shownStart}-{shownEnd} of {visibleActivities.length}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-8 rounded-lg px-2"
+                        onClick={handlePreviousPage}
+                        disabled={activePage <= 1}
+                        aria-label="Show previous recent login activity page"
+                        data-testid="button-login-activity-prev-page"
                       >
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <p className="break-words text-sm font-semibold text-foreground sm:text-base">
-                              {activity.username}
-                            </p>
-                            <div className="mt-2 flex flex-wrap items-center gap-2">
-                              <Badge variant="outline" className="rounded-full text-2xs capitalize">
-                                {activity.role}
-                              </Badge>
-                              <Badge variant="outline" className={`rounded-full text-2xs ${statusMeta.className}`}>
-                                {statusMeta.label}
-                              </Badge>
+                        <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+                        Prev
+                      </Button>
+                      <span className="min-w-12 text-center font-medium text-foreground">
+                        {activePage}/{totalPages}
+                      </span>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-8 rounded-lg px-2"
+                        onClick={handleNextPage}
+                        disabled={activePage >= totalPages}
+                        aria-label="Show next recent login activity page"
+                        data-testid="button-login-activity-next-page"
+                      >
+                        Next
+                        <ChevronRight className="h-4 w-4" aria-hidden="true" />
+                      </Button>
+                    </div>
+                  </div>
+                  <div
+                    className="grid max-h-[360px] gap-2 overflow-y-auto pr-1 lg:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2"
+                    role="region"
+                    tabIndex={0}
+                    aria-label={`${selectedFilterLabel} recent login activity list`}
+                  >
+                    {pagedActivities.map((activity, index) => {
+                      const statusMeta = resolveDashboardRecentLoginStatusMeta(activity.status);
+                      const formattedLoginTime = formatDashboardRecentLoginTime(activity.loginTime);
+                      const formattedLastActivityTime = formatDashboardRecentLoginTime(activity.lastActivityTime);
+                      const browser = activity.browser ?? "Unknown browser";
+                      const ipAddress = activity.ipAddress ?? "Unknown network";
+                      const absoluteIndex = pageStartIndex + index;
+                      const canDeleteActivity = Boolean(activity.id && activity.status === "ended" && onDeleteEndedActivity);
+                      const isDeletingActivity = Boolean(activity.id && activity.id === deletingActivityId);
+
+                      return (
+                        <article
+                          key={activity.id ?? `${activity.username}-${activity.loginTime ?? absoluteIndex}`}
+                          role="group"
+                          aria-label={buildDashboardRecentLoginActivityRowAriaLabel({
+                            activity,
+                            formattedLastActivityTime,
+                            formattedLoginTime,
+                            index: absoluteIndex + 1,
+                            statusLabel: statusMeta.label,
+                          })}
+                          className="rounded-xl border border-border/60 bg-muted/10 p-3 shadow-sm"
+                          data-testid={`row-recent-login-activity-${absoluteIndex}`}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="break-words text-sm font-semibold text-foreground sm:text-base">
+                                {activity.username}
+                              </p>
+                              <div className="mt-2 flex flex-wrap items-center gap-2">
+                                <Badge variant="outline" className="rounded-full text-2xs capitalize">
+                                  {activity.role}
+                                </Badge>
+                                <Badge variant="outline" className={`rounded-full text-2xs ${statusMeta.className}`}>
+                                  {statusMeta.label}
+                                </Badge>
+                              </div>
+                            </div>
+                            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                              <Clock className="h-4 w-4" aria-hidden="true" />
                             </div>
                           </div>
-                          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
-                            <Clock className="h-4 w-4" aria-hidden="true" />
-                          </div>
-                        </div>
 
-                        <div className="mt-3 grid gap-2 text-xs text-muted-foreground sm:grid-cols-2">
-                          <div className="rounded-lg border border-border/50 bg-background/60 p-2.5">
-                            <p className="font-medium text-foreground">Login</p>
-                            <p className="mt-1 leading-5">{formattedLoginTime}</p>
+                          <div className="mt-3 grid gap-2 text-xs text-muted-foreground sm:grid-cols-2">
+                            <div className="rounded-lg border border-border/50 bg-background/60 p-2.5">
+                              <p className="font-medium text-foreground">Login</p>
+                              <p className="mt-1 leading-5">{formattedLoginTime}</p>
+                            </div>
+                            <div className="rounded-lg border border-border/50 bg-background/60 p-2.5">
+                              <p className="font-medium text-foreground">Last activity</p>
+                              <p className="mt-1 leading-5">{formattedLastActivityTime}</p>
+                            </div>
                           </div>
-                          <div className="rounded-lg border border-border/50 bg-background/60 p-2.5">
-                            <p className="font-medium text-foreground">Last activity</p>
-                            <p className="mt-1 leading-5">{formattedLastActivityTime}</p>
-                          </div>
-                        </div>
 
-                        <div className="mt-2 flex flex-col gap-2 rounded-lg border border-border/50 bg-background/60 p-2.5 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
-                          <span className="flex min-w-0 items-center gap-2">
-                            <Globe2 className="h-4 w-4 shrink-0" aria-hidden="true" />
-                            <span className="truncate" title={browser}>
-                              {browser}
+                          <div className="mt-2 flex flex-col gap-2 rounded-lg border border-border/50 bg-background/60 p-2.5 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+                            <span className="flex min-w-0 items-center gap-2">
+                              <Globe2 className="h-4 w-4 shrink-0" aria-hidden="true" />
+                              <span className="truncate" title={browser}>
+                                {browser}
+                              </span>
                             </span>
-                          </span>
-                          <span className="shrink-0 font-medium text-foreground">{ipAddress}</span>
-                        </div>
+                            <span className="shrink-0 font-medium text-foreground">{ipAddress}</span>
+                          </div>
 
-                        {activity.logoutReason ? (
-                          <p className="mt-3 text-xs leading-5 text-muted-foreground">
-                            Status note: <span className="text-foreground">{activity.logoutReason}</span>
-                          </p>
-                        ) : null}
+                          {activity.logoutReason ? (
+                            <p className="mt-3 text-xs leading-5 text-muted-foreground">
+                              Status note: <span className="text-foreground">{activity.logoutReason}</span>
+                            </p>
+                          ) : null}
 
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          className="mt-3 w-full justify-center rounded-lg"
-                          onClick={() => setSelectedActivity(activity)}
-                          aria-label={`Open login activity details for ${activity.username}`}
-                          data-testid={`button-recent-login-details-${index}`}
-                        >
-                          <Eye className="mr-2 h-4 w-4" aria-hidden="true" />
-                          Details
-                        </Button>
-                      </article>
-                    );
-                  })}
-                </div>
+                          <div className={canDeleteActivity ? "mt-3 grid gap-2 sm:grid-cols-2" : "mt-3"}>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="w-full justify-center rounded-lg"
+                              onClick={() => setSelectedActivity(activity)}
+                              aria-label={`Open login activity details for ${activity.username}`}
+                              data-testid={`button-recent-login-details-${absoluteIndex}`}
+                            >
+                              <Eye className="mr-2 h-4 w-4" aria-hidden="true" />
+                              Details
+                            </Button>
+                            {canDeleteActivity ? (
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="w-full justify-center rounded-lg border-destructive/40 text-destructive hover:bg-destructive/10"
+                                onClick={() => setDeleteCandidate(activity)}
+                                disabled={isDeletingActivity}
+                                aria-label={`Delete ended login activity log for ${activity.username}`}
+                                data-testid={`button-recent-login-delete-${absoluteIndex}`}
+                              >
+                                <Trash2 className="mr-2 h-4 w-4" aria-hidden="true" />
+                                {isDeletingActivity ? "Deleting..." : "Delete log"}
+                              </Button>
+                            ) : null}
+                          </div>
+                        </article>
+                      );
+                    })}
+                  </div>
+                </>
               ) : (
                 <div
                   className="flex min-h-[180px] items-center justify-center rounded-xl border border-dashed border-border/60 bg-muted/10 px-4 text-center text-sm text-muted-foreground"
@@ -361,6 +467,26 @@ function DashboardRecentLoginActivityImpl({
         activity={selectedActivity}
         onOpenChange={handleDetailSheetOpenChange}
       />
+      <AlertDialog open={deleteCandidate !== null} onOpenChange={handleDeleteDialogOpenChange}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete ended login log?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This removes the ended activity record for {deleteCandidate?.username ?? "this user"} from the activity log.
+              Active sessions are not deleted from this dashboard action.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="border border-destructive-border bg-destructive text-destructive-foreground"
+              onClick={handleConfirmDelete}
+            >
+              Delete ended log
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }

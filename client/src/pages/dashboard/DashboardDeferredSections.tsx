@@ -224,6 +224,7 @@ type DashboardDeferredSectionsProps = {
   onRetryRoleDistribution: () => void;
   onRetryTopUsers: () => void;
   onRetryTrends: () => void;
+  onDeleteEndedLoginActivity?: ((activity: RecentLoginActivity) => void) | undefined;
   peakHoursErrorMessage: string | null;
   trends: LoginTrend[] | undefined;
   trendsErrorMessage: string | null;
@@ -233,6 +234,7 @@ type DashboardDeferredSectionsProps = {
   peakHoursLoading: boolean;
   peakHoursRetrying: boolean;
   recentLoginActivities: RecentLoginActivity[] | undefined;
+  recentLoginActivityDeletingId?: string | null | undefined;
   recentLoginActivityErrorMessage: string | null;
   recentLoginActivityLoading: boolean;
   recentLoginActivityRetrying: boolean;
@@ -257,6 +259,7 @@ export function DashboardDeferredSections({
   onRetryRoleDistribution,
   onRetryTopUsers,
   onRetryTrends,
+  onDeleteEndedLoginActivity,
   peakHoursErrorMessage,
   trends,
   trendsErrorMessage,
@@ -266,6 +269,7 @@ export function DashboardDeferredSections({
   peakHoursLoading,
   peakHoursRetrying,
   recentLoginActivities,
+  recentLoginActivityDeletingId,
   recentLoginActivityErrorMessage,
   recentLoginActivityLoading,
   recentLoginActivityRetrying,
@@ -411,8 +415,10 @@ export function DashboardDeferredSections({
                   >
                     <DashboardRecentLoginActivity
                       activities={recentLoginActivities}
+                      deletingActivityId={recentLoginActivityDeletingId}
                       errorMessage={recentLoginActivityErrorMessage}
                       loading={recentLoginActivityLoading}
+                      onDeleteEndedActivity={onDeleteEndedLoginActivity}
                       onRetry={onRetryRecentLoginActivity}
                       retrying={recentLoginActivityRetrying}
                     />

@@ -156,6 +156,7 @@ export class AnalyticsRepository {
   async getRecentLoginActivity(limit = 8): Promise<RecentLoginActivity[]> {
     const result = await dbRead.execute(sql`
       SELECT
+        id,
         username,
         role,
         login_time AS "loginTime",
@@ -172,6 +173,7 @@ export class AnalyticsRepository {
 
     return (result.rows as RecentLoginActivityRow[]).map((row) => ({
       browser: summarizeAnalyticsBrowser(row.browser),
+      id: row.id,
       ipAddress: maskAnalyticsIpAddress(row.ipAddress),
       lastActivityTime: serializeAnalyticsTimestamp(row.lastActivityTime),
       loginTime: serializeAnalyticsTimestamp(row.loginTime),

@@ -150,6 +150,7 @@ export class PostgresOperationsStorage extends PostgresCollectionStorage {
   ): Promise<
     Array<{
       browser: string | null;
+      id: string;
       ipAddress: string | null;
       lastActivityTime: string | null;
       loginTime: string | null;

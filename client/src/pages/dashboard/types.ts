@@ -29,6 +29,7 @@ export type RecentLoginActivityStatus = "active" | "ended";
 
 export interface RecentLoginActivity {
   browser: string | null;
+  id?: string | null;
   ipAddress: string | null;
   lastActivityTime: string | null;
   loginTime: string | null;

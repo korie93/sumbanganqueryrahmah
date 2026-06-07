@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { AppQueryProvider } from "@/app/AppQueryProvider";
 import { OperationalPage } from "@/components/layout/OperationalPage";
 import {
+  deleteActivityLog,
   getAnalyticsSummary,
   getLoginTrends,
   getPeakHours,
@@ -11,6 +12,7 @@ import {
   getTopActiveUsers,
 } from "@/lib/api";
 import { logClientError } from "@/lib/client-logger";
+import { queryClient } from "@/lib/queryClient";
 import { toast } from "@/hooks/use-toast";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { isMobileViewportWidth } from "@/lib/responsive";
@@ -240,6 +242,39 @@ function DashboardContent() {
   const handleRetryRecentLoginActivity = useDashboardRetryHandler(refetchRecentLoginActivity);
   const handleRetryPeakHours = useDashboardRetryHandler(refetchPeakHours);
   const handleRetryRoles = useDashboardRetryHandler(refetchRoles);
+  const deleteRecentLoginActivityMutation = useMutation<unknown, Error, RecentLoginActivity>({
+    mutationFn: async (activity) => {
+      if (!activity.id || activity.status !== "ended") {
+        throw new Error("Only ended login activity logs can be deleted from the dashboard.");
+      }
+      return deleteActivityLog(activity.id);
+    },
+    onSuccess: async (_result, activity) => {
+      toast({
+        title: "Login log deleted",
+        description: `Ended login activity for ${activity.username} has been removed.`,
+      });
+      await queryClient.invalidateQueries({ queryKey: ["/api/analytics/recent-login-activity"] });
+      await queryClient.invalidateQueries({ queryKey: ["/api/activity"] });
+    },
+    onError: (error, activity) => {
+      logClientError("Failed to delete recent login activity:", error, {
+        activityStatus: activity.status,
+        hasActivityId: Boolean(activity.id),
+      });
+      toast({
+        title: "Delete login log failed",
+        description: error.message || "Unable to delete the ended login activity log.",
+        variant: "destructive",
+      });
+    },
+  });
+  const handleDeleteEndedLoginActivity = useCallback(
+    (activity: RecentLoginActivity) => {
+      deleteRecentLoginActivityMutation.mutate(activity);
+    },
+    [deleteRecentLoginActivityMutation],
+  );
 
   useEffect(() => {
     const controller = new AbortController();
@@ -406,6 +441,7 @@ function DashboardContent() {
           onRetryRoleDistribution={handleRetryRoles}
           onRetryTopUsers={handleRetryTopUsers}
           onRetryTrends={handleRetryTrends}
+          onDeleteEndedLoginActivity={handleDeleteEndedLoginActivity}
           trends={trends ?? []}
           trendsErrorMessage={trendsErrorMessage}
           trendsLoading={trendsLoading}
@@ -415,6 +451,7 @@ function DashboardContent() {
           peakHoursLoading={!secondaryDashboardQueriesEnabled || peakHoursLoading}
           peakHoursRetrying={peakHoursFetching}
           recentLoginActivities={recentLoginActivities ?? []}
+          recentLoginActivityDeletingId={deleteRecentLoginActivityMutation.variables?.id ?? null}
           recentLoginActivityErrorMessage={recentLoginActivityErrorMessage}
           recentLoginActivityLoading={recentLoginActivityLoading}
           recentLoginActivityRetrying={recentLoginActivityFetching}
