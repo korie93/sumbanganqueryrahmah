@@ -9,7 +9,9 @@ import {
   initializeTrustedTypesRuntimeForGlobal,
   type TrustedTypesRuntimeGlobal,
 } from "@/lib/trusted-types-runtime";
+import { buildPathForPage } from "@/app/routing";
 import type {
+  DashboardActionQueueItem,
   DashboardAccessSignal,
   DashboardLoginRiskInsight,
   DashboardLoginRiskSummary,
@@ -40,6 +42,7 @@ const DASHBOARD_PDF_FALLBACK_ROW_MIN_HEIGHT_MM = 10;
 export const DASHBOARD_PDF_EXPORT_FAILURE_MESSAGE = "Gagal jana PDF. Sila cuba semula.";
 export type DashboardRecentLoginActivityFilter = "all" | "active" | "ended" | "attention";
 export type DashboardRecentLoginRiskTone = "success" | "warning" | "info";
+const DASHBOARD_ACTION_QUEUE_MAX_ITEMS = 4;
 
 export interface DashboardRecentLoginRiskNote {
   label: string;
@@ -435,6 +438,130 @@ export function resolveDashboardLoginRiskSummary(
     description: "Tiada tekanan login besar dikesan.",
     tone: "success",
   };
+}
+
+function hasDashboardRestrictedLogoutReason(activity: RecentLoginActivity) {
+  return /banned|blocked|locked/i.test(activity.logoutReason ?? "");
+}
+
+function hasDashboardForcedLogoutReason(activity: RecentLoginActivity) {
+  return /forced|kicked|revoked/i.test(activity.logoutReason ?? "");
+}
+
+function hasDashboardTimeoutLogoutReason(activity: RecentLoginActivity) {
+  return /expired|idle|timeout/i.test(activity.logoutReason ?? "");
+}
+
+function pushDashboardActionQueueItem(
+  items: DashboardActionQueueItem[],
+  item: DashboardActionQueueItem,
+) {
+  if (!items.some((existing) => existing.id === item.id)) {
+    items.push(item);
+  }
+}
+
+export function buildDashboardActionQueueItems(input: {
+  recentLoginActivities?: readonly RecentLoginActivity[] | undefined;
+  summary?: SummaryData | undefined;
+  trends?: readonly LoginTrend[] | undefined;
+}): DashboardActionQueueItem[] {
+  const { recentLoginActivities, summary, trends } = input;
+  const items: DashboardActionQueueItem[] = [];
+  const recentRows = recentLoginActivities ?? [];
+  const failedLogins = summary?.loginFailures24h ?? 0;
+  const bannedUsers = summary?.bannedUsers ?? 0;
+  const activeSessions = summary?.activeSessions ?? 0;
+  const totalUsers = summary?.totalUsers ?? 0;
+  const activeSessionRatio = totalUsers > 0 ? activeSessions / totalUsers : 0;
+  const recentActiveSessions = recentRows.filter((activity) => activity.status === "active");
+  const timeoutRows = recentRows.filter(hasDashboardTimeoutLogoutReason);
+  const restrictedRow = recentRows.find(hasDashboardRestrictedLogoutReason);
+  const forcedRow = recentRows.find(hasDashboardForcedLogoutReason);
+  const { latest, previousAverage } = getLatestDashboardTrendLogins(trends);
+  const spikeThreshold = Math.max(3, previousAverage * 1.5);
+  const hasLoginSpike = latest >= spikeThreshold && latest > previousAverage;
+
+  if (failedLogins >= 10) {
+    pushDashboardActionQueueItem(items, {
+      id: "failed-login-pressure",
+      title: "Review failed login pressure",
+      description: `${failedLogins.toLocaleString()} failed login attempts were recorded in the last 24 hours. Compare activity and audit logs before locking accounts.`,
+      priority: "high",
+      actionLabel: "Open activity logs",
+      targetHref: buildPathForPage("activity"),
+    });
+  }
+
+  if (restrictedRow || bannedUsers > 0) {
+    pushDashboardActionQueueItem(items, {
+      id: "restricted-account-review",
+      title: "Check restricted account events",
+      description: restrictedRow
+        ? `${restrictedRow.username} has a recent restricted-account logout reason. Confirm the action was expected.`
+        : `${bannedUsers.toLocaleString()} banned account record needs to remain aligned with access audit notes.`,
+      priority: "high",
+      actionLabel: "Open audit logs",
+      targetHref: buildPathForPage("audit"),
+    });
+  }
+
+  if (forcedRow) {
+    pushDashboardActionQueueItem(items, {
+      id: "forced-session-review",
+      title: "Verify forced session end",
+      description: `${forcedRow.username} has a recent forced session end. Confirm whether this came from an operator action or policy enforcement.`,
+      priority: "medium",
+      actionLabel: "Open activity logs",
+      targetHref: buildPathForPage("activity"),
+    });
+  }
+
+  if (timeoutRows.length >= 2) {
+    pushDashboardActionQueueItem(items, {
+      id: "repeated-timeout-review",
+      title: "Watch repeated timeout sessions",
+      description: `${timeoutRows.length.toLocaleString()} recent sessions ended by timeout or idle expiry. Look for shared browser, device, or network patterns.`,
+      priority: "medium",
+      actionLabel: "Open activity logs",
+      targetHref: buildPathForPage("activity"),
+    });
+  }
+
+  if (hasLoginSpike) {
+    pushDashboardActionQueueItem(items, {
+      id: "login-trend-spike",
+      title: "Review login trend spike",
+      description: `Latest login count is ${latest.toLocaleString()}, above the current trend baseline. Check whether this matches expected operations.`,
+      priority: "medium",
+      actionLabel: "Open audit logs",
+      targetHref: buildPathForPage("audit"),
+    });
+  }
+
+  if (activeSessionRatio >= 0.75 && activeSessions > 0) {
+    pushDashboardActionQueueItem(items, {
+      id: "active-session-load",
+      title: "Inspect active session load",
+      description: `${activeSessions.toLocaleString()} of ${totalUsers.toLocaleString()} users currently have active sessions. Review stale sessions if this is unusual.`,
+      priority: "medium",
+      actionLabel: "Open activity logs",
+      targetHref: buildPathForPage("activity"),
+    });
+  }
+
+  if (recentActiveSessions.length > 0) {
+    pushDashboardActionQueueItem(items, {
+      id: "active-session-check",
+      title: "Spot-check active sessions",
+      description: `${recentActiveSessions.length.toLocaleString()} recent active session${recentActiveSessions.length === 1 ? "" : "s"} visible. Confirm device and network context if access looks unfamiliar.`,
+      priority: "low",
+      actionLabel: "Review recent activity",
+      targetHref: buildPathForPage("activity"),
+    });
+  }
+
+  return items.slice(0, DASHBOARD_ACTION_QUEUE_MAX_ITEMS);
 }
 
 function loadHtml2Canvas() {

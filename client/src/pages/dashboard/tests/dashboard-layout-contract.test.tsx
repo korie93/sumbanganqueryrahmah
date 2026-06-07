@@ -6,6 +6,7 @@ import { Activity, Database, FileText, LogIn, ShieldOff, Users, AlertTriangle } 
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { fileURLToPath } from "node:url";
+import { DashboardActionQueue } from "@/pages/dashboard/DashboardActionQueue";
 import { DashboardChartsGrid } from "@/pages/dashboard/DashboardChartsGrid";
 import { DashboardLoginRiskInsights } from "@/pages/dashboard/DashboardLoginRiskInsights";
 import { DashboardPageHeader } from "@/pages/dashboard/DashboardPageHeader";
@@ -156,6 +157,7 @@ test("Dashboard wraps major dashboard regions in accessible render error boundar
   assert.match(dashboardSource, /<DashboardSectionRenderBoundary/);
   assert.match(dashboardSource, /sectionName="Ringkasan dashboard"/);
   assert.match(deferredSource, /Dashboard login review workspace/);
+  assert.match(deferredSource, /<DashboardActionQueue/);
   assert.match(deferredSource, /xl:grid-cols-\[minmax\(0,0\.9fr\)_minmax\(0,1\.1fr\)\]/);
   assert.match(deferredSource, /sectionName="Carta dashboard"/);
   assert.match(deferredSource, /sectionName="Insight risiko login dashboard"/);
@@ -168,6 +170,94 @@ test("Dashboard wraps major dashboard regions in accessible render error boundar
   assert.match(fallbackMarkup, /Bahagian ini gagal dirender/);
   assert.match(fallbackMarkup, /Cuba lagi/);
   assert.match(fallbackMarkup, /type="button"/);
+});
+
+test("DashboardActionQueue renders prioritized operator actions without lifecycle effects", () => {
+  const source = readFileSync(path.resolve(__dirname, "../DashboardActionQueue.tsx"), "utf8");
+  const markup = renderToStaticMarkup(
+    createElement(DashboardActionQueue, {
+      loading: false,
+      recentLoginActivities: [
+        {
+          browser: "Chrome",
+          ipAddress: "10.42.x.x",
+          lastActivityTime: "2026-05-06T02:30:00Z",
+          loginTime: "2026-05-06T02:00:00Z",
+          logoutReason: "ACCOUNT_LOCKED",
+          logoutTime: "2026-05-06T03:00:00Z",
+          role: "admin",
+          status: "ended",
+          username: "locked.user",
+        },
+        {
+          browser: "Edge",
+          ipAddress: "10.43.x.x",
+          lastActivityTime: "2026-05-06T04:30:00Z",
+          loginTime: "2026-05-06T04:00:00Z",
+          logoutReason: "FORCED_LOGOUT",
+          logoutTime: "2026-05-06T05:00:00Z",
+          role: "user",
+          status: "ended",
+          username: "forced.user",
+        },
+      ],
+      summary: {
+        activeSessions: 8,
+        bannedUsers: 1,
+        loginsToday: 12,
+        loginFailures24h: 15,
+        totalDataRows: 100,
+        totalImports: 4,
+        totalUsers: 10,
+      },
+      trends: [
+        { date: "2026-05-04", logins: 3, logouts: 1 },
+        { date: "2026-05-05", logins: 3, logouts: 1 },
+        { date: "2026-05-06", logins: 3, logouts: 2 },
+      ],
+    }),
+  );
+
+  assert.match(markup, /Action Queue/);
+  assert.match(markup, /4 review items/);
+  assert.match(markup, /Review failed login pressure/);
+  assert.match(markup, /Check restricted account events/);
+  assert.match(markup, /Verify forced session end/);
+  assert.match(markup, /Inspect active session load/);
+  assert.match(markup, /href="\/monitor\?section=activity"/);
+  assert.match(markup, /href="\/monitor\?section=audit"/);
+  assert.match(markup, /aria-label="Dashboard suggested action queue"/);
+  assert.match(source, /buildDashboardActionQueueItems/);
+  assert.match(source, /data-testid="card-dashboard-action-queue"/);
+  assert.doesNotMatch(source, /useEffect\(/);
+  assert.doesNotMatch(source, /setTimeout\(/);
+});
+
+test("DashboardActionQueue renders a clear state when no review item is needed", () => {
+  const markup = renderToStaticMarkup(
+    createElement(DashboardActionQueue, {
+      loading: false,
+      recentLoginActivities: [],
+      summary: {
+        activeSessions: 0,
+        bannedUsers: 0,
+        loginsToday: 2,
+        loginFailures24h: 0,
+        totalDataRows: 100,
+        totalImports: 4,
+        totalUsers: 10,
+      },
+      trends: [
+        { date: "2026-05-04", logins: 2, logouts: 1 },
+        { date: "2026-05-05", logins: 2, logouts: 1 },
+        { date: "2026-05-06", logins: 2, logouts: 1 },
+      ],
+    }),
+  );
+
+  assert.match(markup, /Clear/);
+  assert.match(markup, /No immediate review items/);
+  assert.doesNotMatch(markup, /Open activity logs/);
 });
 
 test("DashboardLoginRiskInsights renders operator-ready status from existing login signals", () => {

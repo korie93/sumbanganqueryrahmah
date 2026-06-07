@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  buildDashboardActionQueueItems,
   buildDashboardRecentLoginActivityFilterCounts,
   buildDashboardAccessSignals,
   buildDashboardLoginRiskInsights,
@@ -153,6 +154,103 @@ test("buildDashboardLoginRiskInsights stays calm for normal login signals", () =
   assert.equal(insights.find((insight) => insight.title === "Login trend check")?.tone, "success");
   assert.equal(insights.find((insight) => insight.title === "Recent session state")?.tone, "info");
   assert.equal(resolveDashboardLoginRiskSummary(insights).label, "Normal");
+});
+
+test("buildDashboardActionQueueItems prioritizes concrete login review actions", () => {
+  const actions = buildDashboardActionQueueItems({
+    recentLoginActivities: [
+      {
+        browser: "Chrome",
+        ipAddress: "10.42.x.x",
+        lastActivityTime: "2026-05-06T02:30:00Z",
+        loginTime: "2026-05-06T02:00:00Z",
+        logoutReason: "ACCOUNT_LOCKED",
+        logoutTime: "2026-05-06T03:00:00Z",
+        role: "admin",
+        status: "ended",
+        username: "locked.user",
+      },
+      {
+        browser: "Edge",
+        ipAddress: "10.43.x.x",
+        lastActivityTime: "2026-05-06T04:30:00Z",
+        loginTime: "2026-05-06T04:00:00Z",
+        logoutReason: "FORCED_LOGOUT",
+        logoutTime: "2026-05-06T05:00:00Z",
+        role: "user",
+        status: "ended",
+        username: "forced.user",
+      },
+      {
+        browser: "Firefox",
+        ipAddress: "10.44.x.x",
+        lastActivityTime: "2026-05-06T05:30:00Z",
+        loginTime: "2026-05-06T05:00:00Z",
+        logoutReason: "IDLE_TIMEOUT",
+        logoutTime: "2026-05-06T06:00:00Z",
+        role: "user",
+        status: "ended",
+        username: "timeout.one",
+      },
+      {
+        browser: "Safari",
+        ipAddress: "10.45.x.x",
+        lastActivityTime: "2026-05-06T06:30:00Z",
+        loginTime: "2026-05-06T06:00:00Z",
+        logoutReason: "SESSION_EXPIRED",
+        logoutTime: "2026-05-06T07:00:00Z",
+        role: "user",
+        status: "ended",
+        username: "timeout.two",
+      },
+    ],
+    summary: {
+      activeSessions: 8,
+      bannedUsers: 1,
+      loginsToday: 12,
+      loginFailures24h: 15,
+      totalDataRows: 100,
+      totalImports: 4,
+      totalUsers: 10,
+    },
+    trends: [
+      { date: "2026-05-04", logins: 2, logouts: 1 },
+      { date: "2026-05-05", logins: 3, logouts: 1 },
+      { date: "2026-05-06", logins: 12, logouts: 2 },
+    ],
+  });
+
+  assert.deepEqual(actions.map((action) => action.id), [
+    "failed-login-pressure",
+    "restricted-account-review",
+    "forced-session-review",
+    "repeated-timeout-review",
+  ]);
+  assert.equal(actions[0]?.priority, "high");
+  assert.equal(actions[0]?.targetHref, "/monitor?section=activity");
+  assert.equal(actions[1]?.targetHref, "/monitor?section=audit");
+});
+
+test("buildDashboardActionQueueItems returns no work when login signals are calm", () => {
+  const actions = buildDashboardActionQueueItems({
+    recentLoginActivities: [],
+    summary: {
+      activeSessions: 0,
+      bannedUsers: 0,
+      loginsToday: 2,
+      loginFailures24h: 0,
+      totalDataRows: 100,
+      totalImports: 4,
+      totalUsers: 10,
+    },
+    trends: [
+      { date: "2026-05-04", logins: 2, logouts: 1 },
+      { date: "2026-05-05", logins: 2, logouts: 1 },
+      { date: "2026-05-06", logins: 2, logouts: 1 },
+    ],
+  });
+
+  assert.deepEqual(actions, []);
 });
 
 test("formatDashboardUserLastLogin keeps login timestamps in operational timezone", () => {

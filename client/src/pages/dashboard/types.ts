@@ -77,3 +77,14 @@ export interface DashboardLoginRiskSummary {
   description: string;
   tone: DashboardAccessSignalTone;
 }
+
+export type DashboardActionQueuePriority = "high" | "medium" | "low";
+
+export interface DashboardActionQueueItem {
+  id: string;
+  title: string;
+  description: string;
+  priority: DashboardActionQueuePriority;
+  actionLabel: string;
+  targetHref: string;
+}
