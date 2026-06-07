@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { resolveDashboardExportBlockReason } from "@/pages/dashboard/export-guards";
 import {
+  buildDashboardPdfSummaryReport,
   captureDashboardElementCanvas,
   collectDashboardFallbackPdfLines,
   DASHBOARD_PDF_EXPORT_FAILURE_MESSAGE,
@@ -288,6 +289,120 @@ test("writeDashboardFallbackPdf writes dashboard text when canvas capture is una
   assert.ok(textCalls.includes("Dashboard Analytics"));
   assert.ok(textCalls.includes("Total Users"));
   assert.ok(textCalls.includes("10"));
+});
+
+test("buildDashboardPdfSummaryReport creates a structured operator summary without IP details", () => {
+  const report = buildDashboardPdfSummaryReport(
+    {
+      peakHours: [{ hour: 9, count: 12 }],
+      recentLoginActivities: [
+        {
+          browser: "Chrome",
+          ipAddress: "10.42.1.50",
+          lastActivityTime: "2026-05-06T06:50:00Z",
+          loginTime: "2026-05-06T06:00:00Z",
+          logoutReason: "IDLE_TIMEOUT",
+          logoutTime: "2026-05-06T07:00:00Z",
+          role: "admin",
+          status: "ended",
+          username: "operator.one",
+        },
+      ],
+      summary: {
+        activeSessions: 2,
+        bannedUsers: 0,
+        loginsToday: 8,
+        loginFailures24h: 1,
+        totalDataRows: 100,
+        totalImports: 4,
+        totalUsers: 12,
+      },
+      topUsers: [
+        { lastLogin: "2026-05-06T05:00:00Z", loginCount: 6, role: "admin", username: "operator.one" },
+      ],
+      trends: [
+        { date: "2026-05-05", logins: 5, logouts: 3 },
+        { date: "2026-05-06", logins: 8, logouts: 4 },
+      ],
+    },
+    new Date("2026-05-06T07:00:00Z"),
+  );
+
+  assert.equal(report.title, "Dashboard Login Operational Summary");
+  assert.ok(report.sections.some((section) => section.title === "Executive Summary"));
+  assert.ok(report.sections.some((section) => section.title === "KPI Snapshot"));
+  assert.ok(report.sections.some((section) => section.title === "Action Queue"));
+  assert.ok(report.sections.some((section) => section.rows.some((row) => row.includes("Most active account"))));
+  assert.doesNotMatch(JSON.stringify(report), /10\.42\.1\.50/);
+});
+
+test("writeDashboardFallbackPdf renders structured dashboard report sections", () => {
+  const textCalls: string[] = [];
+  const pdf = {
+    internal: {
+      pageSize: {
+        getWidth: () => 297,
+        getHeight: () => 210,
+      },
+    },
+    addPage() {
+      // Single-page test fixture.
+    },
+    line() {
+      // Styling call.
+    },
+    rect() {
+      // Styling call.
+    },
+    setDrawColor() {
+      // Styling call.
+    },
+    setFillColor() {
+      // Styling call.
+    },
+    setFont() {
+      // Styling call.
+    },
+    setFontSize() {
+      // Styling call.
+    },
+    setLineWidth() {
+      // Styling call.
+    },
+    setTextColor() {
+      // Styling call.
+    },
+    splitTextToSize(line: string) {
+      return [line];
+    },
+    text(value: string | string[]) {
+      textCalls.push(Array.isArray(value) ? value.join(" ") : value);
+    },
+  } as unknown as Parameters<typeof writeDashboardFallbackPdf>[0];
+  const report = buildDashboardPdfSummaryReport(
+    {
+      recentLoginActivities: [],
+      summary: {
+        activeSessions: 0,
+        bannedUsers: 0,
+        loginsToday: 0,
+        loginFailures24h: 0,
+        totalDataRows: 0,
+        totalImports: 0,
+        totalUsers: 0,
+      },
+      trends: [],
+    },
+    new Date("2026-05-06T07:00:00Z"),
+  );
+
+  writeDashboardFallbackPdf(pdf, report, "light");
+
+  assert.ok(textCalls.includes("Operational PDF summary"));
+  assert.ok(textCalls.includes("Executive Summary"));
+  assert.ok(textCalls.includes("KPI Snapshot"));
+  assert.ok(textCalls.includes("Action Queue"));
+  assert.ok(textCalls.some((text) => text.includes("No immediate review items")));
 });
 
 test("withDashboardTrustedHtmlDocumentWrite supplies TrustedHTML to html2canvas document writes", async () => {

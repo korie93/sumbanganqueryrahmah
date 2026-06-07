@@ -86,6 +86,36 @@ type DashboardCanvasPdfSlice = {
   readonly imageWidth: number;
   readonly imageHeight: number;
 };
+export interface DashboardPdfSummaryInput {
+  readonly peakHours?: readonly PeakHour[] | undefined;
+  readonly recentLoginActivities?: readonly RecentLoginActivity[] | undefined;
+  readonly summary?: SummaryData | undefined;
+  readonly topUsers?: readonly TopUser[] | undefined;
+  readonly trends?: readonly LoginTrend[] | undefined;
+}
+
+export interface DashboardPdfSummarySection {
+  readonly title: string;
+  readonly rows: readonly string[];
+}
+
+export interface DashboardPdfSummaryReport {
+  readonly generatedAtLabel: string;
+  readonly sections: readonly DashboardPdfSummarySection[];
+  readonly statusLabel: string;
+  readonly subtitle: string;
+  readonly title: string;
+}
+
+type DashboardFallbackPdfContent = readonly string[] | DashboardPdfSummaryReport;
+type DashboardFallbackPdfRowKind = "section" | "body";
+type DashboardFallbackPdfRow = {
+  readonly kind: DashboardFallbackPdfRowKind;
+  readonly text: string;
+};
+type DashboardFallbackPdfLayoutRow = DashboardFallbackPdfRow & {
+  readonly lines: readonly string[];
+};
 
 export const ROLE_COLORS: Record<string, string> = {
   superuser: "hsl(var(--chart-1))",
@@ -844,6 +874,111 @@ export function buildDashboardActionQueueItems(input: {
   return items.slice(0, DASHBOARD_ACTION_QUEUE_MAX_ITEMS);
 }
 
+function formatDashboardPdfNumber(value: number | null | undefined) {
+  return (typeof value === "number" && Number.isFinite(value) ? value : 0).toLocaleString();
+}
+
+function buildDashboardPdfTrendRows(trends: readonly LoginTrend[] | undefined) {
+  const trendRows = trends ?? [];
+  const latestTrend = trendRows.length > 0 ? trendRows[trendRows.length - 1] : undefined;
+  if (!latestTrend) {
+    return ["Login trend: Not enough data for the selected range."];
+  }
+
+  const totalLogins = trendRows.reduce((total, trend) => total + Math.max(0, trend.logins), 0);
+  const totalLogouts = trendRows.reduce((total, trend) => total + Math.max(0, trend.logouts), 0);
+
+  return [
+    `Selected trend range: ${trendRows.length.toLocaleString()} day${trendRows.length === 1 ? "" : "s"}.`,
+    `Latest day (${formatDashboardDate(latestTrend.date)}): ${latestTrend.logins.toLocaleString()} logins and ${latestTrend.logouts.toLocaleString()} logouts.`,
+    `Range total: ${totalLogins.toLocaleString()} logins and ${totalLogouts.toLocaleString()} logouts.`,
+  ];
+}
+
+function buildDashboardPdfRecentActivityRows(
+  activities: readonly RecentLoginActivity[] | undefined,
+) {
+  const recentRows = (activities ?? []).slice(0, 5);
+  if (recentRows.length === 0) {
+    return ["Recent activity: No recent login rows are available yet."];
+  }
+
+  return recentRows.map((activity) => {
+    const status = resolveDashboardRecentLoginStatusMeta(activity.status).label;
+    const reason = formatDashboardLogoutReasonLabel(activity.logoutReason) ?? "None";
+    return `${activity.username} (${activity.role}) - ${status}; last activity ${formatDashboardRecentLoginTime(activity.lastActivityTime)}; logout reason: ${reason}.`;
+  });
+}
+
+export function buildDashboardPdfSummaryReport(
+  input: DashboardPdfSummaryInput,
+  generatedAt = new Date(),
+): DashboardPdfSummaryReport {
+  const pattern = buildDashboardLoginPatternSummary({
+    peakHours: input.peakHours,
+    recentLoginActivities: input.recentLoginActivities,
+    summary: input.summary,
+    topUsers: input.topUsers,
+  });
+  const healthItems = buildDashboardSessionHealthItems(input.recentLoginActivities, generatedAt.getTime());
+  const actionItems = buildDashboardActionQueueItems({
+    recentLoginActivities: input.recentLoginActivities,
+    summary: input.summary,
+    trends: input.trends,
+  });
+
+  return {
+    generatedAtLabel: formatDateTimeDDMMYYYY(generatedAt, { includeSeconds: true }),
+    statusLabel: pattern.statusLabel,
+    subtitle: pattern.operatorNote,
+    title: "Dashboard Login Operational Summary",
+    sections: [
+      {
+        title: "Executive Summary",
+        rows: [
+          `Overall status: ${pattern.statusLabel}.`,
+          `Operator note: ${pattern.operatorNote}`,
+          `Generated: ${formatDateTimeDDMMYYYY(generatedAt, { includeSeconds: true })}.`,
+        ],
+      },
+      {
+        title: "KPI Snapshot",
+        rows: [
+          `Total users: ${formatDashboardPdfNumber(input.summary?.totalUsers)}.`,
+          `Active sessions: ${formatDashboardPdfNumber(input.summary?.activeSessions)}.`,
+          `Logins today: ${formatDashboardPdfNumber(input.summary?.loginsToday)}.`,
+          `Failed logins (24h): ${formatDashboardPdfNumber(input.summary?.loginFailures24h)}.`,
+          `Banned users: ${formatDashboardPdfNumber(input.summary?.bannedUsers)}.`,
+          `Total imports: ${formatDashboardPdfNumber(input.summary?.totalImports)}.`,
+          `Total data rows: ${formatDashboardPdfNumber(input.summary?.totalDataRows)}.`,
+        ],
+      },
+      {
+        title: "Login Pattern Summary",
+        rows: pattern.facts.map((fact) => `${fact.label}: ${fact.value} - ${fact.description}`),
+      },
+      {
+        title: "Session Health Summary",
+        rows: healthItems.map((item) => `${item.label}: ${item.value.toLocaleString()} - ${item.description}`),
+      },
+      {
+        title: "Trend Summary",
+        rows: buildDashboardPdfTrendRows(input.trends),
+      },
+      {
+        title: "Action Queue",
+        rows: actionItems.length > 0
+          ? actionItems.map((item) => `${item.priority.toUpperCase()}: ${item.title} - ${item.description}`)
+          : ["No immediate review items. Continue normal monitoring."],
+      },
+      {
+        title: "Recent Activity Summary",
+        rows: buildDashboardPdfRecentActivityRows(input.recentLoginActivities),
+      },
+    ],
+  };
+}
+
 function loadHtml2Canvas() {
   if (!html2canvasLoader) {
     html2canvasLoader = import("html2canvas")
@@ -1372,35 +1507,68 @@ function saveDashboardCanvasPdf(
   }
 }
 
+function isDashboardPdfSummaryReport(content: DashboardFallbackPdfContent): content is DashboardPdfSummaryReport {
+  return !Array.isArray(content);
+}
+
+function buildDashboardFallbackPdfRows(content: DashboardFallbackPdfContent): DashboardFallbackPdfRow[] {
+  if (!isDashboardPdfSummaryReport(content)) {
+    const safeLines = content.length > 0 ? content : ["Dashboard data is currently unavailable."];
+    return safeLines.map((line) => ({ kind: "body", text: line }));
+  }
+
+  const rows: DashboardFallbackPdfRow[] = [
+    { kind: "body", text: `Status: ${content.statusLabel}` },
+    { kind: "body", text: `Generated: ${content.generatedAtLabel}` },
+    { kind: "body", text: content.subtitle },
+  ];
+
+  for (const section of content.sections) {
+    rows.push({ kind: "section", text: section.title });
+    const sectionRows = section.rows.length > 0 ? section.rows : ["No data available."];
+    for (const row of sectionRows) {
+      rows.push({ kind: "body", text: row });
+    }
+  }
+
+  return rows;
+}
+
+function resolveDashboardFallbackPdfRowHeight(row: Pick<DashboardFallbackPdfLayoutRow, "kind" | "lines">) {
+  const lineHeight = row.kind === "section" ? 5 : 4.6;
+  const basePadding = row.kind === "section" ? 4 : 5;
+  const minimumHeight = row.kind === "section" ? 8 : DASHBOARD_PDF_FALLBACK_ROW_MIN_HEIGHT_MM;
+  return Math.max(minimumHeight, row.lines.length * lineHeight + basePadding);
+}
+
 export function writeDashboardFallbackPdf(
   pdf: DashboardJsPdfDocument,
-  lines: readonly string[],
+  content: DashboardFallbackPdfContent,
   theme: DashboardPdfTheme,
 ) {
   const colors = getDashboardPdfThemeColors(theme);
-  const safeLines = lines.length > 0 ? lines : ["Dashboard data is currently unavailable."];
+  const isStructuredReport = isDashboardPdfSummaryReport(content);
+  const rows = buildDashboardFallbackPdfRows(content);
   const pageHeight = pdf.internal.pageSize.getHeight();
   const pageWidth = pdf.internal.pageSize.getWidth();
   const contentWidth = pageWidth - DASHBOARD_PDF_MARGIN_MM * 2;
   const textWidth = contentWidth - 8;
-  const lineHeight = 5;
+  const lineHeight = 4.6;
   const pageContentStartY = DASHBOARD_PDF_HEADER_HEIGHT_MM + 6;
   const pageContentEndY = pageHeight - DASHBOARD_PDF_FOOTER_HEIGHT_MM - 2;
-  const pages: string[][][] = [[]];
+  const pages: DashboardFallbackPdfLayoutRow[][] = [[]];
   let cursorY = pageContentStartY;
 
-  for (const line of safeLines) {
-    const wrapped = pdf.splitTextToSize(line, textWidth) as string[];
-    const rowHeight = Math.max(
-      DASHBOARD_PDF_FALLBACK_ROW_MIN_HEIGHT_MM,
-      wrapped.length * lineHeight + 5,
-    );
+  for (const row of rows) {
+    const wrapped = pdf.splitTextToSize(row.text, textWidth) as string[];
+    const layoutRow: DashboardFallbackPdfLayoutRow = { ...row, lines: wrapped };
+    const rowHeight = resolveDashboardFallbackPdfRowHeight(layoutRow);
     if (cursorY + rowHeight > pageContentEndY && pages[pages.length - 1]!.length > 0) {
       pages.push([]);
       cursorY = pageContentStartY;
     }
 
-    pages[pages.length - 1]!.push(wrapped);
+    pages[pages.length - 1]!.push(layoutRow);
     cursorY += rowHeight + DASHBOARD_PDF_ROW_GAP_MM;
   }
 
@@ -1416,23 +1584,37 @@ export function writeDashboardFallbackPdf(
     pdf.setFont("helvetica", "bold");
     pdf.setFontSize(9);
     setDashboardPdfTextColor(pdf, colors.primaryText);
-    pdf.text("Readable dashboard summary", DASHBOARD_PDF_MARGIN_MM + 4, pageContentStartY + 5);
+    pdf.text(
+      isStructuredReport ? "Operational PDF summary" : "Readable dashboard summary",
+      DASHBOARD_PDF_MARGIN_MM + 4,
+      pageContentStartY + 5,
+    );
+
+    if (isStructuredReport && pageIndex === 0) {
+      setDashboardPdfFillColor(pdf, colors.accent);
+      pdf.rect(pageWidth - DASHBOARD_PDF_MARGIN_MM - 42, pageContentStartY, 32, 7, "F");
+      pdf.setFontSize(8);
+      pdf.setFont("helvetica", "bold");
+      setDashboardPdfTextColor(pdf, theme === "dark" ? colors.page : ([255, 255, 255] as DashboardPdfRgb));
+      pdf.text(content.statusLabel, pageWidth - DASHBOARD_PDF_MARGIN_MM - 38, pageContentStartY + 4.8);
+    }
 
     let lineY = pageContentStartY + 16;
     for (const [rowIndex, rowLines] of pageRows.entries()) {
-      const rowHeight = Math.max(
-        DASHBOARD_PDF_FALLBACK_ROW_MIN_HEIGHT_MM,
-        rowLines.length * lineHeight + 5,
-      );
-      setDashboardPdfFillColor(pdf, rowIndex % 2 === 0 ? colors.card : colors.surface);
+      const rowHeight = resolveDashboardFallbackPdfRowHeight(rowLines);
+      const isSection = rowLines.kind === "section";
+      setDashboardPdfFillColor(pdf, isSection ? colors.softAccent : rowIndex % 2 === 0 ? colors.card : colors.surface);
       setDashboardPdfDrawColor(pdf, colors.line);
       pdf.rect(DASHBOARD_PDF_MARGIN_MM, lineY - 4, contentWidth, rowHeight, "FD");
 
-      pdf.setFont("helvetica", rowIndex === 0 && pageIndex === 0 ? "bold" : "normal");
-      pdf.setFontSize(rowIndex === 0 && pageIndex === 0 ? 11 : 9);
-      setDashboardPdfTextColor(pdf, colors.primaryText);
+      pdf.setFont(
+        "helvetica",
+        isSection || (!isStructuredReport && rowIndex === 0 && pageIndex === 0) ? "bold" : "normal",
+      );
+      pdf.setFontSize(isSection ? 10 : !isStructuredReport && rowIndex === 0 && pageIndex === 0 ? 11 : 8.8);
+      setDashboardPdfTextColor(pdf, isSection ? colors.accent : colors.primaryText);
       let wrappedLineY = lineY + 2;
-      for (const wrappedLine of rowLines) {
+      for (const wrappedLine of rowLines.lines) {
         pdf.text(wrappedLine, DASHBOARD_PDF_MARGIN_MM + 4, wrappedLineY);
         wrappedLineY += lineHeight;
       }
@@ -1456,7 +1638,10 @@ function saveDashboardPdf(pdf: DashboardJsPdfDocument) {
   pdf.save(`SQR-Dashboard-Report-${new Date().toISOString().split("T")[0]}.pdf`);
 }
 
-export async function exportDashboardToPdf(element: HTMLDivElement) {
+export async function exportDashboardToPdf(
+  element: HTMLDivElement,
+  summaryInput?: DashboardPdfSummaryInput,
+) {
   assertDashboardExportableElement(element);
 
   const [html2canvas, jsPDF] = await Promise.all([
@@ -1508,9 +1693,11 @@ export async function exportDashboardToPdf(element: HTMLDivElement) {
     saveDashboardPdf(pdf);
   } catch (error) {
     const fallbackPdf = createDashboardPdf(jsPDF);
-    const fallbackLines = collectDashboardFallbackPdfLines(element);
+    const fallbackContent = summaryInput
+      ? buildDashboardPdfSummaryReport(summaryInput)
+      : collectDashboardFallbackPdfLines(element);
     try {
-      writeDashboardFallbackPdf(fallbackPdf, fallbackLines, theme);
+      writeDashboardFallbackPdf(fallbackPdf, fallbackContent, theme);
       saveDashboardPdf(fallbackPdf);
     } catch (fallbackError) {
       const exportError = new Error(DASHBOARD_PDF_EXPORT_FAILURE_MESSAGE) as Error & {

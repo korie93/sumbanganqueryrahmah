@@ -275,7 +275,13 @@ function DashboardContent() {
     exportInFlightRef.current = true;
     setExportingPdf(true);
     try {
-      await exportDashboardToPdf(dashboardRef.current);
+      await exportDashboardToPdf(dashboardRef.current, {
+        peakHours: peakHours ?? [],
+        recentLoginActivities: recentLoginActivities ?? [],
+        summary,
+        topUsers: topUsers ?? [],
+        trends: trends ?? [],
+      });
     } catch (error: unknown) {
       const description = error instanceof Error ? error.message : "Unknown error. Try on desktop browser.";
       logClientError("Failed to export dashboard PDF:", error);
@@ -290,7 +296,7 @@ function DashboardContent() {
         setExportingPdf(false);
       }
     }
-  }, [exportBlockReason, isDashboardLifecycleActive]);
+  }, [exportBlockReason, isDashboardLifecycleActive, peakHours, recentLoginActivities, summary, topUsers, trends]);
 
   return (
     <OperationalPage width="content">
