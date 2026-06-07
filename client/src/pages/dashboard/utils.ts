@@ -1018,6 +1018,12 @@ export function buildDashboardPdfSummaryReport(
     summary: input.summary,
     trends: input.trends,
   });
+  const riskInsights = buildDashboardLoginRiskInsights({
+    recentLoginActivities: input.recentLoginActivities,
+    summary: input.summary,
+    trends: input.trends,
+  });
+  const healthScore = buildDashboardLoginHealthScore(riskInsights);
 
   return {
     generatedAtLabel: formatDateTimeDDMMYYYY(generatedAt, { includeSeconds: true }),
@@ -1031,6 +1037,16 @@ export function buildDashboardPdfSummaryReport(
           `Overall status: ${pattern.statusLabel}.`,
           `Operator note: ${pattern.operatorNote}`,
           `Generated: ${formatDateTimeDDMMYYYY(generatedAt, { includeSeconds: true })}.`,
+        ],
+      },
+      {
+        title: "Login Health Score",
+        rows: [
+          `Score: ${healthScore.score}/100 (${healthScore.label}).`,
+          `Interpretation: ${healthScore.description}`,
+          ...(healthScore.deductions.length > 0
+            ? healthScore.deductions.map((deduction) => `Score deduction: ${deduction}.`)
+            : ["Score deduction: None active."]),
         ],
       },
       {

@@ -362,8 +362,12 @@ test("buildDashboardPdfSummaryReport creates a structured operator summary witho
 
   assert.equal(report.title, "Dashboard Login Operational Summary");
   assert.ok(report.sections.some((section) => section.title === "Executive Summary"));
+  assert.ok(report.sections.some((section) => section.title === "Login Health Score"));
   assert.ok(report.sections.some((section) => section.title === "KPI Snapshot"));
   assert.ok(report.sections.some((section) => section.title === "Action Queue"));
+  assert.ok(report.sections.some((section) => section.rows.some((row) => row.includes("Score: 76/100 (Watch)."))));
+  assert.ok(report.sections.some((section) => section.rows.some((row) => row.includes("Score deduction: -12 Failed login pressure: 1."))));
+  assert.ok(report.sections.some((section) => section.rows.some((row) => row.includes("Score deduction: -12 Login trend check: 8 latest day."))));
   assert.ok(report.sections.some((section) => section.rows.some((row) => row.includes("Most active account"))));
   assert.doesNotMatch(JSON.stringify(report), /10\.42\.1\.50/);
 });
@@ -432,8 +436,10 @@ test("writeDashboardFallbackPdf renders structured dashboard report sections", (
 
   assert.ok(textCalls.includes("Operational PDF summary"));
   assert.ok(textCalls.includes("Executive Summary"));
+  assert.ok(textCalls.includes("Login Health Score"));
   assert.ok(textCalls.includes("KPI Snapshot"));
   assert.ok(textCalls.includes("Action Queue"));
+  assert.ok(textCalls.some((text) => text.includes("Score: 100/100 (Healthy).")));
   assert.ok(textCalls.some((text) => text.includes("No immediate review items")));
 });
 
