@@ -1,5 +1,5 @@
 import { memo, useMemo } from "react";
-import { Activity, AlertTriangle, ShieldCheck } from "lucide-react";
+import { Activity, AlertTriangle, ChevronDown, ShieldCheck } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type {
@@ -9,6 +9,7 @@ import type {
   SummaryData,
 } from "@/pages/dashboard/types";
 import {
+  buildDashboardLoginRiskExplanation,
   buildDashboardLoginRiskInsights,
   resolveDashboardLoginRiskSummary,
 } from "@/pages/dashboard/utils";
@@ -68,6 +69,10 @@ function DashboardLoginRiskInsightsImpl({
     [recentLoginActivities, summary, trends],
   );
   const riskSummary = useMemo(() => resolveDashboardLoginRiskSummary(insights), [insights]);
+  const riskExplanation = useMemo(
+    () => buildDashboardLoginRiskExplanation({ insights, summary: riskSummary }),
+    [insights, riskSummary],
+  );
 
   return (
     <Card
@@ -111,6 +116,37 @@ function DashboardLoginRiskInsightsImpl({
                 </div>
               </div>
             </div>
+            <details
+              className="group rounded-xl border border-border/60 bg-background/80"
+              data-testid="login-risk-explanation-disclosure"
+            >
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2.5 text-sm font-semibold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
+                <span>Kenapa status ini?</span>
+                <ChevronDown
+                  className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180"
+                  aria-hidden="true"
+                />
+              </summary>
+              <div className="border-t border-border/60 px-3 pb-3 pt-2">
+                <p className="text-xs leading-5 text-muted-foreground">{riskExplanation.headline}</p>
+                <ul className="mt-3 space-y-2" aria-label="Signal yang membentuk status risiko login">
+                  {riskExplanation.items.map((item) => (
+                    <li key={item.title} className="flex gap-2 rounded-lg bg-muted/10 p-2">
+                      <span
+                        className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${TONE_BAR_CLASS_BY_TONE[item.tone]}`}
+                        aria-hidden="true"
+                      />
+                      <span className="min-w-0 text-xs leading-5 text-muted-foreground">
+                        <span className="font-semibold text-foreground">{item.title}</span>
+                        <span className="text-foreground">: {item.value}</span>
+                        <span>. {item.description}</span>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+                <p className="mt-3 text-xs leading-5 text-muted-foreground">{riskExplanation.footer}</p>
+              </div>
+            </details>
             <div className="grid gap-2 sm:grid-cols-2">
               {insights.map((insight) => (
                 <article

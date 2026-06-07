@@ -436,9 +436,17 @@ test("DashboardLoginRiskInsights renders operator-ready status from existing log
   assert.match(markup, /Active session load/);
   assert.match(markup, /Login trend check/);
   assert.match(markup, /Recent session state/);
+  assert.match(markup, /login-risk-explanation-disclosure/);
+  assert.match(markup, /Kenapa status ini\?/);
+  assert.match(markup, /Status Attention kerana sekurang-kurangnya satu signal login berada pada tahap bahaya/);
+  assert.match(markup, /Signal yang membentuk status risiko login/);
   assert.match(markup, /Gunakan panel ini bersama rekod login terbaru/);
   assert.match(source, /className="grid gap-2 sm:grid-cols-2"/);
+  assert.match(source, /buildDashboardLoginRiskExplanation/);
   assert.match(source, /text-xl font-bold/);
+  assert.doesNotMatch(source, /useEffect\(/);
+  assert.doesNotMatch(source, /setTimeout\(/);
+  assert.doesNotMatch(source, /setInterval\(/);
 });
 
 test("DashboardLoginRiskInsights keeps warning status contrast above axe thresholds", () => {

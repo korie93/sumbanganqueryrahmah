@@ -78,6 +78,12 @@ export interface DashboardLoginRiskSummary {
   tone: DashboardAccessSignalTone;
 }
 
+export interface DashboardLoginRiskExplanation {
+  headline: string;
+  items: DashboardLoginRiskInsight[];
+  footer: string;
+}
+
 export type DashboardActionQueuePriority = "high" | "medium" | "low";
 
 export interface DashboardActionQueueItem {

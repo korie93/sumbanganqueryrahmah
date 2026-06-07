@@ -14,6 +14,7 @@ import type {
   DashboardActionQueueItem,
   DashboardAccessSignal,
   DashboardLoginPatternSummary,
+  DashboardLoginRiskExplanation,
   DashboardLoginRiskInsight,
   DashboardLoginRiskSummary,
   DashboardSessionHealthItem,
@@ -473,6 +474,36 @@ export function resolveDashboardLoginRiskSummary(
     label: "Normal",
     description: "Tiada tekanan login besar dikesan.",
     tone: "success",
+  };
+}
+
+export function buildDashboardLoginRiskExplanation(input: {
+  insights: readonly DashboardLoginRiskInsight[];
+  summary: DashboardLoginRiskSummary;
+}): DashboardLoginRiskExplanation {
+  const elevatedItems = input.insights.filter((insight) => insight.tone === "danger" || insight.tone === "warning");
+  const explanationItems = elevatedItems.length > 0 ? elevatedItems : input.insights;
+
+  if (input.summary.tone === "danger") {
+    return {
+      headline: "Status Attention kerana sekurang-kurangnya satu signal login berada pada tahap bahaya.",
+      items: [...explanationItems],
+      footer: "Semak item berisiko dahulu, kemudian bandingkan dengan rekod login terbaru sebelum sekat atau reset akaun.",
+    };
+  }
+
+  if (input.summary.tone === "warning") {
+    return {
+      headline: "Status Watch kerana ada signal kecil yang perlu dipantau, tetapi belum mencapai tahap kritikal.",
+      items: [...explanationItems],
+      footer: "Pantau perubahan dalam trend dan aktiviti terbaru sebelum ambil tindakan pentadbiran.",
+    };
+  }
+
+  return {
+    headline: "Status Normal kerana signal login utama berada dalam julat operasi biasa.",
+    items: [...explanationItems],
+    footer: "Teruskan pemantauan rutin dan gunakan rekod login terbaru jika ada laporan pengguna.",
   };
 }
 

@@ -5,6 +5,7 @@ import {
   buildDashboardRecentLoginActivityFilterCounts,
   buildDashboardAccessSignals,
   buildDashboardLoginPatternSummary,
+  buildDashboardLoginRiskExplanation,
   buildDashboardLoginRiskInsights,
   buildDashboardSessionHealthItems,
   buildDashboardTrendTickDates,
@@ -156,6 +157,73 @@ test("buildDashboardLoginRiskInsights stays calm for normal login signals", () =
   assert.equal(insights.find((insight) => insight.title === "Login trend check")?.tone, "success");
   assert.equal(insights.find((insight) => insight.title === "Recent session state")?.tone, "info");
   assert.equal(resolveDashboardLoginRiskSummary(insights).label, "Normal");
+});
+
+test("buildDashboardLoginRiskExplanation focuses operators on elevated signals first", () => {
+  const insights = buildDashboardLoginRiskInsights({
+    recentLoginActivities: [
+      {
+        browser: "Chrome",
+        ipAddress: "10.42.x.x",
+        lastActivityTime: "2026-05-06T02:30:00Z",
+        loginTime: "2026-05-06T02:00:00Z",
+        logoutReason: null,
+        logoutTime: null,
+        role: "superuser",
+        status: "active",
+        username: "super.user",
+      },
+    ],
+    summary: {
+      activeSessions: 9,
+      bannedUsers: 0,
+      loginsToday: 10,
+      loginFailures24h: 12,
+      totalDataRows: 100,
+      totalImports: 4,
+      totalUsers: 10,
+    },
+    trends: [
+      { date: "2026-05-04", logins: 2, logouts: 1 },
+      { date: "2026-05-05", logins: 3, logouts: 1 },
+      { date: "2026-05-06", logins: 10, logouts: 2 },
+    ],
+  });
+  const summary = resolveDashboardLoginRiskSummary(insights);
+  const explanation = buildDashboardLoginRiskExplanation({ insights, summary });
+
+  assert.equal(explanation.headline, "Status Attention kerana sekurang-kurangnya satu signal login berada pada tahap bahaya.");
+  assert.deepEqual(
+    explanation.items.map((item) => item.title),
+    ["Failed login pressure", "Active session load", "Login trend check"],
+  );
+  assert.match(explanation.footer, /sebelum sekat atau reset akaun/);
+});
+
+test("buildDashboardLoginRiskExplanation keeps calm states complete for routine review", () => {
+  const insights = buildDashboardLoginRiskInsights({
+    recentLoginActivities: [],
+    summary: {
+      activeSessions: 1,
+      bannedUsers: 0,
+      loginsToday: 2,
+      loginFailures24h: 0,
+      totalDataRows: 100,
+      totalImports: 4,
+      totalUsers: 10,
+    },
+    trends: [
+      { date: "2026-05-04", logins: 2, logouts: 1 },
+      { date: "2026-05-05", logins: 2, logouts: 1 },
+      { date: "2026-05-06", logins: 2, logouts: 1 },
+    ],
+  });
+  const summary = resolveDashboardLoginRiskSummary(insights);
+  const explanation = buildDashboardLoginRiskExplanation({ insights, summary });
+
+  assert.equal(explanation.headline, "Status Normal kerana signal login utama berada dalam julat operasi biasa.");
+  assert.equal(explanation.items.length, insights.length);
+  assert.match(explanation.footer, /pemantauan rutin/);
 });
 
 test("buildDashboardActionQueueItems prioritizes concrete login review actions", () => {
