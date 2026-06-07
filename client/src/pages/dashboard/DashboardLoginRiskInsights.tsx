@@ -148,6 +148,21 @@ function DashboardLoginRiskInsightsImpl({
                     ? `${healthScore.deductions.length} signal menolak skor untuk semakan operator.`
                     : "Tiada potongan skor aktif daripada signal login."}
                 </p>
+                {healthScore.deductions.length > 0 ? (
+                  <ul
+                    className="mt-2 grid gap-1.5 text-xs leading-5 text-muted-foreground"
+                    aria-label="Login health score deduction breakdown"
+                  >
+                    {healthScore.deductions.map((deduction) => (
+                      <li
+                        key={deduction}
+                        className="rounded-lg border border-border/60 bg-muted/10 px-2 py-1"
+                      >
+                        {deduction}
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
               </div>
             </div>
             <details

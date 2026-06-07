@@ -436,6 +436,10 @@ test("DashboardLoginRiskInsights renders operator-ready status from existing log
   assert.match(markup, /Login health score 44 of 100, Attention/);
   assert.match(markup, /data-testid="login-health-score"/);
   assert.match(markup, /3 signal menolak skor untuk semakan operator/);
+  assert.match(markup, /Login health score deduction breakdown/);
+  assert.match(markup, /-32 Failed login pressure: 12/);
+  assert.match(markup, /-12 Active session load: 9 \/ 10/);
+  assert.match(markup, /-12 Login trend check: 10 latest day/);
   assert.match(markup, /Failed login pressure/);
   assert.match(markup, /Active session load/);
   assert.match(markup, /Login trend check/);
