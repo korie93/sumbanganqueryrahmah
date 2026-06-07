@@ -48,6 +48,8 @@ test("DashboardPageHeader keeps compact solid actions and status badges", () => 
       isMobile: false,
       kpiCount: 9,
       trendDays: 14,
+      hasDashboardErrors: false,
+      latestUpdatedAt: Date.parse("2026-05-06T07:00:00Z"),
       exportingPdf: false,
       exportBlockReason: null,
       refreshing: false,
@@ -60,6 +62,8 @@ test("DashboardPageHeader keeps compact solid actions and status badges", () => 
   assert.match(markup, /Trend 14d/);
   assert.match(markup, /9 KPI akses/);
   assert.match(markup, /Auto refresh/);
+  assert.match(markup, /Data 06\/05\/2026, 3:00 PM/);
+  assert.match(markup, /badge-dashboard-freshness/);
   assert.match(markup, /button-export-pdf/);
   assert.match(markup, /button-refresh-dashboard/);
   assert.match(markup, /aria-describedby="dashboard-export-status"/);

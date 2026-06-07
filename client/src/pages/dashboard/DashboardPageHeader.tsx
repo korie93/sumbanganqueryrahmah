@@ -2,12 +2,18 @@ import { Download, RefreshCw } from "lucide-react";
 import { OperationalPageHeader } from "@/components/layout/OperationalPage";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import {
+  formatDashboardFreshnessLabel,
+  resolveDashboardFreshnessStatusMessage,
+} from "@/pages/dashboard/dashboard-freshness";
 import { resolveDashboardExportStatusMessage, type DashboardExportBlockReason } from "@/pages/dashboard/export-guards";
 
 type DashboardPageHeaderProps = {
   isMobile: boolean;
   kpiCount: number;
   trendDays: number;
+  hasDashboardErrors: boolean;
+  latestUpdatedAt: number | null;
   exportingPdf: boolean;
   exportBlockReason: DashboardExportBlockReason | null;
   refreshing: boolean;
@@ -19,6 +25,8 @@ export function DashboardPageHeader({
   isMobile,
   kpiCount,
   trendDays,
+  hasDashboardErrors,
+  latestUpdatedAt,
   exportingPdf,
   exportBlockReason,
   refreshing,
@@ -28,6 +36,12 @@ export function DashboardPageHeader({
   const exportStatusMessage = resolveDashboardExportStatusMessage({
     exportBlockReason,
     exportingPdf,
+    refreshing,
+  });
+  const freshnessLabel = formatDashboardFreshnessLabel(latestUpdatedAt);
+  const freshnessStatusMessage = resolveDashboardFreshnessStatusMessage({
+    hasDashboardErrors,
+    latestUpdatedAt,
     refreshing,
   });
 
@@ -50,6 +64,14 @@ export function DashboardPageHeader({
           </Badge>
           <Badge variant="outline" className="rounded-full px-3 py-1.5">
             Auto refresh
+          </Badge>
+          <Badge
+            variant={hasDashboardErrors ? "destructive" : "outline"}
+            className="rounded-full px-3 py-1.5"
+            data-testid="badge-dashboard-freshness"
+            aria-label={freshnessStatusMessage}
+          >
+            {freshnessLabel}
           </Badge>
         </div>
       }

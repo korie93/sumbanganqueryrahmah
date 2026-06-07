@@ -22,6 +22,7 @@ import {
   buildDashboardQueryErrorMessages,
   getDashboardQueryErrorDetail,
 } from "@/pages/dashboard/dashboard-query-errors";
+import { resolveDashboardLatestUpdatedAt } from "@/pages/dashboard/dashboard-freshness";
 import { resolveDashboardExportBlockReason } from "@/pages/dashboard/export-guards";
 import {
   DASHBOARD_PRIMARY_REFETCH_INTERVAL_MS,
@@ -64,6 +65,7 @@ function DashboardContent() {
 
   const {
     data: summary,
+    dataUpdatedAt: summaryUpdatedAt,
     error: summaryError,
     isError: summaryIsError,
     isFetching: summaryFetching,
@@ -78,6 +80,7 @@ function DashboardContent() {
 
   const {
     data: trends,
+    dataUpdatedAt: trendsUpdatedAt,
     error: trendsError,
     isError: trendsIsError,
     isFetching: trendsFetching,
@@ -92,6 +95,7 @@ function DashboardContent() {
 
   const {
     data: topUsers,
+    dataUpdatedAt: topUsersUpdatedAt,
     error: topUsersError,
     isError: topUsersIsError,
     isFetching: topUsersFetching,
@@ -106,6 +110,7 @@ function DashboardContent() {
 
   const {
     data: recentLoginActivities,
+    dataUpdatedAt: recentLoginActivityUpdatedAt,
     error: recentLoginActivityError,
     isError: recentLoginActivityIsError,
     isFetching: recentLoginActivityFetching,
@@ -122,6 +127,7 @@ function DashboardContent() {
 
   const {
     data: peakHours,
+    dataUpdatedAt: peakHoursUpdatedAt,
     error: peakHoursError,
     isError: peakHoursIsError,
     isFetching: peakHoursFetching,
@@ -137,6 +143,7 @@ function DashboardContent() {
 
   const {
     data: roleDistribution,
+    dataUpdatedAt: roleDistributionUpdatedAt,
     error: roleDistributionError,
     isError: roleDistributionIsError,
     isFetching: roleDistributionFetching,
@@ -178,6 +185,25 @@ function DashboardContent() {
   const exportBlockReason = useMemo(
     () => resolveDashboardExportBlockReason({ exportingPdf, refreshing }),
     [exportingPdf, refreshing],
+  );
+  const latestDashboardUpdatedAt = useMemo(
+    () =>
+      resolveDashboardLatestUpdatedAt([
+        summaryUpdatedAt,
+        trendsUpdatedAt,
+        topUsersUpdatedAt,
+        recentLoginActivityUpdatedAt,
+        peakHoursUpdatedAt,
+        roleDistributionUpdatedAt,
+      ]),
+    [
+      peakHoursUpdatedAt,
+      recentLoginActivityUpdatedAt,
+      roleDistributionUpdatedAt,
+      summaryUpdatedAt,
+      topUsersUpdatedAt,
+      trendsUpdatedAt,
+    ],
   );
   const dashboardErrorMessages = useMemo(
     () =>
@@ -304,6 +330,8 @@ function DashboardContent() {
         isMobile={isMobile}
         kpiCount={summaryCards.length}
         trendDays={trendDays}
+        hasDashboardErrors={dashboardErrorMessages.length > 0}
+        latestUpdatedAt={latestDashboardUpdatedAt}
         exportingPdf={exportingPdf}
         exportBlockReason={exportBlockReason}
         refreshing={refreshing}
