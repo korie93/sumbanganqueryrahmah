@@ -62,6 +62,9 @@ test("DashboardPageHeader keeps compact solid actions and status badges", () => 
   assert.match(markup, /Auto refresh/);
   assert.match(markup, /button-export-pdf/);
   assert.match(markup, /button-refresh-dashboard/);
+  assert.match(markup, /aria-describedby="dashboard-export-status"/);
+  assert.match(markup, /role="status"/);
+  assert.match(markup, /PDF sedia untuk dijana/);
   assert.match(markup, /type="button"/);
   assert.match(markup, /border-border\/60 bg-background shadow-sm/);
 });

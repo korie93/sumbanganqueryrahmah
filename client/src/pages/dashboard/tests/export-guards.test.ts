@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { resolveDashboardExportBlockReason } from "@/pages/dashboard/export-guards";
+import {
+  resolveDashboardExportBlockReason,
+  resolveDashboardExportStatusMessage,
+} from "@/pages/dashboard/export-guards";
 import {
   buildDashboardPdfSummaryReport,
   captureDashboardElementCanvas,
@@ -82,6 +85,35 @@ test("resolveDashboardExportBlockReason allows export when dashboard is idle", (
       refreshing: false,
     }),
     null,
+  );
+});
+
+test("resolveDashboardExportStatusMessage explains export readiness and busy states", () => {
+  assert.equal(
+    resolveDashboardExportStatusMessage({
+      exportBlockReason: null,
+      exportingPdf: false,
+      refreshing: false,
+    }),
+    "PDF sedia untuk dijana dengan ringkasan dashboard semasa.",
+  );
+
+  assert.equal(
+    resolveDashboardExportStatusMessage({
+      exportBlockReason: "busy",
+      exportingPdf: true,
+      refreshing: false,
+    }),
+    "Sedang jana PDF. Jangan tutup halaman sehingga muat turun selesai.",
+  );
+
+  assert.equal(
+    resolveDashboardExportStatusMessage({
+      exportBlockReason: "busy",
+      exportingPdf: false,
+      refreshing: true,
+    }),
+    "Refresh sedang berjalan. Export PDF akan aktif selepas data stabil.",
   );
 });
 

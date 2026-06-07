@@ -2,13 +2,14 @@ import { Download, RefreshCw } from "lucide-react";
 import { OperationalPageHeader } from "@/components/layout/OperationalPage";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { resolveDashboardExportStatusMessage, type DashboardExportBlockReason } from "@/pages/dashboard/export-guards";
 
 type DashboardPageHeaderProps = {
   isMobile: boolean;
   kpiCount: number;
   trendDays: number;
   exportingPdf: boolean;
-  exportBlockReason: string | null;
+  exportBlockReason: DashboardExportBlockReason | null;
   refreshing: boolean;
   onExportPdf: () => void;
   onRefresh: () => void;
@@ -24,6 +25,12 @@ export function DashboardPageHeader({
   onExportPdf,
   onRefresh,
 }: DashboardPageHeaderProps) {
+  const exportStatusMessage = resolveDashboardExportStatusMessage({
+    exportBlockReason,
+    exportingPdf,
+    refreshing,
+  });
+
   return (
     <OperationalPageHeader
       title={<span data-testid="text-dashboard-title">Login & Access Dashboard</span>}
@@ -50,6 +57,7 @@ export function DashboardPageHeader({
         <>
           <Button
             type="button"
+            aria-describedby="dashboard-export-status"
             onClick={onExportPdf}
             variant="outline"
             disabled={exportBlockReason !== null}
@@ -74,6 +82,15 @@ export function DashboardPageHeader({
             <RefreshCw className={`w-4 h-4 mr-2${refreshing ? " animate-spin" : ""}`} />
             Refresh
           </Button>
+          <p
+            id="dashboard-export-status"
+            role="status"
+            aria-live="polite"
+            data-testid="text-dashboard-export-status"
+            className="text-xs leading-5 text-muted-foreground sm:basis-full xl:max-w-[22rem] xl:text-right"
+          >
+            {exportStatusMessage}
+          </p>
         </>
       }
       className={isMobile ? "rounded-[28px] border-border/60 bg-background shadow-sm" : "border-border/60 bg-background shadow-sm"}
