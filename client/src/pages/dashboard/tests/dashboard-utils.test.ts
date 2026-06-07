@@ -5,6 +5,7 @@ import {
   buildDashboardRecentLoginActivityFilterCounts,
   buildDashboardAccessSignals,
   buildDashboardLoginRiskInsights,
+  buildDashboardSessionHealthItems,
   buildDashboardTrendTickDates,
   buildSummaryCards,
   filterDashboardRecentLoginActivities,
@@ -251,6 +252,97 @@ test("buildDashboardActionQueueItems returns no work when login signals are calm
   });
 
   assert.deepEqual(actions, []);
+});
+
+test("buildDashboardSessionHealthItems groups active freshness and timeout endings", () => {
+  const nowMs = Date.parse("2026-05-06T07:00:00Z");
+  const healthItems = buildDashboardSessionHealthItems(
+    [
+      {
+        browser: "Chrome",
+        ipAddress: "10.42.x.x",
+        lastActivityTime: "2026-05-06T06:50:00Z",
+        loginTime: "2026-05-06T06:00:00Z",
+        logoutReason: null,
+        logoutTime: null,
+        role: "admin",
+        status: "active",
+        username: "fresh.user",
+      },
+      {
+        browser: "Edge",
+        ipAddress: "10.43.x.x",
+        lastActivityTime: "2026-05-06T06:30:00Z",
+        loginTime: "2026-05-06T05:40:00Z",
+        logoutReason: null,
+        logoutTime: null,
+        role: "user",
+        status: "active",
+        username: "idle.user",
+      },
+      {
+        browser: "Firefox",
+        ipAddress: "10.44.x.x",
+        lastActivityTime: "2026-05-06T05:30:00Z",
+        loginTime: "2026-05-06T04:40:00Z",
+        logoutReason: null,
+        logoutTime: null,
+        role: "user",
+        status: "active",
+        username: "stale.user",
+      },
+      {
+        browser: "Safari",
+        ipAddress: "10.45.x.x",
+        lastActivityTime: null,
+        loginTime: "2026-05-06T06:30:00Z",
+        logoutReason: null,
+        logoutTime: null,
+        role: "user",
+        status: "active",
+        username: "unknown.user",
+      },
+      {
+        browser: "Chrome",
+        ipAddress: "10.46.x.x",
+        lastActivityTime: "2026-05-06T04:45:00Z",
+        loginTime: "2026-05-06T04:00:00Z",
+        logoutReason: "IDLE_TIMEOUT",
+        logoutTime: "2026-05-06T05:00:00Z",
+        role: "user",
+        status: "ended",
+        username: "timeout.user",
+      },
+      {
+        browser: "Chrome",
+        ipAddress: "10.47.x.x",
+        lastActivityTime: "2026-05-06T03:45:00Z",
+        loginTime: "2026-05-06T03:00:00Z",
+        logoutReason: "USER_LOGOUT",
+        logoutTime: "2026-05-06T04:00:00Z",
+        role: "user",
+        status: "ended",
+        username: "normal.user",
+      },
+    ],
+    nowMs,
+  );
+
+  assert.equal(healthItems.find((item) => item.id === "active")?.value, 4);
+  assert.equal(healthItems.find((item) => item.id === "fresh")?.value, 1);
+  assert.equal(healthItems.find((item) => item.id === "idle-watch")?.value, 1);
+  assert.equal(healthItems.find((item) => item.id === "stale")?.value, 2);
+  assert.equal(healthItems.find((item) => item.id === "timeout-ended")?.value, 1);
+  assert.equal(healthItems.find((item) => item.id === "idle-watch")?.tone, "warning");
+  assert.equal(healthItems.find((item) => item.id === "stale")?.tone, "danger");
+});
+
+test("buildDashboardSessionHealthItems keeps an empty activity feed healthy", () => {
+  const healthItems = buildDashboardSessionHealthItems([], Date.parse("2026-05-06T07:00:00Z"));
+
+  assert.deepEqual(healthItems.map((item) => item.value), [0, 0, 0, 0, 0]);
+  assert.equal(healthItems.find((item) => item.id === "active")?.tone, "success");
+  assert.equal(healthItems.find((item) => item.id === "stale")?.tone, "success");
 });
 
 test("formatDashboardUserLastLogin keeps login timestamps in operational timezone", () => {

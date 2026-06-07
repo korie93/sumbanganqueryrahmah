@@ -15,6 +15,7 @@ import type {
   DashboardAccessSignal,
   DashboardLoginRiskInsight,
   DashboardLoginRiskSummary,
+  DashboardSessionHealthItem,
   LoginTrend,
   RecentLoginActivity,
   RecentLoginActivityStatus,
@@ -43,6 +44,8 @@ export const DASHBOARD_PDF_EXPORT_FAILURE_MESSAGE = "Gagal jana PDF. Sila cuba s
 export type DashboardRecentLoginActivityFilter = "all" | "active" | "ended" | "attention";
 export type DashboardRecentLoginRiskTone = "success" | "warning" | "info";
 const DASHBOARD_ACTION_QUEUE_MAX_ITEMS = 4;
+const DASHBOARD_SESSION_FRESH_MAX_AGE_MS = 15 * 60 * 1000;
+const DASHBOARD_SESSION_IDLE_WATCH_MAX_AGE_MS = 60 * 60 * 1000;
 
 export interface DashboardRecentLoginRiskNote {
   label: string;
@@ -450,6 +453,101 @@ function hasDashboardForcedLogoutReason(activity: RecentLoginActivity) {
 
 function hasDashboardTimeoutLogoutReason(activity: RecentLoginActivity) {
   return /expired|idle|timeout/i.test(activity.logoutReason ?? "");
+}
+
+function parseDashboardRecentLoginTimeMs(value: string | null | undefined) {
+  if (!value) {
+    return null;
+  }
+
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+export function buildDashboardSessionHealthItems(
+  activities: readonly RecentLoginActivity[] | undefined,
+  nowMs = Date.now(),
+): DashboardSessionHealthItem[] {
+  const recentRows = activities ?? [];
+  let activeCount = 0;
+  let freshCount = 0;
+  let idleWatchCount = 0;
+  let staleCount = 0;
+  let timeoutEndedCount = 0;
+
+  for (const activity of recentRows) {
+    if (activity.status === "active") {
+      activeCount += 1;
+      const lastActivityMs = parseDashboardRecentLoginTimeMs(activity.lastActivityTime);
+
+      if (lastActivityMs === null) {
+        staleCount += 1;
+        continue;
+      }
+
+      const ageMs = Math.max(0, nowMs - lastActivityMs);
+      if (ageMs <= DASHBOARD_SESSION_FRESH_MAX_AGE_MS) {
+        freshCount += 1;
+      } else if (ageMs <= DASHBOARD_SESSION_IDLE_WATCH_MAX_AGE_MS) {
+        idleWatchCount += 1;
+      } else {
+        staleCount += 1;
+      }
+      continue;
+    }
+
+    if (hasDashboardTimeoutLogoutReason(activity)) {
+      timeoutEndedCount += 1;
+    }
+  }
+
+  return [
+    {
+      id: "active",
+      label: "Active now",
+      value: activeCount,
+      description: activeCount > 0
+        ? "Sesi yang masih aktif dalam rekod login terbaru."
+        : "Tiada sesi aktif dalam rekod terbaru.",
+      tone: activeCount > 0 ? "info" : "success",
+    },
+    {
+      id: "fresh",
+      label: "Fresh",
+      value: freshCount,
+      description: freshCount > 0
+        ? "Sesi aktif dengan aktiviti dalam 15 minit terakhir."
+        : "Tiada sesi aktif yang baru bergerak dalam 15 minit.",
+      tone: freshCount > 0 ? "success" : "info",
+    },
+    {
+      id: "idle-watch",
+      label: "Idle watch",
+      value: idleWatchCount,
+      description: idleWatchCount > 0
+        ? "Sesi aktif yang tidak bergerak antara 15 hingga 60 minit."
+        : "Tiada sesi aktif dalam zon idle watch.",
+      tone: idleWatchCount > 0 ? "warning" : "success",
+    },
+    {
+      id: "stale",
+      label: "Stale",
+      value: staleCount,
+      description: staleCount > 0
+        ? "Sesi aktif melebihi 60 minit tanpa aktiviti atau tiada timestamp sah."
+        : "Tiada sesi aktif stale dalam rekod terbaru.",
+      tone: staleCount > 0 ? "danger" : "success",
+    },
+    {
+      id: "timeout-ended",
+      label: "Ended by timeout",
+      value: timeoutEndedCount,
+      description: timeoutEndedCount > 0
+        ? "Sesi terbaru yang tamat kerana idle, expired, atau timeout."
+        : "Tiada sesi tamat kerana timeout dalam rekod terbaru.",
+      tone: timeoutEndedCount >= 2 ? "warning" : timeoutEndedCount > 0 ? "info" : "success",
+    },
+  ];
 }
 
 function pushDashboardActionQueueItem(

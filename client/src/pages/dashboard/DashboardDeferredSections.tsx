@@ -2,6 +2,7 @@ import { Suspense, lazy, startTransition, useEffect, useRef, useState } from "re
 import { OperationalSectionCard } from "@/components/layout/OperationalPage";
 import { DashboardActionQueue } from "@/pages/dashboard/DashboardActionQueue";
 import { DashboardSectionRenderBoundary } from "@/pages/dashboard/DashboardSectionRenderBoundary";
+import { DashboardSessionHealthStrip } from "@/pages/dashboard/DashboardSessionHealthStrip";
 import type {
   LoginTrend,
   PeakHour,
@@ -285,6 +286,10 @@ export function DashboardDeferredSections({
           recentLoginActivities={recentLoginActivities}
           summary={summary}
           trends={trends}
+        />
+        <DashboardSessionHealthStrip
+          loading={recentLoginActivityLoading}
+          recentLoginActivities={recentLoginActivities}
         />
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] xl:items-start">
           <div ref={loginRiskSection.triggerRef}>

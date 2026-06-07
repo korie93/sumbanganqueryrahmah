@@ -12,6 +12,7 @@ import { DashboardLoginRiskInsights } from "@/pages/dashboard/DashboardLoginRisk
 import { DashboardPageHeader } from "@/pages/dashboard/DashboardPageHeader";
 import { DashboardRecentLoginActivity } from "@/pages/dashboard/DashboardRecentLoginActivity";
 import { DashboardSectionRenderFallback } from "@/pages/dashboard/DashboardSectionRenderBoundary";
+import { DashboardSessionHealthStrip } from "@/pages/dashboard/DashboardSessionHealthStrip";
 import { DashboardSnapshotSection } from "@/pages/dashboard/DashboardSnapshotSection";
 import { DashboardSummaryCards } from "@/pages/dashboard/DashboardSummaryCards";
 import {
@@ -158,6 +159,7 @@ test("Dashboard wraps major dashboard regions in accessible render error boundar
   assert.match(dashboardSource, /sectionName="Ringkasan dashboard"/);
   assert.match(deferredSource, /Dashboard login review workspace/);
   assert.match(deferredSource, /<DashboardActionQueue/);
+  assert.match(deferredSource, /<DashboardSessionHealthStrip/);
   assert.match(deferredSource, /xl:grid-cols-\[minmax\(0,0\.9fr\)_minmax\(0,1\.1fr\)\]/);
   assert.match(deferredSource, /sectionName="Carta dashboard"/);
   assert.match(deferredSource, /sectionName="Insight risiko login dashboard"/);
@@ -258,6 +260,64 @@ test("DashboardActionQueue renders a clear state when no review item is needed",
   assert.match(markup, /Clear/);
   assert.match(markup, /No immediate review items/);
   assert.doesNotMatch(markup, /Open activity logs/);
+});
+
+test("DashboardSessionHealthStrip renders session freshness without lifecycle effects", () => {
+  const source = readFileSync(path.resolve(__dirname, "../DashboardSessionHealthStrip.tsx"), "utf8");
+  const markup = renderToStaticMarkup(
+    createElement(DashboardSessionHealthStrip, {
+      loading: false,
+      recentLoginActivities: [
+        {
+          browser: "Chrome",
+          ipAddress: "10.42.x.x",
+          lastActivityTime: new Date().toISOString(),
+          loginTime: "2026-05-06T06:00:00Z",
+          logoutReason: null,
+          logoutTime: null,
+          role: "admin",
+          status: "active",
+          username: "fresh.user",
+        },
+        {
+          browser: "Edge",
+          ipAddress: "10.43.x.x",
+          lastActivityTime: null,
+          loginTime: "2026-05-06T05:40:00Z",
+          logoutReason: null,
+          logoutTime: null,
+          role: "user",
+          status: "active",
+          username: "stale.user",
+        },
+        {
+          browser: "Chrome",
+          ipAddress: "10.44.x.x",
+          lastActivityTime: "2026-05-06T04:45:00Z",
+          loginTime: "2026-05-06T04:00:00Z",
+          logoutReason: "IDLE_TIMEOUT",
+          logoutTime: "2026-05-06T05:00:00Z",
+          role: "user",
+          status: "ended",
+          username: "timeout.user",
+        },
+      ],
+    }),
+  );
+
+  assert.match(markup, /Session Health/);
+  assert.match(markup, /Needs review/);
+  assert.match(markup, /Active now/);
+  assert.match(markup, /Fresh/);
+  assert.match(markup, /Idle watch/);
+  assert.match(markup, /Stale/);
+  assert.match(markup, /Ended by timeout/);
+  assert.match(markup, /aria-label="Dashboard session health summary"/);
+  assert.match(source, /buildDashboardSessionHealthItems/);
+  assert.match(source, /data-testid="card-dashboard-session-health"/);
+  assert.doesNotMatch(source, /useEffect\(/);
+  assert.doesNotMatch(source, /setTimeout\(/);
+  assert.doesNotMatch(source, /setInterval\(/);
 });
 
 test("DashboardLoginRiskInsights renders operator-ready status from existing login signals", () => {

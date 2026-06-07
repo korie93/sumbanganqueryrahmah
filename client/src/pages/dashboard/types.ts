@@ -88,3 +88,20 @@ export interface DashboardActionQueueItem {
   actionLabel: string;
   targetHref: string;
 }
+
+export type DashboardSessionHealthItemId =
+  | "active"
+  | "fresh"
+  | "idle-watch"
+  | "stale"
+  | "timeout-ended";
+
+export type DashboardSessionHealthTone = DashboardAccessSignalTone;
+
+export interface DashboardSessionHealthItem {
+  id: DashboardSessionHealthItemId;
+  label: string;
+  value: number;
+  description: string;
+  tone: DashboardSessionHealthTone;
+}
