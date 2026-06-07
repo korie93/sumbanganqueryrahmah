@@ -440,6 +440,14 @@ test("DashboardLoginRiskInsights renders operator-ready status from existing log
   assert.match(markup, /-32 Failed login pressure: 12/);
   assert.match(markup, /-12 Active session load: 9 \/ 10/);
   assert.match(markup, /-12 Login trend check: 10 latest day/);
+  assert.match(markup, /Next best actions/);
+  assert.match(markup, /aria-label="Login action queue"/);
+  assert.match(markup, /3 tindakan/);
+  assert.match(markup, /Semak login gagal/);
+  assert.match(markup, /Semak sesi aktif tinggi/);
+  assert.match(markup, /Sahkan lonjakan trend/);
+  assert.match(markup, /href="\/monitor\?section=activity"/);
+  assert.match(markup, /href="\/monitor\?section=audit"/);
   assert.match(markup, /Failed login pressure/);
   assert.match(markup, /Active session load/);
   assert.match(markup, /Login trend check/);
@@ -449,6 +457,7 @@ test("DashboardLoginRiskInsights renders operator-ready status from existing log
   assert.match(markup, /Status Attention kerana sekurang-kurangnya satu signal login berada pada tahap bahaya/);
   assert.match(markup, /Signal yang membentuk status risiko login/);
   assert.match(markup, /Gunakan panel ini bersama rekod login terbaru/);
+  assert.match(source, /buildDashboardLoginActionQueueItems/);
   assert.match(source, /className="grid gap-2 sm:grid-cols-2"/);
   assert.match(source, /buildDashboardLoginHealthScore/);
   assert.match(source, /buildDashboardLoginRiskExplanation/);

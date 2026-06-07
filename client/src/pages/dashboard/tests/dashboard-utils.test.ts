@@ -4,6 +4,7 @@ import {
   buildDashboardActionQueueItems,
   buildDashboardRecentLoginActivityFilterCounts,
   buildDashboardAccessSignals,
+  buildDashboardLoginActionQueueItems,
   buildDashboardLoginHealthScore,
   buildDashboardLoginPatternSummary,
   buildDashboardLoginRiskExplanation,
@@ -247,6 +248,73 @@ test("buildDashboardLoginHealthScore keeps watch and healthy states easy to dist
   assert.equal(healthyScore.score, 100);
   assert.equal(healthyScore.label, "Healthy");
   assert.deepEqual(healthyScore.deductions, []);
+});
+
+test("buildDashboardLoginActionQueueItems converts health deductions into local operator steps", () => {
+  const insights = buildDashboardLoginRiskInsights({
+    recentLoginActivities: [
+      {
+        browser: "Chrome",
+        ipAddress: "10.42.x.x",
+        lastActivityTime: "2026-05-06T02:30:00Z",
+        loginTime: "2026-05-06T02:00:00Z",
+        logoutReason: null,
+        logoutTime: null,
+        role: "superuser",
+        status: "active",
+        username: "super.user",
+      },
+    ],
+    summary: {
+      activeSessions: 9,
+      bannedUsers: 0,
+      loginsToday: 10,
+      loginFailures24h: 12,
+      totalDataRows: 100,
+      totalImports: 4,
+      totalUsers: 10,
+    },
+    trends: [
+      { date: "2026-05-04", logins: 2, logouts: 1 },
+      { date: "2026-05-05", logins: 3, logouts: 1 },
+      { date: "2026-05-06", logins: 10, logouts: 2 },
+    ],
+  });
+  const healthScore = buildDashboardLoginHealthScore(insights);
+  const actions = buildDashboardLoginActionQueueItems({ healthScore, insights });
+
+  assert.deepEqual(actions.map((action) => action.id), [
+    "login-action-failed-pressure",
+    "login-action-session-load",
+    "login-action-trend-spike",
+  ]);
+  assert.equal(actions[0]?.priority, "high");
+  assert.equal(actions[1]?.priority, "medium");
+  assert.equal(actions[0]?.targetHref, "/monitor?section=activity");
+  assert.equal(actions[2]?.targetHref, "/monitor?section=audit");
+});
+
+test("buildDashboardLoginActionQueueItems stays empty when login health is healthy", () => {
+  const insights = buildDashboardLoginRiskInsights({
+    recentLoginActivities: [],
+    summary: {
+      activeSessions: 1,
+      bannedUsers: 0,
+      loginsToday: 2,
+      loginFailures24h: 0,
+      totalDataRows: 100,
+      totalImports: 4,
+      totalUsers: 10,
+    },
+    trends: [
+      { date: "2026-05-04", logins: 2, logouts: 1 },
+      { date: "2026-05-05", logins: 2, logouts: 1 },
+      { date: "2026-05-06", logins: 2, logouts: 1 },
+    ],
+  });
+  const healthScore = buildDashboardLoginHealthScore(insights);
+
+  assert.deepEqual(buildDashboardLoginActionQueueItems({ healthScore, insights }), []);
 });
 
 test("buildDashboardLoginRiskExplanation focuses operators on elevated signals first", () => {

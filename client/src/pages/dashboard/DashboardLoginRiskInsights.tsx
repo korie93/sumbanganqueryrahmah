@@ -1,14 +1,17 @@
 import { memo, useMemo } from "react";
-import { Activity, AlertTriangle, ChevronDown, ShieldCheck } from "lucide-react";
+import { Activity, AlertTriangle, ArrowRight, CheckCircle2, ChevronDown, ClipboardList, ShieldCheck } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type {
+  DashboardActionQueueItem,
+  DashboardActionQueuePriority,
   DashboardAccessSignalTone,
   LoginTrend,
   RecentLoginActivity,
   SummaryData,
 } from "@/pages/dashboard/types";
 import {
+  buildDashboardLoginActionQueueItems,
   buildDashboardLoginHealthScore,
   buildDashboardLoginRiskExplanation,
   buildDashboardLoginRiskInsights,
@@ -36,6 +39,18 @@ const TONE_BAR_CLASS_BY_TONE: Record<DashboardAccessSignalTone, string> = {
   warning: "bg-amber-500",
 };
 
+const ACTION_PRIORITY_CLASS_BY_PRIORITY: Record<DashboardActionQueuePriority, string> = {
+  high: "border-rose-500/50 bg-rose-500/10 text-rose-700 dark:text-rose-200",
+  low: "border-sky-500/40 bg-sky-500/10 text-sky-700 dark:text-sky-200",
+  medium: "border-amber-500/50 bg-amber-500/10 text-amber-800 dark:text-amber-200",
+};
+
+const ACTION_PRIORITY_LABEL_BY_PRIORITY: Record<DashboardActionQueuePriority, string> = {
+  high: "High",
+  low: "Low",
+  medium: "Medium",
+};
+
 function DashboardLoginRiskInsightsSkeleton() {
   return (
     <div
@@ -59,6 +74,43 @@ function DashboardLoginRiskInsightsSkeleton() {
   );
 }
 
+function DashboardLoginActionQueueItemRow({
+  item,
+  index,
+}: {
+  item: DashboardActionQueueItem;
+  index: number;
+}) {
+  return (
+    <li className="rounded-lg border border-border/60 bg-muted/10 p-2">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge
+              variant="outline"
+              className={`rounded-full ${ACTION_PRIORITY_CLASS_BY_PRIORITY[item.priority]}`}
+            >
+              {ACTION_PRIORITY_LABEL_BY_PRIORITY[item.priority]}
+            </Badge>
+            <p className="text-xs font-semibold leading-5 text-foreground">
+              {index + 1}. {item.title}
+            </p>
+          </div>
+          <p className="mt-1 text-xs leading-5 text-muted-foreground">{item.description}</p>
+        </div>
+        <a
+          href={item.targetHref}
+          className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg border border-border/70 bg-background px-2.5 py-1.5 text-xs font-semibold text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          data-testid={`link-login-action-${item.id}`}
+        >
+          {item.actionLabel}
+          <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+        </a>
+      </div>
+    </li>
+  );
+}
+
 function DashboardLoginRiskInsightsImpl({
   loading,
   recentLoginActivities,
@@ -75,6 +127,10 @@ function DashboardLoginRiskInsightsImpl({
     [insights, riskSummary],
   );
   const healthScore = useMemo(() => buildDashboardLoginHealthScore(insights), [insights]);
+  const loginActionItems = useMemo(
+    () => buildDashboardLoginActionQueueItems({ healthScore, insights }),
+    [healthScore, insights],
+  );
 
   return (
     <Card
@@ -164,6 +220,41 @@ function DashboardLoginRiskInsightsImpl({
                   </ul>
                 ) : null}
               </div>
+            </div>
+            <div
+              className="rounded-xl border border-border/60 bg-background/80 p-3"
+              data-testid="login-action-queue"
+            >
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                <div className="min-w-0">
+                  <p className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                    <ClipboardList className="h-4 w-4" aria-hidden="true" />
+                    Next best actions
+                  </p>
+                  <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                    Langkah ringkas berdasarkan signal yang menolak skor login.
+                  </p>
+                </div>
+                <Badge variant={loginActionItems.length > 0 ? "outline" : "secondary"} className="w-fit rounded-full">
+                  {loginActionItems.length > 0 ? `${loginActionItems.length} tindakan` : "Clear"}
+                </Badge>
+              </div>
+              {loginActionItems.length > 0 ? (
+                <ol className="mt-3 grid gap-2" aria-label="Login action queue">
+                  {loginActionItems.map((item, index) => (
+                    <DashboardLoginActionQueueItemRow key={item.id} item={item} index={index} />
+                  ))}
+                </ol>
+              ) : (
+                <div className="mt-3 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-emerald-800 dark:text-emerald-200">
+                  <div className="flex items-start gap-2">
+                    <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                    <p className="text-xs leading-5">
+                      Tiada tindakan segera. Teruskan pemantauan rutin melalui rekod login terbaru.
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
             <details
               className="group rounded-xl border border-border/60 bg-background/80"

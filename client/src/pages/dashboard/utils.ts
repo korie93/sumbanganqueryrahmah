@@ -12,6 +12,7 @@ import {
 import { buildPathForPage } from "@/app/routing";
 import type {
   DashboardActionQueueItem,
+  DashboardActionQueuePriority,
   DashboardAccessSignal,
   DashboardLoginPatternSummary,
   DashboardLoginHealthScore,
@@ -49,6 +50,7 @@ export const DASHBOARD_PDF_EXPORT_FAILURE_MESSAGE = "Gagal jana PDF. Sila cuba s
 export type DashboardRecentLoginActivityFilter = "all" | "active" | "ended" | "attention";
 export type DashboardRecentLoginRiskTone = "success" | "warning" | "info";
 const DASHBOARD_ACTION_QUEUE_MAX_ITEMS = 4;
+const DASHBOARD_LOGIN_ACTION_QUEUE_MAX_ITEMS = 3;
 const DASHBOARD_SESSION_FRESH_MAX_AGE_MS = 15 * 60 * 1000;
 const DASHBOARD_SESSION_IDLE_WATCH_MAX_AGE_MS = 60 * 60 * 1000;
 const DASHBOARD_LOGIN_HEALTH_DEDUCTION_BY_TONE = {
@@ -861,6 +863,75 @@ function pushDashboardActionQueueItem(
   if (!items.some((existing) => existing.id === item.id)) {
     items.push(item);
   }
+}
+
+function resolveDashboardLoginActionPriority(
+  tone: DashboardAccessSignal["tone"],
+): DashboardActionQueuePriority {
+  return tone === "danger" ? "high" : "medium";
+}
+
+export function buildDashboardLoginActionQueueItems(input: {
+  healthScore: DashboardLoginHealthScore;
+  insights: readonly DashboardLoginRiskInsight[];
+}): DashboardActionQueueItem[] {
+  const items: DashboardActionQueueItem[] = [];
+
+  for (const insight of input.insights) {
+    if (insight.tone !== "danger" && insight.tone !== "warning") {
+      continue;
+    }
+
+    const priority = resolveDashboardLoginActionPriority(insight.tone);
+
+    if (insight.title === "Failed login pressure") {
+      pushDashboardActionQueueItem(items, {
+        id: "login-action-failed-pressure",
+        title: "Semak login gagal",
+        description: `${insight.value} percubaan gagal perlu dibandingkan dengan aktiviti terkini sebelum akaun dikunci atau reset.`,
+        priority,
+        actionLabel: "Buka aktiviti",
+        targetHref: buildPathForPage("activity"),
+      });
+      continue;
+    }
+
+    if (insight.title === "Active session load") {
+      pushDashboardActionQueueItem(items, {
+        id: "login-action-session-load",
+        title: "Semak sesi aktif tinggi",
+        description: `Beban sesi ${insight.value} mungkin normal atau tanda sesi lama. Periksa rekod aktif sebelum tamatkan sesi.`,
+        priority,
+        actionLabel: "Buka aktiviti",
+        targetHref: buildPathForPage("activity"),
+      });
+      continue;
+    }
+
+    if (insight.title === "Login trend check") {
+      pushDashboardActionQueueItem(items, {
+        id: "login-action-trend-spike",
+        title: "Sahkan lonjakan trend",
+        description: `Hari terkini mencatat ${insight.value}. Padankan dengan jadual operasi atau semak audit jika lonjakan tidak dijangka.`,
+        priority,
+        actionLabel: "Buka audit",
+        targetHref: buildPathForPage("audit"),
+      });
+    }
+  }
+
+  if (items.length === 0 && input.healthScore.label !== "Healthy") {
+    pushDashboardActionQueueItem(items, {
+      id: "login-action-general-review",
+      title: "Semak signal login",
+      description: "Skor login belum sihat sepenuhnya. Baca potongan skor dan bandingkan dengan rekod aktiviti terbaru.",
+      priority: input.healthScore.label === "Attention" ? "high" : "medium",
+      actionLabel: "Buka aktiviti",
+      targetHref: buildPathForPage("activity"),
+    });
+  }
+
+  return items.slice(0, DASHBOARD_LOGIN_ACTION_QUEUE_MAX_ITEMS);
 }
 
 export function buildDashboardActionQueueItems(input: {
