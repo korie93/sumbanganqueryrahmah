@@ -32,21 +32,6 @@ jobs:
   release-readiness:
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_DB: sqr_db
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: sqr-ci-postgres-${{ github.run_id }}-${{ github.run_attempt }}-password-32chars
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U postgres -d sqr_db"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-
     steps:
       - name: Checkout
         uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
@@ -77,6 +62,9 @@ jobs:
 
       - name: Generate SBOM
         run: SBOM_ARTIFACTS_DIR=artifacts/sbom npm run supply-chain:sbom
+
+      - name: Start CI PostgreSQL
+        run: bash scripts/ci-start-postgres.sh
 
       - name: Verify migration drift
         run: npm run db:check

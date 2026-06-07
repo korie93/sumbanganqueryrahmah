@@ -142,20 +142,6 @@ jobs:
       - coverage-gate
     runs-on: ubuntu-latest
     timeout-minutes: 35
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_DB: sqr_db
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: sqr-ci-postgres-${{ github.run_id }}-${{ github.run_attempt }}-password-32chars
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U postgres -d sqr_db"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
     env:
       NODE_ENV: development
       PORT: 5000
@@ -211,6 +197,9 @@ jobs:
 
       - name: Verify XLSX vendor integrity
         run: npm run verify:xlsx-vendor-integrity
+
+      - name: Start CI PostgreSQL
+        run: bash scripts/ci-start-postgres.sh
 
       - name: Verify migration drift
         run: npm run db:check
