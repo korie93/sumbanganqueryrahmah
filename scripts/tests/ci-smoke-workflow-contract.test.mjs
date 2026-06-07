@@ -24,3 +24,20 @@ test("smoke-ui workflow configures a deterministic receipt scanner shim for read
   assert.match(smokeJob, /COLLECTION_RECEIPT_EXTERNAL_SCAN_TIMEOUT_MS:\s*5000/);
   assert.match(smokeJob, /production templates still require clamdscan fail-closed/);
 });
+
+test("smoke-ui workflow keeps auth smoke ahead of slower Lighthouse budgets", () => {
+  const workflow = readFileSync(".github/workflows/ci.yml", "utf8");
+  const startIndex = workflow.indexOf("  smoke-ui:");
+  assert.notEqual(startIndex, -1, "missing smoke-ui job");
+  const smokeJob = workflow.slice(startIndex);
+
+  assert.match(smokeJob, /timeout-minutes:\s*55/);
+  assert.ok(
+    smokeJob.indexOf("Run UI smoke") < smokeJob.indexOf("Run PageSpeed Lighthouse budgets"),
+    "UI smoke should fail fast before slower PageSpeed budgets consume the job timeout",
+  );
+  assert.ok(
+    smokeJob.indexOf("Run accessibility contracts") < smokeJob.indexOf("Run UI smoke"),
+    "UI smoke should still run after visual and accessibility contracts",
+  );
+});

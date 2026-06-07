@@ -141,7 +141,7 @@ jobs:
       - build-and-test
       - coverage-gate
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 55
     env:
       NODE_ENV: development
       PORT: 5000
@@ -263,6 +263,19 @@ jobs:
       - name: Run accessibility contracts
         run: bash scripts/a11y-contrast-check.sh http://127.0.0.1:5000
 
+      - name: Run UI smoke
+        run: |
+          echo "Running smoke-ui on commit: $GITHUB_SHA"
+          git rev-parse HEAD
+          grep -n "Login should establish an authenticated session." scripts/ui-smoke.mjs
+          SMOKE_ARTIFACTS_DIR=artifacts/smoke-ui npm run smoke:ui
+
+      - name: Capture smoke monitoring snapshot
+        if: always()
+        continue-on-error: true
+        run: |
+          MONITOR_OUTPUT_FILE=artifacts/smoke-ui/monitor-stale-conflicts.json npm run monitor:stale-conflicts
+
       - name: Run PageSpeed Lighthouse budgets
         run: |
           PAGESPEED_CHROME_PATH="${PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH}" \
@@ -280,19 +293,6 @@ jobs:
           name: pagespeed-${{ github.run_id }}-${{ github.run_attempt }}
           if-no-files-found: warn
           path: artifacts/pagespeed
-
-      - name: Run UI smoke
-        run: |
-          echo "Running smoke-ui on commit: $GITHUB_SHA"
-          git rev-parse HEAD
-          grep -n "Login should establish an authenticated session." scripts/ui-smoke.mjs
-          SMOKE_ARTIFACTS_DIR=artifacts/smoke-ui npm run smoke:ui
-
-      - name: Capture smoke monitoring snapshot
-        if: always()
-        continue-on-error: true
-        run: |
-          MONITOR_OUTPUT_FILE=artifacts/smoke-ui/monitor-stale-conflicts.json npm run monitor:stale-conflicts
 
       - name: Print server log on failure
         if: failure()

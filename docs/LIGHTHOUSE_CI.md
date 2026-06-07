@@ -11,11 +11,14 @@ The `smoke-ui` job in `.github/workflows/ci.yml`:
 1. Builds the app.
 2. Starts `dist-local/server/cluster-local.js`.
 3. Runs visual and accessibility contracts.
-4. Resolves the Playwright Chromium executable and passes it to Lighthouse via
+4. Runs the authenticated UI smoke flow before the slower Lighthouse budget gate
+   so login/session regressions fail with direct smoke artifacts instead of being
+   hidden by the overall job timeout.
+5. Resolves the Playwright Chromium executable and passes it to Lighthouse via
    `PAGESPEED_CHROME_PATH`, avoiding runner-specific Chrome discovery failures.
-5. Runs `npm run perf:pagespeed:local:strict` against the already-running local
+6. Runs `npm run perf:pagespeed:local:strict` against the already-running local
    server with `PAGESPEED_REUSE_SERVER=true`.
-6. Uploads `artifacts/pagespeed` as a GitHub Actions artifact.
+7. Uploads `artifacts/pagespeed` as a GitHub Actions artifact.
 
 ## Score Thresholds
 
