@@ -9,6 +9,7 @@ import { fileURLToPath } from "node:url";
 import { DashboardActionQueue } from "@/pages/dashboard/DashboardActionQueue";
 import { DashboardChartsGrid } from "@/pages/dashboard/DashboardChartsGrid";
 import { DashboardLoginCommandBar } from "@/pages/dashboard/DashboardLoginCommandBar";
+import { DashboardLoginIncidentTimeline } from "@/pages/dashboard/DashboardLoginIncidentTimeline";
 import { DashboardLoginPatternSummary } from "@/pages/dashboard/DashboardLoginPatternSummary";
 import { DashboardLoginReviewSidebar } from "@/pages/dashboard/DashboardLoginReviewSidebar";
 import { DashboardLoginRiskInsights } from "@/pages/dashboard/DashboardLoginRiskInsights";
@@ -167,6 +168,7 @@ test("Dashboard wraps major dashboard regions in accessible render error boundar
 
   assert.match(dashboardSource, /<DashboardSectionRenderBoundary/);
   assert.match(dashboardSource, /<DashboardLoginCommandBar/);
+  assert.match(dashboardSource, /<DashboardLoginIncidentTimeline/);
   assert.match(dashboardSource, /sectionName="Ringkasan dashboard"/);
   assert.match(deferredSource, /Dashboard login review workspace/);
   assert.match(deferredSource, /<DashboardLoginReviewSidebar/);
@@ -245,6 +247,63 @@ test("DashboardLoginCommandBar gives operators a compact first-read status strip
   assert.match(source, /buildDashboardLoginHealthScore/);
   assert.match(source, /buildDashboardActionQueueItems/);
   assert.match(source, /data-testid="dashboard-login-command-bar"/);
+  assert.doesNotMatch(source, /useEffect\(/);
+  assert.doesNotMatch(source, /setTimeout\(/);
+  assert.doesNotMatch(source, /setInterval\(/);
+});
+
+test("DashboardLoginIncidentTimeline turns login signals into a short operator sequence", () => {
+  const source = readFileSync(path.resolve(__dirname, "../DashboardLoginIncidentTimeline.tsx"), "utf8");
+  const markup = renderToStaticMarkup(
+    createElement(DashboardLoginIncidentTimeline, {
+      loading: false,
+      recentLoginActivities: [
+        {
+          browser: "Chrome",
+          ipAddress: "10.42.x.x",
+          lastActivityTime: "2026-05-06T02:30:00Z",
+          loginTime: "2026-05-06T02:00:00Z",
+          logoutReason: "ACCOUNT_LOCKED",
+          logoutTime: "2026-05-06T03:00:00Z",
+          role: "admin",
+          status: "ended",
+          username: "locked.user",
+        },
+      ],
+      summary: {
+        activeSessions: 8,
+        bannedUsers: 1,
+        loginsToday: 12,
+        loginFailures24h: 15,
+        totalDataRows: 100,
+        totalImports: 4,
+        totalUsers: 10,
+      },
+      trends: [
+        { date: "2026-05-04", logins: 3, logouts: 1 },
+        { date: "2026-05-05", logins: 3, logouts: 1 },
+        { date: "2026-05-06", logins: 12, logouts: 2 },
+      ],
+    }),
+  );
+
+  assert.match(markup, /Incident Timeline/);
+  assert.match(markup, /Apa yang berlaku sekarang/);
+  assert.match(markup, /Login incident sequence/);
+  assert.match(markup, /Restricted account event/);
+  assert.match(markup, /locked\.user/);
+  assert.match(markup, /Failed login pressure/);
+  assert.match(markup, /15 cubaan gagal/);
+  assert.match(markup, /Sesi aktif sekarang/);
+  assert.match(markup, /8 daripada 10 pengguna/);
+  assert.match(markup, /Trend login meningkat/);
+  assert.match(markup, /12 login dan 2 logout/);
+  assert.match(markup, /href="\/monitor\?section=activity"/);
+  assert.match(source, /buildDashboardLoginIncidentTimelineItems/);
+  assert.match(source, /isDashboardRecentLoginAttentionActivity/);
+  assert.match(source, /resolveDashboardRecentLoginRiskNote/);
+  assert.match(source, /buildDashboardActionQueueItems/);
+  assert.match(source, /data-testid="dashboard-login-incident-timeline"/);
   assert.doesNotMatch(source, /useEffect\(/);
   assert.doesNotMatch(source, /setTimeout\(/);
   assert.doesNotMatch(source, /setInterval\(/);
