@@ -31,7 +31,7 @@ const COMMAND_BAR_TONE_CLASS_BY_TONE: Record<DashboardAccessSignalTone, string> 
 function DashboardLoginCommandBarSkeleton() {
   return (
     <section
-      className="rounded-2xl border border-border/60 bg-background p-3 shadow-sm sm:p-4"
+      className="scroll-mt-24 rounded-2xl border border-border/60 bg-background p-3 shadow-sm sm:p-4"
       role="status"
       aria-label="Loading dashboard login command bar"
       data-floating-ai-avoid="true"
@@ -94,7 +94,8 @@ function DashboardLoginCommandBarImpl({
 
   return (
     <section
-      className="rounded-2xl border border-border/60 bg-background p-3 shadow-sm sm:p-4"
+      id="dashboard-login-priority"
+      className="scroll-mt-24 rounded-2xl border border-border/60 bg-background p-3 shadow-sm sm:p-4"
       aria-label="Dashboard login priority command bar"
       data-floating-ai-avoid="true"
       data-testid="dashboard-login-command-bar"

@@ -141,7 +141,7 @@ export function buildDashboardLoginSituationSummary(input: {
 function DashboardLoginSituationSummarySkeleton() {
   return (
     <section
-      className="rounded-2xl border border-border/60 bg-background p-3 shadow-sm sm:p-4"
+      className="scroll-mt-24 rounded-2xl border border-border/60 bg-background p-3 shadow-sm sm:p-4"
       role="status"
       aria-label="Loading dashboard login situation summary"
       data-floating-ai-avoid="true"
@@ -183,7 +183,8 @@ function DashboardLoginSituationSummaryImpl({
 
   return (
     <section
-      className="rounded-2xl border border-border/60 bg-background p-3 shadow-sm sm:p-4"
+      id="dashboard-login-situation-summary"
+      className="scroll-mt-24 rounded-2xl border border-border/60 bg-background p-3 shadow-sm sm:p-4"
       aria-label="Dashboard login situation summary"
       data-floating-ai-avoid="true"
       data-testid="dashboard-login-situation-summary"

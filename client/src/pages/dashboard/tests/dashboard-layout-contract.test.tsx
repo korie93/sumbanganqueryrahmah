@@ -9,6 +9,7 @@ import { fileURLToPath } from "node:url";
 import { DashboardActionQueue } from "@/pages/dashboard/DashboardActionQueue";
 import { DashboardChartsGrid } from "@/pages/dashboard/DashboardChartsGrid";
 import { DashboardLoginCommandBar } from "@/pages/dashboard/DashboardLoginCommandBar";
+import { DashboardLoginFocusStrip } from "@/pages/dashboard/DashboardLoginFocusStrip";
 import { DashboardLoginIncidentTimeline } from "@/pages/dashboard/DashboardLoginIncidentTimeline";
 import { DashboardLoginPatternSummary } from "@/pages/dashboard/DashboardLoginPatternSummary";
 import { DashboardLoginReviewSidebar } from "@/pages/dashboard/DashboardLoginReviewSidebar";
@@ -169,8 +170,10 @@ test("Dashboard wraps major dashboard regions in accessible render error boundar
 
   assert.match(dashboardSource, /<DashboardSectionRenderBoundary/);
   assert.match(dashboardSource, /<DashboardLoginCommandBar/);
+  assert.match(dashboardSource, /<DashboardLoginFocusStrip/);
   assert.match(dashboardSource, /<DashboardLoginSituationSummary/);
   assert.match(dashboardSource, /<DashboardLoginIncidentTimeline/);
+  assert.match(dashboardSource, /id="dashboard-login-snapshot"/);
   assert.match(dashboardSource, /sectionName="Ringkasan dashboard"/);
   assert.match(deferredSource, /Dashboard login review workspace/);
   assert.match(deferredSource, /<DashboardLoginReviewSidebar/);
@@ -248,7 +251,30 @@ test("DashboardLoginCommandBar gives operators a compact first-read status strip
   assert.match(source, /buildDashboardLoginRiskInsights/);
   assert.match(source, /buildDashboardLoginHealthScore/);
   assert.match(source, /buildDashboardActionQueueItems/);
+  assert.match(source, /id="dashboard-login-priority"/);
   assert.match(source, /data-testid="dashboard-login-command-bar"/);
+  assert.doesNotMatch(source, /useEffect\(/);
+  assert.doesNotMatch(source, /setTimeout\(/);
+  assert.doesNotMatch(source, /setInterval\(/);
+});
+
+test("DashboardLoginFocusStrip gives operators a compact section map without lifecycle effects", () => {
+  const source = readFileSync(path.resolve(__dirname, "../DashboardLoginFocusStrip.tsx"), "utf8");
+  const markup = renderToStaticMarkup(createElement(DashboardLoginFocusStrip));
+
+  assert.match(markup, /Dashboard login focus navigation/);
+  assert.match(markup, /data-testid="dashboard-login-focus-strip"/);
+  assert.match(markup, /Jump to/);
+  assert.match(markup, /href="#dashboard-login-priority"/);
+  assert.match(markup, /href="#dashboard-login-situation-summary"/);
+  assert.match(markup, /href="#dashboard-login-incident-timeline"/);
+  assert.match(markup, /href="#dashboard-login-snapshot"/);
+  assert.match(markup, /href="#dashboard-recent-login-activity"/);
+  assert.match(markup, /href="#dashboard-login-charts"/);
+  assert.match(markup, /Status dan tindakan utama/);
+  assert.match(markup, /Keputusan mudah dibaca/);
+  assert.match(markup, /KPI akses utama/);
+  assert.match(source, /DASHBOARD_LOGIN_FOCUS_ITEMS/);
   assert.doesNotMatch(source, /useEffect\(/);
   assert.doesNotMatch(source, /setTimeout\(/);
   assert.doesNotMatch(source, /setInterval\(/);
@@ -306,6 +332,7 @@ test("DashboardLoginSituationSummary explains the current login state in plain o
   assert.match(source, /buildDashboardLoginSituationSummary/);
   assert.match(source, /buildDashboardLoginRiskExplanation/);
   assert.match(source, /buildDashboardActionQueueItems/);
+  assert.match(source, /id="dashboard-login-situation-summary"/);
   assert.match(source, /data-testid="dashboard-login-situation-summary"/);
   assert.doesNotMatch(source, /useEffect\(/);
   assert.doesNotMatch(source, /setTimeout\(/);
@@ -363,6 +390,7 @@ test("DashboardLoginIncidentTimeline turns login signals into a short operator s
   assert.match(source, /isDashboardRecentLoginAttentionActivity/);
   assert.match(source, /resolveDashboardRecentLoginRiskNote/);
   assert.match(source, /buildDashboardActionQueueItems/);
+  assert.match(source, /id="dashboard-login-incident-timeline"/);
   assert.match(source, /data-testid="dashboard-login-incident-timeline"/);
   assert.doesNotMatch(source, /useEffect\(/);
   assert.doesNotMatch(source, /setTimeout\(/);

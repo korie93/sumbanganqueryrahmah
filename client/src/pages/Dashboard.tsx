@@ -16,6 +16,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { isMobileViewportWidth } from "@/lib/responsive";
 import { DashboardDeferredSections } from "@/pages/dashboard/DashboardDeferredSections";
 import { DashboardLoginCommandBar } from "@/pages/dashboard/DashboardLoginCommandBar";
+import { DashboardLoginFocusStrip } from "@/pages/dashboard/DashboardLoginFocusStrip";
 import { DashboardLoginIncidentTimeline } from "@/pages/dashboard/DashboardLoginIncidentTimeline";
 import { DashboardLoginSituationSummary } from "@/pages/dashboard/DashboardLoginSituationSummary";
 import { DashboardPageHeader } from "@/pages/dashboard/DashboardPageHeader";
@@ -368,6 +369,7 @@ function DashboardContent() {
           summary={summary}
           trends={trends ?? []}
         />
+        <DashboardLoginFocusStrip />
         <DashboardLoginSituationSummary
           loading={summaryLoading || trendsLoading || recentLoginActivityLoading}
           recentLoginActivities={recentLoginActivities ?? []}
@@ -380,19 +382,21 @@ function DashboardContent() {
           summary={summary}
           trends={trends ?? []}
         />
-        <DashboardSectionRenderBoundary
-          sectionName="Ringkasan dashboard"
-          boundaryKey={`summary:${summaryLoading}:${summaryErrorMessage ?? "ok"}:${summaryCards.length}`}
-        >
-          <DashboardSnapshotSection
-            summary={summary}
-            summaryCards={summaryCards}
-            summaryErrorMessage={summaryErrorMessage}
-            summaryLoading={summaryLoading}
-            summaryRetrying={summaryFetching}
-            onRetrySummary={handleRetrySummary}
-          />
-        </DashboardSectionRenderBoundary>
+        <div id="dashboard-login-snapshot" className="scroll-mt-24">
+          <DashboardSectionRenderBoundary
+            sectionName="Ringkasan dashboard"
+            boundaryKey={`summary:${summaryLoading}:${summaryErrorMessage ?? "ok"}:${summaryCards.length}`}
+          >
+            <DashboardSnapshotSection
+              summary={summary}
+              summaryCards={summaryCards}
+              summaryErrorMessage={summaryErrorMessage}
+              summaryLoading={summaryLoading}
+              summaryRetrying={summaryFetching}
+              onRetrySummary={handleRetrySummary}
+            />
+          </DashboardSectionRenderBoundary>
+        </div>
         <DashboardDeferredSections
           defer={shouldDeferSecondaryMobileSections}
           trendDays={trendDays}
