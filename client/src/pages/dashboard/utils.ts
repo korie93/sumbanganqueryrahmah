@@ -14,6 +14,7 @@ import type {
   DashboardActionQueueItem,
   DashboardAccessSignal,
   DashboardLoginPatternSummary,
+  DashboardLoginHealthScore,
   DashboardLoginRiskExplanation,
   DashboardLoginRiskInsight,
   DashboardLoginRiskSummary,
@@ -50,6 +51,12 @@ export type DashboardRecentLoginRiskTone = "success" | "warning" | "info";
 const DASHBOARD_ACTION_QUEUE_MAX_ITEMS = 4;
 const DASHBOARD_SESSION_FRESH_MAX_AGE_MS = 15 * 60 * 1000;
 const DASHBOARD_SESSION_IDLE_WATCH_MAX_AGE_MS = 60 * 60 * 1000;
+const DASHBOARD_LOGIN_HEALTH_DEDUCTION_BY_TONE = {
+  danger: 32,
+  info: 0,
+  success: 0,
+  warning: 12,
+} as const;
 
 export interface DashboardRecentLoginRiskNote {
   label: string;
@@ -474,6 +481,60 @@ export function resolveDashboardLoginRiskSummary(
     label: "Normal",
     description: "Tiada tekanan login besar dikesan.",
     tone: "success",
+  };
+}
+
+function clampDashboardLoginHealthScore(score: number) {
+  return Math.max(0, Math.min(100, Math.round(score)));
+}
+
+export function buildDashboardLoginHealthScore(
+  insights: readonly DashboardLoginRiskInsight[],
+): DashboardLoginHealthScore {
+  const deductions: string[] = [];
+  let deductionPoints = 0;
+
+  for (const insight of insights) {
+    const points = DASHBOARD_LOGIN_HEALTH_DEDUCTION_BY_TONE[insight.tone];
+    if (points <= 0) {
+      continue;
+    }
+
+    deductionPoints += points;
+    deductions.push(`-${points} ${insight.title}: ${insight.value}`);
+  }
+
+  const rawScore = 100 - deductionPoints;
+  const score = clampDashboardLoginHealthScore(rawScore);
+  const hasDanger = insights.some((insight) => insight.tone === "danger");
+  const hasWarning = insights.some((insight) => insight.tone === "warning");
+
+  if (hasDanger || score < 70) {
+    return {
+      score,
+      label: "Attention",
+      description: "Skor rendah kerana ada signal login berisiko tinggi yang perlu disemak dahulu.",
+      tone: "danger",
+      deductions,
+    };
+  }
+
+  if (hasWarning || score < 90) {
+    return {
+      score,
+      label: "Watch",
+      description: "Skor masih terkawal, tetapi ada signal kecil yang wajar dipantau hari ini.",
+      tone: "warning",
+      deductions,
+    };
+  }
+
+  return {
+    score,
+    label: "Healthy",
+    description: "Semua signal login utama berada dalam julat operasi biasa.",
+    tone: "success",
+    deductions,
   };
 }
 

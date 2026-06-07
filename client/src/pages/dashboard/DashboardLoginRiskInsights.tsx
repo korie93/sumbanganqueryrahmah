@@ -9,6 +9,7 @@ import type {
   SummaryData,
 } from "@/pages/dashboard/types";
 import {
+  buildDashboardLoginHealthScore,
   buildDashboardLoginRiskExplanation,
   buildDashboardLoginRiskInsights,
   resolveDashboardLoginRiskSummary,
@@ -73,6 +74,7 @@ function DashboardLoginRiskInsightsImpl({
     () => buildDashboardLoginRiskExplanation({ insights, summary: riskSummary }),
     [insights, riskSummary],
   );
+  const healthScore = useMemo(() => buildDashboardLoginHealthScore(insights), [insights]);
 
   return (
     <Card
@@ -114,6 +116,38 @@ function DashboardLoginRiskInsightsImpl({
                     Gunakan panel ini bersama rekod login terbaru sebelum tindakan sekat, reset, atau audit.
                   </p>
                 </div>
+              </div>
+            </div>
+            <div
+              className="grid gap-3 rounded-xl border border-border/60 bg-background/80 p-3 sm:grid-cols-[auto_1fr]"
+              data-testid="login-health-score"
+              role="group"
+              aria-label={`Login health score ${healthScore.score} of 100, ${healthScore.label}`}
+            >
+              <div
+                className={`flex h-16 w-16 shrink-0 flex-col items-center justify-center rounded-2xl border text-center ${TONE_CLASS_BY_TONE[healthScore.tone]}`}
+                aria-hidden="true"
+              >
+                <span className="text-xl font-bold leading-none">{healthScore.score}</span>
+                <span className="mt-0.5 text-xs font-semibold leading-none">/100</span>
+              </div>
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="text-sm font-semibold text-foreground">Login Health Score</p>
+                  <Badge
+                    variant="outline"
+                    className={`rounded-full ${TONE_CLASS_BY_TONE[healthScore.tone]}`}
+                    aria-label={`Login health score status ${healthScore.label}`}
+                  >
+                    {healthScore.label}
+                  </Badge>
+                </div>
+                <p className="mt-1 text-xs leading-5 text-muted-foreground">{healthScore.description}</p>
+                <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                  {healthScore.deductions.length > 0
+                    ? `${healthScore.deductions.length} signal menolak skor untuk semakan operator.`
+                    : "Tiada potongan skor aktif daripada signal login."}
+                </p>
               </div>
             </div>
             <details

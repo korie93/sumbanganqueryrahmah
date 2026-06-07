@@ -78,6 +78,14 @@ export interface DashboardLoginRiskSummary {
   tone: DashboardAccessSignalTone;
 }
 
+export interface DashboardLoginHealthScore {
+  score: number;
+  label: "Healthy" | "Watch" | "Attention";
+  description: string;
+  tone: DashboardAccessSignalTone;
+  deductions: string[];
+}
+
 export interface DashboardLoginRiskExplanation {
   headline: string;
   items: DashboardLoginRiskInsight[];

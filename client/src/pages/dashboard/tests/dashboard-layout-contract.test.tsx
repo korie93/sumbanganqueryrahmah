@@ -432,6 +432,10 @@ test("DashboardLoginRiskInsights renders operator-ready status from existing log
 
   assert.match(markup, /Login Risk Insights/);
   assert.match(markup, /Login risk status Attention/);
+  assert.match(markup, /Login Health Score/);
+  assert.match(markup, /Login health score 44 of 100, Attention/);
+  assert.match(markup, /data-testid="login-health-score"/);
+  assert.match(markup, /3 signal menolak skor untuk semakan operator/);
   assert.match(markup, /Failed login pressure/);
   assert.match(markup, /Active session load/);
   assert.match(markup, /Login trend check/);
@@ -442,7 +446,9 @@ test("DashboardLoginRiskInsights renders operator-ready status from existing log
   assert.match(markup, /Signal yang membentuk status risiko login/);
   assert.match(markup, /Gunakan panel ini bersama rekod login terbaru/);
   assert.match(source, /className="grid gap-2 sm:grid-cols-2"/);
+  assert.match(source, /buildDashboardLoginHealthScore/);
   assert.match(source, /buildDashboardLoginRiskExplanation/);
+  assert.match(source, /sm:grid-cols-\[auto_1fr\]/);
   assert.match(source, /text-xl font-bold/);
   assert.doesNotMatch(source, /useEffect\(/);
   assert.doesNotMatch(source, /setTimeout\(/);

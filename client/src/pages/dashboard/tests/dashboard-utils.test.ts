@@ -4,6 +4,7 @@ import {
   buildDashboardActionQueueItems,
   buildDashboardRecentLoginActivityFilterCounts,
   buildDashboardAccessSignals,
+  buildDashboardLoginHealthScore,
   buildDashboardLoginPatternSummary,
   buildDashboardLoginRiskExplanation,
   buildDashboardLoginRiskInsights,
@@ -157,6 +158,95 @@ test("buildDashboardLoginRiskInsights stays calm for normal login signals", () =
   assert.equal(insights.find((insight) => insight.title === "Login trend check")?.tone, "success");
   assert.equal(insights.find((insight) => insight.title === "Recent session state")?.tone, "info");
   assert.equal(resolveDashboardLoginRiskSummary(insights).label, "Normal");
+});
+
+test("buildDashboardLoginHealthScore summarizes elevated login risk into one operator score", () => {
+  const insights = buildDashboardLoginRiskInsights({
+    recentLoginActivities: [
+      {
+        browser: "Chrome",
+        ipAddress: "10.42.x.x",
+        lastActivityTime: "2026-05-06T02:30:00Z",
+        loginTime: "2026-05-06T02:00:00Z",
+        logoutReason: null,
+        logoutTime: null,
+        role: "superuser",
+        status: "active",
+        username: "super.user",
+      },
+    ],
+    summary: {
+      activeSessions: 9,
+      bannedUsers: 0,
+      loginsToday: 10,
+      loginFailures24h: 12,
+      totalDataRows: 100,
+      totalImports: 4,
+      totalUsers: 10,
+    },
+    trends: [
+      { date: "2026-05-04", logins: 2, logouts: 1 },
+      { date: "2026-05-05", logins: 3, logouts: 1 },
+      { date: "2026-05-06", logins: 10, logouts: 2 },
+    ],
+  });
+  const score = buildDashboardLoginHealthScore(insights);
+
+  assert.equal(score.score, 44);
+  assert.equal(score.label, "Attention");
+  assert.equal(score.tone, "danger");
+  assert.deepEqual(score.deductions, [
+    "-32 Failed login pressure: 12",
+    "-12 Active session load: 9 / 10",
+    "-12 Login trend check: 10 latest day",
+  ]);
+});
+
+test("buildDashboardLoginHealthScore keeps watch and healthy states easy to distinguish", () => {
+  const watchInsights = buildDashboardLoginRiskInsights({
+    recentLoginActivities: [],
+    summary: {
+      activeSessions: 2,
+      bannedUsers: 0,
+      loginsToday: 4,
+      loginFailures24h: 2,
+      totalDataRows: 100,
+      totalImports: 4,
+      totalUsers: 10,
+    },
+    trends: [
+      { date: "2026-05-04", logins: 4, logouts: 1 },
+      { date: "2026-05-05", logins: 4, logouts: 1 },
+      { date: "2026-05-06", logins: 4, logouts: 1 },
+    ],
+  });
+  const healthyInsights = buildDashboardLoginRiskInsights({
+    recentLoginActivities: [],
+    summary: {
+      activeSessions: 1,
+      bannedUsers: 0,
+      loginsToday: 2,
+      loginFailures24h: 0,
+      totalDataRows: 100,
+      totalImports: 4,
+      totalUsers: 10,
+    },
+    trends: [
+      { date: "2026-05-04", logins: 2, logouts: 1 },
+      { date: "2026-05-05", logins: 2, logouts: 1 },
+      { date: "2026-05-06", logins: 2, logouts: 1 },
+    ],
+  });
+
+  const watchScore = buildDashboardLoginHealthScore(watchInsights);
+  const healthyScore = buildDashboardLoginHealthScore(healthyInsights);
+
+  assert.equal(watchScore.score, 88);
+  assert.equal(watchScore.label, "Watch");
+  assert.deepEqual(watchScore.deductions, ["-12 Failed login pressure: 2"]);
+  assert.equal(healthyScore.score, 100);
+  assert.equal(healthyScore.label, "Healthy");
+  assert.deepEqual(healthyScore.deductions, []);
 });
 
 test("buildDashboardLoginRiskExplanation focuses operators on elevated signals first", () => {
