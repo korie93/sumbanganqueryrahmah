@@ -12,6 +12,7 @@ import {
   formatDashboardUserLastLogin,
   isDashboardRecentLoginAttentionActivity,
   resolveDashboardLoginRiskSummary,
+  resolveDashboardRecentLoginRiskNote,
   resolveDashboardRecentLoginStatusMeta,
 } from "@/pages/dashboard/utils";
 import type { RecentLoginActivity } from "@/pages/dashboard/types";
@@ -227,6 +228,9 @@ test("recent login activity filters count active, ended, and attention rows", ()
     filterDashboardRecentLoginActivities(activities, "active").map((activity) => activity.username),
     ["active.user"],
   );
+  assert.equal(resolveDashboardRecentLoginRiskNote(activities[0]!).label, "Active session");
+  assert.equal(resolveDashboardRecentLoginRiskNote(activities[1]!).label, "Normal session end");
+  assert.equal(resolveDashboardRecentLoginRiskNote(activities[2]!).label, "Timeout session");
 });
 
 test("formatDashboardAxisDate keeps dashboard x-axis labels compact", () => {

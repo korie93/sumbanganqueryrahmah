@@ -289,10 +289,18 @@ test("DashboardRecentLoginActivity renders masked access rows with retryable err
   assert.match(markup, /button-login-activity-filter-all/);
   assert.match(markup, /Show attention login activity, 1 records/);
   assert.match(markup, /aria-label="All recent login activity list"/);
+  assert.match(markup, /Open login activity details for super\.user/);
+  assert.match(markup, /Details/);
   assert.match(markup, /tabindex="0"/);
   assert.match(source, /max-h-\[360px\]/);
   assert.match(source, /xl:grid-cols-1 2xl:grid-cols-2/);
   assert.match(source, /useMemo\(/);
+  assert.match(source, /DashboardRecentLoginActivityDetailSheet/);
+  assert.match(source, /SheetContent/);
+  assert.match(source, /resolveDashboardRecentLoginRiskNote/);
+  assert.match(source, /setSelectedActivity\(null\)/);
+  assert.doesNotMatch(source, /useEffect\(/);
+  assert.doesNotMatch(source, /setTimeout\(/);
 
   const errorMarkup = renderToStaticMarkup(
     createElement(DashboardRecentLoginActivity, {

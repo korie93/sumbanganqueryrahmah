@@ -39,6 +39,13 @@ const DASHBOARD_PDF_ROW_GAP_MM = 3;
 const DASHBOARD_PDF_FALLBACK_ROW_MIN_HEIGHT_MM = 10;
 export const DASHBOARD_PDF_EXPORT_FAILURE_MESSAGE = "Gagal jana PDF. Sila cuba semula.";
 export type DashboardRecentLoginActivityFilter = "all" | "active" | "ended" | "attention";
+export type DashboardRecentLoginRiskTone = "success" | "warning" | "info";
+
+export interface DashboardRecentLoginRiskNote {
+  label: string;
+  description: string;
+  tone: DashboardRecentLoginRiskTone;
+}
 
 const DASHBOARD_RECENT_LOGIN_ATTENTION_REASON_PATTERN =
   /banned|blocked|expired|forced|idle|kicked|locked|revoked|timeout/i;
@@ -179,6 +186,51 @@ export function buildDashboardRecentLoginActivityFilterCounts(
     all: activities.length,
     attention: activities.filter(isDashboardRecentLoginAttentionActivity).length,
     ended: activities.filter((activity) => activity.status === "ended").length,
+  };
+}
+
+export function resolveDashboardRecentLoginRiskNote(activity: RecentLoginActivity): DashboardRecentLoginRiskNote {
+  const logoutReason = activity.logoutReason?.trim() ?? "";
+  const normalizedReason = logoutReason.toLowerCase();
+
+  if (activity.status === "active") {
+    return {
+      label: "Active session",
+      description: "Sesi ini masih aktif dalam rekod terbaru. Semak jika peranti atau lokasi kelihatan tidak biasa.",
+      tone: "info",
+    };
+  }
+
+  if (/banned|blocked|locked/.test(normalizedReason)) {
+    return {
+      label: "Restricted account event",
+      description: "Sesi tamat berkaitan sekatan akaun. Kekalkan rekod ini dalam semakan keselamatan.",
+      tone: "warning",
+    };
+  }
+
+  if (/forced|kicked|revoked/.test(normalizedReason)) {
+    return {
+      label: "Forced session end",
+      description: "Sesi ditamatkan secara paksa. Semak sama ada tindakan ini dijangka oleh operator.",
+      tone: "warning",
+    };
+  }
+
+  if (/expired|idle|timeout/.test(normalizedReason)) {
+    return {
+      label: "Timeout session",
+      description: "Sesi tamat kerana tempoh tidak aktif atau tamat masa. Ini biasanya normal tetapi wajar dipantau jika berulang.",
+      tone: "info",
+    };
+  }
+
+  return {
+    label: "Normal session end",
+    description: logoutReason
+      ? "Sesi tamat dengan nota logout biasa. Tiada signal risiko tambahan dikesan daripada reason ini."
+      : "Sesi sudah tamat tanpa nota risiko tambahan.",
+    tone: "success",
   };
 }
 

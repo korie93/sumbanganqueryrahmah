@@ -1,8 +1,15 @@
-import { memo, useMemo, useState } from "react";
-import { Clock, Globe2, ShieldCheck } from "lucide-react";
+import { memo, useCallback, useMemo, useState, type ReactNode } from "react";
+import { Clock, Eye, Globe2, ShieldCheck } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { DashboardSectionError } from "@/pages/dashboard/DashboardSectionError";
 import { buildDashboardRecentLoginActivityRowAriaLabel } from "@/pages/dashboard/dashboard-row-aria";
 import type { RecentLoginActivity } from "@/pages/dashboard/types";
@@ -10,6 +17,7 @@ import {
   buildDashboardRecentLoginActivityFilterCounts,
   filterDashboardRecentLoginActivities,
   formatDashboardRecentLoginTime,
+  resolveDashboardRecentLoginRiskNote,
   type DashboardRecentLoginActivityFilter,
   resolveDashboardRecentLoginStatusMeta,
 } from "@/pages/dashboard/utils";
@@ -32,6 +40,99 @@ const RECENT_LOGIN_FILTER_OPTIONS: readonly {
   { id: "ended", label: "Ended" },
   { id: "attention", label: "Attention" },
 ];
+
+const RISK_NOTE_CLASS_BY_TONE = {
+  info: "border-blue-500/40 bg-blue-500/10 text-blue-800 dark:text-blue-200",
+  success: "border-emerald-500/40 bg-emerald-500/10 text-emerald-800 dark:text-emerald-200",
+  warning: "border-amber-500/50 bg-amber-500/10 text-amber-800 dark:text-amber-200",
+} as const;
+
+function DetailBlock({
+  children,
+  label,
+}: {
+  children: ReactNode;
+  label: string;
+}) {
+  return (
+    <div className="rounded-xl border border-border/60 bg-muted/10 p-3">
+      <p className="text-2xs font-semibold uppercase tracking-label-md text-muted-foreground">{label}</p>
+      <div className="mt-1.5 break-words text-sm text-foreground">{children}</div>
+    </div>
+  );
+}
+
+function DashboardRecentLoginActivityDetailSheet({
+  activity,
+  onOpenChange,
+}: {
+  activity: RecentLoginActivity | null;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const open = activity !== null;
+  const statusMeta = activity ? resolveDashboardRecentLoginStatusMeta(activity.status) : null;
+  const riskNote = activity ? resolveDashboardRecentLoginRiskNote(activity) : null;
+  const formattedLoginTime = activity ? formatDashboardRecentLoginTime(activity.loginTime) : "Unknown";
+  const formattedLastActivityTime = activity ? formatDashboardRecentLoginTime(activity.lastActivityTime) : "Unknown";
+  const formattedLogoutTime = activity ? formatDashboardRecentLoginTime(activity.logoutTime) : "Unknown";
+
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent
+        side="right"
+        className="w-[min(94vw,34rem)] overflow-y-auto sm:max-w-xl"
+        data-testid="recent-login-activity-detail-sheet"
+      >
+        {activity && statusMeta && riskNote ? (
+          <div className="space-y-5 pr-1">
+            <SheetHeader className="pr-8">
+              <SheetTitle>Login Activity Detail</SheetTitle>
+              <SheetDescription>
+                Semak konteks sesi, masa akses, dan nota risiko tanpa memaparkan token atau session ID.
+              </SheetDescription>
+            </SheetHeader>
+
+            <div className="flex flex-wrap gap-2">
+              <Badge variant="outline" className="rounded-full capitalize">
+                {activity.role}
+              </Badge>
+              <Badge variant="outline" className={`rounded-full ${statusMeta.className}`}>
+                {statusMeta.label}
+              </Badge>
+              <Badge variant="outline" className={`rounded-full ${RISK_NOTE_CLASS_BY_TONE[riskNote.tone]}`}>
+                {riskNote.label}
+              </Badge>
+            </div>
+
+            <section
+              className={`rounded-xl border p-3 ${RISK_NOTE_CLASS_BY_TONE[riskNote.tone]}`}
+              aria-label={`Risk note: ${riskNote.label}`}
+            >
+              <p className="text-sm font-semibold">{riskNote.label}</p>
+              <p className="mt-1 text-xs leading-5">{riskNote.description}</p>
+            </section>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <DetailBlock label="Username">{activity.username}</DetailBlock>
+              <DetailBlock label="Role">{activity.role}</DetailBlock>
+              <DetailBlock label="Login time">{formattedLoginTime}</DetailBlock>
+              <DetailBlock label="Last activity">{formattedLastActivityTime}</DetailBlock>
+              <DetailBlock label="Logout time">{formattedLogoutTime}</DetailBlock>
+              <DetailBlock label="Status">{statusMeta.label}</DetailBlock>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <DetailBlock label="Browser">{activity.browser ?? "Unknown browser"}</DetailBlock>
+              <DetailBlock label="Network">{activity.ipAddress ?? "Unknown network"}</DetailBlock>
+            </div>
+
+            <DetailBlock label="Status note">{activity.logoutReason || "No logout reason recorded."}</DetailBlock>
+          </div>
+        ) : null}
+      </SheetContent>
+    </Sheet>
+  );
+}
 
 function DashboardRecentLoginActivitySkeleton() {
   return (
@@ -67,6 +168,7 @@ function DashboardRecentLoginActivityImpl({
   retrying,
 }: DashboardRecentLoginActivityProps) {
   const [selectedFilter, setSelectedFilter] = useState<DashboardRecentLoginActivityFilter>("all");
+  const [selectedActivity, setSelectedActivity] = useState<RecentLoginActivity | null>(null);
   const safeActivities = activities ?? EMPTY_RECENT_LOGIN_ACTIVITIES;
   const filterCounts = useMemo(
     () => buildDashboardRecentLoginActivityFilterCounts(safeActivities),
@@ -78,164 +180,188 @@ function DashboardRecentLoginActivityImpl({
   );
   const selectedFilterLabel =
     RECENT_LOGIN_FILTER_OPTIONS.find((option) => option.id === selectedFilter)?.label ?? "All";
+  const handleDetailSheetOpenChange = useCallback((open: boolean) => {
+    if (!open) {
+      setSelectedActivity(null);
+    }
+  }, []);
 
   return (
-    <Card
-      className="rounded-2xl border border-border/60 bg-background shadow-sm"
-      data-floating-ai-avoid="true"
-      data-testid="card-recent-login-activity"
-    >
-      <CardHeader className="space-y-1 pb-2">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div className="min-w-0 space-y-1">
-            <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
-              <ShieldCheck className="h-5 w-5" />
-              Recent Login Activity
-            </CardTitle>
-            <p className="text-xs leading-5 text-muted-foreground sm:text-sm">
-              Latest access events with masked network details for fast operator review.
-            </p>
-          </div>
-          <Badge variant="outline" className="w-fit rounded-full">
-            {visibleActivities.length} shown
-          </Badge>
-        </div>
-      </CardHeader>
-      <CardContent aria-live="polite">
-        {errorMessage ? (
-          <DashboardSectionError
-            title="Aktiviti login gagal dimuat"
-            description={errorMessage}
-            onRetry={onRetry}
-            retrying={retrying}
-            minHeightClassName="min-h-[260px]"
-          />
-        ) : loading ? (
-          <DashboardRecentLoginActivitySkeleton />
-        ) : safeActivities.length > 0 ? (
-          <div className="space-y-3">
-            <div
-              className="grid grid-cols-2 gap-1 rounded-xl border border-border/60 bg-muted/15 p-1 sm:grid-cols-4"
-              role="group"
-              aria-label="Filter recent login activity"
-            >
-              {RECENT_LOGIN_FILTER_OPTIONS.map((option) => {
-                const active = selectedFilter === option.id;
-                return (
-                  <Button
-                    key={option.id}
-                    type="button"
-                    variant={active ? "default" : "ghost"}
-                    size="sm"
-                    className="h-8 justify-center rounded-lg px-2 text-xs"
-                    onClick={() => setSelectedFilter(option.id)}
-                    aria-pressed={active ? "true" : "false"}
-                    aria-label={`Show ${option.label.toLowerCase()} login activity, ${filterCounts[option.id]} records`}
-                    data-testid={`button-login-activity-filter-${option.id}`}
-                  >
-                    <span>{option.label}</span>
-                    <span className="ml-1.5 rounded-full bg-background/80 px-1.5 py-0.5 text-2xs text-foreground">
-                      {filterCounts[option.id]}
-                    </span>
-                  </Button>
-                );
-              })}
+    <>
+      <Card
+        className="rounded-2xl border border-border/60 bg-background shadow-sm"
+        data-floating-ai-avoid="true"
+        data-testid="card-recent-login-activity"
+      >
+        <CardHeader className="space-y-1 pb-2">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="min-w-0 space-y-1">
+              <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+                <ShieldCheck className="h-5 w-5" />
+                Recent Login Activity
+              </CardTitle>
+              <p className="text-xs leading-5 text-muted-foreground sm:text-sm">
+                Latest access events with masked network details for fast operator review.
+              </p>
             </div>
-
-            {visibleActivities.length > 0 ? (
+            <Badge variant="outline" className="w-fit rounded-full">
+              {visibleActivities.length} shown
+            </Badge>
+          </div>
+        </CardHeader>
+        <CardContent aria-live="polite">
+          {errorMessage ? (
+            <DashboardSectionError
+              title="Aktiviti login gagal dimuat"
+              description={errorMessage}
+              onRetry={onRetry}
+              retrying={retrying}
+              minHeightClassName="min-h-[260px]"
+            />
+          ) : loading ? (
+            <DashboardRecentLoginActivitySkeleton />
+          ) : safeActivities.length > 0 ? (
+            <div className="space-y-3">
               <div
-                className="grid max-h-[360px] gap-2 overflow-y-auto pr-1 lg:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2"
-                role="region"
-                tabIndex={0}
-                aria-label={`${selectedFilterLabel} recent login activity list`}
+                className="grid grid-cols-2 gap-1 rounded-xl border border-border/60 bg-muted/15 p-1 sm:grid-cols-4"
+                role="group"
+                aria-label="Filter recent login activity"
               >
-                {visibleActivities.map((activity, index) => {
-                  const statusMeta = resolveDashboardRecentLoginStatusMeta(activity.status);
-                  const formattedLoginTime = formatDashboardRecentLoginTime(activity.loginTime);
-                  const formattedLastActivityTime = formatDashboardRecentLoginTime(activity.lastActivityTime);
-                  const browser = activity.browser ?? "Unknown browser";
-                  const ipAddress = activity.ipAddress ?? "Unknown network";
-
+                {RECENT_LOGIN_FILTER_OPTIONS.map((option) => {
+                  const active = selectedFilter === option.id;
                   return (
-                    <article
-                      key={`${activity.username}-${activity.loginTime ?? index}`}
-                      role="group"
-                      aria-label={buildDashboardRecentLoginActivityRowAriaLabel({
-                        activity,
-                        formattedLastActivityTime,
-                        formattedLoginTime,
-                        index: index + 1,
-                        statusLabel: statusMeta.label,
-                      })}
-                      className="rounded-xl border border-border/60 bg-muted/10 p-3 shadow-sm"
-                      data-testid={`row-recent-login-activity-${index}`}
+                    <Button
+                      key={option.id}
+                      type="button"
+                      variant={active ? "default" : "ghost"}
+                      size="sm"
+                      className="h-8 justify-center rounded-lg px-2 text-xs"
+                      onClick={() => setSelectedFilter(option.id)}
+                      aria-pressed={active ? "true" : "false"}
+                      aria-label={`Show ${option.label.toLowerCase()} login activity, ${filterCounts[option.id]} records`}
+                      data-testid={`button-login-activity-filter-${option.id}`}
                     >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <p className="break-words text-sm font-semibold text-foreground sm:text-base">
-                            {activity.username}
-                          </p>
-                          <div className="mt-2 flex flex-wrap items-center gap-2">
-                            <Badge variant="outline" className="rounded-full text-2xs capitalize">
-                              {activity.role}
-                            </Badge>
-                            <Badge variant="outline" className={`rounded-full text-2xs ${statusMeta.className}`}>
-                              {statusMeta.label}
-                            </Badge>
-                          </div>
-                        </div>
-                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
-                          <Clock className="h-4 w-4" aria-hidden="true" />
-                        </div>
-                      </div>
-
-                      <div className="mt-3 grid gap-2 text-xs text-muted-foreground sm:grid-cols-2">
-                        <div className="rounded-lg border border-border/50 bg-background/60 p-2.5">
-                          <p className="font-medium text-foreground">Login</p>
-                          <p className="mt-1 leading-5">{formattedLoginTime}</p>
-                        </div>
-                        <div className="rounded-lg border border-border/50 bg-background/60 p-2.5">
-                          <p className="font-medium text-foreground">Last activity</p>
-                          <p className="mt-1 leading-5">{formattedLastActivityTime}</p>
-                        </div>
-                      </div>
-
-                      <div className="mt-2 flex flex-col gap-2 rounded-lg border border-border/50 bg-background/60 p-2.5 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
-                        <span className="flex min-w-0 items-center gap-2">
-                          <Globe2 className="h-4 w-4 shrink-0" aria-hidden="true" />
-                          <span className="truncate" title={browser}>
-                            {browser}
-                          </span>
-                        </span>
-                        <span className="shrink-0 font-medium text-foreground">{ipAddress}</span>
-                      </div>
-
-                      {activity.logoutReason ? (
-                        <p className="mt-3 text-xs leading-5 text-muted-foreground">
-                          Status note: <span className="text-foreground">{activity.logoutReason}</span>
-                        </p>
-                      ) : null}
-                    </article>
+                      <span>{option.label}</span>
+                      <span className="ml-1.5 rounded-full bg-background/80 px-1.5 py-0.5 text-2xs text-foreground">
+                        {filterCounts[option.id]}
+                      </span>
+                    </Button>
                   );
                 })}
               </div>
-            ) : (
-              <div
-                className="flex min-h-[180px] items-center justify-center rounded-xl border border-dashed border-border/60 bg-muted/10 px-4 text-center text-sm text-muted-foreground"
-                role="status"
-                aria-label={`${selectedFilterLabel} login activity filter is empty`}
-              >
-                No {selectedFilterLabel.toLowerCase()} login activity is available in the latest records.
-              </div>
-            )}
-          </div>
-        ) : (
-          <div className="flex min-h-[220px] items-center justify-center rounded-xl border border-dashed border-border/60 bg-muted/10 px-4 text-center text-sm text-muted-foreground">
-            No recent login activity is available yet.
-          </div>
-        )}
-      </CardContent>
-    </Card>
+
+              {visibleActivities.length > 0 ? (
+                <div
+                  className="grid max-h-[360px] gap-2 overflow-y-auto pr-1 lg:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2"
+                  role="region"
+                  tabIndex={0}
+                  aria-label={`${selectedFilterLabel} recent login activity list`}
+                >
+                  {visibleActivities.map((activity, index) => {
+                    const statusMeta = resolveDashboardRecentLoginStatusMeta(activity.status);
+                    const formattedLoginTime = formatDashboardRecentLoginTime(activity.loginTime);
+                    const formattedLastActivityTime = formatDashboardRecentLoginTime(activity.lastActivityTime);
+                    const browser = activity.browser ?? "Unknown browser";
+                    const ipAddress = activity.ipAddress ?? "Unknown network";
+
+                    return (
+                      <article
+                        key={`${activity.username}-${activity.loginTime ?? index}`}
+                        role="group"
+                        aria-label={buildDashboardRecentLoginActivityRowAriaLabel({
+                          activity,
+                          formattedLastActivityTime,
+                          formattedLoginTime,
+                          index: index + 1,
+                          statusLabel: statusMeta.label,
+                        })}
+                        className="rounded-xl border border-border/60 bg-muted/10 p-3 shadow-sm"
+                        data-testid={`row-recent-login-activity-${index}`}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="break-words text-sm font-semibold text-foreground sm:text-base">
+                              {activity.username}
+                            </p>
+                            <div className="mt-2 flex flex-wrap items-center gap-2">
+                              <Badge variant="outline" className="rounded-full text-2xs capitalize">
+                                {activity.role}
+                              </Badge>
+                              <Badge variant="outline" className={`rounded-full text-2xs ${statusMeta.className}`}>
+                                {statusMeta.label}
+                              </Badge>
+                            </div>
+                          </div>
+                          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                            <Clock className="h-4 w-4" aria-hidden="true" />
+                          </div>
+                        </div>
+
+                        <div className="mt-3 grid gap-2 text-xs text-muted-foreground sm:grid-cols-2">
+                          <div className="rounded-lg border border-border/50 bg-background/60 p-2.5">
+                            <p className="font-medium text-foreground">Login</p>
+                            <p className="mt-1 leading-5">{formattedLoginTime}</p>
+                          </div>
+                          <div className="rounded-lg border border-border/50 bg-background/60 p-2.5">
+                            <p className="font-medium text-foreground">Last activity</p>
+                            <p className="mt-1 leading-5">{formattedLastActivityTime}</p>
+                          </div>
+                        </div>
+
+                        <div className="mt-2 flex flex-col gap-2 rounded-lg border border-border/50 bg-background/60 p-2.5 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+                          <span className="flex min-w-0 items-center gap-2">
+                            <Globe2 className="h-4 w-4 shrink-0" aria-hidden="true" />
+                            <span className="truncate" title={browser}>
+                              {browser}
+                            </span>
+                          </span>
+                          <span className="shrink-0 font-medium text-foreground">{ipAddress}</span>
+                        </div>
+
+                        {activity.logoutReason ? (
+                          <p className="mt-3 text-xs leading-5 text-muted-foreground">
+                            Status note: <span className="text-foreground">{activity.logoutReason}</span>
+                          </p>
+                        ) : null}
+
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="mt-3 w-full justify-center rounded-lg"
+                          onClick={() => setSelectedActivity(activity)}
+                          aria-label={`Open login activity details for ${activity.username}`}
+                          data-testid={`button-recent-login-details-${index}`}
+                        >
+                          <Eye className="mr-2 h-4 w-4" aria-hidden="true" />
+                          Details
+                        </Button>
+                      </article>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div
+                  className="flex min-h-[180px] items-center justify-center rounded-xl border border-dashed border-border/60 bg-muted/10 px-4 text-center text-sm text-muted-foreground"
+                  role="status"
+                  aria-label={`${selectedFilterLabel} login activity filter is empty`}
+                >
+                  No {selectedFilterLabel.toLowerCase()} login activity is available in the latest records.
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="flex min-h-[220px] items-center justify-center rounded-xl border border-dashed border-border/60 bg-muted/10 px-4 text-center text-sm text-muted-foreground">
+              No recent login activity is available yet.
+            </div>
+          )}
+        </CardContent>
+      </Card>
+      <DashboardRecentLoginActivityDetailSheet
+        activity={selectedActivity}
+        onOpenChange={handleDetailSheetOpenChange}
+      />
+    </>
   );
 }
 
