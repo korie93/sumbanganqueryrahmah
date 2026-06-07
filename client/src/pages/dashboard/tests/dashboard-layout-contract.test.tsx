@@ -8,6 +8,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { fileURLToPath } from "node:url";
 import { DashboardActionQueue } from "@/pages/dashboard/DashboardActionQueue";
 import { DashboardChartsGrid } from "@/pages/dashboard/DashboardChartsGrid";
+import { DashboardLoginCommandBar } from "@/pages/dashboard/DashboardLoginCommandBar";
 import { DashboardLoginPatternSummary } from "@/pages/dashboard/DashboardLoginPatternSummary";
 import { DashboardLoginReviewSidebar } from "@/pages/dashboard/DashboardLoginReviewSidebar";
 import { DashboardLoginRiskInsights } from "@/pages/dashboard/DashboardLoginRiskInsights";
@@ -165,15 +166,23 @@ test("Dashboard wraps major dashboard regions in accessible render error boundar
   );
 
   assert.match(dashboardSource, /<DashboardSectionRenderBoundary/);
+  assert.match(dashboardSource, /<DashboardLoginCommandBar/);
   assert.match(dashboardSource, /sectionName="Ringkasan dashboard"/);
   assert.match(deferredSource, /Dashboard login review workspace/);
   assert.match(deferredSource, /<DashboardLoginReviewSidebar/);
+  assert.match(deferredSource, /function DashboardCollapsiblePanel/);
   assert.match(deferredSource, /Dashboard login review sidebar/);
   assert.match(deferredSource, /xl:grid-cols-\[minmax\(250px,320px\)_minmax\(0,1fr\)\]/);
   assert.match(deferredSource, /2xl:grid-cols-\[minmax\(0,0\.95fr\)_minmax\(0,1\.05fr\)\]/);
   assert.match(deferredSource, /id="dashboard-login-risk-insights"/);
   assert.match(deferredSource, /id="dashboard-recent-login-activity"/);
   assert.match(deferredSource, /id="dashboard-login-charts"/);
+  assert.match(deferredSource, /id="dashboard-user-insights"/);
+  assert.match(deferredSource, /data-testid=\{`button-toggle-\$\{id\}`\}/);
+  assert.match(deferredSource, /id="dashboard-login-charts-panel"/);
+  assert.match(deferredSource, /id="dashboard-user-insights-panel"/);
+  assert.match(deferredSource, /const \[chartsOpen, setChartsOpen\] = useState\(false\)/);
+  assert.match(deferredSource, /const \[userInsightsOpen, setUserInsightsOpen\] = useState\(false\)/);
   assert.match(deferredSource, /sectionName="Carta dashboard"/);
   assert.match(deferredSource, /sectionName="Insight risiko login dashboard"/);
   assert.match(deferredSource, /sectionName="Aktiviti login dashboard"/);
@@ -185,6 +194,60 @@ test("Dashboard wraps major dashboard regions in accessible render error boundar
   assert.match(fallbackMarkup, /Bahagian ini gagal dirender/);
   assert.match(fallbackMarkup, /Cuba lagi/);
   assert.match(fallbackMarkup, /type="button"/);
+});
+
+test("DashboardLoginCommandBar gives operators a compact first-read status strip", () => {
+  const source = readFileSync(path.resolve(__dirname, "../DashboardLoginCommandBar.tsx"), "utf8");
+  const markup = renderToStaticMarkup(
+    createElement(DashboardLoginCommandBar, {
+      loading: false,
+      recentLoginActivities: [
+        {
+          browser: "Chrome",
+          ipAddress: "10.42.x.x",
+          lastActivityTime: "2026-05-06T02:30:00Z",
+          loginTime: "2026-05-06T02:00:00Z",
+          logoutReason: "ACCOUNT_LOCKED",
+          logoutTime: "2026-05-06T03:00:00Z",
+          role: "admin",
+          status: "ended",
+          username: "locked.user",
+        },
+      ],
+      summary: {
+        activeSessions: 8,
+        bannedUsers: 1,
+        loginsToday: 12,
+        loginFailures24h: 15,
+        totalDataRows: 100,
+        totalImports: 4,
+        totalUsers: 10,
+      },
+      trends: [
+        { date: "2026-05-04", logins: 3, logouts: 1 },
+        { date: "2026-05-05", logins: 3, logouts: 1 },
+        { date: "2026-05-06", logins: 12, logouts: 2 },
+      ],
+    }),
+  );
+
+  assert.match(markup, /Priority Command Bar/);
+  assert.match(markup, /Dashboard login priority command bar/);
+  assert.match(markup, /Login risk status Attention/);
+  assert.match(markup, /Health/);
+  assert.match(markup, /44\/100/);
+  assert.match(markup, /Sesi aktif/);
+  assert.match(markup, /Gagal 24j/);
+  assert.match(markup, /User/);
+  assert.match(markup, /Review failed login pressure/);
+  assert.match(markup, /href="\/monitor\?section=activity"/);
+  assert.match(source, /buildDashboardLoginRiskInsights/);
+  assert.match(source, /buildDashboardLoginHealthScore/);
+  assert.match(source, /buildDashboardActionQueueItems/);
+  assert.match(source, /data-testid="dashboard-login-command-bar"/);
+  assert.doesNotMatch(source, /useEffect\(/);
+  assert.doesNotMatch(source, /setTimeout\(/);
+  assert.doesNotMatch(source, /setInterval\(/);
 });
 
 test("DashboardLoginReviewSidebar turns scattered login panels into a compact sidebar", () => {

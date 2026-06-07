@@ -1,5 +1,9 @@
 import { Suspense, lazy, startTransition, useEffect, useRef, useState } from "react";
+import type { ReactNode } from "react";
+import { ChevronDown } from "lucide-react";
 import { OperationalSectionCard } from "@/components/layout/OperationalPage";
+import { Button } from "@/components/ui/button";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { DashboardLoginReviewSidebar } from "@/pages/dashboard/DashboardLoginReviewSidebar";
 import { DashboardSectionRenderBoundary } from "@/pages/dashboard/DashboardSectionRenderBoundary";
 import type {
@@ -88,6 +92,55 @@ function DashboardUserInsightsFallback({ labelPrefix }: { labelPrefix: string })
         visualClassName="h-[260px]"
       />
     </div>
+  );
+}
+
+function DashboardCollapsiblePanel({
+  children,
+  description,
+  id,
+  open,
+  onOpenChange,
+  title,
+}: {
+  children: ReactNode;
+  description: string;
+  id: string;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  title: string;
+}) {
+  const contentId = `${id}-content`;
+
+  return (
+    <Collapsible open={open} onOpenChange={onOpenChange} className="space-y-3" data-testid={`panel-${id}`}>
+      <div className="flex flex-col gap-3 rounded-2xl border border-border/60 bg-muted/10 p-3 sm:flex-row sm:items-center sm:justify-between sm:p-4">
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-foreground">{title}</p>
+          <p className="mt-1 text-xs leading-5 text-muted-foreground">{description}</p>
+        </div>
+        <CollapsibleTrigger asChild>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            aria-controls={contentId}
+            aria-expanded={open}
+            className="h-10 rounded-xl sm:h-9"
+            data-testid={`button-toggle-${id}`}
+          >
+            {open ? "Tutup" : "Buka"}
+            <ChevronDown
+              className={`h-4 w-4 transition-transform ${open ? "rotate-180" : ""}`}
+              aria-hidden="true"
+            />
+          </Button>
+        </CollapsibleTrigger>
+      </div>
+      <CollapsibleContent id={contentId} className="min-w-0">
+        {children}
+      </CollapsibleContent>
+    </Collapsible>
   );
 }
 
@@ -247,6 +300,10 @@ export function DashboardDeferredSections({
     rootMargin: DASHBOARD_USER_INSIGHTS_DEFER_ROOT_MARGIN,
     timeoutMs: DASHBOARD_USER_INSIGHTS_DEFER_TIMEOUT_MS,
   });
+  const [loginRiskOpen, setLoginRiskOpen] = useState(true);
+  const [recentActivityOpen, setRecentActivityOpen] = useState(true);
+  const [chartsOpen, setChartsOpen] = useState(false);
+  const [userInsightsOpen, setUserInsightsOpen] = useState(false);
   const chartsBoundaryKey = [
     "charts",
     trendDays,
@@ -295,6 +352,13 @@ export function DashboardDeferredSections({
       <div className="min-w-0 space-y-4">
         <div className="grid grid-cols-1 gap-4 2xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] 2xl:items-start">
           <div id="dashboard-login-risk-insights" ref={loginRiskSection.triggerRef} className="scroll-mt-24">
+            <DashboardCollapsiblePanel
+              id="dashboard-login-risk-insights-panel"
+              title="Risk insights"
+              description="Signal risiko utama dan tindakan terbaik untuk login."
+              open={loginRiskOpen}
+              onOpenChange={setLoginRiskOpen}
+            >
               {loginRiskSection.shouldRender ? (
                 <DashboardSectionRenderBoundary
                   sectionName="Insight risiko login dashboard"
@@ -322,8 +386,16 @@ export function DashboardDeferredSections({
                   visualClassName="h-[220px]"
                 />
               )}
+            </DashboardCollapsiblePanel>
           </div>
           <div id="dashboard-recent-login-activity" ref={recentLoginActivitySection.triggerRef} className="scroll-mt-24">
+            <DashboardCollapsiblePanel
+              id="dashboard-recent-login-activity-panel"
+              title="Recent activity"
+              description="Rekod login terbaru dengan fokus kepada event yang perlu semakan."
+              open={recentActivityOpen}
+              onOpenChange={setRecentActivityOpen}
+            >
               {recentLoginActivitySection.shouldRender ? (
                 <DashboardSectionRenderBoundary
                   sectionName="Aktiviti login dashboard"
@@ -352,59 +424,76 @@ export function DashboardDeferredSections({
                   visualClassName="h-[260px]"
                 />
               )}
+            </DashboardCollapsiblePanel>
           </div>
         </div>
         <div id="dashboard-login-charts" ref={chartsSection.triggerRef} className="scroll-mt-24">
-          {chartsSection.shouldRender ? (
-            <DashboardSectionRenderBoundary
-              sectionName="Carta dashboard"
-              boundaryKey={chartsBoundaryKey}
-            >
-              <Suspense fallback={<DashboardChartsFallback labelPrefix="Loading dashboard charts" />}>
-                <DashboardChartsGrid
-                  onTrendDaysChange={onTrendDaysChange}
-                  onRetryPeakHours={onRetryPeakHours}
-                  onRetryTrends={onRetryTrends}
-                  peakHoursErrorMessage={peakHoursErrorMessage}
-                  peakHours={peakHours}
-                  peakHoursLoading={peakHoursLoading}
-                  peakHoursRetrying={peakHoursRetrying}
-                  trendDays={trendDays}
-                  trendsErrorMessage={trendsErrorMessage}
-                  trends={trends}
-                  trendsLoading={trendsLoading}
-                  trendsRetrying={trendsRetrying}
-                />
-              </Suspense>
-            </DashboardSectionRenderBoundary>
-          ) : (
-            <DashboardChartsFallback labelPrefix="Dashboard charts will load as you scroll" />
-          )}
+          <DashboardCollapsiblePanel
+            id="dashboard-login-charts-panel"
+            title="Charts"
+            description="Trend dan waktu puncak login, dibuka bila perlu analisis visual."
+            open={chartsOpen}
+            onOpenChange={setChartsOpen}
+          >
+            {chartsSection.shouldRender ? (
+              <DashboardSectionRenderBoundary
+                sectionName="Carta dashboard"
+                boundaryKey={chartsBoundaryKey}
+              >
+                <Suspense fallback={<DashboardChartsFallback labelPrefix="Loading dashboard charts" />}>
+                  <DashboardChartsGrid
+                    onTrendDaysChange={onTrendDaysChange}
+                    onRetryPeakHours={onRetryPeakHours}
+                    onRetryTrends={onRetryTrends}
+                    peakHoursErrorMessage={peakHoursErrorMessage}
+                    peakHours={peakHours}
+                    peakHoursLoading={peakHoursLoading}
+                    peakHoursRetrying={peakHoursRetrying}
+                    trendDays={trendDays}
+                    trendsErrorMessage={trendsErrorMessage}
+                    trends={trends}
+                    trendsLoading={trendsLoading}
+                    trendsRetrying={trendsRetrying}
+                  />
+                </Suspense>
+              </DashboardSectionRenderBoundary>
+            ) : (
+              <DashboardChartsFallback labelPrefix="Dashboard charts will load as you scroll" />
+            )}
+          </DashboardCollapsiblePanel>
         </div>
         <div id="dashboard-user-insights" ref={userInsightsSection.triggerRef} className="scroll-mt-24">
-          {userInsightsSection.shouldRender ? (
-            <DashboardSectionRenderBoundary
-              sectionName="Insight pengguna dashboard"
-              boundaryKey={userInsightsBoundaryKey}
-            >
-              <Suspense fallback={<DashboardUserInsightsFallback labelPrefix="Loading dashboard user insights" />}>
-                <DashboardUserInsightsGrid
-                  onRetryRoleDistribution={onRetryRoleDistribution}
-                  onRetryTopUsers={onRetryTopUsers}
-                  roleErrorMessage={roleErrorMessage}
-                  roleDistribution={roleDistribution}
-                  roleLoading={roleLoading}
-                  roleRetrying={roleRetrying}
-                  topUsersErrorMessage={topUsersErrorMessage}
-                  topUsers={topUsers}
-                  topUsersLoading={topUsersLoading}
-                  topUsersRetrying={topUsersRetrying}
-                />
-              </Suspense>
-            </DashboardSectionRenderBoundary>
-          ) : (
-            <DashboardUserInsightsFallback labelPrefix="Dashboard user insights will load as you scroll" />
-          )}
+          <DashboardCollapsiblePanel
+            id="dashboard-user-insights-panel"
+            title="User insights"
+            description="Pengguna aktif dan taburan peranan, disimpan sebagai detail sekunder."
+            open={userInsightsOpen}
+            onOpenChange={setUserInsightsOpen}
+          >
+            {userInsightsSection.shouldRender ? (
+              <DashboardSectionRenderBoundary
+                sectionName="Insight pengguna dashboard"
+                boundaryKey={userInsightsBoundaryKey}
+              >
+                <Suspense fallback={<DashboardUserInsightsFallback labelPrefix="Loading dashboard user insights" />}>
+                  <DashboardUserInsightsGrid
+                    onRetryRoleDistribution={onRetryRoleDistribution}
+                    onRetryTopUsers={onRetryTopUsers}
+                    roleErrorMessage={roleErrorMessage}
+                    roleDistribution={roleDistribution}
+                    roleLoading={roleLoading}
+                    roleRetrying={roleRetrying}
+                    topUsersErrorMessage={topUsersErrorMessage}
+                    topUsers={topUsers}
+                    topUsersLoading={topUsersLoading}
+                    topUsersRetrying={topUsersRetrying}
+                  />
+                </Suspense>
+              </DashboardSectionRenderBoundary>
+            ) : (
+              <DashboardUserInsightsFallback labelPrefix="Dashboard user insights will load as you scroll" />
+            )}
+          </DashboardCollapsiblePanel>
         </div>
       </div>
     </section>

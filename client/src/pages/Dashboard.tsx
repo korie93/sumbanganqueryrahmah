@@ -15,6 +15,7 @@ import { toast } from "@/hooks/use-toast";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { isMobileViewportWidth } from "@/lib/responsive";
 import { DashboardDeferredSections } from "@/pages/dashboard/DashboardDeferredSections";
+import { DashboardLoginCommandBar } from "@/pages/dashboard/DashboardLoginCommandBar";
 import { DashboardPageHeader } from "@/pages/dashboard/DashboardPageHeader";
 import { DashboardSectionRenderBoundary } from "@/pages/dashboard/DashboardSectionRenderBoundary";
 import { DashboardSnapshotSection } from "@/pages/dashboard/DashboardSnapshotSection";
@@ -359,6 +360,12 @@ function DashboardContent() {
             </ul>
           </section>
         ) : null}
+        <DashboardLoginCommandBar
+          loading={summaryLoading || trendsLoading || recentLoginActivityLoading}
+          recentLoginActivities={recentLoginActivities ?? []}
+          summary={summary}
+          trends={trends ?? []}
+        />
         <DashboardSectionRenderBoundary
           sectionName="Ringkasan dashboard"
           boundaryKey={`summary:${summaryLoading}:${summaryErrorMessage ?? "ok"}:${summaryCards.length}`}
