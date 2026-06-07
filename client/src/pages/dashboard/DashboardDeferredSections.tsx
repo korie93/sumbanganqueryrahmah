@@ -1,6 +1,7 @@
 import { Suspense, lazy, startTransition, useEffect, useRef, useState } from "react";
 import { OperationalSectionCard } from "@/components/layout/OperationalPage";
 import { DashboardActionQueue } from "@/pages/dashboard/DashboardActionQueue";
+import { DashboardLoginPatternSummary } from "@/pages/dashboard/DashboardLoginPatternSummary";
 import { DashboardSectionRenderBoundary } from "@/pages/dashboard/DashboardSectionRenderBoundary";
 import { DashboardSessionHealthStrip } from "@/pages/dashboard/DashboardSessionHealthStrip";
 import type {
@@ -290,6 +291,13 @@ export function DashboardDeferredSections({
         <DashboardSessionHealthStrip
           loading={recentLoginActivityLoading}
           recentLoginActivities={recentLoginActivities}
+        />
+        <DashboardLoginPatternSummary
+          loading={summaryLoading || topUsersLoading || peakHoursLoading || recentLoginActivityLoading}
+          peakHours={peakHours}
+          recentLoginActivities={recentLoginActivities}
+          summary={summary}
+          topUsers={topUsers}
         />
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] xl:items-start">
           <div ref={loginRiskSection.triggerRef}>

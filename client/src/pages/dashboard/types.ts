@@ -105,3 +105,26 @@ export interface DashboardSessionHealthItem {
   description: string;
   tone: DashboardSessionHealthTone;
 }
+
+export type DashboardLoginPatternFactId =
+  | "top-account"
+  | "common-browser"
+  | "peak-window"
+  | "attention-reason";
+
+export type DashboardLoginPatternTone = DashboardAccessSignalTone;
+
+export interface DashboardLoginPatternFact {
+  id: DashboardLoginPatternFactId;
+  label: string;
+  value: string;
+  description: string;
+  tone: DashboardLoginPatternTone;
+}
+
+export interface DashboardLoginPatternSummary {
+  statusLabel: string;
+  statusTone: DashboardLoginPatternTone;
+  operatorNote: string;
+  facts: DashboardLoginPatternFact[];
+}

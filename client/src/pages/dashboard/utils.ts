@@ -13,14 +13,17 @@ import { buildPathForPage } from "@/app/routing";
 import type {
   DashboardActionQueueItem,
   DashboardAccessSignal,
+  DashboardLoginPatternSummary,
   DashboardLoginRiskInsight,
   DashboardLoginRiskSummary,
   DashboardSessionHealthItem,
   LoginTrend,
+  PeakHour,
   RecentLoginActivity,
   RecentLoginActivityStatus,
   SummaryCardItem,
   SummaryData,
+  TopUser,
 } from "@/pages/dashboard/types";
 
 let html2canvasLoader: Promise<typeof import("html2canvas")["default"]> | null = null;
@@ -548,6 +551,185 @@ export function buildDashboardSessionHealthItems(
       tone: timeoutEndedCount >= 2 ? "warning" : timeoutEndedCount > 0 ? "info" : "success",
     },
   ];
+}
+
+function normalizeDashboardBrowserName(value: string | null | undefined) {
+  const normalized = value?.replace(/\s+/g, " ").trim();
+  return normalized || null;
+}
+
+function resolveMostCommonDashboardBrowser(activities: readonly RecentLoginActivity[]) {
+  const counts = new Map<string, number>();
+
+  for (const activity of activities) {
+    const browser = normalizeDashboardBrowserName(activity.browser);
+    if (!browser) {
+      continue;
+    }
+    counts.set(browser, (counts.get(browser) ?? 0) + 1);
+  }
+
+  let topBrowser: string | null = null;
+  let topCount = 0;
+  for (const [browser, count] of counts) {
+    if (count > topCount || (count === topCount && topBrowser !== null && browser.localeCompare(topBrowser) < 0)) {
+      topBrowser = browser;
+      topCount = count;
+    }
+  }
+
+  return topBrowser ? { browser: topBrowser, count: topCount } : null;
+}
+
+function resolveMostActiveDashboardUser(topUsers: readonly TopUser[] | undefined) {
+  const users = topUsers ?? [];
+  let selected: TopUser | null = null;
+
+  for (const user of users) {
+    if (!Number.isFinite(user.loginCount) || user.loginCount < 0) {
+      continue;
+    }
+    if (
+      selected === null
+      || user.loginCount > selected.loginCount
+      || (user.loginCount === selected.loginCount && user.username.localeCompare(selected.username) < 0)
+    ) {
+      selected = user;
+    }
+  }
+
+  return selected;
+}
+
+function resolveDashboardPeakLoginWindow(peakHours: readonly PeakHour[] | undefined) {
+  const hours = peakHours ?? [];
+  let selected: PeakHour | null = null;
+
+  for (const hour of hours) {
+    if (!Number.isInteger(hour.hour) || hour.hour < 0 || hour.hour > 23 || !Number.isFinite(hour.count) || hour.count < 0) {
+      continue;
+    }
+    if (
+      selected === null
+      || hour.count > selected.count
+      || (hour.count === selected.count && hour.hour < selected.hour)
+    ) {
+      selected = hour;
+    }
+  }
+
+  return selected;
+}
+
+function formatDashboardLogoutReasonLabel(value: string | null | undefined) {
+  const normalized = value
+    ?.replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+
+  if (!normalized) {
+    return null;
+  }
+
+  return normalized.replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function resolveTopDashboardAttentionReason(activities: readonly RecentLoginActivity[]) {
+  const counts = new Map<string, number>();
+
+  for (const activity of activities) {
+    if (!isDashboardRecentLoginAttentionActivity(activity)) {
+      continue;
+    }
+    const reason = formatDashboardLogoutReasonLabel(activity.logoutReason);
+    if (!reason) {
+      continue;
+    }
+    counts.set(reason, (counts.get(reason) ?? 0) + 1);
+  }
+
+  let topReason: string | null = null;
+  let topCount = 0;
+  for (const [reason, count] of counts) {
+    if (count > topCount || (count === topCount && topReason !== null && reason.localeCompare(topReason) < 0)) {
+      topReason = reason;
+      topCount = count;
+    }
+  }
+
+  return topReason ? { reason: topReason, count: topCount, total: Array.from(counts.values()).reduce((sum, count) => sum + count, 0) } : null;
+}
+
+export function buildDashboardLoginPatternSummary(input: {
+  peakHours?: readonly PeakHour[] | undefined;
+  recentLoginActivities?: readonly RecentLoginActivity[] | undefined;
+  summary?: SummaryData | undefined;
+  topUsers?: readonly TopUser[] | undefined;
+}): DashboardLoginPatternSummary {
+  const recentRows = input.recentLoginActivities ?? [];
+  const mostActiveUser = resolveMostActiveDashboardUser(input.topUsers);
+  const commonBrowser = resolveMostCommonDashboardBrowser(recentRows);
+  const peakWindow = resolveDashboardPeakLoginWindow(input.peakHours);
+  const attentionReason = resolveTopDashboardAttentionReason(recentRows);
+  const failedLogins = input.summary?.loginFailures24h ?? 0;
+  const bannedUsers = input.summary?.bannedUsers ?? 0;
+  const attentionTotal = attentionReason?.total ?? 0;
+  const hasAttention = attentionTotal >= 3 || failedLogins >= 10 || bannedUsers > 0;
+  const hasWatch = Boolean(attentionReason) || failedLogins > 0;
+  const statusLabel = hasAttention ? "Attention" : hasWatch ? "Watch" : recentRows.length > 0 ? "Normal" : "Learning";
+  const statusTone = hasAttention ? "danger" : hasWatch ? "warning" : recentRows.length > 0 ? "success" : "info";
+  const operatorNote = hasAttention
+    ? "Semak pola akses yang berulang sebelum ambil tindakan akaun atau sesi."
+    : hasWatch
+      ? "Ada signal kecil untuk dipantau, tetapi belum menunjukkan tekanan kritikal."
+      : recentRows.length > 0
+        ? "Pola login terbaru kelihatan stabil untuk pemantauan biasa."
+        : "Data login belum cukup untuk membuat kesimpulan pola operasi.";
+
+  return {
+    statusLabel,
+    statusTone,
+    operatorNote,
+    facts: [
+      {
+        id: "top-account",
+        label: "Most active account",
+        value: mostActiveUser ? mostActiveUser.username : "Not enough data",
+        description: mostActiveUser
+          ? `${mostActiveUser.loginCount.toLocaleString()} login dalam tempoh semasa. Peranan: ${mostActiveUser.role}.`
+          : "Belum ada ranking pengguna aktif untuk dirumuskan.",
+        tone: mostActiveUser ? "info" : "success",
+      },
+      {
+        id: "common-browser",
+        label: "Common browser",
+        value: commonBrowser ? commonBrowser.browser : "Not enough data",
+        description: commonBrowser
+          ? `${commonBrowser.count.toLocaleString()} rekod terbaru menggunakan browser ini.`
+          : "Belum ada metadata browser yang cukup dalam rekod terbaru.",
+        tone: commonBrowser ? "info" : "success",
+      },
+      {
+        id: "peak-window",
+        label: "Peak login window",
+        value: peakWindow ? formatDashboardHour(peakWindow.hour) : "Not enough data",
+        description: peakWindow
+          ? `${peakWindow.count.toLocaleString()} login direkod pada window ini.`
+          : "Belum ada taburan waktu login yang cukup untuk peak window.",
+        tone: peakWindow && peakWindow.count > 0 ? "info" : "success",
+      },
+      {
+        id: "attention-reason",
+        label: "Attention reason",
+        value: attentionReason ? attentionReason.reason : "No flagged reason",
+        description: attentionReason
+          ? `${attentionReason.count.toLocaleString()} daripada ${attentionReason.total.toLocaleString()} attention event berkaitan reason ini.`
+          : "Tiada logout reason berisiko tinggi dalam rekod terbaru.",
+        tone: attentionReason && attentionReason.total >= 3 ? "danger" : attentionReason ? "warning" : "success",
+      },
+    ],
+  };
 }
 
 function pushDashboardActionQueueItem(

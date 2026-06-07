@@ -8,6 +8,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { fileURLToPath } from "node:url";
 import { DashboardActionQueue } from "@/pages/dashboard/DashboardActionQueue";
 import { DashboardChartsGrid } from "@/pages/dashboard/DashboardChartsGrid";
+import { DashboardLoginPatternSummary } from "@/pages/dashboard/DashboardLoginPatternSummary";
 import { DashboardLoginRiskInsights } from "@/pages/dashboard/DashboardLoginRiskInsights";
 import { DashboardPageHeader } from "@/pages/dashboard/DashboardPageHeader";
 import { DashboardRecentLoginActivity } from "@/pages/dashboard/DashboardRecentLoginActivity";
@@ -160,6 +161,7 @@ test("Dashboard wraps major dashboard regions in accessible render error boundar
   assert.match(deferredSource, /Dashboard login review workspace/);
   assert.match(deferredSource, /<DashboardActionQueue/);
   assert.match(deferredSource, /<DashboardSessionHealthStrip/);
+  assert.match(deferredSource, /<DashboardLoginPatternSummary/);
   assert.match(deferredSource, /xl:grid-cols-\[minmax\(0,0\.9fr\)_minmax\(0,1\.1fr\)\]/);
   assert.match(deferredSource, /sectionName="Carta dashboard"/);
   assert.match(deferredSource, /sectionName="Insight risiko login dashboard"/);
@@ -315,6 +317,72 @@ test("DashboardSessionHealthStrip renders session freshness without lifecycle ef
   assert.match(markup, /aria-label="Dashboard session health summary"/);
   assert.match(source, /buildDashboardSessionHealthItems/);
   assert.match(source, /data-testid="card-dashboard-session-health"/);
+  assert.doesNotMatch(source, /useEffect\(/);
+  assert.doesNotMatch(source, /setTimeout\(/);
+  assert.doesNotMatch(source, /setInterval\(/);
+});
+
+test("DashboardLoginPatternSummary renders compact login pattern facts without lifecycle effects", () => {
+  const source = readFileSync(path.resolve(__dirname, "../DashboardLoginPatternSummary.tsx"), "utf8");
+  const markup = renderToStaticMarkup(
+    createElement(DashboardLoginPatternSummary, {
+      loading: false,
+      peakHours: [
+        { hour: 8, count: 2 },
+        { hour: 9, count: 12 },
+      ],
+      recentLoginActivities: [
+        {
+          browser: "Chrome",
+          ipAddress: "10.42.x.x",
+          lastActivityTime: "2026-05-06T06:50:00Z",
+          loginTime: "2026-05-06T06:00:00Z",
+          logoutReason: null,
+          logoutTime: null,
+          role: "admin",
+          status: "active",
+          username: "active.user",
+        },
+        {
+          browser: "Chrome",
+          ipAddress: "10.43.x.x",
+          lastActivityTime: "2026-05-06T05:45:00Z",
+          loginTime: "2026-05-06T05:00:00Z",
+          logoutReason: "IDLE_TIMEOUT",
+          logoutTime: "2026-05-06T06:00:00Z",
+          role: "user",
+          status: "ended",
+          username: "timeout.user",
+        },
+      ],
+      summary: {
+        activeSessions: 4,
+        bannedUsers: 0,
+        loginsToday: 15,
+        loginFailures24h: 3,
+        totalDataRows: 100,
+        totalImports: 4,
+        totalUsers: 10,
+      },
+      topUsers: [
+        { lastLogin: "2026-05-06T03:00:00Z", loginCount: 8, role: "admin", username: "alpha" },
+      ],
+    }),
+  );
+
+  assert.match(markup, /Login Pattern Summary/);
+  assert.match(markup, /Watch/);
+  assert.match(markup, /Most active account/);
+  assert.match(markup, /alpha/);
+  assert.match(markup, /Common browser/);
+  assert.match(markup, /Chrome/);
+  assert.match(markup, /Peak login window/);
+  assert.match(markup, /9 AM/);
+  assert.match(markup, /Attention reason/);
+  assert.match(markup, /Idle Timeout/);
+  assert.match(markup, /aria-label="Dashboard login pattern facts"/);
+  assert.match(source, /buildDashboardLoginPatternSummary/);
+  assert.match(source, /data-testid="card-dashboard-login-pattern-summary"/);
   assert.doesNotMatch(source, /useEffect\(/);
   assert.doesNotMatch(source, /setTimeout\(/);
   assert.doesNotMatch(source, /setInterval\(/);

@@ -4,6 +4,7 @@ import {
   buildDashboardActionQueueItems,
   buildDashboardRecentLoginActivityFilterCounts,
   buildDashboardAccessSignals,
+  buildDashboardLoginPatternSummary,
   buildDashboardLoginRiskInsights,
   buildDashboardSessionHealthItems,
   buildDashboardTrendTickDates,
@@ -343,6 +344,105 @@ test("buildDashboardSessionHealthItems keeps an empty activity feed healthy", ()
   assert.deepEqual(healthItems.map((item) => item.value), [0, 0, 0, 0, 0]);
   assert.equal(healthItems.find((item) => item.id === "active")?.tone, "success");
   assert.equal(healthItems.find((item) => item.id === "stale")?.tone, "success");
+});
+
+test("buildDashboardLoginPatternSummary highlights the strongest login patterns", () => {
+  const pattern = buildDashboardLoginPatternSummary({
+    peakHours: [
+      { hour: 8, count: 2 },
+      { hour: 9, count: 12 },
+      { hour: 10, count: 5 },
+    ],
+    recentLoginActivities: [
+      {
+        browser: "Chrome",
+        ipAddress: "10.42.x.x",
+        lastActivityTime: "2026-05-06T06:50:00Z",
+        loginTime: "2026-05-06T06:00:00Z",
+        logoutReason: null,
+        logoutTime: null,
+        role: "admin",
+        status: "active",
+        username: "active.user",
+      },
+      {
+        browser: "Chrome",
+        ipAddress: "10.43.x.x",
+        lastActivityTime: "2026-05-06T05:45:00Z",
+        loginTime: "2026-05-06T05:00:00Z",
+        logoutReason: "IDLE_TIMEOUT",
+        logoutTime: "2026-05-06T06:00:00Z",
+        role: "user",
+        status: "ended",
+        username: "timeout.one",
+      },
+      {
+        browser: "Edge",
+        ipAddress: "10.44.x.x",
+        lastActivityTime: "2026-05-06T04:45:00Z",
+        loginTime: "2026-05-06T04:00:00Z",
+        logoutReason: "IDLE_TIMEOUT",
+        logoutTime: "2026-05-06T05:00:00Z",
+        role: "user",
+        status: "ended",
+        username: "timeout.two",
+      },
+      {
+        browser: "Chrome",
+        ipAddress: "10.45.x.x",
+        lastActivityTime: "2026-05-06T03:45:00Z",
+        loginTime: "2026-05-06T03:00:00Z",
+        logoutReason: "ACCOUNT_LOCKED",
+        logoutTime: "2026-05-06T04:00:00Z",
+        role: "user",
+        status: "ended",
+        username: "locked.user",
+      },
+    ],
+    summary: {
+      activeSessions: 4,
+      bannedUsers: 0,
+      loginsToday: 15,
+      loginFailures24h: 3,
+      totalDataRows: 100,
+      totalImports: 4,
+      totalUsers: 10,
+    },
+    topUsers: [
+      { lastLogin: "2026-05-06T02:00:00Z", loginCount: 4, role: "user", username: "beta" },
+      { lastLogin: "2026-05-06T03:00:00Z", loginCount: 8, role: "admin", username: "alpha" },
+    ],
+  });
+
+  assert.equal(pattern.statusLabel, "Attention");
+  assert.equal(pattern.statusTone, "danger");
+  assert.equal(pattern.facts.find((fact) => fact.id === "top-account")?.value, "alpha");
+  assert.equal(pattern.facts.find((fact) => fact.id === "common-browser")?.value, "Chrome");
+  assert.equal(pattern.facts.find((fact) => fact.id === "peak-window")?.value, "9 AM");
+  assert.equal(pattern.facts.find((fact) => fact.id === "attention-reason")?.value, "Idle Timeout");
+});
+
+test("buildDashboardLoginPatternSummary stays calm when pattern data is not ready", () => {
+  const pattern = buildDashboardLoginPatternSummary({
+    peakHours: [],
+    recentLoginActivities: [],
+    summary: {
+      activeSessions: 0,
+      bannedUsers: 0,
+      loginsToday: 0,
+      loginFailures24h: 0,
+      totalDataRows: 0,
+      totalImports: 0,
+      totalUsers: 0,
+    },
+    topUsers: [],
+  });
+
+  assert.equal(pattern.statusLabel, "Learning");
+  assert.equal(pattern.statusTone, "info");
+  assert.equal(pattern.facts.find((fact) => fact.id === "top-account")?.value, "Not enough data");
+  assert.equal(pattern.facts.find((fact) => fact.id === "common-browser")?.value, "Not enough data");
+  assert.equal(pattern.facts.find((fact) => fact.id === "attention-reason")?.value, "No flagged reason");
 });
 
 test("formatDashboardUserLastLogin keeps login timestamps in operational timezone", () => {
