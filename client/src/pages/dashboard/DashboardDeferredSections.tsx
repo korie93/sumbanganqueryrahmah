@@ -1,9 +1,7 @@
 import { Suspense, lazy, startTransition, useEffect, useRef, useState } from "react";
 import { OperationalSectionCard } from "@/components/layout/OperationalPage";
-import { DashboardActionQueue } from "@/pages/dashboard/DashboardActionQueue";
-import { DashboardLoginPatternSummary } from "@/pages/dashboard/DashboardLoginPatternSummary";
+import { DashboardLoginReviewSidebar } from "@/pages/dashboard/DashboardLoginReviewSidebar";
 import { DashboardSectionRenderBoundary } from "@/pages/dashboard/DashboardSectionRenderBoundary";
-import { DashboardSessionHealthStrip } from "@/pages/dashboard/DashboardSessionHealthStrip";
 import type {
   LoginTrend,
   PeakHour,
@@ -280,139 +278,135 @@ export function DashboardDeferredSections({
   ].join(":");
 
   return (
-    <>
-      <section className="space-y-4" aria-label="Dashboard login review workspace">
-        <DashboardActionQueue
+    <section
+      className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(250px,320px)_minmax(0,1fr)] xl:items-start"
+      aria-label="Dashboard login review workspace"
+    >
+      <aside className="min-w-0 xl:sticky xl:top-4" aria-label="Dashboard login review sidebar">
+        <DashboardLoginReviewSidebar
           loading={summaryLoading || trendsLoading || recentLoginActivityLoading}
-          recentLoginActivities={recentLoginActivities}
-          summary={summary}
-          trends={trends}
-        />
-        <DashboardSessionHealthStrip
-          loading={recentLoginActivityLoading}
-          recentLoginActivities={recentLoginActivities}
-        />
-        <DashboardLoginPatternSummary
-          loading={summaryLoading || topUsersLoading || peakHoursLoading || recentLoginActivityLoading}
           peakHours={peakHours}
           recentLoginActivities={recentLoginActivities}
           summary={summary}
           topUsers={topUsers}
+          trends={trends}
         />
-        <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] xl:items-start">
-          <div ref={loginRiskSection.triggerRef}>
-            {loginRiskSection.shouldRender ? (
-              <DashboardSectionRenderBoundary
-                sectionName="Insight risiko login dashboard"
-                boundaryKey={loginRiskBoundaryKey}
-              >
-                <Suspense
-                  fallback={
-                    <DashboardSectionFallback
-                      label="Loading login risk insights"
-                      visualClassName="h-[220px]"
-                    />
-                  }
+      </aside>
+      <div className="min-w-0 space-y-4">
+        <div className="grid grid-cols-1 gap-4 2xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] 2xl:items-start">
+          <div id="dashboard-login-risk-insights" ref={loginRiskSection.triggerRef} className="scroll-mt-24">
+              {loginRiskSection.shouldRender ? (
+                <DashboardSectionRenderBoundary
+                  sectionName="Insight risiko login dashboard"
+                  boundaryKey={loginRiskBoundaryKey}
                 >
-                  <DashboardLoginRiskInsights
-                    loading={summaryLoading || trendsLoading || recentLoginActivityLoading}
-                    recentLoginActivities={recentLoginActivities}
-                    summary={summary}
-                    trends={trends}
-                  />
-                </Suspense>
-              </DashboardSectionRenderBoundary>
-            ) : (
-              <DashboardSectionFallback
-                label="Login risk insights will load as you scroll"
-                visualClassName="h-[220px]"
-              />
-            )}
+                  <Suspense
+                    fallback={
+                      <DashboardSectionFallback
+                        label="Loading login risk insights"
+                        visualClassName="h-[220px]"
+                      />
+                    }
+                  >
+                    <DashboardLoginRiskInsights
+                      loading={summaryLoading || trendsLoading || recentLoginActivityLoading}
+                      recentLoginActivities={recentLoginActivities}
+                      summary={summary}
+                      trends={trends}
+                    />
+                  </Suspense>
+                </DashboardSectionRenderBoundary>
+              ) : (
+                <DashboardSectionFallback
+                  label="Login risk insights will load as you scroll"
+                  visualClassName="h-[220px]"
+                />
+              )}
           </div>
-          <div ref={recentLoginActivitySection.triggerRef}>
-            {recentLoginActivitySection.shouldRender ? (
-              <DashboardSectionRenderBoundary
-                sectionName="Aktiviti login dashboard"
-                boundaryKey={recentLoginActivityBoundaryKey}
-              >
-                <Suspense
-                  fallback={
-                    <DashboardSectionFallback
-                      label="Loading recent login activity"
-                      visualClassName="h-[260px]"
-                    />
-                  }
+          <div id="dashboard-recent-login-activity" ref={recentLoginActivitySection.triggerRef} className="scroll-mt-24">
+              {recentLoginActivitySection.shouldRender ? (
+                <DashboardSectionRenderBoundary
+                  sectionName="Aktiviti login dashboard"
+                  boundaryKey={recentLoginActivityBoundaryKey}
                 >
-                  <DashboardRecentLoginActivity
-                    activities={recentLoginActivities}
-                    errorMessage={recentLoginActivityErrorMessage}
-                    loading={recentLoginActivityLoading}
-                    onRetry={onRetryRecentLoginActivity}
-                    retrying={recentLoginActivityRetrying}
-                  />
-                </Suspense>
-              </DashboardSectionRenderBoundary>
-            ) : (
-              <DashboardSectionFallback
-                label="Recent login activity will load as you scroll"
-                visualClassName="h-[260px]"
-              />
-            )}
+                  <Suspense
+                    fallback={
+                      <DashboardSectionFallback
+                        label="Loading recent login activity"
+                        visualClassName="h-[260px]"
+                      />
+                    }
+                  >
+                    <DashboardRecentLoginActivity
+                      activities={recentLoginActivities}
+                      errorMessage={recentLoginActivityErrorMessage}
+                      loading={recentLoginActivityLoading}
+                      onRetry={onRetryRecentLoginActivity}
+                      retrying={recentLoginActivityRetrying}
+                    />
+                  </Suspense>
+                </DashboardSectionRenderBoundary>
+              ) : (
+                <DashboardSectionFallback
+                  label="Recent login activity will load as you scroll"
+                  visualClassName="h-[260px]"
+                />
+              )}
           </div>
         </div>
-      </section>
-      <div ref={chartsSection.triggerRef}>
-        {chartsSection.shouldRender ? (
-          <DashboardSectionRenderBoundary
-            sectionName="Carta dashboard"
-            boundaryKey={chartsBoundaryKey}
-          >
-            <Suspense fallback={<DashboardChartsFallback labelPrefix="Loading dashboard charts" />}>
-              <DashboardChartsGrid
-                onTrendDaysChange={onTrendDaysChange}
-                onRetryPeakHours={onRetryPeakHours}
-                onRetryTrends={onRetryTrends}
-                peakHoursErrorMessage={peakHoursErrorMessage}
-                peakHours={peakHours}
-                peakHoursLoading={peakHoursLoading}
-                peakHoursRetrying={peakHoursRetrying}
-                trendDays={trendDays}
-                trendsErrorMessage={trendsErrorMessage}
-                trends={trends}
-                trendsLoading={trendsLoading}
-                trendsRetrying={trendsRetrying}
-              />
-            </Suspense>
-          </DashboardSectionRenderBoundary>
-        ) : (
-          <DashboardChartsFallback labelPrefix="Dashboard charts will load as you scroll" />
-        )}
+        <div id="dashboard-login-charts" ref={chartsSection.triggerRef} className="scroll-mt-24">
+          {chartsSection.shouldRender ? (
+            <DashboardSectionRenderBoundary
+              sectionName="Carta dashboard"
+              boundaryKey={chartsBoundaryKey}
+            >
+              <Suspense fallback={<DashboardChartsFallback labelPrefix="Loading dashboard charts" />}>
+                <DashboardChartsGrid
+                  onTrendDaysChange={onTrendDaysChange}
+                  onRetryPeakHours={onRetryPeakHours}
+                  onRetryTrends={onRetryTrends}
+                  peakHoursErrorMessage={peakHoursErrorMessage}
+                  peakHours={peakHours}
+                  peakHoursLoading={peakHoursLoading}
+                  peakHoursRetrying={peakHoursRetrying}
+                  trendDays={trendDays}
+                  trendsErrorMessage={trendsErrorMessage}
+                  trends={trends}
+                  trendsLoading={trendsLoading}
+                  trendsRetrying={trendsRetrying}
+                />
+              </Suspense>
+            </DashboardSectionRenderBoundary>
+          ) : (
+            <DashboardChartsFallback labelPrefix="Dashboard charts will load as you scroll" />
+          )}
+        </div>
+        <div id="dashboard-user-insights" ref={userInsightsSection.triggerRef} className="scroll-mt-24">
+          {userInsightsSection.shouldRender ? (
+            <DashboardSectionRenderBoundary
+              sectionName="Insight pengguna dashboard"
+              boundaryKey={userInsightsBoundaryKey}
+            >
+              <Suspense fallback={<DashboardUserInsightsFallback labelPrefix="Loading dashboard user insights" />}>
+                <DashboardUserInsightsGrid
+                  onRetryRoleDistribution={onRetryRoleDistribution}
+                  onRetryTopUsers={onRetryTopUsers}
+                  roleErrorMessage={roleErrorMessage}
+                  roleDistribution={roleDistribution}
+                  roleLoading={roleLoading}
+                  roleRetrying={roleRetrying}
+                  topUsersErrorMessage={topUsersErrorMessage}
+                  topUsers={topUsers}
+                  topUsersLoading={topUsersLoading}
+                  topUsersRetrying={topUsersRetrying}
+                />
+              </Suspense>
+            </DashboardSectionRenderBoundary>
+          ) : (
+            <DashboardUserInsightsFallback labelPrefix="Dashboard user insights will load as you scroll" />
+          )}
+        </div>
       </div>
-      <div ref={userInsightsSection.triggerRef}>
-        {userInsightsSection.shouldRender ? (
-          <DashboardSectionRenderBoundary
-            sectionName="Insight pengguna dashboard"
-            boundaryKey={userInsightsBoundaryKey}
-          >
-            <Suspense fallback={<DashboardUserInsightsFallback labelPrefix="Loading dashboard user insights" />}>
-              <DashboardUserInsightsGrid
-                onRetryRoleDistribution={onRetryRoleDistribution}
-                onRetryTopUsers={onRetryTopUsers}
-                roleErrorMessage={roleErrorMessage}
-                roleDistribution={roleDistribution}
-                roleLoading={roleLoading}
-                roleRetrying={roleRetrying}
-                topUsersErrorMessage={topUsersErrorMessage}
-                topUsers={topUsers}
-                topUsersLoading={topUsersLoading}
-                topUsersRetrying={topUsersRetrying}
-              />
-            </Suspense>
-          </DashboardSectionRenderBoundary>
-        ) : (
-          <DashboardUserInsightsFallback labelPrefix="Dashboard user insights will load as you scroll" />
-        )}
-      </div>
-    </>
+    </section>
   );
 }

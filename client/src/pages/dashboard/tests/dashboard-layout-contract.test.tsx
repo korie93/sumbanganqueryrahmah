@@ -9,6 +9,7 @@ import { fileURLToPath } from "node:url";
 import { DashboardActionQueue } from "@/pages/dashboard/DashboardActionQueue";
 import { DashboardChartsGrid } from "@/pages/dashboard/DashboardChartsGrid";
 import { DashboardLoginPatternSummary } from "@/pages/dashboard/DashboardLoginPatternSummary";
+import { DashboardLoginReviewSidebar } from "@/pages/dashboard/DashboardLoginReviewSidebar";
 import { DashboardLoginRiskInsights } from "@/pages/dashboard/DashboardLoginRiskInsights";
 import { DashboardPageHeader } from "@/pages/dashboard/DashboardPageHeader";
 import { DashboardRecentLoginActivity } from "@/pages/dashboard/DashboardRecentLoginActivity";
@@ -166,10 +167,13 @@ test("Dashboard wraps major dashboard regions in accessible render error boundar
   assert.match(dashboardSource, /<DashboardSectionRenderBoundary/);
   assert.match(dashboardSource, /sectionName="Ringkasan dashboard"/);
   assert.match(deferredSource, /Dashboard login review workspace/);
-  assert.match(deferredSource, /<DashboardActionQueue/);
-  assert.match(deferredSource, /<DashboardSessionHealthStrip/);
-  assert.match(deferredSource, /<DashboardLoginPatternSummary/);
-  assert.match(deferredSource, /xl:grid-cols-\[minmax\(0,0\.9fr\)_minmax\(0,1\.1fr\)\]/);
+  assert.match(deferredSource, /<DashboardLoginReviewSidebar/);
+  assert.match(deferredSource, /Dashboard login review sidebar/);
+  assert.match(deferredSource, /xl:grid-cols-\[minmax\(250px,320px\)_minmax\(0,1fr\)\]/);
+  assert.match(deferredSource, /2xl:grid-cols-\[minmax\(0,0\.95fr\)_minmax\(0,1\.05fr\)\]/);
+  assert.match(deferredSource, /id="dashboard-login-risk-insights"/);
+  assert.match(deferredSource, /id="dashboard-recent-login-activity"/);
+  assert.match(deferredSource, /id="dashboard-login-charts"/);
   assert.match(deferredSource, /sectionName="Carta dashboard"/);
   assert.match(deferredSource, /sectionName="Insight risiko login dashboard"/);
   assert.match(deferredSource, /sectionName="Aktiviti login dashboard"/);
@@ -181,6 +185,81 @@ test("Dashboard wraps major dashboard regions in accessible render error boundar
   assert.match(fallbackMarkup, /Bahagian ini gagal dirender/);
   assert.match(fallbackMarkup, /Cuba lagi/);
   assert.match(fallbackMarkup, /type="button"/);
+});
+
+test("DashboardLoginReviewSidebar turns scattered login panels into a compact sidebar", () => {
+  const source = readFileSync(path.resolve(__dirname, "../DashboardLoginReviewSidebar.tsx"), "utf8");
+  const markup = renderToStaticMarkup(
+    createElement(DashboardLoginReviewSidebar, {
+      loading: false,
+      peakHours: [
+        { hour: 8, count: 2 },
+        { hour: 9, count: 12 },
+      ],
+      recentLoginActivities: [
+        {
+          browser: "Chrome",
+          ipAddress: "10.42.x.x",
+          lastActivityTime: "2026-05-06T02:30:00Z",
+          loginTime: "2026-05-06T02:00:00Z",
+          logoutReason: "ACCOUNT_LOCKED",
+          logoutTime: "2026-05-06T03:00:00Z",
+          role: "admin",
+          status: "ended",
+          username: "locked.user",
+        },
+        {
+          browser: "Edge",
+          ipAddress: "10.43.x.x",
+          lastActivityTime: "2026-05-06T04:30:00Z",
+          loginTime: "2026-05-06T04:00:00Z",
+          logoutReason: "FORCED_LOGOUT",
+          logoutTime: "2026-05-06T05:00:00Z",
+          role: "user",
+          status: "ended",
+          username: "forced.user",
+        },
+      ],
+      summary: {
+        activeSessions: 8,
+        bannedUsers: 1,
+        loginsToday: 12,
+        loginFailures24h: 15,
+        totalDataRows: 100,
+        totalImports: 4,
+        totalUsers: 10,
+      },
+      topUsers: [
+        { lastLogin: "2026-05-06T03:00:00Z", loginCount: 8, role: "admin", username: "alpha" },
+      ],
+      trends: [
+        { date: "2026-05-04", logins: 3, logouts: 1 },
+        { date: "2026-05-05", logins: 3, logouts: 1 },
+        { date: "2026-05-06", logins: 12, logouts: 2 },
+      ],
+    }),
+  );
+
+  assert.match(markup, /Review Sidebar/);
+  assert.match(markup, /Ringkasan cepat supaya dashboard login tidak nampak berserabut/);
+  assert.match(markup, /Fokus semasa/);
+  assert.match(markup, /Health score/);
+  assert.match(markup, /Active sessions/);
+  assert.match(markup, /Stale sessions/);
+  assert.match(markup, /Tindakan/);
+  assert.match(markup, /Review failed login pressure/);
+  assert.match(markup, /Check restricted account events/);
+  assert.match(markup, /Dashboard login section shortcuts/);
+  assert.match(markup, /href="#dashboard-login-risk-insights"/);
+  assert.match(markup, /href="#dashboard-recent-login-activity"/);
+  assert.match(markup, /href="#dashboard-login-charts"/);
+  assert.match(source, /buildDashboardActionQueueItems/);
+  assert.match(source, /buildDashboardLoginPatternSummary/);
+  assert.match(source, /buildDashboardSessionHealthItems/);
+  assert.match(source, /data-testid="card-dashboard-login-review-sidebar"/);
+  assert.doesNotMatch(source, /useEffect\(/);
+  assert.doesNotMatch(source, /setTimeout\(/);
+  assert.doesNotMatch(source, /setInterval\(/);
 });
 
 test("DashboardActionQueue renders prioritized operator actions without lifecycle effects", () => {
